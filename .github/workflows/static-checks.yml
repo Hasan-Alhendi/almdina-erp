@@ -221,6 +221,8 @@ jobs:
           node almdina_erp/tests/js/dco_recovery_projection.test.js
           node almdina_erp/tests/js/dco_local_recovery_repository.test.js
           node almdina_erp/tests/js/dco_local_checkpoint.test.js
+          node almdina_erp/tests/js/dco_new_recovery.test.js
+          node almdina_erp/tests/js/dco_new_recovery_save.test.js
           node almdina_erp/tests/js/dco_workspace_mutation_impact.test.js
           node almdina_erp/tests/js/cost_workspace_document_version.test.js
           node almdina_erp/tests/js/plan_preview_cost_reconcile.test.js

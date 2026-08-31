@@ -45,9 +45,11 @@ jobs:
           node --check almdina_erp/public/js/door_cutting_order/costing/door_cutting_order_cost_workspace_presenter_adapter.js
           node --check almdina_erp/public/js/door_cutting_order/recovery/application/door_cutting_order_recovery_projection.js
           node --check almdina_erp/public/js/door_cutting_order/recovery/application/door_cutting_order_checkpoint_session.js
+          node --check almdina_erp/public/js/door_cutting_order/recovery/application/door_cutting_order_new_recovery.js
           node --check almdina_erp/public/js/door_cutting_order/recovery/infrastructure/door_cutting_order_recovery_indexeddb.js
           node --check almdina_erp/public/js/door_cutting_order/recovery/infrastructure/door_cutting_order_local_draft_repository.js
           node --check almdina_erp/public/js/door_cutting_order/recovery/infrastructure/door_cutting_order_local_asset_repository.js
+          node --check almdina_erp/public/js/door_cutting_order/recovery/infrastructure/door_cutting_order_recovery_api.js
           node --check almdina_erp/public/js/door_cutting_order/recovery/presentation/door_cutting_order_local_checkpoint.js
           node --check almdina_erp/public/js/door_cutting_order/order_entry/door_cutting_order_defaults.js
           node --check almdina_erp/public/js/door_cutting_order/order_entry/door_cutting_order_mutation_impact_policy.js
@@ -76,6 +78,8 @@ jobs:
           node --check almdina_erp/tests/js/dco_recovery_projection.test.js
           node --check almdina_erp/tests/js/dco_local_recovery_repository.test.js
           node --check almdina_erp/tests/js/dco_local_checkpoint.test.js
+          node --check almdina_erp/tests/js/dco_new_recovery.test.js
+          node --check almdina_erp/tests/js/dco_new_recovery_save.test.js
 
       - name: Enforce targeted DCO architecture and UX contracts
         shell: bash
@@ -139,6 +143,8 @@ jobs:
           node almdina_erp/tests/js/dco_recovery_projection.test.js
           node almdina_erp/tests/js/dco_local_recovery_repository.test.js
           node almdina_erp/tests/js/dco_local_checkpoint.test.js
+          node almdina_erp/tests/js/dco_new_recovery.test.js
+          node almdina_erp/tests/js/dco_new_recovery_save.test.js
 
       - name: Simulate measurement lifecycle cancellation and freshness
         run: node almdina_erp/tests/js/measurement_lifecycle.test.js

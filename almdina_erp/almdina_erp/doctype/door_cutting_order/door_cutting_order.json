@@ -17,7 +17,7 @@
     "technical_section","packing_method","packing_score","engine_version",
     "shop_floor_section","production_path","current_department","shop_floor_column","current_assignee","department_status","current_production_stage","drawing_dxf_status",
     "cost_tab","cost_settings_section","board_rate_usd","cutting_cost_per_board_usd","order_cost_invoice_html",
-    "status","revision","revision_of","revision_root","superseded_by","revision_reason","revision_state","revision_activated_by","revision_activated_on","approved_plan","board_item","full_board_length_mm","full_board_width_mm"
+    "status","revision","revision_of","revision_root","superseded_by","revision_reason","revision_state","revision_activated_by","revision_activated_on","approved_plan","board_item","full_board_length_mm","full_board_width_mm","recovery_creation_token","recovery_creation_user"
   ],
   "fields": [
     {"default":"DCO-.YYYY.-.#####","fieldname":"naming_series","fieldtype":"Select","hidden":1,"label":"Naming Series","options":"DCO-.YYYY.-.#####","reqd":1},
@@ -93,7 +93,9 @@
     {"fieldname":"approved_plan","fieldtype":"Link","hidden":1,"label":"Approved Cutting Plan","options":"Cutting Plan","read_only":1},
     {"fieldname":"board_item","fieldtype":"Link","hidden":1,"label":"Stock Board Item","options":"Item"},
     {"fieldname":"full_board_length_mm","fieldtype":"Float","hidden":1,"label":"Board Length (MM)","read_only":1},
-    {"fieldname":"full_board_width_mm","fieldtype":"Float","hidden":1,"label":"Board Width (MM)","read_only":1}
+    {"fieldname":"full_board_width_mm","fieldtype":"Float","hidden":1,"label":"Board Width (MM)","read_only":1},
+    {"fieldname":"recovery_creation_token","fieldtype":"Data","hidden":1,"label":"Recovery Creation Token","no_copy":1,"read_only":1,"unique":1},
+    {"fieldname":"recovery_creation_user","fieldtype":"Link","hidden":1,"label":"Recovery Creation User","no_copy":1,"options":"User","read_only":1}
   ],
   "links": [],
   "module":"Almdina ERP",
