@@ -36,6 +36,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.master_data_audit import (
     document_snapshot,
     record_master_data_audit,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.optimization_mode_validation import (
+    require_executable_optimization_mode,
+)
 
 
 MACHINE_OPTIONS = tuple(machine.id for machine in CANONICAL_MACHINE_TYPES)
@@ -228,6 +231,9 @@ def _apply_plan_default_values(settings: Any, payload: dict[str, Any]) -> None:
     except PlanSettingsValidationError:
         frappe.throw(_("Invalid Cutting Plan default settings."), frappe.ValidationError)
         raise AssertionError("unreachable")
+
+    if "default_packing_mode" in payload:
+        require_executable_optimization_mode(normalized.optimization_mode)
 
     canonical = {
         "default_packing_mode": normalized.optimization_mode,

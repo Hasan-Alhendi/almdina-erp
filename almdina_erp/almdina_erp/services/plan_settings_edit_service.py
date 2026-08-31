@@ -16,6 +16,9 @@ from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization import (
     require_cutting_plan_capability,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.optimization_mode_validation import (
+    require_executable_optimization_mode,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.stage_assignment_access import (
     require_stage_assignment_access,
 )
@@ -114,6 +117,12 @@ def normalize_plan_settings_updates(values: dict[str, Any]) -> dict[str, Any]:
     }
     if not provided:
         return {}
+
+    # A known but non-executable ID remains a valid persisted historical value,
+    # but an explicit user/API selection must fail closed before metadata or DB
+    # mutation. Legacy low-level modes with real implementations stay compatible.
+    if "packing_mode" in provided:
+        require_executable_optimization_mode(provided["packing_mode"])
 
     plan_meta = frappe.get_meta("Cutting Plan")
     for fieldname in provided:

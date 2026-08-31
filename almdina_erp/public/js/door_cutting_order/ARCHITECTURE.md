@@ -61,10 +61,44 @@ DCO field events, subscribes to the existing Plan/Cost `WorkspaceStore` mutation
 notifications, batches local writes through `AlmdinaDocumentContext.scheduleFrame()`,
 and requests a best-effort local flush on `visibilitychange`/`pagehide`.
 
-This overlay never calls `frm.save()`, never uses arbitrary timeout readiness,
-never restores data, and never changes the current scanner, Plan, Cost, Save, Cancel,
-or first-insert behavior. Restore/reconciliation remains a later-story consumer of
-the repositories.
+This overlay never calls `frm.save()` and never uses arbitrary timeout readiness.
+ALMADINA-129 restores only an explicitly selected NEW `DcoInputProjection` into the
+current form while `RESTORING`: its framework-free application use case invokes a
+presentation-owned Frappe hydration port, which then asks the existing measurement
+owners to rebuild their UI once. It does not restore Plan/Cost/Invoice authority or change scanner,
+Save, Cancel, or EDIT behavior. First-insert safety wraps the native explicit Save
+with a stable hidden unique creation token and a narrow authorized reconciliation
+query; it is not a second insert API. Cross-tab revision conflicts block the stale
+native insert, and native failure/cancellation cleanup is bound to the originating
+document state plus exact save attempt with bounded compare-and-set retry. The same
+operation binding owns acknowledged-success cleanup, and a live session adopts the
+persisted official state only at the same payload revision. A higher external
+revision is a restore-required conflict, not an implicit payload synchronization.
+Every checkpoint write is transactionally fenced against the revision that its
+session last persisted, so coalesced mutations cannot leapfrog another tab. A
+conflict from any foreground, scheduled, visibility, or pagehide flush quarantines
+that form until explicit reopen/restore. `PENDING_RECONCILIATION` also fences out
+higher checkpoint revisions, and confirmed-success cleanup compare-and-deletes only
+the exact attempted revision/save marker; a mismatch retains the local draft/assets.
+A stale discovery dialog uses the same revision/attempt fence for explicit Delete,
+and a begin-attempt ownership conflict quarantines rather than adopting another
+tab's pending state without its timestamp. Continue revalidates that displayed
+revision/attempt before hydration. One mutually exclusive discovery action owns the
+dialog at a time, and Continue/Delete completion also rechecks the source document
+token before changing the dialog or initializing a session. A queued first mutation
+is replayed if discovery fails safely, preserving the existing checkpoint behavior.
+Native first Save is cancelled until discovery establishes a session and the user
+explicitly saves again; frozen conflicted cards remain displayed discovery ownership
+even when no actionable card remains. If no recovery session or dialog can be
+established, native explicit Save remains fail-safe available; a failed explicit
+Start New choice does not reopen discovery or delete retained drafts.
+If hydration fails or reports incomplete, the provisional session and Save observer
+are disposed, the creation token is cleared, and the discovery dialog retains Save
+ownership without deleting the local draft.
+The fail-open marker/checkpoint-storage path carries the retained ACTIVE attempt and
+persisted `saved_revision` fences, which are replaced only when a new pending marker
+is durably returned. The retained timestamp is cleanup evidence only; pending-state
+failure ownership begins only after this operation durably creates its own marker.
 
 ### Special-shape manufacturing boundary
 
