@@ -117,4 +117,21 @@ assert.match(html, /◆ درفة خاصة · مسار هندسي/);
 assert.match(html, /<polygon points="/);
 assert.doesNotMatch(html, /undefined/);
 
+const doubledFrm = {
+    doc: {
+        ...frm.doc,
+        pieces: [
+            {
+                width_cm: 60,
+                length_cm: 80,
+                qty: 3,
+                extra_full_door_double: 1,
+                piece_type: "Extra",
+            },
+        ],
+    },
+};
+const doubledHtml = renderer.build(doubledFrm, renderer.parse(doubledFrm));
+assert.match(doubledHtml, /عدد 6/);
+
 console.log("Cutting-plan renderer simulation passed");

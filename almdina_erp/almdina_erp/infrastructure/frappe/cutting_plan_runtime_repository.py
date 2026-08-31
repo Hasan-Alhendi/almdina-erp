@@ -7,6 +7,9 @@ import frappe
 from frappe.utils import cint
 
 from almdina_erp.almdina_erp.domain.cutting.catalog import DEFAULT_OPTIMIZATION_MODE_ID
+from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
+    ManufacturingRequirementsError,
+)
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import APPROVED, DRAFT
 from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
     DEFAULT_KERF_MM,
@@ -132,7 +135,12 @@ def _plan_is_stale(order: Any, plan: Any) -> bool:
     stored = str(getattr(plan, "input_fingerprint", None) or "").strip()
     if not stored:
         return True
-    return stored != plan_input_fingerprint(order, plan)
+    try:
+        return stored != plan_input_fingerprint(order, plan)
+    except ManufacturingRequirementsError:
+        # Incomplete cut dimensions cannot be fingerprinted. Treat the plan as
+        # stale so list/shop-floor reads stay available without trusting it.
+        return True
 
 
 def approved_plan_for_order(order: Any) -> Any | None:

@@ -8,7 +8,13 @@ from .costing import round_value
 
 
 EXTRA_PIECE_TYPE = "Extra"
-EXTRA_ADDON_CODES = ("double", "liner", "recessed_handle_cutout")
+EXTRA_ADDON_CODES = (
+    "double",
+    "full_door_double",
+    "liner",
+    "recessed_handle_cutout",
+)
+FULL_DOOR_DOUBLE_CUT_MULTIPLIER = 2
 
 
 class ExtraAddonError(ValueError):
@@ -23,6 +29,7 @@ class ExtraAddonError(ValueError):
 @dataclass(frozen=True, slots=True)
 class ExtraAddonRates:
     double_usd: float = 0
+    full_door_double_usd: float = 0
     liner_usd: float = 0
     recessed_handle_cutout_usd: float = 0
 
@@ -33,9 +40,11 @@ class ExtraAddonPieceInput:
     qty: int
     notes: str = ""
     double: bool = False
+    full_door_double: bool = False
     liner: bool = False
     recessed_handle_cutout: bool = False
     double_snapshot_unit_price_usd: float | None = None
+    full_door_double_snapshot_unit_price_usd: float | None = None
     liner_snapshot_unit_price_usd: float | None = None
     recessed_handle_cutout_snapshot_unit_price_usd: float | None = None
 
@@ -46,6 +55,8 @@ class ExtraAddonPieceResult:
     selected_codes: tuple[str, ...]
     double_unit_price_usd: float
     double_total_usd: float
+    full_door_double_unit_price_usd: float
+    full_door_double_total_usd: float
     liner_unit_price_usd: float
     liner_total_usd: float
     recessed_handle_cutout_unit_price_usd: float
@@ -59,6 +70,15 @@ class ExtraAddonPricingSummary:
     total_usd: float
 
 
+def physical_cut_quantity(qty: int, *, full_door_double: bool) -> int:
+    """Return optimizer/cut-list quantity without mutating customer qty."""
+
+    resolved = max(0, int(qty or 0))
+    if full_door_double and resolved > 0:
+        return resolved * FULL_DOOR_DOUBLE_CUT_MULTIPLIER
+    return resolved
+
+
 def calculate_extra_addon_pricing(
     pieces: Iterable[ExtraAddonPieceInput],
     *,
@@ -68,6 +88,7 @@ def calculate_extra_addon_pricing(
 
     resolved_rates = {
         "double": _finite_non_negative(rates.double_usd),
+        "full_door_double": _finite_non_negative(rates.full_door_double_usd),
         "liner": _finite_non_negative(rates.liner_usd),
         "recessed_handle_cutout": _finite_non_negative(
             rates.recessed_handle_cutout_usd
@@ -81,6 +102,7 @@ def calculate_extra_addon_pricing(
             code
             for code, enabled in (
                 ("double", piece.double),
+                ("full_door_double", piece.full_door_double),
                 ("liner", piece.liner),
                 ("recessed_handle_cutout", piece.recessed_handle_cutout),
             )
@@ -103,6 +125,7 @@ def calculate_extra_addon_pricing(
             raise ExtraAddonError("extra_quantity_invalid")
         snapshots = {
             "double": piece.double_snapshot_unit_price_usd,
+            "full_door_double": piece.full_door_double_snapshot_unit_price_usd,
             "liner": piece.liner_snapshot_unit_price_usd,
             "recessed_handle_cutout": (
                 piece.recessed_handle_cutout_snapshot_unit_price_usd
@@ -136,6 +159,8 @@ def calculate_extra_addon_pricing(
                 selected_codes=selected,
                 double_unit_price_usd=unit_values["double"],
                 double_total_usd=total_values["double"],
+                full_door_double_unit_price_usd=unit_values["full_door_double"],
+                full_door_double_total_usd=total_values["full_door_double"],
                 liner_unit_price_usd=unit_values["liner"],
                 liner_total_usd=total_values["liner"],
                 recessed_handle_cutout_unit_price_usd=unit_values[
@@ -160,6 +185,8 @@ def _empty_result() -> ExtraAddonPieceResult:
         selected_codes=(),
         double_unit_price_usd=0,
         double_total_usd=0,
+        full_door_double_unit_price_usd=0,
+        full_door_double_total_usd=0,
         liner_unit_price_usd=0,
         liner_total_usd=0,
         recessed_handle_cutout_unit_price_usd=0,
@@ -185,10 +212,12 @@ def _money(value: float) -> float:
 __all__ = [
     "EXTRA_ADDON_CODES",
     "EXTRA_PIECE_TYPE",
+    "FULL_DOOR_DOUBLE_CUT_MULTIPLIER",
     "ExtraAddonError",
     "ExtraAddonPieceInput",
     "ExtraAddonPieceResult",
     "ExtraAddonPricingSummary",
     "ExtraAddonRates",
     "calculate_extra_addon_pricing",
+    "physical_cut_quantity",
 ]

@@ -160,12 +160,45 @@ class TestFinancialDocumentApplication(unittest.TestCase):
 
         self.assertEqual(
             [line["description"] for line in payload["lines"]],
-            ["إضافة Double — درفة رقم 1", "إضافة Liner — درفة رقم 1"],
+            ["إضافة دبل قشاط — درفة رقم 1", "إضافة Liner — درفة رقم 1"],
         )
         self.assertEqual([line["rate_usd"] for line in payload["lines"]], [4.0, 2.5])
         self.assertEqual(payload["totals"][0]["value_usd"], 13.0)
         self.assertEqual(payload["measurements"][0]["piece_type"], "إضافية")
-        self.assertIn("إضافات: Double، Liner", payload["measurements"][0]["notes"])
+        self.assertIn("إضافات: دبل قشاط، Liner", payload["measurements"][0]["notes"])
+
+    def test_full_door_double_invoice_line_uses_original_quantity(self) -> None:
+        pieces = [
+            {
+                "piece_no": 4,
+                "piece_type": "Extra",
+                "width_cm": 50,
+                "length_cm": 90,
+                "qty": 3,
+                "notes": "دبل كامل",
+                "extra_full_door_double": 1,
+                "extra_full_door_double_unit_price_usd": 6,
+                "extra_full_door_double_total_usd": 18,
+            }
+        ]
+
+        payload = build_customer_invoice_document(
+            {
+                **self.order,
+                "required_boards": 0,
+                "mdf_cost_usd": 0,
+                "cutting_cost_usd": 0,
+                "edge_cost_usd": 0,
+                "total_cost_usd": 0,
+            },
+            pieces,
+        )
+
+        line = payload["lines"][0]
+        self.assertEqual(line["description"], "إضافة دبل كامل الدرفة — درفة رقم 1")
+        self.assertEqual(line["quantity"], 3)
+        self.assertEqual(line["rate_usd"], 6.0)
+        self.assertEqual(line["amount_usd"], 18.0)
 
     def test_internal_report_calculates_margin_and_special_price_variance(self) -> None:
         payload = build_internal_cost_report_document(self.order, self.pieces)

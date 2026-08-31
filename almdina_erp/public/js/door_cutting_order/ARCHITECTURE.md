@@ -61,10 +61,44 @@ DCO field events, subscribes to the existing Plan/Cost `WorkspaceStore` mutation
 notifications, batches local writes through `AlmdinaDocumentContext.scheduleFrame()`,
 and requests a best-effort local flush on `visibilitychange`/`pagehide`.
 
-This overlay never calls `frm.save()`, never uses arbitrary timeout readiness,
-never restores data, and never changes the current scanner, Plan, Cost, Save, Cancel,
-or first-insert behavior. Restore/reconciliation remains a later-story consumer of
-the repositories.
+This overlay never calls `frm.save()` and never uses arbitrary timeout readiness.
+ALMADINA-129 restores only an explicitly selected NEW `DcoInputProjection` into the
+current form while `RESTORING`: its framework-free application use case invokes a
+presentation-owned Frappe hydration port, which then asks the existing measurement
+owners to rebuild their UI once. It does not restore Plan/Cost/Invoice authority or change scanner,
+Save, Cancel, or EDIT behavior. First-insert safety wraps the native explicit Save
+with a stable hidden unique creation token and a narrow authorized reconciliation
+query; it is not a second insert API. Cross-tab revision conflicts block the stale
+native insert, and native failure/cancellation cleanup is bound to the originating
+document state plus exact save attempt with bounded compare-and-set retry. The same
+operation binding owns acknowledged-success cleanup, and a live session adopts the
+persisted official state only at the same payload revision. A higher external
+revision is a restore-required conflict, not an implicit payload synchronization.
+Every checkpoint write is transactionally fenced against the revision that its
+session last persisted, so coalesced mutations cannot leapfrog another tab. A
+conflict from any foreground, scheduled, visibility, or pagehide flush quarantines
+that form until explicit reopen/restore. `PENDING_RECONCILIATION` also fences out
+higher checkpoint revisions, and confirmed-success cleanup compare-and-deletes only
+the exact attempted revision/save marker; a mismatch retains the local draft/assets.
+A stale discovery dialog uses the same revision/attempt fence for explicit Delete,
+and a begin-attempt ownership conflict quarantines rather than adopting another
+tab's pending state without its timestamp. Continue revalidates that displayed
+revision/attempt before hydration. One mutually exclusive discovery action owns the
+dialog at a time, and Continue/Delete completion also rechecks the source document
+token before changing the dialog or initializing a session. A queued first mutation
+is replayed if discovery fails safely, preserving the existing checkpoint behavior.
+Native first Save is cancelled until discovery establishes a session and the user
+explicitly saves again; frozen conflicted cards remain displayed discovery ownership
+even when no actionable card remains. If no recovery session or dialog can be
+established, native explicit Save remains fail-safe available; a failed explicit
+Start New choice does not reopen discovery or delete retained drafts.
+If hydration fails or reports incomplete, the provisional session and Save observer
+are disposed, the creation token is cleared, and the discovery dialog retains Save
+ownership without deleting the local draft.
+The fail-open marker/checkpoint-storage path carries the retained ACTIVE attempt and
+persisted `saved_revision` fences, which are replaced only when a new pending marker
+is durably returned. The retained timestamp is cleanup evidence only; pending-state
+failure ownership begins only after this operation durably creates its own marker.
 
 ### Special-shape manufacturing boundary
 
@@ -84,19 +118,21 @@ images, canvas pixels or presentation state.
 ### Extra-door commercial boundary
 
 `Extra` is a rectangular customer requirement, not a special-shape geometry type.
-Its three fixed selections (`Double`, `Liner`, and recessed-handle cutout) invalidate
-Cost only; changing the piece type itself retains the normal Plan + Cost impact.
-Pricing is calculated by the server Domain from factory settings and quantity. The
-child row stores protected unit/total snapshots so later factory-price changes do
-not rewrite historical orders. A `Special` door never carries Extra flags: e.g. a
-special door with Liner records Liner in notes/drawing and uses its inclusive custom
-special price.
+`Double Edge Banding` (`دبل قشاط`), `Liner`, and recessed-handle cutout invalidate
+Cost only. `Full Door Double` (`دبل كامل الدرفة`) invalidates Plan + Cost because it
+doubles physical cut quantity without changing the stored customer `qty`. Changing
+the piece type itself retains the normal Plan + Cost impact.
+Pricing is calculated by the server Domain from factory settings and original
+quantity. The child row stores protected unit/total snapshots so later factory-price
+changes do not rewrite historical orders. A `Special` door never carries Extra flags:
+e.g. a special door with Liner records Liner in notes/drawing and uses its inclusive
+custom special price.
 
 The measurement type cell remains the native HTML `select` used by the table. The
 visible Arabic order is `عادية / خاصة / زاوية / Extra`; the persisted values remain
 `Regular / Special / Clipped Corner / Extra` according to the existing DocType
 contract. Selecting `Extra` opens a small feature-owned multi-select flyout anchored
-to that row for `Liner`, `Double`, and recessed-handle cutout. A compact Extra-only
+to that row for `دبل قشاط`, `دبل كامل الدرفة`, `Liner`, and recessed-handle cutout. A compact Extra-only
 button reopens the flyout for an existing Extra row. The add-on module does not own or
 reimplement the general piece-type menu. It owns only Extra add-on presentation,
 document cleanup, focus, and flyout positioning; `AlmdinaTablePerformanceUX` remains

@@ -48,9 +48,10 @@ def _extra_addon_labels(piece: Mapping[str, Any]) -> list[str]:
     return [
         label
         for fieldname, label in (
-            ("extra_double", "Double"),
+            ("extra_double", "دبل قشاط"),
+            ("extra_full_door_double", "دبل كامل الدرفة"),
             ("extra_liner", "Liner"),
-            ("extra_recessed_handle_cutout", "تفريغ مسكة مخفية"),
+            ("extra_recessed_handle_cutout", "حفر مسكة غطس"),
         )
         if _number(_value(piece, fieldname))
     ]
@@ -240,7 +241,13 @@ def _customer_invoice_lines(
                     "extra_double",
                     "extra_double_unit_price_usd",
                     "extra_double_total_usd",
-                    "Double",
+                    "دبل قشاط",
+                ),
+                (
+                    "extra_full_door_double",
+                    "extra_full_door_double_unit_price_usd",
+                    "extra_full_door_double_total_usd",
+                    "دبل كامل الدرفة",
                 ),
                 (
                     "extra_liner",
@@ -252,7 +259,7 @@ def _customer_invoice_lines(
                     "extra_recessed_handle_cutout",
                     "extra_recessed_handle_cutout_unit_price_usd",
                     "extra_recessed_handle_cutout_total_usd",
-                    "تفريغ مسكة مخفية",
+                    "حفر مسكة غطس",
                 ),
             )
             for flag_field, rate_field, amount_field, label in specs:

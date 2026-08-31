@@ -261,6 +261,71 @@ assert(deliveredHtml.includes("dco-card-complete-state"));
 assert(deliveredHtml.includes("تم التسليم"), "a delivered order must retain a non-interactive delivered state");
 assert(!deliveredHtml.includes("dco-card-production-action"), "a delivered order must never render another workflow button");
 
+assert.strictEqual(api.overviewStageLabel({ status: "At CNC", current_department: "CNC" }), "CNC");
+assert.strictEqual(api.overviewStageLabel({ status: "Ready for Delivery" }), "جاهز للتسليم");
+assert.strictEqual(api.overviewStageLabel({ status: "Delivered" }), "تم التسليم");
+
+const overviewCnc = {
+    ...doc,
+    status: "At CNC",
+    current_department: "CNC",
+    department_status: "بحاجة للعمل",
+    __almdinaProductionActionContext: {
+        stage: "PST-10",
+        canStart: false,
+        canHandoff: false,
+        canDeliver: false,
+        assignmentState: "completed",
+        queueState: "completed",
+        overview: true,
+    },
+};
+const overviewCncModel = api.cardViewModel(overviewCnc);
+const overviewCncHtml = api.buildCard(overviewCnc, false);
+assert.strictEqual(overviewCncModel.state.key, "ready");
+assert.strictEqual(overviewCncModel.overview, true);
+assert.strictEqual(overviewCncModel.stageLabel, "CNC");
+assert(!overviewCncHtml.includes("dco-mobile-order-card is-completed"));
+assert(!overviewCncHtml.includes("تم الإنجاز"), "all-orders mobile cards must not treat unassigned work as worker-completed");
+assert(overviewCncHtml.includes("dco-card-complete-state"));
+assert(overviewCncHtml.includes("CNC"), "the all-orders footer must show the current stage name");
+assert(!overviewCncHtml.includes("dco-card-production-action"));
+
+const overviewReadyForDelivery = {
+    ...readyForDelivery,
+    __almdinaProductionActionContext: {
+        ...readyForDelivery.__almdinaProductionActionContext,
+        overview: true,
+    },
+};
+const overviewReadyHtml = api.buildCard(overviewReadyForDelivery, false);
+assert(overviewReadyHtml.includes("dco-card-complete-state"), "all-orders ready-for-delivery must keep the footer bar");
+assert(overviewReadyHtml.includes("جاهز للتسليم"));
+assert(!overviewReadyHtml.includes("dco-card-production-action"), "delivery capability must still come only from the server");
+
+const overviewDelivered = {
+    ...delivered,
+    __almdinaProductionActionContext: {
+        ...delivered.__almdinaProductionActionContext,
+        overview: true,
+    },
+};
+const overviewDeliveredHtml = api.buildCard(overviewDelivered, false);
+assert(overviewDeliveredHtml.includes("dco-card-complete-state"));
+assert(overviewDeliveredHtml.includes("تم التسليم"));
+assert(!overviewDeliveredHtml.includes("dco-card-production-action"));
+
+const overviewAuthorizedDelivery = {
+    ...deliveryAuthorized,
+    __almdinaProductionActionContext: {
+        ...deliveryAuthorized.__almdinaProductionActionContext,
+        overview: true,
+    },
+};
+const overviewAuthorizedDeliveryHtml = api.buildCard(overviewAuthorizedDelivery, false);
+assert(overviewAuthorizedDeliveryHtml.includes('data-action-kind="deliver"'), "an authorized delivery action must keep the button in all-orders view");
+assert(!overviewAuthorizedDeliveryHtml.includes("dco-card-complete-state"), "the action button replaces the stage footer");
+
 const phoneRoot = { getBoundingClientRect: () => ({ width: 340 }) };
 assert.strictEqual(api.isPhoneLayout(phoneRoot), true, "a real phone must use order cards");
 assert.strictEqual(responsive.usesCardLayout(phoneRoot), true);
@@ -449,6 +514,126 @@ assert.strictEqual(
     api.personalQueueState({ status: "Delivered", department_status: "مكتمل" }, { assignment_state: "completed" }),
     "delivered"
 );
+
+assert.strictEqual(
+    api.desktopDeliveryRowState({ status: "Ready for Delivery" }),
+    "ready_for_delivery"
+);
+assert.strictEqual(api.desktopDeliveryRowState({ status: "Delivered" }), "delivered");
+assert.strictEqual(api.desktopDeliveryRowState({ status: "At CNC" }), "");
+assert.strictEqual(api.desktopDeliveryRowState({ status: "Completed" }), "");
+assert.strictEqual(
+    api.desktopDeliveryRowState({ current_department: "جاهز للتسليم" }),
+    "ready_for_delivery"
+);
+assert.strictEqual(
+    api.desktopDeliveryRowState({ current_department: "تم التسليم" }),
+    "delivered"
+);
+
+function mockClassList(initial = []) {
+    const classes = new Set(initial);
+    return {
+        contains: name => classes.has(name),
+        add(...names) { names.forEach(name => classes.add(name)); },
+        remove(...names) { names.forEach(name => classes.delete(name)); },
+        toggle(name, force) {
+            const shouldHave = force === undefined ? !classes.has(name) : Boolean(force);
+            if (shouldHave) classes.add(name);
+            else classes.delete(name);
+            return shouldHave;
+        },
+    };
+}
+
+function mockRow(name, extraClasses = []) {
+    return {
+        classList: mockClassList(["list-row-container", ...extraClasses]),
+        dataset: { name },
+        querySelector(selector) {
+            if (selector === "[data-name]") return { dataset: { name } };
+            if (selector === "a[href*='/door-cutting-order/']") return null;
+            if (selector === ".dco-mobile-order-card") return null;
+            return null;
+        },
+    };
+}
+
+function mockListview(rows, { cardLayout = false } = {}) {
+    const result = {
+        querySelectorAll(selector) {
+            return selector === ".list-row-container" ? rows : [];
+        },
+    };
+    const root = {
+        nodeType: 1,
+        classList: mockClassList(cardLayout ? ["dco-order-list", "dco-order-card-layout"] : ["dco-order-list"]),
+        querySelector(selector) {
+            return selector === ".result" ? result : null;
+        },
+    };
+    return {
+        page: { wrapper: root },
+        data: [
+            { name: "DCO-READY", status: "Ready for Delivery" },
+            { name: "DCO-DELIVERED", status: "Delivered" },
+            { name: "DCO-PROD", status: "At CNC" },
+        ],
+        _root: root,
+    };
+}
+
+const readyRow = mockRow("DCO-READY", ["dco-list-row-completed"]);
+const deliveredRow = mockRow("DCO-DELIVERED");
+const productionRow = mockRow("DCO-PROD");
+const desktopList = mockListview([readyRow, deliveredRow, productionRow]);
+api.applyDesktopDeliveryRowColors(desktopList);
+assert(
+    readyRow.classList.contains("dco-list-row-ready-for-delivery"),
+    "desktop ready-for-delivery rows must use the light-green delivery class"
+);
+assert(
+    !readyRow.classList.contains("dco-list-row-completed"),
+    "desktop ready-for-delivery must not keep worker-completed green"
+);
+assert(
+    deliveredRow.classList.contains("dco-list-row-delivered"),
+    "desktop delivered rows must use the dark-green delivery class"
+);
+assert(!productionRow.classList.contains("dco-list-row-ready-for-delivery"));
+assert(!productionRow.classList.contains("dco-list-row-delivered"));
+
+readyRow.classList.add("dco-list-row-ready-for-delivery");
+deliveredRow.classList.add("dco-list-row-delivered");
+const mobileList = mockListview([readyRow, deliveredRow, productionRow], { cardLayout: true });
+api.applyDesktopDeliveryRowColors(mobileList);
+assert(
+    !readyRow.classList.contains("dco-list-row-ready-for-delivery"),
+    "mobile card layout must not receive desktop delivery row colors"
+);
+assert(
+    !deliveredRow.classList.contains("dco-list-row-delivered"),
+    "mobile card layout must not receive desktop delivered row colors"
+);
+
+const desktopCssSource = fs.readFileSync(
+    "almdina_erp/public/css/door_cutting_order_responsive.css",
+    "utf8"
+);
+assert(
+    desktopCssSource.includes(".dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-ready-for-delivery"),
+    "ready-for-delivery green is a desktop table style"
+);
+assert(
+    desktopCssSource.includes(".dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-delivered"),
+    "delivered dark green is a desktop table style"
+);
+assert(desktopCssSource.includes(".list-row-container.dco-list-row-ready-for-delivery .level-right"));
+assert(desktopCssSource.includes(".list-row-container.dco-list-row-delivered .level-right"));
+assert(desktopCssSource.includes("background: #ecfdf3 !important;"));
+assert(desktopCssSource.includes("background: #a7f3d0 !important;"));
+assert(desktopCssSource.includes("border-color: #16a34a !important;"));
+assert(desktopCssSource.includes("border-color: #047857 !important;"));
 
 assert(cssSource.includes("#2563eb"), "ready/start must use the agreed blue identity");
 assert(cssSource.includes("#f59e0b"), "in-progress/finish must use the agreed orange identity");

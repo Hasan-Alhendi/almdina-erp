@@ -36,6 +36,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.master_data_audit import (
     document_snapshot,
     record_master_data_audit,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.optimization_mode_validation import (
+    require_executable_optimization_mode,
+)
 
 
 MACHINE_OPTIONS = tuple(machine.id for machine in CANONICAL_MACHINE_TYPES)
@@ -68,6 +71,7 @@ _SETTINGS_FIELDS = (
     "default_special_manual_edge_fee_usd",
     "default_special_margin_percent",
     "default_extra_double_unit_price_usd",
+    "default_extra_full_door_double_unit_price_usd",
     "default_extra_liner_unit_price_usd",
     "default_extra_recessed_handle_cutout_unit_price_usd",
     "default_production_routing",
@@ -229,6 +233,9 @@ def _apply_plan_default_values(settings: Any, payload: dict[str, Any]) -> None:
         frappe.throw(_("Invalid Cutting Plan default settings."), frappe.ValidationError)
         raise AssertionError("unreachable")
 
+    if "default_packing_mode" in payload:
+        require_executable_optimization_mode(normalized.optimization_mode)
+
     canonical = {
         "default_packing_mode": normalized.optimization_mode,
         "default_cutting_machine_type": normalized.machine_type,
@@ -256,6 +263,9 @@ def _apply_values(settings: Any, payload: dict[str, Any]) -> None:
 
     extra_addon_prices = {
         "default_extra_double_unit_price_usd": _("Extra Double Price USD / Door"),
+        "default_extra_full_door_double_unit_price_usd": _(
+            "Full Door Double Processing Fee USD / Door"
+        ),
         "default_extra_liner_unit_price_usd": _("Extra Liner Price USD / Door"),
         "default_extra_recessed_handle_cutout_unit_price_usd": _(
             "Extra Recessed Handle Cutout Price USD / Door"
@@ -402,6 +412,10 @@ def update_production_settings(values: str | dict[str, Any]) -> dict[str, Any]:
     settings = frappe.get_single("Almdina ERP Settings")
     before = document_snapshot(settings)
     _apply_values(settings, payload)
+    # Section-scoped updates must not fail because unrelated Single-DocType
+    # mandatory fields (print identity) are empty. Payload fields are already
+    # validated in _apply_values; this service is the only allowed writer.
+    settings.flags.ignore_mandatory = True
     settings.save(ignore_permissions=True)
     after = document_snapshot(settings)
     record_master_data_audit(

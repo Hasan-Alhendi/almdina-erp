@@ -39,6 +39,7 @@ SECTION_FIELDS = MappingProxyType(
         FactorySettingsSection.EXTRA_ADDONS: frozenset(
             {
                 "default_extra_double_unit_price_usd",
+                "default_extra_full_door_double_unit_price_usd",
                 "default_extra_liner_unit_price_usd",
                 "default_extra_recessed_handle_cutout_unit_price_usd",
             }

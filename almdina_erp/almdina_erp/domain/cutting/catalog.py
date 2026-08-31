@@ -14,6 +14,10 @@ class UnsupportedOptimizationModeError(ValueError):
 class OptimizationModeUnavailableError(ValueError):
     """Raised when a canonical mode has no current engine implementation."""
 
+    def __init__(self, mode_id: str) -> None:
+        self.mode_id = str(mode_id or "").strip()
+        super().__init__(f"optimization_mode_not_implemented:{self.mode_id}")
+
 
 @dataclass(frozen=True, slots=True)
 class OptimizationMode:
@@ -27,14 +31,22 @@ class OptimizationMode:
     def implemented(self) -> bool:
         return self.engine_mode is not None
 
+    @property
+    def executable(self) -> bool:
+        """Whether this public mode can execute through the current engine."""
+
+        return self.implemented
+
     def as_public_dict(self) -> dict[str, Any]:
-        # All 16 story modes are valid/selectable product choices. ``implemented``
-        # reports whether the current engine can execute the choice in this build.
+        # ``available`` is retained for frontend/backward compatibility. It must
+        # mean the same thing as executable so a name-only mode is never offered
+        # as a selectable choice while still remaining visible in the catalog.
         return {
             "id": self.id,
             "label": self.label,
-            "available": True,
+            "available": self.executable,
             "implemented": self.implemented,
+            "executable": self.executable,
         }
 
 
@@ -47,26 +59,27 @@ class MachineType:
         return {"id": self.id, "label": self.label}
 
 
-# Keep this catalog intentionally independent of optimizer.py. Public IDs are a
-# stable product contract; engine_mode is a compatibility adapter to the current
-# engine and may evolve without changing the public IDs.
+# Public IDs are a stable product contract. Keep executable modes first so every
+# consumer receives the same native ordering without a duplicated UI catalog.
+# engine_mode is only a compatibility adapter to the current optimizer; None
+# means the public ID is known/persistable for compatibility but is not runnable.
 OPTIMIZATION_MODES = (
     OptimizationMode("auto", "تلقائي", "Auto"),
     OptimizationMode("auto_pro", "تلقائي متقدم (موصى به)", "Auto Pro"),
-    OptimizationMode("deep_search", "بحث معمق", "Deep Search"),
+    OptimizationMode("deep_search", "بحث معمّق", "Deep Search"),
     OptimizationMode("optimal", "بحث أمثل", "Optimal Search"),
-    OptimizationMode("cp_sat_ortools", "OR-Tools CP-SAT", None),
-    OptimizationMode("mip_cbc", "MIP / CBC", None),
-    OptimizationMode("scip", "SCIP", None),
-    OptimizationMode("highs", "HiGHS", None),
-    OptimizationMode("gecode", "Gecode", None),
-    OptimizationMode("chuffed", "Chuffed", None),
-    OptimizationMode("maxrects", "MaxRects", "MaxRects Best Short Side"),
-    OptimizationMode("guillotine", "Guillotine", "Guillotine Short Axis"),
-    OptimizationMode("shelf", "Shelf", "Shelf Horizontal"),
-    OptimizationMode("skyline", "Skyline", "Skyline Bottom Left"),
-    OptimizationMode("genetic", "Genetic Algorithm", None),
-    OptimizationMode("simulated_annealing", "Simulated Annealing", None),
+    OptimizationMode("maxrects", "تعبئة المستطيلات القصوى", "MaxRects Best Short Side"),
+    OptimizationMode("guillotine", "القص المقصلي", "Guillotine Short Axis"),
+    OptimizationMode("shelf", "التعبئة بالرفوف", "Shelf Horizontal"),
+    OptimizationMode("skyline", "التعبئة بخط الأفق", "Skyline Bottom Left"),
+    OptimizationMode("cp_sat_ortools", "البرمجة بالقيود — CP-SAT", None),
+    OptimizationMode("mip_cbc", "البرمجة الصحيحة المختلطة — CBC", None),
+    OptimizationMode("scip", "محلّل SCIP", None),
+    OptimizationMode("highs", "محلّل HiGHS", None),
+    OptimizationMode("gecode", "محلّل القيود Gecode", None),
+    OptimizationMode("chuffed", "محلّل القيود Chuffed", None),
+    OptimizationMode("genetic", "الخوارزمية الجينية", None),
+    OptimizationMode("simulated_annealing", "التلدين المُحاكى", None),
 )
 
 MACHINE_TYPES = (
@@ -182,11 +195,9 @@ def require_engine_mode(mode_value: str | None) -> str:
     mode = _OPTIMIZATION_BY_ID.get(persisted)
     if mode is None:
         return persisted
-    if mode.engine_mode is None:
-        raise OptimizationModeUnavailableError(
-            f"optimization_mode_not_implemented:{mode.id}"
-        )
-    return mode.engine_mode
+    if not mode.executable:
+        raise OptimizationModeUnavailableError(mode.id)
+    return mode.engine_mode  # type: ignore[return-value]
 
 
 def is_legacy_engine_mode(mode_value: str) -> bool:

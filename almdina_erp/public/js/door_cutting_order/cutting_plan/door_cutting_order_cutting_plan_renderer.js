@@ -21,6 +21,15 @@
             .replace(/'/g, "&#039;");
     }
 
+    function physicalCutQuantity(row) {
+        const extra = window.AlmdinaExtraDoorAddonsUX;
+        if (extra && typeof extra.physicalCutQuantity === "function") {
+            return extra.physicalCutQuantity(row);
+        }
+        const qty = Math.max(0, Math.floor(num(row && row.qty)));
+        return qty * (Number(row && row.extra_full_door_double) ? 2 : 1);
+    }
+
     function parse_plan(frm) {
         const raw = frm.doc.cutting_plan_json;
         if (!raw) return null;
@@ -163,7 +172,7 @@
                     : (row.piece_type === "Extra" ? " · ＋ Extra" : ""));
             html += `
                 <span style="display:inline-block;margin-left:16px;white-space:nowrap;">
-                    ${index + 1}- ${round(row.width_cm, 1)}*${round(row.length_cm, 1)} عدد ${Math.max(0, Math.floor(num(row.qty)))}${typeLabel}
+                    ${index + 1}- ${round(row.width_cm, 1)}*${round(row.length_cm, 1)} عدد ${physicalCutQuantity(row)}${typeLabel}
                 </span>
             `;
         });
@@ -343,7 +352,7 @@
 
     function requestedPieceCount(frm) {
         return (frm.doc.pieces || []).reduce(
-            (total, row) => total + Math.max(0, Math.floor(num(row.qty))),
+            (total, row) => total + physicalCutQuantity(row),
             0
         );
     }

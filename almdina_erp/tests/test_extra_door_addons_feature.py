@@ -39,6 +39,7 @@ def test_selections_are_plain_requirements_while_price_snapshots_are_protected()
     detail = _fields(DETAIL)
     for fieldname in (
         "extra_double",
+        "extra_full_door_double",
         "extra_liner",
         "extra_recessed_handle_cutout",
     ):
@@ -48,6 +49,8 @@ def test_selections_are_plain_requirements_while_price_snapshots_are_protected()
     for fieldname in (
         "extra_double_unit_price_usd",
         "extra_double_total_usd",
+        "extra_full_door_double_unit_price_usd",
+        "extra_full_door_double_total_usd",
         "extra_liner_unit_price_usd",
         "extra_liner_total_usd",
         "extra_recessed_handle_cutout_unit_price_usd",
@@ -62,10 +65,11 @@ def test_selections_are_plain_requirements_while_price_snapshots_are_protected()
     assert order["extra_addons_total_usd"]["permlevel"] == 1
 
 
-def test_factory_settings_own_three_positive_per_door_prices() -> None:
+def test_factory_settings_own_four_positive_per_door_prices() -> None:
     settings = _fields(SETTINGS)
     for fieldname in (
         "default_extra_double_unit_price_usd",
+        "default_extra_full_door_double_unit_price_usd",
         "default_extra_liner_unit_price_usd",
         "default_extra_recessed_handle_cutout_unit_price_usd",
     ):
@@ -81,6 +85,7 @@ def test_pricing_math_stays_server_side_and_customer_invoice_is_itemized() -> No
     assert "calculate_extra_addon_pricing" in adapter
     assert '"type": "extra_addon"' in documents
     assert "extra_double_unit_price_usd" in documents
+    assert "extra_full_door_double_unit_price_usd" in documents
     assert "extra_liner_unit_price_usd" in documents
 
 
@@ -92,7 +97,9 @@ def test_extra_selection_uses_native_type_select_and_owned_addon_flyout() -> Non
 
     assert "PIECE_COST_ONLY_FIELDS" in mutation
     assert 'recordImpact(frm, ["cost"]' in mutation
-    assert "extra_double" not in mutation.split("const PIECE_PLAN_COST_FIELDS", 1)[1].split("];", 1)[0]
+    plan_fields = mutation.split("const PIECE_PLAN_COST_FIELDS", 1)[1].split("];", 1)[0]
+    assert "extra_double" not in plan_fields
+    assert "extra_full_door_double" in plan_fields
 
     # The piece type remains a real select. Extra owns only its nested multi-select.
     assert '<select class="dco-fast-select dco-piece-type-select"' in ux
@@ -103,8 +110,10 @@ def test_extra_selection_uses_native_type_select_and_owned_addon_flyout() -> Non
     assert "dco-extra-open-button" in ux
     assert "renderSubmenu" in ux
     assert "لاينر" in ux
-    assert "دبل" in ux
-    assert "مسكة غطس" in ux
+    assert "دبل قشاط" in ux
+    assert "دبل كامل الدرفة" in ux
+    assert "حفر مسكة غطس" in ux
+    assert "physicalCutQuantity" in ux
     assert "dco-extra-apply" not in ux
     assert "dco-extra-cancel" not in ux
 

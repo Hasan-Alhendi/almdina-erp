@@ -242,11 +242,13 @@ function dcoPayload(pieceKey = "piece-local-1") {
         expected_server_modified: null,
         tab_session_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
         recovery_revision: 1,
+        expected_recovery_revision: 0,
         payload: dcoPayload(),
         asset_refs: [],
     });
     assert.equal(firstWrite.ok, true);
-    assert.equal(firstWrite.value.schema_version, 1);
+    assert.equal(firstWrite.value.schema_version, 2);
+    assert.equal(firstWrite.value.official_save_state, "ACTIVE");
     assert.equal(firstWrite.value.mode, "NEW");
     assert.equal(firstWrite.value.draft_id, newIdentity.draft_id);
     assert.equal(firstWrite.value.target_name, null);
@@ -269,6 +271,7 @@ function dcoPayload(pieceKey = "piece-local-1") {
         expected_server_modified: null,
         tab_session_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
         recovery_revision: 2,
+        expected_recovery_revision: 1,
         payload: dcoPayload("piece-local-2"),
         asset_refs: [],
     });
@@ -277,7 +280,43 @@ function dcoPayload(pieceKey = "piece-local-1") {
     assert.equal(secondWrite.value.created_at, createdAt);
     assert.equal((await repository.read(newIdentity)).value.payload.dco.pieces[0].piece_key, "piece-local-2");
 
-    const idempotent = await repository.write({
+    const pending = await repository.setOfficialSaveState(
+        newIdentity,
+        "PENDING_RECONCILIATION",
+        2,
+        null
+    );
+    assert.equal(pending.ok, true);
+    assert.equal(pending.value.official_save_state, "PENDING_RECONCILIATION");
+    assert.match(pending.value.official_save_attempted_at, /^2026-08-29T/);
+    const pendingAttemptedAt = pending.value.official_save_attempted_at;
+    const staleTabCheckpoint = await repository.write({
+        ...newIdentity,
+        mode: "NEW",
+        dirty_scope: "DCO",
+        target_name: null,
+        session_origin_modified: null,
+        expected_server_modified: null,
+        tab_session_id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        recovery_revision: 3,
+        expected_recovery_revision: 2,
+        official_save_state: "ACTIVE",
+        official_save_attempted_at: null,
+        payload: dcoPayload("piece-local-3"),
+        asset_refs: [],
+    });
+    assert.equal(staleTabCheckpoint.ok, false);
+    assert.equal(
+        staleTabCheckpoint.error.code,
+        "save_attempt_conflict",
+        "a pending official Save fences out higher checkpoint revisions"
+    );
+    const afterPendingCheckpoint = await repository.read(newIdentity);
+    assert.equal(afterPendingCheckpoint.value.recovery_revision, 2);
+    assert.equal(afterPendingCheckpoint.value.official_save_state, "PENDING_RECONCILIATION");
+    assert.equal(afterPendingCheckpoint.value.official_save_attempted_at, pendingAttemptedAt);
+    assert.equal(afterPendingCheckpoint.value.payload.dco.pieces[0].piece_key, "piece-local-2");
+    const pendingRetry = await repository.write({
         ...newIdentity,
         mode: "NEW",
         dirty_scope: "DCO",
@@ -286,11 +325,111 @@ function dcoPayload(pieceKey = "piece-local-1") {
         expected_server_modified: null,
         tab_session_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
         recovery_revision: 2,
+        expected_recovery_revision: 1,
         payload: dcoPayload("piece-local-2"),
         asset_refs: [],
     });
+    assert.equal(pendingRetry.ok, true, "the exact committed revision remains idempotent while pending");
+    assert.equal(
+        (await repository.delete(newIdentity, 1, pendingAttemptedAt)).error.code,
+        "stale_revision",
+        "confirmed cleanup cannot delete a different checkpoint revision"
+    );
+    assert.equal(
+        (await repository.delete(
+            newIdentity,
+            2,
+            "2026-08-29T10:59:00.000Z"
+        )).error.code,
+        "save_attempt_conflict",
+        "confirmed cleanup cannot delete a different official Save attempt"
+    );
+    const active = await repository.setOfficialSaveState(
+        newIdentity,
+        "ACTIVE",
+        2,
+        pendingAttemptedAt
+    );
+    assert.equal(active.ok, true);
+    assert.equal(active.value.official_save_state, "ACTIVE");
+    assert.equal(
+        active.value.official_save_attempted_at,
+        pendingAttemptedAt,
+        "ACTIVE retains the reconciled attempt as a compare-and-set fence"
+    );
+    const thirdWrite = await repository.write({
+        ...newIdentity,
+        mode: "NEW",
+        dirty_scope: "DCO",
+        target_name: null,
+        session_origin_modified: null,
+        expected_server_modified: null,
+        tab_session_id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        recovery_revision: 3,
+        expected_recovery_revision: 2,
+        payload: dcoPayload("piece-local-3"),
+        asset_refs: [],
+    });
+    assert.equal(thirdWrite.ok, true);
+    const leapfrog = await repository.write({
+        ...newIdentity,
+        mode: "NEW",
+        dirty_scope: "DCO",
+        target_name: null,
+        session_origin_modified: null,
+        expected_server_modified: null,
+        tab_session_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        recovery_revision: 5,
+        expected_recovery_revision: 2,
+        payload: dcoPayload("piece-stale-leapfrog"),
+        asset_refs: [],
+    });
+    assert.equal(leapfrog.ok, false);
+    assert.equal(leapfrog.error.code, "stale_revision");
+    const afterLeapfrog = await repository.read(newIdentity);
+    assert.equal(afterLeapfrog.value.recovery_revision, 3);
+    assert.equal(afterLeapfrog.value.payload.dco.pieces[0].piece_key, "piece-local-3");
+    const newerPending = await repository.setOfficialSaveState(
+        newIdentity,
+        "PENDING_RECONCILIATION",
+        3,
+        pendingAttemptedAt
+    );
+    assert.equal(newerPending.ok, true);
+    assert.notEqual(newerPending.value.official_save_attempted_at, pendingAttemptedAt);
+    assert.equal(
+        (await repository.setOfficialSaveState(
+            newIdentity,
+            "ACTIVE",
+            3,
+            pendingAttemptedAt
+        )).error.code,
+        "save_attempt_conflict",
+        "a stale NOT_FOUND result cannot clear a newer official Save attempt"
+    );
+    const activeAfterNewerAttempt = await repository.setOfficialSaveState(
+        newIdentity,
+        "ACTIVE",
+        3,
+        newerPending.value.official_save_attempted_at
+    );
+    assert.equal(activeAfterNewerAttempt.ok, true);
+
+    const idempotent = await repository.write({
+        ...newIdentity,
+        mode: "NEW",
+        dirty_scope: "DCO",
+        target_name: null,
+        session_origin_modified: null,
+        expected_server_modified: null,
+        tab_session_id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        recovery_revision: 3,
+        expected_recovery_revision: 2,
+        payload: dcoPayload("piece-local-3"),
+        asset_refs: [],
+    });
     assert.equal(idempotent.ok, true);
-    assert.equal(idempotent.value.recovery_revision, 2);
+    assert.equal(idempotent.value.recovery_revision, 3);
 
     const revisionConflict = await repository.write({
         ...newIdentity,
@@ -299,8 +438,9 @@ function dcoPayload(pieceKey = "piece-local-1") {
         target_name: null,
         session_origin_modified: null,
         expected_server_modified: null,
-        tab_session_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-        recovery_revision: 2,
+        tab_session_id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        recovery_revision: 3,
+        expected_recovery_revision: 2,
         payload: dcoPayload("different-at-same-revision"),
         asset_refs: [],
     });
@@ -315,7 +455,8 @@ function dcoPayload(pieceKey = "piece-local-1") {
         session_origin_modified: null,
         expected_server_modified: null,
         tab_session_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-        recovery_revision: 1,
+        recovery_revision: 2,
+        expected_recovery_revision: 1,
         payload: dcoPayload(),
         asset_refs: [],
     });
@@ -337,6 +478,7 @@ function dcoPayload(pieceKey = "piece-local-1") {
         expected_server_modified: "2026-08-29 09:00:00.000000",
         tab_session_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
         recovery_revision: 1,
+        expected_recovery_revision: 0,
         payload: dcoPayload("ROW-EXISTING"),
         asset_refs: [],
     });
@@ -380,7 +522,8 @@ function dcoPayload(pieceKey = "piece-local-1") {
         session_origin_modified: null,
         expected_server_modified: null,
         tab_session_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-        recovery_revision: 3,
+        recovery_revision: 4,
+        expected_recovery_revision: 3,
         payload: specialPayload,
         asset_refs: ["asset-scan-1"],
     });
@@ -400,6 +543,19 @@ function dcoPayload(pieceKey = "piece-local-1") {
     assert.equal(assetRead.ok, true);
     assert.equal(await assetRead.value.blob.text(), "scanner bytes");
     assert.equal(assetRead.value.mime_type, "image/jpeg");
+    const fencedCleanup = await repository.delete(
+        newIdentity,
+        3,
+        newerPending.value.official_save_attempted_at
+    );
+    assert.equal(fencedCleanup.ok, false);
+    assert.equal(fencedCleanup.error.code, "stale_revision");
+    assert.equal((await repository.read(newIdentity)).value.recovery_revision, 4);
+    assert.equal(
+        (await assetRepository.read(newIdentity, "asset-scan-1")).value.byte_length,
+        sourceBlob.size,
+        "a failed cleanup fence retains both the newer draft and its assets"
+    );
     const assetStorageKey = [...gateway.records.dco_recovery_assets.keys()][0];
     const validAssetRecord = gateway.records.dco_recovery_assets.get(assetStorageKey);
     gateway.records.dco_recovery_assets.set(assetStorageKey, {
@@ -418,6 +574,13 @@ function dcoPayload(pieceKey = "piece-local-1") {
     assert.equal((await repository.delete(newIdentity)).value, true);
     assert.equal(gateway.records.dco_recovery_assets.size, 0);
     assert.equal((await repository.read(newIdentity)).value, null);
+    const missingRevisionZeroCleanup = await repository.delete(newIdentity, 0, null);
+    assert.equal(missingRevisionZeroCleanup.ok, true);
+    assert.equal(
+        missingRevisionZeroCleanup.value,
+        false,
+        "revision zero represents a fail-open operation with no persisted draft"
+    );
 
     const editKey = repository.storageKey(editIdentity);
     const validEditRecord = gateway.records.dco_recovery_drafts.get(editKey);
@@ -429,6 +592,15 @@ function dcoPayload(pieceKey = "piece-local-1") {
     const unknownRead = await repository.read(editIdentity);
     assert.equal(unknownRead.ok, false);
     assert.equal(unknownRead.error.code, "unknown_schema");
+    gateway.records.dco_recovery_drafts.set(editKey, {
+        ...validEditRecord,
+        schema_version: 1,
+        official_save_state: undefined,
+        official_save_attempted_at: undefined,
+    });
+    const legacyRead = await repository.read(editIdentity);
+    assert.equal(legacyRead.ok, true);
+    assert.equal(legacyRead.value.official_save_state, "ACTIVE");
     gateway.records.dco_recovery_drafts.set(editKey, { ...validEditRecord, schema_version: 0 });
     const oldRead = await repository.read(editIdentity);
     assert.equal(oldRead.ok, false);
@@ -448,6 +620,7 @@ function dcoPayload(pieceKey = "piece-local-1") {
         expected_server_modified: "2026-08-29 09:00:00.000000",
         tab_session_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
         recovery_revision: 2,
+        expected_recovery_revision: 1,
         payload: dcoPayload("ROW-EXISTING"),
         asset_refs: [],
     });
@@ -482,6 +655,7 @@ function dcoPayload(pieceKey = "piece-local-1") {
         expected_server_modified: "2026-08-29 09:00:00.000000",
         tab_session_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
         recovery_revision: 3,
+        expected_recovery_revision: 1,
         payload: oversizedPayload,
         asset_refs: [],
     });

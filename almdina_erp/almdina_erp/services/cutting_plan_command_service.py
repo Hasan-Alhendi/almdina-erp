@@ -44,6 +44,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import
     calculate_system_plan,
     plan_input_fingerprint,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.optimization_mode_validation import (
+    require_executable_optimization_mode,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.stage_assignment_access import (
     require_stage_assignment_access,
 )
@@ -135,6 +138,12 @@ def _requested_updates(
     }
     if not provided:
         return {}
+
+    if "packing_mode" in provided:
+        # This function is reachable from a whitelisted command, so validate the
+        # public mode here as well as in presentation facades. No crafted request
+        # may persist or execute a known non-executable catalog entry.
+        require_executable_optimization_mode(provided["packing_mode"])
 
     defaults = canonical_default_plan_settings()
     try:
@@ -469,6 +478,10 @@ def recalculate_system_plan(
         plan = repository.get_document(plan.name)
         initialize_draft_plan_cost_snapshot(order, plan)
 
+    # A historical known-but-unavailable mode remains readable and unchanged,
+    # but recalculation must ask for an executable choice instead of leaking the
+    # domain exception or silently converting the stored algorithm.
+    require_executable_optimization_mode(plan.optimization_mode)
     calculate_system_plan(order, plan)
     apply_plan_costs(plan, edge_cost_usd=flt(getattr(order, "edge_cost_usd", 0)))
     repository.save_document(plan)

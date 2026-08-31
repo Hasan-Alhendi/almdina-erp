@@ -45,7 +45,9 @@ doctype_js = {
         "public/js/door_cutting_order/recovery/infrastructure/door_cutting_order_recovery_indexeddb.js",
         "public/js/door_cutting_order/recovery/infrastructure/door_cutting_order_local_draft_repository.js",
         "public/js/door_cutting_order/recovery/infrastructure/door_cutting_order_local_asset_repository.js",
+        "public/js/door_cutting_order/recovery/infrastructure/door_cutting_order_recovery_api.js",
         "public/js/door_cutting_order/recovery/application/door_cutting_order_checkpoint_session.js",
+        "public/js/door_cutting_order/recovery/application/door_cutting_order_new_recovery.js",
         "public/js/door_cutting_order/core/door_cutting_order_workspace_asset_registry.js",
         "public/js/door_cutting_order/core/door_cutting_order_workspace_asset_status_ux.js",
         "public/js/door_cutting_order/core/door_cutting_order_workspace_activation_lifecycle.js",
@@ -61,8 +63,8 @@ doctype_js = {
         "public/js/door_cutting_order/order_entry/door_cutting_order_defaults.js",
         "public/js/door_cutting_order/drawing/door_cutting_order_clipped_corner_ux.js",
         "public/js/door_cutting_order/printing/door_cutting_order_shape_print.js",
-        # Extra-door selection owns only customer requirements and cost impact;
-        # it is evaluated before the operator renderer consumes its type-cell API.
+        # Extra-door selection owns customer requirements; Full Door Double also
+        # impacts Plan quantity while other extras remain cost-only.
         "public/js/door_cutting_order/order_entry/extra_addons/door_cutting_order_extra_addons_ux.js",
         "public/js/door_cutting_order/order_entry/door_cutting_order_operator_ux.js",
         # Presentation-only owner for the native Order tab fields. It does not
