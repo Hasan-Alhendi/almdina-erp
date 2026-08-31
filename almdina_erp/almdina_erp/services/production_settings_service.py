@@ -36,6 +36,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.master_data_audit import (
     document_snapshot,
     record_master_data_audit,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.optimization_mode_validation import (
+    require_executable_optimization_mode,
+)
 
 
 MACHINE_OPTIONS = tuple(machine.id for machine in CANONICAL_MACHINE_TYPES)
@@ -229,6 +232,9 @@ def _apply_plan_default_values(settings: Any, payload: dict[str, Any]) -> None:
         frappe.throw(_("Invalid Cutting Plan default settings."), frappe.ValidationError)
         raise AssertionError("unreachable")
 
+    if "default_packing_mode" in payload:
+        require_executable_optimization_mode(normalized.optimization_mode)
+
     canonical = {
         "default_packing_mode": normalized.optimization_mode,
         "default_cutting_machine_type": normalized.machine_type,
@@ -420,7 +426,7 @@ def get_factory_settings_audit(limit: int = 30) -> list[dict[str, Any]]:
     _require_view()
     rows = frappe.get_all(
         "Almdina Master Data Audit",
-        filters={"target_doctype": "Almdina ERP Settings"},
+        filters={"target_doctype": "Almdina Master Data Audit"},
         fields=["name", "action", "changed_by", "changed_on", "changed_fields", "source"],
         order_by="changed_on desc",
         limit_page_length=max(1, min(cint(limit or 30), 100)),
