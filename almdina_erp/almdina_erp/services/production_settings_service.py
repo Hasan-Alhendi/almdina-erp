@@ -7,7 +7,21 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt
 
-from almdina_erp.almdina_erp.domain.cutting import PACKING_OPTIONS
+from almdina_erp.almdina_erp.domain.cutting.catalog import (
+    DEFAULT_OPTIMIZATION_MODE_ID,
+    MACHINE_TYPES as CANONICAL_MACHINE_TYPES,
+    machine_type_catalog,
+    optimization_catalog,
+    public_mode_value,
+)
+from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
+    DEFAULT_KERF_MM,
+    DEFAULT_MACHINE_TYPE,
+    DEFAULT_OPTIMIZATION_TIME_LIMIT_SEC,
+    DEFAULT_PREFERRED_TRIM_MM,
+    PlanSettingsValidationError,
+    normalize_plan_settings,
+)
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.domain.security.factory_settings import (
     FactorySettingsSection,
@@ -24,7 +38,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.master_data_audit import (
 )
 
 
-MACHINE_OPTIONS = ("Auto", "CNC Router", "Panel Saw")
+MACHINE_OPTIONS = tuple(machine.id for machine in CANONICAL_MACHINE_TYPES)
 PRINT_IDENTITY_DEFAULTS = {
     "print_factory_name": "مجمع المدينة المنورة التجاري",
     "print_factory_description": "الواح هايغلوس - فورميكا - cnc - ليزر - قشر",
@@ -60,6 +74,15 @@ _SETTINGS_FIELDS = (
     "allow_stage_override",
     "allow_unplaced_approval",
     *_PRINT_IDENTITY_FIELDS,
+)
+_PLAN_DEFAULT_FIELDS = frozenset(
+    {
+        "default_kerf_mm",
+        "default_trim_margin_mm",
+        "default_packing_mode",
+        "default_cutting_machine_type",
+        "default_optimization_time_limit_sec",
+    }
 )
 LEGACY_PRESERVED_FIELDS = (
     "enforce_stock_control",
@@ -163,10 +186,64 @@ def _validate_routing(name: Any) -> str:
     return routing_name
 
 
+def _stored_numeric(value: Any, default: float) -> Any:
+    return default if value is None else value
+
+
+def _apply_plan_default_values(settings: Any, payload: dict[str, Any]) -> None:
+    if not _PLAN_DEFAULT_FIELDS.intersection(payload):
+        return
+
+    try:
+        normalized = normalize_plan_settings(
+            optimization_mode=payload.get(
+                "default_packing_mode",
+                str(settings.default_packing_mode or "").strip()
+                or DEFAULT_OPTIMIZATION_MODE_ID,
+            ),
+            machine_type=payload.get(
+                "default_cutting_machine_type",
+                str(settings.default_cutting_machine_type or "").strip()
+                or DEFAULT_MACHINE_TYPE,
+            ),
+            optimization_time_limit_sec=payload.get(
+                "default_optimization_time_limit_sec",
+                _stored_numeric(
+                    settings.default_optimization_time_limit_sec,
+                    DEFAULT_OPTIMIZATION_TIME_LIMIT_SEC,
+                ),
+            ),
+            kerf_mm=payload.get(
+                "default_kerf_mm",
+                _stored_numeric(settings.default_kerf_mm, DEFAULT_KERF_MM),
+            ),
+            preferred_trim_mm=payload.get(
+                "default_trim_margin_mm",
+                _stored_numeric(
+                    settings.default_trim_margin_mm,
+                    DEFAULT_PREFERRED_TRIM_MM,
+                ),
+            ),
+        )
+    except PlanSettingsValidationError:
+        frappe.throw(_("Invalid Cutting Plan default settings."), frappe.ValidationError)
+        raise AssertionError("unreachable")
+
+    canonical = {
+        "default_packing_mode": normalized.optimization_mode,
+        "default_cutting_machine_type": normalized.machine_type,
+        "default_optimization_time_limit_sec": normalized.optimization_time_limit_sec,
+        "default_kerf_mm": normalized.kerf_mm,
+        "default_trim_margin_mm": normalized.preferred_trim_mm,
+    }
+    for fieldname in _PLAN_DEFAULT_FIELDS.intersection(payload):
+        settings.set(fieldname, canonical[fieldname])
+
+
 def _apply_values(settings: Any, payload: dict[str, Any]) -> None:
+    _apply_plan_default_values(settings, payload)
+
     numeric_non_negative = {
-        "default_kerf_mm": _("Default Kerf MM"),
-        "default_trim_margin_mm": _("Default Trim Margin MM"),
         "default_cutting_cost_per_board_usd": _("Default Cutting Cost / Board USD"),
         "default_special_design_fee_usd": _("Default Special Design Fee USD"),
         "default_special_cnc_fee_usd": _("Default Special CNC Fee USD"),
@@ -188,26 +265,12 @@ def _apply_values(settings: Any, payload: dict[str, Any]) -> None:
         if fieldname in payload:
             settings.set(fieldname, flt(_finite_positive(payload[fieldname], label)))
 
-    if "default_optimization_time_limit_sec" in payload:
-        settings.default_optimization_time_limit_sec = flt(
-            _finite_positive(payload["default_optimization_time_limit_sec"], _("Optimization Time Limit"))
-        )
     if "optimal_search_piece_limit" in payload:
         limit = cint(payload["optimal_search_piece_limit"])
         if limit <= 0:
             frappe.throw(_("Optimal Search Piece Limit must be greater than zero."), frappe.ValidationError)
         settings.optimal_search_piece_limit = limit
 
-    if "default_packing_mode" in payload:
-        packing_mode = str(payload["default_packing_mode"] or "").strip()
-        if packing_mode not in PACKING_OPTIONS:
-            frappe.throw(_("Unsupported Packing Mode: {0}").format(packing_mode), frappe.ValidationError)
-        settings.default_packing_mode = packing_mode
-    if "default_cutting_machine_type" in payload:
-        machine_type = str(payload["default_cutting_machine_type"] or "").strip()
-        if machine_type not in MACHINE_OPTIONS:
-            frappe.throw(_("Unsupported Cutting Machine Type: {0}").format(machine_type), frappe.ValidationError)
-        settings.default_cutting_machine_type = machine_type
     if "default_production_routing" in payload:
         settings.default_production_routing = _validate_routing(payload["default_production_routing"])
     for fieldname in ("allow_stage_override", "allow_unplaced_approval"):
@@ -258,7 +321,9 @@ def _settings_values(settings: Any) -> dict[str, Any]:
         value = settings.get(fieldname)
         if fieldname in {"allow_stage_override", "allow_unplaced_approval"}:
             value = int(value or 0)
-        elif fieldname not in {"default_packing_mode", "default_cutting_machine_type", "default_production_routing"}:
+        elif fieldname == "default_packing_mode":
+            value = public_mode_value(value)
+        elif fieldname not in {"default_cutting_machine_type", "default_production_routing"}:
             value = flt(value)
             if fieldname == "optimal_search_piece_limit":
                 value = cint(value)
@@ -305,13 +370,18 @@ def get_production_settings() -> dict[str, Any]:
             order_by="routing_name asc",
         )
     values = _settings_values(settings)
+    catalog = optimization_catalog()
+    machines = machine_type_catalog()
     return {
         **values,
         "values": values,
         "legacy_values": _legacy_settings_values(settings),
         "permissions": context,
-        "packing_options": list(PACKING_OPTIONS),
-        "machine_options": list(MACHINE_OPTIONS),
+        "optimization_catalog": catalog,
+        "machine_type_catalog": machines,
+        # Compatibility projections retain the complete public contract.
+        "packing_options": [item["id"] for item in catalog],
+        "machine_options": [item["id"] for item in machines],
         "routing_options": routing_options,
     }
 

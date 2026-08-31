@@ -6,6 +6,14 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt
 
+from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
+    DxfGeometrySnapshotError,
+    DxfTopologyError,
+    validate_snapshot_material_layout,
+)
+from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
+    ManufacturingRequirementsError,
+)
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     DRAFT,
     SYSTEM,
@@ -23,6 +31,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_reposito
     approved_plan_for_order,
     current_working_plan,
     latest_plan,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import (
+    plan_input_fingerprint,
 )
 from almdina_erp.almdina_erp.services import export_validation_service as legacy_export
 from almdina_erp.almdina_erp.services.order_board_identity import (
@@ -70,11 +81,34 @@ def _require_export_access(
     return None
 
 
+def _topology_kerf_error(exc: Exception) -> str:
+    code = getattr(exc, "code", None)
+    if code:
+        first = getattr(exc, "first_key", None) or "?"
+        second = getattr(exc, "second_key", None) or "?"
+        return _("DXF topology validation failed ({0}) between pieces {1} and {2}.").format(
+            code,
+            first,
+            second,
+        )
+    return _("Persisted DXF topology is invalid: {0}").format(str(exc))
+
+
 def _kerf_errors(snapshot: dict[str, Any], *, fallback_kerf_mm: float = 0.0) -> list[str]:
     required_kerf_cm = max(
         0.0,
         flt(snapshot.get("kerf_cm")) or (max(0.0, flt(fallback_kerf_mm)) / 10.0),
     )
+
+    try:
+        if validate_snapshot_material_layout(
+            snapshot,
+            required_clearance_mm=required_kerf_cm * 10.0,
+        ):
+            return []
+    except (DxfGeometrySnapshotError, DxfTopologyError) as exc:
+        return [_topology_kerf_error(exc)]
+
     if required_kerf_cm <= 0:
         return []
 
@@ -237,6 +271,38 @@ def _required_saved_plan(order: Any, plan_source: str | None = None) -> Any:
     return plan
 
 
+def _assert_saved_plan_fresh(order: Any, plan: Any) -> None:
+    """Reject stale manufacturing plans before any saved geometry is evaluated."""
+
+    if cint(getattr(plan, "plan_needs_recalculation", 0)):
+        frappe.throw(
+            _("خطة القص الحالية قديمة. أعد حساب الخطة أو أعد استيراد DXF قبل التصدير."),
+            frappe.ValidationError,
+        )
+
+    stored = str(getattr(plan, "input_fingerprint", "") or "").strip()
+    if not stored:
+        frappe.throw(
+            _("خطة القص الحالية لا تحتوي على بصمة متطلبات تصنيع موثوقة. أعد حساب الخطة أو أعد استيراد DXF."),
+            frappe.ValidationError,
+        )
+
+    try:
+        current = plan_input_fingerprint(order, plan)
+    except ManufacturingRequirementsError as exc:
+        frappe.throw(
+            _("مقاسات القص التصنيعية المحفوظة في الطلب غير مكتملة. احفظ الطلب ثم أعد حساب الخطة أو استيراد DXF."),
+            frappe.ValidationError,
+        )
+        raise AssertionError("unreachable") from exc
+
+    if current != stored:
+        frappe.throw(
+            _("خطة القص الحالية لا تطابق متطلبات التصنيع الحالية. أعد حساب الخطة أو أعد استيراد DXF قبل التصدير."),
+            frappe.ValidationError,
+        )
+
+
 @frappe.whitelist()
 def get_validated_dxf_plan(
     order_name: str | None = None,
@@ -255,6 +321,7 @@ def get_validated_dxf_plan(
 
     if order_name and order:
         plan = _required_saved_plan(order, plan_source)
+        _assert_saved_plan_fresh(order, plan)
         errors = legacy_export.validate_cutting_plan_document(plan)
         if errors:
             frappe.throw(
@@ -262,7 +329,10 @@ def get_validated_dxf_plan(
                     "\n".join(errors)
                 )
             )
-        snapshot = legacy_export._plan_to_export_snapshot(plan)
+        try:
+            snapshot = legacy_export._plan_to_export_snapshot(plan)
+        except DxfGeometrySnapshotError as exc:
+            frappe.throw(_("DXF export blocked by persisted topology validation: {0}").format(str(exc)))
         _assert_export_kerf(snapshot, fallback_kerf_mm=flt(plan.kerf_mm))
         return {
             "plan": snapshot,

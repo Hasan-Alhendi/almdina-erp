@@ -10,15 +10,12 @@
     });
     const KIND_CONFIG = Object.freeze({
         order: Object.freeze({
-            anchor: "order_details_section",
             title: "معلومات الطلب",
         }),
         plan: Object.freeze({
-            anchor: "plan_actions_section",
             title: "خطة القص",
         }),
         cost: Object.freeze({
-            anchor: "cost_settings_section",
             title: "تكلفة الطلب",
         }),
     });
@@ -26,6 +23,7 @@
     const SAVE_LABEL = "حفظ";
     const CANCEL_LABEL = "إلغاء";
     const TOOLBAR_CLASS = "dco-tab-edit-toolbar";
+    const TOOLBAR_SLOT_CLASS = "dco-tab-edit-toolbar-slot";
     const PAGE_CLASS = "dco-tab-local-edit-actions";
     const STYLE_ID = "dco-tab-local-edit-actions-css";
     const TAB_LISTENER_KEY = "__almdinaPageEditTabListenerInstalled";
@@ -57,21 +55,30 @@
                 .${TOOLBAR_CLASS} {
                     display:flex;
                     align-items:center;
-                    justify-content:space-between;
+                    justify-content:flex-end;
                     gap:12px;
-                    margin:0 0 14px;
-                    padding:10px 12px;
-                    border:1px solid var(--border-color,#dfe3e8);
-                    border-radius:12px;
-                    background:var(--card-bg,var(--fg-color,#fff));
-                    box-shadow:0 3px 12px rgba(15,23,42,.035);
+                    margin:0;
+                    padding:0;
+                    border:0;
+                    border-radius:0;
+                    background:transparent;
+                    box-shadow:none;
                     direction:rtl;
+                }
+                .${TOOLBAR_SLOT_CLASS} {
+                    margin-inline-start:auto;
+                    list-style:none;
+                    display:flex;
+                    align-items:center;
                 }
                 .${TOOLBAR_CLASS}__identity {
                     display:flex;
                     align-items:center;
                     gap:8px;
                     min-width:0;
+                }
+                .${TOOLBAR_CLASS}[data-compact="1"] .${TOOLBAR_CLASS}__identity {
+                    display:none;
                 }
                 .${TOOLBAR_CLASS}__title {
                     font-size:13px;
@@ -181,16 +188,15 @@
                 @media (max-width:560px) {
                     .${TOOLBAR_CLASS} {
                         align-items:stretch;
-                        flex-direction:column;
-                    }
-                    .${TOOLBAR_CLASS}__identity {
-                        justify-content:space-between;
+                        flex-direction:row;
+                        width:100%;
+                        justify-content:flex-end;
                     }
                     .${TOOLBAR_CLASS}__actions {
-                        width:100%;
+                        width:auto;
                     }
                     .${TOOLBAR_CLASS}__actions .btn {
-                        flex:1 1 0;
+                        min-width:76px;
                     }
                     .dco-plan-settings-readonly__grid {
                         grid-template-columns:1fr;
@@ -303,11 +309,36 @@
         return null;
     }
 
-    function toolbarAnchor(frm, kind) {
-        const config = KIND_CONFIG[kind];
-        const field = config && frm && frm.fields_dict && frm.fields_dict[config.anchor];
-        const wrapper = field && (field.$wrapper || field.wrapper);
-        return wrapperNode(wrapper);
+    function toolbarSlotHost(frm) {
+        const root = formRoot(frm);
+        if (!root || !root.querySelector) return null;
+        for (const fieldname of Object.keys(TAB_KIND)) {
+            const node = root.querySelector(`[data-fieldname="${fieldname}"]`);
+            if (!node) continue;
+            const tabNode = node.closest("li,.nav-item") || node;
+            const parent = tabNode.parentElement;
+            if (parent) return parent;
+        }
+        return null;
+    }
+
+    function toolbarSlotFor(frm) {
+        const root = formRoot(frm);
+        return root && root.querySelector
+            ? root.querySelector(`.${TOOLBAR_SLOT_CLASS}`)
+            : null;
+    }
+
+    function ensureToolbarSlot(frm) {
+        const existing = toolbarSlotFor(frm);
+        if (existing && existing.isConnected) return existing;
+        const host = toolbarSlotHost(frm);
+        if (!host) return null;
+        const isList = host.tagName === "UL" || host.tagName === "OL";
+        const slot = document.createElement(isList ? "li" : "div");
+        slot.className = TOOLBAR_SLOT_CLASS;
+        host.appendChild(slot);
+        return slot;
     }
 
     function toolbarFor(frm, kind) {
@@ -318,12 +349,13 @@
     function ensureToolbar(frm, kind) {
         const existing = toolbarFor(frm, kind);
         if (existing && existing.isConnected) return existing;
-        const anchor = toolbarAnchor(frm, kind);
-        if (!anchor || !anchor.parentNode) return null;
+        const slot = ensureToolbarSlot(frm);
+        if (!slot) return null;
         const toolbar = document.createElement("div");
         toolbar.className = TOOLBAR_CLASS;
         toolbar.setAttribute("data-almdina-tab-edit-kind", kind);
-        anchor.parentNode.insertBefore(toolbar, anchor);
+        toolbar.setAttribute("data-compact", "1");
+        slot.replaceChildren(toolbar);
         return toolbar;
     }
 
@@ -331,6 +363,9 @@
         const root = formRoot(frm);
         if (!root || !root.querySelectorAll) return;
         root.querySelectorAll(`.${TOOLBAR_CLASS}`).forEach((node) => node.remove());
+        root.querySelectorAll(`.${TOOLBAR_SLOT_CLASS}`).forEach((node) => {
+            if (!node.childElementCount) node.remove();
+        });
     }
 
     function editBlockedMessage(frm, kind, competingKind = null) {
@@ -541,7 +576,7 @@
         if (page && page.classList) page.classList.add(PAGE_CLASS);
         removeLegacyPageCancel(frm);
         ensurePlanSummaryVisible(frm);
-        ["order", "plan", "cost"].forEach((kind) => renderToolbar(frm, kind));
+        renderToolbar(frm, activeKind(frm));
         renderPlanSettingsReadOnly(frm);
         return true;
     }

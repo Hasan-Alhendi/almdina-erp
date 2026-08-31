@@ -13,6 +13,7 @@ CUTTING_PLAN = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan"
 REGISTRY = ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_workspace_asset_registry.js"
 PLAN_UX = CUTTING_PLAN / "door_cutting_order_plan_ux.js"
 CONTROLS_UX = CUTTING_PLAN / "door_cutting_order_plan_controls_ux.js"
+PLAN_EDIT_SESSION = CUTTING_PLAN / "door_cutting_order_plan_edit_session_ux.js"
 PLAN_WORKSPACE_API = CUTTING_PLAN / "door_cutting_order_plan_workspace_api.js"
 TEXT_BOARD_PLAN_UX = CUTTING_PLAN / "door_cutting_order_text_board_plan_ux.js"
 FAST_SAVE_UX = CUTTING_PLAN / "door_cutting_order_fast_save_ux.js"
@@ -22,13 +23,31 @@ REMOVED_PALETTE = ROOT / "public" / "js" / "door_cutting_order_algorithm_palette
 PLAN_PERMISSION_SERVICE = (
     ROOT / "almdina_erp" / "services" / "order_plan_permission_service.py"
 )
+CANONICAL_ALGORITHM_IDS = {
+    "auto",
+    "auto_pro",
+    "deep_search",
+    "optimal",
+    "cp_sat_ortools",
+    "mip_cbc",
+    "scip",
+    "highs",
+    "gecode",
+    "chuffed",
+    "maxrects",
+    "guillotine",
+    "shelf",
+    "skyline",
+    "genetic",
+    "simulated_annealing",
+}
 
 
 def source(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def test_advanced_algorithms_remain_in_the_canonical_plan_optimization_select():
+def test_canonical_plan_storage_accepts_story_ids_and_historical_values():
     order_payload = json.loads(source(DOCTYPE))
     order_fields = {field.get("fieldname") for field in order_payload["fields"]}
     assert "packing_mode" not in order_fields
@@ -38,7 +57,9 @@ def test_advanced_algorithms_remain_in_the_canonical_plan_optimization_select():
         field for field in payload["fields"] if field.get("fieldname") == "optimization_mode"
     )
     options = set(optimization_mode["options"].splitlines())
-    assert {"Auto Pro", "Deep Search", "Optimal Search"}.issubset(options)
+    assert CANONICAL_ALGORITHM_IDS <= options
+    assert {"Auto Pro", "Deep Search", "Optimal Search", "MaxRects Best Area"} <= options
+    assert optimization_mode.get("default") == "auto_pro"
     assert optimization_mode.get("read_only") == 1
 
 
@@ -201,14 +222,15 @@ def test_piece_financial_fields_are_protected_at_cost_permission_level():
         assert fields[fieldname].get("permlevel") == 1
 
 
-def test_advanced_algorithm_labels_are_applied_inside_the_primary_select():
+def test_algorithm_selector_consumes_workspace_catalog_without_post_render_label_patch():
     controls = source(CONTROLS_UX)
-    for value, label in (
-        ("Auto Pro", "أفضل توزيع متقدم"),
-        ("Deep Search", "بحث معمق"),
-        ("Optimal Search", "بحث أمثل"),
-    ):
-        assert f'{{ value: "{value}", label: "{label}" }}' in controls
-    assert 'if (!field || !field.df) return;' in controls
-    assert 'field.$input' in controls
-    assert 'option.text(label)' in controls
+    edit_session = source(PLAN_EDIT_SESSION)
+
+    assert 'catalog: "optimization_catalog"' in edit_session
+    assert "data[catalogName]" in edit_session
+    assert "entry && entry.id" in edit_session
+    assert "entry && entry.label" in edit_session
+    assert "ensureAdvancedModes" not in controls
+    assert "ADVANCED_MODES" not in controls
+    for hardcoded in ("Auto Pro", "Deep Search", "Optimal Search"):
+        assert hardcoded not in controls

@@ -3,6 +3,9 @@
 
     const STYLE_ID = "dco-measurement-actions-css";
     const EDITOR_CLASS = "dco-measurement-entry-window";
+    const EDIT_LABEL = __("تعديل");
+    const SAVE_LABEL = __("حفظ");
+    const CANCEL_LABEL = __("إلغاء");
 
     function esc(value) {
         return frappe.utils.escape_html(String(value ?? ""));
@@ -30,7 +33,6 @@
         const state = frm && frm._dcoMeasurementEntryWindow;
         if (!state || !state.overlay || !state.overlay.isConnected) return;
         const status = state.overlay.querySelector(".dco-entry-window-status");
-        const saveButton = state.overlay.querySelector(".dco-entry-window-save");
         const dirty = typeof frm.is_dirty === "function" ? frm.is_dirty() : Boolean(frm.dirty);
         if (status) {
             status.classList.toggle("is-dirty", dirty);
@@ -38,7 +40,47 @@
                 ? '<span class="dot"></span><span>توجد تعديلات غير محفوظة</span>'
                 : '<span class="dot"></span><span>جميع التعديلات محفوظة</span>';
         }
-        if (saveButton) saveButton.disabled = !dirty || state.saving;
+        renderInlineOrderEditAction(frm);
+    }
+
+    function orderRevisionUx() {
+        return window.AlmdinaOrderRevisionUX || null;
+    }
+
+    function isInlineEditActive(frm) {
+        const revision = orderRevisionUx();
+        return Boolean(
+            revision
+            && typeof revision.captureEditSessionPresence === "function"
+            && revision.captureEditSessionPresence(frm)
+        );
+    }
+
+    function canInlineStartEdit(frm) {
+        const revision = orderRevisionUx();
+        return Boolean(
+            revision
+            && typeof revision.canOfferEditSession === "function"
+            && revision.canOfferEditSession(frm)
+        );
+    }
+
+    function renderInlineOrderEditAction(frm) {
+        const state = frm && frm._dcoMeasurementEntryWindow;
+        if (!state || !state.overlay || !state.overlay.isConnected) return;
+        const host = state.overlay.querySelector(".dco-entry-window-order-edit-action");
+        if (!host) return;
+        const busy = Boolean(state.saving);
+        if (isInlineEditActive(frm)) {
+            host.innerHTML = `
+                <button type="button" class="btn btn-default dco-inline-order-edit-cancel" ${busy ? "disabled" : ""}>${esc(CANCEL_LABEL)}</button>
+                <button type="button" class="btn btn-primary dco-inline-order-edit-save" ${busy ? "disabled" : ""}>${esc(SAVE_LABEL)}</button>
+            `;
+            return;
+        }
+        host.innerHTML = `
+            <button type="button" class="btn btn-default dco-inline-order-edit-start" ${canInlineStartEdit(frm) ? "" : "disabled"}>${esc(EDIT_LABEL)}</button>
+        `;
     }
 
     function ensureEditorRootMounted(frm) {
@@ -63,30 +105,6 @@
         document.body.classList.remove("dco-measurement-entry-open");
         frm._dcoMeasurementEntryWindow = null;
         requestAnimationFrame(() => ensureActions(frm));
-    }
-
-    async function saveFromEditor(frm) {
-        const state = frm && frm._dcoMeasurementEntryWindow;
-        if (!state || state.saving) return;
-        state.saving = true;
-        const saveButton = state.overlay.querySelector(".dco-entry-window-save");
-        const originalLabel = saveButton ? saveButton.textContent : "";
-        if (saveButton) {
-            saveButton.disabled = true;
-            saveButton.textContent = "جارٍ الحفظ…";
-        }
-        try {
-            await Promise.resolve(frm.save());
-            requestAnimationFrame(() => ensureEditorRootMounted(frm));
-            setTimeout(() => ensureEditorRootMounted(frm), 120);
-            frappe.show_alert({ message: "تم حفظ الطلب.", indicator: "green" });
-        } catch (error) {
-            console.error("Measurement entry save failed", error);
-        } finally {
-            state.saving = false;
-            if (saveButton) saveButton.textContent = originalLabel || "حفظ الطلب";
-            updateEditorState(frm);
-        }
     }
 
     function openEditableMeasurements(frm) {
@@ -125,7 +143,7 @@
                 </div>
                 <div class="dco-entry-window-actions">
                     <button type="button" class="btn btn-default dco-entry-window-print">طباعة القياسات</button>
-                    <button type="button" class="btn btn-primary dco-entry-window-save">حفظ الطلب</button>
+                    <span class="dco-entry-window-order-edit-action"></span>
                     <button type="button" class="btn btn-default dco-entry-window-close">إغلاق والعودة</button>
                 </div>
             </header>
@@ -140,6 +158,7 @@
 
         const state = { overlay, host, root, placeholder, saving: false, stateFrame: null };
         frm._dcoMeasurementEntryWindow = state;
+        renderInlineOrderEditAction(frm);
 
         overlay.addEventListener("click", event => {
             if (event.target.closest(".dco-entry-window-close")) {
@@ -152,9 +171,30 @@
                 printMeasurements(frm);
                 return;
             }
-            if (event.target.closest(".dco-entry-window-save")) {
+            if (event.target.closest(".dco-inline-order-edit-start")) {
                 event.preventDefault();
-                saveFromEditor(frm);
+                const revision = orderRevisionUx();
+                if (revision && typeof revision.enterEditSession === "function") {
+                    revision.enterEditSession(frm);
+                    renderInlineOrderEditAction(frm);
+                }
+                return;
+            }
+            if (event.target.closest(".dco-inline-order-edit-save")) {
+                event.preventDefault();
+                const revision = orderRevisionUx();
+                if (revision && typeof revision.commitEditSession === "function") {
+                    Promise.resolve(revision.commitEditSession(frm)).finally(() => renderInlineOrderEditAction(frm));
+                }
+                return;
+            }
+            if (event.target.closest(".dco-inline-order-edit-cancel")) {
+                event.preventDefault();
+                const revision = orderRevisionUx();
+                if (revision && typeof revision.lockEditSession === "function") {
+                    revision.lockEditSession(frm, { silent: true });
+                    Promise.resolve(frm.reload_doc()).finally(() => renderInlineOrderEditAction(frm));
+                }
             }
         });
 
@@ -197,6 +237,7 @@
             .dco-entry-window-meta{display:flex;align-items:center;justify-content:center;gap:7px;flex-wrap:wrap}.dco-entry-window-meta>span{display:inline-flex;align-items:center;gap:4px;padding:5px 8px;border:1px solid var(--border-color,#dfe3e8);border-radius:999px;background:var(--subtle-fg,#f7f9fb);font-size:10px;white-space:nowrap}
             .dco-entry-window-status .dot{width:7px;height:7px;border-radius:50%;background:#209454}.dco-entry-window-status.is-dirty{border-color:rgba(218,146,21,.35);background:rgba(218,146,21,.08);color:#8a5a08}.dco-entry-window-status.is-dirty .dot{background:#d99215}
             .dco-entry-window-actions{display:flex;align-items:center;justify-content:flex-start;gap:7px;flex-wrap:wrap}.dco-entry-window-actions .btn{min-height:36px;border-radius:9px!important;font-weight:850!important;white-space:nowrap}
+            .dco-entry-window-actions .dco-entry-window-order-edit-action{display:inline-flex;align-items:center;gap:6px}
             .dco-entry-window-body{flex:1;min-height:0;padding:10px}.dco-entry-window-host{height:100%;min-height:0}.dco-entry-window-host>[data-fieldname="pieces_fast_entry"],.dco-entry-window-host>.frappe-control{height:100%;margin:0!important}.dco-entry-window-host .dco-fast-entry-shell{height:100%;display:flex;flex-direction:column;border-radius:12px}.dco-entry-window-host .dco-fast-entry-toolbar{flex:0 0 auto}.dco-entry-window-host .dco-fast-entry-scroll{flex:1 1 auto;max-height:none!important;height:auto!important;min-height:0;overflow:auto!important}.dco-entry-window-host .dco-fast-table{min-width:1180px}.dco-entry-window-host .dco-measurement-table-actions{display:none!important}
             @media(max-width:1000px){.dco-entry-window-header{grid-template-columns:1fr auto}.dco-entry-window-meta{grid-column:1/-1;grid-row:2}.dco-entry-window-actions{grid-column:2;grid-row:1}}
             @media(max-width:760px){.dco-measurement-table-actions{width:100%;margin-inline-start:0}.dco-measurement-table-actions .btn{flex:1 1 auto}.dco-entry-window-header{grid-template-columns:1fr;padding:9px}.dco-entry-window-title,.dco-entry-window-meta,.dco-entry-window-actions{grid-column:1;grid-row:auto}.dco-entry-window-actions .btn{flex:1 1 auto}.dco-entry-window-body{padding:6px}}
@@ -278,6 +319,7 @@
     frappe.ui.form.on("Door Cutting Order", {
         onload_post_render(frm) { schedule(frm); },
         refresh(frm) { schedule(frm); },
+        almdina_edit_session_changed(frm) { schedule(frm); },
     });
 
     window.AlmdinaMeasurementActions = {

@@ -3,12 +3,6 @@
 
     const EDITABLE_ORDER_STATUSES = new Set(["Draft", "Pending Review", "Rejected"]);
 
-    const ADVANCED_MODES = [
-        { value: "Auto Pro", label: "أفضل توزيع متقدم" },
-        { value: "Deep Search", label: "بحث معمق" },
-        { value: "Optimal Search", label: "بحث أمثل" },
-    ];
-
     const DUPLICATED_ACTIONS = [
         ".dco-auto-pro-plan",
         ".dco-deep-plan",
@@ -135,45 +129,6 @@
                 }
             </style>
         `);
-    }
-
-    function ensureAdvancedModes(frm) {
-        const field = frm.fields_dict && frm.fields_dict.packing_mode;
-        if (!field || !field.df) return;
-        const options = String(field.df.options || "")
-            .split("\n")
-            .map((value) => value.trim())
-            .filter(Boolean);
-        let changed = false;
-        ADVANCED_MODES.forEach(({ value }) => {
-            if (!options.includes(value)) {
-                options.push(value);
-                changed = true;
-            }
-        });
-        if (changed) {
-            field.df.options = options.join("\n");
-            if (typeof field.set_options === "function") field.set_options(options);
-            else if (typeof field.refresh === "function") field.refresh();
-        }
-
-        const settings = activeSettings(frm);
-        const selected = String((settings && settings.packing_mode) || "Auto");
-        const input = field.$input && field.$input.length ? field.$input : field.$wrapper.find("select");
-        if (!input || !input.length) return;
-        ADVANCED_MODES.forEach(({ value, label }) => {
-            let option = input.find("option").filter(function matchValue() {
-                return this.value === value;
-            }).first();
-            if (!option.length) {
-                input.append($("<option>", { value, text: label }));
-                option = input.find("option").filter(function matchInsertedValue() {
-                    return this.value === value;
-                }).first();
-            }
-            if (String(option.text() || "") !== label) option.text(label);
-        });
-        if (String(input.val() || "") !== selected) input.val(selected);
     }
 
     function applyOptimizerFieldAccess(frm) {
@@ -573,7 +528,6 @@
 
     function apply(frm) {
         installStyles();
-        ensureAdvancedModes(frm);
         applyOptimizerFieldAccess(frm);
         simplifyActions(frm);
     }

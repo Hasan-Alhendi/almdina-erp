@@ -5,6 +5,9 @@
     window.__almdinaSecureDxfExportLoaded = true;
 
     const DXF_VERSION = "AC1009"; // AutoCAD R11/R12 ASCII. AutoCAD 2020 opens this legacy format.
+    const TOPOLOGY_SCHEMA_VERSION = 1;
+    const TOPOLOGY_UNIT = "mm";
+    const TOPOLOGY_COORDINATE_SPACE = "usable_sheet";
 
     function canExportDxf(frm = window.cur_frm) {
         const permissions = window.AlmdinaPermissions;
@@ -35,6 +38,14 @@
     function num(value) {
         const result = Number(value);
         return Number.isFinite(result) ? result : 0;
+    }
+
+    function finiteCoordinate(value, field) {
+        const result = Number(value);
+        if (!Number.isFinite(result)) {
+            throw new Error(`${field} must be a finite number.`);
+        }
+        return result;
     }
 
     function pair(code, value) {
@@ -90,6 +101,47 @@
         return result;
     }
 
+    function topologyPolygon(points, field) {
+        if (!Array.isArray(points) || points.length < 3) {
+            throw new Error(`${field} must contain at least three points.`);
+        }
+        return points.map((point, index) => {
+            if (!Array.isArray(point) || point.length !== 2) {
+                throw new Error(`${field}[${index}] must be an [x, y] point.`);
+            }
+            return [
+                finiteCoordinate(point[0], `${field}[${index}][0]`),
+                finiteCoordinate(point[1], `${field}[${index}][1]`),
+            ];
+        });
+    }
+
+    function persistedTopology(piece) {
+        if (!Object.prototype.hasOwnProperty.call(piece || {}, "geometry")) return null;
+        const geometry = piece.geometry;
+        if (!geometry || typeof geometry !== "object" || Array.isArray(geometry)) {
+            throw new Error("Persisted DXF geometry must be an object.");
+        }
+        if (geometry.schema_version !== TOPOLOGY_SCHEMA_VERSION) {
+            throw new Error("Persisted DXF geometry schema version is unsupported.");
+        }
+        if (geometry.unit !== TOPOLOGY_UNIT) {
+            throw new Error("Persisted DXF geometry unit must be mm.");
+        }
+        if (geometry.coordinate_space !== TOPOLOGY_COORDINATE_SPACE) {
+            throw new Error("Persisted DXF geometry coordinate space is unsupported.");
+        }
+        if (!Array.isArray(geometry.holes)) {
+            throw new Error("Persisted DXF geometry holes must be an array.");
+        }
+        return {
+            outer: topologyPolygon(geometry.outer, "geometry.outer"),
+            holes: geometry.holes.map((hole, index) =>
+                topologyPolygon(hole, `geometry.holes[${index}]`)
+            ),
+        };
+    }
+
     function firstDefined(...values) {
         return values.find(value => value !== undefined && value !== null && value !== "");
     }
@@ -117,6 +169,15 @@
         };
     }
 
+    function topologyDxfPoints(points, { offsetX, offsetY, fullHeight, appliedTrim }) {
+        // Persisted topology uses usable-sheet coordinates: top-left origin, x right,
+        // y down. DXF uses the physical sheet's bottom-left origin, x right, y up.
+        return points.map(([x, y]) => [
+            offsetX + appliedTrim.width + x,
+            offsetY + fullHeight - appliedTrim.length - y,
+        ]);
+    }
+
     function buildDxf(plan) {
         const sheets = plan.sheets || [];
         const perRow = 2;
@@ -139,6 +200,22 @@
             entities += rectangle("SHEET_OUTLINE", offsetX, offsetY, fullWidth, fullHeight);
 
             (sheet.pieces || []).forEach(piece => {
+                const topology = persistedTopology(piece);
+                if (topology) {
+                    const transform = { offsetX, offsetY, fullHeight, appliedTrim };
+                    entities += closedPath(
+                        "CUT_PATH",
+                        topologyDxfPoints(topology.outer, transform)
+                    );
+                    topology.holes.forEach(hole => {
+                        entities += closedPath(
+                            "CUT_PATH",
+                            topologyDxfPoints(hole, transform)
+                        );
+                    });
+                    return;
+                }
+
                 const pieceWidth = num(piece.w) * 10;
                 const pieceHeight = num(piece.h) * 10;
                 // x/y/w/h are the authoritative optimizer cut-path geometry. The
@@ -232,8 +309,9 @@
             frappe.throw(isArabic() ? "خطة القص المتحقق منها لا تحتوي على ألواح للتصدير." : "Validated cutting plan contains no sheets to export.");
         }
 
-        const dxf = buildDxf(plan);
+        let dxf;
         try {
+            dxf = buildDxf(plan);
             validateDxfText(dxf);
         } catch (error) {
             console.error("DXF self-check failed", error);

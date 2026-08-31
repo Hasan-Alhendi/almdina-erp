@@ -17,6 +17,19 @@ from almdina_erp.almdina_erp.application.cutting.version import ENGINE_VERSION
 from almdina_erp.almdina_erp.application.orders.plan_snapshot_security import (
     sanitize_plan_snapshot,
 )
+from almdina_erp.almdina_erp.domain.cutting.catalog import DEFAULT_OPTIMIZATION_MODE_ID
+from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
+    build_manufacturing_requirements,
+)
+from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
+    DEFAULT_KERF_MM,
+    DEFAULT_MACHINE_TYPE,
+    DEFAULT_OPTIMIZATION_TIME_LIMIT_SEC,
+    DEFAULT_PREFERRED_TRIM_MM,
+    PlanSettings,
+    PlanSettingsValidationError,
+    normalize_plan_settings,
+)
 from almdina_erp.almdina_erp.domain.orders.plan_fingerprint import fingerprint_payload
 from almdina_erp.almdina_erp.infrastructure.cutting.domain_engine import domain_cutting_engine
 from almdina_erp.almdina_erp.infrastructure.frappe.orders.cut_dimension_plan_adapter import (
@@ -41,10 +54,67 @@ def _piece_rows(order: Any) -> tuple[dict[str, Any], ...]:
     )
 
 
+def _manufacturing_requirements(order: Any) -> dict[str, Any]:
+    """Capture persisted cut requirements for the exact plan revision."""
+
+    requirements: list[dict[str, Any]] = []
+    for source_piece_no, row in enumerate(order.pieces or [], start=1):
+        piece = FrappeCutDimensionPlanAdapter.piece_row_as_dict(row)
+        for copy_no in range(1, cint(row.qty) + 1):
+            requirements.append(
+                {
+                    "label": f"{source_piece_no}.{copy_no}",
+                    "source_piece_no": source_piece_no,
+                    "copy_no": copy_no,
+                    "cut_width_cm": piece["width_cm"],
+                    "cut_length_cm": piece["length_cm"],
+                    "allow_rotation": bool(cint(row.allow_rotation)),
+                    "piece_type": str(row.piece_type or "Regular"),
+                }
+            )
+    return build_manufacturing_requirements(requirements)
+
+
+def _numeric_or_default(value: Any, default: float) -> Any:
+    return default if value is None else value
+
+
+def _validated_plan_settings(plan: Any) -> PlanSettings:
+    """Translate Frappe storage fields into the canonical PlanSettings contract."""
+
+    try:
+        return normalize_plan_settings(
+            optimization_mode=(
+                str(getattr(plan, "optimization_mode", None) or "").strip()
+                or DEFAULT_OPTIMIZATION_MODE_ID
+            ),
+            machine_type=(
+                str(getattr(plan, "machine_type", None) or "").strip()
+                or DEFAULT_MACHINE_TYPE
+            ),
+            optimization_time_limit_sec=_numeric_or_default(
+                getattr(plan, "optimization_time_limit_sec", None),
+                DEFAULT_OPTIMIZATION_TIME_LIMIT_SEC,
+            ),
+            kerf_mm=_numeric_or_default(
+                getattr(plan, "kerf_mm", None),
+                DEFAULT_KERF_MM,
+            ),
+            preferred_trim_mm=_numeric_or_default(
+                getattr(plan, "trim_margin_mm", None),
+                DEFAULT_PREFERRED_TRIM_MM,
+            ),
+        )
+    except PlanSettingsValidationError:
+        frappe.throw(_("إعدادات خطة القص الحالية غير صالحة."), frappe.ValidationError)
+        raise AssertionError("unreachable")
+
+
 def plan_input_fingerprint(order: Any, plan: Any) -> str:
-    """Fingerprint only the order requirements and plan-owned working settings."""
+    """Fingerprint only the order requirements and validated plan-owned settings."""
 
     width_mm, length_mm = _board_dimensions_mm(order)
+    settings = _validated_plan_settings(plan)
     return fingerprint_payload(
         {
             "version": 1,
@@ -56,11 +126,11 @@ def plan_input_fingerprint(order: Any, plan: Any) -> str:
                 "length_mm": length_mm,
             },
             "settings": {
-                "optimization_mode": str(plan.optimization_mode or "Auto Pro"),
-                "machine_type": str(plan.machine_type or "Auto"),
-                "time_limit_sec": flt(plan.optimization_time_limit_sec),
-                "kerf_mm": flt(plan.kerf_mm),
-                "trim_margin_mm": flt(plan.trim_margin_mm),
+                "optimization_mode": settings.optimization_mode,
+                "machine_type": settings.machine_type,
+                "time_limit_sec": settings.optimization_time_limit_sec,
+                "kerf_mm": settings.kerf_mm,
+                "trim_margin_mm": settings.preferred_trim_mm,
             },
             "pieces": list(_piece_rows(order)),
         }
@@ -75,26 +145,28 @@ def calculate_system_plan(order: Any, plan: Any) -> OptimizationOutcome:
     """
 
     width_mm, length_mm = _board_dimensions_mm(order)
-    settings = frappe.get_cached_doc("Almdina ERP Settings")
+    factory_settings = frappe.get_cached_doc("Almdina ERP Settings")
+    plan_settings = _validated_plan_settings(plan)
     fingerprint = plan_input_fingerprint(order, plan)
     outcome = optimize_order_plan(
         OptimizeOrderPlanCommand(
             engine_version=ENGINE_VERSION,
             input_fingerprint=fingerprint,
+            plan_settings=plan_settings,
             board=BoardGeometry(
                 full_width_cm=width_mm / 10,
                 full_length_cm=length_mm / 10,
-                trim_cm=flt(plan.trim_margin_mm) / 10,
-                kerf_cm=flt(plan.kerf_mm) / 10,
+                trim_cm=plan_settings.preferred_trim_mm / 10,
+                kerf_cm=plan_settings.kerf_mm / 10,
             ),
             optimizer=OptimizerOptions(
-                selected_mode=str(plan.optimization_mode or "Auto Pro"),
-                machine_type=str(plan.machine_type or "Auto"),
-                time_limit_sec=flt(plan.optimization_time_limit_sec) or 10,
-                exact_piece_limit=cint(settings.optimal_search_piece_limit) or 40,
-                min_remnant_width_cm=flt(settings.min_remnant_width_mm) / 10,
-                min_remnant_length_cm=flt(settings.min_remnant_length_mm) / 10,
-                min_remnant_area_m2=flt(settings.min_remnant_area_m2),
+                selected_mode=plan_settings.optimization_mode,
+                machine_type=plan_settings.machine_type,
+                time_limit_sec=plan_settings.optimization_time_limit_sec,
+                exact_piece_limit=cint(factory_settings.optimal_search_piece_limit) or 40,
+                min_remnant_width_cm=flt(factory_settings.min_remnant_width_mm) / 10,
+                min_remnant_length_cm=flt(factory_settings.min_remnant_length_mm) / 10,
+                min_remnant_area_m2=flt(factory_settings.min_remnant_area_m2),
             ),
             piece_rows=_piece_rows(order),
         ),
@@ -113,6 +185,8 @@ def _apply_snapshot(
     method_label_fallback: str = "",
     engine_version_fallback: str = "",
 ) -> None:
+    snapshot = dict(snapshot)
+    snapshot["manufacturing_requirements"] = _manufacturing_requirements(order)
     validation = snapshot.get("validation") or {}
     metrics = snapshot.get("industrial_metrics") or {}
     width_mm, length_mm = _board_dimensions_mm(order)

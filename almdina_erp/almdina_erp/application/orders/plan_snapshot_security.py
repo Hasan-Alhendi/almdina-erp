@@ -4,6 +4,13 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
+from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
+    canonicalize_snapshot_geometries,
+)
+from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
+    canonicalize_snapshot_manufacturing_requirements,
+)
+
 
 # Cutting-plan snapshots are shared with planning, drawing, production, print,
 # and DXF surfaces. They are therefore an operational geometry artifact, never a
@@ -43,26 +50,33 @@ def is_financial_plan_key(key: Any) -> bool:
     return normalized.startswith(_FINANCIAL_PLAN_PREFIXES)
 
 
-def sanitize_plan_snapshot(value: Any) -> Any:
-    """Deep-copy JSON-compatible plan data while removing financial metadata.
-
-    The sanitizer is deliberately recursive because optimization engines may
-    copy piece metadata into nested sheets. A top-level-only filter would leave
-    edge rates, piece costs, or special-shape prices reachable through a plan
-    endpoint even when scalar DocType fields are protected by permlevel 1.
-    """
-
+def _sanitize_plan_value(value: Any) -> Any:
     if isinstance(value, Mapping):
         return {
-            key: sanitize_plan_snapshot(item)
+            key: _sanitize_plan_value(item)
             for key, item in value.items()
             if not is_financial_plan_key(key)
         }
     if isinstance(value, list):
-        return [sanitize_plan_snapshot(item) for item in value]
+        return [_sanitize_plan_value(item) for item in value]
     if isinstance(value, tuple):
-        return [sanitize_plan_snapshot(item) for item in value]
+        return [_sanitize_plan_value(item) for item in value]
     return value
+
+
+def sanitize_plan_snapshot(value: Any) -> Any:
+    """Return safe operational plan data with trusted persisted contracts.
+
+    Financial metadata is removed recursively. Declared public DXF ``geometry``
+    and manufacturing-requirement contracts are validated and canonicalized;
+    malformed declared contracts are rejected instead of being silently discarded.
+    Legacy plans that do not declare either contract remain unchanged here; the
+    manufacturing/export lifecycle decides whether legacy absence is acceptable.
+    """
+
+    sanitized = _sanitize_plan_value(value)
+    sanitized = canonicalize_snapshot_manufacturing_requirements(sanitized)
+    return canonicalize_snapshot_geometries(sanitized)
 
 
 def sanitize_plan_snapshot_json(raw: Any) -> str:

@@ -79,13 +79,20 @@ class FrappeOrderDocumentAccess:
             return {}
         flags = self.document.flags
         if not flags.get("_order_old_piece_rows_loaded"):
+            table_columns = {
+                str(column or "").strip()
+                for column in (frappe.db.get_table_columns("Door Cutting Order Detail") or [])
+            }
+            fields = [field for field in _OLD_PIECE_FIELDS if field in table_columns]
+            if "name" not in fields:
+                fields = ["name", *fields]
             rows = frappe.get_all(
                 "Door Cutting Order Detail",
                 filters={
                     "parent": self.document.name,
                     "parenttype": "Door Cutting Order",
                 },
-                fields=_OLD_PIECE_FIELDS,
+                fields=fields,
                 order_by="idx asc",
             )
             flags._order_old_piece_rows = {row.name: row for row in rows}

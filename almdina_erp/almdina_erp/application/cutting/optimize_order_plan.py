@@ -4,6 +4,20 @@ import math
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from almdina_erp.almdina_erp.application.cutting.execution_trace import (
+    build_cutting_execution_trace,
+)
+from almdina_erp.almdina_erp.domain.cutting.adaptive_trim import (
+    AdaptiveTrimDecision,
+    AppliedTrim,
+    PlanQuality,
+    TRIM_PRECISION_CM,
+    resolve_adaptive_trim,
+)
+from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
+    PlanSettings,
+    normalize_plan_settings,
+)
 from almdina_erp.almdina_erp.domain.orders.costing import round_value
 
 
@@ -54,21 +68,14 @@ class BoardGeometry:
 
 
 @dataclass(frozen=True, slots=True)
-class AppliedMargins:
-    """Resolved symmetric trim per physical board axis.
-
-    ``width_trim_cm`` is applied to both left and right edges.
-    ``length_trim_cm`` is applied to both top and bottom edges.
-    """
-
-    width_trim_cm: float
-    length_trim_cm: float
+class AppliedMargins(AppliedTrim):
+    """Compatibility surface for callers using the pre-ALMADINA-138 API."""
 
     def usable_width_cm(self, board: BoardGeometry) -> float:
-        return max(0.0, board.full_width_cm - (self.width_trim_cm * 2))
+        return super().usable_width_cm(full_width_cm=board.full_width_cm)
 
     def usable_length_cm(self, board: BoardGeometry) -> float:
-        return max(0.0, board.full_length_cm - (self.length_trim_cm * 2))
+        return super().usable_length_cm(full_length_cm=board.full_length_cm)
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,6 +96,7 @@ class OptimizeOrderPlanCommand:
     board: BoardGeometry
     optimizer: OptimizerOptions
     piece_rows: tuple[dict[str, Any], ...]
+    plan_settings: PlanSettings | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,12 +113,13 @@ def optimize_order_plan(
     *,
     engine: CuttingPlanEngine,
 ) -> OptimizationOutcome:
-    """Expand pieces, resolve safe trim, optimize, validate, and persist a snapshot."""
+    """Expand pieces, resolve Adaptive Trim, optimize, validate, and snapshot."""
 
     board = command.board
+    plan_settings = _canonical_trace_settings(command)
     rows = [dict(row) for row in command.piece_rows]
     expanded = engine.expand_pieces(rows)
-    preferred_margins = AppliedMargins(
+    preferred_trim = AppliedTrim(
         width_trim_cm=max(0.0, board.trim_cm),
         length_trim_cm=max(0.0, board.trim_cm),
     )
@@ -119,26 +128,54 @@ def optimize_order_plan(
         command,
         engine=engine,
         pieces=expanded,
-        margins=preferred_margins,
-        selected_mode=command.optimizer.selected_mode,
+        trim=preferred_trim,
     )
-    applied_margins, plan = _resolve_adaptive_margins(
-        command,
-        engine=engine,
-        pieces=expanded,
-        preferred_margins=preferred_margins,
-        preferred_plan=preferred_plan,
-    )
+    evaluated_plans: dict[AppliedTrim, dict[str, Any]] = {
+        preferred_trim: preferred_plan,
+    }
 
-    usable_width_cm = applied_margins.usable_width_cm(board)
-    usable_length_cm = applied_margins.usable_length_cm(board)
+    def evaluate_trim(trim: AppliedTrim) -> PlanQuality:
+        plan = evaluated_plans.get(trim)
+        if plan is None:
+            plan = _run_engine(
+                command,
+                engine=engine,
+                pieces=expanded,
+                trim=trim,
+            )
+            evaluated_plans[trim] = plan
+        return _plan_quality(plan)
+
+    trim_decision = resolve_adaptive_trim(
+        preferred=preferred_trim,
+        preferred_quality=_plan_quality(preferred_plan),
+        evaluate=evaluate_trim,
+        has_pieces=bool(expanded),
+        physical_board_lower_bound=_physical_board_lower_bound(expanded, board),
+    )
+    applied_trim = trim_decision.applied
+    plan = evaluated_plans.get(applied_trim)
+    if plan is None:
+        plan = _run_engine(
+            command,
+            engine=engine,
+            pieces=expanded,
+            trim=applied_trim,
+        )
+
+    usable_width_cm = applied_trim.usable_width_cm(
+        full_width_cm=board.full_width_cm
+    )
+    usable_length_cm = applied_trim.usable_length_cm(
+        full_length_cm=board.full_length_cm
+    )
     validation_errors = engine.validate(
         plan,
         expanded,
         usable_width_cm,
         usable_length_cm,
     )
-    margin_notes = _build_margin_notes(board, applied_margins)
+    margin_notes = _build_margin_notes(board, applied_trim)
 
     metrics = dict(plan.get("industrial_metrics") or {})
     required_boards = len(plan.get("sheets") or [])
@@ -156,9 +193,19 @@ def optimize_order_plan(
         sheet.setdefault("full_length_cm", board.full_length_cm)
         sheet.setdefault("usable_width_cm", usable_width_cm)
         sheet.setdefault("usable_length_cm", usable_length_cm)
-        sheet["applied_trim_width_cm"] = applied_margins.width_trim_cm
-        sheet["applied_trim_length_cm"] = applied_margins.length_trim_cm
+        sheet["applied_trim_width_cm"] = applied_trim.width_trim_cm
+        sheet["applied_trim_length_cm"] = applied_trim.length_trim_cm
 
+    trim_policy = _trim_policy_metadata(
+        board=board,
+        decision=trim_decision,
+    )
+    execution_trace = build_cutting_execution_trace(
+        plan_settings=plan_settings,
+        trim_decision=trim_decision,
+        optimizer_outcome=plan,
+        engine_version=command.engine_version,
+    )
     snapshot = {
         "engine_version": command.engine_version,
         "input_fingerprint": command.input_fingerprint,
@@ -185,15 +232,19 @@ def optimize_order_plan(
         "usable_board_length_cm": usable_length_cm,
         "kerf_cm": board.kerf_cm,
         "trim_cm": board.trim_cm,
-        "applied_trim_width_cm": applied_margins.width_trim_cm,
-        "applied_trim_length_cm": applied_margins.length_trim_cm,
+        "applied_trim_width_cm": applied_trim.width_trim_cm,
+        "applied_trim_length_cm": applied_trim.length_trim_cm,
+        "trim_policy": trim_policy,
+        "execution_trace": execution_trace.to_snapshot(),
+        # Compatibility metadata retained for print/DXF/readers that still use
+        # the pre-ALMADINA-138 margin vocabulary.
         "margin_policy": {
-            "mode": "adaptive" if margin_notes else "preferred",
-            "preferred_margin_mm": round_value(board.trim_cm * 10, 2),
-            "left_mm": round_value(applied_margins.width_trim_cm * 10, 2),
-            "right_mm": round_value(applied_margins.width_trim_cm * 10, 2),
-            "top_mm": round_value(applied_margins.length_trim_cm * 10, 2),
-            "bottom_mm": round_value(applied_margins.length_trim_cm * 10, 2),
+            "mode": trim_decision.mode,
+            "preferred_margin_mm": trim_policy["preferred_trim_mm"],
+            "left_mm": trim_policy["applied_width_trim_mm"],
+            "right_mm": trim_policy["applied_width_trim_mm"],
+            "top_mm": trim_policy["applied_length_trim_mm"],
+            "bottom_mm": trim_policy["applied_length_trim_mm"],
             "notes": margin_notes,
         },
         "margin_notes": margin_notes,
@@ -228,131 +279,23 @@ def optimize_order_plan(
     )
 
 
-def _resolve_adaptive_margins(
-    command: OptimizeOrderPlanCommand,
-    *,
-    engine: CuttingPlanEngine,
-    pieces: list[dict[str, Any]],
-    preferred_margins: AppliedMargins,
-    preferred_plan: dict[str, Any],
-) -> tuple[AppliedMargins, dict[str, Any]]:
-    """Relax trim only when it improves placement or physical board count.
+def _canonical_trace_settings(command: OptimizeOrderPlanCommand) -> PlanSettings:
+    """Return the canonical settings object used as execution-trace input.
 
-    The cutting Domain remains unaware of trim policy. We probe only exceptional
-    plans, then refine the affected axis to retain as much trim as possible.
+    Frappe production callers pass their already-normalized PlanSettings object.
+    The fallback preserves compatibility for application callers that predate
+    ALMADINA-139 while still constructing the trace from a canonical contract.
     """
 
-    board = command.board
-    if board.trim_cm <= 0 or not pieces:
-        return preferred_margins, preferred_plan
-
-    preferred_quality = _plan_quality(preferred_plan)
-    physical_lower_bound = _physical_board_lower_bound(pieces, board)
-    if preferred_quality[0] == 0 and preferred_quality[1] <= physical_lower_bound:
-        return preferred_margins, preferred_plan
-
-    probes = [
-        AppliedMargins(0.0, preferred_margins.length_trim_cm),
-        AppliedMargins(preferred_margins.width_trim_cm, 0.0),
-        AppliedMargins(0.0, 0.0),
-    ]
-    best_margins = preferred_margins
-    best_quality = preferred_quality
-
-    for margins in probes:
-        probe = _run_engine(
-            command,
-            engine=engine,
-            pieces=pieces,
-            margins=margins,
-            selected_mode="Auto",
-        )
-        quality = _plan_quality(probe)
-        if quality < best_quality or (
-            quality == best_quality
-            and _retained_margin(margins) > _retained_margin(best_margins)
-        ):
-            best_margins = margins
-            best_quality = quality
-
-    if best_quality >= preferred_quality:
-        return preferred_margins, preferred_plan
-
-    refined = best_margins
-    target_quality = best_quality
-    if refined.width_trim_cm < preferred_margins.width_trim_cm:
-        refined = _refine_axis_margin(
-            command,
-            engine=engine,
-            pieces=pieces,
-            margins=refined,
-            axis="width",
-            preferred_cm=preferred_margins.width_trim_cm,
-            target_quality=target_quality,
-        )
-    if refined.length_trim_cm < preferred_margins.length_trim_cm:
-        refined = _refine_axis_margin(
-            command,
-            engine=engine,
-            pieces=pieces,
-            margins=refined,
-            axis="length",
-            preferred_cm=preferred_margins.length_trim_cm,
-            target_quality=target_quality,
-        )
-
-    final_plan = _run_engine(
-        command,
-        engine=engine,
-        pieces=pieces,
-        margins=refined,
-        selected_mode=command.optimizer.selected_mode,
+    if command.plan_settings is not None:
+        return command.plan_settings
+    return normalize_plan_settings(
+        optimization_mode=command.optimizer.selected_mode,
+        machine_type=command.optimizer.machine_type,
+        optimization_time_limit_sec=command.optimizer.time_limit_sec,
+        kerf_mm=command.board.kerf_cm * 10,
+        preferred_trim_mm=command.board.trim_cm * 10,
     )
-    if _plan_quality(final_plan) < preferred_quality:
-        return refined, final_plan
-
-    # The probe may find a packing that the requested strategy cannot reproduce.
-    # In that case keep the original safe plan instead of relaxing trim for no gain.
-    return preferred_margins, preferred_plan
-
-
-def _refine_axis_margin(
-    command: OptimizeOrderPlanCommand,
-    *,
-    engine: CuttingPlanEngine,
-    pieces: list[dict[str, Any]],
-    margins: AppliedMargins,
-    axis: str,
-    preferred_cm: float,
-    target_quality: tuple[int, int],
-) -> AppliedMargins:
-    low = 0.0
-    high = max(0.0, preferred_cm)
-
-    for _ in range(7):
-        mid = (low + high) / 2
-        candidate = (
-            AppliedMargins(mid, margins.length_trim_cm)
-            if axis == "width"
-            else AppliedMargins(margins.width_trim_cm, mid)
-        )
-        probe = _run_engine(
-            command,
-            engine=engine,
-            pieces=pieces,
-            margins=candidate,
-            selected_mode="Auto",
-        )
-        if _plan_quality(probe) <= target_quality:
-            low = mid
-        else:
-            high = mid
-
-    # Keep 0.1 mm precision and round downward so the final margin stays feasible.
-    resolved = math.floor((low * 100) + 1e-9) / 100
-    if axis == "width":
-        return AppliedMargins(resolved, margins.length_trim_cm)
-    return AppliedMargins(margins.width_trim_cm, resolved)
 
 
 def _run_engine(
@@ -360,16 +303,15 @@ def _run_engine(
     *,
     engine: CuttingPlanEngine,
     pieces: list[dict[str, Any]],
-    margins: AppliedMargins,
-    selected_mode: str,
+    trim: AppliedTrim,
 ) -> dict[str, Any]:
     board = command.board
     return engine.optimize(
         pieces,
-        margins.usable_width_cm(board),
-        margins.usable_length_cm(board),
+        trim.usable_width_cm(full_width_cm=board.full_width_cm),
+        trim.usable_length_cm(full_length_cm=board.full_length_cm),
         board.kerf_cm,
-        selected_mode=selected_mode,
+        selected_mode=command.optimizer.selected_mode,
         machine_type=command.optimizer.machine_type,
         time_limit_sec=command.optimizer.time_limit_sec,
         exact_piece_limit=command.optimizer.exact_piece_limit,
@@ -394,20 +336,45 @@ def _physical_board_lower_bound(
     return max(1, math.ceil(piece_area / board_area)) if piece_area else 0
 
 
-def _plan_quality(plan: dict[str, Any]) -> tuple[int, int]:
-    return (
-        len(plan.get("unplaced") or []),
-        len(plan.get("sheets") or []),
+def _plan_quality(plan: dict[str, Any]) -> PlanQuality:
+    return PlanQuality(
+        unplaced_count=len(plan.get("unplaced") or []),
+        board_count=len(plan.get("sheets") or []),
     )
 
 
-def _retained_margin(margins: AppliedMargins) -> float:
-    return margins.width_trim_cm + margins.length_trim_cm
+def _trim_policy_metadata(
+    *,
+    board: BoardGeometry,
+    decision: AdaptiveTrimDecision,
+) -> dict[str, Any]:
+    return {
+        "mode": decision.mode,
+        "preferred_trim_mm": round_value(max(0.0, board.trim_cm) * 10, 2),
+        "applied_width_trim_mm": round_value(
+            max(0.0, decision.applied.width_trim_cm) * 10,
+            2,
+        ),
+        "applied_length_trim_mm": round_value(
+            max(0.0, decision.applied.length_trim_cm) * 10,
+            2,
+        ),
+        "relaxed_axes": list(decision.relaxed_axes),
+        "precision_mm": round_value(TRIM_PRECISION_CM * 10, 2),
+        "preferred_quality": {
+            "unplaced_count": decision.preferred_quality.unplaced_count,
+            "board_count": decision.preferred_quality.board_count,
+        },
+        "applied_quality": {
+            "unplaced_count": decision.applied_quality.unplaced_count,
+            "board_count": decision.applied_quality.board_count,
+        },
+    }
 
 
 def _build_margin_notes(
     board: BoardGeometry,
-    margins: AppliedMargins,
+    margins: AppliedTrim,
 ) -> list[str]:
     preferred_mm = round_value(max(0.0, board.trim_cm) * 10, 2)
     width_mm = round_value(max(0.0, margins.width_trim_cm) * 10, 2)
