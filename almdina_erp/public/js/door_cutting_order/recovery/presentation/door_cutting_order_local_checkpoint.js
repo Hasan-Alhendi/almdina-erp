@@ -1099,6 +1099,8 @@
             await initialization.promise;
             if (!isCurrent()) abortInactiveSave();
             state = currentState(frm);
+            const discoveryOwnsForm = initializations.get(frm) === initialization && dialogs.has(frm);
+            if (!state && !discoveryOwnsForm) return;
             frappe.validated = false;
             showRecoveryError(
                 state

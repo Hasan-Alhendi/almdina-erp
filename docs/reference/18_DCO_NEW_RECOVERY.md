@@ -45,6 +45,9 @@ normal checkpoint/observer/reconciliation chain owns the insert. A revision-conf
 card remains part of the displayed discovery set even after it is removed from the
 actionable set; deleting other cards cannot close the dialog while that frozen draft
 still requires reopen or an explicit Start New choice.
+If the recovery infrastructure cannot create any session and no discovery dialog
+still owns the form, this gate fails open to the existing native explicit Save; local
+recovery unavailability must never make DCO creation permanently unavailable.
 
 `draft_id` is the stable UUID across checkpoint, reopen, restore, temporary Frappe
 names, first Save, and reconciliation. Row `piece_key` values are restored into the

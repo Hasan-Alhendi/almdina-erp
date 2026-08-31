@@ -32,9 +32,11 @@ let nativeSaveDeferred = null;
 let deleteDeferred = null;
 let deleteEntered = null;
 let discoveryDeferred = null;
+let identityFailure = null;
 
 const repository = {
     createIdentity() {
+        if (identityFailure) throw identityFailure;
         uuidSequence += 1;
         return `99999999-9999-4999-8999-${String(uuidSequence).padStart(12, "0")}`;
     },
@@ -412,6 +414,18 @@ function runCleanups(frm) {
     assert.equal(blockedDiscoverySaveForm.doc.recovery_creation_token, blockedDiscoveryState.draft_id);
     assert.equal(records.get(blockedDiscoveryState.draft_id).official_save_state, "PENDING_RECONCILIATION");
     discoveryDeferred = null;
+    fakeWindow.cur_frm = null;
+
+    identityFailure = new Error("secure identity unavailable");
+    discoveredRecords = [];
+    const failSafeSaveForm = form("new-door-cutting-order-fail-safe-save");
+    fakeWindow.cur_frm = failSafeSaveForm;
+    fakeFrappe.validated = true;
+    await handlers["Door Cutting Order"].before_save(failSafeSaveForm);
+    assert.equal(fakeFrappe.validated, true, "recovery session failure never disables native Save");
+    assert.equal(Recovery.LocalCheckpoint.snapshot(failSafeSaveForm), null);
+    assert.equal(failSafeSaveForm.doc.recovery_creation_token, undefined);
+    identityFailure = null;
     fakeWindow.cur_frm = null;
 
     discoveredRecords = [];

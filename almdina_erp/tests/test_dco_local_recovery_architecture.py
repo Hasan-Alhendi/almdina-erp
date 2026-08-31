@@ -366,6 +366,7 @@ class TestDcoLocalRecoveryArchitecture(unittest.TestCase):
         self.assertIn("initializations.get(frm) !== initialization", presentation)
         self.assertIn("if (!ownsDiscovery()) return;", presentation)
         self.assertIn("await initialization.promise;", presentation)
+        self.assertIn("if (!state && !discoveryOwnsForm) return;", presentation)
         self.assertIn("اكتمل تجهيز الحفظ المحلي", presentation)
         self.assertGreaterEqual(
             presentation.count('if (initialization.pendingDirty && state) markDirty(frm, "DCO");'),
