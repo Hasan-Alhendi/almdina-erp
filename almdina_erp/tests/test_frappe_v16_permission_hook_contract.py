@@ -172,6 +172,96 @@ class TestFrappeV16PermissionHookContract(unittest.TestCase):
                 False,
             )
 
+    def test_completed_worker_list_scope_requires_history_capability(self) -> None:
+        with (
+            patch.object(
+                permissions,
+                "_worker_actionable_orders_subquery",
+                return_value="active-orders",
+            ),
+            patch.object(
+                permissions,
+                "_worker_completed_orders_subquery",
+                return_value="completed-orders",
+            ) as completed,
+            patch.object(permissions, "_has", return_value=False),
+        ):
+            self.assertEqual(
+                permissions._worker_visible_orders_subquery("worker@example.com"),
+                "active-orders",
+            )
+            completed.assert_not_called()
+
+        with (
+            patch.object(
+                permissions,
+                "_worker_actionable_orders_subquery",
+                return_value="active-orders",
+            ),
+            patch.object(
+                permissions,
+                "_worker_completed_orders_subquery",
+                return_value="completed-orders",
+            ),
+            patch.object(permissions, "_has", return_value=True),
+        ):
+            self.assertEqual(
+                permissions._worker_visible_orders_subquery("worker@example.com"),
+                "active-orders union completed-orders",
+            )
+
+    def test_completed_document_read_requires_history_capability(self) -> None:
+        with (
+            patch.object(permissions, "_requires_assigned_scope", return_value=True),
+            patch.object(
+                permissions,
+                "_dispatched_order_row",
+                return_value={
+                    "status": "Delivered",
+                    "current_production_stage": None,
+                },
+            ),
+            patch.object(permissions, "_has", return_value=False),
+            patch.object(
+                permissions.frappe.db,
+                "exists",
+                return_value=True,
+                create=True,
+            ) as completed_exists,
+        ):
+            self.assertFalse(
+                permissions.worker_can_view_order(
+                    "worker@example.com",
+                    "DCO-COMPLETED",
+                )
+            )
+            completed_exists.assert_not_called()
+
+        with (
+            patch.object(permissions, "_requires_assigned_scope", return_value=True),
+            patch.object(
+                permissions,
+                "_dispatched_order_row",
+                return_value={
+                    "status": "Delivered",
+                    "current_production_stage": None,
+                },
+            ),
+            patch.object(permissions, "_has", return_value=True),
+            patch.object(
+                permissions.frappe.db,
+                "exists",
+                return_value=True,
+                create=True,
+            ),
+        ):
+            self.assertTrue(
+                permissions.worker_can_view_order(
+                    "worker@example.com",
+                    "DCO-COMPLETED",
+                )
+            )
+
     def test_custom_actions_require_their_owner_and_explicit_capability(self) -> None:
         order = SimpleNamespace(name="DCO-TEST")
         plan = SimpleNamespace(door_cutting_order="DCO-TEST")
