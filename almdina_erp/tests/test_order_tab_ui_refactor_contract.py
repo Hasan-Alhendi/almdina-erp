@@ -120,6 +120,18 @@ def test_notes_and_edge_color_never_disappear_when_empty() -> None:
     assert "ensureRequiredHint" not in layout
 
 
+def test_order_notes_are_disabled_outside_order_edit_session() -> None:
+    layout = LAYOUT.read_text(encoding="utf-8")
+
+    assert "function isOrderNotesEditable" in layout
+    assert "function syncOrderNotesAccess" in layout
+    assert "api.isEditableDraft" in layout
+    assert "textarea.disabled = !editable" in layout
+    assert "textarea.readOnly = !editable" in layout
+    assert "dco-order-notes-locked" in layout
+    assert "almdina_edit_session_changed(frm) { schedule(frm); }" in layout
+
+
 def test_arabic_labels_reflect_the_new_information_hierarchy() -> None:
     defaults = DEFAULTS.read_text(encoding="utf-8")
 

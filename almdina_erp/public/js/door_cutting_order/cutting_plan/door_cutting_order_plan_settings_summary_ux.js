@@ -7,7 +7,6 @@
     const OWNER_ATTR = "data-almdina-plan-settings-summary-owner";
     const STYLE_ID = "dco-plan-settings-summary-owner-css";
     const TIME_LIMIT_HELP = "أقصى مدة يمنحها النظام لمحرك التحسين للبحث عن توزيع أفضل. قد ينتهي البحث قبلها، وزيادتها قد تحسن بعض الخطط المعقدة لكنها تجعل المعاينة أبطأ.";
-    const PLAN_TOOLBAR_SELECTOR = '.dco-tab-edit-toolbar[data-almdina-tab-edit-kind="plan"]';
 
     function documentContext() {
         return window.AlmdinaDocumentContext || null;
@@ -27,11 +26,6 @@
     function anchorNode(frm) {
         const field = frm && frm.fields_dict && frm.fields_dict.plan_actions_section;
         return wrapperNode(field && (field.$wrapper || field.wrapper));
-    }
-
-    function planToolbar(frm) {
-        const root = formRoot(frm);
-        return root && root.querySelector ? root.querySelector(PLAN_TOOLBAR_SELECTOR) : null;
     }
 
     function workspaceReady(frm) {
@@ -72,24 +66,6 @@
             [data-fieldname="plan_control_actions"] .form-control > .${SUMMARY_CLASS} {
                 display:none !important;
             }
-            .${SUMMARY_CLASS} ${PLAN_TOOLBAR_SELECTOR} {
-                flex:0 0 auto;
-                margin:0 !important;
-                padding:0 !important;
-                border:0 !important;
-                border-radius:0 !important;
-                background:transparent !important;
-                box-shadow:none !important;
-            }
-            .${SUMMARY_CLASS} ${PLAN_TOOLBAR_SELECTOR} .dco-tab-edit-toolbar__identity {
-                display:none !important;
-            }
-            .${SUMMARY_CLASS} ${PLAN_TOOLBAR_SELECTOR} .dco-tab-edit-toolbar__actions {
-                width:auto !important;
-            }
-            .${SUMMARY_CLASS} ${PLAN_TOOLBAR_SELECTOR} .dco-tab-edit-toolbar__actions .btn {
-                min-width:92px;
-            }
             .dco-plan-settings-readonly__label-help {
                 display:inline-flex;
                 align-items:center;
@@ -109,11 +85,6 @@
                     align-items:stretch;
                     flex-direction:column;
                 }
-                .${SUMMARY_CLASS} ${PLAN_TOOLBAR_SELECTOR},
-                .${SUMMARY_CLASS} ${PLAN_TOOLBAR_SELECTOR} .dco-tab-edit-toolbar__actions,
-                .${SUMMARY_CLASS} ${PLAN_TOOLBAR_SELECTOR} .dco-tab-edit-toolbar__actions .btn {
-                    width:100% !important;
-                }
             }
         `;
         document.head.appendChild(style);
@@ -127,27 +98,10 @@
     }
 
     function restorePlanToolbar(frm) {
-        const toolbar = planToolbar(frm);
-        const summary = ownedSummary(frm);
-        const anchor = anchorNode(frm);
-        if (
-            !toolbar
-            || !summary
-            || !summary.contains(toolbar)
-            || !anchor
-            || !anchor.parentNode
-        ) return false;
-        anchor.parentNode.insertBefore(toolbar, anchor);
         return true;
     }
 
     function attachPlanToolbar(frm, summary) {
-        const toolbar = planToolbar(frm);
-        const header = summary && summary.querySelector
-            ? summary.querySelector(".dco-plan-settings-readonly__header")
-            : null;
-        if (!toolbar || !header || toolbar.getAttribute("data-editing") === "1") return false;
-        header.appendChild(toolbar);
         return true;
     }
 
@@ -219,15 +173,9 @@
             summary.className = SUMMARY_CLASS;
             summary.setAttribute(OWNER_ATTR, "stable");
             anchor.parentNode.insertBefore(summary, anchor);
-        } else {
-            // The page edit coordinator owns button behavior. Temporarily restore
-            // its toolbar before repainting this card so DOM replacement never
-            // destroys the coordinator's listeners or busy-state ownership.
-            restorePlanToolbar(frm);
         }
         summary.setAttribute("data-almdina-order", String(frm.doc.name || ""));
         summary.innerHTML = summaryMarkup(settings);
-        attachPlanToolbar(frm, summary);
         return true;
     }
 

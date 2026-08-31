@@ -191,6 +191,13 @@
                     overflow-y: auto !important;
                     line-height: 1.55 !important;
                 }
+                .${ROOT_CLASS} .dco-order-notes-locked textarea:disabled,
+                .${ROOT_CLASS} .dco-order-notes-locked textarea[readonly] {
+                    cursor: not-allowed !important;
+                    background: var(--subtle-fg,#f6f8fa) !important;
+                    color: var(--text-color,#26313b) !important;
+                    opacity: 1 !important;
+                }
                 .${ROOT_CLASS} [data-fieldname="board_description"] .help-box,
                 .${ROOT_CLASS} [data-fieldname="edge_color"] .help-box {
                     margin-top: 5px !important;
@@ -328,6 +335,32 @@
         });
     }
 
+    function isOrderNotesEditable(frm) {
+        if (!frm || !frm.doc) return false;
+        if (frm.is_new && frm.is_new()) return true;
+        const api = window.AlmdinaOrderRevisionUX;
+        if (api && typeof api.isEditableDraft === "function") {
+            return Boolean(api.isEditableDraft(frm));
+        }
+        return false;
+    }
+
+    function syncOrderNotesAccess(frm) {
+        const field = frm && frm.fields_dict && frm.fields_dict.order_notes;
+        const wrapper = fieldNode(frm, "order_notes");
+        const textarea = field && field.$input && field.$input.get(0);
+        const editable = isOrderNotesEditable(frm);
+        if (wrapper) wrapper.classList.toggle("dco-order-notes-locked", !editable);
+        if (!textarea) return;
+        textarea.disabled = !editable;
+        textarea.readOnly = !editable;
+        if (editable) {
+            textarea.removeAttribute("aria-disabled");
+        } else {
+            textarea.setAttribute("aria-disabled", "true");
+        }
+    }
+
     function autoGrowNotes(frm) {
         const field = frm && frm.fields_dict && frm.fields_dict.order_notes;
         const textarea = field && field.$input && field.$input.get(0);
@@ -422,6 +455,7 @@
         ensureMaterialRows(frm);
         keepEmptyFieldsVisible(frm);
         autoGrowNotes(frm);
+        syncOrderNotesAccess(frm);
         renderEdgeColorOrigin(frm);
         removeLegacyRequiredHint(frm);
     }
@@ -440,6 +474,7 @@
     frappe.ui.form.on("Door Cutting Order", {
         onload_post_render(frm) { schedule(frm); },
         refresh(frm) { schedule(frm); },
+        almdina_edit_session_changed(frm) { schedule(frm); },
         customer(frm) { schedule(frm); },
         order_date(frm) { schedule(frm); },
         order_notes(frm) { schedule(frm); },
