@@ -471,7 +471,7 @@ function runCleanups(frm) {
     await new Promise((resolve) => setImmediate(resolve));
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(Recovery.LocalCheckpoint.snapshot(failedHydrationForm), null);
-    assert.equal(failedHydrationForm.doc.recovery_creation_token, null);
+    assert.equal(failedHydrationForm.doc.recovery_creation_token, undefined);
     assert.equal(failedHydrationDialog.visible, true, "failed hydration leaves discovery in control");
     assert.equal(records.has(failedHydrationRecord.draft_id), true, "failed hydration retains the draft");
     fakeFrappe.validated = true;
