@@ -247,6 +247,45 @@ class TestOrderScopePermissions(unittest.TestCase):
                             )
                         )
 
+    def test_supporting_workflow_keeps_completed_assignment_without_history(self) -> None:
+        granted = {Capability.START_ASSIGNED_STAGE, Capability.VIEW_ORDERS}
+        with patch.object(
+            permissions,
+            "doctype_has_capability",
+            side_effect=self.capability_checker(granted),
+        ):
+            with patch.object(
+                permissions,
+                "_worker_operational_roles",
+                return_value=("عامل رسم",),
+            ):
+                with patch.object(
+                    permissions.frappe.db,
+                    "exists",
+                    return_value=True,
+                ) as completed_exists:
+                    with patch.object(
+                        permissions.frappe.db,
+                        "get_value",
+                        return_value={
+                            "status": "Delivered",
+                            "current_production_stage": None,
+                        },
+                    ):
+                        self.assertFalse(
+                            permissions.worker_can_view_order(
+                                "worker@example.com",
+                                "DCO-DONE",
+                            )
+                        )
+                        self.assertTrue(
+                            permissions._supporting_order_exists(
+                                "worker@example.com",
+                                "DCO-DONE",
+                            )
+                        )
+                        completed_exists.assert_called_once()
+
     def test_worker_can_open_current_assignment_without_history(self) -> None:
         granted = {Capability.START_ASSIGNED_STAGE, Capability.VIEW_ORDERS}
         with patch.object(

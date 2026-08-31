@@ -136,7 +136,7 @@ def _dispatched_order_row(order_name: str) -> Any | None:
 
 
 def _assigned_order_subquery(user: str) -> str:
-    return _worker_visible_orders_subquery(user)
+    return _worker_supporting_orders_subquery(user)
 
 
 def _worker_operational_roles(user: str) -> tuple[str, ...]:
@@ -201,18 +201,26 @@ def _worker_completed_orders_subquery(user: str) -> str:
     )
 
 
-def _worker_visible_orders_subquery(user: str) -> str:
-    actionable = _worker_actionable_orders_subquery(user)
-    if not _has(user, Capability.VIEW_SHOP_FLOOR_HISTORY):
-        return actionable
+def _worker_supporting_orders_subquery(user: str) -> str:
     return (
-        actionable
+        _worker_actionable_orders_subquery(user)
         + " union "
         + _worker_completed_orders_subquery(user)
     )
 
 
-def worker_can_view_order(user: str, order_name: str | None) -> bool:
+def _worker_visible_orders_subquery(user: str) -> str:
+    if _has(user, Capability.VIEW_SHOP_FLOOR_HISTORY):
+        return _worker_supporting_orders_subquery(user)
+    return _worker_actionable_orders_subquery(user)
+
+
+def _worker_can_access_assigned_order(
+    user: str,
+    order_name: str | None,
+    *,
+    completed_requires_history: bool,
+) -> bool:
     if not order_name:
         return False
     if not _requires_assigned_scope(user):
@@ -222,16 +230,20 @@ def worker_can_view_order(user: str, order_name: str | None) -> bool:
     if not order:
         return False
 
-    if _has(user, Capability.VIEW_SHOP_FLOOR_HISTORY) and frappe.db.exists(
-        "Production Stage",
-        {
-            "door_cutting_order": order_name,
-            "assigned_to": user,
-            "status": "Completed",
-            "piece_label": ["is", "not set"],
-        },
+    if not completed_requires_history or _has(
+        user,
+        Capability.VIEW_SHOP_FLOOR_HISTORY,
     ):
-        return True
+        if frappe.db.exists(
+            "Production Stage",
+            {
+                "door_cutting_order": order_name,
+                "assigned_to": user,
+                "status": "Completed",
+                "piece_label": ["is", "not set"],
+            },
+        ):
+            return True
 
     current_stage_name = str(_row_value(order, "current_production_stage") or "").strip()
     if not current_stage_name:
@@ -252,8 +264,24 @@ def worker_can_view_order(user: str, order_name: str | None) -> bool:
     return role in set(_worker_operational_roles(user))
 
 
+def worker_can_view_order(user: str, order_name: str | None) -> bool:
+    return _worker_can_access_assigned_order(
+        user,
+        order_name,
+        completed_requires_history=True,
+    )
+
+
 def _assigned_order_exists(user: str, order_name: str | None) -> bool:
     return worker_can_view_order(user, order_name)
+
+
+def _supporting_order_exists(user: str, order_name: str | None) -> bool:
+    return _worker_can_access_assigned_order(
+        user,
+        order_name,
+        completed_requires_history=False,
+    )
 
 
 def _scoped_read_decision(
@@ -261,6 +289,7 @@ def _scoped_read_decision(
     user: str,
     required_capability: str,
     order_name: str | None,
+    supporting_workflow: bool = False,
 ) -> bool:
     if user == "Administrator":
         return True
@@ -268,6 +297,8 @@ def _scoped_read_decision(
         return False
     if not _requires_assigned_scope(user):
         return True
+    if supporting_workflow:
+        return _supporting_order_exists(user, order_name)
     return _assigned_order_exists(user, order_name)
 
 
@@ -279,7 +310,11 @@ def door_cutting_order_query(user: str | None = None) -> str:
         return "1=0"
     if not _requires_assigned_scope(user):
         return ""
-    return "`tabDoor Cutting Order`.name in (" + _assigned_order_subquery(user) + ")"
+    return (
+        "`tabDoor Cutting Order`.name in ("
+        + _worker_visible_orders_subquery(user)
+        + ")"
+    )
 
 
 def production_stage_query(user: str | None = None) -> str:
@@ -412,6 +447,7 @@ def cutting_plan_has_permission(
             user=resolved_user,
             required_capability=Capability.VIEW_CUTTING_PLAN,
             order_name=order_name,
+            supporting_workflow=True,
         )
     if resolved_type in _MUTATING_PERMISSION_TYPES:
         return False
@@ -422,6 +458,7 @@ def cutting_plan_has_permission(
             user=resolved_user,
             required_capability=required,
             order_name=order_name,
+            supporting_workflow=True,
         )
     return False
 
@@ -442,6 +479,7 @@ def replacement_piece_has_permission(
             user=resolved_user,
             required_capability=Capability.VIEW_REPLACEMENTS,
             order_name=getattr(doc, "door_cutting_order", None),
+            supporting_workflow=True,
         )
     if resolved_type in _MUTATING_PERMISSION_TYPES:
         return False
