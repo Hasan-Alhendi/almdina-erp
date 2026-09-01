@@ -10,11 +10,17 @@ from almdina_erp.almdina_erp.services.piece_cut_dimension_service import (
     OrderPieceCutSpec,
 )
 from almdina_erp.almdina_erp.services.strict_dxf_import_service import (
+    _apply_strict_dimension_contract,
     _bind_persisted_cut_dimensions,
 )
 
 
-def _spec(*, cut_width_cm: str = "59.800", cut_length_cm: str = "199.700"):
+def _spec(
+    *,
+    cut_width_cm: str = "59.800",
+    cut_length_cm: str = "199.700",
+    piece_type: str = "Regular",
+):
     return OrderPieceCutSpec(
         row_index=1,
         finished_width_cm=Decimal("60.000"),
@@ -24,7 +30,7 @@ def _spec(*, cut_width_cm: str = "59.800", cut_length_cm: str = "199.700"):
         width_deduction_mm=Decimal("2.000"),
         length_deduction_mm=Decimal("3.000"),
         allow_rotation=1,
-        piece_type="Regular",
+        piece_type=piece_type,
         qty=1,
         side_profiles=(),
     )
@@ -60,3 +66,85 @@ def test_strict_import_fails_closed_when_persisted_cut_dimension_is_missing():
 
     with pytest.raises(DxfImportError):
         _bind_persisted_cut_dimensions(order, [_spec()])
+
+
+def test_strict_contract_preserves_topology_owned_arbitrary_special_identity():
+    snapshot = {
+        "sheets": [
+            {
+                "pieces": [
+                    {
+                        "label": "1.1",
+                        "source_piece_no": 1,
+                        "copy_no": 1,
+                        "piece_type": "Special",
+                        "w": 60,
+                        "h": 60,
+                        "rotated": False,
+                    }
+                ]
+            }
+        ]
+    }
+
+    errors = _apply_strict_dimension_contract(
+        snapshot,
+        [_spec(cut_width_cm="120", cut_length_cm="200", piece_type="Special")],
+    )
+
+    assert errors == []
+    piece = snapshot["sheets"][0]["pieces"][0]
+    assert piece["piece_type"] == "Special"
+    assert piece["cut_width_cm"] == 120
+    assert piece["cut_length_cm"] == 200
+
+
+def test_strict_contract_keeps_regular_pieces_dimension_bound():
+    snapshot = {
+        "sheets": [
+            {
+                "pieces": [
+                    {
+                        "label": "1.1",
+                        "source_piece_no": 1,
+                        "copy_no": 1,
+                        "piece_type": "Regular",
+                        "w": 60,
+                        "h": 60,
+                    }
+                ]
+            }
+        ]
+    }
+
+    errors = _apply_strict_dimension_contract(snapshot, [_spec()])
+
+    assert errors
+    assert "لا تطابق" in "\n".join(errors)
+
+
+def test_strict_contract_rejects_unproven_special_identity():
+    snapshot = {
+        "sheets": [
+            {
+                "pieces": [
+                    {
+                        "label": "9.1",
+                        "source_piece_no": 9,
+                        "copy_no": 1,
+                        "piece_type": "Special",
+                        "w": 60,
+                        "h": 60,
+                    }
+                ]
+            }
+        ]
+    }
+
+    errors = _apply_strict_dimension_contract(
+        snapshot,
+        [_spec(piece_type="Special")],
+    )
+
+    assert errors
+    assert "تعذر ربط الدرفة الخاصة" in errors[0]
