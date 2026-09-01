@@ -1,0 +1,53 @@
+/*
+ * Door Cutting Order measurement-table structural contract.
+ *
+ * These rules are intentionally limited to presentation-critical geometry.
+ * They are loaded as a static app asset before the DCO JavaScript lifecycle so
+ * recovery, first render, and New -> Saved transitions cannot expose an
+ * unstructured measurement surface while enhancement modules are still loading.
+ * Visual cosmetics remain owned by the existing feature modules.
+ */
+
+.dco-fast-entry-shell {
+    direction: rtl;
+    width: 100%;
+    max-width: 100%;
+}
+
+.dco-fast-entry-shell .dco-fast-entry-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+}
+
+.dco-fast-entry-shell .dco-fast-entry-scroll {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+.dco-fast-entry-shell .dco-fast-table {
+    width: 100%;
+    table-layout: fixed;
+}
+
+.dco-fast-entry-shell .dco-fast-input,
+.dco-fast-entry-shell .dco-fast-select {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.dco-fast-entry-shell .dco-edge-buttons {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+}
+
+.dco-fast-entry-shell .dco-check-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    box-sizing: border-box;
+}

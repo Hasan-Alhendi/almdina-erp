@@ -6,6 +6,7 @@ coverage.
 """
 
 app_include_css = [
+    "/assets/almdina_erp/css/door_cutting_order_measurement_structure.css",
     "/assets/almdina_erp/css/door_cutting_order_responsive.css",
     "/assets/almdina_erp/css/door_cutting_order_extra_addons.css",
 ]
@@ -77,6 +78,9 @@ doctype_js = {
         # Measurement features keep their existing Frappe hook order; this owner
         # only centralizes cancellable frame/timer work for FE-ARCH-008.
         "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_lifecycle.js",
+        # Presentation-critical geometry is verified before the lifecycle may
+        # stamp the measurement surface ready; structural CSS is a static asset.
+        "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_presentation_owner.js",
         "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_bulk_rows_ux.js",
         "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_keyboard_columns_ux.js",
         "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_compact_measurements_ux.js",
