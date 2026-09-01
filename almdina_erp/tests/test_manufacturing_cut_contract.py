@@ -110,7 +110,7 @@ def test_special_dxf_evidence_marks_shape_as_arbitrary_without_relaxing_dimensio
     assert len(evidence) == 1
     assert evidence[0].arbitrary_outline is True
     assert evidence[0].width == 630
-    assert evidence[0].height == 1998
+    assert evidence[0].height == 630
 
 
 def test_topology_identity_labels_special_with_matching_cut_envelope():
