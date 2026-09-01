@@ -518,3 +518,19 @@ def resolve_contour_ownership(
             "UNRESOLVED_CONTOUR_OWNERSHIP" if leftovers else "INVALID_PART_TOPOLOGY"
         )
     return topology
+
+
+__all__ = [
+    "ContourCandidate",
+    "DxfTopologyError",
+    "ExpectedPieceEvidence",
+    "PartGeometry",
+    "PlacedPartGeometry",
+    "ResolvedPartGeometry",
+    "ResolvedTopology",
+    "containing_hole",
+    "material_footprints_overlap",
+    "polygon_strictly_contains_polygon",
+    "resolve_contour_ownership",
+    "validate_material_layout",
+]
