@@ -664,4 +664,171 @@ assert(cssSource.includes(".is-delivered"));
 assert(cssSource.includes(".is-deliver"));
 assert(!source.includes("frappe.get_roles"), "mobile list presentation must remain capability-driven, never role-name-driven");
 
+const expectedStatusKeys = [
+    "Draft",
+    "Pending Review",
+    "Approved",
+    "At Sharyoun",
+    "At Drawing",
+    "At CNC",
+    "At Sanding",
+    "Ready for Delivery",
+    "Delivered",
+    "Completed",
+    "Rejected",
+    "On Hold",
+    "Cancelled",
+];
+const statusConfig = api.statusFilterConfig();
+assert.strictEqual(statusConfig.fieldtype, "Select");
+assert.strictEqual(statusConfig.fieldname, "status");
+assert.strictEqual(statusConfig.condition, "=");
+assert.strictEqual(statusConfig.label, "Status");
+const statusOptions = api.statusFilterOptions();
+assert.strictEqual(statusOptions[0].value, "");
+assert.strictEqual(statusOptions[0].label, "كل الحالات");
+assert.deepStrictEqual([...statusOptions.slice(1)], expectedStatusKeys);
+assert.strictEqual(statusConfig.options[0].value, "");
+assert.strictEqual(statusConfig.options[0].label, "كل الحالات");
+assert.deepStrictEqual([...statusConfig.options.slice(1)], expectedStatusKeys);
+assert(!statusOptions.some(option => option === "Cutting In Progress" || option && option.value === "Cutting In Progress"));
+assert(!Object.isFrozen(statusConfig), "Frappe mutates custom_filter_configs onchange");
+
+const listSettings = context.frappe.listview_settings["Door Cutting Order"];
+assert(Array.isArray(listSettings.custom_filter_configs));
+assert.strictEqual(listSettings.custom_filter_configs[0].fieldname, "status");
+
+function mockNode(className = "") {
+    const node = {
+        nodeType: 1,
+        className,
+        children: [],
+        parentNode: null,
+        nextSibling: null,
+        classList: {
+            contains(name) {
+                return String(node.className || "").split(/\s+/).includes(name);
+            },
+            add(name) {
+                const names = new Set(String(node.className || "").split(/\s+/).filter(Boolean));
+                names.add(name);
+                node.className = [...names].join(" ");
+            },
+            toggle(name, force) {
+                const enabled = force === undefined ? !this.contains(name) : Boolean(force);
+                if (enabled) this.add(name);
+                else {
+                    const names = new Set(String(node.className || "").split(/\s+/).filter(Boolean));
+                    names.delete(name);
+                    node.className = [...names].join(" ");
+                }
+                return enabled;
+            },
+        },
+        getBoundingClientRect() {
+            return { width: Number(context.window.innerWidth) };
+        },
+        querySelector(selector) {
+            return findAll(node, selector)[0] || null;
+        },
+        querySelectorAll(selector) {
+            return findAll(node, selector);
+        },
+        appendChild(child) {
+            if (child.parentNode) child.parentNode.removeChild(child);
+            child.parentNode = node;
+            node.children.push(child);
+            syncSiblings(node);
+            return child;
+        },
+        insertBefore(child, ref) {
+            if (child.parentNode) child.parentNode.removeChild(child);
+            child.parentNode = node;
+            const idx = ref ? node.children.indexOf(ref) : -1;
+            if (idx < 0) node.children.push(child);
+            else node.children.splice(idx, 0, child);
+            syncSiblings(node);
+            return child;
+        },
+        removeChild(child) {
+            const idx = node.children.indexOf(child);
+            if (idx >= 0) node.children.splice(idx, 1);
+            child.parentNode = null;
+            syncSiblings(node);
+            return child;
+        },
+    };
+    return node;
+}
+
+function syncSiblings(parent) {
+    parent.children.forEach((child, index) => {
+        child.nextSibling = parent.children[index + 1] || null;
+    });
+}
+
+function findAll(node, selector) {
+    const wanted = String(selector || "").replace(/^\./, "");
+    const found = [];
+    node.children.forEach(child => {
+        if (child.classList.contains(wanted)) found.push(child);
+        found.push(...findAll(child, selector));
+    });
+    return found;
+}
+
+context.document.createElement = function createElement() {
+    return mockNode();
+};
+
+function setViewport(width, height) {
+    context.window.innerWidth = width;
+    context.window.screen.width = width;
+    context.window.screen.height = height;
+    context.document.documentElement.clientWidth = width;
+}
+
+const root = mockNode("dco-order-list");
+const pageForm = mockNode("page-form");
+const standardSection = mockNode("standard-filter-section flex");
+const filterSection = mockNode("filter-section flex");
+const filterSelector = mockNode("filter-selector");
+const statusWrapper = mockNode("frappe-control");
+root.appendChild(pageForm);
+pageForm.appendChild(standardSection);
+pageForm.appendChild(filterSection);
+filterSection.appendChild(filterSelector);
+standardSection.appendChild(statusWrapper);
+
+const listview = {
+    page: {
+        wrapper: root,
+        fields_dict: { status: { wrapper: statusWrapper } },
+    },
+};
+
+function assertBesideFrappeFilter(message) {
+    const slot = root.querySelector(".dco-status-filter-slot");
+    assert(slot, message);
+    assert.strictEqual(statusWrapper.parentNode, slot);
+    assert.strictEqual(slot.parentNode, filterSection);
+    assert.strictEqual(filterSelector.nextSibling, slot);
+}
+
+setViewport(390, 844);
+assert.strictEqual(api.reconcileStatusFilterLayout(listview), true);
+assertBesideFrappeFilter("card layout must place the status select beside Frappe's filter button");
+assert.strictEqual(api.reconcileStatusFilterLayout(listview), true);
+assert.strictEqual(
+    root.querySelectorAll(".dco-status-filter-slot").length,
+    1,
+    "refresh must not duplicate the status filter slot"
+);
+assert.strictEqual(statusWrapper.parentNode, root.querySelector(".dco-status-filter-slot"));
+
+setViewport(1440, 900);
+assert.strictEqual(api.reconcileStatusFilterLayout(listview), true);
+assertBesideFrappeFilter("desktop must also place the status select beside Frappe's filter button");
+assert.strictEqual(standardSection.children.filter(child => child === statusWrapper).length, 0);
+
 console.log("Door Cutting Order five-state mobile-card simulation passed");

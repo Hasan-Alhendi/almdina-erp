@@ -43,6 +43,8 @@ Visibility يجب أن يأتي من permission context/capabilities، لا من
 - `factory_production_settings`: إعدادات المصنع المقسمة حسب Capabilities.
 - `factory_plan_archive`: أرشيف الخطط المعتمدة.
 
+- قائمة `Door Cutting Order`: بحث Frappe بالاسم/الزبون مع dropdown الحالة (`status` عبر `custom_filter_configs`) بجانب زر فلترة Frappe على الويب والموبايل. الخيار الفارغ يعرض «كل الحالات». الفلتر Presentation فقط؛ query وdocument scope يبقيان عند Frappe.
+
 ### مساندة/تشخيص
 
 - Go-live workspace.

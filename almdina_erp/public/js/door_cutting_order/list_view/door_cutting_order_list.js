@@ -97,6 +97,9 @@
         DESKTOP_DELIVERY_ROW_CLASS.ready_for_delivery,
         DESKTOP_DELIVERY_ROW_CLASS.delivered,
     ]);
+    const STATUS_FILTER_SLOT_CLASS = "dco-status-filter-slot";
+    const STATUS_FILTER_FIELDNAME = "status";
+    const STATUS_FILTER_ALL_LABEL = "كل الحالات";
 
     frappe.listview_settings = frappe.listview_settings || {};
     const existing = frappe.listview_settings[METHODS.doctype] || {};
@@ -284,6 +287,96 @@
         } catch (error) {
             return false;
         }
+    }
+
+    function statusFilterOptions() {
+        return [
+            { value: "", label: __(STATUS_FILTER_ALL_LABEL) },
+            ...Object.keys(STATUS_LABELS),
+        ];
+    }
+
+    function statusFilterConfig() {
+        return {
+            fieldtype: "Select",
+            fieldname: STATUS_FILTER_FIELDNAME,
+            label: __("Status"),
+            options: statusFilterOptions(),
+            condition: "=",
+        };
+    }
+
+    function statusFilterField(listview) {
+        return listview && listview.page && listview.page.fields_dict
+            ? listview.page.fields_dict[STATUS_FILTER_FIELDNAME]
+            : null;
+    }
+
+    function controlWrapper(field) {
+        if (!field) return null;
+        if (field.$wrapper) {
+            if (field.$wrapper.nodeType) return field.$wrapper;
+            if (field.$wrapper[0]) return field.$wrapper[0];
+        }
+        const wrapper = field.wrapper;
+        if (!wrapper) return null;
+        return wrapper.nodeType ? wrapper : wrapper[0];
+    }
+
+    function insertAfter(reference, node) {
+        if (!reference || !node) return false;
+        const parent = reference.parentNode;
+        if (!parent) return false;
+        if (reference.nextSibling) parent.insertBefore(node, reference.nextSibling);
+        else parent.appendChild(node);
+        return true;
+    }
+
+    function ensureStatusFilterSlot(root) {
+        if (!root || typeof root.querySelector !== "function") return null;
+        const existingSlot = root.querySelector(`.${STATUS_FILTER_SLOT_CLASS}`);
+        if (existingSlot) return existingSlot;
+        if (typeof document === "undefined" || typeof document.createElement !== "function") {
+            return null;
+        }
+
+        const slot = document.createElement("div");
+        slot.className = `${STATUS_FILTER_SLOT_CLASS} standard-filter-section flex`;
+        const filterSection = root.querySelector(".filter-section");
+        const filterSelector = filterSection && filterSection.querySelector(".filter-selector");
+        if (insertAfter(filterSelector, slot)) return slot;
+        if (filterSection) {
+            filterSection.appendChild(slot);
+            return slot;
+        }
+        const pageForm = root.querySelector(".page-form");
+        if (pageForm) {
+            pageForm.appendChild(slot);
+            return slot;
+        }
+        return null;
+    }
+
+    function applyStatusFilterHint(listview) {
+        const field = statusFilterField(listview);
+        const wrapper = controlWrapper(field);
+        if (!wrapper || typeof wrapper.querySelector !== "function") return;
+        const select = wrapper.querySelector("select");
+        if (!select) return;
+        select.setAttribute("aria-label", __("Status"));
+        select.setAttribute("title", __(STATUS_FILTER_ALL_LABEL));
+    }
+
+    function reconcileStatusFilterLayout(listview) {
+        const root = rootNode(listview);
+        const wrapper = controlWrapper(statusFilterField(listview));
+        if (!root || !wrapper) return false;
+
+        const target = ensureStatusFilterSlot(root);
+        if (!target) return false;
+        if (wrapper.parentNode !== target) target.appendChild(wrapper);
+        applyStatusFilterHint(listview);
+        return true;
     }
 
     function applyCardLayoutClass(listview) {
@@ -756,6 +849,7 @@
             if (next === listview._dcoLastCardLayout) return;
             listview._dcoLastCardLayout = next;
             renderMobileCards(listview);
+            reconcileStatusFilterLayout(listview);
         };
         if (typeof ResizeObserver === "function") {
             listview._dcoResponsiveObserver = new ResizeObserver(refreshLayout);
@@ -1035,6 +1129,7 @@
         listview._dcoPresentationNeedsRoleRefresh = false;
 
         applySearchHint(listview);
+        applyStatusFilterHint(listview);
         resolveAssigneeNames(listview);
         if (refreshRoleFlags) {
             invalidateRoleFlags(listview);
@@ -1088,10 +1183,12 @@
     function installListRuntime(listview) {
         const root = rootNode(listview);
         if (root) root.classList.add("dco-order-list");
+        applyCardLayoutClass(listview);
         installOrderNotesColumnOrder(listview);
         installCombinedSearch(listview);
         installResponsiveObserver(listview);
         installRowsObserver(listview);
+        reconcileStatusFilterLayout(listview);
     }
 
     frappe.listview_settings[METHODS.doctype] = Object.assign({}, existing, {
@@ -1103,6 +1200,10 @@
             "current_department", "current_assignee",
             "current_production_stage",
         ])],
+        custom_filter_configs: [
+            ...(Array.isArray(existing.custom_filter_configs) ? existing.custom_filter_configs : []),
+            statusFilterConfig(),
+        ],
         formatters: Object.assign({}, existing.formatters || {}, {
             current_department(value, df, doc) {
                 if (doc.status === "Ready for Delivery") return __("جاهز للتسليم");
@@ -1143,8 +1244,11 @@
         productionStageLabel,
         personalQueueState,
         quickActionContext,
+        reconcileStatusFilterLayout,
         renderMobileCards,
         sortDesktopQueueItems,
         sortPersonalQueueItems,
+        statusFilterConfig,
+        statusFilterOptions,
     });
 })();

@@ -29,7 +29,7 @@
 
 .dco-operator-form :where(.btn, button, input, select, textarea):focus-visible,
 .page-head.dco-responsive-head :where(.btn, button, a):focus-visible,
-.dco-order-list :where(.btn, button, input, a):focus-visible {
+.dco-order-list :where(.btn, button, input, select, a):focus-visible {
     outline: 2px solid var(--primary, #2490ef);
     outline-offset: 2px;
 }
@@ -115,6 +115,35 @@
 .almdina-sf-list.is-completed .shop-floor-order-card:hover,
 .almdina-sf-order-card.is-completed:hover {
     background: #bbf7d0 !important;
+}
+
+.dco-order-list .filter-section {
+    align-items: center;
+    gap: 8px;
+}
+
+.dco-order-list .dco-status-filter-slot {
+    display: flex;
+    align-items: center;
+    flex: 0 1 auto;
+    width: auto;
+    min-width: 150px;
+    max-width: 220px;
+    margin: 0;
+}
+
+.dco-order-list .dco-status-filter-slot .form-group,
+.dco-order-list .dco-status-filter-slot .frappe-control {
+    width: 100%;
+    min-width: 150px;
+    max-width: 220px;
+    margin-block: 0;
+    padding-inline-end: 0;
+}
+
+.dco-order-list .dco-status-filter-slot .control-label,
+.dco-order-list .dco-status-filter-slot .help-box {
+    display: none;
 }
 
 /* Mobile order cards are opt-in through the shared phone detector. */
@@ -971,7 +1000,7 @@
     }
 
     .dco-order-list .list-search input,
-    .dco-order-list .page-form :where(.btn, button, input) {
+    .dco-order-list .page-form :where(.btn, button, input, select) {
         min-height: var(--dco-touch-target);
     }
 

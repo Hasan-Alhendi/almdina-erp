@@ -251,6 +251,29 @@ def test_mobile_order_list_uses_reference_card_and_server_authorized_actions():
     assert 'row.board_description || "—"' in inbox_renderer
 
 
+def test_order_list_status_filter_uses_frappe_standard_filter_contract():
+    css = source(RESPONSIVE_CSS)
+    list_source = source(LIST_UX)
+
+    assert "custom_filter_configs:" in list_source
+    assert "function statusFilterConfig()" in list_source
+    assert "function reconcileStatusFilterLayout(listview)" in list_source
+    assert "function installListRuntime(listview)" in list_source
+    assert "reconcileStatusFilterLayout(listview)" in list_source
+    assert 'STATUS_FILTER_SLOT_CLASS = "dco-status-filter-slot"' in list_source
+    assert 'fieldname: STATUS_FILTER_FIELDNAME' in list_source
+    assert 'label: __("Status")' in list_source
+    assert ".dco-status-filter-slot" in css
+    assert ".dco-order-list .dco-status-filter-slot" in css
+    assert ".dco-order-list .filter-section" in css
+    assert 'STATUS_FILTER_ALL_LABEL = "كل الحالات"' in list_source
+    assert 'root.querySelector(".filter-section")' in list_source
+    assert 'filterSection.querySelector(".filter-selector")' in list_source
+    assert ".dco-order-list:not(.dco-order-card-layout) .dco-status-filter-slot" not in css
+    assert "frappe.get_roles" not in list_source
+    assert "in_standard_filter" not in list_source
+
+
 def test_desktop_keeps_legacy_ordering_while_mobile_uses_five_states():
     css = source(RESPONSIVE_CSS)
     list_source = source(LIST_UX)
