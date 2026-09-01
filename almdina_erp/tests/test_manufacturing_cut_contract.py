@@ -102,24 +102,26 @@ def _plan():
     )
 
 
-def test_special_dxf_evidence_uses_arbitrary_outline_identity():
+def test_special_dxf_evidence_marks_shape_as_arbitrary_without_relaxing_dimensions():
     evidence = _expected_topology_evidence(
         _order(_piece(piece_type="Special", cut_width_cm=63, cut_length_cm=63))
     )
 
     assert len(evidence) == 1
     assert evidence[0].arbitrary_outline is True
+    assert evidence[0].width == 630
+    assert evidence[0].height == 1998
 
 
-def test_topology_identity_labels_arbitrary_special_without_bbox_matching():
+def test_topology_identity_labels_special_with_matching_cut_envelope():
     order = _order(
         _piece(piece_type="Special", cut_width_cm=120, cut_length_cm=200)
     )
     pieces = [
         {
             "id": 1,
-            "w": 60,
-            "h": 60,
+            "w": 120,
+            "h": 200,
             "_expected_piece_index": 0,
             "_material_area_m2": 0.21,
         }
