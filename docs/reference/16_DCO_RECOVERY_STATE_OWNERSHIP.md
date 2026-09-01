@@ -105,7 +105,7 @@ Each piece contains a recovery `piece_key` plus only editable requirement fields
 
 ```text
 piece_type,
-extra_double, extra_full_door_double, extra_liner, extra_recessed_handle_cutout,
+extra_double, extra_full_door_double, extra_liner, extra_back_groove, extra_recessed_handle_cutout,
 clipped_corner_position, clipped_corner_width_cm, clipped_corner_length_cm,
 width_cm, length_cm, qty, allow_rotation,
 edge_long_right, edge_long_left, edge_width_top, edge_width_bottom,
@@ -370,6 +370,7 @@ piece[]:
   extra_double, extra_double_unit_price_usd, extra_double_total_usd,
   extra_full_door_double, extra_full_door_double_unit_price_usd, extra_full_door_double_total_usd,
   extra_liner, extra_liner_unit_price_usd, extra_liner_total_usd,
+  extra_back_groove, extra_back_groove_unit_price_usd, extra_back_groove_total_usd,
   extra_recessed_handle_cutout,
   extra_recessed_handle_cutout_unit_price_usd,
   extra_recessed_handle_cutout_total_usd

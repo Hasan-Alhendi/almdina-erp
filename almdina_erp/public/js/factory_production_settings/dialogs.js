@@ -128,6 +128,7 @@
                     { fieldname: "default_extra_double_unit_price_usd", fieldtype: "Currency", label: t("سعر Double لكل درفة (USD)"), description: t("سعر بيع يضاف تلقائيًا لكل درفة Extra مختارة."), default: values.default_extra_double_unit_price_usd, reqd: 1 },
                     { fieldname: "default_extra_full_door_double_unit_price_usd", fieldtype: "Currency", label: t("أجرة دبل كامل الدرفة (USD)"), description: t("أجرة معالجة تُضاف لكل درفة أصلية عند اختيار دبل كامل الدرفة."), default: values.default_extra_full_door_double_unit_price_usd, reqd: 1 },
                     { fieldname: "default_extra_liner_unit_price_usd", fieldtype: "Currency", label: t("سعر Liner لكل درفة (USD)"), description: t("لا يستخدم للدرفة الخاصة؛ لاينر الدرفة الخاصة يبقى ضمن سعرها الخاص الشامل."), default: values.default_extra_liner_unit_price_usd, reqd: 1 },
+                    { fieldname: "default_extra_back_groove_unit_price_usd", fieldtype: "Currency", label: t("سعر فرزة ظهر لكل درفة (USD)"), description: t("لا يستخدم للدرفة الخاصة؛ فرزة ظهر الدرفة الخاصة تبقى ضمن سعرها الخاص الشامل."), default: values.default_extra_back_groove_unit_price_usd, reqd: 1 },
                     { fieldname: "default_extra_recessed_handle_cutout_unit_price_usd", fieldtype: "Currency", label: t("سعر تفريغ المسكة المخفية لكل درفة (USD)"), default: values.default_extra_recessed_handle_cutout_unit_price_usd, reqd: 1 },
                 ];
             }

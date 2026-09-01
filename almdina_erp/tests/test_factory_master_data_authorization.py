@@ -41,6 +41,12 @@ class TestFactoryMasterDataAuthorization(unittest.TestCase):
         )
         self.assertTrue(extra.allowed)
 
+        back_groove = decide_settings_update(
+            {Capability.EDIT_FACTORY_COST_DEFAULTS},
+            {"default_extra_back_groove_unit_price_usd": 3},
+        )
+        self.assertTrue(back_groove.allowed)
+
         full_door_double = decide_settings_update(
             {Capability.EDIT_FACTORY_COST_DEFAULTS},
             {"default_extra_full_door_double_unit_price_usd": 6},

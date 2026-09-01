@@ -205,6 +205,8 @@ def _persist_extra_addon_pricing_projection(order: Any) -> None:
         "extra_full_door_double_total_usd",
         "extra_liner_unit_price_usd",
         "extra_liner_total_usd",
+        "extra_back_groove_unit_price_usd",
+        "extra_back_groove_total_usd",
         "extra_recessed_handle_cutout_unit_price_usd",
         "extra_recessed_handle_cutout_total_usd",
         "extra_addons_total_usd",

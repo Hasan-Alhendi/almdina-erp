@@ -51,6 +51,7 @@ def _extra_addon_labels(piece: Mapping[str, Any]) -> list[str]:
             ("extra_double", "دبل قشاط"),
             ("extra_full_door_double", "دبل كامل الدرفة"),
             ("extra_liner", "Liner"),
+            ("extra_back_groove", "فرزة ظهر"),
             ("extra_recessed_handle_cutout", "حفر مسكة غطس"),
         )
         if _number(_value(piece, fieldname))
@@ -254,6 +255,12 @@ def _customer_invoice_lines(
                     "extra_liner_unit_price_usd",
                     "extra_liner_total_usd",
                     "Liner",
+                ),
+                (
+                    "extra_back_groove",
+                    "extra_back_groove_unit_price_usd",
+                    "extra_back_groove_total_usd",
+                    "فرزة ظهر",
                 ),
                 (
                     "extra_recessed_handle_cutout",

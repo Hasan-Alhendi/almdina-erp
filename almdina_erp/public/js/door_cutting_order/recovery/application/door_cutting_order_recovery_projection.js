@@ -21,6 +21,7 @@
         "extra_double",
         "extra_full_door_double",
         "extra_liner",
+        "extra_back_groove",
         "extra_recessed_handle_cutout",
         "clipped_corner_position",
         "clipped_corner_width_cm",

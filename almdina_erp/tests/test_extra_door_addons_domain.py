@@ -17,6 +17,7 @@ class TestExtraDoorAddonsDomain(unittest.TestCase):
             double_usd=4,
             full_door_double_usd=6,
             liner_usd=2.5,
+            back_groove_usd=3,
             recessed_handle_cutout_usd=1.25,
         )
 
@@ -40,9 +41,31 @@ class TestExtraDoorAddonsDomain(unittest.TestCase):
         self.assertEqual(piece.double_total_usd, 12)
         self.assertEqual(piece.liner_unit_price_usd, 2.5)
         self.assertEqual(piece.liner_total_usd, 7.5)
+        self.assertEqual(piece.back_groove_total_usd, 0)
         self.assertEqual(piece.recessed_handle_cutout_total_usd, 0)
         self.assertEqual(piece.total_usd, 19.5)
         self.assertEqual(summary.total_usd, 19.5)
+
+    def test_back_groove_is_itemized_and_multiplied_by_door_quantity(self) -> None:
+        summary = calculate_extra_addon_pricing(
+            [
+                ExtraAddonPieceInput(
+                    piece_type="Extra",
+                    qty=2,
+                    notes="فرزة ظهر حسب الطلب",
+                    back_groove=True,
+                )
+            ],
+            rates=self.rates,
+        )
+
+        piece = summary.pieces[0]
+        self.assertEqual(piece.selected_codes, ("back_groove",))
+        self.assertEqual(piece.back_groove_unit_price_usd, 3)
+        self.assertEqual(piece.back_groove_total_usd, 6)
+        self.assertEqual(piece.liner_total_usd, 0)
+        self.assertEqual(piece.total_usd, 6)
+        self.assertEqual(summary.total_usd, 6)
 
     def test_extra_requires_at_least_one_addon_and_notes(self) -> None:
         with self.assertRaisesRegex(ExtraAddonError, "extra_addon_required"):
@@ -82,6 +105,18 @@ class TestExtraDoorAddonsDomain(unittest.TestCase):
                 ],
                 rates=self.rates,
             )
+        with self.assertRaisesRegex(ExtraAddonError, "non_extra_addon_selection"):
+            calculate_extra_addon_pricing(
+                [
+                    ExtraAddonPieceInput(
+                        piece_type="Special",
+                        qty=1,
+                        notes="فرزة ظهر",
+                        back_groove=True,
+                    )
+                ],
+                rates=self.rates,
+            )
 
     def test_selected_addon_requires_a_configured_positive_price(self) -> None:
         with self.assertRaisesRegex(ExtraAddonError, "extra_addon_rate_not_configured") as raised:
@@ -114,6 +149,38 @@ class TestExtraDoorAddonsDomain(unittest.TestCase):
 
         self.assertEqual(summary.pieces[0].liner_unit_price_usd, 2.5)
         self.assertEqual(summary.pieces[0].liner_total_usd, 7.5)
+
+    def test_existing_selected_back_groove_preserves_its_historical_unit_price(self) -> None:
+        summary = calculate_extra_addon_pricing(
+            [
+                ExtraAddonPieceInput(
+                    piece_type="Extra",
+                    qty=2,
+                    notes="ملاحظة",
+                    back_groove=True,
+                    back_groove_snapshot_unit_price_usd=3,
+                )
+            ],
+            rates=ExtraAddonRates(back_groove_usd=9),
+        )
+
+        self.assertEqual(summary.pieces[0].back_groove_unit_price_usd, 3)
+        self.assertEqual(summary.pieces[0].back_groove_total_usd, 6)
+
+    def test_selected_back_groove_requires_a_configured_positive_price(self) -> None:
+        with self.assertRaisesRegex(ExtraAddonError, "extra_addon_rate_not_configured") as raised:
+            calculate_extra_addon_pricing(
+                [
+                    ExtraAddonPieceInput(
+                        piece_type="Extra",
+                        qty=1,
+                        notes="ملاحظة",
+                        back_groove=True,
+                    )
+                ],
+                rates=ExtraAddonRates(),
+            )
+        self.assertEqual(raised.exception.addon_code, "back_groove")
 
     def test_full_door_double_fee_uses_original_qty_and_does_not_scale_other_addons(self) -> None:
         summary = calculate_extra_addon_pricing(

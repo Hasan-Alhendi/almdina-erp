@@ -12,6 +12,7 @@ EXTRA_ADDON_CODES = (
     "double",
     "full_door_double",
     "liner",
+    "back_groove",
     "recessed_handle_cutout",
 )
 FULL_DOOR_DOUBLE_CUT_MULTIPLIER = 2
@@ -31,6 +32,7 @@ class ExtraAddonRates:
     double_usd: float = 0
     full_door_double_usd: float = 0
     liner_usd: float = 0
+    back_groove_usd: float = 0
     recessed_handle_cutout_usd: float = 0
 
 
@@ -42,10 +44,12 @@ class ExtraAddonPieceInput:
     double: bool = False
     full_door_double: bool = False
     liner: bool = False
+    back_groove: bool = False
     recessed_handle_cutout: bool = False
     double_snapshot_unit_price_usd: float | None = None
     full_door_double_snapshot_unit_price_usd: float | None = None
     liner_snapshot_unit_price_usd: float | None = None
+    back_groove_snapshot_unit_price_usd: float | None = None
     recessed_handle_cutout_snapshot_unit_price_usd: float | None = None
 
 
@@ -59,6 +63,8 @@ class ExtraAddonPieceResult:
     full_door_double_total_usd: float
     liner_unit_price_usd: float
     liner_total_usd: float
+    back_groove_unit_price_usd: float
+    back_groove_total_usd: float
     recessed_handle_cutout_unit_price_usd: float
     recessed_handle_cutout_total_usd: float
     total_usd: float
@@ -90,6 +96,7 @@ def calculate_extra_addon_pricing(
         "double": _finite_non_negative(rates.double_usd),
         "full_door_double": _finite_non_negative(rates.full_door_double_usd),
         "liner": _finite_non_negative(rates.liner_usd),
+        "back_groove": _finite_non_negative(rates.back_groove_usd),
         "recessed_handle_cutout": _finite_non_negative(
             rates.recessed_handle_cutout_usd
         ),
@@ -104,6 +111,7 @@ def calculate_extra_addon_pricing(
                 ("double", piece.double),
                 ("full_door_double", piece.full_door_double),
                 ("liner", piece.liner),
+                ("back_groove", piece.back_groove),
                 ("recessed_handle_cutout", piece.recessed_handle_cutout),
             )
             if bool(enabled)
@@ -127,6 +135,7 @@ def calculate_extra_addon_pricing(
             "double": piece.double_snapshot_unit_price_usd,
             "full_door_double": piece.full_door_double_snapshot_unit_price_usd,
             "liner": piece.liner_snapshot_unit_price_usd,
+            "back_groove": piece.back_groove_snapshot_unit_price_usd,
             "recessed_handle_cutout": (
                 piece.recessed_handle_cutout_snapshot_unit_price_usd
             ),
@@ -163,6 +172,8 @@ def calculate_extra_addon_pricing(
                 full_door_double_total_usd=total_values["full_door_double"],
                 liner_unit_price_usd=unit_values["liner"],
                 liner_total_usd=total_values["liner"],
+                back_groove_unit_price_usd=unit_values["back_groove"],
+                back_groove_total_usd=total_values["back_groove"],
                 recessed_handle_cutout_unit_price_usd=unit_values[
                     "recessed_handle_cutout"
                 ],
@@ -189,6 +200,8 @@ def _empty_result() -> ExtraAddonPieceResult:
         full_door_double_total_usd=0,
         liner_unit_price_usd=0,
         liner_total_usd=0,
+        back_groove_unit_price_usd=0,
+        back_groove_total_usd=0,
         recessed_handle_cutout_unit_price_usd=0,
         recessed_handle_cutout_total_usd=0,
         total_usd=0,

@@ -46,6 +46,7 @@ const row = {
     doctype:"Door Cutting Order Detail",
     piece_type:"Regular",
     extra_liner:0,
+    extra_back_groove:0,
     extra_double:0,
     extra_full_door_double:0,
     extra_recessed_handle_cutout:0,

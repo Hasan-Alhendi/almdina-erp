@@ -92,6 +92,12 @@
                     amount: number(source.extra_liner_total_usd),
                 },
                 {
+                    selected: Boolean(number(source.extra_back_groove)),
+                    label: "فرزة ظهر",
+                    rate: number(source.extra_back_groove_unit_price_usd),
+                    amount: number(source.extra_back_groove_total_usd),
+                },
+                {
                     selected: Boolean(number(source.extra_recessed_handle_cutout)),
                     label: "حفر مسكة غطس",
                     rate: number(source.extra_recessed_handle_cutout_unit_price_usd),

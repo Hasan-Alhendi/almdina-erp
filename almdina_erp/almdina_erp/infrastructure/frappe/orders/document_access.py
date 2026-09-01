@@ -43,6 +43,8 @@ _OLD_PIECE_FIELDS = [
     "extra_full_door_double_unit_price_usd",
     "extra_liner",
     "extra_liner_unit_price_usd",
+    "extra_back_groove",
+    "extra_back_groove_unit_price_usd",
     "extra_recessed_handle_cutout",
     "extra_recessed_handle_cutout_unit_price_usd",
 ]

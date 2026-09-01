@@ -78,6 +78,7 @@
                     [t("Double / درفة"), `${display(source.default_extra_double_unit_price_usd)} USD`],
                     [t("أجرة دبل كامل الدرفة"), `${display(source.default_extra_full_door_double_unit_price_usd)} USD`],
                     [t("Liner / درفة"), `${display(source.default_extra_liner_unit_price_usd)} USD`],
+                    [t("فرزة ظهر / درفة"), `${display(source.default_extra_back_groove_unit_price_usd)} USD`],
                     [t("تفريغ مسكة مخفية / درفة"), `${display(source.default_extra_recessed_handle_cutout_unit_price_usd)} USD`],
                 ], current),
                 section("production", t("ضوابط الإنتاج"), t("يمكن ترك المسار الافتراضي فارغًا وبناء المسارات من شاشة إدارة المسارات. عند إرسال الطلب للإنتاج يجب اختيار مسار فعلي."), [

@@ -96,6 +96,7 @@
             ["extra_double", "دبل قشاط"],
             ["extra_full_door_double", "دبل كامل الدرفة"],
             ["extra_liner", "Liner"],
+            ["extra_back_groove", "فرزة ظهر"],
             ["extra_recessed_handle_cutout", "حفر مسكة غطس"],
         ].filter(([fieldname]) => Number(row[fieldname] || 0)).map(([, label]) => label);
     }
