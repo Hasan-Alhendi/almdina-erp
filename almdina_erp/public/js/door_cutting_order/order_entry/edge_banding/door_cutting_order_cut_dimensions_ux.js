@@ -101,4 +101,9 @@
         edge_width_top(frm) { schedule(frm); },
         edge_width_bottom(frm) { schedule(frm); },
     });
+
+    const measurementLifecycle = window.AlmdinaMeasurementLifecycle;
+    if (measurementLifecycle && typeof measurementLifecycle.registerFeature === "function") {
+        measurementLifecycle.registerFeature("cut-dimensions", apply);
+    }
 })();

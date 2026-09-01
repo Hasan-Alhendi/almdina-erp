@@ -32,7 +32,7 @@
 | Shop Floor Inbox interactions | `public/js/shop_floor_inbox/interactions.js` | delegated UI events وربطها بالـlifecycle |
 | Shop Floor Inbox dialogs | `public/js/shop_floor_inbox/dialogs.js` | handoff/logout prompts ورسائل الصفحة |
 | Shop Floor Inbox orchestration | `public/js/shop_floor_inbox/controller.js` | تنسيق API/state/view-model/renderers فقط؛ ليس transport أو renderer |
-| Measurement scheduling | `door_cutting_order/order_entry/measurements/door_cutting_order_measurement_lifecycle.js` | إلغاء frame/timer work القديم، feature-key ownership، document freshness |
+| Measurement scheduling/readiness | `door_cutting_order/order_entry/measurements/door_cutting_order_measurement_lifecycle.js` | إلغاء frame/timer work القديم، feature-key ownership، document freshness، والمصالحة النهائية المسجلة بعد كل base render |
 | Fast-entry base interaction | `door_cutting_order/order_entry/door_cutting_order_operator_ux.js` | row materialization/input sync وsingle-click edge toggle الأساسي |
 | Qty + Enter keyboard flow | `measurements/door_cutting_order_fast_entry_keyboard_ux.js` | Qty normalization، تشغيل qty handler، ثم الانتقال إلى Width في السطر التالي |
 | Multi-edge feature renderer | `edge_banding/door_cutting_order_multi_edge_ux.js` | واجهة/بيانات القشاط متعدد الأضلاع ووظائفه العامة |
@@ -72,6 +72,8 @@
 ### 3.4 Measurement lifecycle
 
 العمل المؤجل الناتج عن refresh يجب أن يكون cancellable ومربوطًا بالوثيقة الحالية. لا تضف `setTimeout`/`requestAnimationFrame` متكررة على refresh كحل مستقل إذا كان يمكن جدولتها عبر `AlmdinaMeasurementLifecycle` أو `AlmdinaDocumentContext`.
+
+جدول القياسات مسجل أيضًا كـdocument surface داخل `AlmdinaDocumentContext`. بعد كل base render يعلن Operator جيل render جديدًا، ثم يشغّل `AlmdinaMeasurementLifecycle` جميع feature reconcilers المسجلة بالترتيب نفسه قبل اعتماد الجاهزية. إذا أفرغ Frappe حقل HTML أو وصل feature asset متأخرًا، تفشل الجاهزية مغلقة وتعيد surface recovery بناء الجدول الحالي فقط؛ وإذا بقي HTML جزئي تفرض مسار Operator recovery إعادة الهيكل متجاوزة cache التطابق مع استعادة الحقل النشط وموضع التمرير. لا تستدعي هذه العملية `frm.refresh()` ولا تعيد تحميل الطلب ولا تسمح لعمل وثيقة قديمة بالكتابة في الحالية.
 
 ### 3.5 Cutting-plan content
 
