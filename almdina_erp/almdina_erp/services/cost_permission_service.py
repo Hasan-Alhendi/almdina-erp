@@ -22,7 +22,6 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspac
 from almdina_erp.almdina_erp.services.order_edit_policy import assert_order_editable
 
 
-EDITABLE_ORDER_STATUSES = {"Draft", "Pending Review", "Rejected"}
 ORDER_COST_FIELDS = (
     "board_rate_usd",
     "cutting_cost_per_board_usd",
@@ -210,8 +209,6 @@ def update_order_cost_settings(
     )
     order = _authorized_order(name, Capability.EDIT_COST_SETTINGS)
     _require_cost_visibility(order)
-    if order.status not in EDITABLE_ORDER_STATUSES:
-        frappe.throw(_("Cost settings can only be changed while the order is editable."))
 
     board_rate = _required_cost_input(board_rate_usd, _("سعر اللوح"))
     cutting_rate = _required_cost_input(

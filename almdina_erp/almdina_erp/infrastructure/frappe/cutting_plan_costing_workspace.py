@@ -6,7 +6,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt
 
-from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import DRAFT
+from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import APPROVED, DRAFT
 from almdina_erp.almdina_erp.domain.orders.costing import (
     CostingError,
     SpecialPricingPieceInput,
@@ -15,7 +15,7 @@ from almdina_erp.almdina_erp.domain.orders.costing import (
     calculate_special_pricing,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
-    current_working_plan,
+    latest_plan,
 )
 
 
@@ -112,13 +112,16 @@ def persist_plan_cost_snapshot(plan: Any) -> dict[str, float | int]:
 
     This narrow infrastructure boundary therefore persists only the already
     calculated in-memory snapshot after the parent command has authorized the
-    order and saved the Draft plan. It does not accept raw request values and it
-    never grants the caller permission to edit cost inputs.
+    order. Geometry commands still save a Draft first; the focused cost command
+    may persist the same fields onto an Approved production plan without
+    Document.save. It does not accept raw request values and it never grants
+    the caller permission to edit cost inputs.
     """
 
-    if str(getattr(plan, "status", None) or "") != DRAFT:
+    status = str(getattr(plan, "status", None) or "")
+    if status not in {DRAFT, APPROVED}:
         frappe.throw(
-            _("لا يمكن تحديث لقطة تكلفة خطة القص إلا على خطة في حالة المسودة."),
+            _("لا يمكن تحديث لقطة تكلفة خطة القص إلا على خطة مسودة أو معتمدة."),
             frappe.ValidationError,
         )
     if not str(getattr(plan, "name", None) or "").strip():
@@ -316,9 +319,23 @@ def project_plan_costs_to_order(order: Any, plan: Any) -> dict[str, float]:
 
 
 def current_cost_plan(order: Any) -> Any | None:
-    """Resolve financial reads from canonical Cutting Plan lineage only."""
+    """Resolve the plan that owns commercial cost geometry.
 
-    return current_working_plan(str(order.name))
+    Geometry editing still uses ``current_working_plan``. Cost reads and the
+    focused cost-settings command must not prefer a leftover empty Draft over
+    an Approved production plan, or invoice board/cutting lines disappear.
+    """
+
+    order_name = str(getattr(order, "name", None) or "").strip()
+    if not order_name:
+        return None
+    draft = latest_plan(order_name, status=DRAFT)
+    approved = latest_plan(order_name, status=APPROVED)
+    if draft is not None and cint(getattr(draft, "required_boards", 0)) > 0:
+        return draft
+    if approved is not None:
+        return approved
+    return draft
 
 
 def authoritative_cost_values(order: Any, *, plan: Any | None = None) -> dict[str, float]:

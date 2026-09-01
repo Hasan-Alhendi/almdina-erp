@@ -148,6 +148,47 @@ class TestPlanCostSnapshotRefreshRegression(unittest.TestCase):
         self.assertNotIn("almdina_cutting_plan_command_capability", plan.flags)
         self.assertNotIn("allow_status_transition", plan.flags)
 
+    def test_server_snapshot_boundary_persists_approved_financial_fields(self) -> None:
+        plan = _Plan(status="Approved")
+        expected = {
+            "cost_snapshot_version": workspace.COST_SNAPSHOT_VERSION,
+            "board_rate_usd": 20.0,
+            "cutting_cost_per_board_usd": 2.0,
+            "mdf_cost_usd": 80.0,
+            "cutting_cost_usd": 8.0,
+            "edge_cost_usd": 5.0,
+            "total_cost_usd": 93.0,
+        }
+        recorded: dict[str, object] = {}
+
+        class FakeDB:
+            def set_value(self, *args, **kwargs):
+                recorded["set_value"] = (args, kwargs)
+
+            def get_value(self, *args, **kwargs):
+                return expected
+
+        with patch.object(workspace.frappe, "db", FakeDB()):
+            result = workspace.persist_plan_cost_snapshot(plan)
+
+        args, kwargs = recorded["set_value"]
+        self.assertEqual(args[0], "Cutting Plan")
+        self.assertEqual(args[1], plan.name)
+        self.assertEqual(args[2], expected)
+        self.assertEqual(kwargs.get("update_modified"), False)
+        self.assertEqual(result, expected)
+
+    def test_server_snapshot_boundary_rejects_superseded_plans(self) -> None:
+        plan = _Plan(status="Superseded")
+
+        def throw_validation(*args, **kwargs):
+            raise frappe.ValidationError(args[0] if args else "blocked")
+
+        with patch.object(workspace, "_", lambda value: value):
+            with patch.object(workspace.frappe, "throw", side_effect=throw_validation):
+                with self.assertRaises(frappe.ValidationError):
+                    workspace.persist_plan_cost_snapshot(plan)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -124,6 +124,22 @@ assert.equal(action.canStart, true);
 assert.equal(action.canHandoff, false);
 assert.equal(viewModel.quickActionContext(active[0], "account").canStart, false);
 
+const pendingHandoffOnly = viewModel.quickActionContext(
+    {
+        ...active[0],
+        can_start_stage: false,
+        can_handoff_stage: true,
+        status: "Pending",
+    },
+    "board"
+);
+assert.equal(pendingHandoffOnly.canStart, false);
+assert.equal(
+    pendingHandoffOnly.canHandoff,
+    true,
+    "inbox must expose handoff when the server allows it on a Pending stage"
+);
+
 const account = viewModel.account({
     identity: { user: "worker@example.com", full_name: "عامل", departments: ["القص"] },
     navigation: { sections: { orders: true, production: true, costing: false } },

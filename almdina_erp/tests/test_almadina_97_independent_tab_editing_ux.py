@@ -202,6 +202,7 @@ def test_tab_local_edit_buttons_fail_closed_against_each_session_permission_poli
     assert 'can(frm, "view_costs") && can(frm, "edit_cost_settings")' in cost_source
     assert 'can(frm, "approve_special_price") || can(frm, "edit_special_price")' in cost_source
     assert "canEditCostSettings(frm) || canEditPiecePrices(frm)" in cost_source
+    assert "COST_SETTINGS_EDITABLE_ORDER_STATUSES" not in cost_source
     assert 'typeof api.canEditCostWorkspace === "function"' in page_source
     assert 'can(frm, "edit_order")' in order_source
     assert "لا تملك صلاحية تعديل إعدادات خطة القص" in page_source
