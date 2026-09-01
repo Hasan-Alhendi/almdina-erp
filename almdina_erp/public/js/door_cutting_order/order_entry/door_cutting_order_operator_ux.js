@@ -559,6 +559,75 @@
         }
     }
 
+    function captureMeasurementView(root) {
+        if (!root) return null;
+        const focused = document.activeElement;
+        const active = focused && root.contains(focused) ? focused : null;
+        const row = active && typeof active.closest === "function"
+            ? active.closest("tr[data-row-name]")
+            : null;
+        const scroller = root.querySelector(".dco-fast-entry-scroll");
+        const page = document.scrollingElement;
+        return {
+            rowName: row && row.dataset ? row.dataset.rowName : "",
+            fieldName: active && active.dataset ? active.dataset.field : "",
+            selectionStart: active && Number.isInteger(active.selectionStart)
+                ? active.selectionStart
+                : null,
+            selectionEnd: active && Number.isInteger(active.selectionEnd)
+                ? active.selectionEnd
+                : null,
+            tableTop: scroller ? scroller.scrollTop : 0,
+            tableLeft: scroller ? scroller.scrollLeft : 0,
+            pageTop: page ? page.scrollTop : 0,
+            pageLeft: page ? page.scrollLeft : 0,
+        };
+    }
+
+    function restoreMeasurementView(root, state) {
+        if (!root || !state) return;
+        let control = null;
+        if (state.rowName && state.fieldName) {
+            const row = Array.from(root.querySelectorAll("tr[data-row-name]")).find(candidate => (
+                candidate.dataset && candidate.dataset.rowName === state.rowName
+            ));
+            control = row && Array.from(row.querySelectorAll("[data-field]")).find(candidate => (
+                candidate.dataset && candidate.dataset.field === state.fieldName
+            ));
+        }
+        if (control && typeof control.focus === "function") {
+            control.focus({ preventScroll: true });
+            if (
+                state.selectionStart !== null
+                && state.selectionEnd !== null
+                && typeof control.setSelectionRange === "function"
+            ) {
+                control.setSelectionRange(state.selectionStart, state.selectionEnd);
+            }
+        }
+
+        const scroller = root.querySelector(".dco-fast-entry-scroll");
+        if (scroller) {
+            scroller.scrollTop = state.tableTop;
+            scroller.scrollLeft = state.tableLeft;
+        }
+        if (document.scrollingElement) {
+            document.scrollingElement.scrollTop = state.pageTop;
+            document.scrollingElement.scrollLeft = state.pageLeft;
+        }
+    }
+
+    function recoverFastMeasurements(frm) {
+        const field = frm && frm.fields_dict && frm.fields_dict.pieces_fast_entry;
+        if (!field || !field.$wrapper) return false;
+        const root = field.$wrapper.get(0);
+        const view = captureMeasurementView(root);
+        field.$wrapper._dcoForceHtmlReplace = true;
+        renderFastMeasurements(frm);
+        restoreMeasurementView(field.$wrapper.get(0), view);
+        return true;
+    }
+
     function getOrMaterializeRow(frm, tr) {
         if (!tr) return null;
         return materializeVirtualRow(frm, tr);
@@ -787,6 +856,10 @@
 
     window.AlmdinaDoorCuttingFastEntry = Object.assign(
         window.AlmdinaDoorCuttingFastEntry || {},
-        { render: renderFastMeasurements, loadEdgeTypes }
+        {
+            render: renderFastMeasurements,
+            recover: recoverFastMeasurements,
+            loadEdgeTypes,
+        }
     );
 })();

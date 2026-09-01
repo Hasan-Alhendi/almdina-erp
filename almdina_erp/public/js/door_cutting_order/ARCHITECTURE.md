@@ -194,5 +194,8 @@ generation. The same lifecycle registers `measurement-table` with
 a late feature registration invalidates the old readiness stamp until one keyed final
 reconciliation completes. The existing measurement-resilience observer also asks this
 surface owner to recover when the HTML field is cleared; it does not introduce another
-observer. Recovery is document-current and idempotent; it must not call a broad form
-refresh, rebuild business state, or add polling timers.
+observer. A partially malformed shell uses the Operator's explicit forced-replacement
+path so its normal identical-HTML cache cannot keep broken markup; that path restores
+the active measurement control and table/page scroll. Recovery is document-current and
+idempotent; it must not call a broad form refresh, rebuild business state, or add polling
+timers.

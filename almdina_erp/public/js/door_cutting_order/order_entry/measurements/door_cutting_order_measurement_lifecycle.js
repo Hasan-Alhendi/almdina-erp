@@ -253,8 +253,10 @@
         if (!state.applicable) return true;
         if (!state.ready) {
             const renderer = window.AlmdinaDoorCuttingFastEntry;
-            if (!renderer || typeof renderer.render !== "function") return false;
-            renderer.render(frm);
+            if (!renderer) return false;
+            if (typeof renderer.recover === "function") renderer.recover(frm);
+            else if (typeof renderer.render === "function") renderer.render(frm);
+            else return false;
             state = surfaceState(frm);
         }
         if (!state.ready) return false;

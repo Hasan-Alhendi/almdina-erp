@@ -73,7 +73,7 @@
 
 العمل المؤجل الناتج عن refresh يجب أن يكون cancellable ومربوطًا بالوثيقة الحالية. لا تضف `setTimeout`/`requestAnimationFrame` متكررة على refresh كحل مستقل إذا كان يمكن جدولتها عبر `AlmdinaMeasurementLifecycle` أو `AlmdinaDocumentContext`.
 
-جدول القياسات مسجل أيضًا كـdocument surface داخل `AlmdinaDocumentContext`. بعد كل base render يعلن Operator جيل render جديدًا، ثم يشغّل `AlmdinaMeasurementLifecycle` جميع feature reconcilers المسجلة بالترتيب نفسه قبل اعتماد الجاهزية. إذا أفرغ Frappe حقل HTML أو وصل feature asset متأخرًا، تفشل الجاهزية مغلقة وتعيد surface recovery بناء الجدول الحالي فقط؛ لا تستدعي `frm.refresh()` ولا تعيد تحميل الطلب ولا تسمح لعمل وثيقة قديمة بالكتابة في الحالية.
+جدول القياسات مسجل أيضًا كـdocument surface داخل `AlmdinaDocumentContext`. بعد كل base render يعلن Operator جيل render جديدًا، ثم يشغّل `AlmdinaMeasurementLifecycle` جميع feature reconcilers المسجلة بالترتيب نفسه قبل اعتماد الجاهزية. إذا أفرغ Frappe حقل HTML أو وصل feature asset متأخرًا، تفشل الجاهزية مغلقة وتعيد surface recovery بناء الجدول الحالي فقط؛ وإذا بقي HTML جزئي تفرض مسار Operator recovery إعادة الهيكل متجاوزة cache التطابق مع استعادة الحقل النشط وموضع التمرير. لا تستدعي هذه العملية `frm.refresh()` ولا تعيد تحميل الطلب ولا تسمح لعمل وثيقة قديمة بالكتابة في الحالية.
 
 ### 3.5 Cutting-plan content
 

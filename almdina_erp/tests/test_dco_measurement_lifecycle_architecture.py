@@ -113,10 +113,15 @@ def test_measurement_surface_has_real_readiness_recovery_and_final_reconciliatio
     assert "function reconcile(frm)" in lifecycle
     assert "featureOwners.forEach" in lifecycle
     assert "documentContext.isCurrent(frm, token)" in lifecycle
-    assert "renderer.render(frm)" in lifecycle
+    assert 'typeof renderer.recover === "function"' in lifecycle
+    assert "renderer.recover(frm)" in lifecycle
+    assert 'else if (typeof renderer.render === "function") renderer.render(frm)' in lifecycle
     assert "frm.refresh()" not in lifecycle
     assert "frm.reload_doc()" not in lifecycle
     assert 'measurementLifecycle.rendered(frm)' in operator
+    assert "function recoverFastMeasurements(frm)" in operator
+    assert "field.$wrapper._dcoForceHtmlReplace = true" in operator
+    assert "recover: recoverFastMeasurements" in operator
     assert "lifecycle.isReady(frm) === false" in resilience
     assert "lifecycle.recover(frm)" in resilience
 

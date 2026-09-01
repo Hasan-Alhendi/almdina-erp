@@ -132,8 +132,10 @@ function attachMeasurementSurface(frm, { mounted = false } = {}) {
     const state = {
         mounted,
         renderCalls: 0,
+        recoveryCalls: 0,
         effectiveReconciliations: 0,
         decorations: new Set(),
+        missingSelectors: new Set(),
         activeInput: "ROW-1:width_cm",
         scrollTop: 175,
         scrollLeft: 42,
@@ -149,7 +151,9 @@ function attachMeasurementSurface(frm, { mounted = false } = {}) {
     const root = {
         __measurementSurfaceState: state,
         querySelector(selector) {
-            return state.mounted ? (selectors.get(selector) || null) : null;
+            return state.mounted && !state.missingSelectors.has(selector)
+                ? (selectors.get(selector) || null)
+                : null;
         },
         querySelectorAll(selector) {
             if (selector === ".dco-fast-entry-shell" && state.mounted) {
@@ -455,6 +459,14 @@ async function testRealSurfaceOwnerRecoversMissingAndLateFeatureWork() {
             assert.equal(targetFrm, frm);
             state.renderCalls += 1;
             state.mounted = true;
+            state.missingSelectors.clear();
+            lifecycle.rendered(targetFrm);
+        },
+        recover(targetFrm) {
+            assert.equal(targetFrm, frm);
+            state.recoveryCalls += 1;
+            state.mounted = true;
+            state.missingSelectors.clear();
             lifecycle.rendered(targetFrm);
         },
     };
@@ -462,7 +474,8 @@ async function testRealSurfaceOwnerRecoversMissingAndLateFeatureWork() {
     assert.equal(lifecycle.isReady(frm), false, "A missing table must not report ready");
     assert.equal(lifecycle.recover(frm), true, "The surface owner must rebuild a missing table");
     assert.equal(lifecycle.isReady(frm), true);
-    assert.equal(state.renderCalls, 1);
+    assert.equal(state.renderCalls, 0);
+    assert.equal(state.recoveryCalls, 1);
     assert.deepEqual([...state.decorations], ["base"]);
     assert.equal(state.effectiveReconciliations, 1);
 
@@ -487,12 +500,24 @@ async function testRealSurfaceOwnerRecoversMissingAndLateFeatureWork() {
     assert.equal(state.scrollTop, 175);
     assert.equal(state.scrollLeft, 42);
 
+    // A structurally partial wrapper must bypass the Operator HTML cache and
+    // use its forced recovery path even while the table element still exists.
+    state.missingSelectors.add(".dco-fast-entry-toolbar");
+    assert.equal(lifecycle.isReady(frm), false);
+    assert.equal(lifecycle.recover(frm), true);
+    assert.equal(state.recoveryCalls, 2);
+    assert.equal(lifecycle.isReady(frm), true);
+    assert.equal(state.activeInput, "ROW-1:width_cm");
+    assert.equal(state.scrollTop, 175);
+    assert.equal(state.scrollLeft, 42);
+
     // If Frappe clears the HTML field after an identity transition, readiness
     // fails closed and the registered document surface restores it once.
     state.mounted = false;
     assert.equal(lifecycle.isReady(frm), false);
     assert.equal(lifecycle.recover(frm), true);
-    assert.equal(state.renderCalls, 2);
+    assert.equal(state.renderCalls, 0);
+    assert.equal(state.recoveryCalls, 3);
     assert.equal(lifecycle.isReady(frm), true);
 }
 
