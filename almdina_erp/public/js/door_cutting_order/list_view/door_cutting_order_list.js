@@ -6,7 +6,7 @@
         roleFlags: "almdina_erp.almdina_erp.services.shop_floor_query_service.get_order_operational_role_flags",
     });
     const MOBILE_CARD_STYLESHEET_ID = "almdina-dco-mobile-list-css";
-    const MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=7";
+    const MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=8";
     const STATUS_LABELS = Object.freeze({
         Draft: "مسودة",
         "Pending Review": "بانتظار المراجعة",
@@ -401,12 +401,20 @@
         return __(STATUS_LABELS[doc.status] || doc.status || "غير محدد");
     }
 
+    function productionStageLabel(doc) {
+        const status = String(doc && doc.status || "").trim();
+        if (status === "Delivered" || status === "Ready for Delivery") {
+            return "";
+        }
+        return String(doc && doc.current_department || "").trim();
+    }
+
     function overviewStageLabel(doc) {
         const status = String(doc && doc.status || "").trim();
         if (status === "Delivered" || status === "Ready for Delivery") {
             return __(STATUS_LABELS[status] || status);
         }
-        const department = String(doc && doc.current_department || "").trim();
+        const department = productionStageLabel(doc);
         if (department) return department;
         return fallbackStatusLabel(doc);
     }
@@ -466,6 +474,7 @@
         const state = cardState(doc, context, candidateAction);
         const action = state.history ? null : candidateAction;
         const overview = context.overview === true;
+        const productionStage = productionStageLabel(doc);
         return Object.freeze({
             orderId: displayValue(doc.name),
             customer: displayValue(doc.customer),
@@ -478,7 +487,8 @@
             state,
             history: state.history,
             overview,
-            stageLabel: overview ? overviewStageLabel(doc) : "",
+            productionStageLabel: productionStage,
+            stageLabel: overview ? overviewStageLabel(doc) : productionStage,
         });
     }
 
@@ -510,6 +520,12 @@
                 <span>${escapeHtml(state.label)}</span>
             </span>
         `;
+    }
+
+    function renderStageChip(model) {
+        const label = String(model && model.productionStageLabel || "").trim();
+        if (!label) return "";
+        return `<span class="dco-card-stage">${escapeHtml(label)}</span>`;
     }
 
     function renderCustomer(model) {
@@ -608,7 +624,10 @@
             >
                 <header class="dco-card-header">
                     ${renderCustomer(model)}
-                    ${renderStatusPill(model.state)}
+                    <div class="dco-card-header-meta">
+                        ${renderStageChip(model)}
+                        ${renderStatusPill(model.state)}
+                    </div>
                 </header>
                 ${renderOrderLink(model)}
                 <section class="dco-card-info-grid" aria-label="${escapeHtml(__("بيانات الطلب"))}">
@@ -641,6 +660,7 @@
             model.context.queueState || "",
             model.overview ? 1 : 0,
             model.stageLabel || "",
+            model.productionStageLabel || "",
             hasSelection ? 1 : 0,
             String(doc.department_status || ""),
         ]);
@@ -1120,6 +1140,7 @@
         desktopDeliveryRowState,
         isPhoneLayout,
         overviewStageLabel,
+        productionStageLabel,
         personalQueueState,
         quickActionContext,
         renderMobileCards,

@@ -192,6 +192,8 @@ def test_mobile_order_list_uses_reference_card_and_server_authorized_actions():
     assert 'node.matches(".list-row-container")' in list_source
     assert 'class="dco-mobile-order-card' in list_source
     assert 'class="dco-card-customer-block"' in list_source
+    assert 'class="dco-card-header-meta"' in list_source
+    assert 'class="dco-card-stage"' in list_source
     assert 'class="dco-card-state-pill"' in list_source
     assert 'class="dco-card-state-icon"' in list_source
     assert 'class="dco-card-order-link"' in list_source
@@ -208,7 +210,7 @@ def test_mobile_order_list_uses_reference_card_and_server_authorized_actions():
     assert 'if (!applyCardLayoutClass(listview)) {' in list_source
     assert "containers.forEach(removeMobileCard);" in list_source
     assert "ensureMobileCardStylesheet();" in list_source
-    assert 'MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=7"' in list_source
+    assert 'MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=8"' in list_source
     assert ".dco-order-list.dco-order-card-layout" in mobile_css
     scoped_result_rule = mobile_css.split(
         ".dco-order-list.dco-order-card-layout .result {",
@@ -219,6 +221,8 @@ def test_mobile_order_list_uses_reference_card_and_server_authorized_actions():
     assert "max-height:" not in scoped_result_rule
     assert "overflow: hidden" not in scoped_result_rule
     assert "grid-template-columns: repeat(3, minmax(0, 1fr))" in mobile_css
+    assert ".dco-card-header-meta" in mobile_css
+    assert ".dco-card-stage" in mobile_css
     assert ".dco-card-production-action.is-start" in mobile_css
     assert ".dco-card-production-action.is-finish" in mobile_css
     assert ".dco-card-production-action.is-deliver" in mobile_css

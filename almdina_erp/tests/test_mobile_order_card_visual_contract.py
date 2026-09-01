@@ -27,10 +27,12 @@ def test_mobile_card_matches_approved_reference_hierarchy() -> None:
     assert ".dco-order-list.dco-order-card-layout" in css
     assert ".dco-order-list:not(.dco-order-card-layout)" not in css
 
-    # Reference hierarchy: customer + status, clickable order ID, three equal
+    # Reference hierarchy: customer + stage/status, clickable order ID, three equal
     # information tiles, full-width date, then one state-aware CTA.
     for marker in (
         'class="dco-card-customer-block"',
+        'class="dco-card-header-meta"',
+        'class="dco-card-stage"',
         'class="dco-card-state-pill"',
         'class="dco-card-order-link"',
         'class="dco-card-info-grid"',
@@ -46,6 +48,8 @@ def test_mobile_card_matches_approved_reference_hierarchy() -> None:
     assert 'class="dco-card-assignee"' not in js
 
     assert "grid-template-columns: repeat(3, minmax(0, 1fr))" in css
+    assert ".dco-card-header-meta" in css
+    assert ".dco-card-stage" in css
     assert ".dco-card-date-row" in css
     assert ".dco-card-production-action.is-start" in css
     assert ".dco-card-production-action.is-finish" in css

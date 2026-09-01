@@ -165,6 +165,36 @@
     overflow-wrap: anywhere;
 }
 
+.dco-order-list.dco-order-card-layout .dco-card-header-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    flex: 0 0 auto;
+    gap: 6px;
+    min-width: 0;
+    max-width: 46%;
+}
+
+.dco-order-list.dco-order-card-layout .dco-card-stage {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    max-width: 100%;
+    min-height: 22px;
+    padding: 3px 9px;
+    border: 1px solid var(--dco-accent-border);
+    border-radius: 999px;
+    background: #fff;
+    color: var(--dco-accent-strong);
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1.2;
+    letter-spacing: .02em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .dco-order-list.dco-order-card-layout .dco-card-state-pill {
     display: inline-flex;
     align-items: center;
@@ -477,6 +507,17 @@
         font-size: 16px;
     }
 
+    .dco-order-list.dco-order-card-layout .dco-card-header-meta {
+        gap: 5px;
+        max-width: 48%;
+    }
+
+    .dco-order-list.dco-order-card-layout .dco-card-stage {
+        min-height: 20px;
+        padding: 2px 8px;
+        font-size: 9px;
+    }
+
     .dco-order-list.dco-order-card-layout .dco-card-state-pill {
         min-height: 29px;
         padding: 6px 9px;
@@ -569,6 +610,14 @@
 
     .dco-order-list.dco-order-card-layout .dco-card-customer-avatar {
         display: none;
+    }
+
+    .dco-order-list.dco-order-card-layout .dco-card-header-meta {
+        max-width: 44%;
+    }
+
+    .dco-order-list.dco-order-card-layout .dco-card-stage {
+        padding-inline: 7px;
     }
 
     .dco-order-list.dco-order-card-layout .dco-card-state-pill {
