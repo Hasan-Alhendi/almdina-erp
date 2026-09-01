@@ -43,6 +43,7 @@ class ExpectedPieceEvidence:
     width: float
     height: float
     allow_rotation: bool
+    arbitrary_outline: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,6 +63,7 @@ class ResolvedPartGeometry:
     contour_key: int
     geometry: PartGeometry
     hole_contour_keys: tuple[int, ...] = ()
+    expected_piece_index: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -228,6 +230,8 @@ def _dimensions_match(
     *,
     dimension_tolerance: float,
 ) -> bool:
+    if expected.arbitrary_outline:
+        return True
     min_x, min_y, max_x, max_y = bbox(contour.polygon)
     width = max_x - min_x
     height = max_y - min_y
@@ -244,7 +248,7 @@ def _dimensions_match(
     )
 
 
-def _matches_any_expected(
+def _matches_any_dimension_bound_expected(
     contour: ContourCandidate,
     expected: Sequence[ExpectedPieceEvidence],
     *,
@@ -257,24 +261,30 @@ def _matches_any_expected(
             dimension_tolerance=dimension_tolerance,
         )
         for expected_piece in expected
+        if not expected_piece.arbitrary_outline
     )
 
 
-def _inventory_can_match(
+def _inventory_assignment(
     selected: Sequence[ContourCandidate],
     expected: Sequence[ExpectedPieceEvidence],
     *,
     dimension_tolerance: float,
-) -> bool:
-    """Return whether selected contours admit a one-to-one expected-piece match."""
-    if len(selected) != len(expected):
-        return False
+) -> tuple[int, ...] | None:
+    """Return one expected-piece index per selected contour, if injective.
+
+    Dimension-bound pieces are preferred over arbitrary outlines. Matching still
+    backtracks, so a Special wildcard cannot consume an ordinary contour when
+    that would leave the dimension-bound inventory unmatched.
+    """
+    if len(selected) > len(expected):
+        return None
 
     candidate_indexes: list[list[int]] = []
-    for expected_piece in expected:
+    for contour in selected:
         matches = [
             index
-            for index, contour in enumerate(selected)
+            for index, expected_piece in enumerate(expected)
             if _dimensions_match(
                 contour,
                 expected_piece,
@@ -282,27 +292,56 @@ def _inventory_can_match(
             )
         ]
         if not matches:
-            return False
+            return None
+        matches.sort(key=lambda index: (expected[index].arbitrary_outline, index))
         candidate_indexes.append(matches)
 
-    contour_owner: dict[int, int] = {}
+    expected_owner: dict[int, int] = {}
 
-    def assign(expected_index: int, visited: set[int]) -> bool:
-        for contour_index in candidate_indexes[expected_index]:
-            if contour_index in visited:
+    def assign(contour_index: int, visited: set[int]) -> bool:
+        for expected_index in candidate_indexes[contour_index]:
+            if expected_index in visited:
                 continue
-            visited.add(contour_index)
-            previous_expected = contour_owner.get(contour_index)
-            if previous_expected is None or assign(previous_expected, visited):
-                contour_owner[contour_index] = expected_index
+            visited.add(expected_index)
+            previous_contour = expected_owner.get(expected_index)
+            if previous_contour is None or assign(previous_contour, visited):
+                expected_owner[expected_index] = contour_index
                 return True
         return False
 
     order = sorted(
-        range(len(expected)),
+        range(len(selected)),
         key=lambda index: (len(candidate_indexes[index]), index),
     )
-    return all(assign(expected_index, set()) for expected_index in order)
+    if not all(assign(contour_index, set()) for contour_index in order):
+        return None
+
+    contour_to_expected = {
+        contour_index: expected_index
+        for expected_index, contour_index in expected_owner.items()
+    }
+    return tuple(contour_to_expected[index] for index in range(len(selected)))
+
+
+def _root_contours(
+    contours: Sequence[ContourCandidate],
+    *,
+    geometry_tolerance: float,
+) -> tuple[ContourCandidate, ...]:
+    """Return contours that cannot structurally be holes of another contour."""
+    return tuple(
+        contour
+        for contour in contours
+        if not any(
+            owner.key != contour.key
+            and polygon_strictly_contains_polygon(
+                owner.polygon,
+                contour.polygon,
+                tolerance=geometry_tolerance,
+            )
+            for owner in contours
+        )
+    )
 
 
 def _validate_part_topology(
@@ -335,6 +374,7 @@ def _classify_selection(
     leftovers: Sequence[ContourCandidate],
     *,
     geometry_tolerance: float,
+    expected_piece_indexes: dict[int, int],
 ) -> ResolvedTopology | None:
     """Attach each proven hole to exactly one selected outer contour.
 
@@ -379,6 +419,7 @@ def _classify_selection(
                 contour_key=contour.key,
                 geometry=geometry,
                 hole_contour_keys=tuple(hole.key for hole in owned_holes),
+                expected_piece_index=expected_piece_indexes.get(contour.key),
             )
         )
 
@@ -399,10 +440,13 @@ def resolve_contour_ownership(
 
     The decision is deterministic and intentionally fail-closed:
 
-    * a contour that matches an expected piece dimension is treated as an actual
-      piece candidate;
-    * a contour that matches no expected dimension can be considered a hole only
-      when it is strictly contained by exactly one selected outer contour;
+    * a contour not contained by another contour must be an actual piece;
+    * a nested contour matching a dimension-bound expected piece remains an
+      actual piece candidate (supporting pieces placed inside proven holes);
+    * Special pieces are arbitrary outer outlines and do not claim nested holes
+      merely because a hole happens to match their nominal width/height;
+    * a nested contour without dimension-bound piece evidence can be considered
+      a hole only when it is strictly contained by exactly one selected outer;
     * if there are more piece-like contours than expected pieces, ownership is
       ambiguous and the DXF is rejected instead of guessing from contour order,
       nesting parity, or size.
@@ -419,16 +463,25 @@ def resolve_contour_ownership(
             raise DxfTopologyError("UNRESOLVED_CONTOUR_OWNERSHIP")
         return ResolvedTopology(parts=())
 
-    selected = tuple(
+    roots = _root_contours(
+        ordered_contours,
+        geometry_tolerance=geometry_tolerance,
+    )
+    dimension_bound_candidates = tuple(
         contour
         for contour in ordered_contours
-        if _matches_any_expected(
+        if _matches_any_dimension_bound_expected(
             contour,
             expected,
             dimension_tolerance=dimension_tolerance,
         )
     )
-    selected_keys = {contour.key for contour in selected}
+    selected_keys = {
+        contour.key for contour in (*roots, *dimension_bound_candidates)
+    }
+    selected = tuple(
+        contour for contour in ordered_contours if contour.key in selected_keys
+    )
     leftovers = tuple(
         contour for contour in ordered_contours if contour.key not in selected_keys
     )
@@ -436,18 +489,29 @@ def resolve_contour_ownership(
     if len(selected) < len(expected):
         raise DxfTopologyError("EXPECTED_PIECE_MISMATCH")
     if len(selected) > len(expected):
+        if _inventory_assignment(
+            roots,
+            expected,
+            dimension_tolerance=dimension_tolerance,
+        ) is None:
+            raise DxfTopologyError("UNRESOLVED_CONTOUR_OWNERSHIP")
         raise DxfTopologyError("AMBIGUOUS_CONTOUR_OWNERSHIP")
-    if not _inventory_can_match(
+    assignment = _inventory_assignment(
         selected,
         expected,
         dimension_tolerance=dimension_tolerance,
-    ):
+    )
+    if assignment is None:
         raise DxfTopologyError("EXPECTED_PIECE_MISMATCH")
 
     topology = _classify_selection(
         selected,
         leftovers,
         geometry_tolerance=geometry_tolerance,
+        expected_piece_indexes={
+            contour.key: assignment[index]
+            for index, contour in enumerate(selected)
+        },
     )
     if topology is None:
         raise DxfTopologyError(
