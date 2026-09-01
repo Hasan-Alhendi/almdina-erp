@@ -20,7 +20,7 @@ business-logic rewrites.
 - `recovery/`: bounded local recovery overlay split into application projections/session,
   IndexedDB repositories, and presentation integration. It reads existing owners and
   never becomes a document/workspace/save authority.
-- `list_view/`: Door Cutting Order list presentation, search, status/stage presentation and list quick actions.
+- `list_view/`: Door Cutting Order list presentation, combined search, status filter shortcut, status/stage presentation and list quick actions.
 
 ### A5 aggregate workspace state
 

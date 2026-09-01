@@ -101,6 +101,11 @@ assert.equal(api.canEditCostSettings(frm), true);
 assert.equal(api.canEditCostWorkspace(frm), true);
 assert.equal(api.canEditPiecePrices(frm), false);
 
+frm.doc.status = "At CNC";
+assert.equal(api.canEditCostSettings(frm), true);
+assert.equal(api.canEditCostWorkspace(frm), true);
+assert.equal(api.canEditPiecePrices(frm), false);
+
 grants.delete("edit_cost_settings");
 frm.doc.status = "Draft";
 grants.delete("approve_special_price");
@@ -112,5 +117,11 @@ assert.equal(api.canEditCostWorkspace(frm), true);
 
 frm.doc.revision_state = "Superseded";
 assert.equal(api.canEditCostWorkspace(frm), false);
+
+assert.equal(
+    sessionSource.includes("COST_SETTINGS_EDITABLE_ORDER_STATUSES"),
+    false,
+    "Cost settings must not be gated by a draft-like order status list"
+);
 
 console.log("Special price Cost-workspace access simulation passed");

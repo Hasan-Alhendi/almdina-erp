@@ -111,8 +111,12 @@ class TestOrderCostingArchitecture(unittest.TestCase):
         self.assertIn("FrappeCuttingPlanCommandRepository", command)
         self.assertIn("Capability.EDIT_COST_SETTINGS", command)
         self.assertIn("apply_plan_costs(plan)", command)
+        self.assertIn("current_cost_plan", command)
+        self.assertIn("persist_plan_cost_snapshot(plan)", command)
         self.assertIn("repository.save_document(plan)", command)
         self.assertIn("refresh_order_commercial_totals(order, plan)", command)
+        self.assertNotIn("ensure_system_draft", command)
+        self.assertNotIn("ensure_uploaded_dxf_draft", command)
         self.assertNotIn("project_plan_costs_to_order", command)
         self.assertNotIn("order.save(", command)
         self.assertNotIn("ignore_permissions", command)
@@ -135,6 +139,9 @@ class TestOrderCostingArchitecture(unittest.TestCase):
         self.assertNotIn("order.save(", focused)
         self.assertNotIn("ignore_permissions", focused)
         self.assertNotIn("plan_needs_recalculation", focused)
+        self.assertNotIn("EDITABLE_ORDER_STATUSES", focused)
+        self.assertNotIn("Cost settings can only be changed while the order is editable.", focused)
+        self.assertNotIn('order.status not in', focused)
 
     def test_geometry_refreshes_plan_cost_before_canonical_plan_save(self) -> None:
         source = PLAN_COMMAND_PATH.read_text(encoding="utf-8")

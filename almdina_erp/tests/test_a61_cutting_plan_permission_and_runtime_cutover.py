@@ -172,9 +172,12 @@ def test_cost_workspace_no_longer_selects_plan_from_dco_source_projection() -> N
         "almdina_erp/infrastructure/frappe/cutting_plan_costing_workspace.py"
     )
     command = source("almdina_erp/services/cutting_plan_cost_command_service.py")
-    assert "current_working_plan" in workspace
+    assert "current_cost_plan" in workspace
+    assert "latest_plan" in workspace
     assert "cutting_plan_source" not in workspace
-    assert "current_working_plan" in command
+    assert "current_cost_plan" in command
+    assert "ensure_system_draft" not in command
+    assert "ensure_uploaded_dxf_draft" not in command
     assert "cutting_plan_source" not in command
 
 

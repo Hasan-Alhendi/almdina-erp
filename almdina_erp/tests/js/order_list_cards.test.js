@@ -19,18 +19,29 @@ const cssSource = fs.readFileSync(
 
 let coarsePointer = false;
 let noHover = false;
+function KanbanView() {}
+KanbanView.prototype.setup_defaults = function setupDefaults() {
+    return Promise.resolve("base-ready");
+};
+
 const context = {
     console,
     document: { documentElement: { clientWidth: 390 } },
     frappe: {
         datetime: { str_to_user: value => `date:${value}` },
         listview_settings: {},
+        model: {
+            get_std_field(fieldname) {
+                return { fieldname, fieldtype: "Data", label: "ID", parent: "Door Cutting Order" };
+            },
+        },
         session: { user: "cutting@example.com" },
         utils: {
             escape_html(value) {
                 return String(value).replaceAll("<", "&lt;").replaceAll(">", "&gt;");
             },
         },
+        views: { KanbanView },
     },
     window: {
         innerWidth: 390,
@@ -64,6 +75,47 @@ vm.runInContext(source, context);
 
 const responsive = context.window.AlmdinaResponsiveDevice;
 const api = context.window.AlmdinaDoorCuttingOrderListUX;
+
+const kanbanView = new context.frappe.views.KanbanView();
+kanbanView.doctype = "Door Cutting Order";
+kanbanView.card_meta = { title_field: { fieldname: "order_notes" } };
+kanbanView.board = {
+    fields: ["order_notes", "customer", "name", "order_notes"],
+    show_labels: 0,
+};
+api.applyKanbanCardPresentation(kanbanView);
+assert.strictEqual(kanbanView.card_meta.title_field.fieldname, "name");
+assert.deepStrictEqual(
+    [...kanbanView.board.fields],
+    ["customer", "board_description", "edge_color", "order_notes"]
+);
+assert.strictEqual(kanbanView.board.show_labels, 1);
+assert.strictEqual(
+    context.frappe.views.KanbanView.prototype.__almdinaDcoCardPresentationInstalled,
+    true
+);
+
+const lifecycleKanban = new context.frappe.views.KanbanView();
+lifecycleKanban.doctype = "Door Cutting Order";
+lifecycleKanban.card_meta = { title_field: { fieldname: "order_notes" } };
+lifecycleKanban.board = { fields: [], show_labels: 0 };
+const lifecycleSetup = lifecycleKanban.setup_defaults();
+
+const otherKanban = {
+    doctype: "Task",
+    card_meta: { title_field: { fieldname: "subject" } },
+    board: { fields: ["status"], show_labels: 0 },
+};
+api.applyKanbanCardPresentation(otherKanban);
+assert.strictEqual(otherKanban.card_meta.title_field.fieldname, "subject");
+assert.deepStrictEqual([...otherKanban.board.fields], ["status"]);
+assert.strictEqual(otherKanban.board.show_labels, 0);
+
+assert.deepStrictEqual(
+    [...api.kanbanCardFields(["edge_color", { fieldname: "order_notes" }, "customer"])],
+    ["customer", "board_description", "edge_color", "order_notes"]
+);
+
 const doc = {
     name: "DCO-2026-00010",
     customer: "عميل الاختبار",
@@ -95,10 +147,15 @@ assert.strictEqual(model.state.icon, "play");
 assert.strictEqual(model.boardColor, "أبيض لولو");
 assert.strictEqual(model.edgeColor, "أسود");
 assert.strictEqual(model.edgeType, "PVC 2 مم");
+assert.strictEqual(model.productionStageLabel, "شريون");
+assert.strictEqual(model.stageLabel, "شريون");
 
 const html = api.buildCard(doc, true);
 assert(html.includes("dco-mobile-order-card is-ready"), "the ready order must render with the blue ready theme");
 assert(html.includes('class="dco-card-customer-block"'), "customer identity must be the primary header block");
+assert(html.includes('class="dco-card-header-meta"'), "stage and queue state must share a compact header meta column");
+assert(html.includes('class="dco-card-stage"'), "the current production stage must be visible on the worker card");
+assert(html.includes("شريون"), "the worker card must show the current department name");
 assert(html.includes('class="dco-card-state-pill"'), "the card must expose a visual workflow-state pill");
 assert(html.includes('class="dco-card-state-icon"'), "each workflow state must expose a semantic icon in addition to color");
 assert(html.includes("جاهز للبدء"), "the initial production state must be clear");
@@ -137,6 +194,8 @@ const inProgressHtml = api.buildCard(inProgress, false);
 assert.strictEqual(inProgressModel.state.key, "in_progress");
 assert.strictEqual(inProgressModel.state.icon, "activity");
 assert(inProgressHtml.includes("dco-mobile-order-card is-in-progress"));
+assert(inProgressHtml.includes("dco-card-stage"));
+assert(inProgressHtml.includes("شريون"));
 assert(inProgressHtml.includes("قيد التنفيذ"));
 assert(inProgressHtml.includes("إنهاء العمل"), "an active mobile assignment must expose a clear finish action");
 assert(inProgressHtml.includes('data-action-kind="handoff"'));
@@ -186,6 +245,8 @@ assert.strictEqual(readyForDeliveryModel.state.label, "جاهز للتسليم")
 assert.strictEqual(readyForDeliveryModel.state.icon, "package");
 assert.strictEqual(readyForDeliveryModel.history, false);
 assert(readyForDeliveryHtml.includes("dco-mobile-order-card is-ready-for-delivery"));
+assert.strictEqual(readyForDeliveryModel.productionStageLabel, "");
+assert(!readyForDeliveryHtml.includes("dco-card-stage"), "delivery cards must not repeat a production-stage chip");
 assert(readyForDeliveryHtml.includes("جاهز للتسليم"), "production-complete orders must have an explicit waiting-for-delivery state");
 assert(!readyForDeliveryHtml.includes("dco-card-complete-state"), "ready for delivery is still actionable work, not history");
 assert(!readyForDeliveryHtml.includes("dco-card-production-action"), "delivery capability must still come only from the server");
@@ -257,6 +318,8 @@ assert.strictEqual(deliveredModel.state.icon, "truck");
 assert.strictEqual(deliveredModel.history, true);
 assert.strictEqual(deliveredModel.action, null);
 assert(deliveredHtml.includes("dco-mobile-order-card is-delivered"));
+assert.strictEqual(deliveredModel.productionStageLabel, "");
+assert(!deliveredHtml.includes("dco-card-stage"), "delivered cards must not repeat a production-stage chip");
 assert(deliveredHtml.includes("dco-card-complete-state"));
 assert(deliveredHtml.includes("تم التسليم"), "a delivered order must retain a non-interactive delivered state");
 assert(!deliveredHtml.includes("dco-card-production-action"), "a delivered order must never render another workflow button");
@@ -264,6 +327,10 @@ assert(!deliveredHtml.includes("dco-card-production-action"), "a delivered order
 assert.strictEqual(api.overviewStageLabel({ status: "At CNC", current_department: "CNC" }), "CNC");
 assert.strictEqual(api.overviewStageLabel({ status: "Ready for Delivery" }), "جاهز للتسليم");
 assert.strictEqual(api.overviewStageLabel({ status: "Delivered" }), "تم التسليم");
+assert.strictEqual(api.productionStageLabel({ status: "At CNC", current_department: "CNC" }), "CNC");
+assert.strictEqual(api.productionStageLabel({ status: "At Sharyoun", current_department: "شريون" }), "شريون");
+assert.strictEqual(api.productionStageLabel({ status: "Ready for Delivery", current_department: "شريون" }), "");
+assert.strictEqual(api.productionStageLabel({ status: "Delivered", current_department: "CNC" }), "");
 
 const overviewCnc = {
     ...doc,
@@ -285,6 +352,8 @@ const overviewCncHtml = api.buildCard(overviewCnc, false);
 assert.strictEqual(overviewCncModel.state.key, "ready");
 assert.strictEqual(overviewCncModel.overview, true);
 assert.strictEqual(overviewCncModel.stageLabel, "CNC");
+assert.strictEqual(overviewCncModel.productionStageLabel, "CNC");
+assert(overviewCncHtml.includes("dco-card-stage"));
 assert(!overviewCncHtml.includes("dco-mobile-order-card is-completed"));
 assert(!overviewCncHtml.includes("تم الإنجاز"), "all-orders mobile cards must not treat unassigned work as worker-completed");
 assert(overviewCncHtml.includes("dco-card-complete-state"));
@@ -635,6 +704,8 @@ assert(desktopCssSource.includes("background: #a7f3d0 !important;"));
 assert(desktopCssSource.includes("border-color: #16a34a !important;"));
 assert(desktopCssSource.includes("border-color: #047857 !important;"));
 
+assert(cssSource.includes(".dco-card-header-meta"));
+assert(cssSource.includes(".dco-card-stage"));
 assert(cssSource.includes("#2563eb"), "ready/start must use the agreed blue identity");
 assert(cssSource.includes("#f59e0b"), "in-progress/finish must use the agreed orange identity");
 assert(cssSource.includes("#7c3aed"), "ready-for-delivery/deliver must use the agreed purple identity");
@@ -645,4 +716,16 @@ assert(cssSource.includes(".is-delivered"));
 assert(cssSource.includes(".is-deliver"));
 assert(!source.includes("frappe.get_roles"), "mobile list presentation must remain capability-driven, never role-name-driven");
 
-console.log("Door Cutting Order five-state mobile-card simulation passed");
+lifecycleSetup.then(result => {
+    assert.strictEqual(result, "base-ready");
+    assert.strictEqual(lifecycleKanban.card_meta.title_field.fieldname, "name");
+    assert.deepStrictEqual(
+        [...lifecycleKanban.board.fields],
+        ["customer", "board_description", "edge_color"]
+    );
+    assert.strictEqual(lifecycleKanban.board.show_labels, 1);
+    console.log("Door Cutting Order five-state mobile-card simulation passed");
+}).catch(error => {
+    console.error(error);
+    process.exitCode = 1;
+});

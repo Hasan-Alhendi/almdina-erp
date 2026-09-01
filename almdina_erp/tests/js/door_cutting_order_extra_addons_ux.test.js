@@ -44,9 +44,17 @@ assert.deepEqual(
         piece_type: "Extra",
         extra_double: 1,
         extra_liner: 0,
+        extra_back_groove: 0,
         extra_recessed_handle_cutout: 1,
     }).map(item => item.fieldname))),
     ["extra_double", "extra_recessed_handle_cutout"]
+);
+assert.deepEqual(
+    JSON.parse(JSON.stringify(api.selectedFields({
+        piece_type: "Extra",
+        extra_back_groove: 1,
+    }).map(item => item.fieldname))),
+    ["extra_back_groove"]
 );
 
 assert.equal(api.physicalCutQuantity({ qty: 3, extra_full_door_double: 1 }), 6);
@@ -81,6 +89,7 @@ assert.match(selectedExtra, /dco-extra-open-count">2<\/b>/);
 const submenu = api.renderSubmenu({ piece_type: "Extra" });
 assert.match(submenu, /إضافات Extra/);
 assert.match(submenu, /لاينر/);
+assert.match(submenu, /فرزة ظهر/);
 assert.match(submenu, /دبل قشاط/);
 assert.match(submenu, /دبل كامل الدرفة/);
 assert.match(submenu, /حفر مسكة غطس/);

@@ -152,3 +152,28 @@ def test_cost_save_keeps_editor_open_when_server_does_not_return_authoritative_s
     unmount = save_body.index("unmountDraftControls(frm);")
     assert invalid_guard < unmount
     assert "لم يتم إغلاق وضع التعديل" in save_body
+
+
+def test_cost_settings_edit_is_not_gated_by_order_status() -> None:
+    ux = _source(COST_EDIT_UX)
+    service = _source(COST_SERVICE)
+
+    assert "COST_SETTINGS_EDITABLE_ORDER_STATUSES" not in ux
+    cost_settings_gate = ux.split("function canEditCostSettings", 1)[1].split(
+        "function canEditPiecePrices", 1
+    )[0]
+    assert "baseDocumentEditable(frm)" in cost_settings_gate
+    assert 'can(frm, "view_costs") && can(frm, "edit_cost_settings")' in cost_settings_gate
+    assert "frm.doc.status" not in cost_settings_gate
+
+    piece_gate = ux.split("function canEditPiecePrices", 1)[1].split(
+        "function canEditCostWorkspace", 1
+    )[0]
+    assert 'status || "Draft") !== "Draft"' in piece_gate
+
+    focused = service.split("def update_order_cost_settings", 1)[1].split(
+        "def approve_special_piece_price", 1
+    )[0]
+    assert "EDITABLE_ORDER_STATUSES" not in focused
+    assert "Cost settings can only be changed while the order is editable." not in focused
+    assert "assert_order_editable" not in focused

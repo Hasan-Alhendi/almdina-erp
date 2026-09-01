@@ -63,7 +63,7 @@ class TestA3PlanCostingOwnership(unittest.TestCase):
                 self.capability = capability
 
             def ensure_system_draft(self, _order):
-                return plan
+                raise AssertionError("Cost settings must not create a system draft")
 
             def ensure_uploaded_dxf_draft(self, _order):
                 raise AssertionError("System order must not create a DXF draft")
@@ -73,7 +73,7 @@ class TestA3PlanCostingOwnership(unittest.TestCase):
                 return saved_plan
 
         with patch.object(cost_commands, "require_cutting_plan_capability"):
-            with patch.object(cost_commands, "current_working_plan", return_value=plan):
+            with patch.object(cost_commands, "current_cost_plan", return_value=plan):
                 with patch.object(cost_commands, "FrappeCuttingPlanCommandRepository", FakeRepository):
                     with patch.object(cost_commands, "initialize_draft_plan_cost_snapshot", return_value=False):
                         with patch.object(cost_commands, "refresh_order_commercial_totals"):
@@ -104,6 +104,96 @@ class TestA3PlanCostingOwnership(unittest.TestCase):
         self.assertEqual(plan.metadata_fingerprint, "metadata-fingerprint")
         self.assertEqual(plan.validation_status, "Valid")
         self.assertEqual(plan.plan_needs_recalculation, 0)
+
+    def test_cost_edit_on_approved_plan_persists_rates_without_creating_a_draft(self) -> None:
+        plan = SimpleNamespace(
+            name="CP-A3-APPROVED",
+            source_type="System",
+            status="Approved",
+            required_boards=2,
+            board_rate_usd=5,
+            cutting_cost_per_board_usd=1,
+            mdf_cost_usd=10,
+            cutting_cost_usd=2,
+            edge_cost_usd=3,
+            total_cost_usd=15,
+            cost_snapshot_version=1,
+            snapshot_json='{"sheets":[{"sheet_no":1}]}',
+            input_fingerprint="geometry-fingerprint",
+            metadata_fingerprint="metadata-fingerprint",
+            validation_status="Valid",
+            plan_needs_recalculation=0,
+        )
+        order = SimpleNamespace(name="DCO-A3-APPROVED")
+        persisted: list[SimpleNamespace] = []
+        fake_db = SimpleNamespace(
+            get_value=lambda *_args, **_kwargs: {
+                "board_rate_usd": 8,
+                "cutting_cost_per_board_usd": 2,
+            }
+        )
+
+        with patch.object(cost_commands, "_", lambda value: value):
+            with patch.object(cost_commands.frappe, "db", fake_db):
+                with patch.object(cost_commands, "require_cutting_plan_capability"):
+                    with patch.object(cost_commands, "current_cost_plan", return_value=plan):
+                        with patch.object(cost_commands, "FrappeCuttingPlanCommandRepository") as repository_cls:
+                            with patch.object(cost_commands, "initialize_draft_plan_cost_snapshot", return_value=False):
+                                with patch.object(
+                                    cost_commands,
+                                    "persist_plan_cost_snapshot",
+                                    side_effect=lambda saved_plan: persisted.append(saved_plan) or {},
+                                ):
+                                    with patch.object(cost_commands, "refresh_order_commercial_totals"):
+                                        result = cost_commands.update_plan_cost_settings(
+                                            order,
+                                            board_rate_usd=8,
+                                            cutting_cost_per_board_usd=2,
+                                        )
+
+        repository_cls.assert_not_called()
+        self.assertEqual(len(persisted), 1)
+        self.assertEqual(plan.required_boards, 2)
+        self.assertEqual(plan.board_rate_usd, 8)
+        self.assertEqual(plan.cutting_cost_per_board_usd, 2)
+        self.assertEqual(plan.mdf_cost_usd, 16)
+        self.assertEqual(plan.cutting_cost_usd, 4)
+        self.assertEqual(plan.total_cost_usd, 23)
+        self.assertEqual(result["total_cost_usd"], 23)
+        self.assertEqual(plan.snapshot_json, '{"sheets":[{"sheet_no":1}]}')
+        self.assertEqual(plan.plan_needs_recalculation, 0)
+
+    def test_current_cost_plan_prefers_draft_that_owns_boards(self) -> None:
+        draft = SimpleNamespace(name="CP-DRAFT-BOARDS", status="Draft", required_boards=3)
+        approved = SimpleNamespace(name="CP-APPROVED", status="Approved", required_boards=3)
+        order = SimpleNamespace(name="DCO-COST-PLAN-1")
+
+        def latest(_order_name, **filters):
+            status = filters.get("status")
+            if status == "Draft":
+                return draft
+            if status == "Approved":
+                return approved
+            return None
+
+        with patch.object(workspace, "latest_plan", side_effect=latest):
+            self.assertIs(workspace.current_cost_plan(order), draft)
+
+    def test_current_cost_plan_ignores_empty_draft_when_approved_exists(self) -> None:
+        draft = SimpleNamespace(name="CP-EMPTY-DRAFT", status="Draft", required_boards=0)
+        approved = SimpleNamespace(name="CP-APPROVED", status="Approved", required_boards=4)
+        order = SimpleNamespace(name="DCO-COST-PLAN-2")
+
+        def latest(_order_name, **filters):
+            status = filters.get("status")
+            if status == "Draft":
+                return draft
+            if status == "Approved":
+                return approved
+            return None
+
+        with patch.object(workspace, "latest_plan", side_effect=latest):
+            self.assertIs(workspace.current_cost_plan(order), approved)
 
     def test_cost_edit_fails_closed_if_frappe_restores_old_permlevel_values(self) -> None:
         plan = SimpleNamespace(name="CP-A3-PERMLEVEL")
@@ -396,6 +486,47 @@ class TestA3PlanCostingOwnership(unittest.TestCase):
 
         with self.assertRaises(frappe.ValidationError):
             plan_commands._assert_plan_ready_for_approval(order, plan)
+
+    def test_cost_settings_update_does_not_require_draft_order_status(self) -> None:
+        order = SimpleNamespace(name="DCO-AT-CNC-001", status="At CNC")
+        saved_plan = SimpleNamespace(name="CP-AT-CNC-001")
+        snapshot = {"order_name": order.name, "cutting_plan": saved_plan.name}
+        fake_db = SimpleNamespace(sql=lambda *args, **kwargs: None)
+
+        with patch.object(cost_service.frappe, "db", fake_db):
+            with patch.object(cost_service, "_", lambda value: value):
+                with patch.object(cost_service, "_authorized_order", return_value=order):
+                    with patch.object(cost_service, "_require_cost_visibility"):
+                        with patch.object(
+                            cost_service,
+                            "_required_cost_input",
+                            side_effect=lambda value, _label: float(value),
+                        ):
+                            with patch(
+                                "almdina_erp.almdina_erp.services.cutting_plan_cost_command_service.update_plan_cost_settings",
+                                return_value={"cutting_plan": saved_plan.name},
+                            ) as save_settings:
+                                with patch.object(
+                                    cost_service.frappe,
+                                    "get_doc",
+                                    return_value=saved_plan,
+                                ):
+                                    with patch.object(
+                                        cost_service,
+                                        "_cost_snapshot",
+                                        return_value=snapshot,
+                                    ):
+                                        result = cost_service.update_order_cost_settings(
+                                            order.name,
+                                            board_rate_usd=8,
+                                            cutting_cost_per_board_usd=2,
+                                        )
+
+        save_settings.assert_called_once()
+        self.assertIs(save_settings.call_args.args[0], order)
+        self.assertEqual(save_settings.call_args.kwargs["board_rate_usd"], 8.0)
+        self.assertEqual(save_settings.call_args.kwargs["cutting_cost_per_board_usd"], 2.0)
+        self.assertEqual(result, snapshot)
 
 
 if __name__ == "__main__":

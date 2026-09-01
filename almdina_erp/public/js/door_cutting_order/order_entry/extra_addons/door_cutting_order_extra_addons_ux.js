@@ -23,6 +23,11 @@
         }),
         Object.freeze({ fieldname: "extra_liner", labelAr: "لاينر", labelEn: "Liner" }),
         Object.freeze({
+            fieldname: "extra_back_groove",
+            labelAr: "فرزة ظهر",
+            labelEn: "Back Groove",
+        }),
+        Object.freeze({
             fieldname: "extra_recessed_handle_cutout",
             labelAr: "حفر مسكة غطس",
             labelEn: "Recessed handle cutout",

@@ -11,7 +11,6 @@
         board_rate_usd: "سعر اللوح",
         cutting_cost_per_board_usd: "أجور القص / لوح",
     });
-    const COST_SETTINGS_EDITABLE_ORDER_STATUSES = new Set(["Draft", "Pending Review", "Rejected"]);
     const STATUS_KEY = "__almdinaFocusedCostStatus";
     const STATUS_OWNER_KEY = "__almdinaFocusedCostStatusOwnerInstalled";
 
@@ -59,7 +58,6 @@
 
     function canEditCostSettings(frm) {
         if (!baseDocumentEditable(frm)) return false;
-        if (!COST_SETTINGS_EDITABLE_ORDER_STATUSES.has(String(frm.doc.status || "Draft"))) return false;
         return Boolean(can(frm, "view_costs") && can(frm, "edit_cost_settings"));
     }
 
@@ -262,7 +260,7 @@
 
     async function startEditing(frm) {
         if (!canEditCostWorkspace(frm)) {
-            frappe.msgprint(__("لا تملك صلاحية تعديل التكلفة أو تسعير الدرف الخاصة في حالة الطلب الحالية."));
+            frappe.msgprint(__("لا تملك صلاحية تعديل التكلفة أو تسعير الدرف الخاصة لهذا المستند."));
             return false;
         }
         if (frm.is_dirty && frm.is_dirty()) {
@@ -313,7 +311,7 @@
         if (!isEditing(frm)) return false;
         if (!canEditCostWorkspace(frm)) {
             await cancelEditing(frm);
-            frappe.msgprint(__("لم تعد حالة الطلب أو صلاحياتك تسمح بتعديل هذا القسم."));
+            frappe.msgprint(__("لم تعد صلاحياتك أو حالة هذا المستند تسمح بتعديل هذا القسم."));
             return false;
         }
 

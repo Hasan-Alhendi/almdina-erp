@@ -125,6 +125,12 @@ def _serialize_order_preview(
                     ),
                     "extra_liner_unit_price_usd": getattr(row, "extra_liner_unit_price_usd", 0),
                     "extra_liner_total_usd": getattr(row, "extra_liner_total_usd", 0),
+                    "extra_back_groove_unit_price_usd": getattr(
+                        row, "extra_back_groove_unit_price_usd", 0
+                    ),
+                    "extra_back_groove_total_usd": getattr(
+                        row, "extra_back_groove_total_usd", 0
+                    ),
                     "extra_recessed_handle_cutout_unit_price_usd": getattr(
                         row,
                         "extra_recessed_handle_cutout_unit_price_usd",

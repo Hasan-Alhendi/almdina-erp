@@ -7,7 +7,7 @@
     "stock_section","enforce_stock_control","default_warehouse","reserve_stock_on_approval","stock_consumption_point",
     "remnant_section","prefer_remnants_before_full_boards","min_remnant_width_mm","min_remnant_length_mm","min_remnant_area_m2","remnant_cost_policy","remnant_rate_usd_per_m2",
     "special_shape_pricing_section","default_special_design_fee_usd","default_special_cnc_fee_usd","default_special_manual_edge_fee_usd","default_special_margin_percent",
-    "extra_door_pricing_section","default_extra_double_unit_price_usd","default_extra_full_door_double_unit_price_usd","default_extra_liner_unit_price_usd","default_extra_recessed_handle_cutout_unit_price_usd",
+    "extra_door_pricing_section","default_extra_double_unit_price_usd","default_extra_full_door_double_unit_price_usd","default_extra_liner_unit_price_usd","default_extra_back_groove_unit_price_usd","default_extra_recessed_handle_cutout_unit_price_usd",
     "production_section","default_production_routing","allow_stage_override","allow_unplaced_approval",
     "print_identity_section","print_factory_name","print_factory_description","print_factory_address","print_factory_contacts"
   ],
@@ -41,6 +41,7 @@
     {"default":"0","description":"Customer sales price for one Double add-on per door.","fieldname":"default_extra_double_unit_price_usd","fieldtype":"Currency","label":"Extra Double Price USD / Door","non_negative":1},
     {"default":"0","description":"Customer sales price for one Full Door Double processing fee per original door.","fieldname":"default_extra_full_door_double_unit_price_usd","fieldtype":"Currency","label":"Full Door Double Processing Fee USD / Door","non_negative":1},
     {"default":"0","description":"Customer sales price for one Liner add-on per door.","fieldname":"default_extra_liner_unit_price_usd","fieldtype":"Currency","label":"Extra Liner Price USD / Door","non_negative":1},
+    {"default":"0","description":"Customer sales price for one back groove add-on per door.","fieldname":"default_extra_back_groove_unit_price_usd","fieldtype":"Currency","label":"Extra Back Groove Price USD / Door","non_negative":1},
     {"default":"0","description":"Customer sales price for one recessed handle cutout per door.","fieldname":"default_extra_recessed_handle_cutout_unit_price_usd","fieldtype":"Currency","label":"Extra Recessed Handle Cutout Price USD / Door","non_negative":1},
     {"fieldname":"production_section","fieldtype":"Section Break","label":"Production Controls"},
     {"fieldname":"default_production_routing","fieldtype":"Link","label":"Default Production Routing","options":"Production Routing"},

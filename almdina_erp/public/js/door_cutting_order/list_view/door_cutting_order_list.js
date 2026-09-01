@@ -5,8 +5,14 @@
         doctype: "Door Cutting Order",
         roleFlags: "almdina_erp.almdina_erp.services.shop_floor_query_service.get_order_operational_role_flags",
     });
+    const KANBAN_CARD_FIELDS = Object.freeze([
+        "customer",
+        "board_description",
+        "edge_color",
+    ]);
+    const KANBAN_VIEW_PATCH_KEY = "__almdinaDcoCardPresentationInstalled";
     const MOBILE_CARD_STYLESHEET_ID = "almdina-dco-mobile-list-css";
-    const MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=7";
+    const MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=8";
     const STATUS_LABELS = Object.freeze({
         Draft: "مسودة",
         "Pending Review": "بانتظار المراجعة",
@@ -97,11 +103,71 @@
         DESKTOP_DELIVERY_ROW_CLASS.ready_for_delivery,
         DESKTOP_DELIVERY_ROW_CLASS.delivered,
     ]);
+    const STATUS_FILTER_SLOT_CLASS = "dco-status-filter-slot";
+    const STATUS_FILTER_FIELDNAME = "status";
+    const STATUS_FILTER_ALL_LABEL = "كل الحالات";
 
     frappe.listview_settings = frappe.listview_settings || {};
     const existing = frappe.listview_settings[METHODS.doctype] || {};
     const originalOnload = existing.onload;
     const originalRefresh = existing.refresh;
+
+    function kanbanCardFields(fields) {
+        const configured = Array.isArray(fields) ? fields : [];
+        return [...new Set([...KANBAN_CARD_FIELDS, ...configured]
+            .map(field => typeof field === "string" ? field : field && field.fieldname)
+            .map(fieldname => String(fieldname || "").trim())
+            .filter(fieldname => fieldname && fieldname !== "name"))];
+    }
+
+    function kanbanNameField() {
+        if (frappe.model && typeof frappe.model.get_std_field === "function") {
+            const field = frappe.model.get_std_field("name");
+            if (field) return field;
+        }
+        return {
+            fieldname: "name",
+            fieldtype: "Data",
+            label: "ID",
+            parent: METHODS.doctype,
+        };
+    }
+
+    function applyKanbanCardPresentation(view) {
+        if (!view || view.doctype !== METHODS.doctype) return view;
+
+        view.card_meta = Object.assign({}, view.card_meta || {}, {
+            title_field: kanbanNameField(),
+        });
+        if (view.board) {
+            view.board.fields = kanbanCardFields(view.board.fields);
+            view.board.show_labels = 1;
+        }
+        return view;
+    }
+
+    function installKanbanCardPresentation() {
+        // Frappe v16 otherwise selects the first visible text field as the card
+        // title. For DCO that is optional order_notes, which renders as `null`.
+        // Keep the correction Kanban-scoped so Form/List document titles stay intact.
+        const prototype = frappe.views
+            && frappe.views.KanbanView
+            && frappe.views.KanbanView.prototype;
+        if (!prototype || prototype[KANBAN_VIEW_PATCH_KEY]) return;
+
+        const originalSetupDefaults = prototype.setup_defaults;
+        if (typeof originalSetupDefaults !== "function") return;
+
+        prototype.setup_defaults = function dcoKanbanSetupDefaults(...args) {
+            return Promise.resolve(originalSetupDefaults.apply(this, args)).then(result => {
+                applyKanbanCardPresentation(this);
+                return result;
+            });
+        };
+        prototype[KANBAN_VIEW_PATCH_KEY] = true;
+    }
+
+    installKanbanCardPresentation();
 
     function rootNode(listview) {
         const wrapper = listview && listview.page && listview.page.wrapper;
@@ -286,6 +352,96 @@
         }
     }
 
+    function statusFilterOptions() {
+        return [
+            { value: "", label: __(STATUS_FILTER_ALL_LABEL) },
+            ...Object.keys(STATUS_LABELS),
+        ];
+    }
+
+    function statusFilterConfig() {
+        return {
+            fieldtype: "Select",
+            fieldname: STATUS_FILTER_FIELDNAME,
+            label: __("Status"),
+            options: statusFilterOptions(),
+            condition: "=",
+        };
+    }
+
+    function statusFilterField(listview) {
+        return listview && listview.page && listview.page.fields_dict
+            ? listview.page.fields_dict[STATUS_FILTER_FIELDNAME]
+            : null;
+    }
+
+    function controlWrapper(field) {
+        if (!field) return null;
+        if (field.$wrapper) {
+            if (field.$wrapper.nodeType) return field.$wrapper;
+            if (field.$wrapper[0]) return field.$wrapper[0];
+        }
+        const wrapper = field.wrapper;
+        if (!wrapper) return null;
+        return wrapper.nodeType ? wrapper : wrapper[0];
+    }
+
+    function insertAfter(reference, node) {
+        if (!reference || !node) return false;
+        const parent = reference.parentNode;
+        if (!parent) return false;
+        if (reference.nextSibling) parent.insertBefore(node, reference.nextSibling);
+        else parent.appendChild(node);
+        return true;
+    }
+
+    function ensureStatusFilterSlot(root) {
+        if (!root || typeof root.querySelector !== "function") return null;
+        const existingSlot = root.querySelector(`.${STATUS_FILTER_SLOT_CLASS}`);
+        if (existingSlot) return existingSlot;
+        if (typeof document === "undefined" || typeof document.createElement !== "function") {
+            return null;
+        }
+
+        const slot = document.createElement("div");
+        slot.className = `${STATUS_FILTER_SLOT_CLASS} standard-filter-section flex`;
+        const filterSection = root.querySelector(".filter-section");
+        const filterSelector = filterSection && filterSection.querySelector(".filter-selector");
+        if (insertAfter(filterSelector, slot)) return slot;
+        if (filterSection) {
+            filterSection.appendChild(slot);
+            return slot;
+        }
+        const pageForm = root.querySelector(".page-form");
+        if (pageForm) {
+            pageForm.appendChild(slot);
+            return slot;
+        }
+        return null;
+    }
+
+    function applyStatusFilterHint(listview) {
+        const field = statusFilterField(listview);
+        const wrapper = controlWrapper(field);
+        if (!wrapper || typeof wrapper.querySelector !== "function") return;
+        const select = wrapper.querySelector("select");
+        if (!select) return;
+        select.setAttribute("aria-label", __("Status"));
+        select.setAttribute("title", __(STATUS_FILTER_ALL_LABEL));
+    }
+
+    function reconcileStatusFilterLayout(listview) {
+        const root = rootNode(listview);
+        const wrapper = controlWrapper(statusFilterField(listview));
+        if (!root || !wrapper) return false;
+
+        const target = ensureStatusFilterSlot(root);
+        if (!target) return false;
+        if (wrapper.parentNode !== target) target.appendChild(wrapper);
+        applyStatusFilterHint(listview);
+        return true;
+    }
+
     function applyCardLayoutClass(listview) {
         const root = rootNode(listview);
         if (!root) return false;
@@ -401,12 +557,20 @@
         return __(STATUS_LABELS[doc.status] || doc.status || "غير محدد");
     }
 
+    function productionStageLabel(doc) {
+        const status = String(doc && doc.status || "").trim();
+        if (status === "Delivered" || status === "Ready for Delivery") {
+            return "";
+        }
+        return String(doc && doc.current_department || "").trim();
+    }
+
     function overviewStageLabel(doc) {
         const status = String(doc && doc.status || "").trim();
         if (status === "Delivered" || status === "Ready for Delivery") {
             return __(STATUS_LABELS[status] || status);
         }
-        const department = String(doc && doc.current_department || "").trim();
+        const department = productionStageLabel(doc);
         if (department) return department;
         return fallbackStatusLabel(doc);
     }
@@ -466,6 +630,7 @@
         const state = cardState(doc, context, candidateAction);
         const action = state.history ? null : candidateAction;
         const overview = context.overview === true;
+        const productionStage = productionStageLabel(doc);
         return Object.freeze({
             orderId: displayValue(doc.name),
             customer: displayValue(doc.customer),
@@ -478,7 +643,8 @@
             state,
             history: state.history,
             overview,
-            stageLabel: overview ? overviewStageLabel(doc) : "",
+            productionStageLabel: productionStage,
+            stageLabel: overview ? overviewStageLabel(doc) : productionStage,
         });
     }
 
@@ -510,6 +676,12 @@
                 <span>${escapeHtml(state.label)}</span>
             </span>
         `;
+    }
+
+    function renderStageChip(model) {
+        const label = String(model && model.productionStageLabel || "").trim();
+        if (!label) return "";
+        return `<span class="dco-card-stage">${escapeHtml(label)}</span>`;
     }
 
     function renderCustomer(model) {
@@ -608,7 +780,10 @@
             >
                 <header class="dco-card-header">
                     ${renderCustomer(model)}
-                    ${renderStatusPill(model.state)}
+                    <div class="dco-card-header-meta">
+                        ${renderStageChip(model)}
+                        ${renderStatusPill(model.state)}
+                    </div>
                 </header>
                 ${renderOrderLink(model)}
                 <section class="dco-card-info-grid" aria-label="${escapeHtml(__("بيانات الطلب"))}">
@@ -641,6 +816,7 @@
             model.context.queueState || "",
             model.overview ? 1 : 0,
             model.stageLabel || "",
+            model.productionStageLabel || "",
             hasSelection ? 1 : 0,
             String(doc.department_status || ""),
         ]);
@@ -736,6 +912,7 @@
             if (next === listview._dcoLastCardLayout) return;
             listview._dcoLastCardLayout = next;
             renderMobileCards(listview);
+            reconcileStatusFilterLayout(listview);
         };
         if (typeof ResizeObserver === "function") {
             listview._dcoResponsiveObserver = new ResizeObserver(refreshLayout);
@@ -1015,6 +1192,7 @@
         listview._dcoPresentationNeedsRoleRefresh = false;
 
         applySearchHint(listview);
+        applyStatusFilterHint(listview);
         resolveAssigneeNames(listview);
         if (refreshRoleFlags) {
             invalidateRoleFlags(listview);
@@ -1068,10 +1246,12 @@
     function installListRuntime(listview) {
         const root = rootNode(listview);
         if (root) root.classList.add("dco-order-list");
+        applyCardLayoutClass(listview);
         installOrderNotesColumnOrder(listview);
         installCombinedSearch(listview);
         installResponsiveObserver(listview);
         installRowsObserver(listview);
+        reconcileStatusFilterLayout(listview);
     }
 
     frappe.listview_settings[METHODS.doctype] = Object.assign({}, existing, {
@@ -1083,6 +1263,10 @@
             "current_department", "current_assignee",
             "current_production_stage",
         ])],
+        custom_filter_configs: [
+            ...(Array.isArray(existing.custom_filter_configs) ? existing.custom_filter_configs : []),
+            statusFilterConfig(),
+        ],
         formatters: Object.assign({}, existing.formatters || {}, {
             current_department(value, df, doc) {
                 if (doc.status === "Ready for Delivery") return __("جاهز للتسليم");
@@ -1115,15 +1299,21 @@
 
     window.AlmdinaDoorCuttingOrderListUX = Object.freeze({
         applyDesktopDeliveryRowColors,
+        applyKanbanCardPresentation,
         buildCard,
         cardViewModel,
         desktopDeliveryRowState,
         isPhoneLayout,
+        kanbanCardFields,
         overviewStageLabel,
+        productionStageLabel,
         personalQueueState,
         quickActionContext,
+        reconcileStatusFilterLayout,
         renderMobileCards,
         sortDesktopQueueItems,
         sortPersonalQueueItems,
+        statusFilterConfig,
+        statusFilterOptions,
     });
 })();

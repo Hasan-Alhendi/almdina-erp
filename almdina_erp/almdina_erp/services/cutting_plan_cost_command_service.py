@@ -6,7 +6,7 @@ import frappe
 from frappe import _
 from frappe.utils import flt
 
-from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import SYSTEM, UPLOADED_DXF
+from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import APPROVED, DRAFT, SYSTEM
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization import (
     require_cutting_plan_capability,
@@ -17,18 +17,11 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_command_reposito
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspace import (
     PLAN_COST_FIELDS,
     apply_plan_costs,
+    current_cost_plan,
     initialize_draft_plan_cost_snapshot,
+    persist_plan_cost_snapshot,
     refresh_order_commercial_totals,
 )
-from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
-    current_working_plan,
-)
-
-
-def _current_source_type(order: Any) -> str:
-    plan = current_working_plan(str(order.name))
-    source_type = str(getattr(plan, "source_type", None) or SYSTEM) if plan else SYSTEM
-    return UPLOADED_DXF if source_type == UPLOADED_DXF else SYSTEM
 
 
 def _assert_cost_inputs_persisted(
@@ -81,17 +74,28 @@ def update_plan_cost_settings(
         Capability.EDIT_COST_SETTINGS,
         message=_("لا تملك صلاحية تعديل إعدادات تكلفة خطة القص لهذا الطلب."),
     )
-    repository = FrappeCuttingPlanCommandRepository(Capability.EDIT_COST_SETTINGS)
-    plan = (
-        repository.ensure_uploaded_dxf_draft(order)
-        if _current_source_type(order) == UPLOADED_DXF
-        else repository.ensure_system_draft(order)
-    )
+    plan = current_cost_plan(order)
+    if plan is None:
+        frappe.throw(
+            _("لا توجد خطة قص يمكن حفظ إعدادات التكلفة عليها."),
+            frappe.ValidationError,
+        )
+
     initialize_draft_plan_cost_snapshot(order, plan)
     plan.board_rate_usd = flt(board_rate_usd)
     plan.cutting_cost_per_board_usd = flt(cutting_cost_per_board_usd)
     apply_plan_costs(plan)
-    repository.save_document(plan)
+    status = str(getattr(plan, "status", None) or "")
+    if status == DRAFT:
+        repository = FrappeCuttingPlanCommandRepository(Capability.EDIT_COST_SETTINGS)
+        repository.save_document(plan)
+    elif status == APPROVED:
+        persist_plan_cost_snapshot(plan)
+    else:
+        frappe.throw(
+            _("لا يمكن حفظ إعدادات التكلفة على خطة في حالة {0}.").format(status),
+            frappe.ValidationError,
+        )
     _assert_cost_inputs_persisted(
         plan,
         board_rate_usd=board_rate_usd,

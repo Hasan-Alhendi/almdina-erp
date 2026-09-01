@@ -39,6 +39,7 @@
     const PIECE_COST_ONLY_FIELDS = [
         "extra_double",
         "extra_liner",
+        "extra_back_groove",
         "extra_recessed_handle_cutout",
     ];
 

@@ -73,6 +73,7 @@ _SETTINGS_FIELDS = (
     "default_extra_double_unit_price_usd",
     "default_extra_full_door_double_unit_price_usd",
     "default_extra_liner_unit_price_usd",
+    "default_extra_back_groove_unit_price_usd",
     "default_extra_recessed_handle_cutout_unit_price_usd",
     "default_production_routing",
     "allow_stage_override",
@@ -267,6 +268,9 @@ def _apply_values(settings: Any, payload: dict[str, Any]) -> None:
             "Full Door Double Processing Fee USD / Door"
         ),
         "default_extra_liner_unit_price_usd": _("Extra Liner Price USD / Door"),
+        "default_extra_back_groove_unit_price_usd": _(
+            "Extra Back Groove Price USD / Door"
+        ),
         "default_extra_recessed_handle_cutout_unit_price_usd": _(
             "Extra Recessed Handle Cutout Price USD / Door"
         ),

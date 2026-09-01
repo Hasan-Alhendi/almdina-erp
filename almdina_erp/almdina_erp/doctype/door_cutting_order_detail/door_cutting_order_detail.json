@@ -9,6 +9,7 @@
     "extra_double",
     "extra_full_door_double",
     "extra_liner",
+    "extra_back_groove",
     "extra_recessed_handle_cutout",
     "clipped_corner_position",
     "clipped_corner_width_cm",
@@ -68,6 +69,8 @@
     "extra_full_door_double_total_usd",
     "extra_liner_unit_price_usd",
     "extra_liner_total_usd",
+    "extra_back_groove_unit_price_usd",
+    "extra_back_groove_total_usd",
     "extra_recessed_handle_cutout_unit_price_usd",
     "extra_recessed_handle_cutout_total_usd",
     "extra_addons_total_usd"
@@ -78,6 +81,7 @@
     {"default":"0","fieldname":"extra_double","fieldtype":"Check","hidden":1,"label":"Extra: Double Edge Banding"},
     {"default":"0","fieldname":"extra_full_door_double","fieldtype":"Check","hidden":1,"label":"Extra: Full Door Double"},
     {"default":"0","fieldname":"extra_liner","fieldtype":"Check","hidden":1,"label":"Extra: Liner"},
+    {"default":"0","fieldname":"extra_back_groove","fieldtype":"Check","hidden":1,"label":"Extra: Back Groove"},
     {"default":"0","fieldname":"extra_recessed_handle_cutout","fieldtype":"Check","hidden":1,"label":"Extra: Recessed Handle Cutout"},
     {"default":"Top Right","fieldname":"clipped_corner_position","fieldtype":"Select","hidden":1,"label":"Clipped Corner Position","options":"Top Right\nTop Left\nBottom Right\nBottom Left"},
     {"fieldname":"clipped_corner_width_cm","fieldtype":"Float","hidden":1,"label":"Clipped Corner Width (CM)","non_negative":1},
@@ -137,6 +141,8 @@
     {"default":"0","fieldname":"extra_full_door_double_total_usd","fieldtype":"Currency","hidden":1,"label":"Extra Full Door Double Total USD","non_negative":1,"permlevel":1,"read_only":1},
     {"default":"0","fieldname":"extra_liner_unit_price_usd","fieldtype":"Currency","hidden":1,"label":"Extra Liner Unit Price USD","non_negative":1,"permlevel":1,"read_only":1},
     {"default":"0","fieldname":"extra_liner_total_usd","fieldtype":"Currency","hidden":1,"label":"Extra Liner Total USD","non_negative":1,"permlevel":1,"read_only":1},
+    {"default":"0","fieldname":"extra_back_groove_unit_price_usd","fieldtype":"Currency","hidden":1,"label":"Extra Back Groove Unit Price USD","non_negative":1,"permlevel":1,"read_only":1},
+    {"default":"0","fieldname":"extra_back_groove_total_usd","fieldtype":"Currency","hidden":1,"label":"Extra Back Groove Total USD","non_negative":1,"permlevel":1,"read_only":1},
     {"default":"0","fieldname":"extra_recessed_handle_cutout_unit_price_usd","fieldtype":"Currency","hidden":1,"label":"Extra Recessed Handle Cutout Unit Price USD","non_negative":1,"permlevel":1,"read_only":1},
     {"default":"0","fieldname":"extra_recessed_handle_cutout_total_usd","fieldtype":"Currency","hidden":1,"label":"Extra Recessed Handle Cutout Total USD","non_negative":1,"permlevel":1,"read_only":1},
     {"default":"0","fieldname":"extra_addons_total_usd","fieldtype":"Currency","hidden":1,"label":"Extra Add-ons Total USD","non_negative":1,"permlevel":1,"read_only":1}

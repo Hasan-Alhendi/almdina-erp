@@ -52,6 +52,31 @@
 		);
 	}
 
+	function assignedToCurrentUser(stage) {
+		const assignedTo = stage && stage.active_stage_assigned_to;
+		return Boolean(assignedTo && assignedTo === frappe.session.user);
+	}
+
+	function canShowStartAction(frm, stage) {
+		return Boolean(
+			assignedToCurrentUser(stage)
+			&& stage.can_start_stage
+			&& stage.active_stage_status === "Pending"
+			&& can(frm, "start_assigned_stage")
+		);
+	}
+
+	function canShowHandoffAction(frm, stage) {
+		// Visibility follows the server decision. Direct handoff from Pending is
+		// allowed when the worker has handoff without start; do not re-encode
+		// In Progress/Paused here or that case stays hidden.
+		return Boolean(
+			assignedToCurrentUser(stage)
+			&& stage.can_handoff_stage
+			&& can(frm, "handoff_assigned_stage")
+		);
+	}
+
 	function isShopFloorProfile(frm) {
 		const context = permissionContext();
 		return Boolean(
@@ -712,24 +737,17 @@
 
 		const stage = frm.__almdina_stage_context || {};
 		const stageStatus = stage.active_stage_status || "";
-		const assignedToMe = Boolean(
-			stage.active_stage_assigned_to
-			&& stage.active_stage_assigned_to === frappe.session.user
-		);
 		if (
 			stage.can_reassign_worker
 			&& ACTIVE_STAGE_STATUSES.has(stageStatus)
 			&& can(frm, "reassign_worker")
 		) labels.push(__("تغيير العامل"));
-		if (assignedToMe && stage.can_start_stage && stageStatus === "Pending" && can(frm, "start_assigned_stage")) {
+		if (canShowStartAction(frm, stage)) {
 			labels.push(__("بدء العمل"));
 		}
-		if (
-			assignedToMe
-			&& stage.can_handoff_stage
-			&& ["In Progress", "Paused"].includes(stageStatus)
-			&& can(frm, "handoff_assigned_stage")
-		) labels.push(__("إنهاء وإرسال"));
+		if (canShowHandoffAction(frm, stage)) {
+			labels.push(__("إنهاء وإرسال"));
+		}
 		return labels;
 	}
 
@@ -819,7 +837,6 @@
 			renderTrackingStrip(frm);
 			const stageStatus = stage.active_stage_status || "";
 			const assignedTo = stage.active_stage_assigned_to || "";
-			const assignedToMe = Boolean(assignedTo && assignedTo === frappe.session.user);
 
 			if (stage.can_reassign_worker && ACTIVE_STAGE_STATUSES.has(stageStatus) && can(frm, "reassign_worker")) {
 				frm.add_custom_button(
@@ -829,8 +846,8 @@
 				);
 			}
 
-			if (!assignedToMe) return;
-			if (stage.can_start_stage && stageStatus === "Pending" && can(frm, "start_assigned_stage")) {
+			if (!assignedToCurrentUser(stage)) return;
+			if (canShowStartAction(frm, stage)) {
 				// The worker's current stage action is intentionally top-level: it is
 				// the primary next step, not a category that needs another tap.
 				frm.add_custom_button(__("بدء العمل"), () =>
@@ -841,7 +858,7 @@
 						frm
 					));
 			}
-			if (!stage.can_handoff_stage || !["In Progress", "Paused"].includes(stageStatus) || !can(frm, "handoff_assigned_stage")) return;
+			if (!canShowHandoffAction(frm, stage)) return;
 			// Keep the handoff dialog and server authorization unchanged; only the
 			// toolbar placement is direct so the worker reaches it in one tap.
 			frm.add_custom_button(__("إنهاء وإرسال"), () => {

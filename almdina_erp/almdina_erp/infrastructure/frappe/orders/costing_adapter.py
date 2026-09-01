@@ -117,6 +117,7 @@ class FrappeOrderCostingAdapter:
                             cint(getattr(row, "extra_full_door_double", 0))
                         ),
                         liner=bool(cint(getattr(row, "extra_liner", 0))),
+                        back_groove=bool(cint(getattr(row, "extra_back_groove", 0))),
                         recessed_handle_cutout=bool(
                             cint(
                                 getattr(
@@ -141,6 +142,11 @@ class FrappeOrderCostingAdapter:
                             "extra_liner",
                             "extra_liner_unit_price_usd",
                         ),
+                        back_groove_snapshot_unit_price_usd=preserved_rate(
+                            row,
+                            "extra_back_groove",
+                            "extra_back_groove_unit_price_usd",
+                        ),
                         recessed_handle_cutout_snapshot_unit_price_usd=preserved_rate(
                             row,
                             "extra_recessed_handle_cutout",
@@ -163,6 +169,13 @@ class FrappeOrderCostingAdapter:
                     liner_usd=flt(
                         getattr(settings, "default_extra_liner_unit_price_usd", 0)
                     ),
+                    back_groove_usd=flt(
+                        getattr(
+                            settings,
+                            "default_extra_back_groove_unit_price_usd",
+                            0,
+                        )
+                    ),
                     recessed_handle_cutout_usd=flt(
                         getattr(
                             settings,
@@ -177,6 +190,7 @@ class FrappeOrderCostingAdapter:
                 "double": _("Double Edge Banding"),
                 "full_door_double": _("Full Door Double"),
                 "liner": _("Liner"),
+                "back_groove": _("Back Groove"),
                 "recessed_handle_cutout": _("Recessed Handle Cutout"),
             }
             messages = {
@@ -216,6 +230,7 @@ class FrappeOrderCostingAdapter:
                             "extra_double",
                             "extra_full_door_double",
                             "extra_liner",
+                            "extra_back_groove",
                             "extra_recessed_handle_cutout",
                         )
                     )
@@ -232,6 +247,8 @@ class FrappeOrderCostingAdapter:
             row.extra_full_door_double_total_usd = result.full_door_double_total_usd
             row.extra_liner_unit_price_usd = result.liner_unit_price_usd
             row.extra_liner_total_usd = result.liner_total_usd
+            row.extra_back_groove_unit_price_usd = result.back_groove_unit_price_usd
+            row.extra_back_groove_total_usd = result.back_groove_total_usd
             row.extra_recessed_handle_cutout_unit_price_usd = (
                 result.recessed_handle_cutout_unit_price_usd
             )
