@@ -206,6 +206,91 @@ class TestOrderListFrappeAdapterContract(unittest.TestCase):
             "return _execute(queries.get_order_operational_role_flags, order_names)",
             source,
         )
+        self.assertIn("order_list_query.get_department_filter_options", source)
+        self.assertIn("require_doctype_capability", source)
+        self.assertIn("Capability.VIEW_ORDERS", source)
+
+
+class DepartmentFilterRepository:
+    def __init__(self) -> None:
+        self.user = "supervisor@example.com"
+        self.admin = False
+        self.capabilities = frozenset({Capability.VIEW_ORDERS})
+        self.rows = [
+            {"stage_type": "Sanding", "department_label": "التقشيط"},
+            {"stage_type": "Sanding", "department_label": "تقشيط"},
+            {"stage_type": "Edge Banding", "department_label": "قشاط"},
+            {"stage_type": "", "department_label": "ignored"},
+        ]
+
+    def current_user(self) -> str:
+        return self.user
+
+    def is_admin(self) -> bool:
+        return self.admin
+
+    def actor_roles(self, user: str | None = None) -> tuple[str, ...]:
+        return ()
+
+    def global_capabilities(self) -> frozenset[str]:
+        return self.capabilities
+
+    def visible_order_names(self, order_names):
+        return frozenset()
+
+    def order_summaries(self, order_names):
+        return {}
+
+    def stage_summaries(self, stage_names):
+        return {}
+
+    def personal_order_stage_timings(self, order_names, *, user: str):
+        return {}
+
+    def production_routes(self, route_names):
+        return {}
+
+    def department_filter_options(self):
+        return list(self.rows)
+
+
+class TestDepartmentFilterOptions(unittest.TestCase):
+    def test_options_are_unique_stage_types_with_visible_labels(self) -> None:
+        payload = order_list_query.get_department_filter_options(
+            DepartmentFilterRepository()
+        )
+        self.assertEqual(
+            payload,
+            [
+                {"stage_type": "Sanding", "department_label": "التقشيط"},
+                {"stage_type": "Edge Banding", "department_label": "قشاط"},
+            ],
+        )
+
+    def test_missing_view_orders_returns_no_catalog(self) -> None:
+        repository = DepartmentFilterRepository()
+        repository.capabilities = frozenset()
+        self.assertEqual(
+            order_list_query.get_department_filter_options(repository),
+            [],
+        )
+
+    def test_guest_returns_no_catalog(self) -> None:
+        repository = DepartmentFilterRepository()
+        repository.user = "Guest"
+        self.assertEqual(
+            order_list_query.get_department_filter_options(repository),
+            [],
+        )
+
+    def test_adapter_reads_enabled_routing_stages_without_financial_fields(self) -> None:
+        source = ADAPTER_PATH.read_text(encoding="utf-8")
+        self.assertIn("def department_filter_options", source)
+        self.assertIn('"Production Routing Stage"', source)
+        self.assertIn('"stage_type"', source)
+        self.assertIn('"department_label"', source)
+        self.assertNotIn("rate_usd", source)
+        self.assertNotIn("operational_role", source.split("def department_filter_options", 1)[1])
 
 
 if __name__ == "__main__":

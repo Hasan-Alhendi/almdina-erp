@@ -12,6 +12,7 @@ from almdina_erp.almdina_erp.domain.orders.lifecycle import department_for_stage
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     granted_capabilities,
+    require_doctype_capability,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.order_list_query_repository import (
     FrappeOrderListQueryRepository,
@@ -118,7 +119,19 @@ def get_order_operational_role_flags(order_names: Any = None) -> dict[str, Any]:
     )
 
 
+@frappe.whitelist()
+def get_department_filter_options() -> list[dict[str, str]]:
+    """Operational stage identities for the Door Cutting Order list shortcut."""
+
+    require_doctype_capability(
+        Capability.VIEW_ORDERS,
+        message=_("لا تملك صلاحية عرض الطلبات."),
+    )
+    return order_list_query.get_department_filter_options(_order_list_repository)
+
+
 __all__ = [
+    "get_department_filter_options",
     "get_dispatch_options",
     "get_current_stage_context",
     "get_my_archive",

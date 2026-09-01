@@ -60,6 +60,8 @@ class OrderListQueryPort(Protocol):
         route_names: Sequence[str],
     ) -> Mapping[str, ProductionRoute]: ...
 
+    def department_filter_options(self) -> Sequence[Mapping[str, str]]: ...
+
 
 def _value(row: Any, fieldname: str, default: Any = None) -> Any:
     if isinstance(row, Mapping):
@@ -297,4 +299,39 @@ def get_order_operational_role_flags(
     return {"personal_view": personal_view, "orders": flags}
 
 
-__all__ = ["OrderListQueryPort", "get_order_operational_role_flags"]
+def get_department_filter_options(
+    repository: OrderListQueryPort,
+) -> list[dict[str, str]]:
+    """Return unique operational stage identities for the DCO list shortcut.
+
+    Display stays on the Arabic department label. Query identity is ``stage_type``.
+    The payload is operational only: no role names, costs, or routing internals.
+    """
+
+    actor = str(repository.current_user() or "").strip()
+    if not actor or actor == "Guest":
+        return []
+    if actor != "Administrator" and not repository.is_admin():
+        if Capability.VIEW_ORDERS not in repository.global_capabilities():
+            return []
+
+    options: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for row in repository.department_filter_options():
+        stage_type = str(_value(row, "stage_type") or "").strip()
+        label = str(_value(row, "department_label") or stage_type).strip()
+        if not stage_type or stage_type in seen:
+            continue
+        seen.add(stage_type)
+        options.append({
+            "stage_type": stage_type,
+            "department_label": label or stage_type,
+        })
+    return options
+
+
+__all__ = [
+    "OrderListQueryPort",
+    "get_department_filter_options",
+    "get_order_operational_role_flags",
+]

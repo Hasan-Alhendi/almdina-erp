@@ -4,6 +4,7 @@
     const METHODS = Object.freeze({
         doctype: "Door Cutting Order",
         roleFlags: "almdina_erp.almdina_erp.services.shop_floor_query_service.get_order_operational_role_flags",
+        departmentFilterOptions: "almdina_erp.almdina_erp.services.shop_floor_query_service.get_department_filter_options",
     });
     const KANBAN_CARD_FIELDS = Object.freeze([
         "customer",
@@ -105,12 +106,11 @@
     ]);
     const STATUS_FILTER_SLOT_CLASS = "dco-status-filter-slot";
     const STATUS_FILTER_FIELDNAME = "current_department";
+    const STATUS_FILTER_STAGE_FIELD = "current_production_stage.stage_type";
     const STATUS_FILTER_ALL_LABEL = "كل الأقسام";
-    const DEPARTMENT_FILTER_VALUES = Object.freeze([
-        ...Object.keys(STAGE_BY_DEPARTMENT),
-        "جاهز للتسليم",
-        "تم التسليم",
-    ]);
+    const DELIVERY_FILTER_READY = "جاهز للتسليم";
+    const DELIVERY_FILTER_DELIVERED = "تم التسليم";
+    let loadedDepartmentStageOptions = null;
 
     frappe.listview_settings = frappe.listview_settings || {};
     const existing = frappe.listview_settings[METHODS.doctype] || {};
@@ -299,11 +299,47 @@
             && filter[1] === STATUS_FILTER_FIELDNAME;
     }
 
+    function fallbackDepartmentStageOptions() {
+        return Object.entries(STAGE_BY_DEPARTMENT).map(([label, stageType]) => ({
+            value: stageType,
+            label,
+        }));
+    }
+
+    function uniqueDepartmentStageOptions(rows) {
+        const byType = new Map();
+        (rows || []).forEach((row) => {
+            const stageType = String(row && (row.stage_type || row.value) || "").trim();
+            const label = String(row && (row.department_label || row.label || stageType) || "").trim();
+            if (!stageType || byType.has(stageType)) return;
+            byType.set(stageType, label);
+        });
+        return [...byType.entries()].map(([value, label]) => ({ value, label }));
+    }
+
+    function departmentStageOptions() {
+        if (loadedDepartmentStageOptions && loadedDepartmentStageOptions.length) {
+            return loadedDepartmentStageOptions;
+        }
+        return fallbackDepartmentStageOptions();
+    }
+
+    function resolveDepartmentFilterStageType(value) {
+        const selected = String(value || "").trim();
+        if (!selected) return "";
+        if (STAGE_BY_DEPARTMENT[selected]) return STAGE_BY_DEPARTMENT[selected];
+        const match = departmentStageOptions().find(
+            option => option.value === selected || option.label === selected
+        );
+        return match ? match.value : selected;
+    }
+
     function departmentColumnQueryFilter(value, doctype) {
         const selected = String(value || "").trim();
-        if (selected === "جاهز للتسليم") return [doctype, "status", "=", "Ready for Delivery"];
-        if (selected === "تم التسليم") return [doctype, "status", "=", "Delivered"];
-        return [doctype, STATUS_FILTER_FIELDNAME, "=", selected];
+        if (selected === DELIVERY_FILTER_READY) return [doctype, "status", "=", "Ready for Delivery"];
+        if (selected === DELIVERY_FILTER_DELIVERED) return [doctype, "status", "=", "Delivered"];
+        // reportview.validate_filters rejects 4-tuples whose fieldname is dotted.
+        return [STATUS_FILTER_STAGE_FIELD, "=", resolveDepartmentFilterStageType(selected)];
     }
 
     function rewriteDepartmentColumnFilters(args, doctype) {
@@ -384,7 +420,9 @@
     function statusFilterOptions() {
         return [
             { value: "", label: __(STATUS_FILTER_ALL_LABEL) },
-            ...DEPARTMENT_FILTER_VALUES,
+            ...departmentStageOptions(),
+            { value: DELIVERY_FILTER_READY, label: __(DELIVERY_FILTER_READY) },
+            { value: DELIVERY_FILTER_DELIVERED, label: __(DELIVERY_FILTER_DELIVERED) },
         ];
     }
 
@@ -457,6 +495,41 @@
         if (!select) return;
         select.setAttribute("aria-label", __("Current Department"));
         select.setAttribute("title", __(STATUS_FILTER_ALL_LABEL));
+    }
+
+    function applyLoadedDepartmentFilterOptions(listview, rows) {
+        const options = uniqueDepartmentStageOptions(rows);
+        if (!options.length) return false;
+        loadedDepartmentStageOptions = options;
+        const field = statusFilterField(listview);
+        if (!field || !field.df) return true;
+        const current = typeof field.get_value === "function" ? field.get_value() : "";
+        field.df.options = statusFilterOptions();
+        if (typeof field.set_options === "function") field.set_options(current);
+        if (current && typeof field.set_input === "function") field.set_input(current);
+        applyStatusFilterHint(listview);
+        return true;
+    }
+
+    function hydrateDepartmentFilterOptions(listview) {
+        if (!listview) return;
+        if (loadedDepartmentStageOptions && loadedDepartmentStageOptions.length) {
+            applyLoadedDepartmentFilterOptions(listview, loadedDepartmentStageOptions);
+            listview._dcoDepartmentFilterOptionsKey = "ready";
+            return;
+        }
+        if (listview._dcoDepartmentFilterOptionsKey) return;
+        if (!window.frappe || typeof frappe.call !== "function") return;
+        listview._dcoDepartmentFilterOptionsKey = "pending";
+        frappe.call({
+            method: METHODS.departmentFilterOptions,
+            freeze: false,
+        }).then((response) => {
+            applyLoadedDepartmentFilterOptions(listview, response && response.message);
+            listview._dcoDepartmentFilterOptionsKey = "ready";
+        }).catch(() => {
+            listview._dcoDepartmentFilterOptionsKey = null;
+        });
     }
 
     function reconcileStatusFilterLayout(listview) {
@@ -1281,6 +1354,7 @@
         installResponsiveObserver(listview);
         installRowsObserver(listview);
         reconcileStatusFilterLayout(listview);
+        hydrateDepartmentFilterOptions(listview);
     }
 
     frappe.listview_settings[METHODS.doctype] = Object.assign({}, existing, {
@@ -1329,8 +1403,10 @@
     window.AlmdinaDoorCuttingOrderListUX = Object.freeze({
         applyDesktopDeliveryRowColors,
         applyKanbanCardPresentation,
+        applyLoadedDepartmentFilterOptions,
         buildCard,
         cardViewModel,
+        departmentColumnQueryFilter,
         desktopDeliveryRowState,
         isPhoneLayout,
         kanbanCardFields,
@@ -1340,10 +1416,12 @@
         quickActionContext,
         reconcileStatusFilterLayout,
         renderMobileCards,
+        resolveDepartmentFilterStageType,
         rewriteDepartmentColumnFilters,
         sortDesktopQueueItems,
         sortPersonalQueueItems,
         statusFilterConfig,
         statusFilterOptions,
+        uniqueDepartmentStageOptions,
     });
 })();
