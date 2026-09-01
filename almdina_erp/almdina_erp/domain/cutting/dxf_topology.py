@@ -43,6 +43,9 @@ class ExpectedPieceEvidence:
     width: float
     height: float
     allow_rotation: bool
+    # Shape freedom is distinct from manufacturing-envelope freedom. Special
+    # pieces may use arbitrary valid polygons, but their bbox must still match
+    # the persisted cut dimensions below.
     arbitrary_outline: bool = False
 
 
@@ -230,8 +233,6 @@ def _dimensions_match(
     *,
     dimension_tolerance: float,
 ) -> bool:
-    if expected.arbitrary_outline:
-        return True
     min_x, min_y, max_x, max_y = bbox(contour.polygon)
     width = max_x - min_x
     height = max_y - min_y
@@ -248,7 +249,7 @@ def _dimensions_match(
     )
 
 
-def _matches_any_dimension_bound_expected(
+def _matches_any_expected(
     contour: ContourCandidate,
     expected: Sequence[ExpectedPieceEvidence],
     *,
@@ -261,7 +262,6 @@ def _matches_any_dimension_bound_expected(
             dimension_tolerance=dimension_tolerance,
         )
         for expected_piece in expected
-        if not expected_piece.arbitrary_outline
     )
 
 
@@ -273,9 +273,8 @@ def _inventory_assignment(
 ) -> tuple[int, ...] | None:
     """Return one expected-piece index per selected contour, if injective.
 
-    Dimension-bound pieces are preferred over arbitrary outlines. Matching still
-    backtracks, so a Special wildcard cannot consume an ordinary contour when
-    that would leave the dimension-bound inventory unmatched.
+    Every piece, including Special, is bound to its persisted manufacturing
+    envelope. The contour itself may be any valid polygon inside that envelope.
     """
     if len(selected) > len(expected):
         return None
@@ -293,7 +292,6 @@ def _inventory_assignment(
         ]
         if not matches:
             return None
-        matches.sort(key=lambda index: (expected[index].arbitrary_outline, index))
         candidate_indexes.append(matches)
 
     expected_owner: dict[int, int] = {}
@@ -441,12 +439,14 @@ def resolve_contour_ownership(
     The decision is deterministic and intentionally fail-closed:
 
     * a contour not contained by another contour must be an actual piece;
-    * a nested contour matching a dimension-bound expected piece remains an
-      actual piece candidate (supporting pieces placed inside proven holes);
-    * Special pieces are arbitrary outer outlines and do not claim nested holes
-      merely because a hole happens to match their nominal width/height;
-    * a nested contour without dimension-bound piece evidence can be considered
-      a hole only when it is strictly contained by exactly one selected outer;
+    * every actual piece, including Special, must match the persisted cut-width
+      and cut-length envelope (or its allowed rotation);
+    * a Special outer may still be concave or otherwise non-rectangular as long
+      as its valid polygon has the required manufacturing bounding box;
+    * a nested contour matching expected piece dimensions remains an actual piece
+      candidate (supporting pieces placed inside proven holes);
+    * a nested contour without piece evidence can be considered a hole only when
+      it is strictly contained by exactly one selected outer contour;
     * if there are more piece-like contours than expected pieces, ownership is
       ambiguous and the DXF is rejected instead of guessing from contour order,
       nesting parity, or size.
@@ -467,17 +467,17 @@ def resolve_contour_ownership(
         ordered_contours,
         geometry_tolerance=geometry_tolerance,
     )
-    dimension_bound_candidates = tuple(
+    dimension_candidates = tuple(
         contour
         for contour in ordered_contours
-        if _matches_any_dimension_bound_expected(
+        if _matches_any_expected(
             contour,
             expected,
             dimension_tolerance=dimension_tolerance,
         )
     )
     selected_keys = {
-        contour.key for contour in (*roots, *dimension_bound_candidates)
+        contour.key for contour in (*roots, *dimension_candidates)
     }
     selected = tuple(
         contour for contour in ordered_contours if contour.key in selected_keys
@@ -518,19 +518,3 @@ def resolve_contour_ownership(
             "UNRESOLVED_CONTOUR_OWNERSHIP" if leftovers else "INVALID_PART_TOPOLOGY"
         )
     return topology
-
-
-__all__ = [
-    "ContourCandidate",
-    "DxfTopologyError",
-    "ExpectedPieceEvidence",
-    "PartGeometry",
-    "PlacedPartGeometry",
-    "ResolvedPartGeometry",
-    "ResolvedTopology",
-    "containing_hole",
-    "material_footprints_overlap",
-    "polygon_strictly_contains_polygon",
-    "resolve_contour_ownership",
-    "validate_material_layout",
-]
