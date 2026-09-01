@@ -55,6 +55,7 @@ jobs:
           node --check almdina_erp/public/js/door_cutting_order/order_entry/door_cutting_order_mutation_impact_policy.js
           node --check almdina_erp/public/js/door_cutting_order/order_entry/measurements/door_cutting_order_fast_entry_keyboard_ux.js
           node --check almdina_erp/public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_lifecycle.js
+          node --check almdina_erp/public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_presentation_owner.js
           node --check almdina_erp/public/js/door_cutting_order/order_entry/measurements/door_cutting_order_bulk_rows_ux.js
           node --check almdina_erp/public/js/door_cutting_order/order_entry/measurements/door_cutting_order_keyboard_columns_ux.js
           node --check almdina_erp/public/js/door_cutting_order/order_entry/measurements/door_cutting_order_compact_measurements_ux.js
@@ -72,6 +73,7 @@ jobs:
           node --check almdina_erp/tests/js/order_lifecycle_jquery_thenable.test.js
           node --check almdina_erp/tests/js/dco_workspace_mutation_impact.test.js
           node --check almdina_erp/tests/js/measurement_lifecycle.test.js
+          node --check almdina_erp/tests/js/measurement_presentation_readiness.test.js
           node --check almdina_erp/tests/js/plan_board_presenter.test.js
           node --check almdina_erp/tests/js/operator_edge_ownership.test.js
           node --check almdina_erp/tests/js/surface_settle_guard.test.js
@@ -146,8 +148,10 @@ jobs:
           node almdina_erp/tests/js/dco_new_recovery.test.js
           node almdina_erp/tests/js/dco_new_recovery_save.test.js
 
-      - name: Simulate measurement lifecycle cancellation and freshness
-        run: node almdina_erp/tests/js/measurement_lifecycle.test.js
+      - name: Simulate measurement lifecycle and presentation readiness
+        run: |
+          node almdina_erp/tests/js/measurement_lifecycle.test.js
+          node almdina_erp/tests/js/measurement_presentation_readiness.test.js
 
       - name: Validate bounded DCO surface recovery
         run: node almdina_erp/tests/js/surface_settle_guard.test.js
