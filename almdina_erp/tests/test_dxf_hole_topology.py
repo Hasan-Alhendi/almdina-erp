@@ -34,17 +34,24 @@ def _expected(
     )
 
 
-def _l_shape(key: int, x: float, y: float, size: float = 80):
-    arm = size / 3
+def _concave_shape(
+    key: int,
+    x: float,
+    y: float,
+    *,
+    width: float,
+    height: float,
+):
+    arm = min(width, height) / 3
     return ContourCandidate(
         key=key,
         polygon=(
             (x, y),
-            (x + size, y),
-            (x + size, y + arm),
+            (x + width, y),
+            (x + width, y + arm),
             (x + arm, y + arm),
-            (x + arm, y + size),
-            (x, y + size),
+            (x + arm, y + height),
+            (x, y + height),
         ),
     )
 
@@ -181,16 +188,16 @@ def test_piece_like_extra_contour_fails_closed_as_ambiguous():
     assert exc_info.value.code == "AMBIGUOUS_CONTOUR_OWNERSHIP"
 
 
-def test_special_outer_is_arbitrary_and_does_not_turn_same_size_hole_into_piece():
+def test_special_outer_accepts_concave_shape_with_exact_manufacturing_bbox():
     contours = [
         _candidate(1, 0, 0, 100, 100),
-        _candidate(2, 10, 10, 90, 90),  # hole with the Special nominal dimensions
-        _l_shape(3, 150, 0),  # actual Special outer
+        _candidate(2, 20, 20, 70, 70),  # ordinary internal opening
+        _concave_shape(3, 150, 0, width=80, height=120),
     ]
 
     topology = resolve_contour_ownership(
         contours,
-        [_expected(100, 100), _expected(80, 80, arbitrary=True)],
+        [_expected(100, 100), _expected(80, 120, arbitrary=True)],
         dimension_tolerance=0.2,
         geometry_tolerance=0.01,
     )
@@ -200,16 +207,38 @@ def test_special_outer_is_arbitrary_and_does_not_turn_same_size_hole_into_piece(
     assert [part.expected_piece_index for part in topology.parts] == [0, 1]
 
 
-def test_special_outer_identity_does_not_depend_on_bounding_box_dimensions():
+def test_special_outer_rejects_wrong_manufacturing_bbox_even_when_shape_is_valid():
+    with pytest.raises(DxfTopologyError) as exc_info:
+        resolve_contour_ownership(
+            [_concave_shape(1, 0, 0, width=60, height=60)],
+            [_expected(120, 200, arbitrary=True)],
+            dimension_tolerance=0.2,
+            geometry_tolerance=0.01,
+        )
+
+    assert exc_info.value.code == "EXPECTED_PIECE_MISMATCH"
+
+
+def test_special_outer_allows_rotated_manufacturing_bbox_only_when_enabled():
+    contour = _concave_shape(1, 0, 0, width=200, height=120)
+
     topology = resolve_contour_ownership(
-        [_l_shape(1, 0, 0, size=60)],
-        [_expected(120, 200, arbitrary=True)],
+        [contour],
+        [_expected(120, 200, rotate=True, arbitrary=True)],
         dimension_tolerance=0.2,
         geometry_tolerance=0.01,
     )
-
-    assert topology.actual_contour_keys == (1,)
     assert topology.parts[0].expected_piece_index == 0
+
+    with pytest.raises(DxfTopologyError) as exc_info:
+        resolve_contour_ownership(
+            [contour],
+            [_expected(120, 200, rotate=False, arbitrary=True)],
+            dimension_tolerance=0.2,
+            geometry_tolerance=0.01,
+        )
+
+    assert exc_info.value.code == "EXPECTED_PIECE_MISMATCH"
 
 
 def test_many_internal_openings_resolve_without_subset_search():
