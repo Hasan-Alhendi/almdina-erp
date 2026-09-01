@@ -137,6 +137,8 @@ class TestConfigurableProductionPermissions(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("get_order_operational_role_flags", service)
+        self.assertIn("get_department_filter_options", service)
+        self.assertIn("Capability.VIEW_ORDERS", service)
         self.assertIn('"production_actions"', application)
         self.assertIn('"can_reassign_worker"', application)
         self.assertIn('"active_stage_assigned_to"', application)

@@ -262,6 +262,12 @@ def test_order_list_status_filter_uses_frappe_standard_filter_contract():
     assert "reconcileStatusFilterLayout(listview)" in list_source
     assert 'STATUS_FILTER_SLOT_CLASS = "dco-status-filter-slot"' in list_source
     assert 'STATUS_FILTER_FIELDNAME = "current_department"' in list_source
+    assert 'STATUS_FILTER_STAGE_FIELD = "current_production_stage.stage_type"' in list_source
+    assert 'return [STATUS_FILTER_STAGE_FIELD, "=", resolveDepartmentFilterStageType(selected)];' in list_source
+    assert "[doctype, STATUS_FILTER_STAGE_FIELD" not in list_source
+    assert "function resolveDepartmentFilterStageType(value)" in list_source
+    assert "function hydrateDepartmentFilterOptions(listview)" in list_source
+    assert "get_department_filter_options" in list_source
     assert 'label: __("Current Department")' in list_source
     assert ".dco-status-filter-slot" in css
     assert ".dco-order-list .dco-status-filter-slot" in css

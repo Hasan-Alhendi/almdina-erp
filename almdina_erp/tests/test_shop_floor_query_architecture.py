@@ -97,6 +97,7 @@ class TestShopFloorQueryArchitecture(unittest.TestCase):
         self.assertIn("FrappeShopFloorQueryRepository", source)
         self.assertIn("FrappeOrderListQueryRepository", source)
         self.assertIn("order_list_query.get_order_operational_role_flags", source)
+        self.assertIn("order_list_query.get_department_filter_options", source)
         self.assertNotIn("present_order_detail", source)
         self.assertNotIn("get_order_shop_floor_detail", source)
         self.assertIn("def get_shop_floor_context", source)
