@@ -19,18 +19,29 @@ const cssSource = fs.readFileSync(
 
 let coarsePointer = false;
 let noHover = false;
+function KanbanView() {}
+KanbanView.prototype.setup_defaults = function setupDefaults() {
+    return Promise.resolve("base-ready");
+};
+
 const context = {
     console,
     document: { documentElement: { clientWidth: 390 } },
     frappe: {
         datetime: { str_to_user: value => `date:${value}` },
         listview_settings: {},
+        model: {
+            get_std_field(fieldname) {
+                return { fieldname, fieldtype: "Data", label: "ID", parent: "Door Cutting Order" };
+            },
+        },
         session: { user: "cutting@example.com" },
         utils: {
             escape_html(value) {
                 return String(value).replaceAll("<", "&lt;").replaceAll(">", "&gt;");
             },
         },
+        views: { KanbanView },
     },
     window: {
         innerWidth: 390,
@@ -64,6 +75,41 @@ vm.runInContext(source, context);
 
 const responsive = context.window.AlmdinaResponsiveDevice;
 const api = context.window.AlmdinaDoorCuttingOrderListUX;
+
+const kanbanView = new context.frappe.views.KanbanView();
+kanbanView.doctype = "Door Cutting Order";
+kanbanView.card_meta = { title_field: { fieldname: "order_notes" } };
+kanbanView.board = {
+    fields: ["order_notes", "customer", "name", "order_notes"],
+    show_labels: 0,
+};
+api.applyKanbanCardPresentation(kanbanView);
+assert.strictEqual(kanbanView.card_meta.title_field.fieldname, "name");
+assert.deepStrictEqual(
+    [...kanbanView.board.fields],
+    ["customer", "board_description", "edge_color", "order_notes"]
+);
+assert.strictEqual(kanbanView.board.show_labels, 1);
+assert.strictEqual(
+    context.frappe.views.KanbanView.prototype.__almdinaDcoCardPresentationInstalled,
+    true
+);
+
+const otherKanban = {
+    doctype: "Task",
+    card_meta: { title_field: { fieldname: "subject" } },
+    board: { fields: ["status"], show_labels: 0 },
+};
+api.applyKanbanCardPresentation(otherKanban);
+assert.strictEqual(otherKanban.card_meta.title_field.fieldname, "subject");
+assert.deepStrictEqual([...otherKanban.board.fields], ["status"]);
+assert.strictEqual(otherKanban.board.show_labels, 0);
+
+assert.deepStrictEqual(
+    [...api.kanbanCardFields(["edge_color", { fieldname: "order_notes" }, "customer"])],
+    ["customer", "board_description", "edge_color", "order_notes"]
+);
+
 const doc = {
     name: "DCO-2026-00010",
     customer: "عميل الاختبار",
