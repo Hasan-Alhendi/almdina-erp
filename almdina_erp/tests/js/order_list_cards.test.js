@@ -95,6 +95,12 @@ assert.strictEqual(
     true
 );
 
+const lifecycleKanban = new context.frappe.views.KanbanView();
+lifecycleKanban.doctype = "Door Cutting Order";
+lifecycleKanban.card_meta = { title_field: { fieldname: "order_notes" } };
+lifecycleKanban.board = { fields: [], show_labels: 0 };
+const lifecycleSetup = lifecycleKanban.setup_defaults();
+
 const otherKanban = {
     doctype: "Task",
     card_meta: { title_field: { fieldname: "subject" } },
@@ -691,4 +697,16 @@ assert(cssSource.includes(".is-delivered"));
 assert(cssSource.includes(".is-deliver"));
 assert(!source.includes("frappe.get_roles"), "mobile list presentation must remain capability-driven, never role-name-driven");
 
-console.log("Door Cutting Order five-state mobile-card simulation passed");
+lifecycleSetup.then(result => {
+    assert.strictEqual(result, "base-ready");
+    assert.strictEqual(lifecycleKanban.card_meta.title_field.fieldname, "name");
+    assert.deepStrictEqual(
+        [...lifecycleKanban.board.fields],
+        ["customer", "board_description", "edge_color"]
+    );
+    assert.strictEqual(lifecycleKanban.board.show_labels, 1);
+    console.log("Door Cutting Order five-state mobile-card simulation passed");
+}).catch(error => {
+    console.error(error);
+    process.exitCode = 1;
+});
