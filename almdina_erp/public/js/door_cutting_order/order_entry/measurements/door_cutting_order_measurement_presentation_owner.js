@@ -11,7 +11,6 @@
 
     const FLEX_DISPLAYS = new Set(["flex", "inline-flex"]);
     const GRID_DISPLAYS = new Set(["grid", "inline-grid"]);
-    const SCROLLABLE_OVERFLOW = new Set(["auto", "scroll", "overlay"]);
 
     function first(rootNode, selector) {
         if (!rootNode || typeof rootNode.querySelector !== "function") return null;
@@ -41,13 +40,6 @@
         return Boolean(style && accepted.has(normalized(style.display)));
     }
 
-    function scrollIsReady(node) {
-        const style = computed(node);
-        if (!style) return false;
-        const overflowX = normalized(style.overflowX || style.overflow);
-        return SCROLLABLE_OVERFLOW.has(overflowX);
-    }
-
     function tableIsReady(node) {
         const style = computed(node);
         return Boolean(style && normalized(style.tableLayout) === "fixed");
@@ -61,13 +53,17 @@
         const table = first(rootNode, ".dco-fast-table");
         if (!toolbar || !scroll || !table) return false;
 
+        // Overflow belongs to the active layout mode: compact desktop intentionally
+        // uses hidden horizontal overflow while mobile cards use visible overflow.
+        // The central lifecycle owns scroll-node existence; presentation readiness
+        // must not reject either valid mode.
+
         // Non-browser test/SSR harnesses cannot prove computed presentation. The
         // central lifecycle still owns structural readiness there; in a browser,
         // computed style is mandatory before the surface may be marked ready.
         if (typeof root.getComputedStyle !== "function") return true;
 
         if (!displayMatches(toolbar, FLEX_DISPLAYS)) return false;
-        if (!scrollIsReady(scroll)) return false;
         if (!tableIsReady(table)) return false;
 
         const edgeGroups = all(rootNode, ".dco-edge-buttons");
