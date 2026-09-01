@@ -85,9 +85,15 @@ assert.equal(
 );
 
 assert.equal(
+    presentationOwner({}, surface({ overflowX: "hidden" })),
+    true,
+    "compact desktop horizontal overflow is a valid presentation mode"
+);
+
+assert.equal(
     presentationOwner({}, surface({ overflowX: "visible" })),
-    false,
-    "the measurement scroll surface must be ready before settling"
+    true,
+    "mobile-card visible overflow is a valid presentation mode"
 );
 
 const originalGetComputedStyle = window.getComputedStyle;
