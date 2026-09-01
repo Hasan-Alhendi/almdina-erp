@@ -5,6 +5,12 @@
         doctype: "Door Cutting Order",
         roleFlags: "almdina_erp.almdina_erp.services.shop_floor_query_service.get_order_operational_role_flags",
     });
+    const KANBAN_CARD_FIELDS = Object.freeze([
+        "customer",
+        "board_description",
+        "edge_color",
+    ]);
+    const KANBAN_VIEW_PATCH_KEY = "__almdinaDcoCardPresentationInstalled";
     const MOBILE_CARD_STYLESHEET_ID = "almdina-dco-mobile-list-css";
     const MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=7";
     const STATUS_LABELS = Object.freeze({
@@ -102,6 +108,63 @@
     const existing = frappe.listview_settings[METHODS.doctype] || {};
     const originalOnload = existing.onload;
     const originalRefresh = existing.refresh;
+
+    function kanbanCardFields(fields) {
+        const configured = Array.isArray(fields) ? fields : [];
+        return [...new Set([...KANBAN_CARD_FIELDS, ...configured]
+            .map(field => typeof field === "string" ? field : field && field.fieldname)
+            .map(fieldname => String(fieldname || "").trim())
+            .filter(fieldname => fieldname && fieldname !== "name"))];
+    }
+
+    function kanbanNameField() {
+        if (frappe.model && typeof frappe.model.get_std_field === "function") {
+            const field = frappe.model.get_std_field("name");
+            if (field) return field;
+        }
+        return {
+            fieldname: "name",
+            fieldtype: "Data",
+            label: "ID",
+            parent: METHODS.doctype,
+        };
+    }
+
+    function applyKanbanCardPresentation(view) {
+        if (!view || view.doctype !== METHODS.doctype) return view;
+
+        view.card_meta = Object.assign({}, view.card_meta || {}, {
+            title_field: kanbanNameField(),
+        });
+        if (view.board) {
+            view.board.fields = kanbanCardFields(view.board.fields);
+            view.board.show_labels = 1;
+        }
+        return view;
+    }
+
+    function installKanbanCardPresentation() {
+        // Frappe v16 otherwise selects the first visible text field as the card
+        // title. For DCO that is optional order_notes, which renders as `null`.
+        // Keep the correction Kanban-scoped so Form/List document titles stay intact.
+        const prototype = frappe.views
+            && frappe.views.KanbanView
+            && frappe.views.KanbanView.prototype;
+        if (!prototype || prototype[KANBAN_VIEW_PATCH_KEY]) return;
+
+        const originalSetupDefaults = prototype.setup_defaults;
+        if (typeof originalSetupDefaults !== "function") return;
+
+        prototype.setup_defaults = function dcoKanbanSetupDefaults(...args) {
+            return Promise.resolve(originalSetupDefaults.apply(this, args)).then(result => {
+                applyKanbanCardPresentation(this);
+                return result;
+            });
+        };
+        prototype[KANBAN_VIEW_PATCH_KEY] = true;
+    }
+
+    installKanbanCardPresentation();
 
     function rootNode(listview) {
         const wrapper = listview && listview.page && listview.page.wrapper;
@@ -1115,10 +1178,12 @@
 
     window.AlmdinaDoorCuttingOrderListUX = Object.freeze({
         applyDesktopDeliveryRowColors,
+        applyKanbanCardPresentation,
         buildCard,
         cardViewModel,
         desktopDeliveryRowState,
         isPhoneLayout,
+        kanbanCardFields,
         overviewStageLabel,
         personalQueueState,
         quickActionContext,
