@@ -183,3 +183,16 @@ Stage 9. Order form and list behavior must live under the feature owners above.
 5. Existing product contracts must be updated to the current owner, never weakened to make a change pass.
 6. Treat asset order and the dual-load allowlist as frozen contracts unless a deliberate dependency change proves otherwise.
 7. Run Static, Security and Frappe v16 Integration gates for frontend architecture changes.
+
+### Measurement surface readiness
+
+`door_cutting_order_operator_ux.js` owns the base measurement HTML. Every base render
+is handed to `AlmdinaMeasurementLifecycle`, which synchronously runs the registered
+measurement/edge presentation owners and stamps readiness for the current document
+generation. The same lifecycle registers `measurement-table` with
+`AlmdinaDocumentContext`: a missing/cleared shell is rebuilt through the Operator and
+a late feature registration invalidates the old readiness stamp until one keyed final
+reconciliation completes. The existing measurement-resilience observer also asks this
+surface owner to recover when the HTML field is cleared; it does not introduce another
+observer. Recovery is document-current and idempotent; it must not call a broad form
+refresh, rebuild business state, or add polling timers.

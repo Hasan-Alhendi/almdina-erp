@@ -120,6 +120,54 @@ function measurementDom(rowNames = ["ROW-1"]) {
     };
 }
 
+function attachMeasurementSurface(frm, { mounted = false } = {}) {
+    const nodes = {
+        shell: {},
+        toolbar: {},
+        scroll: {},
+        table: {},
+        head: {},
+        body: {},
+    };
+    const state = {
+        mounted,
+        renderCalls: 0,
+        effectiveReconciliations: 0,
+        decorations: new Set(),
+        activeInput: "ROW-1:width_cm",
+        scrollTop: 175,
+        scrollLeft: 42,
+    };
+    const selectors = new Map([
+        [".dco-fast-entry-shell", nodes.shell],
+        [".dco-fast-entry-toolbar", nodes.toolbar],
+        [".dco-fast-entry-scroll", nodes.scroll],
+        [".dco-fast-table", nodes.table],
+        [".dco-fast-table thead tr", nodes.head],
+        [".dco-fast-table tbody", nodes.body],
+    ]);
+    const root = {
+        __measurementSurfaceState: state,
+        querySelector(selector) {
+            return state.mounted ? (selectors.get(selector) || null) : null;
+        },
+        querySelectorAll(selector) {
+            if (selector === ".dco-fast-entry-shell" && state.mounted) {
+                return [nodes.shell];
+            }
+            return [];
+        },
+    };
+    frm.fields_dict.pieces_fast_entry = {
+        $wrapper: {
+            get(index) {
+                return index === 0 ? root : null;
+            },
+        },
+    };
+    return { root, state };
+}
+
 function reconcileMeasurementDom(dom) {
     const alreadyReady = dom.tableClasses.has("dco-compact-measurements");
     dom.tableClasses.add("dco-compact-measurements");
@@ -389,6 +437,99 @@ async function testFrappeV16FirstSaveDispatchOrdering() {
     );
 }
 
+async function testRealSurfaceOwnerRecoversMissingAndLateFeatureWork() {
+    const frm = form("DCO-LIFECYCLE-SURFACE");
+    const { root, state } = attachMeasurementSurface(frm);
+    activate(frm);
+
+    lifecycle.registerFeature("test-base-decoration", (targetFrm, targetRoot) => {
+        if (targetRoot !== root || targetFrm !== frm) return true;
+        if (!state.decorations.has("base")) state.effectiveReconciliations += 1;
+        state.decorations.add("base");
+        return true;
+    });
+    flushFrames();
+
+    window.AlmdinaDoorCuttingFastEntry = {
+        render(targetFrm) {
+            assert.equal(targetFrm, frm);
+            state.renderCalls += 1;
+            state.mounted = true;
+            lifecycle.rendered(targetFrm);
+        },
+    };
+
+    assert.equal(lifecycle.isReady(frm), false, "A missing table must not report ready");
+    assert.equal(lifecycle.recover(frm), true, "The surface owner must rebuild a missing table");
+    assert.equal(lifecycle.isReady(frm), true);
+    assert.equal(state.renderCalls, 1);
+    assert.deepEqual([...state.decorations], ["base"]);
+    assert.equal(state.effectiveReconciliations, 1);
+
+    // A late asset registration invalidates the previous readiness stamp. Its
+    // keyed frame performs one final current-document reconciliation.
+    lifecycle.registerFeature("test-late-decoration", (targetFrm, targetRoot) => {
+        if (targetRoot !== root || targetFrm !== frm) return true;
+        state.decorations.add("late");
+        return true;
+    });
+    assert.equal(lifecycle.isReady(frm), false);
+    flushFrames();
+    assert.equal(lifecycle.isReady(frm), true);
+    assert.deepEqual([...state.decorations].sort(), ["base", "late"]);
+
+    // A later base-HTML replacement is reconciled synchronously before paint.
+    state.decorations.clear();
+    assert.equal(lifecycle.rendered(frm), true);
+    assert.equal(lifecycle.isReady(frm), true);
+    assert.deepEqual([...state.decorations].sort(), ["base", "late"]);
+    assert.equal(state.activeInput, "ROW-1:width_cm");
+    assert.equal(state.scrollTop, 175);
+    assert.equal(state.scrollLeft, 42);
+
+    // If Frappe clears the HTML field after an identity transition, readiness
+    // fails closed and the registered document surface restores it once.
+    state.mounted = false;
+    assert.equal(lifecycle.isReady(frm), false);
+    assert.equal(lifecycle.recover(frm), true);
+    assert.equal(state.renderCalls, 2);
+    assert.equal(lifecycle.isReady(frm), true);
+}
+
+async function testReadySurfaceSurvivesFirstInsertPromotionOnly() {
+    const temporaryName = "new-door-cutting-order-surface";
+    const permanentName = "DCO-2026-01002";
+    const frm = form(temporaryName, { isLocal: true });
+    const { state } = attachMeasurementSurface(frm, { mounted: true });
+    activate(frm);
+    window.AlmdinaDoorCuttingFastEntry = {
+        render(targetFrm) {
+            state.mounted = true;
+            lifecycle.rendered(targetFrm);
+        },
+    };
+
+    assert.equal(lifecycle.rendered(frm), true);
+    assert.equal(lifecycle.isReady(frm), true);
+    trigger("before_save", frm);
+    frappe.model.new_names[temporaryName] = permanentName;
+    frm.doc = { ...frm.doc, name: permanentName, __islocal: 0, localname: temporaryName };
+    trigger("after_save", frm);
+    assert.equal(
+        lifecycle.isReady(frm),
+        true,
+        "A first-insert rename must preserve the reconciled measurement surface"
+    );
+
+    frm.doc.name = "DCO-2026-OTHER";
+    trigger("onload", frm);
+    assert.equal(
+        lifecycle.isReady(frm),
+        false,
+        "A real document switch must invalidate the previous surface readiness"
+    );
+}
+
 (async () => {
     await testSameFeatureCancelsStaleFrameAndTimer();
     await testDocumentIdentityInvalidatesQueuedWork();
@@ -396,6 +537,8 @@ async function testFrappeV16FirstSaveDispatchOrdering() {
     await testNewDocumentPromotionKeepsQueuedWorkCurrent();
     await testRapidFirstSaveMatchesFreshSavedDomWithoutDestroyingInputState();
     await testFrappeV16FirstSaveDispatchOrdering();
+    await testRealSurfaceOwnerRecoversMissingAndLateFeatureWork();
+    await testReadySurfaceSurvivesFirstInsertPromotionOnly();
     console.log("DCO measurement lifecycle checks passed");
 })().catch(error => {
     console.error(error);

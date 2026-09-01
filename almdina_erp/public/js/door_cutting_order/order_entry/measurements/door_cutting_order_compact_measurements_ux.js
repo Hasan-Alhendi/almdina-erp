@@ -467,4 +467,9 @@
         pieces_add(frm) { schedule(frm); },
         pieces_remove(frm) { schedule(frm); },
     });
+
+    const measurementLifecycle = window.AlmdinaMeasurementLifecycle;
+    if (measurementLifecycle && typeof measurementLifecycle.registerFeature === "function") {
+        measurementLifecycle.registerFeature("compact-measurements", compactTable);
+    }
 })();

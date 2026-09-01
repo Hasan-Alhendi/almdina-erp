@@ -158,6 +158,11 @@
         pieces_remove(frm) { scheduleStructuralRefresh(frm); },
     });
 
+    const measurementLifecycle = window.AlmdinaMeasurementLifecycle;
+    if (measurementLifecycle && typeof measurementLifecycle.registerFeature === "function") {
+        measurementLifecycle.registerFeature("edge-render-owner", install);
+    }
+
     window.AlmdinaEdgeRenderOwner = Object.freeze({
         install,
         renderDecorations,

@@ -139,6 +139,11 @@
         pieces_remove(frm) { schedule(frm); },
     });
 
+    const measurementLifecycle = window.AlmdinaMeasurementLifecycle;
+    if (measurementLifecycle && typeof measurementLifecycle.registerFeature === "function") {
+        measurementLifecycle.registerFeature("measurement-toolbar", polish);
+    }
+
     window.AlmdinaMeasurementToolbarUX = Object.freeze({
         polish,
         ensureTitle,

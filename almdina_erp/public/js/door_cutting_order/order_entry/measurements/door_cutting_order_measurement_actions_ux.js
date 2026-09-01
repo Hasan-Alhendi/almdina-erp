@@ -322,6 +322,11 @@
         almdina_edit_session_changed(frm) { schedule(frm); },
     });
 
+    const measurementLifecycle = window.AlmdinaMeasurementLifecycle;
+    if (measurementLifecycle && typeof measurementLifecycle.registerFeature === "function") {
+        measurementLifecycle.registerFeature("measurement-actions", ensureActions);
+    }
+
     window.AlmdinaMeasurementActions = {
         print: printMeasurements,
         open: openEditableMeasurements,

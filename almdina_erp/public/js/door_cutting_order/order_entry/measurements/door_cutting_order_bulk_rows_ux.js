@@ -447,4 +447,9 @@
             schedule(frm);
         },
     });
+
+    const measurementLifecycle = window.AlmdinaMeasurementLifecycle;
+    if (measurementLifecycle && typeof measurementLifecycle.registerFeature === "function") {
+        measurementLifecycle.registerFeature("bulk-rows", enhance);
+    }
 })();

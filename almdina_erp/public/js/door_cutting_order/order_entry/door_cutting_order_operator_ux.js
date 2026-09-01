@@ -553,6 +553,10 @@
             extraAddons.bindTable(frm, root);
         }
         loadEdgeTypes(frm);
+        const measurementLifecycle = window.AlmdinaMeasurementLifecycle;
+        if (measurementLifecycle && typeof measurementLifecycle.rendered === "function") {
+            measurementLifecycle.rendered(frm);
+        }
     }
 
     function getOrMaterializeRow(frm, tr) {
