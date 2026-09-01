@@ -716,6 +716,177 @@ assert(cssSource.includes(".is-delivered"));
 assert(cssSource.includes(".is-deliver"));
 assert(!source.includes("frappe.get_roles"), "mobile list presentation must remain capability-driven, never role-name-driven");
 
+const expectedDepartmentValues = ["شريون", "رسم", "CNC", "تقشيط", "جاهز للتسليم", "تم التسليم"];
+const statusConfig = api.statusFilterConfig();
+assert.strictEqual(statusConfig.fieldtype, "Select");
+assert.strictEqual(statusConfig.fieldname, "current_department");
+assert.strictEqual(statusConfig.condition, "=");
+assert.strictEqual(statusConfig.label, "Current Department");
+const statusOptions = api.statusFilterOptions();
+assert.strictEqual(statusOptions[0].value, "");
+assert.strictEqual(statusOptions[0].label, "كل الأقسام");
+assert.deepStrictEqual([...statusOptions.slice(1)], expectedDepartmentValues);
+assert.strictEqual(statusConfig.options[0].value, "");
+assert.strictEqual(statusConfig.options[0].label, "كل الأقسام");
+assert.deepStrictEqual([...statusConfig.options.slice(1)], expectedDepartmentValues);
+assert(!statusOptions.includes("Draft"));
+assert(!statusOptions.some(option => option === "At CNC" || option && option.value === "At CNC"));
+
+const listSettings = context.frappe.listview_settings["Door Cutting Order"];
+assert(Array.isArray(listSettings.custom_filter_configs));
+assert.strictEqual(listSettings.custom_filter_configs[0].fieldname, "current_department");
+
+function hostFilters(args) {
+    return JSON.parse(JSON.stringify(args.filters));
+}
+
+assert.deepStrictEqual(
+    hostFilters(api.rewriteDepartmentColumnFilters({
+        filters: [["Door Cutting Order", "current_department", "=", "شريون"]],
+    }, "Door Cutting Order")),
+    [["Door Cutting Order", "current_department", "=", "شريون"]]
+);
+assert.deepStrictEqual(
+    hostFilters(api.rewriteDepartmentColumnFilters({
+        filters: [["Door Cutting Order", "current_department", "=", "جاهز للتسليم"]],
+    }, "Door Cutting Order")),
+    [["Door Cutting Order", "status", "=", "Ready for Delivery"]]
+);
+assert.deepStrictEqual(
+    hostFilters(api.rewriteDepartmentColumnFilters({
+        filters: [["Door Cutting Order", "current_department", "=", "تم التسليم"]],
+    }, "Door Cutting Order")),
+    [["Door Cutting Order", "status", "=", "Delivered"]]
+);
+
+function mockFilterNode(className = "") {
+    const node = {
+        nodeType: 1,
+        className,
+        children: [],
+        parentNode: null,
+        nextSibling: null,
+        classList: {
+            contains(name) {
+                return String(node.className || "").split(/\s+/).includes(name);
+            },
+            add(name) {
+                const names = new Set(String(node.className || "").split(/\s+/).filter(Boolean));
+                names.add(name);
+                node.className = [...names].join(" ");
+            },
+            toggle(name, force) {
+                const enabled = force === undefined ? !this.contains(name) : Boolean(force);
+                if (enabled) this.add(name);
+                else {
+                    const names = new Set(String(node.className || "").split(/\s+/).filter(Boolean));
+                    names.delete(name);
+                    node.className = [...names].join(" ");
+                }
+                return enabled;
+            },
+        },
+        getBoundingClientRect() {
+            return { width: Number(context.window.innerWidth) };
+        },
+        querySelector(selector) {
+            return findFilterNodes(node, selector)[0] || null;
+        },
+        querySelectorAll(selector) {
+            return findFilterNodes(node, selector);
+        },
+        appendChild(child) {
+            if (child.parentNode) child.parentNode.removeChild(child);
+            child.parentNode = node;
+            node.children.push(child);
+            syncFilterSiblings(node);
+            return child;
+        },
+        insertBefore(child, ref) {
+            if (child.parentNode) child.parentNode.removeChild(child);
+            child.parentNode = node;
+            const idx = ref ? node.children.indexOf(ref) : -1;
+            if (idx < 0) node.children.push(child);
+            else node.children.splice(idx, 0, child);
+            syncFilterSiblings(node);
+            return child;
+        },
+        removeChild(child) {
+            const idx = node.children.indexOf(child);
+            if (idx >= 0) node.children.splice(idx, 1);
+            child.parentNode = null;
+            syncFilterSiblings(node);
+            return child;
+        },
+    };
+    return node;
+}
+
+function syncFilterSiblings(parent) {
+    parent.children.forEach((child, index) => {
+        child.nextSibling = parent.children[index + 1] || null;
+    });
+}
+
+function findFilterNodes(node, selector) {
+    const wanted = String(selector || "").replace(/^\./, "");
+    const found = [];
+    node.children.forEach(child => {
+        if (child.classList.contains(wanted)) found.push(child);
+        found.push(...findFilterNodes(child, selector));
+    });
+    return found;
+}
+
+context.document.createElement = function createElement() {
+    return mockFilterNode();
+};
+
+function setFilterViewport(width, height) {
+    context.window.innerWidth = width;
+    context.window.screen.width = width;
+    context.window.screen.height = height;
+    context.document.documentElement.clientWidth = width;
+}
+
+const filterRoot = mockFilterNode("dco-order-list");
+const pageForm = mockFilterNode("page-form");
+const standardSection = mockFilterNode("standard-filter-section flex");
+const filterSection = mockFilterNode("filter-section flex");
+const filterSelector = mockFilterNode("filter-selector");
+const departmentWrapper = mockFilterNode("frappe-control");
+filterRoot.appendChild(pageForm);
+pageForm.appendChild(standardSection);
+pageForm.appendChild(filterSection);
+filterSection.appendChild(filterSelector);
+standardSection.appendChild(departmentWrapper);
+
+const departmentListview = {
+    page: {
+        wrapper: filterRoot,
+        fields_dict: { current_department: { wrapper: departmentWrapper } },
+    },
+};
+
+function assertBesideFrappeFilter(message) {
+    const slot = filterRoot.querySelector(".dco-status-filter-slot");
+    assert(slot, message);
+    assert.strictEqual(departmentWrapper.parentNode, slot);
+    assert.strictEqual(slot.parentNode, filterSection);
+    assert.strictEqual(filterSelector.nextSibling, slot);
+}
+
+setFilterViewport(390, 844);
+assert.strictEqual(api.reconcileStatusFilterLayout(departmentListview), true);
+assertBesideFrappeFilter("card layout must place the department select beside Frappe's filter button");
+assert.strictEqual(api.reconcileStatusFilterLayout(departmentListview), true);
+assert.strictEqual(filterRoot.querySelectorAll(".dco-status-filter-slot").length, 1);
+
+setFilterViewport(1440, 900);
+assert.strictEqual(api.reconcileStatusFilterLayout(departmentListview), true);
+assertBesideFrappeFilter("desktop must also place the department select beside Frappe's filter button");
+assert.strictEqual(standardSection.children.filter(child => child === departmentWrapper).length, 0);
+
 lifecycleSetup.then(result => {
     assert.strictEqual(result, "base-ready");
     assert.strictEqual(lifecycleKanban.card_meta.title_field.fieldname, "name");
