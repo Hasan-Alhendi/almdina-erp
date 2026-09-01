@@ -353,7 +353,7 @@ registries وglobal owners تستخدم keys مستقرة وتستبدل الت�
 | `AlmdinaPageRevisit.bindActivationLifecycle` | primitive مناسبة لـCached Custom Pages فقط |
 | `AlmdinaPageRevisit.refreshOnRevisit` | compatibility facade؛ وجودها لا يمنح certification كاملة |
 | `AlmdinaDocumentContext` | DCO document identity/generation وdata/render guards وeffects |
-| `AlmdinaMeasurementLifecycle` | measurement feature-key scheduling/cancellation |
+| `AlmdinaMeasurementLifecycle` | measurement feature-key scheduling/cancellation + registered final reconciliation/readiness after the Operator base render |
 | `AlmdinaWorkspaceSyncCoordinator` | ordered invalidation/refresh/reconciliation للـDCO workspaces |
 | Door Drawing `open/suspend/destroy` | foundation متخصصة للـStateful Workspace |
 

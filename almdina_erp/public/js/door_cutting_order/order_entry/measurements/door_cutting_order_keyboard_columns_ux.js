@@ -368,4 +368,9 @@
             scheduleInstall(frm, [250]);
         },
     });
+
+    const measurementLifecycle = window.AlmdinaMeasurementLifecycle;
+    if (measurementLifecycle && typeof measurementLifecycle.registerFeature === "function") {
+        measurementLifecycle.registerFeature("keyboard-columns", install);
+    }
 })();

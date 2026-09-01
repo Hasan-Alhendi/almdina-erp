@@ -27,6 +27,10 @@ class TestOrderPageStabilityContract(unittest.TestCase):
         self.assertIn("root._dcoFastEntryHtml !== html", operator)
         self.assertIn("root._dcoFastEntryHtml = html", operator)
         self.assertIn("_dcoForceHtmlReplace", operator)
+        self.assertIn("function recoverFastMeasurements(frm)", operator)
+        self.assertIn("captureMeasurementView(root)", operator)
+        self.assertIn("restoreMeasurementView(field.$wrapper.get(0), view)", operator)
+        self.assertIn("recover: recoverFastMeasurements", operator)
         self.assertIn("renderStableHtml(", operator)
 
     def test_revision_is_the_only_save_edit_owner(self) -> None:

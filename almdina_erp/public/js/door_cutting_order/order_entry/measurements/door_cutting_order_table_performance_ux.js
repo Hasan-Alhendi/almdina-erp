@@ -454,6 +454,11 @@
         pieces_remove(frm) { scheduleRowRefresh(frm); },
     });
 
+    const measurementLifecycle = window.AlmdinaMeasurementLifecycle;
+    if (measurementLifecycle && typeof measurementLifecycle.registerFeature === "function") {
+        measurementLifecycle.registerFeature("table-performance", enhance);
+    }
+
     window.AlmdinaTablePerformanceUX = Object.freeze({
         setPieceType,
         refreshPieceTypeVisual,

@@ -365,8 +365,20 @@
         if (root._dcoMeasurementResilienceObserver) return;
         const observer = new MutationObserver(() => {
             requestAnimationFrame(() => {
-                decorateNotes(root);
-                bind(frm, root);
+                const lifecycle = window.AlmdinaMeasurementLifecycle;
+                if (
+                    lifecycle
+                    && typeof lifecycle.isReady === "function"
+                    && typeof lifecycle.recover === "function"
+                    && lifecycle.isReady(frm) === false
+                ) {
+                    lifecycle.recover(frm);
+                }
+
+                const currentRoot = getRoot(frm);
+                if (!currentRoot) return;
+                decorateNotes(currentRoot);
+                bind(frm, currentRoot);
             });
         });
         observer.observe(root, { childList: true, subtree: true });
@@ -404,4 +416,9 @@
         pieces_add(frm) { schedule(frm); },
         pieces_remove(frm) { schedule(frm); },
     });
+
+    const measurementLifecycle = window.AlmdinaMeasurementLifecycle;
+    if (measurementLifecycle && typeof measurementLifecycle.registerFeature === "function") {
+        measurementLifecycle.registerFeature("measurement-resilience", enhance);
+    }
 })();
