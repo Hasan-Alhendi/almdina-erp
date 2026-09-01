@@ -19,8 +19,34 @@ def _candidate(key: int, x1: float, y1: float, x2: float, y2: float):
     return ContourCandidate(key=key, polygon=_rect(x1, y1, x2, y2))
 
 
-def _expected(width: float, height: float, *, rotate: bool = False):
-    return ExpectedPieceEvidence(width=width, height=height, allow_rotation=rotate)
+def _expected(
+    width: float,
+    height: float,
+    *,
+    rotate: bool = False,
+    arbitrary: bool = False,
+):
+    return ExpectedPieceEvidence(
+        width=width,
+        height=height,
+        allow_rotation=rotate,
+        arbitrary_outline=arbitrary,
+    )
+
+
+def _l_shape(key: int, x: float, y: float, size: float = 80):
+    arm = size / 3
+    return ContourCandidate(
+        key=key,
+        polygon=(
+            (x, y),
+            (x + size, y),
+            (x + size, y + arm),
+            (x + arm, y + arm),
+            (x + arm, y + size),
+            (x, y + size),
+        ),
+    )
 
 
 def test_canonical_twelve_piece_plan_ignores_glass_opening_as_phantom_piece():
@@ -153,6 +179,37 @@ def test_piece_like_extra_contour_fails_closed_as_ambiguous():
         )
 
     assert exc_info.value.code == "AMBIGUOUS_CONTOUR_OWNERSHIP"
+
+
+def test_special_outer_is_arbitrary_and_does_not_turn_same_size_hole_into_piece():
+    contours = [
+        _candidate(1, 0, 0, 100, 100),
+        _candidate(2, 10, 10, 90, 90),  # hole with the Special nominal dimensions
+        _l_shape(3, 150, 0),  # actual Special outer
+    ]
+
+    topology = resolve_contour_ownership(
+        contours,
+        [_expected(100, 100), _expected(80, 80, arbitrary=True)],
+        dimension_tolerance=0.2,
+        geometry_tolerance=0.01,
+    )
+
+    assert topology.actual_contour_keys == (1, 3)
+    assert topology.hole_contour_keys == (2,)
+    assert [part.expected_piece_index for part in topology.parts] == [0, 1]
+
+
+def test_special_outer_identity_does_not_depend_on_bounding_box_dimensions():
+    topology = resolve_contour_ownership(
+        [_l_shape(1, 0, 0, size=60)],
+        [_expected(120, 200, arbitrary=True)],
+        dimension_tolerance=0.2,
+        geometry_tolerance=0.01,
+    )
+
+    assert topology.actual_contour_keys == (1,)
+    assert topology.parts[0].expected_piece_index == 0
 
 
 def test_many_internal_openings_resolve_without_subset_search():

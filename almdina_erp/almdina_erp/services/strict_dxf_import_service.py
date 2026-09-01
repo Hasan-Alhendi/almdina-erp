@@ -191,6 +191,34 @@ def _find_exact_candidate(
     return None
 
 
+def _topology_special_candidate(
+    unmatched: list[dict[str, Any]],
+    piece: dict[str, Any],
+) -> int | None:
+    """Resolve a Special piece only from identity proven by the topology importer."""
+    if str(piece.get("piece_type") or "") != "Special":
+        return None
+
+    label = str(piece.get("label") or "").strip()
+    try:
+        source_piece_no = int(piece.get("source_piece_no") or 0)
+        copy_no = int(piece.get("copy_no") or 0)
+    except (TypeError, ValueError):
+        return None
+    if not label or source_piece_no <= 0 or copy_no <= 0:
+        return None
+
+    matches = [
+        index
+        for index, candidate in enumerate(unmatched)
+        if candidate["label"] == label
+        and candidate["copy_no"] == copy_no
+        and candidate["spec"].row_index == source_piece_no
+        and candidate["spec"].piece_type == "Special"
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
 def _edge_print_contract(spec: OrderPieceCutSpec) -> dict[str, Any]:
     """Return canonical plan-piece edge metadata used by screen and print renderers.
 
@@ -227,6 +255,32 @@ def _edge_print_contract(spec: OrderPieceCutSpec) -> dict[str, Any]:
     return flags
 
 
+def _apply_piece_contract_metadata(
+    piece: dict[str, Any],
+    candidate: dict[str, Any],
+    *,
+    rotated: bool,
+) -> None:
+    spec: OrderPieceCutSpec = candidate["spec"]
+    piece["label"] = candidate["label"]
+    piece["source_piece_no"] = spec.row_index
+    piece["copy_no"] = candidate["copy_no"]
+    piece["rotated"] = rotated
+    # DCO business identity is authoritative. The imported contour stays
+    # physical geometry truth for bounds/topology but cannot reclassify a
+    # Special door as Regular merely because its bbox is rectangular.
+    piece["piece_type"] = spec.piece_type
+    piece["original_w"] = float(spec.cut_width_cm)
+    piece["original_h"] = float(spec.cut_length_cm)
+    piece["finished_w"] = float(spec.finished_width_cm)
+    piece["finished_h"] = float(spec.finished_length_cm)
+    piece["cut_width_cm"] = float(spec.cut_width_cm)
+    piece["cut_length_cm"] = float(spec.cut_length_cm)
+    piece["edge_width_deduction_mm"] = float(spec.width_deduction_mm)
+    piece["edge_length_deduction_mm"] = float(spec.length_deduction_mm)
+    piece.update(_edge_print_contract(spec))
+
+
 def _apply_strict_dimension_contract(
     snapshot: dict[str, Any],
     specs: list[OrderPieceCutSpec],
@@ -237,6 +291,22 @@ def _apply_strict_dimension_contract(
 
     for sheet in snapshot.get("sheets") or []:
         for piece in sheet.get("pieces") or []:
+            topology_special_index = _topology_special_candidate(unmatched, piece)
+            if topology_special_index is not None:
+                candidate = unmatched.pop(topology_special_index)
+                _apply_piece_contract_metadata(
+                    piece,
+                    candidate,
+                    rotated=bool(piece.get("rotated")),
+                )
+                continue
+            if str(piece.get("piece_type") or "") == "Special":
+                errors.append(
+                    f"تعذر ربط الدرفة الخاصة {piece.get('label') or '؟'} "
+                    "بهوية قطعة خاصة واحدة مثبتة في الطلب. أعد تصدير DXF من الخطة الحالية ثم أعد الرفع."
+                )
+                continue
+
             actual_w, actual_h = _actual_dimensions(piece)
             direct_index = _find_exact_candidate(
                 unmatched,
@@ -296,24 +366,7 @@ def _apply_strict_dimension_contract(
                 continue
 
             candidate = unmatched.pop(match_index)
-            spec: OrderPieceCutSpec = candidate["spec"]
-            piece["label"] = candidate["label"]
-            piece["source_piece_no"] = spec.row_index
-            piece["copy_no"] = candidate["copy_no"]
-            piece["rotated"] = rotated
-            # DCO business identity is authoritative. The imported contour stays
-            # physical geometry truth for bounds/topology but cannot reclassify a
-            # Special door as Regular merely because its bbox is rectangular.
-            piece["piece_type"] = spec.piece_type
-            piece["original_w"] = float(spec.cut_width_cm)
-            piece["original_h"] = float(spec.cut_length_cm)
-            piece["finished_w"] = float(spec.finished_width_cm)
-            piece["finished_h"] = float(spec.finished_length_cm)
-            piece["cut_width_cm"] = float(spec.cut_width_cm)
-            piece["cut_length_cm"] = float(spec.cut_length_cm)
-            piece["edge_width_deduction_mm"] = float(spec.width_deduction_mm)
-            piece["edge_length_deduction_mm"] = float(spec.length_deduction_mm)
-            piece.update(_edge_print_contract(spec))
+            _apply_piece_contract_metadata(piece, candidate, rotated=rotated)
 
     if unmatched:
         preview = "، ".join(
@@ -338,7 +391,8 @@ def parse_production_dxf(
 
     Topology/layers/physical board bounds/kerf remain owned by the geometry
     importer. Applied Trim is resolved over that fixed physical layout through
-    ALMADINA-138. Final manufacturing identity remains exact at 0.001 cm.
+    ALMADINA-138. Dimension-bound manufacturing identity remains exact at
+    0.001 cm; Special outline identity remains topology-owned and arbitrary.
     """
     try:
         specs = build_order_piece_cut_specs(order)
@@ -382,6 +436,8 @@ def parse_production_dxf(
         "mode": "exact-persisted-cut",
         "precision_cm": "0.001",
         "finished_dimensions_immutable": True,
+        "special_outline_identity": "topology-owned",
+        "special_bbox_match_required": False,
     }
     snapshot["print_contract"] = {
         "renderer": "canonical-cutting-plan",
