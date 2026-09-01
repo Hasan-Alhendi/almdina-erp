@@ -104,8 +104,13 @@
         DESKTOP_DELIVERY_ROW_CLASS.delivered,
     ]);
     const STATUS_FILTER_SLOT_CLASS = "dco-status-filter-slot";
-    const STATUS_FILTER_FIELDNAME = "status";
-    const STATUS_FILTER_ALL_LABEL = "كل الحالات";
+    const STATUS_FILTER_FIELDNAME = "current_department";
+    const STATUS_FILTER_ALL_LABEL = "كل الأقسام";
+    const DEPARTMENT_FILTER_VALUES = Object.freeze([
+        ...Object.keys(STAGE_BY_DEPARTMENT),
+        "جاهز للتسليم",
+        "تم التسليم",
+    ]);
 
     frappe.listview_settings = frappe.listview_settings || {};
     const existing = frappe.listview_settings[METHODS.doctype] || {};
@@ -287,12 +292,36 @@
             && filter[1] === "name";
     }
 
+    function isDepartmentFilter(filter, doctype) {
+        return Array.isArray(filter)
+            && filter.length >= 4
+            && filter[0] === doctype
+            && filter[1] === STATUS_FILTER_FIELDNAME;
+    }
+
+    function departmentColumnQueryFilter(value, doctype) {
+        const selected = String(value || "").trim();
+        if (selected === "جاهز للتسليم") return [doctype, "status", "=", "Ready for Delivery"];
+        if (selected === "تم التسليم") return [doctype, "status", "=", "Delivered"];
+        return [doctype, STATUS_FILTER_FIELDNAME, "=", selected];
+    }
+
+    function rewriteDepartmentColumnFilters(args, doctype) {
+        if (!args) return args;
+        args.filters = (args.filters || []).map(filter => (
+            isDepartmentFilter(filter, doctype)
+                ? departmentColumnQueryFilter(filter[3], doctype)
+                : filter
+        ));
+        return args;
+    }
+
     function installCombinedSearch(listview) {
         if (!listview || listview._dcoCombinedSearchInstalled || typeof listview.get_args !== "function") return;
         const originalGetArgs = listview.get_args.bind(listview);
 
         listview.get_args = function dcoCombinedSearchArgs() {
-            const args = originalGetArgs();
+            const args = rewriteDepartmentColumnFilters(originalGetArgs(), this.doctype);
             const field = searchField(this);
             const term = normalizedTerm(field && typeof field.get_value === "function" ? field.get_value() : "");
             if (!term) return args;
@@ -355,7 +384,7 @@
     function statusFilterOptions() {
         return [
             { value: "", label: __(STATUS_FILTER_ALL_LABEL) },
-            ...Object.keys(STATUS_LABELS),
+            ...DEPARTMENT_FILTER_VALUES,
         ];
     }
 
@@ -363,7 +392,7 @@
         return {
             fieldtype: "Select",
             fieldname: STATUS_FILTER_FIELDNAME,
-            label: __("Status"),
+            label: __("Current Department"),
             options: statusFilterOptions(),
             condition: "=",
         };
@@ -426,7 +455,7 @@
         if (!wrapper || typeof wrapper.querySelector !== "function") return;
         const select = wrapper.querySelector("select");
         if (!select) return;
-        select.setAttribute("aria-label", __("Status"));
+        select.setAttribute("aria-label", __("Current Department"));
         select.setAttribute("title", __(STATUS_FILTER_ALL_LABEL));
     }
 
@@ -1311,6 +1340,7 @@
         quickActionContext,
         reconcileStatusFilterLayout,
         renderMobileCards,
+        rewriteDepartmentColumnFilters,
         sortDesktopQueueItems,
         sortPersonalQueueItems,
         statusFilterConfig,
