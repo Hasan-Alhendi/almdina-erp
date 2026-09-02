@@ -246,6 +246,36 @@ class TestOrderPiecePolicyDomain(unittest.TestCase):
         self.assertEqual(regular["special_shape_price_status"], "Not Applicable")
         self.assertIsNone(special["special_shape_price_approved_on"])
 
+    def test_corner_cut_predicate_covers_diagonal_and_l_shaped_types(self) -> None:
+        from almdina_erp.almdina_erp.domain.orders.piece_policy import (
+            L_SHAPED_CORNER_TYPE,
+            PIECE_TYPES,
+            corner_cut_arabic_label,
+            is_corner_cut,
+            pending_custom_edge_price_labels,
+        )
+
+        self.assertIn("L-Shaped Corner", PIECE_TYPES)
+        self.assertTrue(is_corner_cut("Clipped Corner"))
+        self.assertTrue(is_corner_cut(L_SHAPED_CORNER_TYPE))
+        self.assertFalse(is_corner_cut("Regular"))
+        self.assertFalse(is_corner_cut("Special"))
+        self.assertEqual(corner_cut_arabic_label("Clipped Corner"), "درفة زاوية مقصوصة")
+        self.assertEqual(corner_cut_arabic_label(L_SHAPED_CORNER_TYPE), "درفة زاوية L")
+        self.assertEqual(
+            pending_custom_edge_price_labels(
+                [
+                    {"piece_type": "Clipped Corner", "clipped_corner_edge_price_status": "Unpriced"},
+                    {
+                        "piece_type": "L-Shaped Corner",
+                        "clipped_corner_edge_price_status": "Unpriced",
+                    },
+                    {"piece_type": "Clipped Corner", "clipped_corner_edge_price_status": "Priced"},
+                ]
+            ),
+            ("درفة زاوية مقصوصة 1", "درفة زاوية L 2"),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -349,7 +349,8 @@
         const data = row || { qty:1 };
         const pieceType = data.piece_type || "Regular";
         const isSpecial = pieceType === "Special";
-        const isClipped = pieceType === "Clipped Corner";
+        const cornerGeometry = window.AlmdinaClippedCornerGeometry;
+        const isClipped = Boolean(cornerGeometry && cornerGeometry.isCornerCut({ piece_type: pieceType }));
         const isExtra = pieceType === "Extra";
         const extraAddons = window.AlmdinaExtraDoorAddonsUX;
         const labels = CELL_LABELS[isArabic() ? "ar" : "en"];
@@ -367,22 +368,25 @@
             && shapeOutput
             && shapeOutput.hasExactCutPath(data)
         );
-        const cornerSummary = isClipped && window.AlmdinaClippedCornerGeometry
-            ? window.AlmdinaClippedCornerGeometry.summary(data)
+        const cornerSummary = isClipped && cornerGeometry
+            ? cornerGeometry.summary(data)
             : "";
-        const shapeIcon = isClipped ? "⌑" : ((hasDrawing || hasExactGeometry) ? "✓" : "✎");
+        const shapeIcon = isClipped
+            ? (cornerGeometry && cornerGeometry.typeIcon(data)) || "⌑"
+            : ((hasDrawing || hasExactGeometry) ? "✓" : "✎");
         const shapeLabel = isClipped
             ? (isArabic() ? "ضبط" : "Set")
             : ((hasDrawing || hasExactGeometry)
                 ? (isArabic() ? "موثقة" : "Documented")
                 : (isArabic() ? "وثّق" : "Document"));
         const shapeTitle = isClipped
-            ? `${isArabic() ? "ضبط الزاوية المقصوصة" : "Configure clipped corner"}${cornerSummary ? ` — ${cornerSummary}` : ""}`
+            ? `${isArabic() ? `ضبط ${cornerGeometry ? cornerGeometry.typeLabel(data) : "الزاوية"}` : `Configure ${cornerGeometry ? cornerGeometry.typeLabel(data, false) : "corner"}`}${cornerSummary ? ` — ${cornerSummary}` : ""}`
             : (isArabic() ? "افتح توثيق الصورة والقياسات والملاحظات" : "Open image, measurements and notes documentation");
         const nativePieceTypeSelect = `<select class="dco-fast-select" data-field="piece_type" ${disabled}>
             <option value="Regular" ${pieceType === "Regular" ? "selected" : ""}>${isArabic() ? "عادية" : "Regular"}</option>
-            <option value="Clipped Corner" ${pieceType === "Clipped Corner" ? "selected" : ""}>${isArabic() ? "زاوية مقصوصة" : "Clipped corner"}</option>
             <option value="Special" ${pieceType === "Special" ? "selected" : ""}>${isArabic() ? "خاصة" : "Special"}</option>
+            <option value="Clipped Corner" ${pieceType === "Clipped Corner" ? "selected" : ""}>${isArabic() ? "زاوية مقصوصة" : "Clipped corner"}</option>
+            <option value="L-Shaped Corner" ${pieceType === "L-Shaped Corner" ? "selected" : ""}>${isArabic() ? "زاوية L" : "L-shaped corner"}</option>
             <option value="Extra" ${pieceType === "Extra" ? "selected" : ""}>${isArabic() ? "إضافية" : "Extra"}</option>
         </select>`;
         const pieceTypeControl = extraAddons && typeof extraAddons.renderTypePicker === "function"
@@ -812,7 +816,7 @@
                 event.stopPropagation();
                 const tr = sketch.closest("tr[data-row-name]");
                 const row = rowByName(currentFrm, tr && tr.dataset.rowName);
-                if (row && row.piece_type === "Clipped Corner" && window.AlmdinaClippedCornerEditor) {
+                if (row && window.AlmdinaClippedCornerGeometry && window.AlmdinaClippedCornerGeometry.isCornerCut(row) && window.AlmdinaClippedCornerEditor) {
                     window.AlmdinaClippedCornerEditor.open(currentFrm, row);
                 } else if (row && window.AlmdinaSpecialShapeEditor) {
                     window.AlmdinaSpecialShapeEditor.open(currentFrm, row);

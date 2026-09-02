@@ -26,7 +26,7 @@ def _fields(path: Path) -> dict[str, dict]:
 def test_extra_is_a_fourth_door_type_but_not_a_special_shape_type() -> None:
     detail = _fields(DETAIL)
     plan = _fields(PLAN_PIECE)
-    expected = "Regular\nClipped Corner\nSpecial\nExtra"
+    expected = "Regular\nClipped Corner\nL-Shaped Corner\nSpecial\nExtra"
     assert detail["piece_type"]["options"] == expected
     assert plan["piece_type"]["options"] == expected
 

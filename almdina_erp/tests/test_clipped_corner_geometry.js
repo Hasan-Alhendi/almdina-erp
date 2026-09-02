@@ -10,7 +10,10 @@ global.document = { documentElement: { lang: "ar" } };
 global.frappe = { boot: { lang: "ar" } };
 
 const source = fs.readFileSync(
-    path.join(__dirname, "../public/js/door_cutting_order_clipped_corner_ux.js"),
+    path.join(
+        __dirname,
+        "../public/js/door_cutting_order/drawing/door_cutting_order_clipped_corner_ux.js"
+    ),
     "utf8"
 );
 vm.runInThisContext(source, { filename: "door_cutting_order_clipped_corner_ux.js" });
@@ -62,5 +65,61 @@ assert.equal(defaults.cutWidth, 16);
 assert.equal(defaults.cutLength, 40);
 assert.match(geometry.summary(piece), /أعلى اليمين/);
 assert.equal(geometry.isClipped({ piece_type: "Regular" }), false);
+assert.equal(geometry.isCornerCut({ piece_type: "Regular" }), false);
+assert.equal(geometry.isCornerCut(piece), true);
+assert.equal(geometry.cutStyle(piece), "diagonal");
 
-console.log("Clipped-corner geometry, rotation, DXF, defaults, and labels passed");
+const lPiece = {
+    piece_type: "L-Shaped Corner",
+    width_cm: 100,
+    length_cm: 100,
+    clipped_corner_position: "Top Right",
+    clipped_corner_width_cm: 20,
+    clipped_corner_length_cm: 20,
+};
+assert.equal(geometry.isClipped(lPiece), false);
+assert.equal(geometry.isLShaped(lPiece), true);
+assert.equal(geometry.isCornerCut(lPiece), true);
+assert.equal(geometry.cutStyle(lPiece), "L");
+assert.equal(geometry.typeLabel(lPiece), "زاوية L");
+assert.deepEqual(
+    geometry.points(lPiece, 100, 100),
+    [[0, 0], [80, 0], [80, 20], [100, 20], [100, 100], [0, 100]],
+    "Top-right L clipping should insert a right-angle vertex instead of a diagonal"
+);
+assert.deepEqual(
+    geometry.points({ ...lPiece, clipped_corner_position: "Top Left" }, 100, 100),
+    [[20, 0], [100, 0], [100, 100], [0, 100], [0, 20], [20, 20]]
+);
+assert.deepEqual(
+    geometry.points({ ...lPiece, clipped_corner_position: "Bottom Right" }, 100, 100),
+    [[0, 0], [100, 0], [100, 80], [80, 80], [80, 100], [0, 100]]
+);
+assert.deepEqual(
+    geometry.points({ ...lPiece, clipped_corner_position: "Bottom Left" }, 100, 100),
+    [[0, 0], [100, 0], [100, 100], [20, 100], [20, 80], [0, 80]]
+);
+
+const rotatedL = {
+    ...lPiece,
+    width_cm: 100,
+    length_cm: 200,
+    clipped_corner_width_cm: 20,
+    clipped_corner_length_cm: 40,
+    original_w: 100,
+    original_h: 200,
+    w: 200,
+    h: 100,
+    rotated: true,
+};
+assert.deepEqual(
+    geometry.points(rotatedL, 200, 100),
+    [[0, 0], [200, 0], [200, 80], [160, 80], [160, 100], [0, 100]],
+    "A clockwise rotation should move an L top-right cut to a six-vertex bottom-right L"
+);
+assert.deepEqual(
+    geometry.dxfPoints(rotatedL, 10, 20, 200, 100),
+    [[10, 120], [210, 120], [210, 40], [170, 40], [170, 20], [10, 20]]
+);
+
+console.log("Clipped-corner and L-shaped geometry, rotation, DXF, defaults, and labels passed");

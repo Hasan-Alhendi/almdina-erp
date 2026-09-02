@@ -77,7 +77,7 @@
   ],
   "fields": [
     {"fieldname":"piece_no","fieldtype":"Int","in_list_view":1,"label":"Piece No","read_only":1},
-    {"default":"Regular","fieldname":"piece_type","fieldtype":"Select","in_list_view":1,"label":"Piece Type","options":"Regular\nClipped Corner\nSpecial\nExtra","reqd":1},
+    {"default":"Regular","fieldname":"piece_type","fieldtype":"Select","in_list_view":1,"label":"Piece Type","options":"Regular\nClipped Corner\nL-Shaped Corner\nSpecial\nExtra","reqd":1},
     {"default":"0","fieldname":"extra_double","fieldtype":"Check","hidden":1,"label":"Extra: Double Edge Banding"},
     {"default":"0","fieldname":"extra_full_door_double","fieldtype":"Check","hidden":1,"label":"Extra: Full Door Double"},
     {"default":"0","fieldname":"extra_liner","fieldtype":"Check","hidden":1,"label":"Extra: Liner"},

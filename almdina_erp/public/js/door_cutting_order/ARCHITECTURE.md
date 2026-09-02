@@ -129,9 +129,11 @@ e.g. a special door with Liner records Liner in notes/drawing and uses its inclu
 custom special price.
 
 The measurement type cell remains the native HTML `select` used by the table. The
-visible Arabic order is `عادية / خاصة / زاوية / Extra`; the persisted values remain
-`Regular / Special / Clipped Corner / Extra` according to the existing DocType
-contract. Selecting `Extra` opens a small feature-owned multi-select flyout anchored
+visible Arabic order is `عادية / خاصة / زاوية / زاوية L / Extra`; the persisted values remain
+`Regular / Special / Clipped Corner / L-Shaped Corner / Extra` according to the existing DocType
+contract. `L-Shaped Corner` reuses the clipped-corner editor, stored cut distances, edge-price
+workflow, plan SVG, and DXF path; only the polygon topology changes from a five-vertex diagonal
+to a six-vertex right-angle L. Selecting `Extra` opens a small feature-owned multi-select flyout anchored
 to that row for `دبل قشاط`, `دبل كامل الدرفة`, `Liner`, and recessed-handle cutout. A compact Extra-only
 button reopens the flyout for an existing Extra row. The add-on module does not own or
 reimplement the general piece-type menu. It owns only Extra add-on presentation,

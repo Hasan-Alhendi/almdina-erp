@@ -42,8 +42,14 @@
     function pieceTypeLabel(value) {
         if (value === "Special") return "خاصة";
         if (value === "Clipped Corner") return "زاوية مقصوصة";
+        if (value === "L-Shaped Corner") return "زاوية L";
         if (value === "Extra") return "إضافية";
         return "عادية";
+    }
+
+    function isCornerCutType(value) {
+        const geometry = window.AlmdinaClippedCornerGeometry;
+        return Boolean(geometry && geometry.isCornerCut({ piece_type: value }));
     }
 
     function rows(frm) {
@@ -119,10 +125,10 @@
         const result = [];
         const allRows = rows(frm);
         const customDoorRows = allRows.filter(row =>
-            row.pieceType === "Special" || row.pieceType === "Clipped Corner"
+            row.pieceType === "Special" || isCornerCutType(row.pieceType)
         );
         const regularRows = customDoorRows.length
-            ? allRows.filter(row => row.pieceType !== "Special" && row.pieceType !== "Clipped Corner")
+            ? allRows.filter(row => row.pieceType !== "Special" && !isCornerCutType(row.pieceType))
             : allRows;
         const boardCount = Math.max(0, Math.trunc(number(frm.doc.required_boards)));
         const boardRate = number(frm.doc.board_rate_usd);
@@ -200,17 +206,21 @@
                 });
                 return;
             }
-            if (row.pieceType === "Clipped Corner") {
+            if (isCornerCutType(row.pieceType)) {
                 const ready = cutCornerPriceReady(row);
                 result.push({
                     type: "cut_corner",
-                    description: `درفة زاوية مقصوصة ${row.index}`,
+                    description: cutCornerDoorLabel(row),
                     quantity: row.qty,
                     unit: "درفة",
                     rate: ready ? row.clippedEdgePrice : null,
                     amount: ready ? row.clippedEdgePrice * row.qty : 0,
                     pending: !ready,
-                    note: ready ? row.clippedEdgeNote : "بانتظار إدخال سعر معالجة قشاط الزاوية المقصوصة",
+                    note: ready ? row.clippedEdgeNote : (
+                        row.pieceType === "L-Shaped Corner"
+                            ? "بانتظار إدخال سعر معالجة قشاط زاوية L"
+                            : "بانتظار إدخال سعر معالجة قشاط الزاوية المقصوصة"
+                    ),
                 });
                 return;
             }
@@ -237,8 +247,8 @@
             if (row.pieceType === "Special" && !specialPriceReady(row)) {
                 return [`درفة خاصة رقم ${row.index}`];
             }
-            if (row.pieceType === "Clipped Corner" && !cutCornerPriceReady(row)) {
-                return [`درفة زاوية مقصوصة ${row.index}`];
+            if (isCornerCutType(row.pieceType) && !cutCornerPriceReady(row)) {
+                return [cutCornerDoorLabel(row)];
             }
             return [];
         });
@@ -388,7 +398,9 @@
     }
 
     function cutCornerDoorLabel(row) {
-        return `درفة زاوية مقصوصة ${row.index}`;
+        return row.pieceType === "L-Shaped Corner"
+            ? `درفة زاوية L ${row.index}`
+            : `درفة زاوية مقصوصة ${row.index}`;
     }
 
     function specialPriceInputValue(row) {
@@ -427,10 +439,10 @@
     }
 
     function cutCornerPricingHtml(frm) {
-        const cutRows = rows(frm).filter(row => row.pieceType === "Clipped Corner");
+        const cutRows = rows(frm).filter(row => isCornerCutType(row.pieceType));
         if (!cutRows.length) return "";
         return `<div class="dco-cost-section"><div class="dco-cost-section-title">
-            <h4>تسعير قشاط درف الزاوية المقصوصة</h4><span>عدّل سعر القشاط مباشرة في الحقل أثناء وضع التعديل</span>
+            <h4>تسعير قشاط درف الزاوية المقصوصة وزاوية L</h4><span>عدّل سعر القشاط مباشرة في الحقل أثناء وضع التعديل</span>
         </div><div class="dco-special-price-list">${cutRows.map(row => {
             const doorLabel = cutCornerDoorLabel(row);
             const priced = cutCornerPriceReady(row);

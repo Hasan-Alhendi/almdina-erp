@@ -69,10 +69,12 @@ assert.doesNotMatch(regularPicker, /dco-extra-open-button/);
 
 const specialIndex = regularPicker.indexOf(">خاصة</option>");
 const cornerIndex = regularPicker.indexOf(">زاوية</option>");
+const lCornerIndex = regularPicker.indexOf(">زاوية L</option>");
 const extraIndex = regularPicker.indexOf(">Extra</option>");
 assert.ok(specialIndex > regularPicker.indexOf(">عادية</option>"));
 assert.ok(cornerIndex > specialIndex);
-assert.ok(extraIndex > cornerIndex);
+assert.ok(lCornerIndex > cornerIndex);
+assert.ok(extraIndex > lCornerIndex);
 
 const emptyExtra = api.renderTypePicker({ piece_type: "Extra" }, { editable: true });
 assert.match(emptyExtra, /dco-piece-type-select/);

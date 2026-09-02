@@ -102,7 +102,7 @@
       "fieldname": "piece_type",
       "fieldtype": "Select",
       "label": "Piece Type",
-      "options": "Regular\nClipped Corner\nSpecial\nExtra",
+      "options": "Regular\nClipped Corner\nL-Shaped Corner\nSpecial\nExtra",
       "read_only": 1
     },
     {

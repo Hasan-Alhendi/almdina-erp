@@ -2,6 +2,8 @@
     "use strict";
 
     const CLIPPED_TYPE = "Clipped Corner";
+    const L_TYPE = "L-Shaped Corner";
+    const CORNER_TYPES = Object.freeze([CLIPPED_TYPE, L_TYPE]);
     const DEFAULT_POSITION = "Top Right";
     const ROTATED_POSITION = {
         "Top Left": "Top Right",
@@ -37,6 +39,35 @@
 
     function clamp(value, min, max) {
         return Math.min(max, Math.max(min, value));
+    }
+
+    function pieceType(piece) {
+        return (piece && piece.piece_type) || "";
+    }
+
+    function isCornerCut(piece) {
+        return CORNER_TYPES.includes(pieceType(piece));
+    }
+
+    function isClipped(piece) {
+        return pieceType(piece) === CLIPPED_TYPE;
+    }
+
+    function isLShaped(piece) {
+        return pieceType(piece) === L_TYPE;
+    }
+
+    function cutStyle(piece) {
+        return isLShaped(piece) ? "L" : "diagonal";
+    }
+
+    function typeLabel(piece, arabic = isArabic()) {
+        if (isLShaped(piece)) return arabic ? "زاوية L" : "L-shaped corner";
+        return arabic ? "زاوية مقصوصة" : "Clipped corner";
+    }
+
+    function typeIcon(piece) {
+        return isLShaped(piece) ? "⌐" : "⌑";
     }
 
     function defaultCut(total) {
@@ -88,12 +119,19 @@
 
         const cutX = clamp(config.cutWidth / config.width * width, 0, width * 0.95);
         const cutY = clamp(config.cutLength / config.length * height, 0, height * 0.95);
-        const byPosition = {
-            "Top Right": [[0, 0], [width - cutX, 0], [width, cutY], [width, height], [0, height]],
-            "Top Left": [[cutX, 0], [width, 0], [width, height], [0, height], [0, cutY]],
-            "Bottom Right": [[0, 0], [width, 0], [width, height - cutY], [width - cutX, height], [0, height]],
-            "Bottom Left": [[0, 0], [width, 0], [width, height], [cutX, height], [0, height - cutY]],
-        };
+        const byPosition = cutStyle(piece) === "L"
+            ? {
+                "Top Right": [[0, 0], [width - cutX, 0], [width - cutX, cutY], [width, cutY], [width, height], [0, height]],
+                "Top Left": [[cutX, 0], [width, 0], [width, height], [0, height], [0, cutY], [cutX, cutY]],
+                "Bottom Right": [[0, 0], [width, 0], [width, height - cutY], [width - cutX, height - cutY], [width - cutX, height], [0, height]],
+                "Bottom Left": [[0, 0], [width, 0], [width, height], [cutX, height], [cutX, height - cutY], [0, height - cutY]],
+            }
+            : {
+                "Top Right": [[0, 0], [width - cutX, 0], [width, cutY], [width, height], [0, height]],
+                "Top Left": [[cutX, 0], [width, 0], [width, height], [0, height], [0, cutY]],
+                "Bottom Right": [[0, 0], [width, 0], [width, height - cutY], [width - cutX, height], [0, height]],
+                "Bottom Left": [[0, 0], [width, 0], [width, height], [cutX, height], [0, height - cutY]],
+            };
         return byPosition[config.position] || byPosition[DEFAULT_POSITION];
     }
 
@@ -116,7 +154,7 @@
     }
 
     function prepareRow(row) {
-        if (!row || row.piece_type !== CLIPPED_TYPE) return false;
+        if (!isCornerCut(row)) return false;
         const config = baseConfig(row);
         let changed = false;
         if (!POSITIONS.some(item => item.value === row.clipped_corner_position)) {
@@ -135,7 +173,7 @@
     }
 
     function summary(row, arabic = isArabic()) {
-        if (!row || row.piece_type !== CLIPPED_TYPE) return "";
+        if (!isCornerCut(row)) return "";
         const config = baseConfig(row);
         const size = config.cutWidth && config.cutLength
             ? `${rounded(config.cutWidth)}×${rounded(config.cutLength)} ${arabic ? "سم" : "cm"}`
@@ -184,9 +222,9 @@
         document.head.appendChild(style);
     }
 
-    function cornerIcon(position) {
+    function cornerIcon(position, row) {
         const piece = {
-            piece_type: CLIPPED_TYPE,
+            piece_type: pieceType(row) || CLIPPED_TYPE,
             width_cm: 100,
             length_cm: 100,
             clipped_corner_position: position,
@@ -210,7 +248,7 @@
                             <strong>${isArabic() ? "معاينة الدرفة داخل اللوح" : "Piece preview on the board"}</strong>
                             <span>${isArabic() ? "المقاس الخارجي" : "Outer size"}: ${rounded(dimensions.width)} × ${rounded(dimensions.length)} ${isArabic() ? "سم" : "cm"}</span>
                         </div>
-                        <span class="dco-corner-badge">⌑ ${isArabic() ? "مسار قص حقيقي" : "Real cut path"}</span>
+                        <span class="dco-corner-badge">${typeIcon(row)} ${isArabic() ? "مسار قص حقيقي" : "Real cut path"}</span>
                     </div>
                     <div class="dco-corner-preview" data-corner-preview></div>
                 </section>
@@ -220,7 +258,7 @@
                         <div class="dco-corner-position-grid">
                             ${POSITIONS.map(position => `
                                 <button type="button" class="dco-corner-position ${position.value === config.position ? "is-active" : ""}" data-position="${position.value}">
-                                    ${cornerIcon(position.value)}
+                                    ${cornerIcon(position.value, row)}
                                     <span>${isArabic() ? position.ar : position.en}</span>
                                 </button>`).join("")}
                         </div>
@@ -285,7 +323,7 @@
         if (!preview) return;
 
         const sample = {
-            piece_type: CLIPPED_TYPE,
+            piece_type: pieceType(row) || CLIPPED_TYPE,
             width_cm: config.width || 100,
             length_cm: config.length || 100,
             clipped_corner_position: config.position,
@@ -294,7 +332,7 @@
         };
         const polygon = points(sample, 360, 220).map(([x, y]) => `${x + 30},${y + 30}`).join(" ");
         preview.innerHTML = `
-            <svg viewBox="0 0 420 280" role="img" aria-label="${isArabic() ? "معاينة الزاوية المقصوصة" : "Clipped corner preview"}">
+            <svg viewBox="0 0 420 280" role="img" aria-label="${isArabic() ? `معاينة ${typeLabel(row)}` : `${typeLabel(row, false)} preview`}">
                 <defs><pattern id="dco-corner-grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" fill="none" stroke="#dfe8ef" stroke-width="1"/></pattern></defs>
                 <rect x="10" y="10" width="400" height="260" rx="12" fill="url(#dco-corner-grid)" stroke="#e2e8f0"/>
                 <polygon points="${polygon}" fill="#dff1fb" stroke="#172033" stroke-width="3" stroke-linejoin="round"/>
@@ -313,7 +351,7 @@
     let activeDialog = null;
 
     function open(frm, row, options = {}) {
-        if (!frm || !row || row.piece_type !== CLIPPED_TYPE) return;
+        if (!frm || !isCornerCut(row)) return;
         installStyles();
         prepareRow(row);
         const readOnly = Boolean(options.readOnly);
@@ -326,8 +364,8 @@
 
         const dialog = new frappe.ui.Dialog({
             title: isArabic()
-                ? `${readOnly ? "عرض" : "إعداد"} الزاوية المقصوصة — الدرفة ${row.piece_no || row.idx || ""}`
-                : `${readOnly ? "View" : "Edit"} clipped corner — piece ${row.piece_no || row.idx || ""}`,
+                ? `${readOnly ? "عرض" : "إعداد"} ${typeLabel(row)} — الدرفة ${row.piece_no || row.idx || ""}`
+                : `${readOnly ? "View" : "Edit"} ${typeLabel(row, false)} — piece ${row.piece_no || row.idx || ""}`,
             fields: [{ fieldname: "corner_editor", fieldtype: "HTML" }],
             primary_action_label: readOnly
                 ? (isArabic() ? "إغلاق" : "Close")
@@ -404,8 +442,14 @@
 
     window.AlmdinaClippedCornerGeometry = Object.freeze({
         TYPE: CLIPPED_TYPE,
+        L_TYPE,
         positions: POSITIONS.map(position => position.value),
-        isClipped: piece => Boolean(piece && piece.piece_type === CLIPPED_TYPE),
+        isClipped,
+        isLShaped,
+        isCornerCut,
+        cutStyle,
+        typeLabel,
+        typeIcon,
         baseConfig,
         effectiveConfig,
         points,

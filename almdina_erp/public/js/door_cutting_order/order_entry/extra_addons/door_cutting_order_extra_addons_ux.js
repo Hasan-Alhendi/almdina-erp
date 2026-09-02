@@ -8,6 +8,7 @@
         Object.freeze({ value: "Regular", labelAr: "عادية", labelEn: "Regular" }),
         Object.freeze({ value: "Special", labelAr: "خاصة", labelEn: "Special" }),
         Object.freeze({ value: "Clipped Corner", labelAr: "زاوية", labelEn: "Clipped corner" }),
+        Object.freeze({ value: "L-Shaped Corner", labelAr: "زاوية L", labelEn: "L-shaped corner" }),
         Object.freeze({ value: TYPE, labelAr: "Extra", labelEn: "Extra" }),
     ]);
     const FIELDS = Object.freeze([

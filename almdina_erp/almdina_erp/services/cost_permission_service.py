@@ -7,6 +7,7 @@ import frappe
 from frappe import _
 from frappe.utils import flt, now_datetime
 
+from almdina_erp.almdina_erp.domain.orders.piece_policy import is_corner_cut
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     require_document_capability,
@@ -316,7 +317,7 @@ def update_clipped_corner_edge_price(
     _require_expected_document_version(order, expected_modified)
     assert_order_editable(order)
 
-    if (piece.piece_type or "Regular") != "Clipped Corner":
+    if not is_corner_cut(piece.piece_type):
         frappe.throw(_("Only a cut-corner door can receive a custom edge banding price."))
 
     price = _finite_non_negative(edge_price_usd, _("Cut-Corner Edge Banding Price USD"))

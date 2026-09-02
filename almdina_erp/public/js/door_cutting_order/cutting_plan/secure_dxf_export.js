@@ -225,7 +225,7 @@
                 const y = offsetY + fullHeight - appliedTrim.length - num(piece.y) * 10 - pieceHeight;
                 const clippedGeometry = window.AlmdinaClippedCornerGeometry;
                 const shapeOutput = window.AlmdinaShapeOutputContract;
-                const clipped = clippedGeometry && clippedGeometry.isClipped(piece);
+                const clipped = clippedGeometry && clippedGeometry.isCornerCut(piece);
                 const exactSpecial = shapeOutput && shapeOutput.hasExactCutPath(piece);
                 const cutPath = clipped
                     ? clippedGeometry.dxfPoints(piece, x, y, pieceWidth, pieceHeight)
