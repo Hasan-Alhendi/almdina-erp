@@ -95,6 +95,11 @@ def test_operator_opens_only_new_documentation_runtime():
     assert '"public/js/door_cutting_order/drawing/special_shape_facade.js"' in hooks
     assert "__documentationOnly: true" in entry
     assert "__manufacturingGeometrySeparated: true" in entry
+    assert "function hasBlankDimensions(row)" in entry
+    assert "أدخل عرض الدرفة وطولها أولًا، ثم افتح توثيق الشكل." in entry
+    assert entry.index("if (!hasBlankDimensions(row))") < entry.index("await persistedRow")
+    assert "function requirePieceDimensions(row, tr)" in operator
+    assert "if (!row || !requirePieceDimensions(row, tr)) return" in operator
     assert "door_drawing_v4" not in entry
     for tool in ("select", "pen", "line", "rect", "ellipse", "dimension", "text"):
         assert f'tool("{tool}"' in shell

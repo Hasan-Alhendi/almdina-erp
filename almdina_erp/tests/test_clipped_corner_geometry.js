@@ -122,4 +122,27 @@ assert.deepEqual(
     [[10, 120], [210, 120], [210, 40], [170, 40], [170, 20], [10, 20]]
 );
 
+let printed = null;
+global.frappe.msgprint = (payload) => {
+    printed = payload;
+};
+global.frappe.ui = {
+    Dialog: function Dialog() {
+        throw new Error("Corner editor must not open before piece dimensions exist");
+    },
+};
+
+window.AlmdinaClippedCornerEditor.open({}, {
+    piece_type: "Clipped Corner",
+    width_cm: 0,
+    length_cm: 0,
+});
+assert.ok(printed, "Missing dimensions should show a guidance message instead of an error");
+assert.match(printed.message, /أدخل عرض الدرفة وطولها أولًا، ثم افتح إعداد الزاوية/);
+
+window.AlmdinaClippedCornerEditor.open({}, {
+    piece_type: "L-Shaped Corner",
+});
+assert.match(printed.message, /أدخل عرض الدرفة وطولها أولًا، ثم افتح إعداد الزاوية/);
+
 console.log("Clipped-corner and L-shaped geometry, rotation, DXF, defaults, and labels passed");

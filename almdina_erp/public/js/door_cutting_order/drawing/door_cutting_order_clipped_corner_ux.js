@@ -352,6 +352,17 @@
 
     function open(frm, row, options = {}) {
         if (!frm || !isCornerCut(row)) return;
+        const dimensions = originalDimensions(row);
+        if (!dimensions.width || !dimensions.length) {
+            frappe.msgprint({
+                title: isArabic() ? "أدخل المقاس أولًا" : "Enter dimensions first",
+                message: isArabic()
+                    ? "أدخل عرض الدرفة وطولها أولًا، ثم افتح إعداد الزاوية."
+                    : "Enter the piece width and length before editing the corner.",
+                indicator: "orange",
+            });
+            return;
+        }
         installStyles();
         prepareRow(row);
         const readOnly = Boolean(options.readOnly);

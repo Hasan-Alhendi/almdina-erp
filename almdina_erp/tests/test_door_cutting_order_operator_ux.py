@@ -281,6 +281,9 @@ def test_fast_editor_binds_measurement_handlers_only_once():
     assert "if (root._dcoFastMeasurementsBound) return" in source
     assert "root._dcoFastMeasurementsBound = true" in source
     assert "const currentFrm = root._dcoFastEntryForm" in source
+    assert "function requirePieceDimensions(row, tr)" in source
+    assert "if (!row || !requirePieceDimensions(row, tr)) return" in source
+    assert "أدخل عرض الدرفة وطولها أولًا، ثم افتح توثيق الشكل." in source
     assert "window.AlmdinaSpecialShapeEditor.open(currentFrm, row)" in source
     assert "window.AlmdinaClippedCornerEditor.open(currentFrm, row)" in source
     # html() replaces children of the wrapper; rebinding the wrapper on every

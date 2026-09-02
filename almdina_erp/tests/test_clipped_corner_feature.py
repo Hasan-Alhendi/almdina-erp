@@ -95,6 +95,7 @@ def test_fast_measurements_offer_one_click_corner_settings_with_live_visual_prev
     assert '<option value="L-Shaped Corner"' in operator
     assert 'value: "L-Shaped Corner"' in extra_addons
     assert "AlmdinaClippedCornerEditor.open(currentFrm, row)" in operator
+    assert "if (!row || !requirePieceDimensions(row, tr)) return" in operator
     assert "isCornerCut" in operator
     assert "dco-clipped-corner-row" in operator
     assert "dco-corner-position-grid" in editor
@@ -103,6 +104,16 @@ def test_fast_measurements_offer_one_click_corner_settings_with_live_visual_prev
     assert "المستطيل الخارجي هو المساحة المحجوزة الآمنة" in editor
     assert "let activeDialog = null" in editor
     assert "Prevent stacked corner dialogs" in editor
+    open_fn = editor.split("function open(frm, row, options = {}) {", 1)[1]
+    open_fn = open_fn.split("function view(frm, row)", 1)[0]
+    assert "if (!dimensions.width || !dimensions.length)" in open_fn
+    assert open_fn.index("if (!dimensions.width || !dimensions.length)") < open_fn.index(
+        "installStyles()"
+    )
+    assert open_fn.index("if (!dimensions.width || !dimensions.length)") < open_fn.index(
+        "new frappe.ui.Dialog"
+    )
+    assert "أدخل عرض الدرفة وطولها أولًا، ثم افتح إعداد الزاوية." in open_fn
     assert 'const L_TYPE = "L-Shaped Corner"' in editor
     assert "cutStyle" in editor
     assert assets.index("door_cutting_order_clipped_corner_ux.js") < assets.index(

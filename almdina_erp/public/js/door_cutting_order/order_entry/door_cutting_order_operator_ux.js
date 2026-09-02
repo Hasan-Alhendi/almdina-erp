@@ -662,6 +662,19 @@
         return document.activeElement === input;
     }
 
+    function requirePieceDimensions(row, tr) {
+        if (num(row && row.width_cm) > 0 && num(row && row.length_cm) > 0) return true;
+        frappe.msgprint({
+            title: isArabic() ? "أدخل المقاس أولًا" : "Enter dimensions first",
+            message: isArabic()
+                ? "أدخل عرض الدرفة وطولها أولًا، ثم افتح توثيق الشكل."
+                : "Enter the piece width and length before opening the shape.",
+            indicator: "orange",
+        });
+        focusWidth(tr);
+        return false;
+    }
+
     function moveToNextWidth(frm, currentTr) {
         let next = currentTr.nextElementSibling;
         if (!next) {
@@ -816,9 +829,10 @@
                 event.stopPropagation();
                 const tr = sketch.closest("tr[data-row-name]");
                 const row = rowByName(currentFrm, tr && tr.dataset.rowName);
-                if (row && window.AlmdinaClippedCornerGeometry && window.AlmdinaClippedCornerGeometry.isCornerCut(row) && window.AlmdinaClippedCornerEditor) {
+                if (!row || !requirePieceDimensions(row, tr)) return;
+                if (window.AlmdinaClippedCornerGeometry && window.AlmdinaClippedCornerGeometry.isCornerCut(row) && window.AlmdinaClippedCornerEditor) {
                     window.AlmdinaClippedCornerEditor.open(currentFrm, row);
-                } else if (row && window.AlmdinaSpecialShapeEditor) {
+                } else if (window.AlmdinaSpecialShapeEditor) {
                     window.AlmdinaSpecialShapeEditor.open(currentFrm, row);
                 }
             }
