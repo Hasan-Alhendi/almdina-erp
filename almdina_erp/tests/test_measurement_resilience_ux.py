@@ -22,7 +22,8 @@ def test_horizontal_scroll_is_available_on_small_screens_without_crushing_the_ta
     source = _source()
     assert "overflow-x:auto !important" in source
     assert "@media (max-width:980px)" in source
-    assert "min-width:960px !important" in source
+    assert "min-width:1180px !important" in source
+    assert "min-width:300px !important" in source
     assert "scrollbar-width:thin" in source
     assert "overscroll-behavior:contain" in source
 

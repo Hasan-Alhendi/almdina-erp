@@ -141,7 +141,7 @@
                     padding:2px 6px; background:var(--card-bg,#fff); font-family:inherit; font-size:11px;
                 }
                 .dco-fast-entry-scroll { overflow:auto; max-height:68vh; }
-                .dco-fast-table { width:100%; min-width:1220px; border-collapse:separate; border-spacing:0; table-layout:fixed; }
+                .dco-fast-table { width:100%; min-width:1360px; border-collapse:separate; border-spacing:0; table-layout:fixed; }
                 .dco-fast-table th {
                     position:sticky; top:0; z-index:5; background:var(--card-bg,#fff); border-bottom:1px solid var(--border-color,#dfe3e8);
                     padding:8px 5px; font-size:12px; font-weight:800; text-align:center; white-space:nowrap;
@@ -158,7 +158,7 @@
                 .dco-fast-table .dco-col-edges { width:310px; }
                 .dco-fast-table .dco-col-edge-type { width:160px; }
                 .dco-fast-table .dco-col-calc { width:88px; text-align:center; font-variant-numeric:tabular-nums; }
-                .dco-fast-table .dco-col-notes { width:160px; }
+                .dco-fast-table .dco-col-notes { width:300px; min-width:300px; }
                 .dco-fast-table .dco-col-delete { width:50px; text-align:center; }
                 .dco-fast-input,.dco-fast-select {
                     width:100%; min-height:38px; border:1px solid var(--border-color,#ccd3da); border-radius:8px;

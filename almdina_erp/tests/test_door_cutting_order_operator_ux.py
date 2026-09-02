@@ -184,24 +184,24 @@ def test_fast_entry_hides_area_and_edge_meter_columns_but_keeps_calculation_logi
     assert "updateCalculatedCells" in operator
 
 
-def test_measurement_table_fits_the_form_without_horizontal_scrolling():
+def test_measurement_table_keeps_notes_readable_with_horizontal_scroll():
     source = COMPACT_MEASUREMENTS_JS.read_text(encoding="utf-8")
 
     required = [
-        "overflow-x:hidden !important",
-        "min-width:0 !important",
+        "overflow-x:auto !important",
+        "min-width:1180px !important",
+        "max-width:none !important",
         "table-layout:fixed !important",
         "scrollbar-gutter:stable",
         ".dco-fast-table .dco-col-notes",
-        "width:auto !important",
+        "min-width:300px !important",
         ".dco-fast-table .dco-col-edges{width:188px !important;}",
         "@media (max-width:900px)",
         "@media (max-width:720px)",
     ]
     missing = [fragment for fragment in required if fragment not in source]
-    assert not missing, f"Missing responsive table-layout fragments: {missing}"
-    assert "min-width:1180px" not in source
-    assert "min-width:1220px" not in source
+    assert not missing, f"Missing readable notes / horizontal-scroll fragments: {missing}"
+    assert "overflow-x:hidden !important" not in source
 
 
 def test_edge_cells_use_compact_visual_side_indicators_and_accessibility_labels():

@@ -123,19 +123,21 @@
                 pointer-events:none;
             }
 
+            /* Allow horizontal scroll so the notes column keeps a readable
+               width instead of being crushed into leftover form space. */
             .dco-fast-entry-scroll{
                 width:100% !important;
                 max-width:100% !important;
                 overflow-y:auto !important;
-                overflow-x:hidden !important;
+                overflow-x:auto !important;
                 scrollbar-gutter:stable;
                 max-height:min(70vh,720px) !important;
             }
 
             .dco-fast-table{
                 width:100% !important;
-                max-width:100% !important;
-                min-width:0 !important;
+                max-width:none !important;
+                min-width:1180px !important;
                 table-layout:fixed !important;
                 border-collapse:separate;
                 border-spacing:0;
@@ -173,7 +175,11 @@
             .dco-fast-table .dco-col-edges{width:188px !important;}
             .dco-fast-table .dco-col-edge-type{width:128px !important;}
             .dco-fast-table .dco-col-sketch{width:50px !important;}
-            .dco-fast-table .dco-col-notes{width:auto !important;min-width:0 !important;}
+            .dco-fast-table .dco-col-notes{
+                width:auto !important;
+                min-width:300px !important;
+                overflow:visible;
+            }
             .dco-fast-table .dco-col-delete{width:34px !important;}
 
             .dco-fast-input,
@@ -187,7 +193,11 @@
             }
 
             .dco-fast-input[type="number"]{font-size:14.5px !important;font-weight:650;}
-            .dco-col-notes .dco-fast-input{text-align:right;font-size:12.5px !important;}
+            .dco-col-notes .dco-fast-input{
+                text-align:right;
+                font-size:13px !important;
+                min-width:220px !important;
+            }
             .dco-row-selector,.dco-select-all{width:17px !important;height:17px !important;}
             .dco-column-header-select{min-height:43px !important;gap:3px !important;}
             .dco-column-select-all{gap:3px !important;font-size:9px !important;}

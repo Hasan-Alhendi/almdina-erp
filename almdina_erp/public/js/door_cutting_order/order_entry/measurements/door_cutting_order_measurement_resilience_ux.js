@@ -23,8 +23,8 @@
         const style = document.createElement("style");
         style.id = STYLE_ID;
         style.textContent = `
-            /* Desktop remains compact. Horizontal scrolling is deliberately kept
-               available for narrower screens instead of crushing or hiding controls. */
+            /* Horizontal scrolling keeps the notes column readable instead of
+               crushing it into leftover space or hiding row actions. */
             .dco-fast-entry-scroll {
                 overflow-x:auto !important;
                 overflow-y:auto !important;
@@ -45,11 +45,11 @@
 
             .dco-notes-editor {
                 display:grid;
-                grid-template-columns:minmax(0,1fr) 31px;
+                grid-template-columns:minmax(220px,1fr) 31px;
                 align-items:center;
                 gap:4px;
                 width:100%;
-                min-width:0;
+                min-width:260px;
             }
             .dco-notes-editor .dco-notes-input {
                 min-width:0 !important;
@@ -129,13 +129,18 @@
             }
             .dco-note-context b { color:var(--text-color,#172033); }
 
+            .dco-fast-table .dco-col-notes {
+                width:auto !important;
+                min-width:300px !important;
+            }
+
             @media (max-width:980px) {
                 .dco-fast-table {
-                    width:960px !important;
-                    min-width:960px !important;
+                    width:1180px !important;
+                    min-width:1180px !important;
                     max-width:none !important;
                 }
-                .dco-fast-table .dco-col-notes { width:190px !important; }
+                .dco-fast-table .dco-col-notes { width:auto !important; min-width:300px !important; }
                 .dco-fast-table .dco-select-col,
                 .dco-fast-table .dco-col-no {
                     position:sticky;
@@ -151,8 +156,8 @@
                 /* Keep important actions reachable through horizontal scrolling. */
                 .dco-fast-table .dco-col-sketch,
                 .dco-fast-table .dco-col-delete { display:table-cell !important; }
-                .dco-fast-table { width:940px !important; min-width:940px !important; }
-                .dco-fast-table .dco-col-notes { width:180px !important; }
+                .dco-fast-table { width:1180px !important; min-width:1180px !important; }
+                .dco-fast-table .dco-col-notes { width:auto !important; min-width:300px !important; }
                 .dco-fast-entry-toolbar { align-items:flex-start; }
             }
         `;
