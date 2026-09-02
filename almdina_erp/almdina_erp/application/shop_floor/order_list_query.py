@@ -4,6 +4,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any, Protocol
 
+from almdina_erp.almdina_erp.domain.orders.lifecycle import normalize_order_status
 from almdina_erp.almdina_erp.domain.orders.production_authorization import (
     ProductionActionFacts,
     build_production_action_context,
@@ -74,6 +75,31 @@ def _as_bool(value: Any) -> bool:
         return bool(int(value or 0))
     except (TypeError, ValueError):
         return bool(value)
+
+
+def overview_order_list_delivered_rank(status: str | None) -> int:
+    """Return 1 for delivered orders so they sort after every other status."""
+
+    return 1 if normalize_order_status(status) == "Delivered" else 0
+
+
+def sort_overview_order_list(rows: Sequence[Any]) -> list[Any]:
+    """Sort all-orders rows: non-delivered first, then modified newest-first.
+
+    Delivered rows stay last. Within each group, missing ``modified`` sorts last
+    and equal timestamps break ties by document name.
+    """
+
+    named = sorted(rows, key=lambda row: str(_value(row, "name") or ""))
+    by_modified = sorted(
+        named,
+        key=lambda row: str(_value(row, "modified") or ""),
+        reverse=True,
+    )
+    return sorted(
+        by_modified,
+        key=lambda row: overview_order_list_delivered_rank(_value(row, "status")),
+    )
 
 
 def _normalize_order_names(order_names: Any) -> list[str]:
@@ -334,4 +360,6 @@ __all__ = [
     "OrderListQueryPort",
     "get_department_filter_options",
     "get_order_operational_role_flags",
+    "overview_order_list_delivered_rank",
+    "sort_overview_order_list",
 ]

@@ -96,6 +96,10 @@
         ready: Object.freeze({ rank: 1, field: "assignment_time", direction: 1 }),
         completed: Object.freeze({ rank: 2, field: "completion_time", direction: -1 }),
     });
+    const OVERVIEW_LIST_SORT_RULES = Object.freeze({
+        active: Object.freeze({ rank: 0, field: "modified", direction: -1 }),
+        delivered: Object.freeze({ rank: 1, field: "modified", direction: -1 }),
+    });
     const DESKTOP_DELIVERY_ROW_CLASS = Object.freeze({
         ready_for_delivery: "dco-list-row-ready-for-delivery",
         delivered: "dco-list-row-delivered",
@@ -1156,6 +1160,58 @@
         );
     }
 
+    function usesOverviewDeliveredLastSort() {
+        const user = String(frappe.session && frappe.session.user || "").trim();
+        if (user === "Administrator") return true;
+        const permissions = window.AlmdinaPermissions;
+        return Boolean(
+            permissions
+            && typeof permissions.can === "function"
+            && permissions.can("view_all_orders")
+        );
+    }
+
+    function overviewListState(doc) {
+        return desktopDeliveryRowState(doc) === "delivered" ? "delivered" : "active";
+    }
+
+    function sortOverviewListItems(items) {
+        return sortQueueItemsByRules(
+            items,
+            overviewListState,
+            OVERVIEW_LIST_SORT_RULES,
+            "active"
+        );
+    }
+
+    function applyOrderedListRows(listview, result, ordered) {
+        const current = [...result.querySelectorAll(".list-row-container")]
+            .filter(container => Boolean(rowDocumentName(container)));
+        const needsReorder = ordered.some((container, index) => current[index] !== container);
+        if (!needsReorder) return;
+        listview._dcoApplyingRolePresentation = true;
+        ordered.forEach(container => result.appendChild(container));
+        const schedule = window.requestAnimationFrame || (callback => window.setTimeout(callback, 16));
+        schedule(() => {
+            listview._dcoApplyingRolePresentation = false;
+        });
+    }
+
+    function reorderOverviewListRows(listview, result) {
+        const docs = orderDocuments(listview);
+        const queueItems = [];
+        [...result.querySelectorAll(".list-row-container")].forEach(container => {
+            const name = rowDocumentName(container);
+            if (!name) return;
+            queueItems.push({ container, flag: {}, name, doc: docs.get(name) || {} });
+        });
+        applyOrderedListRows(
+            listview,
+            result,
+            sortOverviewListItems(queueItems).map(item => item.container)
+        );
+    }
+
     function isHistoryQueueState(state) {
         return state === "completed" || state === "delivered";
     }
@@ -1186,6 +1242,9 @@
         if (!personalView) {
             clearOperationalRoleRows(listview);
             applyDesktopDeliveryRowColors(listview);
+            if (usesOverviewDeliveredLastSort()) {
+                reorderOverviewListRows(listview, result);
+            }
             return;
         }
 
@@ -1214,17 +1273,11 @@
         const orderedItems = mobileLayout
             ? sortPersonalQueueItems(queueItems)
             : sortDesktopQueueItems(queueItems);
-        const ordered = orderedItems.map(item => item.container);
-        const current = [...result.querySelectorAll(".list-row-container")]
-            .filter(container => Boolean(rowDocumentName(container)));
-        const needsReorder = ordered.some((container, index) => current[index] !== container);
-        if (needsReorder) {
-            listview._dcoApplyingRolePresentation = true;
-            ordered.forEach(container => result.appendChild(container));
-            requestAnimationFrame(() => {
-                listview._dcoApplyingRolePresentation = false;
-            });
-        }
+        applyOrderedListRows(
+            listview,
+            result,
+            orderedItems.map(item => item.container)
+        );
     }
 
     function roleFlagNames(listview) {
@@ -1360,7 +1413,7 @@
     frappe.listview_settings[METHODS.doctype] = Object.assign({}, existing, {
         add_fields: [...new Set([
             ...(existing.add_fields || []),
-            "customer", "order_date", "status",
+            "customer", "order_date", "status", "modified",
             "board_description", "edge_color", "default_edge_type", "production_path",
             "order_notes",
             "current_department", "current_assignee",
@@ -1410,6 +1463,7 @@
         desktopDeliveryRowState,
         isPhoneLayout,
         kanbanCardFields,
+        overviewListState,
         overviewStageLabel,
         productionStageLabel,
         personalQueueState,
@@ -1419,9 +1473,11 @@
         resolveDepartmentFilterStageType,
         rewriteDepartmentColumnFilters,
         sortDesktopQueueItems,
+        sortOverviewListItems,
         sortPersonalQueueItems,
         statusFilterConfig,
         statusFilterOptions,
         uniqueDepartmentStageOptions,
+        usesOverviewDeliveredLastSort,
     });
 })();

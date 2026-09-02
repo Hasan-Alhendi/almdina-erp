@@ -293,5 +293,34 @@ class TestDepartmentFilterOptions(unittest.TestCase):
         self.assertNotIn("operational_role", source.split("def department_filter_options", 1)[1])
 
 
+class TestOverviewOrderListSort(unittest.TestCase):
+    def test_delivered_rank_is_last_and_other_statuses_share_the_active_group(self) -> None:
+        self.assertEqual(order_list_query.overview_order_list_delivered_rank("Delivered"), 1)
+        self.assertEqual(order_list_query.overview_order_list_delivered_rank("Ready for Delivery"), 0)
+        self.assertEqual(order_list_query.overview_order_list_delivered_rank("Cancelled"), 0)
+        self.assertEqual(order_list_query.overview_order_list_delivered_rank("At CNC"), 0)
+        self.assertEqual(order_list_query.overview_order_list_delivered_rank(None), 0)
+
+    def test_recently_modified_delivered_order_sorts_below_older_active_orders(self) -> None:
+        rows = [
+            {"name": "DCO-DELIVERED-NEW", "status": "Delivered", "modified": "2026-09-02 11:00:00"},
+            {"name": "DCO-ACTIVE-OLD", "status": "At CNC", "modified": "2026-08-01 08:00:00"},
+            {"name": "DCO-READY", "status": "Ready for Delivery", "modified": "2026-09-01 09:00:00"},
+            {"name": "DCO-DELIVERED-OLD", "status": "Delivered", "modified": "2026-07-01 07:00:00"},
+            {"name": "DCO-CANCELLED", "status": "Cancelled", "modified": "2026-09-02 10:00:00"},
+        ]
+        ordered = order_list_query.sort_overview_order_list(rows)
+        self.assertEqual(
+            [row["name"] for row in ordered],
+            [
+                "DCO-CANCELLED",
+                "DCO-READY",
+                "DCO-ACTIVE-OLD",
+                "DCO-DELIVERED-NEW",
+                "DCO-DELIVERED-OLD",
+            ],
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

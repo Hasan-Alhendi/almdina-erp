@@ -309,7 +309,8 @@ def test_desktop_keeps_legacy_ordering_while_mobile_uses_five_states():
     assert 'const mobileLayout = root.classList.contains("dco-order-card-layout");' in list_source
     assert "? sortPersonalQueueItems(queueItems)" in list_source
     assert ": sortDesktopQueueItems(queueItems);" in list_source
-    assert "const ordered = orderedItems.map(item => item.container);" in list_source
+    assert "function applyOrderedListRows(listview, result, ordered)" in list_source
+    assert "orderedItems.map(item => item.container)" in list_source
     assert "const isHistory = mobileLayout" in list_source
     assert ': desktopQueueState(doc, flag) === "completed";' in list_source
     assert 'classList.toggle("dco-list-row-completed"' in list_source
@@ -351,3 +352,24 @@ def test_desktop_list_colors_ready_for_delivery_and_delivered_rows_only():
     assert ".dco-mobile-order-card.is-delivered" in mobile_css
     assert desktop_ready not in mobile_css
     assert desktop_delivered not in mobile_css
+
+
+def test_overview_list_puts_delivered_orders_last_for_view_all_orders():
+    list_source = source(LIST_UX)
+
+    assert "function usesOverviewDeliveredLastSort()" in list_source
+    assert 'permissions.can("view_all_orders")' in list_source
+    assert 'user === "Administrator"' in list_source
+    assert "function sortOverviewListItems(items)" in list_source
+    assert "const OVERVIEW_LIST_SORT_RULES = Object.freeze({" in list_source
+    assert 'delivered: Object.freeze({ rank: 1, field: "modified", direction: -1 })' in list_source
+    assert "function overviewListOrderBy(" not in list_source
+    assert "IN ('Delivered')" not in list_source
+    assert "installOverviewListSort" not in list_source
+    assert "args.order_by = overviewListOrderBy" not in list_source
+    assert "if (usesOverviewDeliveredLastSort()) {" in list_source
+    assert "reorderOverviewListRows(listview, result);" in list_source
+    assert '"modified"' in list_source
+    assert "if (!personalView)" in list_source
+    personal_block = list_source.split("if (!personalView) {", 1)[1]
+    assert "sortPersonalQueueItems(queueItems)" not in personal_block.split("return;", 1)[0]

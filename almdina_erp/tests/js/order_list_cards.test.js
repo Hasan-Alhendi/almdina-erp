@@ -560,6 +560,9 @@ assert.deepStrictEqual(
 assert(source.includes('const mobileLayout = root.classList.contains("dco-order-card-layout")'));
 assert(source.includes("? sortPersonalQueueItems(queueItems)"));
 assert(source.includes(": sortDesktopQueueItems(queueItems);"));
+assert(source.includes("if (usesOverviewDeliveredLastSort())"));
+assert(source.includes("reorderOverviewListRows(listview, result);"));
+assert(!source.includes("? sortOverviewListItems(queueItems)"));
 
 assert.strictEqual(
     api.personalQueueState({ status: "At CNC", department_status: "قيد العمل" }, { assignment_state: "assigned" }),
@@ -583,6 +586,67 @@ assert.strictEqual(
     api.personalQueueState({ status: "Delivered", department_status: "مكتمل" }, { assignment_state: "completed" }),
     "delivered"
 );
+
+const overviewQueueItems = [
+    {
+        name: "DCO-DELIVERED-NEW",
+        doc: { status: "Delivered", modified: "2026-09-02 11:00:00" },
+        flag: {},
+    },
+    {
+        name: "DCO-ACTIVE-OLD",
+        doc: { status: "At CNC", modified: "2026-08-01 08:00:00" },
+        flag: {},
+    },
+    {
+        name: "DCO-READY",
+        doc: { status: "Ready for Delivery", modified: "2026-09-01 09:00:00" },
+        flag: {},
+    },
+    {
+        name: "DCO-DELIVERED-OLD",
+        doc: { status: "Delivered", modified: "2026-07-01 07:00:00" },
+        flag: {},
+    },
+    {
+        name: "DCO-CANCELLED",
+        doc: { status: "Cancelled", modified: "2026-09-02 10:00:00" },
+        flag: {},
+    },
+];
+assert.deepStrictEqual(
+    Array.from(api.sortOverviewListItems(overviewQueueItems), item => item.name),
+    [
+        "DCO-CANCELLED",
+        "DCO-READY",
+        "DCO-ACTIVE-OLD",
+        "DCO-DELIVERED-NEW",
+        "DCO-DELIVERED-OLD",
+    ],
+    "all-orders list must keep delivered rows last while remaining rows stay newest-first by modified"
+);
+assert.strictEqual(api.overviewListState({ status: "Delivered" }), "delivered");
+assert.strictEqual(api.overviewListState({ current_department: "تم التسليم" }), "delivered");
+assert.strictEqual(api.overviewListState({ status: "Ready for Delivery" }), "active");
+assert.strictEqual(api.overviewListState({ status: "Cancelled" }), "active");
+assert.strictEqual(typeof api.overviewListOrderBy, "undefined");
+assert(!source.includes("IN ('Delivered')"));
+assert(!source.includes("args.order_by = overviewListOrderBy"));
+
+assert.strictEqual(api.usesOverviewDeliveredLastSort(), false);
+context.frappe.session.user = "Administrator";
+assert.strictEqual(api.usesOverviewDeliveredLastSort(), true);
+context.frappe.session.user = "manager@example.com";
+context.window.AlmdinaPermissions = {
+    can(capability) { return capability === "view_all_orders"; },
+};
+assert.strictEqual(api.usesOverviewDeliveredLastSort(), true);
+context.window.AlmdinaPermissions = {
+    can() { return false; },
+};
+assert.strictEqual(api.usesOverviewDeliveredLastSort(), false);
+context.frappe.session.user = "cutting@example.com";
+context.window.AlmdinaPermissions = undefined;
 
 assert.strictEqual(
     api.desktopDeliveryRowState({ status: "Ready for Delivery" }),

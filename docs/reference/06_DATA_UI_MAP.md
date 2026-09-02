@@ -43,7 +43,7 @@ Visibility يجب أن يأتي من permission context/capabilities، لا من
 - `factory_production_settings`: إعدادات المصنع المقسمة حسب Capabilities.
 - `factory_plan_archive`: أرشيف الخطط المعتمدة.
 
-- قائمة `Door Cutting Order`: بحث Frappe بالاسم/الزبون مع dropdown القسم الحالي (`current_department` عبر `custom_filter_configs`) بجانب زر فلترة Frappe على الويب والموبايل. الخيار الفارغ يعرض «كل الأقسام». العرض عربي من `department_label` في المسارات المفعّلة، والاستعلام يطابق `current_production_stage.stage_type` حتى لا تفشل التسميات المختلفة لنفس المرحلة. قيم التسليم المعروضة في العمود تُترجم إلى `status` عند الاستعلام. الفلتر Presentation فقط؛ query وdocument scope يبقيان عند Frappe.
+- قائمة `Door Cutting Order`: بحث Frappe بالاسم/الزبون مع dropdown القسم الحالي (`current_department` عبر `custom_filter_configs`) بجانب زر فلترة Frappe على الويب والموبايل. الخيار الفارغ يعرض «كل الأقسام». العرض عربي من `department_label` في المسارات المفعّلة، والاستعلام يطابق `current_production_stage.stage_type` حتى لا تفشل التسميات المختلفة لنفس المرحلة. قيم التسليم المعروضة في العمود تُترجم إلى `status` عند الاستعلام. الفلتر Presentation فقط؛ query وdocument scope يبقيان عند Frappe. في وضع عرض جميع الطلبات (`view_all_orders` أو Administrator) تُرتَّب الصفوف غير المسلَّمة حسب `modified DESC` ثم تُوضع طلبات `Delivered` في الأسفل.
 
 ### مساندة/تشخيص
 
