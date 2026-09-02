@@ -247,6 +247,8 @@ jobs:
           node almdina_erp/tests/js/shop_floor_inbox_view_model.test.js
           node almdina_erp/tests/js/order_tab_visibility.test.js
           node almdina_erp/tests/js/factory_workforce_view_model.test.js
+          node almdina_erp/tests/js/door_cutting_order_extra_addons_ux.test.js
+          node almdina_erp/tests/js/door_cutting_order_extra_addons_row_integration.test.js
           node almdina_erp/tests/test_shape_print.js
 
       - name: Run special-shape documentation regressions

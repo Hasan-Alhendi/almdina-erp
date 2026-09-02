@@ -35,6 +35,9 @@
         }),
     ]);
     const CLEANUP_KEY = "extra-door-addons-surface";
+    const HOVER_OPEN_MS = 40;
+    const ROW_HOVER_OPEN_MS = 90;
+    const HOVER_CLOSE_MS = 240;
 
     function isArabic() {
         const language = String(
@@ -54,6 +57,23 @@
             return window.CSS.escape(value);
         }
         return String(value || "").replace(/["\\]/g, "\\$&");
+    }
+
+    function prefersReducedMotion() {
+        return Boolean(
+            window.matchMedia
+            && window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        );
+    }
+
+    function isMousePointer(event) {
+        if (event.pointerType === "touch" || event.pointerType === "pen") return false;
+        if (event.sourceCapabilities && event.sourceCapabilities.firesTouchEvents) return false;
+        return !event.pointerType || event.pointerType === "mouse";
+    }
+
+    function hoverDelay(ms) {
+        return prefersReducedMotion() ? 0 : ms;
     }
 
     function pieceTypeDefinition(value) {
@@ -114,6 +134,22 @@
         `;
     }
 
+    function renderTypeMenu(row) {
+        const current = (row && row.piece_type) || "Regular";
+        return PIECE_TYPES.map(item => {
+            const label = isArabic() ? item.labelAr : item.labelEn;
+            const isExtra = item.value === TYPE;
+            const selected = current === item.value;
+            const submenu = isExtra ? " dco-piece-type-has-submenu" : "";
+            const selectedClass = selected ? " is-selected" : "";
+            const arrow = isExtra
+                ? `<span class="dco-piece-type-submenu-arrow" aria-hidden="true">${isArabic() ? "‹" : "›"}</span>`
+                : "";
+            const popup = isExtra ? ' aria-haspopup="menu" aria-expanded="false"' : "";
+            return `<button type="button" role="menuitemradio" class="dco-piece-type-option${submenu}${selectedClass}" data-piece-type-option="${esc(item.value)}" aria-checked="${selected ? "true" : "false"}"${popup}><span class="dco-piece-type-check" aria-hidden="true">${selected ? "✓" : ""}</span><span class="dco-piece-type-option-label">${esc(label)}</span>${arrow}</button>`;
+        }).join("");
+    }
+
     function renderSubmenu(row) {
         const selected = new Set(selectedFields(row).map(item => item.fieldname));
         return `
@@ -158,6 +194,48 @@
         });
     }
 
+    function typeSelect(tableRow) {
+        return tableRow && tableRow.querySelector("select.dco-piece-type-select[data-field='piece_type']");
+    }
+
+    function extraOption(active) {
+        return active && active.typeMenu
+            ? active.typeMenu.querySelector("[data-piece-type-option='Extra']")
+            : null;
+    }
+
+    function isRowEditable(tableRow) {
+        const select = typeSelect(tableRow);
+        return Boolean(select && !select.disabled);
+    }
+
+    function nodeFrom(target) {
+        if (!target) return null;
+        if (target.nodeType === 1) return target;
+        return target.parentElement || null;
+    }
+
+    function isInsideMenuTree(active, target) {
+        const node = nodeFrom(target);
+        if (!active || !node || typeof node.closest !== "function") return false;
+        if (active.surface && active.surface.contains(node)) return true;
+        if (active.typeMenu && active.typeMenu.contains(node)) return true;
+        if (!active.tableRow || !active.tableRow.isConnected) return false;
+        const typeCell = active.tableRow.querySelector(".dco-col-type");
+        return Boolean(typeCell && typeCell.contains(node));
+    }
+
+    function clearTimer(active, key) {
+        if (!active || !active[key]) return;
+        window.clearTimeout(active[key]);
+        active[key] = null;
+    }
+
+    function clearHoverTimers(active) {
+        clearTimer(active, "openTimer");
+        clearTimer(active, "closeTimer");
+    }
+
     function ensureNativeTypeShell(typeCell) {
         if (!typeCell) return null;
         let shell = typeCell.querySelector(".dco-piece-type-native");
@@ -199,7 +277,7 @@
         native.shell.insertAdjacentHTML("beforeend", renderSelectedAddons(row));
 
         const active = frm && frm.__almdinaExtraAddonsSurface;
-        if (active && active.tableRow === tableRow) {
+        if (active && active.tableRow === tableRow && active.surface) {
             const button = native.shell.querySelector(".dco-extra-open-button");
             if (button) button.setAttribute("aria-expanded", "true");
         }
@@ -256,17 +334,52 @@
         }
     }
 
-    function closeSurface(frm, options = {}) {
-        const active = frm && frm.__almdinaExtraAddonsSurface;
-        if (!active) return false;
-        frm.__almdinaExtraAddonsSurface = null;
-        const currentButton = active.tableRow && active.tableRow.querySelector(".dco-extra-open-button");
-        if (currentButton) currentButton.setAttribute("aria-expanded", "false");
-        active.surface.remove();
+    function unbindSession(active) {
+        if (!active) return;
         document.removeEventListener("pointerdown", active.onOutside, true);
+        document.removeEventListener("pointerover", active.onPointerOver, true);
+        document.removeEventListener("pointerout", active.onPointerOut, true);
         document.removeEventListener("keydown", active.onDocumentKeydown, true);
         document.removeEventListener("scroll", active.onScroll, true);
         window.removeEventListener("resize", active.onResize);
+    }
+
+    function syncExpandedButtons(active) {
+        if (!active || !active.tableRow) return;
+        const expanded = Boolean(active.surface);
+        const button = active.tableRow.querySelector(".dco-extra-open-button");
+        if (button) button.setAttribute("aria-expanded", expanded ? "true" : "false");
+        const option = extraOption(active);
+        if (option) {
+            option.classList.toggle("is-open", expanded);
+            option.setAttribute("aria-expanded", expanded ? "true" : "false");
+        }
+    }
+
+    function closeAddonFlyout(active) {
+        if (!active || !active.surface) return false;
+        active.surface.remove();
+        active.surface = null;
+        syncExpandedButtons(active);
+        return true;
+    }
+
+    function closeTypeMenu(active) {
+        if (!active || !active.typeMenu) return false;
+        active.typeMenu.remove();
+        active.typeMenu = null;
+        return true;
+    }
+
+    function closeSurface(frm, options = {}) {
+        const active = frm && frm.__almdinaExtraAddonsSurface;
+        if (!active) return false;
+        clearHoverTimers(active);
+        const currentButton = active.tableRow && active.tableRow.querySelector(".dco-extra-open-button");
+        closeAddonFlyout(active);
+        closeTypeMenu(active);
+        unbindSession(active);
+        frm.__almdinaExtraAddonsSurface = null;
         if (options.restoreFocus && currentButton && currentButton.isConnected) {
             currentButton.focus({ preventScroll: true });
         }
@@ -274,12 +387,57 @@
     }
 
     function resolveAnchor(active) {
+        const option = extraOption(active);
+        if (option) return option;
         if (!active.tableRow || !active.tableRow.isConnected) return null;
         return active.tableRow.querySelector(".dco-extra-open-button")
-            || active.tableRow.querySelector("select.dco-piece-type-select");
+            || typeSelect(active.tableRow);
+    }
+
+    function applyFixedBox(node, top, left, width) {
+        if (!node) return;
+        node.style.setProperty("position", "fixed", "important");
+        node.style.setProperty("inset", "auto", "important");
+        node.style.setProperty("top", `${Math.round(top)}px`, "important");
+        node.style.setProperty("left", `${Math.round(left)}px`, "important");
+        node.style.setProperty("right", "auto", "important");
+        node.style.setProperty("bottom", "auto", "important");
+        node.style.setProperty("margin", "0", "important");
+        node.style.setProperty("transform", "none", "important");
+        if (width == null) {
+            node.style.setProperty("width", "max-content", "important");
+            node.style.setProperty("min-width", "136px", "important");
+            return;
+        }
+        node.style.setProperty("width", `${Math.round(width)}px`, "important");
+    }
+
+    function placeTypeMenu(active) {
+        const select = typeSelect(active.tableRow);
+        const menu = active.typeMenu;
+        if (!select || !menu) {
+            if (!select) closeSurface(active.frm);
+            return;
+        }
+        const rect = select.getBoundingClientRect();
+        const margin = 8;
+        applyFixedBox(menu, rect.top, rect.left, null);
+        const width = Math.max(menu.offsetWidth || 136, 136);
+        const height = Math.min(menu.scrollHeight || 180, window.innerHeight - (margin * 2));
+        const selected = menu.querySelector(".dco-piece-type-option.is-selected");
+        const selectedOffset = selected ? selected.offsetTop : 0;
+        let top = rect.top - selectedOffset;
+        if (top < margin) top = margin;
+        if (top + height > window.innerHeight - margin) {
+            top = Math.max(margin, window.innerHeight - height - margin);
+        }
+        let left = isArabic() ? rect.right - width : rect.left;
+        left = Math.min(Math.max(margin, left), window.innerWidth - width - margin);
+        applyFixedBox(menu, top, left, width);
     }
 
     function placeSurface(active) {
+        if (!active.surface) return;
         const anchor = resolveAnchor(active);
         if (!anchor) {
             closeSurface(active.frm);
@@ -289,7 +447,7 @@
         const rect = anchor.getBoundingClientRect();
         const surface = active.surface;
         const margin = 10;
-        const gap = 7;
+        const gap = extraOption(active) ? 2 : 7;
         const width = Math.min(236, window.innerWidth - (margin * 2));
         const height = Math.min(surface.scrollHeight || 210, window.innerHeight - (margin * 2));
         const leftSide = rect.left - width - gap;
@@ -305,9 +463,13 @@
         if (top + height > window.innerHeight - margin) {
             top = Math.max(margin, window.innerHeight - height - margin);
         }
-        surface.style.setProperty("--dco-extra-top", `${Math.round(top)}px`);
-        surface.style.setProperty("--dco-extra-left", `${Math.round(left)}px`);
-        surface.style.setProperty("--dco-extra-width", `${Math.round(width)}px`);
+        applyFixedBox(surface, top, left, width);
+    }
+
+    function placeMenus(active) {
+        if (!active) return;
+        if (active.typeMenu) placeTypeMenu(active);
+        if (active.surface) placeSurface(active);
     }
 
     function refreshPieceTypeVisual(frm, tableRow, row) {
@@ -317,6 +479,20 @@
             return;
         }
         syncRowPresentation(frm, tableRow, row, { editable: true });
+    }
+
+    function applyPieceType(frm, tableRow, pieceType) {
+        const performance = window.AlmdinaTablePerformanceUX;
+        if (performance && typeof performance.setPieceType === "function") {
+            return performance.setPieceType(frm, tableRow, pieceType);
+        }
+        const select = typeSelect(tableRow);
+        if (!select) return rowByName(frm, tableRow && tableRow.dataset.rowName);
+        if (select.value !== pieceType) {
+            select.value = pieceType;
+            select.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+        return rowByName(frm, tableRow.dataset.rowName);
     }
 
     function setAddon(frm, tableRow, row, fieldname, enabled) {
@@ -330,72 +506,258 @@
         return true;
     }
 
-    function openSurface(frm, row, tableRow, options = {}) {
-        if (!frm || !row || !tableRow || (row.piece_type || "Regular") !== TYPE) return false;
-        closeSurface(frm);
+    function virtualPlaceholder(tableRow) {
+        if (!tableRow || !tableRow.classList.contains("dco-virtual-row")) return null;
+        const select = typeSelect(tableRow);
+        return {
+            name: tableRow.dataset.rowName,
+            piece_type: (select && select.value) || "Regular",
+        };
+    }
+
+    function currentRow(active) {
+        return rowByName(active.frm, active.rowName)
+            || rowByName(active.frm, active.tableRow && active.tableRow.dataset.rowName)
+            || virtualPlaceholder(active.tableRow);
+    }
+
+    function updateAddonError(active, row) {
+        if (!active.surface) return;
+        const error = active.surface.querySelector(".dco-extra-error");
+        if (!error) return;
+        error.textContent = selectedFields(row).length
+            ? ""
+            : (isArabic() ? "اختر إضافة واحدة على الأقل." : "Choose at least one add-on.");
+    }
+
+    function bindAddonSurface(active) {
+        const surface = active.surface;
+        if (!surface || surface.__almdinaExtraBound) return;
+        surface.__almdinaExtraBound = true;
+        surface.addEventListener("change", event => {
+            const input = event.target.closest("input[data-extra-field]");
+            if (!input || !surface.contains(input)) return;
+            let row = currentRow(active);
+            if (!row) {
+                closeSurface(active.frm);
+                return;
+            }
+            if ((row.piece_type || "Regular") !== TYPE) {
+                row = applyPieceType(active.frm, active.tableRow, TYPE) || row;
+            }
+            if (!row || (row.piece_type || "Regular") !== TYPE) {
+                closeSurface(active.frm);
+                return;
+            }
+            active.rowName = row.name;
+            setAddon(active.frm, active.tableRow, row, input.dataset.extraField, input.checked);
+            updateAddonError(active, row);
+            placeMenus(active);
+        });
+        surface.addEventListener("pointerover", () => clearTimer(active, "closeTimer"));
+    }
+
+    function openAddonFlyout(frm, row, tableRow, options = {}) {
+        if (!frm || !row || !tableRow) return false;
+        const active = frm.__almdinaExtraAddonsSurface;
+        if (!active || active.tableRow !== tableRow) return false;
+
+        if (active.surface) {
+            syncExpandedButtons(active);
+            placeMenus(active);
+            return true;
+        }
 
         const surface = document.createElement("div");
         surface.className = "dco-extra-submenu-flyout";
         surface.setAttribute("role", "menu");
         surface.setAttribute("aria-label", isArabic() ? "إضافات Extra" : "Extra add-ons");
+        surface.setAttribute("dir", isArabic() ? "rtl" : "ltr");
         surface.innerHTML = renderSubmenu(row);
         document.body.appendChild(surface);
+        active.surface = surface;
+        bindAddonSurface(active);
+        syncExpandedButtons(active);
+        placeMenus(active);
+        if (options.focusFirst) {
+            const first = surface.querySelector("input[data-extra-field]");
+            if (first) first.focus({ preventScroll: true });
+        }
+        return true;
+    }
 
-        const active = {
+    function bindTypeMenu(active) {
+        const menu = active.typeMenu;
+        if (!menu || menu.__almdinaTypeMenuBound) return;
+        menu.__almdinaTypeMenuBound = true;
+        menu.addEventListener("click", event => {
+            const option = event.target.closest("[data-piece-type-option]");
+            if (!option || !menu.contains(option)) return;
+            event.preventDefault();
+            const pieceType = option.dataset.pieceTypeOption;
+            const row = applyPieceType(active.frm, active.tableRow, pieceType);
+            if (!row) {
+                closeSurface(active.frm);
+                return;
+            }
+            active.rowName = row.name;
+            if (pieceType === TYPE) {
+                openAddonFlyout(active.frm, row, active.tableRow);
+                return;
+            }
+            closeSurface(active.frm);
+        });
+        menu.addEventListener("pointerover", event => {
+            if (!isMousePointer(event)) return;
+            const option = event.target.closest("[data-piece-type-option]");
+            if (!option || !menu.contains(option)) return;
+            clearTimer(active, "closeTimer");
+            if (option.dataset.pieceTypeOption === TYPE) {
+                option.classList.add("is-open");
+                option.setAttribute("aria-expanded", "true");
+                scheduleAddonOpen(active, HOVER_OPEN_MS);
+                return;
+            }
+            clearTimer(active, "openTimer");
+            closeAddonFlyout(active);
+        });
+    }
+
+    function openTypeMenu(frm, row, tableRow) {
+        const active = frm.__almdinaExtraAddonsSurface;
+        if (!active || active.tableRow !== tableRow || active.typeMenu) return false;
+        const menu = document.createElement("div");
+        menu.className = "dco-piece-type-menu-flyout";
+        menu.setAttribute("role", "menu");
+        menu.setAttribute("aria-label", isArabic() ? "نوع الدرفة" : "Piece type");
+        menu.setAttribute("dir", isArabic() ? "rtl" : "ltr");
+        menu.innerHTML = renderTypeMenu(row);
+        document.body.appendChild(menu);
+        active.typeMenu = menu;
+        active.pinned = true;
+        bindTypeMenu(active);
+        placeMenus(active);
+        window.requestAnimationFrame(() => {
+            if (active.typeMenu === menu) placeMenus(active);
+        });
+        return true;
+    }
+
+    function scheduleLeaveClose(active) {
+        clearTimer(active, "closeTimer");
+        active.closeTimer = window.setTimeout(() => {
+            active.closeTimer = null;
+            if (active.pinned && active.typeMenu) {
+                closeAddonFlyout(active);
+                return;
+            }
+            if (active.pinned) return;
+            closeSurface(active.frm);
+        }, hoverDelay(HOVER_CLOSE_MS));
+    }
+
+    function scheduleAddonOpen(active, delayMs) {
+        clearTimer(active, "openTimer");
+        const run = () => {
+            active.openTimer = null;
+            if (!active.pointerInside && !active.surface) return;
+            const row = currentRow(active);
+            if (!row || !active.tableRow || !active.tableRow.isConnected) return;
+            openAddonFlyout(active.frm, row, active.tableRow);
+        };
+        const wait = hoverDelay(delayMs);
+        if (!wait) {
+            run();
+            return;
+        }
+        active.openTimer = window.setTimeout(run, wait);
+    }
+
+    function ensureSession(frm, tableRow, row, options = {}) {
+        let active = frm.__almdinaExtraAddonsSurface;
+        if (active && active.tableRow !== tableRow) {
+            closeSurface(frm);
+            active = null;
+        }
+        if (active) {
+            active.rowName = row.name;
+            if (options.pinned) active.pinned = true;
+            return active;
+        }
+
+        active = {
             frm,
             rowName: row.name,
             tableRow,
-            surface,
+            surface: null,
+            typeMenu: null,
             anchor: null,
+            pinned: Boolean(options.pinned),
+            pointerInside: true,
+            openTimer: null,
+            closeTimer: null,
             onOutside: null,
+            onPointerOver: null,
+            onPointerOut: null,
             onDocumentKeydown: null,
             onResize: null,
             onScroll: null,
         };
         active.onOutside = event => {
-            const anchor = resolveAnchor(active);
-            if (surface.contains(event.target) || (anchor && anchor.contains(event.target))) return;
+            if (isInsideMenuTree(active, event.target)) return;
             closeSurface(frm);
+        };
+        active.onPointerOver = event => {
+            if (!isMousePointer(event) || !isInsideMenuTree(active, event.target)) return;
+            active.pointerInside = true;
+            clearTimer(active, "closeTimer");
+        };
+        active.onPointerOut = event => {
+            if (!isMousePointer(event) || isInsideMenuTree(active, event.relatedTarget)) return;
+            active.pointerInside = false;
+            scheduleLeaveClose(active);
         };
         active.onDocumentKeydown = event => {
             if (event.key !== "Escape") return;
             event.preventDefault();
             closeSurface(frm, { restoreFocus: true });
         };
-        active.onResize = () => placeSurface(active);
-        active.onScroll = () => placeSurface(active);
-        frm.__almdinaExtraAddonsSurface = active;
-
-        const button = tableRow.querySelector(".dco-extra-open-button");
-        if (button) button.setAttribute("aria-expanded", "true");
+        active.onResize = () => placeMenus(active);
+        active.onScroll = () => placeMenus(active);
         document.addEventListener("pointerdown", active.onOutside, true);
+        document.addEventListener("pointerover", active.onPointerOver, true);
+        document.addEventListener("pointerout", active.onPointerOut, true);
         document.addEventListener("keydown", active.onDocumentKeydown, true);
         document.addEventListener("scroll", active.onScroll, true);
         window.addEventListener("resize", active.onResize);
+        frm.__almdinaExtraAddonsSurface = active;
+        return active;
+    }
 
-        surface.addEventListener("change", event => {
-            const input = event.target.closest("input[data-extra-field]");
-            if (!input || !surface.contains(input)) return;
-            const currentRow = rowByName(frm, active.rowName);
-            if (!currentRow || (currentRow.piece_type || "Regular") !== TYPE) {
-                closeSurface(frm);
-                return;
-            }
-            setAddon(frm, tableRow, currentRow, input.dataset.extraField, input.checked);
-            const error = surface.querySelector(".dco-extra-error");
-            if (error) {
-                error.textContent = selectedFields(currentRow).length
-                    ? ""
-                    : (isArabic() ? "اختر إضافة واحدة على الأقل." : "Choose at least one add-on.");
-            }
-            placeSurface(active);
-        });
+    function openSurface(frm, row, tableRow, options = {}) {
+        if (!frm || !row || !tableRow || (row.piece_type || "Regular") !== TYPE) return false;
+        const active = ensureSession(frm, tableRow, row, { pinned: options.pinned !== false });
+        return openAddonFlyout(frm, row, tableRow, options);
+    }
 
-        placeSurface(active);
-        if (options.focusFirst) {
-            const first = surface.querySelector("input[data-extra-field]");
-            if (first) first.focus({ preventScroll: true });
+    function toggleTypeMenu(frm, tableRow) {
+        const row = rowByName(frm, tableRow.dataset.rowName) || virtualPlaceholder(tableRow);
+        if (!row || !isRowEditable(tableRow)) return false;
+        const active = frm.__almdinaExtraAddonsSurface;
+        if (active && active.tableRow === tableRow && active.typeMenu) {
+            closeSurface(frm);
+            return false;
         }
+        const session = ensureSession(frm, tableRow, row, { pinned: true });
+        return openTypeMenu(frm, row, tableRow) || Boolean(session.typeMenu);
+    }
+
+    function previewExtraRow(frm, tableRow) {
+        const row = rowByName(frm, tableRow.dataset.rowName);
+        if (!row || (row.piece_type || "Regular") !== TYPE || !isRowEditable(tableRow)) return false;
+        const active = ensureSession(frm, tableRow, row, { pinned: false });
+        if (active.typeMenu) return false;
+        scheduleAddonOpen(active, ROW_HOVER_OPEN_MS);
         return true;
     }
 
@@ -405,7 +767,12 @@
             if (!tableRow || !tableRow.isConnected) return;
             const row = rowByName(frm, tableRow.dataset.rowName || "");
             if (!row || (row.piece_type || "Regular") !== TYPE) return;
-            openSurface(frm, row, tableRow, { focusFirst: true });
+            const active = frm.__almdinaExtraAddonsSurface;
+            if (active && active.tableRow === tableRow && active.typeMenu) {
+                openAddonFlyout(frm, row, tableRow);
+                return;
+            }
+            openSurface(frm, row, tableRow, { focusFirst: true, pinned: true });
         };
         if (context && typeof context.scheduleFrame === "function") {
             const rowName = tableRow && tableRow.dataset ? tableRow.dataset.rowName : "row";
@@ -462,6 +829,25 @@
 
         if (!root.__almdinaExtraAddonsBound) {
             root.__almdinaExtraAddonsBound = true;
+            root.addEventListener("pointerdown", event => {
+                if (!isMousePointer(event) || event.button) return;
+                const select = event.target.closest("select.dco-piece-type-select[data-field='piece_type']");
+                if (!select || select.disabled || !root.contains(select)) return;
+                event.preventDefault();
+                select.focus({ preventScroll: true });
+                const currentFrm = root.__almdinaExtraAddonsForm;
+                const tableRow = select.closest("tr[data-row-name]");
+                if (!tableRow) return;
+                toggleTypeMenu(currentFrm, tableRow);
+            }, true);
+            root.addEventListener("mousedown", event => {
+                if (event.button) return;
+                const select = event.target.closest("select.dco-piece-type-select[data-field='piece_type']");
+                if (!select || select.disabled || !root.contains(select)) return;
+                const currentFrm = root.__almdinaExtraAddonsForm;
+                const active = currentFrm && currentFrm.__almdinaExtraAddonsSurface;
+                if (active && active.typeMenu) event.preventDefault();
+            }, true);
             root.addEventListener("click", event => {
                 const button = event.target.closest(".dco-extra-open-button");
                 if (!button || !root.contains(button) || button.disabled) return;
@@ -471,7 +857,21 @@
                 const tableRow = button.closest("tr[data-row-name]");
                 const row = rowByName(currentFrm, tableRow && tableRow.dataset.rowName);
                 if (!row || (row.piece_type || "Regular") !== TYPE) return;
-                openSurface(currentFrm, row, tableRow, { focusFirst: true });
+                openSurface(currentFrm, row, tableRow, { focusFirst: true, pinned: true });
+            });
+            root.addEventListener("pointerover", event => {
+                if (!isMousePointer(event)) return;
+                const typeCell = event.target.closest(".dco-col-type");
+                if (!typeCell || !root.contains(typeCell)) return;
+                const tableRow = typeCell.closest("tr[data-row-name]");
+                if (!tableRow) return;
+                const currentFrm = root.__almdinaExtraAddonsForm;
+                const active = currentFrm && currentFrm.__almdinaExtraAddonsSurface;
+                if (active && active.tableRow === tableRow) {
+                    clearTimer(active, "closeTimer");
+                    return;
+                }
+                previewExtraRow(currentFrm, tableRow);
             });
         }
 
@@ -513,6 +913,7 @@
         physicalCutQuantity,
         pieceTypeLabel,
         renderTypePicker,
+        renderTypeMenu,
         renderSubmenu,
         notesCueHtml,
         syncRowPresentation,

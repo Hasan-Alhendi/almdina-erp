@@ -128,18 +128,20 @@ changes do not rewrite historical orders. A `Special` door never carries Extra f
 e.g. a special door with Liner records Liner in notes/drawing and uses its inclusive
 custom special price.
 
-The measurement type cell remains the native HTML `select` used by the table. The
-visible Arabic order is `عادية / خاصة / زاوية / زاوية L / Extra`; the persisted values remain
-`Regular / Special / Clipped Corner / L-Shaped Corner / Extra` according to the existing DocType
-contract. `L-Shaped Corner` reuses the clipped-corner editor, stored cut distances, edge-price
-workflow, plan SVG, and DXF path; only the polygon topology changes from a five-vertex diagonal
-to a six-vertex right-angle L. Selecting `Extra` opens a small feature-owned multi-select flyout anchored
-to that row for `دبل قشاط`, `دبل كامل الدرفة`, `Liner`, and recessed-handle cutout. A compact Extra-only
-button reopens the flyout for an existing Extra row. The add-on module does not own or
-reimplement the general piece-type menu. It owns only Extra add-on presentation,
-document cleanup, focus, and flyout positioning; `AlmdinaTablePerformanceUX` remains
-the owner of in-place row materialization/model mutation so changing a type never
-rebuilds the table.
+The measurement type cell remains the native HTML `select` used by the table as the
+data-field owner. The visible Arabic order is `عادية / خاصة / زاوية / زاوية L / Extra`;
+the persisted values remain `Regular / Special / Clipped Corner / L-Shaped Corner / Extra`
+according to the existing DocType contract. `L-Shaped Corner` reuses the clipped-corner
+editor, stored cut distances, edge-price workflow, plan SVG, and DXF path; only the
+polygon topology changes from a five-vertex diagonal to a six-vertex right-angle L.
+Extra owns a Windows-style cascade overlay on top of that select: mouse interaction
+opens a feature-owned type menu, hovering `Extra` shows a submenu arrow and the add-on
+checkboxes immediately, and hovering an Extra type cell in edit mode previews the
+selected add-ons for in-place editing. Keyboard and touch keep the native select;
+choosing `Extra` that way still opens the same multi-select flyout. A compact Extra-only
+button remains available to pin the flyout. Extra does not replace table-performance
+ownership; `AlmdinaTablePerformanceUX` still mutates the row in place so changing a
+type never rebuilds the table.
 
 ## Frontend asset manifest
 

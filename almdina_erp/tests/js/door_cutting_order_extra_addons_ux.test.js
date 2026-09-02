@@ -100,6 +100,19 @@ assert.doesNotMatch(submenu, /data-piece-type-option/);
 assert.doesNotMatch(submenu, /تطبيق/);
 assert.doesNotMatch(submenu, /إلغاء/);
 
+const typeMenu = api.renderTypeMenu({ piece_type: "Regular" });
+assert.match(typeMenu, /data-piece-type-option="Regular"/);
+assert.match(typeMenu, /data-piece-type-option="Special"/);
+assert.match(typeMenu, /data-piece-type-option="Extra"/);
+assert.match(typeMenu, /dco-piece-type-has-submenu/);
+assert.match(typeMenu, /dco-piece-type-submenu-arrow/);
+assert.match(typeMenu, /aria-haspopup="menu"/);
+assert.match(typeMenu, /dco-piece-type-check/);
+assert.match(typeMenu, /aria-checked="true"/);
+assert.match(typeMenu, />عادية<\/span>/);
+assert.match(typeMenu, />Extra<\/span>/);
+assert.doesNotMatch(typeMenu, /dco-piece-type-trigger/);
+
 // In-place type refresh must preserve the actual native select node so the
 // table-performance owner can restore keyboard focus after changing the type.
 const nativeSelect = { value: "Regular", disabled: false };
@@ -136,4 +149,4 @@ assert.equal(nativeSelect.disabled, false);
 assert.match(api.notesCueHtml({ piece_type: "Extra", notes: "" }), /اكتب تفاصيل التنفيذ/);
 assert.equal(api.notesCueHtml({ piece_type: "Extra", notes: "تم" }), "");
 
-console.log("Extra door add-ons native-select UX simulation passed");
+console.log("Extra door add-ons cascade-menu UX simulation passed");
