@@ -25,6 +25,8 @@ from almdina_erp.almdina_erp.services import dxf_export_service
 from almdina_erp.almdina_erp.services.dxf_import_service import (
     DxfImportError,
     _expected_order_pieces,
+    _expected_topology_evidence,
+    _match_pieces_to_order,
 )
 from almdina_erp.almdina_erp.services.export_validation_service import (
     _expected_snapshot_pieces,
@@ -98,6 +100,40 @@ def _plan():
         kerf_mm=3.2,
         trim_margin_mm=5,
     )
+
+
+def test_special_dxf_evidence_marks_shape_as_arbitrary_without_relaxing_dimensions():
+    evidence = _expected_topology_evidence(
+        _order(_piece(piece_type="Special", cut_width_cm=63, cut_length_cm=63))
+    )
+
+    assert len(evidence) == 1
+    assert evidence[0].arbitrary_outline is True
+    assert evidence[0].width == 630
+    assert evidence[0].height == 630
+
+
+def test_topology_identity_labels_special_with_matching_cut_envelope():
+    order = _order(
+        _piece(piece_type="Special", cut_width_cm=120, cut_length_cm=200)
+    )
+    pieces = [
+        {
+            "id": 1,
+            "w": 120,
+            "h": 200,
+            "_expected_piece_index": 0,
+            "_material_area_m2": 0.21,
+        }
+    ]
+
+    labeled = _match_pieces_to_order(pieces, order)
+
+    assert labeled[0]["label"] == "1.1"
+    assert labeled[0]["piece_type"] == "Special"
+    assert labeled[0]["original_w"] == 120
+    assert labeled[0]["original_h"] == 200
+    assert labeled[0]["area_m2"] == 0.21
 
 
 def test_requirement_contract_is_versioned_deterministic_and_identity_safe():

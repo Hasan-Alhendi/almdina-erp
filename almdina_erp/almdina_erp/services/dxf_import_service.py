@@ -88,8 +88,8 @@ def _topology_error_message(error: DxfTopologyError, *, kerf_mm: float = 0.0) ->
         )
     if error.code == "AMBIGUOUS_CONTOUR_OWNERSHIP":
         return (
-            "تركيب مسارات CUT_PATH ملتبس: توجد أكثر من طريقة صالحة لاعتبار المسارات قطعًا أو فتحات داخلية. "
-            "اجعل كل فتحة مغلقة وموجودة بالكامل داخل قطعة واحدة فقط ثم أعد الرفع."
+            "تركيب مسارات CUT_PATH ملتبس فعليًا: يوجد مسار داخلي يمكن اعتباره فتحة أو قطعة مستقلة من الطلب. "
+            "افصل القطعة المستقلة عن الفتحة أو اجعل الفتحة مملوكة بوضوح لمحيط خارجي واحد ثم أعد الرفع."
         )
     if error.code == "UNRESOLVED_CONTOUR_OWNERSHIP":
         return (
@@ -275,6 +275,7 @@ def _expected_topology_evidence(order: Any) -> tuple[ExpectedPieceEvidence, ...]
             width=piece["width_cm"] * 10.0,
             height=piece["length_cm"] * 10.0,
             allow_rotation=bool(piece["allow_rotation"]),
+            arbitrary_outline=piece["piece_type"] == "Special",
         )
         for piece in _expected_order_pieces(order)
     )
@@ -297,58 +298,136 @@ def _match_dimensions(a_w: float, a_h: float, b_w: float, b_h: float, tol: float
     )
 
 
+def _legacy_expected_piece_match(
+    *,
+    width_cm: float,
+    height_cm: float,
+    expected: list[dict[str, Any]],
+    unmatched_indexes: list[int],
+) -> tuple[int | None, bool, dict[str, Any] | None]:
+    """Match callers that do not yet carry the topology-owned identity index."""
+    direct_index = next(
+        (
+            index
+            for index in unmatched_indexes
+            if _direct_dimensions_match(
+                width_cm,
+                height_cm,
+                expected[index]["width_cm"],
+                expected[index]["length_cm"],
+            )
+        ),
+        None,
+    )
+    rotated_index = next(
+        (
+            index
+            for index in unmatched_indexes
+            if expected[index]["allow_rotation"]
+            and _rotated_dimensions_match(
+                width_cm,
+                height_cm,
+                expected[index]["width_cm"],
+                expected[index]["length_cm"],
+            )
+        ),
+        None,
+    )
+    expected_index = direct_index if direct_index is not None else rotated_index
+    if expected_index is not None:
+        return expected_index, direct_index is None, None
+
+    forbidden_rotation = next(
+        (
+            expected[index]
+            for index in unmatched_indexes
+            if not expected[index]["allow_rotation"]
+            and _rotated_dimensions_match(
+                width_cm,
+                height_cm,
+                expected[index]["width_cm"],
+                expected[index]["length_cm"],
+            )
+        ),
+        None,
+    )
+    return None, False, forbidden_rotation
+
+
+def _topology_piece_rotation(
+    width_cm: float,
+    height_cm: float,
+    candidate: dict[str, Any],
+) -> bool:
+    if _direct_dimensions_match(
+        width_cm,
+        height_cm,
+        candidate["width_cm"],
+        candidate["length_cm"],
+    ):
+        return False
+    return bool(
+        candidate["allow_rotation"]
+        and _rotated_dimensions_match(
+            width_cm,
+            height_cm,
+            candidate["width_cm"],
+            candidate["length_cm"],
+        )
+    )
+
+
 def _match_pieces_to_order(pieces: list[dict[str, Any]], order: Any) -> list[dict[str, Any]]:
     expected = _expected_order_pieces(order)
-    unmatched = list(expected)
+    unmatched_indexes = list(range(len(expected)))
     labeled: list[dict[str, Any]] = []
     errors: list[str] = []
 
     for piece_index, piece in enumerate(pieces, start=1):
         width_cm = _num(piece.get("w"))
         height_cm = _num(piece.get("h"))
-        direct_index = next(
-            (
-                index
-                for index, candidate in enumerate(unmatched)
-                if _direct_dimensions_match(width_cm, height_cm, candidate["width_cm"], candidate["length_cm"])
-            ),
-            None,
-        )
-        rotated_index = next(
-            (
-                index
-                for index, candidate in enumerate(unmatched)
-                if candidate["allow_rotation"]
-                and _rotated_dimensions_match(width_cm, height_cm, candidate["width_cm"], candidate["length_cm"])
-            ),
-            None,
-        )
-        match_index = direct_index if direct_index is not None else rotated_index
-        rotated = direct_index is None and rotated_index is not None
-
-        if match_index is None:
-            forbidden_rotation = next(
-                (
-                    candidate
-                    for candidate in unmatched
-                    if not candidate["allow_rotation"]
-                    and _rotated_dimensions_match(width_cm, height_cm, candidate["width_cm"], candidate["length_cm"])
-                ),
-                None,
+        expected_index = piece.get("_expected_piece_index")
+        if expected_index is not None:
+            try:
+                expected_index = int(expected_index)
+            except (TypeError, ValueError):
+                expected_index = -1
+            if expected_index not in unmatched_indexes:
+                errors.append(
+                    f"تعذر ربط القطعة رقم {piece_index} بهوية قطعة واحدة في الطلب."
+                )
+                continue
+            candidate = expected[expected_index]
+            rotated = _topology_piece_rotation(
+                width_cm,
+                height_cm,
+                candidate,
             )
-            if forbidden_rotation:
-                errors.append(
-                    f"القطعة رقم {piece_index} أبعادها {_format_cm(width_cm)} × {_format_cm(height_cm)} سم "
-                    f"وتطابق القطعة {forbidden_rotation['label']} بعد تدويرها، لكن التدوير غير مسموح لهذه القطعة في الطلب."
-                )
-            else:
-                errors.append(
-                    f"القطعة رقم {piece_index} أبعادها {_format_cm(width_cm)} × {_format_cm(height_cm)} سم "
-                    f"ولا تطابق أي قطعة متبقية في الطلب ضمن سماحية ±{_format_mm(DIMENSION_TOLERANCE_MM)} مم."
-                )
-            continue
+        else:
+            expected_index, rotated, forbidden_rotation = _legacy_expected_piece_match(
+                width_cm=width_cm,
+                height_cm=height_cm,
+                expected=expected,
+                unmatched_indexes=unmatched_indexes,
+            )
 
-        candidate = unmatched.pop(match_index)
+            if expected_index is None:
+                if forbidden_rotation:
+                    errors.append(
+                        f"القطعة رقم {piece_index} أبعادها {_format_cm(width_cm)} × {_format_cm(height_cm)} سم "
+                        f"وتطابق القطعة {forbidden_rotation['label']} بعد تدويرها، لكن التدوير غير مسموح لهذه القطعة في الطلب."
+                    )
+                else:
+                    errors.append(
+                        f"القطعة رقم {piece_index} أبعادها {_format_cm(width_cm)} × {_format_cm(height_cm)} سم "
+                        f"ولا تطابق أي قطعة متبقية في الطلب ضمن سماحية ±{_format_mm(DIMENSION_TOLERANCE_MM)} مم."
+                    )
+                continue
+
+            candidate = expected[expected_index]
+
+        unmatched_indexes.remove(expected_index)
+
         piece["label"] = candidate["label"]
         piece["source_piece_no"] = candidate["source_piece_no"]
         piece["copy_no"] = candidate["copy_no"]
@@ -362,12 +441,12 @@ def _match_pieces_to_order(pieces: list[dict[str, Any]], order: Any) -> list[dic
             piece["area_m2"] = round((width_cm * height_cm) / 10000.0, 4)
         labeled.append(piece)
 
-    if unmatched:
+    if unmatched_indexes:
         preview = "، ".join(
-            f"{candidate['label']} ({_format_cm(candidate['width_cm'])} × {_format_cm(candidate['length_cm'])} سم)"
-            for candidate in unmatched[:6]
+            f"{expected[index]['label']} ({_format_cm(expected[index]['width_cm'])} × {_format_cm(expected[index]['length_cm'])} سم)"
+            for index in unmatched_indexes[:6]
         )
-        suffix = " ..." if len(unmatched) > 6 else ""
+        suffix = " ..." if len(unmatched_indexes) > 6 else ""
         errors.append(f"ملف DXF لا يحتوي على جميع قطع الطلب. القطع غير المطابقة/المفقودة: {preview}{suffix}")
     if errors:
         raise DxfImportError(errors)
@@ -561,10 +640,12 @@ def _extract_pieces(
             "_outline_cm": plan_points,
             "_holes_cm": holes_cm,
             "_sheet_no": target_sheet["sheet_no"],
+            "_expected_piece_index": part.expected_piece_index,
         }
-        if holes_mm:
-            material_area_mm2 = polygon_area(points_mm) - sum(polygon_area(hole) for hole in holes_mm)
-            piece["_material_area_m2"] = max(0.0, material_area_mm2) / 1_000_000.0
+        material_area_mm2 = polygon_area(points_mm) - sum(
+            polygon_area(hole) for hole in holes_mm
+        )
+        piece["_material_area_m2"] = max(0.0, material_area_mm2) / 1_000_000.0
         pieces.append(piece)
         target_sheet["pieces"].append(piece)
     if errors:
