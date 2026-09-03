@@ -7,6 +7,15 @@
     const UPLOAD_METHOD =
         "almdina_erp.almdina_erp.services.shop_floor_service.upload_production_dxf";
 
+    function activateUploadedPlan(frm) {
+        if (!frm) return;
+        frm.__almdina_active_plan_tab = "Custom";
+        const workspace = window.AlmdinaPlanWorkspaceState;
+        if (workspace && typeof workspace.invalidate === "function") {
+            workspace.invalidate(frm, "dxf_uploaded");
+        }
+    }
+
     function uploadProductionDxf(frm) {
         if (!frm || frm.is_new()) {
             frappe.msgprint(__("احفظ الطلب قبل رفع ملف DXF."));
@@ -48,6 +57,7 @@
                         indicator: "green",
                     }, 5);
                     if (frm.doc && frm.doc.name === orderName) {
+                        activateUploadedPlan(frm);
                         return frm.reload_doc();
                     }
                     return null;
