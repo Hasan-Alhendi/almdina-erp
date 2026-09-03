@@ -81,6 +81,6 @@ def test_plan_workspace_commands_are_contextual_to_the_active_plan():
     assert "استبدال الخطة المعتمدة بخطة النظام" in context
     assert "استبدال الخطة المعتمدة بالخطة المرفوعة" in context
     assert "إلغاء اعتماد الخطة" in context
-    assert "export_order_dxf(frm.doc.name, activeTab(frm))" in context
+    assert "export_order_dxf(frm.doc.name, activeTab(frm), {" in context
     assert "tabs.printActivePlan(frm)" in context
     assert "frappe.call" not in context

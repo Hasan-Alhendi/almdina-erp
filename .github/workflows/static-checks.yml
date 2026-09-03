@@ -196,6 +196,7 @@ jobs:
             almdina_erp/tests/test_dxf_import_service.py \
             almdina_erp/tests/test_dxf_lwpolyline_ascii_fallback.py \
             almdina_erp/tests/test_dxf_cut_size_diagnostics.py \
+            almdina_erp/tests/test_dxf_original_upload_download.py \
             almdina_erp/tests/test_arabic_operator_localization.py \
             almdina_erp/tests/test_compact_invoice_print_contract.py \
             almdina_erp/tests/test_advanced_cutting_optimizer.py
@@ -253,6 +254,7 @@ jobs:
           node almdina_erp/tests/js/factory_workforce_view_model.test.js
           node almdina_erp/tests/js/door_cutting_order_extra_addons_ux.test.js
           node almdina_erp/tests/js/door_cutting_order_extra_addons_row_integration.test.js
+          node almdina_erp/tests/js/secure_dxf_topology_export.test.js
           node almdina_erp/tests/test_shape_print.js
 
       - name: Run special-shape documentation regressions

@@ -357,7 +357,9 @@
             frappe.msgprint(__("تعذر تحميل خدمة تصدير DXF الآمنة."));
             return false;
         }
-        return frappe.almdina.export_order_dxf(frm.doc.name, activeTab(frm));
+        return frappe.almdina.export_order_dxf(frm.doc.name, activeTab(frm), {
+            hasOriginalFile: hasOriginalDxfFile(rowForTab(frm)),
+        });
     }
 
     function runUpload(frm) {
@@ -383,12 +385,24 @@
         return `<button type="button" class="btn btn-success btn-sm dco-plan-context-approve"${disabled}>${esc(approveLabel(frm, tab))}</button>`;
     }
 
+    function hasOriginalDxfFile(row) {
+        return Boolean(row && row.dxf && String(row.dxf.file || "").trim());
+    }
+
+    function exportLabel(tab, row) {
+        if (tab === "Custom" || (tab === "Approved" && hasOriginalDxfFile(row))) {
+            return __("تنزيل DXF المرفوع");
+        }
+        return __("تصدير DXF");
+    }
+
     function toolsHtml(frm, row) {
+        const tab = activeTab(frm);
         const print = canPrint(frm, row)
             ? `<button type="button" class="btn btn-default btn-sm dco-print-cutting-plan"><span aria-hidden="true">▣</span>${esc(__("طباعة"))}</button>`
             : "";
         const exportDxf = canExport(frm, row)
-            ? `<button type="button" class="btn btn-default btn-sm dco-export-dxf"><span aria-hidden="true">↓</span>${esc(__("تصدير DXF"))}</button>`
+            ? `<button type="button" class="btn btn-default btn-sm dco-export-dxf"><span aria-hidden="true">↓</span>${esc(exportLabel(tab, row))}</button>`
             : "";
         const upload = canUpload(frm)
             ? `<button type="button" class="btn btn-default btn-sm dco-upload-dxf-plan"><span aria-hidden="true">↑</span>${esc(uploadedFile(frm) ? __("استبدال الخطة المرفوعة") : __("رفع خطة DXF"))}</button>`

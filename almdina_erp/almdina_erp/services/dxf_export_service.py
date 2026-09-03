@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import base64
+import os
+from pathlib import Path
 from typing import Any
 
 import frappe
@@ -44,6 +47,13 @@ from almdina_erp.almdina_erp.services.order_board_identity import (
 
 
 DXF_KERF_NUMERIC_TOLERANCE_CM = 0.01
+_ORIGINAL_UPLOAD_SOURCES = frozenset(
+    {"custom", "uploaded", "uploaded dxf", "uploaded_dxf", "dxf", "approved"}
+)
+_MISSING_UPLOADED_DXF_MESSAGE = "لا يوجد ملف DXF مرفوع لهذه الخطة."
+_UNSCOPED_UPLOADED_DXF_MESSAGE = (
+    "تعذر تنزيل ملف DXF المرفوع لأن الملف غير مرتبط بهذه الخطة."
+)
 
 
 def _require_export_access(
@@ -303,6 +313,136 @@ def _assert_saved_plan_fresh(order: Any, plan: Any) -> None:
         )
 
 
+def _safe_uploaded_dxf_filename(file_name: Any, file_url: str, order_name: str) -> str:
+    candidate = Path(str(file_name or "").strip() or Path(str(file_url or "")).name).name
+    if not candidate.lower().endswith(".dxf"):
+        safe_order = "".join(
+            character if character.isalnum() or character in "-_" else "_"
+            for character in str(order_name or "door_cutting_order")
+        )
+        candidate = f"cutting_plan_{safe_order}.dxf"
+    return candidate
+
+
+def _existing_dxf_disk_path(file_url: str) -> str | None:
+    normalized = str(file_url or "").strip().lstrip("/")
+    if not normalized or ".." in normalized.split("/"):
+        return None
+    for candidate in (
+        frappe.get_site_path(normalized),
+        frappe.get_site_path("public", normalized),
+    ):
+        if candidate and os.path.isfile(candidate):
+            return candidate
+    return None
+
+
+def _dxf_file_row(file_url: str) -> Any | None:
+    return frappe.db.get_value(
+        "File",
+        {"file_url": file_url},
+        [
+            "name",
+            "file_name",
+            "file_url",
+            "is_private",
+            "attached_to_doctype",
+            "attached_to_name",
+            "attached_to_field",
+        ],
+        as_dict=True,
+    )
+
+
+def _attach_download_response(filename: str, content: bytes) -> None:
+    try:
+        response = getattr(frappe.local, "response", None)
+    except RuntimeError:
+        return
+    if response is None:
+        return
+    # Keep the raw bytes on the response for API/download clients, but do
+    # not set type=download: desk ``frappe.call`` must receive JSON so the
+    # browser can Blob the original file without a parse error.
+    response["filename"] = filename
+    response["filecontent"] = content
+
+
+def _load_original_uploaded_dxf(order: Any, plan_source: str | None) -> tuple[str, bytes]:
+    """Return the validated uploaded DXF bytes after attachment-scope checks.
+
+    The client never supplies ``file_url``. The file is resolved from the Cutting
+    Plan that belongs to this order, then the File row must be a private
+    attachment of that same plan.
+    """
+
+    normalized = str(plan_source or "").strip().lower()
+    if normalized == "system":
+        frappe.throw(_(_MISSING_UPLOADED_DXF_MESSAGE), frappe.ValidationError)
+    if normalized and normalized not in _ORIGINAL_UPLOAD_SOURCES:
+        frappe.throw(_("مصدر خطة القص المحدد للتصدير غير مدعوم."), frappe.ValidationError)
+
+    plan = _saved_plan_for_source(order, plan_source)
+    if not plan or str(getattr(plan, "door_cutting_order", "") or "") != str(order.name):
+        frappe.throw(_(_MISSING_UPLOADED_DXF_MESSAGE), frappe.ValidationError)
+
+    file_url = str(getattr(plan, "dxf_file", "") or "").strip()
+    if (
+        not file_url.startswith("/private/files/")
+        or ".." in file_url
+        or not file_url.lower().split("?", 1)[0].endswith(".dxf")
+    ):
+        frappe.throw(_(_MISSING_UPLOADED_DXF_MESSAGE), frappe.ValidationError)
+
+    file_row = _dxf_file_row(file_url)
+    if not file_row:
+        frappe.throw(_(_MISSING_UPLOADED_DXF_MESSAGE), frappe.ValidationError)
+    if not cint(file_row.is_private):
+        frappe.throw(_(_UNSCOPED_UPLOADED_DXF_MESSAGE), frappe.PermissionError)
+    if (
+        str(file_row.attached_to_doctype or "") != "Cutting Plan"
+        or str(file_row.attached_to_name or "") != str(plan.name)
+        or str(file_row.attached_to_field or "") != "dxf_file"
+    ):
+        frappe.throw(_(_UNSCOPED_UPLOADED_DXF_MESSAGE), frappe.PermissionError)
+
+    path = _existing_dxf_disk_path(file_url)
+    if not path:
+        frappe.throw(_(_MISSING_UPLOADED_DXF_MESSAGE), frappe.ValidationError)
+
+    content = Path(path).read_bytes()
+    filename = _safe_uploaded_dxf_filename(file_row.file_name, file_url, order.name)
+    return filename, content
+
+
+@frappe.whitelist()
+def download_uploaded_dxf(
+    order_name: str,
+    plan_source: str | None = None,
+) -> dict[str, str]:
+    """Download the original validated DXF attached to the chosen uploaded plan.
+
+    Desk ``frappe.call`` cannot consume ``type=download`` as JSON, so the
+    original bytes are returned as base64 after the same authorization and
+    File-scope checks. ``frappe.local.response`` still carries the raw bytes
+    for direct/API download clients.
+    """
+
+    if not str(order_name or "").strip():
+        frappe.throw(_(_MISSING_UPLOADED_DXF_MESSAGE), frappe.ValidationError)
+
+    order = _require_export_access(order_name=order_name, payload=None)
+    if order is None:
+        frappe.throw(_(_MISSING_UPLOADED_DXF_MESSAGE), frappe.ValidationError)
+
+    filename, content = _load_original_uploaded_dxf(order, plan_source)
+    _attach_download_response(filename, content)
+    return {
+        "filename": filename,
+        "content_b64": base64.standard_b64encode(content).decode("ascii"),
+    }
+
+
 @frappe.whitelist()
 def get_validated_dxf_plan(
     order_name: str | None = None,
@@ -358,4 +498,4 @@ def get_validated_dxf_plan(
     }
 
 
-__all__ = ["get_validated_dxf_plan"]
+__all__ = ["download_uploaded_dxf", "get_validated_dxf_plan"]

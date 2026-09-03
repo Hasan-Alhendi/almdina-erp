@@ -52,6 +52,9 @@ def test_autocad_export_button_is_distinct_from_legacy_exporter():
     assert 'const STRIP_EXPORT_LABELS = [' in src
     assert '"تصدير DXF"' in src
     assert '"Export DXF"' in src
+    assert '"تنزيل DXF المرفوع"' in src
+    assert "download_uploaded_dxf" in src
+    assert "shouldDownloadOriginalUpload" in src
 
 
 def test_export_keeps_required_cut_and_preview_layers():
