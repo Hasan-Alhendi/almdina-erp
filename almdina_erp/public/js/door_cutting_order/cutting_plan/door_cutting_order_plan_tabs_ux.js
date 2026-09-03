@@ -109,12 +109,10 @@
 		if (frm.doc.approved_plan && allowed.includes("Approved")) {
 			return "Approved";
 		}
-		if (
-			frm.doc.approved_plan &&
-			frm.doc.approved_plan_source === "Custom" &&
-			hasCustomPlan(frm) &&
-			allowed.includes("Custom")
-		) {
+		// An accepted uploaded DXF is the only plan surface that owns the exact
+		// imported contours. Prefer it on first entry so the operator sees the
+		// geometry they just validated instead of the rectangular System estimate.
+		if (hasCustomPlan(frm) && allowed.includes("Custom")) {
 			return "Custom";
 		}
 		if (allowed.includes("System")) return "System";
