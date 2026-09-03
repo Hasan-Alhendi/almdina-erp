@@ -119,6 +119,14 @@
             : "";
     }
 
+    function points(piece, width = 100, height = 100) {
+        const module = geometry();
+        const canonical = canonicalGeometryPiece(piece);
+        return module && module.isExact(canonical)
+            ? module.points(canonical, width, height)
+            : [];
+    }
+
     function dxfPoints(piece, x, y, width, height) {
         const module = geometry();
         const canonical = canonicalGeometryPiece(piece);
@@ -137,6 +145,7 @@
         visual,
         hasVisual,
         hasExactCutPath,
+        points,
         pointsAttribute,
         dxfPoints,
     });

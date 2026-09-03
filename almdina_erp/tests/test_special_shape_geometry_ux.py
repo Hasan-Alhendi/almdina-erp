@@ -15,6 +15,7 @@ SAVE_GATEWAY = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "orders" / "
 SAVE_USE_CASE = ROOT / "almdina_erp" / "application" / "orders" / "process_order_save.py"
 CUTTING_PLAN = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan"
 PLAN_RENDERER = CUTTING_PLAN / "door_cutting_order_cutting_plan_renderer.js"
+PIECE_GEOMETRY = CUTTING_PLAN / "door_cutting_order_piece_geometry.js"
 SERVICE = ROOT / "almdina_erp" / "services" / "special_shape_service.py"
 PLAN = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "cutting_plan_workspace.py"
 REMNANTS = ROOT / "almdina_erp" / "services" / "remnant_planning.py"
@@ -101,11 +102,14 @@ def test_exact_geometry_survives_every_packing_and_approved_export_path():
 
 def test_plan_and_current_dxf_paths_use_exact_special_polygon_when_available():
     plan_renderer = PLAN_RENDERER.read_text(encoding="utf-8")
+    piece_geometry = PIECE_GEOMETRY.read_text(encoding="utf-8")
     secure_dxf = SECURE_DXF.read_text(encoding="utf-8")
-    for source in (plan_renderer, secure_dxf):
+    for source in (piece_geometry, secure_dxf):
         assert "AlmdinaShapeOutputContract" in source
         assert "hasExactCutPath(piece)" in source
         assert "AlmdinaSpecialShapeGeometry" not in source
+    assert "AlmdinaCuttingPlanPieceGeometry" in plan_renderer
+    assert "geometry.resolve(piece)" in plan_renderer
     assert "shapeOutput.dxfPoints(piece" in secure_dxf
     assert "dco-special-exact-piece" in plan_renderer
     assert "◆ درفة خاصة · مسار هندسي" in plan_renderer

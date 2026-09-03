@@ -10,6 +10,7 @@ SHAPE_PRINT = ROOT / "public" / "js" / "door_cutting_order" / "printing" / "door
 EDITOR = ROOT / "public" / "js" / "door_cutting_order" / "drawing" / "special_shape_facade.js"
 CUTTING_PLAN = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan"
 PLAN_RENDERER = CUTTING_PLAN / "door_cutting_order_cutting_plan_renderer.js"
+PIECE_GEOMETRY = CUTTING_PLAN / "door_cutting_order_piece_geometry.js"
 SECURE_DXF = CUTTING_PLAN / "secure_dxf_export.js"
 OPERATOR = (
     ROOT
@@ -155,12 +156,14 @@ def test_customer_documents_keep_drawing_first_and_share_one_renderer():
 
 
 def test_plan_dxf_and_browser_surfaces_do_not_reimplement_exact_shape_policy():
-    consumers = (PLAN_RENDERER, SECURE_DXF, OPERATOR, TABLE)
+    consumers = (PIECE_GEOMETRY, SECURE_DXF, OPERATOR, TABLE)
     for path in consumers:
         source = _source(path)
         assert "AlmdinaShapeOutputContract" in source, path
         assert "AlmdinaSpecialShapeGeometry" not in source, path
         assert ".isExact(" not in source, path
-    assert "shapeOutput.pointsAttribute(piece, 100, 100)" in _source(PLAN_RENDERER)
+    assert "AlmdinaCuttingPlanPieceGeometry" in _source(PLAN_RENDERER)
+    assert "geometry.resolve(piece)" in _source(PLAN_RENDERER)
+    assert "contract.points(piece, widthMm, heightMm)" in _source(PIECE_GEOMETRY)
     assert "shapeOutput.dxfPoints(piece" in _source(SECURE_DXF)
     assert not (ROOT / "public" / "js" / "door_cutting_order_workflow.js").exists()

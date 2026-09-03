@@ -79,9 +79,11 @@ class CustomEvent {
     assert.ok(calls[0].length > 10, "Plan bundle should batch its presentation modules");
     assert.ok(calls[0].every(asset => asset.includes("/cutting_plan/")));
     assert.ok(calls[0].some(asset => asset.endsWith("door_cutting_order_plan_surface_bootstrap.js")));
+    assert.ok(calls[0].some(asset => asset.endsWith("door_cutting_order_piece_geometry.js")));
     assert.ok(calls[0].some(asset => asset.endsWith("door_cutting_order_plan_edit_session_ux.js")));
     assert.ok(calls[0].some(asset => asset.endsWith("secure_dxf_export.js")));
 
+    fakeWindow.AlmdinaCuttingPlanPieceGeometry = {};
     fakeWindow.AlmdinaPlanWorkspacePresenterAdapter = {};
     fakeWindow.AlmdinaCuttingPlanSurfaceBootstrap = {};
     fakeWindow.AlmdinaPlanFieldAccessAdapter = {};
