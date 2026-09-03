@@ -44,7 +44,10 @@
 
         function cleanup() { window.removeEventListener("resize", resizeHandler); window.removeEventListener("beforeunload", beforeUnloadHandler); window.removeEventListener("keyup", keyupHandler); if (shell) shell.destroy(); shell = null; renderer = null; history = null; context = null; cropSession = null; draft = null; dragging = false; scanning = false; clipboard.clear(); spacePressed = false; panning = false; panPoint = null; }
         function showMessage(message, error = false) { main.innerHTML = `<div class="ald-doc-message ${error ? "is-error" : ""}">${frappe.utils.escape_html(String(message))}</div>`; }
-        function back() { if (context) frappe.set_route("Form", "Door Cutting Order", context.order.name); else frappe.set_route("List", "Door Cutting Order"); }
+        function back() {
+            if (window.opener && !window.opener.closed) { window.close(); if (window.closed) return; }
+            if (context) frappe.set_route("Form", "Door Cutting Order", context.order.name); else frappe.set_route("List", "Door Cutting Order");
+        }
         function render() {
             if (!history || !shell || !renderer) return; const state = history.state();
             shell.render(state.document, { ...state, selectedId, cropMode: Boolean(cropSession), cropCanReset: cropSession ? !Crop.isFull(cropSession.value) : false }); shell.setActiveTool(tool); shell.setHint(cropSession ? "اسحب داخل الإطار لتحريكه، أو اسحب أحد المقابض لتحديد الجزء المطلوب." : TOOL_HINTS[tool]); shell.setSaveState(cropSession ? "اقتصاص قيد التعديل" : (state.dirty ? "غير محفوظ" : "محفوظ"), cropSession || state.dirty ? "dirty" : "saved");

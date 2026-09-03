@@ -32,10 +32,22 @@ def _function_calls(source: str, function_name: str) -> set[str]:
 class TestSpecialShapeDocumentationWorkspaceContract(unittest.TestCase):
     def test_entry_routes_to_one_standalone_documentation_workspace(self) -> None:
         facade = FACADE.read_text(encoding="utf-8")
+        self.assertIn('window.open("about:blank", "_blank")', facade)
+        self.assertIn("popup.location.replace", facade)
         self.assertIn('frappe.set_route("door-drawing", frm.doc.name, saved.name)', facade)
+        self.assertIn("closePopup(popup)", facade)
+        self.assertLess(facade.index("if (!hasBlankDimensions(row))"), facade.index('window.open("about:blank", "_blank")'))
+        self.assertLess(facade.index('window.open("about:blank", "_blank")'), facade.index("await persistedRow"))
         self.assertIn("__documentationOnly: true", facade)
         self.assertIn("__manufacturingGeometrySeparated: true", facade)
         self.assertNotIn("frappe.ui.Dialog", facade)
+
+    def test_back_closes_opener_tab_then_falls_back_to_order_route(self) -> None:
+        controller = (DOCUMENTATION / "presentation" / "workspace_controller.js").read_text(encoding="utf-8")
+        self.assertIn("window.opener", controller)
+        self.assertIn("window.close()", controller)
+        self.assertIn('frappe.set_route("Form", "Door Cutting Order", context.order.name)', controller)
+        self.assertIn('frappe.set_route("List", "Door Cutting Order")', controller)
 
     def test_page_loads_only_new_layered_subsystem(self) -> None:
         page = PAGE.read_text(encoding="utf-8")
