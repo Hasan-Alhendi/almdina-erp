@@ -5,6 +5,11 @@ from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from almdina_erp.almdina_erp.domain.orders.piece_policy import (
+    corner_cut_arabic_label,
+    is_corner_cut,
+)
+
 
 def _value(source: Mapping[str, Any], key: str, default: Any = None) -> Any:
     return source.get(key, default)
@@ -39,6 +44,7 @@ def _piece_type_label(value: Any) -> str:
     return {
         "Special": "خاصة",
         "Clipped Corner": "زاوية مقصوصة",
+        "L-Shaped Corner": "زاوية L",
         "Extra": "إضافية",
         "Regular": "عادية",
     }.get(_text(value, "Regular"), "عادية")
@@ -159,7 +165,8 @@ def _customer_invoice_lines(
     special_pieces = [
         piece
         for piece in pieces
-        if _text(_value(piece, "piece_type")) in {"Special", "Clipped Corner"}
+        if _text(_value(piece, "piece_type")) == "Special"
+        or is_corner_cut(_value(piece, "piece_type"))
     ]
     edge_source = (
         [piece for piece in pieces if piece not in special_pieces]
@@ -223,12 +230,12 @@ def _customer_invoice_lines(
                     "note": _text(_value(piece, "special_shape_price_note")),
                 }
             )
-        elif piece_type == "Clipped Corner":
+        elif is_corner_cut(piece_type):
             edge_rate = _number(_value(piece, "clipped_corner_edge_price_usd"))
             lines.append(
                 {
                     "type": "cut_corner",
-                    "description": f"درفة زاوية مقصوصة {index}",
+                    "description": f"{corner_cut_arabic_label(piece_type)} {index}",
                     "quantity": quantity,
                     "unit": "درفة",
                     "rate_usd": _money(edge_rate),

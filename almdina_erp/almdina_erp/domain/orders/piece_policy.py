@@ -6,10 +6,23 @@ from dataclasses import dataclass
 from typing import Any, Mapping
 
 
-PIECE_TYPES = frozenset({"Regular", "Clipped Corner", "Special", "Extra"})
+CLIPPED_CORNER_TYPE = "Clipped Corner"
+L_SHAPED_CORNER_TYPE = "L-Shaped Corner"
+CORNER_CUT_TYPES = frozenset({CLIPPED_CORNER_TYPE, L_SHAPED_CORNER_TYPE})
+PIECE_TYPES = frozenset({"Regular", "Clipped Corner", "L-Shaped Corner", "Special", "Extra"})
 CLIPPED_CORNER_POSITIONS = frozenset(
     {"Top Right", "Top Left", "Bottom Right", "Bottom Left"}
 )
+
+
+def is_corner_cut(piece_type: str | None) -> bool:
+    return (piece_type or "Regular") in CORNER_CUT_TYPES
+
+
+def corner_cut_arabic_label(piece_type: str | None) -> str:
+    if (piece_type or "") == L_SHAPED_CORNER_TYPE:
+        return "درفة زاوية L"
+    return "درفة زاوية مقصوصة"
 
 
 class PiecePolicyError(ValueError):
@@ -252,7 +265,7 @@ def reset_price_values(piece_type: str) -> dict[str, Any]:
         "special_shape_price_approved_on": None,
         "clipped_corner_edge_price_usd": 0,
         "clipped_corner_edge_price_status": (
-            "Unpriced" if piece_type == "Clipped Corner" else "Unpriced"
+            "Unpriced" if is_corner_cut(piece_type) else "Unpriced"
         ),
         "clipped_corner_edge_price_note": "",
         "clipped_corner_edge_price_set_by": "",
@@ -277,8 +290,8 @@ def pending_custom_edge_price_labels(pieces: Any) -> tuple[str, ...]:
             )
         if piece_type == "Special" and special_status != "Approved":
             pending.append(f"درفة خاصة رقم {index}")
-        elif piece_type == "Clipped Corner" and clipped_status != "Priced":
-            pending.append(f"درفة زاوية مقصوصة {index}")
+        elif is_corner_cut(piece_type) and clipped_status != "Priced":
+            pending.append(f"{corner_cut_arabic_label(piece_type)} {index}")
     return tuple(pending)
 
 
@@ -293,15 +306,20 @@ def _same_number(first: float, second: float) -> bool:
 
 __all__ = [
     "CLIPPED_CORNER_POSITIONS",
+    "CLIPPED_CORNER_TYPE",
+    "CORNER_CUT_TYPES",
+    "L_SHAPED_CORNER_TYPE",
     "PIECE_TYPES",
     "ClippedCorner",
     "PieceGeometry",
     "PiecePolicyError",
     "SpecialPrice",
     "SpecialShapeDecision",
+    "corner_cut_arabic_label",
     "drawing_token",
     "evaluate_special_shape",
     "geometry_changed",
+    "is_corner_cut",
     "pricing_basis_changed",
     "protected_price_changed",
     "pending_custom_edge_price_labels",

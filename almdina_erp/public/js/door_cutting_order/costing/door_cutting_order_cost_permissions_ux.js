@@ -150,7 +150,7 @@
                 ? "edit_special_price"
                 : "approve_special_price";
         }
-        if (piece.piece_type === "Clipped Corner") {
+        if (piece.piece_type === "Clipped Corner" || piece.piece_type === "L-Shaped Corner") {
             return piece.clipped_corner_edge_price_status === "Priced"
                 ? "edit_special_price"
                 : "approve_special_price";
@@ -405,8 +405,10 @@
         if (piece && piece.piece_type === "Special") {
             return __("السعر الخاص الشامل للدرفة");
         }
-        if (piece && piece.piece_type === "Clipped Corner") {
-            return __("تكلفة معالجة قشاط الزاوية المقصوصة");
+        if (piece && (piece.piece_type === "Clipped Corner" || piece.piece_type === "L-Shaped Corner")) {
+            return piece.piece_type === "L-Shaped Corner"
+                ? __("تكلفة معالجة قشاط زاوية L")
+                : __("تكلفة معالجة قشاط الزاوية المقصوصة");
         }
         return __("السعر");
     }

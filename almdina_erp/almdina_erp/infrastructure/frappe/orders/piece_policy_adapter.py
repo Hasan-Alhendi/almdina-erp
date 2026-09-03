@@ -14,6 +14,7 @@ from almdina_erp.almdina_erp.domain.orders.piece_policy import (
     SpecialPrice,
     drawing_token,
     evaluate_special_shape,
+    is_corner_cut,
     pending_custom_edge_price_labels,
     reset_price_values,
     resolve_clipped_corner,
@@ -160,7 +161,7 @@ class FrappeOrderPiecePolicyAdapter:
             row.piece_type = row.piece_type or "Regular"
             if row.piece_type not in PIECE_TYPES:
                 frappe.throw(_("Row {0}: Piece Type is invalid.").format(index))
-            if row.piece_type == "Clipped Corner":
+            if is_corner_cut(row.piece_type):
                 self._validate_clipped_corner(row, index)
 
             old_row = old_rows.get(row.name)
@@ -254,7 +255,8 @@ class FrappeOrderPiecePolicyAdapter:
             frappe.throw(
                 _(
                     "أدخل السعر الخاص الشامل للدرف الخاصة وسعر قشاط درف "
-                    "الزاوية المقصوصة قبل الحفظ أو طباعة الفاتورة. المتبقي: {0}."
+                    "الزاوية المقصوصة وزاوية L قبل الحفظ أو طباعة الفاتورة. "
+                    "المتبقي: {0}."
                 ).format("، ".join(pending))
             )
 

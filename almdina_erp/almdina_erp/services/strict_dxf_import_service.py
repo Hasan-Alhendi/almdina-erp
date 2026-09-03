@@ -219,6 +219,43 @@ def _topology_special_candidate(
     return matches[0] if len(matches) == 1 else None
 
 
+def _validate_topology_candidate_dimensions(
+    piece: dict[str, Any],
+    candidate: dict[str, Any],
+) -> tuple[bool | None, str | None]:
+    """Validate a topology-owned Special against its persisted cut envelope."""
+    actual_w, actual_h = _actual_dimensions(piece)
+    spec: OrderPieceCutSpec = candidate["spec"]
+
+    if dimensions_match_exact(
+        actual_w,
+        actual_h,
+        spec.cut_width_cm,
+        spec.cut_length_cm,
+    ):
+        return False, None
+
+    if dimensions_match_exact(
+        actual_w,
+        actual_h,
+        spec.cut_length_cm,
+        spec.cut_width_cm,
+    ):
+        if spec.allow_rotation:
+            return True, None
+        return None, (
+            f"القطعة {candidate['label']}: {_format_spec(spec)}. "
+            f"DXF يحتوي {_format_decimal(actual_w)} × {_format_decimal(actual_h)} سم، "
+            "وهو نفس مقاس القص بعد التدوير، لكن التدوير غير مسموح لهذه الدرفة."
+        )
+
+    return None, (
+        f"القطعة {candidate['label']}: {_format_spec(spec)}. "
+        f"DXF يحتوي {_format_decimal(actual_w)} × {_format_decimal(actual_h)} سم. "
+        "شكل الدرفة الخاصة حر، لكن الإطار الخارجي للتصنيع يجب أن يطابق مقاس القص المحفوظ تمامًا."
+    )
+
+
 def _edge_print_contract(spec: OrderPieceCutSpec) -> dict[str, Any]:
     """Return canonical plan-piece edge metadata used by screen and print renderers.
 
@@ -293,11 +330,19 @@ def _apply_strict_dimension_contract(
         for piece in sheet.get("pieces") or []:
             topology_special_index = _topology_special_candidate(unmatched, piece)
             if topology_special_index is not None:
-                candidate = unmatched.pop(topology_special_index)
+                candidate = unmatched[topology_special_index]
+                rotated, error = _validate_topology_candidate_dimensions(
+                    piece,
+                    candidate,
+                )
+                if error:
+                    errors.append(error)
+                    continue
+                unmatched.pop(topology_special_index)
                 _apply_piece_contract_metadata(
                     piece,
                     candidate,
-                    rotated=bool(piece.get("rotated")),
+                    rotated=bool(rotated),
                 )
                 continue
             if str(piece.get("piece_type") or "") == "Special":
@@ -391,8 +436,9 @@ def parse_production_dxf(
 
     Topology/layers/physical board bounds/kerf remain owned by the geometry
     importer. Applied Trim is resolved over that fixed physical layout through
-    ALMADINA-138. Dimension-bound manufacturing identity remains exact at
-    0.001 cm; Special outline identity remains topology-owned and arbitrary.
+    ALMADINA-138. Manufacturing identity remains exact at 0.001 cm for every
+    piece. Special outlines stay topology-owned and shape-free inside that fixed
+    persisted cut envelope.
     """
     try:
         specs = build_order_piece_cut_specs(order)
@@ -407,7 +453,12 @@ def parse_production_dxf(
         )
     except DxfImportError as exc:
         text = str(exc)
-        if "سماحية" in text or "لا تطابق أي قطعة" in text or "بعد تدويرها" in text:
+        if (
+            "سماحية" in text
+            or "لا تطابق أي قطعة" in text
+            or "بعد تدويرها" in text
+            or "لا يمكن مطابقة محيطات CUT_PATH" in text
+        ):
             expected = "؛ ".join(
                 f"الدرفة {spec.row_index}: {_format_spec(spec)}" for spec in specs[:8]
             )
@@ -437,7 +488,7 @@ def parse_production_dxf(
         "precision_cm": "0.001",
         "finished_dimensions_immutable": True,
         "special_outline_identity": "topology-owned",
-        "special_bbox_match_required": False,
+        "special_bbox_match_required": True,
     }
     snapshot["print_contract"] = {
         "renderer": "canonical-cutting-plan",

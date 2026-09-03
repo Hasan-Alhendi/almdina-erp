@@ -230,6 +230,24 @@ class TestFinancialDocumentApplication(unittest.TestCase):
         summary = {item["label"]: item["value"] for item in payload["summary"]}
         self.assertEqual(summary["التكلفة الفعلية/المتوقعة ($)"], 54.0)
 
+    def test_l_shaped_corner_uses_cut_corner_line_with_distinct_label(self) -> None:
+        pieces = [
+            {
+                "piece_no": 1,
+                "piece_type": "L-Shaped Corner",
+                "width_cm": 60,
+                "length_cm": 90,
+                "qty": 2,
+                "clipped_corner_edge_price_usd": 4.25,
+                "clipped_corner_edge_price_status": "Priced",
+            }
+        ]
+        payload = build_customer_invoice_document(self.order, pieces)
+        cut_corner = next(line for line in payload["lines"] if line["type"] == "cut_corner")
+        self.assertEqual(cut_corner["description"], "درفة زاوية L 1")
+        self.assertEqual(cut_corner["quantity"], 2)
+        self.assertEqual(cut_corner["amount_usd"], 8.5)
+
 
 if __name__ == "__main__":
     unittest.main()

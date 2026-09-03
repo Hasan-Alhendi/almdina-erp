@@ -100,6 +100,7 @@ def test_financial_print_ui_uses_server_authorized_payloads_only() -> None:
     assert "cutCornerPricingHtml(frm)" in presenter
     assert "درفة خاصة رقم" in presenter
     assert "درفة زاوية مقصوصة" in presenter
+    assert "درفة زاوية L" in presenter
     assert "specialDoorLabel(row)" in presenter
     assert "cutCornerDoorLabel(row)" in presenter
     assert "dco-invoice-total-card" in presenter

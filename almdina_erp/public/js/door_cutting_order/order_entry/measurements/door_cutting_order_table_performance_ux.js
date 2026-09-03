@@ -232,7 +232,8 @@
 
     function updatePieceTypeVisual(frm, tr, row) {
         const special = row.piece_type === "Special";
-        const clipped = row.piece_type === "Clipped Corner";
+        const cornerGeometry = window.AlmdinaClippedCornerGeometry;
+        const clipped = Boolean(cornerGeometry && cornerGeometry.isCornerCut(row));
         const extra = row.piece_type === "Extra";
         const shapeOutput = window.AlmdinaShapeOutputContract;
         const drawing = Boolean(
@@ -259,8 +260,8 @@
 
         const sketch = tr.querySelector("button.dco-special-sketch-button");
         if (sketch) {
-            const cornerSummary = clipped && window.AlmdinaClippedCornerGeometry
-                ? window.AlmdinaClippedCornerGeometry.summary(row)
+            const cornerSummary = clipped && cornerGeometry
+                ? cornerGeometry.summary(row)
                 : "";
             sketch.disabled = !((special || clipped) && isEditable(frm));
             sketch.classList.toggle("is-documented", special && (drawing || exact));
@@ -268,7 +269,7 @@
             sketch.classList.toggle("is-clipped-corner", clipped);
             const icon = sketch.querySelector("span:first-child");
             const label = sketch.querySelector("span:last-child");
-            if (icon) icon.textContent = clipped ? "⌑" : ((drawing || exact) ? "✓" : "✎");
+            if (icon) icon.textContent = clipped ? (cornerGeometry.typeIcon(row) || "⌑") : ((drawing || exact) ? "✓" : "✎");
             if (label) {
                 label.textContent = clipped
                     ? (isArabic() ? "ضبط" : "Set")
@@ -277,7 +278,7 @@
                         : (isArabic() ? "وثّق" : "Document"));
             }
             sketch.title = clipped
-                ? `${isArabic() ? "ضبط الزاوية المقصوصة" : "Configure clipped corner"}${cornerSummary ? ` — ${cornerSummary}` : ""}`
+                ? `${isArabic() ? `ضبط ${cornerGeometry.typeLabel(row)}` : `Configure ${cornerGeometry.typeLabel(row, false)}`}${cornerSummary ? ` — ${cornerSummary}` : ""}`
                 : (isArabic() ? "افتح توثيق الصورة والقياسات والملاحظات" : "Open image, measurements and notes documentation");
         }
 
@@ -326,7 +327,7 @@
         const nextType = pieceType || "Regular";
         const changed = (row.piece_type || "Regular") !== nextType;
         row.piece_type = nextType;
-        if (nextType === "Clipped Corner" && window.AlmdinaClippedCornerEditor) {
+        if (window.AlmdinaClippedCornerGeometry && window.AlmdinaClippedCornerGeometry.isCornerCut({ piece_type: nextType }) && window.AlmdinaClippedCornerEditor) {
             window.AlmdinaClippedCornerEditor.prepare(row);
         }
         const extraAddons = window.AlmdinaExtraDoorAddonsUX;

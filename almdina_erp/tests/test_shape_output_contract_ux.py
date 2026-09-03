@@ -129,7 +129,7 @@ def test_special_shape_button_resolves_documentation_workspace_at_click_time():
     operator = _source(OPERATOR)
     editor = _source(EDITOR)
     assert 'event.target.closest(".dco-special-sketch-button")' in operator
-    assert "row && window.AlmdinaSpecialShapeEditor" in operator
+    assert "if (!row || !requirePieceDimensions(row, tr)) return" in operator
     assert "window.AlmdinaSpecialShapeEditor.open(currentFrm, row)" in operator
     assert "window.AlmdinaSpecialShapeEditor = Object.freeze(facade);" in editor
     assert "__documentationOnly: true" in editor

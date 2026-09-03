@@ -43,7 +43,7 @@ Visibility يجب أن يأتي من permission context/capabilities، لا من
 - `factory_production_settings`: إعدادات المصنع المقسمة حسب Capabilities.
 - `factory_plan_archive`: أرشيف الخطط المعتمدة.
 
-- قائمة `Door Cutting Order`: بحث Frappe بالاسم/الزبون مع dropdown القسم الحالي (`current_department` عبر `custom_filter_configs`) بجانب زر فلترة Frappe على الويب والموبايل. الخيار الفارغ يعرض «كل الأقسام». العرض عربي من `department_label` في المسارات المفعّلة، والاستعلام يطابق `current_production_stage.stage_type` حتى لا تفشل التسميات المختلفة لنفس المرحلة. قيم التسليم المعروضة في العمود تُترجم إلى `status` عند الاستعلام. الفلتر Presentation فقط؛ query وdocument scope يبقيان عند Frappe.
+- قائمة `Door Cutting Order`: بحث Frappe بالاسم/الزبون مع dropdown القسم الحالي (`current_department` عبر `custom_filter_configs`) بجانب زر فلترة Frappe على الويب والموبايل. الخيار الفارغ يعرض «كل الأقسام». العرض عربي من `department_label` في المسارات المفعّلة، والاستعلام يطابق `current_production_stage.stage_type` حتى لا تفشل التسميات المختلفة لنفس المرحلة. قيم التسليم المعروضة في العمود تُترجم إلى `status` عند الاستعلام. الفلتر Presentation فقط؛ query وdocument scope يبقيان عند Frappe. في وضع عرض جميع الطلبات (`view_all_orders` أو Administrator) تُرتَّب الصفوف غير المسلَّمة حسب `modified DESC` ثم تُوضع طلبات `Delivered` في الأسفل.
 
 ### مساندة/تشخيص
 
@@ -91,7 +91,7 @@ Capability catalog + authorization/application policy + Frappe/document scope.
 ### Extra door add-ons
 
 - اختيار `دبل قشاط` / `دبل كامل الدرفة` / `Liner` / `فرزة ظهر` / `حفر مسكة غطس` هو Customer requirement محفوظ على `Door Cutting Order Detail`.
-- نوع الدرفة يبقى Native dropdown بالقيم `عادية / خاصة / زاوية / Extra`. اختيار `Extra` يفتح Flyout صغيرًا ملاصقًا للسطر لاختيار `دبل قشاط` / `دبل كامل الدرفة` / `لاينر` / `فرزة ظهر` / `حفر مسكة غطس` بشكل متعدد، مع زر صغير لإعادة فتح الإضافات لاحقًا؛ لا تُستبدل قائمة نوع الدرفة بقائمة مخصصة مستقلة.
+- نوع الدرفة يبقى Native `select` بالقيم `عادية / خاصة / زاوية / زاوية L / Extra` كمالك لحقل `piece_type`. Extra يملك طبقة cascade بنمط Windows فوق هذا الـselect: عند hover على `Extra` داخل قائمة الأنواع يظهر سهم وتُعرض الإضافات مباشرة، وفي وضع التعديل يظهر hover على خلية نوع درفة Extra نفس الخيارات المختارة للتعديل. لوحة المفاتيح واللمس تبقيان الـselect الأصلي؛ اختيار `Extra` من هناك ما زال يفتح نفس الـFlyout متعدد الاختيار لـ `دبل قشاط` / `دبل كامل الدرفة` / `لاينر` / `فرزة ظهر` / `حفر مسكة غطس`، مع زر صغير لتثبيت القائمة. `AlmdinaTablePerformanceUX` يبقى مالك تغيير النوع في مكانه.
 - أسعار الوحدة والإجماليات حقول مالية محمية وتُحفظ كلقطة تاريخية على السطر، بينما الإجمالي التجاري يُعرض في Cost/فاتورة الزبون.
 - `Almdina ERP Settings` هو مصدر أسعار المصنع للطلبات/الإضافات الجديدة؛ تعديل السعر لا يعيد تسعير اختيار محفوظ سابقًا.
 - أسعار المصنع الحالية في قسم إضافات Extra: دبل قشاط، أجرة دبل كامل الدرفة (`default_extra_full_door_double_unit_price_usd` لكل درفة أصلية)، Liner، فرزة ظهر (`default_extra_back_groove_unit_price_usd`)، وتفريغ المسكة المخفية.

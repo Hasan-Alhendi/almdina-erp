@@ -104,8 +104,10 @@
         const special = piece.piece_type === "Special"
             ? `<span class="dco-piece-kind-badge" style="display:inline-block;margin-bottom:2px;padding:2px 6px;border-radius:999px;background:#7a4c13;color:#fff;font-size:9px;font-weight:900">${exact_special ? "◆ درفة خاصة · مسار هندسي" : "✦ درفة خاصة · خام CNC"}</span><br>`
             : "";
-        const clipped = piece.piece_type === "Clipped Corner"
-            ? `<span class="dco-piece-kind-badge" style="display:inline-block;margin-bottom:2px;padding:2px 6px;border-radius:999px;background:#8a5700;color:#fff;font-size:9px;font-weight:900">⌑ زاوية مقصوصة</span><br>`
+        const clippedGeometry = window.AlmdinaClippedCornerGeometry;
+        const clipped = Boolean(clippedGeometry && clippedGeometry.isCornerCut(piece));
+        const clippedLabel = clipped
+            ? `<span class="dco-piece-kind-badge" style="display:inline-block;margin-bottom:2px;padding:2px 6px;border-radius:999px;background:#8a5700;color:#fff;font-size:9px;font-weight:900">${clippedGeometry.typeIcon(piece)} ${clippedGeometry.typeLabel(piece)}</span><br>`
             : "";
         const extra = piece.piece_type === "Extra"
             ? `<span class="dco-piece-kind-badge" style="display:inline-block;margin-bottom:2px;padding:2px 6px;border-radius:999px;background:#2459a6;color:#fff;font-size:9px;font-weight:900">＋ درفة Extra</span><br>`
@@ -113,7 +115,7 @@
         const piece_number = print_piece_number(piece.label);
         return `
             <div class="dco-piece-label" style="position:relative;z-index:4;direction:ltr;text-align:center;">
-                ${special}${clipped}${extra}
+                ${special}${clippedLabel}${extra}
                 <span class="dco-piece-size">${round(piece.original_w, 1)}*${round(piece.original_h, 1)}</span>
                 <span class="dco-piece-number" style="display:none">${escape_html(piece_number)}</span>
             </div>
@@ -165,10 +167,11 @@
         `;
 
         rows.forEach((row, index) => {
+            const cornerGeometry = window.AlmdinaClippedCornerGeometry;
             const typeLabel = row.piece_type === "Special"
                 ? " · ✦ خاصة (خام CNC)"
-                : (row.piece_type === "Clipped Corner"
-                    ? " · ⌑ زاوية مقصوصة"
+                : (cornerGeometry && cornerGeometry.isCornerCut(row)
+                    ? ` · ${cornerGeometry.typeIcon(row)} ${cornerGeometry.typeLabel(row)}`
                     : (row.piece_type === "Extra" ? " · ＋ Extra" : ""));
             html += `
                 <span style="display:inline-block;margin-left:16px;white-space:nowrap;">
@@ -269,8 +272,8 @@
                 const special_piece_style = piece.piece_type === "Special"
                     ? "border:2px solid #7a4c13;background:linear-gradient(135deg,#fff2cf,#ffe2a3);box-shadow:inset 0 0 0 2px rgba(255,255,255,.45);"
                     : "border:1px solid #111;background:#e4f5ff;";
-                const clipped = piece.piece_type === "Clipped Corner";
                 const clippedGeometry = window.AlmdinaClippedCornerGeometry;
+                const clipped = Boolean(clippedGeometry && clippedGeometry.isCornerCut(piece));
                 const shapeOutput = window.AlmdinaShapeOutputContract;
                 const exactSpecial = piece.piece_type === "Special"
                     && shapeOutput

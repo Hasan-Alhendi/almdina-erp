@@ -146,7 +146,10 @@
             if (edgeCell) edgeCell.textContent = edgeMeters(row).toFixed(3);
 
             tr.classList.toggle("dco-special-row", row.piece_type === "Special");
-            tr.classList.toggle("dco-clipped-corner-row", row.piece_type === "Clipped Corner");
+            tr.classList.toggle("dco-clipped-corner-row", Boolean(
+                window.AlmdinaClippedCornerGeometry
+                && window.AlmdinaClippedCornerGeometry.isCornerCut(row)
+            ));
 
             const sketch = tr.querySelector(".dco-special-sketch-button");
             if (sketch) {

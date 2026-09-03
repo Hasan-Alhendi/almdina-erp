@@ -26,7 +26,7 @@ def _fields(path: Path) -> dict[str, dict]:
 def test_extra_is_a_fourth_door_type_but_not_a_special_shape_type() -> None:
     detail = _fields(DETAIL)
     plan = _fields(PLAN_PIECE)
-    expected = "Regular\nClipped Corner\nSpecial\nExtra"
+    expected = "Regular\nClipped Corner\nL-Shaped Corner\nSpecial\nExtra"
     assert detail["piece_type"]["options"] == expected
     assert plan["piece_type"]["options"] == expected
 
@@ -94,7 +94,7 @@ def test_pricing_math_stays_server_side_and_customer_invoice_is_itemized() -> No
     assert "extra_back_groove_unit_price_usd" in documents
 
 
-def test_extra_selection_uses_native_type_select_and_owned_addon_flyout() -> None:
+def test_extra_selection_uses_native_type_select_and_windows_cascade_flyout() -> None:
     mutation = MUTATION.read_text(encoding="utf-8")
     ux = UX.read_text(encoding="utf-8")
     css = CSS.read_text(encoding="utf-8")
@@ -108,12 +108,19 @@ def test_extra_selection_uses_native_type_select_and_owned_addon_flyout() -> Non
     assert "extra_full_door_double" in plan_fields
     assert "extra_back_groove" in mutation.split("const PIECE_COST_ONLY_FIELDS", 1)[1].split("];", 1)[0]
 
-    # The piece type remains a real select. Extra owns only its nested multi-select.
+    # The piece type remains a real select. Extra owns a Windows-style cascade
+    # overlay: hover Extra in the type menu or an Extra row to edit add-ons.
     assert '<select class="dco-fast-select dco-piece-type-select"' in ux
     assert 'data-field="piece_type"' in ux
     assert "dco-piece-type-trigger" not in ux
-    assert "data-piece-type-option" not in ux
-    assert "pointerover" not in ux
+    assert "renderTypeMenu" in ux
+    assert 'data-piece-type-option="' in ux
+    assert "dco-piece-type-has-submenu" in ux
+    assert "dco-piece-type-check" in ux
+    assert "isMousePointer" in ux
+    assert "previewExtraRow" in ux
+    assert 'root.addEventListener("pointerover"' in ux
+    assert 'root.addEventListener("pointerdown"' in ux
     assert "dco-extra-open-button" in ux
     assert "renderSubmenu" in ux
     assert "لاينر" in ux
@@ -137,6 +144,11 @@ def test_extra_selection_uses_native_type_select_and_owned_addon_flyout() -> Non
 
     assert ".dco-extra-submenu-flyout" in css
     assert ".dco-extra-open-button" in css
+    assert ".dco-piece-type-menu-flyout" in css
+    assert ".dco-piece-type-submenu-arrow" in css
+    assert ".dco-piece-type-check" in css
+    assert "#2c2c2e" in css
+    assert "#0a84ff" in css
     assert ".dco-piece-type-flyout" not in css
     assert "@media (max-width: 720px)" in css
     assert "prefers-reduced-motion" in css

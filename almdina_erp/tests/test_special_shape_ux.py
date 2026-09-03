@@ -43,7 +43,7 @@ def _fields(path: Path) -> dict[str, dict]:
 
 def test_special_piece_schema_keeps_documentation_and_accounting_price_separate():
     fields = _fields(DETAIL_JSON)
-    assert fields["piece_type"]["options"] == "Regular\nClipped Corner\nSpecial\nExtra"
+    assert fields["piece_type"]["options"] == "Regular\nClipped Corner\nL-Shaped Corner\nSpecial\nExtra"
     assert fields["special_shape_drawing_json"]["fieldtype"] == "Long Text"
     assert fields["special_shape_status"]["read_only"] == 1
     for fieldname in (
@@ -95,6 +95,11 @@ def test_operator_opens_only_new_documentation_runtime():
     assert '"public/js/door_cutting_order/drawing/special_shape_facade.js"' in hooks
     assert "__documentationOnly: true" in entry
     assert "__manufacturingGeometrySeparated: true" in entry
+    assert "function hasBlankDimensions(row)" in entry
+    assert "أدخل عرض الدرفة وطولها أولًا، ثم افتح توثيق الشكل." in entry
+    assert entry.index("if (!hasBlankDimensions(row))") < entry.index("await persistedRow")
+    assert "function requirePieceDimensions(row, tr)" in operator
+    assert "if (!row || !requirePieceDimensions(row, tr)) return" in operator
     assert "door_drawing_v4" not in entry
     for tool in ("select", "pen", "line", "rect", "ellipse", "dimension", "text"):
         assert f'tool("{tool}"' in shell
@@ -193,7 +198,7 @@ def test_review_and_production_keep_special_drawing_optional_but_require_price()
     assert "self._gateway().ensure_special_shapes_documented()" not in order
     assert "def ensure_special_prices_approved" in order
     assert "order.ensure_special_prices_approved()" in command_service
-    assert placed_piece_fields["piece_type"]["options"] == "Regular\nClipped Corner\nSpecial\nExtra"
+    assert placed_piece_fields["piece_type"]["options"] == "Regular\nClipped Corner\nL-Shaped Corner\nSpecial\nExtra"
     assert '"piece_type": piece.get("piece_type") or "Regular"' in workspace
 
 
