@@ -17,6 +17,10 @@ const contractSource = fs.readFileSync(
     path.resolve(__dirname, "../../public/js/door_cutting_order/drawing/door_cutting_order_shape_output_contract.js"),
     "utf8"
 );
+const pieceGeometrySource = fs.readFileSync(
+    path.resolve(__dirname, "../../public/js/door_cutting_order/cutting_plan/door_cutting_order_piece_geometry.js"),
+    "utf8"
+);
 
 const fakeWindow = {};
 const context = vm.createContext({
@@ -32,6 +36,9 @@ vm.runInContext(geometrySource, context, {
 });
 vm.runInContext(contractSource, context, {
     filename: "door_cutting_order_shape_output_contract.js",
+});
+vm.runInContext(pieceGeometrySource, context, {
+    filename: "door_cutting_order_piece_geometry.js",
 });
 vm.runInContext(source, context, {
     filename: "door_cutting_order_cutting_plan_renderer.js",
@@ -90,6 +97,27 @@ const plan = {
                             )
                         ),
                 },
+                {
+                    id: 3,
+                    x: 80,
+                    y: 90,
+                    w: 20,
+                    h: 20,
+                    original_w: 20,
+                    original_h: 20,
+                    area_m2: 0.03,
+                    label: "3.1",
+                    piece_type: "Special",
+                    rotated: true,
+                    edge_long_left: 1,
+                    geometry: {
+                        schema_version: 1,
+                        unit: "mm",
+                        coordinate_space: "usable_sheet",
+                        outer: [[800, 900], [1000, 900], [1000, 1100], [800, 1100]],
+                        holes: [[[860, 960], [940, 960], [940, 1040], [860, 1040]]],
+                    },
+                },
             ],
         },
     ],
@@ -114,7 +142,13 @@ assert.match(html, /dco-cutting-plan/);
 assert.match(html, /dco-sheet-board/);
 assert.match(html, /dco-special-exact-piece/);
 assert.match(html, /◆ درفة خاصة · مسار هندسي/);
-assert.match(html, /<polygon points="/);
+assert.match(html, /<path d="/);
+assert.match(html, /data-geometry-source="manual-special"/);
+assert.match(html, /data-geometry-source="dxf"/);
+assert.match(html, /data-geometry-id="pg-/);
+assert.match(html, /fill-rule="evenodd"/);
+assert.match(html, /clip-rule="evenodd"/);
+assert.match(html, /dco-edge-line-svg/);
 assert.doesNotMatch(html, /undefined/);
 
 const doubledFrm = {

@@ -87,6 +87,10 @@ assert.equal(
 assert.equal(contract.hasVisual({ piece_type: "Regular" }), false);
 
 assert.equal(contract.hasExactCutPath(exactPiece), true);
+assert.deepEqual(
+    contract.points(exactPiece, 100, 100),
+    geometry.points(exactPiece, 100, 100)
+);
 assert.equal(
     contract.pointsAttribute(exactPiece, 100, 100),
     geometry.pointsAttribute(exactPiece, 100, 100)

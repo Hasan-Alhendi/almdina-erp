@@ -48,7 +48,7 @@
     // Cutting plan rendering
     // =====================================================
 
-    function render_piece_edge_lines(piece) {
+    function piece_edge_flags(piece) {
         let left = 0;
         let right = 0;
         let top = 0;
@@ -67,12 +67,34 @@
             left = piece.edge_width_bottom ? 1 : 0;
         }
 
+        return { left, right, top, bottom };
+    }
+
+    function render_piece_edge_lines(piece, geometryModel = null, clipId = "") {
+        const { left, right, top, bottom } = piece_edge_flags(piece);
+
         const color = "#d00000";
         const thickness = "3px";
         const inset = "3px";
         const EDGE_LINE_PERCENT = 66.666;
         const EDGE_LINE_START = (100 - EDGE_LINE_PERCENT) / 2;
         let html = "";
+
+        if (geometryModel && geometryModel.vector) {
+            const lines = [];
+            const end = EDGE_LINE_START + EDGE_LINE_PERCENT;
+            if (left) lines.push(`<line class="dco-edge-line-svg" vector-effect="non-scaling-stroke" x1="1" y1="${EDGE_LINE_START}" x2="1" y2="${end}"/>`);
+            if (right) lines.push(`<line class="dco-edge-line-svg" vector-effect="non-scaling-stroke" x1="99" y1="${EDGE_LINE_START}" x2="99" y2="${end}"/>`);
+            if (top) lines.push(`<line class="dco-edge-line-svg" vector-effect="non-scaling-stroke" x1="${EDGE_LINE_START}" y1="1" x2="${end}" y2="1"/>`);
+            if (bottom) lines.push(`<line class="dco-edge-line-svg" vector-effect="non-scaling-stroke" x1="${EDGE_LINE_START}" y1="99" x2="${end}" y2="99"/>`);
+            if (!lines.length) return "";
+            return `
+                <svg class="dco-piece-edge-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;z-index:3;overflow:hidden;">
+                    <defs><clipPath id="${clipId}"><path d="${geometryModel.geometry.pathData}" fill-rule="evenodd" clip-rule="evenodd"/></clipPath></defs>
+                    <g clip-path="url(#${clipId})" fill="none" stroke="${color}" stroke-width="3" vector-effect="non-scaling-stroke">${lines.join("")}</g>
+                </svg>
+            `;
+        }
 
         if (left) {
             html += `<span class="dco-edge-line" style="position:absolute;left:${inset};top:${EDGE_LINE_START}%;height:${EDGE_LINE_PERCENT}%;border-left:${thickness} solid ${color};z-index:3;"></span>`;
@@ -96,13 +118,15 @@
         return primary || "—";
     }
 
-    function render_piece_label(piece) {
-        const shape_output = window.AlmdinaShapeOutputContract;
+    function render_piece_label(piece, geometryModel) {
         const exact_special = piece.piece_type === "Special"
-            && shape_output
-            && shape_output.hasExactCutPath(piece);
+            && geometryModel
+            && geometryModel.exact;
         const special = piece.piece_type === "Special"
             ? `<span class="dco-piece-kind-badge" style="display:inline-block;margin-bottom:2px;padding:2px 6px;border-radius:999px;background:#7a4c13;color:#fff;font-size:9px;font-weight:900">${exact_special ? "◆ درفة خاصة · مسار هندسي" : "✦ درفة خاصة · خام CNC"}</span><br>`
+            : "";
+        const invalidGeometry = geometryModel && geometryModel.invalid
+            ? '<span class="dco-geometry-error-badge" style="display:inline-block;margin-bottom:2px;padding:2px 6px;border-radius:999px;background:#a61b1b;color:#fff;font-size:9px;font-weight:900">تعذر عرض المسار الهندسي</span><br>'
             : "";
         const clippedGeometry = window.AlmdinaClippedCornerGeometry;
         const clipped = Boolean(clippedGeometry && clippedGeometry.isCornerCut(piece));
@@ -113,9 +137,12 @@
             ? `<span class="dco-piece-kind-badge" style="display:inline-block;margin-bottom:2px;padding:2px 6px;border-radius:999px;background:#2459a6;color:#fff;font-size:9px;font-weight:900">＋ درفة Extra</span><br>`
             : "";
         const piece_number = print_piece_number(piece.label);
+        const labelStyle = geometryModel && geometryModel.vector
+            ? `position:absolute;left:${geometryModel.labelPoint.xPercent}%;top:${geometryModel.labelPoint.yPercent}%;transform:translate(-50%,-50%);max-width:84%;`
+            : "position:relative;";
         return `
-            <div class="dco-piece-label" style="position:relative;z-index:4;direction:ltr;text-align:center;">
-                ${special}${clippedLabel}${extra}
+            <div class="dco-piece-label" style="${labelStyle}z-index:4;direction:ltr;text-align:center;">
+                ${invalidGeometry}${special}${clippedLabel}${extra}
                 <span class="dco-piece-size">${round(piece.original_w, 1)}*${round(piece.original_h, 1)}</span>
                 <span class="dco-piece-number" style="display:none">${escape_html(piece_number)}</span>
             </div>
@@ -144,7 +171,7 @@
             ? "border-color:#c9a66b;background:linear-gradient(135deg,#fff8e8,#fffdf8);color:#684117"
             : "border-color:#dc7b72;background:#fff4f2;color:#9b2f26";
         const message = complete
-            ? `تم إدخال جميع الدرف الخاصة في خطة القص كمستطيل خام: <b>${placed} من ${requested}</b>`
+            ? `تم إدخال جميع الدرف الخاصة في خطة القص: <b>${placed} من ${requested}</b>`
             : `تنبيه: دخل خطة القص <b>${placed} من ${requested}</b> فقط من الدرف الخاصة. راجع المقاسات والقطع غير الموزعة.`;
 
         return `
@@ -169,7 +196,7 @@
         rows.forEach((row, index) => {
             const cornerGeometry = window.AlmdinaClippedCornerGeometry;
             const typeLabel = row.piece_type === "Special"
-                ? " · ✦ خاصة (خام CNC)"
+                ? " · ✦ خاصة (CNC)"
                 : (cornerGeometry && cornerGeometry.isCornerCut(row)
                     ? ` · ${cornerGeometry.typeIcon(row)} ${cornerGeometry.typeLabel(row)}`
                     : (row.piece_type === "Extra" ? " · ＋ Extra" : ""));
@@ -265,44 +292,39 @@
             `;
 
             (sheet.pieces || []).forEach(piece => {
-                const left = (num(piece.x) / board_w_cm) * 100;
-                const top = (num(piece.y) / board_h_cm) * 100;
-                const width = (num(piece.w) / board_w_cm) * 100;
-                const height = (num(piece.h) / board_h_cm) * 100;
+                const geometry = window.AlmdinaCuttingPlanPieceGeometry;
+                if (!geometry || typeof geometry.resolve !== "function") {
+                    throw new Error("Canonical cutting-plan piece geometry is unavailable");
+                }
+                const geometryModel = geometry.resolve(piece);
+                const placement = geometryModel.placement;
+                const left = (num(placement.xCm) / board_w_cm) * 100;
+                const top = (num(placement.yCm) / board_h_cm) * 100;
+                const width = (num(placement.widthCm) / board_w_cm) * 100;
+                const height = (num(placement.heightCm) / board_h_cm) * 100;
                 const special_piece_style = piece.piece_type === "Special"
                     ? "border:2px solid #7a4c13;background:linear-gradient(135deg,#fff2cf,#ffe2a3);box-shadow:inset 0 0 0 2px rgba(255,255,255,.45);"
                     : "border:1px solid #111;background:#e4f5ff;";
                 const clippedGeometry = window.AlmdinaClippedCornerGeometry;
                 const clipped = Boolean(clippedGeometry && clippedGeometry.isCornerCut(piece));
-                const shapeOutput = window.AlmdinaShapeOutputContract;
                 const exactSpecial = piece.piece_type === "Special"
-                    && shapeOutput
-                    && shapeOutput.hasExactCutPath(piece);
-                const shapePoints = clipped && clippedGeometry
-                    ? clippedGeometry.pointsAttribute(piece, 100, 100)
-                    : (exactSpecial
-                        ? shapeOutput.pointsAttribute(piece, 100, 100)
-                        : "0,0 100,0 100,100 0,100");
-                const shaped = clipped || exactSpecial;
+                    && geometryModel.exact;
+                const shaped = geometryModel.vector;
                 const shapeOutline = shaped
-                    ? `<svg class="dco-shaped-piece-outline" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;z-index:1;overflow:visible"><polygon points="${shapePoints}" fill="${exactSpecial ? "#ffe5ad" : "#fff0c7"}" stroke="${exactSpecial ? "#7a4c13" : "#8a5700"}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>`
+                    ? `<svg class="dco-shaped-piece-outline" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;z-index:1;overflow:visible"><path d="${geometryModel.geometry.pathData}" fill="${exactSpecial ? "#ffe5ad" : "#fff0c7"}" fill-rule="evenodd" clip-rule="evenodd" stroke="${exactSpecial ? "#7a4c13" : "#8a5700"}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>`
                     : "";
                 const pieceStyle = shaped
                     ? "border:0;background:transparent;box-shadow:none;"
                     : special_piece_style;
-                const shapeClip = shapePoints.split(" ").map(pair => {
-                    const [x, y] = pair.split(",");
-                    return `${x}% ${y}%`;
-                }).join(",");
-                const edgeLines = shaped
-                    ? `<span style="position:absolute;display:block;inset:0;z-index:3;clip-path:polygon(${shapeClip})">${render_piece_edge_lines(piece)}</span>`
-                    : render_piece_edge_lines(piece);
+                const clipId = `dco-clip-${sheet.sheet_no || 0}-${piece.id || piece.label || 0}-${geometryModel.geometryIdentity}`
+                    .replace(/[^a-zA-Z0-9_-]/g, "-");
+                const edgeLines = render_piece_edge_lines(piece, geometryModel, clipId);
 
                 html += `
-                    <div class="dco-piece ${piece.piece_type === "Special" ? "dco-special-raw-piece" : ""} ${exactSpecial ? "dco-special-exact-piece" : ""} ${clipped ? "dco-clipped-corner-piece" : ""}" data-piece-type="${escape_html(piece.piece_type || "Regular")}" style="position:absolute;left:${left}%;top:${top}%;width:${width}%;height:${height}%;${pieceStyle}color:#111;overflow:hidden;padding:2px;font-size:10px;line-height:1.2;text-align:center;box-sizing:border-box;display:flex;align-items:center;justify-content:center;">
+                    <div class="dco-piece ${piece.piece_type === "Special" ? "dco-special-raw-piece" : ""} ${exactSpecial ? "dco-special-exact-piece" : ""} ${clipped ? "dco-clipped-corner-piece" : ""} ${shaped ? "dco-vector-piece" : ""}" data-piece-type="${escape_html(piece.piece_type || "Regular")}" data-geometry-source="${escape_html(geometryModel.source)}" data-geometry-id="${escape_html(geometryModel.geometryIdentity)}" style="position:absolute;left:${left}%;top:${top}%;width:${width}%;height:${height}%;${pieceStyle}color:#111;overflow:hidden;padding:2px;font-size:10px;line-height:1.2;text-align:center;box-sizing:border-box;display:flex;align-items:center;justify-content:center;">
                         ${shapeOutline}
                         ${edgeLines}
-                        ${render_piece_label(piece)}
+                        ${render_piece_label(piece, geometryModel)}
                     </div>
                 `;
             });
@@ -605,9 +627,8 @@ ${printHeaderCss()}
     box-shadow: none !important;
     padding: 0 !important;
 }
-.dco-special-exact-piece,
-.dco-clipped-corner-piece { background: transparent !important; border: 0 !important; }
-.dco-shaped-piece-outline polygon { fill: #fff !important; stroke: #111 !important; }
+.dco-vector-piece { background: transparent !important; border: 0 !important; }
+.dco-shaped-piece-outline path { fill: #fff !important; stroke: #111 !important; }
 .dco-piece-label {
     direction: ltr !important;
     text-align: center !important;
@@ -630,6 +651,10 @@ ${printHeaderCss()}
 .dco-edge-line {
     border-color: #e00000 !important;
     border-width: .45pt !important;
+}
+.dco-edge-line-svg {
+    stroke: #e00000 !important;
+    stroke-width: .45pt !important;
 }
 @media print {
     a { color: inherit !important; text-decoration: none !important; }

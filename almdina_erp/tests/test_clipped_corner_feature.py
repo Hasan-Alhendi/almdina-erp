@@ -38,6 +38,7 @@ EXTRA_ADDONS = (
 )
 CORNER_UX = DCO_JS / "drawing" / "door_cutting_order_clipped_corner_ux.js"
 PLAN_RENDERER = DCO_JS / "cutting_plan" / "door_cutting_order_cutting_plan_renderer.js"
+PIECE_GEOMETRY = DCO_JS / "cutting_plan" / "door_cutting_order_piece_geometry.js"
 SECURE_DXF = DCO_JS / "cutting_plan" / "secure_dxf_export.js"
 ASSETS = APP_ROOT / "frontend_assets.py"
 
@@ -123,11 +124,13 @@ def test_fast_measurements_offer_one_click_corner_settings_with_live_visual_prev
 
 def test_cutting_plan_and_dxf_use_the_same_shared_corner_geometry():
     order_js = PLAN_RENDERER.read_text(encoding="utf-8")
+    piece_geometry = PIECE_GEOMETRY.read_text(encoding="utf-8")
     secure_dxf = SECURE_DXF.read_text(encoding="utf-8")
     editor = CORNER_UX.read_text(encoding="utf-8")
 
-    assert "window.AlmdinaClippedCornerGeometry" in order_js
-    assert "clippedGeometry.pointsAttribute(piece, 100, 100)" in order_js
+    assert "window.AlmdinaClippedCornerGeometry" in piece_geometry
+    assert "corner.points(piece, widthMm, heightMm)" in piece_geometry
+    assert "AlmdinaCuttingPlanPieceGeometry" in order_js
     assert "dco-clipped-corner-piece" in order_js
     assert "isCornerCut" in order_js
     assert "typeLabel(piece)" in order_js

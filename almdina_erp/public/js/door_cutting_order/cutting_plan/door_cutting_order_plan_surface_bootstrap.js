@@ -7,6 +7,10 @@
     const RECOVERY_DELAY_MS = 120;
     const MODULES = Object.freeze([
         Object.freeze({
+            global: "AlmdinaCuttingPlanPieceGeometry",
+            asset: "/assets/almdina_erp/js/door_cutting_order/cutting_plan/door_cutting_order_piece_geometry.js",
+        }),
+        Object.freeze({
             global: "AlmdinaCuttingPlanRender",
             asset: "/assets/almdina_erp/js/door_cutting_order/cutting_plan/door_cutting_order_cutting_plan_renderer.js",
         }),

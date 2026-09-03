@@ -3,8 +3,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 STRICT = ROOT / "almdina_erp" / "services" / "strict_dxf_import_service.py"
-TABS = ROOT / "public" / "js" / "door_cutting_order_plan_tabs_ux.js"
-RENDERER = ROOT / "public" / "js" / "door_cutting_order_cutting_plan_renderer.js"
+CUTTING_PLAN = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan"
+TABS = CUTTING_PLAN / "door_cutting_order_plan_tabs_ux.js"
+RENDERER = CUTTING_PLAN / "door_cutting_order_cutting_plan_renderer.js"
 
 
 def _source(path: Path) -> str:
@@ -50,7 +51,9 @@ def test_custom_dxf_and_system_plan_share_the_same_print_renderer():
 def test_shared_renderer_draws_edge_markers_on_screen_and_print():
     renderer = _source(RENDERER)
 
-    assert "render_piece_edge_lines(piece)" in renderer
+    assert "render_piece_edge_lines(piece, geometryModel, clipId)" in renderer
     assert 'class="dco-edge-line"' in renderer
+    assert 'class="dco-edge-line-svg"' in renderer
     assert ".dco-edge-line {" in renderer
+    assert ".dco-edge-line-svg {" in renderer
     assert "border-color: #e00000 !important;" in renderer
