@@ -19,6 +19,7 @@ from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
     dimensions_match_exact,
     normalize_cut_cm,
 )
+from almdina_erp.almdina_erp.domain.orders.extra_addons import physical_cut_quantity
 from almdina_erp.almdina_erp.services.dxf_import_service import (
     DxfImportError,
     parse_production_dxf as _legacy_parse_production_dxf,
@@ -118,27 +119,50 @@ def _bind_persisted_cut_dimensions(
     return persisted_specs
 
 
+def _row_for_spec(order: Any, spec: OrderPieceCutSpec) -> Any | None:
+    rows = list(getattr(order, "pieces", None) or [])
+    index = spec.row_index - 1
+    if 0 <= index < len(rows):
+        return rows[index]
+    return None
+
+
+def _physical_spec_qty(order: Any | None, spec: OrderPieceCutSpec) -> int:
+    if order is None:
+        return spec.qty
+    row = _row_for_spec(order, spec)
+    return physical_cut_quantity(
+        spec.qty,
+        full_door_double=bool(int(getattr(row, "extra_full_door_double", 0) or 0)) if row else False,
+    )
+
+
 def _proxy_order(
     order: Any,
     specs: list[OrderPieceCutSpec],
     settings: PlanSettings,
 ) -> Any:
-    pieces = [
-        SimpleNamespace(
-            qty=spec.qty,
-            # The legacy topology parser expects its public width/length inputs in
-            # manufacturing space. Preserve the same canonical values explicitly
-            # under cut_* as well so ALMADINA-143 never relies on a finished-size
-            # fallback while this internal proxy crosses the service boundary.
-            width_cm=float(spec.cut_width_cm),
-            length_cm=float(spec.cut_length_cm),
-            cut_width_cm=float(spec.cut_width_cm),
-            cut_length_cm=float(spec.cut_length_cm),
-            allow_rotation=spec.allow_rotation,
-            piece_type=spec.piece_type,
+    pieces = []
+    for spec in specs:
+        row = _row_for_spec(order, spec)
+        pieces.append(
+            SimpleNamespace(
+                qty=spec.qty,
+                extra_full_door_double=getattr(row, "extra_full_door_double", 0) if row else 0,
+                # The legacy topology parser expects its public width/length inputs in
+                # manufacturing space. Preserve the same canonical values explicitly
+                # under cut_* as well so ALMADINA-143 never relies on a finished-size
+                # fallback while this internal proxy crosses the service boundary.
+                width_cm=float(spec.cut_width_cm),
+                length_cm=float(spec.cut_length_cm),
+                cut_width_cm=float(spec.cut_width_cm),
+                cut_length_cm=float(spec.cut_length_cm),
+                finished_width_cm=float(spec.finished_width_cm),
+                finished_length_cm=float(spec.finished_length_cm),
+                allow_rotation=spec.allow_rotation,
+                piece_type=spec.piece_type,
+            )
         )
-        for spec in specs
-    ]
     return SimpleNamespace(
         pieces=pieces,
         # Before ALMADINA-141 this boundary used
@@ -154,7 +178,10 @@ def _proxy_order(
     )
 
 
-def _expanded_expected(specs: list[OrderPieceCutSpec]) -> list[dict[str, Any]]:
+def _expanded_expected(
+    specs: list[OrderPieceCutSpec],
+    order: Any | None = None,
+) -> list[dict[str, Any]]:
     return [
         {
             "spec": spec,
@@ -162,7 +189,7 @@ def _expanded_expected(specs: list[OrderPieceCutSpec]) -> list[dict[str, Any]]:
             "label": f"{spec.row_index}.{copy_no}",
         }
         for spec in specs
-        for copy_no in range(1, spec.qty + 1)
+        for copy_no in range(1, _physical_spec_qty(order, spec) + 1)
     ]
 
 
@@ -321,10 +348,12 @@ def _apply_piece_contract_metadata(
 def _apply_strict_dimension_contract(
     snapshot: dict[str, Any],
     specs: list[OrderPieceCutSpec],
+    *,
+    order: Any | None = None,
 ) -> list[str]:
     """Relabel pieces and enrich them with exact order + edge-print metadata."""
     errors: list[str] = []
-    unmatched = _expanded_expected(specs)
+    unmatched = _expanded_expected(specs, order)
 
     for sheet in snapshot.get("sheets") or []:
         for piece in sheet.get("pieces") or []:
@@ -426,6 +455,33 @@ def _apply_strict_dimension_contract(
     return errors
 
 
+def _with_persisted_cut_context(
+    error: DxfImportError,
+    specs: list[OrderPieceCutSpec],
+) -> DxfImportError:
+    """Keep the original geometry diagnosis and append persisted cut specs."""
+    text = str(error)
+    if "لا يمكن مطابقة محيطات CUT_PATH" in text:
+        return error
+    if (
+        "سماحية" not in text
+        and "لا تطابق أي قطعة" not in text
+        and "بعد تدويرها" not in text
+    ):
+        return error
+    expected = "؛ ".join(
+        f"الدرفة {spec.row_index}: {_format_spec(spec)}" for spec in specs[:8]
+    )
+    suffix = " ..." if len(specs) > 8 else ""
+    return DxfImportError(
+        list(error.errors)
+        + [
+            "مقاسات القص التصنيعية المحفوظة في الطلب: "
+            f"{expected}{suffix}. يجب مطابقة مقاس القص وليس المقاس النهائي، ولا توجد سماحية لتغيير مقاس الدرفة."
+        ]
+    )
+
+
 def parse_production_dxf(
     file_url: str,
     order: Any,
@@ -452,22 +508,10 @@ def parse_production_dxf(
             _proxy_order(order, specs, settings),
         )
     except DxfImportError as exc:
-        text = str(exc)
-        if (
-            "سماحية" in text
-            or "لا تطابق أي قطعة" in text
-            or "بعد تدويرها" in text
-            or "لا يمكن مطابقة محيطات CUT_PATH" in text
-        ):
-            expected = "؛ ".join(
-                f"الدرفة {spec.row_index}: {_format_spec(spec)}" for spec in specs[:8]
-            )
-            suffix = " ..." if len(specs) > 8 else ""
-            raise DxfImportError(
-                "مقاسات القطع في DXF لا تطابق مقاسات القص التصنيعية المحفوظة في الطلب. "
-                f"{expected}{suffix}. لا توجد سماحية لتغيير مقاس الدرفة."
-            ) from exc
-        raise
+        annotated = _with_persisted_cut_context(exc, specs)
+        if annotated is exc:
+            raise
+        raise annotated from exc
 
     try:
         snapshot = apply_adaptive_trim_to_fixed_dxf_layout(
@@ -479,7 +523,7 @@ def parse_production_dxf(
             "هندسة DXF تتجاوز حدود اللوح الفيزيائية ولا يمكن جعلها صالحة حتى بعد تطبيق سياسة التشذيب التكيفية."
         ) from exc
 
-    exact_errors = _apply_strict_dimension_contract(snapshot, specs)
+    exact_errors = _apply_strict_dimension_contract(snapshot, specs, order=order)
     if exact_errors:
         raise DxfImportError(exact_errors)
 

@@ -142,7 +142,9 @@ DXF importer يدعم قراءة Geometry ثم يطبق validation مستقلً�
 - kerf/geometric distance rules.
 - supported entity types/layers.
 
-لا تعتبر “الملف فتح في AutoCAD” دليلاً كافيًا أنه صالح للإنتاج.
+AutoCAD غالبًا يحفظ المستطيلات كـ `LWPOLYLINE` حتى لو صدّر النظام `LINE`. المستورد يجب أن يقرأ الاثنين من Modelspace. لا تعتبر “الملف فتح في AutoCAD” دليلاً كافيًا أنه صالح للإنتاج.
+
+تنزيل تبويب **الخطة المرفوعة** (والمعتمدة إذا كانت هي نفسها خطة DXF مرفوعة) يعيد بايتات ملف `Cutting Plan.dxf_file` الأصلي بعد التحقق من ارتباط الملف بالخطة. تصدير **خطة النظام** يبقى DXF R12 مولَّداً من snapshot بطبقات `SHEET_OUTLINE` و`CUT_PATH` فقط. طبقات إضافية يضيفها المصمم مثل `along` ليست جزءاً من عقد الاستيراد؛ تُحفظ فقط داخل الملف الأصلي ولا يعيد مولّد R12 كتابتها.
 
 ## 12. Drawing/DXF authorization
 

@@ -77,6 +77,7 @@ class TestPlanContextualActionsUI(unittest.TestCase):
             "رفع خطة DXF",
             "استبدال الخطة المرفوعة",
             "تصدير DXF",
+            "تنزيل DXF المرفوع",
             "طباعة",
         ):
             with self.subTest(label=label):
@@ -87,7 +88,8 @@ class TestPlanContextualActionsUI(unittest.TestCase):
         self.assertIn("controls.runApproval(frm)", context)
         self.assertIn("api.cancelApproval(frm.doc.name)", context)
         self.assertIn("tabs.printActivePlan(frm)", context)
-        self.assertIn("export_order_dxf(frm.doc.name, activeTab(frm))", context)
+        self.assertIn("export_order_dxf(frm.doc.name, activeTab(frm), {", context)
+        self.assertIn("hasOriginalFile: hasOriginalDxfFile(rowForTab(frm))", context)
         self.assertIn("upload_production_dxf(frm)", context)
         self.assertNotIn("frappe.call", context)
 
@@ -131,13 +133,19 @@ class TestPlanContextualActionsUI(unittest.TestCase):
         frontend = source(SECURE_EXPORT)
         backend = source(DXF_SERVICE)
 
-        self.assertIn("function exportOrderDxf(orderName, planSource = null)", frontend)
+        self.assertIn("function exportOrderDxf(orderName, planSource = null, options = null)", frontend)
         self.assertIn("args.plan_source = planSource", frontend)
         self.assertIn(
             "almdina_erp.almdina_erp.services.dxf_export_service.get_validated_dxf_plan",
             frontend,
         )
+        self.assertIn(
+            "almdina_erp.almdina_erp.services.dxf_export_service.download_uploaded_dxf",
+            frontend,
+        )
+        self.assertIn("shouldDownloadOriginalUpload(planSource, options)", frontend)
         self.assertIn("def _saved_plan_for_source(order: Any, plan_source: str | None)", backend)
+        self.assertIn("def download_uploaded_dxf(", backend)
         self.assertIn("source_type=SYSTEM, status=DRAFT", backend)
         self.assertIn("source_type=UPLOADED_DXF, status=DRAFT", backend)
         self.assertIn("approved_plan_for_order(order)", backend)

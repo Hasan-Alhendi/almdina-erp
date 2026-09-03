@@ -8,6 +8,17 @@
     const TOPOLOGY_SCHEMA_VERSION = 1;
     const TOPOLOGY_UNIT = "mm";
     const TOPOLOGY_COORDINATE_SPACE = "usable_sheet";
+    const ORIGINAL_UPLOAD_SOURCES = new Set([
+        "custom",
+        "uploaded",
+        "uploaded dxf",
+        "uploaded_dxf",
+        "dxf",
+    ]);
+    const ORIGINAL_DXF_METHOD =
+        "almdina_erp.almdina_erp.services.dxf_export_service.download_uploaded_dxf";
+    const VALIDATED_PLAN_METHOD =
+        "almdina_erp.almdina_erp.services.dxf_export_service.get_validated_dxf_plan";
 
     function canExportDxf(frm = window.cur_frm) {
         const permissions = window.AlmdinaPermissions;
@@ -285,6 +296,24 @@
         }
     }
 
+    function shouldDownloadOriginalUpload(planSource, options) {
+        const normalized = String(planSource || "").trim().toLowerCase();
+        if (ORIGINAL_UPLOAD_SOURCES.has(normalized)) return true;
+        if (normalized === "approved") {
+            return Boolean(options && options.hasOriginalFile);
+        }
+        return false;
+    }
+
+    function decodeBase64Bytes(value) {
+        const binary = atob(String(value || ""));
+        const bytes = new Uint8Array(binary.length);
+        for (let index = 0; index < binary.length; index += 1) {
+            bytes[index] = binary.charCodeAt(index);
+        }
+        return bytes;
+    }
+
     function download(filename, content, mimeType) {
         const blob = new Blob([content], { type: mimeType });
         const url = URL.createObjectURL(blob);
@@ -332,10 +361,36 @@
 
     function fetchValidatedPlan(args) {
         return frappe.call({
-            method: "almdina_erp.almdina_erp.services.dxf_export_service.get_validated_dxf_plan",
+            method: VALIDATED_PLAN_METHOD,
             args,
             freeze: true,
             freeze_message: isArabic() ? "جاري التحقق من هندسة ملف DXF قبل التصدير..." : "Validating DXF geometry on server...",
+        });
+    }
+
+    function fetchOriginalUploadedDxf(args) {
+        return frappe.call({
+            method: ORIGINAL_DXF_METHOD,
+            args,
+            freeze: true,
+            freeze_message: isArabic()
+                ? "جاري تنزيل ملف DXF المرفوع..."
+                : "Downloading the uploaded DXF file...",
+        });
+    }
+
+    function downloadOriginalUpload(data) {
+        const filename = String((data && data.filename) || "").trim();
+        const contentB64 = String((data && data.content_b64) || "");
+        if (!filename || !contentB64) {
+            throw new Error("Uploaded DXF payload is missing.");
+        }
+        download(filename, decodeBase64Bytes(contentB64), "application/dxf");
+        frappe.show_alert({
+            message: isArabic()
+                ? "تم تنزيل ملف DXF المرفوع بنجاح."
+                : "Uploaded DXF downloaded successfully.",
+            indicator: "green",
         });
     }
 
@@ -346,9 +401,21 @@
         return fetchValidatedPlan(args).then(r => downloadValidatedPlan(r.message, frm.doc.name));
     }
 
-    function exportOrderDxf(orderName, planSource = null) {
+    function exportOrderDxf(orderName, planSource = null, options = null) {
         const args = { order_name: orderName };
         if (planSource) args.plan_source = planSource;
+        if (shouldDownloadOriginalUpload(planSource, options)) {
+            return fetchOriginalUploadedDxf(args).then(r => {
+                try {
+                    downloadOriginalUpload(r && r.message);
+                } catch (error) {
+                    console.error("Uploaded DXF download failed", error);
+                    frappe.throw(isArabic()
+                        ? "تعذر تنزيل ملف DXF المرفوع."
+                        : "Could not download the uploaded DXF file.");
+                }
+            });
+        }
         return fetchValidatedPlan(args).then(r =>
             downloadValidatedPlan(r.message, orderName)
         );
@@ -366,6 +433,8 @@
         "تصدير DXF للتعديل",
         "تصدير DXF لأوتوكاد",
         "Export DXF for AutoCAD",
+        "تنزيل DXF المرفوع",
+        "Download uploaded DXF",
         "تنزيل DXF للإنتاج",
         "رفع ملف DXF",
         "استبدال ملف DXF",
@@ -376,7 +445,7 @@
     function isExportButtonLabel(text) {
         const value = String(text || "").trim();
         if (STRIP_EXPORT_LABELS.includes(value)) return true;
-        return /تصدير\s*DXF/i.test(value) || /^export\s*dxf/i.test(value);
+        return /تصدير\s*DXF/i.test(value) || /تنزيل\s*DXF/i.test(value) || /^export\s*dxf/i.test(value) || /^download\s*uploaded\s*dxf/i.test(value);
     }
 
     function stripUnauthorizedExportButtons(frm) {

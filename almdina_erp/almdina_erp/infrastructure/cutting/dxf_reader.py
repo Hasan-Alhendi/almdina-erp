@@ -62,6 +62,65 @@ def _diagnostics(
     }
 
 
+def _import_ezdxf():
+    import ezdxf
+    from ezdxf import path as ezpath
+
+    return ezdxf, ezpath
+
+
+def _load_ezdxf_document(ezdxf: Any, file_path: str) -> Any:
+    try:
+        return ezdxf.readfile(file_path)
+    except Exception:
+        try:
+            from ezdxf import recover
+
+            document, _auditor = recover.readfile(file_path)
+        except Exception as exc:
+            raise DxfReadError(
+                "تعذر قراءة بنية ملف DXF. تأكد أن الملف DXF صالح وغير تالف."
+            ) from exc
+        return document
+
+
+def _geometry_from_legacy_rows(
+    rows: list[dict[str, Any]],
+    *,
+    relevant_layers: set[str],
+) -> dict[str, Any]:
+    segments: list[dict[str, Any]] = []
+    detected_layers: set[str] = set()
+    entity_counts: Counter[str] = Counter()
+    for row in rows:
+        layer = _normalize_layer(row.get("layer"))
+        detected_layers.add(layer)
+        entity_type = str(row.get("entity_type") or row.get("type") or "LINE").upper()
+        entity_counts[entity_type] += 1
+        if layer not in relevant_layers:
+            continue
+        segments.append(
+            {
+                "layer": layer,
+                "entity_type": entity_type,
+                "start": (float(row.get("x1") or 0), float(row.get("y1") or 0)),
+                "end": (float(row.get("x2") or 0), float(row.get("y2") or 0)),
+            }
+        )
+    return {
+        "segments": segments,
+        "unsupported": [],
+        "diagnostics": _diagnostics(
+            detected_layers=detected_layers,
+            relevant_layers=relevant_layers,
+            entity_counts=entity_counts,
+            has_inserts=False,
+            block_names=set(),
+            expanded_entities=len(rows),
+        ),
+    }
+
+
 def read_dxf_geometry(
     file_path: str,
     *,
@@ -77,44 +136,16 @@ def read_dxf_geometry(
     """
     normalized_relevant_layers = {_normalize_layer(layer) for layer in relevant_layers}
     try:
-        import ezdxf
-        from ezdxf import path as ezpath
+        ezdxf, ezpath = _import_ezdxf()
     except ImportError:
         if legacy_line_parser is None:
             raise DxfReadError("مكتبة قراءة DXF غير متوفرة على الخادم.")
-        rows = legacy_line_parser()
-        segments = []
-        detected_layers: set[str] = set()
-        for row in rows:
-            layer = _normalize_layer(row.get("layer"))
-            detected_layers.add(layer)
-            if layer not in normalized_relevant_layers:
-                continue
-            segments.append(
-                {
-                    "layer": layer,
-                    "entity_type": "LINE",
-                    "start": (float(row.get("x1") or 0), float(row.get("y1") or 0)),
-                    "end": (float(row.get("x2") or 0), float(row.get("y2") or 0)),
-                }
-            )
-        return {
-            "segments": segments,
-            "unsupported": [],
-            "diagnostics": _diagnostics(
-                detected_layers=detected_layers,
-                relevant_layers=normalized_relevant_layers,
-                entity_counts=Counter({"LINE": len(rows)}) if rows else Counter(),
-                has_inserts=False,
-                block_names=set(),
-                expanded_entities=len(rows),
-            ),
-        }
+        return _geometry_from_legacy_rows(
+            legacy_line_parser(),
+            relevant_layers=normalized_relevant_layers,
+        )
 
-    try:
-        doc = ezdxf.readfile(file_path)
-    except Exception as exc:
-        raise DxfReadError("تعذر قراءة بنية ملف DXF. تأكد أن الملف DXF صالح وغير تالف.") from exc
+    doc = _load_ezdxf_document(ezdxf, file_path)
 
     segments: list[dict[str, Any]] = []
     unsupported: list[dict[str, str]] = []

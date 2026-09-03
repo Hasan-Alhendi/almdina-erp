@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from collections import Counter
 from typing import Any
 
 import frappe
@@ -78,14 +79,147 @@ def _format_mm(value: float) -> str:
     return f"{value:.1f}".rstrip("0").rstrip(".")
 
 
-def _topology_error_message(error: DxfTopologyError, *, kerf_mm: float = 0.0) -> str:
+def _format_size_counts(counts: Counter[str], *, limit: int = 10) -> str:
+    if not counts:
+        return "لا توجد"
+    visible = [
+        f"{size} (×{qty})" if qty > 1 else size
+        for size, qty in counts.most_common(limit)
+    ]
+    suffix = " ..." if len(counts) > limit else ""
+    return "، ".join(visible) + suffix
+
+
+def _bbox_size_label_cm(points: list[tuple[float, float]] | tuple[tuple[float, float], ...]) -> str:
+    min_x, min_y, max_x, max_y = bbox(points)
+    return f"{_format_cm((max_x - min_x) / 10.0)} × {_format_cm((max_y - min_y) / 10.0)} سم"
+
+
+def _cut_topology_mismatch_details(
+    candidates: tuple[ContourCandidate, ...],
+    order: Any,
+) -> str:
+    dxf_sizes = _format_size_counts(
+        Counter(_bbox_size_label_cm(candidate.polygon) for candidate in candidates)
+    )
+    expected_sizes = _format_size_counts(
+        Counter(
+            f"{_format_cm(piece['width_cm'])} × {_format_cm(piece['length_cm'])} سم"
+            for piece in _expected_order_pieces(order)
+        )
+    )
+    parts = [
+        f"مقاسات DXF: {dxf_sizes}.",
+        f"مقاسات القص المطلوبة: {expected_sizes}.",
+        "ارسم بمقاس القص المحفوظ وليس المقاس النهائي، ولا تترك مسارات إضافية على CUT_PATH.",
+    ]
+    parts.extend(_finished_size_hints(candidates, order)[:2])
+    parts.extend(_near_miss_size_hints(candidates, order)[:2])
+    return " ".join(parts)
+
+
+def _size_matches(width: float, height: float, expected_w: float, expected_h: float, *, tol: float) -> bool:
+    return abs(width - expected_w) <= tol and abs(height - expected_h) <= tol
+
+
+def _finished_size_hints(
+    candidates: tuple[ContourCandidate, ...],
+    order: Any,
+) -> list[str]:
+    expected = _expected_order_pieces(order)
+    tol = DIMENSION_TOLERANCE_MM / 10.0
+    hints: list[str] = []
+    seen: set[tuple[object, ...]] = set()
+    for contour in candidates:
+        min_x, min_y, max_x, max_y = bbox(contour.polygon)
+        width_cm = (max_x - min_x) / 10.0
+        height_cm = (max_y - min_y) / 10.0
+        for piece in expected:
+            finished_w = _num(piece.get("finished_width_cm"))
+            finished_h = _num(piece.get("finished_length_cm"))
+            if finished_w <= 0 or finished_h <= 0:
+                continue
+            matches_finished = _size_matches(
+                width_cm, height_cm, finished_w, finished_h, tol=tol
+            ) or (
+                bool(piece["allow_rotation"])
+                and _size_matches(width_cm, height_cm, finished_h, finished_w, tol=tol)
+            )
+            matches_cut = _size_matches(
+                width_cm, height_cm, piece["width_cm"], piece["length_cm"], tol=tol
+            ) or (
+                bool(piece["allow_rotation"])
+                and _size_matches(width_cm, height_cm, piece["length_cm"], piece["width_cm"], tol=tol)
+            )
+            key = (piece["source_piece_no"], _bbox_size_label_cm(contour.polygon))
+            if matches_finished and not matches_cut and key not in seen:
+                seen.add(key)
+                hints.append(
+                    f"محيط {_bbox_size_label_cm(contour.polygon)} يطابق المقاس النهائي للدرفة "
+                    f"{piece['source_piece_no']} وليس مقاس القص "
+                    f"{_format_cm(piece['width_cm'])} × {_format_cm(piece['length_cm'])} سم."
+                )
+    return hints
+
+
+def _near_miss_size_hints(
+    candidates: tuple[ContourCandidate, ...],
+    order: Any,
+) -> list[str]:
+    expected = _expected_order_pieces(order)
+    match_tol = DIMENSION_TOLERANCE_MM / 10.0
+    near_tol = 1.5
+    hints: list[str] = []
+    seen: set[tuple[str, str]] = set()
+    for contour in candidates:
+        min_x, min_y, max_x, max_y = bbox(contour.polygon)
+        width_cm = (max_x - min_x) / 10.0
+        height_cm = (max_y - min_y) / 10.0
+        if any(
+            _size_matches(width_cm, height_cm, piece["width_cm"], piece["length_cm"], tol=match_tol)
+            or (
+                bool(piece["allow_rotation"])
+                and _size_matches(width_cm, height_cm, piece["length_cm"], piece["width_cm"], tol=match_tol)
+            )
+            for piece in expected
+        ):
+            continue
+        dxf_label = _bbox_size_label_cm(contour.polygon)
+        for piece in expected:
+            orientations = [(piece["width_cm"], piece["length_cm"])]
+            if piece["allow_rotation"]:
+                orientations.append((piece["length_cm"], piece["width_cm"]))
+            for expected_w, expected_h in orientations:
+                delta_w = abs(width_cm - expected_w)
+                delta_h = abs(height_cm - expected_h)
+                if max(delta_w, delta_h) > near_tol or (delta_w <= match_tol and delta_h <= match_tol):
+                    continue
+                key = (dxf_label, piece["label"])
+                if key in seen:
+                    continue
+                seen.add(key)
+                hints.append(
+                    f"محيط {dxf_label} قريب من مقاس القص {piece['label']} "
+                    f"({_format_cm(piece['width_cm'])} × {_format_cm(piece['length_cm'])} سم) "
+                    f"بفرق {_format_mm(delta_w * 10.0)} × {_format_mm(delta_h * 10.0)} مم."
+                )
+    return hints
+
+
+def _topology_error_message(
+    error: DxfTopologyError,
+    *,
+    kerf_mm: float = 0.0,
+    details: str = "",
+) -> str:
     first = error.first_key if error.first_key is not None else "؟"
     second = error.second_key if error.second_key is not None else "؟"
     if error.code == "EXPECTED_PIECE_MISMATCH":
-        return (
+        message = (
             "لا يمكن مطابقة محيطات CUT_PATH المغلقة مع قطع الطلب المطلوبة. "
             "تأكد من مقاسات محيطات القطع ومن أن المسارات الإضافية هي فتحات داخلية فقط."
         )
+        return f"{message} {details}".strip()
     if error.code == "AMBIGUOUS_CONTOUR_OWNERSHIP":
         return (
             "تركيب مسارات CUT_PATH ملتبس فعليًا: يوجد مسار داخلي يمكن اعتباره فتحة أو قطعة مستقلة من الطلب. "
@@ -119,8 +253,50 @@ def _topology_error_message(error: DxfTopologyError, *, kerf_mm: float = 0.0) ->
     return "تعذر التحقق من بنية القطع والفتحات الداخلية في DXF. صحح الرسم ثم أعد الرفع."
 
 
+def _lwpolyline_segments(current: dict[str, Any]) -> list[dict[str, Any]]:
+    layer = str(current.get("layer") or "").strip()
+    points = list(current.get("points") or [])
+    if not layer or len(points) < 2:
+        return []
+    if current.get("closed") and points[0] != points[-1]:
+        points.append(points[0])
+    segments: list[dict[str, Any]] = []
+    for start, end in zip(points, points[1:]):
+        if start == end:
+            continue
+        segments.append(
+            {
+                "type": "LWPOLYLINE",
+                "layer": layer,
+                "x1": start[0],
+                "y1": start[1],
+                "x2": end[0],
+                "y2": end[1],
+            }
+        )
+    return segments
+
+
+def _flush_ascii_entity(
+    entity_type: str,
+    current: dict[str, Any],
+    entities: list[dict[str, Any]],
+    *,
+    section: str,
+) -> None:
+    if section not in {"", "ENTITIES"}:
+        return
+    if current.get("paperspace"):
+        return
+    if entity_type == "LINE" and current:
+        entities.append(current)
+        return
+    if entity_type == "LWPOLYLINE" and current:
+        entities.extend(_lwpolyline_segments(current))
+
+
 def _parse_r12_lines(content: str) -> list[dict[str, Any]]:
-    """Fallback parser for the application's legacy R12 LINE-only exporter."""
+    """Fallback parser for R12 LINE entities and AutoCAD LWPOLYLINE."""
     if not content:
         return []
     normalized = content.replace("\r\n", "\n").replace("\r", "\n")
@@ -132,37 +308,68 @@ def _parse_r12_lines(content: str) -> list[dict[str, Any]]:
     idx = 0
     current: dict[str, Any] = {}
     entity_type = ""
+    section = ""
     while idx + 1 < len(lines):
         code = lines[idx].strip()
         value = lines[idx + 1]
         idx += 2
         if code == "0":
-            if entity_type == "LINE" and current:
-                entities.append(current)
-            if value == "LINE":
-                entity_type = "LINE"
-                current = {"type": "LINE"}
+            _flush_ascii_entity(entity_type, current, entities, section=section)
+            if value == "SECTION":
+                entity_type = "_SECTION"
+                current = {}
             elif value in {"EOF", "ENDSEC"}:
                 entity_type = ""
                 current = {}
+                if value == "ENDSEC":
+                    section = ""
+            elif value == "LINE":
+                entity_type = "LINE"
+                current = {"type": "LINE"}
+            elif value == "LWPOLYLINE":
+                entity_type = "LWPOLYLINE"
+                current = {"type": "LWPOLYLINE", "points": []}
             else:
                 entity_type = value
                 current = {}
             continue
-        if entity_type != "LINE":
+        if entity_type == "_SECTION" and code == "2":
+            section = value.strip()
+            entity_type = ""
+            current = {}
+            continue
+        if section not in {"", "ENTITIES"}:
+            continue
+        if entity_type == "LINE":
+            if code == "8":
+                current["layer"] = value.strip()
+            elif code == "67":
+                current["paperspace"] = value.strip() not in {"", "0"}
+            elif code == "10":
+                current["x1"] = _num(value)
+            elif code == "20":
+                current["y1"] = _num(value)
+            elif code == "11":
+                current["x2"] = _num(value)
+            elif code == "21":
+                current["y2"] = _num(value)
+            continue
+        if entity_type != "LWPOLYLINE":
             continue
         if code == "8":
             current["layer"] = value.strip()
+        elif code == "67":
+            current["paperspace"] = value.strip() not in {"", "0"}
+        elif code == "70":
+            try:
+                current["closed"] = bool(int(float(value.strip())) & 1)
+            except ValueError:
+                pass
         elif code == "10":
-            current["x1"] = _num(value)
+            current["_x"] = _num(value)
         elif code == "20":
-            current["y1"] = _num(value)
-        elif code == "11":
-            current["x2"] = _num(value)
-        elif code == "21":
-            current["y2"] = _num(value)
-    if entity_type == "LINE" and current:
-        entities.append(current)
+            current.setdefault("points", []).append((current.pop("_x", 0.0), _num(value)))
+    _flush_ascii_entity(entity_type, current, entities, section=section)
     return [row for row in entities if row.get("layer")]
 
 
@@ -247,6 +454,12 @@ def _expected_order_pieces(order: Any) -> list[dict[str, Any]]:
                 f"مقاسات القص التصنيعية للقطعة رقم {group_index} غير محفوظة أو غير صالحة. "
                 "احفظ الطلب لإعادة تثبيت مقاسات القص ثم أعد رفع DXF."
             ) from exc
+        finished_width_cm = getattr(row, "finished_width_cm", None)
+        finished_length_cm = getattr(row, "finished_length_cm", None)
+        if finished_width_cm is None:
+            finished_width_cm = getattr(row, "width_cm", 0)
+        if finished_length_cm is None:
+            finished_length_cm = getattr(row, "length_cm", 0)
         for copy_no in range(
             1,
             physical_cut_quantity(
@@ -260,6 +473,8 @@ def _expected_order_pieces(order: Any) -> list[dict[str, Any]]:
                     "label": f"{group_index}.{copy_no}",
                     "width_cm": cut_width_cm,
                     "length_cm": cut_length_cm,
+                    "finished_width_cm": _num(finished_width_cm),
+                    "finished_length_cm": _num(finished_length_cm),
                     "allow_rotation": cint(row.allow_rotation),
                     "piece_type": row.piece_type or "Regular",
                     "source_piece_no": group_index,
@@ -585,8 +800,15 @@ def _resolve_cut_topology(contours: list[dict[str, object]], order: Any) -> Reso
             geometry_tolerance=GEOMETRY_TOLERANCE_MM,
         )
     except DxfTopologyError as exc:
+        details = ""
+        if exc.code == "EXPECTED_PIECE_MISMATCH":
+            details = _cut_topology_mismatch_details(candidates, order)
         raise DxfImportError(
-            _topology_error_message(exc, kerf_mm=max(0.0, flt(order.kerf_mm)))
+            _topology_error_message(
+                exc,
+                kerf_mm=max(0.0, flt(order.kerf_mm)),
+                details=details,
+            )
         ) from exc
 
 

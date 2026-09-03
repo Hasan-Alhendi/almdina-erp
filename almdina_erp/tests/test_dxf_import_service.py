@@ -5,7 +5,9 @@ ROOT = Path(__file__).resolve().parents[1]
 DXF_IMPORT = ROOT / "almdina_erp" / "services" / "dxf_import_service.py"
 DXF_READER = ROOT / "almdina_erp" / "infrastructure" / "cutting" / "dxf_reader.py"
 DXF_GEOMETRY = ROOT / "almdina_erp" / "domain" / "cutting" / "dxf_geometry.py"
-SECURE_DXF = ROOT / "public" / "js" / "secure_dxf_export.js"
+SECURE_DXF = (
+    ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan" / "secure_dxf_export.js"
+)
 
 
 def _source(path: Path) -> str:
@@ -43,6 +45,7 @@ def test_round_trip_line_parser_is_kept_as_r12_fallback():
     assert "def _parse_r12_lines" in src
     assert 'if code == "0":' in src
     assert 'entity_type == "LINE"' in src
+    assert 'value == "LWPOLYLINE"' in src
     assert "legacy_line_parser" in src
 
 

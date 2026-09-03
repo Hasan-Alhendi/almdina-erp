@@ -15,6 +15,8 @@
         "Export DXF for AutoCAD",
         "تصدير DXF",
         "Export DXF",
+        "تنزيل DXF المرفوع",
+        "Download uploaded DXF",
         "تصدير DXF للرسم",
         "تصدير DXF للتعديل",
         "تنزيل DXF للإنتاج",
