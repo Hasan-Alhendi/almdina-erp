@@ -46,6 +46,28 @@ class TestWorkforceNativeNavigationContract(unittest.TestCase):
         self.assertNotIn("ALMDINA_APP", source)
         self.assertNotIn("is_almdina_user", source)
 
+    def test_default_app_is_navigation_only_not_membership_authority(self) -> None:
+        scope = (
+            APP_ROOT
+            / "almdina_erp"
+            / "infrastructure"
+            / "frappe"
+            / "factory_user_scope.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('ALMDINA_APP = "almdina_erp"', scope)
+        self.assertIn('ALMDINA_WORKSPACE = "Almdina ERP"', scope)
+        self.assertNotIn("def is_almdina_user", scope)
+
+        app_source = APP_ROOT / "almdina_erp"
+        for path in app_source.rglob("*.py"):
+            source = path.read_text(encoding="utf-8")
+            self.assertNotIn(
+                "is_almdina_user",
+                source,
+                f"default_app membership authority returned in {path}",
+            )
+
     def test_app_card_uses_the_workspace_slug_route(self) -> None:
         hooks = (APP_ROOT / "hooks.py").read_text(encoding="utf-8")
         self.assertIn('"route": "/desk/almdina-erp"', hooks)
