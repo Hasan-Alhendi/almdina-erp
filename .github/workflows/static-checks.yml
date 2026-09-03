@@ -193,6 +193,9 @@ jobs:
           python -m pytest -q \
             almdina_erp/tests/test_*ux.py \
             almdina_erp/tests/test_dxf_autocad_compatibility.py \
+            almdina_erp/tests/test_dxf_import_service.py \
+            almdina_erp/tests/test_dxf_lwpolyline_ascii_fallback.py \
+            almdina_erp/tests/test_dxf_cut_size_diagnostics.py \
             almdina_erp/tests/test_arabic_operator_localization.py \
             almdina_erp/tests/test_compact_invoice_print_contract.py \
             almdina_erp/tests/test_advanced_cutting_optimizer.py

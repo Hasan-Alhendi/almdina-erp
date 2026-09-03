@@ -142,7 +142,7 @@ DXF importer يدعم قراءة Geometry ثم يطبق validation مستقلً�
 - kerf/geometric distance rules.
 - supported entity types/layers.
 
-لا تعتبر “الملف فتح في AutoCAD” دليلاً كافيًا أنه صالح للإنتاج.
+AutoCAD غالبًا يحفظ المستطيلات كـ `LWPOLYLINE` حتى لو صدّر النظام `LINE`. المستورد يجب أن يقرأ الاثنين من Modelspace. لا تعتبر “الملف فتح في AutoCAD” دليلاً كافيًا أنه صالح للإنتاج.
 
 ## 12. Drawing/DXF authorization
 

@@ -128,14 +128,16 @@
 
 1. units = mm في Geometry التشغيلية.
 2. طبقات `SHEET_OUTLINE` و`CUT_PATH` المطلوبة حسب العقد.
-3. entity types المدعومة.
-4. contours/connectivity.
-5. dimensions والتسامحات.
-6. overlap/bounds.
-7. rotation rules.
-8. عدد القطع ومطابقتها مع DCO.
-9. kerf/distance rules.
-10. File مرتبط بالطلب الصحيح ورفع بواسطة persona مخولة.
+3. أن الرسم في Modelspace، وأن AutoCAD لم يحوّل المسارات إلى `LWPOLYLINE` فقط دون أن يقرأها المستورد (النظام يدعم `LINE` و`LWPOLYLINE`).
+4. entity types المدعومة.
+5. contours/connectivity.
+6. dimensions والتسامحات.
+7. overlap/bounds.
+8. rotation rules.
+9. عدد القطع ومطابقتها مع DCO.
+10. kerf/distance rules.
+11. File مرتبط بالطلب الصحيح ورفع بواسطة persona مخولة.
+12. DXF يطابق **مقاس القص** المحفوظ (`cut_width_cm × cut_length_cm`) وليس المقاس النهائي بعد القشاط. فرق 1 سم مثل 28.9 بدل 29.9 يرفض الملف.
 
 لا تخفّض tolerance عشوائيًا لحل ملف واحد قبل فهم الفرق الهندسي.
 
