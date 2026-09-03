@@ -183,3 +183,14 @@ Stage 14 يثبت أن CNC لا يستطيع التصرف كعامل الرسم 
 - plan snapshot security.
 - Special Shape Documentation checks إذا تغير محرر التوثيق.
 - Frappe integration إذا تغير persistence/schema/files.
+
+## 16. عرض هندسة القطع في الخطة
+
+- هندسة DXF المقبولة تُحفظ في `sheets[].pieces[].geometry` بعقد versioned، بوحدة `mm` وفي إحداثيات `usable_sheet`. هذا الـsnapshot هو مصدر الحقيقة للعرض وإعادة الفتح والطباعة والنسخ المعتمدة.
+- `outer` و`holes` هما تمثيل `PartGeometry` الحالي. المنحنيات تُعرض من نفس النقاط التي أنتجها DXF reader بسماحية التسطيح المعتمدة؛ لا تعيد طبقة العرض قراءة DXF أو تقريب المنحنى بعقد آخر.
+- `door_cutting_order_piece_geometry.js` هو compatibility adapter نقي يحول هندسة DXF، وSpecial اليدوية، والزاوية، والمستطيل التاريخي إلى `PieceRenderModel` واحد يفصل الشكل المحلي عن `PiecePlacement`.
+- هندسة DXF المخزنة تكون مطبّقًا عليها موضع الرسم الفعلي أصلًا. يحولها adapter إلى شكل محلي عبر طرح حدودها، ويستخرج placement من حدودها دون إعادة تطبيق `rotated`؛ منع الدوران المزدوج جزء من العقد.
+- النظام optimizer يدعم حاليًا 0°/90° عبر `rotated` ولا يملك mirror أو حالات 180°/270° مستقلة. لا يجوز لطبقة العرض اختراع تحويل غير موجود في الخطة.
+- web وprint يستهلكان `geometry.pathData` نفسها كـSVG vector. الفتحات تُعرض بـ`evenodd`، ورقم القطعة يستخدم visual-center داخل المادة بدل مركز bounding box عند الأشكال غير المنتظمة.
+- دلالات القشاط الحالية تبقى `top/bottom/left/right`. للأشكال غير المنتظمة تُقص المؤشرات ضمن مادة المسار الحقيقي، من دون ترحيل مدمر أو اختراع ربط جديد بين القشاط وكل segment.
+- وجود عقد `geometry` معلن لكنه غير صالح لا يتحول بصمت إلى قطعة صحيحة؛ يظهر fallback تشخيصي. أما snapshots القديمة التي لا تعلن الهندسة فتستمر بالمستطيل أو عقد Special/Corner التوافقية.

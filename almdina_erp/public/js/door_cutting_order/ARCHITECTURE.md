@@ -115,6 +115,22 @@ contracts and responsibilities:
 Do not reconstruct manufacturing geometry from documentation strokes, templates,
 images, canvas pixels or presentation state.
 
+### Cutting-plan piece geometry
+
+`cutting_plan/door_cutting_order_piece_geometry.js` owns the pure presentation
+normalization boundary for placed pieces. It accepts the persisted DXF geometry
+contract plus the existing manual Special, corner, and legacy rectangle contracts,
+then returns one immutable `PieceRenderModel`. The model separates piece-local
+contours from placement and provides one deterministic SVG path and an inside-material
+label point. The cutting-plan renderer does not parse source schemas.
+
+Persisted DXF contours are already transformed into usable-sheet coordinates by the
+import pipeline. The adapter localizes those coordinates and derives placement from
+their bounds; it must not apply `piece.rotated` again. Manual Special and corner
+geometry retain their existing 0°/90° transform owners. Screen, board focus, previews,
+and print consume the same path model, while print keeps its own stroke/label/page CSS.
+No DXF is reparsed during render, and no canvas/raster conversion is permitted.
+
 ### Extra-door commercial boundary
 
 `Extra` is a rectangular customer requirement, not a special-shape geometry type.

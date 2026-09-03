@@ -233,6 +233,7 @@ jobs:
           node almdina_erp/tests/js/permission_context.test.js
           node almdina_erp/tests/js/order_lifecycle_permissions.test.js
           node almdina_erp/tests/js/financial_documents.test.js
+          node almdina_erp/tests/js/cutting_plan_piece_geometry.test.js
           node almdina_erp/tests/js/cutting_plan_renderer.test.js
           node almdina_erp/tests/js/document_context.test.js
           node almdina_erp/tests/js/document_context_async.test.js
