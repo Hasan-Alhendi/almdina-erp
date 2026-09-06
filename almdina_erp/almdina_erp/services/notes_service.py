@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import frappe
+import frappe.permissions
 from frappe import _
 
 from almdina_erp.almdina_erp.application.notes.contracts import (
@@ -113,11 +114,11 @@ def _require_manage_important(order: Any) -> None:
 
 def _customer_has_read_access(customer: Any) -> bool:
     # This is an availability probe for an optional secondary context, not an
-    # authorization failure for the DCO itself. Keep it silent so a valid Notes
-    # drawer never surfaces Frappe's permission-debug dialog merely because the
-    # current worker cannot read Customer records.
+    # authorization failure for the DCO itself. Frappe v16's public
+    # `frappe.has_permission` facade does not accept `print_logs`; the lower-level
+    # permission evaluator does and is the correct API when the probe must be silent.
     return bool(
-        frappe.has_permission(
+        frappe.permissions.has_permission(
             CUSTOMER_DOCTYPE,
             ptype="read",
             doc=customer,
