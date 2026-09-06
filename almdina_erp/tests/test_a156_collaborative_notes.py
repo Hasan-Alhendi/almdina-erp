@@ -9,6 +9,7 @@ from almdina_erp.almdina_erp.application.notes.contracts import (
     NOTE_MAX_LENGTH,
     NotesValidationError,
     is_collaborative_note_subject,
+    normalize_boolean_flag,
     normalize_note_content,
     normalize_reference,
     normalize_request_id,
@@ -72,6 +73,15 @@ def test_a156_note_contracts_are_small_bounded_and_reference_scoped() -> None:
     with pytest.raises(NotesValidationError):
         normalize_note_content("x" * (NOTE_MAX_LENGTH + 1))
     assert normalize_note_content("  ملاحظة قصيرة  ") == "ملاحظة قصيرة"
+
+
+def test_a156_boolean_flags_are_strict_and_rpc_safe() -> None:
+    for value in (True, 1, "1", "true", "TRUE", "yes", "on"):
+        assert normalize_boolean_flag(value) is True
+    for value in (False, 0, "0", "false", "FALSE", "no", "off", ""):
+        assert normalize_boolean_flag(value) is False
+    with pytest.raises(NotesValidationError):
+        normalize_boolean_flag("unexpected", label="قيمة الملاحظة المهمة")
 
 
 def test_a156_request_id_and_preview_support_retryable_weak_network_flow() -> None:
@@ -159,6 +169,7 @@ def test_a156_mutations_require_separate_add_and_important_authority() -> None:
     clear_body = service.split("def clear_important_note", 1)[1]
 
     assert "_require_add_note(order)" in add_body
+    assert "mark_important = _normalize_important_flag(important)" in add_body
     assert "if mark_important:" in add_body
     assert "_require_manage_important(order)" in add_body
     assert "_require_manage_important(order)" in set_body
@@ -172,7 +183,19 @@ def test_a156_lost_response_retry_is_server_idempotent() -> None:
     assert "find_by_request_subject" in repository
     assert "request_subject(normalized_request)" in service
     assert "find_by_request_subject(doctype, name, subject)" in service
-    assert "already used with different content" in service
+    assert "تم استخدام معرّف هذا الطلب سابقًا مع محتوى مختلف" in service
+
+
+def test_a156_factory_facing_validation_feedback_is_arabic() -> None:
+    contracts = source(CONTRACTS)
+    service = source(SERVICE)
+    assert "لا يمكن إضافة ملاحظة فارغة" in contracts
+    assert "يجب تحديد طلب القص" in service
+    assert "ملاحظات العميل متاحة فقط" in service
+    assert "اختر ملاحظة لتعيينها كملاحظة مهمة" in service
+    assert "A Door Cutting Order is required" not in service
+    assert "Customer notes are only available" not in service
+    assert "Select a note to mark as important" not in service
 
 
 def test_a156_projection_is_list_only_and_never_updates_dco_modified() -> None:
