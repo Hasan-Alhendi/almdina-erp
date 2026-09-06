@@ -62,6 +62,15 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
     Capability.APPROVE_ORDER: _presentation("اعتماد الطلب (ملغاة)", "أُلغيت. استخدم «إرسال للإنتاج» مباشرة. اعتماد خطة القص يبقى صلاحية منفصلة.", "critical"),
     Capability.REJECT_ORDER: _presentation("رفض الطلب", "رفض طلب عالق في قائمة المراجعة القديمة وإعادته للتعديل.", "critical"),
     Capability.CANCEL_ORDER: _presentation("إلغاء الطلب", "إلغاء الطلب وفق ضوابط دورة الحياة.", "critical"),
+    Capability.ADD_INTERNAL_NOTE: _presentation(
+        "إضافة ملاحظة داخلية",
+        "إضافة ملاحظات تعاونية على الطلب والزبون المرتبط به دون تعديل الطلب أو الدخول في دورة الحفظ والمراجعات.",
+    ),
+    Capability.MANAGE_IMPORTANT_NOTE: _presentation(
+        "تعيين الملاحظة المهمة",
+        "اختيار أو إلغاء الملاحظة المهمة الحالية للطلب؛ تظهر مباشرة في قائمة الطلبات وداخل بطاقة الموبايل.",
+        "sensitive",
+    ),
     Capability.VIEW_COSTS: _presentation("عرض التكلفة", "عرض بيانات التكلفة والأسعار والربحية المحمية.", "sensitive"),
     Capability.EDIT_COST_SETTINGS: _presentation("تعديل إعدادات التكلفة", "تعديل سعر اللوح وأجرة القص وإعادة حساب التكلفة.", "critical"),
     Capability.EDIT_SPECIAL_PRICE: _presentation("تعديل سعر معتمد", "تغيير سعر درفة خاصة بعد اعتماده سابقًا.", "critical"),

@@ -8,7 +8,7 @@ from types import MappingProxyType
 class Capability:
     """Stable business capability keys used by UI and server authorization."""
 
-    # Order lifecycle
+    # Order lifecycle and collaboration
     VIEW_ORDERS = "view_orders"
     VIEW_ALL_ORDERS = "view_all_orders"
     CREATE_ORDER = "create_order"
@@ -18,6 +18,8 @@ class Capability:
     APPROVE_ORDER = "approve_order"
     REJECT_ORDER = "reject_order"
     CANCEL_ORDER = "cancel_order"
+    ADD_INTERNAL_NOTE = "add_internal_note"
+    MANAGE_IMPORTANT_NOTE = "manage_important_note"
 
     # Costing and customer documents
     VIEW_COSTS = "view_costs"
@@ -143,6 +145,8 @@ _CAPABILITY_DEFINITIONS = (
     CapabilityDefinition(Capability.APPROVE_ORDER, Capability.APPROVE_ORDER, _ORDER_DOCTYPE, "order"),
     CapabilityDefinition(Capability.REJECT_ORDER, Capability.REJECT_ORDER, _ORDER_DOCTYPE, "order"),
     CapabilityDefinition(Capability.CANCEL_ORDER, Capability.CANCEL_ORDER, _ORDER_DOCTYPE, "order"),
+    CapabilityDefinition(Capability.ADD_INTERNAL_NOTE, Capability.ADD_INTERNAL_NOTE, _ORDER_DOCTYPE, "order"),
+    CapabilityDefinition(Capability.MANAGE_IMPORTANT_NOTE, Capability.MANAGE_IMPORTANT_NOTE, _ORDER_DOCTYPE, "order"),
     # The reviewed board/cutting financial snapshot belongs to Cutting Plan.
     # Special-piece prices and customer-document authority remain order-owned.
     CapabilityDefinition(Capability.VIEW_COSTS, Capability.VIEW_COSTS, CUTTING_PLAN_DOCTYPE, "costing"),

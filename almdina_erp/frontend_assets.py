@@ -9,11 +9,14 @@ app_include_css = [
     "/assets/almdina_erp/css/door_cutting_order_measurement_structure.css",
     "/assets/almdina_erp/css/door_cutting_order_responsive.css",
     "/assets/almdina_erp/css/door_cutting_order_extra_addons.css",
+    "/assets/almdina_erp/css/notes.css",
 ]
 
 app_include_js = [
     "/assets/almdina_erp/js/permission_context.js",
     "/assets/almdina_erp/js/frontend_foundation.js",
+    "/assets/almdina_erp/js/notes/notes_panel.js",
+    "/assets/almdina_erp/js/notes/notes_dco_list_integration.js",
     "/assets/almdina_erp/js/page_revisit_refresh.js",
     "/assets/almdina_erp/js/responsive_device.js",
     "/assets/almdina_erp/js/shop_floor_quick_actions.js",
@@ -108,6 +111,9 @@ doctype_js = {
         "public/js/door_cutting_order/core/door_cutting_order_tab_permissions_ux.js",
         "public/js/door_cutting_order/core/door_cutting_order_permission_refresh_ux.js",
         "public/js/door_cutting_order/responsive/door_cutting_order_header_ux.js",
+        # Collaboration is independent from the DCO save/revision lifecycle. This
+        # adapter only mounts a button and opens the globally reusable NotesPanel.
+        "public/js/door_cutting_order/notes/door_cutting_order_notes_ux.js",
         "public/js/door_cutting_order/production/shop_floor_order_ux.js",
         "public/js/door_cutting_order/core/door_cutting_order_toolbar_stability_ux.js",
         "public/js/door_cutting_order/core/door_cutting_order_revision_ux.js",
