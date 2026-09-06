@@ -4,6 +4,8 @@
     const METHODS = Object.freeze({
         context: "almdina_erp.almdina_erp.services.notes_service.get_order_notes_context",
         add: "almdina_erp.almdina_erp.services.notes_service.add_note",
+        edit: "almdina_erp.almdina_erp.services.notes_service.edit_note",
+        delete: "almdina_erp.almdina_erp.services.notes_service.delete_note",
         pin: "almdina_erp.almdina_erp.services.notes_service.set_important_note",
         clearImportant: "almdina_erp.almdina_erp.services.notes_service.clear_important_note",
     });
@@ -27,6 +29,8 @@
         pendingRequest: null,
         drafts: { order: "", customer: "" },
         importantDraft: false,
+        editingComment: "",
+        editDraft: "",
         returnFocus: null,
     };
 
@@ -117,6 +121,12 @@
             : (state.context.order_notes || []);
     }
 
+    function noteByName(commentName) {
+        const resolved = String(commentName || "").trim();
+        if (!resolved) return null;
+        return currentNotes().find(note => String(note && note.name || "") === resolved) || null;
+    }
+
     function canCompose() {
         const permissions = state.context && state.context.permissions || {};
         if (state.activeTab === "customer") return permissions.can_add_customer_note === true;
@@ -181,32 +191,59 @@
                     <span class="almdina-notes-star" aria-hidden="true">★</span>
                     <div>
                         <strong>${escapeHtml(note.content || "")}</strong>
-                        <div class="almdina-notes-meta">${escapeHtml(note.author || "")} ${note.creation ? `• ${escapeHtml(creationLabel(note.creation))}` : ""}</div>
+                        <div class="almdina-notes-meta">${escapeHtml(note.author || "")} ${note.creation ? `• ${escapeHtml(creationLabel(note.creation))}` : ""}${note.is_edited ? " • تم التعديل" : ""}</div>
                     </div>
                 </div>
             </section>
         `;
     }
 
+    function renderNoteEditor(note) {
+        const value = state.editDraft || "";
+        return `
+            <div class="almdina-note-editor" data-comment-name="${escapeHtml(note.name || "")}">
+                <textarea data-notes-input="edit-content" maxlength="${MAX_LENGTH}" rows="3" aria-label="تعديل الملاحظة" ${state.mutating ? "disabled" : ""}>${escapeHtml(value)}</textarea>
+                <div class="almdina-note-editor-meta">
+                    <span class="almdina-note-edit-counter">${value.length} / ${MAX_LENGTH}</span>
+                    <div class="almdina-note-editor-actions">
+                        <button type="button" class="btn btn-default btn-xs" data-notes-action="cancel-edit" ${state.mutating ? "disabled" : ""}>إلغاء</button>
+                        <button type="button" class="btn btn-primary btn-xs" data-notes-action="save-edit" ${state.mutating || !value.trim() ? "disabled" : ""}>${state.mutating ? "جارٍ الحفظ..." : "حفظ التعديل"}</button>
+                    </div>
+                </div>
+                ${state.error ? `<div class="almdina-notes-error" role="alert">${escapeHtml(state.error)}</div>` : ""}
+            </div>
+        `;
+    }
+
     function renderNote(note) {
         const important = note && note.is_important === true;
+        const editing = String(state.editingComment || "") === String(note && note.name || "");
         const pinAction = canManageImportant() && !important
             ? `<button type="button" class="almdina-note-pin" data-notes-action="pin" data-comment-name="${escapeHtml(note.name || "")}" ${state.mutating ? "disabled" : ""} aria-label="تعيين كملاحظة مهمة" title="تعيين كملاحظة مهمة">☆</button>`
             : important
                 ? '<span class="almdina-note-pin is-important" aria-label="ملاحظة مهمة" title="ملاحظة مهمة">★</span>'
                 : "";
+        const editAction = note && note.can_edit === true && !editing
+            ? `<button type="button" class="almdina-note-action" data-notes-action="edit" data-comment-name="${escapeHtml(note.name || "")}" ${state.mutating ? "disabled" : ""}>تعديل</button>`
+            : "";
+        const deleteAction = note && note.can_delete === true && !editing
+            ? `<button type="button" class="almdina-note-action is-danger" data-notes-action="delete" data-comment-name="${escapeHtml(note.name || "")}" ${state.mutating ? "disabled" : ""}>حذف</button>`
+            : "";
+        const actions = pinAction || editAction || deleteAction
+            ? `<div class="almdina-note-actions">${pinAction}${editAction}${deleteAction}</div>`
+            : "";
         return `
-            <article class="almdina-note-card ${important ? "is-important" : ""}">
+            <article class="almdina-note-card ${important ? "is-important" : ""} ${editing ? "is-editing" : ""}">
                 <div class="almdina-note-avatar" aria-hidden="true">${escapeHtml(String(note.author || "م").trim().slice(0, 1) || "م")}</div>
                 <div class="almdina-note-body">
                     <div class="almdina-note-head">
                         <div>
                             <strong>${escapeHtml(note.author || note.author_user || "مستخدم")}</strong>
-                            <span>${escapeHtml(creationLabel(note.creation))}</span>
+                            <span>${escapeHtml(creationLabel(note.creation))}${note.is_edited ? " • تم التعديل" : ""}</span>
                         </div>
-                        ${pinAction}
+                        ${actions}
                     </div>
-                    <p>${escapeHtml(note.content || "")}</p>
+                    ${editing ? renderNoteEditor(note) : `<p>${escapeHtml(note.content || "")}</p>`}
                 </div>
             </article>
         `;
@@ -231,6 +268,11 @@
         `;
     }
 
+    function renderActionError() {
+        if (!state.error || state.editingComment) return "";
+        return `<div class="almdina-notes-error almdina-notes-action-error" role="alert">${escapeHtml(state.error)}</div>`;
+    }
+
     function renderComposer() {
         if (!canCompose()) return "";
         const value = state.drafts[state.activeTab] || "";
@@ -251,7 +293,6 @@
                     <span class="almdina-notes-counter">${value.length} / ${MAX_LENGTH}</span>
                     ${importantToggle}
                 </div>
-                ${state.error ? `<div class="almdina-notes-error" role="alert">${escapeHtml(state.error)}</div>` : ""}
                 <button type="button" class="btn btn-primary almdina-notes-submit" data-notes-action="submit" ${state.mutating || !value.trim() ? "disabled" : ""}>
                     ${state.mutating ? "جارٍ الإضافة..." : "إضافة"}
                 </button>
@@ -272,7 +313,7 @@
                 </div>
             `;
         }
-        return `${renderTabs()}${renderImportantNote()}${renderNotesList()}${renderComposer()}`;
+        return `${renderTabs()}${renderImportantNote()}${renderNotesList()}${renderActionError()}${renderComposer()}`;
     }
 
     function render() {
@@ -309,6 +350,8 @@
         state.loading = true;
         state.error = "";
         state.context = null;
+        state.editingComment = "";
+        state.editDraft = "";
         render();
         return apiCall(METHODS.context, { order_name: orderName })
             .then(context => {
@@ -351,7 +394,12 @@
         return state.pendingRequest.id;
     }
 
-    function performMutation(method, args, { clearDraft = false } = {}) {
+    function clearEditState() {
+        state.editingComment = "";
+        state.editDraft = "";
+    }
+
+    function performMutation(method, args, { clearDraft = false, clearEdit = false } = {}) {
         if (state.mutating) return Promise.resolve(null);
         const orderName = state.orderName;
         const activeTab = state.activeTab;
@@ -379,6 +427,7 @@
                     if (activeTab === "order") state.importantDraft = false;
                     state.pendingRequest = null;
                 }
+                if (clearEdit) clearEditState();
                 installContext(context);
                 return context;
             })
@@ -412,6 +461,64 @@
         }, { clearDraft: true });
     }
 
+    function beginEdit(commentName) {
+        if (state.mutating) return;
+        const note = noteByName(commentName);
+        if (!note || note.can_edit !== true) return;
+        state.editingComment = String(note.name || "");
+        state.editDraft = String(note.content || "").slice(0, MAX_LENGTH);
+        state.error = "";
+        state.pendingRequest = null;
+        render();
+        const textarea = state.root && state.root.querySelector('[data-notes-input="edit-content"]');
+        if (textarea) {
+            textarea.focus({ preventScroll: true });
+            textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+        }
+    }
+
+    function cancelEdit() {
+        if (state.mutating) return;
+        clearEditState();
+        state.error = "";
+        render();
+    }
+
+    function saveEdit() {
+        const note = noteByName(state.editingComment);
+        const reference = referenceArgs();
+        if (!note || note.can_edit !== true || !reference) return;
+        const content = String(state.editDraft || "").trim();
+        if (!content || content.length > MAX_LENGTH) return;
+        performMutation(METHODS.edit, {
+            ...reference,
+            comment_name: note.name,
+            content,
+        }, { clearEdit: true });
+    }
+
+    function confirmDelete(message, onConfirm) {
+        if (window.frappe && typeof frappe.confirm === "function") {
+            frappe.confirm(message, onConfirm);
+            return;
+        }
+        if (typeof window.confirm === "function" && window.confirm(message)) onConfirm();
+    }
+
+    function deleteComment(commentName) {
+        if (state.mutating) return;
+        const note = noteByName(commentName);
+        if (!note || note.can_delete !== true) return;
+        confirmDelete("هل تريد حذف هذه الملاحظة؟ لا يمكن التراجع عن الحذف.", () => {
+            const reference = referenceArgs();
+            if (!reference || state.mutating) return;
+            performMutation(METHODS.delete, {
+                ...reference,
+                comment_name: note.name,
+            }, { clearEdit: state.editingComment === note.name });
+        });
+    }
+
     function pinComment(commentName) {
         const resolved = String(commentName || "").trim();
         if (!resolved || !canManageImportant()) return;
@@ -443,24 +550,40 @@
                 state.activeTab = tab;
                 state.error = "";
                 state.pendingRequest = null;
+                clearEditState();
                 if (tab !== "order") state.importantDraft = false;
                 render();
             }
             return;
         }
         if (action === "submit") return submitCurrentDraft();
+        if (action === "edit") return beginEdit(actionNode.dataset.commentName);
+        if (action === "cancel-edit") return cancelEdit();
+        if (action === "save-edit") return saveEdit();
+        if (action === "delete") return deleteComment(actionNode.dataset.commentName);
         if (action === "pin") return pinComment(actionNode.dataset.commentName);
         if (action === "clear-important") return clearImportant();
     }
 
     function onInput(event) {
-        if (!event.target || event.target.dataset.notesInput !== "content") return;
-        const value = String(event.target.value || "").slice(0, MAX_LENGTH);
-        state.drafts[state.activeTab] = value;
-        const counter = state.root && state.root.querySelector(".almdina-notes-counter");
-        if (counter) counter.textContent = `${value.length} / ${MAX_LENGTH}`;
-        const submit = state.root && state.root.querySelector('[data-notes-action="submit"]');
-        if (submit && !state.mutating) submit.disabled = !value.trim();
+        if (!event.target) return;
+        if (event.target.dataset.notesInput === "content") {
+            const value = String(event.target.value || "").slice(0, MAX_LENGTH);
+            state.drafts[state.activeTab] = value;
+            const counter = state.root && state.root.querySelector(".almdina-notes-counter");
+            if (counter) counter.textContent = `${value.length} / ${MAX_LENGTH}`;
+            const submit = state.root && state.root.querySelector('[data-notes-action="submit"]');
+            if (submit && !state.mutating) submit.disabled = !value.trim();
+            return;
+        }
+        if (event.target.dataset.notesInput === "edit-content") {
+            const value = String(event.target.value || "").slice(0, MAX_LENGTH);
+            state.editDraft = value;
+            const counter = state.root && state.root.querySelector(".almdina-note-edit-counter");
+            if (counter) counter.textContent = `${value.length} / ${MAX_LENGTH}`;
+            const save = state.root && state.root.querySelector('[data-notes-action="save-edit"]');
+            if (save && !state.mutating) save.disabled = !value.trim();
+        }
     }
 
     function onChange(event) {
@@ -471,6 +594,10 @@
     function onKeydown(event) {
         if (event.key === "Escape" && state.isOpen) {
             event.preventDefault();
+            if (state.editingComment && !state.mutating) {
+                cancelEdit();
+                return;
+            }
             close();
             return;
         }
@@ -513,6 +640,7 @@
         state.pendingRequest = null;
         state.drafts = { order: "", customer: "" };
         state.importantDraft = false;
+        clearEditState();
         root.classList.add("is-open");
         root.setAttribute("aria-hidden", "false");
         document.body.classList.add("almdina-notes-open");
@@ -526,6 +654,7 @@
         if (!state.root || !state.isOpen) return;
         state.isOpen = false;
         invalidateTransientWork();
+        clearEditState();
         state.root.classList.remove("is-open");
         state.root.setAttribute("aria-hidden", "true");
         document.body.classList.remove("almdina-notes-open");
@@ -564,6 +693,7 @@
         state.pendingRequest = null;
         state.drafts = { order: "", customer: "" };
         state.importantDraft = false;
+        clearEditState();
         state.returnFocus = null;
     }
 
