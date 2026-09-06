@@ -42,6 +42,22 @@ class TestA156NotesListLifecycle(unittest.TestCase):
         self.assertIn("names.indexOf(IMPORTANT_FIELD)", body)
         self.assertIn("columns.splice(nextNotesIndex + 1, 0, important)", body)
 
+    def test_projection_event_immediately_refreshes_desktop_rows(self) -> None:
+        helper = self.source.split("function refreshProjectionRows", 1)[1].split(
+            "function openPanel",
+            1,
+        )[0]
+        self.assertIn('typeof listview.render_list !== "function"', helper)
+        self.assertIn("listview.render_list()", helper)
+
+        event_body = self.source.split("document.addEventListener(UPDATED_EVENT", 1)[1].split(
+            "if (window.frappe",
+            1,
+        )[0]
+        self.assertIn("doc[IMPORTANT_FIELD]", event_body)
+        self.assertIn("refreshProjectionRows(listview)", event_body)
+        self.assertIn("schedule(listview)", event_body)
+
     def test_new_list_instance_disposes_previous_runtime(self) -> None:
         body = self.source.split("function installRuntime", 1)[1].split(
             "function formatter",
