@@ -61,6 +61,26 @@
         }
     }
 
+    function disposeRuntime(listview) {
+        if (!listview) return;
+        const root = rootNode(listview);
+        if (listview._almdinaNotesObserver) {
+            listview._almdinaNotesObserver.disconnect();
+            listview._almdinaNotesObserver = null;
+        }
+        if (listview._almdinaNotesFrame != null) {
+            const cancelFrame = window.cancelAnimationFrame || window.clearTimeout;
+            if (typeof cancelFrame === "function") cancelFrame(listview._almdinaNotesFrame);
+            listview._almdinaNotesFrame = null;
+        }
+        if (root && listview._almdinaNotesClickHandler) {
+            root.removeEventListener("click", listview._almdinaNotesClickHandler);
+        }
+        listview._almdinaNotesClickHandler = null;
+        listview._almdinaNotesClickInstalled = false;
+        if (activeListView === listview) activeListView = null;
+    }
+
     function schedule(listview) {
         if (!listview || listview._almdinaNotesFrame != null) return;
         const requestFrame = window.requestAnimationFrame || (callback => window.setTimeout(callback, 16));
@@ -68,7 +88,7 @@
             listview._almdinaNotesFrame = null;
             const root = rootNode(listview);
             if (!root || !root.isConnected) {
-                if (listview._almdinaNotesObserver) listview._almdinaNotesObserver.disconnect();
+                disposeRuntime(listview);
                 return;
             }
             reconcileColumns(listview);
@@ -156,7 +176,7 @@
     function installClickDelegation(listview) {
         const root = rootNode(listview);
         if (!root || listview._almdinaNotesClickInstalled) return;
-        root.addEventListener("click", event => {
+        const handler = event => {
             const target = event.target.closest(".dco-important-note-link, .dco-card-important-note");
             if (!target || !root.contains(target)) return;
             const orderName = String(target.dataset.orderName || "").trim();
@@ -164,7 +184,9 @@
             event.preventDefault();
             event.stopPropagation();
             openPanel(orderName);
-        });
+        };
+        root.addEventListener("click", handler);
+        listview._almdinaNotesClickHandler = handler;
         listview._almdinaNotesClickInstalled = true;
     }
 
@@ -175,8 +197,7 @@
         if (!result) return;
         const observer = new MutationObserver(mutations => {
             if (!root.isConnected) {
-                observer.disconnect();
-                listview._almdinaNotesObserver = null;
+                disposeRuntime(listview);
                 return;
             }
             const relevant = mutations.some(mutation =>
@@ -194,6 +215,7 @@
 
     function installRuntime(listview) {
         if (!listview || listview.doctype !== DOCTYPE) return;
+        if (activeListView && activeListView !== listview) disposeRuntime(activeListView);
         activeListView = listview;
         installClickDelegation(listview);
         installObserver(listview);
@@ -237,7 +259,7 @@
         const listview = activeListView;
         const root = rootNode(listview);
         if (!listview || !root || !root.isConnected || listview.doctype !== DOCTYPE) {
-            activeListView = null;
+            disposeRuntime(listview);
             return;
         }
         const orderName = String(detail.order_name || "").trim();
@@ -247,8 +269,21 @@
         schedule(listview);
     });
 
+    if (window.frappe && frappe.router && typeof frappe.router.on === "function") {
+        frappe.router.on("change", () => {
+            const listview = activeListView;
+            if (!listview) return;
+            const route = typeof frappe.get_route === "function" ? frappe.get_route() : [];
+            const isCurrentList = Array.isArray(route)
+                && route[0] === "List"
+                && route[1] === DOCTYPE;
+            if (!isCurrentList) disposeRuntime(listview);
+        });
+    }
+
     window.AlmdinaDcoNotesListIntegration = Object.freeze({
         IMPORTANT_FIELD,
+        disposeRuntime,
         formatter,
         reconcileColumns,
         reconcileMobileCards,
