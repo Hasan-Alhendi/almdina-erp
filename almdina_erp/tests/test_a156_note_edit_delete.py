@@ -41,11 +41,25 @@ def test_note_edit_delete_are_owner_scoped_server_actions() -> None:
     for body in (edit_body, delete_body):
         assert "_authorize_reference(" in body
         assert "_repository.lock_reference(doctype, name)" in body
-        assert "_note_for_reference(doctype, name, comment_name)" in body
         assert "_require_note_mutation(order, comment)" in body
         assert "return _context(order)" in body
+    assert "_note_for_reference(doctype, name, comment_name)" in edit_body
+    assert "_note_for_reference(doctype, name, resolved_comment)" in delete_body
     assert "_repository.update_note(" in edit_body
     assert "_repository.delete_note(" in delete_body
+
+
+def test_edit_delete_use_optimistic_concurrency_and_retry_safe_semantics() -> None:
+    service = source(SERVICE)
+    panel = source(PANEL)
+    assert "def _require_fresh_note(" in service
+    assert "frappe.TimestampMismatchError" in service
+    assert "تم تغيير هذه الملاحظة في جلسة أخرى" in service
+    assert "desired_content=normalized_content" in service
+    assert 'if not frappe.db.exists("Comment", resolved_comment)' in service
+    assert "expected_modified: str" in service
+    assert 'expected_modified: note.modified || ""' in panel
+    assert panel.count('expected_modified: note.modified || ""') == 2
 
 
 def test_important_note_cannot_be_changed_without_important_authority() -> None:
