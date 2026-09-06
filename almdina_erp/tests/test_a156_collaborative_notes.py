@@ -8,6 +8,7 @@ import pytest
 from almdina_erp.almdina_erp.application.notes.contracts import (
     NOTE_MAX_LENGTH,
     NotesValidationError,
+    is_collaborative_note_subject,
     normalize_note_content,
     normalize_reference,
     normalize_request_id,
@@ -84,6 +85,19 @@ def test_a156_request_id_and_preview_support_retryable_weak_network_flow() -> No
     assert "\n" not in preview
     assert len(preview) <= 18
     assert preview.endswith("…")
+
+
+def test_a156_collaborative_comments_have_an_explicit_native_namespace() -> None:
+    request_id = "47a7b77f-0790-469a-a643-c12e276e6d03"
+    subject = request_subject(request_id)
+    assert is_collaborative_note_subject(subject) is True
+    assert is_collaborative_note_subject("Order imported") is False
+    assert is_collaborative_note_subject("") is False
+
+    repository = source(REPOSITORY)
+    assert "NOTE_SUBJECT_PREFIX" in repository
+    assert '"subject": ["like", f"{NOTE_SUBJECT_PREFIX}%"]' in repository
+    assert "is_collaborative_note_subject(row.get(\"subject\"))" in repository
 
 
 def test_a156_collaboration_actions_are_explicit_assignable_capabilities() -> None:
