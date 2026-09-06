@@ -16,87 +16,87 @@ def run_scenario() -> dict:
     if NODE is None:
         raise RuntimeError("node is required for browser-lifecycle simulation")
 
-    script = f"""
+    script = r"""
 const fs = require('fs');
 const vm = require('vm');
 
-class FakeClassList {{
-    constructor() {{ this.values = new Set(); }}
-    add(value) {{ this.values.add(value); }}
-    toggle(value, enabled) {{
+class FakeClassList {
+    constructor() { this.values = new Set(); }
+    add(value) { this.values.add(value); }
+    toggle(value, enabled) {
         if (enabled) this.values.add(value); else this.values.delete(value);
-    }}
-}}
+    }
+}
 
-function makeButton(label) {{
-    return {{
+function makeButton(label) {
+    return {
         nodeType: 1,
         isConnected: true,
         textContent: label,
         title: '',
-        dataset: {{}},
+        dataset: {},
         classList: new FakeClassList(),
-        attributes: {{}},
-        setAttribute(name, value) {{ this.attributes[name] = value; }},
-        remove() {{ this.isConnected = false; }},
-    }};
-}}
+        attributes: {},
+        setAttribute(name, value) { this.attributes[name] = value; },
+        remove() { this.isConnected = false; },
+    };
+}
 
-const formHandlers = {{}};
+const formHandlers = {};
 const surfaces = new Map();
-const documentContext = {{
-    registerSurface(name, probe) {{ surfaces.set(name, probe); return true; }},
-}};
+const documentContext = {
+    registerSurface(name, probe) { surfaces.set(name, probe); return true; },
+};
 
-const document = {{
-    addEventListener() {{}},
-}};
+const document = {
+    addEventListener() {},
+};
 
-const frappe = {{
-    session: {{ user: 'designer@example.com' }},
-    ui: {{ form: {{ on(doctype, handlers) {{ formHandlers[doctype] = handlers; }} }} }},
-    call() {{
-        return Promise.resolve({{ message: {{
+const frappe = {
+    session: { user: 'designer@example.com' },
+    ui: { form: { on(doctype, handlers) { formHandlers[doctype] = handlers; } } },
+    call() {
+        return Promise.resolve({ message: {
             order: 'DCO-TEST',
-            counts: {{ order: 2 }},
+            counts: { order: 2 },
             important_note_preview: '',
             important_note_comment: '',
-        }} }});
-    }},
-    msgprint() {{}},
-}};
+        } });
+    },
+    msgprint() {},
+};
 
-const window = {{
+const window = {
     frappe,
     AlmdinaDocumentContext: documentContext,
-    AlmdinaNotesPanel: {{ openForOrder() {{}} }},
+    AlmdinaNotesPanel: { openForOrder() {} },
     cur_frm: null,
-}};
+};
 
-const context = {{
+const context = {
     window,
     document,
     frappe,
     console,
     Promise,
-    CustomEvent: function CustomEvent(name, init) {{ this.type = name; this.detail = init && init.detail; }},
+    CustomEvent: function CustomEvent(name, init) { this.type = name; this.detail = init && init.detail; },
     __: value => value,
-}};
+};
 context.globalThis = context;
 vm.createContext(context);
-vm.runInContext(fs.readFileSync({json.dumps(str(UX))}, 'utf8'), context);
+vm.runInContext(fs.readFileSync(__UX_PATH__, 'utf8'), context);
 
-function makeForm(status) {{
-    const toolbarRoot = {{
-        querySelector(selector) {{
+function makeForm(status) {
+    const toolbarRoot = {
+        querySelector(selector) {
             if (selector !== '.dco-notes-toolbar-button') return null;
             return this.button && this.button.isConnected ? this.button : null;
-        }},
+        },
         button: null,
-    }};
-    const frm = {{
+    };
+    const frm = {
         doctype: 'Door Cutting Order',
-        doc: {{
+        doc: {
             doctype: 'Door Cutting Order',
             name: 'DCO-TEST',
             status,
@@ -104,29 +104,29 @@ function makeForm(status) {{
             current_assignee: status === 'At Drawing' ? 'designer@example.com' : '',
             important_note_preview: '',
             important_note_comment: '',
-        }},
-        page: {{ wrapper: toolbarRoot }},
-        custom_buttons: {{}},
-        is_new() {{ return false; }},
-        add_custom_button(label, handler) {{
+        },
+        page: { wrapper: toolbarRoot },
+        custom_buttons: {},
+        is_new() { return false; },
+        add_custom_button(label, handler) {
             const button = makeButton(label);
             button.handler = handler;
             toolbarRoot.button = button;
             this.custom_buttons[label] = [button];
             return [button];
-        }},
-        remove_custom_button(label) {{
+        },
+        remove_custom_button(label) {
             const stored = this.custom_buttons[label];
             const node = stored && stored[0];
             if (node) node.isConnected = false;
             delete this.custom_buttons[label];
             if (toolbarRoot.button === node) toolbarRoot.button = null;
-        }},
-    }};
+        },
+    };
     return frm;
-}}
+}
 
-(async () => {{
+(async () => {
     const frm = makeForm('Draft');
     window.cur_frm = frm;
     formHandlers['Door Cutting Order'].refresh(frm);
@@ -152,7 +152,7 @@ function makeForm(status) {{
     const recovered = surface.recover(frm);
     const second = frm.page.wrapper.button;
 
-    process.stdout.write(JSON.stringify({{
+    process.stdout.write(JSON.stringify({
         readyBeforeRecovery,
         recovered,
         secondConnected: Boolean(second && second.isConnected),
@@ -160,12 +160,13 @@ function makeForm(status) {{
         stableRegistryKey: Boolean(frm.custom_buttons['الملاحظات']),
         status: frm.doc.status,
         assignee: frm.doc.current_assignee,
-    }}));
-}})().catch(error => {{
+    }));
+})().catch(error => {
     console.error(error);
     process.exit(1);
-}});
-"""
+});
+""".replace("__UX_PATH__", json.dumps(str(UX)))
+
     completed = subprocess.run(
         [NODE, "-e", script],
         check=True,
