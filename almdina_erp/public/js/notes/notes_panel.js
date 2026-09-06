@@ -494,6 +494,7 @@
             ...reference,
             comment_name: note.name,
             content,
+            expected_modified: note.modified || "",
         }, { clearEdit: true });
     }
 
@@ -515,6 +516,7 @@
             performMutation(METHODS.delete, {
                 ...reference,
                 comment_name: note.name,
+                expected_modified: note.modified || "",
             }, { clearEdit: state.editingComment === note.name });
         });
     }
