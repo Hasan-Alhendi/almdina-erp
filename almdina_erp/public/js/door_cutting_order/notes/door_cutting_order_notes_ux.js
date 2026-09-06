@@ -4,9 +4,16 @@
     const DOCTYPE = "Door Cutting Order";
     const UPDATED_EVENT = "almdina:notes-context-updated";
     const CONTEXT_METHOD = "almdina_erp.almdina_erp.services.notes_service.get_order_notes_context";
+    const NOTES_ACTION_LABEL = __("الملاحظات");
+    const NOTES_BUTTON_CLASS = "dco-notes-toolbar-button";
+    const NOTES_SURFACE = "collaborative-notes-toolbar";
 
     function panel() {
         return window.AlmdinaNotesPanel || null;
+    }
+
+    function documentContext() {
+        return window.AlmdinaDocumentContext || null;
     }
 
     function isSavedOrder(frm) {
@@ -29,7 +36,7 @@
         const important = String(frm && frm.doc && frm.doc.important_note_preview || "").trim();
         const countText = count > 0 ? ` ${count}` : "";
         const importantText = important ? " ★" : "";
-        return `الملاحظات${countText}${importantText}`;
+        return `${NOTES_ACTION_LABEL}${countText}${importantText}`;
     }
 
     function buttonNode(button) {
@@ -39,9 +46,72 @@
         return null;
     }
 
+    function formPageRoot(frm) {
+        const wrapper = frm && frm.page && frm.page.wrapper;
+        return wrapper && (wrapper.nodeType ? wrapper : wrapper[0]);
+    }
+
+    function registeredNotesButton(frm) {
+        if (!frm) return null;
+
+        const owned = buttonNode(frm._almdinaNotesButton);
+        if (owned && owned.isConnected) return owned;
+
+        const registered = frm.custom_buttons && frm.custom_buttons[NOTES_ACTION_LABEL];
+        const registeredNode = buttonNode(registered);
+        if (registeredNode && registeredNode.isConnected) {
+            frm._almdinaNotesButton = registered;
+            return registeredNode;
+        }
+
+        const root = formPageRoot(frm);
+        const rendered = root && root.querySelector(`.${NOTES_BUTTON_CLASS}`);
+        if (rendered && rendered.isConnected) {
+            frm._almdinaNotesButton = rendered;
+            return rendered;
+        }
+        return null;
+    }
+
+    function clearStaleButtonRegistration(frm) {
+        if (!frm) return;
+        const registered = frm.custom_buttons && frm.custom_buttons[NOTES_ACTION_LABEL];
+        const node = buttonNode(registered);
+        if (
+            registered
+            && (!node || !node.isConnected)
+            && typeof frm.remove_custom_button === "function"
+        ) {
+            try {
+                frm.remove_custom_button(NOTES_ACTION_LABEL);
+            } catch (error) {
+                // Frappe may already have cleared the toolbar registry during refresh.
+            }
+        }
+        const owned = buttonNode(frm._almdinaNotesButton);
+        if (!owned || !owned.isConnected) frm._almdinaNotesButton = null;
+    }
+
+    function removeNotesButton(frm) {
+        if (!frm) return;
+        const rendered = registeredNotesButton(frm);
+        if (typeof frm.remove_custom_button === "function") {
+            try {
+                frm.remove_custom_button(NOTES_ACTION_LABEL);
+            } catch (error) {
+                // Nothing to remove is a valid state for a new/unsaved order.
+            }
+        }
+        if (rendered && rendered.isConnected) rendered.remove();
+        frm._almdinaNotesButton = null;
+    }
+
     function updateButtonPresentation(frm) {
-        const button = buttonNode(frm && frm._almdinaNotesButton);
-        if (!button || !button.isConnected) return false;
+        const button = registeredNotesButton(frm);
+        if (!button) return false;
+        frm._almdinaNotesButton = button;
+        button.classList.add(NOTES_BUTTON_CLASS);
+        button.dataset.almdinaNotesButton = "1";
         button.textContent = buttonLabel(frm);
         button.classList.toggle(
             "dco-notes-button-has-important",
@@ -67,12 +137,44 @@
     }
 
     function ensureNotesButton(frm) {
-        if (!isSavedOrder(frm)) return;
-        if (updateButtonPresentation(frm)) return;
+        if (!isSavedOrder(frm)) {
+            removeNotesButton(frm);
+            return false;
+        }
+        if (updateButtonPresentation(frm)) return true;
 
-        const button = frm.add_custom_button(buttonLabel(frm), () => openNotes(frm));
+        // Frappe indexes custom actions by the label passed to add_custom_button.
+        // Keep that identity stable; count/star are presentation-only text. A
+        // dynamic registration label made toolbar rebuilds capable of orphaning
+        // the Notes action after lifecycle/production refreshes.
+        clearStaleButtonRegistration(frm);
+        const button = frm.add_custom_button(NOTES_ACTION_LABEL, () => openNotes(frm));
         frm._almdinaNotesButton = button;
-        updateButtonPresentation(frm);
+        return updateButtonPresentation(frm);
+    }
+
+    function notesSurfaceReady(frm) {
+        if (!frm || !frm.doc || frm.doc.doctype !== DOCTYPE) return true;
+        if (!isSavedOrder(frm)) return registeredNotesButton(frm) === null;
+        return registeredNotesButton(frm) !== null;
+    }
+
+    function recoverNotesSurface(frm) {
+        if (!frm || !frm.doc || frm.doc.doctype !== DOCTYPE) return true;
+        if (!isSavedOrder(frm)) {
+            removeNotesButton(frm);
+            return true;
+        }
+        return ensureNotesButton(frm);
+    }
+
+    function registerNotesSurface() {
+        const context = documentContext();
+        if (!context || typeof context.registerSurface !== "function") return false;
+        return context.registerSurface(NOTES_SURFACE, {
+            isReady: notesSurfaceReady,
+            recover: recoverNotesSurface,
+        });
     }
 
     function resetIdentityState(frm, identity) {
@@ -170,9 +272,13 @@
     document.addEventListener(UPDATED_EVENT, applyContextUpdate);
 
     frappe.ui.form.on(DOCTYPE, {
+        onload_post_render(frm) {
+            ensureNotesButton(frm);
+        },
         refresh(frm) {
             if (!isSavedOrder(frm)) {
                 resetIdentityState(frm, "");
+                removeNotesButton(frm);
                 return;
             }
             ensureNotesButton(frm);
@@ -183,7 +289,11 @@
     window.AlmdinaDoorCuttingOrderNotesUX = Object.freeze({
         buttonLabel,
         ensureNotesButton,
+        notesSurfaceReady,
         openNotes,
+        recoverNotesSurface,
         refreshNotesSummary,
     });
+
+    registerNotesSurface();
 })();
