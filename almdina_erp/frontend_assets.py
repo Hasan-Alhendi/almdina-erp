@@ -10,6 +10,7 @@ app_include_css = [
     "/assets/almdina_erp/css/door_cutting_order_responsive.css",
     "/assets/almdina_erp/css/door_cutting_order_extra_addons.css",
     "/assets/almdina_erp/css/notes.css",
+    "/assets/almdina_erp/css/notes_interactions.css",
 ]
 
 app_include_js = [
