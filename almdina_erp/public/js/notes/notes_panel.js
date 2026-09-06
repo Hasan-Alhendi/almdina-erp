@@ -23,6 +23,7 @@
         mutating: false,
         error: "",
         loadGeneration: 0,
+        mutationGeneration: 0,
         pendingRequest: null,
         drafts: { order: "", customer: "" },
         importantDraft: false,
@@ -311,13 +312,13 @@
         render();
         return apiCall(METHODS.context, { order_name: orderName })
             .then(context => {
-                if (generation !== state.loadGeneration || orderName !== state.orderName) return null;
+                if (generation !== state.loadGeneration || orderName !== state.orderName || !state.isOpen) return null;
                 state.loading = false;
                 installContext(context);
                 return context;
             })
             .catch(error => {
-                if (generation !== state.loadGeneration || orderName !== state.orderName) return null;
+                if (generation !== state.loadGeneration || orderName !== state.orderName || !state.isOpen) return null;
                 state.loading = false;
                 state.error = errorMessage(error);
                 state.context = null;
@@ -353,27 +354,45 @@
     function performMutation(method, args, { clearDraft = false } = {}) {
         if (state.mutating) return Promise.resolve(null);
         const orderName = state.orderName;
+        const activeTab = state.activeTab;
+        const generation = ++state.mutationGeneration;
         state.mutating = true;
         state.error = "";
         render();
         return apiCall(method, args)
             .then(context => {
+                // A successful server mutation belongs to its captured order even
+                // if the drawer was closed or reopened elsewhere while in flight.
+                // Keep list/form projections synchronized, but never let that stale
+                // response take ownership of the new drawer lifecycle.
+                emitContextUpdated(context);
+                if (
+                    generation !== state.mutationGeneration
+                    || orderName !== state.orderName
+                    || !state.isOpen
+                ) {
+                    return context;
+                }
                 state.mutating = false;
-                if (orderName !== state.orderName) return context;
                 if (clearDraft) {
-                    state.drafts[state.activeTab] = "";
-                    if (state.activeTab === "order") state.importantDraft = false;
+                    state.drafts[activeTab] = "";
+                    if (activeTab === "order") state.importantDraft = false;
                     state.pendingRequest = null;
                 }
-                installContext(context, { emit: true });
+                installContext(context);
                 return context;
             })
             .catch(error => {
-                state.mutating = false;
-                if (orderName === state.orderName) {
-                    state.error = errorMessage(error);
-                    render();
+                if (
+                    generation !== state.mutationGeneration
+                    || orderName !== state.orderName
+                    || !state.isOpen
+                ) {
+                    return null;
                 }
+                state.mutating = false;
+                state.error = errorMessage(error);
+                render();
                 return null;
             });
     }
@@ -471,17 +490,26 @@
         }
     }
 
+    function invalidateTransientWork() {
+        state.loadGeneration += 1;
+        state.mutationGeneration += 1;
+        state.loading = false;
+        state.mutating = false;
+    }
+
     function openForOrder(orderName, options = {}) {
         const resolved = String(orderName || "").trim();
         if (!resolved) return Promise.resolve(null);
         const root = mountedRoot();
         if (!root) return Promise.resolve(null);
 
+        invalidateTransientWork();
         state.returnFocus = document.activeElement;
         state.isOpen = true;
         state.orderName = resolved;
         state.activeTab = options.tab === "customer" ? "customer" : "order";
         state.error = "";
+        state.context = null;
         state.pendingRequest = null;
         state.drafts = { order: "", customer: "" };
         state.importantDraft = false;
@@ -497,7 +525,7 @@
     function close() {
         if (!state.root || !state.isOpen) return;
         state.isOpen = false;
-        state.loadGeneration += 1;
+        invalidateTransientWork();
         state.root.classList.remove("is-open");
         state.root.setAttribute("aria-hidden", "true");
         document.body.classList.remove("almdina-notes-open");
@@ -517,9 +545,38 @@
         return loadCurrentOrder();
     }
 
+    function destroy() {
+        if (state.isOpen) close();
+        invalidateTransientWork();
+        if (state.root) {
+            state.root.removeEventListener("click", onClick);
+            state.root.removeEventListener("input", onInput);
+            state.root.removeEventListener("change", onChange);
+            state.root.removeEventListener("keydown", onKeydown);
+            state.root.remove();
+        }
+        state.root = null;
+        state.content = null;
+        state.orderName = "";
+        state.context = null;
+        state.activeTab = "order";
+        state.error = "";
+        state.pendingRequest = null;
+        state.drafts = { order: "", customer: "" };
+        state.importantDraft = false;
+        state.returnFocus = null;
+    }
+
+    if (window.frappe && frappe.router && typeof frappe.router.on === "function") {
+        frappe.router.on("change", () => {
+            if (state.isOpen) close();
+        });
+    }
+
     window.AlmdinaNotesPanel = Object.freeze({
         NOTE_UPDATED_EVENT,
         close,
+        destroy,
         openForOrder,
         refresh,
     });
