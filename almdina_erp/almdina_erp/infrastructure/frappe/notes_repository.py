@@ -82,7 +82,14 @@ class FrappeNotesRepository:
         )
         if not row or not is_collaborative_note_subject(row.get("subject")):
             return None
-        return dict(row)
+        note = dict(row)
+        # `owner` is Frappe's canonical authenticated actor identity. `comment_email`
+        # is comment metadata and may not equal the login identity on every site.
+        # The notes service historically reads comment_email for its owner guard,
+        # so normalize the in-memory authorization row without changing Comment.
+        if str(note.get("owner") or "").strip():
+            note["comment_email"] = str(note.get("owner") or "").strip()
+        return note
 
     def find_by_request_subject(
         self,
@@ -211,7 +218,10 @@ class FrappeNotesRepository:
         return {
             "name": comment_name,
             "author": str(note.get("comment_by") or note.get("owner") or "").strip(),
-            "author_user": str(note.get("comment_email") or note.get("owner") or "").strip(),
+            # Frappe `owner` is the stable authenticated user identity. Keep
+            # comment_email as metadata/fallback only so action visibility does
+            # not disappear when a site's email/login representations differ.
+            "author_user": str(note.get("owner") or note.get("comment_email") or "").strip(),
             "creation": creation,
             "modified": modified,
             "content": content,
