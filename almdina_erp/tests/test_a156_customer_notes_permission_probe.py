@@ -16,11 +16,16 @@ def function_body(text: str, name: str, next_name: str) -> str:
     return text.split(f"def {name}", 1)[1].split(f"def {next_name}", 1)[0]
 
 
-def test_optional_customer_permission_probe_is_silent() -> None:
+def test_optional_customer_permission_probe_uses_silent_capable_frappe_api() -> None:
     service = source(SERVICE)
     body = function_body(service, "_customer_has_read_access", "_linked_customer")
 
-    assert "frappe.has_permission(" in body
+    # Frappe v16 exposes print_logs on frappe.permissions.has_permission, not on
+    # the public frappe.has_permission facade. Keep this contract explicit so a
+    # future refactor cannot reintroduce the runtime TypeError seen in production.
+    assert "import frappe.permissions" in service
+    assert "frappe.permissions.has_permission(" in body
+    assert "frappe.has_permission(" not in body
     assert 'ptype="read"' in body
     assert "doc=customer" in body
     assert "user=frappe.session.user" in body
