@@ -3,6 +3,7 @@
 
     const DOCTYPE = "Door Cutting Order";
     const UPDATED_EVENT = "almdina:notes-context-updated";
+    const CONTEXT_METHOD = "almdina_erp.almdina_erp.services.notes_service.get_order_notes_context";
 
     function panel() {
         return window.AlmdinaNotesPanel || null;
@@ -17,6 +18,10 @@
             && !(typeof frm.is_new === "function" && frm.is_new())
             && !String(frm.doc.name).startsWith("new-")
         );
+    }
+
+    function orderIdentity(frm) {
+        return isSavedOrder(frm) ? String(frm.doc.name || "").trim() : "";
     }
 
     function buttonLabel(frm) {
@@ -70,16 +75,93 @@
         updateButtonPresentation(frm);
     }
 
+    function resetIdentityState(frm, identity) {
+        if (!frm) return;
+        frm._almdinaNotesOrderIdentity = String(identity || "");
+        frm._almdinaNotesCount = 0;
+        frm._almdinaNotesSummaryGeneration = Number(frm._almdinaNotesSummaryGeneration || 0) + 1;
+        frm._almdinaNotesSummaryPromise = null;
+    }
+
+    function isCurrentSummaryRequest(frm, identity, generation) {
+        return Boolean(
+            isSavedOrder(frm)
+            && orderIdentity(frm) === String(identity || "")
+            && String(frm._almdinaNotesOrderIdentity || "") === String(identity || "")
+            && Number(frm._almdinaNotesSummaryGeneration || 0) === Number(generation || 0)
+        );
+    }
+
+    function applyContextSnapshot(frm, context, identity, generation) {
+        if (!context || !isCurrentSummaryRequest(frm, identity, generation)) return false;
+        if (String(context.order || "") !== String(identity || "")) return false;
+
+        const counts = context.counts || {};
+        frm._almdinaNotesCount = Number(counts.order || 0);
+        // Collaboration projections are presentation state only. Keep them out of
+        // the official DCO form/save lifecycle exactly like drawer mutations do.
+        frm.doc.important_note_preview = String(context.important_note_preview || "");
+        frm.doc.important_note_comment = String(context.important_note_comment || "");
+        ensureNotesButton(frm);
+        return true;
+    }
+
+    function refreshNotesSummary(frm) {
+        if (!isSavedOrder(frm) || !window.frappe || typeof frappe.call !== "function") {
+            return Promise.resolve(null);
+        }
+
+        const identity = orderIdentity(frm);
+        if (String(frm._almdinaNotesOrderIdentity || "") !== identity) {
+            // Never paint the previous order's count while the new order summary
+            // is loading. The button becomes neutral until this identity confirms.
+            resetIdentityState(frm, identity);
+            ensureNotesButton(frm);
+        }
+
+        const generation = Number(frm._almdinaNotesSummaryGeneration || 0) + 1;
+        frm._almdinaNotesSummaryGeneration = generation;
+
+        const request = frappe.call({
+            method: CONTEXT_METHOD,
+            args: { order_name: identity },
+            freeze: false,
+        }).then(response => {
+            const context = response && response.message;
+            applyContextSnapshot(frm, context, identity, generation);
+            return context || null;
+        }).catch(error => {
+            // Fail quiet on a toolbar enhancement. Most importantly, never restore
+            // stale data from another order or disturb the DCO page lifecycle.
+            if (isCurrentSummaryRequest(frm, identity, generation)) {
+                frm._almdinaNotesCount = 0;
+                ensureNotesButton(frm);
+            }
+            return null;
+        }).finally(() => {
+            if (isCurrentSummaryRequest(frm, identity, generation)) {
+                frm._almdinaNotesSummaryPromise = null;
+            }
+        });
+
+        frm._almdinaNotesSummaryPromise = request;
+        return request;
+    }
+
     function applyContextUpdate(event) {
         const detail = event && event.detail || {};
         const frm = window.cur_frm;
         if (!isSavedOrder(frm)) return;
         if (String(detail.order_name || "") !== String(frm.doc.name || "")) return;
 
+        // A drawer-confirmed context is newer than any toolbar read that may still
+        // be in flight. Invalidate that read before applying the mutation result.
+        frm._almdinaNotesOrderIdentity = orderIdentity(frm);
+        frm._almdinaNotesSummaryGeneration = Number(frm._almdinaNotesSummaryGeneration || 0) + 1;
+        frm._almdinaNotesSummaryPromise = null;
+
         const counts = detail.counts || {};
         frm._almdinaNotesCount = Number(counts.order || 0);
-        // Projection values are presentation state here. Assign directly instead
-        // of frm.set_value so a collaboration action can never dirty/save the DCO.
         frm.doc.important_note_preview = String(detail.important_note_preview || "");
         frm.doc.important_note_comment = String(detail.important_note_comment || "");
         ensureNotesButton(frm);
@@ -89,7 +171,12 @@
 
     frappe.ui.form.on(DOCTYPE, {
         refresh(frm) {
+            if (!isSavedOrder(frm)) {
+                resetIdentityState(frm, "");
+                return;
+            }
             ensureNotesButton(frm);
+            refreshNotesSummary(frm);
         },
     });
 
@@ -97,5 +184,6 @@
         buttonLabel,
         ensureNotesButton,
         openNotes,
+        refreshNotesSummary,
     });
 })();
