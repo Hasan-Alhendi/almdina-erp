@@ -10,6 +10,8 @@ NOTE_MAX_LENGTH = 500
 IMPORTANT_PREVIEW_LENGTH = 140
 NOTE_SUBJECT_PREFIX = "almdina-note:"
 _REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$")
+_TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
+_FALSE_VALUES = frozenset({"0", "false", "no", "off", ""})
 
 
 class NotesValidationError(ValueError):
@@ -20,19 +22,19 @@ def normalize_reference(reference_doctype: object, reference_name: object) -> tu
     doctype = str(reference_doctype or "").strip()
     name = str(reference_name or "").strip()
     if doctype not in ALLOWED_REFERENCE_DOCTYPES:
-        raise NotesValidationError("Unsupported note reference type.")
+        raise NotesValidationError("نوع مرجع الملاحظة غير مدعوم.")
     if not name:
-        raise NotesValidationError("A note reference name is required.")
+        raise NotesValidationError("يجب تحديد السجل المرتبط بالملاحظة.")
     return doctype, name
 
 
 def normalize_note_content(content: object) -> str:
     resolved = str(content or "").strip()
     if not resolved:
-        raise NotesValidationError("Note content is required.")
+        raise NotesValidationError("لا يمكن إضافة ملاحظة فارغة.")
     if len(resolved) > NOTE_MAX_LENGTH:
         raise NotesValidationError(
-            f"Note content cannot exceed {NOTE_MAX_LENGTH} characters."
+            f"يجب ألا تتجاوز الملاحظة {NOTE_MAX_LENGTH} محرفًا."
         )
     return resolved
 
@@ -40,8 +42,23 @@ def normalize_note_content(content: object) -> str:
 def normalize_request_id(request_id: object) -> str:
     resolved = str(request_id or "").strip()
     if not _REQUEST_ID_PATTERN.fullmatch(resolved):
-        raise NotesValidationError("A valid note request id is required.")
+        raise NotesValidationError("معرّف طلب الملاحظة غير صالح.")
     return resolved
+
+
+def normalize_boolean_flag(value: object, *, label: str = "القيمة") -> bool:
+    """Normalize Frappe form/RPC boolean encodings without truthy-string bugs."""
+
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int) and value in (0, 1):
+        return bool(value)
+    normalized = str(value or "").strip().lower()
+    if normalized in _TRUE_VALUES:
+        return True
+    if normalized in _FALSE_VALUES:
+        return False
+    raise NotesValidationError(f"{label} غير صالحة.")
 
 
 def request_subject(request_id: object) -> str:
@@ -71,6 +88,7 @@ __all__ = [
     "ORDER_DOCTYPE",
     "NotesValidationError",
     "is_collaborative_note_subject",
+    "normalize_boolean_flag",
     "normalize_note_content",
     "normalize_reference",
     "normalize_request_id",
