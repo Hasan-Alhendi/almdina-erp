@@ -3,20 +3,19 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+import unittest
 from pathlib import Path
-
-import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
 UX = ROOT / "public" / "js" / "door_cutting_order" / "notes" / "door_cutting_order_notes_ux.js"
-
-
 NODE = shutil.which("node")
-pytestmark = pytest.mark.skipif(NODE is None, reason="node is required for browser-lifecycle simulation")
 
 
 def run_scenario() -> dict:
+    if NODE is None:
+        raise RuntimeError("node is required for browser-lifecycle simulation")
+
     script = f"""
 const fs = require('fs');
 const vm = require('vm');
@@ -45,13 +44,12 @@ function makeButton(label) {{
 
 const formHandlers = {{}};
 const surfaces = new Map();
-const documentListeners = {{}};
 const documentContext = {{
     registerSurface(name, probe) {{ surfaces.set(name, probe); return true; }},
 }};
 
 const document = {{
-    addEventListener(name, handler) {{ documentListeners[name] = handler; }},
+    addEventListener() {{}},
 }};
 
 const frappe = {{
@@ -136,7 +134,12 @@ function makeForm(status) {{
     await Promise.resolve();
     const first = frm.page.wrapper.button;
 
-    // Simulate Frappe rebuilding the toolbar while the same saved DCO enters Drawing.
+    if (!first || !first.isConnected || !frm.custom_buttons['الملاحظات']) {
+        throw new Error('Notes action did not mount with a stable registry key');
+    }
+
+    // Reproduce the reported lifecycle: Frappe rebuilds the toolbar while the
+    // same saved order advances into Drawing for the designer.
     first.isConnected = false;
     frm.page.wrapper.button = null;
     frm.doc.status = 'At Drawing';
@@ -144,6 +147,7 @@ function makeForm(status) {{
     frm.doc.current_assignee = 'designer@example.com';
 
     const surface = surfaces.get('collaborative-notes-toolbar');
+    if (!surface) throw new Error('Notes toolbar surface was not registered');
     const readyBeforeRecovery = surface.isReady(frm);
     const recovered = surface.recover(frm);
     const second = frm.page.wrapper.button;
@@ -171,12 +175,18 @@ function makeForm(status) {{
     return json.loads(completed.stdout)
 
 
-def test_saved_dco_notes_button_recovers_after_drawing_toolbar_rebuild() -> None:
-    result = run_scenario()
-    assert result["status"] == "At Drawing"
-    assert result["assignee"] == "designer@example.com"
-    assert result["readyBeforeRecovery"] is False
-    assert result["recovered"] is True
-    assert result["secondConnected"] is True
-    assert result["secondLabel"].startswith("الملاحظات")
-    assert result["stableRegistryKey"] is True
+@unittest.skipIf(NODE is None, "node is required for browser-lifecycle simulation")
+class TestA156NotesToolbarRuntime(unittest.TestCase):
+    def test_saved_dco_notes_button_recovers_after_drawing_toolbar_rebuild(self) -> None:
+        result = run_scenario()
+        self.assertEqual(result["status"], "At Drawing")
+        self.assertEqual(result["assignee"], "designer@example.com")
+        self.assertIs(result["readyBeforeRecovery"], False)
+        self.assertIs(result["recovered"], True)
+        self.assertIs(result["secondConnected"], True)
+        self.assertTrue(result["secondLabel"].startswith("الملاحظات"))
+        self.assertIs(result["stableRegistryKey"], True)
+
+
+if __name__ == "__main__":
+    unittest.main()
