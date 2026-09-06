@@ -15,6 +15,11 @@ from almdina_erp.almdina_erp.application.notes.contracts import (
     plain_text_preview,
     request_subject,
 )
+from almdina_erp.almdina_erp.domain.security.authorization import Capability
+from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
+    document_has_capability,
+    require_document_capability,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.notes_repository import (
     FrappeNotesRepository,
 )
@@ -57,10 +62,44 @@ def _authorized_order(order_name: object) -> Any:
         frappe.throw(_("A Door Cutting Order is required."))
     order = frappe.get_doc(ORDER_DOCTYPE, resolved)
     # Native DCO permission hooks contain the current worker/assigned-order scope.
-    # Notes deliberately follow document visibility rather than EDIT_ORDER or the
-    # DCO lifecycle because collaboration remains valid after approval/production.
+    # Reading notes follows concrete DCO visibility and is deliberately independent
+    # from EDIT_ORDER and the DCO lifecycle.
     order.check_permission("read")
     return order
+
+
+def _can_add_note(order: Any) -> bool:
+    return document_has_capability(
+        order,
+        Capability.ADD_INTERNAL_NOTE,
+        user=frappe.session.user,
+    )
+
+
+def _can_manage_important(order: Any) -> bool:
+    return document_has_capability(
+        order,
+        Capability.MANAGE_IMPORTANT_NOTE,
+        user=frappe.session.user,
+    )
+
+
+def _require_add_note(order: Any) -> None:
+    require_document_capability(
+        order,
+        Capability.ADD_INTERNAL_NOTE,
+        user=frappe.session.user,
+        message=_("لا تملك صلاحية إضافة ملاحظة داخلية على هذا الطلب."),
+    )
+
+
+def _require_manage_important(order: Any) -> None:
+    require_document_capability(
+        order,
+        Capability.MANAGE_IMPORTANT_NOTE,
+        user=frappe.session.user,
+        message=_("لا تملك صلاحية تعيين الملاحظة المهمة لهذا الطلب."),
+    )
 
 
 def _customer_has_read_access(customer: Any) -> bool:
@@ -195,6 +234,8 @@ def _context(order: Any) -> dict[str, Any]:
     order_payload = _order_notes_payload(order)
     customer_payload = _customer_notes_payload(order)
     customer_access = bool(customer_payload["available"])
+    can_add = _can_add_note(order)
+    can_manage_important = _can_manage_important(order)
     return {
         "order": str(order.name),
         "customer": customer_payload["customer"],
@@ -208,15 +249,13 @@ def _context(order: Any) -> dict[str, Any]:
         "important_note_comment": order_payload["important_note_comment"],
         "important_note_preview": order_payload["important_note_preview"],
         "permissions": {
-            # V1 policy: a user who can read this concrete DCO may collaborate on
-            # it and may select its one current important Comment. This remains
-            # server enforced and keeps notes independent from EDIT_ORDER/lifecycle.
-            "can_add_order_note": True,
-            "can_manage_important_note": True,
-            # Customer collaboration additionally requires the explicit linked
-            # Customer read policy above; arbitrary Customer writes are impossible.
+            "can_add_order_note": can_add,
+            "can_manage_important_note": can_manage_important,
             "can_view_customer_notes": customer_access,
-            "can_add_customer_note": customer_access,
+            # Customer collaboration is permitted only through the linked DCO
+            # context and the same explicit add-note capability. It never grants
+            # arbitrary Customer write authority.
+            "can_add_customer_note": customer_access and can_add,
         },
     }
 
@@ -270,11 +309,14 @@ def add_note(
         reference_name,
         order_name=order_name,
     )
+    _require_add_note(order)
     normalized_content = _normalize_content(content)
     normalized_request = _normalize_request(request_id)
     mark_important = bool(int(important)) if isinstance(important, (str, int)) else bool(important)
     if mark_important and doctype != ORDER_DOCTYPE:
         frappe.throw(_("Only Door Cutting Order notes can be marked as important."))
+    if mark_important:
+        _require_manage_important(order)
 
     # Serialize same-reference note creation. Together with the namespaced native
     # Comment.subject operation key this makes a lost-response retry idempotent.
@@ -307,6 +349,7 @@ def add_note(
 @frappe.whitelist()
 def set_important_note(order_name: str, comment_name: str) -> dict[str, Any]:
     order = _authorized_order(order_name)
+    _require_manage_important(order)
     resolved_comment = str(comment_name or "").strip()
     if not resolved_comment:
         frappe.throw(_("Select a note to mark as important."))
@@ -332,6 +375,7 @@ def set_important_note(order_name: str, comment_name: str) -> dict[str, Any]:
 @frappe.whitelist()
 def clear_important_note(order_name: str) -> dict[str, Any]:
     order = _authorized_order(order_name)
+    _require_manage_important(order)
     _repository.lock_reference(ORDER_DOCTYPE, order.name)
     _repository.set_order_projection(
         order.name,
