@@ -6,6 +6,7 @@ from typing import Any
 import frappe
 
 from almdina_erp.almdina_erp.application.notes.contracts import (
+    NOTE_SUBJECT_PREFIX,
     ORDER_DOCTYPE,
     plain_text_preview,
 )
@@ -55,6 +56,10 @@ class FrappeNotesRepository:
                 "comment_type": "Comment",
                 "reference_doctype": reference_doctype,
                 "reference_name": reference_name,
+                # Keep generic Timeline/system Comments available to Frappe while
+                # the Almadina drawer reads only records created through its
+                # authorized collaboration boundary.
+                "subject": ["like", f"{NOTE_SUBJECT_PREFIX}%"],
             },
             fields=list(self.comment_fields),
             order_by="creation desc, name desc",
