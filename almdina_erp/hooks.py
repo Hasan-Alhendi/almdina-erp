@@ -34,6 +34,14 @@ doc_events = {
     "Door Cutting Order": {
         "before_validate":
             "almdina_erp.almdina_erp.services.order_plan_permission_service.enforce_plan_and_drawing_permissions",
+        "before_save":
+            "almdina_erp.almdina_erp.services.notes_projection_service.preserve_order_projection_on_save",
+    },
+    "Comment": {
+        "on_update":
+            "almdina_erp.almdina_erp.services.notes_projection_service.refresh_important_projection_from_comment",
+        "on_trash":
+            "almdina_erp.almdina_erp.services.notes_projection_service.clear_important_projection_for_deleted_comment",
     },
     "Replacement Piece": {
         "on_update": "almdina_erp.almdina_erp.services.cost_service.on_replacement_update",
