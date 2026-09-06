@@ -195,6 +195,14 @@
         root.querySelectorAll(".list-row-container").forEach(container => reconcileMobileCard(listview, container));
     }
 
+    function refreshProjectionRows(listview) {
+        if (!listview || typeof listview.render_list !== "function") return;
+        // The in-memory projection is already authoritative for this current list
+        // instance. Re-render from it so the desktop cell changes immediately;
+        // the existing DCO presenter will then rebuild/reconcile mobile cards.
+        listview.render_list();
+    }
+
     function openPanel(orderName) {
         const panel = window.AlmdinaNotesPanel;
         if (panel && typeof panel.openForOrder === "function") {
@@ -297,6 +305,7 @@
         const doc = docByName(listview, orderName);
         if (!doc) return;
         doc[IMPORTANT_FIELD] = String(detail.important_note_preview || "");
+        refreshProjectionRows(listview);
         schedule(listview);
     });
 
@@ -319,5 +328,6 @@
         formatter,
         reconcileColumns,
         reconcileMobileCards,
+        refreshProjectionRows,
     });
 })();
