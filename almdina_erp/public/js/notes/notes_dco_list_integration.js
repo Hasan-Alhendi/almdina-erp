@@ -31,6 +31,12 @@
         return left.length === right.length && left.every((value, index) => value === right[index]);
     }
 
+    function importantColumnDefinition() {
+        if (!window.frappe || !frappe.meta || typeof frappe.meta.get_docfield !== "function") return null;
+        const df = frappe.meta.get_docfield(DOCTYPE, IMPORTANT_FIELD);
+        return df ? { type: "Field", df } : null;
+    }
+
     function reorderImportantColumn(listview) {
         const columns = listview && listview.columns;
         if (!Array.isArray(columns) || !columns.length) return false;
@@ -45,16 +51,41 @@
         return true;
     }
 
+    function ensureImportantColumn(listview) {
+        const columns = listview && listview.columns;
+        if (!Array.isArray(columns) || !columns.length) return false;
+        if (columns.some(column => columnFieldname(column) === IMPORTANT_FIELD)) {
+            return reorderImportantColumn(listview);
+        }
+
+        // Frappe's saved List View layout can omit an in_list_view field even
+        // though the value is fetched. ALMADINA-156 makes the current important
+        // note a mandatory operational signal, so restore only this read-only
+        // projection column without rewriting the user's saved layout.
+        const important = importantColumnDefinition();
+        if (!important) return false;
+        const notesIndex = columns.findIndex(column => columnFieldname(column) === "order_notes");
+        if (notesIndex >= 0) {
+            columns.splice(notesIndex + 1, 0, important);
+        } else {
+            // If a user intentionally hid the legacy order_notes column, preserve
+            // that choice while still showing the mandatory important signal.
+            const tagIndex = columns.findIndex(column => column && column.type === "Tag");
+            columns.splice(tagIndex >= 0 ? tagIndex + 1 : Math.min(1, columns.length), 0, important);
+        }
+        return true;
+    }
+
     function reconcileColumns(listview) {
         if (!listview || listview._almdinaNotesReconcilingColumns) return;
         const before = (listview.columns || []).map(columnFieldname);
-        if (!reorderImportantColumn(listview)) return;
+        if (!ensureImportantColumn(listview)) return;
         const after = (listview.columns || []).map(columnFieldname);
         if (arraysMatch(before, after)) return;
 
         listview._almdinaNotesReconcilingColumns = true;
         try {
-            if (typeof listview.render_header === "function") listview.render_header();
+            if (typeof listview.render_header === "function") listview.render_header(true);
             if (typeof listview.render_list === "function") listview.render_list();
         } finally {
             listview._almdinaNotesReconcilingColumns = false;
@@ -284,6 +315,7 @@
     window.AlmdinaDcoNotesListIntegration = Object.freeze({
         IMPORTANT_FIELD,
         disposeRuntime,
+        ensureImportantColumn,
         formatter,
         reconcileColumns,
         reconcileMobileCards,
