@@ -8,6 +8,7 @@ import frappe
 from almdina_erp.almdina_erp.application.notes.contracts import (
     NOTE_SUBJECT_PREFIX,
     ORDER_DOCTYPE,
+    is_collaborative_note_subject,
     plain_text_preview,
 )
 
@@ -78,7 +79,9 @@ class FrappeNotesRepository:
             list(self.comment_fields),
             as_dict=True,
         )
-        return dict(row) if row else None
+        if not row or not is_collaborative_note_subject(row.get("subject")):
+            return None
+        return dict(row)
 
     def find_by_request_subject(
         self,
