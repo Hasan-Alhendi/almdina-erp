@@ -8,8 +8,8 @@ CUSTOMER_DOCTYPE = "Customer"
 ALLOWED_REFERENCE_DOCTYPES = frozenset({ORDER_DOCTYPE, CUSTOMER_DOCTYPE})
 NOTE_MAX_LENGTH = 500
 IMPORTANT_PREVIEW_LENGTH = 140
+NOTE_SUBJECT_PREFIX = "almdina-note:"
 _REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$")
-_REQUEST_SUBJECT_PREFIX = "almdina-note:"
 
 
 class NotesValidationError(ValueError):
@@ -45,7 +45,13 @@ def normalize_request_id(request_id: object) -> str:
 
 
 def request_subject(request_id: object) -> str:
-    return f"{_REQUEST_SUBJECT_PREFIX}{normalize_request_id(request_id)}"
+    return f"{NOTE_SUBJECT_PREFIX}{normalize_request_id(request_id)}"
+
+
+def is_collaborative_note_subject(subject: object) -> bool:
+    """Identify Comments owned by the Almadina collaborative-notes boundary."""
+
+    return str(subject or "").strip().startswith(NOTE_SUBJECT_PREFIX)
 
 
 def plain_text_preview(content: object, limit: int = IMPORTANT_PREVIEW_LENGTH) -> str:
@@ -61,8 +67,10 @@ __all__ = [
     "CUSTOMER_DOCTYPE",
     "IMPORTANT_PREVIEW_LENGTH",
     "NOTE_MAX_LENGTH",
+    "NOTE_SUBJECT_PREFIX",
     "ORDER_DOCTYPE",
     "NotesValidationError",
+    "is_collaborative_note_subject",
     "normalize_note_content",
     "normalize_reference",
     "normalize_request_id",
