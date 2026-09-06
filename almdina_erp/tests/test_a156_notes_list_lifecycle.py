@@ -22,6 +22,26 @@ class TestA156NotesListLifecycle(unittest.TestCase):
         self.assertIn('removeEventListener("click", listview._almdinaNotesClickHandler)', body)
         self.assertIn("activeListView === listview", body)
 
+    def test_saved_list_layout_cannot_hide_mandatory_important_signal(self) -> None:
+        body = self.source.split("function ensureImportantColumn", 1)[1].split(
+            "function reconcileColumns",
+            1,
+        )[0]
+        self.assertIn("importantColumnDefinition()", body)
+        self.assertIn('columnFieldname(column) === "order_notes"', body)
+        self.assertIn("columns.splice(notesIndex + 1, 0, important)", body)
+        self.assertIn("tagIndex", body)
+        self.assertIn("preserve", body.lower())
+
+    def test_existing_important_column_is_reordered_beside_order_notes(self) -> None:
+        body = self.source.split("function reorderImportantColumn", 1)[1].split(
+            "function ensureImportantColumn",
+            1,
+        )[0]
+        self.assertIn('names.indexOf("order_notes")', body)
+        self.assertIn("names.indexOf(IMPORTANT_FIELD)", body)
+        self.assertIn("columns.splice(nextNotesIndex + 1, 0, important)", body)
+
     def test_new_list_instance_disposes_previous_runtime(self) -> None:
         body = self.source.split("function installRuntime", 1)[1].split(
             "function formatter",
