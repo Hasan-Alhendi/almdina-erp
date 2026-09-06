@@ -207,7 +207,28 @@ def _note_owner(row: Any) -> str:
 
 
 def _is_owned_note(row: Any) -> bool:
-    return bool(_note_owner(row) and _note_owner(row) == str(frappe.session.user or "").strip())
+    owner = _note_owner(row)
+    return bool(owner and owner == str(frappe.session.user or "").strip())
+
+
+def _require_fresh_note(
+    row: Any,
+    expected_modified: object,
+    *,
+    desired_content: str | None = None,
+) -> None:
+    """Reject stale destructive intent while keeping lost-response edit retry safe."""
+
+    if desired_content is not None and _repository.plain_text(row) == desired_content:
+        return
+    expected = str(expected_modified or "").strip()
+    current = str(dict(row or {}).get("modified") or "").strip()
+    if expected and current and expected == current:
+        return
+    frappe.throw(
+        _("تم تغيير هذه الملاحظة في جلسة أخرى. أعد تحميل الملاحظات قبل المتابعة."),
+        frappe.TimestampMismatchError,
+    )
 
 
 def _is_current_important(order: Any, comment_name: object) -> bool:
@@ -450,6 +471,7 @@ def edit_note(
     reference_name: str,
     comment_name: str,
     content: str,
+    expected_modified: str,
     order_name: str | None = None,
 ) -> dict[str, Any]:
     doctype, name, order = _authorize_reference(
@@ -462,7 +484,12 @@ def edit_note(
     _repository.lock_reference(doctype, name)
     comment = _note_for_reference(doctype, name, comment_name)
     _require_note_mutation(order, comment)
-    if str(comment.get("content") or "").strip() != normalized_content:
+    _require_fresh_note(
+        comment,
+        expected_modified,
+        desired_content=normalized_content,
+    )
+    if _repository.plain_text(comment) != normalized_content:
         _repository.update_note(
             str(comment.get("name") or ""),
             content=normalized_content,
@@ -475,6 +502,7 @@ def delete_note(
     reference_doctype: str,
     reference_name: str,
     comment_name: str,
+    expected_modified: str,
     order_name: str | None = None,
 ) -> dict[str, Any]:
     doctype, name, order = _authorize_reference(
@@ -482,10 +510,18 @@ def delete_note(
         reference_name,
         order_name=order_name,
     )
+    resolved_comment = str(comment_name or "").strip()
+    if not resolved_comment:
+        frappe.throw(_("يجب تحديد الملاحظة."))
 
     _repository.lock_reference(doctype, name)
-    comment = _note_for_reference(doctype, name, comment_name)
+    # A lost response after a successful delete can be retried safely. A still
+    # existing non-Almadina/system Comment never becomes an idempotent no-op.
+    if not frappe.db.exists("Comment", resolved_comment):
+        return _context(order)
+    comment = _note_for_reference(doctype, name, resolved_comment)
     _require_note_mutation(order, comment)
+    _require_fresh_note(comment, expected_modified)
     _repository.delete_note(str(comment.get("name") or ""))
     return _context(order)
 
