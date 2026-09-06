@@ -98,7 +98,7 @@ def _require_add_note(order: Any) -> None:
         order,
         Capability.ADD_INTERNAL_NOTE,
         user=frappe.session.user,
-        message=_("لا تملك صلاحية إضافة ملاحظة داخلية على هذا الطلب."),
+        message=_("لا تملك صلاحية إضافة أو إدارة ملاحظاتك الداخلية على هذا الطلب."),
     )
 
 
@@ -181,20 +181,127 @@ def _valid_important_row(order_name: str, comment_name: str) -> dict[str, Any] |
     return row
 
 
+def _note_for_reference(
+    reference_doctype: str,
+    reference_name: str,
+    comment_name: object,
+) -> dict[str, Any]:
+    resolved = str(comment_name or "").strip()
+    if not resolved:
+        frappe.throw(_("يجب تحديد الملاحظة."))
+    row = _repository.get_note(resolved)
+    if not row:
+        frappe.throw(_("الملاحظة غير موجودة أو لم تعد متاحة."), frappe.DoesNotExistError)
+    if str(row.get("comment_type") or "") != "Comment":
+        frappe.throw(_("الملاحظة المحددة غير صالحة."), frappe.PermissionError)
+    if str(row.get("reference_doctype") or "") != reference_doctype:
+        frappe.throw(_("الملاحظة المحددة لا تتبع هذا السجل."), frappe.PermissionError)
+    if str(row.get("reference_name") or "") != reference_name:
+        frappe.throw(_("الملاحظة المحددة لا تتبع هذا السجل."), frappe.PermissionError)
+    return row
+
+
+def _note_owner(row: Any) -> str:
+    note = dict(row or {})
+    return str(note.get("comment_email") or note.get("owner") or "").strip()
+
+
+def _is_owned_note(row: Any) -> bool:
+    owner = _note_owner(row)
+    return bool(owner and owner == str(frappe.session.user or "").strip())
+
+
+def _require_fresh_note(
+    row: Any,
+    expected_modified: object,
+    *,
+    desired_content: str | None = None,
+) -> None:
+    """Reject stale destructive intent while keeping lost-response edit retry safe."""
+
+    if desired_content is not None and _repository.plain_text(row) == desired_content:
+        return
+    expected = str(expected_modified or "").strip()
+    current = str(dict(row or {}).get("modified") or "").strip()
+    if expected and current and expected == current:
+        return
+    frappe.throw(
+        _("تم تغيير هذه الملاحظة في جلسة أخرى. أعد تحميل الملاحظات قبل المتابعة."),
+        frappe.TimestampMismatchError,
+    )
+
+
+def _is_current_important(order: Any, comment_name: object) -> bool:
+    resolved = str(comment_name or "").strip()
+    if not resolved:
+        return False
+    projection = _repository.order_projection(str(order.name))
+    return projection["comment"] == resolved
+
+
+def _require_note_mutation(order: Any, row: Any) -> None:
+    """Allow a collaborator to change only their own note.
+
+    A currently important note is a factory-wide signal. Even its author may not
+    alter or delete that signal unless they also hold MANAGE_IMPORTANT_NOTE.
+    """
+
+    _require_add_note(order)
+    if not _is_owned_note(row):
+        frappe.throw(
+            _("يمكنك تعديل أو حذف الملاحظات التي أضفتها أنت فقط."),
+            frappe.PermissionError,
+        )
+    if _is_current_important(order, row.get("name")):
+        _require_manage_important(order)
+
+
+def _note_actions(order: Any, note: dict[str, Any]) -> dict[str, bool]:
+    owns_note = (
+        str(note.get("author_user") or "").strip()
+        == str(frappe.session.user or "").strip()
+    )
+    can_mutate = bool(_can_add_note(order) and owns_note)
+    if note.get("is_important") is True and not _can_manage_important(order):
+        can_mutate = False
+    return {
+        "can_edit": can_mutate,
+        "can_delete": can_mutate,
+    }
+
+
+def _decorate_note(order: Any, note: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not note:
+        return None
+    decorated = dict(note)
+    decorated.update(_note_actions(order, decorated))
+    return decorated
+
+
+def _decorate_notes(order: Any, notes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [dict(_decorate_note(order, note) or {}) for note in notes]
+
+
 def _order_notes_payload(order: Any) -> dict[str, Any]:
     projection = _repository.order_projection(order.name)
     important_name = projection["comment"]
     important_row = _valid_important_row(order.name, important_name)
     effective_important = important_name if important_row else ""
-    order_notes = _repository.list_notes(
-        ORDER_DOCTYPE,
-        order.name,
-        important_comment=effective_important,
+    order_notes = _decorate_notes(
+        order,
+        _repository.list_notes(
+            ORDER_DOCTYPE,
+            order.name,
+            important_comment=effective_important,
+        ),
     )
     important_note = (
-        _repository.serialize_note(
-            important_row,
-            important_comment=effective_important,
+        _decorate_note(
+            order,
+            _repository.serialize_note(
+                important_row,
+                important_comment=effective_important,
+            ),
         )
         if important_row
         else None
@@ -230,7 +337,10 @@ def _customer_notes_payload(order: Any) -> dict[str, Any]:
             "notes": [],
             "count": 0,
         }
-    notes = _repository.list_notes(CUSTOMER_DOCTYPE, customer_name)
+    notes = _decorate_notes(
+        order,
+        _repository.list_notes(CUSTOMER_DOCTYPE, customer_name),
+    )
     return {
         "customer": customer_name,
         "available": True,
@@ -292,7 +402,7 @@ def get_notes(
             "reference_name": name,
             **payload,
         }
-    notes = _repository.list_notes(doctype, name)
+    notes = _decorate_notes(order, _repository.list_notes(doctype, name))
     return {
         "reference_doctype": doctype,
         "reference_name": name,
@@ -356,6 +466,67 @@ def add_note(
 
 
 @frappe.whitelist()
+def edit_note(
+    reference_doctype: str,
+    reference_name: str,
+    comment_name: str,
+    content: str,
+    expected_modified: str,
+    order_name: str | None = None,
+) -> dict[str, Any]:
+    doctype, name, order = _authorize_reference(
+        reference_doctype,
+        reference_name,
+        order_name=order_name,
+    )
+    normalized_content = _normalize_content(content)
+
+    _repository.lock_reference(doctype, name)
+    comment = _note_for_reference(doctype, name, comment_name)
+    _require_note_mutation(order, comment)
+    _require_fresh_note(
+        comment,
+        expected_modified,
+        desired_content=normalized_content,
+    )
+    if _repository.plain_text(comment) != normalized_content:
+        _repository.update_note(
+            str(comment.get("name") or ""),
+            content=normalized_content,
+        )
+    return _context(order)
+
+
+@frappe.whitelist()
+def delete_note(
+    reference_doctype: str,
+    reference_name: str,
+    comment_name: str,
+    expected_modified: str,
+    order_name: str | None = None,
+) -> dict[str, Any]:
+    doctype, name, order = _authorize_reference(
+        reference_doctype,
+        reference_name,
+        order_name=order_name,
+    )
+    resolved_comment = str(comment_name or "").strip()
+    if not resolved_comment:
+        frappe.throw(_("يجب تحديد الملاحظة."))
+
+    _repository.lock_reference(doctype, name)
+    # A lost response after a successful delete can be retried safely. A still
+    # existing non-Almadina/system Comment never becomes an idempotent no-op.
+    if not frappe.db.exists("Comment", resolved_comment):
+        return _context(order)
+    comment = _note_for_reference(doctype, name, resolved_comment)
+    _require_note_mutation(order, comment)
+    _require_fresh_note(comment, expected_modified)
+    _repository.delete_note(str(comment.get("name") or ""))
+    return _context(order)
+
+
+@frappe.whitelist()
 def set_important_note(order_name: str, comment_name: str) -> dict[str, Any]:
     order = _authorized_order(order_name)
     _require_manage_important(order)
@@ -397,6 +568,8 @@ def clear_important_note(order_name: str) -> dict[str, Any]:
 __all__ = [
     "add_note",
     "clear_important_note",
+    "delete_note",
+    "edit_note",
     "get_notes",
     "get_order_notes_context",
     "set_important_note",
