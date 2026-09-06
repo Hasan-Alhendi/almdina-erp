@@ -1,0 +1,150 @@
+/* Collaborative note mutation controls. Loaded after notes.css. */
+
+.almdina-note-actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 5px;
+    flex-wrap: wrap;
+}
+
+.almdina-note-action {
+    min-height: 30px;
+    padding: 4px 8px;
+    border: 1px solid #dce5f0;
+    border-radius: 8px;
+    background: #fff;
+    color: #43536c;
+    font-size: 10.5px;
+    font-weight: 800;
+    line-height: 1.2;
+    cursor: pointer;
+}
+
+.almdina-note-action:hover {
+    border-color: #b9c9dd;
+    background: #f7faff;
+    color: #1f4f9c;
+}
+
+.almdina-note-action.is-danger {
+    border-color: #f0d5d5;
+    color: #a44545;
+}
+
+.almdina-note-action.is-danger:hover {
+    border-color: #e7b6b6;
+    background: #fff6f6;
+    color: #8f2f2f;
+}
+
+.almdina-note-action:disabled {
+    opacity: .5;
+    cursor: wait;
+}
+
+.almdina-note-card.is-editing {
+    border-color: #9dbcf1;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, .07);
+}
+
+.almdina-note-editor {
+    margin-top: 9px;
+}
+
+.almdina-note-editor textarea {
+    display: block;
+    width: 100%;
+    min-height: 86px;
+    max-height: 190px;
+    resize: vertical;
+    padding: 9px 11px;
+    border: 1px solid #cbd8e8;
+    border-radius: 10px;
+    background: #fff;
+    color: #263952;
+    font-size: 12.5px;
+    line-height: 1.65;
+    direction: rtl;
+    outline: none;
+}
+
+.almdina-note-editor textarea:focus {
+    border-color: #70a5fa;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, .10);
+}
+
+.almdina-note-editor-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 7px;
+}
+
+.almdina-note-edit-counter {
+    color: #929daf;
+    font-size: 10px;
+    direction: ltr;
+}
+
+.almdina-note-editor-actions {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+.almdina-note-editor-actions .btn {
+    min-height: 32px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.almdina-notes-action-error {
+    margin: -8px 0 14px;
+}
+
+.almdina-note-action:focus-visible,
+.almdina-note-editor textarea:focus-visible,
+.almdina-note-editor-actions .btn:focus-visible {
+    outline: 3px solid rgba(37, 99, 235, .22);
+    outline-offset: 2px;
+}
+
+@media (max-width: 600px) {
+    .almdina-note-head {
+        gap: 6px;
+    }
+
+    .almdina-note-actions {
+        gap: 4px;
+    }
+
+    .almdina-note-action {
+        min-height: 34px;
+        padding-inline: 9px;
+    }
+
+    .almdina-note-editor-meta {
+        align-items: flex-end;
+        flex-direction: column;
+    }
+
+    .almdina-note-editor-actions {
+        width: 100%;
+    }
+
+    .almdina-note-editor-actions .btn {
+        flex: 1 1 0;
+        min-height: 38px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .almdina-note-card.is-editing {
+        scroll-behavior: auto;
+    }
+}
