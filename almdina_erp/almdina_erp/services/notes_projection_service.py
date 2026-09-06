@@ -30,8 +30,9 @@ def preserve_order_projection_on_save(order: Any, method: str | None = None) -> 
     """Keep the read projection outside normal DCO authoring state.
 
     A form opened before another worker pins a Comment may later save unrelated
-    order edits. Reloading these two read-only fields immediately before that save
-    prevents the stale form payload from overwriting the collaboration projection.
+    order edits. Locking the persisted DCO before reloading the projection makes
+    that save serialize with pin/unpin operations, so a stale form can never
+    overwrite a newer collaboration projection.
     """
 
     del method
@@ -42,6 +43,7 @@ def preserve_order_projection_on_save(order: Any, method: str | None = None) -> 
     name = str(order.get("name") or "").strip()
     if not name or not frappe.db.exists(ORDER_DOCTYPE, name):
         return
+    _repository.lock_reference(ORDER_DOCTYPE, name)
     projection = _repository.order_projection(name)
     order.set("important_note_comment", projection["comment"] or None)
     order.set("important_note_preview", projection["preview"] or None)
@@ -59,6 +61,10 @@ def refresh_important_projection_from_comment(
     order_name = str(comment.get("reference_name") or "").strip()
     if not frappe.db.exists(ORDER_DOCTYPE, order_name):
         return
+    # Pin/unpin and native Comment edits must share the same order lock. Without
+    # this, an edit of the previously pinned Comment could race with a new pin and
+    # restore the old pointer after the newer operation already succeeded.
+    _repository.lock_reference(ORDER_DOCTYPE, order_name)
     projection = _repository.order_projection(order_name)
     if projection["comment"] != str(comment.get("name") or "").strip():
         return
@@ -82,6 +88,7 @@ def clear_important_projection_for_deleted_comment(
     order_name = str(comment.get("reference_name") or "").strip()
     if not frappe.db.exists(ORDER_DOCTYPE, order_name):
         return
+    _repository.lock_reference(ORDER_DOCTYPE, order_name)
     projection = _repository.order_projection(order_name)
     if projection["comment"] != str(comment.get("name") or "").strip():
         return
