@@ -16,6 +16,7 @@ app_include_js = [
     "/assets/almdina_erp/js/permission_context.js",
     "/assets/almdina_erp/js/frontend_foundation.js",
     "/assets/almdina_erp/js/notes/notes_panel.js",
+    "/assets/almdina_erp/js/notes/notes_dco_list_integration.js",
     "/assets/almdina_erp/js/page_revisit_refresh.js",
     "/assets/almdina_erp/js/responsive_device.js",
     "/assets/almdina_erp/js/shop_floor_quick_actions.js",
