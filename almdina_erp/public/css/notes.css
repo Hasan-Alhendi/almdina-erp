@@ -1,0 +1,683 @@
+/* Almadina collaborative notes: reusable drawer + DCO list/mobile projection. */
+
+body.almdina-notes-open {
+    overflow: hidden;
+}
+
+.almdina-notes-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1060;
+    display: flex;
+    align-items: stretch;
+    justify-content: flex-start;
+    visibility: hidden;
+    background: rgba(15, 23, 42, 0);
+    pointer-events: none;
+    transition: background-color 180ms ease, visibility 0s linear 180ms;
+}
+
+.almdina-notes-overlay.is-open {
+    visibility: visible;
+    background: rgba(15, 23, 42, .28);
+    pointer-events: auto;
+    transition-delay: 0s;
+}
+
+.almdina-notes-panel {
+    display: flex;
+    flex-direction: column;
+    width: min(430px, 92vw);
+    height: 100%;
+    min-width: 0;
+    overflow: hidden;
+    border-inline-end: 1px solid #dfe7f2;
+    background: #fff;
+    color: #10203f;
+    box-shadow: 12px 0 36px rgba(15, 23, 42, .13);
+    transform: translateX(-102%);
+    transition: transform 220ms ease;
+}
+
+.almdina-notes-overlay.is-open .almdina-notes-panel {
+    transform: translateX(0);
+}
+
+.almdina-notes-panel-content {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+    flex-direction: column;
+}
+
+.almdina-notes-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    min-height: 72px;
+    padding: 14px 18px;
+    border-bottom: 1px solid #e8eef6;
+    background: #fff;
+}
+
+.almdina-notes-header > div {
+    min-width: 0;
+}
+
+.almdina-notes-header h2 {
+    margin: 0;
+    color: #10235b;
+    font-size: 20px;
+    font-weight: 850;
+    line-height: 1.25;
+}
+
+.almdina-notes-order-id {
+    display: block;
+    margin-top: 3px;
+    direction: ltr;
+    color: #7b879c;
+    font-size: 11px;
+    font-weight: 700;
+    text-align: right;
+}
+
+.almdina-notes-icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 38px;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 11px;
+    background: transparent;
+    color: #34445f;
+    font-size: 26px;
+    font-weight: 350;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.almdina-notes-icon-button:hover {
+    border-color: #dce5f1;
+    background: #f6f9fd;
+}
+
+.almdina-notes-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding: 14px 18px 22px;
+    background: #fbfdff;
+}
+
+.almdina-notes-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 5px;
+    padding: 4px;
+    margin-bottom: 17px;
+    border: 1px solid #dbe6f4;
+    border-radius: 12px;
+    background: #f3f7fc;
+}
+
+.almdina-notes-tab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-height: 38px;
+    padding: 7px 11px;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: #52617b;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.almdina-notes-tab > span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 22px;
+    padding-inline: 6px;
+    border-radius: 999px;
+    background: #e4edf9;
+    color: #3a506f;
+    font-size: 11px;
+}
+
+.almdina-notes-tab.is-active {
+    background: #1d6df2;
+    color: #fff;
+    box-shadow: 0 3px 10px rgba(29, 109, 242, .2);
+}
+
+.almdina-notes-tab.is-active > span {
+    background: rgba(255, 255, 255, .2);
+    color: #fff;
+}
+
+.almdina-notes-tab:disabled {
+    opacity: .48;
+    cursor: not-allowed;
+}
+
+.almdina-notes-section-label {
+    display: block;
+    margin-bottom: 9px;
+    color: #233454;
+    font-size: 12px;
+    font-weight: 850;
+}
+
+.almdina-notes-important {
+    margin-bottom: 18px;
+}
+
+.almdina-notes-important-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.almdina-notes-important-heading .almdina-notes-section-label {
+    margin-bottom: 9px;
+}
+
+.almdina-notes-link-button {
+    padding: 0 0 7px;
+    border: 0;
+    background: transparent;
+    color: #8a6112;
+    font-size: 11px;
+    font-weight: 750;
+    cursor: pointer;
+}
+
+.almdina-notes-link-button:disabled {
+    opacity: .55;
+    cursor: wait;
+}
+
+.almdina-notes-important-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 11px;
+    padding: 13px 14px;
+    border: 1px solid #f2cf73;
+    border-radius: 13px;
+    background: #fff9e8;
+}
+
+.almdina-notes-star {
+    flex: 0 0 auto;
+    color: #e39b08;
+    font-size: 19px;
+    line-height: 1.2;
+}
+
+.almdina-notes-important-card > div {
+    min-width: 0;
+}
+
+.almdina-notes-important-card strong {
+    display: block;
+    color: #372b12;
+    font-size: 13.5px;
+    font-weight: 800;
+    line-height: 1.65;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+
+.almdina-notes-meta {
+    margin-top: 7px;
+    color: #87775a;
+    font-size: 10.5px;
+    font-weight: 650;
+}
+
+.almdina-notes-important-empty {
+    padding: 11px 13px;
+    border: 1px dashed #d9e2ee;
+    border-radius: 12px;
+    background: #fff;
+    color: #8a95a8;
+    font-size: 12px;
+}
+
+.almdina-notes-list-section {
+    margin-bottom: 18px;
+}
+
+.almdina-notes-list {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+}
+
+.almdina-note-card {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 9px;
+    padding: 12px;
+    border: 1px solid #e1e8f1;
+    border-radius: 13px;
+    background: #fff;
+}
+
+.almdina-note-card.is-important {
+    border-color: #f0d48f;
+    background: #fffdf7;
+}
+
+.almdina-note-avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    background: #eaf2ff;
+    color: #2466cf;
+    font-size: 12px;
+    font-weight: 850;
+}
+
+.almdina-note-body {
+    min-width: 0;
+}
+
+.almdina-note-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.almdina-note-head > div {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+}
+
+.almdina-note-head strong {
+    color: #1e2f4c;
+    font-size: 12px;
+    font-weight: 850;
+    overflow-wrap: anywhere;
+}
+
+.almdina-note-head span:not(.almdina-note-pin) {
+    margin-top: 2px;
+    color: #8a96a8;
+    font-size: 10px;
+}
+
+.almdina-note-body p {
+    margin: 7px 0 0;
+    color: #2f405c;
+    font-size: 12.5px;
+    line-height: 1.65;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+
+.almdina-note-pin {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 30px;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 1px solid #e1e7ef;
+    border-radius: 9px;
+    background: #fff;
+    color: #a66f00;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.almdina-note-pin.is-important {
+    border-color: transparent;
+    background: #fff5d4;
+    color: #e39b08;
+    cursor: default;
+}
+
+.almdina-note-pin:disabled {
+    opacity: .55;
+    cursor: wait;
+}
+
+.almdina-notes-empty-state {
+    padding: 18px 14px;
+    border: 1px dashed #dce4ef;
+    border-radius: 13px;
+    background: #fff;
+    color: #8692a6;
+    font-size: 12px;
+    line-height: 1.6;
+    text-align: center;
+}
+
+.almdina-notes-composer {
+    position: sticky;
+    bottom: -22px;
+    z-index: 2;
+    padding: 14px 0 22px;
+    border-top: 1px solid #e7edf5;
+    background: #fbfdff;
+}
+
+.almdina-notes-composer > label {
+    display: block;
+    margin-bottom: 8px;
+    color: #243552;
+    font-size: 12px;
+    font-weight: 850;
+}
+
+.almdina-notes-composer textarea {
+    display: block;
+    width: 100%;
+    min-height: 84px;
+    max-height: 180px;
+    resize: vertical;
+    padding: 10px 12px;
+    border: 1px solid #cfd9e7;
+    border-radius: 12px;
+    background: #fff;
+    color: #1f2f49;
+    font-size: 13px;
+    line-height: 1.6;
+    direction: rtl;
+    outline: none;
+}
+
+.almdina-notes-composer textarea:focus {
+    border-color: #70a5fa;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, .10);
+}
+
+.almdina-notes-composer-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 34px;
+    margin: 5px 1px 7px;
+}
+
+.almdina-notes-counter {
+    color: #929daf;
+    font-size: 10px;
+    direction: ltr;
+}
+
+.almdina-notes-important-toggle {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 6px;
+    margin: 0 !important;
+    color: #6f5420 !important;
+    font-size: 11px !important;
+    font-weight: 750 !important;
+    cursor: pointer;
+}
+
+.almdina-notes-important-toggle input {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: #d89400;
+}
+
+.almdina-notes-important-toggle > span:first-of-type {
+    color: #e09a07;
+    font-size: 15px;
+}
+
+.almdina-notes-submit {
+    width: 100%;
+    min-height: 42px;
+    border-radius: 11px !important;
+    font-weight: 800 !important;
+}
+
+.almdina-notes-error {
+    margin: 7px 0;
+    padding: 9px 10px;
+    border: 1px solid #fecaca;
+    border-radius: 10px;
+    background: #fff5f5;
+    color: #a33a3a;
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.almdina-notes-loading,
+.almdina-notes-load-error {
+    display: flex;
+    min-height: 190px;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 10px;
+    padding: 24px;
+    border: 1px solid #e4ebf4;
+    border-radius: 14px;
+    background: #fff;
+    color: #68758b;
+    text-align: center;
+}
+
+.almdina-notes-load-error strong {
+    color: #283854;
+}
+
+.almdina-notes-load-error span {
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.almdina-notes-spinner {
+    width: 25px;
+    height: 25px;
+    border: 3px solid #d8e4f4;
+    border-top-color: #2563eb;
+    border-radius: 999px;
+    animation: almdina-notes-spin .8s linear infinite;
+}
+
+@keyframes almdina-notes-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Desktop DCO list projection: quiet when absent, obvious when present. */
+.dco-important-note-link {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    gap: 6px;
+    padding: 4px 8px;
+    border: 1px solid #f1d694;
+    border-radius: 999px;
+    background: #fff8e7;
+    color: #8b5d00;
+    font-size: 11px;
+    font-weight: 750;
+    line-height: 1.25;
+    cursor: pointer;
+}
+
+.dco-important-note-link .dco-important-note-star {
+    flex: 0 0 auto;
+    color: #df9700;
+    font-size: 13px;
+}
+
+.dco-important-note-link .dco-important-note-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dco-important-note-link:hover {
+    border-color: #e4b94f;
+    background: #fff3cf;
+}
+
+/* The DCO mobile card has its own renderer; the same list projection is shown here. */
+.dco-order-list.dco-order-card-layout .dco-card-important-note {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr);
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    min-height: 54px;
+    margin: 0 0 10px;
+    padding: 9px 11px;
+    border: 1px solid #f1d28a;
+    border-radius: 13px;
+    background: #fff9e9;
+    color: #4e3a11;
+    text-align: right;
+    cursor: pointer;
+}
+
+.dco-order-list.dco-order-card-layout .dco-card-important-note-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 9px;
+    background: #ffefbd;
+    color: #d99000;
+    font-size: 17px;
+}
+
+.dco-order-list.dco-order-card-layout .dco-card-important-note-copy {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.dco-order-list.dco-order-card-layout .dco-card-important-note-copy > span {
+    margin-bottom: 2px;
+    color: #8e6d2a;
+    font-size: 10px;
+    font-weight: 750;
+}
+
+.dco-order-list.dco-order-card-layout .dco-card-important-note-copy > strong {
+    display: -webkit-box;
+    max-width: 100%;
+    overflow: hidden;
+    color: #4b3710;
+    font-size: 12px;
+    font-weight: 850;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.dco-order-list.dco-order-card-layout .dco-card-important-note:hover,
+.dco-order-list.dco-order-card-layout .dco-card-important-note:focus-visible {
+    border-color: #e7bb51;
+    background: #fff3d2;
+}
+
+.almdina-notes-icon-button:focus-visible,
+.almdina-notes-tab:focus-visible,
+.almdina-notes-link-button:focus-visible,
+.almdina-note-pin:focus-visible,
+.almdina-notes-important-toggle:focus-within,
+.almdina-notes-submit:focus-visible,
+.dco-important-note-link:focus-visible,
+.dco-card-important-note:focus-visible {
+    outline: 3px solid rgba(37, 99, 235, .22);
+    outline-offset: 2px;
+}
+
+@media (max-width: 600px) {
+    .almdina-notes-overlay {
+        align-items: flex-end;
+        justify-content: stretch;
+    }
+
+    .almdina-notes-panel {
+        width: 100%;
+        max-width: none;
+        height: min(92dvh, 760px);
+        border: 0;
+        border-radius: 20px 20px 0 0;
+        box-shadow: 0 -16px 42px rgba(15, 23, 42, .16);
+        transform: translateY(102%);
+    }
+
+    .almdina-notes-overlay.is-open .almdina-notes-panel {
+        transform: translateY(0);
+    }
+
+    .almdina-notes-header {
+        min-height: 64px;
+        padding: 12px 15px;
+    }
+
+    .almdina-notes-header::before {
+        content: "";
+        position: absolute;
+        top: 7px;
+        left: 50%;
+        width: 44px;
+        height: 4px;
+        border-radius: 999px;
+        background: #dbe3ee;
+        transform: translateX(-50%);
+    }
+
+    .almdina-notes-scroll {
+        padding: 12px 14px max(18px, env(safe-area-inset-bottom));
+    }
+
+    .almdina-notes-composer {
+        bottom: calc(-1 * max(18px, env(safe-area-inset-bottom)));
+        padding-bottom: max(18px, env(safe-area-inset-bottom));
+    }
+
+    .almdina-note-card {
+        grid-template-columns: 32px minmax(0, 1fr);
+        padding: 11px;
+    }
+
+    .almdina-note-avatar {
+        width: 32px;
+        height: 32px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .almdina-notes-overlay,
+    .almdina-notes-panel,
+    .almdina-notes-spinner {
+        animation-duration: .001ms !important;
+        transition-duration: .001ms !important;
+    }
+}
