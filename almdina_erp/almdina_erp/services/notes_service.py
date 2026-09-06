@@ -113,19 +113,29 @@ def _require_manage_important(order: Any) -> None:
 
 
 def _customer_has_read_access(customer: Any) -> bool:
-    # This is an availability probe for an optional secondary context, not an
-    # authorization failure for the DCO itself. Frappe v16's public
-    # `frappe.has_permission` facade does not accept `print_logs`; the lower-level
-    # permission evaluator does and is the correct API when the probe must be silent.
-    return bool(
-        frappe.permissions.has_permission(
-            CUSTOMER_DOCTYPE,
-            ptype="read",
-            doc=customer,
-            user=frappe.session.user,
-            print_logs=False,
+    """Probe optional Customer visibility without leaking Frappe permission dialogs.
+
+    Frappe v16.17.5 accepts ``print_logs=False`` on the low-level evaluator, but a
+    denied document check performs an internal doctype-level ``has_permission`` call
+    without propagating that flag. That nested call can still emit ``msgprint``.
+    ``mute_messages`` is request-local and is restored in ``finally``, so the probe
+    preserves Frappe's complete permission/share semantics without any UI side effect.
+    """
+
+    previous_mute_messages = frappe.flags.get("mute_messages", False)
+    frappe.flags.mute_messages = True
+    try:
+        return bool(
+            frappe.permissions.has_permission(
+                CUSTOMER_DOCTYPE,
+                ptype="read",
+                doc=customer,
+                user=frappe.session.user,
+                print_logs=False,
+            )
         )
-    )
+    finally:
+        frappe.flags.mute_messages = previous_mute_messages
 
 
 def _linked_customer(order: Any, customer_name: object, *, required: bool) -> Any | None:
