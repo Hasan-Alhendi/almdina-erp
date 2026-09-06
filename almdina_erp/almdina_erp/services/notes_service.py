@@ -9,6 +9,7 @@ from almdina_erp.almdina_erp.application.notes.contracts import (
     CUSTOMER_DOCTYPE,
     ORDER_DOCTYPE,
     NotesValidationError,
+    normalize_boolean_flag,
     normalize_note_content,
     normalize_reference,
     normalize_request_id,
@@ -56,10 +57,18 @@ def _normalize_request(request_id: object) -> str:
     raise AssertionError("frappe.throw must interrupt execution")
 
 
+def _normalize_important_flag(value: object) -> bool:
+    try:
+        return normalize_boolean_flag(value, label="قيمة الملاحظة المهمة")
+    except NotesValidationError as error:
+        _validation_error(error)
+    raise AssertionError("frappe.throw must interrupt execution")
+
+
 def _authorized_order(order_name: object) -> Any:
     resolved = str(order_name or "").strip()
     if not resolved:
-        frappe.throw(_("A Door Cutting Order is required."))
+        frappe.throw(_("يجب تحديد طلب القص."))
     order = frappe.get_doc(ORDER_DOCTYPE, resolved)
     # Native DCO permission hooks contain the current worker/assigned-order scope.
     # Reading notes follows concrete DCO visibility and is deliberately independent
@@ -119,7 +128,7 @@ def _linked_customer(order: Any, customer_name: object, *, required: bool) -> An
     if not resolved or not linked or resolved != linked:
         if required:
             frappe.throw(
-                _("Customer notes are only available for the customer linked to this order."),
+                _("ملاحظات العميل متاحة فقط للعميل المرتبط بهذا الطلب."),
                 frappe.PermissionError,
             )
         return None
@@ -129,7 +138,7 @@ def _linked_customer(order: Any, customer_name: object, *, required: bool) -> An
         return customer
     if required:
         frappe.throw(
-            _("You do not have permission to access notes for this customer."),
+            _("لا تملك صلاحية الوصول إلى ملاحظات هذا العميل."),
             frappe.PermissionError,
         )
     return None
@@ -146,7 +155,7 @@ def _authorize_reference(
         order = _authorized_order(name)
         context_order = str(order_name or "").strip()
         if context_order and context_order != order.name:
-            frappe.throw(_("The note reference does not match the requested order."))
+            frappe.throw(_("مرجع الملاحظة لا يطابق الطلب المطلوب."))
         return doctype, name, order
 
     # Customer notes are intentionally contextual: DCO visibility by itself does
@@ -302,7 +311,7 @@ def add_note(
     content: str,
     request_id: str,
     order_name: str | None = None,
-    important: int | bool = False,
+    important: int | bool | str = False,
 ) -> dict[str, Any]:
     doctype, name, order = _authorize_reference(
         reference_doctype,
@@ -312,9 +321,9 @@ def add_note(
     _require_add_note(order)
     normalized_content = _normalize_content(content)
     normalized_request = _normalize_request(request_id)
-    mark_important = bool(int(important)) if isinstance(important, (str, int)) else bool(important)
+    mark_important = _normalize_important_flag(important)
     if mark_important and doctype != ORDER_DOCTYPE:
-        frappe.throw(_("Only Door Cutting Order notes can be marked as important."))
+        frappe.throw(_("يمكن تعيين ملاحظات الطلب فقط كملاحظة مهمة."))
     if mark_important:
         _require_manage_important(order)
 
@@ -325,7 +334,7 @@ def add_note(
     existing = _repository.find_by_request_subject(doctype, name, subject)
     if existing:
         if str(existing.get("content") or "").strip() != normalized_content:
-            frappe.throw(_("This note request was already used with different content."))
+            frappe.throw(_("تم استخدام معرّف هذا الطلب سابقًا مع محتوى مختلف."))
         comment = existing
     else:
         comment = _repository.create_note(
@@ -352,18 +361,18 @@ def set_important_note(order_name: str, comment_name: str) -> dict[str, Any]:
     _require_manage_important(order)
     resolved_comment = str(comment_name or "").strip()
     if not resolved_comment:
-        frappe.throw(_("Select a note to mark as important."))
+        frappe.throw(_("اختر ملاحظة لتعيينها كملاحظة مهمة."))
 
     _repository.lock_reference(ORDER_DOCTYPE, order.name)
     comment = _valid_important_row(order.name, resolved_comment)
     if not comment:
         frappe.throw(
-            _("The selected Comment is not a valid note for this order."),
+            _("الملاحظة المحددة غير صالحة لهذا الطلب."),
             frappe.PermissionError,
         )
     preview = plain_text_preview(_repository.plain_text(comment))
     if not preview:
-        frappe.throw(_("An empty Comment cannot be marked as important."))
+        frappe.throw(_("لا يمكن تعيين ملاحظة فارغة كملاحظة مهمة."))
     _repository.set_order_projection(
         order.name,
         comment_name=resolved_comment,
