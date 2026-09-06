@@ -112,12 +112,17 @@ def _require_manage_important(order: Any) -> None:
 
 
 def _customer_has_read_access(customer: Any) -> bool:
+    # This is an availability probe for an optional secondary context, not an
+    # authorization failure for the DCO itself. Keep it silent so a valid Notes
+    # drawer never surfaces Frappe's permission-debug dialog merely because the
+    # current worker cannot read Customer records.
     return bool(
         frappe.has_permission(
             CUSTOMER_DOCTYPE,
             ptype="read",
             doc=customer,
             user=frappe.session.user,
+            print_logs=False,
         )
     )
 
@@ -331,8 +336,12 @@ def _customer_notes_payload(order: Any) -> dict[str, Any]:
         }
     customer = _linked_customer(order, customer_name, required=False)
     if not customer:
+        # Expose customer context only when it is actually available to the
+        # current user. The frontend already treats an empty customer context as
+        # a disabled tab, so this keeps the UX deterministic without a second
+        # permission check or a client-side workaround.
         return {
-            "customer": customer_name,
+            "customer": "",
             "available": False,
             "notes": [],
             "count": 0,
