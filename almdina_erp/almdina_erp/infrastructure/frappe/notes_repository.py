@@ -37,6 +37,7 @@ class FrappeNotesRepository:
         "comment_by",
         "comment_email",
         "creation",
+        "modified",
         "content",
         "subject",
         "reference_doctype",
@@ -133,6 +134,23 @@ class FrappeNotesRepository:
             raise RuntimeError("Created Comment could not be reloaded.")
         return row
 
+    def update_note(self, comment_name: str, *, content: str) -> dict[str, Any]:
+        """Edit the canonical native Comment through its document lifecycle."""
+
+        document = frappe.get_doc("Comment", comment_name)
+        document.content = content
+        document.save(ignore_permissions=True)
+        row = self.get_note(str(document.name))
+        if not row:
+            raise RuntimeError("Updated Comment could not be reloaded.")
+        return row
+
+    @staticmethod
+    def delete_note(comment_name: str) -> None:
+        """Delete the canonical Comment so native hooks/cache cleanup still run."""
+
+        frappe.delete_doc("Comment", comment_name, ignore_permissions=True)
+
     @staticmethod
     def lock_reference(reference_doctype: str, reference_name: str) -> None:
         # Callers validate the doctype against the application allowlist before
@@ -188,13 +206,17 @@ class FrappeNotesRepository:
         note = dict(row or {})
         content = _plain_text(note.get("content"))
         comment_name = str(note.get("name") or "")
+        creation = note.get("creation")
+        modified = note.get("modified")
         return {
             "name": comment_name,
             "author": str(note.get("comment_by") or note.get("owner") or "").strip(),
             "author_user": str(note.get("comment_email") or note.get("owner") or "").strip(),
-            "creation": note.get("creation"),
+            "creation": creation,
+            "modified": modified,
             "content": content,
             "preview": plain_text_preview(content),
+            "is_edited": bool(creation and modified and str(creation) != str(modified)),
             "is_important": bool(
                 important_comment and comment_name == str(important_comment)
             ),
