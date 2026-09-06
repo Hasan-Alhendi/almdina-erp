@@ -14,6 +14,14 @@ from almdina_erp.almdina_erp.application.notes.contracts import (
     plain_text_preview,
     request_subject,
 )
+from almdina_erp.almdina_erp.application.security.permission_matrix import (
+    CAPABILITY_PRESENTATION,
+    normalize_capability_state,
+)
+from almdina_erp.almdina_erp.domain.security.authorization import (
+    CAPABILITY_CATALOG,
+    Capability,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -78,6 +86,29 @@ def test_a156_request_id_and_preview_support_retryable_weak_network_flow() -> No
     assert preview.endswith("…")
 
 
+def test_a156_collaboration_actions_are_explicit_assignable_capabilities() -> None:
+    add_definition = CAPABILITY_CATALOG[Capability.ADD_INTERNAL_NOTE]
+    important_definition = CAPABILITY_CATALOG[Capability.MANAGE_IMPORTANT_NOTE]
+
+    assert Capability.ADD_INTERNAL_NOTE == "add_internal_note"
+    assert Capability.MANAGE_IMPORTANT_NOTE == "manage_important_note"
+    assert add_definition.applies_to == "Door Cutting Order"
+    assert important_definition.applies_to == "Door Cutting Order"
+    assert add_definition.category == "order"
+    assert important_definition.category == "order"
+    assert add_definition.custom is True
+    assert important_definition.custom is True
+
+    assert CAPABILITY_PRESENTATION[Capability.ADD_INTERNAL_NOTE]["label"] == "إضافة ملاحظة داخلية"
+    assert CAPABILITY_PRESENTATION[Capability.MANAGE_IMPORTANT_NOTE]["label"] == "تعيين الملاحظة المهمة"
+    assert CAPABILITY_PRESENTATION[Capability.MANAGE_IMPORTANT_NOTE]["risk"] == "sensitive"
+
+    normalized = normalize_capability_state({Capability.ADD_INTERNAL_NOTE: True})
+    assert normalized[Capability.ADD_INTERNAL_NOTE] is True
+    assert normalized[Capability.VIEW_ORDERS] is True
+    assert normalized[Capability.EDIT_ORDER] is False
+
+
 def test_a156_uses_native_comment_as_only_note_store_and_filters_system_events() -> None:
     repository = source(REPOSITORY)
     assert '"doctype": "Comment"' in repository
@@ -91,11 +122,33 @@ def test_a156_uses_native_comment_as_only_note_store_and_filters_system_events()
 def test_a156_server_authorization_is_document_scoped_and_customer_is_linked() -> None:
     service = source(SERVICE)
     assert 'order.check_permission("read")' in service
+    assert "document_has_capability(" in service
+    assert "require_document_capability(" in service
+    assert "Capability.ADD_INTERNAL_NOTE" in service
+    assert "Capability.MANAGE_IMPORTANT_NOTE" in service
     assert 'resolved != linked' in service
     assert '_customer_has_read_access(customer)' in service
     assert 'frappe.PermissionError' in service
+    assert '"can_add_order_note": can_add' in service
+    assert '"can_manage_important_note": can_manage_important' in service
+    assert '"can_add_customer_note": customer_access and can_add' in service
+    assert '"can_add_order_note": True' not in service
+    assert '"can_manage_important_note": True' not in service
     assert 'EDIT_ORDER' not in service
     assert 'frm.save' not in service
+
+
+def test_a156_mutations_require_separate_add_and_important_authority() -> None:
+    service = source(SERVICE)
+    add_body = service.split("def add_note(", 1)[1].split("def set_important_note", 1)[0]
+    set_body = service.split("def set_important_note", 1)[1].split("def clear_important_note", 1)[0]
+    clear_body = service.split("def clear_important_note", 1)[1]
+
+    assert "_require_add_note(order)" in add_body
+    assert "if mark_important:" in add_body
+    assert "_require_manage_important(order)" in add_body
+    assert "_require_manage_important(order)" in set_body
+    assert "_require_manage_important(order)" in clear_body
 
 
 def test_a156_lost_response_retry_is_server_idempotent() -> None:
