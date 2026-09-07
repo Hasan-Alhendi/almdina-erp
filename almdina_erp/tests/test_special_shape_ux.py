@@ -187,17 +187,26 @@ def test_customer_quote_uses_full_board_and_cutting_costs_with_special_price():
     assert "frm.doc.customer_quote_total_usd = costUx.quoteTotal(frm)" in permissions
 
 
-def test_review_and_production_keep_special_drawing_optional_but_require_price():
+def test_review_and_production_keep_special_drawing_optional_and_plan_approval_independent_of_price():
     order = ORDER_PY.read_text(encoding="utf-8")
     command_service = CUTTING_PLAN_COMMAND_SERVICE.read_text(encoding="utf-8")
     workspace = CUTTING_PLAN_WORKSPACE.read_text(encoding="utf-8")
+    invoice = (
+        APP_ROOT / "almdina_erp" / "services" / "cost_document_service.py"
+    ).read_text(encoding="utf-8")
     placed_piece_fields = _fields(CUTTING_PLAN_PIECE_JSON)
+    approval = command_service.split("def approve_order_plan", 1)[1].split(
+        "def save_system_plan_settings", 1
+    )[0]
 
     assert "def ensure_special_shapes_documented" in order
     assert "special-door drawing is optional metadata" in order
     assert "self._gateway().ensure_special_shapes_documented()" not in order
+    assert "order.ensure_special_shapes_documented()" in approval
     assert "def ensure_special_prices_approved" in order
-    assert "order.ensure_special_prices_approved()" in command_service
+    assert "ensure_special_prices_approved" not in approval
+    assert "pending_custom_edge_price_labels" in invoice
+    assert "قبل طباعة الفاتورة" in invoice
     assert placed_piece_fields["piece_type"]["options"] == "Regular\nClipped Corner\nL-Shaped Corner\nSpecial\nExtra"
     assert '"piece_type": piece.get("piece_type") or "Regular"' in workspace
 

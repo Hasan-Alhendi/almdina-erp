@@ -84,6 +84,8 @@ class TestA2DxfApprovalArchitecture(unittest.TestCase):
         self.assertIn("latest_document(", approval)
         self.assertIn("status=DRAFT", approval)
         self.assertIn("_assert_plan_ready_for_approval(order, plan)", approval)
+        self.assertIn("order.ensure_special_shapes_documented()", approval)
+        self.assertNotIn("ensure_special_prices_approved", approval)
         self.assertIn("plan.status = APPROVED", approval)
         self.assertIn("repository.save_document(plan, allow_status_transition=True)", approval)
         self.assertIn("_set_approved_plan_relation(order, plan)", approval)
