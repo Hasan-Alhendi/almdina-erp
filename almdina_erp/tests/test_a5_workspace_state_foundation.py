@@ -117,6 +117,38 @@ class TestA5WorkspaceStateFoundation(unittest.TestCase):
         ):
             self.assertNotIn(financial_field, source)
 
+    def test_approved_workspace_uses_order_relation_only(self) -> None:
+        query = (APP / "services" / "cutting_plan_workspace_query_service.py").read_text(
+            encoding="utf-8"
+        )
+        presenter = (
+            PUBLIC
+            / "cutting_plan"
+            / "door_cutting_order_plan_workspace_presenter_adapter.js"
+        ).read_text(encoding="utf-8")
+        cancel = (APP / "services" / "cutting_plan_approval_cancellation_service.py").read_text(
+            encoding="utf-8"
+        )
+        approved_fn = query.split("def _approved", 1)[1].split("def _calculation_settings", 1)[0]
+        snapshot_fn = query.split("def get_plan_workspace_snapshot", 1)[1]
+
+        self.assertNotIn("_latest(rows, status=APPROVED)", approved_fn)
+        self.assertIn("return None", approved_fn)
+        self.assertIn('"approved_plan": current_approved_name', snapshot_fn)
+        self.assertNotIn('getattr(order, "approved_plan", None)', snapshot_fn)
+        self.assertIn("const currentApproved = String(payload.approved_plan || \"\").trim();", presenter)
+        self.assertNotIn("approvedRow && approvedRow.name", presenter)
+        self.assertIn(
+            'return Boolean(payload && String(payload.approved_plan || "").trim());',
+            presenter,
+        )
+        self.assertNotIn(
+            'planRow(frm, "Approved") || (payload && payload.approved_plan)',
+            presenter,
+        )
+        self.assertIn("_clear_order_approved_plan(order)", cancel)
+        self.assertNotIn("الخطة المعتمدة لا تتبع هذا الطلب.", cancel)
+
     def test_workspace_bootstrap_precedes_lazy_plan_and_cost_presenters(self) -> None:
         manifest = (ROOT / "frontend_assets.py").read_text(encoding="utf-8")
         registry = ASSET_REGISTRY.read_text(encoding="utf-8")

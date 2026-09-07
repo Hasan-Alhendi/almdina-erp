@@ -257,6 +257,64 @@ function planPayload(orderName, approvedPlan) {
         "approved plan recalculation must remain locked at CNC"
     );
 
+    const orphanFrm = {
+        doctype: "Door Cutting Order",
+        doc: {
+            doctype: "Door Cutting Order",
+            name: "DCO-ORPHAN",
+            status: "Draft",
+            docstatus: 0,
+            revision_state: "Current",
+            approved_plan: null,
+        },
+        fields_dict: {},
+        is_new() { return false; },
+    };
+    fakeWindow.cur_frm = orphanFrm;
+    fakeWindow.AlmdinaDocumentContext.synchronize(orphanFrm);
+    const orphanLoad = fakeWindow.AlmdinaPlanWorkspaceState.load(orphanFrm);
+    assert.equal(calls[3].options.args.order_name, "DCO-ORPHAN");
+    calls[3].pending.resolve({
+        message: {
+            order_name: "DCO-ORPHAN",
+            approved_plan: null,
+            plans: {
+                system_draft: {
+                    name: "SYS-ORPHAN",
+                    snapshot_json: '{"sheets":[{"source":"System"}]}',
+                    validation: { needs_recalculation: false },
+                    settings: { packing_mode: "Auto Pro", cutting_machine_type: "Auto", kerf_mm: 3, trim_margin_mm: 5, optimization_time_limit_sec: 10 },
+                },
+                uploaded_draft: null,
+                approved: {
+                    name: "FOREIGN-APPROVED",
+                    snapshot_json: '{"sheets":[{"source":"Approved"}]}',
+                    validation: { needs_recalculation: false },
+                },
+            },
+        },
+    });
+    await orphanLoad;
+    await flushPromises();
+
+    vm.runInContext(source("door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_presenter_adapter.js"), context);
+    fakeWindow.AlmdinaPlanWorkspacePresenterAdapter.project(orphanFrm);
+    assert.equal(
+        orphanFrm.doc.approved_plan,
+        null,
+        "an Approved row without the order relation must not become approved_plan"
+    );
+    assert.equal(
+        fakeWindow.AlmdinaPlanWorkspacePresenterAdapter.hasApprovedPlan(orphanFrm),
+        false,
+        "an Approved row without the order relation must not open the approved tab"
+    );
+    assert.equal(
+        fakeWindow.AlmdinaPlanEditSessionUX.canEditPlanSettings(orphanFrm),
+        true,
+        "a Draft order without a current approved_plan relation must stay editable"
+    );
+
     console.log("Approved plan workspace navigation and Drawing revision simulation passed");
 })().catch(error => {
     console.error(error);

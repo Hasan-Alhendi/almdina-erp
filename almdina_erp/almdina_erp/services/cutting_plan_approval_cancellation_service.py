@@ -45,12 +45,25 @@ def _reset_drawing_dxf_status(order: Any, repository: FrappeCuttingPlanCommandRe
     order.drawing_dxf_status = status
 
 
+def _clear_order_approved_plan(order: Any) -> None:
+    frappe.db.set_value(
+        "Door Cutting Order",
+        order.name,
+        "approved_plan",
+        None,
+        update_modified=False,
+    )
+    order.approved_plan = None
+
+
 def cancel_approved_order_plan(order: Any) -> dict[str, Any]:
     """Cancel the current immutable production approval while preserving history.
 
     The approved Cutting Plan is transitioned to ``Cancelled`` and the aggregate
     relation on Door Cutting Order is cleared. Geometry is never mutated back into
     Draft; a later edit/recalculation creates or reuses a proper Draft revision.
+    A stale ``approved_plan`` pointing at another order is cleared without touching
+    that foreign plan.
     """
 
     require_cutting_plan_capability(
@@ -66,20 +79,20 @@ def cancel_approved_order_plan(order: Any) -> dict[str, Any]:
     repository = FrappeCuttingPlanCommandRepository(Capability.APPROVE_DXF)
     plan = repository.get_document(approved_name)
     if str(getattr(plan, "door_cutting_order", None) or "") != str(order.name):
-        frappe.throw(_("الخطة المعتمدة لا تتبع هذا الطلب."), frappe.ValidationError)
+        _clear_order_approved_plan(order)
+        _reset_drawing_dxf_status(order, repository)
+        return {
+            "name": order.name,
+            "cancelled_plan": None,
+            "plan_status": str(getattr(plan, "status", None) or ""),
+            "approved_plan": None,
+        }
 
     _before, after = cancel_approval_transition(getattr(plan, "status", None))
     plan.status = after
     repository.save_document(plan, allow_status_transition=True)
 
-    frappe.db.set_value(
-        "Door Cutting Order",
-        order.name,
-        "approved_plan",
-        None,
-        update_modified=False,
-    )
-    order.approved_plan = None
+    _clear_order_approved_plan(order)
     _reset_drawing_dxf_status(order, repository)
 
     return {
