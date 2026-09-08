@@ -35,6 +35,7 @@ def _add_rectangle(msp, points, *, layer: str) -> None:
 def _order(
     *,
     piece_type: str,
+    extra_double: int = 0,
     extra_liner: int = 0,
     extra_back_groove: int = 0,
     extra_recessed_handle_cutout: int = 0,
@@ -61,7 +62,7 @@ def _order(
                 extra_back_groove=extra_back_groove,
                 extra_full_door_double=0,
                 extra_recessed_handle_cutout=extra_recessed_handle_cutout,
-                extra_double=0,
+                extra_double=extra_double,
             )
         ],
     )
@@ -423,13 +424,35 @@ class TestExtraDxfOverlayImport(unittest.TestCase):
         snapshot = self._parse(doc, _order(piece_type="Extra", extra_liner=1))
         self.assertEqual(len(snapshot["sheets"][0]["pieces"]), 1)
 
-    def test_extra_without_drawn_overlay_is_still_accepted(self) -> None:
+    def test_extra_without_drawn_overlay_is_rejected_when_addon_is_selected(self) -> None:
+        with self.assertRaises(DxfImportError) as exc_info:
+            self._parse(
+                _extra_plan_doc(overlay_layer=None),
+                _order(piece_type="Extra", extra_liner=1),
+            )
+        message = str(exc_info.exception)
+        self.assertIn("اللاينر", message)
+        self.assertIn("Liner", message)
+        self.assertIn("جدول القياسات", message)
+        self.assertIn("1.1", message)
+
+    def test_extra_with_only_double_does_not_require_overlay_layers(self) -> None:
         snapshot = self._parse(
             _extra_plan_doc(overlay_layer=None),
-            _order(piece_type="Extra", extra_liner=1),
+            _order(piece_type="Extra", extra_double=1),
         )
         self.assertEqual(len(snapshot["sheets"][0]["pieces"]), 1)
         self.assertNotIn("overlays", snapshot["sheets"][0]["pieces"][0])
+
+    def test_duplicate_liner_on_one_extra_is_rejected(self) -> None:
+        doc = _extra_plan_doc()
+        msp = doc.modelspace()
+        _add_rectangle(msp, ((200, 200), (280, 200), (280, 280), (200, 280)), layer=LINER)
+        with self.assertRaises(DxfImportError) as exc_info:
+            self._parse(doc, _order(piece_type="Extra", extra_liner=1))
+        message = str(exc_info.exception)
+        self.assertIn("أكثر من علامة", message)
+        self.assertIn("Liner", message)
 
     def test_liner_overlay_on_regular_is_rejected(self) -> None:
         with self.assertRaises(DxfImportError) as exc_info:
