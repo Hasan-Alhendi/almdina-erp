@@ -118,6 +118,116 @@
         return primary || "—";
     }
 
+    const EXTRA_OVERLAY_STROKE_BY_KIND = Object.freeze({
+        liner: "#1d6fbf",
+        back_groove: "#2a7d4f",
+        recessed_handle_cutout: "#c45c12",
+    });
+    const EXTRA_DOUBLE_MARK_COLOR = "#5a2d82";
+    const EXTRA_FULL_DOOR_DOUBLE_MARK_COLOR = "#1a5f4a";
+    const EXTRA_ADDON_LEGEND_ITEMS = Object.freeze([
+        Object.freeze({ fieldname: "extra_liner", labelAr: "لاينر", overlayKind: "liner" }),
+        Object.freeze({ fieldname: "extra_back_groove", labelAr: "فرزة ظهر", overlayKind: "back_groove" }),
+        Object.freeze({
+            fieldname: "extra_recessed_handle_cutout",
+            labelAr: "مسكة غطس",
+            overlayKind: "recessed_handle_cutout",
+        }),
+        Object.freeze({ fieldname: "extra_double", labelAr: "دبل قشاط", addonKind: "double" }),
+        Object.freeze({
+            fieldname: "extra_full_door_double",
+            labelAr: "دبل كامل الدرفة",
+            addonKind: "full_door_double",
+        }),
+    ]);
+
+    function extraAddonLegendLabel(fieldname, fallback) {
+        const extra = window.AlmdinaExtraDoorAddonsUX;
+        const field = extra && Array.isArray(extra.FIELDS)
+            ? extra.FIELDS.find(item => item.fieldname === fieldname)
+            : null;
+        return (field && field.labelAr) || fallback;
+    }
+
+    function extraGroupNo(piece) {
+        const sourceNo = Math.floor(Number(piece && piece.source_piece_no));
+        if (sourceNo >= 1) return sourceNo;
+        const group = Math.floor(Number(String((piece && piece.label) || "").split(".")[0]));
+        return group >= 1 ? group : 0;
+    }
+
+    function extraOrderRowForPiece(frm, piece) {
+        const rows = (frm && frm.doc && frm.doc.pieces) || [];
+        const groupNo = extraGroupNo(piece);
+        if (!(groupNo >= 1) || groupNo > rows.length) return null;
+        return rows[groupNo - 1] || null;
+    }
+
+    function extraAddonFlags(frm, piece) {
+        if ((piece && piece.piece_type) !== "Extra") {
+            return { double: false, fullDoorDouble: false };
+        }
+        const row = extraOrderRowForPiece(frm, piece);
+        if (!row) return { double: false, fullDoorDouble: false };
+        return {
+            double: Boolean(Number(row.extra_double)),
+            fullDoorDouble: Boolean(Number(row.extra_full_door_double)),
+        };
+    }
+
+    function extraOverlayStrokeSample(color) {
+        return `<svg class="dco-extra-addon-legend-swatch" viewBox="0 0 28 10" width="28" height="10" aria-hidden="true"><path d="M2 5 H26" fill="none" stroke="${escape_html(color)}" stroke-width="2" stroke-dasharray="4 2" stroke-linecap="round"/></svg>`;
+    }
+
+    function extraDoubleBandingIcon(size = 16) {
+        return `<svg class="dco-extra-addon-icon" data-addon-kind="double" viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true"><rect x="3.5" y="2.5" width="17" height="19" fill="#fff" stroke="${EXTRA_DOUBLE_MARK_COLOR}" stroke-width="1.7"/><rect x="7" y="6" width="10" height="12" fill="none" stroke="${EXTRA_DOUBLE_MARK_COLOR}" stroke-width="1.3"/></svg>`;
+    }
+
+    function extraFullDoorDoubleIcon(size = 16) {
+        return `<svg class="dco-extra-addon-icon" data-addon-kind="full_door_double" viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true"><rect x="1.5" y="5" width="9" height="15" fill="#fff" stroke="${EXTRA_FULL_DOOR_DOUBLE_MARK_COLOR}" stroke-width="1.5"/><rect x="13.5" y="5" width="9" height="15" fill="#fff" stroke="${EXTRA_FULL_DOOR_DOUBLE_MARK_COLOR}" stroke-width="1.5"/><text x="12" y="4.2" text-anchor="middle" font-size="5.8" font-weight="800" fill="${EXTRA_FULL_DOOR_DOUBLE_MARK_COLOR}" font-family="Tahoma,Arial,sans-serif">2</text></svg>`;
+    }
+
+    function extraAddonLegendSwatch(item) {
+        if (item.overlayKind) {
+            return extraOverlayStrokeSample(EXTRA_OVERLAY_STROKE_BY_KIND[item.overlayKind]);
+        }
+        if (item.addonKind === "double") return extraDoubleBandingIcon(14);
+        return extraFullDoorDoubleIcon(14);
+    }
+
+    function render_extra_addon_legend() {
+        const items = EXTRA_ADDON_LEGEND_ITEMS.map(item => `
+            <span class="dco-extra-addon-legend-item">
+                ${extraAddonLegendSwatch(item)}
+                <span>${escape_html(extraAddonLegendLabel(item.fieldname, item.labelAr))}</span>
+            </span>
+        `).join("");
+        return `<div class="dco-extra-addon-legend" dir="rtl" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin:8px 0 12px;padding:7px 10px;border:1px solid #c5ccd3;border-radius:8px;background:#f8fafc;font-size:11px;font-weight:700;line-height:1.2;">
+            <span class="dco-extra-addon-legend-title" style="font-weight:900;white-space:nowrap;">رموز إضافات Extra</span>
+            ${items}
+        </div>`;
+    }
+
+    function extraAddonMarkPlate(slot, kind, iconHtml) {
+        const corner = slot === "top-start"
+            ? "top:4%;left:4%;right:auto;"
+            : "top:4%;right:4%;left:auto;";
+        return `<div class="dco-extra-addon-mark" data-addon-kind="${escape_html(kind)}" data-addon-slot="${escape_html(slot)}" style="position:absolute;${corner}z-index:5;background:#fff;border:0.6px solid #c5ccd3;border-radius:2px;padding:1px;line-height:0;">${iconHtml}</div>`;
+    }
+
+    function render_piece_addon_marks(frm, piece) {
+        const flags = extraAddonFlags(frm, piece);
+        const marks = [];
+        if (flags.fullDoorDouble) {
+            marks.push(extraAddonMarkPlate("top-start", "full_door_double", extraFullDoorDoubleIcon(14)));
+        }
+        if (flags.double) {
+            marks.push(extraAddonMarkPlate("top-end", "double", extraDoubleBandingIcon(14)));
+        }
+        if (!marks.length) return "";
+        return `<div class="dco-extra-addon-marks" aria-hidden="true" style="position:absolute;inset:0;z-index:5;pointer-events:none;">${marks.join("")}</div>`;
+    }
+
     function render_piece_overlays(piece, geometryModel) {
         const overlays = Array.isArray(piece && piece.overlays) ? piece.overlays : [];
         if (!overlays.length || !geometryModel) return "";
@@ -126,11 +236,6 @@
         const widthMm = num(geometryModel.placement.widthCm) * 10;
         const heightMm = num(geometryModel.placement.heightCm) * 10;
         if (!(widthMm > 0) || !(heightMm > 0)) return "";
-        const strokeByKind = {
-            liner: "#1d6fbf",
-            back_groove: "#2a7d4f",
-            recessed_handle_cutout: "#c45c12",
-        };
         const paths = overlays.map((overlay, index) => {
             const kind = String((overlay && overlay.kind) || "").trim();
             const geometry = overlay && overlay.geometry;
@@ -146,7 +251,7 @@
             const d = local
                 .map((point, pointIndex) => `${pointIndex ? "L" : "M"}${point[0]} ${point[1]}`)
                 .join(" ") + (closed ? " Z" : "");
-            const stroke = strokeByKind[kind] || "#5c4d2e";
+            const stroke = EXTRA_OVERLAY_STROKE_BY_KIND[kind] || "#5c4d2e";
             const layer = String((overlay && overlay.layer) || kind || "overlay");
             return `<path class="dco-extra-overlay-path" data-overlay-kind="${escape_html(kind)}" data-overlay-layer="${escape_html(layer)}" data-overlay-index="${index}" d="${d}" fill="none" stroke="${stroke}" stroke-width="1.75" stroke-dasharray="4 2" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/>`;
         }).filter(Boolean).join("");
@@ -311,6 +416,7 @@
                 ${render_special_raw_coverage(frm, plan)}
 
                 <div style="font-size:12px;margin-bottom:8px;"><b>طريقة الترتيب:</b> ${escape_html(plan.method_label || frm.doc.packing_method || "")}</div>
+                ${render_extra_addon_legend()}
         `;
 
         plan.sheets.forEach(sheet => {
@@ -361,6 +467,7 @@
                         ${shapeOutline}
                         ${render_piece_overlays(piece, geometryModel)}
                         ${edgeLines}
+                        ${render_piece_addon_marks(frm, piece)}
                         ${render_piece_label(piece, geometryModel)}
                     </div>
                 `;
@@ -482,7 +589,7 @@
         const rows = rowSizes.length;
         const aspect = Math.max(0.15, boardAspectFromCards(cards, frm, plan));
         const pageGridWidthMm = 281;
-        const pageGridHeightMm = 164;
+        const pageGridHeightMm = 157;
         const columnGapMm = 2.2;
         const rowGapMm = 2.2;
         const titleHeightMm = 4.2;
@@ -551,6 +658,7 @@
             return `<section class="dco-print-page" data-page="${pageIndex + 1}">
                 ${printHeaderHtml(identity, "خطة القص", `صفحة ${pageIndex + 1} من ${chunks.length}`)}
                 ${printOrderMetaHtml(frm, plan, totalSheets)}
+                ${render_extra_addon_legend()}
                 <div class="dco-print-sheets-grid">${gridRows}</div>
             </section>`;
         }).join("");
@@ -605,6 +713,63 @@ ${printHeaderCss()}
 }
 .dco-print-order-meta b { display: block; margin-bottom: .35mm; font-size: 5.4pt; color: #4d555c; }
 .dco-print-order-meta span { display: block; font-size: 6.9pt; font-weight: 850; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dco-extra-addon-legend {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 1.2mm 3.2mm !important;
+    margin: 0 0 1mm !important;
+    padding: .45mm 1.1mm !important;
+    border: .45pt solid #aab0b6 !important;
+    border-radius: 1mm !important;
+    background: #fff !important;
+    font-size: 6.2pt !important;
+    font-weight: 750 !important;
+    line-height: 1.1 !important;
+    color: #111 !important;
+}
+.dco-extra-addon-legend-title { font-weight: 900 !important; white-space: nowrap !important; }
+.dco-extra-addon-legend-item {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: .8mm !important;
+    white-space: nowrap !important;
+    flex: 0 0 auto !important;
+}
+.dco-extra-addon-legend-swatch { width: 7mm !important; height: 2.4mm !important; }
+.dco-extra-overlay { display: block !important; }
+.dco-extra-addon-marks {
+    display: block !important;
+    position: absolute !important;
+    inset: 0 !important;
+    z-index: 5 !important;
+    pointer-events: none !important;
+}
+.dco-extra-addon-mark {
+    position: absolute !important;
+    z-index: 5 !important;
+    background: #fff !important;
+    border: .3pt solid #c5ccd3 !important;
+    border-radius: .4mm !important;
+    padding: .2mm !important;
+    line-height: 0 !important;
+}
+.dco-extra-addon-mark[data-addon-slot="top-start"] {
+    top: 4% !important;
+    left: 4% !important;
+    right: auto !important;
+}
+.dco-extra-addon-mark[data-addon-slot="top-end"] {
+    top: 4% !important;
+    right: 4% !important;
+    left: auto !important;
+}
+.dco-extra-addon-marks .dco-extra-addon-icon,
+.dco-extra-addon-legend .dco-extra-addon-icon {
+    display: block !important;
+    width: 3.2mm !important;
+    height: 3.2mm !important;
+}
 .dco-print-sheets-grid {
     flex: 1 1 auto;
     min-height: 0;

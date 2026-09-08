@@ -275,6 +275,8 @@ def _topology_error_message(
 
 def _overlay_error_message(error: ExtraOverlayError) -> str:
     layer = error.layer or "؟"
+    kind_name = _OVERLAY_KIND_AR.get(error.kind, layer)
+    door = _overlay_door_label(error)
     if error.code == "extra_overlay_on_non_extra":
         return (
             f"العلامة على الطبقة {layer} تقع على درفة ليست Extra. "
@@ -292,8 +294,18 @@ def _overlay_error_message(error: ExtraOverlayError) -> str:
         )
     if error.code == "extra_overlay_addon_not_selected":
         return (
-            f"العلامة على الطبقة {layer} مرسومة على درفة Extra دون تفعيل الخانة المطابقة في الطلب. "
-            "فعّل الخانة في صف Extra ثم احفظ الطلب وأعد الرفع؛ الرسم لا يحتاج تغييرًا إذا كانت العلامة صحيحة."
+            f"{door}العلامة على الطبقة {layer} ({kind_name}) مرسومة دون تفعيل الخانة المطابقة في جدول القياسات. "
+            "أزل العلامة من الرسم أو فعّل الخانة في صف Extra ثم احفظ الطلب وأعد الرفع."
+        )
+    if error.code == "extra_overlay_addon_missing":
+        return (
+            f"{door}خانة {kind_name} مفعّلة في جدول القياسات، لكن ملف DXF لا يحتوي علامة على الطبقة {layer} داخل هذه الدرفة. "
+            f"أضف علامة {kind_name} على الطبقة {layer} داخل درفة Extra ثم أعد الرفع."
+        )
+    if error.code == "extra_overlay_addon_duplicate":
+        return (
+            f"{door}خانة {kind_name} مفعّلة مرة واحدة في جدول القياسات، لكن ملف DXF يحتوي أكثر من علامة على الطبقة {layer} داخل هذه الدرفة. "
+            "اترك علامة واحدة مطابقة للخانة ثم أعد الرفع."
         )
     if error.code == "extra_overlay_invalid_path":
         return (
@@ -301,6 +313,20 @@ def _overlay_error_message(error: ExtraOverlayError) -> str:
             "ارسم خطًا أو مسارًا واضحًا ثم أعد الرفع."
         )
     return f"تعذر التحقق من علامات Extra على الطبقة {layer}. صحح الرسم ثم أعد الرفع."
+
+
+_OVERLAY_KIND_AR = {
+    "liner": "اللاينر",
+    "back_groove": "فرزة الظهر",
+    "recessed_handle_cutout": "مسكة الغطس",
+}
+
+
+def _overlay_door_label(error: ExtraOverlayError) -> str:
+    label = str(error.label or error.host_key or "").strip()
+    if not label:
+        return ""
+    return f"درفة Extra رقم {label}: "
 
 
 def _lwpolyline_segments(current: dict[str, Any]) -> list[dict[str, Any]]:
@@ -1185,17 +1211,22 @@ def _attach_extra_overlays(
     sheets: list[dict[str, Any]],
     trim_mm: float,
 ) -> None:
-    if not overlays:
-        return
     hosts = tuple(
         ExtraOverlayHost(
             key=int(piece["id"]),
             piece_type=str(piece.get("piece_type") or "Regular"),
             polygon=tuple(tuple(point) for point in piece.get("_outline_mm") or ()),
             selected_codes=tuple(piece.get("_extra_selected_codes") or ()),
+            label=str(piece.get("label") or piece["id"]),
         )
         for piece in pieces
     )
+    if not overlays and not any(
+        code in EXTRA_OVERLAY_LAYER_BY_KIND
+        for host in hosts
+        for code in host.selected_codes
+    ):
+        return
     try:
         assigned = assign_extra_overlays(
             overlays,

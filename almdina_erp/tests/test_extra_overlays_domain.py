@@ -134,6 +134,81 @@ def test_assign_extra_overlays_rejects_floating_and_missing_addon():
             tolerance=0.25,
         )
     assert missing.value.code == "extra_overlay_addon_not_selected"
+    assert missing.value.kind == "liner"
+
+
+def test_assign_extra_overlays_rejects_selected_addon_without_drawn_mark():
+    extra = ExtraOverlayHost(
+        key=1,
+        piece_type="Extra",
+        polygon=_rect(0, 0, 400, 600),
+        selected_codes=("liner", "back_groove"),
+        label="1.1",
+    )
+    with pytest.raises(ExtraOverlayError) as missing:
+        assign_extra_overlays(
+            [
+                ExtraOverlayCandidate(
+                    key=1,
+                    kind="liner",
+                    layer="Liner",
+                    path=((40, 40), (180, 160)),
+                )
+            ],
+            [extra],
+            tolerance=0.25,
+        )
+    assert missing.value.code == "extra_overlay_addon_missing"
+    assert missing.value.kind == "back_groove"
+    assert missing.value.layer == "Rear Groove"
+    assert missing.value.label == "1.1"
+
+
+def test_assign_extra_overlays_rejects_duplicate_mark_for_one_selected_addon():
+    extra = ExtraOverlayHost(
+        key=1,
+        piece_type="Extra",
+        polygon=_rect(0, 0, 400, 600),
+        selected_codes=("liner",),
+        label="2.1",
+    )
+    with pytest.raises(ExtraOverlayError) as duplicate:
+        assign_extra_overlays(
+            [
+                ExtraOverlayCandidate(
+                    key=1,
+                    kind="liner",
+                    layer="Liner",
+                    path=((40, 40), (80, 80)),
+                ),
+                ExtraOverlayCandidate(
+                    key=2,
+                    kind="liner",
+                    layer="Liner",
+                    path=((120, 40), (180, 80)),
+                ),
+            ],
+            [extra],
+            tolerance=0.25,
+        )
+    assert duplicate.value.code == "extra_overlay_addon_duplicate"
+    assert duplicate.value.kind == "liner"
+
+
+def test_extra_with_only_commercial_addons_does_not_require_dxf_marks():
+    assigned = assign_extra_overlays(
+        [],
+        [
+            ExtraOverlayHost(
+                key=1,
+                piece_type="Extra",
+                polygon=_rect(0, 0, 400, 600),
+                selected_codes=("double",),
+            )
+        ],
+        tolerance=0.25,
+    )
+    assert assigned == ()
 
 
 def test_assign_extra_overlays_rejects_span_across_two_extras():

@@ -10,7 +10,11 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import (
     polygon_segments,
     segments_intersect,
 )
-from almdina_erp.almdina_erp.domain.orders.extra_addons import EXTRA_PIECE_TYPE
+from almdina_erp.almdina_erp.domain.orders.extra_addons import (
+    EXTRA_OVERLAY_LAYER_BY_KIND,
+    EXTRA_PIECE_TYPE,
+    extra_overlay_layer_for_kind,
+)
 
 Point = tuple[float, float]
 Polygon = tuple[Point, ...]
@@ -28,11 +32,15 @@ class ExtraOverlayError(ValueError):
         *,
         layer: str = "",
         host_key: str | int | None = None,
+        kind: str = "",
+        label: str = "",
     ) -> None:
         super().__init__(code)
         self.code = code
         self.layer = layer
         self.host_key = host_key
+        self.kind = kind
+        self.label = label
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,6 +58,7 @@ class ExtraOverlayHost:
     piece_type: str
     polygon: Polygon
     selected_codes: tuple[str, ...] = ()
+    label: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -229,6 +238,8 @@ def assign_extra_overlays(
                     "extra_overlay_addon_not_selected",
                     layer=overlay.layer,
                     host_key=host.key,
+                    kind=overlay.kind,
+                    label=host.label,
                 )
             assigned.append(
                 AssignedExtraOverlay(
@@ -250,7 +261,70 @@ def assign_extra_overlays(
             "extra_overlay_floating",
             layer=overlay.layer,
         )
+
+    mismatches = extra_overlay_selection_mismatches(hosts, assigned)
+    if mismatches:
+        raise mismatches[0]
     return tuple(assigned)
+
+
+def extra_overlay_selection_mismatches(
+    hosts: Sequence[ExtraOverlayHost],
+    assigned: Sequence[AssignedExtraOverlay],
+) -> tuple[ExtraOverlayError, ...]:
+    """Return Extra overlay kinds that do not match the order checkboxes.
+
+    Each Extra host must have exactly one mark for every selected overlay kind
+    (liner, back groove, recessed handle) and none for unselected overlay kinds.
+    Double / full-door-double are commercial addons, not DXF overlay layers.
+    """
+
+    found_by_host: dict[str | int, list[str]] = {}
+    for item in assigned:
+        found_by_host.setdefault(item.host_key, []).append(item.kind)
+
+    errors: list[ExtraOverlayError] = []
+    for host in hosts:
+        if host.piece_type != EXTRA_PIECE_TYPE:
+            continue
+        found = found_by_host.get(host.key, [])
+        selected = {
+            code for code in host.selected_codes if code in EXTRA_OVERLAY_LAYER_BY_KIND
+        }
+        for kind in EXTRA_OVERLAY_LAYER_BY_KIND:
+            count = found.count(kind)
+            selected_kind = kind in selected
+            if selected_kind and count == 0:
+                errors.append(
+                    ExtraOverlayError(
+                        "extra_overlay_addon_missing",
+                        layer=extra_overlay_layer_for_kind(kind),
+                        host_key=host.key,
+                        kind=kind,
+                        label=host.label,
+                    )
+                )
+            elif selected_kind and count > 1:
+                errors.append(
+                    ExtraOverlayError(
+                        "extra_overlay_addon_duplicate",
+                        layer=extra_overlay_layer_for_kind(kind),
+                        host_key=host.key,
+                        kind=kind,
+                        label=host.label,
+                    )
+                )
+            elif not selected_kind and count:
+                errors.append(
+                    ExtraOverlayError(
+                        "extra_overlay_addon_not_selected",
+                        layer=extra_overlay_layer_for_kind(kind),
+                        host_key=host.key,
+                        kind=kind,
+                        label=host.label,
+                    )
+                )
+    return tuple(errors)
 
 
 __all__ = [
@@ -260,6 +334,7 @@ __all__ = [
     "ExtraOverlayHost",
     "assign_extra_overlays",
     "dedupe_overlay_points",
+    "extra_overlay_selection_mismatches",
     "overlay_path_contained_in_polygon",
     "overlay_path_hits_polygon",
     "overlay_path_segments",
