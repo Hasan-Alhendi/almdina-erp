@@ -187,11 +187,12 @@ def _latest(rows: list[Any], *, status: str, source_type: str | None = None) -> 
 
 def _approved(rows: list[Any], order: Any) -> Any | None:
     approved_name = str(getattr(order, "approved_plan", None) or "").strip()
-    if approved_name:
-        for row in rows:
-            if row.get("name") == approved_name and str(row.get("status") or "") == APPROVED:
-                return row
-    return _latest(rows, status=APPROVED)
+    if not approved_name:
+        return None
+    for row in rows:
+        if row.get("name") == approved_name and str(row.get("status") or "") == APPROVED:
+            return row
+    return None
 
 
 def _calculation_settings(rows: list[Any]) -> dict[str, Any]:
@@ -272,6 +273,7 @@ def get_plan_workspace_snapshot(order_name: str) -> dict[str, Any]:
         else None
     )
     approved = _approved(rows, order) if capabilities["view_approved"] else None
+    current_approved_name = str((approved or {}).get("name") or "").strip() or None
     calculation_settings = (
         _calculation_settings(rows)
         if capabilities["recalculate"] or capabilities["edit_settings"]
@@ -285,7 +287,7 @@ def get_plan_workspace_snapshot(order_name: str) -> dict[str, Any]:
         "revision_state": str(getattr(order, "revision_state", None) or "Current"),
         "current_production_stage": getattr(order, "current_production_stage", None),
         "production_path": getattr(order, "production_path", None),
-        "approved_plan": getattr(order, "approved_plan", None),
+        "approved_plan": current_approved_name,
         "capabilities": capabilities,
         "optimization_catalog": optimization_catalog(),
         "machine_type_catalog": machine_type_catalog(),

@@ -289,6 +289,27 @@ def polygon_distance(a: Sequence[Point], b: Sequence[Point], tolerance: float = 
     return min(segment_distance(first, second, tolerance) for first in first_segments for second in second_segments)
 
 
+def point_to_polygon_distance(point: Point, polygon: Sequence[Point]) -> float:
+    segments = polygon_segments(polygon)
+    if not segments:
+        return math.inf
+    return min(_point_segment_distance(point, segment) for segment in segments)
+
+
+def point_near_polygon(
+    point: Point,
+    polygon: Sequence[Point],
+    *,
+    tolerance: float = EPSILON,
+    margin: float = 0.0,
+) -> bool:
+    """True when the point is inside the polygon or within ``margin`` of its boundary."""
+
+    if point_in_polygon(point, polygon, tolerance):
+        return True
+    return margin > 0 and point_to_polygon_distance(point, polygon) <= margin
+
+
 def polygon_inside_rect(
     points: Sequence[Point],
     *,

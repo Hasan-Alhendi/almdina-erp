@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .primitives import num, rect_intersects, rects_have_clearance
+from .primitives import num, present_shop_floor_packing, rect_intersects, rects_have_clearance
 
 
 def evaluate_plan(
@@ -23,6 +23,7 @@ def evaluate_plan(
         + waste_area * 1000
         + complexity
     )
+    present_shop_floor_packing(plan, board_h_cm=board_h_cm)
     return {
         "method_key": method_key,
         "method_label": method_label,

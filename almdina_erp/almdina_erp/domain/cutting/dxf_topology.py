@@ -111,6 +111,20 @@ def _contour_sort_key(contour: ContourCandidate) -> tuple[object, ...]:
     return (min_x, min_y, max_x, max_y, _canonical_ring(contour.polygon))
 
 
+def polygon_contains_polygon(
+    container: Sequence[Point],
+    nested: Sequence[Point],
+    *,
+    tolerance: float = EPSILON,
+) -> bool:
+    """Return True when the nested polygon lies wholly inside, including boundary contact."""
+    outer = _open_ring(container)
+    inner = _open_ring(nested)
+    if len(outer) < 3 or len(inner) < 3:
+        return False
+    return all(point_in_polygon(point, outer, tolerance) for point in inner)
+
+
 def polygon_strictly_contains_polygon(
     container: Sequence[Point],
     nested: Sequence[Point],
@@ -122,7 +136,7 @@ def polygon_strictly_contains_polygon(
     inner = _open_ring(nested)
     if len(outer) < 3 or len(inner) < 3:
         return False
-    if not all(point_in_polygon(point, outer, tolerance) for point in inner):
+    if not polygon_contains_polygon(outer, inner, tolerance=tolerance):
         return False
     return polygon_distance(outer, inner, tolerance) > tolerance
 
@@ -530,6 +544,7 @@ __all__ = [
     "ResolvedTopology",
     "containing_hole",
     "material_footprints_overlap",
+    "polygon_contains_polygon",
     "polygon_strictly_contains_polygon",
     "resolve_contour_ownership",
     "validate_material_layout",

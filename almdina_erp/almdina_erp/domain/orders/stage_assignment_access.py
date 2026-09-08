@@ -17,12 +17,14 @@ def decide_stage_assignment_access(
     has_current_stage: bool,
     has_production_path: bool,
     is_admin: bool = False,
+    order_status: str | None = None,
 ) -> StageAssignmentDecision:
     """Authorize a stage-scoped mutation by assignment, never by role name.
 
     Before a route exists, capabilities and the feature lifecycle are sufficient.
-    Once routed, an active stage belongs to its explicit assignee. A route with no
-    active stage is already finished/closed and therefore cannot be mutated.
+    A planned production path on Draft is still pre-dispatch, not a finished
+    shop-floor route. Once dispatched, an active stage belongs to its explicit
+    assignee. A finished route with no active stage cannot be mutated.
     """
 
     if is_admin:
@@ -30,6 +32,10 @@ def decide_stage_assignment_access(
 
     if not has_current_stage:
         if has_production_path:
+            # Require an explicit Draft status. Missing/None must keep the
+            # finished-route lock so callers that omit status stay fail-closed.
+            if str(order_status or "").strip() == "Draft":
+                return StageAssignmentDecision(True, "pre_production", "")
             return StageAssignmentDecision(
                 False,
                 "no_active_stage",

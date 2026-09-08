@@ -73,6 +73,23 @@ def is_drawing_stage(
     return normalize_status(status) == "At Drawing" or current_stage_type == "Drawing"
 
 
+def is_pre_dispatch_draft(
+    *,
+    status: str | None,
+    current_production_stage: str | None = None,
+) -> bool:
+    """True while the order is still Draft and has not been dispatched.
+
+    A planned production route on Draft is a dispatch choice, not an active
+    shop-floor stage. Plan mutations stay available until dispatch creates
+    ``current_production_stage``.
+    """
+
+    if str(current_production_stage or "").strip():
+        return False
+    return can_edit_order(status)
+
+
 def can_recalculate_drawing_system_plan(
     *,
     has_recalculate_permission: bool,
@@ -81,16 +98,19 @@ def can_recalculate_drawing_system_plan(
     status: str | None,
     current_stage_type: str | None,
 ) -> bool:
-    """Evaluate the exceptional drawing-stage recalculation policy.
+    """Evaluate when an approved snapshot may be replaced by a new calculation.
 
-    An existing approved snapshot remains immutable and production-authoritative
-    while Drawing prepares a replacement. Approval history therefore does not
-    block recalculation at Drawing; explicit re-approval is what activates the
-    newly calculated plan. Outside Drawing the exception stays closed.
+    Draft remains fully mutable before dispatch, including when a plan was
+    already approved or a production route was chosen. At Drawing the approved
+    snapshot stays production-authoritative while a replacement is prepared;
+    explicit re-approval is what activates the newly calculated plan. After
+    the order leaves Drawing the exception stays closed.
     """
     del approved_plan
     if not has_recalculate_permission:
         return False
+    if can_edit_order(status):
+        return True
     return is_drawing_stage(
         production_path=production_path,
         status=status,

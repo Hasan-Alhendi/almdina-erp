@@ -336,6 +336,20 @@ function makePlanEditForm(overrides = {}) {
         "approved cutting plans must be locked after the order leaves Drawing"
     );
 
+    const draftApproved = loadPlanEditSession({ allowed: true });
+    assert.equal(
+        draftApproved.canEditPlanSettings(
+            makePlanEditForm({
+                status: "Draft",
+                approved_plan: "CP-APPROVED-001",
+                production_path: "ROUTE-DRAWING",
+                current_production_stage: null,
+            })
+        ),
+        true,
+        "a Draft order must remain editable before dispatch even with an approved plan and a planned route"
+    );
+
     const deniedPlanEdit = loadPlanEditSession({ allowed: false });
     assert.equal(
         deniedPlanEdit.canEditPlanSettings(makePlanEditForm()),

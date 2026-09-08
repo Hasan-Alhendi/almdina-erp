@@ -48,10 +48,26 @@ class TestPlanSettingsEditLifecycle(unittest.TestCase):
     def test_preproduction_draft_remains_editable(self):
         assert_plan_settings_edit_lifecycle(self.order(status="Draft"))
 
+    def test_preproduction_draft_remains_editable_with_approved_plan_and_planned_route(self):
+        assert_plan_settings_edit_lifecycle(
+            self.order(
+                approved_plan="CP-0001",
+                production_path="ROUTE-1",
+            )
+        )
+
+    def test_approved_plan_is_locked_after_leaving_draft_and_drawing(self):
+        with self.assertRaises(frappe.ValidationError):
+            assert_plan_settings_edit_lifecycle(
+                self.order(
+                    status="At CNC",
+                    approved_plan="CP-0001",
+                )
+            )
+
     def test_hard_document_locks_still_fail_closed(self):
         locked_orders = (
             self.order(docstatus=1),
-            self.order(approved_plan="CP-0001"),
             self.order(revision_state="Superseded"),
         )
 

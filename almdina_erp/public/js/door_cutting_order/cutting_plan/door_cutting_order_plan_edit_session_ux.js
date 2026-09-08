@@ -180,10 +180,14 @@
 
         const approved = approvedPlanName(frm);
         if (approved === null) return false;
+
+        const status = String(frm.doc.status || "Draft").trim();
+        if (status === "Draft" && !hasActiveProductionStage(frm)) return true;
+
         if (approved && !isDrawingStage(frm)) return false;
 
         if (hasProductionRoute(frm)) return hasActiveRoutedLifecycle(frm);
-        return DRAFT_LIKE.has(frm.doc.status || "Draft");
+        return DRAFT_LIKE.has(status);
     }
 
     function canEditPlanSettings(frm) {

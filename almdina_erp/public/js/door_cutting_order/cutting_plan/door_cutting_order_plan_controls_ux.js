@@ -144,6 +144,7 @@
     function isCurrentAssignee(frm) {
         if (!frm || !frm.doc) return false;
         if (!frm.doc.current_production_stage) {
+            if (String(frm.doc.status || "Draft").trim() === "Draft") return true;
             return !String(frm.doc.production_path || "").trim();
         }
         const stage = frm.__almdina_stage_context || {};
@@ -179,6 +180,10 @@
 
         const approved = approvedPlanName(frm);
         if (approved && isPlanningStage(frm)) return canMutateCurrentStage(frm);
+        const status = String(frm.doc.status || "Draft").trim();
+        if (approved && status === "Draft" && !String(frm.doc.current_production_stage || "").trim()) {
+            return canMutateCurrentStage(frm);
+        }
         if (approved) return false;
         if (!canMutateCurrentStage(frm)) return false;
         if (frm.doc.current_production_stage) return isPlanningStage(frm);
@@ -188,6 +193,7 @@
     function stageMutationBlockReason(frm) {
         if (!frm || !frm.doc) return "";
         if (!frm.doc.current_production_stage) {
+            if (String(frm.doc.status || "Draft").trim() === "Draft") return "";
             return String(frm.doc.production_path || "").trim()
                 ? __("الطلب غادر مراحل الإنتاج النشطة ولا يمكن تعديل خطة القص.")
                 : "";
@@ -228,7 +234,11 @@
         if (previews && typeof previews.isBusy === "function" && previews.isBusy(frm)) {
             return __("انتظر حتى تكتمل عملية المعاينة أو الحفظ الحالية.");
         }
-        if (approvedPlanName(frm) && !isPlanningStage(frm)) {
+        const approved = approvedPlanName(frm);
+        const status = String(frm.doc.status || "Draft").trim();
+        const preDispatchDraft = status === "Draft"
+            && !String(frm.doc.current_production_stage || "").trim();
+        if (approved && !isPlanningStage(frm) && !preDispatchDraft) {
             return __("الخطة المعتمدة لا يمكن إعادة حسابها خارج مرحلة التخطيط.");
         }
         if (!can(frm, "recalculate_plan")) return __("تحتاج صلاحية «إعادة حساب الخطة» لتشغيل المحرك.");

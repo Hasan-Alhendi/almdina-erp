@@ -2,12 +2,17 @@ from __future__ import annotations
 
 import os
 from collections import Counter
-from typing import Any
+from typing import Any, Sequence
 
 import frappe
 from frappe import _
 from frappe.utils import cint, flt
 
+from almdina_erp.almdina_erp.domain.cutting.dxf_default_layer import (
+    DESIGNER_DEFAULT_LAYER,
+    classify_default_layer_polygons,
+    polygon_to_segments,
+)
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import (
     assemble_contours,
     bbox,
@@ -21,6 +26,7 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import (
 )
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
     serialize_geometry_from_cm,
+    serialize_overlay_geometry_from_cm,
 )
 from almdina_erp.almdina_erp.domain.cutting.dxf_topology import (
     ContourCandidate,
@@ -32,11 +38,25 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_topology import (
     resolve_contour_ownership,
     validate_material_layout,
 )
+from almdina_erp.almdina_erp.domain.cutting.extra_overlays import (
+    ExtraOverlayCandidate,
+    ExtraOverlayError,
+    ExtraOverlayHost,
+    assign_extra_overlays,
+    dedupe_overlay_points,
+    OVERLAY_HOST_MARGIN_MM,
+)
 from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
     ManufacturingRequirementsError,
     require_cut_dimension_cm,
 )
-from almdina_erp.almdina_erp.domain.orders.extra_addons import physical_cut_quantity
+from almdina_erp.almdina_erp.domain.orders.extra_addons import (
+    EXTRA_ADDON_FIELD_BY_CODE,
+    EXTRA_OVERLAY_LAYER_BY_KIND,
+    EXTRA_OVERLAY_LAYER_NAMES,
+    extra_overlay_layer_for_kind,
+    physical_cut_quantity,
+)
 from almdina_erp.almdina_erp.infrastructure.cutting.dxf_reader import (
     DxfReadError,
     SUPPORTED_DXF_ENTITY_TYPES,
@@ -253,6 +273,36 @@ def _topology_error_message(
     return "تعذر التحقق من بنية القطع والفتحات الداخلية في DXF. صحح الرسم ثم أعد الرفع."
 
 
+def _overlay_error_message(error: ExtraOverlayError) -> str:
+    layer = error.layer or "؟"
+    if error.code == "extra_overlay_on_non_extra":
+        return (
+            f"العلامة على الطبقة {layer} تقع على درفة ليست Extra. "
+            "ضع علامات اللاينر وفرزة الظهر ومسكة الغطس داخل درفة Extra فقط."
+        )
+    if error.code == "extra_overlay_floating":
+        return (
+            f"العلامة على الطبقة {layer} ليست بالكامل داخل درفة Extra واحدة. "
+            "ضع العلامة بالكامل داخل درفة Extra ثم أعد الرفع."
+        )
+    if error.code == "extra_overlay_spans_hosts":
+        return (
+            f"العلامة على الطبقة {layer} تمتد فوق أكثر من درفة. "
+            "ضع كل علامة داخل درفة Extra واحدة ثم أعد الرفع."
+        )
+    if error.code == "extra_overlay_addon_not_selected":
+        return (
+            f"العلامة على الطبقة {layer} مرسومة على درفة Extra دون تفعيل الخانة المطابقة في الطلب. "
+            "فعّل الخانة في صف Extra ثم احفظ الطلب وأعد الرفع؛ الرسم لا يحتاج تغييرًا إذا كانت العلامة صحيحة."
+        )
+    if error.code == "extra_overlay_invalid_path":
+        return (
+            f"العلامة على الطبقة {layer} أقصر من أن تُقرأ. "
+            "ارسم خطًا أو مسارًا واضحًا ثم أعد الرفع."
+        )
+    return f"تعذر التحقق من علامات Extra على الطبقة {layer}. صحح الرسم ثم أعد الرفع."
+
+
 def _lwpolyline_segments(current: dict[str, Any]) -> list[dict[str, Any]]:
     layer = str(current.get("layer") or "").strip()
     points = list(current.get("points") or [])
@@ -393,13 +443,22 @@ def _read_normalized_geometry(file_path: str) -> tuple[list[dict[str, Any]], dic
     try:
         result = read_dxf_geometry(
             file_path,
-            relevant_layers={SHEET_OUTLINE_LAYER, CUT_PATH_LAYER},
+            relevant_layers={
+                SHEET_OUTLINE_LAYER,
+                CUT_PATH_LAYER,
+                DESIGNER_DEFAULT_LAYER,
+                *EXTRA_OVERLAY_LAYER_NAMES,
+            },
             legacy_line_parser=legacy_parser,
         )
     except DxfReadError as exc:
         raise DxfImportError(str(exc)) from exc
 
-    unsupported = result.get("unsupported") or []
+    unsupported = [
+        item
+        for item in (result.get("unsupported") or [])
+        if str(item.get("layer") or "").strip().upper() != DESIGNER_DEFAULT_LAYER
+    ]
     if unsupported:
         unique = sorted({f"{item['entity_type']} على {item['layer']}" for item in unsupported})
         supported = ", ".join(sorted(SUPPORTED_DXF_ENTITY_TYPES))
@@ -435,8 +494,167 @@ def _detected_layers_message(diagnostics: dict[str, Any]) -> str:
     return f"الطبقات المكتشفة: {'، '.join(visible)}{suffix}."
 
 
+def _missing_role_layer_guidance(diagnostics: dict[str, Any]) -> list[str]:
+    detected = {
+        str(layer or "").strip().upper()
+        for layer in diagnostics.get("detected_layers") or []
+        if str(layer or "").strip()
+    }
+    hints = [
+        "أي طبقة غير SHEET_OUTLINE وCUT_PATH لا تُستخدم كحدود لوح أو مسار قص. "
+        "ضع مستطيل كل لوح على SHEET_OUTLINE ومحيط كل درفة على CUT_PATH."
+    ]
+    if DESIGNER_DEFAULT_LAYER in detected:
+        hints.append(
+            "إذا لم تُرسم SHEET_OUTLINE وCUT_PATH، تُقرأ المحيطات المغلقة على الطبقة 0: "
+            "مستطيل اللوح بمقاس الطلب كحدود اللوح، وباقي الدرف كمسارات قص. "
+            "إذا وُجدت SHEET_OUTLINE دون CUT_PATH، الطبقة 0 تُقرأ كـCUT_PATH. "
+            "طبقات along وPIECES لا تُعد قصًا."
+        )
+    found_overlays = [
+        extra_overlay_layer_for_kind(kind)
+        for kind, layer_name in EXTRA_OVERLAY_LAYER_BY_KIND.items()
+        if layer_name.strip().upper() in detected
+    ]
+    if found_overlays:
+        hints.append(
+            "طبقات علامات Extra ("
+            + "، ".join(found_overlays)
+            + ") تُقرأ فوق درفة Extra فقط، ولا تغني عن طبقات اللوح والقص."
+        )
+    return hints
+
+
 def _segments_for_layer(rows: list[dict[str, Any]], layer: str) -> list[tuple[tuple[float, float], tuple[float, float]]]:
-    return [(row["start"], row["end"]) for row in rows if row.get("layer") == layer]
+    wanted = str(layer or "").strip().upper()
+    return [
+        (row["start"], row["end"])
+        for row in rows
+        if str(row.get("layer") or "").strip().upper() == wanted
+    ]
+
+
+def _overlay_rows_for_layer(rows: list[dict[str, Any]], layer: str) -> list[dict[str, Any]]:
+    wanted = str(layer or "").strip().upper()
+    return [
+        row
+        for row in rows
+        if str(row.get("layer") or "").strip().upper() == wanted
+    ]
+
+
+def _polyline_from_ordered_segments(
+    segments: Sequence[dict[str, Any]],
+) -> tuple[tuple[float, float], ...]:
+    if not segments:
+        return ()
+    points = [tuple(segments[0]["start"])]
+    for row in segments:
+        points.append(tuple(row["end"]))
+    return tuple((float(point[0]), float(point[1])) for point in points)
+
+
+def _overlay_source_paths(
+    rows: list[dict[str, Any]],
+    layer_name: str,
+) -> tuple[tuple[tuple[tuple[tuple[float, float], ...], bool], ...], tuple[str, ...]]:
+    """Keep polyline/curve marks as original DXF entities; assemble LINE networks only.
+
+    Handle Recess is often one open LWPOLYLINE whose vertices sit closer than the
+    cut-path connectivity tolerance. Assembling those flattened segments as a
+    graph falsely reports a branch. LINE rectangles stay assembled from edges.
+    """
+    layer_rows = _overlay_rows_for_layer(rows, layer_name)
+    grouped: dict[int, list[dict[str, Any]]] = {}
+    line_segments: list[tuple[tuple[float, float], tuple[float, float]]] = []
+    ungrouped: list[tuple[tuple[float, float], tuple[float, float]]] = []
+    for row in layer_rows:
+        entity_type = str(row.get("entity_type") or "").strip().upper()
+        entity_id = row.get("entity_id")
+        if entity_type == "LINE":
+            line_segments.append((row["start"], row["end"]))
+            continue
+        if entity_id is None:
+            ungrouped.append((row["start"], row["end"]))
+            continue
+        grouped.setdefault(int(entity_id), []).append(row)
+
+    paths: list[tuple[tuple[tuple[float, float], ...], bool]] = []
+    errors: list[str] = []
+    for entity_id in sorted(grouped):
+        entity_rows = grouped[entity_id]
+        points = _polyline_from_ordered_segments(entity_rows)
+        closed = bool(entity_rows[0].get("closed"))
+        paths.append((points, closed))
+    for source in (line_segments, ungrouped):
+        if not source:
+            continue
+        tolerance = (
+            CONNECTIVITY_TOLERANCE_MM if source is line_segments else GEOMETRY_TOLERANCE_MM
+        )
+        for contour_no, contour in enumerate(assemble_contours(source, tolerance), start=1):
+            if contour.get("branched"):
+                errors.append(
+                    f"علامة {layer_name} رقم {contour_no} تحتوي على تفرع أو خطوط زائدة "
+                    "ولا تشكل علامة واحدة."
+                )
+                continue
+            points = tuple(tuple(point) for point in (contour.get("points") or ()))
+            closed = bool(contour.get("closed"))
+            paths.append((points, closed))
+    return tuple(paths), tuple(errors)
+
+
+def _closed_polygons_from_segments(
+    segments: list[tuple[tuple[float, float], tuple[float, float]]],
+) -> tuple[tuple[tuple[float, float], ...], ...]:
+    polygons: list[tuple[tuple[float, float], ...]] = []
+    for contour in assemble_contours(segments, CONNECTIVITY_TOLERANCE_MM):
+        if contour.get("branched") or not contour.get("closed"):
+            continue
+        points = simplify_polygon(contour.get("points") or [], GEOMETRY_TOLERANCE_MM)
+        if validate_polygon(points, GEOMETRY_TOLERANCE_MM):
+            continue
+        polygons.append(tuple(tuple(point) for point in points))
+    return tuple(polygons)
+
+
+def _default_layer_role_segments(
+    rows: list[dict[str, Any]],
+    *,
+    expected_width_mm: float,
+    expected_height_mm: float,
+    overlays: Sequence[ExtraOverlayCandidate],
+    infer_sheets: bool = True,
+) -> tuple[
+    list[tuple[tuple[float, float], tuple[float, float]]],
+    list[tuple[tuple[float, float], tuple[float, float]]],
+]:
+    polygons = _closed_polygons_from_segments(
+        _segments_for_layer(rows, DESIGNER_DEFAULT_LAYER)
+    )
+    if not polygons:
+        return [], []
+    sheets, cuts = classify_default_layer_polygons(
+        polygons,
+        expected_width_mm=expected_width_mm,
+        expected_height_mm=expected_height_mm,
+        overlays=overlays,
+        geometry_tolerance=CONNECTIVITY_TOLERANCE_MM,
+        dimension_tolerance=DIMENSION_TOLERANCE_MM,
+        infer_sheets=infer_sheets,
+    )
+    sheet_segments = [
+        segment
+        for polygon in sheets
+        for segment in polygon_to_segments(polygon)
+    ]
+    cut_segments = [
+        segment
+        for polygon in cuts
+        for segment in polygon_to_segments(polygon)
+    ]
+    return sheet_segments, cut_segments
 
 
 def _expected_order_pieces(order: Any) -> list[dict[str, Any]]:
@@ -460,6 +678,11 @@ def _expected_order_pieces(order: Any) -> list[dict[str, Any]]:
             finished_width_cm = getattr(row, "width_cm", 0)
         if finished_length_cm is None:
             finished_length_cm = getattr(row, "length_cm", 0)
+        selected_codes = tuple(
+            code
+            for code, attr in EXTRA_ADDON_FIELD_BY_CODE.items()
+            if bool(cint(getattr(row, attr, 0)))
+        )
         for copy_no in range(
             1,
             physical_cut_quantity(
@@ -479,6 +702,7 @@ def _expected_order_pieces(order: Any) -> list[dict[str, Any]]:
                     "piece_type": row.piece_type or "Regular",
                     "source_piece_no": group_index,
                     "copy_no": copy_no,
+                    "selected_codes": selected_codes,
                 }
             )
     return expected
@@ -650,6 +874,7 @@ def _match_pieces_to_order(pieces: list[dict[str, Any]], order: Any) -> list[dic
         piece["original_h"] = candidate["length_cm"]
         piece["rotated"] = rotated
         piece["piece_type"] = candidate["piece_type"]
+        piece["_extra_selected_codes"] = tuple(candidate.get("selected_codes") or ())
         if "_material_area_m2" in piece:
             piece["area_m2"] = round(_num(piece["_material_area_m2"]), 4)
         else:
@@ -910,6 +1135,105 @@ def _validate_piece_spacing(pieces: list[dict[str, Any]], *, kerf_mm: float) -> 
             raise DxfImportError(_topology_error_message(exc, kerf_mm=kerf_mm)) from exc
 
 
+def _collect_extra_overlay_candidates(rows: list[dict[str, Any]]) -> tuple[ExtraOverlayCandidate, ...]:
+    errors: list[str] = []
+    candidates: list[ExtraOverlayCandidate] = []
+    next_key = 1
+    for kind, layer_name in EXTRA_OVERLAY_LAYER_BY_KIND.items():
+        source_paths, source_errors = _overlay_source_paths(rows, layer_name)
+        errors.extend(source_errors)
+        for contour_no, (raw_points, closed_flag) in enumerate(
+            source_paths,
+            start=1,
+        ):
+            points_mm = dedupe_overlay_points(
+                raw_points,
+                tolerance=GEOMETRY_TOLERANCE_MM,
+            )
+            if len(points_mm) < 2:
+                errors.append(
+                    f"علامة {layer_name} رقم {contour_no} أقصر من أن تُقرأ. "
+                    "ارسم خطًا أو مسارًا واضحًا ثم أعد الرفع."
+                )
+                continue
+            closed = bool(closed_flag) and len(points_mm) >= 3
+            points_mm = dedupe_overlay_points(
+                points_mm,
+                tolerance=GEOMETRY_TOLERANCE_MM,
+                closed=closed,
+            )
+            closed = closed and len(points_mm) >= 3
+            candidates.append(
+                ExtraOverlayCandidate(
+                    key=next_key,
+                    kind=kind,
+                    layer=extra_overlay_layer_for_kind(kind),
+                    path=points_mm,
+                    closed=closed,
+                )
+            )
+            next_key += 1
+    if errors:
+        raise DxfImportError(errors)
+    return tuple(candidates)
+
+
+def _attach_extra_overlays(
+    pieces: list[dict[str, Any]],
+    *,
+    overlays: Sequence[ExtraOverlayCandidate],
+    sheets: list[dict[str, Any]],
+    trim_mm: float,
+) -> None:
+    if not overlays:
+        return
+    hosts = tuple(
+        ExtraOverlayHost(
+            key=int(piece["id"]),
+            piece_type=str(piece.get("piece_type") or "Regular"),
+            polygon=tuple(tuple(point) for point in piece.get("_outline_mm") or ()),
+            selected_codes=tuple(piece.get("_extra_selected_codes") or ()),
+        )
+        for piece in pieces
+    )
+    try:
+        assigned = assign_extra_overlays(
+            overlays,
+            hosts,
+            tolerance=GEOMETRY_TOLERANCE_MM,
+            host_margin=OVERLAY_HOST_MARGIN_MM,
+        )
+    except ExtraOverlayError as exc:
+        raise DxfImportError(_overlay_error_message(exc)) from exc
+
+    sheets_by_no = {int(sheet["sheet_no"]): sheet for sheet in sheets}
+    grouped: dict[int, list] = {}
+    for item in assigned:
+        grouped.setdefault(int(item.host_key), []).append(item)
+    for piece in pieces:
+        items = grouped.get(int(piece["id"])) or []
+        if not items:
+            continue
+        sheet = sheets_by_no[int(piece["_sheet_no"])]
+        piece["overlays"] = [
+            {
+                "kind": item.kind,
+                "layer": item.layer,
+                "geometry": serialize_overlay_geometry_from_cm(
+                    tuple(
+                        _to_plan_points(
+                            list(item.path),
+                            sheet=sheet,
+                            trim_mm=trim_mm,
+                        )
+                    ),
+                    closed=item.closed,
+                ),
+            }
+            for item in items
+        ]
+
+
 def _public_piece(piece: dict[str, Any]) -> dict[str, Any]:
     public_piece = {key: value for key, value in piece.items() if not key.startswith("_")}
     public_piece["geometry"] = serialize_geometry_from_cm(
@@ -1014,17 +1338,6 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
         raise DxfImportError("تعذر العثور على ملف DXF المرفوع على الخادم. أعد رفع الملف ثم حاول مرة أخرى.")
 
     rows, diagnostics = _read_normalized_geometry(file_path)
-    sheet_segments = _segments_for_layer(rows, SHEET_OUTLINE_LAYER)
-    cut_segments = _segments_for_layer(rows, CUT_PATH_LAYER)
-    missing: list[str] = []
-    if not sheet_segments:
-        missing.append(f"الطبقة {SHEET_OUTLINE_LAYER} الخاصة بحدود الألواح غير موجودة أو فارغة.")
-    if not cut_segments:
-        missing.append(f"الطبقة {CUT_PATH_LAYER} الخاصة بمسارات القطع غير موجودة أو فارغة.")
-    if missing:
-        missing.append(_detected_layers_message(diagnostics))
-        raise DxfImportError(missing)
-
     trim_mm = max(0.0, flt(order.trim_margin_mm))
     full_board_width_cm = flt(order.board_width_cm) or flt(order.full_board_width_mm) / 10
     full_board_length_cm = flt(order.board_length_cm) or flt(order.full_board_length_mm) / 10
@@ -1035,6 +1348,31 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
     usable_board_length_cm = max(0.0, full_board_length_cm - (2 * trim_cm))
     if usable_board_width_cm <= 0 or usable_board_length_cm <= 0:
         raise DxfImportError("هامش التشذيب أكبر من أبعاد اللوح ولا توجد مساحة صالحة للقص.")
+
+    overlays = _collect_extra_overlay_candidates(rows)
+    sheet_segments = _segments_for_layer(rows, SHEET_OUTLINE_LAYER)
+    cut_segments = _segments_for_layer(rows, CUT_PATH_LAYER)
+    if not sheet_segments or not cut_segments:
+        fallback_sheets, fallback_cuts = _default_layer_role_segments(
+            rows,
+            expected_width_mm=full_board_width_cm * 10.0,
+            expected_height_mm=full_board_length_cm * 10.0,
+            overlays=overlays,
+            infer_sheets=not sheet_segments,
+        )
+        if not sheet_segments:
+            sheet_segments = fallback_sheets
+        if not cut_segments:
+            cut_segments = fallback_cuts
+    missing: list[str] = []
+    if not sheet_segments:
+        missing.append(f"الطبقة {SHEET_OUTLINE_LAYER} الخاصة بحدود الألواح غير موجودة أو فارغة.")
+    if not cut_segments:
+        missing.append(f"الطبقة {CUT_PATH_LAYER} الخاصة بمسارات القطع غير موجودة أو فارغة.")
+    if missing:
+        missing.append(_detected_layers_message(diagnostics))
+        missing.extend(_missing_role_layer_guidance(diagnostics))
+        raise DxfImportError(missing)
 
     sheet_contours = assemble_contours(sheet_segments, CONNECTIVITY_TOLERANCE_MM)
     sheets = _validate_sheet_contours(
@@ -1060,6 +1398,12 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
 
     _validate_piece_spacing(pieces, kerf_mm=max(0.0, flt(order.kerf_mm)))
     labeled = _match_pieces_to_order(pieces, order)
+    _attach_extra_overlays(
+        labeled,
+        overlays=overlays,
+        sheets=sheets,
+        trim_mm=trim_mm,
+    )
     by_id = {int(piece["id"]): piece for piece in labeled}
     for sheet in sheets:
         sheet["pieces"] = [by_id[int(piece["id"])] for piece in sheet["pieces"]]

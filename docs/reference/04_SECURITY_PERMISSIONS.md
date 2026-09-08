@@ -127,7 +127,7 @@ Production Routing CRUD, Customer CRUD, Edge Banding Type CRUD عبر مفاتي
 - Operational plan snapshots لا تحمل cost payload يلتف حول Permission Level.
 - Customer-facing document منفصل عن Internal cost report.
 - Reports المالية تتطلب Financial reporting capability.
-- `edit_cost_settings` يُضيَّق بالقدرة ونطاق المستند (غير محفوظ / مقدَّم أو ملغى / نسخة مستبدلة)، ولا يُضيَّق بحالة الطلب التشغيلية. الأمر يحدّث الخطة المالية ذات الهندسة (المسودة إذا ملكت عدد ألواح، وإلا الخطة المعتمدة بعد الإنتاج) ولا ينشئ مراجعة خطة جديدة. تسعير الدرف الخاصة (`approve_special_price` / `edit_special_price`) يبقى Draft-only.
+- `edit_cost_settings` يُضيَّق بالقدرة ونطاق المستند (غير محفوظ / مقدَّم أو ملغى / نسخة مستبدلة)، ولا يُضيَّق بحالة الطلب التشغيلية. الأمر يحدّث الخطة المالية ذات الهندسة (المسودة إذا ملكت عدد ألواح، وإلا الخطة المعتمدة بعد الإنتاج) ولا ينشئ مراجعة خطة جديدة. تسعير الدرف الخاصة (`approve_special_price` / `edit_special_price`) يبقى Draft-only. اعتماد Production Cutting Plan لا يشترط إدخال أسعار أو تكلفة؛ شرط الأسعار الخاصة يبقى على طباعة الفاتورة والمستندات المالية.
 
 ## 7. Whitelisted endpoints
 

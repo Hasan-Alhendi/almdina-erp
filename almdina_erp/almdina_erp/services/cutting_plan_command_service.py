@@ -374,7 +374,7 @@ def finalize_uploaded_dxf_order_state(order: Any, plan: Any) -> None:
 
 
 def approve_order_plan(order: Any, plan_source: str) -> dict[str, Any]:
-    """Approve the reviewed Draft Cutting Plan without recalculation or DCO save."""
+    """Approve the reviewed Draft Cutting Plan without recalculation, DCO save, or cost entry."""
 
     require_cutting_plan_capability(
         order,
@@ -398,7 +398,6 @@ def approve_order_plan(order: Any, plan_source: str) -> dict[str, Any]:
 
     _assert_plan_ready_for_approval(order, plan)
     order.ensure_special_shapes_documented()
-    order.ensure_special_prices_approved()
 
     for previous in repository.approved_documents(order.name, exclude=plan.name):
         previous.status = SUPERSEDED

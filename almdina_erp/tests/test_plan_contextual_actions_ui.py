@@ -163,8 +163,11 @@ class TestPlanContextualActionsUI(unittest.TestCase):
         self.assertIn("cancel_approved_order_plan(order)", boundary)
         self.assertIn("Capability.APPROVE_DXF", service)
         self.assertIn("cancel_approval_transition", service)
+        self.assertIn("_clear_order_approved_plan(order)", service)
+        self.assertIn("cancelled_plan", service)
         self.assertIn('"approved_plan"', service)
         self.assertIn("repository.save_document(plan, allow_status_transition=True)", service)
+        self.assertNotIn("الخطة المعتمدة لا تتبع هذا الطلب.", service)
         self.assertNotIn("frappe.db.set_value", context)
 
     def test_domain_cancel_transition_preserves_immutable_history(self) -> None:

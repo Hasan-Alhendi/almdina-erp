@@ -16,6 +16,16 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_topology import (
     polygon_strictly_contains_polygon,
     validate_material_layout,
 )
+from almdina_erp.almdina_erp.domain.cutting.extra_overlays import (
+    overlay_path_contained_in_polygon,
+    OVERLAY_HOST_MARGIN_MM,
+)
+from almdina_erp.almdina_erp.domain.orders.extra_addons import (
+    EXTRA_OVERLAY_LAYER_BY_KIND,
+    EXTRA_PIECE_TYPE,
+    extra_overlay_kind_for_layer,
+    extra_overlay_layer_for_kind,
+)
 
 GEOMETRY_SCHEMA_VERSION = 1
 GEOMETRY_UNIT = "mm"
@@ -37,9 +47,16 @@ def _number(value: Any, *, field: str) -> float:
     return number
 
 
-def _polygon(value: Any, *, field: str) -> tuple[tuple[float, float], ...]:
-    if isinstance(value, (str, bytes)) or not isinstance(value, Sequence) or len(value) < 3:
-        raise DxfGeometrySnapshotError(f"{field} must contain at least three points.")
+def _points(
+    value: Any,
+    *,
+    field: str,
+    minimum: int,
+) -> tuple[tuple[float, float], ...]:
+    if isinstance(value, (str, bytes)) or not isinstance(value, Sequence) or len(value) < minimum:
+        raise DxfGeometrySnapshotError(
+            f"{field} must contain at least {minimum} points."
+        )
 
     points: list[tuple[float, float]] = []
     for index, point in enumerate(value):
@@ -52,6 +69,10 @@ def _polygon(value: Any, *, field: str) -> tuple[tuple[float, float], ...]:
             )
         )
     return tuple(points)
+
+
+def _polygon(value: Any, *, field: str) -> tuple[tuple[float, float], ...]:
+    return _points(value, field=field, minimum=3)
 
 
 def _validate_part_geometry(geometry: PartGeometry) -> None:
@@ -151,6 +172,113 @@ def parse_geometry_mm(value: Any) -> PartGeometry:
     return geometry
 
 
+def serialize_overlay_geometry_mm(
+    path: Sequence[tuple[float, float]],
+    *,
+    closed: bool = False,
+) -> dict[str, Any]:
+    """Serialize an Extra overlay mark as a path, including open lines."""
+
+    return {
+        "schema_version": GEOMETRY_SCHEMA_VERSION,
+        "unit": GEOMETRY_UNIT,
+        "coordinate_space": GEOMETRY_COORDINATE_SPACE,
+        "path": [[float(x), float(y)] for x, y in path],
+        "closed": bool(closed),
+    }
+
+
+def serialize_overlay_geometry_from_cm(
+    path: Sequence[tuple[float, float]],
+    *,
+    closed: bool = False,
+) -> dict[str, Any]:
+    """Serialize plan-local centimetre overlay marks as the canonical mm path."""
+
+    return serialize_overlay_geometry_mm(
+        tuple((x * 10.0, y * 10.0) for x, y in path),
+        closed=closed,
+    )
+
+
+def parse_overlay_geometry_mm(value: Any, *, field: str = "geometry") -> dict[str, Any]:
+    """Parse an Extra overlay path without requiring a closed cut polygon."""
+
+    if not isinstance(value, Mapping):
+        raise DxfGeometrySnapshotError(f"{field} must be an object.")
+    if value.get("schema_version") != GEOMETRY_SCHEMA_VERSION:
+        raise DxfGeometrySnapshotError(f"{field} schema_version is unsupported.")
+    if value.get("unit") != GEOMETRY_UNIT:
+        raise DxfGeometrySnapshotError(f"{field} unit must be mm.")
+    if value.get("coordinate_space") != GEOMETRY_COORDINATE_SPACE:
+        raise DxfGeometrySnapshotError(f"{field} coordinate_space is unsupported.")
+    holes_value = value.get("holes")
+    if holes_value:
+        raise DxfGeometrySnapshotError(f"{field} must not use holes.")
+    closed = bool(value.get("closed"))
+    path = _points(value.get("path"), field=f"{field}.path", minimum=2)
+    if closed and len(path) < 3:
+        raise DxfGeometrySnapshotError(f"{field} closed path must contain at least three points.")
+    return serialize_overlay_geometry_mm(path, closed=closed)
+
+
+def parse_overlay_annotation(value: Any, *, field: str = "overlays") -> dict[str, Any]:
+    """Parse one Extra overlay annotation without treating it as a cut hole."""
+
+    if not isinstance(value, Mapping):
+        raise DxfGeometrySnapshotError(f"{field} must be an object.")
+    kind = str(value.get("kind") or "").strip()
+    if kind not in EXTRA_OVERLAY_LAYER_BY_KIND:
+        raise DxfGeometrySnapshotError(f"{field}.kind is unsupported.")
+    layer = str(value.get("layer") or "").strip()
+    if extra_overlay_kind_for_layer(layer) != kind:
+        raise DxfGeometrySnapshotError(f"{field}.layer must match {field}.kind.")
+    return {
+        "kind": kind,
+        "layer": extra_overlay_layer_for_kind(kind),
+        "geometry": parse_overlay_geometry_mm(value.get("geometry"), field=f"{field}.geometry"),
+    }
+
+
+def _canonicalize_piece_overlays(piece: Mapping[str, Any]) -> list[dict[str, Any]] | None:
+    if "overlays" not in piece:
+        return None
+    overlays_value = piece.get("overlays")
+    if overlays_value is None:
+        return []
+    if isinstance(overlays_value, (str, bytes)) or not isinstance(overlays_value, Sequence):
+        raise DxfGeometrySnapshotError("piece overlays must be an array.")
+    overlays = [
+        parse_overlay_annotation(item, field=f"overlays[{index}]")
+        for index, item in enumerate(overlays_value)
+    ]
+    if not overlays:
+        return overlays
+    piece_type = str(piece.get("piece_type") or "Regular")
+    if piece_type != EXTRA_PIECE_TYPE:
+        raise DxfGeometrySnapshotError("overlays are only allowed on Extra pieces.")
+    if "geometry" not in piece:
+        raise DxfGeometrySnapshotError("Extra overlays require persisted piece geometry.")
+    host = parse_geometry_mm(piece["geometry"])
+    for index, overlay in enumerate(overlays):
+        overlay_geometry = overlay["geometry"]
+        path = tuple(
+            (float(point[0]), float(point[1]))
+            for point in overlay_geometry["path"]
+        )
+        if not overlay_path_contained_in_polygon(
+            host.outer,
+            path,
+            tolerance=GEOMETRY_TOLERANCE_MM,
+            closed=bool(overlay_geometry.get("closed")),
+            host_margin=OVERLAY_HOST_MARGIN_MM,
+        ):
+            raise DxfGeometrySnapshotError(
+                f"overlays[{index}] must lie inside the Extra piece outline."
+            )
+    return overlays
+
+
 def geometry_mm_to_cm(geometry: PartGeometry) -> PartGeometry:
     return PartGeometry(
         outer=tuple((x / 10.0, y / 10.0) for x, y in geometry.outer),
@@ -162,11 +290,12 @@ def geometry_mm_to_cm(geometry: PartGeometry) -> PartGeometry:
 
 
 def canonicalize_snapshot_geometries(value: Any) -> Any:
-    """Validate/canonicalize only ``sheets[*].pieces[*].geometry`` contracts.
+    """Validate/canonicalize uploaded-DXF piece topology and Extra overlays.
 
     Other snapshot metadata may legitimately use a generic ``geometry`` key for
-    unrelated features. This hotfix owns only uploaded-DXF piece topology and
-    therefore deliberately avoids interpreting geometry outside placed pieces.
+    unrelated features. This owns only placed-piece ``geometry`` and Extra
+    ``overlays`` annotations, and therefore deliberately avoids interpreting
+    geometry outside those fields.
     """
 
     if not isinstance(value, Mapping):
@@ -193,6 +322,9 @@ def canonicalize_snapshot_geometries(value: Any) -> Any:
                         normalized_piece["geometry"] = serialize_geometry_mm(
                             parse_geometry_mm(normalized_piece["geometry"])
                         )
+                    overlays = _canonicalize_piece_overlays(normalized_piece)
+                    if overlays is not None:
+                        normalized_piece["overlays"] = overlays
                     normalized_pieces.append(normalized_piece)
                 normalized_sheet["pieces"] = normalized_pieces
             normalized_sheets.append(normalized_sheet)
@@ -301,8 +433,12 @@ __all__ = [
     "canonicalize_snapshot_geometries",
     "geometry_mm_to_cm",
     "parse_geometry_mm",
+    "parse_overlay_annotation",
+    "parse_overlay_geometry_mm",
     "serialize_geometry_from_cm",
     "serialize_geometry_mm",
+    "serialize_overlay_geometry_from_cm",
+    "serialize_overlay_geometry_mm",
     "snapshot_geometry_index",
     "validate_snapshot_material_layout",
 ]

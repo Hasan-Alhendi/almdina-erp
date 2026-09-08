@@ -1,3 +1,4 @@
+from almdina_erp.almdina_erp.domain.cutting.evaluation import evaluate_plan
 from almdina_erp.almdina_erp.services.cutting_engine import (
     PACKING_OPTIONS,
     choose_best_plan,
@@ -205,3 +206,81 @@ def test_clipped_corner_geometry_survives_expansion_placement_and_rotation():
     assert placed[0]["clipped_corner_width_cm"] == 18
     assert placed[0]["clipped_corner_length_cm"] == 32
     assert not validate_plan(plan, pieces, 210, 90)
+
+
+def test_evaluated_plan_keeps_waste_at_the_top_and_shows_last_sheet_first():
+    pieces = expand_piece_groups(
+        [
+            {"width_cm": 50, "length_cm": 80, "qty": 1, "allow_rotation": 0},
+            {"width_cm": 40, "length_cm": 60, "qty": 1, "allow_rotation": 0},
+        ]
+    )
+    raw = {
+        "sheets": [
+            {
+                "sheet_no": 1,
+                "w": 100,
+                "h": 200,
+                "pieces": [
+                    {
+                        **pieces[0],
+                        "x": 0,
+                        "y": 0,
+                        "w": 50,
+                        "h": 80,
+                        "rotated": False,
+                    }
+                ],
+                "free_rects": [{"x": 0, "y": 80, "w": 100, "h": 120}],
+            },
+            {
+                "sheet_no": 2,
+                "w": 100,
+                "h": 200,
+                "pieces": [
+                    {
+                        **pieces[1],
+                        "x": 0,
+                        "y": 0,
+                        "w": 40,
+                        "h": 60,
+                        "rotated": False,
+                    }
+                ],
+            },
+        ],
+        "unplaced": [],
+    }
+
+    plan = evaluate_plan(raw, pieces, 100, 200, "Test", "Test")
+
+    assert [sheet["sheet_no"] for sheet in plan["sheets"]] == [2, 1]
+    assert plan["sheets"][0]["pieces"][0]["y"] == 140
+    assert plan["sheets"][1]["pieces"][0]["y"] == 120
+    assert plan["sheets"][1]["free_rects"][0] == {"x": 0, "y": 0, "w": 100, "h": 120}
+    assert not validate_plan(plan, pieces, 100, 200)
+
+
+def test_packed_doors_sit_on_the_bottom_edge_of_the_usable_board():
+    pieces = expand_piece_groups(
+        [{"width_cm": 50, "length_cm": 40, "qty": 1, "allow_rotation": 0}]
+    )
+    plan = run_single_method(pieces, 100, 100, 0, "MaxRects Best Area")
+    placed = plan["sheets"][0]["pieces"][0]
+
+    assert placed["x"] == 0
+    assert placed["y"] == 60
+    assert placed["w"] == 50
+    assert placed["h"] == 40
+    assert not validate_plan(plan, pieces, 100, 100)
+
+
+def test_last_opened_board_is_the_first_sheet_in_the_plan():
+    pieces = expand_piece_groups(
+        [{"width_cm": 90, "length_cm": 90, "qty": 2, "allow_rotation": 0}]
+    )
+    plan = run_single_method(pieces, 100, 100, 0, "MaxRects Best Area")
+
+    assert [sheet["sheet_no"] for sheet in plan["sheets"]] == [2, 1]
+    assert all(sheet["pieces"][0]["y"] == 10 for sheet in plan["sheets"])
+    assert not validate_plan(plan, pieces, 100, 100)

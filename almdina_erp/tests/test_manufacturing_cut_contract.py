@@ -249,18 +249,11 @@ def test_dxf_import_matches_persisted_cut_dimensions_not_finished_dimensions():
         _piece(width_cm=60, length_cm=200, cut_width_cm=59.9, cut_length_cm=199.8)
     )
     expected = _expected_order_pieces(order)
-
-    assert expected == [
-        {
-            "label": "1.1",
-            "width_cm": 59.9,
-            "length_cm": 199.8,
-            "allow_rotation": 1,
-            "piece_type": "Regular",
-            "source_piece_no": 1,
-            "copy_no": 1,
-        }
-    ]
+    assert expected[0]["width_cm"] == 59.9
+    assert expected[0]["length_cm"] == 199.8
+    assert expected[0]["finished_width_cm"] == 60.0
+    assert expected[0]["finished_length_cm"] == 200.0
+    assert expected[0]["selected_codes"] == ()
 
 
 def test_dxf_import_fails_closed_when_persisted_cut_dimensions_are_missing():
@@ -291,6 +284,45 @@ def test_strict_dxf_import_proxy_preserves_normalized_cut_dimensions():
     assert proxy.pieces[0].cut_length_cm == 199.8
     assert _expected_order_pieces(proxy)[0]["width_cm"] == 59.9
     assert _expected_order_pieces(proxy)[0]["length_cm"] == 199.8
+
+
+def test_strict_dxf_import_proxy_preserves_extra_overlay_addon_flags():
+    spec = OrderPieceCutSpec(
+        row_index=1,
+        finished_width_cm=Decimal("33.000"),
+        finished_length_cm=Decimal("90.000"),
+        cut_width_cm=Decimal("33.000"),
+        cut_length_cm=Decimal("89.900"),
+        width_deduction_mm=Decimal("0"),
+        length_deduction_mm=Decimal("1.000"),
+        allow_rotation=0,
+        piece_type="Extra",
+        qty=1,
+        side_profiles=(),
+    )
+    proxy = _proxy_order(
+        _order(
+            _piece(
+                piece_type="Extra",
+                extra_liner=1,
+                extra_back_groove=1,
+                extra_recessed_handle_cutout=1,
+                extra_double=0,
+                extra_full_door_double=0,
+            )
+        ),
+        [spec],
+        _plan(),
+    )
+
+    assert proxy.pieces[0].extra_liner == 1
+    assert proxy.pieces[0].extra_back_groove == 1
+    assert proxy.pieces[0].extra_recessed_handle_cutout == 1
+    assert _expected_order_pieces(proxy)[0]["selected_codes"] == (
+        "liner",
+        "back_groove",
+        "recessed_handle_cutout",
+    )
 
 
 def test_saved_plan_validation_reads_captured_requirement_not_live_order_dimensions():

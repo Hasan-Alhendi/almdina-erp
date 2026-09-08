@@ -115,14 +115,15 @@ def test_approved_plan_can_be_revised_at_planning_without_unlocking_later_stages
     assert 'state.status !== "ready" || !state.data' in session
     assert 'String(state.data.approved_plan || "").trim()' in session
     assert "if (approved === null) return false;" in session
+    assert 'status === "Draft" && !hasActiveProductionStage(frm)' in session
     assert "if (approved && !isDrawingStage(frm)) return false;" in session
     assert 'String(frm.doc.approved_plan || "").trim()' not in session
-    assert 'DRAFT_LIKE.has(frm.doc.status || "Draft")' in session
+    assert "DRAFT_LIKE.has(status)" in session
 
     assert 'getattr(doc, "docstatus", 0)' in service
     assert 'getattr(doc, "revision_state", "Current")' in service
     assert "is_order_at_drawing_stage(doc)" in service
-    assert 'getattr(doc, "approved_plan", None) and not is_order_at_drawing_stage(doc)' in service
+    assert "and status != \"Draft\"" in service
     assert "خطة القص المعتمدة لا يمكن تعديل إعداداتها خارج مرحلة الرسم" in service
 
     # Browser controls resolve Planning from configurable route metadata rather
