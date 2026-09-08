@@ -128,6 +128,7 @@ const plan = {
                     original_h: 60,
                     area_m2: 0.24,
                     label: "4.1",
+                    source_piece_no: 4,
                     piece_type: "Extra",
                     rotated: false,
                     geometry: {
@@ -180,6 +181,11 @@ assert.match(html, /data-geometry-source="manual-special"/);
 assert.match(html, /data-geometry-source="dxf"/);
 assert.match(html, /dco-extra-overlay/);
 assert.match(html, /data-overlay-layer="Liner"/);
+assert.match(html, /dco-extra-addon-legend/);
+assert.match(html, /رموز إضافات Extra/);
+assert.match(html, /دبل قشاط/);
+assert.match(html, /دبل كامل الدرفة/);
+assert.doesNotMatch(html, /dco-extra-addon-marks/);
 assert.match(html, /data-geometry-id="pg-/);
 assert.match(html, /fill-rule="evenodd"/);
 assert.match(html, /clip-rule="evenodd"/);
@@ -202,5 +208,63 @@ const doubledFrm = {
 };
 const doubledHtml = renderer.build(doubledFrm, renderer.parse(doubledFrm));
 assert.match(doubledHtml, /عدد 6/);
+
+const extraAddonFrm = {
+    doc: {
+        ...frm.doc,
+        pieces: [
+            { width_cm: 60, length_cm: 80, qty: 1, piece_type: "Regular" },
+            { width_cm: 62, length_cm: 80, qty: 1, piece_type: "Special" },
+            { width_cm: 20, length_cm: 20, qty: 1, piece_type: "Special" },
+            {
+                width_cm: 40,
+                length_cm: 60,
+                qty: 1,
+                piece_type: "Extra",
+                extra_double: 1,
+                extra_full_door_double: 1,
+                extra_liner: 1,
+            },
+        ],
+    },
+};
+const extraAddonHtml = renderer.build(extraAddonFrm, renderer.parse(extraAddonFrm));
+assert.match(extraAddonHtml, /dco-extra-addon-marks/);
+assert.match(extraAddonHtml, /data-addon-kind="double"/);
+assert.match(extraAddonHtml, /data-addon-kind="full_door_double"/);
+assert.match(extraAddonHtml, /data-addon-slot="top-end"/);
+assert.match(extraAddonHtml, /data-addon-slot="top-start"/);
+assert.match(extraAddonHtml, /dco-extra-addon-mark/);
+assert.match(extraAddonHtml, /dco-extra-overlay/);
+assert.match(extraAddonHtml, /data-overlay-layer="Liner"/);
+assert.match(extraAddonHtml, /dco-extra-addon-legend/);
+
+const regularOnlyFrm = {
+    doc: {
+        ...frm.doc,
+        pieces: [
+            {
+                width_cm: 60,
+                length_cm: 80,
+                qty: 1,
+                piece_type: "Regular",
+                extra_double: 1,
+                extra_full_door_double: 1,
+            },
+        ],
+    },
+};
+const regularOnlyPlan = {
+    ...plan,
+    sheets: [
+        {
+            sheet_no: 1,
+            pieces: [plan.sheets[0].pieces[0]],
+        },
+    ],
+};
+const regularOnlyHtml = renderer.build(regularOnlyFrm, regularOnlyPlan);
+assert.doesNotMatch(regularOnlyHtml, /dco-extra-addon-marks/);
+assert.match(regularOnlyHtml, /dco-extra-addon-legend/);
 
 console.log("Cutting-plan renderer simulation passed");

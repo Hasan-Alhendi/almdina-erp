@@ -115,6 +115,37 @@ def test_web_and_print_share_path_data_but_keep_print_presentation_rules() -> No
     assert ".dco-edge-line-svg" in renderer
 
 
+def test_extra_addon_print_marks_and_legend_stay_visible() -> None:
+    renderer = source(RENDERER)
+
+    assert "function render_piece_addon_marks" in renderer
+    assert "function render_extra_addon_legend" in renderer
+    assert renderer.count("${render_extra_addon_legend()}") >= 2
+    assert "dco-extra-addon-marks" in renderer
+    assert "dco-extra-addon-legend" in renderer
+    assert 'data-addon-kind="double"' in renderer
+    assert 'data-addon-kind="full_door_double"' in renderer
+    assert 'data-addon-slot="top-end"' in renderer
+    assert 'data-addon-slot="top-start"' in renderer
+    assert ".dco-extra-overlay { display: block !important; }" in renderer
+    assert ".dco-extra-addon-marks {" in renderer
+    assert ".dco-extra-addon-mark {" in renderer
+    assert '.dco-extra-addon-mark[data-addon-slot="top-end"]' in renderer
+    assert '.dco-extra-addon-mark[data-addon-slot="top-start"]' in renderer
+    assert "flex-wrap: wrap !important;" in renderer
+    assert ".dco-extra-addon-legend {" in renderer
+    print_css = renderer.split("function buildPrintDocument")[1].split(
+        "async function print_cutting_plan"
+    )[0]
+    badge_hide = print_css.split(".dco-piece-kind-badge")[1].split(".dco-piece-number")[0]
+    assert "dco-extra-addon-marks" not in badge_hide
+    assert "dco-extra-addon-legend" not in badge_hide
+    assert ".dco-extra-addon-marks { display: none" not in print_css
+    assert ".dco-extra-addon-legend { display: none" not in print_css
+    print_pages = renderer.split("function buildPrintPages")[1].split("function buildPrintDocument")[0]
+    assert "${render_extra_addon_legend()}" in print_pages
+
+
 def test_piece_geometry_loads_before_renderer_in_both_lazy_paths() -> None:
     geometry_asset = "door_cutting_order_piece_geometry.js"
     renderer_asset = "door_cutting_order_cutting_plan_renderer.js"
