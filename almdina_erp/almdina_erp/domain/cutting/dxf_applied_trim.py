@@ -48,21 +48,36 @@ def _quality(snapshot: dict[str, Any], trim: AppliedTrim) -> PlanQuality:
     return PlanQuality(unplaced_count=failures, board_count=len(sheets))
 
 
+def _shift_points(points: Any, *, dx_mm: float, dy_mm: float) -> Any:
+    if not isinstance(points, list):
+        return points
+    shifted_points = []
+    for point in points:
+        if not isinstance(point, (list, tuple)) or len(point) != 2:
+            shifted_points.append(point)
+            continue
+        shifted_points.append([float(point[0]) - dx_mm, float(point[1]) - dy_mm])
+    return shifted_points
+
+
 def _shift_geometry(geometry: Any, *, dx_mm: float, dy_mm: float) -> Any:
     if not isinstance(geometry, dict):
         return geometry
     shifted = dict(geometry)
+    shifted["outer"] = _shift_points(geometry.get("outer"), dx_mm=dx_mm, dy_mm=dy_mm)
+    shifted["holes"] = [
+        _shift_points(hole, dx_mm=dx_mm, dy_mm=dy_mm)
+        for hole in (geometry.get("holes") or [])
+    ]
+    return shifted
 
-    def shift_polygon(points: Any) -> Any:
-        if not isinstance(points, list):
-            return points
-        return [
-            [float(point[0]) - dx_mm, float(point[1]) - dy_mm]
-            for point in points
-        ]
 
-    shifted["outer"] = shift_polygon(geometry.get("outer"))
-    shifted["holes"] = [shift_polygon(hole) for hole in (geometry.get("holes") or [])]
+def _shift_overlay_geometry(geometry: Any, *, dx_mm: float, dy_mm: float) -> Any:
+    if not isinstance(geometry, dict):
+        return geometry
+    shifted = dict(geometry)
+    if "path" in geometry:
+        shifted["path"] = _shift_points(geometry.get("path"), dx_mm=dx_mm, dy_mm=dy_mm)
     return shifted
 
 
@@ -148,15 +163,26 @@ def apply_adaptive_trim_to_fixed_dxf_layout(
         sheet["usable_length_cm"] = sheet_usable_h
         sheet["w"] = sheet_usable_w
         sheet["h"] = sheet_usable_h
+        dx_mm = applied.width_trim_cm * 10.0
+        dy_mm = applied.length_trim_cm * 10.0
         for piece in sheet.get("pieces") or []:
             piece["x"] = _number(piece.get("x")) - applied.width_trim_cm
             piece["y"] = _number(piece.get("y")) - applied.length_trim_cm
             if "geometry" in piece:
                 piece["geometry"] = _shift_geometry(
                     piece["geometry"],
-                    dx_mm=applied.width_trim_cm * 10.0,
-                    dy_mm=applied.length_trim_cm * 10.0,
+                    dx_mm=dx_mm,
+                    dy_mm=dy_mm,
                 )
+            overlays = piece.get("overlays")
+            if isinstance(overlays, list):
+                for overlay in overlays:
+                    if isinstance(overlay, dict) and "geometry" in overlay:
+                        overlay["geometry"] = _shift_overlay_geometry(
+                            overlay["geometry"],
+                            dx_mm=dx_mm,
+                            dy_mm=dy_mm,
+                        )
 
     return result
 

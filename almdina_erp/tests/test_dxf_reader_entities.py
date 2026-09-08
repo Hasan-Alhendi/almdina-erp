@@ -43,3 +43,8 @@ def test_reader_supports_production_line_and_curve_entities(tmp_path: Path):
     entity_types = {row["entity_type"] for row in result["segments"]}
     assert {"LINE", "LWPOLYLINE", "POLYLINE", "ARC", "CIRCLE", "ELLIPSE", "SPLINE"} <= entity_types
     assert "POLYLINE" in SUPPORTED_DXF_ENTITY_TYPES
+    ids = {row.get("entity_id") for row in result["segments"]}
+    assert None not in ids
+    lw_ids = {row["entity_id"] for row in result["segments"] if row["entity_type"] == "LWPOLYLINE"}
+    assert len(lw_ids) == 1
+    assert all("closed" in row for row in result["segments"])

@@ -15,6 +15,16 @@
         "uploaded_dxf",
         "dxf",
     ]);
+    const EXTRA_OVERLAY_LAYER_BY_KIND = Object.freeze({
+        liner: "Liner",
+        back_groove: "Rear Groove",
+        recessed_handle_cutout: "Handle Recess",
+    });
+    const EXTRA_OVERLAY_LAYER_COLORS = Object.freeze({
+        Liner: 5,
+        "Rear Groove": 3,
+        "Handle Recess": 6,
+    });
     const ORIGINAL_DXF_METHOD =
         "almdina_erp.almdina_erp.services.dxf_export_service.download_uploaded_dxf";
     const VALIDATED_PLAN_METHOD =
@@ -112,6 +122,37 @@
         return result;
     }
 
+    function overlayPath(layerName, points, closed) {
+        if (!Array.isArray(points) || points.length < 2) return "";
+        let result = "";
+        for (let index = 0; index < points.length - 1; index += 1) {
+            const point = points[index];
+            const next = points[index + 1];
+            result += line(layerName, point[0], point[1], next[0], next[1]);
+        }
+        if (closed && points.length >= 3) {
+            const last = points[points.length - 1];
+            const first = points[0];
+            result += line(layerName, last[0], last[1], first[0], first[1]);
+        }
+        return result;
+    }
+
+    function overlayPolyline(points, field) {
+        if (!Array.isArray(points) || points.length < 2) {
+            throw new Error(`${field} must contain at least two points.`);
+        }
+        return points.map((point, index) => {
+            if (!Array.isArray(point) || point.length !== 2) {
+                throw new Error(`${field}[${index}] must be an [x, y] point.`);
+            }
+            return [
+                finiteCoordinate(point[0], `${field}[${index}][0]`),
+                finiteCoordinate(point[1], `${field}[${index}][1]`),
+            ];
+        });
+    }
+
     function topologyPolygon(points, field) {
         if (!Array.isArray(points) || points.length < 3) {
             throw new Error(`${field} must contain at least three points.`);
@@ -151,6 +192,49 @@
                 topologyPolygon(hole, `geometry.holes[${index}]`)
             ),
         };
+    }
+
+    function overlayLayerName(overlay) {
+        const kind = String((overlay && overlay.kind) || "").trim();
+        const mapped = EXTRA_OVERLAY_LAYER_BY_KIND[kind];
+        if (mapped) return mapped;
+        const layer = String((overlay && overlay.layer) || "").trim();
+        return layer || "";
+    }
+
+    function persistedOverlays(piece) {
+        const overlays = Array.isArray(piece && piece.overlays) ? piece.overlays : [];
+        return overlays.map((overlay, index) => {
+            const layerName = overlayLayerName(overlay);
+            if (!layerName) {
+                throw new Error(`overlays[${index}].kind must map to a DXF overlay layer.`);
+            }
+            const geometry = overlay && overlay.geometry;
+            if (!geometry || typeof geometry !== "object" || Array.isArray(geometry)) {
+                throw new Error(`overlays[${index}].geometry must be an object.`);
+            }
+            if (geometry.schema_version !== TOPOLOGY_SCHEMA_VERSION) {
+                throw new Error(`overlays[${index}] geometry schema version is unsupported.`);
+            }
+            if (geometry.unit !== TOPOLOGY_UNIT) {
+                throw new Error(`overlays[${index}] geometry unit must be mm.`);
+            }
+            if (geometry.coordinate_space !== TOPOLOGY_COORDINATE_SPACE) {
+                throw new Error(`overlays[${index}] geometry coordinate space is unsupported.`);
+            }
+            if (Array.isArray(geometry.holes) && geometry.holes.length) {
+                throw new Error(`overlays[${index}] must not use holes.`);
+            }
+            const usesPath = Array.isArray(geometry.path);
+            const path = usesPath ? geometry.path : geometry.outer;
+            return {
+                layer: layerName,
+                closed: usesPath
+                    ? Boolean(geometry.closed) && Array.isArray(path) && path.length >= 3
+                    : Array.isArray(path) && path.length >= 3,
+                path: overlayPolyline(path, `overlays[${index}].geometry.path`),
+            };
+        });
     }
 
     function firstDefined(...values) {
@@ -224,6 +308,13 @@
                             topologyDxfPoints(hole, transform)
                         );
                     });
+                    persistedOverlays(piece).forEach(overlay => {
+                        entities += overlayPath(
+                            overlay.layer,
+                            topologyDxfPoints(overlay.path, transform),
+                            overlay.closed
+                        );
+                    });
                     return;
                 }
 
@@ -246,6 +337,13 @@
                 entities += cutPath
                     ? closedPath("CUT_PATH", cutPath)
                     : rectangle("CUT_PATH", x, y, pieceWidth, pieceHeight);
+                persistedOverlays(piece).forEach(overlay => {
+                    entities += overlayPath(
+                        overlay.layer,
+                        topologyDxfPoints(overlay.path, { offsetX, offsetY, fullHeight, appliedTrim }),
+                        overlay.closed
+                    );
+                });
             });
         });
 
@@ -260,8 +358,11 @@
         dxf += pair(0, "TABLE") + pair(2, "LTYPE") + pair(70, 1);
         dxf += pair(0, "LTYPE") + pair(2, "CONTINUOUS") + pair(70, 0) + pair(3, "Solid line") + pair(72, 65) + pair(73, 0) + pair(40, 0);
         dxf += pair(0, "ENDTAB");
-        dxf += pair(0, "TABLE") + pair(2, "LAYER") + pair(70, 3);
+        dxf += pair(0, "TABLE") + pair(2, "LAYER") + pair(70, 6);
         dxf += layer("0", 7) + layer("SHEET_OUTLINE", 8) + layer("CUT_PATH", 1);
+        dxf += layer("Liner", EXTRA_OVERLAY_LAYER_COLORS.Liner)
+            + layer("Rear Groove", EXTRA_OVERLAY_LAYER_COLORS["Rear Groove"])
+            + layer("Handle Recess", EXTRA_OVERLAY_LAYER_COLORS["Handle Recess"]);
         dxf += pair(0, "ENDTAB") + pair(0, "ENDSEC");
 
         dxf += pair(0, "SECTION") + pair(2, "BLOCKS") + pair(0, "ENDSEC");

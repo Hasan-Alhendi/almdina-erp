@@ -84,7 +84,9 @@ function planPayload(orderName, approvedPlan) {
     const fakeWindow = {
         cur_frm: null,
         clearTimeout() {},
-        requestAnimationFrame() { return 1; },
+        requestAnimationFrame() {
+            return 1;
+        },
         addEventListener(name, listener) {
             const current = listeners.get(name) || [];
             current.push(listener);
@@ -257,6 +259,45 @@ function planPayload(orderName, approvedPlan) {
         "approved plan recalculation must remain locked at CNC"
     );
 
+    const draftApprovedFrm = {
+        doctype: "Door Cutting Order",
+        doc: {
+            doctype: "Door Cutting Order",
+            name: "DCO-DRAFT",
+            status: "Draft",
+            docstatus: 0,
+            revision_state: "Current",
+            approved_plan: "PLAN-APPROVED",
+            production_path: "ROUTE-1",
+            current_production_stage: "",
+        },
+        fields_dict: {},
+        is_new() { return false; },
+    };
+    fakeWindow.cur_frm = draftApprovedFrm;
+    fakeWindow.AlmdinaDocumentContext.synchronize(draftApprovedFrm);
+    const draftLoad = fakeWindow.AlmdinaPlanWorkspaceState.load(draftApprovedFrm);
+    assert.equal(calls[3].options.args.order_name, "DCO-DRAFT");
+    calls[3].pending.resolve({ message: planPayload("DCO-DRAFT", "PLAN-APPROVED") });
+    await draftLoad;
+    await flushPromises();
+
+    assert.equal(
+        fakeWindow.AlmdinaPlanEditSessionUX.canEditPlanSettings(draftApprovedFrm),
+        true,
+        "Draft orders must keep plan settings editable before dispatch even with an approved plan"
+    );
+    assert.equal(
+        fakeWindow.AlmdinaDocumentContext.canTuneCuttingAlgorithm(draftApprovedFrm),
+        true,
+        "Draft pre-dispatch must remain algorithm-tunable with an approved snapshot"
+    );
+    assert.equal(
+        fakeWindow.AlmdinaPlanControlsUX.canCalculate(draftApprovedFrm),
+        false,
+        "an existing approved draft still requires the Edit session before preview recalculation"
+    );
+
     const orphanFrm = {
         doctype: "Door Cutting Order",
         doc: {
@@ -273,8 +314,8 @@ function planPayload(orderName, approvedPlan) {
     fakeWindow.cur_frm = orphanFrm;
     fakeWindow.AlmdinaDocumentContext.synchronize(orphanFrm);
     const orphanLoad = fakeWindow.AlmdinaPlanWorkspaceState.load(orphanFrm);
-    assert.equal(calls[3].options.args.order_name, "DCO-ORPHAN");
-    calls[3].pending.resolve({
+    assert.equal(calls[4].options.args.order_name, "DCO-ORPHAN");
+    calls[4].pending.resolve({
         message: {
             order_name: "DCO-ORPHAN",
             approved_plan: null,

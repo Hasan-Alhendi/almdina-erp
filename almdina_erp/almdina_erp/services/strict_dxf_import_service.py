@@ -19,7 +19,10 @@ from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
     dimensions_match_exact,
     normalize_cut_cm,
 )
-from almdina_erp.almdina_erp.domain.orders.extra_addons import physical_cut_quantity
+from almdina_erp.almdina_erp.domain.orders.extra_addons import (
+    EXTRA_ADDON_FIELD_BY_CODE,
+    physical_cut_quantity,
+)
 from almdina_erp.almdina_erp.services.dxf_import_service import (
     DxfImportError,
     parse_production_dxf as _legacy_parse_production_dxf,
@@ -145,10 +148,14 @@ def _proxy_order(
     pieces = []
     for spec in specs:
         row = _row_for_spec(order, spec)
+        addon_flags = {
+            attr: getattr(row, attr, 0) if row else 0
+            for attr in EXTRA_ADDON_FIELD_BY_CODE.values()
+        }
         pieces.append(
             SimpleNamespace(
                 qty=spec.qty,
-                extra_full_door_double=getattr(row, "extra_full_door_double", 0) if row else 0,
+                **addon_flags,
                 # The legacy topology parser expects its public width/length inputs in
                 # manufacturing space. Preserve the same canonical values explicitly
                 # under cut_* as well so ALMADINA-143 never relies on a finished-size

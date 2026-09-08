@@ -240,6 +240,33 @@ class TestAlmadina141AppliedTrim(unittest.TestCase):
         self.assertEqual(result["sheets"][0]["pieces"][0]["h"], 200.0)
         self.assertEqual(source["sheets"][0]["pieces"][0]["x"], 0.0)
 
+    def test_applied_trim_shifts_extra_overlay_paths_with_piece_geometry(self) -> None:
+        snapshot = self._snapshot(x=1.0, y=1.0, w=20.0, h=30.0)
+        piece = snapshot["sheets"][0]["pieces"][0]
+        piece["piece_type"] = "Extra"
+        piece["overlays"] = [
+            {
+                "kind": "liner",
+                "layer": "Liner",
+                "geometry": {
+                    "schema_version": 1,
+                    "unit": "mm",
+                    "coordinate_space": "usable_sheet",
+                    "path": [[12.0, 12.0], [14.5, 12.0], [14.5, 308.0], [12.0, 308.0]],
+                    "closed": False,
+                },
+            }
+        ]
+
+        result = apply_adaptive_trim_to_fixed_dxf_layout(snapshot, preferred_trim_mm=5.0)
+        overlay_path = result["sheets"][0]["pieces"][0]["overlays"][0]["geometry"]["path"]
+        outer = result["sheets"][0]["pieces"][0]["geometry"]["outer"]
+
+        self.assertAlmostEqual(overlay_path[0][0], 7.0)
+        self.assertAlmostEqual(overlay_path[0][1], 7.0)
+        self.assertAlmostEqual(outer[0][0], 5.0)
+        self.assertAlmostEqual(outer[0][1], 5.0)
+
 
 if __name__ == "__main__":
     unittest.main()

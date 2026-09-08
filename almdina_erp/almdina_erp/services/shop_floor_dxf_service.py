@@ -75,7 +75,10 @@ def _authorize_order(
         except DrawingActionDenied as error:
             _throw_policy_error(error)
     elif require_unlocked_plan and order.approved_plan:
-        _throw_policy_error(DrawingActionDenied("plan_already_approved"))
+        status = str(getattr(order, "status", None) or "Draft").strip()
+        has_stage = bool(str(getattr(order, "current_production_stage", None) or "").strip())
+        if status != "Draft" or has_stage:
+            _throw_policy_error(DrawingActionDenied("plan_already_approved"))
     return order
 
 

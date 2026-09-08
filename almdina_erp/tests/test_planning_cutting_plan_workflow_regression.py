@@ -100,6 +100,37 @@ def test_stage_scoped_mutation_is_assignment_based_not_role_based() -> None:
     assert denied.code == "not_assigned"
 
 
+def test_draft_planned_route_is_pre_production_not_a_finished_stage() -> None:
+    allowed = decide_stage_assignment_access(
+        actor="designer@example.com",
+        assigned_to=None,
+        has_current_stage=False,
+        has_production_path=True,
+        order_status="Draft",
+    )
+    assert allowed.allowed is True
+    assert allowed.code == "pre_production"
+
+    finished = decide_stage_assignment_access(
+        actor="designer@example.com",
+        assigned_to=None,
+        has_current_stage=False,
+        has_production_path=True,
+        order_status="Ready for Delivery",
+    )
+    assert finished.allowed is False
+    assert finished.code == "no_active_stage"
+
+    omitted_status = decide_stage_assignment_access(
+        actor="designer@example.com",
+        assigned_to=None,
+        has_current_stage=False,
+        has_production_path=True,
+    )
+    assert omitted_status.allowed is False
+    assert omitted_status.code == "no_active_stage"
+
+
 def test_planning_handoff_reports_missing_approval_precisely() -> None:
     decision = decide_planning_handoff(
         PlanningHandoffFacts(

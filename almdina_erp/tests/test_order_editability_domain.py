@@ -10,6 +10,7 @@ from almdina_erp.almdina_erp.domain.orders.editability import (
     is_draft_like,
     is_drawing_stage,
     is_locked_status,
+    is_pre_dispatch_draft,
 )
 
 
@@ -81,6 +82,17 @@ class TestOrderEditabilityPolicy(unittest.TestCase):
                 current_stage_type="CNC",
             )
         )
+        self.assertTrue(is_pre_dispatch_draft(status="Draft"))
+        self.assertTrue(
+            is_pre_dispatch_draft(status="Draft", current_production_stage="")
+        )
+        self.assertFalse(
+            is_pre_dispatch_draft(
+                status="Draft",
+                current_production_stage="STAGE-DRAWING",
+            )
+        )
+        self.assertFalse(is_pre_dispatch_draft(status="At Drawing"))
 
     def test_drawing_recalculation_allows_preparing_replacement_for_approved_plan(self) -> None:
         allowed = dict(
@@ -96,9 +108,25 @@ class TestOrderEditabilityPolicy(unittest.TestCase):
                 **{**allowed, "approved_plan": "PLAN-0001"}
             )
         )
+        self.assertTrue(
+            can_recalculate_drawing_system_plan(
+                has_recalculate_permission=True,
+                approved_plan="PLAN-0001",
+                production_path="Drawing",
+                status="Draft",
+                current_stage_type=None,
+            )
+        )
 
         blocked_cases = (
             {**allowed, "has_recalculate_permission": False},
+            {
+                **allowed,
+                "has_recalculate_permission": False,
+                "approved_plan": "PLAN-0001",
+                "status": "Draft",
+                "current_stage_type": None,
+            },
             {
                 **allowed,
                 "approved_plan": "PLAN-0001",

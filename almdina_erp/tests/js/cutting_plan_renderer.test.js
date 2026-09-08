@@ -118,6 +118,39 @@ const plan = {
                         holes: [[[860, 960], [940, 960], [940, 1040], [860, 1040]]],
                     },
                 },
+                {
+                    id: 4,
+                    x: 0,
+                    y: 90,
+                    w: 40,
+                    h: 60,
+                    original_w: 40,
+                    original_h: 60,
+                    area_m2: 0.24,
+                    label: "4.1",
+                    piece_type: "Extra",
+                    rotated: false,
+                    geometry: {
+                        schema_version: 1,
+                        unit: "mm",
+                        coordinate_space: "usable_sheet",
+                        outer: [[0, 900], [400, 900], [400, 1500], [0, 1500]],
+                        holes: [],
+                    },
+                    overlays: [
+                        {
+                            kind: "liner",
+                            layer: "Liner",
+                            geometry: {
+                                schema_version: 1,
+                                unit: "mm",
+                                coordinate_space: "usable_sheet",
+                                path: [[40, 940], [180, 940], [180, 1060], [40, 1060]],
+                                closed: true,
+                            },
+                        },
+                    ],
+                },
             ],
         },
     ],
@@ -145,6 +178,8 @@ assert.match(html, /◆ درفة خاصة · مسار هندسي/);
 assert.match(html, /<path d="/);
 assert.match(html, /data-geometry-source="manual-special"/);
 assert.match(html, /data-geometry-source="dxf"/);
+assert.match(html, /dco-extra-overlay/);
+assert.match(html, /data-overlay-layer="Liner"/);
 assert.match(html, /data-geometry-id="pg-/);
 assert.match(html, /fill-rule="evenodd"/);
 assert.match(html, /clip-rule="evenodd"/);

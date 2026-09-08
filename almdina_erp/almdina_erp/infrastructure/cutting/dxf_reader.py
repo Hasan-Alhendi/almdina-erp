@@ -21,6 +21,18 @@ class DxfReadError(ValueError):
     pass
 
 
+def _entity_is_closed(entity: Any) -> bool:
+    if bool(getattr(entity, "closed", False)):
+        return True
+    if bool(getattr(entity, "is_closed", False)):
+        return True
+    flags = getattr(getattr(entity, "dxf", None), "flags", None)
+    try:
+        return bool(int(flags or 0) & 1)
+    except (TypeError, ValueError):
+        return False
+
+
 def _segments_from_points(points: list[tuple[float, float]]) -> list[tuple[tuple[float, float], tuple[float, float]]]:
     return [(points[index], points[index + 1]) for index in range(len(points) - 1) if points[index] != points[index + 1]]
 
@@ -154,9 +166,10 @@ def read_dxf_geometry(
     block_names: set[str] = set()
     has_inserts = False
     expanded_entities = 0
+    entity_seq = 0
 
     def visit(entities: Iterable[Any], *, inherited_layer: str | None, depth: int) -> None:
-        nonlocal expanded_entities, has_inserts
+        nonlocal expanded_entities, has_inserts, entity_seq
         if depth > MAX_INSERT_DEPTH:
             raise DxfReadError(
                 "ملف DXF يحتوي على تداخل BLOCK/INSERT أعمق من الحد الآمن المسموح. بسّط البلوكات ثم أعد الرفع."
@@ -214,11 +227,15 @@ def read_dxf_geometry(
                 raise DxfReadError(
                     f"تعذر تحليل عنصر {entity_type} على الطبقة {layer}. أعد حفظ الرسم كـ DXF قياسي ثم حاول مجددًا."
                 ) from exc
+            entity_seq += 1
+            closed = _entity_is_closed(entity)
             for start, end in _segments_from_points(flattened):
                 segments.append(
                     {
                         "layer": layer,
                         "entity_type": entity_type,
+                        "entity_id": entity_seq,
+                        "closed": closed,
                         "start": start,
                         "end": end,
                     }

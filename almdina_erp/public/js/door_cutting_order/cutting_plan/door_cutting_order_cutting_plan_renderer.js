@@ -118,6 +118,42 @@
         return primary || "—";
     }
 
+    function render_piece_overlays(piece, geometryModel) {
+        const overlays = Array.isArray(piece && piece.overlays) ? piece.overlays : [];
+        if (!overlays.length || !geometryModel) return "";
+        const originX = num(geometryModel.placement.xCm) * 10;
+        const originY = num(geometryModel.placement.yCm) * 10;
+        const widthMm = num(geometryModel.placement.widthCm) * 10;
+        const heightMm = num(geometryModel.placement.heightCm) * 10;
+        if (!(widthMm > 0) || !(heightMm > 0)) return "";
+        const strokeByKind = {
+            liner: "#1d6fbf",
+            back_groove: "#2a7d4f",
+            recessed_handle_cutout: "#c45c12",
+        };
+        const paths = overlays.map((overlay, index) => {
+            const kind = String((overlay && overlay.kind) || "").trim();
+            const geometry = overlay && overlay.geometry;
+            const points = geometry && Array.isArray(geometry.path)
+                ? geometry.path
+                : (geometry && Array.isArray(geometry.outer) ? geometry.outer : []);
+            if (points.length < 2) return "";
+            const local = points.map(point => [
+                ((Number(point[0]) - originX) / widthMm) * 100,
+                ((Number(point[1]) - originY) / heightMm) * 100,
+            ]);
+            const closed = Boolean(geometry && geometry.closed) && local.length >= 3;
+            const d = local
+                .map((point, pointIndex) => `${pointIndex ? "L" : "M"}${point[0]} ${point[1]}`)
+                .join(" ") + (closed ? " Z" : "");
+            const stroke = strokeByKind[kind] || "#5c4d2e";
+            const layer = String((overlay && overlay.layer) || kind || "overlay");
+            return `<path class="dco-extra-overlay-path" data-overlay-kind="${escape_html(kind)}" data-overlay-layer="${escape_html(layer)}" data-overlay-index="${index}" d="${d}" fill="none" stroke="${stroke}" stroke-width="1.75" stroke-dasharray="4 2" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/>`;
+        }).filter(Boolean).join("");
+        if (!paths) return "";
+        return `<svg class="dco-extra-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;z-index:2;overflow:visible;pointer-events:none">${paths}</svg>`;
+    }
+
     function render_piece_label(piece, geometryModel) {
         const exact_special = piece.piece_type === "Special"
             && geometryModel
@@ -323,6 +359,7 @@
                 html += `
                     <div class="dco-piece ${piece.piece_type === "Special" ? "dco-special-raw-piece" : ""} ${exactSpecial ? "dco-special-exact-piece" : ""} ${clipped ? "dco-clipped-corner-piece" : ""} ${shaped ? "dco-vector-piece" : ""}" data-piece-type="${escape_html(piece.piece_type || "Regular")}" data-geometry-source="${escape_html(geometryModel.source)}" data-geometry-id="${escape_html(geometryModel.geometryIdentity)}" style="position:absolute;left:${left}%;top:${top}%;width:${width}%;height:${height}%;${pieceStyle}color:#111;overflow:hidden;padding:2px;font-size:10px;line-height:1.2;text-align:center;box-sizing:border-box;display:flex;align-items:center;justify-content:center;">
                         ${shapeOutline}
+                        ${render_piece_overlays(piece, geometryModel)}
                         ${edgeLines}
                         ${render_piece_label(piece, geometryModel)}
                     </div>

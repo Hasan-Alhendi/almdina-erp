@@ -52,6 +52,8 @@ def test_renderer_consumes_one_canonical_geometry_model() -> None:
 
     assert "AlmdinaCuttingPlanPieceGeometry" in renderer
     assert renderer.count("geometry.resolve(piece)") == 1
+    assert "render_piece_overlays" in renderer
+    assert "dco-extra-overlay" in renderer
     assert "special_shape_geometry_json" not in renderer
     assert "geometry.schema_version" not in renderer
     assert "clippedGeometry.points" not in renderer

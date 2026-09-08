@@ -280,6 +280,62 @@ async function run() {
     assert.match(lastCallMethod, /get_validated_dxf_plan/);
     assert.match(downloadedDxf, /\$ACADVER\r\n1\r\nAC1009/);
 
+    nextPlan = {
+        full_board_width_cm: 100,
+        full_board_length_cm: 100,
+        trim_cm: 0,
+        sheets: [
+            {
+                sheet_no: 1,
+                full_width_cm: 100,
+                full_length_cm: 100,
+                pieces: [
+                    {
+                        id: 1,
+                        label: "1.1",
+                        piece_type: "Extra",
+                        x: 0,
+                        y: 0,
+                        w: 40,
+                        h: 60,
+                        geometry: geometry(
+                            [[0, 0], [400, 0], [400, 600], [0, 600]]
+                        ),
+                        overlays: [
+                            {
+                                kind: "liner",
+                                layer: "Liner",
+                                geometry: geometry(
+                                    [[40, 40], [180, 40], [180, 160], [40, 160]]
+                                ),
+                            },
+                            {
+                                kind: "back_groove",
+                                layer: "Rear Groove",
+                                geometry: {
+                                    schema_version: 1,
+                                    unit: "mm",
+                                    coordinate_space: "usable_sheet",
+                                    path: [[360, 40], [360, 560]],
+                                    closed: false,
+                                },
+                            },
+                        ],
+                    },
+                ],
+            },
+        ],
+    };
+    downloadedDxf = "";
+    lastCallMethod = "";
+    await fakeFrappe.almdina.export_order_dxf("DCO-EXTRA-OVERLAY", "system");
+    assert.match(lastCallMethod, /get_validated_dxf_plan/);
+    assert.match(downloadedDxf, /2\r\nLiner\r\n/);
+    assert.match(downloadedDxf, /2\r\nRear Groove\r\n/);
+    assert.equal((downloadedDxf.match(/8\r\nLiner\r\n/g) || []).length, 4);
+    assert.equal((downloadedDxf.match(/8\r\nRear Groove\r\n/g) || []).length, 1);
+    assert.equal(cutPathLineCount(downloadedDxf), 4);
+
     console.log("Secure DXF topology export simulation passed");
 }
 
