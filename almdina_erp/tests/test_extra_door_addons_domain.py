@@ -3,10 +3,13 @@ from __future__ import annotations
 import unittest
 
 from almdina_erp.almdina_erp.domain.orders.extra_addons import (
+    EXTRA_ADDON_FIELD_BY_CODE,
     ExtraAddonError,
     ExtraAddonPieceInput,
     ExtraAddonRates,
     calculate_extra_addon_pricing,
+    extra_overlay_kind_for_layer,
+    extra_overlay_layer_for_kind,
     physical_cut_quantity,
 )
 
@@ -212,6 +215,17 @@ class TestExtraDoorAddonsDomain(unittest.TestCase):
         self.assertEqual(physical_cut_quantity(3, full_door_double=True), 6)
         self.assertEqual(physical_cut_quantity(3, full_door_double=False), 3)
         self.assertEqual(physical_cut_quantity(0, full_door_double=True), 0)
+
+    def test_extra_overlay_layers_normalize_case_and_whitespace_only(self) -> None:
+        self.assertEqual(extra_overlay_kind_for_layer(" liner "), "liner")
+        self.assertEqual(extra_overlay_kind_for_layer("Rear Groove"), "back_groove")
+        self.assertEqual(extra_overlay_kind_for_layer("HANDLE RECESS"), "recessed_handle_cutout")
+        self.assertIsNone(extra_overlay_kind_for_layer("لاينر"))
+        self.assertIsNone(extra_overlay_kind_for_layer("CUT_PATH"))
+        self.assertEqual(extra_overlay_layer_for_kind("liner"), "Liner")
+        self.assertEqual(extra_overlay_layer_for_kind("back_groove"), "Rear Groove")
+        self.assertEqual(extra_overlay_layer_for_kind("recessed_handle_cutout"), "Handle Recess")
+        self.assertEqual(EXTRA_ADDON_FIELD_BY_CODE["liner"], "extra_liner")
 
 
 if __name__ == "__main__":

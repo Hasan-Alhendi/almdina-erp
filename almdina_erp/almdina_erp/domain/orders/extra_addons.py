@@ -15,7 +15,24 @@ EXTRA_ADDON_CODES = (
     "back_groove",
     "recessed_handle_cutout",
 )
+EXTRA_ADDON_FIELD_BY_CODE = {
+    "double": "extra_double",
+    "full_door_double": "extra_full_door_double",
+    "liner": "extra_liner",
+    "back_groove": "extra_back_groove",
+    "recessed_handle_cutout": "extra_recessed_handle_cutout",
+}
 FULL_DOOR_DOUBLE_CUT_MULTIPLIER = 2
+EXTRA_OVERLAY_LAYER_BY_KIND = {
+    "liner": "Liner",
+    "back_groove": "Rear Groove",
+    "recessed_handle_cutout": "Handle Recess",
+}
+EXTRA_OVERLAY_LAYER_NAMES = frozenset(EXTRA_OVERLAY_LAYER_BY_KIND.values())
+EXTRA_OVERLAY_KIND_BY_LAYER = {
+    layer.strip().upper(): kind
+    for kind, layer in EXTRA_OVERLAY_LAYER_BY_KIND.items()
+}
 
 
 class ExtraAddonError(ValueError):
@@ -74,6 +91,18 @@ class ExtraAddonPieceResult:
 class ExtraAddonPricingSummary:
     pieces: tuple[ExtraAddonPieceResult, ...]
     total_usd: float
+
+
+def extra_overlay_kind_for_layer(layer: str) -> str | None:
+    """Map a DXF layer name to an Extra overlay kind after case/whitespace normalize."""
+
+    return EXTRA_OVERLAY_KIND_BY_LAYER.get(str(layer or "").strip().upper())
+
+
+def extra_overlay_layer_for_kind(kind: str) -> str:
+    """Return the canonical DXF layer name for one Extra overlay kind."""
+
+    return EXTRA_OVERLAY_LAYER_BY_KIND[str(kind)]
 
 
 def physical_cut_quantity(qty: int, *, full_door_double: bool) -> int:
@@ -224,6 +253,10 @@ def _money(value: float) -> float:
 
 __all__ = [
     "EXTRA_ADDON_CODES",
+    "EXTRA_ADDON_FIELD_BY_CODE",
+    "EXTRA_OVERLAY_KIND_BY_LAYER",
+    "EXTRA_OVERLAY_LAYER_BY_KIND",
+    "EXTRA_OVERLAY_LAYER_NAMES",
     "EXTRA_PIECE_TYPE",
     "FULL_DOOR_DOUBLE_CUT_MULTIPLIER",
     "ExtraAddonError",
@@ -232,5 +265,7 @@ __all__ = [
     "ExtraAddonPricingSummary",
     "ExtraAddonRates",
     "calculate_extra_addon_pricing",
+    "extra_overlay_kind_for_layer",
+    "extra_overlay_layer_for_kind",
     "physical_cut_quantity",
 ]

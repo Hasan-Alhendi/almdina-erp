@@ -38,6 +38,7 @@ def test_secure_export_has_minimal_sections_layers_and_eof_self_check():
         'pair(2, "ENTITIES")',
         'layer("SHEET_OUTLINE", 8)',
         'layer("CUT_PATH", 1)',
+        'layer("Liner", EXTRA_OVERLAY_LAYER_COLORS.Liner)',
         'pair(0, "EOF")',
         'validateDxfText(dxf)',
         'content.endsWith("0\\r\\nEOF\\r\\n")',

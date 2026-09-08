@@ -114,6 +114,19 @@ class TestOrderEditPolicyAdapter(unittest.TestCase):
         self.assertTrue(policy.user_can_recalculate_drawing_system_plan(order))
         self.assertEqual(harness.db.calls, [])
 
+    def test_draft_approved_plan_can_be_recalculated_before_dispatch(self) -> None:
+        harness = AdapterHarness(can_recalculate=True)
+        policy = harness.load()
+        order = {
+            "status": "Draft",
+            "production_path": "Drawing",
+            "current_production_stage": None,
+            "approved_plan": "PLAN-0001",
+        }
+
+        self.assertTrue(policy.user_can_recalculate_drawing_system_plan(order))
+        self.assertEqual(harness.db.calls, [])
+
     def test_drawing_stage_fallback_reads_only_the_current_stage_type(self) -> None:
         harness = AdapterHarness(can_recalculate=True)
         harness.db.stage_types["STAGE-DRAWING"] = "Drawing"

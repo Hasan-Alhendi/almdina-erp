@@ -226,6 +226,7 @@ class TestCapabilityExecutionContract(unittest.TestCase):
         self.assertIn("approve_order_plan", boundary)
         self.assertNotIn("cutting_plan_snapshot_service", boundary)
         self.assertIn("_assert_plan_ready_for_approval", command)
+        self.assertNotIn("ensure_special_prices_approved", approval_command)
         self.assertIn("plan_input_fingerprint", command)
         self.assertIn("plan_needs_recalculation", command)
         self.assertNotIn("recalculate_system_plan", approval_command)

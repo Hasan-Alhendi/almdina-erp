@@ -21,10 +21,19 @@ def test_dxf_import_service_exists_with_layered_core_functions():
         "def validate_imported_plan",
         "SHEET_OUTLINE_LAYER",
         "CUT_PATH_LAYER",
+        "EXTRA_OVERLAY_LAYER_NAMES",
+        "_overlay_source_paths",
+        "_collect_extra_overlay_candidates",
+        "_attach_extra_overlays",
+        "_default_layer_role_segments",
+        "DESIGNER_DEFAULT_LAYER",
+        "infer_sheets",
+        "_missing_role_layer_guidance",
         "_parse_r12_lines",
         "_match_pieces_to_order",
         "read_dxf_geometry",
         "assemble_contours",
+        "أي طبقة غير SHEET_OUTLINE وCUT_PATH",
     ]:
         assert token in src
     assert DXF_READER.exists()
@@ -36,8 +45,10 @@ def test_dxf_import_mirrors_secure_export_layers():
     importer = _source(DXF_IMPORT)
     assert 'layer("SHEET_OUTLINE", 8)' in secure
     assert 'layer("CUT_PATH", 1)' in secure
+    assert 'layer("Liner", EXTRA_OVERLAY_LAYER_COLORS.Liner)' in secure
     assert 'SHEET_OUTLINE_LAYER = "SHEET_OUTLINE"' in importer
     assert 'CUT_PATH_LAYER = "CUT_PATH"' in importer
+    assert "EXTRA_OVERLAY_LAYER_NAMES" in importer
 
 
 def test_round_trip_line_parser_is_kept_as_r12_fallback():
@@ -73,6 +84,7 @@ def test_import_enforces_sheet_and_cut_contour_topology():
     assert "تتقاطع مع نفسها" in src
     assert "full_width_mm" in src
     assert "full_height_mm" in src
+    assert "entity_id" in src
 
 
 def test_board_area_uses_correct_cm2_to_m2_conversion():

@@ -41,7 +41,14 @@
     }
 
     function planIsLocked(frm) {
-        return Boolean(frm && frm.doc && frm.doc.approved_plan);
+        if (!frm || !frm.doc || !frm.doc.approved_plan) return false;
+        const status = String(frm.doc.status || "Draft").trim();
+        if (status === "Draft" && !String(frm.doc.current_production_stage || "").trim()) {
+            return false;
+        }
+        if (status === "At Drawing") return false;
+        const stageType = String(frm.__almdina_stage_type || "").trim();
+        return stageType !== "Drawing";
     }
 
     function canMutatePlan(frm) {

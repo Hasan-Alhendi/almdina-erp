@@ -38,6 +38,7 @@ def current_stage_assignment_access(
         has_current_stage=bool(stage_name),
         has_production_path=bool(production_path),
         is_admin=actor == "Administrator",
+        order_status=str(getattr(order, "status", None) or ""),
     )
     return {
         "allowed": decision.allowed,

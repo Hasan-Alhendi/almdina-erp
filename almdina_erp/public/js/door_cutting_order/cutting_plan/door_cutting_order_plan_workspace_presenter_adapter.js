@@ -64,7 +64,7 @@
 
     function hasApprovedPlan(frm) {
         const payload = data(frm);
-        return Boolean(planRow(frm, "Approved") || (payload && payload.approved_plan));
+        return Boolean(payload && String(payload.approved_plan || "").trim());
     }
 
     function sourceLabel(row) {
@@ -119,9 +119,10 @@
         frm.doc.cutting_plan_json = systemPlan || parseSnapshot(currentRow);
         frm.doc.custom_plan_json = customPlan;
         frm.doc.production_dxf = customRow && customRow.dxf ? customRow.dxf.file || null : null;
-        frm.doc.approved_plan = payload.approved_plan || (approvedRow && approvedRow.name) || null;
-        frm.doc.approved_plan_source = sourceLabel(approvedRow);
-        frm.__almdina_approved_plan_snapshot = approvedPlan;
+        const currentApproved = String(payload.approved_plan || "").trim();
+        frm.doc.approved_plan = currentApproved || null;
+        frm.doc.approved_plan_source = currentApproved ? sourceLabel(approvedRow) : null;
+        frm.__almdina_approved_plan_snapshot = currentApproved ? approvedPlan : null;
         frm.__almdina_approved_plan_order = frm.doc.name;
 
         const editor = window.AlmdinaWorkspaceFieldEditor;

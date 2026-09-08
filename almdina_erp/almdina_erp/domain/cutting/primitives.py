@@ -297,6 +297,33 @@ def prune_free_rects(
     return pruned
 
 
+def present_shop_floor_packing(
+    plan: dict[str, Any],
+    *,
+    board_h_cm: float,
+) -> dict[str, Any]:
+    """Keep leftover at the top of each board and show the last-filled sheet first.
+
+    Packers place from ``y = 0``, which the renderer and DXF export treat as the
+    top of the usable area. Reflecting each rectangle on Y after packing moves
+    doors toward the bottom. Sheet numbers keep fill order; the list is reversed
+    so the last opened board appears first in preview, print, and DXF.
+    """
+
+    sheets = list(plan.get("sheets") or [])
+    for sheet in sheets:
+        height = num(sheet.get("h")) or num(board_h_cm)
+        if height <= 0:
+            continue
+        for piece in sheet.get("pieces") or []:
+            piece["y"] = height - num(piece.get("y")) - num(piece.get("h"))
+        for rect in sheet.get("free_rects") or []:
+            rect["y"] = height - num(rect.get("y")) - num(rect.get("h"))
+    sheets.reverse()
+    plan["sheets"] = sheets
+    return plan
+
+
 __all__ = [
     "clone_pieces",
     "create_sheet",
@@ -306,6 +333,7 @@ __all__ = [
     "normalize_mode",
     "num",
     "orientations_for",
+    "present_shop_floor_packing",
     "prune_free_rects",
     "rect_intersects",
     "rects_have_clearance",

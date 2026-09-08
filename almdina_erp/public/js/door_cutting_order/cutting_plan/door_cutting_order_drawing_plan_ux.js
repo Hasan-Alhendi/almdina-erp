@@ -54,7 +54,16 @@
 		if (context && typeof context.canTuneCuttingAlgorithm === "function") {
 			return context.canTuneCuttingAlgorithm(frm);
 		}
-		if (!frm || !frm.doc || frm.is_new() || frm.doc.approved_plan) return false;
+		if (!frm || !frm.doc || frm.is_new()) return false;
+		if (frm.doc.approved_plan) {
+			const status = String(frm.doc.status || "Draft").trim();
+			const preDispatchDraft = status === "Draft"
+				&& !String(frm.doc.current_production_stage || "").trim();
+			const isDrawing = status === "At Drawing"
+				|| frm.__almdina_stage_type === "Drawing"
+				|| frm.doc.current_department === "رسم";
+			if (!preDispatchDraft && !isDrawing) return false;
+		}
 		if (frm.doc.current_production_stage) return holdsStageOperationalRole(frm);
 		return true;
 	}

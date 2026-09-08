@@ -129,11 +129,16 @@
     }
 
     function canTuneCuttingAlgorithm(frm) {
-        if (!frm || frm.is_new() || approvedPlanName(frm)) return false;
+        if (!frm || frm.is_new()) return false;
         const context = documentContext();
         if (context && typeof context.canTuneCuttingAlgorithm === "function") {
             return context.canTuneCuttingAlgorithm(frm);
         }
+        const approved = approvedPlanName(frm);
+        const status = String((frm.doc && frm.doc.status) || "Draft").trim();
+        const preDispatchDraft = status === "Draft"
+            && !String((frm.doc && frm.doc.current_production_stage) || "").trim();
+        if (approved && !preDispatchDraft && status !== "At Drawing") return false;
         if (!canMutateCurrentStage(frm)) return false;
         if (frm.doc.current_production_stage) return true;
         return EDITABLE_STATUSES.has(frm.doc.status || "Draft");

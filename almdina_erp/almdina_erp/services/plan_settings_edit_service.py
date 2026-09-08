@@ -74,7 +74,12 @@ def assert_plan_settings_edit_lifecycle(doc: Any) -> None:
             frappe.ValidationError,
         )
 
-    if getattr(doc, "approved_plan", None) and not is_order_at_drawing_stage(doc):
+    status = str(getattr(doc, "status", None) or "Draft").strip()
+    if (
+        getattr(doc, "approved_plan", None)
+        and not is_order_at_drawing_stage(doc)
+        and status != "Draft"
+    ):
         frappe.throw(
             _("خطة القص المعتمدة لا يمكن تعديل إعداداتها خارج مرحلة الرسم."),
             frappe.ValidationError,
@@ -83,12 +88,12 @@ def assert_plan_settings_edit_lifecycle(doc: Any) -> None:
     if _has_production_route(doc):
         if _has_active_routed_lifecycle(doc):
             return
-        frappe.throw(
-            _("انتهى المسار الإنتاجي الحالي ولا يمكن تعديل إعدادات خطة القص."),
-            frappe.PermissionError,
-        )
+        if status != "Draft":
+            frappe.throw(
+                _("انتهى المسار الإنتاجي الحالي ولا يمكن تعديل إعدادات خطة القص."),
+                frappe.PermissionError,
+            )
 
-    status = str(getattr(doc, "status", None) or "Draft").strip()
     if status not in DRAFT_LIKE_STATUSES:
         frappe.throw(
             _("حالة الطلب الحالية لا تسمح بتعديل إعدادات خطة القص."),

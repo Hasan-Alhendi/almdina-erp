@@ -381,8 +381,10 @@
     function isCurrentStageAssignee(frm) {
         if (!frm || !frm.doc) return false;
         // Pre-production has no assignee yet; capabilities/lifecycle decide.
-        // A route with no active stage has already left active production.
+        // A planned route on Draft is still pre-dispatch. A finished route
+        // with no active stage has already left active production.
         if (!frm.doc.current_production_stage) {
+            if (String(frm.doc.status || "Draft").trim() === "Draft") return true;
             return !String(frm.doc.production_path || "").trim();
         }
         if (!frm.__almdina_stage_context_ready) return false;
@@ -406,9 +408,16 @@
     function canTuneCuttingAlgorithm(frm) {
         if (!frm || !frm.doc || frm.is_new()) return false;
         if (Number(frm.doc.docstatus || 0) !== 0) return false;
-        if (frm.doc.approved_plan) return false;
         if (String(frm.doc.revision_state || "Current") === "Superseded") return false;
         if (!canMutateCurrentStage(frm)) return false;
+        if (frm.doc.approved_plan) {
+            const status = String(frm.doc.status || "Draft").trim();
+            const preDispatchDraft = status === "Draft"
+                && !String(frm.doc.current_production_stage || "").trim();
+            const isDrawing = status === "At Drawing"
+                || String(frm.__almdina_stage_type || "").trim() === "Drawing";
+            if (!preDispatchDraft && !isDrawing) return false;
+        }
         if (frm.doc.current_production_stage) return true;
         return ALGORITHM_TUNABLE_STATUSES.has(frm.doc.status || "Draft");
     }
@@ -422,6 +431,7 @@
     function stageMutationBlockReason(frm) {
         if (!frm || !frm.doc) return "";
         if (!frm.doc.current_production_stage) {
+            if (String(frm.doc.status || "Draft").trim() === "Draft") return "";
             if (String(frm.doc.production_path || "").trim()) {
                 return "يمكنك عرض هذا الطلب فقط. الطلب غادر مراحل الإنتاج النشطة.";
             }
