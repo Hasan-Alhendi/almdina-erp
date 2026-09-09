@@ -3,6 +3,10 @@ from __future__ import annotations
 import unittest
 from types import SimpleNamespace
 
+from almdina_erp.tests.frappe_test_stub import install_if_unavailable
+
+install_if_unavailable()
+
 from almdina_erp.almdina_erp.services.dxf_import_service import (
     DxfImportError,
     _resolve_cut_topology,

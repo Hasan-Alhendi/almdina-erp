@@ -6,6 +6,10 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from almdina_erp.tests.frappe_test_stub import install_if_unavailable
+
+install_if_unavailable()
+
 from almdina_erp.almdina_erp.infrastructure.cutting import dxf_reader
 from almdina_erp.almdina_erp.services import dxf_import_service
 from almdina_erp.almdina_erp.services.dxf_import_service import DxfImportError
