@@ -5,6 +5,11 @@ from typing import Any
 import frappe
 from frappe import _
 
+from almdina_erp.almdina_erp.domain.orders.intake_lifecycle import (
+    IntakeFacts,
+    IntakeLifecycleError,
+    assert_legacy_dispatch_allowed,
+)
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     require_document_capability,
@@ -22,27 +27,48 @@ def _lock_and_validate(order_name: str) -> Any:
     return order
 
 
+def _assert_legacy_dispatch_boundary(order: Any) -> None:
+    """Keep intake-managed orders out of the retired immediate-dispatch path."""
+
+    facts = IntakeFacts(
+        workflow_stage=str(getattr(order, "workflow_stage", None) or ""),
+        production_path=str(getattr(order, "production_path", None) or ""),
+        current_production_stage=str(
+            getattr(order, "current_production_stage", None) or ""
+        ),
+        current_assignee=str(getattr(order, "current_assignee", None) or ""),
+        owner=str(getattr(order, "owner", None) or ""),
+    )
+    try:
+        assert_legacy_dispatch_allowed(facts)
+    except IntakeLifecycleError as error:
+        frappe.throw(_(str(error)))
+
+
 @frappe.whitelist()
 def dispatch_order(order_name: str, path: str, assignee: str) -> dict[str, Any]:
-    """Serialize dispatch against revision activation and route-specific gates."""
+    """Serialize legacy dispatch while respecting the intake lifecycle boundary."""
 
-    _lock_and_validate(order_name)
+    order = _lock_and_validate(order_name)
+    _assert_legacy_dispatch_boundary(order)
     # The application command locks/reloads the order again before its decision.
     # That second boundary deliberately owns route, plan-approval, worker and
-    # stage-creation checks so every dispatch path shares one authoritative rule.
+    # stage-creation checks so every legacy dispatch path shares one authoritative rule.
     return shop_floor_commands.dispatch_order(order_name, path, assignee)
 
 
 @frappe.whitelist()
 def validate_order_for_dispatch(order_name: str) -> dict[str, Any]:
-    """Validate only the route-independent prerequisites for opening dispatch UX.
+    """Validate only the route-independent prerequisites for legacy dispatch UX.
 
-    A selected route may add stricter requirements (for example an approved plan
-    before a physical-first route). ``get_dispatch_options`` and ``dispatch_order``
-    remain the authoritative route-aware boundaries.
+    Intake-managed orders are intentionally rejected before route selection. A
+    selected route may add stricter requirements for legacy orders (for example an
+    approved plan before a physical-first route). ``get_dispatch_options`` and
+    ``dispatch_order`` remain the authoritative route-aware boundaries there.
     """
 
     order = _lock_and_validate(order_name)
+    _assert_legacy_dispatch_boundary(order)
     require_document_capability(
         order,
         Capability.DISPATCH_ORDER,
