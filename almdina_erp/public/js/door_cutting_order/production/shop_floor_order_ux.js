@@ -5,6 +5,7 @@
 	const PRODUCTION_ACTION_GROUP = __("صالة الإنتاج");
 	const ACTIVE_STAGE_STATUSES = new Set(["Pending", "In Progress", "Paused"]);
 	const NON_REVERTABLE_ORDER_STATUSES = new Set(["Draft", "Rejected", "Delivered", "Cancelled"]);
+	const INTAKE_WORKFLOW_STAGES = new Set(["DATA_ENTRY", "READY_TO_DISPATCH"]);
 	const OWNED_PRODUCTION_ACTION_LABELS = new Set([
 		__("إرسال للإنتاج"),
 		__("تم التسليم"),
@@ -49,6 +50,14 @@
 					? context.canDocument(frm, capability)
 					: context.can(capability)
 			)
+		);
+	}
+
+	function isIntakeManaged(frm) {
+		return Boolean(
+			frm
+			&& frm.doc
+			&& INTAKE_WORKFLOW_STAGES.has(String(frm.doc.workflow_stage || ""))
 		);
 	}
 
@@ -349,8 +358,9 @@
 	]);
 
 	function addDispatchButton(frm) {
-		if (frm.is_new() || !can(frm, "dispatch_order")) return;
-		// Review/approve were retired: dispatch opens from draft (and leftovers).
+		if (frm.is_new() || !can(frm, "dispatch_order") || isIntakeManaged(frm)) return;
+		// Intake-managed orders use ALMADINA-162 planning. Legacy immediate
+		// dispatch remains available only for orders outside that lifecycle.
 		if (
 			!DISPATCHABLE_STATUSES.has(frm.doc.status || "Draft")
 			|| frm.doc.production_path
@@ -684,6 +694,7 @@
 			frm.doc.current_production_stage || "",
 			frm.doc.status || "",
 			frm.doc.production_path || "",
+			frm.doc.workflow_stage || "",
 		].join("::");
 	}
 
@@ -718,7 +729,8 @@
 		const labels = [];
 		const status = frm.doc.status || "Draft";
 		if (
-			can(frm, "dispatch_order")
+			!isIntakeManaged(frm)
+			&& can(frm, "dispatch_order")
 			&& DISPATCHABLE_STATUSES.has(status)
 			&& !frm.doc.production_path
 			&& !frm.doc.current_production_stage
