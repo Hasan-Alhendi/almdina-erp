@@ -57,6 +57,26 @@ def assert_pending_dispatch_editable(
         )
 
 
+def assert_ready_to_dispatch(
+    facts: IntakeFacts,
+    *,
+    actor: str,
+    is_admin: bool,
+) -> None:
+    """Validate the exact intake boundary for the real production-start command."""
+
+    if facts.workflow_stage != READY_TO_DISPATCH:
+        raise IntakeLifecycleError(
+            "يمكن إرسال الطلب إلى الإنتاج فقط عندما يكون جاهزًا للإرسال."
+        )
+    if facts.production_path or facts.current_production_stage:
+        raise IntakeLifecycleError("بدأ الإنتاج لهذا الطلب بالفعل.")
+    if not is_admin and facts.current_assignee != actor:
+        raise IntakePermissionError(
+            "إرسال الطلب إلى الإنتاج يبقى تحت مسؤولية مدخل البيانات الحالي."
+        )
+
+
 def assert_legacy_dispatch_allowed(facts: IntakeFacts) -> None:
     """Fail closed when the retired dispatch path targets an intake-managed order.
 
@@ -81,5 +101,6 @@ __all__ = [
     "IntakePermissionError",
     "assert_legacy_dispatch_allowed",
     "assert_pending_dispatch_editable",
+    "assert_ready_to_dispatch",
     "should_initialize_data_entry",
 ]

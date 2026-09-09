@@ -7,6 +7,10 @@ from almdina_erp.almdina_erp.application.shop_floor.commands import (
     ShopFloorCommandPort,
     StageState,
 )
+from almdina_erp.almdina_erp.application.shop_floor.planned_dispatch import (
+    PlannedDispatchOrderState,
+    PlannedDispatchPort,
+)
 from almdina_erp.almdina_erp.domain.orders.production_authorization import (
     PRODUCTION_ACTIONS,
 )
@@ -32,7 +36,7 @@ def _as_int(value: Any) -> int:
         return 0
 
 
-class FrappeShopFloorCommandRepository(ShopFloorCommandPort):
+class FrappeShopFloorCommandRepository(ShopFloorCommandPort, PlannedDispatchPort):
     """Composes focused Frappe adapters for shop-floor write use cases."""
 
     @staticmethod
@@ -89,6 +93,24 @@ class FrappeShopFloorCommandRepository(ShopFloorCommandPort):
             drawing_dxf_status=order.drawing_dxf_status or None,
         )
 
+    def get_planned_dispatch_order(self, order_name: str) -> PlannedDispatchOrderState:
+        order = order_tracking_repository.get_order(order_name)
+        plan = production_plan_facts(order)
+        return PlannedDispatchOrderState(
+            name=str(order.name),
+            status=str(order.status or ""),
+            workflow_stage=str(getattr(order, "workflow_stage", None) or ""),
+            production_path=order.production_path or None,
+            current_stage=order.current_production_stage or None,
+            current_assignee=order.current_assignee or None,
+            owner=order.owner or None,
+            planned_route=getattr(order, "planned_production_route", None) or None,
+            planned_assignee=getattr(order, "planned_first_assignee", None) or None,
+            has_cutting_plan=plan.has_cutting_plan,
+            plan_needs_recalculation=plan.plan_needs_recalculation,
+            drawing_dxf_status=order.drawing_dxf_status or None,
+        )
+
     def get_stage_state(self, stage_name: str) -> StageState:
         return self._stage_state(production_stage_repository.get_stage(stage_name))
 
@@ -103,6 +125,9 @@ class FrappeShopFloorCommandRepository(ShopFloorCommandPort):
 
     def get_users_for_role(self, role: str) -> list[dict[str, str]]:
         return shop_floor_authorization.get_users_for_role(role)
+
+    def has_active_order_stage(self, order_name: str) -> bool:
+        return production_stage_repository.has_active_order_stage(order_name)
 
     def cancel_active_order_stages(self, order_name: str) -> None:
         production_stage_repository.cancel_active_order_stages(order_name)
@@ -126,6 +151,21 @@ class FrappeShopFloorCommandRepository(ShopFloorCommandPort):
             operational_role=operational_role,
         )
         return self._stage_state(stage)
+
+    def activate_planned_dispatch(
+        self,
+        order_name: str,
+        *,
+        path: str,
+        stage_name: str,
+    ) -> None:
+        stage = production_stage_repository.get_stage(stage_name)
+        order_tracking_repository.set_order_tracking(
+            order_name,
+            path=path,
+            stage=stage,
+            clear_workflow_stage=True,
+        )
 
     def reassign_stage(self, stage_name: str, *, assignee: str) -> StageState:
         return self._stage_state(

@@ -14,11 +14,10 @@
 ```mermaid
 stateDiagram-v2
     [*] --> DataEntry
-    DataEntry --> ReadyToDispatch: Finish Data Entry + route + qualified first assignee
-    ReadyToDispatch --> AtDrawing: Dispatch + valid cutting plan
-    AtDrawing --> AtCNC: planning plan approved + handoff
-    AtCNC --> AtSanding: CNC completes + handoff
-    AtSanding --> ReadyForDelivery: final stage completes
+    DataEntry --> ReadyToDispatch: Finish Data Entry + persisted route + qualified first assignee
+    ReadyToDispatch --> Production: Dispatch persisted plan
+    Production --> Production: route.next_stage(current_stage)
+    Production --> ReadyForDelivery: final route stage completes
     ReadyForDelivery --> Delivered: supervisor confirms delivery
 ```
 
@@ -27,10 +26,12 @@ stateDiagram-v2
 - أثناء الحالتين يبقى `production_path` فارغًا ولا يوجد `current_production_stage`.
 - `current_assignee` يبقى مدخل البيانات الحالي أثناء intake؛ العامل المختار لأول مرحلة يُحفظ منفصلًا في `planned_first_assignee` ولا يصبح assignee إنتاجيًا قبل dispatch الحقيقي.
 - `planned_production_route` يحفظ المسار المختار فقط؛ لا ينشئ `Production Stage` ولا يفعّل route.
+- عند dispatch الحقيقي فقط يُمسح `workflow_stage`; بعد ذلك تصبح `production_path` و`current_production_stage` و`current_department` و`current_assignee` هي الحقيقة التشغيلية للإنتاج.
+- لا تُكتب مراحل Production Routing الفيزيائية داخل `workflow_stage`، ولا توجد حالة عامة من نوع `At Drawing` أو `At CNC`; الحالة العامة أثناء الإنتاج تبقى العقد العام الحالي مثل `Production In Progress`.
 
 عند أول حفظ ناجح لطلب جديد يُهيأ `DATA_ENTRY` على الخادم. وعند ترقية موقع موجود، migration يعيد نفس التهيئة idempotently للطلبات القديمة التي لا تملك `workflow_stage` **ولم تدخل الإنتاج أصلًا**؛ تشغيل migrate مرة ثانية لا يعيد تهيئتها ولا يعيد فتح طلب دخل production.
 
-الأسماء الفعلية لمراحل الإنتاج بعد dispatch قابلة للضبط عبر `Production Routing`. المثال أعلاه يمثل Route يبدأ بمرحلة تخطيط Drawing ثم CNC ثم Sanding/تقشيط.
+الأسماء الفعلية لمراحل الإنتاج بعد dispatch قابلة للضبط عبر `Production Routing` و`Production Workflow Stage`. لا يعتمد runtime على أسماء Drawing/CNC/Sanding ثابتة.
 
 ## 3. Draft وReview/Approve القديم
 
@@ -55,27 +56,65 @@ stateDiagram-v2
 - اختيار `Production Routing` مفعّل.
 - اختيار مستخدم مؤهل لـ`operational_role` الخاص بأول Stage في المسار.
 
-الحفظ يكتب `READY_TO_DISPATCH` و`planned_production_route` و`planned_first_assignee` وبيانات من خطط الإرسال، ولا ينشئ `Production Stage` ولا يبدأ الإنتاج ولا يغيّر `current_assignee` إلى العامل المخطط.
+الحفظ يكتب `READY_TO_DISPATCH` و`planned_production_route` و`planned_first_assignee` وبيانات خطة الإرسال، ولا ينشئ `Production Stage` ولا يبدأ الإنتاج ولا يغيّر `current_assignee` إلى العامل المخطط.
 
-إذا كان الطلب أصلًا `READY_TO_DISPATCH` يستطيع مالك intake تعديل الخطة بنفس الحدود قبل بدء production.
+إذا كان الطلب أصلًا `READY_TO_DISPATCH` يستطيع مالك intake تعديل الخطة بنفس الحدود قبل بدء production. يمكن تعديل route/worker عدة مرات دون إنشاء Stage إنتاجية.
 
 كل async completion في هذا الحوار تتبع Document identity/generation عبر `AlmdinaDocumentContext`; مغادرة الطلب أو الانتقال إلى Form آخر تمنع dialog/alert/reload قديم من الظهور في السياق الجديد.
 
-## 5. Dispatch
+## 5. Dispatch الحقيقي — ALMADINA-163
 
-Dispatch الحقيقي هو الحد الذي يبدأ عنده production. خطة `READY_TO_DISPATCH` المعلقة لا تعني أن هذا الحد عُبر.
+`إرسال للإنتاج` هو **الحد الوحيد** الذي يحول خطة `READY_TO_DISPATCH` المحفوظة إلى إنتاج فعلي.
 
-لإرسال الطلب للإنتاج يلزم، كحد أدنى وفق عقد dispatch:
+### 5.1 عقد API
 
-- `DISPATCH_ORDER` capability.
-- حالة قابلة للإرسال.
-- الطلب غير dispatched مسبقًا.
-- وجود Cutting Plan صالح.
-- ألا تكون الخطة بحاجة لإعادة حساب.
-- Route صالح.
-- العامل المختار يملك `operational_role` المطلوب لأول مرحلة.
+العميل يرسل هوية الطلب فقط. لا يختار route أو worker أثناء dispatch الحقيقي.
 
-بعد dispatch فقط ينشأ Current Production Stage ويُسند لمستخدم محدد. تغيير سلوك dispatch الفعلي أو زر بدء الإنتاج ليس جزءًا من عقد intake نفسه.
+الخادم يقرأ من الطلب المقفول:
+
+- `planned_production_route`
+- `planned_first_assignee`
+
+ولا يثق بقيم `path`, `assignee`, `stage`, أو `department` القادمة من المتصفح.
+
+### 5.2 Transaction / Locking
+
+الـApplication command:
+
+1. يقفل `Door Cutting Order` باستخدام `SELECT ... FOR UPDATE`.
+2. يعيد قراءة الحالة بعد الحصول على القفل.
+3. يشترط `workflow_stage == READY_TO_DISPATCH` وعدم وجود production فعلي سابق.
+4. يطبق `DISPATCH_ORDER` capability وdocument scope وملكية intake الحالية.
+5. يعيد تحميل `planned_production_route` ويتأكد أنه ما زال مفعّلًا وصالحًا.
+6. يحل `route.first_stage` ديناميكيًا.
+7. يعيد التحقق من أهلية `planned_first_assignee` لـ`first_stage.operational_role`.
+8. يعيد استخدام Production Authorization الحالية لتمييز Planning-first عن Physical-first وتطبيق Cutting Plan readiness الصحيحة.
+9. يحافظ على Special Shape gate الحالية.
+10. يفشل مغلقًا إذا وجد Production Stage route-level نشطة تتعارض مع حالة `READY_TO_DISPATCH`; لا يلغي history ولا يستخدم `cancel_active_order_stages()` لتجاوز التعارض.
+11. ينشئ أول `Production Stage` مرة واحدة.
+12. في نفس transaction يكتب `production_path`, `current_production_stage`, `current_department`, `current_assignee`, `department_status`, والحالة العامة، ويمسح `workflow_stage` فقط.
+13. يسجل Production Event واضحًا لحد بدء الإنتاج.
+
+لا يوجد `frappe.db.commit()` داخل use case؛ transaction الخاصة بطلب Frappe تضمن أن stage + tracking + event إما تنجح كلها أو تتراجع كلها عند exception.
+
+### 5.3 Concurrency / Retry
+
+طلبان متزامنان على نفس DCO يستخدمان نفس row lock. الأول ينفذ ويغيّر الحالة. الثاني ينتظر ثم يعيد القراءة بعد القفل ويرى أن `READY_TO_DISPATCH` انتهت/production بدأ، لذلك لا يستطيع إنشاء First Stage ثانية.
+
+تعطيل الزر في JavaScript هو UX فقط؛ correctness تأتي من lock + post-lock state validation على السيرفر.
+
+### 5.4 State ownership بعد النجاح
+
+بعد dispatch ناجح:
+
+- `workflow_stage = NULL`
+- `production_path = planned_production_route`
+- `current_production_stage = first created Production Stage`
+- `current_department = route.first_stage.department_label`
+- `current_assignee = planned_first_assignee`
+- الحالة العامة = production status الحالية مثل `Production In Progress`
+
+تبقى حقول الخطة المعلقة (`planned_production_route`, `planned_first_assignee`, `dispatch_planned_at`, `dispatch_planned_by`) كتاريخ للخطة التي تم إرسالها، ما لم يصدر عقد صريح آخر.
 
 ## 6. تنفيذ المرحلة
 
@@ -85,9 +124,10 @@ Dispatch الحقيقي هو الحد الذي يبدأ عنده production. خ�
 
 - `START_ASSIGNED_STAGE`.
 - المرحلة هي Current Stage للطلب.
-- Role المستخدم يطابق `operational_role` للمرحلة أو Administrator.
 - المرحلة مسندة لنفس المستخدم.
 - Stage status يسمح بـStart، عادة `Pending`.
+
+`operational_role` يؤهل المستخدم للاستلام عند إنشاء/إعادة إسناد Stage، لكنه ليس مصدر Authorization لإجراءات production.
 
 ### Handoff / Finish
 
@@ -101,7 +141,7 @@ Dispatch الحقيقي هو الحد الذي يبدأ عنده production. خ�
 
 ### Next stage
 
-Application يقرأ المرحلة التالية من Route، لا من سلسلة `if` ثابتة. يتم إنشاء/تفعيل المرحلة التالية وإسنادها للعامل المناسب.
+Application يقرأ المرحلة التالية حصريًا من `route.next_stage(current_stage)`. يتم إنشاء المرحلة التالية وإسنادها للعامل المناسب دون topology ثابت.
 
 ### Last stage
 
@@ -109,7 +149,9 @@ Application يقرأ المرحلة التالية من Route، لا من سلس
 
 ## 7. Inbox وArchive
 
-العامل يرى العمل النشط المسند له في Inbox. بعد اكتمال مرحلته ينتقل سجله إلى Archive/التاريخ الشخصي، بينما يرى العامل التالي مرحلته الجديدة.
+العامل المخطط في `planned_first_assignee` لا يرى الطلب كعمل production نشط قبل dispatch الحقيقي. بعد إنشاء أول Production Stage وإسنادها له، تظهر طبيعيًا في Inbox من خلال query الحالية دون آلية Inbox خاصة بـALMADINA-163.
+
+بعد اكتمال مرحلة عامل تنتقل مرحلته إلى Archive/التاريخ الشخصي، بينما يرى العامل التالي مرحلته الجديدة.
 
 هذه ليست مجرد طريقة عرض؛ Stage 14 يختبر انتقال نفس الطلب بين commands وqueries معًا.
 
@@ -129,11 +171,14 @@ Supervisor capability لا تلغي كل قواعد البنية تلقائيً�
 
 إذا كان أول Stage `is_planning_stage=True`:
 
-1. إذا كان العامل يملك `START_ASSIGNED_STAGE` يبدأ المرحلة؛ أما Handoff-only فيخضع لاستثناء `Pending` الموثق أعلاه.
-2. يراجع System plan أو Uploaded/Custom plan حسب الصلاحيات.
-3. يعالج Special Drawing/DXF إن كان مطلوبًا.
-4. يعتمد Production Cutting Plan المختارة.
-5. عند handoff فقط ينتقل الطلب للمرحلة التالية، مع بقاء Planning Handoff Gate إلزامية في الحالتين.
+1. dispatch يستطيع تسليم الطلب لمرحلة التخطيط قبل وجود Cutting Plan؛ إنشاء/مراجعة الخطة هو عمل مرحلة التخطيط.
+2. إذا كان العامل يملك `START_ASSIGNED_STAGE` يبدأ المرحلة؛ أما Handoff-only فيخضع لاستثناء `Pending` الموثق أعلاه.
+3. يراجع System plan أو Uploaded/Custom plan حسب الصلاحيات.
+4. يعالج Special Drawing/DXF إن كان مطلوبًا.
+5. يعتمد Production Cutting Plan المختارة.
+6. عند handoff فقط ينتقل الطلب للمرحلة التالية، مع بقاء Planning Handoff Gate إلزامية.
+
+إذا كان أول Stage Physical، يطبق dispatch Production Authorization الحالية التي تشترط Cutting Plan صالحًا وغير stale قبل بدء المسار.
 
 ## 10. Revision
 
@@ -153,10 +198,11 @@ Revision تحافظ على تاريخ الطلب بدل تعديل حقيقة إ
 ## 12. State ownership
 
 - Intake lifecycle rules: `domain/orders/intake_lifecycle.py`.
-- Intake use cases: `application/orders/intake_planning.py`.
+- Intake planning use cases: `application/orders/intake_planning.py`.
+- Planned production-start use case: `application/shop_floor/planned_dispatch.py`.
 - Route model: `domain/orders/production_routing.py`.
 - Production authorization facts: `domain/orders/production_authorization.py`.
-- Commands: `application/shop_floor/commands.py`.
+- Existing production commands/handoff: `application/shop_floor/commands.py`.
 - Queries/Inbox/Archive: `application/shop_floor/queries.py`.
 - DCO async form identity/generation: `AlmdinaDocumentContext` وفق [15 — Frontend Lifecycle](15_FRONTEND_LIFECYCLE_STANDARD.md).
 

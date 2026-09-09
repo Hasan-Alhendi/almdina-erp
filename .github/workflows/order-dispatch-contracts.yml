@@ -1,0 +1,39 @@
+name: ALMADINA-163 Planned Dispatch Contracts
+
+on:
+  push:
+    branches: [main, Develop, develop]
+  pull_request:
+    branches:
+      - main
+      - Develop
+      - develop
+      - agent/almadina-162-order-intake-lifecycle
+
+permissions:
+  contents: read
+
+jobs:
+  planned-dispatch-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test runner
+        run: python -m pip install pytest
+
+      - name: Run ALMADINA-161/162/163 focused contracts
+        run: |
+          python -m pytest -q \
+            almdina_erp/tests/test_a161_dynamic_production_routing.py \
+            almdina_erp/tests/test_a162_intake_planning.py \
+            almdina_erp/tests/test_a162_intake_planning_ui_contract.py \
+            almdina_erp/tests/test_a163_planned_dispatch.py \
+            almdina_erp/tests/test_a163_planned_dispatch_ui_contract.py \
+            almdina_erp/tests/test_shop_floor_command_application.py

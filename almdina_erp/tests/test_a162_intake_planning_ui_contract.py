@@ -45,7 +45,7 @@ def test_intake_planning_ux_uses_server_plan_without_starting_production() -> No
     assert "order_intake_service.finish_data_entry" in source
     assert '__("إنهاء إدخال البيانات")' in source
     assert '__("تعديل خطة الإرسال")' in source
-    assert "dispatch_order" not in source
+    assert "services.order_dispatch_service.dispatch_order" not in source
     assert "Production Stage" not in source
     assert "setTimeout(" not in source
 

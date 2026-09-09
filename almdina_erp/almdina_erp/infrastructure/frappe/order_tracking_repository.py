@@ -40,6 +40,7 @@ def set_order_tracking(
     assignee: str | None = None,
     department_status: str | None = None,
     clear_stage: bool = False,
+    clear_workflow_stage: bool = False,
 ) -> None:
     values: dict[str, Any] = {}
     if path is not None:
@@ -52,6 +53,8 @@ def set_order_tracking(
         values["current_assignee"] = assignee
     if department_status is not None:
         values["department_status"] = department_status
+    if clear_workflow_stage:
+        values["workflow_stage"] = None
     if clear_stage:
         values["current_production_stage"] = None
     elif stage is not None:

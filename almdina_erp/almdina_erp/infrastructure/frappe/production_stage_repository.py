@@ -5,6 +5,8 @@ from typing import Any
 import frappe
 from frappe.utils import cint, now_datetime, time_diff_in_seconds
 
+from almdina_erp.almdina_erp.domain.orders.lifecycle import ACTIVE_STAGE_STATUSES
+
 
 def lock_stage(stage_name: str) -> None:
     frappe.db.sql(
@@ -21,6 +23,25 @@ def stage_exists(stage_name: str | None) -> bool:
     return bool(stage_name and frappe.db.exists("Production Stage", stage_name))
 
 
+def has_active_order_stage(order_name: str) -> bool:
+    """Return whether route-level production is already active for the order.
+
+    Piece-specific stages are independent exceptional work items and are not the
+    order-wide route stage that ALMADINA-163 activates.
+    """
+
+    rows = frappe.get_all(
+        "Production Stage",
+        filters={
+            "door_cutting_order": order_name,
+            "status": ["in", list(ACTIVE_STAGE_STATUSES)],
+        },
+        fields=["name", "piece_label"],
+        limit_page_length=0,
+    )
+    return any(not str(row.piece_label or "").strip() for row in rows)
+
+
 def cancel_active_order_stages(order_name: str) -> None:
     """Cancel stale order-wide stages before a fresh route is dispatched.
 
@@ -33,7 +54,7 @@ def cancel_active_order_stages(order_name: str) -> None:
         "Production Stage",
         filters={
             "door_cutting_order": order_name,
-            "status": ["in", ["Pending", "In Progress", "Paused"]],
+            "status": ["in", list(ACTIVE_STAGE_STATUSES)],
         },
         fields=["name", "piece_label", "stage_type"],
     )
@@ -209,6 +230,7 @@ __all__ = [
     "complete_stage",
     "create_stage",
     "get_stage",
+    "has_active_order_stage",
     "list_later_stages",
     "list_revert_stage_candidates",
     "lock_stage",
