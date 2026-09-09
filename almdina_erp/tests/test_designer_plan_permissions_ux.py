@@ -93,7 +93,8 @@ def test_designer_plan_edit_capability_is_not_replaced_by_current_stage_role() -
 
     assert "Capability.EDIT_OPTIMIZER_SETTINGS" in service
     assert "require_stage_operational_access" not in service
-    assert "SHOP_FLOOR_ORDER_STATUSES" in service
+    assert "PRODUCTION_ORDER_STATUS" in service
+    assert "SHOP_FLOOR_ORDER_STATUSES" not in service
     assert "if _has_active_routed_lifecycle(doc):" in service
     assert "انتهى المسار الإنتاجي الحالي" in service
 

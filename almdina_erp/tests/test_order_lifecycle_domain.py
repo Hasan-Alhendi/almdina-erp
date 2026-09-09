@@ -6,7 +6,7 @@ from pathlib import Path
 
 from almdina_erp.almdina_erp.domain.orders.lifecycle import (
     ORDER_STATUSES,
-    SHOP_FLOOR_ORDER_STATUSES,
+    PRODUCTION_ORDER_STATUS,
     StageState,
     can_dispatch_from_status,
     can_mark_delivered,
@@ -23,13 +23,8 @@ from almdina_erp.almdina_erp.domain.orders.lifecycle import (
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-DOMAIN_SOURCE = (
-    REPOSITORY_ROOT / "almdina_erp/almdina_erp/domain/orders/lifecycle.py"
-)
-DOCTYPE_JSON = (
-    REPOSITORY_ROOT
-    / "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order.json"
-)
+DOMAIN_SOURCE = REPOSITORY_ROOT / "almdina_erp/almdina_erp/domain/orders/lifecycle.py"
+DOCTYPE_JSON = REPOSITORY_ROOT / "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order.json"
 
 
 class OrderLifecycleDomainTests(unittest.TestCase):
@@ -41,27 +36,17 @@ class OrderLifecycleDomainTests(unittest.TestCase):
 
     def test_order_status_contract_matches_doctype(self) -> None:
         definition = json.loads(DOCTYPE_JSON.read_text(encoding="utf-8"))
-        status_field = next(
-            field for field in definition["fields"] if field.get("fieldname") == "status"
-        )
+        status_field = next(field for field in definition["fields"] if field.get("fieldname") == "status")
         self.assertEqual(tuple(status_field["options"].splitlines()), ORDER_STATUSES)
 
-    def test_production_paths_are_deterministic(self) -> None:
-        self.assertEqual(production_path_sequence("Sharyoun"), ("Sharyoun", "Sanding"))
-        self.assertEqual(
-            production_path_sequence("Drawing"),
-            ("Drawing", "CNC", "Sanding"),
-        )
-        self.assertEqual(next_stage_type("Drawing", "Drawing"), "CNC")
-        self.assertEqual(next_stage_type("Drawing", "CNC"), "Sanding")
-        self.assertIsNone(next_stage_type("Drawing", "Sanding"))
-        self.assertEqual(stage_sequence("Drawing", "Drawing"), 10)
-        self.assertEqual(stage_sequence("Drawing", "CNC"), 20)
-        self.assertEqual(stage_sequence("Drawing", "Sanding"), 30)
-        with self.assertRaises(ValueError):
-            production_path_sequence("Unknown")
-        with self.assertRaises(ValueError):
-            next_stage_type("Drawing", "Sharyoun")
+    def test_fixed_production_path_registry_is_retired(self) -> None:
+        for call in (
+            lambda: production_path_sequence("Drawing"),
+            lambda: next_stage_type("Drawing", "Drawing"),
+            lambda: stage_sequence("Drawing", "Drawing"),
+        ):
+            with self.assertRaisesRegex(ValueError, "Fixed production paths are retired"):
+                call()
 
     def test_stage_transition_matrix(self) -> None:
         expected = {
@@ -78,129 +63,92 @@ class OrderLifecycleDomainTests(unittest.TestCase):
                 self.assertTrue(can_transition_stage(current, event))
                 self.assertEqual(transition_stage(current, event), target)
 
-        invalid = (
-            ("Paused", "start"),
-            ("Pending", "pause"),
-            ("In Progress", "resume"),
-            ("Pending", "finish"),
-            ("Completed", "start"),
-        )
-        for current, event in invalid:
-            with self.subTest(current=current, event=event):
-                self.assertFalse(can_transition_stage(current, event))
-                with self.assertRaises(ValueError):
-                    transition_stage(current, event)
-
-    def test_order_transition_guards_preserve_existing_policy(self) -> None:
+    def test_order_transition_guards_preserve_capability_policy(self) -> None:
         for status in ("Draft", "Rejected", "Pending Review", "Approved"):
             self.assertTrue(can_dispatch_from_status(status))
-        for status in ("At Drawing", "Delivered", "Cancelled"):
+        for status in (PRODUCTION_ORDER_STATUS, "Delivered", "Cancelled"):
             self.assertFalse(can_dispatch_from_status(status))
-
         self.assertFalse(is_order_dispatched(production_path=None, current_stage=None))
-        self.assertTrue(is_order_dispatched(production_path="Drawing", current_stage=None))
+        self.assertTrue(is_order_dispatched(production_path="Custom Route", current_stage=None))
         self.assertTrue(is_order_dispatched(production_path=None, current_stage="PST-1"))
-
         self.assertTrue(can_mark_delivered("Ready for Delivery"))
-        self.assertFalse(can_mark_delivered("At Sanding"))
-
-        for status in ("Pending Review", "Approved", "At CNC", "Ready for Delivery", "Draft", "Rejected", "Delivered", "Cancelled"):
+        self.assertFalse(can_mark_delivered(PRODUCTION_ORDER_STATUS))
+        for status in ("Approved", PRODUCTION_ORDER_STATUS, "Ready for Delivery", "Delivered"):
             self.assertTrue(can_return_to_draft(status))
-
-        self.assertTrue(can_revert_department("At CNC", production_path="Drawing"))
-        self.assertTrue(can_revert_department("Delivered", production_path="Drawing"))
-        self.assertTrue(can_revert_department("At CNC", production_path=None))
-        self.assertTrue(can_revert_department("Draft", production_path=None))
+        self.assertTrue(can_revert_department(PRODUCTION_ORDER_STATUS, production_path="Custom Route"))
 
     def test_replacement_status_has_highest_priority(self) -> None:
         status = derive_order_status(
             current_status="Delivered",
-            production_path="Drawing",
-            current_stage=StageState("CNC", "In Progress"),
-            stages=(StageState("CNC", "In Progress"),),
+            production_path="Custom Route",
+            current_stage=StageState("ANY_STAGE", "In Progress"),
+            stages=(StageState("ANY_STAGE", "In Progress"),),
             has_open_replacements=True,
         )
         self.assertEqual(status, "Replacement Required")
 
-    def test_ready_and_delivered_statuses_are_preserved(self) -> None:
-        for current in ("Ready for Delivery", "Delivered"):
+    def test_ready_delivered_and_cancelled_are_preserved(self) -> None:
+        for current in ("Ready for Delivery", "Delivered", "Cancelled"):
             with self.subTest(current=current):
                 status = derive_order_status(
                     current_status=current,
-                    production_path="Drawing",
-                    current_stage=StageState("Drawing", "Pending"),
-                    stages=(StageState("Drawing", "Pending"),),
+                    production_path="Custom Route",
+                    current_stage=StageState("ANY_STAGE", "Pending"),
+                    stages=(StageState("ANY_STAGE", "Pending"),),
                     has_open_replacements=False,
                 )
                 self.assertEqual(status, current)
 
-    def test_current_shop_floor_stage_owns_dispatched_order_status(self) -> None:
-        for stage_type, expected in SHOP_FLOOR_ORDER_STATUSES.items():
+    def test_current_physical_stage_never_becomes_order_status(self) -> None:
+        for stage_type in ("CNC", "Drawing", "NEW_CUSTOM_STAGE", "مرحلة خاصة"):
             with self.subTest(stage_type=stage_type):
                 status = derive_order_status(
                     current_status="Approved",
-                    production_path="Drawing",
+                    production_path="Custom Route",
                     current_stage=StageState(stage_type, "Pending"),
                     stages=(),
                     has_open_replacements=False,
                 )
-                self.assertEqual(status, expected)
+                self.assertEqual(status, PRODUCTION_ORDER_STATUS)
 
-        preserved = derive_order_status(
-            current_status="At CNC",
-            production_path="Drawing",
-            current_stage=StageState("CNC", "Cancelled"),
-            stages=(),
-            has_open_replacements=False,
-        )
-        self.assertEqual(preserved, "At CNC")
-
-    def test_status_is_derived_from_ordered_base_stages(self) -> None:
-        cases = (
-            ((StageState("Cutting", "Pending"),), "Cutting In Progress"),
-            ((StageState("Edge Banding", "Paused"),), "Edge Banding In Progress"),
-            ((StageState("Quality Check", "In Progress"),), "Quality Check"),
-            ((StageState("Assembly", "Pending"),), "Production In Progress"),
-            ((StageState("Cutting", "Completed"),), "Completed"),
-            (
-                (
-                    StageState("Drawing", "Completed"),
-                    StageState("CNC", "Completed"),
-                    StageState("Sanding", "Completed"),
-                ),
-                "Ready for Delivery",
+    def test_base_stage_derivation_is_route_neutral(self) -> None:
+        for stage_type in ("Cutting", "Edge Banding", "Quality Check", "Anything"):
+            status = derive_order_status(
+                current_status="Approved",
+                production_path=None,
+                current_stage=None,
+                stages=(StageState(stage_type, "In Progress"),),
+                has_open_replacements=False,
+            )
+            self.assertEqual(status, PRODUCTION_ORDER_STATUS)
+        self.assertEqual(
+            derive_order_status(
+                current_status="Approved",
+                production_path=None,
+                current_stage=None,
+                stages=(StageState("Anything", "Completed"),),
+                has_open_replacements=False,
             ),
+            "Completed",
         )
-        for stages, expected in cases:
-            with self.subTest(expected=expected):
-                status = derive_order_status(
-                    current_status="Approved",
-                    production_path=None,
-                    current_stage=None,
-                    stages=iter(stages),
-                    has_open_replacements=False,
-                )
-                self.assertEqual(status, expected)
+        self.assertEqual(
+            derive_order_status(
+                current_status=PRODUCTION_ORDER_STATUS,
+                production_path="Custom Route",
+                current_stage=None,
+                stages=(StageState("Anything", "Completed"),),
+                has_open_replacements=False,
+            ),
+            "Ready for Delivery",
+        )
 
     def test_no_stages_preserves_current_status_or_defaults_to_draft(self) -> None:
         self.assertEqual(
-            derive_order_status(
-                current_status="On Hold",
-                production_path=None,
-                current_stage=None,
-                stages=(),
-                has_open_replacements=False,
-            ),
+            derive_order_status(current_status="On Hold", production_path=None, current_stage=None, stages=(), has_open_replacements=False),
             "On Hold",
         )
         self.assertEqual(
-            derive_order_status(
-                current_status=None,
-                production_path=None,
-                current_stage=None,
-                stages=(),
-                has_open_replacements=False,
-            ),
+            derive_order_status(current_status=None, production_path=None, current_stage=None, stages=(), has_open_replacements=False),
             "Draft",
         )
 

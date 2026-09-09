@@ -12,27 +12,10 @@ from almdina_erp.almdina_erp.domain.orders.production_routing import (
 
 
 _REQUEST_CACHE_KEY = "almdina_production_route_cache"
-
-
-def _stage_definition(row: Any) -> RoutingStage:
-    return RoutingStage(
-        sequence=cint(row.sequence),
-        stage_type=str(row.stage_type or "").strip(),
-        department_label=str(getattr(row, "department_label", None) or "").strip(),
-        operational_role=str(getattr(row, "operational_role", None) or "").strip(),
-        is_planning_stage=bool(cint(getattr(row, "is_planning_stage", 0))),
-    )
+_STAGE_CACHE_KEY = "almdina_production_workflow_stage_cache"
 
 
 def _request_cache() -> dict[str, tuple[ProductionRoute, bool]]:
-    """Return a request-local immutable route projection cache.
-
-    `frappe.local` is scoped to the current request/job context, so this cache
-    never survives into a later HTTP request. That gives repeated routing reads
-    within one application use case a cheap fast path without cross-request
-    invalidation or stale configuration risk.
-    """
-
     cache = getattr(frappe.local, _REQUEST_CACHE_KEY, None)
     if cache is None:
         cache = {}
@@ -40,11 +23,77 @@ def _request_cache() -> dict[str, tuple[ProductionRoute, bool]]:
     return cache
 
 
+def _stage_cache() -> dict[str, Any]:
+    cache = getattr(frappe.local, _STAGE_CACHE_KEY, None)
+    if cache is None:
+        cache = {}
+        setattr(frappe.local, _STAGE_CACHE_KEY, cache)
+    return cache
+
+
+def _workflow_stage_name(row: Any) -> str:
+    return str(getattr(row, "workflow_stage", None) or "").strip()
+
+
+def _workflow_stage_definitions(rows: Any) -> dict[str, Any]:
+    names = sorted(
+        {
+            _workflow_stage_name(row)
+            for row in rows
+            if cint(row.required) and _workflow_stage_name(row)
+        }
+    )
+    cache = _stage_cache()
+    missing = [name for name in names if name not in cache]
+    if missing:
+        found = frappe.get_all(
+            "Production Workflow Stage",
+            filters={"name": ["in", missing]},
+            fields=["name", "stage_code", "stage_label", "disabled"],
+        )
+        for item in found:
+            cache[str(item.name)] = item
+        for name in missing:
+            cache.setdefault(name, None)
+    return {name: cache.get(name) for name in names}
+
+
+def _stage_definition(row: Any, definition: Any) -> RoutingStage:
+    workflow_stage = _workflow_stage_name(row)
+    if workflow_stage:
+        if not definition:
+            raise ValueError("مسار الإنتاج يحتوي على مرحلة غير معرفة في دليل مراحل الإنتاج.")
+        if cint(definition.disabled):
+            raise ValueError(f"مرحلة الإنتاج {definition.stage_label or definition.stage_code} معطّلة.")
+        stage_type = str(definition.stage_code or "").strip()
+        department_label = str(definition.stage_label or "").strip()
+    else:
+        # Transitional read-only fallback for pre-migration rows and historical
+        # snapshots. New/edited rows are validated to require workflow_stage.
+        stage_type = str(getattr(row, "stage_type", None) or "").strip()
+        department_label = str(getattr(row, "department_label", None) or stage_type).strip()
+        if not stage_type:
+            raise ValueError("مسار الإنتاج يحتوي على مرحلة غير معرفة في دليل مراحل الإنتاج.")
+
+    return RoutingStage(
+        sequence=cint(row.sequence),
+        stage_type=stage_type,
+        department_label=department_label,
+        operational_role=str(getattr(row, "operational_role", None) or "").strip(),
+        is_planning_stage=bool(cint(getattr(row, "is_planning_stage", 0))),
+    )
+
+
 def _route_projection(document: Any) -> ProductionRoute:
-    stages = tuple(
-        _stage_definition(row)
+    rows = [
+        row
         for row in sorted(document.stages or (), key=lambda item: cint(item.sequence))
         if cint(row.required)
+    ]
+    definitions = _workflow_stage_definitions(rows)
+    stages = tuple(
+        _stage_definition(row, definitions.get(_workflow_stage_name(row)))
+        for row in rows
     )
     return ProductionRoute(
         name=str(document.name),
@@ -58,10 +107,8 @@ def _load_route(resolved: str) -> tuple[ProductionRoute, bool]:
     cached = cache.get(resolved)
     if cached is not None:
         return cached
-
     if not frappe.db.exists("Production Routing", resolved):
         raise ValueError(f"مسار الإنتاج {resolved or '<فارغ>'} غير موجود.")
-
     document = frappe.get_doc("Production Routing", resolved)
     cached = (_route_projection(document), bool(cint(document.disabled)))
     cache[resolved] = cached
@@ -72,7 +119,6 @@ def get_route(name: str, *, require_enabled: bool = True) -> ProductionRoute:
     resolved = str(name or "").strip()
     if not resolved:
         raise ValueError("مسار الإنتاج <فارغ> غير موجود.")
-
     route, disabled = _load_route(resolved)
     if require_enabled and disabled:
         raise ValueError(f"مسار الإنتاج {resolved} معطّل.")
@@ -91,8 +137,6 @@ def list_active_routes() -> list[ProductionRoute]:
         try:
             routes.append(get_route(str(name)))
         except ValueError:
-            # Invalid legacy rows stay out of dispatch until an administrator
-            # completes their required route metadata from master data.
             continue
     return routes
 

@@ -158,9 +158,6 @@ class TestShopFloorQueryApplication(unittest.TestCase):
             context["production_routes"][1]["stages"][0],
         )
 
-        # A worker's queue is already limited to their own stages, so the page may
-        # append the work they finished. A supervisor sees the whole floor and
-        # must keep the list restricted to what is still active.
         self.assertTrue(context["personal_inbox"])
         repository.admin = True
         self.assertFalse(queries.get_shop_floor_context(repository)["personal_inbox"])
@@ -177,6 +174,7 @@ class TestShopFloorQueryApplication(unittest.TestCase):
                 "name": "PST-OLD",
                 "door_cutting_order": "DCO-1",
                 "stage_type": "Drawing",
+                "department_label": "رسم",
                 "status": "Completed",
                 "assigned_to": repository.user,
                 "operational_role": "عامل رسم",
@@ -185,6 +183,7 @@ class TestShopFloorQueryApplication(unittest.TestCase):
                 "name": "PST-CURRENT",
                 "door_cutting_order": "DCO-1",
                 "stage_type": "Drawing",
+                "department_label": "رسم",
                 "status": "In Progress",
                 "assigned_to": repository.user,
                 "operational_role": "عامل رسم",
@@ -223,8 +222,6 @@ class TestShopFloorQueryApplication(unittest.TestCase):
         self.assertEqual([row["name"] for row in rows], ["PST-CURRENT"])
         self.assertEqual(rows[0]["can_handoff_to"], "CNC")
         self.assertEqual(rows[0]["department_label"], "رسم")
-        # Authorization/action visibility stays true for the assigned worker;
-        # planning readiness is reported independently by the block metadata.
         self.assertTrue(rows[0]["can_handoff_stage"])
         self.assertEqual(rows[0]["handoff_block_code"], "plan_not_approved")
         self.assertIn("اعتمد خطة القص", rows[0]["handoff_block_reason"])
@@ -484,8 +481,6 @@ class TestShopFloorQueryApplication(unittest.TestCase):
         self.assertEqual(detail["active_plan_source"], "System")
         self.assertEqual(detail["stage_snapshot"]["active_stage_type"], "Drawing")
         self.assertEqual(detail["stage_snapshot"]["can_handoff_to"], "CNC")
-        # The worker owns the handoff action, so the UI may show it. The separate
-        # readiness metadata remains the command-layer reason it cannot finish yet.
         self.assertTrue(detail["stage_snapshot"]["can_handoff_stage"])
         self.assertEqual(detail["stage_snapshot"]["handoff_block_code"], "plan_not_approved")
         self.assertTrue(actions[Capability.HANDOFF_ASSIGNED_STAGE]["allowed"])
@@ -615,7 +610,6 @@ class TestShopFloorQueryApplication(unittest.TestCase):
 
         repository.capabilities.add(Capability.REVERT_DEPARTMENT)
         repository.order.status = "Delivered"
-        # Revert is capability-only; Delivered no longer blocks authorization.
         targets = queries.get_revert_targets(repository, "DCO-1")
         self.assertEqual([target["stage_type"] for target in targets], ["Drawing", "CNC"])
 

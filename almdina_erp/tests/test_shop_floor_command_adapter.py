@@ -10,15 +10,9 @@ from types import SimpleNamespace
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-COMMAND_PATH = (
-    REPOSITORY_ROOT
-    / "almdina_erp/almdina_erp/services/shop_floor_commands.py"
-)
+COMMAND_PATH = REPOSITORY_ROOT / "almdina_erp/almdina_erp/services/shop_floor_commands.py"
 HOOKS_PATH = REPOSITORY_ROOT / "almdina_erp/hooks.py"
-REPOSITORY_MODULE = (
-    "almdina_erp.almdina_erp.infrastructure.frappe."
-    "shop_floor_command_repository"
-)
+REPOSITORY_MODULE = "almdina_erp.almdina_erp.infrastructure.frappe.shop_floor_command_repository"
 
 
 class AdapterHarness:
@@ -32,25 +26,17 @@ class AdapterHarness:
             raise RuntimeError(message)
 
         fake_frappe.throw = throw
-
         fake_repository_module = types.ModuleType(REPOSITORY_MODULE)
 
         class FakeRepository:
             pass
 
         fake_repository_module.FrappeShopFloorCommandRepository = FakeRepository
-
-        replacements = {
-            "frappe": fake_frappe,
-            REPOSITORY_MODULE: fake_repository_module,
-        }
+        replacements = {"frappe": fake_frappe, REPOSITORY_MODULE: fake_repository_module}
         previous = {name: sys.modules.get(name) for name in replacements}
         sys.modules.update(replacements)
         try:
-            spec = importlib.util.spec_from_file_location(
-                "_almdina_shop_floor_commands_test",
-                COMMAND_PATH,
-            )
+            spec = importlib.util.spec_from_file_location("_almdina_shop_floor_commands_test", COMMAND_PATH)
             if spec is None or spec.loader is None:
                 raise RuntimeError("Could not load shop-floor command adapter")
             module = importlib.util.module_from_spec(spec)
@@ -68,32 +54,13 @@ class TestShopFloorCommandAdapter(unittest.TestCase):
     def test_hooks_route_mutating_shop_floor_apis_to_command_boundaries(self) -> None:
         hooks = runpy.run_path(str(HOOKS_PATH))
         overrides = hooks["override_whitelisted_methods"]
-        for method in (
-            "get_handoff_workers",
-            "start_my_stage",
-            "handoff_to_next",
-            "mark_delivered",
-            "revert_department",
-        ):
+        for method in ("get_handoff_workers", "start_my_stage", "handoff_to_next", "mark_delivered", "revert_department"):
             old = f"almdina_erp.almdina_erp.services.shop_floor_service.{method}"
             new = f"almdina_erp.almdina_erp.services.shop_floor_commands.{method}"
             self.assertEqual(overrides.get(old), new)
-
-        guarded_dispatch = (
-            "almdina_erp.almdina_erp.services.order_dispatch_service.dispatch_order"
-        )
-        self.assertEqual(
-            overrides.get(
-                "almdina_erp.almdina_erp.services.shop_floor_service.dispatch_order"
-            ),
-            guarded_dispatch,
-        )
-        self.assertEqual(
-            overrides.get(
-                "almdina_erp.almdina_erp.services.shop_floor_commands.dispatch_order"
-            ),
-            guarded_dispatch,
-        )
+        guarded_dispatch = "almdina_erp.almdina_erp.services.order_dispatch_service.dispatch_order"
+        self.assertEqual(overrides.get("almdina_erp.almdina_erp.services.shop_floor_service.dispatch_order"), guarded_dispatch)
+        self.assertEqual(overrides.get("almdina_erp.almdina_erp.services.shop_floor_commands.dispatch_order"), guarded_dispatch)
 
     def test_adapter_delegates_framework_errors_without_owning_rules(self) -> None:
         adapter = AdapterHarness().load()
@@ -107,47 +74,20 @@ class TestShopFloorCommandAdapter(unittest.TestCase):
     def test_dispatch_compatibility_validator_preserves_behavior(self) -> None:
         adapter = AdapterHarness().load()
         calls: list[str] = []
-
-        # The adapter owns no persistence. Tests inject canonical Plan facts at
-        # its seam rather than recreating the retired DCO plan projections.
-        adapter._production_plan_facts = lambda _order: SimpleNamespace(
-            has_cutting_plan=True,
-            plan_needs_recalculation=False,
-            has_approved_plan=True,
-        )
-        valid = SimpleNamespace(
-            name="DCO-VALID",
-            production_path=None,
-            current_production_stage=None,
-            status="Approved",
-            drawing_dxf_status=None,
-            ensure_special_shapes_documented=lambda: calls.append("validated"),
-        )
+        adapter._production_plan_facts = lambda _order: SimpleNamespace(has_cutting_plan=True, plan_needs_recalculation=False, has_approved_plan=True)
+        valid = SimpleNamespace(name="DCO-VALID", production_path=None, current_production_stage=None, status="Approved", drawing_dxf_status=None, ensure_special_shapes_documented=lambda: calls.append("validated"))
         adapter.assert_order_ready_for_dispatch(valid)
         self.assertEqual(calls, ["validated"])
-
-        invalid = SimpleNamespace(
-            name="DCO-HOLD",
-            production_path=None,
-            current_production_stage=None,
-            status="On Hold",
-            drawing_dxf_status=None,
-            ensure_special_shapes_documented=lambda: None,
-        )
-        with self.assertRaisesRegex(
-            RuntimeError,
-            "حالة الطلب الحالية لا تسمح بإرساله إلى الإنتاج",
-        ):
+        invalid = SimpleNamespace(name="DCO-HOLD", production_path=None, current_production_stage=None, status="On Hold", drawing_dxf_status=None, ensure_special_shapes_documented=lambda: None)
+        with self.assertRaisesRegex(RuntimeError, "حالة الطلب الحالية لا تسمح بإرساله إلى الإنتاج"):
             adapter.assert_order_ready_for_dispatch(invalid)
 
-    def test_private_compatibility_helpers_delegate_to_application(self) -> None:
+    def test_private_transition_helper_remains_and_fixed_path_helper_fails_closed(self) -> None:
         adapter = AdapterHarness().load()
         self.assertEqual(adapter._transition("Pending", "start", "error"), "In Progress")
-        self.assertEqual(adapter._next_stage("Drawing", "Drawing"), "CNC")
-        with self.assertRaisesRegex(
-            adapter.commands.ShopFloorCommandError,
-            "error",
-        ):
+        with self.assertRaisesRegex(adapter.commands.ShopFloorCommandError, "ليست ضمن المسار"):
+            adapter._next_stage("Drawing", "Drawing")
+        with self.assertRaisesRegex(adapter.commands.ShopFloorCommandError, "error"):
             adapter._transition("Completed", "start", "error")
 
 

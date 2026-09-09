@@ -26,10 +26,10 @@ class ProductionRoutingManagementPermissionDenied(PermissionError):
 @dataclass(frozen=True, slots=True)
 class RoutingStageCommand:
     sequence: int
-    stage_type: str
-    department_label: str
+    workflow_stage: str
     operational_role: str
     is_planning_stage: bool = False
+    legacy_stage_label: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,13 +73,55 @@ def _stage_command(value: Any, index: int) -> RoutingStageCommand:
         raise ProductionRoutingManagementError(
             f"بيانات المرحلة رقم {index + 1} غير صالحة."
         )
+    # stage_type remains accepted as a compatibility input while the existing
+    # editor migrates its payload key. Production Workflow Stage uses the
+    # immutable stage_code as its document identity, so this value is still the
+    # real Link identity rather than a duplicated label/code source of truth.
+    explicit_workflow_stage = _text(value.get("workflow_stage"))
+    legacy_stage_code = _text(value.get("stage_type"))
+    workflow_stage = explicit_workflow_stage or legacy_stage_code
     return RoutingStageCommand(
         sequence=(index + 1) * 10,
-        stage_type=_text(value.get("stage_type")),
-        department_label=_text(value.get("department_label")),
+        workflow_stage=workflow_stage,
         operational_role=_text(value.get("operational_role")),
         is_planning_stage=_boolean(value.get("is_planning_stage")),
+        legacy_stage_label=(
+            None
+            if explicit_workflow_stage
+            else (_text(value.get("department_label")) or legacy_stage_code)
+        ),
     )
+
+
+def _validate_route_shape(
+    *,
+    name: str | None,
+    routing_name: str,
+    stages: tuple[RoutingStageCommand, ...],
+) -> None:
+    normalized_stage_ids = [stage.workflow_stage.casefold() for stage in stages]
+    if len(normalized_stage_ids) != len(set(normalized_stage_ids)):
+        raise ProductionRoutingManagementError(
+            "لا يمكن تكرار المرحلة داخل مسار الإنتاج."
+        )
+
+    try:
+        ProductionRoute(
+            name=name or routing_name,
+            label=routing_name,
+            stages=tuple(
+                RoutingStage(
+                    sequence=stage.sequence,
+                    stage_type=stage.workflow_stage,
+                    department_label=stage.workflow_stage,
+                    operational_role=stage.operational_role,
+                    is_planning_stage=stage.is_planning_stage,
+                )
+                for stage in stages
+            ),
+        )
+    except ValueError as error:
+        raise ProductionRoutingManagementError(str(error)) from error
 
 
 def routing_command(payload: Mapping[str, Any]) -> SaveProductionRoutingCommand:
@@ -102,29 +144,10 @@ def routing_command(payload: Mapping[str, Any]) -> SaveProductionRoutingCommand:
         raise ProductionRoutingManagementConflict(
             "نسخة المسار غير محددة. حدّث الصفحة ثم أعد المحاولة."
         )
-    normalized_stage_types = [stage.stage_type.casefold() for stage in stages]
-    if len(normalized_stage_types) != len(set(normalized_stage_types)):
-        raise ProductionRoutingManagementError(
-            "لا يمكن تكرار رمز المرحلة داخل مسار الإنتاج."
-        )
+    if any(not stage.workflow_stage for stage in stages):
+        raise ProductionRoutingManagementError("مرحلة الإنتاج مطلوبة.")
 
-    try:
-        ProductionRoute(
-            name=name or routing_name,
-            label=routing_name,
-            stages=tuple(
-                RoutingStage(
-                    sequence=stage.sequence,
-                    stage_type=stage.stage_type,
-                    department_label=stage.department_label,
-                    operational_role=stage.operational_role,
-                    is_planning_stage=stage.is_planning_stage,
-                )
-                for stage in stages
-            ),
-        )
-    except ValueError as error:
-        raise ProductionRoutingManagementError(str(error)) from error
+    _validate_route_shape(name=name, routing_name=routing_name, stages=stages)
 
     return SaveProductionRoutingCommand(
         name=name,

@@ -11,7 +11,7 @@ from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
     normalize_plan_settings,
 )
 from almdina_erp.almdina_erp.domain.orders.editability import DRAFT_LIKE_STATUSES
-from almdina_erp.almdina_erp.domain.orders.lifecycle import SHOP_FLOOR_ORDER_STATUSES
+from almdina_erp.almdina_erp.domain.orders.lifecycle import PRODUCTION_ORDER_STATUS
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization import (
     require_cutting_plan_capability,
@@ -39,7 +39,7 @@ _PLAN_META_FIELDS = {
     "trim_margin_mm": "trim_margin_mm",
     "optimization_time_limit_sec": "optimization_time_limit_sec",
 }
-_ACTIVE_ROUTED_ORDER_STATUSES = frozenset(SHOP_FLOOR_ORDER_STATUSES.values())
+_ACTIVE_ROUTED_ORDER_STATUSES = frozenset({PRODUCTION_ORDER_STATUS})
 
 
 def _has_active_production_stage(doc: Any) -> bool:
@@ -54,7 +54,7 @@ def _has_production_route(doc: Any) -> bool:
 
 
 def _has_active_routed_lifecycle(doc: Any) -> bool:
-    if _has_active_production_stage(doc):
+    if _has_active_production_stage(doc) or is_order_at_drawing_stage(doc):
         return True
     status = str(getattr(doc, "status", None) or "").strip()
     return status in _ACTIVE_ROUTED_ORDER_STATUSES

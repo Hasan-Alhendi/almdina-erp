@@ -1,0 +1,23 @@
+{
+  "actions": [],
+  "allow_rename": 0,
+  "autoname": "field:stage_code",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": ["stage_code", "stage_label", "kanban_order", "disabled"],
+  "fields": [
+    {"description":"معرّف تقني ثابت للمرحلة. يبقى ثابتًا حتى لو تغيّر الاسم الظاهر.","fieldname":"stage_code","fieldtype":"Data","in_list_view":1,"label":"رمز المرحلة","reqd":1,"unique":1},
+    {"description":"الاسم العربي/التشغيلي الذي يظهر للمستخدمين ويمكن تغييره دون كسر المسارات.","fieldname":"stage_label","fieldtype":"Data","in_list_view":1,"label":"اسم المرحلة","reqd":1},
+    {"default":"0","description":"ترتيب العرض العام للمرحلة. لا يغيّر ترتيب التنفيذ داخل أي مسار.","fieldname":"kanban_order","fieldtype":"Int","in_list_view":1,"label":"ترتيب العرض"},
+    {"default":"0","description":"المرحلة المعطّلة لا يمكن استخدامها داخل مسار إنتاج فعّال جديد.","fieldname":"disabled","fieldtype":"Check","in_list_view":1,"label":"معطّلة"}
+  ],
+  "links": [],
+  "module": "Almdina ERP",
+  "name": "Production Workflow Stage",
+  "permissions": [],
+  "search_fields": "stage_code,stage_label",
+  "sort_field": "kanban_order",
+  "sort_order": "ASC",
+  "title_field": "stage_label",
+  "track_changes": 1
+}

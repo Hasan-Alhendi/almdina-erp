@@ -13,6 +13,7 @@ from almdina_erp.almdina_erp.application.security.business_capability_state impo
     normalize_business_capability_state,
 )
 from almdina_erp.almdina_erp.application.shop_floor import commands, queries
+from almdina_erp.almdina_erp.domain.orders.lifecycle import PRODUCTION_ORDER_STATUS
 from almdina_erp.almdina_erp.domain.orders.production_routing import (
     ProductionRoute,
     RoutingStage,
@@ -442,7 +443,7 @@ class TestStage14EndToEndRegression(unittest.TestCase):
             repository, "DCO-E2E-1", "Drawing", "drawing@example.com"
         )
         drawing_stage = dispatched["stage"]
-        self.assertEqual(repository.orders["DCO-E2E-1"].status, "At Drawing")
+        self.assertEqual(repository.orders["DCO-E2E-1"].status, PRODUCTION_ORDER_STATUS)
 
         repository.as_actor("drawing@example.com")
         self.assertEqual([row["name"] for row in queries.get_my_inbox(repository)], [drawing_stage])
@@ -457,7 +458,7 @@ class TestStage14EndToEndRegression(unittest.TestCase):
             repository, drawing_stage, "cnc@example.com"
         )
         cnc_stage = drawing_handoff["next_stage"]
-        self.assertEqual(repository.orders["DCO-E2E-1"].status, "At CNC")
+        self.assertEqual(repository.orders["DCO-E2E-1"].status, PRODUCTION_ORDER_STATUS)
         self.assertEqual(queries.get_my_inbox(repository), [])
         self.assertEqual(
             [row["name"] for row in queries.get_my_archive(repository)], [drawing_stage]
@@ -477,7 +478,7 @@ class TestStage14EndToEndRegression(unittest.TestCase):
         commands.start_my_stage(repository, cnc_stage)
         cnc_handoff = commands.handoff_to_next(repository, cnc_stage, "edge@example.com")
         edge_stage = cnc_handoff["next_stage"]
-        self.assertEqual(repository.orders["DCO-E2E-1"].status, "At Sanding")
+        self.assertEqual(repository.orders["DCO-E2E-1"].status, PRODUCTION_ORDER_STATUS)
         self.assertEqual(
             [row["name"] for row in queries.get_my_archive(repository)], [cnc_stage]
         )

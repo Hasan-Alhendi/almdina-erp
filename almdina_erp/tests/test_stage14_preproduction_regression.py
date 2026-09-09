@@ -10,6 +10,7 @@ from almdina_erp.almdina_erp.application.security.drawing_action_policy import (
     validate_assigned_drawing_action,
 )
 from almdina_erp.almdina_erp.application.shop_floor import commands
+from almdina_erp.almdina_erp.domain.orders.lifecycle import PRODUCTION_ORDER_STATUS
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.tests.test_stage14_end_to_end_regression import (
     StatefulFactoryRepository,
@@ -41,7 +42,7 @@ class TestStage14PreproductionRegression(unittest.TestCase):
         )
 
         drawing_stage = repository.stages[dispatched["stage"]]
-        self.assertEqual(repository.orders["DCO-E2E-DRAFT"].status, "At Drawing")
+        self.assertEqual(repository.orders["DCO-E2E-DRAFT"].status, PRODUCTION_ORDER_STATUS)
         self.assertEqual(drawing_stage.stage_type, "Drawing")
         self.assertEqual(drawing_stage.assigned_to, "drawing@example.com")
         self.assertFalse(repository.orders["DCO-E2E-DRAFT"].has_cutting_plan)

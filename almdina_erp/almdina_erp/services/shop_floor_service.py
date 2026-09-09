@@ -15,13 +15,10 @@ import frappe
 from almdina_erp.almdina_erp.domain.orders.lifecycle import (
     CUTTING_LIKE_STAGE_TYPES,
     DEPARTMENT_STATUS_BY_STAGE_STATUS,
-    PRODUCTION_PATHS,
-    SHOP_FLOOR_ORDER_STATUSES,
-    STAGE_DEPARTMENTS,
-    next_stage_type,
-    production_path_sequence,
     resolve_shop_floor_stage_type,
-    stage_sequence,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.production_routing_repository import (
+    get_route,
 )
 
 
@@ -73,25 +70,52 @@ def sync_order_status(order_name: str) -> str:
     return _delegate(_STATUS_SYNC, "sync_order_status", order_name)
 
 
-# Read-only lifecycle aliases remain for older Python callers. Operational role
-# eligibility now comes only from each configured Production Routing stage.
-PATH_SEQUENCE = PRODUCTION_PATHS
-STAGE_DEPARTMENT = STAGE_DEPARTMENTS
-STAGE_ORDER_STATUS = SHOP_FLOOR_ORDER_STATUSES
 DEPARTMENT_STATUS_MAP = DEPARTMENT_STATUS_BY_STAGE_STATUS
 CUTTING_LIKE_STAGES = CUTTING_LIKE_STAGE_TYPES
 
+# Read-only compatibility snapshots for callers that still import the original
+# facade symbols. Runtime routing and authorization never consume these maps.
+PATH_SEQUENCE = {
+    "Sharyoun": ("Sharyoun", "Sanding"),
+    "Drawing": ("Drawing", "CNC", "Sanding"),
+}
+STAGE_DEPARTMENT = {
+    "Sharyoun": "شريون",
+    "Drawing": "رسم",
+    "CNC": "CNC",
+    "Sanding": "تقشيط",
+}
+STAGE_ORDER_STATUS = {
+    "Sharyoun": "At Sharyoun",
+    "Drawing": "At Drawing",
+    "CNC": "At CNC",
+    "Sanding": "At Sanding",
+}
+
 
 def _path_sequence(path: str) -> tuple[str, ...]:
-    return production_path_sequence(path)
+    if path in PATH_SEQUENCE:
+        return PATH_SEQUENCE[path]
+    route = get_route(path, require_enabled=False)
+    return tuple(stage.stage_type for stage in route.stages)
 
 
 def _next_stage_type(path: str, current_stage_type: str) -> str | None:
-    return next_stage_type(path, current_stage_type)
+    sequence = _path_sequence(path)
+    try:
+        index = sequence.index(current_stage_type)
+    except ValueError as error:
+        raise ValueError(f"المرحلة {current_stage_type} ليست ضمن المسار {path}.") from error
+    return sequence[index + 1] if index + 1 < len(sequence) else None
 
 
 def _sequence_for_stage(path: str, stage_type: str) -> int:
-    return stage_sequence(path, stage_type)
+    if path in PATH_SEQUENCE:
+        try:
+            return (PATH_SEQUENCE[path].index(stage_type) + 1) * 10
+        except ValueError as error:
+            raise ValueError(f"المرحلة {stage_type} ليست ضمن المسار {path}.") from error
+    return get_route(path, require_enabled=False).stage(stage_type).sequence
 
 
 def _resolve_revert_stage_type(value: str | None) -> str:

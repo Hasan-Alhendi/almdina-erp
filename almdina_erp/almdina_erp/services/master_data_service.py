@@ -28,6 +28,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.production_routing_management
     FrappeProductionRoutingManagementRepository,
     list_operational_roles,
     list_production_routings,
+    list_workflow_stages,
 )
 
 
@@ -51,75 +52,6 @@ _MASTER_DEFINITIONS = {
         "delete": Capability.DELETE_CUSTOMERS,
     },
 }
-
-_PRODUCTION_STAGE_CATALOG = (
-    {
-        "stage_type": "Review / Preparation",
-        "label": "مراجعة وتجهيز",
-        "description": "مراجعة الطلب وخطة القص قبل بدء التنفيذ.",
-        "planning": True,
-    },
-    {
-        "stage_type": "Drawing",
-        "label": "رسم",
-        "description": "إعداد واعتماد ملفات الرسم والتفاصيل الفنية.",
-        "planning": True,
-    },
-    {
-        "stage_type": "Sharyoun",
-        "label": "شريون",
-        "description": "مرحلة تجهيز الشريون ضمن المسار التشغيلي.",
-        "planning": False,
-    },
-    {
-        "stage_type": "Cutting",
-        "label": "قص",
-        "description": "تنفيذ خطة القص المعتمدة.",
-        "planning": False,
-    },
-    {
-        "stage_type": "CNC",
-        "label": "CNC",
-        "description": "تشغيل القطع على ماكينة CNC.",
-        "planning": False,
-    },
-    {
-        "stage_type": "Edge Banding",
-        "label": "قشاط",
-        "description": "تلبيس الحواف المطلوبة للقطع.",
-        "planning": False,
-    },
-    {
-        "stage_type": "Sanding",
-        "label": "تقشيط",
-        "description": "تجهيز وتشطيب الأسطح والحواف.",
-        "planning": False,
-    },
-    {
-        "stage_type": "Drilling",
-        "label": "تثقيب",
-        "description": "تنفيذ الثقوب ومواضع التجميع.",
-        "planning": False,
-    },
-    {
-        "stage_type": "Assembly",
-        "label": "تجميع",
-        "description": "تجميع مكونات الطلب وفحص المطابقة.",
-        "planning": False,
-    },
-    {
-        "stage_type": "Quality Check",
-        "label": "فحص الجودة",
-        "description": "فحص الجودة النهائي قبل التغليف.",
-        "planning": False,
-    },
-    {
-        "stage_type": "Packing",
-        "label": "تغليف",
-        "description": "تغليف الطلب وتجهيزه للتسليم.",
-        "planning": False,
-    },
-)
 
 
 def _definition(doctype: str) -> dict[str, str]:
@@ -318,7 +250,7 @@ def get_production_routing_console() -> dict[str, Any]:
         "permissions": permissions,
         "routings": routings,
         "operational_roles": list_operational_roles() if can_manage else [],
-        "stage_catalog": [dict(stage) for stage in _PRODUCTION_STAGE_CATALOG],
+        "stage_catalog": list_workflow_stages(),
         "audit": _audit_rows(["Production Routing"], limit=60),
         "summary": _routing_summary(routings),
     }

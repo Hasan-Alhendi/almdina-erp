@@ -148,7 +148,8 @@ def test_focused_save_contract_delegates_persistence_to_plan_command_owner() -> 
     assert "require_cutting_plan_capability(" in backend
     assert "Capability.EDIT_OPTIMIZER_SETTINGS" in backend
     assert "require_stage_operational_access" not in backend
-    assert "SHOP_FLOOR_ORDER_STATUSES" in backend
+    assert "PRODUCTION_ORDER_STATUS" in backend
+    assert "SHOP_FLOOR_ORDER_STATUSES" not in backend
     assert "save_system_plan_settings" in backend
     assert "frappe.db.set_value(" not in backend
     assert "ignore_permissions" not in backend

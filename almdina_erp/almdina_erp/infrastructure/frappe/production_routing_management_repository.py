@@ -15,21 +15,63 @@ from almdina_erp.almdina_erp.application.factory.production_routing_management i
 from almdina_erp.almdina_erp.infrastructure.frappe.system_role_policy import (
     PROTECTED_SYSTEM_ROLES,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.production_workflow_stage_repository import (
+    ensure_workflow_stage,
+    workflow_stage_name,
+)
 
 
-def _stage_payload(row: Any) -> dict[str, Any]:
+def _workflow_stage_definitions(names: set[str]) -> dict[str, Any]:
+    resolved = sorted(name for name in names if name)
+    if not resolved:
+        return {}
+    rows = frappe.get_all(
+        "Production Workflow Stage",
+        filters={"name": ["in", resolved]},
+        fields=["name", "stage_code", "stage_label", "kanban_order", "disabled"],
+    )
+    return {str(row.name): row for row in rows}
+
+
+def _stage_payload(row: Any, definitions: Mapping[str, Any]) -> dict[str, Any]:
+    workflow_stage = str(row.workflow_stage or "").strip()
+    definition = definitions.get(workflow_stage)
+    stage_code = str(getattr(definition, "stage_code", None) or row.stage_type or workflow_stage)
+    stage_label = str(getattr(definition, "stage_label", None) or row.department_label or stage_code)
     return {
         "sequence": cint(row.sequence),
-        "stage_type": str(row.stage_type or ""),
-        "department_label": str(row.department_label or ""),
+        "workflow_stage": workflow_stage,
+        "stage_type": stage_code,
+        "department_label": stage_label,
         "operational_role": str(row.operational_role or ""),
         "required": bool(cint(row.required)),
         "is_planning_stage": bool(cint(row.is_planning_stage)),
     }
 
 
+def list_workflow_stages() -> list[dict[str, Any]]:
+    rows = frappe.get_all(
+        "Production Workflow Stage",
+        filters={"disabled": 0},
+        fields=["name", "stage_code", "stage_label", "kanban_order", "disabled"],
+        order_by="kanban_order asc, stage_label asc, name asc",
+    )
+    return [
+        {
+            "workflow_stage": str(row.name),
+            "stage_type": str(row.stage_code or ""),
+            "stage_code": str(row.stage_code or ""),
+            "label": str(row.stage_label or row.stage_code or row.name),
+            "stage_label": str(row.stage_label or row.stage_code or row.name),
+            "kanban_order": cint(row.kanban_order),
+            "disabled": bool(cint(row.disabled)),
+        }
+        for row in rows
+    ]
+
+
 def list_production_routings() -> list[dict[str, Any]]:
-    """Return the routing console projection without one query per route."""
+    """Return the routing console projection without one query per route or stage."""
 
     rows = frappe.get_all(
         "Production Routing",
@@ -37,9 +79,9 @@ def list_production_routings() -> list[dict[str, Any]]:
         order_by="disabled asc, routing_name asc",
     )
     names = [str(row.name) for row in rows]
-    stages_by_route: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    raw_stages: list[Any] = []
     if names:
-        stage_rows = frappe.get_all(
+        raw_stages = frappe.get_all(
             "Production Routing Stage",
             filters={
                 "parent": ["in", names],
@@ -48,6 +90,7 @@ def list_production_routings() -> list[dict[str, Any]]:
             fields=[
                 "parent",
                 "sequence",
+                "workflow_stage",
                 "stage_type",
                 "department_label",
                 "operational_role",
@@ -56,8 +99,12 @@ def list_production_routings() -> list[dict[str, Any]]:
             ],
             order_by="parent asc, sequence asc, idx asc",
         )
-        for stage in stage_rows:
-            stages_by_route[str(stage.parent)].append(_stage_payload(stage))
+    definitions = _workflow_stage_definitions(
+        {str(stage.workflow_stage or "").strip() for stage in raw_stages}
+    )
+    stages_by_route: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for stage in raw_stages:
+        stages_by_route[str(stage.parent)].append(_stage_payload(stage, definitions))
 
     in_flight_counts: dict[str, int] = {}
     if names:
@@ -131,19 +178,20 @@ def _assert_version(snapshot: Mapping[str, Any], expected_modified: str) -> None
 
 
 def _document_payload(document: Any) -> dict[str, Any]:
+    ordered = sorted(
+        document.stages or (),
+        key=lambda item: (cint(item.sequence), cint(item.idx)),
+    )
+    definitions = _workflow_stage_definitions(
+        {str(row.workflow_stage or "").strip() for row in ordered}
+    )
     return {
         "name": str(document.name),
         "label": str(document.routing_name or document.name),
         "disabled": bool(cint(document.disabled)),
         "modified": document.modified,
         "modified_by": str(document.modified_by or ""),
-        "stages": [
-            _stage_payload(row)
-            for row in sorted(
-                document.stages or (),
-                key=lambda item: (cint(item.sequence), cint(item.idx)),
-            )
-        ],
+        "stages": [_stage_payload(row, definitions) for row in ordered],
     }
 
 
@@ -163,16 +211,26 @@ class FrappeProductionRoutingManagementRepository:
                 )
             document = frappe.new_doc("Production Routing")
 
+        resolved_stages: list[tuple[Any, str]] = []
+        for stage in command.stages:
+            workflow_stage = workflow_stage_name(stage.workflow_stage)
+            if not workflow_stage and stage.legacy_stage_label is not None:
+                workflow_stage = ensure_workflow_stage(
+                    stage.workflow_stage,
+                    stage.legacy_stage_label,
+                    kanban_order=stage.sequence,
+                )
+            resolved_stages.append((stage, workflow_stage or stage.workflow_stage))
+
         document.routing_name = command.routing_name
         document.disabled = int(command.disabled)
         document.set("stages", [])
-        for stage in command.stages:
+        for stage, workflow_stage in resolved_stages:
             document.append(
                 "stages",
                 {
                     "sequence": stage.sequence,
-                    "stage_type": stage.stage_type,
-                    "department_label": stage.department_label,
+                    "workflow_stage": workflow_stage,
                     "operational_role": stage.operational_role,
                     "required": 1,
                     "is_planning_stage": int(stage.is_planning_stage),
@@ -209,4 +267,5 @@ __all__ = [
     "FrappeProductionRoutingManagementRepository",
     "list_operational_roles",
     "list_production_routings",
+    "list_workflow_stages",
 ]

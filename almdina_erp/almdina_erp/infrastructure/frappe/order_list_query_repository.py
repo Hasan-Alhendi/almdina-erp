@@ -139,7 +139,7 @@ class FrappeOrderListQueryRepository:
         return routes
 
     def department_filter_options(self) -> list[dict[str, str]]:
-        """Unique required stages from enabled routes: stage_type + visible label."""
+        """Return enabled-route stages resolved from the central stage master."""
 
         route_names = frappe.get_all(
             "Production Routing",
@@ -150,24 +150,62 @@ class FrappeOrderListQueryRepository:
         names = [str(name).strip() for name in route_names if str(name or "").strip()]
         if not names:
             return []
-        rows = frappe.get_all(
+
+        route_stages = frappe.get_all(
             "Production Routing Stage",
             filters={
                 "parent": ["in", names],
                 "parenttype": "Production Routing",
                 "required": 1,
             },
-            fields=["stage_type", "department_label"],
+            fields=["workflow_stage", "stage_type", "department_label"],
             order_by="parent asc, sequence asc, idx asc",
             limit_page_length=500,
         )
-        return [
+        workflow_names = sorted(
             {
-                "stage_type": str(row.stage_type or "").strip(),
-                "department_label": str(row.department_label or "").strip(),
+                str(row.workflow_stage or "").strip()
+                for row in route_stages
+                if str(row.workflow_stage or "").strip()
             }
-            for row in rows
-        ]
+        )
+        definitions = {}
+        if workflow_names:
+            rows = frappe.get_all(
+                "Production Workflow Stage",
+                filters={"name": ["in", workflow_names], "disabled": 0},
+                fields=["name", "stage_code", "stage_label"],
+                limit_page_length=max(len(workflow_names), 1),
+            )
+            definitions = {str(row.name): row for row in rows}
+
+        result: list[dict[str, str]] = []
+        for row in route_stages:
+            workflow_stage = str(row.workflow_stage or "").strip()
+            definition = definitions.get(workflow_stage)
+            if workflow_stage and not definition:
+                # A disabled or missing central definition is not an active filter option.
+                continue
+            stage_type = str(
+                getattr(definition, "stage_code", None)
+                or row.stage_type
+                or workflow_stage
+                or ""
+            ).strip()
+            department_label = str(
+                getattr(definition, "stage_label", None)
+                or row.department_label
+                or stage_type
+                or ""
+            ).strip()
+            if stage_type:
+                result.append(
+                    {
+                        "stage_type": stage_type,
+                        "department_label": department_label,
+                    }
+                )
+        return result
 
 
 __all__ = ["FrappeOrderListQueryRepository"]

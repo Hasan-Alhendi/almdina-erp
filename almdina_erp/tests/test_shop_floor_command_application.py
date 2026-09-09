@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any, Sequence
 
 from almdina_erp.almdina_erp.application.shop_floor import commands
+from almdina_erp.almdina_erp.domain.orders.lifecycle import PRODUCTION_ORDER_STATUS
 from almdina_erp.almdina_erp.domain.orders.production_authorization import PRODUCTION_ACTIONS
 from almdina_erp.almdina_erp.domain.orders.production_routing import (
     ProductionRoute,
@@ -281,7 +282,7 @@ class TestShopFloorCommandApplication(unittest.TestCase):
             repository, "DCO-1", "Drawing", "drawing@example.com"
         )
 
-        self.assertEqual(result["status"], "At Drawing")
+        self.assertEqual(result["status"], PRODUCTION_ORDER_STATUS)
         self.assertEqual(result["stage"], "PST-1")
         self.assertLess(
             self._call_index(repository, "lock_order"),
