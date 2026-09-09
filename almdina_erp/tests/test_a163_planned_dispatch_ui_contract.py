@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-import re
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -13,6 +12,8 @@ UX = (
     / "production"
     / "door_cutting_order_intake_planning_ux.js"
 )
+CSS = ROOT / "public" / "css" / "door_cutting_order_intake_planning.css"
+ASSETS = ROOT / "frontend_assets.py"
 SERVICE = ROOT / "almdina_erp" / "services" / "planned_dispatch_service.py"
 APPLICATION = (
     ROOT
@@ -122,6 +123,19 @@ def test_dirty_form_is_never_silently_overwritten_by_dispatch() -> None:
     assert "if (!requirePersistedFormState(frm)) return null;" in source
     assert "if (!requirePersistedFormState(frm)) return;" in source
     assert "if (hasUnsavedChanges(frm))" in source
+
+
+def test_dispatch_plan_presentation_has_one_owned_css_asset() -> None:
+    source = UX.read_text(encoding="utf-8")
+    css = CSS.read_text(encoding="utf-8")
+    assets = ASSETS.read_text(encoding="utf-8")
+
+    assert CSS.exists()
+    assert 'style="' not in source
+    assert "/assets/almdina_erp/css/door_cutting_order_intake_planning.css" in assets
+    assert ".almadina-dispatch-plan-card" in css
+    assert ".almadina-intake-route-stage" in css
+    assert "@media (max-width: 600px)" in css
 
 
 def test_service_exposes_narrow_server_authoritative_contract() -> None:
