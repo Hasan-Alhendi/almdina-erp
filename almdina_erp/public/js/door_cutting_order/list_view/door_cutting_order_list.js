@@ -112,8 +112,11 @@
     const STATUS_FILTER_FIELDNAME = "current_department";
     const STATUS_FILTER_STAGE_FIELD = "current_production_stage.stage_type";
     const STATUS_FILTER_ALL_LABEL = "كل الأقسام";
+    const INTAKE_FILTER_DATA_ENTRY = "المسودة / إدخال البيانات";
+    const INTAKE_FILTER_READY_TO_DISPATCH = "جاهز للإرسال";
     const DELIVERY_FILTER_READY = "جاهز للتسليم";
     const DELIVERY_FILTER_DELIVERED = "تم التسليم";
+    const CANCELLED_FILTER = "الملغى";
     let loadedDepartmentStageOptions = null;
 
     frappe.listview_settings = frappe.listview_settings || {};
@@ -340,19 +343,27 @@
 
     function departmentColumnQueryFilter(value, doctype) {
         const selected = String(value || "").trim();
+        if (!selected) return null;
+        if (selected === INTAKE_FILTER_DATA_ENTRY) {
+            return [doctype, "workflow_stage", "=", "DATA_ENTRY"];
+        }
+        if (selected === INTAKE_FILTER_READY_TO_DISPATCH) {
+            return [doctype, "workflow_stage", "=", "READY_TO_DISPATCH"];
+        }
         if (selected === DELIVERY_FILTER_READY) return [doctype, "status", "=", "Ready for Delivery"];
         if (selected === DELIVERY_FILTER_DELIVERED) return [doctype, "status", "=", "Delivered"];
+        if (selected === CANCELLED_FILTER) return [doctype, "status", "=", "Cancelled"];
         // reportview.validate_filters rejects 4-tuples whose fieldname is dotted.
         return [STATUS_FILTER_STAGE_FIELD, "=", resolveDepartmentFilterStageType(selected)];
     }
 
     function rewriteDepartmentColumnFilters(args, doctype) {
         if (!args) return args;
-        args.filters = (args.filters || []).map(filter => (
-            isDepartmentFilter(filter, doctype)
-                ? departmentColumnQueryFilter(filter[3], doctype)
-                : filter
-        ));
+        args.filters = (args.filters || []).flatMap(filter => {
+            if (!isDepartmentFilter(filter, doctype)) return [filter];
+            const rewritten = departmentColumnQueryFilter(filter[3], doctype);
+            return rewritten ? [rewritten] : [];
+        });
         return args;
     }
 
@@ -424,9 +435,12 @@
     function statusFilterOptions() {
         return [
             { value: "", label: __(STATUS_FILTER_ALL_LABEL) },
+            { value: INTAKE_FILTER_DATA_ENTRY, label: __(INTAKE_FILTER_DATA_ENTRY) },
+            { value: INTAKE_FILTER_READY_TO_DISPATCH, label: __(INTAKE_FILTER_READY_TO_DISPATCH) },
             ...departmentStageOptions(),
             { value: DELIVERY_FILTER_READY, label: __(DELIVERY_FILTER_READY) },
             { value: DELIVERY_FILTER_DELIVERED, label: __(DELIVERY_FILTER_DELIVERED) },
+            { value: CANCELLED_FILTER, label: __(CANCELLED_FILTER) },
         ];
     }
 
@@ -697,7 +711,6 @@
         const status = String(doc.status || "").trim();
         if (status === "Delivered") return cardStateDefinition("delivered");
         if (status === "Ready for Delivery") return cardStateDefinition("ready_for_delivery");
-
         const completed = context.overview
             ? status === "Completed"
             : context.queueState === "completed"
