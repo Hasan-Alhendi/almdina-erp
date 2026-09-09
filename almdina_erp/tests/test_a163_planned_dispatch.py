@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from types import SimpleNamespace
 import unittest
 
@@ -53,6 +54,7 @@ class FakePlannedDispatchRepository:
         first_role = self.route.first_stage.operational_role
         self.valid_worker = "worker@example.com"
         self.worker_roles = {self.valid_worker: {first_role}}
+        self.worker_enabled = {self.valid_worker: True}
         self.capabilities = {Capability.DISPATCH_ORDER}
         self.order = SimpleNamespace(
             name="DCO-1",
@@ -104,6 +106,8 @@ class FakePlannedDispatchRepository:
 
     def assert_worker_for_role(self, user: str, role: str) -> None:
         self.calls.append("assert_worker")
+        if not self.worker_enabled.get(user, False):
+            raise ValueError("العامل المحدد غير مفعّل.")
         if role not in self.worker_roles.get(user, set()):
             raise ValueError("العامل المحدد غير مؤهل للمرحلة الأولى.")
 
@@ -139,6 +143,31 @@ class FakePlannedDispatchRepository:
         self.events.append((stage_name, event_type, details or {}))
 
 
+class ConcurrentPlannedDispatchRepository(FakePlannedDispatchRepository):
+    """Model the row-lock serialization boundary used by the Frappe adapter."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._sequence_guard = threading.Lock()
+        self._lock_sequence = 0
+        self._first_committed = threading.Event()
+
+    def lock_order(self, order_name: str) -> None:
+        with self._sequence_guard:
+            self._lock_sequence += 1
+            sequence = self._lock_sequence
+        if sequence > 1:
+            if not self._first_committed.wait(timeout=2):
+                raise AssertionError("simulated first transaction did not complete")
+        super().lock_order(order_name)
+
+    def log_stage_event(self, stage_name: str, event_type: str, details=None) -> None:
+        try:
+            super().log_stage_event(stage_name, event_type, details)
+        finally:
+            self._first_committed.set()
+
+
 class PlannedDispatchTests(unittest.TestCase):
     def test_valid_persisted_plan_starts_exactly_first_dynamic_stage(self) -> None:
         repository = FakePlannedDispatchRepository()
@@ -156,7 +185,12 @@ class PlannedDispatchTests(unittest.TestCase):
         self.assertEqual(repository.created[0].stage_type, "LASER")
         self.assertEqual(repository.created[0].sequence, 10)
         self.assertEqual(repository.created[0].operational_role, "Laser Operator")
-        self.assertTrue(repository.events[0][2]["planned_dispatch"])
+        event = repository.events[0][2]
+        self.assertTrue(event["planned_dispatch"])
+        self.assertEqual(event["path"], "ROUTE-A")
+        self.assertEqual(event["first_stage_type"], "LASER")
+        self.assertEqual(event["assignee"], repository.valid_worker)
+        self.assertEqual(event["dispatch_actor"], repository.actor)
 
     def test_context_is_read_only_and_uses_persisted_plan(self) -> None:
         repository = FakePlannedDispatchRepository()
@@ -214,6 +248,15 @@ class PlannedDispatchTests(unittest.TestCase):
 
         self.assertEqual(repository.created, [])
 
+    def test_disabled_worker_between_planning_and_dispatch_is_rejected(self) -> None:
+        repository = FakePlannedDispatchRepository()
+        repository.worker_enabled[repository.valid_worker] = False
+
+        with self.assertRaisesRegex(PlannedDispatchError, "غير مفعّل"):
+            dispatch_planned_order(repository, repository.order.name)
+
+        self.assertEqual(repository.created, [])
+
     def test_worker_role_removed_between_planning_and_dispatch_is_rejected(self) -> None:
         repository = FakePlannedDispatchRepository()
         repository.worker_roles[repository.valid_worker].clear()
@@ -241,6 +284,33 @@ class PlannedDispatchTests(unittest.TestCase):
             dispatch_planned_order(repository, repository.order.name)
 
         self.assertEqual(len(repository.created), 1)
+
+    def test_concurrent_dispatches_serialize_to_one_first_stage(self) -> None:
+        repository = ConcurrentPlannedDispatchRepository()
+        start = threading.Barrier(3)
+        successes: list[dict] = []
+        failures: list[Exception] = []
+
+        def attempt() -> None:
+            start.wait()
+            try:
+                successes.append(dispatch_planned_order(repository, repository.order.name))
+            except Exception as error:  # exercise the competing transaction result
+                failures.append(error)
+
+        threads = [threading.Thread(target=attempt) for _ in range(2)]
+        for thread in threads:
+            thread.start()
+        start.wait()
+        for thread in threads:
+            thread.join(timeout=3)
+
+        self.assertTrue(all(not thread.is_alive() for thread in threads))
+        self.assertEqual(len(successes), 1)
+        self.assertEqual(len(failures), 1)
+        self.assertIsInstance(failures[0], PlannedDispatchError)
+        self.assertEqual(len(repository.created), 1)
+        self.assertEqual(repository.calls.count("lock_order"), 2)
 
     def test_physical_first_route_requires_current_cutting_plan_policy(self) -> None:
         repository = FakePlannedDispatchRepository(planning_first=False)
@@ -285,6 +355,7 @@ class PlannedDispatchTests(unittest.TestCase):
         repository.worker_roles = {
             repository.valid_worker: {repository.route.first_stage.operational_role}
         }
+        repository.worker_enabled = {repository.valid_worker: True}
 
         result = dispatch_planned_order(repository, repository.order.name)
 
