@@ -57,6 +57,26 @@ def test_ready_ui_shows_plan_edit_and_real_dispatch_actions() -> None:
     assert "خطة الإرسال الحالية" in source
 
 
+def test_ready_plan_fetch_and_actions_follow_server_intake_owner_boundary() -> None:
+    source = UX.read_text(encoding="utf-8")
+
+    assert "function isIntakeOwnerOrAdmin(frm)" in source
+    assert 'actor === "Administrator"' in source
+    assert "actor === assignee" in source
+    assert "function canUseReadyDispatchPlan(frm)" in source
+    assert "isIntakeOwnerOrAdmin(frm) && (canEditOrder(frm) || canDispatchOrder(frm))" in source
+
+    render_start = source.index("function renderReadyDispatchPlan(frm)")
+    render_end = source.index("function workerOptions", render_start)
+    render_block = source[render_start:render_end]
+    assert "!canUseReadyDispatchPlan(frm)" in render_block
+
+    reconcile_start = source.index("function reconcileIntakeActions(frm)")
+    reconcile_block = source[reconcile_start:]
+    assert "isIntakeOwnerOrAdmin(frm) && canEditOrder(frm)" in reconcile_block
+    assert "isIntakeOwnerOrAdmin(frm) && canDispatchOrder(frm)" in reconcile_block
+
+
 def test_dispatch_confirmation_is_read_only_and_uses_persisted_server_plan() -> None:
     source = UX.read_text(encoding="utf-8")
 
