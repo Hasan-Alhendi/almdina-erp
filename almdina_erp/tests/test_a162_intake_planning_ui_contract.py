@@ -66,6 +66,19 @@ def test_intake_planning_ux_hides_plan_actions_if_real_production_already_starte
     assert "frm.is_new() || !canEditOrder(frm) || productionStarted(frm)" in source
 
 
+def test_intake_actions_reconcile_when_permissions_become_ready() -> None:
+    source = UX.read_text(encoding="utf-8")
+
+    assert "function reconcileIntakeActions(frm)" in source
+    assert 'window.addEventListener("almdina:permissions-updated"' in source
+    assert "reconcileIntakeActions(frm);" in source
+    assert 'frappe.ui.form.on("Door Cutting Order", { refresh: reconcileIntakeActions });' in source
+    assert "window.AlmdinaOrderIntakePlanningUX = Object.freeze" in source
+    assert "function removeIntakeActions(frm)" in source
+    assert 'frm.remove_custom_button(__(label))' in source
+    assert "setTimeout(" not in source
+
+
 def test_shop_floor_owner_never_recreates_legacy_dispatch_during_intake() -> None:
     source = SHOP_FLOOR_UX.read_text(encoding="utf-8")
 
