@@ -75,6 +75,16 @@
         return canDocument(frm, DISPATCH_CAPABILITY);
     }
 
+    function isIntakeOwnerOrAdmin(frm) {
+        const actor = String((frappe.session && frappe.session.user) || "");
+        const assignee = String((frm && frm.doc && frm.doc.current_assignee) || "");
+        return actor === "Administrator" || Boolean(actor && assignee && actor === assignee);
+    }
+
+    function canUseReadyDispatchPlan(frm) {
+        return isIntakeOwnerOrAdmin(frm) && (canEditOrder(frm) || canDispatchOrder(frm));
+    }
+
     function canShowIntakeEditor(frm) {
         return !(frm.is_new() || !canEditOrder(frm) || productionStarted(frm));
     }
@@ -162,6 +172,7 @@
             || !frm.doc
             || String(frm.doc.workflow_stage || "") !== READY_TO_DISPATCH
             || productionStarted(frm)
+            || !canUseReadyDispatchPlan(frm)
         ) {
             clearDispatchPlanSummary(frm);
             return null;
@@ -385,11 +396,11 @@
         if (stage === READY_TO_DISPATCH) {
             renderReadyDispatchPlan(frm);
             let visible = false;
-            if (canEditOrder(frm)) {
+            if (isIntakeOwnerOrAdmin(frm) && canEditOrder(frm)) {
                 frm.add_custom_button(__("تعديل خطة الإرسال"), () => openIntakePlanningDialog(frm));
                 visible = true;
             }
-            if (canDispatchOrder(frm)) {
+            if (isIntakeOwnerOrAdmin(frm) && canDispatchOrder(frm)) {
                 frm.add_custom_button(__("إرسال للإنتاج"), () => openDispatchConfirmation(frm));
                 visible = true;
             }
