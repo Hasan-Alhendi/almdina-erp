@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import frappe
 
+from almdina_erp.almdina_erp.domain.orders.intake_lifecycle import (
+    INTAKE_WORKFLOW_STAGES,
+)
+
 
 _SYSTEM_STAGES = (
     ("DATA_ENTRY", "المسودة / إدخال البيانات", 10),
@@ -45,4 +49,42 @@ def sync_order_workflow_stages() -> None:
         document.insert(ignore_permissions=True)
 
 
-__all__ = ["sync_order_workflow_stages"]
+def repair_started_orders_with_intake_stage() -> int:
+    """Clear only stale intake markers from orders already in real production.
+
+    Early ALMADINA-162 deployments could still expose the legacy immediate-dispatch
+    action. Those orders may have a real production path/stage while retaining
+    DATA_ENTRY or READY_TO_DISPATCH. Runtime production is authoritative, so the
+    safest repair is to remove only the contradictory pre-production marker and
+    preserve the production path, Production Stage, worker, and audit history.
+    """
+
+    if not frappe.db.exists("DocType", "Door Cutting Order"):
+        return 0
+
+    rows = frappe.get_all(
+        "Door Cutting Order",
+        filters={"workflow_stage": ["in", sorted(INTAKE_WORKFLOW_STAGES)]},
+        fields=["name", "production_path", "current_production_stage"],
+    )
+    names = [
+        row.name
+        for row in rows
+        if str(row.production_path or "").strip()
+        or str(row.current_production_stage or "").strip()
+    ]
+    for name in names:
+        frappe.db.set_value(
+            "Door Cutting Order",
+            name,
+            "workflow_stage",
+            None,
+            update_modified=False,
+        )
+    return len(names)
+
+
+__all__ = [
+    "repair_started_orders_with_intake_stage",
+    "sync_order_workflow_stages",
+]
