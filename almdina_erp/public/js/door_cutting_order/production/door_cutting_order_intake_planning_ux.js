@@ -104,36 +104,45 @@
 
     function routeStagesHtml(route) {
         return (route && Array.isArray(route.stages) ? route.stages : []).map((stage, index) => `
-            <span style="display:inline-flex;flex-direction:column;gap:2px;padding:8px 11px;border-radius:12px;background:var(--subtle-fg,#f3f5f7);font-size:12px;font-weight:700">
+            <span class="almadina-intake-route-stage">
                 <span>${index + 1}. ${escapeHtml(stage.department || stage.stage_type)}</span>
-                <small style="font-weight:500;color:var(--text-muted,#667085)">${escapeHtml(stage.operational_role || "")}</small>
-            </span>`).join('<span style="color:var(--text-muted,#98a2b3)">←</span>');
+                <small class="almadina-intake-route-stage-role">${escapeHtml(stage.operational_role || "")}</small>
+            </span>`).join('<span class="almadina-intake-route-arrow">←</span>');
     }
 
     function routePreview(routes, routeName) {
         const route = routes.find((item) => item.value === routeName) || routes[0];
         if (!route) return "";
-        return `<div dir="rtl" style="padding:12px;border:1px solid var(--border-color,#e5e7eb);border-radius:12px;background:var(--fg-color,#fff)">
-            <div style="font-weight:800;margin-bottom:8px">${escapeHtml(route.label || route.value)}</div>
-            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${routeStagesHtml(route)}</div>
+        return `<div class="almadina-intake-route-preview" dir="rtl">
+            <div class="almadina-intake-route-title">${escapeHtml(route.label || route.value)}</div>
+            <div class="almadina-intake-route-stages">${routeStagesHtml(route)}</div>
         </div>`;
     }
 
     function dispatchPlanHtml(payload, { compact = false } = {}) {
         const route = payload.route || {};
         const first = route.first_stage || {};
-        const padding = compact ? "12px" : "14px";
-        return `<div dir="rtl" style="padding:${padding};border:1px solid var(--border-color,#e5e7eb);border-radius:14px;background:var(--fg-color,#fff);box-shadow:0 1px 2px rgba(16,24,40,.04)">
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px">
-                <strong style="font-size:14px">${__("خطة الإرسال الحالية")}</strong>
-                <span style="font-size:12px;color:var(--text-muted,#667085)">${__("لم يبدأ الإنتاج بعد")}</span>
+        const cardClass = `almadina-dispatch-plan-card${compact ? " is-compact" : ""}`;
+        return `<div class="${cardClass}" dir="rtl">
+            <div class="almadina-dispatch-plan-header">
+                <strong class="almadina-dispatch-plan-title">${__("خطة الإرسال الحالية")}</strong>
+                <span class="almadina-dispatch-plan-state">${__("لم يبدأ الإنتاج بعد")}</span>
             </div>
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px 14px;margin-bottom:10px">
-                <div><small style="color:var(--text-muted,#667085)">${__("مسار الإنتاج")}</small><div style="font-weight:700">${escapeHtml(route.label || route.value || payload.planned_production_route)}</div></div>
-                <div><small style="color:var(--text-muted,#667085)">${__("العامل الأول")}</small><div style="font-weight:700">${escapeHtml(payload.planned_first_assignee)}</div></div>
-                <div><small style="color:var(--text-muted,#667085)">${__("المرحلة الأولى")}</small><div style="font-weight:700">${escapeHtml(first.department || first.stage_type)}</div></div>
+            <div class="almadina-dispatch-plan-grid">
+                <div>
+                    <small class="almadina-dispatch-plan-label">${__("مسار الإنتاج")}</small>
+                    <div class="almadina-dispatch-plan-value">${escapeHtml(route.label || route.value || payload.planned_production_route)}</div>
+                </div>
+                <div>
+                    <small class="almadina-dispatch-plan-label">${__("العامل الأول")}</small>
+                    <div class="almadina-dispatch-plan-value">${escapeHtml(payload.planned_first_assignee)}</div>
+                </div>
+                <div>
+                    <small class="almadina-dispatch-plan-label">${__("المرحلة الأولى")}</small>
+                    <div class="almadina-dispatch-plan-value">${escapeHtml(first.department || first.stage_type)}</div>
+                </div>
             </div>
-            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${routeStagesHtml(route)}</div>
+            <div class="almadina-intake-route-stages">${routeStagesHtml(route)}</div>
         </div>`;
     }
 
@@ -142,7 +151,7 @@
         if (!field || !field.$wrapper || !field.$wrapper.length) return null;
         let host = field.$wrapper.find(`.${PLAN_SUMMARY_CLASS}`);
         if (!host.length) {
-            host = $(`<div class="${PLAN_SUMMARY_CLASS}" style="margin:10px 0 14px"></div>`);
+            host = $(`<div class="${PLAN_SUMMARY_CLASS}"></div>`);
             field.$wrapper.append(host);
         }
         return host;
@@ -187,7 +196,7 @@
             if (!isCurrentDocumentContext(frm, token)) return;
             const host = dispatchPlanHost(frm);
             if (!host) return;
-            host.html(`<div dir="rtl" style="padding:12px;border:1px solid var(--border-color,#e5e7eb);border-radius:12px;color:var(--text-muted,#667085)">
+            host.html(`<div class="almadina-dispatch-plan-error" dir="rtl">
                 ${__("تعذر التحقق من خطة الإرسال الحالية. استخدم «تعديل خطة الإرسال» ثم أعد المحاولة.")}
             </div>`);
         });
