@@ -57,6 +57,21 @@ def assert_pending_dispatch_editable(
         )
 
 
+def assert_legacy_dispatch_allowed(facts: IntakeFacts) -> None:
+    """Fail closed when the retired dispatch path targets an intake-managed order.
+
+    ALMADINA-162 owns DATA_ENTRY and READY_TO_DISPATCH as pre-production states.
+    The legacy dispatch command creates a Production Stage immediately, so allowing
+    it here would create an impossible mixed state (intake + active production).
+    Legacy orders without an intake workflow stage remain backward compatible.
+    """
+
+    if facts.workflow_stage in INTAKE_WORKFLOW_STAGES:
+        raise IntakeLifecycleError(
+            "هذا الطلب ضمن دورة إدخال البيانات الجديدة؛ لا يمكن استخدام إرسال الإنتاج القديم."
+        )
+
+
 __all__ = [
     "DATA_ENTRY",
     "READY_TO_DISPATCH",
@@ -64,6 +79,7 @@ __all__ = [
     "IntakeFacts",
     "IntakeLifecycleError",
     "IntakePermissionError",
+    "assert_legacy_dispatch_allowed",
     "assert_pending_dispatch_editable",
     "should_initialize_data_entry",
 ]
