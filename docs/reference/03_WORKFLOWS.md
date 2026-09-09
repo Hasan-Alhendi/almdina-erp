@@ -9,19 +9,28 @@
 
 ## 2. المسار التشغيلي الحالي
 
-Stage 14 ثبّت المسار المرجعي التالي كرحلة E2E:
+قبل بدء الإنتاج يمر الطلب بمرحلتين route-independent محفوظتين على `workflow_stage`:
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Draft
-    Draft --> AtDrawing: Dispatch + valid cutting plan
+    [*] --> DataEntry
+    DataEntry --> ReadyToDispatch: Finish Data Entry + route + qualified first assignee
+    ReadyToDispatch --> AtDrawing: Dispatch + valid cutting plan
     AtDrawing --> AtCNC: planning plan approved + handoff
     AtCNC --> AtSanding: CNC completes + handoff
     AtSanding --> ReadyForDelivery: final stage completes
     ReadyForDelivery --> Delivered: supervisor confirms delivery
 ```
 
-الأسماء الفعلية للمراحل قابلة للضبط عبر `Production Routing`. المثال أعلاه يمثل Route يبدأ بمرحلة تخطيط Drawing ثم CNC ثم Sanding/تقشيط.
+- `DATA_ENTRY`: الطلب محفوظ على الخادم وما زال تحت مسؤولية مدخل البيانات.
+- `READY_TO_DISPATCH`: اكتمل إدخال البيانات وحُفظت **خطة إرسال معلقة**، لكن الإنتاج لم يبدأ بعد.
+- أثناء الحالتين يبقى `production_path` فارغًا ولا يوجد `current_production_stage`.
+- `current_assignee` يبقى مدخل البيانات الحالي أثناء intake؛ العامل المختار لأول مرحلة يُحفظ منفصلًا في `planned_first_assignee` ولا يصبح assignee إنتاجيًا قبل dispatch الحقيقي.
+- `planned_production_route` يحفظ المسار المختار فقط؛ لا ينشئ `Production Stage` ولا يفعّل route.
+
+عند أول حفظ ناجح لطلب جديد يُهيأ `DATA_ENTRY` على الخادم. وعند ترقية موقع موجود، migration يعيد نفس التهيئة idempotently للطلبات القديمة التي لا تملك `workflow_stage` **ولم تدخل الإنتاج أصلًا**؛ تشغيل migrate مرة ثانية لا يعيد تهيئتها ولا يعيد فتح طلب دخل production.
+
+الأسماء الفعلية لمراحل الإنتاج بعد dispatch قابلة للضبط عبر `Production Routing`. المثال أعلاه يمثل Route يبدأ بمرحلة تخطيط Drawing ثم CNC ثم Sanding/تقشيط.
 
 ## 3. Draft وReview/Approve القديم
 
@@ -33,11 +42,30 @@ stateDiagram-v2
 
 **مهم:** هذا مختلف عن **اعتماد Cutting Plan**. إذا بدأ Production Route بمرحلة تخطيط، يجب اعتماد الخطة المختارة قبل handoff من مرحلة التخطيط إلى المرحلة التالية.
 
-قبل الإرسال للإنتاج يبقى الطلب في `Draft` قابلًا لإعادة حساب الخطة أو رفع/استبدال DXF أو تعديل إعدادات القص حتى لو كانت هناك خطة معتمدة أو مسار إنتاج مخطط. الاعتماد السابق يبقى مرجعًا حتى يُعتمد البديل. بعد مغادرة مرحلة الرسم تبقى الخطة المعتمدة مقفلة.
+## 4. إنهاء إدخال البيانات وخطة الإرسال
 
-## 4. Dispatch
+زر `إنهاء إدخال البيانات` هو transition من `DATA_ENTRY` إلى `READY_TO_DISPATCH`، وليس dispatch.
 
-لإرسال الطلب للإنتاج يلزم، كحد أدنى وفق العقد الحالي:
+يلزم قبل حفظ الخطة:
+
+- أن يكون الطلب محفوظًا ولا توجد تعديلات محلية غير محفوظة؛ الواجهة تمنع الإجراء بدل إعادة تحميل نسخة الخادم فوق عمل المستخدم.
+- أن يملك المستخدم `edit_order` ضمن document scope.
+- أن يبقى الطلب قبل الإنتاج: لا `production_path` ولا `current_production_stage`.
+- أن يكون المستخدم هو `current_assignee` الخاص بمرحلة الإدخال، أو `Administrator`.
+- اختيار `Production Routing` مفعّل.
+- اختيار مستخدم مؤهل لـ`operational_role` الخاص بأول Stage في المسار.
+
+الحفظ يكتب `READY_TO_DISPATCH` و`planned_production_route` و`planned_first_assignee` وبيانات من خطط الإرسال، ولا ينشئ `Production Stage` ولا يبدأ الإنتاج ولا يغيّر `current_assignee` إلى العامل المخطط.
+
+إذا كان الطلب أصلًا `READY_TO_DISPATCH` يستطيع مالك intake تعديل الخطة بنفس الحدود قبل بدء production.
+
+كل async completion في هذا الحوار تتبع Document identity/generation عبر `AlmdinaDocumentContext`; مغادرة الطلب أو الانتقال إلى Form آخر تمنع dialog/alert/reload قديم من الظهور في السياق الجديد.
+
+## 5. Dispatch
+
+Dispatch الحقيقي هو الحد الذي يبدأ عنده production. خطة `READY_TO_DISPATCH` المعلقة لا تعني أن هذا الحد عُبر.
+
+لإرسال الطلب للإنتاج يلزم، كحد أدنى وفق عقد dispatch:
 
 - `DISPATCH_ORDER` capability.
 - حالة قابلة للإرسال.
@@ -47,9 +75,9 @@ stateDiagram-v2
 - Route صالح.
 - العامل المختار يملك `operational_role` المطلوب لأول مرحلة.
 
-بعد dispatch ينشأ Current Production Stage ويُسند لمستخدم محدد.
+بعد dispatch فقط ينشأ Current Production Stage ويُسند لمستخدم محدد. تغيير سلوك dispatch الفعلي أو زر بدء الإنتاج ليس جزءًا من عقد intake نفسه.
 
-## 5. تنفيذ المرحلة
+## 6. تنفيذ المرحلة
 
 ### Start
 
@@ -79,13 +107,13 @@ Application يقرأ المرحلة التالية من Route، لا من سلس
 
 انتهاء آخر مرحلة يحوّل الطلب إلى `Ready for Delivery`، ثم `MARK_DELIVERED` يحوله إلى `Delivered`.
 
-## 6. Inbox وArchive
+## 7. Inbox وArchive
 
 العامل يرى العمل النشط المسند له في Inbox. بعد اكتمال مرحلته ينتقل سجله إلى Archive/التاريخ الشخصي، بينما يرى العامل التالي مرحلته الجديدة.
 
 هذه ليست مجرد طريقة عرض؛ Stage 14 يختبر انتقال نفس الطلب بين commands وqueries معًا.
 
-## 7. Supervisor actions
+## 8. Supervisor actions
 
 حسب Capabilities يمكن للمشرف:
 
@@ -97,7 +125,7 @@ Application يقرأ المرحلة التالية من Route، لا من سلس
 
 Supervisor capability لا تلغي كل قواعد البنية تلقائيًا؛ بعض الإجراءات ما زالت تتطلب وجود target stage صالح أو status مناسب.
 
-## 8. Drawing / planning handoff
+## 9. Drawing / planning handoff
 
 إذا كان أول Stage `is_planning_stage=True`:
 
@@ -107,13 +135,13 @@ Supervisor capability لا تلغي كل قواعد البنية تلقائيً�
 4. يعتمد Production Cutting Plan المختارة.
 5. عند handoff فقط ينتقل الطلب للمرحلة التالية، مع بقاء Planning Handoff Gate إلزامية في الحالتين.
 
-## 9. Revision
+## 10. Revision
 
 Revision تحافظ على تاريخ الطلب بدل تعديل حقيقة إنتاجية قديمة بصمت. أي تغيير يؤثر على geometry أو plan بعد نقطة اعتماد/إنتاج يجب أن يمر بالآلية المناسبة ويعيد حساب/اعتماد الخطة عند الحاجة.
 
 لا تجعل Preview لطلب مقفل يعيد تشغيل optimizer وكأنه Draft؛ تاريخ الطلب يجب أن يبقى ثابتًا.
 
-## 10. Incidents & Replacements
+## 11. Incidents & Replacements
 
 عند تلف/خطأ قطعة:
 
@@ -122,12 +150,14 @@ Revision تحافظ على تاريخ الطلب بدل تعديل حقيقة إ
 - التعويض له Authorization وPlanning/Execution مستقلان.
 - معرفة اسم Replacement أو DCO لا تكفي للوصول إليه؛ document scope يجب أن يثبت العلاقة.
 
-## 11. State ownership
+## 12. State ownership
 
-- Order lifecycle rules: `domain/orders/lifecycle.py`.
+- Intake lifecycle rules: `domain/orders/intake_lifecycle.py`.
+- Intake use cases: `application/orders/intake_planning.py`.
 - Route model: `domain/orders/production_routing.py`.
 - Production authorization facts: `domain/orders/production_authorization.py`.
 - Commands: `application/shop_floor/commands.py`.
 - Queries/Inbox/Archive: `application/shop_floor/queries.py`.
+- DCO async form identity/generation: `AlmdinaDocumentContext` وفق [15 — Frontend Lifecycle](15_FRONTEND_LIFECYCLE_STANDARD.md).
 
 هذه الملفات هي أول مكان يقرأه المطور عند تعديل Workflow.

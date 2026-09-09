@@ -116,6 +116,7 @@ doctype_js = {
         # adapter only mounts a button and opens the globally reusable NotesPanel.
         "public/js/door_cutting_order/notes/door_cutting_order_notes_ux.js",
         "public/js/door_cutting_order/production/shop_floor_order_ux.js",
+        "public/js/door_cutting_order/production/door_cutting_order_intake_planning_ux.js",
         "public/js/door_cutting_order/core/door_cutting_order_toolbar_stability_ux.js",
         "public/js/door_cutting_order/core/door_cutting_order_revision_ux.js",
         # Integration runs only after the existing Edit Session owner is present.

@@ -1,0 +1,69 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+
+DATA_ENTRY = "DATA_ENTRY"
+READY_TO_DISPATCH = "READY_TO_DISPATCH"
+INTAKE_WORKFLOW_STAGES = frozenset({DATA_ENTRY, READY_TO_DISPATCH})
+
+
+class IntakeLifecycleError(ValueError):
+    """Raised when an order cannot move through the pre-production intake flow."""
+
+
+class IntakePermissionError(PermissionError):
+    """Raised when the current actor does not own the intake responsibility."""
+
+
+@dataclass(frozen=True, slots=True)
+class IntakeFacts:
+    workflow_stage: str
+    production_path: str
+    current_production_stage: str
+    current_assignee: str
+    owner: str
+
+
+def should_initialize_data_entry(facts: IntakeFacts) -> bool:
+    """Return whether a persisted, never-dispatched order needs DATA_ENTRY."""
+
+    return bool(
+        not facts.workflow_stage
+        and not facts.production_path
+        and not facts.current_production_stage
+    )
+
+
+def assert_pending_dispatch_editable(
+    facts: IntakeFacts,
+    *,
+    actor: str,
+    is_admin: bool,
+) -> None:
+    """Validate the boundary between intake and real production execution."""
+
+    if facts.workflow_stage not in INTAKE_WORKFLOW_STAGES:
+        raise IntakeLifecycleError(
+            "يمكن إنهاء إدخال البيانات أو تعديل خطة الإرسال فقط قبل بدء الإنتاج."
+        )
+    if facts.production_path or facts.current_production_stage:
+        raise IntakeLifecycleError(
+            "بدأ الإنتاج لهذا الطلب بالفعل؛ لا يمكن تعديل خطة الإرسال المعلقة."
+        )
+    if not is_admin and facts.current_assignee != actor:
+        raise IntakePermissionError(
+            "خطة الإرسال المعلقة تبقى تحت مسؤولية مدخل البيانات الحالي."
+        )
+
+
+__all__ = [
+    "DATA_ENTRY",
+    "READY_TO_DISPATCH",
+    "INTAKE_WORKFLOW_STAGES",
+    "IntakeFacts",
+    "IntakeLifecycleError",
+    "IntakePermissionError",
+    "assert_pending_dispatch_editable",
+    "should_initialize_data_entry",
+]

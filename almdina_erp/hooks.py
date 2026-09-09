@@ -36,6 +36,8 @@ doc_events = {
             "almdina_erp.almdina_erp.services.order_plan_permission_service.enforce_plan_and_drawing_permissions",
         "before_save":
             "almdina_erp.almdina_erp.services.notes_projection_service.preserve_order_projection_on_save",
+        "after_insert":
+            "almdina_erp.almdina_erp.services.order_intake_service.ensure_data_entry_after_save",
     },
     "Comment": {
         "on_update":

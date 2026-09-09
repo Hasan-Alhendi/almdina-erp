@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from almdina_erp.almdina_erp.application.orders.intake_planning import backfill_data_entry
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_surface_metadata import (
     sync_cutting_plan_surface_metadata,
 )
@@ -8,6 +9,12 @@ from almdina_erp.almdina_erp.infrastructure.frappe.native_app_navigation import 
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.order_cost_surface_metadata import (
     sync_order_cost_surface_metadata,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.order_intake_repository import (
+    FrappeOrderIntakeRepository,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.order_workflow_stage_sync import (
+    sync_order_workflow_stages,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.permission_type_sync import (
     sync_permission_types,
@@ -54,11 +61,24 @@ def _sync_native_navigation_metadata() -> None:
     sync_native_app_navigation()
 
 
+def _sync_order_workflow_metadata() -> None:
+    """Keep shared, route-independent order workflow stages available."""
+
+    sync_order_workflow_stages()
+
+
+def _backfill_order_intake_state() -> None:
+    """Initialize legacy never-dispatched orders after model sync, idempotently."""
+
+    backfill_data_entry(FrappeOrderIntakeRepository())
+
+
 def after_install() -> None:
     run_existing_after_install()
     _sync_form_metadata_invariants()
     _sync_security_foundation()
     _sync_native_navigation_metadata()
+    _sync_order_workflow_metadata()
 
 
 def after_migrate() -> None:
@@ -66,6 +86,8 @@ def after_migrate() -> None:
     _sync_form_metadata_invariants()
     _sync_security_foundation()
     _sync_native_navigation_metadata()
+    _sync_order_workflow_metadata()
+    _backfill_order_intake_state()
 
 
 __all__ = ["after_install", "after_migrate"]
