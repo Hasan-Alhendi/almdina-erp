@@ -1,0 +1,108 @@
+.almadina-intake-route-preview,
+.almadina-dispatch-plan-card,
+.almadina-dispatch-plan-error {
+    direction: rtl;
+    border: 1px solid var(--border-color, #e5e7eb);
+    border-radius: 12px;
+    background: var(--fg-color, #fff);
+}
+
+.almadina-intake-route-preview {
+    padding: 12px;
+}
+
+.almadina-intake-route-title {
+    margin-block-end: 8px;
+    font-weight: 800;
+}
+
+.almadina-intake-route-stages {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.almadina-intake-route-stage {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 11px;
+    border-radius: 12px;
+    background: var(--subtle-fg, #f3f5f7);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.almadina-intake-route-stage-role {
+    color: var(--text-muted, #667085);
+    font-weight: 500;
+}
+
+.almadina-intake-route-arrow {
+    color: var(--text-muted, #98a2b3);
+}
+
+.almadina-dispatch-plan-summary {
+    margin-block: 10px 14px;
+}
+
+.almadina-dispatch-plan-card {
+    padding: 14px;
+    border-radius: 14px;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+
+.almadina-dispatch-plan-card.is-compact {
+    padding: 12px;
+}
+
+.almadina-dispatch-plan-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-block-end: 10px;
+}
+
+.almadina-dispatch-plan-title {
+    font-size: 14px;
+}
+
+.almadina-dispatch-plan-state,
+.almadina-dispatch-plan-label,
+.almadina-dispatch-plan-error {
+    color: var(--text-muted, #667085);
+}
+
+.almadina-dispatch-plan-state,
+.almadina-dispatch-plan-label {
+    font-size: 12px;
+}
+
+.almadina-dispatch-plan-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 8px 14px;
+    margin-block-end: 10px;
+}
+
+.almadina-dispatch-plan-value {
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+.almadina-dispatch-plan-error {
+    padding: 12px;
+}
+
+@media (max-width: 600px) {
+    .almadina-dispatch-plan-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .almadina-intake-route-stage {
+        max-width: 100%;
+    }
+}
