@@ -12,7 +12,10 @@ from almdina_erp.almdina_erp.application.orders.intake_planning import (
 from almdina_erp.almdina_erp.domain.orders.intake_lifecycle import (
     DATA_ENTRY,
     READY_TO_DISPATCH,
+    IntakeFacts,
+    IntakeLifecycleError,
     IntakePermissionError,
+    assert_legacy_dispatch_allowed,
 )
 from almdina_erp.almdina_erp.domain.orders.production_routing import (
     ProductionRoute,
@@ -38,6 +41,16 @@ def _route() -> ProductionRoute:
                 operational_role="CNC Operator",
             ),
         ),
+    )
+
+
+def _intake_facts(workflow_stage: str) -> IntakeFacts:
+    return IntakeFacts(
+        workflow_stage=workflow_stage,
+        production_path="",
+        current_production_stage="",
+        current_assignee="entry@example.com",
+        owner="entry@example.com",
     )
 
 
@@ -214,6 +227,15 @@ class IntakePlanningTests(unittest.TestCase):
             payload["workers"]["ROUTE-A"][0]["name"],
             "drawing@example.com",
         )
+
+    def test_legacy_dispatch_is_blocked_for_every_intake_stage(self) -> None:
+        for stage in (DATA_ENTRY, READY_TO_DISPATCH):
+            with self.subTest(stage=stage):
+                with self.assertRaises(IntakeLifecycleError):
+                    assert_legacy_dispatch_allowed(_intake_facts(stage))
+
+    def test_legacy_order_without_intake_stage_remains_backward_compatible(self) -> None:
+        assert_legacy_dispatch_allowed(_intake_facts(""))
 
 
 if __name__ == "__main__":
