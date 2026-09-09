@@ -12,6 +12,14 @@ UX = (
     / "production"
     / "door_cutting_order_intake_planning_ux.js"
 )
+SHOP_FLOOR = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "production"
+    / "shop_floor_order_ux.js"
+)
 CSS = ROOT / "public" / "css" / "door_cutting_order_intake_planning.css"
 ASSETS = ROOT / "frontend_assets.py"
 SERVICE = ROOT / "almdina_erp" / "services" / "planned_dispatch_service.py"
@@ -76,6 +84,25 @@ def test_ready_plan_fetch_and_actions_follow_server_intake_owner_boundary() -> N
     reconcile_block = source[reconcile_start:]
     assert "isIntakeOwnerOrAdmin(frm) && canEditOrder(frm)" in reconcile_block
     assert "isIntakeOwnerOrAdmin(frm) && canDispatchOrder(frm)" in reconcile_block
+
+
+def test_legacy_shop_floor_surface_preserves_ready_planned_dispatch_action() -> None:
+    source = SHOP_FLOOR.read_text(encoding="utf-8")
+
+    assert "function isOwnedProductionAction(frm, label)" in source
+    assert 'return label !== __("إرسال للإنتاج") || !isIntakeManaged(frm);' in source
+    assert "filter(label => isOwnedProductionAction(frm, label))" in source
+
+    remove_start = source.index("function removeProductionButtons(frm)")
+    remove_end = source.index("function reconcileProductionActions(frm)", remove_start)
+    remove_block = source[remove_start:remove_end]
+    assert "if (!isIntakeManaged(frm))" in remove_block
+    assert 'frm.remove_custom_button(__("إرسال للإنتاج"));' in remove_block
+
+    expected_start = source.index("function expectedProductionActionLabels(frm)")
+    expected_end = source.index("function productionActionsReady(frm)", expected_start)
+    expected_block = source[expected_start:expected_end]
+    assert "!isIntakeManaged(frm)" in expected_block
 
 
 def test_dispatch_confirmation_is_read_only_and_uses_persisted_server_plan() -> None:
