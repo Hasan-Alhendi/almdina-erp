@@ -26,6 +26,14 @@ DISPATCH_SERVICE = (
     / "services"
     / "order_dispatch_service.py"
 )
+WORKFLOW_SYNC = (
+    ROOT
+    / "almdina_erp"
+    / "infrastructure"
+    / "frappe"
+    / "order_workflow_stage_sync.py"
+)
+LIFECYCLE = ROOT / "lifecycle.py"
 
 
 def test_intake_planning_ux_uses_server_plan_without_starting_production() -> None:
@@ -50,6 +58,14 @@ def test_intake_planning_ux_retires_legacy_dispatch_button_during_intake() -> No
     assert 'stage === READY_TO_DISPATCH' in source
 
 
+def test_intake_planning_ux_hides_plan_actions_if_real_production_already_started() -> None:
+    source = UX.read_text(encoding="utf-8")
+
+    assert "function productionStarted(frm)" in source
+    assert "frm.doc.production_path || frm.doc.current_production_stage" in source
+    assert "frm.is_new() || !canEditOrder(frm) || productionStarted(frm)" in source
+
+
 def test_shop_floor_owner_never_recreates_legacy_dispatch_during_intake() -> None:
     source = SHOP_FLOOR_UX.read_text(encoding="utf-8")
 
@@ -66,6 +82,19 @@ def test_legacy_dispatch_endpoint_enforces_intake_boundary_server_side() -> None
     assert "assert_legacy_dispatch_allowed" in source
     assert "def _assert_legacy_dispatch_boundary(order: Any) -> None:" in source
     assert source.count("_assert_legacy_dispatch_boundary(order)") >= 2
+
+
+def test_migrate_repairs_only_contradictory_intake_marker_before_backfill() -> None:
+    sync_source = WORKFLOW_SYNC.read_text(encoding="utf-8")
+    lifecycle_source = LIFECYCLE.read_text(encoding="utf-8")
+
+    assert "def repair_started_orders_with_intake_stage() -> int:" in sync_source
+    assert 'fields=["name", "production_path", "current_production_stage"]' in sync_source
+    assert '"workflow_stage",\n            None,' in sync_source
+    assert "repair_started_orders_with_intake_stage()" in lifecycle_source
+    assert lifecycle_source.index("_repair_order_intake_state()") < lifecycle_source.index(
+        "_backfill_order_intake_state()"
+    )
 
 
 def test_intake_planning_ux_blocks_unsaved_form_state_before_server_mutation() -> None:
