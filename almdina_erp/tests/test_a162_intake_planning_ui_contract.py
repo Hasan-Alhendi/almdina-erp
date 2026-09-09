@@ -12,6 +12,20 @@ UX = (
     / "production"
     / "door_cutting_order_intake_planning_ux.js"
 )
+SHOP_FLOOR_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "production"
+    / "shop_floor_order_ux.js"
+)
+DISPATCH_SERVICE = (
+    ROOT
+    / "almdina_erp"
+    / "services"
+    / "order_dispatch_service.py"
+)
 
 
 def test_intake_planning_ux_uses_server_plan_without_starting_production() -> None:
@@ -34,6 +48,24 @@ def test_intake_planning_ux_retires_legacy_dispatch_button_during_intake() -> No
     assert 'frm.remove_custom_button(__("إرسال للإنتاج"))' in source
     assert 'stage === DATA_ENTRY' in source
     assert 'stage === READY_TO_DISPATCH' in source
+
+
+def test_shop_floor_owner_never_recreates_legacy_dispatch_during_intake() -> None:
+    source = SHOP_FLOOR_UX.read_text(encoding="utf-8")
+
+    assert 'const INTAKE_WORKFLOW_STAGES = new Set(["DATA_ENTRY", "READY_TO_DISPATCH"]);' in source
+    assert "function isIntakeManaged(frm)" in source
+    assert 'frm.doc.workflow_stage || ""' in source
+    assert 'if (frm.is_new() || !can(frm, "dispatch_order") || isIntakeManaged(frm)) return;' in source
+    assert "!isIntakeManaged(frm)" in source
+
+
+def test_legacy_dispatch_endpoint_enforces_intake_boundary_server_side() -> None:
+    source = DISPATCH_SERVICE.read_text(encoding="utf-8")
+
+    assert "assert_legacy_dispatch_allowed" in source
+    assert "def _assert_legacy_dispatch_boundary(order: Any) -> None:" in source
+    assert source.count("_assert_legacy_dispatch_boundary(order)") >= 2
 
 
 def test_intake_planning_ux_blocks_unsaved_form_state_before_server_mutation() -> None:
