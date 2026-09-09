@@ -61,6 +61,14 @@
 		);
 	}
 
+	function isOwnedProductionAction(frm, label) {
+		if (!OWNED_PRODUCTION_ACTION_LABELS.has(label)) return false;
+		// READY_TO_DISPATCH owns its real dispatch action in the intake/planned
+		// dispatch module. The legacy shop-floor surface must neither remove it
+		// nor treat it as stale while reconciling its own toolbar actions.
+		return label !== __("إرسال للإنتاج") || !isIntakeManaged(frm);
+	}
+
 	function assignedToCurrentUser(stage) {
 		const assignedTo = stage && stage.active_stage_assigned_to;
 		return Boolean(assignedTo && assignedTo === frappe.session.user);
@@ -772,7 +780,7 @@
 		if (frm.__almdinaProductionActionsKey !== productionActionsKey(frm)) return false;
 		const expected = new Set(expectedProductionActionLabels(frm));
 		const rendered = renderedButtonLabels(frm);
-		const renderedOwned = [...rendered].filter(label => OWNED_PRODUCTION_ACTION_LABELS.has(label));
+		const renderedOwned = [...rendered].filter(label => isOwnedProductionAction(frm, label));
 		return (
 			[...expected].every(label => rendered.has(label))
 			&& renderedOwned.every(label => expected.has(label))
@@ -901,9 +909,12 @@
 			"إنهاء وإرسال",
 			"تغيير العامل",
 		].forEach((label) => frm.remove_custom_button(__(label), PRODUCTION_ACTION_GROUP));
-		// Standalone toolbar buttons (no group). Removing both direct and legacy
-		// grouped variants prevents a stale stage action after a state refresh.
-		frm.remove_custom_button(__("إرسال للإنتاج"));
+		// Standalone toolbar buttons (no group). The planned-dispatch owner keeps
+		// «إرسال للإنتاج» during intake; legacy cleanup owns it only outside that
+		// lifecycle. Other shop-floor buttons remain owned here.
+		if (!isIntakeManaged(frm)) {
+			frm.remove_custom_button(__("إرسال للإنتاج"));
+		}
 		frm.remove_custom_button(__("إرجاع لمرحلة سابقة"));
 		frm.remove_custom_button(__("بدء العمل"));
 		frm.remove_custom_button(__("إنهاء وإرسال"));
