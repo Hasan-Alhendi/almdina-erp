@@ -128,10 +128,24 @@ def test_service_exposes_narrow_server_authoritative_contract() -> None:
     source = SERVICE.read_text(encoding="utf-8")
 
     assert "def dispatch_planned_order(order_name: str)" in source
-    assert "route_name" not in source
-    assert "assignee" not in source
+    dispatch_block = source.split("def dispatch_planned_order(order_name: str)", 1)[1]
+    assert "route_name" not in dispatch_block
+    assert "assignee" not in dispatch_block
     assert "PlannedDispatchPermissionDenied" in source
     assert "frappe.PermissionError" in source
+
+
+def test_plan_context_read_requires_explicit_capability_and_document_scope() -> None:
+    source = SERVICE.read_text(encoding="utf-8")
+
+    assert "def _require_plan_context_access(order_name: str)" in source
+    assert "require_any_document_capability" in source
+    assert "Capability.EDIT_ORDER" in source
+    assert "Capability.DISPATCH_ORDER" in source
+    context_block = source.split("def get_planned_dispatch_context(order_name: str)", 1)[1].split(
+        "\n\n@frappe.whitelist()", 1
+    )[0]
+    assert "_require_plan_context_access(order_name)" in context_block
 
 
 def test_application_owns_lock_state_authorization_and_atomic_mutation_order() -> None:
