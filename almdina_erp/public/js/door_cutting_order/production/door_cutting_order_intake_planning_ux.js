@@ -4,6 +4,7 @@
     const DATA_ENTRY = "DATA_ENTRY";
     const READY_TO_DISPATCH = "READY_TO_DISPATCH";
     const INTAKE_STAGES = new Set([DATA_ENTRY, READY_TO_DISPATCH]);
+    const INTAKE_ACTION_LABELS = ["إنهاء إدخال البيانات", "تعديل خطة الإرسال"];
 
     function permissions() {
         return window.AlmdinaPermissions || null;
@@ -63,6 +64,10 @@
     function removeLegacyDispatchAction(frm) {
         if (!INTAKE_STAGES.has(String(frm.doc.workflow_stage || ""))) return;
         frm.remove_custom_button(__("إرسال للإنتاج"));
+    }
+
+    function removeIntakeActions(frm) {
+        INTAKE_ACTION_LABELS.forEach((label) => frm.remove_custom_button(__(label)));
     }
 
     function workerOptions(workers, routeName) {
@@ -204,17 +209,35 @@
         });
     }
 
-    function refresh(frm) {
+    function reconcileIntakeActions(frm) {
+        if (!frm || frm.doctype !== "Door Cutting Order" || !frm.doc) return false;
+
+        removeIntakeActions(frm);
         removeLegacyDispatchAction(frm);
-        if (frm.is_new() || !canEditOrder(frm) || productionStarted(frm)) return;
+        if (frm.is_new() || !canEditOrder(frm) || productionStarted(frm)) return false;
 
         const stage = String(frm.doc.workflow_stage || "");
         if (stage === DATA_ENTRY) {
             frm.add_custom_button(__("إنهاء إدخال البيانات"), () => openIntakePlanningDialog(frm));
-        } else if (stage === READY_TO_DISPATCH) {
-            frm.add_custom_button(__("تعديل خطة الإرسال"), () => openIntakePlanningDialog(frm));
+            return true;
         }
+        if (stage === READY_TO_DISPATCH) {
+            frm.add_custom_button(__("تعديل خطة الإرسال"), () => openIntakePlanningDialog(frm));
+            return true;
+        }
+        return false;
     }
 
-    frappe.ui.form.on("Door Cutting Order", { refresh });
+    frappe.ui.form.on("Door Cutting Order", { refresh: reconcileIntakeActions });
+
+    window.addEventListener("almdina:permissions-updated", () => {
+        const frm = window.cur_frm;
+        if (frm && frm.doctype === "Door Cutting Order") {
+            reconcileIntakeActions(frm);
+        }
+    });
+
+    window.AlmdinaOrderIntakePlanningUX = Object.freeze({
+        reconcileIntakeActions,
+    });
 })();
