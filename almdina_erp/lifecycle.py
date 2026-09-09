@@ -14,6 +14,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.order_intake_repository impor
     FrappeOrderIntakeRepository,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.order_workflow_stage_sync import (
+    repair_started_orders_with_intake_stage,
     sync_order_workflow_stages,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.permission_type_sync import (
@@ -67,6 +68,12 @@ def _sync_order_workflow_metadata() -> None:
     sync_order_workflow_stages()
 
 
+def _repair_order_intake_state() -> None:
+    """Remove contradictory intake markers from orders already in production."""
+
+    repair_started_orders_with_intake_stage()
+
+
 def _backfill_order_intake_state() -> None:
     """Initialize legacy never-dispatched orders after model sync, idempotently."""
 
@@ -87,6 +94,7 @@ def after_migrate() -> None:
     _sync_security_foundation()
     _sync_native_navigation_metadata()
     _sync_order_workflow_metadata()
+    _repair_order_intake_state()
     _backfill_order_intake_state()
 
 
