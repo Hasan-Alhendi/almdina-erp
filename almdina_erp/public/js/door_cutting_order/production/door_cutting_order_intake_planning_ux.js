@@ -35,6 +35,14 @@
         return Boolean(frm.doc.__unsaved);
     }
 
+    function productionStarted(frm) {
+        return Boolean(
+            frm
+            && frm.doc
+            && (frm.doc.production_path || frm.doc.current_production_stage)
+        );
+    }
+
     function requirePersistedFormState(frm) {
         if (!hasUnsavedChanges(frm)) return true;
         frappe.msgprint(__(
@@ -198,7 +206,7 @@
 
     function refresh(frm) {
         removeLegacyDispatchAction(frm);
-        if (frm.is_new() || !canEditOrder(frm)) return;
+        if (frm.is_new() || !canEditOrder(frm) || productionStarted(frm)) return;
 
         const stage = String(frm.doc.workflow_stage || "");
         if (stage === DATA_ENTRY) {
