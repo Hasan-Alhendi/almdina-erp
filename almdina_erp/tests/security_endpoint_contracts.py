@@ -52,6 +52,7 @@ _GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("almdina_erp.almdina_erp.services.order_lifecycle_service", C, ("cancel_order", "return_order_to_draft")),
     ("almdina_erp.almdina_erp.services.order_plan_permission_service", C, ("recalculate_order", "simulate_optimizer_plan")),
     ("almdina_erp.almdina_erp.services.plan_settings_edit_service", C, ("save_plan_settings",)),
+    ("almdina_erp.almdina_erp.services.planned_dispatch_service", C, ("dispatch_planned_order", "get_planned_dispatch_context")),
     ("almdina_erp.almdina_erp.services.order_review_service", F, ("reject_order",)),
     ("almdina_erp.almdina_erp.services.order_revision_service", C, ("create_order_revision", "return_order_to_draft")),
     ("almdina_erp.almdina_erp.services.permission_context_service", S, ("get_permission_context",)),
