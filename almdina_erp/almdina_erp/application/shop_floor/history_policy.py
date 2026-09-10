@@ -56,8 +56,6 @@ def _is_operational_ready_row(
 
     order_status = normalize_order_status(_value(row, "order_status"))
     legacy_ready = order_status == _READY_FOR_DELIVERY
-    if legacy_ready and route_resolver is None:
-        return True
     projected_ready = bool(
         order_status not in {"Delivered", "Cancelled"}
         and str(_value(row, "status") or "") == "Completed"
@@ -126,7 +124,10 @@ def visible_archive_rows(
     return [
         row
         for row in list(rows or ())
-        if not _is_operational_ready_row(row, route_resolver)
+        if (
+            normalize_order_status(_value(row, "order_status")) != _READY_FOR_DELIVERY
+            and not _is_operational_ready_row(row, route_resolver)
+        )
     ]
 
 
