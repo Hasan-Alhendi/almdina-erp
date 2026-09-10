@@ -1,0 +1,101 @@
+/*
+ * Door Cutting Order desktop ListView compact presentation.
+ *
+ * Behaviour remains in the list-view JavaScript modules. This stylesheet owns
+ * only field-scoped sizing and the presentation of compact list values.
+ */
+
+@media (min-width: 601px) {
+    .dco-order-list .list-row-col[data-fieldname="name"] {
+        width: 108px !important;
+        min-width: 108px !important;
+        max-width: 108px !important;
+        flex: 0 0 108px !important;
+    }
+
+    .dco-order-list .list-row-col[data-fieldname="customer"] {
+        width: 150px !important;
+        min-width: 150px !important;
+        max-width: 150px !important;
+        flex: 0 0 150px !important;
+    }
+
+    .dco-order-list .list-row-col[data-fieldname="order_date"] {
+        width: 96px !important;
+        min-width: 96px !important;
+        max-width: 96px !important;
+        flex: 0 0 96px !important;
+    }
+
+    .dco-order-list .list-row-col[data-fieldname="board_description"] {
+        width: 175px !important;
+        min-width: 175px !important;
+        max-width: 175px !important;
+        flex: 0 0 175px !important;
+    }
+
+    .dco-order-list .list-row-col[data-fieldname="edge_color"] {
+        width: 120px !important;
+        min-width: 120px !important;
+        max-width: 120px !important;
+        flex: 0 0 120px !important;
+    }
+
+    .dco-order-list .list-row-col[data-fieldname="order_notes"],
+    .dco-order-list .list-row-col[data-fieldname="important_note_preview"] {
+        width: 175px !important;
+        min-width: 175px !important;
+        max-width: 175px !important;
+        flex: 0 0 175px !important;
+    }
+
+    .dco-order-list .list-row-col[data-fieldname="production_path"] {
+        width: 135px !important;
+        min-width: 135px !important;
+        max-width: 135px !important;
+        flex: 0 0 135px !important;
+    }
+
+    .dco-order-list .list-row-col[data-fieldname="current_department"] {
+        width: 130px !important;
+        min-width: 130px !important;
+        max-width: 130px !important;
+        flex: 0 0 130px !important;
+    }
+
+    .dco-order-list .list-row-col[data-fieldname="current_assignee"] {
+        width: 145px !important;
+        min-width: 145px !important;
+        max-width: 145px !important;
+        flex: 0 0 145px !important;
+    }
+
+    .dco-order-list .list-row-col[data-fieldname="name"],
+    .dco-order-list .list-row-col[data-fieldname="order_date"] {
+        direction: ltr;
+        unicode-bidi: isolate;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .dco-order-list .dco-list-compact-text {
+        display: block;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .dco-order-list .dco-list-filterable-text {
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        appearance: none;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        line-height: inherit;
+        text-align: start;
+        cursor: pointer;
+    }
+}

@@ -8,6 +8,7 @@ coverage.
 app_include_css = [
     "/assets/almdina_erp/css/door_cutting_order_measurement_structure.css",
     "/assets/almdina_erp/css/door_cutting_order_responsive.css",
+    "/assets/almdina_erp/css/door_cutting_order_list.css",
     "/assets/almdina_erp/css/door_cutting_order_extra_addons.css",
     "/assets/almdina_erp/css/notes.css",
     "/assets/almdina_erp/css/notes_interactions.css",
@@ -143,5 +144,8 @@ doctype_js = {
 }
 
 doctype_list_js = {
-    "Door Cutting Order": "public/js/door_cutting_order/list_view/door_cutting_order_list.js",
+    "Door Cutting Order": [
+        "public/js/door_cutting_order/list_view/door_cutting_order_list.js",
+        "public/js/door_cutting_order/list_view/door_cutting_order_compact_list_ux.js",
+    ],
 }
