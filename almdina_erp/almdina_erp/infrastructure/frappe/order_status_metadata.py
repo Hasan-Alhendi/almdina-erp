@@ -13,16 +13,8 @@ STATUS_FIELDNAME = "status"
 # stage values are projected from Production Stage Definition at runtime.
 FIXED_ORDER_STATUS_OPTIONS: tuple[str, ...] = (
     "Draft",
-    "Pending Review",
-    "Approved",
-    "Ready for Delivery",
     "Delivered",
-    "Completed",
-    "Rejected",
-    "On Hold",
     "Cancelled",
-    "Replacement Required",
-    "Partially Completed",
 )
 
 
@@ -84,13 +76,44 @@ def build_order_status_options() -> tuple[str, ...]:
     )
 
 
-def sync_order_status_options() -> tuple[str, ...]:
-    """Materialize dynamic stage labels into the app-owned status Select field.
+def _sync_kanban_boards(options: tuple[str, ...]) -> None:
+    """Replace persisted DCO Status board columns with the canonical projection."""
 
-    Frappe's native Kanban reads Select options from DocField metadata. Keeping
-    this projection synchronized lets the existing Kanban remain completely
-    native while production stages stay data-driven.
-    """
+    if not frappe.db.exists("DocType", "Kanban Board"):
+        return
+    board_names = frappe.get_all(
+        "Kanban Board",
+        filters={
+            "reference_doctype": ORDER_DOCTYPE,
+            "field_name": STATUS_FIELDNAME,
+        },
+        pluck="name",
+    )
+    for board_name in board_names:
+        board = frappe.get_doc("Kanban Board", board_name)
+        existing = {
+            str(column.column_name): {
+                "indicator": column.indicator,
+                "order": column.order,
+            }
+            for column in board.columns
+        }
+        board.set("columns", [])
+        for option in options:
+            preserved = existing.get(option, {})
+            board.append(
+                "columns",
+                {
+                    "column_name": option,
+                    "indicator": preserved.get("indicator") or "Gray",
+                    "order": preserved.get("order") or "[]",
+                },
+            )
+        board.save(ignore_permissions=True)
+
+
+def sync_order_status_options() -> tuple[str, ...]:
+    """Synchronize the app-owned Status Select and persisted Kanban columns."""
 
     if not frappe.db.exists("DocType", ORDER_DOCTYPE):
         return ()
@@ -111,6 +134,7 @@ def sync_order_status_options() -> tuple[str, ...]:
         "\n".join(options),
         update_modified=False,
     )
+    _sync_kanban_boards(options)
     frappe.clear_cache(doctype=ORDER_DOCTYPE)
     return options
 
