@@ -44,7 +44,9 @@ class OrderLifecycleDomainTests(unittest.TestCase):
         status_field = next(
             field for field in definition["fields"] if field.get("fieldname") == "status"
         )
-        self.assertEqual(tuple(status_field["options"].splitlines()), ORDER_STATUSES)
+        visible_statuses = tuple(status_field["options"].splitlines())
+        self.assertEqual(visible_statuses, ("Draft", "Delivered", "Cancelled"))
+        self.assertTrue(set(visible_statuses).issubset(ORDER_STATUSES))
 
     def test_production_paths_are_deterministic(self) -> None:
         self.assertEqual(production_path_sequence("Sharyoun"), ("Sharyoun", "Sanding"))
