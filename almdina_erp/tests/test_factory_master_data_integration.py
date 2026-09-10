@@ -233,8 +233,8 @@ class TestFactoryMasterDataIntegration(FrappeTestCase):
 
         frappe.set_user("Administrator")
         for stage_code, stage_label in (
-            (ROUTING_STAGE_A, "القص"),
-            (ROUTING_STAGE_B, "التقشيط"),
+            (ROUTING_STAGE_A, "قص اختبار تكامل"),
+            (ROUTING_STAGE_B, "تقشيط اختبار تكامل"),
         ):
             frappe.get_doc(
                 {
