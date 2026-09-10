@@ -451,13 +451,13 @@
 
 	function addDeliveryButtons(frm) {
 		if (frm.is_new()) return;
-		const stage = frm.__almdina_stage_context || {};
+		const deliveryContext = frm.__almdina_stage_context || {};
 		const serverAllowsDelivery = Boolean(
-			stage.can_mark_delivered
+			deliveryContext.can_mark_delivered
 			|| (
-				stage.production_actions
-				&& stage.production_actions.mark_delivered
-				&& stage.production_actions.mark_delivered.allowed
+				deliveryContext.production_actions
+				&& deliveryContext.production_actions.mark_delivered
+				&& deliveryContext.production_actions.mark_delivered.allowed
 			)
 		);
 		if (
@@ -735,13 +735,13 @@
 			&& !frm.doc.production_path
 			&& !frm.doc.current_production_stage
 		) labels.push(__("إرسال للإنتاج"));
-		const stage = frm.__almdina_stage_context || {};
+		const deliveryContext = frm.__almdina_stage_context || {};
 		const serverAllowsDelivery = Boolean(
-			stage.can_mark_delivered
+			deliveryContext.can_mark_delivered
 			|| (
-				stage.production_actions
-				&& stage.production_actions.mark_delivered
-				&& stage.production_actions.mark_delivered.allowed
+				deliveryContext.production_actions
+				&& deliveryContext.production_actions.mark_delivered
+				&& deliveryContext.production_actions.mark_delivered.allowed
 			)
 		);
 		if (
