@@ -1020,9 +1020,11 @@
     function desktopDeliveryRowState(doc) {
         const status = String(doc && doc.status || "").trim();
         if (status === "Delivered") return "delivered";
-        if (flag.ready_for_delivery === true || status === "Ready for Delivery") {
-            return "ready_for_delivery";
-        }
+        if (
+            doc && doc.__almdinaProductionActionContext
+            && doc.__almdinaProductionActionContext.readyForDelivery === true
+        ) return "ready_for_delivery";
+        if (status === "Ready for Delivery") return "ready_for_delivery";
         const department = String(doc && doc.current_department || "").trim();
         if (department === "تم التسليم") return "delivered";
         if (department === "جاهز للتسليم") return "ready_for_delivery";
@@ -1079,7 +1081,9 @@
     function personalQueueState(doc, flag = {}) {
         const status = String(doc && doc.status || "").trim();
         if (status === "Delivered") return "delivered";
-        if (status === "Ready for Delivery") return "ready_for_delivery";
+        if (flag.ready_for_delivery === true || status === "Ready for Delivery") {
+            return "ready_for_delivery";
+        }
         if (flag.assignment_state === "completed" || status === "Completed") return "completed";
         if (String(doc && doc.department_status || "").trim() === "قيد العمل") {
             return "in_progress";
