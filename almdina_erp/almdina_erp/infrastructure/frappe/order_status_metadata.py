@@ -70,9 +70,16 @@ def _in_flight_status_values() -> list[str]:
 def build_order_status_options() -> tuple[str, ...]:
     """Build the Select projection consumed by native List/Kanban surfaces."""
 
+    production_stages = _unique_nonempty(
+        (*_stage_labels(), *_in_flight_status_values())
+    )
     return tuple(
         _unique_nonempty(
-            (*FIXED_ORDER_STATUS_OPTIONS, *_stage_labels(), *_in_flight_status_values())
+            (
+                FIXED_ORDER_STATUS_OPTIONS[0],
+                *production_stages,
+                *FIXED_ORDER_STATUS_OPTIONS[1:],
+            )
         )
     )
 
