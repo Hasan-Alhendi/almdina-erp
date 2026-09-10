@@ -55,11 +55,12 @@ def _in_flight_status_values() -> list[str]:
         return []
     rows = frappe.db.sql(
         """
-        select distinct status
-        from `tabDoor Cutting Order`
-        where ifnull(current_production_stage, '') != ''
-          and ifnull(status, '') != ''
-        order by status asc
+        select distinct ps.department_label
+          from `tabDoor Cutting Order` dco
+          inner join `tabProduction Stage` ps
+                  on ps.name = dco.current_production_stage
+         where ifnull(ps.department_label, '') != ''
+         order by ps.department_label asc
         """,
         as_list=True,
     )
