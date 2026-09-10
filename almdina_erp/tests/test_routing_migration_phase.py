@@ -30,9 +30,6 @@ STAGE_DEFINITION_JSON = (
     / "production_stage_definition"
     / "production_stage_definition.json"
 )
-STAGE_LIBRARY_MIGRATION = (
-    ROOT / "patches" / "v1_0" / "migrate_production_stage_library.py"
-)
 
 
 def patch_section(target: str) -> str:
@@ -50,9 +47,12 @@ def patch_section(target: str) -> str:
 
 
 class TestRoutingMigrationPhase(unittest.TestCase):
-    def test_routing_activation_and_stage_library_migration_run_after_model_sync(self) -> None:
+    def test_existing_routing_activation_still_runs_after_model_sync(self) -> None:
         self.assertEqual(patch_section(ROUTING_PATCH), "post_model_sync")
-        self.assertEqual(patch_section(STAGE_LIBRARY_PATCH), "post_model_sync")
+
+    def test_stage_library_uses_schema_sync_without_legacy_backfill_patch(self) -> None:
+        patches = PATCHES_FILE.read_text(encoding="utf-8")
+        self.assertNotIn(STAGE_LIBRARY_PATCH, patches)
 
     def test_routing_configuration_references_stage_library_and_runtime_keeps_snapshot(self) -> None:
         route_payload = json.loads(ROUTING_STAGE_JSON.read_text(encoding="utf-8"))
@@ -83,17 +83,6 @@ class TestRoutingMigrationPhase(unittest.TestCase):
         self.assertTrue(
             {"stage_code", "stage_label", "disabled"}.issubset(definition_fields)
         )
-
-    def test_stage_library_migration_is_upgrade_only_and_backfills_existing_rows(self) -> None:
-        source = STAGE_LIBRARY_MIGRATION.read_text(encoding="utf-8")
-        self.assertIn('"stage_definition" not in columns', source)
-        self.assertIn('"stage_type" not in columns', source)
-        self.assertIn("get_table_columns", source)
-        self.assertIn("where ifnull(stage_definition, '') = ''", source)
-        self.assertIn('"stage_code": stage_code', source)
-        self.assertIn('"stage_definition"', source)
-        self.assertNotIn("STAGE_DEFAULTS", source)
-        self.assertNotIn("for stage_code in", source)
 
 
 if __name__ == "__main__":
