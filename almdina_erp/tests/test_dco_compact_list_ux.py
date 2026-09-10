@@ -19,15 +19,25 @@ MANIFEST = ROOT / "frontend_assets.py"
 
 
 class TestDcoCompactListUx(unittest.TestCase):
-    def test_compact_list_assets_are_scoped_and_load_after_the_canonical_owner(self) -> None:
+    def test_compact_assets_preserve_the_canonical_list_runtime_owner(self) -> None:
         manifest = MANIFEST.read_text(encoding="utf-8")
-        canonical = "public/js/door_cutting_order/list_view/door_cutting_order_list.js"
-        compact = "public/js/door_cutting_order/list_view/door_cutting_order_compact_list_ux.js"
+        canonical = (
+            '"Door Cutting Order": '
+            '"public/js/door_cutting_order/list_view/door_cutting_order_list.js"'
+        )
+        compact_global = (
+            '"/assets/almdina_erp/js/door_cutting_order/list_view/'
+            'door_cutting_order_compact_list_ux.js"'
+        )
 
         self.assertIn('"/assets/almdina_erp/css/door_cutting_order_list.css"', manifest)
+        self.assertIn(compact_global, manifest)
         self.assertIn(canonical, manifest)
-        self.assertIn(compact, manifest)
-        self.assertLess(manifest.index(canonical), manifest.index(compact))
+        self.assertNotIn(
+            '"Door Cutting Order": [\n'
+            '        "public/js/door_cutting_order/list_view/door_cutting_order_list.js"',
+            manifest,
+        )
 
     def test_id_compaction_is_display_only(self) -> None:
         source = LIST_JS.read_text(encoding="utf-8")
@@ -54,15 +64,20 @@ class TestDcoCompactListUx(unittest.TestCase):
         self.assertIn('Array.from(text)', source)
         self.assertIn('characters.slice(0, limit)', source)
         self.assertIn('<button type="button"', source)
-        self.assertIn('class="filterable dco-list-compact-text dco-list-filterable-text ellipsis"', source)
+        self.assertIn(
+            'class="filterable dco-list-compact-text dco-list-filterable-text ellipsis"',
+            source,
+        )
         self.assertIn('data-filter=', source)
         self.assertIn('title=', source)
         self.assertIn('aria-label=', source)
         self.assertNotIn('<a class="filterable dco-list-compact-text', source)
 
-    def test_compact_module_has_no_lifecycle_or_inline_style_owner(self) -> None:
+    def test_compact_module_is_formatter_only_and_has_no_lifecycle_or_inline_styles(self) -> None:
         source = LIST_JS.read_text(encoding="utf-8")
 
+        self.assertIn('const existing = frappe.listview_settings[DOCTYPE] || {};', source)
+        self.assertIn('Object.assign({}, existing.formatters || {}, {', source)
         self.assertNotIn('style.textContent', source)
         self.assertNotIn('document.createElement', source)
         self.assertNotIn('MutationObserver', source)
