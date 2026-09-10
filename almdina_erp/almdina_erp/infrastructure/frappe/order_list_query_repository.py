@@ -148,6 +148,7 @@ class FrappeOrderListQueryRepository:
             _ORDER_DOCTYPE,
             filters={"current_assignee": ["is", "set"]},
             fields=["current_assignee"],
+            distinct=True,
             limit_page_length=0,
         )
         assignees = sorted(
