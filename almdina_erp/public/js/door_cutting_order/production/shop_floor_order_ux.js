@@ -451,7 +451,19 @@
 
 	function addDeliveryButtons(frm) {
 		if (frm.is_new()) return;
-		if (frm.doc.status === "Ready for Delivery" && can(frm, "mark_delivered")) {
+		const stage = frm.__almdina_stage_context || {};
+		const serverAllowsDelivery = Boolean(
+			stage.can_mark_delivered
+			|| (
+				stage.production_actions
+				&& stage.production_actions.mark_delivered
+				&& stage.production_actions.mark_delivered.allowed
+			)
+		);
+		if (
+			(serverAllowsDelivery || frm.doc.status === "Ready for Delivery")
+			&& can(frm, "mark_delivered")
+		) {
 			frm.add_custom_button(__("تم التسليم"), () => {
 				frappe.confirm(__("تأكيد تسليم الطلب للعميل؟"), () =>
 					callAction(
@@ -723,7 +735,19 @@
 			&& !frm.doc.production_path
 			&& !frm.doc.current_production_stage
 		) labels.push(__("إرسال للإنتاج"));
-		if (status === "Ready for Delivery" && can(frm, "mark_delivered")) {
+		const stage = frm.__almdina_stage_context || {};
+		const serverAllowsDelivery = Boolean(
+			stage.can_mark_delivered
+			|| (
+				stage.production_actions
+				&& stage.production_actions.mark_delivered
+				&& stage.production_actions.mark_delivered.allowed
+			)
+		);
+		if (
+			(serverAllowsDelivery || status === "Ready for Delivery")
+			&& can(frm, "mark_delivered")
+		) {
 			labels.push(__("تم التسليم"));
 		}
 		if (
