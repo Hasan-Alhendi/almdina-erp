@@ -1,0 +1,64 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "field:stage_code",
+ "creation": "2026-09-10 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "stage_label",
+  "stage_code",
+  "description",
+  "is_planning_default",
+  "disabled"
+ ],
+ "fields": [
+  {
+   "fieldname": "stage_label",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "اسم المرحلة",
+   "reqd": 1
+  },
+  {
+   "fieldname": "stage_code",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "رمز المرحلة",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "الوصف"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_planning_default",
+   "fieldtype": "Check",
+   "label": "مرحلة تخطيط افتراضيًا"
+  },
+  {
+   "default": "0",
+   "fieldname": "disabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "معطّل"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-09-10 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Almdina ERP",
+ "name": "Production Stage Definition",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "stage_label",
+ "sort_order": "ASC",
+ "states": [],
+ "title_field": "stage_label",
+ "track_changes": 1
+}
