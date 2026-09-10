@@ -784,89 +784,56 @@ function hostOptions(options) {
     return JSON.parse(JSON.stringify(options));
 }
 
-const expectedDepartmentOptions = [
-    { value: "Sharyoun", label: "شريون" },
-    { value: "Drawing", label: "رسم" },
-    { value: "CNC", label: "CNC" },
-    { value: "Sanding", label: "تقشيط" },
-    { value: "جاهز للتسليم", label: "جاهز للتسليم" },
-    { value: "تم التسليم", label: "تم التسليم" },
-];
 const statusConfig = api.statusFilterConfig();
 assert.strictEqual(statusConfig.fieldtype, "Select");
-assert.strictEqual(statusConfig.fieldname, "current_department");
+assert.strictEqual(statusConfig.fieldname, "status");
 assert.strictEqual(statusConfig.condition, "=");
-assert.strictEqual(statusConfig.label, "Current Department");
+assert.strictEqual(statusConfig.label, "Status");
 const statusOptions = api.statusFilterOptions();
 assert.strictEqual(statusOptions[0].value, "");
-assert.strictEqual(statusOptions[0].label, "كل الأقسام");
-assert.deepStrictEqual(hostOptions(statusOptions.slice(1)), expectedDepartmentOptions);
-assert.strictEqual(statusConfig.options[0].value, "");
-assert.strictEqual(statusConfig.options[0].label, "كل الأقسام");
-assert.deepStrictEqual(hostOptions(statusConfig.options.slice(1)), expectedDepartmentOptions);
-assert(!statusOptions.includes("Draft"));
-assert(!statusOptions.some(option => option === "At CNC" || option && option.value === "At CNC"));
-assert.strictEqual(api.resolveDepartmentFilterStageType("تقشيط"), "Sanding");
-assert.strictEqual(api.resolveDepartmentFilterStageType("Sanding"), "Sanding");
+assert.strictEqual(statusOptions[0].label, "كل الحالات");
 assert.deepStrictEqual(
-    hostOptions(api.uniqueDepartmentStageOptions([
-        { stage_type: "Sanding", department_label: "التقشيط" },
-        { stage_type: "Sanding", department_label: "تقشيط" },
-        { stage_type: "Edge Banding", department_label: "قشاط" },
+    hostOptions(statusOptions.slice(1)),
+    [
+        { value: "Draft", label: "Draft" },
+        { value: "Delivered", label: "Delivered" },
+        { value: "Cancelled", label: "Cancelled" },
+    ]
+);
+
+assert.deepStrictEqual(
+    hostOptions(api.uniqueStatusOptions([
+        { value: "الرسم", label: "الرسم" },
+        { value: "الرسم", label: "اسم مكرر" },
+        { value: "CNC", label: "CNC" },
+        { value: "التغليف", label: "التغليف" },
     ])),
     [
-        { value: "Sanding", label: "التقشيط" },
-        { value: "Edge Banding", label: "قشاط" },
+        { value: "الرسم", label: "الرسم" },
+        { value: "CNC", label: "CNC" },
+        { value: "التغليف", label: "التغليف" },
     ]
 );
 
 const listSettings = context.frappe.listview_settings["Door Cutting Order"];
 assert(Array.isArray(listSettings.custom_filter_configs));
-assert.strictEqual(listSettings.custom_filter_configs[0].fieldname, "current_department");
+assert.strictEqual(listSettings.custom_filter_configs[0].fieldname, "status");
 
-function hostFilters(args) {
-    return JSON.parse(JSON.stringify(args.filters));
-}
-
-assert.deepStrictEqual(
-    hostFilters(api.rewriteDepartmentColumnFilters({
-        filters: [["Door Cutting Order", "current_department", "=", "شريون"]],
-    }, "Door Cutting Order")),
-    [["current_production_stage.stage_type", "=", "Sharyoun"]]
-);
-assert.deepStrictEqual(
-    hostFilters(api.rewriteDepartmentColumnFilters({
-        filters: [["Door Cutting Order", "current_department", "=", "Sanding"]],
-    }, "Door Cutting Order")),
-    [["current_production_stage.stage_type", "=", "Sanding"]]
-);
-assert.deepStrictEqual(
-    hostFilters(api.rewriteDepartmentColumnFilters({
-        filters: [["Door Cutting Order", "current_department", "=", "جاهز للتسليم"]],
-    }, "Door Cutting Order")),
-    [["Door Cutting Order", "status", "=", "Ready for Delivery"]]
-);
-assert.deepStrictEqual(
-    hostFilters(api.rewriteDepartmentColumnFilters({
-        filters: [["Door Cutting Order", "current_department", "=", "تم التسليم"]],
-    }, "Door Cutting Order")),
-    [["Door Cutting Order", "status", "=", "Delivered"]]
-);
-
-api.applyLoadedDepartmentFilterOptions({
-    page: { fields_dict: { current_department: { df: {}, get_value() { return ""; } } } },
+api.applyLoadedStatusFilterOptions({
+    page: { fields_dict: { status: { df: {}, get_value() { return ""; } } } },
 }, [
-    { stage_type: "Sanding", department_label: "تقشيط" },
-    { stage_type: "Edge Banding", department_label: "قشاط" },
+    { value: "Draft", label: "Draft" },
+    { value: "الرسم", label: "الرسم" },
+    { value: "CNC", label: "CNC" },
+    { value: "التغليف", label: "التغليف" },
+    { value: "Delivered", label: "Delivered" },
+    { value: "Cancelled", label: "Cancelled" },
 ]);
-assert.strictEqual(api.resolveDepartmentFilterStageType("قشاط"), "Edge Banding");
-assert.deepStrictEqual(
-    hostFilters(api.rewriteDepartmentColumnFilters({
-        filters: [["Door Cutting Order", "current_department", "=", "قشاط"]],
-    }, "Door Cutting Order")),
-    [["current_production_stage.stage_type", "=", "Edge Banding"]]
-);
-assert(api.statusFilterOptions().some(option => option && option.value === "Edge Banding" && option.label === "قشاط"));
+assert(api.statusFilterOptions().some(option => option.value === "التغليف" && option.label === "التغليف"));
+assert(!source.includes("STAGE_BY_DEPARTMENT"));
+assert(!source.includes("current_production_stage.stage_type"));
+assert(!source.includes("كل الأقسام"));
+assert(source.includes("get_status_filter_options"));
 
 function mockFilterNode(className = "") {
     const node = {
@@ -963,38 +930,38 @@ const pageForm = mockFilterNode("page-form");
 const standardSection = mockFilterNode("standard-filter-section flex");
 const filterSection = mockFilterNode("filter-section flex");
 const filterSelector = mockFilterNode("filter-selector");
-const departmentWrapper = mockFilterNode("frappe-control");
+const statusWrapper = mockFilterNode("frappe-control");
 filterRoot.appendChild(pageForm);
 pageForm.appendChild(standardSection);
 pageForm.appendChild(filterSection);
 filterSection.appendChild(filterSelector);
-standardSection.appendChild(departmentWrapper);
+standardSection.appendChild(statusWrapper);
 
-const departmentListview = {
+const statusListview = {
     page: {
         wrapper: filterRoot,
-        fields_dict: { current_department: { wrapper: departmentWrapper } },
+        fields_dict: { status: { wrapper: statusWrapper } },
     },
 };
 
 function assertBesideFrappeFilter(message) {
     const slot = filterRoot.querySelector(".dco-status-filter-slot");
     assert(slot, message);
-    assert.strictEqual(departmentWrapper.parentNode, slot);
+    assert.strictEqual(statusWrapper.parentNode, slot);
     assert.strictEqual(slot.parentNode, filterSection);
     assert.strictEqual(filterSelector.nextSibling, slot);
 }
 
 setFilterViewport(390, 844);
-assert.strictEqual(api.reconcileStatusFilterLayout(departmentListview), true);
-assertBesideFrappeFilter("card layout must place the department select beside Frappe's filter button");
-assert.strictEqual(api.reconcileStatusFilterLayout(departmentListview), true);
+assert.strictEqual(api.reconcileStatusFilterLayout(statusListview), true);
+assertBesideFrappeFilter("card layout must place the status select beside Frappe's filter button");
+assert.strictEqual(api.reconcileStatusFilterLayout(statusListview), true);
 assert.strictEqual(filterRoot.querySelectorAll(".dco-status-filter-slot").length, 1);
 
 setFilterViewport(1440, 900);
-assert.strictEqual(api.reconcileStatusFilterLayout(departmentListview), true);
-assertBesideFrappeFilter("desktop must also place the department select beside Frappe's filter button");
-assert.strictEqual(standardSection.children.filter(child => child === departmentWrapper).length, 0);
+assert.strictEqual(api.reconcileStatusFilterLayout(statusListview), true);
+assertBesideFrappeFilter("desktop must also place the status select beside Frappe's filter button");
+assert.strictEqual(standardSection.children.filter(child => child === statusWrapper).length, 0);
 
 lifecycleSetup.then(result => {
     assert.strictEqual(result, "base-ready");

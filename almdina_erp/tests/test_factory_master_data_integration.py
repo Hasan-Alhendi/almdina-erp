@@ -22,6 +22,8 @@ ROUTING_USER = "almdina.routing.manager@example.com"
 EDGE_USER = "almdina.edge.manager@example.com"
 ROUTING_NAME = "Almdina Integration Routing"
 EDGE_NAME = "قشاط اختبار تكامل"
+ROUTING_STAGE_A = "INTEGRATION_CUTTING"
+ROUTING_STAGE_B = "INTEGRATION_EDGE"
 
 
 class TestFactoryMasterDataIntegration(FrappeTestCase):
@@ -132,6 +134,14 @@ class TestFactoryMasterDataIntegration(FrappeTestCase):
             frappe.delete_doc("Production Routing", ROUTING_NAME, force=True, ignore_permissions=True)
         if frappe.db.exists("Edge Banding Type", EDGE_NAME):
             frappe.delete_doc("Edge Banding Type", EDGE_NAME, force=True, ignore_permissions=True)
+        for stage_code in (ROUTING_STAGE_A, ROUTING_STAGE_B):
+            if frappe.db.exists("Production Stage Definition", stage_code):
+                frappe.delete_doc(
+                    "Production Stage Definition",
+                    stage_code,
+                    force=True,
+                    ignore_permissions=True,
+                )
 
     def setUp(self):
         super().setUp()
@@ -223,6 +233,19 @@ class TestFactoryMasterDataIntegration(FrappeTestCase):
             update_production_settings,
         )
 
+        frappe.set_user("Administrator")
+        for stage_code, stage_label in (
+            (ROUTING_STAGE_A, "قص اختبار تكامل"),
+            (ROUTING_STAGE_B, "تقشيط اختبار تكامل"),
+        ):
+            frappe.get_doc(
+                {
+                    "doctype": "Production Stage Definition",
+                    "stage_code": stage_code,
+                    "stage_label": stage_label,
+                }
+            ).insert(ignore_permissions=True)
+
         frappe.set_user(ROUTING_USER)
         created = save_production_routing(
             {
@@ -230,13 +253,11 @@ class TestFactoryMasterDataIntegration(FrappeTestCase):
                 "disabled": 0,
                 "stages": [
                     {
-                        "stage_type": "Cutting",
-                        "department_label": "القص",
+                        "stage_definition": ROUTING_STAGE_A,
                         "operational_role": ROUTING_ROLE,
                     },
                     {
-                        "stage_type": "Edge Banding",
-                        "department_label": "التقشيط",
+                        "stage_definition": ROUTING_STAGE_B,
                         "operational_role": ROUTING_ROLE,
                     },
                 ],

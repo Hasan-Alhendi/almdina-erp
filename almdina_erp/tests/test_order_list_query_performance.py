@@ -188,6 +188,49 @@ class TestOrderListBulkQuery(unittest.TestCase):
         self.assertFalse(row["can_handoff_stage"])
 
 
+class TestMultipleRouteStatusProjection(unittest.TestCase):
+    def test_terminal_readiness_is_scoped_to_each_selected_route(self) -> None:
+        route_a = ProductionRoute(
+            "Route A",
+            "المسار أ",
+            (
+                RoutingStage(10, "ALPHA", "ألفا", "عامل ألفا"),
+                RoutingStage(20, "BETA", "بيتا", "عامل بيتا"),
+            ),
+        )
+        route_b = ProductionRoute(
+            "Route B",
+            "المسار ب",
+            (
+                RoutingStage(10, "ALPHA", "ألفا", "عامل ألفا"),
+                RoutingStage(20, "GAMMA", "غاما", "عامل غاما"),
+            ),
+        )
+        routes = {route_a.name: route_a, route_b.name: route_b}
+
+        stage_a = {"name": "STAGE-A", "stage_type": "BETA", "status": "Completed"}
+        order_a = {
+            "status": "بيتا",
+            "production_path": route_a.name,
+            "current_production_stage": stage_a["name"],
+        }
+        self.assertEqual(
+            order_list_query._effective_order_status(order_a, stage_a, routes),
+            "Ready for Delivery",
+        )
+
+        stage_b = {"name": "STAGE-B", "stage_type": "ALPHA", "status": "Completed"}
+        order_b = {
+            "status": "ألفا",
+            "production_path": route_b.name,
+            "current_production_stage": stage_b["name"],
+        }
+        self.assertEqual(
+            order_list_query._effective_order_status(order_b, stage_b, routes),
+            "ألفا",
+        )
+
+
 class TestOrderListFrappeAdapterContract(unittest.TestCase):
     def test_adapter_uses_bulk_permission_and_stage_reads_without_documents(self) -> None:
         source = ADAPTER_PATH.read_text(encoding="utf-8")
@@ -206,22 +249,17 @@ class TestOrderListFrappeAdapterContract(unittest.TestCase):
             "return _execute(queries.get_order_operational_role_flags, order_names)",
             source,
         )
-        self.assertIn("order_list_query.get_department_filter_options", source)
+        self.assertIn("order_list_query.get_status_filter_options", source)
         self.assertIn("require_doctype_capability", source)
         self.assertIn("Capability.VIEW_ORDERS", source)
 
 
-class DepartmentFilterRepository:
+class StatusFilterRepository:
     def __init__(self) -> None:
         self.user = "supervisor@example.com"
         self.admin = False
         self.capabilities = frozenset({Capability.VIEW_ORDERS})
-        self.rows = [
-            {"stage_type": "Sanding", "department_label": "التقشيط"},
-            {"stage_type": "Sanding", "department_label": "تقشيط"},
-            {"stage_type": "Edge Banding", "department_label": "قشاط"},
-            {"stage_type": "", "department_label": "ignored"},
-        ]
+        self.rows = ("Draft", "الرسم", "CNC", "التغليف", "Delivered", "Cancelled")
 
     def current_user(self) -> str:
         return self.user
@@ -250,47 +288,41 @@ class DepartmentFilterRepository:
     def production_routes(self, route_names):
         return {}
 
-    def department_filter_options(self):
-        return list(self.rows)
+    def status_filter_options(self):
+        return self.rows
 
 
-class TestDepartmentFilterOptions(unittest.TestCase):
-    def test_options_are_unique_stage_types_with_visible_labels(self) -> None:
-        payload = order_list_query.get_department_filter_options(
-            DepartmentFilterRepository()
-        )
+class TestStatusFilterOptions(unittest.TestCase):
+    def test_options_preserve_canonical_values_and_exact_stage_labels(self) -> None:
+        payload = order_list_query.get_status_filter_options(StatusFilterRepository())
         self.assertEqual(
             payload,
             [
-                {"stage_type": "Sanding", "department_label": "التقشيط"},
-                {"stage_type": "Edge Banding", "department_label": "قشاط"},
+                {"value": "Draft", "label": "Draft"},
+                {"value": "الرسم", "label": "الرسم"},
+                {"value": "CNC", "label": "CNC"},
+                {"value": "التغليف", "label": "التغليف"},
+                {"value": "Delivered", "label": "Delivered"},
+                {"value": "Cancelled", "label": "Cancelled"},
             ],
         )
 
     def test_missing_view_orders_returns_no_catalog(self) -> None:
-        repository = DepartmentFilterRepository()
+        repository = StatusFilterRepository()
         repository.capabilities = frozenset()
-        self.assertEqual(
-            order_list_query.get_department_filter_options(repository),
-            [],
-        )
+        self.assertEqual(order_list_query.get_status_filter_options(repository), [])
 
     def test_guest_returns_no_catalog(self) -> None:
-        repository = DepartmentFilterRepository()
+        repository = StatusFilterRepository()
         repository.user = "Guest"
-        self.assertEqual(
-            order_list_query.get_department_filter_options(repository),
-            [],
-        )
+        self.assertEqual(order_list_query.get_status_filter_options(repository), [])
 
-    def test_adapter_reads_enabled_routing_stages_without_financial_fields(self) -> None:
+    def test_adapter_uses_shared_status_metadata_projection(self) -> None:
         source = ADAPTER_PATH.read_text(encoding="utf-8")
-        self.assertIn("def department_filter_options", source)
-        self.assertIn('"Production Routing Stage"', source)
-        self.assertIn('"stage_type"', source)
-        self.assertIn('"department_label"', source)
-        self.assertNotIn("rate_usd", source)
-        self.assertNotIn("operational_role", source.split("def department_filter_options", 1)[1])
+        self.assertIn("def status_filter_options", source)
+        self.assertIn("build_order_status_options", source)
+        self.assertNotIn('"stage_type"', source.split("def status_filter_options", 1)[1])
+        self.assertNotIn('"department_label"', source.split("def status_filter_options", 1)[1])
 
 
 class TestOverviewOrderListSort(unittest.TestCase):

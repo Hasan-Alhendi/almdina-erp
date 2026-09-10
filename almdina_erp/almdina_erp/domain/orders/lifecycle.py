@@ -4,21 +4,14 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 
+# Lifecycle/business states remain stable. Production stage statuses are dynamic
+# and are projected from the stage label carried by the runtime Production Stage.
 ORDER_STATUSES = (
     "Draft",
     "Pending Review",
     "Approved",
-    "At Sharyoun",
-    "At Drawing",
-    "At CNC",
-    "At Sanding",
     "Ready for Delivery",
     "Delivered",
-    "Cutting In Progress",
-    "Cut Completed",
-    "Edge Banding In Progress",
-    "Production In Progress",
-    "Quality Check",
     "Completed",
     "Rejected",
     "On Hold",
@@ -35,16 +28,11 @@ STAGE_STATUSES = (
     "Cancelled",
 )
 
+# Legacy helpers are retained for compatibility callers only. Runtime routing is
+# owned by Production Routing and Production Stage Definition.
 PRODUCTION_PATHS: dict[str, tuple[str, ...]] = {
     "Sharyoun": ("Sharyoun", "Sanding"),
     "Drawing": ("Drawing", "CNC", "Sanding"),
-}
-
-SHOP_FLOOR_ORDER_STATUSES: dict[str, str] = {
-    "Sharyoun": "At Sharyoun",
-    "Drawing": "At Drawing",
-    "CNC": "At CNC",
-    "Sanding": "At Sanding",
 }
 
 STAGE_DEPARTMENTS: dict[str, str] = {
@@ -61,7 +49,7 @@ DEPARTMENT_STATUS_BY_STAGE_STATUS: dict[str, str] = {
     "Completed": "مكتمل",
 }
 
-SHOP_FLOOR_STAGE_TYPES = tuple(SHOP_FLOOR_ORDER_STATUSES)
+SHOP_FLOOR_STAGE_TYPES = tuple(STAGE_DEPARTMENTS)
 CUTTING_LIKE_STAGE_TYPES = frozenset({"Sharyoun", "CNC", "Cutting"})
 ACTIVE_STAGE_STATUSES = frozenset({"Pending", "In Progress", "Paused"})
 TERMINAL_STAGE_STATUSES = frozenset({"Completed", "Cancelled"})
@@ -90,6 +78,7 @@ STAGE_TRANSITIONS: dict[str, tuple[frozenset[str], str]] = {
 class StageState:
     stage_type: str
     status: str
+    department_label: str | None = None
 
 
 def normalize_order_status(status: str | None) -> str:
@@ -199,17 +188,27 @@ def transition_stage(current_status: str, event: str) -> str:
     return target
 
 
+def order_status_for_stage(
+    stage_type: str | None,
+    department_label: str | None = None,
+) -> str:
+    """Return the exact user-defined production-stage label for display status.
+
+    ``department_label`` is the runtime snapshot copied from the selected
+    Production Stage Definition. ``stage_type`` is only a defensive fallback for
+    older execution rows that do not carry a label.
+    """
+
+    label = str(department_label or "").strip()
+    if label:
+        return label
+    return str(stage_type or "").strip() or "Production"
+
+
 def order_status_for_stage_type(stage_type: str) -> str:
-    mapped = SHOP_FLOOR_ORDER_STATUSES.get(stage_type)
-    if mapped:
-        return mapped
-    if stage_type == "Cutting":
-        return "Cutting In Progress"
-    if stage_type == "Edge Banding":
-        return "Edge Banding In Progress"
-    if stage_type == "Quality Check":
-        return "Quality Check"
-    return "Production In Progress"
+    """Compatibility helper for legacy callers without a stage-label snapshot."""
+
+    return order_status_for_stage(stage_type)
 
 
 def derive_order_status(
@@ -226,37 +225,27 @@ def derive_order_status(
     if has_open_replacements:
         return "Replacement Required"
 
-    if normalized_current in {"Ready for Delivery", "Delivered"}:
+    if normalized_current in {"Ready for Delivery", "Delivered", "Cancelled"}:
         return normalized_current
 
-    if production_path:
-        if current_stage and current_stage.status != "Cancelled":
-            mapped = SHOP_FLOOR_ORDER_STATUSES.get(current_stage.stage_type)
-            if mapped:
-                return mapped
-        if normalized_current.startswith("At "):
-            return normalized_current
+    if production_path and current_stage and current_stage.status != "Cancelled":
+        return order_status_for_stage(
+            current_stage.stage_type,
+            current_stage.department_label,
+        )
 
     stage_list = tuple(stages)
     if not stage_list:
         return normalized_current
 
     if all(stage.status in TERMINAL_STAGE_STATUSES for stage in stage_list):
-        sanding_completed = any(
-            stage.stage_type == "Sanding" and stage.status == "Completed"
-            for stage in stage_list
-        )
-        return "Ready for Delivery" if sanding_completed else "Completed"
+        return "Completed"
 
     active = next(
         (stage for stage in stage_list if stage.status in ACTIVE_STAGE_STATUSES),
         None,
     )
     if active:
-        return order_status_for_stage_type(active.stage_type)
+        return order_status_for_stage(active.stage_type, active.department_label)
 
-    cutting = next((stage for stage in stage_list if stage.stage_type == "Cutting"), None)
-    edge = next((stage for stage in stage_list if stage.stage_type == "Edge Banding"), None)
-    if cutting and cutting.status == "Completed" and edge and edge.status == "Pending":
-        return "Cut Completed"
-    return "Approved"
+    return normalized_current if normalized_current in ORDER_STATUSES else "Approved"

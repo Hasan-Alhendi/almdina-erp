@@ -16,6 +16,7 @@ ROUTING_JSON = ROOT / "almdina_erp" / "doctype" / "production_routing" / "produc
 ROUTING_CONTROLLER = ROUTING_JSON.with_suffix(".py")
 EDGE_JSON = ROOT / "almdina_erp" / "doctype" / "edge_banding_type" / "edge_banding_type.json"
 EDGE_CONTROLLER = EDGE_JSON.with_suffix(".py")
+STAGE_DEFINITION_JSON = ROOT / "almdina_erp" / "doctype" / "production_stage_definition" / "production_stage_definition.json"
 SETTINGS_CONTROLLER = ROOT / "almdina_erp" / "doctype" / "almdina_erp_settings" / "almdina_erp_settings.py"
 AUDIT_JSON = ROOT / "almdina_erp" / "doctype" / "almdina_master_data_audit" / "almdina_master_data_audit.json"
 SETTINGS_PAGE = ROOT / "almdina_erp" / "page" / "factory_production_settings" / "factory_production_settings.js"
@@ -26,6 +27,7 @@ SETTINGS_CSS = ROOT / "public" / "css" / "factory_production_settings.css"
 MASTER_PAGE = ROOT / "almdina_erp" / "page" / "factory_master_data" / "factory_master_data.js"
 MASTER_PAGE_JSON = MASTER_PAGE.with_suffix(".json")
 ROUTING_WORKFLOW_CSS = ROOT / "public" / "css" / "factory_routing_workflow.css"
+STAGE_LIBRARY_CSS = ROOT / "public" / "css" / "factory_stage_library.css"
 WORKSPACE = ROOT / "almdina_erp" / "workspace" / "almdina_settings" / "almdina_settings.json"
 SHARED_SHELL = ROOT / "public" / "js" / "shared_shell.js"
 
@@ -39,7 +41,7 @@ class TestFactoryMasterDataArchitecture(unittest.TestCase):
         self.assertIn("decide_settings_update", source)
 
     def test_master_doctypes_have_no_fixed_role_grants(self) -> None:
-        for path in (ROUTING_JSON, EDGE_JSON):
+        for path in (ROUTING_JSON, EDGE_JSON, STAGE_DEFINITION_JSON):
             metadata = json.loads(path.read_text(encoding="utf-8"))
             self.assertEqual(metadata["permissions"], [])
             self.assertEqual(metadata["allow_rename"], 0)
@@ -69,7 +71,6 @@ class TestFactoryMasterDataArchitecture(unittest.TestCase):
         self.assertIn("decide_settings_update", source)
         self.assertIn("record_master_data_audit", source)
         self.assertIn("for update", source.lower())
-        self.assertIn("settings.flags.ignore_mandatory = True", source)
         self.assertNotIn("Production Manager", source)
         self.assertNotIn("System Manager", source)
         self.assertNotIn("frappe.user_roles", source)
@@ -119,18 +120,22 @@ class TestFactoryMasterDataArchitecture(unittest.TestCase):
         self.assertNotIn("requestId", master)
         self.assertNotIn("frappe.user_roles", master)
         css = ROUTING_WORKFLOW_CSS.read_text(encoding="utf-8")
+        stage_css = STAGE_LIBRARY_CSS.read_text(encoding="utf-8")
         self.assertIn("get_production_routing_console", master)
         self.assertIn("save_production_routing", master)
         self.assertIn("سجل التغييرات", master)
         self.assertIn("سيُرفض الحذف", master)
         self.assertIn("@media", css)
+        self.assertIn("@media", stage_css)
 
     def test_routing_workflow_stylesheet_bootstrap_is_explicit_and_fail_closed(self) -> None:
         master = MASTER_PAGE.read_text(encoding="utf-8")
 
         self.assertIn("/assets/almdina_erp/js/frontend_foundation.js", master)
-        self.assertIn("ensureStylesheet(STYLE_ASSET", master)
+        self.assertIn("STYLE_ASSETS.map", master)
+        self.assertIn("core.frontend.ensureStylesheet(asset, {id})", master)
         self.assertIn("almdina-routing-workflow-style", master)
+        self.assertIn("almdina-stage-library-style", master)
         self.assertIn("bootstrapRoutingWorkflowPage", master)
         self.assertIn("__almdinaStyleBootstrapPromise", master)
         self.assertIn('$(event.currentTarget).prop("disabled", true)', master)

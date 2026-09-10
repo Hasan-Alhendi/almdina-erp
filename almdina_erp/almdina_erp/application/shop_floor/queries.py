@@ -325,7 +325,7 @@ def _enrich_stage_rows(
                 "order_date": _value(order, "order_date"),
                 "board_description": _value(order, "board_description"),
                 "edge_color": _value(order, "edge_color"),
-                "order_status": _value(order, "status"),
+                "order_status": _effective_order_status(repository, order, stage),
                 "production_path": production_path,
                 "current_department": _value(order, "current_department"),
                 "department_status": _value(order, "department_status")
@@ -382,7 +382,11 @@ def get_my_archive(repository: ShopFloorQueryPort) -> list[dict[str, Any]]:
             if normalize_order_status(row.get("order_status"))
             not in PRE_PRODUCTION_ORDER_STATUSES
         ]
-    return visible_archive_rows(rows, capabilities)
+    return visible_archive_rows(
+        rows,
+        capabilities,
+        route_resolver=repository.get_production_route,
+    )
 
 
 def get_ready_for_delivery(repository: ShopFloorQueryPort) -> list[dict[str, Any]]:
@@ -514,6 +518,31 @@ def _resolve_operational_role(
         return None
 
 
+def _effective_order_status(
+    repository: ShopFloorQueryPort,
+    order: Any,
+    stage: Any | None,
+) -> str | None:
+    status = _value(order, "status")
+    if normalize_order_status(status) in {"Delivered", "Cancelled"} or not stage:
+        return status
+    if str(_value(stage, "status") or "") != "Completed":
+        return status
+    if str(_value(order, "current_production_stage") or "") != str(
+        _value(stage, "name") or ""
+    ):
+        return status
+    route = _production_route(repository, str(_value(order, "production_path") or ""))
+    if not route:
+        return status
+    try:
+        return "Ready for Delivery" if route.next_stage(
+            str(_value(stage, "stage_type") or "")
+        ) is None else status
+    except ValueError:
+        return status
+
+
 def _production_facts(
     repository: ShopFloorQueryPort,
     order: Any,
@@ -523,7 +552,7 @@ def _production_facts(
 ) -> ProductionActionFacts:
     actor = repository.current_user()
     return ProductionActionFacts(
-        order_status=_value(order, "status"),
+        order_status=_effective_order_status(repository, order, stage),
         production_path=_value(order, "production_path"),
         current_stage_name=_value(order, "current_production_stage"),
         has_cutting_plan=_as_bool(_value(order, "has_cutting_plan")),
@@ -685,6 +714,9 @@ def _active_stage_snapshot(
             "can_start_stage": False,
             "can_handoff_stage": False,
             "can_reassign_worker": False,
+            "can_mark_delivered": bool(
+                actions[Capability.MARK_DELIVERED]["allowed"]
+            ),
             "can_handoff_to": None,
             "handoff_block_code": "",
             "handoff_block_reason": "",
@@ -732,6 +764,7 @@ def _active_stage_snapshot(
         "can_start_stage": bool(actions[Capability.START_ASSIGNED_STAGE]["allowed"]),
         "can_handoff_stage": can_handoff,
         "can_reassign_worker": bool(actions[Capability.REASSIGN_WORKER]["allowed"]),
+        "can_mark_delivered": bool(actions[Capability.MARK_DELIVERED]["allowed"]),
         "can_handoff_to": can_handoff_to,
         "handoff_block_code": handoff_code or "",
         "handoff_block_reason": handoff_reason,

@@ -29,6 +29,14 @@ def _add_rectangle(msp, *, layer: str) -> None:
         msp.add_line(start, end, dxfattribs={"layer": layer})
 
 
+def _valid_order_dimensions() -> SimpleNamespace:
+    return SimpleNamespace(
+        trim_margin_mm=0,
+        board_width_cm=280,
+        board_length_cm=207,
+    )
+
+
 class TestAlmadina142CuttingDxfContract(unittest.TestCase):
     def test_missing_canonical_layer_reports_normalized_detected_layers(self) -> None:
         """ALMADINA-142: missing-role errors keep ALMADINA-141 reader diagnostics."""
@@ -47,7 +55,7 @@ class TestAlmadina142CuttingDxfContract(unittest.TestCase):
                         with self.assertRaises(DxfImportError) as exc_info:
                             dxf_import_service.parse_production_dxf(
                                 "/private/files/almadina-142-missing-layer.dxf",
-                                SimpleNamespace(),
+                                _valid_order_dimensions(),
                             )
                 finally:
                     Path(path).unlink(missing_ok=True)

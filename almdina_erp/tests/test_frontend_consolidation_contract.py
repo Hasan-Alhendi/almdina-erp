@@ -265,7 +265,7 @@ class TestFrontendConsolidationContract(unittest.TestCase):
         self.assertIn("dco-print-sheets-row", source)
         self.assertIn("flex-wrap: nowrap", source)
         self.assertIn("justify-content: center", source)
-        self.assertIn("pageGridHeightMm = 164", source)
+        self.assertIn("pageGridHeightMm = 157", source)
 
     def test_plan_page_has_one_control_surface_and_no_duplicate_summary(self) -> None:
         source = PLAN_CONTENT.read_text(encoding="utf-8")

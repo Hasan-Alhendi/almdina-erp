@@ -18,7 +18,7 @@ class TestShopFloorRouting(unittest.TestCase):
     def test_stage_metadata_has_no_fixed_role_map(self):
         self.assertFalse(hasattr(sfs, "STAGE_ROLE"))
         self.assertEqual(sfs.STAGE_DEPARTMENT["Sanding"], "تقشيط")
-        self.assertEqual(sfs.STAGE_ORDER_STATUS["Drawing"], "At Drawing")
+        self.assertFalse(hasattr(sfs, "STAGE_ORDER_STATUS"))
         self.assertEqual(sfs.DEPARTMENT_STATUS_MAP["Pending"], "بحاجة للعمل")
         self.assertEqual(sfs.DEPARTMENT_STATUS_MAP["In Progress"], "قيد العمل")
 

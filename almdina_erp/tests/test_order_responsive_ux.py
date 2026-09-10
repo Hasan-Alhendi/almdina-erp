@@ -258,27 +258,21 @@ def test_order_list_status_filter_uses_frappe_standard_filter_contract():
     assert "custom_filter_configs:" in list_source
     assert "function statusFilterConfig()" in list_source
     assert "function reconcileStatusFilterLayout(listview)" in list_source
-    assert "function installListRuntime(listview)" in list_source
-    assert "reconcileStatusFilterLayout(listview)" in list_source
-    assert 'STATUS_FILTER_SLOT_CLASS = "dco-status-filter-slot"' in list_source
-    assert 'STATUS_FILTER_FIELDNAME = "current_department"' in list_source
-    assert 'STATUS_FILTER_STAGE_FIELD = "current_production_stage.stage_type"' in list_source
-    assert 'return [STATUS_FILTER_STAGE_FIELD, "=", resolveDepartmentFilterStageType(selected)];' in list_source
-    assert "[doctype, STATUS_FILTER_STAGE_FIELD" not in list_source
-    assert "function resolveDepartmentFilterStageType(value)" in list_source
-    assert "function hydrateDepartmentFilterOptions(listview)" in list_source
-    assert "get_department_filter_options" in list_source
-    assert 'label: __("Current Department")' in list_source
+    assert "function hydrateStatusFilterOptions(listview)" in list_source
+    assert 'STATUS_FILTER_FIELDNAME = "status"' in list_source
+    assert 'STATUS_FILTER_ALL_LABEL = "كل الحالات"' in list_source
+    assert "get_status_filter_options" in list_source
+    assert 'label: __("Status")' in list_source
     assert ".dco-status-filter-slot" in css
     assert ".dco-order-list .dco-status-filter-slot" in css
     assert ".dco-order-list .filter-section" in css
-    assert 'STATUS_FILTER_ALL_LABEL = "كل الأقسام"' in list_source
-    assert "function rewriteDepartmentColumnFilters(args, doctype)" in list_source
     assert 'root.querySelector(".filter-section")' in list_source
     assert 'filterSection.querySelector(".filter-selector")' in list_source
     assert ".dco-order-list:not(.dco-order-card-layout) .dco-status-filter-slot" not in css
     assert "frappe.get_roles" not in list_source
     assert "in_standard_filter" not in list_source
+    assert "STAGE_BY_DEPARTMENT" not in list_source
+    assert "current_production_stage.stage_type" not in list_source
 
 
 def test_desktop_keeps_legacy_ordering_while_mobile_uses_five_states():
@@ -289,7 +283,7 @@ def test_desktop_keeps_legacy_ordering_while_mobile_uses_five_states():
     assert "get_order_operational_role_flags" in list_source
     assert "function personalQueueState(doc, flag = {})" in list_source
     assert 'if (status === "Delivered") return "delivered";' in list_source
-    assert 'if (status === "Ready for Delivery") return "ready_for_delivery";' in list_source
+    assert 'flag.ready_for_delivery === true || status === "Ready for Delivery"' in list_source
     assert 'if (flag.assignment_state === "completed" || status === "Completed") return "completed";' in list_source
     assert "const PERSONAL_QUEUE_SORT_RULES = Object.freeze({" in list_source
     assert 'in_progress: Object.freeze({ rank: 0, field: "start_time", direction: -1 })' in list_source

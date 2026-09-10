@@ -11,6 +11,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe import (
 from almdina_erp.almdina_erp.infrastructure.frappe.shop_floor_query_repository import (
     FrappeShopFloorQueryRepository,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.order_status_metadata import (
+    build_order_status_options,
+)
 
 
 _ORDER_DOCTYPE = "Door Cutting Order"
@@ -138,36 +141,11 @@ class FrappeOrderListQueryRepository:
                 continue
         return routes
 
-    def department_filter_options(self) -> list[dict[str, str]]:
-        """Unique required stages from enabled routes: stage_type + visible label."""
+    def status_filter_options(self) -> tuple[str, ...]:
+        """Return the canonical visible Status values used by List and Kanban."""
 
-        route_names = frappe.get_all(
-            "Production Routing",
-            filters={"disabled": 0},
-            pluck="name",
-            limit_page_length=200,
-        )
-        names = [str(name).strip() for name in route_names if str(name or "").strip()]
-        if not names:
-            return []
-        rows = frappe.get_all(
-            "Production Routing Stage",
-            filters={
-                "parent": ["in", names],
-                "parenttype": "Production Routing",
-                "required": 1,
-            },
-            fields=["stage_type", "department_label"],
-            order_by="parent asc, sequence asc, idx asc",
-            limit_page_length=500,
-        )
-        return [
-            {
-                "stage_type": str(row.stage_type or "").strip(),
-                "department_label": str(row.department_label or "").strip(),
-            }
-            for row in rows
-        ]
+        return build_order_status_options()
+
 
 
 __all__ = ["FrappeOrderListQueryRepository"]

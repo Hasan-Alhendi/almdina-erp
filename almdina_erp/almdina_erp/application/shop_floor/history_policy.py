@@ -54,8 +54,16 @@ def _is_operational_ready_row(
 ) -> bool:
     """Return whether the row is the terminal operational delivery row."""
 
+    order_status = normalize_order_status(_value(row, "order_status"))
+    legacy_ready = order_status == _READY_FOR_DELIVERY
+    projected_ready = bool(
+        order_status not in {"Delivered", "Cancelled"}
+        and str(_value(row, "status") or "") == "Completed"
+        and str(_value(row, "current_production_stage") or "")
+        == str(_value(row, "name") or "")
+    )
     return bool(
-        normalize_order_status(_value(row, "order_status")) == _READY_FOR_DELIVERY
+        (legacy_ready or projected_ready)
         and _is_terminal_route_stage(row, route_resolver)
     )
 
@@ -102,6 +110,8 @@ def rows_with_order_capability(
 def visible_archive_rows(
     rows: Sequence[Mapping[str, Any] | Any] | None,
     capabilities: Iterable[str] | None,
+    *,
+    route_resolver: RouteResolver | None = None,
 ) -> list[Any]:
     """Return true completed history allowed by the explicit history grant.
 
@@ -114,7 +124,10 @@ def visible_archive_rows(
     return [
         row
         for row in list(rows or ())
-        if normalize_order_status(_value(row, "order_status")) != _READY_FOR_DELIVERY
+        if (
+            normalize_order_status(_value(row, "order_status")) != _READY_FOR_DELIVERY
+            and not _is_operational_ready_row(row, route_resolver)
+        )
     ]
 
 

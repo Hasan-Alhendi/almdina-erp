@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unittest
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from almdina_erp.almdina_erp.application.factory.production_routing_management import (
@@ -13,6 +13,17 @@ from almdina_erp.almdina_erp.application.factory.production_routing_management i
     routing_command,
     save_production_routing,
     set_production_routing_disabled,
+)
+from almdina_erp.almdina_erp.application.factory.production_stage_definition_management import (
+    ProductionStageDefinitionConflict,
+    ProductionStageDefinitionError,
+    ProductionStageDefinitionPermissionDenied,
+    ProductionStageDefinitionSnapshot,
+    SaveProductionStageDefinitionCommand,
+    delete_production_stage_definition,
+    save_production_stage_definition,
+    set_production_stage_definition_disabled,
+    stage_definition_command,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 
@@ -44,20 +55,128 @@ class FakeRoutingRepository:
         self.deleted = (name, expected_modified)
 
 
+class FakeStageDefinitionRepository:
+    def __init__(self) -> None:
+        self.definitions = {
+            "Drawing": ProductionStageDefinitionSnapshot(
+                name="Drawing",
+                stage_code="Drawing",
+                stage_label="رسم",
+                description="",
+                is_planning_default=True,
+                disabled=False,
+                modified="v1",
+            ),
+            "Quality Check": ProductionStageDefinitionSnapshot(
+                name="Quality Check",
+                stage_code="Quality Check",
+                stage_label="فحص الجودة",
+                description="",
+                is_planning_default=False,
+                disabled=False,
+                modified="v1",
+            ),
+            "CNC": ProductionStageDefinitionSnapshot(
+                name="CNC",
+                stage_code="CNC",
+                stage_label="CNC",
+                description="",
+                is_planning_default=False,
+                disabled=False,
+                modified="v1",
+            ),
+            "Disabled": ProductionStageDefinitionSnapshot(
+                name="Disabled",
+                stage_code="Disabled",
+                stage_label="مرحلة معطلة",
+                description="",
+                is_planning_default=False,
+                disabled=True,
+                modified="v1",
+            ),
+        }
+
+    def get_definitions(
+        self,
+        names: Sequence[str],
+    ) -> Mapping[str, ProductionStageDefinitionSnapshot]:
+        return {
+            name: self.definitions[name]
+            for name in names
+            if name in self.definitions
+        }
+
+
+class FakeStageManagementRepository:
+    def __init__(self, *, in_use: bool = False) -> None:
+        self.in_use = in_use
+        self.saved: SaveProductionStageDefinitionCommand | None = None
+        self.toggled: tuple[str, bool, str] | None = None
+        self.deleted: tuple[str, str] | None = None
+
+    def list_definitions(self) -> Sequence[ProductionStageDefinitionSnapshot]:
+        return []
+
+    def get_definitions(
+        self,
+        names: Sequence[str],
+    ) -> Mapping[str, ProductionStageDefinitionSnapshot]:
+        del names
+        return {}
+
+    def save_definition(
+        self,
+        command: SaveProductionStageDefinitionCommand,
+    ) -> ProductionStageDefinitionSnapshot:
+        self.saved = command
+        return ProductionStageDefinitionSnapshot(
+            name=command.name or command.stage_code,
+            stage_code=command.stage_code,
+            stage_label=command.stage_label,
+            description=command.description,
+            is_planning_default=command.is_planning_default,
+            disabled=False,
+            modified="saved-version",
+        )
+
+    def set_disabled(
+        self,
+        name: str,
+        *,
+        disabled: bool,
+        expected_modified: str,
+    ) -> ProductionStageDefinitionSnapshot:
+        self.toggled = (name, disabled, expected_modified)
+        return ProductionStageDefinitionSnapshot(
+            name=name,
+            stage_code=name,
+            stage_label=name,
+            description="",
+            is_planning_default=False,
+            disabled=disabled,
+            modified="toggled-version",
+        )
+
+    def is_in_use(self, name: str) -> bool:
+        del name
+        return self.in_use
+
+    def delete_definition(self, name: str, *, expected_modified: str) -> None:
+        self.deleted = (name, expected_modified)
+
+
 def route_payload(**overrides: Any) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "routing_name": "مسار جودة",
         "disabled": False,
         "stages": [
             {
-                "stage_type": "Drawing",
-                "department_label": "رسم",
+                "stage_definition": "Drawing",
                 "operational_role": "عامل رسم",
                 "is_planning_stage": True,
             },
             {
-                "stage_type": "Quality Check",
-                "department_label": "فحص الجودة",
+                "stage_definition": "Quality Check",
                 "operational_role": "عامل الجودة",
                 "is_planning_stage": False,
             },
@@ -70,8 +189,10 @@ def route_payload(**overrides: Any) -> dict[str, Any]:
 class TestProductionRoutingManagementApplication(unittest.TestCase):
     def test_create_builds_a_valid_atomic_workflow_with_derived_sequences(self) -> None:
         repository = FakeRoutingRepository()
+        stage_definitions = FakeStageDefinitionRepository()
         result = save_production_routing(
             repository,
+            stage_definitions,
             {Capability.CREATE_PRODUCTION_ROUTINGS},
             route_payload(),
         )
@@ -80,12 +201,17 @@ class TestProductionRoutingManagementApplication(unittest.TestCase):
         self.assertIsNotNone(repository.saved)
         assert repository.saved is not None
         self.assertEqual([stage.sequence for stage in repository.saved.stages], [10, 20])
+        self.assertEqual(
+            [stage.stage_definition for stage in repository.saved.stages],
+            ["Drawing", "Quality Check"],
+        )
         self.assertTrue(repository.saved.stages[0].is_planning_stage)
 
     def test_create_and_edit_use_distinct_capabilities(self) -> None:
         repository = FakeRoutingRepository()
+        stage_definitions = FakeStageDefinitionRepository()
         with self.assertRaises(ProductionRoutingManagementPermissionDenied):
-            save_production_routing(repository, set(), route_payload())
+            save_production_routing(repository, stage_definitions, set(), route_payload())
 
         edit = route_payload(
             name="Existing Route",
@@ -94,11 +220,13 @@ class TestProductionRoutingManagementApplication(unittest.TestCase):
         with self.assertRaises(ProductionRoutingManagementPermissionDenied):
             save_production_routing(
                 repository,
+                stage_definitions,
                 {Capability.CREATE_PRODUCTION_ROUTINGS},
                 edit,
             )
         save_production_routing(
             repository,
+            stage_definitions,
             {Capability.EDIT_PRODUCTION_ROUTINGS},
             edit,
         )
@@ -110,22 +238,21 @@ class TestProductionRoutingManagementApplication(unittest.TestCase):
         with self.assertRaises(ProductionRoutingManagementConflict):
             save_production_routing(
                 repository,
+                FakeStageDefinitionRepository(),
                 {Capability.EDIT_PRODUCTION_ROUTINGS},
                 route_payload(name="Existing Route"),
             )
         self.assertIsNone(repository.saved)
 
-    def test_duplicate_codes_and_invalid_planning_order_are_rejected(self) -> None:
+    def test_duplicate_definitions_and_invalid_planning_order_are_rejected(self) -> None:
         duplicate = route_payload(
             stages=[
                 {
-                    "stage_type": "CNC",
-                    "department_label": "CNC 1",
+                    "stage_definition": "CNC",
                     "operational_role": "عامل CNC",
                 },
                 {
-                    "stage_type": "cnc",
-                    "department_label": "CNC 2",
+                    "stage_definition": "cnc",
                     "operational_role": "عامل CNC",
                 },
             ]
@@ -137,7 +264,49 @@ class TestProductionRoutingManagementApplication(unittest.TestCase):
         invalid_planning["stages"][0]["is_planning_stage"] = False
         invalid_planning["stages"][1]["is_planning_stage"] = True
         with self.assertRaisesRegex(ProductionRoutingManagementError, "أول مرحلة"):
-            routing_command(invalid_planning)
+            save_production_routing(
+                FakeRoutingRepository(),
+                FakeStageDefinitionRepository(),
+                {Capability.CREATE_PRODUCTION_ROUTINGS},
+                invalid_planning,
+            )
+
+    def test_missing_or_disabled_stage_definition_is_rejected_before_save(self) -> None:
+        repository = FakeRoutingRepository()
+        stage_definitions = FakeStageDefinitionRepository()
+        missing = route_payload(
+            stages=[
+                {
+                    "stage_definition": "Unknown",
+                    "operational_role": "عامل",
+                }
+            ]
+        )
+        with self.assertRaisesRegex(ProductionRoutingManagementError, "غير موجودة"):
+            save_production_routing(
+                repository,
+                stage_definitions,
+                {Capability.CREATE_PRODUCTION_ROUTINGS},
+                missing,
+            )
+        self.assertIsNone(repository.saved)
+
+        disabled = route_payload(
+            stages=[
+                {
+                    "stage_definition": "Disabled",
+                    "operational_role": "عامل",
+                }
+            ]
+        )
+        with self.assertRaisesRegex(ProductionRoutingManagementError, "معطّلة"):
+            save_production_routing(
+                repository,
+                stage_definitions,
+                {Capability.CREATE_PRODUCTION_ROUTINGS},
+                disabled,
+            )
+        self.assertIsNone(repository.saved)
 
     def test_toggle_and_delete_are_versioned_and_capability_protected(self) -> None:
         repository = FakeRoutingRepository()
@@ -165,6 +334,95 @@ class TestProductionRoutingManagementApplication(unittest.TestCase):
             expected_modified="v2",
         )
         self.assertEqual(repository.deleted, ("Route A", "v2"))
+
+    def test_stage_library_create_is_normalized_and_capability_protected(self) -> None:
+        repository = FakeStageManagementRepository()
+        payload = {
+            "stage_code": "  CNC  ",
+            "stage_label": "  تشغيل CNC  ",
+            "description": "  محطة القص  ",
+            "is_planning_default": "1",
+        }
+        with self.assertRaises(ProductionStageDefinitionPermissionDenied):
+            save_production_stage_definition(repository, set(), payload)
+        self.assertIsNone(repository.saved)
+
+        result = save_production_stage_definition(
+            repository,
+            {Capability.EDIT_PRODUCTION_ROUTINGS},
+            payload,
+        )
+        assert repository.saved is not None
+        self.assertEqual(repository.saved.stage_code, "CNC")
+        self.assertEqual(repository.saved.stage_label, "تشغيل CNC")
+        self.assertEqual(repository.saved.description, "محطة القص")
+        self.assertTrue(repository.saved.is_planning_default)
+        self.assertEqual(result.name, "CNC")
+
+    def test_stage_library_edit_keeps_code_immutable_and_requires_version(self) -> None:
+        with self.assertRaisesRegex(ProductionStageDefinitionError, "ثابت"):
+            stage_definition_command(
+                {
+                    "name": "CNC",
+                    "stage_code": "CUT",
+                    "stage_label": "قص",
+                    "expected_modified": "v1",
+                }
+            )
+        with self.assertRaises(ProductionStageDefinitionConflict):
+            stage_definition_command(
+                {
+                    "name": "CNC",
+                    "stage_code": "CNC",
+                    "stage_label": "قص",
+                }
+            )
+
+    def test_stage_library_toggle_and_delete_are_versioned_and_safe(self) -> None:
+        repository = FakeStageManagementRepository(in_use=True)
+        with self.assertRaises(ProductionStageDefinitionPermissionDenied):
+            set_production_stage_definition_disabled(
+                repository,
+                set(),
+                name="CNC",
+                disabled=True,
+                expected_modified="v1",
+            )
+        with self.assertRaises(ProductionStageDefinitionConflict):
+            set_production_stage_definition_disabled(
+                repository,
+                {Capability.EDIT_PRODUCTION_ROUTINGS},
+                name="CNC",
+                disabled=True,
+                expected_modified="",
+            )
+
+        set_production_stage_definition_disabled(
+            repository,
+            {Capability.EDIT_PRODUCTION_ROUTINGS},
+            name="CNC",
+            disabled="1",
+            expected_modified="v1",
+        )
+        self.assertEqual(repository.toggled, ("CNC", True, "v1"))
+
+        with self.assertRaisesRegex(ProductionStageDefinitionError, "عطّلها بدل حذفها"):
+            delete_production_stage_definition(
+                repository,
+                {Capability.EDIT_PRODUCTION_ROUTINGS},
+                name="CNC",
+                expected_modified="v2",
+            )
+        self.assertIsNone(repository.deleted)
+
+        repository.in_use = False
+        delete_production_stage_definition(
+            repository,
+            {Capability.EDIT_PRODUCTION_ROUTINGS},
+            name="CNC",
+            expected_modified="v2",
+        )
+        self.assertEqual(repository.deleted, ("CNC", "v2"))
 
 
 if __name__ == "__main__":

@@ -9,6 +9,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.native_app_navigation import 
 from almdina_erp.almdina_erp.infrastructure.frappe.order_cost_surface_metadata import (
     sync_order_cost_surface_metadata,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.order_status_metadata import (
+    sync_order_status_options,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.permission_type_sync import (
     sync_permission_types,
 )
@@ -42,10 +45,11 @@ def _sync_security_foundation() -> None:
 
 
 def _sync_form_metadata_invariants() -> None:
-    """Keep Order, Plan, and Cost workspace metadata boundaries explicit."""
+    """Keep Order, Plan, Cost, and status projections explicit and current."""
 
     sync_cutting_plan_surface_metadata()
     sync_order_cost_surface_metadata()
+    sync_order_status_options()
 
 
 def _sync_native_navigation_metadata() -> None:

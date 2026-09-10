@@ -61,7 +61,7 @@ class OrderListQueryPort(Protocol):
         route_names: Sequence[str],
     ) -> Mapping[str, ProductionRoute]: ...
 
-    def department_filter_options(self) -> Sequence[Mapping[str, str]]: ...
+    def status_filter_options(self) -> Sequence[str]: ...
 
 
 def _value(row: Any, fieldname: str, default: Any = None) -> Any:
@@ -151,6 +151,31 @@ def _resolve_operational_role(
         return None
 
 
+def _effective_order_status(
+    order: Any,
+    stage: Any | None,
+    routes: Mapping[str, ProductionRoute],
+) -> str | None:
+    status = _value(order, "status")
+    if normalize_order_status(status) in {"Delivered", "Cancelled"} or not stage:
+        return status
+    if str(_value(stage, "status") or "") != "Completed":
+        return status
+    if str(_value(order, "current_production_stage") or "") != str(
+        _value(stage, "name") or ""
+    ):
+        return status
+    route = routes.get(str(_value(order, "production_path") or ""))
+    if not route:
+        return status
+    try:
+        return "Ready for Delivery" if route.next_stage(
+            str(_value(stage, "stage_type") or "")
+        ) is None else status
+    except ValueError:
+        return status
+
+
 def _production_facts(
     *,
     actor: str,
@@ -158,9 +183,10 @@ def _production_facts(
     order: Any,
     stage: Any | None,
     operational_role: str | None,
+    order_status: str | None = None,
 ) -> ProductionActionFacts:
     return ProductionActionFacts(
-        order_status=_value(order, "status"),
+        order_status=order_status if order_status is not None else _value(order, "status"),
         production_path=_value(order, "production_path"),
         current_stage_name=_value(order, "current_production_stage"),
         has_cutting_plan=bool(_value(order, "cutting_plan_json")),
@@ -283,6 +309,7 @@ def get_order_operational_role_flags(
                 order=order,
                 stage=stage,
                 operational_role=operational_role,
+                order_status=_effective_order_status(order, stage, routes),
             ),
         )
         actor_holds_current_role = actor_holds_operational_role(
@@ -320,19 +347,18 @@ def get_order_operational_role_flags(
             "can_mark_delivered": bool(
                 actions[Capability.MARK_DELIVERED]["allowed"]
             ),
+            "ready_for_delivery": (
+                _effective_order_status(order, stage, routes) == "Ready for Delivery"
+            ),
         }
 
     return {"personal_view": personal_view, "orders": flags}
 
 
-def get_department_filter_options(
+def get_status_filter_options(
     repository: OrderListQueryPort,
 ) -> list[dict[str, str]]:
-    """Return unique operational stage identities for the DCO list shortcut.
-
-    Display stays on the Arabic department label. Query identity is ``stage_type``.
-    The payload is operational only: no role names, costs, or routing internals.
-    """
+    """Return the exact visible Status values allowed by the shared metadata model."""
 
     actor = str(repository.current_user() or "").strip()
     if not actor or actor == "Guest":
@@ -341,24 +367,16 @@ def get_department_filter_options(
         if Capability.VIEW_ORDERS not in repository.global_capabilities():
             return []
 
-    options: list[dict[str, str]] = []
-    seen: set[str] = set()
-    for row in repository.department_filter_options():
-        stage_type = str(_value(row, "stage_type") or "").strip()
-        label = str(_value(row, "department_label") or stage_type).strip()
-        if not stage_type or stage_type in seen:
-            continue
-        seen.add(stage_type)
-        options.append({
-            "stage_type": stage_type,
-            "department_label": label or stage_type,
-        })
-    return options
+    return [
+        {"value": value, "label": value}
+        for value in repository.status_filter_options()
+        if str(value or "").strip()
+    ]
 
 
 __all__ = [
     "OrderListQueryPort",
-    "get_department_filter_options",
+    "get_status_filter_options",
     "get_order_operational_role_flags",
     "overview_order_list_delivered_rank",
     "sort_overview_order_list",
