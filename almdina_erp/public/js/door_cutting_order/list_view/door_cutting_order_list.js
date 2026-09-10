@@ -4,7 +4,7 @@
     const METHODS = Object.freeze({
         doctype: "Door Cutting Order",
         roleFlags: "almdina_erp.almdina_erp.services.shop_floor_query_service.get_order_operational_role_flags",
-        departmentFilterOptions: "almdina_erp.almdina_erp.services.shop_floor_query_service.get_department_filter_options",
+        statusFilterOptions: "almdina_erp.almdina_erp.services.shop_floor_query_service.get_status_filter_options",
     });
     const KANBAN_CARD_FIELDS = Object.freeze([
         "customer",
@@ -18,22 +18,12 @@
         Draft: "مسودة",
         "Pending Review": "بانتظار المراجعة",
         Approved: "معتمد",
-        "At Sharyoun": "عند الشريون",
-        "At Drawing": "عند الرسم",
-        "At CNC": "عند CNC",
-        "At Sanding": "عند التقشيط",
         "Ready for Delivery": "جاهز للتسليم",
         Delivered: "تم التسليم",
         Completed: "تم الإنجاز",
         Rejected: "مرفوض",
         "On Hold": "متوقف",
         Cancelled: "ملغى",
-    });
-    const STAGE_BY_DEPARTMENT = Object.freeze({
-        "شريون": "Sharyoun",
-        "رسم": "Drawing",
-        CNC: "CNC",
-        "تقشيط": "Sanding",
     });
     const MOBILE_CARD_STATES = Object.freeze({
         in_progress: Object.freeze({
@@ -109,12 +99,15 @@
         DESKTOP_DELIVERY_ROW_CLASS.delivered,
     ]);
     const STATUS_FILTER_SLOT_CLASS = "dco-status-filter-slot";
-    const STATUS_FILTER_FIELDNAME = "current_department";
-    const STATUS_FILTER_STAGE_FIELD = "current_production_stage.stage_type";
-    const STATUS_FILTER_ALL_LABEL = "كل الأقسام";
-    const DELIVERY_FILTER_READY = "جاهز للتسليم";
-    const DELIVERY_FILTER_DELIVERED = "تم التسليم";
-    let loadedDepartmentStageOptions = null;
+    const STATUS_FILTER_FIELDNAME = "status";
+    const STATUS_FILTER_ALL_LABEL = "كل الحالات";
+    const DEFAULT_STATUS_OPTIONS = Object.freeze([
+        Object.freeze({ value: "Draft", label: "Draft" }),
+        Object.freeze({ value: "Delivered", label: "Delivered" }),
+        Object.freeze({ value: "Cancelled", label: "Cancelled" }),
+    ]);
+    let loadedStatusOptions = [...DEFAULT_STATUS_OPTIONS];
+    let statusOptionsGeneration = 0;
 
     frappe.listview_settings = frappe.listview_settings || {};
     const existing = frappe.listview_settings[METHODS.doctype] || {};
@@ -173,6 +166,27 @@
                 return result;
             });
         };
+
+        const originalRender = prototype.render;
+        if (typeof originalRender === "function") {
+            prototype.render = function dcoReadOnlyKanbanRender(...args) {
+                const result = originalRender.apply(this, args);
+                if (
+                    this.doctype === METHODS.doctype
+                    && this.board
+                    && this.board.field_name === STATUS_FILTER_FIELDNAME
+                    && this.$result
+                ) {
+                    this.$result.find(".kanban-cards").each((_index, element) => {
+                        const sortable = window.Sortable && window.Sortable.get(element);
+                        if (sortable) sortable.option("disabled", true);
+                    });
+                    this.$result.find(".add-card, .new-card-area").remove();
+                    this.$result.find(".kanban-card-body").css("cursor", "default");
+                }
+                return result;
+            };
+        }
         prototype[KANBAN_VIEW_PATCH_KEY] = true;
     }
 
@@ -296,64 +310,17 @@
             && filter[1] === "name";
     }
 
-    function isDepartmentFilter(filter, doctype) {
-        return Array.isArray(filter)
-            && filter.length >= 4
-            && filter[0] === doctype
-            && filter[1] === STATUS_FILTER_FIELDNAME;
-    }
-
-    function fallbackDepartmentStageOptions() {
-        return Object.entries(STAGE_BY_DEPARTMENT).map(([label, stageType]) => ({
-            value: stageType,
-            label,
-        }));
-    }
-
-    function uniqueDepartmentStageOptions(rows) {
-        const byType = new Map();
+    function uniqueStatusOptions(rows) {
+        const options = [];
+        const seen = new Set();
         (rows || []).forEach((row) => {
-            const stageType = String(row && (row.stage_type || row.value) || "").trim();
-            const label = String(row && (row.department_label || row.label || stageType) || "").trim();
-            if (!stageType || byType.has(stageType)) return;
-            byType.set(stageType, label);
+            const value = String(row && (row.value || row.label) || "").trim();
+            const label = String(row && (row.label || row.value) || "").trim();
+            if (!value || seen.has(value)) return;
+            seen.add(value);
+            options.push({ value, label: label || value });
         });
-        return [...byType.entries()].map(([value, label]) => ({ value, label }));
-    }
-
-    function departmentStageOptions() {
-        if (loadedDepartmentStageOptions && loadedDepartmentStageOptions.length) {
-            return loadedDepartmentStageOptions;
-        }
-        return fallbackDepartmentStageOptions();
-    }
-
-    function resolveDepartmentFilterStageType(value) {
-        const selected = String(value || "").trim();
-        if (!selected) return "";
-        if (STAGE_BY_DEPARTMENT[selected]) return STAGE_BY_DEPARTMENT[selected];
-        const match = departmentStageOptions().find(
-            option => option.value === selected || option.label === selected
-        );
-        return match ? match.value : selected;
-    }
-
-    function departmentColumnQueryFilter(value, doctype) {
-        const selected = String(value || "").trim();
-        if (selected === DELIVERY_FILTER_READY) return [doctype, "status", "=", "Ready for Delivery"];
-        if (selected === DELIVERY_FILTER_DELIVERED) return [doctype, "status", "=", "Delivered"];
-        // reportview.validate_filters rejects 4-tuples whose fieldname is dotted.
-        return [STATUS_FILTER_STAGE_FIELD, "=", resolveDepartmentFilterStageType(selected)];
-    }
-
-    function rewriteDepartmentColumnFilters(args, doctype) {
-        if (!args) return args;
-        args.filters = (args.filters || []).map(filter => (
-            isDepartmentFilter(filter, doctype)
-                ? departmentColumnQueryFilter(filter[3], doctype)
-                : filter
-        ));
-        return args;
+        return options;
     }
 
     function installCombinedSearch(listview) {
@@ -361,7 +328,7 @@
         const originalGetArgs = listview.get_args.bind(listview);
 
         listview.get_args = function dcoCombinedSearchArgs() {
-            const args = rewriteDepartmentColumnFilters(originalGetArgs(), this.doctype);
+            const args = originalGetArgs();
             const field = searchField(this);
             const term = normalizedTerm(field && typeof field.get_value === "function" ? field.get_value() : "");
             if (!term) return args;
@@ -424,9 +391,10 @@
     function statusFilterOptions() {
         return [
             { value: "", label: __(STATUS_FILTER_ALL_LABEL) },
-            ...departmentStageOptions(),
-            { value: DELIVERY_FILTER_READY, label: __(DELIVERY_FILTER_READY) },
-            { value: DELIVERY_FILTER_DELIVERED, label: __(DELIVERY_FILTER_DELIVERED) },
+            ...loadedStatusOptions.map(option => ({
+                value: option.value,
+                label: __(option.label),
+            })),
         ];
     }
 
@@ -434,7 +402,7 @@
         return {
             fieldtype: "Select",
             fieldname: STATUS_FILTER_FIELDNAME,
-            label: __("Current Department"),
+            label: __("Status"),
             options: statusFilterOptions(),
             condition: "=",
         };
@@ -497,14 +465,12 @@
         if (!wrapper || typeof wrapper.querySelector !== "function") return;
         const select = wrapper.querySelector("select");
         if (!select) return;
-        select.setAttribute("aria-label", __("Current Department"));
+        select.setAttribute("aria-label", __("Status"));
         select.setAttribute("title", __(STATUS_FILTER_ALL_LABEL));
     }
 
-    function applyLoadedDepartmentFilterOptions(listview, rows) {
-        const options = uniqueDepartmentStageOptions(rows);
-        if (!options.length) return false;
-        loadedDepartmentStageOptions = options;
+    function applyLoadedStatusFilterOptions(listview, rows) {
+        loadedStatusOptions = uniqueStatusOptions(rows);
         const field = statusFilterField(listview);
         if (!field || !field.df) return true;
         const current = typeof field.get_value === "function" ? field.get_value() : "";
@@ -515,24 +481,20 @@
         return true;
     }
 
-    function hydrateDepartmentFilterOptions(listview) {
-        if (!listview) return;
-        if (loadedDepartmentStageOptions && loadedDepartmentStageOptions.length) {
-            applyLoadedDepartmentFilterOptions(listview, loadedDepartmentStageOptions);
-            listview._dcoDepartmentFilterOptionsKey = "ready";
-            return;
-        }
-        if (listview._dcoDepartmentFilterOptionsKey) return;
-        if (!window.frappe || typeof frappe.call !== "function") return;
-        listview._dcoDepartmentFilterOptionsKey = "pending";
+    function hydrateStatusFilterOptions(listview) {
+        if (!listview || !window.frappe || typeof frappe.call !== "function") return;
+        const generation = ++statusOptionsGeneration;
+        listview._dcoStatusOptionsGeneration = generation;
         frappe.call({
-            method: METHODS.departmentFilterOptions,
+            method: METHODS.statusFilterOptions,
             freeze: false,
         }).then((response) => {
-            applyLoadedDepartmentFilterOptions(listview, response && response.message);
-            listview._dcoDepartmentFilterOptionsKey = "ready";
+            if (listview._dcoStatusOptionsGeneration !== generation) return;
+            applyLoadedStatusFilterOptions(listview, response && response.message);
         }).catch(() => {
-            listview._dcoDepartmentFilterOptionsKey = null;
+            if (listview._dcoStatusOptionsGeneration === generation) {
+                loadedStatusOptions = [...DEFAULT_STATUS_OPTIONS];
+            }
         });
     }
 
@@ -618,7 +580,7 @@
         return {
             order: doc.name,
             stage: authorized.stage || doc.current_production_stage,
-            stageType: STAGE_BY_DEPARTMENT[doc.current_department] || doc.current_department,
+            stageType: doc.current_department || "",
             canStart: authorized.canStart === true,
             canHandoff: authorized.canHandoff === true,
             canDeliver: authorized.canDeliver === true,
@@ -1407,7 +1369,7 @@
         installResponsiveObserver(listview);
         installRowsObserver(listview);
         reconcileStatusFilterLayout(listview);
-        hydrateDepartmentFilterOptions(listview);
+        hydrateStatusFilterOptions(listview);
     }
 
     frappe.listview_settings[METHODS.doctype] = Object.assign({}, existing, {
@@ -1456,10 +1418,9 @@
     window.AlmdinaDoorCuttingOrderListUX = Object.freeze({
         applyDesktopDeliveryRowColors,
         applyKanbanCardPresentation,
-        applyLoadedDepartmentFilterOptions,
+        applyLoadedStatusFilterOptions,
         buildCard,
         cardViewModel,
-        departmentColumnQueryFilter,
         desktopDeliveryRowState,
         isPhoneLayout,
         kanbanCardFields,
@@ -1470,14 +1431,12 @@
         quickActionContext,
         reconcileStatusFilterLayout,
         renderMobileCards,
-        resolveDepartmentFilterStageType,
-        rewriteDepartmentColumnFilters,
         sortDesktopQueueItems,
         sortOverviewListItems,
         sortPersonalQueueItems,
         statusFilterConfig,
         statusFilterOptions,
-        uniqueDepartmentStageOptions,
+        uniqueStatusOptions,
         usesOverviewDeliveredLastSort,
     });
 })();
