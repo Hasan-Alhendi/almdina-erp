@@ -117,7 +117,6 @@ class StatefulFactoryRepository:
     def _profile(self, user: str | None = None) -> dict[str, Any]:
         return self.profiles.get(user or self.actor, {"roles": (), "capabilities": set()})
 
-    # Shared identity / authorization ports ---------------------------------
     def current_user(self) -> str:
         return self.actor
 
@@ -146,9 +145,12 @@ class StatefulFactoryRepository:
         )
 
     def session_identity(self) -> dict[str, Any]:
-        return {"user": self.actor, "full_name": self.actor, "roles": list(self.actor_roles())}
+        return {
+            "user": self.actor,
+            "full_name": self.actor,
+            "roles": list(self.actor_roles()),
+        }
 
-    # Routing ---------------------------------------------------------------
     def list_active_routes(self) -> list[ProductionRoute]:
         return list(self.routes.values())
 
@@ -160,7 +162,9 @@ class StatefulFactoryRepository:
 
     def assert_worker_for_role(self, user: str, role: str) -> None:
         if role not in self.actor_roles(user):
-            raise commands.ShopFloorCommandError("العامل المختار لا يملك دور المرحلة المطلوبة.")
+            raise commands.ShopFloorCommandError(
+                "العامل المختار لا يملك دور المرحلة المطلوبة."
+            )
 
     def get_users_for_role(self, role: str) -> list[dict[str, str]]:
         return [
@@ -172,7 +176,6 @@ class StatefulFactoryRepository:
     def default_production_route(self) -> str | None:
         return "Drawing"
 
-    # Command persistence port ---------------------------------------------
     def lock_order(self, order_name: str) -> None:
         return None
 
@@ -190,7 +193,10 @@ class StatefulFactoryRepository:
 
     def cancel_active_order_stages(self, order_name: str) -> None:
         for name, stage in list(self.stages.items()):
-            if stage.order_name == order_name and stage.status not in {"Completed", "Cancelled"}:
+            if stage.order_name == order_name and stage.status not in {
+                "Completed",
+                "Cancelled",
+            }:
                 self.stages[name] = replace(stage, status="Cancelled")
 
     def create_stage(
@@ -235,17 +241,24 @@ class StatefulFactoryRepository:
             order,
             production_path=path if path is not None else order.production_path,
             current_stage=stage_name,
-            status=commands.order_status_for_stage_type(stage.stage_type),
+            status=commands.order_status_for_stage(
+                stage.stage_type,
+                stage.department_label,
+            ),
         )
 
     def track_order_ready_for_delivery(self, order_name: str) -> None:
         self.orders[order_name] = replace(
-            self.orders[order_name], status="Ready for Delivery", current_stage=None
+            self.orders[order_name],
+            status="Ready for Delivery",
+            current_stage=None,
         )
 
     def track_order_delivered(self, order_name: str) -> None:
         self.orders[order_name] = replace(
-            self.orders[order_name], status="Delivered", current_stage=None
+            self.orders[order_name],
+            status="Delivered",
+            current_stage=None,
         )
 
     def log_stage_event(
@@ -295,7 +308,9 @@ class StatefulFactoryRepository:
         return self.orders[order_name].status
 
     def list_revert_candidates(
-        self, order_name: str, stage_type: str
+        self,
+        order_name: str,
+        stage_type: str,
     ) -> Sequence[commands.StageState]:
         return [
             stage
@@ -307,7 +322,9 @@ class StatefulFactoryRepository:
         return bool(stage_name and stage_name in self.stages)
 
     def list_later_stages(
-        self, order_name: str, sequence: int
+        self,
+        order_name: str,
+        sequence: int,
     ) -> Sequence[commands.StageState]:
         return sorted(
             (
@@ -318,17 +335,26 @@ class StatefulFactoryRepository:
             key=lambda row: row.sequence,
         )
 
-    def cancel_stage(self, stage_name: str, *, target_status: str) -> commands.StageState:
+    def cancel_stage(
+        self,
+        stage_name: str,
+        *,
+        target_status: str,
+    ) -> commands.StageState:
         updated = replace(self.stages[stage_name], status=target_status)
         self.stages[stage_name] = updated
         return updated
 
-    def reopen_stage(self, stage_name: str, *, target_status: str) -> commands.StageState:
+    def reopen_stage(
+        self,
+        stage_name: str,
+        *,
+        target_status: str,
+    ) -> commands.StageState:
         updated = replace(self.stages[stage_name], status=target_status)
         self.stages[stage_name] = updated
         return updated
 
-    # Query persistence port ------------------------------------------------
     def _stage_row(self, stage: commands.StageState) -> dict[str, Any]:
         return {
             "name": stage.name,
@@ -353,7 +379,11 @@ class StatefulFactoryRepository:
             "production_path": order.production_path,
             "current_production_stage": order.current_stage,
             "current_department": current.department_label if current else None,
-            "department_status": "قيد العمل" if current and current.status == "In Progress" else "بحاجة للعمل",
+            "department_status": (
+                "قيد العمل"
+                if current and current.status == "In Progress"
+                else "بحاجة للعمل"
+            ),
             "approved_plan": "PLAN-E2E-1" if order.has_approved_plan else None,
             "plan_needs_recalculation": int(order.plan_needs_recalculation),
             "drawing_dxf_status": order.drawing_dxf_status,
@@ -377,8 +407,15 @@ class StatefulFactoryRepository:
         ]
         return [self._stage_row(stage) for stage in rows]
 
-    def current_stage_names(self, order_names: Sequence[str]) -> dict[str, str | None]:
-        return {name: self.orders[name].current_stage for name in order_names if name in self.orders}
+    def current_stage_names(
+        self,
+        order_names: Sequence[str],
+    ) -> dict[str, str | None]:
+        return {
+            name: self.orders[name].current_stage
+            for name in order_names
+            if name in self.orders
+        }
 
     def order_summaries(self, order_names: Sequence[str]) -> dict[str, Any]:
         return {
@@ -388,7 +425,10 @@ class StatefulFactoryRepository:
         }
 
     def personal_order_stage_timings(
-        self, order_names: Sequence[str], *, user: str
+        self,
+        order_names: Sequence[str],
+        *,
+        user: str,
     ) -> dict[str, Any]:
         return {}
 
@@ -410,7 +450,9 @@ class StatefulFactoryRepository:
         return self._stage_row(stage) if stage else None
 
     def load_plan_snapshot(
-        self, order: Any, plan_source: str | None = None
+        self,
+        order: Any,
+        plan_source: str | None = None,
     ) -> dict[str, Any]:
         return {"sheets": [{"index": 1, "placements": []}]}
 
@@ -434,33 +476,45 @@ class TestStage14EndToEndRegression(unittest.TestCase):
             has_approved_plan=False,
         )
 
-    def test_order_moves_drawing_to_cnc_to_edge_then_delivery_with_personal_history(self) -> None:
+    def test_order_moves_drawing_to_cnc_to_edge_then_delivery_with_personal_history(
+        self,
+    ) -> None:
         repository = self.repository
 
         repository.as_actor("supervisor@example.com")
         dispatched = commands.dispatch_order(
-            repository, "DCO-E2E-1", "Drawing", "drawing@example.com"
+            repository,
+            "DCO-E2E-1",
+            "Drawing",
+            "drawing@example.com",
         )
         drawing_stage = dispatched["stage"]
-        self.assertEqual(repository.orders["DCO-E2E-1"].status, "At Drawing")
+        self.assertEqual(repository.orders["DCO-E2E-1"].status, "رسم")
 
         repository.as_actor("drawing@example.com")
-        self.assertEqual([row["name"] for row in queries.get_my_inbox(repository)], [drawing_stage])
+        self.assertEqual(
+            [row["name"] for row in queries.get_my_inbox(repository)],
+            [drawing_stage],
+        )
         commands.start_my_stage(repository, drawing_stage)
         with self.assertRaisesRegex(commands.ShopFloorCommandError, "اعتمد خطة القص"):
             commands.handoff_to_next(repository, drawing_stage, "cnc@example.com")
 
         repository.orders["DCO-E2E-1"] = replace(
-            repository.orders["DCO-E2E-1"], has_approved_plan=True
+            repository.orders["DCO-E2E-1"],
+            has_approved_plan=True,
         )
         drawing_handoff = commands.handoff_to_next(
-            repository, drawing_stage, "cnc@example.com"
+            repository,
+            drawing_stage,
+            "cnc@example.com",
         )
         cnc_stage = drawing_handoff["next_stage"]
-        self.assertEqual(repository.orders["DCO-E2E-1"].status, "At CNC")
+        self.assertEqual(repository.orders["DCO-E2E-1"].status, "CNC")
         self.assertEqual(queries.get_my_inbox(repository), [])
         self.assertEqual(
-            [row["name"] for row in queries.get_my_archive(repository)], [drawing_stage]
+            [row["name"] for row in queries.get_my_archive(repository)],
+            [drawing_stage],
         )
 
         repository.as_actor("edge@example.com")
@@ -473,21 +527,35 @@ class TestStage14EndToEndRegression(unittest.TestCase):
             commands.start_my_stage(repository, cnc_stage)
 
         repository.as_actor("cnc@example.com")
-        self.assertEqual([row["name"] for row in queries.get_my_inbox(repository)], [cnc_stage])
-        commands.start_my_stage(repository, cnc_stage)
-        cnc_handoff = commands.handoff_to_next(repository, cnc_stage, "edge@example.com")
-        edge_stage = cnc_handoff["next_stage"]
-        self.assertEqual(repository.orders["DCO-E2E-1"].status, "At Sanding")
         self.assertEqual(
-            [row["name"] for row in queries.get_my_archive(repository)], [cnc_stage]
+            [row["name"] for row in queries.get_my_inbox(repository)],
+            [cnc_stage],
+        )
+        commands.start_my_stage(repository, cnc_stage)
+        cnc_handoff = commands.handoff_to_next(
+            repository,
+            cnc_stage,
+            "edge@example.com",
+        )
+        edge_stage = cnc_handoff["next_stage"]
+        self.assertEqual(repository.orders["DCO-E2E-1"].status, "تقشيط")
+        self.assertEqual(
+            [row["name"] for row in queries.get_my_archive(repository)],
+            [cnc_stage],
         )
 
         repository.as_actor("edge@example.com")
-        self.assertEqual([row["name"] for row in queries.get_my_inbox(repository)], [edge_stage])
+        self.assertEqual(
+            [row["name"] for row in queries.get_my_inbox(repository)],
+            [edge_stage],
+        )
         commands.start_my_stage(repository, edge_stage)
         final = commands.handoff_to_next(repository, edge_stage)
         self.assertTrue(final["ready_for_delivery"])
-        self.assertEqual(repository.orders["DCO-E2E-1"].status, "Ready for Delivery")
+        self.assertEqual(
+            repository.orders["DCO-E2E-1"].status,
+            "Ready for Delivery",
+        )
         self.assertEqual(queries.get_my_inbox(repository), [])
         self.assertEqual(queries.get_my_archive(repository), [])
 
@@ -499,15 +567,19 @@ class TestStage14EndToEndRegression(unittest.TestCase):
         commands.mark_delivered(repository, "DCO-E2E-1")
         self.assertEqual(repository.orders["DCO-E2E-1"].status, "Delivered")
         self.assertEqual(
-            [event[1] for event in repository.events].count("Finish"), 3
+            [event[1] for event in repository.events].count("Finish"),
+            3,
         )
 
         repository.as_actor("edge@example.com")
         self.assertEqual(
-            [row["name"] for row in queries.get_my_archive(repository)], [edge_stage]
+            [row["name"] for row in queries.get_my_archive(repository)],
+            [edge_stage],
         )
 
-    def test_finance_permission_admin_and_system_manager_cannot_enter_production_by_role_name(self) -> None:
+    def test_finance_permission_admin_and_system_manager_cannot_enter_production_by_role_name(
+        self,
+    ) -> None:
         repository = self.repository
         for actor in (
             "financial@example.com",
@@ -518,11 +590,16 @@ class TestStage14EndToEndRegression(unittest.TestCase):
                 repository.as_actor(actor)
                 with self.assertRaises(commands.ShopFloorPermissionDenied):
                     commands.dispatch_order(
-                        repository, "DCO-E2E-1", "Drawing", "drawing@example.com"
+                        repository,
+                        "DCO-E2E-1",
+                        "Drawing",
+                        "drawing@example.com",
                     )
                 self.assertIsNone(repository.orders["DCO-E2E-1"].current_stage)
 
-    def test_customer_sales_document_stays_available_without_exposing_internal_cost(self) -> None:
+    def test_customer_sales_document_stays_available_without_exposing_internal_cost(
+        self,
+    ) -> None:
         order_entry_state = normalize_business_capability_state(
             {
                 Capability.VIEW_ORDERS: True,
