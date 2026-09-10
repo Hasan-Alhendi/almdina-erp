@@ -801,6 +801,15 @@ assert.deepStrictEqual(
     ]
 );
 
+const assigneeConfig = api.assigneeFilterConfig();
+assert.strictEqual(assigneeConfig.fieldtype, "Select");
+assert.strictEqual(assigneeConfig.fieldname, "current_assignee");
+assert.strictEqual(assigneeConfig.condition, "=");
+assert.strictEqual(assigneeConfig.label, "العامل الحالي");
+assert.deepStrictEqual(hostOptions(api.assigneeFilterOptions()), [
+    { value: "", label: "كل العمال" },
+]);
+
 assert.deepStrictEqual(
     hostOptions(api.uniqueStatusOptions([
         { value: "الرسم", label: "الرسم" },
@@ -818,6 +827,7 @@ assert.deepStrictEqual(
 const listSettings = context.frappe.listview_settings["Door Cutting Order"];
 assert(Array.isArray(listSettings.custom_filter_configs));
 assert.strictEqual(listSettings.custom_filter_configs[0].fieldname, "status");
+assert.strictEqual(listSettings.custom_filter_configs[1].fieldname, "current_assignee");
 
 api.applyLoadedStatusFilterOptions({
     page: { fields_dict: { status: { df: {}, get_value() { return ""; } } } },
@@ -830,10 +840,22 @@ api.applyLoadedStatusFilterOptions({
     { value: "Cancelled", label: "Cancelled" },
 ]);
 assert(api.statusFilterOptions().some(option => option.value === "التغليف" && option.label === "التغليف"));
+api.applyLoadedAssigneeFilterOptions({
+    page: { fields_dict: { current_assignee: { df: {}, get_value() { return ""; } } } },
+}, [
+    { value: "worker-a@example.com", label: "أحمد" },
+    { value: "worker-b@example.com", label: "باسم" },
+]);
+assert.deepStrictEqual(hostOptions(api.assigneeFilterOptions()), [
+    { value: "", label: "كل العمال" },
+    { value: "worker-a@example.com", label: "أحمد" },
+    { value: "worker-b@example.com", label: "باسم" },
+]);
 assert(!source.includes("STAGE_BY_DEPARTMENT"));
 assert(!source.includes("current_production_stage.stage_type"));
 assert(!source.includes("كل الأقسام"));
 assert(source.includes("get_status_filter_options"));
+assert(source.includes("get_assignee_filter_options"));
 
 function mockFilterNode(className = "") {
     const node = {
@@ -931,16 +953,21 @@ const standardSection = mockFilterNode("standard-filter-section flex");
 const filterSection = mockFilterNode("filter-section flex");
 const filterSelector = mockFilterNode("filter-selector");
 const statusWrapper = mockFilterNode("frappe-control");
+const assigneeWrapper = mockFilterNode("frappe-control");
 filterRoot.appendChild(pageForm);
 pageForm.appendChild(standardSection);
 pageForm.appendChild(filterSection);
 filterSection.appendChild(filterSelector);
 standardSection.appendChild(statusWrapper);
+standardSection.appendChild(assigneeWrapper);
 
 const statusListview = {
     page: {
         wrapper: filterRoot,
-        fields_dict: { status: { wrapper: statusWrapper } },
+        fields_dict: {
+            status: { wrapper: statusWrapper },
+            current_assignee: { wrapper: assigneeWrapper },
+        },
     },
 };
 
@@ -948,20 +975,23 @@ function assertBesideFrappeFilter(message) {
     const slot = filterRoot.querySelector(".dco-status-filter-slot");
     assert(slot, message);
     assert.strictEqual(statusWrapper.parentNode, slot);
+    assert.strictEqual(assigneeWrapper.parentNode, slot);
+    assert.deepStrictEqual(slot.children, [statusWrapper, assigneeWrapper]);
     assert.strictEqual(slot.parentNode, filterSection);
     assert.strictEqual(filterSelector.nextSibling, slot);
 }
 
 setFilterViewport(390, 844);
 assert.strictEqual(api.reconcileStatusFilterLayout(statusListview), true);
-assertBesideFrappeFilter("card layout must place the status select beside Frappe's filter button");
+assertBesideFrappeFilter("card layout must place status then current worker beside Frappe's filter button");
 assert.strictEqual(api.reconcileStatusFilterLayout(statusListview), true);
 assert.strictEqual(filterRoot.querySelectorAll(".dco-status-filter-slot").length, 1);
 
 setFilterViewport(1440, 900);
 assert.strictEqual(api.reconcileStatusFilterLayout(statusListview), true);
-assertBesideFrappeFilter("desktop must also place the status select beside Frappe's filter button");
+assertBesideFrappeFilter("desktop must also place status then current worker beside Frappe's filter button");
 assert.strictEqual(standardSection.children.filter(child => child === statusWrapper).length, 0);
+assert.strictEqual(standardSection.children.filter(child => child === assigneeWrapper).length, 0);
 
 lifecycleSetup.then(result => {
     assert.strictEqual(result, "base-ready");
