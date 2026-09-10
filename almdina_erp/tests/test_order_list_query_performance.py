@@ -250,6 +250,7 @@ class TestOrderListFrappeAdapterContract(unittest.TestCase):
             source,
         )
         self.assertIn("order_list_query.get_status_filter_options", source)
+        self.assertIn("order_list_query.get_assignee_filter_options", source)
         self.assertIn("require_doctype_capability", source)
         self.assertIn("Capability.VIEW_ORDERS", source)
 
@@ -260,6 +261,11 @@ class StatusFilterRepository:
         self.admin = False
         self.capabilities = frozenset({Capability.VIEW_ORDERS})
         self.rows = ("Draft", "الرسم", "CNC", "التغليف", "Delivered", "Cancelled")
+        self.assignees = (
+            {"value": "worker-b@example.com", "label": "باسم العامل"},
+            {"value": "worker-a@example.com", "label": "أحمد العامل"},
+            {"value": "worker-a@example.com", "label": "اسم مكرر"},
+        )
 
     def current_user(self) -> str:
         return self.user
@@ -291,6 +297,9 @@ class StatusFilterRepository:
     def status_filter_options(self):
         return self.rows
 
+    def assignee_filter_options(self):
+        return self.assignees
+
 
 class TestStatusFilterOptions(unittest.TestCase):
     def test_options_preserve_canonical_values_and_exact_stage_labels(self) -> None:
@@ -306,6 +315,21 @@ class TestStatusFilterOptions(unittest.TestCase):
                 {"value": "Cancelled", "label": "Cancelled"},
             ],
         )
+
+    def test_assignee_options_preserve_user_identity_and_display_name(self) -> None:
+        payload = order_list_query.get_assignee_filter_options(StatusFilterRepository())
+        self.assertEqual(
+            payload,
+            [
+                {"value": "worker-b@example.com", "label": "باسم العامل"},
+                {"value": "worker-a@example.com", "label": "أحمد العامل"},
+            ],
+        )
+
+    def test_assignee_catalog_fails_closed_without_view_orders(self) -> None:
+        repository = StatusFilterRepository()
+        repository.capabilities = frozenset()
+        self.assertEqual(order_list_query.get_assignee_filter_options(repository), [])
 
     def test_missing_view_orders_returns_no_catalog(self) -> None:
         repository = StatusFilterRepository()
@@ -323,6 +347,17 @@ class TestStatusFilterOptions(unittest.TestCase):
         self.assertIn("build_order_status_options", source)
         self.assertNotIn('"stage_type"', source.split("def status_filter_options", 1)[1])
         self.assertNotIn('"department_label"', source.split("def status_filter_options", 1)[1])
+
+    def test_assignee_adapter_uses_native_visible_order_scope(self) -> None:
+        source = ADAPTER_PATH.read_text(encoding="utf-8")
+        projection = source.split("def assignee_filter_options", 1)[1].split(
+            "def status_filter_options", 1
+        )[0]
+        self.assertIn("frappe.get_list", projection)
+        self.assertIn("distinct=True", projection)
+        self.assertIn('"current_assignee"', projection)
+        self.assertIn('"full_name"', projection)
+        self.assertNotIn("frappe.db.sql", projection)
 
 
 class TestOverviewOrderListSort(unittest.TestCase):

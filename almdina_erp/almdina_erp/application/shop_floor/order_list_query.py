@@ -63,6 +63,8 @@ class OrderListQueryPort(Protocol):
 
     def status_filter_options(self) -> Sequence[str]: ...
 
+    def assignee_filter_options(self) -> Sequence[Mapping[str, str]]: ...
+
 
 def _value(row: Any, fieldname: str, default: Any = None) -> Any:
     if isinstance(row, Mapping):
@@ -355,6 +357,30 @@ def get_order_operational_role_flags(
     return {"personal_view": personal_view, "orders": flags}
 
 
+def get_assignee_filter_options(
+    repository: OrderListQueryPort,
+) -> list[dict[str, str]]:
+    """Return workers currently assigned to orders visible to the actor."""
+
+    actor = str(repository.current_user() or "").strip()
+    if not actor or actor == "Guest":
+        return []
+    if actor != "Administrator" and not repository.is_admin():
+        if Capability.VIEW_ORDERS not in repository.global_capabilities():
+            return []
+
+    options: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for row in repository.assignee_filter_options():
+        value = str(_value(row, "value") or "").strip()
+        label = str(_value(row, "label") or value).strip()
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        options.append({"value": value, "label": label or value})
+    return options
+
+
 def get_status_filter_options(
     repository: OrderListQueryPort,
 ) -> list[dict[str, str]]:
@@ -376,6 +402,7 @@ def get_status_filter_options(
 
 __all__ = [
     "OrderListQueryPort",
+    "get_assignee_filter_options",
     "get_status_filter_options",
     "get_order_operational_role_flags",
     "overview_order_list_delivered_rank",

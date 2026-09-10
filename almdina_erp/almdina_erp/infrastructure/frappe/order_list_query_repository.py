@@ -141,11 +141,52 @@ class FrappeOrderListQueryRepository:
                 continue
         return routes
 
+    def assignee_filter_options(self) -> tuple[dict[str, str], ...]:
+        """List current assignees from the actor's native DCO permission scope."""
+
+        rows = frappe.get_list(
+            _ORDER_DOCTYPE,
+            filters={"current_assignee": ["is", "set"]},
+            fields=["current_assignee"],
+            distinct=True,
+            limit_page_length=0,
+        )
+        assignees = sorted(
+            {
+                str(row.current_assignee).strip()
+                for row in rows
+                if str(row.current_assignee or "").strip()
+            }
+        )
+        if not assignees:
+            return ()
+
+        users = frappe.get_all(
+            "User",
+            filters={"name": ["in", assignees]},
+            fields=["name", "full_name"],
+            limit_page_length=max(len(assignees), 1),
+        )
+        labels = {
+            str(user.name): str(user.full_name or user.name).strip()
+            for user in users
+            if user.name
+        }
+        options = (
+            {"value": user, "label": labels.get(user) or user}
+            for user in assignees
+        )
+        return tuple(
+            sorted(
+                options,
+                key=lambda option: (option["label"].casefold(), option["value"]),
+            )
+        )
+
     def status_filter_options(self) -> tuple[str, ...]:
         """Return the canonical visible Status values used by List and Kanban."""
 
         return build_order_status_options()
-
 
 
 __all__ = ["FrappeOrderListQueryRepository"]

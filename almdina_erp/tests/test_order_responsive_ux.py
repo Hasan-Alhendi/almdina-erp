@@ -265,6 +265,8 @@ def test_order_list_status_filter_uses_frappe_standard_filter_contract():
     assert 'label: __("Status")' in list_source
     assert ".dco-status-filter-slot" in css
     assert ".dco-order-list .dco-status-filter-slot" in css
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr)) !important;" in css
+    assert ".dco-order-list .dco-status-filter-slot > .frappe-control" in css
     assert ".dco-order-list .filter-section" in css
     assert 'root.querySelector(".filter-section")' in list_source
     assert 'filterSection.querySelector(".filter-selector")' in list_source
