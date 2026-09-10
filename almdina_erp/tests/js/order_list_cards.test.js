@@ -930,38 +930,38 @@ const pageForm = mockFilterNode("page-form");
 const standardSection = mockFilterNode("standard-filter-section flex");
 const filterSection = mockFilterNode("filter-section flex");
 const filterSelector = mockFilterNode("filter-selector");
-const departmentWrapper = mockFilterNode("frappe-control");
+const statusWrapper = mockFilterNode("frappe-control");
 filterRoot.appendChild(pageForm);
 pageForm.appendChild(standardSection);
 pageForm.appendChild(filterSection);
 filterSection.appendChild(filterSelector);
-standardSection.appendChild(departmentWrapper);
+standardSection.appendChild(statusWrapper);
 
-const departmentListview = {
+const statusListview = {
     page: {
         wrapper: filterRoot,
-        fields_dict: { current_department: { wrapper: departmentWrapper } },
+        fields_dict: { status: { wrapper: statusWrapper } },
     },
 };
 
 function assertBesideFrappeFilter(message) {
     const slot = filterRoot.querySelector(".dco-status-filter-slot");
     assert(slot, message);
-    assert.strictEqual(departmentWrapper.parentNode, slot);
+    assert.strictEqual(statusWrapper.parentNode, slot);
     assert.strictEqual(slot.parentNode, filterSection);
     assert.strictEqual(filterSelector.nextSibling, slot);
 }
 
 setFilterViewport(390, 844);
-assert.strictEqual(api.reconcileStatusFilterLayout(departmentListview), true);
-assertBesideFrappeFilter("card layout must place the department select beside Frappe's filter button");
-assert.strictEqual(api.reconcileStatusFilterLayout(departmentListview), true);
+assert.strictEqual(api.reconcileStatusFilterLayout(statusListview), true);
+assertBesideFrappeFilter("card layout must place the status select beside Frappe's filter button");
+assert.strictEqual(api.reconcileStatusFilterLayout(statusListview), true);
 assert.strictEqual(filterRoot.querySelectorAll(".dco-status-filter-slot").length, 1);
 
 setFilterViewport(1440, 900);
-assert.strictEqual(api.reconcileStatusFilterLayout(departmentListview), true);
-assertBesideFrappeFilter("desktop must also place the department select beside Frappe's filter button");
-assert.strictEqual(standardSection.children.filter(child => child === departmentWrapper).length, 0);
+assert.strictEqual(api.reconcileStatusFilterLayout(statusListview), true);
+assertBesideFrappeFilter("desktop must also place the status select beside Frappe's filter button");
+assert.strictEqual(standardSection.children.filter(child => child === statusWrapper).length, 0);
 
 lifecycleSetup.then(result => {
     assert.strictEqual(result, "base-ready");
