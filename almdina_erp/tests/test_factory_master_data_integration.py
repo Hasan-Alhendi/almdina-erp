@@ -21,7 +21,9 @@ CUTTING_USER = "almdina.cutting.settings@example.com"
 ROUTING_USER = "almdina.routing.manager@example.com"
 EDGE_USER = "almdina.edge.manager@example.com"
 ROUTING_NAME = "Almdina Integration Routing"
-EDGE_NAME = "قشاط اختبار تكامل"\nROUTING_STAGE_A = "INTEGRATION_CUTTING"\nROUTING_STAGE_B = "INTEGRATION_EDGE"
+EDGE_NAME = "قشاط اختبار تكامل"
+ROUTING_STAGE_A = "INTEGRATION_CUTTING"
+ROUTING_STAGE_B = "INTEGRATION_EDGE"
 
 
 class TestFactoryMasterDataIntegration(FrappeTestCase):
