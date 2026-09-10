@@ -40,4 +40,7 @@ def test_status_kanban_is_read_only_without_frontend_database_writes_or_timers()
     assert 'sortable.option("disabled", true)' in source
     assert 'find(".add-card, .new-card-area").remove()' in source
     assert "frappe.db.set_value" not in source
-    hydration = source.split("function hydrateStatusFilterOptions", 1)[1].split(\n        "function reconcileStatusFilterLayout", 1\n    )[0]\n    assert "setTimeout" not in hydration\n
+    hydration = source.split("function hydrateStatusFilterOptions", 1)[1].split(
+        "function reconcileStatusFilterLayout", 1
+    )[0]
+    assert "setTimeout" not in hydration
