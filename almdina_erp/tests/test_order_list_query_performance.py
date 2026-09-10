@@ -188,6 +188,49 @@ class TestOrderListBulkQuery(unittest.TestCase):
         self.assertFalse(row["can_handoff_stage"])
 
 
+class TestMultipleRouteStatusProjection(unittest.TestCase):
+    def test_terminal_readiness_is_scoped_to_each_selected_route(self) -> None:
+        route_a = ProductionRoute(
+            "Route A",
+            "المسار أ",
+            (
+                RoutingStage(10, "ALPHA", "ألفا", "عامل ألفا"),
+                RoutingStage(20, "BETA", "بيتا", "عامل بيتا"),
+            ),
+        )
+        route_b = ProductionRoute(
+            "Route B",
+            "المسار ب",
+            (
+                RoutingStage(10, "ALPHA", "ألفا", "عامل ألفا"),
+                RoutingStage(20, "GAMMA", "غاما", "عامل غاما"),
+            ),
+        )
+        routes = {route_a.name: route_a, route_b.name: route_b}
+
+        stage_a = {"name": "STAGE-A", "stage_type": "BETA", "status": "Completed"}
+        order_a = {
+            "status": "بيتا",
+            "production_path": route_a.name,
+            "current_production_stage": stage_a["name"],
+        }
+        self.assertEqual(
+            order_list_query._effective_order_status(order_a, stage_a, routes),
+            "Ready for Delivery",
+        )
+
+        stage_b = {"name": "STAGE-B", "stage_type": "ALPHA", "status": "Completed"}
+        order_b = {
+            "status": "ألفا",
+            "production_path": route_b.name,
+            "current_production_stage": stage_b["name"],
+        }
+        self.assertEqual(
+            order_list_query._effective_order_status(order_b, stage_b, routes),
+            "ألفا",
+        )
+
+
 class TestOrderListFrappeAdapterContract(unittest.TestCase):
     def test_adapter_uses_bulk_permission_and_stage_reads_without_documents(self) -> None:
         source = ADAPTER_PATH.read_text(encoding="utf-8")
