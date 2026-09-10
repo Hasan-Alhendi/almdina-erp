@@ -11,7 +11,6 @@ from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
     normalize_plan_settings,
 )
 from almdina_erp.almdina_erp.domain.orders.editability import DRAFT_LIKE_STATUSES
-from almdina_erp.almdina_erp.domain.orders.lifecycle import SHOP_FLOOR_ORDER_STATUSES
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization import (
     require_cutting_plan_capability,
@@ -39,7 +38,6 @@ _PLAN_META_FIELDS = {
     "trim_margin_mm": "trim_margin_mm",
     "optimization_time_limit_sec": "optimization_time_limit_sec",
 }
-_ACTIVE_ROUTED_ORDER_STATUSES = frozenset(SHOP_FLOOR_ORDER_STATUSES.values())
 
 
 def _has_active_production_stage(doc: Any) -> bool:
@@ -51,13 +49,6 @@ def _has_production_route(doc: Any) -> bool:
         _has_active_production_stage(doc)
         or str(getattr(doc, "production_path", None) or "").strip()
     )
-
-
-def _has_active_routed_lifecycle(doc: Any) -> bool:
-    if _has_active_production_stage(doc):
-        return True
-    status = str(getattr(doc, "status", None) or "").strip()
-    return status in _ACTIVE_ROUTED_ORDER_STATUSES
 
 
 def assert_plan_settings_edit_lifecycle(doc: Any) -> None:
@@ -86,7 +77,10 @@ def assert_plan_settings_edit_lifecycle(doc: Any) -> None:
         )
 
     if _has_production_route(doc):
-        if _has_active_routed_lifecycle(doc):
+        # current_production_stage is the authoritative runtime fact for an
+        # active configurable route. Production-stage names are user-defined and
+        # therefore must never be recognized through a hard-coded status list.
+        if _has_active_production_stage(doc):
             return
         if status != "Draft":
             frappe.throw(
