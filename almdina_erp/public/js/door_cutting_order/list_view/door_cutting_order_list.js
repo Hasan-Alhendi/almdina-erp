@@ -1020,7 +1020,9 @@
     function desktopDeliveryRowState(doc) {
         const status = String(doc && doc.status || "").trim();
         if (status === "Delivered") return "delivered";
-        if (status === "Ready for Delivery") return "ready_for_delivery";
+        if (flag.ready_for_delivery === true || status === "Ready for Delivery") {
+            return "ready_for_delivery";
+        }
         const department = String(doc && doc.current_department || "").trim();
         if (department === "تم التسليم") return "delivered";
         if (department === "جاهز للتسليم") return "ready_for_delivery";
@@ -1195,6 +1197,7 @@
                 canStart: flag.can_start_stage === true,
                 canHandoff: flag.can_handoff_stage === true,
                 canDeliver: flag.can_mark_delivered === true,
+                readyForDelivery: flag.ready_for_delivery === true,
                 assignmentState: flag.assignment_state || "",
                 queueState: personalQueueState(doc, flag),
                 overview: !personalView,
