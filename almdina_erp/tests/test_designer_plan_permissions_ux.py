@@ -93,8 +93,10 @@ def test_designer_plan_edit_capability_is_not_replaced_by_current_stage_role() -
 
     assert "Capability.EDIT_OPTIMIZER_SETTINGS" in service
     assert "require_stage_operational_access" not in service
-    assert "SHOP_FLOOR_ORDER_STATUSES" in service
-    assert "if _has_active_routed_lifecycle(doc):" in service
+    assert "SHOP_FLOOR_ORDER_STATUSES" not in service
+    assert "def _has_active_production_stage" in service
+    assert 'getattr(doc, "current_production_stage", None)' in service
+    assert "if _has_active_production_stage(doc):" in service
     assert "انتهى المسار الإنتاجي الحالي" in service
 
     assert "function canTuneCuttingAlgorithm" in context

@@ -4,6 +4,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from almdina_erp.almdina_erp.application.factory.production_stage_definition_management import (
+    ProductionStageDefinitionPort,
+)
 from almdina_erp.almdina_erp.domain.orders.production_routing import (
     ProductionRoute,
     RoutingStage,
@@ -26,8 +29,7 @@ class ProductionRoutingManagementPermissionDenied(PermissionError):
 @dataclass(frozen=True, slots=True)
 class RoutingStageCommand:
     sequence: int
-    stage_type: str
-    department_label: str
+    stage_definition: str
     operational_role: str
     is_planning_stage: bool = False
 
@@ -75,8 +77,7 @@ def _stage_command(value: Any, index: int) -> RoutingStageCommand:
         )
     return RoutingStageCommand(
         sequence=(index + 1) * 10,
-        stage_type=_text(value.get("stage_type")),
-        department_label=_text(value.get("department_label")),
+        stage_definition=_text(value.get("stage_definition")),
         operational_role=_text(value.get("operational_role")),
         is_planning_stage=_boolean(value.get("is_planning_stage")),
     )
@@ -102,29 +103,17 @@ def routing_command(payload: Mapping[str, Any]) -> SaveProductionRoutingCommand:
         raise ProductionRoutingManagementConflict(
             "نسخة المسار غير محددة. حدّث الصفحة ثم أعد المحاولة."
         )
-    normalized_stage_types = [stage.stage_type.casefold() for stage in stages]
-    if len(normalized_stage_types) != len(set(normalized_stage_types)):
+    if any(not stage.stage_definition for stage in stages):
         raise ProductionRoutingManagementError(
-            "لا يمكن تكرار رمز المرحلة داخل مسار الإنتاج."
+            "يجب اختيار كل مرحلة من مكتبة مراحل الإنتاج."
         )
-
-    try:
-        ProductionRoute(
-            name=name or routing_name,
-            label=routing_name,
-            stages=tuple(
-                RoutingStage(
-                    sequence=stage.sequence,
-                    stage_type=stage.stage_type,
-                    department_label=stage.department_label,
-                    operational_role=stage.operational_role,
-                    is_planning_stage=stage.is_planning_stage,
-                )
-                for stage in stages
-            ),
+    normalized_definitions = [
+        stage.stage_definition.casefold() for stage in stages
+    ]
+    if len(normalized_definitions) != len(set(normalized_definitions)):
+        raise ProductionRoutingManagementError(
+            "لا يمكن تكرار المرحلة داخل مسار الإنتاج."
         )
-    except ValueError as error:
-        raise ProductionRoutingManagementError(str(error)) from error
 
     return SaveProductionRoutingCommand(
         name=name,
@@ -135,8 +124,47 @@ def routing_command(payload: Mapping[str, Any]) -> SaveProductionRoutingCommand:
     )
 
 
+def _validate_route_definition(
+    command: SaveProductionRoutingCommand,
+    stage_definitions: ProductionStageDefinitionPort,
+) -> None:
+    definitions = stage_definitions.get_definitions(
+        [stage.stage_definition for stage in command.stages]
+    )
+    resolved_stages: list[RoutingStage] = []
+    for stage in command.stages:
+        definition = definitions.get(stage.stage_definition)
+        if definition is None:
+            raise ProductionRoutingManagementError(
+                f"المرحلة {stage.stage_definition} غير موجودة في مكتبة المراحل."
+            )
+        if definition.disabled:
+            raise ProductionRoutingManagementError(
+                f"المرحلة {definition.stage_label} معطّلة ولا يمكن إضافتها إلى المسار."
+            )
+        resolved_stages.append(
+            RoutingStage(
+                sequence=stage.sequence,
+                stage_type=definition.stage_code,
+                department_label=definition.stage_label,
+                operational_role=stage.operational_role,
+                is_planning_stage=stage.is_planning_stage,
+            )
+        )
+
+    try:
+        ProductionRoute(
+            name=command.name or command.routing_name,
+            label=command.routing_name,
+            stages=tuple(resolved_stages),
+        )
+    except ValueError as error:
+        raise ProductionRoutingManagementError(str(error)) from error
+
+
 def save_production_routing(
     repository: ProductionRoutingManagementPort,
+    stage_definitions: ProductionStageDefinitionPort,
     capabilities: frozenset[str] | set[str],
     payload: Mapping[str, Any],
 ) -> Mapping[str, Any]:
@@ -151,6 +179,7 @@ def save_production_routing(
         raise ProductionRoutingManagementPermissionDenied(
             f"لا تملك صلاحية {action} مسارات الإنتاج."
         )
+    _validate_route_definition(command, stage_definitions)
     return repository.save_routing(command)
 
 

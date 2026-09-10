@@ -5,6 +5,7 @@ almdina_erp.patches.v1_0.drop_obsolete_order_board_columns
 almdina_erp.patches.v1_0.backfill_revision_activation_state
 
 [post_model_sync]
+almdina_erp.patches.v1_0.migrate_production_stage_library
 almdina_erp.patches.v1_0.migrate_legacy_order_plan_projections
 almdina_erp.patches.v1_0.sanitize_historical_plan_snapshots
 almdina_erp.patches.v1_0.drop_legacy_order_plan_columns

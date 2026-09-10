@@ -80,6 +80,12 @@ extend_bootinfo = ["almdina_erp.boot.extend_bootinfo"]
 override_whitelisted_methods = {
     "frappe.desk.desktop.get_desktop_page":
         "almdina_erp.workspace_api.get_desktop_page",
+    "frappe.desk.doctype.kanban_board.kanban_board.update_order":
+        "almdina_erp.almdina_erp.services.order_kanban_service.update_order",
+    "frappe.desk.doctype.kanban_board.kanban_board.update_order_for_single_card":
+        "almdina_erp.almdina_erp.services.order_kanban_service.update_order_for_single_card",
+    "frappe.desk.doctype.kanban_board.kanban_board.add_card":
+        "almdina_erp.almdina_erp.services.order_kanban_service.add_card",
     "almdina_erp.almdina_erp.doctype.door_cutting_order.door_cutting_order.recalculate_order":
         "almdina_erp.almdina_erp.services.order_plan_permission_service.recalculate_order",
     "almdina_erp.almdina_erp.services.cutting_plan_service.submit_order_for_review":

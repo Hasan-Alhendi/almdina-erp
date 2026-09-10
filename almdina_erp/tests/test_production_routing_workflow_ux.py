@@ -43,6 +43,28 @@ class TestProductionRoutingWorkflowUx(unittest.TestCase):
         self.assertIn("expected_modified", source)
         self.assertIn("operational_roles", source)
         self.assertIn("is_planning_stage", source)
+        self.assertIn("completed.workingId === editor.workingId", source)
+        self.assertIn("editor.expected_modified = String(saved.modified)", source)
+
+    def test_stage_library_interaction_contract_is_one_click_and_read_only(self) -> None:
+        source = PAGE.read_text(encoding="utf-8")
+
+        self.assertIn("＋ ${__(\"إضافة مرحلة\")}", source)
+        self.assertNotIn("إضافة مكتبة جديدة", source)
+        self.assertNotIn("إضافة مرحلة مخصصة", source)
+        self.assertIn("prw-library-card-actions", source)
+        self.assertIn("prw-edit-stage-definition", source)
+        self.assertIn("prw-toggle-stage-definition", source)
+        self.assertIn("prw-delete-stage-definition", source)
+        self.assertIn("event.stopPropagation()", source)
+        self.assertIn('role=\"button\" tabindex=\"0\"', source)
+        self.assertIn('event.key !== \"Enter\" && event.key !== \" \"', source)
+        self.assertIn('message: __(\"المرحلة موجودة بالفعل\")', source)
+        self.assertNotIn('data-stage-field=\"stage_type\"', source)
+        self.assertNotIn('data-stage-field=\"department_label\"', source)
+        self.assertIn("prw-stage-identity", source)
+        self.assertIn("libraryMutationPending", source)
+        self.assertIn("beginLibraryMutation", source)
 
     def test_styles_are_scoped_responsive_and_accessible(self) -> None:
         css = CSS.read_text(encoding="utf-8")

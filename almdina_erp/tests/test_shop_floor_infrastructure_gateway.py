@@ -127,6 +127,7 @@ class TestShopFloorInfrastructureGateway(unittest.TestCase):
         stage = SimpleNamespace(
             name="PST-1",
             stage_type="Drawing",
+            department_label="الرسم الفني",
             assigned_to="drawing@example.com",
             status="Pending",
         )
@@ -141,10 +142,10 @@ class TestShopFloorInfrastructureGateway(unittest.TestCase):
             {
                 "production_path": "Drawing",
                 "current_production_stage": "PST-1",
-                "current_department": "رسم",
+                "current_department": "الرسم الفني",
                 "current_assignee": "drawing@example.com",
                 "department_status": "بحاجة للعمل",
-                "status": "At Drawing",
+                "status": "الرسم الفني",
             },
         )
         self.assertTrue(kwargs["update_modified"])

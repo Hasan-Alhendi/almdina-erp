@@ -12,20 +12,37 @@ from almdina_erp.almdina_erp.application.factory.production_routing_management i
     ProductionRoutingManagementError,
     SaveProductionRoutingCommand,
 )
+from almdina_erp.almdina_erp.application.factory.production_stage_definition_management import (
+    ProductionStageDefinitionSnapshot,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.production_stage_definition_repository import (
+    FrappeProductionStageDefinitionRepository,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.system_role_policy import (
     PROTECTED_SYSTEM_ROLES,
 )
 
 
-def _stage_payload(row: Any) -> dict[str, Any]:
+def _stage_payload(
+    row: Any,
+    definitions: Mapping[str, ProductionStageDefinitionSnapshot],
+) -> dict[str, Any]:
+    stage_definition = str(row.stage_definition or "")
+    definition = definitions.get(stage_definition)
     return {
         "sequence": cint(row.sequence),
-        "stage_type": str(row.stage_type or ""),
-        "department_label": str(row.department_label or ""),
+        "stage_definition": stage_definition,
+        "stage_type": definition.stage_code if definition else stage_definition,
+        "department_label": definition.stage_label if definition else stage_definition,
         "operational_role": str(row.operational_role or ""),
         "required": bool(cint(row.required)),
         "is_planning_stage": bool(cint(row.is_planning_stage)),
     }
+
+
+def _definitions_for_rows(rows: list[Any]) -> dict[str, ProductionStageDefinitionSnapshot]:
+    names = [str(row.stage_definition or "") for row in rows]
+    return FrappeProductionStageDefinitionRepository().get_definitions(names)
 
 
 def list_production_routings() -> list[dict[str, Any]]:
@@ -48,16 +65,18 @@ def list_production_routings() -> list[dict[str, Any]]:
             fields=[
                 "parent",
                 "sequence",
-                "stage_type",
-                "department_label",
+                "stage_definition",
                 "operational_role",
                 "required",
                 "is_planning_stage",
             ],
             order_by="parent asc, sequence asc, idx asc",
         )
+        definitions = _definitions_for_rows(stage_rows)
         for stage in stage_rows:
-            stages_by_route[str(stage.parent)].append(_stage_payload(stage))
+            stages_by_route[str(stage.parent)].append(
+                _stage_payload(stage, definitions)
+            )
 
     in_flight_counts: dict[str, int] = {}
     if names:
@@ -131,19 +150,18 @@ def _assert_version(snapshot: Mapping[str, Any], expected_modified: str) -> None
 
 
 def _document_payload(document: Any) -> dict[str, Any]:
+    ordered_rows = sorted(
+        document.stages or (),
+        key=lambda item: (cint(item.sequence), cint(item.idx)),
+    )
+    definitions = _definitions_for_rows(list(ordered_rows))
     return {
         "name": str(document.name),
         "label": str(document.routing_name or document.name),
         "disabled": bool(cint(document.disabled)),
         "modified": document.modified,
         "modified_by": str(document.modified_by or ""),
-        "stages": [
-            _stage_payload(row)
-            for row in sorted(
-                document.stages or (),
-                key=lambda item: (cint(item.sequence), cint(item.idx)),
-            )
-        ],
+        "stages": [_stage_payload(row, definitions) for row in ordered_rows],
     }
 
 
@@ -171,8 +189,7 @@ class FrappeProductionRoutingManagementRepository:
                 "stages",
                 {
                     "sequence": stage.sequence,
-                    "stage_type": stage.stage_type,
-                    "department_label": stage.department_label,
+                    "stage_definition": stage.stage_definition,
                     "operational_role": stage.operational_role,
                     "required": 1,
                     "is_planning_stage": int(stage.is_planning_stage),

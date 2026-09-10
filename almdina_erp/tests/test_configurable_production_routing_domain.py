@@ -105,9 +105,14 @@ class TestConfigurableProductionRoutingDomain(unittest.TestCase):
         route_fields = {row["fieldname"]: row for row in route_stage_schema["fields"]}
         self.assertEqual(order_fields["production_path"]["fieldtype"], "Link")
         self.assertEqual(order_fields["production_path"]["options"], "Production Routing")
-        self.assertEqual(route_fields["stage_type"]["fieldtype"], "Data")
+        self.assertEqual(route_fields["stage_definition"]["fieldtype"], "Link")
+        self.assertEqual(
+            route_fields["stage_definition"]["options"], "Production Stage Definition"
+        )
         self.assertEqual(route_fields["operational_role"]["options"], "Role")
         self.assertIn("is_planning_stage", route_fields)
+        self.assertNotIn("stage_type", route_fields)
+        self.assertNotIn("department_label", route_fields)
         self.assertNotIn("auto_complete_if_not_applicable", route_fields)
 
         commands = (
@@ -166,16 +171,18 @@ class TestConfigurableProductionRoutingDomain(unittest.TestCase):
         self.assertNotIn("STAGE_ROLE_BY_TYPE", repository)
         self.assertNotIn("shop_floor_authorization", repository)
         self.assertNotIn("department_for_stage_type", repository)
+        self.assertIn("stage_definition", repository)
         self.assertIn('getattr(row, "operational_role", None)', repository)
         self.assertIn("is_protected_system_role", controller)
         self.assertIn("MEMBERSHIP_FIELD", authorization)
         self.assertNotIn("ALMDINA_APP", authorization)
         self.assertNotIn("default_app", authorization)
 
-    def test_migrations_preserve_legacy_data_without_seeding_clean_sites(self) -> None:
+    def test_legacy_routing_migrations_include_stage_library_backfill(self) -> None:
         root = Path(__file__).resolve().parents[1]
         activate_patch = "almdina_erp.patches.v1_0.activate_configurable_production_routings"
         planning_patch = "almdina_erp.patches.v1_0.mark_route_planning_stages"
+        stage_library_patch = "almdina_erp.patches.v1_0.migrate_production_stage_library"
         patches = (root / "patches.txt").read_text(encoding="utf-8")
         activation = (
             root / "patches" / "v1_0" / "activate_configurable_production_routings.py"
@@ -183,9 +190,16 @@ class TestConfigurableProductionRoutingDomain(unittest.TestCase):
         planning = (
             root / "patches" / "v1_0" / "mark_route_planning_stages.py"
         ).read_text(encoding="utf-8")
+        stage_library_path = root / "patches" / "v1_0" / "migrate_production_stage_library.py"
 
         self.assertIn(activate_patch, patches)
         self.assertIn(planning_patch, patches)
+        self.assertIn(stage_library_patch, patches)
+        self.assertTrue(stage_library_path.exists())
+        stage_library = stage_library_path.read_text(encoding="utf-8")
+        self.assertIn("stage_definition", stage_library)
+        self.assertNotIn("Drawing", stage_library)
+        self.assertNotIn("CNC", stage_library)
         self.assertIn("_has_legacy_production_data", activation)
         self.assertIn("if not _has_legacy_production_data():", activation)
         self.assertIn("return", activation)

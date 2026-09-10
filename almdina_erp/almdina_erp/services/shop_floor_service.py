@@ -16,7 +16,6 @@ from almdina_erp.almdina_erp.domain.orders.lifecycle import (
     CUTTING_LIKE_STAGE_TYPES,
     DEPARTMENT_STATUS_BY_STAGE_STATUS,
     PRODUCTION_PATHS,
-    SHOP_FLOOR_ORDER_STATUSES,
     STAGE_DEPARTMENTS,
     next_stage_type,
     production_path_sequence,
@@ -73,11 +72,11 @@ def sync_order_status(order_name: str) -> str:
     return _delegate(_STATUS_SYNC, "sync_order_status", order_name)
 
 
-# Read-only lifecycle aliases remain for older Python callers. Operational role
-# eligibility now comes only from each configured Production Routing stage.
+# Read-only legacy routing aliases remain for older Python callers. Production
+# status values are intentionally absent: stage labels are data-driven and must
+# come from the configured route/runtime stage snapshot.
 PATH_SEQUENCE = PRODUCTION_PATHS
 STAGE_DEPARTMENT = STAGE_DEPARTMENTS
-STAGE_ORDER_STATUS = SHOP_FLOOR_ORDER_STATUSES
 DEPARTMENT_STATUS_MAP = DEPARTMENT_STATUS_BY_STAGE_STATUS
 CUTTING_LIKE_STAGES = CUTTING_LIKE_STAGE_TYPES
 

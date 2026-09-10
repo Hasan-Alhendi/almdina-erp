@@ -8,7 +8,7 @@ from frappe.utils import cint
 from almdina_erp.almdina_erp.domain.orders.lifecycle import (
     department_for_stage_type,
     department_status_for_stage_status,
-    order_status_for_stage_type,
+    order_status_for_stage,
 )
 
 
@@ -57,14 +57,15 @@ def set_order_tracking(
         values["current_production_stage"] = None
     elif stage is not None:
         values["current_production_stage"] = stage.name
-        values["current_department"] = (
+        stage_label = (
             getattr(stage, "department_label", None)
             or department_for_stage_type(stage.stage_type)
             or stage.stage_type
         )
+        values["current_department"] = stage_label
         values["current_assignee"] = stage.assigned_to
         values["department_status"] = department_status_for_stage_status(stage.status)
-        values["status"] = order_status_for_stage_type(stage.stage_type)
+        values["status"] = order_status_for_stage(stage.stage_type, stage_label)
     if values:
         frappe.db.set_value(
             "Door Cutting Order",

@@ -34,8 +34,7 @@ class TestProductionRoutingRuntimeCache(unittest.TestCase):
 
         stage = types.SimpleNamespace(
             sequence=10,
-            stage_type="Drawing",
-            department_label="رسم",
+            stage_definition="Drawing",
             operational_role="عامل رسم",
             is_planning_stage=1,
             required=1,
@@ -45,6 +44,15 @@ class TestProductionRoutingRuntimeCache(unittest.TestCase):
             routing_name="الرسم",
             disabled=disabled,
             stages=[stage],
+        )
+        definition = types.SimpleNamespace(
+            name="Drawing",
+            stage_code="Drawing",
+            stage_label="رسم",
+            description="",
+            is_planning_default=True,
+            disabled=False,
+            modified="v1",
         )
 
         frappe_module = types.ModuleType("frappe")
@@ -76,6 +84,13 @@ class TestProductionRoutingRuntimeCache(unittest.TestCase):
         ):
             spec.loader.exec_module(module)
 
+        stage_library = types.SimpleNamespace(
+            get_definitions=lambda names: {
+                name: definition for name in names if name == "Drawing"
+            }
+        )
+        module.FrappeProductionStageDefinitionRepository = lambda: stage_library
+
         return module, frappe_module, database, get_doc_calls
 
     def test_same_route_is_loaded_once_within_one_frappe_request(self) -> None:
@@ -85,6 +100,8 @@ class TestProductionRoutingRuntimeCache(unittest.TestCase):
         second = repository.get_route("Drawing")
 
         self.assertIs(first, second)
+        self.assertEqual(first.first_stage.stage_type, "Drawing")
+        self.assertEqual(first.first_stage.department_label, "رسم")
         self.assertEqual(database.exists_calls, 1)
         self.assertEqual(get_doc_calls["count"], 1)
 

@@ -41,7 +41,7 @@ class TestStage14PreproductionRegression(unittest.TestCase):
         )
 
         drawing_stage = repository.stages[dispatched["stage"]]
-        self.assertEqual(repository.orders["DCO-E2E-DRAFT"].status, "At Drawing")
+        self.assertEqual(repository.orders["DCO-E2E-DRAFT"].status, "رسم")
         self.assertEqual(drawing_stage.stage_type, "Drawing")
         self.assertEqual(drawing_stage.assigned_to, "drawing@example.com")
         self.assertFalse(repository.orders["DCO-E2E-DRAFT"].has_cutting_plan)

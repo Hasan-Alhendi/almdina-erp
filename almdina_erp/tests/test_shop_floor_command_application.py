@@ -81,18 +81,20 @@ class FakeShopFloorCommandRepository:
 
     def get_stage_state(self, stage_name: str) -> commands.StageState:
         stage = self.stages[stage_name]
-        if stage.operational_role:
-            return stage
         order = self.orders.get(stage.order_name)
         route_name = order.production_path if order else None
         route = self.routes.get(str(route_name or ""))
         if not route:
             return stage
         try:
-            role = route.stage(stage.stage_type).operational_role
+            route_stage = route.stage(stage.stage_type)
         except ValueError:
             return stage
-        return replace(stage, operational_role=role)
+        return replace(
+            stage,
+            department_label=stage.department_label or route_stage.department_label,
+            operational_role=stage.operational_role or route_stage.operational_role,
+        )
 
     def validate_special_shapes(self, order_name: str) -> None:
         self.calls.append(("validate_special_shapes", order_name))
@@ -148,12 +150,15 @@ class FakeShopFloorCommandRepository:
         path: str | None = None,
     ) -> None:
         order = self.orders[order_name]
-        stage = self.stages[stage_name]
+        stage = self.get_stage_state(stage_name)
         self.orders[order_name] = replace(
             order,
             production_path=path if path is not None else order.production_path,
             current_stage=stage_name,
-            status=commands.order_status_for_stage_type(stage.stage_type),
+            status=commands.order_status_for_stage(
+                stage.stage_type,
+                stage.department_label,
+            ),
         )
         self.calls.append(("track_order_to_stage", order_name, stage_name, path))
 
@@ -281,7 +286,7 @@ class TestShopFloorCommandApplication(unittest.TestCase):
             repository, "DCO-1", "Drawing", "drawing@example.com"
         )
 
-        self.assertEqual(result["status"], "At Drawing")
+        self.assertEqual(result["status"], "رسم")
         self.assertEqual(result["stage"], "PST-1")
         self.assertLess(
             self._call_index(repository, "lock_order"),
@@ -301,6 +306,7 @@ class TestShopFloorCommandApplication(unittest.TestCase):
             repository, "DCO-1", "Sharyoun", "cutting@example.com"
         )
         self.assertEqual(result["department"], "شريون")
+        self.assertEqual(result["status"], "شريون")
         self.assertTrue(any(call[0] == "create_stage" for call in repository.calls))
 
         repository.calls.clear()
@@ -309,6 +315,7 @@ class TestShopFloorCommandApplication(unittest.TestCase):
             repository, "DCO-1", "Sharyoun", "cutting@example.com"
         )
         self.assertEqual(result["department"], "شريون")
+        self.assertEqual(result["status"], "شريون")
 
     def test_custom_route_uses_configured_stage_role_and_department(self) -> None:
         repository = FakeShopFloorCommandRepository()
@@ -327,6 +334,7 @@ class TestShopFloorCommandApplication(unittest.TestCase):
         )
 
         self.assertEqual(result["department"], "قص")
+        self.assertEqual(result["status"], "قص")
         self.assertIn(
             ("assert_worker_for_role", "cutter@example.com", "عامل قص مخصص"),
             repository.calls,
@@ -354,7 +362,7 @@ class TestShopFloorCommandApplication(unittest.TestCase):
         repository = FakeShopFloorCommandRepository()
         repository.orders["DCO-1"] = replace(
             self._approved_order(),
-            status="At Sharyoun",
+            status="شريون",
             production_path="Sharyoun",
             current_stage="PST-1",
         )
@@ -365,6 +373,7 @@ class TestShopFloorCommandApplication(unittest.TestCase):
             status="Pending",
             assigned_to="other@example.com",
             sequence=10,
+            department_label="شريون",
         )
 
         with self.assertRaisesRegex(commands.ShopFloorCommandError, "مستخدم آخر"):
@@ -381,6 +390,7 @@ class TestShopFloorCommandApplication(unittest.TestCase):
         result = commands.start_my_stage(repository, "PST-1")
 
         self.assertEqual(result["status"], "In Progress")
+        self.assertEqual(result["order_status"], "شريون")
         self.assertLess(
             self._call_index(repository, "lock_stage"),
             self._call_index(repository, "start_stage"),
@@ -390,7 +400,7 @@ class TestShopFloorCommandApplication(unittest.TestCase):
         repository = FakeShopFloorCommandRepository()
         repository.orders["DCO-1"] = commands.OrderState(
             name="DCO-1",
-            status="At Drawing",
+            status="رسم",
             production_path="Drawing",
             current_stage="PST-1",
             has_cutting_plan=True,
@@ -404,6 +414,7 @@ class TestShopFloorCommandApplication(unittest.TestCase):
             status="In Progress",
             assigned_to=repository.actor,
             sequence=10,
+            department_label="رسم",
         )
 
         with self.assertRaisesRegex(commands.ShopFloorCommandError, "اعتمد خطة القص"):
@@ -416,6 +427,8 @@ class TestShopFloorCommandApplication(unittest.TestCase):
         )
         result = commands.handoff_to_next(repository, "PST-1", "cnc@example.com")
         self.assertEqual(result["next_stage_type"], "CNC")
+        self.assertEqual(result["next_department"], "CNC")
+        self.assertEqual(result["order_status"], "CNC")
         self.assertLess(
             self._call_index(repository, "lock_stage"),
             self._call_index(repository, "complete_stage"),
@@ -425,7 +438,7 @@ class TestShopFloorCommandApplication(unittest.TestCase):
         repository = FakeShopFloorCommandRepository()
         repository.orders["DCO-1"] = commands.OrderState(
             name="DCO-1",
-            status="At Drawing",
+            status="رسم",
             production_path="Drawing",
             current_stage="PST-1",
             has_cutting_plan=True,
@@ -440,6 +453,7 @@ class TestShopFloorCommandApplication(unittest.TestCase):
             status="In Progress",
             assigned_to=repository.actor,
             sequence=10,
+            department_label="رسم",
         )
 
         with self.assertRaisesRegex(commands.ShopFloorCommandError, "لم تعد مطابقة"):
@@ -449,7 +463,7 @@ class TestShopFloorCommandApplication(unittest.TestCase):
         repository = FakeShopFloorCommandRepository()
         repository.orders["DCO-1"] = commands.OrderState(
             name="DCO-1",
-            status="At CNC",
+            status="CNC",
             production_path="Drawing",
             current_stage="PST-1",
             has_cutting_plan=True,
@@ -463,6 +477,7 @@ class TestShopFloorCommandApplication(unittest.TestCase):
             status="In Progress",
             assigned_to=repository.actor,
             sequence=20,
+            department_label="CNC",
         )
 
         with self.assertRaisesRegex(commands.ShopFloorCommandError, "اختر العامل"):
@@ -475,7 +490,7 @@ class TestShopFloorCommandApplication(unittest.TestCase):
         repository = FakeShopFloorCommandRepository()
         repository.orders["DCO-1"] = commands.OrderState(
             name="DCO-1",
-            status="At Sanding",
+            status="تقشيط",
             production_path="Drawing",
             current_stage="PST-1",
             has_cutting_plan=True,
@@ -489,6 +504,7 @@ class TestShopFloorCommandApplication(unittest.TestCase):
             status="In Progress",
             assigned_to=repository.actor,
             sequence=30,
+            department_label="تقشيط",
         )
 
         result = commands.handoff_to_next(repository, "PST-1")
@@ -501,7 +517,7 @@ class TestShopFloorCommandApplication(unittest.TestCase):
         repository = FakeShopFloorCommandRepository()
         repository.orders["DCO-1"] = commands.OrderState(
             name="DCO-1",
-            status="At CNC",
+            status="CNC",
             production_path="Drawing",
             current_stage="PST-1",
             has_cutting_plan=True,
@@ -515,6 +531,7 @@ class TestShopFloorCommandApplication(unittest.TestCase):
             status="Pending",
             assigned_to="old@example.com",
             sequence=20,
+            department_label="CNC",
         )
 
         result = commands.reassign_worker(repository, "PST-1", "new@example.com")
@@ -546,7 +563,7 @@ class TestShopFloorCommandApplication(unittest.TestCase):
         )
         repository.orders["DCO-1"] = commands.OrderState(
             name="DCO-1",
-            status="Production In Progress",
+            status="تلبيس PVC",
             production_path="PVC Route",
             current_stage="PST-1",
             has_cutting_plan=True,
@@ -574,7 +591,7 @@ class TestShopFloorCommandApplication(unittest.TestCase):
         repository = FakeShopFloorCommandRepository()
         repository.orders["DCO-1"] = commands.OrderState(
             name="DCO-1",
-            status="At Sanding",
+            status="تقشيط",
             production_path="Drawing",
             current_stage="PST-3",
             has_cutting_plan=True,
@@ -583,9 +600,33 @@ class TestShopFloorCommandApplication(unittest.TestCase):
         )
         repository.stages.update(
             {
-                "PST-1": commands.StageState("PST-1", "DCO-1", "Drawing", "Completed", "drawing@example.com", 10),
-                "PST-2": commands.StageState("PST-2", "DCO-1", "CNC", "Completed", "cnc@example.com", 20),
-                "PST-3": commands.StageState("PST-3", "DCO-1", "Sanding", "Pending", "sanding@example.com", 30),
+                "PST-1": commands.StageState(
+                    "PST-1",
+                    "DCO-1",
+                    "Drawing",
+                    "Completed",
+                    "drawing@example.com",
+                    10,
+                    department_label="رسم",
+                ),
+                "PST-2": commands.StageState(
+                    "PST-2",
+                    "DCO-1",
+                    "CNC",
+                    "Completed",
+                    "cnc@example.com",
+                    20,
+                    department_label="CNC",
+                ),
+                "PST-3": commands.StageState(
+                    "PST-3",
+                    "DCO-1",
+                    "Sanding",
+                    "Pending",
+                    "sanding@example.com",
+                    30,
+                    department_label="تقشيط",
+                ),
             }
         )
 
@@ -594,6 +635,7 @@ class TestShopFloorCommandApplication(unittest.TestCase):
         )
 
         self.assertEqual(result["stage"], "PST-1")
+        self.assertEqual(result["status"], "رسم")
         self.assertEqual(repository.stages["PST-1"].status, "Pending")
         self.assertEqual(repository.stages["PST-2"].status, "Cancelled")
         self.assertEqual(repository.stages["PST-3"].status, "Cancelled")

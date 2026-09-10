@@ -77,9 +77,24 @@ class FrappeShopFloorCommandRepository(ShopFloorCommandPort):
     def get_order_state(self, order_name: str) -> OrderState:
         order = order_tracking_repository.get_order(order_name)
         plan = production_plan_facts(order)
+        status = str(order.status or "")
+        stage_name = str(order.current_production_stage or "").strip()
+        if (
+            status not in {"Delivered", "Cancelled"}
+            and stage_name
+            and order.production_path
+        ):
+            stage = production_stage_repository.get_stage(stage_name)
+            if str(stage.status or "") == "Completed":
+                try:
+                    route = production_routing_repository.get_route(order.production_path)
+                    if route.next_stage(str(stage.stage_type)) is None:
+                        status = "Ready for Delivery"
+                except (ValueError, AttributeError):
+                    pass
         return OrderState(
             name=str(order.name),
-            status=str(order.status or ""),
+            status=status,
             production_path=order.production_path or None,
             current_stage=order.current_production_stage or None,
             has_cutting_plan=plan.has_cutting_plan,
@@ -146,13 +161,12 @@ class FrappeShopFloorCommandRepository(ShopFloorCommandPort):
         order_tracking_repository.set_order_tracking(order_name, path=path, stage=stage)
 
     def track_order_ready_for_delivery(self, order_name: str) -> None:
+        # Preserve the completed terminal runtime stage as routing truth. Status
+        # remains the exact stage-label projection while readiness is derived.
         order_tracking_repository.set_order_tracking(
             order_name,
-            status="Ready for Delivery",
-            department="جاهز للتسليم",
             assignee="",
             department_status="مكتمل",
-            clear_stage=True,
         )
 
     def track_order_delivered(self, order_name: str) -> None:

@@ -108,7 +108,7 @@ def test_plan_settings_are_read_only_until_explicit_edit_button() -> None:
     assert "context.canTuneCuttingAlgorithm(frm)" not in edit_session
     assert "function lifecycleAllowsEdit(frm)" in edit_session
     assert "function hasActiveRoutedLifecycle(frm)" in edit_session
-    assert '"At Drawing"' in edit_session
+    assert '"At Drawing"' not in edit_session
 
     assert "dco-plan-settings-edit" in edit_session
     assert "dco-plan-settings-save" in edit_session
@@ -174,14 +174,15 @@ class TestPlanSettingsEditService(TestCase):
         # Lifecycle validation must not add a second current-worker role gate.
         service.assert_plan_settings_edit_lifecycle(doc)
 
-    def test_routed_order_at_drawing_allows_edit_without_stage_snapshot(self) -> None:
+    def test_routed_order_without_runtime_stage_fails_closed(self) -> None:
         doc = FakeOrder(
-            status="At Drawing",
+            status="الرسم",
             current_production_stage=None,
             production_path="ROUTE-DRAWING",
         )
 
-        service.assert_plan_settings_edit_lifecycle(doc)
+        with self.assertRaises(frappe.PermissionError):
+            service.assert_plan_settings_edit_lifecycle(doc)
 
     def test_finished_routed_order_without_active_stage_fails_closed(self) -> None:
         doc = FakeOrder(
@@ -235,10 +236,10 @@ class TestPlanSettingsEditService(TestCase):
         )
         self.assertEqual(result, expected)
 
-    def test_save_at_drawing_without_stage_snapshot_uses_focused_capability(self) -> None:
+    def test_save_at_dynamic_stage_uses_runtime_snapshot_and_focused_capability(self) -> None:
         doc = FakeOrder(
-            status="At Drawing",
-            current_production_stage=None,
+            status="الرسم",
+            current_production_stage="STAGE-001",
             production_path="ROUTE-DRAWING",
         )
         expected = {

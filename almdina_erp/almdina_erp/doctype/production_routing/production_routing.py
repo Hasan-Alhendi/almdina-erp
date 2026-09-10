@@ -23,24 +23,52 @@ class ProductionRouting(Document):
         if not self.stages:
             frappe.throw(_("يجب أن يحتوي مسار الإنتاج على مرحلة واحدة على الأقل."))
 
+        stage_names = {
+            str(row.stage_definition or "").strip()
+            for row in self.stages
+            if str(row.stage_definition or "").strip()
+        }
+        definition_rows = frappe.get_all(
+            "Production Stage Definition",
+            filters={"name": ["in", sorted(stage_names)]} if stage_names else {},
+            fields=["name", "stage_label", "disabled"],
+        ) if stage_names else []
+        definitions = {str(row.name): row for row in definition_rows}
+
         sequences: set[int] = set()
-        stage_types: set[str] = set()
+        stage_definitions: set[str] = set()
         required_rows = []
         planning_rows = []
         ordered = sorted(self.stages, key=lambda row: cint(row.sequence))
         for index, row in enumerate(ordered, start=1):
-            row.stage_type = str(row.stage_type or "").strip()
-            row.department_label = str(row.department_label or "").strip()
+            row.stage_definition = str(row.stage_definition or "").strip()
             row.operational_role = str(row.operational_role or "").strip()
             sequence = cint(row.sequence)
             if sequence <= 0:
                 frappe.throw(_("ترتيب مرحلة الإنتاج يجب أن يكون أكبر من الصفر."))
             if sequence in sequences:
                 frappe.throw(_("ترتيب المرحلة رقم {0} مكرر داخل المسار.").format(sequence))
-            if not row.stage_type:
-                frappe.throw(_("رمز مرحلة الإنتاج مطلوب."))
-            if row.stage_type in stage_types:
-                frappe.throw(_("مرحلة الإنتاج {0} مكررة داخل المسار.").format(row.stage_type))
+            if not row.stage_definition:
+                frappe.throw(_("يجب اختيار المرحلة من مكتبة مراحل الإنتاج."))
+            definition = definitions.get(row.stage_definition)
+            if not definition:
+                frappe.throw(
+                    _("المرحلة {0} غير موجودة في مكتبة مراحل الإنتاج.").format(
+                        row.stage_definition
+                    )
+                )
+            if cint(definition.disabled):
+                frappe.throw(
+                    _("المرحلة {0} معطّلة ولا يمكن استخدامها في المسار.").format(
+                        definition.stage_label or row.stage_definition
+                    )
+                )
+            if row.stage_definition in stage_definitions:
+                frappe.throw(
+                    _("مرحلة الإنتاج {0} مكررة داخل المسار.").format(
+                        definition.stage_label or row.stage_definition
+                    )
+                )
 
             is_required = bool(cint(row.required))
             is_planning = bool(cint(getattr(row, "is_planning_stage", 0)))
@@ -51,20 +79,21 @@ class ProductionRouting(Document):
                 )
             if is_required:
                 required_rows.append(row)
-                if not row.department_label:
-                    frappe.throw(
-                        _("الاسم الظاهر مطلوب للمرحلة {0}.").format(row.stage_type)
-                    )
                 if not row.operational_role:
                     frappe.throw(
-                        _("يجب تحديد الدور التشغيلي للمرحلة {0}.").format(row.stage_type)
+                        _("يجب تحديد الدور التشغيلي للمرحلة {0}.").format(
+                            definition.stage_label or row.stage_definition
+                        )
                     )
-                self._validate_operational_role(row.operational_role, row.stage_type)
+                self._validate_operational_role(
+                    row.operational_role,
+                    str(definition.stage_label or row.stage_definition),
+                )
                 if is_planning:
                     planning_rows.append(row)
 
             sequences.add(sequence)
-            stage_types.add(row.stage_type)
+            stage_definitions.add(row.stage_definition)
             row.idx = index
 
         if not required_rows:
@@ -83,12 +112,12 @@ class ProductionRouting(Document):
         self._prevent_active_route_mutation()
 
     @staticmethod
-    def _validate_operational_role(role: str, stage_type: str) -> None:
+    def _validate_operational_role(role: str, stage_label: str) -> None:
         if is_protected_system_role(role):
             frappe.throw(
                 _("لا يمكن استخدام الدور المحمي {0} كدور تشغيلي للمرحلة {1}.").format(
                     role,
-                    stage_type,
+                    stage_label,
                 ),
                 frappe.ValidationError,
             )
@@ -96,7 +125,7 @@ class ProductionRouting(Document):
             frappe.throw(
                 _("الدور التشغيلي {0} المحدد للمرحلة {1} غير موجود.").format(
                     role,
-                    stage_type,
+                    stage_label,
                 ),
                 frappe.ValidationError,
             )
@@ -122,8 +151,7 @@ class ProductionRouting(Document):
             filters={"parent": self.name, "parenttype": "Production Routing"},
             fields=[
                 "sequence",
-                "stage_type",
-                "department_label",
+                "stage_definition",
                 "operational_role",
                 "required",
                 "is_planning_stage",
@@ -133,8 +161,7 @@ class ProductionRouting(Document):
         previous = [
             (
                 cint(row.sequence),
-                str(row.stage_type or ""),
-                str(row.department_label or ""),
+                str(row.stage_definition or ""),
                 str(row.operational_role or ""),
                 cint(row.required),
                 cint(row.is_planning_stage),
@@ -144,8 +171,7 @@ class ProductionRouting(Document):
         current = [
             (
                 cint(row.sequence),
-                str(row.stage_type or ""),
-                str(row.department_label or ""),
+                str(row.stage_definition or ""),
                 str(row.operational_role or ""),
                 cint(row.required),
                 cint(getattr(row, "is_planning_stage", 0)),

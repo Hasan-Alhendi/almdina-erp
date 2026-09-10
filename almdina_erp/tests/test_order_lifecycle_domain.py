@@ -6,7 +6,6 @@ from pathlib import Path
 
 from almdina_erp.almdina_erp.domain.orders.lifecycle import (
     ORDER_STATUSES,
-    SHOP_FLOOR_ORDER_STATUSES,
     StageState,
     can_dispatch_from_status,
     can_mark_delivered,
@@ -16,6 +15,7 @@ from almdina_erp.almdina_erp.domain.orders.lifecycle import (
     derive_order_status,
     is_order_dispatched,
     next_stage_type,
+    order_status_for_stage,
     production_path_sequence,
     stage_sequence,
     transition_stage,
@@ -39,12 +39,14 @@ class OrderLifecycleDomainTests(unittest.TestCase):
         self.assertNotIn("import erpnext", source)
         self.assertNotIn("frappe.", source)
 
-    def test_order_status_contract_matches_doctype(self) -> None:
+    def test_order_status_contract_matches_doctype_baseline(self) -> None:
         definition = json.loads(DOCTYPE_JSON.read_text(encoding="utf-8"))
         status_field = next(
             field for field in definition["fields"] if field.get("fieldname") == "status"
         )
-        self.assertEqual(tuple(status_field["options"].splitlines()), ORDER_STATUSES)
+        visible_statuses = tuple(status_field["options"].splitlines())
+        self.assertEqual(visible_statuses, ("Draft", "Delivered", "Cancelled"))
+        self.assertTrue(set(visible_statuses).issubset(ORDER_STATUSES))
 
     def test_production_paths_are_deterministic(self) -> None:
         self.assertEqual(production_path_sequence("Sharyoun"), ("Sharyoun", "Sanding"))
@@ -94,30 +96,39 @@ class OrderLifecycleDomainTests(unittest.TestCase):
     def test_order_transition_guards_preserve_existing_policy(self) -> None:
         for status in ("Draft", "Rejected", "Pending Review", "Approved"):
             self.assertTrue(can_dispatch_from_status(status))
-        for status in ("At Drawing", "Delivered", "Cancelled"):
+        for status in ("مرحلة رسم", "Delivered", "Cancelled"):
             self.assertFalse(can_dispatch_from_status(status))
 
         self.assertFalse(is_order_dispatched(production_path=None, current_stage=None))
-        self.assertTrue(is_order_dispatched(production_path="Drawing", current_stage=None))
+        self.assertTrue(is_order_dispatched(production_path="ROUTE-1", current_stage=None))
         self.assertTrue(is_order_dispatched(production_path=None, current_stage="PST-1"))
 
         self.assertTrue(can_mark_delivered("Ready for Delivery"))
-        self.assertFalse(can_mark_delivered("At Sanding"))
+        self.assertFalse(can_mark_delivered("مرحلة تقشيط"))
 
-        for status in ("Pending Review", "Approved", "At CNC", "Ready for Delivery", "Draft", "Rejected", "Delivered", "Cancelled"):
+        for status in (
+            "Pending Review",
+            "Approved",
+            "مرحلة CNC",
+            "Ready for Delivery",
+            "Draft",
+            "Rejected",
+            "Delivered",
+            "Cancelled",
+        ):
             self.assertTrue(can_return_to_draft(status))
 
-        self.assertTrue(can_revert_department("At CNC", production_path="Drawing"))
-        self.assertTrue(can_revert_department("Delivered", production_path="Drawing"))
-        self.assertTrue(can_revert_department("At CNC", production_path=None))
+        self.assertTrue(can_revert_department("مرحلة CNC", production_path="ROUTE-1"))
+        self.assertTrue(can_revert_department("Delivered", production_path="ROUTE-1"))
+        self.assertTrue(can_revert_department("مرحلة CNC", production_path=None))
         self.assertTrue(can_revert_department("Draft", production_path=None))
 
     def test_replacement_status_has_highest_priority(self) -> None:
         status = derive_order_status(
             current_status="Delivered",
-            production_path="Drawing",
-            current_stage=StageState("CNC", "In Progress"),
-            stages=(StageState("CNC", "In Progress"),),
+            production_path="ROUTE-1",
+            current_stage=StageState("CNC", "In Progress", "مرحلة CNC"),
+            stages=(StageState("CNC", "In Progress", "مرحلة CNC"),),
             has_open_replacements=True,
         )
         self.assertEqual(status, "Replacement Required")
@@ -127,48 +138,57 @@ class OrderLifecycleDomainTests(unittest.TestCase):
             with self.subTest(current=current):
                 status = derive_order_status(
                     current_status=current,
-                    production_path="Drawing",
-                    current_stage=StageState("Drawing", "Pending"),
-                    stages=(StageState("Drawing", "Pending"),),
+                    production_path="ROUTE-1",
+                    current_stage=StageState("DRAW", "Pending", "الرسم"),
+                    stages=(StageState("DRAW", "Pending", "الرسم"),),
                     has_open_replacements=False,
                 )
                 self.assertEqual(status, current)
 
-    def test_current_shop_floor_stage_owns_dispatched_order_status(self) -> None:
-        for stage_type, expected in SHOP_FLOOR_ORDER_STATUSES.items():
-            with self.subTest(stage_type=stage_type):
+    def test_current_runtime_stage_snapshot_owns_dispatched_order_status(self) -> None:
+        cases = (
+            StageState("DRAW", "Pending", "الرسم"),
+            StageState("CNC", "In Progress", "تشغيل CNC"),
+            StageState("EDGE", "Paused", "تلزيق القشاط"),
+        )
+        for stage in cases:
+            with self.subTest(stage=stage.stage_type):
                 status = derive_order_status(
                     current_status="Approved",
-                    production_path="Drawing",
-                    current_stage=StageState(stage_type, "Pending"),
+                    production_path="ROUTE-1",
+                    current_stage=stage,
                     stages=(),
                     has_open_replacements=False,
                 )
-                self.assertEqual(status, expected)
+                self.assertEqual(status, stage.department_label)
 
         preserved = derive_order_status(
-            current_status="At CNC",
-            production_path="Drawing",
-            current_stage=StageState("CNC", "Cancelled"),
+            current_status="تشغيل CNC",
+            production_path="ROUTE-1",
+            current_stage=StageState("CNC", "Cancelled", "تشغيل CNC"),
             stages=(),
             has_open_replacements=False,
         )
-        self.assertEqual(preserved, "At CNC")
+        self.assertEqual(preserved, "تشغيل CNC")
 
-    def test_status_is_derived_from_ordered_base_stages(self) -> None:
+    def test_stage_status_projection_uses_label_with_code_as_defensive_fallback(self) -> None:
+        self.assertEqual(order_status_for_stage("CUSTOM", "مرحلة مخصصة"), "مرحلة مخصصة")
+        self.assertEqual(order_status_for_stage("CUSTOM"), "CUSTOM")
+
+    def test_status_is_derived_from_runtime_base_stage_snapshots(self) -> None:
         cases = (
-            ((StageState("Cutting", "Pending"),), "Cutting In Progress"),
-            ((StageState("Edge Banding", "Paused"),), "Edge Banding In Progress"),
-            ((StageState("Quality Check", "In Progress"),), "Quality Check"),
-            ((StageState("Assembly", "Pending"),), "Production In Progress"),
-            ((StageState("Cutting", "Completed"),), "Completed"),
+            ((StageState("CUT", "Pending", "القص"),), "القص"),
+            ((StageState("EDGE", "Paused", "القشاط"),), "القشاط"),
+            ((StageState("QC", "In Progress", "فحص الجودة"),), "فحص الجودة"),
+            ((StageState("ASSEMBLY", "Pending"),), "ASSEMBLY"),
+            ((StageState("CUT", "Completed", "القص"),), "Completed"),
             (
                 (
-                    StageState("Drawing", "Completed"),
-                    StageState("CNC", "Completed"),
-                    StageState("Sanding", "Completed"),
+                    StageState("DRAW", "Completed", "الرسم"),
+                    StageState("CNC", "Completed", "تشغيل CNC"),
+                    StageState("EDGE", "Completed", "القشاط"),
                 ),
-                "Ready for Delivery",
+                "Completed",
             ),
         )
         for stages, expected in cases:
