@@ -15,7 +15,15 @@ from almdina_erp.almdina_erp.application.factory.production_routing_management i
     set_production_routing_disabled,
 )
 from almdina_erp.almdina_erp.application.factory.production_stage_definition_management import (
+    ProductionStageDefinitionConflict,
+    ProductionStageDefinitionError,
+    ProductionStageDefinitionPermissionDenied,
     ProductionStageDefinitionSnapshot,
+    SaveProductionStageDefinitionCommand,
+    delete_production_stage_definition,
+    save_production_stage_definition,
+    set_production_stage_definition_disabled,
+    stage_definition_command,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 
@@ -97,6 +105,64 @@ class FakeStageDefinitionRepository:
             for name in names
             if name in self.definitions
         }
+
+
+class FakeStageManagementRepository:
+    def __init__(self, *, in_use: bool = False) -> None:
+        self.in_use = in_use
+        self.saved: SaveProductionStageDefinitionCommand | None = None
+        self.toggled: tuple[str, bool, str] | None = None
+        self.deleted: tuple[str, str] | None = None
+
+    def list_definitions(self) -> Sequence[ProductionStageDefinitionSnapshot]:
+        return []
+
+    def get_definitions(
+        self,
+        names: Sequence[str],
+    ) -> Mapping[str, ProductionStageDefinitionSnapshot]:
+        del names
+        return {}
+
+    def save_definition(
+        self,
+        command: SaveProductionStageDefinitionCommand,
+    ) -> ProductionStageDefinitionSnapshot:
+        self.saved = command
+        return ProductionStageDefinitionSnapshot(
+            name=command.name or command.stage_code,
+            stage_code=command.stage_code,
+            stage_label=command.stage_label,
+            description=command.description,
+            is_planning_default=command.is_planning_default,
+            disabled=False,
+            modified="saved-version",
+        )
+
+    def set_disabled(
+        self,
+        name: str,
+        *,
+        disabled: bool,
+        expected_modified: str,
+    ) -> ProductionStageDefinitionSnapshot:
+        self.toggled = (name, disabled, expected_modified)
+        return ProductionStageDefinitionSnapshot(
+            name=name,
+            stage_code=name,
+            stage_label=name,
+            description="",
+            is_planning_default=False,
+            disabled=disabled,
+            modified="toggled-version",
+        )
+
+    def is_in_use(self, name: str) -> bool:
+        del name
+        return self.in_use
+
+    def delete_definition(self, name: str, *, expected_modified: str) -> None:
+        self.deleted = (name, expected_modified)
 
 
 def route_payload(**overrides: Any) -> dict[str, Any]:
@@ -268,6 +334,95 @@ class TestProductionRoutingManagementApplication(unittest.TestCase):
             expected_modified="v2",
         )
         self.assertEqual(repository.deleted, ("Route A", "v2"))
+
+    def test_stage_library_create_is_normalized_and_capability_protected(self) -> None:
+        repository = FakeStageManagementRepository()
+        payload = {
+            "stage_code": "  CNC  ",
+            "stage_label": "  تشغيل CNC  ",
+            "description": "  محطة القص  ",
+            "is_planning_default": "1",
+        }
+        with self.assertRaises(ProductionStageDefinitionPermissionDenied):
+            save_production_stage_definition(repository, set(), payload)
+        self.assertIsNone(repository.saved)
+
+        result = save_production_stage_definition(
+            repository,
+            {Capability.EDIT_PRODUCTION_ROUTINGS},
+            payload,
+        )
+        assert repository.saved is not None
+        self.assertEqual(repository.saved.stage_code, "CNC")
+        self.assertEqual(repository.saved.stage_label, "تشغيل CNC")
+        self.assertEqual(repository.saved.description, "محطة القص")
+        self.assertTrue(repository.saved.is_planning_default)
+        self.assertEqual(result.name, "CNC")
+
+    def test_stage_library_edit_keeps_code_immutable_and_requires_version(self) -> None:
+        with self.assertRaisesRegex(ProductionStageDefinitionError, "ثابت"):
+            stage_definition_command(
+                {
+                    "name": "CNC",
+                    "stage_code": "CUT",
+                    "stage_label": "قص",
+                    "expected_modified": "v1",
+                }
+            )
+        with self.assertRaises(ProductionStageDefinitionConflict):
+            stage_definition_command(
+                {
+                    "name": "CNC",
+                    "stage_code": "CNC",
+                    "stage_label": "قص",
+                }
+            )
+
+    def test_stage_library_toggle_and_delete_are_versioned_and_safe(self) -> None:
+        repository = FakeStageManagementRepository(in_use=True)
+        with self.assertRaises(ProductionStageDefinitionPermissionDenied):
+            set_production_stage_definition_disabled(
+                repository,
+                set(),
+                name="CNC",
+                disabled=True,
+                expected_modified="v1",
+            )
+        with self.assertRaises(ProductionStageDefinitionConflict):
+            set_production_stage_definition_disabled(
+                repository,
+                {Capability.EDIT_PRODUCTION_ROUTINGS},
+                name="CNC",
+                disabled=True,
+                expected_modified="",
+            )
+
+        set_production_stage_definition_disabled(
+            repository,
+            {Capability.EDIT_PRODUCTION_ROUTINGS},
+            name="CNC",
+            disabled="1",
+            expected_modified="v1",
+        )
+        self.assertEqual(repository.toggled, ("CNC", True, "v1"))
+
+        with self.assertRaisesRegex(ProductionStageDefinitionError, "عطّلها بدل حذفها"):
+            delete_production_stage_definition(
+                repository,
+                {Capability.EDIT_PRODUCTION_ROUTINGS},
+                name="CNC",
+                expected_modified="v2",
+            )
+        self.assertIsNone(repository.deleted)
+
+        repository.in_use = False
+        delete_production_stage_definition(
+            repository,
+            {Capability.EDIT_PRODUCTION_ROUTINGS},
+            name="CNC",
+            expected_modified="v2",
+        )
+        self.assertEqual(repository.deleted, ("CNC", "v2"))
 
 
 if __name__ == "__main__":
