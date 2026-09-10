@@ -117,10 +117,12 @@ class TestOrderStatusMetadata(unittest.TestCase):
         self.assertEqual(
             options,
             (
-                *metadata.FIXED_ORDER_STATUS_OPTIONS,
+                "Draft",
                 "الرسم",
                 "CNC",
                 "التقشيط",
+                "Delivered",
+                "Cancelled",
             ),
         )
         self.assertEqual(len(harness.get_all_calls), 1)
