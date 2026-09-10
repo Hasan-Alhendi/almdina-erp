@@ -43,8 +43,9 @@ def _stage_labels() -> list[str]:
         return []
     rows = frappe.get_all(
         STAGE_DEFINITION_DOCTYPE,
+        filters={"disabled": 0},
         fields=["stage_label"],
-        order_by="disabled asc, stage_label asc",
+        order_by="stage_label asc",
     )
     return _unique_nonempty(row.stage_label for row in rows)
 
@@ -52,10 +53,10 @@ def _stage_labels() -> list[str]:
 def _in_flight_status_values() -> list[str]:
     """Keep snapshot labels valid while an already-dispatched order uses them.
 
-    Renaming a library stage must not invalidate the status of an execution stage
-    that was created before the rename. Runtime Production Stage is deliberately
-    a snapshot boundary, so current order values are included until those orders
-    leave production.
+    Disabling or renaming a library stage must not invalidate the status of an
+    execution stage that was created earlier. Runtime Production Stage is the
+    snapshot boundary, so current order values stay in the Select metadata until
+    those orders leave production.
     """
 
     if not frappe.db.exists("DocType", ORDER_DOCTYPE):
