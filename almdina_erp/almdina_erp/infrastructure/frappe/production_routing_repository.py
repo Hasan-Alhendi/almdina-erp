@@ -1,37 +1,47 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 import frappe
 from frappe.utils import cint
 
+from almdina_erp.almdina_erp.application.factory.production_stage_definition_management import (
+    ProductionStageDefinitionSnapshot,
+)
 from almdina_erp.almdina_erp.domain.orders.production_routing import (
     ProductionRoute,
     RoutingStage,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.production_stage_definition_repository import (
+    FrappeProductionStageDefinitionRepository,
 )
 
 
 _REQUEST_CACHE_KEY = "almdina_production_route_cache"
 
 
-def _stage_definition(row: Any) -> RoutingStage:
+def _stage_definition(
+    row: Any,
+    definitions: Mapping[str, ProductionStageDefinitionSnapshot],
+) -> RoutingStage:
+    definition_name = str(row.stage_definition or "").strip()
+    definition = definitions.get(definition_name)
+    if definition is None:
+        raise ValueError(
+            f"تعريف مرحلة الإنتاج {definition_name or '<فارغ>'} غير موجود."
+        )
     return RoutingStage(
         sequence=cint(row.sequence),
-        stage_type=str(row.stage_type or "").strip(),
-        department_label=str(getattr(row, "department_label", None) or "").strip(),
+        stage_type=definition.stage_code,
+        department_label=definition.stage_label,
         operational_role=str(getattr(row, "operational_role", None) or "").strip(),
         is_planning_stage=bool(cint(getattr(row, "is_planning_stage", 0))),
     )
 
 
 def _request_cache() -> dict[str, tuple[ProductionRoute, bool]]:
-    """Return a request-local immutable route projection cache.
-
-    `frappe.local` is scoped to the current request/job context, so this cache
-    never survives into a later HTTP request. That gives repeated routing reads
-    within one application use case a cheap fast path without cross-request
-    invalidation or stale configuration risk.
-    """
+    """Return a request-local immutable route projection cache."""
 
     cache = getattr(frappe.local, _REQUEST_CACHE_KEY, None)
     if cache is None:
@@ -41,10 +51,13 @@ def _request_cache() -> dict[str, tuple[ProductionRoute, bool]]:
 
 
 def _route_projection(document: Any) -> ProductionRoute:
+    required_rows = [row for row in document.stages or () if cint(row.required)]
+    definitions = FrappeProductionStageDefinitionRepository().get_definitions(
+        [str(row.stage_definition or "") for row in required_rows]
+    )
     stages = tuple(
-        _stage_definition(row)
-        for row in sorted(document.stages or (), key=lambda item: cint(item.sequence))
-        if cint(row.required)
+        _stage_definition(row, definitions)
+        for row in sorted(required_rows, key=lambda item: cint(item.sequence))
     )
     return ProductionRoute(
         name=str(document.name),
@@ -91,8 +104,8 @@ def list_active_routes() -> list[ProductionRoute]:
         try:
             routes.append(get_route(str(name)))
         except ValueError:
-            # Invalid legacy rows stay out of dispatch until an administrator
-            # completes their required route metadata from master data.
+            # Invalid configuration stays out of dispatch until an administrator
+            # completes its required stage-library metadata.
             continue
     return routes
 
