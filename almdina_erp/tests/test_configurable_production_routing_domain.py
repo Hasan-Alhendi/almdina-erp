@@ -178,7 +178,7 @@ class TestConfigurableProductionRoutingDomain(unittest.TestCase):
         self.assertNotIn("ALMDINA_APP", authorization)
         self.assertNotIn("default_app", authorization)
 
-    def test_migrations_preserve_legacy_data_without_seeding_clean_sites(self) -> None:
+    def test_legacy_routing_migrations_remain_but_stage_library_is_clean_break(self) -> None:
         root = Path(__file__).resolve().parents[1]
         activate_patch = "almdina_erp.patches.v1_0.activate_configurable_production_routings"
         planning_patch = "almdina_erp.patches.v1_0.mark_route_planning_stages"
@@ -190,14 +190,12 @@ class TestConfigurableProductionRoutingDomain(unittest.TestCase):
         planning = (
             root / "patches" / "v1_0" / "mark_route_planning_stages.py"
         ).read_text(encoding="utf-8")
-        stage_library = (
-            root / "patches" / "v1_0" / "migrate_production_stage_library.py"
-        ).read_text(encoding="utf-8")
+        stage_library_path = root / "patches" / "v1_0" / "migrate_production_stage_library.py"
 
         self.assertIn(activate_patch, patches)
         self.assertIn(planning_patch, patches)
-        self.assertIn(stage_library_patch, patches)
-        self.assertLess(patches.index(planning_patch), patches.index(stage_library_patch))
+        self.assertNotIn(stage_library_patch, patches)
+        self.assertFalse(stage_library_path.exists())
         self.assertIn("_has_legacy_production_data", activation)
         self.assertIn("if not _has_legacy_production_data():", activation)
         self.assertIn("return", activation)
@@ -207,10 +205,6 @@ class TestConfigurableProductionRoutingDomain(unittest.TestCase):
         self.assertIn("operational_role", activation)
         self.assertIn('!= "Drawing"', planning)
         self.assertIn('"is_planning_stage"', planning)
-        self.assertIn("get_table_columns", stage_library)
-        self.assertIn("stage_definition", stage_library)
-        self.assertIn("stage_type", stage_library)
-        self.assertNotIn("STAGE_DEFAULTS", stage_library)
 
 
 if __name__ == "__main__":
