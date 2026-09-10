@@ -50,9 +50,8 @@ class TestRoutingMigrationPhase(unittest.TestCase):
     def test_existing_routing_activation_still_runs_after_model_sync(self) -> None:
         self.assertEqual(patch_section(ROUTING_PATCH), "post_model_sync")
 
-    def test_stage_library_uses_schema_sync_without_legacy_backfill_patch(self) -> None:
-        patches = PATCHES_FILE.read_text(encoding="utf-8")
-        self.assertNotIn(STAGE_LIBRARY_PATCH, patches)
+    def test_stage_library_backfill_runs_after_model_sync(self) -> None:
+        self.assertEqual(patch_section(STAGE_LIBRARY_PATCH), "post_model_sync")
 
     def test_routing_configuration_references_stage_library_and_runtime_keeps_snapshot(self) -> None:
         route_payload = json.loads(ROUTING_STAGE_JSON.read_text(encoding="utf-8"))
