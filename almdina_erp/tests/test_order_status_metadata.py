@@ -32,13 +32,15 @@ class StatusMetadataHarness:
         self.cache_clears: list[str | None] = []
         self.get_all_calls: list[tuple[str, dict[str, Any]]] = []
         self.docfield_name = "status-docfield"
+        self.kanban_enabled = False
+        self.kanban_boards: dict[str, Any] = {}
 
     def load(self):
         fake_frappe = types.ModuleType("frappe")
 
         def exists(doctype: str, filters: Any = None) -> bool:
             if doctype == "DocType":
-                return filters != "Kanban Board"
+                return filters != "Kanban Board" or self.kanban_enabled
             if doctype == "Production Stage Definition":
                 return True
             return False
@@ -63,9 +65,12 @@ class StatusMetadataHarness:
 
         def get_all(doctype: str, **kwargs: Any) -> list[Any]:
             self.get_all_calls.append((doctype, kwargs))
+            if doctype == "Kanban Board":
+                return list(self.kanban_boards)
             return list(self.stage_rows)
 
         fake_frappe.get_all = get_all
+        fake_frappe.get_doc = lambda doctype, name: self.kanban_boards[name]
         fake_frappe.clear_cache = lambda doctype=None: self.cache_clears.append(doctype)
 
         previous = sys.modules.get("frappe")
@@ -82,6 +87,24 @@ class StatusMetadataHarness:
                 sys.modules.pop("frappe", None)
             else:
                 sys.modules["frappe"] = previous
+
+
+class FakeKanbanBoard:
+    def __init__(self, columns: list[tuple[str, str]]) -> None:
+        self.columns = [
+            SimpleNamespace(column_name=name, indicator=indicator, order="[]")
+            for name, indicator in columns
+        ]
+        self.saved = False
+
+    def set(self, fieldname: str, value: list[Any]) -> None:
+        self.columns = list(value)
+
+    def append(self, fieldname: str, value: dict[str, Any]) -> None:
+        self.columns.append(SimpleNamespace(**value))
+
+    def save(self, **kwargs: Any) -> None:
+        self.saved = True
 
 
 class TestOrderStatusMetadata(unittest.TestCase):
@@ -119,6 +142,31 @@ class TestOrderStatusMetadata(unittest.TestCase):
         self.assertEqual(args[3], "\n".join(options))
         self.assertFalse(kwargs["update_modified"])
         self.assertEqual(harness.cache_clears, ["Door Cutting Order"])
+
+    def test_sync_replaces_persisted_kanban_columns_and_removes_legacy_values(self) -> None:
+        harness = StatusMetadataHarness()
+        harness.kanban_enabled = True
+        board = FakeKanbanBoard([
+            ("Completed", "Green"),
+            ("At Drawing", "Blue"),
+            ("Draft", "Gray"),
+        ])
+        harness.kanban_boards["Orders"] = board
+        metadata = harness.load()
+
+        options = metadata.sync_order_status_options()
+
+        self.assertTrue(board.saved)
+        self.assertEqual(
+            [column.column_name for column in board.columns],
+            list(options),
+        )
+        self.assertNotIn("Completed", [column.column_name for column in board.columns])
+        self.assertNotIn("At Drawing", [column.column_name for column in board.columns])
+        self.assertEqual(
+            next(column.indicator for column in board.columns if column.column_name == "Draft"),
+            "Gray",
+        )
 
     def test_sync_is_safe_when_status_docfield_is_missing(self) -> None:
         harness = StatusMetadataHarness()
