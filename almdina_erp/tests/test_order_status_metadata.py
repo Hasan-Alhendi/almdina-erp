@@ -37,7 +37,9 @@ class StatusMetadataHarness:
         fake_frappe = types.ModuleType("frappe")
 
         def exists(doctype: str, filters: Any = None) -> bool:
-            if doctype in {"DocType", "Production Stage Definition"}:
+            if doctype == "DocType":
+                return filters != "Kanban Board"
+            if doctype == "Production Stage Definition":
                 return True
             return False
 
