@@ -354,6 +354,7 @@ class TestStatusFilterOptions(unittest.TestCase):
             "def status_filter_options", 1
         )[0]
         self.assertIn("frappe.get_list", projection)
+        self.assertIn("distinct=True", projection)
         self.assertIn('"current_assignee"', projection)
         self.assertIn('"full_name"', projection)
         self.assertNotIn("frappe.db.sql", projection)
