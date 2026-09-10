@@ -46,6 +46,7 @@
             this.readGate = null;
             this.mutationGate = null;
             this.libraryMutationGate = null;
+            this.libraryMutationPending = null;
             this.initialized = false;
             this.disposed = false;
             this.bootstrapReady = false;
@@ -242,6 +243,7 @@
             if (this.readGate) this.readGate.invalidate();
             if (this.mutationGate) this.mutationGate.invalidate();
             if (this.libraryMutationGate) this.libraryMutationGate.invalidate();
+            this.libraryMutationPending = null;
             this.closeTransientSurfaces();
             this.clearDragState();
             this.$main.off(".prw").off(".prw-bootstrap");
@@ -310,6 +312,18 @@
 
         canManageLibrary() {
             return this.can("edit_production_routings");
+        }
+
+        beginLibraryMutation(meta) {
+            if (this.libraryMutationPending || !this.isActive() || !this.canManageLibrary()) return null;
+            const generation = this.activeGeneration();
+            const token = this.libraryMutationGate.begin({...meta, generation});
+            this.libraryMutationPending = token;
+            return {generation, token};
+        }
+
+        endLibraryMutation(token) {
+            if (this.libraryMutationPending === token) this.libraryMutationPending = null;
         }
 
         load({discardEditor = false} = {}) {
@@ -894,7 +908,7 @@
                 stage => String(stage.stage_definition).toLocaleLowerCase() === String(name).toLocaleLowerCase()
             );
             if (duplicate) {
-                frappe.show_alert({message: __("هذه المرحلة موجودة بالفعل داخل المسار."), indicator: "orange"});
+                frappe.show_alert({message: __("المرحلة موجودة بالفعل"), indicator: "orange"});
                 return;
             }
             const draft = this.stageDraft({
@@ -1019,6 +1033,13 @@
                 });
                 return Promise.resolve(false);
             }
+            const completed = this.completedSave;
+            if (completed && completed.workingId === editor.workingId) {
+                const saved = completed.data || {};
+                if (saved.name) editor.name = saved.name;
+                if (saved.modified) editor.expected_modified = String(saved.modified);
+                this.completedSave = null;
+            }
             const generation = this.activeGeneration();
             const workingId = editor.workingId;
             const revision = editor.revision;
@@ -1135,7 +1156,8 @@
         }
 
         saveStageDefinition(source, values) {
-            if (!this.isActive() || !this.canManageLibrary()) return Promise.resolve(false);
+            const mutation = this.beginLibraryMutation({type: "save-stage", name: source ? source.name : null});
+            if (!mutation) return Promise.resolve(false);
             const payload = {
                 name: source ? source.name : null,
                 stage_code: String(values.stage_code || "").trim(),
@@ -1144,11 +1166,13 @@
                 is_planning_default: Boolean(Number(values.is_planning_default || 0)),
                 expected_modified: source ? source.modified : null,
             };
-            const generation = this.activeGeneration();
-            const token = this.libraryMutationGate.begin({type: "save-stage", generation, name: payload.name});
-            return this.call(METHODS.saveStage, {payload}, __("جاري حفظ المرحلة..."))
+            const {generation, token} = mutation;
+            const operation = this.call(METHODS.saveStage, {payload}, __("جاري حفظ المرحلة..."))
                 .then(data => {
-                    if (!this.libraryMutationGate.isCurrent(token) || !this.isCurrentGeneration(generation)) return false;
+                    if (!this.libraryMutationGate.isCurrent(token) || !this.isCurrentGeneration(generation)) {
+                        this.reconciliationPending = !this.disposed;
+                        return true;
+                    }
                     this.applyStageCatalog(data.stage_catalog || []);
                     frappe.show_alert({
                         message: source ? __("تم تعديل المرحلة.") : __("تمت إضافة المرحلة إلى المكتبة."),
@@ -1160,20 +1184,25 @@
                     console.error("Failed to save production stage definition", error);
                     return false;
                 });
+            operation.finally(() => this.endLibraryMutation(token));
+            return operation;
         }
 
         toggleStageDefinition(dataset) {
-            if (!this.isActive() || !this.canManageLibrary()) return Promise.resolve(false);
+            const mutation = this.beginLibraryMutation({type: "toggle-stage", name: dataset.name});
+            if (!mutation) return Promise.resolve(false);
             const disabled = Number(dataset.disabled || 0);
-            const generation = this.activeGeneration();
-            const token = this.libraryMutationGate.begin({type: "toggle-stage", generation, name: dataset.name});
-            return this.call(METHODS.toggleStage, {
+            const {generation, token} = mutation;
+            const operation = this.call(METHODS.toggleStage, {
                 name: dataset.name,
                 disabled,
                 expected_modified: dataset.modified,
             }, disabled ? __("جاري تعطيل المرحلة...") : __("جاري تفعيل المرحلة..."))
                 .then(data => {
-                    if (!this.libraryMutationGate.isCurrent(token) || !this.isCurrentGeneration(generation)) return false;
+                    if (!this.libraryMutationGate.isCurrent(token) || !this.isCurrentGeneration(generation)) {
+                        this.reconciliationPending = !this.disposed;
+                        return true;
+                    }
                     this.applyStageCatalog(data.stage_catalog || []);
                     frappe.show_alert({
                         message: disabled ? __("تم تعطيل المرحلة.") : __("تم تفعيل المرحلة."),
@@ -1185,6 +1214,8 @@
                     console.error("Failed to toggle production stage definition", error);
                     return false;
                 });
+            operation.finally(() => this.endLibraryMutation(token));
+            return operation;
         }
 
         deleteStageDefinition(dataset) {
@@ -1195,13 +1226,18 @@
                 `${__("حذف المرحلة نهائيًا من المكتبة")} «${stage ? stage.label : dataset.name}»؟`,
                 generation,
                 () => {
-                    const token = this.libraryMutationGate.begin({type: "delete-stage", generation, name: dataset.name});
-                    return this.call(METHODS.removeStageDefinition, {
+                    const mutation = this.beginLibraryMutation({type: "delete-stage", name: dataset.name});
+                    if (!mutation) return Promise.resolve(false);
+                    const {generation: mutationGeneration, token} = mutation;
+                    const operation = this.call(METHODS.removeStageDefinition, {
                         name: dataset.name,
                         expected_modified: dataset.modified,
                     }, __("جاري حذف المرحلة..."))
                         .then(data => {
-                            if (!this.libraryMutationGate.isCurrent(token) || !this.isCurrentGeneration(generation)) return false;
+                            if (!this.libraryMutationGate.isCurrent(token) || !this.isCurrentGeneration(mutationGeneration)) {
+                                this.reconciliationPending = !this.disposed;
+                                return true;
+                            }
                             this.applyStageCatalog(data.stage_catalog || []);
                             frappe.show_alert({message: __("تم حذف المرحلة من المكتبة."), indicator: "green"});
                             return true;
@@ -1210,6 +1246,8 @@
                             console.error("Failed to delete production stage definition", error);
                             return false;
                         });
+                    operation.finally(() => this.endLibraryMutation(token));
+                    return operation;
                 }
             );
         }
