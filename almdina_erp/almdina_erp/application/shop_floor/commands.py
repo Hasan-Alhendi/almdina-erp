@@ -6,7 +6,7 @@ from typing import Any, Protocol, Sequence
 
 from almdina_erp.almdina_erp.domain.orders.lifecycle import (
     next_stage_type,
-    order_status_for_stage_type,
+    order_status_for_stage,
     production_path_sequence,
     resolve_shop_floor_stage_type,
     transition_stage,
@@ -431,7 +431,7 @@ def dispatch_order(
         "name": order_name,
         "production_path": path,
         "stage": stage.name,
-        "status": order_status_for_stage_type(first.stage_type),
+        "status": order_status_for_stage(first.stage_type, first.department_label),
         "department": first.department_label,
         "current_assignee": assignee,
         "department_status": "بحاجة للعمل",
@@ -565,7 +565,10 @@ def handoff_to_next(
         "next_stage": next_stage.name,
         "next_stage_type": target_stage.stage_type,
         "next_department": target_stage.department_label,
-        "order_status": order_status_for_stage_type(target_stage.stage_type),
+        "order_status": order_status_for_stage(
+            target_stage.stage_type,
+            target_stage.department_label,
+        ),
         "ready_for_delivery": False,
     }
 
@@ -699,7 +702,10 @@ def revert_department(
         "name": order_name,
         "stage": reopened.name,
         "stage_type": reopened.stage_type,
-        "status": order_status_for_stage_type(reopened.stage_type),
+        "status": order_status_for_stage(
+            reopened.stage_type,
+            reopened.department_label,
+        ),
         "department_status": "بحاجة للعمل",
     }
 
