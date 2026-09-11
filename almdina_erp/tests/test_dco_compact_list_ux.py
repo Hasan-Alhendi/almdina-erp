@@ -64,14 +64,29 @@ class TestDcoCompactListUx(unittest.TestCase):
         self.assertIn('Array.from(text)', source)
         self.assertIn('characters.slice(0, limit)', source)
         self.assertIn('<button type="button"', source)
-        self.assertIn(
-            'class="filterable dco-list-compact-text dco-list-filterable-text ellipsis"',
-            source,
-        )
+        self.assertIn('class="filterable dco-list-compact-text dco-list-filterable-text ellipsis${boardClass}"', source)
         self.assertIn('data-filter=', source)
         self.assertIn('title=', source)
         self.assertIn('aria-label=', source)
         self.assertNotIn('<a class="filterable dco-list-compact-text', source)
+
+    def test_board_item_gets_pill_presentation_without_changing_other_compact_fields(self) -> None:
+        source = LIST_JS.read_text(encoding="utf-8")
+        css = LIST_CSS.read_text(encoding="utf-8")
+
+        self.assertIn('fieldname === "board_description" ? " dco-list-board-pill" : ""', source)
+        self.assertIn('.dco-list-filterable-text.dco-list-board-pill', css)
+        self.assertIn('border-radius: 999px;', css)
+        self.assertIn('background: var(--subtle-fg);', css)
+
+    def test_edge_color_is_plain_text_instead_of_a_pill(self) -> None:
+        css = LIST_CSS.read_text(encoding="utf-8")
+
+        self.assertIn('.dco-order-list .dco-list-edge-color', css)
+        self.assertIn('border-radius: 0 !important;', css)
+        self.assertIn('background: transparent !important;', css)
+        self.assertIn('box-shadow: none !important;', css)
+        self.assertIn('font-weight: inherit !important;', css)
 
     def test_compact_module_has_bounded_initialization_and_no_parallel_runtime(self) -> None:
         source = LIST_JS.read_text(encoding="utf-8")
@@ -106,14 +121,18 @@ class TestDcoCompactListUx(unittest.TestCase):
 
         self.assertIn('@media (min-width: 601px)', css)
         self.assertIn('.dco-order-list .list-row-col[data-fieldname] {', css)
-        self.assertIn('margin-right: 6px !important;', css)
+        self.assertIn('margin-right: 3px !important;', css)
         self.assertIn('.dco-order-list .list-row-col[data-fieldname="name"]', css)
-        self.assertIn('width: 90px !important;', css)
+        self.assertIn('width: 82px !important;', css)
         self.assertIn('.dco-order-list .list-row-col[data-fieldname="status_field"]', css)
-        self.assertIn('width: 92px !important;', css)
         self.assertIn('.dco-order-list .list-row-col[data-fieldname="order_date"]', css)
+        self.assertIn('width: 86px !important;', css)
         self.assertIn('.dco-order-list .list-row-col[data-fieldname="customer"]', css)
-        self.assertIn('width: 110px !important;', css)
+        self.assertIn('width: 100px !important;', css)
+        self.assertIn('.dco-order-list .list-row-col[data-fieldname="current_production_stage"]', css)
+        self.assertIn('.dco-order-list .list-row-col[data-fieldname="department_status"]', css)
+        self.assertIn('.dco-order-list .result.no-assign-to .list-row .level-right', css)
+        self.assertIn('flex: 0 0 86px !important;', css)
         self.assertIn('.dco-order-list .dco-list-filterable-text', css)
         self.assertNotIn('nth-child', css)
 
