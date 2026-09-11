@@ -24,7 +24,7 @@ class TestA156NotesListLifecycle(unittest.TestCase):
 
     def test_saved_layout_exposes_important_note_to_list_settings(self) -> None:
         body = self.source.split("function ensureImportantFieldInListSettings", 1)[1].split(
-            "function ensureImportantColumn",
+            "function importantColumnTargetIndex",
             1,
         )[0]
         self.assertIn("savedListSettingsFields(listview)", body)
@@ -33,28 +33,56 @@ class TestA156NotesListLifecycle(unittest.TestCase):
         self.assertIn("fields.splice(notesIndex >= 0 ? notesIndex + 1 : fields.length, 0, entry)", body)
         self.assertIn("settings.fields = JSON.stringify(fields)", body)
 
-    def test_saved_list_layout_still_restores_mandatory_important_signal(self) -> None:
+    def test_saved_list_settings_order_is_used_only_when_column_must_be_restored(self) -> None:
+        body = self.source.split("function importantColumnTargetIndex", 1)[1].split(
+            "function ensureImportantColumn",
+            1,
+        )[0]
+        self.assertIn("savedListSettingsFields(listview)", body)
+        self.assertIn("desired.indexOf(IMPORTANT_FIELD)", body)
+        self.assertIn("listSettingsFieldname(column) === desired[index]", body)
+        self.assertIn("return nextIndex", body)
+        self.assertIn("return previousIndex + 1", body)
+
+    def test_existing_important_column_keeps_frappe_native_saved_order(self) -> None:
         body = self.source.split("function ensureImportantColumn", 1)[1].split(
             "function reconcileColumns",
             1,
         )[0]
         self.assertIn("ensureImportantFieldInListSettings(listview)", body)
-        self.assertIn("importantColumnDefinition()", body)
-        self.assertIn('columnFieldname(column) === "order_notes"', body)
-        self.assertIn("columns.splice(notesIndex + 1, 0, important)", body)
-        self.assertIn("tagIndex", body)
+        self.assertIn(
+            "if (columns.some(column => listSettingsFieldname(column) === IMPORTANT_FIELD))",
+            body,
+        )
+        self.assertIn("return false;", body)
+        self.assertNotIn("columns.splice(currentIndex, 1)[0]", body)
+        self.assertNotIn("const before = columns.map", body)
+        self.assertNotIn("arraysMatch", self.source)
 
-    def test_existing_important_column_keeps_user_selected_order(self) -> None:
+    def test_missing_important_column_is_restored_at_saved_position(self) -> None:
         body = self.source.split("function ensureImportantColumn", 1)[1].split(
             "function reconcileColumns",
             1,
         )[0]
-        self.assertIn(
-            "if (columns.some(column => columnFieldname(column) === IMPORTANT_FIELD)) return false;",
-            body,
-        )
-        self.assertNotIn("reorderImportantColumn", self.source)
-        self.assertNotIn("nextNotesIndex", self.source)
+        self.assertIn("importantColumnTargetIndex(listview, columns)", body)
+        self.assertIn("columns.splice(targetIndex, 0, important)", body)
+        self.assertIn("return true;", body)
+
+    def test_desktop_important_preview_is_capped_at_exactly_22_characters(self) -> None:
+        self.assertIn("const IMPORTANT_PREVIEW_CHARACTERS = 22;", self.source)
+        body = self.source.split("function truncateImportantPreview", 1)[1].split(
+            "function formatter",
+            1,
+        )[0]
+        self.assertIn("Array.from(text)", body)
+        self.assertIn("limit - 1", body)
+        self.assertIn("…", body)
+        formatter = self.source.split("function formatter", 1)[1].split(
+            "frappe.listview_settings",
+            1,
+        )[0]
+        self.assertIn("truncateImportantPreview(preview)", formatter)
+        self.assertIn('title="${escapeHtml(preview)}"', formatter)
 
     def test_projection_event_immediately_refreshes_desktop_rows(self) -> None:
         helper = self.source.split("function refreshProjectionRows", 1)[1].split(
@@ -74,7 +102,7 @@ class TestA156NotesListLifecycle(unittest.TestCase):
 
     def test_new_list_instance_disposes_previous_runtime_and_syncs_settings(self) -> None:
         body = self.source.split("function installRuntime", 1)[1].split(
-            "function formatter",
+            "function truncateImportantPreview",
             1,
         )[0]
         self.assertIn("activeListView && activeListView !== listview", body)

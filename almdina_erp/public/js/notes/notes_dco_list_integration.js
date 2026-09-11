@@ -4,6 +4,7 @@
     const DOCTYPE = "Door Cutting Order";
     const UPDATED_EVENT = "almdina:notes-context-updated";
     const IMPORTANT_FIELD = "important_note_preview";
+    const IMPORTANT_PREVIEW_CHARACTERS = 22;
     let activeListView = null;
 
     function escapeHtml(value) {
@@ -27,8 +28,10 @@
         return String(column && column.df && column.df.fieldname || "").trim();
     }
 
-    function arraysMatch(left, right) {
-        return left.length === right.length && left.every((value, index) => value === right[index]);
+    function listSettingsFieldname(column) {
+        const fieldname = columnFieldname(column);
+        if (fieldname) return fieldname;
+        return column && column.type === "Status" ? "status_field" : "";
     }
 
     function importantColumnDefinition() {
@@ -66,34 +69,67 @@
         return true;
     }
 
+    function importantColumnTargetIndex(listview, columns) {
+        const fields = savedListSettingsFields(listview);
+        if (!fields) return -1;
+        const desired = fields
+            .map(field => String(field && field.fieldname || "").trim())
+            .filter(Boolean);
+        const importantIndex = desired.indexOf(IMPORTANT_FIELD);
+        if (importantIndex < 0) return -1;
+
+        for (let index = importantIndex + 1; index < desired.length; index += 1) {
+            const nextIndex = columns.findIndex(
+                column => listSettingsFieldname(column) === desired[index]
+            );
+            if (nextIndex >= 0) return nextIndex;
+        }
+
+        for (let index = importantIndex - 1; index >= 0; index -= 1) {
+            const previousIndex = columns.findIndex(
+                column => listSettingsFieldname(column) === desired[index]
+            );
+            if (previousIndex >= 0) return previousIndex + 1;
+        }
+
+        const tagIndex = columns.findIndex(column => column && column.type === "Tag");
+        return tagIndex >= 0 ? tagIndex + 1 : Math.min(1, columns.length);
+    }
+
     function ensureImportantColumn(listview) {
         ensureImportantFieldInListSettings(listview);
 
         const columns = listview && listview.columns;
         if (!Array.isArray(columns) || !columns.length) return false;
-        if (columns.some(column => columnFieldname(column) === IMPORTANT_FIELD)) return false;
 
-        // Existing saved layouts may predate ALMADINA-156. Keep the current
-        // important note visible while exposing it to Frappe List Settings so
-        // the user can choose and persist its order from the standard UI.
+        // Frappe already applies List Settings ordering in setup_columns().
+        // Never move an existing important-note column here; doing so can
+        // overwrite the freshly saved user order with stale runtime settings.
+        if (columns.some(column => listSettingsFieldname(column) === IMPORTANT_FIELD)) {
+            return false;
+        }
+
         const important = importantColumnDefinition();
         if (!important) return false;
-        const notesIndex = columns.findIndex(column => columnFieldname(column) === "order_notes");
-        if (notesIndex >= 0) {
-            columns.splice(notesIndex + 1, 0, important);
-        } else {
-            const tagIndex = columns.findIndex(column => column && column.type === "Tag");
-            columns.splice(tagIndex >= 0 ? tagIndex + 1 : Math.min(1, columns.length), 0, important);
+
+        let targetIndex = importantColumnTargetIndex(listview, columns);
+        if (targetIndex < 0) {
+            const notesIndex = columns.findIndex(
+                column => listSettingsFieldname(column) === "order_notes"
+            );
+            if (notesIndex >= 0) targetIndex = notesIndex + 1;
+            else {
+                const tagIndex = columns.findIndex(column => column && column.type === "Tag");
+                targetIndex = tagIndex >= 0 ? tagIndex + 1 : Math.min(1, columns.length);
+            }
         }
+        columns.splice(targetIndex, 0, important);
         return true;
     }
 
     function reconcileColumns(listview) {
         if (!listview || listview._almdinaNotesReconcilingColumns) return;
-        const before = (listview.columns || []).map(columnFieldname);
         if (!ensureImportantColumn(listview)) return;
-        const after = (listview.columns || []).map(columnFieldname);
-        if (arraysMatch(before, after)) return;
 
         listview._almdinaNotesReconcilingColumns = true;
         try {
@@ -274,11 +310,18 @@
         schedule(listview);
     }
 
+    function truncateImportantPreview(value, limit = IMPORTANT_PREVIEW_CHARACTERS) {
+        const text = String(value || "").trim();
+        const characters = Array.from(text);
+        if (characters.length <= limit) return text;
+        return `${characters.slice(0, Math.max(1, limit - 1)).join("").trimEnd()}…`;
+    }
+
     function formatter(value, df, doc) {
         const preview = String(value || "").trim();
         if (!preview) return "";
         const orderName = String(doc && doc.name || "").trim();
-        const short = preview.length > 58 ? `${preview.slice(0, 57).trim()}…` : preview;
+        const short = truncateImportantPreview(preview);
         return `
             <button type="button" class="dco-important-note-link" data-order-name="${escapeHtml(orderName)}" title="${escapeHtml(preview)}" aria-label="فتح الملاحظة المهمة: ${escapeHtml(preview)}">
                 <span class="dco-important-note-star" aria-hidden="true">★</span>
@@ -336,12 +379,15 @@
 
     window.AlmdinaDcoNotesListIntegration = Object.freeze({
         IMPORTANT_FIELD,
+        IMPORTANT_PREVIEW_CHARACTERS,
         disposeRuntime,
         ensureImportantColumn,
         ensureImportantFieldInListSettings,
         formatter,
+        importantColumnTargetIndex,
         reconcileColumns,
         reconcileMobileCards,
         refreshProjectionRows,
+        truncateImportantPreview,
     });
 })();
