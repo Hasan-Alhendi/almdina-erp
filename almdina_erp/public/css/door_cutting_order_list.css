@@ -6,68 +6,79 @@
  */
 
 @media (min-width: 601px) {
+    .dco-order-list .list-row-col[data-fieldname] {
+        margin-right: 6px !important;
+    }
+
     .dco-order-list .list-row-col[data-fieldname="name"] {
-        width: 108px !important;
-        min-width: 108px !important;
-        max-width: 108px !important;
-        flex: 0 0 108px !important;
+        width: 90px !important;
+        min-width: 90px !important;
+        max-width: 90px !important;
+        flex: 0 0 90px !important;
+    }
+
+    .dco-order-list .list-row-col[data-fieldname="status_field"] {
+        width: 92px !important;
+        min-width: 92px !important;
+        max-width: 92px !important;
+        flex: 0 0 92px !important;
     }
 
     .dco-order-list .list-row-col[data-fieldname="customer"] {
-        width: 150px !important;
-        min-width: 150px !important;
-        max-width: 150px !important;
-        flex: 0 0 150px !important;
+        width: 110px !important;
+        min-width: 110px !important;
+        max-width: 110px !important;
+        flex: 0 0 110px !important;
     }
 
     .dco-order-list .list-row-col[data-fieldname="order_date"] {
-        width: 96px !important;
-        min-width: 96px !important;
-        max-width: 96px !important;
-        flex: 0 0 96px !important;
+        width: 92px !important;
+        min-width: 92px !important;
+        max-width: 92px !important;
+        flex: 0 0 92px !important;
     }
 
     .dco-order-list .list-row-col[data-fieldname="board_description"] {
-        width: 175px !important;
-        min-width: 175px !important;
-        max-width: 175px !important;
-        flex: 0 0 175px !important;
+        width: 140px !important;
+        min-width: 140px !important;
+        max-width: 140px !important;
+        flex: 0 0 140px !important;
     }
 
     .dco-order-list .list-row-col[data-fieldname="edge_color"] {
-        width: 120px !important;
-        min-width: 120px !important;
-        max-width: 120px !important;
-        flex: 0 0 120px !important;
+        width: 105px !important;
+        min-width: 105px !important;
+        max-width: 105px !important;
+        flex: 0 0 105px !important;
     }
 
     .dco-order-list .list-row-col[data-fieldname="order_notes"],
     .dco-order-list .list-row-col[data-fieldname="important_note_preview"] {
-        width: 175px !important;
-        min-width: 175px !important;
-        max-width: 175px !important;
-        flex: 0 0 175px !important;
+        width: 140px !important;
+        min-width: 140px !important;
+        max-width: 140px !important;
+        flex: 0 0 140px !important;
     }
 
     .dco-order-list .list-row-col[data-fieldname="production_path"] {
-        width: 135px !important;
-        min-width: 135px !important;
-        max-width: 135px !important;
-        flex: 0 0 135px !important;
+        width: 115px !important;
+        min-width: 115px !important;
+        max-width: 115px !important;
+        flex: 0 0 115px !important;
     }
 
     .dco-order-list .list-row-col[data-fieldname="current_department"] {
-        width: 130px !important;
-        min-width: 130px !important;
-        max-width: 130px !important;
-        flex: 0 0 130px !important;
+        width: 110px !important;
+        min-width: 110px !important;
+        max-width: 110px !important;
+        flex: 0 0 110px !important;
     }
 
     .dco-order-list .list-row-col[data-fieldname="current_assignee"] {
-        width: 145px !important;
-        min-width: 145px !important;
-        max-width: 145px !important;
-        flex: 0 0 145px !important;
+        width: 115px !important;
+        min-width: 115px !important;
+        max-width: 115px !important;
+        flex: 0 0 115px !important;
     }
 
     .dco-order-list .list-row-col[data-fieldname="name"],
