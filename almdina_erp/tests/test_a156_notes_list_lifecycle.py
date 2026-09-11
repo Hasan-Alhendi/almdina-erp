@@ -33,7 +33,7 @@ class TestA156NotesListLifecycle(unittest.TestCase):
         self.assertIn("fields.splice(notesIndex >= 0 ? notesIndex + 1 : fields.length, 0, entry)", body)
         self.assertIn("settings.fields = JSON.stringify(fields)", body)
 
-    def test_saved_list_settings_order_is_authoritative_for_important_note(self) -> None:
+    def test_saved_list_settings_order_is_used_only_when_column_must_be_restored(self) -> None:
         body = self.source.split("function importantColumnTargetIndex", 1)[1].split(
             "function ensureImportantColumn",
             1,
@@ -44,17 +44,29 @@ class TestA156NotesListLifecycle(unittest.TestCase):
         self.assertIn("return nextIndex", body)
         self.assertIn("return previousIndex + 1", body)
 
-    def test_existing_or_missing_important_column_is_reconciled_to_saved_position(self) -> None:
+    def test_existing_important_column_keeps_frappe_native_saved_order(self) -> None:
         body = self.source.split("function ensureImportantColumn", 1)[1].split(
             "function reconcileColumns",
             1,
         )[0]
         self.assertIn("ensureImportantFieldInListSettings(listview)", body)
-        self.assertIn("const currentIndex = columns.findIndex", body)
-        self.assertIn("columns.splice(currentIndex, 1)[0]", body)
+        self.assertIn(
+            "if (columns.some(column => listSettingsFieldname(column) === IMPORTANT_FIELD))",
+            body,
+        )
+        self.assertIn("return false;", body)
+        self.assertNotIn("columns.splice(currentIndex, 1)[0]", body)
+        self.assertNotIn("const before = columns.map", body)
+        self.assertNotIn("arraysMatch", self.source)
+
+    def test_missing_important_column_is_restored_at_saved_position(self) -> None:
+        body = self.source.split("function ensureImportantColumn", 1)[1].split(
+            "function reconcileColumns",
+            1,
+        )[0]
         self.assertIn("importantColumnTargetIndex(listview, columns)", body)
         self.assertIn("columns.splice(targetIndex, 0, important)", body)
-        self.assertIn("return !arraysMatch(before, after)", body)
+        self.assertIn("return true;", body)
 
     def test_desktop_important_preview_is_capped_at_exactly_22_characters(self) -> None:
         self.assertIn("const IMPORTANT_PREVIEW_CHARACTERS = 22;", self.source)
