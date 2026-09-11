@@ -72,13 +72,14 @@ class TestA156NotesListLifecycle(unittest.TestCase):
         self.assertIn("refreshProjectionRows(listview)", event_body)
         self.assertIn("schedule(listview)", event_body)
 
-    def test_new_list_instance_disposes_previous_runtime(self) -> None:
+    def test_new_list_instance_disposes_previous_runtime_and_syncs_settings(self) -> None:
         body = self.source.split("function installRuntime", 1)[1].split(
             "function formatter",
             1,
         )[0]
         self.assertIn("activeListView && activeListView !== listview", body)
         self.assertIn("disposeRuntime(activeListView)", body)
+        self.assertIn("ensureImportantFieldInListSettings(listview)", body)
 
     def test_route_change_releases_dco_list_observers(self) -> None:
         self.assertIn('frappe.router.on("change"', self.source)
