@@ -4,8 +4,10 @@ from typing import Any
 
 import frappe
 from frappe.model.document import Document
+from frappe.model.naming import make_autoname
 
 from almdina_erp.almdina_erp.application.orders.process_order_save import process_order_save
+from almdina_erp.almdina_erp.domain.orders.order_identity import ORDER_NAME_SERIES
 from almdina_erp.almdina_erp.infrastructure.frappe.orders import FrappeDoorCuttingOrderSaveGateway
 from almdina_erp.almdina_erp.infrastructure.frappe.orders.document_access import FrappeOrderDocumentAccess
 from almdina_erp.almdina_erp.infrastructure.frappe.orders.plan_adapter import FrappeOrderPlanAdapter
@@ -24,6 +26,11 @@ class DoorCuttingOrder(Document):
     the framework base plus a small set of historical helper signatures still
     used by preview/simulation paths while they migrate independently.
     """
+
+    def autoname(self) -> None:
+        """Assign the canonical compact order identifier at document creation."""
+
+        self.name = make_autoname(ORDER_NAME_SERIES, doc=self)
 
     def _gateway(self) -> FrappeDoorCuttingOrderSaveGateway:
         gateway = self.flags.get("_order_save_gateway")

@@ -8,6 +8,7 @@ coverage.
 app_include_css = [
     "/assets/almdina_erp/css/door_cutting_order_measurement_structure.css",
     "/assets/almdina_erp/css/door_cutting_order_responsive.css",
+    "/assets/almdina_erp/css/door_cutting_order_list.css",
     "/assets/almdina_erp/css/door_cutting_order_extra_addons.css",
     "/assets/almdina_erp/css/notes.css",
     "/assets/almdina_erp/css/notes_interactions.css",
@@ -18,6 +19,9 @@ app_include_js = [
     "/assets/almdina_erp/js/frontend_foundation.js",
     "/assets/almdina_erp/js/notes/notes_panel.js",
     "/assets/almdina_erp/js/notes/notes_dco_list_integration.js",
+    # Lightweight presentation policy only: it composes ListView formatters and
+    # leaves lifecycle/runtime ownership with the canonical DCO list controller.
+    "/assets/almdina_erp/js/door_cutting_order/list_view/door_cutting_order_compact_list_ux.js",
     "/assets/almdina_erp/js/page_revisit_refresh.js",
     "/assets/almdina_erp/js/responsive_device.js",
     "/assets/almdina_erp/js/shop_floor_quick_actions.js",

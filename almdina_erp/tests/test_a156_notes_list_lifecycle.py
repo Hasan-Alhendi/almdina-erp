@@ -22,25 +22,39 @@ class TestA156NotesListLifecycle(unittest.TestCase):
         self.assertIn('removeEventListener("click", listview._almdinaNotesClickHandler)', body)
         self.assertIn("activeListView === listview", body)
 
-    def test_saved_list_layout_cannot_hide_mandatory_important_signal(self) -> None:
+    def test_saved_layout_exposes_important_note_to_list_settings(self) -> None:
+        body = self.source.split("function ensureImportantFieldInListSettings", 1)[1].split(
+            "function ensureImportantColumn",
+            1,
+        )[0]
+        self.assertIn("savedListSettingsFields(listview)", body)
+        self.assertIn("fieldname: IMPORTANT_FIELD", body)
+        self.assertIn('fieldname || "") === "order_notes"', body)
+        self.assertIn("fields.splice(notesIndex >= 0 ? notesIndex + 1 : fields.length, 0, entry)", body)
+        self.assertIn("settings.fields = JSON.stringify(fields)", body)
+
+    def test_saved_list_layout_still_restores_mandatory_important_signal(self) -> None:
         body = self.source.split("function ensureImportantColumn", 1)[1].split(
             "function reconcileColumns",
             1,
         )[0]
+        self.assertIn("ensureImportantFieldInListSettings(listview)", body)
         self.assertIn("importantColumnDefinition()", body)
         self.assertIn('columnFieldname(column) === "order_notes"', body)
         self.assertIn("columns.splice(notesIndex + 1, 0, important)", body)
         self.assertIn("tagIndex", body)
-        self.assertIn("preserve", body.lower())
 
-    def test_existing_important_column_is_reordered_beside_order_notes(self) -> None:
-        body = self.source.split("function reorderImportantColumn", 1)[1].split(
-            "function ensureImportantColumn",
+    def test_existing_important_column_keeps_user_selected_order(self) -> None:
+        body = self.source.split("function ensureImportantColumn", 1)[1].split(
+            "function reconcileColumns",
             1,
         )[0]
-        self.assertIn('names.indexOf("order_notes")', body)
-        self.assertIn("names.indexOf(IMPORTANT_FIELD)", body)
-        self.assertIn("columns.splice(nextNotesIndex + 1, 0, important)", body)
+        self.assertIn(
+            "if (columns.some(column => columnFieldname(column) === IMPORTANT_FIELD)) return false;",
+            body,
+        )
+        self.assertNotIn("reorderImportantColumn", self.source)
+        self.assertNotIn("nextNotesIndex", self.source)
 
     def test_projection_event_immediately_refreshes_desktop_rows(self) -> None:
         helper = self.source.split("function refreshProjectionRows", 1)[1].split(
@@ -58,13 +72,14 @@ class TestA156NotesListLifecycle(unittest.TestCase):
         self.assertIn("refreshProjectionRows(listview)", event_body)
         self.assertIn("schedule(listview)", event_body)
 
-    def test_new_list_instance_disposes_previous_runtime(self) -> None:
+    def test_new_list_instance_disposes_previous_runtime_and_syncs_settings(self) -> None:
         body = self.source.split("function installRuntime", 1)[1].split(
             "function formatter",
             1,
         )[0]
         self.assertIn("activeListView && activeListView !== listview", body)
         self.assertIn("disposeRuntime(activeListView)", body)
+        self.assertIn("ensureImportantFieldInListSettings(listview)", body)
 
     def test_route_change_releases_dco_list_observers(self) -> None:
         self.assertIn('frappe.router.on("change"', self.source)
