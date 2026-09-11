@@ -39,15 +39,12 @@ class TestDcoCompactListUx(unittest.TestCase):
             manifest,
         )
 
-    def test_id_compaction_is_display_only(self) -> None:
+    def test_list_uses_canonical_document_name_without_display_only_id_rewrite(self) -> None:
         source = LIST_JS.read_text(encoding="utf-8")
 
-        self.assertIn(r'/^DCO-(\d{4})-(.+)$/', source)
-        self.assertIn('match[1].slice(-2)', source)
-        self.assertIn('name: compactOrderId', source)
-        self.assertNotIn('doc.name =', source)
-        self.assertNotIn('set_value', source)
-        self.assertNotIn('rename_doc', source)
+        self.assertNotIn("compactOrderId", source)
+        self.assertNotIn("name: compactOrderId", source)
+        self.assertNotIn(r"/^DCO-(\d{4})-(.+)$/", source)
 
     def test_long_text_is_capped_at_22_characters_and_remains_keyboard_filterable(self) -> None:
         source = LIST_JS.read_text(encoding="utf-8")
@@ -93,7 +90,7 @@ class TestDcoCompactListUx(unittest.TestCase):
 
         self.assertIn('const existing = frappe.listview_settings[DOCTYPE] || {};', source)
         self.assertIn('const originalOnload = existing.onload;', source)
-        self.assertIn('Object.assign({}, existing.formatters || {}, {', source)
+        self.assertIn('const formatters = Object.assign({}, existing.formatters || {});', source)
         self.assertIn('onload(listview)', source)
         self.assertIn('applyDefaultDesktopPageLength(listview);', source)
         self.assertNotIn('style.textContent', source)
@@ -116,7 +113,7 @@ class TestDcoCompactListUx(unittest.TestCase):
         self.assertIn('data-value="${DEFAULT_DESKTOP_PAGE_LENGTH}"', source)
         self.assertIn('listview._dcoDefaultPageLengthApplied = true;', source)
 
-    def test_column_widths_live_in_external_css_and_use_stable_field_selectors(self) -> None:
+    def test_column_widths_and_hidden_activity_areas_are_dco_scoped(self) -> None:
         css = LIST_CSS.read_text(encoding="utf-8")
 
         self.assertIn('@media (min-width: 601px)', css)
@@ -131,6 +128,7 @@ class TestDcoCompactListUx(unittest.TestCase):
         self.assertIn('width: 100px !important;', css)
         self.assertIn('.dco-order-list .list-row-col[data-fieldname="current_production_stage"]', css)
         self.assertIn('.dco-order-list .list-row-col[data-fieldname="department_status"]', css)
+        self.assertIn('.dco-order-list .list-row-head > .level-right', css)
         self.assertIn('.dco-order-list .list-row > .level-right', css)
         self.assertIn('display: none !important;', css)
         self.assertIn('.dco-order-list .dco-list-filterable-text', css)
