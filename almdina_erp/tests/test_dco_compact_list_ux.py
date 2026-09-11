@@ -73,27 +73,47 @@ class TestDcoCompactListUx(unittest.TestCase):
         self.assertIn('aria-label=', source)
         self.assertNotIn('<a class="filterable dco-list-compact-text', source)
 
-    def test_compact_module_is_formatter_only_and_has_no_lifecycle_or_inline_styles(self) -> None:
+    def test_compact_module_has_bounded_initialization_and_no_parallel_runtime(self) -> None:
         source = LIST_JS.read_text(encoding="utf-8")
 
         self.assertIn('const existing = frappe.listview_settings[DOCTYPE] || {};', source)
+        self.assertIn('const originalOnload = existing.onload;', source)
         self.assertIn('Object.assign({}, existing.formatters || {}, {', source)
+        self.assertIn('onload(listview)', source)
+        self.assertIn('applyDefaultDesktopPageLength(listview);', source)
         self.assertNotIn('style.textContent', source)
         self.assertNotIn('document.createElement', source)
         self.assertNotIn('MutationObserver', source)
         self.assertNotIn('setTimeout', source)
+        self.assertNotIn('setInterval', source)
         self.assertNotIn('frappe.call', source)
-        self.assertNotIn('onload(listview)', source)
         self.assertNotIn('refresh(listview)', source)
+
+    def test_default_desktop_page_length_is_500_without_changing_mobile_default(self) -> None:
+        source = LIST_JS.read_text(encoding="utf-8")
+
+        self.assertIn('const DEFAULT_DESKTOP_PAGE_LENGTH = 500;', source)
+        self.assertIn('typeof frappe.is_mobile === "function" && frappe.is_mobile()', source)
+        self.assertIn('if (isMobile) return;', source)
+        self.assertIn('listview.start = 0;', source)
+        self.assertIn('listview.page_length = DEFAULT_DESKTOP_PAGE_LENGTH;', source)
+        self.assertIn('listview.selected_page_count = DEFAULT_DESKTOP_PAGE_LENGTH;', source)
+        self.assertIn('data-value="${DEFAULT_DESKTOP_PAGE_LENGTH}"', source)
+        self.assertIn('listview._dcoDefaultPageLengthApplied = true;', source)
 
     def test_column_widths_live_in_external_css_and_use_stable_field_selectors(self) -> None:
         css = LIST_CSS.read_text(encoding="utf-8")
 
         self.assertIn('@media (min-width: 601px)', css)
+        self.assertIn('.dco-order-list .list-row-col[data-fieldname] {', css)
+        self.assertIn('margin-right: 6px !important;', css)
         self.assertIn('.dco-order-list .list-row-col[data-fieldname="name"]', css)
-        self.assertIn('width: 108px !important;', css)
+        self.assertIn('width: 90px !important;', css)
+        self.assertIn('.dco-order-list .list-row-col[data-fieldname="status_field"]', css)
+        self.assertIn('width: 92px !important;', css)
         self.assertIn('.dco-order-list .list-row-col[data-fieldname="order_date"]', css)
-        self.assertIn('width: 96px !important;', css)
+        self.assertIn('.dco-order-list .list-row-col[data-fieldname="customer"]', css)
+        self.assertIn('width: 110px !important;', css)
         self.assertIn('.dco-order-list .dco-list-filterable-text', css)
         self.assertNotIn('nth-child', css)
 
