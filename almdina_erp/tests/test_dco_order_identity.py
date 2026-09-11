@@ -21,11 +21,13 @@ class TestDcoOrderIdentity(unittest.TestCase):
         self.assertEqual(ORDER_NAME_SERIES, "YY.-.#####")
         self.assertEqual(compact_legacy_order_name("DCO-2026-00001"), "26-00001")
         self.assertEqual(compact_legacy_order_name("DCO-2026-00055"), "26-00055")
+        self.assertEqual(compact_legacy_order_name("DCO-2026-000023"), "26-000023")
         self.assertIsNone(compact_legacy_order_name("26-00001"))
         self.assertIsNone(compact_legacy_order_name("DCO-26-00001"))
 
     def test_compact_sequence_parser_supports_counter_synchronization(self) -> None:
         self.assertEqual(compact_order_sequence("26-00055"), ("26", 55))
+        self.assertEqual(compact_order_sequence("26-000023"), ("26", 23))
         self.assertEqual(compact_order_sequence("27-00001"), ("27", 1))
         self.assertIsNone(compact_order_sequence("DCO-2026-00055"))
 
