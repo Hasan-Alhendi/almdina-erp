@@ -102,6 +102,7 @@
         flex: 0 0 95px !important;
     }
 
+    .dco-order-list .list-row-head > .level-right,
     .dco-order-list .list-row > .level-right {
         display: none !important;
     }
