@@ -102,15 +102,8 @@
         flex: 0 0 95px !important;
     }
 
-    .dco-order-list .result.no-assign-to .list-row .level-right {
-        width: 86px !important;
-        flex: 0 0 86px !important;
-        padding-inline: 4px !important;
-    }
-
-    .dco-order-list .list-row-activity .modified {
-        min-width: auto !important;
-        margin-right: 2px !important;
+    .dco-order-list .list-row > .level-right {
+        display: none !important;
     }
 
     .dco-order-list .list-row-col[data-fieldname="name"],
