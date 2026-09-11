@@ -21,12 +21,6 @@
             .replaceAll("'", "&#039;");
     }
 
-    function compactOrderId(value) {
-        const text = String(value ?? "").trim();
-        const match = /^DCO-(\d{4})-(.+)$/.exec(text);
-        return match ? `${match[1].slice(-2)}-${match[2]}` : text;
-    }
-
     function truncateListText(value, limit = MAX_TEXT_CHARACTERS) {
         const text = String(value ?? "").trim();
         const characters = Array.from(text);
@@ -70,9 +64,7 @@
     frappe.listview_settings = frappe.listview_settings || {};
     const existing = frappe.listview_settings[DOCTYPE] || {};
     const originalOnload = existing.onload;
-    const formatters = Object.assign({}, existing.formatters || {}, {
-        name: compactOrderId,
-    });
+    const formatters = Object.assign({}, existing.formatters || {});
 
     TRUNCATED_TEXT_FIELDS.forEach(fieldname => {
         formatters[fieldname] = compactListTextFormatter;
@@ -91,7 +83,6 @@
         MAX_TEXT_CHARACTERS,
         applyDefaultDesktopPageLength,
         compactListTextFormatter,
-        compactOrderId,
         truncateListText,
     });
 })();
