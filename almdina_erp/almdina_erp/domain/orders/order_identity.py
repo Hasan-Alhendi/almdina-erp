@@ -5,8 +5,8 @@ import re
 
 ORDER_NAME_SERIES = "YY.-.#####"
 
-_LEGACY_ORDER_NAME_RE = re.compile(r"^DCO-(?P<year>\d{4})-(?P<number>\d{5})$")
-_COMPACT_ORDER_NAME_RE = re.compile(r"^(?P<year>\d{2})-(?P<number>\d{5})$")
+_LEGACY_ORDER_NAME_RE = re.compile(r"^DCO-(?P<year>\d{4})-(?P<number>\d{5,})$")
+_COMPACT_ORDER_NAME_RE = re.compile(r"^(?P<year>\d{2})-(?P<number>\d{5,})$")
 
 
 def compact_legacy_order_name(name: str) -> str | None:
