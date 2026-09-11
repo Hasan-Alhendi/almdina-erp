@@ -57,7 +57,7 @@ def _synchronize_compact_series() -> None:
 
 
 def execute() -> None:
-    if not frappe.db.table_exists(f"tab{DOCTYPE}"):
+    if not frappe.db.table_exists(DOCTYPE):
         return
 
     names = frappe.get_all(DOCTYPE, pluck="name", order_by="name asc")
