@@ -120,6 +120,17 @@ def get_order_operational_role_flags(order_names: Any = None) -> dict[str, Any]:
 
 
 @frappe.whitelist()
+def get_assignee_filter_options() -> list[dict[str, str]]:
+    """Workers currently assigned to Door Cutting Orders visible to the actor."""
+
+    require_doctype_capability(
+        Capability.VIEW_ORDERS,
+        message=_("لا تملك صلاحية عرض الطلبات."),
+    )
+    return order_list_query.get_assignee_filter_options(_order_list_repository)
+
+
+@frappe.whitelist()
 def get_status_filter_options() -> list[dict[str, str]]:
     """Canonical visible Status values for the Door Cutting Order list."""
 
@@ -131,6 +142,7 @@ def get_status_filter_options() -> list[dict[str, str]]:
 
 
 __all__ = [
+    "get_assignee_filter_options",
     "get_status_filter_options",
     "get_dispatch_options",
     "get_current_stage_context",

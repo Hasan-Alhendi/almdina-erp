@@ -5,6 +5,7 @@
         doctype: "Door Cutting Order",
         roleFlags: "almdina_erp.almdina_erp.services.shop_floor_query_service.get_order_operational_role_flags",
         statusFilterOptions: "almdina_erp.almdina_erp.services.shop_floor_query_service.get_status_filter_options",
+        assigneeFilterOptions: "almdina_erp.almdina_erp.services.shop_floor_query_service.get_assignee_filter_options",
     });
     const KANBAN_CARD_FIELDS = Object.freeze([
         "customer",
@@ -101,13 +102,17 @@
     const STATUS_FILTER_SLOT_CLASS = "dco-status-filter-slot";
     const STATUS_FILTER_FIELDNAME = "status";
     const STATUS_FILTER_ALL_LABEL = "كل الحالات";
+    const ASSIGNEE_FILTER_FIELDNAME = "current_assignee";
+    const ASSIGNEE_FILTER_ALL_LABEL = "كل العمال";
     const DEFAULT_STATUS_OPTIONS = Object.freeze([
         Object.freeze({ value: "Draft", label: "Draft" }),
         Object.freeze({ value: "Delivered", label: "Delivered" }),
         Object.freeze({ value: "Cancelled", label: "Cancelled" }),
     ]);
     let loadedStatusOptions = [...DEFAULT_STATUS_OPTIONS];
+    let loadedAssigneeOptions = [];
     let statusOptionsGeneration = 0;
+    let assigneeOptionsGeneration = 0;
 
     frappe.listview_settings = frappe.listview_settings || {};
     const existing = frappe.listview_settings[METHODS.doctype] || {};
@@ -408,9 +413,35 @@
         };
     }
 
+    function assigneeFilterOptions() {
+        return [
+            { value: "", label: __(ASSIGNEE_FILTER_ALL_LABEL) },
+            ...loadedAssigneeOptions.map(option => ({
+                value: option.value,
+                label: option.label,
+            })),
+        ];
+    }
+
+    function assigneeFilterConfig() {
+        return {
+            fieldtype: "Select",
+            fieldname: ASSIGNEE_FILTER_FIELDNAME,
+            label: __("العامل الحالي"),
+            options: assigneeFilterOptions(),
+            condition: "=",
+        };
+    }
+
     function statusFilterField(listview) {
         return listview && listview.page && listview.page.fields_dict
             ? listview.page.fields_dict[STATUS_FILTER_FIELDNAME]
+            : null;
+    }
+
+    function assigneeFilterField(listview) {
+        return listview && listview.page && listview.page.fields_dict
+            ? listview.page.fields_dict[ASSIGNEE_FILTER_FIELDNAME]
             : null;
     }
 
@@ -469,6 +500,16 @@
         select.setAttribute("title", __(STATUS_FILTER_ALL_LABEL));
     }
 
+    function applyAssigneeFilterHint(listview) {
+        const field = assigneeFilterField(listview);
+        const wrapper = controlWrapper(field);
+        if (!wrapper || typeof wrapper.querySelector !== "function") return;
+        const select = wrapper.querySelector("select");
+        if (!select) return;
+        select.setAttribute("aria-label", __("العامل الحالي"));
+        select.setAttribute("title", __(ASSIGNEE_FILTER_ALL_LABEL));
+    }
+
     function applyLoadedStatusFilterOptions(listview, rows) {
         loadedStatusOptions = uniqueStatusOptions(rows);
         const field = statusFilterField(listview);
@@ -498,15 +539,47 @@
         });
     }
 
+    function applyLoadedAssigneeFilterOptions(listview, rows) {
+        loadedAssigneeOptions = uniqueStatusOptions(rows);
+        const field = assigneeFilterField(listview);
+        if (!field || !field.df) return true;
+        const current = typeof field.get_value === "function" ? field.get_value() : "";
+        field.df.options = assigneeFilterOptions();
+        if (typeof field.set_options === "function") field.set_options(current);
+        if (current && typeof field.set_input === "function") field.set_input(current);
+        applyAssigneeFilterHint(listview);
+        return true;
+    }
+
+    function hydrateAssigneeFilterOptions(listview) {
+        if (!listview || !window.frappe || typeof frappe.call !== "function") return;
+        const generation = ++assigneeOptionsGeneration;
+        listview._dcoAssigneeOptionsGeneration = generation;
+        frappe.call({
+            method: METHODS.assigneeFilterOptions,
+            freeze: false,
+        }).then((response) => {
+            if (listview._dcoAssigneeOptionsGeneration !== generation) return;
+            applyLoadedAssigneeFilterOptions(listview, response && response.message);
+        }).catch(() => {
+            if (listview._dcoAssigneeOptionsGeneration === generation) {
+                loadedAssigneeOptions = [];
+            }
+        });
+    }
+
     function reconcileStatusFilterLayout(listview) {
         const root = rootNode(listview);
-        const wrapper = controlWrapper(statusFilterField(listview));
-        if (!root || !wrapper) return false;
+        const statusWrapper = controlWrapper(statusFilterField(listview));
+        const assigneeWrapper = controlWrapper(assigneeFilterField(listview));
+        if (!root || !statusWrapper || !assigneeWrapper) return false;
 
         const target = ensureStatusFilterSlot(root);
         if (!target) return false;
-        if (wrapper.parentNode !== target) target.appendChild(wrapper);
+        if (statusWrapper.parentNode !== target) target.appendChild(statusWrapper);
+        if (assigneeWrapper.parentNode !== target) target.appendChild(assigneeWrapper);
         applyStatusFilterHint(listview);
+        applyAssigneeFilterHint(listview);
         return true;
     }
 
@@ -1377,6 +1450,7 @@
         installRowsObserver(listview);
         reconcileStatusFilterLayout(listview);
         hydrateStatusFilterOptions(listview);
+        hydrateAssigneeFilterOptions(listview);
     }
 
     frappe.listview_settings[METHODS.doctype] = Object.assign({}, existing, {
@@ -1391,6 +1465,7 @@
         custom_filter_configs: [
             ...(Array.isArray(existing.custom_filter_configs) ? existing.custom_filter_configs : []),
             statusFilterConfig(),
+            assigneeFilterConfig(),
         ],
         formatters: Object.assign({}, existing.formatters || {}, {
             current_department(value, df, doc) {
@@ -1425,7 +1500,10 @@
     window.AlmdinaDoorCuttingOrderListUX = Object.freeze({
         applyDesktopDeliveryRowColors,
         applyKanbanCardPresentation,
+        applyLoadedAssigneeFilterOptions,
         applyLoadedStatusFilterOptions,
+        assigneeFilterConfig,
+        assigneeFilterOptions,
         buildCard,
         cardViewModel,
         desktopDeliveryRowState,
