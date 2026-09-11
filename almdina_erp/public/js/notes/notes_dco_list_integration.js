@@ -34,10 +34,6 @@
         return column && column.type === "Status" ? "status_field" : "";
     }
 
-    function arraysMatch(left, right) {
-        return left.length === right.length && left.every((value, index) => value === right[index]);
-    }
-
     function importantColumnDefinition() {
         if (!window.frappe || !frappe.meta || typeof frappe.meta.get_docfield !== "function") return null;
         const df = frappe.meta.get_docfield(DOCTYPE, IMPORTANT_FIELD);
@@ -105,13 +101,15 @@
 
         const columns = listview && listview.columns;
         if (!Array.isArray(columns) || !columns.length) return false;
-        const before = columns.map(listSettingsFieldname);
-        const currentIndex = columns.findIndex(
-            column => listSettingsFieldname(column) === IMPORTANT_FIELD
-        );
-        const important = currentIndex >= 0
-            ? columns.splice(currentIndex, 1)[0]
-            : importantColumnDefinition();
+
+        // Frappe already applies List Settings ordering in setup_columns().
+        // Never move an existing important-note column here; doing so can
+        // overwrite the freshly saved user order with stale runtime settings.
+        if (columns.some(column => listSettingsFieldname(column) === IMPORTANT_FIELD)) {
+            return false;
+        }
+
+        const important = importantColumnDefinition();
         if (!important) return false;
 
         let targetIndex = importantColumnTargetIndex(listview, columns);
@@ -126,9 +124,7 @@
             }
         }
         columns.splice(targetIndex, 0, important);
-
-        const after = columns.map(listSettingsFieldname);
-        return !arraysMatch(before, after);
+        return true;
     }
 
     function reconcileColumns(listview) {
