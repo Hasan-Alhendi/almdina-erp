@@ -131,8 +131,8 @@ class TestDcoCompactListUx(unittest.TestCase):
         self.assertIn('width: 100px !important;', css)
         self.assertIn('.dco-order-list .list-row-col[data-fieldname="current_production_stage"]', css)
         self.assertIn('.dco-order-list .list-row-col[data-fieldname="department_status"]', css)
-        self.assertIn('.dco-order-list .result.no-assign-to .list-row .level-right', css)
-        self.assertIn('flex: 0 0 86px !important;', css)
+        self.assertIn('.dco-order-list .list-row > .level-right', css)
+        self.assertIn('display: none !important;', css)
         self.assertIn('.dco-order-list .dco-list-filterable-text', css)
         self.assertNotIn('nth-child', css)
 
