@@ -3,6 +3,7 @@
 
     const DOCTYPE = "Door Cutting Order";
     const MAX_TEXT_CHARACTERS = 22;
+    const DEFAULT_DESKTOP_PAGE_LENGTH = 500;
     const TRUNCATED_TEXT_FIELDS = Object.freeze([
         "board_description",
         "order_notes",
@@ -46,8 +47,28 @@
         return `<button type="button" class="filterable dco-list-compact-text dco-list-filterable-text ellipsis" data-filter="${escapeHtml(fieldname)},=,${escapeHtml(fullText)}" title="${escapeHtml(fullText)}" aria-label="${escapeHtml(fullText)}">${escapeHtml(shortText)}</button>`;
     }
 
+    function applyDefaultDesktopPageLength(listview) {
+        if (!listview || listview._dcoDefaultPageLengthApplied) return;
+        const isMobile = typeof frappe.is_mobile === "function" && frappe.is_mobile();
+        if (isMobile) return;
+
+        listview.start = 0;
+        listview.page_length = DEFAULT_DESKTOP_PAGE_LENGTH;
+        listview.selected_page_count = DEFAULT_DESKTOP_PAGE_LENGTH;
+        listview._dcoDefaultPageLengthApplied = true;
+
+        const pagingArea = listview.$paging_area;
+        if (!pagingArea || typeof pagingArea.find !== "function") return;
+        pagingArea.find(".btn-paging").removeClass("btn-info").prop("disabled", false);
+        pagingArea
+            .find(`.btn-paging[data-value="${DEFAULT_DESKTOP_PAGE_LENGTH}"]`)
+            .addClass("btn-info")
+            .prop("disabled", true);
+    }
+
     frappe.listview_settings = frappe.listview_settings || {};
     const existing = frappe.listview_settings[DOCTYPE] || {};
+    const originalOnload = existing.onload;
     const formatters = Object.assign({}, existing.formatters || {}, {
         name: compactOrderId,
     });
@@ -58,10 +79,16 @@
 
     frappe.listview_settings[DOCTYPE] = Object.assign({}, existing, {
         formatters,
+        onload(listview) {
+            if (typeof originalOnload === "function") originalOnload(listview);
+            applyDefaultDesktopPageLength(listview);
+        },
     });
 
     window.AlmdinaDcoCompactListUX = Object.freeze({
+        DEFAULT_DESKTOP_PAGE_LENGTH,
         MAX_TEXT_CHARACTERS,
+        applyDefaultDesktopPageLength,
         compactListTextFormatter,
         compactOrderId,
         truncateListText,
