@@ -44,7 +44,8 @@
             return `<span class="dco-list-compact-text ellipsis" title="${escapeHtml(fullText)}">${escapeHtml(shortText)}</span>`;
         }
 
-        return `<button type="button" class="filterable dco-list-compact-text dco-list-filterable-text ellipsis" data-filter="${escapeHtml(fieldname)},=,${escapeHtml(fullText)}" title="${escapeHtml(fullText)}" aria-label="${escapeHtml(fullText)}">${escapeHtml(shortText)}</button>`;
+        const boardClass = fieldname === "board_description" ? " dco-list-board-pill" : "";
+        return `<button type="button" class="filterable dco-list-compact-text dco-list-filterable-text ellipsis${boardClass}" data-filter="${escapeHtml(fieldname)},=,${escapeHtml(fullText)}" title="${escapeHtml(fullText)}" aria-label="${escapeHtml(fullText)}">${escapeHtml(shortText)}</button>`;
     }
 
     function applyDefaultDesktopPageLength(listview) {
