@@ -268,6 +268,7 @@
         if (!listview || listview.doctype !== DOCTYPE) return;
         if (activeListView && activeListView !== listview) disposeRuntime(activeListView);
         activeListView = listview;
+        ensureImportantFieldInListSettings(listview);
         installClickDelegation(listview);
         installObserver(listview);
         schedule(listview);
