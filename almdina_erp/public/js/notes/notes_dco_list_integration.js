@@ -37,39 +37,51 @@
         return df ? { type: "Field", df } : null;
     }
 
-    function reorderImportantColumn(listview) {
-        const columns = listview && listview.columns;
-        if (!Array.isArray(columns) || !columns.length) return false;
-        const names = columns.map(columnFieldname);
-        const notesIndex = names.indexOf("order_notes");
-        const importantIndex = names.indexOf(IMPORTANT_FIELD);
-        if (notesIndex < 0 || importantIndex < 0 || importantIndex === notesIndex + 1) return false;
+    function savedListSettingsFields(listview) {
+        const settings = listview && listview.list_view_settings;
+        if (!settings || !settings.fields) return null;
+        try {
+            const fields = JSON.parse(settings.fields);
+            return Array.isArray(fields) ? fields : null;
+        } catch (_error) {
+            return null;
+        }
+    }
 
-        const important = columns.splice(importantIndex, 1)[0];
-        const nextNotesIndex = columns.findIndex(column => columnFieldname(column) === "order_notes");
-        columns.splice(nextNotesIndex + 1, 0, important);
+    function ensureImportantFieldInListSettings(listview) {
+        const settings = listview && listview.list_view_settings;
+        const fields = savedListSettingsFields(listview);
+        if (!settings || !fields) return false;
+        if (fields.some(field => String(field && field.fieldname || "") === IMPORTANT_FIELD)) return false;
+
+        const important = importantColumnDefinition();
+        if (!important) return false;
+        const entry = {
+            fieldname: IMPORTANT_FIELD,
+            label: important.df.label || "ملاحظة مهمة",
+        };
+        const notesIndex = fields.findIndex(field => String(field && field.fieldname || "") === "order_notes");
+        fields.splice(notesIndex >= 0 ? notesIndex + 1 : fields.length, 0, entry);
+        settings.fields = JSON.stringify(fields);
         return true;
     }
 
     function ensureImportantColumn(listview) {
+        ensureImportantFieldInListSettings(listview);
+
         const columns = listview && listview.columns;
         if (!Array.isArray(columns) || !columns.length) return false;
-        if (columns.some(column => columnFieldname(column) === IMPORTANT_FIELD)) {
-            return reorderImportantColumn(listview);
-        }
+        if (columns.some(column => columnFieldname(column) === IMPORTANT_FIELD)) return false;
 
-        // Frappe's saved List View layout can omit an in_list_view field even
-        // though the value is fetched. ALMADINA-156 makes the current important
-        // note a mandatory operational signal, so restore only this read-only
-        // projection column without rewriting the user's saved layout.
+        // Existing saved layouts may predate ALMADINA-156. Keep the current
+        // important note visible while exposing it to Frappe List Settings so
+        // the user can choose and persist its order from the standard UI.
         const important = importantColumnDefinition();
         if (!important) return false;
         const notesIndex = columns.findIndex(column => columnFieldname(column) === "order_notes");
         if (notesIndex >= 0) {
             columns.splice(notesIndex + 1, 0, important);
         } else {
-            // If a user intentionally hid the legacy order_notes column, preserve
-            // that choice while still showing the mandatory important signal.
             const tagIndex = columns.findIndex(column => column && column.type === "Tag");
             columns.splice(tagIndex >= 0 ? tagIndex + 1 : Math.min(1, columns.length), 0, important);
         }
@@ -325,6 +337,7 @@
         IMPORTANT_FIELD,
         disposeRuntime,
         ensureImportantColumn,
+        ensureImportantFieldInListSettings,
         formatter,
         reconcileColumns,
         reconcileMobileCards,
