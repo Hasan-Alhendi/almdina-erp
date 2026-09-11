@@ -7,78 +7,110 @@
 
 @media (min-width: 601px) {
     .dco-order-list .list-row-col[data-fieldname] {
-        margin-right: 6px !important;
+        width: 110px !important;
+        min-width: 80px !important;
+        max-width: 110px !important;
+        flex: 0 0 110px !important;
+        margin-right: 3px !important;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 
     .dco-order-list .list-row-col[data-fieldname="name"] {
+        width: 82px !important;
+        min-width: 82px !important;
+        max-width: 82px !important;
+        flex: 0 0 82px !important;
+    }
+
+    .dco-order-list .list-row-col[data-fieldname="status_field"] {
+        width: 82px !important;
+        min-width: 82px !important;
+        max-width: 82px !important;
+        flex: 0 0 82px !important;
+    }
+
+    .dco-order-list .list-row-col[data-fieldname="customer"] {
+        width: 100px !important;
+        min-width: 100px !important;
+        max-width: 100px !important;
+        flex: 0 0 100px !important;
+    }
+
+    .dco-order-list .list-row-col[data-fieldname="order_date"] {
+        width: 86px !important;
+        min-width: 86px !important;
+        max-width: 86px !important;
+        flex: 0 0 86px !important;
+    }
+
+    .dco-order-list .list-row-col[data-fieldname="board_description"] {
+        width: 120px !important;
+        min-width: 120px !important;
+        max-width: 120px !important;
+        flex: 0 0 120px !important;
+    }
+
+    .dco-order-list .list-row-col[data-fieldname="edge_color"] {
         width: 90px !important;
         min-width: 90px !important;
         max-width: 90px !important;
         flex: 0 0 90px !important;
     }
 
-    .dco-order-list .list-row-col[data-fieldname="status_field"] {
-        width: 92px !important;
-        min-width: 92px !important;
-        max-width: 92px !important;
-        flex: 0 0 92px !important;
-    }
-
-    .dco-order-list .list-row-col[data-fieldname="customer"] {
-        width: 110px !important;
-        min-width: 110px !important;
-        max-width: 110px !important;
-        flex: 0 0 110px !important;
-    }
-
-    .dco-order-list .list-row-col[data-fieldname="order_date"] {
-        width: 92px !important;
-        min-width: 92px !important;
-        max-width: 92px !important;
-        flex: 0 0 92px !important;
-    }
-
-    .dco-order-list .list-row-col[data-fieldname="board_description"] {
-        width: 140px !important;
-        min-width: 140px !important;
-        max-width: 140px !important;
-        flex: 0 0 140px !important;
-    }
-
-    .dco-order-list .list-row-col[data-fieldname="edge_color"] {
-        width: 105px !important;
-        min-width: 105px !important;
-        max-width: 105px !important;
-        flex: 0 0 105px !important;
-    }
-
     .dco-order-list .list-row-col[data-fieldname="order_notes"],
     .dco-order-list .list-row-col[data-fieldname="important_note_preview"] {
-        width: 140px !important;
-        min-width: 140px !important;
-        max-width: 140px !important;
-        flex: 0 0 140px !important;
+        width: 120px !important;
+        min-width: 120px !important;
+        max-width: 120px !important;
+        flex: 0 0 120px !important;
     }
 
     .dco-order-list .list-row-col[data-fieldname="production_path"] {
-        width: 115px !important;
-        min-width: 115px !important;
-        max-width: 115px !important;
-        flex: 0 0 115px !important;
+        width: 100px !important;
+        min-width: 100px !important;
+        max-width: 100px !important;
+        flex: 0 0 100px !important;
     }
 
     .dco-order-list .list-row-col[data-fieldname="current_department"] {
-        width: 110px !important;
-        min-width: 110px !important;
-        max-width: 110px !important;
-        flex: 0 0 110px !important;
+        width: 100px !important;
+        min-width: 100px !important;
+        max-width: 100px !important;
+        flex: 0 0 100px !important;
     }
 
     .dco-order-list .list-row-col[data-fieldname="current_assignee"] {
+        width: 100px !important;
+        min-width: 100px !important;
+        max-width: 100px !important;
+        flex: 0 0 100px !important;
+    }
+
+    .dco-order-list .list-row-col[data-fieldname="current_production_stage"] {
         width: 115px !important;
         min-width: 115px !important;
         max-width: 115px !important;
         flex: 0 0 115px !important;
+    }
+
+    .dco-order-list .list-row-col[data-fieldname="department_status"] {
+        width: 95px !important;
+        min-width: 95px !important;
+        max-width: 95px !important;
+        flex: 0 0 95px !important;
+    }
+
+    .dco-order-list .result.no-assign-to .list-row .level-right {
+        width: 86px !important;
+        flex: 0 0 86px !important;
+        padding-inline: 4px !important;
+    }
+
+    .dco-order-list .list-row-activity .modified {
+        min-width: auto !important;
+        margin-right: 2px !important;
     }
 
     .dco-order-list .list-row-col[data-fieldname="name"],
@@ -108,5 +140,33 @@
         line-height: inherit;
         text-align: start;
         cursor: pointer;
+    }
+
+    .dco-order-list .dco-list-filterable-text.dco-list-board-pill {
+        display: inline-block;
+        width: auto;
+        max-width: 100%;
+        padding: 3px 9px;
+        border: 1px solid var(--border-color);
+        border-radius: 999px;
+        background: var(--subtle-fg);
+        box-sizing: border-box;
+        text-align: center;
+    }
+
+    .dco-order-list .dco-list-edge-color {
+        display: block;
+        max-width: 100%;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        color: inherit !important;
+        font-weight: inherit !important;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 }
