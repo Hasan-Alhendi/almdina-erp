@@ -419,15 +419,12 @@
     }
 
     function editorHost(frm) {
-        const wrapper = actionSurface(frm);
-        if (!wrapper) return null;
-        const shell = wrapper.find(".dco-plan-actions-shell").first();
-        return shell.length ? shell : null;
+        return actionSurface(frm);
     }
 
     function markEditorDirty(host, dirty) {
         if (!host || !host.length) return;
-        host.find(EDITOR_SELECTOR).toggleClass("is-dirty", Boolean(dirty));
+        host.children(EDITOR_SELECTOR).first().toggleClass("is-dirty", Boolean(dirty));
     }
 
     function patchFromControl(store, control, frm) {
@@ -452,7 +449,7 @@
         if (!store || !state || !state.editing || !host) return false;
 
         installEditorStyles();
-        host.find(EDITOR_SELECTOR).remove();
+        host.children(EDITOR_SELECTOR).remove();
         const specs = planSettingSpecs(frm, state.draft || {});
         const fields = specs
             .map((spec) => fieldMarkup(spec, (state.draft || {})[spec.fieldname]))
@@ -469,7 +466,7 @@
                 <div class="dco-plan-settings-editor__grid">${fields}</div>
             </section>
         `);
-        const editor = host.find(EDITOR_SELECTOR).first();
+        const editor = host.children(EDITOR_SELECTOR).first();
         editor.find("[data-almdina-plan-setting]")
             .off("input.almdinaPlanEdit change.almdinaPlanEdit")
             .on("input.almdinaPlanEdit change.almdinaPlanEdit", function onSettingChanged() {
@@ -482,7 +479,7 @@
 
     function unmountDraftControls(frm) {
         const wrapper = actionSurface(frm);
-        if (wrapper) wrapper.find(EDITOR_SELECTOR).remove();
+        if (wrapper) wrapper.children(EDITOR_SELECTOR).remove();
     }
 
     function focusDraftControl(frm, fieldname) {

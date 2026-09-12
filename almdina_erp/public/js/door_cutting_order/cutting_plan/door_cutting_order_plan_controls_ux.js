@@ -444,14 +444,14 @@
         } else button.removeAttr("title");
     }
 
-    function installApprovalAction(frm, field) {
+    function installApprovalAction(frm, shell) {
         if (!can(frm, "approve_dxf") || !canMutateCurrentStage(frm)) {
-            field.$wrapper.find(".dco-approve-cutting-plan").remove();
+            shell.find(".dco-approve-cutting-plan").remove();
             return;
         }
-        let host = field.$wrapper.find(".dco-plan-actions").first();
-        if (!host.length) host = field.$wrapper;
-        let button = field.$wrapper.find(".dco-approve-cutting-plan").first();
+        let host = shell.find(".dco-plan-actions").first();
+        if (!host.length) host = shell;
+        let button = shell.find(".dco-approve-cutting-plan").first();
         if (!button.length) {
             button = $('<button type="button" class="btn btn-success btn-sm dco-approve-cutting-plan"></button>');
             host.append(button);
@@ -501,24 +501,21 @@
     function simplifyActions(frm) {
         const field = frm.fields_dict && frm.fields_dict.plan_control_actions;
         if (!field || !field.$wrapper) return;
-        if (!workspaceReady(frm)) {
-            field.$wrapper.empty();
-            return;
-        }
+        if (!workspaceReady(frm)) return;
 
-        const shell = field.$wrapper.find(".dco-plan-actions-shell").first();
+        const shell = field.$wrapper.children(".dco-plan-actions-shell").first();
         if (!shell.length) {
             const presenter = window.AlmdinaDoorCuttingPlanUX;
             if (presenter && typeof presenter.refresh === "function") presenter.refresh(frm);
             return;
         }
 
-        const duplicated = field.$wrapper.find(DUPLICATED_ACTIONS);
+        const duplicated = shell.find(DUPLICATED_ACTIONS);
         if (duplicated.length) duplicated.remove();
-        bindRecalculationAction(frm, field.$wrapper.find(".dco-recalculate-plan").first());
-        installApprovalAction(frm, field);
+        bindRecalculationAction(frm, shell.find(".dco-recalculate-plan").first());
+        installApprovalAction(frm, shell);
 
-        const note = field.$wrapper.find(".dco-plan-note").first();
+        const note = shell.find(".dco-plan-note").first();
         if (note.length) {
             let message;
             if (!hasSystemDraft(frm) && can(frm, "recalculate_plan")) {
