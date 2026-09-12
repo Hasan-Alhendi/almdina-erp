@@ -205,6 +205,7 @@ def _production_facts(
         # Administrator bypasses the operational-role requirement. Supervisors
         # remain capability-driven and do not impersonate a worker role.
         is_admin=actor == "Administrator",
+        has_factory_work=bool(_value(order, "has_factory_work", True)),
     )
 
 

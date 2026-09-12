@@ -6,6 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PUBLIC = ROOT / "public" / "js" / "door_cutting_order"
 COORDINATOR = PUBLIC / "core" / "door_cutting_order_page_edit_action_ux.js"
+TAB_GUARD = PUBLIC / "core" / "door_cutting_order_tab_edit_lifecycle_guard.js"
 COST_SESSION = PUBLIC / "costing" / "door_cutting_order_cost_edit_session_ux.js"
 PLAN_SESSION = PUBLIC / "cutting_plan" / "door_cutting_order_plan_edit_session_ux.js"
 PLAN_FIELD_ACCESS = PUBLIC / "cutting_plan" / "door_cutting_order_plan_field_access_adapter.js"
@@ -38,13 +39,16 @@ def test_contextual_edit_action_preserves_final_plan_field_owner() -> None:
     plan = _feature_assets("plan")
     cost = _feature_assets("cost")
     coordinator = "door_cutting_order_page_edit_action_ux.js"
+    tab_guard = "door_cutting_order_tab_edit_lifecycle_guard.js"
     plan_session = "door_cutting_order_plan_edit_session_ux.js"
     plan_access = "door_cutting_order_plan_field_access_adapter.js"
     cost_session = "door_cutting_order_cost_edit_session_ux.js"
 
-    # The page-level affordance remains eager; workspace mutation owners remain
-    # tab-local and must not return to the DCO first-open critical path.
+    # The page-level affordance and semantic tab guard remain eager; workspace
+    # mutation owners remain tab-local and must not return to the first-open path.
     assert eager.count(coordinator) == 1
+    assert eager.count(tab_guard) == 1
+    assert eager.index(coordinator) < eager.index(tab_guard)
     assert plan_session not in eager
     assert plan_access not in eager
     assert cost_session not in eager
@@ -110,20 +114,42 @@ def test_persisted_order_does_not_expose_competing_global_edit_action() -> None:
 
     assert ".page-actions .primary-action" in coordinator
     assert "display:none !important" in coordinator
-    assert "Synchronous sync prevents the legacy global primary action" in coordinator
+    assert "sync(frm);" in coordinator
+    assert "on_tab_change(frm)" in coordinator
     assert "set_primary_action" not in coordinator
     assert "clear_primary_action" not in coordinator
     assert "data-almdina-context-edit-mode" not in coordinator
 
 
-def test_switching_tabs_is_blocked_while_any_page_edit_session_is_open() -> None:
+def test_switching_tabs_is_blocked_at_frappe_native_activation_boundary() -> None:
     coordinator = source(COORDINATOR)
+    guard = source(TAB_GUARD)
 
+    # Session ownership stays centralized in the page coordinator. The lifecycle
+    # guard consumes that one projection rather than reimplementing Order/Plan/Cost.
     assert "function activeEditingKind(frm)" in coordinator
-    assert "if (editingKind && targetField !== currentField)" in coordinator
-    assert "event.preventDefault();" in coordinator
-    assert "event.stopImmediatePropagation();" in coordinator
-    assert "احفظ أو ألغِ التعديل الحالي قبل الانتقال إلى قسم آخر" in coordinator
+    assert "owner.activeEditingKind(frm)" in guard
+
+    # Frappe v16 changes a top-level tab through each Tab object's set_active().
+    # Guard that semantic boundary before the native method can mutate classes,
+    # active_tab_map, URL hash, or trigger on_tab_change. A DOM-click-only guard is
+    # insufficient because programmatic/native activation can bypass it.
+    assert "Array.isArray(frm.layout.tabs)" in guard
+    assert 'typeof tab.set_active === "function"' in guard
+    assert "tab.set_active = guardedSetActive;" in guard
+    assert "if (shouldBlock(frm, targetFieldname))" in guard
+    assert "return false;" in guard
+    assert "originalSetActive.apply(this, args)" in guard
+    assert "registerCleanup(frm, CLEANUP_KEY" in guard
+    assert "tab.set_active = originalSetActive;" in guard
+    assert "احفظ أو ألغِ التعديل الحالي قبل الانتقال إلى قسم آخر" in guard
+
+    # The semantic guard itself must not depend on click propagation, timers, or
+    # a global Frappe prototype patch.
+    assert 'addEventListener("click"' not in guard
+    assert "stopImmediatePropagation" not in guard
+    assert "setTimeout" not in guard
+    assert "frappe.ui.form.Tab.prototype" not in guard
 
 
 def test_plan_tab_keeps_local_edit_affordance_and_plan_session_ownership() -> None:
@@ -154,9 +180,9 @@ def test_cost_page_is_read_only_until_explicit_workspace_edit_session() -> None:
     assert 'df.get_status = function almdinaFocusedCostFieldStatus' in cost
     assert 'field.df[STATUS_KEY] = "Read"' in cost
 
-    # A5.2 keeps the editable baseline/draft inside CostWorkspaceState. Save now
-    # captures the visible detached controls once, persists that exact payload,
-    # and commits the authoritative server snapshot without reloading the DCO.
+    # A5.2 keeps the editable baseline/draft inside CostWorkspaceState. Save
+    # captures both the visible draft and document identity once, persists that
+    # exact payload, and rejects stale async completion before projecting it.
     assert "AlmdinaCostWorkspaceState" in cost
     assert "AlmdinaCostWorkspaceAPI" in cost
     assert "store.beginEdit(seed)" in cost
@@ -164,7 +190,9 @@ def test_cost_page_is_read_only_until_explicit_workspace_edit_session() -> None:
     assert "state.draft" in cost
     assert "const captured = captureCostSettings(frm, state.draft || {});" in cost
     assert "store.replaceDraft(payload);" in cost
-    assert "api.saveSettings(frm.doc.name, payload)" in cost
+    assert 'const orderName = String(frm.doc.name || "");' in cost
+    assert "api.saveSettings(orderName, payload)" in cost
+    assert "documentStillCurrent(frm, token)" in cost
     assert "owner.commit(frm, saved);" in cost
     assert "frm.reload_doc()" not in cost
     assert "frappe.call" not in cost

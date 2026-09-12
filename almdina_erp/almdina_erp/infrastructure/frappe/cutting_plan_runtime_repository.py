@@ -32,6 +32,7 @@ class ProductionPlanFacts:
     plan_needs_recalculation: bool
     has_approved_plan: bool
     approved_plan_source_type: str | None = None
+    has_factory_work: bool = True
 
 
 def _plan_rows(order_name: str, **filters: Any) -> list[Any]:
@@ -189,9 +190,17 @@ def production_plan_facts(order: Any) -> ProductionPlanFacts:
             plan_needs_recalculation=True,
             has_approved_plan=False,
             approved_plan_source_type=approved_source,
+            has_factory_work=True,
         )
 
     has_snapshot = bool(str(getattr(candidate, "snapshot_json", None) or "").strip())
+    snapshot = frappe.parse_json(getattr(candidate, "snapshot_json", None) or "{}") or {}
+    has_factory_work = any(
+        str(piece.get("resource_kind") or "FULL_BOARD").upper() == "FULL_BOARD"
+        or str(piece.get("offcut_execution_party") or "").upper() == "FACTORY"
+        for sheet in (snapshot.get("sheets") or [])
+        for piece in (sheet.get("pieces") or [])
+    )
     stale = _plan_is_stale(order, candidate) if has_snapshot else True
     return ProductionPlanFacts(
         plan_name=str(candidate.name),
@@ -200,6 +209,7 @@ def production_plan_facts(order: Any) -> ProductionPlanFacts:
         plan_needs_recalculation=stale,
         has_approved_plan=bool(approved and has_snapshot and not stale),
         approved_plan_source_type=approved_source,
+        has_factory_work=has_factory_work,
     )
 
 

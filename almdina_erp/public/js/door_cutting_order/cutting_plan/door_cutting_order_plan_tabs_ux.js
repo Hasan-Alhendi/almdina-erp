@@ -119,6 +119,16 @@
 		return allowed[0];
 	}
 
+	function activeTab(frm) {
+		return defaultTab(frm);
+	}
+
+	function notifyPlanSelection(frm, tab) {
+		window.dispatchEvent(new CustomEvent("almdina:plan-selection-changed", {
+			detail: { frm, tab },
+		}));
+	}
+
 	function buildTabBar(frm, activeTab, tabs) {
 		const approvedSource = frm.doc.approved_plan_source || "System";
 		const badge = (tab) => {
@@ -202,28 +212,31 @@
 		const tabs = visibleTabs(frm);
 		if (!wrapper || !tabs.length) return false;
 
-		const activeTab = defaultTab(frm);
-		frm.__almdina_active_plan_tab = activeTab;
-		const content = renderTabContent(frm, activeTab);
+		const selectedTab = activeTab(frm);
+		frm.__almdina_active_plan_tab = selectedTab;
+		const content = renderTabContent(frm, selectedTab);
 		const orderName = String(frm.doc.name || "");
 		const escapedOrderName = frappe.utils.escape_html(orderName);
 		wrapper
 			.attr("data-almdina-order", orderName)
 			.html(`
-				${buildTabBar(frm, activeTab, tabs)}
+				${buildTabBar(frm, selectedTab, tabs)}
 				<div class="dco-plan-context-actions-host" data-almdina-order="${escapedOrderName}"></div>
 				<div class="dco-plan-tab-content" data-almdina-order="${escapedOrderName}">${content}</div>
 			`);
 		renderContextActions(frm, wrapper);
 		wrapper.find("[data-plan-tab]").on("click", function onTabClick() {
-			frm.__almdina_active_plan_tab = $(this).attr("data-plan-tab");
+			const nextTab = $(this).attr("data-plan-tab");
+			if (nextTab === frm.__almdina_active_plan_tab) return;
+			frm.__almdina_active_plan_tab = nextTab;
 			renderDualTabs(frm);
+			notifyPlanSelection(frm, nextTab);
 		});
 		return true;
 	}
 
 	function printActivePlan(frm) {
-		const tab = frm.__almdina_active_plan_tab || defaultTab(frm);
+		const tab = activeTab(frm);
 		const plan = getPlanForTab(frm, tab);
 		const renderer = window.AlmdinaCuttingPlanRender;
 		if (!plan || !plan.sheets || !plan.sheets.length) {
@@ -250,6 +263,7 @@
 		hasApprovedPlan,
 		visibleTabs,
 		defaultTab,
+		activeTab,
 		getPlanForTab,
 		ensureApprovedPlanLoaded,
 		renderDualTabs,

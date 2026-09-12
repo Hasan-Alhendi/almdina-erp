@@ -90,6 +90,11 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
         "sensitive",
     ),
     Capability.PRINT_CUTTING_PLAN: _presentation("طباعة خطة القص", "طباعة الخطة المصرح بعرضها."),
+    Capability.SET_OFFCUT_EXECUTION_OWNER: _presentation(
+        "تحديد مصدر وتنفيذ قطع النقص",
+        "يسمح بتحديد ما إذا كانت فضلة النقص من المعمل أو من الزبون، وتحديد ما إذا كان تنفيذها في المعمل أو عند الزبون، ضمن الحالات المسموحة فقط.",
+        "sensitive",
+    ),
     Capability.APPROVE_DXF: _presentation("اعتماد خطة القص", "اعتماد خطة النظام الحالية أو خطة DXF المرفوعة كمصدر نهائي للإنتاج بعد مراجعتها.", "critical"),
     Capability.VIEW_DRAWING_WORKSPACE: _presentation("فتح مساحة الرسم", "عرض أدوات الرسم الخاصة وخطة DXF."),
     Capability.EDIT_SPECIAL_DRAWING: _presentation("تعديل الرسم الخاص", "تحرير هندسة وملاحظات الدرف الخاصة.", "sensitive"),

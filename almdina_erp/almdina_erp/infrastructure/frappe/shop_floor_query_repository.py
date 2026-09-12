@@ -105,6 +105,7 @@ def _project_plan_facts(order: Any, document: Any | None) -> Any:
     # derived solely from the exact approved Cutting Plan revision; no removed
     # Door Cutting Order field is consulted or persisted.
     setattr(order, "approved_plan_source", approved_source)
+    setattr(order, "has_factory_work", bool(facts.has_factory_work) if facts is not None else True)
     return order
 
 

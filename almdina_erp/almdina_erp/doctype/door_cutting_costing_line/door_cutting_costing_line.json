@@ -4,6 +4,8 @@
   "editable_grid": 1,
   "engine": "InnoDB",
   "field_order": [
+    "piece_instance_id",
+    "resource_kind",
     "piece_uid",
     "piece_no",
     "piece_type",
@@ -16,6 +18,8 @@
     "notes"
   ],
   "fields": [
+    {"fieldname":"piece_instance_id","fieldtype":"Data","hidden":1,"label":"Piece Instance ID","read_only":1},
+    {"default":"FULL_BOARD","fieldname":"resource_kind","fieldtype":"Select","label":"Resource Kind","options":"FULL_BOARD\nOFFCUT","read_only":1},
     {"fieldname":"piece_uid","fieldtype":"Data","hidden":1,"label":"Piece UID","reqd":1},
     {"fieldname":"piece_no","fieldtype":"Int","in_list_view":1,"label":"Piece No","read_only":1},
     {"fieldname":"piece_type","fieldtype":"Data","in_list_view":1,"label":"Piece Type","read_only":1},

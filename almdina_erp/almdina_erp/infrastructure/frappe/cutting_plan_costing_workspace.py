@@ -27,6 +27,10 @@ PLAN_COST_FIELDS = (
     "cutting_cost_usd",
     "edge_cost_usd",
     "total_cost_usd",
+    "offcut_price_usd",
+)
+_LEGACY_ORDER_COST_FIELDS = tuple(
+    fieldname for fieldname in PLAN_COST_FIELDS if fieldname != "offcut_price_usd"
 )
 
 
@@ -48,14 +52,15 @@ def initial_plan_cost_values(
     values = frappe.db.get_value(
         source_doctype,
         source_name,
-        list(PLAN_COST_FIELDS),
+        list(PLAN_COST_FIELDS if based_on_plan else _LEGACY_ORDER_COST_FIELDS),
         as_dict=True,
     ) or {}
     return {
         **{
             fieldname: flt(values.get(fieldname))
-            for fieldname in PLAN_COST_FIELDS
+            for fieldname in _LEGACY_ORDER_COST_FIELDS
         },
+        "offcut_price_usd": flt(values.get("offcut_price_usd")),
         "cost_snapshot_version": COST_SNAPSHOT_VERSION,
     }
 
@@ -93,7 +98,8 @@ def apply_plan_costs(plan: Any, *, edge_cost_usd: float | None = None) -> dict[s
         "mdf_cost_usd": result.mdf_cost_usd,
         "cutting_cost_usd": result.cutting_cost_usd,
         "edge_cost_usd": result.edge_cost_usd,
-        "total_cost_usd": result.total_cost_usd,
+        "total_cost_usd": result.total_cost_usd + flt(getattr(plan, "offcut_price_usd", 0)),
+        "offcut_price_usd": flt(getattr(plan, "offcut_price_usd", 0)),
     }
     for fieldname, value in values.items():
         setattr(plan, fieldname, value)

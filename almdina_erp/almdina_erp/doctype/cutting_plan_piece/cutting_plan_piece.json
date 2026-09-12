@@ -4,6 +4,10 @@
   "editable_grid": 1,
   "engine": "InnoDB",
   "field_order": [
+    "piece_instance_id",
+    "resource_kind",
+    "offcut_source_party",
+    "offcut_execution_party",
     "sheet_no",
     "piece_id",
     "piece_label",
@@ -29,6 +33,10 @@
     "notes"
   ],
   "fields": [
+    {"fieldname":"piece_instance_id","fieldtype":"Data","in_list_view":1,"label":"Piece Instance ID","reqd":1,"read_only":1},
+    {"default":"FULL_BOARD","fieldname":"resource_kind","fieldtype":"Select","in_list_view":1,"label":"Resource Kind","options":"FULL_BOARD\nOFFCUT","reqd":1,"read_only":1},
+    {"default":"UNASSIGNED","fieldname":"offcut_source_party","fieldtype":"Select","label":"Offcut Source","options":"CUSTOMER\nFACTORY\nUNASSIGNED","read_only":1},
+    {"default":"UNASSIGNED","fieldname":"offcut_execution_party","fieldtype":"Select","label":"Offcut Execution","options":"CUSTOMER\nFACTORY\nUNASSIGNED","read_only":1},
     {
       "fieldname": "sheet_no",
       "fieldtype": "Int",

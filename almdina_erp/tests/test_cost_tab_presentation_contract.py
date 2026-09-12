@@ -107,7 +107,7 @@ class CostTabPresentationContractTest(unittest.TestCase):
         self.assertIn('.removeAttr("aria-label title role tabindex")', source)
         self.assertNotIn("dco-cost-measurements-toggle-label", source)
         self.assertNotIn("dco-cost-measurements-toggle-icon", source)
-        self.assertNotIn("keydown.almdinaCostMeasurements", source)
+        self.assertNotIn('.on("keydown.almdinaCostMeasurements"', source)
 
     def test_layout_module_can_upgrade_a_stale_spa_instance(self) -> None:
         source = LAYOUT_UX_PATH.read_text(encoding="utf-8")

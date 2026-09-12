@@ -57,6 +57,7 @@ ORDER_DOCUMENT_FIELDS = (
     "material_variance_cost_usd",
     "internal_loss_cost_usd",
     "actual_cost_usd",
+    "offcut_price_usd",
 )
 PIECE_DOCUMENT_FIELDS = (
     "name",
@@ -125,6 +126,19 @@ def _document_context(order: Any) -> tuple[dict[str, Any], list[dict[str, Any]]]
         order,
         _snapshot(order, ORDER_DOCUMENT_FIELDS),
     )
+    plan = None
+    if order.approved_plan:
+        plan = frappe.get_doc("Cutting Plan", order.approved_plan)
+    if plan:
+        snapshot = frappe.parse_json(plan.snapshot_json or "{}") or {}
+        order_snapshot["offcut_price_usd"] = getattr(plan, "offcut_price_usd", 0)
+        order_snapshot["offcut_factory_factory"] = any(
+            str(piece.get("resource_kind") or "").upper() == "OFFCUT"
+            and str(piece.get("offcut_source_party") or "").upper() == "FACTORY"
+            and str(piece.get("offcut_execution_party") or "").upper() == "FACTORY"
+            for sheet in (snapshot.get("sheets") or [])
+            for piece in (sheet.get("pieces") or [])
+        )
     return (
         order_snapshot,
         [

@@ -41,6 +41,9 @@
         "clipped_corner_edge_price_set_by",
         "clipped_corner_edge_price_set_on",
     ];
+    const ACTION_OBSERVER_KEY = "cost-permissions-render-actions";
+    const APPLY_FRAME_KEY = "cost-permissions-apply";
+    const RECONCILE_FRAME_KEY = "cost-permissions-reconcile-actions";
 
     function can(frm, capability) {
         const permissions = window.AlmdinaPermissions;
@@ -55,7 +58,24 @@
     }
 
     function documentContext() {
-        return window.AlmdinaDocumentContext;
+        return window.AlmdinaDocumentContext || null;
+    }
+
+    function captureDocument(frm) {
+        const context = documentContext();
+        if (context && typeof context.capture === "function") return context.capture(frm);
+        return Object.freeze({ name: String(frm && frm.doc && frm.doc.name || "") });
+    }
+
+    function documentStillCurrent(frm, token) {
+        const context = documentContext();
+        if (context && typeof context.isCurrent === "function") {
+            return context.isCurrent(frm, token);
+        }
+        return Boolean(
+            window.cur_frm === frm
+            && String(frm && frm.doc && frm.doc.name || "") === String(token && token.name || "")
+        );
     }
 
     function costWorkspaceState() {
@@ -63,7 +83,7 @@
     }
 
     function costWrapper(frm) {
-        const field = frm.fields_dict.order_cost_invoice_html;
+        const field = frm && frm.fields_dict && frm.fields_dict.order_cost_invoice_html;
         return field && field.$wrapper ? field.$wrapper : null;
     }
 
@@ -274,6 +294,7 @@
         const costUx = window.AlmdinaOrderCostUX;
         if (costUx && typeof costUx.refreshInvoiceSection === "function") {
             costUx.refreshInvoiceSection(frm);
+            reconcileRenderedActions(frm);
             return;
         }
         renderAuthorizedCost(frm);
@@ -328,19 +349,25 @@
     }
 
     async function refreshAuthoritativeCost(frm) {
+        const token = captureDocument(frm);
         const owner = costWorkspaceState();
         if (owner && typeof owner.load === "function") {
             await owner.load(frm, { force: true });
-            return;
+            return documentStillCurrent(frm, token);
         }
+        if (!documentStillCurrent(frm, token)) return false;
         renderAuthorizedCost(frm);
+        return true;
     }
 
     async function flushPendingPriceEdits(frm, options = {}) {
         const pending = pendingPricePieces(frm);
         if (!pending.length) return false;
 
+        const token = captureDocument(frm);
+        const orderName = String(frm && frm.doc && frm.doc.name || "");
         for (const piece of pending) {
+            if (!documentStillCurrent(frm, token)) return false;
             const expectedModified = pricingExpectedModified(frm);
             if (!expectedModified) {
                 throw new Error(__("تعذر التحقق من نسخة الطلب الحالية. أعد تحميل الطلب ثم حاول مرة أخرى."));
@@ -351,7 +378,7 @@
                 response = await frappe.call({
                     method: "almdina_erp.almdina_erp.services.cost_permission_service.update_clipped_corner_edge_price",
                     args: {
-                        order_name: frm.doc.name,
+                        order_name: orderName,
                         piece_name: piece.name,
                         edge_price_usd: piece.clipped_corner_edge_price_usd,
                         note: piece.clipped_corner_edge_price_note || "",
@@ -364,7 +391,7 @@
                 response = await frappe.call({
                     method: "almdina_erp.almdina_erp.services.cost_permission_service.approve_special_piece_price",
                     args: {
-                        order_name: frm.doc.name,
+                        order_name: orderName,
                         piece_name: piece.name,
                         unit_price_usd: piece.special_shape_custom_unit_price_usd,
                         note: piece.special_shape_price_note || "",
@@ -374,6 +401,7 @@
                     freeze_message: __("جاري اعتماد أسعار الدرف الخاصة..."),
                 });
             }
+            if (!documentStillCurrent(frm, token)) return false;
             rememberPricingCommandModified(frm, response);
             clearPendingPriceMarker(piece);
         }
@@ -381,7 +409,7 @@
         clearPriceOnlyDirty(frm);
         finalizePricingDocumentVersion(frm);
         if (options.refresh !== false) {
-            await refreshAuthoritativeCost(frm);
+            return Boolean(await refreshAuthoritativeCost(frm));
         }
         return true;
     }
@@ -392,13 +420,15 @@
             String(frm && frm.__almdina_pricing_command_modified || "").trim()
         );
         if (!pending.length && !hasCommandVersion) return false;
+        const token = captureDocument(frm);
         pending.forEach(clearPendingPriceMarker);
         clearPriceOnlyDirty(frm);
         finalizePricingDocumentVersion(frm);
         if (options.refresh !== false) {
-            await refreshAuthoritativeCost(frm);
+            return Boolean(await refreshAuthoritativeCost(frm))
+                && documentStillCurrent(frm, token);
         }
-        return true;
+        return documentStillCurrent(frm, token);
     }
 
     function inlinePriceLabel(piece) {
@@ -480,93 +510,133 @@
 
     function installActionPermissions(frm) {
         const wrapper = costWrapper(frm);
-        if (!wrapper || !wrapper.find(".dco-cost-shell").length) return;
+        if (!wrapper || !wrapper.find(".dco-cost-shell").length) return false;
 
         ensurePrintInvoiceButton(frm);
         wrapper.find(".dco-edit-cost-settings").remove();
         wrapper.find(".dco-approve-special-price,.dco-capability-special-price,.dco-capability-cut-corner-price").remove();
         bindInlinePriceInputs(frm);
+        return true;
+    }
+
+    function clearActionObserver(frm) {
+        const observer = frm && frm.__almdina_cost_actions_observer;
+        if (observer && typeof observer.disconnect === "function") observer.disconnect();
+        if (frm) frm.__almdina_cost_actions_observer = null;
     }
 
     function installActionsAfterRender(frm) {
         const wrapper = costWrapper(frm);
-        if (!wrapper || !wrapper[0]) return;
-        if (frm.__almdina_cost_actions_observer) {
-            frm.__almdina_cost_actions_observer.disconnect();
-            frm.__almdina_cost_actions_observer = null;
-        }
+        if (!wrapper || !wrapper[0]) return false;
+        clearActionObserver(frm);
         if (wrapper.find(".dco-cost-shell").length) {
-            installActionPermissions(frm);
-            return;
+            return installActionPermissions(frm);
         }
 
-        const identity = documentContext().capture(frm);
+        const identity = captureDocument(frm);
         const observer = new MutationObserver(() => {
-            if (!documentContext().isCurrent(frm, identity)) {
-                observer.disconnect();
-                if (frm.__almdina_cost_actions_observer === observer) {
-                    frm.__almdina_cost_actions_observer = null;
-                }
+            if (!documentStillCurrent(frm, identity)) {
+                clearActionObserver(frm);
                 return;
             }
             if (!wrapper.find(".dco-cost-shell").length) return;
-            observer.disconnect();
-            if (frm.__almdina_cost_actions_observer === observer) {
-                frm.__almdina_cost_actions_observer = null;
-            }
+            clearActionObserver(frm);
             installActionPermissions(frm);
         });
         observer.observe(wrapper[0], { childList: true, subtree: true });
         frm.__almdina_cost_actions_observer = observer;
-        setTimeout(() => {
-            observer.disconnect();
-            if (frm.__almdina_cost_actions_observer === observer) {
-                frm.__almdina_cost_actions_observer = null;
-            }
-            if (documentContext().isCurrent(frm, identity)) {
-                installActionPermissions(frm);
-            }
-        }, 1500);
+        const context = documentContext();
+        if (context && typeof context.registerObserver === "function") {
+            context.registerObserver(frm, ACTION_OBSERVER_KEY, observer);
+        }
+        return true;
+    }
+
+    function reconcileRenderedActions(frm) {
+        if (!frm || frm.doctype !== "Door Cutting Order") return false;
+        return installActionsAfterRender(frm);
     }
 
     function renderAuthorizedCost(frm) {
         if (window.AlmdinaOrderCostUX && window.AlmdinaOrderCostUX.render) {
             window.AlmdinaOrderCostUX.render(frm);
         }
-        installActionsAfterRender(frm);
+        reconcileRenderedActions(frm);
     }
 
     function apply(frm) {
+        if (!frm || !frm.doc || frm.doctype !== "Door Cutting Order") return false;
         configureCostInputFields(frm);
 
         if (!canUseCostTab(frm)) {
             scrubCostData(frm);
             setCostTabVisibility(frm, false);
-            return;
+            return true;
         }
 
         setCostTabVisibility(frm, true);
 
         // CostWorkspaceState + its presenter adapter are the sole snapshot owner.
-        // Rendering a pending workspace will ask that owner to load when needed;
-        // this permission layer intentionally performs no financial GET itself.
+        // This permission layer projects capabilities only; it performs no GET.
         renderAuthorizedCost(frm);
+        return true;
+    }
+
+    function scheduleApply(frm) {
+        if (!frm || frm.doctype !== "Door Cutting Order") return;
+        const run = () => apply(frm);
+        const context = documentContext();
+        if (context && typeof context.scheduleFrame === "function") {
+            context.scheduleFrame(frm, APPLY_FRAME_KEY, run);
+            return;
+        }
+        if (window.requestAnimationFrame) {
+            window.requestAnimationFrame(() => {
+                if (window.cur_frm === frm) run();
+            });
+            return;
+        }
+        if (window.cur_frm === frm) run();
+    }
+
+    function scheduleRenderedActions(frm) {
+        if (!frm || frm.doctype !== "Door Cutting Order") return;
+        const run = () => reconcileRenderedActions(frm);
+        const context = documentContext();
+        if (context && typeof context.scheduleFrame === "function") {
+            context.scheduleFrame(frm, RECONCILE_FRAME_KEY, run);
+            return;
+        }
+        if (window.requestAnimationFrame) {
+            window.requestAnimationFrame(() => {
+                if (window.cur_frm === frm) run();
+            });
+            return;
+        }
+        if (window.cur_frm === frm) run();
     }
 
     frappe.ui.form.on("Door Cutting Order", {
         onload_post_render(frm) {
-            setTimeout(() => apply(frm), 0);
+            scheduleApply(frm);
         },
         refresh(frm) {
-            setTimeout(() => apply(frm), 0);
+            scheduleApply(frm);
         },
         almdina_edit_session_changed(frm) {
-            setTimeout(() => apply(frm), 0);
+            // Edit-state changes should not cause a second Cost render. The store
+            // owns data, the presenter owns markup, and this owner only reconciles
+            // permissions onto the markup already present.
+            configureCostInputFields(frm);
+            scheduleRenderedActions(frm);
         },
     });
 
     window.AlmdinaCostPermissionsUX = Object.freeze({
         apply,
+        scheduleApply,
+        reconcileRenderedActions,
+        scheduleRenderedActions,
         can,
         canEditInlinePiecePrice,
         scrubCostData,

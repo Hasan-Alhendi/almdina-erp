@@ -21,6 +21,9 @@ from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     SYSTEM,
     UPLOADED_DXF,
 )
+from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
+    preserve_offcut_classification,
+)
 from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
     PlanSettingsValidationError,
     canonical_default_plan_settings,
@@ -356,6 +359,16 @@ def save_uploaded_dxf_plan(
     repository = FrappeCuttingPlanCommandRepository(capability)
     plan = repository.ensure_uploaded_dxf_draft(order)
     initialize_draft_plan_cost_snapshot(order, plan)
+    previous_classification = [
+        {
+            "piece_instance_id": getattr(piece, "piece_instance_id", None),
+            "resource_kind": getattr(piece, "resource_kind", None),
+            "offcut_source_party": getattr(piece, "offcut_source_party", None),
+            "offcut_execution_party": getattr(piece, "offcut_execution_party", None),
+        }
+        for piece in (plan.placed_pieces or [])
+    ]
+    preserve_offcut_classification(snapshot, previous_classification)
     apply_validated_dxf_snapshot(order, plan, snapshot)
     apply_plan_costs(plan, edge_cost_usd=flt(getattr(order, "edge_cost_usd", 0)))
     plan.dxf_file = str(file_url or "").strip()

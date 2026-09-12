@@ -21,6 +21,7 @@ def test_dxf_import_service_exists_with_layered_core_functions():
         "def validate_imported_plan",
         "SHEET_OUTLINE_LAYER",
         "CUT_PATH_LAYER",
+        "OFFCUT_LAYER",
         "EXTRA_OVERLAY_LAYER_NAMES",
         "_overlay_source_paths",
         "_collect_extra_overlay_candidates",
@@ -33,7 +34,7 @@ def test_dxf_import_service_exists_with_layered_core_functions():
         "_match_pieces_to_order",
         "read_dxf_geometry",
         "assemble_contours",
-        "أي طبقة غير SHEET_OUTLINE وCUT_PATH",
+        "أي طبقة غير SHEET_OUTLINE أو CUT_PATH أو OFFCUT",
     ]:
         assert token in src
     assert DXF_READER.exists()
@@ -45,6 +46,7 @@ def test_dxf_import_mirrors_secure_export_layers():
     importer = _source(DXF_IMPORT)
     assert 'layer("SHEET_OUTLINE", 8)' in secure
     assert 'layer("CUT_PATH", 1)' in secure
+    assert 'layer("OFFCUT", EXTRA_OVERLAY_LAYER_COLORS.OFFCUT)' in secure
     assert 'layer("Liner", EXTRA_OVERLAY_LAYER_COLORS.Liner)' in secure
     assert 'SHEET_OUTLINE_LAYER = "SHEET_OUTLINE"' in importer
     assert 'CUT_PATH_LAYER = "CUT_PATH"' in importer

@@ -21,6 +21,7 @@ from almdina_erp.almdina_erp.domain.cutting.catalog import DEFAULT_OPTIMIZATION_
 from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
     build_manufacturing_requirements,
 )
+from almdina_erp.almdina_erp.domain.cutting.offcut_policy import decision_from_values
 from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
     DEFAULT_KERF_MM,
     DEFAULT_MACHINE_TYPE,
@@ -60,10 +61,20 @@ def _manufacturing_requirements(order: Any) -> dict[str, Any]:
     requirements: list[dict[str, Any]] = []
     for source_piece_no, row in enumerate(order.pieces or [], start=1):
         piece = FrappeCutDimensionPlanAdapter.piece_row_as_dict(row)
+        base_identity = str(getattr(row, "piece_instance_id", "") or "").strip()
+        if not base_identity:
+            frappe.throw(
+                _(
+                    "لا يمكن إنشاء خطة القص لأن إحدى القطع الفيزيائية بلا هوية ثابتة. "
+                    "احفظ الطلب أولاً ثم أعد المحاولة."
+                ),
+                frappe.ValidationError,
+            )
         for copy_no in range(1, cint(piece["qty"]) + 1):
             requirements.append(
                 {
                     "label": f"{source_piece_no}.{copy_no}",
+                    "piece_instance_id": f"{base_identity}:{copy_no}",
                     "source_piece_no": source_piece_no,
                     "copy_no": copy_no,
                     "cut_width_cm": piece["width_cm"],
@@ -212,7 +223,15 @@ def _apply_snapshot(
     plan.rotation_count = cint(metrics.get("rotation_count"))
     plan.validation_status = "Valid" if validation.get("is_valid") else "Invalid"
     plan.validation_errors = "\n".join(validation.get("errors") or [])
-    plan.required_boards = len(snapshot.get("sheets") or [])
+    plan.required_boards = sum(
+        1
+        for sheet in (snapshot.get("sheets") or [])
+        if decision_from_values(
+            sheet.get("resource_kind"),
+            sheet.get("offcut_source_party"),
+            sheet.get("offcut_execution_party"),
+        ).consumes_full_board
+    )
     plan.used_area_m2 = flt(snapshot.get("used_area_m2"))
     plan.total_source_area_m2 = flt(snapshot.get("total_board_area_m2"))
     plan.waste_area_m2 = flt(snapshot.get("waste_area_m2"))
@@ -251,11 +270,19 @@ def _apply_snapshot(
         used_area = sum(
             flt(piece.get("area_m2")) for piece in (sheet.get("pieces") or [])
         )
+        sheet_decision = decision_from_values(
+            sheet.get("resource_kind"),
+            sheet.get("offcut_source_party"),
+            sheet.get("offcut_execution_party"),
+        )
         plan.append(
             "sources",
             {
                 "sheet_no": sheet_no,
+                "resource_kind": sheet_decision.resource_kind.value,
                 "source_type": "Full Board",
+                "offcut_source_party": sheet_decision.source_party.value,
+                "offcut_execution_party": sheet_decision.execution_party.value,
                 "board_description": str(order.board_description or "").strip(),
                 "full_width_mm": source_width_mm,
                 "full_length_mm": source_length_mm,
@@ -271,6 +298,10 @@ def _apply_snapshot(
                 "placed_pieces",
                 {
                     "sheet_no": sheet_no,
+                    "piece_instance_id": piece.get("piece_instance_id") or "",
+                    "resource_kind": piece.get("resource_kind") or sheet_decision.resource_kind.value,
+                    "offcut_source_party": piece.get("offcut_source_party") or sheet_decision.source_party.value,
+                    "offcut_execution_party": piece.get("offcut_execution_party") or sheet_decision.execution_party.value,
                     "piece_id": piece.get("id"),
                     "piece_label": piece.get("label"),
                     "source_piece_no": cint(piece.get("source_piece_no")),

@@ -133,11 +133,11 @@
 
     function reconcilePermissionActions(frm) {
         const permissionUx = window.AlmdinaCostPermissionsUX;
-        if (!permissionUx || typeof permissionUx.apply !== "function") return;
-        window.setTimeout(() => {
-            if (window.cur_frm !== frm || frm.doctype !== "Door Cutting Order") return;
-            permissionUx.apply(frm);
-        }, 0);
+        if (!permissionUx) return false;
+        if (typeof permissionUx.reconcileRenderedActions === "function") {
+            return permissionUx.reconcileRenderedActions(frm);
+        }
+        return false;
     }
 
     function refreshCurrent() {
@@ -145,10 +145,8 @@
         if (!frm || frm.doctype !== "Door Cutting Order") return;
         const presenter = window.AlmdinaOrderCostUX;
         if (presenter && typeof presenter.render === "function") presenter.render(frm);
-        // The presenter renders inline price inputs fail-closed (disabled/readonly).
-        // Reconcile the permission-owned actions after every asynchronous workspace
-        // refresh so an authorized active edit session does not get visually locked
-        // again when a financial snapshot arrives.
+        // Rendering is synchronous. Apply permissions directly to the markup that
+        // was just produced instead of starting a timer-based second render pass.
         reconcilePermissionActions(frm);
     }
 
@@ -158,6 +156,7 @@
         install,
         project,
         ready,
+        reconcilePermissionActions,
     });
 
     install();

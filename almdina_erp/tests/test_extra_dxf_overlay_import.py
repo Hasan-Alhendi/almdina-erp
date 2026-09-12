@@ -528,7 +528,7 @@ class TestExtraDxfOverlayImport(unittest.TestCase):
         self.assertIn(SHEET, message)
         self.assertIn(CUT, message)
         self.assertIn("NOTES", message)
-        self.assertIn("أي طبقة غير SHEET_OUTLINE وCUT_PATH", message)
+        self.assertIn("أي طبقة غير SHEET_OUTLINE أو CUT_PATH أو OFFCUT", message)
         self.assertIn("طبقات علامات Extra (Liner)", message)
         self.assertNotIn("PIECES", message)
         self.assertNotIn("ALONG", message)

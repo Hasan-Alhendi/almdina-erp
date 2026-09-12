@@ -93,8 +93,7 @@ def build_manufacturing_requirements(
             raw.get("source_piece_no"), fieldname="source_piece_no"
         )
         copy_no = _positive_int(raw.get("copy_no"), fieldname="copy_no")
-        canonical_pieces.append(
-            {
+        canonical_piece = {
                 "label": label,
                 "source_piece_no": source_piece_no,
                 "copy_no": copy_no,
@@ -108,8 +107,11 @@ def build_manufacturing_requirements(
                     raw.get("allow_rotation"), fieldname="allow_rotation"
                 ),
                 "piece_type": str(raw.get("piece_type") or "Regular"),
-            }
-        )
+        }
+        identity = str(raw.get("piece_instance_id") or "").strip()
+        if identity:
+            canonical_piece["piece_instance_id"] = identity
+        canonical_pieces.append(canonical_piece)
 
     if not canonical_pieces:
         raise ManufacturingRequirementsError(
