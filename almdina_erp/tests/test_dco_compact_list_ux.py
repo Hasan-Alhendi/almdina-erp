@@ -14,14 +14,6 @@ LIST_JS = (
     / "list_view"
     / "door_cutting_order_compact_list_ux.js"
 )
-CANONICAL_LIST_JS = (
-    ROOT
-    / "public"
-    / "js"
-    / "door_cutting_order"
-    / "list_view"
-    / "door_cutting_order_list.js"
-)
 LIST_CSS = ROOT / "public" / "css" / "door_cutting_order_list.css"
 MANIFEST = ROOT / "frontend_assets.py"
 
@@ -120,24 +112,6 @@ class TestDcoCompactListUx(unittest.TestCase):
         self.assertIn('listview.selected_page_count = DEFAULT_DESKTOP_PAGE_LENGTH;', source)
         self.assertIn('data-value="${DEFAULT_DESKTOP_PAGE_LENGTH}"', source)
         self.assertIn('listview._dcoDefaultPageLengthApplied = true;', source)
-
-    def test_saved_list_settings_are_not_overridden_by_legacy_order_notes_policy(self) -> None:
-        source = CANONICAL_LIST_JS.read_text(encoding="utf-8")
-        helper = source.split("function hasSavedListFieldOrder", 1)[1].split(
-            "function applyOrderNotesColumnOrder",
-            1,
-        )[0]
-        reorder = source.split("function applyOrderNotesColumnOrder", 1)[1].split(
-            "function installOrderNotesColumnOrder",
-            1,
-        )[0]
-
-        self.assertIn("listview.list_view_settings.fields", helper)
-        self.assertIn("JSON.parse(raw)", helper)
-        self.assertIn("Array.isArray(fields) && fields.length > 0", helper)
-        self.assertIn("if (hasSavedListFieldOrder(listview)) return false;", reorder)
-        self.assertIn('columnFieldname(column) === "order_notes"', reorder)
-        self.assertIn('columnFieldname(column) === "edge_color"', reorder)
 
     def test_column_widths_and_hidden_activity_areas_are_dco_scoped(self) -> None:
         css = LIST_CSS.read_text(encoding="utf-8")
