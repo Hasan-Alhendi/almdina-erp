@@ -121,6 +121,15 @@
         );
     }
 
+    function activeEditSnapshot(store, currentIdentity) {
+        const current = store && store.snapshot ? store.snapshot() : null;
+        return current
+            && current.identity === currentIdentity
+            && current.editing === true
+            ? current
+            : null;
+    }
+
     function createFlight(frm) {
         let resolveFlight;
         let rejectFlight;
@@ -142,6 +151,15 @@
         if (!store || !api || typeof api.load !== "function") return null;
 
         const currentIdentity = identity(frm);
+        const editing = activeEditSnapshot(store, currentIdentity);
+        if (editing) {
+            // WorkspaceStore.editing is the canonical edit-session boundary.
+            // A background/forced read must never replace an active draft or close
+            // the session. Save/Cancel close editing first, then may request an
+            // authoritative reload explicitly.
+            return editing;
+        }
+
         const orderName = String(frm.doc.name || "").trim();
         if (!orderName || (frm.is_new && frm.is_new()) || !canView(frm)) {
             return settleUnavailable(frm, store, currentIdentity);
@@ -165,6 +183,8 @@
                 // retry is still valid for the same live document identity.
             }
             if (identity(frm) !== currentIdentity) return store.snapshot();
+            const editingAfterFlight = activeEditSnapshot(store, currentIdentity);
+            if (editingAfterFlight) return editingAfterFlight;
             if (isFreshReady(frm, store, currentIdentity)) return store.snapshot();
             return load(frm, { force: true });
         }
@@ -193,6 +213,11 @@
                 if (rejectIdentityTransition(frm, store, currentIdentity)) {
                     return store.snapshot();
                 }
+                // If the operator entered edit mode while this read was in flight,
+                // the response is now stale relative to the local draft. Never let
+                // resolveLoad() clear editing/baseline/draft in that case.
+                const editingNow = activeEditSnapshot(store, currentIdentity);
+                if (editingNow) return editingNow;
                 const accepted = store.resolveLoad(currentIdentity, requestId, payload);
                 if (!accepted) return store.snapshot();
                 frm[LOADED_IDENTITY_KEY] = currentIdentity;
@@ -206,6 +231,8 @@
                 if (rejectIdentityTransition(frm, store, currentIdentity)) {
                     return store.snapshot();
                 }
+                const editingNow = activeEditSnapshot(store, currentIdentity);
+                if (editingNow) return editingNow;
                 store.rejectLoad(currentIdentity, requestId, error);
                 const state = store.snapshot();
                 dispatch(frm, state);
@@ -243,7 +270,11 @@
             context.scheduleFrame(frm, "cost-workspace-state-load", run);
             return;
         }
-        window.requestAnimationFrame(run);
+        if (window.requestAnimationFrame) {
+            window.requestAnimationFrame(run);
+            return;
+        }
+        run();
     }
 
     const owner = Object.freeze({
