@@ -7,6 +7,8 @@
     const GUARDED_TABS = new Set(["order_tab", "results_tab", "cost_tab"]);
     const STATE_KEY = "__almdinaTabEditLifecycleGuard";
     const CLEANUP_KEY = "tab-edit-lifecycle-guard";
+    const LEGACY_ROOT_KEY = "__almdinaPageEditTabListenerRoot";
+    const LEGACY_HANDLER_KEY = "__almdinaPageEditTabListenerHandler";
 
     function documentContext() {
         return window.AlmdinaDocumentContext || null;
@@ -67,6 +69,17 @@
         });
     }
 
+    function retireLegacyClickGuard(frm) {
+        if (!frm) return;
+        const root = frm[LEGACY_ROOT_KEY];
+        const handler = frm[LEGACY_HANDLER_KEY];
+        if (root && handler && typeof root.removeEventListener === "function") {
+            root.removeEventListener("click", handler, true);
+        }
+        frm[LEGACY_ROOT_KEY] = null;
+        frm[LEGACY_HANDLER_KEY] = null;
+    }
+
     function restoreState(frm, state) {
         if (!state || !Array.isArray(state.bindings)) return;
         state.bindings.forEach(({ tab, originalSetActive, guardedSetActive }) => {
@@ -88,6 +101,13 @@
 
     function install(frm) {
         if (!isOrderForm(frm)) return false;
+
+        // The old page coordinator had a capture-phase click guard. Keep its
+        // aggregation/presentation duties, but retire that DOM interception after
+        // every form refresh so the semantic Frappe Tab boundary below is the
+        // single runtime authority for edit-session navigation.
+        retireLegacyClickGuard(frm);
+
         const tabs = topLevelTabs(frm);
         if (!tabs.length) return false;
 
@@ -141,6 +161,7 @@
         activeEditingKind,
         currentTabFieldname,
         install,
+        retireLegacyClickGuard,
         shouldBlock,
         topLevelTabs,
     });
