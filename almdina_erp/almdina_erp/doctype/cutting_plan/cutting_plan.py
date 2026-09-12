@@ -18,6 +18,10 @@ from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
     PlanSettingsValidationError,
     normalize_plan_settings,
 )
+from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
+    OffcutPolicyError,
+    decision_from_values,
+)
 
 
 # Float fields are stored as decimal(21,9); engine scores must stay inside it.
@@ -43,6 +47,7 @@ class CuttingPlan(Document):
         self._validate_working_settings()
         self.score = max(-MAX_STORED_SCORE, min(MAX_STORED_SCORE, flt(self.score)))
         self._populate_source_identity_snapshots()
+        self._validate_offcut_contract()
         if self.plan_kind == "Replacement":
             self._validate_replacement_plan()
         if self.validation_status in {"Valid", "Invalid"} and not self.validated_on:
@@ -120,6 +125,48 @@ class CuttingPlan(Document):
                 or order.board_description
                 or ""
             ).strip()
+
+    def _validate_offcut_contract(self) -> None:
+        """Validate OFFCUT classification server-side for every save path."""
+        identities: set[str] = set()
+        full_board_sources = 0
+        for source in self.sources or []:
+            try:
+                decision = decision_from_values(
+                    getattr(source, "resource_kind", None),
+                    getattr(source, "offcut_source_party", None),
+                    getattr(source, "offcut_execution_party", None),
+                )
+            except OffcutPolicyError as exc:
+                frappe.throw(_("تركيبة مصدر وتنفيذ النقص غير صالحة: {0}").format(exc), frappe.ValidationError)
+                raise AssertionError("unreachable")
+            source.resource_kind = decision.resource_kind.value
+            source.offcut_source_party = decision.source_party.value
+            source.offcut_execution_party = decision.execution_party.value
+            full_board_sources += int(decision.consumes_full_board)
+
+        for piece in self.placed_pieces or []:
+            identity = str(getattr(piece, "piece_instance_id", "") or "").strip()
+            if not identity:
+                identity = f"{self.name or 'plan'}:{piece.source_piece_no}:{piece.copy_no}"
+                piece.piece_instance_id = identity
+            if identity in identities:
+                frappe.throw(_("تكررت هوية القطعة الفيزيائية {0}.").format(identity), frappe.ValidationError)
+            identities.add(identity)
+            try:
+                decision = decision_from_values(
+                    getattr(piece, "resource_kind", None),
+                    getattr(piece, "offcut_source_party", None),
+                    getattr(piece, "offcut_execution_party", None),
+                )
+            except OffcutPolicyError as exc:
+                frappe.throw(_("تركيبة مصدر وتنفيذ النقص غير صالحة: {0}").format(exc), frappe.ValidationError)
+                raise AssertionError("unreachable")
+            piece.resource_kind = decision.resource_kind.value
+            piece.offcut_source_party = decision.source_party.value
+            piece.offcut_execution_party = decision.execution_party.value
+        if self.sources:
+            self.required_boards = full_board_sources
 
     def _validate_replacement_plan(self) -> None:
         errors: list[str] = []

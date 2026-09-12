@@ -281,6 +281,10 @@ def _plan_to_export_snapshot(plan: Any) -> dict[str, Any]:
             public_piece = {
                 "id": piece_id,
                 "label": piece.piece_label,
+                "piece_instance_id": getattr(piece, "piece_instance_id", "") or "",
+                "resource_kind": getattr(piece, "resource_kind", "FULL_BOARD") or "FULL_BOARD",
+                "offcut_source_party": getattr(piece, "offcut_source_party", "UNASSIGNED") or "UNASSIGNED",
+                "offcut_execution_party": getattr(piece, "offcut_execution_party", "UNASSIGNED") or "UNASSIGNED",
                 "source_piece_no": cint(piece.source_piece_no),
                 "copy_no": cint(piece.copy_no),
                 "x": flt(piece.x_mm) / 10,

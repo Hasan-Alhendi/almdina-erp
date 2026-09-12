@@ -145,6 +145,9 @@ class FrappeOrderDocumentAccess:
     def set_piece_numbers(self) -> None:
         for index, row in enumerate(self.document.pieces or [], start=1):
             row.piece_no = index
+            if not str(getattr(row, "piece_instance_id", "") or "").strip():
+                row_id = str(getattr(row, "name", "") or "").strip()
+                row.piece_instance_id = f"{self.document.name or 'order'}:{row_id or f'row-{index}'}"
 
     def validate_numeric_inputs(self) -> None:
         kerf = self.finite(self.document.kerf_mm, _("Kerf (MM)"))

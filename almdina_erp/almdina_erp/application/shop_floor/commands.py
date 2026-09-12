@@ -43,6 +43,7 @@ class OrderState:
     has_approved_plan: bool = False
     approved_plan_name: str | None = None
     drawing_dxf_status: str | None = None
+    has_factory_work: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -251,6 +252,7 @@ def _facts(
         operational_role=stage.operational_role if stage else None,
         actor_roles=repository.actor_roles(resolved_actor) if resolved_actor else (),
         is_admin=repository.is_admin(resolved_actor) if resolved_actor else False,
+        has_factory_work=order.has_factory_work,
     )
 
 
@@ -322,6 +324,7 @@ def assert_order_ready_for_dispatch(order: OrderState) -> None:
             plan_needs_recalculation=order.plan_needs_recalculation,
             route_starts_with_planning=True,
             drawing_dxf_status=order.drawing_dxf_status,
+            has_factory_work=order.has_factory_work,
         ),
     )
     if not decision.allowed:

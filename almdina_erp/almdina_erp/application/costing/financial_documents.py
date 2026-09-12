@@ -162,6 +162,26 @@ def _customer_invoice_lines(
             }
         )
 
+    offcut_price = _number(_value(order, "offcut_price_usd"))
+    factory_offcut = bool(_value(order, "offcut_factory_factory")) or any(
+        _text(_value(piece, "resource_kind"), "FULL_BOARD").upper() == "OFFCUT"
+        and _text(_value(piece, "offcut_source_party"), "UNASSIGNED").upper() == "FACTORY"
+        and _text(_value(piece, "offcut_execution_party"), "UNASSIGNED").upper() == "FACTORY"
+        for piece in pieces
+    )
+    if factory_offcut and offcut_price:
+        lines.append(
+            {
+                "type": "offcut",
+                "description": "سعر الفضلة",
+                "quantity": 1,
+                "unit": "مجموعة",
+                "rate_usd": _money(offcut_price),
+                "amount_usd": _money(offcut_price),
+                "note": "سعر إجمالي للمجموعة",
+            }
+        )
+
     special_pieces = [
         piece
         for piece in pieces

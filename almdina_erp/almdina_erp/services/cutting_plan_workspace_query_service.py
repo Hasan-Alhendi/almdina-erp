@@ -105,6 +105,7 @@ def _capabilities(order: Any) -> dict[str, bool]:
         "approve": cutting_plan_capability_allowed(order, Capability.APPROVE_DXF),
         "print": cutting_plan_capability_allowed(order, Capability.PRINT_CUTTING_PLAN),
         "export_dxf": cutting_plan_capability_allowed(order, Capability.EXPORT_DXF),
+        "set_offcut_execution_owner": cutting_plan_capability_allowed(order, Capability.SET_OFFCUT_EXECUTION_OWNER),
     }
 
 
@@ -119,6 +120,13 @@ def _plan_settings(plan: Any) -> dict[str, Any]:
 
 
 def _plan_row(plan: Any, snapshot_json: str = "") -> dict[str, Any]:
+    snapshot = frappe.parse_json(snapshot_json or "{}") or {}
+    offcut_pieces = [
+        piece
+        for sheet in (snapshot.get("sheets") or [])
+        for piece in (sheet.get("pieces") or [])
+        if str(piece.get("resource_kind") or "FULL_BOARD").upper() == "OFFCUT"
+    ]
     return {
         "name": plan.get("name"),
         "source_type": str(plan.get("source_type") or ""),
@@ -163,6 +171,30 @@ def _plan_row(plan: Any, snapshot_json: str = "") -> dict[str, Any]:
             "total_source_area_m2": flt(plan.get("total_source_area_m2")),
             "waste_area_m2": flt(plan.get("waste_area_m2")),
             "waste_percent": flt(plan.get("waste_percent")),
+        },
+        "offcut": {
+            "count": len(offcut_pieces),
+            "label": "نقص" if offcut_pieces else "",
+            "assignments": [
+                {
+                    "piece_instance_id": piece.get("piece_instance_id"),
+                    "piece_label": piece.get("label"),
+                    "source_party": piece.get("offcut_source_party") or "UNASSIGNED",
+                    "execution_party": piece.get("offcut_execution_party") or "UNASSIGNED",
+                    "source_label": {
+                        "CUSTOMER": "الزبون",
+                        "FACTORY": "المعمل",
+                        "UNASSIGNED": "غير محدد",
+                    }.get(str(piece.get("offcut_source_party") or "UNASSIGNED"), "غير محدد"),
+                    "execution_label": {
+                        "CUSTOMER": "الزبون",
+                        "FACTORY": "المعمل",
+                        "UNASSIGNED": "غير محدد",
+                    }.get(str(piece.get("offcut_execution_party") or "UNASSIGNED"), "غير محدد"),
+                    "enters_worker_queue": str(piece.get("offcut_execution_party") or "").upper() == "FACTORY",
+                }
+                for piece in offcut_pieces
+            ],
         },
         "dxf": {
             "file": plan.get("dxf_file"),

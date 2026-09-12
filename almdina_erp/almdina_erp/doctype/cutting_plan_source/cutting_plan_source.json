@@ -4,11 +4,15 @@
   "editable_grid": 1,
   "engine": "InnoDB",
   "field_order": [
+    "resource_kind","offcut_source_party","offcut_execution_party",
     "sheet_no","source_type","board_description","board_item","remnant","identity_section","material","color","thickness_mm",
     "dimensions_section","full_width_mm","full_length_mm","usable_width_mm","usable_length_mm",
     "source_area_m2","used_area_m2","waste_area_m2"
   ],
   "fields": [
+    {"default":"FULL_BOARD","fieldname":"resource_kind","fieldtype":"Select","in_list_view":1,"label":"Resource Kind","options":"FULL_BOARD\nOFFCUT","reqd":1,"read_only":1},
+    {"default":"UNASSIGNED","fieldname":"offcut_source_party","fieldtype":"Select","label":"Offcut Source","options":"CUSTOMER\nFACTORY\nUNASSIGNED","read_only":1},
+    {"default":"UNASSIGNED","fieldname":"offcut_execution_party","fieldtype":"Select","label":"Offcut Execution","options":"CUSTOMER\nFACTORY\nUNASSIGNED","read_only":1},
     {"fieldname":"sheet_no","fieldtype":"Int","in_list_view":1,"label":"Sheet No","reqd":1},
     {"default":"Full Board","fieldname":"source_type","fieldtype":"Select","in_list_view":1,"label":"Source Type","options":"Full Board\nRemnant","reqd":1},
     {"fieldname":"board_description","fieldtype":"Data","in_list_view":1,"label":"Board Description","read_only":1},

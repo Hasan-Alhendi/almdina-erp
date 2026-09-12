@@ -194,6 +194,10 @@ def _expanded_expected(
             "spec": spec,
             "copy_no": copy_no,
             "label": f"{spec.row_index}.{copy_no}",
+            "piece_instance_id": str(
+                getattr(_row_for_spec(order, spec), "piece_instance_id", "")
+                or f"row-{spec.row_index}"
+            ) + f":{copy_no}",
         }
         for spec in specs
         for copy_no in range(1, _physical_spec_qty(order, spec) + 1)
@@ -334,6 +338,10 @@ def _apply_piece_contract_metadata(
 ) -> None:
     spec: OrderPieceCutSpec = candidate["spec"]
     piece["label"] = candidate["label"]
+    piece["piece_instance_id"] = candidate.get("piece_instance_id") or candidate["label"]
+    piece["resource_kind"] = piece.get("resource_kind") or "FULL_BOARD"
+    piece["offcut_source_party"] = piece.get("offcut_source_party") or "UNASSIGNED"
+    piece["offcut_execution_party"] = piece.get("offcut_execution_party") or "UNASSIGNED"
     piece["source_piece_no"] = spec.row_index
     piece["copy_no"] = candidate["copy_no"]
     piece["rotated"] = rotated
@@ -535,7 +543,8 @@ def parse_production_dxf(
         raise DxfImportError(exact_errors)
 
     snapshot["dimension_contract"] = {
-        "mode": "exact-persisted-cut",
+        "mode": "exact-edge-adjusted",
+        "identity": "exact-persisted-cut",
         "precision_cm": "0.001",
         "finished_dimensions_immutable": True,
         "special_outline_identity": "topology-owned",

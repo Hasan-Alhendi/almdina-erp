@@ -52,6 +52,7 @@ class ProductionActionFacts:
     operational_role: str | None = None
     actor_roles: tuple[str, ...] = ()
     is_admin: bool = False
+    has_factory_work: bool = True
 
 
 def _decision(
@@ -106,6 +107,13 @@ def decide_production_action(
         )
 
     if action == Capability.DISPATCH_ORDER:
+        if facts.has_cutting_plan and not facts.has_factory_work:
+            return _decision(
+                action,
+                False,
+                "customer_only_offcut",
+                "هذا الطلب يحتوي على نقص مخصص للزبون فقط ولا يدخل طوابير عمال المعمل.",
+            )
         if is_order_dispatched(
             production_path=facts.production_path,
             current_stage=facts.current_stage_name,

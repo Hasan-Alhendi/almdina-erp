@@ -65,6 +65,7 @@ from almdina_erp.almdina_erp.infrastructure.cutting.dxf_reader import (
 
 SHEET_OUTLINE_LAYER = "SHEET_OUTLINE"
 CUT_PATH_LAYER = "CUT_PATH"
+OFFCUT_LAYER = "OFFCUT"
 SHEETS_PER_ROW = 2
 SHEET_GAP_MM = 200
 CONNECTIVITY_TOLERANCE_MM = 1.5
@@ -472,6 +473,7 @@ def _read_normalized_geometry(file_path: str) -> tuple[list[dict[str, Any]], dic
             relevant_layers={
                 SHEET_OUTLINE_LAYER,
                 CUT_PATH_LAYER,
+                OFFCUT_LAYER,
                 DESIGNER_DEFAULT_LAYER,
                 *EXTRA_OVERLAY_LAYER_NAMES,
             },
@@ -527,8 +529,9 @@ def _missing_role_layer_guidance(diagnostics: dict[str, Any]) -> list[str]:
         if str(layer or "").strip()
     }
     hints = [
-        "أي طبقة غير SHEET_OUTLINE وCUT_PATH لا تُستخدم كحدود لوح أو مسار قص. "
-        "ضع مستطيل كل لوح على SHEET_OUTLINE ومحيط كل درفة على CUT_PATH."
+        "أي طبقة غير SHEET_OUTLINE أو CUT_PATH أو OFFCUT لا تُستخدم كحدود لوح أو مسار قص. "
+        "ضع مستطيل كل لوح على SHEET_OUTLINE، ومحيط الدرفة الكاملة على CUT_PATH، "
+        "ومحيط الدرفة الناقصة على OFFCUT."
     ]
     if DESIGNER_DEFAULT_LAYER in detected:
         hints.append(
@@ -1383,6 +1386,12 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
     overlays = _collect_extra_overlay_candidates(rows)
     sheet_segments = _segments_for_layer(rows, SHEET_OUTLINE_LAYER)
     cut_segments = _segments_for_layer(rows, CUT_PATH_LAYER)
+    offcut_segments = _segments_for_layer(rows, OFFCUT_LAYER)
+    if offcut_segments:
+        # OFFCUT is an input classification, not a validation bypass. Its
+        # contours enter the same topology, spacing, bounds and exact-size
+        # pipeline as ordinary CUT_PATH contours.
+        cut_segments = [*cut_segments, *offcut_segments]
     if not sheet_segments or not cut_segments:
         fallback_sheets, fallback_cuts = _default_layer_role_segments(
             rows,
@@ -1420,6 +1429,15 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
         usable_width_cm=usable_board_width_cm,
         usable_length_cm=usable_board_length_cm,
     )
+    offcut_polygons = _closed_polygons_from_segments(offcut_segments)
+    for piece in pieces:
+        if any(
+            polygons_overlap(piece.get("_outline_mm") or (), polygon, tolerance=GEOMETRY_TOLERANCE_MM)
+            for polygon in offcut_polygons
+        ):
+            piece["resource_kind"] = "OFFCUT"
+            piece["offcut_source_party"] = "UNASSIGNED"
+            piece["offcut_execution_party"] = "UNASSIGNED"
 
     expected_count = len(_expected_order_pieces(order))
     if len(pieces) != expected_count:
@@ -1445,6 +1463,21 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
         sheet["w"] = usable_board_width_cm
         sheet["h"] = usable_board_length_cm
         sheet["source_type"] = "Full Board"
+        sheet["resource_kind"] = (
+            "OFFCUT"
+            if sheet.get("pieces") and all(
+                str(piece.get("resource_kind") or "FULL_BOARD").upper() == "OFFCUT"
+                for piece in sheet.get("pieces") or []
+            )
+            else "FULL_BOARD"
+        )
+        if sheet["resource_kind"] == "OFFCUT":
+            first_offcut = (sheet.get("pieces") or [])[0]
+            sheet["offcut_source_party"] = first_offcut.get("offcut_source_party") or "UNASSIGNED"
+            sheet["offcut_execution_party"] = first_offcut.get("offcut_execution_party") or "UNASSIGNED"
+        else:
+            sheet["offcut_source_party"] = "UNASSIGNED"
+            sheet["offcut_execution_party"] = "UNASSIGNED"
 
     geometry_by_piece_id = {int(piece["id"]): piece["_outline_cm"] for piece in labeled}
     topology_by_piece_id = {
@@ -1454,7 +1487,12 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
     all_public_pieces = [_public_piece(piece) for piece in labeled]
     public_by_id = {int(piece["id"]): piece for piece in all_public_pieces}
     used_area_m2 = sum(flt(piece.get("area_m2")) for piece in all_public_pieces)
-    total_board_area_m2 = len(sheets) * (full_board_width_cm * full_board_length_cm) / 10000.0
+    full_board_sheets = [
+        sheet
+        for sheet in sheets
+        if str(sheet.get("resource_kind") or "FULL_BOARD").upper() == "FULL_BOARD"
+    ]
+    total_board_area_m2 = len(full_board_sheets) * (full_board_width_cm * full_board_length_cm) / 10000.0
     waste_area_m2 = max(0.0, total_board_area_m2 - used_area_m2)
 
     snapshot = {
@@ -1471,7 +1509,7 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
         "used_area_m2": used_area_m2,
         "total_board_area_m2": total_board_area_m2,
         "waste_area_m2": waste_area_m2,
-        "required_full_boards": len(sheets),
+        "required_full_boards": len(full_board_sheets),
         "sheets": [
             {
                 "sheet_no": sheet["sheet_no"],
@@ -1480,6 +1518,11 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
                 "full_length_cm": sheet["full_length_cm"],
                 "usable_width_cm": sheet["usable_width_cm"],
                 "usable_length_cm": sheet["usable_length_cm"],
+                # The UI and print output project this authoritative source
+                # classification. Without it OFFCUT silently becomes a board.
+                "resource_kind": sheet.get("resource_kind") or "FULL_BOARD",
+                "offcut_source_party": sheet.get("offcut_source_party") or "UNASSIGNED",
+                "offcut_execution_party": sheet.get("offcut_execution_party") or "UNASSIGNED",
                 "w": sheet["w"],
                 "h": sheet["h"],
                 "pieces": [public_by_id[int(piece["id"])] for piece in sheet["pieces"]],
@@ -1502,6 +1545,7 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
 
 __all__ = [
     "CUT_PATH_LAYER",
+    "OFFCUT_LAYER",
     "DIMENSION_TOLERANCE_MM",
     "DxfImportError",
     "SHEET_OUTLINE_LAYER",

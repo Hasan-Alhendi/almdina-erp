@@ -392,6 +392,9 @@
         const kerf_cm = num(plan.kerf_cm);
         const trim_cm = num(plan.trim_cm);
         const board_area_m2 = (board_w_cm * board_h_cm) / 10000;
+        const fullBoardSheets = (plan.sheets || []).filter(
+            sheet => String(sheet.resource_kind || "FULL_BOARD").toUpperCase() === "FULL_BOARD"
+        );
         const used_area_m2 = round(plan.used_area_m2, 3);
         const total_board_area_m2 = round(plan.total_board_area_m2, 3);
         const waste_area_m2 = round(plan.waste_area_m2, 3);
@@ -406,7 +409,7 @@
                 ${render_plan_header_cards(frm)}
 
                 <div class="dco-summary-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:8px 0 12px 0;">
-                    <div class="dco-summary-card" style="border:1px solid #ddd;border-radius:8px;padding:8px;background:#f8fafc;"><b>عدد الألواح</b><span>${plan.sheets.length}</span></div>
+                    <div class="dco-summary-card" style="border:1px solid #ddd;border-radius:8px;padding:8px;background:#f8fafc;"><b>عدد الألواح</b><span>${fullBoardSheets.length}</span></div>
                     <div class="dco-summary-card" style="border:1px solid #ddd;border-radius:8px;padding:8px;background:#f8fafc;"><b>مساحة القطع</b><span>${used_area_m2} م²</span></div>
                     <div class="dco-summary-card" style="border:1px solid #ddd;border-radius:8px;padding:8px;background:#f8fafc;"><b>مساحة الهدر</b><span>${waste_area_m2} م²</span></div>
                     <div class="dco-summary-card" style="border:1px solid #ddd;border-radius:8px;padding:8px;background:#f8fafc;"><b>نسبة الهدر</b><span>${waste_percent}%</span></div>
@@ -420,14 +423,16 @@
         `;
 
         plan.sheets.forEach(sheet => {
+            const isOffcut = String(sheet.resource_kind || "FULL_BOARD").toUpperCase() === "OFFCUT";
+            const sheetTitle = isOffcut ? "نقص" : `لوح ${sheet.sheet_no}`;
             const sheet_used_area_m2 = round((sheet.pieces || []).reduce((sum, p) => sum + num(p.area_m2), 0), 3);
             const sheet_waste_area_m2 = round(Math.max(0, board_area_m2 - sheet_used_area_m2), 3);
             const sheet_waste_percent = board_area_m2 ? round((sheet_waste_area_m2 / board_area_m2) * 100, 2) : 0;
 
             html += `
-                <div class="dco-sheet-card" style="border:1px solid #bbb;border-radius:10px;padding:10px;margin:14px 0;background:#fff;page-break-inside:avoid;break-inside:avoid;">
+                <div class="dco-sheet-card" data-resource-kind="${isOffcut ? "OFFCUT" : "FULL_BOARD"}" style="border:1px solid #bbb;border-radius:10px;padding:10px;margin:14px 0;background:#fff;page-break-inside:avoid;break-inside:avoid;">
                     <div class="dco-sheet-title" style="display:flex;justify-content:space-between;gap:10px;margin-bottom:8px;font-size:13px;font-weight:bold;">
-                        <div>اللوح ${sheet.sheet_no}</div>
+                        <div>${sheetTitle}</div>
                         <div>عدد القطع: ${(sheet.pieces || []).length} &nbsp; | &nbsp; الهدر: ${sheet_waste_area_m2} م² (${sheet_waste_percent}%)</div>
                     </div>
                     <div class="dco-sheet-board" style="position:relative;direction:ltr;width:${board_width_px}px;height:${board_height_px}px;max-width:100%;border:2px solid #111;background:linear-gradient(90deg,rgba(0,0,0,0.05) 1px,transparent 1px),linear-gradient(rgba(0,0,0,0.05) 1px,transparent 1px),#fff;background-size:32px 32px;overflow:hidden;margin:0 auto 8px auto;">
@@ -609,10 +614,13 @@
         const boardHmm = boardWmm * aspect;
         const cardWmm = boardWmm + cardHorizontalSpaceMm;
 
-        cards.forEach((card, index) => {
+        let boardIndex = 0;
+        cards.forEach(card => {
             const board = card.querySelector(".dco-sheet-board");
             const title = card.querySelector(".dco-sheet-title");
-            if (title) title.innerHTML = `<div class="dco-print-sheet-number">لوح ${index + 1}</div>`;
+            const isOffcut = card.dataset.resourceKind === "OFFCUT";
+            if (!isOffcut) boardIndex += 1;
+            if (title) title.innerHTML = `<div class="dco-print-sheet-number">${isOffcut ? "نقص" : "لوح " + boardIndex}</div>`;
             if (board) {
                 board.style.width = `${boardWmm}mm`;
                 board.style.height = `${boardHmm}mm`;
@@ -637,7 +645,9 @@
     function buildPrintPages(frm, planRoot, plan, identity) {
         const sourceCards = [...planRoot.querySelectorAll(".dco-sheet-card")]
             .map(card => card.cloneNode(true));
-        const totalSheets = sourceCards.length;
+        const totalSheets = sourceCards.filter(
+            card => card.dataset.resourceKind !== "OFFCUT"
+        ).length;
         const chunks = pageChunks(sourceCards);
         let globalBoardIndex = 0;
 
@@ -649,8 +659,9 @@
                 cardOffset += rowSize;
                 const rowHtml = rowCards.map(card => {
                     const title = card.querySelector(".dco-sheet-title");
-                    globalBoardIndex += 1;
-                    if (title) title.innerHTML = `<div class="dco-print-sheet-number">لوح ${globalBoardIndex}</div>`;
+                    const isOffcut = card.dataset.resourceKind === "OFFCUT";
+                    if (!isOffcut) globalBoardIndex += 1;
+                    if (title) title.innerHTML = `<div class="dco-print-sheet-number">${isOffcut ? "نقص" : "لوح " + globalBoardIndex}</div>`;
                     return card.outerHTML;
                 }).join("");
                 return `<div class="dco-print-sheets-row">${rowHtml}</div>`;

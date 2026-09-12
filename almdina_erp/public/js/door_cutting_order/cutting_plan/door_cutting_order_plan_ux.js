@@ -535,6 +535,65 @@
         `;
     }
 
+    function offcutPanelHtml(frm) {
+        const plan = activePlanRow(frm);
+        if (!plan) return "";
+        const assignments = plan && plan.offcut && Array.isArray(plan.offcut.assignments)
+            ? plan.offcut.assignments
+            : [];
+        const editable = can(frm, "set_offcut_execution_owner");
+        const option = (value, selected) => `<option value="${value}" ${value === selected ? "selected" : ""}>${value === "CUSTOMER" ? "الزبون" : value === "FACTORY" ? "المعمل" : "غير محدد"}</option>`;
+        return `
+            <section class="dco-offcut-policy" aria-label="تصنيف النقص">
+                <div class="dco-plan-actions-title"><strong>إدارة الدرف الناقصة</strong><span class="dco-plan-mode-hint">عدد القطع: ${assignments.length}</span></div>
+                <div class="text-muted" style="font-size:12px;margin-bottom:8px;">حدد لكل قطعة مصدر النقص والجهة التي تنفذها. تبقى كل validations والهندسة والكمية كما هي.</div>
+                ${assignments.length ? `<div style="display:grid;grid-template-columns:minmax(90px,1fr) 1fr 1fr;gap:8px;align-items:center;font-size:12px;font-weight:600;color:#6b7280;margin:8px 0 4px;"><span>القطعة</span><span>مصدر النقص</span><span>التنفيذ</span></div>` : `<div class="text-muted" style="font-size:12px;margin:6px 0;">لا توجد قطع مصنفة حاليًا كـ OFFCUT في الخطة.</div>`}
+                ${assignments.map(item => `
+                    <div class="dco-offcut-row" data-piece-instance-id="${esc(item.piece_instance_id)}" style="display:grid;grid-template-columns:minmax(90px,1fr) 1fr 1fr;gap:8px;align-items:center;margin:6px 0;">
+                        <span>${esc(item.piece_label || item.piece_instance_id || "قطعة")}</span>
+                        <select aria-label="مصدر النقص" title="مصدر النقص" class="form-control input-sm dco-offcut-source" ${editable ? "" : "disabled"}>${option("CUSTOMER", item.source_party)}${option("FACTORY", item.source_party)}${option("UNASSIGNED", item.source_party)}</select>
+                        <select aria-label="تنفيذ النقص" title="تنفيذ النقص" class="form-control input-sm dco-offcut-execution" ${editable ? "" : "disabled"}>${option("CUSTOMER", item.execution_party)}${option("FACTORY", item.execution_party)}${option("UNASSIGNED", item.execution_party)}</select>
+                    </div>
+                `).join("")}
+                ${editable ? `<div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap;"><button type="button" class="btn btn-default btn-sm dco-offcut-bulk-factory">الكل: معمل</button><button type="button" class="btn btn-default btn-sm dco-offcut-bulk-customer">الكل: زبون</button><button type="button" class="btn btn-primary btn-sm dco-save-offcut-policy">حفظ تصنيف النقص</button><input class="form-control input-sm dco-offcut-price" type="number" min="0" step="0.01" placeholder="سعر الفضلة للمجموعة" style="max-width:190px;"></div>` : ""}
+            </section>
+        `;
+    }
+
+    function bindOffcutPolicy(frm, field) {
+        field.$wrapper.find(".dco-offcut-bulk-factory").off("click").on("click", () => {
+            field.$wrapper.find(".dco-offcut-source").val("FACTORY");
+            field.$wrapper.find(".dco-offcut-execution").val("FACTORY");
+        });
+        field.$wrapper.find(".dco-offcut-bulk-customer").off("click").on("click", () => {
+            field.$wrapper.find(".dco-offcut-source").val("CUSTOMER");
+            field.$wrapper.find(".dco-offcut-execution").val("CUSTOMER");
+        });
+        field.$wrapper.find(".dco-save-offcut-policy").off("click").on("click", () => {
+            const plan = activePlanRow(frm);
+            if (!plan || !plan.name) return;
+            const assignments = field.$wrapper.find(".dco-offcut-row").map(function () {
+                const row = $(this);
+                return {
+                    piece_instance_id: row.attr("data-piece-instance-id"),
+                    resource_kind: "OFFCUT",
+                    source_party: row.find(".dco-offcut-source").val(),
+                    execution_party: row.find(".dco-offcut-execution").val(),
+                };
+            }).get();
+            frappe.call({
+                method: "almdina_erp.almdina_erp.services.offcut_service.set_offcut_execution_owner",
+                args: {
+                    plan_name: plan.name,
+                    assignments: JSON.stringify(assignments),
+                    offcut_price_usd: field.$wrapper.find(".dco-offcut-price").val() || null,
+                },
+                freeze: true,
+                freeze_message: "جارٍ حفظ تصنيف النقص...",
+            }).then(() => frm.reload_doc());
+        });
+    }
+
     function renderActions(frm) {
         const field = frm.fields_dict.plan_control_actions;
         if (!field || !field.$wrapper) return;
@@ -562,6 +621,7 @@
                     </div>
                 ` : ""}
                 ${documentActionsHtml(frm)}
+                ${offcutPanelHtml(frm)}
                 <div class="dco-plan-note">
                     ${blockReason
                         ? esc(__(blockReason))
@@ -577,6 +637,7 @@
         shell.find(".dco-print-cutting-plan").on("click", () => printCuttingPlan(frm));
         shell.find(".dco-export-dxf").on("click", () => exportCuttingPlanDxf(frm));
         shell.find(".dco-upload-dxf-plan").on("click", () => uploadCuttingPlanDxf(frm));
+        bindOffcutPolicy(frm, { $wrapper: shell });
     }
 
     async function recalculate(frm) {

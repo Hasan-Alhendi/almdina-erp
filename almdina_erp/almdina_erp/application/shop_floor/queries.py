@@ -567,6 +567,7 @@ def _production_facts(
         operational_role=_resolve_operational_role(repository, order, stage),
         actor_roles=(),
         is_admin=actor == "Administrator",
+        has_factory_work=bool(_value(order, "has_factory_work", True)),
     )
 
 

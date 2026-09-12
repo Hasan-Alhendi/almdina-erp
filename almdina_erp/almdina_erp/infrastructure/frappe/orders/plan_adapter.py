@@ -58,7 +58,9 @@ class FrappeOrderPlanAdapter:
 
     @staticmethod
     def piece_row_as_dict(row: Any) -> dict[str, Any]:
+        piece_instance_id = str(getattr(row, "piece_instance_id", "") or "").strip()
         return {
+            "piece_instance_id": piece_instance_id,
             "width_cm": flt(row.width_cm),
             "length_cm": flt(row.length_cm),
             "qty": physical_cut_quantity(
