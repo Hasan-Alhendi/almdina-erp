@@ -8,6 +8,32 @@
     const SAVE_SETTINGS_METHOD =
         "almdina_erp.almdina_erp.services.cost_permission_service.update_order_cost_settings";
 
+    function unwrapResponse(response) {
+        return response && response.message !== undefined ? response.message : response;
+    }
+
+    function legacyCall(runtime, request) {
+        return new Promise((resolve, reject) => {
+            let settled = false;
+            const succeed = (response) => {
+                if (settled) return;
+                settled = true;
+                resolve(unwrapResponse(response));
+            };
+            const fail = (error) => {
+                if (settled) return;
+                settled = true;
+                reject(error);
+            };
+
+            try {
+                runtime.call({ ...request, callback: succeed, error: fail });
+            } catch (error) {
+                fail(error);
+            }
+        });
+    }
+
     async function call(method, args, options = {}) {
         const runtime = window.frappe || null;
         if (!runtime) throw new Error("Frappe RPC is unavailable");
@@ -17,20 +43,19 @@
         // opaque errors such as "s is not a function" in the Cost workspace.
         if (typeof runtime.xcall === "function" && !options.freeze) {
             const result = await runtime.xcall(method, args || {});
-            return result && result.message !== undefined ? result.message : result;
+            return unwrapResponse(result);
         }
 
         if (typeof runtime.call !== "function") {
             throw new Error("Frappe RPC is unavailable");
         }
 
-        const response = await runtime.call({
+        return legacyCall(runtime, {
             method,
             args,
             freeze: Boolean(options.freeze),
             freeze_message: options.freezeMessage || undefined,
         });
-        return response && response.message !== undefined ? response.message : response;
     }
 
     function load(orderName) {
