@@ -39,7 +39,7 @@ class TestDcoCompactListUx(unittest.TestCase):
             'door_cutting_order_compact_list_ux.js?v=13"'
         )
 
-        self.assertIn('"/assets/almdina_erp/css/door_cutting_order_list.css?v=14"', manifest)
+        self.assertIn('"/assets/almdina_erp/css/door_cutting_order_list.css?v=15"', manifest)
         self.assertIn('"/assets/almdina_erp/js/notes/notes_dco_list_integration.js?v=14"', manifest)
         self.assertIn(compact_global, manifest)
         self.assertIn(canonical, manifest)
@@ -139,25 +139,35 @@ class TestDcoCompactListUx(unittest.TestCase):
         self.assertIn('data-value="${DEFAULT_DESKTOP_PAGE_LENGTH}"', source)
         self.assertIn('listview._dcoDefaultPageLengthApplied = true;', source)
 
-    def test_column_widths_support_v16_classes_and_newer_data_attributes(self) -> None:
+    def test_column_widths_are_fluid_full_width_and_support_both_frappe_dom_contracts(self) -> None:
         css = LIST_CSS.read_text(encoding="utf-8")
 
         self.assertIn('@media (min-width: 601px)', css)
         self.assertIn('.dco-order-list .list-row .level-left', css)
         self.assertIn('.dco-order-list .list-row-head .level-left', css)
-        self.assertIn('gap: 2px;', css)
+        self.assertIn('flex: 1 1 100% !important;', css)
+        self.assertIn('width: 100%;', css)
+        self.assertIn('gap: 6px;', css)
         self.assertIn('.dco-order-list .list-row-col {', css)
         self.assertIn('margin: 0 !important;', css)
         self.assertIn('.dco-order-list .list-row-col:not(.tag-col)', css)
-        self.assertIn('flex: 0 0 96px !important;', css)
+        self.assertIn('--dco-col-grow: 0.9;', css)
+        self.assertIn('--dco-col-basis: 108px;', css)
+        self.assertIn('--dco-col-min: 90px;', css)
+        self.assertIn('width: auto !important;', css)
+        self.assertIn('max-width: none !important;', css)
+        self.assertIn(
+            'flex: var(--dco-col-grow) 1 var(--dco-col-basis) !important;',
+            css,
+        )
+        self.assertNotIn('flex: 0 0 96px !important;', css)
         self.assertIn('.name, .list-subject, [data-fieldname="name"]', css)
-        self.assertIn('width: 78px !important;', css)
+        self.assertIn('--dco-col-basis: 118px;', css)
         self.assertIn('.order_date, [data-fieldname="order_date"]', css)
-        self.assertIn('width: 82px !important;', css)
         self.assertIn('.customer, [data-fieldname="customer"]', css)
-        self.assertIn('width: 92px !important;', css)
+        self.assertIn('--dco-col-basis: 140px;', css)
         self.assertIn('.important_note_preview, [data-fieldname="important_note_preview"]', css)
-        self.assertIn('flex: 0 0 92px !important;', css)
+        self.assertIn('--dco-col-basis: 150px;', css)
         self.assertIn('.current_production_stage, [data-fieldname="current_production_stage"]', css)
         self.assertIn('.department_status, [data-fieldname="department_status"]', css)
         self.assertIn('.name, .list-subject, .order_date, [data-fieldname="name"]', css)
