@@ -56,7 +56,8 @@ class TestA156NotesListLifecycle(unittest.TestCase):
         self.assertIn("importantColumnTargetIndex(listview, columns)", body)
         self.assertIn("columns.splice(targetIndex, 0, important)", body)
         self.assertIn("return !arraysMatch(before, after)", body)
-        self.assertIn("legacy post-setup rule", body)
+        self.assertIn("saved List Settings", body)
+        self.assertIn("Do not rewrite unrelated", body)
 
     def test_reconciliation_is_idempotent_when_saved_order_is_already_rendered(self) -> None:
         self.assertIn("function arraysMatch", self.source)
