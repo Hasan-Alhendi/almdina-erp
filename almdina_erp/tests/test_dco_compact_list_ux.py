@@ -14,6 +14,14 @@ LIST_JS = (
     / "list_view"
     / "door_cutting_order_compact_list_ux.js"
 )
+CANONICAL_LIST_JS = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "list_view"
+    / "door_cutting_order_list.js"
+)
 LIST_CSS = ROOT / "public" / "css" / "door_cutting_order_list.css"
 MANIFEST = ROOT / "frontend_assets.py"
 
@@ -27,10 +35,10 @@ class TestDcoCompactListUx(unittest.TestCase):
         )
         compact_global = (
             '"/assets/almdina_erp/js/door_cutting_order/list_view/'
-            'door_cutting_order_compact_list_ux.js"'
+            'door_cutting_order_compact_list_ux.js?v=13"'
         )
 
-        self.assertIn('"/assets/almdina_erp/css/door_cutting_order_list.css"', manifest)
+        self.assertIn('"/assets/almdina_erp/css/door_cutting_order_list.css?v=13"', manifest)
         self.assertIn(compact_global, manifest)
         self.assertIn(canonical, manifest)
         self.assertNotIn(
@@ -61,7 +69,10 @@ class TestDcoCompactListUx(unittest.TestCase):
         self.assertIn('Array.from(text)', source)
         self.assertIn('characters.slice(0, limit)', source)
         self.assertIn('<button type="button"', source)
-        self.assertIn('class="filterable dco-list-compact-text dco-list-filterable-text ellipsis${boardClass}"', source)
+        self.assertIn(
+            'class="filterable dco-list-compact-text dco-list-filterable-text ellipsis${boardClass}"',
+            source,
+        )
         self.assertIn('data-filter=', source)
         self.assertIn('title=', source)
         self.assertIn('aria-label=', source)
@@ -92,8 +103,9 @@ class TestDcoCompactListUx(unittest.TestCase):
         self.assertIn('const originalOnload = existing.onload;', source)
         self.assertIn('const formatters = Object.assign({}, existing.formatters || {});', source)
         self.assertIn('onload(listview)', source)
-        self.assertIn('preserveSavedListSettingsOrder(listview);', source)
         self.assertIn('applyDefaultDesktopPageLength(listview);', source)
+        self.assertNotIn('preserveSavedListSettingsOrder', source)
+        self.assertNotIn('_dcoOrderNotesColumnInstalled', source)
         self.assertNotIn('style.textContent', source)
         self.assertNotIn('document.createElement', source)
         self.assertNotIn('MutationObserver', source)
@@ -102,15 +114,16 @@ class TestDcoCompactListUx(unittest.TestCase):
         self.assertNotIn('frappe.call', source)
         self.assertNotIn('refresh(listview)', source)
 
-    def test_saved_list_settings_order_disables_legacy_order_notes_override(self) -> None:
-        source = LIST_JS.read_text(encoding="utf-8")
-        body = source.split("function preserveSavedListSettingsOrder", 1)[1].split(
-            "function applyDefaultDesktopPageLength",
-            1,
-        )[0]
+    def test_frappe_list_settings_are_the_only_column_order_owner(self) -> None:
+        canonical = CANONICAL_LIST_JS.read_text(encoding="utf-8")
+        compact = LIST_JS.read_text(encoding="utf-8")
 
-        self.assertIn("listview._dcoOrderNotesColumnInstalled = true;", body)
-        self.assertIn("Frappe v16 already owns the user's column order", body)
+        self.assertNotIn('function applyOrderNotesColumnOrder', canonical)
+        self.assertNotIn('function installOrderNotesColumnOrder', canonical)
+        self.assertNotIn('installOrderNotesColumnOrder(listview);', canonical)
+        self.assertNotIn('_dcoOrderNotesColumnInstalled', canonical)
+        self.assertNotIn('_dcoOrderNotesColumnInstalled', compact)
+        self.assertNotIn('preserveSavedListSettingsOrder', compact)
 
     def test_default_desktop_page_length_is_500_without_changing_mobile_default(self) -> None:
         source = LIST_JS.read_text(encoding="utf-8")
@@ -142,7 +155,7 @@ class TestDcoCompactListUx(unittest.TestCase):
         self.assertIn('.dco-order-list .list-row-col[data-fieldname="customer"]', css)
         self.assertIn('width: 92px !important;', css)
         self.assertIn('.dco-order-list .list-row-col[data-fieldname="important_note_preview"]', css)
-        self.assertIn('width: 96px !important;', css)
+        self.assertIn('flex: 0 0 92px !important;', css)
         self.assertIn('.dco-order-list .dco-important-note-link', css)
         self.assertIn('.dco-order-list .list-row-col[data-fieldname="current_production_stage"]', css)
         self.assertIn('.dco-order-list .list-row-col[data-fieldname="department_status"]', css)
@@ -151,6 +164,24 @@ class TestDcoCompactListUx(unittest.TestCase):
         self.assertIn('display: none !important;', css)
         self.assertIn('.dco-order-list .dco-list-filterable-text', css)
         self.assertNotIn('nth-child', css)
+
+    def test_important_note_is_contained_inside_its_own_column(self) -> None:
+        css = LIST_CSS.read_text(encoding="utf-8")
+
+        self.assertIn(
+            '.dco-order-list .list-row-col[data-fieldname="important_note_preview"] > *',
+            css,
+        )
+        self.assertIn('min-width: 0;', css)
+        self.assertIn('width: 100%;', css)
+        self.assertIn('box-sizing: border-box;', css)
+        self.assertIn('overflow: hidden;', css)
+        self.assertIn(
+            '.dco-order-list .dco-important-note-link .dco-important-note-text',
+            css,
+        )
+        self.assertIn('flex: 1 1 auto;', css)
+        self.assertIn('text-overflow: ellipsis;', css)
 
     def test_operational_filters_are_compact_and_stay_side_by_side(self) -> None:
         css = LIST_CSS.read_text(encoding="utf-8")
@@ -173,14 +204,15 @@ class TestDcoCompactListUx(unittest.TestCase):
 
         self.assertIn('.dco-order-list .filter-section > .filter-selector {', css)
         self.assertIn('.dco-order-list .filter-section > .filter-selector .btn-group', css)
+        self.assertIn('flex-direction: row !important;', css)
         self.assertIn('height: 30px;', css)
         self.assertIn('border-radius: 8px;', css)
         self.assertIn('.dco-order-list .filter-section > .filter-selector .filter-button', css)
         self.assertIn('min-width: 72px;', css)
         self.assertIn('.dco-order-list .filter-section > .filter-selector .filter-x-button', css)
-        self.assertIn('width: 28px;', css)
+        self.assertIn('width: 28px !important;', css)
         self.assertIn('.dco-order-list .filter-section > .filter-selector .button-label', css)
-        self.assertIn('white-space: nowrap;', css)
+        self.assertIn('white-space: nowrap !important;', css)
         self.assertNotIn('.page-form .filter-selector', css)
 
 
