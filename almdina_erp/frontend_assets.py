@@ -11,6 +11,9 @@ app_include_css = [
     # Raw /assets paths are not content-fingerprinted by Frappe; bump the bounded
     # DCO list revision when its presentation contract changes.
     "/assets/almdina_erp/css/door_cutting_order_list.css?v=15",
+    # Subject-direction correction must load after the list presentation owner:
+    # keep Frappe's checkbox at the RTL edge while isolating only ID text as LTR.
+    "/assets/almdina_erp/css/door_cutting_order_list_rtl_subject.css?v=1",
     "/assets/almdina_erp/css/door_cutting_order_extra_addons.css",
     "/assets/almdina_erp/css/notes.css",
     "/assets/almdina_erp/css/notes_interactions.css",
