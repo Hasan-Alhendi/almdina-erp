@@ -2,18 +2,22 @@ from __future__ import annotations
 
 import pytest
 
+from almdina_erp.almdina_erp.application.orders.plan_snapshot_security import (
+    sanitize_plan_snapshot,
+)
 from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
     OffcutBusinessState,
     OffcutPolicyError,
     Party,
     ResourceKind,
     business_state_options,
+    canonicalize_snapshot_allocation,
+    canonicalize_snapshot_sources,
     decision_from_business_state,
     decision_from_values,
     offcut_summary,
     preserve_offcut_classification,
     source_summary,
-    canonicalize_snapshot_sources,
     validate_source_resource_homogeneity,
 )
 
@@ -55,7 +59,10 @@ def test_business_state_options_expose_only_supported_cases() -> None:
         {"value": "CUSTOMER_CUSTOMER", "label": "فضلة من الزبون — تنفيذ عند الزبون"},
         {"value": "FACTORY_FACTORY", "label": "فضلة من المعمل — تنفيذ في المعمل"},
     ]
-    assert all(option["value"] != "FACTORY_CUSTOMER" for option in business_state_options())
+    assert all(
+        option["value"] != "FACTORY_CUSTOMER"
+        for option in business_state_options()
+    )
 
 
 def test_physical_source_cannot_mix_full_board_and_offcut() -> None:
@@ -213,3 +220,221 @@ def test_reimport_preserves_only_same_offcut_physical_identity() -> None:
         "UNASSIGNED",
         "UNASSIGNED",
     )
+
+
+def test_allocation_numbers_only_real_full_boards_without_rewriting_source_identity() -> None:
+    snapshot = {
+        "sheets": [
+            {
+                "sheet_no": 10,
+                "resource_kind": "FULL_BOARD",
+                "pieces": [{"piece_instance_id": "row-a:1", "resource_kind": "FULL_BOARD", "area_m2": 1}],
+            },
+            {
+                "sheet_no": 20,
+                "resource_kind": "OFFCUT",
+                "pieces": [{"piece_instance_id": "row-b:1", "resource_kind": "OFFCUT", "area_m2": 0.5}],
+            },
+            {
+                "sheet_no": 30,
+                "resource_kind": "FULL_BOARD",
+                "pieces": [{"piece_instance_id": "row-c:1", "resource_kind": "FULL_BOARD", "area_m2": 1}],
+            },
+        ],
+        "total_board_area_m2": 6,
+        "waste_area_m2": 4,
+    }
+
+    canonicalize_snapshot_allocation(snapshot)
+
+    assert [sheet["sheet_no"] for sheet in snapshot["sheets"]] == [10, 20, 30]
+    assert [sheet["full_board_no"] for sheet in snapshot["sheets"]] == [1, None, 2]
+    assert snapshot["required_full_boards"] == 2
+
+
+def test_allocation_excludes_offcut_area_from_new_board_waste() -> None:
+    snapshot = {
+        "used_area_m2": 4.0,
+        "total_board_area_m2": 5.0,
+        "waste_area_m2": 1.0,
+        "sheets": [
+            {
+                "sheet_no": 1,
+                "resource_kind": "FULL_BOARD",
+                "pieces": [{"piece_instance_id": "full:1", "resource_kind": "FULL_BOARD", "area_m2": 3.0}],
+            },
+            {
+                "sheet_no": 2,
+                "resource_kind": "OFFCUT",
+                "pieces": [{"piece_instance_id": "offcut:1", "resource_kind": "OFFCUT", "area_m2": 1.0}],
+            },
+        ],
+    }
+
+    canonicalize_snapshot_allocation(snapshot)
+
+    assert snapshot["used_area_m2"] == 4.0
+    assert snapshot["full_board_used_area_m2"] == 3.0
+    assert snapshot["total_board_area_m2"] == 5.0
+    assert snapshot["waste_area_m2"] == 2.0
+    assert snapshot["required_full_boards"] == 1
+
+
+@pytest.mark.parametrize(
+    ("state", "source", "execution"),
+    [
+        ("UNASSIGNED", "UNASSIGNED", "UNASSIGNED"),
+        ("CUSTOMER_FACTORY", "CUSTOMER", "FACTORY"),
+        ("CUSTOMER_CUSTOMER", "CUSTOMER", "CUSTOMER"),
+        ("FACTORY_FACTORY", "FACTORY", "FACTORY"),
+    ],
+)
+def test_all_supported_offcut_business_states_allocate_zero_new_boards(
+    state: str,
+    source: str,
+    execution: str,
+) -> None:
+    decision = decision_from_business_state("OFFCUT", state)
+    assert decision.source_party.value == source
+    assert decision.execution_party.value == execution
+
+    snapshot = {
+        "total_board_area_m2": 0,
+        "waste_area_m2": 0,
+        "sheets": [{
+            "sheet_no": 7,
+            "resource_kind": "OFFCUT",
+            "offcut_source_party": source,
+            "offcut_execution_party": execution,
+            "pieces": [{
+                "piece_instance_id": f"copy:{state}",
+                "resource_kind": "OFFCUT",
+                "offcut_source_party": source,
+                "offcut_execution_party": execution,
+                "area_m2": 0.8,
+            }],
+        }],
+    }
+
+    canonicalize_snapshot_allocation(snapshot)
+
+    assert snapshot["required_full_boards"] == 0
+    assert snapshot["sheets"][0]["full_board_no"] is None
+
+
+def test_all_offcut_plan_keeps_every_piece_and_allocates_zero_full_boards() -> None:
+    identities = [f"row:copy:{copy_no}" for copy_no in range(1, 6)]
+    snapshot = {
+        "used_area_m2": 5.0,
+        "total_board_area_m2": 5.0,
+        "waste_area_m2": 0.0,
+        "sheets": [{
+            "sheet_no": 4,
+            "resource_kind": "OFFCUT",
+            "pieces": [
+                {"piece_instance_id": identity, "resource_kind": "OFFCUT", "area_m2": 1.0}
+                for identity in identities
+            ],
+        }],
+    }
+
+    canonicalize_snapshot_allocation(snapshot)
+
+    assert [piece["piece_instance_id"] for piece in snapshot["sheets"][0]["pieces"]] == identities
+    assert snapshot["required_full_boards"] == 0
+    assert snapshot["full_board_used_area_m2"] == 0.0
+    assert snapshot["total_board_area_m2"] == 0.0
+    assert snapshot["waste_area_m2"] == 0.0
+    assert snapshot["sheets"][0]["sheet_no"] == 4
+    assert snapshot["sheets"][0]["full_board_no"] is None
+
+
+def test_legacy_snapshot_without_resource_kind_keeps_normal_full_board_behavior() -> None:
+    snapshot = {
+        "used_area_m2": 3.0,
+        "total_board_area_m2": 5.0,
+        "waste_area_m2": 2.0,
+        "sheets": [{
+            "sheet_no": 1,
+            "pieces": [{"piece_instance_id": "legacy:1", "area_m2": 3.0}],
+        }],
+    }
+
+    canonicalize_snapshot_allocation(snapshot)
+
+    assert snapshot["required_full_boards"] == 1
+    assert snapshot["sheets"][0]["full_board_no"] == 1
+    assert snapshot["full_board_used_area_m2"] == 3.0
+    assert snapshot["waste_area_m2"] == 2.0
+
+
+def test_per_copy_identity_geometry_and_extra_metadata_survive_allocation_projection() -> None:
+    full_board_copies = [
+        {
+            "piece_instance_id": f"door-row:copy:{copy_no}",
+            "resource_kind": "FULL_BOARD",
+            "area_m2": 1.0,
+            "special_shape_geometry_json": f"geometry-{copy_no}",
+            "extra_overlays": {"Liner": [copy_no]},
+        }
+        for copy_no in (1, 2, 4, 5)
+    ]
+    offcut_copy = {
+        "piece_instance_id": "door-row:copy:3",
+        "resource_kind": "OFFCUT",
+        "area_m2": 1.0,
+        "special_shape_geometry_json": "geometry-3",
+        "extra_overlays": {"Liner": [3], "Rear Groove": [3], "Handle Recess": [3]},
+    }
+    snapshot = {
+        "used_area_m2": 5.0,
+        "total_board_area_m2": 8.0,
+        "waste_area_m2": 3.0,
+        "sheets": [
+            {"sheet_no": 1, "resource_kind": "FULL_BOARD", "pieces": full_board_copies},
+            {"sheet_no": 2, "resource_kind": "OFFCUT", "pieces": [offcut_copy]},
+        ],
+    }
+
+    canonicalize_snapshot_allocation(snapshot)
+
+    all_pieces = [piece for sheet in snapshot["sheets"] for piece in sheet["pieces"]]
+    assert {piece["piece_instance_id"] for piece in all_pieces} == {
+        f"door-row:copy:{copy_no}" for copy_no in range(1, 6)
+    }
+    preserved = next(piece for piece in all_pieces if piece["piece_instance_id"] == "door-row:copy:3")
+    assert preserved["special_shape_geometry_json"] == "geometry-3"
+    assert preserved["extra_overlays"] == {
+        "Liner": [3],
+        "Rear Groove": [3],
+        "Handle Recess": [3],
+    }
+    assert snapshot["required_full_boards"] == 1
+    assert snapshot["full_board_used_area_m2"] == 4.0
+
+
+def test_snapshot_security_applies_canonical_offcut_allocation_before_persistence() -> None:
+    snapshot = {
+        "used_area_m2": 4.0,
+        "total_board_area_m2": 5.0,
+        "waste_area_m2": 1.0,
+        "sheets": [
+            {
+                "sheet_no": 1,
+                "resource_kind": "FULL_BOARD",
+                "pieces": [{"piece_instance_id": "full:1", "resource_kind": "FULL_BOARD", "area_m2": 3.0}],
+            },
+            {
+                "sheet_no": 2,
+                "resource_kind": "OFFCUT",
+                "pieces": [{"piece_instance_id": "offcut:1", "resource_kind": "OFFCUT", "area_m2": 1.0}],
+            },
+        ],
+    }
+
+    sanitized = sanitize_plan_snapshot(snapshot)
+
+    assert sanitized["required_full_boards"] == 1
+    assert sanitized["full_board_used_area_m2"] == 3.0
+    assert sanitized["waste_area_m2"] == 2.0
+    assert [sheet["full_board_no"] for sheet in sanitized["sheets"]] == [1, None]
