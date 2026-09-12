@@ -26,7 +26,8 @@
     const TOOLBAR_SLOT_CLASS = "dco-tab-edit-toolbar-slot";
     const PAGE_CLASS = "dco-tab-local-edit-actions";
     const STYLE_ID = "dco-tab-local-edit-actions-css";
-    const TAB_LISTENER_KEY = "__almdinaPageEditTabListenerInstalled";
+    const TAB_LISTENER_ROOT_KEY = "__almdinaPageEditTabListenerRoot";
+    const TAB_LISTENER_HANDLER_KEY = "__almdinaPageEditTabListenerHandler";
     const BUSY_KEY = "__almdinaPageEditActionBusy";
 
     function documentContext() {
@@ -593,36 +594,71 @@
         });
     }
 
+    function tabNavigationRoot(frm) {
+        const nativeTabs = frm && frm.layout && frm.layout.tab_link_container;
+        return wrapperNode(nativeTabs) || formRoot(frm);
+    }
+
     function tabFieldFromEventTarget(target) {
-        if (!target || !target.closest) return "";
-        const node = target.closest(
-            '[data-fieldname="order_tab"],'
-            + '[data-fieldname="results_tab"],'
-            + '[data-fieldname="cost_tab"]'
-        );
-        if (!node) return "";
-        const nav = node.closest("li,.nav-item");
-        if (!nav && !node.classList.contains("nav-link")) return "";
-        return String(node.getAttribute("data-fieldname") || "");
+        if (!target || typeof target.closest !== "function") return "";
+        const link = target.closest(".nav-link[data-fieldname]");
+        if (!link) return "";
+        const fieldname = String(link.getAttribute("data-fieldname") || "");
+        return TAB_KIND[fieldname] ? fieldname : "";
+    }
+
+    function clearTabListener(frm) {
+        if (!frm) return;
+        const root = frm[TAB_LISTENER_ROOT_KEY];
+        const handler = frm[TAB_LISTENER_HANDLER_KEY];
+        if (root && handler && typeof root.removeEventListener === "function") {
+            root.removeEventListener("click", handler, true);
+        }
+        frm[TAB_LISTENER_ROOT_KEY] = null;
+        frm[TAB_LISTENER_HANDLER_KEY] = null;
     }
 
     function installTabListener(frm) {
-        const root = formRoot(frm);
-        if (!root || root[TAB_LISTENER_KEY]) return;
-        root.addEventListener("click", (event) => {
+        const root = tabNavigationRoot(frm);
+        if (!root || typeof root.addEventListener !== "function") return;
+        if (frm[TAB_LISTENER_ROOT_KEY] === root && frm[TAB_LISTENER_HANDLER_KEY]) return;
+
+        clearTabListener(frm);
+        const handler = (event) => {
             const targetField = tabFieldFromEventTarget(event.target);
             if (!targetField) return;
             const currentField = currentTabFieldname(frm);
             const editingKind = activeEditingKind(frm);
             if (editingKind && targetField !== currentField) {
                 event.preventDefault();
-                event.stopImmediatePropagation();
-                frappe.msgprint(__("احفظ أو ألغِ التعديل الحالي قبل الانتقال إلى قسم آخر."));
+                if (typeof event.stopImmediatePropagation === "function") {
+                    event.stopImmediatePropagation();
+                } else if (typeof event.stopPropagation === "function") {
+                    event.stopPropagation();
+                }
+                frappe.msgprint({
+                    title: __("التعديل ما زال مفتوحًا"),
+                    message: __("احفظ أو ألغِ التعديل الحالي قبل الانتقال إلى قسم آخر."),
+                    indicator: "orange",
+                });
                 return;
             }
-            window.requestAnimationFrame(() => schedule(frm));
-        }, true);
-        root[TAB_LISTENER_KEY] = true;
+            schedule(frm);
+        };
+
+        root.addEventListener("click", handler, true);
+        const context = documentContext();
+        if (context && typeof context.registerCleanup === "function") {
+            context.registerCleanup(frm, "tab-local-edit-navigation", () => {
+                root.removeEventListener("click", handler, true);
+                if (frm[TAB_LISTENER_ROOT_KEY] === root) {
+                    frm[TAB_LISTENER_ROOT_KEY] = null;
+                    frm[TAB_LISTENER_HANDLER_KEY] = null;
+                }
+            });
+        }
+        frm[TAB_LISTENER_ROOT_KEY] = root;
+        frm[TAB_LISTENER_HANDLER_KEY] = handler;
     }
 
     function refresh(frm) {

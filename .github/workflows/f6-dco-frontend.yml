@@ -70,6 +70,7 @@ jobs:
           node --check almdina_erp/tests/js/dco_workspace_asset_registry.test.js
           node --check almdina_erp/tests/js/dco_workspace_asset_activation.test.js
           node --check almdina_erp/tests/js/dco_workspace_lifecycle.test.js
+          node --check almdina_erp/tests/js/dco_cost_assets_tab_guard.test.js
           node --check almdina_erp/tests/js/order_lifecycle_jquery_thenable.test.js
           node --check almdina_erp/tests/js/dco_workspace_mutation_impact.test.js
           node --check almdina_erp/tests/js/measurement_lifecycle.test.js
@@ -134,6 +135,9 @@ jobs:
 
       - name: Simulate DCO workspace lifecycle reentrancy and lazy activation
         run: node almdina_erp/tests/js/dco_workspace_lifecycle.test.js
+
+      - name: Validate Cost lazy assets and edit-session tab navigation guard
+        run: node almdina_erp/tests/js/dco_cost_assets_tab_guard.test.js
 
       - name: Simulate order lifecycle jqXHR transport compatibility
         run: node almdina_erp/tests/js/order_lifecycle_jquery_thenable.test.js
