@@ -22,21 +22,12 @@
         box-sizing: border-box;
     }
 
-    .dco-order-list .list-row-col:is(
-        .name,
-        .customer,
-        .order_date,
-        .board_description,
-        .edge_color,
-        .order_notes,
-        .important_note_preview,
-        .production_path,
-        .current_department,
-        .current_assignee,
-        .current_production_stage,
-        .department_status,
-        [data-fieldname]
-    ) {
+    /*
+     * v16.17.5 has no semantic marker on the Status column, so give every
+     * non-Tag desktop column a deterministic compact baseline first. Known field
+     * classes/attributes below then refine their exact semantic widths.
+     */
+    .dco-order-list .list-row-col:not(.tag-col) {
         width: 96px !important;
         min-width: 64px !important;
         max-width: 96px !important;
@@ -53,6 +44,7 @@
         flex: 0 0 78px !important;
     }
 
+    /* Newer Frappe builds expose a semantic Status marker; v16.17.5 uses the 96px baseline. */
     .dco-order-list .list-row-col[data-fieldname="status_field"] {
         width: 74px !important;
         min-width: 74px !important;
