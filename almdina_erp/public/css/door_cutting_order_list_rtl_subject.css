@@ -1,0 +1,26 @@
+/*
+ * Door Cutting Order desktop ListView subject-column direction contract.
+ *
+ * Frappe renders the row checkbox and the document identity inside the same
+ * `.list-subject` flex container. The ID text itself must remain LTR, but making
+ * the whole subject column LTR also moves the checkbox to the left of the ID.
+ * Keep the container RTL so selection stays on the far right, then isolate only
+ * the ID/sort text as LTR. Scoped to DCO desktop ListView only.
+ */
+
+@media (min-width: 601px) {
+    .dco-order-list .list-row-col:is(.name, .list-subject, [data-fieldname="name"]) {
+        direction: rtl;
+        unicode-bidi: normal;
+    }
+
+    .dco-order-list .list-row-col:is(.name, .list-subject, [data-fieldname="name"]) > :not(.select-like) {
+        direction: ltr;
+        unicode-bidi: isolate;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .dco-order-list .list-row-col:is(.name, .list-subject, [data-fieldname="name"]) > .select-like {
+        flex: 0 0 auto;
+    }
+}
