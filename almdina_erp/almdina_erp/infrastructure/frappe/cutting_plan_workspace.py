@@ -61,14 +61,20 @@ def _manufacturing_requirements(order: Any) -> dict[str, Any]:
     requirements: list[dict[str, Any]] = []
     for source_piece_no, row in enumerate(order.pieces or [], start=1):
         piece = FrappeCutDimensionPlanAdapter.piece_row_as_dict(row)
+        base_identity = str(getattr(row, "piece_instance_id", "") or "").strip()
+        if not base_identity:
+            frappe.throw(
+                _(
+                    "لا يمكن إنشاء خطة القص لأن إحدى القطع الفيزيائية بلا هوية ثابتة. "
+                    "احفظ الطلب أولاً ثم أعد المحاولة."
+                ),
+                frappe.ValidationError,
+            )
         for copy_no in range(1, cint(piece["qty"]) + 1):
             requirements.append(
                 {
                     "label": f"{source_piece_no}.{copy_no}",
-                    "piece_instance_id": (
-                        str(getattr(row, "piece_instance_id", "") or f"row-{source_piece_no}")
-                        + f":{copy_no}"
-                    ),
+                    "piece_instance_id": f"{base_identity}:{copy_no}",
                     "source_piece_no": source_piece_no,
                     "copy_no": copy_no,
                     "cut_width_cm": piece["width_cm"],
@@ -292,7 +298,7 @@ def _apply_snapshot(
                 "placed_pieces",
                 {
                     "sheet_no": sheet_no,
-                    "piece_instance_id": piece.get("piece_instance_id") or f"{piece.get('source_piece_no')}:{piece.get('copy_no')}",
+                    "piece_instance_id": piece.get("piece_instance_id") or "",
                     "resource_kind": piece.get("resource_kind") or sheet_decision.resource_kind.value,
                     "offcut_source_party": piece.get("offcut_source_party") or sheet_decision.source_party.value,
                     "offcut_execution_party": piece.get("offcut_execution_party") or sheet_decision.execution_party.value,
