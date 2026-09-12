@@ -36,6 +36,7 @@ function verifyNativeTabLifecycleGuard() {
     const activeState = { fieldname: "results_tab" };
     let editingKind = "plan";
     let scheduleCount = 0;
+    let legacyRemoveCount = 0;
 
     const makeTabs = () => [
         makeTab("order_tab", activeState),
@@ -43,10 +44,22 @@ function verifyNativeTabLifecycleGuard() {
         makeTab("cost_tab", activeState),
     ];
 
+    const legacyHandler = () => {};
+    const legacyRoot = {
+        removeEventListener(name, handler, capture) {
+            assert.equal(name, "click");
+            assert.equal(handler, legacyHandler);
+            assert.equal(capture, true);
+            legacyRemoveCount += 1;
+        },
+    };
+
     const frm = {
         doctype: "Door Cutting Order",
         doc: { doctype: "Door Cutting Order", name: "DCO-TAB-GUARD-1" },
         layout: { tabs: makeTabs() },
+        __almdinaPageEditTabListenerRoot: legacyRoot,
+        __almdinaPageEditTabListenerHandler: legacyHandler,
         get_active_tab() {
             return this.layout.tabs.find((tab) => tab.df.fieldname === activeState.fieldname) || null;
         },
@@ -105,6 +118,9 @@ function verifyNativeTabLifecycleGuard() {
 
     assert.equal(typeof formHandlers.refresh, "function");
     formHandlers.refresh(frm);
+    assert.equal(legacyRemoveCount, 1, "native lifecycle owner must retire the legacy DOM click guard");
+    assert.equal(frm.__almdinaPageEditTabListenerRoot, null);
+    assert.equal(frm.__almdinaPageEditTabListenerHandler, null);
 
     for (const scenario of [
         { kind: "plan", current: "results_tab", target: "order_tab" },
