@@ -20,6 +20,8 @@
     function headerHtml(identity = {}, options = {}) {
         const contacts = contactLines(identity.print_factory_contacts);
         const title = String(options.title || "").trim();
+        const reference = String(options.reference || "").trim();
+        const date = String(options.date || "").trim();
         const meta = String(options.meta || "").trim();
         const badge = String(options.badge || "").trim();
         const badgeClass = String(options.badgeClass || "").trim();
@@ -33,7 +35,9 @@
             </div>
             <div class="dco-unified-print-document">
                 <h1>${esc(title)}</h1>
-                ${meta ? `<div class="dco-unified-print-meta">${esc(meta)}</div>` : ""}
+                ${reference ? `<div class="dco-unified-print-reference">${esc(reference)}</div>` : ""}
+                ${date ? `<div class="dco-unified-print-date">${esc(date)}</div>` : ""}
+                ${!reference && meta ? `<div class="dco-unified-print-meta">${esc(meta)}</div>` : ""}
                 ${badge ? `<div class="dco-unified-print-badge ${esc(badgeClass)}">${esc(badge)}</div>` : ""}
             </div>
         </header>`;
@@ -49,7 +53,9 @@
             .dco-unified-print-factory-contacts{display:flex;flex-wrap:wrap;gap:.4mm 2.3mm;margin-top:.45mm;font-size:6.1pt;font-weight:700;line-height:1.3;color:#4f5a65}
             .dco-unified-print-factory-contacts span{white-space:nowrap}
             .dco-unified-print-document{min-width:0;text-align:left}
-            .dco-unified-print-document h1{margin:0;font-size:14.8pt;font-weight:950;line-height:1.06;letter-spacing:-.1pt;color:#172033}
+            .dco-unified-print-document h1{margin:0;font-size:10.8pt;font-weight:900;line-height:1.08;letter-spacing:-.05pt;color:#394550}
+            .dco-unified-print-reference{margin-top:.7mm;font-size:15.6pt;font-weight:950;line-height:1.05;letter-spacing:.1pt;color:#172033;direction:ltr;unicode-bidi:plaintext;overflow-wrap:anywhere}
+            .dco-unified-print-date{margin-top:.75mm;font-size:6.7pt;font-weight:750;line-height:1.35;color:#5d6874;direction:ltr;unicode-bidi:plaintext}
             .dco-unified-print-meta{margin-top:.8mm;font-size:6.5pt;font-weight:700;line-height:1.4;color:#5d6874;overflow-wrap:anywhere}
             .dco-unified-print-badge{display:inline-block;margin-top:1.2mm;padding:.8mm 1.6mm;border:.75pt solid #8c1d1d;border-radius:1.6mm;background:#fff0f0;color:#8c1d1d;font-size:6.3pt;font-weight:900;line-height:1.2}
         `;
@@ -71,10 +77,14 @@
             body{font-size:${bodySize};line-height:1.28;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-variant-numeric:tabular-nums}
             ${headerCss()}
             .info{display:grid;gap:1.2mm;margin:0 0 2.2mm}
-            .shared-info{grid-template-columns:repeat(6,minmax(0,1fr))}
+            .shared-info{grid-template-columns:minmax(0,1.65fr) minmax(0,1.2fr) minmax(0,1fr) minmax(0,.72fr)}
             .financial-info{grid-template-columns:repeat(4,minmax(0,1fr));margin-top:1.2mm}
             .info>div{min-width:0;min-height:${measurements ? "10.5mm" : "11.5mm"};padding:1.35mm 1.55mm;border:.7pt solid #c7cdd3;border-radius:2.1mm;background:#fbfcfd;line-height:1.25;overflow-wrap:anywhere}
             .info b{display:block;margin-bottom:.55mm;color:#5d6874;font-size:${measurements ? "6.35pt" : "6.65pt"};font-weight:800}
+            .shared-info-primary{display:block;color:#172033;font-size:${measurements ? "8pt" : "8.3pt"};font-weight:850;line-height:1.2;overflow-wrap:anywhere}
+            .shared-info-phone{display:flex;align-items:baseline;gap:1mm;margin-top:.65mm;color:#5d6874;font-size:${measurements ? "6.35pt" : "6.65pt"};font-weight:700;line-height:1.25}
+            .shared-info-phone-label{flex:0 0 auto}
+            .shared-info-phone-value{min-width:0;direction:ltr;unicode-bidi:plaintext;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
             .title{margin:${measurements ? "2.1mm" : "3mm"} 0 1.2mm;font-size:${measurements ? "9.2pt" : "9.8pt"};font-weight:900;color:#172033}
             .table{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;border:.75pt solid #98a2ac;border-radius:2mm;overflow:hidden}
             .table thead{display:table-header-group}
