@@ -34,6 +34,7 @@ class _Plan:
         self.cutting_cost_usd = 8
         self.edge_cost_usd = 5
         self.total_cost_usd = 93
+        self.offcut_price_usd = 0
         self._wipe_protected_fields_on_save = wipe_protected_fields_on_save
 
     def save(self) -> None:
@@ -49,6 +50,7 @@ class _Plan:
         self.cutting_cost_usd = 0
         self.edge_cost_usd = 0
         self.total_cost_usd = 0
+        self.offcut_price_usd = 0
 
     def insert(self) -> None:
         self.save()
@@ -65,6 +67,7 @@ class TestPlanCostSnapshotRefreshRegression(unittest.TestCase):
             "cutting_cost_usd": 8.0,
             "edge_cost_usd": 5.0,
             "total_cost_usd": 93.0,
+            "offcut_price_usd": 0.0,
         }
 
         with patch.object(workspace.frappe.db, "set_value") as set_value:
@@ -128,6 +131,7 @@ class TestPlanCostSnapshotRefreshRegression(unittest.TestCase):
                     "cutting_cost_usd": 8.0,
                     "edge_cost_usd": 5.0,
                     "total_cost_usd": 93.0,
+                    "offcut_price_usd": 0.0,
                 }
             ],
         )
@@ -158,6 +162,7 @@ class TestPlanCostSnapshotRefreshRegression(unittest.TestCase):
             "cutting_cost_usd": 8.0,
             "edge_cost_usd": 5.0,
             "total_cost_usd": 93.0,
+            "offcut_price_usd": 0.0,
         }
         recorded: dict[str, object] = {}
 
