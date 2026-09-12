@@ -99,6 +99,20 @@ def decision_from_piece(piece: dict[str, Any]) -> OffcutDecision:
     )
 
 
+def validate_source_resource_homogeneity(
+    sources: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+) -> None:
+    """Reject a physical source that mixes full-board and OFFCUT pieces."""
+    for source in sources:
+        pieces = list(source.get("pieces") or [])
+        kinds = {
+            decision_from_piece(piece).resource_kind
+            for piece in pieces
+        }
+        if len(kinds) > 1:
+            raise OffcutPolicyError("mixed_full_board_offcut_source")
+
+
 def canonicalize_snapshot_sources(snapshot: dict[str, Any]) -> dict[str, Any]:
     """Backfill source projections for snapshots created before OFFCUT fields.
 
@@ -164,5 +178,6 @@ __all__ = [
     "decision_from_values",
     "presentation_label",
     "source_summary",
+    "validate_source_resource_homogeneity",
     "validate_piece_collection",
 ]
