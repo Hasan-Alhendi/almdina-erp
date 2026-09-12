@@ -98,7 +98,7 @@ def test_customer_invoice_reuses_the_canonical_measurement_and_shape_renderer():
     edge_color = text(EDGE_COLOR)
 
     assert "renderer.notesCell(row, notes" in presenter
-    assert "measurementDocumentBodyWithPayload(frm, quotePayload)" in presenter
+    assert "measurementDocumentBodyWithPayload(frm, quotePayload, customerPhone)" in presenter
     assert '${invoice ? quoteDetailsHtml(quotePayload || {}) : ""}' in presenter
     assert "shapePrintCss()" in presenter
     assert "async function printAuthorizedInvoice(frm, payload)" in presenter
