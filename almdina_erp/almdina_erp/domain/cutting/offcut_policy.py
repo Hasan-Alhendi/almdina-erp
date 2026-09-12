@@ -7,6 +7,7 @@ re-implementing the customer/factory matrix in each surface.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
@@ -46,7 +47,11 @@ class OffcutDecision:
 
     @property
     def is_resolved(self) -> bool:
-        return self.is_offcut and self.source_party is not Party.UNASSIGNED and self.execution_party is not Party.UNASSIGNED
+        return (
+            self.is_offcut
+            and self.source_party is not Party.UNASSIGNED
+            and self.execution_party is not Party.UNASSIGNED
+        )
 
     @property
     def enters_worker_queues(self) -> bool:
@@ -72,8 +77,7 @@ _DECISION_BY_BUSINESS_STATE = {
     OffcutBusinessState.FACTORY_FACTORY: (Party.FACTORY, Party.FACTORY),
 }
 _BUSINESS_STATE_BY_DECISION = {
-    decision: state
-    for state, decision in _DECISION_BY_BUSINESS_STATE.items()
+    decision: state for state, decision in _DECISION_BY_BUSINESS_STATE.items()
 }
 _BUSINESS_STATE_LABELS = {
     OffcutBusinessState.UNASSIGNED: "غير محدد",
@@ -99,15 +103,22 @@ def _party(value: Any, *, default: Party = Party.UNASSIGNED) -> Party:
         raise OffcutPolicyError(f"unsupported_offcut_party:{text}") from exc
 
 
+def resource_kind_from_value(value: Any = ResourceKind.FULL_BOARD) -> ResourceKind:
+    """Return the explicit resource kind; legacy absence means FULL_BOARD."""
+
+    text = str(value or ResourceKind.FULL_BOARD).strip().upper()
+    try:
+        return ResourceKind(text)
+    except ValueError as exc:
+        raise OffcutPolicyError(f"unsupported_resource_kind:{value}") from exc
+
+
 def decision_from_values(
     resource_kind: Any = ResourceKind.FULL_BOARD,
     source_party: Any = Party.UNASSIGNED,
     execution_party: Any = Party.UNASSIGNED,
 ) -> OffcutDecision:
-    try:
-        kind = ResourceKind(str(resource_kind or ResourceKind.FULL_BOARD).strip().upper())
-    except ValueError as exc:
-        raise OffcutPolicyError(f"unsupported_resource_kind:{resource_kind}") from exc
+    kind = resource_kind_from_value(resource_kind)
 
     source = _party(source_party)
     execution = _party(execution_party)
@@ -181,7 +192,9 @@ def offcut_assignment_projection(piece: dict[str, Any]) -> dict[str, Any]:
     state = business_state_from_decision(decision)
     return {
         "piece_instance_id": str(piece.get("piece_instance_id") or "").strip(),
-        "piece_label": str(piece.get("label") or piece.get("piece_label") or "").strip(),
+        "piece_label": str(
+            piece.get("label") or piece.get("piece_label") or ""
+        ).strip(),
         "business_state": state.value,
         "business_state_label": _BUSINESS_STATE_LABELS[state],
         "source_party": decision.source_party.value,
@@ -225,10 +238,7 @@ def validate_source_resource_homogeneity(
     """Reject a physical source that mixes full-board and OFFCUT pieces."""
     for source in sources:
         pieces = list(source.get("pieces") or [])
-        kinds = {
-            decision_from_piece(piece).resource_kind
-            for piece in pieces
-        }
+        kinds = {decision_from_piece(piece).resource_kind for piece in pieces}
         if len(kinds) > 1:
             raise OffcutPolicyError("mixed_full_board_offcut_source")
 
@@ -264,6 +274,74 @@ def canonicalize_snapshot_sources(snapshot: dict[str, Any]) -> dict[str, Any]:
     return snapshot
 
 
+def _nonnegative_number(value: Any) -> float:
+    try:
+        number = float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+    if not math.isfinite(number):
+        return 0.0
+    return max(0.0, number)
+
+
+def canonicalize_snapshot_allocation(snapshot: dict[str, Any]) -> dict[str, Any]:
+    """Project new-board allocation independently from physical-source identity.
+
+    ``sheet_no`` remains the stable physical source reference used to associate
+    pieces with their source. ``full_board_no`` is a separate semantic sequence
+    assigned only to resources that actually consume a new full board. OFFCUT
+    therefore never needs a magic sheet number and never creates a numbering gap.
+
+    ``used_area_m2`` keeps its existing meaning (all physical pieces). The
+    additional ``full_board_used_area_m2`` isolates material cut from new boards
+    so OFFCUT area cannot reduce new-board waste.
+    """
+
+    canonicalize_snapshot_sources(snapshot)
+    sheets = list(snapshot.get("sheets") or [])
+
+    full_board_count = 0
+    full_board_used_area_m2 = 0.0
+    full_board_piece_areas_complete = True
+
+    for sheet in sheets:
+        kind = resource_kind_from_value(sheet.get("resource_kind"))
+        if kind is ResourceKind.FULL_BOARD:
+            full_board_count += 1
+            sheet["full_board_no"] = full_board_count
+            for piece in sheet.get("pieces") or []:
+                if "area_m2" not in piece or piece.get("area_m2") is None:
+                    full_board_piece_areas_complete = False
+                    continue
+                full_board_used_area_m2 += _nonnegative_number(piece.get("area_m2"))
+        else:
+            sheet["full_board_no"] = None
+
+    snapshot["required_full_boards"] = full_board_count
+
+    # The imported/system snapshots normally carry piece areas. Fail closed for
+    # legacy snapshots that do not: preserve their historical waste instead of
+    # inventing an area from dimensions or bounding boxes.
+    if full_board_count == 0:
+        snapshot["full_board_used_area_m2"] = 0.0
+        if "total_board_area_m2" in snapshot:
+            snapshot["total_board_area_m2"] = 0.0
+        if "waste_area_m2" in snapshot:
+            snapshot["waste_area_m2"] = 0.0
+    elif full_board_piece_areas_complete:
+        snapshot["full_board_used_area_m2"] = full_board_used_area_m2
+        if "total_board_area_m2" in snapshot:
+            total_board_area_m2 = _nonnegative_number(
+                snapshot.get("total_board_area_m2")
+            )
+            snapshot["waste_area_m2"] = max(
+                0.0,
+                total_board_area_m2 - full_board_used_area_m2,
+            )
+
+    return snapshot
+
+
 def preserve_offcut_classification(
     snapshot: dict[str, Any],
     previous_pieces: list[dict[str, Any]],
@@ -284,10 +362,14 @@ def preserve_offcut_classification(
                 continue
             identity = str(piece.get("piece_instance_id") or "").strip()
             old = previous.get(identity)
-            preserved = old if old and old.is_offcut else OffcutDecision(
-                ResourceKind.OFFCUT,
-                Party.UNASSIGNED,
-                Party.UNASSIGNED,
+            preserved = (
+                old
+                if old and old.is_offcut
+                else OffcutDecision(
+                    ResourceKind.OFFCUT,
+                    Party.UNASSIGNED,
+                    Party.UNASSIGNED,
+                )
             )
             piece["offcut_source_party"] = preserved.source_party.value
             piece["offcut_execution_party"] = preserved.execution_party.value
@@ -323,13 +405,16 @@ def source_summary(pieces: list[dict[str, Any]]) -> dict[str, int]:
     }
 
 
-def presentation_label(decision: OffcutDecision, *, full_board_number: int | None = None) -> str:
+def presentation_label(
+    decision: OffcutDecision, *, full_board_number: int | None = None
+) -> str:
     if decision.is_offcut:
         return "نقص"
     return f"لوح {full_board_number}" if full_board_number is not None else "لوح"
 
 
 __all__ = [
+    "canonicalize_snapshot_allocation",
     "canonicalize_snapshot_sources",
     "business_state_from_decision",
     "business_state_from_values",
@@ -347,6 +432,7 @@ __all__ = [
     "decision_from_values",
     "presentation_label",
     "preserve_offcut_classification",
+    "resource_kind_from_value",
     "source_summary",
     "validate_source_resource_homogeneity",
     "validate_piece_collection",
