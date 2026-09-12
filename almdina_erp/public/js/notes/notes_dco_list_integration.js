@@ -34,6 +34,10 @@
         return column && column.type === "Status" ? "status_field" : "";
     }
 
+    function arraysMatch(left, right) {
+        return left.length === right.length && left.every((value, index) => value === right[index]);
+    }
+
     function importantColumnDefinition() {
         if (!window.frappe || !frappe.meta || typeof frappe.meta.get_docfield !== "function") return null;
         const df = frappe.meta.get_docfield(DOCTYPE, IMPORTANT_FIELD);
@@ -102,14 +106,18 @@
         const columns = listview && listview.columns;
         if (!Array.isArray(columns) || !columns.length) return false;
 
-        // Frappe already applies List Settings ordering in setup_columns().
-        // Never move an existing important-note column here; doing so can
-        // overwrite the freshly saved user order with stale runtime settings.
-        if (columns.some(column => listSettingsFieldname(column) === IMPORTANT_FIELD)) {
-            return false;
-        }
-
-        const important = importantColumnDefinition();
+        // Frappe applies List Settings first, but the existing DCO list owner has
+        // a legacy post-setup rule that can still move order_notes after edge_color.
+        // Reconcile only the Important Note projection back to the user's saved
+        // position after all list setup hooks have run; do not rewrite the saved
+        // settings or any unrelated column order.
+        const before = columns.map(listSettingsFieldname);
+        const currentIndex = columns.findIndex(
+            column => listSettingsFieldname(column) === IMPORTANT_FIELD
+        );
+        const important = currentIndex >= 0
+            ? columns.splice(currentIndex, 1)[0]
+            : importantColumnDefinition();
         if (!important) return false;
 
         let targetIndex = importantColumnTargetIndex(listview, columns);
@@ -124,7 +132,9 @@
             }
         }
         columns.splice(targetIndex, 0, important);
-        return true;
+
+        const after = columns.map(listSettingsFieldname);
+        return !arraysMatch(before, after);
     }
 
     function reconcileColumns(listview) {

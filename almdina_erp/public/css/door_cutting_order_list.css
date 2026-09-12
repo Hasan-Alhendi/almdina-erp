@@ -6,106 +6,118 @@
  */
 
 @media (min-width: 601px) {
+    /*
+     * Frappe gives list columns a 15px physical margin and later writes growing
+     * flex values inline. Keep density policy scoped to DCO, use an RTL-safe gap,
+     * and make each semantic width deterministic without touching Frappe core or
+     * List View Settings.
+     */
+    .dco-order-list .list-row .level-left,
+    .dco-order-list .list-row-head .level-left {
+        gap: 2px;
+    }
+
     .dco-order-list .list-row-col[data-fieldname] {
-        width: 110px !important;
-        min-width: 80px !important;
-        max-width: 110px !important;
-        flex: 0 0 110px !important;
-        margin-right: 3px !important;
+        width: 96px !important;
+        min-width: 64px !important;
+        max-width: 96px !important;
+        flex: 0 0 96px !important;
+        margin: 0 !important;
+        box-sizing: border-box;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
     }
 
     .dco-order-list .list-row-col[data-fieldname="name"] {
-        width: 82px !important;
-        min-width: 82px !important;
-        max-width: 82px !important;
-        flex: 0 0 82px !important;
+        width: 78px !important;
+        min-width: 78px !important;
+        max-width: 78px !important;
+        flex: 0 0 78px !important;
     }
 
     .dco-order-list .list-row-col[data-fieldname="status_field"] {
+        width: 74px !important;
+        min-width: 74px !important;
+        max-width: 74px !important;
+        flex: 0 0 74px !important;
+    }
+
+    .dco-order-list .list-row-col[data-fieldname="customer"] {
+        width: 92px !important;
+        min-width: 92px !important;
+        max-width: 92px !important;
+        flex: 0 0 92px !important;
+    }
+
+    .dco-order-list .list-row-col[data-fieldname="order_date"] {
         width: 82px !important;
         min-width: 82px !important;
         max-width: 82px !important;
         flex: 0 0 82px !important;
     }
 
-    .dco-order-list .list-row-col[data-fieldname="customer"] {
+    .dco-order-list .list-row-col[data-fieldname="board_description"] {
         width: 100px !important;
         min-width: 100px !important;
         max-width: 100px !important;
         flex: 0 0 100px !important;
     }
 
-    .dco-order-list .list-row-col[data-fieldname="order_date"] {
-        width: 86px !important;
-        min-width: 86px !important;
-        max-width: 86px !important;
-        flex: 0 0 86px !important;
-    }
-
-    .dco-order-list .list-row-col[data-fieldname="board_description"] {
-        width: 120px !important;
-        min-width: 120px !important;
-        max-width: 120px !important;
-        flex: 0 0 120px !important;
-    }
-
     .dco-order-list .list-row-col[data-fieldname="edge_color"] {
+        width: 78px !important;
+        min-width: 78px !important;
+        max-width: 78px !important;
+        flex: 0 0 78px !important;
+    }
+
+    .dco-order-list .list-row-col[data-fieldname="order_notes"] {
+        width: 104px !important;
+        min-width: 104px !important;
+        max-width: 104px !important;
+        flex: 0 0 104px !important;
+    }
+
+    .dco-order-list .list-row-col[data-fieldname="important_note_preview"] {
+        width: 96px !important;
+        min-width: 96px !important;
+        max-width: 96px !important;
+        flex: 0 0 96px !important;
+    }
+
+    .dco-order-list .list-row-col[data-fieldname="production_path"] {
         width: 90px !important;
         min-width: 90px !important;
         max-width: 90px !important;
         flex: 0 0 90px !important;
     }
 
-    .dco-order-list .list-row-col[data-fieldname="order_notes"] {
-        width: 120px !important;
-        min-width: 120px !important;
-        max-width: 120px !important;
-        flex: 0 0 120px !important;
-    }
-
-    .dco-order-list .list-row-col[data-fieldname="important_note_preview"] {
-        width: 110px !important;
-        min-width: 110px !important;
-        max-width: 110px !important;
-        flex: 0 0 110px !important;
-    }
-
-    .dco-order-list .list-row-col[data-fieldname="production_path"] {
-        width: 100px !important;
-        min-width: 100px !important;
-        max-width: 100px !important;
-        flex: 0 0 100px !important;
-    }
-
     .dco-order-list .list-row-col[data-fieldname="current_department"] {
-        width: 100px !important;
-        min-width: 100px !important;
-        max-width: 100px !important;
-        flex: 0 0 100px !important;
+        width: 90px !important;
+        min-width: 90px !important;
+        max-width: 90px !important;
+        flex: 0 0 90px !important;
     }
 
     .dco-order-list .list-row-col[data-fieldname="current_assignee"] {
-        width: 100px !important;
-        min-width: 100px !important;
-        max-width: 100px !important;
-        flex: 0 0 100px !important;
+        width: 92px !important;
+        min-width: 92px !important;
+        max-width: 92px !important;
+        flex: 0 0 92px !important;
     }
 
     .dco-order-list .list-row-col[data-fieldname="current_production_stage"] {
-        width: 115px !important;
-        min-width: 115px !important;
-        max-width: 115px !important;
-        flex: 0 0 115px !important;
+        width: 102px !important;
+        min-width: 102px !important;
+        max-width: 102px !important;
+        flex: 0 0 102px !important;
     }
 
     .dco-order-list .list-row-col[data-fieldname="department_status"] {
-        width: 95px !important;
-        min-width: 95px !important;
-        max-width: 95px !important;
-        flex: 0 0 95px !important;
+        width: 84px !important;
+        min-width: 84px !important;
+        max-width: 84px !important;
+        flex: 0 0 84px !important;
     }
 
     .dco-order-list .list-row-head > .level-right,
@@ -146,7 +158,7 @@
         display: inline-block;
         width: auto;
         max-width: 100%;
-        padding: 3px 9px;
+        padding: 3px 7px;
         border: 1px solid var(--border-color);
         border-radius: 999px;
         background: var(--subtle-fg);
@@ -168,5 +180,80 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+    }
+
+    /* Important Note keeps its visual identity while fitting the denser column. */
+    .dco-order-list .dco-important-note-link {
+        max-width: 100%;
+        gap: 3px;
+        padding: 3px 5px;
+        font-size: 10px;
+    }
+
+    /*
+     * Keep the two operational filters compact and toolbar-like. The responsive
+     * owner creates the slot; this desktop-only block only refines presentation.
+     * No Frappe List Settings or framework styles are changed globally.
+     */
+    .dco-order-list .dco-status-filter-slot {
+        display: inline-flex !important;
+        grid-template-columns: none !important;
+        align-items: center;
+        flex: 0 0 auto !important;
+        width: auto !important;
+        min-width: 0 !important;
+        max-width: none !important;
+        gap: 5px !important;
+        margin: 0 !important;
+    }
+
+    .dco-order-list .dco-status-filter-slot > .form-group,
+    .dco-order-list .dco-status-filter-slot > .frappe-control {
+        flex: 0 0 auto !important;
+        width: auto !important;
+        min-width: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    .dco-order-list .dco-status-filter-slot [data-fieldname="status"] {
+        width: 118px !important;
+    }
+
+    .dco-order-list .dco-status-filter-slot [data-fieldname="current_assignee"] {
+        width: 138px !important;
+    }
+
+    .dco-order-list .dco-status-filter-slot .control-label,
+    .dco-order-list .dco-status-filter-slot .help-box {
+        display: none !important;
+    }
+
+    .dco-order-list .dco-status-filter-slot .control-input-wrapper,
+    .dco-order-list .dco-status-filter-slot .control-input {
+        width: 100%;
+        min-height: 30px;
+        margin: 0;
+    }
+
+    .dco-order-list .dco-status-filter-slot select.form-control {
+        width: 100% !important;
+        min-width: 0 !important;
+        height: 30px !important;
+        min-height: 30px !important;
+        padding-block: 0 !important;
+        padding-inline: 9px 26px !important;
+        border: 1px solid var(--border-color) !important;
+        border-radius: 8px !important;
+        background-color: var(--control-bg) !important;
+        color: var(--text-color) !important;
+        box-shadow: none !important;
+        font-size: 12px !important;
+        font-weight: 600;
+        line-height: 28px;
+    }
+
+    .dco-order-list .dco-status-filter-slot select.form-control:hover {
+        border-color: var(--gray-400) !important;
     }
 }
