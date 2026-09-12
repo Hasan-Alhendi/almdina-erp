@@ -47,6 +47,10 @@
         return Boolean(frm && identity && frm === activeFrm && identity === activeIdentity);
     }
 
+    function currentCustomer(frm) {
+        return String(frm && frm.doc && frm.doc.customer || "").trim();
+    }
+
     function edgeBandingApi() {
         return window.AlmdinaMultiEdgeBanding || null;
     }
@@ -72,15 +76,24 @@
     }
 
     async function resolveCustomerPhone(frm) {
-        const customer = String(frm && frm.doc && frm.doc.customer || "").trim();
-        if (!customer || !frappe.db || typeof frappe.db.get_value !== "function") return "";
+        const customer = currentCustomer(frm);
+        if (!customer || !frappe.db || typeof frappe.db.get_value !== "function") {
+            return { customer, phone: "" };
+        }
         try {
             const response = await frappe.db.get_value("Customer", customer, "mobile_no");
-            return String(response && response.message && response.message.mobile_no || "").trim();
+            return {
+                customer,
+                phone: String(response && response.message && response.message.mobile_no || "").trim(),
+            };
         } catch (error) {
             console.warn("Customer phone lookup failed", error);
-            return "";
+            return { customer, phone: "" };
         }
+    }
+
+    function customerPhoneIsCurrent(frm, resolved) {
+        return Boolean(resolved && currentCustomer(frm) === resolved.customer);
     }
 
     async function ensureProfiles(frm) {
@@ -399,12 +412,15 @@
     async function printMeasurements(frm) {
         const documentIdentity = captureIdentity(frm);
         if (!isCurrent(frm, documentIdentity)) return false;
-        const [, printIdentity, customerPhone] = await Promise.all([
+        const [, printIdentity, resolvedCustomer] = await Promise.all([
             ensureProfiles(frm),
             resolvePrintIdentity(),
             resolveCustomerPhone(frm),
         ]);
-        if (!isCurrent(frm, documentIdentity)) return false;
+        if (!isCurrent(frm, documentIdentity) || !customerPhoneIsCurrent(frm, resolvedCustomer)) {
+            return false;
+        }
+        const customerPhone = resolvedCustomer.phone;
         printHtml(documentHtml(frm, "measurements", printIdentity, null, customerPhone));
         return true;
     }
@@ -415,12 +431,15 @@
         if (!payload || payload.kind !== "customer_invoice" || payload.order_name !== frm.doc.name) {
             throw new Error("Authorized customer invoice payload does not match the active order");
         }
-        const [, printIdentity, customerPhone] = await Promise.all([
+        const [, printIdentity, resolvedCustomer] = await Promise.all([
             ensureProfiles(frm),
             resolvePrintIdentity(),
             resolveCustomerPhone(frm),
         ]);
-        if (!isCurrent(frm, documentIdentity)) return false;
+        if (!isCurrent(frm, documentIdentity) || !customerPhoneIsCurrent(frm, resolvedCustomer)) {
+            return false;
+        }
+        const customerPhone = resolvedCustomer.phone;
         printHtml(documentHtml(frm, "invoice", printIdentity, payload, customerPhone));
         return true;
     }
