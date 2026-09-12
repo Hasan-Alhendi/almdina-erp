@@ -600,26 +600,50 @@
             + '[data-fieldname="results_tab"],'
             + '[data-fieldname="cost_tab"]'
         );
-        if (!node) return "";
-        const nav = node.closest("li,.nav-item");
-        if (!nav && !node.classList.contains("nav-link")) return "";
-        return String(node.getAttribute("data-fieldname") || "");
+        if (node) {
+            const nav = node.closest("li,.nav-item");
+            if (nav || node.classList.contains("nav-link")) {
+                return String(node.getAttribute("data-fieldname") || "");
+            }
+        }
+
+        // Frappe themes differ on whether data-fieldname is placed on the tab
+        // link or its list item. Resolve the same native tab from either shape;
+        // the guard must run before Frappe's delegated handler changes tabs.
+        const nav = target.closest("li,.nav-item");
+        const link = nav && nav.querySelector
+            ? nav.querySelector(".nav-link")
+            : target.closest(".nav-link");
+        const fieldname = String(
+            (nav && nav.getAttribute && nav.getAttribute("data-fieldname"))
+            || (link && link.getAttribute && link.getAttribute("data-fieldname"))
+            || ""
+        );
+        return TAB_KIND[fieldname] ? fieldname : "";
+    }
+
+    function guardTabChange(frm, event) {
+        const targetField = tabFieldFromEventTarget(event && event.target);
+        if (!targetField) return false;
+        const currentField = currentTabFieldname(frm);
+        const editingKind = activeEditingKind(frm);
+        if (!editingKind || targetField === currentField) return false;
+
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        frappe.msgprint({
+            title: __("يوجد تعديل غير محفوظ"),
+            message: __("احفظ أو ألغِ التعديل الحالي قبل الانتقال إلى قسم آخر."),
+            indicator: "orange",
+        });
+        return true;
     }
 
     function installTabListener(frm) {
         const root = formRoot(frm);
         if (!root || root[TAB_LISTENER_KEY]) return;
         root.addEventListener("click", (event) => {
-            const targetField = tabFieldFromEventTarget(event.target);
-            if (!targetField) return;
-            const currentField = currentTabFieldname(frm);
-            const editingKind = activeEditingKind(frm);
-            if (editingKind && targetField !== currentField) {
-                event.preventDefault();
-                event.stopImmediatePropagation();
-                frappe.msgprint(__("احفظ أو ألغِ التعديل الحالي قبل الانتقال إلى قسم آخر."));
-                return;
-            }
+            if (guardTabChange(frm, event)) return;
             window.requestAnimationFrame(() => schedule(frm));
         }, true);
         root[TAB_LISTENER_KEY] = true;
