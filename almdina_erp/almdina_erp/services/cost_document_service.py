@@ -6,6 +6,9 @@ import frappe
 from frappe import _
 from frappe.utils import now_datetime
 
+from almdina_erp.almdina_erp.application.costing.customer_invoice_addon_summary import (
+    summarize_extra_addon_lines,
+)
 from almdina_erp.almdina_erp.application.costing.financial_documents import (
     build_customer_invoice_document,
     build_internal_cost_report_document,
@@ -154,6 +157,15 @@ def _require_custom_edge_prices(order: Any) -> None:
         )
 
 
+def _summarize_customer_invoice(payload: dict[str, Any]) -> dict[str, Any]:
+    """Apply customer-only line summarization without changing stored costing data."""
+
+    return {
+        **payload,
+        "lines": summarize_extra_addon_lines(payload.get("lines") or []),
+    }
+
+
 @frappe.whitelist()
 def get_customer_invoice_document(order_name: str) -> dict[str, Any]:
     """Return a customer invoice after read and explicit print authorization."""
@@ -166,7 +178,9 @@ def get_customer_invoice_document(order_name: str) -> dict[str, Any]:
     _require_custom_edge_prices(order)
     order_snapshot, pieces = _document_context(order)
     return _finalize(
-        build_customer_invoice_document(order_snapshot, pieces),
+        _summarize_customer_invoice(
+            build_customer_invoice_document(order_snapshot, pieces)
+        ),
         order,
     )
 
