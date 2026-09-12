@@ -268,7 +268,17 @@
             return false;
         }
 
-        await ensureLoaded(frm);
+        try {
+            await ensureLoaded(frm);
+        } catch (error) {
+            console.error("Cost workspace load failed while starting edit", error);
+            frappe.msgprint({
+                title: __("تعذر تحميل التكلفة"),
+                message: __("تعذر تحميل بيانات التكلفة الحالية. أعد تحميل الطلب ثم حاول مرة أخرى."),
+                indicator: "red",
+            });
+            return false;
+        }
         const store = storeFor(frm);
         const seed = currentSettings(frm);
         if (!store || !seed) {
