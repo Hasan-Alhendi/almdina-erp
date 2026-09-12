@@ -9,13 +9,28 @@
         "almdina_erp.almdina_erp.services.cost_permission_service.update_order_cost_settings";
 
     async function call(method, args, options = {}) {
-        const response = await frappe.call({
+        const runtime = window.frappe || null;
+        if (!runtime) throw new Error("Frappe RPC is unavailable");
+
+        // Frappe v16 exposes xcall as the native Promise RPC boundary. Using it
+        // first avoids the legacy jQuery Deferred callback path that can surface
+        // opaque errors such as "s is not a function" in the Cost workspace.
+        if (typeof runtime.xcall === "function" && !options.freeze) {
+            const result = await runtime.xcall(method, args || {});
+            return result && result.message !== undefined ? result.message : result;
+        }
+
+        if (typeof runtime.call !== "function") {
+            throw new Error("Frappe RPC is unavailable");
+        }
+
+        const response = await runtime.call({
             method,
             args,
             freeze: Boolean(options.freeze),
             freeze_message: options.freezeMessage || undefined,
         });
-        return response && response.message !== undefined ? response.message : null;
+        return response && response.message !== undefined ? response.message : response;
     }
 
     function load(orderName) {
