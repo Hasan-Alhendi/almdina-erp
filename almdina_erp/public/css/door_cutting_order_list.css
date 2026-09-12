@@ -7,17 +7,19 @@
 
 @media (min-width: 601px) {
     /*
-     * Frappe gives list columns a 15px physical margin and later writes growing
-     * flex values inline. Keep density policy scoped to DCO, use an RTL-safe gap,
-     * and make each semantic width deterministic without touching Frappe core or
-     * List View Settings.
+     * Frappe v16.17.5 renders semantic list fields as CSS classes (for example
+     * `.customer`) while newer v16 builds also expose `data-fieldname`. Support
+     * both contracts so DCO density is deterministic across sites without
+     * changing Frappe core or List View Settings. Frappe also contributes a 15px
+     * physical margin and dynamic inline flex widths; the DCO scope intentionally
+     * overrides both presentation details.
      */
     .dco-order-list .list-row .level-left,
     .dco-order-list .list-row-head .level-left {
         gap: 2px;
     }
 
-    .dco-order-list .list-row-col[data-fieldname] {
+    .dco-order-list .list-row-col {
         width: 96px !important;
         min-width: 64px !important;
         max-width: 96px !important;
@@ -29,6 +31,7 @@
         white-space: nowrap;
     }
 
+    .dco-order-list .list-row-col.name,
     .dco-order-list .list-row-col[data-fieldname="name"] {
         width: 78px !important;
         min-width: 78px !important;
@@ -36,6 +39,7 @@
         flex: 0 0 78px !important;
     }
 
+    .dco-order-list .list-row-col.status_field,
     .dco-order-list .list-row-col[data-fieldname="status_field"] {
         width: 74px !important;
         min-width: 74px !important;
@@ -43,6 +47,7 @@
         flex: 0 0 74px !important;
     }
 
+    .dco-order-list .list-row-col.customer,
     .dco-order-list .list-row-col[data-fieldname="customer"] {
         width: 92px !important;
         min-width: 92px !important;
@@ -50,6 +55,7 @@
         flex: 0 0 92px !important;
     }
 
+    .dco-order-list .list-row-col.order_date,
     .dco-order-list .list-row-col[data-fieldname="order_date"] {
         width: 82px !important;
         min-width: 82px !important;
@@ -57,6 +63,7 @@
         flex: 0 0 82px !important;
     }
 
+    .dco-order-list .list-row-col.board_description,
     .dco-order-list .list-row-col[data-fieldname="board_description"] {
         width: 100px !important;
         min-width: 100px !important;
@@ -64,6 +71,7 @@
         flex: 0 0 100px !important;
     }
 
+    .dco-order-list .list-row-col.edge_color,
     .dco-order-list .list-row-col[data-fieldname="edge_color"] {
         width: 78px !important;
         min-width: 78px !important;
@@ -71,6 +79,7 @@
         flex: 0 0 78px !important;
     }
 
+    .dco-order-list .list-row-col.order_notes,
     .dco-order-list .list-row-col[data-fieldname="order_notes"] {
         width: 104px !important;
         min-width: 104px !important;
@@ -78,6 +87,7 @@
         flex: 0 0 104px !important;
     }
 
+    .dco-order-list .list-row-col.important_note_preview,
     .dco-order-list .list-row-col[data-fieldname="important_note_preview"] {
         width: 92px !important;
         min-width: 92px !important;
@@ -86,11 +96,13 @@
         overflow: hidden !important;
     }
 
+    .dco-order-list .list-row-col.important_note_preview > *,
     .dco-order-list .list-row-col[data-fieldname="important_note_preview"] > * {
         min-width: 0;
         max-width: 100%;
     }
 
+    .dco-order-list .list-row-col.production_path,
     .dco-order-list .list-row-col[data-fieldname="production_path"] {
         width: 90px !important;
         min-width: 90px !important;
@@ -98,6 +110,7 @@
         flex: 0 0 90px !important;
     }
 
+    .dco-order-list .list-row-col.current_department,
     .dco-order-list .list-row-col[data-fieldname="current_department"] {
         width: 90px !important;
         min-width: 90px !important;
@@ -105,6 +118,7 @@
         flex: 0 0 90px !important;
     }
 
+    .dco-order-list .list-row-col.current_assignee,
     .dco-order-list .list-row-col[data-fieldname="current_assignee"] {
         width: 92px !important;
         min-width: 92px !important;
@@ -112,6 +126,7 @@
         flex: 0 0 92px !important;
     }
 
+    .dco-order-list .list-row-col.current_production_stage,
     .dco-order-list .list-row-col[data-fieldname="current_production_stage"] {
         width: 102px !important;
         min-width: 102px !important;
@@ -119,6 +134,7 @@
         flex: 0 0 102px !important;
     }
 
+    .dco-order-list .list-row-col.department_status,
     .dco-order-list .list-row-col[data-fieldname="department_status"] {
         width: 84px !important;
         min-width: 84px !important;
@@ -131,7 +147,9 @@
         display: none !important;
     }
 
+    .dco-order-list .list-row-col.name,
     .dco-order-list .list-row-col[data-fieldname="name"],
+    .dco-order-list .list-row-col.order_date,
     .dco-order-list .list-row-col[data-fieldname="order_date"] {
         direction: ltr;
         unicode-bidi: isolate;
