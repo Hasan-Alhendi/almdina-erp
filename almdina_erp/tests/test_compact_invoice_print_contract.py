@@ -168,7 +168,14 @@ class TestCompactInvoicePrintContract(unittest.TestCase):
         )
         self.assertIn("catch (error)", phone_resolver)
         self.assertNotIn("order_notes", phone_resolver)
+        self.assertIn("function customerPhoneIsCurrent", phone_resolver)
         self.assertEqual(presenter.count("resolveCustomerPhone(frm)"), 3)
+        self.assertEqual(
+            presenter.count("customerPhoneIsCurrent(frm, resolvedCustomer)"), 2
+        )
+        self.assertEqual(
+            presenter.count("const customerPhone = resolvedCustomer.phone;"), 2
+        )
         self.assertIn('title: "جدول قياسات الطلب"', presenter)
         self.assertIn("reference,", presenter)
         self.assertIn("date,", presenter)
