@@ -37,8 +37,8 @@
 
     function activePlanRow(frm) {
         const owner = planWorkspaceState();
-        return owner && typeof owner.activePlan === "function"
-            ? owner.activePlan(frm, "System")
+        return owner && typeof owner.displayedPlan === "function"
+            ? owner.displayedPlan(frm)
             : null;
     }
 
@@ -618,11 +618,16 @@
         `;
     }
 
-    function offcutPanelHtml(frm) {
+    function offcutContext(frm) {
         const plan = activePlanRow(frm);
-        if (!plan) return "";
-        const offcut = plan.offcut || {};
+        const offcut = plan && plan.offcut ? plan.offcut : {};
         const assignments = Array.isArray(offcut.assignments) ? offcut.assignments : [];
+        const options = Array.isArray(offcut.state_options) ? offcut.state_options : [];
+        return { plan, offcut, assignments, options };
+    }
+
+    function offcutPanelHtml(frm) {
+        const { assignments, offcut } = offcutContext(frm);
         if (!assignments.length) return "";
         const summary = Array.isArray(offcut.summary) ? offcut.summary : [];
         const editable = can(frm, "set_offcut_execution_owner");
@@ -679,10 +684,7 @@
     }
 
     function openOffcutEditor(frm) {
-        const plan = activePlanRow(frm);
-        const offcut = plan && plan.offcut ? plan.offcut : {};
-        const assignments = Array.isArray(offcut.assignments) ? offcut.assignments : [];
-        const options = Array.isArray(offcut.state_options) ? offcut.state_options : [];
+        const { plan, assignments, options } = offcutContext(frm);
         if (!plan || !plan.name || !assignments.length || !options.length) return false;
         if (!can(frm, "set_offcut_execution_owner")) {
             frappe.msgprint(__("لا تملك صلاحية تحديد مصدر وتنفيذ قطع النقص."));
@@ -909,7 +911,14 @@
         if (frm && frm.doctype === "Door Cutting Order") schedulePlanUX(frm);
     });
 
+    window.addEventListener("almdina:plan-selection-changed", (event) => {
+        const frm = event.detail && event.detail.frm;
+        if (frm && frm === window.cur_frm) schedulePlanUX(frm);
+    });
+
     window.AlmdinaDoorCuttingPlanUX = Object.freeze({
+        offcutContext,
+        offcutPanelHtml,
         renderActions,
         refresh: schedulePlanUX,
     });

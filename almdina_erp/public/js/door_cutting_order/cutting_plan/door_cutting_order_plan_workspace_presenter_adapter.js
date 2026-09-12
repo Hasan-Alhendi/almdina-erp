@@ -24,18 +24,16 @@
     }
 
     function planRow(frm, tab) {
-        const payload = data(frm);
-        const plans = payload && payload.plans;
-        if (!plans) return null;
-        if (tab === "Custom") return plans.uploaded_draft || null;
-        if (tab === "Approved") return plans.approved || null;
-        return plans.system_draft || null;
+        const owner = stateOwner();
+        return owner && typeof owner.planForTab === "function"
+            ? owner.planForTab(frm, tab)
+            : null;
     }
 
     function activeRow(frm) {
         const owner = stateOwner();
-        return owner && typeof owner.activePlan === "function"
-            ? owner.activePlan(frm, "System")
+        return owner && typeof owner.displayedPlan === "function"
+            ? owner.displayedPlan(frm)
             : null;
     }
 

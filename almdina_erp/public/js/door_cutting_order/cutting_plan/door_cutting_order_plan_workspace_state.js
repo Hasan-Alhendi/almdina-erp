@@ -213,6 +213,39 @@
         return plans.system_draft || plans.approved || plans.uploaded_draft || null;
     }
 
+    function planForTab(frm, tab) {
+        const state = snapshot(frm);
+        const data = state && state.data;
+        const plans = data && data.plans;
+        if (!plans) return null;
+        if (tab === "Custom") return plans.uploaded_draft || null;
+        if (tab === "Approved") return plans.approved || null;
+        return plans.system_draft || null;
+    }
+
+    function displayedTab(frm) {
+        const tabs = window.AlmdinaPlanTabsUX;
+        if (tabs && typeof tabs.activeTab === "function") {
+            return tabs.activeTab(frm);
+        }
+        return String(frm && frm.__almdina_active_plan_tab || "System");
+    }
+
+    function displayedPlan(frm) {
+        const tab = displayedTab(frm);
+        const preview = window.AlmdinaPlanPreviewSession;
+        if (
+            tab === "System"
+            && preview
+            && typeof preview.isReady === "function"
+            && preview.isReady(frm)
+            && typeof preview.previewRow === "function"
+        ) {
+            return preview.previewRow(frm);
+        }
+        return planForTab(frm, tab);
+    }
+
     function schedule(frm, force = false) {
         if (!frm || frm.doctype !== "Door Cutting Order") return;
         const context = documentContext();
@@ -236,6 +269,8 @@
         load,
         snapshot,
         activePlan,
+        planForTab,
+        displayedPlan,
         schedule,
     });
     window.AlmdinaPlanWorkspaceState = owner;
