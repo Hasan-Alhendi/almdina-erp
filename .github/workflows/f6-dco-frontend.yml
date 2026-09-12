@@ -38,6 +38,7 @@ jobs:
           node --check almdina_erp/public/js/door_cutting_order/core/door_cutting_order_workspace_asset_status_ux.js
           node --check almdina_erp/public/js/door_cutting_order/core/door_cutting_order_workspace_activation_lifecycle.js
           node --check almdina_erp/public/js/door_cutting_order/core/door_cutting_order_permission_refresh_ux.js
+          node --check almdina_erp/public/js/door_cutting_order/core/door_cutting_order_tab_edit_lifecycle_guard.js
           node --check almdina_erp/public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_state.js
           node --check almdina_erp/public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_presenter_adapter.js
           node --check almdina_erp/public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_surface_bootstrap.js
@@ -71,6 +72,7 @@ jobs:
           node --check almdina_erp/tests/js/dco_workspace_asset_activation.test.js
           node --check almdina_erp/tests/js/dco_workspace_lifecycle.test.js
           node --check almdina_erp/tests/js/dco_cost_assets_tab_guard.test.js
+          node --check almdina_erp/tests/js/dco_tab_edit_lifecycle_guard.test.js
           node --check almdina_erp/tests/js/order_lifecycle_jquery_thenable.test.js
           node --check almdina_erp/tests/js/dco_workspace_mutation_impact.test.js
           node --check almdina_erp/tests/js/measurement_lifecycle.test.js
@@ -138,6 +140,9 @@ jobs:
 
       - name: Validate Cost lazy assets and edit-session tab navigation guard
         run: node almdina_erp/tests/js/dco_cost_assets_tab_guard.test.js
+
+      - name: Validate native DCO tab edit lifecycle guard
+        run: node almdina_erp/tests/js/dco_tab_edit_lifecycle_guard.test.js
 
       - name: Simulate order lifecycle jqXHR transport compatibility
         run: node almdina_erp/tests/js/order_lifecycle_jquery_thenable.test.js
