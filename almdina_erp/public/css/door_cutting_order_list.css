@@ -11,10 +11,18 @@
      * ListView builds also expose data-fieldname. Support both DOM contracts so
      * DCO density stays deterministic across sites without touching Frappe core
      * or List View Settings.
+     *
+     * The row must also consume the available desktop width. Fixed pixel columns
+     * left a large empty area on wide screens and made readable values truncate
+     * unnecessarily. Keep deterministic minimums, then let semantic columns share
+     * the remaining space with bounded flex weights.
      */
     .dco-order-list .list-row .level-left,
     .dco-order-list .list-row-head .level-left {
-        gap: 2px;
+        flex: 1 1 100% !important;
+        width: 100%;
+        min-width: 0;
+        gap: 6px;
     }
 
     .dco-order-list .list-row-col {
@@ -23,75 +31,71 @@
     }
 
     /*
-     * v16.17.5 has no semantic marker on the Status column, so give every
-     * non-Tag desktop column a deterministic compact baseline first. Known field
-     * classes/attributes below then refine their exact semantic widths.
+     * v16.17.5 has no semantic marker on the Status column. Use one readable
+     * baseline for any non-Tag column and refine known fields through variables.
+     * Inline widths/flex values written by Frappe are intentionally overridden
+     * inside DCO only, while the columns remain fluid instead of hard-fixed.
      */
     .dco-order-list .list-row-col:not(.tag-col) {
-        width: 96px !important;
-        min-width: 64px !important;
-        max-width: 96px !important;
-        flex: 0 0 96px !important;
+        --dco-col-grow: 0.9;
+        --dco-col-basis: 108px;
+        --dco-col-min: 90px;
+        width: auto !important;
+        min-width: var(--dco-col-min) !important;
+        max-width: none !important;
+        flex: var(--dco-col-grow) 1 var(--dco-col-basis) !important;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
     }
 
     .dco-order-list .list-row-col:is(.name, .list-subject, [data-fieldname="name"]) {
-        width: 78px !important;
-        min-width: 78px !important;
-        max-width: 78px !important;
-        flex: 0 0 78px !important;
+        --dco-col-grow: 0.9;
+        --dco-col-basis: 118px;
+        --dco-col-min: 108px;
     }
 
-    /* Newer Frappe builds expose a semantic Status marker; v16.17.5 uses the 96px baseline. */
+    /* Newer Frappe builds expose a semantic Status marker; v16.17.5 uses the baseline above. */
     .dco-order-list .list-row-col[data-fieldname="status_field"] {
-        width: 74px !important;
-        min-width: 74px !important;
-        max-width: 74px !important;
-        flex: 0 0 74px !important;
+        --dco-col-grow: 0.9;
+        --dco-col-basis: 108px;
+        --dco-col-min: 90px;
     }
 
     .dco-order-list .list-row-col:is(.customer, [data-fieldname="customer"]) {
-        width: 92px !important;
-        min-width: 92px !important;
-        max-width: 92px !important;
-        flex: 0 0 92px !important;
+        --dco-col-grow: 1.15;
+        --dco-col-basis: 140px;
+        --dco-col-min: 116px;
     }
 
     .dco-order-list .list-row-col:is(.order_date, [data-fieldname="order_date"]) {
-        width: 82px !important;
-        min-width: 82px !important;
-        max-width: 82px !important;
-        flex: 0 0 82px !important;
+        --dco-col-grow: 0.95;
+        --dco-col-basis: 118px;
+        --dco-col-min: 105px;
     }
 
     .dco-order-list .list-row-col:is(.board_description, [data-fieldname="board_description"]) {
-        width: 100px !important;
-        min-width: 100px !important;
-        max-width: 100px !important;
-        flex: 0 0 100px !important;
+        --dco-col-grow: 1;
+        --dco-col-basis: 128px;
+        --dco-col-min: 108px;
     }
 
     .dco-order-list .list-row-col:is(.edge_color, [data-fieldname="edge_color"]) {
-        width: 78px !important;
-        min-width: 78px !important;
-        max-width: 78px !important;
-        flex: 0 0 78px !important;
+        --dco-col-grow: 0.9;
+        --dco-col-basis: 110px;
+        --dco-col-min: 90px;
     }
 
     .dco-order-list .list-row-col:is(.order_notes, [data-fieldname="order_notes"]) {
-        width: 104px !important;
-        min-width: 104px !important;
-        max-width: 104px !important;
-        flex: 0 0 104px !important;
+        --dco-col-grow: 1.2;
+        --dco-col-basis: 145px;
+        --dco-col-min: 120px;
     }
 
     .dco-order-list .list-row-col:is(.important_note_preview, [data-fieldname="important_note_preview"]) {
-        width: 92px !important;
-        min-width: 92px !important;
-        max-width: 92px !important;
-        flex: 0 0 92px !important;
+        --dco-col-grow: 1.2;
+        --dco-col-basis: 150px;
+        --dco-col-min: 120px;
         overflow: hidden !important;
     }
 
@@ -101,38 +105,33 @@
     }
 
     .dco-order-list .list-row-col:is(.production_path, [data-fieldname="production_path"]) {
-        width: 90px !important;
-        min-width: 90px !important;
-        max-width: 90px !important;
-        flex: 0 0 90px !important;
+        --dco-col-grow: 1;
+        --dco-col-basis: 130px;
+        --dco-col-min: 110px;
     }
 
     .dco-order-list .list-row-col:is(.current_department, [data-fieldname="current_department"]) {
-        width: 90px !important;
-        min-width: 90px !important;
-        max-width: 90px !important;
-        flex: 0 0 90px !important;
+        --dco-col-grow: 1;
+        --dco-col-basis: 120px;
+        --dco-col-min: 100px;
     }
 
     .dco-order-list .list-row-col:is(.current_assignee, [data-fieldname="current_assignee"]) {
-        width: 92px !important;
-        min-width: 92px !important;
-        max-width: 92px !important;
-        flex: 0 0 92px !important;
+        --dco-col-grow: 1;
+        --dco-col-basis: 125px;
+        --dco-col-min: 105px;
     }
 
     .dco-order-list .list-row-col:is(.current_production_stage, [data-fieldname="current_production_stage"]) {
-        width: 102px !important;
-        min-width: 102px !important;
-        max-width: 102px !important;
-        flex: 0 0 102px !important;
+        --dco-col-grow: 1;
+        --dco-col-basis: 130px;
+        --dco-col-min: 110px;
     }
 
     .dco-order-list .list-row-col:is(.department_status, [data-fieldname="department_status"]) {
-        width: 84px !important;
-        min-width: 84px !important;
-        max-width: 84px !important;
-        flex: 0 0 84px !important;
+        --dco-col-grow: 0.9;
+        --dco-col-basis: 110px;
+        --dco-col-min: 94px;
     }
 
     .dco-order-list .list-row-head > .level-right,

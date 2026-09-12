@@ -29,6 +29,14 @@ LAYOUT_UX_PATH = (
     / "costing"
     / "door_cutting_order_cost_page_layout_ux.js"
 )
+COMPACT_PRICING_UX_PATH = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "costing"
+    / "door_cutting_order_compact_pricing_ux.js"
+)
 
 
 class CostTabPresentationContractTest(unittest.TestCase):
@@ -54,16 +62,19 @@ class CostTabPresentationContractTest(unittest.TestCase):
         self.assertLess(section_index, invoice_index)
         self.assertEqual(fields["cost_content_section"]["fieldtype"], "Section Break")
 
-    def test_cost_layout_layer_loads_before_workspace_rendering(self) -> None:
+    def test_cost_layout_layers_load_before_workspace_rendering(self) -> None:
         source = REGISTRY_PATH.read_text(encoding="utf-8")
         presenter = source.index("door_cutting_order_cost_presenter.js")
         addon_summary = source.index("door_cutting_order_customer_invoice_addon_summary.js")
         layout = source.index("door_cutting_order_cost_page_layout_ux.js")
+        compact_pricing = source.index("door_cutting_order_compact_pricing_ux.js")
         adapter = source.index("door_cutting_order_cost_workspace_presenter_adapter.js")
 
         self.assertLess(presenter, addon_summary)
         self.assertLess(addon_summary, layout)
-        self.assertLess(layout, adapter)
+        self.assertLess(layout, compact_pricing)
+        self.assertLess(compact_pricing, adapter)
+        self.assertIn('"AlmdinaCompactPricingUX"', source)
 
     def test_layout_contract_keeps_invoice_action_compact_and_measurements_collapsible(self) -> None:
         source = LAYOUT_UX_PATH.read_text(encoding="utf-8")
@@ -75,6 +86,18 @@ class CostTabPresentationContractTest(unittest.TestCase):
         self.assertIn("__almdina_cost_measurements_expanded = false", source)
         self.assertIn("aria-expanded", source)
         self.assertIn("actions = $('<div class=\"dco-cost-actions\"></div>')", source)
+
+    def test_custom_door_pricing_is_compact_and_attention_first(self) -> None:
+        source = COMPACT_PRICING_UX_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("dco-compact-pricing-section", source)
+        self.assertIn(".dco-special-price-id + .dco-special-price-cell{display:none!important}", source)
+        self.assertIn("dco-inline-price-input", source)
+        self.assertIn("cards.sort((left, right)", source)
+        self.assertIn("غير مسعّرة من", source)
+        self.assertIn("✓ مسعّر", source)
+        self.assertNotIn("replaceWith", source)
+        self.assertNotIn(".html(", source)
 
 
 if __name__ == "__main__":
