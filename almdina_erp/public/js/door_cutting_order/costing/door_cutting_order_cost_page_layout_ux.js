@@ -1,9 +1,15 @@
 (() => {
     "use strict";
 
-    if (window.AlmdinaCostPageLayoutUX) return;
+    const MODULE_VERSION = 3;
+    const existingApi = window.AlmdinaCostPageLayoutUX;
+    if (existingApi && Number(existingApi.version || 0) >= MODULE_VERSION) return;
 
-    const STYLE_ID = "dco-cost-page-layout-ux-v2";
+    const STYLE_ID = "dco-cost-page-layout-ux-v3";
+    const LEGACY_STYLE_IDS = [
+        "dco-cost-page-layout-ux-v1",
+        "dco-cost-page-layout-ux-v2",
+    ];
     const COST_API_FLAG = "__almdinaCostPageLayoutUX";
     const INTERNAL_REPORT_CLASS = "dco-secure-print-internal-cost-report";
 
@@ -20,6 +26,10 @@
     }
 
     function installStyles() {
+        LEGACY_STYLE_IDS.forEach(id => {
+            const legacy = document.getElementById(id);
+            if (legacy) legacy.remove();
+        });
         if (document.getElementById(STYLE_ID)) return;
         const style = document.createElement("style");
         style.id = STYLE_ID;
@@ -38,13 +48,12 @@
             .dco-cost-measurements-title-main{display:flex;align-items:center;gap:8px;min-width:max-content;flex:0 0 auto;white-space:nowrap;isolation:isolate}
             .dco-cost-measurements-title-main h4{margin:0;white-space:nowrap;flex:0 0 auto;position:relative;z-index:1}
             .dco-cost-measurements-section>.dco-cost-measurements-title>span{min-width:0;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-            .dco-cost-measurements-toggle{display:inline-grid;place-items:center;width:26px;height:26px;min-width:26px;max-width:26px;flex:0 0 26px;padding:0;overflow:hidden;position:relative;border:1px solid var(--border-color,#dfe4e8);border-radius:7px;background:var(--card-bg,#fff);color:var(--text-muted,#66727d);cursor:pointer;transition:background-color .15s ease,border-color .15s ease,color .15s ease;font-size:0;line-height:1;user-select:none}
-            .dco-cost-measurements-toggle::before,.dco-cost-measurements-toggle::after{content:none!important;display:none!important}
-            .dco-cost-measurements-toggle:hover{background:var(--subtle-fg,#f3f5f7);color:var(--text-color,#26313b)}
-            .dco-cost-measurements-toggle:focus-visible{outline:2px solid var(--primary,#2490ef);outline-offset:2px}
-            .dco-cost-measurements-toggle-icon{display:block!important;font-size:17px!important;line-height:1!important;transform:rotate(0deg);transition:transform .16s ease}
-            .dco-cost-measurements-toggle[aria-expanded="true"] .dco-cost-measurements-toggle-icon{transform:rotate(180deg)}
-            .dco-cost-measurements-toggle-label{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+            .dco-cost-measurements-toggle{appearance:none!important;-webkit-appearance:none!important;display:inline-grid!important;place-items:center!important;width:26px!important;height:26px!important;min-width:26px!important;max-width:26px!important;min-height:26px!important;max-height:26px!important;flex:0 0 26px!important;padding:0!important;margin:0!important;overflow:hidden!important;position:relative!important;border:1px solid var(--border-color,#dfe4e8)!important;border-radius:7px!important;background:var(--card-bg,#fff)!important;color:var(--text-muted,#66727d)!important;cursor:pointer!important;font-size:0!important;line-height:0!important;text-indent:0!important;white-space:nowrap!important;box-shadow:none!important;user-select:none!important;transition:background-color .15s ease,border-color .15s ease,color .15s ease,transform .16s ease}
+            .dco-cost-measurements-toggle::before{content:"⌄"!important;display:block!important;position:static!important;width:auto!important;height:auto!important;font-size:17px!important;line-height:1!important;font-family:inherit!important;color:inherit!important;transform:rotate(0deg);transition:transform .16s ease}
+            .dco-cost-measurements-toggle::after{content:none!important;display:none!important}
+            .dco-cost-measurements-toggle[aria-expanded="true"]::before{transform:rotate(180deg)}
+            .dco-cost-measurements-toggle:hover{background:var(--subtle-fg,#f3f5f7)!important;color:var(--text-color,#26313b)!important}
+            .dco-cost-measurements-toggle:focus-visible{outline:2px solid var(--primary,#2490ef)!important;outline-offset:2px!important}
             @media(max-width:760px){
                 .dco-cost-invoice-section>.dco-cost-section-title{display:flex!important;flex-direction:row!important;align-items:center!important}
                 .dco-cost-invoice-actions{margin-inline-start:0}
@@ -65,15 +74,20 @@
     function applyMeasurementState(frm, section, control) {
         const expanded = measurementExpanded(frm);
         section.toggleClass("is-collapsed", !expanded);
-        control.attr("aria-expanded", expanded ? "true" : "false");
-        control.find(".dco-cost-measurements-toggle-label").text(
-            expanded ? __("طي جدول قياسات الطلب") : __("عرض جدول قياسات الطلب")
-        );
+        control
+            .removeAttr("aria-label")
+            .attr("aria-expanded", expanded ? "true" : "false");
     }
 
     function toggleMeasurements(frm, section, control) {
         frm.__almdina_cost_measurements_expanded = !measurementExpanded(frm);
         applyMeasurementState(frm, section, control);
+    }
+
+    function measurementHeadingId(frm) {
+        const raw = String((frm && frm.doc && frm.doc.name) || "current");
+        const token = raw.replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "current";
+        return `dco-cost-measurements-heading-${token}`;
     }
 
     function ensureMeasurementToggle(frm) {
@@ -99,24 +113,33 @@
             }
         }
 
+        const heading = main.children("h4").first();
+        const headingId = measurementHeadingId(frm);
+        if (heading.length) heading.attr("id", headingId);
+
         let control = main.children(".dco-cost-measurements-toggle").first();
-        if (!control.length) {
-            control = $('<span class="dco-cost-measurements-toggle" role="button" tabindex="0"><span class="dco-cost-measurements-toggle-icon" aria-hidden="true">⌄</span><span class="dco-cost-measurements-toggle-label"></span></span>');
-            main.prepend(control);
+        if (!control.length || !control.is("button")) {
+            const replacement = $('<button type="button" class="dco-cost-measurements-toggle"></button>');
+            if (control.length) control.replaceWith(replacement);
+            else main.prepend(replacement);
+            control = replacement;
         }
+
+        // The control must stay physically empty. Its accessible name comes from
+        // the visible heading via aria-labelledby, so no hidden Arabic text can
+        // ever leak into the 26px toggle when Frappe/global CSS changes.
         control
+            .empty()
+            .removeAttr("aria-label title role tabindex")
+            .attr("type", "button")
+            .attr("aria-labelledby", headingId)
             .off("click.almdinaCostMeasurements keydown.almdinaCostMeasurements")
             .on("click.almdinaCostMeasurements", event => {
                 event.preventDefault();
                 event.stopPropagation();
                 toggleMeasurements(frm, section, control);
-            })
-            .on("keydown.almdinaCostMeasurements", event => {
-                if (event.key !== "Enter" && event.key !== " ") return;
-                event.preventDefault();
-                event.stopPropagation();
-                toggleMeasurements(frm, section, control);
             });
+
         applyMeasurementState(frm, section, control);
         return true;
     }
@@ -204,6 +227,7 @@
     }
 
     window.AlmdinaCostPageLayoutUX = Object.freeze({
+        version: MODULE_VERSION,
         enhance,
         install,
     });
