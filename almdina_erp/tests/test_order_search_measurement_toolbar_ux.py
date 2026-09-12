@@ -104,18 +104,16 @@ def test_measurement_print_is_the_shared_base_and_invoice_only_appends_quote():
     for label in ("النوع", "العرض", "الطول", "العدد", "القشاط المخصص", "ملاحظات"):
         assert label in source
     assert "function measurementTable(frm)" in source
-    assert "function measurementDocumentBody(frm)" in source
-    assert 'printHtml(documentHtml(frm, "measurements", printIdentity))' in source
+    assert 'function measurementDocumentBody(frm, customerPhone = "")' in source
+    assert 'printHtml(documentHtml(frm, "measurements", printIdentity, null, customerPhone))' in source
     assert "function quoteDetailsHtml(payload)" in source
-    measurement_body = (
-        "${invoice ? measurementDocumentBodyWithPayload(frm, quotePayload) "
-        ": measurementDocumentBody(frm)}"
-    )
-    assert measurement_body in source
-    assert '${invoice ? quoteDetailsHtml(quotePayload || {}) : ""}' in source
-    assert source.index(measurement_body) < source.index(
-        '${invoice ? quoteDetailsHtml(quotePayload || {}) : ""}'
-    )
+    invoice_measurements = "measurementDocumentBodyWithPayload(frm, quotePayload, customerPhone)"
+    regular_measurements = "measurementDocumentBody(frm, customerPhone)"
+    quote = '${invoice ? quoteDetailsHtml(quotePayload || {}) : ""}'
+    assert invoice_measurements in source
+    assert regular_measurements in source
+    assert quote in source
+    assert source.index(invoice_measurements) < source.index(quote)
     assert "function invoiceSummary" not in source
     assert "function invoiceLines(frm)" not in source
 
@@ -126,7 +124,7 @@ def test_customer_invoice_keeps_edge_color_once_in_shared_measurement_header():
 
     assert print_source.count("<b>لون القشاط</b>") == 1
     assert "<th>لون القشاط</th>" not in print_source
-    assert "<b>نوع القشاط</b>" in print_source
+    assert "<b>نوع القشاط</b>" not in print_source
     assert "patchMeasurementTable" not in edge_color_patch
     assert "patchInvoiceLines" not in edge_color_patch
     assert "patchInvoiceMeta" not in edge_color_patch

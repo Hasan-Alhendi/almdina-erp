@@ -123,6 +123,11 @@ class TestCompactInvoicePrintContract(unittest.TestCase):
     def test_invoice_is_exact_measurement_document_plus_quote_at_the_end(self) -> None:
         presenter = PRESENTER_PATH.read_text(encoding="utf-8")
         financial = FINANCIAL_DOCUMENTS_PATH.read_text(encoding="utf-8")
+        invoice_measurements = (
+            "measurementDocumentBodyWithPayload(frm, quotePayload, customerPhone)"
+        )
+        regular_measurements = "measurementDocumentBody(frm, customerPhone)"
+        quote = '${invoice ? quoteDetailsHtml(quotePayload || {}) : ""}'
 
         self.assertIn("function sharedHeader", presenter)
         self.assertIn("function sharedInfo", presenter)
@@ -132,17 +137,10 @@ class TestCompactInvoicePrintContract(unittest.TestCase):
         self.assertIn("function quoteDetailsHtml", presenter)
         self.assertIn("function printAuthorizedInvoice", presenter)
         self.assertIn('theme.css("measurements", shapePrintCss())', presenter)
-        self.assertIn(
-            "${invoice ? measurementDocumentBodyWithPayload(frm, quotePayload) : measurementDocumentBody(frm)}",
-            presenter,
-        )
-        self.assertIn('${invoice ? quoteDetailsHtml(quotePayload || {}) : ""}', presenter)
-        self.assertLess(
-            presenter.index(
-                "${invoice ? measurementDocumentBodyWithPayload(frm, quotePayload) : measurementDocumentBody(frm)}"
-            ),
-            presenter.index('${invoice ? quoteDetailsHtml(quotePayload || {}) : ""}'),
-        )
+        self.assertIn(invoice_measurements, presenter)
+        self.assertIn(regular_measurements, presenter)
+        self.assertIn(quote, presenter)
+        self.assertLess(presenter.index(invoice_measurements), presenter.index(quote))
         self.assertNotIn("function invoiceSummary", presenter)
         self.assertNotIn("function invoiceLines(frm)", presenter)
         self.assertNotIn("function invoiceTotal(frm", presenter)
@@ -154,6 +152,40 @@ class TestCompactInvoicePrintContract(unittest.TestCase):
             'throw new Error("Customer invoice layout belongs to AlmdinaOrderDocumentPrint")',
             financial,
         )
+
+    def test_customer_phone_and_order_identity_are_owned_by_the_unified_print_presenter(self) -> None:
+        presenter = PRESENTER_PATH.read_text(encoding="utf-8")
+        theme = THEME_PATH.read_text(encoding="utf-8")
+        phone_resolver = presenter.split(
+            "async function resolveCustomerPhone", 1
+        )[1].split("async function ensureProfiles", 1)[0]
+        shared_info = presenter.split("function sharedInfo", 1)[1].split(
+            "function measurementTableWithPayload", 1
+        )[0]
+
+        self.assertIn(
+            'frappe.db.get_value("Customer", customer, "mobile_no")', phone_resolver
+        )
+        self.assertIn("catch (error)", phone_resolver)
+        self.assertNotIn("order_notes", phone_resolver)
+        self.assertIn("function customerPhoneIsCurrent", phone_resolver)
+        self.assertEqual(presenter.count("resolveCustomerPhone(frm)"), 3)
+        self.assertEqual(
+            presenter.count("customerPhoneIsCurrent(frm, resolvedCustomer)"), 2
+        )
+        self.assertEqual(
+            presenter.count("const customerPhone = resolvedCustomer.phone;"), 2
+        )
+        self.assertIn('title: "جدول قياسات الطلب"', presenter)
+        self.assertIn("reference,", presenter)
+        self.assertIn("date,", presenter)
+        self.assertIn('class="shared-info-phone"', shared_info)
+        self.assertIn('${esc(phone || "—")}', shared_info)
+        self.assertNotIn("<b>رقم الطلب</b>", shared_info)
+        self.assertNotIn("<b>نوع القشاط</b>", shared_info)
+        self.assertNotIn("default_edge_type", shared_info)
+        self.assertIn('class="dco-unified-print-reference"', theme)
+        self.assertIn('class="dco-unified-print-date"', theme)
 
     def test_factory_header_has_one_markup_and_style_owner(self) -> None:
         theme = THEME_PATH.read_text(encoding="utf-8")
@@ -199,7 +231,8 @@ class TestCompactInvoicePrintContract(unittest.TestCase):
             'const rowPadding = measurements ? "1.05mm 1.1mm"', source
         )
         self.assertIn(
-            "grid-template-columns:repeat(6,minmax(0,1fr))", source
+            "grid-template-columns:minmax(0,1.65fr) minmax(0,1.2fr) minmax(0,1fr) minmax(0,.72fr)",
+            source,
         )
         self.assertIn("table-layout:fixed", source)
         self.assertIn("display:table-header-group", source)

@@ -150,7 +150,7 @@ def test_customer_documents_keep_drawing_first_and_share_one_renderer():
     assert "هذا توثيق لطلب العميل وليس ملف تصنيع" in shape_print
     assert "renderer.notesCell(row, notes" in presenter
     assert "window.AlmdinaOrderDocumentPrint" in measurement_actions
-    assert "measurementDocumentBodyWithPayload(frm, quotePayload)" in presenter
+    assert "measurementDocumentBodyWithPayload(frm, quotePayload, customerPhone)" in presenter
     assert '${invoice ? quoteDetailsHtml(quotePayload || {}) : ""}' in presenter
     assert "presenter.printAuthorizedInvoice(frm, payload)" in financial
 
