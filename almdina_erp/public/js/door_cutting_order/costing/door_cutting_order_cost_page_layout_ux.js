@@ -34,10 +34,11 @@
             .dco-cost-invoice-actions .btn{width:auto!important;min-height:32px;padding:6px 12px;border-radius:9px;font-size:11px;font-weight:850;white-space:nowrap;box-shadow:none}
             .dco-cost-measurements-section>.dco-cost-section-title{cursor:default}
             .dco-cost-measurements-section.is-collapsed>:not(.dco-cost-section-title){display:none!important}
-            .dco-cost-measurements-title{display:flex;align-items:center;justify-content:space-between;gap:12px}
-            .dco-cost-measurements-title-main{display:flex;align-items:center;gap:8px;min-width:0}
-            .dco-cost-measurements-title-main h4{margin:0}
-            .dco-cost-measurements-toggle{display:inline-grid;place-items:center;width:25px;height:25px;padding:0;border:1px solid var(--border-color,#dfe4e8);border-radius:7px;background:var(--card-bg,#fff);color:var(--text-muted,#66727d);cursor:pointer;transition:background-color .15s ease,border-color .15s ease,color .15s ease}
+            .dco-cost-measurements-title{display:flex;align-items:center;justify-content:space-between;gap:12px;overflow:hidden}
+            .dco-cost-measurements-title-main{display:flex;align-items:center;gap:8px;min-width:0;flex:0 0 auto;white-space:nowrap}
+            .dco-cost-measurements-title-main h4{margin:0;white-space:nowrap}
+            .dco-cost-measurements-section>.dco-cost-measurements-title>span{min-width:0;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+            .dco-cost-measurements-toggle{display:inline-grid;place-items:center;width:25px;height:25px;flex:0 0 25px;padding:0;border:1px solid var(--border-color,#dfe4e8);border-radius:7px;background:var(--card-bg,#fff);color:var(--text-muted,#66727d);cursor:pointer;transition:background-color .15s ease,border-color .15s ease,color .15s ease}
             .dco-cost-measurements-toggle:hover{background:var(--subtle-fg,#f3f5f7);color:var(--text-color,#26313b)}
             .dco-cost-measurements-toggle:focus-visible{outline:2px solid var(--primary,#2490ef);outline-offset:2px}
             .dco-cost-measurements-toggle span{display:block;font-size:17px;line-height:1;transform:rotate(0deg);transition:transform .16s ease}
