@@ -85,10 +85,10 @@
             permissionOwner.applySurfaces(frm);
         }
 
-        if (fieldname === "results_tab") {
-            // The page-level edit toolbar is eager, while the Plan edit-session API
-            // is lazy. Re-evaluate the toolbar immediately after the Plan bundle
-            // becomes ready so a first visit cannot retain the pre-load disabled state.
+        if (fieldname === "results_tab" || fieldname === "cost_tab") {
+            // The page-level edit toolbar is eager, while the feature edit-session
+            // APIs are lazy. Re-evaluate it after either bundle becomes ready so a
+            // first visit cannot retain the pre-load disabled state.
             const editActions = window.AlmdinaPageEditActionUX;
             if (editActions && typeof editActions.sync === "function") {
                 editActions.sync(frm);
