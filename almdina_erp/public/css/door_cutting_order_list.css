@@ -37,7 +37,7 @@
         white-space: nowrap;
     }
 
-    .dco-order-list .list-row-col:is(.name, [data-fieldname="name"]) {
+    .dco-order-list .list-row-col:is(.name, .list-subject, [data-fieldname="name"]) {
         width: 78px !important;
         min-width: 78px !important;
         max-width: 78px !important;
@@ -140,7 +140,7 @@
         display: none !important;
     }
 
-    .dco-order-list .list-row-col:is(.name, .order_date, [data-fieldname="name"], [data-fieldname="order_date"]) {
+    .dco-order-list .list-row-col:is(.name, .list-subject, .order_date, [data-fieldname="name"], [data-fieldname="order_date"]) {
         direction: ltr;
         unicode-bidi: isolate;
         font-variant-numeric: tabular-nums;
