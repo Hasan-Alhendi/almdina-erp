@@ -58,11 +58,7 @@
         if (!state || state.status !== "ready" || !state.data) return false;
         const plans = state.data.plans || {};
         const system = plans.system_draft || null;
-        return Boolean(
-            system
-            && system.validation
-            && system.validation.needs_recalculation
-        );
+        return Boolean(system && system.validation && system.validation.needs_recalculation);
     }
 
     function fieldNode(frm, fieldname) {
@@ -82,10 +78,8 @@
             node.setAttribute("data-almdina-workspace-editing", editing ? "1" : "0");
             if (options.stale) node.setAttribute("data-almdina-workspace-stale", "1");
             else node.removeAttribute("data-almdina-workspace-stale");
-
             if (status === "loading") node.setAttribute("aria-busy", "true");
             else node.removeAttribute("aria-busy");
-
             if (["cutting_plan_html", "order_cost_invoice_html"].includes(fieldname)) {
                 node.setAttribute("aria-live", "polite");
             }
@@ -107,8 +101,14 @@
             .${ROOT_CLASS} [data-almdina-workspace-kind]{
                 transition:border-color .16s ease,box-shadow .16s ease,background-color .16s ease;
             }
-            .${ROOT_CLASS} [data-almdina-workspace-status="error"]{
-                border-inline-start:3px solid #c2413a;
+            .${ROOT_CLASS} [data-almdina-workspace-status="error"]{border-inline-start:3px solid #c2413a;}
+
+            /* The outer HTML-field surface owns page height while lazy assets/data
+               are loading. This keeps Comments/Activity below the workspace and
+               removes the first-visit layout jump without delays or hiding content. */
+            .${ROOT_CLASS} [data-fieldname="cutting_plan_html"][data-almdina-workspace-status="loading"],
+            .${ROOT_CLASS} [data-fieldname="order_cost_invoice_html"][data-almdina-workspace-status="loading"]{
+                min-height:240px;
             }
             .${ROOT_CLASS} [data-almdina-workspace-status="loading"] .dco-plan-workspace-state,
             .${ROOT_CLASS} [data-almdina-workspace-status="loading"] .dco-cost-empty{
@@ -145,21 +145,15 @@
                 outline:none !important;box-shadow:var(--dco-workspace-ring) !important;
             }
 
-            .${ROOT_CLASS} [data-fieldname="plan_controls_intro"] .dco-plan-intro{
-                gap:12px !important;margin:4px 0 10px !important;
-            }
+            .${ROOT_CLASS} [data-fieldname="plan_controls_intro"] .dco-plan-intro{gap:12px !important;margin:4px 0 10px !important;}
             .${ROOT_CLASS} [data-fieldname="plan_controls_intro"] .dco-plan-card{
                 min-height:104px;padding:14px 15px;border-radius:var(--dco-workspace-radius) !important;
                 border-color:var(--border-color,#dfe5ea) !important;
                 background:linear-gradient(180deg,var(--card-bg,#fff),var(--subtle-fg,#fafbfc)) !important;
                 box-shadow:0 3px 12px rgba(15,23,42,.035);
             }
-            .${ROOT_CLASS} [data-fieldname="plan_controls_intro"] .dco-plan-card .label{
-                font-size:10.5px !important;font-weight:800 !important;letter-spacing:.01em;
-            }
-            .${ROOT_CLASS} [data-fieldname="plan_controls_intro"] .dco-plan-card .value{
-                font-size:17px !important;line-height:1.4 !important;
-            }
+            .${ROOT_CLASS} [data-fieldname="plan_controls_intro"] .dco-plan-card .label{font-size:10.5px !important;font-weight:800 !important;letter-spacing:.01em;}
+            .${ROOT_CLASS} [data-fieldname="plan_controls_intro"] .dco-plan-card .value{font-size:17px !important;line-height:1.4 !important;}
             .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-actions-shell{
                 border-radius:var(--dco-workspace-radius) !important;border-color:var(--border-color,#dce3e8) !important;
                 background:var(--card-bg,#fff) !important;box-shadow:var(--dco-workspace-shadow) !important;
@@ -172,22 +166,16 @@
             .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-document-actions .btn:hover:not(:disabled){
                 transform:translateY(-1px);box-shadow:0 5px 14px rgba(15,23,42,.08);
             }
-            .${ROOT_CLASS} [data-fieldname="plan_control_actions"][data-almdina-workspace-stale="1"] .dco-recalculate-plan{
-                box-shadow:0 0 0 3px rgba(190,125,25,.12);
-            }
+            .${ROOT_CLASS} [data-fieldname="plan_control_actions"][data-almdina-workspace-stale="1"] .dco-recalculate-plan{box-shadow:0 0 0 3px rgba(190,125,25,.12);}
             .${ROOT_CLASS} [data-fieldname="cutting_plan_html"] .dco-plan-tabs{
                 margin-bottom:14px !important;padding:5px !important;border-radius:13px !important;
                 box-shadow:0 2px 8px rgba(15,23,42,.035);
             }
-            .${ROOT_CLASS} [data-fieldname="cutting_plan_html"] .dco-plan-tabs .btn{
-                min-height:36px !important;padding-inline:13px !important;
-            }
+            .${ROOT_CLASS} [data-fieldname="cutting_plan_html"] .dco-plan-tabs .btn{min-height:36px !important;padding-inline:13px !important;}
             .${ROOT_CLASS} [data-fieldname="cutting_plan_html"] .dco-board-gallery > .dco-sheet-card{
                 border-radius:13px !important;box-shadow:0 2px 8px rgba(15,23,42,.035) !important;
             }
-            .${ROOT_CLASS} [data-fieldname="cutting_plan_html"] .dco-board-gallery > .dco-sheet-card:hover{
-                box-shadow:var(--dco-workspace-shadow-hover) !important;
-            }
+            .${ROOT_CLASS} [data-fieldname="cutting_plan_html"] .dco-board-gallery > .dco-sheet-card:hover{box-shadow:var(--dco-workspace-shadow-hover) !important;}
 
             .${ROOT_CLASS} .dco-cost-shell{max-width:1360px;padding:6px 0 22px}
             .${ROOT_CLASS} .dco-cost-section{
@@ -209,31 +197,25 @@
             .${ROOT_CLASS} .dco-special-price-card{
                 border-radius:14px !important;transition:border-color .14s ease,box-shadow .14s ease,transform .14s ease;
             }
-            .${ROOT_CLASS} .dco-special-price-card:hover{
-                border-color:#bcc8d2 !important;box-shadow:0 5px 16px rgba(15,23,42,.055);
-            }
+            .${ROOT_CLASS} .dco-special-price-card:hover{border-color:#bcc8d2 !important;box-shadow:0 5px 16px rgba(15,23,42,.055);}
             .${ROOT_CLASS} .dco-invoice-total-card{
                 border-radius:0 0 var(--dco-workspace-radius) var(--dco-workspace-radius) !important;padding:20px 22px !important;
             }
             .${ROOT_CLASS} .dco-invoice-total-card b{font-size:30px !important;letter-spacing:.015em}
 
             .${ROOT_CLASS} .page-actions [data-almdina-context-edit-mode$="-edit"],
-            .${ROOT_CLASS} .page-actions [data-almdina-context-edit-mode$="-save"]{
-                min-height:32px;border-radius:9px;font-weight:850;
-            }
+            .${ROOT_CLASS} .page-actions [data-almdina-context-edit-mode$="-save"]{min-height:32px;border-radius:9px;font-weight:850;}
             .${ROOT_CLASS} .page-actions .dco-context-edit-cancel{border-radius:9px;font-weight:800}
 
             @media (max-width:900px){
-                .${ROOT_CLASS} [data-fieldname="plan_controls_intro"] .dco-plan-intro{
-                    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
-                }
+                .${ROOT_CLASS} [data-fieldname="plan_controls_intro"] .dco-plan-intro{grid-template-columns:repeat(2,minmax(0,1fr)) !important;}
                 .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-actions{grid-template-columns:1fr !important}
                 .${ROOT_CLASS} .dco-cost-section{border-radius:14px !important}
             }
             @media (max-width:560px){
-                .${ROOT_CLASS} [data-fieldname="plan_controls_intro"] .dco-plan-intro{
-                    grid-template-columns:1fr !important;gap:8px !important;
-                }
+                .${ROOT_CLASS} [data-fieldname="cutting_plan_html"][data-almdina-workspace-status="loading"],
+                .${ROOT_CLASS} [data-fieldname="order_cost_invoice_html"][data-almdina-workspace-status="loading"]{min-height:170px;}
+                .${ROOT_CLASS} [data-fieldname="plan_controls_intro"] .dco-plan-intro{grid-template-columns:1fr !important;gap:8px !important;}
                 .${ROOT_CLASS} [data-fieldname="plan_controls_intro"] .dco-plan-card{min-height:86px;padding:12px 13px}
                 .${ROOT_CLASS} [data-fieldname="cutting_plan_html"] .dco-plan-tabs{
                     width:100% !important;overflow-x:auto;justify-content:flex-start !important;scrollbar-width:thin;
@@ -244,9 +226,7 @@
                 .${ROOT_CLASS} .dco-invoice-total-card{padding:16px !important}
                 .${ROOT_CLASS} .dco-invoice-total-card b{font-size:25px !important}
                 .${ROOT_CLASS} [data-fieldname="plan_control_actions"][data-almdina-workspace-editing="1"]::before,
-                .${ROOT_CLASS} [data-fieldname="order_cost_invoice_html"][data-almdina-workspace-editing="1"]::before{
-                    align-items:flex-start;font-size:10.5px;
-                }
+                .${ROOT_CLASS} [data-fieldname="order_cost_invoice_html"][data-almdina-workspace-editing="1"]::before{align-items:flex-start;font-size:10.5px;}
             }
             @media (prefers-reduced-motion:reduce){
                 .${ROOT_CLASS} *, .${ROOT_CLASS} *::before, .${ROOT_CLASS} *::after{
@@ -267,7 +247,6 @@
         installStyles();
         addVisualScope(formRoot(frm));
         addVisualScope(pageRoot(frm));
-
         const plan = planState(frm);
         const cost = costState(frm);
         applySurfaceState(frm, "plan", PLAN_FIELDS, plan, { stale: planIsStale(plan) });
@@ -282,9 +261,13 @@
             context.scheduleFrame(frm, "a53-plan-cost-workspace-visuals", () => refresh(frm));
             return;
         }
-        window.requestAnimationFrame(() => {
-            if (window.cur_frm === frm) refresh(frm);
-        });
+        if (window.requestAnimationFrame) {
+            window.requestAnimationFrame(() => {
+                if (window.cur_frm === frm) refresh(frm);
+            });
+            return;
+        }
+        if (window.cur_frm === frm) refresh(frm);
     }
 
     frappe.ui.form.on("Door Cutting Order", {
