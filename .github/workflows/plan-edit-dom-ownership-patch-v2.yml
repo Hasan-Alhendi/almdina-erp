@@ -1,0 +1,50 @@
+name: Apply focused plan DOM ownership patch
+
+on:
+  push:
+    branches:
+      - agent/fix-plan-edit-dom-ownership
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/fix-plan-edit-dom-ownership
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Apply patch
+        run: python .github/plan-edit-dom-ownership-patch.py
+
+      - name: Run focused regression checks
+        run: |
+          node --check almdina_erp/public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_ux.js
+          node --check almdina_erp/public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_edit_session_ux.js
+          node --check almdina_erp/public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_controls_ux.js
+          node --check almdina_erp/tests/js/plan_edit_dom_ownership.test.js
+          node almdina_erp/tests/js/plan_edit_dom_ownership.test.js
+          node almdina_erp/tests/js/plan_surface_isolation.test.js
+
+      - name: Commit focused fix
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/plan-edit-dom-ownership-patch.yml
+          git rm .github/workflows/plan-edit-dom-ownership-patch-v2.yml
+          git rm .github/plan-edit-dom-ownership-patch.py
+          git add almdina_erp/public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_ux.js
+          git add almdina_erp/public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_edit_session_ux.js
+          git add almdina_erp/public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_controls_ux.js
+          git add almdina_erp/tests/js/plan_edit_dom_ownership.test.js
+          git add .github/workflows/f6-dco-frontend.yml
+          git commit -m "fix(plan): separate edit-session DOM ownership"
+          git push origin HEAD:agent/fix-plan-edit-dom-ownership
