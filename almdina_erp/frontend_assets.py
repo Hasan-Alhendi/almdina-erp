@@ -140,6 +140,10 @@ doctype_js = {
         # The page coordinator reads feature APIs dynamically. On Plan/Cost first
         # activation the workspace-updated event re-renders it after lazy assets load.
         "public/js/door_cutting_order/core/door_cutting_order_page_edit_action_ux.js",
+        # Authoritative edit-session navigation guard. It wraps the current DCO
+        # Frappe Tab instances so every native/programmatic activation is rejected
+        # before visual state, active_tab_map, URL hash, or on_tab_change can move.
+        "public/js/door_cutting_order/core/door_cutting_order_tab_edit_lifecycle_guard.js",
         "public/js/door_cutting_order/core/door_cutting_order_plan_cost_workspace_visual_ux.js",
         "public/js/door_cutting_order/core/door_cutting_order_workspace_freshness_ux.js",
     ],
