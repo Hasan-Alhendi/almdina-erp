@@ -108,6 +108,7 @@ class CustomEvent {
     assert.ok(calls[1].length >= 7);
     assert.ok(calls[1].every(asset => asset.includes("/costing/")));
     assert.ok(calls[1].some(asset => asset.endsWith("door_cutting_order_cost_presenter.js")));
+    assert.ok(calls[1].some(asset => asset.endsWith("door_cutting_order_compact_pricing_ux.js")));
 
     flights[1].reject(new Error("offline"));
     await assert.rejects(costOne, /offline/);
@@ -116,6 +117,7 @@ class CustomEvent {
     const costRetry = registry.ensure("cost");
     assert.equal(calls.length, 3, "failed bundle must be retryable");
     fakeWindow.AlmdinaOrderCostUX = {};
+    fakeWindow.AlmdinaCompactPricingUX = {};
     fakeWindow.AlmdinaCostWorkspacePresenterAdapter = {};
     fakeWindow.AlmdinaCostPermissionsUX = {};
     fakeWindow.AlmdinaCostEditSessionUX = {};
