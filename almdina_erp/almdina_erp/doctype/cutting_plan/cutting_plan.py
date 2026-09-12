@@ -21,6 +21,7 @@ from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
 from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
     OffcutPolicyError,
     decision_from_values,
+    validate_source_resource_homogeneity,
 )
 
 
@@ -130,6 +131,33 @@ class CuttingPlan(Document):
         """Validate OFFCUT classification server-side for every save path."""
         identities: set[str] = set()
         full_board_sources = 0
+        pieces_by_source: dict[str, list[dict[str, object]]] = {}
+        for piece in self.placed_pieces or []:
+            pieces_by_source.setdefault(str(piece.sheet_no), []).append(
+                {
+                    "piece_instance_id": getattr(piece, "piece_instance_id", ""),
+                    "resource_kind": getattr(piece, "resource_kind", None),
+                    "offcut_source_party": getattr(piece, "offcut_source_party", None),
+                    "offcut_execution_party": getattr(piece, "offcut_execution_party", None),
+                }
+            )
+        try:
+            validate_source_resource_homogeneity(
+                [
+                    {"pieces": pieces_by_source.get(str(source.sheet_no), [])}
+                    for source in (self.sources or [])
+                ]
+            )
+        except OffcutPolicyError as exc:
+            frappe.throw(
+                _(
+                    "لا يمكن أن يحتوي نفس مصدر القص على قطع نقص وقطع من لوح كامل. "
+                    "ضع قطع OFFCUT كمصدر مستقل عن ألواح MDF الكاملة."
+                ),
+                frappe.ValidationError,
+            )
+            raise AssertionError("unreachable") from exc
+
         for source in self.sources or []:
             try:
                 decision = decision_from_values(
@@ -148,8 +176,13 @@ class CuttingPlan(Document):
         for piece in self.placed_pieces or []:
             identity = str(getattr(piece, "piece_instance_id", "") or "").strip()
             if not identity:
-                identity = f"{self.name or 'plan'}:{piece.source_piece_no}:{piece.copy_no}"
-                piece.piece_instance_id = identity
+                frappe.throw(
+                    _(
+                        "لا يمكن حفظ خطة القص لأن إحدى القطع الفيزيائية بلا هوية ثابتة. "
+                        "أعد حساب الخطة أو أعد رفع DXF من الطلب المحفوظ."
+                    ),
+                    frappe.ValidationError,
+                )
             if identity in identities:
                 frappe.throw(_("تكررت هوية القطعة الفيزيائية {0}.").format(identity), frappe.ValidationError)
             identities.add(identity)
