@@ -113,7 +113,11 @@ def test_cost_edit_scope_remains_independent_from_plan_scope():
     assert "store.cancelEdit()" in source
     assert "const captured = captureCostSettings(frm, state.draft || {});" in source
     assert "store.replaceDraft(payload);" in source
-    assert "api.saveSettings(frm.doc.name, payload)" in source
+    # Capture the document identity before any awaited command. A late completion
+    # must never pick up frm.doc.name from a different order.
+    assert 'const orderName = String(frm.doc.name || "");' in source
+    assert "api.saveSettings(orderName, payload)" in source
+    assert "documentStillCurrent(frm, token)" in source
     assert "owner.commit(frm, saved);" in source
     assert 'field.df[STATUS_KEY] = "Read"' in source
     assert "frm.save(" not in source
@@ -167,7 +171,7 @@ def test_persisted_dco_no_longer_uses_global_primary_action_for_tab_editing():
     assert ".page-actions .primary-action" in source
     assert "display:none !important" in source
     assert "sync(frm);" in source
-    assert "Synchronous sync prevents the legacy global primary action" in source
+    assert "on_tab_change(frm)" in source
     assert "set_primary_action" not in source
     assert "clear_primary_action" not in source
     assert "data-almdina-context-edit-mode" not in source
