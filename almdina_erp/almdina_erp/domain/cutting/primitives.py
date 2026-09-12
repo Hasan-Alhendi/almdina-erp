@@ -70,19 +70,18 @@ def expand_piece_groups(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         width_cm = num(row.get("width_cm"))
         length_cm = num(row.get("length_cm"))
         group_no = row_index + 1
+        base_identity = str(row.get("piece_instance_id") or "").strip()
 
         if not width_cm or not length_cm or not qty:
             continue
-
         for copy_no in range(1, qty + 1):
-            base_identity = str(row.get("piece_instance_id") or f"row-{group_no}")
             pieces.append(
                 {
                     "id": serial,
                     "label": f"{group_no}.{copy_no}",
                     "source_piece_no": group_no,
                     "copy_no": copy_no,
-                    "piece_instance_id": f"{base_identity}:{copy_no}",
+                    "piece_instance_id": f"{base_identity}:{copy_no}" if base_identity else "",
                     "resource_kind": "FULL_BOARD",
                     "offcut_source_party": "UNASSIGNED",
                     "offcut_execution_party": "UNASSIGNED",
@@ -140,7 +139,7 @@ def make_placed_piece(
         "label": piece["label"],
         "source_piece_no": piece["source_piece_no"],
         "copy_no": piece["copy_no"],
-        "piece_instance_id": piece.get("piece_instance_id") or f"{piece['source_piece_no']}:{piece['copy_no']}",
+        "piece_instance_id": str(piece.get("piece_instance_id") or "").strip(),
         "resource_kind": piece.get("resource_kind") or "FULL_BOARD",
         "offcut_source_party": piece.get("offcut_source_party") or "UNASSIGNED",
         "offcut_execution_party": piece.get("offcut_execution_party") or "UNASSIGNED",
