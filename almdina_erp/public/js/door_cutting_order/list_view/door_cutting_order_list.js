@@ -610,36 +610,6 @@
         return String((fallback && fallback.name) || "");
     }
 
-    function columnFieldname(column) {
-        return String(column && column.df && column.df.fieldname || "").trim();
-    }
-
-    function applyOrderNotesColumnOrder(listview) {
-        const columns = listview && listview.columns;
-        if (!Array.isArray(columns) || !columns.length) return false;
-        const notesIdx = columns.findIndex(column => columnFieldname(column) === "order_notes");
-        const edgeIdx = columns.findIndex(column => columnFieldname(column) === "edge_color");
-        if (notesIdx < 0 || edgeIdx < 0 || notesIdx === edgeIdx + 1) return false;
-        const [notes] = columns.splice(notesIdx, 1);
-        const nextEdgeIdx = columns.findIndex(column => columnFieldname(column) === "edge_color");
-        columns.splice(nextEdgeIdx + 1, 0, notes);
-        return true;
-    }
-
-    function installOrderNotesColumnOrder(listview) {
-        if (!listview || listview._dcoOrderNotesColumnInstalled) return;
-        if (typeof listview.setup_columns !== "function") return;
-        listview._dcoOrderNotesColumnInstalled = true;
-        const originalSetup = listview.setup_columns.bind(listview);
-        listview.setup_columns = function dcoSetupColumns() {
-            originalSetup();
-            applyOrderNotesColumnOrder(this);
-        };
-        if (applyOrderNotesColumnOrder(listview) && typeof listview.render_header === "function") {
-            listview.render_header();
-        }
-    }
-
     function dateLabel(value) {
         if (!value) return "—";
         if (frappe.datetime && typeof frappe.datetime.str_to_user === "function") {
@@ -1444,7 +1414,6 @@
         const root = rootNode(listview);
         if (root) root.classList.add("dco-order-list");
         applyCardLayoutClass(listview);
-        installOrderNotesColumnOrder(listview);
         installCombinedSearch(listview);
         installResponsiveObserver(listview);
         installRowsObserver(listview);
