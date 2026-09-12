@@ -17,6 +17,8 @@
         "almdina_erp.almdina_erp.services.drawing_approval_service.approve_production_dxf";
     const CANCEL_APPROVAL_METHOD =
         "almdina_erp.almdina_erp.services.drawing_approval_service.cancel_production_plan_approval";
+    const SAVE_OFFCUT_ASSIGNMENTS_METHOD =
+        "almdina_erp.almdina_erp.services.offcut_service.set_offcut_execution_owner";
 
     async function call(method, args, options = {}) {
         const response = await frappe.call({
@@ -133,6 +135,20 @@
         );
     }
 
+    function saveOffcutAssignments(planName, assignments) {
+        return call(
+            SAVE_OFFCUT_ASSIGNMENTS_METHOD,
+            {
+                plan_name: planName,
+                assignments: JSON.stringify(assignments || []),
+            },
+            {
+                freeze: true,
+                freezeMessage: __("جارٍ حفظ تصنيف قطع النقص..."),
+            }
+        );
+    }
+
     window.AlmdinaPlanWorkspaceAPI = Object.freeze({
         READ_METHOD,
         SAVE_SETTINGS_METHOD,
@@ -141,6 +157,7 @@
         COMMIT_PREVIEW_METHOD,
         APPROVE_METHOD,
         CANCEL_APPROVAL_METHOD,
+        SAVE_OFFCUT_ASSIGNMENTS_METHOD,
         load,
         saveSettings,
         recalculate,
@@ -149,5 +166,6 @@
         commitPreview,
         approve,
         cancelApproval,
+        saveOffcutAssignments,
     });
 })();

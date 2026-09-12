@@ -23,6 +23,13 @@ class Party(StrEnum):
     UNASSIGNED = "UNASSIGNED"
 
 
+class OffcutBusinessState(StrEnum):
+    UNASSIGNED = "UNASSIGNED"
+    CUSTOMER_FACTORY = "CUSTOMER_FACTORY"
+    CUSTOMER_CUSTOMER = "CUSTOMER_CUSTOMER"
+    FACTORY_FACTORY = "FACTORY_FACTORY"
+
+
 class OffcutPolicyError(ValueError):
     pass
 
@@ -58,6 +65,29 @@ RESOLVED_OFFCUT_STATES = frozenset(
     }
 )
 
+_DECISION_BY_BUSINESS_STATE = {
+    OffcutBusinessState.UNASSIGNED: (Party.UNASSIGNED, Party.UNASSIGNED),
+    OffcutBusinessState.CUSTOMER_FACTORY: (Party.CUSTOMER, Party.FACTORY),
+    OffcutBusinessState.CUSTOMER_CUSTOMER: (Party.CUSTOMER, Party.CUSTOMER),
+    OffcutBusinessState.FACTORY_FACTORY: (Party.FACTORY, Party.FACTORY),
+}
+_BUSINESS_STATE_BY_DECISION = {
+    decision: state
+    for state, decision in _DECISION_BY_BUSINESS_STATE.items()
+}
+_BUSINESS_STATE_LABELS = {
+    OffcutBusinessState.UNASSIGNED: "غير محدد",
+    OffcutBusinessState.CUSTOMER_FACTORY: "فضلة من الزبون — تنفيذ في المعمل",
+    OffcutBusinessState.CUSTOMER_CUSTOMER: "فضلة من الزبون — تنفيذ عند الزبون",
+    OffcutBusinessState.FACTORY_FACTORY: "فضلة من المعمل — تنفيذ في المعمل",
+}
+_SUMMARY_LABELS = {
+    OffcutBusinessState.CUSTOMER_FACTORY: "من الزبون / في المعمل",
+    OffcutBusinessState.CUSTOMER_CUSTOMER: "من الزبون / عند الزبون",
+    OffcutBusinessState.FACTORY_FACTORY: "من المعمل / في المعمل",
+    OffcutBusinessState.UNASSIGNED: "غير محدد",
+}
+
 
 def _party(value: Any, *, default: Party = Party.UNASSIGNED) -> Party:
     text = str(value or "").strip().upper()
@@ -81,14 +111,104 @@ def decision_from_values(
 
     source = _party(source_party)
     execution = _party(execution_party)
+    if kind is ResourceKind.FULL_BOARD:
+        # Legacy rows may still contain stale OFFCUT metadata. FULL_BOARD owns no
+        # OFFCUT business state, so canonical reads/saves neutralize it instead
+        # of carrying an invalid combination forward.
+        return OffcutDecision(kind, Party.UNASSIGNED, Party.UNASSIGNED)
+    if source is Party.UNASSIGNED or execution is Party.UNASSIGNED:
+        return OffcutDecision(kind, Party.UNASSIGNED, Party.UNASSIGNED)
     decision = OffcutDecision(kind, source, execution)
-    if not decision.is_offcut:
-        return decision
-    if (source, execution) not in RESOLVED_OFFCUT_STATES and not (
-        source is Party.UNASSIGNED or execution is Party.UNASSIGNED
-    ):
+    if (source, execution) not in RESOLVED_OFFCUT_STATES:
         raise OffcutPolicyError("factory_source_customer_execution_forbidden")
     return decision
+
+
+def decision_from_business_state(
+    resource_kind: Any,
+    business_state: Any,
+) -> OffcutDecision:
+    try:
+        state = OffcutBusinessState(
+            str(business_state or OffcutBusinessState.UNASSIGNED).strip().upper()
+        )
+    except ValueError as exc:
+        raise OffcutPolicyError(
+            f"unsupported_offcut_business_state:{business_state}"
+        ) from exc
+
+    decision = decision_from_values(
+        resource_kind,
+        *_DECISION_BY_BUSINESS_STATE[state],
+    )
+    if not decision.is_offcut and state is not OffcutBusinessState.UNASSIGNED:
+        raise OffcutPolicyError("full_board_offcut_classification_forbidden")
+    return decision
+
+
+def business_state_from_decision(decision: OffcutDecision) -> OffcutBusinessState:
+    if not decision.is_offcut or not decision.is_resolved:
+        return OffcutBusinessState.UNASSIGNED
+    try:
+        return _BUSINESS_STATE_BY_DECISION[
+            (decision.source_party, decision.execution_party)
+        ]
+    except KeyError as exc:
+        raise OffcutPolicyError("unsupported_offcut_business_state") from exc
+
+
+def business_state_from_values(
+    resource_kind: Any,
+    source_party: Any = Party.UNASSIGNED,
+    execution_party: Any = Party.UNASSIGNED,
+) -> OffcutBusinessState:
+    return business_state_from_decision(
+        decision_from_values(resource_kind, source_party, execution_party)
+    )
+
+
+def business_state_options() -> list[dict[str, str]]:
+    return [
+        {"value": state.value, "label": _BUSINESS_STATE_LABELS[state]}
+        for state in OffcutBusinessState
+    ]
+
+
+def offcut_assignment_projection(piece: dict[str, Any]) -> dict[str, Any]:
+    decision = decision_from_piece(piece)
+    if not decision.is_offcut:
+        raise OffcutPolicyError("offcut_assignment_requires_offcut_piece")
+    state = business_state_from_decision(decision)
+    return {
+        "piece_instance_id": str(piece.get("piece_instance_id") or "").strip(),
+        "piece_label": str(piece.get("label") or piece.get("piece_label") or "").strip(),
+        "business_state": state.value,
+        "business_state_label": _BUSINESS_STATE_LABELS[state],
+        "source_party": decision.source_party.value,
+        "execution_party": decision.execution_party.value,
+    }
+
+
+def offcut_summary(pieces: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    counts = {state: 0 for state in OffcutBusinessState}
+    for piece in pieces:
+        decision = decision_from_piece(piece)
+        if decision.is_offcut:
+            counts[business_state_from_decision(decision)] += 1
+    order = (
+        OffcutBusinessState.CUSTOMER_FACTORY,
+        OffcutBusinessState.CUSTOMER_CUSTOMER,
+        OffcutBusinessState.FACTORY_FACTORY,
+        OffcutBusinessState.UNASSIGNED,
+    )
+    return [
+        {
+            "business_state": state.value,
+            "label": _SUMMARY_LABELS[state],
+            "count": counts[state],
+        }
+        for state in order
+    ]
 
 
 def decision_from_piece(piece: dict[str, Any]) -> OffcutDecision:
@@ -122,14 +242,56 @@ def canonicalize_snapshot_sources(snapshot: dict[str, Any]) -> dict[str, Any]:
     """
     for sheet in snapshot.get("sheets") or []:
         pieces = list(sheet.get("pieces") or [])
-        if not pieces or not all(decision_from_piece(piece).is_offcut for piece in pieces):
+        if not pieces:
+            continue
+        decisions = [decision_from_piece(piece) for piece in pieces]
+        if not all(decision.is_offcut for decision in decisions):
+            sheet["offcut_source_party"] = Party.UNASSIGNED.value
+            sheet["offcut_execution_party"] = Party.UNASSIGNED.value
             continue
         sheet["resource_kind"] = ResourceKind.OFFCUT.value
-        sources = {str(piece.get("offcut_source_party") or Party.UNASSIGNED.value).upper() for piece in pieces}
-        executions = {str(piece.get("offcut_execution_party") or Party.UNASSIGNED.value).upper() for piece in pieces}
-        sheet["offcut_source_party"] = next(iter(sources)) if len(sources) == 1 else Party.UNASSIGNED.value
-        sheet["offcut_execution_party"] = next(iter(executions)) if len(executions) == 1 else Party.UNASSIGNED.value
+        source_projection = (
+            decisions[0]
+            if all(decision == decisions[0] for decision in decisions)
+            else OffcutDecision(
+                ResourceKind.OFFCUT,
+                Party.UNASSIGNED,
+                Party.UNASSIGNED,
+            )
+        )
+        sheet["offcut_source_party"] = source_projection.source_party.value
+        sheet["offcut_execution_party"] = source_projection.execution_party.value
     return snapshot
+
+
+def preserve_offcut_classification(
+    snapshot: dict[str, Any],
+    previous_pieces: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Preserve business state only for the same confidently matched identity."""
+
+    previous = {
+        str(piece.get("piece_instance_id") or "").strip(): decision_from_piece(piece)
+        for piece in previous_pieces
+        if str(piece.get("piece_instance_id") or "").strip()
+    }
+    for sheet in snapshot.get("sheets") or []:
+        for piece in sheet.get("pieces") or []:
+            current = decision_from_piece(piece)
+            if not current.is_offcut:
+                piece["offcut_source_party"] = Party.UNASSIGNED.value
+                piece["offcut_execution_party"] = Party.UNASSIGNED.value
+                continue
+            identity = str(piece.get("piece_instance_id") or "").strip()
+            old = previous.get(identity)
+            preserved = old if old and old.is_offcut else OffcutDecision(
+                ResourceKind.OFFCUT,
+                Party.UNASSIGNED,
+                Party.UNASSIGNED,
+            )
+            piece["offcut_source_party"] = preserved.source_party.value
+            piece["offcut_execution_party"] = preserved.execution_party.value
+    return canonicalize_snapshot_sources(snapshot)
 
 
 def validate_piece_collection(pieces: list[dict[str, Any]]) -> None:
@@ -169,14 +331,22 @@ def presentation_label(decision: OffcutDecision, *, full_board_number: int | Non
 
 __all__ = [
     "canonicalize_snapshot_sources",
+    "business_state_from_decision",
+    "business_state_from_values",
+    "business_state_options",
+    "decision_from_business_state",
     "OffcutDecision",
+    "OffcutBusinessState",
     "OffcutPolicyError",
+    "offcut_assignment_projection",
+    "offcut_summary",
     "Party",
     "RESOLVED_OFFCUT_STATES",
     "ResourceKind",
     "decision_from_piece",
     "decision_from_values",
     "presentation_label",
+    "preserve_offcut_classification",
     "source_summary",
     "validate_source_resource_homogeneity",
     "validate_piece_collection",

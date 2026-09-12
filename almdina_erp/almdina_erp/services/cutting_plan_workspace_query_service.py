@@ -20,6 +20,11 @@ from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     SYSTEM,
     UPLOADED_DXF,
 )
+from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
+    business_state_options,
+    offcut_assignment_projection,
+    offcut_summary,
+)
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization import (
     cutting_plan_capability_allowed,
@@ -127,6 +132,10 @@ def _plan_row(plan: Any, snapshot_json: str = "") -> dict[str, Any]:
         for piece in (sheet.get("pieces") or [])
         if str(piece.get("resource_kind") or "FULL_BOARD").upper() == "OFFCUT"
     ]
+    offcut_assignments = [
+        offcut_assignment_projection(piece)
+        for piece in offcut_pieces
+    ]
     return {
         "name": plan.get("name"),
         "source_type": str(plan.get("source_type") or ""),
@@ -175,26 +184,9 @@ def _plan_row(plan: Any, snapshot_json: str = "") -> dict[str, Any]:
         "offcut": {
             "count": len(offcut_pieces),
             "label": "نقص" if offcut_pieces else "",
-            "assignments": [
-                {
-                    "piece_instance_id": piece.get("piece_instance_id"),
-                    "piece_label": piece.get("label"),
-                    "source_party": piece.get("offcut_source_party") or "UNASSIGNED",
-                    "execution_party": piece.get("offcut_execution_party") or "UNASSIGNED",
-                    "source_label": {
-                        "CUSTOMER": "الزبون",
-                        "FACTORY": "المعمل",
-                        "UNASSIGNED": "غير محدد",
-                    }.get(str(piece.get("offcut_source_party") or "UNASSIGNED"), "غير محدد"),
-                    "execution_label": {
-                        "CUSTOMER": "الزبون",
-                        "FACTORY": "المعمل",
-                        "UNASSIGNED": "غير محدد",
-                    }.get(str(piece.get("offcut_execution_party") or "UNASSIGNED"), "غير محدد"),
-                    "enters_worker_queue": str(piece.get("offcut_execution_party") or "").upper() == "FACTORY",
-                }
-                for piece in offcut_pieces
-            ],
+            "summary": offcut_summary(offcut_pieces),
+            "state_options": business_state_options(),
+            "assignments": offcut_assignments,
         },
         "dxf": {
             "file": plan.get("dxf_file"),

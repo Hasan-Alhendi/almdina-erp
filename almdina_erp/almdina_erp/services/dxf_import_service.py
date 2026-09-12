@@ -52,6 +52,7 @@ from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
 )
 from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
     OffcutPolicyError,
+    canonicalize_snapshot_sources,
     validate_source_resource_homogeneity,
 )
 from almdina_erp.almdina_erp.domain.orders.extra_addons import (
@@ -1532,13 +1533,10 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
             )
             else "FULL_BOARD"
         )
-        if sheet["resource_kind"] == "OFFCUT":
-            first_offcut = (sheet.get("pieces") or [])[0]
-            sheet["offcut_source_party"] = first_offcut.get("offcut_source_party") or "UNASSIGNED"
-            sheet["offcut_execution_party"] = first_offcut.get("offcut_execution_party") or "UNASSIGNED"
-        else:
-            sheet["offcut_source_party"] = "UNASSIGNED"
-            sheet["offcut_execution_party"] = "UNASSIGNED"
+        sheet["offcut_source_party"] = "UNASSIGNED"
+        sheet["offcut_execution_party"] = "UNASSIGNED"
+
+    canonicalize_snapshot_sources({"sheets": sheets})
 
     geometry_by_piece_id = {int(piece["id"]): piece["_outline_cm"] for piece in labeled}
     topology_by_piece_id = {
