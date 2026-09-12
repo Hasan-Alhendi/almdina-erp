@@ -22,7 +22,7 @@ def _parse_assignments(value: Any) -> list[dict[str, Any]]:
         parsed = json.loads(value) if isinstance(value, str) else value
     except (TypeError, ValueError) as exc:
         raise OffcutPolicyError("invalid_offcut_assignments") from exc
-    if not isinstance(parsed, list) or not parsed:
+    if not isinstance(parsed, list):
         raise OffcutPolicyError("offcut_assignments_required")
     return [row for row in parsed if isinstance(row, dict)]
 
@@ -46,6 +46,19 @@ def set_offcut_execution_owner(
         message=_("لا تملك صلاحية تحديد مصدر وتنفيذ النقص لهذه الخطة."),
     )
     rows = _parse_assignments(assignments)
+    if not rows:
+        if offcut_price_usd is not None and flt(offcut_price_usd):
+            frappe.throw(
+                _("لا يمكن إدخال سعر فضلة دون وجود قطعة نقص مصنفة."),
+                frappe.ValidationError,
+            )
+        return {
+            "cutting_plan": plan.name,
+            "status": plan.status,
+            "approval_preserved": True,
+            "assignments": {},
+            "offcut_price_usd": flt(getattr(plan, "offcut_price_usd", 0)),
+        }
     by_identity = {
         str(row.piece_instance_id or "").strip(): row
         for row in (plan.placed_pieces or [])
