@@ -106,11 +106,9 @@
         const columns = listview && listview.columns;
         if (!Array.isArray(columns) || !columns.length) return false;
 
-        // Frappe applies List Settings first, but the existing DCO list owner has
-        // a legacy post-setup rule that can still move order_notes after edge_color.
-        // Reconcile only the Important Note projection back to the user's saved
-        // position after all list setup hooks have run; do not rewrite the saved
-        // settings or any unrelated column order.
+        // Reconcile only the Important Note projection to the saved List Settings
+        // position after Frappe has built the columns. Do not rewrite unrelated
+        // column order or persist any presentation-only width policy here.
         const before = columns.map(listSettingsFieldname);
         const currentIndex = columns.findIndex(
             column => listSettingsFieldname(column) === IMPORTANT_FIELD
@@ -332,12 +330,10 @@
         if (!preview) return "";
         const orderName = String(doc && doc.name || "").trim();
         const short = truncateImportantPreview(preview);
-        return `
-            <button type="button" class="dco-important-note-link" data-order-name="${escapeHtml(orderName)}" title="${escapeHtml(preview)}" aria-label="فتح الملاحظة المهمة: ${escapeHtml(preview)}">
-                <span class="dco-important-note-star" aria-hidden="true">★</span>
-                <span class="dco-important-note-text">${escapeHtml(short)}</span>
-            </button>
-        `;
+        // Keep the ListView template whitespace-free: Frappe v16.17.5 derives
+        // dynamic column width from jQuery.text(), so indentation/newlines would
+        // be counted as visible characters and can inflate this column.
+        return `<button type="button" class="dco-important-note-link" data-order-name="${escapeHtml(orderName)}" title="${escapeHtml(preview)}" aria-label="فتح الملاحظة المهمة: ${escapeHtml(preview)}"><span class="dco-important-note-star" aria-hidden="true">★</span><span class="dco-important-note-text">${escapeHtml(short)}</span></button>`;
     }
 
     frappe.listview_settings = frappe.listview_settings || {};

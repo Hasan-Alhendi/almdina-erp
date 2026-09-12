@@ -7,35 +7,44 @@
 
 @media (min-width: 601px) {
     /*
-     * Frappe gives list columns a 15px physical margin and later writes growing
-     * flex values inline. Keep density policy scoped to DCO, use an RTL-safe gap,
-     * and make each semantic width deterministic without touching Frappe core or
-     * List View Settings.
+     * Frappe v16.17.5 renders semantic field names as CSS classes while newer
+     * ListView builds also expose data-fieldname. Support both DOM contracts so
+     * DCO density stays deterministic across sites without touching Frappe core
+     * or List View Settings.
      */
     .dco-order-list .list-row .level-left,
     .dco-order-list .list-row-head .level-left {
         gap: 2px;
     }
 
-    .dco-order-list .list-row-col[data-fieldname] {
+    .dco-order-list .list-row-col {
+        margin: 0 !important;
+        box-sizing: border-box;
+    }
+
+    /*
+     * v16.17.5 has no semantic marker on the Status column, so give every
+     * non-Tag desktop column a deterministic compact baseline first. Known field
+     * classes/attributes below then refine their exact semantic widths.
+     */
+    .dco-order-list .list-row-col:not(.tag-col) {
         width: 96px !important;
         min-width: 64px !important;
         max-width: 96px !important;
         flex: 0 0 96px !important;
-        margin: 0 !important;
-        box-sizing: border-box;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
     }
 
-    .dco-order-list .list-row-col[data-fieldname="name"] {
+    .dco-order-list .list-row-col:is(.name, .list-subject, [data-fieldname="name"]) {
         width: 78px !important;
         min-width: 78px !important;
         max-width: 78px !important;
         flex: 0 0 78px !important;
     }
 
+    /* Newer Frappe builds expose a semantic Status marker; v16.17.5 uses the 96px baseline. */
     .dco-order-list .list-row-col[data-fieldname="status_field"] {
         width: 74px !important;
         min-width: 74px !important;
@@ -43,42 +52,42 @@
         flex: 0 0 74px !important;
     }
 
-    .dco-order-list .list-row-col[data-fieldname="customer"] {
+    .dco-order-list .list-row-col:is(.customer, [data-fieldname="customer"]) {
         width: 92px !important;
         min-width: 92px !important;
         max-width: 92px !important;
         flex: 0 0 92px !important;
     }
 
-    .dco-order-list .list-row-col[data-fieldname="order_date"] {
+    .dco-order-list .list-row-col:is(.order_date, [data-fieldname="order_date"]) {
         width: 82px !important;
         min-width: 82px !important;
         max-width: 82px !important;
         flex: 0 0 82px !important;
     }
 
-    .dco-order-list .list-row-col[data-fieldname="board_description"] {
+    .dco-order-list .list-row-col:is(.board_description, [data-fieldname="board_description"]) {
         width: 100px !important;
         min-width: 100px !important;
         max-width: 100px !important;
         flex: 0 0 100px !important;
     }
 
-    .dco-order-list .list-row-col[data-fieldname="edge_color"] {
+    .dco-order-list .list-row-col:is(.edge_color, [data-fieldname="edge_color"]) {
         width: 78px !important;
         min-width: 78px !important;
         max-width: 78px !important;
         flex: 0 0 78px !important;
     }
 
-    .dco-order-list .list-row-col[data-fieldname="order_notes"] {
+    .dco-order-list .list-row-col:is(.order_notes, [data-fieldname="order_notes"]) {
         width: 104px !important;
         min-width: 104px !important;
         max-width: 104px !important;
         flex: 0 0 104px !important;
     }
 
-    .dco-order-list .list-row-col[data-fieldname="important_note_preview"] {
+    .dco-order-list .list-row-col:is(.important_note_preview, [data-fieldname="important_note_preview"]) {
         width: 92px !important;
         min-width: 92px !important;
         max-width: 92px !important;
@@ -86,40 +95,40 @@
         overflow: hidden !important;
     }
 
-    .dco-order-list .list-row-col[data-fieldname="important_note_preview"] > * {
+    .dco-order-list .list-row-col:is(.important_note_preview, [data-fieldname="important_note_preview"]) > * {
         min-width: 0;
         max-width: 100%;
     }
 
-    .dco-order-list .list-row-col[data-fieldname="production_path"] {
+    .dco-order-list .list-row-col:is(.production_path, [data-fieldname="production_path"]) {
         width: 90px !important;
         min-width: 90px !important;
         max-width: 90px !important;
         flex: 0 0 90px !important;
     }
 
-    .dco-order-list .list-row-col[data-fieldname="current_department"] {
+    .dco-order-list .list-row-col:is(.current_department, [data-fieldname="current_department"]) {
         width: 90px !important;
         min-width: 90px !important;
         max-width: 90px !important;
         flex: 0 0 90px !important;
     }
 
-    .dco-order-list .list-row-col[data-fieldname="current_assignee"] {
+    .dco-order-list .list-row-col:is(.current_assignee, [data-fieldname="current_assignee"]) {
         width: 92px !important;
         min-width: 92px !important;
         max-width: 92px !important;
         flex: 0 0 92px !important;
     }
 
-    .dco-order-list .list-row-col[data-fieldname="current_production_stage"] {
+    .dco-order-list .list-row-col:is(.current_production_stage, [data-fieldname="current_production_stage"]) {
         width: 102px !important;
         min-width: 102px !important;
         max-width: 102px !important;
         flex: 0 0 102px !important;
     }
 
-    .dco-order-list .list-row-col[data-fieldname="department_status"] {
+    .dco-order-list .list-row-col:is(.department_status, [data-fieldname="department_status"]) {
         width: 84px !important;
         min-width: 84px !important;
         max-width: 84px !important;
@@ -131,8 +140,7 @@
         display: none !important;
     }
 
-    .dco-order-list .list-row-col[data-fieldname="name"],
-    .dco-order-list .list-row-col[data-fieldname="order_date"] {
+    .dco-order-list .list-row-col:is(.name, .list-subject, .order_date, [data-fieldname="name"], [data-fieldname="order_date"]) {
         direction: ltr;
         unicode-bidi: isolate;
         font-variant-numeric: tabular-nums;
