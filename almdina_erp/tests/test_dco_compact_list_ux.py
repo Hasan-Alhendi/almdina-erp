@@ -38,7 +38,7 @@ class TestDcoCompactListUx(unittest.TestCase):
             'door_cutting_order_compact_list_ux.js?v=13"'
         )
 
-        self.assertIn('"/assets/almdina_erp/css/door_cutting_order_list.css?v=13"', manifest)
+        self.assertIn('"/assets/almdina_erp/css/door_cutting_order_list.css?v=14"', manifest)
         self.assertIn(compact_global, manifest)
         self.assertIn(canonical, manifest)
         self.assertNotIn(
@@ -144,30 +144,65 @@ class TestDcoCompactListUx(unittest.TestCase):
         self.assertIn('.dco-order-list .list-row .level-left', css)
         self.assertIn('.dco-order-list .list-row-head .level-left', css)
         self.assertIn('gap: 2px;', css)
-        self.assertIn('.dco-order-list .list-row-col[data-fieldname] {', css)
+        self.assertIn('.dco-order-list .list-row-col {', css)
         self.assertIn('margin: 0 !important;', css)
         self.assertIn('flex: 0 0 96px !important;', css)
+        self.assertIn('.dco-order-list .list-row-col.name,', css)
         self.assertIn('.dco-order-list .list-row-col[data-fieldname="name"]', css)
         self.assertIn('width: 78px !important;', css)
-        self.assertIn('.dco-order-list .list-row-col[data-fieldname="status_field"]', css)
+        self.assertIn('.dco-order-list .list-row-col.order_date,', css)
         self.assertIn('.dco-order-list .list-row-col[data-fieldname="order_date"]', css)
         self.assertIn('width: 82px !important;', css)
+        self.assertIn('.dco-order-list .list-row-col.customer,', css)
         self.assertIn('.dco-order-list .list-row-col[data-fieldname="customer"]', css)
         self.assertIn('width: 92px !important;', css)
+        self.assertIn('.dco-order-list .list-row-col.important_note_preview,', css)
         self.assertIn('.dco-order-list .list-row-col[data-fieldname="important_note_preview"]', css)
         self.assertIn('flex: 0 0 92px !important;', css)
         self.assertIn('.dco-order-list .dco-important-note-link', css)
-        self.assertIn('.dco-order-list .list-row-col[data-fieldname="current_production_stage"]', css)
-        self.assertIn('.dco-order-list .list-row-col[data-fieldname="department_status"]', css)
+        self.assertIn('.dco-order-list .list-row-col.current_production_stage,', css)
+        self.assertIn('.dco-order-list .list-row-col.department_status,', css)
         self.assertIn('.dco-order-list .list-row-head > .level-right', css)
         self.assertIn('.dco-order-list .list-row > .level-right', css)
         self.assertIn('display: none !important;', css)
         self.assertIn('.dco-order-list .dco-list-filterable-text', css)
         self.assertNotIn('nth-child', css)
 
+    def test_frappe_v16_field_class_contract_is_supported_alongside_data_fieldname(self) -> None:
+        css = LIST_CSS.read_text(encoding="utf-8")
+
+        field_widths = {
+            "name": "78px",
+            "customer": "92px",
+            "order_date": "82px",
+            "board_description": "100px",
+            "edge_color": "78px",
+            "order_notes": "104px",
+            "important_note_preview": "92px",
+            "production_path": "90px",
+            "current_department": "90px",
+            "current_assignee": "92px",
+            "current_production_stage": "102px",
+            "department_status": "84px",
+        }
+        for fieldname, width in field_widths.items():
+            self.assertIn(f'.dco-order-list .list-row-col.{fieldname},', css)
+            self.assertIn(
+                f'.dco-order-list .list-row-col[data-fieldname="{fieldname}"]',
+                css,
+            )
+            self.assertIn(f'width: {width} !important;', css)
+
+        self.assertIn('.dco-order-list .list-row-col {', css)
+        self.assertIn('margin: 0 !important;', css)
+
     def test_important_note_is_contained_inside_its_own_column(self) -> None:
         css = LIST_CSS.read_text(encoding="utf-8")
 
+        self.assertIn(
+            '.dco-order-list .list-row-col.important_note_preview > *,',
+            css,
+        )
         self.assertIn(
             '.dco-order-list .list-row-col[data-fieldname="important_note_preview"] > *',
             css,
