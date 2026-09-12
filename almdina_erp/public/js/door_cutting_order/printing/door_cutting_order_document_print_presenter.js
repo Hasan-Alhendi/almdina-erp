@@ -71,6 +71,18 @@
         return api && typeof api.fallback === "function" ? api.fallback() : {};
     }
 
+    async function resolveCustomerPhone(frm) {
+        const customer = String(frm && frm.doc && frm.doc.customer || "").trim();
+        if (!customer || !frappe.db || typeof frappe.db.get_value !== "function") return "";
+        try {
+            const response = await frappe.db.get_value("Customer", customer, "mobile_no");
+            return String(response && response.message && response.message.mobile_no || "").trim();
+        } catch (error) {
+            console.warn("Customer phone lookup failed", error);
+            return "";
+        }
+    }
+
     async function ensureProfiles(frm) {
         const module = edgeBandingApi();
         if (module && typeof module.ensureProfiles === "function") {
@@ -232,20 +244,24 @@
         const date = String(frm.doc.order_date || "").trim();
         return theme.headerHtml(printIdentity, {
             title: "جدول قياسات الطلب",
-            meta: date ? `${reference} · ${date}` : reference,
+            reference,
+            date,
         });
     }
 
-    function sharedInfo(frm) {
+    function sharedInfo(frm, customerPhone = "") {
         const doorCount = (frm.doc.pieces || []).reduce(
             (sum, row) => sum + Math.max(1, Math.trunc(number(row.qty) || 1)),
             0
         );
+        const phone = String(customerPhone || "").trim();
         return `<div class="info shared-info">
-            <div><b>رقم الطلب</b>${esc(frm.doc.name || "مسودة")}</div>
-            <div><b>الزبون</b>${esc(frm.doc.customer || "—")}</div>
+            <div class="shared-info-customer">
+                <b>الزبون</b>
+                <span class="shared-info-primary">${esc(frm.doc.customer || "—")}</span>
+                <span class="shared-info-phone"><span class="shared-info-phone-label">الهاتف</span><span class="shared-info-phone-value">${esc(phone || "—")}</span></span>
+            </div>
             <div><b>اللوح</b>${esc(frm.doc.board_description || "—")}</div>
-            <div><b>نوع القشاط</b>${esc(frm.doc.default_edge_type || "—")}</div>
             <div><b>لون القشاط</b>${esc(frm.doc.edge_color || "غير محدد")}</div>
             <div><b>عدد الدرف</b>${quantity(doorCount)}</div>
         </div>`;
@@ -268,16 +284,16 @@
             : "";
     }
 
-    function measurementDocumentBodyWithPayload(frm, payload) {
+    function measurementDocumentBodyWithPayload(frm, payload, customerPhone = "") {
         return `
-            ${sharedInfo(frm)}
+            ${sharedInfo(frm, customerPhone)}
             <div class="title">جدول القياسات</div>
             ${measurementTableWithPayload(frm, payload)}
             ${orderNotesHtml(frm)}`;
     }
 
-    function measurementDocumentBody(frm) {
-        return measurementDocumentBodyWithPayload(frm, null);
+    function measurementDocumentBody(frm, customerPhone = "") {
+        return measurementDocumentBodyWithPayload(frm, null, customerPhone);
     }
 
     function quoteLineNote(line) {
@@ -330,14 +346,22 @@
             : shapePrintCss();
     }
 
-    function documentHtml(frm, mode = "measurements", printIdentity = null, quotePayload = null) {
+    function documentHtml(
+        frm,
+        mode = "measurements",
+        printIdentity = null,
+        quotePayload = null,
+        customerPhone = ""
+    ) {
         const api = printIdentityApi();
         const identity = printIdentity || (api && typeof api.fallback === "function" ? api.fallback() : {});
         const invoice = mode === "invoice";
         const generated = frappe.datetime ? frappe.datetime.now_datetime() : new Date().toISOString();
         return `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${invoice ? "فاتورة الزبون" : "قياسات"} الطلب ${esc(frm.doc.name || "")}</title><style>${printCss()}</style></head><body>
             ${sharedHeader(frm, identity)}
-            ${invoice ? measurementDocumentBodyWithPayload(frm, quotePayload) : measurementDocumentBody(frm)}
+            ${invoice
+                ? measurementDocumentBodyWithPayload(frm, quotePayload, customerPhone)
+                : measurementDocumentBody(frm, customerPhone)}
             ${invoice ? quoteDetailsHtml(quotePayload || {}) : ""}
             <div class="footer"><span>رقم الطلب: ${esc(frm.doc.name || "مسودة")}</span><span>تاريخ الطباعة: ${esc(generated)}</span></div>
         </body></html>`;
@@ -375,12 +399,13 @@
     async function printMeasurements(frm) {
         const documentIdentity = captureIdentity(frm);
         if (!isCurrent(frm, documentIdentity)) return false;
-        const [, printIdentity] = await Promise.all([
+        const [, printIdentity, customerPhone] = await Promise.all([
             ensureProfiles(frm),
             resolvePrintIdentity(),
+            resolveCustomerPhone(frm),
         ]);
         if (!isCurrent(frm, documentIdentity)) return false;
-        printHtml(documentHtml(frm, "measurements", printIdentity));
+        printHtml(documentHtml(frm, "measurements", printIdentity, null, customerPhone));
         return true;
     }
 
@@ -390,12 +415,13 @@
         if (!payload || payload.kind !== "customer_invoice" || payload.order_name !== frm.doc.name) {
             throw new Error("Authorized customer invoice payload does not match the active order");
         }
-        const [, printIdentity] = await Promise.all([
+        const [, printIdentity, customerPhone] = await Promise.all([
             ensureProfiles(frm),
             resolvePrintIdentity(),
+            resolveCustomerPhone(frm),
         ]);
         if (!isCurrent(frm, documentIdentity)) return false;
-        printHtml(documentHtml(frm, "invoice", printIdentity, payload));
+        printHtml(documentHtml(frm, "invoice", printIdentity, payload, customerPhone));
         return true;
     }
 
