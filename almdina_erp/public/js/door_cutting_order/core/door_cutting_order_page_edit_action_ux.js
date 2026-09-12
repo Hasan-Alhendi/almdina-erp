@@ -9,15 +9,9 @@
         cost_tab: "cost",
     });
     const KIND_CONFIG = Object.freeze({
-        order: Object.freeze({
-            title: "معلومات الطلب",
-        }),
-        plan: Object.freeze({
-            title: "خطة القص",
-        }),
-        cost: Object.freeze({
-            title: "تكلفة الطلب",
-        }),
+        order: Object.freeze({ title: "معلومات الطلب" }),
+        plan: Object.freeze({ title: "خطة القص" }),
+        cost: Object.freeze({ title: "تكلفة الطلب" }),
     });
     const EDIT_LABEL = "تعديل";
     const SAVE_LABEL = "حفظ";
@@ -26,8 +20,6 @@
     const TOOLBAR_SLOT_CLASS = "dco-tab-edit-toolbar-slot";
     const PAGE_CLASS = "dco-tab-local-edit-actions";
     const STYLE_ID = "dco-tab-local-edit-actions-css";
-    const TAB_LISTENER_ROOT_KEY = "__almdinaPageEditTabListenerRoot";
-    const TAB_LISTENER_HANDLER_KEY = "__almdinaPageEditTabListenerHandler";
     const BUSY_KEY = "__almdinaPageEditActionBusy";
 
     function documentContext() {
@@ -47,161 +39,75 @@
         if (document.getElementById(STYLE_ID)) return;
         $("head").append(`
             <style id="${STYLE_ID}">
-                .${PAGE_CLASS} .page-actions .primary-action {
-                    display:none !important;
-                }
-                .${PAGE_CLASS} .page-actions .dco-context-edit-cancel {
-                    display:none !important;
-                }
+                .${PAGE_CLASS} .page-actions .primary-action { display:none !important; }
+                .${PAGE_CLASS} .page-actions .dco-context-edit-cancel { display:none !important; }
                 .${TOOLBAR_CLASS} {
-                    display:flex;
-                    align-items:center;
-                    justify-content:flex-end;
-                    gap:12px;
-                    margin:0;
-                    padding:0;
-                    border:0;
-                    border-radius:0;
-                    background:transparent;
-                    box-shadow:none;
-                    direction:rtl;
+                    display:flex;align-items:center;justify-content:flex-end;gap:12px;margin:0;padding:0;border:0;
+                    border-radius:0;background:transparent;box-shadow:none;direction:rtl;
                 }
                 .${TOOLBAR_SLOT_CLASS} {
-                    margin-inline-start:auto;
-                    list-style:none;
-                    display:flex;
-                    align-items:center;
+                    margin-inline-start:auto;list-style:none;display:flex;align-items:center;
                 }
-                .${TOOLBAR_CLASS}__identity {
-                    display:flex;
-                    align-items:center;
-                    gap:8px;
-                    min-width:0;
-                }
-                .${TOOLBAR_CLASS}[data-compact="1"] .${TOOLBAR_CLASS}__identity {
-                    display:none;
-                }
+                .${TOOLBAR_CLASS}__identity { display:flex;align-items:center;gap:8px;min-width:0; }
+                .${TOOLBAR_CLASS}[data-compact="1"] .${TOOLBAR_CLASS}__identity { display:none; }
                 .${TOOLBAR_CLASS}__title {
-                    font-size:13px;
-                    font-weight:850;
-                    color:var(--text-color,#26313b);
-                    white-space:nowrap;
+                    font-size:13px;font-weight:850;color:var(--text-color,#26313b);white-space:nowrap;
                 }
                 .${TOOLBAR_CLASS}__state {
-                    display:inline-flex;
-                    align-items:center;
-                    min-height:24px;
-                    padding:3px 8px;
-                    border-radius:999px;
-                    background:var(--subtle-fg,#f4f6f8);
-                    color:var(--text-muted,#687481);
-                    font-size:10px;
-                    font-weight:750;
-                    white-space:nowrap;
+                    display:inline-flex;align-items:center;min-height:24px;padding:3px 8px;border-radius:999px;
+                    background:var(--subtle-fg,#f4f6f8);color:var(--text-muted,#687481);font-size:10px;font-weight:750;white-space:nowrap;
                 }
                 .${TOOLBAR_CLASS}[data-editing="1"] {
-                    border-color:rgba(36,144,239,.34);
-                    box-shadow:0 0 0 3px rgba(36,144,239,.08);
+                    border-color:rgba(36,144,239,.34);box-shadow:0 0 0 3px rgba(36,144,239,.08);
                 }
                 .${TOOLBAR_CLASS}[data-editing="1"] .${TOOLBAR_CLASS}__state {
-                    background:rgba(36,144,239,.1);
-                    color:var(--primary,#2490ef);
+                    background:rgba(36,144,239,.1);color:var(--primary,#2490ef);
                 }
-                .${TOOLBAR_CLASS}__actions {
-                    display:flex;
-                    align-items:center;
-                    gap:8px;
-                    flex:0 0 auto;
-                }
+                .${TOOLBAR_CLASS}__actions { display:flex;align-items:center;gap:8px;flex:0 0 auto; }
                 .${TOOLBAR_CLASS}__actions .btn {
-                    min-width:82px;
-                    min-height:34px;
-                    border-radius:9px;
-                    font-weight:800;
+                    min-width:82px;min-height:34px;border-radius:9px;font-weight:800;
                 }
                 .${TOOLBAR_CLASS}__actions .btn:focus-visible {
-                    outline:none !important;
-                    box-shadow:0 0 0 3px rgba(36,144,239,.15) !important;
+                    outline:none !important;box-shadow:0 0 0 3px rgba(36,144,239,.15) !important;
                 }
                 .dco-plan-settings-readonly {
-                    margin:0 0 12px;
-                    padding:13px 14px;
-                    border:1px solid var(--border-color,#dfe3e8);
-                    border-radius:13px;
-                    background:linear-gradient(180deg,var(--card-bg,#fff),var(--subtle-fg,#fafbfc));
-                    direction:rtl;
+                    margin:0 0 12px;padding:13px 14px;border:1px solid var(--border-color,#dfe3e8);border-radius:13px;
+                    background:linear-gradient(180deg,var(--card-bg,#fff),var(--subtle-fg,#fafbfc));direction:rtl;
                 }
                 .dco-plan-settings-readonly__header {
-                    display:flex;
-                    align-items:flex-start;
-                    justify-content:space-between;
-                    gap:10px;
-                    margin-bottom:10px;
+                    display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px;
                 }
                 .dco-plan-settings-readonly__title {
-                    margin:0;
-                    font-size:13px;
-                    font-weight:850;
-                    color:var(--text-color,#26313b);
+                    margin:0;font-size:13px;font-weight:850;color:var(--text-color,#26313b);
                 }
                 .dco-plan-settings-readonly__help {
-                    margin:3px 0 0;
-                    color:var(--text-muted,#687481);
-                    font-size:10.5px;
-                    line-height:1.55;
+                    margin:3px 0 0;color:var(--text-muted,#687481);font-size:10.5px;line-height:1.55;
                 }
                 .dco-plan-settings-readonly__grid {
-                    display:grid;
-                    grid-template-columns:repeat(5,minmax(0,1fr));
-                    gap:8px;
+                    display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;
                 }
                 .dco-plan-settings-readonly__item {
-                    min-width:0;
-                    padding:9px 10px;
-                    border-radius:10px;
-                    background:var(--subtle-fg,#f6f8fa);
+                    min-width:0;padding:9px 10px;border-radius:10px;background:var(--subtle-fg,#f6f8fa);
                 }
                 .dco-plan-settings-readonly__label {
-                    display:block;
-                    margin-bottom:4px;
-                    color:var(--text-muted,#687481);
-                    font-size:10px;
-                    font-weight:750;
+                    display:block;margin-bottom:4px;color:var(--text-muted,#687481);font-size:10px;font-weight:750;
                 }
                 .dco-plan-settings-readonly__value {
-                    display:block;
-                    overflow:hidden;
-                    text-overflow:ellipsis;
-                    color:var(--text-color,#26313b);
-                    font-size:12px;
-                    font-weight:850;
-                    white-space:nowrap;
+                    display:block;overflow:hidden;text-overflow:ellipsis;color:var(--text-color,#26313b);
+                    font-size:12px;font-weight:850;white-space:nowrap;
                 }
                 .dco-a53-workspace-polish [data-fieldname="plan_control_actions"][data-almdina-workspace-editing="1"]::before,
                 .dco-a53-workspace-polish [data-fieldname="order_cost_invoice_html"][data-almdina-workspace-editing="1"]::before {
                     content:"وضع التعديل مفعّل — غيّر القيم المطلوبة ثم استخدم «حفظ» أو «إلغاء» داخل هذا القسم." !important;
                 }
                 @media (max-width:900px) {
-                    .dco-plan-settings-readonly__grid {
-                        grid-template-columns:repeat(2,minmax(0,1fr));
-                    }
+                    .dco-plan-settings-readonly__grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
                 }
                 @media (max-width:560px) {
-                    .${TOOLBAR_CLASS} {
-                        align-items:stretch;
-                        flex-direction:row;
-                        width:100%;
-                        justify-content:flex-end;
-                    }
-                    .${TOOLBAR_CLASS}__actions {
-                        width:auto;
-                    }
-                    .${TOOLBAR_CLASS}__actions .btn {
-                        min-width:76px;
-                    }
-                    .dco-plan-settings-readonly__grid {
-                        grid-template-columns:1fr;
-                    }
+                    .${TOOLBAR_CLASS} { align-items:stretch;flex-direction:row;width:100%;justify-content:flex-end; }
+                    .${TOOLBAR_CLASS}__actions { width:auto; }
+                    .${TOOLBAR_CLASS}__actions .btn { min-width:76px; }
+                    .dco-plan-settings-readonly__grid { grid-template-columns:1fr; }
                 }
             </style>
         `);
@@ -217,17 +123,9 @@
         return wrapper && (wrapper.nodeType ? wrapper : wrapper[0]);
     }
 
-    function orderApi() {
-        return window.AlmdinaOrderRevisionUX || null;
-    }
-
-    function planApi() {
-        return window.AlmdinaPlanEditSessionUX || null;
-    }
-
-    function costApi() {
-        return window.AlmdinaCostEditSessionUX || null;
-    }
+    function orderApi() { return window.AlmdinaOrderRevisionUX || null; }
+    function planApi() { return window.AlmdinaPlanEditSessionUX || null; }
+    function costApi() { return window.AlmdinaCostEditSessionUX || null; }
 
     function apiFor(kind) {
         if (kind === "plan") return planApi();
@@ -270,12 +168,7 @@
         const activeTab = frm && typeof frm.get_active_tab === "function"
             ? frm.get_active_tab()
             : null;
-        const native = String(
-            activeTab
-            && activeTab.df
-            && activeTab.df.fieldname
-            || ""
-        );
+        const native = String(activeTab && activeTab.df && activeTab.df.fieldname || "");
         if (TAB_KIND[native]) return native;
 
         const root = formRoot(frm);
@@ -303,13 +196,6 @@
         return `.${TOOLBAR_CLASS}[data-almdina-tab-edit-kind="${kind}"]`;
     }
 
-    function wrapperNode(wrapper) {
-        if (!wrapper) return null;
-        if (wrapper.nodeType) return wrapper;
-        if (wrapper[0] && wrapper[0].nodeType) return wrapper[0];
-        return null;
-    }
-
     function toolbarSlotHost(frm) {
         const root = formRoot(frm);
         if (!root || !root.querySelector) return null;
@@ -325,9 +211,7 @@
 
     function toolbarSlotFor(frm) {
         const root = formRoot(frm);
-        return root && root.querySelector
-            ? root.querySelector(`.${TOOLBAR_SLOT_CLASS}`)
-            : null;
+        return root && root.querySelector ? root.querySelector(`.${TOOLBAR_SLOT_CLASS}`) : null;
     }
 
     function ensureToolbarSlot(frm) {
@@ -420,24 +304,16 @@
         const start = toolbar.querySelector(".dco-tab-edit-start");
         const save = toolbar.querySelector(".dco-tab-edit-save");
         const cancel = toolbar.querySelector(".dco-tab-edit-cancel");
-        if (start && !start.disabled) {
-            start.addEventListener("click", () => runAction(frm, () => startFor(frm, kind)));
-        }
-        if (save && !save.disabled) {
-            save.addEventListener("click", () => runAction(frm, () => saveFor(frm, kind)));
-        }
-        if (cancel && !cancel.disabled) {
-            cancel.addEventListener("click", () => runAction(frm, () => cancelFor(frm, kind)));
-        }
+        if (start && !start.disabled) start.addEventListener("click", () => runAction(frm, () => startFor(frm, kind)));
+        if (save && !save.disabled) save.addEventListener("click", () => runAction(frm, () => saveFor(frm, kind)));
+        if (cancel && !cancel.disabled) cancel.addEventListener("click", () => runAction(frm, () => cancelFor(frm, kind)));
         return true;
     }
 
     async function cancelOrder(frm) {
         const api = orderApi();
         if (!api || !isEditing(frm, "order")) return false;
-        if (typeof api.lockEditSession === "function") {
-            api.lockEditSession(frm, { silent: true });
-        }
+        if (typeof api.lockEditSession === "function") api.lockEditSession(frm, { silent: true });
         await frm.reload_doc();
         return true;
     }
@@ -445,18 +321,14 @@
     function startFor(frm, kind) {
         const api = apiFor(kind);
         if (!api || activeEditingKind(frm)) return false;
-        if (kind === "order" && typeof api.enterEditSession === "function") {
-            return api.enterEditSession(frm);
-        }
+        if (kind === "order" && typeof api.enterEditSession === "function") return api.enterEditSession(frm);
         return typeof api.startEditing === "function" ? api.startEditing(frm) : false;
     }
 
     function saveFor(frm, kind) {
         const api = apiFor(kind);
         if (!api) return false;
-        if (kind === "order" && typeof api.commitEditSession === "function") {
-            return api.commitEditSession(frm);
-        }
+        if (kind === "order" && typeof api.commitEditSession === "function") return api.commitEditSession(frm);
         return typeof api.saveEditing === "function" ? api.saveEditing(frm) : false;
     }
 
@@ -486,9 +358,8 @@
         ["plan_result_section", "plan_controls_intro"].forEach((fieldname) => {
             const field = frm && frm.fields_dict && frm.fields_dict[fieldname];
             if (!field || !field.df || Number(field.df.hidden || 0) !== 1) return;
-            if (typeof frm.set_df_property === "function") {
-                frm.set_df_property(fieldname, "hidden", 0);
-            } else {
+            if (typeof frm.set_df_property === "function") frm.set_df_property(fieldname, "hidden", 0);
+            else {
                 field.df.hidden = 0;
                 if (typeof field.refresh === "function") field.refresh();
             }
@@ -496,18 +367,18 @@
         });
         if (changed) {
             const planUx = window.AlmdinaDoorCuttingPlanUX;
-            window.requestAnimationFrame(() => {
+            const refreshPlan = () => {
                 if (planUx && typeof planUx.refresh === "function") planUx.refresh(frm);
-            });
+            };
+            if (window.requestAnimationFrame) window.requestAnimationFrame(refreshPlan);
+            else refreshPlan();
         }
         return changed;
     }
 
     function planWorkspaceRow(frm) {
         const owner = window.AlmdinaPlanWorkspaceState;
-        return owner && typeof owner.activePlan === "function"
-            ? owner.activePlan(frm, "System")
-            : null;
+        return owner && typeof owner.activePlan === "function" ? owner.activePlan(frm, "System") : null;
     }
 
     function planWorkspaceReady(frm) {
@@ -589,104 +460,20 @@
             context.scheduleFrame(frm, "tab-local-edit-actions", () => sync(frm));
             return;
         }
-        window.requestAnimationFrame(() => {
-            if (window.cur_frm === frm) sync(frm);
-        });
-    }
-
-    function tabNavigationRoot(frm) {
-        const nativeTabs = frm && frm.layout && frm.layout.tab_link_container;
-        return wrapperNode(nativeTabs) || formRoot(frm);
-    }
-
-    function tabFieldFromEventTarget(target) {
-        if (!target || typeof target.closest !== "function") return "";
-        const node = target.closest(
-            '[data-fieldname="order_tab"],'
-            + '[data-fieldname="results_tab"],'
-            + '[data-fieldname="cost_tab"]'
-        );
-        if (node) {
-            const nav = node.closest("li,.nav-item");
-            if (nav || (node.classList && node.classList.contains("nav-link"))) {
-                return String(node.getAttribute("data-fieldname") || "");
-            }
-        }
-
-        // Frappe themes differ on whether data-fieldname is placed on the tab
-        // link or its list item. Resolve the same native tab from either shape;
-        // the guard must run before Frappe's delegated handler changes tabs.
-        const nav = target.closest("li,.nav-item");
-        const link = nav && nav.querySelector
-            ? nav.querySelector(".nav-link")
-            : target.closest(".nav-link");
-        const fieldname = String(
-            (nav && nav.getAttribute && nav.getAttribute("data-fieldname"))
-            || (link && link.getAttribute && link.getAttribute("data-fieldname"))
-            || ""
-        );
-        return TAB_KIND[fieldname] ? fieldname : "";
-    }
-
-    function clearTabListener(frm) {
-        if (!frm) return;
-        const root = frm[TAB_LISTENER_ROOT_KEY];
-        const handler = frm[TAB_LISTENER_HANDLER_KEY];
-        if (root && handler && typeof root.removeEventListener === "function") {
-            root.removeEventListener("click", handler, true);
-        }
-        frm[TAB_LISTENER_ROOT_KEY] = null;
-        frm[TAB_LISTENER_HANDLER_KEY] = null;
-    }
-
-    function installTabListener(frm) {
-        const root = tabNavigationRoot(frm);
-        if (!root || typeof root.addEventListener !== "function") return;
-        if (frm[TAB_LISTENER_ROOT_KEY] === root && frm[TAB_LISTENER_HANDLER_KEY]) return;
-
-        clearTabListener(frm);
-        const handler = (event) => {
-            const targetField = tabFieldFromEventTarget(event.target);
-            if (!targetField) return;
-            const currentField = currentTabFieldname(frm);
-            const editingKind = activeEditingKind(frm);
-            if (editingKind && targetField !== currentField) {
-                event.preventDefault();
-                if (typeof event.stopImmediatePropagation === "function") {
-                    event.stopImmediatePropagation();
-                } else if (typeof event.stopPropagation === "function") {
-                    event.stopPropagation();
-                }
-                frappe.msgprint({
-                    title: __("التعديل ما زال مفتوحًا"),
-                    message: __("احفظ أو ألغِ التعديل الحالي قبل الانتقال إلى قسم آخر."),
-                    indicator: "orange",
-                });
-                return;
-            }
-            schedule(frm);
-        };
-
-        root.addEventListener("click", handler, true);
-        const context = documentContext();
-        if (context && typeof context.registerCleanup === "function") {
-            context.registerCleanup(frm, "tab-local-edit-navigation", () => {
-                root.removeEventListener("click", handler, true);
-                if (frm[TAB_LISTENER_ROOT_KEY] === root) {
-                    frm[TAB_LISTENER_ROOT_KEY] = null;
-                    frm[TAB_LISTENER_HANDLER_KEY] = null;
-                }
+        if (window.requestAnimationFrame) {
+            window.requestAnimationFrame(() => {
+                if (window.cur_frm === frm) sync(frm);
             });
+            return;
         }
-        frm[TAB_LISTENER_ROOT_KEY] = root;
-        frm[TAB_LISTENER_HANDLER_KEY] = handler;
+        if (window.cur_frm === frm) sync(frm);
     }
 
     function refresh(frm) {
         installStyles();
-        installTabListener(frm);
-        // Synchronous sync prevents the legacy global primary action from being
-        // painted for a frame before the local tab controls take ownership.
+        // Tab navigation blocking is owned exclusively by
+        // AlmdinaDcoTabEditLifecycleGuard at Frappe Tab.set_active(). This module
+        // owns only edit-session discovery and toolbar projection.
         sync(frm);
         schedule(frm);
     }
@@ -694,6 +481,7 @@
     frappe.ui.form.on("Door Cutting Order", {
         onload_post_render(frm) { refresh(frm); },
         refresh(frm) { refresh(frm); },
+        on_tab_change(frm) { sync(frm); schedule(frm); },
         almdina_edit_session_changed(frm) { sync(frm); schedule(frm); },
         refresh_plan_controls(frm) { schedule(frm); },
     });
