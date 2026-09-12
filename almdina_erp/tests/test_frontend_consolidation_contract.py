@@ -379,12 +379,13 @@ class TestFrontendConsolidationContract(unittest.TestCase):
             "function apply(frm)", 1
         )[0]
 
-        self.assertIn('.find(".dco-plan-actions-shell").first()', simplify)
+        self.assertIn('.children(".dco-plan-actions-shell").first()', simplify)
+        self.assertNotIn("field.$wrapper.empty()", simplify)
         self.assertIn("window.AlmdinaDoorCuttingPlanUX", simplify)
         self.assertIn("presenter.refresh(frm)", simplify)
         self.assertLess(
             simplify.index("presenter.refresh(frm)"),
-            simplify.index("installApprovalAction(frm, field)"),
+            simplify.index("installApprovalAction(frm, shell)"),
         )
 
     def test_plan_surface_waits_for_stage_context_before_readiness_check(self) -> None:

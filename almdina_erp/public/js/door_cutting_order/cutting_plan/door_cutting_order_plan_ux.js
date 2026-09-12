@@ -538,17 +538,16 @@
     function renderActions(frm) {
         const field = frm.fields_dict.plan_control_actions;
         if (!field || !field.$wrapper) return;
-        if (!workspaceReady(frm)) {
-            field.$wrapper.empty();
-            return;
-        }
+        const wrapper = field.$wrapper;
+        wrapper.children(".dco-plan-actions-shell").remove();
+        if (!workspaceReady(frm)) return;
 
         const mayMutate = canRecalculatePlan(frm);
         const settings = activeSettings(frm);
         const mode = String(settings.packing_mode || "Auto Pro");
         const blockReason = stageMutationBlockReason(frm);
 
-        field.$wrapper.html(`
+        wrapper.append(`
             <div class="dco-plan-actions-shell">
                 <div class="dco-plan-dirty-note">تم تغيير أحد إعدادات الخطة. أعد الحساب لتطبيق التغيير على الرسم والنتائج.</div>
                 <div class="dco-plan-actions-title">
@@ -573,10 +572,11 @@
             </div>
         `);
 
-        field.$wrapper.find(".dco-recalculate-plan").on("click", () => recalculate(frm));
-        field.$wrapper.find(".dco-print-cutting-plan").on("click", () => printCuttingPlan(frm));
-        field.$wrapper.find(".dco-export-dxf").on("click", () => exportCuttingPlanDxf(frm));
-        field.$wrapper.find(".dco-upload-dxf-plan").on("click", () => uploadCuttingPlanDxf(frm));
+        const shell = wrapper.children(".dco-plan-actions-shell").last();
+        shell.find(".dco-recalculate-plan").on("click", () => recalculate(frm));
+        shell.find(".dco-print-cutting-plan").on("click", () => printCuttingPlan(frm));
+        shell.find(".dco-export-dxf").on("click", () => exportCuttingPlanDxf(frm));
+        shell.find(".dco-upload-dxf-plan").on("click", () => uploadCuttingPlanDxf(frm));
     }
 
     async function recalculate(frm) {
@@ -621,7 +621,9 @@
             const summary = frm.fields_dict.plan_controls_intro;
             const actions = frm.fields_dict.plan_control_actions;
             if (summary && summary.$wrapper) summary.$wrapper.empty();
-            if (actions && actions.$wrapper) actions.$wrapper.empty();
+            if (actions && actions.$wrapper) {
+                actions.$wrapper.children(".dco-plan-actions-shell").remove();
+            }
         }
     }
 

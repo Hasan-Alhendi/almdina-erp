@@ -256,4 +256,79 @@
     .dco-order-list .dco-status-filter-slot select.form-control:hover {
         border-color: var(--gray-400) !important;
     }
+
+    /* Match Frappe's native Filter control to the compact DCO toolbar. */
+    .dco-order-list .filter-section > .filter-selector {
+        flex: 0 0 auto !important;
+        width: auto !important;
+        min-width: 0 !important;
+        margin: 0 !important;
+    }
+
+    .dco-order-list .filter-section > .filter-selector .btn-group {
+        display: inline-flex !important;
+        align-items: stretch;
+        height: 30px;
+        margin: 0 !important;
+        overflow: hidden;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        background: var(--control-bg);
+        box-shadow: none;
+    }
+
+    .dco-order-list .filter-section > .filter-selector .filter-button,
+    .dco-order-list .filter-section > .filter-selector .filter-x-button {
+        display: inline-flex !important;
+        align-items: center;
+        justify-content: center;
+        height: 28px !important;
+        min-height: 28px !important;
+        margin: 0 !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        line-height: 1 !important;
+    }
+
+    .dco-order-list .filter-section > .filter-selector .filter-button {
+        min-width: 72px;
+        gap: 4px;
+        padding: 0 8px !important;
+    }
+
+    .dco-order-list .filter-section > .filter-selector .filter-x-button {
+        width: 28px;
+        min-width: 28px;
+        padding: 0 !important;
+        border-inline-start: 1px solid var(--border-color) !important;
+    }
+
+    .dco-order-list .filter-section > .filter-selector .button-label {
+        display: inline !important;
+        margin: 0 !important;
+        white-space: nowrap;
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 1 !important;
+    }
+
+    .dco-order-list .filter-section > .filter-selector .filter-icon,
+    .dco-order-list .filter-section > .filter-selector .button-icon {
+        display: inline-flex !important;
+        align-items: center;
+        justify-content: center;
+        margin: 0 !important;
+        line-height: 1 !important;
+    }
+
+    .dco-order-list .filter-section > .filter-selector svg {
+        width: 14px !important;
+        height: 14px !important;
+    }
+
+    .dco-order-list .filter-section > .filter-selector .filter-button:hover,
+    .dco-order-list .filter-section > .filter-selector .filter-x-button:hover {
+        background-color: var(--subtle-fg) !important;
+    }
 }
