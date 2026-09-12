@@ -100,8 +100,8 @@ def test_financial_documents_use_server_payload_and_shared_customer_presenter():
     assert "printHtml(documentHtml(payload, printIdentity))" in financial
     assert "presenter.printAuthorizedInvoice(frm, payload)" in financial
     assert "function printAuthorizedInvoice(frm, payload)" in presenter
-    assert 'documentHtml(frm, "invoice", printIdentity, payload)' in presenter
-    assert 'documentHtml(frm, "measurements", printIdentity)' in presenter
+    assert 'documentHtml(frm, "invoice", printIdentity, payload, customerPhone)' in presenter
+    assert 'documentHtml(frm, "measurements", printIdentity, null, customerPhone)' in presenter
     assert "function printHtml(frm)" not in edge
     assert "event.stopImmediatePropagation()" not in edge
 

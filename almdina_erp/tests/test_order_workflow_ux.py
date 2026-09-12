@@ -72,8 +72,8 @@ def test_measurement_print_is_shared_base_without_quote_details():
     for label in ("النوع", "العرض", "الطول", "العدد", "القشاط المخصص", "ملاحظات"):
         assert label in source
     assert "function measurementTable(frm)" in source
-    assert "function measurementDocumentBody(frm)" in source
-    assert 'printHtml(documentHtml(frm, "measurements", printIdentity))' in source
+    assert 'function measurementDocumentBody(frm, customerPhone = "")' in source
+    assert 'printHtml(documentHtml(frm, "measurements", printIdentity, null, customerPhone))' in source
     assert "function quoteDetailsHtml(payload)" in source
     assert '${invoice ? quoteDetailsHtml(quotePayload || {}) : ""}' in source
     assert "function invoiceSummary" not in source
@@ -85,7 +85,7 @@ def test_edge_color_is_kept_in_shared_print_header_without_duplicate_columns():
     print_source = text(PRINT_PRESENTER)
     measurement_source = text(MEASUREMENT_UX)
 
-    assert "<b>نوع القشاط</b>" in print_source
+    assert "<b>نوع القشاط</b>" not in print_source
     assert print_source.count("<b>لون القشاط</b>") == 1
     assert "<th>لون القشاط</th>" not in print_source
     assert "patchMeasurementTable" not in edge_source
