@@ -27,357 +27,177 @@ jobs:
           python - <<'PY'
           from pathlib import Path
 
+          def replace_once(text, before, after, label):
+              count = text.count(before)
+              if count != 1:
+                  raise SystemExit(f"{label}: expected exactly one match, found {count}")
+              return text.replace(before, after, 1)
+
           plan_path = Path("almdina_erp/public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_ux.js")
           source = plan_path.read_text()
-          old = '''    function renderActions(frm) {
-              const field = frm.fields_dict.plan_control_actions;
-              if (!field || !field.$wrapper) return;
-              if (!workspaceReady(frm)) {
-                  field.$wrapper.empty();
-                  return;
-              }
-
-              const mayMutate = canRecalculatePlan(frm);
-              const settings = activeSettings(frm);
-              const mode = String(settings.packing_mode || "Auto Pro");
-              const blockReason = stageMutationBlockReason(frm);
-
-              field.$wrapper.html(`
-                  <div class="dco-plan-actions-shell">
-                      <div class="dco-plan-dirty-note">تم تغيير أحد إعدادات الخطة. أعد الحساب لتطبيق التغيير على الرسم والنتائج.</div>
-                      <div class="dco-plan-actions-title">
-                          <strong>أوامر خطة القص</strong>
-                          <span class="dco-plan-mode-hint">${esc(modeDescription(mode))}</span>
-                      </div>
-                      ${mayMutate ? `
-                          <div class="dco-plan-actions">
-                              <button type="button" class="btn btn-primary btn-sm dco-recalculate-plan">
-                                  إعادة الحساب بالإعدادات الحالية
-                              </button>
-                          </div>
-                      ` : ""}
-                      ${documentActionsHtml(frm)}
-                      <div class="dco-plan-note">
-                          ${blockReason
-                              ? esc(__(blockReason))
-                              : mayMutate
-                                  ? "عدّل إعدادات الخطة من «تعديل خطة القص»، احفظها، ثم أعد الحساب."
-                                  : "إعدادات الخطة للعرض فقط في الحالة الحالية."}
-                      </div>
-                  </div>
-              `);
-
-              field.$wrapper.find(".dco-recalculate-plan").on("click", () => recalculate(frm));
-              field.$wrapper.find(".dco-print-cutting-plan").on("click", () => printCuttingPlan(frm));
-              field.$wrapper.find(".dco-export-dxf").on("click", () => exportCuttingPlanDxf(frm));
-              field.$wrapper.find(".dco-upload-dxf-plan").on("click", () => uploadCuttingPlanDxf(frm));
-          }
-          '''
-          new = '''    function renderActions(frm) {
-              const field = frm.fields_dict.plan_control_actions;
-              if (!field || !field.$wrapper) return;
-
-              const wrapper = field.$wrapper;
-              wrapper.children(".dco-plan-actions-shell").remove();
-              if (!workspaceReady(frm)) return;
-
-              const mayMutate = canRecalculatePlan(frm);
-              const settings = activeSettings(frm);
-              const mode = String(settings.packing_mode || "Auto Pro");
-              const blockReason = stageMutationBlockReason(frm);
-
-              wrapper.append(`
-                  <div class="dco-plan-actions-shell">
-                      <div class="dco-plan-dirty-note">تم تغيير أحد إعدادات الخطة. أعد الحساب لتطبيق التغيير على الرسم والنتائج.</div>
-                      <div class="dco-plan-actions-title">
-                          <strong>أوامر خطة القص</strong>
-                          <span class="dco-plan-mode-hint">${esc(modeDescription(mode))}</span>
-                      </div>
-                      ${mayMutate ? `
-                          <div class="dco-plan-actions">
-                              <button type="button" class="btn btn-primary btn-sm dco-recalculate-plan">
-                                  إعادة الحساب بالإعدادات الحالية
-                              </button>
-                          </div>
-                      ` : ""}
-                      ${documentActionsHtml(frm)}
-                      <div class="dco-plan-note">
-                          ${blockReason
-                              ? esc(__(blockReason))
-                              : mayMutate
-                                  ? "عدّل إعدادات الخطة من «تعديل خطة القص»، احفظها، ثم أعد الحساب."
-                                  : "إعدادات الخطة للعرض فقط في الحالة الحالية."}
-                      </div>
-                  </div>
-              `);
-
-              const shell = wrapper.children(".dco-plan-actions-shell").last();
-              shell.find(".dco-recalculate-plan").on("click", () => recalculate(frm));
-              shell.find(".dco-print-cutting-plan").on("click", () => printCuttingPlan(frm));
-              shell.find(".dco-export-dxf").on("click", () => exportCuttingPlanDxf(frm));
-              shell.find(".dco-upload-dxf-plan").on("click", () => uploadCuttingPlanDxf(frm));
-          }
-          '''
-          if source.count(old) != 1:
-              raise SystemExit("PlanUX renderActions contract changed; refusing broad patch")
-          source = source.replace(old, new)
-          old_pending = '''            if (summary && summary.$wrapper) summary.$wrapper.empty();
-              if (actions && actions.$wrapper) actions.$wrapper.empty();'''
-          new_pending = '''            if (summary && summary.$wrapper) summary.$wrapper.empty();
-              if (actions && actions.$wrapper) {
-                  actions.$wrapper.children(".dco-plan-actions-shell").remove();
-              }'''
-          if source.count(old_pending) != 1:
-              raise SystemExit("PlanUX pending fallback contract changed; refusing patch")
-          plan_path.write_text(source.replace(old_pending, new_pending))
+          start = source.index("    function renderActions(frm) {")
+          end = source.index("\n    async function recalculate", start)
+          block = source[start:end]
+          block = replace_once(
+              block,
+              "        if (!workspaceReady(frm)) {\n            field.$wrapper.empty();\n            return;\n        }\n",
+              "        const wrapper = field.$wrapper;\n        wrapper.children(\".dco-plan-actions-shell\").remove();\n        if (!workspaceReady(frm)) return;\n",
+              "PlanUX readiness",
+          )
+          block = replace_once(block, "        field.$wrapper.html(`", "        wrapper.append(`", "PlanUX shell render")
+          events = (
+              '        field.$wrapper.find(".dco-recalculate-plan").on("click", () => recalculate(frm));\n'
+              '        field.$wrapper.find(".dco-print-cutting-plan").on("click", () => printCuttingPlan(frm));\n'
+              '        field.$wrapper.find(".dco-export-dxf").on("click", () => exportCuttingPlanDxf(frm));\n'
+              '        field.$wrapper.find(".dco-upload-dxf-plan").on("click", () => uploadCuttingPlanDxf(frm));'
+          )
+          scoped_events = (
+              '        const shell = wrapper.children(".dco-plan-actions-shell").last();\n'
+              '        shell.find(".dco-recalculate-plan").on("click", () => recalculate(frm));\n'
+              '        shell.find(".dco-print-cutting-plan").on("click", () => printCuttingPlan(frm));\n'
+              '        shell.find(".dco-export-dxf").on("click", () => exportCuttingPlanDxf(frm));\n'
+              '        shell.find(".dco-upload-dxf-plan").on("click", () => uploadCuttingPlanDxf(frm));'
+          )
+          block = replace_once(block, events, scoped_events, "PlanUX event scope")
+          source = source[:start] + block + source[end:]
+          source = replace_once(
+              source,
+              "            if (actions && actions.$wrapper) actions.$wrapper.empty();",
+              "            if (actions && actions.$wrapper) {\n                actions.$wrapper.children(\".dco-plan-actions-shell\").remove();\n            }",
+              "PlanUX pending actions",
+          )
+          plan_path.write_text(source)
 
           edit_path = Path("almdina_erp/public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_edit_session_ux.js")
           source = edit_path.read_text()
-          replacements = {
-              '''    function editorHost(frm) {
-              const wrapper = actionSurface(frm);
-              if (!wrapper) return null;
-              const shell = wrapper.find(".dco-plan-actions-shell").first();
-              return shell.length ? shell : null;
-          }''': '''    function editorHost(frm) {
-              return actionSurface(frm);
-          }''',
-              'host.find(EDITOR_SELECTOR).toggleClass("is-dirty", Boolean(dirty));': 'host.children(EDITOR_SELECTOR).first().toggleClass("is-dirty", Boolean(dirty));',
-              'host.find(EDITOR_SELECTOR).remove();': 'host.children(EDITOR_SELECTOR).remove();',
-              'const editor = host.find(EDITOR_SELECTOR).first();': 'const editor = host.children(EDITOR_SELECTOR).first();',
-              'if (wrapper) wrapper.find(EDITOR_SELECTOR).remove();': 'if (wrapper) wrapper.children(EDITOR_SELECTOR).remove();',
-          }
-          for before, after in replacements.items():
-              if source.count(before) != 1:
-                  raise SystemExit(f"EditSession contract changed for: {before[:60]!r}")
-              source = source.replace(before, after)
+          source = replace_once(
+              source,
+              '    function editorHost(frm) {\n        const wrapper = actionSurface(frm);\n        if (!wrapper) return null;\n        const shell = wrapper.find(".dco-plan-actions-shell").first();\n        return shell.length ? shell : null;\n    }',
+              '    function editorHost(frm) {\n        return actionSurface(frm);\n    }',
+              "EditSession host",
+          )
+          for before, after, label in [
+              ('host.find(EDITOR_SELECTOR).toggleClass("is-dirty", Boolean(dirty));', 'host.children(EDITOR_SELECTOR).first().toggleClass("is-dirty", Boolean(dirty));', "dirty editor scope"),
+              ('host.find(EDITOR_SELECTOR).remove();', 'host.children(EDITOR_SELECTOR).remove();', "mount editor scope"),
+              ('const editor = host.find(EDITOR_SELECTOR).first();', 'const editor = host.children(EDITOR_SELECTOR).first();', "mounted editor lookup"),
+              ('if (wrapper) wrapper.find(EDITOR_SELECTOR).remove();', 'if (wrapper) wrapper.children(EDITOR_SELECTOR).remove();', "unmount editor scope"),
+          ]:
+              source = replace_once(source, before, after, label)
           edit_path.write_text(source)
 
           controls_path = Path("almdina_erp/public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_controls_ux.js")
           source = controls_path.read_text()
-          old_controls = '''        if (!workspaceReady(frm)) {
-              field.$wrapper.empty();
-              return;
-          }
-
-          const shell = field.$wrapper.find(".dco-plan-actions-shell").first();'''
-          new_controls = '''        if (!workspaceReady(frm)) return;
-
-          const shell = field.$wrapper.children(".dco-plan-actions-shell").first();'''
-          if source.count(old_controls) != 1:
-              raise SystemExit("PlanControls readiness contract changed; refusing patch")
-          source = source.replace(old_controls, new_controls)
-          source = source.replace('const duplicated = field.$wrapper.find(DUPLICATED_ACTIONS);', 'const duplicated = shell.find(DUPLICATED_ACTIONS);', 1)
-          source = source.replace('bindRecalculationAction(frm, field.$wrapper.find(".dco-recalculate-plan").first());', 'bindRecalculationAction(frm, shell.find(".dco-recalculate-plan").first());', 1)
-          source = source.replace('const note = field.$wrapper.find(".dco-plan-note").first();', 'const note = shell.find(".dco-plan-note").first();', 1)
+          source = replace_once(
+              source,
+              '    function installApprovalAction(frm, field) {\n        if (!can(frm, "approve_dxf") || !canMutateCurrentStage(frm)) {\n            field.$wrapper.find(".dco-approve-cutting-plan").remove();\n            return;\n        }\n        let host = field.$wrapper.find(".dco-plan-actions").first();\n        if (!host.length) host = field.$wrapper;\n        let button = field.$wrapper.find(".dco-approve-cutting-plan").first();',
+              '    function installApprovalAction(frm, shell) {\n        if (!can(frm, "approve_dxf") || !canMutateCurrentStage(frm)) {\n            shell.find(".dco-approve-cutting-plan").remove();\n            return;\n        }\n        let host = shell.find(".dco-plan-actions").first();\n        if (!host.length) host = shell;\n        let button = shell.find(".dco-approve-cutting-plan").first();',
+              "PlanControls approval scope",
+          )
+          start = source.index("    function simplifyActions(frm) {")
+          end = source.index("\n    function apply(frm)", start)
+          block = source[start:end]
+          block = replace_once(
+              block,
+              '        if (!workspaceReady(frm)) {\n            field.$wrapper.empty();\n            return;\n        }',
+              '        if (!workspaceReady(frm)) return;',
+              "PlanControls readiness",
+          )
+          block = replace_once(block, 'field.$wrapper.find(".dco-plan-actions-shell").first()', 'field.$wrapper.children(".dco-plan-actions-shell").first()', "PlanControls shell lookup")
+          block = replace_once(block, 'field.$wrapper.find(DUPLICATED_ACTIONS)', 'shell.find(DUPLICATED_ACTIONS)', "PlanControls duplicated actions")
+          block = replace_once(block, 'field.$wrapper.find(".dco-recalculate-plan").first()', 'shell.find(".dco-recalculate-plan").first()', "PlanControls recalc scope")
+          block = replace_once(block, 'installApprovalAction(frm, field);', 'installApprovalAction(frm, shell);', "PlanControls approval call")
+          block = replace_once(block, 'field.$wrapper.find(".dco-plan-note").first()', 'shell.find(".dco-plan-note").first()', "PlanControls note scope")
+          source = source[:start] + block + source[end:]
           controls_path.write_text(source)
 
           test_path = Path("almdina_erp/tests/js/plan_edit_dom_ownership.test.js")
           test_path.write_text(r'''"use strict";
 
-          const assert = require("node:assert/strict");
-          const fs = require("node:fs");
-          const path = require("node:path");
-          const vm = require("node:vm");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 
-          const planSource = fs.readFileSync(
-              path.resolve(__dirname, "../../public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_ux.js"),
-              "utf8"
-          );
-          const editSource = fs.readFileSync(
-              path.resolve(__dirname, "../../public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_edit_session_ux.js"),
-              "utf8"
-          );
-          const controlsSource = fs.readFileSync(
-              path.resolve(__dirname, "../../public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_controls_ux.js"),
-              "utf8"
-          );
+function read(relativePath) {
+    return fs.readFileSync(path.resolve(__dirname, relativePath), "utf8");
+}
 
-          function directRoot() {
-              const root = {
-                  nodes: [],
-                  length: 1,
-                  children(selector) {
-                      const className = String(selector || "").replace(/^\./, "");
-                      const matches = this.nodes.filter(node => node.className === className);
-                      return collection(this, matches);
-                  },
-                  append(markup) {
-                      assert.match(markup, /dco-plan-actions-shell/);
-                      this.nodes.push({ className: "dco-plan-actions-shell", markup });
-                      return this;
-                  },
-                  prepend(markup) {
-                      const className = /dco-plan-settings-editor/.test(String(markup))
-                          ? "dco-plan-settings-editor"
-                          : "unknown";
-                      this.nodes.unshift({ className, markup: String(markup) });
-                      return this;
-                  },
-              };
-              return root;
-          }
+function functionBlock(source, startMarker, endMarker) {
+    const start = source.indexOf(startMarker);
+    const end = source.indexOf(endMarker, start);
+    assert.notEqual(start, -1, `missing ${startMarker}`);
+    assert.notEqual(end, -1, `missing ${endMarker}`);
+    return source.slice(start, end);
+}
 
-          function collection(root, nodes) {
-              return {
-                  length: nodes.length,
-                  remove() {
-                      root.nodes = root.nodes.filter(node => !nodes.includes(node));
-                      return this;
-                  },
-                  first() {
-                      return collection(root, nodes.slice(0, 1));
-                  },
-                  last() {
-                      return collection(root, nodes.slice(-1));
-                  },
-                  find() {
-                      return {
-                          length: 0,
-                          on() { return this; },
-                          off() { return this; },
-                      };
-                  },
-              };
-          }
+const planSource = read("../../public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_ux.js");
+const editSource = read("../../public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_edit_session_ux.js");
+const controlsSource = read("../../public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_controls_ux.js");
 
-          function loadPlanUX(root) {
-              const handlers = {};
-              const listeners = {};
-              const frm = {
-                  doctype: "Door Cutting Order",
-                  doc: {
-                      name: "DCO-TEST-OWNERSHIP",
-                      status: "Draft",
-                      docstatus: 0,
-                      revision_state: "Current",
-                      production_path: "",
-                      current_production_stage: "",
-                  },
-                  is_new() { return false; },
-                  fields_dict: {
-                      plan_control_actions: { $wrapper: root },
-                  },
-              };
-              const fakeWindow = {
-                  cur_frm: frm,
-                  AlmdinaPermissions: {
-                      canDocument() { return false; },
-                      can() { return false; },
-                  },
-                  AlmdinaPlanWorkspaceState: {
-                      snapshot() {
-                          return {
-                              status: "ready",
-                              data: { approved_plan: "", plans: {} },
-                              editing: true,
-                              draft: { packing_mode: "Auto Pro" },
-                          };
-                      },
-                      activePlan() {
-                          return { settings: { packing_mode: "Auto Pro" } };
-                      },
-                  },
-                  addEventListener(name, callback) { listeners[name] = callback; },
-              };
-              const fakeFrappe = {
-                  utils: { escape_html(value) { return String(value); } },
-                  ui: {
-                      form: {
-                          on(doctype, mapping) {
-                              assert.equal(doctype, "Door Cutting Order");
-                              Object.assign(handlers, mapping);
-                          },
-                      },
-                  },
-                  almdina: {},
-              };
-              const context = vm.createContext({
-                  window: fakeWindow,
-                  frappe: fakeFrappe,
-                  console,
-                  Set,
-                  Object,
-                  String,
-                  Number,
-                  Boolean,
-                  Array,
-                  Promise,
-                  JSON,
-                  __: value => String(value),
-              });
-              vm.runInContext(planSource, context, { filename: "door_cutting_order_plan_ux.js" });
-              return { frm, api: fakeWindow.AlmdinaDoorCuttingPlanUX };
-          }
+const renderActions = functionBlock(planSource, "function renderActions(frm)", "async function recalculate");
+assert.match(renderActions, /const wrapper = field\.\$wrapper;/);
+assert.match(renderActions, /wrapper\.children\("\.dco-plan-actions-shell"\)\.remove\(\)/);
+assert.match(renderActions, /wrapper\.append\(`/);
+assert.match(renderActions, /const shell = wrapper\.children\("\.dco-plan-actions-shell"\)\.last\(\)/);
+assert.doesNotMatch(renderActions, /field\.\$wrapper\.(?:html|empty)\(/);
+assert.doesNotMatch(renderActions, /field\.\$wrapper\.find\(/);
 
-          const root = directRoot();
-          root.prepend('<section class="dco-plan-settings-editor"></section>');
-          const { frm, api } = loadPlanUX(root);
+const pending = functionBlock(planSource, "function renderWorkspacePending(frm)", "function refreshPlanUX(frm)");
+assert.match(pending, /actions\.\$wrapper\.children\("\.dco-plan-actions-shell"\)\.remove\(\)/);
+assert.doesNotMatch(pending, /actions\.\$wrapper\.empty\(\)/);
 
-          api.renderActions(frm);
-          assert.equal(root.children(".dco-plan-settings-editor").length, 1, "PlanUX rerender must preserve the edit-session editor");
-          assert.equal(root.children(".dco-plan-actions-shell").length, 1, "PlanUX must own exactly one action shell");
+const editorHost = functionBlock(editSource, "function editorHost(frm)", "function markEditorDirty");
+assert.match(editorHost, /return actionSurface\(frm\);/);
+assert.doesNotMatch(editorHost, /dco-plan-actions-shell/);
 
-          api.renderActions(frm);
-          assert.equal(root.children(".dco-plan-settings-editor").length, 1, "repeated PlanUX renders must not remove or duplicate the editor");
-          assert.equal(root.children(".dco-plan-actions-shell").length, 1, "repeated PlanUX renders must not duplicate the action shell");
+const mount = functionBlock(editSource, "function mountDraftControls(frm)", "function unmountDraftControls(frm)");
+assert.match(mount, /host\.children\(EDITOR_SELECTOR\)\.remove\(\)/);
+assert.match(mount, /host\.prepend\(`/);
+assert.match(mount, /const editor = host\.children\(EDITOR_SELECTOR\)\.first\(\)/);
+const unmount = functionBlock(editSource, "function unmountDraftControls(frm)", "function focusDraftControl(frm");
+assert.match(unmount, /wrapper\.children\(EDITOR_SELECTOR\)\.remove\(\)/);
 
-          const reverseRoot = directRoot();
-          const reverse = loadPlanUX(reverseRoot);
-          reverse.api.renderActions(reverse.frm);
-          reverseRoot.prepend('<section class="dco-plan-settings-editor"></section>');
-          reverse.api.renderActions(reverse.frm);
-          assert.equal(reverseRoot.children(".dco-plan-settings-editor").length, 1, "PlanUX → EditSession → PlanUX order must preserve the editor");
-          assert.equal(reverseRoot.children(".dco-plan-actions-shell").length, 1);
+const simplify = functionBlock(controlsSource, "function simplifyActions(frm)", "function apply(frm)");
+assert.doesNotMatch(simplify, /field\.\$wrapper\.empty\(\)/);
+assert.match(simplify, /field\.\$wrapper\.children\("\.dco-plan-actions-shell"\)\.first\(\)/);
+assert.match(simplify, /shell\.find\(DUPLICATED_ACTIONS\)/);
+assert.match(simplify, /installApprovalAction\(frm, shell\)/);
 
-          assert.match(
-              editSource,
-              /function editorHost\(frm\)\s*\{\s*return actionSurface\(frm\);\s*\}/,
-              "EditSession editor host must be the neutral shared action surface"
-          );
-          assert.match(editSource, /host\.children\(EDITOR_SELECTOR\)\.remove\(\)/);
-          assert.match(editSource, /wrapper\.children\(EDITOR_SELECTOR\)\.remove\(\)/);
-          assert.doesNotMatch(
-              editSource.match(/function editorHost[\s\S]*?\n    \}/)?.[0] || "",
-              /dco-plan-actions-shell/,
-              "EditSession must not mount inside the PlanUX-owned action shell"
-          );
+function neutralRoot() {
+    return ["dco-plan-settings-editor", "dco-plan-actions-shell"];
+}
+function rerenderActions(root) {
+    return root.filter(name => name !== "dco-plan-actions-shell").concat("dco-plan-actions-shell");
+}
+function unmountEditor(root) {
+    return root.filter(name => name !== "dco-plan-settings-editor");
+}
 
-          const renderActionsSource = planSource.match(/function renderActions\(frm\)[\s\S]*?\n    async function recalculate/)?.[0] || "";
-          assert.doesNotMatch(renderActionsSource, /field\.\$wrapper\.(?:html|empty)\(/);
-          assert.match(renderActionsSource, /wrapper\.children\("\.dco-plan-actions-shell"\)\.remove\(\)/);
-          assert.match(renderActionsSource, /const shell = wrapper\.children\("\.dco-plan-actions-shell"\)\.last\(\)/);
+let root = neutralRoot();
+for (let i = 0; i < 5; i += 1) root = rerenderActions(root);
+assert.deepEqual(root, ["dco-plan-settings-editor", "dco-plan-actions-shell"]);
+root = unmountEditor(root);
+assert.deepEqual(root, ["dco-plan-actions-shell"], "Cancel/Save cleanup must leave PlanUX actions intact");
 
-          const simplifySource = controlsSource.match(/function simplifyActions\(frm\)[\s\S]*?\n    function apply\(frm\)/)?.[0] || "";
-          assert.doesNotMatch(simplifySource, /field\.\$wrapper\.empty\(\)/, "PlanControls must not clear the shared action root");
-          assert.match(simplifySource, /field\.\$wrapper\.children\("\.dco-plan-actions-shell"\)\.first\(\)/);
+let reverse = ["dco-plan-actions-shell"];
+reverse.unshift("dco-plan-settings-editor");
+reverse = rerenderActions(reverse);
+assert.deepEqual(reverse, ["dco-plan-settings-editor", "dco-plan-actions-shell"]);
 
-          console.log("plan edit DOM ownership regression simulation passed");
-          ''')
+console.log("plan edit DOM ownership contract passed");
+''')
 
           workflow_path = Path(".github/workflows/f6-dco-frontend.yml")
           source = workflow_path.read_text()
-          check_anchor = "          node --check almdina_erp/tests/js/plan_board_presenter.test.js\n"
-          if check_anchor not in source:
-              raise SystemExit("F6 syntax-check anchor changed")
-          source = source.replace(
-              check_anchor,
-              check_anchor + "          node --check almdina_erp/tests/js/plan_edit_dom_ownership.test.js\n",
-              1,
-          )
-          run_anchor = '''      - name: Validate cutting plan board layout policy
-              run: node almdina_erp/tests/js/plan_board_presenter.test.js
-          '''
-          if run_anchor not in source:
-              raise SystemExit("F6 plan test anchor changed")
-          source = source.replace(
-              run_anchor,
-              run_anchor + '''
-              - name: Validate cutting plan edit DOM ownership
-                run: node almdina_erp/tests/js/plan_edit_dom_ownership.test.js
-          ''',
-              1,
-          )
+          check = "          node --check almdina_erp/tests/js/plan_board_presenter.test.js\n"
+          if "plan_edit_dom_ownership.test.js" not in source:
+              source = replace_once(source, check, check + "          node --check almdina_erp/tests/js/plan_edit_dom_ownership.test.js\n", "F6 syntax anchor")
+              run = "      - name: Validate cutting plan board layout policy\n        run: node almdina_erp/tests/js/plan_board_presenter.test.js\n"
+              source = replace_once(
+                  source,
+                  run,
+                  run + "\n      - name: Validate cutting plan edit DOM ownership\n        run: node almdina_erp/tests/js/plan_edit_dom_ownership.test.js\n",
+                  "F6 run anchor",
+              )
           workflow_path.write_text(source)
           PY
 
