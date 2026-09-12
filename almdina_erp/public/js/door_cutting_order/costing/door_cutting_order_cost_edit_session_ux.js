@@ -18,6 +18,27 @@
         return window.AlmdinaDocumentContext || null;
     }
 
+    function captureDocument(frm) {
+        const context = documentContext();
+        if (context && typeof context.capture === "function") {
+            return context.capture(frm);
+        }
+        return Object.freeze({
+            name: String(frm && frm.doc && frm.doc.name || ""),
+        });
+    }
+
+    function documentStillCurrent(frm, token) {
+        const context = documentContext();
+        if (context && typeof context.isCurrent === "function") {
+            return context.isCurrent(frm, token);
+        }
+        return Boolean(
+            window.cur_frm === frm
+            && String(frm && frm.doc && frm.doc.name || "") === String(token && token.name || "")
+        );
+    }
+
     function stateOwner() {
         return window.AlmdinaCostWorkspaceState || null;
     }
@@ -268,9 +289,11 @@
             return false;
         }
 
+        const token = captureDocument(frm);
         try {
             await ensureLoaded(frm);
         } catch (error) {
+            if (!documentStillCurrent(frm, token)) return false;
             console.error("Cost workspace load failed while starting edit", error);
             frappe.msgprint({
                 title: __("تعذر تحميل التكلفة"),
@@ -279,19 +302,29 @@
             });
             return false;
         }
+        if (!documentStillCurrent(frm, token)) return false;
+
         const store = storeFor(frm);
         const seed = currentSettings(frm);
         if (!store || !seed) {
             frappe.msgprint(__("تعذر تحميل بيانات التكلفة الحالية."));
             return false;
         }
-        store.beginEdit(seed);
-        applyFieldAccess(frm);
-        if (canEditCostSettings(frm)) {
-            mountDraftControls(frm);
-        } else {
-            unmountDraftControls(frm);
+
+        const started = store.beginEdit(seed);
+        const startedState = store.snapshot();
+        if (!started || !startedState || startedState.editing !== true) {
+            frappe.msgprint({
+                title: __("تعذر بدء التعديل"),
+                message: __("لم تصبح بيانات التكلفة جاهزة لوضع التعديل. أعد المحاولة بعد اكتمال التحميل."),
+                indicator: "orange",
+            });
+            return false;
         }
+
+        // Reconcile the Cost-owned controls synchronously from the canonical store
+        // before broadcasting the edit-state change to page/visual owners.
+        sync(frm);
         signalEditChanged(frm);
         if (canEditCostSettings(frm)) {
             const fieldEditor = editor();
@@ -304,15 +337,18 @@
 
     async function cancelEditing(frm) {
         if (!isEditing(frm)) return false;
+        const token = captureDocument(frm);
         const store = storeFor(frm);
         if (store) store.cancelEdit();
         unmountDraftControls(frm);
 
-        const discardedPrice = await discardPendingPriceEdits(frm);
-        if (!discardedPrice) {
-            projectCurrent(frm);
-        }
-        applyFieldAccess(frm);
+        // Cancel restores the authoritative snapshot already held by the store.
+        // Discard inline price markers without starting a network read that could
+        // compete with the edit-session transition.
+        await discardPendingPriceEdits(frm, { refresh: false });
+        if (!documentStillCurrent(frm, token)) return false;
+
+        sync(frm);
         signalEditChanged(frm);
         return true;
     }
@@ -321,10 +357,14 @@
         if (!isEditing(frm)) return false;
         if (!canEditCostWorkspace(frm)) {
             await cancelEditing(frm);
-            frappe.msgprint(__("لم تعد صلاحياتك أو حالة هذا المستند تسمح بتعديل هذا القسم."));
+            if (window.cur_frm === frm) {
+                frappe.msgprint(__("لم تعد صلاحياتك أو حالة هذا المستند تسمح بتعديل هذا القسم."));
+            }
             return false;
         }
 
+        const token = captureDocument(frm);
+        const orderName = String(frm.doc.name || "");
         const store = storeFor(frm);
         const state = store && store.snapshot();
         const owner = stateOwner();
@@ -347,7 +387,8 @@
             }
 
             if (pending.dirty) {
-                const saved = await api.saveSettings(frm.doc.name, payload);
+                const saved = await api.saveSettings(orderName, payload);
+                if (!documentStillCurrent(frm, token)) return false;
                 if (!validSavedSnapshot(saved)) {
                     frappe.msgprint({
                         title: __("تعذر حفظ التكلفة"),
@@ -369,6 +410,7 @@
             store.cancelEdit();
         }
 
+        if (!documentStillCurrent(frm, token)) return false;
         unmountDraftControls(frm);
         projectCurrent(frm);
         applyFieldAccess(frm);
@@ -378,14 +420,18 @@
         // after the settings draft closes, and reload one authoritative snapshot.
         const hadPendingPrices = pendingPricePieces(frm).length > 0;
         if (hadPendingPrices) {
-            await flushPendingPriceEdits(frm, { refresh: false });
+            const flushed = await flushPendingPriceEdits(frm, { refresh: false });
+            if (!documentStillCurrent(frm, token)) return false;
+            if (!flushed) return false;
             if (owner && typeof owner.load === "function") {
                 await owner.load(frm, { force: true });
+                if (!documentStillCurrent(frm, token)) return false;
             } else {
                 projectCurrent(frm);
             }
         }
 
+        sync(frm);
         signalEditChanged(frm);
         frappe.show_alert({
             message: __("تم حفظ تعديلات التكلفة وإعادة القسم إلى وضع القراءة."),
@@ -401,10 +447,12 @@
             if (store) store.cancelEdit();
             unmountDraftControls(frm);
             // Permission/state loss must not leave an unsaved local price marker
-            // that can later leak into another edit session.
-            discardPendingPriceEdits(frm).catch((error) => {
+            // that can later leak into another edit session. No authoritative GET
+            // is needed: the stored snapshot already owns the read projection.
+            discardPendingPriceEdits(frm, { refresh: false }).catch((error) => {
                 console.debug("Could not discard pending Cost price edits", error);
             });
+            projectCurrent(frm);
             applyFieldAccess(frm);
             signalEditChanged(frm);
             return;
@@ -430,9 +478,13 @@
             context.scheduleFrame(frm, "cost-settings-edit-session", () => sync(frm));
             return;
         }
-        window.requestAnimationFrame(() => {
-            if (window.cur_frm === frm) sync(frm);
-        });
+        if (window.requestAnimationFrame) {
+            window.requestAnimationFrame(() => {
+                if (window.cur_frm === frm) sync(frm);
+            });
+            return;
+        }
+        if (window.cur_frm === frm) sync(frm);
     }
 
     frappe.ui.form.on("Door Cutting Order", {
@@ -462,6 +514,7 @@
         captureCostSettings,
         normalizeCostSettings,
         validateRequiredCostSettings,
+        sync,
         schedule,
     });
 })();
