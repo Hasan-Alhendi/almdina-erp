@@ -33,18 +33,15 @@ jobs:
           node almdina_erp/tests/js/plan_edit_dom_ownership.test.js
           node almdina_erp/tests/js/plan_surface_isolation.test.js
 
-      - name: Commit focused fix
+      - name: Commit focused product fix
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm .github/workflows/plan-edit-dom-ownership-patch.yml
-          git rm .github/workflows/plan-edit-dom-ownership-patch-v2.yml
-          git rm .github/plan-edit-dom-ownership-patch.py
+          git restore .github/workflows/f6-dco-frontend.yml
           git add almdina_erp/public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_ux.js
           git add almdina_erp/public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_edit_session_ux.js
           git add almdina_erp/public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_controls_ux.js
           git add almdina_erp/tests/js/plan_edit_dom_ownership.test.js
-          git add .github/workflows/f6-dco-frontend.yml
           git commit -m "fix(plan): separate edit-session DOM ownership"
           git push origin HEAD:agent/fix-plan-edit-dom-ownership
