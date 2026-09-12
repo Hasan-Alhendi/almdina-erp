@@ -141,6 +141,22 @@ class TestDcoCompactListUx(unittest.TestCase):
         self.assertIn('.dco-order-list .dco-list-filterable-text', css)
         self.assertNotIn('nth-child', css)
 
+    def test_operational_filters_are_compact_and_stay_side_by_side(self) -> None:
+        css = LIST_CSS.read_text(encoding="utf-8")
+
+        self.assertIn('.dco-order-list .dco-status-filter-slot {', css)
+        self.assertIn('display: inline-flex !important;', css)
+        self.assertIn('gap: 5px !important;', css)
+        self.assertIn('width: auto !important;', css)
+        self.assertIn('[data-fieldname="status"]', css)
+        self.assertIn('width: 118px !important;', css)
+        self.assertIn('[data-fieldname="current_assignee"]', css)
+        self.assertIn('width: 138px !important;', css)
+        self.assertIn('.dco-order-list .dco-status-filter-slot select.form-control', css)
+        self.assertIn('height: 30px !important;', css)
+        self.assertIn('border-radius: 8px !important;', css)
+        self.assertIn('background-color: var(--control-bg) !important;', css)
+
 
 if __name__ == "__main__":
     unittest.main()

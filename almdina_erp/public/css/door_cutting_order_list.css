@@ -189,4 +189,71 @@
         padding: 3px 5px;
         font-size: 10px;
     }
+
+    /*
+     * Keep the two operational filters compact and toolbar-like. The responsive
+     * owner creates the slot; this desktop-only block only refines presentation.
+     * No Frappe List Settings or framework styles are changed globally.
+     */
+    .dco-order-list .dco-status-filter-slot {
+        display: inline-flex !important;
+        grid-template-columns: none !important;
+        align-items: center;
+        flex: 0 0 auto !important;
+        width: auto !important;
+        min-width: 0 !important;
+        max-width: none !important;
+        gap: 5px !important;
+        margin: 0 !important;
+    }
+
+    .dco-order-list .dco-status-filter-slot > .form-group,
+    .dco-order-list .dco-status-filter-slot > .frappe-control {
+        flex: 0 0 auto !important;
+        width: auto !important;
+        min-width: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    .dco-order-list .dco-status-filter-slot [data-fieldname="status"] {
+        width: 118px !important;
+    }
+
+    .dco-order-list .dco-status-filter-slot [data-fieldname="current_assignee"] {
+        width: 138px !important;
+    }
+
+    .dco-order-list .dco-status-filter-slot .control-label,
+    .dco-order-list .dco-status-filter-slot .help-box {
+        display: none !important;
+    }
+
+    .dco-order-list .dco-status-filter-slot .control-input-wrapper,
+    .dco-order-list .dco-status-filter-slot .control-input {
+        width: 100%;
+        min-height: 30px;
+        margin: 0;
+    }
+
+    .dco-order-list .dco-status-filter-slot select.form-control {
+        width: 100% !important;
+        min-width: 0 !important;
+        height: 30px !important;
+        min-height: 30px !important;
+        padding-block: 0 !important;
+        padding-inline: 9px 26px !important;
+        border: 1px solid var(--border-color) !important;
+        border-radius: 8px !important;
+        background-color: var(--control-bg) !important;
+        color: var(--text-color) !important;
+        box-shadow: none !important;
+        font-size: 12px !important;
+        font-weight: 600;
+        line-height: 28px;
+    }
+
+    .dco-order-list .dco-status-filter-slot select.form-control:hover {
+        border-color: var(--gray-400) !important;
+    }
 }
