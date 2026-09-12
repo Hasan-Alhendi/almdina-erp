@@ -133,7 +133,7 @@
             .removeAttr("aria-label title role tabindex")
             .attr("type", "button")
             .attr("aria-labelledby", headingId)
-            .off("click.almdinaCostMeasurements keydown.almdinaCostMeasurements")
+            .off("click.almdinaCostMeasurements")
             .on("click.almdinaCostMeasurements", event => {
                 event.preventDefault();
                 event.stopPropagation();
