@@ -75,6 +75,7 @@ jobs:
           node --check almdina_erp/tests/js/measurement_lifecycle.test.js
           node --check almdina_erp/tests/js/measurement_presentation_readiness.test.js
           node --check almdina_erp/tests/js/plan_board_presenter.test.js
+          node --check almdina_erp/tests/js/plan_edit_dom_ownership.test.js
           node --check almdina_erp/tests/js/operator_edge_ownership.test.js
           node --check almdina_erp/tests/js/surface_settle_guard.test.js
           node --check almdina_erp/tests/js/dco_recovery_projection.test.js
@@ -158,6 +159,9 @@ jobs:
 
       - name: Validate cutting plan board layout policy
         run: node almdina_erp/tests/js/plan_board_presenter.test.js
+
+      - name: Validate cutting plan edit DOM ownership
+        run: node almdina_erp/tests/js/plan_edit_dom_ownership.test.js
 
       - name: Validate operator and edge ownership helpers
         run: node almdina_erp/tests/js/operator_edge_ownership.test.js
