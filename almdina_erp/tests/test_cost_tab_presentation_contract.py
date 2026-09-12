@@ -90,10 +90,23 @@ class CostTabPresentationContractTest(unittest.TestCase):
     def test_measurement_header_keeps_rtl_title_and_toggle_from_collapsing(self) -> None:
         source = LAYOUT_UX_PATH.read_text(encoding="utf-8")
 
-        self.assertIn("flex:0 0 auto;white-space:nowrap", source)
-        self.assertIn("h4{margin:0;white-space:nowrap}", source)
+        self.assertIn('STYLE_ID = "dco-cost-page-layout-ux-v2"', source)
+        self.assertIn("min-width:max-content;flex:0 0 auto;white-space:nowrap", source)
+        self.assertIn("h4{margin:0;white-space:nowrap;flex:0 0 auto", source)
         self.assertIn("text-overflow:ellipsis;white-space:nowrap", source)
-        self.assertIn("flex:0 0 25px", source)
+        self.assertIn("flex:0 0 26px", source)
+        self.assertIn("dco-cost-measurements-toggle::before", source)
+        self.assertIn("content:none!important", source)
+
+    def test_measurement_toggle_keeps_accessible_text_out_of_visual_layout(self) -> None:
+        source = LAYOUT_UX_PATH.read_text(encoding="utf-8")
+
+        self.assertIn('role="button" tabindex="0"', source)
+        self.assertIn("dco-cost-measurements-toggle-icon", source)
+        self.assertIn("dco-cost-measurements-toggle-label", source)
+        self.assertIn("keydown.almdinaCostMeasurements", source)
+        self.assertIn('event.key !== "Enter" && event.key !== " "', source)
+        self.assertNotIn('button.attr(\n            "aria-label"', source)
 
     def test_custom_door_pricing_is_compact_and_attention_first(self) -> None:
         source = COMPACT_PRICING_UX_PATH.read_text(encoding="utf-8")

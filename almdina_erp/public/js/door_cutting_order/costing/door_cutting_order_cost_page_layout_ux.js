@@ -3,7 +3,7 @@
 
     if (window.AlmdinaCostPageLayoutUX) return;
 
-    const STYLE_ID = "dco-cost-page-layout-ux-v1";
+    const STYLE_ID = "dco-cost-page-layout-ux-v2";
     const COST_API_FLAG = "__almdinaCostPageLayoutUX";
     const INTERNAL_REPORT_CLASS = "dco-secure-print-internal-cost-report";
 
@@ -35,14 +35,16 @@
             .dco-cost-measurements-section>.dco-cost-section-title{cursor:default}
             .dco-cost-measurements-section.is-collapsed>:not(.dco-cost-section-title){display:none!important}
             .dco-cost-measurements-title{display:flex;align-items:center;justify-content:space-between;gap:12px;overflow:hidden}
-            .dco-cost-measurements-title-main{display:flex;align-items:center;gap:8px;min-width:0;flex:0 0 auto;white-space:nowrap}
-            .dco-cost-measurements-title-main h4{margin:0;white-space:nowrap}
+            .dco-cost-measurements-title-main{display:flex;align-items:center;gap:8px;min-width:max-content;flex:0 0 auto;white-space:nowrap;isolation:isolate}
+            .dco-cost-measurements-title-main h4{margin:0;white-space:nowrap;flex:0 0 auto;position:relative;z-index:1}
             .dco-cost-measurements-section>.dco-cost-measurements-title>span{min-width:0;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-            .dco-cost-measurements-toggle{display:inline-grid;place-items:center;width:25px;height:25px;flex:0 0 25px;padding:0;border:1px solid var(--border-color,#dfe4e8);border-radius:7px;background:var(--card-bg,#fff);color:var(--text-muted,#66727d);cursor:pointer;transition:background-color .15s ease,border-color .15s ease,color .15s ease}
+            .dco-cost-measurements-toggle{display:inline-grid;place-items:center;width:26px;height:26px;min-width:26px;max-width:26px;flex:0 0 26px;padding:0;overflow:hidden;position:relative;border:1px solid var(--border-color,#dfe4e8);border-radius:7px;background:var(--card-bg,#fff);color:var(--text-muted,#66727d);cursor:pointer;transition:background-color .15s ease,border-color .15s ease,color .15s ease;font-size:0;line-height:1;user-select:none}
+            .dco-cost-measurements-toggle::before,.dco-cost-measurements-toggle::after{content:none!important;display:none!important}
             .dco-cost-measurements-toggle:hover{background:var(--subtle-fg,#f3f5f7);color:var(--text-color,#26313b)}
             .dco-cost-measurements-toggle:focus-visible{outline:2px solid var(--primary,#2490ef);outline-offset:2px}
-            .dco-cost-measurements-toggle span{display:block;font-size:17px;line-height:1;transform:rotate(0deg);transition:transform .16s ease}
-            .dco-cost-measurements-toggle[aria-expanded="true"] span{transform:rotate(180deg)}
+            .dco-cost-measurements-toggle-icon{display:block!important;font-size:17px!important;line-height:1!important;transform:rotate(0deg);transition:transform .16s ease}
+            .dco-cost-measurements-toggle[aria-expanded="true"] .dco-cost-measurements-toggle-icon{transform:rotate(180deg)}
+            .dco-cost-measurements-toggle-label{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
             @media(max-width:760px){
                 .dco-cost-invoice-section>.dco-cost-section-title{display:flex!important;flex-direction:row!important;align-items:center!important}
                 .dco-cost-invoice-actions{margin-inline-start:0}
@@ -60,14 +62,18 @@
         return Boolean(frm.__almdina_cost_measurements_expanded);
     }
 
-    function applyMeasurementState(frm, section, button) {
+    function applyMeasurementState(frm, section, control) {
         const expanded = measurementExpanded(frm);
         section.toggleClass("is-collapsed", !expanded);
-        button.attr("aria-expanded", expanded ? "true" : "false");
-        button.attr(
-            "aria-label",
+        control.attr("aria-expanded", expanded ? "true" : "false");
+        control.find(".dco-cost-measurements-toggle-label").text(
             expanded ? __("طي جدول قياسات الطلب") : __("عرض جدول قياسات الطلب")
         );
+    }
+
+    function toggleMeasurements(frm, section, control) {
+        frm.__almdina_cost_measurements_expanded = !measurementExpanded(frm);
+        applyMeasurementState(frm, section, control);
     }
 
     function ensureMeasurementToggle(frm) {
@@ -93,20 +99,25 @@
             }
         }
 
-        let button = main.children(".dco-cost-measurements-toggle").first();
-        if (!button.length) {
-            button = $('<button type="button" class="dco-cost-measurements-toggle"><span aria-hidden="true">⌄</span></button>');
-            main.prepend(button);
+        let control = main.children(".dco-cost-measurements-toggle").first();
+        if (!control.length) {
+            control = $('<span class="dco-cost-measurements-toggle" role="button" tabindex="0"><span class="dco-cost-measurements-toggle-icon" aria-hidden="true">⌄</span><span class="dco-cost-measurements-toggle-label"></span></span>');
+            main.prepend(control);
         }
-        button
-            .off("click.almdinaCostMeasurements")
+        control
+            .off("click.almdinaCostMeasurements keydown.almdinaCostMeasurements")
             .on("click.almdinaCostMeasurements", event => {
                 event.preventDefault();
                 event.stopPropagation();
-                frm.__almdina_cost_measurements_expanded = !measurementExpanded(frm);
-                applyMeasurementState(frm, section, button);
+                toggleMeasurements(frm, section, control);
+            })
+            .on("keydown.almdinaCostMeasurements", event => {
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault();
+                event.stopPropagation();
+                toggleMeasurements(frm, section, control);
             });
-        applyMeasurementState(frm, section, button);
+        applyMeasurementState(frm, section, control);
         return true;
     }
 
