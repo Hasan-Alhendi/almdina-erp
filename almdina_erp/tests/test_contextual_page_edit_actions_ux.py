@@ -114,7 +114,8 @@ def test_persisted_order_does_not_expose_competing_global_edit_action() -> None:
 
     assert ".page-actions .primary-action" in coordinator
     assert "display:none !important" in coordinator
-    assert "Synchronous sync prevents the legacy global primary action" in coordinator
+    assert "sync(frm);" in coordinator
+    assert "on_tab_change(frm)" in coordinator
     assert "set_primary_action" not in coordinator
     assert "clear_primary_action" not in coordinator
     assert "data-almdina-context-edit-mode" not in coordinator
@@ -179,9 +180,9 @@ def test_cost_page_is_read_only_until_explicit_workspace_edit_session() -> None:
     assert 'df.get_status = function almdinaFocusedCostFieldStatus' in cost
     assert 'field.df[STATUS_KEY] = "Read"' in cost
 
-    # A5.2 keeps the editable baseline/draft inside CostWorkspaceState. Save now
-    # captures the visible detached controls once, persists that exact payload,
-    # and commits the authoritative server snapshot without reloading the DCO.
+    # A5.2 keeps the editable baseline/draft inside CostWorkspaceState. Save
+    # captures both the visible draft and document identity once, persists that
+    # exact payload, and rejects stale async completion before projecting it.
     assert "AlmdinaCostWorkspaceState" in cost
     assert "AlmdinaCostWorkspaceAPI" in cost
     assert "store.beginEdit(seed)" in cost
@@ -189,7 +190,9 @@ def test_cost_page_is_read_only_until_explicit_workspace_edit_session() -> None:
     assert "state.draft" in cost
     assert "const captured = captureCostSettings(frm, state.draft || {});" in cost
     assert "store.replaceDraft(payload);" in cost
-    assert "api.saveSettings(frm.doc.name, payload)" in cost
+    assert 'const orderName = String(frm.doc.name || "");' in cost
+    assert "api.saveSettings(orderName, payload)" in cost
+    assert "documentStillCurrent(frm, token)" in cost
     assert "owner.commit(frm, saved);" in cost
     assert "frm.reload_doc()" not in cost
     assert "frappe.call" not in cost
