@@ -22,6 +22,7 @@ CANONICAL_LIST_JS = (
     / "list_view"
     / "door_cutting_order_list.js"
 )
+NOTES_LIST_JS = ROOT / "public" / "js" / "notes" / "notes_dco_list_integration.js"
 LIST_CSS = ROOT / "public" / "css" / "door_cutting_order_list.css"
 MANIFEST = ROOT / "frontend_assets.py"
 
@@ -38,7 +39,8 @@ class TestDcoCompactListUx(unittest.TestCase):
             'door_cutting_order_compact_list_ux.js?v=13"'
         )
 
-        self.assertIn('"/assets/almdina_erp/css/door_cutting_order_list.css?v=13"', manifest)
+        self.assertIn('"/assets/almdina_erp/css/door_cutting_order_list.css?v=14"', manifest)
+        self.assertIn('"/assets/almdina_erp/js/notes/notes_dco_list_integration.js?v=14"', manifest)
         self.assertIn(compact_global, manifest)
         self.assertIn(canonical, manifest)
         self.assertNotIn(
@@ -137,39 +139,37 @@ class TestDcoCompactListUx(unittest.TestCase):
         self.assertIn('data-value="${DEFAULT_DESKTOP_PAGE_LENGTH}"', source)
         self.assertIn('listview._dcoDefaultPageLengthApplied = true;', source)
 
-    def test_column_widths_and_hidden_activity_areas_are_dco_scoped(self) -> None:
+    def test_column_widths_support_v16_classes_and_newer_data_attributes(self) -> None:
         css = LIST_CSS.read_text(encoding="utf-8")
 
         self.assertIn('@media (min-width: 601px)', css)
         self.assertIn('.dco-order-list .list-row .level-left', css)
         self.assertIn('.dco-order-list .list-row-head .level-left', css)
         self.assertIn('gap: 2px;', css)
-        self.assertIn('.dco-order-list .list-row-col[data-fieldname] {', css)
+        self.assertIn('.dco-order-list .list-row-col {', css)
         self.assertIn('margin: 0 !important;', css)
+        self.assertIn('.dco-order-list .list-row-col:not(.tag-col)', css)
         self.assertIn('flex: 0 0 96px !important;', css)
-        self.assertIn('.dco-order-list .list-row-col[data-fieldname="name"]', css)
+        self.assertIn('.name, [data-fieldname="name"]', css)
         self.assertIn('width: 78px !important;', css)
-        self.assertIn('.dco-order-list .list-row-col[data-fieldname="status_field"]', css)
-        self.assertIn('.dco-order-list .list-row-col[data-fieldname="order_date"]', css)
+        self.assertIn('.order_date, [data-fieldname="order_date"]', css)
         self.assertIn('width: 82px !important;', css)
-        self.assertIn('.dco-order-list .list-row-col[data-fieldname="customer"]', css)
+        self.assertIn('.customer, [data-fieldname="customer"]', css)
         self.assertIn('width: 92px !important;', css)
-        self.assertIn('.dco-order-list .list-row-col[data-fieldname="important_note_preview"]', css)
+        self.assertIn('.important_note_preview, [data-fieldname="important_note_preview"]', css)
         self.assertIn('flex: 0 0 92px !important;', css)
-        self.assertIn('.dco-order-list .dco-important-note-link', css)
-        self.assertIn('.dco-order-list .list-row-col[data-fieldname="current_production_stage"]', css)
-        self.assertIn('.dco-order-list .list-row-col[data-fieldname="department_status"]', css)
+        self.assertIn('.current_production_stage, [data-fieldname="current_production_stage"]', css)
+        self.assertIn('.department_status, [data-fieldname="department_status"]', css)
         self.assertIn('.dco-order-list .list-row-head > .level-right', css)
         self.assertIn('.dco-order-list .list-row > .level-right', css)
         self.assertIn('display: none !important;', css)
-        self.assertIn('.dco-order-list .dco-list-filterable-text', css)
         self.assertNotIn('nth-child', css)
 
     def test_important_note_is_contained_inside_its_own_column(self) -> None:
         css = LIST_CSS.read_text(encoding="utf-8")
 
         self.assertIn(
-            '.dco-order-list .list-row-col[data-fieldname="important_note_preview"] > *',
+            '.dco-order-list .list-row-col:is(.important_note_preview, [data-fieldname="important_note_preview"]) > *',
             css,
         )
         self.assertIn('min-width: 0;', css)
@@ -182,6 +182,19 @@ class TestDcoCompactListUx(unittest.TestCase):
         )
         self.assertIn('flex: 1 1 auto;', css)
         self.assertIn('text-overflow: ellipsis;', css)
+
+    def test_important_note_formatter_does_not_add_whitespace_to_frappe_width_measurement(self) -> None:
+        source = NOTES_LIST_JS.read_text(encoding="utf-8")
+        formatter = source.split("function formatter", 1)[1].split(
+            "frappe.listview_settings",
+            1,
+        )[0]
+
+        self.assertIn('jQuery.text()', formatter)
+        self.assertIn('return `<button type="button"', formatter)
+        self.assertNotIn('return `\n', formatter)
+        self.assertNotRegex(formatter, r'>\s+<span class="dco-important-note-star"')
+        self.assertNotRegex(formatter, r'</span>\s+<span class="dco-important-note-text"')
 
     def test_operational_filters_are_compact_and_stay_side_by_side(self) -> None:
         css = LIST_CSS.read_text(encoding="utf-8")
