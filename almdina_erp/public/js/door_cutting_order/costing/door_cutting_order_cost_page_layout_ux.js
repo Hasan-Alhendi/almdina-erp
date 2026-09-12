@@ -114,8 +114,7 @@
         if (!wrapper.length) return false;
         const section = wrapper.find(".dco-cost-invoice-section").first();
         const header = section.children(".dco-cost-section-title").first();
-        const actions = wrapper.find(".dco-cost-actions").first();
-        if (!header.length || !actions.length) return false;
+        if (!header.length) return false;
 
         let heading = header.children(".dco-cost-invoice-heading").first();
         if (!heading.length) {
@@ -127,6 +126,10 @@
             if (subtitle.length) heading.append(subtitle);
         }
 
+        let actions = wrapper.find(".dco-cost-actions").first();
+        if (!actions.length) {
+            actions = $('<div class="dco-cost-actions"></div>');
+        }
         actions.addClass("dco-cost-invoice-actions");
         header.append(actions);
         wrapper.find(".dco-cost-actions-bar").each(function removeEmptyBar() {
