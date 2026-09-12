@@ -42,15 +42,6 @@
         return `<button type="button" class="filterable dco-list-compact-text dco-list-filterable-text ellipsis${boardClass}" data-filter="${escapeHtml(fieldname)},=,${escapeHtml(fullText)}" title="${escapeHtml(fullText)}" aria-label="${escapeHtml(fullText)}">${escapeHtml(shortText)}</button>`;
     }
 
-    function preserveSavedListSettingsOrder(listview) {
-        if (!listview) return;
-        // The canonical DCO list owner still contains a legacy compatibility rule
-        // that forces order_notes immediately after edge_color. List Settings in
-        // Frappe v16 already owns the user's column order, so intentionally mark
-        // that legacy installer as satisfied before the canonical onload continues.
-        listview._dcoOrderNotesColumnInstalled = true;
-    }
-
     function applyDefaultDesktopPageLength(listview) {
         if (!listview || listview._dcoDefaultPageLengthApplied) return;
         const isMobile = typeof frappe.is_mobile === "function" && frappe.is_mobile();
@@ -83,7 +74,6 @@
         formatters,
         onload(listview) {
             if (typeof originalOnload === "function") originalOnload(listview);
-            preserveSavedListSettingsOrder(listview);
             applyDefaultDesktopPageLength(listview);
         },
     });
@@ -93,7 +83,6 @@
         MAX_TEXT_CHARACTERS,
         applyDefaultDesktopPageLength,
         compactListTextFormatter,
-        preserveSavedListSettingsOrder,
         truncateListText,
     });
 })();
