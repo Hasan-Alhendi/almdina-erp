@@ -11,7 +11,7 @@ from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
     canonicalize_snapshot_manufacturing_requirements,
 )
 from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
-    canonicalize_snapshot_sources,
+    canonicalize_snapshot_allocation,
 )
 
 
@@ -78,7 +78,7 @@ def sanitize_plan_snapshot(value: Any) -> Any:
     """
 
     sanitized = _sanitize_plan_value(value)
-    sanitized = canonicalize_snapshot_sources(sanitized)
+    sanitized = canonicalize_snapshot_allocation(sanitized)
     sanitized = canonicalize_snapshot_manufacturing_requirements(sanitized)
     return canonicalize_snapshot_geometries(sanitized)
 
