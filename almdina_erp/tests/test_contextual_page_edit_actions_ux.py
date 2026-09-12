@@ -120,7 +120,7 @@ def test_switching_tabs_is_blocked_while_any_page_edit_session_is_open() -> None
     coordinator = source(COORDINATOR)
 
     assert "function activeEditingKind(frm)" in coordinator
-    assert "if (editingKind && targetField !== currentField)" in coordinator
+    assert "if (!editingKind || targetField === currentField) return false;" in coordinator
     assert "event.preventDefault();" in coordinator
     assert "event.stopImmediatePropagation();" in coordinator
     assert "احفظ أو ألغِ التعديل الحالي قبل الانتقال إلى قسم آخر" in coordinator
