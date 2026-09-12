@@ -9,6 +9,7 @@ from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
     decision_from_values,
     source_summary,
     canonicalize_snapshot_sources,
+    validate_source_resource_homogeneity,
 )
 
 
@@ -25,6 +26,20 @@ def test_offcut_has_exactly_three_resolved_states() -> None:
 def test_factory_source_customer_execution_is_rejected() -> None:
     with pytest.raises(OffcutPolicyError, match="forbidden"):
         decision_from_values("OFFCUT", "FACTORY", "CUSTOMER")
+
+
+def test_physical_source_cannot_mix_full_board_and_offcut() -> None:
+    with pytest.raises(OffcutPolicyError, match="mixed_full_board_offcut_source"):
+        validate_source_resource_homogeneity(
+            [
+                {
+                    "pieces": [
+                        {"piece_instance_id": "a:1", "resource_kind": "FULL_BOARD"},
+                        {"piece_instance_id": "b:1", "resource_kind": "OFFCUT"},
+                    ]
+                }
+            ]
+        )
 
 
 def test_offcut_does_not_consume_full_board_and_customer_execution_skips_queue() -> None:
