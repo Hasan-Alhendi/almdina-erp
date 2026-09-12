@@ -3,8 +3,15 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
+from almdina_erp.tests.frappe_test_stub import install_if_unavailable
+
+install_if_unavailable()
+
 import frappe
 import pytest
+
+if not hasattr(frappe, "as_json"):
+    frappe.as_json = json.dumps
 
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.services import offcut_service
@@ -13,7 +20,24 @@ from almdina_erp.almdina_erp.services import cutting_plan_command_service
 
 @pytest.fixture(autouse=True)
 def _stub_plan_row_lock(monkeypatch):
-    monkeypatch.setattr(offcut_service.frappe.db, "sql", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(
+        offcut_service.frappe,
+        "get_doc",
+        lambda *_args, **_kwargs: None,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        offcut_service.frappe.db,
+        "sql",
+        lambda *_args, **_kwargs: [],
+        raising=False,
+    )
+    monkeypatch.setattr(
+        offcut_service.frappe.db,
+        "set_value",
+        lambda *_args, **_kwargs: None,
+        raising=False,
+    )
 
 
 def _piece(identity: str, kind: str = "OFFCUT", **values):

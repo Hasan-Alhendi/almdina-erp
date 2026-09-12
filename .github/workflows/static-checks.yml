@@ -160,6 +160,13 @@ jobs:
             almdina_erp.tests.test_cutting_execution_trace \
             almdina_erp.tests.test_cutting_plan_architecture
 
+      - name: Run ALMADINA-176 OFFCUT classification contracts
+        run: |
+          python -m pytest -q \
+            almdina_erp/tests/test_offcut_policy.py \
+            almdina_erp/tests/test_almadina_176_offcut_classification.py \
+            almdina_erp/tests/test_almadina_176_read_model_ux.py
+
       - name: Run cutting-domain strategy tests
         run: |
           python -m unittest -v \

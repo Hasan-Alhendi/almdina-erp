@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
-import frappe
+from almdina_erp.tests.frappe_test_stub import install_if_unavailable
+
+install_if_unavailable()
 
 from almdina_erp.almdina_erp.application.security.permission_matrix import (
     CAPABILITY_PRESENTATION,
@@ -26,7 +29,7 @@ def _row(snapshot):
             "status": "Draft",
             "required_boards": 0,
         },
-        frappe.as_json(snapshot),
+        json.dumps(snapshot),
     )
 
 
