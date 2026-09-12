@@ -70,17 +70,38 @@ function makeTabRoot() {
         },
         click(fieldname) {
             assert.ok(clickHandler, "tab navigation guard should be installed");
-            const link = {
+            let link = null;
+            const nav = {
+                getAttribute() {
+                    return null;
+                },
+                querySelector(selector) {
+                    assert.equal(selector, ".nav-link");
+                    return link;
+                },
+            };
+            link = {
                 getAttribute(name) {
                     assert.equal(name, "data-fieldname");
                     return fieldname;
+                },
+                closest(selector) {
+                    assert.equal(selector, "li,.nav-item");
+                    return nav;
+                },
+                classList: {
+                    contains(name) {
+                        return name === "nav-link";
+                    },
                 },
             };
             const event = {
                 target: {
                     closest(selector) {
-                        assert.equal(selector, ".nav-link[data-fieldname]");
-                        return link;
+                        if (selector.includes('[data-fieldname="order_tab"]')) return link;
+                        if (selector === "li,.nav-item") return nav;
+                        if (selector === ".nav-link") return link;
+                        throw new Error(`Unexpected selector: ${selector}`);
                     },
                 },
                 prevented: false,
