@@ -41,6 +41,19 @@ class CostTabPresentationContractTest(unittest.TestCase):
         fields = {field["fieldname"]: field for field in meta["fields"]}
         self.assertEqual(fields["cost_settings_column"]["fieldtype"], "Column Break")
 
+    def test_cost_content_starts_new_full_width_section_after_rate_columns(self) -> None:
+        meta = json.loads(DOCTYPE_PATH.read_text(encoding="utf-8"))
+        field_order = meta["field_order"]
+        fields = {field["fieldname"]: field for field in meta["fields"]}
+
+        cutting_index = field_order.index("cutting_cost_per_board_usd")
+        section_index = field_order.index("cost_content_section")
+        invoice_index = field_order.index("order_cost_invoice_html")
+
+        self.assertLess(cutting_index, section_index)
+        self.assertLess(section_index, invoice_index)
+        self.assertEqual(fields["cost_content_section"]["fieldtype"], "Section Break")
+
     def test_cost_layout_layer_loads_before_workspace_rendering(self) -> None:
         source = REGISTRY_PATH.read_text(encoding="utf-8")
         presenter = source.index("door_cutting_order_cost_presenter.js")
