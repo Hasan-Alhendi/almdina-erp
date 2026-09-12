@@ -92,6 +92,7 @@ class TestDcoCompactListUx(unittest.TestCase):
         self.assertIn('const originalOnload = existing.onload;', source)
         self.assertIn('const formatters = Object.assign({}, existing.formatters || {});', source)
         self.assertIn('onload(listview)', source)
+        self.assertIn('preserveSavedListSettingsOrder(listview);', source)
         self.assertIn('applyDefaultDesktopPageLength(listview);', source)
         self.assertNotIn('style.textContent', source)
         self.assertNotIn('document.createElement', source)
@@ -100,6 +101,16 @@ class TestDcoCompactListUx(unittest.TestCase):
         self.assertNotIn('setInterval', source)
         self.assertNotIn('frappe.call', source)
         self.assertNotIn('refresh(listview)', source)
+
+    def test_saved_list_settings_order_disables_legacy_order_notes_override(self) -> None:
+        source = LIST_JS.read_text(encoding="utf-8")
+        body = source.split("function preserveSavedListSettingsOrder", 1)[1].split(
+            "function applyDefaultDesktopPageLength",
+            1,
+        )[0]
+
+        self.assertIn("listview._dcoOrderNotesColumnInstalled = true;", body)
+        self.assertIn("Frappe v16 already owns the user's column order", body)
 
     def test_default_desktop_page_length_is_500_without_changing_mobile_default(self) -> None:
         source = LIST_JS.read_text(encoding="utf-8")
@@ -156,6 +167,21 @@ class TestDcoCompactListUx(unittest.TestCase):
         self.assertIn('height: 30px !important;', css)
         self.assertIn('border-radius: 8px !important;', css)
         self.assertIn('background-color: var(--control-bg) !important;', css)
+
+    def test_native_filter_button_matches_compact_toolbar_without_global_frappe_changes(self) -> None:
+        css = LIST_CSS.read_text(encoding="utf-8")
+
+        self.assertIn('.dco-order-list .filter-section > .filter-selector {', css)
+        self.assertIn('.dco-order-list .filter-section > .filter-selector .btn-group', css)
+        self.assertIn('height: 30px;', css)
+        self.assertIn('border-radius: 8px;', css)
+        self.assertIn('.dco-order-list .filter-section > .filter-selector .filter-button', css)
+        self.assertIn('min-width: 72px;', css)
+        self.assertIn('.dco-order-list .filter-section > .filter-selector .filter-x-button', css)
+        self.assertIn('width: 28px;', css)
+        self.assertIn('.dco-order-list .filter-section > .filter-selector .button-label', css)
+        self.assertIn('white-space: nowrap;', css)
+        self.assertNotIn('.page-form .filter-selector', css)
 
 
 if __name__ == "__main__":
