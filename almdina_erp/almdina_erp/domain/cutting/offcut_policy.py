@@ -297,6 +297,12 @@ def canonicalize_snapshot_allocation(snapshot: dict[str, Any]) -> dict[str, Any]
     so OFFCUT area cannot reduce new-board waste.
     """
 
+    # This sanitizer is also used by focused geometry/manufacturing payloads.
+    # Only a real plan snapshot owns allocation semantics; unrelated dictionaries
+    # must pass through unchanged instead of gaining synthetic board totals.
+    if "sheets" not in snapshot:
+        return snapshot
+
     canonicalize_snapshot_sources(snapshot)
     sheets = list(snapshot.get("sheets") or [])
 
