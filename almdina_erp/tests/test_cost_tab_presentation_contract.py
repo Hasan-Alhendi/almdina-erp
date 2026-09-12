@@ -87,6 +87,14 @@ class CostTabPresentationContractTest(unittest.TestCase):
         self.assertIn("aria-expanded", source)
         self.assertIn("actions = $('<div class=\"dco-cost-actions\"></div>')", source)
 
+    def test_measurement_header_keeps_rtl_title_and_toggle_from_collapsing(self) -> None:
+        source = LAYOUT_UX_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("flex:0 0 auto;white-space:nowrap", source)
+        self.assertIn("h4{margin:0;white-space:nowrap}", source)
+        self.assertIn("text-overflow:ellipsis;white-space:nowrap", source)
+        self.assertIn("flex:0 0 25px", source)
+
     def test_custom_door_pricing_is_compact_and_attention_first(self) -> None:
         source = COMPACT_PRICING_UX_PATH.read_text(encoding="utf-8")
 
