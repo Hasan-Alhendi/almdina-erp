@@ -81,6 +81,15 @@ def _stage_is_current(facts: ProductionActionFacts) -> bool:
     )
 
 
+def _customer_only_offcut(action: str) -> ProductionActionDecision:
+    return _decision(
+        action,
+        False,
+        "customer_only_offcut",
+        "هذا الطلب يحتوي على نقص مخصص للزبون فقط ولا يدخل طوابير عمال المعمل.",
+    )
+
+
 def decide_production_action(
     action: str,
     *,
@@ -108,12 +117,7 @@ def decide_production_action(
 
     if action == Capability.DISPATCH_ORDER:
         if facts.has_cutting_plan and not facts.has_factory_work:
-            return _decision(
-                action,
-                False,
-                "customer_only_offcut",
-                "هذا الطلب يحتوي على نقص مخصص للزبون فقط ولا يدخل طوابير عمال المعمل.",
-            )
+            return _customer_only_offcut(action)
         if is_order_dispatched(
             production_path=facts.production_path,
             current_stage=facts.current_stage_name,
@@ -164,6 +168,17 @@ def decide_production_action(
         # Capability alone authorizes revert; structural target checks stay in
         # the command (must pick an existing earlier stage on the order).
         return _decision(action, True, "allowed", "")
+
+    # ALMADINA-178 reconciliation is not dispatch-only. A classification may be
+    # changed after a stage already exists, so execution commands must re-evaluate
+    # the current physical projection on every Start/Handoff. This makes stale
+    # worker tasks non-executable without deleting their audit history.
+    if (
+        action in {Capability.START_ASSIGNED_STAGE, Capability.HANDOFF_ASSIGNED_STAGE}
+        and facts.has_cutting_plan
+        and not facts.has_factory_work
+    ):
+        return _customer_only_offcut(action)
 
     if not _stage_is_current(facts):
         return _decision(
