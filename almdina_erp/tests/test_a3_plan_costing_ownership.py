@@ -163,37 +163,33 @@ class TestA3PlanCostingOwnership(unittest.TestCase):
         self.assertEqual(plan.snapshot_json, '{"sheets":[{"sheet_no":1}]}')
         self.assertEqual(plan.plan_needs_recalculation, 0)
 
-    def test_current_cost_plan_prefers_draft_that_owns_boards(self) -> None:
-        draft = SimpleNamespace(name="CP-DRAFT-BOARDS", status="Draft", required_boards=3)
-        approved = SimpleNamespace(name="CP-APPROVED", status="Approved", required_boards=3)
-        order = SimpleNamespace(name="DCO-COST-PLAN-1")
+    def test_current_cost_plan_returns_canonical_uploaded_draft(self) -> None:
+        uploaded = SimpleNamespace(
+            name="CP-UPLOADED-DRAFT",
+            status="Draft",
+            source_type="Uploaded DXF",
+            required_boards=3,
+        )
+        order = SimpleNamespace(name="DCO-COST-PLAN-1", approved_plan="")
 
-        def latest(_order_name, **filters):
-            status = filters.get("status")
-            if status == "Draft":
-                return draft
-            if status == "Approved":
-                return approved
-            return None
+        with patch.object(workspace, "resolve_canonical_cost_plan", return_value=uploaded) as resolver:
+            self.assertIs(workspace.current_cost_plan(order), uploaded)
 
-        with patch.object(workspace, "latest_plan", side_effect=latest):
-            self.assertIs(workspace.current_cost_plan(order), draft)
+        resolver.assert_called_once_with(order)
 
-    def test_current_cost_plan_ignores_empty_draft_when_approved_exists(self) -> None:
-        draft = SimpleNamespace(name="CP-EMPTY-DRAFT", status="Draft", required_boards=0)
-        approved = SimpleNamespace(name="CP-APPROVED", status="Approved", required_boards=4)
-        order = SimpleNamespace(name="DCO-COST-PLAN-2")
+    def test_current_cost_plan_returns_official_approved_plan(self) -> None:
+        approved = SimpleNamespace(
+            name="CP-APPROVED",
+            status="Approved",
+            source_type="System",
+            required_boards=4,
+        )
+        order = SimpleNamespace(name="DCO-COST-PLAN-2", approved_plan=approved.name)
 
-        def latest(_order_name, **filters):
-            status = filters.get("status")
-            if status == "Draft":
-                return draft
-            if status == "Approved":
-                return approved
-            return None
-
-        with patch.object(workspace, "latest_plan", side_effect=latest):
+        with patch.object(workspace, "resolve_canonical_cost_plan", return_value=approved) as resolver:
             self.assertIs(workspace.current_cost_plan(order), approved)
+
+        resolver.assert_called_once_with(order)
 
     def test_cost_edit_fails_closed_if_frappe_restores_old_permlevel_values(self) -> None:
         plan = SimpleNamespace(name="CP-A3-PERMLEVEL")
