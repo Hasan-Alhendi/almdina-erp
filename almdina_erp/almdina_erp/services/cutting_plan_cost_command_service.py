@@ -23,9 +23,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspac
     persist_plan_cost_snapshot,
     refresh_order_commercial_totals,
 )
-from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
-    physical_execution_projection_from_snapshot,
-)
+from almdina_erp.almdina_erp.domain.cutting.physical_execution_contract import physical_execution_for_snapshot
 
 
 def _assert_cost_inputs_persisted(
@@ -96,19 +94,24 @@ def update_plan_cost_settings(
     if requested_offcut_price < 0:
         frappe.throw(_("سعر الفضلة لا يمكن أن يكون سالبًا."), frappe.ValidationError)
     snapshot = frappe.parse_json(getattr(plan, "snapshot_json", None) or "{}") or {}
-    projection = physical_execution_projection_from_snapshot(snapshot)
-    if requested_offcut_price and not projection.has_factory_source_offcut:
+    projection = physical_execution_for_snapshot(snapshot)
+    if requested_offcut_price and (projection is None or not projection.has_factory_source_offcut):
         frappe.throw(
             _("سعر الفضلة يُستخدم فقط عندما يكون المصدر والتنفيذ من المعمل."),
             frappe.ValidationError,
         )
     # Reclassification removes the only eligible state => price must not survive
     # as a stale commercial charge.  An omitted value keeps the applicable price.
-    plan.offcut_price_usd = (
-        requested_offcut_price
-        if offcut_price_usd is not None and projection.has_factory_source_offcut
-        else (flt(plan.offcut_price_usd) if projection.has_factory_source_offcut else 0)
-    )
+    if projection is None:
+        # A historical plan has no OFFCUT contract.  Preserve its stored
+        # commercial history instead of silently rewriting it during costing.
+        plan.offcut_price_usd = flt(plan.offcut_price_usd)
+    else:
+        plan.offcut_price_usd = (
+            requested_offcut_price
+            if offcut_price_usd is not None and projection.has_factory_source_offcut
+            else (flt(plan.offcut_price_usd) if projection.has_factory_source_offcut else 0)
+        )
     plan.edge_cost_usd = factory_execution_edge_cost(order, plan)
     apply_plan_costs(plan)
     status = str(getattr(plan, "status", None) or "")
