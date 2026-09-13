@@ -37,14 +37,38 @@
             : null;
     }
 
+    function presentationAssignments(row) {
+        const offcut = row && row.offcut;
+        const assignments = offcut && Array.isArray(offcut.assignments)
+            ? offcut.assignments
+            : [];
+        return assignments.map(assignment => ({ ...assignment }));
+    }
+
+    function attachPresentationMetadata(plan, row) {
+        if (!plan || typeof plan !== "object") return null;
+        // This metadata is a transient read projection only. It is deliberately
+        // kept outside the canonical persisted snapshot contract so presentation
+        // can consume backend-owned OFFCUT state labels without mutating geometry,
+        // physical source identity, or piece_instance_id.
+        return {
+            ...plan,
+            __offcut_assignments: presentationAssignments(row),
+        };
+    }
+
     function parseSnapshot(row) {
         if (!row) return null;
         const raw = row.snapshot_json;
         if (!raw) return null;
-        if (typeof raw === "object") return raw;
+        if (typeof raw === "object") {
+            return attachPresentationMetadata(raw, row);
+        }
         try {
             const parsed = JSON.parse(raw);
-            return parsed && typeof parsed === "object" ? parsed : null;
+            return parsed && typeof parsed === "object"
+                ? attachPresentationMetadata(parsed, row)
+                : null;
         } catch (error) {
             return null;
         }
@@ -239,6 +263,7 @@
     window.AlmdinaPlanWorkspacePresenterAdapter = Object.freeze({
         install,
         project,
+        parseSnapshot,
         getPlanForTab,
         hasApprovedPlan,
         activeSettings,

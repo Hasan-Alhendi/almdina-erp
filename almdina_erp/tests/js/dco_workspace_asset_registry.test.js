@@ -80,6 +80,7 @@ class CustomEvent {
     assert.ok(calls[0].every(asset => asset.includes("/cutting_plan/")));
     assert.ok(calls[0].some(asset => asset.endsWith("door_cutting_order_plan_surface_bootstrap.js")));
     assert.ok(calls[0].some(asset => asset.endsWith("door_cutting_order_piece_geometry.js")));
+    assert.ok(calls[0].some(asset => asset.endsWith("door_cutting_order_plan_source_presentation.js")));
     assert.ok(calls[0].some(asset => asset.endsWith("door_cutting_order_plan_edit_session_ux.js")));
     assert.ok(calls[0].some(asset => asset.endsWith("secure_dxf_export.js")));
 
@@ -87,6 +88,13 @@ class CustomEvent {
     fakeWindow.AlmdinaPlanWorkspacePresenterAdapter = {};
     fakeWindow.AlmdinaCuttingPlanSurfaceBootstrap = {};
     fakeWindow.AlmdinaPlanFieldAccessAdapter = {};
+    assert.equal(
+        registry.isLoaded("plan"),
+        false,
+        "Plan readiness must wait for the ALMADINA-179 source presentation contract"
+    );
+
+    fakeWindow.AlmdinaPlanSourcePresentation = {};
     assert.equal(
         registry.isLoaded("plan"),
         false,
@@ -136,6 +144,11 @@ class CustomEvent {
         "cost:loading",
         "cost:loaded",
     ]);
+
+    // F6 and Static Checks already execute this lifecycle simulation. Keep the
+    // ALMADINA-179 semantic projection regression on the same Plan bundle gate so
+    // a future asset-order change cannot silently stop executing it.
+    require("./offcut_plan_presentation.test.js");
 
     console.log("DCO workspace asset registry simulation passed");
 })().catch(error => {

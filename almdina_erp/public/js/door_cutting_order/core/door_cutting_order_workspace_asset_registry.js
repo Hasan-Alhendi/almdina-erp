@@ -13,6 +13,7 @@
                 `${ASSET_ROOT}/cutting_plan/door_cutting_order_plan_preview_session.js`,
                 `${ASSET_ROOT}/cutting_plan/door_cutting_order_piece_geometry.js`,
                 `${ASSET_ROOT}/cutting_plan/door_cutting_order_cutting_plan_renderer.js`,
+                `${ASSET_ROOT}/cutting_plan/door_cutting_order_plan_source_presentation.js`,
                 `${ASSET_ROOT}/cutting_plan/secure_dxf_upload.js`,
                 `${ASSET_ROOT}/cutting_plan/door_cutting_order_plan_ux.js`,
                 `${ASSET_ROOT}/cutting_plan/door_cutting_order_text_board_plan_ux.js`,
@@ -35,6 +36,7 @@
             ]),
             readyGlobals: Object.freeze([
                 "AlmdinaCuttingPlanPieceGeometry",
+                "AlmdinaPlanSourcePresentation",
                 "AlmdinaPlanWorkspacePresenterAdapter",
                 "AlmdinaCuttingPlanSurfaceBootstrap",
                 "AlmdinaPlanEditSessionUX",
