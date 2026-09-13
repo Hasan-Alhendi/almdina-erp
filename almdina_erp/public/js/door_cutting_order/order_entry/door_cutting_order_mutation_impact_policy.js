@@ -205,8 +205,9 @@
     }
 
     function onPlanWorkspaceUpdated(event) {
-        reconcileOffcutClassification(event).catch((error) => {
+        return reconcileOffcutClassification(event).catch((error) => {
             console.error("DCO OFFCUT cost reconciliation failed", error);
+            return false;
         });
     }
 
