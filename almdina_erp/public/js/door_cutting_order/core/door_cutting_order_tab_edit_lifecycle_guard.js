@@ -22,6 +22,11 @@
         return Boolean(frm && frm.doc && frm.doctype === DOCTYPE);
     }
 
+    function formRoot(frm) {
+        const wrapper = frm && frm.wrapper;
+        return wrapper && (wrapper.nodeType ? wrapper : wrapper[0]);
+    }
+
     function tabFieldname(tab) {
         return String(tab && tab.df && tab.df.fieldname || "").trim();
     }
@@ -80,19 +85,47 @@
         frm[LEGACY_HANDLER_KEY] = null;
     }
 
+    function targetTabFieldname(event) {
+        const target = event && event.target;
+        const tabLink = target && typeof target.closest === "function"
+            ? target.closest(".nav-link[data-fieldname], [data-toggle=\"tab\"][data-fieldname]")
+            : null;
+        if (!tabLink || typeof tabLink.getAttribute !== "function") return "";
+        const fieldname = String(tabLink.getAttribute("data-fieldname") || "").trim();
+        return GUARDED_TABS.has(fieldname) ? fieldname : "";
+    }
+
+    function makeCaptureClickGuard(frm) {
+        return function almdinaCapturedDcoTabClick(event) {
+            const targetFieldname = targetTabFieldname(event);
+            if (!targetFieldname || !shouldBlock(frm, targetFieldname)) return;
+
+            if (typeof event.preventDefault === "function") event.preventDefault();
+            if (typeof event.stopImmediatePropagation === "function") event.stopImmediatePropagation();
+            else if (typeof event.stopPropagation === "function") event.stopPropagation();
+            showOpenEditMessage();
+        };
+    }
+
     function restoreState(frm, state) {
-        if (!state || !Array.isArray(state.bindings)) return;
-        state.bindings.forEach(({ tab, originalSetActive, guardedSetActive }) => {
-            if (tab && tab.set_active === guardedSetActive) {
-                tab.set_active = originalSetActive;
-            }
-        });
+        if (!state) return;
+        if (Array.isArray(state.bindings)) {
+            state.bindings.forEach(({ tab, originalSetActive, guardedSetActive }) => {
+                if (tab && tab.set_active === guardedSetActive) {
+                    tab.set_active = originalSetActive;
+                }
+            });
+        }
+        if (state.clickRoot && state.clickHandler && typeof state.clickRoot.removeEventListener === "function") {
+            state.clickRoot.removeEventListener("click", state.clickHandler, true);
+        }
         if (frm && frm[STATE_KEY] === state) frm[STATE_KEY] = null;
     }
 
-    function sameInstallation(state, tabs) {
+    function sameInstallation(state, tabs, root) {
         if (!state || !Array.isArray(state.bindings)) return false;
         if (state.bindings.length !== tabs.length) return false;
+        if (state.clickRoot !== root || !state.clickHandler) return false;
         return state.bindings.every((binding, index) => (
             binding.tab === tabs[index]
             && binding.tab.set_active === binding.guardedSetActive
@@ -102,17 +135,17 @@
     function install(frm) {
         if (!isOrderForm(frm)) return false;
 
-        // The old page coordinator had a capture-phase click guard. Keep its
-        // aggregation/presentation duties, but retire that DOM interception after
-        // every form refresh so the semantic Frappe Tab boundary below is the
-        // single runtime authority for edit-session navigation.
+        // Retire only the historical PageEditActionUX click interceptor. This
+        // lifecycle owner installs its own capture guard below so DOM/Bootstrap
+        // activation and programmatic Tab.set_active() share one authority.
         retireLegacyClickGuard(frm);
 
         const tabs = topLevelTabs(frm);
-        if (!tabs.length) return false;
+        const root = formRoot(frm);
+        if (!tabs.length || !root || typeof root.addEventListener !== "function") return false;
 
         const previous = frm[STATE_KEY];
-        if (sameInstallation(previous, tabs)) return true;
+        if (sameInstallation(previous, tabs, root)) return true;
         if (previous) restoreState(frm, previous);
 
         const bindings = tabs
@@ -138,7 +171,15 @@
             });
 
         if (!bindings.length) return false;
-        const state = Object.freeze({ bindings: Object.freeze(bindings) });
+
+        const clickHandler = makeCaptureClickGuard(frm);
+        root.addEventListener("click", clickHandler, true);
+
+        const state = Object.freeze({
+            bindings: Object.freeze(bindings),
+            clickRoot: root,
+            clickHandler,
+        });
 
         const context = documentContext();
         if (context && typeof context.registerCleanup === "function") {
@@ -163,6 +204,7 @@
         install,
         retireLegacyClickGuard,
         shouldBlock,
+        targetTabFieldname,
         topLevelTabs,
     });
 })();
