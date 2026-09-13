@@ -4,7 +4,6 @@
     if (window.AlmdinaOrderMutationImpactPolicy) return;
 
     const IMPACT_KEY = "__almdinaWorkspaceMutationImpact";
-    const OFFCUT_CLASSIFICATION_REASON = "offcut_classification_changed";
     const SPECIAL_PRICE_BASIS_FIELDS = new Set([
         "width_cm",
         "length_cm",
@@ -100,9 +99,6 @@
     }
 
     function onPieceCollectionChanged(frm) {
-        // Frappe emits pieces_add / pieces_remove for child-table structural changes.
-        // There may be no surviving row/field event after a deletion, so the
-        // collection event itself must invalidate both derived workspaces.
         recordImpact(frm, ["plan", "cost"], "order_inputs_changed");
     }
 
@@ -146,10 +142,6 @@
         const coordinator = syncCoordinator();
         if (!coordinator || typeof coordinator.refresh !== "function") return false;
 
-        // Saving the order workspace must not immediately pay the hidden Plan/Cost
-        // read cost. Their stores are already invalidated above; refresh only a
-        // derived workspace that is actually visible, and let tab activation
-        // resolve the rest later from the canonical server state.
         await coordinator.refresh(frm, impact.resources, {
             force: false,
             activeOnly: true,
@@ -157,9 +149,6 @@
         });
         clearSpecialPriceStaleMarkers(frm);
 
-        // The refreshed Cost snapshot now contains the authoritative special-price
-        // status, but board/cutting totals still belong to the last calculated Plan.
-        // Keep Cost visibly stale until the Plan dependency itself is recalculated.
         if (
             impact.resources.includes("cost")
             && impact.resources.includes("plan")
@@ -168,47 +157,6 @@
             coordinator.invalidate(frm, ["cost"], "plan_recalculation_required");
         }
         return true;
-    }
-
-    async function reconcileOffcutClassification(event) {
-        const detail = event && event.detail ? event.detail : {};
-        const planState = detail.snapshot || null;
-        if (
-            !planState
-            || planState.staleReason !== OFFCUT_CLASSIFICATION_REASON
-            || planState.freshness !== "stale"
-            || planState.status === "loading"
-        ) {
-            return false;
-        }
-
-        const frm = window.cur_frm;
-        if (!frm || frm.doctype !== "Door Cutting Order" || !frm.doc) return false;
-        const eventOrderName = String(detail.orderName || "").trim();
-        if (eventOrderName && eventOrderName !== String(frm.doc.name || "").trim()) {
-            return false;
-        }
-
-        const coordinator = syncCoordinator();
-        if (!coordinator || typeof coordinator.reconcile !== "function") return false;
-
-        // OFFCUT classification is already committed server-side. Cost is a direct
-        // dependent read model, so invalidate it and force one canonical reload.
-        // The registered Cost state owner performs the read; its presenter reacts
-        // to the normal cost-workspace-updated event and renders the fresh snapshot.
-        await coordinator.reconcile(
-            frm,
-            { changed: ["cost"], reason: OFFCUT_CLASSIFICATION_REASON },
-            { activeOnly: false }
-        );
-        return true;
-    }
-
-    function onPlanWorkspaceUpdated(event) {
-        return reconcileOffcutClassification(event).catch((error) => {
-            console.error("DCO OFFCUT cost reconciliation failed", error);
-            return false;
-        });
     }
 
     const orderHandlers = {
@@ -235,19 +183,13 @@
     });
     frappe.ui.form.on("Door Cutting Order Detail", pieceHandlers);
 
-    if (typeof window.addEventListener === "function") {
-        window.addEventListener("almdina:plan-workspace-updated", onPlanWorkspaceUpdated);
-    }
-
     window.AlmdinaOrderMutationImpactPolicy = Object.freeze({
-        OFFCUT_CLASSIFICATION_REASON,
         SPECIAL_PRICE_BASIS_FIELDS,
         ORDER_PLAN_COST_FIELDS,
         PIECE_PLAN_COST_FIELDS,
         PIECE_COST_ONLY_FIELDS,
         recordImpact,
         reconcileAfterSave,
-        reconcileOffcutClassification,
         planNeedsRecalculation,
     });
 })();
