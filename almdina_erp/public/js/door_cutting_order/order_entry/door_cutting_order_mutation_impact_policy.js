@@ -4,6 +4,7 @@
     if (window.AlmdinaOrderMutationImpactPolicy) return;
 
     const IMPACT_KEY = "__almdinaWorkspaceMutationImpact";
+    const OFFCUT_CLASSIFICATION_REASON = "offcut_classification_changed";
     const SPECIAL_PRICE_BASIS_FIELDS = new Set([
         "width_cm",
         "length_cm",
@@ -159,6 +160,59 @@
         return true;
     }
 
+    function offcutDependencyEffects(result) {
+        const dependencies = result && result.dependencies;
+        const changed = normalizeResources(dependencies && dependencies.changed)
+            .filter((name) => name === "plan" || name === "cost");
+        return {
+            changed: changed.length ? changed : ["plan", "cost"],
+            reason: String(
+                dependencies && dependencies.reason
+                || OFFCUT_CLASSIFICATION_REASON
+            ),
+        };
+    }
+
+    async function reconcileOffcutMutation(frm, result) {
+        const coordinator = syncCoordinator();
+        if (
+            !frm
+            || frm.doctype !== "Door Cutting Order"
+            || !coordinator
+            || typeof coordinator.reconcile !== "function"
+        ) {
+            return false;
+        }
+        await coordinator.reconcile(
+            frm,
+            offcutDependencyEffects(result),
+            { activeOnly: false }
+        );
+        return true;
+    }
+
+    function installOffcutMutationPolicy() {
+        const api = window.AlmdinaPlanWorkspaceAPI;
+        if (
+            !api
+            || api.__offcutDependencyOwned
+            || typeof api.saveOffcutAssignments !== "function"
+        ) {
+            return false;
+        }
+        const transport = api.saveOffcutAssignments;
+        window.AlmdinaPlanWorkspaceAPI = Object.freeze({
+            ...api,
+            __offcutDependencyOwned: true,
+            async saveOffcutAssignments(planName, assignments) {
+                const result = await transport(planName, assignments);
+                await reconcileOffcutMutation(window.cur_frm, result);
+                return result;
+            },
+        });
+        return true;
+    }
+
     const orderHandlers = {
         after_save(frm) {
             reconcileAfterSave(frm).catch((error) => {
@@ -183,13 +237,18 @@
     });
     frappe.ui.form.on("Door Cutting Order Detail", pieceHandlers);
 
+    installOffcutMutationPolicy();
+
     window.AlmdinaOrderMutationImpactPolicy = Object.freeze({
+        OFFCUT_CLASSIFICATION_REASON,
         SPECIAL_PRICE_BASIS_FIELDS,
         ORDER_PLAN_COST_FIELDS,
         PIECE_PLAN_COST_FIELDS,
         PIECE_COST_ONLY_FIELDS,
         recordImpact,
         reconcileAfterSave,
+        reconcileOffcutMutation,
+        offcutDependencyEffects,
         planNeedsRecalculation,
     });
 })();
