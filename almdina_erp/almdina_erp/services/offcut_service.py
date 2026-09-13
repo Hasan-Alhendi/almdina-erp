@@ -208,8 +208,9 @@ def _reconcile_factory_execution_projection(order: Any, plan: Any, execution: An
     Mixed orders retain their current route/stage because the authoritative
     required quantity is projected dynamically from physical factory pieces.
     When the projection reaches zero factory pieces there is no valid executable
-    task left: cancel active stage rows for audit, clear routing pointers, and
-    return the order to a dispatchable pre-production status.
+    task left: cancel active stage rows for audit and clear routing pointers only
+    if the order had actually entered production. Merely classifying a fresh order
+    must not rewrite its lifecycle status.
     """
 
     if execution.has_factory_work:
@@ -227,6 +228,17 @@ def _reconcile_factory_execution_projection(order: Any, plan: Any, execution: An
         order.name,
         include_piece_stages=True,
     )
+    had_tracking = bool(
+        cancelled
+        or str(getattr(order, "production_path", None) or "").strip()
+        or str(getattr(order, "current_production_stage", None) or "").strip()
+    )
+    if not had_tracking:
+        return {
+            "production_reconciled": False,
+            "cancelled_stage_count": 0,
+        }
+
     fallback_status = "Approved" if str(getattr(plan, "status", None) or "") == APPROVED else "Draft"
     order_tracking_repository.clear_factory_tracking(
         order.name,
