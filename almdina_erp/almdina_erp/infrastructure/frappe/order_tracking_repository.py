@@ -9,10 +9,11 @@ from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
     OffcutPolicyError,
     physical_execution_projection_from_snapshot,
 )
-
 from almdina_erp.almdina_erp.domain.orders.lifecycle import (
+    LOCKED_ORDER_STATUSES,
     department_for_stage_type,
     department_status_for_stage_status,
+    normalize_order_status,
     order_status_for_stage,
 )
 
@@ -80,6 +81,38 @@ def set_order_tracking(
         )
 
 
+def clear_factory_tracking(
+    order_name: str,
+    *,
+    fallback_status: str,
+) -> dict[str, Any]:
+    """Clear stale factory routing after OFFCUT becomes customer-only.
+
+    The production path/current-stage fields are execution projections, not order
+    requirements. When no physical piece remains executable by the factory they
+    must be cleared so old assignments cannot keep the order dispatched. Locked
+    terminal statuses are preserved exactly.
+    """
+
+    current_status = normalize_order_status(get_order_status(order_name))
+    values: dict[str, Any] = {
+        "production_path": None,
+        "current_production_stage": None,
+        "current_department": "",
+        "current_assignee": "",
+        "department_status": "",
+    }
+    if current_status not in LOCKED_ORDER_STATUSES:
+        values["status"] = fallback_status
+    frappe.db.set_value(
+        "Door Cutting Order",
+        order_name,
+        values,
+        update_modified=True,
+    )
+    return values
+
+
 def required_piece_qty(order_name: str) -> int:
     order = get_order(order_name)
     plan = None
@@ -115,6 +148,7 @@ def required_piece_qty(order_name: str) -> int:
 
 
 __all__ = [
+    "clear_factory_tracking",
     "get_order",
     "get_order_path",
     "get_order_status",

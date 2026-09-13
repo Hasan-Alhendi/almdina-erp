@@ -172,7 +172,9 @@ def _customer_invoice_lines(
 
     offcut_price = _number(_value(order, "offcut_price_usd"))
     factory_offcut = bool(_value(order, "offcut_factory_factory"))
-    if factory_offcut and offcut_price:
+    # Zero is a valid aggregate commercial price. Applicability, not truthiness,
+    # owns whether the dedicated OFFCUT invoice line exists.
+    if factory_offcut:
         lines.append(
             {
                 "type": "offcut",

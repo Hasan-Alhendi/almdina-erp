@@ -202,6 +202,54 @@ def _source_business_projection(snapshot: dict[str, Any]) -> dict[str, dict[str,
     }
 
 
+def _reconcile_factory_execution_projection(order: Any, plan: Any, execution: Any) -> dict[str, Any]:
+    """Remove stale executable work when classification becomes customer-only.
+
+    Mixed orders retain their current route/stage because the authoritative
+    required quantity is projected dynamically from physical factory pieces.
+    When the projection reaches zero factory pieces there is no valid executable
+    task left: cancel active stage rows for audit and clear routing pointers only
+    if the order had actually entered production. Merely classifying a fresh order
+    must not rewrite its lifecycle status.
+    """
+
+    if execution.has_factory_work:
+        return {
+            "production_reconciled": False,
+            "cancelled_stage_count": 0,
+        }
+
+    from almdina_erp.almdina_erp.infrastructure.frappe import (
+        order_tracking_repository,
+        production_stage_repository,
+    )
+
+    cancelled = production_stage_repository.cancel_active_order_stages(
+        order.name,
+        include_piece_stages=True,
+    )
+    had_tracking = bool(
+        cancelled
+        or str(getattr(order, "production_path", None) or "").strip()
+        or str(getattr(order, "current_production_stage", None) or "").strip()
+    )
+    if not had_tracking:
+        return {
+            "production_reconciled": False,
+            "cancelled_stage_count": 0,
+        }
+
+    fallback_status = "Approved" if str(getattr(plan, "status", None) or "") == APPROVED else "Draft"
+    order_tracking_repository.clear_factory_tracking(
+        order.name,
+        fallback_status=fallback_status,
+    )
+    return {
+        "production_reconciled": True,
+        "cancelled_stage_count": len(cancelled),
+    }
+
+
 @frappe.whitelist()
 def set_offcut_execution_owner(plan_name: str, assignments: Any) -> dict[str, Any]:
     """Classify OFFCUT physical pieces without changing geometry or approval."""
@@ -271,6 +319,11 @@ def set_offcut_execution_owner(plan_name: str, assignments: Any) -> dict[str, An
         apply_plan_costs(plan, edge_cost_usd=factory_execution_edge_cost(order, plan))
         persist_plan_cost_snapshot(plan)
     refresh_order_commercial_totals(order, plan)
+    production_reconciliation = _reconcile_factory_execution_projection(
+        order,
+        plan,
+        execution,
+    )
 
     return {
         "cutting_plan": plan.name,
@@ -280,6 +333,7 @@ def set_offcut_execution_owner(plan_name: str, assignments: Any) -> dict[str, An
         "approval_preserved": True,
         "factory_executable_quantity": execution.factory_executable_quantity,
         "offcut_price_applicable": execution.has_factory_source_offcut,
+        **production_reconciliation,
         "assignments": [
             offcut_assignment_projection(snapshot_pieces[identity])
             for identity in normalized
