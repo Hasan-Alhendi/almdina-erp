@@ -125,21 +125,34 @@ def test_switching_tabs_is_blocked_at_frappe_native_activation_boundary() -> Non
     coordinator = source(COORDINATOR)
     guard = source(TAB_GUARD)
 
-    # Session ownership stays centralized in the aggregate coordinator. The lifecycle
-    # guard consumes that one projection rather than reimplementing Order/Plan/Cost.
+    # Session ownership stays centralized in the aggregate coordinator. Navigation
+    # derives its allowed tab from that owner; host/DOM current-tab state is never
+    # an authorization input because it may already have drifted during a race.
     assert "function activeEditingKind(frm)" in coordinator
     assert "owner.activeKind(frm)" in guard
+    assert 'order: "order_tab"' in guard
+    assert 'plan: "results_tab"' in guard
+    assert 'cost: "cost_tab"' in guard
+    assert "function sessionTabFieldname(frm)" in guard
+    assert "targetFieldname !== ownerTabFieldname" in guard
 
     # Frappe v16 changes a top-level tab through each Tab object's set_active().
-    # Guard that semantic boundary before the native method can mutate classes,
-    # active_tab_map, URL hash, or trigger on_tab_change. A DOM-click-only guard is
-    # insufficient because programmatic/native activation can bypass it.
+    # Guard that semantic boundary before native activation can mutate visual/host
+    # state, and additionally disable non-owner native buttons while editing so a
+    # click cannot reach either Frappe or Bootstrap in the first place.
     assert "Array.isArray(frm.layout.tabs)" in guard
     assert 'typeof tab.set_active === "function"' in guard
     assert "tab.set_active = guardedSetActive;" in guard
     assert "if (shouldBlock(frm, targetFieldname))" in guard
     assert "return false;" in guard
     assert "originalSetActive.apply(this, args)" in guard
+    assert 'control.prop("disabled", true)' in guard
+    assert 'control.attr("aria-disabled", "true")' in guard
+    assert 'control.attr("tabindex", "-1")' in guard
+    assert "function reconcileOwnerTab(frm, state, ownerTabFieldname)" in guard
+    assert "ownerBinding.guardedSetActive.call(ownerBinding.tab)" in guard
+    assert "almdina_edit_session_changed(frm) { syncNavigationLock(frm); }" in guard
+    assert "on_tab_change(frm)" in guard
     assert "registerCleanup(frm, CLEANUP_KEY" in guard
     assert "tab.set_active = originalSetActive;" in guard
     assert "احفظ أو ألغِ التعديل الحالي قبل الانتقال إلى قسم آخر" in guard
@@ -149,6 +162,7 @@ def test_switching_tabs_is_blocked_at_frappe_native_activation_boundary() -> Non
     assert 'addEventListener("click"' not in guard
     assert "stopImmediatePropagation" not in guard
     assert "setTimeout" not in guard
+    assert "requestAnimationFrame" not in guard
     assert "frappe.ui.form.Tab.prototype" not in guard
 
 
