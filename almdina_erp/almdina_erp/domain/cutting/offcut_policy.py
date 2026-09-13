@@ -10,6 +10,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from enum import StrEnum
+from collections import Counter
+from collections.abc import Mapping
 from typing import Any
 
 
@@ -55,11 +57,70 @@ class OffcutDecision:
 
     @property
     def enters_worker_queues(self) -> bool:
-        return self.execution_party is Party.FACTORY
+        # Historical OFFCUT summary count: full-board pieces are reported by
+        # ``full_board_piece_count`` and do not belong in this OFFCUT metric.
+        return self.is_offcut and self.execution_party is Party.FACTORY
+
+    @property
+    def requires_factory_execution(self) -> bool:
+        """Whether this physical piece belongs to factory processing/production."""
+
+        return self.consumes_full_board or (
+            self.is_offcut
+            and self.is_resolved
+            and self.execution_party is Party.FACTORY
+        )
+
+    @property
+    def is_customer_executed(self) -> bool:
+        return (
+            self.is_offcut
+            and self.is_resolved
+            and self.execution_party is Party.CUSTOMER
+        )
+
+    @property
+    def requires_aggregate_offcut_price(self) -> bool:
+        return (
+            self.is_offcut
+            and self.source_party is Party.FACTORY
+            and self.execution_party is Party.FACTORY
+        )
 
     @property
     def consumes_full_board(self) -> bool:
         return self.resource_kind is ResourceKind.FULL_BOARD
+
+
+@dataclass(frozen=True, slots=True)
+class PhysicalExecutionProjection:
+    """Commercial/production view of canonical physical plan pieces.
+
+    A DCO detail row is a customer requirement and may expand to many physical
+    copies.  OFFCUT classification is applied to those copies, never to the
+    aggregate row quantity.  This projection is the single policy boundary used
+    by cost, invoice and shop-floor adapters.
+    """
+
+    piece_instance_ids: tuple[str, ...]
+    factory_execution_piece_ids: tuple[str, ...]
+    customer_execution_piece_ids: tuple[str, ...]
+    unresolved_piece_ids: tuple[str, ...]
+    factory_source_offcut_piece_ids: tuple[str, ...]
+    factory_processing_qty_by_source_piece_no: Mapping[int, int]
+    physical_qty_by_source_piece_no: Mapping[int, int]
+
+    @property
+    def factory_executable_quantity(self) -> int:
+        return len(self.factory_execution_piece_ids)
+
+    @property
+    def has_factory_work(self) -> bool:
+        return bool(self.factory_execution_piece_ids)
+
+    @property
+    def has_factory_source_offcut(self) -> bool:
+        return bool(self.factory_source_offcut_piece_ids)
 
 
 RESOLVED_OFFCUT_STATES = frozenset(
@@ -394,6 +455,70 @@ def validate_piece_collection(pieces: list[dict[str, Any]]) -> None:
         decision_from_piece(piece)
 
 
+def physical_execution_projection(
+    pieces: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+) -> PhysicalExecutionProjection:
+    """Project canonical physical pieces into factory/customer execution sets.
+
+    The caller supplies pieces from exactly one plan snapshot.  Invalid state is
+    rejected here so downstream projections cannot silently route the forbidden
+    ``FACTORY → CUSTOMER`` combination, or invent work for ``UNASSIGNED``.
+    """
+
+    normalized = [dict(piece) for piece in pieces]
+    validate_piece_collection(normalized)
+    factory: list[str] = []
+    customer: list[str] = []
+    unresolved: list[str] = []
+    factory_source_offcut: list[str] = []
+    quantities: Counter[int] = Counter()
+    physical_quantities: Counter[int] = Counter()
+
+    for piece in normalized:
+        identity = str(piece.get("piece_instance_id") or "").strip()
+        decision = decision_from_piece(piece)
+        source_piece_no = int(piece.get("source_piece_no") or 0)
+        if source_piece_no > 0:
+            physical_quantities[source_piece_no] += 1
+        if decision.requires_factory_execution:
+            factory.append(identity)
+            if source_piece_no > 0:
+                quantities[source_piece_no] += 1
+        elif decision.is_customer_executed:
+            customer.append(identity)
+        else:
+            unresolved.append(identity)
+        if decision.requires_aggregate_offcut_price:
+            factory_source_offcut.append(identity)
+
+    return PhysicalExecutionProjection(
+        piece_instance_ids=tuple(
+            str(piece.get("piece_instance_id") or "").strip()
+            for piece in normalized
+        ),
+        factory_execution_piece_ids=tuple(factory),
+        customer_execution_piece_ids=tuple(customer),
+        unresolved_piece_ids=tuple(unresolved),
+        factory_source_offcut_piece_ids=tuple(factory_source_offcut),
+        factory_processing_qty_by_source_piece_no=dict(quantities),
+        physical_qty_by_source_piece_no=dict(physical_quantities),
+    )
+
+
+def physical_execution_projection_from_snapshot(
+    snapshot: Mapping[str, Any],
+) -> PhysicalExecutionProjection:
+    """Read the physical execution policy from one Cutting Plan snapshot."""
+
+    return physical_execution_projection(
+        [
+            piece
+            for sheet in (snapshot.get("sheets") or [])
+            for piece in (sheet.get("pieces") or [])
+        ]
+    )
+
+
 def source_summary(pieces: list[dict[str, Any]]) -> dict[str, int]:
     """Return board/queue counts from the same policy used by costing/UI."""
     validate_piece_collection(pieces)
@@ -427,6 +552,7 @@ __all__ = [
     "business_state_options",
     "decision_from_business_state",
     "OffcutDecision",
+    "PhysicalExecutionProjection",
     "OffcutBusinessState",
     "OffcutPolicyError",
     "offcut_assignment_projection",
@@ -437,6 +563,8 @@ __all__ = [
     "decision_from_piece",
     "decision_from_values",
     "presentation_label",
+    "physical_execution_projection",
+    "physical_execution_projection_from_snapshot",
     "preserve_offcut_classification",
     "resource_kind_from_value",
     "source_summary",

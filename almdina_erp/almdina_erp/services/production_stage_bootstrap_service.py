@@ -6,6 +6,10 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, now_datetime
 
+from almdina_erp.almdina_erp.infrastructure.frappe.order_tracking_repository import (
+    required_piece_qty,
+)
+
 
 def _log_event(
     stage: Any,
@@ -39,18 +43,6 @@ def _stage_is_applicable(stage_type: str, order: Any) -> bool:
     if stage_type == "Edge Banding":
         return flt(order.total_edge_meters) > 0
     return True
-
-
-def _required_piece_qty(order_name: str) -> int:
-    rows = frappe.get_all(
-        "Door Cutting Order Detail",
-        filters={
-            "parent": order_name,
-            "parenttype": "Door Cutting Order",
-        },
-        fields=["qty"],
-    )
-    return sum(cint(row.qty) for row in rows)
 
 
 def ensure_default_stages(
@@ -108,7 +100,7 @@ def ensure_default_stages(
             stage.finish_time = now
             stage.actual_working_seconds = 0
             stage.completed_qty = (
-                _required_piece_qty(order_name) if applicable else 0
+                required_piece_qty(order_name) if applicable else 0
             )
             if not applicable:
                 stage.notes = _(

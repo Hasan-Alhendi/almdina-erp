@@ -70,6 +70,7 @@
                 order_name: orderName,
                 board_rate_usd: values.board_rate_usd,
                 cutting_cost_per_board_usd: values.cutting_cost_per_board_usd,
+                offcut_price_usd: values.offcut_price_usd,
             },
             {
                 freeze: true,

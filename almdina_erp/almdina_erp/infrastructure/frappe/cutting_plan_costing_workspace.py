@@ -7,6 +7,10 @@ from frappe import _
 from frappe.utils import cint, flt
 
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import APPROVED, DRAFT
+from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
+    PhysicalExecutionProjection,
+    physical_execution_projection_from_snapshot,
+)
 from almdina_erp.almdina_erp.domain.orders.costing import (
     CostingError,
     SpecialPricingPieceInput,
@@ -85,6 +89,9 @@ def initialize_draft_plan_cost_snapshot(order: Any, plan: Any) -> bool:
 def apply_plan_costs(plan: Any, *, edge_cost_usd: float | None = None) -> dict[str, float]:
     """Calculate and store the plan-owned financial result without touching geometry."""
 
+    execution = physical_execution_for_plan(plan)
+    if execution is not None and not execution.has_factory_source_offcut:
+        plan.offcut_price_usd = 0
     edge_cost = flt(plan.edge_cost_usd) if edge_cost_usd is None else flt(edge_cost_usd)
     result = calculate_order_costs(
         required_boards=int(plan.required_boards or 0),
@@ -105,6 +112,40 @@ def apply_plan_costs(plan: Any, *, edge_cost_usd: float | None = None) -> dict[s
         setattr(plan, fieldname, value)
     plan.cost_snapshot_version = COST_SNAPSHOT_VERSION
     return values
+
+
+def physical_execution_for_plan(plan: Any) -> PhysicalExecutionProjection | None:
+    """Return the plan-owned physical execution projection, if geometry exists."""
+
+    snapshot_json = str(getattr(plan, "snapshot_json", None) or "").strip()
+    if not snapshot_json:
+        return None
+    snapshot = frappe.parse_json(snapshot_json) or {}
+    if not any(sheet.get("pieces") for sheet in (snapshot.get("sheets") or [])):
+        # Pre-OFFCUT/partial snapshots have no trustworthy physical identities;
+        # retain the legacy aggregate costing bridge until a real plan is stored.
+        return None
+    return physical_execution_projection_from_snapshot(snapshot)
+
+
+def factory_execution_edge_cost(order: Any, plan: Any) -> float:
+    """Scale automatic edge services to physical pieces executed by the factory."""
+
+    projection = physical_execution_for_plan(plan)
+    if projection is None:
+        return flt(getattr(order, "edge_cost_usd", getattr(plan, "edge_cost_usd", 0)))
+    total = 0.0
+    for source_piece_no, piece in enumerate(getattr(order, "pieces", None) or [], start=1):
+        physical_qty = projection.physical_qty_by_source_piece_no.get(source_piece_no)
+        if physical_qty is None:
+            total += flt(getattr(piece, "edge_cost_usd", 0))
+            continue
+        factory_qty = projection.factory_processing_qty_by_source_piece_no.get(
+            source_piece_no,
+            0,
+        )
+        total += flt(getattr(piece, "edge_cost_usd", 0)) * factory_qty / physical_qty
+    return flt(total)
 
 
 def persist_plan_cost_snapshot(plan: Any) -> dict[str, float | int]:
@@ -244,6 +285,25 @@ def _commercial_cost_basis(order: Any, plan: Any | None) -> tuple[float, float]:
     )
 
 
+def _commercial_piece_execution(
+    order: Any,
+    plan: Any | None,
+) -> tuple[PhysicalExecutionProjection | None, dict[int, float]]:
+    projection = physical_execution_for_plan(plan) if plan is not None else None
+    ratios: dict[int, float] = {}
+    if projection is None:
+        return None, ratios
+    for source_piece_no, _piece in enumerate(order.pieces or [], start=1):
+        physical_qty = projection.physical_qty_by_source_piece_no.get(source_piece_no)
+        if physical_qty is None:
+            continue
+        ratios[source_piece_no] = (
+            projection.factory_processing_qty_by_source_piece_no.get(source_piece_no, 0)
+            / physical_qty
+        )
+    return projection, ratios
+
+
 def refresh_order_commercial_totals(order: Any, plan: Any | None = None) -> dict[str, Any]:
     """Refresh DCO-owned per-piece and aggregate commercial projections.
 
@@ -261,28 +321,39 @@ def refresh_order_commercial_totals(order: Any, plan: Any | None = None) -> dict
         manual_edge_fee_usd=flt(settings.default_special_manual_edge_fee_usd),
         margin_percent=flt(settings.default_special_margin_percent),
     )
-    board_and_cutting_cost_usd, total_cost_usd = _commercial_cost_basis(order, plan)
+    resolved_plan = plan or current_cost_plan(order)
+    board_and_cutting_cost_usd, total_cost_usd = _commercial_cost_basis(order, resolved_plan)
+    projection, ratios = _commercial_piece_execution(order, resolved_plan)
+    extra_addons_total = sum(
+        flt(getattr(piece, "extra_addons_total_usd", 0)) * ratios.get(index, 1)
+        for index, piece in enumerate(order.pieces or [], start=1)
+    )
     try:
         summary = calculate_special_pricing(
             (
                 SpecialPricingPieceInput(
                     piece_type=str(piece.piece_type or "Regular"),
-                    qty=cint(piece.qty),
-                    area_m2=flt(piece.area_m2),
-                    edge_cost_usd=flt(piece.edge_cost_usd),
+                    qty=(
+                        projection.factory_processing_qty_by_source_piece_no.get(index, 0)
+                        if projection and index in ratios
+                        else cint(piece.qty)
+                    ),
+                    area_m2=flt(piece.area_m2) * ratios.get(index, 1),
+                    edge_cost_usd=flt(piece.edge_cost_usd) * ratios.get(index, 1),
                     price_status=str(piece.special_shape_price_status or ""),
                     approved_by=str(piece.special_shape_price_approved_by or ""),
                     custom_unit_price_usd=flt(piece.special_shape_custom_unit_price_usd),
                 )
-                for piece in (order.pieces or [])
+                for index, piece in enumerate(order.pieces or [], start=1)
             ),
             settings=pricing_settings,
-            total_area_m2=flt(order.total_area_m2),
+            total_area_m2=sum(
+                flt(piece.area_m2) * ratios.get(index, 1)
+                for index, piece in enumerate(order.pieces or [], start=1)
+            ),
             board_and_cutting_cost_usd=board_and_cutting_cost_usd,
             total_cost_usd=total_cost_usd,
-            extra_addons_total_usd=flt(
-                getattr(order, "extra_addons_total_usd", 0)
-            ),
+            extra_addons_total_usd=extra_addons_total,
         )
     except CostingError as error:
         if str(error) == "special_shape_defaults_negative":
@@ -295,9 +366,7 @@ def refresh_order_commercial_totals(order: Any, plan: Any | None = None) -> dict
         "special_shapes_baseline_cost_usd": summary.baseline_cost_usd,
         "special_shapes_estimated_total_usd": summary.estimated_total_usd,
         "special_shapes_final_total_usd": summary.final_total_usd,
-        "extra_addons_total_usd": flt(
-            getattr(order, "extra_addons_total_usd", 0)
-        ),
+        "extra_addons_total_usd": extra_addons_total,
         "customer_quote_total_usd": summary.customer_quote_total_usd,
         "customer_quote_status": summary.customer_quote_status,
     }
@@ -384,9 +453,11 @@ __all__ = [
     "apply_plan_costs",
     "authoritative_cost_values",
     "current_cost_plan",
+    "factory_execution_edge_cost",
     "initial_plan_cost_values",
     "initialize_draft_plan_cost_snapshot",
     "overlay_authoritative_costs",
+    "physical_execution_for_plan",
     "persist_plan_cost_snapshot",
     "project_plan_costs_to_order",
     "refresh_order_commercial_totals",

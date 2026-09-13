@@ -7,6 +7,7 @@
         "board_rate_usd",
         "cutting_cost_per_board_usd",
     ]);
+    const OFFCUT_PRICE_FIELD = "offcut_price_usd";
     const REQUIRED_COST_LABELS = Object.freeze({
         board_rate_usd: "سعر اللوح",
         cutting_cost_per_board_usd: "أجور القص / لوح",
@@ -185,7 +186,38 @@
             store.patchDraft(patch);
         });
         markRequiredDraftControls(frm);
+        mountOffcutPriceControl(frm, state);
         return true;
+    }
+
+    function offcutPriceContainer(frm) {
+        const field = frm && frm.fields_dict && frm.fields_dict.order_cost_invoice_html;
+        return field && field.$wrapper ? field.$wrapper : null;
+    }
+
+    function mountOffcutPriceControl(frm, state) {
+        unmountOffcutPriceControl(frm);
+        if (!state || !state.draft || !state.draft.offcut_price_applicable) return false;
+        const wrapper = offcutPriceContainer(frm);
+        if (!wrapper || !wrapper.length) return false;
+        const value = state.draft[OFFCUT_PRICE_FIELD] || 0;
+        const control = $(
+            `<section class="dco-offcut-price-editor dco-cost-section">
+                <div class="dco-cost-section-title"><h4>سعر الفضلة</h4><span>سعر إجمالي واحد للمجموعة</span></div>
+                <div class="dco-cost-settings-grid"><label>سعر الفضلة ($)<input class="form-control" type="number" min="0" step="0.01" value="${frappe.utils.escape_html(String(value))}"></label></div>
+            </section>`
+        );
+        control.find("input").on("input", event => {
+            const store = storeFor(frm);
+            if (store) store.patchDraft({ [OFFCUT_PRICE_FIELD]: event.currentTarget.value });
+        });
+        wrapper.find(".dco-cost-shell").first().prepend(control);
+        return true;
+    }
+
+    function unmountOffcutPriceControl(frm) {
+        const wrapper = offcutPriceContainer(frm);
+        if (wrapper && wrapper.length) wrapper.find(".dco-offcut-price-editor").remove();
     }
 
     function unmountDraftControls(frm) {
@@ -193,6 +225,7 @@
         if (fieldEditor && typeof fieldEditor.unmount === "function") {
             fieldEditor.unmount(frm, COST_SETTING_FIELDS);
         }
+        unmountOffcutPriceControl(frm);
     }
 
     function projectCurrent(frm) {
@@ -211,16 +244,24 @@
     }
 
     function captureCostSettings(frm, draft) {
-        return Object.fromEntries(
+        const values = Object.fromEntries(
             COST_SETTING_FIELDS.map((fieldname) => [
                 fieldname,
                 draftControlValue(frm, fieldname, draft),
             ])
         );
+        if (draft && draft.offcut_price_applicable) {
+            const wrapper = offcutPriceContainer(frm);
+            const input = wrapper && wrapper.find(".dco-offcut-price-editor input").first();
+            values[OFFCUT_PRICE_FIELD] = input && input.length
+                ? input.val()
+                : draft[OFFCUT_PRICE_FIELD];
+        }
+        return values;
     }
 
     function normalizeCostSettings(values) {
-        return Object.fromEntries(
+        const normalized = Object.fromEntries(
             COST_SETTING_FIELDS.map((fieldname) => {
                 const raw = values ? values[fieldname] : null;
                 if (raw === null || raw === undefined || String(raw).trim() === "") {
@@ -229,6 +270,10 @@
                 return [fieldname, Number(raw)];
             })
         );
+        if (values && Object.prototype.hasOwnProperty.call(values, OFFCUT_PRICE_FIELD)) {
+            normalized[OFFCUT_PRICE_FIELD] = Number(values[OFFCUT_PRICE_FIELD] || 0);
+        }
+        return normalized;
     }
 
     function validateRequiredCostSettings(frm, values) {

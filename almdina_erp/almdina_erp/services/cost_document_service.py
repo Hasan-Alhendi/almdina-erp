@@ -16,6 +16,9 @@ from almdina_erp.almdina_erp.application.costing.financial_documents import (
 from almdina_erp.almdina_erp.domain.orders.piece_policy import (
     pending_custom_edge_price_labels,
 )
+from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
+    physical_execution_projection_from_snapshot,
+)
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     require_document_capability,
@@ -129,23 +132,48 @@ def _document_context(order: Any) -> tuple[dict[str, Any], list[dict[str, Any]]]
     plan = None
     if order.approved_plan:
         plan = frappe.get_doc("Cutting Plan", order.approved_plan)
+    execution_qty_by_source: dict[int, int] = {}
+    physical_qty_by_source: dict[int, int] = {}
     if plan:
         snapshot = frappe.parse_json(plan.snapshot_json or "{}") or {}
-        order_snapshot["offcut_price_usd"] = getattr(plan, "offcut_price_usd", 0)
-        order_snapshot["offcut_factory_factory"] = any(
-            str(piece.get("resource_kind") or "").upper() == "OFFCUT"
-            and str(piece.get("offcut_source_party") or "").upper() == "FACTORY"
-            and str(piece.get("offcut_execution_party") or "").upper() == "FACTORY"
-            for sheet in (snapshot.get("sheets") or [])
-            for piece in (sheet.get("pieces") or [])
+        execution = physical_execution_projection_from_snapshot(snapshot)
+        execution_qty_by_source = dict(
+            execution.factory_processing_qty_by_source_piece_no
         )
+        physical_qty_by_source = dict(execution.physical_qty_by_source_piece_no)
+        order_snapshot["offcut_price_usd"] = getattr(plan, "offcut_price_usd", 0)
+        order_snapshot["offcut_factory_factory"] = execution.has_factory_source_offcut
     return (
         order_snapshot,
-        [
-            _snapshot(piece, PIECE_DOCUMENT_FIELDS)
-            for piece in (order.pieces or [])
-        ],
+        _commercial_piece_snapshots(
+            order.pieces or [],
+            execution_qty_by_source,
+            physical_qty_by_source,
+        ),
     )
+
+
+def _commercial_piece_snapshots(
+    pieces: list[Any],
+    execution_qty_by_source: dict[int, int],
+    physical_qty_by_source: dict[int, int],
+) -> list[dict[str, Any]]:
+    """Annotate customer rows with plan-derived factory service quantities."""
+
+    snapshots: list[dict[str, Any]] = []
+    for source_piece_no, piece in enumerate(pieces, start=1):
+        row = _snapshot(piece, PIECE_DOCUMENT_FIELDS)
+        physical_qty = physical_qty_by_source.get(source_piece_no)
+        if physical_qty is None:
+            snapshots.append(row)
+            continue
+        factory_qty = execution_qty_by_source.get(source_piece_no, 0)
+        row["factory_execution_qty"] = factory_qty
+        ratio = factory_qty / physical_qty if physical_qty else 0
+        for fieldname in ("edge_meters", "edge_cost_usd"):
+            row[fieldname] = (row.get(fieldname) or 0) * ratio
+        snapshots.append(row)
+    return snapshots
 
 
 def _finalize(payload: dict[str, Any], order: Any) -> dict[str, Any]:

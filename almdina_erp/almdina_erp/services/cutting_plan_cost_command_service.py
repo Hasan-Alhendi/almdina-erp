@@ -18,9 +18,13 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspac
     PLAN_COST_FIELDS,
     apply_plan_costs,
     current_cost_plan,
+    factory_execution_edge_cost,
     initialize_draft_plan_cost_snapshot,
     persist_plan_cost_snapshot,
     refresh_order_commercial_totals,
+)
+from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
+    physical_execution_projection_from_snapshot,
 )
 
 
@@ -29,23 +33,26 @@ def _assert_cost_inputs_persisted(
     *,
     board_rate_usd: float,
     cutting_cost_per_board_usd: float,
+    offcut_price_usd: float | None = None,
 ) -> None:
     """Fail closed if Frappe discarded protected financial field mutations."""
 
     persisted = frappe.db.get_value(
         "Cutting Plan",
         plan.name,
-        ["board_rate_usd", "cutting_cost_per_board_usd"],
+        ["board_rate_usd", "cutting_cost_per_board_usd", "offcut_price_usd"],
         as_dict=True,
     ) or {}
     actual_board_rate = flt(persisted.get("board_rate_usd"))
     actual_cutting_rate = flt(persisted.get("cutting_cost_per_board_usd"))
     expected_board_rate = flt(board_rate_usd)
     expected_cutting_rate = flt(cutting_cost_per_board_usd)
+    expected_offcut_price = flt(offcut_price_usd)
 
     if (
         actual_board_rate != expected_board_rate
         or actual_cutting_rate != expected_cutting_rate
+        or flt(persisted.get("offcut_price_usd")) != expected_offcut_price
     ):
         frappe.throw(
             _(
@@ -61,6 +68,7 @@ def update_plan_cost_settings(
     *,
     board_rate_usd: float,
     cutting_cost_per_board_usd: float,
+    offcut_price_usd: float | None = None,
 ) -> dict[str, Any]:
     """Update only plan-owned cost inputs and their derived financial result.
 
@@ -84,6 +92,24 @@ def update_plan_cost_settings(
     initialize_draft_plan_cost_snapshot(order, plan)
     plan.board_rate_usd = flt(board_rate_usd)
     plan.cutting_cost_per_board_usd = flt(cutting_cost_per_board_usd)
+    requested_offcut_price = flt(offcut_price_usd)
+    if requested_offcut_price < 0:
+        frappe.throw(_("سعر الفضلة لا يمكن أن يكون سالبًا."), frappe.ValidationError)
+    snapshot = frappe.parse_json(getattr(plan, "snapshot_json", None) or "{}") or {}
+    projection = physical_execution_projection_from_snapshot(snapshot)
+    if requested_offcut_price and not projection.has_factory_source_offcut:
+        frappe.throw(
+            _("سعر الفضلة يُستخدم فقط عندما يكون المصدر والتنفيذ من المعمل."),
+            frappe.ValidationError,
+        )
+    # Reclassification removes the only eligible state => price must not survive
+    # as a stale commercial charge.  An omitted value keeps the applicable price.
+    plan.offcut_price_usd = (
+        requested_offcut_price
+        if offcut_price_usd is not None and projection.has_factory_source_offcut
+        else (flt(plan.offcut_price_usd) if projection.has_factory_source_offcut else 0)
+    )
+    plan.edge_cost_usd = factory_execution_edge_cost(order, plan)
     apply_plan_costs(plan)
     status = str(getattr(plan, "status", None) or "")
     if status == DRAFT:
@@ -100,6 +126,7 @@ def update_plan_cost_settings(
         plan,
         board_rate_usd=board_rate_usd,
         cutting_cost_per_board_usd=cutting_cost_per_board_usd,
+        offcut_price_usd=plan.offcut_price_usd,
     )
     refresh_order_commercial_totals(order, plan)
 

@@ -24,6 +24,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_command_reposito
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspace import (
     apply_plan_costs,
+    factory_execution_edge_cost,
     initialize_draft_plan_cost_snapshot,
     refresh_order_commercial_totals,
 )
@@ -204,7 +205,7 @@ def preview_cutting_plan(
     if include_cost:
         apply_plan_costs(
             preview_plan,
-            edge_cost_usd=flt(getattr(order, "edge_cost_usd", 0)),
+            edge_cost_usd=factory_execution_edge_cost(order, preview_plan),
         )
 
     snapshot = sanitize_plan_snapshot(
@@ -295,7 +296,7 @@ def commit_cutting_plan_preview(order_name: str, preview_id: str) -> dict[str, A
         snapshot=session.snapshot,
         expected_input_fingerprint=session.input_fingerprint,
     )
-    apply_plan_costs(plan, edge_cost_usd=flt(getattr(order, "edge_cost_usd", 0)))
+    apply_plan_costs(plan, edge_cost_usd=factory_execution_edge_cost(order, plan))
     repository.save_document(plan)
     refresh_order_commercial_totals(order, plan)
     order.add_comment(

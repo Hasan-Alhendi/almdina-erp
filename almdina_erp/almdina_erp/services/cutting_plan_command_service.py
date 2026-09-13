@@ -39,6 +39,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_command_reposito
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspace import (
     COST_SNAPSHOT_VERSION,
     apply_plan_costs,
+    factory_execution_edge_cost,
     initialize_draft_plan_cost_snapshot,
     refresh_order_commercial_totals,
 )
@@ -370,7 +371,7 @@ def save_uploaded_dxf_plan(
     ]
     preserve_offcut_classification(snapshot, previous_classification)
     apply_validated_dxf_snapshot(order, plan, snapshot)
-    apply_plan_costs(plan, edge_cost_usd=flt(getattr(order, "edge_cost_usd", 0)))
+    apply_plan_costs(plan, edge_cost_usd=factory_execution_edge_cost(order, plan))
     plan.dxf_file = str(file_url or "").strip()
     plan.dxf_status = "Validated"
     plan.dxf_uploaded_by = frappe.session.user
@@ -495,7 +496,7 @@ def recalculate_system_plan(
     # domain exception or silently converting the stored algorithm.
     require_executable_optimization_mode(plan.optimization_mode)
     calculate_system_plan(order, plan)
-    apply_plan_costs(plan, edge_cost_usd=flt(getattr(order, "edge_cost_usd", 0)))
+    apply_plan_costs(plan, edge_cost_usd=factory_execution_edge_cost(order, plan))
     repository.save_document(plan)
     refresh_order_commercial_totals(order, plan)
     result = plan_payload(plan, order)

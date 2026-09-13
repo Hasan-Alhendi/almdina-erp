@@ -13,6 +13,7 @@ from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
     decision_from_business_state,
     decision_from_values,
     offcut_assignment_projection,
+    physical_execution_projection_from_snapshot,
     validate_source_resource_homogeneity,
 )
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import APPROVED, DRAFT
@@ -22,6 +23,12 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization im
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
     latest_plan,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspace import (
+    apply_plan_costs,
+    factory_execution_edge_cost,
+    persist_plan_cost_snapshot,
+    refresh_order_commercial_totals,
 )
 
 
@@ -199,7 +206,7 @@ def _source_business_projection(snapshot: dict[str, Any]) -> dict[str, dict[str,
 def set_offcut_execution_owner(plan_name: str, assignments: Any) -> dict[str, Any]:
     """Classify OFFCUT physical pieces without changing geometry or approval."""
 
-    plan, _order = _current_classifiable_plan(
+    plan, order = _current_classifiable_plan(
         plan_name,
         Capability.SET_OFFCUT_EXECUTION_OWNER,
     )
@@ -219,6 +226,7 @@ def set_offcut_execution_owner(plan_name: str, assignments: Any) -> dict[str, An
     for identity, values in normalized.items():
         snapshot_pieces[identity].update(values)
     source_projection = _source_business_projection(snapshot)
+    execution = physical_execution_projection_from_snapshot(snapshot)
 
     for identity, values in normalized.items():
         frappe.db.set_value(
@@ -243,6 +251,26 @@ def set_offcut_execution_owner(plan_name: str, assignments: Any) -> dict[str, An
         frappe.as_json(snapshot),
         update_modified=True,
     )
+    plan.snapshot_json = frappe.as_json(snapshot)
+    # Classification is intentionally independent from approval and geometry,
+    # but it is commercial input. Reconcile the dependent projection in the same
+    # request and clear an aggregate price that is no longer legally applicable.
+    if not execution.has_factory_source_offcut and flt(getattr(plan, "offcut_price_usd", 0)):
+        frappe.db.set_value(
+            "Cutting Plan",
+            plan.name,
+            "offcut_price_usd",
+            0,
+            update_modified=False,
+        )
+        plan.offcut_price_usd = 0
+    if all(
+        hasattr(plan, fieldname)
+        for fieldname in ("board_rate_usd", "cutting_cost_per_board_usd", "edge_cost_usd")
+    ):
+        apply_plan_costs(plan, edge_cost_usd=factory_execution_edge_cost(order, plan))
+        persist_plan_cost_snapshot(plan)
+    refresh_order_commercial_totals(order, plan)
 
     return {
         "cutting_plan": plan.name,
@@ -250,6 +278,8 @@ def set_offcut_execution_owner(plan_name: str, assignments: Any) -> dict[str, An
         "approved_by": getattr(plan, "approved_by", None),
         "approved_on": getattr(plan, "approved_on", None),
         "approval_preserved": True,
+        "factory_executable_quantity": execution.factory_executable_quantity,
+        "offcut_price_applicable": execution.has_factory_source_offcut,
         "assignments": [
             offcut_assignment_projection(snapshot_pieces[identity])
             for identity in normalized
@@ -257,35 +287,4 @@ def set_offcut_execution_owner(plan_name: str, assignments: Any) -> dict[str, An
     }
 
 
-@frappe.whitelist()
-def set_offcut_group_price(plan_name: str, offcut_price_usd: float | None = None) -> dict[str, Any]:
-    """ALMADINA-178 boundary kept separate from OFFCUT classification."""
-
-    plan, _order = _current_classifiable_plan(plan_name, Capability.EDIT_COST_SETTINGS)
-    price = flt(offcut_price_usd)
-    if price < 0:
-        frappe.throw(_("سعر الفضلة لا يمكن أن يكون سالبًا."), frappe.ValidationError)
-    has_factory_offcut = any(
-        decision_from_values(
-            getattr(piece, "resource_kind", None),
-            getattr(piece, "offcut_source_party", None),
-            getattr(piece, "offcut_execution_party", None),
-        ).source_party.value == "FACTORY"
-        for piece in (plan.placed_pieces or [])
-    )
-    if price and not has_factory_offcut:
-        frappe.throw(
-            _("سعر الفضلة يُستخدم فقط عندما يكون المصدر والتنفيذ من المعمل."),
-            frappe.ValidationError,
-        )
-    frappe.db.set_value(
-        "Cutting Plan",
-        plan.name,
-        "offcut_price_usd",
-        price,
-        update_modified=True,
-    )
-    return {"cutting_plan": plan.name, "offcut_price_usd": price}
-
-
-__all__ = ["set_offcut_execution_owner", "set_offcut_group_price"]
+__all__ = ["set_offcut_execution_owner"]
