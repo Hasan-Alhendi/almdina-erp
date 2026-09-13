@@ -104,6 +104,14 @@ PIECE_DOCUMENT_FIELDS = (
     "extra_recessed_handle_cutout_total_usd",
     "extra_addons_total_usd",
 )
+_FACTORY_SCALED_TOTAL_FIELDS = (
+    "extra_double_total_usd",
+    "extra_full_door_double_total_usd",
+    "extra_liner_total_usd",
+    "extra_back_groove_total_usd",
+    "extra_recessed_handle_cutout_total_usd",
+    "extra_addons_total_usd",
+)
 
 
 def _snapshot(source: Any, fields: tuple[str, ...]) -> dict[str, Any]:
@@ -170,7 +178,7 @@ def _commercial_piece_snapshots(
         factory_qty = execution_qty_by_source.get(source_piece_no, 0)
         row["factory_execution_qty"] = factory_qty
         ratio = factory_qty / physical_qty if physical_qty else 0
-        for fieldname in ("edge_meters", "edge_cost_usd"):
+        for fieldname in ("edge_meters", "edge_cost_usd", *_FACTORY_SCALED_TOTAL_FIELDS):
             row[fieldname] = (row.get(fieldname) or 0) * ratio
         snapshots.append(row)
     return snapshots
@@ -188,8 +196,8 @@ def _finalize(payload: dict[str, Any], order: Any) -> dict[str, Any]:
     }
 
 
-def _require_custom_edge_prices(order: Any) -> None:
-    pending = pending_custom_edge_price_labels(order.pieces or [])
+def _require_custom_edge_prices(pieces: list[dict[str, Any]]) -> None:
+    pending = pending_custom_edge_price_labels(pieces)
     if pending:
         frappe.throw(
             _(
@@ -217,8 +225,11 @@ def get_customer_invoice_document(order_name: str) -> dict[str, Any]:
         Capability.PRINT_CUSTOMER_INVOICE,
         requires_cost_access=False,
     )
-    _require_custom_edge_prices(order)
     order_snapshot, pieces = _document_context(order)
+    # Pricing readiness follows the same physical execution projection used by
+    # the invoice builder. Customer-executed OFFCUT copies are real requirements
+    # but they must never block a factory-service invoice price.
+    _require_custom_edge_prices(pieces)
     return _finalize(
         _summarize_customer_invoice(
             build_customer_invoice_document(order_snapshot, pieces)
