@@ -127,7 +127,7 @@ assert.ok(owner);
 
     offcutPriceApplicable = true;
     factoryExecutionQty = 1;
-    serverModified = "server-offcut";
+    serverModified = "server-offcut-factory";
     await planDependency({
         detail: {
             orderName: frm.doc.name,
@@ -148,6 +148,23 @@ assert.ok(owner);
     assert.equal(frm.doc.modified, "client-opened",
         "dependency refresh remains read-only for DCO optimistic concurrency");
 
+    offcutPriceApplicable = false;
+    serverModified = "server-offcut-customer";
+    await planDependency({
+        detail: {
+            orderName: frm.doc.name,
+            snapshot: {
+                staleReason: "offcut_classification_changed",
+                freshness: "stale",
+                status: "ready",
+            },
+        },
+    });
+    assert.equal(apiCalls, 3,
+        "each committed OFFCUT classification must reconcile Cost exactly once");
+    assert.equal(owner.settings(frm).offcut_price_applicable, false,
+        "customer-source classification must hide offcut pricing from the fresh Cost state");
+
     await planDependency({
         detail: {
             orderName: frm.doc.name,
@@ -158,14 +175,14 @@ assert.ok(owner);
             },
         },
     });
-    assert.equal(apiCalls, 2,
+    assert.equal(apiCalls, 3,
         "Plan loading emissions must not duplicate the OFFCUT Cost reload");
 
     owner.invalidate(frm, "order_inputs_changed");
     assert.equal(owner.snapshot(frm).freshness, "stale");
     serverModified = "server-2";
     await owner.load(frm);
-    assert.equal(apiCalls, 3,
+    assert.equal(apiCalls, 4,
         "ordinary load must bypass its ready cache when the workspace is stale");
     assert.equal(frm.doc.modified, "client-opened",
         "refreshing stale Cost data must still preserve the version the form opened");
