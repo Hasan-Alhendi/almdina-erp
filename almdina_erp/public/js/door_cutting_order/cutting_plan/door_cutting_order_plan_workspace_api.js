@@ -19,7 +19,6 @@
         "almdina_erp.almdina_erp.services.drawing_approval_service.cancel_production_plan_approval";
     const SAVE_OFFCUT_ASSIGNMENTS_METHOD =
         "almdina_erp.almdina_erp.services.offcut_service.set_offcut_execution_owner";
-    const OFFCUT_REASON = "offcut_classification_changed";
 
     async function call(method, args, options = {}) {
         const response = await frappe.call({
@@ -130,38 +129,8 @@
         );
     }
 
-    function offcutEffects(result) {
-        const dependencies = result && result.dependencies;
-        const changed = dependencies && Array.isArray(dependencies.changed)
-            ? dependencies.changed.filter(name => name === "plan" || name === "cost")
-            : [];
-        return {
-            changed: changed.length ? changed : ["plan", "cost"],
-            reason: String(dependencies && dependencies.reason || OFFCUT_REASON),
-        };
-    }
-
-    async function reconcileOffcutMutation(result) {
-        const frm = window.cur_frm;
-        const coordinator = window.AlmdinaWorkspaceSyncCoordinator;
-        if (
-            !frm
-            || frm.doctype !== "Door Cutting Order"
-            || !coordinator
-            || typeof coordinator.reconcile !== "function"
-        ) {
-            return false;
-        }
-        await coordinator.reconcile(
-            frm,
-            offcutEffects(result),
-            { activeOnly: false }
-        );
-        return true;
-    }
-
-    async function saveOffcutAssignments(planName, assignments) {
-        const result = await call(
+    function saveOffcutAssignments(planName, assignments) {
+        return call(
             SAVE_OFFCUT_ASSIGNMENTS_METHOD,
             {
                 plan_name: planName,
@@ -172,8 +141,6 @@
                 freezeMessage: __("جارٍ حفظ تصنيف قطع النقص..."),
             }
         );
-        await reconcileOffcutMutation(result);
-        return result;
     }
 
     window.AlmdinaPlanWorkspaceAPI = Object.freeze({
@@ -194,6 +161,5 @@
         approve,
         cancelApproval,
         saveOffcutAssignments,
-        reconcileOffcutMutation,
     });
 })();
