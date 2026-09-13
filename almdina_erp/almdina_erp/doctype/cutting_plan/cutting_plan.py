@@ -23,6 +23,9 @@ from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
     decision_from_values,
     validate_source_resource_homogeneity,
 )
+from almdina_erp.almdina_erp.domain.cutting.physical_execution_contract import (
+    is_legacy_physical_execution_snapshot,
+)
 
 
 # Float fields are stored as decimal(21,9); engine scores must stay inside it.
@@ -129,6 +132,15 @@ class CuttingPlan(Document):
 
     def _validate_offcut_contract(self) -> None:
         """Validate OFFCUT classification server-side for every save path."""
+        try:
+            snapshot = frappe.parse_json(self.snapshot_json or "{}") or {}
+        except Exception:
+            snapshot = {}
+        # Historical immutable snapshots without any stable physical identities
+        # are display/cost compatible only. They never enter the modern OFFCUT
+        # contract, and no data is synthesized or persisted on their behalf.
+        if is_legacy_physical_execution_snapshot(snapshot):
+            return
         identities: set[str] = set()
         full_board_sources = 0
         pieces_by_source: dict[str, list[dict[str, object]]] = {}
