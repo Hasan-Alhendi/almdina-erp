@@ -7,7 +7,16 @@ import frappe
 from frappe import _
 from frappe.utils import flt, now_datetime
 
-from almdina_erp.almdina_erp.domain.orders.piece_policy import is_corner_cut
+from almdina_erp.almdina_erp.application.costing.customer_invoice_addon_summary import (
+    summarize_extra_addon_lines,
+)
+from almdina_erp.almdina_erp.application.costing.financial_documents import (
+    build_customer_invoice_document,
+)
+from almdina_erp.almdina_erp.domain.orders.piece_policy import (
+    is_corner_cut,
+    pending_custom_edge_price_labels,
+)
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     require_document_capability,
@@ -26,6 +35,8 @@ from almdina_erp.almdina_erp.services.order_edit_policy import assert_order_edit
 
 
 ORDER_COST_FIELDS = (
+    "board_description",
+    "total_edge_meters",
     "board_rate_usd",
     "cutting_cost_per_board_usd",
     "mdf_cost_usd",
@@ -43,6 +54,12 @@ ORDER_COST_FIELDS = (
     "actual_cost_usd",
 )
 PIECE_COST_FIELDS = (
+    "piece_no",
+    "piece_type",
+    "qty",
+    "edge_type",
+    "edge_meters",
+    "notes",
     "edge_long_rate_usd",
     "edge_width_rate_usd",
     "edge_long_cost_usd",
@@ -61,15 +78,28 @@ PIECE_COST_FIELDS = (
     "clipped_corner_edge_price_note",
     "clipped_corner_edge_price_set_by",
     "clipped_corner_edge_price_set_on",
+    "extra_double",
     "extra_double_unit_price_usd",
     "extra_double_total_usd",
+    "extra_full_door_double",
     "extra_full_door_double_unit_price_usd",
     "extra_full_door_double_total_usd",
+    "extra_liner",
     "extra_liner_unit_price_usd",
     "extra_liner_total_usd",
+    "extra_back_groove",
     "extra_back_groove_unit_price_usd",
     "extra_back_groove_total_usd",
+    "extra_recessed_handle_cutout",
     "extra_recessed_handle_cutout_unit_price_usd",
+    "extra_recessed_handle_cutout_total_usd",
+    "extra_addons_total_usd",
+)
+_FACTORY_SCALED_TOTAL_FIELDS = (
+    "extra_double_total_usd",
+    "extra_full_door_double_total_usd",
+    "extra_liner_total_usd",
+    "extra_back_groove_total_usd",
     "extra_recessed_handle_cutout_total_usd",
     "extra_addons_total_usd",
 )
@@ -164,6 +194,57 @@ def _document_version(order: Any) -> str:
     return str(getattr(order, "modified", None) or "")
 
 
+def _commercial_piece_projection(
+    order: Any,
+    projection: Any | None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Build UI metadata plus an invoice-only factory-service projection.
+
+    The Cost workspace keeps the customer's original requirement quantity intact.
+    ``factory_execution_qty`` and ``factory_execution_ratio`` are read-only
+    projection metadata. A separate copy scales service totals for the invoice
+    preview so the browser never needs to reinterpret OFFCUT business states.
+    """
+
+    ui_rows: list[dict[str, Any]] = []
+    invoice_rows: list[dict[str, Any]] = []
+    for source_piece_no, piece in enumerate(order.pieces or [], start=1):
+        ui_row = _piece_snapshot(piece)
+        invoice_row = dict(ui_row)
+        if projection is not None:
+            physical_qty = projection.physical_qty_by_source_piece_no.get(source_piece_no)
+            if physical_qty is not None:
+                factory_qty = projection.factory_processing_qty_by_source_piece_no.get(
+                    source_piece_no,
+                    0,
+                )
+                ratio = factory_qty / physical_qty if physical_qty else 0
+                ui_row["factory_execution_qty"] = factory_qty
+                ui_row["factory_execution_ratio"] = ratio
+                invoice_row["factory_execution_qty"] = factory_qty
+                invoice_row["factory_execution_ratio"] = ratio
+                for fieldname in (
+                    "edge_meters",
+                    "edge_cost_usd",
+                    *_FACTORY_SCALED_TOTAL_FIELDS,
+                ):
+                    invoice_row[fieldname] = flt(invoice_row.get(fieldname)) * ratio
+        ui_rows.append(ui_row)
+        invoice_rows.append(invoice_row)
+    return ui_rows, invoice_rows
+
+
+def _invoice_preview(
+    order_snapshot: dict[str, Any],
+    invoice_rows: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], float, tuple[str, ...]]:
+    document = build_customer_invoice_document(order_snapshot, invoice_rows)
+    lines = summarize_extra_addon_lines(document.get("lines") or [])
+    total = round(sum(float(line.get("amount_usd") or 0) for line in lines), 2)
+    pending = pending_custom_edge_price_labels(invoice_rows)
+    return lines, total, pending
+
+
 def _cost_snapshot(order: Any, *, plan: Any | None = None) -> dict[str, Any]:
     order_snapshot = {
         fieldname: getattr(order, fieldname, None)
@@ -181,15 +262,23 @@ def _cost_snapshot(order: Any, *, plan: Any | None = None) -> dict[str, Any]:
         resolved_order.update(authoritative_cost_values(order, plan=plan))
         resolved_order["required_boards"] = int(getattr(plan, "required_boards", 0) or 0)
     projection = physical_execution_for_plan(resolved_plan) if resolved_plan else None
-    resolved_order["offcut_price_applicable"] = bool(
-        projection and projection.has_factory_source_offcut
+    offcut_applicable = bool(projection and projection.has_factory_source_offcut)
+    resolved_order["offcut_price_applicable"] = offcut_applicable
+    resolved_order["offcut_factory_factory"] = offcut_applicable
+    pieces, invoice_rows = _commercial_piece_projection(order, projection)
+    invoice_lines, invoice_total, pending_labels = _invoice_preview(
+        resolved_order,
+        invoice_rows,
     )
     return {
         "order_name": order.name,
         "order_modified": _document_version(order),
-        "cutting_plan": str(getattr(plan, "name", None) or "") or None,
+        "cutting_plan": str(getattr(resolved_plan, "name", None) or "") or None,
         "order": resolved_order,
-        "pieces": [_piece_snapshot(piece) for piece in (order.pieces or [])],
+        "pieces": pieces,
+        "invoice_preview_lines": invoice_lines,
+        "invoice_preview_total_usd": invoice_total,
+        "pending_factory_price_labels": list(pending_labels),
     }
 
 

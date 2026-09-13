@@ -78,6 +78,7 @@ jobs:
           node --check almdina_erp/tests/js/dco_cost_assets_tab_guard.test.js
           node --check almdina_erp/tests/js/dco_tab_edit_lifecycle_guard.test.js
           node --check almdina_erp/tests/js/cost_edit_session_lifecycle.test.js
+          node --check almdina_erp/tests/js/offcut_cost_preview_projection.test.js
           node --check almdina_erp/tests/js/plan_cost_workspace_visual.test.js
           node --check almdina_erp/tests/js/order_lifecycle_jquery_thenable.test.js
           node --check almdina_erp/tests/js/dco_workspace_mutation_impact.test.js
@@ -152,6 +153,9 @@ jobs:
 
       - name: Validate Cost edit-session lifecycle invariants
         run: node almdina_erp/tests/js/cost_edit_session_lifecycle.test.js
+
+      - name: Validate ALMADINA-178 Cost preview projection
+        run: node almdina_erp/tests/js/offcut_cost_preview_projection.test.js
 
       - name: Validate stable Plan and Cost loading surfaces
         run: node almdina_erp/tests/js/plan_cost_workspace_visual.test.js
