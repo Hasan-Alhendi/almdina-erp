@@ -80,12 +80,41 @@
         frm[LEGACY_HANDLER_KEY] = null;
     }
 
+    function tabLinkControl(tab) {
+        const container = tab && tab.tab_link;
+        if (!container || typeof container.find !== "function") return null;
+        const control = container.find(".nav-link[data-fieldname]");
+        return control && control.length ? control : null;
+    }
+
+    function suspendBootstrapAutoActivation(tab) {
+        const control = tabLinkControl(tab);
+        if (!control || typeof control.attr !== "function" || typeof control.removeAttr !== "function") {
+            return Object.freeze({ control: null, hadDataToggle: false, dataToggleValue: null });
+        }
+
+        const value = control.attr("data-toggle");
+        const hadDataToggle = value !== undefined && value !== null;
+        if (hadDataToggle) control.removeAttr("data-toggle");
+        return Object.freeze({ control, hadDataToggle, dataToggleValue: value });
+    }
+
+    function restoreBootstrapAutoActivation(binding) {
+        const control = binding && binding.bootstrapControl;
+        if (!control || typeof control.attr !== "function") return;
+        if (binding.hadDataToggle) {
+            control.attr("data-toggle", binding.dataToggleValue);
+        }
+    }
+
     function restoreState(frm, state) {
         if (!state || !Array.isArray(state.bindings)) return;
-        state.bindings.forEach(({ tab, originalSetActive, guardedSetActive }) => {
+        state.bindings.forEach((binding) => {
+            const { tab, originalSetActive, guardedSetActive } = binding;
             if (tab && tab.set_active === guardedSetActive) {
                 tab.set_active = originalSetActive;
             }
+            restoreBootstrapAutoActivation(binding);
         });
         if (frm && frm[STATE_KEY] === state) frm[STATE_KEY] = null;
     }
@@ -102,10 +131,11 @@
     function install(frm) {
         if (!isOrderForm(frm)) return false;
 
-        // The old page coordinator had a capture-phase click guard. Keep its
-        // aggregation/presentation duties, but retire that DOM interception after
-        // every form refresh so the semantic Frappe Tab boundary below is the
-        // single runtime authority for edit-session navigation.
+        // Retire the historical DOM interceptor. Frappe's own click listener calls
+        // Tab.set_active(), which is the semantic boundary guarded below. The tab
+        // markup also carries Bootstrap's data-toggle="tab" hook; remove that
+        // competing automatic activation path so every switch goes through the
+        // guarded Frappe method instead of depending on click propagation order.
         retireLegacyClickGuard(frm);
 
         const tabs = topLevelTabs(frm);
@@ -120,6 +150,7 @@
             .map((tab) => {
                 const targetFieldname = tabFieldname(tab);
                 const originalSetActive = tab.set_active;
+                const bootstrap = suspendBootstrapAutoActivation(tab);
                 const guardedSetActive = function almdinaGuardedTabSetActive(...args) {
                     if (shouldBlock(frm, targetFieldname)) {
                         showOpenEditMessage();
@@ -134,7 +165,14 @@
                     return result;
                 };
                 tab.set_active = guardedSetActive;
-                return Object.freeze({ tab, originalSetActive, guardedSetActive });
+                return Object.freeze({
+                    tab,
+                    originalSetActive,
+                    guardedSetActive,
+                    bootstrapControl: bootstrap.control,
+                    hadDataToggle: bootstrap.hadDataToggle,
+                    dataToggleValue: bootstrap.dataToggleValue,
+                });
             });
 
         if (!bindings.length) return false;
@@ -163,6 +201,7 @@
         install,
         retireLegacyClickGuard,
         shouldBlock,
+        suspendBootstrapAutoActivation,
         topLevelTabs,
     });
 })();
