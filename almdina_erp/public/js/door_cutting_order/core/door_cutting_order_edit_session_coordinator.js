@@ -89,15 +89,29 @@
         return KINDS.has(String(kind || ""));
     }
 
+    function freezeAdapter(adapter) {
+        return Object.freeze({ ...adapter });
+    }
+
     function register(kind, adapter) {
         const normalized = String(kind || "");
         if (!validKind(normalized) || !adapter) return false;
-        adapters.set(normalized, Object.freeze({ ...adapter }));
+        adapters.set(normalized, freezeAdapter(adapter));
         return true;
     }
 
     function adapterFor(kind) {
         return adapters.get(String(kind || "")) || null;
+    }
+
+    function decorate(kind, decorator) {
+        const normalized = String(kind || "");
+        const current = adapterFor(normalized);
+        if (!validKind(normalized) || !current || typeof decorator !== "function") return false;
+        const decorated = decorator(current);
+        if (!decorated || typeof decorated !== "object") return false;
+        adapters.set(normalized, freezeAdapter(decorated));
+        return true;
     }
 
     function canStart(frm, kind) {
@@ -147,7 +161,10 @@
                     : { phase: "editing" });
                 return false;
             }
-            transitionCurrent(frm, state, token, { activeKind: command === "start" ? kind : null, phase: command === "start" ? "editing" : "idle" });
+            transitionCurrent(frm, state, token, {
+                activeKind: command === "start" ? kind : null,
+                phase: command === "start" ? "editing" : "idle",
+            });
             return true;
         } catch (error) {
             if (states.get(frm) === state && sameToken(state.token, token) && isCurrent(frm, token)) {
@@ -211,6 +228,7 @@
 
     window.AlmdinaDcoEditSessionCoordinator = Object.freeze({
         register,
+        decorate,
         snapshot,
         canStart,
         start,
