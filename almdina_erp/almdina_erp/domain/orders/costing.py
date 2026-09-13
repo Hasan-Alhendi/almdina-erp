@@ -285,8 +285,15 @@ def calculate_special_pricing(
     if extra_addons_total < 0:
         raise CostingError("extra_addons_total_negative")
 
+    # ALMADINA-178: a Special requirement can contain physical copies that are
+    # explicitly executed by the customer.  The caller projects those copies as
+    # qty=0.  They remain part of the customer requirement, but they are not a
+    # factory pricing/service line and therefore must not be promoted back to one
+    # unit by a legacy minimum-quantity fallback.
     special_indexes = [
-        index for index, piece in enumerate(piece_list) if (piece.piece_type or "Regular") == "Special"
+        index
+        for index, piece in enumerate(piece_list)
+        if (piece.piece_type or "Regular") == "Special" and int(piece.qty or 0) > 0
     ]
     if not special_indexes:
         return SpecialPricingSummary(
@@ -320,7 +327,9 @@ def calculate_special_pricing(
     regular_edge_total = 0.0
 
     for piece in piece_list:
-        if (piece.piece_type or "Regular") != "Special":
+        piece_type = piece.piece_type or "Regular"
+        projected_qty = max(0, int(piece.qty or 0))
+        if piece_type != "Special":
             regular_edge_total += _finite(piece.edge_cost_usd)
             results.append(
                 SpecialPricingPieceResult(
@@ -332,8 +341,19 @@ def calculate_special_pricing(
                 )
             )
             continue
+        if projected_qty == 0:
+            results.append(
+                SpecialPricingPieceResult(
+                    applicable=False,
+                    estimated_unit_price_usd=0,
+                    final_unit_price_usd=0,
+                    price_status="Not Applicable",
+                    preserve_approval=False,
+                )
+            )
+            continue
 
-        qty = max(1, int(piece.qty))
+        qty = projected_qty
         edge_total = _finite(piece.edge_cost_usd)
         area_share = (_finite(piece.area_m2) / total_area) if total_area else 0
         allocated_total = (board_and_cutting_cost * area_share) + edge_total
