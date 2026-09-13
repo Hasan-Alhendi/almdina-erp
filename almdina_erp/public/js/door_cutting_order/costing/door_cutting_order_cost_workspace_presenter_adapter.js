@@ -154,11 +154,19 @@
         return raw.replace(/["\\]/g, "\\$&");
     }
 
+    function costRoot(frm) {
+        const field = frm && frm.fields_dict && frm.fields_dict.order_cost_invoice_html;
+        const wrapper = field && field.$wrapper;
+        if (!wrapper) return null;
+        if (typeof wrapper.get === "function") return wrapper.get(0) || null;
+        if (wrapper[0]) return wrapper[0];
+        return typeof wrapper.querySelector === "function" ? wrapper : null;
+    }
+
     function reconcileNonFactoryPricingCards(frm) {
         const payload = data(frm);
-        const field = frm && frm.fields_dict && frm.fields_dict.order_cost_invoice_html;
-        const root = field && field.$wrapper && field.$wrapper.get(0);
-        if (!payload || !root) return;
+        const root = costRoot(frm);
+        if (!payload || !root || typeof root.querySelectorAll !== "function") return;
         (payload.pieces || []).forEach((piece) => {
             if (!piece || piece.factory_execution_qty === undefined || !piece.name) return;
             const hidden = number(piece.factory_execution_qty) <= 0;
@@ -174,9 +182,10 @@
     function reconcileInvoiceTotalCard(frm) {
         const total = previewTotal(frm);
         if (total === null) return;
-        const field = frm && frm.fields_dict && frm.fields_dict.order_cost_invoice_html;
-        const root = field && field.$wrapper && field.$wrapper.get(0);
-        const card = root && root.querySelector(".dco-invoice-total-card");
+        const root = costRoot(frm);
+        const card = root && typeof root.querySelector === "function"
+            ? root.querySelector(".dco-invoice-total-card")
+            : null;
         if (!card) return;
 
         const pending = pendingFactoryPriceLabels(frm);
