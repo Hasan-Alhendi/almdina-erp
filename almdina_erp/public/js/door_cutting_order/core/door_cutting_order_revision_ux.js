@@ -331,6 +331,16 @@
         delete sessionStore()[name];
     }
 
+    function adoptHydratedOrderEditSession(frm) {
+        if (!isEditSessionActive(frm)) return false;
+        const coordinator = window.AlmdinaDcoEditSessionCoordinator;
+        if (!coordinator || typeof coordinator.snapshot !== "function" || typeof coordinator.adoptLegacyEditing !== "function") {
+            return false;
+        }
+        return coordinator.snapshot(frm).phase === "idle"
+            && coordinator.adoptLegacyEditing(frm, "order");
+    }
+
     function abandonEditSessionsNotOnRoute() {
         const currentName = currentOrderRouteName();
         const frm = window.cur_frm;
@@ -501,7 +511,12 @@
         }
 
         if (orderCanEdit(frm)) {
-            setPrimaryActionMode(frm, "save", SAVE_LABEL, () => commitEditSession(frm), false);
+            setPrimaryActionMode(frm, "save", SAVE_LABEL, () => {
+                const coordinator = window.AlmdinaDcoEditSessionCoordinator;
+                return coordinator && typeof coordinator.save === "function"
+                    ? coordinator.save(frm, "order")
+                    : commitEditSession(frm);
+            }, false);
             return;
         }
 
@@ -527,7 +542,12 @@
             return;
         }
         if (canOfferEditSession(frm)) {
-            enterEditSession(frm);
+            const coordinator = window.AlmdinaDcoEditSessionCoordinator;
+            if (coordinator && typeof coordinator.start === "function") {
+                coordinator.start(frm, "order");
+            } else {
+                enterEditSession(frm);
+            }
             return;
         }
         frappe.msgprint(__(
@@ -793,6 +813,7 @@
     frappe.ui.form.on("Door Cutting Order", {
         onload(frm) {
             hydrateEditSession(frm);
+            adoptHydratedOrderEditSession(frm);
         },
         after_save(frm) {
             const preserveSession = Boolean(frm.__almdina_preserve_edit_session_after_save);
@@ -819,6 +840,7 @@
             const leftEdit = Boolean(frm.__almdina_edit_session_abandoned);
             const wasEditable = isEditSessionActive(frm);
             hydrateEditSession(frm);
+            adoptHydratedOrderEditSession(frm);
             const editable = isEditSessionActive(frm);
 
             applyEditableFields(frm);
@@ -867,12 +889,49 @@
         const frm = window.cur_frm;
         if (!frm || frm.doctype !== "Door Cutting Order") return;
         if (!canOfferEditSession(frm)) {
+            const coordinator = window.AlmdinaDcoEditSessionCoordinator;
+            if (coordinator && typeof coordinator.activeKind === "function" && coordinator.activeKind(frm) === "order") {
+                coordinator.cancel(frm, "order");
+                return;
+            }
             setEditSession(frm, false);
         }
         applyEditableFields(frm);
         installEditSessionButtons(frm);
         schedulePrimaryActionSync(frm);
     });
+
+    async function cancelOrderEditSession(frm) {
+        if (!isEditSessionActive(frm)) return false;
+        lockEditSession(frm, { silent: true });
+        await frm.reload_doc();
+        return true;
+    }
+
+    const editSessionCoordinator = window.AlmdinaDcoEditSessionCoordinator;
+    if (editSessionCoordinator && typeof editSessionCoordinator.register === "function") {
+        editSessionCoordinator.register("order", {
+            canStart: canOfferEditSession,
+            start(frm) {
+                enterEditSession(frm);
+                return captureEditSessionPresence(frm);
+            },
+            async save(frm) {
+                await commitEditSession(frm);
+                return !captureEditSessionPresence(frm);
+            },
+            cancel: cancelOrderEditSession,
+            isDirty(frm) {
+                return Boolean(frm && frm.is_dirty && frm.is_dirty());
+            },
+        });
+    }
+
+    function coordinated(command, frm, fallback) {
+        const coordinator = window.AlmdinaDcoEditSessionCoordinator;
+        if (!coordinator || typeof coordinator[command] !== "function") return fallback(frm);
+        return coordinator[command](frm, "order");
+    }
 
     window.AlmdinaOrderRevisionUX = Object.freeze({
         canCreateRevision,
@@ -887,11 +946,12 @@
         markEditSessionSticky,
         persistOrderEditCheckpoint,
         openRevision,
-        enterEditSession,
+        enterEditSession: frm => coordinated("start", frm, enterEditSession),
         activateEditSessionQuietly,
         confirmEditSession,
         lockEditSession,
-        commitEditSession,
+        commitEditSession: frm => coordinated("save", frm, commitEditSession),
+        cancelEditSession: frm => coordinated("cancel", frm, cancelOrderEditSession),
         syncPrimaryAction,
         schedulePrimaryActionSync,
         scheduleDependentUxRefresh,

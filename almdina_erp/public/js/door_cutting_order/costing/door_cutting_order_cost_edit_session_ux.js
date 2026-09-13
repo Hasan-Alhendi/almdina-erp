@@ -324,7 +324,17 @@
         return Boolean(await owner.discardPendingPriceEdits(frm, options));
     }
 
-    async function startEditing(frm) {
+    function sessionIsCurrent(frm, sessionContext) {
+        if (!sessionContext) return documentStillCurrent(frm, captureDocument(frm));
+        const coordinator = editSessionCoordinator();
+        return Boolean(
+            coordinator
+            && typeof coordinator.isSessionCurrent === "function"
+            && coordinator.isSessionCurrent(frm, sessionContext)
+        );
+    }
+
+    async function startEditing(frm, sessionContext = null) {
         if (!canEditCostWorkspace(frm)) {
             frappe.msgprint(__("لا تملك صلاحية تعديل التكلفة أو تسعير الدرف الخاصة لهذا المستند."));
             return false;
@@ -348,6 +358,7 @@
             return false;
         }
         if (!documentStillCurrent(frm, token)) return false;
+        if (!sessionIsCurrent(frm, sessionContext)) return false;
 
         const store = storeFor(frm);
         const seed = currentSettings(frm);
@@ -380,7 +391,8 @@
         return true;
     }
 
-    async function cancelEditing(frm) {
+    async function cancelEditing(frm, sessionContext = null) {
+        if (!sessionIsCurrent(frm, sessionContext)) return false;
         if (!isEditing(frm)) return false;
         const token = captureDocument(frm);
         const store = storeFor(frm);
@@ -392,16 +404,19 @@
         // compete with the edit-session transition.
         await discardPendingPriceEdits(frm, { refresh: false });
         if (!documentStillCurrent(frm, token)) return false;
+        if (!sessionIsCurrent(frm, sessionContext)) return false;
 
         sync(frm);
         signalEditChanged(frm);
         return true;
     }
 
-    async function saveEditing(frm) {
+    async function saveEditing(frm, sessionContext = null) {
+        if (!sessionIsCurrent(frm, sessionContext)) return false;
         if (!isEditing(frm)) return false;
         if (!canEditCostWorkspace(frm)) {
-            await cancelEditing(frm);
+            await cancelEditing(frm, sessionContext);
+            if (!sessionIsCurrent(frm, sessionContext)) return false;
             if (window.cur_frm === frm) {
                 frappe.msgprint(__("لم تعد صلاحياتك أو حالة هذا المستند تسمح بتعديل هذا القسم."));
             }
@@ -434,6 +449,7 @@
             if (pending.dirty) {
                 const saved = await api.saveSettings(orderName, payload);
                 if (!documentStillCurrent(frm, token)) return false;
+                if (!sessionIsCurrent(frm, sessionContext)) return false;
                 if (!validSavedSnapshot(saved)) {
                     frappe.msgprint({
                         title: __("تعذر حفظ التكلفة"),
@@ -456,6 +472,7 @@
         }
 
         if (!documentStillCurrent(frm, token)) return false;
+        if (!sessionIsCurrent(frm, sessionContext)) return false;
         unmountDraftControls(frm);
         projectCurrent(frm);
         applyFieldAccess(frm);
@@ -467,10 +484,12 @@
         if (hadPendingPrices) {
             const flushed = await flushPendingPriceEdits(frm, { refresh: false });
             if (!documentStillCurrent(frm, token)) return false;
+            if (!sessionIsCurrent(frm, sessionContext)) return false;
             if (!flushed) return false;
             if (owner && typeof owner.load === "function") {
                 await owner.load(frm, { force: true });
                 if (!documentStillCurrent(frm, token)) return false;
+                if (!sessionIsCurrent(frm, sessionContext)) return false;
             } else {
                 projectCurrent(frm);
             }
@@ -488,6 +507,11 @@
     function sync(frm) {
         if (!frm || frm.doctype !== "Door Cutting Order") return;
         if (isEditing(frm) && !canEditCostWorkspace(frm)) {
+            const coordinator = editSessionCoordinator();
+            if (coordinator && typeof coordinator.activeKind === "function" && coordinator.activeKind(frm) === "cost") {
+                coordinator.cancel(frm, "cost");
+                return;
+            }
             const store = storeFor(frm);
             if (store) store.cancelEdit();
             unmountDraftControls(frm);
@@ -545,6 +569,30 @@
         });
     });
 
+    function editSessionCoordinator() {
+        return window.AlmdinaDcoEditSessionCoordinator || null;
+    }
+
+    function coordinated(command, frm, fallback) {
+        const coordinator = editSessionCoordinator();
+        if (!coordinator || typeof coordinator[command] !== "function") return fallback(frm);
+        return coordinator[command](frm, "cost");
+    }
+
+    const coordinator = editSessionCoordinator();
+    if (coordinator && typeof coordinator.register === "function") {
+        coordinator.register("cost", {
+            canStart: canEditCostWorkspace,
+            start: startEditing,
+            save: saveEditing,
+            cancel: cancelEditing,
+            isDirty(frm) {
+                const state = workspaceSnapshot(frm);
+                return Boolean(state && state.dirty);
+            },
+        });
+    }
+
     window.AlmdinaCostEditSessionUX = Object.freeze({
         COST_SETTING_FIELDS,
         canEditCostSettings,
@@ -552,9 +600,9 @@
         canEditCostWorkspace,
         isEditing,
         costSettingsMayWrite,
-        startEditing,
-        cancelEditing,
-        saveEditing,
+        startEditing: frm => coordinated("start", frm, startEditing),
+        cancelEditing: frm => coordinated("cancel", frm, cancelEditing),
+        saveEditing: frm => coordinated("save", frm, saveEditing),
         applyFieldAccess,
         captureCostSettings,
         normalizeCostSettings,

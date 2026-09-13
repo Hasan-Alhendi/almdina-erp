@@ -151,17 +151,20 @@
         return false;
     }
 
+    function editSessionCoordinator() {
+        return window.AlmdinaDcoEditSessionCoordinator || null;
+    }
+
     function isEditing(frm, kind) {
-        const api = apiFor(kind);
-        if (!api) return false;
-        if (kind === "order" && typeof api.captureEditSessionPresence === "function") {
-            return Boolean(api.captureEditSessionPresence(frm));
-        }
-        return typeof api.isEditing === "function" && Boolean(api.isEditing(frm));
+        const coordinator = editSessionCoordinator();
+        return Boolean(coordinator && typeof coordinator.isEditing === "function" && coordinator.isEditing(frm, kind));
     }
 
     function activeEditingKind(frm) {
-        return ["order", "plan", "cost"].find((kind) => isEditing(frm, kind)) || null;
+        const coordinator = editSessionCoordinator();
+        return coordinator && typeof coordinator.activeEditingKind === "function"
+            ? coordinator.activeEditingKind(frm)
+            : null;
     }
 
     function currentTabFieldname(frm) {
@@ -280,11 +283,16 @@
         if (!toolbar || !config) return false;
 
         const busy = Boolean(frm[BUSY_KEY]);
-        const editingKind = activeEditingKind(frm);
+        const coordinator = editSessionCoordinator();
+        const editState = coordinator && typeof coordinator.snapshot === "function"
+            ? coordinator.snapshot(frm)
+            : { activeKind: null, phase: "idle" };
+        const editingKind = editState.activeKind;
         const editing = editingKind === kind;
         const competing = Boolean(editingKind && editingKind !== kind);
         const editable = permissionsResolved() && canEdit(frm, kind);
-        const editDisabled = busy || competing || !editable;
+        const transitionBusy = editState.phase !== "idle" && editState.phase !== "editing";
+        const editDisabled = busy || transitionBusy || competing || !editable;
         const blockMessage = editDisabled ? editBlockedMessage(frm, kind, editingKind) : "";
 
         toolbar.setAttribute("data-editing", editing ? "1" : "0");
@@ -295,8 +303,8 @@
             </div>
             <div class="${TOOLBAR_CLASS}__actions">
                 ${editing
-                    ? button(CANCEL_LABEL, "btn-default dco-tab-edit-cancel", busy, "إلغاء التغييرات غير المحفوظة")
-                        + button(SAVE_LABEL, "btn-primary dco-tab-edit-save", busy, "حفظ تعديلات هذا القسم فقط")
+                    ? button(CANCEL_LABEL, "btn-default dco-tab-edit-cancel", busy || transitionBusy, "إلغاء التغييرات غير المحفوظة")
+                        + button(SAVE_LABEL, "btn-primary dco-tab-edit-save", busy || transitionBusy, "حفظ تعديلات هذا القسم فقط")
                     : button(EDIT_LABEL, "btn-default dco-tab-edit-start", editDisabled, blockMessage)}
             </div>
         `;
@@ -319,24 +327,24 @@
     }
 
     function startFor(frm, kind) {
-        const api = apiFor(kind);
-        if (!api || activeEditingKind(frm)) return false;
-        if (kind === "order" && typeof api.enterEditSession === "function") return api.enterEditSession(frm);
-        return typeof api.startEditing === "function" ? api.startEditing(frm) : false;
+        const coordinator = editSessionCoordinator();
+        return coordinator && typeof coordinator.start === "function"
+            ? coordinator.start(frm, kind)
+            : false;
     }
 
     function saveFor(frm, kind) {
-        const api = apiFor(kind);
-        if (!api) return false;
-        if (kind === "order" && typeof api.commitEditSession === "function") return api.commitEditSession(frm);
-        return typeof api.saveEditing === "function" ? api.saveEditing(frm) : false;
+        const coordinator = editSessionCoordinator();
+        return coordinator && typeof coordinator.save === "function"
+            ? coordinator.save(frm, kind)
+            : false;
     }
 
     function cancelFor(frm, kind) {
-        const api = apiFor(kind);
-        if (!api) return false;
-        if (kind === "order") return cancelOrder(frm);
-        return typeof api.cancelEditing === "function" ? api.cancelEditing(frm) : false;
+        const coordinator = editSessionCoordinator();
+        return coordinator && typeof coordinator.cancel === "function"
+            ? coordinator.cancel(frm, kind)
+            : false;
     }
 
     async function runAction(frm, callback) {

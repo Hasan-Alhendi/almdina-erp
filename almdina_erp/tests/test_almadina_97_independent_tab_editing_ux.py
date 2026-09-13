@@ -178,18 +178,16 @@ def test_persisted_dco_no_longer_uses_global_primary_action_for_tab_editing():
     assert "dco-plan-settings-edit-toolbar { display:none" not in source
 
 
-def test_tab_local_actions_delegate_to_existing_independent_session_owners():
+def test_tab_local_actions_delegate_through_the_aggregate_session_owner():
     source = PAGE_EDIT.read_text(encoding="utf-8")
 
     assert "window.AlmdinaOrderRevisionUX" in source
     assert "window.AlmdinaPlanEditSessionUX" in source
     assert "window.AlmdinaCostEditSessionUX" in source
-    assert "api.enterEditSession(frm)" in source
-    assert "api.startEditing(frm)" in source
-    assert "api.commitEditSession(frm)" in source
-    assert "api.saveEditing(frm)" in source
-    assert "api.cancelEditing(frm)" in source
-    assert "cancelOrder(frm)" in source
+    assert "window.AlmdinaDcoEditSessionCoordinator" in source
+    assert "coordinator.start(frm, kind)" in source
+    assert "coordinator.save(frm, kind)" in source
+    assert "coordinator.cancel(frm, kind)" in source
     assert "activeEditingKind(frm)" in source
     assert "احفظ أو ألغِ التعديل المفتوح في القسم الآخر أولًا" in source
     assert "frappe.call" not in source
