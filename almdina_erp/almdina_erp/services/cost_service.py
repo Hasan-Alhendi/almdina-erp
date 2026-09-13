@@ -13,6 +13,9 @@ from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     require_document_capability,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspace import (
+    authoritative_cost_values,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
     resolve_canonical_cost_plan,
 )
@@ -36,11 +39,7 @@ def _internal_loss(order_name: str) -> float:
 def get_order_cost_summary(order_name: str) -> dict[str, Any]:
     order = frappe.get_doc("Door Cutting Order", order_name)
     plan = resolve_canonical_cost_plan(order)
-    planned_cost = flt(
-        getattr(plan, "total_cost_usd", None)
-        if plan is not None
-        else order.total_cost_usd
-    )
+    planned_cost = flt(authoritative_cost_values(order, plan=plan)["total_cost_usd"])
 
     internal_loss = _internal_loss(order_name)
     actual_cost = planned_cost + internal_loss
