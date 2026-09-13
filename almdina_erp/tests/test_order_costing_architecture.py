@@ -38,6 +38,9 @@ PLAN_COMMAND_CONTEXT_PATH = (
 PLAN_COST_WORKSPACE_PATH = (
     ROOT / "almdina_erp" / "infrastructure" / "frappe" / "cutting_plan_costing_workspace.py"
 )
+PLAN_RUNTIME_REPOSITORY_PATH = (
+    ROOT / "almdina_erp" / "infrastructure" / "frappe" / "cutting_plan_runtime_repository.py"
+)
 PLAN_COST_COMMAND_PATH = (
     ROOT / "almdina_erp" / "services" / "cutting_plan_cost_command_service.py"
 )
@@ -173,16 +176,35 @@ class TestOrderCostingArchitecture(unittest.TestCase):
         self.assertIn("_set_approved_plan_relation(order, plan)", approval)
         self.assertIn("refresh_order_commercial_totals(order, plan)", approval)
 
-    def test_cost_reads_and_financial_documents_prefer_plan_snapshot(self) -> None:
+    def test_cost_reads_and_financial_documents_share_one_canonical_plan(self) -> None:
         cost_service = COST_PERMISSION_PATH.read_text(encoding="utf-8")
         document_service = COST_DOCUMENT_PATH.read_text(encoding="utf-8")
         workspace = PLAN_COST_WORKSPACE_PATH.read_text(encoding="utf-8")
+        runtime = PLAN_RUNTIME_REPOSITORY_PATH.read_text(encoding="utf-8")
 
-        self.assertIn("overlay_authoritative_costs(order, order_snapshot)", cost_service)
-        self.assertIn("overlay_authoritative_costs(", document_service)
-        self.assertIn("def current_cost_plan", workspace)
+        self.assertIn("def resolve_canonical_cost_plan", runtime)
+        self.assertLess(
+            runtime.index("approved = approved_plan_for_order(order_doc)"),
+            runtime.index("source_type=UPLOADED_DXF"),
+        )
+        self.assertLess(
+            runtime.index("source_type=UPLOADED_DXF"),
+            runtime.index("source_type=SYSTEM"),
+        )
+        self.assertIn("return resolve_canonical_cost_plan(order)", workspace)
+
+        self.assertIn("resolved_plan = plan if plan is not None else current_cost_plan(order)", cost_service)
+        self.assertIn("plan=resolved_plan", cost_service)
+        self.assertIn("physical_execution_for_plan(resolved_plan)", cost_service)
+
+        self.assertIn("plan = current_cost_plan(order)", document_service)
+        self.assertIn("plan=plan", document_service)
+        self.assertIn("physical_execution_for_plan(plan)", document_service)
+        self.assertNotIn('frappe.get_doc("Cutting Plan", order.approved_plan)', document_service)
+
         self.assertIn("def authoritative_cost_values", workspace)
         self.assertIn("def overlay_authoritative_costs", workspace)
+        self.assertIn("PLAN_EXECUTION_METRIC_FIELDS", workspace)
         self.assertIn("update_modified=False", workspace)
         self.assertNotIn("save(ignore_permissions=True)", document_service)
 
