@@ -7,10 +7,8 @@ from frappe import _
 from frappe.utils import cint, flt
 
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import APPROVED, DRAFT
-from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
-    PhysicalExecutionProjection,
-    physical_execution_projection_from_snapshot,
-)
+from almdina_erp.almdina_erp.domain.cutting.offcut_policy import PhysicalExecutionProjection
+from almdina_erp.almdina_erp.domain.cutting.physical_execution_contract import physical_execution_for_snapshot
 from almdina_erp.almdina_erp.domain.orders.costing import (
     CostingError,
     SpecialPricingPieceInput,
@@ -125,7 +123,7 @@ def physical_execution_for_plan(plan: Any) -> PhysicalExecutionProjection | None
         # Pre-OFFCUT/partial snapshots have no trustworthy physical identities;
         # retain the legacy aggregate costing bridge until a real plan is stored.
         return None
-    return physical_execution_projection_from_snapshot(snapshot)
+    return physical_execution_for_snapshot(snapshot)
 
 
 def factory_execution_edge_cost(order: Any, plan: Any) -> float:
