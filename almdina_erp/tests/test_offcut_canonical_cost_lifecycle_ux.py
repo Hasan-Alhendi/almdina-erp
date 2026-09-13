@@ -37,6 +37,7 @@ def test_required_boards_reconciles_from_physical_sources_without_mutating_snaps
         offcut_service.frappe.db,
         "set_value",
         lambda *args, **kwargs: writes.append((args, kwargs)),
+        raising=False,
     )
 
     required = offcut_service._reconcile_required_boards(plan, snapshot)
@@ -54,7 +55,12 @@ def test_required_boards_reconciles_from_physical_sources_without_mutating_snaps
 
 def test_all_offcut_reconciles_to_zero_new_board_cost_basis(monkeypatch) -> None:
     plan = SimpleNamespace(name="CP-ALL-OFFCUT", required_boards=4)
-    monkeypatch.setattr(offcut_service.frappe.db, "set_value", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        offcut_service.frappe.db,
+        "set_value",
+        lambda *args, **kwargs: None,
+        raising=False,
+    )
 
     required = offcut_service._reconcile_required_boards(
         plan,
@@ -67,7 +73,12 @@ def test_all_offcut_reconciles_to_zero_new_board_cost_basis(monkeypatch) -> None
 
 def test_full_board_only_reconciliation_is_unchanged(monkeypatch) -> None:
     plan = SimpleNamespace(name="CP-FULL", required_boards=2)
-    monkeypatch.setattr(offcut_service.frappe.db, "set_value", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        offcut_service.frappe.db,
+        "set_value",
+        lambda *args, **kwargs: None,
+        raising=False,
+    )
 
     required = offcut_service._reconcile_required_boards(
         plan,
