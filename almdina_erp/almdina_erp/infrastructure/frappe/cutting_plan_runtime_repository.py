@@ -10,7 +10,12 @@ from almdina_erp.almdina_erp.domain.cutting.catalog import DEFAULT_OPTIMIZATION_
 from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
     ManufacturingRequirementsError,
 )
-from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import APPROVED, DRAFT
+from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
+    APPROVED,
+    DRAFT,
+    SYSTEM,
+    UPLOADED_DXF,
+)
 from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
     DEFAULT_KERF_MM,
     DEFAULT_MACHINE_TYPE,
@@ -167,6 +172,43 @@ def approved_plan_for_order(order: Any) -> Any | None:
     return plan
 
 
+def resolve_canonical_cost_plan(order: Any | str) -> Any | None:
+    """Resolve the single Cutting Plan authoritative for cost and execution reads.
+
+    The explicit DCO approval relation always wins. Before approval, an Uploaded
+    DXF Draft represents the operator-reviewed physical layout and therefore owns
+    commercial/execution projections ahead of the System Draft. No timestamp on a
+    newer Draft may supersede an official Approved plan implicitly.
+    """
+
+    order_doc = (
+        frappe.get_doc("Door Cutting Order", order)
+        if isinstance(order, str)
+        else order
+    )
+    order_name = str(getattr(order_doc, "name", None) or "").strip()
+    if not order_name:
+        return None
+
+    approved = approved_plan_for_order(order_doc)
+    if approved is not None:
+        return approved
+
+    uploaded = latest_plan(
+        order_name,
+        status=DRAFT,
+        source_type=UPLOADED_DXF,
+    )
+    if uploaded is not None:
+        return uploaded
+
+    return latest_plan(
+        order_name,
+        status=DRAFT,
+        source_type=SYSTEM,
+    )
+
+
 def production_plan_facts(order: Any) -> ProductionPlanFacts:
     """Build shop-floor plan facts exclusively from canonical Cutting Plan state.
 
@@ -225,5 +267,6 @@ __all__ = [
     "latest_plan",
     "plan_settings",
     "production_plan_facts",
+    "resolve_canonical_cost_plan",
     "seed_plan_settings",
 ]
