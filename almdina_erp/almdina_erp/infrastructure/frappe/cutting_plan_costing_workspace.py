@@ -395,12 +395,27 @@ def project_plan_costs_to_order(order: Any, plan: Any) -> dict[str, float]:
     return {}
 
 
+def _plan_has_physical_pieces(plan: Any) -> bool:
+    """Distinguish a real zero-board OFFCUT Draft from an empty placeholder Draft."""
+
+    snapshot_json = str(getattr(plan, "snapshot_json", None) or "").strip()
+    if not snapshot_json:
+        return False
+    try:
+        snapshot = frappe.parse_json(snapshot_json) or {}
+    except (TypeError, ValueError):
+        return False
+    return any(sheet.get("pieces") for sheet in (snapshot.get("sheets") or []))
+
+
 def current_cost_plan(order: Any) -> Any | None:
     """Resolve the plan that owns commercial cost geometry.
 
     Geometry editing still uses ``current_working_plan``. Cost reads and the
     focused cost-settings command must not prefer a leftover empty Draft over
-    an Approved production plan, or invoice board/cutting lines disappear.
+    an Approved production plan. Conversely, ALMADINA-177/178 allow a legitimate
+    all-OFFCUT Draft to own zero new boards, so ``required_boards == 0`` cannot be
+    used as an emptiness sentinel once physical pieces exist.
     """
 
     order_name = str(getattr(order, "name", None) or "").strip()
@@ -408,7 +423,10 @@ def current_cost_plan(order: Any) -> Any | None:
         return None
     draft = latest_plan(order_name, status=DRAFT)
     approved = latest_plan(order_name, status=APPROVED)
-    if draft is not None and cint(getattr(draft, "required_boards", 0)) > 0:
+    if draft is not None and (
+        cint(getattr(draft, "required_boards", 0)) > 0
+        or _plan_has_physical_pieces(draft)
+    ):
         return draft
     if approved is not None:
         return approved
