@@ -92,15 +92,15 @@ def test_each_top_level_tab_has_its_own_local_edit_command_family() -> None:
     assert 'dco-tab-edit-cancel' in coordinator
     assert "renderToolbar(frm, activeKind(frm));" in coordinator
 
-    # Existing domain/session owners remain authoritative; the local toolbar only
-    # delegates to them instead of re-implementing capability or persistence rules.
+    # Existing domain adapters retain their capability/persistence rules, while the
+    # aggregate coordinator owns the single active session and command dispatch.
     assert "api.canOfferEditSession(frm)" in coordinator
     assert "api.canEditPlanSettings(frm)" in coordinator
     assert "api.canEditCostSettings(frm)" in coordinator
-    assert "api.enterEditSession(frm)" in coordinator
-    assert "api.commitEditSession(frm)" in coordinator
-    assert "api.startEditing(frm)" in coordinator
-    assert "api.saveEditing(frm)" in coordinator
+    assert "window.AlmdinaDcoEditSessionCoordinator" in coordinator
+    assert "coordinator.start(frm, kind)" in coordinator
+    assert "coordinator.save(frm, kind)" in coordinator
+    assert "coordinator.cancel(frm, kind)" in coordinator
 
     # Plan edit eligibility is fail-closed until PlanWorkspaceState is ready, so
     # the local action must be reevaluated as soon as that authoritative snapshot
@@ -125,10 +125,10 @@ def test_switching_tabs_is_blocked_at_frappe_native_activation_boundary() -> Non
     coordinator = source(COORDINATOR)
     guard = source(TAB_GUARD)
 
-    # Session ownership stays centralized in the page coordinator. The lifecycle
+    # Session ownership stays centralized in the aggregate coordinator. The lifecycle
     # guard consumes that one projection rather than reimplementing Order/Plan/Cost.
     assert "function activeEditingKind(frm)" in coordinator
-    assert "owner.activeEditingKind(frm)" in guard
+    assert "owner.activeKind(frm)" in guard
 
     # Frappe v16 changes a top-level tab through each Tab object's set_active().
     # Guard that semantic boundary before the native method can mutate classes,

@@ -89,7 +89,7 @@ def test_full_screen_entry_reuses_live_grid_and_preserves_all_existing_editing_b
     assert "dco-inline-order-edit-save" in source
     assert "revision.commitEditSession(frm)" in source
     assert "dco-inline-order-edit-cancel" in source
-    assert "revision.lockEditSession(frm, { silent: true })" in source
+    assert "revision.enterEditSession(frm)" in source
     assert "dco-entry-window-print" in source
     assert "dco-entry-window-close" in source
     assert "إغلاق والعودة" in source
