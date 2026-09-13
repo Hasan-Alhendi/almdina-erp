@@ -54,6 +54,12 @@ def test_renderer_consumes_one_canonical_geometry_model() -> None:
     assert renderer.count("geometry.resolve(piece)") == 1
     assert "render_piece_overlays" in renderer
     assert "dco-extra-overlay" in renderer
+    assert "dco-extra-overlay-handle" in renderer
+    assert "function overlaySingleLine" in renderer
+    assert 'kind === "liner"' in renderer
+    assert 'stroke-width="0.7"' in renderer
+    assert 'stroke-width="0.65"' in renderer
+    assert 'stroke-width="1.75"' not in renderer
     assert "special_shape_geometry_json" not in renderer
     assert "geometry.schema_version" not in renderer
     assert "clippedGeometry.points" not in renderer

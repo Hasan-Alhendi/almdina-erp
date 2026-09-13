@@ -150,6 +150,28 @@ const plan = {
                                 closed: true,
                             },
                         },
+                        {
+                            kind: "back_groove",
+                            layer: "Rear Groove",
+                            geometry: {
+                                schema_version: 1,
+                                unit: "mm",
+                                coordinate_space: "usable_sheet",
+                                path: [[20, 1480], [380, 1480]],
+                                closed: false,
+                            },
+                        },
+                        {
+                            kind: "recessed_handle_cutout",
+                            layer: "Handle Recess",
+                            geometry: {
+                                schema_version: 1,
+                                unit: "mm",
+                                coordinate_space: "usable_sheet",
+                                path: [[80, 980], [160, 980], [160, 1020], [80, 1020]],
+                                closed: true,
+                            },
+                        },
                     ],
                 },
             ],
@@ -181,6 +203,15 @@ assert.match(html, /data-geometry-source="manual-special"/);
 assert.match(html, /data-geometry-source="dxf"/);
 assert.match(html, /dco-extra-overlay/);
 assert.match(html, /data-overlay-layer="Liner"/);
+assert.match(html, /data-overlay-kind="liner"[^>]*stroke-width="0.7"/);
+assert.match(html, /data-overlay-kind="back_groove"[^>]*stroke-width="0.7"/);
+assert.match(html, /data-overlay-kind="liner"[^>]*stroke="#1d6fbf"/);
+assert.match(html, /data-overlay-kind="liner"[^>]*stroke-dasharray="3 2.2"/);
+assert.match(html, /data-overlay-kind="liner"[^>]*d="M[\d.-]+ [\d.-]+ L[\d.-]+ [\d.-]+"/);
+assert.doesNotMatch(html, /data-overlay-kind="liner"[^>]* Z"/);
+assert.match(html, /<rect class="dco-extra-overlay-path dco-extra-overlay-handle"/);
+assert.match(html, /data-overlay-kind="recessed_handle_cutout"[^>]*stroke-width="0.65"/);
+assert.doesNotMatch(html, /stroke-width="1.75"/);
 assert.match(html, /dco-extra-addon-legend/);
 assert.match(html, /رموز إضافات Extra/);
 assert.match(html, /دبل قشاط/);

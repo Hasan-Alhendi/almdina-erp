@@ -176,7 +176,12 @@
     }
 
     function extraOverlayStrokeSample(color) {
-        return `<svg class="dco-extra-addon-legend-swatch" viewBox="0 0 28 10" width="28" height="10" aria-hidden="true"><path d="M2 5 H26" fill="none" stroke="${escape_html(color)}" stroke-width="2" stroke-dasharray="4 2" stroke-linecap="round"/></svg>`;
+        return `<svg class="dco-extra-addon-legend-swatch" viewBox="0 0 28 10" width="28" height="10" aria-hidden="true"><path d="M2 5 H26" fill="none" stroke="${escape_html(color)}" stroke-width="1" stroke-dasharray="3 2.2" stroke-linecap="round"/></svg>`;
+    }
+
+    function extraHandleLegendSwatch() {
+        const color = EXTRA_OVERLAY_STROKE_BY_KIND.recessed_handle_cutout;
+        return `<svg class="dco-extra-addon-legend-swatch" viewBox="0 0 28 10" width="28" height="10" aria-hidden="true"><rect x="6" y="2.2" width="16" height="5.6" fill="none" stroke="${color}" stroke-width="0.9"/></svg>`;
     }
 
     function extraDoubleBandingIcon(size = 16) {
@@ -188,6 +193,7 @@
     }
 
     function extraAddonLegendSwatch(item) {
+        if (item.overlayKind === "recessed_handle_cutout") return extraHandleLegendSwatch();
         if (item.overlayKind) {
             return extraOverlayStrokeSample(EXTRA_OVERLAY_STROKE_BY_KIND[item.overlayKind]);
         }
@@ -228,6 +234,47 @@
         return `<div class="dco-extra-addon-marks" aria-hidden="true" style="position:absolute;inset:0;z-index:5;pointer-events:none;">${marks.join("")}</div>`;
     }
 
+    function overlayMajorAxisLine(local) {
+        const xs = local.map(point => point[0]);
+        const ys = local.map(point => point[1]);
+        const minX = Math.min(...xs);
+        const maxX = Math.max(...xs);
+        const minY = Math.min(...ys);
+        const maxY = Math.max(...ys);
+        if ((maxX - minX) >= (maxY - minY)) {
+            const midY = (minY + maxY) / 2;
+            return [[minX, midY], [maxX, midY]];
+        }
+        const midX = (minX + maxX) / 2;
+        return [[midX, minY], [midX, maxY]];
+    }
+
+    function overlaySingleLine(local, closed) {
+        if (local.length === 2 && !closed) return local;
+        return overlayMajorAxisLine(local);
+    }
+
+    function overlayHandleRect(local) {
+        const xs = local.map(point => point[0]);
+        const ys = local.map(point => point[1]);
+        let minX = Math.min(...xs);
+        let maxX = Math.max(...xs);
+        let minY = Math.min(...ys);
+        let maxY = Math.max(...ys);
+        const minSize = 1.1;
+        if (maxX - minX < minSize) {
+            const mid = (minX + maxX) / 2;
+            minX = mid - (minSize / 2);
+            maxX = mid + (minSize / 2);
+        }
+        if (maxY - minY < minSize) {
+            const mid = (minY + maxY) / 2;
+            minY = mid - (minSize / 2);
+            maxY = mid + (minSize / 2);
+        }
+        return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+    }
+
     function render_piece_overlays(piece, geometryModel) {
         const overlays = Array.isArray(piece && piece.overlays) ? piece.overlays : [];
         if (!overlays.length || !geometryModel) return "";
@@ -247,13 +294,19 @@
                 ((Number(point[0]) - originX) / widthMm) * 100,
                 ((Number(point[1]) - originY) / heightMm) * 100,
             ]);
-            const closed = Boolean(geometry && geometry.closed) && local.length >= 3;
-            const d = local
-                .map((point, pointIndex) => `${pointIndex ? "L" : "M"}${point[0]} ${point[1]}`)
-                .join(" ") + (closed ? " Z" : "");
             const stroke = EXTRA_OVERLAY_STROKE_BY_KIND[kind] || "#5c4d2e";
             const layer = String((overlay && overlay.layer) || kind || "overlay");
-            return `<path class="dco-extra-overlay-path" data-overlay-kind="${escape_html(kind)}" data-overlay-layer="${escape_html(layer)}" data-overlay-index="${index}" d="${d}" fill="none" stroke="${stroke}" stroke-width="1.75" stroke-dasharray="4 2" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/>`;
+            const attrs = `data-overlay-kind="${escape_html(kind)}" data-overlay-layer="${escape_html(layer)}" data-overlay-index="${index}" fill="none" stroke="${stroke}" vector-effect="non-scaling-stroke"`;
+            if (kind === "recessed_handle_cutout") {
+                const box = overlayHandleRect(local);
+                return `<rect class="dco-extra-overlay-path dco-extra-overlay-handle" ${attrs} x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" stroke-width="0.65" stroke-linejoin="miter"/>`;
+            }
+            const closed = Boolean(geometry && geometry.closed) && local.length >= 3;
+            const strokePoints = kind === "liner" ? overlaySingleLine(local, closed) : local;
+            const d = strokePoints
+                .map((point, pointIndex) => `${pointIndex ? "L" : "M"}${point[0]} ${point[1]}`)
+                .join(" ") + (kind === "liner" ? "" : (closed ? " Z" : ""));
+            return `<path class="dco-extra-overlay-path" ${attrs} d="${d}" stroke-width="0.7" stroke-dasharray="3 2.2" stroke-linejoin="round" stroke-linecap="round"/>`;
         }).filter(Boolean).join("");
         if (!paths) return "";
         return `<svg class="dco-extra-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;z-index:2;overflow:visible;pointer-events:none">${paths}</svg>`;
