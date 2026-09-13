@@ -13,6 +13,9 @@ from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     require_document_capability,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
+    resolve_canonical_cost_plan,
+)
 
 
 def _internal_loss(order_name: str) -> float:
@@ -32,12 +35,12 @@ def _internal_loss(order_name: str) -> float:
 
 def get_order_cost_summary(order_name: str) -> dict[str, Any]:
     order = frappe.get_doc("Door Cutting Order", order_name)
-    planned_cost = flt(order.total_cost_usd)
-
-    if order.approved_plan:
-        planned_cost = flt(
-            frappe.db.get_value("Cutting Plan", order.approved_plan, "total_cost_usd")
-        ) or planned_cost
+    plan = resolve_canonical_cost_plan(order)
+    planned_cost = flt(
+        getattr(plan, "total_cost_usd", None)
+        if plan is not None
+        else order.total_cost_usd
+    )
 
     internal_loss = _internal_loss(order_name)
     actual_cost = planned_cost + internal_loss
@@ -100,9 +103,9 @@ def on_order_plan_update(doc: Any, method: str | None = None) -> None:
     if (doc.plan_kind or "Order") != "Order" or doc.status != "Approved" or not doc.door_cutting_order:
         return
 
-    # This hook runs while the new approved plan may not yet be linked into the
-    # order. Use this plan directly and include completed internal replacement
-    # losses; stock-consumption variance is outside the product boundary.
+    # Approval persistence runs immediately before the DCO relation is linked.
+    # Use the just-approved plan for this narrow hook; normal reads always resolve
+    # through resolve_canonical_cost_plan once the relation is established.
     internal_loss = _internal_loss(doc.door_cutting_order)
     frappe.db.set_value(
         "Door Cutting Order",
