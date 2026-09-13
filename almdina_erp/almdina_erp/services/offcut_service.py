@@ -19,7 +19,11 @@ from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
 from almdina_erp.almdina_erp.domain.cutting.physical_execution_contract import (
     physical_execution_for_snapshot,
 )
-from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import APPROVED, DRAFT
+from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
+    APPROVED,
+    DRAFT,
+    UPLOADED_DXF,
+)
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization import (
     require_cutting_plan_capability,
@@ -270,17 +274,37 @@ def _reconcile_factory_execution_projection(order: Any, plan: Any, execution: An
     }
 
 
-def _canonical_production_reconciliation(order: Any, fallback_plan: Any) -> tuple[Any, dict[str, Any]]:
-    """Reconcile production only from the same plan that owns cost/execution reads."""
+def _canonical_plan_after_mutation(order: Any, plan: Any) -> Any:
+    """Return the single commercial authority after mutating one visible plan.
 
-    canonical_plan = resolve_canonical_cost_plan(order) or fallback_plan
+    The current Approved relation is authoritative without another repository read.
+    Without an Approved relation, the current Uploaded DXF Draft is canonical by
+    definition; System still needs the central resolver so an Uploaded Draft can
+    take precedence when both coexist.
+    """
+
+    approved_name = str(getattr(order, "approved_plan", None) or "").strip()
+    if approved_name and approved_name == str(getattr(plan, "name", None) or ""):
+        return plan
+    if (
+        not approved_name
+        and str(getattr(plan, "status", None) or "") == DRAFT
+        and str(getattr(plan, "source_type", None) or "") == UPLOADED_DXF
+    ):
+        return plan
+    return resolve_canonical_cost_plan(order) or plan
+
+
+def _canonical_production_reconciliation(order: Any, canonical_plan: Any) -> dict[str, Any]:
+    """Reconcile production from the exact same plan used for commercial reads."""
+
     canonical_execution = physical_execution_for_plan(canonical_plan)
     if canonical_execution is None:
-        return canonical_plan, {
+        return {
             "production_reconciled": False,
             "cancelled_stage_count": 0,
         }
-    return canonical_plan, _reconcile_factory_execution_projection(
+    return _reconcile_factory_execution_projection(
         order,
         canonical_plan,
         canonical_execution,
@@ -356,12 +380,9 @@ def set_offcut_execution_owner(plan_name: str, assignments: Any) -> dict[str, An
         apply_plan_costs(plan, edge_cost_usd=factory_execution_edge_cost(order, plan))
         persist_plan_cost_snapshot(plan)
 
-    # The visible target plan owns this mutation, but commercial/order projections
-    # must remain on the canonical authority. Editing a newer Draft while an
-    # Approved plan exists must never silently replace production financial truth.
-    canonical_plan = resolve_canonical_cost_plan(order) or plan
+    canonical_plan = _canonical_plan_after_mutation(order, plan)
     refresh_order_commercial_totals(order, canonical_plan)
-    canonical_plan, production_reconciliation = _canonical_production_reconciliation(
+    production_reconciliation = _canonical_production_reconciliation(
         order,
         canonical_plan,
     )
