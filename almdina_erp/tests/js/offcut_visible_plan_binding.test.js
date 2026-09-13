@@ -169,20 +169,23 @@ assert.doesNotMatch(planUxSource, /activePlan\(frm,\s*["']System["']\)/);
 assert.match(planUxSource, /almdina:plan-selection-changed/);
 
 const apiSource = source("door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_api.js");
-assert.match(apiSource, /async function saveOffcutAssignments/);
-assert.match(apiSource, /await reconcileOffcutMutation\(result\)/);
-assert.match(apiSource, /coordinator\.reconcile\(/);
-assert.match(apiSource, /changed:\s*changed\.length\s*\?\s*changed\s*:\s*\["plan",\s*"cost"\]/);
-assert.doesNotMatch(apiSource, /Promise\.all\s*\(/);
+assert.match(apiSource, /function saveOffcutAssignments/);
+assert.doesNotMatch(apiSource, /AlmdinaWorkspaceSyncCoordinator/);
+assert.doesNotMatch(apiSource, /cur_frm/);
 assert.doesNotMatch(apiSource, /setTimeout\s*\(/);
 assert.doesNotMatch(apiSource, /location\.reload\s*\(/);
 
 const dependencyPolicySource = source(
     "door_cutting_order/order_entry/door_cutting_order_mutation_impact_policy.js"
 );
-assert.doesNotMatch(dependencyPolicySource, /OFFCUT_CLASSIFICATION_REASON/);
-assert.doesNotMatch(dependencyPolicySource, /reconcileOffcutClassification/);
+assert.match(dependencyPolicySource, /OFFCUT_CLASSIFICATION_REASON/);
+assert.match(dependencyPolicySource, /offcutDependencyEffects/);
+assert.match(dependencyPolicySource, /reconcileOffcutMutation/);
+assert.match(dependencyPolicySource, /coordinator\.reconcile\(/);
+assert.match(dependencyPolicySource, /changed:\s*changed\.length\s*\?\s*changed\s*:\s*\["plan",\s*"cost"\]/);
 assert.doesNotMatch(dependencyPolicySource, /almdina:plan-workspace-updated/);
+assert.doesNotMatch(dependencyPolicySource, /setTimeout\s*\(/);
+assert.doesNotMatch(dependencyPolicySource, /location\.reload\s*\(/);
 
 fakeWindow.AlmdinaPlanPreviewSession = {
     isReady() {
