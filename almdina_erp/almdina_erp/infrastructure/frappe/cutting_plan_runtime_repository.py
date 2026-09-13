@@ -19,6 +19,10 @@ from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
     PlanSettings,
     normalize_plan_settings,
 )
+from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
+    OffcutPolicyError,
+    physical_execution_projection_from_snapshot,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import (
     plan_input_fingerprint,
 )
@@ -195,12 +199,13 @@ def production_plan_facts(order: Any) -> ProductionPlanFacts:
 
     has_snapshot = bool(str(getattr(candidate, "snapshot_json", None) or "").strip())
     snapshot = frappe.parse_json(getattr(candidate, "snapshot_json", None) or "{}") or {}
-    has_factory_work = any(
-        str(piece.get("resource_kind") or "FULL_BOARD").upper() == "FULL_BOARD"
-        or str(piece.get("offcut_execution_party") or "").upper() == "FACTORY"
-        for sheet in (snapshot.get("sheets") or [])
-        for piece in (sheet.get("pieces") or [])
-    )
+    try:
+        has_factory_work = physical_execution_projection_from_snapshot(
+            snapshot
+        ).has_factory_work
+    except OffcutPolicyError:
+        # Invalid snapshots must never dispatch production optimistically.
+        has_factory_work = False
     stale = _plan_is_stale(order, candidate) if has_snapshot else True
     return ProductionPlanFacts(
         plan_name=str(candidate.name),

@@ -255,6 +255,8 @@
         return {
             board_rate_usd: Number(order.board_rate_usd || 0),
             cutting_cost_per_board_usd: Number(order.cutting_cost_per_board_usd || 0),
+            offcut_price_usd: Number(order.offcut_price_usd || 0),
+            offcut_price_applicable: Boolean(order.offcut_price_applicable),
         };
     }
 

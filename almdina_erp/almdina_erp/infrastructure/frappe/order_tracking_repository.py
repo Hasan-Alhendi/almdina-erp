@@ -5,6 +5,15 @@ from typing import Any
 import frappe
 from frappe.utils import cint
 
+from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
+    OffcutPolicyError,
+    physical_execution_projection_from_snapshot,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
+    approved_plan_for_order,
+    current_working_plan,
+)
+
 from almdina_erp.almdina_erp.domain.orders.lifecycle import (
     department_for_stage_type,
     department_status_for_stage_status,
@@ -76,6 +85,23 @@ def set_order_tracking(
 
 
 def required_piece_qty(order_name: str) -> int:
+    order = get_order(order_name)
+    plan = (
+        approved_plan_for_order(order) or current_working_plan(order_name)
+        if order is not None
+        else None
+    )
+    snapshot_json = str(getattr(plan, "snapshot_json", None) or "") if plan else ""
+    if snapshot_json.strip():
+        try:
+            snapshot = frappe.parse_json(snapshot_json) or {}
+            return physical_execution_projection_from_snapshot(
+                snapshot
+            ).factory_executable_quantity
+        except (OffcutPolicyError, TypeError, ValueError):
+            # Orders created before physical identities existed retain their legacy
+            # quantity projection instead of being blocked by a migration gap.
+            pass
     rows = frappe.get_all(
         "Door Cutting Order Detail",
         filters={

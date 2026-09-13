@@ -17,7 +17,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization im
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspace import (
     authoritative_cost_values,
+    current_cost_plan,
     overlay_authoritative_costs,
+    physical_execution_for_plan,
     refresh_order_commercial_totals,
 )
 from almdina_erp.almdina_erp.services.order_edit_policy import assert_order_editable
@@ -167,6 +169,7 @@ def _cost_snapshot(order: Any, *, plan: Any | None = None) -> dict[str, Any]:
         fieldname: getattr(order, fieldname, None)
         for fieldname in ORDER_COST_FIELDS
     }
+    resolved_plan = plan or current_cost_plan(order)
     if plan is None:
         resolved_order = overlay_authoritative_costs(order, order_snapshot)
     else:
@@ -177,6 +180,10 @@ def _cost_snapshot(order: Any, *, plan: Any | None = None) -> dict[str, Any]:
         resolved_order = dict(order_snapshot)
         resolved_order.update(authoritative_cost_values(order, plan=plan))
         resolved_order["required_boards"] = int(getattr(plan, "required_boards", 0) or 0)
+    projection = physical_execution_for_plan(resolved_plan) if resolved_plan else None
+    resolved_order["offcut_price_applicable"] = bool(
+        projection and projection.has_factory_source_offcut
+    )
     return {
         "order_name": order.name,
         "order_modified": _document_version(order),
@@ -199,6 +206,7 @@ def update_order_cost_settings(
     order_name: str,
     board_rate_usd: float | None = None,
     cutting_cost_per_board_usd: float | None = None,
+    offcut_price_usd: float | None = None,
 ) -> dict[str, Any]:
     """Update plan-owned cost inputs without granting full document write access."""
 
@@ -226,6 +234,11 @@ def update_order_cost_settings(
         order,
         board_rate_usd=board_rate,
         cutting_cost_per_board_usd=cutting_rate,
+        offcut_price_usd=(
+            _finite_non_negative(offcut_price_usd, _("سعر الفضلة"))
+            if offcut_price_usd is not None
+            else None
+        ),
     )
     plan_name = str(saved.get("cutting_plan") or "").strip()
     if not plan_name:

@@ -38,6 +38,11 @@ def _stub_plan_row_lock(monkeypatch):
         lambda *_args, **_kwargs: None,
         raising=False,
     )
+    monkeypatch.setattr(
+        offcut_service,
+        "refresh_order_commercial_totals",
+        lambda *_args, **_kwargs: {},
+    )
 
 
 def _piece(identity: str, kind: str = "OFFCUT", **values):
