@@ -133,7 +133,7 @@ def factory_execution_edge_cost(order: Any, plan: Any) -> float:
 
     projection = physical_execution_for_plan(plan)
     if projection is None:
-        return flt(getattr(order, "edge_cost_usd", 0))
+        return flt(getattr(order, "edge_cost_usd", getattr(plan, "edge_cost_usd", 0)))
     total = 0.0
     for source_piece_no, piece in enumerate(getattr(order, "pieces", None) or [], start=1):
         physical_qty = projection.physical_qty_by_source_piece_no.get(source_piece_no)

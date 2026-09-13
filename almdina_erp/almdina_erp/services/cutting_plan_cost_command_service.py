@@ -109,7 +109,8 @@ def update_plan_cost_settings(
         if offcut_price_usd is not None and projection.has_factory_source_offcut
         else (flt(plan.offcut_price_usd) if projection.has_factory_source_offcut else 0)
     )
-    apply_plan_costs(plan, edge_cost_usd=factory_execution_edge_cost(order, plan))
+    plan.edge_cost_usd = factory_execution_edge_cost(order, plan)
+    apply_plan_costs(plan)
     status = str(getattr(plan, "status", None) or "")
     if status == DRAFT:
         repository = FrappeCuttingPlanCommandRepository(Capability.EDIT_COST_SETTINGS)
