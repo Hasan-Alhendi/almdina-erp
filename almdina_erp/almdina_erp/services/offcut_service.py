@@ -13,8 +13,10 @@ from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
     decision_from_business_state,
     decision_from_values,
     offcut_assignment_projection,
-    physical_execution_projection_from_snapshot,
     validate_source_resource_homogeneity,
+)
+from almdina_erp.almdina_erp.domain.cutting.physical_execution_contract import (
+    physical_execution_for_snapshot,
 )
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import APPROVED, DRAFT
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
@@ -62,6 +64,7 @@ def _throw_policy_error(error: OffcutPolicyError) -> None:
         "offcut_assignment_requires_offcut_piece": "لا يمكن تصنيف قطعة لوح كامل كقطعة نقص.",
         "full_board_offcut_classification_forbidden": "لا يمكن إسناد حالة نقص إلى قطعة لوح كامل.",
         "factory_source_customer_execution_forbidden": "حالة فضلة المعمل مع التنفيذ عند الزبون غير موجودة.",
+        "legacy_physical_execution_contract": "لا يمكن تصنيف قطع النقص لخطة تاريخية. أعد حساب خطة حديثة أولاً.",
     }
     code = str(error).split(":", 1)[0]
     frappe.throw(_(messages.get(code, "بيانات تصنيف قطع النقص غير صالحة.")), frappe.ValidationError)
@@ -262,6 +265,8 @@ def set_offcut_execution_owner(plan_name: str, assignments: Any) -> dict[str, An
         rows = _parse_assignments(assignments)
         plan_pieces = _unique_plan_pieces(plan)
         snapshot = frappe.parse_json(plan.snapshot_json or "{}") or {}
+        if physical_execution_for_snapshot(snapshot) is None:
+            raise OffcutPolicyError("legacy_physical_execution_contract")
         snapshot_pieces = _unique_snapshot_pieces(snapshot)
         _assert_plan_snapshot_compatibility(plan_pieces, snapshot_pieces)
         normalized = _normalize_assignments(rows, plan_pieces, snapshot_pieces)
@@ -274,7 +279,8 @@ def set_offcut_execution_owner(plan_name: str, assignments: Any) -> dict[str, An
     for identity, values in normalized.items():
         snapshot_pieces[identity].update(values)
     source_projection = _source_business_projection(snapshot)
-    execution = physical_execution_projection_from_snapshot(snapshot)
+    execution = physical_execution_for_snapshot(snapshot)
+    assert execution is not None
 
     for identity, values in normalized.items():
         frappe.db.set_value(
