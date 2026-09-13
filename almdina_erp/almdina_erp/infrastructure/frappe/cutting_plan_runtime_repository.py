@@ -19,10 +19,8 @@ from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
     PlanSettings,
     normalize_plan_settings,
 )
-from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
-    OffcutPolicyError,
-    physical_execution_projection_from_snapshot,
-)
+from almdina_erp.almdina_erp.domain.cutting.offcut_policy import OffcutPolicyError
+from almdina_erp.almdina_erp.domain.cutting.physical_execution_contract import physical_execution_for_snapshot
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import (
     plan_input_fingerprint,
 )
@@ -200,9 +198,10 @@ def production_plan_facts(order: Any) -> ProductionPlanFacts:
     has_snapshot = bool(str(getattr(candidate, "snapshot_json", None) or "").strip())
     snapshot = frappe.parse_json(getattr(candidate, "snapshot_json", None) or "{}") or {}
     try:
-        has_factory_work = physical_execution_projection_from_snapshot(
-            snapshot
-        ).has_factory_work
+        execution = physical_execution_for_snapshot(snapshot)
+        # Legacy plans retain their historical production/cost behavior and do
+        # not become customer-only merely because they predate stable identities.
+        has_factory_work = True if execution is None else execution.has_factory_work
     except OffcutPolicyError:
         # Invalid snapshots must never dispatch production optimistically.
         has_factory_work = False

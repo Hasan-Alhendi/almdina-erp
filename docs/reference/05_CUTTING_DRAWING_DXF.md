@@ -103,6 +103,16 @@ Adaptive Trim هو Business Rule صريح تحت `domain/cutting/adaptive_trim.p
 
 كل System Cutting Plan محسوبة تملك عقد Application واحدًا immutable وversioned باسم `CuttingExecutionTrace` تحت `application/cutting/execution_trace.py`.
 
+### هوية التنفيذ المادي والتوافق التاريخي
+
+كل snapshot جديدة تُنشأ أو تُعاد حسابها تحمل
+`physical_execution_contract: 1`، ولذلك تكون `piece_instance_id` إلزامية لكل
+قطعة في عقد OFFCUT والتنفيذ المادي. snapshot تاريخية لا تعلن هذا العقد ولا تحمل
+أي هوية قطع ثابتة تبقى قابلة للعرض والتكلفة التاريخية فقط، من دون توليد IDs أو
+كتابة snapshot عند القراءة. عند الحاجة إلى إنشاء خطة حديثة من طلب قديم، يملأ
+النظام IDs الناقصة في صفوف الطلب المحفوظة فقط وبشكل Lazy تحت قفل الطلب؛ لا توجد
+migration جماعية ولا fallback مبني على ترتيب الصفوف.
+
 قواعد الملكية والتنفيذ:
 
 - يُبنى الـTrace **مرة واحدة فقط** بعد اكتمال التنفيذ الفعلي، من نفس `PlanSettings` canonical التي دخلت الحساب + `AdaptiveTrimDecision` الحقيقي + نتيجة الـoptimizer النهائية الحقيقية.

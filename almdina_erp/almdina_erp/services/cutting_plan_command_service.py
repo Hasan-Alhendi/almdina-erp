@@ -45,6 +45,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspac
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import (
     apply_validated_dxf_snapshot,
+    backfill_piece_instance_ids,
     calculate_system_plan,
     plan_input_fingerprint,
 )
@@ -356,6 +357,7 @@ def save_uploaded_dxf_plan(
         capability,
         message=_("لا تملك صلاحية رفع أو استبدال DXF لهذا الطلب."),
     )
+    backfill_piece_instance_ids(order)
 
     repository = FrappeCuttingPlanCommandRepository(capability)
     plan = repository.ensure_uploaded_dxf_draft(order)
@@ -495,6 +497,7 @@ def recalculate_system_plan(
     # but recalculation must ask for an executable choice instead of leaking the
     # domain exception or silently converting the stored algorithm.
     require_executable_optimization_mode(plan.optimization_mode)
+    backfill_piece_instance_ids(order)
     calculate_system_plan(order, plan)
     apply_plan_costs(plan, edge_cost_usd=factory_execution_edge_cost(order, plan))
     repository.save_document(plan)

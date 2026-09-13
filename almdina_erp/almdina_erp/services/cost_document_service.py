@@ -16,9 +16,7 @@ from almdina_erp.almdina_erp.application.costing.financial_documents import (
 from almdina_erp.almdina_erp.domain.orders.piece_policy import (
     pending_custom_edge_price_labels,
 )
-from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
-    physical_execution_projection_from_snapshot,
-)
+from almdina_erp.almdina_erp.domain.cutting.physical_execution_contract import physical_execution_for_snapshot
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     require_document_capability,
@@ -144,13 +142,14 @@ def _document_context(order: Any) -> tuple[dict[str, Any], list[dict[str, Any]]]
     physical_qty_by_source: dict[int, int] = {}
     if plan:
         snapshot = frappe.parse_json(plan.snapshot_json or "{}") or {}
-        execution = physical_execution_projection_from_snapshot(snapshot)
-        execution_qty_by_source = dict(
-            execution.factory_processing_qty_by_source_piece_no
-        )
-        physical_qty_by_source = dict(execution.physical_qty_by_source_piece_no)
+        execution = physical_execution_for_snapshot(snapshot)
+        if execution is not None:
+            execution_qty_by_source = dict(execution.factory_processing_qty_by_source_piece_no)
+            physical_qty_by_source = dict(execution.physical_qty_by_source_piece_no)
         order_snapshot["offcut_price_usd"] = getattr(plan, "offcut_price_usd", 0)
-        order_snapshot["offcut_factory_factory"] = execution.has_factory_source_offcut
+        order_snapshot["offcut_factory_factory"] = bool(
+            execution and execution.has_factory_source_offcut
+        )
     return (
         order_snapshot,
         _commercial_piece_snapshots(
