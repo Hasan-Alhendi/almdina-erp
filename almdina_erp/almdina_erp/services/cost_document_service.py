@@ -16,13 +16,14 @@ from almdina_erp.almdina_erp.application.costing.financial_documents import (
 from almdina_erp.almdina_erp.domain.orders.piece_policy import (
     pending_custom_edge_price_labels,
 )
-from almdina_erp.almdina_erp.domain.cutting.physical_execution_contract import physical_execution_for_snapshot
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     require_document_capability,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspace import (
+    current_cost_plan,
     overlay_authoritative_costs,
+    physical_execution_for_plan,
 )
 
 
@@ -131,25 +132,29 @@ def _authorized_order(
 
 
 def _document_context(order: Any) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Build all document projections from one canonical Cutting Plan revision."""
+
+    plan = current_cost_plan(order)
     order_snapshot = overlay_authoritative_costs(
         order,
         _snapshot(order, ORDER_DOCUMENT_FIELDS),
+        plan=plan,
     )
-    plan = None
-    if order.approved_plan:
-        plan = frappe.get_doc("Cutting Plan", order.approved_plan)
-    execution_qty_by_source: dict[int, int] = {}
-    physical_qty_by_source: dict[int, int] = {}
-    if plan:
-        snapshot = frappe.parse_json(plan.snapshot_json or "{}") or {}
-        execution = physical_execution_for_snapshot(snapshot)
-        if execution is not None:
-            execution_qty_by_source = dict(execution.factory_processing_qty_by_source_piece_no)
-            physical_qty_by_source = dict(execution.physical_qty_by_source_piece_no)
-        order_snapshot["offcut_price_usd"] = getattr(plan, "offcut_price_usd", 0)
-        order_snapshot["offcut_factory_factory"] = bool(
-            execution and execution.has_factory_source_offcut
-        )
+    execution = physical_execution_for_plan(plan) if plan is not None else None
+    execution_qty_by_source = (
+        dict(execution.factory_processing_qty_by_source_piece_no)
+        if execution is not None
+        else {}
+    )
+    physical_qty_by_source = (
+        dict(execution.physical_qty_by_source_piece_no)
+        if execution is not None
+        else {}
+    )
+    order_snapshot["offcut_factory_factory"] = bool(
+        execution and execution.has_factory_source_offcut
+    )
+    order_snapshot["offcut_price_applicable"] = order_snapshot["offcut_factory_factory"]
     return (
         order_snapshot,
         _commercial_piece_snapshots(
@@ -165,7 +170,7 @@ def _commercial_piece_snapshots(
     execution_qty_by_source: dict[int, int],
     physical_qty_by_source: dict[int, int],
 ) -> list[dict[str, Any]]:
-    """Annotate customer rows with plan-derived factory service quantities."""
+    """Annotate customer rows with canonical-plan factory service quantities."""
 
     snapshots: list[dict[str, Any]] = []
     for source_piece_no, piece in enumerate(pieces, start=1):
@@ -225,9 +230,6 @@ def get_customer_invoice_document(order_name: str) -> dict[str, Any]:
         requires_cost_access=False,
     )
     order_snapshot, pieces = _document_context(order)
-    # Pricing readiness follows the same physical execution projection used by
-    # the invoice builder. Customer-executed OFFCUT copies are real requirements
-    # but they must never block a factory-service invoice price.
     _require_custom_edge_prices(pieces)
     return _finalize(
         _summarize_customer_invoice(
