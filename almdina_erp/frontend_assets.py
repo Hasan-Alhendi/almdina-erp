@@ -42,6 +42,9 @@ doctype_js = {
         # Critical bootstrap only. The document context must exist before any
         # surface or lifecycle owner registers cancellable work with it.
         "public/js/door_cutting_order/core/door_cutting_order_document_context.js",
+        # Sole authority for DCO edit-session ownership. Feature-local edit
+        # state remains a temporary projection behind registered adapters.
+        "public/js/door_cutting_order/core/door_cutting_order_edit_session_coordinator.js",
         "public/js/permission_context.js",
         "public/js/door_cutting_order/core/door_cutting_order_workspace_store.js",
         "public/js/door_cutting_order/core/door_cutting_order_workspace_sync_coordinator.js",

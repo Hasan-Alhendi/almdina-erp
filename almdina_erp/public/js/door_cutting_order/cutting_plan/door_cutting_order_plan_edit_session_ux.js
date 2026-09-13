@@ -529,7 +529,29 @@
         return owner.load(frm);
     }
 
-    async function startEditing(frm) {
+    function sessionIsCurrent(frm, sessionContext) {
+        if (!sessionContext) return window.cur_frm === frm;
+        const coordinator = editSessionCoordinator();
+        return Boolean(
+            coordinator
+            && typeof coordinator.isSessionCurrent === "function"
+            && coordinator.isSessionCurrent(frm, sessionContext)
+        );
+    }
+
+    function scheduleSessionFocus(frm, sessionContext, fieldname) {
+        const context = documentContext();
+        const focus = () => {
+            if (sessionIsCurrent(frm, sessionContext)) focusDraftControl(frm, fieldname);
+        };
+        if (context && typeof context.scheduleFrame === "function") {
+            context.scheduleFrame(frm, "plan-edit-session-focus", focus);
+            return;
+        }
+        focus();
+    }
+
+    async function startEditing(frm, sessionContext = null) {
         if (!can(frm, "edit_optimizer_settings")) {
             frappe.msgprint(translate("لا تملك صلاحية تعديل إعدادات خطة القص."));
             return false;
@@ -540,6 +562,7 @@
         }
 
         await ensureLoaded(frm);
+        if (!sessionIsCurrent(frm, sessionContext)) return false;
         if (!lifecycleAllowsEdit(frm)) {
             frappe.msgprint(translate("حالة الطلب الحالية لا تسمح بتعديل إعدادات خطة القص."));
             return false;
@@ -556,11 +579,12 @@
         setPlanActionsSuspended(frm, true);
         signalEditChanged(frm);
         schedule(frm);
-        window.requestAnimationFrame(() => focusDraftControl(frm, "kerf_mm"));
+        scheduleSessionFocus(frm, sessionContext, "kerf_mm");
         return true;
     }
 
-    async function cancelEditing(frm) {
+    async function cancelEditing(frm, sessionContext = null) {
+        if (!sessionIsCurrent(frm, sessionContext)) return false;
         if (!isEditing(frm)) return false;
         const store = storeFor(frm);
         if (store) store.cancelEdit();
@@ -572,10 +596,12 @@
         return true;
     }
 
-    async function saveEditing(frm) {
+    async function saveEditing(frm, sessionContext = null) {
+        if (!sessionIsCurrent(frm, sessionContext)) return false;
         if (!isEditing(frm)) return false;
         if (!canEditPlanSettings(frm)) {
-            await cancelEditing(frm);
+            await cancelEditing(frm, sessionContext);
+            if (!sessionIsCurrent(frm, sessionContext)) return false;
             frappe.msgprint(translate("لم تعد حالة الطلب الحالية تسمح لك بتعديل إعدادات خطة القص."));
             return false;
         }
@@ -608,6 +634,7 @@
 
         if (state.dirty) {
             await api.saveSettings(frm.doc.name, state.draft || {});
+            if (!sessionIsCurrent(frm, sessionContext)) return false;
         }
 
         unmountDraftControls(frm);
@@ -615,6 +642,7 @@
         const owner = stateOwner();
         if (owner && typeof owner.load === "function") {
             await owner.load(frm, { force: true });
+            if (!sessionIsCurrent(frm, sessionContext)) return false;
         } else {
             store.cancelEdit();
         }
@@ -631,6 +659,11 @@
     function sync(frm) {
         if (!frm || frm.doctype !== "Door Cutting Order") return;
         if (isEditing(frm) && !canEditPlanSettings(frm)) {
+            const coordinator = editSessionCoordinator();
+            if (coordinator && typeof coordinator.activeKind === "function" && coordinator.activeKind(frm) === "plan") {
+                coordinator.cancel(frm, "plan");
+                return;
+            }
             const store = storeFor(frm);
             if (store) store.cancelEdit();
             unmountDraftControls(frm);
@@ -658,9 +691,10 @@
             context.scheduleFrame(frm, "plan-settings-edit-session", () => sync(frm));
             return;
         }
-        window.requestAnimationFrame(() => {
-            if (window.cur_frm === frm) sync(frm);
-        });
+        // The DocumentContext is the normal runtime scheduler. Keep the
+        // compatibility fallback synchronous so an unowned RAF cannot run
+        // against a recycled form/session.
+        if (window.cur_frm === frm) sync(frm);
     }
 
     frappe.ui.form.on("Door Cutting Order", {
@@ -681,6 +715,30 @@
         });
     });
 
+    function editSessionCoordinator() {
+        return window.AlmdinaDcoEditSessionCoordinator || null;
+    }
+
+    function coordinated(command, frm, fallback) {
+        const coordinator = editSessionCoordinator();
+        if (!coordinator || typeof coordinator[command] !== "function") return fallback(frm);
+        return coordinator[command](frm, "plan");
+    }
+
+    const coordinator = editSessionCoordinator();
+    if (coordinator && typeof coordinator.register === "function") {
+        coordinator.register("plan", {
+            canStart: canEditPlanSettings,
+            start: startEditing,
+            save: saveEditing,
+            cancel: cancelEditing,
+            isDirty(frm) {
+                const state = workspaceSnapshot(frm);
+                return Boolean(state && state.dirty);
+            },
+        });
+    }
+
     window.AlmdinaPlanEditSessionUX = Object.freeze({
         PLAN_SETTING_FIELDS,
         PLAN_SETTING_SPECS,
@@ -688,9 +746,9 @@
         canEditPlanSettings,
         isEditing,
         planSettingsMayWrite,
-        startEditing,
-        cancelEditing,
-        saveEditing,
+        startEditing: frm => coordinated("start", frm, startEditing),
+        cancelEditing: frm => coordinated("cancel", frm, cancelEditing),
+        saveEditing: frm => coordinated("save", frm, saveEditing),
         validateDraft,
         schedule,
     });

@@ -22,6 +22,7 @@
 | Workspace entry visibility | `application/security/workspace_visibility.py` + `boot.py` + `workspace_api.py` | إسقاط shortcuts/sections/links غير المسموحة من payload الخادم قبل render |
 | Workforce primary action visibility | `public/js/factory_workforce/controller.js` | fail-closed محليًا أثناء mount/refresh ثم يتبع `create_users` من console payload الحالي |
 | DCO document freshness | `door_cutting_order/core/door_cutting_order_document_context.js` | هوية الوثيقة، generation/freshness، timers/frames/observers المرتبطة بعمر الوثيقة |
+| DCO aggregate edit session | `door_cutting_order/core/door_cutting_order_edit_session_coordinator.js` | المالك الوحيد لجلسة Edit الواحدة عبر Order/Plan/Cost؛ يحكم النوع النشط والمرحلة وهوية/جيل الوثيقة وجيل الجلسة، بينما تبقى الوحدات الثلاث adapters لآثارها المحلية |
 | DCO permission refresh | `door_cutting_order/core/door_cutting_order_permission_refresh_ux.js` | إعادة مزامنة واجهة DCO عند تغيّر permission context |
 | Production settings | `public/js/production_routing_ux.js` | إعدادات وتحرير production routing فقط |
 | Shared shop-floor actions | `public/js/shop_floor_quick_actions.js` | quick actions المشتركة خارج صفحة inbox؛ لا يملك صفحة inbox نفسها |

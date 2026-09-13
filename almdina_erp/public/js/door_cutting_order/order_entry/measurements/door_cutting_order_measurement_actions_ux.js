@@ -191,9 +191,8 @@
             if (event.target.closest(".dco-inline-order-edit-cancel")) {
                 event.preventDefault();
                 const revision = orderRevisionUx();
-                if (revision && typeof revision.lockEditSession === "function") {
-                    revision.lockEditSession(frm, { silent: true });
-                    Promise.resolve(frm.reload_doc()).finally(() => renderInlineOrderEditAction(frm));
+                if (revision && typeof revision.cancelEditSession === "function") {
+                    Promise.resolve(revision.cancelEditSession(frm)).finally(() => renderInlineOrderEditAction(frm));
                 }
             }
         });

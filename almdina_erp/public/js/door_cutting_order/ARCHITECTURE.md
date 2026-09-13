@@ -38,6 +38,17 @@ load is bound to the document identity and a request token so a late response fr
 previous order cannot repaint the current order. The server remains authoritative for
 capabilities and all mutations.
 
+The aggregate Edit Session has one owner:
+`AlmdinaDcoEditSessionCoordinator`. It arbitrates the single active `order`, `plan`,
+or `cost` session and carries document identity/generation plus a session generation
+into each adapter command. Order revision UX and the Plan/Cost `WorkspaceStore`
+draft flags are local adapter projections, not competing session authorities. An
+adapter must re-check its supplied session context after every asynchronous boundary
+before it mounts/unmounts controls, changes store state, refreshes a workspace, or
+shows completion UI. Legacy Order hydration is the only explicit compatibility seam;
+it adopts a known recovered Order session through the coordinator rather than
+polling feature-local editing flags.
+
 The active special-shape documentation workspace is separately layered under
 `special_shape_documentation/` (`domain`, `application`, `infrastructure`,
 `presentation`). Its versioned document records the customer's explanatory image,
@@ -49,7 +60,8 @@ workspace. Legacy V3/V4 editor assets have been removed.
 
 ALMADINA-128 adds versioned, site/user/DCO-namespaced local checkpoints without
 changing canonical persistence. `AlmdinaDocumentContext` remains the document
-identity/freshness owner; `AlmdinaOrderRevisionUX` remains the EDIT-session owner;
+identity/freshness owner; `AlmdinaDcoEditSessionCoordinator` remains the aggregate
+EDIT-session owner;
 Plan and Cost drafts remain in their existing `WorkspaceStore` instances and
 `WorkspaceSyncCoordinator` remains the derived-workspace coordinator.
 

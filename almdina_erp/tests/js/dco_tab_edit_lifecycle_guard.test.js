@@ -66,10 +66,12 @@ function verifyNativeTabLifecycleGuard() {
     };
 
     const fakeWindow = {
-        AlmdinaPageEditActionUX: {
-            activeEditingKind() {
+        AlmdinaDcoEditSessionCoordinator: {
+            activeKind() {
                 return editingKind;
             },
+        },
+        AlmdinaPageEditActionUX: {
             schedule() {
                 scheduleCount += 1;
             },

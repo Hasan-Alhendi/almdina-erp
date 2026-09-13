@@ -14,8 +14,8 @@
         return window.AlmdinaDocumentContext || null;
     }
 
-    function editActionOwner() {
-        return window.AlmdinaPageEditActionUX || null;
+    function editSessionCoordinator() {
+        return window.AlmdinaDcoEditSessionCoordinator || null;
     }
 
     function isOrderForm(frm) {
@@ -48,9 +48,9 @@
     }
 
     function activeEditingKind(frm) {
-        const owner = editActionOwner();
-        return owner && typeof owner.activeEditingKind === "function"
-            ? owner.activeEditingKind(frm)
+        const owner = editSessionCoordinator();
+        return owner && typeof owner.activeKind === "function"
+            ? owner.activeKind(frm)
             : null;
     }
 
@@ -127,7 +127,7 @@
                     }
 
                     const result = originalSetActive.apply(this, args);
-                    const owner = editActionOwner();
+                    const owner = window.AlmdinaPageEditActionUX;
                     if (owner && typeof owner.schedule === "function") {
                         owner.schedule(frm);
                     }
