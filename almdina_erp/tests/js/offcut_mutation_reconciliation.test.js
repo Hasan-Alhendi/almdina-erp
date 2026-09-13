@@ -108,8 +108,11 @@ vm.runInContext(
         "CP-UPLOADED",
         [{ piece_instance_id: "piece:1", business_state: "CUSTOMER_CUSTOMER" }]
     );
+    const policy = windowObject.AlmdinaOrderMutationImpactPolicy;
+    const reconciled = await policy.reconcileOffcutMutation(frm, result);
 
     assert.equal(result.cutting_plan, "CP-UPLOADED");
+    assert.equal(reconciled, true);
     assert.deepEqual(sequence, [
         "mutation",
         "invalidate:plan:offcut_classification_changed",
@@ -123,6 +126,15 @@ vm.runInContext(
         sequence.indexOf("load:cost:start") > sequence.indexOf("load:plan:end"),
         "Cost refresh must not start before the canonical Plan refresh has completed"
     );
+
+    const beforeNavigationCheck = sequence.length;
+    windowObject.cur_frm = {
+        doctype: "Door Cutting Order",
+        doc: { name: "DCO-OTHER", pieces: [] },
+    };
+    const skipped = await policy.reconcileOffcutMutation(frm, result);
+    assert.equal(skipped, false, "navigation must prevent reconciliation against the wrong form");
+    assert.equal(sequence.length, beforeNavigationCheck, "no workspace read may start after navigation");
 
     console.log("OFFCUT mutation Plan-to-Cost reconciliation simulation passed");
 })().catch((error) => {
