@@ -5,10 +5,8 @@ from typing import Any
 import frappe
 from frappe.utils import cint
 
-from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
-    OffcutPolicyError,
-    physical_execution_projection_from_snapshot,
-)
+from almdina_erp.almdina_erp.domain.cutting.offcut_policy import OffcutPolicyError
+from almdina_erp.almdina_erp.domain.cutting.physical_execution_contract import physical_execution_for_snapshot
 from almdina_erp.almdina_erp.domain.orders.lifecycle import (
     LOCKED_ORDER_STATUSES,
     department_for_stage_type,
@@ -129,9 +127,9 @@ def required_piece_qty(order_name: str) -> int:
     if snapshot_json.strip():
         try:
             snapshot = frappe.parse_json(snapshot_json) or {}
-            return physical_execution_projection_from_snapshot(
-                snapshot
-            ).factory_executable_quantity
+            execution = physical_execution_for_snapshot(snapshot)
+            if execution is not None:
+                return execution.factory_executable_quantity
         except (OffcutPolicyError, TypeError, ValueError):
             # Orders created before physical identities existed retain their legacy
             # quantity projection instead of being blocked by a migration gap.
