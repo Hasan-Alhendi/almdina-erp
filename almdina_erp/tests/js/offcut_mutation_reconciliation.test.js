@@ -12,7 +12,7 @@ function source(relative) {
 const sequence = [];
 const frm = {
     doctype: "Door Cutting Order",
-    doc: { name: "DCO-OFFCUT-LIFECYCLE" },
+    doc: { name: "DCO-OFFCUT-LIFECYCLE", pieces: [] },
 };
 
 const windowObject = {
@@ -34,6 +34,11 @@ const fakeFrappe = {
             },
         };
     },
+    ui: {
+        form: {
+            on() {},
+        },
+    },
 };
 
 const context = vm.createContext({
@@ -44,6 +49,7 @@ const context = vm.createContext({
     Object,
     Array,
     String,
+    Number,
     Boolean,
     JSON,
     Map,
@@ -90,6 +96,10 @@ coordinator.register("cost", {
 
 vm.runInContext(
     source("../../public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_api.js"),
+    context
+);
+vm.runInContext(
+    source("../../public/js/door_cutting_order/order_entry/door_cutting_order_mutation_impact_policy.js"),
     context
 );
 
