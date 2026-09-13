@@ -673,14 +673,8 @@
         `).join("");
     }
 
-    async function reloadOffcutState(frm) {
-        const owner = planWorkspaceState();
-        if (!owner || typeof owner.load !== "function") return false;
-        if (typeof owner.invalidate === "function") {
-            owner.invalidate(frm, "offcut_classification_changed");
-        }
-        await owner.load(frm, { force: true });
-        return true;
+    function offcutMutationPolicy() {
+        return window.AlmdinaOrderMutationImpactPolicy || null;
     }
 
     function openOffcutEditor(frm) {
@@ -711,9 +705,27 @@
                 }).get();
                 dialog.get_primary_btn().prop("disabled", true);
                 try {
-                    await api.saveOffcutAssignments(plan.name, rows);
+                    const result = await api.saveOffcutAssignments(plan.name, rows);
                     dialog.hide();
-                    await reloadOffcutState(frm);
+
+                    const policy = offcutMutationPolicy();
+                    if (!policy || typeof policy.reconcileOffcutMutation !== "function") {
+                        frappe.msgprint(__(
+                            "تم حفظ تصنيف قطع النقص، لكن تعذر تحديث الخطة والتكلفة تلقائيًا. أعد تحميل الصفحة."
+                        ));
+                        return;
+                    }
+                    try {
+                        const reconciled = await policy.reconcileOffcutMutation(frm, result);
+                        if (!reconciled) return;
+                    } catch (reconciliationError) {
+                        console.error("DCO OFFCUT workspace reconciliation failed", reconciliationError);
+                        frappe.msgprint(__(
+                            "تم حفظ تصنيف قطع النقص، لكن تعذر تحديث الخطة والتكلفة تلقائيًا. أعد تحميل الصفحة."
+                        ));
+                        return;
+                    }
+
                     frappe.show_alert({
                         message: __("تم حفظ تصنيف قطع النقص."),
                         indicator: "green",
