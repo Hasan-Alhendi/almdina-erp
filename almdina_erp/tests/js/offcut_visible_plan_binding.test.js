@@ -109,6 +109,10 @@ vm.runInContext(
     source("door_cutting_order/cutting_plan/door_cutting_order_plan_ux.js"),
     context
 );
+vm.runInContext(
+    source("door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_presenter_adapter.js"),
+    context
+);
 
 const frm = {
     doctype: "Door Cutting Order",
@@ -137,6 +141,11 @@ function assertVisiblePlan(tab, expectedRow, expectedGeometry, expectedOffcutCou
     assert.equal(displayed.name, expectedRow.name);
     assert.equal(JSON.parse(displayed.snapshot_json).identity, expectedGeometry);
     assert.equal(geometry.identity, expectedGeometry);
+    assert.equal(
+        geometry.__offcut_assignments.length,
+        expectedOffcutCount,
+        "presentation snapshot must carry the canonical assignments for the visible plan only"
+    );
     assert.equal(offcut.plan.name, expectedRow.name);
     assert.equal(offcut.assignments.length, expectedOffcutCount);
 }

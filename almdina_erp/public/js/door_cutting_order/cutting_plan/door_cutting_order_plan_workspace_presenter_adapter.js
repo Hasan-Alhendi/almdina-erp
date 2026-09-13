@@ -37,14 +37,42 @@
             : null;
     }
 
+    function presentationAssignments(row) {
+        const offcut = row && row.offcut;
+        const assignments = offcut && Array.isArray(offcut.assignments)
+            ? offcut.assignments
+            : [];
+        return assignments.map(assignment => ({ ...assignment }));
+    }
+
+    function attachPresentationMetadata(plan, row) {
+        if (!plan || typeof plan !== "object") return null;
+        // Keep the canonical plan JSON serializable exactly as before. OFFCUT
+        // labels belong to this transient read projection only, so attach them as
+        // non-enumerable metadata on a shallow clone rather than extending the
+        // persisted/signed snapshot shape.
+        const projected = { ...plan };
+        Object.defineProperty(projected, "__offcut_assignments", {
+            value: presentationAssignments(row),
+            enumerable: false,
+            configurable: false,
+            writable: false,
+        });
+        return projected;
+    }
+
     function parseSnapshot(row) {
         if (!row) return null;
         const raw = row.snapshot_json;
         if (!raw) return null;
-        if (typeof raw === "object") return raw;
+        if (typeof raw === "object") {
+            return attachPresentationMetadata(raw, row);
+        }
         try {
             const parsed = JSON.parse(raw);
-            return parsed && typeof parsed === "object" ? parsed : null;
+            return parsed && typeof parsed === "object"
+                ? attachPresentationMetadata(parsed, row)
+                : null;
         } catch (error) {
             return null;
         }
@@ -239,6 +267,7 @@
     window.AlmdinaPlanWorkspacePresenterAdapter = Object.freeze({
         install,
         project,
+        parseSnapshot,
         getPlanForTab,
         hasApprovedPlan,
         activeSettings,
