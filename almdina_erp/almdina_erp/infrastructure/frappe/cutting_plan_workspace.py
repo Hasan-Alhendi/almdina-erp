@@ -107,7 +107,7 @@ def backfill_piece_instance_ids(order: Any) -> bool:
         )
 
     changed = False
-    for row in order.pieces or []:
+    for row in getattr(order, "pieces", None) or []:
         if str(getattr(row, "piece_instance_id", "") or "").strip():
             continue
         identity = f"piece:{uuid4().hex}"
