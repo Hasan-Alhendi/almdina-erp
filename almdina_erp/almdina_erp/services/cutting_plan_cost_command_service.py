@@ -105,7 +105,7 @@ def update_plan_cost_settings(
     if projection is None:
         # A historical plan has no OFFCUT contract.  Preserve its stored
         # commercial history instead of silently rewriting it during costing.
-        plan.offcut_price_usd = flt(plan.offcut_price_usd)
+        plan.offcut_price_usd = flt(getattr(plan, "offcut_price_usd", 0))
     else:
         plan.offcut_price_usd = (
             requested_offcut_price
