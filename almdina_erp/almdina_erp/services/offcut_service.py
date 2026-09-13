@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 from typing import Any
 
@@ -9,6 +10,7 @@ from frappe.utils import cint, flt
 
 from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
     OffcutPolicyError,
+    canonicalize_snapshot_allocation,
     canonicalize_snapshot_sources,
     decision_from_business_state,
     decision_from_values,
@@ -205,6 +207,24 @@ def _source_business_projection(snapshot: dict[str, Any]) -> dict[str, dict[str,
     }
 
 
+def _reconcile_required_boards(plan: Any, snapshot: dict[str, Any]) -> int:
+    """Persist the canonical new-board count from physical source allocation."""
+
+    allocation = canonicalize_snapshot_allocation(copy.deepcopy(snapshot))
+    required_boards = cint(allocation.get("required_full_boards"))
+    previous_required_boards = cint(getattr(plan, "required_boards", 0))
+    plan.required_boards = required_boards
+    if required_boards != previous_required_boards:
+        frappe.db.set_value(
+            "Cutting Plan",
+            plan.name,
+            "required_boards",
+            required_boards,
+            update_modified=False,
+        )
+    return required_boards
+
+
 def _reconcile_factory_execution_projection(order: Any, plan: Any, execution: Any) -> dict[str, Any]:
     """Remove stale executable work when classification becomes customer-only.
 
@@ -306,6 +326,7 @@ def set_offcut_execution_owner(plan_name: str, assignments: Any) -> dict[str, An
         update_modified=True,
     )
     plan.snapshot_json = frappe.as_json(snapshot)
+    _reconcile_required_boards(plan, snapshot)
     # Classification is intentionally independent from approval and geometry,
     # but it is commercial input. Reconcile the dependent projection in the same
     # request and clear an aggregate price that is no longer legally applicable.

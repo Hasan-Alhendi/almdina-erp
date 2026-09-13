@@ -4,6 +4,7 @@
     if (window.AlmdinaOrderMutationImpactPolicy) return;
 
     const IMPACT_KEY = "__almdinaWorkspaceMutationImpact";
+    const OFFCUT_CLASSIFICATION_REASON = "offcut_classification_changed";
     const SPECIAL_PRICE_BASIS_FIELDS = new Set([
         "width_cm",
         "length_cm",
@@ -169,6 +170,46 @@
         return true;
     }
 
+    async function reconcileOffcutClassification(event) {
+        const detail = event && event.detail ? event.detail : {};
+        const planState = detail.snapshot || null;
+        if (
+            !planState
+            || planState.staleReason !== OFFCUT_CLASSIFICATION_REASON
+            || planState.freshness !== "stale"
+            || planState.status === "loading"
+        ) {
+            return false;
+        }
+
+        const frm = window.cur_frm;
+        if (!frm || frm.doctype !== "Door Cutting Order" || !frm.doc) return false;
+        const eventOrderName = String(detail.orderName || "").trim();
+        if (eventOrderName && eventOrderName !== String(frm.doc.name || "").trim()) {
+            return false;
+        }
+
+        const coordinator = syncCoordinator();
+        if (!coordinator || typeof coordinator.reconcile !== "function") return false;
+
+        // OFFCUT classification is already committed server-side. Cost is a direct
+        // dependent read model, so invalidate it and force one canonical reload.
+        // The registered Cost state owner performs the read; its presenter reacts
+        // to the normal cost-workspace-updated event and renders the fresh snapshot.
+        await coordinator.reconcile(
+            frm,
+            { changed: ["cost"], reason: OFFCUT_CLASSIFICATION_REASON },
+            { activeOnly: false }
+        );
+        return true;
+    }
+
+    function onPlanWorkspaceUpdated(event) {
+        reconcileOffcutClassification(event).catch((error) => {
+            console.error("DCO OFFCUT cost reconciliation failed", error);
+        });
+    }
+
     const orderHandlers = {
         after_save(frm) {
             reconcileAfterSave(frm).catch((error) => {
@@ -193,13 +234,19 @@
     });
     frappe.ui.form.on("Door Cutting Order Detail", pieceHandlers);
 
+    if (typeof window.addEventListener === "function") {
+        window.addEventListener("almdina:plan-workspace-updated", onPlanWorkspaceUpdated);
+    }
+
     window.AlmdinaOrderMutationImpactPolicy = Object.freeze({
+        OFFCUT_CLASSIFICATION_REASON,
         SPECIAL_PRICE_BASIS_FIELDS,
         ORDER_PLAN_COST_FIELDS,
         PIECE_PLAN_COST_FIELDS,
         PIECE_COST_ONLY_FIELDS,
         recordImpact,
         reconcileAfterSave,
+        reconcileOffcutClassification,
         planNeedsRecalculation,
     });
 })();

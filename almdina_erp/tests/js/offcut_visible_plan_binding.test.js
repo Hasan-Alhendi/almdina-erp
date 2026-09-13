@@ -167,6 +167,20 @@ const planUxSource = source("door_cutting_order/cutting_plan/door_cutting_order_
 assert.match(planUxSource, /saveOffcutAssignments\(plan\.name, rows\)/);
 assert.doesNotMatch(planUxSource, /activePlan\(frm,\s*["']System["']\)/);
 assert.match(planUxSource, /almdina:plan-selection-changed/);
+assert.match(planUxSource, /offcut_classification_changed/);
+
+const dependencyPolicySource = source(
+    "door_cutting_order/order_entry/door_cutting_order_mutation_impact_policy.js"
+);
+assert.match(
+    dependencyPolicySource,
+    /OFFCUT_CLASSIFICATION_REASON\s*=\s*["']offcut_classification_changed["']/
+);
+assert.match(dependencyPolicySource, /almdina:plan-workspace-updated/);
+assert.match(dependencyPolicySource, /changed:\s*\["cost"\]/);
+assert.match(dependencyPolicySource, /coordinator\.reconcile\(/);
+assert.doesNotMatch(dependencyPolicySource, /setTimeout\s*\(/);
+assert.doesNotMatch(dependencyPolicySource, /location\.reload\s*\(/);
 
 fakeWindow.AlmdinaPlanPreviewSession = {
     isReady() {
