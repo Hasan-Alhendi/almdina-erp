@@ -47,14 +47,18 @@
 
     function attachPresentationMetadata(plan, row) {
         if (!plan || typeof plan !== "object") return null;
-        // This metadata is a transient read projection only. It is deliberately
-        // kept outside the canonical persisted snapshot contract so presentation
-        // can consume backend-owned OFFCUT state labels without mutating geometry,
-        // physical source identity, or piece_instance_id.
-        return {
-            ...plan,
-            __offcut_assignments: presentationAssignments(row),
-        };
+        // Keep the canonical plan JSON serializable exactly as before. OFFCUT
+        // labels belong to this transient read projection only, so attach them as
+        // non-enumerable metadata on a shallow clone rather than extending the
+        // persisted/signed snapshot shape.
+        const projected = { ...plan };
+        Object.defineProperty(projected, "__offcut_assignments", {
+            value: presentationAssignments(row),
+            enumerable: false,
+            configurable: false,
+            writable: false,
+        });
+        return projected;
     }
 
     function parseSnapshot(row) {
