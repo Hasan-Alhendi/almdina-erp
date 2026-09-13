@@ -260,14 +260,15 @@ def test_active_stage_start_and_handoff_fail_closed_after_reclassification_remov
     assert handoff.code == "customer_only_offcut"
 
 
-def test_cost_plan_prefers_real_zero_board_offcut_draft(monkeypatch) -> None:
+def test_cost_plan_uses_zero_board_uploaded_draft_when_resolver_selects_it(monkeypatch) -> None:
     from almdina_erp.almdina_erp.infrastructure.frappe import (
         cutting_plan_costing_workspace as workspace,
     )
 
-    draft = SimpleNamespace(
-        name="PLAN-DRAFT",
+    uploaded = SimpleNamespace(
+        name="PLAN-UPLOADED",
         status="Draft",
+        source_type="Uploaded DXF",
         required_boards=0,
         snapshot_json=json.dumps({
             "sheets": [
@@ -285,53 +286,34 @@ def test_cost_plan_prefers_real_zero_board_offcut_draft(monkeypatch) -> None:
             ]
         }),
     )
-    approved = SimpleNamespace(
-        name="PLAN-APPROVED",
-        status="Approved",
-        required_boards=2,
-        snapshot_json=json.dumps({"sheets": [{"pieces": [_piece("door:1", copy_no=1)]}]}),
+    monkeypatch.setattr(
+        workspace,
+        "resolve_canonical_cost_plan",
+        lambda _order: uploaded,
     )
 
-    def fake_latest(_order_name: str, **filters):
-        if filters.get("status") == "Draft":
-            return draft
-        if filters.get("status") == "Approved":
-            return approved
-        return None
-
-    monkeypatch.setattr(workspace, "latest_plan", fake_latest)
-
-    assert workspace.current_cost_plan(SimpleNamespace(name="DCO-1")) is draft
+    assert workspace.current_cost_plan(SimpleNamespace(name="DCO-1", approved_plan="")) is uploaded
 
 
-def test_cost_plan_still_ignores_empty_placeholder_draft(monkeypatch) -> None:
+def test_cost_plan_keeps_official_approved_authority_over_newer_drafts(monkeypatch) -> None:
     from almdina_erp.almdina_erp.infrastructure.frappe import (
         cutting_plan_costing_workspace as workspace,
     )
 
-    draft = SimpleNamespace(
-        name="PLAN-DRAFT",
-        status="Draft",
-        required_boards=0,
-        snapshot_json=json.dumps({"sheets": []}),
-    )
     approved = SimpleNamespace(
         name="PLAN-APPROVED",
         status="Approved",
         required_boards=2,
         snapshot_json=json.dumps({"sheets": [{"pieces": [_piece("door:1", copy_no=1)]}]}),
     )
+    monkeypatch.setattr(
+        workspace,
+        "resolve_canonical_cost_plan",
+        lambda _order: approved,
+    )
 
-    def fake_latest(_order_name: str, **filters):
-        if filters.get("status") == "Draft":
-            return draft
-        if filters.get("status") == "Approved":
-            return approved
-        return None
-
-    monkeypatch.setattr(workspace, "latest_plan", fake_latest)
-
-    assert workspace.current_cost_plan(SimpleNamespace(name="DCO-1")) is approved
+    order = SimpleNamespace(name="DCO-1", approved_plan=approved.name)
+    assert workspace.current_cost_plan(order) is approved
 
 
 def test_invoice_service_scales_edge_and_extra_totals_to_factory_physical_quantity() -> None:
