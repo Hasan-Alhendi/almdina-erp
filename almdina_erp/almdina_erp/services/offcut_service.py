@@ -13,30 +13,39 @@ from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
     canonicalize_snapshot_allocation,
     canonicalize_snapshot_sources,
     decision_from_business_state,
-    decision_from_values,
     offcut_assignment_projection,
     validate_source_resource_homogeneity,
 )
 from almdina_erp.almdina_erp.domain.cutting.physical_execution_contract import (
     physical_execution_for_snapshot,
 )
-from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import APPROVED, DRAFT
+from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
+    APPROVED,
+    DRAFT,
+    UPLOADED_DXF,
+)
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization import (
     require_cutting_plan_capability,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
     latest_plan,
+    resolve_canonical_cost_plan,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspace import (
     apply_plan_costs,
     factory_execution_edge_cost,
     persist_plan_cost_snapshot,
+    physical_execution_for_plan,
     refresh_order_commercial_totals,
 )
 
 
 _ASSIGNMENT_FIELDS = frozenset({"piece_instance_id", "business_state"})
+_OFFCUT_DEPENDENCIES = {
+    "changed": ["plan", "cost"],
+    "reason": "offcut_classification_changed",
+}
 
 
 def _parse_assignments(value: Any) -> list[dict[str, Any]]:
@@ -226,15 +235,7 @@ def _reconcile_required_boards(plan: Any, snapshot: dict[str, Any]) -> int:
 
 
 def _reconcile_factory_execution_projection(order: Any, plan: Any, execution: Any) -> dict[str, Any]:
-    """Remove stale executable work when classification becomes customer-only.
-
-    Mixed orders retain their current route/stage because the authoritative
-    required quantity is projected dynamically from physical factory pieces.
-    When the projection reaches zero factory pieces there is no valid executable
-    task left: cancel active stage rows for audit and clear routing pointers only
-    if the order had actually entered production. Merely classifying a fresh order
-    must not rewrite its lifecycle status.
-    """
+    """Remove stale executable work when canonical classification becomes customer-only."""
 
     if execution.has_factory_work:
         return {
@@ -273,6 +274,43 @@ def _reconcile_factory_execution_projection(order: Any, plan: Any, execution: An
     }
 
 
+def _canonical_plan_after_mutation(order: Any, plan: Any) -> Any:
+    """Return the single commercial authority after mutating one visible plan.
+
+    The current Approved relation is authoritative without another repository read.
+    Without an Approved relation, the current Uploaded DXF Draft is canonical by
+    definition; System still needs the central resolver so an Uploaded Draft can
+    take precedence when both coexist.
+    """
+
+    approved_name = str(getattr(order, "approved_plan", None) or "").strip()
+    if approved_name and approved_name == str(getattr(plan, "name", None) or ""):
+        return plan
+    if (
+        not approved_name
+        and str(getattr(plan, "status", None) or "") == DRAFT
+        and str(getattr(plan, "source_type", None) or "") == UPLOADED_DXF
+    ):
+        return plan
+    return resolve_canonical_cost_plan(order) or plan
+
+
+def _canonical_production_reconciliation(order: Any, canonical_plan: Any) -> dict[str, Any]:
+    """Reconcile production from the exact same plan used for commercial reads."""
+
+    canonical_execution = physical_execution_for_plan(canonical_plan)
+    if canonical_execution is None:
+        return {
+            "production_reconciled": False,
+            "cancelled_stage_count": 0,
+        }
+    return _reconcile_factory_execution_projection(
+        order,
+        canonical_plan,
+        canonical_execution,
+    )
+
+
 @frappe.whitelist()
 def set_offcut_execution_owner(plan_name: str, assignments: Any) -> dict[str, Any]:
     """Classify OFFCUT physical pieces without changing geometry or approval."""
@@ -294,8 +332,6 @@ def set_offcut_execution_owner(plan_name: str, assignments: Any) -> dict[str, An
         _throw_policy_error(error)
         raise AssertionError("unreachable") from error
 
-    # Validate everything before the first DB write. Classification mutates only
-    # OFFCUT business fields; resource allocation, price and approval stay intact.
     for identity, values in normalized.items():
         snapshot_pieces[identity].update(values)
     source_projection = _source_business_projection(snapshot)
@@ -327,9 +363,7 @@ def set_offcut_execution_owner(plan_name: str, assignments: Any) -> dict[str, An
     )
     plan.snapshot_json = frappe.as_json(snapshot)
     _reconcile_required_boards(plan, snapshot)
-    # Classification is intentionally independent from approval and geometry,
-    # but it is commercial input. Reconcile the dependent projection in the same
-    # request and clear an aggregate price that is no longer legally applicable.
+
     if not execution.has_factory_source_offcut and flt(getattr(plan, "offcut_price_usd", 0)):
         frappe.db.set_value(
             "Cutting Plan",
@@ -345,21 +379,24 @@ def set_offcut_execution_owner(plan_name: str, assignments: Any) -> dict[str, An
     ):
         apply_plan_costs(plan, edge_cost_usd=factory_execution_edge_cost(order, plan))
         persist_plan_cost_snapshot(plan)
-    refresh_order_commercial_totals(order, plan)
-    production_reconciliation = _reconcile_factory_execution_projection(
+
+    canonical_plan = _canonical_plan_after_mutation(order, plan)
+    refresh_order_commercial_totals(order, canonical_plan)
+    production_reconciliation = _canonical_production_reconciliation(
         order,
-        plan,
-        execution,
+        canonical_plan,
     )
 
     return {
         "cutting_plan": plan.name,
+        "canonical_cost_plan": getattr(canonical_plan, "name", None),
         "status": plan.status,
         "approved_by": getattr(plan, "approved_by", None),
         "approved_on": getattr(plan, "approved_on", None),
         "approval_preserved": True,
         "factory_executable_quantity": execution.factory_executable_quantity,
         "offcut_price_applicable": execution.has_factory_source_offcut,
+        "dependencies": dict(_OFFCUT_DEPENDENCIES),
         **production_reconciliation,
         "assignments": [
             offcut_assignment_projection(snapshot_pieces[identity])

@@ -17,7 +17,7 @@ from almdina_erp.almdina_erp.domain.orders.costing import (
     calculate_special_pricing,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
-    latest_plan,
+    resolve_canonical_cost_plan,
 )
 
 
@@ -30,6 +30,13 @@ PLAN_COST_FIELDS = (
     "edge_cost_usd",
     "total_cost_usd",
     "offcut_price_usd",
+)
+PLAN_EXECUTION_METRIC_FIELDS = (
+    "required_boards",
+    "used_area_m2",
+    "total_source_area_m2",
+    "waste_area_m2",
+    "waste_percent",
 )
 _LEGACY_ORDER_COST_FIELDS = tuple(
     fieldname for fieldname in PLAN_COST_FIELDS if fieldname != "offcut_price_usd"
@@ -303,13 +310,12 @@ def _commercial_piece_execution(
 
 
 def refresh_order_commercial_totals(order: Any, plan: Any | None = None) -> dict[str, Any]:
-    """Refresh DCO-owned per-piece and aggregate commercial projections.
+    """Refresh DCO-owned commercial projections from the canonical cost plan.
 
-    Cutting Plan remains the sole owner of board/cutting/edge financial fields.
-    The order stores customer-facing commercial projections. When no canonical
-    plan exists yet, the existing authoritative-cost compatibility bridge is used
-    only as a read source; ordinary DCO save still never creates or recalculates
-    Cutting Plan state.
+    ``plan`` remains a compatibility hint for callers that have just persisted a
+    first plan. Once canonical plan state exists, however, the resolver is the
+    authority. In particular, a newer Draft must never repaint DCO commercial
+    totals while an official Approved plan remains linked to the order.
     """
 
     settings = frappe.get_cached_doc("Almdina ERP Settings")
@@ -319,7 +325,7 @@ def refresh_order_commercial_totals(order: Any, plan: Any | None = None) -> dict
         manual_edge_fee_usd=flt(settings.default_special_manual_edge_fee_usd),
         margin_percent=flt(settings.default_special_margin_percent),
     )
-    resolved_plan = plan or current_cost_plan(order)
+    resolved_plan = current_cost_plan(order) or plan
     board_and_cutting_cost_usd, total_cost_usd = _commercial_cost_basis(order, resolved_plan)
     projection, ratios = _commercial_piece_execution(order, resolved_plan)
     extra_addons_total = sum(
@@ -380,55 +386,16 @@ def refresh_order_commercial_totals(order: Any, plan: Any | None = None) -> dict
 
 
 def project_plan_costs_to_order(order: Any, plan: Any) -> dict[str, float]:
-    """A6.2 compatibility facade: refresh order-owned quote totals only.
-
-    The historical implementation copied every Plan financial field back onto
-    Door Cutting Order. Runtime no longer needs that projection, so the function
-    remains temporarily for older callers while deliberately performing no Plan
-    financial mirror. It can be removed with the legacy surface after callers
-    migrate to ``refresh_order_commercial_totals``.
-    """
+    """A6.2 compatibility facade: refresh order-owned quote totals only."""
 
     refresh_order_commercial_totals(order, plan)
     return {}
 
 
-def _plan_has_physical_pieces(plan: Any) -> bool:
-    """Distinguish a real zero-board OFFCUT Draft from an empty placeholder Draft."""
-
-    snapshot_json = str(getattr(plan, "snapshot_json", None) or "").strip()
-    if not snapshot_json:
-        return False
-    try:
-        snapshot = frappe.parse_json(snapshot_json) or {}
-    except (TypeError, ValueError):
-        return False
-    return any(sheet.get("pieces") for sheet in (snapshot.get("sheets") or []))
-
-
 def current_cost_plan(order: Any) -> Any | None:
-    """Resolve the plan that owns commercial cost geometry.
+    """Compatibility wrapper for the canonical cost-plan resolution policy."""
 
-    Geometry editing still uses ``current_working_plan``. Cost reads and the
-    focused cost-settings command must not prefer a leftover empty Draft over
-    an Approved production plan. Conversely, ALMADINA-177/178 allow a legitimate
-    all-OFFCUT Draft to own zero new boards, so ``required_boards == 0`` cannot be
-    used as an emptiness sentinel once physical pieces exist.
-    """
-
-    order_name = str(getattr(order, "name", None) or "").strip()
-    if not order_name:
-        return None
-    draft = latest_plan(order_name, status=DRAFT)
-    approved = latest_plan(order_name, status=APPROVED)
-    if draft is not None and (
-        cint(getattr(draft, "required_boards", 0)) > 0
-        or _plan_has_physical_pieces(draft)
-    ):
-        return draft
-    if approved is not None:
-        return approved
-    return draft
+    return resolve_canonical_cost_plan(order)
 
 
 def authoritative_cost_values(order: Any, *, plan: Any | None = None) -> dict[str, float]:
@@ -452,20 +419,26 @@ def authoritative_cost_values(order: Any, *, plan: Any | None = None) -> dict[st
 def overlay_authoritative_costs(
     order: Any,
     snapshot: Mapping[str, Any],
+    *,
+    plan: Any | None = None,
 ) -> dict[str, Any]:
-    """Overlay canonical Plan financials onto a DCO-shaped read model."""
+    """Overlay one canonical Plan's financial and execution metrics onto a read model."""
 
     result = dict(snapshot)
-    plan = current_cost_plan(order)
-    result.update(authoritative_cost_values(order, plan=plan))
-    if plan is not None:
-        result["required_boards"] = int(plan.required_boards or 0)
+    resolved_plan = plan if plan is not None else current_cost_plan(order)
+    result.update(authoritative_cost_values(order, plan=resolved_plan))
+    if resolved_plan is not None:
+        for fieldname in PLAN_EXECUTION_METRIC_FIELDS:
+            value = getattr(resolved_plan, fieldname, None)
+            if value is not None:
+                result[fieldname] = int(value or 0) if fieldname == "required_boards" else flt(value)
     return result
 
 
 __all__ = [
     "COST_SNAPSHOT_VERSION",
     "PLAN_COST_FIELDS",
+    "PLAN_EXECUTION_METRIC_FIELDS",
     "apply_plan_costs",
     "authoritative_cost_values",
     "current_cost_plan",

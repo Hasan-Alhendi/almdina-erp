@@ -46,9 +46,6 @@
         };
     }
 
-    // Kept for compatibility consumers outside the focused edit flow. The plan
-    // edit session itself uses preview() -> commitPreview() and never persists
-    // optimizer settings before the operator chooses a result.
     function saveSettings(orderName, settings) {
         return call(
             SAVE_SETTINGS_METHOD,
@@ -71,9 +68,6 @@
         );
     }
 
-    // First-plan creation is an explicit command, not a preview. Keeping this
-    // semantic entry point in the transport adapter lets the controls own policy
-    // without depending on the generic recalculation transport name.
     function bootstrapPlan(orderName, settings) {
         return call(
             RECALCULATE_METHOD,

@@ -17,7 +17,6 @@ class FakeCustomEvent {
 }
 
 const handlers = new Map();
-const eventListeners = new Map();
 let apiCalls = 0;
 let serverModified = "server-1";
 let offcutPriceApplicable = false;
@@ -33,7 +32,7 @@ const frm = {
 const windowObject = {
     cur_frm: frm,
     dispatchEvent() {},
-    addEventListener(name, handler) { eventListeners.set(name, handler); },
+    addEventListener() {},
     requestAnimationFrame(callback) { callback(); },
     AlmdinaDocumentContext: {
         formIdentity(form) { return `Door Cutting Order::${form.doc.name}`; },
@@ -94,10 +93,6 @@ vm.runInContext(
     source("../../public/js/door_cutting_order/costing/door_cutting_order_cost_workspace_state.js"),
     context
 );
-vm.runInContext(
-    source("../../public/js/door_cutting_order/order_entry/door_cutting_order_mutation_impact_policy.js"),
-    context
-);
 
 const owner = windowObject.AlmdinaCostWorkspaceState;
 assert.ok(owner);
@@ -109,83 +104,24 @@ assert.ok(owner);
         "a Cost GET must never advance the DCO optimistic-concurrency token");
     assert.equal(owner.snapshot(frm).freshness, "fresh");
 
-    const planDependency = eventListeners.get("almdina:plan-workspace-updated");
-    assert.equal(typeof planDependency, "function");
-
-    await planDependency({
-        detail: {
-            orderName: frm.doc.name,
-            snapshot: {
-                staleReason: "plan_settings_changed",
-                freshness: "stale",
-                status: "ready",
-            },
-        },
-    });
-    assert.equal(apiCalls, 1,
-        "unrelated Plan invalidation must not refetch Cost workspace");
-
     offcutPriceApplicable = true;
     factoryExecutionQty = 1;
     serverModified = "server-offcut-factory";
-    await planDependency({
-        detail: {
-            orderName: frm.doc.name,
-            snapshot: {
-                staleReason: "offcut_classification_changed",
-                freshness: "stale",
-                status: "ready",
-            },
-        },
-    });
-    assert.equal(apiCalls, 2,
-        "OFFCUT classification must force one canonical Cost workspace reload");
+    owner.invalidate(frm, "offcut_classification_changed");
+    await owner.load(frm, { force: true });
+    assert.equal(apiCalls, 2);
     assert.equal(owner.snapshot(frm).freshness, "fresh");
-    assert.equal(owner.settings(frm).offcut_price_applicable, true,
-        "fresh FACTORY+FACTORY applicability must reach the Cost workspace immediately");
-    assert.equal(owner.snapshot(frm).data.pieces[0].factory_execution_qty, 1,
-        "fresh factory_execution_qty must replace the stale Cost projection");
-    assert.equal(frm.doc.modified, "client-opened",
-        "dependency refresh remains read-only for DCO optimistic concurrency");
-
-    offcutPriceApplicable = false;
-    serverModified = "server-offcut-customer";
-    await planDependency({
-        detail: {
-            orderName: frm.doc.name,
-            snapshot: {
-                staleReason: "offcut_classification_changed",
-                freshness: "stale",
-                status: "ready",
-            },
-        },
-    });
-    assert.equal(apiCalls, 3,
-        "each committed OFFCUT classification must reconcile Cost exactly once");
-    assert.equal(owner.settings(frm).offcut_price_applicable, false,
-        "customer-source classification must hide offcut pricing from the fresh Cost state");
-
-    await planDependency({
-        detail: {
-            orderName: frm.doc.name,
-            snapshot: {
-                staleReason: "offcut_classification_changed",
-                freshness: "stale",
-                status: "loading",
-            },
-        },
-    });
-    assert.equal(apiCalls, 3,
-        "Plan loading emissions must not duplicate the OFFCUT Cost reload");
+    assert.equal(owner.settings(frm).offcut_price_applicable, true);
+    assert.equal(owner.snapshot(frm).data.pieces[0].factory_execution_qty, 1);
+    assert.equal(frm.doc.modified, "client-opened");
 
     owner.invalidate(frm, "order_inputs_changed");
     assert.equal(owner.snapshot(frm).freshness, "stale");
     serverModified = "server-2";
     await owner.load(frm);
-    assert.equal(apiCalls, 4,
+    assert.equal(apiCalls, 3,
         "ordinary load must bypass its ready cache when the workspace is stale");
-    assert.equal(frm.doc.modified, "client-opened",
-        "refreshing stale Cost data must still preserve the version the form opened");
+    assert.equal(frm.doc.modified, "client-opened");
     assert.equal(owner.snapshot(frm).freshness, "fresh");
 
     frm.is_dirty = () => true;
@@ -195,7 +131,7 @@ assert.ok(owner);
     assert.equal(frm.__almdina_pending_server_modified, undefined,
         "read-only snapshots must not install a pending server write token either");
 
-    console.log("Cost workspace read-version and OFFCUT dependency simulation passed");
+    console.log("Cost workspace read-version simulation passed");
 })().catch((error) => {
     console.error(error);
     process.exitCode = 1;

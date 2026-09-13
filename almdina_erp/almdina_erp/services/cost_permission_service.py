@@ -25,7 +25,6 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization im
     require_cutting_plan_capability,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspace import (
-    authoritative_cost_values,
     current_cost_plan,
     overlay_authoritative_costs,
     physical_execution_for_plan,
@@ -149,13 +148,7 @@ def _locked_order(order_name: str) -> Any:
 
 
 def _require_expected_document_version(order: Any, expected_modified: str | None) -> None:
-    """Preserve optimistic concurrency for commands that save the parent DCO.
-
-    Pricing is edited through a focused Cost command instead of the native DCO
-    form save. The browser must therefore send the document version it actually
-    opened. Advancing that token from an unrelated GET would hide concurrent
-    edits, so only a successful mutation may return a new trusted version.
-    """
+    """Preserve optimistic concurrency for commands that save the parent DCO."""
 
     expected = str(expected_modified or "").strip()
     current = _document_version(order)
@@ -189,8 +182,6 @@ def _piece_snapshot(piece: Any) -> dict[str, Any]:
 
 
 def _document_version(order: Any) -> str:
-    """Return the DCO optimistic-concurrency token after the current command/read."""
-
     return str(getattr(order, "modified", None) or "")
 
 
@@ -200,10 +191,9 @@ def _commercial_piece_projection(
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Build UI metadata plus an invoice-only factory-service projection.
 
-    The Cost workspace keeps the customer's original requirement quantity intact.
-    ``factory_execution_qty`` and ``factory_execution_ratio`` are read-only
-    projection metadata. A separate copy scales service totals for the invoice
-    preview so the browser never needs to reinterpret OFFCUT business states.
+    The customer requirement ``qty`` remains untouched. Factory execution is a
+    separate physical-plan projection and may be lower or higher than that order
+    quantity depending on the canonical physical expansion/classification.
     """
 
     ui_rows: list[dict[str, Any]] = []
@@ -250,17 +240,12 @@ def _cost_snapshot(order: Any, *, plan: Any | None = None) -> dict[str, Any]:
         fieldname: getattr(order, fieldname, None)
         for fieldname in ORDER_COST_FIELDS
     }
-    resolved_plan = plan or current_cost_plan(order)
-    if plan is None:
-        resolved_order = overlay_authoritative_costs(order, order_snapshot)
-    else:
-        # Read-after-write must use the exact plan revision that accepted the
-        # command. Re-resolving current_working_plan() here can select another
-        # Draft/lineage member and repaint stale financial values immediately
-        # after a successful save.
-        resolved_order = dict(order_snapshot)
-        resolved_order.update(authoritative_cost_values(order, plan=plan))
-        resolved_order["required_boards"] = int(getattr(plan, "required_boards", 0) or 0)
+    resolved_plan = plan if plan is not None else current_cost_plan(order)
+    resolved_order = overlay_authoritative_costs(
+        order,
+        order_snapshot,
+        plan=resolved_plan,
+    )
     projection = physical_execution_for_plan(resolved_plan) if resolved_plan else None
     offcut_applicable = bool(projection and projection.has_factory_source_offcut)
     resolved_order["offcut_price_applicable"] = offcut_applicable
@@ -377,10 +362,6 @@ def approve_special_piece_price(
     order.flags.special_price_approval_action = True
     order.save(ignore_permissions=True)
 
-    # Ordinary DCO save intentionally does not orchestrate Cutting Plan or
-    # commercial pricing. This focused pricing command therefore refreshes the
-    # canonical per-piece final price and customer quote projections explicitly
-    # after the approved input has been persisted.
     refresh_order_commercial_totals(order)
 
     return {
