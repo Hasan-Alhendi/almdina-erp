@@ -178,6 +178,7 @@
         if (
             !frm
             || frm.doctype !== "Door Cutting Order"
+            || window.cur_frm !== frm
             || !coordinator
             || typeof coordinator.reconcile !== "function"
         ) {
@@ -188,28 +189,6 @@
             offcutDependencyEffects(result),
             { activeOnly: false }
         );
-        return true;
-    }
-
-    function installOffcutMutationPolicy() {
-        const api = window.AlmdinaPlanWorkspaceAPI;
-        if (
-            !api
-            || api.__offcutDependencyOwned
-            || typeof api.saveOffcutAssignments !== "function"
-        ) {
-            return false;
-        }
-        const transport = api.saveOffcutAssignments;
-        window.AlmdinaPlanWorkspaceAPI = Object.freeze({
-            ...api,
-            __offcutDependencyOwned: true,
-            async saveOffcutAssignments(planName, assignments) {
-                const result = await transport(planName, assignments);
-                await reconcileOffcutMutation(window.cur_frm, result);
-                return result;
-            },
-        });
         return true;
     }
 
@@ -236,8 +215,6 @@
         pieceHandlers[fieldname] = (frm) => onPieceCostInputChanged(fieldname, frm);
     });
     frappe.ui.form.on("Door Cutting Order Detail", pieceHandlers);
-
-    installOffcutMutationPolicy();
 
     window.AlmdinaOrderMutationImpactPolicy = Object.freeze({
         OFFCUT_CLASSIFICATION_REASON,
