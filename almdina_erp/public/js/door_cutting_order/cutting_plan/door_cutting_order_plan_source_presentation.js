@@ -130,7 +130,7 @@
 
         let boardIndex = 0;
         output = output.replace(
-            /(<div class="dco-sheet-board"\b)/g,
+            /(<div class="dco-sheet-board"[^>]*>)/g,
             (match) => {
                 const source = projection[boardIndex++];
                 if (!source) return match;
