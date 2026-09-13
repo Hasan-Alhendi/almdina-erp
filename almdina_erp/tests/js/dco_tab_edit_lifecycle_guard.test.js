@@ -9,13 +9,14 @@ function source(relativePath) {
     return fs.readFileSync(path.resolve(__dirname, "../../", relativePath), "utf8");
 }
 
-function makeTab(fieldname, activeState) {
-    let activationCount = 0;
+function makeControl(fieldname) {
     const attributes = new Map([
         ["data-toggle", "tab"],
         ["data-fieldname", fieldname],
     ]);
-    const navLink = {
+    const properties = new Map([["disabled", false]]);
+    const classes = new Set(["nav-link"]);
+    return {
         length: 1,
         attr(name, value) {
             if (arguments.length > 1) {
@@ -28,7 +29,30 @@ function makeTab(fieldname, activeState) {
             attributes.delete(name);
             return this;
         },
+        prop(name, value) {
+            if (arguments.length > 1) {
+                properties.set(name, value);
+                return this;
+            }
+            return properties.get(name);
+        },
+        hasClass(name) {
+            return classes.has(name);
+        },
+        addClass(name) {
+            classes.add(name);
+            return this;
+        },
+        removeClass(name) {
+            classes.delete(name);
+            return this;
+        },
     };
+}
+
+function makeTab(fieldname, activeState) {
+    let activationCount = 0;
+    const control = makeControl(fieldname);
 
     function nativeSetActive() {
         activationCount += 1;
@@ -43,7 +67,7 @@ function makeTab(fieldname, activeState) {
         tab_link: {
             find(selector) {
                 assert.equal(selector, ".nav-link[data-fieldname]");
-                return navLink;
+                return control;
             },
         },
         is_active() {
@@ -53,23 +77,43 @@ function makeTab(fieldname, activeState) {
             return activationCount;
         },
         get dataToggle() {
-            return navLink.attr("data-toggle");
+            return control.attr("data-toggle");
+        },
+        get disabled() {
+            return Boolean(control.prop("disabled"));
+        },
+        get ariaDisabled() {
+            return control.attr("aria-disabled");
+        },
+        get tabIndex() {
+            return control.attr("tabindex");
+        },
+        get title() {
+            return control.attr("title");
+        },
+        get lockedClass() {
+            return control.hasClass("dco-edit-navigation-locked");
         },
     };
 }
 
+function simulateNativeUserClick(tab) {
+    if (tab.disabled) return false;
+    return tab.set_active();
+}
+
 function simulateBootstrapDataApi(tab, activeState) {
-    if (tab.dataToggle !== "tab") return false;
+    if (tab.disabled || tab.dataToggle !== "tab") return false;
     activeState.fieldname = tab.df.fieldname;
     return true;
 }
 
-function verifyNativeTabLifecycleGuard() {
+function verifyEditOwnerNavigationLock() {
     const formHandlers = {};
     const messages = [];
     const cleanups = new Map();
-    const activeState = { fieldname: "results_tab" };
-    let editingKind = "plan";
+    const activeState = { fieldname: "order_tab" };
+    let editingKind = null;
     let scheduleCount = 0;
     let legacyRemoveCount = 0;
 
@@ -154,64 +198,90 @@ function verifyNativeTabLifecycleGuard() {
     );
 
     assert.equal(typeof formHandlers.refresh, "function");
+    assert.equal(typeof formHandlers.almdina_edit_session_changed, "function");
+    assert.equal(typeof formHandlers.on_tab_change, "function");
+
     formHandlers.refresh(frm);
-    assert.equal(legacyRemoveCount, 1, "native lifecycle owner must retire the old PageEditActionUX click guard");
+    assert.equal(legacyRemoveCount, 1, "semantic owner must retire the historical click interceptor");
     assert.equal(frm.__almdinaPageEditTabListenerRoot, null);
     assert.equal(frm.__almdinaPageEditTabListenerHandler, null);
     frm.layout.tabs.forEach((tab) => {
-        assert.equal(
-            tab.dataToggle,
-            undefined,
-            "guarded DCO tabs must disable Bootstrap data-api auto activation so Frappe set_active is the only switch boundary"
-        );
+        assert.equal(tab.dataToggle, undefined, "Bootstrap data-api must not compete with Frappe set_active");
+        assert.equal(tab.disabled, false, "tabs remain native while no edit session owns navigation");
     });
 
-    for (const scenario of [
-        { kind: "plan", current: "results_tab", target: "order_tab" },
-        { kind: "cost", current: "cost_tab", target: "results_tab" },
-        { kind: "order", current: "order_tab", target: "cost_tab" },
-    ]) {
+    const scenarios = [
+        { kind: "order", owner: "order_tab", blocked: ["results_tab", "cost_tab"] },
+        { kind: "plan", owner: "results_tab", blocked: ["order_tab", "cost_tab"] },
+        { kind: "cost", owner: "cost_tab", blocked: ["order_tab", "results_tab"] },
+    ];
+
+    for (const scenario of scenarios) {
         editingKind = scenario.kind;
-        activeState.fieldname = scenario.current;
+        activeState.fieldname = scenario.owner;
         messages.length = 0;
-        const target = frm.layout.tabs.find((tab) => tab.df.fieldname === scenario.target);
-        const beforeCount = target.activationCount;
+        formHandlers.almdina_edit_session_changed(frm);
 
-        // Frappe's direct click handler calls the guarded instance method.
-        const result = target.set_active();
-        assert.equal(result, false, `${scenario.kind} edit must reject native Tab.set_active()`);
-        assert.equal(target.activationCount, beforeCount, "blocked navigation must not reach Frappe activation");
-        assert.equal(activeState.fieldname, scenario.current, "blocked navigation must not mutate active tab state");
-        assert.equal(messages.length, 1, "blocked navigation should show exactly one message");
-        assert.equal(messages[0].title, "التعديل ما زال مفتوحًا");
-        assert.match(messages[0].message, /احفظ أو ألغِ/);
+        const owner = frm.layout.tabs.find((tab) => tab.df.fieldname === scenario.owner);
+        assert.equal(owner.disabled, false, `${scenario.kind} owner tab must remain available`);
+        assert.equal(owner.lockedClass, false);
 
-        // Bootstrap's delegated data-api used to be a second click path because
-        // Frappe renders data-toggle=tab on the same button. The lifecycle owner
-        // removes that hook, so it cannot visually activate the target afterwards.
-        assert.equal(simulateBootstrapDataApi(target, activeState), false);
-        assert.equal(activeState.fieldname, scenario.current);
-        assert.equal(messages.length, 1, "the removed Bootstrap path must not create a duplicate warning");
+        for (const fieldname of scenario.blocked) {
+            const target = frm.layout.tabs.find((tab) => tab.df.fieldname === fieldname);
+            assert.equal(target.disabled, true, `${scenario.kind} edit must natively disable ${fieldname}`);
+            assert.equal(target.ariaDisabled, "true");
+            assert.equal(target.tabIndex, "-1");
+            assert.equal(target.lockedClass, true);
+            assert.match(target.title, /احفظ أو ألغِ/);
+
+            const beforeCount = target.activationCount;
+            assert.equal(simulateNativeUserClick(target), false, "disabled user click must not reach Frappe");
+            assert.equal(target.activationCount, beforeCount);
+            assert.equal(activeState.fieldname, scenario.owner);
+            assert.equal(simulateBootstrapDataApi(target, activeState), false, "Bootstrap path must remain closed");
+            assert.equal(activeState.fieldname, scenario.owner);
+
+            const programmatic = target.set_active();
+            assert.equal(programmatic, false, "programmatic activation must also be rejected");
+            assert.equal(target.activationCount, beforeCount);
+            assert.equal(activeState.fieldname, scenario.owner);
+            assert.equal(messages.length, 1);
+            assert.equal(messages[0].title, "التعديل ما زال مفتوحًا");
+            messages.length = 0;
+        }
     }
 
-    editingKind = "plan";
-    activeState.fieldname = "results_tab";
-    messages.length = 0;
-    const current = frm.layout.tabs.find((tab) => tab.df.fieldname === "results_tab");
-    const currentResult = current.set_active();
-    assert.equal(currentResult, "activated:results_tab", "re-activating the current tab remains harmless");
-    assert.equal(messages.length, 0);
+    // Regression from the real recording: even if host/DOM state has already drifted
+    // to another tab, navigation authority remains the edit-session owner. A lifecycle
+    // reconciliation returns the UI to that owner instead of accepting the drift as
+    // the new "current" authorization state.
+    editingKind = "order";
+    activeState.fieldname = "cost_tab";
+    const order = frm.layout.tabs.find((tab) => tab.df.fieldname === "order_tab");
+    const beforeOrderActivation = order.activationCount;
+    formHandlers.on_tab_change(frm);
+    assert.equal(activeState.fieldname, "order_tab", "drifted UI must recover to the Order edit owner");
+    assert.equal(order.activationCount, beforeOrderActivation + 1);
+    assert.equal(order.disabled, false);
+    assert.equal(frm.layout.tabs.find((tab) => tab.df.fieldname === "cost_tab").disabled, true);
 
-    // Save/Cancel closes the aggregate session; Frappe's own listener still switches
-    // tabs normally even though Bootstrap auto-activation remains disabled.
+    // Save/Cancel closes the aggregate session and navigation unlocks immediately.
     editingKind = null;
+    formHandlers.almdina_edit_session_changed(frm);
+    frm.layout.tabs.forEach((tab) => {
+        assert.equal(tab.disabled, false);
+        assert.equal(tab.ariaDisabled, undefined);
+        assert.equal(tab.tabIndex, undefined);
+        assert.equal(tab.title, undefined);
+        assert.equal(tab.lockedClass, false);
+    });
     const cost = frm.layout.tabs.find((tab) => tab.df.fieldname === "cost_tab");
-    const allowedResult = cost.set_active();
-    assert.equal(allowedResult, "activated:cost_tab");
+    assert.equal(cost.set_active(), "activated:cost_tab");
     assert.equal(activeState.fieldname, "cost_tab");
-    assert.equal(cost.dataToggle, undefined);
-    assert.ok(scheduleCount >= 2, "allowed native activations should reconcile the page coordinator");
+    assert.ok(scheduleCount >= 2, "allowed activations should reconcile the page action projection");
 
+    // Frappe may rebuild Tab instances. Retired instances are restored exactly and
+    // the new instances receive the same semantic + native lock contract.
     editingKind = "plan";
     activeState.fieldname = "results_tab";
     const oldTabs = frm.layout.tabs;
@@ -219,28 +289,26 @@ function verifyNativeTabLifecycleGuard() {
     formHandlers.refresh(frm);
 
     oldTabs.forEach((tab) => {
-        assert.equal(tab.set_active, tab.nativeSetActive, "rebuilt layouts must release guards from retired Tab instances");
-        assert.equal(tab.dataToggle, "tab", "retired Tab markup must regain its original Bootstrap attribute");
+        assert.equal(tab.set_active, tab.nativeSetActive, "retired Tab instances must regain native methods");
+        assert.equal(tab.dataToggle, "tab", "retired markup must regain Bootstrap's original attribute");
+        assert.equal(tab.disabled, false, "retired markup must not keep an edit lock");
     });
     frm.layout.tabs.forEach((tab) => {
-        assert.notEqual(tab.set_active, tab.nativeSetActive, "rebuilt layouts must guard every new top-level DCO Tab instance");
-        assert.equal(tab.dataToggle, undefined, "rebuilt guarded Tabs must also suppress Bootstrap auto activation");
+        assert.notEqual(tab.set_active, tab.nativeSetActive, "rebuilt tabs must be guarded");
+        assert.equal(tab.dataToggle, undefined);
+        assert.equal(tab.disabled, tab.df.fieldname !== "results_tab");
     });
-
-    messages.length = 0;
-    const rebuiltOrder = frm.layout.tabs.find((tab) => tab.df.fieldname === "order_tab");
-    assert.equal(rebuiltOrder.set_active(), false);
-    assert.equal(simulateBootstrapDataApi(rebuiltOrder, activeState), false);
-    assert.equal(messages.length, 1);
 
     const cleanup = cleanups.get("tab-edit-lifecycle-guard");
     assert.equal(typeof cleanup, "function");
     cleanup();
     frm.layout.tabs.forEach((tab) => {
-        assert.equal(tab.set_active, tab.nativeSetActive, "document cleanup must restore Frappe's original Tab methods");
-        assert.equal(tab.dataToggle, "tab", "document cleanup must restore Frappe's original tab markup");
+        assert.equal(tab.set_active, tab.nativeSetActive, "document cleanup must restore native Frappe methods");
+        assert.equal(tab.dataToggle, "tab", "document cleanup must restore native tab markup");
+        assert.equal(tab.disabled, false, "document cleanup must release native navigation locks");
+        assert.equal(tab.lockedClass, false);
     });
 }
 
-verifyNativeTabLifecycleGuard();
-console.log("DCO semantic tab edit lifecycle guard simulation passed");
+verifyEditOwnerNavigationLock();
+console.log("DCO edit-owner navigation lifecycle guard simulation passed");
