@@ -9,10 +9,6 @@ from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
     OffcutPolicyError,
     physical_execution_projection_from_snapshot,
 )
-from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
-    approved_plan_for_order,
-    current_working_plan,
-)
 
 from almdina_erp.almdina_erp.domain.orders.lifecycle import (
     department_for_stage_type,
@@ -86,11 +82,16 @@ def set_order_tracking(
 
 def required_piece_qty(order_name: str) -> int:
     order = get_order(order_name)
-    plan = (
-        approved_plan_for_order(order) or current_working_plan(order_name)
-        if order is not None
-        else None
-    )
+    plan = None
+    if order is not None:
+        # Keep this focused adapter loadable by lightweight shop-floor harnesses;
+        # runtime plan resolution is needed only for a real persisted order.
+        from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
+            approved_plan_for_order,
+            current_working_plan,
+        )
+
+        plan = approved_plan_for_order(order) or current_working_plan(order_name)
     snapshot_json = str(getattr(plan, "snapshot_json", None) or "") if plan else ""
     if snapshot_json.strip():
         try:
