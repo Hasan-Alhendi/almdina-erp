@@ -66,13 +66,17 @@
     }
 
     function sourceForState(state) {
-        return String(state || "") === "FACTORY_FACTORY" ? FACTORY : CUSTOMER;
+        const value = String(state || "");
+        if (value === "FACTORY_FACTORY") return FACTORY;
+        if (value.startsWith("CUSTOMER_")) return CUSTOMER;
+        return "";
     }
 
     function executionForState(state) {
         const value = String(state || "");
         if (value === "CUSTOMER_CUSTOMER") return CUSTOMER;
-        return FACTORY;
+        if (value.endsWith("_FACTORY")) return FACTORY;
+        return "";
     }
 
     function stateFor(source, execution) {
@@ -101,12 +105,14 @@
                 </div>
                 <label>المصدر
                     <select class="form-control input-sm dco-cost-offcut-source" ${disabled}>
+                        <option value="" ${!source ? "selected" : ""}>غير محدد</option>
                         <option value="${CUSTOMER}" ${source === CUSTOMER ? "selected" : ""}>من الزبون</option>
                         <option value="${FACTORY}" ${source === FACTORY ? "selected" : ""}>من المعمل</option>
                     </select>
                 </label>
                 <label>التنفيذ
                     <select class="form-control input-sm dco-cost-offcut-execution" ${disabled}>
+                        <option value="" ${!execution ? "selected" : ""}>غير محدد</option>
                         <option value="${FACTORY}" ${execution === FACTORY ? "selected" : ""}>في المعمل</option>
                         <option value="${CUSTOMER}" ${execution === CUSTOMER ? "selected" : ""}>عند الزبون</option>
                     </select>
@@ -154,6 +160,10 @@
         const execution = row.find(".dco-cost-offcut-execution");
         if (source === FACTORY) {
             execution.val(FACTORY).prop("disabled", true);
+            return;
+        }
+        if (!source) {
+            execution.val("").prop("disabled", true);
             return;
         }
         execution.prop("disabled", false);
