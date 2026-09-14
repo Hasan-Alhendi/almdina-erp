@@ -368,7 +368,12 @@
     }
 
     function offcutPriceHtml(frm) {
-        if (number(frm.doc.offcut_price_applicable) <= 0) return "";
+        const state = window.AlmdinaCostWorkspaceState;
+        const snapshot = state && typeof state.snapshot === "function" ? state.snapshot(frm) : null;
+        const hasOffcut = Boolean(snapshot && snapshot.data && snapshot.data.offcut
+            && Array.isArray(snapshot.data.offcut.assignments)
+            && snapshot.data.offcut.assignments.length);
+        if (number(frm.doc.offcut_price_applicable) <= 0 && !hasOffcut) return "";
         const value = number(frm.doc.offcut_price_usd);
         return `<div class="dco-cost-section dco-offcut-price-section" data-offcut-price-section>
             <div class="dco-cost-section-title">
