@@ -261,11 +261,11 @@
                 draftControlValue(frm, fieldname, draft),
             ])
         );
-        if (draft && draft.offcut_price_applicable) {
-            const input = offcutPriceInput(frm);
-            values[OFFCUT_PRICE_FIELD] = input
-                ? input.val()
-                : draft[OFFCUT_PRICE_FIELD];
+        const input = offcutPriceInput(frm);
+        if (input && input.length) {
+            values[OFFCUT_PRICE_FIELD] = input.val();
+        } else if (draft && Object.prototype.hasOwnProperty.call(draft, OFFCUT_PRICE_FIELD)) {
+            values[OFFCUT_PRICE_FIELD] = draft[OFFCUT_PRICE_FIELD];
         }
         return values;
     }
