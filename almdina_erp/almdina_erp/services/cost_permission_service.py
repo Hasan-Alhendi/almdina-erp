@@ -270,7 +270,7 @@ def _offcut_projection(plan: Any | None) -> dict[str, Any] | None:
                 piece.get("measurement")
                 or piece.get("size")
                 or (
-                    f"{assignment['length']} x {assignment['width']}"
+                    f"{assignment['width']} x {assignment['length']}"
                     if assignment.get("width") and assignment.get("length")
                     else assignment.get("piece_label")
                 )
