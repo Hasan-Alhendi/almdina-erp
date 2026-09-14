@@ -83,7 +83,9 @@ class CostTabPresentationContractTest(unittest.TestCase):
         self.assertIn("dco-secure-print-internal-cost-report", source)
         self.assertIn("display:none!important", source)
         self.assertIn("dco-cost-measurements-toggle", source)
-        self.assertIn("__almdina_cost_measurements_expanded = false", source)
+        self.assertIn("measurementsExpanded: false", source)
+        self.assertIn("settingsExpanded: false", source)
+        self.assertIn("documentIdentity(frm)", source)
         self.assertIn("aria-expanded", source)
         self.assertIn("actions = $('<div class=\"dco-cost-actions\"></div>')", source)
 
@@ -117,6 +119,17 @@ class CostTabPresentationContractTest(unittest.TestCase):
         self.assertIn('"dco-cost-page-layout-ux-v1"', source)
         self.assertIn('"dco-cost-page-layout-ux-v2"', source)
         self.assertIn("version: MODULE_VERSION", source)
+
+    def test_cost_settings_owns_one_collapsible_special_pricing_location(self) -> None:
+        source = LAYOUT_UX_PATH.read_text(encoding="utf-8")
+        self.assertIn("function ensureCostSettingsAccordion(frm)", source)
+        self.assertIn("dco-cost-settings-section", source)
+        self.assertIn("dco-cost-settings-special", source)
+        self.assertIn("تسعير الدرفات الخاصة", source)
+        self.assertIn("تسعير قشاط درف الزاوية المقصوصة وزاوية L", source)
+        self.assertIn("settingsExpanded: false", source)
+        self.assertNotIn("localStorage", source)
+
 
     def test_custom_door_pricing_is_compact_and_attention_first(self) -> None:
         source = COMPACT_PRICING_UX_PATH.read_text(encoding="utf-8")
