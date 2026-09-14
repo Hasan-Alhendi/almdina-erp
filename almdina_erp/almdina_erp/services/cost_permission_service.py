@@ -13,6 +13,13 @@ from almdina_erp.almdina_erp.application.costing.customer_invoice_addon_summary 
 from almdina_erp.almdina_erp.application.costing.financial_documents import (
     build_customer_invoice_document,
 )
+from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
+    OffcutPolicyError,
+    business_state_options,
+    decision_from_piece,
+    offcut_assignment_projection,
+    offcut_summary,
+)
 from almdina_erp.almdina_erp.domain.orders.piece_policy import (
     is_corner_cut,
     pending_custom_edge_price_labels,
@@ -235,6 +242,33 @@ def _invoice_preview(
     return lines, total, pending
 
 
+def _offcut_projection(plan: Any | None) -> dict[str, Any] | None:
+    """Project the canonical plan's physical OFFCUT pieces for the Cost workspace."""
+
+    if plan is None or not str(getattr(plan, "name", None) or "").strip():
+        return None
+    snapshot = frappe.parse_json(str(getattr(plan, "snapshot_json", None) or "{}")) or {}
+    pieces = [
+        piece
+        for sheet in snapshot.get("sheets") or []
+        for piece in sheet.get("pieces") or []
+    ]
+    try:
+        offcut_pieces = [piece for piece in pieces if decision_from_piece(piece).is_offcut]
+        assignments = [offcut_assignment_projection(piece) for piece in offcut_pieces]
+    except OffcutPolicyError:
+        # Historical/partial snapshots are intentionally not editable as OFFCUT.
+        return None
+    if not assignments:
+        return None
+    return {
+        "plan_name": plan.name,
+        "assignments": assignments,
+        "summary": offcut_summary(offcut_pieces),
+        "state_options": business_state_options(),
+    }
+
+
 def _cost_snapshot(order: Any, *, plan: Any | None = None) -> dict[str, Any]:
     order_snapshot = {
         fieldname: getattr(order, fieldname, None)
@@ -259,6 +293,7 @@ def _cost_snapshot(order: Any, *, plan: Any | None = None) -> dict[str, Any]:
         "order_name": order.name,
         "order_modified": _document_version(order),
         "cutting_plan": str(getattr(resolved_plan, "name", None) or "") or None,
+        "offcut": _offcut_projection(resolved_plan),
         "order": resolved_order,
         "pieces": pieces,
         "invoice_preview_lines": invoice_lines,
