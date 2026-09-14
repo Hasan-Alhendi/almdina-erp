@@ -54,7 +54,20 @@
             .dco-cost-measurements-toggle[aria-expanded="true"]::before{transform:rotate(180deg)}
             .dco-cost-measurements-toggle:hover{background:var(--subtle-fg,#f3f5f7)!important;color:var(--text-color,#26313b)!important}
             .dco-cost-measurements-toggle:focus-visible{outline:2px solid var(--primary,#2490ef)!important;outline-offset:2px!important}
-            @media(max-width:760px){
+            .dco-cost-settings-section.is-collapsed>.dco-cost-settings-content{display:none!important}
+            .dco-cost-settings-title{cursor:default}
+            .dco-cost-settings-title-main{display:flex;align-items:center;gap:8px;min-width:max-content}
+            .dco-cost-settings-title-main h4{margin:0}
+            .dco-cost-settings-toggle{appearance:none;-webkit-appearance:none;display:inline-grid;place-items:center;width:26px;height:26px;min-width:26px;padding:0;border:1px solid var(--border-color,#dfe4e8);border-radius:7px;background:var(--card-bg,#fff);color:var(--text-muted,#66727d);cursor:pointer;font-size:0}
+            .dco-cost-settings-toggle::before{content:"⌄";font-size:17px;line-height:1;transition:transform .16s ease}
+            .dco-cost-settings-toggle[aria-expanded="true"]::before{transform:rotate(180deg)}
+            .dco-cost-settings-content{padding:12px}
+            .dco-cost-settings-basic{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+            .dco-cost-settings-basic>.form-group{margin:0!important;padding:10px;border:1px solid var(--border-color,#e1e6ea);border-radius:11px;background:var(--subtle-fg,#f8fafc)}
+            .dco-cost-settings-special{display:grid;gap:12px;margin-top:12px}
+            .dco-cost-settings-special>.dco-cost-section{margin:0!important;box-shadow:none!important}
+            @media(max-width:760px){.dco-cost-settings-basic{grid-template-columns:1fr}}
+
                 .dco-cost-invoice-section>.dco-cost-section-title{display:flex!important;flex-direction:row!important;align-items:center!important}
                 .dco-cost-invoice-actions{margin-inline-start:0}
                 .dco-cost-invoice-actions .btn{padding:6px 9px;font-size:10px}
@@ -64,11 +77,31 @@
         document.head.appendChild(style);
     }
 
-    function measurementExpanded(frm) {
-        if (frm.__almdina_cost_measurements_expanded === undefined) {
-            frm.__almdina_cost_measurements_expanded = false;
+    function documentIdentity(frm) {
+        const context = window.AlmdinaDocumentContext;
+        if (context && typeof context.formIdentity === "function") return context.formIdentity(frm);
+        return `${frm && frm.doctype || ""}::${frm && frm.doc && frm.doc.name || "__new__"}`;
+    }
+
+    function uiState(frm) {
+        const identity = documentIdentity(frm);
+        const current = frm.__almdina_cost_page_ui_state;
+        if (!current || current.identity !== identity) {
+            frm.__almdina_cost_page_ui_state = {
+                identity,
+                measurementsExpanded: false,
+                settingsExpanded: false,
+            };
         }
-        return Boolean(frm.__almdina_cost_measurements_expanded);
+        return frm.__almdina_cost_page_ui_state;
+    }
+
+    function measurementExpanded(frm) {
+        return Boolean(uiState(frm).measurementsExpanded);
+    }
+
+    function costSettingsExpanded(frm) {
+        return Boolean(uiState(frm).settingsExpanded);
     }
 
     function applyMeasurementState(frm, section, control) {
@@ -80,7 +113,7 @@
     }
 
     function toggleMeasurements(frm, section, control) {
-        frm.__almdina_cost_measurements_expanded = !measurementExpanded(frm);
+        uiState(frm).measurementsExpanded = !measurementExpanded(frm);
         applyMeasurementState(frm, section, control);
     }
 
@@ -144,6 +177,72 @@
         return true;
     }
 
+    function costSettingFields(frm) {
+        return ["board_rate_usd", "cutting_cost_per_board_usd"]
+            .map(fieldname => frm && frm.fields_dict && frm.fields_dict[fieldname])
+            .filter(Boolean);
+    }
+
+    function ensureCostSettingsAccordion(frm) {
+        const wrapper = costWrapper(frm);
+        const shell = wrapper.find(".dco-cost-shell").first();
+        if (!shell.length) return false;
+
+        const pricingSections = shell.children(".dco-cost-section").filter(function () {
+            const title = $(this).children(".dco-cost-section-title").find("h4").first().text().trim();
+            return title === "تسعير الدرفات الخاصة"
+                || title === "تسعير قشاط درف الزاوية المقصوصة وزاوية L";
+        });
+        const hasBasicSettings = costSettingFields(frm).length > 0;
+        if (!pricingSections.length && !hasBasicSettings) return false;
+
+        let section = shell.children(".dco-cost-settings-section").first();
+        if (!section.length) {
+            section = $(`
+                <section class="dco-cost-section dco-cost-settings-section">
+                    <div class="dco-cost-section-title dco-cost-settings-title">
+                        <div class="dco-cost-settings-title-main">
+                            <button type="button" class="dco-cost-settings-toggle"></button>
+                            <h4>إعدادات التكلفة</h4>
+                        </div>
+                        <span>الأسعار الأساسية وتسعير الدرف الخاصة</span>
+                    </div>
+                    <div class="dco-cost-settings-content">
+                        <div class="dco-cost-settings-basic"></div>
+                        <div class="dco-cost-settings-special"></div>
+                    </div>
+                </section>
+            `);
+            const measurement = shell.children(".dco-cost-measurements-section").first();
+            if (measurement.length) section.insertBefore(measurement);
+            else shell.prepend(section);
+        }
+
+        const header = section.children(".dco-cost-settings-title").first();
+        const control = header.find(".dco-cost-settings-toggle").first();
+        const state = costSettingsExpanded(frm);
+        section.toggleClass("is-collapsed", !state);
+        control.attr({
+            type: "button",
+            "aria-expanded": state ? "true" : "false",
+            "aria-label": "إعدادات التكلفة",
+        }).off("click.almdinaCostSettings").on("click.almdinaCostSettings", event => {
+            event.preventDefault();
+            uiState(frm).settingsExpanded = !costSettingsExpanded(frm);
+            ensureCostSettingsAccordion(frm);
+        });
+
+        const basic = section.find(".dco-cost-settings-basic").first();
+        costSettingFields(frm).forEach(field => {
+            const node = field.$wrapper && field.$wrapper.closest(".form-group");
+            if (node && node.length) basic.append(node);
+        });
+        pricingSections.each(function () {
+            section.find(".dco-cost-settings-special").first().append(this);
+        });
+        return true;
+    }
+
     function moveInvoiceActions(frm) {
         const wrapper = costWrapper(frm);
         if (!wrapper.length) return false;
@@ -182,9 +281,10 @@
         if (!frm) return false;
         installStyles();
         const measurementReady = ensureMeasurementToggle(frm);
+        const settingsReady = ensureCostSettingsAccordion(frm);
         const offcutReady = renderOffcutAssignment(frm);
         const actionsReady = moveInvoiceActions(frm);
-        return measurementReady || offcutReady || actionsReady;
+        return measurementReady || settingsReady || offcutReady || actionsReady;
     }
 
     function wrapCostPresenter() {
