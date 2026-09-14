@@ -1,15 +1,16 @@
 (() => {
     "use strict";
 
-    const MODULE_VERSION = 4;
+    const MODULE_VERSION = 5;
     const existingApi = window.AlmdinaCostPageLayoutUX;
     if (existingApi && Number(existingApi.version || 0) >= MODULE_VERSION) return;
 
-    const STYLE_ID = "dco-cost-page-layout-ux-v4";
+    const STYLE_ID = "dco-cost-page-layout-ux-v5";
     const LEGACY_STYLE_IDS = [
         "dco-cost-page-layout-ux-v1",
         "dco-cost-page-layout-ux-v2",
         "dco-cost-page-layout-ux-v3",
+        "dco-cost-page-layout-ux-v4",
     ];
     const COST_API_FLAG = "__almdinaCostPageLayoutUX";
     const INTERNAL_REPORT_CLASS = "dco-secure-print-internal-cost-report";
@@ -67,6 +68,10 @@
             .dco-cost-settings-basic>.form-group{margin:0!important;padding:10px;border:1px solid var(--border-color,#e1e6ea);border-radius:11px;background:var(--subtle-fg,#f8fafc)}
             .dco-cost-settings-special{display:grid;gap:12px;margin-top:12px}
             .dco-cost-settings-special>.dco-cost-section{margin:0!important;box-shadow:none!important}
+            .dco-cost-settings-offcut:empty{display:none}
+            .dco-cost-settings-offcut{margin-top:12px}
+            .dco-cost-settings-offcut>.dco-cost-offcut-assignment{margin:0!important;box-shadow:none!important}
+            .dco-cost-settings-basic>.dco-offcut-price-section{margin:0!important;box-shadow:none!important}
             @media(max-width:760px){.dco-cost-settings-basic{grid-template-columns:1fr}}
 
                 .dco-cost-invoice-section>.dco-cost-section-title{display:flex!important;flex-direction:row!important;align-items:center!important}
@@ -211,6 +216,7 @@
                     <div class="dco-cost-settings-content">
                         <div class="dco-cost-settings-basic"></div>
                         <div class="dco-cost-settings-special"></div>
+                        <div class="dco-cost-settings-offcut"></div>
                     </div>
                 </section>
             `);
@@ -235,10 +241,12 @@
 
         const basic = section.find(".dco-cost-settings-basic").first();
         costSettingFields(frm).forEach(field => {
-            const node = field.$wrapper && field.$wrapper.closest(".form-group");
+            const wrapper = field.$wrapper;
+            const group = wrapper && wrapper.closest(".form-group");
+            const node = group && group.length ? group : wrapper;
             if (node && node.length) basic.append(node);
         });
-        shell.children(".dco-offcut-price-editor").each(function () {
+        shell.children(".dco-offcut-price-section").each(function () {
             basic.append(this);
         });
         pricingSections.each(function () {
