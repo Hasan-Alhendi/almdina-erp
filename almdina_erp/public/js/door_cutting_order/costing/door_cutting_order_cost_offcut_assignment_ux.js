@@ -262,10 +262,10 @@
         wrapper.find(`.${ROOT_CLASS}`).remove();
         const offcut = projection(frm);
         if (!offcut) return false;
-        const measurement = wrapper.find(".dco-cost-measurements-section").first();
+        const slot = wrapper.find(".dco-cost-settings-offcut").first();
+        if (!slot.length) return false;
         const section = $(html(offcut, canEdit(frm)));
-        if (measurement.length) section.insertBefore(measurement);
-        else wrapper.find(".dco-cost-shell").first().append(section);
+        slot.append(section);
         bind(frm, section);
         return true;
     }
