@@ -92,7 +92,7 @@ class CostTabPresentationContractTest(unittest.TestCase):
     def test_measurement_header_keeps_rtl_title_and_toggle_from_collapsing(self) -> None:
         source = LAYOUT_UX_PATH.read_text(encoding="utf-8")
 
-        self.assertIn('STYLE_ID = "dco-cost-page-layout-ux-v3"', source)
+        self.assertIn('STYLE_ID = "dco-cost-page-layout-ux-v4"', source)
         self.assertIn("min-width:max-content;flex:0 0 auto;white-space:nowrap", source)
         self.assertIn("h4{margin:0;white-space:nowrap;flex:0 0 auto", source)
         self.assertIn("text-overflow:ellipsis;white-space:nowrap", source)
@@ -114,10 +114,11 @@ class CostTabPresentationContractTest(unittest.TestCase):
     def test_layout_module_can_upgrade_a_stale_spa_instance(self) -> None:
         source = LAYOUT_UX_PATH.read_text(encoding="utf-8")
 
-        self.assertIn("const MODULE_VERSION = 3", source)
+        self.assertIn("const MODULE_VERSION = 4", source)
         self.assertIn("Number(existingApi.version || 0) >= MODULE_VERSION", source)
         self.assertIn('"dco-cost-page-layout-ux-v1"', source)
         self.assertIn('"dco-cost-page-layout-ux-v2"', source)
+        self.assertIn('"dco-cost-page-layout-ux-v3"', source)
         self.assertIn("version: MODULE_VERSION", source)
 
     def test_cost_settings_owns_one_collapsible_special_pricing_location(self) -> None:
