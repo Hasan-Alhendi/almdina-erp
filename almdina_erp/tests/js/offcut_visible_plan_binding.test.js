@@ -3,205 +3,55 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const vm = require("node:vm");
 
 function source(filename) {
     return fs.readFileSync(path.resolve(__dirname, "../../public/js", filename), "utf8");
 }
 
-function assignment(id) {
-    return {
-        piece_instance_id: id,
-        piece_label: id,
-        business_state: "UNASSIGNED",
-        business_state_label: "غير محدد",
-    };
-}
-
-function planRow(name, geometryIdentity, assignments) {
-    return {
-        name,
-        snapshot_json: JSON.stringify({
-            identity: geometryIdentity,
-            sheets: [{ sheet_no: 1, pieces: [] }],
-        }),
-        offcut: {
-            assignments,
-            summary: [{ label: "غير محدد", count: assignments.length }],
-            state_options: [{ value: "UNASSIGNED", label: "غير محدد" }],
-        },
-    };
-}
-
-const system = planRow("CP-SYSTEM", "SYSTEM", []);
-const uploaded = planRow("CP-UPLOADED", "UPLOADED", [assignment("DXF:1"), assignment("DXF:2")]);
-const approved = planRow("CP-APPROVED", "APPROVED-UPLOADED", [assignment("DXF:1"), assignment("DXF:2")]);
-const workspaceSnapshot = {
-    status: "ready",
-    data: {
-        approved_plan: approved.name,
-        plans: {
-            system_draft: system,
-            uploaded_draft: uploaded,
-            approved,
-        },
-    },
-};
-
-const listeners = new Map();
-const fakeWindow = {
-    AlmdinaPermissions: {
-        canDocument() {
-            return true;
-        },
-        can() {
-            return true;
-        },
-    },
-    AlmdinaWorkspaceStore: {
-        create() {
-            return { snapshot: () => workspaceSnapshot };
-        },
-    },
-    addEventListener(name, handler) {
-        listeners.set(name, handler);
-    },
-    dispatchEvent() {
-        return true;
-    },
-};
-const fakeFrappe = {
-    ui: { form: { on() {} } },
-    utils: { escape_html: value => String(value) },
-};
-const context = vm.createContext({
-    window: fakeWindow,
-    frappe: fakeFrappe,
-    document: {},
-    console,
-    CustomEvent: class CustomEvent {
-        constructor(type, options) {
-            this.type = type;
-            this.detail = options && options.detail;
-        }
-    },
-    $: value => value,
-    __: value => value,
-    Promise,
-    Object,
-    Array,
-    String,
-    Number,
-    Boolean,
-    JSON,
-    Set,
-});
-
-vm.runInContext(
-    source("door_cutting_order/cutting_plan/door_cutting_order_plan_tabs_ux.js"),
-    context
+const planUx = source("door_cutting_order/cutting_plan/door_cutting_order_plan_ux.js");
+const costOffcut = source(
+    "door_cutting_order/costing/door_cutting_order_cost_offcut_assignment_ux.js"
 );
-vm.runInContext(
-    source("door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_state.js"),
-    context
+const costLayout = source(
+    "door_cutting_order/costing/door_cutting_order_cost_page_layout_ux.js"
 );
-vm.runInContext(
-    source("door_cutting_order/cutting_plan/door_cutting_order_plan_ux.js"),
-    context
+const registry = source(
+    "door_cutting_order/core/door_cutting_order_workspace_asset_registry.js"
 );
-vm.runInContext(
-    source("door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_presenter_adapter.js"),
-    context
-);
-
-const frm = {
-    doctype: "Door Cutting Order",
-    doc: {
-        name: "DCO-VISIBLE-PLAN",
-        approved_plan: approved.name,
-        system_plan_json: JSON.parse(system.snapshot_json),
-        cutting_plan_json: JSON.parse(system.snapshot_json),
-        custom_plan_json: JSON.parse(uploaded.snapshot_json),
-    },
-    __almdina_approved_plan_order: "DCO-VISIBLE-PLAN",
-    __almdina_approved_plan_snapshot: JSON.parse(approved.snapshot_json),
-};
-fakeWindow.cur_frm = frm;
-
-const state = fakeWindow.AlmdinaPlanWorkspaceState;
-const planUx = fakeWindow.AlmdinaDoorCuttingPlanUX;
-const tabs = fakeWindow.AlmdinaPlanTabsUX;
-
-function assertVisiblePlan(tab, expectedRow, expectedGeometry, expectedOffcutCount) {
-    frm.__almdina_active_plan_tab = tab;
-    const displayed = state.displayedPlan(frm);
-    const geometry = tabs.getPlanForTab(frm, tabs.activeTab(frm));
-    const offcut = planUx.offcutContext(frm);
-
-    assert.equal(displayed.name, expectedRow.name);
-    assert.equal(JSON.parse(displayed.snapshot_json).identity, expectedGeometry);
-    assert.equal(geometry.identity, expectedGeometry);
-    assert.equal(
-        geometry.__offcut_assignments.length,
-        expectedOffcutCount,
-        "presentation snapshot must carry the assignments for the visible plan only"
-    );
-    assert.equal(offcut.plan.name, expectedRow.name);
-    assert.equal(offcut.assignments.length, expectedOffcutCount);
-}
-
-assertVisiblePlan("System", system, "SYSTEM", 0);
-assert.equal(planUx.offcutPanelHtml(frm), "", "System without OFFCUT must hide the panel");
-
-assertVisiblePlan("Custom", uploaded, "UPLOADED", 2);
-assert.match(planUx.offcutPanelHtml(frm), /2 قطع/);
-assert.match(planUx.offcutPanelHtml(frm), /تحديد مصدر وتنفيذ قطع النقص/);
-
-assertVisiblePlan("System", system, "SYSTEM", 0);
-assert.equal(planUx.offcutPanelHtml(frm), "", "returning to System must clear Uploaded OFFCUT UI");
-
-assertVisiblePlan("Approved", approved, "APPROVED-UPLOADED", 2);
-assert.match(planUx.offcutPanelHtml(frm), /2 قطع/);
-
-const planUxSource = source("door_cutting_order/cutting_plan/door_cutting_order_plan_ux.js");
-assert.match(planUxSource, /saveOffcutAssignments\(plan\.name, rows\)/);
-assert.match(planUxSource, /policy\.reconcileOffcutMutation\(frm, result\)/);
-assert.doesNotMatch(planUxSource, /reloadOffcutState/);
-assert.doesNotMatch(planUxSource, /activePlan\(frm,\s*["']System["']\)/);
-assert.match(planUxSource, /almdina:plan-selection-changed/);
-
-const apiSource = source("door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_api.js");
-assert.match(apiSource, /function saveOffcutAssignments/);
-assert.doesNotMatch(apiSource, /AlmdinaWorkspaceSyncCoordinator/);
-assert.doesNotMatch(apiSource, /cur_frm/);
-assert.doesNotMatch(apiSource, /setTimeout\s*\(/);
-assert.doesNotMatch(apiSource, /location\.reload\s*\(/);
-
-const dependencyPolicySource = source(
+const api = source("door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_api.js");
+const dependencyPolicy = source(
     "door_cutting_order/order_entry/door_cutting_order_mutation_impact_policy.js"
 );
-assert.match(dependencyPolicySource, /OFFCUT_CLASSIFICATION_REASON/);
-assert.match(dependencyPolicySource, /offcutDependencyEffects/);
-assert.match(dependencyPolicySource, /reconcileOffcutMutation/);
-assert.match(dependencyPolicySource, /window\.cur_frm !== frm/);
-assert.match(dependencyPolicySource, /coordinator\.reconcile\(/);
-assert.match(dependencyPolicySource, /changed:\s*changed\.length\s*\?\s*changed\s*:\s*\["plan",\s*"cost"\]/);
-assert.doesNotMatch(dependencyPolicySource, /installOffcutMutationPolicy/);
-assert.doesNotMatch(dependencyPolicySource, /__offcutDependencyOwned/);
-assert.doesNotMatch(dependencyPolicySource, /almdina:plan-workspace-updated/);
-assert.doesNotMatch(dependencyPolicySource, /setTimeout\s*\(/);
-assert.doesNotMatch(dependencyPolicySource, /location\.reload\s*\(/);
 
-fakeWindow.AlmdinaPlanPreviewSession = {
-    isReady() {
-        return true;
-    },
-    previewRow() {
-        return planRow("preview:1", "PREVIEW", []);
-    },
-};
-frm.__almdina_active_plan_tab = "System";
-assert.equal(state.displayedPlan(frm).name, "preview:1");
-assert.equal(planUx.offcutPanelHtml(frm), "", "preview geometry must not leak persisted OFFCUT state");
+assert.doesNotMatch(planUx, /dco-open-offcut-editor/);
+assert.doesNotMatch(planUx, /new frappe\.ui\.Dialog/);
+assert.doesNotMatch(planUx, /saveOffcutAssignments\(/);
 
-console.log("OFFCUT visible-plan binding simulation passed");
+assert.match(costOffcut, /function projection\(frm\)/);
+assert.match(costOffcut, /state\.data/);
+assert.match(costOffcut, /piece_instance_id/);
+assert.match(costOffcut, /dco-cost-offcut-apply-all/);
+assert.match(costOffcut, /saveOffcutAssignments\(offcut\.plan_name, assignments\(root\)\)/);
+assert.match(costOffcut, /policy\.reconcileOffcutMutation\(frm, result\)/);
+assert.match(costOffcut, /captureDocument\(frm\)/);
+assert.match(costOffcut, /documentStillCurrent\(frm, token\)/);
+assert.doesNotMatch(costOffcut, /frappe\.call\(/);
+assert.doesNotMatch(costOffcut, /setTimeout\s*\(/);
+assert.doesNotMatch(costOffcut, /location\.reload\s*\(/);
+
+assert.match(costLayout, /AlmdinaCostOffcutAssignmentUX/);
+assert.match(registry, /door_cutting_order_cost_offcut_assignment_ux\.js/);
+
+assert.match(api, /function saveOffcutAssignments/);
+assert.doesNotMatch(api, /AlmdinaWorkspaceSyncCoordinator/);
+assert.doesNotMatch(api, /cur_frm/);
+assert.doesNotMatch(api, /setTimeout\s*\(/);
+assert.doesNotMatch(api, /location\.reload\s*\(/);
+
+assert.match(dependencyPolicy, /OFFCUT_CLASSIFICATION_REASON/);
+assert.match(dependencyPolicy, /reconcileOffcutMutation/);
+assert.match(dependencyPolicy, /coordinator\.reconcile\(/);
+assert.doesNotMatch(dependencyPolicy, /setTimeout\s*\(/);
+assert.doesNotMatch(dependencyPolicy, /location\.reload\s*\(/);
+
+console.log("OFFCUT Cost-tab ownership simulation passed");
