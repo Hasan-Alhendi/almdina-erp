@@ -440,6 +440,25 @@
         const owner = stateOwner();
         if (!store || !state) return false;
 
+        const offcutUx = window.AlmdinaCostOffcutAssignmentUX;
+        const hasPendingOffcut = Boolean(
+            offcutUx
+            && typeof offcutUx.hasPending === "function"
+            && offcutUx.hasPending(frm)
+        );
+        if (hasPendingOffcut) {
+            // Capture the price before the classification mutation refreshes the
+            // read projection; then restore the edit draft before saving settings.
+            store.replaceDraft(normalizeCostSettings(
+                captureCostSettings(frm, state.draft || {})
+            ));
+            const savedOffcut = await offcutUx.savePending(frm);
+            if (!savedOffcut) return false;
+            if (!documentStillCurrent(frm, token)) return false;
+            if (!sessionIsCurrent(frm, sessionContext)) return false;
+            sync(frm);
+        }
+
         if (canEditCostSettings(frm)) {
             const api = window.AlmdinaCostWorkspaceAPI;
             if (!api || typeof api.saveSettings !== "function") return false;
@@ -447,7 +466,8 @@
             // Capture the visible controls exactly once. Validation, dirty detection,
             // and transport all consume this same payload so the UI can never show
             // one value while the workspace saves a stale draft.
-            const captured = captureCostSettings(frm, state.draft || {});
+            const currentState = store.snapshot() || state;
+            const captured = captureCostSettings(frm, currentState.draft || {});
             const payload = normalizeCostSettings(captured);
             store.replaceDraft(payload);
             const pending = store.snapshot();
@@ -483,13 +503,6 @@
 
         if (!documentStillCurrent(frm, token)) return false;
         if (!sessionIsCurrent(frm, sessionContext)) return false;
-        const offcutUx = window.AlmdinaCostOffcutAssignmentUX;
-        if (offcutUx && typeof offcutUx.savePending === "function") {
-            const savedOffcut = await offcutUx.savePending(frm);
-            if (!savedOffcut) return false;
-            if (!documentStillCurrent(frm, token)) return false;
-            if (!sessionIsCurrent(frm, sessionContext)) return false;
-        }
         unmountDraftControls(frm);
         projectCurrent(frm);
         applyFieldAccess(frm);
