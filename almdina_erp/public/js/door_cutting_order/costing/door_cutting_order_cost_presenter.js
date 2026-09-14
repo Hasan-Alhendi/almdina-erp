@@ -3,7 +3,7 @@
 
     if (window.AlmdinaOrderCostUX) return;
 
-    const STYLE_ID = "dco-capability-cost-presenter-css-v6";
+    const STYLE_ID = "dco-capability-cost-presenter-css-v7";
 
     function can(frm, capability) {
         const permissions = window.AlmdinaPermissions;
@@ -293,6 +293,11 @@
             .dco-cost-section-title{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 16px;border-bottom:1px solid var(--border-color,#dfe4e8);background:var(--subtle-fg,#f8f9fa)}
             .dco-cost-section-title h4{margin:0;font-size:14px;font-weight:900}
             .dco-cost-section-title span{font-size:10px;color:var(--text-muted,#687481)}
+            .dco-offcut-price-body{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px}
+            .dco-offcut-price-body>span{font-size:12px;font-weight:800;color:var(--text-muted,#687481)}
+            .dco-offcut-price-control{min-width:150px;display:flex;justify-content:flex-end}
+            .dco-offcut-price-input{max-width:150px;direction:ltr;text-align:right;font-weight:900}
+            .dco-offcut-price-input:disabled,.dco-offcut-price-input[readonly]{background:transparent;border-color:transparent;box-shadow:none;color:inherit;opacity:1;cursor:default;padding-inline:0}
             .dco-cost-table-wrap{overflow:auto}
             .dco-cost-table{width:100%;min-width:760px;border-collapse:collapse;font-size:12px}
             .dco-cost-table th,.dco-cost-table td{padding:9px 10px;border-bottom:1px solid var(--border-color,#e7ebef);text-align:center;vertical-align:middle}
@@ -332,7 +337,7 @@
             .dco-cost-empty{padding:24px;text-align:center;color:var(--text-muted,#687481)}
             .dco-cost-plan-stale-notice{margin:0;padding:10px 14px;border-bottom:1px solid rgba(190,125,25,.28);background:rgba(190,125,25,.08);color:#875812;font-size:11px;font-weight:800;line-height:1.55}
             @media(max-width:900px){.dco-special-price-card{grid-template-columns:1fr 1fr}.dco-special-price-actions,.dco-special-price-card>.dco-special-price-id,.dco-special-price-note{grid-column:1/-1}}
-            @media(max-width:560px){.dco-cost-actions .btn{width:100%}.dco-special-price-card{grid-template-columns:1fr}.dco-invoice-total-card{flex-direction:column;align-items:flex-start}.dco-invoice-total-card b{font-size:24px}}
+            @media(max-width:560px){.dco-cost-actions .btn{width:100%}.dco-special-price-card{grid-template-columns:1fr}.dco-invoice-total-card{flex-direction:column;align-items:flex-start}.dco-invoice-total-card b{font-size:24px}.dco-offcut-price-body{align-items:flex-start;flex-direction:column}.dco-offcut-price-control{width:100%;justify-content:flex-start}}
         `;
         document.head.appendChild(style);
     }
@@ -359,6 +364,22 @@
         if (!planNeedsRecalculation(frm)) return "";
         return `<div class="dco-cost-plan-stale-notice" role="status">
             ${__("عدد الألواح وأجور القص مبنية على آخر خطة محسوبة. احسب خطة القص لتحديث الفاتورة بالقيم النهائية.")}
+        </div>`;
+    }
+
+    function offcutPriceHtml(frm) {
+        if (number(frm.doc.offcut_price_applicable) <= 0) return "";
+        const value = number(frm.doc.offcut_price_usd);
+        return `<div class="dco-cost-section dco-offcut-price-section" data-offcut-price-section>
+            <div class="dco-cost-section-title">
+                <h4>${__("سعر الفضلة")}</h4><span>${__("سعر إجمالي واحد للمجموعة")}</span>
+            </div>
+            <div class="dco-offcut-price-body">
+                <span>${__("سعر الفضلة ($)")}</span>
+                <div class="dco-offcut-price-control" data-offcut-price-control>
+                    <input class="form-control dco-offcut-price-input" data-offcut-price-input type="number" min="0" step="0.01" value="${esc(value)}" disabled readonly inputmode="decimal" aria-label="${esc(__("سعر الفضلة ($)"))}">
+                </div>
+            </div>
         </div>`;
     }
 
@@ -505,6 +526,7 @@
 
         field.$wrapper.html(`<div class="dco-cost-shell">
             ${actionShell}
+            ${offcutPriceHtml(frm)}
             <div class="dco-cost-section"><div class="dco-cost-section-title"><h4>جدول قياسات الطلب</h4><span>القياسات والكميات والملاحظات</span></div>${measurementRowsHtml(frm)}</div>
             ${specialPricingHtml(frm)}
             ${cutCornerPricingHtml(frm)}
