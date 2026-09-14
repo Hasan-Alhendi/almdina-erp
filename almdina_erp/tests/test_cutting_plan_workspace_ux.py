@@ -84,3 +84,24 @@ def test_plan_workspace_commands_are_contextual_to_the_active_plan():
     assert "export_order_dxf(frm.doc.name, activeTab(frm), {" in context
     assert "tabs.printActivePlan(frm)" in context
     assert "frappe.call" not in context
+
+
+def test_plan_source_tabs_lock_during_edit_inside_render_not_after_it():
+    tabs = TABS_UX.read_text(encoding="utf-8")
+    presenter = (CUTTING_PLAN / "door_cutting_order_plan_preview_presenter.js").read_text(
+        encoding="utf-8"
+    )
+
+    assert "function isPlanEditing(frm)" in tabs
+    assert "function isSourceTabLocked(frm, tabId)" in tabs
+    assert "function lockSourceTabs(frm, wrapper)" in tabs
+    assert "isPlanEditing(frm) && allowed.includes(\"System\")" in tabs
+    assert "isSourceTabLocked(frm, nextTab)" in tabs
+    assert "lockSourceTabs(frm, wrapper)" in tabs
+    assert "احفظ أو ألغِ تعديل خطة القص قبل تغيير مصدر الخطة" in tabs
+    render_dual = tabs[tabs.index("function renderDualTabs(frm)"):]
+    assert render_dual.index("buildTabBar(frm, selectedTab, tabs)") < render_dual.index(
+        "lockSourceTabs(frm, wrapper)"
+    )
+    assert 'typeof tabs.lockSourceTabs === "function"' in presenter
+    assert "function lockSourceTabs(frm)" in presenter

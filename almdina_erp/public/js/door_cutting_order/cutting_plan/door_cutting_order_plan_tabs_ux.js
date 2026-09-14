@@ -18,6 +18,7 @@
 			capability: "view_approved_cutting_plan",
 		}),
 	]);
+	const SOURCE_LOCK_TITLE = "احفظ أو ألغِ تعديل خطة القص قبل تغيير مصدر الخطة.";
 
 	function permissions() {
 		return window.AlmdinaPermissions || null;
@@ -40,6 +41,15 @@
 			canCapability(frm, "view_cutting_plan") ||
 			PLAN_TABS.some((tab) => canCapability(frm, tab.capability))
 		);
+	}
+
+	function isPlanEditing(frm) {
+		const editor = window.AlmdinaPlanEditSessionUX;
+		return Boolean(editor && typeof editor.isEditing === "function" && editor.isEditing(frm));
+	}
+
+	function isSourceTabLocked(frm, tabId) {
+		return isPlanEditing(frm) && String(tabId || "") !== "System";
 	}
 
 	function visibleTabs(frm) {
@@ -101,6 +111,13 @@
 		const allowed = visibleTabs(frm).map((tab) => tab.id);
 		if (!allowed.length) return "System";
 
+		// Optimizer editing/preview owns System settings only. Keep the operator
+		// on that source for the whole edit session, even if a later workspace
+		// refresh rebuilds the tab bar while Custom/Approved was preferred.
+		if (isPlanEditing(frm) && allowed.includes("System")) {
+			return "System";
+		}
+
 		const preferred = frm.__almdina_active_plan_tab;
 		if (preferred && allowed.includes(preferred)) {
 			return preferred;
@@ -141,12 +158,16 @@
 			return "";
 		};
 		const buttons = tabs
-			.map(
-				(tab) => `
-				<button type="button" class="btn btn-sm ${activeTab === tab.id ? "btn-primary" : "btn-default"}" data-plan-tab="${tab.id}">
+			.map((tab) => {
+				const locked = isSourceTabLocked(frm, tab.id);
+				const lockAttrs = locked
+					? ` disabled aria-disabled="true" title="${frappe.utils.escape_html(__(SOURCE_LOCK_TITLE))}"`
+					: "";
+				return `
+				<button type="button" class="btn btn-sm ${activeTab === tab.id ? "btn-primary" : "btn-default"}" data-plan-tab="${tab.id}"${lockAttrs}>
 					${badge(tab.id)}${__(tab.label)}
-				</button>`
-			)
+				</button>`;
+			})
 			.join("");
 		return `
 			<div class="dco-plan-tabs" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px 0;">
@@ -207,6 +228,28 @@
 		return owner.render(frm, wrapper.find(".dco-plan-context-actions-host").first());
 	}
 
+	function lockSourceTabs(frm, wrapper) {
+		const host = wrapper
+			|| (frm && frm.fields_dict && frm.fields_dict.cutting_plan_html && frm.fields_dict.cutting_plan_html.$wrapper);
+		if (!host || typeof host.find !== "function") return;
+		const nodes = host.find("[data-plan-tab]");
+		if (!nodes || typeof nodes.each !== "function") return;
+		nodes.each((_, element) => {
+			const tab = $(element);
+			const locked = isSourceTabLocked(frm, tab.attr("data-plan-tab"));
+			tab.prop("disabled", locked);
+			if (locked) {
+				tab.attr("aria-disabled", "true");
+				tab.attr("title", __(SOURCE_LOCK_TITLE));
+				return;
+			}
+			if (typeof tab.removeAttr === "function") {
+				tab.removeAttr("aria-disabled");
+				tab.removeAttr("title");
+			}
+		});
+	}
+
 	function renderDualTabs(frm) {
 		const wrapper = frm.fields_dict.cutting_plan_html && frm.fields_dict.cutting_plan_html.$wrapper;
 		const tabs = visibleTabs(frm);
@@ -227,11 +270,14 @@
 		renderContextActions(frm, wrapper);
 		wrapper.find("[data-plan-tab]").on("click", function onTabClick() {
 			const nextTab = $(this).attr("data-plan-tab");
+			if (this && this.disabled) return;
+			if (isSourceTabLocked(frm, nextTab)) return;
 			if (nextTab === frm.__almdina_active_plan_tab) return;
 			frm.__almdina_active_plan_tab = nextTab;
 			renderDualTabs(frm);
 			notifyPlanSelection(frm, nextTab);
 		});
+		lockSourceTabs(frm, wrapper);
 		return true;
 	}
 
@@ -264,6 +310,9 @@
 		visibleTabs,
 		defaultTab,
 		activeTab,
+		isPlanEditing,
+		isSourceTabLocked,
+		lockSourceTabs,
 		getPlanForTab,
 		ensureApprovedPlanLoaded,
 		renderDualTabs,

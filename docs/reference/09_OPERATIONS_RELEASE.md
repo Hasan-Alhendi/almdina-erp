@@ -45,6 +45,7 @@ bench --site <site> migrate
 build/refresh assets when frontend assets changed
 clear/reload caches when required
 restart relevant workers/services
+ensure the Frappe `long` queue worker is running; Save-triggered System plan recalculation is enqueued there and will stay queued if no worker is available
 smoke test
 ```
 
@@ -110,7 +111,7 @@ smoke test
 - request/endpoint إن أمكن.
 - browser/server error.
 - whether refresh changes result.
-- relevant worker/web logs.
+- relevant worker/web logs, including the Frappe `long` queue if Cutting Plan save-recalculation did not start.
 
 تجنب تعديل عدة طبقات “للتجربة” قبل تحديد أول boundary يظهر فيها السلوك الخاطئ.
 

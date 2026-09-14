@@ -134,6 +134,11 @@
     }
 
     function lockSourceTabs(frm) {
+        const tabs = window.AlmdinaPlanTabsUX;
+        if (tabs && typeof tabs.lockSourceTabs === "function") {
+            tabs.lockSourceTabs(frm);
+            return;
+        }
         const wrapper = planWrapper(frm);
         if (!wrapper) return;
         wrapper.find("[data-plan-tab]").each((_, element) => {

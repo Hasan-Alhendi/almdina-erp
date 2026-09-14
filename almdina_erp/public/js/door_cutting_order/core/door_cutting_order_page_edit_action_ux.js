@@ -277,6 +277,59 @@
         `;
     }
 
+    function flushOrderSurfaces(frm) {
+        const owner = window.AlmdinaDoorCuttingFastEntry;
+        if (owner && typeof owner.flush === "function") owner.flush(frm);
+    }
+
+    function bindToolbarActions(toolbar) {
+        if (!toolbar || toolbar._dcoTabEditBound) return;
+        toolbar._dcoTabEditBound = true;
+        toolbar.addEventListener("pointerdown", (event) => {
+            const save = event.target.closest(".dco-tab-edit-save");
+            if (!save || save.disabled || !toolbar.contains(save)) return;
+            flushOrderSurfaces(toolbar._dcoTabEditForm);
+        });
+        toolbar.addEventListener("click", (event) => {
+            const frm = toolbar._dcoTabEditForm;
+            const kind = toolbar.getAttribute("data-almdina-tab-edit-kind");
+            if (!frm || !kind) return;
+            const start = event.target.closest(".dco-tab-edit-start");
+            if (start && toolbar.contains(start) && !start.disabled) {
+                event.preventDefault();
+                runAction(frm, () => startFor(frm, kind));
+                return;
+            }
+            const save = event.target.closest(".dco-tab-edit-save");
+            if (save && toolbar.contains(save) && !save.disabled) {
+                event.preventDefault();
+                flushOrderSurfaces(frm);
+                runAction(frm, () => saveFor(frm, kind));
+                return;
+            }
+            const cancel = event.target.closest(".dco-tab-edit-cancel");
+            if (cancel && toolbar.contains(cancel) && !cancel.disabled) {
+                event.preventDefault();
+                runAction(frm, () => cancelFor(frm, kind));
+            }
+        });
+    }
+
+    function patchToolbarButtons(toolbar, editing, actionBusy, editDisabled, blockMessage) {
+        const status = toolbar.querySelector(`.${TOOLBAR_CLASS}__state`);
+        if (status) status.textContent = __(editing ? "وضع التعديل" : "وضع القراءة");
+        const save = toolbar.querySelector(".dco-tab-edit-save");
+        const cancel = toolbar.querySelector(".dco-tab-edit-cancel");
+        const start = toolbar.querySelector(".dco-tab-edit-start");
+        if (save) save.disabled = actionBusy;
+        if (cancel) cancel.disabled = actionBusy;
+        if (start) {
+            start.disabled = editDisabled;
+            if (blockMessage) start.setAttribute("title", frappe.utils.escape_html(__(blockMessage)));
+            else start.removeAttribute("title");
+        }
+    }
+
     function renderToolbar(frm, kind) {
         const toolbar = ensureToolbar(frm, kind);
         const config = KIND_CONFIG[kind];
@@ -292,10 +345,24 @@
         const competing = Boolean(editingKind && editingKind !== kind);
         const editable = permissionsResolved() && canEdit(frm, kind);
         const transitionBusy = editState.phase !== "idle" && editState.phase !== "editing";
-        const editDisabled = busy || transitionBusy || competing || !editable;
+        const actionBusy = busy || transitionBusy;
+        const editDisabled = actionBusy || competing || !editable;
         const blockMessage = editDisabled ? editBlockedMessage(frm, kind, editingKind) : "";
+        const actionMode = editing ? "save" : "edit";
 
+        toolbar._dcoTabEditForm = frm;
         toolbar.setAttribute("data-editing", editing ? "1" : "0");
+        bindToolbarActions(toolbar);
+
+        const hasMatchingActions = editing
+            ? Boolean(toolbar.querySelector(".dco-tab-edit-save"))
+            : Boolean(toolbar.querySelector(".dco-tab-edit-start"));
+        if (toolbar.getAttribute("data-almdina-action-mode") === actionMode && hasMatchingActions) {
+            patchToolbarButtons(toolbar, editing, actionBusy, editDisabled, blockMessage);
+            return true;
+        }
+
+        toolbar.setAttribute("data-almdina-action-mode", actionMode);
         toolbar.innerHTML = `
             <div class="${TOOLBAR_CLASS}__identity">
                 <strong class="${TOOLBAR_CLASS}__title">${frappe.utils.escape_html(__(config.title))}</strong>
@@ -303,18 +370,11 @@
             </div>
             <div class="${TOOLBAR_CLASS}__actions">
                 ${editing
-                    ? button(CANCEL_LABEL, "btn-default dco-tab-edit-cancel", busy || transitionBusy, "إلغاء التغييرات غير المحفوظة")
-                        + button(SAVE_LABEL, "btn-primary dco-tab-edit-save", busy || transitionBusy, "حفظ تعديلات هذا القسم فقط")
+                    ? button(CANCEL_LABEL, "btn-default dco-tab-edit-cancel", actionBusy, "إلغاء التغييرات غير المحفوظة")
+                        + button(SAVE_LABEL, "btn-primary dco-tab-edit-save", actionBusy, "حفظ تعديلات هذا القسم فقط")
                     : button(EDIT_LABEL, "btn-default dco-tab-edit-start", editDisabled, blockMessage)}
             </div>
         `;
-
-        const start = toolbar.querySelector(".dco-tab-edit-start");
-        const save = toolbar.querySelector(".dco-tab-edit-save");
-        const cancel = toolbar.querySelector(".dco-tab-edit-cancel");
-        if (start && !start.disabled) start.addEventListener("click", () => runAction(frm, () => startFor(frm, kind)));
-        if (save && !save.disabled) save.addEventListener("click", () => runAction(frm, () => saveFor(frm, kind)));
-        if (cancel && !cancel.disabled) cancel.addEventListener("click", () => runAction(frm, () => cancelFor(frm, kind)));
         return true;
     }
 

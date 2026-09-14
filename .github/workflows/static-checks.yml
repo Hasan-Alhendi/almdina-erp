@@ -158,7 +158,9 @@ jobs:
           python -m unittest -v \
             almdina_erp.tests.test_cutting_plan_application \
             almdina_erp.tests.test_cutting_execution_trace \
-            almdina_erp.tests.test_cutting_plan_architecture
+            almdina_erp.tests.test_cutting_plan_architecture \
+            almdina_erp.tests.test_system_plan_recalculation_job \
+            almdina_erp.tests.test_system_plan_recalculation_job_service
 
       - name: Run ALMADINA-176 OFFCUT classification contracts
         run: |
@@ -236,6 +238,7 @@ jobs:
           node almdina_erp/tests/js/dco_new_recovery.test.js
           node almdina_erp/tests/js/dco_new_recovery_save.test.js
           node almdina_erp/tests/js/dco_workspace_mutation_impact.test.js
+          node almdina_erp/tests/js/plan_recalculation_job.test.js
           node almdina_erp/tests/js/cost_workspace_document_version.test.js
           node almdina_erp/tests/js/offcut_cost_preview_projection.test.js
           node almdina_erp/tests/js/plan_preview_cost_reconcile.test.js
@@ -261,6 +264,8 @@ jobs:
           node almdina_erp/tests/js/shop_floor_quick_actions.test.js
           node almdina_erp/tests/js/shop_floor_inbox_view_model.test.js
           node almdina_erp/tests/js/order_tab_visibility.test.js
+          node almdina_erp/tests/js/plan_source_tab_edit_lock.test.js
+          node almdina_erp/tests/js/order_measurement_save_flush.test.js
           node almdina_erp/tests/js/factory_workforce_view_model.test.js
           node almdina_erp/tests/js/door_cutting_order_extra_addons_ux.test.js
           node almdina_erp/tests/js/door_cutting_order_extra_addons_row_integration.test.js

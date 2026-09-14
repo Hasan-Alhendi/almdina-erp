@@ -203,6 +203,16 @@ def _assert_recalculation_state(order: Any) -> None:
     assert_order_editable(order)
 
 
+def recalculation_is_allowed(order: Any) -> bool:
+    """True when the current user may run a System plan recalculation now."""
+
+    try:
+        _assert_recalculation_state(order)
+    except (frappe.ValidationError, frappe.PermissionError):
+        return False
+    return True
+
+
 def _set_drawing_dxf_status(order: Any, status: str) -> None:
     """Persist only the DCO-owned drawing workflow signal, never Plan data."""
 
@@ -562,6 +572,7 @@ __all__ = [
     "plan_payload",
     "recalculate_order_plan",
     "recalculate_system_plan",
+    "recalculation_is_allowed",
     "save_system_plan_settings",
     "save_uploaded_dxf_plan",
 ]

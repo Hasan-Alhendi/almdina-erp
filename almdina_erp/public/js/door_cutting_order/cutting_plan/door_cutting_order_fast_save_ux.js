@@ -46,6 +46,15 @@
                     line-height:1.65;
                     font-weight:750;
                 }
+                .dco-plan-stale-banner.is-calculating {
+                    border-color:rgba(36,144,239,.32);
+                    background:rgba(36,144,239,.08);
+                    color:#1d4f7a;
+                }
+                .dco-plan-stale-banner.is-stalled {
+                    border-color:rgba(190,125,25,.4);
+                    background:#fff3d8;
+                }
                 .dco-plan-stale-banner strong { display:block; font-size:12px; }
                 .dco-plan-stale-banner .icon { font-size:18px; line-height:1.2; }
             </style>
@@ -92,6 +101,8 @@
 
     async function persistPendingOrderInputs(frm) {
         if (!frm || !frm.__almdina_pending_order_input_persistence) return true;
+        const fastEntry = window.AlmdinaDoorCuttingFastEntry;
+        if (fastEntry && typeof fastEntry.flush === "function") fastEntry.flush(frm);
         const dirty = Boolean(frm.is_dirty && frm.is_dirty());
         if (!dirty) {
             frm.__almdina_pending_order_input_persistence = false;
@@ -118,13 +129,43 @@
         return saved;
     }
 
+    function backgroundJob(frm) {
+        const owner = window.AlmdinaPlanRecalculationJob;
+        return owner && typeof owner.snapshot === "function" ? owner.snapshot(frm) : null;
+    }
+
+    function jobIsActive(frm) {
+        const owner = window.AlmdinaPlanRecalculationJob;
+        return Boolean(owner && typeof owner.isActive === "function" && owner.isActive(frm));
+    }
+
     function renderStaleState(frm) {
         installStyles();
-        const stale = planIsStale(frm);
         const planActions = frm.fields_dict && frm.fields_dict.plan_control_actions;
         if (!planActions || !planActions.$wrapper) return;
 
         planActions.$wrapper.find(".dco-plan-stale-banner").remove();
+        const job = backgroundJob(frm);
+        if (jobIsActive(frm)) {
+            const stalled = Boolean(job && job.stalled);
+            const title = stalled
+                ? __("حساب خطة القص ما زال في الانتظار")
+                : __("جاري إعادة حساب خطة القص والتكلفة في الخلفية");
+            const body = stalled
+                ? __("الحفظ تم بنجاح، لكن العامل الخلفي لم يبدأ بعد. يمكنك متابعة العمل أو استخدام زر إعادة الحساب اليدوي.")
+                : __("يمكنك متابعة العمل على الطلب. ستتحدث خطة القص والتكلفة تلقائيًا عند اكتمال الحساب.");
+            planActions.$wrapper.prepend(`
+                <div class="dco-plan-stale-banner is-calculating${stalled ? " is-stalled" : ""}" role="status" aria-live="polite">
+                    <span class="icon">⏳</span>
+                    <div>
+                        <strong>${frappe.utils.escape_html(title)}</strong>
+                        ${frappe.utils.escape_html(body)}
+                    </div>
+                </div>`);
+            return;
+        }
+
+        const stale = planIsStale(frm);
         if (!stale) return;
 
         planActions.$wrapper.prepend(`
@@ -181,6 +222,11 @@
         edge_long_left_type_override(frm) { markOrderInputPlanStale(frm); },
         edge_width_top_type_override(frm) { markOrderInputPlanStale(frm); },
         edge_width_bottom_type_override(frm) { markOrderInputPlanStale(frm); },
+    });
+
+    window.addEventListener("almdina:plan-recalculation-updated", () => {
+        const frm = window.cur_frm;
+        if (frm && frm.doctype === "Door Cutting Order") schedule(frm);
     });
 
     window.AlmdinaFastSaveUX = Object.freeze({

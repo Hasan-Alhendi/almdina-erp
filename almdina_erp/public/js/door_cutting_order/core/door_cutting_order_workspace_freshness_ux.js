@@ -44,6 +44,9 @@
             .${BANNER_CLASS}.is-preview{
                 border-color:rgba(36,144,239,.28);background:rgba(36,144,239,.065);color:var(--text-color,#26313b);
             }
+            .${BANNER_CLASS}.is-calculating{
+                border-color:rgba(36,144,239,.32);background:rgba(36,144,239,.08);color:#1d4f7a;
+            }
             .${BANNER_CLASS} strong{display:block;margin-bottom:2px;font-size:12px;font-weight:900}
             .${BANNER_CLASS} .dco-freshness-icon{font-size:17px;line-height:1.25}
             [data-fieldname="order_cost_invoice_html"][data-almdina-cost-freshness="stale"] .dco-cost-section,
@@ -85,6 +88,21 @@
             };
         }
         if (reason === "plan_recalculation_required") {
+            const job = window.AlmdinaPlanRecalculationJob;
+            const frm = window.cur_frm;
+            if (job && frm && typeof job.isActive === "function" && job.isActive(frm)) {
+                const state = typeof job.snapshot === "function" ? job.snapshot(frm) : null;
+                if (state && state.stalled) {
+                    return {
+                        title: __("حساب التكلفة ما زال في الانتظار"),
+                        body: __("تم حفظ القياسات. تكلفة الألواح والقص ستتحدث عند بدء العامل الخلفي أو بعد إعادة الحساب اليدوي."),
+                    };
+                }
+                return {
+                    title: __("جاري إعادة حساب خطة القص والتكلفة في الخلفية"),
+                    body: __("تم حفظ التغييرات. تكلفة الألواح والقص لن تعتبر نهائية حتى يكتمل الحساب التلقائي."),
+                };
+            }
             return {
                 title: __("التكلفة بانتظار خطة القص الجديدة"),
                 body: __("تم حفظ تغييرات تؤثر على توزيع القطع. تكلفة الألواح والقص لن تعتبر نهائية حتى إعادة حساب خطة القص وحفظ النتيجة الجديدة."),
@@ -136,9 +154,14 @@
 
         if (state && state.freshness === "stale") {
             const copy = staleMessage(state.staleReason);
+            const calculating = Boolean(
+                window.AlmdinaPlanRecalculationJob
+                && typeof window.AlmdinaPlanRecalculationJob.isActive === "function"
+                && window.AlmdinaPlanRecalculationJob.isActive(frm)
+            );
             wrapper.prepend(`
-                <div class="${BANNER_CLASS}" role="status" aria-live="polite">
-                    <span class="dco-freshness-icon" aria-hidden="true">⚠</span>
+                <div class="${BANNER_CLASS}${calculating ? " is-calculating" : ""}" role="status" aria-live="polite">
+                    <span class="dco-freshness-icon" aria-hidden="true">${calculating ? "⏳" : "⚠"}</span>
                     <div><strong>${frappe.utils.escape_html(copy.title)}</strong>${frappe.utils.escape_html(copy.body)}</div>
                 </div>
             `);
@@ -242,6 +265,7 @@
         "almdina:workspace-freshness-changed",
         "almdina:cost-workspace-updated",
         "almdina:plan-preview-updated",
+        "almdina:plan-recalculation-updated",
         "almdina:surfaces-settled",
     ].forEach((eventName) => {
         window.addEventListener(eventName, () => {

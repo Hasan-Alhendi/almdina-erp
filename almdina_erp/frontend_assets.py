@@ -68,6 +68,9 @@ doctype_js = {
         "public/js/door_cutting_order/core/door_cutting_order_workspace_asset_registry.js",
         "public/js/door_cutting_order/core/door_cutting_order_workspace_asset_status_ux.js",
         "public/js/door_cutting_order/core/door_cutting_order_workspace_activation_lifecycle.js",
+        # Background System plan recalc must exist before after_save impact
+        # reconciliation so explicit measurement saves can enqueue without freeze.
+        "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_recalculation_job.js",
         # DCO-specific dependency policy is deliberately separate from the shared
         # freshness primitive: only this feature knows which inputs affect Plan,
         # Cost, or the special-price basis.

@@ -60,6 +60,7 @@ class TestWorkspaceFreshnessArchitecture(unittest.TestCase):
         for fieldname in ("width_cm", "length_cm", "qty", "piece_type"):
             self.assertIn(f'"{fieldname}"', source)
         self.assertIn("AlmdinaWorkspaceSyncCoordinator", source)
+        self.assertIn("AlmdinaPlanRecalculationJob", source)
         self.assertIn('recordImpact(frm, ["plan", "cost"]', source)
         self.assertIn("special_price_basis_changed", source)
         self.assertIn("plan_recalculation_required", source)

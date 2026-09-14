@@ -33,6 +33,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization im
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
     factory_default_plan_settings,
 )
+from almdina_erp.almdina_erp.services.cutting_plan_recalculation_job_service import (
+    overlay_background_recalculation,
+)
 
 
 # Keep the revision scan lightweight. Geometry snapshots can be large, so they are
@@ -307,6 +310,7 @@ def get_plan_workspace_snapshot(order_name: str) -> dict[str, Any]:
 
     return {
         "order_name": order.name,
+        "background_recalculation": overlay_background_recalculation(order.name),
         "order_status": str(getattr(order, "status", None) or "Draft"),
         "revision_state": str(getattr(order, "revision_state", None) or "Current"),
         "current_production_stage": getattr(order, "current_production_stage", None),

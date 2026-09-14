@@ -135,10 +135,19 @@
         });
     }
 
+    function backgroundRecalc() {
+        return window.AlmdinaPlanRecalculationJob || null;
+    }
+
     async function reconcileAfterSave(frm) {
         const impact = frm && frm[IMPACT_KEY];
         if (!impact || !(impact.resources || []).length) return false;
         frm[IMPACT_KEY] = null;
+
+        const job = backgroundRecalc();
+        if (job && typeof job.enqueueAfterSave === "function") {
+            await job.enqueueAfterSave(frm, impact);
+        }
 
         const coordinator = syncCoordinator();
         if (!coordinator || typeof coordinator.refresh !== "function") return false;
@@ -150,10 +159,11 @@
         });
         clearSpecialPriceStaleMarkers(frm);
 
+        const jobActive = Boolean(job && typeof job.isActive === "function" && job.isActive(frm));
         if (
             impact.resources.includes("cost")
             && impact.resources.includes("plan")
-            && planNeedsRecalculation(frm)
+            && (planNeedsRecalculation(frm) || jobActive)
         ) {
             coordinator.invalidate(frm, ["cost"], "plan_recalculation_required");
         }

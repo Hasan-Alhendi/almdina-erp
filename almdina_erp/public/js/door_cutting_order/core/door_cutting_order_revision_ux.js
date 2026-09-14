@@ -666,47 +666,84 @@
         return Boolean(await costUx.flushPendingPriceEdits(frm));
     }
 
+    function flushPendingMeasurements(frm) {
+        const owner = window.AlmdinaDoorCuttingFastEntry;
+        if (!owner || typeof owner.flush !== "function") return false;
+        return Boolean(owner.flush(frm));
+    }
+
+    function documentIsDirty(frm) {
+        return Boolean(frm && frm.is_dirty && frm.is_dirty());
+    }
+
+    async function persistDirtyDocument(frm) {
+        if (!frm || typeof frm.save !== "function" || !documentIsDirty(frm)) return true;
+        await frm.save();
+        return !documentIsDirty(frm);
+    }
+
     async function commitEditSession(frm) {
         if (!frm || frm.is_new()) {
-            if (frm && typeof frm.save === "function") return frm.save();
-            return;
+            if (frm && typeof frm.save === "function") {
+                await frm.save();
+                return !documentIsDirty(frm);
+            }
+            return false;
         }
+
+        flushPendingMeasurements(frm);
+
         if (!isEditSessionActive(frm)) {
             // Never call bare frm.save() on a clean doc — Frappe shows
             // "No changes in document" and confuses price/API workflows.
-            if (frm.is_dirty && frm.is_dirty() && typeof frm.save === "function") {
+            if (documentIsDirty(frm) && typeof frm.save === "function") {
                 try {
                     await flushPendingCostPriceEdits(frm);
                 } catch (error) {
                     console.error("Failed to flush pending piece prices", error);
-                    return;
+                    return false;
                 }
-                if (frm.is_dirty && frm.is_dirty()) {
-                    return frm.save();
+                flushPendingMeasurements(frm);
+                if (documentIsDirty(frm)) {
+                    return persistDirtyDocument(frm);
                 }
             }
-            return;
+            return true;
         }
 
         try {
             await flushPendingCostPriceEdits(frm);
         } catch (error) {
             console.error("Failed to flush pending piece prices", error);
-            return;
+            return false;
         }
+
+        flushPendingMeasurements(frm);
 
         // Price-only edits are persisted by the pricing APIs. Avoid frm.save()
         // when nothing else is dirty — that was causing the Save error.
-        if (frm.is_dirty && frm.is_dirty()) {
+        if (documentIsDirty(frm)) {
             frm.__almdina_lock_after_save = true;
-            return frm.save();
+            const saved = await persistDirtyDocument(frm);
+            if (!saved) {
+                frm.__almdina_lock_after_save = false;
+                return false;
+            }
+            // Frappe resolves frm.save() before after_save finishes, so the
+            // coordinator must not wait on captureEditSessionPresence().
+            if (captureEditSessionPresence(frm)) {
+                lockEditSession(frm, { silent: true });
+            }
+            return !captureEditSessionPresence(frm);
         }
         lockEditSession(frm);
+        return !captureEditSessionPresence(frm);
     }
 
     async function persistOrderEditCheckpoint(frm) {
         if (!frm || frm.is_new() || !orderCanEdit(frm)) return false;
-        if (!(frm.is_dirty && frm.is_dirty())) return true;
+        flushPendingMeasurements(frm);
+        if (!documentIsDirty(frm)) return true;
         if (typeof frm.save !== "function") return false;
 
         // Plan recalculation needs current piece rows in the database, but this
@@ -714,7 +751,8 @@
         // button still locks the session; only this explicit internal checkpoint
         // preserves it across the save/reload cycle.
         await flushPendingCostPriceEdits(frm);
-        if (!(frm.is_dirty && frm.is_dirty())) return true;
+        flushPendingMeasurements(frm);
+        if (!documentIsDirty(frm)) return true;
         markEditSessionSticky(frm);
         frm.__almdina_preserve_edit_session_after_save = true;
         try {
@@ -722,7 +760,7 @@
         } finally {
             frm.__almdina_preserve_edit_session_after_save = false;
         }
-        return !(frm.is_dirty && frm.is_dirty());
+        return !documentIsDirty(frm);
     }
 
     function confirmEditSession(frm) {
@@ -917,8 +955,7 @@
                 return captureEditSessionPresence(frm);
             },
             async save(frm) {
-                await commitEditSession(frm);
-                return !captureEditSessionPresence(frm);
+                return Boolean(await commitEditSession(frm));
             },
             cancel: cancelOrderEditSession,
             isDirty(frm) {

@@ -72,8 +72,13 @@ class TestOrderEditSaveIntentUx(unittest.TestCase):
             "function confirmEditSession", 1
         )[0]
 
+        self.assertIn("flushPendingMeasurements(frm);", explicit)
         self.assertIn("frm.__almdina_lock_after_save = true;", explicit)
-        self.assertIn("return frm.save();", explicit)
+        self.assertIn("const saved = await persistDirtyDocument(frm);", explicit)
+        self.assertIn("if (captureEditSessionPresence(frm)) {", explicit)
+        self.assertIn("lockEditSession(frm, { silent: true });", explicit)
+        self.assertNotIn("return frm.save();", explicit)
+        self.assertIn("flushPendingMeasurements(frm);", checkpoint)
         self.assertIn("markEditSessionSticky(frm);", checkpoint)
         self.assertIn("frm.__almdina_preserve_edit_session_after_save = true;", checkpoint)
         self.assertIn("await frm.save();", checkpoint)
