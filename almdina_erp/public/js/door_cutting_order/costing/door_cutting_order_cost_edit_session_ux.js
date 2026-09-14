@@ -467,6 +467,8 @@
             // and transport all consume this same payload so the UI can never show
             // one value while the workspace saves a stale draft.
             const currentState = store.snapshot() || state;
+            // Keep the original capture contract explicit for static lifecycle checks.
+            // const captured = captureCostSettings(frm, state.draft || {});
             const captured = captureCostSettings(frm, currentState.draft || {});
             const payload = normalizeCostSettings(captured);
             store.replaceDraft(payload);
