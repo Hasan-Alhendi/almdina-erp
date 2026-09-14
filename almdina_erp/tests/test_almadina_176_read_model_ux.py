@@ -94,13 +94,16 @@ def test_cost_tab_uses_canonical_offcut_projection_and_one_batch_save_path():
 
     assert "function projection(frm)" in source
     assert "state.data" in source
-    assert "dco-cost-offcut-source" in source
-    assert "dco-cost-offcut-execution" in source
+    assert "type=\"radio\"" in source
+    assert "CUSTOMER_FACTORY" in source
+    assert "FACTORY_FACTORY" in source
+    assert "CUSTOMER_CUSTOMER" in source
+    assert "dco-cost-offcut-table" in source
     assert "STATE_BY_SELECTION" in source
     assert "FACTORY_CUSTOMER" not in source
     assert 'resource_kind: "OFFCUT"' not in source
     assert "offcut_price_usd" not in source
-    assert "dco-cost-offcut-apply-all" in source
+    assert "dco-cost-offcut-summary" not in source
     assert "saveOffcutAssignments(offcut.plan_name, assignments(root))" in source
     assert "policy.reconcileOffcutMutation(frm, result)" in source
     assert "frappe.call(" not in source
