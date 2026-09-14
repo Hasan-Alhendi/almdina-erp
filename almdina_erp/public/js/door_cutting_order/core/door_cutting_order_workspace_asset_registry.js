@@ -51,6 +51,7 @@
                 `${ASSET_ROOT}/costing/door_cutting_order_customer_invoice_addon_summary.js`,
                 `${ASSET_ROOT}/costing/door_cutting_order_cost_page_layout_ux.js`,
                 `${ASSET_ROOT}/costing/door_cutting_order_compact_pricing_ux.js`,
+                `${ASSET_ROOT}/costing/door_cutting_order_cost_offcut_assignment_ux.js`,
                 `${ASSET_ROOT}/costing/door_cutting_order_cost_workspace_presenter_adapter.js`,
                 `${ASSET_ROOT}/costing/door_cutting_order_cost_permissions_ux.js`,
                 `${ASSET_ROOT}/costing/door_cutting_order_financial_documents_ux.js`,
