@@ -1,14 +1,15 @@
 (() => {
     "use strict";
 
-    const MODULE_VERSION = 3;
+    const MODULE_VERSION = 4;
     const existingApi = window.AlmdinaCostPageLayoutUX;
     if (existingApi && Number(existingApi.version || 0) >= MODULE_VERSION) return;
 
-    const STYLE_ID = "dco-cost-page-layout-ux-v3";
+    const STYLE_ID = "dco-cost-page-layout-ux-v4";
     const LEGACY_STYLE_IDS = [
         "dco-cost-page-layout-ux-v1",
         "dco-cost-page-layout-ux-v2",
+        "dco-cost-page-layout-ux-v3",
     ];
     const COST_API_FLAG = "__almdinaCostPageLayoutUX";
     const INTERNAL_REPORT_CLASS = "dco-secure-print-internal-cost-report";
