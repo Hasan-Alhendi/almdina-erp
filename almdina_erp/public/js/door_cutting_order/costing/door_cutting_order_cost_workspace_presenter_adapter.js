@@ -210,6 +210,22 @@
         reconcileInvoiceTotalCard(frm);
     }
 
+    function reconcileActiveCostEditSession(frm) {
+        const editSession = window.AlmdinaCostEditSessionUX;
+        if (!editSession || typeof editSession.sync !== "function") return false;
+        if (
+            typeof editSession.isEditing === "function"
+            && !editSession.isEditing(frm)
+        ) {
+            return false;
+        }
+        // A full presenter render replaces the stable OFFCUT input node. When a
+        // Cost edit session is active, synchronously re-bind the current draft to
+        // that new node before control returns to any asynchronous caller.
+        editSession.sync(frm);
+        return true;
+    }
+
     function install() {
         const legacy = window.AlmdinaOrderCostUX;
         if (!legacy || legacy.__a52WorkspaceOwned) return false;
@@ -221,6 +237,7 @@
                 if (ready(frm)) project(frm);
                 const result = legacy.render(frm);
                 if (ready(frm)) reconcileRenderedCommercialProjection(frm);
+                reconcileActiveCostEditSession(frm);
                 return result;
             },
             refreshInvoiceSection(frm) {
