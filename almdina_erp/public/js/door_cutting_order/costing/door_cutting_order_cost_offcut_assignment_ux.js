@@ -83,76 +83,20 @@
         return STATE_BY_SELECTION[`${source}:${execution}`] || EMPTY_STATE;
     }
 
-    function summaryHtml(summary) {
-        return (summary || []).map(item => `
-            <div class="dco-cost-offcut-summary__item">
-                <span>${esc(item.label)}</span>
-                <strong>${Number(item.count || 0)}</strong>
-            </div>
-        `).join("");
+    function optionForState(state) {
+        const value = String(state || EMPTY_STATE);
+        return ["CUSTOMER_FACTORY", "FACTORY_FACTORY", "CUSTOMER_CUSTOMER"].includes(value) ? value : "";
     }
-
+    function rowLabel(item) { return item.piece_label || item.piece_instance_id || __("درفة"); }
     function rowHtml(item, editable) {
-        const state = String(item.business_state || EMPTY_STATE);
-        const source = sourceForState(state);
-        const execution = executionForState(state);
+        const selected = optionForState(item.business_state);
         const disabled = editable ? "" : "disabled";
-        return `
-            <article class="dco-cost-offcut-row" data-piece-instance-id="${esc(item.piece_instance_id)}">
-                <div class="dco-cost-offcut-row__identity">
-                    <strong>${esc(item.piece_label || item.piece_instance_id || __("قطعة"))}</strong>
-                    <span>${esc(item.business_state_label || __("غير محدد"))}</span>
-                </div>
-                <label>المصدر
-                    <select class="form-control input-sm dco-cost-offcut-source" ${disabled}>
-                        <option value="" ${!source ? "selected" : ""}>غير محدد</option>
-                        <option value="${CUSTOMER}" ${source === CUSTOMER ? "selected" : ""}>من الزبون</option>
-                        <option value="${FACTORY}" ${source === FACTORY ? "selected" : ""}>من المعمل</option>
-                    </select>
-                </label>
-                <label>التنفيذ
-                    <select class="form-control input-sm dco-cost-offcut-execution" ${disabled}>
-                        <option value="" ${!execution ? "selected" : ""}>غير محدد</option>
-                        <option value="${FACTORY}" ${execution === FACTORY ? "selected" : ""}>في المعمل</option>
-                        <option value="${CUSTOMER}" ${execution === CUSTOMER ? "selected" : ""}>عند الزبون</option>
-                    </select>
-                </label>
-            </article>
-        `;
+        const options = [["CUSTOMER_FACTORY","المصدر الزبون · التنفيذ في المعمل"],["FACTORY_FACTORY","المصدر المعمل · التنفيذ في المعمل"],["CUSTOMER_CUSTOMER","المصدر الزبون · التنفيذ عند الزبون"]];
+        return `<tr class="dco-cost-offcut-row" data-piece-instance-id="${esc(item.piece_instance_id)}"><th scope="row"><strong>${esc(rowLabel(item))}</strong></th><td class="dco-cost-offcut-options"><div class="dco-cost-offcut-option-group" role="radiogroup" aria-label="${esc(rowLabel(item))}">${options.map(([value,label]) => `<label class="dco-cost-offcut-option"><input type="radio" name="dco-offcut-${esc(item.piece_instance_id)}" value="${value}" ${selected===value?"checked":""} ${disabled}><span>${esc(label)}</span></label>`).join("")}</div></td></tr>`;
     }
 
     function html(offcut, editable) {
-        return `
-            <section class="${ROOT_CLASS} dco-cost-section" aria-label="${esc(__("قطع النقص"))}">
-                <div class="dco-cost-section-title">
-                    <div>
-                        <h4>${esc(__("قطع النقص"))}</h4>
-                        <span>${esc(__("حدد مصدر الفضلة ومكان التنفيذ لكل قطعة فعلية."))}</span>
-                    </div>
-                    <span class="dco-cost-offcut-count">${offcut.assignments.length} ${esc(__("قطع"))}</span>
-                </div>
-                <div class="dco-cost-offcut-summary">${summaryHtml(offcut.summary)}</div>
-                ${editable ? `
-                    <div class="dco-cost-offcut-bulk">
-                        <label>المصدر
-                            <select class="form-control input-sm dco-cost-offcut-bulk-source">
-                                <option value="${CUSTOMER}">من الزبون</option>
-                                <option value="${FACTORY}">من المعمل</option>
-                            </select>
-                        </label>
-                        <label>التنفيذ
-                            <select class="form-control input-sm dco-cost-offcut-bulk-execution">
-                                <option value="${FACTORY}">في المعمل</option>
-                                <option value="${CUSTOMER}">عند الزبون</option>
-                            </select>
-                        </label>
-                        <button type="button" class="btn btn-default btn-sm dco-cost-offcut-apply-all">تطبيق على الكل</button>
-                        <button type="button" class="btn btn-primary btn-sm dco-cost-offcut-save">حفظ قطع النقص</button>
-                    </div>
-                ` : ""}
-                <div class="dco-cost-offcut-rows">${offcut.assignments.map(item => rowHtml(item, editable)).join("")}</div>
-            </section>
-        `;
+        return `<section class="${ROOT_CLASS} dco-cost-section" aria-label="${esc(__("قطع النقص"))}"><div class="dco-cost-section-title"><div><h4>${esc(__("قطع النقص"))}</h4><span>اختر أحد الخيارات الثلاثة لكل درفة.</span></div><span class="dco-cost-offcut-count">${offcut.assignments.length} درفة</span></div><div class="dco-cost-offcut-table-wrap"><table class="dco-cost-offcut-table"><thead><tr><th>الدرفة</th><th>مصدر الكلفة ومكان التنفيذ</th></tr></thead><tbody>${offcut.assignments.map(item => rowHtml(item, editable)).join("")}</tbody></table></div>${editable ? `<div class="dco-cost-offcut-actions"><button type="button" class="btn btn-primary btn-sm dco-cost-offcut-save">حفظ قطع النقص</button></div>` : ""}</section>`;
     }
 
     function normalizeExecution(row) {
@@ -172,11 +116,10 @@
     function assignments(root) {
         return root.find(".dco-cost-offcut-row").map(function () {
             const row = $(this);
-            const source = row.find(".dco-cost-offcut-source").val();
-            const execution = row.find(".dco-cost-offcut-execution").val();
+            const businessState = row.find("input[type=radio]:checked").val() || EMPTY_STATE;
             return {
                 piece_instance_id: row.attr("data-piece-instance-id"),
-                business_state: stateFor(source, execution),
+                business_state: businessState,
             };
         }).get();
     }
@@ -208,49 +151,13 @@
 
     function bind(frm, root) {
         root.off(".almdinaCostOffcut");
-        root.on("change.almdinaCostOffcut", ".dco-cost-offcut-source", function () {
-            normalizeExecution($(this).closest(".dco-cost-offcut-row"));
-        });
-        root.on("change.almdinaCostOffcut", ".dco-cost-offcut-bulk-source", function () {
-            const bulk = $(this).closest(".dco-cost-offcut-bulk");
-            const execution = bulk.find(".dco-cost-offcut-bulk-execution");
-            if ($(this).val() === FACTORY) execution.val(FACTORY).prop("disabled", true);
-            else execution.prop("disabled", false);
-        });
-        root.on("click.almdinaCostOffcut", ".dco-cost-offcut-apply-all", () => {
-            const bulk = root.find(".dco-cost-offcut-bulk");
-            const source = bulk.find(".dco-cost-offcut-bulk-source").val();
-            const execution = bulk.find(".dco-cost-offcut-bulk-execution").val();
-            root.find(".dco-cost-offcut-row").each(function () {
-                const row = $(this);
-                row.find(".dco-cost-offcut-source").val(source);
-                row.find(".dco-cost-offcut-execution").val(source === FACTORY ? FACTORY : execution);
-                normalizeExecution(row);
-            });
-        });
         root.on("click.almdinaCostOffcut", ".dco-cost-offcut-save", () => { save(frm, root); });
-        root.find(".dco-cost-offcut-row").each(function () { normalizeExecution($(this)); });
     }
 
     function installStyles() {
         if (document.getElementById(STYLE_ID)) return;
         $("<style>", { id: STYLE_ID, text: `
-            .${ROOT_CLASS}{direction:rtl}
-            .${ROOT_CLASS}> .dco-cost-section-title{display:flex;align-items:center;justify-content:space-between;gap:12px}
-            .dco-cost-offcut-count{display:inline-flex;padding:4px 9px;border-radius:999px;background:var(--subtle-fg,#f4f6f8);font-size:11px;font-weight:800}
-            .dco-cost-offcut-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:12px 14px 0}
-            .dco-cost-offcut-summary__item{padding:9px 10px;border-radius:10px;background:var(--subtle-fg,#f6f8fa)}
-            .dco-cost-offcut-summary__item span{display:block;color:var(--text-muted,#687481);font-size:10px;font-weight:700}
-            .dco-cost-offcut-summary__item strong{display:block;margin-top:3px;font-size:16px}
-            .dco-cost-offcut-bulk{display:grid;grid-template-columns:minmax(130px,1fr) minmax(130px,1fr) auto auto;gap:8px;align-items:end;padding:12px 14px;border-bottom:1px solid var(--border-color,#e1e6ea)}
-            .dco-cost-offcut-bulk label,.dco-cost-offcut-row label{display:grid;gap:4px;margin:0;font-size:10px;font-weight:800;color:var(--text-muted,#687481)}
-            .dco-cost-offcut-bulk .btn{min-height:34px;border-radius:9px;font-weight:800;white-space:nowrap}
-            .dco-cost-offcut-rows{display:grid;gap:8px;padding:12px 14px 14px}
-            .dco-cost-offcut-row{display:grid;grid-template-columns:minmax(180px,1.4fr) minmax(120px,.8fr) minmax(120px,.8fr);gap:10px;align-items:end;padding:11px;border:1px solid var(--border-color,#e1e6ea);border-radius:12px;background:var(--card-bg,#fff)}
-            .dco-cost-offcut-row__identity strong{display:block;font-size:12px}
-            .dco-cost-offcut-row__identity span{display:block;margin-top:3px;color:var(--text-muted,#687481);font-size:10px}
-            @media(max-width:760px){.dco-cost-offcut-summary,.dco-cost-offcut-bulk,.dco-cost-offcut-row{grid-template-columns:1fr 1fr}.dco-cost-offcut-bulk .btn{width:100%}}
-            @media(max-width:480px){.dco-cost-offcut-summary,.dco-cost-offcut-bulk,.dco-cost-offcut-row{grid-template-columns:1fr}.dco-cost-offcut-row__identity{padding-bottom:3px}}
+            .${ROOT_CLASS}{direction:rtl}.dco-cost-offcut-table-wrap{overflow:auto;padding:10px 12px 12px}.dco-cost-offcut-table{width:100%;border-collapse:separate;border-spacing:0 7px;font-size:12px}.dco-cost-offcut-table th{padding:9px 10px;text-align:right;white-space:nowrap}.dco-cost-offcut-table tbody th,.dco-cost-offcut-table tbody td{padding:10px;border:1px solid var(--border-color,#e1e6ea);background:var(--card-bg,#fff);vertical-align:middle}.dco-cost-offcut-table tbody th{border-radius:10px 0 0 10px;width:24%;font-weight:900}.dco-cost-offcut-table tbody td{border-right:0;border-radius:0 10px 10px 0}.dco-cost-offcut-option-group{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.dco-cost-offcut-option{display:flex;align-items:center;gap:7px;min-height:34px;margin:0;padding:7px 9px;border:1px solid var(--border-color,#e1e6ea);border-radius:9px;background:var(--subtle-fg,#f8fafc);font-size:11px;font-weight:800;cursor:pointer}.dco-cost-offcut-option:has(input:checked){border-color:var(--primary,#2490ef);background:rgba(36,144,239,.08)}.dco-cost-offcut-option input{margin:0;accent-color:var(--primary,#2490ef)}.dco-cost-offcut-option input:disabled+span{opacity:.72}.dco-cost-offcut-actions{display:flex;justify-content:flex-start;padding:0 12px 12px}@media(max-width:800px){.dco-cost-offcut-option-group{grid-template-columns:1fr}.dco-cost-offcut-table tbody th{width:32%}}
         ` }).appendTo("head");
     }
 
@@ -264,8 +171,11 @@
         if (!offcut) return false;
         const slot = wrapper.find(".dco-cost-settings-offcut").first();
         if (!slot.length) return false;
-        const section = $(html(offcut, canEdit(frm)));
+        const editing = window.AlmdinaCostEditSessionUX && typeof window.AlmdinaCostEditSessionUX.isEditing === "function" ? window.AlmdinaCostEditSessionUX.isEditing(frm) : false;
+        const section = $(html(offcut, canEdit(frm) && editing));
+        const price = slot.find(".dco-offcut-price-section").detach();
         slot.append(section);
+        if (price.length) slot.append(price);
         bind(frm, section);
         return true;
     }
