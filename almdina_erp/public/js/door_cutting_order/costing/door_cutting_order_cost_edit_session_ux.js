@@ -190,34 +190,45 @@
         return true;
     }
 
-    function offcutPriceContainer(frm) {
+    function offcutPriceInput(frm) {
         const field = frm && frm.fields_dict && frm.fields_dict.order_cost_invoice_html;
-        return field && field.$wrapper ? field.$wrapper : null;
+        const wrapper = field && field.$wrapper;
+        if (!wrapper || !wrapper.length) return null;
+        const input = wrapper.find("[data-offcut-price-input]").first();
+        return input && input.length ? input : null;
     }
 
     function mountOffcutPriceControl(frm, state) {
-        unmountOffcutPriceControl(frm);
-        if (!state || !state.draft || !state.draft.offcut_price_applicable) return false;
-        const wrapper = offcutPriceContainer(frm);
-        if (!wrapper || !wrapper.length) return false;
-        const value = state.draft[OFFCUT_PRICE_FIELD] || 0;
-        const control = $(
-            `<section class="dco-offcut-price-editor dco-cost-section">
-                <div class="dco-cost-section-title"><h4>سعر الفضلة</h4><span>سعر إجمالي واحد للمجموعة</span></div>
-                <div class="dco-cost-settings-grid"><label>سعر الفضلة ($)<input class="form-control" type="number" min="0" step="0.01" value="${frappe.utils.escape_html(String(value))}"></label></div>
-            </section>`
-        );
-        control.find("input").on("input", event => {
+        if (!state || !state.draft || !state.draft.offcut_price_applicable) {
+            unmountOffcutPriceControl(frm);
+            return false;
+        }
+        const input = offcutPriceInput(frm);
+        if (!input) return false;
+        const value = state.draft[OFFCUT_PRICE_FIELD] ?? 0;
+        input.off(".almdinaOffcutPrice");
+        input.val(value);
+        input.prop("disabled", false);
+        input.prop("readOnly", false);
+        input.on("input.almdinaOffcutPrice", event => {
             const store = storeFor(frm);
             if (store) store.patchDraft({ [OFFCUT_PRICE_FIELD]: event.currentTarget.value });
         });
-        wrapper.find(".dco-cost-shell").first().prepend(control);
         return true;
     }
 
     function unmountOffcutPriceControl(frm) {
-        const wrapper = offcutPriceContainer(frm);
-        if (wrapper && wrapper.length) wrapper.find(".dco-offcut-price-editor").remove();
+        const input = offcutPriceInput(frm);
+        if (!input) return false;
+        input.off(".almdinaOffcutPrice");
+        input.prop("disabled", true);
+        input.prop("readOnly", true);
+        const settings = currentSettings(frm);
+        const value = settings && Object.prototype.hasOwnProperty.call(settings, OFFCUT_PRICE_FIELD)
+            ? settings[OFFCUT_PRICE_FIELD]
+            : (frm && frm.doc ? frm.doc[OFFCUT_PRICE_FIELD] : 0);
+        input.val(value ?? 0);
+        return true;
     }
 
     function unmountDraftControls(frm) {
@@ -251,9 +262,8 @@
             ])
         );
         if (draft && draft.offcut_price_applicable) {
-            const wrapper = offcutPriceContainer(frm);
-            const input = wrapper && wrapper.find(".dco-offcut-price-editor input").first();
-            values[OFFCUT_PRICE_FIELD] = input && input.length
+            const input = offcutPriceInput(frm);
+            values[OFFCUT_PRICE_FIELD] = input
                 ? input.val()
                 : draft[OFFCUT_PRICE_FIELD];
         }
