@@ -483,6 +483,13 @@
 
         if (!documentStillCurrent(frm, token)) return false;
         if (!sessionIsCurrent(frm, sessionContext)) return false;
+        const offcutUx = window.AlmdinaCostOffcutAssignmentUX;
+        if (offcutUx && typeof offcutUx.savePending === "function") {
+            const savedOffcut = await offcutUx.savePending(frm);
+            if (!savedOffcut) return false;
+            if (!documentStillCurrent(frm, token)) return false;
+            if (!sessionIsCurrent(frm, sessionContext)) return false;
+        }
         unmountDraftControls(frm);
         projectCurrent(frm);
         applyFieldAccess(frm);
