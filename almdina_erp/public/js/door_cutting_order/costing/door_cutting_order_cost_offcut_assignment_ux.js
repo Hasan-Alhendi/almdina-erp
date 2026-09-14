@@ -91,7 +91,7 @@
         const number = item.piece_number || item.piece_no || item.sequence || item.piece_label || item.index || "—";
         const width = item.width || item.width_cm || item.w;
         const length = item.length || item.length_cm || item.h;
-        const measure = item.measurement || item.size || (width && length ? `${length} x ${width}` : "—");
+        const measure = item.measurement || item.size || (width && length ? `${width} x ${length}` : "—");
         return { number, measure };
     }
     function rowHtml(item, editable) {
