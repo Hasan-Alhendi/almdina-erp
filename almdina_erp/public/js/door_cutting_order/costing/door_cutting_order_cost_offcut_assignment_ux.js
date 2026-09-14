@@ -88,8 +88,10 @@
         return ["CUSTOMER_FACTORY", "FACTORY_FACTORY", "CUSTOMER_CUSTOMER"].includes(value) ? value : "";
     }
     function rowLabel(item) {
-        const number = item.piece_number || item.piece_no || item.sequence || item.index || "—";
-        const measure = item.measurement || item.size || (item.width && item.length ? `${item.width} × ${item.length} سم` : (item.piece_label || "—"));
+        const number = item.piece_number || item.piece_no || item.sequence || item.piece_label || item.index || "—";
+        const width = item.width || item.width_cm || item.w;
+        const length = item.length || item.length_cm || item.h;
+        const measure = item.measurement || item.size || (width && length ? `${width}x${length}` : "—");
         return { number, measure };
     }
     function rowHtml(item, editable) {
@@ -187,7 +189,7 @@
 
     function bind(frm, root) {
         root.off(".almdinaCostOffcut");
-        root.on("change.almdinaCostOffcut", 'input[type="radio"]', () => {
+        root.on("change.almdinaCostOffcut input.almdinaCostOffcut", 'input[type="radio"]', () => {
             const map = pendingMap(frm);
             assignments(root).forEach(item => { map[item.piece_instance_id] = item.business_state; });
             syncPriceVisibility(frm, root);
