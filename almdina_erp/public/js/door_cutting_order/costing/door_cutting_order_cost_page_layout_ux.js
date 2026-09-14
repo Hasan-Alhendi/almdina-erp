@@ -173,12 +173,18 @@
         return true;
     }
 
+    function renderOffcutAssignment(frm) {
+        const offcut = window.AlmdinaCostOffcutAssignmentUX;
+        return Boolean(offcut && typeof offcut.render === "function" && offcut.render(frm));
+    }
+
     function enhance(frm) {
         if (!frm) return false;
         installStyles();
         const measurementReady = ensureMeasurementToggle(frm);
+        const offcutReady = renderOffcutAssignment(frm);
         const actionsReady = moveInvoiceActions(frm);
-        return measurementReady || actionsReady;
+        return measurementReady || offcutReady || actionsReady;
     }
 
     function wrapCostPresenter() {
