@@ -30,7 +30,7 @@ assert.doesNotMatch(planUx, /saveOffcutAssignments\(/);
 assert.match(costOffcut, /function projection\(frm\)/);
 assert.match(costOffcut, /state\.data/);
 assert.match(costOffcut, /piece_instance_id/);
-assert.match(costOffcut, /dco-cost-offcut-apply-all/);
+assert.match(costOffcut, /type="radio"/);\nassert.match(costOffcut, /CUSTOMER_FACTORY/);\nassert.match(costOffcut, /FACTORY_FACTORY/);\nassert.match(costOffcut, /CUSTOMER_CUSTOMER/);\nassert.match(costOffcut, /dco-cost-offcut-table/);\nassert.doesNotMatch(costOffcut, /dco-cost-offcut-summary/);
 assert.match(costOffcut, /saveOffcutAssignments\(offcut\.plan_name, assignments\(root\)\)/);
 assert.match(costOffcut, /policy\.reconcileOffcutMutation\(frm, result\)/);
 assert.match(costOffcut, /captureDocument\(frm\)/);
