@@ -17,7 +17,10 @@ from almdina_erp.almdina_erp.services.cutting_plan_workspace_query_service impor
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PLAN_UX = ROOT / "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_ux.js"
+COST_OFFCUT_UX = (
+    ROOT
+    / "public/js/door_cutting_order/costing/door_cutting_order_cost_offcut_assignment_ux.js"
+)
 
 
 def _row(snapshot):
@@ -86,19 +89,24 @@ def test_read_model_projects_business_state_labels_and_exact_summary():
     assert len(row["offcut"]["state_options"]) == 4
 
 
-def test_frontend_uses_one_business_state_selector_and_hides_empty_surface():
-    source = PLAN_UX.read_text(encoding="utf-8")
+def test_cost_tab_uses_canonical_offcut_projection_and_one_batch_save_path():
+    source = COST_OFFCUT_UX.read_text(encoding="utf-8")
 
-    assert 'if (!assignments.length) return "";' in source
-    assert "dco-offcut-business-state" in source
-    assert "dco-offcut-source" not in source
-    assert "dco-offcut-execution" not in source
+    assert "function projection(frm)" in source
+    assert "state.data" in source
+    assert "type=\"radio\"" in source
+    assert "CUSTOMER_FACTORY" in source
+    assert "FACTORY_FACTORY" in source
+    assert "CUSTOMER_CUSTOMER" in source
+    assert "dco-cost-offcut-table" in source
+    assert "STATE_BY_SELECTION" in source
     assert "FACTORY_CUSTOMER" not in source
-    assert "resource_kind: \"OFFCUT\"" not in source
+    assert 'resource_kind: "OFFCUT"' not in source
     assert "offcut_price_usd" not in source
-    assert "dco-offcut-price" not in source
-    assert "تحديد مصدر وتنفيذ قطع النقص" in source
-    assert "dco-apply-offcut-bulk" in source
+    assert "dco-cost-offcut-summary" not in source
+    assert "saveOffcutAssignments(offcut.plan_name, assignments(root))" in source
+    assert "policy.reconcileOffcutMutation(frm, result)" in source
+    assert "frappe.call(" not in source
 
 
 def test_factory_permission_presentation_matches_jira_contract():
