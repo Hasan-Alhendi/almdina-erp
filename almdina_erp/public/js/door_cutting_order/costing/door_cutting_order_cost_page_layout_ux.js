@@ -237,6 +237,9 @@
             const node = field.$wrapper && field.$wrapper.closest(".form-group");
             if (node && node.length) basic.append(node);
         });
+        shell.children(".dco-offcut-price-editor").each(function () {
+            basic.append(this);
+        });
         pricingSections.each(function () {
             section.find(".dco-cost-settings-special").first().append(this);
         });
