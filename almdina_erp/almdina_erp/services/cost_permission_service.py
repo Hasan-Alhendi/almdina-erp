@@ -255,7 +255,23 @@ def _offcut_projection(plan: Any | None) -> dict[str, Any] | None:
     ]
     try:
         offcut_pieces = [piece for piece in pieces if decision_from_piece(piece).is_offcut]
-        assignments = [offcut_assignment_projection(piece) for piece in offcut_pieces]
+        assignments = []
+        for index, piece in enumerate(offcut_pieces, start=1):
+            assignment = offcut_assignment_projection(piece)
+            assignment["piece_number"] = (
+                piece.get("piece_number")
+                or piece.get("piece_no")
+                or piece.get("index")
+                or index
+            )
+            assignment["width"] = piece.get("width") or piece.get("width_cm")
+            assignment["length"] = piece.get("length") or piece.get("length_cm")
+            assignment["measurement"] = (
+                piece.get("measurement")
+                or piece.get("size")
+                or assignment.get("piece_label")
+            )
+            assignments.append(assignment)
     except OffcutPolicyError:
         # Historical/partial snapshots are intentionally not editable as OFFCUT.
         return None
