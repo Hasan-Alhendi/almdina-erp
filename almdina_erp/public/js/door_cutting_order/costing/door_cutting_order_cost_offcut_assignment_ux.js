@@ -100,7 +100,7 @@
     }
 
     function html(offcut, editable) {
-        return `<section class="${ROOT_CLASS} dco-cost-section" aria-label="${esc(__("قطع النقص"))}"><div class="dco-cost-section-title"><div><h4>${esc(__("قطع النقص"))}</h4><span>اختر أحد الخيارات الثلاثة لكل درفة.</span></div><span class="dco-cost-offcut-count">${offcut.assignments.length} درفة</span></div><div class="dco-cost-offcut-table-wrap"><table class="dco-cost-offcut-table"><thead><tr><th>الدرفة</th><th>مصدر الكلفة ومكان التنفيذ</th></tr></thead><tbody>${offcut.assignments.map(item => rowHtml(item, editable)).join("")}</tbody></table></div>${editable ? `<div class="dco-cost-offcut-actions"><button type="button" class="btn btn-primary btn-sm dco-cost-offcut-save">حفظ قطع النقص</button></div>` : ""}</section>`;
+        return `<section class="${ROOT_CLASS} dco-cost-section" aria-label="${esc(__("قطع النقص"))}"><div class="dco-cost-section-title"><div><h4>${esc(__("قطع النقص"))}</h4><span>اختر أحد الخيارات الثلاثة لكل درفة.</span></div><span class="dco-cost-offcut-count">${offcut.assignments.length} درفة</span></div><div class="dco-cost-offcut-table-wrap"><table class="dco-cost-offcut-table"><thead><tr><th>الدرفة</th><th>مصدر الكلفة ومكان التنفيذ</th></tr></thead><tbody>${offcut.assignments.map(item => rowHtml(item, editable)).join("")}</tbody></table></div></section>`;
     }
 
     function normalizeExecution(row) {
@@ -126,6 +126,11 @@
                 business_state: businessState,
             };
         }).get();
+    }
+
+    function pendingMap(frm) {
+        if (!frm.__almdina_offcut_pending_assignments) frm.__almdina_offcut_pending_assignments = {};
+        return frm.__almdina_offcut_pending_assignments;
     }
 
     function rootFor(frm) {
@@ -167,23 +172,26 @@
         }
 
         const token = captureDocument(frm);
-        const button = root.find(".dco-cost-offcut-save");
-        button.prop("disabled", true);
         try {
             const result = await api.saveOffcutAssignments(offcut.plan_name, assignments(root));
             if (!documentStillCurrent(frm, token)) return false;
             await policy.reconcileOffcutMutation(frm, result);
             if (!documentStillCurrent(frm, token)) return false;
+            frm.__almdina_offcut_pending_assignments = {};
             frappe.show_alert({ message: __("تم حفظ تصنيف قطع النقص."), indicator: "green" }, 4);
             return true;
         } finally {
-            if (documentStillCurrent(frm, token)) button.prop("disabled", false);
+
         }
     }
 
     function bind(frm, root) {
         root.off(".almdinaCostOffcut");
-        root.on("change.almdinaCostOffcut", 'input[type="radio"]', () => syncPriceVisibility(frm, root));
+        root.on("change.almdinaCostOffcut", 'input[type="radio"]', () => {
+            const map = pendingMap(frm);
+            assignments(root).forEach(item => { map[item.piece_instance_id] = item.business_state; });
+            syncPriceVisibility(frm, root);
+        });
         syncPriceVisibility(frm, root);
     }
 
@@ -205,7 +213,12 @@
         const slot = wrapper.find(".dco-cost-settings-offcut").first();
         if (!slot.length) return false;
         const editing = window.AlmdinaCostEditSessionUX && typeof window.AlmdinaCostEditSessionUX.isEditing === "function" ? window.AlmdinaCostEditSessionUX.isEditing(frm) : false;
-        const section = $(html(offcut, canEdit(frm) && editing));
+        const pending = pendingMap(frm);
+        const visibleAssignments = offcut.assignments.map(item => ({
+            ...item,
+            business_state: pending[item.piece_instance_id] || item.business_state,
+        }));
+        const section = $(html({ ...offcut, assignments: visibleAssignments }, canEdit(frm) && editing));
         const price = slot.find(".dco-offcut-price-section").detach();
         slot.append(section);
         if (price.length) slot.append(price);
