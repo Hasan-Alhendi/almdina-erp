@@ -246,8 +246,9 @@
             const node = group && group.length ? group : wrapper;
             if (node && node.length) basic.append(node);
         });
+        const offcutSlot = section.find(".dco-cost-settings-offcut").first();
         shell.children(".dco-offcut-price-section").each(function () {
-            basic.append(this);
+            offcutSlot.append(this);
         });
         pricingSections.each(function () {
             section.find(".dco-cost-settings-special").first().append(this);
@@ -336,6 +337,7 @@
     frappe.ui.form.on("Door Cutting Order", {
         onload_post_render(frm) { install(frm); },
         refresh(frm) { install(frm); },
+        almdina_edit_session_changed(frm) { enhance(frm); },
     });
 
     wrapCostPresenter();
