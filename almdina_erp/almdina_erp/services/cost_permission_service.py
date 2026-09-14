@@ -261,15 +261,19 @@ def _offcut_projection(plan: Any | None) -> dict[str, Any] | None:
             assignment["piece_number"] = (
                 piece.get("piece_number")
                 or piece.get("piece_no")
-                or piece.get("index")
+                or piece.get("label")
                 or index
             )
-            assignment["width"] = piece.get("width") or piece.get("width_cm")
-            assignment["length"] = piece.get("length") or piece.get("length_cm")
+            assignment["width"] = piece.get("width") or piece.get("width_cm") or piece.get("w")
+            assignment["length"] = piece.get("length") or piece.get("length_cm") or piece.get("h")
             assignment["measurement"] = (
                 piece.get("measurement")
                 or piece.get("size")
-                or assignment.get("piece_label")
+                or (
+                    f"{assignment['width']}x{assignment['length']}"
+                    if assignment.get("width") and assignment.get("length")
+                    else assignment.get("piece_label")
+                )
             )
             assignments.append(assignment)
     except OffcutPolicyError:
