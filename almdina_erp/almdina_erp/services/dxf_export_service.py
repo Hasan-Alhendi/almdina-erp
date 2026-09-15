@@ -455,6 +455,18 @@ def _normalized_dxf_filename(order_name: str | None) -> str:
     return f"cutting_plan_{safe_order}_AutoCAD2011_2026.dxf"
 
 
+def _assert_single_dxf_document(content: str) -> None:
+    lines = content.splitlines()
+    header_sections = sum(
+        1
+        for index, value in enumerate(lines[:-2])
+        if value.strip() == "SECTION" and lines[index + 2].strip() == "HEADER"
+    )
+    eof_markers = sum(1 for value in lines if value.strip() == "EOF")
+    if header_sections != 1 or eof_markers != 1:
+        raise ValueError("DXF serialization produced multiple document bodies.")
+
+
 @frappe.whitelist()
 def normalize_dxf_for_autocad(
     content_b64: str,
@@ -482,13 +494,16 @@ def normalize_dxf_for_autocad(
         document.dxfversion = _AUTOCAD_DXF_VERSION
         target = io.StringIO()
         document.write(target)
-        content = target.getvalue().encode("utf-8")
+        normalized = target.getvalue()
+        _assert_single_dxf_document(normalized)
+        content = normalized.encode("utf-8")
     except Exception as exc:
         frappe.throw(_("تعذر تجهيز ملف DXF متوافق مع AutoCAD."), frappe.ValidationError)
         raise AssertionError("unreachable") from exc
 
     filename = _normalized_dxf_filename(order_name)
-    _attach_download_response(filename, content)
+    # Desk frappe.call expects one JSON response. Setting filecontent here causes
+    # Frappe to concatenate another DXF body with the Base64 download.
     return {
         "filename": filename,
         "content_b64": base64.standard_b64encode(content).decode("ascii"),
