@@ -273,11 +273,36 @@ def reset_price_values(piece_type: str) -> dict[str, Any]:
     }
 
 
+def _factory_execution_qty(piece: Any) -> int | None:
+    """Return an explicit physical factory quantity when a projection supplied one."""
+
+    if isinstance(piece, Mapping):
+        if "factory_execution_qty" not in piece:
+            return None
+        value = piece.get("factory_execution_qty")
+    else:
+        if not hasattr(piece, "factory_execution_qty"):
+            return None
+        value = getattr(piece, "factory_execution_qty", None)
+    try:
+        return max(0, int(float(value or 0)))
+    except (TypeError, ValueError):
+        return 0
+
+
 def pending_custom_edge_price_labels(pieces: Any) -> tuple[str, ...]:
-    """Return Arabic labels for special/cut-corner rows still missing edge prices."""
+    """Return Arabic labels for factory-executed custom rows still missing prices.
+
+    Legacy callers without a physical execution projection keep the historical
+    requirement.  When ALMADINA-178 supplies ``factory_execution_qty``, a row with
+    zero factory copies is customer-executed work and must not block invoice output.
+    """
 
     pending: list[str] = []
     for index, piece in enumerate(pieces or [], start=1):
+        factory_qty = _factory_execution_qty(piece)
+        if factory_qty == 0:
+            continue
         if isinstance(piece, Mapping):
             piece_type = str(piece.get("piece_type") or "Regular")
             special_status = str(piece.get("special_shape_price_status") or "")

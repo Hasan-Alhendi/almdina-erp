@@ -7,7 +7,23 @@ import frappe
 from frappe import _
 from frappe.utils import flt, now_datetime
 
-from almdina_erp.almdina_erp.domain.orders.piece_policy import is_corner_cut
+from almdina_erp.almdina_erp.application.costing.customer_invoice_addon_summary import (
+    summarize_extra_addon_lines,
+)
+from almdina_erp.almdina_erp.application.costing.financial_documents import (
+    build_customer_invoice_document,
+)
+from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
+    OffcutPolicyError,
+    business_state_options,
+    decision_from_piece,
+    offcut_assignment_projection,
+    offcut_summary,
+)
+from almdina_erp.almdina_erp.domain.orders.piece_policy import (
+    is_corner_cut,
+    pending_custom_edge_price_labels,
+)
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     require_document_capability,
@@ -16,14 +32,17 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization im
     require_cutting_plan_capability,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspace import (
-    authoritative_cost_values,
+    current_cost_plan,
     overlay_authoritative_costs,
+    physical_execution_for_plan,
     refresh_order_commercial_totals,
 )
 from almdina_erp.almdina_erp.services.order_edit_policy import assert_order_editable
 
 
 ORDER_COST_FIELDS = (
+    "board_description",
+    "total_edge_meters",
     "board_rate_usd",
     "cutting_cost_per_board_usd",
     "mdf_cost_usd",
@@ -41,6 +60,12 @@ ORDER_COST_FIELDS = (
     "actual_cost_usd",
 )
 PIECE_COST_FIELDS = (
+    "piece_no",
+    "piece_type",
+    "qty",
+    "edge_type",
+    "edge_meters",
+    "notes",
     "edge_long_rate_usd",
     "edge_width_rate_usd",
     "edge_long_cost_usd",
@@ -59,15 +84,28 @@ PIECE_COST_FIELDS = (
     "clipped_corner_edge_price_note",
     "clipped_corner_edge_price_set_by",
     "clipped_corner_edge_price_set_on",
+    "extra_double",
     "extra_double_unit_price_usd",
     "extra_double_total_usd",
+    "extra_full_door_double",
     "extra_full_door_double_unit_price_usd",
     "extra_full_door_double_total_usd",
+    "extra_liner",
     "extra_liner_unit_price_usd",
     "extra_liner_total_usd",
+    "extra_back_groove",
     "extra_back_groove_unit_price_usd",
     "extra_back_groove_total_usd",
+    "extra_recessed_handle_cutout",
     "extra_recessed_handle_cutout_unit_price_usd",
+    "extra_recessed_handle_cutout_total_usd",
+    "extra_addons_total_usd",
+)
+_FACTORY_SCALED_TOTAL_FIELDS = (
+    "extra_double_total_usd",
+    "extra_full_door_double_total_usd",
+    "extra_liner_total_usd",
+    "extra_back_groove_total_usd",
     "extra_recessed_handle_cutout_total_usd",
     "extra_addons_total_usd",
 )
@@ -117,13 +155,7 @@ def _locked_order(order_name: str) -> Any:
 
 
 def _require_expected_document_version(order: Any, expected_modified: str | None) -> None:
-    """Preserve optimistic concurrency for commands that save the parent DCO.
-
-    Pricing is edited through a focused Cost command instead of the native DCO
-    form save. The browser must therefore send the document version it actually
-    opened. Advancing that token from an unrelated GET would hide concurrent
-    edits, so only a successful mutation may return a new trusted version.
-    """
+    """Preserve optimistic concurrency for commands that save the parent DCO."""
 
     expected = str(expected_modified or "").strip()
     current = _document_version(order)
@@ -157,9 +189,104 @@ def _piece_snapshot(piece: Any) -> dict[str, Any]:
 
 
 def _document_version(order: Any) -> str:
-    """Return the DCO optimistic-concurrency token after the current command/read."""
-
     return str(getattr(order, "modified", None) or "")
+
+
+def _commercial_piece_projection(
+    order: Any,
+    projection: Any | None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Build UI metadata plus an invoice-only factory-service projection.
+
+    The customer requirement ``qty`` remains untouched. Factory execution is a
+    separate physical-plan projection and may be lower or higher than that order
+    quantity depending on the canonical physical expansion/classification.
+    """
+
+    ui_rows: list[dict[str, Any]] = []
+    invoice_rows: list[dict[str, Any]] = []
+    for source_piece_no, piece in enumerate(order.pieces or [], start=1):
+        ui_row = _piece_snapshot(piece)
+        invoice_row = dict(ui_row)
+        if projection is not None:
+            physical_qty = projection.physical_qty_by_source_piece_no.get(source_piece_no)
+            if physical_qty is not None:
+                factory_qty = projection.factory_processing_qty_by_source_piece_no.get(
+                    source_piece_no,
+                    0,
+                )
+                ratio = factory_qty / physical_qty if physical_qty else 0
+                ui_row["factory_execution_qty"] = factory_qty
+                ui_row["factory_execution_ratio"] = ratio
+                invoice_row["factory_execution_qty"] = factory_qty
+                invoice_row["factory_execution_ratio"] = ratio
+                for fieldname in (
+                    "edge_meters",
+                    "edge_cost_usd",
+                    *_FACTORY_SCALED_TOTAL_FIELDS,
+                ):
+                    invoice_row[fieldname] = flt(invoice_row.get(fieldname)) * ratio
+        ui_rows.append(ui_row)
+        invoice_rows.append(invoice_row)
+    return ui_rows, invoice_rows
+
+
+def _invoice_preview(
+    order_snapshot: dict[str, Any],
+    invoice_rows: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], float, tuple[str, ...]]:
+    document = build_customer_invoice_document(order_snapshot, invoice_rows)
+    lines = summarize_extra_addon_lines(document.get("lines") or [])
+    total = round(sum(float(line.get("amount_usd") or 0) for line in lines), 2)
+    pending = pending_custom_edge_price_labels(invoice_rows)
+    return lines, total, pending
+
+
+def _offcut_projection(plan: Any | None) -> dict[str, Any] | None:
+    """Project the canonical plan's physical OFFCUT pieces for the Cost workspace."""
+
+    if plan is None or not str(getattr(plan, "name", None) or "").strip():
+        return None
+    snapshot = frappe.parse_json(str(getattr(plan, "snapshot_json", None) or "{}")) or {}
+    pieces = [
+        piece
+        for sheet in snapshot.get("sheets") or []
+        for piece in sheet.get("pieces") or []
+    ]
+    try:
+        offcut_pieces = [piece for piece in pieces if decision_from_piece(piece).is_offcut]
+        assignments = []
+        for index, piece in enumerate(offcut_pieces, start=1):
+            assignment = offcut_assignment_projection(piece)
+            assignment["piece_number"] = (
+                piece.get("piece_number")
+                or piece.get("piece_no")
+                or piece.get("label")
+                or index
+            )
+            assignment["width"] = piece.get("width") or piece.get("width_cm") or piece.get("w")
+            assignment["length"] = piece.get("length") or piece.get("length_cm") or piece.get("h")
+            assignment["measurement"] = (
+                piece.get("measurement")
+                or piece.get("size")
+                or (
+                    f"{assignment['width']} × {assignment['length']} سم"
+                    if assignment.get("width") and assignment.get("length")
+                    else assignment.get("piece_label")
+                )
+            )
+            assignments.append(assignment)
+    except OffcutPolicyError:
+        # Historical/partial snapshots are intentionally not editable as OFFCUT.
+        return None
+    if not assignments:
+        return None
+    return {
+        "plan_name": plan.name,
+        "assignments": assignments,
+        "summary": offcut_summary(offcut_pieces),
+        "state_options": business_state_options(),
+    }
 
 
 def _cost_snapshot(order: Any, *, plan: Any | None = None) -> dict[str, Any]:
@@ -167,22 +294,31 @@ def _cost_snapshot(order: Any, *, plan: Any | None = None) -> dict[str, Any]:
         fieldname: getattr(order, fieldname, None)
         for fieldname in ORDER_COST_FIELDS
     }
-    if plan is None:
-        resolved_order = overlay_authoritative_costs(order, order_snapshot)
-    else:
-        # Read-after-write must use the exact plan revision that accepted the
-        # command. Re-resolving current_working_plan() here can select another
-        # Draft/lineage member and repaint stale financial values immediately
-        # after a successful save.
-        resolved_order = dict(order_snapshot)
-        resolved_order.update(authoritative_cost_values(order, plan=plan))
-        resolved_order["required_boards"] = int(getattr(plan, "required_boards", 0) or 0)
+    resolved_plan = plan if plan is not None else current_cost_plan(order)
+    resolved_order = overlay_authoritative_costs(
+        order,
+        order_snapshot,
+        plan=resolved_plan,
+    )
+    projection = physical_execution_for_plan(resolved_plan) if resolved_plan else None
+    offcut_applicable = bool(projection and projection.has_factory_source_offcut)
+    resolved_order["offcut_price_applicable"] = offcut_applicable
+    resolved_order["offcut_factory_factory"] = offcut_applicable
+    pieces, invoice_rows = _commercial_piece_projection(order, projection)
+    invoice_lines, invoice_total, pending_labels = _invoice_preview(
+        resolved_order,
+        invoice_rows,
+    )
     return {
         "order_name": order.name,
         "order_modified": _document_version(order),
-        "cutting_plan": str(getattr(plan, "name", None) or "") or None,
+        "cutting_plan": str(getattr(resolved_plan, "name", None) or "") or None,
+        "offcut": _offcut_projection(resolved_plan),
         "order": resolved_order,
-        "pieces": [_piece_snapshot(piece) for piece in (order.pieces or [])],
+        "pieces": pieces,
+        "invoice_preview_lines": invoice_lines,
+        "invoice_preview_total_usd": invoice_total,
+        "pending_factory_price_labels": list(pending_labels),
     }
 
 
@@ -199,6 +335,7 @@ def update_order_cost_settings(
     order_name: str,
     board_rate_usd: float | None = None,
     cutting_cost_per_board_usd: float | None = None,
+    offcut_price_usd: float | None = None,
 ) -> dict[str, Any]:
     """Update plan-owned cost inputs without granting full document write access."""
 
@@ -226,6 +363,11 @@ def update_order_cost_settings(
         order,
         board_rate_usd=board_rate,
         cutting_cost_per_board_usd=cutting_rate,
+        offcut_price_usd=(
+            _finite_non_negative(offcut_price_usd, _("سعر الفضلة"))
+            if offcut_price_usd is not None
+            else None
+        ),
     )
     plan_name = str(saved.get("cutting_plan") or "").strip()
     if not plan_name:
@@ -275,10 +417,6 @@ def approve_special_piece_price(
     order.flags.special_price_approval_action = True
     order.save(ignore_permissions=True)
 
-    # Ordinary DCO save intentionally does not orchestrate Cutting Plan or
-    # commercial pricing. This focused pricing command therefore refreshes the
-    # canonical per-piece final price and customer quote projections explicitly
-    # after the approved input has been persisted.
     refresh_order_commercial_totals(order)
 
     return {

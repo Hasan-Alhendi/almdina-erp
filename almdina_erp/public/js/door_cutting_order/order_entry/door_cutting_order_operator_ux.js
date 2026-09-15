@@ -637,6 +637,21 @@
         return materializeVirtualRow(frm, tr);
     }
 
+    function valuesEqual(fieldname, previous, next) {
+        if (NUMBER_FIELDS.has(fieldname)) return num(previous) === num(next);
+        return String(previous ?? "") === String(next ?? "");
+    }
+
+    function virtualRowHasEnteredValue(tr) {
+        if (!tr || !tr.classList.contains("dco-virtual-row")) return false;
+        const width = tr.querySelector("input[data-field='width_cm']");
+        const length = tr.querySelector("input[data-field='length_cm']");
+        const notes = tr.querySelector("input[data-field='notes']");
+        return num(width && width.value) > 0
+            || num(length && length.value) > 0
+            || String(notes && notes.value || "").trim() !== "";
+    }
+
     function syncInputToModel(frm, input, trigger = false) {
         const tr = input.closest("tr[data-row-name]");
         const fieldname = input.dataset.field;
@@ -646,11 +661,26 @@
         let value = input.value;
         if (NUMBER_FIELDS.has(fieldname)) value = num(value);
         if (fieldname === "qty") value = Math.max(1, Math.trunc(value || 1));
-        row[fieldname] = value;
-        frm.dirty();
+        if (!valuesEqual(fieldname, row[fieldname], value)) {
+            row[fieldname] = value;
+            frm.dirty();
+        }
         updateCalculatedCells(tr, row);
         if (trigger) triggerChildField(frm, row, fieldname, 0);
         return row;
+    }
+
+    function flushMeasurementInputs(frm) {
+        const field = frm && frm.fields_dict && frm.fields_dict.pieces_fast_entry;
+        const root = field && field.$wrapper ? field.$wrapper.get(0) : null;
+        if (!root || !root.querySelectorAll) return false;
+        let flushed = false;
+        root.querySelectorAll(".dco-fast-input[data-field], .dco-fast-select[data-field]").forEach((control) => {
+            const tr = control.closest("tr[data-row-name]");
+            if (tr && tr.classList.contains("dco-virtual-row") && !virtualRowHasEnteredValue(tr)) return;
+            if (syncInputToModel(frm, control, false)) flushed = true;
+        });
+        return flushed;
     }
 
     function focusWidth(tr) {
@@ -854,6 +884,14 @@
         if (changed) reindexPieces(frm);
     }
 
+    function editSessionPhase(frm) {
+        const coordinator = window.AlmdinaDcoEditSessionCoordinator;
+        const snapshot = coordinator && typeof coordinator.snapshot === "function"
+            ? coordinator.snapshot(frm)
+            : null;
+        return snapshot && snapshot.phase || "";
+    }
+
     function refreshOperatorUI(frm) {
         installStyles();
         decorateSections(frm);
@@ -867,9 +905,17 @@
     frappe.ui.form.on("Door Cutting Order", {
         onload_post_render(frm) { refreshOperatorUI(frm); },
         refresh(frm) { refreshOperatorUI(frm); },
-        almdina_edit_session_changed(frm) { refreshOperatorUI(frm); },
+        almdina_edit_session_changed(frm) {
+            // Replacing the measurement table while Save is in-flight destroys
+            // the focused cell and can swallow the original click.
+            if (editSessionPhase(frm) === "saving") return;
+            refreshOperatorUI(frm);
+        },
         default_edge_type(frm) { refreshEdgeSelects(frm); },
-        before_save(frm) { pruneEmptyTrailingRows(frm); },
+        before_save(frm) {
+            flushMeasurementInputs(frm);
+            pruneEmptyTrailingRows(frm);
+        },
     });
 
     window.AlmdinaDoorCuttingFastEntry = Object.assign(
@@ -877,6 +923,7 @@
         {
             render: renderFastMeasurements,
             recover: recoverFastMeasurements,
+            flush: flushMeasurementInputs,
             loadEdgeTypes,
         }
     );

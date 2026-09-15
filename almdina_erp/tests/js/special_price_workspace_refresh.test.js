@@ -15,7 +15,7 @@ const source = fs.readFileSync(
 
 const listeners = new Map();
 let legacyRenderCount = 0;
-let permissionApplyCount = 0;
+let permissionReconcileCount = 0;
 
 const frm = {
     doctype: "Door Cutting Order",
@@ -27,10 +27,6 @@ const frm = {
 
 const fakeWindow = {
     cur_frm: frm,
-    setTimeout(callback) {
-        callback();
-        return 1;
-    },
     addEventListener(name, callback) {
         listeners.set(name, callback);
     },
@@ -75,9 +71,10 @@ const fakeWindow = {
         },
     },
     AlmdinaCostPermissionsUX: {
-        apply(receivedFrm) {
+        reconcileRenderedActions(receivedFrm) {
             assert.equal(receivedFrm, frm);
-            permissionApplyCount += 1;
+            permissionReconcileCount += 1;
+            return true;
         },
     },
 };
@@ -113,9 +110,9 @@ refreshListener();
 
 assert.equal(legacyRenderCount, 1, "Workspace refresh must render the latest cost snapshot once");
 assert.equal(
-    permissionApplyCount,
+    permissionReconcileCount,
     1,
-    "Workspace refresh must re-apply permission-owned inline price controls after rendering"
+    "Workspace refresh must synchronously reconcile permission-owned inline price controls after rendering"
 );
 assert.equal(
     frm.doc.pieces[0].special_shape_price_status,
@@ -133,7 +130,7 @@ frm.doc.pieces[0].__almdina_pending_price_edit = "special";
 refreshListener();
 
 assert.equal(legacyRenderCount, 2);
-assert.equal(permissionApplyCount, 2);
+assert.equal(permissionReconcileCount, 2);
 assert.equal(
     frm.doc.pieces[0].special_shape_custom_unit_price_usd,
     150,
@@ -147,13 +144,13 @@ assert.equal(frm.doc.pieces[0].__almdina_pending_price_edit, "special");
 delete frm.doc.pieces[0].__almdina_pending_price_edit;
 refreshListener();
 assert.equal(legacyRenderCount, 3);
-assert.equal(permissionApplyCount, 3);
+assert.equal(permissionReconcileCount, 3);
 assert.equal(frm.doc.pieces[0].special_shape_custom_unit_price_usd, 0);
 assert.equal(frm.doc.pieces[0].special_shape_price_status, "Estimated");
 
 fakeWindow.cur_frm = { doctype: "Customer" };
 refreshListener();
 assert.equal(legacyRenderCount, 3, "A stale/non-order route must not repaint the prior order");
-assert.equal(permissionApplyCount, 3, "A stale/non-order route must not re-apply order permissions");
+assert.equal(permissionReconcileCount, 3, "A stale/non-order route must not re-apply order permissions");
 
 console.log("Special price workspace refresh regression simulation passed");

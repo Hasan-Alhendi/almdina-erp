@@ -10,7 +10,12 @@ from almdina_erp.almdina_erp.domain.cutting.catalog import DEFAULT_OPTIMIZATION_
 from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
     ManufacturingRequirementsError,
 )
-from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import APPROVED, DRAFT
+from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
+    APPROVED,
+    DRAFT,
+    SYSTEM,
+    UPLOADED_DXF,
+)
 from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
     DEFAULT_KERF_MM,
     DEFAULT_MACHINE_TYPE,
@@ -19,6 +24,8 @@ from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
     PlanSettings,
     normalize_plan_settings,
 )
+from almdina_erp.almdina_erp.domain.cutting.offcut_policy import OffcutPolicyError
+from almdina_erp.almdina_erp.domain.cutting.physical_execution_contract import physical_execution_for_snapshot
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import (
     plan_input_fingerprint,
 )
@@ -32,6 +39,7 @@ class ProductionPlanFacts:
     plan_needs_recalculation: bool
     has_approved_plan: bool
     approved_plan_source_type: str | None = None
+    has_factory_work: bool = True
 
 
 def _plan_rows(order_name: str, **filters: Any) -> list[Any]:
@@ -164,6 +172,43 @@ def approved_plan_for_order(order: Any) -> Any | None:
     return plan
 
 
+def resolve_canonical_cost_plan(order: Any | str) -> Any | None:
+    """Resolve the single Cutting Plan authoritative for cost and execution reads.
+
+    The explicit DCO approval relation always wins. Before approval, an Uploaded
+    DXF Draft represents the operator-reviewed physical layout and therefore owns
+    commercial/execution projections ahead of the System Draft. No timestamp on a
+    newer Draft may supersede an official Approved plan implicitly.
+    """
+
+    order_doc = (
+        frappe.get_doc("Door Cutting Order", order)
+        if isinstance(order, str)
+        else order
+    )
+    order_name = str(getattr(order_doc, "name", None) or "").strip()
+    if not order_name:
+        return None
+
+    approved = approved_plan_for_order(order_doc)
+    if approved is not None:
+        return approved
+
+    uploaded = latest_plan(
+        order_name,
+        status=DRAFT,
+        source_type=UPLOADED_DXF,
+    )
+    if uploaded is not None:
+        return uploaded
+
+    return latest_plan(
+        order_name,
+        status=DRAFT,
+        source_type=SYSTEM,
+    )
+
+
 def production_plan_facts(order: Any) -> ProductionPlanFacts:
     """Build shop-floor plan facts exclusively from canonical Cutting Plan state.
 
@@ -189,9 +234,19 @@ def production_plan_facts(order: Any) -> ProductionPlanFacts:
             plan_needs_recalculation=True,
             has_approved_plan=False,
             approved_plan_source_type=approved_source,
+            has_factory_work=True,
         )
 
     has_snapshot = bool(str(getattr(candidate, "snapshot_json", None) or "").strip())
+    snapshot = frappe.parse_json(getattr(candidate, "snapshot_json", None) or "{}") or {}
+    try:
+        execution = physical_execution_for_snapshot(snapshot)
+        # Legacy plans retain their historical production/cost behavior and do
+        # not become customer-only merely because they predate stable identities.
+        has_factory_work = True if execution is None else execution.has_factory_work
+    except OffcutPolicyError:
+        # Invalid snapshots must never dispatch production optimistically.
+        has_factory_work = False
     stale = _plan_is_stale(order, candidate) if has_snapshot else True
     return ProductionPlanFacts(
         plan_name=str(candidate.name),
@@ -200,6 +255,7 @@ def production_plan_facts(order: Any) -> ProductionPlanFacts:
         plan_needs_recalculation=stale,
         has_approved_plan=bool(approved and has_snapshot and not stale),
         approved_plan_source_type=approved_source,
+        has_factory_work=has_factory_work,
     )
 
 
@@ -211,5 +267,6 @@ __all__ = [
     "latest_plan",
     "plan_settings",
     "production_plan_facts",
+    "resolve_canonical_cost_plan",
     "seed_plan_settings",
 ]

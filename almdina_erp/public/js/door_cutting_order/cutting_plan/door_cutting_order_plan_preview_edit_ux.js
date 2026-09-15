@@ -7,6 +7,7 @@
     if (!legacy) return;
 
     const SYNC_KEY = "__almdinaPlanPreviewEditSyncScheduled";
+    let baseCoordinatorAdapter = null;
 
     function previewOwner() {
         return window.AlmdinaPlanPreviewSession || null;
@@ -14,6 +15,10 @@
 
     function presenter() {
         return window.AlmdinaPlanPreviewPresenter || null;
+    }
+
+    function editSessionCoordinator() {
+        return window.AlmdinaDcoEditSessionCoordinator || null;
     }
 
     function planToolbar(frm) {
@@ -136,18 +141,33 @@
         });
     }
 
-    async function startEditing(frm) {
+    function runBaseCommand(command, frm, sessionContext = null) {
+        const base = baseCoordinatorAdapter;
+        const operation = base && base[command];
+        if (typeof operation === "function") {
+            return operation(frm, sessionContext);
+        }
+
+        const fallback = command === "start"
+            ? legacy.startEditing
+            : command === "cancel"
+                ? legacy.cancelEditing
+                : legacy.saveEditing;
+        return typeof fallback === "function" ? fallback(frm) : false;
+    }
+
+    async function startEditingCommand(frm, sessionContext = null) {
         const owner = previewOwner();
         if (owner) owner.reset(frm);
-        const result = await Promise.resolve(legacy.startEditing(frm));
+        const result = await Promise.resolve(runBaseCommand("start", frm, sessionContext));
         schedule(frm);
         return result;
     }
 
-    async function cancelEditing(frm) {
+    async function cancelEditingCommand(frm, sessionContext = null) {
         const owner = previewOwner();
         if (owner) owner.reset(frm);
-        const result = await Promise.resolve(legacy.cancelEditing(frm));
+        const result = await Promise.resolve(runBaseCommand("cancel", frm, sessionContext));
         const view = presenter();
         if (view && typeof view.restorePersistedPresentation === "function") {
             view.restorePersistedPresentation(frm);
@@ -196,7 +216,7 @@
         }, workspacesRefreshed ? 5 : 7);
     }
 
-    async function saveEditing(frm) {
+    async function saveEditingCommand(frm, sessionContext = null) {
         const owner = previewOwner();
         if (!owner || !owner.isCommittable(frm)) {
             frappe.msgprint(__(saveBlockedReason(frm)));
@@ -214,12 +234,13 @@
         }
         if (!committed) return false;
 
-        // From this point the mutation is already durable. UI cleanup and workspace
-        // reconciliation are recoverable follow-up work and must never make the user
-        // believe the commit itself failed.
+        // The durable mutation is complete at this point. Close the same Plan edit
+        // session through the undecorated base adapter so workspace state and the
+        // coordinator transition finish atomically; never recurse through the public
+        // coordinated cancel command while the coordinator is in its saving phase.
         if (legacy.isEditing(frm)) {
             try {
-                await Promise.resolve(legacy.cancelEditing(frm));
+                await Promise.resolve(runBaseCommand("cancel", frm, sessionContext));
             } catch (error) {
                 console.error("Cutting plan post-commit edit-session cleanup failed", error);
             }
@@ -239,6 +260,37 @@
         showCommittedResult(workspacesRefreshed);
         schedule(frm);
         return true;
+    }
+
+    function coordinated(command, frm, fallback) {
+        const coordinator = editSessionCoordinator();
+        if (!coordinator || typeof coordinator[command] !== "function") return fallback();
+        return coordinator[command](frm, "plan");
+    }
+
+    function startEditing(frm) {
+        return coordinated("start", frm, () => startEditingCommand(frm));
+    }
+
+    function cancelEditing(frm) {
+        return coordinated("cancel", frm, () => cancelEditingCommand(frm));
+    }
+
+    function saveEditing(frm) {
+        return coordinated("save", frm, () => saveEditingCommand(frm));
+    }
+
+    const coordinator = editSessionCoordinator();
+    if (coordinator && typeof coordinator.decorate === "function") {
+        coordinator.decorate("plan", (base) => {
+            baseCoordinatorAdapter = base;
+            return {
+                ...base,
+                start: startEditingCommand,
+                save: saveEditingCommand,
+                cancel: cancelEditingCommand,
+            };
+        });
     }
 
     window.AlmdinaPlanEditSessionUX = Object.freeze({

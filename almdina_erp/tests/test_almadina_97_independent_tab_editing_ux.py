@@ -113,7 +113,11 @@ def test_cost_edit_scope_remains_independent_from_plan_scope():
     assert "store.cancelEdit()" in source
     assert "const captured = captureCostSettings(frm, state.draft || {});" in source
     assert "store.replaceDraft(payload);" in source
-    assert "api.saveSettings(frm.doc.name, payload)" in source
+    # Capture the document identity before any awaited command. A late completion
+    # must never pick up frm.doc.name from a different order.
+    assert 'const orderName = String(frm.doc.name || "");' in source
+    assert "api.saveSettings(orderName, payload)" in source
+    assert "documentStillCurrent(frm, token)" in source
     assert "owner.commit(frm, saved);" in source
     assert 'field.df[STATUS_KEY] = "Read"' in source
     assert "frm.save(" not in source
@@ -167,25 +171,23 @@ def test_persisted_dco_no_longer_uses_global_primary_action_for_tab_editing():
     assert ".page-actions .primary-action" in source
     assert "display:none !important" in source
     assert "sync(frm);" in source
-    assert "Synchronous sync prevents the legacy global primary action" in source
+    assert "on_tab_change(frm)" in source
     assert "set_primary_action" not in source
     assert "clear_primary_action" not in source
     assert "data-almdina-context-edit-mode" not in source
     assert "dco-plan-settings-edit-toolbar { display:none" not in source
 
 
-def test_tab_local_actions_delegate_to_existing_independent_session_owners():
+def test_tab_local_actions_delegate_through_the_aggregate_session_owner():
     source = PAGE_EDIT.read_text(encoding="utf-8")
 
     assert "window.AlmdinaOrderRevisionUX" in source
     assert "window.AlmdinaPlanEditSessionUX" in source
     assert "window.AlmdinaCostEditSessionUX" in source
-    assert "api.enterEditSession(frm)" in source
-    assert "api.startEditing(frm)" in source
-    assert "api.commitEditSession(frm)" in source
-    assert "api.saveEditing(frm)" in source
-    assert "api.cancelEditing(frm)" in source
-    assert "cancelOrder(frm)" in source
+    assert "window.AlmdinaDcoEditSessionCoordinator" in source
+    assert "coordinator.start(frm, kind)" in source
+    assert "coordinator.save(frm, kind)" in source
+    assert "coordinator.cancel(frm, kind)" in source
     assert "activeEditingKind(frm)" in source
     assert "احفظ أو ألغِ التعديل المفتوح في القسم الآخر أولًا" in source
     assert "frappe.call" not in source

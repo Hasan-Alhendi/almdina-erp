@@ -21,6 +21,9 @@ from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     SYSTEM,
     UPLOADED_DXF,
 )
+from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
+    preserve_offcut_classification,
+)
 from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
     PlanSettingsValidationError,
     canonical_default_plan_settings,
@@ -36,11 +39,13 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_command_reposito
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspace import (
     COST_SNAPSHOT_VERSION,
     apply_plan_costs,
+    factory_execution_edge_cost,
     initialize_draft_plan_cost_snapshot,
     refresh_order_commercial_totals,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import (
     apply_validated_dxf_snapshot,
+    backfill_piece_instance_ids,
     calculate_system_plan,
     plan_input_fingerprint,
 )
@@ -198,6 +203,16 @@ def _assert_recalculation_state(order: Any) -> None:
     assert_order_editable(order)
 
 
+def recalculation_is_allowed(order: Any) -> bool:
+    """True when the current user may run a System plan recalculation now."""
+
+    try:
+        _assert_recalculation_state(order)
+    except (frappe.ValidationError, frappe.PermissionError):
+        return False
+    return True
+
+
 def _set_drawing_dxf_status(order: Any, status: str) -> None:
     """Persist only the DCO-owned drawing workflow signal, never Plan data."""
 
@@ -352,12 +367,23 @@ def save_uploaded_dxf_plan(
         capability,
         message=_("لا تملك صلاحية رفع أو استبدال DXF لهذا الطلب."),
     )
+    backfill_piece_instance_ids(order)
 
     repository = FrappeCuttingPlanCommandRepository(capability)
     plan = repository.ensure_uploaded_dxf_draft(order)
     initialize_draft_plan_cost_snapshot(order, plan)
+    previous_classification = [
+        {
+            "piece_instance_id": getattr(piece, "piece_instance_id", None),
+            "resource_kind": getattr(piece, "resource_kind", None),
+            "offcut_source_party": getattr(piece, "offcut_source_party", None),
+            "offcut_execution_party": getattr(piece, "offcut_execution_party", None),
+        }
+        for piece in (plan.placed_pieces or [])
+    ]
+    preserve_offcut_classification(snapshot, previous_classification)
     apply_validated_dxf_snapshot(order, plan, snapshot)
-    apply_plan_costs(plan, edge_cost_usd=flt(getattr(order, "edge_cost_usd", 0)))
+    apply_plan_costs(plan, edge_cost_usd=factory_execution_edge_cost(order, plan))
     plan.dxf_file = str(file_url or "").strip()
     plan.dxf_status = "Validated"
     plan.dxf_uploaded_by = frappe.session.user
@@ -481,8 +507,9 @@ def recalculate_system_plan(
     # but recalculation must ask for an executable choice instead of leaking the
     # domain exception or silently converting the stored algorithm.
     require_executable_optimization_mode(plan.optimization_mode)
+    backfill_piece_instance_ids(order)
     calculate_system_plan(order, plan)
-    apply_plan_costs(plan, edge_cost_usd=flt(getattr(order, "edge_cost_usd", 0)))
+    apply_plan_costs(plan, edge_cost_usd=factory_execution_edge_cost(order, plan))
     repository.save_document(plan)
     refresh_order_commercial_totals(order, plan)
     result = plan_payload(plan, order)
@@ -545,6 +572,7 @@ __all__ = [
     "plan_payload",
     "recalculate_order_plan",
     "recalculate_system_plan",
+    "recalculation_is_allowed",
     "save_system_plan_settings",
     "save_uploaded_dxf_plan",
 ]

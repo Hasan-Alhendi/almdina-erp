@@ -5,9 +5,13 @@ from typing import Any
 import frappe
 from frappe.utils import cint
 
+from almdina_erp.almdina_erp.domain.cutting.offcut_policy import OffcutPolicyError
+from almdina_erp.almdina_erp.domain.cutting.physical_execution_contract import physical_execution_for_snapshot
 from almdina_erp.almdina_erp.domain.orders.lifecycle import (
+    LOCKED_ORDER_STATUSES,
     department_for_stage_type,
     department_status_for_stage_status,
+    normalize_order_status,
     order_status_for_stage,
 )
 
@@ -75,7 +79,61 @@ def set_order_tracking(
         )
 
 
+def clear_factory_tracking(
+    order_name: str,
+    *,
+    fallback_status: str,
+) -> dict[str, Any]:
+    """Clear stale factory routing after OFFCUT becomes customer-only.
+
+    The production path/current-stage fields are execution projections, not order
+    requirements. When no physical piece remains executable by the factory they
+    must be cleared so old assignments cannot keep the order dispatched. Locked
+    terminal statuses are preserved exactly.
+    """
+
+    current_status = normalize_order_status(get_order_status(order_name))
+    values: dict[str, Any] = {
+        "production_path": None,
+        "current_production_stage": None,
+        "current_department": "",
+        "current_assignee": "",
+        "department_status": "",
+    }
+    if current_status not in LOCKED_ORDER_STATUSES:
+        values["status"] = fallback_status
+    frappe.db.set_value(
+        "Door Cutting Order",
+        order_name,
+        values,
+        update_modified=True,
+    )
+    return values
+
+
 def required_piece_qty(order_name: str) -> int:
+    order = get_order(order_name)
+    plan = None
+    if order is not None:
+        # Keep this focused adapter loadable by lightweight shop-floor harnesses;
+        # runtime plan resolution is needed only for a real persisted order.
+        from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
+            approved_plan_for_order,
+            current_working_plan,
+        )
+
+        plan = approved_plan_for_order(order) or current_working_plan(order_name)
+    snapshot_json = str(getattr(plan, "snapshot_json", None) or "") if plan else ""
+    if snapshot_json.strip():
+        try:
+            snapshot = frappe.parse_json(snapshot_json) or {}
+            execution = physical_execution_for_snapshot(snapshot)
+            if execution is not None:
+                return execution.factory_executable_quantity
+        except (OffcutPolicyError, TypeError, ValueError):
+            # Orders created before physical identities existed retain their legacy
+            # quantity projection instead of being blocked by a migration gap.
+            pass
     rows = frappe.get_all(
         "Door Cutting Order Detail",
         filters={
@@ -88,6 +146,7 @@ def required_piece_qty(order_name: str) -> int:
 
 
 __all__ = [
+    "clear_factory_tracking",
     "get_order",
     "get_order_path",
     "get_order_status",

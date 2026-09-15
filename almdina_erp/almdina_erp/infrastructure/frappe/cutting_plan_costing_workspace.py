@@ -7,6 +7,8 @@ from frappe import _
 from frappe.utils import cint, flt
 
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import APPROVED, DRAFT
+from almdina_erp.almdina_erp.domain.cutting.offcut_policy import PhysicalExecutionProjection
+from almdina_erp.almdina_erp.domain.cutting.physical_execution_contract import physical_execution_for_snapshot
 from almdina_erp.almdina_erp.domain.orders.costing import (
     CostingError,
     SpecialPricingPieceInput,
@@ -15,7 +17,7 @@ from almdina_erp.almdina_erp.domain.orders.costing import (
     calculate_special_pricing,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
-    latest_plan,
+    resolve_canonical_cost_plan,
 )
 
 
@@ -27,6 +29,17 @@ PLAN_COST_FIELDS = (
     "cutting_cost_usd",
     "edge_cost_usd",
     "total_cost_usd",
+    "offcut_price_usd",
+)
+PLAN_EXECUTION_METRIC_FIELDS = (
+    "required_boards",
+    "used_area_m2",
+    "total_source_area_m2",
+    "waste_area_m2",
+    "waste_percent",
+)
+_LEGACY_ORDER_COST_FIELDS = tuple(
+    fieldname for fieldname in PLAN_COST_FIELDS if fieldname != "offcut_price_usd"
 )
 
 
@@ -48,14 +61,15 @@ def initial_plan_cost_values(
     values = frappe.db.get_value(
         source_doctype,
         source_name,
-        list(PLAN_COST_FIELDS),
+        list(PLAN_COST_FIELDS if based_on_plan else _LEGACY_ORDER_COST_FIELDS),
         as_dict=True,
     ) or {}
     return {
         **{
             fieldname: flt(values.get(fieldname))
-            for fieldname in PLAN_COST_FIELDS
+            for fieldname in _LEGACY_ORDER_COST_FIELDS
         },
+        "offcut_price_usd": flt(values.get("offcut_price_usd")),
         "cost_snapshot_version": COST_SNAPSHOT_VERSION,
     }
 
@@ -80,6 +94,9 @@ def initialize_draft_plan_cost_snapshot(order: Any, plan: Any) -> bool:
 def apply_plan_costs(plan: Any, *, edge_cost_usd: float | None = None) -> dict[str, float]:
     """Calculate and store the plan-owned financial result without touching geometry."""
 
+    execution = physical_execution_for_plan(plan)
+    if execution is not None and not execution.has_factory_source_offcut:
+        plan.offcut_price_usd = 0
     edge_cost = flt(plan.edge_cost_usd) if edge_cost_usd is None else flt(edge_cost_usd)
     result = calculate_order_costs(
         required_boards=int(plan.required_boards or 0),
@@ -93,12 +110,47 @@ def apply_plan_costs(plan: Any, *, edge_cost_usd: float | None = None) -> dict[s
         "mdf_cost_usd": result.mdf_cost_usd,
         "cutting_cost_usd": result.cutting_cost_usd,
         "edge_cost_usd": result.edge_cost_usd,
-        "total_cost_usd": result.total_cost_usd,
+        "total_cost_usd": result.total_cost_usd + flt(getattr(plan, "offcut_price_usd", 0)),
+        "offcut_price_usd": flt(getattr(plan, "offcut_price_usd", 0)),
     }
     for fieldname, value in values.items():
         setattr(plan, fieldname, value)
     plan.cost_snapshot_version = COST_SNAPSHOT_VERSION
     return values
+
+
+def physical_execution_for_plan(plan: Any) -> PhysicalExecutionProjection | None:
+    """Return the plan-owned physical execution projection, if geometry exists."""
+
+    snapshot_json = str(getattr(plan, "snapshot_json", None) or "").strip()
+    if not snapshot_json:
+        return None
+    snapshot = frappe.parse_json(snapshot_json) or {}
+    if not any(sheet.get("pieces") for sheet in (snapshot.get("sheets") or [])):
+        # Pre-OFFCUT/partial snapshots have no trustworthy physical identities;
+        # retain the legacy aggregate costing bridge until a real plan is stored.
+        return None
+    return physical_execution_for_snapshot(snapshot)
+
+
+def factory_execution_edge_cost(order: Any, plan: Any) -> float:
+    """Scale automatic edge services to physical pieces executed by the factory."""
+
+    projection = physical_execution_for_plan(plan)
+    if projection is None:
+        return flt(getattr(order, "edge_cost_usd", getattr(plan, "edge_cost_usd", 0)))
+    total = 0.0
+    for source_piece_no, piece in enumerate(getattr(order, "pieces", None) or [], start=1):
+        physical_qty = projection.physical_qty_by_source_piece_no.get(source_piece_no)
+        if physical_qty is None:
+            total += flt(getattr(piece, "edge_cost_usd", 0))
+            continue
+        factory_qty = projection.factory_processing_qty_by_source_piece_no.get(
+            source_piece_no,
+            0,
+        )
+        total += flt(getattr(piece, "edge_cost_usd", 0)) * factory_qty / physical_qty
+    return flt(total)
 
 
 def persist_plan_cost_snapshot(plan: Any) -> dict[str, float | int]:
@@ -238,14 +290,32 @@ def _commercial_cost_basis(order: Any, plan: Any | None) -> tuple[float, float]:
     )
 
 
-def refresh_order_commercial_totals(order: Any, plan: Any | None = None) -> dict[str, Any]:
-    """Refresh DCO-owned per-piece and aggregate commercial projections.
+def _commercial_piece_execution(
+    order: Any,
+    plan: Any | None,
+) -> tuple[PhysicalExecutionProjection | None, dict[int, float]]:
+    projection = physical_execution_for_plan(plan) if plan is not None else None
+    ratios: dict[int, float] = {}
+    if projection is None:
+        return None, ratios
+    for source_piece_no, _piece in enumerate(order.pieces or [], start=1):
+        physical_qty = projection.physical_qty_by_source_piece_no.get(source_piece_no)
+        if physical_qty is None:
+            continue
+        ratios[source_piece_no] = (
+            projection.factory_processing_qty_by_source_piece_no.get(source_piece_no, 0)
+            / physical_qty
+        )
+    return projection, ratios
 
-    Cutting Plan remains the sole owner of board/cutting/edge financial fields.
-    The order stores customer-facing commercial projections. When no canonical
-    plan exists yet, the existing authoritative-cost compatibility bridge is used
-    only as a read source; ordinary DCO save still never creates or recalculates
-    Cutting Plan state.
+
+def refresh_order_commercial_totals(order: Any, plan: Any | None = None) -> dict[str, Any]:
+    """Refresh DCO-owned commercial projections from the canonical cost plan.
+
+    ``plan`` remains a compatibility hint for callers that have just persisted a
+    first plan. Once canonical plan state exists, however, the resolver is the
+    authority. In particular, a newer Draft must never repaint DCO commercial
+    totals while an official Approved plan remains linked to the order.
     """
 
     settings = frappe.get_cached_doc("Almdina ERP Settings")
@@ -255,28 +325,39 @@ def refresh_order_commercial_totals(order: Any, plan: Any | None = None) -> dict
         manual_edge_fee_usd=flt(settings.default_special_manual_edge_fee_usd),
         margin_percent=flt(settings.default_special_margin_percent),
     )
-    board_and_cutting_cost_usd, total_cost_usd = _commercial_cost_basis(order, plan)
+    resolved_plan = current_cost_plan(order) or plan
+    board_and_cutting_cost_usd, total_cost_usd = _commercial_cost_basis(order, resolved_plan)
+    projection, ratios = _commercial_piece_execution(order, resolved_plan)
+    extra_addons_total = sum(
+        flt(getattr(piece, "extra_addons_total_usd", 0)) * ratios.get(index, 1)
+        for index, piece in enumerate(order.pieces or [], start=1)
+    )
     try:
         summary = calculate_special_pricing(
             (
                 SpecialPricingPieceInput(
                     piece_type=str(piece.piece_type or "Regular"),
-                    qty=cint(piece.qty),
-                    area_m2=flt(piece.area_m2),
-                    edge_cost_usd=flt(piece.edge_cost_usd),
+                    qty=(
+                        projection.factory_processing_qty_by_source_piece_no.get(index, 0)
+                        if projection and index in ratios
+                        else cint(piece.qty)
+                    ),
+                    area_m2=flt(piece.area_m2) * ratios.get(index, 1),
+                    edge_cost_usd=flt(piece.edge_cost_usd) * ratios.get(index, 1),
                     price_status=str(piece.special_shape_price_status or ""),
                     approved_by=str(piece.special_shape_price_approved_by or ""),
                     custom_unit_price_usd=flt(piece.special_shape_custom_unit_price_usd),
                 )
-                for piece in (order.pieces or [])
+                for index, piece in enumerate(order.pieces or [], start=1)
             ),
             settings=pricing_settings,
-            total_area_m2=flt(order.total_area_m2),
+            total_area_m2=sum(
+                flt(piece.area_m2) * ratios.get(index, 1)
+                for index, piece in enumerate(order.pieces or [], start=1)
+            ),
             board_and_cutting_cost_usd=board_and_cutting_cost_usd,
             total_cost_usd=total_cost_usd,
-            extra_addons_total_usd=flt(
-                getattr(order, "extra_addons_total_usd", 0)
-            ),
+            extra_addons_total_usd=extra_addons_total,
         )
     except CostingError as error:
         if str(error) == "special_shape_defaults_negative":
@@ -289,9 +370,7 @@ def refresh_order_commercial_totals(order: Any, plan: Any | None = None) -> dict
         "special_shapes_baseline_cost_usd": summary.baseline_cost_usd,
         "special_shapes_estimated_total_usd": summary.estimated_total_usd,
         "special_shapes_final_total_usd": summary.final_total_usd,
-        "extra_addons_total_usd": flt(
-            getattr(order, "extra_addons_total_usd", 0)
-        ),
+        "extra_addons_total_usd": extra_addons_total,
         "customer_quote_total_usd": summary.customer_quote_total_usd,
         "customer_quote_status": summary.customer_quote_status,
     }
@@ -307,37 +386,16 @@ def refresh_order_commercial_totals(order: Any, plan: Any | None = None) -> dict
 
 
 def project_plan_costs_to_order(order: Any, plan: Any) -> dict[str, float]:
-    """A6.2 compatibility facade: refresh order-owned quote totals only.
-
-    The historical implementation copied every Plan financial field back onto
-    Door Cutting Order. Runtime no longer needs that projection, so the function
-    remains temporarily for older callers while deliberately performing no Plan
-    financial mirror. It can be removed with the legacy surface after callers
-    migrate to ``refresh_order_commercial_totals``.
-    """
+    """A6.2 compatibility facade: refresh order-owned quote totals only."""
 
     refresh_order_commercial_totals(order, plan)
     return {}
 
 
 def current_cost_plan(order: Any) -> Any | None:
-    """Resolve the plan that owns commercial cost geometry.
+    """Compatibility wrapper for the canonical cost-plan resolution policy."""
 
-    Geometry editing still uses ``current_working_plan``. Cost reads and the
-    focused cost-settings command must not prefer a leftover empty Draft over
-    an Approved production plan, or invoice board/cutting lines disappear.
-    """
-
-    order_name = str(getattr(order, "name", None) or "").strip()
-    if not order_name:
-        return None
-    draft = latest_plan(order_name, status=DRAFT)
-    approved = latest_plan(order_name, status=APPROVED)
-    if draft is not None and cint(getattr(draft, "required_boards", 0)) > 0:
-        return draft
-    if approved is not None:
-        return approved
-    return draft
+    return resolve_canonical_cost_plan(order)
 
 
 def authoritative_cost_values(order: Any, *, plan: Any | None = None) -> dict[str, float]:
@@ -361,26 +419,34 @@ def authoritative_cost_values(order: Any, *, plan: Any | None = None) -> dict[st
 def overlay_authoritative_costs(
     order: Any,
     snapshot: Mapping[str, Any],
+    *,
+    plan: Any | None = None,
 ) -> dict[str, Any]:
-    """Overlay canonical Plan financials onto a DCO-shaped read model."""
+    """Overlay one canonical Plan's financial and execution metrics onto a read model."""
 
     result = dict(snapshot)
-    plan = current_cost_plan(order)
-    result.update(authoritative_cost_values(order, plan=plan))
-    if plan is not None:
-        result["required_boards"] = int(plan.required_boards or 0)
+    resolved_plan = plan if plan is not None else current_cost_plan(order)
+    result.update(authoritative_cost_values(order, plan=resolved_plan))
+    if resolved_plan is not None:
+        for fieldname in PLAN_EXECUTION_METRIC_FIELDS:
+            value = getattr(resolved_plan, fieldname, None)
+            if value is not None:
+                result[fieldname] = int(value or 0) if fieldname == "required_boards" else flt(value)
     return result
 
 
 __all__ = [
     "COST_SNAPSHOT_VERSION",
     "PLAN_COST_FIELDS",
+    "PLAN_EXECUTION_METRIC_FIELDS",
     "apply_plan_costs",
     "authoritative_cost_values",
     "current_cost_plan",
+    "factory_execution_edge_cost",
     "initial_plan_cost_values",
     "initialize_draft_plan_cost_snapshot",
     "overlay_authoritative_costs",
+    "physical_execution_for_plan",
     "persist_plan_cost_snapshot",
     "project_plan_costs_to_order",
     "refresh_order_commercial_totals",

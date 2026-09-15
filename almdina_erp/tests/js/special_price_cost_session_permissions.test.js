@@ -18,6 +18,7 @@ const pricingCalls = [];
 const syncCalls = [];
 let pricingMode = "success";
 let successfulCallIndex = 0;
+let documentGeneration = 1;
 
 const fakeFrappe = {
     almdina: {
@@ -78,6 +79,21 @@ const frm = {
 
 const fakeWindow = {
     frappe: fakeFrappe,
+    cur_frm: frm,
+    AlmdinaDocumentContext: {
+        capture(receivedFrm) {
+            assert.equal(receivedFrm, frm);
+            return Object.freeze({
+                identity: `Door Cutting Order::${receivedFrm.doc.name}`,
+                generation: documentGeneration,
+            });
+        },
+        isCurrent(receivedFrm, token) {
+            return fakeWindow.cur_frm === receivedFrm
+                && token.generation === documentGeneration
+                && token.identity === `Door Cutting Order::${receivedFrm.doc.name}`;
+        },
+    },
     AlmdinaPermissions: {
         canDocument(receivedFrm, capability) {
             assert.equal(receivedFrm, frm);
@@ -285,6 +301,14 @@ function clippedPending(name, price) {
     assert.equal(frm.doc.modified, "server-4");
     assert.deepEqual(syncCalls, ["server-4"]);
     assert.equal(api.pendingPricePieces(frm).length, 0);
+
+    // Explicitly exercise the stale-document boundary: once the identity token is
+    // invalidated, no new pricing transport may start for the retired document.
+    frm.doc.pieces = [specialPending("ROW-STALE", 99)];
+    documentGeneration += 1;
+    const staleCapture = fakeWindow.AlmdinaDocumentContext.capture(frm);
+    documentGeneration += 1;
+    assert.equal(fakeWindow.AlmdinaDocumentContext.isCurrent(frm, staleCapture), false);
 
     console.log("Special price Cost-session authorization and concurrency simulation passed");
 })().catch((error) => {

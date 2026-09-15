@@ -209,6 +209,7 @@ async function flushPromises() {
     assert.deepEqual(order, [
         "assets:cost_tab",
         "surfaces:apply",
+        "edit:sync",
         "financial:apply",
         "invoice:install",
         "workspace:activate",

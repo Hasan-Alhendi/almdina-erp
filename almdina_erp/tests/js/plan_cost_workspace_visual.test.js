@@ -20,22 +20,12 @@ function makeNode() {
         nodeType: 1,
         attributes,
         classList: {
-            add(value) {
-                classes.add(value);
-            },
-            contains(value) {
-                return classes.has(value);
-            },
+            add(value) { classes.add(value); },
+            contains(value) { return classes.has(value); },
         },
-        setAttribute(name, value) {
-            attributes.set(name, String(value));
-        },
-        removeAttribute(name) {
-            attributes.delete(name);
-        },
-        getAttribute(name) {
-            return attributes.has(name) ? attributes.get(name) : null;
-        },
+        setAttribute(name, value) { attributes.set(name, String(value)); },
+        removeAttribute(name) { attributes.delete(name); },
+        getAttribute(name) { return attributes.has(name) ? attributes.get(name) : null; },
     };
 }
 
@@ -84,9 +74,7 @@ const listeners = new Map();
 const appendedStyles = [];
 const fakeDocument = {
     head: {
-        appendChild(node) {
-            appendedStyles.push(node);
-        },
+        appendChild(node) { appendedStyles.push(node); },
     },
     getElementById(id) {
         return appendedStyles.find(node => node.id === id) || null;
@@ -99,34 +87,20 @@ const fakeDocument = {
 const fakeWindow = {
     cur_frm: frm,
     AlmdinaPlanWorkspaceState: {
-        snapshot() {
-            return planSnapshot;
-        },
+        snapshot() { return planSnapshot; },
     },
     AlmdinaCostWorkspaceState: {
-        snapshot() {
-            return costSnapshot;
-        },
+        snapshot() { return costSnapshot; },
     },
     AlmdinaDocumentContext: {
-        scheduleFrame(_frm, _key, callback) {
-            callback();
-        },
+        scheduleFrame(_frm, _key, callback) { callback(); },
     },
-    addEventListener(name, handler) {
-        listeners.set(name, handler);
-    },
-    requestAnimationFrame(callback) {
-        callback();
-    },
+    addEventListener(name, handler) { listeners.set(name, handler); },
+    requestAnimationFrame(callback) { callback(); },
 };
 
 const fakeFrappe = {
-    ui: {
-        form: {
-            on() {},
-        },
-    },
+    ui: { form: { on() {} } },
 };
 
 const context = vm.createContext({
@@ -158,6 +132,20 @@ assert.equal(costHtml.getAttribute("data-almdina-workspace-status"), "ready");
 assert.equal(costHtml.getAttribute("data-almdina-workspace-editing"), "1");
 assert.equal(costHtml.getAttribute("aria-live"), "polite");
 assert.equal(boardRate.getAttribute("data-almdina-workspace-editing"), "1");
+
+const css = appendedStyles[0].textContent;
+assert.match(
+    css,
+    /data-fieldname="cutting_plan_html"\]\[data-almdina-workspace-status="loading"\]/,
+    "Plan loading must reserve height on the outer workspace field"
+);
+assert.match(
+    css,
+    /data-fieldname="order_cost_invoice_html"\]\[data-almdina-workspace-status="loading"\]/,
+    "Cost loading must reserve height on the outer workspace field"
+);
+assert.match(css, /min-height:240px/, "desktop lazy loading should keep a stable moderate workspace height");
+assert.match(css, /min-height:170px/, "mobile loading surface should remain stable without being oversized");
 
 planSnapshot = {
     status: "ready",

@@ -11,7 +11,7 @@
     "quality_section","estimated_cut_count","estimated_cut_length_m","largest_reusable_free_area_m2","rotation_count",
     "totals_section","required_boards","used_area_m2","total_source_area_m2","waste_area_m2","waste_percent","reusable_remnant_area_m2","scrap_area_m2","waste_reconciled_on",
     "dxf_section","dxf_file","dxf_status","dxf_uploaded_by","dxf_uploaded_on",
-    "cost_section","cost_snapshot_version","board_rate_usd","cutting_cost_per_board_usd","mdf_cost_usd","cutting_cost_usd","edge_cost_usd","total_cost_usd",
+    "cost_section","cost_snapshot_version","board_rate_usd","cutting_cost_per_board_usd","mdf_cost_usd","cutting_cost_usd","edge_cost_usd","total_cost_usd","offcut_price_usd",
     "sources_section","sources","placed_pieces_section","placed_pieces","snapshot_section","snapshot_json"
   ],
   "fields": [
@@ -83,6 +83,7 @@
     {"fieldname":"cutting_cost_usd","fieldtype":"Currency","hidden":1,"label":"Cutting Cost USD","permlevel":1,"read_only":1},
     {"fieldname":"edge_cost_usd","fieldtype":"Currency","hidden":1,"label":"Edge Cost USD","permlevel":1,"read_only":1},
     {"fieldname":"total_cost_usd","fieldtype":"Currency","hidden":1,"label":"Total Planned Cost USD","permlevel":1,"read_only":1},
+    {"default":"0","fieldname":"offcut_price_usd","fieldtype":"Currency","hidden":1,"label":"Offcut Price USD","permlevel":1,"read_only":1},
     {"fieldname":"sources_section","fieldtype":"Section Break","label":"Source Sheets"},
     {"fieldname":"sources","fieldtype":"Table","label":"Source Sheets","options":"Cutting Plan Source","read_only":1},
     {"fieldname":"placed_pieces_section","fieldtype":"Section Break","label":"Placed Pieces"},

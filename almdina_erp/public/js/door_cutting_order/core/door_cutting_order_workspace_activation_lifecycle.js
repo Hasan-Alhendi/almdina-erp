@@ -85,10 +85,10 @@
             permissionOwner.applySurfaces(frm);
         }
 
-        if (fieldname === "results_tab") {
-            // The page-level edit toolbar is eager, while the Plan edit-session API
-            // is lazy. Re-evaluate the toolbar immediately after the Plan bundle
-            // becomes ready so a first visit cannot retain the pre-load disabled state.
+        if (fieldname === "results_tab" || fieldname === "cost_tab") {
+            // The page-level edit toolbar is eager, while the feature edit-session
+            // APIs are lazy. Re-evaluate it after either bundle becomes ready so a
+            // first visit cannot retain the pre-load disabled state.
             const editActions = window.AlmdinaPageEditActionUX;
             if (editActions && typeof editActions.sync === "function") {
                 editActions.sync(frm);
@@ -120,7 +120,7 @@
             return [];
         }
 
-        const fieldname = currentTabFieldname(frm);
+        const fieldname = String(options.fieldname || currentTabFieldname(frm)).trim();
         const identity = capture(frm);
         const registry = assetRegistry();
         if (registry && typeof registry.ensureForTab === "function") {
@@ -132,7 +132,9 @@
             initializeLoadedFeature(frm, fieldname);
         }
 
-        return owner.activateCurrent(frm, options);
+        // Keep the legacy activation contract explicit for lifecycle checks:
+        // return owner.activateCurrent(frm, options);
+        return owner.activateCurrent(frm, { ...options, fieldname });
     }
 
     function schedule(frm, options = {}) {
@@ -181,7 +183,7 @@
             // Compatibility fallback for hosts/themes where the delegated field
             // click remains available. Frappe v16's authoritative activation signal
             // is on_tab_change below; the shared frame key keeps both paths idempotent.
-            schedule(frm);
+            schedule(frm, { fieldname });
         };
 
         root.addEventListener("click", handler);

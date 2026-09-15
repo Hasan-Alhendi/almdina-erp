@@ -189,8 +189,12 @@ class TestA5WorkspaceStateFoundation(unittest.TestCase):
             / "costing"
             / "door_cutting_order_cost_workspace_api.js"
         ).read_text(encoding="utf-8")
+        self.assertIn("frappe.call", plan_api)
+        self.assertIn("runtime.xcall", cost_api)
+        self.assertIn("runtime.call", cost_api)
+        self.assertIn("new Promise", cost_api)
+        self.assertNotIn("await runtime.call", cost_api)
         for source in (plan_api, cost_api):
-            self.assertIn("frappe.call", source)
             self.assertNotIn("querySelector", source)
             self.assertNotIn("MutationObserver", source)
             self.assertNotIn("fields_dict", source)

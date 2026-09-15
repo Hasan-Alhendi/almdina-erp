@@ -10,6 +10,9 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
 from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
     canonicalize_snapshot_manufacturing_requirements,
 )
+from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
+    canonicalize_snapshot_allocation,
+)
 
 
 # Cutting-plan snapshots are shared with planning, drawing, production, print,
@@ -75,6 +78,11 @@ def sanitize_plan_snapshot(value: Any) -> Any:
     """
 
     sanitized = _sanitize_plan_value(value)
+    # Allocation metadata belongs only to an actual plan that already owns at
+    # least one physical source. Empty/specialized safe payloads must remain
+    # byte-semantically unchanged for the historical snapshot boundary.
+    if isinstance(sanitized, Mapping) and sanitized.get("sheets"):
+        sanitized = canonicalize_snapshot_allocation(sanitized)
     sanitized = canonicalize_snapshot_manufacturing_requirements(sanitized)
     return canonicalize_snapshot_geometries(sanitized)
 

@@ -21,12 +21,18 @@ def stage_exists(stage_name: str | None) -> bool:
     return bool(stage_name and frappe.db.exists("Production Stage", stage_name))
 
 
-def cancel_active_order_stages(order_name: str) -> None:
-    """Cancel stale order-wide stages before a fresh route is dispatched.
+def cancel_active_order_stages(
+    order_name: str,
+    *,
+    include_piece_stages: bool = False,
+) -> tuple[str, ...]:
+    """Cancel active production stages while preserving audit rows.
 
-    Exceptional-piece stages are independent work items and must survive the
-    order dispatch. Every other active stage is route work; no stage code is
-    privileged here because routes are administrator-configurable.
+    Fresh route dispatch keeps exceptional piece stages because they are independent
+    work items. OFFCUT reclassification can explicitly request all active work to be
+    cancelled when the physical execution projection contains no factory work at all.
+    Returning the affected stage names lets the caller expose deterministic
+    reconciliation without deleting history.
     """
 
     rows = frappe.get_all(
@@ -37,8 +43,9 @@ def cancel_active_order_stages(order_name: str) -> None:
         },
         fields=["name", "piece_label", "stage_type"],
     )
+    cancelled: list[str] = []
     for row in rows:
-        if row.piece_label:
+        if row.piece_label and not include_piece_stages:
             continue
         frappe.db.set_value(
             "Production Stage",
@@ -47,6 +54,8 @@ def cancel_active_order_stages(order_name: str) -> None:
             "Cancelled",
             update_modified=True,
         )
+        cancelled.append(str(row.name))
+    return tuple(cancelled)
 
 
 def create_stage(

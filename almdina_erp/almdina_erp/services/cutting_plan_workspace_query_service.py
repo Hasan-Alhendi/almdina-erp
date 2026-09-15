@@ -20,6 +20,11 @@ from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     SYSTEM,
     UPLOADED_DXF,
 )
+from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
+    business_state_options,
+    offcut_assignment_projection,
+    offcut_summary,
+)
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization import (
     cutting_plan_capability_allowed,
@@ -27,6 +32,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization im
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
     factory_default_plan_settings,
+)
+from almdina_erp.almdina_erp.services.cutting_plan_recalculation_job_service import (
+    overlay_background_recalculation,
 )
 
 
@@ -105,6 +113,7 @@ def _capabilities(order: Any) -> dict[str, bool]:
         "approve": cutting_plan_capability_allowed(order, Capability.APPROVE_DXF),
         "print": cutting_plan_capability_allowed(order, Capability.PRINT_CUTTING_PLAN),
         "export_dxf": cutting_plan_capability_allowed(order, Capability.EXPORT_DXF),
+        "set_offcut_execution_owner": cutting_plan_capability_allowed(order, Capability.SET_OFFCUT_EXECUTION_OWNER),
     }
 
 
@@ -119,6 +128,17 @@ def _plan_settings(plan: Any) -> dict[str, Any]:
 
 
 def _plan_row(plan: Any, snapshot_json: str = "") -> dict[str, Any]:
+    snapshot = frappe.parse_json(snapshot_json or "{}") or {}
+    offcut_pieces = [
+        piece
+        for sheet in (snapshot.get("sheets") or [])
+        for piece in (sheet.get("pieces") or [])
+        if str(piece.get("resource_kind") or "FULL_BOARD").upper() == "OFFCUT"
+    ]
+    offcut_assignments = [
+        offcut_assignment_projection(piece)
+        for piece in offcut_pieces
+    ]
     return {
         "name": plan.get("name"),
         "source_type": str(plan.get("source_type") or ""),
@@ -163,6 +183,13 @@ def _plan_row(plan: Any, snapshot_json: str = "") -> dict[str, Any]:
             "total_source_area_m2": flt(plan.get("total_source_area_m2")),
             "waste_area_m2": flt(plan.get("waste_area_m2")),
             "waste_percent": flt(plan.get("waste_percent")),
+        },
+        "offcut": {
+            "count": len(offcut_pieces),
+            "label": "نقص" if offcut_pieces else "",
+            "summary": offcut_summary(offcut_pieces),
+            "state_options": business_state_options(),
+            "assignments": offcut_assignments,
         },
         "dxf": {
             "file": plan.get("dxf_file"),
@@ -283,6 +310,7 @@ def get_plan_workspace_snapshot(order_name: str) -> dict[str, Any]:
 
     return {
         "order_name": order.name,
+        "background_recalculation": overlay_background_recalculation(order.name),
         "order_status": str(getattr(order, "status", None) or "Draft"),
         "revision_state": str(getattr(order, "revision_state", None) or "Current"),
         "current_production_stage": getattr(order, "current_production_stage", None),

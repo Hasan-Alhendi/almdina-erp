@@ -27,6 +27,14 @@ def _quantity(value: Any) -> int:
     return max(1, int(_number(value) or 1))
 
 
+def _factory_quantity(piece: Mapping[str, Any]) -> int:
+    """Use a plan-derived service quantity when OFFCUT is classified per copy."""
+
+    if "factory_execution_qty" not in piece:
+        return _quantity(_value(piece, "qty"))
+    return max(0, int(_number(_value(piece, "factory_execution_qty"))))
+
+
 def _text(value: Any, fallback: str = "") -> str:
     result = str(value or "").strip()
     return result or fallback
@@ -162,6 +170,23 @@ def _customer_invoice_lines(
             }
         )
 
+    offcut_price = _number(_value(order, "offcut_price_usd"))
+    factory_offcut = bool(_value(order, "offcut_factory_factory"))
+    # Zero is a valid aggregate commercial price. Applicability, not truthiness,
+    # owns whether the dedicated OFFCUT invoice line exists.
+    if factory_offcut:
+        lines.append(
+            {
+                "type": "offcut",
+                "description": "سعر الفضلة",
+                "quantity": 1,
+                "unit": "مجموعة",
+                "rate_usd": _money(offcut_price),
+                "amount_usd": _money(offcut_price),
+                "note": "سعر إجمالي للمجموعة",
+            }
+        )
+
     special_pieces = [
         piece
         for piece in pieces
@@ -177,6 +202,8 @@ def _customer_invoice_lines(
         lambda: {"meters": 0.0, "amount": 0.0}
     )
     for piece in edge_source:
+        if _factory_quantity(piece) <= 0:
+            continue
         meters = _number(_value(piece, "edge_meters"))
         if meters <= 0:
             continue
@@ -216,7 +243,9 @@ def _customer_invoice_lines(
 
     for index, piece in enumerate(pieces, start=1):
         piece_type = _text(_value(piece, "piece_type"), "Regular")
-        quantity = _quantity(_value(piece, "qty"))
+        quantity = _factory_quantity(piece)
+        if quantity <= 0:
+            continue
         if piece_type == "Special":
             final_rate = _number(_value(piece, "special_shape_final_unit_price_usd"))
             lines.append(
@@ -288,7 +317,7 @@ def _customer_invoice_lines(
                         "quantity": quantity,
                         "unit": "درفة",
                         "rate_usd": _money(rate),
-                        "amount_usd": _money(amount or (rate * quantity)),
+                        "amount_usd": _money(rate * quantity if rate else amount),
                         "note": _text(_value(piece, "notes")),
                     }
                 )

@@ -65,12 +65,34 @@
         );
     }
 
+    function inlineActionSignature(frm) {
+        const state = frm && frm._dcoMeasurementEntryWindow;
+        return [
+            isInlineEditActive(frm) ? "editing" : "idle",
+            Boolean(state && state.saving) ? "1" : "0",
+            canInlineStartEdit(frm) ? "1" : "0",
+        ].join(":");
+    }
+
+    function flushOrderMeasurements(frm) {
+        const owner = window.AlmdinaDoorCuttingFastEntry;
+        if (owner && typeof owner.flush === "function") owner.flush(frm);
+    }
+
     function renderInlineOrderEditAction(frm) {
         const state = frm && frm._dcoMeasurementEntryWindow;
         if (!state || !state.overlay || !state.overlay.isConnected) return;
         const host = state.overlay.querySelector(".dco-entry-window-order-edit-action");
         if (!host) return;
         const busy = Boolean(state.saving);
+        const signature = inlineActionSignature(frm);
+        if (host.dataset.almdinaInlineEdit === signature) {
+            host.querySelectorAll("button").forEach((button) => {
+                button.disabled = busy;
+            });
+            return;
+        }
+        host.dataset.almdinaInlineEdit = signature;
         if (isInlineEditActive(frm)) {
             host.innerHTML = `
                 <button type="button" class="btn btn-default dco-inline-order-edit-cancel" ${busy ? "disabled" : ""}>${esc(CANCEL_LABEL)}</button>
@@ -160,6 +182,12 @@
         frm._dcoMeasurementEntryWindow = state;
         renderInlineOrderEditAction(frm);
 
+        overlay.addEventListener("pointerdown", event => {
+            if (event.target.closest(".dco-inline-order-edit-save")) {
+                flushOrderMeasurements(frm);
+            }
+        }, true);
+
         overlay.addEventListener("click", event => {
             if (event.target.closest(".dco-entry-window-close")) {
                 event.preventDefault();
@@ -183,17 +211,21 @@
             if (event.target.closest(".dco-inline-order-edit-save")) {
                 event.preventDefault();
                 const revision = orderRevisionUx();
-                if (revision && typeof revision.commitEditSession === "function") {
-                    Promise.resolve(revision.commitEditSession(frm)).finally(() => renderInlineOrderEditAction(frm));
-                }
+                if (!revision || typeof revision.commitEditSession !== "function" || state.saving) return;
+                flushOrderMeasurements(frm);
+                state.saving = true;
+                renderInlineOrderEditAction(frm);
+                Promise.resolve(revision.commitEditSession(frm)).finally(() => {
+                    state.saving = false;
+                    renderInlineOrderEditAction(frm);
+                });
                 return;
             }
             if (event.target.closest(".dco-inline-order-edit-cancel")) {
                 event.preventDefault();
                 const revision = orderRevisionUx();
-                if (revision && typeof revision.lockEditSession === "function") {
-                    revision.lockEditSession(frm, { silent: true });
-                    Promise.resolve(frm.reload_doc()).finally(() => renderInlineOrderEditAction(frm));
+                if (revision && typeof revision.cancelEditSession === "function") {
+                    Promise.resolve(revision.cancelEditSession(frm)).finally(() => renderInlineOrderEditAction(frm));
                 }
             }
         });
@@ -319,7 +351,14 @@
     frappe.ui.form.on("Door Cutting Order", {
         onload_post_render(frm) { schedule(frm); },
         refresh(frm) { schedule(frm); },
-        almdina_edit_session_changed(frm) { schedule(frm); },
+        almdina_edit_session_changed(frm) {
+            const coordinator = window.AlmdinaDcoEditSessionCoordinator;
+            const snapshot = coordinator && typeof coordinator.snapshot === "function"
+                ? coordinator.snapshot(frm)
+                : null;
+            if (snapshot && snapshot.phase === "saving") return;
+            schedule(frm);
+        },
     });
 
     const measurementLifecycle = window.AlmdinaMeasurementLifecycle;

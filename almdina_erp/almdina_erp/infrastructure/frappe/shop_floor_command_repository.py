@@ -102,6 +102,7 @@ class FrappeShopFloorCommandRepository(ShopFloorCommandPort):
             has_approved_plan=plan.has_approved_plan,
             approved_plan_name=plan.approved_plan_name,
             drawing_dxf_status=order.drawing_dxf_status or None,
+            has_factory_work=plan.has_factory_work,
         )
 
     def get_stage_state(self, stage_name: str) -> StageState:

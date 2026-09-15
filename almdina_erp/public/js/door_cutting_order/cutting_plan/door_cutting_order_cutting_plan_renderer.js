@@ -176,7 +176,12 @@
     }
 
     function extraOverlayStrokeSample(color) {
-        return `<svg class="dco-extra-addon-legend-swatch" viewBox="0 0 28 10" width="28" height="10" aria-hidden="true"><path d="M2 5 H26" fill="none" stroke="${escape_html(color)}" stroke-width="2" stroke-dasharray="4 2" stroke-linecap="round"/></svg>`;
+        return `<svg class="dco-extra-addon-legend-swatch" viewBox="0 0 28 10" width="28" height="10" aria-hidden="true"><path d="M2 5 H26" fill="none" stroke="${escape_html(color)}" stroke-width="1" stroke-dasharray="3 2.2" stroke-linecap="round"/></svg>`;
+    }
+
+    function extraHandleLegendSwatch() {
+        const color = EXTRA_OVERLAY_STROKE_BY_KIND.recessed_handle_cutout;
+        return `<svg class="dco-extra-addon-legend-swatch" viewBox="0 0 28 10" width="28" height="10" aria-hidden="true"><rect x="6" y="2.2" width="16" height="5.6" fill="none" stroke="${color}" stroke-width="0.9"/></svg>`;
     }
 
     function extraDoubleBandingIcon(size = 16) {
@@ -188,6 +193,7 @@
     }
 
     function extraAddonLegendSwatch(item) {
+        if (item.overlayKind === "recessed_handle_cutout") return extraHandleLegendSwatch();
         if (item.overlayKind) {
             return extraOverlayStrokeSample(EXTRA_OVERLAY_STROKE_BY_KIND[item.overlayKind]);
         }
@@ -228,6 +234,47 @@
         return `<div class="dco-extra-addon-marks" aria-hidden="true" style="position:absolute;inset:0;z-index:5;pointer-events:none;">${marks.join("")}</div>`;
     }
 
+    function overlayMajorAxisLine(local) {
+        const xs = local.map(point => point[0]);
+        const ys = local.map(point => point[1]);
+        const minX = Math.min(...xs);
+        const maxX = Math.max(...xs);
+        const minY = Math.min(...ys);
+        const maxY = Math.max(...ys);
+        if ((maxX - minX) >= (maxY - minY)) {
+            const midY = (minY + maxY) / 2;
+            return [[minX, midY], [maxX, midY]];
+        }
+        const midX = (minX + maxX) / 2;
+        return [[midX, minY], [midX, maxY]];
+    }
+
+    function overlaySingleLine(local, closed) {
+        if (local.length === 2 && !closed) return local;
+        return overlayMajorAxisLine(local);
+    }
+
+    function overlayHandleRect(local) {
+        const xs = local.map(point => point[0]);
+        const ys = local.map(point => point[1]);
+        let minX = Math.min(...xs);
+        let maxX = Math.max(...xs);
+        let minY = Math.min(...ys);
+        let maxY = Math.max(...ys);
+        const minSize = 1.1;
+        if (maxX - minX < minSize) {
+            const mid = (minX + maxX) / 2;
+            minX = mid - (minSize / 2);
+            maxX = mid + (minSize / 2);
+        }
+        if (maxY - minY < minSize) {
+            const mid = (minY + maxY) / 2;
+            minY = mid - (minSize / 2);
+            maxY = mid + (minSize / 2);
+        }
+        return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+    }
+
     function render_piece_overlays(piece, geometryModel) {
         const overlays = Array.isArray(piece && piece.overlays) ? piece.overlays : [];
         if (!overlays.length || !geometryModel) return "";
@@ -247,13 +294,19 @@
                 ((Number(point[0]) - originX) / widthMm) * 100,
                 ((Number(point[1]) - originY) / heightMm) * 100,
             ]);
-            const closed = Boolean(geometry && geometry.closed) && local.length >= 3;
-            const d = local
-                .map((point, pointIndex) => `${pointIndex ? "L" : "M"}${point[0]} ${point[1]}`)
-                .join(" ") + (closed ? " Z" : "");
             const stroke = EXTRA_OVERLAY_STROKE_BY_KIND[kind] || "#5c4d2e";
             const layer = String((overlay && overlay.layer) || kind || "overlay");
-            return `<path class="dco-extra-overlay-path" data-overlay-kind="${escape_html(kind)}" data-overlay-layer="${escape_html(layer)}" data-overlay-index="${index}" d="${d}" fill="none" stroke="${stroke}" stroke-width="1.75" stroke-dasharray="4 2" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/>`;
+            const attrs = `data-overlay-kind="${escape_html(kind)}" data-overlay-layer="${escape_html(layer)}" data-overlay-index="${index}" fill="none" stroke="${stroke}" vector-effect="non-scaling-stroke"`;
+            if (kind === "recessed_handle_cutout") {
+                const box = overlayHandleRect(local);
+                return `<rect class="dco-extra-overlay-path dco-extra-overlay-handle" ${attrs} x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" stroke-width="0.65" stroke-linejoin="miter"/>`;
+            }
+            const closed = Boolean(geometry && geometry.closed) && local.length >= 3;
+            const strokePoints = kind === "liner" ? overlaySingleLine(local, closed) : local;
+            const d = strokePoints
+                .map((point, pointIndex) => `${pointIndex ? "L" : "M"}${point[0]} ${point[1]}`)
+                .join(" ") + (kind === "liner" ? "" : (closed ? " Z" : ""));
+            return `<path class="dco-extra-overlay-path" ${attrs} d="${d}" stroke-width="0.7" stroke-dasharray="3 2.2" stroke-linejoin="round" stroke-linecap="round"/>`;
         }).filter(Boolean).join("");
         if (!paths) return "";
         return `<svg class="dco-extra-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;z-index:2;overflow:visible;pointer-events:none">${paths}</svg>`;
@@ -392,6 +445,9 @@
         const kerf_cm = num(plan.kerf_cm);
         const trim_cm = num(plan.trim_cm);
         const board_area_m2 = (board_w_cm * board_h_cm) / 10000;
+        const fullBoardSheets = (plan.sheets || []).filter(
+            sheet => String(sheet.resource_kind || "FULL_BOARD").toUpperCase() === "FULL_BOARD"
+        );
         const used_area_m2 = round(plan.used_area_m2, 3);
         const total_board_area_m2 = round(plan.total_board_area_m2, 3);
         const waste_area_m2 = round(plan.waste_area_m2, 3);
@@ -406,7 +462,7 @@
                 ${render_plan_header_cards(frm)}
 
                 <div class="dco-summary-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:8px 0 12px 0;">
-                    <div class="dco-summary-card" style="border:1px solid #ddd;border-radius:8px;padding:8px;background:#f8fafc;"><b>عدد الألواح</b><span>${plan.sheets.length}</span></div>
+                    <div class="dco-summary-card" style="border:1px solid #ddd;border-radius:8px;padding:8px;background:#f8fafc;"><b>عدد الألواح</b><span>${fullBoardSheets.length}</span></div>
                     <div class="dco-summary-card" style="border:1px solid #ddd;border-radius:8px;padding:8px;background:#f8fafc;"><b>مساحة القطع</b><span>${used_area_m2} م²</span></div>
                     <div class="dco-summary-card" style="border:1px solid #ddd;border-radius:8px;padding:8px;background:#f8fafc;"><b>مساحة الهدر</b><span>${waste_area_m2} م²</span></div>
                     <div class="dco-summary-card" style="border:1px solid #ddd;border-radius:8px;padding:8px;background:#f8fafc;"><b>نسبة الهدر</b><span>${waste_percent}%</span></div>
@@ -420,14 +476,16 @@
         `;
 
         plan.sheets.forEach(sheet => {
+            const isOffcut = String(sheet.resource_kind || "FULL_BOARD").toUpperCase() === "OFFCUT";
+            const sheetTitle = isOffcut ? "نقص" : `لوح ${sheet.sheet_no}`;
             const sheet_used_area_m2 = round((sheet.pieces || []).reduce((sum, p) => sum + num(p.area_m2), 0), 3);
             const sheet_waste_area_m2 = round(Math.max(0, board_area_m2 - sheet_used_area_m2), 3);
             const sheet_waste_percent = board_area_m2 ? round((sheet_waste_area_m2 / board_area_m2) * 100, 2) : 0;
 
             html += `
-                <div class="dco-sheet-card" style="border:1px solid #bbb;border-radius:10px;padding:10px;margin:14px 0;background:#fff;page-break-inside:avoid;break-inside:avoid;">
+                <div class="dco-sheet-card" data-resource-kind="${isOffcut ? "OFFCUT" : "FULL_BOARD"}" style="border:1px solid #bbb;border-radius:10px;padding:10px;margin:14px 0;background:#fff;page-break-inside:avoid;break-inside:avoid;">
                     <div class="dco-sheet-title" style="display:flex;justify-content:space-between;gap:10px;margin-bottom:8px;font-size:13px;font-weight:bold;">
-                        <div>اللوح ${sheet.sheet_no}</div>
+                        <div>${sheetTitle}</div>
                         <div>عدد القطع: ${(sheet.pieces || []).length} &nbsp; | &nbsp; الهدر: ${sheet_waste_area_m2} م² (${sheet_waste_percent}%)</div>
                     </div>
                     <div class="dco-sheet-board" style="position:relative;direction:ltr;width:${board_width_px}px;height:${board_height_px}px;max-width:100%;border:2px solid #111;background:linear-gradient(90deg,rgba(0,0,0,0.05) 1px,transparent 1px),linear-gradient(rgba(0,0,0,0.05) 1px,transparent 1px),#fff;background-size:32px 32px;overflow:hidden;margin:0 auto 8px auto;">
@@ -609,10 +667,13 @@
         const boardHmm = boardWmm * aspect;
         const cardWmm = boardWmm + cardHorizontalSpaceMm;
 
-        cards.forEach((card, index) => {
+        let boardIndex = 0;
+        cards.forEach(card => {
             const board = card.querySelector(".dco-sheet-board");
             const title = card.querySelector(".dco-sheet-title");
-            if (title) title.innerHTML = `<div class="dco-print-sheet-number">لوح ${index + 1}</div>`;
+            const isOffcut = card.dataset.resourceKind === "OFFCUT";
+            if (!isOffcut) boardIndex += 1;
+            if (title) title.innerHTML = `<div class="dco-print-sheet-number">${isOffcut ? "نقص" : "لوح " + boardIndex}</div>`;
             if (board) {
                 board.style.width = `${boardWmm}mm`;
                 board.style.height = `${boardHmm}mm`;
@@ -637,7 +698,9 @@
     function buildPrintPages(frm, planRoot, plan, identity) {
         const sourceCards = [...planRoot.querySelectorAll(".dco-sheet-card")]
             .map(card => card.cloneNode(true));
-        const totalSheets = sourceCards.length;
+        const totalSheets = sourceCards.filter(
+            card => card.dataset.resourceKind !== "OFFCUT"
+        ).length;
         const chunks = pageChunks(sourceCards);
         let globalBoardIndex = 0;
 
@@ -649,8 +712,9 @@
                 cardOffset += rowSize;
                 const rowHtml = rowCards.map(card => {
                     const title = card.querySelector(".dco-sheet-title");
-                    globalBoardIndex += 1;
-                    if (title) title.innerHTML = `<div class="dco-print-sheet-number">لوح ${globalBoardIndex}</div>`;
+                    const isOffcut = card.dataset.resourceKind === "OFFCUT";
+                    if (!isOffcut) globalBoardIndex += 1;
+                    if (title) title.innerHTML = `<div class="dco-print-sheet-number">${isOffcut ? "نقص" : "لوح " + globalBoardIndex}</div>`;
                     return card.outerHTML;
                 }).join("");
                 return `<div class="dco-print-sheets-row">${rowHtml}</div>`;

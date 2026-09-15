@@ -246,6 +246,9 @@ def test_fast_measurements_editor_does_not_depend_on_frappe_active_grid_row():
         "ensureSingleVirtualRow(frm)",
         "row[fieldname] = value",
         "frm.dirty()",
+        "function flushMeasurementInputs(frm)",
+        "flush: flushMeasurementInputs",
+        "if (editSessionPhase(frm) === \"saving\") return",
     ]
     missing = [fragment for fragment in required if fragment not in source]
     assert not missing, f"Missing direct model synchronization fragments: {missing}"

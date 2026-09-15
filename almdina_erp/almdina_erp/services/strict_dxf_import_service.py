@@ -189,15 +189,27 @@ def _expanded_expected(
     specs: list[OrderPieceCutSpec],
     order: Any | None = None,
 ) -> list[dict[str, Any]]:
-    return [
-        {
-            "spec": spec,
-            "copy_no": copy_no,
-            "label": f"{spec.row_index}.{copy_no}",
-        }
-        for spec in specs
-        for copy_no in range(1, _physical_spec_qty(order, spec) + 1)
-    ]
+    expected: list[dict[str, Any]] = []
+    for spec in specs:
+        row_identity = str(
+            getattr(_row_for_spec(order, spec), "piece_instance_id", "") or ""
+        ).strip()
+        if not row_identity:
+            raise DxfImportError(
+                "لا يمكن استيراد DXF لأن إحدى قطع الطلب بلا هوية فيزيائية ثابتة. "
+                "احفظ الطلب ثم أعد رفع الملف."
+            )
+        for copy_no in range(1, _physical_spec_qty(order, spec) + 1):
+            expected.append(
+                {
+                    "expected_index": len(expected),
+                    "spec": spec,
+                    "copy_no": copy_no,
+                    "label": f"{spec.row_index}.{copy_no}",
+                    "piece_instance_id": f"{row_identity}:{copy_no}",
+                }
+            )
+    return expected
 
 
 def _actual_dimensions(piece: dict[str, Any]) -> tuple[Decimal, Decimal]:
@@ -249,6 +261,23 @@ def _topology_special_candidate(
         and candidate["copy_no"] == copy_no
         and candidate["spec"].row_index == source_piece_no
         and candidate["spec"].piece_type == "Special"
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _topology_candidate(
+    unmatched: list[dict[str, Any]],
+    piece: dict[str, Any],
+) -> int | None:
+    """Resolve any piece only through the importer-owned canonical topology index."""
+    try:
+        expected_index = int(piece.get("_expected_piece_index"))
+    except (TypeError, ValueError):
+        return None
+    matches = [
+        index
+        for index, candidate in enumerate(unmatched)
+        if candidate.get("expected_index") == expected_index
     ]
     return matches[0] if len(matches) == 1 else None
 
@@ -334,6 +363,10 @@ def _apply_piece_contract_metadata(
 ) -> None:
     spec: OrderPieceCutSpec = candidate["spec"]
     piece["label"] = candidate["label"]
+    piece["piece_instance_id"] = candidate["piece_instance_id"]
+    piece["resource_kind"] = piece.get("resource_kind") or "FULL_BOARD"
+    piece["offcut_source_party"] = piece.get("offcut_source_party") or "UNASSIGNED"
+    piece["offcut_execution_party"] = piece.get("offcut_execution_party") or "UNASSIGNED"
     piece["source_piece_no"] = spec.row_index
     piece["copy_no"] = candidate["copy_no"]
     piece["rotated"] = rotated
@@ -364,9 +397,9 @@ def _apply_strict_dimension_contract(
 
     for sheet in snapshot.get("sheets") or []:
         for piece in sheet.get("pieces") or []:
-            topology_special_index = _topology_special_candidate(unmatched, piece)
-            if topology_special_index is not None:
-                candidate = unmatched[topology_special_index]
+            topology_index = _topology_candidate(unmatched, piece)
+            if topology_index is not None:
+                candidate = unmatched[topology_index]
                 rotated, error = _validate_topology_candidate_dimensions(
                     piece,
                     candidate,
@@ -374,7 +407,7 @@ def _apply_strict_dimension_contract(
                 if error:
                     errors.append(error)
                     continue
-                unmatched.pop(topology_special_index)
+                unmatched.pop(topology_index)
                 _apply_piece_contract_metadata(
                     piece,
                     candidate,
@@ -535,7 +568,8 @@ def parse_production_dxf(
         raise DxfImportError(exact_errors)
 
     snapshot["dimension_contract"] = {
-        "mode": "exact-persisted-cut",
+        "mode": "exact-edge-adjusted",
+        "identity": "exact-persisted-cut",
         "precision_cm": "0.001",
         "finished_dimensions_immutable": True,
         "special_outline_identity": "topology-owned",

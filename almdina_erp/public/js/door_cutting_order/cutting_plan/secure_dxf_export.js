@@ -21,6 +21,7 @@
         recessed_handle_cutout: "Handle Recess",
     });
     const EXTRA_OVERLAY_LAYER_COLORS = Object.freeze({
+        OFFCUT: 2,
         Liner: 5,
         "Rear Groove": 3,
         "Handle Recess": 6,
@@ -151,6 +152,12 @@
                 finiteCoordinate(point[1], `${field}[${index}][1]`),
             ];
         });
+    }
+
+    function cutLayerForPiece(piece) {
+        return String(piece && piece.resource_kind || "FULL_BOARD").toUpperCase() === "OFFCUT"
+            ? "OFFCUT"
+            : "CUT_PATH";
     }
 
     function topologyPolygon(points, field) {
@@ -295,16 +302,17 @@
             entities += rectangle("SHEET_OUTLINE", offsetX, offsetY, fullWidth, fullHeight);
 
             (sheet.pieces || []).forEach(piece => {
+                const cutLayer = cutLayerForPiece(piece);
                 const topology = persistedTopology(piece);
                 if (topology) {
                     const transform = { offsetX, offsetY, fullHeight, appliedTrim };
                     entities += closedPath(
-                        "CUT_PATH",
+                        cutLayer,
                         topologyDxfPoints(topology.outer, transform)
                     );
                     topology.holes.forEach(hole => {
                         entities += closedPath(
-                            "CUT_PATH",
+                            cutLayer,
                             topologyDxfPoints(hole, transform)
                         );
                     });
@@ -335,8 +343,10 @@
                         ? shapeOutput.dxfPoints(piece, x, y, pieceWidth, pieceHeight)
                         : null);
                 entities += cutPath
-                    ? closedPath("CUT_PATH", cutPath)
-                    : rectangle("CUT_PATH", x, y, pieceWidth, pieceHeight);
+                    ? closedPath(cutLayer, cutPath)
+                    : cutLayer === "OFFCUT"
+                        ? rectangle(cutLayer, x, y, pieceWidth, pieceHeight)
+                        : rectangle("CUT_PATH", x, y, pieceWidth, pieceHeight);
                 persistedOverlays(piece).forEach(overlay => {
                     entities += overlayPath(
                         overlay.layer,
@@ -359,7 +369,8 @@
         dxf += pair(0, "LTYPE") + pair(2, "CONTINUOUS") + pair(70, 0) + pair(3, "Solid line") + pair(72, 65) + pair(73, 0) + pair(40, 0);
         dxf += pair(0, "ENDTAB");
         dxf += pair(0, "TABLE") + pair(2, "LAYER") + pair(70, 6);
-        dxf += layer("0", 7) + layer("SHEET_OUTLINE", 8) + layer("CUT_PATH", 1);
+        dxf += layer("0", 7) + layer("SHEET_OUTLINE", 8) + layer("CUT_PATH", 1)
+            + layer("OFFCUT", EXTRA_OVERLAY_LAYER_COLORS.OFFCUT);
         dxf += layer("Liner", EXTRA_OVERLAY_LAYER_COLORS.Liner)
             + layer("Rear Groove", EXTRA_OVERLAY_LAYER_COLORS["Rear Groove"])
             + layer("Handle Recess", EXTRA_OVERLAY_LAYER_COLORS["Handle Recess"]);

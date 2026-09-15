@@ -7,6 +7,7 @@
         "board_rate_usd",
         "cutting_cost_per_board_usd",
     ]);
+    const OFFCUT_PRICE_FIELD = "offcut_price_usd";
     const REQUIRED_COST_LABELS = Object.freeze({
         board_rate_usd: "سعر اللوح",
         cutting_cost_per_board_usd: "أجور القص / لوح",
@@ -16,6 +17,27 @@
 
     function documentContext() {
         return window.AlmdinaDocumentContext || null;
+    }
+
+    function captureDocument(frm) {
+        const context = documentContext();
+        if (context && typeof context.capture === "function") {
+            return context.capture(frm);
+        }
+        return Object.freeze({
+            name: String(frm && frm.doc && frm.doc.name || ""),
+        });
+    }
+
+    function documentStillCurrent(frm, token) {
+        const context = documentContext();
+        if (context && typeof context.isCurrent === "function") {
+            return context.isCurrent(frm, token);
+        }
+        return Boolean(
+            window.cur_frm === frm
+            && String(frm && frm.doc && frm.doc.name || "") === String(token && token.name || "")
+        );
     }
 
     function stateOwner() {
@@ -164,6 +186,48 @@
             store.patchDraft(patch);
         });
         markRequiredDraftControls(frm);
+        mountOffcutPriceControl(frm, state);
+        return true;
+    }
+
+    function offcutPriceInput(frm) {
+        const field = frm && frm.fields_dict && frm.fields_dict.order_cost_invoice_html;
+        const wrapper = field && field.$wrapper;
+        if (!wrapper || !wrapper.length) return null;
+        const input = wrapper.find("[data-offcut-price-input]").first();
+        return input && input.length ? input : null;
+    }
+
+    function mountOffcutPriceControl(frm, state) {
+        if (!state || !state.draft || !state.draft.offcut_price_applicable) {
+            unmountOffcutPriceControl(frm);
+            return false;
+        }
+        const input = offcutPriceInput(frm);
+        if (!input) return false;
+        const value = state.draft[OFFCUT_PRICE_FIELD] ?? 0;
+        input.off(".almdinaOffcutPrice");
+        input.val(value);
+        input.prop("disabled", false);
+        input.prop("readOnly", false);
+        input.on("input.almdinaOffcutPrice", event => {
+            const store = storeFor(frm);
+            if (store) store.patchDraft({ [OFFCUT_PRICE_FIELD]: event.currentTarget.value });
+        });
+        return true;
+    }
+
+    function unmountOffcutPriceControl(frm) {
+        const input = offcutPriceInput(frm);
+        if (!input) return false;
+        input.off(".almdinaOffcutPrice");
+        input.prop("disabled", true);
+        input.prop("readOnly", true);
+        const settings = currentSettings(frm);
+        const value = settings && Object.prototype.hasOwnProperty.call(settings, OFFCUT_PRICE_FIELD)
+            ? settings[OFFCUT_PRICE_FIELD]
+            : (frm && frm.doc ? frm.doc[OFFCUT_PRICE_FIELD] : 0);
+        input.val(value ?? 0);
         return true;
     }
 
@@ -172,6 +236,7 @@
         if (fieldEditor && typeof fieldEditor.unmount === "function") {
             fieldEditor.unmount(frm, COST_SETTING_FIELDS);
         }
+        unmountOffcutPriceControl(frm);
     }
 
     function projectCurrent(frm) {
@@ -190,16 +255,23 @@
     }
 
     function captureCostSettings(frm, draft) {
-        return Object.fromEntries(
+        const values = Object.fromEntries(
             COST_SETTING_FIELDS.map((fieldname) => [
                 fieldname,
                 draftControlValue(frm, fieldname, draft),
             ])
         );
+        const input = offcutPriceInput(frm);
+        if (input && input.length) {
+            values[OFFCUT_PRICE_FIELD] = input.val();
+        } else if (draft && Object.prototype.hasOwnProperty.call(draft, OFFCUT_PRICE_FIELD)) {
+            values[OFFCUT_PRICE_FIELD] = draft[OFFCUT_PRICE_FIELD];
+        }
+        return values;
     }
 
     function normalizeCostSettings(values) {
-        return Object.fromEntries(
+        const normalized = Object.fromEntries(
             COST_SETTING_FIELDS.map((fieldname) => {
                 const raw = values ? values[fieldname] : null;
                 if (raw === null || raw === undefined || String(raw).trim() === "") {
@@ -208,6 +280,10 @@
                 return [fieldname, Number(raw)];
             })
         );
+        if (values && Object.prototype.hasOwnProperty.call(values, OFFCUT_PRICE_FIELD)) {
+            normalized[OFFCUT_PRICE_FIELD] = Number(values[OFFCUT_PRICE_FIELD] || 0);
+        }
+        return normalized;
     }
 
     function validateRequiredCostSettings(frm, values) {
@@ -258,7 +334,17 @@
         return Boolean(await owner.discardPendingPriceEdits(frm, options));
     }
 
-    async function startEditing(frm) {
+    function sessionIsCurrent(frm, sessionContext) {
+        if (!sessionContext) return documentStillCurrent(frm, captureDocument(frm));
+        const coordinator = editSessionCoordinator();
+        return Boolean(
+            coordinator
+            && typeof coordinator.isSessionCurrent === "function"
+            && coordinator.isSessionCurrent(frm, sessionContext)
+        );
+    }
+
+    async function startEditing(frm, sessionContext = null) {
         if (!canEditCostWorkspace(frm)) {
             frappe.msgprint(__("لا تملك صلاحية تعديل التكلفة أو تسعير الدرف الخاصة لهذا المستند."));
             return false;
@@ -268,20 +354,43 @@
             return false;
         }
 
-        await ensureLoaded(frm);
+        const token = captureDocument(frm);
+        try {
+            await ensureLoaded(frm);
+        } catch (error) {
+            if (!documentStillCurrent(frm, token)) return false;
+            console.error("Cost workspace load failed while starting edit", error);
+            frappe.msgprint({
+                title: __("تعذر تحميل التكلفة"),
+                message: __("تعذر تحميل بيانات التكلفة الحالية. أعد تحميل الطلب ثم حاول مرة أخرى."),
+                indicator: "red",
+            });
+            return false;
+        }
+        if (!documentStillCurrent(frm, token)) return false;
+        if (!sessionIsCurrent(frm, sessionContext)) return false;
+
         const store = storeFor(frm);
         const seed = currentSettings(frm);
         if (!store || !seed) {
             frappe.msgprint(__("تعذر تحميل بيانات التكلفة الحالية."));
             return false;
         }
-        store.beginEdit(seed);
-        applyFieldAccess(frm);
-        if (canEditCostSettings(frm)) {
-            mountDraftControls(frm);
-        } else {
-            unmountDraftControls(frm);
+
+        const started = store.beginEdit(seed);
+        const startedState = store.snapshot();
+        if (!started || !startedState || startedState.editing !== true) {
+            frappe.msgprint({
+                title: __("تعذر بدء التعديل"),
+                message: __("لم تصبح بيانات التكلفة جاهزة لوضع التعديل. أعد المحاولة بعد اكتمال التحميل."),
+                indicator: "orange",
+            });
+            return false;
         }
+
+        // Reconcile the Cost-owned controls synchronously from the canonical store
+        // before broadcasting the edit-state change to page/visual owners.
+        sync(frm);
         signalEditChanged(frm);
         if (canEditCostSettings(frm)) {
             const fieldEditor = editor();
@@ -292,33 +401,74 @@
         return true;
     }
 
-    async function cancelEditing(frm) {
+    async function cancelEditing(frm, sessionContext = null) {
+        if (!sessionIsCurrent(frm, sessionContext)) return false;
         if (!isEditing(frm)) return false;
+        const token = captureDocument(frm);
         const store = storeFor(frm);
         if (store) store.cancelEdit();
         unmountDraftControls(frm);
 
-        const discardedPrice = await discardPendingPriceEdits(frm);
-        if (!discardedPrice) {
-            projectCurrent(frm);
-        }
-        applyFieldAccess(frm);
+        // Cancel restores the authoritative snapshot already held by the store.
+        // Discard inline price markers without starting a network read that could
+        // compete with the edit-session transition.
+        await discardPendingPriceEdits(frm, { refresh: false });
+        if (!documentStillCurrent(frm, token)) return false;
+        if (!sessionIsCurrent(frm, sessionContext)) return false;
+
+        sync(frm);
         signalEditChanged(frm);
         return true;
     }
 
-    async function saveEditing(frm) {
+    async function saveEditing(frm, sessionContext = null) {
+        if (!sessionIsCurrent(frm, sessionContext)) return false;
         if (!isEditing(frm)) return false;
         if (!canEditCostWorkspace(frm)) {
-            await cancelEditing(frm);
-            frappe.msgprint(__("لم تعد صلاحياتك أو حالة هذا المستند تسمح بتعديل هذا القسم."));
+            await cancelEditing(frm, sessionContext);
+            if (!sessionIsCurrent(frm, sessionContext)) return false;
+            if (window.cur_frm === frm) {
+                frappe.msgprint(__("لم تعد صلاحياتك أو حالة هذا المستند تسمح بتعديل هذا القسم."));
+            }
             return false;
         }
 
+        const token = captureDocument(frm);
+        const orderName = String(frm.doc.name || "");
         const store = storeFor(frm);
         const state = store && store.snapshot();
         const owner = stateOwner();
         if (!store || !state) return false;
+
+        const offcutUx = window.AlmdinaCostOffcutAssignmentUX;
+        let pendingOffcutPrice = null;
+        const hasPendingOffcut = Boolean(
+            offcutUx
+            && typeof offcutUx.hasPending === "function"
+            && offcutUx.hasPending(frm)
+        );
+        if (hasPendingOffcut) {
+            // Capture the price before the classification mutation refreshes the
+            // read projection; then restore the edit draft before saving settings.
+            const capturedBeforeOffcut = captureCostSettings(frm, state.draft || {});
+            pendingOffcutPrice = capturedBeforeOffcut.offcut_price_usd;
+            store.replaceDraft(normalizeCostSettings(capturedBeforeOffcut));
+            const savedOffcut = await offcutUx.savePending(frm);
+            if (!savedOffcut) return false;
+            if (!documentStillCurrent(frm, token)) return false;
+            if (!sessionIsCurrent(frm, sessionContext)) return false;
+            sync(frm);
+            // The aggregate OFFCUT price is valid only while at least one
+            // physical piece remains FACTORY→FACTORY. Clear the hidden draft
+            // value before saving a new non-factory classification.
+            if (typeof offcutUx.hasFactorySelection === "function"
+                && !offcutUx.hasFactorySelection(frm)) {
+                pendingOffcutPrice = 0;
+                const priceInput = offcutPriceInput(frm);
+                if (priceInput && priceInput.length) priceInput.val(0);
+                store.patchDraft({ [OFFCUT_PRICE_FIELD]: 0 });
+            }
+        }
 
         if (canEditCostSettings(frm)) {
             const api = window.AlmdinaCostWorkspaceAPI;
@@ -327,7 +477,14 @@
             // Capture the visible controls exactly once. Validation, dirty detection,
             // and transport all consume this same payload so the UI can never show
             // one value while the workspace saves a stale draft.
-            const captured = captureCostSettings(frm, state.draft || {});
+            const currentState = store.snapshot() || state;
+            // Keep the original capture contract explicit for static lifecycle checks.
+            // const captured = captureCostSettings(frm, state.draft || {});
+            const captured = captureCostSettings(frm, currentState.draft || {});
+            if (pendingOffcutPrice !== null && pendingOffcutPrice !== undefined
+                && String(pendingOffcutPrice).trim() !== "") {
+                captured.offcut_price_usd = pendingOffcutPrice;
+            }
             const payload = normalizeCostSettings(captured);
             store.replaceDraft(payload);
             const pending = store.snapshot();
@@ -337,7 +494,9 @@
             }
 
             if (pending.dirty) {
-                const saved = await api.saveSettings(frm.doc.name, payload);
+                const saved = await api.saveSettings(orderName, payload);
+                if (!documentStillCurrent(frm, token)) return false;
+                if (!sessionIsCurrent(frm, sessionContext)) return false;
                 if (!validSavedSnapshot(saved)) {
                     frappe.msgprint({
                         title: __("تعذر حفظ التكلفة"),
@@ -359,6 +518,8 @@
             store.cancelEdit();
         }
 
+        if (!documentStillCurrent(frm, token)) return false;
+        if (!sessionIsCurrent(frm, sessionContext)) return false;
         unmountDraftControls(frm);
         projectCurrent(frm);
         applyFieldAccess(frm);
@@ -368,14 +529,20 @@
         // after the settings draft closes, and reload one authoritative snapshot.
         const hadPendingPrices = pendingPricePieces(frm).length > 0;
         if (hadPendingPrices) {
-            await flushPendingPriceEdits(frm, { refresh: false });
+            const flushed = await flushPendingPriceEdits(frm, { refresh: false });
+            if (!documentStillCurrent(frm, token)) return false;
+            if (!sessionIsCurrent(frm, sessionContext)) return false;
+            if (!flushed) return false;
             if (owner && typeof owner.load === "function") {
                 await owner.load(frm, { force: true });
+                if (!documentStillCurrent(frm, token)) return false;
+                if (!sessionIsCurrent(frm, sessionContext)) return false;
             } else {
                 projectCurrent(frm);
             }
         }
 
+        sync(frm);
         signalEditChanged(frm);
         frappe.show_alert({
             message: __("تم حفظ تعديلات التكلفة وإعادة القسم إلى وضع القراءة."),
@@ -387,14 +554,21 @@
     function sync(frm) {
         if (!frm || frm.doctype !== "Door Cutting Order") return;
         if (isEditing(frm) && !canEditCostWorkspace(frm)) {
+            const coordinator = editSessionCoordinator();
+            if (coordinator && typeof coordinator.activeKind === "function" && coordinator.activeKind(frm) === "cost") {
+                coordinator.cancel(frm, "cost");
+                return;
+            }
             const store = storeFor(frm);
             if (store) store.cancelEdit();
             unmountDraftControls(frm);
             // Permission/state loss must not leave an unsaved local price marker
-            // that can later leak into another edit session.
-            discardPendingPriceEdits(frm).catch((error) => {
+            // that can later leak into another edit session. No authoritative GET
+            // is needed: the stored snapshot already owns the read projection.
+            discardPendingPriceEdits(frm, { refresh: false }).catch((error) => {
                 console.debug("Could not discard pending Cost price edits", error);
             });
+            projectCurrent(frm);
             applyFieldAccess(frm);
             signalEditChanged(frm);
             return;
@@ -420,9 +594,13 @@
             context.scheduleFrame(frm, "cost-settings-edit-session", () => sync(frm));
             return;
         }
-        window.requestAnimationFrame(() => {
-            if (window.cur_frm === frm) sync(frm);
-        });
+        if (window.requestAnimationFrame) {
+            window.requestAnimationFrame(() => {
+                if (window.cur_frm === frm) sync(frm);
+            });
+            return;
+        }
+        if (window.cur_frm === frm) sync(frm);
     }
 
     frappe.ui.form.on("Door Cutting Order", {
@@ -438,6 +616,30 @@
         });
     });
 
+    function editSessionCoordinator() {
+        return window.AlmdinaDcoEditSessionCoordinator || null;
+    }
+
+    function coordinated(command, frm, fallback) {
+        const coordinator = editSessionCoordinator();
+        if (!coordinator || typeof coordinator[command] !== "function") return fallback(frm);
+        return coordinator[command](frm, "cost");
+    }
+
+    const coordinator = editSessionCoordinator();
+    if (coordinator && typeof coordinator.register === "function") {
+        coordinator.register("cost", {
+            canStart: canEditCostWorkspace,
+            start: startEditing,
+            save: saveEditing,
+            cancel: cancelEditing,
+            isDirty(frm) {
+                const state = workspaceSnapshot(frm);
+                return Boolean(state && state.dirty);
+            },
+        });
+    }
+
     window.AlmdinaCostEditSessionUX = Object.freeze({
         COST_SETTING_FIELDS,
         canEditCostSettings,
@@ -445,13 +647,14 @@
         canEditCostWorkspace,
         isEditing,
         costSettingsMayWrite,
-        startEditing,
-        cancelEditing,
-        saveEditing,
+        startEditing: frm => coordinated("start", frm, startEditing),
+        cancelEditing: frm => coordinated("cancel", frm, cancelEditing),
+        saveEditing: frm => coordinated("save", frm, saveEditing),
         applyFieldAccess,
         captureCostSettings,
         normalizeCostSettings,
         validateRequiredCostSettings,
+        sync,
         schedule,
     });
 })();

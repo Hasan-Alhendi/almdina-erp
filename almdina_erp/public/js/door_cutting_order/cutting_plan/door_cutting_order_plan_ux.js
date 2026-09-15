@@ -37,8 +37,8 @@
 
     function activePlanRow(frm) {
         const owner = planWorkspaceState();
-        return owner && typeof owner.activePlan === "function"
-            ? owner.activePlan(frm, "System")
+        return owner && typeof owner.displayedPlan === "function"
+            ? owner.displayedPlan(frm)
             : null;
     }
 
@@ -683,6 +683,11 @@
     window.addEventListener("almdina:plan-workspace-updated", () => {
         const frm = window.cur_frm;
         if (frm && frm.doctype === "Door Cutting Order") schedulePlanUX(frm);
+    });
+
+    window.addEventListener("almdina:plan-selection-changed", (event) => {
+        const frm = event.detail && event.detail.frm;
+        if (frm && frm === window.cur_frm) schedulePlanUX(frm);
     });
 
     window.AlmdinaDoorCuttingPlanUX = Object.freeze({

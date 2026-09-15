@@ -4,6 +4,7 @@
     if (window.AlmdinaOrderMutationImpactPolicy) return;
 
     const IMPACT_KEY = "__almdinaWorkspaceMutationImpact";
+    const OFFCUT_CLASSIFICATION_REASON = "offcut_classification_changed";
     const SPECIAL_PRICE_BASIS_FIELDS = new Set([
         "width_cm",
         "length_cm",
@@ -99,9 +100,6 @@
     }
 
     function onPieceCollectionChanged(frm) {
-        // Frappe emits pieces_add / pieces_remove for child-table structural changes.
-        // There may be no surviving row/field event after a deletion, so the
-        // collection event itself must invalidate both derived workspaces.
         recordImpact(frm, ["plan", "cost"], "order_inputs_changed");
     }
 
@@ -137,18 +135,23 @@
         });
     }
 
+    function backgroundRecalc() {
+        return window.AlmdinaPlanRecalculationJob || null;
+    }
+
     async function reconcileAfterSave(frm) {
         const impact = frm && frm[IMPACT_KEY];
         if (!impact || !(impact.resources || []).length) return false;
         frm[IMPACT_KEY] = null;
 
+        const job = backgroundRecalc();
+        if (job && typeof job.enqueueAfterSave === "function") {
+            await job.enqueueAfterSave(frm, impact);
+        }
+
         const coordinator = syncCoordinator();
         if (!coordinator || typeof coordinator.refresh !== "function") return false;
 
-        // Saving the order workspace must not immediately pay the hidden Plan/Cost
-        // read cost. Their stores are already invalidated above; refresh only a
-        // derived workspace that is actually visible, and let tab activation
-        // resolve the rest later from the canonical server state.
         await coordinator.refresh(frm, impact.resources, {
             force: false,
             activeOnly: true,
@@ -156,16 +159,46 @@
         });
         clearSpecialPriceStaleMarkers(frm);
 
-        // The refreshed Cost snapshot now contains the authoritative special-price
-        // status, but board/cutting totals still belong to the last calculated Plan.
-        // Keep Cost visibly stale until the Plan dependency itself is recalculated.
+        const jobActive = Boolean(job && typeof job.isActive === "function" && job.isActive(frm));
         if (
             impact.resources.includes("cost")
             && impact.resources.includes("plan")
-            && planNeedsRecalculation(frm)
+            && (planNeedsRecalculation(frm) || jobActive)
         ) {
             coordinator.invalidate(frm, ["cost"], "plan_recalculation_required");
         }
+        return true;
+    }
+
+    function offcutDependencyEffects(result) {
+        const dependencies = result && result.dependencies;
+        const changed = normalizeResources(dependencies && dependencies.changed)
+            .filter((name) => name === "plan" || name === "cost");
+        return {
+            changed: changed.length ? changed : ["plan", "cost"],
+            reason: String(
+                dependencies && dependencies.reason
+                || OFFCUT_CLASSIFICATION_REASON
+            ),
+        };
+    }
+
+    async function reconcileOffcutMutation(frm, result) {
+        const coordinator = syncCoordinator();
+        if (
+            !frm
+            || frm.doctype !== "Door Cutting Order"
+            || window.cur_frm !== frm
+            || !coordinator
+            || typeof coordinator.reconcile !== "function"
+        ) {
+            return false;
+        }
+        await coordinator.reconcile(
+            frm,
+            offcutDependencyEffects(result),
+            { activeOnly: false }
+        );
         return true;
     }
 
@@ -194,12 +227,15 @@
     frappe.ui.form.on("Door Cutting Order Detail", pieceHandlers);
 
     window.AlmdinaOrderMutationImpactPolicy = Object.freeze({
+        OFFCUT_CLASSIFICATION_REASON,
         SPECIAL_PRICE_BASIS_FIELDS,
         ORDER_PLAN_COST_FIELDS,
         PIECE_PLAN_COST_FIELDS,
         PIECE_COST_ONLY_FIELDS,
         recordImpact,
         reconcileAfterSave,
+        reconcileOffcutMutation,
+        offcutDependencyEffects,
         planNeedsRecalculation,
     });
 })();
