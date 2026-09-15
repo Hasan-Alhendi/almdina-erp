@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import base64
+import io
 import os
+
+import ezdxf
 from pathlib import Path
 from typing import Any
 
@@ -51,6 +54,9 @@ _ORIGINAL_UPLOAD_SOURCES = frozenset(
     {"custom", "uploaded", "uploaded dxf", "uploaded_dxf", "dxf", "approved"}
 )
 _MISSING_UPLOADED_DXF_MESSAGE = "لا يوجد ملف DXF مرفوع لهذه الخطة."
+_AUTOCAD_DXF_MAX_BYTES = 2 * 1024 * 1024
+_AUTOCAD_DXF_VERSION = "AC1032"
+
 _UNSCOPED_UPLOADED_DXF_MESSAGE = (
     "تعذر تنزيل ملف DXF المرفوع لأن الملف غير مرتبط بهذه الخطة."
 )
@@ -443,6 +449,52 @@ def download_uploaded_dxf(
     }
 
 
+def _normalized_dxf_filename(order_name: str | None) -> str:
+    safe_order = "".join(
+        character if character.isalnum() or character in "-_" else "_"
+        for character in str(order_name or "door_cutting_order")
+    )
+    return f"cutting_plan_{safe_order}_AutoCAD2021.dxf"
+
+
+@frappe.whitelist()
+def normalize_dxf_for_autocad(
+    content_b64: str,
+    order_name: str | None = None,
+) -> dict[str, str]:
+    """Re-serialize client-produced geometry with ezdxf for AutoCAD compatibility."""
+
+    order = _require_export_access(order_name=order_name, payload=None)
+    if order_name and order is None:
+        frappe.throw(_("تعذر التحقق من صلاحية تصدير ملف DXF."), frappe.PermissionError)
+
+    try:
+        raw = base64.standard_b64decode(str(content_b64 or ""), validate=True)
+    except (ValueError, TypeError) as exc:
+        frappe.throw(_("محتوى ملف DXF غير صالح للتصدير."), frappe.ValidationError)
+        raise AssertionError("unreachable") from exc
+
+    if not raw or len(raw) > _AUTOCAD_DXF_MAX_BYTES:
+        frappe.throw(_("حجم ملف DXF غير صالح للتصدير."), frappe.ValidationError)
+
+    try:
+        document = ezdxf.read(io.StringIO(raw.decode("ascii")))
+        document.dxfversion = _AUTOCAD_DXF_VERSION
+        target = io.StringIO()
+        document.write(target)
+        content = target.getvalue().encode("utf-8")
+    except (UnicodeDecodeError, ezdxf.DXFError, ValueError) as exc:
+        frappe.throw(_("تعذر تجهيز ملف DXF متوافق مع AutoCAD."), frappe.ValidationError)
+        raise AssertionError("unreachable") from exc
+
+    filename = _normalized_dxf_filename(order_name)
+    _attach_download_response(filename, content)
+    return {
+        "filename": filename,
+        "content_b64": base64.standard_b64encode(content).decode("ascii"),
+    }
+
+
 @frappe.whitelist()
 def get_validated_dxf_plan(
     order_name: str | None = None,
@@ -498,4 +550,4 @@ def get_validated_dxf_plan(
     }
 
 
-__all__ = ["download_uploaded_dxf", "get_validated_dxf_plan"]
+__all__ = ["download_uploaded_dxf", "get_validated_dxf_plan", "normalize_dxf_for_autocad"]
