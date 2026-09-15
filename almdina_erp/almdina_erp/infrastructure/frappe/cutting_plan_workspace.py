@@ -34,6 +34,9 @@ from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
     PlanSettingsValidationError,
     normalize_plan_settings,
 )
+from almdina_erp.almdina_erp.domain.cutting.plan_freshness import (
+    matching_freshness_fingerprint,
+)
 from almdina_erp.almdina_erp.domain.orders.plan_fingerprint import fingerprint_payload
 from almdina_erp.almdina_erp.infrastructure.cutting.domain_engine import domain_cutting_engine
 from almdina_erp.almdina_erp.infrastructure.frappe.orders.cut_dimension_plan_adapter import (
@@ -124,29 +127,54 @@ def _numeric_or_default(value: Any, default: float) -> Any:
     return default if value is None else value
 
 
+def _plan_attr(plan: Any, fieldname: str, default: Any = None) -> Any:
+    if isinstance(plan, dict):
+        return plan.get(fieldname, default)
+    return getattr(plan, fieldname, default)
+
+
+_COMMERCIAL_PIECE_KEYS = (
+    "edge_type",
+    "edge_rate_usd",
+    "edge_cost_usd",
+    "edge_long_right_type_override",
+    "edge_long_left_type_override",
+    "edge_width_top_type_override",
+    "edge_width_bottom_type_override",
+    "edge_long_type",
+    "edge_width_type",
+    "edge_long_rate_usd",
+    "edge_width_rate_usd",
+    "edge_long_cost_usd",
+    "edge_width_cost_usd",
+    "notes",
+    "cut_size_label",
+)
+
+
 def _validated_plan_settings(plan: Any) -> PlanSettings:
     """Translate Frappe storage fields into the canonical PlanSettings contract."""
 
     try:
         return normalize_plan_settings(
             optimization_mode=(
-                str(getattr(plan, "optimization_mode", None) or "").strip()
+                str(_plan_attr(plan, "optimization_mode") or "").strip()
                 or DEFAULT_OPTIMIZATION_MODE_ID
             ),
             machine_type=(
-                str(getattr(plan, "machine_type", None) or "").strip()
+                str(_plan_attr(plan, "machine_type") or "").strip()
                 or DEFAULT_MACHINE_TYPE
             ),
             optimization_time_limit_sec=_numeric_or_default(
-                getattr(plan, "optimization_time_limit_sec", None),
+                _plan_attr(plan, "optimization_time_limit_sec"),
                 DEFAULT_OPTIMIZATION_TIME_LIMIT_SEC,
             ),
             kerf_mm=_numeric_or_default(
-                getattr(plan, "kerf_mm", None),
+                _plan_attr(plan, "kerf_mm"),
                 DEFAULT_KERF_MM,
             ),
             preferred_trim_mm=_numeric_or_default(
-                getattr(plan, "trim_margin_mm", None),
+                _plan_attr(plan, "trim_margin_mm"),
                 DEFAULT_PREFERRED_TRIM_MM,
             ),
         )
@@ -155,31 +183,98 @@ def _validated_plan_settings(plan: Any) -> PlanSettings:
         raise AssertionError("unreachable")
 
 
-def plan_input_fingerprint(order: Any, plan: Any) -> str:
-    """Fingerprint only the order requirements and validated plan-owned settings."""
+def _plan_settings_payload(plan: Any) -> dict[str, Any]:
+    settings = _validated_plan_settings(plan)
+    return {
+        "optimization_mode": settings.optimization_mode,
+        "machine_type": settings.machine_type,
+        "time_limit_sec": settings.optimization_time_limit_sec,
+        "kerf_mm": settings.kerf_mm,
+        "trim_margin_mm": settings.preferred_trim_mm,
+    }
+
+
+def _geometry_piece_rows(order: Any) -> list[dict[str, Any]]:
+    rows = []
+    for row in _piece_rows(order):
+        piece = dict(row)
+        for key in _COMMERCIAL_PIECE_KEYS:
+            piece.pop(key, None)
+        rows.append(piece)
+    return rows
+
+
+class _BoardLabelOverlay:
+    """Keep live geometry while restoring the plan's stored board label."""
+
+    def __init__(self, order: Any, board_description: str) -> None:
+        object.__setattr__(self, "_order", order)
+        object.__setattr__(self, "board_description", board_description)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(object.__getattribute__(self, "_order"), name)
+
+
+def _legacy_plan_input_fingerprint(order: Any, plan: Any) -> str:
+    """v1 hash kept only so historical stored fingerprints can still match."""
 
     width_mm, length_mm = _board_dimensions_mm(order)
-    settings = _validated_plan_settings(plan)
     return fingerprint_payload(
         {
             "version": 1,
             "order": order.name,
             "order_revision": cint(getattr(order, "revision", 1)) or 1,
             "board": {
-                "description": str(order.board_description or "").strip(),
+                "description": str(getattr(order, "board_description", "") or "").strip(),
                 "width_mm": width_mm,
                 "length_mm": length_mm,
             },
-            "settings": {
-                "optimization_mode": settings.optimization_mode,
-                "machine_type": settings.machine_type,
-                "time_limit_sec": settings.optimization_time_limit_sec,
-                "kerf_mm": settings.kerf_mm,
-                "trim_margin_mm": settings.preferred_trim_mm,
-            },
+            "settings": _plan_settings_payload(plan),
             "pieces": list(_piece_rows(order)),
         }
     )
+
+
+def plan_input_fingerprint(order: Any, plan: Any) -> str:
+    """Fingerprint cutting geometry and optimizer settings, not commercial labels.
+
+    Customer name, board description, edge color, and edge-profile names/rates
+    stay out of this hash so they do not stale or cancel a production plan.
+    """
+
+    width_mm, length_mm = _board_dimensions_mm(order)
+    return fingerprint_payload(
+        {
+            "version": 2,
+            "order": order.name,
+            "order_revision": cint(getattr(order, "revision", 1)) or 1,
+            "board": {
+                "width_mm": width_mm,
+                "length_mm": length_mm,
+            },
+            "settings": _plan_settings_payload(plan),
+            "pieces": _geometry_piece_rows(order),
+        }
+    )
+
+
+def freshness_expected_fingerprint(order: Any, plan: Any, stored: str = "") -> str:
+    """Compare live geometry against stored hashes, including legacy v1 rows."""
+
+    geometry = plan_input_fingerprint(order, plan)
+    legacy = _legacy_plan_input_fingerprint(order, plan)
+    overlaid = _legacy_plan_input_fingerprint(
+        _BoardLabelOverlay(
+            order,
+            str(
+                _plan_attr(plan, "board_description")
+                or getattr(order, "board_description", "")
+                or ""
+            ).strip(),
+        ),
+        plan,
+    )
+    return matching_freshness_fingerprint(stored, geometry, legacy, overlaid)
 
 
 def calculate_system_plan(order: Any, plan: Any) -> OptimizationOutcome:
@@ -411,5 +506,6 @@ __all__ = [
     "apply_validated_dxf_snapshot",
     "backfill_piece_instance_ids",
     "calculate_system_plan",
+    "freshness_expected_fingerprint",
     "plan_input_fingerprint",
 ]

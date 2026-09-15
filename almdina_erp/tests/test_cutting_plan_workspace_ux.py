@@ -105,3 +105,18 @@ def test_plan_source_tabs_lock_during_edit_inside_render_not_after_it():
     )
     assert 'typeof tabs.lockSourceTabs === "function"' in presenter
     assert "function lockSourceTabs(frm)" in presenter
+
+
+def test_uploaded_tab_keeps_accepted_plan_and_warns_on_order_mismatch():
+    tabs = TABS_UX.read_text(encoding="utf-8")
+    query = (
+        APP_ROOT / "almdina_erp" / "services" / "cutting_plan_workspace_query_service.py"
+    ).read_text(encoding="utf-8")
+
+    assert "select_uploaded_workspace_plan(rows)" in query
+    assert "_latest(rows, status=DRAFT, source_type=UPLOADED_DXF)" not in query
+    assert "function uploadedPlanMismatched(frm)" in tabs
+    assert "function mismatchBanner()" in tabs
+    assert "dco-uploaded-plan-mismatch-banner" in tabs
+    assert "بيانات هذا الطلب تم تعديلها وأصبحت الخطة غير مطابقة" in tabs
+    assert "الخطة غير مطابقة للطلب" in tabs

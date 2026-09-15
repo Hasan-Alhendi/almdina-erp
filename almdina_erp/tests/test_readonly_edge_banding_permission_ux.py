@@ -99,6 +99,7 @@ def test_drawing_profile_command_is_narrow_and_stage_authorized() -> None:
     assert "_SIDE_FIELDS.get(side_key)" in command
     assert "if not cint(getattr(piece, selected_field, 0))" in command
     assert "FrappeOrderCutDimensionAdapter" in service
+    assert "apply_stale_approved_plan_cancellation(order)" in service
     assert "invalidate_stale_draft_plans(order)" in service
     assert "ignore_permissions" not in service
 

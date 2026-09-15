@@ -131,7 +131,7 @@ def test_production_readiness_no_longer_reads_dco_plan_projection() -> None:
 
     assert '"Cutting Plan"' in runtime
     assert "snapshot_json" in runtime
-    assert "plan_input_fingerprint(order, plan)" in runtime
+    assert "freshness_expected_fingerprint(order, plan, stored)" in runtime
     assert "except ManufacturingRequirementsError" in runtime
     assert "approved_plan" in runtime
 
