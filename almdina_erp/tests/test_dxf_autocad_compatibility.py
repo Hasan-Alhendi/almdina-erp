@@ -65,8 +65,10 @@ def test_export_keeps_required_cut_and_preview_layers():
     assert 'const fullWidth = num(sheet.full_width_cm || plan.full_board_width_cm) * 10' in src
     assert 'const pieceWidth = num(piece.w) * 10' in src
     assert 'pair(0, "LINE")' in src
-    assert '_AutoCAD_R12.dxf' in src
-    assert 'application/dxf;charset=us-ascii' in src
+    assert 'const NORMALIZE_DXF_METHOD =' in src
+    assert 'normalize_dxf_for_autocad' in src
+    assert 'content_b64: btoa(dxf)' in src
+    assert 'application/dxf;charset=utf-8' in src
 
 
 def test_export_uses_resolved_per_axis_trim_without_rewriting_optimizer_spacing():
@@ -132,3 +134,12 @@ def test_secure_export_declares_exact_layer_table_count():
     src = _source(SECURE_DXF)
     assert "const DXF_LAYER_COUNT = 7" in src
     assert 'pair(2, "LAYER") + pair(70, DXF_LAYER_COUNT)' in src
+
+
+def test_server_normalization_emits_complete_autocad_document():
+    service = ROOT / "almdina_erp" / "services" / "dxf_export_service.py"
+    src = _source(service)
+    assert "def normalize_dxf_for_autocad(" in src
+    assert "ezdxf.read(io.StringIO(raw.decode(\"ascii\")))" in src
+    assert 'document.dxfversion = _AUTOCAD_DXF_VERSION' in src
+    assert 'return f"cutting_plan_{safe_order}_AutoCAD2021.dxf"' in src
