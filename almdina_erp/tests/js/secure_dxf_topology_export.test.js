@@ -55,7 +55,12 @@ const fakeFrappe = {
             return Promise.resolve({
                 message: {
                     filename: "cutting_plan_DCO-TOPOLOGY_AutoCAD2021.dxf",
-                    content_b64: String((opts.args && opts.args.content_b64) || ""),
+                    content_b64: Buffer.from(
+                        Buffer.from(String((opts.args && opts.args.content_b64) || ""), "base64")
+                            .toString("utf8")
+                            .replace("AC1009", "AC1032"),
+                        "utf8"
+                    ).toString("base64"),
                 },
             });
         }
@@ -186,7 +191,7 @@ async function run() {
     lastCallMethod = "";
     await fakeFrappe.almdina.export_order_dxf("DCO-TOPOLOGY", "system");
     assert.ok(downloadedDxf);
-    assert.match(lastCallMethod, /get_validated_dxf_plan/);
+    assert.match(lastCallMethod, /normalize_dxf_for_autocad/);
     // Owner outer + owner hole + nested outer = 12 CUT_PATH LINE entities.
     assert.equal(cutPathLineCount(downloadedDxf), 12);
     // Top-left usable-sheet [0,0] becomes physical DXF [5,995] with 5 mm trim.
