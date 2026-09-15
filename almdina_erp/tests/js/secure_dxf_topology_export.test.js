@@ -297,7 +297,7 @@ async function run() {
         ],
     };
     await fakeFrappe.almdina.export_order_dxf("DCO-APPROVED-SYSTEM", "approved");
-    assert.match(lastCallMethod, /get_validated_dxf_plan/);
+    assert.match(lastCallMethod, /normalize_dxf_for_autocad/);
     assert.match(downloadedDxf, /\$ACADVER\r\n1\r\nAC1032/);
 
     nextPlan = {
@@ -349,7 +349,7 @@ async function run() {
     downloadedDxf = "";
     lastCallMethod = "";
     await fakeFrappe.almdina.export_order_dxf("DCO-EXTRA-OVERLAY", "system");
-    assert.match(lastCallMethod, /get_validated_dxf_plan/);
+    assert.match(lastCallMethod, /normalize_dxf_for_autocad/);
     assert.match(downloadedDxf, /2\r\nLiner\r\n/);
     assert.match(downloadedDxf, /2\r\nRear Groove\r\n/);
     assert.equal((downloadedDxf.match(/8\r\nLiner\r\n/g) || []).length, 4);
