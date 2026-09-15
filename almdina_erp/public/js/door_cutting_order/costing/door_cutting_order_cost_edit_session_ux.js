@@ -442,6 +442,7 @@
 
         const offcutUx = window.AlmdinaCostOffcutAssignmentUX;
         let pendingOffcutPrice = null;
+        let costSnapshotChanged = false;
         const hasPendingOffcut = Boolean(
             offcutUx
             && typeof offcutUx.hasPending === "function"
@@ -484,6 +485,7 @@
             }
 
             if (pending.dirty) {
+                costSnapshotChanged = true;
                 const saved = await api.saveSettings(orderName, payload);
                 if (!documentStillCurrent(frm, token)) return false;
                 if (!sessionIsCurrent(frm, sessionContext)) return false;
@@ -510,6 +512,11 @@
 
         if (!documentStillCurrent(frm, token)) return false;
         if (!sessionIsCurrent(frm, sessionContext)) return false;
+        if (costSnapshotChanged && owner && typeof owner.load === "function") {
+            await owner.load(frm, { force: true });
+            if (!documentStillCurrent(frm, token)) return false;
+            if (!sessionIsCurrent(frm, sessionContext)) return false;
+        }
         unmountDraftControls(frm);
         projectCurrent(frm);
         applyFieldAccess(frm);
