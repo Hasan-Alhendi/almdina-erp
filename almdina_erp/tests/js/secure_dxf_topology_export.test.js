@@ -51,6 +51,14 @@ const fakeFrappe = {
         if (lastCallMethod.includes("download_uploaded_dxf")) {
             return Promise.resolve({ message: originalUpload });
         }
+        if (lastCallMethod.includes("normalize_dxf_for_autocad")) {
+            return Promise.resolve({
+                message: {
+                    filename: "cutting_plan_DCO-TOPOLOGY_AutoCAD2021.dxf",
+                    content_b64: String((opts.args && opts.args.content_b64) || ""),
+                },
+            });
+        }
         return Promise.resolve({ message: { plan: nextPlan } });
     },
     show_alert() {},
@@ -82,6 +90,7 @@ const context = vm.createContext({
     Promise,
     Uint8Array,
     atob,
+    btoa,
     Buffer,
     Blob: FakeBlob,
     URL: {
