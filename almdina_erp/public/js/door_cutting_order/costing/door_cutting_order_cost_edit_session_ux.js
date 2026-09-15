@@ -441,6 +441,7 @@
         if (!store || !state) return false;
 
         const offcutUx = window.AlmdinaCostOffcutAssignmentUX;
+        let pendingOffcutPrice = null;
         const hasPendingOffcut = Boolean(
             offcutUx
             && typeof offcutUx.hasPending === "function"
@@ -449,9 +450,9 @@
         if (hasPendingOffcut) {
             // Capture the price before the classification mutation refreshes the
             // read projection; then restore the edit draft before saving settings.
-            store.replaceDraft(normalizeCostSettings(
-                captureCostSettings(frm, state.draft || {})
-            ));
+            const capturedBeforeOffcut = captureCostSettings(frm, state.draft || {});
+            pendingOffcutPrice = capturedBeforeOffcut.offcut_price_usd;
+            store.replaceDraft(normalizeCostSettings(capturedBeforeOffcut));
             const savedOffcut = await offcutUx.savePending(frm);
             if (!savedOffcut) return false;
             if (!documentStillCurrent(frm, token)) return false;
@@ -470,6 +471,10 @@
             // Keep the original capture contract explicit for static lifecycle checks.
             // const captured = captureCostSettings(frm, state.draft || {});
             const captured = captureCostSettings(frm, currentState.draft || {});
+            if (pendingOffcutPrice !== null && pendingOffcutPrice !== undefined
+                && String(pendingOffcutPrice).trim() !== "") {
+                captured.offcut_price_usd = pendingOffcutPrice;
+            }
             const payload = normalizeCostSettings(captured);
             store.replaceDraft(payload);
             const pending = store.snapshot();
