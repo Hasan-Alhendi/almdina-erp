@@ -53,7 +53,7 @@ _ORIGINAL_UPLOAD_SOURCES = frozenset(
 )
 _MISSING_UPLOADED_DXF_MESSAGE = "لا يوجد ملف DXF مرفوع لهذه الخطة."
 _AUTOCAD_DXF_MAX_BYTES = 2 * 1024 * 1024
-_AUTOCAD_DXF_VERSION = "AC1032"
+_AUTOCAD_DXF_VERSION = "AC1024"
 
 _UNSCOPED_UPLOADED_DXF_MESSAGE = (
     "تعذر تنزيل ملف DXF المرفوع لأن الملف غير مرتبط بهذه الخطة."
@@ -452,7 +452,7 @@ def _normalized_dxf_filename(order_name: str | None) -> str:
         character if character.isalnum() or character in "-_" else "_"
         for character in str(order_name or "door_cutting_order")
     )
-    return f"cutting_plan_{safe_order}_AutoCAD2021.dxf"
+    return f"cutting_plan_{safe_order}_AutoCAD2011_2026.dxf"
 
 
 @frappe.whitelist()
