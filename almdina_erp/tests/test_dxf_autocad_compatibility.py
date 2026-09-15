@@ -126,3 +126,9 @@ def test_dxf_import_service_is_wired_for_round_trip():
     src = _source(importer)
     assert "def parse_production_dxf" in src
     assert "_parse_r12_lines" in src
+
+
+def test_secure_export_declares_exact_layer_table_count():
+    src = _source(SECURE_DXF)
+    assert "const DXF_LAYER_COUNT = 7" in src
+    assert 'pair(2, "LAYER") + pair(70, DXF_LAYER_COUNT)' in src
