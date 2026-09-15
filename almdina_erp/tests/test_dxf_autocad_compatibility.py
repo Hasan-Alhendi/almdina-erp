@@ -196,5 +196,5 @@ def test_rebuild_autocad_dxf_rejects_non_line_geometry():
 def test_secure_dxf_export_asset_is_cache_busted():
     registry = ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_workspace_asset_registry.js"
     src = _source(registry)
-    assert "cutting_plan/secure_dxf_export.js?v=2" in src
+    assert "cutting_plan/secure_dxf_export.js" in src\n    assert "?v=2" not in src
 
