@@ -191,4 +191,4 @@ def test_rebuild_autocad_dxf_rejects_non_line_geometry():
 
     with pytest.raises(ValueError, match="LINE entities only"):
         rebuild_autocad_dxf(output.getvalue().encode("ascii"))
-\n
+
