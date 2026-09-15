@@ -158,6 +158,11 @@
         price.find("[data-offcut-price-input]").prop("disabled", !factorySelected).prop("readOnly", !factorySelected);
     }
 
+    function hasFactorySelection(frm) {
+        const root = rootFor(frm);
+        return Boolean(root && root.length && root.find('input[type="radio"][value="FACTORY_FACTORY"]:checked').length);
+    }
+
     async function savePending(frm) {
         const root = rootFor(frm);
         return root && root.length && hasPending(frm) ? save(frm, root) : true;
@@ -228,5 +233,5 @@
         return true;
     }
 
-    window.AlmdinaCostOffcutAssignmentUX = Object.freeze({ render, hasPending, savePending });
+    window.AlmdinaCostOffcutAssignmentUX = Object.freeze({ render, hasPending, hasFactorySelection, savePending });
 })();
