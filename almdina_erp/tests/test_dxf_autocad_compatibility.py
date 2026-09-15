@@ -12,9 +12,9 @@ def _source(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def test_secure_export_uses_r12_ascii_and_simple_line_entities():
+def test_secure_export_uses_autocad_2021_ascii_and_simple_line_entities():
     src = _source(SECURE_DXF)
-    assert 'const DXF_VERSION = "AC1009"' in src
+    assert 'const DXF_VERSION = "AC1032"' in src
     assert 'pair(0, "LINE")' in src
     assert 'pair(10, dxfNumber(x1))' in src
     assert 'pair(11, dxfNumber(x2))' in src
@@ -65,7 +65,7 @@ def test_export_keeps_required_cut_and_preview_layers():
     assert 'const fullWidth = num(sheet.full_width_cm || plan.full_board_width_cm) * 10' in src
     assert 'const pieceWidth = num(piece.w) * 10' in src
     assert 'pair(0, "LINE")' in src
-    assert '_AutoCAD2020_R12.dxf' in src
+    assert '_AutoCAD2021.dxf' in src
     assert 'application/dxf;charset=us-ascii' in src
 
 

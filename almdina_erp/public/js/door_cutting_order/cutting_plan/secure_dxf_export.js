@@ -4,7 +4,7 @@
     if (window.__almdinaSecureDxfExportLoaded) return;
     window.__almdinaSecureDxfExportLoaded = true;
 
-    const DXF_VERSION = "AC1009"; // AutoCAD R11/R12 ASCII. AutoCAD 2020 opens this legacy format.
+    const DXF_VERSION = "AC1032"; // AutoCAD 2018 ASCII, fully supported by AutoCAD 2021+.
     const TOPOLOGY_SCHEMA_VERSION = 1;
     const TOPOLOGY_UNIT = "mm";
     // R12 TABLE records must declare the exact number of entries. The exporter
@@ -465,7 +465,7 @@
         }
 
         const base = `cutting_plan_${safeName(orderName || "draft")}`;
-        download(`${base}_AutoCAD2020_R12.dxf`, dxf, "application/dxf;charset=us-ascii");
+        download(`${base}_AutoCAD2021.dxf`, dxf, "application/dxf;charset=us-ascii");
         frappe.show_alert({
             message: isArabic()
                 ? "تم تصدير ملف DXF متوافق مع AutoCAD بنجاح."
