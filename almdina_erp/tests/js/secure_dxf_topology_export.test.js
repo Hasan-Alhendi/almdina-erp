@@ -257,7 +257,7 @@ async function run() {
     assert.match(lastCallMethod, /download_uploaded_dxf/);
     assert.equal(downloadedDxf, originalDxf);
     assert.equal(downloadedName, "cutting_plan_DCO-2026-00018_corrected.dxf");
-    assert.doesNotMatch(downloadedDxf, /\$ACADVER\r\n1\r\nAC1032/);
+    assert.doesNotMatch(downloadedDxf, /\$ACADVER\r\n1\r\nAC1009/);
 
     downloadedDxf = "";
     lastCallMethod = "";
