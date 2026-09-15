@@ -33,6 +33,8 @@
         "almdina_erp.almdina_erp.services.dxf_export_service.download_uploaded_dxf";
     const VALIDATED_PLAN_METHOD =
         "almdina_erp.almdina_erp.services.dxf_export_service.get_validated_dxf_plan";
+    const NORMALIZE_DXF_METHOD =
+        "almdina_erp.almdina_erp.services.dxf_export_service.normalize_dxf_for_autocad";
 
     function canExportDxf(frm = window.cur_frm) {
         const permissions = window.AlmdinaPermissions;
@@ -464,13 +466,32 @@
                 : "DXF export failed its compatibility self-check and was not downloaded.");
         }
 
-        const base = `cutting_plan_${safeName(orderName || "draft")}`;
-        download(`${base}_AutoCAD_R12.dxf`, dxf, "application/dxf;charset=us-ascii");
-        frappe.show_alert({
-            message: isArabic()
-                ? "تم تصدير ملف DXF متوافق مع AutoCAD بنجاح."
-                : "Validated AutoCAD-compatible DXF exported successfully.",
-            indicator: "green",
+        return frappe.call({
+            method: NORMALIZE_DXF_METHOD,
+            args: {
+                order_name: orderName || null,
+                content_b64: btoa(dxf),
+            },
+            freeze: true,
+            freeze_message: isArabic()
+                ? "جاري تجهيز ملف DXF المتوافق مع AutoCAD..."
+                : "Preparing an AutoCAD-compatible DXF...",
+        }).then(response => {
+            const output = (response && response.message) || {};
+            if (!output.filename || !output.content_b64) {
+                throw new Error("AutoCAD DXF normalization response is incomplete.");
+            }
+            download(
+                output.filename,
+                decodeBase64Bytes(output.content_b64),
+                "application/dxf;charset=utf-8"
+            );
+            frappe.show_alert({
+                message: isArabic()
+                    ? "تم تصدير ملف DXF متوافق مع AutoCAD بنجاح."
+                    : "Validated AutoCAD-compatible DXF exported successfully.",
+                indicator: "green",
+            });
         });
     }
 
