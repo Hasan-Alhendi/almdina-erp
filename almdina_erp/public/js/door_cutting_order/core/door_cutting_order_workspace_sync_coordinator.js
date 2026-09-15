@@ -160,7 +160,9 @@
 
     async function activateCurrent(frm, options = {}) {
         if (!frm || !frm.doc) return [];
-        const names = activeResourceNames(frm, options.fieldname);
+        const names = options.fieldname
+            ? activeResourceNames(frm, options.fieldname)
+            : activeResourceNames(frm);
         if (!names.length) return [];
 
         // Surface owners can start their lightweight skeleton/module work in
