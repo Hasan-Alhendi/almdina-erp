@@ -144,3 +144,9 @@ def test_server_normalization_emits_complete_autocad_document():
     assert "ezdxf.read(io.StringIO(raw.decode(\"ascii\")))" in src
     assert 'document.dxfversion = _AUTOCAD_DXF_VERSION' in src
     assert 'return f"cutting_plan_{safe_order}_AutoCAD2011_2026.dxf"' in src
+    normalized = src.split("def normalize_dxf_for_autocad(", 1)[1].split(
+        "\n\n@frappe.whitelist()",
+        1,
+    )[0]
+    assert "_assert_single_dxf_document(normalized)" in normalized
+    assert "_attach_download_response" not in normalized
