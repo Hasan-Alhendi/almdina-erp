@@ -1,8 +1,9 @@
 import io
 from pathlib import Path
 
-import ezdxf
 import pytest
+
+ezdxf = pytest.importorskip("ezdxf")
 
 from almdina_erp.almdina_erp.services.dxf_autocad_normalization import (
     assert_single_dxf_document,
