@@ -1,4 +1,13 @@
+import io
 from pathlib import Path
+
+import ezdxf
+import pytest
+
+from almdina_erp.almdina_erp.services.dxf_autocad_normalization import (
+    assert_single_dxf_document,
+    rebuild_autocad_dxf,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -136,22 +145,50 @@ def test_secure_export_declares_exact_layer_table_count():
     assert 'pair(2, "LAYER") + pair(70, DXF_LAYER_COUNT)' in src
 
 
-def test_server_normalization_emits_complete_autocad_document():
-    service = ROOT / "almdina_erp" / "services" / "dxf_export_service.py"
-    src = _source(service)
-    assert '_AUTOCAD_DXF_VERSION = "AC1024"' in src
-    assert "def normalize_dxf_for_autocad(" in src
-    assert "ezdxf.read(io.StringIO(raw.decode(\"ascii\")))" in src
-    assert 'ezdxf.new("R2010", setup=True)' in src
-    assert 'any(entity.dxftype() != "LINE" for entity in source_entities)' in src
-    assert "target_modelspace.add_line(" in src
-    assert "verification.dxfversion != _AUTOCAD_DXF_VERSION" in src
-    assert "verification.audit().has_errors" in src
-    assert 'title="AutoCAD DXF normalization failed"' in src
-    assert 'return f"cutting_plan_{safe_order}_AutoCAD2011_2026.dxf"' in src
-    normalized = src.split("def normalize_dxf_for_autocad(", 1)[1].split(
-        "\n\n@frappe.whitelist()",
-        1,
-    )[0]
-    assert "_assert_single_dxf_document(normalized)" in normalized
-    assert "_attach_download_response" not in normalized
+
+def _sample_r12_bytes(newline: bytes) -> bytes:
+    source = ezdxf.new("R12")
+    source.layers.add(name="SHEET_OUTLINE", color=8)
+    source.layers.add(name="CUT_PATH", color=1)
+    modelspace = source.modelspace()
+    modelspace.add_line((10, 20), (110, 20), dxfattribs={"layer": "SHEET_OUTLINE"})
+    modelspace.add_line((15.5, 25.25), (15.5, 95.75), dxfattribs={"layer": "CUT_PATH"})
+    output = io.StringIO()
+    source.write(output)
+    return output.getvalue().replace("\n", "\r\n").encode("ascii").replace(b"\r\n", newline)
+
+
+@pytest.mark.parametrize("newline", [b"\r\n", b"\n"])
+def test_rebuild_autocad_dxf_preserves_geometry_for_crlf_and_lf(newline):
+    raw = _sample_r12_bytes(newline)
+    source = ezdxf.read(io.StringIO(raw.decode("ascii").replace("\r\n", "\n")))
+    source_lines = list(source.modelspace())
+
+    normalized = rebuild_autocad_dxf(raw)
+    text = normalized.decode("utf-8")
+    assert_single_dxf_document(text)
+
+    result = ezdxf.read(io.StringIO(text))
+    result_lines = list(result.modelspace())
+    assert result.dxfversion == "AC1024"
+    assert len(result_lines) == len(source_lines)
+    assert {line.dxf.layer for line in result_lines} == {"SHEET_OUTLINE", "CUT_PATH"}
+    assert [
+        (tuple(line.dxf.start), tuple(line.dxf.end))
+        for line in result_lines
+    ] == [
+        (tuple(line.dxf.start), tuple(line.dxf.end))
+        for line in source_lines
+    ]
+    assert result.audit().has_errors is False
+
+
+def test_rebuild_autocad_dxf_rejects_non_line_geometry():
+    source = ezdxf.new("R12")
+    source.modelspace().add_circle((0, 0), 10)
+    output = io.StringIO()
+    source.write(output)
+
+    with pytest.raises(ValueError, match="LINE entities only"):
+        rebuild_autocad_dxf(output.getvalue().encode("ascii"))
+\n
