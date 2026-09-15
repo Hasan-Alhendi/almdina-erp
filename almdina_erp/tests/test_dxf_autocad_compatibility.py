@@ -139,6 +139,7 @@ def test_secure_export_declares_exact_layer_table_count():
 def test_server_normalization_emits_complete_autocad_document():
     service = ROOT / "almdina_erp" / "services" / "dxf_export_service.py"
     src = _source(service)
+    assert '_AUTOCAD_DXF_VERSION = "AC1024"' in src
     assert "def normalize_dxf_for_autocad(" in src
     assert "ezdxf.read(io.StringIO(raw.decode(\"ascii\")))" in src
     assert 'document.dxfversion = _AUTOCAD_DXF_VERSION' in src
