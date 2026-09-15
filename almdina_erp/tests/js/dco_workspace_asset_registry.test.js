@@ -82,7 +82,7 @@ class CustomEvent {
     assert.ok(calls[0].some(asset => asset.endsWith("door_cutting_order_piece_geometry.js")));
     assert.ok(calls[0].some(asset => asset.endsWith("door_cutting_order_plan_source_presentation.js")));
     assert.ok(calls[0].some(asset => asset.endsWith("door_cutting_order_plan_edit_session_ux.js")));
-    assert.ok(calls[0].some(asset => asset.startsWith("/assets/almdina_erp/js/door_cutting_order/cutting_plan/secure_dxf_export.js?v=2")));
+    assert.ok(calls[0].some(asset => asset.endsWith("secure_dxf_export.js")));
 
     fakeWindow.AlmdinaCuttingPlanPieceGeometry = {};
     fakeWindow.AlmdinaPlanWorkspacePresenterAdapter = {};

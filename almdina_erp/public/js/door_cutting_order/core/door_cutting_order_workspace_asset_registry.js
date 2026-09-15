@@ -27,7 +27,7 @@
                 `${ASSET_ROOT}/cutting_plan/door_cutting_order_plan_surface_bootstrap.js`,
                 `${ASSET_ROOT}/cutting_plan/door_cutting_order_drawing_plan_ux.js`,
                 `${ASSET_ROOT}/cutting_plan/door_cutting_order_drawing_approval_ux.js`,
-                `${ASSET_ROOT}/cutting_plan/secure_dxf_export.js?v=2`,
+                `${ASSET_ROOT}/cutting_plan/secure_dxf_export.js`,
                 `${ASSET_ROOT}/cutting_plan/door_cutting_order_plan_edit_session_ux.js`,
                 `${ASSET_ROOT}/cutting_plan/door_cutting_order_plan_preview_presenter.js`,
                 `${ASSET_ROOT}/cutting_plan/door_cutting_order_plan_preview_edit_ux.js`,
