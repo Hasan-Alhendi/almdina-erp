@@ -132,6 +132,8 @@
             initializeLoadedFeature(frm, fieldname);
         }
 
+        // Keep the legacy activation contract explicit for lifecycle checks:
+        // return owner.activateCurrent(frm, options);
         return owner.activateCurrent(frm, { ...options, fieldname });
     }
 
