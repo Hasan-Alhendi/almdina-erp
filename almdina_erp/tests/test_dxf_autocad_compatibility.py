@@ -142,7 +142,12 @@ def test_server_normalization_emits_complete_autocad_document():
     assert '_AUTOCAD_DXF_VERSION = "AC1024"' in src
     assert "def normalize_dxf_for_autocad(" in src
     assert "ezdxf.read(io.StringIO(raw.decode(\"ascii\")))" in src
-    assert 'document.dxfversion = _AUTOCAD_DXF_VERSION' in src
+    assert 'ezdxf.new("R2010", setup=True)' in src
+    assert 'any(entity.dxftype() != "LINE" for entity in source_entities)' in src
+    assert "target_modelspace.add_line(" in src
+    assert "verification.dxfversion != _AUTOCAD_DXF_VERSION" in src
+    assert "verification.audit().has_errors" in src
+    assert 'title="AutoCAD DXF normalization failed"' in src
     assert 'return f"cutting_plan_{safe_order}_AutoCAD2011_2026.dxf"' in src
     normalized = src.split("def normalize_dxf_for_autocad(", 1)[1].split(
         "\n\n@frappe.whitelist()",
