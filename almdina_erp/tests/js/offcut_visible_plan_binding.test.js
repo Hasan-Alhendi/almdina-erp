@@ -37,6 +37,8 @@ assert.match(costOffcut, /CUSTOMER_CUSTOMER/);
 assert.match(costOffcut, /dco-cost-offcut-table/);
 assert.doesNotMatch(costOffcut, /dco-cost-offcut-summary/);
 assert.match(costOffcut, /saveOffcutAssignments\(offcut\.plan_name, assignments\(root\)\)/);
+assert.match(costOffcut, /savePending/);
+assert.doesNotMatch(costOffcut, /dco-cost-offcut-save/);
 assert.match(costOffcut, /policy\.reconcileOffcutMutation\(frm, result\)/);
 assert.match(costOffcut, /captureDocument\(frm\)/);
 assert.match(costOffcut, /documentStillCurrent\(frm, token\)/);

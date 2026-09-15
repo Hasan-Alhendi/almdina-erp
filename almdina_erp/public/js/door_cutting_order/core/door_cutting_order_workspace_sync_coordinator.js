@@ -70,11 +70,13 @@
         return Boolean(descriptor && descriptorIsActive(frm, descriptor));
     }
 
-    function activeResourceNames(frm) {
+    function activeResourceNames(frm, requestedFieldname = "") {
+        const target = String(requestedFieldname || "").trim();
         const names = [];
         resources.forEach((descriptor, name) => {
-            if (!activationField(descriptor)) return;
-            if (descriptorIsActive(frm, descriptor)) names.push(name);
+            const fieldname = activationField(descriptor);
+            if (!fieldname) return;
+            if (target ? fieldname === target : descriptorIsActive(frm, descriptor)) names.push(name);
         });
         return names;
     }
@@ -158,7 +160,9 @@
 
     async function activateCurrent(frm, options = {}) {
         if (!frm || !frm.doc) return [];
-        const names = activeResourceNames(frm);
+        const names = options.fieldname
+            ? activeResourceNames(frm, options.fieldname)
+            : activeResourceNames(frm);
         if (!names.length) return [];
 
         // Surface owners can start their lightweight skeleton/module work in
