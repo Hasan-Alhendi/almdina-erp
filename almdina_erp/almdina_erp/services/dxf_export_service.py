@@ -483,7 +483,7 @@ def normalize_dxf_for_autocad(
         target = io.StringIO()
         document.write(target)
         content = target.getvalue().encode("utf-8")
-    except (ImportError, UnicodeDecodeError, ValueError) as exc:
+    except Exception as exc:
         frappe.throw(_("تعذر تجهيز ملف DXF متوافق مع AutoCAD."), frappe.ValidationError)
         raise AssertionError("unreachable") from exc
 
