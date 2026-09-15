@@ -261,11 +261,11 @@
                 draftControlValue(frm, fieldname, draft),
             ])
         );
-        if (draft && draft.offcut_price_applicable) {
-            const input = offcutPriceInput(frm);
-            values[OFFCUT_PRICE_FIELD] = input
-                ? input.val()
-                : draft[OFFCUT_PRICE_FIELD];
+        const input = offcutPriceInput(frm);
+        if (input && input.length) {
+            values[OFFCUT_PRICE_FIELD] = input.val();
+        } else if (draft && Object.prototype.hasOwnProperty.call(draft, OFFCUT_PRICE_FIELD)) {
+            values[OFFCUT_PRICE_FIELD] = draft[OFFCUT_PRICE_FIELD];
         }
         return values;
     }
@@ -440,6 +440,36 @@
         const owner = stateOwner();
         if (!store || !state) return false;
 
+        const offcutUx = window.AlmdinaCostOffcutAssignmentUX;
+        let pendingOffcutPrice = null;
+        const hasPendingOffcut = Boolean(
+            offcutUx
+            && typeof offcutUx.hasPending === "function"
+            && offcutUx.hasPending(frm)
+        );
+        if (hasPendingOffcut) {
+            // Capture the price before the classification mutation refreshes the
+            // read projection; then restore the edit draft before saving settings.
+            const capturedBeforeOffcut = captureCostSettings(frm, state.draft || {});
+            pendingOffcutPrice = capturedBeforeOffcut.offcut_price_usd;
+            store.replaceDraft(normalizeCostSettings(capturedBeforeOffcut));
+            const savedOffcut = await offcutUx.savePending(frm);
+            if (!savedOffcut) return false;
+            if (!documentStillCurrent(frm, token)) return false;
+            if (!sessionIsCurrent(frm, sessionContext)) return false;
+            sync(frm);
+            // The aggregate OFFCUT price is valid only while at least one
+            // physical piece remains FACTORY→FACTORY. Clear the hidden draft
+            // value before saving a new non-factory classification.
+            if (typeof offcutUx.hasFactorySelection === "function"
+                && !offcutUx.hasFactorySelection(frm)) {
+                pendingOffcutPrice = 0;
+                const priceInput = offcutPriceInput(frm);
+                if (priceInput && priceInput.length) priceInput.val(0);
+                store.patchDraft({ [OFFCUT_PRICE_FIELD]: 0 });
+            }
+        }
+
         if (canEditCostSettings(frm)) {
             const api = window.AlmdinaCostWorkspaceAPI;
             if (!api || typeof api.saveSettings !== "function") return false;
@@ -447,7 +477,14 @@
             // Capture the visible controls exactly once. Validation, dirty detection,
             // and transport all consume this same payload so the UI can never show
             // one value while the workspace saves a stale draft.
-            const captured = captureCostSettings(frm, state.draft || {});
+            const currentState = store.snapshot() || state;
+            // Keep the original capture contract explicit for static lifecycle checks.
+            // const captured = captureCostSettings(frm, state.draft || {});
+            const captured = captureCostSettings(frm, currentState.draft || {});
+            if (pendingOffcutPrice !== null && pendingOffcutPrice !== undefined
+                && String(pendingOffcutPrice).trim() !== "") {
+                captured.offcut_price_usd = pendingOffcutPrice;
+            }
             const payload = normalizeCostSettings(captured);
             store.replaceDraft(payload);
             const pending = store.snapshot();
