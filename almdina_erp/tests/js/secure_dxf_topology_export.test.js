@@ -54,11 +54,11 @@ const fakeFrappe = {
         if (lastCallMethod.includes("normalize_dxf_for_autocad")) {
             return Promise.resolve({
                 message: {
-                    filename: "cutting_plan_DCO-TOPOLOGY_AutoCAD2021.dxf",
+                    filename: "cutting_plan_DCO-TOPOLOGY_AutoCAD2011_2026.dxf",
                     content_b64: Buffer.from(
                         Buffer.from(String((opts.args && opts.args.content_b64) || ""), "base64")
                             .toString("utf8")
-                            .replace("AC1009", "AC1032"),
+                            .replace("AC1009", "AC1024"),
                         "utf8"
                     ).toString("base64"),
                 },
@@ -298,7 +298,7 @@ async function run() {
     };
     await fakeFrappe.almdina.export_order_dxf("DCO-APPROVED-SYSTEM", "approved");
     assert.match(lastCallMethod, /normalize_dxf_for_autocad/);
-    assert.match(downloadedDxf, /\$ACADVER\r\n1\r\nAC1032/);
+    assert.match(downloadedDxf, /\$ACADVER\r\n1\r\nAC1024/);
 
     nextPlan = {
         full_board_width_cm: 100,
