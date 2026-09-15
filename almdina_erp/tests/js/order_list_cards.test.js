@@ -560,8 +560,9 @@ assert.deepStrictEqual(
 assert(source.includes('const mobileLayout = root.classList.contains("dco-order-card-layout")'));
 assert(source.includes("? sortPersonalQueueItems(queueItems)"));
 assert(source.includes(": sortDesktopQueueItems(queueItems);"));
-assert(source.includes("if (usesOverviewDeliveredLastSort())"));
+assert(source.includes("if (isOverviewDefaultSortActive(listview))"));
 assert(source.includes("reorderOverviewListRows(listview, result);"));
+assert(source.includes("installOverviewDefaultSort(listview)"));
 assert(!source.includes("? sortOverviewListItems(queueItems)"));
 
 assert.strictEqual(
@@ -632,10 +633,61 @@ assert.strictEqual(api.overviewListState({ status: "Cancelled" }), "active");
 assert.strictEqual(typeof api.overviewListOrderBy, "undefined");
 assert(!source.includes("IN ('Delivered')"));
 assert(!source.includes("args.order_by = overviewListOrderBy"));
+assert.strictEqual(api.overviewDefaultSortField, "__dco_default_sort");
+assert.strictEqual(api.overviewDefaultSortLabel, "الترتيب الافتراضي");
+assert.strictEqual(
+    api.overviewDefaultSortSql(),
+    "`tabDoor Cutting Order`.`modified` desc"
+);
+
+const overviewSortStore = {
+    data: {},
+    getItem(key) {
+        return Object.prototype.hasOwnProperty.call(this.data, key) ? this.data[key] : null;
+    },
+    setItem(key, value) {
+        this.data[key] = String(value);
+    },
+};
+assert.strictEqual(api.shouldSelectOverviewDefaultSort("", overviewSortStore), true);
+assert.strictEqual(api.shouldSelectOverviewDefaultSort(api.overviewDefaultSortField, overviewSortStore), true);
+assert.strictEqual(api.shouldSelectOverviewDefaultSort("modified", overviewSortStore), true);
+assert.strictEqual(api.shouldSelectOverviewDefaultSort("name", overviewSortStore), false);
+overviewSortStore.setItem(api.overviewDefaultSortMigrationKey, "1");
+assert.strictEqual(api.shouldSelectOverviewDefaultSort("modified", overviewSortStore), false);
+assert.strictEqual(api.shouldSelectOverviewDefaultSort("name", overviewSortStore), false);
 
 assert.strictEqual(api.usesOverviewDeliveredLastSort(), false);
+assert.strictEqual(
+    api.isOverviewDefaultSortActive({
+        sort_selector: { sort_by: api.overviewDefaultSortField },
+    }),
+    false,
+    "workers must not activate the overview default sort"
+);
 context.frappe.session.user = "Administrator";
 assert.strictEqual(api.usesOverviewDeliveredLastSort(), true);
+assert.strictEqual(
+    api.isOverviewDefaultSortActive({
+        sort_selector: { sort_by: api.overviewDefaultSortField },
+    }),
+    true
+);
+assert.strictEqual(
+    api.isOverviewDefaultSortActive({
+        sort_by: "name",
+        sort_selector: { sort_by: "name", sort_order: "desc" },
+    }),
+    false,
+    "built-in descending sort must not reuse delivered-last reordering"
+);
+assert.strictEqual(
+    api.isOverviewDefaultSortActive({
+        sort_by: "modified",
+        sort_selector: { sort_by: "modified", sort_order: "desc" },
+    }),
+    false
+);
 context.frappe.session.user = "manager@example.com";
 context.window.AlmdinaPermissions = {
     can(capability) { return capability === "view_all_orders"; },
@@ -645,6 +697,206 @@ context.window.AlmdinaPermissions = {
     can() { return false; },
 };
 assert.strictEqual(api.usesOverviewDeliveredLastSort(), false);
+context.frappe.session.user = "cutting@example.com";
+context.window.AlmdinaPermissions = undefined;
+
+const memoryStorage = {
+    data: {},
+    getItem(key) {
+        return Object.prototype.hasOwnProperty.call(this.data, key) ? this.data[key] : null;
+    },
+    setItem(key, value) {
+        this.data[key] = String(value);
+    },
+    clear() {
+        this.data = {};
+    },
+};
+context.window.localStorage = memoryStorage;
+
+function mockSortSelector(sortBy) {
+    return {
+        sort_by: sortBy,
+        sort_order: "desc",
+        args: {
+            sort_by: sortBy,
+            sort_order: "desc",
+            options: [
+                { fieldname: "modified", label: "Last Updated" },
+                { fieldname: "name", label: "ID" },
+            ],
+        },
+        labels: {},
+        make() {
+            this.made = (this.made || 0) + 1;
+        },
+        set_value(nextSortBy, nextSortOrder) {
+            this.sort_by = nextSortBy;
+            this.sort_order = nextSortOrder;
+        },
+        get_sql_string() {
+            return "`tabDoor Cutting Order`.`" + this.sort_by + "` " + this.sort_order;
+        },
+    };
+}
+
+context.frappe.session.user = "Administrator";
+const defaultSelector = mockSortSelector("modified");
+const defaultListview = {
+    sort_by: "modified",
+    sort_order: "desc",
+    sort_selector: defaultSelector,
+};
+api.installOverviewDefaultSort(defaultListview);
+assert.strictEqual(defaultSelector.sort_by, api.overviewDefaultSortField);
+assert.strictEqual(defaultListview.sort_by, api.overviewDefaultSortField);
+assert.strictEqual(defaultSelector.get_sql_string(), api.overviewDefaultSortSql());
+assert.strictEqual(defaultSelector.args.options[0].fieldname, api.overviewDefaultSortField);
+assert.strictEqual(defaultSelector.args.options[0].label, api.overviewDefaultSortLabel);
+assert.strictEqual(api.isOverviewDefaultSortActive(defaultListview), true);
+assert.strictEqual(memoryStorage.getItem(api.overviewDefaultSortMigrationKey), "1");
+api.installOverviewDefaultSort(defaultListview);
+assert.strictEqual(
+    defaultSelector.args.options.filter(option => option.fieldname === api.overviewDefaultSortField).length,
+    1,
+    "default sort option must be injected once"
+);
+
+defaultSelector.sort_by = "name";
+defaultSelector.sort_order = "desc";
+defaultListview.sort_by = "name";
+assert.strictEqual(api.isOverviewDefaultSortActive(defaultListview), false);
+assert.strictEqual(
+    defaultSelector.get_sql_string(),
+    "`tabDoor Cutting Order`.`name` desc",
+    "built-in descending SQL must stay native after leaving the default option"
+);
+
+memoryStorage.clear();
+memoryStorage.setItem(api.overviewDefaultSortMigrationKey, "1");
+const lastUpdatedSelector = mockSortSelector("modified");
+const lastUpdatedListview = {
+    sort_by: "modified",
+    sort_order: "desc",
+    sort_selector: lastUpdatedSelector,
+};
+api.installOverviewDefaultSort(lastUpdatedListview);
+assert.strictEqual(
+    lastUpdatedSelector.sort_by,
+    "modified",
+    "explicit Last Updated must persist after the one-time default migration"
+);
+assert.strictEqual(api.isOverviewDefaultSortActive(lastUpdatedListview), false);
+
+const nameSelector = mockSortSelector("name");
+const nameListview = {
+    sort_by: "name",
+    sort_order: "desc",
+    sort_selector: nameSelector,
+};
+api.installOverviewDefaultSort(nameListview);
+assert.strictEqual(nameSelector.sort_by, "name");
+assert.strictEqual(nameSelector.args.options[0].fieldname, api.overviewDefaultSortField);
+assert.strictEqual(api.isOverviewDefaultSortActive(nameListview), false);
+
+function frappeLikeSortSelector(sortBy) {
+    const button = {
+        attrs: { "data-value": "desc" },
+        length: 1,
+        attr(name, value) {
+            if (arguments.length < 2) return this.attrs[name];
+            this.attrs[name] = value;
+            return this;
+        },
+        find() {
+            return { length: 1, html() {} };
+        },
+    };
+    const selector = {
+        sort_by: sortBy,
+        sort_order: "desc",
+        args: {
+            sort_by: sortBy,
+            sort_order: "desc",
+            options: [
+                { fieldname: "modified", label: "Last Updated" },
+                { fieldname: "name", label: "ID" },
+            ],
+        },
+        labels: {},
+        wrapper: {
+            find(selectorName) {
+                if (selectorName === ".btn-order") return button;
+                return { length: 1, html() {}, attr() { return this; } };
+            },
+        },
+        make() {
+            this.made = (this.made || 0) + 1;
+        },
+        set_value(nextSortBy, nextSortOrder) {
+            if (this.sort_by !== nextSortBy) this.sort_by = nextSortBy;
+            if (this.sort_order !== nextSortOrder) {
+                this.sort_order = nextSortOrder;
+                button.attr("data-value", nextSortOrder);
+            }
+        },
+        get_sql_string() {
+            return "`tabDoor Cutting Order`.`" + this.sort_by + "` " + this.sort_order;
+        },
+        orderButton() {
+            return button;
+        },
+    };
+    selector.onchange = function onSortChange(sortBy, sortOrder) {
+        if (!selector.listview) return;
+        selector.listview.sort_by = sortBy;
+        selector.listview.sort_order = sortOrder;
+    };
+    return selector;
+}
+
+memoryStorage.clear();
+const toggleSelector = frappeLikeSortSelector("modified");
+const toggleListview = {
+    sort_by: "modified",
+    sort_order: "desc",
+    sort_selector: toggleSelector,
+};
+toggleSelector.listview = toggleListview;
+api.installOverviewDefaultSort(toggleListview);
+assert.strictEqual(toggleSelector.sort_by, api.overviewDefaultSortField);
+
+toggleSelector.set_value(api.overviewDefaultSortField, "asc");
+toggleSelector.onchange(toggleSelector.sort_by, toggleSelector.sort_order);
+assert.strictEqual(toggleSelector.sort_order, "desc");
+assert.strictEqual(toggleSelector.orderButton().attr("data-value"), "desc");
+
+toggleSelector.set_value("name", toggleSelector.sort_order);
+toggleSelector.onchange(toggleSelector.sort_by, toggleSelector.sort_order);
+assert.strictEqual(toggleSelector.sort_by, "name");
+assert.strictEqual(toggleSelector.orderButton().attr("data-value"), toggleSelector.sort_order);
+assert.strictEqual(
+    toggleSelector.get_sql_string(),
+    "`tabDoor Cutting Order`.`name` desc"
+);
+
+const nextOrder = toggleSelector.orderButton().attr("data-value") === "desc" ? "asc" : "desc";
+toggleSelector.set_value(toggleSelector.sort_by, nextOrder);
+toggleSelector.onchange(toggleSelector.sort_by, toggleSelector.sort_order);
+assert.strictEqual(toggleSelector.sort_order, "asc");
+assert.strictEqual(toggleListview.sort_order, "asc");
+assert.strictEqual(toggleSelector.orderButton().attr("data-value"), "asc");
+assert.strictEqual(
+    toggleSelector.get_sql_string(),
+    "`tabDoor Cutting Order`.`name` asc",
+    "built-in ascending/descending toggle must work after leaving the default sort"
+);
+
+toggleSelector.set_value(toggleSelector.sort_by, "desc");
+toggleSelector.onchange(toggleSelector.sort_by, toggleSelector.sort_order);
+assert.strictEqual(toggleSelector.sort_order, "desc");
+assert.strictEqual(toggleSelector.orderButton().attr("data-value"), "desc");
+
 context.frappe.session.user = "cutting@example.com";
 context.window.AlmdinaPermissions = undefined;
 

@@ -91,6 +91,9 @@
         active: Object.freeze({ rank: 0, field: "modified", direction: -1 }),
         delivered: Object.freeze({ rank: 1, field: "modified", direction: -1 }),
     });
+    const OVERVIEW_DEFAULT_SORT_FIELD = "__dco_default_sort";
+    const OVERVIEW_DEFAULT_SORT_LABEL = "الترتيب الافتراضي";
+    const OVERVIEW_DEFAULT_SORT_MIGRATION_KEY = "dco.overviewDefaultSort.v1";
     const DESKTOP_DELIVERY_ROW_CLASS = Object.freeze({
         ready_for_delivery: "dco-list-row-ready-for-delivery",
         delivered: "dco-list-row-delivered",
@@ -1182,6 +1185,182 @@
         );
     }
 
+    function overviewSortStorage() {
+        try {
+            return window.localStorage || null;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function overviewDefaultSortSql() {
+        return "`tab" + METHODS.doctype + "`.`modified` desc";
+    }
+
+    function listSortBy(listview) {
+        if (listview && listview.sort_selector && listview.sort_selector.sort_by) {
+            return String(listview.sort_selector.sort_by).trim();
+        }
+        return String(listview && listview.sort_by || "").trim();
+    }
+
+    function shouldSelectOverviewDefaultSort(sortBy, storage) {
+        const field = String(sortBy || "").trim();
+        if (!field || field === OVERVIEW_DEFAULT_SORT_FIELD) return true;
+        if (field !== "modified") return false;
+        const store = storage === undefined ? overviewSortStorage() : storage;
+        try {
+            return !(store && typeof store.getItem === "function"
+                && store.getItem(OVERVIEW_DEFAULT_SORT_MIGRATION_KEY));
+        } catch (error) {
+            return true;
+        }
+    }
+
+    function markOverviewDefaultSortMigrated(storage) {
+        const store = storage === undefined ? overviewSortStorage() : storage;
+        try {
+            if (store && typeof store.setItem === "function") {
+                store.setItem(OVERVIEW_DEFAULT_SORT_MIGRATION_KEY, "1");
+            }
+        } catch (error) {
+            // Private mode and quota errors must not block list rendering.
+        }
+    }
+
+    function isOverviewDefaultSortActive(listview) {
+        return usesOverviewDeliveredLastSort()
+            && listSortBy(listview) === OVERVIEW_DEFAULT_SORT_FIELD;
+    }
+
+    function ensureOverviewDefaultSortOption(selector) {
+        if (!selector) return;
+        selector.args = selector.args || {};
+        const options = Array.isArray(selector.args.options) ? [...selector.args.options] : [];
+        if (!options.some(option => option && option.fieldname === OVERVIEW_DEFAULT_SORT_FIELD)) {
+            options.unshift({
+                fieldname: OVERVIEW_DEFAULT_SORT_FIELD,
+                label: OVERVIEW_DEFAULT_SORT_LABEL,
+            });
+        }
+        selector.args.options = options;
+        selector.labels = selector.labels || {};
+        selector.labels[OVERVIEW_DEFAULT_SORT_FIELD] = OVERVIEW_DEFAULT_SORT_LABEL;
+    }
+
+    function normalizedSortOrder(sortOrder) {
+        return String(sortOrder || "desc").toLowerCase() === "asc" ? "asc" : "desc";
+    }
+
+    function syncSortSelectorOrderButton(selector, sortOrder) {
+        const order = normalizedSortOrder(sortOrder);
+        if (!selector) return order;
+        selector.sort_order = order;
+        if (selector.args) selector.args.sort_order = order;
+        const wrapper = selector.wrapper;
+        if (!wrapper || typeof wrapper.find !== "function") return order;
+        const $btn = wrapper.find(".btn-order");
+        if (!$btn || !$btn.length) return order;
+        $btn.attr("data-value", order);
+        $btn.attr("title", order === "desc" ? __("ascending") : __("descending"));
+        const $icon = $btn.find(".sort-order");
+        if ($icon && $icon.length && frappe.utils && typeof frappe.utils.icon === "function") {
+            $icon.html(frappe.utils.icon(order === "asc" ? "sort-ascending" : "sort-descending", "sm"));
+        }
+        return order;
+    }
+
+    function selectOverviewDefaultSort(listview, selector) {
+        selector.args = selector.args || {};
+        selector.args.sort_by = OVERVIEW_DEFAULT_SORT_FIELD;
+        selector.args.sort_order = "desc";
+        selector.args.sort_by_label = OVERVIEW_DEFAULT_SORT_LABEL;
+        selector.sort_by = OVERVIEW_DEFAULT_SORT_FIELD;
+        selector.sort_order = "desc";
+        if (typeof selector.set_value === "function") {
+            selector.set_value(OVERVIEW_DEFAULT_SORT_FIELD, "desc");
+        } else {
+            syncSortSelectorOrderButton(selector, "desc");
+        }
+        listview.sort_by = OVERVIEW_DEFAULT_SORT_FIELD;
+        listview.sort_order = "desc";
+    }
+
+    function patchOverviewSortSelectorSql(selector) {
+        if (!selector || selector._dcoOverviewSqlPatched) return;
+        if (typeof selector.get_sql_string !== "function") return;
+        const original = selector.get_sql_string.bind(selector);
+        selector.get_sql_string = function dcoOverviewGetSqlString() {
+            if (this.sort_by === OVERVIEW_DEFAULT_SORT_FIELD) {
+                return overviewDefaultSortSql();
+            }
+            return original();
+        };
+        selector._dcoOverviewSqlPatched = true;
+    }
+
+    function patchOverviewSortSelectorSetValue(selector) {
+        if (!selector || selector._dcoOverviewSetValuePatched) return;
+        if (typeof selector.set_value !== "function") return;
+        const originalSetValue = selector.set_value.bind(selector);
+        selector.set_value = function dcoOverviewSetValue(sortBy, sortOrder) {
+            const field = String(sortBy || this.sort_by || "").trim();
+            const order = field === OVERVIEW_DEFAULT_SORT_FIELD
+                ? "desc"
+                : normalizedSortOrder(sortOrder);
+            originalSetValue(field, order);
+            syncSortSelectorOrderButton(this, this.sort_order || order);
+        };
+        selector._dcoOverviewSetValuePatched = true;
+    }
+
+    function patchOverviewSortSelectorChange(listview, selector) {
+        if (!selector || selector._dcoOverviewChangePatched) return;
+        const original = selector.onchange || selector.change;
+        selector.onchange = function dcoOverviewSortChange(sortBy, sortOrder) {
+            const field = String(sortBy || selector.sort_by || "").trim();
+            if (field === OVERVIEW_DEFAULT_SORT_FIELD) {
+                selectOverviewDefaultSort(listview, selector);
+                if (typeof original === "function") {
+                    original(OVERVIEW_DEFAULT_SORT_FIELD, "desc");
+                }
+                return;
+            }
+            const order = syncSortSelectorOrderButton(selector, selector.sort_order || sortOrder);
+            listview.sort_by = field;
+            listview.sort_order = order;
+            if (typeof original === "function") original(field, order);
+        };
+        selector.change = selector.onchange;
+        selector._dcoOverviewChangePatched = true;
+    }
+
+    function installOverviewDefaultSort(listview) {
+        if (!listview || !usesOverviewDeliveredLastSort()) return;
+        const selector = listview.sort_selector;
+        if (!selector) return;
+
+        ensureOverviewDefaultSortOption(selector);
+        patchOverviewSortSelectorSql(selector);
+        patchOverviewSortSelectorSetValue(selector);
+        patchOverviewSortSelectorChange(listview, selector);
+
+        if (selector._dcoOverviewSortOptionInstalled) return;
+
+        const current = listSortBy(listview);
+        if (shouldSelectOverviewDefaultSort(current)) {
+            selectOverviewDefaultSort(listview, selector);
+        }
+        markOverviewDefaultSortMigrated();
+        if (typeof selector.make === "function") selector.make();
+        ensureOverviewDefaultSortOption(selector);
+        patchOverviewSortSelectorSql(selector);
+        patchOverviewSortSelectorSetValue(selector);
+        patchOverviewSortSelectorChange(listview, selector);
+        syncSortSelectorOrderButton(selector, selector.sort_order);
+        selector._dcoOverviewSortOptionInstalled = true;
+    }
+
     function overviewListState(doc) {
         return desktopDeliveryRowState(doc) === "delivered" ? "delivered" : "active";
     }
@@ -1254,7 +1433,7 @@
         if (!personalView) {
             clearOperationalRoleRows(listview);
             applyDesktopDeliveryRowColors(listview);
-            if (usesOverviewDeliveredLastSort()) {
+            if (isOverviewDefaultSortActive(listview)) {
                 reorderOverviewListRows(listview, result);
             }
             return;
@@ -1417,6 +1596,7 @@
         installCombinedSearch(listview);
         installResponsiveObserver(listview);
         installRowsObserver(listview);
+        installOverviewDefaultSort(listview);
         reconcileStatusFilterLayout(listview);
         hydrateStatusFilterOptions(listview);
         hydrateAssigneeFilterOptions(listview);
@@ -1478,6 +1658,12 @@
         desktopDeliveryRowState,
         isPhoneLayout,
         kanbanCardFields,
+        installOverviewDefaultSort,
+        isOverviewDefaultSortActive,
+        overviewDefaultSortField: OVERVIEW_DEFAULT_SORT_FIELD,
+        overviewDefaultSortLabel: OVERVIEW_DEFAULT_SORT_LABEL,
+        overviewDefaultSortMigrationKey: OVERVIEW_DEFAULT_SORT_MIGRATION_KEY,
+        overviewDefaultSortSql,
         overviewListState,
         overviewStageLabel,
         productionStageLabel,
@@ -1485,6 +1671,8 @@
         quickActionContext,
         reconcileStatusFilterLayout,
         renderMobileCards,
+        shouldSelectOverviewDefaultSort,
+        syncSortSelectorOrderButton,
         sortDesktopQueueItems,
         sortOverviewListItems,
         sortPersonalQueueItems,
