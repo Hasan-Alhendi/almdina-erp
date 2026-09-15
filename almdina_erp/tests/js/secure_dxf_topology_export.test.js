@@ -198,7 +198,7 @@ async function run() {
     assert.match(downloadedDxf, /10\r\n5\r\n20\r\n995\r\n/);
     // Hole geometry must survive into the emitted DXF rather than rectangle fallback.
     assert.match(downloadedDxf, /10\r\n25\r\n20\r\n975\r\n/);
-    assert.match(downloadedName, /_AutoCAD2021\.dxf$/);
+    assert.match(downloadedName, /_AutoCAD2011_2026\.dxf$/);
 
     nextPlan = {
         full_board_width_cm: 100,
