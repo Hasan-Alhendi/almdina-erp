@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-import io
 import os
 from pathlib import Path
 from typing import Any
@@ -40,6 +39,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import
     plan_input_fingerprint,
 )
 from almdina_erp.almdina_erp.services import export_validation_service as legacy_export
+from almdina_erp.almdina_erp.services.dxf_autocad_normalization import (
+    rebuild_autocad_dxf,
+)
 from almdina_erp.almdina_erp.services.order_board_identity import (
     order_board_color,
     order_board_material,
@@ -455,17 +457,6 @@ def _normalized_dxf_filename(order_name: str | None) -> str:
     return f"cutting_plan_{safe_order}_AutoCAD2011_2026.dxf"
 
 
-def _assert_single_dxf_document(content: str) -> None:
-    lines = content.splitlines()
-    header_sections = sum(
-        1
-        for index, value in enumerate(lines[:-2])
-        if value.strip() == "SECTION" and lines[index + 2].strip() == "HEADER"
-    )
-    eof_markers = sum(1 for value in lines if value.strip() == "EOF")
-    if header_sections != 1 or eof_markers != 1:
-        raise ValueError("DXF serialization produced multiple document bodies.")
-
 
 @frappe.whitelist()
 def normalize_dxf_for_autocad(
@@ -488,52 +479,7 @@ def normalize_dxf_for_autocad(
         frappe.throw(_("حجم ملف DXF غير صالح للتصدير."), frappe.ValidationError)
 
     try:
-        import ezdxf
-
-        source_document = ezdxf.read(io.StringIO(raw.decode("ascii")))
-        source_modelspace = source_document.modelspace()
-        source_entities = list(source_modelspace)
-        if not source_entities or any(entity.dxftype() != "LINE" for entity in source_entities):
-            raise ValueError("The client DXF must contain LINE entities only.")
-
-        # Build a canonical AutoCAD 2010 document from primitives. Mutating the
-        # version of a legacy R12 document does not upgrade its internal tables.
-        target_document = ezdxf.new("R2010", setup=True)
-        target_document.units = 4  # millimetres
-        target_modelspace = target_document.modelspace()
-
-        used_layers = {str(entity.dxf.layer or "0") for entity in source_entities}
-        for layer_name in sorted(used_layers):
-            if layer_name == "0" or layer_name in target_document.layers:
-                continue
-            source_layer = source_document.layers.get(layer_name)
-            target_document.layers.add(
-                name=layer_name,
-                color=int(source_layer.dxf.color or 7),
-                linetype="CONTINUOUS",
-            )
-
-        for entity in source_entities:
-            target_modelspace.add_line(
-                entity.dxf.start,
-                entity.dxf.end,
-                dxfattribs={"layer": str(entity.dxf.layer or "0")},
-            )
-
-        target = io.StringIO()
-        target_document.write(target)
-        normalized = target.getvalue()
-        _assert_single_dxf_document(normalized)
-
-        verification = ezdxf.read(io.StringIO(normalized))
-        if verification.dxfversion != _AUTOCAD_DXF_VERSION:
-            raise ValueError("DXF output version is not AutoCAD 2010.")
-        if len(list(verification.modelspace())) != len(source_entities):
-            raise ValueError("DXF output geometry is incomplete.")
-        if verification.audit().has_errors:
-            raise ValueError("DXF output failed the ezdxf audit.")
-
-        content = normalized.encode("utf-8")
+        content = rebuild_autocad_dxf(raw)
     except Exception as exc:
         try:
             frappe.log_error(
