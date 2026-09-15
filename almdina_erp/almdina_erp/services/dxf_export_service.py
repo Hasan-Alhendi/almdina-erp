@@ -490,14 +490,58 @@ def normalize_dxf_for_autocad(
     try:
         import ezdxf
 
-        document = ezdxf.read(io.StringIO(raw.decode("ascii")))
-        document.dxfversion = _AUTOCAD_DXF_VERSION
+        source_document = ezdxf.read(io.StringIO(raw.decode("ascii")))
+        source_modelspace = source_document.modelspace()
+        source_entities = list(source_modelspace)
+        if not source_entities or any(entity.dxftype() != "LINE" for entity in source_entities):
+            raise ValueError("The client DXF must contain LINE entities only.")
+
+        # Build a canonical AutoCAD 2010 document from primitives. Mutating the
+        # version of a legacy R12 document does not upgrade its internal tables.
+        target_document = ezdxf.new("R2010", setup=True)
+        target_document.units = 4  # millimetres
+        target_modelspace = target_document.modelspace()
+
+        used_layers = {str(entity.dxf.layer or "0") for entity in source_entities}
+        for layer_name in sorted(used_layers):
+            if layer_name == "0" or layer_name in target_document.layers:
+                continue
+            source_layer = source_document.layers.get(layer_name)
+            target_document.layers.add(
+                name=layer_name,
+                color=int(source_layer.dxf.color or 7),
+                linetype="CONTINUOUS",
+            )
+
+        for entity in source_entities:
+            target_modelspace.add_line(
+                entity.dxf.start,
+                entity.dxf.end,
+                dxfattribs={"layer": str(entity.dxf.layer or "0")},
+            )
+
         target = io.StringIO()
-        document.write(target)
+        target_document.write(target)
         normalized = target.getvalue()
         _assert_single_dxf_document(normalized)
+
+        verification = ezdxf.read(io.StringIO(normalized))
+        if verification.dxfversion != _AUTOCAD_DXF_VERSION:
+            raise ValueError("DXF output version is not AutoCAD 2010.")
+        if len(list(verification.modelspace())) != len(source_entities):
+            raise ValueError("DXF output geometry is incomplete.")
+        if verification.audit().has_errors:
+            raise ValueError("DXF output failed the ezdxf audit.")
+
         content = normalized.encode("utf-8")
     except Exception as exc:
+        try:
+            frappe.log_error(
+                title="AutoCAD DXF normalization failed",
+                message=frappe.get_traceback(),
+            )
+        except Exception:
+            pass
         frappe.throw(_("تعذر تجهيز ملف DXF متوافق مع AutoCAD."), frappe.ValidationError)
         raise AssertionError("unreachable") from exc
 
