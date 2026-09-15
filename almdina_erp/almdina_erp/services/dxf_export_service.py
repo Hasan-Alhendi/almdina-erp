@@ -3,8 +3,6 @@ from __future__ import annotations
 import base64
 import io
 import os
-
-import ezdxf
 from pathlib import Path
 from typing import Any
 
@@ -478,12 +476,14 @@ def normalize_dxf_for_autocad(
         frappe.throw(_("حجم ملف DXF غير صالح للتصدير."), frappe.ValidationError)
 
     try:
+        import ezdxf
+
         document = ezdxf.read(io.StringIO(raw.decode("ascii")))
         document.dxfversion = _AUTOCAD_DXF_VERSION
         target = io.StringIO()
         document.write(target)
         content = target.getvalue().encode("utf-8")
-    except (UnicodeDecodeError, ezdxf.DXFError, ValueError) as exc:
+    except (ImportError, UnicodeDecodeError, ValueError) as exc:
         frappe.throw(_("تعذر تجهيز ملف DXF متوافق مع AutoCAD."), frappe.ValidationError)
         raise AssertionError("unreachable") from exc
 
