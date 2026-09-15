@@ -34,6 +34,8 @@ class TestLegacyPermissionBootstrap(unittest.TestCase):
         self.assertTrue(state[Capability.RECALCULATE_PLAN])
         self.assertTrue(state[Capability.DISPATCH_ORDER])
         self.assertTrue(state[Capability.REASSIGN_WORKER])
+        self.assertTrue(state[Capability.RETURN_ORDER_TO_DRAFT])
+        self.assertTrue(state[Capability.RESUME_CANCELLED_ORDER])
         self.assertTrue(state[Capability.APPROVE_ORDER])
         self.assertTrue(state[Capability.REJECT_ORDER])
         self.assertFalse(state[Capability.VIEW_COSTS])

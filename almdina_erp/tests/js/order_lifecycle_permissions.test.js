@@ -40,6 +40,7 @@ function makeForm(name = "DCO-TEST-001", status = "Draft") {
                 added.splice(i, 1);
             }
         },
+        refresh_field() {},
         reload_doc() {
             return Promise.resolve();
         },
@@ -200,6 +201,7 @@ function makePlanEditForm(overrides = {}) {
         "approve_order",
         "return_order_to_draft",
         "cancel_order",
+        "resume_cancelled_order",
     ]);
     const lifecycle = {
         order_name: "DCO-TEST-001",
@@ -264,26 +266,76 @@ function makePlanEditForm(overrides = {}) {
     await draftLoaded.api.loadContext(draftForm);
     assert.deepEqual(draftForm.added, []);
 
-    const cancellableLifecycle = {
-        ...lifecycle,
+    const drawingLifecycle = {
+        order_name: "DCO-TEST-001",
+        status: "At Drawing",
         actions: {
-            ...lifecycle.actions,
             return_to_draft: { allowed: false },
             cancel: { allowed: true },
+            resume_cancelled: { allowed: false },
         },
     };
-    const cancellable = load(capabilities, () => cancellableLifecycle);
-    const cancellableForm = makeForm();
-    await cancellable.api.loadContext(cancellableForm);
+    const cancelledLifecycle = {
+        order_name: "DCO-TEST-001",
+        status: "Cancelled",
+        actions: {
+            return_to_draft: { allowed: false },
+            cancel: { allowed: false },
+            resume_cancelled: { allowed: true },
+        },
+    };
+    const liveForm = makeForm("DCO-TEST-001", "At Drawing");
+    const liveLoaded = load(capabilities, options => {
+        if (options.method.endsWith("cancel_order")) {
+            return {
+                name: "DCO-TEST-001",
+                status: "Cancelled",
+                lifecycle: cancelledLifecycle,
+            };
+        }
+        if (options.method.endsWith("resume_cancelled_order")) {
+            return {
+                name: "DCO-TEST-001",
+                status: "At Drawing",
+                lifecycle: drawingLifecycle,
+            };
+        }
+        if (liveForm.doc.status === "Cancelled") return cancelledLifecycle;
+        return drawingLifecycle;
+    });
+    await liveLoaded.api.loadContext(liveForm);
     assert.deepEqual(
-        cancellableForm.added.map(item => ({ label: item.label, group: item.group })),
+        liveForm.added.map(item => ({ label: item.label, group: item.group })),
         [{ label: "إلغاء الطلب", group: undefined }]
     );
-    cancellable.api.installButtons(cancellableForm, cancellableLifecycle);
+    liveLoaded.api.installButtons(liveForm, drawingLifecycle);
     assert.equal(
-        cancellableForm.added.filter(item => item.label === "إلغاء الطلب").length,
+        liveForm.added.filter(item => item.label === "إلغاء الطلب").length,
         1,
         "the cancel action must remain stable across repeated permission refreshes"
+    );
+
+    liveForm.added.find(item => item.label === "إلغاء الطلب").handler();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(liveForm.doc.status, "Cancelled");
+    assert.deepEqual(
+        liveForm.added.map(item => item.label),
+        ["استئناف الطلب"],
+        "after cancel the form must refresh to the resume action"
+    );
+
+    liveForm.added.find(item => item.label === "استئناف الطلب").handler();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const resumeCall = liveLoaded.calls.find(call =>
+        call.method.endsWith("order_lifecycle_service.resume_cancelled_order")
+    );
+    assert.ok(resumeCall);
+    assert.equal(resumeCall.args && resumeCall.args.reason, undefined);
+    assert.equal(liveForm.doc.status, "At Drawing");
+    assert.deepEqual(
+        liveForm.added.map(item => item.label),
+        ["إلغاء الطلب"],
+        "after resume the form must refresh to the cancel action"
     );
 
     const denied = load(new Set(), () => lifecycle);

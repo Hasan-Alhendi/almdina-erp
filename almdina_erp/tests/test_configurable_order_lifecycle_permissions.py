@@ -26,6 +26,7 @@ def test_lifecycle_capabilities_are_assignable_permission_types():
         "submit_order",
         "approve_order",
         "cancel_order",
+        "resume_cancelled_order",
         "return_order_to_draft",
     ):
         assert capability in authorization
@@ -42,6 +43,7 @@ def test_server_actions_use_one_lifecycle_policy_without_role_names():
     assert "document_has_capability" in context_service
     assert "OrderLifecycleAction.APPROVE" in approval_service
     assert "OrderLifecycleAction.CANCEL" in cancel_service
+    assert "OrderLifecycleAction.RESUME_CANCELLED" in cancel_service
     assert "OrderLifecycleAction.RETURN_TO_DRAFT" in cancel_service
     assert '"in_place": True' in cancel_service
     assert "Capability.CREATE_ORDER_REVISION" in revision_service
@@ -72,6 +74,17 @@ def test_lifecycle_ui_is_capability_driven_and_fail_closed():
     assert 'can(frm, "edit_order")' in lifecycle_ux
     assert "function canReturnToDraft(frm, context)" in lifecycle_ux
     assert 'return actionAllowed(context, "return_to_draft");' in lifecycle_ux
+    assert "function canResumeCancelledOrder(frm, context)" in lifecycle_ux
+    assert 'return actionAllowed(context, "resume_cancelled");' in lifecycle_ux
+    resume_fn = lifecycle_ux.split("function resumeCancelledOrder", 1)[1].split(
+        "function installButtons",
+        1,
+    )[0]
+    assert "frappe.prompt" not in resume_fn
+    assert "frappe.confirm" in resume_fn
+    assert "invalidateLifecycleContext(frm)" in lifecycle_ux
+    assert "function applyLifecycleResult(frm, result)" in lifecycle_ux
+    assert "return loadContext(frm).then(() => result);" in lifecycle_ux
     assert "context.actions[action].allowed === true" in lifecycle_ux
     assert (
         "OrderLifecycleAction.RETURN_TO_DRAFT: Capability.RETURN_ORDER_TO_DRAFT"
@@ -137,6 +150,7 @@ def test_return_and_revert_are_capability_only_without_status_gates():
         "function loadContext", 1
     )[0]
     assert "LABELS.return_to_draft" in install
+    assert "LABELS.resume_cancelled" in install
     assert "ACTION_GROUP" not in install.split("LABELS.return_to_draft", 1)[1].split(
         "if (actionAllowed(context, \"cancel\"))", 1
     )[0]

@@ -93,9 +93,12 @@ Application يقرأ المرحلة التالية من Route، لا من سلس
 - Reassign worker لمرحلة نشطة.
 - Revert إلى قسم/مرحلة سابقة مع شروط بنيوية.
 - Return order to Draft.
+- Resume a cancelled order to the production stage it was cancelled from (`resume_cancelled_order`).
 - Mark Delivered.
 
 Supervisor capability لا تلغي كل قواعد البنية تلقائيًا؛ بعض الإجراءات ما زالت تتطلب وجود target stage صالح أو status مناسب.
+
+إلغاء الطلب (`cancel_order`) إجراء نهائي من ناحية الحالة، لكنه يحفظ snapshot للمراحل والخطة. استئناف الطلب الملغى (`resume_cancelled_order`) يعيد نفس المستند إلى المرحلة التي أُلغي منها دون طلب سبب، دون `return_order_to_draft` ودون استرجاع قطع التعويض الملغاة مع الإلغاء. بعد الإلغاء أو الاستئناف تُحدَّث واجهة الطلب فورًا لإظهار الحالة والزر المناسب.
 
 ## 8. Drawing / planning handoff
 

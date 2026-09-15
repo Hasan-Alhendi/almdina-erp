@@ -63,7 +63,7 @@ flowchart LR
 
 ### Orders
 
-`view_orders`, `view_all_orders`, `create_order`, `edit_order`, `create_order_revision`, `submit_order`, `approve_order`, `reject_order`, `cancel_order`.
+`view_orders`, `view_all_orders`, `create_order`, `edit_order`, `create_order_revision`, `submit_order`, `approve_order`, `reject_order`, `cancel_order`, `resume_cancelled_order`.
 
 ### Costing & documents
 
