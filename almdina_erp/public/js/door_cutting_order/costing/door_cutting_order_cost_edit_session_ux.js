@@ -458,6 +458,16 @@
             if (!documentStillCurrent(frm, token)) return false;
             if (!sessionIsCurrent(frm, sessionContext)) return false;
             sync(frm);
+            // The aggregate OFFCUT price is valid only while at least one
+            // physical piece remains FACTORY→FACTORY. Clear the hidden draft
+            // value before saving a new non-factory classification.
+            if (typeof offcutUx.hasFactorySelection === "function"
+                && !offcutUx.hasFactorySelection(frm)) {
+                pendingOffcutPrice = 0;
+                const priceInput = offcutPriceInput(frm);
+                if (priceInput && priceInput.length) priceInput.val(0);
+                store.patchDraft({ [OFFCUT_PRICE_FIELD]: 0 });
+            }
         }
 
         if (canEditCostSettings(frm)) {
