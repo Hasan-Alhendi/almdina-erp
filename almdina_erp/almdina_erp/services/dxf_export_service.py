@@ -467,7 +467,7 @@ def normalize_dxf_for_autocad(
         frappe.throw(_("تعذر التحقق من صلاحية تصدير ملف DXF."), frappe.PermissionError)
 
     try:
-        raw = base64.standard_b64decode(str(content_b64 or ""), validate=True)
+        raw = base64.b64decode(str(content_b64 or ""), validate=True)
     except (ValueError, TypeError) as exc:
         frappe.throw(_("محتوى ملف DXF غير صالح للتصدير."), frappe.ValidationError)
         raise AssertionError("unreachable") from exc
