@@ -7,6 +7,9 @@
     const DXF_VERSION = "AC1009"; // AutoCAD R11/R12 ASCII. AutoCAD 2020 opens this legacy format.
     const TOPOLOGY_SCHEMA_VERSION = 1;
     const TOPOLOGY_UNIT = "mm";
+    // R12 TABLE records must declare the exact number of entries. The exporter
+    // writes four base layers plus three manufacturing overlay layers.
+    const DXF_LAYER_COUNT = 7;
     const TOPOLOGY_COORDINATE_SPACE = "usable_sheet";
     const ORIGINAL_UPLOAD_SOURCES = new Set([
         "custom",
@@ -368,7 +371,7 @@
         dxf += pair(0, "TABLE") + pair(2, "LTYPE") + pair(70, 1);
         dxf += pair(0, "LTYPE") + pair(2, "CONTINUOUS") + pair(70, 0) + pair(3, "Solid line") + pair(72, 65) + pair(73, 0) + pair(40, 0);
         dxf += pair(0, "ENDTAB");
-        dxf += pair(0, "TABLE") + pair(2, "LAYER") + pair(70, 6);
+        dxf += pair(0, "TABLE") + pair(2, "LAYER") + pair(70, DXF_LAYER_COUNT);
         dxf += layer("0", 7) + layer("SHEET_OUTLINE", 8) + layer("CUT_PATH", 1)
             + layer("OFFCUT", EXTRA_OVERLAY_LAYER_COLORS.OFFCUT);
         dxf += layer("Liner", EXTRA_OVERLAY_LAYER_COLORS.Liner)
