@@ -184,7 +184,7 @@ async function run() {
     assert.match(downloadedDxf, /10\r\n5\r\n20\r\n995\r\n/);
     // Hole geometry must survive into the emitted DXF rather than rectangle fallback.
     assert.match(downloadedDxf, /10\r\n25\r\n20\r\n975\r\n/);
-    assert.match(downloadedName, /_AutoCAD2020_R12\.dxf$/);
+    assert.match(downloadedName, /_AutoCAD2021\.dxf$/);
 
     nextPlan = {
         full_board_width_cm: 100,
@@ -257,7 +257,7 @@ async function run() {
     assert.match(lastCallMethod, /download_uploaded_dxf/);
     assert.equal(downloadedDxf, originalDxf);
     assert.equal(downloadedName, "cutting_plan_DCO-2026-00018_corrected.dxf");
-    assert.doesNotMatch(downloadedDxf, /\$ACADVER\r\n1\r\nAC1009/);
+    assert.doesNotMatch(downloadedDxf, /\$ACADVER\r\n1\r\nAC1032/);
 
     downloadedDxf = "";
     lastCallMethod = "";
@@ -284,7 +284,7 @@ async function run() {
     };
     await fakeFrappe.almdina.export_order_dxf("DCO-APPROVED-SYSTEM", "approved");
     assert.match(lastCallMethod, /get_validated_dxf_plan/);
-    assert.match(downloadedDxf, /\$ACADVER\r\n1\r\nAC1009/);
+    assert.match(downloadedDxf, /\$ACADVER\r\n1\r\nAC1032/);
 
     nextPlan = {
         full_board_width_cm: 100,
