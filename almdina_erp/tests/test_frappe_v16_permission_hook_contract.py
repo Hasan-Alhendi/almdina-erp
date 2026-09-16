@@ -15,19 +15,25 @@ GATEWAY_MODULE = (
 )
 
 
-def load_permissions_module():
-    fake_frappe = types.ModuleType("frappe")
-    fake_frappe.session = SimpleNamespace(user="test@example.com")
-    fake_frappe.db = SimpleNamespace()
+def _real_frappe_is_available() -> bool:
+    try:
+        return importlib.util.find_spec("frappe") is not None
+    except (ImportError, ValueError):
+        return False
 
+
+def load_permissions_module():
     fake_gateway = types.ModuleType(GATEWAY_MODULE)
     fake_gateway.doctype_has_capability = lambda *_args, **_kwargs: False
 
-    previous_frappe = sys.modules.get("frappe")
-    previous_gateway = sys.modules.get(GATEWAY_MODULE)
-    sys.modules["frappe"] = fake_frappe
-    sys.modules[GATEWAY_MODULE] = fake_gateway
-    try:
+    module_overrides = {GATEWAY_MODULE: fake_gateway}
+    if not _real_frappe_is_available():
+        fake_frappe = types.ModuleType("frappe")
+        fake_frappe.session = SimpleNamespace(user="test@example.com")
+        fake_frappe.db = SimpleNamespace()
+        module_overrides["frappe"] = fake_frappe
+
+    with patch.dict(sys.modules, module_overrides):
         spec = importlib.util.spec_from_file_location(
             "_almdina_frappe_v16_permission_hook_contract",
             PERMISSIONS_PATH,
@@ -37,15 +43,6 @@ def load_permissions_module():
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         return module
-    finally:
-        if previous_frappe is None:
-            sys.modules.pop("frappe", None)
-        else:
-            sys.modules["frappe"] = previous_frappe
-        if previous_gateway is None:
-            sys.modules.pop(GATEWAY_MODULE, None)
-        else:
-            sys.modules[GATEWAY_MODULE] = previous_gateway
 
 
 permissions = load_permissions_module()
