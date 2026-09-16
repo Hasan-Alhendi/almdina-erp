@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import importlib.util
 import sys
 import types
@@ -23,17 +24,18 @@ def _real_frappe_is_available() -> bool:
         return False
 
 
-def load_permissions_module():
+def _load_permissions_with_fakes():
+    fake_frappe = types.ModuleType("frappe")
+    fake_frappe.session = SimpleNamespace(user="test@example.com")
+    fake_frappe.db = SimpleNamespace()
+
     fake_gateway = types.ModuleType(GATEWAY_MODULE)
     fake_gateway.doctype_has_capability = lambda *_args, **_kwargs: False
 
-    module_overrides = {GATEWAY_MODULE: fake_gateway}
-    if not _real_frappe_is_available():
-        fake_frappe = types.ModuleType("frappe")
-        fake_frappe.session = SimpleNamespace(user="test@example.com")
-        fake_frappe.db = SimpleNamespace()
-        module_overrides["frappe"] = fake_frappe
-
+    module_overrides = {
+        "frappe": fake_frappe,
+        GATEWAY_MODULE: fake_gateway,
+    }
     previous_modules = {
         name: sys.modules.get(name, _MISSING_MODULE) for name in module_overrides
     }
@@ -54,6 +56,12 @@ def load_permissions_module():
                 sys.modules.pop(name, None)
             else:
                 sys.modules[name] = previous
+
+
+def load_permissions_module():
+    if _real_frappe_is_available():
+        return importlib.import_module("almdina_erp.permissions")
+    return _load_permissions_with_fakes()
 
 
 permissions = load_permissions_module()
@@ -224,11 +232,18 @@ class TestFrappeV16PermissionHookContract(unittest.TestCase):
         self.assertIn("and ps.status in ({active_stage_sql})", source)
         self.assertIn("not in ACTIVE_STAGE_STATUSES", source)
 
-        permissions.frappe.db.escape = lambda value: f"'{value}'"
-        with patch.object(
-            permissions,
-            "_worker_operational_roles",
-            return_value=("عامل تقشيط",),
+        with (
+            patch.object(
+                permissions.frappe.db,
+                "escape",
+                side_effect=lambda value: f"'{value}'",
+                create=True,
+            ),
+            patch.object(
+                permissions,
+                "_worker_operational_roles",
+                return_value=("عامل تقشيط",),
+            ),
         ):
             sql = permissions._worker_actionable_orders_subquery("sanding@example.com")
         self.assertIn("ps.status in", sql)
