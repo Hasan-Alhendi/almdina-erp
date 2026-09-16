@@ -47,7 +47,7 @@ stateDiagram-v2
 - Route صالح.
 - العامل المختار يملك `operational_role` المطلوب لأول مرحلة.
 
-بعد dispatch ينشأ Current Production Stage ويُسند لمستخدم محدد.
+بعد dispatch ينشأ Current Production Stage ويُسند لمستخدم محدد. إذا نجح الإرسال وكان المستخدم لا يملك `view_all_orders` ولا `view_shop_floor_history`، تعيد الاستمارة إلى قائمة `Door Cutting Order` بدل إعادة تحميل طلب خرج من نطاق رؤيته.
 
 ## 5. تنفيذ المرحلة
 
@@ -65,7 +65,7 @@ stateDiagram-v2
 
 العامل يحتاج `HANDOFF_ASSIGNED_STAGE` ونفس شروط ownership. المسار الطبيعي للإنهاء يبقى من `In Progress` أو `Paused` إلى `Completed`.
 
-يوجد استثناء مقصود للمرحلة `Pending`: إذا كانت المرحلة هي Current Stage ومسندة لنفس العامل، وكان العامل يملك `HANDOFF_ASSIGNED_STAGE` **ولا يملك** `START_ASSIGNED_STAGE`، يمكنه تنفيذ Handoff يدوي مباشر من `Pending` إلى `Completed` دون إنشاء Start وهمي. هذا لا يحدث تلقائيًا.
+يوجد استثناء مقصود للمرحلة `Pending`: إذا كانت المرحلة هي Current Stage ومسندة لنفس العامل، وكان العامل يملك `HANDOFF_ASSIGNED_STAGE` **ولا يملك** `START_ASSIGNED_STAGE`، يمكنه تنفيذ Handoff يدوي مباشر من `Pending` إلى `Completed` دون إنشاء Start وهمي. هذا لا يحدث تلقائيًا. بعد Handoff أو تأكيد التسليم، نفس قاعدة العودة إلى قائمة الطلبات تنطبق إذا لم يملك المستخدم صلاحية رؤية الطلبات المنجزة أو كل الطلبات.
 
 إذا كان العامل يملك الصلاحيتين `START_ASSIGNED_STAGE` و`HANDOFF_ASSIGNED_STAGE` معًا، فلا يجوز له تجاوز Start: في `Pending` يظهر/يُسمح Start أولًا، وبعد دخول المرحلة في حالة `In Progress` يصبح Handoff متاحًا.
 
@@ -77,7 +77,7 @@ Application يقرأ المرحلة التالية من Route، لا من سلس
 
 ### Last stage
 
-انتهاء آخر مرحلة يحوّل الطلب إلى `Ready for Delivery`، ثم `MARK_DELIVERED` يحوله إلى `Delivered`.
+انتهاء آخر مرحلة يحوّل الطلب إلى `Ready for Delivery`، ثم `MARK_DELIVERED` يحوله إلى `Delivered`. للعامل ذي النطاق المسند بدون `view_shop_floor_history` يخرج الطلب من استعلام قائمة `Door Cutting Order` ومن العدد بعد إنهاء آخر مرحلة، كما يخرج بعد Handoff للمراحل الوسطى؛ صف `Ready for Delivery` يبقى ظاهرًا لمن يملك `view_all_orders` أو ليس عامل أرضية بنطاق مسند، ولا يعتمد على صلاحية الأرشيف.
 
 ## 6. Inbox وArchive
 

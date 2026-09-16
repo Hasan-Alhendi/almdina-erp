@@ -966,6 +966,7 @@ function mockRow(name, extraClasses = []) {
     return {
         classList: mockClassList(["list-row-container", ...extraClasses]),
         dataset: { name },
+        children: [],
         querySelector(selector) {
             if (selector === "[data-name]") return { dataset: { name } };
             if (selector === "a[href*='/door-cutting-order/']") return null;
@@ -1027,6 +1028,116 @@ assert(
     "desktop cancelled must not keep worker-completed green"
 );
 assert(!cancelledRow.classList.contains("dco-list-row-delivered"));
+
+assert.equal(api.shouldHidePersonalHistoryRow("completed", false), true);
+assert.equal(api.shouldHidePersonalHistoryRow("delivered", false), true);
+assert.equal(api.shouldHidePersonalHistoryRow("ready", false), false);
+assert.equal(api.shouldHidePersonalHistoryRow("ready_for_delivery", false), true);
+assert.equal(api.shouldHidePersonalHistoryRow("ready_for_delivery", true), false);
+assert.equal(api.shouldHidePersonalHistoryRow("completed", true), false);
+assert.equal(api.canViewPersonalHistory({ can_view_history: false }), false);
+assert.equal(api.canViewPersonalHistory({ can_view_history: true }), true);
+
+const handedOffRow = mockRow("DCO-HANDED-OFF");
+const assignedRow = mockRow("DCO-ASSIGNED");
+const historyList = mockListview([assignedRow, handedOffRow]);
+historyList.data = [
+    { name: "DCO-ASSIGNED", status: "At CNC", department_status: "قيد العمل" },
+    { name: "DCO-HANDED-OFF", status: "At CNC", department_status: "مكتمل" },
+];
+historyList._root.querySelectorAll = selector => (
+    selector === ".list-row-container" ? [assignedRow, handedOffRow] : []
+);
+historyList._root.querySelector(".result").appendChild = () => {};
+api.applyOperationalRolePresentation(historyList, {
+    personal_view: true,
+    can_view_history: false,
+    orders: {
+        "DCO-ASSIGNED": { assignment_state: "assigned" },
+        "DCO-HANDED-OFF": { assignment_state: "completed" },
+    },
+});
+assert(
+    handedOffRow.classList.contains("dco-list-row-history-hidden"),
+    "handed-off work must leave the personal queue without completed-history permission"
+);
+assert(
+    !handedOffRow.classList.contains("dco-list-row-completed"),
+    "hidden history must not keep the completed green style"
+);
+assert(!assignedRow.classList.contains("dco-list-row-history-hidden"));
+assert(!assignedRow.classList.contains("dco-list-row-completed"));
+
+api.applyOperationalRolePresentation(historyList, {
+    personal_view: true,
+    can_view_history: true,
+    orders: {
+        "DCO-ASSIGNED": { assignment_state: "assigned" },
+        "DCO-HANDED-OFF": { assignment_state: "completed" },
+    },
+});
+assert(!handedOffRow.classList.contains("dco-list-row-history-hidden"));
+assert(
+    handedOffRow.classList.contains("dco-list-row-completed"),
+    "completed history remains green only when the actor may see finished orders"
+);
+
+const lastStageRow = mockRow("DCO-LAST-STAGE", ["dco-list-row-ready-for-delivery"]);
+const lastStageAssignedRow = mockRow("DCO-LAST-ASSIGNED");
+const lastStageList = mockListview([lastStageAssignedRow, lastStageRow]);
+lastStageList.data = [
+    { name: "DCO-LAST-ASSIGNED", status: "At Sanding", department_status: "قيد العمل" },
+    { name: "DCO-LAST-STAGE", status: "Ready for Delivery", department_status: "مكتمل" },
+];
+lastStageList._root.querySelectorAll = selector => (
+    selector === ".list-row-container" ? [lastStageAssignedRow, lastStageRow] : []
+);
+lastStageList._root.querySelector(".result").appendChild = () => {};
+api.applyOperationalRolePresentation(lastStageList, {
+    personal_view: true,
+    can_view_history: false,
+    orders: {
+        "DCO-LAST-ASSIGNED": { assignment_state: "assigned" },
+        "DCO-LAST-STAGE": { assignment_state: "completed", ready_for_delivery: true },
+    },
+});
+assert(
+    lastStageRow.classList.contains("dco-list-row-history-hidden"),
+    "last-stage ready-for-delivery must leave the personal queue without completed-history permission"
+);
+assert(
+    !lastStageRow.classList.contains("dco-list-row-ready-for-delivery"),
+    "hidden last-stage leftover must not keep ready-for-delivery green"
+);
+assert(!lastStageAssignedRow.classList.contains("dco-list-row-history-hidden"));
+
+api.applyOperationalRolePresentation(lastStageList, {
+    personal_view: true,
+    can_view_history: true,
+    orders: {
+        "DCO-LAST-ASSIGNED": { assignment_state: "assigned" },
+        "DCO-LAST-STAGE": { assignment_state: "completed", ready_for_delivery: true },
+    },
+});
+assert(!lastStageRow.classList.contains("dco-list-row-history-hidden"));
+assert(
+    lastStageRow.classList.contains("dco-list-row-ready-for-delivery"),
+    "ready-for-delivery remains visible in the personal queue when history is granted"
+);
+
+api.applyOperationalRolePresentation(lastStageList, {
+    personal_view: false,
+    can_view_history: false,
+    orders: {
+        "DCO-LAST-ASSIGNED": { assignment_state: "assigned" },
+        "DCO-LAST-STAGE": { assignment_state: "completed", ready_for_delivery: true },
+    },
+});
+assert(
+    !lastStageRow.classList.contains("dco-list-row-history-hidden"),
+    "overview/delivery lists must keep ready-for-delivery rows without history permission"
+);
+assert(lastStageRow.classList.contains("dco-list-row-ready-for-delivery"));
 assert(!productionRow.classList.contains("dco-list-row-ready-for-delivery"));
 assert(!productionRow.classList.contains("dco-list-row-delivered"));
 assert(!productionRow.classList.contains("dco-list-row-cancelled"));

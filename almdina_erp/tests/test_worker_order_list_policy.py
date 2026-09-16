@@ -11,6 +11,20 @@ def source(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
 
 
+def test_actionable_worker_orders_require_active_current_stage():
+    permissions = source("permissions.py")
+    actionable = permissions.split("def _worker_actionable_orders_subquery", 1)[1].split(
+        "def _worker_completed_orders_subquery", 1
+    )[0]
+    access = permissions.split("def _worker_can_access_assigned_order", 1)[1].split(
+        "def worker_can_view_order", 1
+    )[0]
+
+    assert "ACTIVE_STAGE_STATUSES" in permissions
+    assert "and ps.status in ({active_stage_sql})" in actionable
+    assert 'not in ACTIVE_STAGE_STATUSES' in access
+
+
 def test_operational_workers_keep_assigned_scope_despite_adjacent_grants():
     permissions = source("permissions.py")
     authorization = source(

@@ -120,6 +120,11 @@
     background-color: #fca5a5 !important;
 }
 
+/* Completed worker history is hidden when the actor lacks view_shop_floor_history. */
+.dco-order-list .list-row-container.dco-list-row-history-hidden {
+    display: none !important;
+}
+
 .dco-order-list .dco-mobile-order-card.dco-list-row-completed {
     background: #dcfce7 !important;
     border-color: #86efac !important;

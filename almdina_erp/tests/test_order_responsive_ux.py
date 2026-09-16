@@ -311,11 +311,18 @@ def test_desktop_keeps_legacy_ordering_while_mobile_uses_five_states():
     assert "const isHistory = mobileLayout" in list_source
     assert ': desktopQueueState(doc, flag) === "completed";' in list_source
     assert 'classList.toggle("dco-list-row-completed"' in list_source
+    assert 'classList.toggle("dco-list-row-history-hidden"' in list_source
+    assert "function shouldHidePersonalHistoryRow" in list_source
+    assert "function isPersonalQueueFinishedState" in list_source
+    assert 'state === "ready_for_delivery"' in list_source
+    assert "can_view_history" in list_source
     assert "const needsReorder = ordered.some" in list_source
     assert "ordered.forEach(container => result.appendChild(container));" in list_source
     assert ".list-row-container.dco-list-row-completed > .list-row" in css
     assert ".list-row-container.dco-list-row-completed > .list-row .list-row-col" in css
     assert "background: #dcfce7 !important;" in css
+    assert ".list-row-container.dco-list-row-history-hidden" in css
+    assert "display: none !important;" in css
 
 
 def test_desktop_list_colors_ready_for_delivery_and_delivered_rows_only():

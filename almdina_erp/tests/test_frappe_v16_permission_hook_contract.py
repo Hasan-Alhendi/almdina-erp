@@ -210,6 +210,25 @@ class TestFrappeV16PermissionHookContract(unittest.TestCase):
                 "active-orders union completed-orders",
             )
 
+    def test_actionable_worker_query_requires_active_current_stage(self) -> None:
+        source = PERMISSIONS_PATH.read_text(encoding="utf-8")
+        self.assertIn("ACTIVE_STAGE_STATUSES", source)
+        self.assertIn("and ps.status in ({active_stage_sql})", source)
+        self.assertIn("not in ACTIVE_STAGE_STATUSES", source)
+
+        permissions.frappe.db.escape = lambda value: f"'{value}'"
+        with patch.object(
+            permissions,
+            "_worker_operational_roles",
+            return_value=("عامل تقشيط",),
+        ):
+            sql = permissions._worker_actionable_orders_subquery("sanding@example.com")
+        self.assertIn("ps.status in", sql)
+        self.assertIn("'Pending'", sql)
+        self.assertIn("'In Progress'", sql)
+        self.assertIn("'Paused'", sql)
+        self.assertNotIn("'Completed'", sql)
+
     def test_supporting_list_scopes_preserve_completed_assignments(self) -> None:
         granted = {
             permissions.Capability.VIEW_ORDERS,
@@ -334,6 +353,67 @@ class TestFrappeV16PermissionHookContract(unittest.TestCase):
                 permissions.worker_can_view_order(
                     "worker@example.com",
                     "DCO-COMPLETED",
+                )
+            )
+
+    def test_completed_current_stage_read_requires_history_capability(self) -> None:
+        with (
+            patch.object(permissions, "_requires_assigned_scope", return_value=True),
+            patch.object(
+                permissions,
+                "_dispatched_order_row",
+                return_value={
+                    "status": "Ready for Delivery",
+                    "current_production_stage": "PST-SAND",
+                },
+            ),
+            patch.object(permissions, "_has", return_value=False),
+            patch.object(
+                permissions.frappe.db,
+                "get_value",
+                return_value={
+                    "assigned_to": "worker@example.com",
+                    "operational_role": "عامل تقشيط",
+                    "stage_type": "Sanding",
+                    "status": "Completed",
+                },
+                create=True,
+            ),
+            patch.object(
+                permissions,
+                "_worker_operational_roles",
+                return_value=("عامل تقشيط",),
+            ),
+        ):
+            self.assertFalse(
+                permissions.worker_can_view_order(
+                    "worker@example.com",
+                    "DCO-LAST-STAGE",
+                )
+            )
+
+        with (
+            patch.object(permissions, "_requires_assigned_scope", return_value=True),
+            patch.object(
+                permissions,
+                "_dispatched_order_row",
+                return_value={
+                    "status": "Ready for Delivery",
+                    "current_production_stage": "PST-SAND",
+                },
+            ),
+            patch.object(permissions, "_has", return_value=True),
+            patch.object(
+                permissions.frappe.db,
+                "exists",
+                return_value=True,
+                create=True,
+            ),
+        ):
+            self.assertTrue(
+                permissions.worker_can_view_order(
+                    "worker@example.com",
+                    "DCO-LAST-STAGE",
                 )
             )
 

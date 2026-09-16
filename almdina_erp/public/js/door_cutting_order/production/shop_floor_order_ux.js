@@ -102,6 +102,41 @@
 		);
 	}
 
+	function grantedCapability(frm, capability) {
+		const context = permissionContext();
+		if (context && typeof context.can === "function") {
+			return context.can(capability) === true;
+		}
+		return can(frm, capability);
+	}
+
+	function canKeepViewingAfterLeavingAssignment(frm) {
+		return Boolean(
+			grantedCapability(frm, "view_all_orders")
+			|| grantedCapability(frm, "view_shop_floor_history")
+		);
+	}
+
+	function productionActionLeavesCurrentView(method) {
+		return (
+			method === "almdina_erp.almdina_erp.services.shop_floor_service.dispatch_order"
+			|| method === "almdina_erp.almdina_erp.services.shop_floor_service.handoff_to_next"
+			|| method === "almdina_erp.almdina_erp.services.shop_floor_service.mark_delivered"
+		);
+	}
+
+	function shouldReturnToOrderList(method, frm) {
+		return productionActionLeavesCurrentView(method)
+			&& !canKeepViewingAfterLeavingAssignment(frm);
+	}
+
+	function returnToOrderList() {
+		if (typeof frappe.set_route === "function") {
+			return Promise.resolve(frappe.set_route("List", "Door Cutting Order"));
+		}
+		return Promise.resolve();
+	}
+
 	function callAction(method, args, successMessage, frm) {
 		const documentName = frm && frm.doc ? frm.doc.name : null;
 		return frappe
@@ -116,6 +151,9 @@
 					frappe.show_alert({ message: successMessage, indicator: "green" });
 				}
 				if (frm && frm.doc && frm.doc.name === documentName) {
+					if (shouldReturnToOrderList(method, frm)) {
+						return returnToOrderList().then(() => response.message);
+					}
 					return frm.reload_doc().then(() => response.message);
 				}
 				return response.message;

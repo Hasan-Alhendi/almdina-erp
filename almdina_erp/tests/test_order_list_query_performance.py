@@ -136,6 +136,7 @@ class TestOrderListBulkQuery(unittest.TestCase):
 
         first = payload["orders"]["DCO-001"]
         second = payload["orders"]["DCO-002"]
+        self.assertFalse(payload["can_view_history"])
         self.assertEqual(first["assignment_state"], "assigned")
         self.assertTrue(first["can_start_stage"])
         self.assertFalse(first["can_handoff_stage"])
@@ -186,6 +187,23 @@ class TestOrderListBulkQuery(unittest.TestCase):
         )["orders"][repository.names[0]]
 
         self.assertFalse(row["can_handoff_stage"])
+
+    def test_flags_payload_reports_completed_history_capability(self) -> None:
+        repository = BulkRepository(count=1)
+        payload = order_list_query.get_order_operational_role_flags(
+            repository,
+            repository.names,
+        )
+        self.assertFalse(payload["can_view_history"])
+
+        repository.capabilities = repository.capabilities | {
+            Capability.VIEW_SHOP_FLOOR_HISTORY
+        }
+        granted = order_list_query.get_order_operational_role_flags(
+            repository,
+            repository.names,
+        )
+        self.assertTrue(granted["can_view_history"])
 
 
 class TestMultipleRouteStatusProjection(unittest.TestCase):

@@ -1065,10 +1065,11 @@
         const root = rootNode(listview);
         if (!root) return;
         root.querySelectorAll(
-            ".dco-list-row-other-role,.dco-list-row-completed,.dco-list-row-ready-for-delivery,.dco-list-row-delivered,.dco-list-row-cancelled"
+            ".dco-list-row-other-role,.dco-list-row-completed,.dco-list-row-history-hidden,.dco-list-row-ready-for-delivery,.dco-list-row-delivered,.dco-list-row-cancelled"
         ).forEach(node => {
             node.classList.remove("dco-list-row-other-role");
             node.classList.remove("dco-list-row-completed");
+            node.classList.remove("dco-list-row-history-hidden");
             DESKTOP_DELIVERY_ROW_CLASSES.forEach(className => node.classList.remove(className));
         });
     }
@@ -1097,7 +1098,8 @@
         const docs = orderDocuments(listview);
         [...result.querySelectorAll(".list-row-container")].forEach(container => {
             const name = rowDocumentName(container);
-            const state = name && !mobileLayout
+            const hidden = container.classList.contains("dco-list-row-history-hidden");
+            const state = name && !mobileLayout && !hidden
                 ? desktopDeliveryRowState(docs.get(name) || {})
                 : "";
             container.classList.toggle(
@@ -1421,12 +1423,33 @@
         return state === "completed" || state === "delivered";
     }
 
+    function isPersonalQueueFinishedState(state) {
+        return isHistoryQueueState(state) || state === "ready_for_delivery";
+    }
+
+    function canViewPersonalHistory(payload) {
+        if (payload && typeof payload.can_view_history === "boolean") {
+            return payload.can_view_history;
+        }
+        const permissions = window.AlmdinaPermissions;
+        return Boolean(
+            permissions
+            && typeof permissions.can === "function"
+            && permissions.can("view_shop_floor_history")
+        );
+    }
+
+    function shouldHidePersonalHistoryRow(queueState, canViewHistory) {
+        return !canViewHistory && isPersonalQueueFinishedState(queueState);
+    }
+
     function applyOperationalRolePresentation(listview, payload) {
         const root = rootNode(listview);
         const result = root && root.querySelector(".result");
         if (!root || !result) return;
 
         const personalView = Boolean(payload && payload.personal_view);
+        const canViewHistory = canViewPersonalHistory(payload);
         const flags = payload && payload.orders && typeof payload.orders === "object"
             ? payload.orders
             : {};
@@ -1462,6 +1485,20 @@
             const flag = flags[name] || {};
             const doc = docs.get(name) || {};
             const queueState = personalQueueState(doc, flag);
+            const hideHistory = shouldHidePersonalHistoryRow(queueState, canViewHistory);
+            container.classList.toggle("dco-list-row-history-hidden", hideHistory);
+            if (hideHistory) {
+                container.classList.remove("dco-list-row-other-role");
+                container.classList.remove("dco-list-row-completed");
+                DESKTOP_DELIVERY_ROW_CLASSES.forEach(className => container.classList.remove(className));
+                const hiddenCard = container.querySelector(".dco-mobile-order-card");
+                if (hiddenCard) {
+                    hiddenCard.classList.remove("dco-list-row-other-role");
+                    hiddenCard.classList.remove("dco-list-row-completed");
+                    DESKTOP_DELIVERY_ROW_CLASSES.forEach(className => hiddenCard.classList.remove(className));
+                }
+                return;
+            }
             const isHistory = mobileLayout
                 ? isHistoryQueueState(queueState)
                 : desktopQueueState(doc, flag) === "completed";
@@ -1522,7 +1559,7 @@
         }).then(response => {
             if (Number(listview._dcoRoleFlagGeneration || 0) !== generation) return null;
             const payload = response && response.message;
-            listview._dcoRoleFlagsPayload = payload || { personal_view: false, orders: {} };
+            listview._dcoRoleFlagsPayload = payload || { personal_view: false, can_view_history: false, orders: {} };
             listview._dcoRoleFlagsPayloadGeneration = generation;
             applyOperationalRolePresentation(listview, listview._dcoRoleFlagsPayload);
             return listview._dcoRoleFlagsPayload;
@@ -1666,10 +1703,12 @@
         applyKanbanCardPresentation,
         applyLoadedAssigneeFilterOptions,
         applyLoadedStatusFilterOptions,
+        applyOperationalRolePresentation,
         assigneeFilterConfig,
         assigneeFilterOptions,
         buildCard,
         cardViewModel,
+        canViewPersonalHistory,
         desktopDeliveryRowState,
         isPhoneLayout,
         kanbanCardFields,
@@ -1691,6 +1730,7 @@
         sortDesktopQueueItems,
         sortOverviewListItems,
         sortPersonalQueueItems,
+        shouldHidePersonalHistoryRow,
         statusFilterConfig,
         statusFilterOptions,
         uniqueStatusOptions,
