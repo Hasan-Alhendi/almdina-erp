@@ -6,6 +6,7 @@
         ["/assets/almdina_erp/css/factory_stage_library.css", "almdina-stage-library-style"],
     ]);
     const FOUNDATION = "/assets/almdina_erp/js/frontend_foundation.js";
+    const DESIGN_SYSTEM = "/assets/almdina_erp/js/almdina_ui.js";
     const PAGE_LIFECYCLE = "/assets/almdina_erp/js/page_revisit_refresh.js";
     const METHODS = Object.freeze({
         load: "almdina_erp.almdina_erp.services.master_data_service.get_production_routing_console",
@@ -1400,6 +1401,7 @@
 
     function resolveCore() {
         const frontend = window.AlmdinaFrontend;
+        const ui = window.AlmdinaUi;
         const lifecycle = window.AlmdinaPageRevisit;
         if (
             !frontend
@@ -1408,6 +1410,9 @@
             || typeof frontend.createLifecycleScope !== "function"
         ) {
             throw new Error("Almdina frontend foundation did not initialize");
+        }
+        if (!ui || typeof ui.button !== "function") {
+            throw new Error("Almdina design system did not initialize");
         }
         if (!lifecycle || typeof lifecycle.bindActivationLifecycle !== "function") {
             throw new Error("Almdina page lifecycle did not initialize");
@@ -1419,6 +1424,7 @@
         const frontend = window.AlmdinaFrontend;
         const assets = [];
         if (!frontend || typeof frontend.ensureStylesheet !== "function") assets.push(FOUNDATION);
+        if (!window.AlmdinaUi || typeof window.AlmdinaUi.button !== "function") assets.push(DESIGN_SYSTEM);
         if (!window.AlmdinaPageRevisit || typeof window.AlmdinaPageRevisit.bindActivationLifecycle !== "function") {
             assets.push(PAGE_LIFECYCLE);
         }
