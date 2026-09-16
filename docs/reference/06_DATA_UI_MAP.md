@@ -43,7 +43,7 @@ Visibility يجب أن يأتي من permission context/capabilities، لا من
 - `factory_production_settings`: إعدادات المصنع المقسمة حسب Capabilities.
 - `factory_plan_archive`: أرشيف الخطط المعتمدة.
 
-- قائمة `Door Cutting Order`: بحث Frappe بالاسم/الزبون مع dropdown الحالة (`status` عبر `custom_filter_configs`) بجانب زر فلترة Frappe على الويب والموبايل، يليه مباشرة dropdown «العامل الحالي» (`current_assignee`) داخل الحاوية نفسها. الخياران الفارغان يعرضان «كل الحالات» و«كل العمال». خيارات الحالة وقيم أعمدة Kanban هي `Draft` وملصقات المراحل الفعّالة حرفيًا من `Production Stage Definition` ثم `Delivered` و`Cancelled`؛ وتُحدّث عند حفظ/تعطيل تعريف مرحلة وعند migrate. خيارات العامل هي العمال المعيّنون حاليًا ضمن طلبات النطاق الذي تسمح صلاحيات Frappe للمستخدم برؤيته؛ يظهر `User.full_name` بينما تبقى قيمة الفلتر هوية `User.name` المخزنة في `current_assignee`. `status` إسقاط مرئي فقط: المرحلة الحالية والمسار المحدد هما مرجع الانتقال، وKanban للعرض ولا يغيّر الحالة. query وdocument scope يبقيان عند Frappe. في وضع عرض جميع الطلبات (`view_all_orders` أو Administrator) تُرتَّب الصفوف غير المسلَّمة حسب `modified DESC` ثم تُوضع طلبات `Delivered` في الأسفل.
+- قائمة `Door Cutting Order`: بحث Frappe بالاسم/الزبون مع dropdown الحالة (`status` عبر `custom_filter_configs`) بجانب زر فلترة Frappe على الويب والموبايل، يليه مباشرة dropdown «العامل الحالي» (`current_assignee`) داخل الحاوية نفسها. الخياران الفارغان يعرضان «كل الحالات» و«كل العمال». خيارات الحالة وقيم أعمدة Kanban هي `Draft` وملصقات المراحل الفعّالة حرفيًا من `Production Stage Definition` ثم `Delivered` و`Cancelled`؛ وتُحدّث عند حفظ/تعطيل تعريف مرحلة وعند migrate. خيارات العامل هي العمال المعيّنون حاليًا ضمن طلبات النطاق الذي تسمح صلاحيات Frappe للمستخدم برؤيته؛ يظهر `User.full_name` بينما تبقى قيمة الفلتر هوية `User.name` المخزنة في `current_assignee`. `status` إسقاط مرئي فقط: المرحلة الحالية والمسار المحدد هما مرجع الانتقال، وKanban للعرض ولا يغيّر الحالة. query وdocument scope يبقيان عند Frappe. في وضع عرض جميع الطلبات (`view_all_orders` أو Administrator) يظهر خيار «الترتيب الافتراضي» في Sort Selector كافتراضي: غير المسلَّم حسب `modified DESC` ثم `Delivered` أسفل. اختيار أي ترتيب Frappe مدمج (بما فيه التنازلي) يلغي هذه القاعدة ولا يعيد ترتيب الصفحة. بعد إرسال الطلب للإنتاج أو تسليم المرحلة أو تأكيد التسليم من الاستمارة، إذا لم يملك المستخدم `view_shop_floor_history` ولا `view_all_orders` يُعاد إلى هذه القائمة بدل البقاء على استمارة لم يعد مصرّحًا بمشاهدتها. للعامل ذي النطاق المسند بدون `view_shop_floor_history` يخرج العمل المنتهي (`completed` و`delivered` ومرحلة حالية مكتملة بعد آخر مرحلة / `ready_for_delivery`) من استعلام Frappe نفسه فلا يدخل العدد ولا يُرسم ثم يُخفى؛ العرض العام وقائمة التسليم خارج النطاق المسند لا تستخدم هذا القيد.
 
 ### مساندة/تشخيص
 
@@ -82,7 +82,7 @@ Capability catalog + authorization/application policy + Frappe/document scope.
 
 صنّف الحقول قبل استخدامها:
 
-- **Operational:** قياسات، حالة، مرحلة، assignee، geometry اللازمة للعمل.
+- **Operational:** قياسات، حالة، مرحلة، assignee، geometry اللازمة للعمل، ونوع آلة القص التشغيلي على الطلب (`order_cutting_machine`: `CNC` / `مشرحة`) المعروض كأزرار اختيار في تاب الطلب وفي طباعة جدول القياسات. الإلزام واجهة فقط: الحفظ من النموذج يرفض القيمة الفارغة برسالة خطأ، بينما الخادم يقبل `null`. الطلبات السابقة تُصفَّر إلى `null` عبر patch. هذا الحقل مستقل عن `Cutting Plan.machine_type` الخاص بالمحسّن.
 - **Customer-facing sales:** ما يلزم عرض/طباعة مستند الزبون وفق capability.
 - **Internal financial:** board/cutting/edge/internal cost breakdown وغيرها من بيانات التكلفة المحمية.
 

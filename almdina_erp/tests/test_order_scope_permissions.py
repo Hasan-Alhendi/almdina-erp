@@ -99,6 +99,10 @@ class TestOrderScopePermissions(unittest.TestCase):
                 )
         self.assertNotIn("union", subquery.lower())
         self.assertIn("current_production_stage", subquery)
+        self.assertIn("ps.status in", subquery)
+        self.assertIn("Pending", subquery)
+        self.assertIn("In Progress", subquery)
+        self.assertIn("Paused", subquery)
         self.assertNotIn("status = 'Completed'", subquery)
         self.assertIn("Draft", subquery)
         self.assertIn("Pending Review", subquery)
@@ -315,6 +319,7 @@ class TestOrderScopePermissions(unittest.TestCase):
                                 "assigned_to": "worker@example.com",
                                 "operational_role": "عامل رسم",
                                 "stage_type": "Drawing",
+                                "status": "In Progress",
                             },
                         ],
                     ):
@@ -337,6 +342,7 @@ class TestOrderScopePermissions(unittest.TestCase):
                                 "assigned_to": "worker@example.com",
                                 "operational_role": "عامل CNC",
                                 "stage_type": "CNC",
+                                "status": "Pending",
                             },
                         ],
                     ):
@@ -359,6 +365,46 @@ class TestOrderScopePermissions(unittest.TestCase):
                             permissions.worker_can_view_order(
                                 "worker@example.com",
                                 "DCO-DRAFT",
+                            )
+                        )
+
+    def test_worker_cannot_open_completed_current_stage_without_history(self) -> None:
+        granted = {Capability.START_ASSIGNED_STAGE, Capability.VIEW_ORDERS}
+        with patch.object(
+            permissions,
+            "doctype_has_capability",
+            side_effect=self.capability_checker(granted),
+        ):
+            with patch.object(
+                permissions,
+                "_worker_operational_roles",
+                return_value=("عامل تقشيط",),
+            ):
+                with patch.object(
+                    permissions.frappe.db,
+                    "exists",
+                    return_value=False,
+                ):
+                    with patch.object(
+                        permissions.frappe.db,
+                        "get_value",
+                        side_effect=[
+                            {
+                                "status": "Ready for Delivery",
+                                "current_production_stage": "PST-SAND",
+                            },
+                            {
+                                "assigned_to": "worker@example.com",
+                                "operational_role": "عامل تقشيط",
+                                "stage_type": "Sanding",
+                                "status": "Completed",
+                            },
+                        ],
+                    ):
+                        self.assertFalse(
+                            permissions.worker_can_view_order(
+                                "worker@example.com",
+                                "DCO-LAST-STAGE",
                             )
                         )
 

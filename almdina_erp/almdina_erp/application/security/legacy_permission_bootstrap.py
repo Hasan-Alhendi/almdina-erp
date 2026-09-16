@@ -55,6 +55,7 @@ _PRODUCTION_SUPERVISOR = frozenset(
         Capability.DISPATCH_ORDER,
         Capability.REVERT_DEPARTMENT,
         Capability.RETURN_ORDER_TO_DRAFT,
+        Capability.RESUME_CANCELLED_ORDER,
         Capability.MARK_DELIVERED,
         Capability.REASSIGN_WORKER,
         Capability.CREATE_REPLACEMENT,

@@ -26,6 +26,7 @@
 
     const ALWAYS_VISIBLE_FIELDS = Object.freeze({
         order_notes: "أضف ملاحظة للطلب…",
+        order_cutting_machine: "اختر آلة القص",
         edge_color: "أدخل لون القشاط",
     });
 
@@ -115,7 +116,7 @@
                     display: none !important;
                 }
 
-                /* Order intake: customer/date first row, notes full-width second row. */
+                /* Order intake: customer/date, notes, then compact cutting machine. */
                 .${ROOT_CLASS} .dco-order-intake-card > .section-body {
                     display: grid !important;
                     grid-template-columns: minmax(0,2fr) minmax(220px,1fr);
@@ -137,6 +138,11 @@
                 .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="order_notes"] {
                     grid-column: 1 / -1;
                     grid-row: 2;
+                }
+                .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="order_cutting_machine"] {
+                    grid-column: 1 / -1;
+                    grid-row: 3;
+                    max-width: 420px;
                 }
 
                 /*
@@ -192,7 +198,9 @@
                     line-height: 1.55 !important;
                 }
                 .${ROOT_CLASS} .dco-order-notes-locked textarea:disabled,
-                .${ROOT_CLASS} .dco-order-notes-locked textarea[readonly] {
+                .${ROOT_CLASS} .dco-order-notes-locked textarea[readonly],
+                .${ROOT_CLASS} .dco-order-notes-locked select:disabled,
+                .${ROOT_CLASS} .dco-order-notes-locked input[type="radio"]:disabled {
                     cursor: not-allowed !important;
                     background: var(--subtle-fg,#f6f8fa) !important;
                     color: var(--text-color,#26313b) !important;
@@ -242,9 +250,11 @@
                     }
                     .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="customer"],
                     .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="order_date"],
-                    .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="order_notes"] {
+                    .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="order_notes"],
+                    .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="order_cutting_machine"] {
                         grid-column: 1;
                         grid-row: auto;
+                        max-width: none;
                     }
                     .${ROOT_CLASS} .dco-material-row--primary {
                         grid-template-columns: repeat(2,minmax(0,1fr));
@@ -345,20 +355,38 @@
         return false;
     }
 
+    function syncLockedInput(frm, fieldname) {
+        const field = frm && frm.fields_dict && frm.fields_dict[fieldname];
+        const wrapper = fieldNode(frm, fieldname);
+        const input = field && field.$input && field.$input.get(0);
+        const editable = isOrderNotesEditable(frm);
+        if (wrapper) wrapper.classList.toggle("dco-order-notes-locked", !editable);
+        if (!input) return;
+        input.disabled = !editable;
+        input.readOnly = !editable;
+        if (editable) {
+            input.removeAttribute("aria-disabled");
+        } else {
+            input.setAttribute("aria-disabled", "true");
+        }
+    }
+
     function syncOrderNotesAccess(frm) {
         const field = frm && frm.fields_dict && frm.fields_dict.order_notes;
         const wrapper = fieldNode(frm, "order_notes");
         const textarea = field && field.$input && field.$input.get(0);
         const editable = isOrderNotesEditable(frm);
         if (wrapper) wrapper.classList.toggle("dco-order-notes-locked", !editable);
-        if (!textarea) return;
-        textarea.disabled = !editable;
-        textarea.readOnly = !editable;
-        if (editable) {
-            textarea.removeAttribute("aria-disabled");
-        } else {
-            textarea.setAttribute("aria-disabled", "true");
+        if (textarea) {
+            textarea.disabled = !editable;
+            textarea.readOnly = !editable;
+            if (editable) {
+                textarea.removeAttribute("aria-disabled");
+            } else {
+                textarea.setAttribute("aria-disabled", "true");
+            }
         }
+        syncLockedInput(frm, "order_cutting_machine");
     }
 
     function autoGrowNotes(frm) {
@@ -458,6 +486,8 @@
         syncOrderNotesAccess(frm);
         renderEdgeColorOrigin(frm);
         removeLegacyRequiredHint(frm);
+        const machine = window.AlmdinaOrderCuttingMachineUX;
+        if (machine && typeof machine.schedule === "function") machine.schedule(frm);
     }
 
     function schedule(frm) {
@@ -478,6 +508,7 @@
         customer(frm) { schedule(frm); },
         order_date(frm) { schedule(frm); },
         order_notes(frm) { schedule(frm); },
+        order_cutting_machine(frm) { schedule(frm); },
         board_description(frm) { schedule(frm); },
         board_length_cm(frm) { schedule(frm); },
         board_width_cm(frm) { schedule(frm); },

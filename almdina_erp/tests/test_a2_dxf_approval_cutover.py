@@ -143,13 +143,13 @@ class TestA2ApprovalFreshness(unittest.TestCase):
     def test_fresh_valid_system_plan_is_approvable_without_recalculation(self) -> None:
         plan = valid_plan(source_type=SYSTEM)
         order = SimpleNamespace(name="DCO-A2-001")
-        with patch.object(commands, "plan_input_fingerprint", return_value="fresh-fingerprint"):
+        with patch.object(commands, "freshness_expected_fingerprint", return_value="fresh-fingerprint"):
             commands._assert_plan_ready_for_approval(order, plan)
 
     def test_stale_system_plan_is_rejected_instead_of_auto_recalculation(self) -> None:
         plan = valid_plan(source_type=SYSTEM)
         order = SimpleNamespace(name="DCO-A2-002")
-        with patch.object(commands, "plan_input_fingerprint", return_value="changed-input"):
+        with patch.object(commands, "freshness_expected_fingerprint", return_value="changed-input"):
             with self.assertRaises(frappe.ValidationError):
                 commands._assert_plan_ready_for_approval(order, plan)
 
@@ -157,7 +157,7 @@ class TestA2ApprovalFreshness(unittest.TestCase):
         plan = valid_plan(source_type=SYSTEM)
         plan.snapshot_json = ""
         order = SimpleNamespace(name="DCO-A2-003")
-        with patch.object(commands, "plan_input_fingerprint", return_value="fresh-fingerprint"):
+        with patch.object(commands, "freshness_expected_fingerprint", return_value="fresh-fingerprint"):
             with self.assertRaises(frappe.ValidationError):
                 commands._assert_plan_ready_for_approval(order, plan)
 
@@ -165,7 +165,7 @@ class TestA2ApprovalFreshness(unittest.TestCase):
         plan = valid_plan(source_type=UPLOADED_DXF)
         plan.dxf_status = "Draft"
         order = SimpleNamespace(name="DCO-A2-004")
-        with patch.object(commands, "plan_input_fingerprint", return_value="fresh-fingerprint"):
+        with patch.object(commands, "freshness_expected_fingerprint", return_value="fresh-fingerprint"):
             with self.assertRaises(frappe.ValidationError):
                 commands._assert_plan_ready_for_approval(order, plan)
 

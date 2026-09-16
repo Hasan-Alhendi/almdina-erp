@@ -354,9 +354,191 @@ async function verifyProductionActionsRecoverAfterPermissions() {
     );
 }
 
+async function verifyDispatchWithoutHistoryReturnsToOrderList() {
+    const handlers = {};
+    const calls = [];
+    const routes = [];
+    const reloads = [];
+    const capabilities = new Set(["dispatch_order"]);
+    let dialog = null;
+
+    class FakeDialog {
+        constructor(config) {
+            this.config = config;
+            this.fields_dict = {
+                route_preview: { $wrapper: { html() {} } },
+            };
+            dialog = this;
+        }
+
+        show() {}
+
+        hide() {}
+
+        get_value() {
+            return "";
+        }
+
+        set_value() {}
+
+        set_df_property() {}
+    }
+
+    const fakeWindow = {
+        cur_frm: null,
+        AlmdinaPermissions: {
+            canDocument(_frm, capability) {
+                return capabilities.has(capability);
+            },
+            can(capability) {
+                return capabilities.has(capability);
+            },
+            profile() {
+                return "shop_floor";
+            },
+        },
+        AlmdinaDocumentContext: {
+            capture(frm) {
+                return `${frm.doctype}::${frm.doc.name}`;
+            },
+            isCurrent() {
+                return true;
+            },
+        },
+        addEventListener() {},
+        setTimeout() {
+            return 1;
+        },
+    };
+    const fakeFrappe = {
+        almdina: {},
+        session: { user: "worker@example.com" },
+        utils: { escape_html: value => String(value) },
+        ui: {
+            Dialog: FakeDialog,
+            form: {
+                on(doctype, events) {
+                    Object.assign(handlers, events);
+                },
+            },
+        },
+        provide() {},
+        show_alert() {},
+        msgprint() {},
+        call(options) {
+            const pending = deferred();
+            calls.push({ options, pending });
+            return jqueryThenable(pending.promise);
+        },
+        set_route(...parts) {
+            routes.push(parts);
+            return Promise.resolve(parts);
+        },
+    };
+    const context = vm.createContext({
+        window: fakeWindow,
+        frappe: fakeFrappe,
+        console,
+        Promise,
+        Object,
+        Set,
+        Map,
+        String,
+        Number,
+        Boolean,
+        Array,
+        __: value => value,
+    });
+    vm.runInContext(source("door_cutting_order/production/shop_floor_order_ux.js"), context);
+
+    const frm = {
+        doctype: "Door Cutting Order",
+        doc: {
+            doctype: "Door Cutting Order",
+            name: "DCO-A",
+            status: "Draft",
+            production_path: "",
+            current_production_stage: "",
+        },
+        fields_dict: {},
+        meta: { fields: [] },
+        page: { wrapper: { nodeType: 1, querySelectorAll() { return []; } } },
+        is_new() {
+            return false;
+        },
+        add_custom_button() {},
+        remove_custom_button() {},
+        set_df_property() {},
+        enable_save() {},
+        reload_doc() {
+            reloads.push("DCO-A");
+            return Promise.resolve();
+        },
+    };
+    fakeWindow.cur_frm = frm;
+
+    fakeFrappe.almdina.open_dispatch_dialog(frm);
+    assert.equal(calls.length, 1);
+    assert.equal(
+        calls[0].options.method,
+        "almdina_erp.almdina_erp.services.shop_floor_service.get_dispatch_options"
+    );
+    calls[0].pending.resolve({
+        message: {
+            default_path: "Drawing",
+            paths: [{
+                value: "Drawing",
+                label: "Drawing",
+                stages: [{ department: "رسم", stage_type: "Drawing", operational_role: "عامل رسم" }],
+            }],
+            workers: {
+                Drawing: [{ name: "cnc@example.com", full_name: "عامل" }],
+            },
+        },
+    });
+    await flushPromises();
+    assert.equal(Boolean(dialog), true);
+    dialog.config.primary_action({ path: "Drawing", assignee: "cnc@example.com" });
+    await flushPromises();
+    assert.equal(
+        calls[1].options.method,
+        "almdina_erp.almdina_erp.services.shop_floor_service.dispatch_order"
+    );
+    calls[1].pending.resolve({ message: { name: "DCO-A" } });
+    await flushPromises();
+    assert.deepEqual(routes, [["List", "Door Cutting Order"]]);
+    assert.deepEqual(reloads, []);
+
+    capabilities.add("view_all_orders");
+    routes.length = 0;
+    fakeFrappe.almdina.open_dispatch_dialog(frm);
+    await flushPromises();
+    calls[2].pending.resolve({
+        message: {
+            default_path: "Drawing",
+            paths: [{
+                value: "Drawing",
+                label: "Drawing",
+                stages: [{ department: "رسم", stage_type: "Drawing", operational_role: "عامل رسم" }],
+            }],
+            workers: {
+                Drawing: [{ name: "cnc@example.com", full_name: "عامل" }],
+            },
+        },
+    });
+    await flushPromises();
+    dialog.config.primary_action({ path: "Drawing", assignee: "cnc@example.com" });
+    await flushPromises();
+    calls[3].pending.resolve({ message: { name: "DCO-A" } });
+    await flushPromises();
+    assert.deepEqual(routes, []);
+    assert.deepEqual(reloads, ["DCO-A"]);
+}
+
 (async () => {
     await verifyCostSnapshotIsolation();
     await verifyProductionActionsRecoverAfterPermissions();
+    await verifyDispatchWithoutHistoryReturnsToOrderList();
     console.log("Order navigation surface isolation simulation passed");
 })().catch(error => {
     console.error(error);

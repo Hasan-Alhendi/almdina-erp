@@ -56,6 +56,31 @@ def test_order_creator_dispatches_directly_without_approval_or_plan_lock():
     assert "return_order_to_draft" in lifecycle
 
 
+def test_dispatch_without_completed_history_returns_to_order_list():
+    shop_floor = _source(SHOP_FLOOR_UX)
+    call_action = shop_floor.split("function callAction(", 1)[1].split(
+        "const STATUS_LABELS", 1
+    )[0]
+
+    assert 'grantedCapability(frm, "view_all_orders")' in shop_floor
+    assert 'grantedCapability(frm, "view_shop_floor_history")' in shop_floor
+    assert "shouldReturnToOrderList(method, frm)" in call_action
+    assert 'frappe.set_route("List", "Door Cutting Order")' in shop_floor
+    assert "shop-floor-inbox" not in shop_floor
+    assert "dispatch_order" in shop_floor.split(
+        "function productionActionLeavesCurrentView", 1
+    )[1].split("function shouldReturnToOrderList", 1)[0]
+    assert "handoff_to_next" in shop_floor.split(
+        "function productionActionLeavesCurrentView", 1
+    )[1].split("function shouldReturnToOrderList", 1)[0]
+    assert "mark_delivered" in shop_floor.split(
+        "function productionActionLeavesCurrentView", 1
+    )[1].split("function shouldReturnToOrderList", 1)[0]
+    assert "start_my_stage" not in shop_floor.split(
+        "function productionActionLeavesCurrentView", 1
+    )[1].split("function shouldReturnToOrderList", 1)[0]
+
+
 def test_dispatch_uses_capability_and_calculated_plan_policy():
     shop_floor = _source(SHOP_FLOOR_COMMANDS)
     policy = _source(PRODUCTION_POLICY)

@@ -258,6 +258,7 @@ def test_saved_dxf_paths_require_canonical_cutting_plan() -> None:
     assert "current_working_plan" in export
     assert "latest_plan(order.name, source_type=SYSTEM, status=DRAFT)" in export
     assert "latest_plan(order.name, source_type=UPLOADED_DXF, status=DRAFT)" in export
+    assert "or latest_plan(order.name, source_type=UPLOADED_DXF)" in export
     assert "approved_plan_for_order(order)" in export
     assert "_stored_order_export_snapshot(order)" not in export
     assert 'getattr(order, "kerf_mm"' not in export

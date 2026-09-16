@@ -147,6 +147,7 @@ class TestDcoLocalRecoveryArchitecture(unittest.TestCase):
             "customer",
             "order_date",
             "order_notes",
+            "order_cutting_machine",
             "board_description",
             "board_length_cm",
             "board_width_cm",

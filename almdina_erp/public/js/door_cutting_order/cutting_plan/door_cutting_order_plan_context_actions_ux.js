@@ -136,6 +136,7 @@
             && caps.approve
             && can(frm, "approve_dxf")
             && hasOperationalAccess(frm)
+            && String(row.status || "") === "Draft"
             && row.validation
             && row.validation.status === "Valid"
             && !row.validation.needs_recalculation

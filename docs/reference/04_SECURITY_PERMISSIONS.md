@@ -63,7 +63,7 @@ flowchart LR
 
 ### Orders
 
-`view_orders`, `view_all_orders`, `create_order`, `edit_order`, `create_order_revision`, `submit_order`, `approve_order`, `reject_order`, `cancel_order`.
+`view_orders`, `view_all_orders`, `create_order`, `edit_order`, `create_order_revision`, `submit_order`, `approve_order`, `reject_order`, `cancel_order`, `resume_cancelled_order`.
 
 ### Costing & documents
 
@@ -88,7 +88,7 @@ flowchart LR
 - لا يمنح دخول Shop Floor بمفرده؛ الدخول يبقى محكومًا بـ`SHOP_FLOOR_ACCESS_CAPABILITIES`.
 - لا يمنح `view_orders` أو `view_all_orders` ولا يوسّع Document scope.
 - لا يمنح أي Production action. صف `Ready for Delivery` الحالي قد يبقى ضمن بيانات اللوحة التشغيلية لأنه حالة عمل حية، وليس سجلًا تاريخيًا.
-- للعامل ذي النطاق المسند، تُظهر قائمة الطلبات المراحل الحالية فقط عند تعطيله، وتضيف الطلبات التي أكمل فيها مرحلة سابقة عند تفعيله.
+- للعامل ذي النطاق المسند، تُظهر قائمة الطلبات المرحلة الحالية النشطة فقط (`Pending` / `In Progress` / `Paused`) عند تعطيله. مرحلة حالية مكتملة بعد آخر مرحلة (`Ready for Delivery`) ليست عملًا نشطًا لذلك تخرج من العدد والقائمة ومن `has_permission`؛ عند تفعيله تُضاف الطلبات التي أكمل فيها مرحلة سابقة.
 - فتح طلب تاريخي مباشرةً يخضع للعقد نفسه؛ معرفة اسم الطلب أو رابطه لا تتجاوز إخفاء السجل.
 - هذا القيد يخص سطح سجل الطلب نفسه، ولا يلغي وصولًا مستقلًا ومصرحًا به إلى خطة قص أو طلب تعويض مرتبط بإسناد سابق مكتمل.
 

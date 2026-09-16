@@ -14,6 +14,7 @@ from almdina_erp.almdina_erp.domain.security.authorization import (
     Capability,
 )
 from almdina_erp.almdina_erp.domain.orders.lifecycle import (
+    ACTIVE_STAGE_STATUSES,
     PRE_PRODUCTION_ORDER_STATUSES,
     normalize_order_status,
 )
@@ -111,6 +112,13 @@ def _pre_production_status_sql() -> str:
     )
 
 
+def _active_stage_status_sql() -> str:
+    return ", ".join(
+        frappe.db.escape(status)
+        for status in sorted(ACTIVE_STAGE_STATUSES)
+    )
+
+
 def _row_value(row: Any, fieldname: str) -> Any:
     if isinstance(row, dict):
         return row.get(fieldname)
@@ -175,6 +183,7 @@ def _worker_actionable_orders_subquery(user: str) -> str:
         return " select null as door_cutting_order where 1=0"
     role_sql = ", ".join(frappe.db.escape(role) for role in roles)
     pre_production_sql = _pre_production_status_sql()
+    active_stage_sql = _active_stage_status_sql()
     return (
         " select distinct ps.door_cutting_order"
         " from `tabProduction Stage` ps"
@@ -182,6 +191,7 @@ def _worker_actionable_orders_subquery(user: str) -> str:
         f" where ps.name = dco.current_production_stage"
         f" and ifnull(dco.current_production_stage, '') != ''"
         f" and dco.status not in ({pre_production_sql})"
+        f" and ps.status in ({active_stage_sql})"
         f" and ps.assigned_to = {user_sql}"
         f" and ps.operational_role in ({role_sql})"
     )
@@ -252,10 +262,12 @@ def _worker_can_access_assigned_order(
     stage = frappe.db.get_value(
         "Production Stage",
         current_stage_name,
-        ["assigned_to", "operational_role", "stage_type"],
+        ["assigned_to", "operational_role", "stage_type", "status"],
         as_dict=True,
     )
     if not stage or _row_value(stage, "assigned_to") != user:
+        return False
+    if str(_row_value(stage, "status") or "").strip() not in ACTIVE_STAGE_STATUSES:
         return False
 
     role = _resolve_stage_operational_role(order_name, stage)

@@ -4,9 +4,12 @@
     if (window.__almdinaSecureDxfExportLoaded) return;
     window.__almdinaSecureDxfExportLoaded = true;
 
-    const DXF_VERSION = "AC1009"; // AutoCAD R11/R12 ASCII. AutoCAD 2020 opens this legacy format.
+    const DXF_VERSION = "AC1009"; // Valid R12 ASCII: the widest AutoCAD compatibility, including AutoCAD 2021+.
     const TOPOLOGY_SCHEMA_VERSION = 1;
     const TOPOLOGY_UNIT = "mm";
+    // R12 TABLE records must declare the exact number of entries. The exporter
+    // writes four base layers plus three manufacturing overlay layers.
+    const DXF_LAYER_COUNT = 7;
     const TOPOLOGY_COORDINATE_SPACE = "usable_sheet";
     const ORIGINAL_UPLOAD_SOURCES = new Set([
         "custom",
@@ -30,6 +33,8 @@
         "almdina_erp.almdina_erp.services.dxf_export_service.download_uploaded_dxf";
     const VALIDATED_PLAN_METHOD =
         "almdina_erp.almdina_erp.services.dxf_export_service.get_validated_dxf_plan";
+    const NORMALIZE_DXF_METHOD =
+        "almdina_erp.almdina_erp.services.dxf_export_service.normalize_dxf_for_autocad";
 
     function canExportDxf(frm = window.cur_frm) {
         const permissions = window.AlmdinaPermissions;
@@ -368,7 +373,7 @@
         dxf += pair(0, "TABLE") + pair(2, "LTYPE") + pair(70, 1);
         dxf += pair(0, "LTYPE") + pair(2, "CONTINUOUS") + pair(70, 0) + pair(3, "Solid line") + pair(72, 65) + pair(73, 0) + pair(40, 0);
         dxf += pair(0, "ENDTAB");
-        dxf += pair(0, "TABLE") + pair(2, "LAYER") + pair(70, 6);
+        dxf += pair(0, "TABLE") + pair(2, "LAYER") + pair(70, DXF_LAYER_COUNT);
         dxf += layer("0", 7) + layer("SHEET_OUTLINE", 8) + layer("CUT_PATH", 1)
             + layer("OFFCUT", EXTRA_OVERLAY_LAYER_COLORS.OFFCUT);
         dxf += layer("Liner", EXTRA_OVERLAY_LAYER_COLORS.Liner)
@@ -461,13 +466,32 @@
                 : "DXF export failed its compatibility self-check and was not downloaded.");
         }
 
-        const base = `cutting_plan_${safeName(orderName || "draft")}`;
-        download(`${base}_AutoCAD2020_R12.dxf`, dxf, "application/dxf;charset=us-ascii");
-        frappe.show_alert({
-            message: isArabic()
-                ? "تم تصدير ملف DXF متوافق مع AutoCAD بنجاح."
-                : "Validated AutoCAD-compatible DXF exported successfully.",
-            indicator: "green",
+        return frappe.call({
+            method: NORMALIZE_DXF_METHOD,
+            args: {
+                order_name: orderName || null,
+                content_b64: btoa(dxf),
+            },
+            freeze: true,
+            freeze_message: isArabic()
+                ? "جاري تجهيز ملف DXF المتوافق مع AutoCAD..."
+                : "Preparing an AutoCAD-compatible DXF...",
+        }).then(response => {
+            const output = (response && response.message) || {};
+            if (!output.filename || !output.content_b64) {
+                throw new Error("AutoCAD DXF normalization response is incomplete.");
+            }
+            download(
+                output.filename,
+                decodeBase64Bytes(output.content_b64),
+                "application/dxf;charset=utf-8"
+            );
+            frappe.show_alert({
+                message: isArabic()
+                    ? "تم تصدير ملف DXF متوافق مع AutoCAD بنجاح."
+                    : "Validated AutoCAD-compatible DXF exported successfully.",
+                indicator: "green",
+            });
         });
     }
 

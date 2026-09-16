@@ -276,6 +276,7 @@
             </div>
             <div><b>اللوح</b>${esc(frm.doc.board_description || "—")}</div>
             <div><b>لون القشاط</b>${esc(frm.doc.edge_color || "غير محدد")}</div>
+            <div><b>آلة القص</b>${esc(frm.doc.order_cutting_machine || "—")}</div>
             <div><b>عدد الدرف</b>${quantity(doorCount)}</div>
         </div>`;
     }

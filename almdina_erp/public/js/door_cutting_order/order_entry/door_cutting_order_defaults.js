@@ -20,6 +20,7 @@
             customer: "العميل",
             order_date: "تاريخ الطلب",
             order_notes: "ملاحظات الطلب",
+            order_cutting_machine: "نوع آلة القص",
             board_section: "المادة والقشاط",
             board_description: "صنف اللوح",
             board_length_cm: "طول اللوح (سم)",

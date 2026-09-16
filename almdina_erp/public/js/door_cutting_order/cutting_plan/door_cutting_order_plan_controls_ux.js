@@ -372,7 +372,8 @@
             && !frm.is_new()
             && canMutateCurrentStage(frm)
             && rowHasPlan(row)
-            && !(source === "System" && row && row.validation && row.validation.needs_recalculation)
+            && String(row.status || "") === "Draft"
+            && !(row && row.validation && row.validation.needs_recalculation)
         );
     }
 
@@ -383,8 +384,12 @@
             const row = approvalRow(frm, source);
             if (workspaceEditing(frm)) {
                 frappe.msgprint(__("احفظ أو ألغِ تعديل إعدادات الخطة قبل الاعتماد."));
-            } else if (source === "System" && row && row.validation && row.validation.needs_recalculation) {
-                frappe.msgprint(__("أعد حساب خطة القص وراجع النتيجة الجديدة قبل الاعتماد."));
+            } else if (row && row.validation && row.validation.needs_recalculation) {
+                frappe.msgprint(
+                    source === "Custom"
+                        ? __("بيانات الطلب تغيّرت. ارفع DXF جديدًا يطابق القياسات الحالية ثم اعتمد الخطة.")
+                        : __("أعد حساب خطة القص وراجع النتيجة الجديدة قبل الاعتماد.")
+                );
             } else if (!can(frm, "approve_dxf")) {
                 frappe.msgprint(__("ليست لديك صلاحية اعتماد خطة القص."));
             } else {
@@ -437,8 +442,12 @@
         if (!allowed) {
             button.attr(
                 "title",
-                source === "System" && row && row.validation && row.validation.needs_recalculation
-                    ? __("أعد حساب الخطة قبل اعتمادها")
+                row && row.validation && row.validation.needs_recalculation
+                    ? (
+                        source === "Custom"
+                            ? __("ارفع DXF جديدًا يطابق بيانات الطلب الحالية قبل الاعتماد")
+                            : __("أعد حساب الخطة قبل اعتمادها")
+                    )
                     : __("الاعتماد غير متاح في حالة الطلب الحالية أو لا توجد صلاحية")
             );
         } else button.removeAttr("title");

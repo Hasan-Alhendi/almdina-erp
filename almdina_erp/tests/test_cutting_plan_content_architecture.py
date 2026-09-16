@@ -41,10 +41,11 @@ def test_plan_content_is_an_orchestrator_not_a_style_or_focus_owner():
 
 def test_style_owner_preserves_existing_style_identity_and_critical_selectors():
     source = STYLES.read_text(encoding="utf-8")
-    assert 'const STYLE_ID = "dco-plan-content-layout-css-v7"' in source
+    assert 'const STYLE_ID = "dco-plan-content-layout-css-v9"' in source
     for selector in (
         ".dco-plan-actions-section",
         ".dco-margin-policy-alert",
+        ".dco-uploaded-plan-mismatch-banner",
         ".dco-board-gallery",
         ".dco-board-focus__dialog",
         "@media (max-width:760px)",

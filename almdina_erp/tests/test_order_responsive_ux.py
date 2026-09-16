@@ -210,7 +210,7 @@ def test_mobile_order_list_uses_reference_card_and_server_authorized_actions():
     assert 'if (!applyCardLayoutClass(listview)) {' in list_source
     assert "containers.forEach(removeMobileCard);" in list_source
     assert "ensureMobileCardStylesheet();" in list_source
-    assert 'MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=8"' in list_source
+    assert 'MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=9"' in list_source
     assert ".dco-order-list.dco-order-card-layout" in mobile_css
     scoped_result_rule = mobile_css.split(
         ".dco-order-list.dco-order-card-layout .result {",
@@ -234,6 +234,7 @@ def test_mobile_order_list_uses_reference_card_and_server_authorized_actions():
     assert ".dco-mobile-order-card.is-ready-for-delivery" in mobile_css
     assert ".dco-mobile-order-card.is-completed" in mobile_css
     assert ".dco-mobile-order-card.is-delivered" in mobile_css
+    assert ".dco-mobile-order-card.is-cancelled" in mobile_css
     assert ".dco-order-card-container > .list-row" in css
     assert ".dco-order-list.dco-order-card-layout .dco-mobile-order-card" in css
     assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in css
@@ -310,11 +311,18 @@ def test_desktop_keeps_legacy_ordering_while_mobile_uses_five_states():
     assert "const isHistory = mobileLayout" in list_source
     assert ': desktopQueueState(doc, flag) === "completed";' in list_source
     assert 'classList.toggle("dco-list-row-completed"' in list_source
+    assert 'classList.toggle("dco-list-row-history-hidden"' in list_source
+    assert "function shouldHidePersonalHistoryRow" in list_source
+    assert "function isPersonalQueueFinishedState" in list_source
+    assert 'state === "ready_for_delivery"' in list_source
+    assert "can_view_history" in list_source
     assert "const needsReorder = ordered.some" in list_source
     assert "ordered.forEach(container => result.appendChild(container));" in list_source
     assert ".list-row-container.dco-list-row-completed > .list-row" in css
     assert ".list-row-container.dco-list-row-completed > .list-row .list-row-col" in css
     assert "background: #dcfce7 !important;" in css
+    assert ".list-row-container.dco-list-row-history-hidden" in css
+    assert "display: none !important;" in css
 
 
 def test_desktop_list_colors_ready_for_delivery_and_delivered_rows_only():
@@ -327,27 +335,36 @@ def test_desktop_list_colors_ready_for_delivery_and_delivered_rows_only():
     assert "applyDesktopDeliveryRowColors(listview)" in list_source
     assert 'dco-list-row-ready-for-delivery' in list_source
     assert 'dco-list-row-delivered' in list_source
+    assert 'dco-list-row-cancelled' in list_source
     assert "root.classList.contains(\"dco-order-card-layout\")" in list_source
 
     desktop_ready = ".dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-ready-for-delivery"
     desktop_delivered = ".dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-delivered"
+    desktop_cancelled = ".dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-cancelled"
     assert desktop_ready in css
     assert desktop_delivered in css
+    assert desktop_cancelled in css
     assert ".list-row-container.dco-list-row-ready-for-delivery .level-right" in css
     assert ".list-row-container.dco-list-row-delivered .level-right" in css
+    assert ".list-row-container.dco-list-row-cancelled .level-right" in css
     assert "background: #ecfdf3 !important;" in css
     assert "background: #a7f3d0 !important;" in css
+    assert "background: #fecaca !important;" in css
     assert "border-color: #16a34a !important;" in css
     assert "border-color: #047857 !important;" in css
+    assert "border-color: #b91c1c !important;" in css
     assert "applyDesktopDeliveryRowColors(listview)" in list_source
     assert 'department === "جاهز للتسليم"' in list_source
     assert 'department === "تم التسليم"' in list_source
+    assert 'status === "Cancelled"' in list_source
 
     assert ".dco-mobile-order-card.is-ready-for-delivery" in mobile_css
     assert "#7c3aed" in mobile_css
     assert ".dco-mobile-order-card.is-delivered" in mobile_css
+    assert ".dco-mobile-order-card.is-cancelled" in mobile_css
     assert desktop_ready not in mobile_css
     assert desktop_delivered not in mobile_css
+    assert desktop_cancelled not in mobile_css
 
 
 def test_overview_list_puts_delivered_orders_last_for_view_all_orders():
@@ -359,11 +376,19 @@ def test_overview_list_puts_delivered_orders_last_for_view_all_orders():
     assert "function sortOverviewListItems(items)" in list_source
     assert "const OVERVIEW_LIST_SORT_RULES = Object.freeze({" in list_source
     assert 'delivered: Object.freeze({ rank: 1, field: "modified", direction: -1 })' in list_source
+    assert 'const OVERVIEW_DEFAULT_SORT_FIELD = "__dco_default_sort"' in list_source
+    assert 'const OVERVIEW_DEFAULT_SORT_LABEL = "الترتيب الافتراضي"' in list_source
+    assert "function isOverviewDefaultSortActive(listview)" in list_source
+    assert "function shouldSelectOverviewDefaultSort(sortBy, storage)" in list_source
+    assert "function installOverviewDefaultSort(listview)" in list_source
+    assert "function syncSortSelectorOrderButton(selector, sortOrder)" in list_source
+    assert "function patchOverviewSortSelectorSetValue(selector)" in list_source
+    assert "installOverviewDefaultSort(listview)" in list_source
     assert "function overviewListOrderBy(" not in list_source
     assert "IN ('Delivered')" not in list_source
     assert "installOverviewListSort" not in list_source
     assert "args.order_by = overviewListOrderBy" not in list_source
-    assert "if (usesOverviewDeliveredLastSort()) {" in list_source
+    assert "if (isOverviewDefaultSortActive(listview)) {" in list_source
     assert "reorderOverviewListRows(listview, result);" in list_source
     assert '"modified"' in list_source
     assert "if (!personalView)" in list_source

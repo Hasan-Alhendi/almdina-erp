@@ -47,7 +47,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import
     apply_validated_dxf_snapshot,
     backfill_piece_instance_ids,
     calculate_system_plan,
-    plan_input_fingerprint,
+    freshness_expected_fingerprint,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.optimization_mode_validation import (
     require_executable_optimization_mode,
@@ -277,7 +277,11 @@ def _assert_plan_ready_for_approval(order: Any, plan: Any) -> None:
             frappe.ValidationError,
         )
 
-    expected_fingerprint = plan_input_fingerprint(order, plan)
+    expected_fingerprint = freshness_expected_fingerprint(
+        order,
+        plan,
+        str(plan.input_fingerprint or ""),
+    )
     if not str(plan.input_fingerprint or "").strip() or plan.input_fingerprint != expected_fingerprint:
         frappe.throw(
             _("خطة القص لم تعد مطابقة لبيانات الطلب الحالية. حدّث الخطة ثم اعتمدها."),

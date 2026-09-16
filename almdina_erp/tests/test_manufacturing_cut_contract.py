@@ -244,6 +244,50 @@ def test_plan_fingerprint_changes_when_persisted_cut_dimension_changes():
     assert first != second
 
 
+def test_plan_fingerprint_ignores_customer_board_label_and_edge_color():
+    order = _order(_piece())
+    plan = _plan()
+    first = plan_input_fingerprint(order, plan)
+
+    order.board_description = "MDF أبيض آخر"
+    order.pieces[0].edge_type = "قشاط أسود"
+    order.pieces[0].edge_long_type = "قشاط أسود"
+    order.pieces[0].edge_width_type = "قشاط أسود"
+    order.pieces[0].edge_long_right_type_override = "قشاط أسود"
+    order.pieces[0].edge_long_rate_usd = 9
+    order.pieces[0].notes = "ملاحظة تجارية"
+
+    assert plan_input_fingerprint(order, plan) == first
+
+
+def test_plan_fingerprint_changes_when_qty_or_board_size_changes():
+    order = _order(_piece())
+    plan = _plan()
+    first = plan_input_fingerprint(order, plan)
+
+    order.pieces[0].qty = 2
+    assert plan_input_fingerprint(order, plan) != first
+
+    order.pieces[0].qty = 1
+    order.full_board_width_mm = 1830
+    assert plan_input_fingerprint(order, plan) != first
+
+
+def test_legacy_stored_hash_stays_fresh_when_only_board_label_changes():
+    from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import (
+        _legacy_plan_input_fingerprint,
+        freshness_expected_fingerprint,
+    )
+
+    order = _order(_piece())
+    plan = _plan()
+    plan.board_description = order.board_description
+    stored = _legacy_plan_input_fingerprint(order, plan)
+
+    order.board_description = "نوع لوح مختلف"
+    assert freshness_expected_fingerprint(order, plan, stored) == stored
+
+
 def test_dxf_import_matches_persisted_cut_dimensions_not_finished_dimensions():
     order = _order(
         _piece(width_cm=60, length_cm=200, cut_width_cm=59.9, cut_length_cm=199.8)
@@ -352,8 +396,8 @@ def test_saved_export_rejects_fingerprint_drift_before_geometry(monkeypatch):
     plan.input_fingerprint = "captured-revision"
     monkeypatch.setattr(
         dxf_export_service,
-        "plan_input_fingerprint",
-        lambda _order, _plan: "current-revision",
+        "freshness_expected_fingerprint",
+        lambda _order, _plan, _stored="": "current-revision",
     )
 
     with pytest.raises(frappe.ValidationError):

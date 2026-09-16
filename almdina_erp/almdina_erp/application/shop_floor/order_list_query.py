@@ -4,6 +4,9 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any, Protocol
 
+from almdina_erp.almdina_erp.application.shop_floor.history_policy import (
+    can_view_shop_floor_history,
+)
 from almdina_erp.almdina_erp.domain.orders.lifecycle import normalize_order_status
 from almdina_erp.almdina_erp.domain.orders.production_authorization import (
     ProductionActionFacts,
@@ -102,6 +105,19 @@ def sort_overview_order_list(rows: Sequence[Any]) -> list[Any]:
         by_modified,
         key=lambda row: overview_order_list_delivered_rank(_value(row, "status")),
     )
+
+
+def _flags_payload(
+    *,
+    personal_view: bool,
+    can_view_history: bool,
+    orders: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    return {
+        "personal_view": personal_view,
+        "can_view_history": can_view_history,
+        "orders": dict(orders or {}),
+    }
 
 
 def _normalize_order_names(order_names: Any) -> list[str]:
@@ -250,17 +266,25 @@ def get_order_operational_role_flags(
 
     actor = str(repository.current_user() or "").strip()
     if not actor or actor == "Guest":
-        return {"personal_view": False, "orders": {}}
+        return _flags_payload(personal_view=False, can_view_history=False)
 
     names = _normalize_order_names(order_names)
     personal_view = actor != "Administrator" and not repository.is_admin()
+    granted = repository.global_capabilities()
+    can_view_history = can_view_shop_floor_history(granted)
     if not names:
-        return {"personal_view": personal_view, "orders": {}}
+        return _flags_payload(
+            personal_view=personal_view,
+            can_view_history=can_view_history,
+        )
 
     visible = repository.visible_order_names(names)
     visible_names = [name for name in names if name in visible]
     if not visible_names:
-        return {"personal_view": personal_view, "orders": {}}
+        return _flags_payload(
+            personal_view=personal_view,
+            can_view_history=can_view_history,
+        )
 
     orders = repository.order_summaries(visible_names)
     stage_names = sorted(
@@ -291,7 +315,7 @@ def get_order_operational_role_flags(
     # document_has_capability previously repeated for every capability and row.
     action_capabilities = frozenset(
         capability
-        for capability in repository.global_capabilities()
+        for capability in granted
         if capability in _LIST_ACTION_CAPABILITIES
     )
 
@@ -355,7 +379,11 @@ def get_order_operational_role_flags(
             ),
         }
 
-    return {"personal_view": personal_view, "orders": flags}
+    return _flags_payload(
+        personal_view=personal_view,
+        can_view_history=can_view_history,
+        orders=flags,
+    )
 
 
 def get_assignee_filter_options(

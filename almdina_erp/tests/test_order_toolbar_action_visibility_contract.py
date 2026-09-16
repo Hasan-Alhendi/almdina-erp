@@ -27,6 +27,7 @@ class TestOrderToolbarActionVisibilityContract(unittest.TestCase):
         )[0]
 
         self.assertIn('LABELS.cancel', installer)
+        self.assertIn('LABELS.resume_cancelled', installer)
         self.assertIn('addClass("btn-danger")', installer)
         self.assertNotIn("ACTION_GROUP\n", installer)
         self.assertNotIn(",\n                ACTION_GROUP", installer)

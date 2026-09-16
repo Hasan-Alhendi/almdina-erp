@@ -101,6 +101,30 @@
     background-color: #6ee7b7 !important;
 }
 
+.dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-cancelled,
+.dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-cancelled .list-row,
+.dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-cancelled .level-left,
+.dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-cancelled .level-right,
+.dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-cancelled .list-row-col {
+    background: #fecaca !important;
+    background-color: #fecaca !important;
+    border-color: #b91c1c !important;
+}
+
+.dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-cancelled:hover,
+.dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-cancelled:hover .list-row,
+.dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-cancelled:hover .level-left,
+.dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-cancelled:hover .level-right,
+.dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-cancelled:hover .list-row-col {
+    background: #fca5a5 !important;
+    background-color: #fca5a5 !important;
+}
+
+/* Completed worker history is hidden when the actor lacks view_shop_floor_history. */
+.dco-order-list .list-row-container.dco-list-row-history-hidden {
+    display: none !important;
+}
+
 .dco-order-list .dco-mobile-order-card.dco-list-row-completed {
     background: #dcfce7 !important;
     border-color: #86efac !important;

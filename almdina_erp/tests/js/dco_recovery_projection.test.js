@@ -34,6 +34,7 @@ const doc = {
     customer: "CUST-001",
     order_date: "2026-08-29",
     order_notes: "Keep grain aligned",
+    order_cutting_machine: "CNC",
     board_description: "MDF white",
     board_length_cm: 280,
     board_width_cm: 207,

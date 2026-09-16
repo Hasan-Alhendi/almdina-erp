@@ -51,6 +51,19 @@ const fakeFrappe = {
         if (lastCallMethod.includes("download_uploaded_dxf")) {
             return Promise.resolve({ message: originalUpload });
         }
+        if (lastCallMethod.includes("normalize_dxf_for_autocad")) {
+            return Promise.resolve({
+                message: {
+                    filename: "cutting_plan_DCO-TOPOLOGY_AutoCAD2011_2026.dxf",
+                    content_b64: Buffer.from(
+                        Buffer.from(String((opts.args && opts.args.content_b64) || ""), "base64")
+                            .toString("utf8")
+                            .replace("AC1009", "AC1024"),
+                        "utf8"
+                    ).toString("base64"),
+                },
+            });
+        }
         return Promise.resolve({ message: { plan: nextPlan } });
     },
     show_alert() {},
@@ -82,6 +95,7 @@ const context = vm.createContext({
     Promise,
     Uint8Array,
     atob,
+    btoa,
     Buffer,
     Blob: FakeBlob,
     URL: {
@@ -177,14 +191,14 @@ async function run() {
     lastCallMethod = "";
     await fakeFrappe.almdina.export_order_dxf("DCO-TOPOLOGY", "system");
     assert.ok(downloadedDxf);
-    assert.match(lastCallMethod, /get_validated_dxf_plan/);
+    assert.match(lastCallMethod, /normalize_dxf_for_autocad/);
     // Owner outer + owner hole + nested outer = 12 CUT_PATH LINE entities.
     assert.equal(cutPathLineCount(downloadedDxf), 12);
     // Top-left usable-sheet [0,0] becomes physical DXF [5,995] with 5 mm trim.
     assert.match(downloadedDxf, /10\r\n5\r\n20\r\n995\r\n/);
     // Hole geometry must survive into the emitted DXF rather than rectangle fallback.
     assert.match(downloadedDxf, /10\r\n25\r\n20\r\n975\r\n/);
-    assert.match(downloadedName, /_AutoCAD2020_R12\.dxf$/);
+    assert.match(downloadedName, /_AutoCAD2011_2026\.dxf$/);
 
     nextPlan = {
         full_board_width_cm: 100,
@@ -283,8 +297,8 @@ async function run() {
         ],
     };
     await fakeFrappe.almdina.export_order_dxf("DCO-APPROVED-SYSTEM", "approved");
-    assert.match(lastCallMethod, /get_validated_dxf_plan/);
-    assert.match(downloadedDxf, /\$ACADVER\r\n1\r\nAC1009/);
+    assert.match(lastCallMethod, /normalize_dxf_for_autocad/);
+    assert.match(downloadedDxf, /\$ACADVER\r\n1\r\nAC1024/);
 
     nextPlan = {
         full_board_width_cm: 100,
@@ -335,7 +349,7 @@ async function run() {
     downloadedDxf = "";
     lastCallMethod = "";
     await fakeFrappe.almdina.export_order_dxf("DCO-EXTRA-OVERLAY", "system");
-    assert.match(lastCallMethod, /get_validated_dxf_plan/);
+    assert.match(lastCallMethod, /normalize_dxf_for_autocad/);
     assert.match(downloadedDxf, /2\r\nLiner\r\n/);
     assert.match(downloadedDxf, /2\r\nRear Groove\r\n/);
     assert.equal((downloadedDxf.match(/8\r\nLiner\r\n/g) || []).length, 4);
