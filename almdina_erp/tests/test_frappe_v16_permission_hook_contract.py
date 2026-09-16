@@ -13,6 +13,7 @@ PERMISSIONS_PATH = Path(__file__).resolve().parents[1] / "permissions.py"
 GATEWAY_MODULE = (
     "almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway"
 )
+_MISSING_MODULE = object()
 
 
 def _real_frappe_is_available() -> bool:
@@ -33,7 +34,11 @@ def load_permissions_module():
         fake_frappe.db = SimpleNamespace()
         module_overrides["frappe"] = fake_frappe
 
-    with patch.dict(sys.modules, module_overrides):
+    previous_modules = {
+        name: sys.modules.get(name, _MISSING_MODULE) for name in module_overrides
+    }
+    sys.modules.update(module_overrides)
+    try:
         spec = importlib.util.spec_from_file_location(
             "_almdina_frappe_v16_permission_hook_contract",
             PERMISSIONS_PATH,
@@ -43,6 +48,12 @@ def load_permissions_module():
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         return module
+    finally:
+        for name, previous in previous_modules.items():
+            if previous is _MISSING_MODULE:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = previous
 
 
 permissions = load_permissions_module()
