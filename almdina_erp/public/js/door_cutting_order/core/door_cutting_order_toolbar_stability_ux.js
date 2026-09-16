@@ -222,12 +222,12 @@
                 box-shadow:0 1px 2px rgba(15,23,42,.035)!important;
             }
             .dco-fast-entry-toolbar .dco-input-help:hover {
-                border-color:var(--primary,#2490ef)!important;
-                background:rgba(36,144,239,.06)!important;
-                color:var(--primary,#2490ef)!important;
+                border-color:var(--alm-primary,#172033)!important;
+                background:color-mix(in srgb, var(--alm-primary, #172033) 6%, transparent)!important;
+                color:var(--alm-primary,#172033)!important;
             }
             .dco-fast-entry-toolbar .dco-input-help:focus-visible {
-                outline:2px solid var(--primary,#2490ef)!important;
+                outline:2px solid var(--alm-primary,#172033)!important;
                 outline-offset:2px!important;
             }
 

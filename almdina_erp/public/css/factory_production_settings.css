@@ -4,8 +4,8 @@
     --aps-radius-sm: 10px;
     --aps-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04), 0 7px 22px rgba(15, 23, 42, 0.045);
     --aps-shadow-md: 0 14px 40px rgba(15, 23, 42, 0.09);
-    --aps-primary-soft: rgba(36, 144, 239, 0.08);
-    --aps-primary-border: rgba(36, 144, 239, 0.22);
+    --aps-primary-soft: color-mix(in srgb, var(--alm-primary, #172033) 8%, transparent);
+    --aps-primary-border: color-mix(in srgb, var(--alm-primary, #172033) 22%, transparent);
     --aps-success-soft: rgba(21, 128, 61, 0.08);
     --aps-muted-soft: rgba(100, 116, 139, 0.07);
     --aps-info-soft: rgba(37, 99, 235, 0.06);
@@ -24,7 +24,7 @@
     border: 1px solid var(--border-color, #e5e7eb);
     border-radius: var(--aps-radius-lg);
     background:
-        radial-gradient(circle at 8% 12%, rgba(36, 144, 239, 0.10), transparent 34%),
+        radial-gradient(circle at 8% 12%, color-mix(in srgb, var(--alm-primary, #172033) 10%, transparent), transparent 34%),
         linear-gradient(135deg, var(--fg-color, #fff), var(--subtle-fg, #f8fafb));
     box-shadow: var(--aps-shadow-sm);
 }
@@ -35,7 +35,7 @@
     inset-block: 0;
     inset-inline-start: 0;
     width: 4px;
-    background: var(--primary, #2490ef);
+    background: var(--alm-primary, #172033);
 }
 
 .aps-hero-layout {
@@ -52,7 +52,7 @@
 .aps-eyebrow,
 .aps-section-kicker {
     display: block;
-    color: var(--primary, #2490ef);
+    color: var(--alm-primary, #172033);
     font-size: 10px;
     font-weight: 850;
     letter-spacing: 0.02em;
@@ -97,7 +97,7 @@
     place-items: center;
     border-radius: 9px;
     background: var(--aps-primary-soft);
-    color: var(--primary, #2490ef);
+    color: var(--alm-primary, #172033);
     font-size: 12px;
     font-weight: 900;
 }
@@ -183,7 +183,7 @@
 }
 
 .aps-section.is-editable {
-    box-shadow: inset -3px 0 0 rgba(36, 144, 239, 0.58), var(--aps-shadow-sm);
+    box-shadow: inset -3px 0 0 color-mix(in srgb, var(--alm-primary, #172033) 58%, transparent), var(--aps-shadow-sm);
 }
 
 .aps-section.is-readonly {
@@ -250,8 +250,8 @@
     height: 6px;
     flex: 0 0 auto;
     border-radius: 50%;
-    background: var(--primary, #2490ef);
-    box-shadow: 0 0 0 3px rgba(36, 144, 239, 0.09);
+    background: var(--alm-primary, #172033);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--alm-primary, #172033) 9%, transparent);
 }
 
 .aps-permission.readonly .aps-permission-dot {
@@ -491,8 +491,8 @@
     height: 9px;
     flex: 0 0 auto;
     border-radius: 50%;
-    background: var(--primary, #2490ef);
-    box-shadow: 0 0 0 5px rgba(36, 144, 239, 0.10);
+    background: var(--alm-primary, #172033);
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--alm-primary, #172033) 10%, transparent);
 }
 
 .aps-error {
@@ -564,8 +564,8 @@
     height: 8px;
     margin: 5px auto 0;
     border-radius: 50%;
-    background: var(--primary, #2490ef);
-    box-shadow: 0 0 0 4px rgba(36, 144, 239, 0.09);
+    background: var(--alm-primary, #172033);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--alm-primary, #172033) 9%, transparent);
 }
 
 .aps-audit-content {

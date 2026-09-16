@@ -5,6 +5,7 @@
     const FOUNDATION = "/assets/almdina_erp/js/frontend_foundation.js";
     const PAGE_LIFECYCLE = "/assets/almdina_erp/js/page_revisit_refresh.js";
     const MODULES = Object.freeze([
+        "/assets/almdina_erp/js/almdina_ui.js",
         "/assets/almdina_erp/js/shop_floor_quick_actions.js",
         "/assets/almdina_erp/js/shop_floor_inbox/api.js",
         "/assets/almdina_erp/js/shop_floor_inbox/state.js",

@@ -1,0 +1,86 @@
+/*
+ * Almdina ERP — shared UI components.
+ * All selectors stay scoped under .almdina-ui (FE-ARCH-009).
+ */
+
+.almdina-ui :where(.btn, button).alm-btn-primary,
+.almdina-ui .btn.alm-btn-primary {
+    min-height: var(--alm-height-button);
+    padding: 0 var(--alm-padding-button-x);
+    border-radius: var(--alm-radius-button);
+    border: 1px solid var(--alm-primary);
+    background: var(--alm-primary);
+    color: var(--alm-on-primary);
+    font-weight: 700;
+    box-shadow: var(--alm-shadow-button);
+}
+
+.almdina-ui :where(.btn, button).alm-btn-primary:hover:not(:disabled),
+.almdina-ui .btn.alm-btn-primary:hover:not(:disabled) {
+    background: var(--alm-primary-hover);
+    border-color: var(--alm-primary-hover);
+    color: var(--alm-on-primary);
+}
+
+.almdina-ui :where(.btn, button).alm-btn-primary:disabled,
+.almdina-ui .btn.alm-btn-primary:disabled {
+    opacity: 0.55;
+    box-shadow: none;
+}
+
+.almdina-ui :where(.btn, button).alm-btn-danger,
+.almdina-ui .btn.alm-btn-danger {
+    min-height: var(--alm-height-button);
+    padding: 0 var(--alm-padding-button-x);
+    border-radius: var(--alm-radius-button);
+    border: 1px solid var(--alm-danger);
+    background: var(--alm-danger);
+    color: var(--alm-on-danger);
+    font-weight: 700;
+}
+
+.almdina-ui :where(.btn, button).alm-btn-danger:hover:not(:disabled),
+.almdina-ui .btn.alm-btn-danger:hover:not(:disabled) {
+    background: var(--alm-danger-hover);
+    border-color: var(--alm-danger-hover);
+}
+
+.almdina-ui :where(.btn, button).alm-btn-success,
+.almdina-ui .btn.alm-btn-success {
+    min-height: var(--alm-height-button);
+    padding: 0 var(--alm-padding-button-x);
+    border-radius: var(--alm-radius-button);
+    border: 1px solid var(--alm-success);
+    background: var(--alm-success);
+    color: var(--alm-on-success);
+    font-weight: 700;
+}
+
+.almdina-ui :where(.btn, button).alm-btn-success:hover:not(:disabled),
+.almdina-ui .btn.alm-btn-success:hover:not(:disabled) {
+    background: var(--alm-success-hover);
+    border-color: var(--alm-success-hover);
+}
+
+.almdina-ui .alm-empty {
+    padding: 28px 18px;
+    border: 1px dashed var(--alm-border);
+    border-radius: var(--alm-radius-md);
+    background: var(--subtle-fg, #fafafa);
+    color: var(--alm-text-muted);
+    text-align: center;
+    line-height: 1.7;
+}
+
+.almdina-ui .alm-empty strong {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--text-color, #1f272e);
+}
+
+.almdina-ui .dco-plan-tabs .btn.is-active {
+    background: var(--alm-primary);
+    border-color: var(--alm-primary);
+    color: var(--alm-on-primary);
+    font-weight: 700;
+}

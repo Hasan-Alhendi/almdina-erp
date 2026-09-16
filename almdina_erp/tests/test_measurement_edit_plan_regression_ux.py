@@ -132,4 +132,4 @@ def test_special_edge_visual_highlight_is_scoped_to_special_rows() -> None:
     assert ".is-edge-missing.is-checked" in edge_owner
     assert "tr.dco-special-row" in edge_owner
     assert "background:#b5701c!important" in edge_owner
-    assert "background:var(--primary,#2490ef)!important" in edge_owner
+    assert "background:var(--alm-primary,#172033)!important" in edge_owner

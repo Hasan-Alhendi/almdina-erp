@@ -6,6 +6,9 @@ coverage.
 """
 
 app_include_css = [
+    "/assets/almdina_erp/css/almdina_design_tokens.css",
+    "/assets/almdina_erp/css/almdina_components.css",
+    "/assets/almdina_erp/css/almdina_desk_theme.css",
     "/assets/almdina_erp/css/door_cutting_order_measurement_structure.css",
     "/assets/almdina_erp/css/door_cutting_order_responsive.css",
     # Raw /assets paths are not content-fingerprinted by Frappe; bump the bounded
@@ -22,6 +25,7 @@ app_include_css = [
 app_include_js = [
     "/assets/almdina_erp/js/permission_context.js",
     "/assets/almdina_erp/js/frontend_foundation.js",
+    "/assets/almdina_erp/js/almdina_ui.js",
     "/assets/almdina_erp/js/notes/notes_panel.js",
     "/assets/almdina_erp/js/notes/notes_dco_list_integration.js?v=14",
     # Lightweight presentation policy only: it composes ListView formatters and

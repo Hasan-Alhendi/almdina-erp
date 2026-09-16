@@ -52,6 +52,7 @@ jobs:
             almdina_erp.tests.test_frontend_architecture_contract \
             almdina_erp.tests.test_frontend_lifecycle_standard_contract \
             almdina_erp.tests.test_frontend_foundation_contract \
+            almdina_erp.tests.test_design_system_contract \
             almdina_erp.tests.test_a5_workspace_state_foundation \
             almdina_erp.tests.test_workspace_freshness_architecture \
             almdina_erp.tests.test_dco_local_recovery_architecture
@@ -230,6 +231,7 @@ jobs:
       - name: Run active frontend browser simulations
         run: |
           node almdina_erp/tests/js/frontend_foundation.test.js
+          node almdina_erp/tests/js/almdina_ui.test.js
           node almdina_erp/tests/js/workspace_store.test.js
           node almdina_erp/tests/js/workspace_sync_coordinator.test.js
           node almdina_erp/tests/js/dco_recovery_projection.test.js

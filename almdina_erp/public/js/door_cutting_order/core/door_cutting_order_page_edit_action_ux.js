@@ -58,17 +58,17 @@
                     background:var(--subtle-fg,#f4f6f8);color:var(--text-muted,#687481);font-size:10px;font-weight:750;white-space:nowrap;
                 }
                 .${TOOLBAR_CLASS}[data-editing="1"] {
-                    border-color:rgba(36,144,239,.34);box-shadow:0 0 0 3px rgba(36,144,239,.08);
+                    border-color:color-mix(in srgb, var(--alm-primary, #172033) 34%, transparent);box-shadow:0 0 0 3px color-mix(in srgb, var(--alm-primary, #172033) 8%, transparent);
                 }
                 .${TOOLBAR_CLASS}[data-editing="1"] .${TOOLBAR_CLASS}__state {
-                    background:rgba(36,144,239,.1);color:var(--primary,#2490ef);
+                    background:color-mix(in srgb, var(--alm-primary, #172033) 10%, transparent);color:var(--alm-primary,#172033);
                 }
                 .${TOOLBAR_CLASS}__actions { display:flex;align-items:center;gap:8px;flex:0 0 auto; }
                 .${TOOLBAR_CLASS}__actions .btn {
                     min-width:82px;min-height:34px;border-radius:9px;font-weight:800;
                 }
                 .${TOOLBAR_CLASS}__actions .btn:focus-visible {
-                    outline:none !important;box-shadow:0 0 0 3px rgba(36,144,239,.15) !important;
+                    outline:none !important;box-shadow:0 0 0 3px color-mix(in srgb, var(--alm-primary, #172033) 15%, transparent) !important;
                 }
                 .dco-plan-settings-readonly {
                     margin:0 0 12px;padding:13px 14px;border:1px solid var(--border-color,#dfe3e8);border-radius:13px;
@@ -240,7 +240,7 @@
         const slot = ensureToolbarSlot(frm);
         if (!slot) return null;
         const toolbar = document.createElement("div");
-        toolbar.className = TOOLBAR_CLASS;
+        toolbar.className = `${TOOLBAR_CLASS} almdina-ui`;
         toolbar.setAttribute("data-almdina-tab-edit-kind", kind);
         toolbar.setAttribute("data-compact", "1");
         slot.replaceChildren(toolbar);
@@ -267,14 +267,30 @@
     }
 
     function button(label, className, disabled, title) {
-        return `
-            <button
-                type="button"
-                class="btn btn-sm ${className}"
-                ${disabled ? "disabled" : ""}
-                ${title ? `title="${frappe.utils.escape_html(__(title))}"` : ""}
-            >${frappe.utils.escape_html(__(label))}</button>
-        `;
+        const ui = window.AlmdinaUi;
+        if (!ui || typeof ui.button !== "function") {
+            throw new Error("AlmdinaUi.button is required for DCO tab edit actions");
+        }
+        const normalized = String(className || "");
+        let variant = "secondary";
+        if (/\bbtn-primary\b/.test(normalized)) variant = "primary";
+        else if (/\bbtn-danger\b/.test(normalized)) variant = "danger";
+        else if (/\bbtn-success\b/.test(normalized)) variant = "success";
+        const extraClass = normalized
+            .replace(/\bbtn-primary\b/g, "")
+            .replace(/\bbtn-default\b/g, "")
+            .replace(/\bbtn-danger\b/g, "")
+            .replace(/\bbtn-success\b/g, "")
+            .trim();
+        const attrs = title ? { title: __(title) } : {};
+        return ui.button({
+            label: __(label),
+            variant,
+            size: "btn-sm",
+            className: extraClass,
+            disabled: Boolean(disabled),
+            attrs,
+        });
     }
 
     function flushOrderSurfaces(frm) {

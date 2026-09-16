@@ -22,6 +22,14 @@
         return can(frm, "print_customer_invoice");
     }
 
+    function uiButton(options) {
+        const ui = window.AlmdinaUi;
+        if (!ui || typeof ui.button !== "function") {
+            throw new Error("AlmdinaUi.button is required for DCO customer invoice toolbar");
+        }
+        return ui.button(options);
+    }
+
     function costWrapper(frm) {
         const field = frm && frm.fields_dict && frm.fields_dict.order_cost_invoice_html;
         return field && field.$wrapper ? field.$wrapper : $();
@@ -71,9 +79,16 @@
             return false;
         }
 
+        actions.addClass("almdina-ui");
+
         let created = false;
         if (!button.length) {
-            button = $(`<button type="button" class="btn btn-primary btn-sm ${CUSTOMER_CLASS}">${__("طباعة فاتورة الزبون")}</button>`);
+            button = $(uiButton({
+                label: __("طباعة فاتورة الزبون"),
+                variant: "primary",
+                size: "btn-sm",
+                className: CUSTOMER_CLASS,
+            }));
             actions.prepend(button);
             created = true;
         }

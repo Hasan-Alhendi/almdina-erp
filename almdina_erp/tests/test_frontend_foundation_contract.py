@@ -41,10 +41,13 @@ class TestFrontendFoundationContract(unittest.TestCase):
     def test_foundation_is_loaded_once_before_legacy_shared_shell(self) -> None:
         source = ASSETS.read_text(encoding="utf-8")
         foundation_asset = '"/assets/almdina_erp/js/frontend_foundation.js"'
+        ui_asset = '"/assets/almdina_erp/js/almdina_ui.js"'
         shell_asset = '"/assets/almdina_erp/js/shared_shell.js"'
 
         self.assertEqual(source.count(foundation_asset), 1)
-        self.assertLess(source.index(foundation_asset), source.index(shell_asset))
+        self.assertEqual(source.count(ui_asset), 1)
+        self.assertLess(source.index(foundation_asset), source.index(ui_asset))
+        self.assertLess(source.index(ui_asset), source.index(shell_asset))
 
     def test_modular_pages_self_bootstrap_when_global_foundation_is_late(self) -> None:
         for page_entry in PAGE_ENTRIES:
@@ -84,6 +87,7 @@ class TestFrontendFoundationContract(unittest.TestCase):
 
         self.assertIn("almdina_erp.tests.test_frontend_foundation_contract", workflow)
         self.assertIn("node almdina_erp/tests/js/frontend_foundation.test.js", workflow)
+        self.assertIn("node almdina_erp/tests/js/almdina_ui.test.js", workflow)
 
 
 if __name__ == "__main__":

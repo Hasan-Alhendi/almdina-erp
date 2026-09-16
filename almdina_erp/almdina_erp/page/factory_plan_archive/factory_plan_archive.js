@@ -23,6 +23,14 @@ frappe.pages["factory-plan-archive"].on_page_load = function (wrapper) {
         return frappe.utils.escape_html(String(value ?? ""));
     }
 
+    function uiButton(options = {}) {
+        const ui = window.AlmdinaUi;
+        if (!ui || typeof ui.button !== "function") {
+            throw new Error("AlmdinaUi.button is required for factory plan archive rendering");
+        }
+        return ui.button(options);
+    }
+
     function injectStyles() {
         if (document.getElementById("almdina-plan-archive-style")) return;
         const style = document.createElement("style");
@@ -34,7 +42,7 @@ frappe.pages["factory-plan-archive"].on_page_load = function (wrapper) {
     }
 
     function loading(message) {
-        $body.html(`<div class="apa-shell"><div class="apa-empty">${esc(message)}</div></div>`);
+        $body.html(`<div class="almdina-ui apa-shell"><div class="apa-empty">${esc(message)}</div></div>`);
     }
 
     function load() {
@@ -52,7 +60,7 @@ frappe.pages["factory-plan-archive"].on_page_load = function (wrapper) {
 
     function render() {
         $body.html(`
-            <div class="apa-shell">
+            <div class="almdina-ui apa-shell">
                 <section class="apa-hero">
                     <h3>${__("نسخة رسمية ثابتة لكل خطة معتمدة")}</h3>
                     <p>${__("ينشئ الأرشيف ملف PDF خاصًا محفوظًا مع الطلب. إذا كان الملف موجودًا مسبقًا فلن يتم إنشاء نسخة مكررة.")}</p>
@@ -84,7 +92,11 @@ frappe.pages["factory-plan-archive"].on_page_load = function (wrapper) {
                     </div>
                     <div class="apa-result" style="display:none"></div>
                 </div>
-                <button type="button" class="btn btn-primary apa-archive">${__("أرشفة PDF الرسمي")}</button>
+                ${uiButton({
+                    label: __("أرشفة PDF الرسمي"),
+                    variant: "primary",
+                    className: "apa-archive",
+                })}
             </article>
         `).join("");
         $body.find(".apa-list").html(

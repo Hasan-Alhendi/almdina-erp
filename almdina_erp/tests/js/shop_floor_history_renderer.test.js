@@ -25,6 +25,25 @@ window.AlmdinaShopFloorQuickActions = {
         return null;
     },
 };
+window.AlmdinaUi = {
+    button(options = {}) {
+        const variant = String(options.variant || "secondary");
+        const className = String(options.className || "").trim();
+        const classes = [
+            variant === "primary" ? "btn alm-btn-primary" : "",
+            variant === "secondary" ? "btn btn-default" : "",
+            variant === "danger" ? "btn alm-btn-danger" : "",
+            variant === "success" ? "btn alm-btn-success" : "",
+            className,
+        ].filter(Boolean).join(" ");
+        const attrs = options.attrs && typeof options.attrs === "object" ? options.attrs : {};
+        const attrText = Object.entries(attrs)
+            .map(([key, value]) => ` ${key}="${String(value).replaceAll('"', "&quot;")}"`)
+            .join("");
+        const disabled = options.disabled === true ? " disabled" : "";
+        return `<button type="button" class="${classes}"${attrText}${disabled}>${options.label || ""}</button>`;
+    },
+};
 
 require("../../public/js/shop_floor_inbox/renderer.js");
 const renderer = window.AlmdinaShopFloorInboxRenderer;

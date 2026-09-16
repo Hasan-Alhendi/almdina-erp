@@ -13,9 +13,17 @@
 
         const t = (message, replacements) => replacements ? translate(message, replacements) : translate(message);
 
+        function uiButton(options) {
+            const ui = window.AlmdinaUi;
+            if (!ui || typeof ui.button !== "function") {
+                throw new Error("AlmdinaUi.button is required for Factory Permissions rendering");
+            }
+            return ui.button(options);
+        }
+
         function renderShell() {
             $main.html(`
-                <div class="apc-shell">
+                <div class="almdina-ui apc-shell">
                     <header class="apc-hero">
                         <div class="apc-hero-copy">
                             <div class="apc-eyebrow">${t("إدارة الصلاحيات")}</div>
@@ -50,8 +58,8 @@
                                 </div>
                             </div>
                             <div class="apc-transfer-tools">
-                                <button type="button" class="btn btn-default apc-export">${t("تصدير JSON")}</button>
-                                <button type="button" class="btn btn-default apc-import">${t("استيراد JSON")}</button>
+                                ${uiButton({ label: t("تصدير JSON"), variant: "secondary", className: "apc-export" })}
+                                ${uiButton({ label: t("استيراد JSON"), variant: "secondary", className: "apc-import" })}
                             </div>
                             <div class="apc-helper-text">${t("الاستيراد يحمّل الصلاحيات للمعاينة فقط؛ الحفظ يبقى خطوة مستقلة.")}</div>
                             <input type="file" class="apc-import-file" accept="application/json,.json" hidden>
@@ -63,7 +71,11 @@
                                     <div class="apc-panel-kicker">${t("نظرة سريعة")}</div>
                                     <div class="apc-panel-title">${t("ملخص الصلاحيات")}</div>
                                 </div>
-                                <button type="button" class="btn btn-default apc-bulk-toggle apc-select-all-global">${t("تحديد الكل للكل")}</button>
+                                ${uiButton({
+                                    label: t("تحديد الكل للكل"),
+                                    variant: "secondary",
+                                    className: "apc-bulk-toggle apc-select-all-global",
+                                })}
                             </div>
                             <div class="apc-stats">
                                 <div class="apc-stat apc-stat-total"><strong class="apc-total-count">0</strong><span>${t("إجمالي")}</span></div>
@@ -87,8 +99,8 @@
                     <div class="apc-savebar-inner">
                         <div class="apc-dirty" role="status" aria-live="polite" aria-atomic="true">${t("لا توجد تغييرات غير محفوظة")}</div>
                         <div class="apc-save-actions">
-                            <button type="button" class="btn btn-default apc-reset">${t("تراجع")}</button>
-                            <button type="button" class="btn btn-primary apc-save">${t("حفظ الصلاحيات")}</button>
+                            ${uiButton({ label: t("تراجع"), variant: "secondary", className: "apc-reset" })}
+                            ${uiButton({ label: t("حفظ الصلاحيات"), variant: "primary", className: "apc-save" })}
                         </div>
                     </div>
                 </div>
@@ -152,7 +164,12 @@
                             <h4>${esc(group.label)}<span class="apc-group-count">${group.count}</span></h4>
                             <p>${esc(group.description)}</p>
                         </div>
-                        <button type="button" class="btn btn-default apc-bulk-toggle apc-select-all-group" data-group="${esc(group.key)}">${t("تحديد الكل")}</button>
+                        ${uiButton({
+                            label: t("تحديد الكل"),
+                            variant: "secondary",
+                            className: "apc-bulk-toggle apc-select-all-group",
+                            attrs: { "data-group": group.key },
+                        })}
                     </div>
                     <div class="apc-group-body">${group.capabilities.map(renderCapability).join("")}</div>
                 </section>

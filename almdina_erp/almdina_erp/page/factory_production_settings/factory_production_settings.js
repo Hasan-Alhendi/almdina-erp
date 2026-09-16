@@ -4,6 +4,7 @@ frappe.pages["factory-production-settings"].on_page_load = function (wrapper) {
     const FOUNDATION = "/assets/almdina_erp/js/frontend_foundation.js";
     const PAGE_LIFECYCLE = "/assets/almdina_erp/js/page_revisit_refresh.js";
     const MODULES = Object.freeze([
+        "/assets/almdina_erp/js/almdina_ui.js",
         "/assets/almdina_erp/js/factory_production_settings/api.js",
         "/assets/almdina_erp/js/factory_production_settings/state.js",
         "/assets/almdina_erp/js/factory_production_settings/view_model.js",

@@ -293,6 +293,14 @@
                 : $("<div>").text(text).html();
         }
 
+        uiButton(options = {}) {
+            const ui = window.AlmdinaUi;
+            if (!ui || typeof ui.button !== "function") {
+                throw new Error("AlmdinaUi.button is required for factory master data rendering");
+            }
+            return ui.button(options);
+        }
+
         call(method, args = {}, freezeMessage = "") {
             return frappe.call({
                 method,
@@ -393,17 +401,18 @@
             const summary = data.summary || {};
             const canCreate = this.can("create_production_routings");
             this.$main.html(`
-                <main class="prw-shell" dir="rtl">
+                <main class="almdina-ui prw-shell" dir="rtl">
                     <section class="prw-hero">
                         <div class="prw-hero-copy">
                             <span class="prw-eyebrow">${__("Production Workflow")}</span>
                             <h2>${__("صمّم رحلة الطلب من أول مرحلة حتى التسليم")}</h2>
                             <p>${__("رتّب مراحل العمل بصريًا، اربط كل مرحلة بالدور التشغيلي المناسب، ثم استخدم المسار مباشرة في لوحة الإنتاج.")}</p>
                         </div>
-                        ${canCreate ? `
-                            <button type="button" class="btn btn-primary prw-new-route">
-                                <span aria-hidden="true">＋</span>${__("مسار إنتاج جديد")}
-                            </button>` : ""}
+                        ${canCreate ? this.uiButton({
+                            label: `＋ ${__("مسار إنتاج جديد")}`,
+                            variant: "primary",
+                            className: "prw-new-route",
+                        }) : ""}
                     </section>
                     <section class="prw-summary" aria-label="${__("ملخص مسارات الإنتاج")}">
                         ${this.statHtml(__("المسارات"), summary.routings || 0, "routes")}
@@ -516,10 +525,23 @@
                             <span>${__("بواسطة")}: <b>${this.esc(route.modified_by || "—")}</b></span>
                         </div>
                         <div class="prw-card-actions">
-                            <button type="button" class="btn btn-primary prw-edit-route" data-name="${this.esc(route.name)}">${canEdit ? __("تحرير Workflow") : __("معاينة")}</button>
+                            ${this.uiButton({
+                                label: canEdit ? __("تحرير Workflow") : __("معاينة"),
+                                variant: "primary",
+                                className: "prw-edit-route",
+                                attrs: { "data-name": route.name },
+                            })}
                             ${canCreate ? `<button type="button" class="btn btn-default prw-duplicate-route" data-name="${this.esc(route.name)}">${__("نسخ")}</button>` : ""}
                             ${canEdit ? `<button type="button" class="btn btn-default prw-toggle-route" data-name="${this.esc(route.name)}" data-disabled="${route.disabled ? 0 : 1}" data-modified="${this.esc(route.modified || "")}">${route.disabled ? __("تفعيل") : __("تعطيل")}</button>` : ""}
-                            ${canDelete ? `<button type="button" class="btn btn-danger prw-delete-route" data-name="${this.esc(route.name)}" data-modified="${this.esc(route.modified || "")}">${__("حذف")}</button>` : ""}
+                            ${canDelete ? this.uiButton({
+                                label: __("حذف"),
+                                variant: "danger",
+                                className: "prw-delete-route",
+                                attrs: {
+                                    "data-name": route.name,
+                                    "data-modified": route.modified || "",
+                                },
+                            }) : ""}
                         </div>
                     </footer>
                 </article>`;
@@ -620,7 +642,7 @@
             const title = editor.name ? __("تحرير مسار الإنتاج") : __("إنشاء مسار إنتاج جديد");
             const readOnly = editor.readOnly;
             this.$main.html(`
-                <main class="prw-shell prw-editor-shell" dir="rtl">
+                <main class="almdina-ui prw-shell prw-editor-shell" dir="rtl">
                     <header class="prw-editor-topbar">
                         <div class="prw-editor-heading">
                             <button type="button" class="btn btn-default prw-close-editor" aria-label="${__("رجوع")}">→</button>
@@ -633,7 +655,12 @@
                         <div class="prw-editor-actions">
                             <span class="prw-save-state ${editor.dirty ? "is-dirty" : ""}">${editor.dirty ? __("تغييرات غير محفوظة") : __("لا توجد تغييرات")}</span>
                             <button type="button" class="btn btn-default prw-close-editor">${__("إلغاء")}</button>
-                            ${readOnly ? "" : `<button type="button" class="btn btn-primary prw-save-route" ${this.state.saving || !editor.dirty ? "disabled" : ""}>${this.state.saving ? __("جاري الحفظ...") : __("حفظ المسار")}</button>`}
+                            ${readOnly ? "" : this.uiButton({
+                                label: this.state.saving ? __("جاري الحفظ...") : __("حفظ المسار"),
+                                variant: "primary",
+                                className: "prw-save-route",
+                                disabled: this.state.saving || !editor.dirty,
+                            })}
                         </div>
                     </header>
                     <div class="prw-editor-layout">
@@ -683,7 +710,11 @@
                             <div><span>03</span><h3>${__("مكتبة المراحل")}</h3></div>
                             <p>${__("اضغط على المرحلة لإضافتها فورًا. تُدار أسماء المراحل ورموزها من المكتبة فقط.")}</p>
                         </div>
-                        ${canManage ? `<button type="button" class="btn btn-primary prw-library-add">＋ ${__("إضافة مرحلة")}</button>` : ""}
+                        ${canManage ? this.uiButton({
+                            label: `＋ ${__("إضافة مرحلة")}`,
+                            variant: "primary",
+                            className: "prw-library-add",
+                        }) : ""}
                     </div>
                     <div class="prw-library-list">
                         ${catalog.length

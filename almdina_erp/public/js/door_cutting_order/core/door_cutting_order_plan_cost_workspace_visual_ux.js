@@ -96,7 +96,7 @@
                 --dco-workspace-radius-sm:11px;
                 --dco-workspace-shadow:0 6px 22px rgba(15,23,42,.055);
                 --dco-workspace-shadow-hover:0 10px 28px rgba(15,23,42,.085);
-                --dco-workspace-ring:0 0 0 3px rgba(36,144,239,.14);
+                --dco-workspace-ring:0 0 0 3px color-mix(in srgb, var(--alm-primary, #172033) 14%, transparent);
             }
             .${ROOT_CLASS} [data-almdina-workspace-kind]{
                 transition:border-color .16s ease,box-shadow .16s ease,background-color .16s ease;
@@ -128,14 +128,14 @@
             .${ROOT_CLASS} [data-fieldname="order_cost_invoice_html"][data-almdina-workspace-editing="1"]::before{
                 content:"وضع التعديل مفعّل — غيّر القيم المطلوبة ثم اضغط «حفظ» من أعلى الصفحة.";
                 display:flex;align-items:center;min-height:38px;margin:0 0 10px;padding:8px 12px;
-                border:1px solid rgba(36,144,239,.28);border-radius:var(--dco-workspace-radius-sm);
-                background:rgba(36,144,239,.075);color:var(--text-color,#26313b);font-size:11px;font-weight:800;line-height:1.55;
+                border:1px solid color-mix(in srgb, var(--alm-primary, #172033) 28%, transparent);border-radius:var(--dco-workspace-radius-sm);
+                background:color-mix(in srgb, var(--alm-primary, #172033) 8%, transparent);color:var(--text-color,#26313b);font-size:11px;font-weight:800;line-height:1.55;
             }
             .${ROOT_CLASS} [data-almdina-workspace-editing="1"] .almdina-workspace-field-editor{
-                padding:4px;border-radius:12px;background:rgba(36,144,239,.055);
+                padding:4px;border-radius:12px;background:color-mix(in srgb, var(--alm-primary, #172033) 6%, transparent);
             }
             .${ROOT_CLASS} [data-almdina-workspace-editing="1"] .almdina-workspace-field-editor .form-control{
-                min-height:40px;border-radius:10px;border-color:rgba(36,144,239,.34);background:var(--card-bg,#fff);
+                min-height:40px;border-radius:10px;border-color:color-mix(in srgb, var(--alm-primary, #172033) 34%, transparent);background:var(--card-bg,#fff);
                 font-weight:750;box-shadow:0 1px 2px rgba(15,23,42,.035);
             }
             .${ROOT_CLASS} [data-almdina-workspace-editing="1"] .almdina-workspace-field-editor .form-control:focus-visible,
@@ -193,7 +193,7 @@
                 box-shadow:0 1px 0 var(--border-color,#e7ebef);
             }
             .${ROOT_CLASS} .dco-cost-table tbody tr{transition:background-color .12s ease}
-            .${ROOT_CLASS} .dco-cost-table tbody tr:hover td{background:rgba(36,144,239,.035)}
+            .${ROOT_CLASS} .dco-cost-table tbody tr:hover td{background:color-mix(in srgb, var(--alm-primary, #172033) 4%, transparent)}
             .${ROOT_CLASS} .dco-special-price-card{
                 border-radius:14px !important;transition:border-color .14s ease,box-shadow .14s ease,transform .14s ease;
             }
