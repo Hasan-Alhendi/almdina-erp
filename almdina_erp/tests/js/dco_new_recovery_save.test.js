@@ -197,6 +197,13 @@ const fakeWindow = {
     location: { host: "erp.example.test" },
     structuredClone,
     AlmdinaDocumentContext: DocumentContext,
+    AlmdinaUi: {
+        button(options = {}) {
+            const type = String(options.type || "button");
+            const label = String(options.label || "");
+            return `<button type="${type}">${label}</button>`;
+        },
+    },
     AlmdinaOrderRevisionUX: { isEditSessionActive: () => false },
     AlmdinaDoorCuttingFastEntry: { render() {} },
     AlmdinaFastEntryKeyboardUX: { install() {} },
