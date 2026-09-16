@@ -91,6 +91,9 @@ doctype_js = {
         # duplicate document state or save commands; it only arranges the existing
         # Frappe controls into the compact intake/material/measurements hierarchy.
         "public/js/door_cutting_order/order_entry/door_cutting_order_order_tab_layout_ux.js",
+        # Radio presentation and client-only required check for the operational
+        # cutting machine. Schema stays optional so the server accepts null.
+        "public/js/door_cutting_order/order_entry/door_cutting_order_cutting_machine_ux.js",
         # Qty+Enter is a focused keyboard behavior layered on the operator's
         # existing row materialization/model-sync contract; it owns no rendering.
         "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_fast_entry_keyboard_ux.js",

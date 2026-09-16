@@ -82,7 +82,7 @@ Capability catalog + authorization/application policy + Frappe/document scope.
 
 صنّف الحقول قبل استخدامها:
 
-- **Operational:** قياسات، حالة، مرحلة، assignee، geometry اللازمة للعمل.
+- **Operational:** قياسات، حالة، مرحلة، assignee، geometry اللازمة للعمل، ونوع آلة القص التشغيلي على الطلب (`order_cutting_machine`: `CNC` / `مشرحة`) المعروض كأزرار اختيار في تاب الطلب وفي طباعة جدول القياسات. الإلزام واجهة فقط: الحفظ من النموذج يرفض القيمة الفارغة برسالة خطأ، بينما الخادم يقبل `null`. الطلبات السابقة تُصفَّر إلى `null` عبر patch. هذا الحقل مستقل عن `Cutting Plan.machine_type` الخاص بالمحسّن.
 - **Customer-facing sales:** ما يلزم عرض/طباعة مستند الزبون وفق capability.
 - **Internal financial:** board/cutting/edge/internal cost breakdown وغيرها من بيانات التكلفة المحمية.
 
