@@ -18,6 +18,8 @@ _MISSING_MODULE = object()
 
 
 def _real_frappe_is_available() -> bool:
+    if "frappe" in sys.modules:
+        return True
     try:
         return importlib.util.find_spec("frappe") is not None
     except (ImportError, ValueError):
