@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib
 import importlib.util
 import sys
 import types
@@ -8,6 +7,8 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
+
+from almdina_erp.tests.frappe_test_stub import install_if_unavailable
 
 
 PERMISSIONS_PATH = Path(__file__).resolve().parents[1] / "permissions.py"
@@ -17,31 +18,16 @@ GATEWAY_MODULE = (
 _MISSING_MODULE = object()
 
 
-def _real_frappe_is_available() -> bool:
-    if "frappe" in sys.modules:
-        return True
-    try:
-        return importlib.util.find_spec("frappe") is not None
-    except (ImportError, ValueError):
-        return False
+def load_permissions_module():
+    """Load permission hooks without replacing the process-wide Frappe module."""
 
-
-def _load_permissions_with_fakes():
-    fake_frappe = types.ModuleType("frappe")
-    fake_frappe.session = SimpleNamespace(user="test@example.com")
-    fake_frappe.db = SimpleNamespace()
+    install_if_unavailable()
 
     fake_gateway = types.ModuleType(GATEWAY_MODULE)
     fake_gateway.doctype_has_capability = lambda *_args, **_kwargs: False
 
-    module_overrides = {
-        "frappe": fake_frappe,
-        GATEWAY_MODULE: fake_gateway,
-    }
-    previous_modules = {
-        name: sys.modules.get(name, _MISSING_MODULE) for name in module_overrides
-    }
-    sys.modules.update(module_overrides)
+    previous_gateway = sys.modules.get(GATEWAY_MODULE, _MISSING_MODULE)
+    sys.modules[GATEWAY_MODULE] = fake_gateway
     try:
         spec = importlib.util.spec_from_file_location(
             "_almdina_frappe_v16_permission_hook_contract",
@@ -53,17 +39,10 @@ def _load_permissions_with_fakes():
         spec.loader.exec_module(module)
         return module
     finally:
-        for name, previous in previous_modules.items():
-            if previous is _MISSING_MODULE:
-                sys.modules.pop(name, None)
-            else:
-                sys.modules[name] = previous
-
-
-def load_permissions_module():
-    if _real_frappe_is_available():
-        return importlib.import_module("almdina_erp.permissions")
-    return _load_permissions_with_fakes()
+        if previous_gateway is _MISSING_MODULE:
+            sys.modules.pop(GATEWAY_MODULE, None)
+        else:
+            sys.modules[GATEWAY_MODULE] = previous_gateway
 
 
 permissions = load_permissions_module()
