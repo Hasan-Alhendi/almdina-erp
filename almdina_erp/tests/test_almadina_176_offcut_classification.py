@@ -447,7 +447,7 @@ def test_unassigned_offcut_does_not_block_existing_approval_rules(monkeypatch):
     order = SimpleNamespace(name="DCO-176")
     monkeypatch.setattr(
         cutting_plan_command_service,
-        "plan_input_fingerprint",
+        "freshness_expected_fingerprint",
         lambda *_args: "same-fingerprint",
     )
 
