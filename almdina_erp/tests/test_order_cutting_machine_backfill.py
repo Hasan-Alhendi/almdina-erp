@@ -18,6 +18,7 @@ CONTROLLER = (
     / "door_cutting_order"
     / "door_cutting_order_controller.py"
 )
+_MISSING_MODULE = object()
 
 
 class FakeDB:
@@ -48,20 +49,39 @@ class FakeDB:
 
 
 def _load_patch(path: Path, db: FakeDB, module_name: str):
-    frappe = types.ModuleType("frappe")
-    frappe.db = db
-    sys.modules["frappe"] = frappe
-    sys.modules.pop(module_name, None)
-    spec = importlib.util.spec_from_file_location(module_name, path)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    """Load a patch against a fake DB without corrupting global Frappe imports."""
+
+    fake_frappe = types.ModuleType("frappe")
+    fake_frappe.db = db
+    previous_frappe = sys.modules.get("frappe", _MISSING_MODULE)
+    sys.modules["frappe"] = fake_frappe
+    try:
+        spec = importlib.util.spec_from_file_location(module_name, path)
+        assert spec and spec.loader
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    finally:
+        if previous_frappe is _MISSING_MODULE:
+            sys.modules.pop("frappe", None)
+        else:
+            sys.modules["frappe"] = previous_frappe
 
 
 class TestOrderCuttingMachineBackfill(unittest.TestCase):
-    def tearDown(self) -> None:
-        sys.modules.pop("frappe", None)
+    def test_patch_loader_preserves_process_frappe_module(self) -> None:
+        previous_frappe = sys.modules.get("frappe", _MISSING_MODULE)
+
+        _load_patch(
+            EMPTY_PATCH_PATH,
+            FakeDB(),
+            "empty_order_cutting_machine_import_isolation",
+        )
+
+        self.assertIs(
+            sys.modules.get("frappe", _MISSING_MODULE),
+            previous_frappe,
+        )
 
     def test_patches_are_registered_after_model_sync(self) -> None:
         patches = PATCHES.read_text(encoding="utf-8")
