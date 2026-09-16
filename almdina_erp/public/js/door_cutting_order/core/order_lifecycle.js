@@ -10,6 +10,7 @@
         create_revision: __("تعديل الطلب"),
         return_to_draft: __("إعادة للمسودة"),
         cancel: __("إلغاء الطلب"),
+        resume_cancelled: __("استئناف الطلب"),
     });
     const RETIRED_LABELS = Object.freeze([
         __("إرسال للمراجعة"),
@@ -96,6 +97,7 @@
         removeRetiredLifecycleButtons(frm);
         removeManagedLifecycleButton(frm, LABELS.return_to_draft);
         removeManagedLifecycleButton(frm, LABELS.cancel);
+        removeManagedLifecycleButton(frm, LABELS.resume_cancelled);
     }
 
     function rememberLifecycleButton(frm, label) {
@@ -139,6 +141,40 @@
         return actionAllowed(context, "cancel");
     }
 
+    function canResumeCancelledOrder(frm, context) {
+        if (!frm || !frm.doc || frm.is_new() || isSuperseded(frm)) return false;
+        const status = String(frm.doc.status || "Draft");
+        if (status !== "Cancelled") return false;
+        return actionAllowed(context, "resume_cancelled");
+    }
+
+    function invalidateLifecycleContext(frm) {
+        if (!frm) return;
+        frm.__almdina_lifecycle_context = null;
+        frm.__almdinaLifecycleContextPromise = null;
+        frm.__almdinaLifecycleContextToken = null;
+        frm.__almdinaLifecycleContextPending = false;
+        if (frm.__almdinaLifecycleRenderedLabels instanceof Set) {
+            frm.__almdinaLifecycleRenderedLabels.clear();
+        }
+        removeLifecycleButtons(frm);
+    }
+
+    function applyLifecycleResult(frm, result) {
+        if (!frm || !frm.doc || !result) return;
+        if (result.status) {
+            frm.doc.status = result.status;
+            if (typeof frm.refresh_field === "function") {
+                frm.refresh_field("status");
+            }
+        }
+        const lifecycle = result.lifecycle;
+        if (lifecycle && lifecycle.order_name === frm.doc.name) {
+            frm.__almdina_lifecycle_context = lifecycle;
+            installButtons(frm, lifecycle);
+        }
+    }
+
     function callAction(frm, options) {
         const identity = documentContext().capture(frm);
         return frappe.call({
@@ -161,7 +197,16 @@
                 message: options.successMessage,
                 indicator: options.indicator || "green",
             }, 6);
-            return frm.reload_doc().then(() => result);
+            invalidateLifecycleContext(frm);
+            applyLifecycleResult(frm, result);
+            const reload = typeof frm.reload_doc === "function"
+                ? Promise.resolve(frm.reload_doc())
+                : Promise.resolve();
+            return reload.then(() => {
+                if (!documentContext().isCurrent(frm, identity)) return result;
+                applyLifecycleResult(frm, result);
+                return loadContext(frm).then(() => result);
+            });
         });
     }
 
@@ -239,11 +284,23 @@
         );
     }
 
+    function resumeCancelledOrder(frm) {
+        frappe.confirm(
+            __("سيتم استئناف الطلب من المرحلة التي أُلغي فيها. هل تريد المتابعة؟"),
+            () => callAction(frm, {
+                method: "almdina_erp.almdina_erp.services.order_lifecycle_service.resume_cancelled_order",
+                freezeMessage: __("جاري استئناف الطلب..."),
+                successMessage: __("تم استئناف الطلب إلى مرحلته السابقة."),
+            })
+        );
+    }
+
     function installButtons(frm, context) {
         removeRetiredLifecycleButtons(frm);
         if (!frm || frm.is_new()) {
             removeManagedLifecycleButton(frm, LABELS.return_to_draft);
             removeManagedLifecycleButton(frm, LABELS.cancel);
+            removeManagedLifecycleButton(frm, LABELS.resume_cancelled);
             return;
         }
 
@@ -267,6 +324,15 @@
             }
         } else {
             removeManagedLifecycleButton(frm, LABELS.cancel);
+        }
+        if (canResumeCancelledOrder(frm, context)) {
+            ensureLifecycleButton(
+                frm,
+                LABELS.resume_cancelled,
+                () => resumeCancelledOrder(frm)
+            );
+        } else {
+            removeManagedLifecycleButton(frm, LABELS.resume_cancelled);
         }
     }
 
@@ -296,8 +362,15 @@
         }
 
         const cached = frm.__almdina_lifecycle_context;
-        if (cached && cached.order_name === frm.doc.name) installButtons(frm, cached);
-        else removeLifecycleButtons(frm);
+        if (
+            cached
+            && cached.order_name === frm.doc.name
+            && cached.status === String(frm.doc.status || "Draft")
+        ) {
+            installButtons(frm, cached);
+        } else {
+            removeLifecycleButtons(frm);
+        }
 
         const identity = contextApi.capture(frm);
         frm.__almdinaLifecycleContextPending = true;
@@ -363,9 +436,11 @@
         if (!context || context.order_name !== frm.doc.name) return true;
         const wantsReturn = canReturnToDraft(frm, context);
         const wantsCancel = canCancelOrder(frm, context);
+        const wantsResume = canResumeCancelledOrder(frm, context);
         return (
             lifecycleButtonRendered(frm, LABELS.return_to_draft) === wantsReturn
             && lifecycleButtonRendered(frm, LABELS.cancel) === wantsCancel
+            && lifecycleButtonRendered(frm, LABELS.resume_cancelled) === wantsResume
         );
     }
 

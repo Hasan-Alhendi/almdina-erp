@@ -28,6 +28,9 @@ def _reset_drawing_dxf_status(order: Any, repository: FrappeCuttingPlanCommandRe
         order.name,
         source_type=UPLOADED_DXF,
         status=DRAFT,
+    ) or repository.latest_document(
+        order.name,
+        source_type=UPLOADED_DXF,
     )
     has_valid_uploaded_dxf = bool(
         uploaded

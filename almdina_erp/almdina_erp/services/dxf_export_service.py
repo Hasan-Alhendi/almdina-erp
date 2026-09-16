@@ -36,7 +36,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_reposito
     latest_plan,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import (
-    plan_input_fingerprint,
+    freshness_expected_fingerprint,
 )
 from almdina_erp.almdina_erp.services import export_validation_service as legacy_export
 from almdina_erp.almdina_erp.services.dxf_autocad_normalization import (
@@ -265,7 +265,10 @@ def _saved_plan_for_source(order: Any, plan_source: str | None) -> Any | None:
     if normalized == "system":
         return latest_plan(order.name, source_type=SYSTEM, status=DRAFT)
     if normalized in {"custom", "uploaded", "uploaded dxf", "uploaded_dxf", "dxf"}:
-        return latest_plan(order.name, source_type=UPLOADED_DXF, status=DRAFT)
+        return (
+            latest_plan(order.name, source_type=UPLOADED_DXF, status=DRAFT)
+            or latest_plan(order.name, source_type=UPLOADED_DXF)
+        )
     if normalized == "approved":
         return approved_plan_for_order(order)
     frappe.throw(_("مصدر خطة القص المحدد للتصدير غير مدعوم."), frappe.ValidationError)
@@ -304,7 +307,7 @@ def _assert_saved_plan_fresh(order: Any, plan: Any) -> None:
         )
 
     try:
-        current = plan_input_fingerprint(order, plan)
+        current = freshness_expected_fingerprint(order, plan, stored)
     except ManufacturingRequirementsError as exc:
         frappe.throw(
             _("مقاسات القص التصنيعية المحفوظة في الطلب غير مكتملة. احفظ الطلب ثم أعد حساب الخطة أو استيراد DXF."),

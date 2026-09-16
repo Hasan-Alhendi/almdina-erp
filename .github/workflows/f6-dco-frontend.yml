@@ -89,6 +89,7 @@ jobs:
           node --check almdina_erp/tests/js/plan_board_presenter.test.js
           node --check almdina_erp/tests/js/plan_edit_dom_ownership.test.js
           node --check almdina_erp/tests/js/plan_source_tab_edit_lock.test.js
+          node --check almdina_erp/tests/js/uploaded_plan_mismatch_banner.test.js
           node --check almdina_erp/tests/js/order_measurement_save_flush.test.js
           node --check almdina_erp/tests/js/operator_edge_ownership.test.js
           node --check almdina_erp/tests/js/surface_settle_guard.test.js
@@ -199,6 +200,9 @@ jobs:
 
       - name: Validate plan source tabs stay locked during edit rerenders
         run: node almdina_erp/tests/js/plan_source_tab_edit_lock.test.js
+
+      - name: Validate uploaded plan remains visible and warns on order mismatch
+        run: node almdina_erp/tests/js/uploaded_plan_mismatch_banner.test.js
 
       - name: Validate measurement cells flush into the order save path
         run: node almdina_erp/tests/js/order_measurement_save_flush.test.js

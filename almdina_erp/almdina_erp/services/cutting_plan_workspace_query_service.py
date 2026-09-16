@@ -14,11 +14,17 @@ from almdina_erp.almdina_erp.domain.cutting.catalog import (
     optimization_catalog,
     public_mode_value,
 )
+from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
+    ManufacturingRequirementsError,
+)
+from almdina_erp.almdina_erp.domain.cutting.plan_freshness import (
+    decide_uploaded_plan_mismatch,
+    select_uploaded_workspace_plan,
+)
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     APPROVED,
     DRAFT,
     SYSTEM,
-    UPLOADED_DXF,
 )
 from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
     business_state_options,
@@ -32,6 +38,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization im
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
     factory_default_plan_settings,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import (
+    freshness_expected_fingerprint,
 )
 from almdina_erp.almdina_erp.services.cutting_plan_recalculation_job_service import (
     overlay_background_recalculation,
@@ -70,6 +79,7 @@ _PLAN_FIELDS = (
     "kerf_mm",
     "trim_margin_mm",
     "plan_needs_recalculation",
+    "input_fingerprint",
     "estimated_cut_count",
     "estimated_cut_length_m",
     "largest_reusable_free_area_m2",
@@ -272,6 +282,27 @@ def _selected_snapshot_json(rows: list[Any | None]) -> dict[str, str]:
     }
 
 
+def _uploaded_plan_row(order: Any, uploaded: Any, snapshot_json: str) -> dict[str, Any]:
+    payload = _plan_row(uploaded, snapshot_json)
+    try:
+        expected = freshness_expected_fingerprint(
+            order,
+            uploaded,
+            str(uploaded.get("input_fingerprint") or ""),
+        )
+    except (ManufacturingRequirementsError, frappe.ValidationError):
+        return payload
+    decision = decide_uploaded_plan_mismatch(
+        source_type=str(uploaded.get("source_type") or ""),
+        stored_fingerprint=str(uploaded.get("input_fingerprint") or ""),
+        expected_fingerprint=expected,
+        already_needs_recalculation=payload["validation"]["needs_recalculation"],
+    )
+    if decision.should_invalidate:
+        payload["validation"]["needs_recalculation"] = True
+    return payload
+
+
 @frappe.whitelist()
 def get_plan_workspace_snapshot(order_name: str) -> dict[str, Any]:
     """Return a plan-only read model for the unified order workspace.
@@ -295,7 +326,7 @@ def get_plan_workspace_snapshot(order_name: str) -> dict[str, Any]:
 
     system = _latest(rows, status=DRAFT, source_type=SYSTEM) if capabilities["view_system"] else None
     uploaded = (
-        _latest(rows, status=DRAFT, source_type=UPLOADED_DXF)
+        select_uploaded_workspace_plan(rows)
         if capabilities["view_uploaded"]
         else None
     )
@@ -307,6 +338,10 @@ def get_plan_workspace_snapshot(order_name: str) -> dict[str, Any]:
         else None
     )
     snapshot_json = _selected_snapshot_json([system, uploaded, approved])
+    uploaded_payload = (
+        _uploaded_plan_row(order, uploaded, snapshot_json.get(str(uploaded.get("name") or ""), ""))
+        if uploaded else None
+    )
 
     return {
         "order_name": order.name,
@@ -326,10 +361,7 @@ def get_plan_workspace_snapshot(order_name: str) -> dict[str, Any]:
                 _plan_row(system, snapshot_json.get(str(system.get("name") or ""), ""))
                 if system else None
             ),
-            "uploaded_draft": (
-                _plan_row(uploaded, snapshot_json.get(str(uploaded.get("name") or ""), ""))
-                if uploaded else None
-            ),
+            "uploaded_draft": uploaded_payload,
             "approved": (
                 _plan_row(approved, snapshot_json.get(str(approved.get("name") or ""), ""))
                 if approved else None

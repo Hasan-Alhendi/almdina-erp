@@ -3,7 +3,7 @@
 
     if (window.AlmdinaPlanContentStyles) return;
 
-    const STYLE_ID = "dco-plan-content-layout-css-v7";
+    const STYLE_ID = "dco-plan-content-layout-css-v9";
     const CSS_TEXT = `
         .dco-plan-actions-section {
             border:0 !important;
@@ -121,6 +121,43 @@
             background:linear-gradient(135deg,#fff9e8,#fffdf6) !important;
             color:#5f4508 !important;
             box-shadow:none !important;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-uploaded-plan-mismatch-banner {
+            display:flex !important;
+            align-items:flex-start !important;
+            gap:12px !important;
+            direction:rtl !important;
+            width:100% !important;
+            box-sizing:border-box !important;
+            margin:0 0 14px !important;
+            padding:14px 16px !important;
+            border:2px solid #d9480f !important;
+            border-radius:12px !important;
+            background:#fff4e6 !important;
+            color:#9c2b00 !important;
+            box-shadow:0 1px 0 rgba(217,72,15,.14) !important;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-uploaded-plan-mismatch-banner__icon {
+            flex:0 0 auto;
+            font-size:22px !important;
+            line-height:1.2 !important;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-uploaded-plan-mismatch-banner__body {
+            min-width:0;
+            flex:1 1 auto;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-uploaded-plan-mismatch-banner__title {
+            display:block;
+            margin:0 0 4px !important;
+            font-size:15px !important;
+            font-weight:900 !important;
+            line-height:1.35 !important;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-uploaded-plan-mismatch-banner__summary {
+            display:block;
+            font-size:13px !important;
+            font-weight:700 !important;
+            line-height:1.6 !important;
         }
         [data-fieldname="cutting_plan_html"] .dco-margin-policy-alert__icon {
             flex:0 0 auto;
@@ -577,6 +614,10 @@
     `;
 
     function install() {
+        ["dco-plan-content-layout-css-v8"].forEach((id) => {
+            const legacy = document.getElementById(id);
+            if (legacy) legacy.remove();
+        });
         if (document.getElementById(STYLE_ID)) return;
         const style = document.createElement("style");
         style.id = STYLE_ID;

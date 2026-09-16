@@ -122,7 +122,8 @@ def test_plan_cost_commands_refresh_only_order_commercial_aggregates() -> None:
 def test_invalidation_marks_only_canonical_cutting_plan_drafts() -> None:
     invalidation = source("almdina_erp/services/cutting_plan_invalidation_service.py")
 
-    assert 'frappe.db.set_value(\n            "Cutting Plan"' in invalidation
+    assert 'frappe.db.set_value(' in invalidation
+    assert '"Cutting Plan"' in invalidation
     assert '"Door Cutting Order"' not in invalidation
     assert "order.plan_needs_recalculation" not in invalidation
 

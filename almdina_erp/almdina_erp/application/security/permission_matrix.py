@@ -62,6 +62,11 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
     Capability.APPROVE_ORDER: _presentation("اعتماد الطلب (ملغاة)", "أُلغيت. استخدم «إرسال للإنتاج» مباشرة. اعتماد خطة القص يبقى صلاحية منفصلة.", "critical"),
     Capability.REJECT_ORDER: _presentation("رفض الطلب", "رفض طلب عالق في قائمة المراجعة القديمة وإعادته للتعديل.", "critical"),
     Capability.CANCEL_ORDER: _presentation("إلغاء الطلب", "إلغاء الطلب وفق ضوابط دورة الحياة.", "critical"),
+    Capability.RESUME_CANCELLED_ORDER: _presentation(
+        "استئناف الطلب الملغى",
+        "إعادة الطلب الملغى إلى مرحلة الإنتاج التي أُلغي منها دون تصفير المسار أو إعادته للمسودة.",
+        "critical",
+    ),
     Capability.ADD_INTERNAL_NOTE: _presentation(
         "إضافة ملاحظة داخلية",
         "إضافة ملاحظات تعاونية على الطلب والزبون المرتبط به دون تعديل الطلب أو الدخول في دورة الحفظ والمراجعات.",

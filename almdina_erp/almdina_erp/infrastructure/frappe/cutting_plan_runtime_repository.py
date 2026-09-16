@@ -27,7 +27,7 @@ from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
 from almdina_erp.almdina_erp.domain.cutting.offcut_policy import OffcutPolicyError
 from almdina_erp.almdina_erp.domain.cutting.physical_execution_contract import physical_execution_for_snapshot
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import (
-    plan_input_fingerprint,
+    freshness_expected_fingerprint,
 )
 
 
@@ -144,7 +144,7 @@ def _plan_is_stale(order: Any, plan: Any) -> bool:
     if not stored:
         return True
     try:
-        return stored != plan_input_fingerprint(order, plan)
+        return stored != freshness_expected_fingerprint(order, plan, stored)
     except ManufacturingRequirementsError:
         # Incomplete cut dimensions cannot be fingerprinted. Treat the plan as
         # stale so list/shop-floor reads stay available without trusting it.
