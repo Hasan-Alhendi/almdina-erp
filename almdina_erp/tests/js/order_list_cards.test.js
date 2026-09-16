@@ -324,6 +324,32 @@ assert(deliveredHtml.includes("dco-card-complete-state"));
 assert(deliveredHtml.includes("تم التسليم"), "a delivered order must retain a non-interactive delivered state");
 assert(!deliveredHtml.includes("dco-card-production-action"), "a delivered order must never render another workflow button");
 
+const cancelled = {
+    ...delivered,
+    status: "Cancelled",
+    current_department: "CNC",
+    __almdinaProductionActionContext: {
+        stage: "PST-10",
+        canStart: false,
+        canHandoff: false,
+        canDeliver: false,
+        assignmentState: "completed",
+        queueState: "completed",
+    },
+};
+const cancelledModel = api.cardViewModel(cancelled);
+const cancelledHtml = api.buildCard(cancelled, false);
+assert.strictEqual(cancelledModel.state.key, "cancelled");
+assert.strictEqual(cancelledModel.state.label, "ملغى");
+assert.strictEqual(cancelledModel.state.icon, "x");
+assert.strictEqual(cancelledModel.history, true);
+assert.strictEqual(cancelledModel.action, null);
+assert(cancelledHtml.includes("dco-mobile-order-card is-cancelled"));
+assert(cancelledHtml.includes("dco-card-complete-state"));
+assert(cancelledHtml.includes("ملغى"), "a cancelled order must retain a non-interactive cancelled state");
+assert(!cancelledHtml.includes("dco-card-production-action"), "a cancelled order must never render another workflow button");
+assert(!cancelledHtml.includes("is-delivered"), "cancelled must not inherit delivered green styling");
+
 assert.strictEqual(api.overviewStageLabel({ status: "At CNC", current_department: "CNC" }), "CNC");
 assert.strictEqual(api.overviewStageLabel({ status: "Ready for Delivery" }), "جاهز للتسليم");
 assert.strictEqual(api.overviewStageLabel({ status: "Delivered" }), "تم التسليم");
@@ -905,6 +931,11 @@ assert.strictEqual(
     "ready_for_delivery"
 );
 assert.strictEqual(api.desktopDeliveryRowState({ status: "Delivered" }), "delivered");
+assert.strictEqual(api.desktopDeliveryRowState({ status: "Cancelled" }), "cancelled");
+assert.strictEqual(
+    api.desktopDeliveryRowState({ status: "Cancelled", current_department: "تم التسليم" }),
+    "cancelled"
+);
 assert.strictEqual(api.desktopDeliveryRowState({ status: "At CNC" }), "");
 assert.strictEqual(api.desktopDeliveryRowState({ status: "Completed" }), "");
 assert.strictEqual(
@@ -962,6 +993,7 @@ function mockListview(rows, { cardLayout = false } = {}) {
         data: [
             { name: "DCO-READY", status: "Ready for Delivery" },
             { name: "DCO-DELIVERED", status: "Delivered" },
+            { name: "DCO-CANCELLED", status: "Cancelled" },
             { name: "DCO-PROD", status: "At CNC" },
         ],
         _root: root,
@@ -970,8 +1002,9 @@ function mockListview(rows, { cardLayout = false } = {}) {
 
 const readyRow = mockRow("DCO-READY", ["dco-list-row-completed"]);
 const deliveredRow = mockRow("DCO-DELIVERED");
+const cancelledRow = mockRow("DCO-CANCELLED", ["dco-list-row-completed"]);
 const productionRow = mockRow("DCO-PROD");
-const desktopList = mockListview([readyRow, deliveredRow, productionRow]);
+const desktopList = mockListview([readyRow, deliveredRow, cancelledRow, productionRow]);
 api.applyDesktopDeliveryRowColors(desktopList);
 assert(
     readyRow.classList.contains("dco-list-row-ready-for-delivery"),
@@ -985,12 +1018,23 @@ assert(
     deliveredRow.classList.contains("dco-list-row-delivered"),
     "desktop delivered rows must use the dark-green delivery class"
 );
+assert(
+    cancelledRow.classList.contains("dco-list-row-cancelled"),
+    "desktop cancelled rows must use the red cancelled class"
+);
+assert(
+    !cancelledRow.classList.contains("dco-list-row-completed"),
+    "desktop cancelled must not keep worker-completed green"
+);
+assert(!cancelledRow.classList.contains("dco-list-row-delivered"));
 assert(!productionRow.classList.contains("dco-list-row-ready-for-delivery"));
 assert(!productionRow.classList.contains("dco-list-row-delivered"));
+assert(!productionRow.classList.contains("dco-list-row-cancelled"));
 
 readyRow.classList.add("dco-list-row-ready-for-delivery");
 deliveredRow.classList.add("dco-list-row-delivered");
-const mobileList = mockListview([readyRow, deliveredRow, productionRow], { cardLayout: true });
+cancelledRow.classList.add("dco-list-row-cancelled");
+const mobileList = mockListview([readyRow, deliveredRow, cancelledRow, productionRow], { cardLayout: true });
 api.applyDesktopDeliveryRowColors(mobileList);
 assert(
     !readyRow.classList.contains("dco-list-row-ready-for-delivery"),
@@ -999,6 +1043,10 @@ assert(
 assert(
     !deliveredRow.classList.contains("dco-list-row-delivered"),
     "mobile card layout must not receive desktop delivered row colors"
+);
+assert(
+    !cancelledRow.classList.contains("dco-list-row-cancelled"),
+    "mobile card layout must not receive desktop cancelled row colors"
 );
 
 const desktopCssSource = fs.readFileSync(
@@ -1013,12 +1061,19 @@ assert(
     desktopCssSource.includes(".dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-delivered"),
     "delivered dark green is a desktop table style"
 );
+assert(
+    desktopCssSource.includes(".dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-cancelled"),
+    "cancelled red is a desktop table style"
+);
 assert(desktopCssSource.includes(".list-row-container.dco-list-row-ready-for-delivery .level-right"));
 assert(desktopCssSource.includes(".list-row-container.dco-list-row-delivered .level-right"));
+assert(desktopCssSource.includes(".list-row-container.dco-list-row-cancelled .level-right"));
 assert(desktopCssSource.includes("background: #ecfdf3 !important;"));
 assert(desktopCssSource.includes("background: #a7f3d0 !important;"));
+assert(desktopCssSource.includes("background: #fecaca !important;"));
 assert(desktopCssSource.includes("border-color: #16a34a !important;"));
 assert(desktopCssSource.includes("border-color: #047857 !important;"));
+assert(desktopCssSource.includes("border-color: #b91c1c !important;"));
 
 assert(cssSource.includes(".dco-card-header-meta"));
 assert(cssSource.includes(".dco-card-stage"));
@@ -1027,8 +1082,10 @@ assert(cssSource.includes("#f59e0b"), "in-progress/finish must use the agreed or
 assert(cssSource.includes("#7c3aed"), "ready-for-delivery/deliver must use the agreed purple identity");
 assert(cssSource.includes("#16a34a"), "completed must use the agreed green identity");
 assert(cssSource.includes("#047857"), "delivered must use the agreed dark-green identity");
+assert(cssSource.includes("#b91c1c"), "cancelled must use the agreed red identity");
 assert(cssSource.includes(".is-ready-for-delivery"));
 assert(cssSource.includes(".is-delivered"));
+assert(cssSource.includes(".is-cancelled"));
 assert(cssSource.includes(".is-deliver"));
 assert(!source.includes("frappe.get_roles"), "mobile list presentation must remain capability-driven, never role-name-driven");
 

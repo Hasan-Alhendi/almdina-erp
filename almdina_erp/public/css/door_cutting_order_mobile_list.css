@@ -95,6 +95,18 @@
     box-shadow: 0 10px 30px rgba(4, 120, 87, .10);
 }
 
+.dco-order-list.dco-order-card-layout .dco-mobile-order-card.is-cancelled {
+    --dco-accent: #b91c1c;
+    --dco-accent-strong: #991b1b;
+    --dco-accent-soft: #fef2f2;
+    --dco-accent-border: #fecaca;
+    --dco-card-border: #fca5a5;
+    --dco-card-bg: #fff7f7;
+    border-color: var(--dco-card-border) !important;
+    background: var(--dco-card-bg) !important;
+    box-shadow: 0 10px 30px rgba(185, 28, 28, .10);
+}
+
 .dco-order-list.dco-order-card-layout .dco-mobile-order-card.is-neutral {
     --dco-accent: #64748b;
     --dco-accent-strong: #475569;

@@ -14,7 +14,7 @@
     ]);
     const KANBAN_VIEW_PATCH_KEY = "__almdinaDcoCardPresentationInstalled";
     const MOBILE_CARD_STYLESHEET_ID = "almdina-dco-mobile-list-css";
-    const MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=8";
+    const MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=9";
     const STATUS_LABELS = Object.freeze({
         Draft: "مسودة",
         "Pending Review": "بانتظار المراجعة",
@@ -57,6 +57,12 @@
             icon: "truck",
             history: true,
         }),
+        cancelled: Object.freeze({
+            label: "ملغى",
+            cardClass: "is-cancelled",
+            icon: "x",
+            history: true,
+        }),
     });
     const MOBILE_ACTION_PRESENTATION = Object.freeze({
         start: Object.freeze({
@@ -97,10 +103,12 @@
     const DESKTOP_DELIVERY_ROW_CLASS = Object.freeze({
         ready_for_delivery: "dco-list-row-ready-for-delivery",
         delivered: "dco-list-row-delivered",
+        cancelled: "dco-list-row-cancelled",
     });
     const DESKTOP_DELIVERY_ROW_CLASSES = Object.freeze([
         DESKTOP_DELIVERY_ROW_CLASS.ready_for_delivery,
         DESKTOP_DELIVERY_ROW_CLASS.delivered,
+        DESKTOP_DELIVERY_ROW_CLASS.cancelled,
     ]);
     const STATUS_FILTER_SLOT_CLASS = "dco-status-filter-slot";
     const STATUS_FILTER_FIELDNAME = "status";
@@ -703,6 +711,7 @@
 
     function cardState(doc, context, action) {
         const status = String(doc.status || "").trim();
+        if (status === "Cancelled") return cardStateDefinition("cancelled");
         if (status === "Delivered") return cardStateDefinition("delivered");
         if (status === "Ready for Delivery") return cardStateDefinition("ready_for_delivery");
 
@@ -776,6 +785,7 @@
             package: '<path d="m12 3 8 4-8 4-8-4 8-4Z"/><path d="M4 7v10l8 4 8-4V7M12 11v10"/>',
             "package-check": '<path d="m12 3 8 4-8 4-8-4 8-4Z"/><path d="M4 7v10l8 4 8-4V7M12 11v4"/><path d="m9 16 2 2 4-4"/>',
             truck: '<path d="M3 6h11v10H3z"/><path d="M14 10h4l3 3v3h-7z"/><circle cx="7" cy="18" r="2"/><circle cx="18" cy="18" r="2"/>',
+            x: '<circle cx="12" cy="12" r="9"/><path d="m9 9 6 6M15 9l-6 6"/>',
             chevron: '<path d="m10 7 5 5-5 5"/>',
         };
         const body = paths[name] || "";
@@ -1055,7 +1065,7 @@
         const root = rootNode(listview);
         if (!root) return;
         root.querySelectorAll(
-            ".dco-list-row-other-role,.dco-list-row-completed,.dco-list-row-ready-for-delivery,.dco-list-row-delivered"
+            ".dco-list-row-other-role,.dco-list-row-completed,.dco-list-row-ready-for-delivery,.dco-list-row-delivered,.dco-list-row-cancelled"
         ).forEach(node => {
             node.classList.remove("dco-list-row-other-role");
             node.classList.remove("dco-list-row-completed");
@@ -1065,6 +1075,7 @@
 
     function desktopDeliveryRowState(doc) {
         const status = String(doc && doc.status || "").trim();
+        if (status === "Cancelled") return "cancelled";
         if (status === "Delivered") return "delivered";
         if (
             doc && doc.__almdinaProductionActionContext
@@ -1096,6 +1107,10 @@
             container.classList.toggle(
                 DESKTOP_DELIVERY_ROW_CLASS.delivered,
                 state === "delivered"
+            );
+            container.classList.toggle(
+                DESKTOP_DELIVERY_ROW_CLASS.cancelled,
+                state === "cancelled"
             );
             if (state) {
                 container.classList.remove("dco-list-row-completed");
