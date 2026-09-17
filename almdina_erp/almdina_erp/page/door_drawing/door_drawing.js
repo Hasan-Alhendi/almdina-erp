@@ -3,6 +3,9 @@
     const PAGE_ROUTE = "door-drawing";
     const STYLE = "/assets/almdina_erp/css/special_shape_documentation.css";
     const ASSET_ROOT = "/assets/almdina_erp/js/special_shape_documentation";
+    const PREREQUISITES = Object.freeze([
+        "/assets/almdina_erp/js/almdina_ui.js",
+    ]);
     const MODULES = Object.freeze([
         `${ASSET_ROOT}/domain/reference_crop.js`,
         `${ASSET_ROOT}/domain/document.js`,
@@ -49,7 +52,7 @@
         </div>`;
     }
     function loadModules() {
-        return Promise.all(MODULES.map(asset => frappe.require(asset)));
+        return Promise.all([...PREREQUISITES, ...MODULES].map(asset => frappe.require(asset)));
     }
     function bootstrap(wrapper) {
         scaffold(wrapper); if (wrapper.__almdinaDocumentationBoot) return wrapper.__almdinaDocumentationBoot;

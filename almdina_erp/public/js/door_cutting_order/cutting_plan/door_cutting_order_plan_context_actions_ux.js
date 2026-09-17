@@ -88,6 +88,14 @@
         return frappe.utils.escape_html(String(value ?? ""));
     }
 
+    function uiButton(options) {
+        const ui = window.AlmdinaUi;
+        if (!ui || typeof ui.button !== "function") {
+            throw new Error("AlmdinaUi.button is required for DCO plan context actions");
+        }
+        return ui.button(options);
+    }
+
     function sourceLabel(tab) {
         if (tab === "Custom") return __("الخطة المرفوعة");
         if (tab === "Approved") return __("الخطة المعتمدة");
@@ -240,8 +248,8 @@
                 font-weight:750;
                 box-shadow:none !important;
             }
-            .dco-plan-context-primary .btn-primary,
-            .dco-plan-context-primary .btn-success {
+            .dco-plan-context-primary .alm-btn-primary,
+            .dco-plan-context-primary .alm-btn-success {
                 min-width:190px;
             }
             .dco-plan-context-tools .btn {
@@ -376,14 +384,24 @@
             return `
                 <span class="dco-plan-context-chip is-approved">✓ ${esc(__("الخطة المعتمدة للإنتاج"))}</span>
                 ${canCancelApproval(frm, tab)
-                    ? `<button type="button" class="btn btn-default btn-sm dco-plan-context-cancel">${esc(__("إلغاء اعتماد الخطة"))}</button>`
+                    ? uiButton({
+                        label: __("إلغاء اعتماد الخطة"),
+                        variant: "secondary",
+                        size: "btn-sm",
+                        className: "dco-plan-context-cancel",
+                    })
                     : ""}
             `;
         }
         if (!rowHasPlan(row)) return "";
         const allowed = canApprove(frm, tab, row);
-        const disabled = allowed ? "" : " disabled aria-disabled=\"true\"";
-        return `<button type="button" class="btn btn-success btn-sm dco-plan-context-approve"${disabled}>${esc(approveLabel(frm, tab))}</button>`;
+        return uiButton({
+            label: approveLabel(frm, tab),
+            variant: "success",
+            size: "btn-sm",
+            className: "dco-plan-context-approve",
+            disabled: !allowed,
+        });
     }
 
     function hasOriginalDxfFile(row) {
@@ -436,7 +454,7 @@
             : `<span class="dco-plan-context-chip">${esc(sourceLabel(tab))}</span>`;
 
         target.html(`
-            <div class="dco-plan-context-bar" data-active-plan-source="${esc(tab)}">
+            <div class="almdina-ui dco-plan-context-bar" data-active-plan-source="${esc(tab)}">
                 <div class="dco-plan-context-primary">
                     ${editing
                         ? `<span class="dco-plan-context-chip">${esc(__("وضع تجربة الإعدادات"))}</span>`

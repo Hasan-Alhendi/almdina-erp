@@ -13,6 +13,14 @@
         return lang === "ar" || lang.startsWith("ar-");
     }
 
+    function uiButton(options) {
+        const ui = window.AlmdinaUi;
+        if (!ui || typeof ui.button !== "function") {
+            throw new Error("AlmdinaUi.button is required for DCO bulk row actions");
+        }
+        return ui.button(options);
+    }
+
     function isEditable(frm) {
         if (window.frappe && frappe.almdina && frappe.almdina.orderCanEdit) {
             return frappe.almdina.orderCanEdit(frm);
@@ -49,21 +57,21 @@
                     height:20px;
                     margin:0;
                     cursor:pointer;
-                    accent-color:var(--primary,#2490ef);
+                    accent-color:var(--alm-primary,#172033);
                     vertical-align:middle;
                 }
                 .dco-row-selector:focus-visible,
                 .dco-select-all:focus-visible {
-                    outline:2px solid var(--primary,#2490ef);
+                    outline:2px solid var(--alm-primary,#172033);
                     outline-offset:2px;
                     border-radius:4px;
                 }
                 .dco-fast-table tbody tr.dco-row-selected {
-                    background:rgba(36,144,239,.09) !important;
-                    box-shadow:inset -3px 0 0 var(--primary,#2490ef);
+                    background:color-mix(in srgb, var(--alm-primary, #172033) 9%, transparent) !important;
+                    box-shadow:inset -3px 0 0 var(--alm-primary,#172033);
                 }
                 .dco-fast-table tbody tr.dco-row-selected:hover {
-                    background:rgba(36,144,239,.12) !important;
+                    background:color-mix(in srgb, var(--alm-primary, #172033) 12%, transparent) !important;
                 }
                 .dco-bulk-footer {
                     display:flex;
@@ -92,8 +100,8 @@
                     min-height:32px;
                     padding:5px 10px;
                     border-radius:999px;
-                    background:rgba(36,144,239,.1);
-                    color:var(--primary,#2490ef);
+                    background:color-mix(in srgb, var(--alm-primary, #172033) 10%, transparent);
+                    color:var(--alm-primary,#172033);
                     font-weight:800;
                     font-size:12px;
                 }
@@ -189,20 +197,29 @@
         let footer = shell.querySelector(":scope > .dco-bulk-footer");
         if (!footer) {
             footer = document.createElement("div");
-            footer.className = "dco-bulk-footer";
+            footer.className = "dco-bulk-footer almdina-ui";
             footer.innerHTML = `
                 <div class="dco-selection-actions" hidden>
                     <span class="dco-selection-count"></span>
-                    <button type="button" class="btn btn-danger btn-sm dco-delete-selected">
-                        ${isArabic() ? "حذف الأسطر المحددة" : "Delete selected rows"}
-                    </button>
-                    <button type="button" class="btn btn-default btn-sm dco-clear-selection">
-                        ${isArabic() ? "إلغاء التحديد" : "Clear selection"}
-                    </button>
+                    ${uiButton({
+                        label: isArabic() ? "حذف الأسطر المحددة" : "Delete selected rows",
+                        variant: "danger",
+                        size: "btn-sm",
+                        className: "dco-delete-selected",
+                    })}
+                    ${uiButton({
+                        label: isArabic() ? "إلغاء التحديد" : "Clear selection",
+                        variant: "secondary",
+                        size: "btn-sm",
+                        className: "dco-clear-selection",
+                    })}
                 </div>
-                <button type="button" class="btn btn-primary btn-sm dco-add-row">
-                    <span class="dco-plus">+</span>${isArabic() ? "إضافة سطر جديد" : "Add new row"}
-                </button>
+                ${uiButton({
+                    label: isArabic() ? "+ إضافة سطر جديد" : "+ Add new row",
+                    variant: "primary",
+                    size: "btn-sm",
+                    className: "dco-add-row",
+                })}
             `;
             shell.appendChild(footer);
         }

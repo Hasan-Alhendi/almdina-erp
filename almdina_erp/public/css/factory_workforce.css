@@ -4,8 +4,8 @@
     --aw-radius-sm: 10px;
     --aw-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04), 0 7px 22px rgba(15, 23, 42, 0.045);
     --aw-shadow-md: 0 12px 36px rgba(15, 23, 42, 0.09);
-    --aw-primary-soft: rgba(36, 144, 239, 0.08);
-    --aw-primary-border: rgba(36, 144, 239, 0.24);
+    --aw-primary-soft: color-mix(in srgb, var(--alm-primary, #172033) 8%, transparent);
+    --aw-primary-border: color-mix(in srgb, var(--alm-primary, #172033) 24%, transparent);
     --aw-success-soft: rgba(21, 128, 61, 0.08);
     --aw-danger-soft: rgba(185, 28, 28, 0.07);
     --aw-warning-soft: rgba(180, 83, 9, 0.09);
@@ -28,7 +28,7 @@
     border: 1px solid var(--border-color, #e5e7eb);
     border-radius: var(--aw-radius-lg);
     background:
-        radial-gradient(circle at 8% 12%, rgba(36, 144, 239, 0.09), transparent 34%),
+        radial-gradient(circle at 8% 12%, color-mix(in srgb, var(--alm-primary, #172033) 9%, transparent), transparent 34%),
         linear-gradient(135deg, var(--fg-color, #fff), var(--subtle-fg, #f8fafb));
     box-shadow: var(--aw-shadow-sm);
 }
@@ -39,7 +39,7 @@
     inset-block: 0;
     inset-inline-start: 0;
     width: 4px;
-    background: var(--primary, #2490ef);
+    background: var(--alm-primary, #172033);
 }
 
 .aw-hero-copy {
@@ -49,7 +49,7 @@
 .aw-eyebrow,
 .aw-toolbar-kicker {
     display: block;
-    color: var(--primary, #2490ef);
+    color: var(--alm-primary, #172033);
     font-size: 10px;
     font-weight: 850;
     letter-spacing: 0.02em;
@@ -159,8 +159,8 @@
 .aw-field input:focus,
 .aw-field select:focus,
 .aw-search-control:focus-within {
-    border-color: var(--primary, #2490ef);
-    box-shadow: 0 0 0 3px rgba(36, 144, 239, 0.11);
+    border-color: var(--alm-primary, #172033);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--alm-primary, #172033) 11%, transparent);
 }
 
 .aw-search-control {
@@ -381,7 +381,7 @@
     border: 1px solid var(--aw-primary-border);
     border-radius: 11px;
     background: var(--aw-primary-soft);
-    color: var(--primary, #2490ef);
+    color: var(--alm-primary, #172033);
     font-size: 14px;
     font-weight: 900;
     text-transform: uppercase;
@@ -602,8 +602,8 @@
     width: 9px;
     height: 9px;
     border-radius: 50%;
-    background: var(--primary, #2490ef);
-    box-shadow: 0 0 0 5px rgba(36, 144, 239, 0.1);
+    background: var(--alm-primary, #172033);
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--alm-primary, #172033) 10%, transparent);
 }
 
 .aw-error {
@@ -656,7 +656,7 @@
     inset-inline-start: 0;
     width: 2px;
     border-radius: 999px;
-    background: rgba(36, 144, 239, 0.48);
+    background: color-mix(in srgb, var(--alm-primary, #172033) 48%, transparent);
 }
 
 .aw-audit-title {

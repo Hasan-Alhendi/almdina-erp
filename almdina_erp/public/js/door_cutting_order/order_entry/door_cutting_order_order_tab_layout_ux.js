@@ -220,8 +220,8 @@
                     margin-top: 5px;
                     padding: 3px 7px;
                     border-radius: 999px;
-                    background: rgba(36,144,239,.07);
-                    color: var(--primary,#2490ef);
+                    background: color-mix(in srgb, var(--alm-primary, #172033) 7%, transparent);
+                    color: var(--alm-primary,#172033);
                     font-size: 9.5px;
                     font-weight: 800;
                 }

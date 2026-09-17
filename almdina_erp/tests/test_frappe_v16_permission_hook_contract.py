@@ -8,24 +8,25 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from almdina_erp.tests.frappe_test_stub import install_if_unavailable
+
 
 PERMISSIONS_PATH = Path(__file__).resolve().parents[1] / "permissions.py"
 GATEWAY_MODULE = (
     "almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway"
 )
+_MISSING_MODULE = object()
 
 
 def load_permissions_module():
-    fake_frappe = types.ModuleType("frappe")
-    fake_frappe.session = SimpleNamespace(user="test@example.com")
-    fake_frappe.db = SimpleNamespace()
+    """Load permission hooks without replacing the process-wide Frappe module."""
+
+    install_if_unavailable()
 
     fake_gateway = types.ModuleType(GATEWAY_MODULE)
     fake_gateway.doctype_has_capability = lambda *_args, **_kwargs: False
 
-    previous_frappe = sys.modules.get("frappe")
-    previous_gateway = sys.modules.get(GATEWAY_MODULE)
-    sys.modules["frappe"] = fake_frappe
+    previous_gateway = sys.modules.get(GATEWAY_MODULE, _MISSING_MODULE)
     sys.modules[GATEWAY_MODULE] = fake_gateway
     try:
         spec = importlib.util.spec_from_file_location(
@@ -38,11 +39,7 @@ def load_permissions_module():
         spec.loader.exec_module(module)
         return module
     finally:
-        if previous_frappe is None:
-            sys.modules.pop("frappe", None)
-        else:
-            sys.modules["frappe"] = previous_frappe
-        if previous_gateway is None:
+        if previous_gateway is _MISSING_MODULE:
             sys.modules.pop(GATEWAY_MODULE, None)
         else:
             sys.modules[GATEWAY_MODULE] = previous_gateway
@@ -216,11 +213,18 @@ class TestFrappeV16PermissionHookContract(unittest.TestCase):
         self.assertIn("and ps.status in ({active_stage_sql})", source)
         self.assertIn("not in ACTIVE_STAGE_STATUSES", source)
 
-        permissions.frappe.db.escape = lambda value: f"'{value}'"
-        with patch.object(
-            permissions,
-            "_worker_operational_roles",
-            return_value=("عامل تقشيط",),
+        with (
+            patch.object(
+                permissions.frappe.db,
+                "escape",
+                side_effect=lambda value: f"'{value}'",
+                create=True,
+            ),
+            patch.object(
+                permissions,
+                "_worker_operational_roles",
+                return_value=("عامل تقشيط",),
+            ),
         ):
             sql = permissions._worker_actionable_orders_subquery("sanding@example.com")
         self.assertIn("ps.status in", sql)

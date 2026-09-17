@@ -47,8 +47,8 @@
                     font-weight:750;
                 }
                 .dco-plan-stale-banner.is-calculating {
-                    border-color:rgba(36,144,239,.32);
-                    background:rgba(36,144,239,.08);
+                    border-color:color-mix(in srgb, var(--alm-primary, #172033) 32%, transparent);
+                    background:color-mix(in srgb, var(--alm-primary, #172033) 8%, transparent);
                     color:#1d4f7a;
                 }
                 .dco-plan-stale-banner.is-stalled {

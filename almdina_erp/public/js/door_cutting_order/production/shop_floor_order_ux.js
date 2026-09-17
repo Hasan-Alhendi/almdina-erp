@@ -179,7 +179,7 @@
 	const STATUS_COLORS = {
 		Draft: "#6b7280",
 		"Pending Review": "#b45309",
-		Approved: "#2563eb",
+		Approved: "#172033",
 		"At Sharyoun": "#7c3aed",
 		"At Drawing": "#7c3aed",
 		"At CNC": "#7c3aed",
@@ -225,7 +225,7 @@
 			.map((step, index) => {
 				const done = delivered || index < currentIndex;
 				const active = !delivered && index === currentIndex;
-				const background = done ? "#15803d" : active ? "#2490ef" : "var(--control-bg,#f3f4f6)";
+				const background = done ? "#15803d" : active ? "var(--alm-primary,#172033)" : "var(--control-bg,#f3f4f6)";
 				const color = done || active ? "#fff" : "var(--text-muted,#6b7280)";
 				return `<span style="display:inline-flex;align-items:center;gap:4px;background:${background};color:${color};border-radius:999px;padding:5px 12px;font-size:12px;font-weight:700;white-space:nowrap">${done ? "✓ " : ""}${__(step)}</span>`;
 			})

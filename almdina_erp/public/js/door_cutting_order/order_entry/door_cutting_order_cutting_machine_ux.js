@@ -92,13 +92,13 @@
                     user-select: none;
                 }
                 .dco-cutting-machine-option.is-selected {
-                    border-color: var(--primary,#2490ef);
+                    border-color: var(--alm-primary,#172033);
                     background: rgba(36,144,239,.08);
                     color: var(--primary,#1b74c4);
                 }
                 .dco-cutting-machine-option input {
                     margin: 0;
-                    accent-color: var(--primary,#2490ef);
+                    accent-color: var(--alm-primary,#172033);
                 }
                 .dco-cutting-machine-radios.is-invalid .dco-cutting-machine-option {
                     border-color: var(--red,#e24c4c);

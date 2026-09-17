@@ -9,6 +9,10 @@ const pageSource = fs.readFileSync(
     path.resolve(__dirname, "../../almdina_erp/page/factory_master_data/factory_master_data.js"),
     "utf8"
 );
+const uiSource = fs.readFileSync(
+    path.resolve(__dirname, "../../public/js/almdina_ui.js"),
+    "utf8"
+);
 const lifecycleSource = fs.readFileSync(
     path.resolve(__dirname, "../../public/js/page_revisit_refresh.js"),
     "utf8"
@@ -242,6 +246,7 @@ function createRuntime({coldCore = false, pendingStyle = false} = {}) {
         require(assets) {
             assert.deepEqual(Array.from(assets), [
                 "/assets/almdina_erp/js/frontend_foundation.js",
+                "/assets/almdina_erp/js/almdina_ui.js",
                 "/assets/almdina_erp/js/page_revisit_refresh.js",
             ]);
             return assetLoad.promise;
@@ -284,6 +289,7 @@ function createRuntime({coldCore = false, pendingStyle = false} = {}) {
 
     function installCore() {
         windowObject.AlmdinaFrontend = frontend;
+        vm.runInContext(uiSource, context, {filename: "almdina_ui.js"});
         vm.runInContext(lifecycleSource, context, {filename: "page_revisit_refresh.js"});
     }
 

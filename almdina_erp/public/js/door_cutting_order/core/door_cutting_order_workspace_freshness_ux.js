@@ -42,10 +42,10 @@
                 color:#77500f;font-size:11px;font-weight:750;line-height:1.65;
             }
             .${BANNER_CLASS}.is-preview{
-                border-color:rgba(36,144,239,.28);background:rgba(36,144,239,.065);color:var(--text-color,#26313b);
+                border-color:color-mix(in srgb, var(--alm-primary, #172033) 28%, transparent);background:color-mix(in srgb, var(--alm-primary, #172033) 6%, transparent);color:var(--text-color,#26313b);
             }
             .${BANNER_CLASS}.is-calculating{
-                border-color:rgba(36,144,239,.32);background:rgba(36,144,239,.08);color:#1d4f7a;
+                border-color:color-mix(in srgb, var(--alm-primary, #172033) 32%, transparent);background:color-mix(in srgb, var(--alm-primary, #172033) 8%, transparent);color:#1d4f7a;
             }
             .${BANNER_CLASS} strong{display:block;margin-bottom:2px;font-size:12px;font-weight:900}
             .${BANNER_CLASS} .dco-freshness-icon{font-size:17px;line-height:1.25}

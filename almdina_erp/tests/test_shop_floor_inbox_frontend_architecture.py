@@ -227,6 +227,12 @@ class ShopFloorInboxFrontendArchitectureTest(unittest.TestCase):
         self.assertNotIn("AlmdinaMutationLifecycle", self.quick_actions)
         self.assertNotIn("AlmdinaAsyncCommandFramework", self.quick_actions)
 
+    def test_renderer_uses_central_design_system_for_buttons(self) -> None:
+        self.assertIn('class="almdina-ui almdina-sf-shell"', self.renderer)
+        self.assertIn("AlmdinaUi.button", self.renderer)
+        self.assertNotIn('class="btn btn-default sf-open-btn"', self.renderer)
+        self.assertIn("/assets/almdina_erp/js/almdina_ui.js", self.page)
+
     def test_structural_phase_keeps_existing_stylesheet_owner(self) -> None:
         self.assertIn(".almdina-sf-shell", self.css)
         self.assertIn(".almdina-sf-kanban", self.css)

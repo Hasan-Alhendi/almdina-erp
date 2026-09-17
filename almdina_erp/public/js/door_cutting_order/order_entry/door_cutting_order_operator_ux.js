@@ -148,7 +148,7 @@
                 }
                 .dco-fast-table td { border-bottom:1px solid var(--border-color,#edf0f2); padding:4px; vertical-align:middle; }
                 .dco-fast-table tbody tr:hover { background:var(--subtle-fg,rgba(0,0,0,.02)); }
-                .dco-fast-table tbody tr.dco-virtual-row { background:rgba(36,144,239,.035); }
+                .dco-fast-table tbody tr.dco-virtual-row { background:color-mix(in srgb, var(--alm-primary, #172033) 4%, transparent); }
                 .dco-fast-table .dco-col-no { width:54px; text-align:center; font-weight:800; }
                 .dco-fast-table .dco-col-number { width:105px; }
                 .dco-fast-table .dco-col-qty { width:70px; }
@@ -166,7 +166,7 @@
                 }
                 .dco-fast-input[type="number"] { direction:ltr; text-align:center; font-variant-numeric:tabular-nums; }
                 .dco-fast-input:focus,.dco-fast-select:focus {
-                    border-color:var(--primary,#2490ef); box-shadow:0 0 0 2px rgba(36,144,239,.13);
+                    border-color:var(--alm-primary,#172033); box-shadow:0 0 0 2px color-mix(in srgb, var(--alm-primary, #172033) 13%, transparent);
                 }
                 .dco-edge-buttons { display:grid; grid-template-columns:repeat(4,1fr); gap:4px; }
                 .dco-check-toggle {
@@ -175,9 +175,9 @@
                     display:inline-flex; align-items:center; justify-content:center; gap:4px;
                     transition:background .08s ease,border-color .08s ease,transform .05s ease;
                 }
-                .dco-check-toggle:hover { border-color:var(--primary,#2490ef); }
+                .dco-check-toggle:hover { border-color:var(--alm-primary,#172033); }
                 .dco-check-toggle:active { transform:scale(.97); }
-                .dco-check-toggle.is-checked { background:var(--primary,#2490ef); border-color:var(--primary,#2490ef); color:#fff; font-weight:800; }
+                .dco-check-toggle.is-checked { background:var(--alm-primary,#172033); border-color:var(--alm-primary,#172033); color:#fff; font-weight:800; }
                 .dco-check-toggle:disabled { opacity:.55; cursor:not-allowed; transform:none; }
                 .dco-rotate-toggle { width:40px; height:34px; padding:0; font-size:17px; }
                 .dco-delete-row {

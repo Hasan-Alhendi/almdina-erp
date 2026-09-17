@@ -1,5 +1,5 @@
 .prw-shell {
-    --prw-primary: var(--primary, #2563eb);
+    --prw-primary: var(--alm-primary, #172033);
     --prw-primary-soft: color-mix(in srgb, var(--prw-primary) 9%, transparent);
     --prw-border: var(--border-color, #e2e8f0);
     --prw-card: var(--card-bg, var(--fg-color, #fff));
@@ -130,7 +130,7 @@
 
 .prw-stat[data-tone="routes"] { --prw-stat-tone: #7c3aed; }
 .prw-stat[data-tone="active"] { --prw-stat-tone: #16a34a; }
-.prw-stat[data-tone="stages"] { --prw-stat-tone: #2563eb; }
+.prw-stat[data-tone="stages"] { --prw-stat-tone: var(--prw-primary); }
 .prw-stat[data-tone="orders"] { --prw-stat-tone: #ea580c; }
 
 .prw-stat span {

@@ -23,6 +23,14 @@
         return frappe.utils.escape_html(String(value ?? ""));
     }
 
+    function uiButton(options) {
+        const ui = window.AlmdinaUi;
+        if (!ui || typeof ui.button !== "function") {
+            throw new Error("AlmdinaUi.button is required for DCO financial documents");
+        }
+        return ui.button(options);
+    }
+
     function number(value) {
         const parsed = Number(value || 0);
         return Number.isFinite(parsed) ? parsed : 0;
@@ -329,7 +337,12 @@
     }
 
     function createButton(label, className, primary = false) {
-        return $(`<button type="button" class="btn ${primary ? "btn-primary" : "btn-default"} btn-sm ${className}">${esc(label)}</button>`);
+        return $(uiButton({
+            label,
+            variant: primary ? "primary" : "secondary",
+            size: "btn-sm",
+            className,
+        }));
     }
 
     function ensureActionButton(actions, options) {
@@ -357,6 +370,7 @@
 
         const actions = costActions(frm);
         if (!actions.length) return;
+        actions.addClass("almdina-ui");
 
         ensureActionButton(actions, {
             className: CUSTOMER_CLASS,

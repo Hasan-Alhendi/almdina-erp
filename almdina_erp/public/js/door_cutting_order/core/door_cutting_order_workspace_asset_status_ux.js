@@ -18,6 +18,14 @@
         return feature === "plan" ? __("خطة القص") : __("التكلفة");
     }
 
+    function uiButton(options) {
+        const ui = window.AlmdinaUi;
+        if (!ui || typeof ui.button !== "function") {
+            throw new Error("AlmdinaUi.button is required for DCO workspace asset status");
+        }
+        return ui.button(options);
+    }
+
     function renderLoading(frm, feature) {
         const target = wrapper(frm, feature);
         if (!target || (typeof target.children === "function" && target.children().length)) return false;
@@ -43,11 +51,16 @@
         if (!target) return false;
         const label = featureLabel(feature);
         target.html(`
-            <div class="dco-workspace-asset-status" data-phase="failed" role="alert"
+            <div class="almdina-ui dco-workspace-asset-status" data-phase="failed" role="alert"
                  style="padding:18px;text-align:center;border:1px solid rgba(220,53,69,.25);border-radius:12px;background:rgba(220,53,69,.04);">
                 <strong style="display:block;margin-bottom:6px;color:var(--text-color,#26313b);">${frappe.utils.escape_html(__(`تعذر تحميل ${label}`))}</strong>
                 <span style="display:block;margin-bottom:12px;color:var(--text-muted,#667085);">${frappe.utils.escape_html(errorMessage || __("تحقق من اتصال الإنترنت ثم أعد المحاولة."))}</span>
-                <button type="button" class="btn btn-sm btn-primary dco-workspace-assets-retry">${frappe.utils.escape_html(__("إعادة المحاولة"))}</button>
+                ${uiButton({
+                    label: __("إعادة المحاولة"),
+                    variant: "primary",
+                    size: "btn-sm",
+                    className: "dco-workspace-assets-retry",
+                })}
             </div>
         `);
         const button = target.find(".dco-workspace-assets-retry");

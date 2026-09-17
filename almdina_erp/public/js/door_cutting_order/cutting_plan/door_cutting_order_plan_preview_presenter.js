@@ -16,8 +16,8 @@
             <style id="${STYLE_ID}">
                 .dco-plan-preview-banner {
                     display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
-                    margin:0 0 12px;padding:11px 13px;border:1px solid rgba(36,144,239,.28);
-                    border-radius:11px;background:rgba(36,144,239,.065);direction:rtl;
+                    margin:0 0 12px;padding:11px 13px;border:1px solid color-mix(in srgb, var(--alm-primary, #172033) 28%, transparent);
+                    border-radius:11px;background:color-mix(in srgb, var(--alm-primary, #172033) 6%, transparent);direction:rtl;
                 }
                 .dco-plan-preview-banner.is-stale {
                     border-color:rgba(217,119,6,.30);background:rgba(245,158,11,.075);
@@ -31,7 +31,7 @@
                     font-size:10.5px;line-height:1.55;
                 }
                 .dco-plan-preview-badge {
-                    flex:0 0 auto;padding:4px 8px;border-radius:999px;background:var(--primary,#2490ef);
+                    flex:0 0 auto;padding:4px 8px;border-radius:999px;background:var(--alm-primary,#172033);
                     color:#fff;font-size:10px;font-weight:800;white-space:nowrap;
                 }
                 .dco-plan-preview-banner.is-stale .dco-plan-preview-badge { background:#b45309; }
@@ -40,8 +40,8 @@
                     display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:9px;direction:rtl;
                 }
                 .dco-plan-preview-summary__item {
-                    padding:10px 12px;border:1px solid rgba(36,144,239,.18);
-                    border-radius:11px;background:rgba(36,144,239,.045);
+                    padding:10px 12px;border:1px solid color-mix(in srgb, var(--alm-primary, #172033) 18%, transparent);
+                    border-radius:11px;background:color-mix(in srgb, var(--alm-primary, #172033) 4%, transparent);
                 }
                 .dco-plan-preview-summary__item.is-cost {
                     border-color:rgba(31,130,82,.24);background:rgba(31,130,82,.055);

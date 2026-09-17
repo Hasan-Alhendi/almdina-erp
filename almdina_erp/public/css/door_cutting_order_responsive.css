@@ -30,7 +30,7 @@
 .dco-operator-form :where(.btn, button, input, select, textarea):focus-visible,
 .page-head.dco-responsive-head :where(.btn, button, a):focus-visible,
 .dco-order-list :where(.btn, button, input, select, a):focus-visible {
-    outline: 2px solid var(--primary, #2490ef);
+    outline: 2px solid var(--alm-primary, #172033);
     outline-offset: 2px;
 }
 
@@ -290,7 +290,7 @@
     width: 21px;
     height: 21px;
     margin: 1px 0 0;
-    accent-color: var(--primary, #2490ef);
+    accent-color: var(--alm-primary, #172033);
 }
 
 .dco-order-list .dco-card-workflow {
@@ -299,9 +299,9 @@
     gap: 5px 10px;
     margin-inline: 12px;
     padding: 10px 11px;
-    border: 1px solid rgba(36, 144, 239, .16);
+    border: 1px solid color-mix(in srgb, var(--alm-primary, #172033) 16%, transparent);
     border-radius: 11px;
-    background: rgba(36, 144, 239, .055);
+    background: color-mix(in srgb, var(--alm-primary, #172033) 6%, transparent);
 }
 
 .dco-order-list .dco-card-workflow-main {
@@ -331,7 +331,7 @@
     align-self: center;
     max-width: 116px;
     padding: 4px 8px;
-    border: 1px solid rgba(36, 144, 239, .18);
+    border: 1px solid color-mix(in srgb, var(--alm-primary, #172033) 18%, transparent);
     border-radius: 999px;
     background: var(--card-bg, #fff);
     color: var(--text-color, #334155);
@@ -347,7 +347,7 @@
     min-width: 0;
     gap: 6px;
     padding-top: 5px;
-    border-top: 1px solid rgba(36, 144, 239, .12);
+    border-top: 1px solid color-mix(in srgb, var(--alm-primary, #172033) 12%, transparent);
 }
 
 .dco-order-list .dco-card-assignee-value {
@@ -394,7 +394,7 @@
 }
 
 .dco-order-list .dco-card-edge-color {
-    box-shadow: inset -3px 0 0 var(--primary, #2490ef);
+    box-shadow: inset -3px 0 0 var(--alm-primary, #172033);
 }
 
 .dco-order-list .dco-card-wide-field {
@@ -450,9 +450,9 @@
     width: 100%;
     margin-bottom: 9px;
     padding: 7px 9px !important;
-    border: 1px solid rgba(36, 144, 239, .14) !important;
+    border: 1px solid color-mix(in srgb, var(--alm-primary, #172033) 14%, transparent) !important;
     border-radius: 9px !important;
-    background: rgba(36, 144, 239, .045) !important;
+    background: color-mix(in srgb, var(--alm-primary, #172033) 4%, transparent) !important;
     font-size: 10px !important;
 }
 
@@ -466,7 +466,7 @@
 }
 
 .dco-mobile-piece-cards .dco-fast-help > b {
-    color: var(--primary, #2490ef);
+    color: var(--alm-primary, #172033);
     font-size: 10px;
 }
 
@@ -524,13 +524,13 @@
 
 .dco-mobile-piece-cards .dco-fast-table tbody tr.dco-virtual-row {
     border-style: dashed !important;
-    border-color: rgba(36, 144, 239, .34) !important;
-    background: rgba(36, 144, 239, .025) !important;
+    border-color: color-mix(in srgb, var(--alm-primary, #172033) 34%, transparent) !important;
+    background: color-mix(in srgb, var(--alm-primary, #172033) 2%, transparent) !important;
 }
 
 .dco-mobile-piece-cards .dco-fast-table tbody tr.dco-row-selected {
-    border-color: var(--primary, #2490ef) !important;
-    box-shadow: inset -3px 0 0 var(--primary, #2490ef), 0 2px 9px rgba(15, 23, 42, .06) !important;
+    border-color: var(--alm-primary, #172033) !important;
+    box-shadow: inset -3px 0 0 var(--alm-primary, #172033), 0 2px 9px rgba(15, 23, 42, .06) !important;
 }
 
 .dco-mobile-piece-cards .dco-fast-table tbody tr.dco-special-row {

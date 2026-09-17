@@ -46,6 +46,14 @@
             .replaceAll("'", "&#039;");
     }
 
+    function uiButton(options) {
+        const ui = window.AlmdinaUi;
+        if (!ui || typeof ui.button !== "function") {
+            throw new Error("AlmdinaUi.button is required for Notes panel rendering");
+        }
+        return ui.button(options);
+    }
+
     function uuid() {
         try {
             if (window.crypto && typeof window.crypto.randomUUID === "function") {
@@ -92,7 +100,7 @@
         root.className = "almdina-notes-overlay";
         root.setAttribute("aria-hidden", "true");
         root.innerHTML = `
-            <aside class="almdina-notes-panel" role="dialog" aria-modal="true" aria-labelledby="almdina-notes-title" dir="rtl">
+            <aside class="almdina-notes-panel almdina-ui" role="dialog" aria-modal="true" aria-labelledby="almdina-notes-title" dir="rtl">
                 <div class="almdina-notes-panel-content"></div>
             </aside>
         `;
@@ -206,8 +214,20 @@
                 <div class="almdina-note-editor-meta">
                     <span class="almdina-note-edit-counter">${value.length} / ${MAX_LENGTH}</span>
                     <div class="almdina-note-editor-actions">
-                        <button type="button" class="btn btn-default btn-xs" data-notes-action="cancel-edit" ${state.mutating ? "disabled" : ""}>إلغاء</button>
-                        <button type="button" class="btn btn-primary btn-xs" data-notes-action="save-edit" ${state.mutating || !value.trim() ? "disabled" : ""}>${state.mutating ? "جارٍ الحفظ..." : "حفظ التعديل"}</button>
+                        ${uiButton({
+                            label: "إلغاء",
+                            variant: "secondary",
+                            size: "btn-xs",
+                            disabled: state.mutating,
+                            attrs: { "data-notes-action": "cancel-edit" },
+                        })}
+                        ${uiButton({
+                            label: state.mutating ? "جارٍ الحفظ..." : "حفظ التعديل",
+                            variant: "primary",
+                            size: "btn-xs",
+                            disabled: state.mutating || !value.trim(),
+                            attrs: { "data-notes-action": "save-edit" },
+                        })}
                     </div>
                 </div>
                 ${state.error ? `<div class="almdina-notes-error" role="alert">${escapeHtml(state.error)}</div>` : ""}
@@ -293,9 +313,13 @@
                     <span class="almdina-notes-counter">${value.length} / ${MAX_LENGTH}</span>
                     ${importantToggle}
                 </div>
-                <button type="button" class="btn btn-primary almdina-notes-submit" data-notes-action="submit" ${state.mutating || !value.trim() ? "disabled" : ""}>
-                    ${state.mutating ? "جارٍ الإضافة..." : "إضافة"}
-                </button>
+                ${uiButton({
+                    label: state.mutating ? "جارٍ الإضافة..." : "إضافة",
+                    variant: "primary",
+                    className: "almdina-notes-submit",
+                    disabled: state.mutating || !value.trim(),
+                    attrs: { "data-notes-action": "submit" },
+                })}
             </section>
         `;
     }
@@ -309,7 +333,11 @@
                 <div class="almdina-notes-load-error" role="alert">
                     <strong>تعذر تحميل الملاحظات.</strong>
                     <span>${escapeHtml(state.error || "تحقق من الاتصال وحاول مرة أخرى.")}</span>
-                    <button type="button" class="btn btn-default" data-notes-action="retry-load">إعادة المحاولة</button>
+                    ${uiButton({
+                        label: "إعادة المحاولة",
+                        variant: "secondary",
+                        attrs: { "data-notes-action": "retry-load" },
+                    })}
                 </div>
             `;
         }

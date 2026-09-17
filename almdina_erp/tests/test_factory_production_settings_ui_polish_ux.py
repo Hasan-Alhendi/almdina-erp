@@ -43,7 +43,9 @@ def test_production_settings_polish_distinguishes_editable_and_readonly_sections
     assert ".aps-section.is-readonly" in css
     assert ".aps-permission.readonly" in css
     assert ".aps-readonly-note" in css
-    assert 'class="btn btn-primary aps-edit"' in renderer
+    assert "AlmdinaUi.button" in renderer
+    assert 'variant: "primary"' in renderer
+    assert 'className: "aps-edit"' in renderer
 
 
 def test_production_settings_polish_is_dense_responsive_and_motion_safe() -> None:

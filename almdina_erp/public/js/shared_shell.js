@@ -406,7 +406,7 @@
             [data-almdina-permission-hidden="1"]{display:none!important}
             .almdina-sf-tabs{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px;background:var(--fg-color,#fff);border:1px solid var(--border-color,#e5e7eb);border-radius:14px;margin-bottom:12px}
             .almdina-sf-tab{appearance:none;border:1px solid var(--border-color,#dfe3e8);background:var(--control-bg,#fff);color:var(--text-color,#1f272e);min-height:42px;padding:8px 16px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer}
-            .almdina-sf-tab.is-active{background:var(--primary,#2490ef);border-color:var(--primary,#2490ef);color:#fff}
+            .almdina-sf-tab.is-active{background:var(--alm-primary,#172033);border-color:var(--alm-primary,#172033);color:#fff}
             .almdina-sf-refresh{margin-inline-start:auto;min-height:42px!important;font-weight:700}
             .almdina-sf-shell{padding:2px 0 24px}.almdina-sf-list-title{font-size:1.05rem;font-weight:800;margin:0 0 10px}.almdina-sf-list{display:grid;gap:10px}
             .almdina-sf-order-card{padding:14px!important;border-radius:14px!important;border:1px solid var(--border-color,#e5e7eb)!important;box-shadow:0 1px 3px rgba(0,0,0,.05);cursor:pointer}.almdina-sf-order-card:hover{box-shadow:0 4px 14px rgba(0,0,0,.08)}

@@ -164,13 +164,13 @@
 					? ` disabled aria-disabled="true" title="${frappe.utils.escape_html(__(SOURCE_LOCK_TITLE))}"`
 					: "";
 				return `
-				<button type="button" class="btn btn-sm ${activeTab === tab.id ? "btn-primary" : "btn-default"}" data-plan-tab="${tab.id}"${lockAttrs}>
+				<button type="button" class="btn btn-sm btn-default ${activeTab === tab.id ? "is-active" : ""}" data-plan-tab="${tab.id}"${lockAttrs}>
 					${badge(tab.id)}${__(tab.label)}
 				</button>`;
 			})
 			.join("");
 		return `
-			<div class="dco-plan-tabs" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px 0;">
+			<div class="almdina-ui dco-plan-tabs" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px 0;">
 				${buttons}
 			</div>
 		`;

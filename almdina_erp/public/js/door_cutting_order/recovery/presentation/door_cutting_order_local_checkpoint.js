@@ -372,6 +372,14 @@
         })[character]);
     }
 
+    function uiButton(options) {
+        const ui = window.AlmdinaUi;
+        if (!ui || typeof ui.button !== "function") {
+            throw new Error("AlmdinaUi.button is required for DCO recovery actions");
+        }
+        return ui.button(options);
+    }
+
     function userTimestamp(value) {
         if (frappe.datetime && typeof frappe.datetime.str_to_user === "function") {
             return frappe.datetime.str_to_user(value);
@@ -651,9 +659,19 @@
                 <div><strong>اللوح:</strong> ${escapeHtml(summary.board_description || "غير محدد")}</div>
                 <div><strong>لون القشاط:</strong> ${escapeHtml(summary.edge_color || "غير محدد")}</div>
                 ${summary.has_special_piece ? '<div class="text-warning">تتضمن بيانات درفة خاصة</div>' : ""}
-                <div class="dco-recovery-card__actions">
-                    <button class="btn btn-primary btn-sm" data-recovery-action="continue">متابعة الطلب</button>
-                    <button class="btn btn-danger btn-sm" data-recovery-action="delete">حذف المسودة</button>
+                <div class="dco-recovery-card__actions almdina-ui">
+                    ${uiButton({
+                        label: "متابعة الطلب",
+                        variant: "primary",
+                        size: "btn-sm",
+                        attrs: { "data-recovery-action": "continue" },
+                    })}
+                    ${uiButton({
+                        label: "حذف المسودة",
+                        variant: "danger",
+                        size: "btn-sm",
+                        attrs: { "data-recovery-action": "delete" },
+                    })}
                 </div>
             </article>
         `).join("");
@@ -670,7 +688,14 @@
                 هذه البيانات <strong>مسودة محلية غير محفوظة رسميًا</strong>. لن يُنشأ طلب رسمي إلا عند ضغط «حفظ» بعد المتابعة.
             </div>
             <div class="dco-recovery-list">${cards}</div>
-            <button class="btn btn-default dco-recovery-new" data-recovery-action="new">بدء طلب جديد</button>
+            <div class="almdina-ui">
+                ${uiButton({
+                    label: "بدء طلب جديد",
+                    variant: "secondary",
+                    className: "dco-recovery-new",
+                    attrs: { "data-recovery-action": "new" },
+                })}
+            </div>
         `;
     }
 
