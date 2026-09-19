@@ -14,6 +14,9 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
     DxfTopologyError,
     validate_snapshot_material_layout,
 )
+from almdina_erp.almdina_erp.domain.orders.extra_addons import (
+    apply_extra_double_text_flags_to_snapshot,
+)
 from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
     ManufacturingRequirementsError,
 )
@@ -533,6 +536,7 @@ def get_validated_dxf_plan(
             snapshot = legacy_export._plan_to_export_snapshot(plan)
         except DxfGeometrySnapshotError as exc:
             frappe.throw(_("DXF export blocked by persisted topology validation: {0}").format(str(exc)))
+        snapshot = apply_extra_double_text_flags_to_snapshot(snapshot, order.pieces)
         _assert_export_kerf(snapshot, fallback_kerf_mm=flt(plan.kerf_mm))
         return {
             "plan": snapshot,
@@ -548,6 +552,10 @@ def get_validated_dxf_plan(
         )
 
     editable, snapshot = legacy_export._strict_editable_snapshot(payload)
+    snapshot = apply_extra_double_text_flags_to_snapshot(
+        snapshot,
+        payload.get("pieces") or getattr(editable, "pieces", None),
+    )
     _assert_export_kerf(
         snapshot,
         fallback_kerf_mm=flt(getattr(editable, "kerf_mm", 0)),

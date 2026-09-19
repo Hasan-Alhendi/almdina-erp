@@ -16,6 +16,10 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_topology import (
     polygon_strictly_contains_polygon,
     validate_material_layout,
 )
+from almdina_erp.almdina_erp.domain.cutting.dxf_text_labels import (
+    DxfTextLabelError,
+    canonicalize_text_labels,
+)
 from almdina_erp.almdina_erp.domain.cutting.extra_overlays import (
     overlay_path_contained_in_polygon,
     OVERLAY_HOST_MARGIN_MM,
@@ -290,12 +294,12 @@ def geometry_mm_to_cm(geometry: PartGeometry) -> PartGeometry:
 
 
 def canonicalize_snapshot_geometries(value: Any) -> Any:
-    """Validate/canonicalize uploaded-DXF piece topology and Extra overlays.
+    """Validate/canonicalize uploaded-DXF piece topology, Extra overlays, and text labels.
 
     Other snapshot metadata may legitimately use a generic ``geometry`` key for
-    unrelated features. This owns only placed-piece ``geometry`` and Extra
-    ``overlays`` annotations, and therefore deliberately avoids interpreting
-    geometry outside those fields.
+    unrelated features. This owns only placed-piece ``geometry``, Extra
+    ``overlays`` annotations, and optional ``text_labels``, and therefore
+    deliberately avoids interpreting geometry outside those fields.
     """
 
     if not isinstance(value, Mapping):
@@ -327,6 +331,18 @@ def canonicalize_snapshot_geometries(value: Any) -> Any:
                         normalized_piece["overlays"] = overlays
                     normalized_pieces.append(normalized_piece)
                 normalized_sheet["pieces"] = normalized_pieces
+            if "text_labels" in normalized_sheet:
+                try:
+                    labels = canonicalize_text_labels(
+                        normalized_sheet.get("text_labels"),
+                        field="text_labels",
+                    )
+                except DxfTextLabelError as exc:
+                    raise DxfGeometrySnapshotError(str(exc)) from exc
+                if labels:
+                    normalized_sheet["text_labels"] = labels
+                else:
+                    normalized_sheet.pop("text_labels", None)
             normalized_sheets.append(normalized_sheet)
         normalized["sheets"] = normalized_sheets
     return normalized

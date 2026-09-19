@@ -183,6 +183,13 @@ def apply_adaptive_trim_to_fixed_dxf_layout(
                             dx_mm=dx_mm,
                             dy_mm=dy_mm,
                         )
+        labels = sheet.get("text_labels")
+        if isinstance(labels, list):
+            for label in labels:
+                if not isinstance(label, dict):
+                    continue
+                label["x_mm"] = _number(label.get("x_mm")) - dx_mm
+                label["y_mm"] = _number(label.get("y_mm")) - dy_mm
 
     return result
 

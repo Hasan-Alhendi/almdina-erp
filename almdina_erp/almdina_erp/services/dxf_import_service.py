@@ -24,6 +24,11 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import (
     simplify_polygon,
     validate_polygon,
 )
+from almdina_erp.almdina_erp.domain.cutting.dxf_text_labels import (
+    TEXT_LABEL_LAYER,
+    matches_text_label_layer,
+    serialize_text_label,
+)
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
     serialize_geometry_from_cm,
     serialize_overlay_geometry_from_cm,
@@ -373,6 +378,9 @@ def _flush_ascii_entity(
     if entity_type == "LINE" and current:
         entities.append(current)
         return
+    if entity_type == "TEXT" and current:
+        entities.append(current)
+        return
     if entity_type == "LWPOLYLINE" and current:
         entities.extend(_lwpolyline_segments(current))
 
@@ -408,6 +416,9 @@ def _parse_r12_lines(content: str) -> list[dict[str, Any]]:
             elif value == "LINE":
                 entity_type = "LINE"
                 current = {"type": "LINE"}
+            elif value == "TEXT":
+                entity_type = "TEXT"
+                current = {"type": "TEXT"}
             elif value == "LWPOLYLINE":
                 entity_type = "LWPOLYLINE"
                 current = {"type": "LWPOLYLINE", "points": []}
@@ -436,6 +447,30 @@ def _parse_r12_lines(content: str) -> list[dict[str, Any]]:
             elif code == "21":
                 current["y2"] = _num(value)
             continue
+        if entity_type == "TEXT":
+            if code == "8":
+                current["layer"] = value.strip()
+            elif code == "67":
+                current["paperspace"] = value.strip() not in {"", "0"}
+            elif code == "1":
+                current["text"] = value
+            elif code == "10":
+                current.setdefault("insert_x", _num(value))
+                if "x" not in current:
+                    current["x"] = _num(value)
+            elif code == "20":
+                current.setdefault("insert_y", _num(value))
+                if "y" not in current:
+                    current["y"] = _num(value)
+            elif code == "11":
+                current["x"] = _num(value)
+            elif code == "21":
+                current["y"] = _num(value)
+            elif code == "40":
+                current["height"] = _num(value)
+            elif code == "50":
+                current["rotation"] = _num(value)
+            continue
         if entity_type != "LWPOLYLINE":
             continue
         if code == "8":
@@ -463,7 +498,9 @@ def _read_legacy_content(file_path: str) -> str:
         raise DxfImportError("تعذر قراءة ملف DXF من الخادم. أعد رفع الملف ثم حاول مرة أخرى.") from exc
 
 
-def _read_normalized_geometry(file_path: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+def _read_normalized_geometry(
+    file_path: str,
+) -> tuple[list[dict[str, Any]], dict[str, Any], list[dict[str, Any]]]:
     content_cache: str | None = None
 
     def legacy_parser() -> list[dict[str, Any]]:
@@ -480,6 +517,7 @@ def _read_normalized_geometry(file_path: str) -> tuple[list[dict[str, Any]], dic
                 CUT_PATH_LAYER,
                 OFFCUT_LAYER,
                 DESIGNER_DEFAULT_LAYER,
+                TEXT_LABEL_LAYER,
                 *EXTRA_OVERLAY_LAYER_NAMES,
             },
             legacy_line_parser=legacy_parser,
@@ -500,11 +538,11 @@ def _read_normalized_geometry(file_path: str) -> tuple[list[dict[str, Any]], dic
             + "، ".join(unique)
             + f". العناصر المدعومة هي: {supported}."
         )
-    return result.get("segments") or [], result.get("diagnostics") or {}
+    return result.get("segments") or [], result.get("diagnostics") or {}, result.get("annotations") or []
 
 
 def _normalized_segments(file_path: str) -> list[dict[str, Any]]:
-    rows, _diagnostics = _read_normalized_geometry(file_path)
+    rows, _diagnostics, _annotations = _read_normalized_geometry(file_path)
     return rows
 
 
@@ -536,7 +574,7 @@ def _missing_role_layer_guidance(diagnostics: dict[str, Any]) -> list[str]:
     hints = [
         "أي طبقة غير SHEET_OUTLINE أو CUT_PATH أو OFFCUT لا تُستخدم كحدود لوح أو مسار قص. "
         "ضع مستطيل كل لوح على SHEET_OUTLINE، ومحيط الدرفة الكاملة على CUT_PATH، "
-        "ومحيط الدرفة الناقصة على OFFCUT."
+        "ومحيط الدرفة الناقصة على OFFCUT. طبقة text تحمل أرقام الدرف داخل DXF فقط ولا تُعد قصًا."
     ]
     if DESIGNER_DEFAULT_LAYER in detected:
         hints.append(
@@ -555,6 +593,10 @@ def _missing_role_layer_guidance(diagnostics: dict[str, Any]) -> list[str]:
             "طبقات علامات Extra ("
             + "، ".join(found_overlays)
             + ") تُقرأ فوق درفة Extra فقط، ولا تغني عن طبقات اللوح والقص."
+        )
+    if TEXT_LABEL_LAYER.upper() in detected:
+        hints.append(
+            "طبقة text تحمل أرقام الدرف داخل DXF فقط ولا تُعد قصًا."
         )
     return hints
 
@@ -1323,6 +1365,65 @@ def _attach_extra_overlays(
         ]
 
 
+def _sheet_for_point(
+    point: tuple[float, float],
+    sheets: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    matches: list[dict[str, Any]] = []
+    x, y = point
+    for sheet in sheets:
+        min_x = _num(sheet["offset_x_mm"])
+        min_y = _num(sheet["offset_y_mm"])
+        max_x = min_x + _num(sheet["full_width_mm"])
+        max_y = min_y + _num(sheet["full_height_mm"])
+        if (
+            min_x - GEOMETRY_TOLERANCE_MM <= x <= max_x + GEOMETRY_TOLERANCE_MM
+            and min_y - GEOMETRY_TOLERANCE_MM <= y <= max_y + GEOMETRY_TOLERANCE_MM
+        ):
+            matches.append(sheet)
+    return matches[0] if len(matches) == 1 else None
+
+
+def _attach_text_labels(
+    sheets: list[dict[str, Any]],
+    *,
+    annotations: Sequence[dict[str, Any]],
+    trim_mm: float,
+) -> None:
+    grouped: dict[int, list[dict[str, Any]]] = {
+        int(sheet["sheet_no"]): [] for sheet in sheets
+    }
+    for item in annotations:
+        if not matches_text_label_layer(item.get("layer")):
+            continue
+        content = str(item.get("text") or "").strip()
+        if not content:
+            continue
+        try:
+            point = (float(item["x"]), float(item["y"]))
+            height_mm = float(item.get("height") or 0)
+            rotation_deg = float(item.get("rotation") or 0)
+        except (TypeError, ValueError, KeyError):
+            continue
+        host = _sheet_for_point(point, sheets)
+        if host is None:
+            continue
+        plan_cm = _to_plan_points([point], sheet=host, trim_mm=trim_mm)[0]
+        grouped[int(host["sheet_no"])].append(
+            serialize_text_label(
+                text=content,
+                x_mm=plan_cm[0] * 10.0,
+                y_mm=plan_cm[1] * 10.0,
+                height_mm=height_mm,
+                rotation_deg=rotation_deg,
+            )
+        )
+    for sheet in sheets:
+        labels = grouped.get(int(sheet["sheet_no"])) or []
+        if labels:
+            sheet["text_labels"] = labels
+
+
 def _public_piece(piece: dict[str, Any]) -> dict[str, Any]:
     public_piece = {key: value for key, value in piece.items() if not key.startswith("_")}
     public_piece["geometry"] = serialize_geometry_from_cm(
@@ -1426,7 +1527,7 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
     if not os.path.exists(file_path):
         raise DxfImportError("تعذر العثور على ملف DXF المرفوع على الخادم. أعد رفع الملف ثم حاول مرة أخرى.")
 
-    rows, diagnostics = _read_normalized_geometry(file_path)
+    rows, diagnostics, annotations = _read_normalized_geometry(file_path)
     trim_mm = max(0.0, flt(order.trim_margin_mm))
     full_board_width_cm = flt(order.board_width_cm) or flt(order.full_board_width_mm) / 10
     full_board_length_cm = flt(order.board_length_cm) or flt(order.full_board_length_mm) / 10
@@ -1504,6 +1605,11 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
         labeled,
         overlays=overlays,
         sheets=sheets,
+        trim_mm=trim_mm,
+    )
+    _attach_text_labels(
+        sheets,
+        annotations=annotations,
         trim_mm=trim_mm,
     )
     by_id = {int(piece["id"]): piece for piece in labeled}
@@ -1585,6 +1691,7 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
                 "w": sheet["w"],
                 "h": sheet["h"],
                 "pieces": [public_by_id[int(piece["id"])] for piece in sheet["pieces"]],
+                **({"text_labels": sheet["text_labels"]} if sheet.get("text_labels") else {}),
             }
             for sheet in sheets
         ],

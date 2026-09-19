@@ -261,11 +261,16 @@ const extraAddonFrm = {
 };
 const extraAddonHtml = renderer.build(extraAddonFrm, renderer.parse(extraAddonFrm));
 assert.match(extraAddonHtml, /dco-extra-addon-marks/);
+assert.match(extraAddonHtml, /dco-extra-addon-text[^>]*data-addon-kind="double"/);
+assert.match(extraAddonHtml, /dco-extra-addon-text[^>]*data-addon-kind="full_door_double"/);
 assert.match(extraAddonHtml, /data-addon-kind="double"/);
 assert.match(extraAddonHtml, /data-addon-kind="full_door_double"/);
 assert.match(extraAddonHtml, /data-addon-slot="top-end"/);
 assert.match(extraAddonHtml, /data-addon-slot="top-start"/);
 assert.match(extraAddonHtml, /dco-extra-addon-mark/);
+assert.match(extraAddonHtml, /دبل قشاط/);
+assert.match(extraAddonHtml, /دبل كامل الدرفة/);
+assert.doesNotMatch(extraAddonHtml, /dco-extra-addon-icon/);
 assert.match(extraAddonHtml, /dco-extra-overlay/);
 assert.match(extraAddonHtml, /data-overlay-layer="Liner"/);
 assert.match(extraAddonHtml, /dco-extra-addon-legend/);
@@ -297,5 +302,7 @@ const regularOnlyPlan = {
 const regularOnlyHtml = renderer.build(regularOnlyFrm, regularOnlyPlan);
 assert.doesNotMatch(regularOnlyHtml, /dco-extra-addon-marks/);
 assert.match(regularOnlyHtml, /dco-extra-addon-legend/);
+assert.doesNotMatch(regularOnlyHtml, /dco-sheet-text-labels/);
+assert.match(regularOnlyHtml, /dco-piece-number/);
 
 console.log("Cutting-plan renderer simulation passed");

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Any
 
 from .costing import round_value
 
@@ -247,6 +248,97 @@ def _finite_non_negative(value: float) -> float:
     return number
 
 
+def extra_double_text_flags(
+    *,
+    piece_type: str,
+    extra_double: bool,
+    extra_full_door_double: bool,
+) -> dict[str, int]:
+    """Return Extra double checkboxes that DXF/plan TEXT marks may copy.
+
+    These flags are operational workshop marks, not prices. Regular/Special
+    rows stay empty even if a checkbox leaked onto the row.
+    """
+
+    if str(piece_type or "").strip() != EXTRA_PIECE_TYPE:
+        return {}
+    flags: dict[str, int] = {}
+    if extra_double:
+        flags["extra_double"] = 1
+    if extra_full_door_double:
+        flags["extra_full_door_double"] = 1
+    return flags
+
+
+def extra_double_text_flags_by_source_no(rows: Iterable[Any]) -> dict[int, dict[str, int]]:
+    flags: dict[int, dict[str, int]] = {}
+    for index, row in enumerate(rows or [], start=1):
+        attached = extra_double_text_flags(
+            piece_type=str(_row_field(row, "piece_type", "Regular") or "Regular"),
+            extra_double=_truthy_flag(_row_field(row, "extra_double", 0)),
+            extra_full_door_double=_truthy_flag(
+                _row_field(row, "extra_full_door_double", 0)
+            ),
+        )
+        if attached:
+            flags[index] = attached
+    return flags
+
+
+def apply_extra_double_text_flags_to_snapshot(
+    snapshot: Any,
+    rows: Iterable[Any],
+) -> Any:
+    """Copy Extra double checkboxes onto matching snapshot pieces for DXF TEXT."""
+
+    if not isinstance(snapshot, dict):
+        return snapshot
+    flags = extra_double_text_flags_by_source_no(rows)
+    if not flags:
+        return snapshot
+    for sheet in snapshot.get("sheets") or []:
+        if not isinstance(sheet, dict):
+            continue
+        for piece in sheet.get("pieces") or []:
+            if not isinstance(piece, dict):
+                continue
+            attached = flags.get(_source_piece_no(piece))
+            if attached:
+                piece.update(attached)
+    return snapshot
+
+
+def _row_field(row: Any, field: str, default: Any = None) -> Any:
+    if isinstance(row, Mapping):
+        return row.get(field, default)
+    return getattr(row, field, default)
+
+
+def _truthy_flag(value: Any) -> bool:
+    if value in (None, "", False):
+        return False
+    try:
+        return int(value) != 0
+    except (TypeError, ValueError):
+        return bool(value)
+
+
+def _source_piece_no(piece: Mapping[str, Any]) -> int:
+    try:
+        source = int(piece.get("source_piece_no") or 0)
+    except (TypeError, ValueError):
+        source = 0
+    if source >= 1:
+        return source
+    label = str(piece.get("label") or "").strip()
+    head = label.split(".", 1)[0].strip()
+    try:
+        group = int(float(head))
+    except (TypeError, ValueError):
+        return 0
+    return group if group >= 1 else 0
+
+
 def _money(value: float) -> float:
     return round_value(value, 3)
 
@@ -264,7 +356,10 @@ __all__ = [
     "ExtraAddonPieceResult",
     "ExtraAddonPricingSummary",
     "ExtraAddonRates",
+    "apply_extra_double_text_flags_to_snapshot",
     "calculate_extra_addon_pricing",
+    "extra_double_text_flags",
+    "extra_double_text_flags_by_source_no",
     "extra_overlay_kind_for_layer",
     "extra_overlay_layer_for_kind",
     "physical_cut_quantity",

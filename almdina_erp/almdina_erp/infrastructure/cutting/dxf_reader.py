@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections import Counter
 from typing import Any, Callable, Iterable
 
+from almdina_erp.almdina_erp.domain.cutting.dxf_text_labels import matches_text_label_layer
+
 SUPPORTED_DXF_ENTITY_TYPES = frozenset({
     "LINE",
     "LWPOLYLINE",
@@ -12,6 +14,7 @@ SUPPORTED_DXF_ENTITY_TYPES = frozenset({
     "SPLINE",
     "ELLIPSE",
 })
+TEXT_ANNOTATION_ENTITY_TYPES = frozenset({"TEXT", "MTEXT"})
 CURVE_FLATTENING_TOLERANCE_MM = 0.25
 MAX_INSERT_DEPTH = 32
 MAX_EXPANDED_ENTITIES = 100_000
@@ -19,6 +22,73 @@ MAX_EXPANDED_ENTITIES = 100_000
 
 class DxfReadError(ValueError):
     pass
+
+
+def _annotation_point(value: Any) -> tuple[float, float]:
+    if hasattr(value, "x") and hasattr(value, "y"):
+        return (float(value.x), float(value.y))
+    return (float(value[0]), float(value[1]))
+
+
+def _annotation_from_entity(entity: Any, *, layer: str) -> dict[str, Any] | None:
+    entity_type = entity.dxftype().upper()
+    if entity_type == "TEXT":
+        content = str(getattr(entity.dxf, "text", "") or "").replace("%%u", "").strip()
+        insert = entity.dxf.insert
+        halign = int(getattr(entity.dxf, "halign", 0) or 0)
+        valign = int(getattr(entity.dxf, "valign", 0) or 0)
+        align = getattr(entity.dxf, "align_point", None)
+        point = align if (halign or valign) and align is not None else insert
+        height = float(getattr(entity.dxf, "height", 0) or 0)
+        rotation = float(getattr(entity.dxf, "rotation", 0) or 0)
+    elif entity_type == "MTEXT":
+        try:
+            content = str(entity.plain_text() or "").strip()
+        except Exception:
+            content = str(getattr(entity.dxf, "text", "") or "").strip()
+        point = entity.dxf.insert
+        height = float(
+            getattr(entity.dxf, "char_height", 0)
+            or getattr(entity.dxf, "height", 0)
+            or 0
+        )
+        rotation = float(getattr(entity.dxf, "rotation", 0) or 0)
+    else:
+        return None
+    if not content:
+        return None
+    x, y = _annotation_point(point)
+    return {
+        "layer": layer,
+        "entity_type": entity_type,
+        "text": content,
+        "x": x,
+        "y": y,
+        "height": height,
+        "rotation": rotation,
+    }
+
+
+def _legacy_annotation_from_row(row: dict[str, Any], *, layer: str) -> dict[str, Any] | None:
+    content = str(row.get("text") or "").strip()
+    if not content:
+        return None
+    try:
+        x = float(row.get("x") if row.get("x") is not None else row.get("x1") or 0)
+        y = float(row.get("y") if row.get("y") is not None else row.get("y1") or 0)
+        height = float(row.get("height") or 0)
+        rotation = float(row.get("rotation") or 0)
+    except (TypeError, ValueError):
+        return None
+    return {
+        "layer": layer,
+        "entity_type": str(row.get("entity_type") or row.get("type") or "TEXT").upper(),
+        "text": content,
+        "x": x,
+        "y": y,
+        "height": height,
+        "rotation": rotation,
+    }
 
 
 def _entity_is_closed(entity: Any) -> bool:
@@ -102,6 +172,7 @@ def _geometry_from_legacy_rows(
     relevant_layers: set[str],
 ) -> dict[str, Any]:
     segments: list[dict[str, Any]] = []
+    annotations: list[dict[str, Any]] = []
     detected_layers: set[str] = set()
     entity_counts: Counter[str] = Counter()
     for row in rows:
@@ -110,6 +181,14 @@ def _geometry_from_legacy_rows(
         entity_type = str(row.get("entity_type") or row.get("type") or "LINE").upper()
         entity_counts[entity_type] += 1
         if layer not in relevant_layers:
+            continue
+        if matches_text_label_layer(layer):
+            if entity_type in TEXT_ANNOTATION_ENTITY_TYPES:
+                annotation = _legacy_annotation_from_row(row, layer=layer)
+                if annotation:
+                    annotations.append(annotation)
+            continue
+        if entity_type in TEXT_ANNOTATION_ENTITY_TYPES:
             continue
         segments.append(
             {
@@ -121,6 +200,7 @@ def _geometry_from_legacy_rows(
         )
     return {
         "segments": segments,
+        "annotations": annotations,
         "unsupported": [],
         "diagnostics": _diagnostics(
             detected_layers=detected_layers,
@@ -160,6 +240,7 @@ def read_dxf_geometry(
     doc = _load_ezdxf_document(ezdxf, file_path)
 
     segments: list[dict[str, Any]] = []
+    annotations: list[dict[str, Any]] = []
     unsupported: list[dict[str, str]] = []
     detected_layers: set[str] = set()
     entity_counts: Counter[str] = Counter()
@@ -209,6 +290,15 @@ def read_dxf_geometry(
                     ) from exc
                 continue
 
+            if matches_text_label_layer(layer):
+                if layer not in normalized_relevant_layers:
+                    continue
+                if entity_type in TEXT_ANNOTATION_ENTITY_TYPES:
+                    annotation = _annotation_from_entity(entity, layer=layer)
+                    if annotation:
+                        annotations.append(annotation)
+                continue
+
             if layer not in normalized_relevant_layers:
                 continue
             if entity_type not in SUPPORTED_DXF_ENTITY_TYPES:
@@ -244,6 +334,7 @@ def read_dxf_geometry(
     visit(doc.modelspace(), inherited_layer=None, depth=0)
     return {
         "segments": segments,
+        "annotations": annotations,
         "unsupported": unsupported,
         "diagnostics": _diagnostics(
             detected_layers=detected_layers,
