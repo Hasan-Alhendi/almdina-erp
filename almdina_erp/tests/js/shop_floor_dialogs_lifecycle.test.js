@@ -65,6 +65,9 @@ owner.promptWorker({
     workers: [{ name: "worker@example.com", full_name: "Worker" }],
     next_department: "CNC",
 }, 7, () => { workerRuns += 1; });
+assert.equal(prompts[0].fields[0].options[0].label, "Worker");
+assert.equal(prompts[0].fields[0].options[0].value, "worker@example.com");
+assert.equal(String(prompts[0].fields[0].options[0].label).includes("@"), false);
 owner.noWorkers({ operational_role: "CNC" }, 7);
 owner.error("failed", 7);
 owner.success("saved", 7);

@@ -284,3 +284,28 @@ def test_last_opened_board_is_the_first_sheet_in_the_plan():
     assert [sheet["sheet_no"] for sheet in plan["sheets"]] == [2, 1]
     assert all(sheet["pieces"][0]["y"] == 10 for sheet in plan["sheets"])
     assert not validate_plan(plan, pieces, 100, 100)
+
+
+def test_ordering_and_labels_stay_correct_past_fifty_piece_rows():
+    rows = [
+        {"width_cm": 40, "length_cm": 50, "qty": 1, "allow_rotation": 0}
+        for _ in range(51)
+    ]
+    pieces = expand_piece_groups(rows)
+
+    assert len(pieces) == 51
+    assert [piece["label"] for piece in pieces] == [f"{index}.1" for index in range(1, 52)]
+    assert pieces[49]["source_piece_no"] == 50
+    assert pieces[50]["source_piece_no"] == 51
+    assert pieces[50]["label"] == "51.1"
+
+    plan = run_single_method(pieces, 122, 244, 0.3, "MaxRects Best Area")
+    placed = [piece for sheet in plan["sheets"] for piece in sheet["pieces"]]
+
+    assert not plan["unplaced"]
+    assert {piece["label"] for piece in placed} == {f"{index}.1" for index in range(1, 52)}
+    assert any(piece["label"] == "51.1" for piece in placed)
+    assert [sheet["sheet_no"] for sheet in plan["sheets"]] == list(
+        range(len(plan["sheets"]), 0, -1)
+    )
+    assert not validate_plan(plan, pieces, 122, 244, kerf_cm=0.3)

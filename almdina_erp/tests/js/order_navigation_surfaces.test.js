@@ -498,6 +498,10 @@ async function verifyDispatchWithoutHistoryReturnsToOrderList() {
     });
     await flushPromises();
     assert.equal(Boolean(dialog), true);
+    const assigneeField = dialog.config.fields.find(field => field.fieldname === "assignee");
+    assert.equal(assigneeField.options[0].label, "عامل");
+    assert.equal(assigneeField.options[0].value, "cnc@example.com");
+    assert.equal(String(assigneeField.options[0].label).includes("@"), false);
     dialog.config.primary_action({ path: "Drawing", assignee: "cnc@example.com" });
     await flushPromises();
     assert.equal(

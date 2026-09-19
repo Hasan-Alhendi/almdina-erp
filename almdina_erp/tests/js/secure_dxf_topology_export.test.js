@@ -377,16 +377,20 @@ async function run() {
                 pieces: [
                     { id: 1, label: "1.1", x: 0, y: 0, w: 10, h: 10 },
                     { id: 2, label: "2.2", x: 20, y: 0, w: 10, h: 10 },
+                    { id: 50, label: "50.1", x: 40, y: 0, w: 10, h: 10 },
+                    { id: 51, label: "51.1", x: 60, y: 0, w: 10, h: 10 },
                 ],
             },
         ],
     };
     downloadedDxf = "";
     await fakeFrappe.almdina.export_order_dxf("DCO-TEXT-NUMBERS", "system");
-    assert.equal((downloadedDxf.match(/0\r\nTEXT\r\n/g) || []).length, 2);
+    assert.equal((downloadedDxf.match(/0\r\nTEXT\r\n/g) || []).length, 4);
     assert.match(downloadedDxf, /8\r\ntext\r\n/);
     assert.match(downloadedDxf, /1\r\n1\r\n/);
     assert.match(downloadedDxf, /1\r\n2\r\n/);
+    assert.match(downloadedDxf, /1\r\n50\r\n/);
+    assert.match(downloadedDxf, /1\r\n51\r\n/);
 
     console.log("Secure DXF topology export simulation passed");
 }

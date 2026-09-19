@@ -84,11 +84,12 @@
             if (!value || seen.has(value)) return;
             seen.add(value);
             const fullName = String(worker.full_name || "").trim();
+            const displayName = fullName && fullName !== value ? fullName : value;
             options.push(Object.freeze({
                 value,
-                label: fullName && fullName !== value ? `${fullName} (${value})` : value,
-                name: fullName || value,
-                meta: fullName && fullName !== value ? value : "",
+                label: displayName,
+                name: displayName,
+                meta: "",
             }));
         });
         return options;

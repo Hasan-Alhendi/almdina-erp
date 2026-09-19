@@ -305,4 +305,77 @@ assert.match(regularOnlyHtml, /dco-extra-addon-legend/);
 assert.doesNotMatch(regularOnlyHtml, /dco-sheet-text-labels/);
 assert.match(regularOnlyHtml, /dco-piece-number/);
 
+const pastFiftyPlan = {
+    ...plan,
+    sheets: [
+        {
+            sheet_no: 2,
+            pieces: [
+                {
+                    x: 0,
+                    y: 0,
+                    w: 40,
+                    h: 50,
+                    original_w: 40,
+                    original_h: 50,
+                    area_m2: 0.2,
+                    label: "50.1",
+                    source_piece_no: 50,
+                    piece_type: "Regular",
+                    rotated: false,
+                },
+                {
+                    x: 40,
+                    y: 0,
+                    w: 40,
+                    h: 50,
+                    original_w: 40,
+                    original_h: 50,
+                    area_m2: 0.2,
+                    label: "51.1",
+                    source_piece_no: 51,
+                    piece_type: "Regular",
+                    rotated: false,
+                },
+            ],
+        },
+        {
+            sheet_no: 1,
+            pieces: [
+                {
+                    x: 0,
+                    y: 0,
+                    w: 40,
+                    h: 50,
+                    original_w: 40,
+                    original_h: 50,
+                    area_m2: 0.2,
+                    label: "1.1",
+                    source_piece_no: 1,
+                    piece_type: "Regular",
+                    rotated: false,
+                },
+            ],
+        },
+    ],
+};
+const pastFiftyFrm = {
+    doc: {
+        ...frm.doc,
+        pieces: Array.from({ length: 51 }, (_, index) => ({
+            width_cm: 40,
+            length_cm: 50,
+            qty: 1,
+            piece_type: "Regular",
+            piece_no: index + 1,
+        })),
+    },
+};
+const pastFiftyHtml = renderer.build(pastFiftyFrm, pastFiftyPlan);
+assert.match(pastFiftyHtml, />50</);
+assert.match(pastFiftyHtml, />51</);
+assert.match(pastFiftyHtml, /لوح 2/);
+assert.match(pastFiftyHtml, /لوح 1/);
+assert.ok(pastFiftyHtml.indexOf("لوح 2") < pastFiftyHtml.indexOf("لوح 1"));
+
 console.log("Cutting-plan renderer simulation passed");
