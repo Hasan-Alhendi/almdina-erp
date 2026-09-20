@@ -240,11 +240,9 @@
         return normalized || "—";
     }
 
-    function listTextHtml(value, className = "") {
+    function listTextHtml(value) {
         const text = String(value ?? "");
-        if (!text) return "";
-        const classAttr = className ? ` class="${className}"` : "";
-        return `<span${classAttr}>${escapeHtml(text)}</span>`;
+        return text ? `<span>${escapeHtml(text)}</span>` : "";
     }
 
     function isEmailLike(value) {
@@ -1634,7 +1632,7 @@
                 return listTextHtml(label);
             },
             edge_color(value) {
-                return listTextHtml(value, "dco-list-edge-color");
+                return value ? `<span class="dco-list-edge-color">${escapeHtml(value)}</span>` : "";
             },
             current_assignee(value) {
                 return listTextHtml(assigneeLabel(value));
