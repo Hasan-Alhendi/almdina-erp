@@ -381,8 +381,10 @@ def test_overview_list_puts_delivered_orders_last_for_view_all_orders():
     assert "function isOverviewDefaultSortActive(listview)" in list_source
     assert "function shouldSelectOverviewDefaultSort(sortBy, storage)" in list_source
     assert "function installOverviewDefaultSort(listview)" in list_source
-    assert "function syncSortSelectorOrderButton(selector, sortOrder)" in list_source
-    assert "function patchOverviewSortSelectorSetValue(selector)" in list_source
+    assert "function patchOverviewSortSelectorSql(selector)" in list_source
+    assert "function syncSortSelectorOrderButton(selector, sortOrder)" not in list_source
+    assert "function patchOverviewSortSelectorSetValue(selector)" not in list_source
+    assert "function patchOverviewSortSelectorChange(listview, selector)" not in list_source
     assert "installOverviewDefaultSort(listview)" in list_source
     assert "function overviewListOrderBy(" not in list_source
     assert "IN ('Delivered')" not in list_source
