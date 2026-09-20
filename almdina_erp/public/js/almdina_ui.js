@@ -28,6 +28,31 @@
         return ` ${String(name)}="${escapeHtml(value)}"`;
     }
 
+    function runSilently(task, state) {
+        state.silentDepth += 1;
+        let result;
+        try {
+            result = task();
+        } catch (error) {
+            state.silentDepth -= 1;
+            throw error;
+        }
+        if (result && typeof result.then === "function") {
+            return Promise.resolve(result).then(
+                value => {
+                    state.silentDepth -= 1;
+                    return value;
+                },
+                error => {
+                    state.silentDepth -= 1;
+                    throw error;
+                }
+            );
+        }
+        state.silentDepth -= 1;
+        return result;
+    }
+
     function button(options = {}) {
         const variant = String(options.variant || "secondary").trim();
         const size = String(options.size || "").trim();
@@ -120,17 +145,20 @@
         const input = frappeControl.$input;
         let disposed = false;
         let initializing = true;
+        const lifecycleState = { silentDepth: 0 };
         if (onChange) {
             const nativeChange = df.change || df.onchange;
             df.change = function nativeChangeBridge(event) {
                 const notify = () => {
-                    if (!initializing && !disposed) onChange(this.get_value(), this, event);
+                    if (!initializing && lifecycleState.silentDepth === 0 && !disposed) {
+                        onChange(this.get_value(), this, event);
+                    }
                 };
                 const result = typeof nativeChange === "function"
                     ? nativeChange.apply(this, arguments)
                     : undefined;
                 if (result && typeof result.then === "function") {
-                    return result.then(value => {
+                    return Promise.resolve(result).then(value => {
                         notify();
                         return value;
                     });
@@ -140,9 +168,21 @@
             };
         }
         if (defaultValue !== undefined && defaultValue !== null && String(defaultValue) !== "") {
-            frappeControl.set_value(defaultValue);
+            const initialValue = runSilently(
+                () => frappeControl.set_value(defaultValue),
+                lifecycleState
+            );
+            if (initialValue && typeof initialValue.then === "function") {
+                initialValue.then(
+                    () => { initializing = false; },
+                    () => { initializing = false; }
+                );
+            } else {
+                initializing = false;
+            }
+        } else {
+            initializing = false;
         }
-        initializing = false;
 
         function dispose() {
             if (disposed) return false;
@@ -159,7 +199,12 @@
                 return frappeControl.get_value();
             },
             setValue(value) {
-                if (!disposed) return frappeControl.set_value(value);
+                if (!disposed) {
+                    return runSilently(
+                        () => frappeControl.set_value(value),
+                        lifecycleState
+                    );
+                }
                 return Promise.resolve();
             },
             focus() {
@@ -185,13 +230,14 @@
         const onChange = typeof options.onChange === "function" ? options.onChange : null;
         let initializing = true;
         let disposed = false;
+        const lifecycleState = { silentDepth: 0 };
         const fields = (Array.isArray(options.fields) ? options.fields : []).map(field => {
             const df = Object.assign({}, field);
             if (onChange) {
                 const nativeChange = df.change || df.onchange;
                 df.change = function nativeChangeBridge(event) {
                     const notify = () => {
-                        if (!initializing && !disposed) {
+                        if (!initializing && lifecycleState.silentDepth === 0 && !disposed) {
                             onChange(
                                 this.df.fieldname,
                                 this.get_value(),
@@ -205,7 +251,7 @@
                         ? nativeChange.apply(this, arguments)
                         : undefined;
                     if (result && typeof result.then === "function") {
-                        return result.then(value => {
+                        return Promise.resolve(result).then(value => {
                             notify();
                             return value;
                         });
@@ -231,8 +277,12 @@
 
         function setValue(fieldname, value) {
             if (fieldGroup.fields_dict[fieldname]) {
-                fieldGroup.set_value(fieldname, value);
+                return runSilently(
+                    () => fieldGroup.set_value(fieldname, value),
+                    lifecycleState
+                );
             }
+            return Promise.resolve();
         }
 
         function dispose() {
@@ -243,10 +293,16 @@
             return true;
         }
 
-        Object.entries(initialValues).forEach(([fieldname, value]) => {
-            if (fieldGroup.fields_dict[fieldname]) fieldGroup.set_value(fieldname, value);
-        });
-        initializing = false;
+        const initialValuesPromise = runSilently(
+            () => Promise.all(
+                Object.entries(initialValues).map(([fieldname, value]) => setValue(fieldname, value))
+            ),
+            lifecycleState
+        );
+        initialValuesPromise.then(
+            () => { initializing = false; },
+            () => { initializing = false; }
+        );
 
         return Object.freeze({
             fieldGroup,
@@ -258,7 +314,9 @@
             },
             setValue,
             setValues(values = {}) {
-                Object.entries(values).forEach(([fieldname, value]) => setValue(fieldname, value));
+                return Promise.all(
+                    Object.entries(values).map(([fieldname, value]) => setValue(fieldname, value))
+                );
             },
             focus(fieldname) {
                 const field = fieldGroup.fields_dict[fieldname];

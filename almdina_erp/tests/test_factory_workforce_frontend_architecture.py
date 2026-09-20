@@ -12,6 +12,7 @@ VIEW_MODEL = ROOT / "public" / "js" / "factory_workforce" / "view_model.js"
 RENDERER = ROOT / "public" / "js" / "factory_workforce" / "renderer.js"
 INTERACTIONS = ROOT / "public" / "js" / "factory_workforce" / "interactions.js"
 DIALOGS = ROOT / "public" / "js" / "factory_workforce" / "dialogs.js"
+TOOLBAR = ROOT / "public" / "js" / "factory_workforce" / "toolbar.js"
 CONTROLLER = ROOT / "public" / "js" / "factory_workforce" / "controller.js"
 CSS = ROOT / "public" / "css" / "factory_workforce.css"
 
@@ -26,6 +27,7 @@ class FactoryWorkforceFrontendArchitectureTest(unittest.TestCase):
         cls.renderer = RENDERER.read_text(encoding="utf-8")
         cls.interactions = INTERACTIONS.read_text(encoding="utf-8")
         cls.dialogs = DIALOGS.read_text(encoding="utf-8")
+        cls.toolbar = TOOLBAR.read_text(encoding="utf-8")
         cls.controller = CONTROLLER.read_text(encoding="utf-8")
         cls.css = CSS.read_text(encoding="utf-8")
 
@@ -39,6 +41,7 @@ class FactoryWorkforceFrontendArchitectureTest(unittest.TestCase):
             "renderer.js",
             "interactions.js",
             "dialogs.js",
+            "toolbar.js",
             "controller.js",
         ):
             self.assertIn(f"/assets/almdina_erp/js/factory_workforce/{asset}", self.page)
@@ -173,7 +176,7 @@ class FactoryWorkforceFrontendArchitectureTest(unittest.TestCase):
             self.assertNotIn(forbidden, self.dialogs)
 
     def test_controller_is_orchestration_only(self) -> None:
-        self.assertLessEqual(len(self.controller.splitlines()), 400)
+        self.assertLessEqual(len(self.controller.splitlines()), 310)
         for dependency in (
             "AlmdinaFactoryWorkforceApi",
             "AlmdinaFactoryWorkforceState",
@@ -181,15 +184,12 @@ class FactoryWorkforceFrontendArchitectureTest(unittest.TestCase):
             "AlmdinaFactoryWorkforceRenderer",
             "AlmdinaFactoryWorkforceInteractions",
             "AlmdinaFactoryWorkforceDialogs",
+            "AlmdinaFactoryWorkforceToolbar",
         ):
             self.assertIn(dependency, self.controller)
-        self.assertIn("AlmdinaUi.control", self.controller)
-        self.assertIn("mountToolbarControls", self.controller)
-        self.assertIn("disposeToolbarControls();", self.controller)
-        self.assertIn("toolbarMounted = false;", self.controller)
+        self.assertIn("toolbar.mount()", self.controller)
+        self.assertIn("toolbar.dispose()", self.controller)
         self.assertIn("preserveToolbar", self.controller)
-        self.assertIn("workforce-search", self.controller)
-        self.assertIn("350", self.controller)
         self.assertIn("requests.console.begin", self.controller)
         self.assertIn("requests.audit.begin", self.controller)
         self.assertIn("actionAllowed(user", self.controller)
@@ -202,6 +202,14 @@ class FactoryWorkforceFrontendArchitectureTest(unittest.TestCase):
         self.assertNotIn(".html(", self.controller)
         self.assertNotIn("aw-card", self.controller)
         self.assertNotIn("style.textContent", self.controller)
+
+    def test_toolbar_owns_control_presentation_and_cleanup(self) -> None:
+        self.assertIn("AlmdinaUi.control", self.toolbar)
+        self.assertIn("workforce-search", self.toolbar)
+        self.assertIn("350", self.toolbar)
+        self.assertIn("function dispose()", self.toolbar)
+        self.assertIn("function mount()", self.toolbar)
+        self.assertIn("lifecycle.track(dispose", self.toolbar)
 
     def test_renderer_uses_central_design_system_for_buttons(self) -> None:
         self.assertIn('class="almdina-ui aw-shell"', self.renderer)

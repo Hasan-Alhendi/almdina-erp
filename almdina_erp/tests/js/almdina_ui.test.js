@@ -62,8 +62,19 @@ const fakeWindow = {
                             },
                             set_value(value) {
                                 this.value = value;
-                                if (typeof this.df.change === "function") this.df.change.call(this, {type: "change"});
-                                return Promise.resolve();
+                                return Promise.resolve().then(() => {
+                                    if (typeof this.df.change === "function") {
+                                        return this.df.change.call(this, {type: "change"});
+                                    }
+                                });
+                            },
+                            userChange(value) {
+                                this.value = value;
+                                return Promise.resolve().then(() => {
+                                    if (typeof this.df.change === "function") {
+                                        return this.df.change.call(this, {type: "change", user: true});
+                                    }
+                                });
                             },
                             set_focus() {},
                         };
@@ -108,8 +119,19 @@ const fakeWindow = {
                         },
                         set_value(next) {
                             this.value = next;
-                            if (typeof this.df.change === "function") this.df.change.call(this, {type: "change"});
-                            return Promise.resolve();
+                            return Promise.resolve().then(() => {
+                                if (typeof this.df.change === "function") {
+                                    return this.df.change.call(this, {type: "change"});
+                                }
+                            });
+                        },
+                        userChange(next) {
+                            this.value = next;
+                            return Promise.resolve().then(() => {
+                                if (typeof this.df.change === "function") {
+                                    return this.df.change.call(this, {type: "change", user: true});
+                                }
+                            });
                         },
                     };
                     const nativeHandler = () => {};
@@ -146,6 +168,12 @@ const ui = fakeWindow.AlmdinaUi;
 assert.ok(ui);
 assert.equal(Object.isFrozen(ui), true);
 
+async function run() {
+async function flush() {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+}
 const primary = ui.button({ label: "حفظ", variant: "primary", className: "apc-save" });
 assert.match(primary, /class="btn alm-btn-primary apc-save"/);
 assert.match(primary, />حفظ</);
@@ -182,14 +210,17 @@ assert.equal(fakeControls[0].opts.only_input, true);
 assert.equal(parent.hasClass("alm-control"), true);
 assert.equal(parent.hasClass("apa-search-control"), true);
 assert.equal(mounted.getValue(), "abc");
-mounted.setValue("xyz");
+await flush();
+assert.equal(changed, 0, "initial async value must not trigger Almdina");
+await mounted.setValue("xyz");
 assert.equal(mounted.getValue(), "xyz");
+assert.equal(changed, 0, "programmatic sync must not bounce into Almdina state");
 changed = 0;
 for (const handler of fakeControls[0].control.$input.handlers.get("input") || []) {
     handler({target: {value: "typed"}});
 }
 assert.equal(changed, 0, "Almdina must not subscribe to the Frappe-owned input event");
-mounted.setValue("new-value");
+await fakeControls[0].control.userChange("new-value");
 assert.equal(changed, 1, "Data changes must use the native control contract exactly once");
 const dataOwnedHandler = frappeOwnedHandlers[0];
 mounted.dispose();
@@ -205,13 +236,16 @@ const linkMounted = ui.control({
     fieldname: "operational_role",
     fieldtype: "Link",
     options: "Role",
+    value: "Order Entry",
     onChange: () => {
         linkChanged += 1;
     },
 });
 assert.equal(fakeControls.length, 2);
 assert.equal(fakeControls[1].opts.df.fieldtype, "Link");
-fakeControls[1].control.set_value("Order Entry");
+await flush();
+assert.equal(linkChanged, 0, "initial Link value must not trigger Almdina");
+await fakeControls[1].control.userChange("Order Entry");
 assert.equal(linkChanged, 1);
 fakeControls[1].control.$input.handlers.set("input", [() => {}]);
 for (const handler of fakeControls[1].control.$input.handlers.get("input")) handler({target: {value: "Ord"}});
@@ -225,9 +259,11 @@ const selectMounted = ui.control({
     fieldname: "status",
     fieldtype: "Select",
     options: "A\nB",
+    value: "A",
     onChange: () => { selectChanged += 1; },
 });
-selectMounted.setValue("B");
+await flush();
+await fakeControls[2].control.userChange("B");
 assert.equal(selectChanged, 1, "Select changes must use the native control contract exactly once");
 selectMounted.dispose();
 
@@ -246,7 +282,7 @@ const secondMount = ui.control({
     fieldtype: "Data",
     onChange: () => { remountChanged += 1; },
 });
-secondMount.setValue("one");
+await fakeControls[4].control.userChange("one");
 assert.equal(remountChanged, 1, "remount must leave one Almdina callback owner");
 secondMount.dispose();
 
@@ -263,9 +299,21 @@ const nativeContractMount = ui.control({
     },
     onChange: () => nativeOrder.push("almdina"),
 });
-nativeContractMount.setValue("validated");
+await fakeControls[5].control.userChange("validated");
 assert.deepEqual(nativeOrder, ["frappe", "almdina"], "native async change contract must remain ordered");
 nativeContractMount.dispose();
+
+let lateChanged = 0;
+const pendingMount = ui.control({
+    parent: createParent(),
+    fieldname: "pending",
+    fieldtype: "Data",
+    onChange: () => { lateChanged += 1; },
+});
+const pendingChange = fakeControls[6].control.userChange("late");
+pendingMount.dispose();
+await pendingChange;
+assert.equal(lateChanged, 0, "dispose must suppress a pending native callback");
 
 const filterParent = createParent();
 let filterChanged = 0;
@@ -285,11 +333,16 @@ assert.equal(fakeFieldGroups.length, 1);
 assert.equal(filterParent.hasClass("alm-filter-group"), true);
 assert.equal(filterParent.hasClass("prw-filter-group"), true);
 assert.equal(filterMounted.getValue("search"), "needle");
-filterMounted.setValue("search", "updated");
+await flush();
+assert.equal(filterChanged, 0, "initial FieldGroup values must not trigger domain callbacks");
+await filterMounted.setValue("search", "updated");
 assert.equal(filterMounted.getValue("search"), "updated");
+assert.equal(filterChanged, 0, "FieldGroup UI sync must not bounce into domain state");
 filterChanged = 0;
-fakeFieldGroups[0].fields_list[0].set_value("changed");
+await fakeFieldGroups[0].fields_list[0].userChange("changed");
 assert.equal(filterChanged, 1);
+await filterMounted.setValues({search: "changed"});
+assert.equal(filterChanged, 1, "setValues must remain silent after native change");
 filterMounted.dispose();
 assert.equal(filterParent.hasClass("alm-filter-group"), false);
 assert.equal(filterMounted.dispose(), false, "filterGroup dispose must be idempotent");
@@ -311,3 +364,9 @@ assert.equal(uploader.options.restrictions.allowed_file_types[0], ".dxf");
 assert.equal(uploader.options.preset, undefined);
 
 console.log("Almdina design system UI builder tests passed");
+}
+
+run().catch(error => {
+    console.error(error);
+    process.exitCode = 1;
+});

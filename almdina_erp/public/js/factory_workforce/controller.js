@@ -20,6 +20,7 @@
         const rendererModule = window.AlmdinaFactoryWorkforceRenderer;
         const interactionsModule = window.AlmdinaFactoryWorkforceInteractions;
         const dialogsModule = window.AlmdinaFactoryWorkforceDialogs;
+        const toolbarModule = window.AlmdinaFactoryWorkforceToolbar;
         if (
             !frontend
             || !pageLifecycleModule
@@ -30,6 +31,7 @@
             || !rendererModule
             || !interactionsModule
             || !dialogsModule
+            || !toolbarModule
         ) {
             throw new Error("Factory workforce frontend modules are unavailable");
         }
@@ -46,10 +48,15 @@
             translate: __,
         });
         const dialogs = dialogsModule.create({ translate: __ });
+        const toolbar = toolbarModule.create({
+            $main,
+            state,
+            lifecycle: store.lifecycle,
+            load,
+            translate: __,
+        });
         let activation = null;
         let initialLoadPending = true;
-        let toolbarControls = null;
-        let toolbarMounted = false;
         if (typeof page.clear_inner_toolbar === "function") page.clear_inner_toolbar();
         page.set_primary_action(__("إنشاء مستخدم جديد"), openCreateDialog, "add");
         syncPrimaryAction();
@@ -65,12 +72,10 @@
                 onAdopt: adoptUser,
             },
         });
-
         const instance = Object.freeze({
             load,
             dispose() {
-                disposeToolbarControls();
-                toolbarMounted = false;
+                toolbar.dispose();
                 dialogs.dispose();
                 store.dispose();
                 if (wrapper.__almdinaFactoryWorkforceController === instance) {
@@ -82,8 +87,7 @@
         activation = pageLifecycleModule.bindActivationLifecycle(wrapper, {
             onActivate: load,
             onDeactivate: () => {
-                disposeToolbarControls();
-                toolbarMounted = false;
+                toolbar.dispose();
                 dialogs.deactivate();
                 store.deactivate();
             },
@@ -95,25 +99,20 @@
         store.lifecycle.track(() => activation.dispose(), "workforce-page-activation");
         if (activation.isActive()) load();
         return instance;
-
         function errorMessage(error, fallback) {
             return frontend.errorMessage(error, fallback);
         }
-
         function freezeOptions(message) {
             return { freeze: true, freezeMessage: message };
         }
-
         function activeGeneration() {
             return activation && activation.isActive() ? activation.generation() : null;
         }
-
         function isCurrentGeneration(generation) {
             return generation !== null
                 && activation.isActive()
                 && activation.generation() === generation;
         }
-
         function runMutation(generation, request, successMessage, refresh = true, preserveDraft = false) {
             if (!isCurrentGeneration(generation)) return Promise.resolve(null);
             return Promise.resolve().then(request).then(data => {
@@ -129,102 +128,21 @@
                 throw error;
             });
         }
-
         function can(capability) {
             return viewModel.can(state, capability);
         }
         function actionAllowed(user, action) {
             return viewModel.actionAllowed(user, action);
         }
-
         function syncPrimaryAction() {
             if (page.btn_primary) page.btn_primary.toggle(can("create_users"));
         }
-
-        function enabledFilterLabel(value) {
-            const labels = {
-                all: __("الكل"),
-                "1": __("مفعّل"),
-                "0": __("معطّل"),
-            };
-            return labels[String(value || "all")] || labels.all;
-        }
-
-        function enabledFilterValue(label) {
-            const entries = [
-                ["all", __("الكل")],
-                ["1", __("مفعّل")],
-                ["0", __("معطّل")],
-            ];
-            const match = entries.find(([, text]) => text === label);
-            return match ? match[0] : "all";
-        }
-
-        function enabledFilterOptions() {
-            return [__("الكل"), __("مفعّل"), __("معطّل")].join("\n");
-        }
-
-        function disposeToolbarControls() {
-            if (!toolbarControls) return;
-            toolbarControls.search.dispose();
-            toolbarControls.enabled.dispose();
-            toolbarControls = null;
-        }
-
-        function mountToolbarControls() {
-            disposeToolbarControls();
-            const ui = window.AlmdinaUi;
-            if (!ui || typeof ui.control !== "function") {
-                throw new Error("AlmdinaUi.control is required for Factory Workforce toolbar");
-            }
-            const $searchMount = $main.find(".aw-search-mount");
-            const $enabledMount = $main.find(".aw-enabled-mount");
-            if (!$searchMount.length || !$enabledMount.length) return;
-
-            const search = ui.control({
-                parent: $searchMount,
-                fieldname: "search",
-                fieldtype: "Data",
-                placeholder: __("اكتب للبحث..."),
-                value: state.search || "",
-                className: "aw-search-control-mount",
-                onlyInput: true,
-                onChange: value => {
-                    store.lifecycle.timeout(() => {
-                        const next = String(value || "").trim();
-                        if (next === state.search) return;
-                        state.search = next;
-                        load();
-                    }, 350, "workforce-search");
-                },
-            });
-            const enabled = ui.control({
-                parent: $enabledMount,
-                fieldname: "enabled",
-                fieldtype: "Select",
-                options: enabledFilterOptions(),
-                value: enabledFilterLabel(state.enabled),
-                className: "aw-enabled-control-mount",
-                onlyInput: true,
-                onChange: value => {
-                    const next = enabledFilterValue(String(value || ""));
-                    if (next === state.enabled) return;
-                    state.enabled = next;
-                    load();
-                },
-            });
-            toolbarControls = { search, enabled };
-            store.lifecycle.track(disposeToolbarControls, "workforce-toolbar-controls");
-        }
-
         function render(options = {}) {
             renderer.render(viewModel.page(state), options);
             if (options.preserveToolbar !== true) {
-                mountToolbarControls();
-                toolbarMounted = true;
+                toolbar.mount();
             }
         }
-
         function load() {
             if (!activation || !activation.isActive()) return Promise.resolve(null);
             state.permissions = {};
@@ -236,29 +154,25 @@
                 enabled: state.enabled,
             });
             if (!isInitialLoad && !store.hasRows()) {
-                disposeToolbarControls();
-                toolbarMounted = false;
+                toolbar.dispose();
                 renderer.renderLoading();
             }
             return api.getConsole(state.search, state.enabled, { freeze: false }).then(data => {
                 if (!activation.isActive() || !store.requests.console.isCurrent(token)) return null;
                 store.applyConsole(data || {});
                 syncPrimaryAction();
-                render({ preserveToolbar: toolbarMounted });
+                render({ preserveToolbar: toolbar.isMounted() });
                 return data;
             }).catch(error => {
                 if (!activation.isActive() || !store.requests.console.isCurrent(token)) return null;
-                disposeToolbarControls();
-                toolbarMounted = false;
+                toolbar.dispose();
                 renderer.renderError(errorMessage(error, __("تعذر تحميل البيانات.")));
                 return null;
             });
         }
-
         function roleOptions(query) {
             return viewModel.roleOptions(state.roles, query);
         }
-
         function validateRoles(selectedRoles) {
             const policy = viewModel.roleHomePolicy(state.roles, selectedRoles);
             if (!policy.hasConflict) return { ok: true };
@@ -271,15 +185,12 @@
                     + `<div class="mt-2 text-muted">${details}</div>`,
             };
         }
-
         function userByEmail(email) {
             return viewModel.findUser(state.users, email);
         }
-
         function availableUserByEmail(email) {
             return viewModel.findUser(state.availableUsers, email);
         }
-
         function openCreateDialog() {
             if (!can("create_users")) return;
             const generation = activeGeneration();
@@ -297,7 +208,6 @@
                 ),
             });
         }
-
         function openEditDialog(email) {
             const user = userByEmail(email);
             if (!user) return;
@@ -322,7 +232,6 @@
                 ),
             });
         }
-
         function openPasswordDialog(email) {
             const user = userByEmail(email);
             if (!user || !actionAllowed(user, "reset_password")) return;
@@ -339,7 +248,6 @@
                 ),
             });
         }
-
         function toggleUser(email, enabled) {
             const user = userByEmail(email);
             const action = enabled ? "enable" : "disable";
@@ -356,7 +264,6 @@
                 ),
             });
         }
-
         function adoptUser(email) {
             const user = availableUserByEmail(email);
             if (!user || !can("create_users")) return;
@@ -371,7 +278,6 @@
                 ),
             });
         }
-
         function openAudit(email) {
             const user = userByEmail(email);
             if (!user) return;

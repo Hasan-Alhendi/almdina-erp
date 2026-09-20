@@ -163,6 +163,12 @@ function createHarness() {
     };
     const fakeWindow = {
         frappe,
+        AlmdinaUi: { control: () => ({ dispose() {} }) },
+        AlmdinaFactoryWorkforceToolbar: {
+            create() {
+                return { mount() {}, dispose() {}, isMounted: () => false };
+            },
+        },
         jQuery: jquery,
         AlmdinaFrontend: {
             createLatestRequestGate,

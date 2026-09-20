@@ -11,6 +11,7 @@ frappe.pages["factory-workforce"].on_page_load = function (wrapper) {
         "/assets/almdina_erp/js/factory_workforce/renderer.js",
         "/assets/almdina_erp/js/factory_workforce/interactions.js",
         "/assets/almdina_erp/js/factory_workforce/dialogs.js",
+        "/assets/almdina_erp/js/factory_workforce/toolbar.js",
         "/assets/almdina_erp/js/factory_workforce/controller.js",
     ]);
     const STYLESHEET = "/assets/almdina_erp/css/factory_workforce.css";
