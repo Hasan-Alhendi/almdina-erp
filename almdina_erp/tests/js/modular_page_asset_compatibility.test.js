@@ -12,7 +12,7 @@ const cases = [
         file: "../../almdina_erp/page/factory_workforce/factory_workforce.js",
         page: "factory-workforce",
         controller: "AlmdinaFactoryWorkforceController",
-        featureModuleCount: 7,
+        featureModuleCount: 8,
         modulePrefix: "/assets/almdina_erp/js/factory_workforce/",
         sharedModules: [DESIGN_SYSTEM_MODULE],
     },

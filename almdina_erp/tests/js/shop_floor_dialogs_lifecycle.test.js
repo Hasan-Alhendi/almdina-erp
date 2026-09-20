@@ -71,9 +71,9 @@ owner.promptWorker({
     workers: [{ name: "worker@example.com", full_name: "Worker" }],
     next_department: "CNC",
 }, 7, () => { workerRuns += 1; });
-assert.equal(prompts[0].fields[0].options[0].label, "Worker");
-assert.equal(prompts[0].fields[0].options[0].value, "worker@example.com");
-assert.equal(String(prompts[0].fields[0].options[0].label).includes("@"), false);
+assert.equal(workerDialogs.length, 1, "handoff worker selection must use the shared dropdown dialog");
+assert.equal(workerDialogs[0].config.title, "إرسال للقسم التالي");
+assert.equal(workerDialogs[0].config.workers[0].full_name, "Worker");
 owner.noWorkers({ operational_role: "CNC" }, 7);
 owner.error("failed", 7);
 owner.success("saved", 7);
