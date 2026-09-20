@@ -50,8 +50,8 @@ def test_secure_export_has_minimal_sections_layers_and_eof_self_check():
         'layer("CUT_PATH", 1)',
         'layer("Liner", EXTRA_OVERLAY_LAYER_COLORS.Liner)',
         'layer(TEXT_LABEL_LAYER, 7)',
-        'const EXTRA_DOUBLE_DXF_TEXT = "Double Edge Banding"',
-        'const EXTRA_FULL_DOOR_DOUBLE_DXF_TEXT = "Full Door Double"',
+        'const EXTRA_DOUBLE_DXF_TEXT = "دبل القشاط"',
+        'const EXTRA_FULL_DOOR_DOUBLE_DXF_TEXT = "دبل كامل"',
         "function dxfAsciiText",
         "maxY - pad - textHeight",
         'function extraAddonTextEntities',
@@ -240,8 +240,12 @@ def test_rebuild_autocad_dxf_decodes_arabic_text_escapes():
     modelspace = source.modelspace()
     modelspace.add_line((0, 0), (400, 0), dxfattribs={"layer": "CUT_PATH"})
     modelspace.add_text(
-        r"\U+062F\U+0628\U+0644 \U+0642\U+0634\U+0627\U+0637",
+        r"\U+062F\U+0628\U+0644 \U+0627\U+0644\U+0642\U+0634\U+0627\U+0637",
         dxfattribs={"layer": "text", "insert": (40, 520), "height": 12},
+    )
+    modelspace.add_text(
+        r"\U+062F\U+0628\U+0644 \U+0643\U+0627\U+0645\U+0644",
+        dxfattribs={"layer": "text", "insert": (40, 500), "height": 12},
     )
     output = io.StringIO()
     source.write(output)
@@ -249,9 +253,9 @@ def test_rebuild_autocad_dxf_decodes_arabic_text_escapes():
     normalized = rebuild_autocad_dxf(output.getvalue().encode("ascii"))
     result = ezdxf.read(io.StringIO(normalized.decode("utf-8")))
     labels = [entity for entity in result.modelspace() if entity.dxftype() == "TEXT"]
-    assert labels[0].dxf.text == "دبل قشاط"
-    assert str(labels[0].dxf.style) == "Tahoma"
-    assert labels[0].dxf.insert.y == pytest.approx(520)
+    assert {label.dxf.text for label in labels} == {"دبل القشاط", "دبل كامل"}
+    assert all(str(label.dxf.style) == "Tahoma" for label in labels)
+    assert all(str(label.dxf.layer) == "text" for label in labels)
 
 def test_secure_dxf_export_asset_is_cache_busted():
     registry = ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_workspace_asset_registry.js"

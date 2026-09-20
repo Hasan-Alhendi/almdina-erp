@@ -361,8 +361,16 @@ async function run() {
     assert.match(downloadedDxf, /0\r\nTEXT\r\n/);
     assert.match(downloadedDxf, /1\r\n1\r\n/);
     assert.equal((downloadedDxf.match(/0\r\nTEXT\r\n/g) || []).length, 3);
-    assert.match(downloadedDxf, /1\r\nDouble Edge Banding\r\n/);
-    assert.match(downloadedDxf, /1\r\nFull Door Double\r\n/);
+    assert.match(
+        downloadedDxf,
+        /1\r\n\\U\+062F\\U\+0628\\U\+0644 \\U\+0627\\U\+0644\\U\+0642\\U\+0634\\U\+0627\\U\+0637\r\n/
+    );
+    assert.match(
+        downloadedDxf,
+        /1\r\n\\U\+062F\\U\+0628\\U\+0644 \\U\+0643\\U\+0627\\U\+0645\\U\+0644\r\n/
+    );
+    assert.doesNotMatch(downloadedDxf, /Double Edge Banding/);
+    assert.doesNotMatch(downloadedDxf, /Full Door Double/);
     assert.doesNotMatch(downloadedDxf, /1\r\nDouble\r\n/);
 
     nextPlan = {
