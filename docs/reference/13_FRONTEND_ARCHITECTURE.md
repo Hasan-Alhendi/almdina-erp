@@ -197,6 +197,33 @@ Store/selectors/actions الخالصة تحصل على Node/unit tests عند ا
 
 **Gate:** `almdina_erp.tests.test_design_system_contract` + `almdina_erp/tests/js/almdina_ui.test.js`.
 
+### `FE-ARCH-017` — Frappe widget migration is incremental, themed, and domain-aware
+
+بعد DS-10، أي استبدال لعناصر HTML generic بـ Frappe Controls يتم **surface-by-surface** وليس rewrite شاملًا.
+
+| الطبقة | الملف / API | الدور |
+|---|---|---|
+| Control wrapper | `public/js/almdina_ui.js` → `AlmdinaUi.control()` / `AlmdinaUi.filterGroup()` | thin adapter فوق `make_control` / `FieldGroup` + `dispose()` |
+| Control theme | `public/css/almdina_components.css` → `.alm-control` / `.alm-filter-group` | tokens + focus ring داخل `.almdina-ui` |
+| Pilot surface | `page/factory_plan_archive/…`, `public/js/factory_workforce/`, `public/js/shop_floor_inbox/`, `page/factory_master_data/`, `public/js/factory_permissions/`, `cutting_plan/secure_dxf_upload.js` | search/filter → `Data`/`Select`/`FieldGroup`; entity pickers → `Link`; secure file staging → `AlmdinaUi.fileUploader(preset: securePrivate)` |
+
+**القواعد:**
+
+- Generic inputs/filters/selects في admin pages تُبنى عبر `AlmdinaUi.control()` — لا `<input>` / `<select>` خام في surfaces مهاجرة.
+- أزرار شريط الصفحة العامة (تحديث، إنشاء، إجراء رئيسي) تُسجَّل عبر Frappe Page API (`set_primary_action` / `add_inner_button`) — لا duplicate داخل hero/toolbar HTML.
+- كل control يُنشأ داخل `.almdina-ui` ويُنظَّف عبر `dispose()` عند `on_page_hide` أو قبل إعادة mount.
+- Domain visualization (measurements grid, cutting plan board, permission matrix, special-shape workspace, shop-floor cards) **freeze** — لا تُستبدل بـ Frappe widgets.
+- Dialogs تبقى `frappe.ui.Dialog` + field definitions؛ `prompt` لحقول structured **ممنوع** في admin surfaces المهاجرة (DS-14) — استخدم Dialog + control/HTML domain-aware (مثل worker dropdown في Shop Floor، Attach في Permissions import).
+- رفع الملفات generic يمر عبر `AlmdinaUi.fileUploader()` مع preset `securePrivate` حيث يلزم staging آمن بلا document attach مبكر (DS-17)؛ JSON import في Permissions يبقى Dialog + Attach.
+- Theme يبقى `--alm-primary` + desk bridge؛ الاستبدال لا يلغي `FE-ARCH-016`.
+
+**Gate:** `test_design_system_contract` + `almdina_ui.test.js` + surface-specific lifecycle tests عند الحاجة.
+
+**استثناءات مسجّلة (allowlist):**
+
+- Domain surfaces المذكورة في freeze أعلاه.
+- `notes.css`, `door_cutting_order_mobile_list.css` — كما في FE-ARCH-016.
+
 ## 5. Async وRace Conditions
 
 كل Controller/Action يجب أن يسأل: هل يمكن للمستخدم تغيير الصفحة أو الـrecord أو filter أو mode قبل وصول الاستجابة؟ إذا نعم، فهناك stale-response risk.
@@ -276,7 +303,7 @@ Cross-app modules مثل `permission_context.js` وshared helpers قد تكون 
 
 ### Frappe admin pages
 
-Factory Permissions / Workforce / Production Settings / Master Data / Plan Archive مهاجَرة إلى Almdina Design System (`.almdina-ui` + `AlmdinaUi.button()` + `--alm-primary`). أي surface جديد في هذه العائلة يلتزم `FE-ARCH-016` من اليوم الأول.
+Factory Permissions / Workforce / Production Settings / Master Data / Plan Archive مهاجَرة إلى Almdina Design System (`.almdina-ui` + `AlmdinaUi.button()` + `--alm-primary`). Plan Archive search field مهاجَر أيضًا إلى `AlmdinaUi.control()` (`FE-ARCH-017`). أي surface جديد في هذه العائلة يلتزم `FE-ARCH-016` و`FE-ARCH-017` من اليوم الأول.
 
 ### Shop Floor
 

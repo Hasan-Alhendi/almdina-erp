@@ -129,7 +129,8 @@
     font-size: 9px;
 }
 
-.aw-field label {
+.aw-field label,
+.aw-field .aw-field-label {
     display: block;
     margin-bottom: 5px;
     color: var(--text-muted, #6b7280);
@@ -137,44 +138,40 @@
     font-weight: 800;
 }
 
-.aw-field input,
-.aw-field select,
-.aw-search-control {
-    width: 100%;
-    min-height: 40px;
-    border: 1px solid var(--border-color, #dfe3e8);
-    border-radius: 10px;
-    background: var(--control-bg, #fff);
-    color: var(--text-color, #1f2937);
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+.aw-field .aw-search-mount,
+.aw-field .aw-enabled-mount {
+    min-height: 0;
+    border: 0;
+    background: transparent;
+    padding: 0;
 }
 
-.aw-field input,
-.aw-field select {
-    padding: 7px 10px;
-    outline: none;
-    font-size: 12px;
-}
-
-.aw-field input:focus,
-.aw-field select:focus,
-.aw-search-control:focus-within {
-    border-color: var(--alm-primary, #172033);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--alm-primary, #172033) 11%, transparent);
-}
-
-.aw-search-control {
-    display: flex;
-    align-items: center;
-    overflow: hidden;
-}
-
-.aw-search-control .aw-search {
+.aw-search-control .aw-search-mount.alm-control,
+.aw-search-control .aw-search-control-mount.alm-control {
+    flex: 1;
     min-width: 0;
+    width: auto;
+}
+
+.aw-search-control .aw-search-control-mount .form-group,
+.aw-search-control .aw-search-control-mount .control-input-wrapper,
+.aw-enabled-mount.alm-control .form-group,
+.aw-enabled-mount.alm-control .control-input-wrapper {
+    margin-bottom: 0;
+}
+
+.aw-search-control .aw-search-control-mount .form-control {
+    min-height: 38px;
     border: 0;
     border-radius: 0;
     background: transparent;
     box-shadow: none;
+    padding-inline-start: 0;
+}
+
+.aw-enabled-mount.alm-control .form-control,
+.aw-enabled-control-mount.alm-control select.form-control {
+    min-height: 40px;
 }
 
 .aw-search-icon {
@@ -186,12 +183,27 @@
     font-size: 17px;
 }
 
-.aw-refresh {
+.aw-search-control {
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    width: 100%;
     min-height: 40px;
-    border-radius: 10px !important;
-    font-size: 11px !important;
-    font-weight: 800 !important;
-    white-space: nowrap;
+    border: 1px solid var(--border-color, #dfe3e8);
+    border-radius: 10px;
+    background: var(--control-bg, #fff);
+    color: var(--text-color, #1f2937);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.aw-search-control:focus-within,
+.aw-enabled-mount:focus-within {
+    border-color: var(--alm-primary, #172033);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--alm-primary, #172033) 11%, transparent);
+}
+
+.aw-enabled-mount.alm-control {
+    width: 100%;
 }
 
 .aw-summary {
@@ -734,10 +746,6 @@
     .aw-toolbar-heading,
     .aw-search-field {
         grid-column: 1 / -1;
-    }
-
-    .aw-refresh {
-        align-self: end;
     }
 
     .aw-summary {

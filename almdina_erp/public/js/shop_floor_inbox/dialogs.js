@@ -67,29 +67,33 @@
 
         function promptWorker(handoff, generation, onSubmit) {
             if (!isCurrent(generation)) return null;
+            const quickActions = window.AlmdinaShopFloorQuickActions;
+            if (!quickActions || typeof quickActions.createWorkerDropdownDialog !== "function") {
+                throw new Error("Shop Floor worker dropdown dialog is unavailable");
+            }
             const workers = Array.isArray(handoff && handoff.workers) ? handoff.workers : [];
-            let surface = null;
-            let settled = false;
-            surface = frappe.prompt(
-                [{
-                    fieldname: "next_assignee",
-                    fieldtype: "Select",
-                    label: `${__("العامل التالي")} — ${handoff.next_department || handoff.next_stage_type || ""}`,
-                    options: workerOptions(workers),
-                    reqd: 1,
-                }],
-                values => {
-                    settled = true;
-                    release("handoff-worker", surface);
-                    if (isCurrent(generation) && typeof onSubmit === "function") {
-                        onSubmit(values.next_assignee);
+            const nextDepartment = handoff.next_department || handoff.next_stage_type || __("القسم التالي");
+            const lifecycle = {
+                isCurrent: () => isCurrent(generation),
+                ownTransient: surface => own(surface, "handoff-worker", generation),
+            };
+            return quickActions.createWorkerDropdownDialog({
+                title: __("إرسال للقسم التالي"),
+                label: `${__("العامل التالي")} — ${nextDepartment}`,
+                workers,
+                primaryLabel: __("إرسال"),
+                lifecycle,
+                onSubmit(nextAssignee, dialogSurface) {
+                    if (!isCurrent(generation)) {
+                        if (dialogSurface && typeof dialogSurface.hide === "function") dialogSurface.hide();
+                        return null;
                     }
+                    release("handoff-worker", dialogSurface);
+                    if (typeof onSubmit === "function") onSubmit(nextAssignee);
+                    if (dialogSurface && typeof dialogSurface.hide === "function") dialogSurface.hide();
+                    return null;
                 },
-                __("إرسال للقسم التالي"),
-                __("إرسال")
-            );
-            if (!settled) own(surface, "handoff-worker", generation);
-            return surface;
+            });
         }
 
         function noWorkers(handoff, generation) {

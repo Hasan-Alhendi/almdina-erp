@@ -12,6 +12,7 @@ VIEW_MODEL = ROOT / "public" / "js" / "factory_workforce" / "view_model.js"
 RENDERER = ROOT / "public" / "js" / "factory_workforce" / "renderer.js"
 INTERACTIONS = ROOT / "public" / "js" / "factory_workforce" / "interactions.js"
 DIALOGS = ROOT / "public" / "js" / "factory_workforce" / "dialogs.js"
+TOOLBAR = ROOT / "public" / "js" / "factory_workforce" / "toolbar.js"
 CONTROLLER = ROOT / "public" / "js" / "factory_workforce" / "controller.js"
 CSS = ROOT / "public" / "css" / "factory_workforce.css"
 
@@ -26,6 +27,7 @@ class FactoryWorkforceFrontendArchitectureTest(unittest.TestCase):
         cls.renderer = RENDERER.read_text(encoding="utf-8")
         cls.interactions = INTERACTIONS.read_text(encoding="utf-8")
         cls.dialogs = DIALOGS.read_text(encoding="utf-8")
+        cls.toolbar = TOOLBAR.read_text(encoding="utf-8")
         cls.controller = CONTROLLER.read_text(encoding="utf-8")
         cls.css = CSS.read_text(encoding="utf-8")
 
@@ -39,6 +41,7 @@ class FactoryWorkforceFrontendArchitectureTest(unittest.TestCase):
             "renderer.js",
             "interactions.js",
             "dialogs.js",
+            "toolbar.js",
             "controller.js",
         ):
             self.assertIn(f"/assets/almdina_erp/js/factory_workforce/{asset}", self.page)
@@ -132,14 +135,9 @@ class FactoryWorkforceFrontendArchitectureTest(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, self.renderer)
 
-    def test_interactions_own_delegated_events_and_search_timer(self) -> None:
+    def test_interactions_own_delegated_events_for_card_actions(self) -> None:
         self.assertIn('EVENT_NAMESPACE = ".almdinaFactoryWorkforce"', self.interactions)
-        self.assertIn("lifecycle.timeout", self.interactions)
-        self.assertIn("350", self.interactions)
         for callback in (
-            "onSearch",
-            "onEnabledChanged",
-            "onRefresh",
             "onEdit",
             "onPassword",
             "onToggle",
@@ -147,6 +145,9 @@ class FactoryWorkforceFrontendArchitectureTest(unittest.TestCase):
             "onAdopt",
         ):
             self.assertIn(callback, self.interactions)
+        self.assertNotIn("aw-refresh", self.interactions)
+        self.assertNotIn(".aw-search", self.interactions)
+        self.assertNotIn(".aw-enabled-filter", self.interactions)
         for forbidden in (
             "frappe.call(",
             "workforce_service",
@@ -183,8 +184,12 @@ class FactoryWorkforceFrontendArchitectureTest(unittest.TestCase):
             "AlmdinaFactoryWorkforceRenderer",
             "AlmdinaFactoryWorkforceInteractions",
             "AlmdinaFactoryWorkforceDialogs",
+            "AlmdinaFactoryWorkforceToolbar",
         ):
             self.assertIn(dependency, self.controller)
+        self.assertIn("toolbar.mount()", self.controller)
+        self.assertIn("toolbar.dispose()", self.controller)
+        self.assertIn("preserveToolbar", self.controller)
         self.assertIn("requests.console.begin", self.controller)
         self.assertIn("requests.audit.begin", self.controller)
         self.assertIn("actionAllowed(user", self.controller)
@@ -198,10 +203,22 @@ class FactoryWorkforceFrontendArchitectureTest(unittest.TestCase):
         self.assertNotIn("aw-card", self.controller)
         self.assertNotIn("style.textContent", self.controller)
 
+    def test_toolbar_owns_control_presentation_and_cleanup(self) -> None:
+        self.assertIn("AlmdinaUi.control", self.toolbar)
+        self.assertIn("workforce-search", self.toolbar)
+        self.assertIn("350", self.toolbar)
+        self.assertIn("function dispose()", self.toolbar)
+        self.assertIn("function mount()", self.toolbar)
+        self.assertIn('lifecycle.track(() => dispose(), "workforce-toolbar-owner")', self.toolbar)
+
     def test_renderer_uses_central_design_system_for_buttons(self) -> None:
         self.assertIn('class="almdina-ui aw-shell"', self.renderer)
         self.assertIn("AlmdinaUi.button", self.renderer)
+        self.assertIn("aw-search-mount", self.renderer)
+        self.assertIn("aw-enabled-mount", self.renderer)
         self.assertNotIn('class="btn btn-primary aw-adopt-user"', self.renderer)
+        self.assertNotIn('id="aw-workforce-search"', self.renderer)
+        self.assertNotIn('id="aw-enabled-filter"', self.renderer)
         self.assertIn("/assets/almdina_erp/js/almdina_ui.js", self.page)
 
     def test_styles_are_external_and_responsive_without_visual_pinning(self) -> None:

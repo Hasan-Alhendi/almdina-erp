@@ -16,6 +16,10 @@ from almdina_erp.almdina_erp.services import (
 
 
 APP_ROOT = Path(__file__).resolve().parents[1]
+WORKSPACE_REGISTRY = (
+    APP_ROOT
+    / "public/js/door_cutting_order/core/door_cutting_order_workspace_asset_registry.js"
+)
 VALID_PLAN_JSON = frappe.as_json(
     {
         "validation": {"is_valid": True, "errors": []},
@@ -226,16 +230,21 @@ def test_frontend_dxf_uploader_is_private_and_unattached():
         APP_ROOT
         / "public/js/door_cutting_order/cutting_plan/secure_dxf_upload.js"
     ).read_text(encoding="utf-8")
-    uploader_config = uploader_source.split("new frappe.ui.FileUploader({", 1)[1].split(
+    uploader_config = uploader_source.split(".fileUploader({", 1)[1].split(
         "on_success(file)", 1
     )[0]
 
-    assert "is_private: 1" in uploader_config
+    assert 'preset: "securePrivate"' in uploader_config
+    assert "make_attachments_public: false" in uploader_config or "securePrivate" in uploader_source
     assert "doctype:" not in uploader_config
     assert "docname:" not in uploader_config
 
-    manifest = (APP_ROOT / "frontend_assets.py").read_text(encoding="utf-8")
-    assert manifest.index("secure_dxf_upload.js") < manifest.index(
+    registry = WORKSPACE_REGISTRY.read_text(encoding="utf-8")
+    plan_assets = registry.split("plan: Object.freeze({", 1)[1].split(
+        "cost: Object.freeze({", 1
+    )[0]
+    assert plan_assets.count("secure_dxf_upload.js") == 1
+    assert plan_assets.index("secure_dxf_upload.js") < plan_assets.index(
         "door_cutting_order_plan_ux.js"
     )
 

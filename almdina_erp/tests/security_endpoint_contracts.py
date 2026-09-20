@@ -80,7 +80,7 @@ _GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("almdina_erp.almdina_erp.services.order_review_service", F, ("reject_order",)),
     ("almdina_erp.almdina_erp.services.order_revision_service", C, ("create_order_revision", "return_order_to_draft")),
     ("almdina_erp.almdina_erp.services.permission_context_service", S, ("get_permission_context",)),
-    ("almdina_erp.almdina_erp.services.permission_management_service", C, ("export_permission_bundle", "export_role_permissions", "get_permission_audit", "get_permission_console", "get_role_permissions", "import_permission_bundle", "preview_permission_bundle_import", "preview_permission_import", "preview_role_permissions", "update_role_permissions")),
+    ("almdina_erp.almdina_erp.services.permission_management_service", C, ("export_permission_bundle", "export_role_permissions", "get_permission_audit", "get_permission_console", "get_role_permissions", "import_permission_bundle", "preview_permission_bundle_import", "preview_permission_import", "preview_role_permissions", "search_permission_roles", "update_role_permissions")),
     ("almdina_erp.almdina_erp.services.production_service", D, ("finish_stage", "start_stage")),
     ("almdina_erp.almdina_erp.services.production_service", F, ("pause_stage", "resume_stage")),
     ("almdina_erp.almdina_erp.services.production_settings_service", C, ("get_factory_settings_audit", "get_print_identity", "get_production_settings", "update_production_settings")),

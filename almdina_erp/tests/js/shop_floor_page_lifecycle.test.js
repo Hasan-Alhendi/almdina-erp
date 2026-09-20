@@ -89,6 +89,22 @@ function createLifecycleScope() {
 function createHarness() {
     const wrapperEvents = new Map();
     const wrapper = { page: {}, bootstrapLoading: true };
+    wrapper.page = {
+        add_inner_button(label, callback) {
+            wrapper.innerButtons = wrapper.innerButtons || [];
+            const button = {
+                label,
+                callback,
+                visible: true,
+                toggle(visible) { this.visible = visible !== false; },
+                remove() { this.removed = true; },
+            };
+            wrapper.innerButtons.push(button);
+            return button;
+        },
+        clear_primary_action() {},
+        clear_inner_toolbar() {},
+    };
     const otherPage = {};
     const queues = {
         context: queue(),
@@ -122,6 +138,9 @@ function createHarness() {
     const quickOperations = [];
     const routes = [];
     let actions = null;
+    let searchControlOnChange = null;
+    let routeControlOnChange = null;
+    const boardToolbarControls = [];
     let activeInteractionOwners = 0;
     let interactionDeactivations = 0;
     let quickUiSuccess = 0;
@@ -181,25 +200,62 @@ function createHarness() {
         },
         AlmdinaShopFloorInboxViewModel: {
             board(snapshot) {
-                return { routeFilter: snapshot.routeFilter, snapshot };
+                return {
+                    routeFilter: snapshot.routeFilter,
+                    routes: [{ name: "route-a", label: "Route A" }],
+                    snapshot,
+                };
             },
             list(snapshot) { return { snapshot }; },
             account(context) { return { context }; },
+        },
+        AlmdinaUi: {
+            control(options = {}) {
+                const api = {
+                    value: options.value || "",
+                    disposed: 0,
+                    getValue() { return this.value; },
+                    setValue(next) { this.value = next; },
+                    dispose() { this.disposed += 1; },
+                    focus() { renders.focus += 1; },
+                };
+                boardToolbarControls.push(api);
+                if (typeof options.onChange === "function") {
+                    if (options.fieldname === "board_search") searchControlOnChange = options.onChange;
+                    if (options.fieldname === "route_filter") routeControlOnChange = options.onChange;
+                }
+                return api;
+            },
         },
         AlmdinaShopFloorInboxRenderer: {
             createShell() {
                 const ownsBootstrap = wrapper.bootstrapLoading;
                 wrapper.bootstrapLoading = false;
+                const mount = { length: 1 };
                 return {
                     page: wrapper.page,
                     $section: {},
+                    $content: {
+                        html() {},
+                        find(selector) {
+                            if (selector === ".almdina-sf-route-mount" || selector === ".almdina-sf-search-mount") {
+                                return mount;
+                            }
+                            return { length: 0 };
+                        },
+                    },
                     hasBootstrapLoading: () => ownsBootstrap,
                 };
             },
             syncTabs() {},
             loading() { renders.loading += 1; },
-            renderBoard(shell, model, search, mode) {
-                renders.board.push({ model, search, mode });
+            renderBoard(shell, model, mode, options = {}) {
+                renders.board.push({
+                    model,
+                    mode,
+                    options,
+                    search: model.snapshot ? model.snapshot.search : "",
+                });
             },
             renderList(shell, model, mode) { renders.list.push({ model, mode }); },
             renderAccount(shell, model) { renders.account.push(model); },
@@ -208,7 +264,17 @@ function createHarness() {
         },
         AlmdinaShopFloorInboxInteractions: {
             bind(shell, lifecycle, callbacks) {
-                actions = callbacks;
+                actions = {
+                    ...callbacks,
+                    setSearch(value) {
+                        if (searchControlOnChange) searchControlOnChange(value);
+                    },
+                    setRouteFilter(value) {
+                        if (routeControlOnChange) {
+                            routeControlOnChange(value === "route-a" ? "Route A" : value);
+                        }
+                    },
+                };
                 activeInteractionOwners += 1;
                 lifecycle.track(() => { activeInteractionOwners -= 1; }, "interactions");
                 return {
@@ -285,6 +351,7 @@ function createHarness() {
         quickUiSuccess: () => quickUiSuccess,
         queues,
         renders,
+        boardToolbarControls,
         routes,
         wrapper,
         hide() {
@@ -354,6 +421,15 @@ async function testReadInvalidationAndFreshRevisit() {
     assert.equal(harness.renders.board.length, 1, "the current revisit must render exactly once");
     assert.equal(harness.renders.board[0].model.snapshot.sessionContext.visit, "current");
     assert.equal(harness.dialogEvents.disposed, 0, "simple hide must not dispose the mounted controller");
+    const firstToolbarSet = harness.boardToolbarControls.slice(-2);
+    assert.deepEqual(firstToolbarSet.map(control => control.disposed), [0, 0]);
+    harness.hide();
+    assert.deepEqual(firstToolbarSet.map(control => control.disposed), [1, 1]);
+    harness.show();
+    await resolveBoardRefresh(harness, { visit: "toolbar-revisit" }, [{ id: "toolbar-current" }], []);
+    const secondToolbarSet = harness.boardToolbarControls.slice(-2);
+    assert.equal(harness.boardToolbarControls.length, 4);
+    assert.deepEqual(secondToolbarSet.map(control => control.disposed), [0, 0]);
 }
 
 async function testMountWhileInactiveWaitsForCurrentShow() {

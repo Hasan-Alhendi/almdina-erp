@@ -681,11 +681,17 @@
 			frappe.msgprint(__("ليست لديك صلاحية رفع خطة القص كملف DXF."));
 			return;
 		}
-		new frappe.ui.FileUploader({
-			doctype: "Door Cutting Order",
-			docname: frm.doc.name,
-			folder: "Home/Attachments",
-			is_private: 1,
+		const core = frappe.almdina && frappe.almdina.__uploadProductionDxfCore;
+		if (typeof core === "function") {
+			return core(frm);
+		}
+		const ui = window.AlmdinaUi;
+		if (!ui || typeof ui.fileUploader !== "function") {
+			frappe.msgprint(__("تعذر فتح رفع DXF."));
+			return null;
+		}
+		return ui.fileUploader({
+			preset: "securePrivate",
 			restrictions: { allowed_file_types: [".dxf"], max_file_size: 10 * 1024 * 1024 },
 			on_success(file) {
 				callAction(

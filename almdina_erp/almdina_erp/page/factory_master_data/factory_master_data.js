@@ -59,10 +59,15 @@
             this.pendingSave = null;
             this.ownedTransients = new Set();
             this.$refreshButton = null;
+            this.toolbarControls = null;
+            this.toolbarMounted = false;
+            this.stageControls = null;
         }
 
         init() {
             if (this.initialized || this.disposed) return this;
+            this.page.set_primary_action(__("مسار إنتاج جديد"), () => this.openEditor(), "add");
+            this.syncPrimaryAction();
             this.$refreshButton = this.page.add_inner_button(
                 __("تحديث"),
                 () => this.refresh(),
@@ -111,6 +116,8 @@
             this.mutationGate = frontend.createLatestRequestGate();
             this.libraryMutationGate = frontend.createLatestRequestGate();
             this.lifecycle = frontend.createLifecycleScope();
+            this.lifecycle.track(() => this.disposeToolbarControls(), "factory-master-data-toolbar-owner");
+            this.lifecycle.track(() => this.disposeStageControls(), "factory-master-data-stage-owner");
             this.activation = lifecycleModule.bindActivationLifecycle(this.wrapper, {
                 onActivate: () => this.activatePage(),
                 onDeactivate: () => this.deactivatePage(),
@@ -176,6 +183,8 @@
 
         deactivatePage() {
             if (this.readGate) this.readGate.invalidate();
+            this.disposeToolbarControls();
+            this.disposeStageControls();
             this.closeTransientSurfaces();
             this.clearDragState();
         }
@@ -241,6 +250,8 @@
         dispose() {
             if (this.disposed) return false;
             this.disposed = true;
+            this.disposeToolbarControls();
+            this.disposeStageControls();
             if (this.readGate) this.readGate.invalidate();
             if (this.mutationGate) this.mutationGate.invalidate();
             if (this.libraryMutationGate) this.libraryMutationGate.invalidate();
@@ -302,6 +313,189 @@
             return ui.button(options);
         }
 
+        uiControl(options = {}) {
+            const ui = window.AlmdinaUi;
+            if (!ui || typeof ui.control !== "function") {
+                throw new Error("AlmdinaUi.control is required for factory master data rendering");
+            }
+            return ui.control(options);
+        }
+
+        uiFilterGroup(options = {}) {
+            const ui = window.AlmdinaUi;
+            if (!ui || typeof ui.filterGroup !== "function") {
+                throw new Error("AlmdinaUi.filterGroup is required for factory master data rendering");
+            }
+            return ui.filterGroup(options);
+        }
+
+        statusFilterLabel(value) {
+            const labels = {
+                all: __("الكل"),
+                active: __("مفعّل"),
+                disabled: __("معطّل"),
+            };
+            return labels[String(value || "all")] || labels.all;
+        }
+
+        statusFilterValue(label) {
+            const entries = [
+                ["all", __("الكل")],
+                ["active", __("مفعّل")],
+                ["disabled", __("معطّل")],
+            ];
+            const match = entries.find(([, text]) => text === label);
+            return match ? match[0] : "all";
+        }
+
+        statusFilterOptions() {
+            return [__("الكل"), __("مفعّل"), __("معطّل")].join("\n");
+        }
+
+        disposeToolbarControls() {
+            if (!this.toolbarControls) return;
+            this.toolbarControls.dispose();
+            this.toolbarControls = null;
+            this.toolbarMounted = false;
+        }
+
+        disposeStageControls() {
+            if (!this.stageControls) return;
+            for (const control of this.stageControls) {
+                if (control && typeof control.dispose === "function") control.dispose();
+            }
+            this.stageControls = null;
+        }
+
+        operationalRoleControlOptions($parent, stage) {
+            const readOnly = Boolean(this.state.editor && this.state.editor.readOnly);
+            return {
+                parent: $parent,
+                fieldname: "operational_role",
+                fieldtype: "Link",
+                options: "Role",
+                placeholder: __("اختر الدور"),
+                value: stage.operational_role || "",
+                readOnly,
+                required: !readOnly,
+                onlyInput: true,
+                className: "prw-stage-role-control",
+                df: {
+                    get_query: () => ({
+                        query: "almdina_erp.almdina_erp.services.master_data_service.search_operational_roles",
+                    }),
+                },
+                onChange: value => this.updateStageOperationalRole(stage.clientId, value),
+            };
+        }
+
+        mountStageControls() {
+            this.disposeStageControls();
+            const editor = this.state.editor;
+            if (!editor) return;
+            const $mounts = this.$main.find(".prw-stage-role-mount");
+            if (!$mounts.length) return;
+            const controls = [];
+            $mounts.each((_, element) => {
+                const $mount = $(element);
+                const stageId = String($mount.data("stageId") || "");
+                const stage = editor.stages.find(row => row.clientId === stageId);
+                if (!stage) return;
+                controls.push(this.uiControl(this.operationalRoleControlOptions($mount, stage)));
+            });
+            this.stageControls = controls;
+        }
+
+        updateStageOperationalRole(stageId, value) {
+            if (!this.isActive() || !this.state.editor || this.state.editor.readOnly) return;
+            const stage = this.state.editor.stages.find(row => row.clientId === stageId);
+            if (!stage) return;
+            const next = String(value || "");
+            if (String(stage.operational_role || "") === next) return;
+            stage.operational_role = next;
+            this.markDirty();
+        }
+
+        toolbarFilterFields() {
+            const fields = [{
+                fieldname: "search",
+                fieldtype: "Data",
+                label: __("بحث"),
+                placeholder: __("ابحث بالاسم أو المرحلة أو الدور..."),
+            }];
+            if (this.state.section === "routings") {
+                fields.push({
+                    fieldname: "status",
+                    fieldtype: "Select",
+                    label: __("الحالة"),
+                    options: this.statusFilterOptions(),
+                });
+            }
+            return fields;
+        }
+
+        toolbarFilterValues() {
+            const values = { search: this.state.search || "" };
+            if (this.state.section === "routings") {
+                values.status = this.statusFilterLabel(this.state.status);
+            }
+            return values;
+        }
+
+        mountToolbarControls() {
+            this.disposeToolbarControls();
+            const $mount = this.$main.find(".prw-filter-group-mount");
+            if (!$mount.length) return;
+
+            const sectionClass = this.state.section === "routings" ? "is-routings" : "is-audit";
+            this.toolbarControls = this.uiFilterGroup({
+                parent: $mount,
+                className: `prw-filter-group ${sectionClass}`,
+                fields: this.toolbarFilterFields(),
+                values: this.toolbarFilterValues(),
+                onChange: (fieldname, value) => {
+                    if (fieldname === "search") {
+                        this.applyToolbarSearch(String(value || ""));
+                        return;
+                    }
+                    if (fieldname === "status") {
+                        this.applyStatusFilter(this.statusFilterValue(String(value || "")));
+                    }
+                },
+            });
+            this.toolbarMounted = true;
+        }
+
+        syncToolbarControlValues() {
+            if (!this.toolbarControls) return;
+            this.toolbarControls.setValues(this.toolbarFilterValues());
+        }
+
+        focusToolbarSearch() {
+            if (this.toolbarControls && typeof this.toolbarControls.focus === "function") {
+                this.toolbarControls.focus("search");
+            }
+        }
+
+        applyToolbarSearch(value) {
+            if (!this.isActive()) return;
+            this.state.search = String(value || "");
+            this.renderOverview({ preserveToolbar: true });
+            this.focusToolbarSearch();
+        }
+
+        applyStatusFilter(value) {
+            if (!this.isActive()) return;
+            this.state.status = String(value || "all");
+            this.renderOverview({ preserveToolbar: true });
+        }
+
+        updateOverviewContent() {
+            this.$main.find(".prw-content").html(
+                this.state.section === "audit" ? this.auditHtml() : this.routesHtml()
+            );
+        }
+
         call(method, args = {}, freezeMessage = "") {
             return frappe.call({
                 method,
@@ -317,6 +511,11 @@
                 && this.state.data.permissions
                 && this.state.data.permissions[capability]
             );
+        }
+
+        syncPrimaryAction() {
+            const visible = this.can("create_production_routings") && !this.state.editor;
+            if (this.page.btn_primary) this.page.btn_primary.toggle(visible);
         }
 
         canManageLibrary() {
@@ -348,7 +547,11 @@
             const previousEditor = discardEditor ? null : this.state.editor;
             const bootstrapOwnsLoading = this.bootstrapLoadingOwned;
             this.bootstrapLoadingOwned = false;
-            if (!bootstrapOwnsLoading) this.$main.html(bootstrapLoadingHtml());
+            if (!bootstrapOwnsLoading) {
+                this.disposeToolbarControls();
+                this.disposeStageControls();
+                this.$main.html(bootstrapLoadingHtml());
+            }
             return this.call(METHODS.load)
                 .then(data => {
                     if (!this.isCurrentGeneration(generation) || !this.readGate.isCurrent(token)) return null;
@@ -360,6 +563,7 @@
                     this.completedSave = null;
                     if (this.state.editor) this.renderEditor();
                     else this.renderOverview();
+                    this.syncPrimaryAction();
                     return this.state.data;
                 })
                 .catch(error => {
@@ -367,6 +571,8 @@
                     const message = error && error.message
                         ? error.message
                         : __("تعذر تحميل مسارات الإنتاج.");
+                    this.disposeToolbarControls();
+                    this.disposeStageControls();
                     this.$main.html(`
                         <div class="prw-error">
                             <b>${__("تعذر فتح إدارة المسارات")}</b>
@@ -397,10 +603,17 @@
             return this.load();
         }
 
-        renderOverview() {
+        renderOverview(options = {}) {
+            if (options.preserveToolbar === true && this.toolbarMounted) {
+                this.updateOverviewContent();
+                this.syncToolbarControlValues();
+                this.syncPrimaryAction();
+                return;
+            }
             const data = this.state.data || {};
             const summary = data.summary || {};
-            const canCreate = this.can("create_production_routings");
+            this.disposeToolbarControls();
+            this.disposeStageControls();
             this.$main.html(`
                 <main class="almdina-ui prw-shell" dir="rtl">
                     <section class="prw-hero">
@@ -409,11 +622,6 @@
                             <h2>${__("صمّم رحلة الطلب من أول مرحلة حتى التسليم")}</h2>
                             <p>${__("رتّب مراحل العمل بصريًا، اربط كل مرحلة بالدور التشغيلي المناسب، ثم استخدم المسار مباشرة في لوحة الإنتاج.")}</p>
                         </div>
-                        ${canCreate ? this.uiButton({
-                            label: `＋ ${__("مسار إنتاج جديد")}`,
-                            variant: "primary",
-                            className: "prw-new-route",
-                        }) : ""}
                     </section>
                     <section class="prw-summary" aria-label="${__("ملخص مسارات الإنتاج")}">
                         ${this.statHtml(__("المسارات"), summary.routings || 0, "routes")}
@@ -426,26 +634,15 @@
                             <button type="button" class="prw-view-tab ${this.state.section === "routings" ? "is-active" : ""}" data-section="routings">${__("المسارات")}</button>
                             <button type="button" class="prw-view-tab ${this.state.section === "audit" ? "is-active" : ""}" data-section="audit">${__("سجل التغييرات")}</button>
                         </div>
-                        <label class="prw-search-wrap">
-                            <span class="sr-only">${__("بحث")}</span>
-                            <span class="prw-search-icon" aria-hidden="true">⌕</span>
-                            <input class="prw-search" type="search" value="${this.esc(this.state.search)}" placeholder="${__("ابحث بالاسم أو المرحلة أو الدور...")}">
-                        </label>
-                        ${this.state.section === "routings" ? `
-                            <label class="prw-filter-wrap">
-                                <span>${__("الحالة")}</span>
-                                <select class="form-control prw-status-filter">
-                                    <option value="all" ${this.state.status === "all" ? "selected" : ""}>${__("الكل")}</option>
-                                    <option value="active" ${this.state.status === "active" ? "selected" : ""}>${__("مفعّل")}</option>
-                                    <option value="disabled" ${this.state.status === "disabled" ? "selected" : ""}>${__("معطّل")}</option>
-                                </select>
-                            </label>` : ""}
+                        <div class="prw-filter-group-mount"></div>
                     </section>
                     <section class="prw-content">
                         ${this.state.section === "audit" ? this.auditHtml() : this.routesHtml()}
                     </section>
                 </main>`);
             this.bind();
+            this.mountToolbarControls();
+            this.syncPrimaryAction();
         }
 
         statHtml(label, value, tone) {
@@ -631,6 +828,7 @@
             }
             this.state.editor = this.editorDraft(source, {duplicate});
             this.state.section = "routings";
+            this.syncPrimaryAction();
             this.renderEditor();
         }
 
@@ -640,8 +838,11 @@
                 this.renderOverview();
                 return;
             }
+            this.disposeToolbarControls();
+            this.disposeStageControls();
             const title = editor.name ? __("تحرير مسار الإنتاج") : __("إنشاء مسار إنتاج جديد");
             const readOnly = editor.readOnly;
+            this.syncPrimaryAction();
             this.$main.html(`
                 <main class="almdina-ui prw-shell prw-editor-shell" dir="rtl">
                     <header class="prw-editor-topbar">
@@ -699,6 +900,7 @@
                     </div>
                 </main>`);
             this.bind();
+            this.mountStageControls();
         }
 
         stageLibraryHtml(readOnly) {
@@ -758,12 +960,6 @@
         }
 
         editorStageHtml(stage, index, readOnly) {
-            const roleValues = new Set(this.state.data.operational_roles || []);
-            if (stage.operational_role) roleValues.add(stage.operational_role);
-            const roleOptions = [...roleValues]
-                .sort((left, right) => left.localeCompare(right))
-                .map(role => `<option value="${this.esc(role)}" ${role === stage.operational_role ? "selected" : ""}>${this.esc(role)}</option>`)
-                .join("");
             return `
                 <div class="prw-story-row" draggable="${readOnly ? "false" : "true"}" data-stage-id="${stage.clientId}">
                     <div class="prw-story-rail">
@@ -796,10 +992,7 @@
                             </label>
                             <label class="prw-field">
                                 <span>${__("الدور التشغيلي")} <em>*</em></span>
-                                <select class="form-control" data-stage-field="operational_role" data-stage-id="${stage.clientId}" ${readOnly ? "disabled" : ""}>
-                                    <option value="">${__("اختر الدور")}</option>
-                                    ${roleOptions}
-                                </select>
+                                <div class="prw-stage-role-mount" data-stage-id="${stage.clientId}"></div>
                             </label>
                             <label class="prw-switch-field prw-stage-planning-toggle">
                                 <input type="checkbox" data-stage-field="is_planning_stage" data-stage-id="${stage.clientId}" ${stage.is_planning_stage ? "checked" : ""} ${readOnly ? "disabled" : ""}>
@@ -815,27 +1008,10 @@
             const $root = this.$main;
             $root.off(".prw");
             $root.on("click.prw", ".prw-retry", () => this.load());
-            $root.on("click.prw", ".prw-new-route", () => this.openEditor());
             $root.on("click.prw", ".prw-view-tab", event => {
                 if (!this.isActive()) return;
                 this.state.section = event.currentTarget.dataset.section;
                 this.state.search = "";
-                this.renderOverview();
-            });
-            $root.on("input.prw", ".prw-search", event => {
-                if (!this.isActive()) return;
-                this.state.search = String(event.currentTarget.value || "");
-                const cursor = event.currentTarget.selectionStart;
-                this.renderOverview();
-                const input = this.$main.find(".prw-search").get(0);
-                if (input) {
-                    input.focus();
-                    if (cursor !== null) input.setSelectionRange(cursor, cursor);
-                }
-            });
-            $root.on("change.prw", ".prw-status-filter", event => {
-                if (!this.isActive()) return;
-                this.state.status = event.currentTarget.value;
                 this.renderOverview();
             });
             $root.on("click.prw", ".prw-edit-route", event => this.openEditor(event.currentTarget.dataset.name));
