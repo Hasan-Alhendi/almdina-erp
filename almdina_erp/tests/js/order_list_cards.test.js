@@ -95,7 +95,7 @@ assert.strictEqual(
 assert.strictEqual(
     listFormatters.edge_color("لون <خاص>."),
     '<span class="dco-list-edge-color">لون &lt;خاص&gt;.</span>',
-    "list text wrappers must preserve HTML escaping"
+    "the existing edge-color formatter must remain unchanged and escaped"
 );
 
 const kanbanView = new context.frappe.views.KanbanView();
