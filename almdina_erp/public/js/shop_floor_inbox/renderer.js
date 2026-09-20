@@ -40,12 +40,6 @@
                     <button type="button" class="almdina-sf-tab is-active" role="tab" aria-selected="true" data-sf-mode="board">${__("لوحة الإنتاج")}</button>
                     <button type="button" class="almdina-sf-tab" role="tab" aria-selected="false" data-sf-mode="inbox">${__("قائمة الطلبات")}</button>
                     <button type="button" class="almdina-sf-tab" role="tab" aria-selected="false" data-sf-mode="account">${__("الحساب")}</button>
-                    ${uiButton({
-                        label: `↻ ${__("تحديث")}`,
-                        variant: "secondary",
-                        className: "almdina-sf-refresh",
-                        attrs: { "aria-label": __("تحديث بيانات صالة الإنتاج") },
-                    })}
                 </div>
             </div>
             `);
@@ -71,7 +65,6 @@
             $(this).toggleClass("is-active", active);
             $(this).attr("aria-selected", active ? "true" : "false");
         });
-        shell.$tabs.find(".almdina-sf-refresh").toggle(mode !== "account");
     }
 
     function pageHero(kicker, title, description, stats = "") {
@@ -242,8 +235,30 @@
             </section>`;
     }
 
-    function renderBoard(shell, model, search, mode = "board") {
-        const routeOptions = model.routes.map(route => `<option value="${esc(route.name)}" ${model.routeFilter === route.name ? "selected" : ""}>${esc(route.label || __("مسار غير محدد"))}</option>`).join("");
+    function updateBoardContent(shell, model, mode = "board") {
+        const activeCount = model.counts.pending + model.counts.progress + model.counts.paused;
+        shell.$content.find(".almdina-sf-hero-stats").html([
+            heroStat(__("قيد المتابعة"), activeCount, "active"),
+            heroStat(__("جاهز للتسليم"), model.counts.ready, "ready"),
+            heroStat(__("المسارات"), model.routes.length, "neutral"),
+        ].join(""));
+        shell.$content.find(".almdina-sf-board-metrics").html([
+            boardMetric(__("بحاجة للعمل"), model.counts.pending, "pending"),
+            boardMetric(__("قيد العمل"), model.counts.progress, "progress"),
+            boardMetric(__("متوقف"), model.counts.paused, "paused"),
+            boardMetric(__("جاهز"), model.counts.ready, "ready"),
+        ].join(""));
+        const boards = model.routeModels.length
+            ? model.routeModels.map(item => routeBoardHtml(item, mode)).join("")
+            : emptyState(__("لا يوجد مسار إنتاج مفعّل"), __("فعّل مسارًا من إعدادات الإنتاج ليظهر هنا."));
+        shell.$content.find(".almdina-sf-boards").html(boards);
+    }
+
+    function renderBoard(shell, model, mode = "board", options = {}) {
+        if (options.preserveToolbar === true) {
+            updateBoardContent(shell, model, mode);
+            return;
+        }
         const boards = model.routeModels.length
             ? model.routeModels.map(item => routeBoardHtml(item, mode)).join("")
             : emptyState(__("لا يوجد مسار إنتاج مفعّل"), __("فعّل مسارًا من إعدادات الإنتاج ليظهر هنا."));
@@ -254,21 +269,21 @@
                     __("صالة الإنتاج"),
                     __("متابعة مراحل الإنتاج"),
                     __("شاهد الطلبات حسب مسارها، ونفّذ الإجراء المتاح دون مغادرة اللوحة."),
-                    [
+                    `<div class="almdina-sf-hero-stats">${[
                         heroStat(__("قيد المتابعة"), activeCount, "active"),
                         heroStat(__("جاهز للتسليم"), model.counts.ready, "ready"),
                         heroStat(__("المسارات"), model.routes.length, "neutral"),
-                    ].join("")
+                    ].join("")}</div>`
                 )}
                 <div class="almdina-sf-overview">
                     <div class="almdina-sf-board-toolbar" aria-label="${__("تصفية لوحة الإنتاج")}">
                         <div class="almdina-sf-filter-field">
-                            <label for="almdina-sf-route-filter">${__("مسار الإنتاج")}</label>
-                            <select id="almdina-sf-route-filter" class="form-control"><option value="">${__("كل المسارات")}</option>${routeOptions}</select>
+                            <span class="almdina-sf-field-label">${__("مسار الإنتاج")}</span>
+                            <div class="almdina-sf-route-mount"></div>
                         </div>
                         <div class="almdina-sf-filter-field almdina-sf-search-field">
-                            <label for="almdina-sf-board-search">${__("بحث سريع")}</label>
-                            <input id="almdina-sf-board-search" class="form-control" type="search" value="${esc(search)}" placeholder="${__("رقم الطلب، الزبون، العامل...")}" autocomplete="off">
+                            <span class="almdina-sf-field-label">${__("بحث سريع")}</span>
+                            <div class="almdina-sf-search-mount"></div>
                         </div>
                         <div class="almdina-sf-board-metrics" aria-label="${__("ملخص حالات الطلبات")}">
                             ${boardMetric(__("بحاجة للعمل"), model.counts.pending, "pending")}
@@ -373,11 +388,17 @@
             </div>`);
     }
 
-    function focusSearch(shell) {
-        const input = shell.$content.find("#almdina-sf-board-search").get(0);
+    function focusSearch(shell, searchControl) {
+        if (searchControl && typeof searchControl.focus === "function") {
+            searchControl.focus();
+            return;
+        }
+        const input = shell.$content.find(".almdina-sf-search-control-mount input").get(0);
         if (!input) return;
         input.focus();
-        if (typeof input.setSelectionRange === "function") input.setSelectionRange(input.value.length, input.value.length);
+        if (typeof input.setSelectionRange === "function") {
+            input.setSelectionRange(input.value.length, input.value.length);
+        }
     }
 
     window.AlmdinaShopFloorInboxRenderer = Object.freeze({

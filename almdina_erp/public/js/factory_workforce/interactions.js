@@ -15,24 +15,6 @@
 
         $main.off(EVENT_NAMESPACE);
 
-        $main.on(`input${EVENT_NAMESPACE}`, ".aw-search", event => {
-            const value = String(event.currentTarget.value || "").trim();
-            lifecycle.timeout(
-                () => callbacks.onSearch && callbacks.onSearch(value),
-                350,
-                "workforce-search"
-            );
-        });
-
-        $main.on(`change${EVENT_NAMESPACE}`, ".aw-enabled-filter", event => {
-            if (callbacks.onEnabledChanged) {
-                callbacks.onEnabledChanged(String(event.currentTarget.value || "all"));
-            }
-        });
-
-        $main.on(`click${EVENT_NAMESPACE}`, ".aw-refresh", () => {
-            if (callbacks.onRefresh) callbacks.onRefresh();
-        });
         $main.on(`click${EVENT_NAMESPACE}`, ".aw-edit", event => {
             if (callbacks.onEdit) callbacks.onEdit(String(event.currentTarget.dataset.user || ""));
         });

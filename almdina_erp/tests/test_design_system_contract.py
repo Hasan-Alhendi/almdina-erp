@@ -12,12 +12,16 @@ DESK_THEME = ROOT / "public" / "css" / "almdina_desk_theme.css"
 UI = ROOT / "public" / "js" / "almdina_ui.js"
 ASSETS = ROOT / "frontend_assets.py"
 PERMISSIONS_RENDERER = ROOT / "public" / "js" / "factory_permissions" / "renderer.js"
+PERMISSIONS_CONTROLLER = ROOT / "public" / "js" / "factory_permissions" / "controller.js"
 PERMISSIONS_PAGE = ROOT / "almdina_erp" / "page" / "factory_permissions" / "factory_permissions.js"
 WORKFORCE_RENDERER = ROOT / "public" / "js" / "factory_workforce" / "renderer.js"
+WORKFORCE_CONTROLLER = ROOT / "public" / "js" / "factory_workforce" / "controller.js"
 WORKFORCE_PAGE = ROOT / "almdina_erp" / "page" / "factory_workforce" / "factory_workforce.js"
 PRODUCTION_SETTINGS_RENDERER = ROOT / "public" / "js" / "factory_production_settings" / "renderer.js"
 PRODUCTION_SETTINGS_PAGE = ROOT / "almdina_erp" / "page" / "factory_production_settings" / "factory_production_settings.js"
 SHOP_FLOOR_RENDERER = ROOT / "public" / "js" / "shop_floor_inbox" / "renderer.js"
+SHOP_FLOOR_CONTROLLER = ROOT / "public" / "js" / "shop_floor_inbox" / "controller.js"
+SHOP_FLOOR_INTERACTIONS = ROOT / "public" / "js" / "shop_floor_inbox" / "interactions.js"
 SHOP_FLOOR_PAGE = ROOT / "almdina_erp" / "page" / "shop_floor_inbox" / "shop_floor_inbox.js"
 NOTES_PANEL = ROOT / "public" / "js" / "notes" / "notes_panel.js"
 DCO_TAB_EDIT = ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_page_edit_action_ux.js"
@@ -35,6 +39,8 @@ SPECIAL_SHAPE_PAGE = ROOT / "almdina_erp" / "page" / "door_drawing" / "door_draw
 FACTORY_MASTER_DATA_PAGE = ROOT / "almdina_erp" / "page" / "factory_master_data" / "factory_master_data.js"
 FACTORY_PLAN_ARCHIVE_PAGE = ROOT / "almdina_erp" / "page" / "factory_plan_archive" / "factory_plan_archive.js"
 DCO_PLAN_TABS = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan" / "door_cutting_order_plan_tabs_ux.js"
+SECURE_DXF_UPLOAD = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan" / "secure_dxf_upload.js"
+SHOP_FLOOR_ORDER_UX = ROOT / "public" / "js" / "door_cutting_order" / "production" / "shop_floor_order_ux.js"
 FACTORY_PERMISSIONS_CSS = ROOT / "public" / "css" / "factory_permissions.css"
 FACTORY_WORKFORCE_CSS = ROOT / "public" / "css" / "factory_workforce.css"
 FACTORY_PRODUCTION_SETTINGS_CSS = ROOT / "public" / "css" / "factory_production_settings.css"
@@ -97,6 +103,31 @@ MIGRATED_CSS_SURFACES = (
     DCO_RESPONSIVE_CSS,
     DCO_EXTRA_ADDONS_CSS,
 )
+WIDGET_MIGRATED_SURFACES = (
+    FACTORY_PLAN_ARCHIVE_PAGE,
+    WORKFORCE_RENDERER,
+    SHOP_FLOOR_RENDERER,
+    FACTORY_MASTER_DATA_PAGE,
+)
+RAW_INPUT_MARKERS = (
+    '<input class="apa-search"',
+    "<input class='apa-search'",
+    '<input id="aw-workforce-search"',
+    "<input id='aw-workforce-search'",
+    '<input id="almdina-sf-board-search"',
+    "<input id='almdina-sf-board-search'",
+    '<input class="prw-search"',
+    "<input class='prw-search'",
+    '<select class="form-control prw-status-filter"',
+    "<select class='form-control prw-status-filter'",
+    '<input type="search"',
+    "<input type='search'",
+    '<select id="aw-enabled-filter"',
+    "<select id='aw-enabled-filter'",
+    '<select id="almdina-sf-route-filter"',
+    "<select id='almdina-sf-route-filter'",
+    'class="aw-enabled-filter"',
+)
 
 
 def _presentation_asset_paths() -> list[Path]:
@@ -125,12 +156,16 @@ class TestDesignSystemContract(unittest.TestCase):
         self.ui = UI.read_text(encoding="utf-8")
         self.assets = ASSETS.read_text(encoding="utf-8")
         self.permissions_renderer = PERMISSIONS_RENDERER.read_text(encoding="utf-8")
+        self.permissions_controller = PERMISSIONS_CONTROLLER.read_text(encoding="utf-8")
         self.permissions_page = PERMISSIONS_PAGE.read_text(encoding="utf-8")
         self.workforce_renderer = WORKFORCE_RENDERER.read_text(encoding="utf-8")
+        self.workforce_controller = WORKFORCE_CONTROLLER.read_text(encoding="utf-8")
         self.workforce_page = WORKFORCE_PAGE.read_text(encoding="utf-8")
         self.production_settings_renderer = PRODUCTION_SETTINGS_RENDERER.read_text(encoding="utf-8")
         self.production_settings_page = PRODUCTION_SETTINGS_PAGE.read_text(encoding="utf-8")
         self.shop_floor_renderer = SHOP_FLOOR_RENDERER.read_text(encoding="utf-8")
+        self.shop_floor_controller = SHOP_FLOOR_CONTROLLER.read_text(encoding="utf-8")
+        self.shop_floor_interactions = SHOP_FLOOR_INTERACTIONS.read_text(encoding="utf-8")
         self.shop_floor_page = SHOP_FLOOR_PAGE.read_text(encoding="utf-8")
         self.notes_panel = NOTES_PANEL.read_text(encoding="utf-8")
         self.dco_tab_edit = DCO_TAB_EDIT.read_text(encoding="utf-8")
@@ -157,12 +192,29 @@ class TestDesignSystemContract(unittest.TestCase):
         self.assertNotIn("body .btn-primary", self.components)
 
     def test_ui_builder_is_presentation_only(self) -> None:
-        self.assertIn("window.AlmdinaUi", self.ui)
+        self.assertIn("filterGroup", self.ui)
+        self.assertIn("frappe.ui.FieldGroup is required for AlmdinaUi.filterGroup", self.ui)
         self.assertIn("function button(", self.ui)
+        self.assertIn("function control(", self.ui)
+        self.assertIn("function filterGroup(", self.ui)
+        self.assertIn("function fileUploader(", self.ui)
+        self.assertIn("fileUploaderPresets", self.ui)
+        self.assertIn("securePrivate", self.ui)
         self.assertIn("function empty(", self.ui)
         self.assertIn("alm-btn-primary", self.ui)
+        self.assertIn("frappe.ui.form.make_control", self.ui)
+        self.assertIn("df.change = function nativeChangeBridge", self.ui)
+        self.assertNotIn("input.on(\"input change\"", self.ui)
+        self.assertNotIn("frappeControl.change =", self.ui)
+        self.assertNotRegex(self.ui, r"\.off\(\s*[\"'](?:input|change|input change)")
+        self.assertNotIn("field.change = function patchedChange", self.ui)
         self.assertNotIn("frappe.call", self.ui)
         self.assertNotIn("has_permission", self.ui)
+
+    def test_components_define_frappe_control_wrapper(self) -> None:
+        self.assertIn(".almdina-ui .alm-control", self.components)
+        self.assertIn(".almdina-ui .alm-filter-group", self.components)
+        self.assertIn(".almdina-ui .alm-control .form-control:focus", self.components)
 
     def test_assets_load_design_system_before_feature_css_and_after_foundation(self) -> None:
         tokens_asset = '"/assets/almdina_erp/css/almdina_design_tokens.css"'
@@ -188,7 +240,14 @@ class TestDesignSystemContract(unittest.TestCase):
     def test_factory_permissions_pilot_uses_design_system(self) -> None:
         self.assertIn('class="almdina-ui apc-shell"', self.permissions_renderer)
         self.assertIn("AlmdinaUi.button", self.permissions_renderer)
+        self.assertIn("AlmdinaUi.control is required for Factory Permissions rendering", self.permissions_renderer)
+        self.assertIn("mountRoleControl", self.permissions_renderer)
+        self.assertIn("apc-role-mount", self.permissions_renderer)
+        self.assertIn("roleSearchQuery", self.permissions_controller)
+        self.assertNotIn("apc-role-picker", self.permissions_renderer)
         self.assertNotIn('class="btn btn-primary apc-save"', self.permissions_renderer)
+        self.assertNotIn('type="file"', self.permissions_renderer)
+        self.assertNotIn("apc-import-file", self.permissions_renderer)
         self.assertIn("/assets/almdina_erp/js/almdina_ui.js", self.permissions_page)
 
     def test_factory_workforce_uses_design_system(self) -> None:
@@ -249,15 +308,62 @@ class TestDesignSystemContract(unittest.TestCase):
     def test_factory_master_data_uses_design_system(self) -> None:
         self.assertIn('class="almdina-ui prw-shell"', self.factory_master_data_page)
         self.assertIn("uiButton(", self.factory_master_data_page)
-        self.assertIn("AlmdinaUi.button is required for factory master data rendering", self.factory_master_data_page)
-        self.assertNotIn('class="btn btn-primary prw-new-route"', self.factory_master_data_page)
+        self.assertIn("AlmdinaUi.control is required for factory master data rendering", self.factory_master_data_page)
+        self.assertIn("AlmdinaUi.filterGroup is required for factory master data rendering", self.factory_master_data_page)
+        self.assertIn("mountToolbarControls", self.factory_master_data_page)
+        self.assertIn("prw-filter-group-mount", self.factory_master_data_page)
+        self.assertIn("toolbarFilterFields", self.factory_master_data_page)
+        self.assertIn("mountStageControls", self.factory_master_data_page)
+        self.assertNotIn("prw-search-mount", self.factory_master_data_page)
+        self.assertNotIn("prw-status-mount", self.factory_master_data_page)
+        self.assertIn("prw-stage-role-mount", self.factory_master_data_page)
+        self.assertIn("search_operational_roles", self.factory_master_data_page)
+        self.assertNotIn('data-stage-field="operational_role"', self.factory_master_data_page)
+        self.assertIn('page.set_primary_action(__("مسار إنتاج جديد")', self.factory_master_data_page)
+        self.assertIn("syncPrimaryAction()", self.factory_master_data_page)
+        self.assertNotIn("prw-new-route", self.factory_master_data_page)
         self.assertNotIn('class="btn btn-primary prw-save-route"', self.factory_master_data_page)
         self.assertNotIn('class="btn btn-danger prw-delete-route"', self.factory_master_data_page)
+        self.assertNotIn('class="prw-search"', self.factory_master_data_page)
+        self.assertNotIn("prw-status-filter", self.factory_master_data_page)
 
     def test_factory_plan_archive_uses_design_system(self) -> None:
         self.assertIn('class="almdina-ui apa-shell"', self.factory_plan_archive_page)
         self.assertIn("AlmdinaUi.button", self.factory_plan_archive_page)
+        self.assertIn("AlmdinaUi.control", self.factory_plan_archive_page)
+        self.assertIn("disposeControls", self.factory_plan_archive_page)
         self.assertNotIn('class="btn btn-primary apa-archive"', self.factory_plan_archive_page)
+
+    def test_widget_migrated_surfaces_reject_raw_search_inputs(self) -> None:
+        for path in WIDGET_MIGRATED_SURFACES:
+            with self.subTest(path=path.name):
+                source = path.read_text(encoding="utf-8")
+                for marker in RAW_INPUT_MARKERS:
+                    self.assertNotIn(marker, source, msg=f"{path.name} still contains {marker}")
+
+    def test_migrated_admin_pages_use_frappe_page_toolbar_actions(self) -> None:
+        self.assertNotIn("aw-refresh", self.workforce_renderer)
+        self.assertIn('add_inner_button(__("تحديث"), load, null, "refresh")', self.workforce_controller)
+        self.assertIn('set_primary_action(__("إنشاء مستخدم جديد"), openCreateDialog, "add")', self.workforce_controller)
+
+        self.assertNotIn("almdina-sf-refresh", self.shop_floor_renderer)
+        self.assertNotIn("almdina-sf-refresh", self.shop_floor_interactions)
+        self.assertIn('add_inner_button(__("تحديث"), refresh, null, "refresh")', self.shop_floor_controller)
+        self.assertIn("syncRefreshButtonVisibility", self.shop_floor_controller)
+
+        self.assertIn('page.set_primary_action(__("مسار إنتاج جديد")', self.factory_master_data_page)
+        self.assertIn("syncPrimaryAction()", self.factory_master_data_page)
+        self.assertIn('this.page.add_inner_button(', self.factory_master_data_page)
+        self.assertIn('page.set_primary_action(__("تحديث"), load, "refresh")', self.factory_plan_archive_page)
+
+    def test_migrated_admin_dialogs_reject_structured_prompts(self) -> None:
+        shop_floor_dialogs = (ROOT / "public" / "js" / "shop_floor_inbox" / "dialogs.js").read_text(encoding="utf-8")
+        permissions_dialogs = (ROOT / "public" / "js" / "factory_permissions" / "dialogs.js").read_text(encoding="utf-8")
+        self.assertNotIn("frappe.prompt", shop_floor_dialogs)
+        self.assertIn("createWorkerDropdownDialog", shop_floor_dialogs)
+        self.assertIn('fieldtype: "Attach"', permissions_dialogs)
+        self.assertIn("permissions_file", permissions_dialogs)
+        self.assertNotIn("frappe.prompt", permissions_dialogs)
 
     def test_dco_plan_tabs_use_design_system_tokens(self) -> None:
         self.assertIn('class="almdina-ui dco-plan-tabs"', self.dco_plan_tabs)
@@ -316,6 +422,20 @@ class TestDesignSystemContract(unittest.TestCase):
         workflow = STATIC_WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("almdina_erp.tests.test_design_system_contract", workflow)
         self.assertIn("node almdina_erp/tests/js/almdina_ui.test.js", workflow)
+
+    def test_secure_dxf_upload_uses_almdina_file_uploader_preset(self) -> None:
+        source = SECURE_DXF_UPLOAD.read_text(encoding="utf-8")
+        self.assertIn("AlmdinaUi.fileUploader", source)
+        self.assertIn('preset: "securePrivate"', source)
+        self.assertNotIn("new frappe.ui.FileUploader", source)
+        self.assertIn("__uploadProductionDxfCore", source)
+
+    def test_shop_floor_dxf_entry_delegates_to_secure_core(self) -> None:
+        source = SHOP_FLOOR_ORDER_UX.read_text(encoding="utf-8")
+        self.assertIn("__uploadProductionDxfCore", source)
+        self.assertIn("frappe.almdina.upload_production_dxf = uploadDrawingDxf", source)
+        self.assertNotIn("new frappe.ui.FileUploader", source)
+        self.assertIn('preset: "securePrivate"', source)
 
 
 if __name__ == "__main__":

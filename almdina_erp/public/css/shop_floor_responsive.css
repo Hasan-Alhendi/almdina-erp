@@ -55,20 +55,16 @@
     box-shadow: 0 2px 12px rgba(15, 23, 42, .045);
 }
 
-.almdina-sf-tab,
-.almdina-sf-refresh {
-    min-height: 42px;
-    border-radius: 9px !important;
-    font-weight: 750;
-    transition: background .16s ease, border-color .16s ease, color .16s ease, box-shadow .16s ease;
-}
-
 .almdina-sf-tab {
     flex: 0 0 auto;
+    min-height: 42px;
     padding-inline: 15px;
     border: 1px solid transparent;
+    border-radius: 9px !important;
     background: transparent;
     color: var(--text-muted, #64748b);
+    font-weight: 750;
+    transition: background .16s ease, border-color .16s ease, color .16s ease, box-shadow .16s ease;
 }
 
 .almdina-sf-tab:hover {
@@ -81,20 +77,6 @@
     background: color-mix(in srgb, var(--alm-primary, #172033) 10%, transparent);
     color: var(--text-color, #0f172a);
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--alm-primary, #172033) 4%, transparent);
-}
-
-.almdina-sf-refresh {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    margin-inline-start: auto;
-    padding-inline: 14px;
-}
-
-.almdina-sf-refresh > span:first-child {
-    font-size: 17px;
-    line-height: 1;
 }
 
 /* Hero ------------------------------------------------------------------- */
@@ -307,12 +289,38 @@
     min-width: 0;
 }
 
-.almdina-sf-board-toolbar label {
+.almdina-sf-board-toolbar label,
+.almdina-sf-board-toolbar .almdina-sf-field-label {
     display: block;
     margin-bottom: 5px;
     color: var(--sf-muted);
     font-size: 11px;
     font-weight: 800;
+}
+
+.almdina-sf-route-mount,
+.almdina-sf-search-mount {
+    min-height: 0;
+    border: 0;
+    background: transparent;
+    padding: 0;
+}
+
+.almdina-sf-route-mount.alm-control,
+.almdina-sf-search-mount.alm-control {
+    width: 100%;
+}
+
+.almdina-sf-board-toolbar .alm-control .form-group,
+.almdina-sf-board-toolbar .alm-control .control-input-wrapper {
+    margin-bottom: 0;
+}
+
+.almdina-sf-board-toolbar .alm-control .form-control,
+.almdina-sf-board-toolbar .alm-control select.form-control {
+    width: 100%;
+    min-height: 42px;
+    border-radius: 9px;
 }
 
 .almdina-sf-board-toolbar .form-control {
@@ -1060,8 +1068,7 @@
         -webkit-overflow-scrolling: touch;
     }
 
-    .almdina-sf-tab,
-    .almdina-sf-refresh {
+    .almdina-sf-tab {
         min-height: 44px;
     }
 
@@ -1096,15 +1103,10 @@
         border-radius: 12px;
     }
 
-    .almdina-sf-tab,
-    .almdina-sf-refresh {
+    .almdina-sf-tab {
         min-height: 46px;
         padding-inline: 12px;
         font-size: 12px;
-    }
-
-    .almdina-sf-refresh > span:last-child {
-        display: none;
     }
 
     .almdina-sf-hero {

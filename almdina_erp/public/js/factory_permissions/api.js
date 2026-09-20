@@ -10,6 +10,7 @@
         export: "almdina_erp.almdina_erp.services.permission_management_service.export_role_permissions",
         import: "almdina_erp.almdina_erp.services.permission_management_service.preview_permission_import",
         update: "almdina_erp.almdina_erp.services.permission_management_service.update_role_permissions",
+        roleSearch: "almdina_erp.almdina_erp.services.permission_management_service.search_permission_roles",
     });
 
     function foundation() {
@@ -67,5 +68,6 @@
         exportRole,
         previewImport,
         updateRole,
+        roleSearchQuery: METHODS.roleSearch,
     });
 })();

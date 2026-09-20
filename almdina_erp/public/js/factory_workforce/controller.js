@@ -20,6 +20,7 @@
         const rendererModule = window.AlmdinaFactoryWorkforceRenderer;
         const interactionsModule = window.AlmdinaFactoryWorkforceInteractions;
         const dialogsModule = window.AlmdinaFactoryWorkforceDialogs;
+        const toolbarModule = window.AlmdinaFactoryWorkforceToolbar;
         if (
             !frontend
             || !pageLifecycleModule
@@ -30,6 +31,7 @@
             || !rendererModule
             || !interactionsModule
             || !dialogsModule
+            || !toolbarModule
         ) {
             throw new Error("Factory workforce frontend modules are unavailable");
         }
@@ -46,6 +48,13 @@
             translate: __,
         });
         const dialogs = dialogsModule.create({ translate: __ });
+        const toolbar = toolbarModule.create({
+            $main,
+            state,
+            lifecycle: store.lifecycle,
+            load,
+            translate: __,
+        });
         let activation = null;
         let initialLoadPending = true;
         if (typeof page.clear_inner_toolbar === "function") page.clear_inner_toolbar();
@@ -56,15 +65,6 @@
             $main,
             lifecycle: store.lifecycle,
             callbacks: {
-                onSearch: value => {
-                    state.search = value;
-                    load();
-                },
-                onEnabledChanged: value => {
-                    state.enabled = value;
-                    load();
-                },
-                onRefresh: load,
                 onEdit: openEditDialog,
                 onPassword: openPasswordDialog,
                 onToggle: toggleUser,
@@ -72,10 +72,10 @@
                 onAdopt: adoptUser,
             },
         });
-
         const instance = Object.freeze({
             load,
             dispose() {
+                toolbar.dispose();
                 dialogs.dispose();
                 store.dispose();
                 if (wrapper.__almdinaFactoryWorkforceController === instance) {
@@ -87,6 +87,7 @@
         activation = pageLifecycleModule.bindActivationLifecycle(wrapper, {
             onActivate: load,
             onDeactivate: () => {
+                toolbar.dispose();
                 dialogs.deactivate();
                 store.deactivate();
             },
@@ -98,25 +99,20 @@
         store.lifecycle.track(() => activation.dispose(), "workforce-page-activation");
         if (activation.isActive()) load();
         return instance;
-
         function errorMessage(error, fallback) {
             return frontend.errorMessage(error, fallback);
         }
-
         function freezeOptions(message) {
             return { freeze: true, freezeMessage: message };
         }
-
         function activeGeneration() {
             return activation && activation.isActive() ? activation.generation() : null;
         }
-
         function isCurrentGeneration(generation) {
             return generation !== null
                 && activation.isActive()
                 && activation.generation() === generation;
         }
-
         function runMutation(generation, request, successMessage, refresh = true, preserveDraft = false) {
             if (!isCurrentGeneration(generation)) return Promise.resolve(null);
             return Promise.resolve().then(request).then(data => {
@@ -132,22 +128,21 @@
                 throw error;
             });
         }
-
         function can(capability) {
             return viewModel.can(state, capability);
         }
         function actionAllowed(user, action) {
             return viewModel.actionAllowed(user, action);
         }
-
         function syncPrimaryAction() {
             if (page.btn_primary) page.btn_primary.toggle(can("create_users"));
         }
-
-        function render() {
-            renderer.render(viewModel.page(state));
+        function render(options = {}) {
+            renderer.render(viewModel.page(state), options);
+            if (options.preserveToolbar !== true) {
+                toolbar.mount();
+            }
         }
-
         function load() {
             if (!activation || !activation.isActive()) return Promise.resolve(null);
             state.permissions = {};
@@ -158,24 +153,26 @@
                 search: state.search,
                 enabled: state.enabled,
             });
-            if (!isInitialLoad && !store.hasRows()) renderer.renderLoading();
+            if (!isInitialLoad && !store.hasRows()) {
+                toolbar.dispose();
+                renderer.renderLoading();
+            }
             return api.getConsole(state.search, state.enabled, { freeze: false }).then(data => {
                 if (!activation.isActive() || !store.requests.console.isCurrent(token)) return null;
                 store.applyConsole(data || {});
                 syncPrimaryAction();
-                render();
+                render({ preserveToolbar: toolbar.isMounted() });
                 return data;
             }).catch(error => {
                 if (!activation.isActive() || !store.requests.console.isCurrent(token)) return null;
+                toolbar.dispose();
                 renderer.renderError(errorMessage(error, __("تعذر تحميل البيانات.")));
                 return null;
             });
         }
-
         function roleOptions(query) {
             return viewModel.roleOptions(state.roles, query);
         }
-
         function validateRoles(selectedRoles) {
             const policy = viewModel.roleHomePolicy(state.roles, selectedRoles);
             if (!policy.hasConflict) return { ok: true };
@@ -188,15 +185,12 @@
                     + `<div class="mt-2 text-muted">${details}</div>`,
             };
         }
-
         function userByEmail(email) {
             return viewModel.findUser(state.users, email);
         }
-
         function availableUserByEmail(email) {
             return viewModel.findUser(state.availableUsers, email);
         }
-
         function openCreateDialog() {
             if (!can("create_users")) return;
             const generation = activeGeneration();
@@ -214,7 +208,6 @@
                 ),
             });
         }
-
         function openEditDialog(email) {
             const user = userByEmail(email);
             if (!user) return;
@@ -239,7 +232,6 @@
                 ),
             });
         }
-
         function openPasswordDialog(email) {
             const user = userByEmail(email);
             if (!user || !actionAllowed(user, "reset_password")) return;
@@ -256,7 +248,6 @@
                 ),
             });
         }
-
         function toggleUser(email, enabled) {
             const user = userByEmail(email);
             const action = enabled ? "enable" : "disable";
@@ -273,7 +264,6 @@
                 ),
             });
         }
-
         function adoptUser(email) {
             const user = availableUserByEmail(email);
             if (!user || !can("create_users")) return;
@@ -288,7 +278,6 @@
                 ),
             });
         }
-
         function openAudit(email) {
             const user = userByEmail(email);
             if (!user) return;

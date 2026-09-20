@@ -182,134 +182,33 @@
 }
 
 .apc-role-combo {
-    position: relative;
     width: 100%;
 }
 
-.apc-role-combo-control {
-    display: flex;
-    align-items: center;
+.apc-role-mount.alm-control,
+.apc-role-control-mount.alm-control {
     width: 100%;
+}
+
+.apc-role-mount.alm-control .form-group,
+.apc-role-mount.alm-control .control-input-wrapper,
+.apc-role-control-mount.alm-control .form-group,
+.apc-role-control-mount.alm-control .control-input-wrapper {
+    margin-bottom: 0;
+}
+
+.apc-role-mount.alm-control .form-control,
+.apc-role-control-mount.alm-control .form-control {
     min-height: 46px;
-    overflow: hidden;
-    border: 1px solid var(--border-color, #d8dee4);
     border-radius: 12px;
-    background: var(--control-bg, #fff);
-    transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
-}
-
-.apc-role-combo-control:hover {
-    border-color: color-mix(in srgb, var(--alm-primary, #172033) 38%, transparent);
-}
-
-.apc-role-combo-control:focus-within {
-    border-color: var(--alm-primary, #172033);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--alm-primary, #172033) 12%, transparent);
-}
-
-.apc-role-picker {
-    flex: 1;
-    min-width: 0;
-    height: 44px;
-    border: 0 !important;
-    background: transparent !important;
-    box-shadow: none !important;
-    outline: none !important;
-    padding: 8px 13px;
-    color: var(--text-color, #1f2937);
     font-size: 13px;
     font-weight: 650;
 }
 
-.apc-role-toggle {
-    width: 44px;
-    height: 44px;
-    flex: 0 0 auto;
-    border: 0;
-    border-inline-start: 1px solid var(--border-color, #e5e7eb);
-    background: transparent;
-    color: var(--text-muted, #6b7280);
-    font-size: 19px;
-    line-height: 1;
-    cursor: pointer;
-}
-
-.apc-role-toggle:hover {
-    background: var(--subtle-fg, #f8fafb);
-    color: var(--text-color, #1f2937);
-}
-
-.apc-role-menu {
-    position: absolute;
-    z-index: 120;
-    top: calc(100% + 6px);
-    right: 0;
-    left: 0;
-    max-height: 300px;
-    overflow: auto;
-    padding: 6px;
-    border: 1px solid var(--border-color, #d8dee4);
-    border-radius: 12px;
-    background: var(--fg-color, #fff);
-    box-shadow: var(--apc-shadow-md);
-}
-
-.apc-role-option {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    width: 100%;
-    min-height: 38px;
-    padding: 8px 10px;
-    border: 0;
-    border-radius: 8px;
-    background: transparent;
-    color: var(--text-color, #1f2937);
-    text-align: right;
-    cursor: pointer;
-    font-size: 12px;
-    transition: background 0.12s ease, color 0.12s ease;
-}
-
-.apc-role-option:hover,
-.apc-role-option:focus,
-.apc-role-option.is-active {
-    background: var(--subtle-fg, #f1f5f9);
-    outline: none;
-}
-
-.apc-role-option.is-selected {
-    background: var(--apc-primary-soft);
-    color: var(--alm-primary, #172033);
-    font-weight: 900;
-}
-
-.apc-role-option.is-selected::before {
-    content: "✓";
-    color: var(--alm-primary, #172033);
-    font-size: 11px;
-}
-
-.apc-role-option-name {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.apc-role-option small {
-    margin-inline-start: auto;
-    color: var(--text-muted, #6b7280);
-    font-size: 9px;
-    white-space: nowrap;
-}
-
-.apc-role-no-results {
-    padding: 22px 10px;
-    text-align: center;
-    color: var(--text-muted, #6b7280);
-    font-size: 11px;
+.apc-role-mount.alm-control .form-control:focus,
+.apc-role-control-mount.alm-control .form-control:focus {
+    border-color: var(--alm-primary, #172033);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--alm-primary, #172033) 12%, transparent);
 }
 
 .apc-transfer-tools {
@@ -828,8 +727,6 @@
 }
 
 .apc-capability-input:disabled + .apc-slider,
-.apc-role-picker:disabled,
-.apc-role-toggle:disabled,
 .apc-bulk-toggle:disabled,
 .apc-export:disabled,
 .apc-import:disabled {
@@ -984,8 +881,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .apc-role-combo-control,
-    .apc-role-option,
     .apc-group,
     .apc-capability,
     .apc-slider,
