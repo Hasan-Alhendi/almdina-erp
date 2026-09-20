@@ -57,7 +57,7 @@
             `;
         }
 
-        function toolbarHtml(model) {
+        function toolbarHtml() {
             return `
                 <div class="aw-toolbar" role="search">
                     <div class="aw-toolbar-heading">
@@ -65,21 +65,16 @@
                         <strong>${t("الوصول السريع للمستخدم")}</strong>
                     </div>
                     <div class="aw-field aw-search-field">
-                        <label for="aw-workforce-search">${t("بحث بالاسم أو البريد")}</label>
+                        <span class="aw-field-label">${t("بحث بالاسم أو البريد")}</span>
                         <div class="aw-search-control">
                             <span class="aw-search-icon" aria-hidden="true">⌕</span>
-                            <input id="aw-workforce-search" class="aw-search" type="search" value="${esc(model.search)}" placeholder="${t("اكتب للبحث...")}" autocomplete="off">
+                            <div class="aw-search-mount"></div>
                         </div>
                     </div>
-                    <div class="aw-field">
-                        <label for="aw-enabled-filter">${t("حالة الحساب")}</label>
-                        <select id="aw-enabled-filter" class="aw-enabled-filter">
-                            <option value="all" ${model.enabled === "all" ? "selected" : ""}>${t("الكل")}</option>
-                            <option value="1" ${model.enabled === "1" ? "selected" : ""}>${t("مفعّل")}</option>
-                            <option value="0" ${model.enabled === "0" ? "selected" : ""}>${t("معطّل")}</option>
-                        </select>
+                    <div class="aw-field aw-enabled-field">
+                        <span class="aw-field-label">${t("حالة الحساب")}</span>
+                        <div class="aw-enabled-mount"></div>
                     </div>
-                    ${uiButton({ label: t("تحديث القائمة"), variant: "secondary", className: "aw-refresh", type: "button" })}
                 </div>
             `;
         }
@@ -259,11 +254,29 @@
             `;
         }
 
-        function render(model) {
+        function updateContent(model) {
+            $main.find(".aw-hero-meta strong").text(model.users.length);
+            $main.find(".aw-summary").replaceWith(summaryHtml(model.summary));
+            $main.find(".aw-workforce-section").replaceWith(workforceSectionHtml(model));
+            const availableSection = availableUsersSectionHtml(model);
+            const $available = $main.find(".aw-available-section");
+            if (availableSection) {
+                if ($available.length) $available.replaceWith(availableSection);
+                else $main.find(".aw-shell").append(availableSection);
+            } else {
+                $available.remove();
+            }
+        }
+
+        function render(model, options = {}) {
+            if (options.preserveToolbar === true) {
+                updateContent(model);
+                return;
+            }
             $main.html(`
                 <div class="almdina-ui aw-shell">
                     ${heroHtml(model)}
-                    ${toolbarHtml(model)}
+                    ${toolbarHtml()}
                     ${summaryHtml(model.summary)}
                     ${workforceSectionHtml(model)}
                     ${availableUsersSectionHtml(model)}

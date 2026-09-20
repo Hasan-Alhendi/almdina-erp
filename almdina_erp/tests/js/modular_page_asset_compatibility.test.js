@@ -20,7 +20,7 @@ const cases = [
         file: "../../almdina_erp/page/factory_permissions/factory_permissions.js",
         page: "factory-permissions",
         controller: "AlmdinaFactoryPermissionsController",
-        featureModuleCount: 6,
+        featureModuleCount: 7,
         modulePrefix: "/assets/almdina_erp/js/factory_permissions/",
         sharedModules: [DESIGN_SYSTEM_MODULE],
     },

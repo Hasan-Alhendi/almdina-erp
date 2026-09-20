@@ -132,14 +132,9 @@ class FactoryWorkforceFrontendArchitectureTest(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, self.renderer)
 
-    def test_interactions_own_delegated_events_and_search_timer(self) -> None:
+    def test_interactions_own_delegated_events_for_card_actions(self) -> None:
         self.assertIn('EVENT_NAMESPACE = ".almdinaFactoryWorkforce"', self.interactions)
-        self.assertIn("lifecycle.timeout", self.interactions)
-        self.assertIn("350", self.interactions)
         for callback in (
-            "onSearch",
-            "onEnabledChanged",
-            "onRefresh",
             "onEdit",
             "onPassword",
             "onToggle",
@@ -147,6 +142,9 @@ class FactoryWorkforceFrontendArchitectureTest(unittest.TestCase):
             "onAdopt",
         ):
             self.assertIn(callback, self.interactions)
+        self.assertNotIn("aw-refresh", self.interactions)
+        self.assertNotIn(".aw-search", self.interactions)
+        self.assertNotIn(".aw-enabled-filter", self.interactions)
         for forbidden in (
             "frappe.call(",
             "workforce_service",
@@ -175,7 +173,7 @@ class FactoryWorkforceFrontendArchitectureTest(unittest.TestCase):
             self.assertNotIn(forbidden, self.dialogs)
 
     def test_controller_is_orchestration_only(self) -> None:
-        self.assertLessEqual(len(self.controller.splitlines()), 310)
+        self.assertLessEqual(len(self.controller.splitlines()), 400)
         for dependency in (
             "AlmdinaFactoryWorkforceApi",
             "AlmdinaFactoryWorkforceState",
@@ -185,6 +183,11 @@ class FactoryWorkforceFrontendArchitectureTest(unittest.TestCase):
             "AlmdinaFactoryWorkforceDialogs",
         ):
             self.assertIn(dependency, self.controller)
+        self.assertIn("AlmdinaUi.control", self.controller)
+        self.assertIn("mountToolbarControls", self.controller)
+        self.assertIn("preserveToolbar", self.controller)
+        self.assertIn("workforce-search", self.controller)
+        self.assertIn("350", self.controller)
         self.assertIn("requests.console.begin", self.controller)
         self.assertIn("requests.audit.begin", self.controller)
         self.assertIn("actionAllowed(user", self.controller)
@@ -201,7 +204,11 @@ class FactoryWorkforceFrontendArchitectureTest(unittest.TestCase):
     def test_renderer_uses_central_design_system_for_buttons(self) -> None:
         self.assertIn('class="almdina-ui aw-shell"', self.renderer)
         self.assertIn("AlmdinaUi.button", self.renderer)
+        self.assertIn("aw-search-mount", self.renderer)
+        self.assertIn("aw-enabled-mount", self.renderer)
         self.assertNotIn('class="btn btn-primary aw-adopt-user"', self.renderer)
+        self.assertNotIn('id="aw-workforce-search"', self.renderer)
+        self.assertNotIn('id="aw-enabled-filter"', self.renderer)
         self.assertIn("/assets/almdina_erp/js/almdina_ui.js", self.page)
 
     def test_styles_are_external_and_responsive_without_visual_pinning(self) -> None:

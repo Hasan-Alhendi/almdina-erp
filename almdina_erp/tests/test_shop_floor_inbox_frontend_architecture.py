@@ -153,20 +153,25 @@ class ShopFloorInboxFrontendArchitectureTest(unittest.TestCase):
             '.almdinaShopFloorInbox',
             '".almdina-sf-tab"',
             '".sf-quick-action"',
-            '"#almdina-sf-board-search"',
             '".almdina-sf-kanban-column"',
             "lifecycle.track",
             "function deactivate()",
         ):
             self.assertIn(marker, self.interactions)
+        self.assertNotIn("#almdina-sf-board-search", self.interactions)
+        self.assertNotIn("#almdina-sf-route-filter", self.interactions)
         self.assertNotIn("frappe.call(", self.interactions)
         self.assertNotIn("shop_floor_query_service", self.interactions)
 
     def test_dialogs_own_handoff_and_logout_prompts(self) -> None:
-        for marker in ("frappe.confirm", "frappe.prompt", "frappe.msgprint", "frappe.show_alert"):
+        for marker in ("frappe.confirm", "frappe.msgprint", "frappe.show_alert"):
             self.assertIn(marker, self.dialogs)
         for marker in ("function create(", "function own(", "function deactivate()", "function dispose()"):
             self.assertIn(marker, self.dialogs)
+        self.assertIn("AlmdinaShopFloorQuickActions", self.dialogs)
+        self.assertIn("createWorkerDropdownDialog", self.dialogs)
+        self.assertNotIn("frappe.prompt", self.dialogs)
+        self.assertNotIn('fieldtype: "Select"', self.dialogs)
         self.assertNotIn("frappe.call(", self.dialogs)
         self.assertNotIn("shop_floor_commands", self.dialogs)
 
@@ -190,6 +195,13 @@ class ShopFloorInboxFrontendArchitectureTest(unittest.TestCase):
         self.assertIn("onDeactivate: deactivatePage", self.controller)
         self.assertIn("isCurrentGeneration", self.controller)
         self.assertIn("onStaleMutationSuccess", self.controller)
+        self.assertIn("AlmdinaUi.control", self.controller)
+        self.assertIn("mountBoardToolbarControls", self.controller)
+        self.assertIn("preserveBoardToolbar", self.controller)
+        self.assertIn('add_inner_button(__("تحديث"), refresh, null, "refresh")', self.controller)
+        self.assertIn("syncRefreshButtonVisibility", self.controller)
+        self.assertNotIn("almdina-sf-refresh", self.renderer)
+        self.assertNotIn("almdina-sf-refresh", self.interactions)
         self.assertEqual(
             self.controller.count("window.AlmdinaShopFloorInboxController = Object.freeze({ mount })"),
             1,
@@ -230,7 +242,11 @@ class ShopFloorInboxFrontendArchitectureTest(unittest.TestCase):
     def test_renderer_uses_central_design_system_for_buttons(self) -> None:
         self.assertIn('class="almdina-ui almdina-sf-shell"', self.renderer)
         self.assertIn("AlmdinaUi.button", self.renderer)
+        self.assertIn("almdina-sf-route-mount", self.renderer)
+        self.assertIn("almdina-sf-search-mount", self.renderer)
         self.assertNotIn('class="btn btn-default sf-open-btn"', self.renderer)
+        self.assertNotIn('id="almdina-sf-board-search"', self.renderer)
+        self.assertNotIn('id="almdina-sf-route-filter"', self.renderer)
         self.assertIn("/assets/almdina_erp/js/almdina_ui.js", self.page)
 
     def test_structural_phase_keeps_existing_stylesheet_owner(self) -> None:

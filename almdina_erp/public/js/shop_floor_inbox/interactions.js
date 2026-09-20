@@ -28,7 +28,6 @@
         $root.on(`click${namespace}`, ".almdina-sf-tab", function () {
             actions.setMode($(this).attr("data-sf-mode"));
         });
-        $root.on(`click${namespace}`, ".almdina-sf-refresh", () => actions.refresh());
         $root.on(`click${namespace}`, ".almdina-sf-logout", () => actions.logout());
         $root.on(`click${namespace}`, ".shop-floor-order-card", function (event) {
             if ($(event.target).closest(".sf-quick-action").length) return;
@@ -38,12 +37,6 @@
             event.preventDefault();
             event.stopPropagation();
             actions.quickAction(cardContext($(this).closest(".shop-floor-order-card")), this);
-        });
-        $root.on(`change${namespace}`, "#almdina-sf-route-filter", function () {
-            actions.setRouteFilter(String($(this).val() || ""));
-        });
-        $root.on(`input${namespace}`, "#almdina-sf-board-search", function () {
-            actions.setSearch(String($(this).val() || ""));
         });
 
         $root.on(`dragstart${namespace}`, '.almdina-sf-kanban-card[draggable="true"]', function (event) {

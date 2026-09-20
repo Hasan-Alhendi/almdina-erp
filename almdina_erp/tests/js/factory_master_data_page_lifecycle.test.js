@@ -211,6 +211,13 @@ function createRuntime({coldCore = false, pendingStyle = false} = {}) {
     };
 
     const page = {
+        btn_primary: {
+            visible: true,
+            toggle(visible) { this.visible = visible !== false; },
+        },
+        set_primary_action(label, callback, icon) {
+            page.primaryAction = { label, callback, icon };
+        },
         add_inner_button(label, callback) {
             const button = {
                 label,

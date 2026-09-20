@@ -455,7 +455,24 @@ async function testPermissionsLifecycle() {
             this.onload();
         }
     }
+    class FakeImportDialog {
+        constructor(config) {
+            this.config = config;
+            this.fields_dict = {
+                permissions_file: {
+                    $input: [{ files: [{ size: 10, contents: '{"view":true}' }] }],
+                },
+            };
+        }
+
+        show() {
+            this.config.primary_action({});
+        }
+
+        hide() {}
+    }
     harness.context.FileReader = FakeFileReader;
+    harness.fakeWindow.frappe.ui.Dialog = FakeImportDialog;
     harness.fakeWindow.AlmdinaFactoryPermissionsApi = {
         getConsole: () => consoleQueue.call(),
         getRole: () => roleQueue.call(),
@@ -480,9 +497,9 @@ async function testPermissionsLifecycle() {
         create: () => ({
             renderShell() { renders.shell += 1; },
             renderActor() {},
-            renderRoleMenu() {},
+            mountRoleControl() {},
+            disposeRoleControl() {},
             setRolePickerValue() {},
-            closeRoleMenu() {},
             showRoleLoading() {},
             showLoaded() { renders.loaded += 1; },
             renderPermissionGroups() {},
@@ -503,6 +520,7 @@ async function testPermissionsLifecycle() {
     };
 
     evaluate(harness, "factory_permissions/state.js");
+    evaluate(harness, "factory_permissions/dialogs.js");
     evaluate(harness, "factory_permissions/controller.js");
     harness.fakeWindow.AlmdinaFactoryPermissionsController.mount(harness.wrapper);
 
@@ -553,7 +571,7 @@ async function testPermissionsLifecycle() {
         "dirty Permissions state must survive revisit without a console reload"
     );
 
-    callbacks.onImportFile({ size: 10, contents: '{"view":true}' });
+    callbacks.onImport();
     await flush();
     assert.equal(transferQueue.requests.length, 1);
     const checkboxBeforeTransfer = renders.checkboxSync;
@@ -811,9 +829,9 @@ async function testPermissionsMutationLifecycle() {
         create: () => ({
             renderShell() {},
             renderActor() {},
-            renderRoleMenu() {},
+            mountRoleControl() {},
+            disposeRoleControl() {},
             setRolePickerValue() {},
-            closeRoleMenu() {},
             showRoleLoading() {},
             showLoaded() {},
             renderPermissionGroups() { renders.permissionState += 1; },
@@ -834,6 +852,7 @@ async function testPermissionsMutationLifecycle() {
     };
 
     evaluate(harness, "factory_permissions/state.js");
+    evaluate(harness, "factory_permissions/dialogs.js");
     evaluate(harness, "factory_permissions/controller.js");
     harness.fakeWindow.AlmdinaFactoryPermissionsController.mount(harness.wrapper);
     consoleQueue.requests[0].resolve({ catalog: [], roles: [{ name: "Role A" }], transfer: {} });
