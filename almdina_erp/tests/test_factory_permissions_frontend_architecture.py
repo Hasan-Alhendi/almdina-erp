@@ -164,8 +164,13 @@ class FactoryPermissionsFrontendArchitectureTest(unittest.TestCase):
         self.assertNotIn("previewRequest", self.controller)
         self.assertNotIn("transferRequest", self.controller)
         self.assertNotIn(".html(", self.controller)
-        self.assertNotIn("apc-shell", self.controller)
         self.assertNotIn('role="combobox"', self.controller)
+
+    def test_renderer_uses_central_design_system_for_buttons(self) -> None:
+        self.assertIn('class="almdina-ui apc-shell"', self.renderer)
+        self.assertIn("AlmdinaUi.button", self.renderer)
+        self.assertNotIn('class="btn btn-primary apc-save"', self.renderer)
+        self.assertIn("/assets/almdina_erp/js/almdina_ui.js", self.page)
 
     def test_feature_styles_are_external_and_preserve_existing_surface_contract(self) -> None:
         for selector in (

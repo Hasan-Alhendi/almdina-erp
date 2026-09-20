@@ -5,7 +5,10 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspac
     refresh_order_commercial_totals,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.orders import FrappeDoorCuttingOrderSaveGateway
-from almdina_erp.almdina_erp.services.cutting_plan_invalidation_service import invalidate_stale_draft_plans
+from almdina_erp.almdina_erp.services.cutting_plan_invalidation_service import (
+    apply_stale_approved_plan_cancellation,
+    invalidate_stale_draft_plans,
+)
 from almdina_erp.almdina_erp.services import new_order_recovery_service
 
 from .door_cutting_order import DoorCuttingOrder
@@ -24,6 +27,7 @@ class DoorCuttingOrderController(DoorCuttingOrder):
     def validate(self) -> None:
         new_order_recovery_service.enforce_creation_identity_immutability(self)
         process_order_save(self._gateway())
+        apply_stale_approved_plan_cancellation(self)
 
     def before_insert(self) -> None:
         new_order_recovery_service.apply_new_order_creation_identity(self)

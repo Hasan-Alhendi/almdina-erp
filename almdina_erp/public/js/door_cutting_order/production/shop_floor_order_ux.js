@@ -102,6 +102,41 @@
 		);
 	}
 
+	function grantedCapability(frm, capability) {
+		const context = permissionContext();
+		if (context && typeof context.can === "function") {
+			return context.can(capability) === true;
+		}
+		return can(frm, capability);
+	}
+
+	function canKeepViewingAfterLeavingAssignment(frm) {
+		return Boolean(
+			grantedCapability(frm, "view_all_orders")
+			|| grantedCapability(frm, "view_shop_floor_history")
+		);
+	}
+
+	function productionActionLeavesCurrentView(method) {
+		return (
+			method === "almdina_erp.almdina_erp.services.shop_floor_service.dispatch_order"
+			|| method === "almdina_erp.almdina_erp.services.shop_floor_service.handoff_to_next"
+			|| method === "almdina_erp.almdina_erp.services.shop_floor_service.mark_delivered"
+		);
+	}
+
+	function shouldReturnToOrderList(method, frm) {
+		return productionActionLeavesCurrentView(method)
+			&& !canKeepViewingAfterLeavingAssignment(frm);
+	}
+
+	function returnToOrderList() {
+		if (typeof frappe.set_route === "function") {
+			return Promise.resolve(frappe.set_route("List", "Door Cutting Order"));
+		}
+		return Promise.resolve();
+	}
+
 	function callAction(method, args, successMessage, frm) {
 		const documentName = frm && frm.doc ? frm.doc.name : null;
 		return frappe
@@ -116,6 +151,9 @@
 					frappe.show_alert({ message: successMessage, indicator: "green" });
 				}
 				if (frm && frm.doc && frm.doc.name === documentName) {
+					if (shouldReturnToOrderList(method, frm)) {
+						return returnToOrderList().then(() => response.message);
+					}
 					return frm.reload_doc().then(() => response.message);
 				}
 				return response.message;
@@ -141,7 +179,7 @@
 	const STATUS_COLORS = {
 		Draft: "#6b7280",
 		"Pending Review": "#b45309",
-		Approved: "#2563eb",
+		Approved: "#172033",
 		"At Sharyoun": "#7c3aed",
 		"At Drawing": "#7c3aed",
 		"At CNC": "#7c3aed",
@@ -172,6 +210,86 @@
 		return __(STATUS_LABELS[status] || status || "");
 	}
 
+	function looksLikeEmail(value) {
+		return String(value || "").includes("@");
+	}
+
+	function workerDisplayName(worker) {
+		const id = String((worker && worker.name) || "").trim();
+		const fullName = String((worker && worker.full_name) || "").trim();
+		if (fullName && fullName !== id) return fullName;
+		return id;
+	}
+
+	function workerSelectOptions(workers) {
+		return (workers || []).map((worker) => ({
+			label: workerDisplayName(worker),
+			value: worker.name,
+		}));
+	}
+
+	function userFullNameFromBoot(userId) {
+		const id = String(userId || "").trim();
+		if (!id) return "";
+		let name = "";
+		if (typeof frappe.user_info === "function") {
+			const info = frappe.user_info(id) || {};
+			name = String(info.fullname || info.full_name || "").trim();
+		}
+		if (!name || name === id || looksLikeEmail(name)) return "";
+		return name;
+	}
+
+	function currentAssigneeDisplayName(userId) {
+		const id = String(userId || "").trim();
+		if (!id) return "-";
+		return userFullNameFromBoot(id) || id;
+	}
+
+	function rememberUserFullName(userId, fullName) {
+		const id = String(userId || "").trim();
+		const name = String(fullName || "").trim();
+		if (!id || !name || name === id || looksLikeEmail(name)) return false;
+		const entry = {};
+		entry[id] = { fullname: name, email: id };
+		if (typeof frappe.update_user_info === "function") {
+			frappe.update_user_info(entry);
+			return true;
+		}
+		frappe.boot = frappe.boot || {};
+		frappe.boot.user_info = Object.assign({}, frappe.boot.user_info || {}, entry);
+		return true;
+	}
+
+	function hydrateCurrentAssigneeName(frm) {
+		const id = String(frm && frm.doc && frm.doc.current_assignee || "").trim();
+		if (!id || userFullNameFromBoot(id)) return;
+		if (!frappe.db || typeof frappe.db.get_value !== "function") return;
+		if (frm.__almdinaAssigneeNameRequest === id) return;
+		frm.__almdinaAssigneeNameRequest = id;
+		frappe.db.get_value("User", id, "full_name")
+			.then((response) => {
+				const fullName = String(
+					(response && response.message && response.message.full_name)
+					|| (response && response.full_name)
+					|| ""
+				).trim();
+				if (!rememberUserFullName(id, fullName)) return;
+				if (!frm.doc || String(frm.doc.current_assignee || "").trim() !== id) return;
+				const field = frm.fields_dict && frm.fields_dict.operator_status_strip;
+				const root = field && field.$wrapper && typeof field.$wrapper.get === "function"
+					? field.$wrapper.get(0)
+					: null;
+				if (root) root._almdinaTrackingStripHtml = "";
+				renderTrackingStrip(frm);
+			})
+			.catch(() => {
+				if (frm.__almdinaAssigneeNameRequest === id) {
+					frm.__almdinaAssigneeNameRequest = null;
+				}
+			});
+	}
+
 	function renderProgressSteps(frm) {
 		const configured = frm.__almdinaProductionRouteName === frm.doc.production_path && Array.isArray(frm.__almdinaProductionRouteSteps)
 			? frm.__almdinaProductionRouteSteps.map((stage) => stage.department || stage.stage_type).filter(Boolean)
@@ -187,7 +305,7 @@
 			.map((step, index) => {
 				const done = delivered || index < currentIndex;
 				const active = !delivered && index === currentIndex;
-				const background = done ? "#15803d" : active ? "#2490ef" : "var(--control-bg,#f3f4f6)";
+				const background = done ? "#15803d" : active ? "var(--alm-primary,#172033)" : "var(--control-bg,#f3f4f6)";
 				const color = done || active ? "#fff" : "var(--text-muted,#6b7280)";
 				return `<span style="display:inline-flex;align-items:center;gap:4px;background:${background};color:${color};border-radius:999px;padding:5px 12px;font-size:12px;font-weight:700;white-space:nowrap">${done ? "✓ " : ""}${__(step)}</span>`;
 			})
@@ -206,7 +324,7 @@
 		const color = STATUS_COLORS[status] || "#374151";
 		const facts = [
 			[__("القسم الحالي"), frm.doc.current_department || "-"],
-			[__("العامل"), frm.doc.current_assignee || "-"],
+			[__("العامل"), currentAssigneeDisplayName(frm.doc.current_assignee)],
 			[__("حالة القسم"), frm.doc.department_status || "-"],
 		]
 			.map(
@@ -222,11 +340,11 @@
 				${renderProgressSteps(frm)}
 			</div>`;
 		const root = field.$wrapper.get(0);
-		if (root && root._almdinaTrackingStripHtml === html && field.$wrapper.children().length) {
-			return;
+		if (!(root && root._almdinaTrackingStripHtml === html && field.$wrapper.children().length)) {
+			field.$wrapper.html(html);
+			if (root) root._almdinaTrackingStripHtml = html;
 		}
-		field.$wrapper.html(html);
-		if (root) root._almdinaTrackingStripHtml = html;
+		hydrateCurrentAssigneeName(frm);
 	}
 
 	function applyShopFloorPresentation(frm) {
@@ -271,12 +389,7 @@
 					label: `${path.label} · ${path.stage_count || 0} ${__("مراحل")}`,
 					value: path.value,
 				}));
-				const workerOptions = (path) => (workers[path] || []).map((worker) => ({
-					label: worker.full_name && worker.full_name !== worker.name
-						? `${worker.full_name} — ${worker.name}`
-						: worker.name,
-					value: worker.name,
-				}));
+				const workerOptions = (path) => workerSelectOptions(workers[path] || []);
 				const routePreview = (pathName) => {
 					const route = paths.find((row) => row.value === pathName) || paths[0];
 					const stages = (route.stages || []).map((stage, index) => `
@@ -632,10 +745,7 @@
 					fieldname: "next_assignee",
 					fieldtype: "Select",
 					label: `${__("العامل التالي")} — ${handoff.next_department || handoff.next_stage_type || ""}`,
-					options: workers.map((worker) => ({
-						label: worker.full_name && worker.full_name !== worker.name ? `${worker.full_name} — ${worker.name}` : worker.name,
-						value: worker.name,
-					})),
+					options: workerSelectOptions(workers),
 					reqd: 1,
 				}],
 				(values) => callAction(
@@ -662,24 +772,18 @@
 					frappe.msgprint(__("لا يوجد عامل آخر متاح لهذا القسم."));
 					return;
 				}
-				const labels = new Map(
-					workers.map((worker) => [
-						`${worker.full_name || worker.name} — ${worker.name}`,
-						worker.name,
-					])
-				);
 				frappe.prompt(
 					[{
 						fieldname: "worker",
 						fieldtype: "Select",
 						label: __("العامل الجديد"),
-						options: [...labels.keys()].join("\n"),
+						options: workerSelectOptions(workers),
 						reqd: 1,
 						description: __("سيصبح العامل الجديد مسؤولًا عن بدء المرحلة وتسليمها."),
 					}],
 					(values) => callAction(
 						"almdina_erp.almdina_erp.services.shop_floor_commands.reassign_worker",
-						{ stage_name: stageName, assignee: labels.get(values.worker) },
+						{ stage_name: stageName, assignee: values.worker },
 						__("تم تغيير العامل المسؤول عن المرحلة."),
 						frm
 					),

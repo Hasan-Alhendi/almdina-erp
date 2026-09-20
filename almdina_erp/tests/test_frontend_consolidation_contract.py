@@ -253,6 +253,8 @@ class TestFrontendConsolidationContract(unittest.TestCase):
         # printed, banding marks stay thin/red, and dense pages use explicit
         # balanced rows (7 => 4+3) rather than leaving a lone board below.
         self.assertIn("dco-piece-number", source)
+        self.assertNotIn("dco-sheet-text-labels", source)
+        self.assertNotIn("data-has-text-labels", source)
         self.assertIn("dco-piece-size { display: none !important; }", source)
         self.assertIn('label.split(".")[0]', source)
         self.assertIn("border-color: #e00000 !important", source)

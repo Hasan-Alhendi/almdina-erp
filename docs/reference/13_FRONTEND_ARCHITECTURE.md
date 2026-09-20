@@ -171,6 +171,32 @@ Store/selectors/actions الخالصة تحصل على Node/unit tests عند ا
 ### `FE-ARCH-015` — No framework rewrite by stealth
 لا يتم إدخال frontend framework أو bundling/state platform جديد كجزء جانبي من cleanup. أي تغيير تقني واسع يحتاج سببًا معماريًا وADR منفصلًا.
 
+### `FE-ARCH-016` — Almdina Design System is scoped, not a Frappe rewrite
+الهوية البصرية لـ Almdina تعيش في طبقة Presentation مركزية ومحدودة النطاق:
+
+| الطبقة | الملف | الدور |
+|---|---|---|
+| Tokens | `public/css/almdina_design_tokens.css` | `--alm-primary` وباقي brand tokens |
+| Components | `public/css/almdina_components.css` | `.alm-btn-primary` وpatterns مشتركة |
+| Builder | `public/js/almdina_ui.js` | `AlmdinaUi.button()` / `AlmdinaUi.empty()` |
+
+**القواعد:**
+
+- كل Surface جديد أو migrated يضع shell/container تحت `.almdina-ui`.
+- الأزرار الأساسية/الخطرة/النجاح تُبنى عبر `AlmdinaUi.button()` — لا `class="btn btn-primary"` في surfaces مهاجرة.
+- ألوان العلامة التجارية تقرأ `var(--alm-primary, #172033)` أو aliases مشتقة (`--sf-primary`, `--prw-primary`) — لا `var(--primary, #2490ef)`.
+- لا override selector-based لـ `body .btn-primary` داخل `almdina_components.css`.
+- **Frappe Desk bridge (DS-10):** `public/css/almdina_desk_theme.css` يعيد توجيه `--primary` / `--btn-primary` و`indicator-pill.blue` إلى `--alm-primary` على `:root` — بدون تغيير markup Frappe.
+- Brand primitives (`--alm-primary` …) تعيش على `:root` + `.almdina-ui` في `almdina_design_tokens.css` حتى يكفي تعديل hex واحد للـDesk وAlmdina surfaces معًا.
+- تغيير اللون الأساسي يتم من `--alm-primary` في tokens فقط، ثم `bench build --app almdina_erp` + `clear-cache`.
+
+**استثناءات مسجّلة (allowlist):**
+
+- `notes.css` — spinner/notes presentation contract منفصل.
+- `door_cutting_order_mobile_list.css` — list cards identity contract (`#2563eb`) مستقل عن admin surfaces.
+
+**Gate:** `almdina_erp.tests.test_design_system_contract` + `almdina_erp/tests/js/almdina_ui.test.js`.
+
 ## 5. Async وRace Conditions
 
 كل Controller/Action يجب أن يسأل: هل يمكن للمستخدم تغيير الصفحة أو الـrecord أو filter أو mode قبل وصول الاستجابة؟ إذا نعم، فهناك stale-response risk.
@@ -250,7 +276,7 @@ Cross-app modules مثل `permission_context.js` وshared helpers قد تكون 
 
 ### Frappe admin pages
 
-Factory Permissions / Workforce / Production Settings هي أول migration family لأن حدودها واضحة ويمكن فصل state/API/render/styles تدريجيًا دون تغيير Business contracts.
+Factory Permissions / Workforce / Production Settings / Master Data / Plan Archive مهاجَرة إلى Almdina Design System (`.almdina-ui` + `AlmdinaUi.button()` + `--alm-primary`). أي surface جديد في هذه العائلة يلتزم `FE-ARCH-016` من اليوم الأول.
 
 ### Shop Floor
 

@@ -323,7 +323,7 @@
                 background:transparent;border-color:transparent;color:inherit;padding-inline:0;cursor:default;
             }
             .dco-inline-price-input:not(:disabled):not([readonly]):focus{
-                outline:2px solid var(--primary,#2490ef);outline-offset:1px;
+                outline:2px solid var(--alm-primary,#172033);outline-offset:1px;
             }
             .dco-special-price-actions{display:flex;flex-direction:column;gap:6px;min-width:118px}
             .dco-special-price-note{grid-column:1/-1;font-size:10px;color:var(--text-muted,#687481)}

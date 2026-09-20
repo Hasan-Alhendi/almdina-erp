@@ -37,10 +37,10 @@
 .dco-extra-open-button:hover,
 .dco-extra-open-button:focus-visible,
 .dco-extra-open-button[aria-expanded="true"] {
-    border-color: var(--primary, #2490ef);
-    color: var(--primary, #1769aa);
+    border-color: var(--alm-primary, #172033);
+    color: var(--alm-primary-hover, #0f172a);
     outline: 0;
-    box-shadow: 0 0 0 2px rgba(36, 144, 239, .12);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--alm-primary, #172033) 12%, transparent);
 }
 
 .dco-extra-open-button:disabled {
@@ -54,7 +54,7 @@
     height: 16px;
     padding: 0 4px;
     border-radius: 999px;
-    background: var(--primary, #2490ef);
+    background: var(--alm-primary, #172033);
     color: #fff;
     display: inline-grid;
     place-items: center;
@@ -77,7 +77,7 @@
 }
 
 .dco-extra-selection-summary {
-    color: var(--primary, #1769aa);
+    color: var(--alm-primary-hover, #0f172a);
 }
 
 .dco-extra-required,
@@ -254,11 +254,11 @@
     height: 18px;
     margin: 0;
     flex: 0 0 auto;
-    accent-color: var(--primary, #2563eb);
+    accent-color: var(--alm-primary, #172033);
 }
 
 .dco-extra-options input:focus-visible {
-    outline: 2px solid var(--primary, #2490ef);
+    outline: 2px solid var(--alm-primary, #172033);
     outline-offset: 2px;
 }
 

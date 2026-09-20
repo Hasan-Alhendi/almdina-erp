@@ -388,30 +388,36 @@ authority and never creates a Sales Invoice aggregate.
 
 ### Current canonical server projection
 
-`CuttingPlanInputProjection v1` is currently assembled on the server by
+`CuttingPlanInputProjection v2` is currently assembled on the server by
 `plan_input_fingerprint(order, plan)` and contains:
 
 ```text
-version: 1
+version: 2
 order: DCO name
 order_revision
-board: description, width_mm, length_mm
+board: width_mm, length_mm
 settings: optimization_mode, machine_type, time_limit_sec, kerf_mm, trim_margin_mm
-pieces: FrappeCutDimensionPlanAdapter.piece_row_as_dict(row)[]
+pieces: cut/final dimensions, quantity, rotation, piece type, clipped-corner
+        and special-shape geometry, selected edge sides, and edge thickness
 ```
 
-The current piece adapter includes normalized cut/final dimensions, quantity,
-rotation, piece/clipped-corner requirements, exact
-`special_shape_geometry_json`, selected edge sides and overrides, resolved edge
-profiles/thickness/rates/costs, notes, and cut-size label. This is the current
-fingerprint boundary; R1 does not narrow or reinterpret it.
+Commercial labels stay out of this hash: customer name, board description, edge
+color, edge-profile names, rates, costs, notes, and cut-size labels. Those
+fields do not cancel an approved plan or show the mismatch banner. Changing
+piece size, quantity, edge sides/thickness, board size, or optimizer settings
+does. Freshness comparison still accepts stored v1 hashes when only the board
+label changed, so historical plans are not mass-cancelled.
+
+The piece adapter used for optimizer input may still carry commercial labels for
+display; only the freshness/input hash is narrowed. Stored v1 fingerprints remain
+comparable through `freshness_expected_fingerprint`.
 
 The fingerprint is lowercase SHA-256 over deterministic JSON with sorted keys,
 compact separators, and ASCII escaping. Its contract key is:
 
 ```text
 (projection_name = CuttingPlanInputProjection,
- projection_version = 1,
+ projection_version = 2,
  input_fingerprint,
  engine_version)
 ```

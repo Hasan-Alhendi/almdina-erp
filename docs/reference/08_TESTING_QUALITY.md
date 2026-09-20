@@ -59,6 +59,7 @@
 | Drawing/DXF | geometry/import/export + drawing auth | Door Drawing + Security/UI + Frappe |
 | DocType/schema | relevant tests | Frappe install + migrate twice إلزامي |
 | UI only | JS/UX contracts | Static/Security UI حسب السطح |
+| Design System / brand tokens | `test_design_system_contract` + `almdina_ui.test.js` | Static Checks |
 | Documentation contract | Stage15 docs test | Static/Stage13 لتجنب وصف Architecture مكسورة |
 
 ## 5. لا تضعف Test

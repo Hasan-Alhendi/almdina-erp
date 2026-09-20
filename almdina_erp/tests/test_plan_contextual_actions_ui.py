@@ -85,6 +85,7 @@ class TestPlanContextualActionsUI(unittest.TestCase):
 
         self.assertIn("frm.__almdina_active_plan_tab", context)
         self.assertIn("rowForTab(frm, tab", context)
+        self.assertIn('String(row.status || "") === "Draft"', context)
         self.assertIn("controls.runApproval(frm)", context)
         self.assertIn("api.cancelApproval(frm.doc.name)", context)
         self.assertIn("tabs.printActivePlan(frm)", context)
@@ -148,6 +149,7 @@ class TestPlanContextualActionsUI(unittest.TestCase):
         self.assertIn("def download_uploaded_dxf(", backend)
         self.assertIn("source_type=SYSTEM, status=DRAFT", backend)
         self.assertIn("source_type=UPLOADED_DXF, status=DRAFT", backend)
+        self.assertIn("or latest_plan(order.name, source_type=UPLOADED_DXF)", backend)
         self.assertIn("approved_plan_for_order(order)", backend)
         self.assertIn("plan_source: str | None = None", backend)
 

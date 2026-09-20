@@ -76,5 +76,6 @@ jobs:
           node almdina_erp/tests/js/approved_plan_navigation.test.js
           node almdina_erp/tests/js/permission_context_jquery_thenable.test.js
           node almdina_erp/tests/js/order_navigation_surfaces.test.js
+          node almdina_erp/tests/js/shop_floor_worker_display.test.js
           node almdina_erp/tests/js/shop_floor_inbox_view_model.test.js
           node almdina_erp/tests/js/shop_floor_history_renderer.test.js

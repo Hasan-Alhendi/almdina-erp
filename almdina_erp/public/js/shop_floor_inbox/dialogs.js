@@ -2,12 +2,14 @@
     "use strict";
 
     function workerOptions(workers) {
-        return (workers || []).map(worker => ({
-            label: worker.full_name && worker.full_name !== worker.name
-                ? `${worker.full_name} (${worker.name})`
-                : worker.name,
-            value: worker.name,
-        }));
+        return (workers || []).map(worker => {
+            const id = String(worker && worker.name || "").trim();
+            const fullName = String(worker && worker.full_name || "").trim();
+            return {
+                label: fullName && fullName !== id ? fullName : (id || worker.name),
+                value: worker.name,
+            };
+        });
     }
 
     function create({ isCurrentGeneration } = {}) {

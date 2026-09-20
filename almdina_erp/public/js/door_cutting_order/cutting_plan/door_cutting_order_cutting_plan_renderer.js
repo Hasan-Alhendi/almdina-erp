@@ -184,12 +184,12 @@
         return `<svg class="dco-extra-addon-legend-swatch" viewBox="0 0 28 10" width="28" height="10" aria-hidden="true"><rect x="6" y="2.2" width="16" height="5.6" fill="none" stroke="${color}" stroke-width="0.9"/></svg>`;
     }
 
-    function extraDoubleBandingIcon(size = 16) {
-        return `<svg class="dco-extra-addon-icon" data-addon-kind="double" viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true"><rect x="3.5" y="2.5" width="17" height="19" fill="#fff" stroke="${EXTRA_DOUBLE_MARK_COLOR}" stroke-width="1.7"/><rect x="7" y="6" width="10" height="12" fill="none" stroke="${EXTRA_DOUBLE_MARK_COLOR}" stroke-width="1.3"/></svg>`;
+    function extraAddonTextColor(kind) {
+        return kind === "double" ? EXTRA_DOUBLE_MARK_COLOR : EXTRA_FULL_DOOR_DOUBLE_MARK_COLOR;
     }
 
-    function extraFullDoorDoubleIcon(size = 16) {
-        return `<svg class="dco-extra-addon-icon" data-addon-kind="full_door_double" viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true"><rect x="1.5" y="5" width="9" height="15" fill="#fff" stroke="${EXTRA_FULL_DOOR_DOUBLE_MARK_COLOR}" stroke-width="1.5"/><rect x="13.5" y="5" width="9" height="15" fill="#fff" stroke="${EXTRA_FULL_DOOR_DOUBLE_MARK_COLOR}" stroke-width="1.5"/><text x="12" y="4.2" text-anchor="middle" font-size="5.8" font-weight="800" fill="${EXTRA_FULL_DOOR_DOUBLE_MARK_COLOR}" font-family="Tahoma,Arial,sans-serif">2</text></svg>`;
+    function extraAddonTextMark(kind, label) {
+        return `<span class="dco-extra-addon-text" data-addon-kind="${escape_html(kind)}" style="display:block;color:${extraAddonTextColor(kind)};font-size:9px;font-weight:900;line-height:1.15;white-space:nowrap;padding:1px 3px;font-family:Tahoma,Arial,sans-serif;">${escape_html(label)}</span>`;
     }
 
     function extraAddonLegendSwatch(item) {
@@ -197,38 +197,59 @@
         if (item.overlayKind) {
             return extraOverlayStrokeSample(EXTRA_OVERLAY_STROKE_BY_KIND[item.overlayKind]);
         }
-        if (item.addonKind === "double") return extraDoubleBandingIcon(14);
-        return extraFullDoorDoubleIcon(14);
+        return "";
     }
 
     function render_extra_addon_legend() {
-        const items = EXTRA_ADDON_LEGEND_ITEMS.map(item => `
+        const items = EXTRA_ADDON_LEGEND_ITEMS.map(item => {
+            const label = extraAddonLegendLabel(item.fieldname, item.labelAr);
+            if (item.addonKind) {
+                return `
+            <span class="dco-extra-addon-legend-item">
+                ${extraAddonTextMark(item.addonKind, label)}
+            </span>`;
+            }
+            return `
             <span class="dco-extra-addon-legend-item">
                 ${extraAddonLegendSwatch(item)}
-                <span>${escape_html(extraAddonLegendLabel(item.fieldname, item.labelAr))}</span>
-            </span>
-        `).join("");
+                <span>${escape_html(label)}</span>
+            </span>`;
+        }).join("");
         return `<div class="dco-extra-addon-legend" dir="rtl" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin:8px 0 12px;padding:7px 10px;border:1px solid #c5ccd3;border-radius:8px;background:#f8fafc;font-size:11px;font-weight:700;line-height:1.2;">
             <span class="dco-extra-addon-legend-title" style="font-weight:900;white-space:nowrap;">رموز إضافات Extra</span>
             ${items}
         </div>`;
     }
 
-    function extraAddonMarkPlate(slot, kind, iconHtml) {
+    function extraAddonMarkPlate(slot, kind, innerHtml) {
         const corner = slot === "top-start"
             ? "top:4%;left:4%;right:auto;"
             : "top:4%;right:4%;left:auto;";
-        return `<div class="dco-extra-addon-mark" data-addon-kind="${escape_html(kind)}" data-addon-slot="${escape_html(slot)}" style="position:absolute;${corner}z-index:5;background:#fff;border:0.6px solid #c5ccd3;border-radius:2px;padding:1px;line-height:0;">${iconHtml}</div>`;
+        return `<div class="dco-extra-addon-mark" data-addon-kind="${escape_html(kind)}" data-addon-slot="${escape_html(slot)}" style="position:absolute;${corner}z-index:5;background:#fff;border:0.6px solid #c5ccd3;border-radius:2px;padding:1px;line-height:1.1;">${innerHtml}</div>`;
     }
 
     function render_piece_addon_marks(frm, piece) {
         const flags = extraAddonFlags(frm, piece);
         const marks = [];
         if (flags.fullDoorDouble) {
-            marks.push(extraAddonMarkPlate("top-start", "full_door_double", extraFullDoorDoubleIcon(14)));
+            marks.push(extraAddonMarkPlate(
+                "top-start",
+                "full_door_double",
+                extraAddonTextMark(
+                    "full_door_double",
+                    extraAddonLegendLabel("extra_full_door_double", "دبل كامل الدرفة")
+                )
+            ));
         }
         if (flags.double) {
-            marks.push(extraAddonMarkPlate("top-end", "double", extraDoubleBandingIcon(14)));
+            marks.push(extraAddonMarkPlate(
+                "top-end",
+                "double",
+                extraAddonTextMark(
+                    "double",
+                    extraAddonLegendLabel("extra_double", "دبل قشاط")
+                )
+            ));
         }
         if (!marks.length) return "";
         return `<div class="dco-extra-addon-marks" aria-hidden="true" style="position:absolute;inset:0;z-index:5;pointer-events:none;">${marks.join("")}</div>`;
@@ -815,8 +836,8 @@ ${printHeaderCss()}
     background: #fff !important;
     border: .3pt solid #c5ccd3 !important;
     border-radius: .4mm !important;
-    padding: .2mm !important;
-    line-height: 0 !important;
+    padding: .15mm .4mm !important;
+    line-height: 1.1 !important;
 }
 .dco-extra-addon-mark[data-addon-slot="top-start"] {
     top: 4% !important;
@@ -828,11 +849,17 @@ ${printHeaderCss()}
     right: 4% !important;
     left: auto !important;
 }
-.dco-extra-addon-marks .dco-extra-addon-icon,
-.dco-extra-addon-legend .dco-extra-addon-icon {
+.dco-extra-addon-text {
     display: block !important;
-    width: 3.2mm !important;
-    height: 3.2mm !important;
+    font-size: 5.2pt !important;
+    font-weight: 900 !important;
+    line-height: 1.1 !important;
+    white-space: nowrap !important;
+    font-family: Tahoma, Arial, sans-serif !important;
+}
+.dco-extra-addon-legend .dco-extra-addon-text {
+    font-size: 6.2pt !important;
+    padding: 0 !important;
 }
 .dco-print-sheets-grid {
     flex: 1 1 auto;

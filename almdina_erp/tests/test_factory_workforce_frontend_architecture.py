@@ -198,6 +198,12 @@ class FactoryWorkforceFrontendArchitectureTest(unittest.TestCase):
         self.assertNotIn("aw-card", self.controller)
         self.assertNotIn("style.textContent", self.controller)
 
+    def test_renderer_uses_central_design_system_for_buttons(self) -> None:
+        self.assertIn('class="almdina-ui aw-shell"', self.renderer)
+        self.assertIn("AlmdinaUi.button", self.renderer)
+        self.assertNotIn('class="btn btn-primary aw-adopt-user"', self.renderer)
+        self.assertIn("/assets/almdina_erp/js/almdina_ui.js", self.page)
+
     def test_styles_are_external_and_responsive_without_visual_pinning(self) -> None:
         for selector in (
             ".aw-shell",

@@ -76,16 +76,16 @@
             }
             .dco-notes-expand:hover:not(:disabled),
             .dco-notes-expand:focus-visible {
-                border-color:var(--primary,#2490ef);
-                color:var(--primary,#1674c5);
-                background:rgba(36,144,239,.07);
+                border-color:var(--alm-primary,#172033);
+                color:var(--alm-primary, #172033);
+                background:color-mix(in srgb, var(--alm-primary, #172033) 7%, transparent);
                 outline:none;
             }
             .dco-notes-expand:active:not(:disabled) { transform:scale(.96); }
             .dco-notes-expand.has-note {
-                border-color:rgba(36,144,239,.36);
-                color:var(--primary,#1674c5);
-                background:rgba(36,144,239,.08);
+                border-color:color-mix(in srgb, var(--alm-primary, #172033) 36%, transparent);
+                color:var(--alm-primary, #172033);
+                background:color-mix(in srgb, var(--alm-primary, #172033) 8%, transparent);
                 font-weight:900;
             }
             .dco-notes-expand.has-long-note::after {

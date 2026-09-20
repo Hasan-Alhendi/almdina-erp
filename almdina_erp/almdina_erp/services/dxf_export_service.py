@@ -14,6 +14,9 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
     DxfTopologyError,
     validate_snapshot_material_layout,
 )
+from almdina_erp.almdina_erp.domain.orders.extra_addons import (
+    apply_extra_double_text_flags_to_snapshot,
+)
 from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
     ManufacturingRequirementsError,
 )
@@ -36,7 +39,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_reposito
     latest_plan,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import (
-    plan_input_fingerprint,
+    freshness_expected_fingerprint,
 )
 from almdina_erp.almdina_erp.services import export_validation_service as legacy_export
 from almdina_erp.almdina_erp.services.dxf_autocad_normalization import (
@@ -265,7 +268,10 @@ def _saved_plan_for_source(order: Any, plan_source: str | None) -> Any | None:
     if normalized == "system":
         return latest_plan(order.name, source_type=SYSTEM, status=DRAFT)
     if normalized in {"custom", "uploaded", "uploaded dxf", "uploaded_dxf", "dxf"}:
-        return latest_plan(order.name, source_type=UPLOADED_DXF, status=DRAFT)
+        return (
+            latest_plan(order.name, source_type=UPLOADED_DXF, status=DRAFT)
+            or latest_plan(order.name, source_type=UPLOADED_DXF)
+        )
     if normalized == "approved":
         return approved_plan_for_order(order)
     frappe.throw(_("مصدر خطة القص المحدد للتصدير غير مدعوم."), frappe.ValidationError)
@@ -304,7 +310,7 @@ def _assert_saved_plan_fresh(order: Any, plan: Any) -> None:
         )
 
     try:
-        current = plan_input_fingerprint(order, plan)
+        current = freshness_expected_fingerprint(order, plan, stored)
     except ManufacturingRequirementsError as exc:
         frappe.throw(
             _("مقاسات القص التصنيعية المحفوظة في الطلب غير مكتملة. احفظ الطلب ثم أعد حساب الخطة أو استيراد DXF."),
@@ -530,6 +536,7 @@ def get_validated_dxf_plan(
             snapshot = legacy_export._plan_to_export_snapshot(plan)
         except DxfGeometrySnapshotError as exc:
             frappe.throw(_("DXF export blocked by persisted topology validation: {0}").format(str(exc)))
+        snapshot = apply_extra_double_text_flags_to_snapshot(snapshot, order.pieces)
         _assert_export_kerf(snapshot, fallback_kerf_mm=flt(plan.kerf_mm))
         return {
             "plan": snapshot,
@@ -545,6 +552,10 @@ def get_validated_dxf_plan(
         )
 
     editable, snapshot = legacy_export._strict_editable_snapshot(payload)
+    snapshot = apply_extra_double_text_flags_to_snapshot(
+        snapshot,
+        payload.get("pieces") or getattr(editable, "pieces", None),
+    )
     _assert_export_kerf(
         snapshot,
         fallback_kerf_mm=flt(getattr(editable, "kerf_mm", 0)),

@@ -190,13 +190,14 @@ class TestDcoRecoveryStateOwnershipContract(unittest.TestCase):
             "def plan_input_fingerprint", 1
         )[1].split("def calculate_system_plan", 1)[0]
         for field in (
-            '"version": 1',
+            '"version": 2',
             '"order_revision"',
             '"board"',
             '"settings"',
             '"pieces"',
         ):
             self.assertIn(field, fingerprint_body)
+        self.assertNotIn('"description"', fingerprint_body)
         self.assertNotIn("ENGINE_VERSION", fingerprint_body)
         self.assertIn('ENGINE_VERSION = "2.1.0-fast-save"', version)
 

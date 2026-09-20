@@ -49,6 +49,12 @@ def test_secure_export_has_minimal_sections_layers_and_eof_self_check():
         'layer("SHEET_OUTLINE", 8)',
         'layer("CUT_PATH", 1)',
         'layer("Liner", EXTRA_OVERLAY_LAYER_COLORS.Liner)',
+        'layer(TEXT_LABEL_LAYER, 7)',
+        'const EXTRA_DOUBLE_DXF_TEXT = "Double Edge Banding"',
+        'const EXTRA_FULL_DOOR_DOUBLE_DXF_TEXT = "Full Door Double"',
+        "function dxfAsciiText",
+        "maxY - pad - textHeight",
+        'function extraAddonTextEntities',
         'pair(0, "EOF")',
         'validateDxfText(dxf)',
         'content.endsWith("0\\r\\nEOF\\r\\n")',
@@ -142,7 +148,7 @@ def test_dxf_import_service_is_wired_for_round_trip():
 
 def test_secure_export_declares_exact_layer_table_count():
     src = _source(SECURE_DXF)
-    assert "const DXF_LAYER_COUNT = 7" in src
+    assert "const DXF_LAYER_COUNT = 8" in src
     assert 'pair(2, "LAYER") + pair(70, DXF_LAYER_COUNT)' in src
 
 
@@ -190,8 +196,62 @@ def test_rebuild_autocad_dxf_rejects_non_line_geometry():
     output = io.StringIO()
     source.write(output)
 
-    with pytest.raises(ValueError, match="LINE entities only"):
+    with pytest.raises(ValueError, match="LINE and TEXT entities only"):
         rebuild_autocad_dxf(output.getvalue().encode("ascii"))
+
+
+def test_rebuild_autocad_dxf_preserves_text_labels():
+    source = ezdxf.new("R12")
+    source.layers.add(name="text", color=7)
+    source.layers.add(name="CUT_PATH", color=1)
+    modelspace = source.modelspace()
+    modelspace.add_line((0, 0), (10, 0), dxfattribs={"layer": "CUT_PATH"})
+    text = modelspace.add_text(
+        "1",
+        dxfattribs={
+            "layer": "text",
+            "insert": (5, 5, 0),
+            "height": 20,
+            "halign": 1,
+            "valign": 2,
+        },
+    )
+    text.dxf.align_point = (5, 5, 0)
+    output = io.StringIO()
+    source.write(output)
+
+    normalized = rebuild_autocad_dxf(output.getvalue().encode("ascii"))
+    result = ezdxf.read(io.StringIO(normalized.decode("utf-8")))
+    entities = list(result.modelspace())
+    types = {entity.dxftype() for entity in entities}
+    assert types == {"LINE", "TEXT"}
+    labels = [entity for entity in entities if entity.dxftype() == "TEXT"]
+    assert len(labels) == 1
+    assert labels[0].dxf.text == "1"
+    assert str(labels[0].dxf.layer) == "text"
+    assert str(labels[0].dxf.style) == "Tahoma"
+    assert result.audit().has_errors is False
+
+
+def test_rebuild_autocad_dxf_decodes_arabic_text_escapes():
+    source = ezdxf.new("R12")
+    source.layers.add(name="text", color=7)
+    source.layers.add(name="CUT_PATH", color=1)
+    modelspace = source.modelspace()
+    modelspace.add_line((0, 0), (400, 0), dxfattribs={"layer": "CUT_PATH"})
+    modelspace.add_text(
+        r"\U+062F\U+0628\U+0644 \U+0642\U+0634\U+0627\U+0637",
+        dxfattribs={"layer": "text", "insert": (40, 520), "height": 12},
+    )
+    output = io.StringIO()
+    source.write(output)
+
+    normalized = rebuild_autocad_dxf(output.getvalue().encode("ascii"))
+    result = ezdxf.read(io.StringIO(normalized.decode("utf-8")))
+    labels = [entity for entity in result.modelspace() if entity.dxftype() == "TEXT"]
+    assert labels[0].dxf.text == "دبل قشاط"
+    assert str(labels[0].dxf.style) == "Tahoma"
+    assert labels[0].dxf.insert.y == pytest.approx(520)
 
 def test_secure_dxf_export_asset_is_cache_busted():
     registry = ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_workspace_asset_registry.js"

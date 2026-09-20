@@ -5,27 +5,32 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
+const DESIGN_SYSTEM_MODULE = "/assets/almdina_erp/js/almdina_ui.js";
+
 const cases = [
     {
         file: "../../almdina_erp/page/factory_workforce/factory_workforce.js",
         page: "factory-workforce",
         controller: "AlmdinaFactoryWorkforceController",
-        moduleCount: 7,
+        featureModuleCount: 7,
         modulePrefix: "/assets/almdina_erp/js/factory_workforce/",
+        sharedModules: [DESIGN_SYSTEM_MODULE],
     },
     {
         file: "../../almdina_erp/page/factory_permissions/factory_permissions.js",
         page: "factory-permissions",
         controller: "AlmdinaFactoryPermissionsController",
-        moduleCount: 6,
+        featureModuleCount: 6,
         modulePrefix: "/assets/almdina_erp/js/factory_permissions/",
+        sharedModules: [DESIGN_SYSTEM_MODULE],
     },
     {
         file: "../../almdina_erp/page/factory_production_settings/factory_production_settings.js",
         page: "factory-production-settings",
         controller: "AlmdinaFactoryProductionSettingsController",
-        moduleCount: 7,
+        featureModuleCount: 7,
         modulePrefix: "/assets/almdina_erp/js/factory_production_settings/",
+        sharedModules: [DESIGN_SYSTEM_MODULE],
     },
 ];
 
@@ -127,11 +132,39 @@ async function simulateCachedFoundation(config) {
     );
     assert.equal(mountCount, 1, `${config.page} controller must mount once`);
     assert.equal(requireCalls.length, 1, `${config.page} must issue exactly one native fallback require`);
-    assert.ok(Array.isArray(requireCalls[0]), `${config.page} fallback must be a batch array`);
-    assert.equal(requireCalls[0].length, config.moduleCount, `${config.page} must load the full module batch`);
+
+    const batch = requireCalls[0];
+    assert.ok(Array.isArray(batch), `${config.page} fallback must be a batch array`);
+    assert.equal(
+        batch.length,
+        config.featureModuleCount + config.sharedModules.length,
+        `${config.page} must load the full approved module batch`
+    );
+
+    const approvedSharedModules = new Set(config.sharedModules);
+    for (const sharedModule of approvedSharedModules) {
+        assert.equal(
+            batch.filter(asset => String(asset) === sharedModule).length,
+            1,
+            `${config.page} must load shared prerequisite ${sharedModule} exactly once`
+        );
+    }
+
+    const featureModules = batch.filter(asset => !approvedSharedModules.has(String(asset)));
+    assert.equal(
+        featureModules.length,
+        config.featureModuleCount,
+        `${config.page} must load every owned feature module`
+    );
     assert.ok(
-        requireCalls[0].every(asset => String(asset).startsWith(config.modulePrefix)),
-        `${config.page} fallback must contain only its owned feature modules`
+        featureModules.every(asset => String(asset).startsWith(config.modulePrefix)),
+        `${config.page} fallback feature modules must stay within their owned prefix`
+    );
+    assert.ok(
+        batch.every(
+            asset => approvedSharedModules.has(String(asset)) || String(asset).startsWith(config.modulePrefix)
+        ),
+        `${config.page} fallback may contain only approved shared prerequisites and owned feature modules`
     );
 }
 

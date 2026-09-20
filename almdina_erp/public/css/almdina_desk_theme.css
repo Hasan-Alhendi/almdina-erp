@@ -1,0 +1,39 @@
+/*
+ * Almdina ERP — Frappe Desk brand bridge (DS-10).
+ * Maps native Frappe Desk tokens to --alm-primary from almdina_design_tokens.css.
+ * Keeps Frappe markup; only retargets CSS variables and primary-blue indicators.
+ */
+
+:root,
+[data-theme="light"],
+[data-theme="dark"] {
+    --primary: var(--alm-primary);
+    --btn-primary: var(--alm-primary);
+    --primary-color: var(--alm-primary);
+    --border-primary: var(--alm-primary);
+    --brand-color: var(--alm-primary);
+    --checkbox-color: var(--alm-primary);
+
+    --bg-blue: color-mix(in srgb, var(--alm-primary) 10%, #ffffff);
+    --text-on-blue: var(--alm-primary);
+    --bg-light-blue: color-mix(in srgb, var(--alm-primary) 7%, #ffffff);
+    --text-on-light-blue: var(--alm-primary-hover);
+}
+
+.indicator.blue::before,
+.indicator.blue::after,
+.indicator-pill.blue::before,
+.indicator-pill.blue::after,
+.indicator-pill-right.blue::before,
+.indicator-pill-right.blue::after,
+.indicator-pill-round.blue::before,
+.indicator-pill-round.blue::after {
+    background: var(--alm-primary);
+}
+
+.indicator-pill.blue,
+.indicator-pill-right.blue,
+.indicator-pill-round.blue {
+    background: color-mix(in srgb, var(--alm-primary) 10%, #ffffff);
+    color: var(--alm-primary);
+}

@@ -165,6 +165,14 @@
         return frappe.utils.escape_html(String(value ?? ""));
     }
 
+    function uiButton(options) {
+        const ui = window.AlmdinaUi;
+        if (!ui || typeof ui.button !== "function") {
+            throw new Error("AlmdinaUi.button is required for DCO plan actions");
+        }
+        return ui.button(options);
+    }
+
     function parsePlanRow(row) {
         if (!row || !row.snapshot_json) return {};
         if (typeof row.snapshot_json === "object") return row.snapshot_json || {};
@@ -209,8 +217,8 @@
                     background:linear-gradient(180deg,rgba(100,116,139,.035),transparent 42%) !important;
                 }
                 .dco-optimizer-card {
-                    border-inline-start:4px solid var(--primary,#2490ef) !important;
-                    background:linear-gradient(180deg,rgba(36,144,239,.045),transparent 46%) !important;
+                    border-inline-start:4px solid var(--alm-primary,#172033) !important;
+                    background:linear-gradient(180deg,color-mix(in srgb, var(--alm-primary, #172033) 4%, transparent),transparent 46%) !important;
                 }
                 .dco-result-card { border-inline-start:4px solid #10b981 !important; }
                 .dco-layout-card { border-inline-start:4px solid #0f172a !important; }
@@ -246,7 +254,7 @@
                     width:58px;
                     height:58px;
                     border-radius:50%;
-                    background:rgba(36,144,239,.045);
+                    background:color-mix(in srgb, var(--alm-primary, #172033) 4%, transparent);
                 }
                 .dco-plan-card .label {
                     display:block;
@@ -307,7 +315,7 @@
                     padding-inline:13px;
                 }
                 .dco-plan-actions .dco-recalculate-plan {
-                    box-shadow:0 4px 10px rgba(36,144,239,.16);
+                    box-shadow:0 4px 10px color-mix(in srgb, var(--alm-primary, #172033) 16%, transparent);
                 }
                 .dco-plan-document-actions {
                     display:flex;
@@ -353,8 +361,8 @@
                     padding:3px 8px;
                     font-size:10px;
                     font-weight:800;
-                    background:rgba(36,144,239,.11);
-                    color:var(--primary,#2490ef);
+                    background:color-mix(in srgb, var(--alm-primary, #172033) 11%, transparent);
+                    color:var(--alm-primary,#172033);
                     margin-top:5px;
                 }
                 [data-fieldname="cutting_plan_html"] .dco-cutting-plan {
@@ -548,7 +556,7 @@
         const blockReason = stageMutationBlockReason(frm);
 
         wrapper.append(`
-            <div class="dco-plan-actions-shell">
+            <div class="almdina-ui dco-plan-actions-shell">
                 <div class="dco-plan-dirty-note">تم تغيير أحد إعدادات الخطة. أعد الحساب لتطبيق التغيير على الرسم والنتائج.</div>
                 <div class="dco-plan-actions-title">
                     <strong>أوامر خطة القص</strong>
@@ -556,9 +564,12 @@
                 </div>
                 ${mayMutate ? `
                     <div class="dco-plan-actions">
-                        <button type="button" class="btn btn-primary btn-sm dco-recalculate-plan">
-                            إعادة الحساب بالإعدادات الحالية
-                        </button>
+                        ${uiButton({
+                            label: "إعادة الحساب بالإعدادات الحالية",
+                            variant: "primary",
+                            size: "btn-sm",
+                            className: "dco-recalculate-plan",
+                        })}
                     </div>
                 ` : ""}
                 ${documentActionsHtml(frm)}

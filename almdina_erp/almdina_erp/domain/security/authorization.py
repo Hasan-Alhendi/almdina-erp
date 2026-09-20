@@ -18,6 +18,7 @@ class Capability:
     APPROVE_ORDER = "approve_order"
     REJECT_ORDER = "reject_order"
     CANCEL_ORDER = "cancel_order"
+    RESUME_CANCELLED_ORDER = "resume_cancelled_order"
     ADD_INTERNAL_NOTE = "add_internal_note"
     MANAGE_IMPORTANT_NOTE = "manage_important_note"
 
@@ -146,6 +147,12 @@ _CAPABILITY_DEFINITIONS = (
     CapabilityDefinition(Capability.APPROVE_ORDER, Capability.APPROVE_ORDER, _ORDER_DOCTYPE, "order"),
     CapabilityDefinition(Capability.REJECT_ORDER, Capability.REJECT_ORDER, _ORDER_DOCTYPE, "order"),
     CapabilityDefinition(Capability.CANCEL_ORDER, Capability.CANCEL_ORDER, _ORDER_DOCTYPE, "order"),
+    CapabilityDefinition(
+        Capability.RESUME_CANCELLED_ORDER,
+        Capability.RESUME_CANCELLED_ORDER,
+        _ORDER_DOCTYPE,
+        "order",
+    ),
     CapabilityDefinition(Capability.ADD_INTERNAL_NOTE, Capability.ADD_INTERNAL_NOTE, _ORDER_DOCTYPE, "order"),
     CapabilityDefinition(Capability.MANAGE_IMPORTANT_NOTE, Capability.MANAGE_IMPORTANT_NOTE, _ORDER_DOCTYPE, "order"),
     # The reviewed board/cutting financial snapshot belongs to Cutting Plan.

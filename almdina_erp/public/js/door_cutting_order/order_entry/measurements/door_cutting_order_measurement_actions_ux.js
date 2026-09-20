@@ -11,6 +11,14 @@
         return frappe.utils.escape_html(String(value ?? ""));
     }
 
+    function uiButton(options) {
+        const ui = window.AlmdinaUi;
+        if (!ui || typeof ui.button !== "function") {
+            throw new Error("AlmdinaUi.button is required for DCO measurement actions");
+        }
+        return ui.button(options);
+    }
+
     function orderEdgeColor(frm) {
         return String(frm.doc.edge_color || "").trim() || "غير محدد";
     }
@@ -95,14 +103,17 @@
         host.dataset.almdinaInlineEdit = signature;
         if (isInlineEditActive(frm)) {
             host.innerHTML = `
-                <button type="button" class="btn btn-default dco-inline-order-edit-cancel" ${busy ? "disabled" : ""}>${esc(CANCEL_LABEL)}</button>
-                <button type="button" class="btn btn-primary dco-inline-order-edit-save" ${busy ? "disabled" : ""}>${esc(SAVE_LABEL)}</button>
+                ${uiButton({ label: CANCEL_LABEL, variant: "secondary", className: "dco-inline-order-edit-cancel", disabled: busy })}
+                ${uiButton({ label: SAVE_LABEL, variant: "primary", className: "dco-inline-order-edit-save", disabled: busy })}
             `;
             return;
         }
-        host.innerHTML = `
-            <button type="button" class="btn btn-default dco-inline-order-edit-start" ${canInlineStartEdit(frm) ? "" : "disabled"}>${esc(EDIT_LABEL)}</button>
-        `;
+        host.innerHTML = uiButton({
+            label: EDIT_LABEL,
+            variant: "secondary",
+            className: "dco-inline-order-edit-start",
+            disabled: !canInlineStartEdit(frm),
+        });
     }
 
     function ensureEditorRootMounted(frm) {
@@ -163,7 +174,7 @@
                     <span>لون القشاط: <b>${esc(orderEdgeColor(frm))}</b></span>
                     <span class="dco-entry-window-status"><span class="dot"></span><span>جميع التعديلات محفوظة</span></span>
                 </div>
-                <div class="dco-entry-window-actions">
+                <div class="dco-entry-window-actions almdina-ui">
                     <button type="button" class="btn btn-default dco-entry-window-print">طباعة القياسات</button>
                     <span class="dco-entry-window-order-edit-action"></span>
                     <button type="button" class="btn btn-default dco-entry-window-close">إغلاق والعودة</button>

@@ -128,12 +128,12 @@
             .dco-edge-bulk-cell-content{display:flex;align-items:center;justify-content:center;min-height:38px;width:100%}
             .dco-all-sides-profile-button{
                 width:100%;max-width:100%;height:38px;min-height:38px;display:flex;align-items:center;
-                justify-content:center;gap:5px;border:1px solid rgba(36,144,239,.38);border-radius:7px;
-                background:rgba(36,144,239,.07);color:var(--text-color,#36414c);padding:2px 6px;
+                justify-content:center;gap:5px;border:1px solid color-mix(in srgb, var(--alm-primary, #172033) 38%, transparent);border-radius:7px;
+                background:color-mix(in srgb, var(--alm-primary, #172033) 7%, transparent);color:var(--text-color,#36414c);padding:2px 6px;
                 font-size:9.5px;font-weight:850;line-height:1.1;cursor:pointer;outline:none
             }
             .dco-all-sides-profile-button:hover,.dco-all-sides-profile-button:focus{
-                border-color:var(--primary,#2490ef);background:#eef7ff;box-shadow:0 0 0 2px rgba(36,144,239,.1)
+                border-color:var(--alm-primary,#172033);background:color-mix(in srgb, var(--alm-primary, #172033) 6%, #ffffff);box-shadow:0 0 0 2px color-mix(in srgb, var(--alm-primary, #172033) 10%, transparent)
             }
             .dco-all-sides-profile-button:disabled{opacity:.48;cursor:not-allowed;box-shadow:none}
             .dco-all-sides-profile-button .dco-bulk-chevron{font-size:11px;line-height:1;opacity:.72}
@@ -185,13 +185,13 @@
                 color:inherit;text-align:right;cursor:pointer
             }
             #${POPOVER_ID} .dco-edge-profile-option:hover,#${POPOVER_ID} .dco-edge-profile-option:focus{
-                border-color:rgba(36,144,239,.42);background:#eef7ff;outline:0
+                border-color:color-mix(in srgb, var(--alm-primary, #172033) 42%, transparent);background:color-mix(in srgb, var(--alm-primary, #172033) 6%, #ffffff);outline:0
             }
-            #${POPOVER_ID} .dco-edge-profile-option.is-current{border-color:#2490ef;background:#e9f5ff}
+            #${POPOVER_ID} .dco-edge-profile-option.is-current{border-color:var(--alm-primary,#172033);background:color-mix(in srgb, var(--alm-primary, #172033) 8%, #ffffff)}
             #${POPOVER_ID} .dco-edge-profile-option.is-custom-current{border-color:#c88a00;background:#fff4cc}
             #${POPOVER_ID} .dco-edge-profile-option b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
             #${POPOVER_ID} .dco-edge-profile-option small{grid-column:1;color:var(--text-muted,#65717d);font-size:8.5px;line-height:1.2}
-            #${POPOVER_ID} .dco-edge-profile-option span{grid-column:2;grid-row:1/3;font-size:13px;font-weight:900;color:#1674c5}
+            #${POPOVER_ID} .dco-edge-profile-option span{grid-column:2;grid-row:1/3;font-size:13px;font-weight:900;color:var(--alm-primary,#172033)}
             #${POPOVER_ID} .dco-edge-profile-option.is-custom-current span{color:#8a6100}
             @media(max-width:900px){
                 .dco-fast-table .dco-col-edge-bulk{width:112px!important;min-width:112px!important;max-width:112px!important}

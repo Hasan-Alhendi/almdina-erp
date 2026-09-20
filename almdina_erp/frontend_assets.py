@@ -6,6 +6,9 @@ coverage.
 """
 
 app_include_css = [
+    "/assets/almdina_erp/css/almdina_design_tokens.css",
+    "/assets/almdina_erp/css/almdina_components.css",
+    "/assets/almdina_erp/css/almdina_desk_theme.css",
     "/assets/almdina_erp/css/door_cutting_order_measurement_structure.css",
     "/assets/almdina_erp/css/door_cutting_order_responsive.css",
     # Raw /assets paths are not content-fingerprinted by Frappe; bump the bounded
@@ -22,6 +25,7 @@ app_include_css = [
 app_include_js = [
     "/assets/almdina_erp/js/permission_context.js",
     "/assets/almdina_erp/js/frontend_foundation.js",
+    "/assets/almdina_erp/js/almdina_ui.js",
     "/assets/almdina_erp/js/notes/notes_panel.js",
     "/assets/almdina_erp/js/notes/notes_dco_list_integration.js?v=14",
     # Lightweight presentation policy only: it composes ListView formatters and
@@ -91,6 +95,9 @@ doctype_js = {
         # duplicate document state or save commands; it only arranges the existing
         # Frappe controls into the compact intake/material/measurements hierarchy.
         "public/js/door_cutting_order/order_entry/door_cutting_order_order_tab_layout_ux.js",
+        # Radio presentation and client-only required check for the operational
+        # cutting machine. Schema stays optional so the server accepts null.
+        "public/js/door_cutting_order/order_entry/door_cutting_order_cutting_machine_ux.js",
         # Qty+Enter is a focused keyboard behavior layered on the operator's
         # existing row materialization/model-sync contract; it owns no rendering.
         "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_fast_entry_keyboard_ux.js",

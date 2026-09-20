@@ -314,6 +314,8 @@ async function run() {
                         id: 1,
                         label: "1.1",
                         piece_type: "Extra",
+                        extra_double: 1,
+                        extra_full_door_double: 1,
                         x: 0,
                         y: 0,
                         w: 40,
@@ -355,6 +357,40 @@ async function run() {
     assert.equal((downloadedDxf.match(/8\r\nLiner\r\n/g) || []).length, 4);
     assert.equal((downloadedDxf.match(/8\r\nRear Groove\r\n/g) || []).length, 1);
     assert.equal(cutPathLineCount(downloadedDxf), 4);
+    assert.match(downloadedDxf, /2\r\ntext\r\n/);
+    assert.match(downloadedDxf, /0\r\nTEXT\r\n/);
+    assert.match(downloadedDxf, /1\r\n1\r\n/);
+    assert.equal((downloadedDxf.match(/0\r\nTEXT\r\n/g) || []).length, 3);
+    assert.match(downloadedDxf, /1\r\nDouble Edge Banding\r\n/);
+    assert.match(downloadedDxf, /1\r\nFull Door Double\r\n/);
+    assert.doesNotMatch(downloadedDxf, /1\r\nDouble\r\n/);
+
+    nextPlan = {
+        full_board_width_cm: 100,
+        full_board_length_cm: 100,
+        trim_cm: 0,
+        sheets: [
+            {
+                sheet_no: 1,
+                full_width_cm: 100,
+                full_length_cm: 100,
+                pieces: [
+                    { id: 1, label: "1.1", x: 0, y: 0, w: 10, h: 10 },
+                    { id: 2, label: "2.2", x: 20, y: 0, w: 10, h: 10 },
+                    { id: 50, label: "50.1", x: 40, y: 0, w: 10, h: 10 },
+                    { id: 51, label: "51.1", x: 60, y: 0, w: 10, h: 10 },
+                ],
+            },
+        ],
+    };
+    downloadedDxf = "";
+    await fakeFrappe.almdina.export_order_dxf("DCO-TEXT-NUMBERS", "system");
+    assert.equal((downloadedDxf.match(/0\r\nTEXT\r\n/g) || []).length, 4);
+    assert.match(downloadedDxf, /8\r\ntext\r\n/);
+    assert.match(downloadedDxf, /1\r\n1\r\n/);
+    assert.match(downloadedDxf, /1\r\n2\r\n/);
+    assert.match(downloadedDxf, /1\r\n50\r\n/);
+    assert.match(downloadedDxf, /1\r\n51\r\n/);
 
     console.log("Secure DXF topology export simulation passed");
 }

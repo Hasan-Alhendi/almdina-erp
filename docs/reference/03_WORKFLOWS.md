@@ -33,7 +33,7 @@ stateDiagram-v2
 
 **مهم:** هذا مختلف عن **اعتماد Cutting Plan**. إذا بدأ Production Route بمرحلة تخطيط، يجب اعتماد الخطة المختارة قبل handoff من مرحلة التخطيط إلى المرحلة التالية.
 
-قبل الإرسال للإنتاج يبقى الطلب في `Draft` قابلًا لإعادة حساب الخطة أو رفع/استبدال DXF أو تعديل إعدادات القص حتى لو كانت هناك خطة معتمدة أو مسار إنتاج مخطط. الاعتماد السابق يبقى مرجعًا حتى يُعتمد البديل. بعد مغادرة مرحلة الرسم تبقى الخطة المعتمدة مقفلة.
+قبل الإرسال للإنتاج يبقى الطلب في `Draft` قابلًا لإعادة حساب الخطة أو رفع/استبدال DXF أو تعديل إعدادات القص. حفظ أي مدخل يؤثر على توزيع القطع يلغي الخطة المعتمدة الحالية ويبقي آخر خطة مرفوعة ظاهرة في تابها مع بانر عدم المطابقة حتى يُعتمد بديل مطابق. اسم الزبون ونوع اللوح ولون القشاط ليست مدخلات قص ولا تلغي الاعتماد. بعد مغادرة مرحلة الرسم لا يُعاد تشغيل المحسّن تلقائيًا لعرض تاريخ قديم.
 
 ## 4. Dispatch
 
@@ -47,7 +47,7 @@ stateDiagram-v2
 - Route صالح.
 - العامل المختار يملك `operational_role` المطلوب لأول مرحلة.
 
-بعد dispatch ينشأ Current Production Stage ويُسند لمستخدم محدد.
+بعد dispatch ينشأ Current Production Stage ويُسند لمستخدم محدد. إذا نجح الإرسال وكان المستخدم لا يملك `view_all_orders` ولا `view_shop_floor_history`، تعيد الاستمارة إلى قائمة `Door Cutting Order` بدل إعادة تحميل طلب خرج من نطاق رؤيته.
 
 ## 5. تنفيذ المرحلة
 
@@ -65,7 +65,7 @@ stateDiagram-v2
 
 العامل يحتاج `HANDOFF_ASSIGNED_STAGE` ونفس شروط ownership. المسار الطبيعي للإنهاء يبقى من `In Progress` أو `Paused` إلى `Completed`.
 
-يوجد استثناء مقصود للمرحلة `Pending`: إذا كانت المرحلة هي Current Stage ومسندة لنفس العامل، وكان العامل يملك `HANDOFF_ASSIGNED_STAGE` **ولا يملك** `START_ASSIGNED_STAGE`، يمكنه تنفيذ Handoff يدوي مباشر من `Pending` إلى `Completed` دون إنشاء Start وهمي. هذا لا يحدث تلقائيًا.
+يوجد استثناء مقصود للمرحلة `Pending`: إذا كانت المرحلة هي Current Stage ومسندة لنفس العامل، وكان العامل يملك `HANDOFF_ASSIGNED_STAGE` **ولا يملك** `START_ASSIGNED_STAGE`، يمكنه تنفيذ Handoff يدوي مباشر من `Pending` إلى `Completed` دون إنشاء Start وهمي. هذا لا يحدث تلقائيًا. بعد Handoff أو تأكيد التسليم، نفس قاعدة العودة إلى قائمة الطلبات تنطبق إذا لم يملك المستخدم صلاحية رؤية الطلبات المنجزة أو كل الطلبات.
 
 إذا كان العامل يملك الصلاحيتين `START_ASSIGNED_STAGE` و`HANDOFF_ASSIGNED_STAGE` معًا، فلا يجوز له تجاوز Start: في `Pending` يظهر/يُسمح Start أولًا، وبعد دخول المرحلة في حالة `In Progress` يصبح Handoff متاحًا.
 
@@ -77,7 +77,7 @@ Application يقرأ المرحلة التالية من Route، لا من سلس
 
 ### Last stage
 
-انتهاء آخر مرحلة يحوّل الطلب إلى `Ready for Delivery`، ثم `MARK_DELIVERED` يحوله إلى `Delivered`.
+انتهاء آخر مرحلة يحوّل الطلب إلى `Ready for Delivery`، ثم `MARK_DELIVERED` يحوله إلى `Delivered`. للعامل ذي النطاق المسند بدون `view_shop_floor_history` يخرج الطلب من استعلام قائمة `Door Cutting Order` ومن العدد بعد إنهاء آخر مرحلة، كما يخرج بعد Handoff للمراحل الوسطى؛ صف `Ready for Delivery` يبقى ظاهرًا لمن يملك `view_all_orders` أو ليس عامل أرضية بنطاق مسند، ولا يعتمد على صلاحية الأرشيف.
 
 ## 6. Inbox وArchive
 
@@ -93,9 +93,12 @@ Application يقرأ المرحلة التالية من Route، لا من سلس
 - Reassign worker لمرحلة نشطة.
 - Revert إلى قسم/مرحلة سابقة مع شروط بنيوية.
 - Return order to Draft.
+- Resume a cancelled order to the production stage it was cancelled from (`resume_cancelled_order`).
 - Mark Delivered.
 
 Supervisor capability لا تلغي كل قواعد البنية تلقائيًا؛ بعض الإجراءات ما زالت تتطلب وجود target stage صالح أو status مناسب.
+
+إلغاء الطلب (`cancel_order`) إجراء نهائي من ناحية الحالة، لكنه يحفظ snapshot للمراحل والخطة. استئناف الطلب الملغى (`resume_cancelled_order`) يعيد نفس المستند إلى المرحلة التي أُلغي منها دون طلب سبب، دون `return_order_to_draft` ودون استرجاع قطع التعويض الملغاة مع الإلغاء. بعد الإلغاء أو الاستئناف تُحدَّث واجهة الطلب فورًا لإظهار الحالة والزر المناسب.
 
 ## 8. Drawing / planning handoff
 

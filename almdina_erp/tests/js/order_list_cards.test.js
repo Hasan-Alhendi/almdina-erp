@@ -324,6 +324,32 @@ assert(deliveredHtml.includes("dco-card-complete-state"));
 assert(deliveredHtml.includes("تم التسليم"), "a delivered order must retain a non-interactive delivered state");
 assert(!deliveredHtml.includes("dco-card-production-action"), "a delivered order must never render another workflow button");
 
+const cancelled = {
+    ...delivered,
+    status: "Cancelled",
+    current_department: "CNC",
+    __almdinaProductionActionContext: {
+        stage: "PST-10",
+        canStart: false,
+        canHandoff: false,
+        canDeliver: false,
+        assignmentState: "completed",
+        queueState: "completed",
+    },
+};
+const cancelledModel = api.cardViewModel(cancelled);
+const cancelledHtml = api.buildCard(cancelled, false);
+assert.strictEqual(cancelledModel.state.key, "cancelled");
+assert.strictEqual(cancelledModel.state.label, "ملغى");
+assert.strictEqual(cancelledModel.state.icon, "x");
+assert.strictEqual(cancelledModel.history, true);
+assert.strictEqual(cancelledModel.action, null);
+assert(cancelledHtml.includes("dco-mobile-order-card is-cancelled"));
+assert(cancelledHtml.includes("dco-card-complete-state"));
+assert(cancelledHtml.includes("ملغى"), "a cancelled order must retain a non-interactive cancelled state");
+assert(!cancelledHtml.includes("dco-card-production-action"), "a cancelled order must never render another workflow button");
+assert(!cancelledHtml.includes("is-delivered"), "cancelled must not inherit delivered green styling");
+
 assert.strictEqual(api.overviewStageLabel({ status: "At CNC", current_department: "CNC" }), "CNC");
 assert.strictEqual(api.overviewStageLabel({ status: "Ready for Delivery" }), "جاهز للتسليم");
 assert.strictEqual(api.overviewStageLabel({ status: "Delivered" }), "تم التسليم");
@@ -560,8 +586,9 @@ assert.deepStrictEqual(
 assert(source.includes('const mobileLayout = root.classList.contains("dco-order-card-layout")'));
 assert(source.includes("? sortPersonalQueueItems(queueItems)"));
 assert(source.includes(": sortDesktopQueueItems(queueItems);"));
-assert(source.includes("if (usesOverviewDeliveredLastSort())"));
+assert(source.includes("if (isOverviewDefaultSortActive(listview))"));
 assert(source.includes("reorderOverviewListRows(listview, result);"));
+assert(source.includes("installOverviewDefaultSort(listview)"));
 assert(!source.includes("? sortOverviewListItems(queueItems)"));
 
 assert.strictEqual(
@@ -623,7 +650,18 @@ assert.deepStrictEqual(
         "DCO-DELIVERED-NEW",
         "DCO-DELIVERED-OLD",
     ],
-    "all-orders list must keep delivered rows last while remaining rows stay newest-first by modified"
+    "all-orders default sort must keep delivered rows last while remaining rows stay newest-first by modified"
+);
+assert.deepStrictEqual(
+    Array.from(api.sortOverviewListItems(overviewQueueItems, "asc"), item => item.name),
+    [
+        "DCO-ACTIVE-OLD",
+        "DCO-READY",
+        "DCO-CANCELLED",
+        "DCO-DELIVERED-OLD",
+        "DCO-DELIVERED-NEW",
+    ],
+    "the extra default option may reverse its own time direction without changing Frappe built-in sorts"
 );
 assert.strictEqual(api.overviewListState({ status: "Delivered" }), "delivered");
 assert.strictEqual(api.overviewListState({ current_department: "تم التسليم" }), "delivered");
@@ -632,10 +670,65 @@ assert.strictEqual(api.overviewListState({ status: "Cancelled" }), "active");
 assert.strictEqual(typeof api.overviewListOrderBy, "undefined");
 assert(!source.includes("IN ('Delivered')"));
 assert(!source.includes("args.order_by = overviewListOrderBy"));
+assert.strictEqual(api.overviewDefaultSortField, "__dco_default_sort");
+assert.strictEqual(api.overviewDefaultSortLabel, "الترتيب الافتراضي");
+assert.strictEqual(
+    api.overviewDefaultSortSql(),
+    "`tabDoor Cutting Order`.`modified` desc"
+);
+assert.strictEqual(
+    api.overviewDefaultSortSql("asc"),
+    "`tabDoor Cutting Order`.`modified` asc"
+);
+
+const overviewSortStore = {
+    data: {},
+    getItem(key) {
+        return Object.prototype.hasOwnProperty.call(this.data, key) ? this.data[key] : null;
+    },
+    setItem(key, value) {
+        this.data[key] = String(value);
+    },
+};
+assert.strictEqual(api.shouldSelectOverviewDefaultSort("", overviewSortStore), true);
+assert.strictEqual(api.shouldSelectOverviewDefaultSort(api.overviewDefaultSortField, overviewSortStore), true);
+assert.strictEqual(api.shouldSelectOverviewDefaultSort("modified", overviewSortStore), true);
+assert.strictEqual(api.shouldSelectOverviewDefaultSort("name", overviewSortStore), false);
+overviewSortStore.setItem(api.overviewDefaultSortMigrationKey, "1");
+assert.strictEqual(api.shouldSelectOverviewDefaultSort("modified", overviewSortStore), false);
+assert.strictEqual(api.shouldSelectOverviewDefaultSort("name", overviewSortStore), false);
 
 assert.strictEqual(api.usesOverviewDeliveredLastSort(), false);
+assert.strictEqual(
+    api.isOverviewDefaultSortActive({
+        sort_selector: { sort_by: api.overviewDefaultSortField },
+    }),
+    false,
+    "workers must not activate the overview default sort"
+);
 context.frappe.session.user = "Administrator";
 assert.strictEqual(api.usesOverviewDeliveredLastSort(), true);
+assert.strictEqual(
+    api.isOverviewDefaultSortActive({
+        sort_selector: { sort_by: api.overviewDefaultSortField },
+    }),
+    true
+);
+assert.strictEqual(
+    api.isOverviewDefaultSortActive({
+        sort_by: "name",
+        sort_selector: { sort_by: "name", sort_order: "desc" },
+    }),
+    false,
+    "built-in descending sort must not reuse delivered-last reordering"
+);
+assert.strictEqual(
+    api.isOverviewDefaultSortActive({
+        sort_by: "modified",
+        sort_selector: { sort_by: "modified", sort_order: "desc" },
+    }),
+    false
+);
 context.frappe.session.user = "manager@example.com";
 context.window.AlmdinaPermissions = {
     can(capability) { return capability === "view_all_orders"; },
@@ -648,11 +741,233 @@ assert.strictEqual(api.usesOverviewDeliveredLastSort(), false);
 context.frappe.session.user = "cutting@example.com";
 context.window.AlmdinaPermissions = undefined;
 
+const memoryStorage = {
+    data: {},
+    getItem(key) {
+        return Object.prototype.hasOwnProperty.call(this.data, key) ? this.data[key] : null;
+    },
+    setItem(key, value) {
+        this.data[key] = String(value);
+    },
+    clear() {
+        this.data = {};
+    },
+};
+context.window.localStorage = memoryStorage;
+
+function mockSortSelector(sortBy) {
+    return {
+        sort_by: sortBy,
+        sort_order: "desc",
+        args: {
+            sort_by: sortBy,
+            sort_order: "desc",
+            options: [
+                { fieldname: "modified", label: "Last Updated" },
+                { fieldname: "name", label: "ID" },
+            ],
+        },
+        labels: {},
+        make() {
+            this.made = (this.made || 0) + 1;
+        },
+        set_value(nextSortBy, nextSortOrder) {
+            this.sort_by = nextSortBy;
+            this.sort_order = nextSortOrder;
+        },
+        get_sql_string() {
+            return "`tabDoor Cutting Order`.`" + this.sort_by + "` " + this.sort_order;
+        },
+    };
+}
+
+context.frappe.session.user = "Administrator";
+const defaultSelector = mockSortSelector("modified");
+const defaultListview = {
+    sort_by: "modified",
+    sort_order: "desc",
+    sort_selector: defaultSelector,
+};
+api.installOverviewDefaultSort(defaultListview);
+assert.strictEqual(defaultSelector.sort_by, api.overviewDefaultSortField);
+assert.strictEqual(
+    defaultListview.sort_by,
+    "modified",
+    "installing the extra option must not rewrite Frappe ListView's native sort state"
+);
+assert.strictEqual(defaultSelector.get_sql_string(), api.overviewDefaultSortSql());
+assert.strictEqual(defaultSelector.args.options[0].fieldname, api.overviewDefaultSortField);
+assert.strictEqual(defaultSelector.args.options[0].label, api.overviewDefaultSortLabel);
+assert.strictEqual(api.isOverviewDefaultSortActive(defaultListview), true);
+assert.strictEqual(memoryStorage.getItem(api.overviewDefaultSortMigrationKey), "1");
+api.installOverviewDefaultSort(defaultListview);
+assert.strictEqual(
+    defaultSelector.args.options.filter(option => option.fieldname === api.overviewDefaultSortField).length,
+    1,
+    "default sort option must be injected once"
+);
+
+defaultSelector.sort_by = "name";
+defaultSelector.sort_order = "desc";
+defaultListview.sort_by = "name";
+assert.strictEqual(api.isOverviewDefaultSortActive(defaultListview), false);
+assert.strictEqual(
+    defaultSelector.get_sql_string(),
+    "`tabDoor Cutting Order`.`name` desc",
+    "built-in descending SQL must stay native after leaving the default option"
+);
+
+memoryStorage.clear();
+memoryStorage.setItem(api.overviewDefaultSortMigrationKey, "1");
+const lastUpdatedSelector = mockSortSelector("modified");
+const lastUpdatedListview = {
+    sort_by: "modified",
+    sort_order: "desc",
+    sort_selector: lastUpdatedSelector,
+};
+api.installOverviewDefaultSort(lastUpdatedListview);
+assert.strictEqual(
+    lastUpdatedSelector.sort_by,
+    "modified",
+    "explicit Last Updated must persist after the one-time default migration"
+);
+assert.strictEqual(api.isOverviewDefaultSortActive(lastUpdatedListview), false);
+
+const nameSelector = mockSortSelector("name");
+const nameListview = {
+    sort_by: "name",
+    sort_order: "desc",
+    sort_selector: nameSelector,
+};
+api.installOverviewDefaultSort(nameListview);
+assert.strictEqual(nameSelector.sort_by, "name");
+assert.strictEqual(nameSelector.args.options[0].fieldname, api.overviewDefaultSortField);
+assert.strictEqual(api.isOverviewDefaultSortActive(nameListview), false);
+
+function frappeLikeSortSelector(sortBy) {
+    const button = {
+        attrs: { "data-value": "desc" },
+        length: 1,
+        attr(name, value) {
+            if (arguments.length < 2) return this.attrs[name];
+            this.attrs[name] = value;
+            return this;
+        },
+        find() {
+            return { length: 1, html() {} };
+        },
+    };
+    const selector = {
+        sort_by: sortBy,
+        sort_order: "desc",
+        args: {
+            sort_by: sortBy,
+            sort_order: "desc",
+            options: [
+                { fieldname: "modified", label: "Last Updated" },
+                { fieldname: "name", label: "ID" },
+            ],
+        },
+        labels: {},
+        wrapper: {
+            find(selectorName) {
+                if (selectorName === ".btn-order") return button;
+                return { length: 1, html() {}, attr() { return this; } };
+            },
+        },
+        make() {
+            this.made = (this.made || 0) + 1;
+        },
+        set_value(nextSortBy, nextSortOrder) {
+            if (this.sort_by !== nextSortBy) this.sort_by = nextSortBy;
+            if (this.sort_order !== nextSortOrder) {
+                this.sort_order = nextSortOrder;
+                button.attr("data-value", nextSortOrder);
+            }
+        },
+        get_sql_string() {
+            return "`tabDoor Cutting Order`.`" + this.sort_by + "` " + this.sort_order;
+        },
+        orderButton() {
+            return button;
+        },
+    };
+    selector.onchange = function onSortChange(sortBy, sortOrder) {
+        if (!selector.listview) return;
+        selector.listview.sort_by = sortBy;
+        selector.listview.sort_order = sortOrder;
+    };
+    return selector;
+}
+
+memoryStorage.clear();
+const toggleSelector = frappeLikeSortSelector("modified");
+const toggleListview = {
+    sort_by: "modified",
+    sort_order: "desc",
+    sort_selector: toggleSelector,
+};
+toggleSelector.listview = toggleListview;
+const nativeSetValue = toggleSelector.set_value;
+const nativeOnchange = toggleSelector.onchange;
+api.installOverviewDefaultSort(toggleListview);
+assert.strictEqual(toggleSelector.sort_by, api.overviewDefaultSortField);
+assert.strictEqual(
+    toggleSelector.set_value,
+    nativeSetValue,
+    "the extra option must not wrap or replace Frappe's native set_value"
+);
+assert.strictEqual(
+    toggleSelector.onchange,
+    nativeOnchange,
+    "the extra option must not wrap or replace Frappe's native onchange"
+);
+
+toggleSelector.set_value(api.overviewDefaultSortField, "asc");
+toggleSelector.onchange(toggleSelector.sort_by, toggleSelector.sort_order);
+assert.strictEqual(toggleSelector.sort_order, "asc");
+assert.strictEqual(toggleListview.sort_order, "asc");
+assert.strictEqual(toggleSelector.orderButton().attr("data-value"), "asc");
+assert.strictEqual(
+    toggleSelector.get_sql_string(),
+    "`tabDoor Cutting Order`.`modified` asc",
+    "only the synthetic default option may translate to its custom SQL"
+);
+
+toggleSelector.set_value("name", toggleSelector.sort_order);
+toggleSelector.onchange(toggleSelector.sort_by, toggleSelector.sort_order);
+assert.strictEqual(toggleSelector.sort_by, "name");
+assert.strictEqual(toggleSelector.orderButton().attr("data-value"), "asc");
+assert.strictEqual(
+    toggleSelector.get_sql_string(),
+    "`tabDoor Cutting Order`.`name` asc",
+    "Frappe ID sort SQL must remain exactly native"
+);
+
+toggleSelector.set_value(toggleSelector.sort_by, "desc");
+toggleSelector.onchange(toggleSelector.sort_by, toggleSelector.sort_order);
+assert.strictEqual(toggleSelector.sort_order, "desc");
+assert.strictEqual(toggleListview.sort_order, "desc");
+assert.strictEqual(toggleSelector.orderButton().attr("data-value"), "desc");
+assert.strictEqual(
+    toggleSelector.get_sql_string(),
+    "`tabDoor Cutting Order`.`name` desc",
+    "Frappe ascending/descending behavior must remain native"
+);
+
+context.frappe.session.user = "cutting@example.com";
+context.window.AlmdinaPermissions = undefined;
+
 assert.strictEqual(
     api.desktopDeliveryRowState({ status: "Ready for Delivery" }),
     "ready_for_delivery"
 );
 assert.strictEqual(api.desktopDeliveryRowState({ status: "Delivered" }), "delivered");
+assert.strictEqual(api.desktopDeliveryRowState({ status: "Cancelled" }), "cancelled");
+assert.strictEqual(
+    api.desktopDeliveryRowState({ status: "Cancelled", current_department: "تم التسليم" }),
+    "cancelled"
+);
 assert.strictEqual(api.desktopDeliveryRowState({ status: "At CNC" }), "");
 assert.strictEqual(api.desktopDeliveryRowState({ status: "Completed" }), "");
 assert.strictEqual(
@@ -683,6 +998,7 @@ function mockRow(name, extraClasses = []) {
     return {
         classList: mockClassList(["list-row-container", ...extraClasses]),
         dataset: { name },
+        children: [],
         querySelector(selector) {
             if (selector === "[data-name]") return { dataset: { name } };
             if (selector === "a[href*='/door-cutting-order/']") return null;
@@ -710,6 +1026,7 @@ function mockListview(rows, { cardLayout = false } = {}) {
         data: [
             { name: "DCO-READY", status: "Ready for Delivery" },
             { name: "DCO-DELIVERED", status: "Delivered" },
+            { name: "DCO-CANCELLED", status: "Cancelled" },
             { name: "DCO-PROD", status: "At CNC" },
         ],
         _root: root,
@@ -718,8 +1035,9 @@ function mockListview(rows, { cardLayout = false } = {}) {
 
 const readyRow = mockRow("DCO-READY", ["dco-list-row-completed"]);
 const deliveredRow = mockRow("DCO-DELIVERED");
+const cancelledRow = mockRow("DCO-CANCELLED", ["dco-list-row-completed"]);
 const productionRow = mockRow("DCO-PROD");
-const desktopList = mockListview([readyRow, deliveredRow, productionRow]);
+const desktopList = mockListview([readyRow, deliveredRow, cancelledRow, productionRow]);
 api.applyDesktopDeliveryRowColors(desktopList);
 assert(
     readyRow.classList.contains("dco-list-row-ready-for-delivery"),
@@ -733,12 +1051,133 @@ assert(
     deliveredRow.classList.contains("dco-list-row-delivered"),
     "desktop delivered rows must use the dark-green delivery class"
 );
+assert(
+    cancelledRow.classList.contains("dco-list-row-cancelled"),
+    "desktop cancelled rows must use the red cancelled class"
+);
+assert(
+    !cancelledRow.classList.contains("dco-list-row-completed"),
+    "desktop cancelled must not keep worker-completed green"
+);
+assert(!cancelledRow.classList.contains("dco-list-row-delivered"));
+
+assert.equal(api.shouldHidePersonalHistoryRow("completed", false), true);
+assert.equal(api.shouldHidePersonalHistoryRow("delivered", false), true);
+assert.equal(api.shouldHidePersonalHistoryRow("ready", false), false);
+assert.equal(api.shouldHidePersonalHistoryRow("ready_for_delivery", false), true);
+assert.equal(api.shouldHidePersonalHistoryRow("ready_for_delivery", true), false);
+assert.equal(api.shouldHidePersonalHistoryRow("completed", true), false);
+assert.equal(api.canViewPersonalHistory({ can_view_history: false }), false);
+assert.equal(api.canViewPersonalHistory({ can_view_history: true }), true);
+
+const handedOffRow = mockRow("DCO-HANDED-OFF");
+const assignedRow = mockRow("DCO-ASSIGNED");
+const historyList = mockListview([assignedRow, handedOffRow]);
+historyList.data = [
+    { name: "DCO-ASSIGNED", status: "At CNC", department_status: "قيد العمل" },
+    { name: "DCO-HANDED-OFF", status: "At CNC", department_status: "مكتمل" },
+];
+historyList._root.querySelectorAll = selector => (
+    selector === ".list-row-container" ? [assignedRow, handedOffRow] : []
+);
+historyList._root.querySelector(".result").appendChild = () => {};
+api.applyOperationalRolePresentation(historyList, {
+    personal_view: true,
+    can_view_history: false,
+    orders: {
+        "DCO-ASSIGNED": { assignment_state: "assigned" },
+        "DCO-HANDED-OFF": { assignment_state: "completed" },
+    },
+});
+assert(
+    handedOffRow.classList.contains("dco-list-row-history-hidden"),
+    "handed-off work must leave the personal queue without completed-history permission"
+);
+assert(
+    !handedOffRow.classList.contains("dco-list-row-completed"),
+    "hidden history must not keep the completed green style"
+);
+assert(!assignedRow.classList.contains("dco-list-row-history-hidden"));
+assert(!assignedRow.classList.contains("dco-list-row-completed"));
+
+api.applyOperationalRolePresentation(historyList, {
+    personal_view: true,
+    can_view_history: true,
+    orders: {
+        "DCO-ASSIGNED": { assignment_state: "assigned" },
+        "DCO-HANDED-OFF": { assignment_state: "completed" },
+    },
+});
+assert(!handedOffRow.classList.contains("dco-list-row-history-hidden"));
+assert(
+    handedOffRow.classList.contains("dco-list-row-completed"),
+    "completed history remains green only when the actor may see finished orders"
+);
+
+const lastStageRow = mockRow("DCO-LAST-STAGE", ["dco-list-row-ready-for-delivery"]);
+const lastStageAssignedRow = mockRow("DCO-LAST-ASSIGNED");
+const lastStageList = mockListview([lastStageAssignedRow, lastStageRow]);
+lastStageList.data = [
+    { name: "DCO-LAST-ASSIGNED", status: "At Sanding", department_status: "قيد العمل" },
+    { name: "DCO-LAST-STAGE", status: "Ready for Delivery", department_status: "مكتمل" },
+];
+lastStageList._root.querySelectorAll = selector => (
+    selector === ".list-row-container" ? [lastStageAssignedRow, lastStageRow] : []
+);
+lastStageList._root.querySelector(".result").appendChild = () => {};
+api.applyOperationalRolePresentation(lastStageList, {
+    personal_view: true,
+    can_view_history: false,
+    orders: {
+        "DCO-LAST-ASSIGNED": { assignment_state: "assigned" },
+        "DCO-LAST-STAGE": { assignment_state: "completed", ready_for_delivery: true },
+    },
+});
+assert(
+    lastStageRow.classList.contains("dco-list-row-history-hidden"),
+    "last-stage ready-for-delivery must leave the personal queue without completed-history permission"
+);
+assert(
+    !lastStageRow.classList.contains("dco-list-row-ready-for-delivery"),
+    "hidden last-stage leftover must not keep ready-for-delivery green"
+);
+assert(!lastStageAssignedRow.classList.contains("dco-list-row-history-hidden"));
+
+api.applyOperationalRolePresentation(lastStageList, {
+    personal_view: true,
+    can_view_history: true,
+    orders: {
+        "DCO-LAST-ASSIGNED": { assignment_state: "assigned" },
+        "DCO-LAST-STAGE": { assignment_state: "completed", ready_for_delivery: true },
+    },
+});
+assert(!lastStageRow.classList.contains("dco-list-row-history-hidden"));
+assert(
+    lastStageRow.classList.contains("dco-list-row-ready-for-delivery"),
+    "ready-for-delivery remains visible in the personal queue when history is granted"
+);
+
+api.applyOperationalRolePresentation(lastStageList, {
+    personal_view: false,
+    can_view_history: false,
+    orders: {
+        "DCO-LAST-ASSIGNED": { assignment_state: "assigned" },
+        "DCO-LAST-STAGE": { assignment_state: "completed", ready_for_delivery: true },
+    },
+});
+assert(
+    !lastStageRow.classList.contains("dco-list-row-history-hidden"),
+    "overview/delivery lists must keep ready-for-delivery rows without history permission"
+);
+assert(lastStageRow.classList.contains("dco-list-row-ready-for-delivery"));
 assert(!productionRow.classList.contains("dco-list-row-ready-for-delivery"));
 assert(!productionRow.classList.contains("dco-list-row-delivered"));
+assert(!productionRow.classList.contains("dco-list-row-cancelled"));
 
 readyRow.classList.add("dco-list-row-ready-for-delivery");
 deliveredRow.classList.add("dco-list-row-delivered");
-const mobileList = mockListview([readyRow, deliveredRow, productionRow], { cardLayout: true });
+cancelledRow.classList.add("dco-list-row-cancelled");
+const mobileList = mockListview([readyRow, deliveredRow, cancelledRow, productionRow], { cardLayout: true });
 api.applyDesktopDeliveryRowColors(mobileList);
 assert(
     !readyRow.classList.contains("dco-list-row-ready-for-delivery"),
@@ -747,6 +1186,10 @@ assert(
 assert(
     !deliveredRow.classList.contains("dco-list-row-delivered"),
     "mobile card layout must not receive desktop delivered row colors"
+);
+assert(
+    !cancelledRow.classList.contains("dco-list-row-cancelled"),
+    "mobile card layout must not receive desktop cancelled row colors"
 );
 
 const desktopCssSource = fs.readFileSync(
@@ -761,12 +1204,19 @@ assert(
     desktopCssSource.includes(".dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-delivered"),
     "delivered dark green is a desktop table style"
 );
+assert(
+    desktopCssSource.includes(".dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-cancelled"),
+    "cancelled red is a desktop table style"
+);
 assert(desktopCssSource.includes(".list-row-container.dco-list-row-ready-for-delivery .level-right"));
 assert(desktopCssSource.includes(".list-row-container.dco-list-row-delivered .level-right"));
+assert(desktopCssSource.includes(".list-row-container.dco-list-row-cancelled .level-right"));
 assert(desktopCssSource.includes("background: #ecfdf3 !important;"));
 assert(desktopCssSource.includes("background: #a7f3d0 !important;"));
+assert(desktopCssSource.includes("background: #fecaca !important;"));
 assert(desktopCssSource.includes("border-color: #16a34a !important;"));
 assert(desktopCssSource.includes("border-color: #047857 !important;"));
+assert(desktopCssSource.includes("border-color: #b91c1c !important;"));
 
 assert(cssSource.includes(".dco-card-header-meta"));
 assert(cssSource.includes(".dco-card-stage"));
@@ -775,8 +1225,10 @@ assert(cssSource.includes("#f59e0b"), "in-progress/finish must use the agreed or
 assert(cssSource.includes("#7c3aed"), "ready-for-delivery/deliver must use the agreed purple identity");
 assert(cssSource.includes("#16a34a"), "completed must use the agreed green identity");
 assert(cssSource.includes("#047857"), "delivered must use the agreed dark-green identity");
+assert(cssSource.includes("#b91c1c"), "cancelled must use the agreed red identity");
 assert(cssSource.includes(".is-ready-for-delivery"));
 assert(cssSource.includes(".is-delivered"));
+assert(cssSource.includes(".is-cancelled"));
 assert(cssSource.includes(".is-deliver"));
 assert(!source.includes("frappe.get_roles"), "mobile list presentation must remain capability-driven, never role-name-driven");
 

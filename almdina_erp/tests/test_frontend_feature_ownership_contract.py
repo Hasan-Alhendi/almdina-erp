@@ -24,6 +24,8 @@ CORE_SCRIPTS = (
 ORDER_ENTRY_SCRIPTS = (
     "public/js/door_cutting_order/order_entry/door_cutting_order_defaults.js",
     "public/js/door_cutting_order/order_entry/door_cutting_order_operator_ux.js",
+    "public/js/door_cutting_order/order_entry/door_cutting_order_order_tab_layout_ux.js",
+    "public/js/door_cutting_order/order_entry/door_cutting_order_cutting_machine_ux.js",
     "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_fast_entry_keyboard_ux.js",
     "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_lifecycle.js",
     "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_bulk_rows_ux.js",
