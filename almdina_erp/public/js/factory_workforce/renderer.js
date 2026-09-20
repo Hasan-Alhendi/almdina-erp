@@ -73,7 +73,7 @@
                     </div>
                     <div class="aw-field aw-enabled-field">
                         <span class="aw-field-label">${t("حالة الحساب")}</span>
-                        <div class="aw-enabled-mount"></div>
+                        <div class="aw-enabled-mount aw-enabled-filter"></div>
                     </div>
                 </div>
             `;
