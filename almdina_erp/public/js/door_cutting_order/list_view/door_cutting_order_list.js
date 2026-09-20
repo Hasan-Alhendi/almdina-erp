@@ -240,6 +240,11 @@
         return normalized || "—";
     }
 
+    function listTextHtml(value) {
+        const text = String(value ?? "");
+        return text ? `<span>${escapeHtml(text)}</span>` : "";
+    }
+
     function isEmailLike(value) {
         return String(value || "").includes("@");
     }
@@ -1617,20 +1622,20 @@
         ],
         formatters: Object.assign({}, existing.formatters || {}, {
             current_department(value, df, doc) {
-                if (doc.status === "Ready for Delivery") return __("جاهز للتسليم");
-                if (doc.status === "Delivered") return __("تم التسليم");
-                if (value === "تسليم") {
-                    if (doc.status === "Ready for Delivery") return __("جاهز للتسليم");
-                    if (doc.status === "Delivered") return __("تم التسليم");
+                let label = value || "";
+                if (doc.status === "Ready for Delivery") label = __("جاهز للتسليم");
+                else if (doc.status === "Delivered") label = __("تم التسليم");
+                else if (value === "تسليم") {
+                    if (doc.status === "Ready for Delivery") label = __("جاهز للتسليم");
+                    else if (doc.status === "Delivered") label = __("تم التسليم");
                 }
-                return value || "";
+                return listTextHtml(label);
             },
             edge_color(value) {
                 return value ? `<span class="dco-list-edge-color">${escapeHtml(value)}</span>` : "";
             },
             current_assignee(value) {
-                const label = assigneeLabel(value);
-                return label ? escapeHtml(label) : "";
+                return listTextHtml(assigneeLabel(value));
             },
         }),
         onload(listview) {
