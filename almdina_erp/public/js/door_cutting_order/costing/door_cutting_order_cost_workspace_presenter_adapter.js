@@ -97,6 +97,78 @@
         return __("جاري تحميل بيانات التكلفة...");
     }
 
+    const HOSTED_COST_SETTING_FIELDS = Object.freeze([
+        "board_rate_usd",
+        "cutting_cost_per_board_usd",
+    ]);
+
+    function unwrapNode(wrapper) {
+        if (!wrapper) return null;
+        if (wrapper.nodeType) return wrapper;
+        if (typeof wrapper.get === "function") return wrapper.get(0) || null;
+        return wrapper[0] || null;
+    }
+
+    function costHtmlNode(frm) {
+        const field = frm && frm.fields_dict && frm.fields_dict.order_cost_invoice_html;
+        return unwrapNode(field && field.$wrapper);
+    }
+
+    function fieldHostNode(field) {
+        const wrapper = field && field.$wrapper;
+        const node = unwrapNode(wrapper);
+        if (!node) return null;
+        if (typeof node.closest === "function") {
+            return node.closest(".form-group") || node;
+        }
+        const group = wrapper && typeof wrapper.closest === "function"
+            ? unwrapNode(wrapper.closest(".form-group"))
+            : null;
+        return group || node;
+    }
+
+    function parkHostedCostSettings(frm) {
+        // Layout UX physically moves native rate fields into the Cost HTML
+        // shell. Replacing that HTML would destroy those Frappe controls.
+        // Park them beside the HTML field first so the later layout enhance
+        // can host them again.
+        const htmlNode = costHtmlNode(frm);
+        if (!htmlNode || typeof htmlNode.contains !== "function") return [];
+        const parent = htmlNode.parentNode;
+        const parked = [];
+        HOSTED_COST_SETTING_FIELDS.forEach((fieldname) => {
+            const field = frm && frm.fields_dict && frm.fields_dict[fieldname];
+            const node = fieldHostNode(field);
+            if (!node || !htmlNode.contains(node)) return;
+            if (parent && typeof parent.insertBefore === "function") {
+                parent.insertBefore(node, htmlNode);
+                parked.push(node);
+                return;
+            }
+            if (typeof htmlNode.removeChild === "function") {
+                htmlNode.removeChild(node);
+                parked.push(node);
+            }
+        });
+        return parked;
+    }
+
+    function restoreCostSettingsLayout(frm) {
+        const layout = window.AlmdinaCostPageLayoutUX;
+        if (layout && typeof layout.enhance === "function") {
+            layout.enhance(frm);
+            return true;
+        }
+        return false;
+    }
+
+    function paintCostHtml(frm, painter) {
+        parkHostedCostSettings(frm);
+        const result = painter();
+        restoreCostSettingsLayout(frm);
+        return result;
+    }
+
     function renderPending(frm) {
         const field = frm && frm.fields_dict && frm.fields_dict.order_cost_invoice_html;
         const wrapper = field && field.$wrapper;
@@ -233,17 +305,21 @@
             ...legacy,
             __a52WorkspaceOwned: true,
             render(frm) {
-                if (canView(frm) && !ready(frm)) return renderPending(frm);
+                if (canView(frm) && !ready(frm)) {
+                    return paintCostHtml(frm, () => renderPending(frm));
+                }
                 if (ready(frm)) project(frm);
-                const result = legacy.render(frm);
+                const result = paintCostHtml(frm, () => legacy.render(frm));
                 if (ready(frm)) reconcileRenderedCommercialProjection(frm);
                 reconcileActiveCostEditSession(frm);
                 return result;
             },
             refreshInvoiceSection(frm) {
-                if (canView(frm) && !ready(frm)) return renderPending(frm);
+                if (canView(frm) && !ready(frm)) {
+                    return paintCostHtml(frm, () => renderPending(frm));
+                }
                 if (ready(frm)) project(frm);
-                const result = legacy.refreshInvoiceSection(frm);
+                const result = paintCostHtml(frm, () => legacy.refreshInvoiceSection(frm));
                 if (ready(frm)) reconcileRenderedCommercialProjection(frm);
                 return result;
             },

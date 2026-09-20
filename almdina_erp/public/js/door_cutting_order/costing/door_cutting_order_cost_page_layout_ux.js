@@ -1,7 +1,7 @@
 (() => {
     "use strict";
 
-    const MODULE_VERSION = 5;
+    const MODULE_VERSION = 6;
     const existingApi = window.AlmdinaCostPageLayoutUX;
     if (existingApi && Number(existingApi.version || 0) >= MODULE_VERSION) return;
 
@@ -108,6 +108,12 @@
 
     function costSettingsExpanded(frm) {
         return Boolean(uiState(frm).settingsExpanded);
+    }
+
+    function revealSettings(frm) {
+        if (!frm) return false;
+        uiState(frm).settingsExpanded = true;
+        return enhance(frm);
     }
 
     function applyMeasurementState(frm, section, control) {
@@ -350,5 +356,6 @@
         version: MODULE_VERSION,
         enhance,
         install,
+        revealSettings,
     });
 })();

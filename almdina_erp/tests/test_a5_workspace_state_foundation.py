@@ -81,6 +81,29 @@ class TestA5WorkspaceStateFoundation(unittest.TestCase):
             self.assertIn("return load(frm, { force: true });", source)
             self.assertIn("function createFlight(frm)", source)
 
+    def test_cost_loader_retries_abandoned_in_flight_invalidation(self) -> None:
+        cost = (
+            PUBLIC
+            / "costing"
+            / "door_cutting_order_cost_workspace_state.js"
+        ).read_text(encoding="utf-8")
+        self.assertIn("function abandonedLoadingSnapshot(frm, store, currentIdentity)", cost)
+        self.assertIn("function recoverAbandonedLoad(frm, store, currentIdentity, result)", cost)
+        self.assertIn("return load(frm, { force: true });", cost)
+        self.assertIn("frm[LOAD_PROMISE_KEY] = completed;", cost)
+        # Recovery is owned by the settled flight, not by pending HTML paint.
+        presenter = (
+            PUBLIC
+            / "costing"
+            / "door_cutting_order_cost_workspace_presenter_adapter.js"
+        ).read_text(encoding="utf-8")
+        pending = presenter[
+            presenter.index("function renderPending(frm)"):
+            presenter.index("function previewLines(frm)")
+        ]
+        self.assertNotIn(".load(", pending)
+        self.assertNotIn("recoverAbandonedLoad", pending)
+
     def test_plan_query_is_capability_scoped_and_contains_no_money(self) -> None:
         path = APP / "services" / "cutting_plan_workspace_query_service.py"
         source = path.read_text(encoding="utf-8")
