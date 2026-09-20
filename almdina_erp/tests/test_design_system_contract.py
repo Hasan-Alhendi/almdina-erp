@@ -203,6 +203,11 @@ class TestDesignSystemContract(unittest.TestCase):
         self.assertIn("function empty(", self.ui)
         self.assertIn("alm-btn-primary", self.ui)
         self.assertIn("frappe.ui.form.make_control", self.ui)
+        self.assertIn("df.change = function nativeChangeBridge", self.ui)
+        self.assertNotIn("input.on(\"input change\"", self.ui)
+        self.assertNotIn("frappeControl.change =", self.ui)
+        self.assertNotRegex(self.ui, r"\.off\(\s*[\"'](?:input|change|input change)")
+        self.assertNotIn("field.change = function patchedChange", self.ui)
         self.assertNotIn("frappe.call", self.ui)
         self.assertNotIn("has_permission", self.ui)
 

@@ -176,6 +176,8 @@ class FactoryPermissionsFrontendArchitectureTest(unittest.TestCase):
         self.assertIn("dialogs.openImportDialog", self.controller)
         self.assertIn("mountRoleControl", self.controller)
         self.assertIn("disposeRoleControl", self.controller)
+        self.assertIn("renderer.disposeRoleControl();", self.controller)
+        self.assertIn("featureShellReady = false;", self.controller)
         self.assertIn("api.roleSearchQuery", self.controller)
         self.assertIn("reconcileAfterSave", self.controller)
         self.assertNotIn("frappe.ui.make_app_page", self.controller)

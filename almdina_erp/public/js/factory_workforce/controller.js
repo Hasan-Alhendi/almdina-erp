@@ -82,6 +82,8 @@
         activation = pageLifecycleModule.bindActivationLifecycle(wrapper, {
             onActivate: load,
             onDeactivate: () => {
+                disposeToolbarControls();
+                toolbarMounted = false;
                 dialogs.deactivate();
                 store.deactivate();
             },

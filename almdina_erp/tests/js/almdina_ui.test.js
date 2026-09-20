@@ -35,6 +35,7 @@ function createParent() {
 const fakeControls = [];
 const fakeFieldGroups = [];
 const fakeUploaders = [];
+const frappeOwnedHandlers = [];
 const fakeWindow = {
     frappe: {
         utils: {
@@ -56,9 +57,13 @@ const fakeWindow = {
                         const field = {
                             df,
                             value: df.default || "",
-                            change() {},
                             get_value() {
                                 return this.value;
+                            },
+                            set_value(value) {
+                                this.value = value;
+                                if (typeof this.df.change === "function") this.df.change.call(this, {type: "change"});
+                                return Promise.resolve();
                             },
                             set_focus() {},
                         };
@@ -76,24 +81,23 @@ const fakeWindow = {
                     return values;
                 }
                 set_value(fieldname, value) {
-                    if (this.fields_dict[fieldname]) this.fields_dict[fieldname].value = value;
+                    if (this.fields_dict[fieldname]) return this.fields_dict[fieldname].set_value(value);
+                    return Promise.resolve();
                 }
             },
             form: {
                 make_control(opts) {
+                    const handlers = new Map();
                     const control = {
                         df: opts.df,
                         value: opts.df.default || "",
                         $input: {
-                            handlers: {},
+                            handlers,
                             on(event, handler) {
                                 String(event).split(/\s+/).filter(Boolean).forEach((name) => {
-                                    this.handlers[name] = handler;
-                                });
-                            },
-                            off(event) {
-                                String(event).split(/\s+/).filter(Boolean).forEach((name) => {
-                                    delete this.handlers[name];
+                                    const current = this.handlers.get(name) || [];
+                                    current.push(handler);
+                                    this.handlers.set(name, current);
                                 });
                             },
                             focus() {},
@@ -104,9 +108,13 @@ const fakeWindow = {
                         },
                         set_value(next) {
                             this.value = next;
+                            if (typeof this.df.change === "function") this.df.change.call(this, {type: "change"});
+                            return Promise.resolve();
                         },
-                        change() {},
                     };
+                    const nativeHandler = () => {};
+                    control.$input.on("change", nativeHandler);
+                    frappeOwnedHandlers.push({control, nativeHandler});
                     fakeControls.push({ opts, control });
                     return control;
                 },
@@ -176,9 +184,17 @@ assert.equal(parent.hasClass("apa-search-control"), true);
 assert.equal(mounted.getValue(), "abc");
 mounted.setValue("xyz");
 assert.equal(mounted.getValue(), "xyz");
-fakeControls[0].control.$input.handlers.input();
-assert.equal(changed, 1);
+changed = 0;
+for (const handler of fakeControls[0].control.$input.handlers.get("input") || []) {
+    handler({target: {value: "typed"}});
+}
+assert.equal(changed, 0, "Almdina must not subscribe to the Frappe-owned input event");
+mounted.setValue("new-value");
+assert.equal(changed, 1, "Data changes must use the native control contract exactly once");
+const dataOwnedHandler = frappeOwnedHandlers[0];
 mounted.dispose();
+assert.equal(dataOwnedHandler.control.$input.handlers.get("change").includes(dataOwnedHandler.nativeHandler), true);
+assert.equal(mounted.dispose(), false, "dispose must be idempotent");
 assert.equal(parent.hasClass("alm-control"), false);
 assert.equal(parent.hasClass("apa-search-control"), false);
 
@@ -195,9 +211,61 @@ const linkMounted = ui.control({
 });
 assert.equal(fakeControls.length, 2);
 assert.equal(fakeControls[1].opts.df.fieldtype, "Link");
-fakeControls[1].control.change();
+fakeControls[1].control.set_value("Order Entry");
 assert.equal(linkChanged, 1);
+fakeControls[1].control.$input.handlers.set("input", [() => {}]);
+for (const handler of fakeControls[1].control.$input.handlers.get("input")) handler({target: {value: "Ord"}});
+assert.equal(linkChanged, 1, "Link typing must not be treated as final selection");
 linkMounted.dispose();
+
+const selectParent = createParent();
+let selectChanged = 0;
+const selectMounted = ui.control({
+    parent: selectParent,
+    fieldname: "status",
+    fieldtype: "Select",
+    options: "A\nB",
+    onChange: () => { selectChanged += 1; },
+});
+selectMounted.setValue("B");
+assert.equal(selectChanged, 1, "Select changes must use the native control contract exactly once");
+selectMounted.dispose();
+
+const remountParent = createParent();
+let remountChanged = 0;
+const firstMount = ui.control({
+    parent: remountParent,
+    fieldname: "remount",
+    fieldtype: "Data",
+    onChange: () => { remountChanged += 1; },
+});
+firstMount.dispose();
+const secondMount = ui.control({
+    parent: remountParent,
+    fieldname: "remount",
+    fieldtype: "Data",
+    onChange: () => { remountChanged += 1; },
+});
+secondMount.setValue("one");
+assert.equal(remountChanged, 1, "remount must leave one Almdina callback owner");
+secondMount.dispose();
+
+const nativeOrder = [];
+const nativeContractMount = ui.control({
+    parent: createParent(),
+    fieldname: "native_contract",
+    fieldtype: "Data",
+    df: {
+        change() {
+            nativeOrder.push("frappe");
+            return {then: resolve => resolve("native-result")};
+        },
+    },
+    onChange: () => nativeOrder.push("almdina"),
+});
+nativeContractMount.setValue("validated");
+assert.deepEqual(nativeOrder, ["frappe", "almdina"], "native async change contract must remain ordered");
+nativeContractMount.dispose();
 
 const filterParent = createParent();
 let filterChanged = 0;
@@ -219,10 +287,15 @@ assert.equal(filterParent.hasClass("prw-filter-group"), true);
 assert.equal(filterMounted.getValue("search"), "needle");
 filterMounted.setValue("search", "updated");
 assert.equal(filterMounted.getValue("search"), "updated");
-fakeFieldGroups[0].fields_list[0].change();
+filterChanged = 0;
+fakeFieldGroups[0].fields_list[0].set_value("changed");
 assert.equal(filterChanged, 1);
 filterMounted.dispose();
 assert.equal(filterParent.hasClass("alm-filter-group"), false);
+assert.equal(filterMounted.dispose(), false, "filterGroup dispose must be idempotent");
+
+assert.doesNotMatch(source, /\.off\(\s*["'](?:input|change|input change)/);
+assert.doesNotMatch(source, /frappeControl\.change\s*=/);
 
 const uploader = ui.fileUploader({
     preset: "securePrivate",

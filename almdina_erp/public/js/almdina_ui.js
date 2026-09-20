@@ -115,37 +115,41 @@
             only_input: onlyInput,
         });
         frappeControl.refresh();
-        if (defaultValue !== undefined && defaultValue !== null && String(defaultValue) !== "") {
-            frappeControl.set_value(defaultValue);
-        }
 
         const onChange = typeof options.onChange === "function" ? options.onChange : null;
         const input = frappeControl.$input;
-        let restoreChange = null;
+        let disposed = false;
+        let initializing = true;
         if (onChange) {
-            const notify = () => onChange(frappeControl.get_value(), frappeControl);
-            if (input && typeof input.on === "function") {
-                input.on("input change", notify);
-            }
-            const previousChange = frappeControl.change;
-            frappeControl.change = function patchedChange() {
-                if (typeof previousChange === "function") {
-                    previousChange.apply(this, arguments);
+            const nativeChange = df.change || df.onchange;
+            df.change = function nativeChangeBridge(event) {
+                const notify = () => {
+                    if (!initializing && !disposed) onChange(this.get_value(), this, event);
+                };
+                const result = typeof nativeChange === "function"
+                    ? nativeChange.apply(this, arguments)
+                    : undefined;
+                if (result && typeof result.then === "function") {
+                    return result.then(value => {
+                        notify();
+                        return value;
+                    });
                 }
                 notify();
-            };
-            restoreChange = () => {
-                if (input && typeof input.off === "function") {
-                    input.off("input change");
-                }
-                frappeControl.change = previousChange;
+                return result;
             };
         }
+        if (defaultValue !== undefined && defaultValue !== null && String(defaultValue) !== "") {
+            frappeControl.set_value(defaultValue);
+        }
+        initializing = false;
 
         function dispose() {
-            if (restoreChange) restoreChange();
+            if (disposed) return false;
+            disposed = true;
             $parent.empty().removeClass("alm-control");
             if (className) $parent.removeClass(className);
+            return true;
         }
 
         return Object.freeze({
@@ -155,10 +159,11 @@
                 return frappeControl.get_value();
             },
             setValue(value) {
-                frappeControl.set_value(value);
+                if (!disposed) return frappeControl.set_value(value);
+                return Promise.resolve();
             },
             focus() {
-                if (input && typeof input.focus === "function") input.focus();
+                if (!disposed && input && typeof input.focus === "function") input.focus();
             },
         });
     }
@@ -177,7 +182,40 @@
         $parent.empty().addClass("alm-filter-group");
         if (className) $parent.addClass(className);
 
-        const fields = Array.isArray(options.fields) ? options.fields.slice() : [];
+        const onChange = typeof options.onChange === "function" ? options.onChange : null;
+        let initializing = true;
+        let disposed = false;
+        const fields = (Array.isArray(options.fields) ? options.fields : []).map(field => {
+            const df = Object.assign({}, field);
+            if (onChange) {
+                const nativeChange = df.change || df.onchange;
+                df.change = function nativeChangeBridge(event) {
+                    const notify = () => {
+                        if (!initializing && !disposed) {
+                            onChange(
+                                this.df.fieldname,
+                                this.get_value(),
+                                getValues(),
+                                this,
+                                event
+                            );
+                        }
+                    };
+                    const result = typeof nativeChange === "function"
+                        ? nativeChange.apply(this, arguments)
+                        : undefined;
+                    if (result && typeof result.then === "function") {
+                        return result.then(value => {
+                            notify();
+                            return value;
+                        });
+                    }
+                    notify();
+                    return result;
+                };
+            }
+            return df;
+        });
         const fieldGroup = new runtime.ui.FieldGroup({
             parent: $parent,
             fields,
@@ -186,28 +224,6 @@
         fieldGroup.make();
 
         const initialValues = options.values && typeof options.values === "object" ? options.values : {};
-        Object.entries(initialValues).forEach(([fieldname, value]) => {
-            if (fieldGroup.fields_dict[fieldname]) {
-                fieldGroup.set_value(fieldname, value);
-            }
-        });
-
-        const onChange = typeof options.onChange === "function" ? options.onChange : null;
-        const restoreHandlers = [];
-        if (onChange) {
-            for (const field of fieldGroup.fields_list || []) {
-                const previousChange = field.change;
-                field.change = function patchedChange() {
-                    if (typeof previousChange === "function") {
-                        previousChange.apply(this, arguments);
-                    }
-                    onChange(field.df.fieldname, field.get_value(), getValues());
-                };
-                restoreHandlers.push(() => {
-                    field.change = previousChange;
-                });
-            }
-        }
 
         function getValues() {
             return fieldGroup.get_values(true) || {};
@@ -220,10 +236,17 @@
         }
 
         function dispose() {
-            while (restoreHandlers.length) restoreHandlers.pop()();
+            if (disposed) return false;
+            disposed = true;
             $parent.empty().removeClass("alm-filter-group");
             if (className) $parent.removeClass(className);
+            return true;
         }
+
+        Object.entries(initialValues).forEach(([fieldname, value]) => {
+            if (fieldGroup.fields_dict[fieldname]) fieldGroup.set_value(fieldname, value);
+        });
+        initializing = false;
 
         return Object.freeze({
             fieldGroup,

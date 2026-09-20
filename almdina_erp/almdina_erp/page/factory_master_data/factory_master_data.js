@@ -182,6 +182,7 @@
         deactivatePage() {
             if (this.readGate) this.readGate.invalidate();
             this.disposeToolbarControls();
+            this.disposeStageControls();
             this.closeTransientSurfaces();
             this.clearDragState();
         }
@@ -552,6 +553,7 @@
             this.bootstrapLoadingOwned = false;
             if (!bootstrapOwnsLoading) {
                 this.disposeToolbarControls();
+                this.disposeStageControls();
                 this.$main.html(bootstrapLoadingHtml());
             }
             return this.call(METHODS.load)
@@ -573,6 +575,8 @@
                     const message = error && error.message
                         ? error.message
                         : __("تعذر تحميل مسارات الإنتاج.");
+                    this.disposeToolbarControls();
+                    this.disposeStageControls();
                     this.$main.html(`
                         <div class="prw-error">
                             <b>${__("تعذر فتح إدارة المسارات")}</b>
@@ -613,6 +617,7 @@
             const data = this.state.data || {};
             const summary = data.summary || {};
             this.disposeToolbarControls();
+            this.disposeStageControls();
             this.$main.html(`
                 <main class="almdina-ui prw-shell" dir="rtl">
                     <section class="prw-hero">

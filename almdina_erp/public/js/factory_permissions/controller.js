@@ -103,6 +103,8 @@
             onDeactivate: () => {
                 closeTransientSurfaces();
                 cancelPreviewTimer();
+                renderer.disposeRoleControl();
+                featureShellReady = false;
                 store.deactivate();
             },
         });

@@ -185,6 +185,8 @@ class FactoryWorkforceFrontendArchitectureTest(unittest.TestCase):
             self.assertIn(dependency, self.controller)
         self.assertIn("AlmdinaUi.control", self.controller)
         self.assertIn("mountToolbarControls", self.controller)
+        self.assertIn("disposeToolbarControls();", self.controller)
+        self.assertIn("toolbarMounted = false;", self.controller)
         self.assertIn("preserveToolbar", self.controller)
         self.assertIn("workforce-search", self.controller)
         self.assertIn("350", self.controller)
