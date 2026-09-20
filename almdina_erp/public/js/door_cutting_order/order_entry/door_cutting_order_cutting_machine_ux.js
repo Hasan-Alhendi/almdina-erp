@@ -3,7 +3,7 @@
 
     if (window.AlmdinaOrderCuttingMachineUX) return;
 
-    const STYLE_ID = "dco-cutting-machine-radio-css";
+    const STYLE_ID = "dco-cutting-machine-inline-row-css";
     const OPTIONS = Object.freeze([
         Object.freeze({ value: "CNC", label: "CNC" }),
         Object.freeze({ value: "مشرحة", label: "مشرحة" }),
@@ -35,21 +35,49 @@
         if (document.getElementById(STYLE_ID)) return;
         $("head").append(`
             <style id="${STYLE_ID}">
+                .dco-cutting-machine-host.input-max-width,
+                .dco-cutting-machine-host.frappe-control {
+                    max-width: none !important;
+                    width: auto !important;
+                }
                 .dco-cutting-machine-host .form-group {
                     display: flex !important;
-                    flex-direction: column;
-                    align-items: stretch;
+                    flex-direction: column !important;
+                    align-items: flex-start;
                     gap: 6px;
                     margin-bottom: 0 !important;
                 }
-                .dco-cutting-machine-host .clearfix {
+                .dco-cutting-machine-host .form-group::before,
+                .dco-cutting-machine-host .form-group::after {
+                    display: none !important;
+                    content: none !important;
+                }
+                .dco-cutting-machine-row {
+                    display: flex !important;
+                    flex-direction: row !important;
+                    flex-wrap: nowrap !important;
+                    align-items: center;
+                    gap: 10px 14px;
+                    width: max-content;
+                    max-width: 100%;
+                }
+                .dco-cutting-machine-row .clearfix {
+                    display: flex !important;
                     float: none !important;
-                    width: 100%;
+                    width: auto !important;
+                    min-width: 0;
+                    flex: 0 0 auto;
+                }
+                .dco-cutting-machine-row .clearfix::before,
+                .dco-cutting-machine-row .clearfix::after {
+                    display: none !important;
+                    content: none !important;
                 }
                 .dco-cutting-machine-host .control-label {
-                    display: block;
+                    display: inline-block !important;
                     float: none !important;
-                    margin: 0;
+                    margin: 0 !important;
+                    white-space: nowrap;
                 }
                 .dco-cutting-machine-host .control-label::after {
                     content: " *";
@@ -71,10 +99,12 @@
                 }
                 .dco-cutting-machine-radios {
                     display: flex;
-                    flex-wrap: wrap;
+                    flex-wrap: nowrap !important;
+                    align-items: center;
                     gap: 8px;
                     position: relative;
                     z-index: 1;
+                    flex: 0 0 auto;
                 }
                 .dco-cutting-machine-option {
                     display: inline-flex;
@@ -105,7 +135,7 @@
                 }
                 .dco-cutting-machine-error {
                     display: none;
-                    margin-top: 6px;
+                    margin: 0;
                     color: var(--red,#d83939);
                     font-size: 12px;
                     font-weight: 700;
@@ -126,12 +156,42 @@
         return wrapper.querySelector(".form-group") || wrapper;
     }
 
+    function labelHostOf(wrapper) {
+        return wrapper.querySelector(".clearfix") || wrapper.querySelector(".control-label");
+    }
+
+    function ensureInlineRow(wrapper, group) {
+        const host = hostOf(wrapper);
+        let row = wrapper.querySelector(".dco-cutting-machine-row");
+        if (!row) {
+            row = document.createElement("div");
+            row.className = "dco-cutting-machine-row";
+        }
+        const error = wrapper.querySelector(".dco-cutting-machine-error");
+        if (row.parentElement !== host) {
+            if (error && error.parentElement === host) host.insertBefore(row, error);
+            else if (group && group.parentElement === host) host.insertBefore(row, group);
+            else host.appendChild(row);
+        }
+        const labelHost = labelHostOf(wrapper);
+        if (labelHost && labelHost.parentElement !== row) {
+            row.insertBefore(labelHost, row.firstChild);
+        }
+        if (group && group.parentElement !== row) row.appendChild(group);
+        if (error && error.parentElement !== host) host.appendChild(error);
+        return row;
+    }
+
     function watchWrapper(frm, wrapper) {
         if (!wrapper || wrapper.__dcoMachineWatch) return;
         wrapper.__dcoMachineWatch = true;
         const observer = new MutationObserver(() => {
             if (!wrapper.isConnected) return;
-            if (wrapper.querySelector(".dco-cutting-machine-radios")) return;
+            const group = wrapper.querySelector(".dco-cutting-machine-radios");
+            const row = wrapper.querySelector(".dco-cutting-machine-row");
+            const labelHost = wrapper.querySelector(".clearfix")
+                || wrapper.querySelector(".control-label");
+            if (group && row && (!labelHost || labelHost.parentElement === row)) return;
             schedule(frm);
         });
         observer.observe(wrapper, { childList: true, subtree: true });
@@ -145,11 +205,6 @@
         watchWrapper(frm, wrapper);
         const host = hostOf(wrapper);
         let group = wrapper.querySelector(".dco-cutting-machine-radios");
-        if (group && group.parentElement !== host) {
-            host.appendChild(group);
-            const error = wrapper.querySelector(".dco-cutting-machine-error");
-            if (error) host.appendChild(error);
-        }
         if (!group) {
             group = document.createElement("div");
             group.className = "dco-cutting-machine-radios";
@@ -184,6 +239,7 @@
             error.textContent = __(REQUIRED_MESSAGE);
             host.appendChild(error);
         }
+        ensureInlineRow(wrapper, group);
         return group;
     }
 

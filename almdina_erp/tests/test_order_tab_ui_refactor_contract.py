@@ -108,7 +108,7 @@ def test_order_and_material_controls_follow_exact_requested_rows() -> None:
     assert 'dco-order-intake-card [data-fieldname="order_cutting_machine"]' in layout
     assert "grid-column: 1 / -1" in layout
     assert "grid-row: 3" in layout
-    assert "max-width: 420px" in layout
+    assert "max-width: none !important" in layout
 
     # Material controls must be placed into two explicit visual rows using the
     # original Frappe wrappers, not left to Column Break nesting.
@@ -186,6 +186,14 @@ def test_cutting_machine_radios_are_client_required_and_server_optional() -> Non
     assert ".dco-cutting-machine-host .control-input-wrapper" in machine
     assert ".dco-cutting-machine-host .control-input" in machine
     assert "display: none !important" in machine
+    assert "dco-cutting-machine-row" in machine
+    assert "function ensureInlineRow" in machine
+    assert "row.insertBefore(labelHost, row.firstChild)" in machine
+    assert "row.appendChild(group)" in machine
+    assert "flex-direction: row !important" in machine
+    assert "flex-wrap: nowrap !important" in machine
+    assert "white-space: nowrap" in machine
+    assert "input-max-width" in machine
     assert "new MutationObserver" in machine
     assert 'querySelector(".form-group")' in machine
     assert "after_save(frm) { schedule(frm); }" in machine

@@ -116,7 +116,7 @@
                     display: none !important;
                 }
 
-                /* Order intake: customer/date, notes, then compact cutting machine. */
+                /* Order intake: customer/date, notes, then cutting machine on one row. */
                 .${ROOT_CLASS} .dco-order-intake-card > .section-body {
                     display: grid !important;
                     grid-template-columns: minmax(0,2fr) minmax(220px,1fr);
@@ -142,7 +142,8 @@
                 .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="order_cutting_machine"] {
                     grid-column: 1 / -1;
                     grid-row: 3;
-                    max-width: 420px;
+                    max-width: none !important;
+                    width: auto;
                 }
 
                 /*
