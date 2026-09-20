@@ -76,6 +76,28 @@ vm.runInContext(source, context);
 const responsive = context.window.AlmdinaResponsiveDevice;
 const api = context.window.AlmdinaDoorCuttingOrderListUX;
 
+const listFormatters = context.frappe.listview_settings["Door Cutting Order"].formatters;
+context.frappe.user = {
+    full_name(user) {
+        return user === "edge@example.com" ? "موظف قشاط ." : "";
+    },
+};
+assert.strictEqual(
+    listFormatters.current_assignee("edge@example.com"),
+    "<span>موظف قشاط .</span>",
+    "assignee labels containing CSS-significant punctuation must render as HTML, never raw selector-like text"
+);
+assert.strictEqual(
+    listFormatters.current_department("قسم #1 [خاص].", {}, { status: "At CNC" }),
+    "<span>قسم #1 [خاص].</span>",
+    "department labels must be wrapped so Frappe's jQuery width measurement cannot parse them as selectors"
+);
+assert.strictEqual(
+    listFormatters.edge_color("لون <خاص>."),
+    '<span class="dco-list-edge-color">لون &lt;خاص&gt;.</span>',
+    "list text wrappers must preserve HTML escaping"
+);
+
 const kanbanView = new context.frappe.views.KanbanView();
 kanbanView.doctype = "Door Cutting Order";
 kanbanView.card_meta = { title_field: { fieldname: "order_notes" } };
