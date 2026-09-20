@@ -49,6 +49,7 @@
         let boardToolbarControls = null;
         let boardToolbarMounted = false;
         let $refreshButton = null;
+        state.lifecycle.track(() => disposeBoardToolbarControls(), "shop-floor-board-toolbar-owner");
         const dialogs = Dialogs.create({ isCurrentGeneration });
 
         if (typeof page.add_inner_button === "function") {
@@ -232,7 +233,6 @@
                 },
             });
             boardToolbarControls = { route, search, entries };
-            state.lifecycle.track(disposeBoardToolbarControls, "shop-floor-board-toolbar-controls");
         }
 
         function syncBoardToolbarControlValues(snapshot, model) {

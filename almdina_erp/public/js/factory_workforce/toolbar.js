@@ -91,9 +91,10 @@
             });
             controls = { search, enabled };
             mounted = true;
-            lifecycle.track(dispose, "workforce-toolbar-controls");
             return true;
         }
+
+        lifecycle.track(() => dispose(), "workforce-toolbar-owner");
 
         return Object.freeze({
             mount,

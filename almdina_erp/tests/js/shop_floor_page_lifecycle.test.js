@@ -140,6 +140,7 @@ function createHarness() {
     let actions = null;
     let searchControlOnChange = null;
     let routeControlOnChange = null;
+    const boardToolbarControls = [];
     let activeInteractionOwners = 0;
     let interactionDeactivations = 0;
     let quickUiSuccess = 0;
@@ -212,11 +213,13 @@ function createHarness() {
             control(options = {}) {
                 const api = {
                     value: options.value || "",
+                    disposed: 0,
                     getValue() { return this.value; },
                     setValue(next) { this.value = next; },
-                    dispose() {},
+                    dispose() { this.disposed += 1; },
                     focus() { renders.focus += 1; },
                 };
+                boardToolbarControls.push(api);
                 if (typeof options.onChange === "function") {
                     if (options.fieldname === "board_search") searchControlOnChange = options.onChange;
                     if (options.fieldname === "route_filter") routeControlOnChange = options.onChange;
@@ -348,6 +351,7 @@ function createHarness() {
         quickUiSuccess: () => quickUiSuccess,
         queues,
         renders,
+        boardToolbarControls,
         routes,
         wrapper,
         hide() {
@@ -417,6 +421,15 @@ async function testReadInvalidationAndFreshRevisit() {
     assert.equal(harness.renders.board.length, 1, "the current revisit must render exactly once");
     assert.equal(harness.renders.board[0].model.snapshot.sessionContext.visit, "current");
     assert.equal(harness.dialogEvents.disposed, 0, "simple hide must not dispose the mounted controller");
+    const firstToolbarSet = harness.boardToolbarControls.slice(-2);
+    assert.deepEqual(firstToolbarSet.map(control => control.disposed), [0, 0]);
+    harness.hide();
+    assert.deepEqual(firstToolbarSet.map(control => control.disposed), [1, 1]);
+    harness.show();
+    await resolveBoardRefresh(harness, { visit: "toolbar-revisit" }, [{ id: "toolbar-current" }], []);
+    const secondToolbarSet = harness.boardToolbarControls.slice(-2);
+    assert.equal(harness.boardToolbarControls.length, 4);
+    assert.deepEqual(secondToolbarSet.map(control => control.disposed), [0, 0]);
 }
 
 async function testMountWhileInactiveWaitsForCurrentShow() {

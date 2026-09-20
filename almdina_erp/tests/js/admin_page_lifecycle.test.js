@@ -453,6 +453,9 @@ async function testPermissionsLifecycle() {
     const transferQueue = endpointQueue();
     const exportQueue = endpointQueue();
     const renders = { shell: 0, loaded: 0, checkboxSync: 0, dirtySync: 0, downloads: 0 };
+    let roleControlMounts = 0;
+    let roleControlDisposals = 0;
+    let roleControlAlive = false;
     let callbacks = null;
 
     class FakeFileReader {
@@ -503,8 +506,12 @@ async function testPermissionsLifecycle() {
         create: () => ({
             renderShell() { renders.shell += 1; },
             renderActor() {},
-            mountRoleControl() {},
-            disposeRoleControl() {},
+            mountRoleControl() { roleControlMounts += 1; roleControlAlive = true; },
+            disposeRoleControl() {
+                if (!roleControlAlive) return;
+                roleControlDisposals += 1;
+                roleControlAlive = false;
+            },
             setRolePickerValue() {},
             showRoleLoading() {},
             showLoaded() { renders.loaded += 1; },
@@ -558,6 +565,8 @@ async function testPermissionsLifecycle() {
     roleQueue.requests[1].resolve({ capabilities: { view: false }, impact: {}, audit: [] });
     await flush();
     assert.equal(renders.loaded, 1);
+    assert.equal(roleControlMounts, 2);
+    assert.equal(roleControlDisposals, 1, "revisiting must not dispose the new Role control");
 
     callbacks.onCapabilityChanged("view", true);
     harness.runTimers();

@@ -84,6 +84,7 @@
                 onSave: savePermissions,
             },
         });
+        lifecycle.track(() => renderer.disposeRoleControl(), "permissions-role-owner");
 
         const instance = Object.freeze({
             load: loadConsole,
@@ -177,7 +178,6 @@
                     requestRoleChange(role);
                 },
             });
-            lifecycle.track(() => renderer.disposeRoleControl(), "permissions-role-control");
             featureShellReady = true;
         }
 

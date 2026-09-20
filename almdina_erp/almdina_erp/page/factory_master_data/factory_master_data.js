@@ -116,6 +116,8 @@
             this.mutationGate = frontend.createLatestRequestGate();
             this.libraryMutationGate = frontend.createLatestRequestGate();
             this.lifecycle = frontend.createLifecycleScope();
+            this.lifecycle.track(() => this.disposeToolbarControls(), "factory-master-data-toolbar-owner");
+            this.lifecycle.track(() => this.disposeStageControls(), "factory-master-data-stage-owner");
             this.activation = lifecycleModule.bindActivationLifecycle(this.wrapper, {
                 onActivate: () => this.activatePage(),
                 onDeactivate: () => this.deactivatePage(),
@@ -402,9 +404,6 @@
                 controls.push(this.uiControl(this.operationalRoleControlOptions($mount, stage)));
             });
             this.stageControls = controls;
-            if (this.lifecycle) {
-                this.lifecycle.track(() => this.disposeStageControls(), "factory-master-data-stage-controls");
-            }
         }
 
         updateStageOperationalRole(stageId, value) {
@@ -465,9 +464,6 @@
                 },
             });
             this.toolbarMounted = true;
-            if (this.lifecycle) {
-                this.lifecycle.track(() => this.disposeToolbarControls(), "factory-master-data-toolbar-controls");
-            }
         }
 
         syncToolbarControlValues() {
