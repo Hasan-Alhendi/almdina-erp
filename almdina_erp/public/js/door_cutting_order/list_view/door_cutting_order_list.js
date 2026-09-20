@@ -1210,8 +1210,9 @@
         }
     }
 
-    function overviewDefaultSortSql() {
-        return "`tab" + METHODS.doctype + "`.`modified` desc";
+    function overviewDefaultSortSql(sortOrder = "desc") {
+        const order = normalizedSortOrder(sortOrder);
+        return "`tab" + METHODS.doctype + "`.`modified` " + order;
     }
 
     function listSortBy(listview) {
@@ -1269,38 +1270,17 @@
         return String(sortOrder || "desc").toLowerCase() === "asc" ? "asc" : "desc";
     }
 
-    function syncSortSelectorOrderButton(selector, sortOrder) {
-        const order = normalizedSortOrder(sortOrder);
-        if (!selector) return order;
-        selector.sort_order = order;
-        if (selector.args) selector.args.sort_order = order;
-        const wrapper = selector.wrapper;
-        if (!wrapper || typeof wrapper.find !== "function") return order;
-        const $btn = wrapper.find(".btn-order");
-        if (!$btn || !$btn.length) return order;
-        $btn.attr("data-value", order);
-        $btn.attr("title", order === "desc" ? __("ascending") : __("descending"));
-        const $icon = $btn.find(".sort-order");
-        if ($icon && $icon.length && frappe.utils && typeof frappe.utils.icon === "function") {
-            $icon.html(frappe.utils.icon(order === "asc" ? "sort-ascending" : "sort-descending", "sm"));
-        }
-        return order;
-    }
-
     function selectOverviewDefaultSort(listview, selector) {
         selector.args = selector.args || {};
         selector.args.sort_by = OVERVIEW_DEFAULT_SORT_FIELD;
         selector.args.sort_order = "desc";
         selector.args.sort_by_label = OVERVIEW_DEFAULT_SORT_LABEL;
-        selector.sort_by = OVERVIEW_DEFAULT_SORT_FIELD;
-        selector.sort_order = "desc";
         if (typeof selector.set_value === "function") {
             selector.set_value(OVERVIEW_DEFAULT_SORT_FIELD, "desc");
         } else {
-            syncSortSelectorOrderButton(selector, "desc");
+            selector.sort_by = OVERVIEW_DEFAULT_SORT_FIELD;
+            selector.sort_order = "desc";
         }
-        listview.sort_by = OVERVIEW_DEFAULT_SORT_FIELD;
-        listview.sort_order = "desc";
     }
 
     function patchOverviewSortSelectorSql(selector) {
@@ -1309,47 +1289,11 @@
         const original = selector.get_sql_string.bind(selector);
         selector.get_sql_string = function dcoOverviewGetSqlString() {
             if (this.sort_by === OVERVIEW_DEFAULT_SORT_FIELD) {
-                return overviewDefaultSortSql();
+                return overviewDefaultSortSql(this.sort_order);
             }
             return original();
         };
         selector._dcoOverviewSqlPatched = true;
-    }
-
-    function patchOverviewSortSelectorSetValue(selector) {
-        if (!selector || selector._dcoOverviewSetValuePatched) return;
-        if (typeof selector.set_value !== "function") return;
-        const originalSetValue = selector.set_value.bind(selector);
-        selector.set_value = function dcoOverviewSetValue(sortBy, sortOrder) {
-            const field = String(sortBy || this.sort_by || "").trim();
-            const order = field === OVERVIEW_DEFAULT_SORT_FIELD
-                ? "desc"
-                : normalizedSortOrder(sortOrder);
-            originalSetValue(field, order);
-            syncSortSelectorOrderButton(this, this.sort_order || order);
-        };
-        selector._dcoOverviewSetValuePatched = true;
-    }
-
-    function patchOverviewSortSelectorChange(listview, selector) {
-        if (!selector || selector._dcoOverviewChangePatched) return;
-        const original = selector.onchange || selector.change;
-        selector.onchange = function dcoOverviewSortChange(sortBy, sortOrder) {
-            const field = String(sortBy || selector.sort_by || "").trim();
-            if (field === OVERVIEW_DEFAULT_SORT_FIELD) {
-                selectOverviewDefaultSort(listview, selector);
-                if (typeof original === "function") {
-                    original(OVERVIEW_DEFAULT_SORT_FIELD, "desc");
-                }
-                return;
-            }
-            const order = syncSortSelectorOrderButton(selector, selector.sort_order || sortOrder);
-            listview.sort_by = field;
-            listview.sort_order = order;
-            if (typeof original === "function") original(field, order);
-        };
-        selector.change = selector.onchange;
-        selector._dcoOverviewChangePatched = true;
     }
 
     function installOverviewDefaultSort(listview) {
@@ -1359,8 +1303,6 @@
 
         ensureOverviewDefaultSortOption(selector);
         patchOverviewSortSelectorSql(selector);
-        patchOverviewSortSelectorSetValue(selector);
-        patchOverviewSortSelectorChange(listview, selector);
 
         if (selector._dcoOverviewSortOptionInstalled) return;
 
@@ -1372,9 +1314,6 @@
         if (typeof selector.make === "function") selector.make();
         ensureOverviewDefaultSortOption(selector);
         patchOverviewSortSelectorSql(selector);
-        patchOverviewSortSelectorSetValue(selector);
-        patchOverviewSortSelectorChange(listview, selector);
-        syncSortSelectorOrderButton(selector, selector.sort_order);
         selector._dcoOverviewSortOptionInstalled = true;
     }
 
@@ -1382,11 +1321,16 @@
         return desktopDeliveryRowState(doc) === "delivered" ? "delivered" : "active";
     }
 
-    function sortOverviewListItems(items) {
+    function sortOverviewListItems(items, sortOrder = "desc") {
+        const direction = normalizedSortOrder(sortOrder) === "asc" ? 1 : -1;
+        const rules = {
+            active: Object.assign({}, OVERVIEW_LIST_SORT_RULES.active, { direction }),
+            delivered: Object.assign({}, OVERVIEW_LIST_SORT_RULES.delivered, { direction }),
+        };
         return sortQueueItemsByRules(
             items,
             overviewListState,
-            OVERVIEW_LIST_SORT_RULES,
+            rules,
             "active"
         );
     }
@@ -1415,7 +1359,10 @@
         applyOrderedListRows(
             listview,
             result,
-            sortOverviewListItems(queueItems).map(item => item.container)
+            sortOverviewListItems(
+                queueItems,
+                listview && listview.sort_selector && listview.sort_selector.sort_order
+            ).map(item => item.container)
         );
     }
 
@@ -1726,7 +1673,6 @@
         reconcileStatusFilterLayout,
         renderMobileCards,
         shouldSelectOverviewDefaultSort,
-        syncSortSelectorOrderButton,
         sortDesktopQueueItems,
         sortOverviewListItems,
         sortPersonalQueueItems,
