@@ -76,6 +76,28 @@ vm.runInContext(source, context);
 const responsive = context.window.AlmdinaResponsiveDevice;
 const api = context.window.AlmdinaDoorCuttingOrderListUX;
 
+const listFormatters = context.frappe.listview_settings["Door Cutting Order"].formatters;
+context.frappe.user = {
+    full_name(user) {
+        return user === "edge@example.com" ? "موظف قشاط ." : "";
+    },
+};
+assert.strictEqual(
+    listFormatters.current_assignee("edge@example.com"),
+    "<span>موظف قشاط .</span>",
+    "assignee labels containing CSS-significant punctuation must render as HTML, never raw selector-like text"
+);
+assert.strictEqual(
+    listFormatters.current_department("قسم #1 [خاص].", {}, { status: "At CNC" }),
+    "<span>قسم #1 [خاص].</span>",
+    "department labels must be wrapped so Frappe's jQuery width measurement cannot parse them as selectors"
+);
+assert.strictEqual(
+    listFormatters.edge_color("لون <خاص>."),
+    '<span class="dco-list-edge-color">لون &lt;خاص&gt;.</span>',
+    "the existing edge-color formatter must remain unchanged and escaped"
+);
+
 const kanbanView = new context.frappe.views.KanbanView();
 kanbanView.doctype = "Door Cutting Order";
 kanbanView.card_meta = { title_field: { fieldname: "order_notes" } };
@@ -650,7 +672,18 @@ assert.deepStrictEqual(
         "DCO-DELIVERED-NEW",
         "DCO-DELIVERED-OLD",
     ],
-    "all-orders list must keep delivered rows last while remaining rows stay newest-first by modified"
+    "all-orders default sort must keep delivered rows last while remaining rows stay newest-first by modified"
+);
+assert.deepStrictEqual(
+    Array.from(api.sortOverviewListItems(overviewQueueItems, "asc"), item => item.name),
+    [
+        "DCO-ACTIVE-OLD",
+        "DCO-READY",
+        "DCO-CANCELLED",
+        "DCO-DELIVERED-OLD",
+        "DCO-DELIVERED-NEW",
+    ],
+    "the extra default option may reverse its own time direction without changing Frappe built-in sorts"
 );
 assert.strictEqual(api.overviewListState({ status: "Delivered" }), "delivered");
 assert.strictEqual(api.overviewListState({ current_department: "تم التسليم" }), "delivered");
@@ -664,6 +697,10 @@ assert.strictEqual(api.overviewDefaultSortLabel, "الترتيب الافترا�
 assert.strictEqual(
     api.overviewDefaultSortSql(),
     "`tabDoor Cutting Order`.`modified` desc"
+);
+assert.strictEqual(
+    api.overviewDefaultSortSql("asc"),
+    "`tabDoor Cutting Order`.`modified` asc"
 );
 
 const overviewSortStore = {
@@ -775,7 +812,11 @@ const defaultListview = {
 };
 api.installOverviewDefaultSort(defaultListview);
 assert.strictEqual(defaultSelector.sort_by, api.overviewDefaultSortField);
-assert.strictEqual(defaultListview.sort_by, api.overviewDefaultSortField);
+assert.strictEqual(
+    defaultListview.sort_by,
+    "modified",
+    "installing the extra option must not rewrite Frappe ListView's native sort state"
+);
 assert.strictEqual(defaultSelector.get_sql_string(), api.overviewDefaultSortSql());
 assert.strictEqual(defaultSelector.args.options[0].fieldname, api.overviewDefaultSortField);
 assert.strictEqual(defaultSelector.args.options[0].label, api.overviewDefaultSortLabel);
@@ -889,39 +930,52 @@ const toggleListview = {
     sort_selector: toggleSelector,
 };
 toggleSelector.listview = toggleListview;
+const nativeSetValue = toggleSelector.set_value;
+const nativeOnchange = toggleSelector.onchange;
 api.installOverviewDefaultSort(toggleListview);
 assert.strictEqual(toggleSelector.sort_by, api.overviewDefaultSortField);
-
-toggleSelector.set_value(api.overviewDefaultSortField, "asc");
-toggleSelector.onchange(toggleSelector.sort_by, toggleSelector.sort_order);
-assert.strictEqual(toggleSelector.sort_order, "desc");
-assert.strictEqual(toggleSelector.orderButton().attr("data-value"), "desc");
-
-toggleSelector.set_value("name", toggleSelector.sort_order);
-toggleSelector.onchange(toggleSelector.sort_by, toggleSelector.sort_order);
-assert.strictEqual(toggleSelector.sort_by, "name");
-assert.strictEqual(toggleSelector.orderButton().attr("data-value"), toggleSelector.sort_order);
 assert.strictEqual(
-    toggleSelector.get_sql_string(),
-    "`tabDoor Cutting Order`.`name` desc"
+    toggleSelector.set_value,
+    nativeSetValue,
+    "the extra option must not wrap or replace Frappe's native set_value"
+);
+assert.strictEqual(
+    toggleSelector.onchange,
+    nativeOnchange,
+    "the extra option must not wrap or replace Frappe's native onchange"
 );
 
-const nextOrder = toggleSelector.orderButton().attr("data-value") === "desc" ? "asc" : "desc";
-toggleSelector.set_value(toggleSelector.sort_by, nextOrder);
+toggleSelector.set_value(api.overviewDefaultSortField, "asc");
 toggleSelector.onchange(toggleSelector.sort_by, toggleSelector.sort_order);
 assert.strictEqual(toggleSelector.sort_order, "asc");
 assert.strictEqual(toggleListview.sort_order, "asc");
 assert.strictEqual(toggleSelector.orderButton().attr("data-value"), "asc");
 assert.strictEqual(
     toggleSelector.get_sql_string(),
+    "`tabDoor Cutting Order`.`modified` asc",
+    "only the synthetic default option may translate to its custom SQL"
+);
+
+toggleSelector.set_value("name", toggleSelector.sort_order);
+toggleSelector.onchange(toggleSelector.sort_by, toggleSelector.sort_order);
+assert.strictEqual(toggleSelector.sort_by, "name");
+assert.strictEqual(toggleSelector.orderButton().attr("data-value"), "asc");
+assert.strictEqual(
+    toggleSelector.get_sql_string(),
     "`tabDoor Cutting Order`.`name` asc",
-    "built-in ascending/descending toggle must work after leaving the default sort"
+    "Frappe ID sort SQL must remain exactly native"
 );
 
 toggleSelector.set_value(toggleSelector.sort_by, "desc");
 toggleSelector.onchange(toggleSelector.sort_by, toggleSelector.sort_order);
 assert.strictEqual(toggleSelector.sort_order, "desc");
+assert.strictEqual(toggleListview.sort_order, "desc");
 assert.strictEqual(toggleSelector.orderButton().attr("data-value"), "desc");
+assert.strictEqual(
+    toggleSelector.get_sql_string(),
+    "`tabDoor Cutting Order`.`name` desc",
+    "Frappe ascending/descending behavior must remain native"
+);
 
 context.frappe.session.user = "cutting@example.com";
 context.window.AlmdinaPermissions = undefined;
