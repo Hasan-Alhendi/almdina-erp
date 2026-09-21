@@ -188,6 +188,7 @@ class TestDesignSystemContract(unittest.TestCase):
 
     def test_components_stay_scoped_and_define_primary_button(self) -> None:
         self.assertIn(".almdina-ui .btn.alm-btn-primary", self.components)
+        self.assertIn(".almdina-ui .btn.alm-btn-secondary", self.components)
         self.assertIn("background: var(--alm-primary)", self.components)
         self.assertNotIn("body .btn-primary", self.components)
 
@@ -202,6 +203,7 @@ class TestDesignSystemContract(unittest.TestCase):
         self.assertIn("securePrivate", self.ui)
         self.assertIn("function empty(", self.ui)
         self.assertIn("alm-btn-primary", self.ui)
+        self.assertIn("alm-btn-secondary", self.ui)
         self.assertIn("frappe.ui.form.make_control", self.ui)
         self.assertIn("df.change = function nativeChangeBridge", self.ui)
         self.assertNotIn("input.on(\"input change\"", self.ui)

@@ -200,10 +200,13 @@
         style.id = STYLE_ID;
         style.textContent = `
             .${HOST_CLASS} {
-                margin: 0 0 14px;
+                margin: 0 0 12px;
+                width: 100%;
                 direction: rtl;
             }
             .dco-plan-context-bar {
+                width: 100%;
+                box-sizing: border-box;
                 display:flex;
                 align-items:center;
                 justify-content:space-between;

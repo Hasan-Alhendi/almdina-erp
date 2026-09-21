@@ -107,7 +107,9 @@
         // wrapper into an ad-hoc row leaves it detached when Frappe repaints a
         // section, while fields_dict still points at the detached node.
         field.$wrapper.addClass("dco-plan-actions-native");
-        if (section.length) section.addClass("dco-plan-actions-section");
+        if (section.length) section.addClass("dco-plan-actions-section hide-border");
+        const layoutSection = sectionElement(frm, "plan_section");
+        if (layoutSection.length) layoutSection.addClass("hide-border dco-plan-layout-section");
     }
 
     function escapeHtml(value) {

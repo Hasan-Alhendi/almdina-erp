@@ -42,6 +42,19 @@ def test_primary_tab_bar_is_fixed_on_scroll_and_labels_are_arabic():
     assert 'results_tab: "خطة القص"' in src
     assert 'cost_tab: "تكلفة الطلب"' in src
     assert 'frm.set_df_property(fieldname, "label", label)' in src
+    assert 'const STYLE_ID = "dco-responsive-header-css-v6"' in src
+    assert "@media (min-width: 721px)" in src
+    assert "function reconcileSearchPlacement" in _source(
+        ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_toolbar_stability_ux.js"
+    )
+    assert ".standard-items-section" in src
+    assert "grid-template-columns: repeat(6, minmax(0, 1fr))" in src
+    assert '[data-dco-mobile-slot="primary-left"]' in src
+    assert '[data-dco-mobile-slot="utility-notes"]' in src
+    assert "search-bar[data-dco-mobile-slot=\"utility-search\"]" in src
+    assert "--control-bg" in src
+    assert "--alm-border" in src
+    assert "min-width: 0 !important" in src
 
 
 def test_cost_measurements_are_compact_and_custom_edge_details_have_one_owner():

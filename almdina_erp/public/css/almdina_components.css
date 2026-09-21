@@ -28,6 +28,52 @@
     box-shadow: none;
 }
 
+.almdina-ui :where(.btn, button).alm-btn-secondary,
+.almdina-ui .btn.alm-btn-secondary {
+    min-height: var(--alm-height-button);
+    padding: 0 var(--alm-padding-button-x);
+    border-radius: var(--alm-radius-button);
+    border: 1px solid var(--alm-secondary-border);
+    background: var(--alm-secondary-bg);
+    color: var(--alm-secondary-text);
+    font-weight: 700;
+    box-shadow: none;
+}
+
+.almdina-ui :where(.btn, button).alm-btn-secondary:hover:not(:disabled),
+.almdina-ui .btn.alm-btn-secondary:hover:not(:disabled) {
+    background: var(--alm-secondary-hover-bg);
+    border-color: var(--alm-border);
+}
+
+.almdina-ui :where(.btn, button).alm-btn-secondary:disabled,
+.almdina-ui .btn.alm-btn-secondary:disabled {
+    opacity: 0.55;
+}
+
+.almdina-ui.dco-tab-edit-toolbar :where(.btn, button).alm-btn-primary,
+.almdina-ui.dco-tab-edit-toolbar :where(.btn, button).alm-btn-secondary,
+.almdina-ui.dco-tab-edit-toolbar .btn.alm-btn-primary,
+.almdina-ui.dco-tab-edit-toolbar .btn.alm-btn-secondary,
+.almdina-ui .dco-tab-edit-toolbar :where(.btn, button).alm-btn-primary,
+.almdina-ui .dco-tab-edit-toolbar :where(.btn, button).alm-btn-secondary,
+.almdina-ui .dco-tab-edit-toolbar .btn.alm-btn-primary,
+.almdina-ui .dco-tab-edit-toolbar .btn.alm-btn-secondary {
+    box-sizing: border-box !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-width: var(--alm-min-width-button-compact, 96px);
+    min-height: unset !important;
+    height: auto !important;
+    padding-block: var(--alm-padding-button-compact-y, 8px) !important;
+    padding-inline: var(--alm-padding-button-compact-x, 18px) !important;
+    line-height: 1.2 !important;
+    font-size: 12px;
+    font-weight: 800;
+    box-shadow: none !important;
+}
+
 .almdina-ui :where(.btn, button).alm-btn-danger,
 .almdina-ui .btn.alm-btn-danger {
     min-height: var(--alm-height-button);
