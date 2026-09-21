@@ -29,8 +29,10 @@ def test_every_full_cost_presenter_render_rebinds_an_active_cost_edit_session():
     assert "function reconcileActiveCostEditSession(frm)" in adapter
     assert 'typeof editSession.isEditing === "function"' in adapter
     assert "editSession.sync(frm);" in adapter
+    assert "function parkHostedCostSettings(frm)" in adapter
+    assert "function paintCostHtml(frm, painter)" in adapter
 
-    render_start = adapter.index("const result = legacy.render(frm);")
+    render_start = adapter.index("paintCostHtml(frm, () => legacy.render(frm))")
     rebind = adapter.index("reconcileActiveCostEditSession(frm);", render_start)
     render_return = adapter.index("return result;", rebind)
     assert render_start < rebind < render_return

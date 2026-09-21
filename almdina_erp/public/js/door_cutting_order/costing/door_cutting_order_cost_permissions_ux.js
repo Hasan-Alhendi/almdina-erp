@@ -627,7 +627,15 @@
             // Edit-state changes should not cause a second Cost render. The store
             // owns data, the presenter owns markup, and this owner only reconciles
             // permissions onto the markup already present.
-            configureCostInputFields(frm);
+            const coordinator = window.AlmdinaDcoEditSessionCoordinator;
+            const snap = coordinator && typeof coordinator.snapshot === "function"
+                ? coordinator.snapshot(frm)
+                : null;
+            // set_df_property/refresh during coordinator "starting" can hide the
+            // relocated native rate fields before beginEdit hosts the draft.
+            if (!(snap && snap.activeKind === "cost" && snap.phase === "starting")) {
+                configureCostInputFields(frm);
+            }
             scheduleRenderedActions(frm);
         },
     });

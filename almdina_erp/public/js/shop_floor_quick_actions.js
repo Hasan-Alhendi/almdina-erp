@@ -508,5 +508,6 @@
     window.AlmdinaShopFloorQuickActions = Object.freeze({
         actionFor,
         perform,
+        createWorkerDropdownDialog,
     });
 })();

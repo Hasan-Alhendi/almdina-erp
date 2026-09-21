@@ -155,6 +155,7 @@ class TestFactoryMasterDataArchitecture(unittest.TestCase):
             "this.readGate.invalidate()",
             "this.closeTransientSurfaces()",
             "this.clearDragState()",
+            "this.disposeStageControls()",
             "this.reconciliationPending",
             "this.completedSave",
             "workingId",
@@ -164,6 +165,12 @@ class TestFactoryMasterDataArchitecture(unittest.TestCase):
             self.assertIn(marker, master)
         self.assertIn("this.state.editor && this.state.editor.dirty", master)
         self.assertIn("previous.dispose()", master)
+        loading_block = master[master.index("if (!bootstrapOwnsLoading)"):master.index("return this.call(METHODS.load)")]
+        self.assertIn("this.disposeToolbarControls()", loading_block)
+        self.assertIn("this.disposeStageControls()", loading_block)
+        overview_block = master[master.index("renderOverview(options = {})"):master.index("statHtml(")]
+        self.assertIn("this.disposeToolbarControls()", overview_block)
+        self.assertIn("this.disposeStageControls()", overview_block)
         self.assertNotIn("AlmdinaMutationLifecycle", master)
         self.assertNotIn("AlmdinaLifecycle", master)
 

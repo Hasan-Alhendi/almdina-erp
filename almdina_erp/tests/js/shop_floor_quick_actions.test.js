@@ -14,6 +14,7 @@ assert(source.includes("get_handoff_context"), "handoff decisions must come from
 assert(source.includes("mark_delivered"), "delivery must reuse the existing server delivery command");
 assert(!source.includes("frappe.get_roles"), "quick actions must not add client-side role-name authorization");
 assert(!source.includes('fieldtype: "Select"'), "worker handoff must not use a native mobile select picker");
+assert(source.includes("createWorkerDropdownDialog"), "worker dropdown dialog must be reusable by inbox dialogs");
 assert(!source.includes("frappe.prompt("), "worker handoff must use the anchored dropdown dialog instead of prompt Select");
 assert(!source.includes("`${fullName} (${value})`"), "worker dropdown labels must not append the email");
 assert(source.includes("label: displayName"), "worker dropdown must display the worker full name");

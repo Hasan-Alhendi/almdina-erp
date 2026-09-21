@@ -31,22 +31,26 @@ def _page_surface() -> str:
     )
 
 
-def test_role_search_is_inside_one_searchable_dropdown() -> None:
+def test_role_picker_uses_frappe_link_control() -> None:
     renderer = RENDERER.read_text(encoding="utf-8")
+    controller = CONTROLLER.read_text(encoding="utf-8")
     interactions = INTERACTIONS.read_text(encoding="utf-8")
-    view_model = VIEW_MODEL.read_text(encoding="utf-8")
-    surface = "\n".join((renderer, interactions, view_model))
+    api_source = API.read_text(encoding="utf-8")
 
-    assert 'role="combobox"' in renderer
-    assert "apc-role-picker" in renderer
-    assert "apc-role-menu" in renderer
-    assert "apc-role-option" in renderer
-    assert "ArrowDown" in interactions
-    assert "ArrowUp" in interactions
-    assert "roleMenu" in view_model
+    assert "apc-role-mount" in renderer
+    assert "mountRoleControl" in renderer
+    assert "search_permission_roles" in api_source
+    assert "roleSearchQuery" in api_source
+    assert "fieldtype: \"Link\"" in renderer
     assert "ابحث واختر دورًا" in renderer
-    assert "apc-role-search" not in surface
-    assert "apc-role-select" not in surface
+    assert "mountRoleControl" in controller
+    assert "disposeRoleControl" in controller
+    assert "roleSearchQuery" in controller
+    assert "apc-role-picker" not in renderer
+    assert "apc-role-menu" not in renderer
+    assert "apc-role-picker" not in interactions
+    assert "apc-role-search" not in "\n".join((renderer, interactions))
+    assert "apc-role-select" not in "\n".join((renderer, interactions))
 
 
 def test_section_and_global_select_all_controls_are_present() -> None:
@@ -83,9 +87,8 @@ def test_permission_console_never_silently_hides_server_capabilities() -> None:
 
 def test_json_export_import_round_trip_and_browser_validation() -> None:
     api_source = API.read_text(encoding="utf-8")
-    controller_source = CONTROLLER.read_text(encoding="utf-8")
     renderer_source = RENDERER.read_text(encoding="utf-8")
-    interactions_source = INTERACTIONS.read_text(encoding="utf-8")
+    dialogs_source = (ROOT / "public" / "js" / "factory_permissions" / "dialogs.js").read_text(encoding="utf-8")
     state = {
         Capability.VIEW_ORDERS: True,
         Capability.CREATE_ORDER: True,
@@ -101,11 +104,11 @@ def test_json_export_import_round_trip_and_browser_validation() -> None:
 
     assert "export_role_permissions" in api_source
     assert "preview_permission_import" in api_source
-    assert "JSON.parse(payload)" in controller_source
-    assert 'this.value = ""' in interactions_source
+    assert "JSON.parse" in dialogs_source
+    assert "processImportFile" in dialogs_source
     assert "URL.createObjectURL" in renderer_source
     assert "URL.revokeObjectURL" in renderer_source
-    assert "لن يتغير الدور قبل الحفظ" in controller_source
+    assert "لن يتغير الدور قبل الحفظ" in dialogs_source
 
 
 def test_bootstrap_loads_the_page_owned_modules() -> None:
@@ -118,6 +121,7 @@ def test_bootstrap_loads_the_page_owned_modules() -> None:
         "view_model.js",
         "renderer.js",
         "interactions.js",
+        "dialogs.js",
         "controller.js",
     ):
         assert f"/assets/almdina_erp/js/factory_permissions/{asset}" in page

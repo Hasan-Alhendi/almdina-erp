@@ -46,7 +46,16 @@
         let initialLoadPending = typeof shell.hasBootstrapLoading === "function"
             && shell.hasBootstrapLoading();
         let interactionOwner = null;
+        let boardToolbarControls = null;
+        let boardToolbarMounted = false;
+        let $refreshButton = null;
+        state.lifecycle.track(() => disposeBoardToolbarControls(), "shop-floor-board-toolbar-owner");
         const dialogs = Dialogs.create({ isCurrentGeneration });
+
+        if (typeof page.add_inner_button === "function") {
+            $refreshButton = page.add_inner_button(__("تحديث"), refresh, null, "refresh");
+        }
+        syncRefreshButtonVisibility();
 
         interactionOwner = Interactions.bind(shell, state.lifecycle, {
             setMode,
@@ -54,8 +63,6 @@
             logout,
             openOrder,
             quickAction,
-            setRouteFilter,
-            setSearch,
             handoff,
         });
         Renderer.syncTabs(shell, state.mode());
@@ -65,6 +72,12 @@
             dispose() {
                 if (disposed) return false;
                 disposed = true;
+                disposeBoardToolbarControls();
+                boardToolbarMounted = false;
+                if ($refreshButton && typeof $refreshButton.remove === "function") {
+                    $refreshButton.remove();
+                    $refreshButton = null;
+                }
                 dialogs.dispose();
                 state.dispose();
                 if (wrapper.__almdinaShopFloorInboxController === instance) {
@@ -108,7 +121,11 @@
         function beginLoading(message) {
             const bootstrapOwnsLoading = initialLoadPending;
             initialLoadPending = false;
-            if (!bootstrapOwnsLoading) Renderer.loading(shell, message);
+            if (!bootstrapOwnsLoading) {
+                disposeBoardToolbarControls();
+                boardToolbarMounted = false;
+                Renderer.loading(shell, message);
+            }
         }
 
         async function loadSessionContext({ fresh = false } = {}) {
@@ -120,21 +137,123 @@
             return state.setContext(context || {});
         }
 
-        function renderCurrent() {
+        function renderCurrent(options = {}) {
             if (!isActive()) return;
             const snapshot = state.snapshot();
             Renderer.syncTabs(shell, snapshot.mode);
             if (snapshot.mode === "account") {
+                disposeBoardToolbarControls();
+                boardToolbarMounted = false;
                 Renderer.renderAccount(shell, ViewModel.account(snapshot.sessionContext || {}));
                 return;
             }
             if (snapshot.mode === "board") {
                 const model = ViewModel.board(snapshot);
                 if (model.routeFilter !== snapshot.routeFilter) state.setRouteFilter(model.routeFilter);
-                Renderer.renderBoard(shell, model, snapshot.search, snapshot.mode);
+                const preserveToolbar = options.preserveBoardToolbar === true && boardToolbarMounted;
+                Renderer.renderBoard(shell, model, snapshot.mode, { preserveToolbar });
+                if (preserveToolbar) {
+                    syncBoardToolbarControlValues(snapshot, model);
+                } else {
+                    mountBoardToolbarControls(snapshot, model);
+                    boardToolbarMounted = true;
+                }
                 return;
             }
+            disposeBoardToolbarControls();
+            boardToolbarMounted = false;
             Renderer.renderList(shell, ViewModel.list(snapshot), snapshot.mode);
+        }
+
+        function allRoutesLabel() {
+            return __("كل المسارات");
+        }
+
+        function routeFilterCatalog(routes) {
+            const entries = (routes || []).map(route => [
+                String(route.name || ""),
+                String(route.label || route.name || __("مسار غير محدد")),
+            ]);
+            const options = [allRoutesLabel(), ...entries.map(([, label]) => label)].join("\n");
+            return { entries, options };
+        }
+
+        function routeFilterLabel(entries, value) {
+            if (!value) return allRoutesLabel();
+            const match = entries.find(([name]) => name === value);
+            return match ? match[1] : allRoutesLabel();
+        }
+
+        function routeFilterValue(entries, label) {
+            if (label === allRoutesLabel()) return "";
+            const match = entries.find(([, text]) => text === label);
+            return match ? match[0] : "";
+        }
+
+        function disposeBoardToolbarControls() {
+            if (!boardToolbarControls) return;
+            boardToolbarControls.route.dispose();
+            boardToolbarControls.search.dispose();
+            boardToolbarControls = null;
+        }
+
+        function mountBoardToolbarControls(snapshot, model) {
+            disposeBoardToolbarControls();
+            const ui = window.AlmdinaUi;
+            if (!ui || typeof ui.control !== "function") {
+                throw new Error("AlmdinaUi.control is required for Shop Floor Inbox board toolbar");
+            }
+            const $routeMount = shell.$content.find(".almdina-sf-route-mount");
+            const $searchMount = shell.$content.find(".almdina-sf-search-mount");
+            if (!$routeMount.length || !$searchMount.length) return;
+
+            const { entries, options } = routeFilterCatalog(model.routes);
+            const route = ui.control({
+                parent: $routeMount,
+                fieldname: "route_filter",
+                fieldtype: "Select",
+                options,
+                value: routeFilterLabel(entries, model.routeFilter),
+                className: "almdina-sf-route-control-mount",
+                onlyInput: true,
+                onChange: value => {
+                    setRouteFilter(routeFilterValue(entries, String(value || "")));
+                },
+            });
+            const search = ui.control({
+                parent: $searchMount,
+                fieldname: "board_search",
+                fieldtype: "Data",
+                placeholder: __("رقم الطلب، الزبون، العامل..."),
+                value: snapshot.search || "",
+                className: "almdina-sf-search-control-mount",
+                onlyInput: true,
+                onChange: value => {
+                    applyBoardSearch(String(value || ""));
+                },
+            });
+            boardToolbarControls = { route, search, entries };
+        }
+
+        function syncBoardToolbarControlValues(snapshot, model) {
+            if (!boardToolbarControls) return;
+            const routeLabel = routeFilterLabel(boardToolbarControls.entries, model.routeFilter);
+            if (boardToolbarControls.route.getValue() !== routeLabel) {
+                boardToolbarControls.route.setValue(routeLabel);
+            }
+            if (boardToolbarControls.search.getValue() !== snapshot.search) {
+                boardToolbarControls.search.setValue(snapshot.search);
+            }
+        }
+
+        function applyBoardSearch(value) {
+            if (!isActive()) return;
+            state.setSearch(value);
+            if (state.mode() !== "board") return;
+            renderCurrent({ preserveBoardToolbar: true });
+            if (boardToolbarControls && boardToolbarControls.search) {
+                Renderer.focusSearch(shell, boardToolbarControls.search);
+            }
         }
 
         async function renderAccount({ freshContext = false } = {}) {
@@ -148,6 +267,8 @@
                 return context;
             } catch (error) {
                 if (isActive() && state.mode() === requestedMode) {
+                    disposeBoardToolbarControls();
+                    boardToolbarMounted = false;
                     Renderer.error(shell, errorMessage(error, __("تعذر تحميل معلومات الحساب.")));
                 }
                 return null;
@@ -193,6 +314,8 @@
                 return state.snapshot();
             } catch (error) {
                 if (isActive() && state.isCurrentListRequest(token) && state.mode() === requestedMode) {
+                    disposeBoardToolbarControls();
+                    boardToolbarMounted = false;
                     Renderer.error(shell, errorMessage(error, __("تعذر تحميل طلبات الإنتاج.")));
                 }
                 return null;
@@ -217,6 +340,8 @@
 
         function deactivatePage() {
             dialogs.deactivate();
+            disposeBoardToolbarControls();
+            boardToolbarMounted = false;
             if (interactionOwner && typeof interactionOwner.deactivate === "function") {
                 interactionOwner.deactivate();
             }
@@ -234,22 +359,25 @@
             if (!isActive()) return;
             state.setMode(nextMode);
             Renderer.syncTabs(shell, state.mode());
+            syncRefreshButtonVisibility();
             if (state.mode() === "account") renderAccount();
             else loadList();
+        }
+
+        function syncRefreshButtonVisibility() {
+            if (!$refreshButton) return;
+            const visible = state.mode() !== "account";
+            if (typeof $refreshButton.toggle === "function") {
+                $refreshButton.toggle(visible);
+            }
         }
 
         function setRouteFilter(value) {
             if (!isActive()) return;
             state.setRouteFilter(value);
-            if (state.mode() === "board") renderCurrent();
-        }
-
-        function setSearch(value) {
-            if (!isActive()) return;
-            state.setSearch(value);
-            if (state.mode() !== "board") return;
-            renderCurrent();
-            Renderer.focusSearch(shell);
+            if (state.mode() === "board") {
+                renderCurrent({ preserveBoardToolbar: boardToolbarMounted });
+            }
         }
 
         function openOrder(context) {

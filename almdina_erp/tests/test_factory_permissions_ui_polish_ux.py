@@ -20,7 +20,8 @@ def test_permissions_polish_keeps_ui_semantics_accessible() -> None:
         'role="status"',
         'aria-live="polite"',
         'aria-atomic="true"',
-        'role="combobox"',
+        "apc-role-mount",
+        'fieldtype: "Link"',
     ):
         assert marker in renderer
 

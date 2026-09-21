@@ -333,6 +333,48 @@ async function verifyBeginEditFailureIsTransactional() {
     assert.ok(messages.length >= 1);
 }
 
+async function verifyStartingPhaseDoesNotReconcileReadMode() {
+    const env = makeEnvironment();
+    const state = env.window.AlmdinaCostWorkspaceState;
+    const edit = env.window.AlmdinaCostEditSessionUX;
+    const layoutCalls = [];
+    env.window.AlmdinaCostPageLayoutUX = {
+        revealSettings() { layoutCalls.push("reveal"); return true; },
+        enhance() { layoutCalls.push("enhance"); return true; },
+    };
+    env.window.AlmdinaDcoEditSessionCoordinator = {
+        snapshot() {
+            return { activeKind: "cost", phase: "starting" };
+        },
+    };
+
+    await state.load(env.frm);
+    const refreshBefore = env.frm.fields_dict.board_rate_usd.refreshCount;
+    const unmountsBefore = env.unmounts.length;
+
+    env.formHandlers.almdina_edit_session_changed(env.frm);
+
+    assert.equal(
+        env.frm.fields_dict.board_rate_usd.refreshCount,
+        refreshBefore,
+        "coordinator starting must not refresh native cost fields before beginEdit"
+    );
+    assert.equal(
+        env.unmounts.length,
+        unmountsBefore,
+        "coordinator starting must not unmount draft controls before beginEdit"
+    );
+    assert.equal(env.mounts.length, 0);
+
+    env.window.AlmdinaDcoEditSessionCoordinator = {
+        snapshot() {
+            return { activeKind: "cost", phase: "editing" };
+        },
+    };
+    assert.equal(await edit.startEditing(env.frm), true);
+    assert.ok(layoutCalls.includes("reveal"), "successful beginEdit must expand the cost settings accordion");
+}
+
 async function verifyStaleStartCannotMutateNextDocument() {
     const gate = deferred();
     const env = makeEnvironment({ loadImpl: () => gate.promise });
@@ -355,6 +397,7 @@ async function verifyStaleStartCannotMutateNextDocument() {
 (async () => {
     await verifyHappyPathAndBackgroundReadGuard();
     await verifyBeginEditFailureIsTransactional();
+    await verifyStartingPhaseDoesNotReconcileReadMode();
     await verifyStaleStartCannotMutateNextDocument();
     console.log("Cost edit-session lifecycle simulation passed");
 })().catch((error) => {

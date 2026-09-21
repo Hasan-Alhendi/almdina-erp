@@ -217,6 +217,38 @@ def _bundle_preview(
 
 
 @frappe.whitelist()
+@frappe.validate_and_sanitize_search_inputs
+def search_permission_roles(
+    doctype: str,
+    txt: str,
+    searchfield: str,
+    start: int,
+    page_len: int,
+    filters: dict[str, Any] | None = None,
+) -> list[list[str]]:
+    """Role link query for permission matrix editor without protected roles."""
+
+    del doctype, searchfield, filters
+    _require_permission_management()
+    role_filters: list[list[Any]] = [
+        ["Role", "name", "like", f"%{txt or ''}%"],
+        ["Role", "name", "not in", sorted(PROTECTED_ROLES)],
+    ]
+    role_meta = frappe.get_meta("Role")
+    if role_meta.has_field("disabled"):
+        role_filters.append(["Role", "disabled", "=", 0])
+    rows = frappe.get_all(
+        "Role",
+        filters=role_filters,
+        fields=["name"],
+        order_by="name asc",
+        limit_start=max(0, cint(start)),
+        limit_page_length=max(1, min(cint(page_len or 20), 100)),
+    )
+    return [[str(row.name), str(row.name)] for row in rows]
+
+
+@frappe.whitelist()
 def get_permission_console(role: str | None = None) -> dict[str, Any]:
     _require_permission_management()
     roles = _repository.list_roles()
@@ -441,5 +473,6 @@ __all__ = [
     "preview_permission_bundle_import",
     "preview_permission_import",
     "preview_role_permissions",
+    "search_permission_roles",
     "update_role_permissions",
 ]

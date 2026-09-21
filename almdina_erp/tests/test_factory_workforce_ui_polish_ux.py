@@ -83,7 +83,6 @@ def test_workforce_polish_is_presentation_only() -> None:
         "aw-toggle",
         "aw-audit-open",
         "aw-adopt-user",
-        "aw-refresh",
         "aw-search",
         "aw-enabled-filter",
     ):

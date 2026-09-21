@@ -11,8 +11,8 @@
     // writes four base layers, three manufacturing overlay layers, and text.
     const DXF_LAYER_COUNT = 8;
     const TEXT_LABEL_LAYER = "text";
-    const EXTRA_DOUBLE_DXF_TEXT = "Double Edge Banding";
-    const EXTRA_FULL_DOOR_DOUBLE_DXF_TEXT = "Full Door Double";
+    const EXTRA_DOUBLE_DXF_TEXT = "دبل القشاط";
+    const EXTRA_FULL_DOOR_DOUBLE_DXF_TEXT = "دبل كامل";
     const TOPOLOGY_COORDINATE_SPACE = "usable_sheet";
     const ORIGINAL_UPLOAD_SOURCES = new Set([
         "custom",

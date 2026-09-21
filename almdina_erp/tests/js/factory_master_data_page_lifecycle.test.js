@@ -86,10 +86,12 @@ function createRuntime({coldCore = false, pendingStyle = false} = {}) {
     const eventOwners = new WeakMap();
     const callQueues = new Map();
     const calls = [];
+    const controlOwners = [];
     const alerts = [];
     const messages = [];
     const confirms = [];
     const buttons = [];
+    let currentOwner = null;
     const assetLoad = deferred();
     const styleLoad = deferred();
 
@@ -105,8 +107,13 @@ function createRuntime({coldCore = false, pendingStyle = false} = {}) {
     }
 
     function collection(target, selector = "") {
+        const isControlMount = (target === main || target.kind === "query" || target.kind === "stage") && (
+            selector === ".prw-filter-group-mount"
+            || selector === ".prw-stage-role-mount"
+        );
         const api = {
-            length: 0,
+            jquery: true,
+            length: isControlMount ? 1 : 0,
             find(nextSelector) {
                 if (target === wrapper && nextSelector === ".layout-main-section") {
                     return collection(main, nextSelector);
@@ -123,6 +130,7 @@ function createRuntime({coldCore = false, pendingStyle = false} = {}) {
                 }
                 return this;
             },
+            empty() { return this; },
             on(names, selectorOrHandler, maybeHandler) {
                 const delegated = typeof selectorOrHandler === "string" ? selectorOrHandler : null;
                 const handler = delegated ? maybeHandler : selectorOrHandler;
@@ -151,11 +159,26 @@ function createRuntime({coldCore = false, pendingStyle = false} = {}) {
             },
             get() { return undefined; },
             val() { return ""; },
+            each(callback) {
+                if (this.length && typeof callback === "function") {
+                    const stageId = currentOwner && currentOwner.state.editor
+                        ? currentOwner.state.editor.stages[0].clientId
+                        : "missing-stage";
+                    callback(0, collection({ kind: "stage", stageId }, ".prw-stage-role-mount"));
+                }
+                return this;
+            },
+            data() {
+                return currentOwner && currentOwner.state.editor
+                    ? currentOwner.state.editor.stages[0].clientId
+                    : "missing-stage";
+            },
         };
         return api;
     }
 
     function jquery(target) {
+        if (target && target.jquery) return target;
         if (typeof target === "string") return collection({kind: "html", html: ""});
         return collection(target);
     }
@@ -211,6 +234,13 @@ function createRuntime({coldCore = false, pendingStyle = false} = {}) {
     };
 
     const page = {
+        btn_primary: {
+            visible: true,
+            toggle(visible) { this.visible = visible !== false; },
+        },
+        set_primary_action(label, callback, icon) {
+            page.primaryAction = { label, callback, icon };
+        },
         add_inner_button(label, callback) {
             const button = {
                 label,
@@ -230,6 +260,48 @@ function createRuntime({coldCore = false, pendingStyle = false} = {}) {
             make_app_page(options) {
                 page.options = options;
                 return page;
+            },
+            form: {
+                make_control(options) {
+                    const control = {
+                        df: options.df,
+                        value: options.df.default || "",
+                        $input: { focus() {}, on() {} },
+                        refresh() {},
+                        get_value() { return this.value; },
+                        set_value(value) {
+                            this.value = value;
+                            return Promise.resolve();
+                        },
+                    };
+                    controlOwners.push(control);
+                    return control;
+                },
+            },
+            FieldGroup: class {
+                constructor(options) {
+                    this.fields_dict = {};
+                    this.fields = (options.fields || []).map(df => {
+                        const field = {
+                            df,
+                            value: df.default || "",
+                            get_value() { return this.value; },
+                            set_value(value) { this.value = value; return Promise.resolve(); },
+                            set_focus() {},
+                        };
+                        this.fields_dict[df.fieldname] = field;
+                        return field;
+                    });
+                }
+                make() {}
+                get_values() {
+                    return Object.fromEntries(this.fields.map(field => [field.df.fieldname, field.get_value()]));
+                }
+                set_value(fieldname, value) {
+                    return this.fields_dict[fieldname]
+                        ? this.fields_dict[fieldname].set_value(value)
+                        : Promise.resolve();
+                }
             },
         },
         utils: {
@@ -285,6 +357,7 @@ function createRuntime({coldCore = false, pendingStyle = false} = {}) {
         Set,
         Date,
         Error,
+        Element: function Element() {},
     });
 
     function installCore() {
@@ -305,6 +378,7 @@ function createRuntime({coldCore = false, pendingStyle = false} = {}) {
         messages,
         confirms,
         buttons,
+        controlOwners,
         calls,
         assetLoad,
         styleLoad,
@@ -318,7 +392,10 @@ function createRuntime({coldCore = false, pendingStyle = false} = {}) {
         loadPage() {
             return frappe.pages["factory-master-data"].on_page_load(wrapper);
         },
-        owner() { return wrapper.__almdinaRoutingWorkflowPage; },
+        owner() {
+            currentOwner = wrapper.__almdinaRoutingWorkflowPage;
+            return currentOwner;
+        },
         show() {
             frappe.container.page = wrapper;
             trigger(wrapper, "show");
@@ -419,6 +496,7 @@ async function testReadActivationAndWorkingState() {
     await flush();
     assert.equal(owner.state.data.routings[0].label, "Fresh");
     assert.match(runtime.main.html, /Fresh/);
+    assert.ok(owner.toolbarControls, "Master Data overview must own a mounted toolbar");
 
     owner.state.section = "audit";
     owner.state.search = "needle";
@@ -429,19 +507,23 @@ async function testReadActivationAndWorkingState() {
     await flush();
     cleanRevisit.resolve({message: routingData("Clean revisit")});
     await flush();
+    assert.ok(owner.toolbarControls, "Master Data revisit must keep the replacement toolbar alive");
     assert.equal(owner.state.section, "audit");
     assert.equal(owner.state.search, "needle");
     assert.equal(owner.state.status, "disabled");
 
     const editor = makeEditorDirty(owner, "Byte-for-byte draft");
+    assert.ok(owner.stageControls, "Master Data editor must own mounted stage controls");
     owner.state.draggedStageId = editor.stages[0].clientId;
     const snapshot = JSON.stringify(editor);
     const callsBeforeDirtyRevisit = runtime.calls.length;
     runtime.hide();
     assert.equal(owner.disposed, false, "hide must not dispose the mounted page");
+    assert.equal(owner.stageControls, null, "deactivate must dispose old stage controls");
     assert.equal(owner.state.draggedStageId, null, "transient drag state must be cleared");
     runtime.show();
     await flush();
+    assert.ok(owner.stageControls, "editor revisit must keep replacement stage controls alive");
     assert.equal(JSON.stringify(owner.state.editor), snapshot);
     assert.equal(runtime.calls.length, callsBeforeDirtyRevisit, "dirty activation must not destructively read");
     assert.equal(owner.state.section, "routings");
