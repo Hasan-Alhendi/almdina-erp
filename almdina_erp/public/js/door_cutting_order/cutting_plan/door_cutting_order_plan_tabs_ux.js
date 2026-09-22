@@ -170,7 +170,7 @@
 			})
 			.join("");
 		return `
-			<div class="almdina-ui dco-plan-tabs" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px 0;">
+			<div class="almdina-ui dco-plan-tabs" style="display:flex;gap:8px;flex-wrap:wrap;width:100%;box-sizing:border-box;margin:0 0 10px 0;">
 				${buttons}
 			</div>
 		`;

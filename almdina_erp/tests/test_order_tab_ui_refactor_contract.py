@@ -23,6 +23,14 @@ DEFAULTS = (
     / "order_entry"
     / "door_cutting_order_defaults.js"
 )
+SHOP_FLOOR = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "production"
+    / "shop_floor_order_ux.js"
+)
 
 
 def test_order_schema_removes_external_reference_and_requires_edge_defaults() -> None:
@@ -101,13 +109,25 @@ def test_order_layout_presenter_is_presentation_only_and_loaded_after_operator_o
 def test_order_and_material_controls_follow_exact_requested_rows() -> None:
     layout = LAYOUT.read_text(encoding="utf-8")
 
-    assert "grid-template-columns: minmax(0,2fr) minmax(220px,1fr)" in layout
+    assert "operator_status_strip" in layout
+    assert "dco-order-status-shell" in layout
+    assert "function ensureStatusShell" in layout
+    assert "border-bottom: none !important" in layout
+    assert "margin-block: 6px 10px !important" in layout
+    assert "padding-block: 14px 16px !important" in layout
+    assert "padding-inline: 44px !important" in layout
+    assert "padding-inline: 20px !important" in layout
+    assert "grid-template-columns: minmax(0, 2fr) minmax(220px, 1fr)" in layout
+    assert "dco-order-intake-card > .section-body" in layout
     assert 'dco-order-intake-card [data-fieldname="customer"]' in layout
     assert 'dco-order-intake-card [data-fieldname="order_date"]' in layout
     assert 'dco-order-intake-card [data-fieldname="order_notes"]' in layout
     assert 'dco-order-intake-card [data-fieldname="order_cutting_machine"]' in layout
     assert "grid-column: 1 / -1" in layout
-    assert "grid-row: 3" in layout
+    assert "grid-row: 4" in layout
+    assert "section-body > .dco-order-section-heading" in layout
+    assert "max-width: none !important" in layout
+    assert "height: 38px !important" in layout
     assert "max-width: none !important" in layout
 
     # Material controls must be placed into two explicit visual rows using the
@@ -127,6 +147,13 @@ def test_order_and_material_controls_follow_exact_requested_rows() -> None:
     assert "grid-template-columns: minmax(0,2fr) minmax(140px,1fr) minmax(140px,1fr)" in layout
     assert "dco-material-row--edge" in layout
     assert "grid-template-columns: repeat(2,minmax(0,1fr))" in layout
+
+
+def test_order_tracking_strip_exposes_layout_hook_class() -> None:
+    source = SHOP_FLOOR.read_text(encoding="utf-8")
+
+    assert "dco-order-tracking-strip" in source
+    assert "margin-bottom:10px" not in source
 
 
 def test_notes_and_edge_color_never_disappear_when_empty() -> None:
@@ -211,3 +238,47 @@ def test_arabic_labels_reflect_the_new_information_hierarchy() -> None:
     assert 'edge_color: "لون القشاط"' in defaults
     assert 'order_cutting_machine: "نوع آلة القص"' in defaults
     assert "cutting_settings_section" not in defaults
+
+
+FORM_TAB_LAYOUT_CSS = ROOT / "public" / "css" / "door_cutting_order_form_tab_layout.css"
+PLAN_VISUAL = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "core"
+    / "door_cutting_order_plan_cost_workspace_visual_ux.js"
+)
+
+
+PLAN_CONTENT_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "door_cutting_order_plan_content_ux.js"
+)
+
+
+def test_form_tab_layout_css_centers_order_and_plan_surfaces() -> None:
+    css = FORM_TAB_LAYOUT_CSS.read_text(encoding="utf-8")
+    visual = PLAN_VISUAL.read_text(encoding="utf-8")
+    plan_content = PLAN_CONTENT_UX.read_text(encoding="utf-8")
+    manifest = MANIFEST.read_text(encoding="utf-8")
+
+    assert 'door_cutting_order_form_tab_layout.css' in manifest
+    assert "--dco-tab-shell-max: 1440px" in css
+    assert "--dco-tab-content-gutter:" in css
+    assert "order_tab_layout_ux.js" in css
+    assert "padding-inline: 20px !important" in visual
+    assert ".dco-plan-section-card.dco-layout-card > .section-body" in visual
+    assert "dco-plan-settings-readonly[data-almdina-plan-settings-summary-owner=\"stable\"]" in visual
+    assert "--dco-plan-card-inset-inline" in visual
+    assert "max-width: none !important" in visual
+    assert ".dco-plan-section-card.dco-layout-card .form-column" in visual
+    assert "border-bottom: none !important" in visual
+    assert "dco-plan-settings-readonly[data-almdina-plan-settings-summary-owner=\"stable\"]" in visual
+    assert "dco-plan-cost-workspace-visual-ux-v2" in visual
+    assert ".dco-operator-form .dco-plan-section-card.dco-layout-card > .section-body" in visual
+    assert "hide-border" in plan_content

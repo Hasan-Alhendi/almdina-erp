@@ -332,7 +332,7 @@
 			)
 			.join("");
 		const html = `
-			<div class="frappe-card" style="padding:14px 16px;margin-bottom:10px;border-inline-start:6px solid ${color}">
+			<div class="frappe-card dco-order-tracking-strip" style="border-inline-start:6px solid ${color}">
 				<div style="display:flex;flex-wrap:wrap;align-items:center;gap:14px 22px">
 					<div><div style="font-size:11px;color:var(--text-muted,#6b7280);font-weight:700">${__("حالة الطلب")}</div><div style="display:inline-block;background:${color};color:#fff;border-radius:999px;padding:5px 16px;font-size:15px;font-weight:800;margin-top:2px">${escape(statusLabel(status))}</div></div>
 					${facts}

@@ -1,0 +1,27 @@
+/*
+ * Door Cutting Order — shared tab layout tokens.
+ * Spacing rules live in order_tab_layout_ux.js and plan_cost_workspace_visual_ux.js
+ * because those stylesheets load with the form and win over global CSS.
+ */
+
+.dco-operator-form {
+    --dco-tab-shell-max: 1440px;
+    --dco-tab-content-gutter: 20px;
+    --dco-tab-card-inset-inline: 44px;
+    --dco-tab-card-inset-block: 14px 16px;
+}
+
+@media (max-width: 1200px) {
+    .dco-operator-form {
+        --dco-tab-content-gutter: 16px;
+        --dco-tab-card-inset-inline: 36px;
+    }
+}
+
+@media (max-width: 720px) {
+    .dco-operator-form {
+        --dco-tab-content-gutter: 12px;
+        --dco-tab-card-inset-inline: 32px;
+        --dco-tab-card-inset-block: 12px 14px;
+    }
+}

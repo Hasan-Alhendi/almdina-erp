@@ -3,8 +3,65 @@
 
     if (window.AlmdinaPlanContentStyles) return;
 
-    const STYLE_ID = "dco-plan-content-layout-css-v9";
+    const STYLE_ID = "dco-plan-content-layout-css-v12";
+    const LEGACY_STYLE_IDS = [
+        "dco-plan-content-layout-css-v8",
+        "dco-plan-content-layout-css-v9",
+        "dco-plan-content-layout-css-v10",
+        "dco-plan-content-layout-css-v11",
+    ];
     const CSS_TEXT = `
+        .dco-operator-form .dco-plan-settings-readonly[data-almdina-plan-settings-summary-owner="stable"],
+        .dco-operator-form .dco-plan-section-card.dco-layout-card > .section-head,
+        .dco-operator-form .dco-plan-section-card.dco-layout-card > .section-body,
+        .dco-operator-form .dco-plan-section-card.dco-layout-card .form-column,
+        .dco-operator-form [data-fieldname="cutting_plan_html"],
+        .dco-operator-form [data-fieldname="cutting_plan_html"] > .frappe-control,
+        .dco-operator-form [data-fieldname="cutting_plan_html"] > .form-group {
+            max-width:none !important;
+            width:100% !important;
+            margin-inline:0 !important;
+            box-sizing:border-box !important;
+        }
+        .dco-operator-form .dco-plan-actions-section.form-section,
+        .dco-operator-form .form-section:has([data-fieldname="plan_control_actions"]) {
+            border:none !important;
+            border-bottom:none !important;
+            margin:0 !important;
+            padding:0 !important;
+            min-height:0 !important;
+        }
+        .dco-operator-form .dco-plan-actions-section > .section-head {
+            display:none !important;
+        }
+        .dco-operator-form .dco-plan-actions-section > .section-body {
+            padding:0 !important;
+            margin:0 !important;
+        }
+        .dco-operator-form .dco-plan-settings-readonly[data-almdina-plan-settings-summary-owner="stable"] {
+            margin-block:0 6px !important;
+            padding-block:14px 16px !important;
+            padding-inline:var(--dco-tab-card-inset-inline, 44px) !important;
+            border:1px solid var(--border-color,#dfe3e8) !important;
+            border-radius:14px !important;
+            background:var(--card-bg,var(--fg-color,#fff)) !important;
+            box-shadow:0 2px 10px rgba(15,23,42,.035) !important;
+        }
+        .dco-operator-form .dco-plan-section-card.dco-layout-card.dco-ui-card {
+            padding:0 !important;
+            margin-block:6px 10px !important;
+            max-width:none !important;
+            width:100% !important;
+        }
+        .dco-operator-form .dco-plan-section-card.dco-layout-card > .section-head {
+            border-bottom:none !important;
+            padding:14px var(--dco-tab-card-inset-inline, 44px) 0 !important;
+            max-width:none !important;
+        }
+        .dco-operator-form .dco-plan-section-card.dco-layout-card > .section-body {
+            padding:0 var(--dco-tab-card-inset-inline, 44px) 16px !important;
+            max-width:none !important;
+        }
         .dco-plan-actions-section {
             border:0 !important;
             box-shadow:none !important;
@@ -19,13 +76,27 @@
             max-width:100% !important;
             margin-bottom:0 !important;
         }
+        .dco-plan-section-card.dco-layout-card > .section-body,
+        .dco-plan-section-card.dco-layout-card .form-column,
+        [data-fieldname="cutting_plan_html"],
+        [data-fieldname="cutting_plan_html"] > .frappe-control,
+        [data-fieldname="cutting_plan_html"] > .form-group,
+        [data-fieldname="cutting_plan_html"] .control-input-wrapper {
+            width:100% !important;
+            max-width:none !important;
+            box-sizing:border-box !important;
+        }
         [data-fieldname="plan_control_actions"] .dco-plan-actions-shell {
             margin:0 !important;
-            padding:14px !important;
+            padding-block:14px 16px !important;
+            padding-inline:var(--dco-tab-card-inset-inline, 44px) !important;
             border:1px solid var(--border-color,#dfe3e8) !important;
             border-radius:14px !important;
             background:linear-gradient(180deg,rgba(248,250,252,.92),rgba(248,250,252,.55)) !important;
             box-shadow:none !important;
+            width:100% !important;
+            max-width:none !important;
+            box-sizing:border-box !important;
         }
         [data-fieldname="plan_control_actions"] .dco-plan-actions-title {
             display:flex !important;
@@ -84,16 +155,32 @@
             color:var(--text-muted,#66717e);
         }
         [data-fieldname="cutting_plan_html"] .dco-plan-tabs {
-            width:max-content;
+            width:100% !important;
             max-width:100%;
             display:flex !important;
             align-items:center !important;
             gap:4px !important;
             padding:4px !important;
-            margin:0 0 12px auto !important;
+            margin:0 0 12px 0 !important;
             border:1px solid var(--border-color,#dfe3e8);
             border-radius:11px;
             background:var(--subtle-fg,#f6f8fa);
+            box-sizing:border-box !important;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-plan-context-actions-host,
+        [data-fieldname="cutting_plan_html"] .dco-plan-tab-content,
+        [data-fieldname="cutting_plan_html"] .dco-cutting-plan,
+        [data-fieldname="cutting_plan_html"] .dco-extra-addon-legend,
+        [data-fieldname="cutting_plan_html"] .dco-margin-policy-alert,
+        [data-fieldname="cutting_plan_html"] .dco-board-gallery {
+            width:100% !important;
+            max-width:none !important;
+            box-sizing:border-box !important;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-extra-addon-legend {
+            display:flex !important;
+            flex-wrap:wrap !important;
+            align-items:center !important;
         }
         [data-fieldname="cutting_plan_html"] .dco-plan-tabs .btn {
             min-height:34px !important;
@@ -369,12 +456,18 @@
             box-shadow:0 0 0 2px rgba(80,105,130,.12);
         }
         [data-fieldname="cutting_plan_html"] .dco-board-gallery .dco-sheet-board {
-            width:min(100%,var(--dco-board-screen-max-width,100%)) !important;
+            width:100% !important;
             height:auto !important;
             max-width:none !important;
             aspect-ratio:var(--dco-board-aspect,1 / 2) !important;
-            margin:0 auto !important;
+            margin:0 !important;
             background-size:20px 20px !important;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-cutting-plan[data-board-columns="2"] .dco-board-gallery .dco-sheet-board,
+        [data-fieldname="cutting_plan_html"] .dco-cutting-plan[data-board-columns="3"] .dco-board-gallery .dco-sheet-board,
+        [data-fieldname="cutting_plan_html"] .dco-cutting-plan[data-board-columns="4"] .dco-board-gallery .dco-sheet-board {
+            width:min(100%,var(--dco-board-screen-max-width,100%)) !important;
+            margin:0 auto !important;
         }
         [data-fieldname="cutting_plan_html"] .dco-board-gallery .dco-piece {
             padding:1px !important;
@@ -534,7 +627,6 @@
         .dco-board-focus .dco-piece { font-size:clamp(10px,.72vw,13px) !important; }
         .dco-board-focus .dco-piece-kind-badge { font-size:8px !important;padding:2px 5px !important; }
         @media (max-width:760px) {
-            .dco-plan-actions-section > .section-body { padding-inline:8px !important; }
             [data-fieldname="plan_control_actions"] .dco-plan-actions { grid-template-columns:1fr !important; }
             [data-fieldname="plan_control_actions"] .dco-plan-actions-title {
                 align-items:flex-start !important;
@@ -614,7 +706,7 @@
     `;
 
     function install() {
-        ["dco-plan-content-layout-css-v8"].forEach((id) => {
+        LEGACY_STYLE_IDS.forEach((id) => {
             const legacy = document.getElementById(id);
             if (legacy) legacy.remove();
         });

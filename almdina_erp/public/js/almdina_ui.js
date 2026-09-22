@@ -5,7 +5,7 @@
 
     const BUTTON_VARIANTS = Object.freeze({
         primary: "btn alm-btn-primary",
-        secondary: "btn btn-default",
+        secondary: "btn alm-btn-secondary",
         danger: "btn alm-btn-danger",
         success: "btn alm-btn-success",
     });

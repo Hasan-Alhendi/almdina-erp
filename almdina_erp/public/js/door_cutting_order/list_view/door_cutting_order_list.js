@@ -584,6 +584,31 @@
         });
     }
 
+    function searchToolbarHost(listview) {
+        const root = rootNode(listview);
+        if (!root) return null;
+        return root.querySelector(".mobile-id-filter .frappe-control[data-fieldname='name']")
+            || root.querySelector(".standard-filter-section .frappe-control[data-fieldname='name']")
+            || root.querySelector(".standard-filter-section .frappe-control[data-fieldname='customer']")
+            || root.querySelector(".standard-filter-section input[placeholder*='ابحث']")?.closest(".frappe-control")
+            || root.querySelector(".mobile-id-filter input[placeholder*='ابحث']")?.closest(".frappe-control");
+    }
+
+    function reconcileMobileListToolbarLayout(listview) {
+        const root = rootNode(listview);
+        if (!root) return false;
+
+        root.querySelectorAll("[data-dco-list-toolbar-slot]").forEach(node => {
+            node.removeAttribute("data-dco-list-toolbar-slot");
+        });
+
+        if (!isPhoneLayout(root)) return false;
+
+        const searchHost = searchToolbarHost(listview);
+        if (searchHost) searchHost.setAttribute("data-dco-list-toolbar-slot", "search");
+        return true;
+    }
+
     function reconcileStatusFilterLayout(listview) {
         const root = rootNode(listview);
         const statusWrapper = controlWrapper(statusFilterField(listview));
@@ -1042,6 +1067,7 @@
             listview._dcoLastCardLayout = next;
             renderMobileCards(listview);
             reconcileStatusFilterLayout(listview);
+            reconcileMobileListToolbarLayout(listview);
         };
         if (typeof ResizeObserver === "function") {
             listview._dcoResponsiveObserver = new ResizeObserver(refreshLayout);
@@ -1602,6 +1628,7 @@
         installRowsObserver(listview);
         installOverviewDefaultSort(listview);
         reconcileStatusFilterLayout(listview);
+        reconcileMobileListToolbarLayout(listview);
         hydrateStatusFilterOptions(listview);
         hydrateAssigneeFilterOptions(listview);
     }
@@ -1676,6 +1703,7 @@
         personalQueueState,
         quickActionContext,
         reconcileStatusFilterLayout,
+        reconcileMobileListToolbarLayout,
         renderMobileCards,
         shouldSelectOverviewDefaultSort,
         sortDesktopQueueItems,

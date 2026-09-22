@@ -40,6 +40,10 @@
 
     --alm-height-button: 42px;
     --alm-padding-button-x: 16px;
+    --alm-height-button-compact: 34px;
+    --alm-padding-button-compact-y: 8px;
+    --alm-padding-button-compact-x: 18px;
+    --alm-min-width-button-compact: 96px;
 
     --alm-text-muted: var(--text-muted, #6b7280);
     --alm-surface: var(--fg-color, #ffffff);

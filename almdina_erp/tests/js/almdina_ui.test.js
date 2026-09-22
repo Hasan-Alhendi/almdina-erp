@@ -184,7 +184,7 @@ const secondary = ui.button({
     className: "apc-reset",
     disabled: true,
 });
-assert.match(secondary, /class="btn btn-default apc-reset"/);
+assert.match(secondary, /class="btn alm-btn-secondary apc-reset"/);
 assert.match(secondary, /disabled/);
 
 const empty = ui.empty({ title: "لا توجد بيانات", message: "اختر دورًا للمتابعة." });

@@ -138,7 +138,7 @@
     top: 56px;
     z-index: 20;
     display: grid;
-    grid-template-columns: auto minmax(260px, 1fr) minmax(155px, auto);
+    grid-template-columns: auto minmax(0, 1fr);
     gap: 10px;
     align-items: end;
     padding: 10px;
@@ -152,7 +152,11 @@
 .prw-view-switch {
     display: flex;
     align-items: center;
+    flex: 0 0 auto;
     gap: 4px;
+    justify-self: start;
+    width: max-content;
+    max-width: 100%;
     padding: 4px;
     border-radius: 11px;
     background: var(--prw-subtle);
@@ -182,20 +186,62 @@
 
 .prw-filter-group-mount {
     min-width: 0;
+    width: 100%;
 }
 
 .prw-filter-group.alm-filter-group {
+    display: block;
+    width: 100%;
+}
+
+.prw-filter-group.alm-filter-group.is-routings,
+.prw-filter-group.alm-filter-group.is-audit {
+    min-width: 0;
+}
+
+.prw-filter-group.alm-filter-group .form-layout,
+.prw-filter-group.alm-filter-group .form-page,
+.prw-filter-group.alm-filter-group .form-section,
+.prw-filter-group.alm-filter-group .section-body,
+.prw-filter-group.alm-filter-group .section-body:first-child,
+.prw-filter-group.alm-filter-group .form-column {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.prw-filter-group.alm-filter-group .form-column > form {
+    width: 100%;
+    min-width: 0;
+}
+
+.prw-filter-group.alm-filter-group.is-routings .form-column > form {
     display: grid;
-    gap: 12px;
+    grid-template-columns: minmax(0, 1.7fr) minmax(120px, 0.7fr);
+    gap: 8px 10px;
     align-items: end;
 }
 
-.prw-filter-group.alm-filter-group.is-routings {
-    grid-template-columns: minmax(0, 1fr) minmax(155px, 220px);
+.prw-filter-group.alm-filter-group .frappe-control,
+.prw-filter-group.alm-filter-group .form-group,
+.prw-filter-group.alm-filter-group .control-input-wrapper,
+.prw-filter-group.alm-filter-group .control-input {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
 }
 
-.prw-filter-group.alm-filter-group.is-audit {
-    grid-template-columns: minmax(0, 1fr);
+.layout-main .prw-shell .form-column.col-sm-12 > form > .input-max-width,
+.prw-filter-group.alm-filter-group .frappe-control.input-max-width {
+    width: 100%;
+    max-width: none;
+    padding-right: 0;
+    padding-inline: 0;
 }
 
 .prw-filter-group.alm-filter-group .form-group[data-fieldname="search"] .control-input-wrapper {
@@ -227,6 +273,7 @@
 
 .prw-filter-group.alm-filter-group .form-control,
 .prw-filter-group.alm-filter-group select.form-control {
+    width: 100%;
     min-height: 46px;
     border: 1px solid var(--prw-border);
     border-radius: 11px;
@@ -1248,10 +1295,6 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    .prw-toolbar {
-        grid-template-columns: auto minmax(0, 1fr);
-    }
-
     .prw-filter-wrap {
         grid-column: 1 / -1;
     }
@@ -1321,7 +1364,21 @@
     .prw-toolbar,
     .prw-editor-topbar {
         position: static;
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .prw-toolbar {
+        gap: 8px;
+        padding: 8px;
+    }
+
+    .prw-filter-group.alm-filter-group.is-routings .form-column > form {
+        grid-template-columns: minmax(0, 1.7fr) minmax(108px, 0.7fr);
+        gap: 8px;
+    }
+
+    .prw-filter-group.alm-filter-group .form-group > label {
+        margin-bottom: 2px;
     }
 
     .prw-view-switch,

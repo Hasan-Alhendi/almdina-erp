@@ -41,7 +41,11 @@ def test_plan_content_is_an_orchestrator_not_a_style_or_focus_owner():
 
 def test_style_owner_preserves_existing_style_identity_and_critical_selectors():
     source = STYLES.read_text(encoding="utf-8")
-    assert 'const STYLE_ID = "dco-plan-content-layout-css-v9"' in source
+    assert 'const STYLE_ID = "dco-plan-content-layout-css-v12"' in source
+    assert ".dco-operator-form .dco-plan-section-card.dco-layout-card > .section-body" in source
+    assert "width:100% !important" in source
+    assert "max-width:none !important" in source
+    assert 'width:max-content' not in source
     for selector in (
         ".dco-plan-actions-section",
         ".dco-margin-policy-alert",
