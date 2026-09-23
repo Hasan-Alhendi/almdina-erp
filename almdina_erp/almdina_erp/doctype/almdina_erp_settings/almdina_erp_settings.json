@@ -9,7 +9,8 @@
     "special_shape_pricing_section","default_special_design_fee_usd","default_special_cnc_fee_usd","default_special_manual_edge_fee_usd","default_special_margin_percent",
     "extra_door_pricing_section","default_extra_double_unit_price_usd","default_extra_full_door_double_unit_price_usd","default_extra_liner_unit_price_usd","default_extra_back_groove_unit_price_usd","default_extra_recessed_handle_cutout_unit_price_usd",
     "production_section","default_production_routing","allow_stage_override","allow_unplaced_approval",
-    "print_identity_section","print_factory_name","print_factory_description","print_factory_address","print_factory_contacts"
+    "print_identity_section","print_factory_name","print_factory_description","print_factory_address","print_factory_contacts",
+    "whatsapp_messages_section","whatsapp_measurements_text","whatsapp_invoice_text","whatsapp_stage_messages"
   ],
   "fields": [
     {"fieldname":"cutting_defaults_section","fieldtype":"Section Break","label":"Cutting Defaults"},
@@ -51,7 +52,11 @@
     {"default":"مجمع المدينة المنورة التجاري","fieldname":"print_factory_name","fieldtype":"Data","label":"Print Factory Name","reqd":1},
     {"default":"الواح هايغلوس - فورميكا - cnc - ليزر - قشر","fieldname":"print_factory_description","fieldtype":"Small Text","label":"Print Factory Description","reqd":1},
     {"default":"دمشق - ببيلا - طريق السيدة زينب","fieldname":"print_factory_address","fieldtype":"Small Text","label":"Print Factory Address","reqd":1},
-    {"description":"One contact per line, for example: أرضي: ... / موبايل: ... / واتس اب: ...","fieldname":"print_factory_contacts","fieldtype":"Small Text","label":"Print Factory Contacts"}
+    {"description":"One contact per line, for example: أرضي: ... / موبايل: ... / واتس اب: ...","fieldname":"print_factory_contacts","fieldtype":"Small Text","label":"Print Factory Contacts"},
+    {"fieldname":"whatsapp_messages_section","fieldtype":"Section Break","label":"WhatsApp Messages"},
+    {"default":"نرفق لك جدول القياسات الخاص بطلبك رقم {order_name}","description":"Text sent before the measurements PDF. Use {order_name} for the order number.","fieldname":"whatsapp_measurements_text","fieldtype":"Small Text","label":"WhatsApp Measurements Text"},
+    {"default":"نرفق لك جدول القياسات الخاص بطلبك رقم {order_name}","description":"Text sent before the customer invoice PDF. Use {order_name} for the order number.","fieldname":"whatsapp_invoice_text","fieldtype":"Small Text","label":"WhatsApp Invoice Text"},
+    {"description":"JSON map of stage_type to WhatsApp completion text. Edited from the factory settings WhatsApp section.","fieldname":"whatsapp_stage_messages","fieldtype":"JSON","hidden":1,"label":"WhatsApp Stage Messages"}
   ],
   "issingle":1,
   "links":[],

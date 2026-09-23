@@ -99,6 +99,7 @@ jobs:
             almdina_erp.tests.test_factory_workforce_frontend_architecture \
             almdina_erp.tests.test_factory_workforce_frontend_security \
             almdina_erp.tests.test_factory_master_data_authorization \
+            almdina_erp.tests.test_whatsapp_settings_capability_migration \
             almdina_erp.tests.test_factory_master_data_architecture \
             almdina_erp.tests.test_production_routing_management_application \
             almdina_erp.tests.test_production_routing_workflow_ux \
@@ -183,7 +184,17 @@ jobs:
         run: |
           python -m unittest -v \
             almdina_erp.tests.test_order_save_application \
-            almdina_erp.tests.test_unified_order_controller_architecture
+            almdina_erp.tests.test_unified_order_controller_architecture \
+            almdina_erp.tests.test_whatsapp_phone \
+            almdina_erp.tests.test_whatsapp_session_policy \
+            almdina_erp.tests.test_whatsapp_application \
+            almdina_erp.tests.test_whatsapp_config \
+            almdina_erp.tests.test_whatsapp_openwa_client \
+            almdina_erp.tests.test_whatsapp_frontend_contracts \
+            almdina_erp.tests.test_whatsapp_settings_capability_migration \
+            almdina_erp.tests.test_whatsapp_message_templates \
+            almdina_erp.tests.test_whatsapp_pdf_adapter \
+            almdina_erp.tests.test_measurements_print_document
 
       - name: Enforce the no-stock product boundary
         run: |

@@ -431,6 +431,9 @@
                     context.next ? __("تم إرسال الطلب للقسم التالي.") : __("الطلب جاهز للتسليم."),
                     generation
                 );
+                if (data && data.whatsapp && typeof dialogs.whatsapp === "function") {
+                    dialogs.whatsapp(data.whatsapp, generation);
+                }
                 return loadList({ freshContext: false }).then(() => data);
             }).catch(error => {
                 if (current()) {

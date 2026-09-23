@@ -160,6 +160,7 @@ doctype_js = {
         "public/js/door_cutting_order/core/door_cutting_order_tab_edit_lifecycle_guard.js",
         "public/js/door_cutting_order/core/door_cutting_order_plan_cost_workspace_visual_ux.js",
         "public/js/door_cutting_order/core/door_cutting_order_workspace_freshness_ux.js",
+        "public/js/door_cutting_order/order_entry/door_cutting_order_whatsapp_delivery_ux.js",
     ],
     "Edge Banding Type": "public/js/edge_banding_type_ux.js",
     "Production Routing": "public/js/production_routing_ux.js",

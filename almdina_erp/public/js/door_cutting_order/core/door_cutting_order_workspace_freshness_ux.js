@@ -213,7 +213,7 @@
         const wrapper = costWrapper(frm);
         if (!wrapper) return;
         const stale = Boolean(state && state.freshness === "stale");
-        const buttons = wrapper.find(".dco-print-customer-invoice, .dco-secure-print-customer-invoice");
+        const buttons = wrapper.find(".dco-print-customer-invoice, .dco-secure-print-customer-invoice, .dco-whatsapp-send-invoice");
         buttons.each(function syncButton() {
             const button = $(this);
             if (stale) {

@@ -24,6 +24,10 @@
             );
         }
 
+        function canManageWhatsAppSession(current) {
+            return Boolean(current && current.permissions && current.permissions.can_manage_whatsapp_session);
+        }
+
         function yesNo(value) {
             return Number(value || 0) ? t("نعم") : t("لا");
         }
@@ -92,6 +96,15 @@
                     [t("العنوان"), source.print_factory_address],
                     [t("أرقام التواصل"), source.print_factory_contacts || "—", true],
                 ], current),
+                section("whatsapp_messages", t("رسائل واتساب"), `${t("النص الذي يُرسل للزبون قبل ملف القياسات أو الفاتورة، ورسائل إتمام المراحل المفعّلة من مسار الإنتاج. استخدم")} {order_name} ${t("لرقم الطلب و")} {stage_label} ${t("لاسم المرحلة.")}`, [
+                    [t("رسالة القياسات"), source.whatsapp_measurements_text, true],
+                    [t("رسالة الفاتورة"), source.whatsapp_invoice_text, true],
+                    ...((current && current.whatsapp_stage_message_rows) || []).map(row => [
+                        `${t("رسالة إتمام")} — ${display(row && row.label)}`,
+                        row && row.text,
+                        true,
+                    ]),
+                ], current),
             ];
         }
 
@@ -117,12 +130,14 @@
                 sections: sections(current),
                 legacy: legacy(current),
                 hasLegacy: Boolean(current.legacy_values && typeof current.legacy_values === "object"),
+                canManageWhatsAppSession: canManageWhatsAppSession(current),
             };
         }
 
         return Object.freeze({
             values,
             sectionEditable,
+            canManageWhatsAppSession,
             yesNo,
             display,
             catalogLabel,

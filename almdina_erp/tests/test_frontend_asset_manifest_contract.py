@@ -93,6 +93,7 @@ EXPECTED_DOOR_CUTTING_ORDER_JS = [
     "public/js/door_cutting_order/core/door_cutting_order_tab_edit_lifecycle_guard.js",
     "public/js/door_cutting_order/core/door_cutting_order_plan_cost_workspace_visual_ux.js",
     "public/js/door_cutting_order/core/door_cutting_order_workspace_freshness_ux.js",
+    "public/js/door_cutting_order/order_entry/door_cutting_order_whatsapp_delivery_ux.js",
 ]
 
 

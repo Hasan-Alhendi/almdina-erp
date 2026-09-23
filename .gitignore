@@ -34,6 +34,10 @@ Thumbs.db
 *.swp
 *.swo
 
+# Local secrets. Keep `.env.example` as the committed template.
+.env
+.env.local
+
 # Frappe local site/runtime artifacts
 sites/assets/
 sites/*/private/backups/

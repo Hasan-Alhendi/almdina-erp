@@ -31,7 +31,17 @@ jobs:
           python -m unittest -v \
             almdina_erp.tests.test_factory_production_settings_frontend_architecture \
             almdina_erp.tests.test_factory_production_settings_frontend_security \
-            almdina_erp.tests.test_page_revisit_refresh_contract
+            almdina_erp.tests.test_page_revisit_refresh_contract \
+            almdina_erp.tests.test_whatsapp_frontend_contracts \
+            almdina_erp.tests.test_whatsapp_settings_capability_migration \
+            almdina_erp.tests.test_whatsapp_message_templates \
+            almdina_erp.tests.test_whatsapp_phone \
+            almdina_erp.tests.test_whatsapp_session_policy \
+            almdina_erp.tests.test_whatsapp_application \
+            almdina_erp.tests.test_whatsapp_config \
+            almdina_erp.tests.test_whatsapp_openwa_client \
+            almdina_erp.tests.test_whatsapp_pdf_adapter \
+            almdina_erp.tests.test_measurements_print_document
 
       - name: Validate Production Settings JavaScript syntax
         run: |
@@ -42,7 +52,11 @@ jobs:
           node --check almdina_erp/public/js/factory_production_settings/renderer.js
           node --check almdina_erp/public/js/factory_production_settings/interactions.js
           node --check almdina_erp/public/js/factory_production_settings/dialogs.js
+          node --check almdina_erp/public/js/factory_production_settings/whatsapp_panel.js
           node --check almdina_erp/public/js/factory_production_settings/controller.js
+          node --check almdina_erp/public/js/door_cutting_order/order_entry/door_cutting_order_whatsapp_delivery_ux.js
 
       - name: Run Production Settings view-model simulation
-        run: node almdina_erp/tests/js/factory_production_settings_view_model.test.js
+        run: |
+          node almdina_erp/tests/js/factory_production_settings_view_model.test.js
+          node almdina_erp/tests/js/whatsapp_delivery.test.js

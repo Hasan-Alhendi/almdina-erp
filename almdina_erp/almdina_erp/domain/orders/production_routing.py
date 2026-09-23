@@ -12,6 +12,7 @@ class RoutingStage:
     department_label: str
     operational_role: str
     is_planning_stage: bool = False
+    notify_whatsapp_on_complete: bool = False
 
 
 @dataclass(frozen=True, slots=True)

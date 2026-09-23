@@ -37,6 +37,9 @@ def _stage_definition(
         department_label=definition.stage_label,
         operational_role=str(getattr(row, "operational_role", None) or "").strip(),
         is_planning_stage=bool(cint(getattr(row, "is_planning_stage", 0))),
+        notify_whatsapp_on_complete=bool(
+            cint(getattr(row, "notify_whatsapp_on_complete", 0))
+        ),
     )
 
 

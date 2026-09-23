@@ -111,6 +111,7 @@ class TestConfigurableProductionRoutingDomain(unittest.TestCase):
         )
         self.assertEqual(route_fields["operational_role"]["options"], "Role")
         self.assertIn("is_planning_stage", route_fields)
+        self.assertIn("notify_whatsapp_on_complete", route_fields)
         self.assertNotIn("stage_type", route_fields)
         self.assertNotIn("department_label", route_fields)
         self.assertNotIn("auto_complete_if_not_applicable", route_fields)

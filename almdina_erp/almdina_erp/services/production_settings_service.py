@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import math
 from typing import Any
 
@@ -29,6 +30,11 @@ from almdina_erp.almdina_erp.domain.security.factory_settings import (
     expand_factory_settings_capabilities,
     settings_context,
 )
+from almdina_erp.almdina_erp.domain.whatsapp.message_templates import (
+    INVOICE_TEXT_TEMPLATE,
+    MEASUREMENTS_TEXT_TEMPLATE,
+    STAGE_COMPLETION_TEXT_TEMPLATE,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     granted_capabilities,
 )
@@ -49,6 +55,12 @@ PRINT_IDENTITY_DEFAULTS = {
     "print_factory_contacts": "",
 }
 _PRINT_IDENTITY_FIELDS = tuple(PRINT_IDENTITY_DEFAULTS)
+WHATSAPP_MESSAGE_DEFAULTS = {
+    "whatsapp_measurements_text": MEASUREMENTS_TEXT_TEMPLATE,
+    "whatsapp_invoice_text": INVOICE_TEXT_TEMPLATE,
+}
+_WHATSAPP_MESSAGE_FIELDS = tuple(WHATSAPP_MESSAGE_DEFAULTS)
+_WHATSAPP_STAGE_MESSAGES_FIELD = "whatsapp_stage_messages"
 _PRINT_IDENTITY_READ_CAPABILITIES = frozenset(
     {
         Capability.VIEW_FACTORY_SETTINGS,
@@ -79,6 +91,8 @@ _SETTINGS_FIELDS = (
     "allow_stage_override",
     "allow_unplaced_approval",
     *_PRINT_IDENTITY_FIELDS,
+    *_WHATSAPP_MESSAGE_FIELDS,
+    _WHATSAPP_STAGE_MESSAGES_FIELD,
 )
 _PLAN_DEFAULT_FIELDS = frozenset(
     {
@@ -316,6 +330,30 @@ def _apply_values(settings: Any, payload: dict[str, Any]) -> None:
             ),
         )
 
+    whatsapp_labels = {
+        "whatsapp_measurements_text": _("WhatsApp Measurements Text"),
+        "whatsapp_invoice_text": _("WhatsApp Invoice Text"),
+    }
+    for fieldname in _WHATSAPP_MESSAGE_FIELDS:
+        if fieldname not in payload:
+            continue
+        stored = _normalized_print_text(
+            payload[fieldname],
+            whatsapp_labels[fieldname],
+            1000,
+            required=False,
+        )
+        settings.set(fieldname, stored or WHATSAPP_MESSAGE_DEFAULTS[fieldname])
+
+    if _WHATSAPP_STAGE_MESSAGES_FIELD in payload:
+        settings.set(
+            _WHATSAPP_STAGE_MESSAGES_FIELD,
+            _normalized_stage_messages(
+                payload[_WHATSAPP_STAGE_MESSAGES_FIELD],
+                _stage_messages_dict(settings),
+            ),
+        )
+
 
 def _print_identity_values(settings: Any) -> dict[str, str]:
     values: dict[str, str] = {}
@@ -325,12 +363,167 @@ def _print_identity_values(settings: Any) -> dict[str, str]:
     return values
 
 
+def _single_text(fieldname: str) -> str:
+    """Read a Single field from tabSingles even when DocType meta is stale."""
+
+    row = frappe.db.sql(
+        "select value from `tabSingles` where doctype = %s and field = %s",
+        ("Almdina ERP Settings", fieldname),
+    )
+    if not row:
+        return ""
+    return str(row[0][0] or "").strip()
+
+
+def _write_single_text(fieldname: str, value: str) -> None:
+    """Write a Single field without requiring it to exist on cached DocType meta.
+
+    Document.save() for Singles deletes every tabSingles row then reinserts
+    get_valid_dict(). Fields missing from meta are dropped; this restores them.
+    """
+
+    frappe.db.sql(
+        "delete from `tabSingles` where doctype = %s and field = %s",
+        ("Almdina ERP Settings", fieldname),
+    )
+    frappe.db.sql(
+        "insert into `tabSingles` (doctype, field, value) values (%s, %s, %s)",
+        ("Almdina ERP Settings", fieldname, value),
+    )
+
+
+def _persist_whatsapp_message_singles(settings: Any, payload: dict[str, Any]) -> None:
+    wrote = False
+    for fieldname in _WHATSAPP_MESSAGE_FIELDS:
+        if fieldname not in payload:
+            continue
+        value = str(settings.get(fieldname) or "").strip() or WHATSAPP_MESSAGE_DEFAULTS[fieldname]
+        _write_single_text(fieldname, value)
+        wrote = True
+    if _WHATSAPP_STAGE_MESSAGES_FIELD in payload:
+        stored = settings.get(_WHATSAPP_STAGE_MESSAGES_FIELD)
+        if not isinstance(stored, str):
+            stored = json.dumps(stored or {}, ensure_ascii=False)
+        _write_single_text(_WHATSAPP_STAGE_MESSAGES_FIELD, stored)
+        wrote = True
+    if not wrote:
+        return
+    frappe.clear_document_cache("Almdina ERP Settings", "Almdina ERP Settings")
+    cache = getattr(frappe.db, "value_cache", None)
+    if isinstance(cache, dict):
+        cache.pop("Almdina ERP Settings", None)
+
+
+def _whatsapp_message_values(settings: Any) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for fieldname in _WHATSAPP_MESSAGE_FIELDS:
+        stored = str(settings.get(fieldname) or "").strip() or _single_text(fieldname)
+        values[fieldname] = stored or WHATSAPP_MESSAGE_DEFAULTS[fieldname]
+    return values
+
+
+def _parse_stage_messages(raw: Any) -> dict[str, str]:
+    if isinstance(raw, str):
+        raw = raw.strip()
+        if not raw:
+            return {}
+        try:
+            raw = json.loads(raw)
+        except ValueError:
+            parsed = frappe.parse_json(raw)
+            raw = parsed if isinstance(parsed, dict) else {}
+    if not isinstance(raw, dict):
+        return {}
+    values: dict[str, str] = {}
+    for key, value in raw.items():
+        stage_id = str(key or "").strip()
+        if not stage_id:
+            continue
+        values[stage_id] = str(value or "").strip()
+    return values
+
+
+def _stage_messages_dict(settings: Any) -> dict[str, str]:
+    stored = _parse_stage_messages(settings.get(_WHATSAPP_STAGE_MESSAGES_FIELD))
+    if stored:
+        return stored
+    return _parse_stage_messages(_single_text(_WHATSAPP_STAGE_MESSAGES_FIELD))
+
+
+def _normalized_stage_messages(payload_value: Any, existing: dict[str, str]) -> dict[str, str]:
+    incoming = _parse_stage_messages(payload_value)
+    merged = dict(existing)
+    for stage_id, text in incoming.items():
+        merged[stage_id] = _normalized_print_text(
+            text,
+            _("WhatsApp Stage Message"),
+            1000,
+            required=False,
+        )
+    return merged
+
+
+def _enabled_whatsapp_stage_catalog() -> list[dict[str, str]]:
+    from almdina_erp.almdina_erp.infrastructure.frappe.production_routing_repository import (
+        list_active_routes,
+    )
+
+    seen: dict[str, str] = {}
+    for route in list_active_routes():
+        for stage in route.stages:
+            if not stage.notify_whatsapp_on_complete:
+                continue
+            stage_id = str(stage.stage_type or "").strip()
+            if not stage_id or stage_id in seen:
+                continue
+            seen[stage_id] = str(stage.department_label or stage_id).strip() or stage_id
+    return [
+        {"id": stage_id, "label": label}
+        for stage_id, label in sorted(seen.items(), key=lambda item: item[1])
+    ]
+
+
+def _whatsapp_stage_message_rows(settings: Any) -> list[dict[str, str]]:
+    stored = _stage_messages_dict(settings)
+    return [
+        {
+            "id": row["id"],
+            "label": row["label"],
+            "text": stored.get(row["id"]) or STAGE_COMPLETION_TEXT_TEMPLATE,
+        }
+        for row in _enabled_whatsapp_stage_catalog()
+    ]
+
+
+def whatsapp_message_templates() -> dict[str, Any]:
+    """Return stored WhatsApp preamble copy with factory defaults."""
+
+    settings = frappe.get_single("Almdina ERP Settings")
+    return {
+        **_whatsapp_message_values(settings),
+        _WHATSAPP_STAGE_MESSAGES_FIELD: _stage_messages_dict(settings),
+    }
+
+
+def whatsapp_stage_message_template(stage_type: object) -> str:
+    stage_id = str(stage_type or "").strip()
+    stored = whatsapp_message_templates()[_WHATSAPP_STAGE_MESSAGES_FIELD].get(stage_id, "")
+    return stored or STAGE_COMPLETION_TEXT_TEMPLATE
+
+
 def _settings_values(settings: Any) -> dict[str, Any]:
     values: dict[str, Any] = {}
     print_values = _print_identity_values(settings)
+    whatsapp_values = _whatsapp_message_values(settings)
     for fieldname in _SETTINGS_FIELDS:
         if fieldname in print_values:
             values[fieldname] = print_values[fieldname]
+            continue
+        if fieldname in whatsapp_values:
+            values[fieldname] = whatsapp_values[fieldname]
+            continue
+        if fieldname == _WHATSAPP_STAGE_MESSAGES_FIELD:
+            values[fieldname] = _stage_messages_dict(settings)
             continue
         value = settings.get(fieldname)
         if fieldname in {"allow_stage_override", "allow_unplaced_approval"}:
@@ -397,6 +590,7 @@ def get_production_settings() -> dict[str, Any]:
         "packing_options": [item["id"] for item in catalog],
         "machine_options": [item["id"] for item in machines],
         "routing_options": routing_options,
+        "whatsapp_stage_message_rows": _whatsapp_stage_message_rows(settings),
     }
 
 
@@ -421,6 +615,7 @@ def update_production_settings(values: str | dict[str, Any]) -> dict[str, Any]:
     # validated in _apply_values; this service is the only allowed writer.
     settings.flags.ignore_mandatory = True
     settings.save(ignore_permissions=True)
+    _persist_whatsapp_message_singles(settings, payload)
     after = document_snapshot(settings)
     record_master_data_audit(
         target_doctype="Almdina ERP Settings",
@@ -454,4 +649,6 @@ __all__ = [
     "get_print_identity",
     "get_production_settings",
     "update_production_settings",
+    "whatsapp_message_templates",
+    "whatsapp_stage_message_template",
 ]

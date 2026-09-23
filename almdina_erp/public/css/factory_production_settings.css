@@ -191,6 +191,40 @@
     box-shadow: inset -3px 0 0 rgba(100, 116, 139, 0.35), var(--aps-shadow-sm);
 }
 
+.aps-whatsapp {
+    grid-column: 1 / -1;
+}
+
+.aps-whatsapp-loading,
+.aps-whatsapp-qr-wait {
+    color: var(--text-muted, #6b7280);
+    font-size: 12px;
+    line-height: 1.7;
+}
+
+.aps-whatsapp-qr {
+    display: grid;
+    gap: 10px;
+    justify-items: center;
+    text-align: center;
+    padding: 8px 4px 4px;
+    direction: rtl;
+}
+
+.aps-whatsapp-qr img {
+    width: min(280px, 100%);
+    height: auto;
+    border: 1px solid var(--border-color, #e5e7eb);
+    border-radius: 12px;
+    background: #fff;
+}
+
+.aps-whatsapp-qr small {
+    color: var(--text-muted, #6b7280);
+    font-size: 11px;
+    line-height: 1.6;
+}
+
 .aps-section-head {
     display: flex;
     justify-content: space-between;

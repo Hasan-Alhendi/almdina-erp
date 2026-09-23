@@ -46,6 +46,8 @@ class TestProductionRoutingWorkflowUx(unittest.TestCase):
         self.assertIn("toolbarFilterFields", source)
         self.assertIn("AlmdinaUi.filterGroup", source)
         self.assertIn("is_planning_stage", source)
+        self.assertIn("notify_whatsapp_on_complete", source)
+        self.assertIn("prw-stage-whatsapp-toggle", source)
         self.assertIn("completed.workingId === editor.workingId", source)
         self.assertIn("editor.expected_modified = String(saved.modified)", source)
 

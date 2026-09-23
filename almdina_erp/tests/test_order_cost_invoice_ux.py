@@ -126,6 +126,9 @@ def test_invoice_has_secure_customer_action_and_shared_a4_print_layout():
     theme = _source(PRINT_THEME)
 
     assert "طباعة فاتورة الزبون" in toolbar
+    assert "إرسال الفاتورة عبر واتساب" in toolbar
+    assert "هل تريد إرسال الفاتورة للزبون؟" in toolbar
+    assert "dco-whatsapp-send-invoice" in toolbar
     assert 'can(frm, "print_customer_invoice")' in toolbar
     assert "@page{size:A4 portrait" in theme
     assert 'const invoice = mode === "invoice";' in presenter

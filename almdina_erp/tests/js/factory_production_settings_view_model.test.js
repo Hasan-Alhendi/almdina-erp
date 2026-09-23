@@ -43,14 +43,21 @@ const current = {
         print_factory_description: "Factory",
         print_factory_address: "Address",
         print_factory_contacts: "111\n222",
+        whatsapp_measurements_text: "قياسات {order_name}",
+        whatsapp_invoice_text: "فاتورة {order_name}",
     },
+    whatsapp_stage_message_rows: [
+        { id: "CNC", label: "CNC", text: "انتهى CNC {order_name}" },
+    ],
     permissions: {
+        can_manage_whatsapp_session: true,
         sections: {
             cutting: { editable: true },
             costing: { editable: false },
             extra_addons: { editable: false },
             production: { editable: true },
             print_identity: { editable: false },
+            whatsapp_messages: { editable: true },
         },
     },
     legacy_values: {
@@ -70,13 +77,15 @@ const current = {
 assert.equal(model.sectionEditable(current, "cutting"), true);
 assert.equal(model.sectionEditable(current, "costing"), false);
 assert.equal(model.sectionEditable(current, "missing"), false);
+assert.equal(model.canManageWhatsAppSession(current), true);
+assert.equal(model.canManageWhatsAppSession({ permissions: { sections: {} } }), false);
 assert.equal(model.yesNo(1), "نعم");
 assert.equal(model.yesNo(0), "لا");
 assert.equal(model.display(null), "—");
 assert.equal(model.values(current).default_kerf_mm, 5);
 
 const sections = model.sections(current);
-assert.equal(sections.length, 5);
+assert.equal(sections.length, 6);
 assert.deepEqual(
     JSON.parse(JSON.stringify(sections.map(section => [section.key, section.editable]))),
     [
@@ -85,6 +94,7 @@ assert.deepEqual(
         ["extra_addons", false],
         ["production", true],
         ["print_identity", false],
+        ["whatsapp_messages", true],
     ]
 );
 assert.equal(sections[0].rows[0].value, 5);
@@ -96,6 +106,10 @@ assert.equal(sections[2].rows[4].value, "1.25 USD");
 assert.equal(sections[3].rows[1].value, "غير مسموح");
 assert.equal(sections[3].rows[2].value, "مسموح");
 assert.equal(sections[4].rows[3].multiline, true);
+assert.equal(sections[5].rows[0].multiline, true);
+assert.equal(sections[5].rows[0].value, "قياسات {order_name}");
+assert.equal(sections[5].rows.length, 3);
+assert.equal(sections[5].rows[2].value, "انتهى CNC {order_name}");
 
 const legacy = model.legacy(current);
 assert.equal(legacy.length, 10);
@@ -105,7 +119,8 @@ assert.equal(legacy[9].value, "5 USD");
 
 const page = model.page(current);
 assert.equal(page.hasLegacy, true);
-assert.equal(page.sections.length, 5);
+assert.equal(page.canManageWhatsAppSession, true);
+assert.equal(page.sections.length, 6);
 assert.equal(page.legacy.length, 10);
 
 const noLegacy = model.page({ values: {}, permissions: { sections: {} } });

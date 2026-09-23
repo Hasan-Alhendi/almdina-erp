@@ -44,6 +44,7 @@ class FactoryProductionSettingsFrontendArchitectureTest(unittest.TestCase):
             "renderer.js",
             "interactions.js",
             "dialogs.js",
+            "whatsapp_panel.js",
             "controller.js",
         ):
             self.assertIn(f"/assets/almdina_erp/js/factory_production_settings/{asset}", self.page)
@@ -58,6 +59,10 @@ class FactoryProductionSettingsFrontendArchitectureTest(unittest.TestCase):
             "get_production_settings",
             "update_production_settings",
             "get_factory_settings_audit",
+            "get_whatsapp_session",
+            "create_whatsapp_session",
+            "reconnect_whatsapp_session",
+            "get_whatsapp_qr",
         ):
             self.assertIn(endpoint, self.api)
             for other in (
@@ -92,12 +97,15 @@ class FactoryProductionSettingsFrontendArchitectureTest(unittest.TestCase):
         for marker in (
             "function sectionEditable(",
             "current.permissions.sections",
+            "function canManageWhatsAppSession(",
+            "current.permissions.can_manage_whatsapp_session",
             "function sections(",
             "function legacy(",
             'section("cutting"',
             'section("costing"',
             'section("production"',
             'section("print_identity"',
+            'section("whatsapp_messages"',
         ):
             self.assertIn(marker, self.view_model)
         for forbidden in (
@@ -118,6 +126,7 @@ class FactoryProductionSettingsFrontendArchitectureTest(unittest.TestCase):
             "aps-section",
             "aps-permission",
             "aps-legacy",
+            "aps-whatsapp",
             "aps-audit",
             "تعديل هذا القسم",
         ):
@@ -133,7 +142,11 @@ class FactoryProductionSettingsFrontendArchitectureTest(unittest.TestCase):
     def test_interactions_own_delegated_edit_events(self) -> None:
         self.assertIn('EVENT_NAMESPACE = ".almdinaFactoryProductionSettings"', self.interactions)
         self.assertIn('".aps-edit"', self.interactions)
+        self.assertIn('".aps-whatsapp-create"', self.interactions)
+        self.assertIn('".aps-whatsapp-reconnect"', self.interactions)
         self.assertIn("onEditSection", self.interactions)
+        self.assertIn("onCreateWhatsApp", self.interactions)
+        self.assertIn("onReconnectWhatsApp", self.interactions)
         self.assertIn("lifecycle.track", self.interactions)
         for forbidden in (
             "frappe.call(",
@@ -165,6 +178,7 @@ class FactoryProductionSettingsFrontendArchitectureTest(unittest.TestCase):
             "AlmdinaFactoryProductionSettingsRenderer",
             "AlmdinaFactoryProductionSettingsInteractions",
             "AlmdinaFactoryProductionSettingsDialogs",
+            "AlmdinaFactoryProductionSettingsWhatsApp",
         ):
             self.assertIn(dependency, self.controller)
         self.assertIn("requests.settings.begin", self.controller)
@@ -191,6 +205,7 @@ class FactoryProductionSettingsFrontendArchitectureTest(unittest.TestCase):
             ".aps-sections",
             ".aps-section",
             ".aps-legacy",
+            ".aps-whatsapp",
             "@media(max-width:",
         ):
             self.assertIn(marker, self.css)

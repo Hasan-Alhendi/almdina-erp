@@ -42,6 +42,7 @@ def test_role_picker_uses_frappe_link_control() -> None:
     assert "search_permission_roles" in api_source
     assert "roleSearchQuery" in api_source
     assert "fieldtype: \"Link\"" in renderer
+    assert "page_length: 100" in renderer
     assert "ابحث واختر دورًا" in renderer
     assert "mountRoleControl" in controller
     assert "disposeRoleControl" in controller

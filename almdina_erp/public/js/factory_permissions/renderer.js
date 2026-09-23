@@ -142,6 +142,9 @@
                 df: {
                     get_query: () => ({
                         query: String(options.roleSearchQuery || ""),
+                        // Frappe Link defaults to 10 results; this console must
+                        // list every editable role without forcing a name search.
+                        page_length: 100,
                     }),
                 },
                 onChange: value => {

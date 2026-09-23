@@ -220,6 +220,19 @@ def _summarize_customer_invoice(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def customer_invoice_payload_for_order(order: Any) -> dict[str, Any]:
+    """Project the authorized customer invoice. Caller must already authorize."""
+
+    order_snapshot, pieces = _document_context(order)
+    _require_custom_edge_prices(pieces)
+    return _finalize(
+        _summarize_customer_invoice(
+            build_customer_invoice_document(order_snapshot, pieces)
+        ),
+        order,
+    )
+
+
 @frappe.whitelist()
 def get_customer_invoice_document(order_name: str) -> dict[str, Any]:
     """Return a customer invoice after read and explicit print authorization."""
@@ -229,14 +242,7 @@ def get_customer_invoice_document(order_name: str) -> dict[str, Any]:
         Capability.PRINT_CUSTOMER_INVOICE,
         requires_cost_access=False,
     )
-    order_snapshot, pieces = _document_context(order)
-    _require_custom_edge_prices(pieces)
-    return _finalize(
-        _summarize_customer_invoice(
-            build_customer_invoice_document(order_snapshot, pieces)
-        ),
-        order,
-    )
+    return customer_invoice_payload_for_order(order)
 
 
 @frappe.whitelist()
@@ -256,6 +262,7 @@ def get_internal_cost_report_document(order_name: str) -> dict[str, Any]:
 
 
 __all__ = [
+    "customer_invoice_payload_for_order",
     "get_customer_invoice_document",
     "get_internal_cost_report_document",
 ]

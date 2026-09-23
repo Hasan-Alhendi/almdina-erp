@@ -140,6 +140,31 @@
                     { fieldname: "print_factory_contacts", fieldtype: "Small Text", label: t("أرقام التواصل"), description: t("سطر مستقل لكل رقم: أرضي / موبايل / واتس اب."), default: values.print_factory_contacts || "" },
                 ];
             }
+            if (section === "whatsapp_messages") {
+                const stageRows = Array.isArray(current.whatsapp_stage_message_rows)
+                    ? current.whatsapp_stage_message_rows
+                    : [];
+                return [
+                    {
+                        fieldname: "whatsapp_measurements_text",
+                        fieldtype: "Small Text",
+                        label: t("رسالة القياسات"),
+                        description: `${t("تُرسل قبل ملف PDF لجدول القياسات. استخدم")} {order_name} ${t("لرقم الطلب.")}`,
+                    },
+                    {
+                        fieldname: "whatsapp_invoice_text",
+                        fieldtype: "Small Text",
+                        label: t("رسالة الفاتورة"),
+                        description: `${t("تُرسل قبل ملف PDF لفاتورة الزبون. استخدم")} {order_name} ${t("لرقم الطلب.")}`,
+                    },
+                    ...stageRows.map(row => ({
+                        fieldname: stageMessageFieldname(row && row.id),
+                        fieldtype: "Small Text",
+                        label: `${t("رسالة إتمام")} — ${row && row.label ? row.label : row && row.id}`,
+                        description: `${t("تُرسل عند إتمام هذه المرحلة. استخدم")} {order_name} ${t("و")} {stage_label}.`,
+                    })),
+                ];
+            }
             return [
                 { fieldname: "default_production_routing", fieldtype: "Select", label: t("مسار الإنتاج الافتراضي (اختياري)"), options: ["", ...(current.routing_options || [])].join("\n"), default: values.default_production_routing || "", reqd: 0 },
                 { fieldname: "allow_stage_override", fieldtype: "Check", label: t("السماح بتجاوز تسلسل المراحل"), default: values.allow_stage_override },
@@ -152,10 +177,47 @@
             if (section === "costing") return t("تعديل التكلفة الافتراضية");
             if (section === "extra_addons") return t("تعديل أسعار إضافات Extra");
             if (section === "print_identity") return t("تعديل هوية أوراق الطباعة");
+            if (section === "whatsapp_messages") return t("تعديل رسائل واتساب");
             return t("تعديل ضوابط الإنتاج");
         }
 
-        function normalizeSectionPayload(section, current, payload = {}) {
+        function stageMessageFieldname(id) {
+            return `whatsapp_stage_msg__${String(id || "").replace(/[^A-Za-z0-9_]/g, "_")}`;
+        }
+
+        function fieldInputValue(dialog, fieldname, fallback) {
+            const field = dialog && dialog.fields_dict && dialog.fields_dict[fieldname];
+            if (field && field.$input && typeof field.$input.val === "function") {
+                return field.$input.val();
+            }
+            return fallback == null ? "" : fallback;
+        }
+
+        function normalizeSectionPayload(section, current, payload = {}, dialog) {
+            if (section === "whatsapp_messages") {
+                const stageMessages = {};
+                for (const row of current.whatsapp_stage_message_rows || []) {
+                    if (!row || !row.id) continue;
+                    stageMessages[row.id] = fieldInputValue(
+                        dialog,
+                        stageMessageFieldname(row.id),
+                        payload[stageMessageFieldname(row.id)]
+                    );
+                }
+                return {
+                    whatsapp_measurements_text: fieldInputValue(
+                        dialog,
+                        "whatsapp_measurements_text",
+                        payload.whatsapp_measurements_text
+                    ),
+                    whatsapp_invoice_text: fieldInputValue(
+                        dialog,
+                        "whatsapp_invoice_text",
+                        payload.whatsapp_invoice_text
+                    ),
+                    whatsapp_stage_messages: stageMessages,
+                };
+            }
             if (section !== "cutting") return payload;
             const values = current.values || current;
             const algorithms = catalogWithCurrent(
@@ -204,7 +266,12 @@
                     button.prop("disabled", true);
                     let action;
                     try {
-                        const normalizedPayload = normalizeSectionPayload(config.section, current, payload);
+                        const normalizedPayload = normalizeSectionPayload(
+                            config.section,
+                            current,
+                            payload,
+                            dialog
+                        );
                         action = config.onSubmit ? config.onSubmit(normalizedPayload) : Promise.resolve();
                     } catch (error) {
                         action = Promise.reject(error);
@@ -230,6 +297,20 @@
             }), draftKey);
             restoreDraft(dialog, draftKey);
             dialog.show();
+            if (config.section === "whatsapp_messages" && !drafts.has(draftKey)) {
+                const values = current.values || current;
+                if (typeof dialog.set_values === "function") {
+                    const nextValues = {
+                        whatsapp_measurements_text: values.whatsapp_measurements_text || "",
+                        whatsapp_invoice_text: values.whatsapp_invoice_text || "",
+                    };
+                    for (const row of current.whatsapp_stage_message_rows || []) {
+                        if (!row || !row.id) continue;
+                        nextValues[stageMessageFieldname(row.id)] = row.text || "";
+                    }
+                    dialog.set_values(nextValues);
+                }
+            }
             if (config.section === "cutting") disableUnavailableAlgorithms(dialog, current);
             return dialog;
         }
@@ -253,11 +334,42 @@
             frappe.show_alert({ message: t("تم تحديث إعدادات المعمل."), indicator: "green" });
         }
 
+        function openQr(config = {}) {
+            const dialog = own(new frappe.ui.Dialog({
+                title: t("مسح رمز WhatsApp"),
+                fields: [{ fieldname: "qr_html", fieldtype: "HTML" }],
+                on_hide() {
+                    if (typeof config.onHide === "function") config.onHide();
+                },
+            }));
+            const $wrapper = dialog.fields_dict.qr_html.$wrapper;
+            function setQr(dataUrl, status) {
+                const source = String(dataUrl || "");
+                const safeSource = source.indexOf("data:image/") === 0 ? source : "";
+                $wrapper.html(`
+                    <div class="aps-whatsapp-qr">
+                        <p>${escapeHtml(config.statusLabel ? config.statusLabel(status) : String(status || t("بانتظار مسح الرمز")))}</p>
+                        ${safeSource ? `<img alt="${escapeHtml(t("رمز QR"))}" src="${escapeHtml(safeSource)}">` : `<div class="aps-whatsapp-qr-wait">${t("جاري تجهيز الرمز...")}</div>`}
+                        <small>${t("يُحدَّث الرمز كل 5 ثوانٍ. امسحه من واتساب على الجوال.")}</small>
+                    </div>
+                `);
+            }
+            dialog.show();
+            return Object.freeze({
+                dialog,
+                setQr,
+                close() {
+                    complete(dialog);
+                },
+            });
+        }
+
         return Object.freeze({
             sectionFields,
             sectionTitle,
             openSection,
             openAudit,
+            openQr,
             showSaved,
             deactivate,
             dispose,

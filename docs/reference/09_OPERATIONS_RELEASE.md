@@ -120,6 +120,7 @@ smoke test
 - لا تضع passwords/tokens في repository docs.
 - Server-specific paths/scripts يمكن توثيقها في Runbook خاص بالبيئة إذا لزم، لكن لا تجعل Architecture المرجعية تعتمد على اسم خادم واحد.
 - Secrets تبقى في environment/secret management المعتمد.
+- تكامل WhatsApp المحلي (OpenWA) يقرأ `OPENWA_BASE_URL` و`OPENWA_API_KEY` من متغيرات البيئة أو ملف `.env` في جذر التطبيق. القالب الملتزم هو `.env.example` فقط؛ ملف `.env` نفسه لا يُرفع. المفتاح لا يُرسل إلى المتصفح ولا يُحفظ في `Almdina ERP Settings`. جلسة المصنع تُدار من صفحة إعدادات المعمل لمن يملك `manage_whatsapp_session`، والحالة الحية تأتي من OpenWA. نصوص الرسائل قبل ملفات القياسات والفاتورة، ورسائل إتمام المراحل المفعّلة على المسار، تُضبط من قسم رسائل واتساب في الإعدادات (`edit_whatsapp_messages`؛ `{order_name}` لرقم الطلب و`{stage_label}` لاسم المرحلة). ملف القياسات المرسل هو نفس مستند طباعة جدول القياسات (ليس Print Format `Door Cutting Measurements`): يُبنى HTML على الخادم ثم يُحوَّل إلى PDF عبر Chromium المضمّن في الـbench (`--print-to-pdf`) ثم يرجع إلى `frappe.utils.pdf.get_pdf` لنفس HTML إن لزم. فاتورة الزبون عبر واتساب تُبنى بنفس الآلية من مستند الطباعة الموحّد (قياسات + عرض السعر المعتمد) وتحتاج `print_customer_invoice`. يجب أن يتوفر مساحة قرص كافية لملفات PDF المؤقتة.
 
 ## 11. Release note المطلوبة
 

@@ -106,7 +106,7 @@ flowchart LR
 
 ### Factory settings
 
-`view_factory_settings`, `edit_factory_cutting_defaults`, `edit_factory_cost_defaults`, `edit_factory_production_controls`, `edit_factory_print_identity`.
+`view_factory_settings`, `edit_factory_cutting_defaults`, `edit_factory_cost_defaults`, `edit_factory_production_controls`, `edit_factory_print_identity`, `manage_whatsapp_session` (إنشاء جلسة المصنع وربطها وإعادة الاتصال)، `edit_whatsapp_messages` (نصوص القياسات والفاتورة وإتمام المراحل). عرض الإعدادات لا يمنح ربط الجلسة، وهوية الطباعة لا تمنح تعديل رسائل واتساب.
 
 ### Master data
 

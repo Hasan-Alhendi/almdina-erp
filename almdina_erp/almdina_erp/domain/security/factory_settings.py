@@ -13,6 +13,7 @@ class FactorySettingsSection:
     EXTRA_ADDONS = "extra_addons"
     PRODUCTION = "production"
     PRINT_IDENTITY = "print_identity"
+    WHATSAPP_MESSAGES = "whatsapp_messages"
 
 
 SECTION_FIELDS = MappingProxyType(
@@ -60,6 +61,13 @@ SECTION_FIELDS = MappingProxyType(
                 "print_factory_contacts",
             }
         ),
+        FactorySettingsSection.WHATSAPP_MESSAGES: frozenset(
+            {
+                "whatsapp_measurements_text",
+                "whatsapp_invoice_text",
+                "whatsapp_stage_messages",
+            }
+        ),
     }
 )
 SECTION_CAPABILITIES = MappingProxyType(
@@ -69,9 +77,13 @@ SECTION_CAPABILITIES = MappingProxyType(
         FactorySettingsSection.EXTRA_ADDONS: Capability.EDIT_FACTORY_COST_DEFAULTS,
         FactorySettingsSection.PRODUCTION: Capability.EDIT_FACTORY_PRODUCTION_CONTROLS,
         FactorySettingsSection.PRINT_IDENTITY: Capability.EDIT_FACTORY_PRINT_IDENTITY,
+        FactorySettingsSection.WHATSAPP_MESSAGES: Capability.EDIT_WHATSAPP_MESSAGES,
     }
 )
 ALL_SETTINGS_FIELDS = frozenset().union(*SECTION_FIELDS.values())
+_VIEW_IMPLIED_BY = frozenset(SECTION_CAPABILITIES.values()) | frozenset(
+    {Capability.MANAGE_WHATSAPP_SESSION}
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,7 +99,7 @@ def expand_factory_settings_capabilities(
     """Apply only safe dependencies between granular factory-setting grants."""
 
     granted = set(normalize_capabilities(capabilities))
-    if any(capability in granted for capability in SECTION_CAPABILITIES.values()):
+    if any(capability in granted for capability in _VIEW_IMPLIED_BY):
         granted.add(Capability.VIEW_FACTORY_SETTINGS)
     return frozenset(granted)
 
@@ -96,6 +108,7 @@ def settings_context(capabilities: Iterable[str] | None) -> dict[str, object]:
     granted = expand_factory_settings_capabilities(capabilities)
     return {
         "can_view": Capability.VIEW_FACTORY_SETTINGS in granted,
+        "can_manage_whatsapp_session": Capability.MANAGE_WHATSAPP_SESSION in granted,
         "sections": {
             section: {
                 "editable": required in granted,

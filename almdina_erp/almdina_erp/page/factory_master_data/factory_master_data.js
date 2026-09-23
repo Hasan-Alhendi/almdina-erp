@@ -778,6 +778,7 @@
                 department_label: String(stage.department_label || stage.label || stage.stage_label || ""),
                 operational_role: String(stage.operational_role || ""),
                 is_planning_stage: Boolean(Number(stage.is_planning_stage || 0)),
+                notify_whatsapp_on_complete: Boolean(Number(stage.notify_whatsapp_on_complete || 0)),
             };
         }
 
@@ -998,6 +999,11 @@
                                 <input type="checkbox" data-stage-field="is_planning_stage" data-stage-id="${stage.clientId}" ${stage.is_planning_stage ? "checked" : ""} ${readOnly ? "disabled" : ""}>
                                 <span class="prw-switch" aria-hidden="true"></span>
                                 <span><b>${__("مرحلة تخطيط")}</b><small>${__("تتطلب اعتماد خطة القص قبل التسليم للمرحلة التالية")}</small></span>
+                            </label>
+                            <label class="prw-switch-field prw-stage-whatsapp-toggle">
+                                <input type="checkbox" data-stage-field="notify_whatsapp_on_complete" data-stage-id="${stage.clientId}" ${stage.notify_whatsapp_on_complete ? "checked" : ""} ${readOnly ? "disabled" : ""}>
+                                <span class="prw-switch" aria-hidden="true"></span>
+                                <span><b>${__("إرسال واتساب عند الإتمام")}</b><small>${__("يظهر حقل نص هذه المرحلة في إعدادات المعمل → رسائل واتساب")}</small></span>
                             </label>
                         </div>
                     </article>
@@ -1263,6 +1269,7 @@
                     stage_definition: String(stage.stage_definition).trim(),
                     operational_role: String(stage.operational_role).trim(),
                     is_planning_stage: Boolean(stage.is_planning_stage),
+                    notify_whatsapp_on_complete: Boolean(stage.notify_whatsapp_on_complete),
                 })),
             };
             const operation = this.call(METHODS.save, {payload}, __("جاري حفظ مسار الإنتاج..."))

@@ -124,7 +124,14 @@
                         <div><span>${t("الإعدادات النشطة")}</span><strong>${t("اضبط كل مجموعة من مكانها المخصص")}</strong></div>
                         <span class="aps-section-intro-note">${t("التعديل يظهر فقط للأقسام المسموحة لك")}</span>
                     </div>
-                    <section class="aps-sections">${model.sections.map(sectionCard).join("")}</section>
+                    <section class="aps-sections">
+                        ${model.sections.map(sectionCard).join("")}
+                        ${model.canManageWhatsAppSession ? `
+                        <article class="aps-section aps-whatsapp" data-whatsapp-root>
+                            <div class="aps-whatsapp-loading">${t("جاري تحميل حالة WhatsApp...")}</div>
+                        </article>
+                        ` : ""}
+                    </section>
                     ${legacySettingsDetails(model)}
                     <div class="aps-note">
                         <span class="aps-note-icon" aria-hidden="true">i</span>
@@ -158,10 +165,98 @@
             return `<div class="aps-error" role="alert"><span class="aps-error-icon" aria-hidden="true">!</span><div><strong>${t("تعذر تحميل السجل")}</strong><span>${esc(message || t("تعذر تحميل السجل."))}</span></div></div>`;
         }
 
+        function statusLabel(status) {
+            const labels = {
+                ready: t("تعمل"),
+                created: t("أُنشئت"),
+                initializing: t("جاري التهيئة"),
+                qr_ready: t("بانتظار مسح الرمز"),
+                authenticating: t("جاري التحقق"),
+                disconnected: t("غير متصلة"),
+                action_required: t("تحتاج إجراء"),
+                failed: t("فشلت"),
+            };
+            const key = String(status || "").trim();
+            return labels[key] || (key ? key : t("غير معروفة"));
+        }
+
+        function whatsappHtml(snapshot = {}) {
+            if (snapshot.configured === false) {
+                return `
+                    <div class="aps-section-head">
+                        <div class="aps-section-copy">
+                            <span class="aps-section-kicker">${t("تكامل خارجي")}</span>
+                            <h3>${t("جلسة WhatsApp")}</h3>
+                            <div class="aps-section-desc">${esc(snapshot.reason || t("لم يتم ضبط عنوان خادم WhatsApp أو مفتاح API."))}</div>
+                        </div>
+                        <span class="aps-permission readonly"><span class="aps-permission-dot" aria-hidden="true"></span>${t("غير مضبوط")}</span>
+                    </div>
+                `;
+            }
+            if (!snapshot.session) {
+                return `
+                    <div class="aps-section-head">
+                        <div class="aps-section-copy">
+                            <span class="aps-section-kicker">${t("تكامل خارجي")}</span>
+                            <h3>${t("جلسة WhatsApp")}</h3>
+                            <div class="aps-section-desc">${t("اربط جلسة واحدة مع واتساب ويب لإرسال جداول القياسات للزبائن.")}</div>
+                        </div>
+                        <span class="aps-permission readonly"><span class="aps-permission-dot" aria-hidden="true"></span>${t("غير مربوطة")}</span>
+                    </div>
+                    <div class="aps-actions">
+                        ${uiButton({
+                            label: t("إنشاء وربط WhatsApp"),
+                            variant: "primary",
+                            className: "aps-whatsapp-create",
+                        })}
+                    </div>
+                `;
+            }
+            const session = snapshot.session || {};
+            const working = Boolean(snapshot.working);
+            const rows = [
+                [t("الحالة"), statusLabel(session.status)],
+                [t("الاسم"), session.name],
+                [t("رقم الجلسة"), session.phone],
+                [t("اسم العرض"), session.push_name],
+            ];
+            if (session.last_error) rows.push([t("آخر خطأ"), session.last_error]);
+            return `
+                <div class="aps-section-head">
+                    <div class="aps-section-copy">
+                        <span class="aps-section-kicker">${t("تكامل خارجي")}</span>
+                        <h3>${t("جلسة WhatsApp")}</h3>
+                        <div class="aps-section-desc">${working ? t("الجلسة متصلة ويمكن إرسال رسائل الزبائن.") : esc(snapshot.reason || t("الجلسة غير متصلة."))}</div>
+                    </div>
+                    <span class="aps-permission ${working ? "" : "readonly"}">
+                        <span class="aps-permission-dot" aria-hidden="true"></span>${working ? t("تعمل") : t("لا تعمل")}
+                    </span>
+                </div>
+                <div class="aps-values">${rows.map(([label, value]) => rowHtml({ label, value })).join("")}</div>
+                ${working ? "" : `
+                    <div class="aps-actions">
+                        ${uiButton({
+                            label: t("إعادة اتصال"),
+                            variant: "primary",
+                            className: "aps-whatsapp-reconnect",
+                        })}
+                    </div>
+                `}
+            `;
+        }
+
+        function renderWhatsApp(snapshot) {
+            const $root = $body.find("[data-whatsapp-root]");
+            if (!$root.length) return;
+            $root.html(whatsappHtml(snapshot));
+        }
+
         return Object.freeze({
             renderLoading,
             renderError,
             render,
+            renderWhatsApp,
+            whatsappHtml,
             auditHtml,
             auditLoadingHtml,
             auditErrorHtml,

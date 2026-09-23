@@ -73,12 +73,58 @@ def start_my_stage(stage_name: str) -> dict[str, Any]:
     return _execute(commands.start_my_stage, stage_name)
 
 
+def _stage_completion_whatsapp_context(stage_name: str) -> dict[str, str] | None:
+    name = str(stage_name or "").strip()
+    if not name:
+        return None
+    row = frappe.db.get_value(
+        "Production Stage",
+        name,
+        ["door_cutting_order", "stage_type"],
+        as_dict=True,
+    )
+    if not row:
+        return None
+    order_name = str(row.door_cutting_order or "").strip()
+    stage_type = str(row.stage_type or "").strip()
+    path = frappe.db.get_value("Door Cutting Order", order_name, "production_path")
+    if not order_name or not stage_type or not path:
+        return None
+    from almdina_erp.almdina_erp.infrastructure.frappe.production_routing_repository import (
+        get_route,
+    )
+
+    try:
+        stage = get_route(str(path)).stage(stage_type)
+    except ValueError:
+        return None
+    if not stage.notify_whatsapp_on_complete:
+        return None
+    return {
+        "order_name": order_name,
+        "stage_type": stage.stage_type,
+        "stage_label": stage.department_label,
+    }
+
+
 @frappe.whitelist()
 def handoff_to_next(
     stage_name: str,
     next_assignee: str | None = None,
 ) -> dict[str, Any]:
-    return _execute(commands.handoff_to_next, stage_name, next_assignee)
+    notify = _stage_completion_whatsapp_context(stage_name)
+    result = _execute(commands.handoff_to_next, stage_name, next_assignee)
+    if not notify:
+        return result
+    from almdina_erp.almdina_erp.services.whatsapp_service import notify_stage_completion
+
+    payload = dict(result or {})
+    payload["whatsapp"] = notify_stage_completion(
+        notify["order_name"],
+        notify["stage_type"],
+        notify["stage_label"],
+    )
+    return payload
 
 
 @frappe.whitelist()
