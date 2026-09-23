@@ -280,8 +280,7 @@
         installStyles();
         const payload = previewState && previewState.payload;
         const plan = payload && payload.plan;
-        const renderer = window.AlmdinaCuttingPlanRender;
-        if (!plan || !Array.isArray(plan.sheets) || !plan.sheets.length || !renderer || !renderer.build) {
+        if (!plan || !Array.isArray(plan.sheets) || !plan.sheets.length) {
             return false;
         }
 
@@ -311,14 +310,17 @@
         const stateClass = invalid ? " is-error" : "";
         const badge = saving ? "حفظ" : invalid ? "غير صالحة" : "PREVIEW";
 
-        content.html(`
+        // Tabs render the displayed plan through the workspace owner. This
+        // presenter owns only the transient status and summary around it.
+        content.prepend(`
             <div class="dco-plan-preview-banner${stateClass}">
                 <div><strong>${escape(title)}</strong><span>${escape(description)}</span></div>
                 <span class="dco-plan-preview-badge">${escape(badge)}</span>
             </div>
-            ${renderer.build(frm, plan)}
         `);
         lockSourceTabs(frm);
+        const decorations = window.AlmdinaPlanContentUX;
+        if (decorations && typeof decorations.apply === "function") decorations.apply(frm);
         renderPreviewSummary(frm, payload.summary || {}, plan);
         return true;
     }

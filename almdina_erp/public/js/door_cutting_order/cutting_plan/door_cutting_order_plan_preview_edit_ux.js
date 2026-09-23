@@ -168,6 +168,11 @@
         const owner = previewOwner();
         if (owner) owner.reset(frm);
         const result = await Promise.resolve(runBaseCommand("cancel", frm, sessionContext));
+        const workspace = window.AlmdinaPlanWorkspaceState;
+        const current = workspace && workspace.snapshot && workspace.snapshot(frm);
+        if (result && current && current.freshness === "stale" && workspace.load) {
+            await workspace.load(frm, { force: true });
+        }
         const view = presenter();
         if (view && typeof view.restorePersistedPresentation === "function") {
             view.restorePersistedPresentation(frm);

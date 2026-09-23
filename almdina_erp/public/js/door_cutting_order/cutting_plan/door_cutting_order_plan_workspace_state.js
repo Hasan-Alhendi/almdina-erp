@@ -126,6 +126,14 @@
 
         const currentIdentity = identity(frm);
         const orderName = String(frm.doc.name || "").trim();
+        // A canonical read is deferred while the Plan workspace owns an edit
+        // draft. resolveLoad() clears draft/editing, so loading here would lose
+        // the operator's settings even when the read is only background sync.
+        const current = store.snapshot();
+        if (current.identity === currentIdentity && current.editing) {
+            if (options.force && current.freshness !== "stale") invalidate(frm, "canonical_reload_deferred");
+            return store.snapshot();
+        }
         if (!orderName || (frm.is_new && frm.is_new()) || !canView(frm)) {
             return settleUnavailable(frm, store, currentIdentity);
         }
@@ -223,6 +231,15 @@
         return plans.system_draft || null;
     }
 
+    function displayedPlanForTab(frm, tab) {
+        if (tab === "System") {
+            const preview = window.AlmdinaPlanPreviewSession;
+            const row = preview && preview.displayedPreviewRow && preview.displayedPreviewRow(frm);
+            if (row) return row;
+        }
+        return planForTab(frm, tab);
+    }
+
     function displayedTab(frm) {
         const tabs = window.AlmdinaPlanTabsUX;
         if (tabs && typeof tabs.activeTab === "function") {
@@ -232,18 +249,7 @@
     }
 
     function displayedPlan(frm) {
-        const tab = displayedTab(frm);
-        const preview = window.AlmdinaPlanPreviewSession;
-        if (
-            tab === "System"
-            && preview
-            && typeof preview.isReady === "function"
-            && preview.isReady(frm)
-            && typeof preview.previewRow === "function"
-        ) {
-            return preview.previewRow(frm);
-        }
-        return planForTab(frm, tab);
+        return displayedPlanForTab(frm, displayedTab(frm));
     }
 
     function schedule(frm, force = false) {
@@ -270,6 +276,7 @@
         snapshot,
         activePlan,
         planForTab,
+        displayedPlanForTab,
         displayedPlan,
         schedule,
     });
