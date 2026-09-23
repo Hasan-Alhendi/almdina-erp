@@ -77,7 +77,7 @@
             body{font-size:${bodySize};line-height:1.28;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-variant-numeric:tabular-nums}
             ${headerCss()}
             .info{display:grid;gap:1.2mm;margin:0 0 2.2mm}
-            .shared-info{grid-template-columns:minmax(0,1.65fr) minmax(0,1.2fr) minmax(0,1fr) minmax(0,.72fr)}
+            .shared-info{grid-template-columns:minmax(0,1.55fr) minmax(0,1.15fr) minmax(0,.95fr) minmax(0,.8fr) minmax(0,.7fr)}
             .financial-info{grid-template-columns:repeat(4,minmax(0,1fr));margin-top:1.2mm}
             .info>div{min-width:0;min-height:${measurements ? "10.5mm" : "11.5mm"};padding:1.35mm 1.55mm;border:.7pt solid #c7cdd3;border-radius:2.1mm;background:#fbfcfd;line-height:1.25;overflow-wrap:anywhere}
             .info b{display:block;margin-bottom:.55mm;color:#5d6874;font-size:${measurements ? "6.35pt" : "6.65pt"};font-weight:800}

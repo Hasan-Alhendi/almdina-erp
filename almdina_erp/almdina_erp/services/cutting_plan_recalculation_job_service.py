@@ -28,7 +28,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization im
     require_cutting_plan_capability,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import (
-    plan_input_fingerprint,
+    freshness_expected_fingerprint,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.system_plan_recalculation_job_store import (
     FrappeSystemPlanRecalculationJobStore,
@@ -82,7 +82,15 @@ def _latest_system_draft(order_name: str) -> Any | None:
 
 def _facts_for(order: Any) -> RecalculationFacts:
     plan = _latest_system_draft(order.name)
-    expected = plan_input_fingerprint(order, plan) if plan else ""
+    expected = (
+        freshness_expected_fingerprint(
+            order,
+            plan,
+            str(getattr(plan, "input_fingerprint", None) or ""),
+        )
+        if plan
+        else ""
+    )
     return RecalculationFacts(
         has_recalculate_capability=cutting_plan_capability_allowed(
             order,

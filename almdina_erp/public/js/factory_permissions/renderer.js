@@ -13,9 +13,27 @@
 
         const t = (message, replacements) => replacements ? translate(message, replacements) : translate(message);
 
+        function uiButton(options) {
+            const ui = window.AlmdinaUi;
+            if (!ui || typeof ui.button !== "function") {
+                throw new Error("AlmdinaUi.button is required for Factory Permissions rendering");
+            }
+            return ui.button(options);
+        }
+
+        function uiControl(options) {
+            const ui = window.AlmdinaUi;
+            if (!ui || typeof ui.control !== "function") {
+                throw new Error("AlmdinaUi.control is required for Factory Permissions rendering");
+            }
+            return ui.control(options);
+        }
+
+        let roleControl = null;
+
         function renderShell() {
             $main.html(`
-                <div class="apc-shell">
+                <div class="almdina-ui apc-shell">
                     <header class="apc-hero">
                         <div class="apc-hero-copy">
                             <div class="apc-eyebrow">${t("إدارة الصلاحيات")}</div>
@@ -34,11 +52,7 @@
                                 </div>
                             </div>
                             <div class="apc-role-combo">
-                                <div class="apc-role-combo-control">
-                                    <input type="text" class="apc-role-picker" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="apc-role-menu" autocomplete="off" placeholder="${t("ابحث واختر دورًا...")}">
-                                    <button type="button" class="apc-role-toggle" aria-label="${t("فتح قائمة الأدوار")}" tabindex="-1">⌄</button>
-                                </div>
-                                <div class="apc-role-menu" id="apc-role-menu" role="listbox" hidden></div>
+                                <div class="apc-role-mount"></div>
                             </div>
                         </section>
 
@@ -50,11 +64,10 @@
                                 </div>
                             </div>
                             <div class="apc-transfer-tools">
-                                <button type="button" class="btn btn-default apc-export">${t("تصدير JSON")}</button>
-                                <button type="button" class="btn btn-default apc-import">${t("استيراد JSON")}</button>
+                                ${uiButton({ label: t("تصدير JSON"), variant: "secondary", className: "apc-export" })}
+                                ${uiButton({ label: t("استيراد JSON"), variant: "secondary", className: "apc-import" })}
                             </div>
                             <div class="apc-helper-text">${t("الاستيراد يحمّل الصلاحيات للمعاينة فقط؛ الحفظ يبقى خطوة مستقلة.")}</div>
-                            <input type="file" class="apc-import-file" accept="application/json,.json" hidden>
                         </section>
 
                         <section class="apc-panel apc-summary-panel">
@@ -63,7 +76,11 @@
                                     <div class="apc-panel-kicker">${t("نظرة سريعة")}</div>
                                     <div class="apc-panel-title">${t("ملخص الصلاحيات")}</div>
                                 </div>
-                                <button type="button" class="btn btn-default apc-bulk-toggle apc-select-all-global">${t("تحديد الكل للكل")}</button>
+                                ${uiButton({
+                                    label: t("تحديد الكل للكل"),
+                                    variant: "secondary",
+                                    className: "apc-bulk-toggle apc-select-all-global",
+                                })}
                             </div>
                             <div class="apc-stats">
                                 <div class="apc-stat apc-stat-total"><strong class="apc-total-count">0</strong><span>${t("إجمالي")}</span></div>
@@ -87,8 +104,8 @@
                     <div class="apc-savebar-inner">
                         <div class="apc-dirty" role="status" aria-live="polite" aria-atomic="true">${t("لا توجد تغييرات غير محفوظة")}</div>
                         <div class="apc-save-actions">
-                            <button type="button" class="btn btn-default apc-reset">${t("تراجع")}</button>
-                            <button type="button" class="btn btn-primary apc-save">${t("حفظ الصلاحيات")}</button>
+                            ${uiButton({ label: t("تراجع"), variant: "secondary", className: "apc-reset" })}
+                            ${uiButton({ label: t("حفظ الصلاحيات"), variant: "primary", className: "apc-save" })}
                         </div>
                     </div>
                 </div>
@@ -108,30 +125,55 @@
             `);
         }
 
-        function renderRoleMenu(roles) {
-            const $menu = $main.find(".apc-role-menu");
-            if (!roles.length) {
-                $menu.html(`<div class="apc-role-no-results">${t("لا يوجد دور مطابق للبحث.")}</div>`);
-                return;
-            }
-            $menu.html(roles.map(role => (
-                `<button type="button" class="apc-role-option ${role.selected ? "is-selected" : ""}" role="option" aria-selected="${role.selected ? "true" : "false"}" data-role="${esc(role.name)}"><span class="apc-role-option-name">${esc(role.name)}</span>${role.deskAccess ? "" : `<small>${t("بدون Desk")}</small>`}</button>`
-            )).join(""));
+        function mountRoleControl(options = {}) {
+            disposeRoleControl();
+            const $mount = $main.find(".apc-role-mount");
+            if (!$mount.length) return null;
+            roleControl = uiControl({
+                parent: $mount,
+                fieldname: "role",
+                fieldtype: "Link",
+                options: "Role",
+                placeholder: t("ابحث واختر دورًا..."),
+                value: options.value || "",
+                readOnly: options.readOnly === true,
+                onlyInput: true,
+                className: "apc-role-control-mount",
+                df: {
+                    get_query: () => ({
+                        query: String(options.roleSearchQuery || ""),
+                    }),
+                },
+                onChange: value => {
+                    if (typeof options.onChange === "function") {
+                        options.onChange(String(value || ""));
+                    }
+                },
+            });
+            return roleControl;
+        }
+
+        function disposeRoleControl() {
+            if (!roleControl) return;
+            roleControl.dispose();
+            roleControl = null;
         }
 
         function setRolePickerValue(value) {
-            $main.find(".apc-role-picker").val(value || "");
+            if (roleControl) roleControl.setValue(value || "");
         }
 
-        function openRoleMenu() {
-            $main.find(".apc-role-menu").prop("hidden", false);
-            $main.find(".apc-role-picker").attr("aria-expanded", "true");
-        }
-
-        function closeRoleMenu(restoreSelection = false, selectedRole = "") {
-            $main.find(".apc-role-menu").prop("hidden", true);
-            $main.find(".apc-role-picker").attr("aria-expanded", "false");
-            if (restoreSelection && selectedRole) setRolePickerValue(selectedRole);
+        function setRoleControlDisabled(disabled) {
+            if (!roleControl || !roleControl.control) return;
+            const control = roleControl.control;
+            if (typeof control.set_read_only === "function") {
+                control.set_read_only(disabled ? 1 : 0);
+                return;
+            }
+            if (control.df) {
+                control.df.read_only = disabled ? 1 : 0;
+                if (typeof control.refresh === "function") control.refresh();
+            }
         }
 
         function showRoleLoading(message) {
@@ -152,7 +194,12 @@
                             <h4>${esc(group.label)}<span class="apc-group-count">${group.count}</span></h4>
                             <p>${esc(group.description)}</p>
                         </div>
-                        <button type="button" class="btn btn-default apc-bulk-toggle apc-select-all-group" data-group="${esc(group.key)}">${t("تحديد الكل")}</button>
+                        ${uiButton({
+                            label: t("تحديد الكل"),
+                            variant: "secondary",
+                            className: "apc-bulk-toggle apc-select-all-group",
+                            attrs: { "data-group": group.key },
+                        })}
                     </div>
                     <div class="apc-group-body">${group.capabilities.map(renderCapability).join("")}</div>
                 </section>
@@ -244,7 +291,8 @@
                 .text(model.dirty ? t("لديك تغييرات غير محفوظة") : t("لا توجد تغييرات غير محفوظة"));
             $main.find(".apc-save").prop("disabled", !model.dirty || model.saving);
             $main.find(".apc-reset").prop("disabled", !model.dirty || model.saving);
-            $main.find(".apc-capability-input,.apc-role-picker,.apc-role-toggle,.apc-bulk-toggle,.apc-export,.apc-import")
+            setRoleControlDisabled(model.saving);
+            $main.find(".apc-capability-input,.apc-bulk-toggle,.apc-export,.apc-import")
                 .prop("disabled", model.saving);
             updateStats(model.stats);
         }
@@ -269,10 +317,10 @@
         return Object.freeze({
             renderShell,
             renderActor,
-            renderRoleMenu,
+            mountRoleControl,
+            disposeRoleControl,
             setRolePickerValue,
-            openRoleMenu,
-            closeRoleMenu,
+            setRoleControlDisabled,
             showRoleLoading,
             showLoaded,
             renderPermissionGroups,

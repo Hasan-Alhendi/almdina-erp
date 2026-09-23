@@ -12,6 +12,14 @@
         }
         const t = (message, replacements) => replacements ? translate(message, replacements) : translate(message);
 
+        function uiButton(options) {
+            const ui = window.AlmdinaUi;
+            if (!ui || typeof ui.button !== "function") {
+                throw new Error("AlmdinaUi.button is required for Factory Workforce rendering");
+            }
+            return ui.button(options);
+        }
+
         function renderLoading() {
             $main.html(`
                 <div class="aw-loading" role="status" aria-live="polite">
@@ -49,7 +57,7 @@
             `;
         }
 
-        function toolbarHtml(model) {
+        function toolbarHtml() {
             return `
                 <div class="aw-toolbar" role="search">
                     <div class="aw-toolbar-heading">
@@ -57,21 +65,16 @@
                         <strong>${t("الوصول السريع للمستخدم")}</strong>
                     </div>
                     <div class="aw-field aw-search-field">
-                        <label for="aw-workforce-search">${t("بحث بالاسم أو البريد")}</label>
+                        <span class="aw-field-label">${t("بحث بالاسم أو البريد")}</span>
                         <div class="aw-search-control">
                             <span class="aw-search-icon" aria-hidden="true">⌕</span>
-                            <input id="aw-workforce-search" class="aw-search" type="search" value="${esc(model.search)}" placeholder="${t("اكتب للبحث...")}" autocomplete="off">
+                            <div class="aw-search-mount"></div>
                         </div>
                     </div>
-                    <div class="aw-field">
-                        <label for="aw-enabled-filter">${t("حالة الحساب")}</label>
-                        <select id="aw-enabled-filter" class="aw-enabled-filter">
-                            <option value="all" ${model.enabled === "all" ? "selected" : ""}>${t("الكل")}</option>
-                            <option value="1" ${model.enabled === "1" ? "selected" : ""}>${t("مفعّل")}</option>
-                            <option value="0" ${model.enabled === "0" ? "selected" : ""}>${t("معطّل")}</option>
-                        </select>
+                    <div class="aw-field aw-enabled-field">
+                        <span class="aw-field-label">${t("حالة الحساب")}</span>
+                        <div class="aw-enabled-mount aw-enabled-filter"></div>
                     </div>
-                    <button type="button" class="btn btn-default aw-refresh">${t("تحديث القائمة")}</button>
                 </div>
             `;
         }
@@ -88,11 +91,45 @@
 
         function userCardHtml(user) {
             const buttons = [];
-            if (user.canEdit) buttons.push(`<button class="btn btn-default aw-edit" data-user="${esc(user.email)}">${t("تعديل")}</button>`);
-            if (user.canResetPassword) buttons.push(`<button class="btn btn-default aw-password" data-user="${esc(user.email)}">${t("كلمة مرور مؤقتة")}</button>`);
-            if (user.canDisable) buttons.push(`<button class="btn btn-danger aw-toggle" data-enabled="0" data-user="${esc(user.email)}">${t("تعطيل")}</button>`);
-            if (user.canEnable) buttons.push(`<button class="btn btn-primary aw-toggle" data-enabled="1" data-user="${esc(user.email)}">${t("تفعيل")}</button>`);
-            buttons.push(`<button class="btn btn-default aw-audit-open" data-user="${esc(user.email)}">${t("سجل التغييرات")}</button>`);
+            const userAttr = { "data-user": user.email };
+            if (user.canEdit) {
+                buttons.push(uiButton({
+                    label: t("تعديل"),
+                    variant: "secondary",
+                    className: "aw-edit",
+                    attrs: userAttr,
+                }));
+            }
+            if (user.canResetPassword) {
+                buttons.push(uiButton({
+                    label: t("كلمة مرور مؤقتة"),
+                    variant: "secondary",
+                    className: "aw-password",
+                    attrs: userAttr,
+                }));
+            }
+            if (user.canDisable) {
+                buttons.push(uiButton({
+                    label: t("تعطيل"),
+                    variant: "danger",
+                    className: "aw-toggle",
+                    attrs: { ...userAttr, "data-enabled": "0" },
+                }));
+            }
+            if (user.canEnable) {
+                buttons.push(uiButton({
+                    label: t("تفعيل"),
+                    variant: "primary",
+                    className: "aw-toggle",
+                    attrs: { ...userAttr, "data-enabled": "1" },
+                }));
+            }
+            buttons.push(uiButton({
+                label: t("سجل التغييرات"),
+                variant: "secondary",
+                className: "aw-audit-open",
+                attrs: userAttr,
+            }));
 
             const roleBadges = user.roles.length
                 ? user.roles.map(role => `<span class="aw-badge aw-role">${esc(role)}</span>`).join("")
@@ -157,7 +194,12 @@
                         <div class="aw-detail"><span>${t("آخر نشاط")}</span><b>${esc(user.lastActive)}</b></div>
                     </div>
                     <div class="aw-scope-note">${t("إضافته إلى المعمل لا تمنحه أي دور أو صلاحية تشغيلية تلقائيًا، ولا تغيّر Default Workspace أو Default App. صفحة الدخول تبقى تحت إدارة Frappe.")}</div>
-                    <div class="aw-actions aw-actions-single"><button class="btn btn-primary aw-adopt-user" data-user="${esc(user.email)}">${t("إضافة إلى المعمل")}</button></div>
+                    <div class="aw-actions aw-actions-single">${uiButton({
+                        label: t("إضافة إلى المعمل"),
+                        variant: "primary",
+                        className: "aw-adopt-user",
+                        attrs: { "data-user": user.email },
+                    })}</div>
                 </article>
             `;
         }
@@ -212,11 +254,29 @@
             `;
         }
 
-        function render(model) {
+        function updateContent(model) {
+            $main.find(".aw-hero-meta strong").text(model.users.length);
+            $main.find(".aw-summary").replaceWith(summaryHtml(model.summary));
+            $main.find(".aw-workforce-section").replaceWith(workforceSectionHtml(model));
+            const availableSection = availableUsersSectionHtml(model);
+            const $available = $main.find(".aw-available-section");
+            if (availableSection) {
+                if ($available.length) $available.replaceWith(availableSection);
+                else $main.find(".aw-shell").append(availableSection);
+            } else {
+                $available.remove();
+            }
+        }
+
+        function render(model, options = {}) {
+            if (options.preserveToolbar === true) {
+                updateContent(model);
+                return;
+            }
             $main.html(`
-                <div class="aw-shell">
+                <div class="almdina-ui aw-shell">
                     ${heroHtml(model)}
-                    ${toolbarHtml(model)}
+                    ${toolbarHtml()}
                     ${summaryHtml(model.summary)}
                     ${workforceSectionHtml(model)}
                     ${availableUsersSectionHtml(model)}

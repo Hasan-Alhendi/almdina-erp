@@ -4,12 +4,14 @@ frappe.pages["factory-workforce"].on_page_load = function (wrapper) {
     const FOUNDATION = "/assets/almdina_erp/js/frontend_foundation.js";
     const PAGE_LIFECYCLE = "/assets/almdina_erp/js/page_revisit_refresh.js";
     const MODULES = Object.freeze([
+        "/assets/almdina_erp/js/almdina_ui.js",
         "/assets/almdina_erp/js/factory_workforce/api.js",
         "/assets/almdina_erp/js/factory_workforce/state.js",
         "/assets/almdina_erp/js/factory_workforce/view_model.js",
         "/assets/almdina_erp/js/factory_workforce/renderer.js",
         "/assets/almdina_erp/js/factory_workforce/interactions.js",
         "/assets/almdina_erp/js/factory_workforce/dialogs.js",
+        "/assets/almdina_erp/js/factory_workforce/toolbar.js",
         "/assets/almdina_erp/js/factory_workforce/controller.js",
     ]);
     const STYLESHEET = "/assets/almdina_erp/css/factory_workforce.css";

@@ -19,6 +19,7 @@
         const viewModelModule = window.AlmdinaFactoryPermissionsViewModel;
         const rendererModule = window.AlmdinaFactoryPermissionsRenderer;
         const interactionsModule = window.AlmdinaFactoryPermissionsInteractions;
+        const dialogsModule = window.AlmdinaFactoryPermissionsDialogs;
         if (
             !frontend
             || !pageLifecycleModule
@@ -28,6 +29,7 @@
             || !viewModelModule
             || !rendererModule
             || !interactionsModule
+            || !dialogsModule
         ) {
             throw new Error("Factory permissions frontend modules are unavailable");
         }
@@ -52,28 +54,43 @@
         let featureShellReady = false;
         let reconcileAfterSave = false;
         const ownedTransients = new Set();
+        const dialogs = dialogsModule.create({
+            translate: __,
+            ownTransient,
+            releaseTransient(surface) {
+                ownedTransients.delete(surface);
+            },
+            isCurrentGeneration,
+            showMessage,
+            previewExternal,
+            getMaxBytes: () => Number(state.transfer.max_bytes || 131072),
+            getSelectedRole: () => state.selectedRole,
+            previewImport: (role, payload, requestOptions) => api.previewImport(role, payload, requestOptions),
+            isActive,
+        });
         const interactions = interactionsModule.bind({
             $main,
             lifecycle,
-            renderer,
             callbacks: {
-                onRoleQuery: renderRoleMenu,
-                onRoleMenuClose: restore => renderer.closeRoleMenu(restore, state.selectedRole),
-                onRoleSelected: chooseRole,
                 onCapabilityChanged,
                 onGroupToggle,
                 onGlobalToggle,
                 onExport: exportSelectedRole,
-                onImportFile: importPermissionFile,
+                onImport: () => {
+                    const generation = activeGeneration();
+                    if (generation !== null) dialogs.openImportDialog(generation);
+                },
                 onReset: resetWorkingState,
                 onSave: savePermissions,
             },
         });
+        lifecycle.track(() => renderer.disposeRoleControl(), "permissions-role-owner");
 
         const instance = Object.freeze({
             load: loadConsole,
             dispose() {
                 closeTransientSurfaces();
+                renderer.disposeRoleControl();
                 interactions.dispose();
                 store.dispose();
                 if (wrapper.__almdinaFactoryPermissionsController === instance) {
@@ -87,6 +104,8 @@
             onDeactivate: () => {
                 closeTransientSurfaces();
                 cancelPreviewTimer();
+                renderer.disposeRoleControl();
+                featureShellReady = false;
                 store.deactivate();
             },
         });
@@ -151,18 +170,15 @@
         function ensureFeatureShell() {
             if (featureShellReady) return;
             renderer.renderShell();
+            renderer.mountRoleControl({
+                value: state.selectedRole,
+                roleSearchQuery: api.roleSearchQuery,
+                onChange: role => {
+                    if (!role || role === state.selectedRole) return;
+                    requestRoleChange(role);
+                },
+            });
             featureShellReady = true;
-        }
-
-        function renderRoleMenu(query) {
-            renderer.renderRoleMenu(viewModel.roleMenu(state.roles, query, state.selectedRole));
-        }
-
-        function chooseRole(role) {
-            if (!role) return;
-            renderer.setRolePickerValue(role);
-            renderer.closeRoleMenu(false, state.selectedRole);
-            if (role !== state.selectedRole) requestRoleChange(role);
         }
 
         function requestRoleChange(role) {
@@ -195,7 +211,6 @@
                 state.roles = Array.isArray(resolved.roles) ? resolved.roles : [];
                 state.transfer = resolved.transfer || {};
                 renderer.renderActor(resolved.actor || {});
-                renderRoleMenu("");
                 if (!state.roles.length) return showEmpty(__("لا توجد أدوار قابلة للإدارة."));
                 const selected = state.roles.find(role => String(role.name || "") === state.selectedRole);
                 const role = String((selected || state.roles[0]).name || "");
@@ -215,8 +230,6 @@
             state.selectedRole = role;
             store.requests.transfer.invalidate();
             renderer.setRolePickerValue(role);
-            renderRoleMenu("");
-            renderer.closeRoleMenu(false, role);
             renderer.showRoleLoading(__("جاري تحميل صلاحيات الدور..."));
             return api.getRole(role, { freeze: false }).then(data => {
                 if (!isActive() || !store.requests.role.isCurrent(token) || role !== state.selectedRole) return null;
@@ -375,41 +388,6 @@
                     indicator: "red",
                 });
             });
-        }
-
-        function importPermissionFile(file) {
-            if (!isActive() || !file || !state.selectedRole) return;
-            const generation = activeGeneration();
-            const maxBytes = Number(state.transfer.max_bytes || 131072);
-            if (file.size > maxBytes) {
-                showMessage({ title: __("ملف كبير جدًا"), message: __("حجم ملف الصلاحيات يتجاوز الحد المسموح."), indicator: "red" });
-                return;
-            }
-            const reader = new FileReader();
-            reader.onload = () => {
-                if (!isCurrentGeneration(generation)) return;
-                const payload = String(reader.result || "");
-                try {
-                    const parsed = JSON.parse(payload);
-                    if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") throw new Error("not-object");
-                } catch (error) {
-                    showMessage({ title: __("ملف JSON غير صالح"), message: __("تعذر قراءة الملف ككائن JSON صحيح. لم يتم تغيير أي صلاحية."), indicator: "red" });
-                    return;
-                }
-                const role = state.selectedRole;
-                previewExternal(
-                    () => api.previewImport(role, payload, {
-                        freeze: true,
-                        freezeMessage: __("جاري التحقق من الصلاحيات..."),
-                    }),
-                    __("تم التحقق من الملف وتحميله للمعاينة فقط. لن يتغير الدور قبل الحفظ.")
-                );
-            };
-            reader.onerror = () => {
-                if (!isCurrentGeneration(generation)) return;
-                showMessage({ title: __("تعذر قراءة الملف"), message: __("لم يتمكن المتصفح من قراءة ملف الصلاحيات."), indicator: "red" });
-            };
-            reader.readAsText(file, "utf-8");
         }
 
         function renderImpact(data) {

@@ -391,6 +391,7 @@
         // Reconcile the Cost-owned controls synchronously from the canonical store
         // before broadcasting the edit-state change to page/visual owners.
         sync(frm);
+        revealCostSettings(frm);
         signalEditChanged(frm);
         if (canEditCostSettings(frm)) {
             const fieldEditor = editor();
@@ -551,8 +552,37 @@
         return true;
     }
 
+    function coordinatorSnapshot(frm) {
+        const coordinator = editSessionCoordinator();
+        return coordinator && typeof coordinator.snapshot === "function"
+            ? coordinator.snapshot(frm)
+            : null;
+    }
+
+    function isCoordinatorStartingCost(frm) {
+        const snap = coordinatorSnapshot(frm);
+        return Boolean(snap && snap.activeKind === "cost" && snap.phase === "starting");
+    }
+
+    function revealCostSettings(frm) {
+        const layout = window.AlmdinaCostPageLayoutUX;
+        if (layout && typeof layout.revealSettings === "function") {
+            layout.revealSettings(frm);
+            return true;
+        }
+        if (layout && typeof layout.enhance === "function") {
+            layout.enhance(frm);
+            return true;
+        }
+        return false;
+    }
+
     function sync(frm) {
         if (!frm || frm.doctype !== "Door Cutting Order") return;
+        // The coordinator emits "starting" before beginEdit. A read-mode
+        // reconcile here would refresh/unmount relocated native rate fields
+        // while the Cost HTML shell still hosts them.
+        if (!isEditing(frm) && isCoordinatorStartingCost(frm)) return;
         if (isEditing(frm) && !canEditCostWorkspace(frm)) {
             const coordinator = editSessionCoordinator();
             if (coordinator && typeof coordinator.activeKind === "function" && coordinator.activeKind(frm) === "cost") {

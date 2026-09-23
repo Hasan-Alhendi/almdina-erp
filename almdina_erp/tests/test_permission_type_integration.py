@@ -88,6 +88,7 @@ class TestPermissionTypeIntegration(unittest.TestCase):
             Capability.SUBMIT_ORDER,
             Capability.APPROVE_ORDER,
             Capability.CANCEL_ORDER,
+            Capability.RESUME_CANCELLED_ORDER,
             Capability.RETURN_ORDER_TO_DRAFT,
             Capability.DISPATCH_ORDER,
             Capability.START_ASSIGNED_STAGE,
@@ -148,6 +149,10 @@ class TestPermissionTypeIntegration(unittest.TestCase):
         self._assert_arbitrary_role_grant(Capability.SUBMIT_ORDER, "SubmitOrder")
         self._assert_arbitrary_role_grant(Capability.APPROVE_ORDER, "ApproveOrder")
         self._assert_arbitrary_role_grant(Capability.CANCEL_ORDER, "CancelOrder")
+        self._assert_arbitrary_role_grant(
+            Capability.RESUME_CANCELLED_ORDER,
+            "ResumeCancelled",
+        )
         self._assert_arbitrary_role_grant(
             Capability.RETURN_ORDER_TO_DRAFT,
             "ReturnOrder",

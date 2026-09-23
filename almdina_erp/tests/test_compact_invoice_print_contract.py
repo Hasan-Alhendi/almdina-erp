@@ -181,6 +181,8 @@ class TestCompactInvoicePrintContract(unittest.TestCase):
         self.assertIn("date,", presenter)
         self.assertIn('class="shared-info-phone"', shared_info)
         self.assertIn('${esc(phone || "—")}', shared_info)
+        self.assertIn("<b>آلة القص</b>", shared_info)
+        self.assertIn("order_cutting_machine", shared_info)
         self.assertNotIn("<b>رقم الطلب</b>", shared_info)
         self.assertNotIn("<b>نوع القشاط</b>", shared_info)
         self.assertNotIn("default_edge_type", shared_info)
@@ -231,7 +233,7 @@ class TestCompactInvoicePrintContract(unittest.TestCase):
             'const rowPadding = measurements ? "1.05mm 1.1mm"', source
         )
         self.assertIn(
-            "grid-template-columns:minmax(0,1.65fr) minmax(0,1.2fr) minmax(0,1fr) minmax(0,.72fr)",
+            "grid-template-columns:minmax(0,1.55fr) minmax(0,1.15fr) minmax(0,.95fr) minmax(0,.8fr) minmax(0,.7fr)",
             source,
         )
         self.assertIn("table-layout:fixed", source)

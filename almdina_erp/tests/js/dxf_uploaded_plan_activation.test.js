@@ -59,6 +59,7 @@ function source(filename) {
             },
         },
     };
+    fakeWindow.frappe = fakeFrappe;
 
     const context = vm.createContext({
         window: fakeWindow,
@@ -75,6 +76,7 @@ function source(filename) {
         __: value => value,
     });
 
+    vm.runInContext(source("almdina_ui.js"), context);
     vm.runInContext(
         source("door_cutting_order/cutting_plan/door_cutting_order_plan_tabs_ux.js"),
         context
@@ -153,7 +155,10 @@ function source(filename) {
 
     const uploader = fakeFrappe.almdina.upload_production_dxf(frm);
     assert.ok(uploaderOptions, "secure DXF uploader must be created");
-    await uploader.options.on_success({ file_url: "/private/files/corrected.dxf" });
+    assert.equal(uploaderOptions.preset, undefined);
+    assert.equal(uploaderOptions.make_attachments_public, false);
+    assert.equal(uploaderOptions.disable_file_browser, true);
+    await uploaderOptions.on_success({ file_url: "/private/files/corrected.dxf" });
 
     assert.equal(frm.__almdina_active_plan_tab, "Custom");
     assert.equal(reloaded, 1, "the order must reload after the server accepts the DXF");

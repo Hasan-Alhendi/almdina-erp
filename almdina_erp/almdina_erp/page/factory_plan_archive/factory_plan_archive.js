@@ -13,14 +13,42 @@ frappe.pages["factory-plan-archive"].on_page_load = function (wrapper) {
     const $body = $(wrapper).find(".layout-main-section");
     let rows = [];
     let requestId = 0;
+    let searchControl = null;
 
     injectStyles();
     page.set_primary_action(__("تحديث"), load, "refresh");
     if (window.AlmdinaPageRevisit) window.AlmdinaPageRevisit.refreshOnRevisit(wrapper, load);
     load();
 
+    frappe.pages["factory-plan-archive"].on_page_hide = function () {
+        disposeControls();
+    };
+
     function esc(value) {
         return frappe.utils.escape_html(String(value ?? ""));
+    }
+
+    function uiButton(options = {}) {
+        const ui = window.AlmdinaUi;
+        if (!ui || typeof ui.button !== "function") {
+            throw new Error("AlmdinaUi.button is required for factory plan archive rendering");
+        }
+        return ui.button(options);
+    }
+
+    function uiControl(options = {}) {
+        const ui = window.AlmdinaUi;
+        if (!ui || typeof ui.control !== "function") {
+            throw new Error("AlmdinaUi.control is required for factory plan archive rendering");
+        }
+        return ui.control(options);
+    }
+
+    function disposeControls() {
+        if (searchControl) {
+            searchControl.dispose();
+            searchControl = null;
+        }
     }
 
     function injectStyles() {
@@ -28,13 +56,14 @@ frappe.pages["factory-plan-archive"].on_page_load = function (wrapper) {
         const style = document.createElement("style");
         style.id = "almdina-plan-archive-style";
         style.textContent = `
-            .apa-shell{direction:rtl;display:grid;gap:12px}.apa-hero{padding:18px;border:1px solid var(--border-color,#e5e7eb);border-radius:15px;background:linear-gradient(135deg,var(--fg-color,#fff),var(--subtle-fg,#f8fafb))}.apa-hero h3{margin:0 0 6px;font-size:19px;font-weight:800}.apa-hero p{margin:0;color:var(--text-muted,#667085);line-height:1.8}.apa-tools{display:flex;gap:10px;align-items:center}.apa-search{width:100%;min-height:42px;border:1px solid var(--border-color,#d8dee4);border-radius:10px;padding:8px 12px;background:var(--control-bg,#fff);color:var(--text-color,#1f2937)}.apa-list{display:grid;gap:10px}.apa-card{padding:14px;border:1px solid var(--border-color,#e5e7eb);border-radius:14px;background:var(--fg-color,#fff);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:center}.apa-title{font-size:15px;font-weight:800}.apa-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.apa-chip{padding:5px 9px;border-radius:999px;background:var(--subtle-fg,#f5f7f9);font-size:11px;font-weight:700}.apa-card .btn{min-height:40px;border-radius:9px;font-weight:700}.apa-result{margin-top:10px;padding:11px;border-radius:10px;background:#eaf8ef;color:#166534;font-size:12px}.apa-empty{padding:32px;text-align:center;border:1px dashed var(--border-color,#d8dee4);border-radius:14px;color:var(--text-muted,#667085);background:var(--subtle-fg,#fafafa)}@media(max-width:700px){.apa-card{grid-template-columns:1fr}.apa-card .btn{width:100%}}
+            .apa-shell{direction:rtl;display:grid;gap:12px}.apa-hero{padding:18px;border:1px solid var(--border-color,#e5e7eb);border-radius:15px;background:linear-gradient(135deg,var(--fg-color,#fff),var(--subtle-fg,#f8fafb))}.apa-hero h3{margin:0 0 6px;font-size:19px;font-weight:800}.apa-hero p{margin:0;color:var(--text-muted,#667085);line-height:1.8}.apa-tools{display:flex;gap:10px;align-items:center}.apa-list{display:grid;gap:10px}.apa-card{padding:14px;border:1px solid var(--border-color,#e5e7eb);border-radius:14px;background:var(--fg-color,#fff);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:center}.apa-title{font-size:15px;font-weight:800}.apa-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.apa-chip{padding:5px 9px;border-radius:999px;background:var(--subtle-fg,#f5f7f9);font-size:11px;font-weight:700}.apa-card .btn{min-height:40px;border-radius:9px;font-weight:700}.apa-result{margin-top:10px;padding:11px;border-radius:10px;background:#eaf8ef;color:#166534;font-size:12px}.apa-empty{padding:32px;text-align:center;border:1px dashed var(--border-color,#d8dee4);border-radius:14px;color:var(--text-muted,#667085);background:var(--subtle-fg,#fafafa)}@media(max-width:700px){.apa-card{grid-template-columns:1fr}.apa-card .btn{width:100%}}
         `;
         document.head.appendChild(style);
     }
 
     function loading(message) {
-        $body.html(`<div class="apa-shell"><div class="apa-empty">${esc(message)}</div></div>`);
+        disposeControls();
+        $body.html(`<div class="almdina-ui apa-shell"><div class="apa-empty">${esc(message)}</div></div>`);
     }
 
     function load() {
@@ -50,23 +79,41 @@ frappe.pages["factory-plan-archive"].on_page_load = function (wrapper) {
         });
     }
 
+    function mountSearchControl() {
+        disposeControls();
+        searchControl = uiControl({
+            parent: $body.find(".apa-tools"),
+            fieldname: "search",
+            fieldtype: "Data",
+            label: __("بحث"),
+            placeholder: __("ابحث برقم الطلب أو اسم الزبون..."),
+            className: "apa-search-control",
+            onChange: renderRows,
+        });
+    }
+
     function render() {
         $body.html(`
-            <div class="apa-shell">
+            <div class="almdina-ui apa-shell">
                 <section class="apa-hero">
                     <h3>${__("نسخة رسمية ثابتة لكل خطة معتمدة")}</h3>
                     <p>${__("ينشئ الأرشيف ملف PDF خاصًا محفوظًا مع الطلب. إذا كان الملف موجودًا مسبقًا فلن يتم إنشاء نسخة مكررة.")}</p>
                 </section>
-                <div class="apa-tools"><input class="apa-search" type="search" placeholder="${__("ابحث برقم الطلب أو اسم الزبون...")}"></div>
+                <div class="apa-tools"></div>
                 <section class="apa-list"></section>
             </div>
         `);
-        $body.find(".apa-search").on("input", renderRows);
+        mountSearchControl();
         renderRows();
     }
 
+    function currentSearchQuery() {
+        if (!searchControl) return "";
+        return String(searchControl.getValue() || "").trim().toLowerCase();
+    }
+
     function renderRows() {
-        const query = String($body.find(".apa-search").val() || "").trim().toLowerCase();
+        const query = currentSearchQuery();
         const filtered = rows.filter(row =>
             !query || [row.name, row.customer, row.approved_plan]
                 .some(value => String(value || "").toLowerCase().includes(query))
@@ -84,7 +131,11 @@ frappe.pages["factory-plan-archive"].on_page_load = function (wrapper) {
                     </div>
                     <div class="apa-result" style="display:none"></div>
                 </div>
-                <button type="button" class="btn btn-primary apa-archive">${__("أرشفة PDF الرسمي")}</button>
+                ${uiButton({
+                    label: __("أرشفة PDF الرسمي"),
+                    variant: "primary",
+                    className: "apa-archive",
+                })}
             </article>
         `).join("");
         $body.find(".apa-list").html(

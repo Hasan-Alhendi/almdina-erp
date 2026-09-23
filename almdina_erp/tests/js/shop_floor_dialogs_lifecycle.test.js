@@ -10,7 +10,7 @@ const source = fs.readFileSync(
 );
 
 const confirms = [];
-const prompts = [];
+const workerDialogs = [];
 const messages = [];
 const alerts = [];
 let active = true;
@@ -33,11 +33,6 @@ const context = {
             confirms.push({ message, yes, no, surface });
             return surface;
         },
-        prompt(fields, submit) {
-            const surface = child();
-            prompts.push({ fields, submit, surface });
-            return surface;
-        },
         msgprint(payload) {
             const surface = child();
             messages.push({ payload, surface });
@@ -45,7 +40,18 @@ const context = {
         },
         show_alert(payload) { alerts.push(payload); },
     },
-    window: {},
+    window: {
+        AlmdinaShopFloorQuickActions: {
+            createWorkerDropdownDialog(config) {
+                const surface = child();
+                workerDialogs.push({ config, surface });
+                if (config.lifecycle && typeof config.lifecycle.ownTransient === "function") {
+                    config.lifecycle.ownTransient(surface);
+                }
+                return surface;
+            },
+        },
+    },
 };
 vm.createContext(context);
 vm.runInContext(source, context, { filename: "shop_floor_inbox/dialogs.js" });
@@ -65,20 +71,25 @@ owner.promptWorker({
     workers: [{ name: "worker@example.com", full_name: "Worker" }],
     next_department: "CNC",
 }, 7, () => { workerRuns += 1; });
+assert.equal(workerDialogs.length, 1, "handoff worker selection must use the shared dropdown dialog");
+assert.equal(workerDialogs[0].config.title, "إرسال للقسم التالي");
+assert.equal(workerDialogs[0].config.workers[0].full_name, "Worker");
 owner.noWorkers({ operational_role: "CNC" }, 7);
 owner.error("failed", 7);
 owner.success("saved", 7);
 assert.equal(alerts.length, 1);
+assert.equal(workerDialogs.length, 1, "handoff worker selection must use the shared dropdown dialog");
+assert.equal(workerDialogs[0].config.title, "إرسال للقسم التالي");
 
 active = false;
 owner.deactivate();
 for (const confirmation of confirms.slice(1)) assert.equal(confirmation.surface.hidden, 1);
-assert.equal(prompts[0].surface.hidden, 1, "an unsubmitted worker selection is discarded on deactivate");
+assert.equal(workerDialogs[0].surface.hidden, 1, "an unsubmitted worker selection is discarded on deactivate");
 for (const message of messages) assert.equal(message.surface.hidden, 1);
 
 confirms[1].yes();
 confirms[2].yes();
-prompts[0].submit({ next_assignee: "worker@example.com" });
+workerDialogs[0].config.onSubmit("worker@example.com", workerDialogs[0].surface);
 owner.success("stale", 7);
 owner.error("stale", 7);
 assert.equal(terminalRuns, 0);

@@ -14,7 +14,7 @@
     ]);
     const KANBAN_VIEW_PATCH_KEY = "__almdinaDcoCardPresentationInstalled";
     const MOBILE_CARD_STYLESHEET_ID = "almdina-dco-mobile-list-css";
-    const MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=8";
+    const MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=9";
     const STATUS_LABELS = Object.freeze({
         Draft: "مسودة",
         "Pending Review": "بانتظار المراجعة",
@@ -57,6 +57,12 @@
             icon: "truck",
             history: true,
         }),
+        cancelled: Object.freeze({
+            label: "ملغى",
+            cardClass: "is-cancelled",
+            icon: "x",
+            history: true,
+        }),
     });
     const MOBILE_ACTION_PRESENTATION = Object.freeze({
         start: Object.freeze({
@@ -91,13 +97,18 @@
         active: Object.freeze({ rank: 0, field: "modified", direction: -1 }),
         delivered: Object.freeze({ rank: 1, field: "modified", direction: -1 }),
     });
+    const OVERVIEW_DEFAULT_SORT_FIELD = "__dco_default_sort";
+    const OVERVIEW_DEFAULT_SORT_LABEL = "الترتيب الافتراضي";
+    const OVERVIEW_DEFAULT_SORT_MIGRATION_KEY = "dco.overviewDefaultSort.v1";
     const DESKTOP_DELIVERY_ROW_CLASS = Object.freeze({
         ready_for_delivery: "dco-list-row-ready-for-delivery",
         delivered: "dco-list-row-delivered",
+        cancelled: "dco-list-row-cancelled",
     });
     const DESKTOP_DELIVERY_ROW_CLASSES = Object.freeze([
         DESKTOP_DELIVERY_ROW_CLASS.ready_for_delivery,
         DESKTOP_DELIVERY_ROW_CLASS.delivered,
+        DESKTOP_DELIVERY_ROW_CLASS.cancelled,
     ]);
     const STATUS_FILTER_SLOT_CLASS = "dco-status-filter-slot";
     const STATUS_FILTER_FIELDNAME = "status";
@@ -227,6 +238,11 @@
     function displayValue(value) {
         const normalized = String(value ?? "").trim();
         return normalized || "—";
+    }
+
+    function listTextHtml(value) {
+        const text = String(value ?? "");
+        return text ? `<span>${escapeHtml(text)}</span>` : "";
     }
 
     function isEmailLike(value) {
@@ -700,6 +716,7 @@
 
     function cardState(doc, context, action) {
         const status = String(doc.status || "").trim();
+        if (status === "Cancelled") return cardStateDefinition("cancelled");
         if (status === "Delivered") return cardStateDefinition("delivered");
         if (status === "Ready for Delivery") return cardStateDefinition("ready_for_delivery");
 
@@ -773,6 +790,7 @@
             package: '<path d="m12 3 8 4-8 4-8-4 8-4Z"/><path d="M4 7v10l8 4 8-4V7M12 11v10"/>',
             "package-check": '<path d="m12 3 8 4-8 4-8-4 8-4Z"/><path d="M4 7v10l8 4 8-4V7M12 11v4"/><path d="m9 16 2 2 4-4"/>',
             truck: '<path d="M3 6h11v10H3z"/><path d="M14 10h4l3 3v3h-7z"/><circle cx="7" cy="18" r="2"/><circle cx="18" cy="18" r="2"/>',
+            x: '<circle cx="12" cy="12" r="9"/><path d="m9 9 6 6M15 9l-6 6"/>',
             chevron: '<path d="m10 7 5 5-5 5"/>',
         };
         const body = paths[name] || "";
@@ -1052,16 +1070,18 @@
         const root = rootNode(listview);
         if (!root) return;
         root.querySelectorAll(
-            ".dco-list-row-other-role,.dco-list-row-completed,.dco-list-row-ready-for-delivery,.dco-list-row-delivered"
+            ".dco-list-row-other-role,.dco-list-row-completed,.dco-list-row-history-hidden,.dco-list-row-ready-for-delivery,.dco-list-row-delivered,.dco-list-row-cancelled"
         ).forEach(node => {
             node.classList.remove("dco-list-row-other-role");
             node.classList.remove("dco-list-row-completed");
+            node.classList.remove("dco-list-row-history-hidden");
             DESKTOP_DELIVERY_ROW_CLASSES.forEach(className => node.classList.remove(className));
         });
     }
 
     function desktopDeliveryRowState(doc) {
         const status = String(doc && doc.status || "").trim();
+        if (status === "Cancelled") return "cancelled";
         if (status === "Delivered") return "delivered";
         if (
             doc && doc.__almdinaProductionActionContext
@@ -1083,7 +1103,8 @@
         const docs = orderDocuments(listview);
         [...result.querySelectorAll(".list-row-container")].forEach(container => {
             const name = rowDocumentName(container);
-            const state = name && !mobileLayout
+            const hidden = container.classList.contains("dco-list-row-history-hidden");
+            const state = name && !mobileLayout && !hidden
                 ? desktopDeliveryRowState(docs.get(name) || {})
                 : "";
             container.classList.toggle(
@@ -1093,6 +1114,10 @@
             container.classList.toggle(
                 DESKTOP_DELIVERY_ROW_CLASS.delivered,
                 state === "delivered"
+            );
+            container.classList.toggle(
+                DESKTOP_DELIVERY_ROW_CLASS.cancelled,
+                state === "cancelled"
             );
             if (state) {
                 container.classList.remove("dco-list-row-completed");
@@ -1182,15 +1207,135 @@
         );
     }
 
+    function overviewSortStorage() {
+        try {
+            return window.localStorage || null;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function overviewDefaultSortSql(sortOrder = "desc") {
+        const order = normalizedSortOrder(sortOrder);
+        return "`tab" + METHODS.doctype + "`.`modified` " + order;
+    }
+
+    function listSortBy(listview) {
+        if (listview && listview.sort_selector && listview.sort_selector.sort_by) {
+            return String(listview.sort_selector.sort_by).trim();
+        }
+        return String(listview && listview.sort_by || "").trim();
+    }
+
+    function shouldSelectOverviewDefaultSort(sortBy, storage) {
+        const field = String(sortBy || "").trim();
+        if (!field || field === OVERVIEW_DEFAULT_SORT_FIELD) return true;
+        if (field !== "modified") return false;
+        const store = storage === undefined ? overviewSortStorage() : storage;
+        try {
+            return !(store && typeof store.getItem === "function"
+                && store.getItem(OVERVIEW_DEFAULT_SORT_MIGRATION_KEY));
+        } catch (error) {
+            return true;
+        }
+    }
+
+    function markOverviewDefaultSortMigrated(storage) {
+        const store = storage === undefined ? overviewSortStorage() : storage;
+        try {
+            if (store && typeof store.setItem === "function") {
+                store.setItem(OVERVIEW_DEFAULT_SORT_MIGRATION_KEY, "1");
+            }
+        } catch (error) {
+            // Private mode and quota errors must not block list rendering.
+        }
+    }
+
+    function isOverviewDefaultSortActive(listview) {
+        return usesOverviewDeliveredLastSort()
+            && listSortBy(listview) === OVERVIEW_DEFAULT_SORT_FIELD;
+    }
+
+    function ensureOverviewDefaultSortOption(selector) {
+        if (!selector) return;
+        selector.args = selector.args || {};
+        const options = Array.isArray(selector.args.options) ? [...selector.args.options] : [];
+        if (!options.some(option => option && option.fieldname === OVERVIEW_DEFAULT_SORT_FIELD)) {
+            options.unshift({
+                fieldname: OVERVIEW_DEFAULT_SORT_FIELD,
+                label: OVERVIEW_DEFAULT_SORT_LABEL,
+            });
+        }
+        selector.args.options = options;
+        selector.labels = selector.labels || {};
+        selector.labels[OVERVIEW_DEFAULT_SORT_FIELD] = OVERVIEW_DEFAULT_SORT_LABEL;
+    }
+
+    function normalizedSortOrder(sortOrder) {
+        return String(sortOrder || "desc").toLowerCase() === "asc" ? "asc" : "desc";
+    }
+
+    function selectOverviewDefaultSort(listview, selector) {
+        selector.args = selector.args || {};
+        selector.args.sort_by = OVERVIEW_DEFAULT_SORT_FIELD;
+        selector.args.sort_order = "desc";
+        selector.args.sort_by_label = OVERVIEW_DEFAULT_SORT_LABEL;
+        if (typeof selector.set_value === "function") {
+            selector.set_value(OVERVIEW_DEFAULT_SORT_FIELD, "desc");
+        } else {
+            selector.sort_by = OVERVIEW_DEFAULT_SORT_FIELD;
+            selector.sort_order = "desc";
+        }
+    }
+
+    function patchOverviewSortSelectorSql(selector) {
+        if (!selector || selector._dcoOverviewSqlPatched) return;
+        if (typeof selector.get_sql_string !== "function") return;
+        const original = selector.get_sql_string.bind(selector);
+        selector.get_sql_string = function dcoOverviewGetSqlString() {
+            if (this.sort_by === OVERVIEW_DEFAULT_SORT_FIELD) {
+                return overviewDefaultSortSql(this.sort_order);
+            }
+            return original();
+        };
+        selector._dcoOverviewSqlPatched = true;
+    }
+
+    function installOverviewDefaultSort(listview) {
+        if (!listview || !usesOverviewDeliveredLastSort()) return;
+        const selector = listview.sort_selector;
+        if (!selector) return;
+
+        ensureOverviewDefaultSortOption(selector);
+        patchOverviewSortSelectorSql(selector);
+
+        if (selector._dcoOverviewSortOptionInstalled) return;
+
+        const current = listSortBy(listview);
+        if (shouldSelectOverviewDefaultSort(current)) {
+            selectOverviewDefaultSort(listview, selector);
+        }
+        markOverviewDefaultSortMigrated();
+        if (typeof selector.make === "function") selector.make();
+        ensureOverviewDefaultSortOption(selector);
+        patchOverviewSortSelectorSql(selector);
+        selector._dcoOverviewSortOptionInstalled = true;
+    }
+
     function overviewListState(doc) {
         return desktopDeliveryRowState(doc) === "delivered" ? "delivered" : "active";
     }
 
-    function sortOverviewListItems(items) {
+    function sortOverviewListItems(items, sortOrder = "desc") {
+        const direction = normalizedSortOrder(sortOrder) === "asc" ? 1 : -1;
+        const rules = {
+            active: Object.assign({}, OVERVIEW_LIST_SORT_RULES.active, { direction }),
+            delivered: Object.assign({}, OVERVIEW_LIST_SORT_RULES.delivered, { direction }),
+        };
         return sortQueueItemsByRules(
             items,
             overviewListState,
-            OVERVIEW_LIST_SORT_RULES,
+            rules,
             "active"
         );
     }
@@ -1219,12 +1364,35 @@
         applyOrderedListRows(
             listview,
             result,
-            sortOverviewListItems(queueItems).map(item => item.container)
+            sortOverviewListItems(
+                queueItems,
+                listview && listview.sort_selector && listview.sort_selector.sort_order
+            ).map(item => item.container)
         );
     }
 
     function isHistoryQueueState(state) {
         return state === "completed" || state === "delivered";
+    }
+
+    function isPersonalQueueFinishedState(state) {
+        return isHistoryQueueState(state) || state === "ready_for_delivery";
+    }
+
+    function canViewPersonalHistory(payload) {
+        if (payload && typeof payload.can_view_history === "boolean") {
+            return payload.can_view_history;
+        }
+        const permissions = window.AlmdinaPermissions;
+        return Boolean(
+            permissions
+            && typeof permissions.can === "function"
+            && permissions.can("view_shop_floor_history")
+        );
+    }
+
+    function shouldHidePersonalHistoryRow(queueState, canViewHistory) {
+        return !canViewHistory && isPersonalQueueFinishedState(queueState);
     }
 
     function applyOperationalRolePresentation(listview, payload) {
@@ -1233,6 +1401,7 @@
         if (!root || !result) return;
 
         const personalView = Boolean(payload && payload.personal_view);
+        const canViewHistory = canViewPersonalHistory(payload);
         const flags = payload && payload.orders && typeof payload.orders === "object"
             ? payload.orders
             : {};
@@ -1254,7 +1423,7 @@
         if (!personalView) {
             clearOperationalRoleRows(listview);
             applyDesktopDeliveryRowColors(listview);
-            if (usesOverviewDeliveredLastSort()) {
+            if (isOverviewDefaultSortActive(listview)) {
                 reorderOverviewListRows(listview, result);
             }
             return;
@@ -1268,6 +1437,20 @@
             const flag = flags[name] || {};
             const doc = docs.get(name) || {};
             const queueState = personalQueueState(doc, flag);
+            const hideHistory = shouldHidePersonalHistoryRow(queueState, canViewHistory);
+            container.classList.toggle("dco-list-row-history-hidden", hideHistory);
+            if (hideHistory) {
+                container.classList.remove("dco-list-row-other-role");
+                container.classList.remove("dco-list-row-completed");
+                DESKTOP_DELIVERY_ROW_CLASSES.forEach(className => container.classList.remove(className));
+                const hiddenCard = container.querySelector(".dco-mobile-order-card");
+                if (hiddenCard) {
+                    hiddenCard.classList.remove("dco-list-row-other-role");
+                    hiddenCard.classList.remove("dco-list-row-completed");
+                    DESKTOP_DELIVERY_ROW_CLASSES.forEach(className => hiddenCard.classList.remove(className));
+                }
+                return;
+            }
             const isHistory = mobileLayout
                 ? isHistoryQueueState(queueState)
                 : desktopQueueState(doc, flag) === "completed";
@@ -1328,7 +1511,7 @@
         }).then(response => {
             if (Number(listview._dcoRoleFlagGeneration || 0) !== generation) return null;
             const payload = response && response.message;
-            listview._dcoRoleFlagsPayload = payload || { personal_view: false, orders: {} };
+            listview._dcoRoleFlagsPayload = payload || { personal_view: false, can_view_history: false, orders: {} };
             listview._dcoRoleFlagsPayloadGeneration = generation;
             applyOperationalRolePresentation(listview, listview._dcoRoleFlagsPayload);
             return listview._dcoRoleFlagsPayload;
@@ -1417,6 +1600,7 @@
         installCombinedSearch(listview);
         installResponsiveObserver(listview);
         installRowsObserver(listview);
+        installOverviewDefaultSort(listview);
         reconcileStatusFilterLayout(listview);
         hydrateStatusFilterOptions(listview);
         hydrateAssigneeFilterOptions(listview);
@@ -1438,20 +1622,20 @@
         ],
         formatters: Object.assign({}, existing.formatters || {}, {
             current_department(value, df, doc) {
-                if (doc.status === "Ready for Delivery") return __("جاهز للتسليم");
-                if (doc.status === "Delivered") return __("تم التسليم");
-                if (value === "تسليم") {
-                    if (doc.status === "Ready for Delivery") return __("جاهز للتسليم");
-                    if (doc.status === "Delivered") return __("تم التسليم");
+                let label = value || "";
+                if (doc.status === "Ready for Delivery") label = __("جاهز للتسليم");
+                else if (doc.status === "Delivered") label = __("تم التسليم");
+                else if (value === "تسليم") {
+                    if (doc.status === "Ready for Delivery") label = __("جاهز للتسليم");
+                    else if (doc.status === "Delivered") label = __("تم التسليم");
                 }
-                return value || "";
+                return listTextHtml(label);
             },
             edge_color(value) {
                 return value ? `<span class="dco-list-edge-color">${escapeHtml(value)}</span>` : "";
             },
             current_assignee(value) {
-                const label = assigneeLabel(value);
-                return label ? escapeHtml(label) : "";
+                return listTextHtml(assigneeLabel(value));
             },
         }),
         onload(listview) {
@@ -1471,13 +1655,21 @@
         applyKanbanCardPresentation,
         applyLoadedAssigneeFilterOptions,
         applyLoadedStatusFilterOptions,
+        applyOperationalRolePresentation,
         assigneeFilterConfig,
         assigneeFilterOptions,
         buildCard,
         cardViewModel,
+        canViewPersonalHistory,
         desktopDeliveryRowState,
         isPhoneLayout,
         kanbanCardFields,
+        installOverviewDefaultSort,
+        isOverviewDefaultSortActive,
+        overviewDefaultSortField: OVERVIEW_DEFAULT_SORT_FIELD,
+        overviewDefaultSortLabel: OVERVIEW_DEFAULT_SORT_LABEL,
+        overviewDefaultSortMigrationKey: OVERVIEW_DEFAULT_SORT_MIGRATION_KEY,
+        overviewDefaultSortSql,
         overviewListState,
         overviewStageLabel,
         productionStageLabel,
@@ -1485,9 +1677,11 @@
         quickActionContext,
         reconcileStatusFilterLayout,
         renderMobileCards,
+        shouldSelectOverviewDefaultSort,
         sortDesktopQueueItems,
         sortOverviewListItems,
         sortPersonalQueueItems,
+        shouldHidePersonalHistoryRow,
         statusFilterConfig,
         statusFilterOptions,
         uniqueStatusOptions,

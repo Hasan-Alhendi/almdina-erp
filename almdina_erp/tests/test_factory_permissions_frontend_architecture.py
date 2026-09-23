@@ -11,6 +11,7 @@ STATE = ROOT / "public" / "js" / "factory_permissions" / "state.js"
 VIEW_MODEL = ROOT / "public" / "js" / "factory_permissions" / "view_model.js"
 RENDERER = ROOT / "public" / "js" / "factory_permissions" / "renderer.js"
 INTERACTIONS = ROOT / "public" / "js" / "factory_permissions" / "interactions.js"
+DIALOGS = ROOT / "public" / "js" / "factory_permissions" / "dialogs.js"
 CONTROLLER = ROOT / "public" / "js" / "factory_permissions" / "controller.js"
 CSS = ROOT / "public" / "css" / "factory_permissions.css"
 
@@ -24,6 +25,7 @@ class FactoryPermissionsFrontendArchitectureTest(unittest.TestCase):
         cls.view_model = VIEW_MODEL.read_text(encoding="utf-8")
         cls.renderer = RENDERER.read_text(encoding="utf-8")
         cls.interactions = INTERACTIONS.read_text(encoding="utf-8")
+        cls.dialogs = DIALOGS.read_text(encoding="utf-8")
         cls.controller = CONTROLLER.read_text(encoding="utf-8")
         cls.css = CSS.read_text(encoding="utf-8")
 
@@ -37,6 +39,7 @@ class FactoryPermissionsFrontendArchitectureTest(unittest.TestCase):
             "view_model.js",
             "renderer.js",
             "interactions.js",
+            "dialogs.js",
             "controller.js",
         ):
             self.assertIn(f"/assets/almdina_erp/js/factory_permissions/{asset}", self.page)
@@ -53,6 +56,7 @@ class FactoryPermissionsFrontendArchitectureTest(unittest.TestCase):
             "export_role_permissions",
             "preview_permission_import",
             "update_role_permissions",
+            "search_permission_roles",
         )
         for method in expected_methods:
             self.assertIn(method, self.api)
@@ -94,8 +98,9 @@ class FactoryPermissionsFrontendArchitectureTest(unittest.TestCase):
     def test_renderer_owns_factory_permissions_dom_without_transport(self) -> None:
         for marker in (
             "apc-shell",
-            'role="combobox"',
-            "apc-role-menu",
+            "apc-role-mount",
+            "mountRoleControl",
+            "roleSearchQuery",
             "apc-capability",
             "apc-impact-panel",
             "apc-audit-panel",
@@ -110,18 +115,21 @@ class FactoryPermissionsFrontendArchitectureTest(unittest.TestCase):
             "requests.role",
             "requests.preview",
             "requests.transfer",
+            "apc-role-picker",
+            'role="combobox"',
+            "apc-role-menu",
         ):
             self.assertNotIn(forbidden, self.renderer)
 
     def test_interactions_own_delegated_events_without_business_state_or_api(self) -> None:
         self.assertIn('EVENT_NAMESPACE = ".almdinaFactoryPermissions"', self.interactions)
-        self.assertIn("ArrowDown", self.interactions)
-        self.assertIn("ArrowUp", self.interactions)
-        self.assertIn("Escape", self.interactions)
         self.assertIn("onCapabilityChanged", self.interactions)
         self.assertIn("onGroupToggle", self.interactions)
         self.assertIn("onGlobalToggle", self.interactions)
-        self.assertIn("onImportFile", self.interactions)
+        self.assertIn("onImport", self.interactions)
+        self.assertNotIn("apc-import-file", self.interactions)
+        self.assertNotIn("apc-role-picker", self.interactions)
+        self.assertNotIn("ArrowDown", self.interactions)
         self.assertIn("lifecycle.track", self.interactions)
         for forbidden in (
             "AlmdinaFactoryPermissionsApi",
@@ -133,6 +141,15 @@ class FactoryPermissionsFrontendArchitectureTest(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, self.interactions)
 
+    def test_dialogs_own_import_attach_dialog(self) -> None:
+        self.assertIn("new frappe.ui.Dialog", self.dialogs)
+        self.assertIn('fieldtype: "Attach"', self.dialogs)
+        self.assertIn("permissions_file", self.dialogs)
+        self.assertIn("processImportFile", self.dialogs)
+        self.assertIn("fetchAttachPayload", self.dialogs)
+        self.assertNotIn("frappe.call(", self.dialogs)
+        self.assertNotIn("permission_management_service", self.dialogs)
+
     def test_controller_is_a_thin_orchestrator_over_extracted_modules(self) -> None:
         self.assertLessEqual(len(self.controller.splitlines()), 540)
         for dependency in (
@@ -141,6 +158,7 @@ class FactoryPermissionsFrontendArchitectureTest(unittest.TestCase):
             "AlmdinaFactoryPermissionsViewModel",
             "AlmdinaFactoryPermissionsRenderer",
             "AlmdinaFactoryPermissionsInteractions",
+            "AlmdinaFactoryPermissionsDialogs",
             "AlmdinaPageRevisit",
         ):
             self.assertIn(dependency, self.controller)
@@ -155,6 +173,12 @@ class FactoryPermissionsFrontendArchitectureTest(unittest.TestCase):
         self.assertIn("bindActivationLifecycle", self.controller)
         self.assertIn("activation.generation()", self.controller)
         self.assertIn("ownedTransients", self.controller)
+        self.assertIn("dialogs.openImportDialog", self.controller)
+        self.assertIn("mountRoleControl", self.controller)
+        self.assertIn("disposeRoleControl", self.controller)
+        self.assertIn("renderer.disposeRoleControl();", self.controller)
+        self.assertIn("featureShellReady = false;", self.controller)
+        self.assertIn("api.roleSearchQuery", self.controller)
         self.assertIn("reconcileAfterSave", self.controller)
         self.assertNotIn("frappe.ui.make_app_page", self.controller)
         self.assertNotIn("frappe.call(", self.controller)
@@ -164,18 +188,26 @@ class FactoryPermissionsFrontendArchitectureTest(unittest.TestCase):
         self.assertNotIn("previewRequest", self.controller)
         self.assertNotIn("transferRequest", self.controller)
         self.assertNotIn(".html(", self.controller)
-        self.assertNotIn("apc-shell", self.controller)
         self.assertNotIn('role="combobox"', self.controller)
+
+    def test_renderer_uses_central_design_system_for_buttons(self) -> None:
+        self.assertIn('class="almdina-ui apc-shell"', self.renderer)
+        self.assertIn("AlmdinaUi.button", self.renderer)
+        self.assertNotIn('class="btn btn-primary apc-save"', self.renderer)
+        self.assertNotIn('type="file"', self.renderer)
+        self.assertNotIn("apc-import-file", self.renderer)
+        self.assertIn("/assets/almdina_erp/js/almdina_ui.js", self.page)
 
     def test_feature_styles_are_external_and_preserve_existing_surface_contract(self) -> None:
         for selector in (
             ".apc-shell",
-            ".apc-role-picker",
+            ".apc-role-mount",
             ".apc-capability",
             ".apc-savebar",
             "@media(max-width:650px)",
         ):
             self.assertIn(selector, self.css)
+        self.assertNotIn(".apc-role-picker", self.css)
         self.assertNotIn("<style", self.controller)
         self.assertNotIn("<style", self.renderer)
 

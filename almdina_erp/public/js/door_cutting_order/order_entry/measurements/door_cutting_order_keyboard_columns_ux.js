@@ -59,15 +59,15 @@
                 }
                 .dco-column-select-all input {
                     width:16px; height:16px; margin:0; cursor:pointer;
-                    accent-color:var(--primary,#2490ef);
+                    accent-color:var(--alm-primary,#172033);
                 }
                 .dco-column-select-all input:disabled { cursor:not-allowed; opacity:.5; }
                 .dco-fast-table input.dco-fast-input[data-field]:focus-visible,
                 .dco-fast-table select.dco-fast-select[data-field]:focus-visible,
                 .dco-fast-table button.dco-check-toggle[data-check-field]:focus-visible {
-                    outline:2px solid var(--primary,#2490ef) !important;
+                    outline:2px solid var(--alm-primary,#172033) !important;
                     outline-offset:1px;
-                    box-shadow:0 0 0 3px rgba(36,144,239,.13) !important;
+                    box-shadow:0 0 0 3px color-mix(in srgb, var(--alm-primary, #172033) 13%, transparent) !important;
                 }
                 .dco-arrow-nav-hint {
                     display:inline-flex; align-items:center; gap:5px; font-weight:700;

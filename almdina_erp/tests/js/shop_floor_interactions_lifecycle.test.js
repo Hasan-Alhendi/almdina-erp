@@ -66,7 +66,7 @@ const callbacks = {
 const firstLifecycle = lifecycleScope();
 const firstOwner = interactions.bind({ $section: root }, firstLifecycle, callbacks);
 const ownedRegistrationCount = registrations.length;
-assert.ok(ownedRegistrationCount >= 10, "delegated click/search/drag-drop handlers must share one owner");
+assert.ok(ownedRegistrationCount >= 7, "delegated click/drag-drop handlers must share one owner");
 firstOwner.deactivate();
 assert.equal(registrations.length, ownedRegistrationCount, "hide suspends drag state without unbinding mounted handlers");
 firstLifecycle.dispose();

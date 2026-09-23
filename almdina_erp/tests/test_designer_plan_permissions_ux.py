@@ -10,6 +10,7 @@ PLAN_EDIT_SESSION = CUTTING_PLAN / "door_cutting_order_plan_edit_session_ux.js"
 FIELD_ACCESS = CUTTING_PLAN / "door_cutting_order_plan_field_access_adapter.js"
 FAST_SAVE = CUTTING_PLAN / "door_cutting_order_fast_save_ux.js"
 SECURE_DXF_UPLOAD = CUTTING_PLAN / "secure_dxf_upload.js"
+ALMDINA_UI = ROOT / "public" / "js" / "almdina_ui.js"
 PLAN_SETTINGS_SERVICE = ROOT / "almdina_erp" / "services" / "plan_settings_edit_service.py"
 ORDER_PLAN_SERVICE = ROOT / "almdina_erp" / "services" / "order_plan_permission_service.py"
 PLAN_COMMAND_SERVICE = ROOT / "almdina_erp" / "services" / "cutting_plan_command_service.py"
@@ -184,20 +185,23 @@ def test_secure_dxf_owner_is_private_unattached_and_form_scoped_before_plan_ui()
     global_assets = manifest.split("app_include_js = [", 1)[1].split("]\n\ndoctype_js", 1)[0]
     plan_assets = _plan_assets()
 
-    config = uploader.split("new frappe.ui.FileUploader({", 1)[1].split(
+    config = uploader.split(".fileUploader({", 1)[1].split(
         "on_success(file)", 1
     )[0]
-    assert "make_attachments_public: false" in config
-    assert "allow_toggle_private: false" in config
-    assert "allow_multiple: false" in config
-    assert "disable_file_browser: true" in config
-    assert "allow_web_link: false" in config
+    preset = source(ALMDINA_UI).split("securePrivate:", 1)[1].split("}),", 1)[0]
+    assert 'preset: "securePrivate"' in config
+    assert "make_attachments_public: false" in preset
+    assert "allow_toggle_private: false" in preset
+    assert "allow_multiple: false" in preset
+    assert "disable_file_browser: true" in preset
+    assert "allow_web_link: false" in preset
     assert "doctype:" not in config
     assert "docname:" not in config
     assert "fieldname:" not in config
 
     assert "__secureDxfUploadInstalled" in uploader
-    assert 'frappe.almdina.upload_production_dxf = uploadProductionDxf' in uploader
+    assert "__uploadProductionDxfCore" in uploader
+    assert 'frappe.almdina.__uploadProductionDxfCore = uploadProductionDxf' in uploader
 
     global_secure = "/assets/almdina_erp/js/door_cutting_order/cutting_plan/secure_dxf_upload.js"
     form_secure = "door_cutting_order/cutting_plan/secure_dxf_upload.js"

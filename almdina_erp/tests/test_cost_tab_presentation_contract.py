@@ -114,7 +114,7 @@ class CostTabPresentationContractTest(unittest.TestCase):
     def test_layout_module_can_upgrade_a_stale_spa_instance(self) -> None:
         source = LAYOUT_UX_PATH.read_text(encoding="utf-8")
 
-        self.assertIn("const MODULE_VERSION = 5", source)
+        self.assertIn("const MODULE_VERSION = 6", source)
         self.assertIn("Number(existingApi.version || 0) >= MODULE_VERSION", source)
         self.assertIn('"dco-cost-page-layout-ux-v1"', source)
         self.assertIn('"dco-cost-page-layout-ux-v2"', source)
@@ -132,7 +132,42 @@ class CostTabPresentationContractTest(unittest.TestCase):
         self.assertIn("تسعير الدرفات الخاصة", source)
         self.assertIn("تسعير قشاط درف الزاوية المقصوصة وزاوية L", source)
         self.assertIn("settingsExpanded: false", source)
+        self.assertIn("function revealSettings(frm)", source)
+        self.assertIn("revealSettings,", source)
         self.assertNotIn("localStorage", source)
+
+    def test_cost_edit_start_does_not_hide_hosted_settings(self) -> None:
+        edit = (
+            ROOT
+            / "public"
+            / "js"
+            / "door_cutting_order"
+            / "costing"
+            / "door_cutting_order_cost_edit_session_ux.js"
+        ).read_text(encoding="utf-8")
+        permissions = (
+            ROOT
+            / "public"
+            / "js"
+            / "door_cutting_order"
+            / "costing"
+            / "door_cutting_order_cost_permissions_ux.js"
+        ).read_text(encoding="utf-8")
+        adapter = (
+            ROOT
+            / "public"
+            / "js"
+            / "door_cutting_order"
+            / "costing"
+            / "door_cutting_order_cost_workspace_presenter_adapter.js"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("function isCoordinatorStartingCost(frm)", edit)
+        self.assertIn('if (!isEditing(frm) && isCoordinatorStartingCost(frm)) return;', edit)
+        self.assertIn("revealCostSettings(frm);", edit)
+        self.assertIn('snap.phase === "starting"', permissions)
+        self.assertIn("function parkHostedCostSettings(frm)", adapter)
+        self.assertIn("paintCostHtml(frm, () => renderPending(frm))", adapter)
 
 
     def test_custom_door_pricing_is_compact_and_attention_first(self) -> None:

@@ -12,7 +12,7 @@
     --almdina-dropdown-bg: var(--card-bg, var(--fg-color, #fff));
     --almdina-dropdown-text: var(--text-color, #0f172a);
     --almdina-dropdown-muted: var(--text-muted, #64748b);
-    --almdina-dropdown-primary: var(--primary, #2490ef);
+    --almdina-dropdown-primary: var(--alm-primary, #172033);
     display: grid;
     gap: 8px;
     width: 100%;

@@ -1,4 +1,14 @@
+import io
 from pathlib import Path
+
+import pytest
+
+ezdxf = pytest.importorskip("ezdxf")
+
+from almdina_erp.almdina_erp.services.dxf_autocad_normalization import (
+    assert_single_dxf_document,
+    rebuild_autocad_dxf,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -39,6 +49,12 @@ def test_secure_export_has_minimal_sections_layers_and_eof_self_check():
         'layer("SHEET_OUTLINE", 8)',
         'layer("CUT_PATH", 1)',
         'layer("Liner", EXTRA_OVERLAY_LAYER_COLORS.Liner)',
+        'layer(TEXT_LABEL_LAYER, 7)',
+        'const EXTRA_DOUBLE_DXF_TEXT = "دبل القشاط"',
+        'const EXTRA_FULL_DOOR_DOUBLE_DXF_TEXT = "دبل كامل"',
+        "function dxfAsciiText",
+        "maxY - pad - textHeight",
+        'function extraAddonTextEntities',
         'pair(0, "EOF")',
         'validateDxfText(dxf)',
         'content.endsWith("0\\r\\nEOF\\r\\n")',
@@ -65,8 +81,10 @@ def test_export_keeps_required_cut_and_preview_layers():
     assert 'const fullWidth = num(sheet.full_width_cm || plan.full_board_width_cm) * 10' in src
     assert 'const pieceWidth = num(piece.w) * 10' in src
     assert 'pair(0, "LINE")' in src
-    assert '_AutoCAD2020_R12.dxf' in src
-    assert 'application/dxf;charset=us-ascii' in src
+    assert 'const NORMALIZE_DXF_METHOD =' in src
+    assert 'normalize_dxf_for_autocad' in src
+    assert 'content_b64: btoa(dxf)' in src
+    assert 'application/dxf;charset=utf-8' in src
 
 
 def test_export_uses_resolved_per_axis_trim_without_rewriting_optimizer_spacing():
@@ -126,3 +144,122 @@ def test_dxf_import_service_is_wired_for_round_trip():
     src = _source(importer)
     assert "def parse_production_dxf" in src
     assert "_parse_r12_lines" in src
+
+
+def test_secure_export_declares_exact_layer_table_count():
+    src = _source(SECURE_DXF)
+    assert "const DXF_LAYER_COUNT = 8" in src
+    assert 'pair(2, "LAYER") + pair(70, DXF_LAYER_COUNT)' in src
+
+
+
+def _sample_r12_bytes(newline: bytes) -> bytes:
+    source = ezdxf.new("R12")
+    source.layers.add(name="SHEET_OUTLINE", color=8)
+    source.layers.add(name="CUT_PATH", color=1)
+    modelspace = source.modelspace()
+    modelspace.add_line((10, 20), (110, 20), dxfattribs={"layer": "SHEET_OUTLINE"})
+    modelspace.add_line((15.5, 25.25), (15.5, 95.75), dxfattribs={"layer": "CUT_PATH"})
+    output = io.StringIO()
+    source.write(output)
+    return output.getvalue().replace("\n", "\r\n").encode("ascii").replace(b"\r\n", newline)
+
+
+@pytest.mark.parametrize("newline", [b"\r\n", b"\n"])
+def test_rebuild_autocad_dxf_preserves_geometry_for_crlf_and_lf(newline):
+    raw = _sample_r12_bytes(newline)
+    source = ezdxf.read(io.StringIO(raw.decode("ascii").replace("\r\n", "\n")))
+    source_lines = list(source.modelspace())
+
+    normalized = rebuild_autocad_dxf(raw)
+    text = normalized.decode("utf-8")
+    assert_single_dxf_document(text)
+
+    result = ezdxf.read(io.StringIO(text))
+    result_lines = list(result.modelspace())
+    assert result.dxfversion == "AC1024"
+    assert len(result_lines) == len(source_lines)
+    assert {line.dxf.layer for line in result_lines} == {"SHEET_OUTLINE", "CUT_PATH"}
+    assert [
+        (tuple(line.dxf.start), tuple(line.dxf.end))
+        for line in result_lines
+    ] == [
+        (tuple(line.dxf.start), tuple(line.dxf.end))
+        for line in source_lines
+    ]
+    assert result.audit().has_errors is False
+
+
+def test_rebuild_autocad_dxf_rejects_non_line_geometry():
+    source = ezdxf.new("R12")
+    source.modelspace().add_circle((0, 0), 10)
+    output = io.StringIO()
+    source.write(output)
+
+    with pytest.raises(ValueError, match="LINE and TEXT entities only"):
+        rebuild_autocad_dxf(output.getvalue().encode("ascii"))
+
+
+def test_rebuild_autocad_dxf_preserves_text_labels():
+    source = ezdxf.new("R12")
+    source.layers.add(name="text", color=7)
+    source.layers.add(name="CUT_PATH", color=1)
+    modelspace = source.modelspace()
+    modelspace.add_line((0, 0), (10, 0), dxfattribs={"layer": "CUT_PATH"})
+    text = modelspace.add_text(
+        "1",
+        dxfattribs={
+            "layer": "text",
+            "insert": (5, 5, 0),
+            "height": 20,
+            "halign": 1,
+            "valign": 2,
+        },
+    )
+    text.dxf.align_point = (5, 5, 0)
+    output = io.StringIO()
+    source.write(output)
+
+    normalized = rebuild_autocad_dxf(output.getvalue().encode("ascii"))
+    result = ezdxf.read(io.StringIO(normalized.decode("utf-8")))
+    entities = list(result.modelspace())
+    types = {entity.dxftype() for entity in entities}
+    assert types == {"LINE", "TEXT"}
+    labels = [entity for entity in entities if entity.dxftype() == "TEXT"]
+    assert len(labels) == 1
+    assert labels[0].dxf.text == "1"
+    assert str(labels[0].dxf.layer) == "text"
+    assert str(labels[0].dxf.style) == "Tahoma"
+    assert result.audit().has_errors is False
+
+
+def test_rebuild_autocad_dxf_decodes_arabic_text_escapes():
+    source = ezdxf.new("R12")
+    source.layers.add(name="text", color=7)
+    source.layers.add(name="CUT_PATH", color=1)
+    modelspace = source.modelspace()
+    modelspace.add_line((0, 0), (400, 0), dxfattribs={"layer": "CUT_PATH"})
+    modelspace.add_text(
+        r"\U+062F\U+0628\U+0644 \U+0627\U+0644\U+0642\U+0634\U+0627\U+0637",
+        dxfattribs={"layer": "text", "insert": (40, 520), "height": 12},
+    )
+    modelspace.add_text(
+        r"\U+062F\U+0628\U+0644 \U+0643\U+0627\U+0645\U+0644",
+        dxfattribs={"layer": "text", "insert": (40, 500), "height": 12},
+    )
+    output = io.StringIO()
+    source.write(output)
+
+    normalized = rebuild_autocad_dxf(output.getvalue().encode("ascii"))
+    result = ezdxf.read(io.StringIO(normalized.decode("utf-8")))
+    labels = [entity for entity in result.modelspace() if entity.dxftype() == "TEXT"]
+    assert {label.dxf.text for label in labels} == {"دبل القشاط", "دبل كامل"}
+    assert all(str(label.dxf.style) == "Tahoma" for label in labels)
+    assert all(str(label.dxf.layer) == "text" for label in labels)
+
+def test_secure_dxf_export_asset_is_cache_busted():
+    registry = ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_workspace_asset_registry.js"
+    src = _source(registry)
+    assert "cutting_plan/secure_dxf_export.js" in src
+    assert "?v=2" not in src
+

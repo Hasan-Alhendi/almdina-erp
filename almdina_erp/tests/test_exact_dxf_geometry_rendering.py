@@ -129,10 +129,14 @@ def test_extra_addon_print_marks_and_legend_stay_visible() -> None:
     assert renderer.count("${render_extra_addon_legend()}") >= 2
     assert "dco-extra-addon-marks" in renderer
     assert "dco-extra-addon-legend" in renderer
-    assert 'data-addon-kind="double"' in renderer
-    assert 'data-addon-kind="full_door_double"' in renderer
+    assert "function extraAddonTextMark" in renderer
+    assert 'data-addon-kind="${escape_html(kind)}"' in renderer
+    assert 'addonKind: "double"' in renderer
+    assert 'addonKind: "full_door_double"' in renderer
     assert 'data-addon-slot="top-end"' in renderer
     assert 'data-addon-slot="top-start"' in renderer
+    assert "dco-extra-addon-text" in renderer
+    assert "dco-extra-addon-icon" not in renderer
     assert ".dco-extra-overlay { display: block !important; }" in renderer
     assert ".dco-extra-addon-marks {" in renderer
     assert ".dco-extra-addon-mark {" in renderer
@@ -148,6 +152,7 @@ def test_extra_addon_print_marks_and_legend_stay_visible() -> None:
     assert "dco-extra-addon-legend" not in badge_hide
     assert ".dco-extra-addon-marks { display: none" not in print_css
     assert ".dco-extra-addon-legend { display: none" not in print_css
+    assert ".dco-extra-addon-text {" in print_css
     print_pages = renderer.split("function buildPrintPages")[1].split("function buildPrintDocument")[0]
     assert "${render_extra_addon_legend()}" in print_pages
 

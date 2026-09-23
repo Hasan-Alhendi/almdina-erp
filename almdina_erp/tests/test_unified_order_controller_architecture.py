@@ -45,13 +45,14 @@ class TestUnifiedOrderControllerArchitecture(unittest.TestCase):
         )
         self.assertIn("from .door_cutting_order import DoorCuttingOrder", source)
         self.assertIn("process_order_save(self._gateway())", source)
+        self.assertIn("apply_stale_approved_plan_cancellation(self)", source)
         self.assertIn("invalidate_stale_draft_plans(self)", source)
         self.assertNotIn("frappe.model.document import Document", source)
         self.assertNotIn("PlanDoorCuttingOrder", source)
         self.assertNotIn("CostingDoorCuttingOrder", source)
         self.assertNotIn("DomainDoorCuttingOrder", source)
         self.assertNotIn("FastDoorCuttingOrder", source)
-        self.assertLess(len(source.splitlines()), 45)
+        self.assertLess(len(source.splitlines()), 55)
 
     def test_hooks_activate_only_the_thin_override_controller(self) -> None:
         hooks = runpy.run_path(str(HOOKS_PATH))

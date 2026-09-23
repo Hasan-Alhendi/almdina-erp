@@ -14,6 +14,9 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
     DxfTopologyError,
     validate_snapshot_material_layout,
 )
+from almdina_erp.almdina_erp.domain.orders.extra_addons import (
+    apply_extra_double_text_flags_to_snapshot,
+)
 from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
     ManufacturingRequirementsError,
 )
@@ -36,9 +39,12 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_reposito
     latest_plan,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import (
-    plan_input_fingerprint,
+    freshness_expected_fingerprint,
 )
 from almdina_erp.almdina_erp.services import export_validation_service as legacy_export
+from almdina_erp.almdina_erp.services.dxf_autocad_normalization import (
+    rebuild_autocad_dxf,
+)
 from almdina_erp.almdina_erp.services.order_board_identity import (
     order_board_color,
     order_board_material,
@@ -51,6 +57,9 @@ _ORIGINAL_UPLOAD_SOURCES = frozenset(
     {"custom", "uploaded", "uploaded dxf", "uploaded_dxf", "dxf", "approved"}
 )
 _MISSING_UPLOADED_DXF_MESSAGE = "لا يوجد ملف DXF مرفوع لهذه الخطة."
+_AUTOCAD_DXF_MAX_BYTES = 2 * 1024 * 1024
+_AUTOCAD_DXF_VERSION = "AC1024"
+
 _UNSCOPED_UPLOADED_DXF_MESSAGE = (
     "تعذر تنزيل ملف DXF المرفوع لأن الملف غير مرتبط بهذه الخطة."
 )
@@ -259,7 +268,10 @@ def _saved_plan_for_source(order: Any, plan_source: str | None) -> Any | None:
     if normalized == "system":
         return latest_plan(order.name, source_type=SYSTEM, status=DRAFT)
     if normalized in {"custom", "uploaded", "uploaded dxf", "uploaded_dxf", "dxf"}:
-        return latest_plan(order.name, source_type=UPLOADED_DXF, status=DRAFT)
+        return (
+            latest_plan(order.name, source_type=UPLOADED_DXF, status=DRAFT)
+            or latest_plan(order.name, source_type=UPLOADED_DXF)
+        )
     if normalized == "approved":
         return approved_plan_for_order(order)
     frappe.throw(_("مصدر خطة القص المحدد للتصدير غير مدعوم."), frappe.ValidationError)
@@ -298,7 +310,7 @@ def _assert_saved_plan_fresh(order: Any, plan: Any) -> None:
         )
 
     try:
-        current = plan_input_fingerprint(order, plan)
+        current = freshness_expected_fingerprint(order, plan, stored)
     except ManufacturingRequirementsError as exc:
         frappe.throw(
             _("مقاسات القص التصنيعية المحفوظة في الطلب غير مكتملة. احفظ الطلب ثم أعد حساب الخطة أو استيراد DXF."),
@@ -443,6 +455,57 @@ def download_uploaded_dxf(
     }
 
 
+def _normalized_dxf_filename(order_name: str | None) -> str:
+    safe_order = "".join(
+        character if character.isalnum() or character in "-_" else "_"
+        for character in str(order_name or "door_cutting_order")
+    )
+    return f"cutting_plan_{safe_order}_AutoCAD2011_2026.dxf"
+
+
+
+@frappe.whitelist()
+def normalize_dxf_for_autocad(
+    content_b64: str,
+    order_name: str | None = None,
+) -> dict[str, str]:
+    """Re-serialize client-produced geometry with ezdxf for AutoCAD compatibility."""
+
+    order = _require_export_access(order_name=order_name, payload=None)
+    if order_name and order is None:
+        frappe.throw(_("تعذر التحقق من صلاحية تصدير ملف DXF."), frappe.PermissionError)
+
+    try:
+        raw = base64.b64decode(str(content_b64 or ""), validate=True)
+    except (ValueError, TypeError) as exc:
+        frappe.throw(_("محتوى ملف DXF غير صالح للتصدير."), frappe.ValidationError)
+        raise AssertionError("unreachable") from exc
+
+    if not raw or len(raw) > _AUTOCAD_DXF_MAX_BYTES:
+        frappe.throw(_("حجم ملف DXF غير صالح للتصدير."), frappe.ValidationError)
+
+    try:
+        content = rebuild_autocad_dxf(raw)
+    except Exception as exc:
+        try:
+            frappe.log_error(
+                title="AutoCAD DXF normalization failed",
+                message=frappe.get_traceback(),
+            )
+        except Exception:
+            pass
+        frappe.throw(_("تعذر تجهيز ملف DXF متوافق مع AutoCAD."), frappe.ValidationError)
+        raise AssertionError("unreachable") from exc
+
+    filename = _normalized_dxf_filename(order_name)
+    # Desk frappe.call expects one JSON response. Setting filecontent here causes
+    # Frappe to concatenate another DXF body with the Base64 download.
+    return {
+        "filename": filename,
+        "content_b64": base64.standard_b64encode(content).decode("ascii"),
+    }
+
+
 @frappe.whitelist()
 def get_validated_dxf_plan(
     order_name: str | None = None,
@@ -473,6 +536,7 @@ def get_validated_dxf_plan(
             snapshot = legacy_export._plan_to_export_snapshot(plan)
         except DxfGeometrySnapshotError as exc:
             frappe.throw(_("DXF export blocked by persisted topology validation: {0}").format(str(exc)))
+        snapshot = apply_extra_double_text_flags_to_snapshot(snapshot, order.pieces)
         _assert_export_kerf(snapshot, fallback_kerf_mm=flt(plan.kerf_mm))
         return {
             "plan": snapshot,
@@ -488,6 +552,10 @@ def get_validated_dxf_plan(
         )
 
     editable, snapshot = legacy_export._strict_editable_snapshot(payload)
+    snapshot = apply_extra_double_text_flags_to_snapshot(
+        snapshot,
+        payload.get("pieces") or getattr(editable, "pieces", None),
+    )
     _assert_export_kerf(
         snapshot,
         fallback_kerf_mm=flt(getattr(editable, "kerf_mm", 0)),
@@ -498,4 +566,4 @@ def get_validated_dxf_plan(
     }
 
 
-__all__ = ["download_uploaded_dxf", "get_validated_dxf_plan"]
+__all__ = ["download_uploaded_dxf", "get_validated_dxf_plan", "normalize_dxf_for_autocad"]

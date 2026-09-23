@@ -79,6 +79,8 @@ jobs:
           node --check almdina_erp/tests/js/dco_cost_assets_tab_guard.test.js
           node --check almdina_erp/tests/js/dco_tab_edit_lifecycle_guard.test.js
           node --check almdina_erp/tests/js/cost_edit_session_lifecycle.test.js
+          node --check almdina_erp/tests/js/cost_hosted_settings_render.test.js
+          node --check almdina_erp/tests/js/cost_workspace_abandoned_load.test.js
           node --check almdina_erp/tests/js/offcut_cost_preview_projection.test.js
           node --check almdina_erp/tests/js/plan_cost_workspace_visual.test.js
           node --check almdina_erp/tests/js/order_lifecycle_jquery_thenable.test.js
@@ -89,6 +91,7 @@ jobs:
           node --check almdina_erp/tests/js/plan_board_presenter.test.js
           node --check almdina_erp/tests/js/plan_edit_dom_ownership.test.js
           node --check almdina_erp/tests/js/plan_source_tab_edit_lock.test.js
+          node --check almdina_erp/tests/js/uploaded_plan_mismatch_banner.test.js
           node --check almdina_erp/tests/js/order_measurement_save_flush.test.js
           node --check almdina_erp/tests/js/operator_edge_ownership.test.js
           node --check almdina_erp/tests/js/surface_settle_guard.test.js
@@ -160,6 +163,12 @@ jobs:
       - name: Validate Cost edit-session lifecycle invariants
         run: node almdina_erp/tests/js/cost_edit_session_lifecycle.test.js
 
+      - name: Validate hosted Cost settings survive HTML replace
+        run: node almdina_erp/tests/js/cost_hosted_settings_render.test.js
+
+      - name: Validate Cost recovers abandoned in-flight loads
+        run: node almdina_erp/tests/js/cost_workspace_abandoned_load.test.js
+
       - name: Validate ALMADINA-178 Cost preview projection
         run: node almdina_erp/tests/js/offcut_cost_preview_projection.test.js
 
@@ -199,6 +208,9 @@ jobs:
 
       - name: Validate plan source tabs stay locked during edit rerenders
         run: node almdina_erp/tests/js/plan_source_tab_edit_lock.test.js
+
+      - name: Validate uploaded plan remains visible and warns on order mismatch
+        run: node almdina_erp/tests/js/uploaded_plan_mismatch_banner.test.js
 
       - name: Validate measurement cells flush into the order save path
         run: node almdina_erp/tests/js/order_measurement_save_flush.test.js

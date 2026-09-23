@@ -210,7 +210,7 @@
             .dco-corner-input-shell{display:flex;align-items:center;border:1px solid var(--border-color,#d9e0e6);border-radius:10px;overflow:hidden;background:#fff}
             .dco-corner-input-shell input{width:100%;border:0!important;box-shadow:none!important;min-height:40px;padding:7px 10px;font-size:16px;font-weight:800;text-align:center}
             .dco-corner-input-shell span{padding:0 9px;color:#64748b;font-size:10px;border-right:1px solid #e7ebef;white-space:nowrap}
-            .dco-corner-equal{align-self:flex-start;border:0;background:transparent;color:var(--primary,#1674c5);font-size:11px;font-weight:800;padding:0;cursor:pointer}
+            .dco-corner-equal{align-self:flex-start;border:0;background:transparent;color:var(--alm-primary, #172033);font-size:11px;font-weight:800;padding:0;cursor:pointer}
             .dco-corner-help{margin-top:auto;border-radius:11px;padding:10px 11px;background:#f8fafc;border:1px solid #e2e8f0;font-size:10px;line-height:1.65;color:#52606d}
             .dco-corner-help.is-error{background:#fff3f1;border-color:#efb5ad;color:#9d2e23}
             .dco-fast-table tr.dco-clipped-corner-row td{background:rgba(224,151,24,.045)}

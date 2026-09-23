@@ -4,9 +4,15 @@
     if (window.__almdinaSecureDxfExportLoaded) return;
     window.__almdinaSecureDxfExportLoaded = true;
 
-    const DXF_VERSION = "AC1009"; // AutoCAD R11/R12 ASCII. AutoCAD 2020 opens this legacy format.
+    const DXF_VERSION = "AC1009"; // Valid R12 ASCII: the widest AutoCAD compatibility, including AutoCAD 2021+.
     const TOPOLOGY_SCHEMA_VERSION = 1;
     const TOPOLOGY_UNIT = "mm";
+    // R12 TABLE records must declare the exact number of entries. The exporter
+    // writes four base layers, three manufacturing overlay layers, and text.
+    const DXF_LAYER_COUNT = 8;
+    const TEXT_LABEL_LAYER = "text";
+    const EXTRA_DOUBLE_DXF_TEXT = "دبل القشاط";
+    const EXTRA_FULL_DOOR_DOUBLE_DXF_TEXT = "دبل كامل";
     const TOPOLOGY_COORDINATE_SPACE = "usable_sheet";
     const ORIGINAL_UPLOAD_SOURCES = new Set([
         "custom",
@@ -30,6 +36,8 @@
         "almdina_erp.almdina_erp.services.dxf_export_service.download_uploaded_dxf";
     const VALIDATED_PLAN_METHOD =
         "almdina_erp.almdina_erp.services.dxf_export_service.get_validated_dxf_plan";
+    const NORMALIZE_DXF_METHOD =
+        "almdina_erp.almdina_erp.services.dxf_export_service.normalize_dxf_for_autocad";
 
     function canExportDxf(frm = window.cur_frm) {
         const permissions = window.AlmdinaPermissions;
@@ -111,6 +119,129 @@
             line(layerName, x2, y2, x, y2) +
             line(layerName, x, y2, x, y)
         );
+    }
+
+    function doorNumberText(piece) {
+        const label = String((piece && piece.label) || "").trim();
+        const primary = label.split(".")[0].trim().replace(/[^\x20-\x7E]/g, "");
+        return primary || "0";
+    }
+
+    function doorNumberHeight(widthMm, heightMm) {
+        const size = Math.min(Math.max(0, widthMm), Math.max(0, heightMm));
+        return Math.max(8, Math.min(40, size * 0.12));
+    }
+
+    function extraAddonTextHeight(widthMm, heightMm) {
+        const size = Math.min(Math.max(0, widthMm), Math.max(0, heightMm));
+        return Math.max(6, Math.min(16, size * 0.08));
+    }
+
+    function extraAddonFlags(piece) {
+        if (String((piece && piece.piece_type) || "") !== "Extra") {
+            return { double: false, fullDoorDouble: false };
+        }
+        return {
+            double: Boolean(Number(piece && piece.extra_double)),
+            fullDoorDouble: Boolean(Number(piece && piece.extra_full_door_double)),
+        };
+    }
+
+    function dxfAsciiText(value) {
+        return Array.from(String(value || "")).map(character => {
+            const code = character.codePointAt(0);
+            if (code >= 0x20 && code <= 0x7E && character !== "\\") {
+                return character;
+            }
+            return `\\U+${code.toString(16).toUpperCase().padStart(4, "0")}`;
+        }).join("");
+    }
+
+    function extraAddonTextEntities(minX, minY, maxX, maxY, piece) {
+        const flags = extraAddonFlags(piece);
+        if (!flags.double && !flags.fullDoorDouble) return "";
+        const width = Math.max(0, maxX - minX);
+        const height = Math.max(0, maxY - minY);
+        const textHeight = extraAddonTextHeight(width, height);
+        const pad = Math.max(textHeight * 0.6, Math.min(width, height) * 0.08);
+        // AutoCAD TEXT uses a baseline insert. Keep the whole glyph inside the
+        // piece so the label sits on the door, not on the CUT_PATH outline.
+        const baselineY = maxY - pad - textHeight;
+        const leftX = minX + pad;
+        const align = { halign: 0, valign: 0 };
+        let entities = "";
+        if (flags.fullDoorDouble) {
+            entities += textEntity(
+                TEXT_LABEL_LAYER,
+                leftX,
+                baselineY,
+                textHeight,
+                dxfAsciiText(EXTRA_FULL_DOOR_DOUBLE_DXF_TEXT),
+                align
+            );
+        }
+        if (flags.double) {
+            const estimatedWidth = Math.min(
+                Math.max(0, width - pad * 2),
+                EXTRA_DOUBLE_DXF_TEXT.length * textHeight * 0.85
+            );
+            entities += textEntity(
+                TEXT_LABEL_LAYER,
+                Math.max(leftX, maxX - pad - estimatedWidth),
+                baselineY,
+                textHeight,
+                dxfAsciiText(EXTRA_DOUBLE_DXF_TEXT),
+                align
+            );
+        }
+        return entities;
+    }
+
+    function boundsFromPoints(points) {
+        const xs = points.map(point => point[0]);
+        const ys = points.map(point => point[1]);
+        return {
+            minX: Math.min(...xs),
+            minY: Math.min(...ys),
+            maxX: Math.max(...xs),
+            maxY: Math.max(...ys),
+        };
+    }
+
+    function polygonBounds(points) {
+        const xs = points.map(point => point[0]);
+        const ys = points.map(point => point[1]);
+        return {
+            minX: Math.min(...xs),
+            minY: Math.min(...ys),
+            maxX: Math.max(...xs),
+            maxY: Math.max(...ys),
+        };
+    }
+
+    function textEntity(layerName, x, y, height, content, align) {
+        const halign = align && Number.isFinite(Number(align.halign)) ? Number(align.halign) : 1;
+        const valign = align && Number.isFinite(Number(align.valign)) ? Number(align.valign) : 2;
+        let entity = (
+            pair(0, "TEXT") +
+            pair(8, layerName || TEXT_LABEL_LAYER) +
+            pair(10, dxfNumber(x)) +
+            pair(20, dxfNumber(y)) +
+            pair(30, 0) +
+            pair(40, dxfNumber(height)) +
+            pair(1, content) +
+            pair(50, 0)
+        );
+        if (halign || valign) {
+            entity += (
+                pair(72, halign) +
+                pair(11, dxfNumber(x)) +
+                pair(21, dxfNumber(y)) +
+                pair(31, 0) +
+                pair(73, valign)
+            );
+        }
+        return entity;
     }
 
     function closedPath(layerName, points) {
@@ -323,6 +454,34 @@
                             overlay.closed
                         );
                     });
+                    const bounds = polygonBounds(topology.outer);
+                    const [labelX, labelY] = topologyDxfPoints(
+                        [[(bounds.minX + bounds.maxX) / 2, (bounds.minY + bounds.maxY) / 2]],
+                        transform
+                    )[0];
+                    entities += textEntity(
+                        TEXT_LABEL_LAYER,
+                        labelX,
+                        labelY,
+                        doorNumberHeight(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY),
+                        doorNumberText(piece)
+                    );
+                    const dxfBounds = boundsFromPoints(topologyDxfPoints(
+                        [
+                            [bounds.minX, bounds.minY],
+                            [bounds.maxX, bounds.minY],
+                            [bounds.maxX, bounds.maxY],
+                            [bounds.minX, bounds.maxY],
+                        ],
+                        transform
+                    ));
+                    entities += extraAddonTextEntities(
+                        dxfBounds.minX,
+                        dxfBounds.minY,
+                        dxfBounds.maxX,
+                        dxfBounds.maxY,
+                        piece
+                    );
                     return;
                 }
 
@@ -354,6 +513,20 @@
                         overlay.closed
                     );
                 });
+                entities += textEntity(
+                    TEXT_LABEL_LAYER,
+                    x + pieceWidth / 2,
+                    y + pieceHeight / 2,
+                    doorNumberHeight(pieceWidth, pieceHeight),
+                    doorNumberText(piece)
+                );
+                entities += extraAddonTextEntities(
+                    x,
+                    y,
+                    x + pieceWidth,
+                    y + pieceHeight,
+                    piece
+                );
             });
         });
 
@@ -368,12 +541,13 @@
         dxf += pair(0, "TABLE") + pair(2, "LTYPE") + pair(70, 1);
         dxf += pair(0, "LTYPE") + pair(2, "CONTINUOUS") + pair(70, 0) + pair(3, "Solid line") + pair(72, 65) + pair(73, 0) + pair(40, 0);
         dxf += pair(0, "ENDTAB");
-        dxf += pair(0, "TABLE") + pair(2, "LAYER") + pair(70, 6);
+        dxf += pair(0, "TABLE") + pair(2, "LAYER") + pair(70, DXF_LAYER_COUNT);
         dxf += layer("0", 7) + layer("SHEET_OUTLINE", 8) + layer("CUT_PATH", 1)
             + layer("OFFCUT", EXTRA_OVERLAY_LAYER_COLORS.OFFCUT);
         dxf += layer("Liner", EXTRA_OVERLAY_LAYER_COLORS.Liner)
             + layer("Rear Groove", EXTRA_OVERLAY_LAYER_COLORS["Rear Groove"])
             + layer("Handle Recess", EXTRA_OVERLAY_LAYER_COLORS["Handle Recess"]);
+        dxf += layer(TEXT_LABEL_LAYER, 7);
         dxf += pair(0, "ENDTAB") + pair(0, "ENDSEC");
 
         dxf += pair(0, "SECTION") + pair(2, "BLOCKS") + pair(0, "ENDSEC");
@@ -461,13 +635,32 @@
                 : "DXF export failed its compatibility self-check and was not downloaded.");
         }
 
-        const base = `cutting_plan_${safeName(orderName || "draft")}`;
-        download(`${base}_AutoCAD2020_R12.dxf`, dxf, "application/dxf;charset=us-ascii");
-        frappe.show_alert({
-            message: isArabic()
-                ? "تم تصدير ملف DXF متوافق مع AutoCAD بنجاح."
-                : "Validated AutoCAD-compatible DXF exported successfully.",
-            indicator: "green",
+        return frappe.call({
+            method: NORMALIZE_DXF_METHOD,
+            args: {
+                order_name: orderName || null,
+                content_b64: btoa(dxf),
+            },
+            freeze: true,
+            freeze_message: isArabic()
+                ? "جاري تجهيز ملف DXF المتوافق مع AutoCAD..."
+                : "Preparing an AutoCAD-compatible DXF...",
+        }).then(response => {
+            const output = (response && response.message) || {};
+            if (!output.filename || !output.content_b64) {
+                throw new Error("AutoCAD DXF normalization response is incomplete.");
+            }
+            download(
+                output.filename,
+                decodeBase64Bytes(output.content_b64),
+                "application/dxf;charset=utf-8"
+            );
+            frappe.show_alert({
+                message: isArabic()
+                    ? "تم تصدير ملف DXF متوافق مع AutoCAD بنجاح."
+                    : "Validated AutoCAD-compatible DXF exported successfully.",
+                indicator: "green",
+            });
         });
     }
 

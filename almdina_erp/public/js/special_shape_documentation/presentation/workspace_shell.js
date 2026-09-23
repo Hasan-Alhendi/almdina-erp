@@ -2,6 +2,13 @@
     "use strict";
     const root = window.AlmdinaSpecialShapeDocumentation = window.AlmdinaSpecialShapeDocumentation || Object.create(null);
     function escapeHtml(value) { const node = document.createElement("div"); node.textContent = String(value ?? ""); return node.innerHTML; }
+    function uiButton(options) {
+        const ui = window.AlmdinaUi;
+        if (!ui || typeof ui.button !== "function") {
+            throw new Error("AlmdinaUi.button is required for special-shape documentation");
+        }
+        return ui.button(options);
+    }
     function tool(id, icon, label, key = "", disabled = false) { return `<button type="button" class="ald-doc-tool" data-tool="${id}" title="${label}${key ? ` (${key})` : ""}" aria-label="${label}" ${disabled ? "disabled" : ""}><span>${icon}</span><small>${label}</small></button>`; }
     function templates(disabled = false) {
         const definitions = root.Templates && root.Templates.DEFINITIONS;
@@ -10,11 +17,11 @@
     }
     function mount(container, context) {
         const order = context.order, piece = context.piece, readOnly = !context.permissions.can_edit;
-        container.innerHTML = `<section class="ald-doc-workspace" dir="rtl" data-read-only="${readOnly ? "1" : "0"}" aria-label="توثيق الدرفة الخاصة">
+        container.innerHTML = `<section class="ald-doc-workspace almdina-ui" dir="rtl" data-read-only="${readOnly ? "1" : "0"}" aria-label="توثيق الدرفة الخاصة">
             <header class="ald-doc-topbar">
                 <div class="ald-doc-title-group"><button type="button" class="ald-doc-back" data-action="back" aria-label="العودة للطلب">→</button><div><h1>توثيق الدرفة الخاصة</h1><p><bdi>${escapeHtml(order.name)}</bdi> · ${escapeHtml(order.customer || "")}</p></div></div>
                 <div class="ald-doc-piece-meta"><span>الدرفة ${escapeHtml(piece.piece_no || "")}</span><bdi>${escapeHtml(piece.width_cm)} × ${escapeHtml(piece.length_cm)} سم</bdi></div>
-                <div class="ald-doc-save-group"><span class="ald-doc-save-state" data-save-state data-state="saved">محفوظ</span><button type="button" class="ald-doc-primary" data-action="save" ${readOnly ? "disabled" : ""}>حفظ التوثيق</button></div>
+                <div class="ald-doc-save-group"><span class="ald-doc-save-state" data-save-state data-state="saved">محفوظ</span>${uiButton({ label: "حفظ التوثيق", variant: "primary", disabled: readOnly, attrs: { "data-action": "save" } })}</div>
             </header>
             <div class="ald-doc-layout">
                 <aside class="ald-doc-panel ald-doc-start-panel">
@@ -36,11 +43,11 @@
                         <div class="ald-doc-reference-crop-actions"><button type="button" class="ald-doc-crop-start" data-action="start-crop" ${readOnly ? "disabled" : ""}>اقتصاص الصورة</button><button type="button" data-action="reset-reference-crop" data-reference-crop-reset hidden ${readOnly ? "disabled" : ""}>إعادة الصورة كاملة</button></div>
                         <label><span>تدوير</span><span class="ald-doc-inline"><button type="button" data-action="rotate-left" ${readOnly ? "disabled" : ""}>↶</button><bdi data-rotation>0°</bdi><button type="button" data-action="rotate-right" ${readOnly ? "disabled" : ""}>↷</button></span></label>
                         <label><span>قفل الصورة</span><input type="checkbox" checked data-reference-lock ${readOnly ? "disabled" : ""}></label>
-                        <a class="ald-doc-download" data-reference-download target="_blank" rel="noopener" hidden>تنزيل الصورة الأصلية للمصمم</a><button type="button" class="ald-doc-danger" data-action="remove-image" ${readOnly ? "disabled" : ""}>مسح الصورة</button>
+                        <a class="ald-doc-download" data-reference-download target="_blank" rel="noopener" hidden>تنزيل الصورة الأصلية للمصمم</a>${uiButton({ label: "مسح الصورة", variant: "danger", className: "ald-doc-remove-image", disabled: readOnly, attrs: { "data-action": "remove-image" } })}
                     </section>
                 </aside>
                 <main class="ald-doc-stage"><canvas class="ald-doc-canvas" tabindex="0" aria-label="لوحة توثيق الدرفة"></canvas><div class="ald-doc-hint" data-hint>اختر صورة أو شكلًا جاهزًا أو ابدأ بالقلم الذكي</div>
-                    <div class="ald-doc-crop-toolbar" data-crop-toolbar hidden role="toolbar" aria-label="أدوات اقتصاص الصورة"><strong>اقتصاص الصورة</strong><span>اسحب الإطار أو مقابضه</span><button type="button" data-action="auto-crop">اقتصاص تلقائي</button><button type="button" data-action="reset-crop">إعادة ضبط</button><button type="button" data-action="cancel-crop">إلغاء</button><button type="button" class="ald-doc-primary" data-action="apply-crop">تطبيق</button></div>
+                    <div class="ald-doc-crop-toolbar" data-crop-toolbar hidden role="toolbar" aria-label="أدوات اقتصاص الصورة"><strong>اقتصاص الصورة</strong><span>اسحب الإطار أو مقابضه</span><button type="button" data-action="auto-crop">اقتصاص تلقائي</button><button type="button" data-action="reset-crop">إعادة ضبط</button><button type="button" data-action="cancel-crop">إلغاء</button>${uiButton({ label: "تطبيق", variant: "primary", attrs: { "data-action": "apply-crop" } })}</div>
                     <div class="ald-doc-toolbar" role="toolbar" aria-label="أدوات التوثيق">
                         ${tool("select", "↖", "تحديد", "V")}${tool("pen", "✎", "قلم ذكي", "P", readOnly)}${tool("line", "╱", "خط", "L", readOnly)}${tool("rect", "□", "مستطيل", "R", readOnly)}${tool("ellipse", "○", "دائرة", "O", readOnly)}${tool("dimension", "↔", "قياس", "D", readOnly)}${tool("text", "T", "ملاحظة", "T", readOnly)}
                         <span class="ald-doc-toolbar-separator"></span><button type="button" class="ald-doc-tool" data-action="undo" title="تراجع Ctrl+Z"><span>↶</span><small>تراجع</small></button><button type="button" class="ald-doc-tool" data-action="redo" title="إعادة Ctrl+Y أو Ctrl+Shift+Z"><span>↷</span><small>إعادة</small></button>

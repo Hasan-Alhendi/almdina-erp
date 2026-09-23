@@ -7,7 +7,9 @@ from almdina_erp.almdina_erp.domain.orders.extra_addons import (
     ExtraAddonError,
     ExtraAddonPieceInput,
     ExtraAddonRates,
+    apply_extra_double_text_flags_to_snapshot,
     calculate_extra_addon_pricing,
+    extra_double_text_flags,
     extra_overlay_kind_for_layer,
     extra_overlay_layer_for_kind,
     physical_cut_quantity,
@@ -226,6 +228,52 @@ class TestExtraDoorAddonsDomain(unittest.TestCase):
         self.assertEqual(extra_overlay_layer_for_kind("back_groove"), "Rear Groove")
         self.assertEqual(extra_overlay_layer_for_kind("recessed_handle_cutout"), "Handle Recess")
         self.assertEqual(EXTRA_ADDON_FIELD_BY_CODE["liner"], "extra_liner")
+
+    def test_extra_double_text_flags_copy_only_extra_workshop_marks(self) -> None:
+        self.assertEqual(
+            extra_double_text_flags(
+                piece_type="Extra",
+                extra_double=True,
+                extra_full_door_double=True,
+            ),
+            {"extra_double": 1, "extra_full_door_double": 1},
+        )
+        self.assertEqual(
+            extra_double_text_flags(
+                piece_type="Regular",
+                extra_double=True,
+                extra_full_door_double=True,
+            ),
+            {},
+        )
+        snapshot = apply_extra_double_text_flags_to_snapshot(
+            {
+                "sheets": [
+                    {
+                        "pieces": [
+                            {
+                                "label": "2.1",
+                                "piece_type": "Extra",
+                                "source_piece_no": 2,
+                            },
+                            {"label": "1.1", "piece_type": "Regular"},
+                        ]
+                    }
+                ]
+            },
+            [
+                {"piece_type": "Regular", "extra_double": 1},
+                {
+                    "piece_type": "Extra",
+                    "extra_double": 1,
+                    "extra_full_door_double": 1,
+                },
+            ],
+        )
+        extra = snapshot["sheets"][0]["pieces"][0]
+        self.assertEqual(extra["extra_double"], 1)
+        self.assertEqual(extra["extra_full_door_double"], 1)
+        self.assertNotIn("extra_double", snapshot["sheets"][0]["pieces"][1])
 
 
 if __name__ == "__main__":

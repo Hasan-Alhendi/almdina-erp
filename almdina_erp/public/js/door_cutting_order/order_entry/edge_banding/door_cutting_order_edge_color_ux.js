@@ -44,10 +44,10 @@
         if (!badge) {
             badge = document.createElement("span");
             badge.className = "dco-order-edge-color-badge";
-            badge.style.cssText = "display:inline-flex;align-items:center;gap:5px;margin-inline-start:auto;padding:5px 9px;border:1px solid rgba(36,144,239,.22);border-radius:999px;background:rgba(36,144,239,.06);font-size:10px;font-weight:800;white-space:nowrap";
+            badge.style.cssText = "display:inline-flex;align-items:center;gap:5px;margin-inline-start:auto;padding:5px 9px;border:1px solid color-mix(in srgb, var(--alm-primary, #172033) 22%, transparent);border-radius:999px;background:color-mix(in srgb, var(--alm-primary, #172033) 6%, transparent);font-size:10px;font-weight:800;white-space:nowrap";
             toolbar.appendChild(badge);
         }
-        badge.innerHTML = `<span style="width:7px;height:7px;border-radius:50%;background:var(--primary,#2490ef)"></span><span>لون القشاط: ${esc(color)}</span>`;
+        badge.innerHTML = `<span style="width:7px;height:7px;border-radius:50%;background:var(--alm-primary,#172033)"></span><span>لون القشاط: ${esc(color)}</span>`;
         badge.title = "لون القشاط العام للطلب";
     }
 

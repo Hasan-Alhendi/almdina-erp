@@ -96,9 +96,9 @@
             }
 
             .dco-fast-entry-toolbar .dco-measurement-table-actions .dco-toolbar-icon-button:hover{
-                border-color:var(--primary,#2490ef) !important;
-                background:rgba(36,144,239,.06) !important;
-                color:var(--primary,#2490ef) !important;
+                border-color:var(--alm-primary,#172033) !important;
+                background:color-mix(in srgb, var(--alm-primary, #172033) 6%, transparent) !important;
+                color:var(--alm-primary,#172033) !important;
                 box-shadow:0 3px 9px rgba(15,23,42,.08);
             }
 
@@ -107,7 +107,7 @@
             }
 
             .dco-fast-entry-toolbar .dco-measurement-table-actions .dco-toolbar-icon-button:focus-visible{
-                outline:2px solid var(--primary,#2490ef);
+                outline:2px solid var(--alm-primary,#172033);
                 outline-offset:2px;
             }
 
@@ -287,8 +287,8 @@
             .dco-special-sketch-button>span:last-child{display:none !important;}
             .dco-special-sketch-button>span:first-child{font-size:16px;}
             .dco-delete-row{width:28px !important;height:30px !important;border-radius:7px !important;}
-            .dco-fast-table tbody tr:hover td{background:rgba(36,144,239,.025);}
-            .dco-fast-table tbody tr:focus-within td{background:rgba(36,144,239,.045);}
+            .dco-fast-table tbody tr:hover td{background:color-mix(in srgb, var(--alm-primary, #172033) 2%, transparent);}
+            .dco-fast-table tbody tr:focus-within td{background:color-mix(in srgb, var(--alm-primary, #172033) 4%, transparent);}
 
             @media (max-width:900px){
                 .dco-fast-table .dco-col-type{width:102px !important;}

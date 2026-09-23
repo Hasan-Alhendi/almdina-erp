@@ -33,6 +33,14 @@
 		return Boolean(value && frappe.session.user && value === frappe.session.user);
 	}
 
+	function uiButton(options) {
+		const ui = window.AlmdinaUi;
+		if (!ui || typeof ui.button !== "function") {
+			throw new Error("AlmdinaUi.button is required for DCO drawing plan actions");
+		}
+		return ui.button(options);
+	}
+
 	function isDrawingStage(frm) {
 		if (frm.doc.status === "At Drawing") return true;
 		return frm.__almdina_stage_type === "Drawing" || frm.doc.current_department === "رسم";
@@ -170,16 +178,22 @@
 			: __("إعادة الحساب وتغيير الخوارزمية يتبعان صلاحيات خطة القص، ولا يحتاجان صلاحية التكلفة.");
 		const badge = previewOnly
 			? `<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,159,10,.12);color:#a15c00;border-radius:999px;padding:5px 10px;font-size:11px;font-weight:800">${__("معاينة فقط")}</span>`
-			: `<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(36,144,239,.1);color:#1769aa;border-radius:999px;padding:5px 10px;font-size:11px;font-weight:800">✓ ${__("إعادة الحساب متاحة")}</span>`;
+			: `<span style="display:inline-flex;align-items:center;gap:5px;background:color-mix(in srgb, var(--alm-primary, #172033) 10%, transparent);color:var(--alm-primary,#172033);border-radius:999px;padding:5px 10px;font-size:11px;font-weight:800">✓ ${__("إعادة الحساب متاحة")}</span>`;
 		return `
-			<div class="dco-drawing-plan-panel" style="direction:rtl;border:1px solid var(--border-color,#dfe3e8);border-radius:16px;padding:16px;background:linear-gradient(135deg,var(--card-bg,#fff),var(--subtle-fg,#f8fafc));margin-bottom:14px;box-shadow:0 8px 24px rgba(0,0,0,.035)">
+			<div class="almdina-ui dco-drawing-plan-panel" style="direction:rtl;border:1px solid var(--border-color,#dfe3e8);border-radius:16px;padding:16px;background:linear-gradient(135deg,var(--card-bg,#fff),var(--subtle-fg,#f8fafc));margin-bottom:14px;box-shadow:0 8px 24px rgba(0,0,0,.035)">
 				<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap">
 					<div><h4 style="margin:0 0 5px;font-size:16px;font-weight:900">${title}</h4><p style="margin:0;color:var(--text-muted,#6b7280);font-size:12px">${intro}</p></div>
 					${badge}
 				</div>
 				<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px">
 					<select class="form-control input-sm" style="max-width:240px;min-height:36px" data-drawing-mode ${disabled}>${options}</select>
-					<button type="button" class="btn btn-primary btn-sm" data-drawing-recalc>${previewOnly ? __("عرض النتيجة") : __("إعادة الحساب")}</button>
+					${uiButton({
+						label: previewOnly ? __("عرض النتيجة") : __("إعادة الحساب"),
+						variant: "primary",
+						size: "btn-sm",
+						className: "",
+						attrs: { "data-drawing-recalc": "" },
+					})}
 					<button type="button" class="btn btn-default btn-sm" data-drawing-mode-btn="Auto Pro" ${disabled}>${__("أفضل توزيع متقدم")}</button>
 					<button type="button" class="btn btn-default btn-sm" data-drawing-mode-btn="Deep Search" ${disabled}>${__("بحث معمق")}</button>
 					<button type="button" class="btn btn-default btn-sm" data-drawing-mode-btn="Optimal Search" ${disabled}>${__("بحث أمثل")}</button>

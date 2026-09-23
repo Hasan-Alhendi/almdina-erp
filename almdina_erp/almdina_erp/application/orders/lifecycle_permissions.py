@@ -15,6 +15,7 @@ class OrderLifecycleAction:
     CREATE_REVISION = "create_revision"
     RETURN_TO_DRAFT = "return_to_draft"
     CANCEL = "cancel"
+    RESUME_CANCELLED = "resume_cancelled"
 
 
 ACTION_CAPABILITIES = MappingProxyType(
@@ -25,6 +26,7 @@ ACTION_CAPABILITIES = MappingProxyType(
         OrderLifecycleAction.CREATE_REVISION: Capability.CREATE_ORDER_REVISION,
         OrderLifecycleAction.RETURN_TO_DRAFT: Capability.RETURN_ORDER_TO_DRAFT,
         OrderLifecycleAction.CANCEL: Capability.CANCEL_ORDER,
+        OrderLifecycleAction.RESUME_CANCELLED: Capability.RESUME_CANCELLED_ORDER,
     }
 )
 
@@ -83,6 +85,11 @@ def _state_reason(action: str, status: str, revision_state: str) -> str:
     if action == OrderLifecycleAction.CANCEL:
         if status in {"Cancelled", "Delivered", "Completed"}:
             return "Cancelled, delivered, or completed orders cannot be cancelled through the normal workflow."
+        return ""
+
+    if action == OrderLifecycleAction.RESUME_CANCELLED:
+        if status != "Cancelled":
+            return "Only cancelled orders can be resumed to their previous production stage."
         return ""
 
     raise ValueError(f"Unknown order lifecycle action: {action}")

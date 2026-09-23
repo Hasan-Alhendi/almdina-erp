@@ -1,0 +1,47 @@
+/*
+ * Almdina ERP — shared design tokens.
+ * Scope: presentation only. Feature CSS may read these variables but must not
+ * redefine brand colors outside this file.
+ *
+ * Brand primitives also live on :root so Frappe Desk can read --alm-primary
+ * through almdina_desk_theme.css without duplicating hex values.
+ */
+
+:root,
+[data-theme="light"],
+[data-theme="dark"],
+.almdina-ui {
+    --alm-primary: #172033;
+    --alm-primary-hover: #0f172a;
+    --alm-on-primary: #ffffff;
+
+    --alm-danger: #b91c1c;
+    --alm-danger-hover: #991b1b;
+    --alm-on-danger: #ffffff;
+
+    --alm-success: #15803d;
+    --alm-success-hover: #166534;
+    --alm-on-success: #ffffff;
+}
+
+.almdina-ui {
+    --alm-secondary-bg: var(--control-bg, #ffffff);
+    --alm-secondary-border: var(--border-color, #dfe3e8);
+    --alm-secondary-text: var(--text-color, #1f272e);
+    --alm-secondary-hover-bg: var(--subtle-fg, #f4f5f6);
+
+    --alm-radius-lg: 18px;
+    --alm-radius-md: 14px;
+    --alm-radius-sm: 10px;
+    --alm-radius-button: 10px;
+
+    --alm-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04), 0 5px 18px rgba(15, 23, 42, 0.045);
+    --alm-shadow-button: 0 4px 12px rgba(23, 32, 51, 0.16);
+
+    --alm-height-button: 42px;
+    --alm-padding-button-x: 16px;
+
+    --alm-text-muted: var(--text-muted, #6b7280);
+    --alm-surface: var(--fg-color, #ffffff);
+    --alm-border: var(--border-color, #dfe3e8);
+}

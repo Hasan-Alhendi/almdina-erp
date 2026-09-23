@@ -12,6 +12,14 @@
         }
         const t = (message, replacements) => replacements ? translate(message, replacements) : translate(message);
 
+        function uiButton(options) {
+            const ui = window.AlmdinaUi;
+            if (!ui || typeof ui.button !== "function") {
+                throw new Error("AlmdinaUi.button is required for Production Settings rendering");
+            }
+            return ui.button(options);
+        }
+
         function multiline(value) {
             return esc(value || "—").replace(/\r?\n/g, "<br>");
         }
@@ -62,7 +70,12 @@
                     <div class="aps-values">${section.rows.map(rowHtml).join("")}</div>
                     ${section.editable ? `
                         <div class="aps-actions">
-                            <button class="btn btn-primary aps-edit" data-section="${esc(section.key)}">${t("تعديل هذا القسم")}</button>
+                            ${uiButton({
+                                label: t("تعديل هذا القسم"),
+                                variant: "primary",
+                                className: "aps-edit",
+                                attrs: { "data-section": section.key },
+                            })}
                         </div>
                     ` : `
                         <div class="aps-readonly-note">${t("يمكنك مراجعة القيم هنا، لكن تعديل هذا القسم غير متاح لصلاحياتك الحالية.")}</div>
@@ -92,7 +105,7 @@
 
         function render(model) {
             $body.html(`
-                <div class="aps-shell">
+                <div class="almdina-ui aps-shell">
                     <header class="aps-hero">
                         <div class="aps-hero-layout">
                             <div class="aps-hero-copy">

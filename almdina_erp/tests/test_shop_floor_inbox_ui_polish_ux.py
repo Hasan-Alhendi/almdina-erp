@@ -70,8 +70,8 @@ def test_shop_floor_polish_is_dense_responsive_touch_safe_and_accessible() -> No
     assert "prefers-reduced-motion" in css
     assert "overscroll-behavior-inline: contain" in css
     assert "-webkit-overflow-scrolling: touch" in css
-    assert 'aria-label="${esc(`${action.label}' in renderer
-    assert 'aria-label="${esc(`${__("فتح الطلب")}' in renderer
+    assert 'attrs: { "aria-label": `${action.label}' in renderer
+    assert 'attrs: { "aria-label": `${__("فتح الطلب")}' in renderer
 
 
 def test_shop_floor_polish_moves_page_visuals_out_of_inline_style_attributes() -> None:

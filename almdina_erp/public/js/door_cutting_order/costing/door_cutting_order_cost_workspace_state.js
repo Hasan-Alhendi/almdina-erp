@@ -6,6 +6,7 @@
     const STORE_KEY = "__almdinaCostWorkspaceStore";
     const LOAD_PROMISE_KEY = "__almdinaCostWorkspaceLoadPromise";
     const LOADED_IDENTITY_KEY = "__almdinaCostWorkspaceLoadedIdentity";
+    const RECOVER_KEY = "__almdinaCostWorkspaceLoadRecoveries";
 
     function documentContext() {
         return window.AlmdinaDocumentContext || null;
@@ -55,6 +56,7 @@
         if (!store) return null;
         frm[LOADED_IDENTITY_KEY] = null;
         frm[LOAD_PROMISE_KEY] = null;
+        frm[RECOVER_KEY] = 0;
         const snapshot = store.reset(identity(frm));
         dispatch(frm, snapshot);
         return snapshot;
@@ -98,6 +100,7 @@
         const settled = store.reset(currentIdentity);
         frm[LOADED_IDENTITY_KEY] = currentIdentity;
         frm[LOAD_PROMISE_KEY] = null;
+        frm[RECOVER_KEY] = 0;
         dispatch(frm, settled);
         return settled;
     }
@@ -142,6 +145,34 @@
             if (frm[LOAD_PROMISE_KEY] === promise) frm[LOAD_PROMISE_KEY] = null;
         });
         return { promise, resolveFlight, rejectFlight };
+    }
+
+    function abandonedLoadingSnapshot(frm, store, currentIdentity) {
+        if (identity(frm) !== currentIdentity) return false;
+        if (activeEditSnapshot(store, currentIdentity)) return false;
+        const current = store.snapshot();
+        return Boolean(current && current.status === "loading");
+    }
+
+    function recoverAbandonedLoad(frm, store, currentIdentity, result) {
+        if (!abandonedLoadingSnapshot(frm, store, currentIdentity)) {
+            frm[RECOVER_KEY] = 0;
+            return result;
+        }
+        const attempts = Number(frm[RECOVER_KEY] || 0);
+        if (attempts >= 2) {
+            const requestId = store.beginLoad(currentIdentity);
+            store.rejectLoad(
+                currentIdentity,
+                requestId,
+                new Error("تعذر تحميل بيانات التكلفة.")
+            );
+            const state = store.snapshot();
+            dispatch(frm, state);
+            return state;
+        }
+        frm[RECOVER_KEY] = attempts + 1;
+        return load(frm, { force: true });
     }
 
     async function load(frm, options = {}) {
@@ -195,6 +226,20 @@
         // are observable synchronously, so listeners must see an owned in-flight
         // request before they can re-enter this loader.
         frm[LOAD_PROMISE_KEY] = promise;
+        const completed = promise.then(
+            (result) => {
+                if (frm[LOAD_PROMISE_KEY] === completed) frm[LOAD_PROMISE_KEY] = null;
+                return recoverAbandonedLoad(frm, store, currentIdentity, result);
+            },
+            (error) => {
+                if (frm[LOAD_PROMISE_KEY] === completed) frm[LOAD_PROMISE_KEY] = null;
+                if (abandonedLoadingSnapshot(frm, store, currentIdentity)) {
+                    return recoverAbandonedLoad(frm, store, currentIdentity, null);
+                }
+                throw error;
+            }
+        );
+        frm[LOAD_PROMISE_KEY] = completed;
         const requestId = store.beginLoad(currentIdentity);
         dispatch(frm, store.snapshot());
 
@@ -240,7 +285,7 @@
             })
             .then(resolveFlight, rejectFlight);
 
-        return promise;
+        return completed;
     }
 
     function snapshot(frm) {

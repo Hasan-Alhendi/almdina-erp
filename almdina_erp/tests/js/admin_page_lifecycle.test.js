@@ -163,6 +163,12 @@ function createHarness() {
     };
     const fakeWindow = {
         frappe,
+        AlmdinaUi: { control: () => ({ dispose() {} }) },
+        AlmdinaFactoryWorkforceToolbar: {
+            create() {
+                return { mount() {}, dispose() {}, isMounted: () => false };
+            },
+        },
         jQuery: jquery,
         AlmdinaFrontend: {
             createLatestRequestGate,
@@ -447,6 +453,9 @@ async function testPermissionsLifecycle() {
     const transferQueue = endpointQueue();
     const exportQueue = endpointQueue();
     const renders = { shell: 0, loaded: 0, checkboxSync: 0, dirtySync: 0, downloads: 0 };
+    let roleControlMounts = 0;
+    let roleControlDisposals = 0;
+    let roleControlAlive = false;
     let callbacks = null;
 
     class FakeFileReader {
@@ -455,7 +464,24 @@ async function testPermissionsLifecycle() {
             this.onload();
         }
     }
+    class FakeImportDialog {
+        constructor(config) {
+            this.config = config;
+            this.fields_dict = {
+                permissions_file: {
+                    $input: [{ files: [{ size: 10, contents: '{"view":true}' }] }],
+                },
+            };
+        }
+
+        show() {
+            this.config.primary_action({});
+        }
+
+        hide() {}
+    }
     harness.context.FileReader = FakeFileReader;
+    harness.fakeWindow.frappe.ui.Dialog = FakeImportDialog;
     harness.fakeWindow.AlmdinaFactoryPermissionsApi = {
         getConsole: () => consoleQueue.call(),
         getRole: () => roleQueue.call(),
@@ -480,9 +506,13 @@ async function testPermissionsLifecycle() {
         create: () => ({
             renderShell() { renders.shell += 1; },
             renderActor() {},
-            renderRoleMenu() {},
+            mountRoleControl() { roleControlMounts += 1; roleControlAlive = true; },
+            disposeRoleControl() {
+                if (!roleControlAlive) return;
+                roleControlDisposals += 1;
+                roleControlAlive = false;
+            },
             setRolePickerValue() {},
-            closeRoleMenu() {},
             showRoleLoading() {},
             showLoaded() { renders.loaded += 1; },
             renderPermissionGroups() {},
@@ -503,6 +533,7 @@ async function testPermissionsLifecycle() {
     };
 
     evaluate(harness, "factory_permissions/state.js");
+    evaluate(harness, "factory_permissions/dialogs.js");
     evaluate(harness, "factory_permissions/controller.js");
     harness.fakeWindow.AlmdinaFactoryPermissionsController.mount(harness.wrapper);
 
@@ -534,6 +565,8 @@ async function testPermissionsLifecycle() {
     roleQueue.requests[1].resolve({ capabilities: { view: false }, impact: {}, audit: [] });
     await flush();
     assert.equal(renders.loaded, 1);
+    assert.equal(roleControlMounts, 2);
+    assert.equal(roleControlDisposals, 1, "revisiting must not dispose the new Role control");
 
     callbacks.onCapabilityChanged("view", true);
     harness.runTimers();
@@ -553,7 +586,7 @@ async function testPermissionsLifecycle() {
         "dirty Permissions state must survive revisit without a console reload"
     );
 
-    callbacks.onImportFile({ size: 10, contents: '{"view":true}' });
+    callbacks.onImport();
     await flush();
     assert.equal(transferQueue.requests.length, 1);
     const checkboxBeforeTransfer = renders.checkboxSync;
@@ -811,9 +844,9 @@ async function testPermissionsMutationLifecycle() {
         create: () => ({
             renderShell() {},
             renderActor() {},
-            renderRoleMenu() {},
+            mountRoleControl() {},
+            disposeRoleControl() {},
             setRolePickerValue() {},
-            closeRoleMenu() {},
             showRoleLoading() {},
             showLoaded() {},
             renderPermissionGroups() { renders.permissionState += 1; },
@@ -834,6 +867,7 @@ async function testPermissionsMutationLifecycle() {
     };
 
     evaluate(harness, "factory_permissions/state.js");
+    evaluate(harness, "factory_permissions/dialogs.js");
     evaluate(harness, "factory_permissions/controller.js");
     harness.fakeWindow.AlmdinaFactoryPermissionsController.mount(harness.wrapper);
     consoleQueue.requests[0].resolve({ catalog: [], roles: [{ name: "Role A" }], transfer: {} });

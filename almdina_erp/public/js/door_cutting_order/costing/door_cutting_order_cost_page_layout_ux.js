@@ -1,7 +1,7 @@
 (() => {
     "use strict";
 
-    const MODULE_VERSION = 5;
+    const MODULE_VERSION = 6;
     const existingApi = window.AlmdinaCostPageLayoutUX;
     if (existingApi && Number(existingApi.version || 0) >= MODULE_VERSION) return;
 
@@ -55,7 +55,7 @@
             .dco-cost-measurements-toggle::after{content:none!important;display:none!important}
             .dco-cost-measurements-toggle[aria-expanded="true"]::before{transform:rotate(180deg)}
             .dco-cost-measurements-toggle:hover{background:var(--subtle-fg,#f3f5f7)!important;color:var(--text-color,#26313b)!important}
-            .dco-cost-measurements-toggle:focus-visible{outline:2px solid var(--primary,#2490ef)!important;outline-offset:2px!important}
+            .dco-cost-measurements-toggle:focus-visible{outline:2px solid var(--alm-primary,#172033)!important;outline-offset:2px!important}
             .dco-cost-settings-section.is-collapsed>.dco-cost-settings-content{display:none!important}
             .dco-cost-settings-title{cursor:default}
             .dco-cost-settings-title-main{display:flex;align-items:center;gap:8px;min-width:max-content}
@@ -108,6 +108,12 @@
 
     function costSettingsExpanded(frm) {
         return Boolean(uiState(frm).settingsExpanded);
+    }
+
+    function revealSettings(frm) {
+        if (!frm) return false;
+        uiState(frm).settingsExpanded = true;
+        return enhance(frm);
     }
 
     function applyMeasurementState(frm, section, control) {
@@ -350,5 +356,6 @@
         version: MODULE_VERSION,
         enhance,
         install,
+        revealSettings,
     });
 })();

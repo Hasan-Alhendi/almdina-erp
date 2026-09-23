@@ -26,6 +26,8 @@ def test_dxf_import_service_exists_with_layered_core_functions():
         "_overlay_source_paths",
         "_collect_extra_overlay_candidates",
         "_attach_extra_overlays",
+        "_attach_text_labels",
+        "TEXT_LABEL_LAYER",
         "_default_layer_role_segments",
         "DESIGNER_DEFAULT_LAYER",
         "infer_sheets",
@@ -48,9 +50,11 @@ def test_dxf_import_mirrors_secure_export_layers():
     assert 'layer("CUT_PATH", 1)' in secure
     assert 'layer("OFFCUT", EXTRA_OVERLAY_LAYER_COLORS.OFFCUT)' in secure
     assert 'layer("Liner", EXTRA_OVERLAY_LAYER_COLORS.Liner)' in secure
+    assert 'layer(TEXT_LABEL_LAYER, 7)' in secure
     assert 'SHEET_OUTLINE_LAYER = "SHEET_OUTLINE"' in importer
     assert 'CUT_PATH_LAYER = "CUT_PATH"' in importer
     assert "EXTRA_OVERLAY_LAYER_NAMES" in importer
+    assert "TEXT_LABEL_LAYER" in importer
 
 
 def test_round_trip_line_parser_is_kept_as_r12_fallback():

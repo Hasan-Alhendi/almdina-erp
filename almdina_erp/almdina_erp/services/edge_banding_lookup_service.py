@@ -23,6 +23,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.stage_operational_access impo
     require_stage_operational_access,
 )
 from almdina_erp.almdina_erp.services.cutting_plan_invalidation_service import (
+    apply_stale_approved_plan_cancellation,
     invalidate_stale_draft_plans,
 )
 from almdina_erp.almdina_erp.services.order_edit_policy import (
@@ -160,12 +161,19 @@ def _persist_operational_piece_state(order: Any, piece: Any, override_field: str
         update_modified=True,
     )
 
-    # Keep the parent audit timestamp aligned with the controlled child mutation.
+    # Command path: bump parent modified. Cancel stale approval in memory first
+    # so this UPDATE also persists approved_plan.
+    apply_stale_approved_plan_cancellation(order)
+    parent_values = {
+        "modified_by": frappe.session.user,
+        "approved_plan": getattr(order, "approved_plan", None),
+    }
+    if hasattr(order, "drawing_dxf_status"):
+        parent_values["drawing_dxf_status"] = getattr(order, "drawing_dxf_status", None)
     frappe.db.set_value(
         "Door Cutting Order",
         order.name,
-        "modified_by",
-        frappe.session.user,
+        parent_values,
         update_modified=True,
     )
     invalidate_stale_draft_plans(order)

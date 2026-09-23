@@ -7,7 +7,7 @@
     "naming_series",
     "order_tab",
     "operator_status_strip",
-    "order_details_section","customer","order_date","order_details_column","order_notes","important_note_preview","important_note_comment",
+    "order_details_section","customer","order_date","order_details_column","order_notes","important_note_preview","important_note_comment","order_cutting_machine",
     "board_section","board_description","board_length_column","board_length_cm","board_width_cm","board_width_column","default_edge_type","edge_color",
     "pieces_section","pieces_fast_entry","pieces",
     "results_tab",
@@ -17,7 +17,7 @@
     "technical_section","packing_method","packing_score","engine_version",
     "shop_floor_section","production_path","current_department","shop_floor_column","current_assignee","department_status","current_production_stage","drawing_dxf_status",
     "cost_tab","cost_settings_section","board_rate_usd","cost_settings_column","cutting_cost_per_board_usd","cost_content_section","order_cost_invoice_html",
-    "status","revision","revision_of","revision_root","superseded_by","revision_reason","revision_state","revision_activated_by","revision_activated_on","approved_plan","board_item","full_board_length_mm","full_board_width_mm","recovery_creation_token","recovery_creation_user"
+    "status","revision","revision_of","revision_root","superseded_by","revision_reason","revision_state","revision_activated_by","revision_activated_on","approved_plan","board_item","full_board_length_mm","full_board_width_mm","recovery_creation_token","recovery_creation_user","cancellation_snapshot"
   ],
   "fields": [
     {"default":"DCO-.YYYY.-.#####","fieldname":"naming_series","fieldtype":"Select","hidden":1,"label":"Naming Series","options":"DCO-.YYYY.-.#####","reqd":1},
@@ -30,6 +30,7 @@
     {"fieldname":"order_notes","fieldtype":"Small Text","in_list_view":1,"label":"Order Notes"},
     {"fieldname":"important_note_preview","fieldtype":"Small Text","hidden":1,"in_list_view":1,"label":"ملاحظة مهمة","no_copy":1,"read_only":1},
     {"fieldname":"important_note_comment","fieldtype":"Link","hidden":1,"label":"Important Note Comment","no_copy":1,"options":"Comment","read_only":1},
+    {"fieldname":"order_cutting_machine","fieldtype":"Select","label":"Cutting Machine","options":"\nCNC\nمشرحة"},
     {"fieldname":"board_section","fieldtype":"Section Break","label":"Board & Edge Banding"},
     {"description":"اكتب وصف اللوح مباشرة، مثال: MDF أبيض 18 مم.","fieldname":"board_description","fieldtype":"Data","in_list_view":1,"label":"Board Item","reqd":1},
     {"fieldname":"board_length_column","fieldtype":"Column Break"},
@@ -99,7 +100,8 @@
     {"fieldname":"full_board_length_mm","fieldtype":"Float","hidden":1,"label":"Board Length (MM)","read_only":1},
     {"fieldname":"full_board_width_mm","fieldtype":"Float","hidden":1,"label":"Board Width (MM)","read_only":1},
     {"fieldname":"recovery_creation_token","fieldtype":"Data","hidden":1,"label":"Recovery Creation Token","no_copy":1,"read_only":1,"unique":1},
-    {"fieldname":"recovery_creation_user","fieldtype":"Link","hidden":1,"label":"Recovery Creation User","no_copy":1,"options":"User","read_only":1}
+    {"fieldname":"recovery_creation_user","fieldtype":"Link","hidden":1,"label":"Recovery Creation User","no_copy":1,"options":"User","read_only":1},
+    {"fieldname":"cancellation_snapshot","fieldtype":"JSON","hidden":1,"label":"Cancellation Snapshot","no_copy":1,"read_only":1}
   ],
   "links": [],
   "module":"Almdina ERP",

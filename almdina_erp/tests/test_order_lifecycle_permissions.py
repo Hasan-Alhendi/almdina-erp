@@ -53,6 +53,10 @@ class TestOrderLifecyclePermissions(unittest.TestCase):
             ACTION_CAPABILITIES[OrderLifecycleAction.CANCEL],
             Capability.CANCEL_ORDER,
         )
+        self.assertEqual(
+            ACTION_CAPABILITIES[OrderLifecycleAction.RESUME_CANCELLED],
+            Capability.RESUME_CANCELLED_ORDER,
+        )
 
     def test_permission_is_required_before_state(self) -> None:
         decision = decide_lifecycle_action(
@@ -160,6 +164,34 @@ class TestOrderLifecyclePermissions(unittest.TestCase):
                 self.assertFalse(
                     decide_lifecycle_action(
                         action=OrderLifecycleAction.CANCEL,
+                        status=status,
+                        revision_state="Current",
+                        has_capability=True,
+                    ).allowed
+                )
+
+    def test_resume_cancelled_is_capability_and_status_gated(self) -> None:
+        self.assertTrue(
+            decide_lifecycle_action(
+                action=OrderLifecycleAction.RESUME_CANCELLED,
+                status="Cancelled",
+                revision_state="Current",
+                has_capability=True,
+            ).allowed
+        )
+        self.assertFalse(
+            decide_lifecycle_action(
+                action=OrderLifecycleAction.RESUME_CANCELLED,
+                status="Cancelled",
+                revision_state="Current",
+                has_capability=False,
+            ).allowed
+        )
+        for status in ("Draft", "At CNC", "Delivered", "Completed"):
+            with self.subTest(resume_status=status):
+                self.assertFalse(
+                    decide_lifecycle_action(
+                        action=OrderLifecycleAction.RESUME_CANCELLED,
                         status=status,
                         revision_state="Current",
                         has_capability=True,

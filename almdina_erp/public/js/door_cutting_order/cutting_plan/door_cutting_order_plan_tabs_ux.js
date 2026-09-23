@@ -164,13 +164,13 @@
 					? ` disabled aria-disabled="true" title="${frappe.utils.escape_html(__(SOURCE_LOCK_TITLE))}"`
 					: "";
 				return `
-				<button type="button" class="btn btn-sm ${activeTab === tab.id ? "btn-primary" : "btn-default"}" data-plan-tab="${tab.id}"${lockAttrs}>
+				<button type="button" class="btn btn-sm btn-default ${activeTab === tab.id ? "is-active" : ""}" data-plan-tab="${tab.id}"${lockAttrs}>
 					${badge(tab.id)}${__(tab.label)}
 				</button>`;
 			})
 			.join("");
 		return `
-			<div class="dco-plan-tabs" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px 0;">
+			<div class="almdina-ui dco-plan-tabs" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px 0;">
 				${buttons}
 			</div>
 		`;
@@ -193,12 +193,36 @@
 		)}</div>`;
 	}
 
+	function planRowMismatched(frm, tab) {
+		const owner = window.AlmdinaPlanWorkspaceState;
+		if (!owner || typeof owner.planForTab !== "function") return false;
+		const row = owner.planForTab(frm, tab);
+		return Boolean(row && row.validation && row.validation.needs_recalculation);
+	}
+
+	function uploadedPlanMismatched(frm) {
+		return planRowMismatched(frm, "Custom");
+	}
+
+	function mismatchBanner() {
+		return `
+			<div class="dco-uploaded-plan-mismatch-banner" role="alert" aria-live="assertive">
+				<span class="dco-uploaded-plan-mismatch-banner__icon" aria-hidden="true">⚠</span>
+				<div class="dco-uploaded-plan-mismatch-banner__body">
+					<strong class="dco-uploaded-plan-mismatch-banner__title">${__("الخطة غير مطابقة للطلب")}</strong>
+					<span class="dco-uploaded-plan-mismatch-banner__summary">${__("بيانات هذا الطلب تم تعديلها وأصبحت الخطة غير مطابقة")}</span>
+				</div>
+			</div>
+		`;
+	}
+
 	function renderTabContent(frm, tab) {
 		if (tab === "Custom") {
 			if (!hasCustomPlan(frm)) {
 				return emptyState("لا يوجد خطة مرفوعة");
 			}
-			return renderPlanHtml(frm, getPlanForTab(frm, "Custom"));
+			const banner = uploadedPlanMismatched(frm) ? mismatchBanner() : "";
+			return `${banner}${renderPlanHtml(frm, getPlanForTab(frm, "Custom"))}`;
 		}
 
 		if (tab === "Approved") {
@@ -213,7 +237,11 @@
 		}
 
 		const planHtml = renderPlanHtml(frm, getPlanForTab(frm, "System"));
-		return planHtml || emptyState("لا توجد خطة نظام لعرضها.");
+		if (!planHtml) {
+			return emptyState("لا توجد خطة نظام لعرضها.");
+		}
+		const banner = planRowMismatched(frm, "System") ? mismatchBanner() : "";
+		return `${banner}${planHtml}`;
 	}
 
 	function ensureApprovedPlanLoaded(frm) {

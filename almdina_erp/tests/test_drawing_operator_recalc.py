@@ -63,3 +63,5 @@ def test_drawing_form_exposes_dual_approval_and_print_actions():
     assert 'frm.add_custom_button(__("استبدال ملف DXF")' not in ux
     assert "removeDrawingDxfToolbarButtons" in ux
     assert "frappe.almdina.upload_production_dxf = uploadDrawingDxf" in ux
+    assert "__uploadProductionDxfCore" in ux
+    assert "new frappe.ui.FileUploader" not in ux

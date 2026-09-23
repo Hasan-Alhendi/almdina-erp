@@ -14,8 +14,8 @@
         style.textContent = `
             .dco-operator-form .dco-fast-table tbody tr:not(.dco-special-row)
             .dco-check-toggle.dco-edge-profile-target.is-edge-missing.is-checked {
-                background:var(--primary,#2490ef)!important;
-                border-color:var(--primary,#2490ef)!important;
+                background:var(--alm-primary,#172033)!important;
+                border-color:var(--alm-primary,#172033)!important;
                 color:#fff!important;
                 box-shadow:0 2px 7px rgba(15,23,42,.16)!important;
             }
