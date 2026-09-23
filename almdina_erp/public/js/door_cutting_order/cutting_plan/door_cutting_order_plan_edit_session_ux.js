@@ -64,6 +64,7 @@
         ".dco-upload-dxf-plan",
     ].join(",");
     const ORIGINAL_DISABLED_ATTR = "data-almdina-plan-edit-original-disabled";
+    const PHASE_DISABLED_ATTR = "data-almdina-plan-phase-original-disabled";
     const EDITOR_SELECTOR = ".dco-plan-settings-editor";
     const STYLE_ID = "almdina-plan-settings-editor-style";
 
@@ -232,6 +233,45 @@
         const field = frm && frm.fields_dict && frm.fields_dict.plan_control_actions;
         const wrapper = field && field.$wrapper;
         return wrapper && wrapper.length ? wrapper : null;
+    }
+
+    function planPhase(frm) {
+        const coordinator = window.AlmdinaDcoEditSessionCoordinator;
+        const state = coordinator && typeof coordinator.snapshot === "function"
+            ? coordinator.snapshot(frm)
+            : null;
+        return state && state.activeKind === "plan" ? state.phase : null;
+    }
+
+    function draftCanChange(frm) {
+        const coordinator = window.AlmdinaDcoEditSessionCoordinator;
+        if (coordinator && typeof coordinator.snapshot === "function") {
+            const state = coordinator.snapshot(frm);
+            return state.activeKind === "plan" && state.phase === "editing";
+        }
+        return isEditing(frm);
+    }
+
+    function syncPhaseLocks(frm) {
+        const wrapper = actionSurface(frm);
+        if (!wrapper) return;
+        const phase = planPhase(frm);
+        const locked = phase === "starting" || phase === "saving" || phase === "cancelling";
+        wrapper.find("[data-almdina-plan-setting], .dco-recalculate-plan").each((_, element) => {
+            const control = $(element);
+            if (locked) {
+                if (control.attr(PHASE_DISABLED_ATTR) === undefined) {
+                    control.attr(PHASE_DISABLED_ATTR, control.prop("disabled") ? "1" : "0");
+                }
+                control.prop("disabled", true).attr("aria-disabled", "true");
+            } else {
+                const original = control.attr(PHASE_DISABLED_ATTR);
+                if (original === undefined) return;
+                control.prop("disabled", original === "1")
+                    .attr("aria-disabled", original === "1" ? "true" : "false")
+                    .removeAttr(PHASE_DISABLED_ATTR);
+            }
+        });
     }
 
     function setPlanActionsSuspended(frm, suspended) {
@@ -428,6 +468,7 @@
     }
 
     function patchFromControl(store, control, frm) {
+        if (!draftCanChange(frm)) return;
         const input = $(control);
         const fieldname = String(input.attr("data-almdina-plan-setting") || "");
         if (!PLAN_SETTING_FIELDS.includes(fieldname)) return;
@@ -470,6 +511,7 @@
         editor.find("[data-almdina-plan-setting]")
             .off("input.almdinaPlanEdit change.almdinaPlanEdit")
             .on("input.almdinaPlanEdit change.almdinaPlanEdit", function onSettingChanged() {
+                if (!draftCanChange(frm)) return;
                 patchFromControl(store, this, frm);
                 const current = store.snapshot();
                 markEditorDirty(host, Boolean(current && current.dirty));
@@ -658,6 +700,10 @@
 
     function sync(frm) {
         if (!frm || frm.doctype !== "Door Cutting Order") return;
+        if (["starting", "saving", "cancelling"].includes(planPhase(frm))) {
+            syncPhaseLocks(frm);
+            return;
+        }
         if (isEditing(frm) && !canEditPlanSettings(frm)) {
             const coordinator = editSessionCoordinator();
             if (coordinator && typeof coordinator.activeKind === "function" && coordinator.activeKind(frm) === "plan") {
@@ -676,8 +722,10 @@
             refreshFieldAccess(frm);
             mountDraftControls(frm);
             setPlanActionsSuspended(frm, true);
+            syncPhaseLocks(frm);
             return;
         }
+        syncPhaseLocks(frm);
         unmountDraftControls(frm);
         setPlanActionsSuspended(frm, false);
         projectCurrent(frm);
@@ -750,6 +798,8 @@
         cancelEditing: frm => coordinated("cancel", frm, cancelEditing),
         saveEditing: frm => coordinated("save", frm, saveEditing),
         validateDraft,
+        draftCanChange,
+        syncPhaseLocks,
         schedule,
     });
 })();

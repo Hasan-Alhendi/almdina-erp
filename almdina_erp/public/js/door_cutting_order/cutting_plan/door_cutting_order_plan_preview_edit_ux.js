@@ -91,6 +91,7 @@
                 "input.almdinaPreviewInvalidation change.almdinaPreviewInvalidation",
                 "[data-almdina-plan-setting]",
                 () => {
+                    if (legacy.draftCanChange && !legacy.draftCanChange(frm)) return;
                     const owner = previewOwner();
                     const changed = Boolean(owner && owner.invalidate(frm));
                     if (changed) {
@@ -127,6 +128,7 @@
 
     function sync(frm) {
         if (!frm || frm.doctype !== "Door Cutting Order") return;
+        if (legacy.syncPhaseLocks) legacy.syncPhaseLocks(frm);
         bindDraftInvalidation(frm);
         syncSaveButton(frm);
         syncPresentation(frm);
@@ -157,6 +159,7 @@
     }
 
     async function startEditingCommand(frm, sessionContext = null) {
+        if (legacy.syncPhaseLocks) legacy.syncPhaseLocks(frm);
         const owner = previewOwner();
         if (owner) owner.reset(frm);
         const result = await Promise.resolve(runBaseCommand("start", frm, sessionContext));
@@ -165,6 +168,7 @@
     }
 
     async function cancelEditingCommand(frm, sessionContext = null) {
+        if (legacy.syncPhaseLocks) legacy.syncPhaseLocks(frm);
         const owner = previewOwner();
         if (owner) owner.reset(frm);
         const result = await Promise.resolve(runBaseCommand("cancel", frm, sessionContext));
@@ -222,6 +226,7 @@
     }
 
     async function saveEditingCommand(frm, sessionContext = null) {
+        if (legacy.syncPhaseLocks) legacy.syncPhaseLocks(frm);
         const owner = previewOwner();
         if (!owner || !owner.isCommittable(frm)) {
             frappe.msgprint(__(saveBlockedReason(frm)));

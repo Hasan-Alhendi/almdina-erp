@@ -78,7 +78,7 @@
 
     function invalidate(frm) {
         const state = stateFor(frm);
-        if (state.status === "idle" || state.status === "stale") return false;
+        if (state.status === "idle" || state.status === "stale" || state.status === "saving") return false;
         state.generation += 1;
         state.activeRequestGeneration = null;
         state.requestedSettings = null;
@@ -206,18 +206,24 @@
 
         const state = stateFor(frm);
         const previewId = state.previewId;
+        const commitGeneration = state.generation;
         const requestIdentity = identity(frm);
+        const current = () => frm[STATE_KEY] === state
+            && state.generation === commitGeneration
+            && state.previewId === previewId
+            && state.status === "saving"
+            && identity(frm) === requestIdentity;
         state.status = "saving";
         state.error = null;
         dispatch(frm);
         try {
             const result = await api.commitPreview(frm.doc.name, previewId);
-            if (frm[STATE_KEY] !== state || identity(frm) !== requestIdentity) return false;
+            if (!current()) return false;
             frm[STATE_KEY] = { ...emptyState(), generation: state.generation + 1 };
             dispatch(frm);
             return result || true;
         } catch (error) {
-            if (frm[STATE_KEY] !== state || identity(frm) !== requestIdentity) return false;
+            if (!current()) return false;
             // The server consumes preview tokens even when a stale commit is
             // rejected. Mark it stale so Save cannot replay the same token.
             state.status = "stale";

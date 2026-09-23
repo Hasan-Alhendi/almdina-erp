@@ -247,6 +247,7 @@ jobs:
           node almdina_erp/tests/js/offcut_cost_preview_projection.test.js
           node almdina_erp/tests/js/plan_preview_cost_reconcile.test.js
           node almdina_erp/tests/js/plan_preview_state_ownership.test.js
+          node almdina_erp/tests/js/plan_preview_save_phase_lock.test.js
           node almdina_erp/tests/js/plan_cost_workspace_visual.test.js
           node almdina_erp/tests/js/special_price_workspace_refresh.test.js
           node almdina_erp/tests/js/cost_edit_session_lifecycle.test.js
