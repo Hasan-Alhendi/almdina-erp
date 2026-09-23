@@ -51,6 +51,67 @@
         if (document.getElementById(STYLE_ID)) return;
         $("head").append(`
             <style id="${STYLE_ID}">
+                .${ROOT_CLASS} .layout-main-section .form-page,
+                .${ROOT_CLASS} .layout-main-section-wrapper .form-page {
+                    max-width: 1440px !important;
+                    margin-inline: auto !important;
+                    width: 100% !important;
+                    padding-inline: 20px !important;
+                    box-sizing: border-box !important;
+                }
+                .${ROOT_CLASS} .dco-status-strip,
+                .${ROOT_CLASS} .dco-board-summary,
+                .${ROOT_CLASS} .form-section.dco-order-status-shell,
+                .${ROOT_CLASS} .form-section:has([data-fieldname="operator_status_strip"]) {
+                    width: 100% !important;
+                    max-width: none !important;
+                    margin: 0 0 6px !important;
+                    padding: 0 !important;
+                    border-bottom: none !important;
+                }
+                .${ROOT_CLASS} .form-section.dco-order-status-shell > .section-body,
+                .${ROOT_CLASS} .form-section:has([data-fieldname="operator_status_strip"]) > .section-body,
+                .${ROOT_CLASS} .form-section.dco-order-status-shell .form-column,
+                .${ROOT_CLASS} .form-section:has([data-fieldname="operator_status_strip"]) .form-column {
+                    width: 100% !important;
+                    max-width: none !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    flex: 1 1 100% !important;
+                }
+                .${ROOT_CLASS} [data-fieldname="operator_status_strip"],
+                .${ROOT_CLASS} [data-fieldname="operator_status_strip"] .frappe-control,
+                .${ROOT_CLASS} [data-fieldname="operator_status_strip"] .form-group,
+                .${ROOT_CLASS} [data-fieldname="operator_status_strip"] .control-input-wrapper {
+                    max-width: none !important;
+                    width: 100% !important;
+                    margin-inline: 0 !important;
+                    box-sizing: border-box !important;
+                }
+                .${ROOT_CLASS} [data-fieldname="operator_status_strip"] {
+                    margin-block: 0 !important;
+                    padding: 0 !important;
+                }
+                .${ROOT_CLASS} [data-fieldname="operator_status_strip"] .dco-order-tracking-strip,
+                .${ROOT_CLASS} [data-fieldname="operator_status_strip"] .frappe-card {
+                    width: 100% !important;
+                    max-width: none !important;
+                    margin: 0 !important;
+                    padding-block: 14px 16px !important;
+                    padding-inline: 44px !important;
+                    border-radius: 14px !important;
+                    border-top: 1px solid var(--border-color,#dfe3e8) !important;
+                    border-inline-end: 1px solid var(--border-color,#dfe3e8) !important;
+                    border-bottom: 1px solid var(--border-color,#dfe3e8) !important;
+                    box-shadow: 0 2px 10px rgba(15,23,42,.035) !important;
+                    box-sizing: border-box !important;
+                }
+                .${ROOT_CLASS} .dco-order-intake-card,
+                .${ROOT_CLASS} .dco-material-edge-card,
+                .${ROOT_CLASS} .dco-measurements-card {
+                    width: 100% !important;
+                    box-sizing: border-box !important;
+                }
                 .${ROOT_CLASS} [data-fieldname="order_details_section"],
                 .${ROOT_CLASS} [data-fieldname="board_section"],
                 .${ROOT_CLASS} [data-fieldname="pieces_section"] {
@@ -58,16 +119,44 @@
                 }
                 .${ROOT_CLASS} .dco-order-intake-card,
                 .${ROOT_CLASS} .dco-material-edge-card {
-                    margin: 10px 0 14px !important;
-                    padding: 6px 16px 14px !important;
+                    margin-block: 6px 10px !important;
+                    padding-block: 14px 16px !important;
+                    padding-inline: 44px !important;
                     border: 1px solid var(--border-color,#dfe3e8) !important;
                     border-radius: 14px !important;
                     background: var(--card-bg,var(--fg-color,#fff)) !important;
                     box-shadow: 0 2px 10px rgba(15,23,42,.035) !important;
                 }
+                .${ROOT_CLASS} .dco-order-intake-card {
+                    display: block !important;
+                }
+                .${ROOT_CLASS} .dco-order-intake-card > .dco-order-section-heading,
+                .${ROOT_CLASS} .dco-material-edge-card > .dco-order-section-heading {
+                    width: 100%;
+                    box-sizing: border-box;
+                }
+                .${ROOT_CLASS} .dco-material-edge-card {
+                    display: block !important;
+                }
+                .${ROOT_CLASS} .dco-order-intake-card > .section-body {
+                    display: grid !important;
+                    grid-template-columns: minmax(0, 2fr) minmax(220px, 1fr);
+                    gap: 12px 16px;
+                    direction: rtl;
+                    align-items: start;
+                    width: 100% !important;
+                    max-width: none !important;
+                    margin: 0 !important;
+                    box-sizing: border-box;
+                }
+                .${ROOT_CLASS} .dco-order-intake-card > .section-body > .dco-order-section-heading {
+                    grid-column: 1 / -1;
+                    grid-row: 1;
+                }
                 .${ROOT_CLASS} .dco-measurements-card {
-                    margin: 14px 0 0 !important;
-                    padding: 4px 0 0 !important;
+                    margin-block: 10px 0 !important;
+                    padding-block: 12px 0 !important;
+                    padding-inline: 44px !important;
                     border: 0 !important;
                     border-radius: 0 !important;
                     background: transparent !important;
@@ -79,9 +168,36 @@
                     justify-content: space-between;
                     gap: 12px;
                     width: 100%;
-                    padding: 7px 0 11px;
+                    padding: 0 0 10px;
+                    margin: 0;
                 }
-                .${ROOT_CLASS} .dco-order-section-heading__copy { min-width: 0; }
+                .${ROOT_CLASS} .dco-order-section-heading__copy {
+                    min-width: 0;
+                    padding-inline: 0;
+                }
+                .${ROOT_CLASS} .dco-order-intake-card.form-section,
+                .${ROOT_CLASS} .dco-material-edge-card.form-section,
+                .${ROOT_CLASS} .dco-measurements-card.form-section {
+                    padding-inline: 44px !important;
+                }
+                .${ROOT_CLASS} .dco-order-intake-card .frappe-control,
+                .${ROOT_CLASS} .dco-material-edge-card .frappe-control,
+                .${ROOT_CLASS} .dco-material-edge-card .form-group {
+                    padding-inline: 0 !important;
+                    margin-inline: 0 !important;
+                }
+                .${ROOT_CLASS} .dco-order-intake-card .frappe-control .control-label,
+                .${ROOT_CLASS} .dco-material-edge-card .frappe-control .control-label,
+                .${ROOT_CLASS} .dco-material-edge-card .form-group .control-label,
+                .${ROOT_CLASS} .dco-measurements-card .dco-fast-entry-toolbar {
+                    padding-inline: 0 !important;
+                    margin-inline: 0 !important;
+                }
+                .${ROOT_CLASS} .dco-order-section-heading__title,
+                .${ROOT_CLASS} .dco-order-section-heading__subtitle {
+                    padding-inline: 0;
+                    text-align: start;
+                }
                 .${ROOT_CLASS} .dco-order-section-heading__title {
                     display: block;
                     margin: 0;
@@ -115,33 +231,38 @@
                 .${ROOT_CLASS} .dco-measurements-card > .section-head {
                     display: none !important;
                 }
+                .${ROOT_CLASS} .dco-order-intake-card > .section-body,
+                .${ROOT_CLASS} .dco-material-edge-card > .section-body,
+                .${ROOT_CLASS} .dco-measurements-card > .section-body {
+                    padding-inline: 0 !important;
+                    padding-top: 0 !important;
+                    margin: 0 !important;
+                    max-width: none !important;
+                    width: 100% !important;
+                }
 
                 /* Order intake: customer/date, notes, then cutting machine on one row. */
-                .${ROOT_CLASS} .dco-order-intake-card > .section-body {
-                    display: grid !important;
-                    grid-template-columns: minmax(0,2fr) minmax(220px,1fr);
-                    gap: 12px 16px;
-                    direction: rtl;
-                    align-items: start;
-                }
                 .${ROOT_CLASS} .dco-order-intake-card > .section-body > .form-column {
                     display: contents !important;
+                    padding: 0 !important;
+                    margin: 0 !important;
+                    max-width: none !important;
                 }
                 .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="customer"] {
                     grid-column: 1;
-                    grid-row: 1;
+                    grid-row: 2;
                 }
                 .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="order_date"] {
                     grid-column: 2;
-                    grid-row: 1;
+                    grid-row: 2;
                 }
                 .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="order_notes"] {
                     grid-column: 1 / -1;
-                    grid-row: 2;
+                    grid-row: 3;
                 }
                 .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="order_cutting_machine"] {
                     grid-column: 1 / -1;
-                    grid-row: 3;
+                    grid-row: 4;
                     max-width: none !important;
                     width: auto;
                 }
@@ -192,11 +313,14 @@
                     font-weight: 500;
                 }
                 .${ROOT_CLASS} [data-fieldname="order_notes"] textarea {
-                    min-height: 72px !important;
-                    max-height: 170px !important;
+                    min-height: 38px !important;
+                    max-height: 38px !important;
+                    height: 38px !important;
                     resize: none !important;
-                    overflow-y: auto !important;
-                    line-height: 1.55 !important;
+                    overflow-x: auto !important;
+                    overflow-y: hidden !important;
+                    line-height: 1.35 !important;
+                    white-space: nowrap !important;
                 }
                 .${ROOT_CLASS} .dco-order-notes-locked textarea:disabled,
                 .${ROOT_CLASS} .dco-order-notes-locked textarea[readonly],
@@ -233,16 +357,27 @@
 
                 @media (max-width: 980px) {
                     .${ROOT_CLASS} .dco-order-intake-card > .section-body {
-                        grid-template-columns: minmax(0,1.5fr) minmax(190px,1fr);
+                        grid-template-columns: minmax(0, 1.5fr) minmax(190px, 1fr);
                     }
                     .${ROOT_CLASS} .dco-material-row--primary {
                         grid-template-columns: minmax(0,1.5fr) minmax(120px,1fr) minmax(120px,1fr);
                     }
                 }
-                @media (max-width: 700px) {
+                @media (max-width: 700px) { 
+                    .${ROOT_CLASS} .layout-main-section .form-page,
+                    .${ROOT_CLASS} .layout-main-section-wrapper .form-page {
+                        padding-inline: 12px !important;
+                    }
                     .${ROOT_CLASS} .dco-order-intake-card,
                     .${ROOT_CLASS} .dco-material-edge-card {
-                        padding: 5px 11px 12px !important;
+                        padding-block: 12px 14px !important;
+                        padding-inline: 32px !important;
+                        border-radius: 12px !important;
+                    }
+                    .${ROOT_CLASS} [data-fieldname="operator_status_strip"] .dco-order-tracking-strip,
+                    .${ROOT_CLASS} [data-fieldname="operator_status_strip"] .frappe-card {
+                        padding-block: 12px 14px !important;
+                        padding-inline: 32px !important;
                         border-radius: 12px !important;
                     }
                     .${ROOT_CLASS} .dco-order-intake-card > .section-body {
@@ -294,16 +429,25 @@
             : 0;
     }
 
+    function ensureStatusShell(frm) {
+        const node = fieldNode(frm, "operator_status_strip");
+        const section = node && node.closest ? node.closest(".form-section") : null;
+        if (section) section.classList.add("dco-order-status-shell");
+    }
+
     function ensureHeading(frm, fieldname, config) {
         const section = sectionNode(frm, fieldname);
-        if (!section) return null;
+        const body = section && section.querySelector(":scope > .section-body");
+        if (!section || !body) return null;
         section.classList.add(config.className);
-        let heading = section.querySelector(":scope > .dco-order-section-heading");
+        let heading = section.querySelector(":scope > .dco-order-section-heading")
+            || body.querySelector(":scope > .dco-order-section-heading");
         if (!heading) {
             heading = document.createElement("div");
             heading.className = "dco-order-section-heading";
-            const body = section.querySelector(":scope > .section-body") || section.firstElementChild;
-            section.insertBefore(heading, body || null);
+        }
+        if (heading.parentElement !== body) {
+            body.insertBefore(heading, body.firstChild || null);
         }
         const meta = fieldname === "pieces_section"
             ? `<span class="dco-order-section-heading__meta">${pieceCount(frm)} قطعة</span>`
@@ -394,16 +538,10 @@
         const field = frm && frm.fields_dict && frm.fields_dict.order_notes;
         const textarea = field && field.$input && field.$input.get(0);
         if (!textarea) return;
-        const resize = () => {
-            textarea.style.height = "auto";
-            const next = Math.min(170, Math.max(72, textarea.scrollHeight || 72));
-            textarea.style.height = `${next}px`;
-        };
-        if (!textarea.__almdinaAutoGrowBound) {
-            textarea.addEventListener("input", resize);
-            textarea.__almdinaAutoGrowBound = true;
-        }
-        resize();
+        textarea.rows = 1;
+        textarea.style.height = "38px";
+        textarea.style.minHeight = "38px";
+        textarea.style.maxHeight = "38px";
     }
 
     function keepFieldVisible(frm, fieldname, placeholder) {
@@ -480,6 +618,7 @@
         if (!root) return;
         installStyles();
         root.classList.add(ROOT_CLASS);
+        ensureStatusShell(frm);
         Object.entries(SECTION_COPY).forEach(([fieldname, config]) => ensureHeading(frm, fieldname, config));
         ensureMaterialRows(frm);
         keepEmptyFieldsVisible(frm);

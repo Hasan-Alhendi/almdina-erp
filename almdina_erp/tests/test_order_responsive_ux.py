@@ -138,8 +138,24 @@ def test_phone_controls_are_touch_sized_and_primary_surfaces_stack():
 def test_order_header_tabs_dialogs_and_list_are_viewport_safe():
     css = source(RESPONSIVE_CSS)
     list_source = source(LIST_UX)
+    toolbar = source(
+        ROOT
+        / "public"
+        / "js"
+        / "door_cutting_order"
+        / "core"
+        / "door_cutting_order_toolbar_stability_ux.js"
+    )
 
     assert ".page-head.dco-responsive-head .page-actions" in css
+    assert ".page-head.dco-responsive-head .standard-items-section" in css
+    assert 'data-dco-mobile-slot="primary-left"' in css
+    assert 'data-dco-mobile-slot="utility-menu"' in css
+    assert "grid-template-columns: repeat(6, minmax(0, 1fr))" in css
+    assert "function applyMobileActionSlots" in toolbar
+    assert "function reconcileSearchPlacement" in toolbar
+    assert "utility-notes" in toolbar
+    assert "navbar-modal-search-mobile" in toolbar
     assert ".dco-sticky-tabs" in css
     assert "overflow-x: auto !important" in css
     assert ".dco-special-shape-modal .modal-dialog" in css
@@ -259,6 +275,8 @@ def test_order_list_status_filter_uses_frappe_standard_filter_contract():
     assert "custom_filter_configs:" in list_source
     assert "function statusFilterConfig()" in list_source
     assert "function reconcileStatusFilterLayout(listview)" in list_source
+    assert "function reconcileMobileListToolbarLayout(listview)" in list_source
+    assert "data-dco-list-toolbar-slot" in list_source
     assert "function hydrateStatusFilterOptions(listview)" in list_source
     assert 'STATUS_FILTER_FIELDNAME = "status"' in list_source
     assert 'STATUS_FILTER_ALL_LABEL = "كل الحالات"' in list_source
@@ -266,7 +284,9 @@ def test_order_list_status_filter_uses_frappe_standard_filter_contract():
     assert 'label: __("Status")' in list_source
     assert ".dco-status-filter-slot" in css
     assert ".dco-order-list .dco-status-filter-slot" in css
-    assert "grid-template-columns: repeat(2, minmax(0, 1fr)) !important;" in css
+    assert ".dco-order-list.dco-order-card-layout .page-form" in css
+    assert "data-dco-list-toolbar-slot" in css
+    assert "grid-template-columns: repeat(6, minmax(0, 1fr))" in css
     assert ".dco-order-list .dco-status-filter-slot > .frappe-control" in css
     assert ".dco-order-list .filter-section" in css
     assert 'root.querySelector(".filter-section")' in list_source

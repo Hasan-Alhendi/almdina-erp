@@ -77,6 +77,18 @@ class TestProductionRoutingWorkflowUx(unittest.TestCase):
         self.assertIn("@media (max-width: 640px)", css)
         self.assertIn("@media (prefers-reduced-motion: reduce)", css)
 
+    def test_routing_filters_share_one_full_width_row_on_web_and_mobile(self) -> None:
+        css = CSS.read_text(encoding="utf-8")
+        self.assertIn("grid-template-columns: auto minmax(0, 1fr);", css)
+        self.assertIn("width: max-content;", css)
+        self.assertIn(".prw-filter-group.alm-filter-group.is-routings .form-column > form", css)
+        self.assertIn("minmax(0, 1.7fr) minmax(120px, 0.7fr)", css)
+        self.assertIn("minmax(0, 1.7fr) minmax(108px, 0.7fr)", css)
+        self.assertIn(".layout-main .prw-shell .form-column.col-sm-12 > form > .input-max-width", css)
+        self.assertIn("max-width: none;", css)
+        self.assertIn(".prw-filter-group.alm-filter-group .section-body:first-child", css)
+        self.assertNotIn("grid-template-columns: auto minmax(260px, 1fr) minmax(155px, auto)", css)
+
     def test_application_use_case_is_framework_independent(self) -> None:
         source = APPLICATION.read_text(encoding="utf-8")
         self.assertNotIn("import frappe", source)

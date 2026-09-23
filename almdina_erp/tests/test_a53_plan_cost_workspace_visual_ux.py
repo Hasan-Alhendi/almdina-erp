@@ -113,8 +113,11 @@ def test_a53_polishes_plan_and_cost_without_replacing_existing_presenters() -> N
 
     for plan_selector in (
         '[data-fieldname="plan_controls_intro"] .dco-plan-intro',
+        'dco-plan-settings-readonly[data-almdina-plan-settings-summary-owner="stable"]',
         '[data-fieldname="plan_control_actions"] .dco-plan-actions-shell',
         '[data-fieldname="cutting_plan_html"] .dco-plan-tabs',
+        '[data-fieldname="cutting_plan_html"] .dco-plan-context-actions-host',
+        '[data-fieldname="cutting_plan_html"] .dco-plan-tab-content',
         '[data-fieldname="cutting_plan_html"] .dco-board-gallery',
     ):
         assert plan_selector in visual

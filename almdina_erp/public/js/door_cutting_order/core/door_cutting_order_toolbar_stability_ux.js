@@ -27,7 +27,15 @@
         "Reset Piece Edge Customization",
         "Reset Edge Customization",
     ]);
+    const MOBILE_PRIMARY_LEFT = new Set(["إرسال للإنتاج", "Send to Production"]);
+    const MOBILE_PRIMARY_RIGHT = new Set([
+        "إلغاء الطلب",
+        "Cancel Order",
+        "استئناف الطلب",
+        "Resume Order",
+    ]);
     const ORDER = new Map([
+        ["إرسال للإنتاج", 5],
         ["إعادة حساب خطة القص", 10],
         ["إعادة للمسودة", 35],
         ["إرجاع لمرحلة سابقة", 36],
@@ -114,6 +122,10 @@
                 max-height:none!important;
                 overflow:visible!important;
             }
+            .page-head.dco-stable-actions-head .page-head-content {
+                position:relative!important;
+            }
+            @media (min-width:721px){
             .page-head.dco-stable-actions-head .page-actions,
             .page-head.dco-stable-actions-head .custom-actions,
             .page-head.dco-stable-actions-head .standard-actions {
@@ -123,9 +135,6 @@
                 flex-wrap:nowrap!important;
                 align-items:center!important;
                 gap:6px!important;
-            }
-            .page-head.dco-stable-actions-head .page-head-content {
-                position:relative!important;
             }
             .page-head.dco-stable-actions-head .page-actions {
                 margin:0!important;
@@ -147,6 +156,7 @@
                 white-space:nowrap!important;
                 visibility:visible!important;
                 opacity:1!important;
+            }
             }
 
             /* Measurement toolbar: exactly one centered title and three actions on the left. */
@@ -260,6 +270,13 @@
                     position:static!important;
                     transform:none!important;
                     margin-inline-start:auto!important;
+                }
+            }
+            @media(max-width:720px){
+                .page-head.dco-stable-actions-head .page-actions {
+                    margin-inline-start:0!important;
+                    width:100%!important;
+                    max-width:100%!important;
                 }
             }
             @media(max-width:560px){
@@ -408,6 +425,108 @@
         });
     }
 
+    function isSearchAction(node) {
+        if (!node || !node.closest(".standard-actions")) return false;
+        if (node.querySelector(".icon-search, .es-icon-sm[data-icon='search'], use[href*='search']")) {
+            return true;
+        }
+        if (node.classList.contains("btn-open") && !text(node)) return true;
+        const label = text(node);
+        return /^(search|بحث)$/i.test(label);
+    }
+
+    function reconcileSearchPlacement(head) {
+        const section = head && head.querySelector(".standard-items-section");
+        const actions = head && head.querySelector(".page-actions");
+        const searchBar = head && head.querySelector(".search-bar");
+        const standardActions = actions && actions.querySelector(".standard-actions");
+        if (!section || !actions || !searchBar || !standardActions) return;
+
+        if (window.innerWidth <= 720) {
+            if (searchBar.parentElement !== section) {
+                section.insertBefore(searchBar, actions);
+            }
+            return;
+        }
+
+        if (searchBar.parentElement !== standardActions) {
+            standardActions.insertBefore(searchBar, standardActions.firstChild);
+        }
+    }
+
+    function clearMobileActionSlots(actions) {
+        if (!actions) return;
+        actions.querySelectorAll("[data-dco-mobile-slot]").forEach(node => {
+            node.removeAttribute("data-dco-mobile-slot");
+        });
+        actions.closest(".page-head")?.querySelectorAll(".search-bar[data-dco-mobile-slot]").forEach(node => {
+            node.removeAttribute("data-dco-mobile-slot");
+        });
+        actions.querySelectorAll(
+            ".custom-actions > button,.custom-actions > a,.custom-mobile-actions > button,.custom-mobile-actions > a,.standard-actions > button,.standard-actions > .btn,.standard-actions > a,.menu-btn-group > button,.menu-btn-group > .btn"
+        ).forEach(node => {
+            node.style.removeProperty("--dco-mobile-grid-row");
+            node.style.removeProperty("--dco-mobile-grid-col");
+        });
+    }
+
+    function applyMobileActionSlots(head) {
+        const actions = head && head.querySelector(".page-actions");
+        if (!actions) return;
+        clearMobileActionSlots(actions);
+        if (window.innerWidth > 720) return;
+
+        let secondaryIndex = 0;
+        const assignSecondary = node => {
+            const row = 3 + Math.floor(secondaryIndex / 2);
+            const col = secondaryIndex % 2 === 0 ? "1 / 4" : "4 / 7";
+            node.setAttribute("data-dco-mobile-slot", "secondary");
+            node.style.setProperty("--dco-mobile-grid-row", String(row));
+            node.style.setProperty("--dco-mobile-grid-col", col);
+            secondaryIndex += 1;
+        };
+
+        actions.querySelectorAll(
+            ".custom-actions > button,.custom-actions > a,.custom-mobile-actions > button,.custom-mobile-actions > a"
+        ).forEach(node => {
+            const label = actionLabel(node);
+            if (
+                node.classList.contains("dco-notes-toolbar-button")
+                || label === "الملاحظات"
+                || label === "Notes"
+            ) {
+                node.setAttribute("data-dco-mobile-slot", "utility-notes");
+                return;
+            }
+            if (MOBILE_PRIMARY_LEFT.has(label)) {
+                node.setAttribute("data-dco-mobile-slot", "primary-left");
+                return;
+            }
+            if (MOBILE_PRIMARY_RIGHT.has(label)) {
+                node.setAttribute("data-dco-mobile-slot", "primary-right");
+                return;
+            }
+            if (label) assignSecondary(node);
+        });
+
+        actions.querySelectorAll(".standard-actions > button,.standard-actions > .btn,.standard-actions > a").forEach(node => {
+            if (isSearchAction(node)) {
+                node.setAttribute("data-dco-mobile-slot", "utility-search");
+            }
+        });
+
+        actions.querySelectorAll(".menu-btn-group > button,.menu-btn-group > .btn").forEach(node => {
+            node.setAttribute("data-dco-mobile-slot", "utility-menu");
+        });
+
+        const searchHost = head.querySelector(".search-bar .navbar-modal-search-mobile")
+            || head.querySelector(".navbar-modal-search-mobile");
+        if (searchHost) {
+            const slotTarget = searchHost.closest(".search-bar") || searchHost;
+            slotTarget.setAttribute("data-dco-mobile-slot", "utility-search");
+        }
+    }
+
     function dedupeButtons(head) {
         const seen = new Map();
         // Frappe owns grouped-action nodes and keeps internal references to them.
@@ -490,6 +609,8 @@
         removeLegacyButtons(frm, head);
         removeDrawingDxfGroup(head);
         dedupeButtons(head);
+        reconcileSearchPlacement(head);
+        applyMobileActionSlots(head);
         anchorActionsToViewportLeft(head);
     }
 

@@ -19,7 +19,8 @@
     const TOOLBAR_CLASS = "dco-tab-edit-toolbar";
     const TOOLBAR_SLOT_CLASS = "dco-tab-edit-toolbar-slot";
     const PAGE_CLASS = "dco-tab-local-edit-actions";
-    const STYLE_ID = "dco-tab-local-edit-actions-css";
+    const STYLE_ID = "dco-tab-local-edit-actions-css-v2";
+    const LEGACY_STYLE_IDS = ["dco-tab-local-edit-actions-css"];
     const BUSY_KEY = "__almdinaPageEditActionBusy";
 
     function documentContext() {
@@ -36,6 +37,10 @@
     }
 
     function installStyles() {
+        LEGACY_STYLE_IDS.forEach((id) => {
+            const legacy = document.getElementById(id);
+            if (legacy) legacy.remove();
+        });
         if (document.getElementById(STYLE_ID)) return;
         $("head").append(`
             <style id="${STYLE_ID}">
@@ -58,43 +63,40 @@
                     background:var(--subtle-fg,#f4f6f8);color:var(--text-muted,#687481);font-size:10px;font-weight:750;white-space:nowrap;
                 }
                 .${TOOLBAR_CLASS}[data-editing="1"] {
-                    border-color:color-mix(in srgb, var(--alm-primary, #172033) 34%, transparent);box-shadow:0 0 0 3px color-mix(in srgb, var(--alm-primary, #172033) 8%, transparent);
+                    border:0;box-shadow:none;background:transparent;
                 }
                 .${TOOLBAR_CLASS}[data-editing="1"] .${TOOLBAR_CLASS}__state {
                     background:color-mix(in srgb, var(--alm-primary, #172033) 10%, transparent);color:var(--alm-primary,#172033);
                 }
                 .${TOOLBAR_CLASS}__actions { display:flex;align-items:center;gap:8px;flex:0 0 auto; }
-                .${TOOLBAR_CLASS}__actions .btn {
-                    min-width:82px;min-height:34px;border-radius:9px;font-weight:800;
-                }
-                .${TOOLBAR_CLASS}__actions .btn:focus-visible {
+                .${TOOLBAR_CLASS}__actions :where(.btn, button):focus-visible {
                     outline:none !important;box-shadow:0 0 0 3px color-mix(in srgb, var(--alm-primary, #172033) 15%, transparent) !important;
                 }
                 .dco-plan-settings-readonly {
-                    margin:0 0 12px;padding:13px 14px;border:1px solid var(--border-color,#dfe3e8);border-radius:13px;
+                    margin:0 0 6px;padding-block:14px 16px;padding-inline:44px;border:1px solid var(--border-color,#dfe3e8);border-radius:14px;
                     background:linear-gradient(180deg,var(--card-bg,#fff),var(--subtle-fg,#fafbfc));direction:rtl;
                 }
                 .dco-plan-settings-readonly__header {
-                    display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px;
+                    display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px;padding-inline:0;
                 }
                 .dco-plan-settings-readonly__title {
-                    margin:0;font-size:13px;font-weight:850;color:var(--text-color,#26313b);
+                    margin:0;font-size:13px;font-weight:850;color:var(--text-color,#26313b);text-align:start;
                 }
                 .dco-plan-settings-readonly__help {
-                    margin:3px 0 0;color:var(--text-muted,#687481);font-size:10.5px;line-height:1.55;
+                    margin:3px 0 0;color:var(--text-muted,#687481);font-size:10.5px;line-height:1.55;text-align:start;
                 }
                 .dco-plan-settings-readonly__grid {
-                    display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;
+                    display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;
                 }
                 .dco-plan-settings-readonly__item {
-                    min-width:0;padding:9px 10px;border-radius:10px;background:var(--subtle-fg,#f6f8fa);
+                    min-width:0;padding:6px 8px;border-radius:8px;background:var(--subtle-fg,#f6f8fa);
                 }
                 .dco-plan-settings-readonly__label {
-                    display:block;margin-bottom:4px;color:var(--text-muted,#687481);font-size:10px;font-weight:750;
+                    display:block;margin-bottom:2px;color:var(--text-muted,#687481);font-size:9.5px;font-weight:750;
                 }
                 .dco-plan-settings-readonly__value {
                     display:block;overflow:hidden;text-overflow:ellipsis;color:var(--text-color,#26313b);
-                    font-size:12px;font-weight:850;white-space:nowrap;
+                    font-size:11px;font-weight:850;white-space:nowrap;
                 }
                 .dco-a53-workspace-polish [data-fieldname="plan_control_actions"][data-almdina-workspace-editing="1"]::before,
                 .dco-a53-workspace-polish [data-fieldname="order_cost_invoice_html"][data-almdina-workspace-editing="1"]::before {
@@ -106,7 +108,6 @@
                 @media (max-width:560px) {
                     .${TOOLBAR_CLASS} { align-items:stretch;flex-direction:row;width:100%;justify-content:flex-end; }
                     .${TOOLBAR_CLASS}__actions { width:auto; }
-                    .${TOOLBAR_CLASS}__actions .btn { min-width:76px; }
                     .dco-plan-settings-readonly__grid { grid-template-columns:1fr; }
                 }
             </style>
@@ -286,7 +287,6 @@
         return ui.button({
             label: __(label),
             variant,
-            size: "btn-sm",
             className: extraClass,
             disabled: Boolean(disabled),
             attrs,
