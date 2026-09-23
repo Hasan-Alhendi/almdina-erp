@@ -107,6 +107,15 @@
 		);
 	}
 
+	function displayedPlanForTab(frm, tab) {
+		if (tab === "System") {
+			const preview = window.AlmdinaPlanPreviewSession;
+			const row = preview && preview.displayedPreviewRow && preview.displayedPreviewRow(frm);
+			if (row) return parseJsonField(row.snapshot_json);
+		}
+		return getPlanForTab(frm, tab);
+	}
+
 	function defaultTab(frm) {
 		const allowed = visibleTabs(frm).map((tab) => tab.id);
 		if (!allowed.length) return "System";
@@ -236,11 +245,14 @@
 			);
 		}
 
-		const planHtml = renderPlanHtml(frm, getPlanForTab(frm, "System"));
+		const displayed = window.AlmdinaPlanTabsUX.displayedPlanForTab(frm, "System");
+		const planHtml = renderPlanHtml(frm, displayed);
 		if (!planHtml) {
 			return emptyState("لا توجد خطة نظام لعرضها.");
 		}
-		const banner = planRowMismatched(frm, "System") ? mismatchBanner() : "";
+		const preview = window.AlmdinaPlanPreviewSession;
+		const banner = !(preview && preview.displayedPreviewRow && preview.displayedPreviewRow(frm))
+			&& planRowMismatched(frm, "System") ? mismatchBanner() : "";
 		return `${banner}${planHtml}`;
 	}
 
@@ -311,7 +323,7 @@
 
 	function printActivePlan(frm) {
 		const tab = activeTab(frm);
-		const plan = getPlanForTab(frm, tab);
+		const plan = window.AlmdinaPlanTabsUX.displayedPlanForTab(frm, tab);
 		const renderer = window.AlmdinaCuttingPlanRender;
 		if (!plan || !plan.sheets || !plan.sheets.length) {
 			const emptyMessages = {
@@ -342,6 +354,7 @@
 		isSourceTabLocked,
 		lockSourceTabs,
 		getPlanForTab,
+		displayedPlanForTab,
 		ensureApprovedPlanLoaded,
 		renderDualTabs,
 		printActivePlan,

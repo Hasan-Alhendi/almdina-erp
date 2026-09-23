@@ -12,6 +12,7 @@ app_include_css = [
     "/assets/almdina_erp/css/door_cutting_order_measurement_structure.css",
     "/assets/almdina_erp/css/door_cutting_order_responsive.css",
     "/assets/almdina_erp/css/door_cutting_order_form_tab_layout.css",
+    "/assets/almdina_erp/css/door_cutting_order_form_sidebar.css",
     # Raw /assets paths are not content-fingerprinted by Frappe; bump the bounded
     # DCO list revision when its presentation contract changes.
     "/assets/almdina_erp/css/door_cutting_order_list.css?v=15",
@@ -47,6 +48,7 @@ doctype_js = {
         # Critical bootstrap only. The document context must exist before any
         # surface or lifecycle owner registers cancellable work with it.
         "public/js/door_cutting_order/core/door_cutting_order_document_context.js",
+        "public/js/door_cutting_order/core/door_cutting_order_form_sidebar_controller.js",
         # Sole authority for DCO edit-session ownership. Feature-local edit
         # state remains a temporary projection behind registered adapters.
         "public/js/door_cutting_order/core/door_cutting_order_edit_session_coordinator.js",

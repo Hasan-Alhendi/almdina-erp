@@ -125,8 +125,8 @@
         if (!frm || !frm.doc) return null;
         const tabs = window.AlmdinaPlanTabsUX;
         const activeTab = frm.__almdina_active_plan_tab;
-        if (tabs && activeTab && typeof tabs.getPlanForTab === "function") {
-            const active = tabs.getPlanForTab(frm, activeTab);
+        if (tabs && activeTab && typeof tabs.displayedPlanForTab === "function") {
+            const active = tabs.displayedPlanForTab(frm, activeTab);
             if (active && typeof active === "object") return active;
         }
         const raw = frm.doc.system_plan_json || frm.doc.cutting_plan_json;

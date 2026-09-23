@@ -244,6 +244,7 @@ jobs:
       - name: Run active frontend browser simulations
         run: |
           node almdina_erp/tests/js/frontend_foundation.test.js
+          node almdina_erp/tests/js/dco_form_sidebar_controller.test.js
           node almdina_erp/tests/js/almdina_ui.test.js
           node almdina_erp/tests/js/workspace_store.test.js
           node almdina_erp/tests/js/workspace_sync_coordinator.test.js
@@ -257,6 +258,8 @@ jobs:
           node almdina_erp/tests/js/cost_workspace_document_version.test.js
           node almdina_erp/tests/js/offcut_cost_preview_projection.test.js
           node almdina_erp/tests/js/plan_preview_cost_reconcile.test.js
+          node almdina_erp/tests/js/plan_preview_state_ownership.test.js
+          node almdina_erp/tests/js/plan_preview_save_phase_lock.test.js
           node almdina_erp/tests/js/plan_cost_workspace_visual.test.js
           node almdina_erp/tests/js/special_price_workspace_refresh.test.js
           node almdina_erp/tests/js/cost_edit_session_lifecycle.test.js
