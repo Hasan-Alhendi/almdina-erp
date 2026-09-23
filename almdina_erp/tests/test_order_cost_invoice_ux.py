@@ -42,7 +42,11 @@ def test_primary_tab_bar_is_fixed_on_scroll_and_labels_are_arabic():
     assert 'results_tab: "خطة القص"' in src
     assert 'cost_tab: "تكلفة الطلب"' in src
     assert 'frm.set_df_property(fieldname, "label", label)' in src
-    assert 'const STYLE_ID = "dco-responsive-header-css-v6"' in src
+    assert 'const STYLE_ID = "dco-responsive-header-css-v8"' in src
+    assert "--alm-primary" in src
+    assert "--alm-on-primary" in src
+    assert "border-bottom: none !important" in src
+    assert "border-radius: 0 !important" in src
     assert "@media (min-width: 721px)" in src
     assert "function reconcileSearchPlacement" in _source(
         ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_toolbar_stability_ux.js"
@@ -65,11 +69,11 @@ def test_cost_measurements_are_compact_and_custom_edge_details_have_one_owner():
     assert "<th>طول القشاط (م)</th>" not in cost
     assert "<th>طول القشاط م</th>" not in cost
     assert "<th>نوع القشاط</th>" in cost
-    assert '<th class="text-start">ملاحظات</th>' in cost
+    assert '<th class="text-start">ملاحظات</th><th>نوع القشاط</th>' in cost
 
     # The focused edge-document presenter decorates only exceptional/custom
     # per-side edge choices; the cost presenter remains the table owner.
-    assert 'headerCells[5].textContent = "القشاط المخصص"' in edges
+    assert 'headerCells[6].textContent = "القشاط المخصص"' in edges
     assert "customEdgeSummaryHtml(data[index].details)" in edges
     assert "dco-notes-col" in edges
 

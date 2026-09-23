@@ -114,11 +114,8 @@
 
     function planMetrics(row) {
         const totals = (row && row.totals) || {};
-        const engine = (row && row.engine) || {};
         return {
             boards: Number(totals.required_boards || 0),
-            waste: Number(totals.waste_percent || 0),
-            method: String(engine.method_label || engine.method_key || "").trim(),
         };
     }
 
@@ -200,7 +197,7 @@
         style.id = STYLE_ID;
         style.textContent = `
             .${HOST_CLASS} {
-                margin: 0 0 12px;
+                margin: 0 0 6px;
                 width: 100%;
                 direction: rtl;
             }
@@ -218,15 +215,14 @@
                 background:var(--card-bg,var(--fg-color,#fff));
                 box-shadow:0 3px 12px rgba(15,23,42,.035);
             }
-            .dco-plan-context-primary,
-            .dco-plan-context-tools,
-            .dco-plan-context-summary {
+            .dco-plan-context-primary {
                 display:flex;
                 align-items:center;
                 gap:8px;
                 flex-wrap:wrap;
+                flex:1 1 auto;
+                min-width:0;
             }
-            .dco-plan-context-summary { gap:6px; }
             .dco-plan-context-chip {
                 display:inline-flex;
                 align-items:center;
@@ -240,6 +236,26 @@
                 font-weight:700;
                 white-space:nowrap;
             }
+            .dco-plan-context-chip.is-boards {
+                min-height:36px;
+                padding:6px 12px;
+                border-radius:10px;
+                background:color-mix(in srgb, var(--alm-primary, #172033) 8%, #fff);
+                border:1px solid color-mix(in srgb, var(--alm-primary, #172033) 24%, transparent);
+                color:var(--alm-primary,#172033);
+                font-weight:900;
+                gap:6px;
+                box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--alm-primary, #172033) 6%, transparent);
+            }
+            .dco-plan-context-boards-value {
+                font-size:16px;
+                line-height:1;
+                font-weight:900;
+            }
+            .dco-plan-context-boards-label {
+                font-size:11px;
+                font-weight:800;
+            }
             .dco-plan-context-chip.is-approved {
                 background:#ecfdf3;
                 color:#166534;
@@ -251,15 +267,26 @@
                 font-weight:750;
                 box-shadow:none !important;
             }
-            .dco-plan-context-primary .alm-btn-primary,
-            .dco-plan-context-primary .alm-btn-success {
+            .dco-plan-context-primary .dco-plan-context-approve,
+            .dco-plan-context-primary .dco-plan-context-cancel,
+            .dco-plan-context-primary .alm-btn-success.dco-plan-context-approve {
+                display:inline-flex !important;
+                align-items:center !important;
+                justify-content:center !important;
+                flex:0 0 auto !important;
                 min-width:190px;
+                padding-inline:14px !important;
+                text-align:center;
+                line-height:1.2;
+                white-space:nowrap;
             }
-            .dco-plan-context-tools .btn {
+            .dco-plan-context-primary .btn:not(.dco-plan-context-approve):not(.dco-plan-context-cancel) {
                 display:inline-flex;
                 align-items:center;
+                justify-content:center;
                 gap:5px;
                 padding-inline:10px;
+                flex:0 0 auto;
             }
             .dco-plan-context-cancel {
                 color:#b42318 !important;
@@ -285,10 +312,10 @@
             }
             @media (max-width:767px) {
                 .dco-plan-context-bar { align-items:stretch; }
-                .dco-plan-context-primary,
-                .dco-plan-context-tools { width:100%; }
-                .dco-plan-context-primary .btn { width:100%; }
-                .dco-plan-context-tools .btn { flex:1 1 auto; justify-content:center; }
+                .dco-plan-context-primary { width:100%; }
+                .dco-plan-context-primary .btn:not(.dco-plan-context-approve):not(.dco-plan-context-cancel) {
+                    justify-content:center;
+                }
             }
         `;
         document.head.appendChild(style);
@@ -448,23 +475,18 @@
         const row = rowForTab(frm, tab);
         const metrics = planMetrics(row);
         const editing = isEditing(frm);
-        const metricChips = rowHasPlan(row)
-            ? `
-                <span class="dco-plan-context-chip">${esc(metrics.boards)} ${esc(__("ألواح"))}</span>
-                <span class="dco-plan-context-chip">${esc(__("هدر"))} ${esc(metrics.waste.toFixed(2))}%</span>
-                ${metrics.method ? `<span class="dco-plan-context-chip">${esc(metrics.method)}</span>` : ""}
-            `
+        const boardsChip = rowHasPlan(row)
+            ? `<span class="dco-plan-context-chip is-boards"><span class="dco-plan-context-boards-value">${esc(metrics.boards)}</span><span class="dco-plan-context-boards-label">${esc(__("ألواح"))}</span></span>`
             : `<span class="dco-plan-context-chip">${esc(sourceLabel(tab))}</span>`;
+        const inlineTools = editing ? "" : toolsHtml(frm, row);
 
         target.html(`
             <div class="almdina-ui dco-plan-context-bar" data-active-plan-source="${esc(tab)}">
                 <div class="dco-plan-context-primary">
                     ${editing
                         ? `<span class="dco-plan-context-chip">${esc(__("وضع تجربة الإعدادات"))}</span>`
-                        : primaryActionHtml(frm, tab, row)}
-                    <div class="dco-plan-context-summary">${metricChips}</div>
+                        : `${primaryActionHtml(frm, tab, row)}${boardsChip}${inlineTools}`}
                 </div>
-                <div class="dco-plan-context-tools">${editing ? "" : toolsHtml(frm, row)}</div>
                 ${editing
                     ? `<div class="dco-plan-context-edit-note">${esc(__("أكمل تجربة الإعدادات من الأعلى. أوامر الاعتماد والطباعة والتصدير والرفع متوقفة حتى الحفظ أو الإلغاء."))}</div>`
                     : ""}

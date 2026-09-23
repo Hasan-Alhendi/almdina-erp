@@ -80,10 +80,44 @@
                 cursor:help;
                 vertical-align:middle;
             }
+            .${SUMMARY_CLASS}[${OWNER_ATTR}="stable"] {
+                margin-block:0 2px !important;
+                padding:0 !important;
+                border:0 !important;
+                border-radius:0 !important;
+                background:transparent !important;
+                box-shadow:none !important;
+            }
+            .${SUMMARY_CLASS} .dco-plan-settings-readonly__strip {
+                display:flex;
+                flex-wrap:wrap;
+                align-items:center;
+                gap:6px 14px;
+                font-size:11px;
+                line-height:1.5;
+                color:var(--text-muted,#667085);
+            }
+            .${SUMMARY_CLASS} .dco-plan-settings-readonly__lead {
+                color:var(--text-color,#26313b);
+                font-weight:850;
+                white-space:nowrap;
+            }
+            .${SUMMARY_CLASS} .dco-plan-settings-readonly__pair {
+                display:inline-flex;
+                align-items:baseline;
+                gap:4px;
+                white-space:nowrap;
+            }
+            .${SUMMARY_CLASS} .dco-plan-settings-readonly__pair .dco-plan-settings-readonly__label {
+                font-weight:750;
+            }
+            .${SUMMARY_CLASS} .dco-plan-settings-readonly__pair .dco-plan-settings-readonly__value {
+                color:var(--text-color,#26313b);
+                font-weight:850;
+            }
             @media (max-width:560px) {
-                .${SUMMARY_CLASS} .dco-plan-settings-readonly__header {
-                    align-items:stretch;
-                    flex-direction:column;
+                .${SUMMARY_CLASS} .dco-plan-settings-readonly__strip {
+                    gap:5px 10px;
                 }
             }
         `;
@@ -122,7 +156,7 @@
         const values = [
             { label: "الخوارزمية", value: valueText(settings.packing_mode || "Auto Pro") },
             { label: "آلة القص", value: valueText(settings.cutting_machine_type || "Auto") },
-            { label: "سماكة القص Kerf", value: valueText(settings.kerf_mm, " مم") },
+            { label: "Kerf", value: valueText(settings.kerf_mm, " مم") },
             { label: "هامش التشذيب", value: valueText(settings.trim_margin_mm, " مم") },
             {
                 label: "مهلة التحسين",
@@ -130,25 +164,23 @@
                 help: TIME_LIMIT_HELP,
             },
         ];
-        const items = values.map((item) => {
+        const pairs = values.map((item) => {
             const help = item.help
                 ? `<span class="dco-plan-settings-readonly__label-help" title="${frappe.utils.escape_html(__(item.help))}" aria-label="${frappe.utils.escape_html(__(item.help))}">?</span>`
                 : "";
+            const title = item.help ? ` title="${frappe.utils.escape_html(__(item.help))}"` : "";
             return `
-                <div class="dco-plan-settings-readonly__item"${item.help ? ` title="${frappe.utils.escape_html(__(item.help))}"` : ""}>
-                    <span class="dco-plan-settings-readonly__label">${frappe.utils.escape_html(__(item.label))}${help}</span>
+                <span class="dco-plan-settings-readonly__pair"${title}>
+                    <span class="dco-plan-settings-readonly__label">${frappe.utils.escape_html(__(item.label))}${help}:</span>
                     <strong class="dco-plan-settings-readonly__value">${frappe.utils.escape_html(item.value)}</strong>
-                </div>
+                </span>
             `;
         }).join("");
         return `
-            <div class="dco-plan-settings-readonly__header">
-                <div>
-                    <h4 class="dco-plan-settings-readonly__title">${frappe.utils.escape_html(__("إعدادات خطة القص"))}</h4>
-                    <p class="dco-plan-settings-readonly__help">${frappe.utils.escape_html(__("القيم المحفوظة في خطة القص الحالية. اضغط «تعديل» لتجربة إعدادات وخوارزميات أخرى."))}</p>
-                </div>
+            <div class="dco-plan-settings-readonly__strip">
+                <span class="dco-plan-settings-readonly__lead">${frappe.utils.escape_html(__("إعدادات الخطة:"))}</span>
+                ${pairs}
             </div>
-            <div class="dco-plan-settings-readonly__grid">${items}</div>
         `;
     }
 

@@ -215,10 +215,17 @@
                 <span>${escape_html(label)}</span>
             </span>`;
         }).join("");
-        return `<div class="dco-extra-addon-legend" dir="rtl" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin:8px 0 12px;padding:7px 10px;border:1px solid #c5ccd3;border-radius:8px;background:#f8fafc;font-size:11px;font-weight:700;line-height:1.2;">
-            <span class="dco-extra-addon-legend-title" style="font-weight:900;white-space:nowrap;">رموز إضافات Extra</span>
+        return `<div class="dco-extra-addon-legend" dir="rtl">
+            <span class="dco-extra-addon-legend-title">رموز إضافات Extra</span>
             ${items}
         </div>`;
+    }
+
+    function render_plan_meta_strip(frm, plan) {
+        const coverage = render_special_raw_coverage(frm, plan);
+        const legend = render_extra_addon_legend();
+        if (!coverage && !legend) return "";
+        return `<div class="dco-plan-meta-strip" dir="rtl">${coverage}${legend}</div>`;
     }
 
     function extraAddonMarkPlate(slot, kind, innerHtml) {
@@ -390,7 +397,7 @@
             : `تنبيه: دخل خطة القص <b>${placed} من ${requested}</b> فقط من الدرف الخاصة. راجع المقاسات والقطع غير الموزعة.`;
 
         return `
-            <div class="dco-special-raw-coverage" style="direction:rtl;border:1px solid;border-radius:10px;padding:9px 12px;margin:8px 0 12px;font-size:12px;font-weight:700;${tone}">
+            <div class="dco-special-raw-coverage" style="direction:rtl;border:1px solid;border-radius:10px;padding:7px 10px;font-size:12px;font-weight:700;${tone}">
                 <span style="font-size:16px;margin-left:6px">✦</span>${message}
             </div>
         `;
@@ -490,10 +497,9 @@
                 </div>
 
                 ${render_piece_groups_summary(frm)}
-                ${render_special_raw_coverage(frm, plan)}
+                ${render_plan_meta_strip(frm, plan)}
 
                 <div style="font-size:12px;margin-bottom:8px;"><b>طريقة الترتيب:</b> ${escape_html(plan.method_label || frm.doc.packing_method || "")}</div>
-                ${render_extra_addon_legend()}
         `;
 
         plan.sheets.forEach(sheet => {

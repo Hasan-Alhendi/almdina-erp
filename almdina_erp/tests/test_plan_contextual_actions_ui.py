@@ -92,7 +92,11 @@ class TestPlanContextualActionsUI(unittest.TestCase):
         self.assertIn("export_order_dxf(frm.doc.name, activeTab(frm), {", context)
         self.assertIn("hasOriginalFile: hasOriginalDxfFile(rowForTab(frm))", context)
         self.assertIn("upload_production_dxf(frm)", context)
-        self.assertNotIn("frappe.call", context)
+        self.assertIn("dco-plan-context-chip is-boards", context)
+        self.assertNotIn('${esc(__("هدر"))}', context)
+        self.assertNotIn("metrics.method", context)
+        self.assertIn("justify-content:center", context)
+        self.assertIn("dco-plan-context-approve", context)
 
     def test_legacy_general_action_surface_is_edit_only(self) -> None:
         context = source(CONTEXT)

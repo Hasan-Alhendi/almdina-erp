@@ -6,17 +6,32 @@
     const EDIT_LABEL = __("تعديل");
     const SAVE_LABEL = __("حفظ");
     const CANCEL_LABEL = __("إلغاء");
+    const PRINT_LABEL = __("طباعة القياسات");
+    const CLOSE_LABEL = __("إغلاق والعودة");
 
     function esc(value) {
         return frappe.utils.escape_html(String(value ?? ""));
     }
 
-    function uiButton(options) {
-        const ui = window.AlmdinaUi;
-        if (!ui || typeof ui.button !== "function") {
-            throw new Error("AlmdinaUi.button is required for DCO measurement actions");
-        }
-        return ui.button(options);
+    function entryWindowIcon(kind) {
+        const icons = {
+            print: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V4h10v5"></path><rect x="6" y="9" width="12" height="10" rx="1.5"></rect><path d="M6 14h12"></path></svg>',
+            edit: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18.5V20h1.5L17 8.5 15.5 7 4 18.5z"></path><path d="M14 5l3 3"></path></svg>',
+            close: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 7h6v10H10z"></path><path d="M14 12H6"></path><path d="M8 10l-2 2 2 2"></path></svg>',
+            save: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l4 4L19 6"></path></svg>',
+            cancel: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7l8 10M16 7L8 17"></path></svg>',
+        };
+        return icons[kind] || "";
+    }
+
+    function entryWindowIconButton(options = {}) {
+        const className = String(options.className || "").trim();
+        const label = String(options.label || "").trim();
+        const icon = String(options.icon || "").trim();
+        const variant = String(options.variant || "secondary").trim();
+        const disabled = options.disabled === true;
+        const variantClass = variant === "primary" ? "alm-btn-primary" : "alm-btn-secondary";
+        return `<button type="button" class="btn ${variantClass} dco-entry-window-icon-button ${className}" aria-label="${esc(label)}" title="${esc(label)}"${disabled ? " disabled" : ""}>${icon}<span class="dco-entry-window-icon-label">${esc(label)}</span></button>`;
     }
 
     function orderEdgeColor(frm) {
@@ -103,16 +118,27 @@
         host.dataset.almdinaInlineEdit = signature;
         if (isInlineEditActive(frm)) {
             host.innerHTML = `
-                ${uiButton({ label: CANCEL_LABEL, variant: "secondary", className: "dco-inline-order-edit-cancel", disabled: busy })}
-                ${uiButton({ label: SAVE_LABEL, variant: "primary", className: "dco-inline-order-edit-save", disabled: busy })}
+                ${entryWindowIconButton({
+                    label: CANCEL_LABEL,
+                    className: "dco-inline-order-edit-cancel",
+                    icon: entryWindowIcon("cancel"),
+                    disabled: busy,
+                })}
+                ${entryWindowIconButton({
+                    label: SAVE_LABEL,
+                    className: "dco-inline-order-edit-save",
+                    icon: entryWindowIcon("save"),
+                    variant: "primary",
+                    disabled: busy,
+                })}
             `;
             return;
         }
-        host.innerHTML = uiButton({
+        host.innerHTML = entryWindowIconButton({
             label: EDIT_LABEL,
-            variant: "secondary",
             className: "dco-inline-order-edit-start",
-            disabled: !canInlineStartEdit(frm),
+            icon: entryWindowIcon("edit"),
+            disabled: !canInlineStartEdit(frm) || busy,
         });
     }
 
@@ -165,19 +191,29 @@
         overlay.setAttribute("aria-label", "جدول إدخال قياسات الدرف");
         overlay.innerHTML = `
             <header class="dco-entry-window-header">
-                <div class="dco-entry-window-title">
-                    <strong>جدول إدخال الدرف</strong>
-                    <span>${esc(frm.doc.name || "مسودة")} · ${esc(frm.doc.customer || "بدون عميل")}</span>
+                <div class="dco-entry-window-top">
+                    <div class="dco-entry-window-title">
+                        <strong>جدول إدخال الدرف</strong>
+                        <span>${esc(frm.doc.name || "مسودة")} · ${esc(frm.doc.customer || "بدون عميل")}</span>
+                    </div>
+                    <div class="dco-entry-window-actions almdina-ui">
+                        ${entryWindowIconButton({
+                            label: PRINT_LABEL,
+                            className: "dco-entry-window-print",
+                            icon: entryWindowIcon("print"),
+                        })}
+                        <span class="dco-entry-window-order-edit-action"></span>
+                        ${entryWindowIconButton({
+                            label: CLOSE_LABEL,
+                            className: "dco-entry-window-close",
+                            icon: entryWindowIcon("close"),
+                        })}
+                    </div>
                 </div>
                 <div class="dco-entry-window-meta">
                     <span>نوع القشاط: <b>${esc(frm.doc.default_edge_type || "—")}</b></span>
                     <span>لون القشاط: <b>${esc(orderEdgeColor(frm))}</b></span>
                     <span class="dco-entry-window-status"><span class="dot"></span><span>جميع التعديلات محفوظة</span></span>
-                </div>
-                <div class="dco-entry-window-actions almdina-ui">
-                    <button type="button" class="btn btn-default dco-entry-window-print">طباعة القياسات</button>
-                    <span class="dco-entry-window-order-edit-action"></span>
-                    <button type="button" class="btn btn-default dco-entry-window-close">إغلاق والعودة</button>
                 </div>
             </header>
             <div class="dco-entry-window-body">
@@ -275,15 +311,18 @@
             .dco-measurement-table-actions .dco-open-measurements-window{display:inline-flex;align-items:center;gap:5px}
             body.dco-measurement-entry-open{overflow:hidden!important}
             .${EDITOR_CLASS}{position:fixed;inset:0;z-index:1040;display:flex;flex-direction:column;direction:rtl;background:var(--bg-color,#f4f6f8);color:var(--text-color,#172033)}
-            .dco-entry-window-header{display:grid;grid-template-columns:minmax(220px,1fr) auto auto;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--border-color,#dfe3e8);background:var(--card-bg,#fff);box-shadow:0 4px 18px rgba(15,23,42,.08)}
-            .dco-entry-window-title{display:flex;flex-direction:column;gap:2px;min-width:0}.dco-entry-window-title strong{font-size:17px;font-weight:900}.dco-entry-window-title span{font-size:11px;color:var(--text-muted,#66717e);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-            .dco-entry-window-meta{display:flex;align-items:center;justify-content:center;gap:7px;flex-wrap:wrap}.dco-entry-window-meta>span{display:inline-flex;align-items:center;gap:4px;padding:5px 8px;border:1px solid var(--border-color,#dfe3e8);border-radius:999px;background:var(--subtle-fg,#f7f9fb);font-size:10px;white-space:nowrap}
+            .dco-entry-window-header{display:flex;flex-direction:column;gap:8px;padding:10px 16px;border-bottom:1px solid var(--border-color,#dfe3e8);background:var(--card-bg,#fff);box-shadow:0 4px 18px rgba(15,23,42,.08)}
+            .dco-entry-window-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;min-width:0}
+            .dco-entry-window-title{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 auto}.dco-entry-window-title strong{font-size:17px;font-weight:900}.dco-entry-window-title span{font-size:11px;color:var(--text-muted,#66717e);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+            .dco-entry-window-meta{display:flex;align-items:center;justify-content:flex-start;gap:7px;flex-wrap:wrap}.dco-entry-window-meta>span{display:inline-flex;align-items:center;gap:4px;padding:5px 8px;border:1px solid var(--border-color,#dfe3e8);border-radius:999px;background:var(--subtle-fg,#f7f9fb);font-size:10px;white-space:nowrap}
             .dco-entry-window-status .dot{width:7px;height:7px;border-radius:50%;background:#209454}.dco-entry-window-status.is-dirty{border-color:rgba(218,146,21,.35);background:rgba(218,146,21,.08);color:#8a5a08}.dco-entry-window-status.is-dirty .dot{background:#d99215}
-            .dco-entry-window-actions{display:flex;align-items:center;justify-content:flex-start;gap:7px;flex-wrap:wrap}.dco-entry-window-actions .btn{min-height:36px;border-radius:9px!important;font-weight:850!important;white-space:nowrap}
+            .dco-entry-window-actions{display:inline-flex;align-items:center;justify-content:flex-start;gap:6px;flex:0 0 auto;flex-wrap:nowrap;direction:ltr}
+            .dco-entry-window-icon-button{width:38px!important;min-width:38px!important;height:38px!important;min-height:38px!important;padding:0!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;border-radius:9px!important;font-weight:850!important}
+            .dco-entry-window-icon-button svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.85;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+            .dco-entry-window-icon-label{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
             .dco-entry-window-actions .dco-entry-window-order-edit-action{display:inline-flex;align-items:center;gap:6px}
             .dco-entry-window-body{flex:1;min-height:0;padding:10px}.dco-entry-window-host{height:100%;min-height:0}.dco-entry-window-host>[data-fieldname="pieces_fast_entry"],.dco-entry-window-host>.frappe-control{height:100%;margin:0!important}.dco-entry-window-host .dco-fast-entry-shell{height:100%;display:flex;flex-direction:column;border-radius:12px}.dco-entry-window-host .dco-fast-entry-toolbar{flex:0 0 auto}.dco-entry-window-host .dco-fast-entry-scroll{flex:1 1 auto;max-height:none!important;height:auto!important;min-height:0;overflow:auto!important}.dco-entry-window-host .dco-fast-table{min-width:1180px}.dco-entry-window-host .dco-measurement-table-actions{display:none!important}
-            @media(max-width:1000px){.dco-entry-window-header{grid-template-columns:1fr auto}.dco-entry-window-meta{grid-column:1/-1;grid-row:2}.dco-entry-window-actions{grid-column:2;grid-row:1}}
-            @media(max-width:760px){.dco-measurement-table-actions{width:100%;margin-inline-start:0}.dco-measurement-table-actions .btn{flex:1 1 auto}.dco-entry-window-header{grid-template-columns:1fr;padding:9px}.dco-entry-window-title,.dco-entry-window-meta,.dco-entry-window-actions{grid-column:1;grid-row:auto}.dco-entry-window-actions .btn{flex:1 1 auto}.dco-entry-window-body{padding:6px}}
+            @media(max-width:760px){.dco-measurement-table-actions{width:100%;margin-inline-start:0}.dco-measurement-table-actions .btn{flex:1 1 auto}.dco-entry-window-header{padding:9px 12px;gap:7px}.dco-entry-window-top{align-items:center;gap:8px}.dco-entry-window-icon-button{width:40px!important;min-width:40px!important;height:40px!important;min-height:40px!important}.dco-entry-window-body{padding:6px}}
         `;
         document.head.appendChild(style);
     }
