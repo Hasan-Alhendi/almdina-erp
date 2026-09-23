@@ -82,6 +82,13 @@
         return parseSnapshot(planRow(frm, tab));
     }
 
+    function displayedPlanForTab(frm, tab) {
+        const owner = stateOwner();
+        return owner && typeof owner.displayedPlanForTab === "function"
+            ? parseSnapshot(owner.displayedPlanForTab(frm, tab))
+            : getPlanForTab(frm, tab);
+    }
+
     function hasPlan(frm, tab) {
         const row = planRow(frm, tab);
         const plan = parseSnapshot(row);
@@ -222,6 +229,7 @@
             },
             hasApprovedPlan,
             getPlanForTab,
+            displayedPlanForTab,
             ensureApprovedPlanLoaded(frm) {
                 return ensureLoad(frm).then(() => getPlanForTab(frm, "Approved"));
             },
