@@ -7,6 +7,19 @@
 > **Scope:** Lifecycle governance, ownership, identity, async safety, cleanup, and certification
 > **Non-goals:** Runtime migration, UI redesign, business-rule changes, authorization changes, backend changes
 
+## Cutting Plan preview display ownership
+
+The Plan workspace owns the canonical row returned by `planForTab()`. A Plan
+edit session may additionally own one disposable preview. For the System tab,
+`displayedPlanForTab()` returns that preview while it is ready or saving;
+otherwise it returns the canonical row. Custom and Approved remain canonical.
+The tab renderer, Plan content decorations and method display consume the same
+displayed projection. The preview presenter adds only status, validation and
+summary UI; it does not replace rendered geometry. Each preview captures its
+settings and document identity. Invalidation or a newer request revokes an old
+response's authority over state, DOM and Save. A forced canonical Plan load is
+deferred while its workspace owns an edit draft, then reconciled after exit.
+
 ## 1. الهدف والسلطة
 
 هذه الوثيقة هي المرجع الرسمي المتخصص لدورة حياة الواجهة في Almdina ERP. تبقى
