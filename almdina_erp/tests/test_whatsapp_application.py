@@ -53,7 +53,7 @@ class FakeWhatsAppGateway:
         self.sessions = list(sessions or [])
         self.started: list[str] = []
         self.texts: list[tuple[str, str, str]] = []
-        self.documents: list[tuple[str, str, str, str, bytes]] = []
+        self.documents: list[tuple[str, str, str, str, bytes, str]] = []
         self.qr = QrCode(qr_code="data:image/png;base64,AAA", status="qr_ready")
         self.fail_qr = False
         self.fail_text: str | None = None
@@ -124,10 +124,11 @@ class FakeWhatsAppGateway:
         filename: str,
         mimetype: str,
         data: bytes,
+        caption: str = "",
     ) -> MessageReceipt:
         if self.fail_document:
             raise WhatsAppTransportError(self.fail_document, status_code=409)
-        self.documents.append((session_id, chat_id, filename, mimetype, data))
+        self.documents.append((session_id, chat_id, filename, mimetype, data, caption))
         return MessageReceipt(message_id="doc-1", timestamp=2)
 
 
@@ -204,7 +205,7 @@ class WhatsAppSessionUseCaseTests(unittest.TestCase):
 
 
 class WhatsAppSendMeasurementsTests(unittest.TestCase):
-    def test_sends_text_then_pdf_to_normalized_syrian_chat(self) -> None:
+    def test_sends_pdf_and_text_as_one_message(self) -> None:
         gateway = FakeWhatsAppGateway([_session()])
         result = send_order_measurements(
             gateway,
@@ -214,13 +215,13 @@ class WhatsAppSendMeasurementsTests(unittest.TestCase):
         )
         self.assertTrue(result.ok)
         self.assertEqual(result.chat_id, "963944123456@c.us")
-        self.assertEqual(
-            gateway.texts[0][2],
-            measurements_text("DCO-0001"),
-        )
+        self.assertEqual(gateway.texts, [])
         self.assertEqual(gateway.documents[0][2], "قياسات-DCO-0001.pdf")
         self.assertEqual(gateway.documents[0][3], "application/pdf")
         self.assertEqual(gateway.documents[0][4], b"%PDF-fake")
+        self.assertEqual(gateway.documents[0][5], measurements_text("DCO-0001"))
+        self.assertEqual(result.text_message_id, result.document_message_id)
+        self.assertEqual(result.document_message_id, "doc-1")
 
     def test_missing_phone_fails_before_openwa(self) -> None:
         gateway = FakeWhatsAppGateway([_session()])
@@ -246,21 +247,35 @@ class WhatsAppSendMeasurementsTests(unittest.TestCase):
             )
         self.assertEqual(raised.exception.code, "session_not_ready")
 
-    def test_partial_failure_when_document_send_fails(self) -> None:
+    def test_document_failure_sends_nothing(self) -> None:
         gateway = FakeWhatsAppGateway([_session()])
         gateway.fail_document = "engine reconnecting"
-        result = send_order_measurements(
-            gateway,
-            FakePdfGateway(),
-            FakePhoneGateway(),
-            "DCO-0001",
-        )
-        self.assertFalse(result.ok)
-        self.assertEqual(result.code, "document_failed")
-        self.assertTrue(result.text_sent)
-        self.assertFalse(result.document_sent)
+        with self.assertRaises(WhatsAppError) as raised:
+            send_order_measurements(
+                gateway,
+                FakePdfGateway(),
+                FakePhoneGateway(),
+                "DCO-0001",
+            )
+        self.assertEqual(raised.exception.code, "send_failed")
+        self.assertEqual(gateway.texts, [])
+        self.assertEqual(gateway.documents, [])
 
-    def test_custom_text_template_is_sent_before_the_pdf(self) -> None:
+    def test_caption_longer_than_whatsapp_limit_is_not_sent(self) -> None:
+        gateway = FakeWhatsAppGateway([_session()])
+        with self.assertRaises(WhatsAppError) as raised:
+            send_order_measurements(
+                gateway,
+                FakePdfGateway(),
+                FakePhoneGateway(),
+                "DCO-0001",
+                text_template="م" * 1025,
+            )
+        self.assertEqual(raised.exception.code, "caption_too_long")
+        self.assertEqual(gateway.texts, [])
+        self.assertEqual(gateway.documents, [])
+
+    def test_custom_text_template_is_the_document_caption(self) -> None:
         gateway = FakeWhatsAppGateway([_session()])
         result = send_order_measurements(
             gateway,
@@ -270,7 +285,9 @@ class WhatsAppSendMeasurementsTests(unittest.TestCase):
             text_template="قياسات الطلب {order_name} جاهزة",
         )
         self.assertTrue(result.ok)
-        self.assertEqual(gateway.texts[0][2], "قياسات الطلب DCO-0001 جاهزة")
+        self.assertEqual(gateway.texts, [])
+        self.assertEqual(gateway.documents[0][5], "قياسات الطلب DCO-0001 جاهزة")
+
     def test_use_case_stays_frappe_free(self) -> None:
         from pathlib import Path
 
@@ -287,7 +304,7 @@ class WhatsAppSendMeasurementsTests(unittest.TestCase):
         self.assertIn("format_whatsapp_preamble", source)
         self.assertIn("text_template", source)
 
-    def test_sends_measurements_text_then_authorized_invoice_pdf(self) -> None:
+    def test_sends_invoice_pdf_with_text_as_one_message(self) -> None:
         gateway = FakeWhatsAppGateway([_session()])
         pdf = FakePdfGateway()
         payload = {
@@ -304,9 +321,11 @@ class WhatsAppSendMeasurementsTests(unittest.TestCase):
         )
         self.assertTrue(result.ok)
         self.assertEqual(result.chat_id, "963944123456@c.us")
-        self.assertEqual(gateway.texts[0][2], measurements_text("DCO-0001"))
+        self.assertEqual(gateway.texts, [])
         self.assertEqual(gateway.documents[0][2], invoice_filename("DCO-0001"))
         self.assertEqual(gateway.documents[0][4], b"%PDF-fake")
+        self.assertEqual(gateway.documents[0][5], measurements_text("DCO-0001"))
+        self.assertEqual(result.text_message_id, result.document_message_id)
         self.assertEqual(pdf.invoice_payloads[0], payload)
 
     def test_invoice_uses_configured_text_template(self) -> None:
@@ -320,7 +339,8 @@ class WhatsAppSendMeasurementsTests(unittest.TestCase):
             text_template="فاتورة طلبك {order_name}",
         )
         self.assertTrue(result.ok)
-        self.assertEqual(gateway.texts[0][2], "فاتورة طلبك DCO-0001")
+        self.assertEqual(gateway.texts, [])
+        self.assertEqual(gateway.documents[0][5], "فاتورة طلبك DCO-0001")
 
     def test_disconnected_session_does_not_send_invoice(self) -> None:
         gateway = FakeWhatsAppGateway([_session(status="disconnected")])

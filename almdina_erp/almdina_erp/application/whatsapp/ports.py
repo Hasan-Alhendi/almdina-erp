@@ -74,6 +74,7 @@ class WhatsAppGateway(Protocol):
         filename: str,
         mimetype: str,
         data: bytes,
+        caption: str = "",
     ) -> MessageReceipt: ...
 
 

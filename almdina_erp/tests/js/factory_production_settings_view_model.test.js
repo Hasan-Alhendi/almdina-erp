@@ -44,6 +44,7 @@ const current = {
         print_factory_address: "Address",
         print_factory_contacts: "111\n222",
         whatsapp_measurements_text: "قياسات {order_name}",
+        whatsapp_measurement_amendments_text: "تعديلات {order_name}",
         whatsapp_invoice_text: "فاتورة {order_name}",
     },
     whatsapp_stage_message_rows: [
@@ -108,8 +109,9 @@ assert.equal(sections[3].rows[2].value, "مسموح");
 assert.equal(sections[4].rows[3].multiline, true);
 assert.equal(sections[5].rows[0].multiline, true);
 assert.equal(sections[5].rows[0].value, "قياسات {order_name}");
-assert.equal(sections[5].rows.length, 3);
-assert.equal(sections[5].rows[2].value, "انتهى CNC {order_name}");
+assert.equal(sections[5].rows[1].value, "تعديلات {order_name}");
+assert.equal(sections[5].rows.length, 4);
+assert.equal(sections[5].rows[3].value, "انتهى CNC {order_name}");
 
 const legacy = model.legacy(current);
 assert.equal(legacy.length, 10);

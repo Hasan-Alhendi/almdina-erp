@@ -6,6 +6,8 @@ from almdina_erp.almdina_erp.domain.whatsapp.phone import (
 )
 from almdina_erp.almdina_erp.domain.whatsapp.message_templates import (
     MEASUREMENTS_TEXT_TEMPLATE,
+    DocumentCaptionError,
+    document_caption,
     format_whatsapp_preamble,
 )
 from almdina_erp.almdina_erp.domain.whatsapp.session_policy import is_working
@@ -66,32 +68,24 @@ def send_order_measurements(
 
     text = measurements_text(name, text_template)
     try:
-        text_receipt = gateway.send_text(session.id, chat_id, text)
-    except WhatsAppTransportError as error:
-        raise WhatsAppError(
-            "text_failed",
-            str(error) or "تعذر إرسال رسالة واتساب النصية.",
-        ) from error
+        caption = document_caption(text)
+    except DocumentCaptionError as error:
+        raise WhatsAppError(error.code, str(error)) from error
 
     try:
-        document_receipt = gateway.send_document(
+        receipt = gateway.send_document(
             session.id,
             chat_id,
             filename=measurements_filename(name),
             mimetype=MEASUREMENTS_PDF_MIMETYPE,
             data=pdf,
+            caption=caption,
         )
     except WhatsAppTransportError as error:
-        return SendMeasurementsResult(
-            ok=False,
-            code="document_failed",
-            message=str(error) or "تم إرسال الرسالة النصية وتعذر إرسال ملف القياسات.",
-            order_name=name,
-            chat_id=chat_id,
-            text_sent=True,
-            document_sent=False,
-            text_message_id=text_receipt.message_id,
-        )
+        raise WhatsAppError(
+            "send_failed",
+            str(error) or "تعذر إرسال جدول القياسات عبر واتساب.",
+        ) from error
 
     return SendMeasurementsResult(
         ok=True,
@@ -99,10 +93,10 @@ def send_order_measurements(
         message="تم إرسال جدول القياسات إلى الزبون عبر واتساب.",
         order_name=name,
         chat_id=chat_id,
-        text_sent=True,
+        text_sent=bool(caption),
         document_sent=True,
-        text_message_id=text_receipt.message_id,
-        document_message_id=document_receipt.message_id,
+        text_message_id=receipt.message_id if caption else "",
+        document_message_id=receipt.message_id,
     )
 
 

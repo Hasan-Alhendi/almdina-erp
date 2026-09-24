@@ -2,10 +2,32 @@ from __future__ import annotations
 
 
 MEASUREMENTS_TEXT_TEMPLATE = "نرفق لك جدول القياسات الخاص بطلبك رقم {order_name}"
+MEASUREMENT_AMENDMENTS_TEXT_TEMPLATE = "نرفق لك تعديلات القياسات الخاصة بطلبك رقم {order_name}"
 INVOICE_TEXT_TEMPLATE = MEASUREMENTS_TEXT_TEMPLATE
 STAGE_COMPLETION_TEXT_TEMPLATE = "طلبك رقم {order_name} اكتملت مرحلة {stage_label}"
 ORDER_NAME_PLACEHOLDER = "{order_name}"
 STAGE_LABEL_PLACEHOLDER = "{stage_label}"
+DOCUMENT_CAPTION_MAX_LENGTH = 1024
+
+
+class DocumentCaptionError(ValueError):
+    """Raised when a file caption cannot be sent as one WhatsApp message."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+
+
+def document_caption(text: object) -> str:
+    """Return text that can ride on a document as one WhatsApp message."""
+
+    caption = str(text or "").strip()
+    if len(caption) > DOCUMENT_CAPTION_MAX_LENGTH:
+        raise DocumentCaptionError(
+            "caption_too_long",
+            "نص الرسالة أطول من 1024 حرفًا، وهو الحد المسموح مع ملف واتساب.",
+        )
+    return caption
 
 
 def format_whatsapp_preamble(
@@ -28,10 +50,14 @@ def format_whatsapp_preamble(
 
 
 __all__ = [
+    "DOCUMENT_CAPTION_MAX_LENGTH",
+    "DocumentCaptionError",
     "INVOICE_TEXT_TEMPLATE",
+    "MEASUREMENT_AMENDMENTS_TEXT_TEMPLATE",
     "MEASUREMENTS_TEXT_TEMPLATE",
     "ORDER_NAME_PLACEHOLDER",
     "STAGE_COMPLETION_TEXT_TEMPLATE",
     "STAGE_LABEL_PLACEHOLDER",
+    "document_caption",
     "format_whatsapp_preamble",
 ]

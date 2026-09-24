@@ -4,9 +4,13 @@ import unittest
 from pathlib import Path
 
 from almdina_erp.almdina_erp.domain.whatsapp.message_templates import (
+    DOCUMENT_CAPTION_MAX_LENGTH,
     INVOICE_TEXT_TEMPLATE,
+    MEASUREMENT_AMENDMENTS_TEXT_TEMPLATE,
     MEASUREMENTS_TEXT_TEMPLATE,
     STAGE_COMPLETION_TEXT_TEMPLATE,
+    DocumentCaptionError,
+    document_caption,
     format_whatsapp_preamble,
 )
 
@@ -43,6 +47,10 @@ class WhatsAppMessageTemplateTests(unittest.TestCase):
             "نرفق لك جدول القياسات الخاص بطلبك رقم 26-00089",
         )
         self.assertEqual(INVOICE_TEXT_TEMPLATE, MEASUREMENTS_TEXT_TEMPLATE)
+        self.assertEqual(
+            format_whatsapp_preamble(MEASUREMENT_AMENDMENTS_TEXT_TEMPLATE, "26-00089"),
+            "نرفق لك تعديلات القياسات الخاصة بطلبك رقم 26-00089",
+        )
 
     def test_empty_template_falls_back_to_default(self) -> None:
         self.assertEqual(
@@ -59,6 +67,12 @@ class WhatsAppMessageTemplateTests(unittest.TestCase):
             ),
             "طلبك رقم 26-00089 اكتملت مرحلة CNC",
         )
+
+    def test_document_caption_rejects_text_over_the_whatsapp_limit(self) -> None:
+        self.assertEqual(document_caption("  جاهز  "), "جاهز")
+        with self.assertRaises(DocumentCaptionError) as raised:
+            document_caption("م" * (DOCUMENT_CAPTION_MAX_LENGTH + 1))
+        self.assertEqual(raised.exception.code, "caption_too_long")
 
     def test_custom_template_keeps_extra_braces(self) -> None:
         self.assertEqual(

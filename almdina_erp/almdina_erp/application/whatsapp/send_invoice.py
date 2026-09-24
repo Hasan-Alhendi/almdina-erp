@@ -4,6 +4,8 @@ from collections.abc import Mapping
 
 from almdina_erp.almdina_erp.domain.whatsapp.message_templates import (
     INVOICE_TEXT_TEMPLATE,
+    DocumentCaptionError,
+    document_caption,
     format_whatsapp_preamble,
 )
 from almdina_erp.almdina_erp.domain.whatsapp.phone import (
@@ -63,32 +65,24 @@ def send_order_invoice(
 
     text = format_whatsapp_preamble(text_template, name, INVOICE_TEXT_TEMPLATE)
     try:
-        text_receipt = gateway.send_text(session.id, chat_id, text)
-    except WhatsAppTransportError as error:
-        raise WhatsAppError(
-            "text_failed",
-            str(error) or "تعذر إرسال رسالة واتساب النصية.",
-        ) from error
+        caption = document_caption(text)
+    except DocumentCaptionError as error:
+        raise WhatsAppError(error.code, str(error)) from error
 
     try:
-        document_receipt = gateway.send_document(
+        receipt = gateway.send_document(
             session.id,
             chat_id,
             filename=invoice_filename(name),
             mimetype=MEASUREMENTS_PDF_MIMETYPE,
             data=pdf,
+            caption=caption,
         )
     except WhatsAppTransportError as error:
-        return SendMeasurementsResult(
-            ok=False,
-            code="document_failed",
-            message=str(error) or "تم إرسال الرسالة النصية وتعذر إرسال ملف الفاتورة.",
-            order_name=name,
-            chat_id=chat_id,
-            text_sent=True,
-            document_sent=False,
-            text_message_id=text_receipt.message_id,
-        )
+        raise WhatsAppError(
+            "send_failed",
+            str(error) or "تعذر إرسال فاتورة الزبون عبر واتساب.",
+        ) from error
 
     return SendMeasurementsResult(
         ok=True,
@@ -96,10 +90,10 @@ def send_order_invoice(
         message="تم إرسال فاتورة الزبون إلى الزبون عبر واتساب.",
         order_name=name,
         chat_id=chat_id,
-        text_sent=True,
+        text_sent=bool(caption),
         document_sent=True,
-        text_message_id=text_receipt.message_id,
-        document_message_id=document_receipt.message_id,
+        text_message_id=receipt.message_id if caption else "",
+        document_message_id=receipt.message_id,
     )
 
 

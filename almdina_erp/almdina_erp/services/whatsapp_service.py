@@ -4,6 +4,7 @@ from typing import Any
 
 import frappe
 from frappe import _
+from frappe.utils import cint
 
 from almdina_erp.almdina_erp.application.whatsapp.errors import (
     WhatsAppError,
@@ -180,11 +181,17 @@ def _send_result(result) -> dict[str, Any]:
 
 
 @frappe.whitelist()
-def send_order_measurements(order_name: str) -> dict[str, Any]:
+def send_order_measurements(order_name: str, amendment: int | str | bool = 0) -> dict[str, Any]:
     order = _authorized_order(
         order_name,
         Capability.PRINT_MEASUREMENTS,
         "تعذر تحديد الطلب لإرسال القياسات.",
+    )
+    templates = whatsapp_message_templates()
+    template_key = (
+        "whatsapp_measurement_amendments_text"
+        if cint(amendment)
+        else "whatsapp_measurements_text"
     )
     try:
         result = deliver_order_measurements(
@@ -192,7 +199,7 @@ def send_order_measurements(order_name: str) -> dict[str, Any]:
             FrappeMeasurementPdfAdapter(),
             FrappeCustomerPhoneAdapter(),
             order.name,
-            text_template=whatsapp_message_templates()["whatsapp_measurements_text"],
+            text_template=templates[template_key],
         )
     except (WhatsAppError, WhatsAppTransportError) as error:
         _throw(error)

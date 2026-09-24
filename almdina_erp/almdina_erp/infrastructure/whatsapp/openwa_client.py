@@ -78,16 +78,21 @@ class OpenWAClient:
         filename: str,
         mimetype: str,
         data: bytes,
+        caption: str = "",
     ) -> MessageReceipt:
+        body: dict[str, Any] = {
+            "chatId": chat_id,
+            "filename": filename,
+            "mimetype": mimetype,
+            "base64": base64.b64encode(data).decode("ascii"),
+        }
+        caption_text = str(caption or "").strip()
+        if caption_text:
+            body["caption"] = caption_text
         payload = self._request(
             "POST",
             f"/api/sessions/{session_id}/messages/send-document",
-            {
-                "chatId": chat_id,
-                "filename": filename,
-                "mimetype": mimetype,
-                "base64": base64.b64encode(data).decode("ascii"),
-            },
+            body,
         )
         return _receipt(payload)
 

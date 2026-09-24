@@ -64,6 +64,7 @@ SECTION_FIELDS = MappingProxyType(
         FactorySettingsSection.WHATSAPP_MESSAGES: frozenset(
             {
                 "whatsapp_measurements_text",
+                "whatsapp_measurement_amendments_text",
                 "whatsapp_invoice_text",
                 "whatsapp_stage_messages",
             }

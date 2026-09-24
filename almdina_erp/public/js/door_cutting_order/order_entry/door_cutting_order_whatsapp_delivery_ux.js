@@ -114,7 +114,10 @@
             frappe.msgprint("تعذر تحديد الطلب لإرسال القياسات.");
             return Promise.resolve(null);
         }
-        return rpc(SEND_METHOD, { order_name: orderName }).then(result => {
+        return rpc(SEND_METHOD, {
+            order_name: orderName,
+            amendment: isAmendmentContext(frm) ? 1 : 0,
+        }).then(result => {
             const payload = result || {};
             const ok = payload.ok !== false && payload.code !== "document_failed";
             frappe.show_alert({

@@ -149,13 +149,19 @@
                         fieldname: "whatsapp_measurements_text",
                         fieldtype: "Small Text",
                         label: t("رسالة القياسات"),
-                        description: `${t("تُرسل قبل ملف PDF لجدول القياسات. استخدم")} {order_name} ${t("لرقم الطلب.")}`,
+                        description: `${t("تُرفق مع ملف PDF في رسالة واحدة عند أول إرسال. الحد 1024 حرفًا. استخدم")} {order_name} ${t("لرقم الطلب.")}`,
+                    },
+                    {
+                        fieldname: "whatsapp_measurement_amendments_text",
+                        fieldtype: "Small Text",
+                        label: t("رسالة تعديلات القياسات"),
+                        description: `${t("تُرفق مع ملف PDF في رسالة واحدة عند إرسال التعديلات. الحد 1024 حرفًا. استخدم")} {order_name} ${t("لرقم الطلب.")}`,
                     },
                     {
                         fieldname: "whatsapp_invoice_text",
                         fieldtype: "Small Text",
                         label: t("رسالة الفاتورة"),
-                        description: `${t("تُرسل قبل ملف PDF لفاتورة الزبون. استخدم")} {order_name} ${t("لرقم الطلب.")}`,
+                        description: `${t("تُرفق مع ملف PDF في رسالة واحدة. الحد 1024 حرفًا. استخدم")} {order_name} ${t("لرقم الطلب.")}`,
                     },
                     ...stageRows.map(row => ({
                         fieldname: stageMessageFieldname(row && row.id),
@@ -209,6 +215,11 @@
                         dialog,
                         "whatsapp_measurements_text",
                         payload.whatsapp_measurements_text
+                    ),
+                    whatsapp_measurement_amendments_text: fieldInputValue(
+                        dialog,
+                        "whatsapp_measurement_amendments_text",
+                        payload.whatsapp_measurement_amendments_text
                     ),
                     whatsapp_invoice_text: fieldInputValue(
                         dialog,
@@ -302,6 +313,7 @@
                 if (typeof dialog.set_values === "function") {
                     const nextValues = {
                         whatsapp_measurements_text: values.whatsapp_measurements_text || "",
+                        whatsapp_measurement_amendments_text: values.whatsapp_measurement_amendments_text || "",
                         whatsapp_invoice_text: values.whatsapp_invoice_text || "",
                     };
                     for (const row of current.whatsapp_stage_message_rows || []) {

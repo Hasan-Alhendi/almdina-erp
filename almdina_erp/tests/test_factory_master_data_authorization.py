@@ -45,6 +45,7 @@ class TestFactoryMasterDataAuthorization(unittest.TestCase):
             {Capability.EDIT_WHATSAPP_MESSAGES},
             {
                 "whatsapp_measurements_text": "قياسات {order_name}",
+                "whatsapp_measurement_amendments_text": "تعديلات {order_name}",
                 "whatsapp_invoice_text": "فاتورة {order_name}",
                 "whatsapp_stage_messages": {"CNC": "انتهى CNC {order_name}"},
             },

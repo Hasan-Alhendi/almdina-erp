@@ -96,8 +96,9 @@
                     [t("العنوان"), source.print_factory_address],
                     [t("أرقام التواصل"), source.print_factory_contacts || "—", true],
                 ], current),
-                section("whatsapp_messages", t("رسائل واتساب"), `${t("النص الذي يُرسل للزبون قبل ملف القياسات أو الفاتورة، ورسائل إتمام المراحل المفعّلة من مسار الإنتاج. استخدم")} {order_name} ${t("لرقم الطلب و")} {stage_label} ${t("لاسم المرحلة.")}`, [
+                section("whatsapp_messages", t("رسائل واتساب"), `${t("نص القياسات وتعديلاتها والفاتورة يُرفق مع ملف PDF في رسالة واحدة بحد 1024 حرفًا. رسائل إتمام المراحل تبقى نصًا من مسار الإنتاج. استخدم")} {order_name} ${t("لرقم الطلب و")} {stage_label} ${t("لاسم المرحلة.")}`, [
                     [t("رسالة القياسات"), source.whatsapp_measurements_text, true],
+                    [t("رسالة تعديلات القياسات"), source.whatsapp_measurement_amendments_text, true],
                     [t("رسالة الفاتورة"), source.whatsapp_invoice_text, true],
                     ...((current && current.whatsapp_stage_message_rows) || []).map(row => [
                         `${t("رسالة إتمام")} — ${display(row && row.label)}`,

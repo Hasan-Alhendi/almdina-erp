@@ -32,6 +32,7 @@ from almdina_erp.almdina_erp.domain.security.factory_settings import (
 )
 from almdina_erp.almdina_erp.domain.whatsapp.message_templates import (
     INVOICE_TEXT_TEMPLATE,
+    MEASUREMENT_AMENDMENTS_TEXT_TEMPLATE,
     MEASUREMENTS_TEXT_TEMPLATE,
     STAGE_COMPLETION_TEXT_TEMPLATE,
 )
@@ -57,6 +58,7 @@ PRINT_IDENTITY_DEFAULTS = {
 _PRINT_IDENTITY_FIELDS = tuple(PRINT_IDENTITY_DEFAULTS)
 WHATSAPP_MESSAGE_DEFAULTS = {
     "whatsapp_measurements_text": MEASUREMENTS_TEXT_TEMPLATE,
+    "whatsapp_measurement_amendments_text": MEASUREMENT_AMENDMENTS_TEXT_TEMPLATE,
     "whatsapp_invoice_text": INVOICE_TEXT_TEMPLATE,
 }
 _WHATSAPP_MESSAGE_FIELDS = tuple(WHATSAPP_MESSAGE_DEFAULTS)
@@ -332,6 +334,7 @@ def _apply_values(settings: Any, payload: dict[str, Any]) -> None:
 
     whatsapp_labels = {
         "whatsapp_measurements_text": _("WhatsApp Measurements Text"),
+        "whatsapp_measurement_amendments_text": _("WhatsApp Measurement Amendments Text"),
         "whatsapp_invoice_text": _("WhatsApp Invoice Text"),
     }
     for fieldname in _WHATSAPP_MESSAGE_FIELDS:

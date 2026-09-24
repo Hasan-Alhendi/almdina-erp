@@ -61,6 +61,30 @@ class OpenWAClientTests(unittest.TestCase):
         self.assertEqual(body["filename"], "file.pdf")
         self.assertEqual(body["mimetype"], "application/pdf")
         self.assertEqual(body["base64"], "UERG")
+        self.assertNotIn("caption", body)
+
+    def test_send_document_includes_caption_on_the_same_message(self) -> None:
+        captured: dict[str, object] = {}
+
+        def opener(request: Request, timeout: float | None = None) -> FakeResponse:
+            captured["body"] = json.loads(request.data.decode("utf-8"))
+            return FakeResponse({"messageId": "mid-2", "timestamp": 9})
+
+        client = OpenWAClient(
+            OpenWAConfig("http://localhost:2785", "secret"),
+            opener=opener,
+        )
+        client.send_document(
+            "sid",
+            "963944123456@c.us",
+            filename="file.pdf",
+            mimetype="application/pdf",
+            data=b"PDF",
+            caption="نرفق القياسات",
+        )
+        body = captured["body"]
+        self.assertEqual(body["caption"], "نرفق القياسات")
+        self.assertEqual(body["filename"], "file.pdf")
 
     def test_http_error_becomes_transport_error(self) -> None:
         def opener(request: Request, timeout: float | None = None) -> FakeResponse:

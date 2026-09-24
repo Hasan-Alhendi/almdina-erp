@@ -141,7 +141,7 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
     Capability.EDIT_FACTORY_PRODUCTION_CONTROLS: _presentation("تعديل ضوابط الإنتاج", "تعديل المسار الافتراضي والاستثناءات التشغيلية الحساسة.", "critical"),
     Capability.EDIT_FACTORY_PRINT_IDENTITY: _presentation("تعديل هوية الطباعة", "تعديل اسم المعمل ولمحته وعنوانه وأرقام التواصل الظاهرة على أوراق الطباعة. لا يشمل رسائل واتساب ولا ربط الجلسة.", "sensitive"),
     Capability.MANAGE_WHATSAPP_SESSION: _presentation("إدارة جلسة واتساب", "عرض حالة جلسة المصنع وإنشاؤها وربطها عبر رمز QR وإعادة الاتصال. لا تمنح تعديل الرسائل ولا إرسال ملفات الزبائن.", "critical"),
-    Capability.EDIT_WHATSAPP_MESSAGES: _presentation("تعديل رسائل واتساب", "تعديل نصوص القياسات والفاتورة وإتمام المراحل في إعدادات المعمل. لا تمنح إنشاء الجلسة ولا إرسال الملفات.", "sensitive"),
+    Capability.EDIT_WHATSAPP_MESSAGES: _presentation("تعديل رسائل واتساب", "تعديل نصوص القياسات وتعديلات القياسات والفاتورة وإتمام المراحل في إعدادات المعمل. لا تمنح إنشاء الجلسة ولا إرسال الملفات.", "sensitive"),
     Capability.VIEW_PRODUCTION_ROUTINGS: _presentation("عرض مسارات الإنتاج", "عرض مسارات الإنتاج وتسلسل مراحلها."),
     Capability.CREATE_PRODUCTION_ROUTINGS: _presentation("إنشاء مسار إنتاج", "إنشاء مسار إنتاج جديد.", "sensitive"),
     Capability.EDIT_PRODUCTION_ROUTINGS: _presentation("تعديل مسارات الإنتاج", "تعديل ترتيب المراحل أو تعطيل المسار.", "critical"),
