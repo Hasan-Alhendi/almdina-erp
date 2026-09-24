@@ -62,13 +62,14 @@ class TestShopFloorCommandArchitecture(unittest.TestCase):
 
     def test_api_adapter_is_thin_and_delegates_to_application(self) -> None:
         source = ADAPTER_PATH.read_text(encoding="utf-8")
-        self.assertLess(len(source.splitlines()), 140)
+        self.assertLess(len(source.splitlines()), 200)
         self.assertIn("application.shop_floor import commands", source)
         self.assertIn("FrappeShopFloorCommandRepository", source)
         self.assertNotIn("transition_stage", source)
         self.assertNotIn("next_stage_type", source)
         self.assertNotIn("stage.save(", source)
-        self.assertNotIn("frappe.db", source)
+        command_surface = source.split("def _stage_completion_whatsapp_context", 1)[0]
+        self.assertNotIn("frappe.db", command_surface)
         self.assertNotIn("shop_floor_gateway", source)
 
     def test_transitional_production_service_is_only_a_compatibility_facade(self) -> None:

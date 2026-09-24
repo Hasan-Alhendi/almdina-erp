@@ -73,6 +73,10 @@ def test_responsive_presentation_uses_scoped_css_and_a_focused_card_adapter():
     assert "MutationObserver" not in cards
     assert "const CARD_CSS" not in cards
     assert ".dco-mobile-piece-cards" in css
+    assert ".dco-mobile-piece-read-table" in css
+    assert "shouldUseReadTableLayout" in cards
+    assert "usesResponsiveScrollTable" in cards
+    assert "mobile-piece-layout" in cards
 
 
 def test_layout_has_explicit_desktop_tablet_phone_and_small_phone_breakpoints():
@@ -86,6 +90,34 @@ def test_layout_has_explicit_desktop_tablet_phone_and_small_phone_breakpoints():
     ):
         assert breakpoint in css
     assert "orientation: landscape" in css
+
+
+def test_phone_read_only_measurements_use_print_like_scroll_table():
+    css = source(RESPONSIVE_CSS)
+    cards = source(MOBILE_CARDS_UX)
+
+    assert ".dco-mobile-piece-read-table .dco-fast-entry-scroll" in css
+    assert ".dco-mobile-piece-read-table .dco-fast-table thead" in css
+    assert "width: max(100%, 1180px) !important" in css
+    assert "position: sticky !important" in css
+    assert ".dco-mobile-piece-read-table .dco-fast-table .dco-col-no" in css
+    assert "dco-measurement-readonly-surface" in css
+    assert "dco-measurements-mobile-scroll" in cards
+    assert ".dco-measurements-card.form-section.dco-measurements-mobile-scroll" in css
+    assert "--dco-mobile-measurements-inset: 20px" in css
+    assert "padding-inline: var(--dco-mobile-measurements-inset, 20px)" in css
+    assert 'classList.toggle("dco-mobile-piece-read-table", useScrollTable)' in cards
+    assert "mobile-piece-layout" in cards
+    assert "almdina_edit_session_changed" in cards
+
+
+def test_phone_inline_measurements_prefer_scroll_table_over_cards():
+    cards = source(MOBILE_CARDS_UX)
+
+    assert "usesResponsiveScrollTable" in cards
+    assert "dco-measurement-entry-window" in cards
+    assert "shouldUseCardLayout" in cards
+    assert "return false;" in cards
 
 
 def test_phone_measurements_use_labelled_cards_without_fixed_table_width():
@@ -190,7 +222,8 @@ def test_measurement_cards_activate_only_for_a_phone_not_a_narrow_laptop_panel()
     assert "viewport <= PHONE_SHORT_SIDE_MAX_WIDTH" in responsive
     assert "deviceShortSide() <= PHONE_SHORT_SIDE_MAX_WIDTH" in responsive
     assert "window.AlmdinaResponsiveDevice" in cards
-    assert 'root.classList.toggle("dco-mobile-piece-cards", shouldUseCardLayout(root))' in cards
+    assert 'classList.toggle("dco-mobile-piece-read-table", useScrollTable)' in cards
+    assert "return false;" in cards
 
 
 def test_mobile_order_list_uses_reference_card_and_server_authorized_actions():

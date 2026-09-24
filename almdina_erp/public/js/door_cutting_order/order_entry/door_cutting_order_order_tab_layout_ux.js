@@ -406,6 +406,30 @@
                         padding-bottom: 9px;
                     }
                     .${ROOT_CLASS} .dco-order-section-heading__subtitle { max-width: 240px; }
+                    .${ROOT_CLASS} .layout-main-section .form-page:has(.dco-measurements-mobile-scroll),
+                    .${ROOT_CLASS} .layout-main-section-wrapper .form-page:has(.dco-measurements-mobile-scroll) {
+                        padding-inline: 20px !important;
+                    }
+                    .${ROOT_CLASS} .dco-measurements-card.dco-measurements-mobile-scroll,
+                    .${ROOT_CLASS} .dco-measurements-card.form-section.dco-measurements-mobile-scroll {
+                        padding-inline: 0 !important;
+                        margin-inline: 0 !important;
+                        width: 100% !important;
+                        max-width: none !important;
+                    }
+                    .${ROOT_CLASS} .dco-measurements-card.dco-measurements-mobile-scroll > .section-body,
+                    .${ROOT_CLASS} .dco-measurements-card.dco-measurements-mobile-scroll [data-fieldname="pieces_fast_entry"],
+                    .${ROOT_CLASS} .dco-measurements-card.dco-measurements-mobile-scroll [data-fieldname="pieces_fast_entry"] .frappe-control,
+                    .${ROOT_CLASS} .dco-measurements-card.dco-measurements-mobile-scroll [data-fieldname="pieces_fast_entry"] .control-input-wrapper {
+                        width: 100% !important;
+                        max-width: none !important;
+                        margin-inline: 0 !important;
+                        padding-inline: 0 !important;
+                        box-sizing: border-box !important;
+                    }
+                    .${ROOT_CLASS} .dco-measurements-card.dco-measurements-mobile-scroll > .dco-order-section-heading {
+                        padding-inline: 0 !important;
+                    }
                 }
             </style>
         `);

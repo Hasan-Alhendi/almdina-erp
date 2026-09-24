@@ -94,7 +94,7 @@
                     max-width:none!important;
                     width:100%!important;
                 }
-                .dco-operator-form .form-tabs-list { gap:8px; margin-bottom:14px; }
+                .dco-operator-form .form-tabs-list { gap:8px; margin-bottom:8px; }
                 .dco-operator-form .form-tabs-list .nav-link {
                     min-height:42px; padding:10px 18px!important; border-radius:10px!important; font-weight:700;
                 }

@@ -92,6 +92,8 @@ def test_full_screen_entry_reuses_live_grid_and_preserves_all_existing_editing_b
     assert "revision.enterEditSession(frm)" in source
     assert "dco-entry-window-print" in source
     assert "dco-entry-window-close" in source
+    assert "dco-entry-window-top" in source
+    assert "dco-entry-window-icon-button" in source
     assert "إغلاق والعودة" in source
     assert "توجد تعديلات غير محفوظة" in source
     assert "جميع التعديلات محفوظة" in source

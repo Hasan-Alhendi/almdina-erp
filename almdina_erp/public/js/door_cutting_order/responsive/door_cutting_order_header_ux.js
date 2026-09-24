@@ -1,13 +1,15 @@
 (() => {
     "use strict";
 
-    const STYLE_ID = "dco-responsive-header-css-v6";
+    const STYLE_ID = "dco-responsive-header-css-v8";
     const LEGACY_STYLE_IDS = [
         "dco-responsive-header-css",
         "dco-responsive-header-css-v2",
         "dco-responsive-header-css-v3",
         "dco-responsive-header-css-v4",
         "dco-responsive-header-css-v5",
+        "dco-responsive-header-css-v6",
+        "dco-responsive-header-css-v7",
     ];
     const TAB_LABELS = {
         order_tab: "الطلب",
@@ -128,13 +130,20 @@
                 border: 0;
             }
 
+            .dco-operator-form .form-tabs-list:has(.dco-sticky-tabs) {
+                border-bottom: none !important;
+                border-radius: 0 !important;
+                background: transparent !important;
+            }
+
             .dco-sticky-tabs {
                 background: var(--card-bg, #fff) !important;
                 border: 1px solid var(--border-color, #dfe3e8) !important;
-                border-radius: 14px !important;
+                border-bottom: none !important;
+                border-radius: 14px 14px 0 0 !important;
                 box-shadow: 0 2px 10px rgba(15, 23, 42, .04) !important;
-                margin: 0 0 14px !important;
-                padding-block: 10px 8px !important;
+                margin: 0 0 8px !important;
+                padding-block: 8px 3px !important;
                 padding-inline: 16px 20px !important;
                 max-width: 1440px;
                 margin-inline: auto;
@@ -146,6 +155,7 @@
             .dco-operator-form .dco-sticky-tabs .form-tabs,
             .dco-operator-form .dco-sticky-tabs .form-tabs-list {
                 margin-bottom: 0 !important;
+                border-bottom: none !important;
             }
 
             .dco-operator-form .dco-tab-edit-toolbar-slot {
@@ -164,9 +174,15 @@
                 z-index: 1055 !important;
                 margin: 0 !important;
                 background: var(--card-bg, #fff) !important;
-                border: 1px solid var(--border-color, #dfe3e8) !important;
-                border-radius: 14px !important;
-                box-shadow: 0 4px 16px rgba(15, 23, 42, .08) !important;
+                border: 0 !important;
+                border-radius: 0 !important;
+                box-shadow: none !important;
+                max-width: none !important;
+            }
+
+            .dco-operator-form .form-tabs-list:has(.dco-sticky-tabs.dco-tabs-is-fixed) {
+                border: 0 !important;
+                box-shadow: none !important;
             }
 
             .dco-sticky-tabs .nav-tabs,
@@ -187,7 +203,32 @@
                 max-width: none !important;
                 flex: 0 0 auto !important;
                 min-width: 0 !important;
+                padding-block: 8px !important;
                 padding-inline: 14px !important;
+                border: 1px solid transparent !important;
+                border-radius: var(--alm-radius-button, 10px) !important;
+                background: transparent !important;
+                color: var(--text-color, #1f272e) !important;
+                box-shadow: none !important;
+            }
+
+            .dco-sticky-tabs .nav-link.active,
+            .dco-sticky-tabs .form-tab.active,
+            .dco-sticky-tabs .nav-item.active > .nav-link,
+            .dco-sticky-tabs .nav-item.active > .form-tab {
+                background: var(--alm-primary, #172033) !important;
+                border-color: var(--alm-primary, #172033) !important;
+                color: var(--alm-on-primary, #fff) !important;
+                box-shadow: none !important;
+            }
+
+            .dco-sticky-tabs .nav-link.active:hover,
+            .dco-sticky-tabs .form-tab.active:hover,
+            .dco-sticky-tabs .nav-item.active > .nav-link:hover,
+            .dco-sticky-tabs .nav-item.active > .form-tab:hover {
+                background: var(--alm-primary-hover, #0f172a) !important;
+                border-color: var(--alm-primary-hover, #0f172a) !important;
+                color: var(--alm-on-primary, #fff) !important;
             }
 
             .dco-sticky-tabs .form-tabs-list,

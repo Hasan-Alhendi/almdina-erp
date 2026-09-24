@@ -850,6 +850,234 @@
     font-size: 11px !important;
 }
 
+/* Phone read-only browsing: keep a print-like table with horizontal scroll. */
+.dco-mobile-piece-read-table {
+    --dco-mobile-table-sticky-shadow: -6px 0 10px rgba(15, 23, 42, .08);
+    box-sizing: border-box;
+    width: 100% !important;
+    min-width: 0;
+    max-width: none !important;
+}
+
+.dco-mobile-piece-read-table .dco-fast-entry-shell {
+    width: 100% !important;
+    max-width: none !important;
+    border: 1px solid #98a2ac !important;
+    border-radius: 0 !important;
+    border-inline: 0 !important;
+    background: var(--card-bg, #fff) !important;
+    overflow: hidden !important;
+    box-sizing: border-box;
+}
+
+.dco-mobile-piece-read-table .dco-fast-entry-toolbar {
+    margin-bottom: 0 !important;
+    border: 0 !important;
+    border-bottom: 1px solid #dfe3e8 !important;
+    border-radius: 0 !important;
+    background: var(--card-bg, #fff) !important;
+    box-shadow: none !important;
+}
+
+.dco-mobile-piece-read-table .dco-fast-help > :not(.dco-measurement-title),
+.dco-mobile-piece-read-table .dco-fast-readonly-note {
+    display: none !important;
+}
+
+.dco-mobile-piece-read-table .dco-fast-entry-scroll {
+    width: 100% !important;
+    max-width: none !important;
+    max-height: min(65vh, 560px) !important;
+    overflow-x: auto !important;
+    overflow-y: auto !important;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+    box-sizing: border-box;
+}
+
+.dco-mobile-piece-read-table .dco-fast-table {
+    display: table !important;
+    width: max(100%, 1180px) !important;
+    min-width: max(100%, 1180px) !important;
+    max-width: none !important;
+    border-collapse: separate !important;
+    border-spacing: 0 !important;
+    border: 0 !important;
+    table-layout: fixed !important;
+    box-sizing: border-box;
+}
+
+.dco-mobile-piece-read-table .dco-fast-table :where(.dco-col-no, .dco-select-col) {
+    position: sticky !important;
+    z-index: 6 !important;
+    background: var(--card-bg, #fff) !important;
+}
+
+.dco-mobile-piece-read-table .dco-fast-table thead :where(.dco-col-no, .dco-select-col) {
+    z-index: 12 !important;
+    background: #eef1f4 !important;
+}
+
+.dco-mobile-piece-read-table .dco-fast-table .dco-select-col {
+    right: 0 !important;
+    width: 48px !important;
+    min-width: 48px !important;
+    max-width: 48px !important;
+}
+
+.dco-mobile-piece-read-table .dco-fast-table .dco-col-no {
+    right: 0 !important;
+    width: 42px !important;
+    min-width: 42px !important;
+    max-width: 42px !important;
+    box-shadow: var(--dco-mobile-table-sticky-shadow) !important;
+}
+
+.dco-mobile-piece-read-table:not(.dco-measurement-readonly-surface) .dco-fast-table .dco-col-no {
+    right: 48px !important;
+}
+
+.dco-mobile-piece-read-table .dco-fast-table tbody tr:nth-child(even) :where(.dco-col-no, .dco-select-col) {
+    background: #fbfcfd !important;
+}
+
+.dco-mobile-piece-read-table .dco-fast-table thead {
+    display: table-header-group !important;
+}
+
+.dco-mobile-piece-read-table .dco-fast-table tbody {
+    display: table-row-group !important;
+}
+
+.dco-mobile-piece-read-table .dco-fast-table tbody tr {
+    display: table-row !important;
+}
+
+.dco-mobile-piece-read-table .dco-fast-table tbody td,
+.dco-mobile-piece-read-table .dco-fast-table thead th {
+    display: table-cell !important;
+}
+
+.dco-mobile-piece-read-table .dco-fast-table tbody td::before {
+    display: none !important;
+    content: none !important;
+}
+
+.dco-mobile-piece-read-table .dco-fast-table thead th {
+    position: static !important;
+    background: #eef1f4 !important;
+    color: #303a44 !important;
+    font-size: 11px !important;
+    font-weight: 900 !important;
+    line-height: 1.2 !important;
+    white-space: nowrap !important;
+    border-bottom: 1px solid #c5cbd1 !important;
+    padding: 8px 6px !important;
+}
+
+.dco-mobile-piece-read-table .dco-fast-table thead th:where(.dco-col-no, .dco-select-col) {
+    position: sticky !important;
+}
+
+.dco-mobile-piece-read-table .dco-fast-table tbody td {
+    height: auto !important;
+    min-height: 42px !important;
+    padding: 8px 6px !important;
+    border-bottom: 1px solid #e7ebef !important;
+    text-align: center !important;
+    vertical-align: middle !important;
+    background: var(--card-bg, #fff) !important;
+}
+
+.dco-mobile-piece-read-table .dco-fast-table tbody tr:nth-child(even) td {
+    background: #fbfcfd !important;
+}
+
+.dco-mobile-piece-read-table.dco-measurement-readonly-surface .dco-fast-table :where(.dco-select-col, .dco-col-delete, .dco-col-calc) {
+    display: none !important;
+}
+
+.dco-mobile-piece-read-table.dco-measurement-readonly-surface .dco-bulk-footer {
+    display: none !important;
+}
+
+.dco-mobile-piece-read-table.dco-measurement-readonly-surface .dco-fast-input:disabled,
+.dco-mobile-piece-read-table.dco-measurement-readonly-surface .dco-fast-select:disabled {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    opacity: 1 !important;
+    color: var(--text-color, #172033) !important;
+    text-align: center !important;
+    -webkit-text-fill-color: currentColor !important;
+    appearance: none;
+}
+
+.dco-mobile-piece-read-table.dco-measurement-readonly-surface .dco-col-width .dco-fast-input:disabled,
+.dco-mobile-piece-read-table.dco-measurement-readonly-surface .dco-col-length .dco-fast-input:disabled {
+    font-size: 14px !important;
+    font-weight: 900 !important;
+    text-decoration: underline !important;
+    text-underline-offset: 3px !important;
+}
+
+.dco-mobile-piece-read-table .dco-check-toggle {
+    min-height: 0 !important;
+    height: auto !important;
+    padding: 2px 6px !important;
+    border-radius: 999px !important;
+    font-size: 10px !important;
+}
+
+.dco-mobile-piece-read-table .dco-check-toggle:not(.is-checked) {
+    opacity: .45 !important;
+}
+
+.dco-mobile-piece-read-table .dco-check-toggle.is-checked {
+    border-color: color-mix(in srgb, var(--alm-primary, #172033) 28%, transparent) !important;
+    background: color-mix(in srgb, var(--alm-primary, #172033) 8%, transparent) !important;
+    color: var(--alm-primary, #172033) !important;
+}
+
+.dco-mobile-piece-read-table .dco-special-sketch-button {
+    min-height: 0 !important;
+    height: auto !important;
+    padding: 4px 8px !important;
+    font-size: 10px !important;
+}
+
+.dco-mobile-piece-read-table.dco-measurement-readonly-surface .dco-col-notes .dco-fast-input:disabled {
+    min-width: 180px !important;
+    text-align: start !important;
+}
+
+.dco-mobile-piece-read-table .dco-col-notes .dco-notes-editor {
+    display: block !important;
+    min-width: 180px !important;
+}
+
+.dco-mobile-piece-read-table.dco-measurement-readonly-surface .dco-col-notes .dco-notes-expand {
+    display: none !important;
+}
+
+.dco-mobile-piece-read-table .dco-bulk-footer {
+    position: static !important;
+    box-shadow: none !important;
+    border-top: 1px solid #dfe3e8 !important;
+}
+
+.dco-compact-measurements.dco-mobile-piece-read-table .dco-fast-entry-shell,
+.dco-mobile-piece-read-table.dco-compact-measurements .dco-fast-entry-shell {
+    max-width: none !important;
+}
+
 /* Keep wide order layouts fluid before the mobile transformation is needed. */
 @media (max-width: 1200px) {
     .dco-operator-form .dco-ui-card {
@@ -984,6 +1212,7 @@
     .dco-order-list {
         --dco-touch-target: 44px;
         --dco-mobile-gap: 9px;
+        --dco-mobile-measurements-inset: 20px;
     }
 
     .page-head.dco-responsive-head {
@@ -1119,6 +1348,58 @@
         padding-inline: 8px !important;
     }
 
+    .dco-order-tab-layout .layout-main-section .form-page:has(.dco-measurements-mobile-scroll),
+    .dco-order-tab-layout .layout-main-section-wrapper .form-page:has(.dco-measurements-mobile-scroll) {
+        padding-inline: var(--dco-mobile-measurements-inset, 20px) !important;
+    }
+
+    .dco-order-tab-layout .dco-measurements-card.form-section.dco-measurements-mobile-scroll,
+    .dco-operator-form .dco-measurements-card.form-section.dco-measurements-mobile-scroll {
+        padding-inline: 0 !important;
+        margin-inline: 0 !important;
+        width: 100% !important;
+        max-width: none !important;
+    }
+
+    .dco-order-tab-layout .dco-measurements-card.dco-measurements-mobile-scroll > .section-body,
+    .dco-order-tab-layout .dco-measurements-card.dco-measurements-mobile-scroll > .section-head,
+    .dco-order-tab-layout .dco-measurements-card.dco-measurements-mobile-scroll .form-column,
+    .dco-order-tab-layout .dco-measurements-card.dco-measurements-mobile-scroll [data-fieldname="pieces_fast_entry"],
+    .dco-order-tab-layout .dco-measurements-card.dco-measurements-mobile-scroll [data-fieldname="pieces_fast_entry"] .frappe-control,
+    .dco-order-tab-layout .dco-measurements-card.dco-measurements-mobile-scroll [data-fieldname="pieces_fast_entry"] .control-input-wrapper {
+        width: 100% !important;
+        max-width: none !important;
+        margin-inline: 0 !important;
+        padding-inline: 0 !important;
+        box-sizing: border-box;
+    }
+
+    .dco-order-tab-layout .dco-measurements-card.dco-measurements-mobile-scroll > .dco-order-section-heading,
+    .dco-order-tab-layout .dco-measurements-card.dco-measurements-mobile-scroll > .section-head {
+        padding-inline: 0 !important;
+    }
+
+    .dco-operator-form .dco-measurements-card.dco-measurements-mobile-scroll.dco-ui-card {
+        padding-inline: 0 !important;
+    }
+
+    .dco-operator-form [data-fieldname="pieces_fast_entry"].dco-mobile-piece-read-table,
+    .dco-order-tab-layout [data-fieldname="pieces_fast_entry"].dco-mobile-piece-read-table {
+        width: 100% !important;
+        max-width: none !important;
+        margin-inline: 0 !important;
+        padding-inline: 0 !important;
+        box-sizing: border-box;
+    }
+
+    .dco-mobile-piece-read-table .dco-fast-entry-shell {
+        width: 100% !important;
+        max-width: none !important;
+        margin-inline: 0 !important;
+        border-radius: 12px !important;
+        border-inline: 1px solid #98a2ac !important;
+    }
+
     .dco-operator-form .dco-ui-card {
         margin-block: 9px !important;
         padding: 3px 10px 11px !important;
@@ -1233,16 +1514,35 @@
         min-height: min(52dvh, 420px) !important;
     }
 
-    .dco-measurement-entry-window .dco-entry-window-header,
-    .dco-measurement-entry-window .dco-entry-window-actions {
-        display: grid !important;
-        grid-template-columns: 1fr !important;
+    .dco-measurement-entry-window .dco-entry-window-header {
+        display: flex !important;
+        flex-direction: column !important;
         width: 100%;
-        gap: 7px !important;
+        gap: 8px !important;
     }
 
-    .dco-measurement-entry-window .dco-entry-window-actions .btn {
+    .dco-measurement-entry-window .dco-entry-window-top {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 10px !important;
         width: 100%;
+        min-width: 0;
+    }
+
+    .dco-measurement-entry-window .dco-entry-window-actions {
+        display: inline-flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        width: auto !important;
+        gap: 6px !important;
+    }
+
+    .dco-measurement-entry-window .dco-entry-window-actions .btn,
+    .dco-measurement-entry-window .dco-entry-window-icon-button {
+        width: auto !important;
+        min-width: 40px !important;
+        flex: 0 0 auto !important;
         min-height: var(--dco-touch-target);
     }
 

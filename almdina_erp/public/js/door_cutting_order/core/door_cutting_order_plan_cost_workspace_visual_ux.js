@@ -127,20 +127,41 @@
                 margin: 0 !important;
             }
             .dco-operator-form .dco-plan-settings-readonly[data-almdina-plan-settings-summary-owner="stable"],
-            .${ROOT_CLASS} .dco-plan-settings-readonly[data-almdina-plan-settings-summary-owner="stable"],
+            .${ROOT_CLASS} .dco-plan-settings-readonly[data-almdina-plan-settings-summary-owner="stable"] {
+                width: 100% !important;
+                max-width: none !important;
+                box-sizing: border-box !important;
+                margin-inline: 0 !important;
+                margin-block: 0 2px !important;
+                padding: 0 !important;
+                padding-inline: var(--dco-plan-card-inset-inline) !important;
+                border: 0 !important;
+                border-radius: 0 !important;
+                background: transparent !important;
+                box-shadow: none !important;
+            }
             .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-readonly,
             .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-editor {
                 width: 100% !important;
                 max-width: none !important;
                 box-sizing: border-box !important;
                 margin-inline: 0 !important;
-                margin-block: 0 6px !important;
-                padding-block: var(--dco-plan-card-inset-block-start) var(--dco-plan-card-inset-block-end) !important;
+                margin-block: 0 4px !important;
+                padding-block: 8px 8px !important;
                 padding-inline: var(--dco-plan-card-inset-inline) !important;
-                border: 1px solid var(--border-color,#dfe3e8) !important;
-                border-radius: 14px !important;
-                background: var(--card-bg,var(--fg-color,#fff)) !important;
-                box-shadow: 0 2px 10px rgba(15,23,42,.035) !important;
+                border: 1px solid var(--border-color,#e2e8f0) !important;
+                border-radius: 10px !important;
+                background: var(--subtle-fg,#f6f8fa) !important;
+                box-shadow: none !important;
+            }
+            .${ROOT_CLASS} .dco-plan-settings-readonly[data-almdina-plan-settings-summary-owner="stable"] .dco-plan-settings-readonly__strip,
+            .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-readonly .dco-plan-settings-readonly__strip {
+                display: flex !important;
+                flex-wrap: wrap !important;
+                align-items: center !important;
+                gap: 6px 14px !important;
+                font-size: 11px !important;
+                line-height: 1.5 !important;
             }
             .dco-operator-form .dco-plan-section-card.dco-layout-card > .section-head,
             .dco-operator-form .dco-plan-section-card.dco-layout-card > .section-body,
@@ -210,7 +231,7 @@
                 padding-top: 0 !important;
             }
             .${ROOT_CLASS} .dco-plan-section-card.dco-layout-card {
-                margin-block: 6px 10px !important;
+                margin-block: 4px 6px !important;
                 margin-inline: 0 !important;
                 width: 100% !important;
                 max-width: none !important;
@@ -252,6 +273,7 @@
             .${ROOT_CLASS} .dco-plan-actions-section > .section-head {
                 display: none !important;
             }
+            .${ROOT_CLASS} [data-fieldname="cutting_plan_html"] .dco-plan-meta-strip,
             .${ROOT_CLASS} [data-fieldname="cutting_plan_html"] .dco-plan-tab-content,
             .${ROOT_CLASS} [data-fieldname="cutting_plan_html"] .dco-extra-addon-legend,
             .${ROOT_CLASS} [data-fieldname="cutting_plan_html"] .dco-margin-policy-alert,
@@ -343,7 +365,7 @@
             }
             .${ROOT_CLASS} [data-fieldname="plan_control_actions"][data-almdina-workspace-stale="1"] .dco-recalculate-plan{box-shadow:0 0 0 3px rgba(190,125,25,.12);}
             .${ROOT_CLASS} [data-fieldname="cutting_plan_html"] .dco-plan-tabs{
-                margin-bottom:14px !important;padding:5px !important;border-radius:13px !important;
+                margin-bottom:8px !important;padding:4px !important;border-radius:11px !important;
                 box-shadow:0 2px 8px rgba(15,23,42,.035);
             }
             .${ROOT_CLASS} [data-fieldname="cutting_plan_html"] .dco-plan-tabs .btn{min-height:36px !important;padding-inline:13px !important;}

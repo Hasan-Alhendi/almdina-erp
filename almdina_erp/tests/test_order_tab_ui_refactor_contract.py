@@ -116,6 +116,7 @@ def test_order_and_material_controls_follow_exact_requested_rows() -> None:
     assert "margin-block: 6px 10px !important" in layout
     assert "padding-block: 14px 16px !important" in layout
     assert "padding-inline: 44px !important" in layout
+    assert "dco-measurements-mobile-scroll" in layout
     assert "padding-inline: 20px !important" in layout
     assert "grid-template-columns: minmax(0, 2fr) minmax(220px, 1fr)" in layout
     assert "dco-order-intake-card > .section-body" in layout

@@ -306,6 +306,7 @@
                 if (!(child instanceof HTMLElement)) return;
                 if (child.classList.contains("dco-sheet-card")) return;
                 if (child.classList.contains("dco-board-gallery")) return;
+                if (child.classList.contains("dco-plan-meta-strip")) return;
                 if (child.classList.contains("dco-special-raw-coverage")) return;
                 if (child.classList.contains("dco-margin-policy-alert")) return;
                 const text = (child.textContent || "").replace(/\s+/g, " ").trim();
