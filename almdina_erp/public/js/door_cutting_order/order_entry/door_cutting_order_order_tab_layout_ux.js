@@ -122,10 +122,10 @@
                     margin-block: 6px 10px !important;
                     padding-block: 14px 16px !important;
                     padding-inline: 44px !important;
-                    border: 1px solid var(--border-color,#dfe3e8) !important;
-                    border-radius: 14px !important;
-                    background: var(--card-bg,var(--fg-color,#fff)) !important;
-                    box-shadow: 0 2px 10px rgba(15,23,42,.035) !important;
+                    border: 1px solid var(--alm-card-border,#e4e8ee) !important;
+                    border-radius: var(--alm-radius-card,16px) !important;
+                    background: var(--alm-card,#fff) !important;
+                    box-shadow: var(--alm-shadow-card,0 8px 24px rgba(15,23,42,.045)) !important;
                 }
                 .${ROOT_CLASS} .dco-order-intake-card {
                     display: block !important;
@@ -140,7 +140,7 @@
                 }
                 .${ROOT_CLASS} .dco-order-intake-card > .section-body {
                     display: grid !important;
-                    grid-template-columns: minmax(0, 2fr) minmax(220px, 1fr);
+                    grid-template-columns: repeat(3, minmax(0, 1fr));
                     gap: 12px 16px;
                     direction: rtl;
                     align-items: start;
@@ -155,12 +155,12 @@
                 }
                 .${ROOT_CLASS} .dco-measurements-card {
                     margin-block: 10px 0 !important;
-                    padding-block: 12px 0 !important;
+                    padding-block: 14px 16px !important;
                     padding-inline: 44px !important;
-                    border: 0 !important;
-                    border-radius: 0 !important;
-                    background: transparent !important;
-                    box-shadow: none !important;
+                    border: 1px solid var(--alm-card-border, #e4e8ee) !important;
+                    border-radius: var(--alm-radius-card, 16px) !important;
+                    background: var(--alm-card, #fff) !important;
+                    box-shadow: var(--alm-shadow-card, 0 8px 24px rgba(15, 23, 42, .045)) !important;
                 }
                 .${ROOT_CLASS} .dco-order-section-heading {
                     display: flex;
@@ -261,8 +261,8 @@
                     grid-row: 3;
                 }
                 .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="order_cutting_machine"] {
-                    grid-column: 1 / -1;
-                    grid-row: 4;
+                    grid-column: 3;
+                    grid-row: 2;
                     max-width: none !important;
                     width: auto;
                 }
@@ -357,7 +357,7 @@
 
                 @media (max-width: 980px) {
                     .${ROOT_CLASS} .dco-order-intake-card > .section-body {
-                        grid-template-columns: minmax(0, 1.5fr) minmax(190px, 1fr);
+                        grid-template-columns: repeat(3, minmax(0, 1fr));
                     }
                     .${ROOT_CLASS} .dco-material-row--primary {
                         grid-template-columns: minmax(0,1.5fr) minmax(120px,1fr) minmax(120px,1fr);
