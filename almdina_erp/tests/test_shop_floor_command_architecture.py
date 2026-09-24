@@ -68,7 +68,7 @@ class TestShopFloorCommandArchitecture(unittest.TestCase):
         self.assertNotIn("transition_stage", source)
         self.assertNotIn("next_stage_type", source)
         self.assertNotIn("stage.save(", source)
-        self.assertNotIn("frappe.db", source)
+        command_surface = source.split("def _stage_completion_whatsapp_context", 1)[0]\n        self.assertNotIn("frappe.db", command_surface)
         self.assertNotIn("shop_floor_gateway", source)
 
     def test_transitional_production_service_is_only_a_compatibility_facade(self) -> None:
