@@ -106,7 +106,7 @@ def test_phone_read_only_measurements_use_print_like_scroll_table():
     assert ".dco-measurements-card.form-section.dco-measurements-mobile-scroll" in css
     assert "--dco-mobile-measurements-inset: 20px" in css
     assert "padding-inline: var(--dco-mobile-measurements-inset, 20px)" in css
-    assert 'root.classList.toggle("dco-mobile-piece-read-table"' in cards
+    assert 'classList.toggle("dco-mobile-piece-read-table", useScrollTable)' in cards
     assert "mobile-piece-layout" in cards
     assert "almdina_edit_session_changed" in cards
 
@@ -222,7 +222,7 @@ def test_measurement_cards_activate_only_for_a_phone_not_a_narrow_laptop_panel()
     assert "viewport <= PHONE_SHORT_SIDE_MAX_WIDTH" in responsive
     assert "deviceShortSide() <= PHONE_SHORT_SIDE_MAX_WIDTH" in responsive
     assert "window.AlmdinaResponsiveDevice" in cards
-    assert 'root.classList.toggle("dco-mobile-piece-read-table"' in cards
+    assert 'classList.toggle("dco-mobile-piece-read-table", useScrollTable)' in cards
     assert "return false;" in cards
 
 

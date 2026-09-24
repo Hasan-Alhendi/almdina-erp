@@ -13,6 +13,14 @@
         return frappe.utils.escape_html(String(value ?? ""));
     }
 
+    function uiButton(options = {}) {
+        const ui = window.AlmdinaUi;
+        if (!ui || typeof ui.button !== "function") {
+            throw new Error("AlmdinaUi.button is required for DCO measurement actions");
+        }
+        return ui.button(options);
+    }
+
     function entryWindowIcon(kind) {
         const icons = {
             print: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V4h10v5"></path><rect x="6" y="9" width="12" height="10" rx="1.5"></rect><path d="M6 14h12"></path></svg>',
@@ -30,8 +38,14 @@
         const icon = String(options.icon || "").trim();
         const variant = String(options.variant || "secondary").trim();
         const disabled = options.disabled === true;
-        const variantClass = variant === "primary" ? "alm-btn-primary" : "alm-btn-secondary";
-        return `<button type="button" class="btn ${variantClass} dco-entry-window-icon-button ${className}" aria-label="${esc(label)}" title="${esc(label)}"${disabled ? " disabled" : ""}>${icon}<span class="dco-entry-window-icon-label">${esc(label)}</span></button>`;
+        const button = uiButton({
+            label: "",
+            variant,
+            className: `dco-entry-window-icon-button ${className}`,
+            disabled,
+            attrs: { "aria-label": label, title: label },
+        });
+        return button.replace("</button>", `${icon}<span class="dco-entry-window-icon-label">${esc(label)}</span></button>`);
     }
 
     function orderEdgeColor(frm) {

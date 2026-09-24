@@ -25,6 +25,7 @@ LEGACY_PRESERVED_FIELDS = {
     "min_remnant_area_m2",
     "remnant_cost_policy",
     "remnant_rate_usd_per_m2",
+    "whatsapp_stage_messages",
 }
 
 
@@ -84,6 +85,7 @@ def test_hidden_legacy_values_are_preserved_and_visible_read_only() -> None:
     assert 'data-section="legacy"' not in renderer_source
     for fieldname in LEGACY_PRESERVED_FIELDS:
         assert fieldname in service_source
+    for fieldname in LEGACY_PRESERVED_FIELDS - {"whatsapp_stage_messages"}:
         assert fieldname in view_model_source
 
 

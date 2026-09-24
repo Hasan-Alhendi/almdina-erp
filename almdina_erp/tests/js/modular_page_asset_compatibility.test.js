@@ -28,7 +28,7 @@ const cases = [
         file: "../../almdina_erp/page/factory_production_settings/factory_production_settings.js",
         page: "factory-production-settings",
         controller: "AlmdinaFactoryProductionSettingsController",
-        featureModuleCount: 7,
+        featureModuleCount: 8,
         modulePrefix: "/assets/almdina_erp/js/factory_production_settings/",
         sharedModules: [DESIGN_SYSTEM_MODULE],
     },
