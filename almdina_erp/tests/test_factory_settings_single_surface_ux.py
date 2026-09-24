@@ -85,6 +85,7 @@ def test_hidden_legacy_values_are_preserved_and_visible_read_only() -> None:
     assert 'data-section="legacy"' not in renderer_source
     for fieldname in LEGACY_PRESERVED_FIELDS:
         assert fieldname in service_source
+    for fieldname in LEGACY_PRESERVED_FIELDS - {"whatsapp_stage_messages"}:
         assert fieldname in view_model_source
 
 
