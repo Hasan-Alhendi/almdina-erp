@@ -25,6 +25,7 @@ LEGACY_PRESERVED_FIELDS = {
     "min_remnant_area_m2",
     "remnant_cost_policy",
     "remnant_rate_usd_per_m2",
+    "whatsapp_stage_messages",
 }
 
 
