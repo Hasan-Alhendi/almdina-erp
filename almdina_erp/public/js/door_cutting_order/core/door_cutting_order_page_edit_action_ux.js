@@ -73,42 +73,41 @@
                     outline:none !important;box-shadow:0 0 0 3px color-mix(in srgb, var(--alm-primary, #172033) 15%, transparent) !important;
                 }
                 .dco-plan-settings-readonly {
-                    margin:0 0 6px;padding-block:14px 16px;padding-inline:44px;border:1px solid var(--border-color,#dfe3e8);border-radius:14px;
-                    background:linear-gradient(180deg,var(--card-bg,#fff),var(--subtle-fg,#fafbfc));direction:rtl;
+                    margin:0 0 2px;padding:0;border:0;border-radius:0;
+                    background:transparent;direction:rtl;
+                }
+                .dco-plan-settings-readonly__strip {
+                    display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;font-size:11px;line-height:1.5;
+                    color:var(--text-muted,#687481);
+                }
+                .dco-plan-settings-readonly__lead {
+                    color:var(--text-color,#26313b);font-weight:850;white-space:nowrap;
+                }
+                .dco-plan-settings-readonly__pair {
+                    display:inline-flex;align-items:baseline;gap:4px;white-space:nowrap;
+                }
+                .dco-plan-settings-readonly__pair .dco-plan-settings-readonly__label {
+                    font-weight:750;
+                }
+                .dco-plan-settings-readonly__pair .dco-plan-settings-readonly__value {
+                    color:var(--text-color,#26313b);font-weight:850;
                 }
                 .dco-plan-settings-readonly__header {
-                    display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px;padding-inline:0;
-                }
-                .dco-plan-settings-readonly__title {
-                    margin:0;font-size:13px;font-weight:850;color:var(--text-color,#26313b);text-align:start;
-                }
-                .dco-plan-settings-readonly__help {
-                    margin:3px 0 0;color:var(--text-muted,#687481);font-size:10.5px;line-height:1.55;text-align:start;
+                    display:none;
                 }
                 .dco-plan-settings-readonly__grid {
-                    display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;
-                }
-                .dco-plan-settings-readonly__item {
-                    min-width:0;padding:6px 8px;border-radius:8px;background:var(--subtle-fg,#f6f8fa);
-                }
-                .dco-plan-settings-readonly__label {
-                    display:block;margin-bottom:2px;color:var(--text-muted,#687481);font-size:9.5px;font-weight:750;
-                }
-                .dco-plan-settings-readonly__value {
-                    display:block;overflow:hidden;text-overflow:ellipsis;color:var(--text-color,#26313b);
-                    font-size:11px;font-weight:850;white-space:nowrap;
+                    display:none;
                 }
                 .dco-a53-workspace-polish [data-fieldname="plan_control_actions"][data-almdina-workspace-editing="1"]::before,
                 .dco-a53-workspace-polish [data-fieldname="order_cost_invoice_html"][data-almdina-workspace-editing="1"]::before {
                     content:"وضع التعديل مفعّل — غيّر القيم المطلوبة ثم استخدم «حفظ» أو «إلغاء» داخل هذا القسم." !important;
                 }
                 @media (max-width:900px) {
-                    .dco-plan-settings-readonly__grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+                    .dco-plan-settings-readonly__strip { gap:5px 10px; }
                 }
                 @media (max-width:560px) {
                     .${TOOLBAR_CLASS} { align-items:stretch;flex-direction:row;width:100%;justify-content:flex-end; }
                     .${TOOLBAR_CLASS}__actions { width:auto; }
-                    .dco-plan-settings-readonly__grid { grid-template-columns:1fr; }
                 }
             </style>
         `);
@@ -492,21 +491,18 @@
             ["هامش التشذيب", planSettingValue(settings.trim_margin_mm, " مم")],
             ["مهلة التحسين", planSettingValue(settings.optimization_time_limit_sec, " ث")],
         ];
-        const items = values.map(([label, value]) => `
-            <div class="dco-plan-settings-readonly__item">
-                <span class="dco-plan-settings-readonly__label">${frappe.utils.escape_html(__(label))}</span>
+        const pairs = values.map(([label, value]) => `
+            <span class="dco-plan-settings-readonly__pair">
+                <span class="dco-plan-settings-readonly__label">${frappe.utils.escape_html(__(label))}:</span>
                 <strong class="dco-plan-settings-readonly__value">${frappe.utils.escape_html(value)}</strong>
-            </div>
+            </span>
         `).join("");
         wrapper.prepend(`
             <section class="dco-plan-settings-readonly" data-almdina-plan-settings-readonly="1">
-                <div class="dco-plan-settings-readonly__header">
-                    <div>
-                        <h4 class="dco-plan-settings-readonly__title">${frappe.utils.escape_html(__("إعدادات خطة القص"))}</h4>
-                        <p class="dco-plan-settings-readonly__help">${frappe.utils.escape_html(__("القيم المحفوظة في خطة القص الحالية. اضغط «تعديل» في هذا القسم لتغييرها."))}</p>
-                    </div>
+                <div class="dco-plan-settings-readonly__strip">
+                    <span class="dco-plan-settings-readonly__lead">${frappe.utils.escape_html(__("إعدادات الخطة:"))}</span>
+                    ${pairs}
                 </div>
-                <div class="dco-plan-settings-readonly__grid">${items}</div>
             </section>
         `);
         return true;

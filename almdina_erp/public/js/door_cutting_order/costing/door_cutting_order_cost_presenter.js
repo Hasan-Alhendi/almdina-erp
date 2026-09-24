@@ -348,11 +348,11 @@
             return '<div class="dco-cost-empty">لا توجد قياسات في الطلب بعد.</div>';
         }
         return `<div class="dco-cost-table-wrap"><table class="dco-cost-table"><thead><tr>
-            <th>#</th><th>النوع</th><th>العرض (سم)</th><th>الطول (سم)</th><th>العدد</th><th>نوع القشاط</th><th class="text-start">ملاحظات</th>
+            <th>#</th><th>النوع</th><th>العرض (سم)</th><th>الطول (سم)</th><th>العدد</th><th class="text-start">ملاحظات</th><th>نوع القشاط</th>
         </tr></thead><tbody>${data.map(row => `<tr>
             <td><b>${row.index}</b></td><td>${esc(pieceTypeLabel(row.pieceType))}</td>
             <td>${quantity(row.width)}</td><td>${quantity(row.length)}</td><td>${row.qty}</td>
-            <td>${esc(row.edgeType || "—")}</td><td class="text-start">${esc(row.notes || "—")}</td>
+            <td class="text-start">${esc(row.notes || "—")}</td><td>${esc(row.edgeType || "—")}</td>
         </tr>`).join("")}</tbody></table></div>`;
     }
 
