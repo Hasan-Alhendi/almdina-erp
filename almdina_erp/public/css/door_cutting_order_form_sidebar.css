@@ -1,18 +1,20 @@
-/* DCO-only Form Sidebar collapse. The native Frappe sidebar DOM stays mounted. */
-@media (min-width: 768px) {
-    .almadina-dco-form-sidebar-host.almadina-dco-form-sidebar-collapsed .layout-side-section {
-        display: none;
-    }
-
-    .almadina-dco-form-sidebar-host.almadina-dco-form-sidebar-collapsed .layout-main-section-wrapper {
+/* DCO-only presentation correction; Frappe owns sidebar visibility and content. */
+@media (min-width: 991px) {
+    .almadina-dco-form-sidebar-host.almadina-dco-form-sidebar-native-collapsed .layout-main-section-wrapper {
         flex: 1 1 100%;
         width: 100%;
         max-width: 100%;
     }
 
-    .almadina-dco-form-sidebar-host.almadina-dco-form-sidebar-collapsed .layout-main-section {
+    .almadina-dco-form-sidebar-host.almadina-dco-form-sidebar-native-collapsed .layout-main-section {
         width: 100%;
         max-width: 100%;
+    }
+}
+
+@media (max-width: 990px) {
+    .almadina-dco-form-sidebar-host .almadina-dco-form-sidebar-toggle {
+        display: none;
     }
 }
 

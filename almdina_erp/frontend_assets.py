@@ -13,6 +13,8 @@ app_include_css = [
     "/assets/almdina_erp/css/door_cutting_order_responsive.css",
     "/assets/almdina_erp/css/door_cutting_order_form_tab_layout.css",
     "/assets/almdina_erp/css/door_cutting_order_form_sidebar.css",
+
+    "/assets/almdina_erp/css/door_cutting_order_form_sidebar.css",
     # Raw /assets paths are not content-fingerprinted by Frappe; bump the bounded
     # DCO list revision when its presentation contract changes.
     "/assets/almdina_erp/css/door_cutting_order_list.css?v=15",
