@@ -48,6 +48,9 @@ from almdina_erp.almdina_erp.services.production_settings_service import (
     whatsapp_stage_message_template,
 )
 from almdina_erp.almdina_erp.infrastructure.whatsapp.openwa_client import OpenWAClient
+from almdina_erp.almdina_erp.infrastructure.whatsapp.session_store import (
+    FrappeWhatsAppSessionStore,
+)
 
 
 def _require_whatsapp_session() -> None:
@@ -64,6 +67,10 @@ def _authorized_order(order_name: object, capability: str, missing_message: str)
         frappe.throw(_("الطلب غير موجود."), frappe.DoesNotExistError)
     require_document_capability(order, capability)
     return order
+
+
+def _session_store() -> FrappeWhatsAppSessionStore:
+    return FrappeWhatsAppSessionStore()
 
 
 def _client() -> OpenWAClient:
@@ -96,7 +103,7 @@ def get_whatsapp_session() -> dict[str, Any]:
     if not config.configured:
         return session_snapshot(None, configured=False)
     try:
-        return session_snapshot(get_factory_session(OpenWAClient(config)))
+        return session_snapshot(get_factory_session(OpenWAClient(config), _session_store()))
     except (WhatsAppError, WhatsAppTransportError) as error:
         _throw(error)
         raise AssertionError("frappe.throw must interrupt execution")
@@ -117,7 +124,7 @@ def get_whatsapp_delivery_status() -> dict[str, Any]:
             "reason": snapshot["reason"],
         }
     try:
-        return dict(delivery_status(OpenWAClient(config)))
+        return dict(delivery_status(OpenWAClient(config), _session_store()))
     except (WhatsAppError, WhatsAppTransportError) as error:
         _throw(error)
         raise AssertionError("frappe.throw must interrupt execution")
@@ -127,7 +134,7 @@ def get_whatsapp_delivery_status() -> dict[str, Any]:
 def create_whatsapp_session() -> dict[str, Any]:
     _require_whatsapp_session()
     try:
-        session = create_and_start_factory_session(_client())
+        session = create_and_start_factory_session(_client(), _session_store())
     except (WhatsAppError, WhatsAppTransportError) as error:
         _throw(error)
         raise AssertionError("frappe.throw must interrupt execution")
@@ -138,7 +145,7 @@ def create_whatsapp_session() -> dict[str, Any]:
 def reconnect_whatsapp_session() -> dict[str, Any]:
     _require_whatsapp_session()
     try:
-        session = reconnect_factory_session(_client())
+        session = reconnect_factory_session(_client(), _session_store())
     except (WhatsAppError, WhatsAppTransportError) as error:
         _throw(error)
         raise AssertionError("frappe.throw must interrupt execution")
@@ -149,7 +156,7 @@ def reconnect_whatsapp_session() -> dict[str, Any]:
 def stop_whatsapp_session() -> dict[str, Any]:
     _require_whatsapp_session()
     try:
-        session = stop_factory_session(_client())
+        session = stop_factory_session(_client(), _session_store())
     except (WhatsAppError, WhatsAppTransportError) as error:
         _throw(error)
         raise AssertionError("frappe.throw must interrupt execution")
@@ -160,7 +167,7 @@ def stop_whatsapp_session() -> dict[str, Any]:
 def get_whatsapp_qr() -> dict[str, Any]:
     _require_whatsapp_session()
     try:
-        return get_session_qr(_client())
+        return get_session_qr(_client(), _session_store())
     except (WhatsAppError, WhatsAppTransportError) as error:
         _throw(error)
         raise AssertionError("frappe.throw must interrupt execution")
@@ -200,6 +207,7 @@ def send_order_measurements(order_name: str, amendment: int | str | bool = 0) ->
             FrappeCustomerPhoneAdapter(),
             order.name,
             text_template=templates[template_key],
+            session_store=_session_store(),
         )
     except (WhatsAppError, WhatsAppTransportError) as error:
         _throw(error)
@@ -223,6 +231,7 @@ def send_order_invoice(order_name: str) -> dict[str, Any]:
             order.name,
             payload,
             text_template=whatsapp_message_templates()["whatsapp_invoice_text"],
+            session_store=_session_store(),
         )
     except (WhatsAppError, WhatsAppTransportError) as error:
         _throw(error)
@@ -251,6 +260,7 @@ def notify_stage_completion(
             order_name,
             stage_label,
             text_template=whatsapp_stage_message_template(stage_type),
+            session_store=_session_store(),
         )
     except (WhatsAppError, WhatsAppTransportError) as error:
         return {

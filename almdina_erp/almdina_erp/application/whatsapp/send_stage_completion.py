@@ -15,6 +15,7 @@ from .ports import (
     CustomerPhoneGateway,
     SendTextResult,
     WhatsAppGateway,
+    WhatsAppSessionStore,
 )
 from .sessions import get_factory_session
 
@@ -38,13 +39,15 @@ def send_stage_completion(
     order_name: object,
     stage_label: object,
     text_template: object = None,
+    *,
+    session_store: WhatsAppSessionStore,
 ) -> SendTextResult:
     name = str(order_name or "").strip()
     label = str(stage_label or "").strip()
     if not name:
         raise WhatsAppError("missing_order", "تعذر تحديد الطلب لإرسال رسالة المرحلة.")
 
-    session = get_factory_session(gateway)
+    session = get_factory_session(gateway, session_store)
     if session is None:
         raise WhatsAppError("missing_session", "لا توجد جلسة WhatsApp مرتبطة.")
     if not is_working(session.status):

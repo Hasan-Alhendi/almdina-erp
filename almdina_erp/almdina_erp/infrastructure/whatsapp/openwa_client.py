@@ -16,6 +16,7 @@ from almdina_erp.almdina_erp.infrastructure.whatsapp.config import OpenWAConfig
 
 
 _Opener = Callable[..., Any]
+SESSION_SETUP_TIMEOUT_SEC = 180.0
 
 
 class OpenWAClient:
@@ -43,13 +44,26 @@ class OpenWAClient:
         return [_session(row) for row in rows if isinstance(row, dict)]
 
     def create_session(self, name: str) -> WhatsAppSession:
-        return _session(self._request("POST", "/api/sessions", {"name": name}))
+        return _session(
+            self._request(
+                "POST",
+                "/api/sessions",
+                {"name": name},
+                timeout=SESSION_SETUP_TIMEOUT_SEC,
+            )
+        )
 
     def get_session(self, session_id: str) -> WhatsAppSession:
         return _session(self._request("GET", f"/api/sessions/{session_id}"))
 
     def start(self, session_id: str) -> WhatsAppSession:
-        return _session(self._request("POST", f"/api/sessions/{session_id}/start"))
+        return _session(
+            self._request(
+                "POST",
+                f"/api/sessions/{session_id}/start",
+                timeout=SESSION_SETUP_TIMEOUT_SEC,
+            )
+        )
 
     def stop(self, session_id: str) -> WhatsAppSession:
         return _session(self._request("POST", f"/api/sessions/{session_id}/stop"))
@@ -101,6 +115,7 @@ class OpenWAClient:
         method: str,
         path: str,
         body: dict[str, Any] | None = None,
+        timeout: float | None = None,
     ) -> Any:
         encoded = None if body is None else json.dumps(body).encode("utf-8")
         headers = {
@@ -116,7 +131,10 @@ class OpenWAClient:
             method=method,
         )
         try:
-            with self._opener(request, timeout=self._timeout) as response:
+            with self._opener(
+                request,
+                timeout=self._timeout if timeout is None else timeout,
+            ) as response:
                 raw = response.read()
                 if not raw:
                     return {}
@@ -130,10 +148,19 @@ class OpenWAClient:
                 ) from error
             finally:
                 error.close()
-        except URLError as error:
+        except TimeoutError as error:
             raise WhatsAppTransportError(
-                "تعذر الاتصال بخادم WhatsApp المحلي.",
-                code="unreachable",
+                "انتهت مهلة الاتصال بخادم WhatsApp.",
+                code="timeout",
+            ) from error
+        except URLError as error:
+            reason = getattr(error, "reason", None)
+            timed_out = isinstance(reason, TimeoutError) or "timed out" in str(reason or "").lower()
+            raise WhatsAppTransportError(
+                "انتهت مهلة الاتصال بخادم WhatsApp."
+                if timed_out
+                else "تعذر الاتصال بخادم WhatsApp المحلي.",
+                code="timeout" if timed_out else "unreachable",
             ) from error
         except json.JSONDecodeError as error:
             raise WhatsAppTransportError(
@@ -185,4 +212,4 @@ def _error_detail(error: HTTPError) -> str:
     return str(error.reason or "")
 
 
-__all__ = ["OpenWAClient"]
+__all__ = ["OpenWAClient", "SESSION_SETUP_TIMEOUT_SEC"]

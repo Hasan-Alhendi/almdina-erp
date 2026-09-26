@@ -18,6 +18,7 @@ from .ports import (
     MeasurementPdfGateway,
     SendMeasurementsResult,
     WhatsAppGateway,
+    WhatsAppSessionStore,
 )
 from .sessions import get_factory_session
 
@@ -43,12 +44,14 @@ def send_order_measurements(
     phone_gateway: CustomerPhoneGateway,
     order_name: object,
     text_template: object = None,
+    *,
+    session_store: WhatsAppSessionStore,
 ) -> SendMeasurementsResult:
     name = str(order_name or "").strip()
     if not name:
         raise WhatsAppError("missing_order", "تعذر تحديد الطلب لإرسال القياسات.")
 
-    session = get_factory_session(gateway)
+    session = get_factory_session(gateway, session_store)
     if session is None:
         raise WhatsAppError("missing_session", "لا توجد جلسة WhatsApp مرتبطة.")
     if not is_working(session.status):

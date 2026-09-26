@@ -20,6 +20,7 @@ from .ports import (
     InvoicePdfGateway,
     SendMeasurementsResult,
     WhatsAppGateway,
+    WhatsAppSessionStore,
 )
 from .send_measurements import MEASUREMENTS_PDF_MIMETYPE
 from .sessions import get_factory_session
@@ -40,12 +41,14 @@ def send_order_invoice(
     order_name: object,
     invoice_payload: Mapping[str, object] | None = None,
     text_template: object = None,
+    *,
+    session_store: WhatsAppSessionStore,
 ) -> SendMeasurementsResult:
     name = str(order_name or "").strip()
     if not name:
         raise WhatsAppError("missing_order", "تعذر تحديد الطلب لإرسال الفاتورة.")
 
-    session = get_factory_session(gateway)
+    session = get_factory_session(gateway, session_store)
     if session is None:
         raise WhatsAppError("missing_session", "لا توجد جلسة WhatsApp مرتبطة.")
     if not is_working(session.status):

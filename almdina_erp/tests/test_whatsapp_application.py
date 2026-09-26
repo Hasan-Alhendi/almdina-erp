@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
 from almdina_erp.almdina_erp.application.whatsapp.errors import (
     WhatsAppError,
@@ -31,13 +32,13 @@ from almdina_erp.almdina_erp.application.whatsapp.sessions import (
     reconnect_factory_session,
     session_snapshot,
 )
-from almdina_erp.almdina_erp.domain.whatsapp.session_policy import FACTORY_SESSION_NAME
+from almdina_erp.almdina_erp.domain.whatsapp.session_policy import SESSION_NAME_PREFIX
 
 
 def _session(**overrides: object) -> WhatsAppSession:
     payload = {
         "id": "sid-1",
-        "name": FACTORY_SESSION_NAME,
+        "name": "bound-session",
         "status": "ready",
         "phone": "963944123456",
         "push_name": "Factory",
@@ -52,15 +53,19 @@ class FakeWhatsAppGateway:
     def __init__(self, sessions: list[WhatsAppSession] | None = None) -> None:
         self.sessions = list(sessions or [])
         self.started: list[str] = []
+        self.listed = 0
         self.texts: list[tuple[str, str, str]] = []
         self.documents: list[tuple[str, str, str, str, bytes, str]] = []
         self.qr = QrCode(qr_code="data:image/png;base64,AAA", status="qr_ready")
         self.fail_qr = False
         self.fail_text: str | None = None
         self.fail_document: str | None = None
+        self.fail_create_after_insert = False
+        self.fail_start = False
         self.start_status = "qr_ready"
 
     def list_sessions(self) -> list[WhatsAppSession]:
+        self.listed += 1
         return list(self.sessions)
 
     def create_session(self, name: str) -> WhatsAppSession:
@@ -73,6 +78,8 @@ class FakeWhatsAppGateway:
             push_name=None,
         )
         self.sessions.append(created)
+        if self.fail_create_after_insert:
+            raise WhatsAppTransportError("timed out", code="timeout")
         return created
 
     def get_session(self, session_id: str) -> WhatsAppSession:
@@ -82,6 +89,8 @@ class FakeWhatsAppGateway:
         raise WhatsAppTransportError("not found", status_code=404, code="missing")
 
     def start(self, session_id: str) -> WhatsAppSession:
+        if self.fail_start:
+            raise WhatsAppTransportError("start failed", code="timeout")
         self.started.append(session_id)
         updated = []
         current = None
@@ -132,6 +141,28 @@ class FakeWhatsAppGateway:
         return MessageReceipt(message_id="doc-1", timestamp=2)
 
 
+class FakeSessionStore:
+    def __init__(self, session_id: str = "sid-1", session_name: str = "") -> None:
+        self.session_id = session_id
+        self.session_name = session_name
+
+    def get_session_id(self) -> str:
+        return self.session_id
+
+    def save_session_id(self, session_id: str) -> None:
+        self.session_id = session_id
+
+    def get_session_name(self) -> str:
+        return self.session_name
+
+    def save_session_name(self, session_name: str) -> None:
+        self.session_name = session_name
+
+
+def _store(session_id: str = "sid-1", session_name: str = "") -> FakeSessionStore:
+    return FakeSessionStore(session_id, session_name)
+
+
 class FakePhoneGateway:
     def __init__(self, phone: str = "0944123456") -> None:
         self.phone = phone
@@ -158,43 +189,184 @@ class FakePdfGateway:
 
 
 class WhatsAppSessionUseCaseTests(unittest.TestCase):
-    def test_create_starts_the_named_factory_session(self) -> None:
-        gateway = FakeWhatsAppGateway()
-        session = create_and_start_factory_session(gateway)
-        self.assertEqual(session.name, FACTORY_SESSION_NAME)
+    def test_create_starts_a_unique_session_and_stores_its_name_and_id(self) -> None:
+        gateway = FakeWhatsAppGateway([_session(id="other", name="almdina-taken")])
+        store = _store("")
+        with patch(
+            "almdina_erp.almdina_erp.application.whatsapp.sessions._draw_session_token",
+            side_effect=["taken", "fresh"],
+        ):
+            session = create_and_start_factory_session(gateway, store)
+        self.assertEqual(session.name, f"{SESSION_NAME_PREFIX}fresh")
+        self.assertEqual(session.id, "new-sid")
+        self.assertEqual(store.get_session_id(), "new-sid")
+        self.assertEqual(store.get_session_name(), f"{SESSION_NAME_PREFIX}fresh")
         self.assertEqual(gateway.started, ["new-sid"])
+        self.assertEqual(gateway.listed, 1)
         self.assertTrue(session.engine_loaded)
 
-    def test_create_is_rejected_when_a_session_already_exists(self) -> None:
-        gateway = FakeWhatsAppGateway([_session(name="dashboard")])
+    def test_create_reuses_the_bound_session_instead_of_a_second_one(self) -> None:
+        gateway = FakeWhatsAppGateway(
+            [_session(id="ours"), _session(id="other", name="dashboard")]
+        )
+        store = _store("ours")
+        session = create_and_start_factory_session(gateway, store)
+        self.assertEqual(session.id, "ours")
+        self.assertEqual(gateway.started, [])
+        self.assertEqual(store.get_session_id(), "ours")
+        self.assertNotIn("new-sid", [item.id for item in gateway.sessions])
+
+    def test_existing_named_session_is_started_for_qr_when_start_fails(self) -> None:
+        gateway = FakeWhatsAppGateway(
+            [
+                _session(
+                    id="orphan",
+                    name="almdina-kept",
+                    status="failed",
+                    engine_loaded=False,
+                    phone=None,
+                    push_name=None,
+                    last_error="start failed",
+                )
+            ]
+        )
+        gateway.fail_start = True
+        store = _store("", "almdina-kept")
+        session = create_and_start_factory_session(gateway, store)
+        snapshot = session_snapshot(session)
+        self.assertEqual(session.id, "orphan")
+        self.assertEqual(store.get_session_id(), "orphan")
+        self.assertEqual(gateway.started, [])
+        self.assertTrue(snapshot["needs_qr"])
+        self.assertFalse(snapshot["working"])
+        self.assertNotIn("new-sid", [item.id for item in gateway.sessions])
+
+    def test_create_reclaims_the_named_session_when_its_id_was_not_saved(self) -> None:
+        gateway = FakeWhatsAppGateway(
+            [
+                _session(
+                    id="orphan",
+                    name="almdina-kept",
+                    status="created",
+                    engine_loaded=False,
+                    phone=None,
+                    push_name=None,
+                ),
+                _session(id="other", name="dashboard"),
+            ]
+        )
+        store = _store("", "almdina-kept")
+        session = create_and_start_factory_session(gateway, store)
+        self.assertEqual(session.id, "orphan")
+        self.assertEqual(store.get_session_id(), "orphan")
+        self.assertEqual(gateway.started, ["orphan"])
+        self.assertNotIn("new-sid", [item.id for item in gateway.sessions])
+
+    def test_timed_out_create_saves_the_session_the_server_already_made(self) -> None:
+        gateway = FakeWhatsAppGateway([_session(id="other", name="dashboard")])
+        gateway.fail_create_after_insert = True
+        store = _store("")
+        with patch(
+            "almdina_erp.almdina_erp.application.whatsapp.sessions._draw_session_token",
+            return_value="once",
+        ):
+            session = create_and_start_factory_session(gateway, store)
+        self.assertEqual(session.id, "new-sid")
+        self.assertEqual(store.get_session_id(), "new-sid")
+        self.assertEqual(store.get_session_name(), f"{SESSION_NAME_PREFIX}once")
+        self.assertEqual(gateway.started, ["new-sid"])
+
+    def test_create_does_not_guess_when_the_factory_name_is_ambiguous(self) -> None:
+        gateway = FakeWhatsAppGateway(
+            [
+                _session(id="a", name="almdina-dup"),
+                _session(id="b", name="almdina-dup"),
+            ]
+        )
+        store = _store("", "almdina-dup")
         with self.assertRaises(WhatsAppError) as raised:
-            create_and_start_factory_session(gateway)
-        self.assertEqual(raised.exception.code, "session_already_exists")
+            create_and_start_factory_session(gateway, store)
+        self.assertEqual(raised.exception.code, "ambiguous_session")
+        self.assertEqual(store.get_session_id(), "")
         self.assertEqual(gateway.started, [])
 
-    def test_get_factory_session_binds_to_dashboard_session(self) -> None:
-        gateway = FakeWhatsAppGateway([_session(id="dash", name="from-ui")])
-        session = get_factory_session(gateway)
+    def test_get_factory_session_ignores_other_projects(self) -> None:
+        gateway = FakeWhatsAppGateway(
+            [
+                _session(id="dash", name="from-ui"),
+                _session(id="legacy", name="almdina-factory"),
+            ]
+        )
+        store = _store("")
+        self.assertIsNone(get_factory_session(gateway, store))
+        self.assertEqual(store.get_session_id(), "")
+        self.assertEqual(gateway.listed, 0)
+
+    def test_get_factory_session_stores_the_named_session_and_exposes_qr(self) -> None:
+        gateway = FakeWhatsAppGateway(
+            [
+                _session(id="other", name="dashboard", status="disconnected"),
+                _session(
+                    id="ours",
+                    name="almdina-ours",
+                    status="qr_ready",
+                    engine_loaded=True,
+                ),
+            ]
+        )
+        store = _store("", "almdina-ours")
+        session = get_factory_session(gateway, store)
         self.assertIsNotNone(session)
-        self.assertEqual(session.id, "dash")
+        self.assertEqual(session.id, "ours")
+        self.assertEqual(store.get_session_id(), "ours")
+        snapshot = session_snapshot(session)
+        self.assertIsNotNone(snapshot["session"])
+        self.assertTrue(snapshot["needs_qr"])
+        payload = get_session_qr(gateway, store)
+        self.assertEqual(payload["qr_code"], gateway.qr.qr_code)
+        self.assertFalse(payload["working"])
+        self.assertEqual(store.get_session_id(), "ours")
+
+    def test_get_factory_session_uses_only_the_stored_id(self) -> None:
+        gateway = FakeWhatsAppGateway(
+            [
+                _session(id="other", name="dashboard"),
+                _session(id="ours", name="factory"),
+            ]
+        )
+        session = get_factory_session(gateway, _store("ours"))
+        self.assertIsNotNone(session)
+        self.assertEqual(session.id, "ours")
+
+    def test_missing_remote_session_does_not_fall_back_and_can_be_replaced(self) -> None:
+        gateway = FakeWhatsAppGateway([_session(id="other", name="dashboard")])
+        store = _store("gone")
+        self.assertIsNone(get_factory_session(gateway, store))
+        snapshot = session_snapshot(get_factory_session(gateway, store))
+        self.assertTrue(snapshot["can_create"])
+        self.assertEqual(snapshot["code"], "missing_session")
+        created = create_and_start_factory_session(gateway, store)
+        self.assertEqual(created.id, "new-sid")
+        self.assertEqual(store.get_session_id(), "new-sid")
+        self.assertEqual(gateway.started, ["new-sid"])
 
     def test_reconnect_starts_when_engine_is_down(self) -> None:
         gateway = FakeWhatsAppGateway(
             [_session(status="disconnected", engine_loaded=False)]
         )
-        session = reconnect_factory_session(gateway)
+        session = reconnect_factory_session(gateway, _store())
         self.assertEqual(gateway.started, ["sid-1"])
         self.assertEqual(session.status, "qr_ready")
 
     def test_qr_returns_ready_without_image_once_working(self) -> None:
         gateway = FakeWhatsAppGateway([_session()])
-        payload = get_session_qr(gateway)
+        payload = get_session_qr(gateway, _store())
         self.assertTrue(payload["working"])
         self.assertEqual(payload["qr_code"], "")
 
     def test_delivery_status_reports_disconnected_session(self) -> None:
         gateway = FakeWhatsAppGateway([_session(status="disconnected")])
-        status = delivery_status(gateway)
+        status = delivery_status(gateway, _store())
         self.assertFalse(status["working"])
         self.assertEqual(status["code"], "not_ready")
 
@@ -212,6 +384,7 @@ class WhatsAppSendMeasurementsTests(unittest.TestCase):
             FakePdfGateway(),
             FakePhoneGateway("0944123456"),
             "DCO-0001",
+            session_store=_store(),
         )
         self.assertTrue(result.ok)
         self.assertEqual(result.chat_id, "963944123456@c.us")
@@ -231,6 +404,7 @@ class WhatsAppSendMeasurementsTests(unittest.TestCase):
                 FakePdfGateway(),
                 FakePhoneGateway(""),
                 "DCO-0001",
+                session_store=_store(),
             )
         self.assertEqual(raised.exception.code, "missing_phone")
         self.assertEqual(gateway.texts, [])
@@ -244,6 +418,7 @@ class WhatsAppSendMeasurementsTests(unittest.TestCase):
                 FakePdfGateway(),
                 FakePhoneGateway(),
                 "DCO-0001",
+                session_store=_store(),
             )
         self.assertEqual(raised.exception.code, "session_not_ready")
 
@@ -256,6 +431,7 @@ class WhatsAppSendMeasurementsTests(unittest.TestCase):
                 FakePdfGateway(),
                 FakePhoneGateway(),
                 "DCO-0001",
+                session_store=_store(),
             )
         self.assertEqual(raised.exception.code, "send_failed")
         self.assertEqual(gateway.texts, [])
@@ -270,6 +446,7 @@ class WhatsAppSendMeasurementsTests(unittest.TestCase):
                 FakePhoneGateway(),
                 "DCO-0001",
                 text_template="م" * 1025,
+                session_store=_store(),
             )
         self.assertEqual(raised.exception.code, "caption_too_long")
         self.assertEqual(gateway.texts, [])
@@ -283,6 +460,7 @@ class WhatsAppSendMeasurementsTests(unittest.TestCase):
             FakePhoneGateway("0944123456"),
             "DCO-0001",
             text_template="قياسات الطلب {order_name} جاهزة",
+            session_store=_store(),
         )
         self.assertTrue(result.ok)
         self.assertEqual(gateway.texts, [])
@@ -318,6 +496,7 @@ class WhatsAppSendMeasurementsTests(unittest.TestCase):
             FakePhoneGateway("0944123456"),
             "DCO-0001",
             payload,
+            session_store=_store(),
         )
         self.assertTrue(result.ok)
         self.assertEqual(result.chat_id, "963944123456@c.us")
@@ -337,6 +516,7 @@ class WhatsAppSendMeasurementsTests(unittest.TestCase):
             "DCO-0001",
             {"kind": "customer_invoice"},
             text_template="فاتورة طلبك {order_name}",
+            session_store=_store(),
         )
         self.assertTrue(result.ok)
         self.assertEqual(gateway.texts, [])
@@ -351,6 +531,7 @@ class WhatsAppSendMeasurementsTests(unittest.TestCase):
                 FakePhoneGateway(),
                 "DCO-0001",
                 {"kind": "customer_invoice"},
+                session_store=_store(),
             )
         self.assertEqual(raised.exception.code, "session_not_ready")
         self.assertEqual(gateway.texts, [])
@@ -366,6 +547,7 @@ class WhatsAppSendStageCompletionTests(unittest.TestCase):
             "DCO-0001",
             "CNC",
             text_template="طلب {order_name} غادر {stage_label}",
+            session_store=_store(),
         )
         self.assertTrue(result.ok)
         self.assertEqual(result.chat_id, "963944123456@c.us")
@@ -384,6 +566,7 @@ class WhatsAppSendStageCompletionTests(unittest.TestCase):
                 FakePhoneGateway(),
                 "DCO-0001",
                 "CNC",
+                session_store=_store(),
             )
         self.assertEqual(raised.exception.code, "session_not_ready")
         self.assertEqual(gateway.texts, [])

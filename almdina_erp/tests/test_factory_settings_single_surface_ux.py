@@ -14,6 +14,7 @@ SETTINGS_SERVICE = ROOT / "almdina_erp" / "services" / "production_settings_serv
 SHARED_SHELL = ROOT / "public" / "js" / "shared_shell.js"
 MAIN_WORKSPACE = ROOT / "almdina_erp" / "workspace" / "almdina_erp" / "almdina_erp.json"
 
+OPERATIONAL_HIDDEN_FIELDS = {"whatsapp_session_id", "whatsapp_session_name"}
 LEGACY_PRESERVED_FIELDS = {
     "enforce_stock_control",
     "default_warehouse",
@@ -76,7 +77,11 @@ def test_hidden_legacy_values_are_preserved_and_visible_read_only() -> None:
         and int(field.get("hidden") or 0)
     }
 
-    assert hidden_fields == LEGACY_PRESERVED_FIELDS
+    assert hidden_fields - OPERATIONAL_HIDDEN_FIELDS == LEGACY_PRESERVED_FIELDS
+    assert "whatsapp_session_id" not in view_model_source
+    assert "whatsapp_session_id" not in renderer_source
+    assert "whatsapp_session_name" not in view_model_source
+    assert "whatsapp_session_name" not in renderer_source
     assert "legacy_values" in service_source
     assert "LEGACY_PRESERVED_FIELDS" in service_source
     assert "بيانات إعدادات قديمة محفوظة" in renderer_source

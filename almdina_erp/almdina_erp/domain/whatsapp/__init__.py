@@ -12,21 +12,26 @@ from .message_templates import (
 )
 from .phone import PhoneNormalizationError, normalize_syrian_whatsapp_chat_id
 from .session_policy import (
-    FACTORY_SESSION_NAME,
+    MAX_SESSION_NAME_ATTEMPTS,
     QR_STATUSES,
+    SESSION_NAME_PREFIX,
     WORKING_STATUS,
     CreateSessionDecision,
+    SessionNameError,
     is_working,
     needs_qr,
-    select_factory_session,
+    sessions_named,
     should_create_session,
+    unique_session_name,
 )
 
 __all__ = [
-    "FACTORY_SESSION_NAME",
+    "MAX_SESSION_NAME_ATTEMPTS",
     "QR_STATUSES",
+    "SESSION_NAME_PREFIX",
     "WORKING_STATUS",
     "CreateSessionDecision",
+    "SessionNameError",
     "DOCUMENT_CAPTION_MAX_LENGTH",
     "DocumentCaptionError",
     "INVOICE_TEXT_TEMPLATE",
@@ -39,6 +44,7 @@ __all__ = [
     "is_working",
     "needs_qr",
     "normalize_syrian_whatsapp_chat_id",
-    "select_factory_session",
+    "sessions_named",
     "should_create_session",
+    "unique_session_name",
 ]

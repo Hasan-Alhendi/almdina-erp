@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import unittest
 from pathlib import Path
 
@@ -44,6 +45,12 @@ class WhatsAppFrontendContractTests(unittest.TestCase):
         self.assertIn("function closeQr(", panel)
         self.assertIn("onHide: stopPoll", panel)
         self.assertIn("api.getWhatsAppQr", panel)
+        refresh_fn = panel.split("function refresh()", 1)[1].split("function create()", 1)[0]
+        create_fn = panel.split("function create()", 1)[1].split("function reconnect()", 1)[0]
+        reconnect_fn = panel.split("function reconnect()", 1)[1].split("function deactivate()", 1)[0]
+        self.assertNotIn("maybeOpenQr(snapshot)", refresh_fn)
+        self.assertIn("maybeOpenQr(snapshot)", create_fn)
+        self.assertIn("maybeOpenQr(snapshot)", reconnect_fn)
         self.assertIn("api.createWhatsAppSession", panel)
         self.assertIn("api.reconnectWhatsAppSession", panel)
 
@@ -172,6 +179,33 @@ class WhatsAppFrontendContractTests(unittest.TestCase):
             "hideUnlessAllowed(formRoot(frm), WHATSAPP_INVOICE_SELECTOR, canSendInvoice)",
             guard,
         )
+
+    def test_bound_session_id_stays_hidden_from_the_browser(self) -> None:
+        settings = json.loads(
+            (
+                ROOT
+                / "almdina_erp"
+                / "doctype"
+                / "almdina_erp_settings"
+                / "almdina_erp_settings.json"
+            ).read_text(encoding="utf-8")
+        )
+        fields = {row["fieldname"]: row for row in settings["fields"]}
+        self.assertEqual(fields["whatsapp_session_id"].get("hidden"), 1)
+        self.assertEqual(fields["whatsapp_session_name"].get("hidden"), 1)
+        self.assertIn("whatsapp_session_id", settings["field_order"])
+        self.assertIn("whatsapp_session_name", settings["field_order"])
+        service = (
+            ROOT / "almdina_erp" / "services" / "production_settings_service.py"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("whatsapp_session_id", service)
+        self.assertNotIn("whatsapp_session_name", service)
+        offenders = []
+        for path in PUBLIC.rglob("*.js"):
+            source = path.read_text(encoding="utf-8")
+            if "whatsapp_session_id" in source or "whatsapp_session_name" in source:
+                offenders.append(str(path.relative_to(ROOT)))
+        self.assertEqual(offenders, [])
 
     def test_shop_floor_handoff_sends_stage_whatsapp_without_blocking(self) -> None:
         commands = (

@@ -8,7 +8,10 @@ from urllib.request import Request
 
 from almdina_erp.almdina_erp.application.whatsapp.errors import WhatsAppTransportError
 from almdina_erp.almdina_erp.infrastructure.whatsapp.config import OpenWAConfig
-from almdina_erp.almdina_erp.infrastructure.whatsapp.openwa_client import OpenWAClient
+from almdina_erp.almdina_erp.infrastructure.whatsapp.openwa_client import (
+    SESSION_SETUP_TIMEOUT_SEC,
+    OpenWAClient,
+)
 
 
 class FakeResponse:
@@ -104,6 +107,32 @@ class OpenWAClientTests(unittest.TestCase):
             client.send_text("sid", "963944123456@c.us", "hello")
         self.assertEqual(raised.exception.status_code, 409)
         self.assertIn("not ready", str(raised.exception))
+
+    def test_session_setup_waits_longer_than_a_message_send(self) -> None:
+        captured: dict[str, object] = {}
+
+        def opener(request: Request, timeout: float | None = None) -> FakeResponse:
+            captured[request.full_url] = timeout
+            if request.full_url.endswith("/start"):
+                return FakeResponse({"id": "sid", "name": "almdina-factory", "status": "qr_ready"})
+            return FakeResponse({"id": "sid", "name": "almdina-factory", "status": "created"})
+
+        client = OpenWAClient(
+            OpenWAConfig("http://localhost:2785", "secret"),
+            opener=opener,
+            timeout=45,
+        )
+        client.create_session("almdina-factory")
+        client.start("sid")
+        self.assertEqual(
+            captured["http://localhost:2785/api/sessions"],
+            SESSION_SETUP_TIMEOUT_SEC,
+        )
+        self.assertEqual(
+            captured["http://localhost:2785/api/sessions/sid/start"],
+            SESSION_SETUP_TIMEOUT_SEC,
+        )
+        self.assertEqual(SESSION_SETUP_TIMEOUT_SEC, 180.0)
 
 
 if __name__ == "__main__":

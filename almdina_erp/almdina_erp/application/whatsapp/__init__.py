@@ -11,6 +11,7 @@ from .ports import (
     SendTextResult,
     WhatsAppGateway,
     WhatsAppSession,
+    WhatsAppSessionStore,
 )
 from .send_invoice import invoice_filename, send_order_invoice
 from .send_measurements import measurements_text, send_order_measurements
@@ -36,6 +37,7 @@ __all__ = [
     "WhatsAppError",
     "WhatsAppGateway",
     "WhatsAppSession",
+    "WhatsAppSessionStore",
     "WhatsAppTransportError",
     "create_and_start_factory_session",
     "delivery_status",

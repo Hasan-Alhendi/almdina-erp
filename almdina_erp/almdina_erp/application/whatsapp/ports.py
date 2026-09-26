@@ -51,6 +51,16 @@ class SendMeasurementsResult:
     document_message_id: str = ""
 
 
+class WhatsAppSessionStore(Protocol):
+    def get_session_id(self) -> str: ...
+
+    def save_session_id(self, session_id: str) -> None: ...
+
+    def get_session_name(self) -> str: ...
+
+    def save_session_name(self, session_name: str) -> None: ...
+
+
 class WhatsAppGateway(Protocol):
     def list_sessions(self) -> Sequence[WhatsAppSession]: ...
 
@@ -104,4 +114,5 @@ __all__ = [
     "SendTextResult",
     "WhatsAppGateway",
     "WhatsAppSession",
+    "WhatsAppSessionStore",
 ]

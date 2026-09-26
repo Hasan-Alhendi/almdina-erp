@@ -3,11 +3,13 @@ from __future__ import annotations
 import unittest
 
 from almdina_erp.almdina_erp.domain.whatsapp.session_policy import (
-    FACTORY_SESSION_NAME,
+    SESSION_NAME_PREFIX,
+    SessionNameError,
     is_working,
     needs_qr,
-    select_factory_session,
+    sessions_named,
     should_create_session,
+    unique_session_name,
 )
 
 
@@ -24,32 +26,53 @@ class WhatsAppSessionPolicyTests(unittest.TestCase):
         self.assertFalse(needs_qr("ready"))
         self.assertFalse(needs_qr("failed"))
 
-    def test_create_is_refused_when_any_session_exists(self) -> None:
-        decision = should_create_session(
-            [{"id": "1", "name": "dashboard-bot", "status": "ready"}]
-        )
+    def test_create_is_refused_when_the_stored_session_still_exists(self) -> None:
+        decision = should_create_session("sid-1", remote_exists=True)
         self.assertFalse(decision.allowed)
         self.assertEqual(decision.code, "session_already_exists")
 
-    def test_create_is_allowed_when_none_exist(self) -> None:
-        decision = should_create_session([])
+    def test_create_is_allowed_when_nothing_is_stored(self) -> None:
+        decision = should_create_session("", remote_exists=False)
         self.assertTrue(decision.allowed)
 
-    def test_select_prefers_factory_session_name(self) -> None:
-        selected = select_factory_session(
+    def test_create_is_allowed_when_the_stored_session_is_gone(self) -> None:
+        decision = should_create_session("sid-1", remote_exists=False)
+        self.assertTrue(decision.allowed)
+
+    def test_named_lookup_ignores_other_projects(self) -> None:
+        matches = sessions_named(
             [
                 {"id": "other", "name": "dashboard"},
-                {"id": "ours", "name": FACTORY_SESSION_NAME},
-            ]
+                {"id": "ours", "name": "almdina-ours"},
+            ],
+            "almdina-ours",
         )
-        self.assertEqual(selected["id"], "ours")
+        self.assertEqual([row["id"] for row in matches], ["ours"])
 
-    def test_select_binds_to_the_only_dashboard_session(self) -> None:
-        selected = select_factory_session([{"id": "dash", "name": "from-dashboard"}])
-        self.assertEqual(selected["id"], "dash")
+    def test_named_lookup_returns_every_exact_match(self) -> None:
+        matches = sessions_named(
+            [
+                {"id": "a", "name": "almdina-dup"},
+                {"id": "b", "name": "almdina-dup"},
+            ],
+            "almdina-dup",
+        )
+        self.assertEqual([row["id"] for row in matches], ["a", "b"])
 
-    def test_select_returns_none_when_empty(self) -> None:
-        self.assertIsNone(select_factory_session([]))
+    def test_unique_name_skips_a_name_that_already_exists(self) -> None:
+        draws = iter(["taken", "fresh"])
+        name = unique_session_name(["almdina-taken", "dashboard"], lambda: next(draws))
+        self.assertEqual(name, f"{SESSION_NAME_PREFIX}fresh")
+
+    def test_unique_name_fails_when_every_draw_collides(self) -> None:
+        with self.assertRaises(SessionNameError) as raised:
+            unique_session_name(["almdina-same"], lambda: "same")
+        self.assertEqual(raised.exception.code, "name_exhausted")
+
+    def test_other_server_sessions_do_not_block_create(self) -> None:
+        decision = should_create_session(None, remote_exists=False)
+        self.assertTrue(decision.allowed)
+        self.assertEqual(decision.code, "allowed")
 
 
 if __name__ == "__main__":

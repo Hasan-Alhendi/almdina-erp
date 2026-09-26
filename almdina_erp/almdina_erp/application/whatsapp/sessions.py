@@ -1,18 +1,19 @@
 from __future__ import annotations
 
+import secrets
 from collections.abc import Mapping
 from typing import Any
 
 from almdina_erp.almdina_erp.domain.whatsapp.session_policy import (
-    FACTORY_SESSION_NAME,
+    SessionNameError,
     is_working,
     needs_qr,
-    select_factory_session,
-    should_create_session,
+    sessions_named,
+    unique_session_name,
 )
 
 from .errors import WhatsAppError, WhatsAppTransportError
-from .ports import WhatsAppGateway, WhatsAppSession
+from .ports import WhatsAppGateway, WhatsAppSession, WhatsAppSessionStore
 
 
 def _as_mapping(session: WhatsAppSession) -> dict[str, object]:
@@ -57,45 +58,71 @@ def session_snapshot(session: WhatsAppSession | None, *, configured: bool = True
         "working": working,
         "can_create": False,
         "needs_reconnect": not working,
-        "needs_qr": needs_qr(session.status),
+        "needs_qr": not working,
         "code": "ready" if working else "not_ready",
         "reason": "" if working else (session.last_error or "جلسة WhatsApp غير متصلة."),
     }
 
 
-def get_factory_session(gateway: WhatsAppGateway) -> WhatsAppSession | None:
-    selected = select_factory_session(
-        [_as_mapping(session) for session in gateway.list_sessions()]
-    )
-    if selected is None:
-        return None
-    session_id = str(selected.get("id") or "").strip()
+def get_factory_session(
+    gateway: WhatsAppGateway,
+    store: WhatsAppSessionStore,
+) -> WhatsAppSession | None:
+    session = _load_bound_session(gateway, store)
+    if session is not None:
+        return session
+    return _reclaim_saved_session(gateway, store)
+
+
+def create_and_start_factory_session(
+    gateway: WhatsAppGateway,
+    store: WhatsAppSessionStore,
+) -> WhatsAppSession:
+    existing = get_factory_session(gateway, store)
+    if existing is not None:
+        return _start_for_pairing(gateway, existing)
+    try:
+        name = unique_session_name(
+            [session.name for session in gateway.list_sessions()],
+            _draw_session_token,
+        )
+    except SessionNameError as error:
+        raise WhatsAppError(error.code, str(error)) from error
+    store.save_session_name(name)
+    try:
+        created = gateway.create_session(name)
+    except WhatsAppTransportError as error:
+        try:
+            existing = _reclaim_saved_session(gateway, store)
+        except WhatsAppTransportError:
+            raise error
+        if existing is None:
+            raise error
+        return _start_for_pairing(gateway, existing)
+    session_id = str(created.id or "").strip()
     if not session_id:
-        return None
-    return gateway.get_session(session_id)
+        raise WhatsAppError("missing_session", "تعذر حفظ معرّف جلسة WhatsApp.")
+    store.save_session_id(session_id)
+    if str(created.name or "").strip():
+        store.save_session_name(created.name)
+    return _start_for_pairing(gateway, created)
 
 
-def create_and_start_factory_session(gateway: WhatsAppGateway) -> WhatsAppSession:
-    decision = should_create_session(
-        [_as_mapping(session) for session in gateway.list_sessions()]
-    )
-    if not decision.allowed:
-        raise WhatsAppError(decision.code, decision.reason)
-    created = gateway.create_session(FACTORY_SESSION_NAME)
-    return _start_if_needed(gateway, created)
-
-
-def reconnect_factory_session(gateway: WhatsAppGateway) -> WhatsAppSession:
-    session = get_factory_session(gateway)
+def reconnect_factory_session(
+    gateway: WhatsAppGateway,
+    store: WhatsAppSessionStore,
+) -> WhatsAppSession:
+    session = get_factory_session(gateway, store)
     if session is None:
         raise WhatsAppError("missing_session", "لا توجد جلسة WhatsApp مرتبطة.")
-    if is_working(session.status):
-        return session
-    return _start_if_needed(gateway, session)
+    return _start_for_pairing(gateway, session)
 
 
-def stop_factory_session(gateway: WhatsAppGateway) -> WhatsAppSession:
-    session = get_factory_session(gateway)
+def stop_factory_session(
+    gateway: WhatsAppGateway,
+    store: WhatsAppSessionStore,
+) -> WhatsAppSession:
+    session = get_factory_session(gateway, store)
     if session is None:
         raise WhatsAppError("missing_session", "لا توجد جلسة WhatsApp مرتبطة.")
     if not session.engine_loaded:
@@ -103,8 +130,11 @@ def stop_factory_session(gateway: WhatsAppGateway) -> WhatsAppSession:
     return gateway.stop(session.id)
 
 
-def get_session_qr(gateway: WhatsAppGateway) -> dict[str, Any]:
-    session = get_factory_session(gateway)
+def get_session_qr(
+    gateway: WhatsAppGateway,
+    store: WhatsAppSessionStore,
+) -> dict[str, Any]:
+    session = get_factory_session(gateway, store)
     if session is None:
         raise WhatsAppError("missing_session", "لا توجد جلسة WhatsApp مرتبطة.")
     if is_working(session.status):
@@ -144,20 +174,74 @@ def get_session_qr(gateway: WhatsAppGateway) -> dict[str, Any]:
     }
 
 
-def _start_if_needed(gateway: WhatsAppGateway, session: WhatsAppSession) -> WhatsAppSession:
-    if session.engine_loaded or is_working(session.status):
+def _start_for_pairing(gateway: WhatsAppGateway, session: WhatsAppSession) -> WhatsAppSession:
+    """Start a non-working session, then leave it available for a QR request."""
+
+    if is_working(session.status):
+        return session
+    if session.engine_loaded and needs_qr(session.status):
         return session
     try:
         return gateway.start(session.id)
-    except WhatsAppTransportError as error:
+    except WhatsAppTransportError:
+        try:
+            return gateway.get_session(session.id)
+        except WhatsAppTransportError:
+            return session
+
+
+def _draw_session_token() -> str:
+    return secrets.token_hex(4)
+
+
+def _reclaim_saved_session(
+    gateway: WhatsAppGateway,
+    store: WhatsAppSessionStore,
+) -> WhatsAppSession | None:
+    """Bind this site to the session whose saved name it already owns."""
+
+    saved_name = str(store.get_session_name() or "").strip()
+    if not saved_name:
+        return None
+    matches = sessions_named(
+        [_as_mapping(session) for session in gateway.list_sessions()],
+        saved_name,
+    )
+    if len(matches) > 1:
         raise WhatsAppError(
-            "start_failed",
-            str(error) or "تعذر بدء جلسة WhatsApp.",
-        ) from error
+            "ambiguous_session",
+            "يوجد أكثر من جلسة WhatsApp بالاسم نفسه. لم يتم اختيار أي منها.",
+        )
+    if not matches:
+        return None
+    session_id = str(matches[0].get("id") or "").strip()
+    if not session_id:
+        return None
+    session = gateway.get_session(session_id)
+    store.save_session_id(session.id)
+    return session
 
 
-def delivery_status(gateway: WhatsAppGateway) -> Mapping[str, Any]:
-    snapshot = session_snapshot(get_factory_session(gateway))
+def _load_bound_session(
+    gateway: WhatsAppGateway,
+    store: WhatsAppSessionStore,
+) -> WhatsAppSession | None:
+    session_id = str(store.get_session_id() or "").strip()
+    if not session_id:
+        return None
+    try:
+        return gateway.get_session(session_id)
+    except WhatsAppTransportError as error:
+        if error.status_code == 404:
+            return None
+        raise
+
+
+def delivery_status(
+    gateway: WhatsAppGateway,
+    store: WhatsAppSessionStore,
+) -> Mapping[str, Any]:
+    snapshot = session_snapshot(get_factory_session(gateway, store))
     return {
         "configured": True,
         "working": bool(snapshot["working"]),
