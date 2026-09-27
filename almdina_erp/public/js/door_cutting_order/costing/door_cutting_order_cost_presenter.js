@@ -327,13 +327,17 @@
             }
             .dco-special-price-actions{display:flex;flex-direction:column;gap:6px;min-width:118px}
             .dco-special-price-note{grid-column:1/-1;font-size:10px;color:var(--text-muted,#687481)}
-            .dco-invoice-total-card{margin:0;padding:18px 20px;border:1px solid rgba(31,130,82,.35);border-radius:0;border-top:0;background:linear-gradient(135deg,rgba(31,130,82,.12),rgba(31,130,82,.045));display:flex;align-items:center;justify-content:space-between;gap:16px}
-            .dco-invoice-total-card.is-pending{border-color:rgba(190,125,25,.4);background:linear-gradient(135deg,rgba(190,125,25,.11),rgba(190,125,25,.035))}
-            .dco-invoice-total-card span{display:block;font-size:13px;font-weight:800;color:#1f8252}
-            .dco-invoice-total-card.is-pending span{color:#875812}
+            .dco-cost-section{border-color:var(--alm-card-border,#e4e8ee);border-radius:var(--alm-radius-card,16px);box-shadow:var(--alm-shadow-card,0 8px 24px rgba(15,23,42,.045))}
+            .dco-cost-section-title{background:var(--alm-card,#fff)}
+            .dco-cost-invoice-section .dco-cost-section-title{align-items:flex-start}
+            .dco-cost-actions .btn,.dco-cost-actions .alm-btn-primary{border-radius:999px;background:var(--alm-primary,#172033);color:var(--alm-on-primary,#fff);border-color:var(--alm-primary,#172033)}
+            .dco-invoice-total-card{margin:12px;padding:16px 18px;border:1px solid var(--alm-card-border,#e4e8ee);border-radius:14px;background:var(--alm-card,#fff);display:flex;align-items:center;justify-content:space-between;gap:16px}
+            .dco-invoice-total-card.is-pending{border-color:color-mix(in srgb, var(--alm-warning,#b45309) 35%, #fff);background:var(--alm-warning-bg,#fff7e8)}
+            .dco-invoice-total-card span{display:block;font-size:13px;font-weight:800;color:var(--text-color,#1f272e)}
+            .dco-invoice-total-card.is-pending span{color:var(--alm-warning,#b45309)}
             .dco-invoice-total-card small{display:block;margin-top:4px;font-size:10px;color:var(--text-muted,#687481);font-weight:700}
-            .dco-invoice-total-card b{display:block;font-size:28px;font-weight:900;direction:ltr;text-align:left;color:#14653d;letter-spacing:.01em}
-            .dco-invoice-total-card.is-pending b{color:#875812}
+            .dco-invoice-total-card b{display:inline-flex;align-items:center;min-height:52px;padding:8px 16px;border:1px solid color-mix(in srgb, var(--alm-warning,#b45309) 45%, #fff);border-radius:12px;background:#fff;font-size:28px;font-weight:900;direction:ltr;text-align:left;color:var(--alm-warning,#b45309);letter-spacing:.01em}
+            .dco-invoice-total-card.is-pending b{color:var(--alm-warning,#b45309)}
             .dco-cost-empty{padding:24px;text-align:center;color:var(--text-muted,#687481)}
             .dco-cost-plan-stale-notice{margin:0;padding:10px 14px;border-bottom:1px solid rgba(190,125,25,.28);background:rgba(190,125,25,.08);color:#875812;font-size:11px;font-weight:800;line-height:1.55}
             @media(max-width:900px){.dco-special-price-card{grid-template-columns:1fr 1fr}.dco-special-price-actions,.dco-special-price-card>.dco-special-price-id,.dco-special-price-note{grid-column:1/-1}}

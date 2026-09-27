@@ -139,8 +139,8 @@
             .dco-sticky-tabs {
                 background: var(--card-bg, #fff) !important;
                 border: 1px solid var(--border-color, #dfe3e8) !important;
-                border-bottom: none !important;
-                border-radius: 14px 14px 0 0 !important;
+                border-bottom: 1px solid var(--alm-card-border, #e4e8ee) !important;
+                border-radius: var(--alm-radius-card, 16px) !important;
                 box-shadow: 0 2px 10px rgba(15, 23, 42, .04) !important;
                 margin: 0 0 8px !important;
                 padding-block: 8px 3px !important;

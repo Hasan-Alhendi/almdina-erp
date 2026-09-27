@@ -18,6 +18,28 @@
     --text-on-blue: var(--alm-primary);
     --bg-light-blue: color-mix(in srgb, var(--alm-primary) 7%, #ffffff);
     --text-on-light-blue: var(--alm-primary-hover);
+
+    --surface-menu-bar: var(--alm-primary);
+    --sidebar-hover-color: color-mix(in srgb, #ffffff 12%, var(--alm-primary));
+    --sidebar-active-color: var(--alm-accent, #2563eb);
+    --sidebar-border-color: transparent;
+}
+
+.body-sidebar,
+.body-sidebar .sidebar-toggle-btn {
+    color: var(--alm-on-primary, #fff);
+}
+
+.body-sidebar .item-anchor,
+.body-sidebar .sidebar-item-label,
+.body-sidebar .collapse-sidebar-link,
+.body-sidebar .sidebar-user-button,
+.body-sidebar .sidebar-item-control {
+    color: var(--alm-on-primary, #fff);
+}
+
+.body-sidebar .active-sidebar .item-anchor {
+    color: #fff;
 }
 
 .indicator.blue::before,
