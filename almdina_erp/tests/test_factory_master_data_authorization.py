@@ -4,7 +4,6 @@ import unittest
 
 from almdina_erp.almdina_erp.application.security.navigation_context import (
     WORKSPACE_GO_LIVE,
-    WORKSPACE_REPORTS,
     WORKSPACE_SETTINGS,
     build_navigation_context,
 )
@@ -182,7 +181,7 @@ class TestFactoryMasterDataAuthorization(unittest.TestCase):
             {Capability.VIEW_EDGE_BANDING_TYPES}
         )
         self.assertIn(WORKSPACE_SETTINGS, navigation["workspaces"])
-        self.assertNotIn(WORKSPACE_REPORTS, navigation["workspaces"])
+        self.assertNotIn("Almdina Reports", navigation["workspaces"])
         self.assertNotIn(WORKSPACE_GO_LIVE, navigation["workspaces"])
         self.assertTrue(navigation["sections"]["master_data"])
         self.assertFalse(navigation["sections"]["administration"])

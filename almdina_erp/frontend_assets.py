@@ -168,10 +168,6 @@ doctype_js = {
     ],
     "Edge Banding Type": "public/js/edge_banding_type_ux.js",
     "Production Routing": "public/js/production_routing_ux.js",
-    "Replacement Piece": [
-        "public/js/permission_context.js",
-        "public/js/replacement_piece.js",
-    ],
 }
 
 doctype_list_js = {

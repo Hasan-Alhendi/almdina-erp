@@ -4,7 +4,7 @@
   "doctype": "DocType",
   "engine": "InnoDB",
   "field_order": [
-    "naming_series","plan_kind","source_type","door_cutting_order","replacement_piece","revision","based_on_plan","status","approval_column","approved_by","approved_on",
+    "naming_series","plan_kind","source_type","door_cutting_order","revision","based_on_plan","status","approval_column","approved_by","approved_on",
     "engine_section","optimization_mode","machine_type","optimization_time_limit_sec","engine_column","method_key","method_label","ordering_strategy","score","engine_version","attempts","solver_status","search_elapsed_sec","validation_status","validated_on","validation_errors",
     "board_section","board_description","board_item","full_board_width_mm","full_board_length_mm","usable_board_width_mm","usable_board_length_mm","settings_column","kerf_mm","trim_margin_mm",
     "working_section","plan_needs_recalculation","input_fingerprint","metadata_fingerprint",
@@ -16,10 +16,9 @@
   ],
   "fields": [
     {"default":"CP-.YYYY.-.#####","fieldname":"naming_series","fieldtype":"Select","label":"Naming Series","options":"CP-.YYYY.-.#####","reqd":1},
-    {"default":"Order","fieldname":"plan_kind","fieldtype":"Select","in_list_view":1,"label":"Plan Kind","options":"Order\nReplacement\nCustom DXF","read_only":1,"reqd":1},
+    {"default":"Order","fieldname":"plan_kind","fieldtype":"Select","in_list_view":1,"label":"Plan Kind","options":"Order\nCustom DXF","read_only":1,"reqd":1},
     {"default":"System","fieldname":"source_type","fieldtype":"Select","in_list_view":1,"label":"Source Type","options":"System\nUploaded DXF","read_only":1,"reqd":1},
     {"fieldname":"door_cutting_order","fieldtype":"Link","in_list_view":1,"label":"Door Cutting Order","options":"Door Cutting Order","reqd":1},
-    {"fieldname":"replacement_piece","fieldtype":"Link","in_list_view":1,"label":"Replacement Piece","options":"Replacement Piece","read_only":1},
     {"default":"1","fieldname":"revision","fieldtype":"Int","in_list_view":1,"label":"Revision","read_only":1},
     {"fieldname":"based_on_plan","fieldtype":"Link","label":"Based On Plan","options":"Cutting Plan","read_only":1},
     {"default":"Draft","fieldname":"status","fieldtype":"Select","in_list_view":1,"label":"Status","options":"Draft\nApproved\nSuperseded\nCancelled","read_only":1,"reqd":1},

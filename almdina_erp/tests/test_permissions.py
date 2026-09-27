@@ -128,7 +128,6 @@ class TestAlmdinaPermissions(FrappeTestCase):
             "customer_quote_total_usd",
             "customer_quote_status",
             "material_variance_cost_usd",
-            "internal_loss_cost_usd",
             "actual_cost_usd",
         }
         for fieldname in cost_fields:
@@ -151,10 +150,3 @@ class TestAlmdinaPermissions(FrappeTestCase):
         frappe.set_user(EDITOR_USER)
         with self.assertRaises(frappe.PermissionError):
             get_production_settings()
-
-    def test_sensitive_replacement_approval_rejects_ungranted_role_before_lookup(self):
-        from almdina_erp.almdina_erp.services.replacement_approval import approve_replacement
-
-        frappe.set_user(EDITOR_USER)
-        with self.assertRaises(frappe.PermissionError):
-            approve_replacement("NON-EXISTENT")

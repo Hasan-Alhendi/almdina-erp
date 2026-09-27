@@ -16,7 +16,6 @@ ORDER_STATUSES = (
     "Rejected",
     "On Hold",
     "Cancelled",
-    "Replacement Required",
     "Partially Completed",
 )
 
@@ -217,13 +216,9 @@ def derive_order_status(
     production_path: str | None,
     current_stage: StageState | None,
     stages: Iterable[StageState],
-    has_open_replacements: bool,
 ) -> str:
     """Derive the order status from lifecycle facts without reading Frappe state."""
     normalized_current = normalize_order_status(current_status)
-
-    if has_open_replacements:
-        return "Replacement Required"
 
     if normalized_current in {"Ready for Delivery", "Delivered", "Cancelled"}:
         return normalized_current

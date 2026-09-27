@@ -52,9 +52,7 @@ class TestStage12SecurityGate(unittest.TestCase):
         for doctype in (
             "Door Cutting Order",
             "Production Stage",
-            "Production Incident",
             "Cutting Plan",
-            "Replacement Piece",
         ):
             with self.subTest(doctype=doctype):
                 self.assertIn(doctype, query_hooks)

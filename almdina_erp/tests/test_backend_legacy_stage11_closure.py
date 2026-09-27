@@ -52,8 +52,8 @@ class TestBackendLegacyStage11Closure(unittest.TestCase):
         removed = _removed_paths()
         removed_stage10 = legacy & removed
 
-        self.assertEqual(len(legacy), 16)
-        self.assertEqual(len(removed_stage10), 12)
+        self.assertEqual(len(legacy), 22)
+        self.assertEqual(len(removed_stage10), 18)
         self.assertTrue(removed_stage10.isdisjoint(RETAINED_STAGE10_BOUNDARIES))
         self.assertEqual(
             legacy,
@@ -88,7 +88,7 @@ class TestBackendLegacyStage11Closure(unittest.TestCase):
             migration["batch"]: migration
             for migration in _load(MIGRATIONS_PATH)["migrations"]
         }
-        self.assertEqual(set(migrations), set(range(1, 9)))
+        self.assertEqual(set(migrations), set(range(1, 11)))
         self.assertEqual(
             migrations[6]["final_sha"],
             "a593a46d636d349e416b74d1162837b885e21cbb",

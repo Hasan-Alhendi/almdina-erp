@@ -42,7 +42,6 @@ RESET_FIELDS: dict[str, Any] = {
     "calculated_plan_metadata_hash": None,
     "plan_needs_recalculation": 1,
     "material_variance_cost_usd": 0,
-    "internal_loss_cost_usd": 0,
     "actual_cost_usd": 0,
 }
 

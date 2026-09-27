@@ -38,14 +38,7 @@ _FLOOR_WORKER_CAPABILITIES = frozenset(
         Capability.HANDOFF_ASSIGNED_STAGE,
     }
 )
-_STAGE_READ_CAPABILITIES = frozenset(PRODUCTION_CAPABILITIES) | frozenset(
-    {
-        Capability.RECORD_INCIDENT,
-        Capability.CREATE_REPLACEMENT,
-        Capability.VIEW_OPERATIONAL_REPORTS,
-        Capability.VIEW_FINANCIAL_REPORTS,
-    }
-)
+_STAGE_READ_CAPABILITIES = frozenset(PRODUCTION_CAPABILITIES)
 _READ_PERMISSION_TYPES = frozenset({None, "read", "select"})
 _MUTATING_PERMISSION_TYPES = frozenset({"create", "write", "delete"})
 _WORKER_SCOPED_CAPABILITIES = (
@@ -61,11 +54,6 @@ _CUTTING_PLAN_PERMISSION_CAPABILITIES = {
     definition.permission_type: capability
     for capability, definition in CAPABILITY_CATALOG.items()
     if definition.applies_to == CUTTING_PLAN_DOCTYPE
-}
-_REPLACEMENT_PERMISSION_CAPABILITIES = {
-    definition.permission_type: capability
-    for capability, definition in CAPABILITY_CATALOG.items()
-    if definition.applies_to == "Replacement Piece"
 }
 _KNOWN_CUSTOM_PERMISSION_TYPES = frozenset(
     definition.permission_type
@@ -340,13 +328,6 @@ def production_stage_query(user: str | None = None) -> str:
     return f"`tabProduction Stage`.assigned_to = {frappe.db.escape(user)}"
 
 
-def production_incident_query(user: str | None = None) -> str:
-    user = user or frappe.session.user
-    if user == "Administrator":
-        return ""
-    return "" if _has(user, Capability.VIEW_PRODUCTION_INCIDENTS) else "1=0"
-
-
 def cutting_plan_query(user: str | None = None) -> str:
     user = user or frappe.session.user
     if user == "Administrator":
@@ -356,17 +337,6 @@ def cutting_plan_query(user: str | None = None) -> str:
     if not _requires_assigned_scope(user):
         return ""
     return "`tabCutting Plan`.door_cutting_order in (" + _assigned_order_subquery(user) + ")"
-
-
-def replacement_piece_query(user: str | None = None) -> str:
-    user = user or frappe.session.user
-    if user == "Administrator":
-        return ""
-    if not _has(user, Capability.VIEW_REPLACEMENTS):
-        return "1=0"
-    if not _requires_assigned_scope(user):
-        return ""
-    return "`tabReplacement Piece`.door_cutting_order in (" + _assigned_order_subquery(user) + ")"
 
 
 def _known_custom_type_owned_elsewhere(resolved_type: str | None, local_map: dict[str, str]) -> bool:
@@ -424,24 +394,6 @@ def production_stage_has_permission(
     return True
 
 
-def production_incident_has_permission(
-    doc: Any,
-    user: str | None = None,
-    ptype: str | None = None,
-    permission_type: str | None = None,
-) -> bool:
-    del doc
-    resolved_user = user or frappe.session.user
-    resolved_type = _resolved_permission_type(ptype, permission_type)
-    if resolved_user == "Administrator":
-        return True
-    if resolved_type in _READ_PERMISSION_TYPES:
-        return _has(resolved_user, Capability.VIEW_PRODUCTION_INCIDENTS)
-    if resolved_type in _MUTATING_PERMISSION_TYPES or str(resolved_type or "") in _KNOWN_CUSTOM_PERMISSION_TYPES:
-        return False
-    return True
-
-
 def cutting_plan_has_permission(
     doc: Any,
     user: str | None = None,
@@ -475,45 +427,12 @@ def cutting_plan_has_permission(
     return False
 
 
-def replacement_piece_has_permission(
-    doc: Any,
-    user: str | None = None,
-    ptype: str | None = None,
-    permission_type: str | None = None,
-) -> bool:
-    resolved_user = user or frappe.session.user
-    resolved_type = _resolved_permission_type(ptype, permission_type)
-
-    if resolved_user == "Administrator":
-        return True
-    if resolved_type in _READ_PERMISSION_TYPES:
-        return _scoped_read_decision(
-            user=resolved_user,
-            required_capability=Capability.VIEW_REPLACEMENTS,
-            order_name=getattr(doc, "door_cutting_order", None),
-            supporting_workflow=True,
-        )
-    if resolved_type in _MUTATING_PERMISSION_TYPES:
-        return False
-
-    required = _REPLACEMENT_PERMISSION_CAPABILITIES.get(str(resolved_type or ""))
-    if required:
-        return _has(resolved_user, required)
-    if _known_custom_type_owned_elsewhere(resolved_type, _REPLACEMENT_PERMISSION_CAPABILITIES):
-        return False
-    return True
-
-
 __all__ = [
     "cutting_plan_has_permission",
     "cutting_plan_query",
     "door_cutting_order_has_permission",
     "door_cutting_order_query",
-    "production_incident_has_permission",
-    "production_incident_query",
     "production_stage_has_permission",
     "production_stage_query",
-    "replacement_piece_has_permission",
-    "replacement_piece_query",
     "worker_can_view_order",
 ]

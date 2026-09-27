@@ -160,7 +160,7 @@ def test_dxf_upload_authorizes_and_validates_before_canonical_plan_attachment(mo
         ),
     )
     monkeypatch.setattr(
-        shop_floor_dxf_service.shop_floor_gateway,
+        shop_floor_dxf_service,
         "get_order",
         lambda _name: order,
     )

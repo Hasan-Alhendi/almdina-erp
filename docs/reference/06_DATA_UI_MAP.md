@@ -13,8 +13,6 @@
 | خطة القص | `Cutting Plan` + pieces/sources | Order planning / archive / print | Approved snapshot له قواعد immutability |
 | المسارات | `Production Routing` + stage definitions | Master Data / settings | المراحل قابلة للضبط |
 | التنفيذ | `Production Stage` + events | Shop Floor | Current assignment وstatus |
-| الجودة | `Production Incident` | Control/production flow | سجل مشكلة إنتاج |
-| التعويض | `Replacement Piece` | replacement workflow | مرتبط بطلب/قطعة أصلية |
 | القشاط | `Edge Banding Type` | Order entry / master data | rates/defaults وفق الصلاحية |
 | الإعدادات | `Almdina ERP Settings` | Production settings | أقسام settings بصلاحيات منفصلة |
 | الصلاحيات | Role + Almdina capability state/audits | Factory Permissions | Capability matrix authority |
@@ -26,7 +24,6 @@
 - `Almdina ERP`
 - `Almdina Control Center`
 - `Shop Floor`
-- `Almdina Reports`
 - `Almdina Settings`
 - `Almdina Go Live`
 
@@ -56,6 +53,7 @@ Visibility يجب أن يأتي من permission context/capabilities، لا من
 - `factory_system_preflight`: أزيل Page source؛ بقي alias التاريخي fail-closed.
 - `factory_performance_benchmark`: أزيل Page source؛ بقي alias التاريخي fail-closed، بينما cutting engine واختبارات الأداء المشتركة بقيت.
 - `factory_approval_queue`: أزيل Page source وروابطه بعد إثبات أن عدد طلبات `Pending Review` على الموقع الحي يساوي صفرًا؛ بقيت capability constants/grants، وأغلقت API القديمة دون حذف بيانات صلاحيات.
+- `Almdina Reports` وتقارير الاستعلام الخمسة (ملخص العمليات، تحليل الطلبات، أداء المراحل، استخدام الألواح، قياسات الدرف): أزيل المصدر ومساحة العمل وقدرتا `view_operational_reports` و`view_financial_reports`. حساب التكلفة والطباعة لم يُمسا.
 
 ## 4. أين توجد الحقيقة لكل نوع بيانات؟
 

@@ -73,30 +73,24 @@ def finish_legacy_stage(
     return handoff_to_next(stage_name)
 
 
+_RETIRED_REPLACEMENT_MESSAGE = _(
+    "Replacement pieces are no longer part of the Almdina product. "
+    "This historical cancellation route is closed."
+)
+
+
 @frappe.whitelist()
 def cancel_legacy_replacement(
-    replacement_name: str,
+    replacement_name: str | None = None,
     reason: str | None = None,
     reverse_stock: int | bool = 0,
     cancel_with_order: int | bool = 0,
-) -> dict[str, Any]:
-    """Keep cancellation while refusing obsolete inventory reversal behavior."""
+) -> NoReturn:
+    """Keep the historical route and refuse every replacement cancellation."""
 
-    if int(reverse_stock or 0):
-        frappe.throw(
-            _(
-                "Stock reversal is unavailable because inventory is outside "
-                "the active Almdina product scope."
-            )
-        )
-
-    from almdina_erp.almdina_erp.services.replacement_service import (
-        cancel_replacement,
-    )
-
-    result = cancel_replacement(replacement_name, reason=reason)
-    result["cancel_with_order"] = bool(int(cancel_with_order or 0))
-    return result
+    del replacement_name, reason, reverse_stock, cancel_with_order
+    frappe.throw(_RETIRED_REPLACEMENT_MESSAGE, frappe.ValidationError)
+    raise AssertionError("frappe.throw must interrupt execution")
 
 
 __all__ = [

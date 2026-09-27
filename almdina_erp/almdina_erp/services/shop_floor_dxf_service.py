@@ -14,12 +14,14 @@ from almdina_erp.almdina_erp.application.security.drawing_action_policy import (
     validate_assigned_drawing_action,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
-from almdina_erp.almdina_erp.infrastructure.frappe import shop_floor_gateway
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization import (
     require_cutting_plan_capability,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
     seed_plan_settings,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.order_tracking_repository import (
+    get_order,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.stage_assignment_access import (
     require_stage_assignment_access,
@@ -90,7 +92,7 @@ def _get_authorized_order(
     require_assigned_designer: bool = True,
     require_assignment: bool = True,
 ) -> Any:
-    order = shop_floor_gateway.get_order(order_name)
+    order = get_order(order_name)
     return _authorize_order(
         order,
         capability,
@@ -227,7 +229,7 @@ def upload_production_dxf(order_name: str, file_url: str) -> dict[str, Any]:
     # Cutting Plan persistence -> File attachment -> order-owned workflow state.
     normalized_url, file_row = _validate_dxf_file_metadata(file_url)
 
-    order = shop_floor_gateway.get_order(order_name)
+    order = get_order(order_name)
     from almdina_erp.almdina_erp.services.cutting_plan_command_service import (
         current_uploaded_dxf_file,
         finalize_uploaded_dxf_order_state,

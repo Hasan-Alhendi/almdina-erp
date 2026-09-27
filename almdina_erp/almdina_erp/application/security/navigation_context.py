@@ -3,9 +3,6 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
-from almdina_erp.almdina_erp.application.security.report_access import (
-    build_report_access,
-)
 from almdina_erp.almdina_erp.domain.security.authorization import (
     CONTROL_CENTER_CAPABILITIES,
     COSTING_CAPABILITIES,
@@ -17,7 +14,6 @@ from almdina_erp.almdina_erp.domain.security.authorization import (
     PRODUCTION_CAPABILITIES,
     PRODUCTION_OPERATOR_CAPABILITIES,
     PRODUCTION_SUPERVISOR_CAPABILITIES,
-    REPORTING_CAPABILITIES,
     SHOP_FLOOR_ACCESS_CAPABILITIES,
     WORKFORCE_CAPABILITIES,
     Capability,
@@ -30,7 +26,6 @@ WORKSPACE_MAIN = "Almdina ERP"
 WORKSPACE_MAIN_ROUTE = "almdina-erp"
 WORKSPACE_SHOP_FLOOR = "Shop Floor"
 WORKSPACE_CONTROL_CENTER = "Almdina Control Center"
-WORKSPACE_REPORTS = "Almdina Reports"
 WORKSPACE_SETTINGS = "Almdina Settings"
 WORKSPACE_GO_LIVE = "Almdina Go-Live"
 ORDER_LIST_ROUTE = "door-cutting-order"
@@ -44,17 +39,7 @@ _FINANCIAL_CAPABILITIES = frozenset(
 _ORDER_MANAGEMENT_CAPABILITIES = frozenset(
     ORDER_CAPABILITIES.difference({Capability.VIEW_ORDERS})
 )
-_CONTROL_CENTER_OPERATOR_CAPABILITIES = frozenset(
-    {
-        Capability.RECORD_INCIDENT,
-        Capability.VIEW_REPLACEMENTS,
-        Capability.START_REPLACEMENT,
-        Capability.COMPLETE_REPLACEMENT,
-    }
-)
-_CONTROL_CENTER_MANAGEMENT_CAPABILITIES = frozenset(
-    CONTROL_CENTER_CAPABILITIES.difference(_CONTROL_CENTER_OPERATOR_CAPABILITIES)
-)
+_CONTROL_CENTER_MANAGEMENT_CAPABILITIES = CONTROL_CENTER_CAPABILITIES
 _CONFIGURATION_CAPABILITIES = frozenset(
     FACTORY_SETTINGS_CAPABILITIES | MASTER_DATA_CAPABILITIES
 )
@@ -98,7 +83,6 @@ def _profile(granted: frozenset[str]) -> str:
         _ORDER_MANAGEMENT_CAPABILITIES
         | _FINANCIAL_CAPABILITIES
         | _CONTROL_CENTER_MANAGEMENT_CAPABILITIES
-        | REPORTING_CAPABILITIES
         | PRODUCTION_SUPERVISOR_CAPABILITIES
         | WORKFORCE_CAPABILITIES
         | visible_configuration
@@ -125,7 +109,6 @@ def _profile(granted: frozenset[str]) -> str:
         | _DRAWING_NAV_CAPABILITIES
         | PRODUCTION_CAPABILITIES
         | _CONTROL_CENTER_NAV_CAPABILITIES
-        | REPORTING_CAPABILITIES
         | WORKFORCE_CAPABILITIES
         | visible_configuration
         | frozenset({Capability.MANAGE_PERMISSIONS}),
@@ -147,11 +130,6 @@ def build_navigation_context(
     has_drawing = _intersects(granted, _DRAWING_NAV_CAPABILITIES)
     has_production = _intersects(granted, PRODUCTION_CAPABILITIES)
     has_quality = _intersects(granted, _CONTROL_CENTER_NAV_CAPABILITIES)
-    report_access = build_report_access(granted)
-    # Every current Almdina Script Report is registered against Door Cutting
-    # Order. Without VIEW_ORDERS Frappe rejects the report before execute(), so
-    # the workspace must not advertise an action the user cannot open.
-    has_reports = report_access.operational and Capability.VIEW_ORDERS in granted
     has_workforce = _intersects(granted, WORKFORCE_CAPABILITIES)
     has_factory_settings = _intersects(granted, FACTORY_SETTINGS_CAPABILITIES)
     visible_configuration = _visible_configuration_capabilities(granted)
@@ -170,7 +148,6 @@ def build_navigation_context(
             _ORDER_MANAGEMENT_CAPABILITIES
             | _FINANCIAL_CAPABILITIES
             | _CONTROL_CENTER_MANAGEMENT_CAPABILITIES
-            | REPORTING_CAPABILITIES
             | PRODUCTION_SUPERVISOR_CAPABILITIES
             | WORKFORCE_CAPABILITIES
             | visible_configuration
@@ -189,8 +166,6 @@ def build_navigation_context(
             workspaces.append(WORKSPACE_SHOP_FLOOR)
         if has_control_center:
             workspaces.append(WORKSPACE_CONTROL_CENTER)
-        if has_reports or has_permissions_admin:
-            workspaces.append(WORKSPACE_REPORTS)
         if (
             Capability.EDIT_COST_SETTINGS in granted
             or has_workforce
@@ -218,7 +193,6 @@ def build_navigation_context(
             "factory_settings": has_factory_settings,
             "master_data": has_master_data,
             "administration": has_permissions_admin,
-            "reports": has_reports,
         },
     }
 
@@ -230,7 +204,6 @@ __all__ = [
     "WORKSPACE_GO_LIVE",
     "WORKSPACE_MAIN",
     "WORKSPACE_MAIN_ROUTE",
-    "WORKSPACE_REPORTS",
     "WORKSPACE_SETTINGS",
     "WORKSPACE_SHOP_FLOOR",
     "build_navigation_context",

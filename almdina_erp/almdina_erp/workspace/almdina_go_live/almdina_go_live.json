@@ -1,6 +1,6 @@
 {
   "charts": [],
-  "content": "[{\"id\":\"gate-header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Go-Live Validation</b></span>\",\"col\":12}},{\"id\":\"archive\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Approved Plan PDF Archive\",\"col\":6}},{\"id\":\"evidence-header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Validation Evidence</b></span>\",\"col\":12}},{\"id\":\"incidents\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Incidents & Replacements\",\"col\":4}},{\"id\":\"summary\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Operations Summary\",\"col\":4}},{\"id\":\"performance\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Production Stage Performance\",\"col\":4}}]",
+  "content": "[{\"id\":\"gate-header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Go-Live Validation</b></span>\",\"col\":12}},{\"id\":\"archive\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Approved Plan PDF Archive\",\"col\":6}}]",
   "custom_blocks": [],
   "docstatus": 0,
   "doctype": "Workspace",
@@ -11,10 +11,7 @@
   "is_hidden": 0,
   "label": "Almdina Go-Live",
   "links": [
-    {"hidden":0,"is_query_report":0,"label":"Approved Plan PDF Archive","link_count":0,"link_to":"factory-plan-archive","link_type":"Page","onboard":0,"type":"Link"},
-    {"hidden":0,"is_query_report":1,"label":"Incidents & Replacements","link_count":0,"link_to":"Production Incidents and Replacements","link_type":"Report","onboard":0,"type":"Link"},
-    {"hidden":0,"is_query_report":1,"label":"Production Stage Performance","link_count":0,"link_to":"Production Stage Performance","link_type":"Report","onboard":0,"type":"Link"},
-    {"hidden":0,"is_query_report":1,"label":"Operations Summary","link_count":0,"link_to":"Factory Operations Summary","link_type":"Report","onboard":0,"type":"Link"}
+    {"hidden":0,"is_query_report":0,"label":"Approved Plan PDF Archive","link_count":0,"link_to":"factory-plan-archive","link_type":"Page","onboard":0,"type":"Link"}
   ],
   "module": "Almdina ERP",
   "name": "Almdina Go-Live",
@@ -25,10 +22,7 @@
   "roles": [],
   "sequence_id": 5,
   "shortcuts": [
-    {"color":"Green","label":"Approved Plan PDF Archive","link_to":"factory-plan-archive","type":"Page"},
-    {"color":"Orange","label":"Incidents & Replacements","link_to":"Production Incidents and Replacements","type":"Report"},
-    {"color":"Blue","label":"Production Stage Performance","link_to":"Production Stage Performance","type":"Report"},
-    {"color":"Blue","label":"Operations Summary","link_to":"Factory Operations Summary","type":"Report"}
+    {"color":"Green","label":"Approved Plan PDF Archive","link_to":"factory-plan-archive","type":"Page"}
   ],
   "title": "Almdina Go-Live"
 }

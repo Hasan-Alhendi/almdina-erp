@@ -43,10 +43,6 @@ OPERATOR_STATE = _state(
     Capability.HANDOFF_ASSIGNED_STAGE,
     Capability.VIEW_CUTTING_PLAN,
     Capability.PRINT_CUTTING_PLAN,
-    Capability.RECORD_INCIDENT,
-    Capability.VIEW_REPLACEMENTS,
-    Capability.START_REPLACEMENT,
-    Capability.COMPLETE_REPLACEMENT,
 )
 
 

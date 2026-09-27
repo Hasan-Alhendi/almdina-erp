@@ -37,7 +37,6 @@ class TestFinancialDocumentApplication(unittest.TestCase):
             "customer_quote_total_usd": 80,
             "customer_quote_status": "Approved",
             "material_variance_cost_usd": 2,
-            "internal_loss_cost_usd": 1,
             "actual_cost_usd": 54,
             "total_area_m2": 4.2,
             "total_edge_meters": 12,
@@ -223,12 +222,14 @@ class TestFinancialDocumentApplication(unittest.TestCase):
         operations = {item["label"]: item["value"] for item in payload["operations"]}
         self.assertEqual(operations["عدد الألواح"], 2)
         self.assertEqual(operations["إجمالي القشاط (م)"], 12.0)
+        labels = [item["label"] for item in payload["cost_breakdown"]]
+        self.assertNotIn("الخسائر الداخلية", labels)
 
     def test_non_finite_or_invalid_values_fail_closed_to_zero(self) -> None:
         order = {**self.order, "actual_cost_usd": float("nan")}
         payload = build_internal_cost_report_document(order, self.pieces)
         summary = {item["label"]: item["value"] for item in payload["summary"]}
-        self.assertEqual(summary["التكلفة الفعلية/المتوقعة ($)"], 54.0)
+        self.assertEqual(summary["التكلفة الفعلية/المتوقعة ($)"], 53.0)
 
     def test_l_shaped_corner_uses_cut_corner_line_with_distinct_label(self) -> None:
         pieces = [

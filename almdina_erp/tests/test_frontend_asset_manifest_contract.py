@@ -123,10 +123,7 @@ def test_door_cutting_order_asset_order_is_frozen_during_manifest_extraction():
     assert manifest["doctype_js"]["Door Cutting Order"] == EXPECTED_DOOR_CUTTING_ORDER_JS
     assert manifest["doctype_js"]["Edge Banding Type"] == "public/js/edge_banding_type_ux.js"
     assert manifest["doctype_js"]["Production Routing"] == "public/js/production_routing_ux.js"
-    assert manifest["doctype_js"]["Replacement Piece"] == [
-        "public/js/permission_context.js",
-        "public/js/replacement_piece.js",
-    ]
+    assert "Replacement Piece" not in manifest["doctype_js"]
     assert manifest["doctype_list_js"] == {
         "Door Cutting Order": "public/js/door_cutting_order/list_view/door_cutting_order_list.js",
     }

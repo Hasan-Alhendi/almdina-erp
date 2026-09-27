@@ -60,24 +60,13 @@ class TestCuttingImportMigrationContract(unittest.TestCase):
             self.assertNotIn(legacy, base)
             self.assertNotIn(legacy, plan_adapter)
 
-    def test_compatibility_modules_are_thin_and_remain_available(self) -> None:
-        cutting = (RUNTIME_ROOT / "services" / "cutting_engine.py").read_text(
-            encoding="utf-8"
-        )
-        optimizer = (
-            RUNTIME_ROOT / "services" / "advanced_cutting_optimizer.py"
-        ).read_text(encoding="utf-8")
-        legacy_engine = (
-            RUNTIME_ROOT / "infrastructure" / "cutting" / "legacy_engine.py"
-        ).read_text(encoding="utf-8")
-
-        self.assertIn("domain.cutting import *", cutting)
-        self.assertLess(len(cutting.splitlines()), 20)
-        self.assertIn("domain.cutting.optimizer import *", optimizer)
-        self.assertLess(len(optimizer.splitlines()), 25)
-        self.assertIn("DomainCuttingEngineAdapter", legacy_engine)
-        self.assertIn("domain_cutting_engine", legacy_engine)
-        self.assertLess(len(legacy_engine.splitlines()), 20)
+    def test_compatibility_modules_are_removed(self) -> None:
+        for relative in (
+            "services/cutting_engine.py",
+            "services/advanced_cutting_optimizer.py",
+            "infrastructure/cutting/legacy_engine.py",
+        ):
+            self.assertFalse((RUNTIME_ROOT / relative).exists(), relative)
 
 
 if __name__ == "__main__":

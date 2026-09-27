@@ -17,7 +17,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.system_role_policy import (
 
 
 _TRANSACTIONAL_SCOPE_DOCTYPES = frozenset(
-    {"Door Cutting Order", CUTTING_PLAN_DOCTYPE, "Replacement Piece"}
+    {"Door Cutting Order", CUTTING_PLAN_DOCTYPE}
 )
 _DEFAULT_PERMISSION_MESSAGE = "لا تملك الصلاحية المطلوبة لتنفيذ هذا الإجراء."
 

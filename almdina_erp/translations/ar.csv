@@ -20,14 +20,6 @@ Production Incident,مشكلة إنتاج
 Factory Settings,إعدادات المعمل
 Almdina ERP Settings,إعدادات المعمل
 Stock & Control,المواد والمخزون والمتابعة
-Reports,تقارير المعمل
-Factory Reports,تقارير المعمل
-Almdina Reports,تقارير المعمل
-Factory Order Analysis,تحليل طلبات القص
-Production Stage Performance,أداء مراحل الإنتاج
-Production Incidents and Replacements,أخطاء الإنتاج والقطع التعويضية
-Board Usage Analysis,تحليل استهلاك الألواح
-Piece Size Usage Analysis,تحليل المقاسات الأكثر استخدامًا
 Almdina Control Center,مركز متابعة المعمل
 Factory Control Center,مركز متابعة وتشغيل المعمل
 Plan PDF Archive,أرشيف مخططات القص المعتمدة
@@ -35,7 +27,6 @@ Factory Plan Archive,أرشيف مخططات القص المعتمدة
 Production Defaults,إعدادات التشغيل الافتراضية
 Stock & Remnant Policy,سياسة المخزون وبقايا الألواح
 Monitoring,المتابعة والرقابة
-Factory Operations Summary,ملخص حركة المعمل
 Almdina Settings,إعدادات المعمل
 Production Routing,تسلسل مراحل الإنتاج
 Production Routing Stage,مرحلة ضمن تسلسل الإنتاج
@@ -49,11 +40,9 @@ System Factory Settings,إعدادات المعمل المتقدمة
 Almdina Go-Live,فحص جاهزية المعمل
 Go-Live Validation,فحص الجاهزية قبل التشغيل
 Approved Plan PDF Archive,أرشيف مخططات القص المعتمدة
-Validation Evidence,نتائج وفحوص الجاهزية
 Stock Availability,توفر المواد بالمخزون
 Incidents & Replacements,الأخطاء والقطع التعويضية
 Incidents and Replacements,الأخطاء والقطع التعويضية
-Operations Summary,ملخص تشغيل المعمل
 Home,الرئيسية
 
 Naming Series,تسلسل الترقيم

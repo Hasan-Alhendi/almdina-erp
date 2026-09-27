@@ -5,7 +5,14 @@ ROOT = Path(__file__).resolve().parents[1]
 PLAN_SERVICE = ROOT / "almdina_erp" / "services" / "cutting_plan_service.py"
 ORDER_JSON = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.json"
 CUTTING_PLAN_JSON = ROOT / "almdina_erp" / "doctype" / "cutting_plan" / "cutting_plan.json"
-SHOP_FLOOR = ROOT / "almdina_erp" / "services" / "shop_floor_service.py"
+DXF_SERVICE = ROOT / "almdina_erp" / "services" / "shop_floor_dxf_service.py"
+PLAN_QUERY = (
+    ROOT
+    / "almdina_erp"
+    / "infrastructure"
+    / "frappe"
+    / "shop_floor_query_repository.py"
+)
 TABS_UX = ROOT / "public" / "js" / "door_cutting_order_plan_tabs_ux.js"
 
 
@@ -42,11 +49,11 @@ def test_lock_cutting_plan_accepts_plan_source():
 
 
 def test_upload_parses_dxf_into_custom_plan_json():
-    src = _source(SHOP_FLOOR)
+    src = _source(DXF_SERVICE)
     upload = src.split("def upload_production_dxf", 1)[1].split("@frappe.whitelist()", 1)[0]
     assert "parse_production_dxf" in upload
     assert "custom_plan_json" in upload
-    assert "validate_imported_plan" in upload
+    assert "save_uploaded_dxf_plan" in upload
 
 
 def test_dxf_export_uses_stored_system_plan_before_approval():
@@ -70,7 +77,8 @@ def test_dual_tabs_ux_exposes_system_custom_and_approved_tabs():
 
 
 def test_custom_plan_snapshot_does_not_fall_back_to_system_plan():
-    src = _source(SHOP_FLOOR)
-    block = src.split('if plan_source == "Custom":', 1)[1].split("\n\n\tsnapshot = None", 1)[0]
-    assert "return {}" in block
+    src = _source(PLAN_QUERY)
+    block = src.split('elif plan_source == "Custom":', 1)[1].split("else:", 1)[0]
+    assert "latest_plan" in block
+    assert "UPLOADED_DXF" in block
     assert "cutting_plan_json" not in block

@@ -87,7 +87,6 @@ class TestFrappeV16PermissionHookContract(unittest.TestCase):
         order = SimpleNamespace(name="DCO-TEST")
         plan = SimpleNamespace(door_cutting_order="DCO-TEST")
         stage = SimpleNamespace(assigned_to="empty@example.com")
-        replacement = SimpleNamespace(door_cutting_order="DCO-TEST")
 
         with (
             patch.object(permissions, "_has", return_value=False),
@@ -118,13 +117,6 @@ class TestFrappeV16PermissionHookContract(unittest.TestCase):
                     ptype="read",
                 )
             )
-            self.assertFalse(
-                permissions.replacement_piece_has_permission(
-                    replacement,
-                    user="empty@example.com",
-                    ptype="read",
-                )
-            )
             self.assertEqual(
                 permissions.door_cutting_order_query("empty@example.com"),
                 "1=0",
@@ -135,10 +127,6 @@ class TestFrappeV16PermissionHookContract(unittest.TestCase):
             )
             self.assertEqual(
                 permissions.production_stage_query("empty@example.com"),
-                "1=0",
-            )
-            self.assertEqual(
-                permissions.replacement_piece_query("empty@example.com"),
                 "1=0",
             )
 
@@ -237,7 +225,6 @@ class TestFrappeV16PermissionHookContract(unittest.TestCase):
         granted = {
             permissions.Capability.VIEW_ORDERS,
             permissions.Capability.VIEW_CUTTING_PLAN,
-            permissions.Capability.VIEW_REPLACEMENTS,
         }
         with (
             patch.object(
@@ -265,16 +252,11 @@ class TestFrappeV16PermissionHookContract(unittest.TestCase):
                 "active-orders union completed-orders",
                 permissions.cutting_plan_query("worker@example.com"),
             )
-            self.assertIn(
-                "active-orders union completed-orders",
-                permissions.replacement_piece_query("worker@example.com"),
-            )
 
     def test_supporting_document_reads_preserve_completed_assignments(self) -> None:
         granted = {
             permissions.Capability.VIEW_ORDERS,
             permissions.Capability.VIEW_CUTTING_PLAN,
-            permissions.Capability.VIEW_REPLACEMENTS,
         }
         with (
             patch.object(
@@ -295,13 +277,6 @@ class TestFrappeV16PermissionHookContract(unittest.TestCase):
             )
             self.assertTrue(
                 permissions.cutting_plan_has_permission(
-                    SimpleNamespace(door_cutting_order="DCO-COMPLETED"),
-                    user="worker@example.com",
-                    ptype="read",
-                )
-            )
-            self.assertTrue(
-                permissions.replacement_piece_has_permission(
                     SimpleNamespace(door_cutting_order="DCO-COMPLETED"),
                     user="worker@example.com",
                     ptype="read",

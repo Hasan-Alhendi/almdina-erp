@@ -6,7 +6,6 @@ from almdina_erp.almdina_erp.domain.security.authorization import Capability
 
 
 PLAN_COMMAND_FLAG = "almdina_cutting_plan_command_capability"
-REPLACEMENT_PLAN_COMMAND_FLAG = "almdina_replacement_plan_command"
 PLAN_COMMAND_CAPABILITIES = frozenset(
     {
         Capability.RECALCULATE_PLAN,
@@ -34,21 +33,16 @@ def command_capability(doc: Any) -> str:
 def is_authorized_plan_command(doc: Any) -> bool:
     """Return True only for a server-created, scoped plan command context.
 
-    Browser payloads cannot persist either flag. Normal order-plan commands carry
-    a plan-owned capability. Replacement approval uses a separate internal flag
-    so its Replacement Piece capability never becomes an implicit Cutting Plan
-    grant in the canonical permission catalog.
+    Browser payloads cannot persist the command flag. Normal order-plan commands
+    carry a plan-owned capability.
     """
 
-    if command_capability(doc) in PLAN_COMMAND_CAPABILITIES:
-        return True
-    return _flag_value(doc, REPLACEMENT_PLAN_COMMAND_FLAG) is True
+    return command_capability(doc) in PLAN_COMMAND_CAPABILITIES
 
 
 __all__ = [
     "PLAN_COMMAND_CAPABILITIES",
     "PLAN_COMMAND_FLAG",
-    "REPLACEMENT_PLAN_COMMAND_FLAG",
     "command_capability",
     "is_authorized_plan_command",
 ]

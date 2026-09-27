@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from almdina_erp.almdina_erp.services.advanced_cutting_optimizer import (
+from almdina_erp.almdina_erp.domain.cutting import (
     AUTO_PRO,
     DEEP_SEARCH,
     OPTIMAL_SEARCH,
+    expand_piece_groups,
     optimize_plan,
+    validate_plan,
 )
-from almdina_erp.almdina_erp.services.cutting_engine import expand_piece_groups, validate_plan
 
 
 def _pieces():

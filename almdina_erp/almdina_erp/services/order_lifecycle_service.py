@@ -84,44 +84,6 @@ def _cancel_stages(order_name: str, reason: str) -> list[str]:
     return cancelled
 
 
-def _cancel_unstarted_replacements(order_name: str, reason: str) -> list[str]:
-    replacements = frappe.get_all(
-        "Replacement Piece",
-        filters={
-            "door_cutting_order": order_name,
-            "status": ["!=", "Cancelled"],
-        },
-        fields=["name", "status"],
-    )
-
-    physically_started = [
-        row
-        for row in replacements
-        if row.status in {"In Progress", "Completed"}
-    ]
-    if physically_started:
-        frappe.throw(
-            _(
-                "Order has replacement work already in progress or completed ({0}). "
-                "Resolve that replacement before cancelling the order."
-            ).format(", ".join(row.name for row in physically_started))
-        )
-
-    from almdina_erp.almdina_erp.services.replacement_execution import (
-        cancel_replacement_for_order_cancellation,
-    )
-
-    cancelled: list[str] = []
-    for row in replacements:
-        if row.status in {"Pending Approval", "Approved"}:
-            cancel_replacement_for_order_cancellation(
-                row.name,
-                reason=_("Order cancelled: {0}").format(reason),
-            )
-            cancelled.append(row.name)
-    return cancelled
-
-
 def _cancellation_snapshot_for(order: Any):
     rows = frappe.get_all(
         "Production Stage",
@@ -214,7 +176,6 @@ def cancel_order(
         )
 
     snapshot = _cancellation_snapshot_for(order)
-    cancelled_replacements = _cancel_unstarted_replacements(order.name, reason)
     cancelled_stages = _cancel_stages(order.name, reason)
 
     if order.approved_plan:
@@ -247,7 +208,6 @@ def cancel_order(
         "name": order.name,
         "status": "Cancelled",
         "cancelled_stages": cancelled_stages,
-        "cancelled_replacements": cancelled_replacements,
         "lifecycle": lifecycle_context_for_order(order),
     }
 
@@ -384,12 +344,10 @@ def return_order_to_draft(
             "name": order.name,
             "status": order.status,
             "cancelled_stages": 0,
-            "cancelled_replacements": 0,
             "in_place": True,
             "noop": True,
         }
 
-    cancelled_replacements = _cancel_unstarted_replacements(order.name, reason)
     cancelled_stages = _cancel_stages(order.name, reason)
 
     if order.approved_plan:
@@ -417,6 +375,5 @@ def return_order_to_draft(
         "name": order.name,
         "status": order.status,
         "cancelled_stages": cancelled_stages,
-        "cancelled_replacements": cancelled_replacements,
         "in_place": True,
     }

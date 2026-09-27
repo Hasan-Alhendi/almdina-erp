@@ -18,7 +18,6 @@
         "customer_quote_total_usd",
         "customer_quote_status",
         "material_variance_cost_usd",
-        "internal_loss_cost_usd",
         "actual_cost_usd",
     ];
     const PIECE_COST_FIELDS = [

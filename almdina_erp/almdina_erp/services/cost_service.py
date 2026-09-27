@@ -21,37 +21,18 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_reposito
 )
 
 
-def _internal_loss(order_name: str) -> float:
-    return flt(
-        frappe.db.sql(
-            """
-            select coalesce(sum(internal_loss_cost_usd), 0)
-            from `tabReplacement Piece`
-            where door_cutting_order = %s
-              and status = 'Completed'
-              and coalesce(charge_customer, 0) = 0
-            """,
-            (order_name,),
-        )[0][0]
-    )
-
-
 def get_order_cost_summary(order_name: str) -> dict[str, Any]:
     order = frappe.get_doc("Door Cutting Order", order_name)
     plan = resolve_canonical_cost_plan(order)
     planned_cost = flt(authoritative_cost_values(order, plan=plan)["total_cost_usd"])
-
-    internal_loss = _internal_loss(order_name)
-    actual_cost = planned_cost + internal_loss
 
     return {
         "planned_cost_usd": planned_cost,
         # Retained as a zero-valued compatibility key for existing callers.
         # Inventory consumption and variance accounting are outside the product.
         "material_variance_cost_usd": 0.0,
-        "internal_loss_cost_usd": internal_loss,
-        "actual_cost_usd": actual_cost,
-        "variance_usd": actual_cost - planned_cost,
+        "actual_cost_usd": planned_cost,
+        "variance_usd": 0.0,
     }
 
 
@@ -63,16 +44,10 @@ def sync_order_costs(order_name: str) -> dict[str, Any]:
         {
             "actual_cost_usd": summary["actual_cost_usd"],
             "material_variance_cost_usd": summary["material_variance_cost_usd"],
-            "internal_loss_cost_usd": summary["internal_loss_cost_usd"],
         },
         update_modified=True,
     )
     return summary
-
-
-def on_replacement_update(doc: Any, method: str | None = None) -> None:
-    if doc.door_cutting_order:
-        sync_order_costs(doc.door_cutting_order)
 
 
 def _sanitize_cutting_plan_snapshot(doc: Any) -> None:
@@ -103,16 +78,12 @@ def on_order_plan_update(doc: Any, method: str | None = None) -> None:
         return
 
     # Approval persistence runs immediately before the DCO relation is linked.
-    # Use the just-approved plan for this narrow hook; normal reads always resolve
-    # through resolve_canonical_cost_plan once the relation is established.
-    internal_loss = _internal_loss(doc.door_cutting_order)
     frappe.db.set_value(
         "Door Cutting Order",
         doc.door_cutting_order,
         {
-            "actual_cost_usd": flt(doc.total_cost_usd) + internal_loss,
+            "actual_cost_usd": flt(doc.total_cost_usd),
             "material_variance_cost_usd": 0,
-            "internal_loss_cost_usd": internal_loss,
         },
         update_modified=True,
     )

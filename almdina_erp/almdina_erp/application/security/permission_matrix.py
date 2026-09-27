@@ -24,7 +24,6 @@ CATEGORY_ORDER = (
     "production",
     "shop_floor",
     "control_center",
-    "reports",
     "workforce",
     "factory_settings",
     "master_data",
@@ -40,7 +39,6 @@ CATEGORY_PRESENTATION: dict[str, dict[str, str]] = {
     "production": {"label": "الإنتاج والإسناد", "description": "إرسال الطلب وبدء المراحل وتسليمها والرجوع وإعادة الإسناد.", "icon": "tool"},
     "shop_floor": {"label": "صالة الإنتاج", "description": "صلاحيات العرض الإضافية داخل صالة الإنتاج دون منح دخول أو إجراءات إنتاجية بحد ذاتها.", "icon": "list"},
     "control_center": {"label": "مركز التحكم والجودة", "description": "أرشفة الخطط وعرض حوادث الإنتاج وتسجيلها وإدارة قطع التعويض.", "icon": "dashboard"},
-    "reports": {"label": "التقارير", "description": "عرض تقارير التشغيل والأداء والتكلفة والخسائر الداخلية.", "icon": "chart"},
     "workforce": {"label": "المستخدمون والقوى العاملة", "description": "عرض حسابات المعمل وإنشاؤها وتعديلها وتفعيلها وإدارة أدوارها.", "icon": "users"},
     "factory_settings": {"label": "إعدادات المعمل", "description": "عرض وتعديل إعدادات القص والتكلفة وضوابط الإنتاج وهوية أوراق الطباعة ورسائل واتساب وجلستها كل قسم بصورة مستقلة.", "icon": "setting-gear"},
     "master_data": {"label": "البيانات الأساسية", "description": "إدارة مسارات الإنتاج وأنواع القشاط مع فصل العرض والإنشاء والتعديل والحذف.", "icon": "database"},
@@ -80,10 +78,9 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
     Capability.EDIT_COST_SETTINGS: _presentation("تعديل إعدادات التكلفة", "تعديل سعر اللوح وأجرة القص وإعادة حساب التكلفة.", "critical"),
     Capability.EDIT_SPECIAL_PRICE: _presentation("تعديل سعر معتمد", "تغيير سعر درفة خاصة بعد اعتماده سابقًا.", "critical"),
     Capability.APPROVE_SPECIAL_PRICE: _presentation("اعتماد سعر خاص", "اعتماد السعر النهائي للدرف الخاصة.", "critical"),
-    Capability.EDIT_REPLACEMENT_COST: _presentation("تعديل خسارة التعويض", "إدخال التكلفة الفعلية الداخلية عند إكمال قطعة التعويض.", "critical"),
     Capability.PRINT_MEASUREMENTS: _presentation("طباعة القياسات", "طباعة مستند القياسات دون أي أسعار."),
     Capability.PRINT_CUSTOMER_INVOICE: _presentation("طباعة فاتورة الزبون", "طباعة مستند الزبون المالي دون البيانات الداخلية.", "sensitive"),
-    Capability.PRINT_INTERNAL_COST_REPORT: _presentation("طباعة تقرير التكلفة الداخلي", "طباعة التقرير السري الذي يتضمن التكلفة والخسائر والربحية.", "critical"),
+    Capability.PRINT_INTERNAL_COST_REPORT: _presentation("طباعة تقرير التكلفة الداخلي", "طباعة التقرير السري الذي يتضمن التكلفة التشغيلية والربحية.", "critical"),
     Capability.VIEW_CUTTING_PLAN: _presentation("عرض قسم خطة القص", "إظهار تبويب نتائج القص. امنح صلاحيات التبويبات أدناه لتحديد أي خطط يمكن مشاهدتها."),
     Capability.VIEW_SYSTEM_CUTTING_PLAN: _presentation("عرض خطة النظام", "مشاهدة تبويب خطة القص المحسوبة بواسطة النظام."),
     Capability.VIEW_UPLOADED_CUTTING_PLAN: _presentation("عرض الخطة المرفوعة", "مشاهدة تبويب خطة القص المرفوعة (DXF/مخصصة)."),
@@ -118,16 +115,6 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
         "عرض الطلبات المنتهية التي تقع أصلًا ضمن نطاق المستخدم. لا تمنح دخول صالة الإنتاج ولا أي إجراء أو نطاق طلبات إضافي.",
     ),
     Capability.ARCHIVE_APPROVED_PLAN: _presentation("أرشفة الخطة المعتمدة", "إنشاء وحفظ PDF رسمي خاص بالخطة المعتمدة.", "sensitive"),
-    Capability.VIEW_PRODUCTION_INCIDENTS: _presentation("عرض أخطاء الإنتاج", "عرض قائمة حوادث وأخطاء الإنتاج المسجلة ومتابعة تفاصيلها."),
-    Capability.RECORD_INCIDENT: _presentation("تسجيل حادث إنتاج", "تسجيل قطعة متضررة أو مشكلة أثناء التنفيذ.", "sensitive"),
-    Capability.CREATE_REPLACEMENT: _presentation("إنشاء قطعة تعويض", "إنشاء قطعة تعويض من حادث إنتاج مسجل.", "sensitive"),
-    Capability.VIEW_REPLACEMENTS: _presentation("عرض قطع التعويض", "فتح قطع التعويض ومتابعة حالتها."),
-    Capability.APPROVE_REPLACEMENT: _presentation("اعتماد قطعة التعويض", "اعتماد القطعة وإنشاء خطة القص المصغرة وتجميد تكلفتها المتوقعة.", "critical"),
-    Capability.START_REPLACEMENT: _presentation("بدء قطعة التعويض", "بدء تنفيذ قطعة تعويض معتمدة."),
-    Capability.COMPLETE_REPLACEMENT: _presentation("إكمال قطعة التعويض", "إنهاء قطعة التعويض وتحديث حالة الطلب."),
-    Capability.CANCEL_REPLACEMENT: _presentation("إلغاء قطعة التعويض", "إلغاء قطعة تعويض لم يبدأ تنفيذها بعد.", "critical"),
-    Capability.VIEW_OPERATIONAL_REPORTS: _presentation("عرض التقارير التشغيلية", "عرض الأداء والمراحل والحوادث دون التكلفة والخسائر المالية.", "sensitive"),
-    Capability.VIEW_FINANCIAL_REPORTS: _presentation("عرض التقارير المالية الداخلية", "عرض التكلفة الفعلية والهدر والخسائر الداخلية داخل التقارير.", "critical"),
     Capability.VIEW_USERS: _presentation("عرض مستخدمي المعمل", "عرض حسابات Almdina فقط وحالتها والأدوار المسندة لها."),
     Capability.CREATE_USERS: _presentation("إنشاء مستخدم", "إنشاء حساب نظام جديد للمعمل مع كلمة مرور مؤقتة.", "critical"),
     Capability.EDIT_USERS: _presentation("تعديل بيانات المستخدم", "تعديل الاسم واللغة وبيانات الحساب غير المالية.", "sensitive"),
@@ -157,13 +144,6 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
     Capability.MANAGE_PERMISSIONS: _presentation("إدارة الصلاحيات", "تعديل مصفوفة الصلاحيات لجميع الأدوار.", "critical"),
 }
 
-_REPLACEMENT_ACTIONS = frozenset({
-    Capability.APPROVE_REPLACEMENT,
-    Capability.START_REPLACEMENT,
-    Capability.COMPLETE_REPLACEMENT,
-    Capability.CANCEL_REPLACEMENT,
-    Capability.EDIT_REPLACEMENT_COST,
-})
 _COST_VIEW_ACTIONS = frozenset({
     Capability.EDIT_COST_SETTINGS,
     Capability.EDIT_SPECIAL_PRICE,
@@ -251,8 +231,6 @@ def normalize_capability_state(raw: Mapping[str, Any] | None) -> dict[str, bool]
         state[Capability.VIEW_CUTTING_PLAN] = True
     if any(state[capability] for capability in _DRAWING_VIEW_ACTIONS):
         state[Capability.VIEW_DRAWING_WORKSPACE] = True
-    if any(state[capability] for capability in _REPLACEMENT_ACTIONS):
-        state[Capability.VIEW_REPLACEMENTS] = True
     if state[Capability.ARCHIVE_APPROVED_PLAN]:
         state[Capability.VIEW_CUTTING_PLAN] = True
         state[Capability.VIEW_APPROVED_CUTTING_PLAN] = True
@@ -264,9 +242,6 @@ def normalize_capability_state(raw: Mapping[str, Any] | None) -> dict[str, bool]
                 state[capability] = True
         elif not any(state[capability] for capability in _PLAN_TAB_VIEW_ACTIONS):
             state[Capability.VIEW_SYSTEM_CUTTING_PLAN] = True
-    if state[Capability.VIEW_FINANCIAL_REPORTS]:
-        state[Capability.VIEW_OPERATIONAL_REPORTS] = True
-        state[Capability.VIEW_COSTS] = True
     if any(state[capability] for capability in _WORKFORCE_ACTIONS):
         state[Capability.VIEW_USERS] = True
     if any(state[capability] for capability in _FACTORY_SECTION_EDITS):
@@ -316,16 +291,6 @@ def standard_permission_projection(
             or any(normalized[value] for value in _FACTORY_SECTION_EDITS)
         )
         return {"read": can_read_settings, "select": can_read_settings, "create": False, "write": False, "delete": False}
-    if doctype == "Replacement Piece":
-        enabled = any(
-            normalized[capability]
-            for capability, definition in CAPABILITY_CATALOG.items()
-            if definition.applies_to == doctype
-        )
-        return {"read": enabled, "select": enabled, "create": False, "write": False, "delete": False}
-    if doctype == "Production Incident":
-        can_read = normalized[Capability.VIEW_PRODUCTION_INCIDENTS]
-        return {"read": can_read, "select": can_read, "create": False, "write": False, "delete": False}
     if doctype == "Production Routing":
         can_read = normalized[Capability.VIEW_PRODUCTION_ROUTINGS]
         return {"read": can_read, "select": can_read, "create": normalized[Capability.CREATE_PRODUCTION_ROUTINGS], "write": normalized[Capability.EDIT_PRODUCTION_ROUTINGS], "delete": normalized[Capability.DELETE_PRODUCTION_ROUTINGS]}

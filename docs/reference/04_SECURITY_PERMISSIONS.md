@@ -67,13 +67,15 @@ flowchart LR
 
 ### Costing & documents
 
-`view_costs`, `edit_cost_settings`, `edit_special_price`, `approve_special_price`, `edit_replacement_cost`, `print_measurements`, `print_customer_invoice`, `print_internal_cost_report`.
+`view_costs`, `edit_cost_settings`, `edit_special_price`, `approve_special_price`, `print_measurements`, `print_customer_invoice`, `print_internal_cost_report`.
 
 ### Cutting plan / drawing / DXF
 
 `view_cutting_plan`, `view_system_cutting_plan`, `view_uploaded_cutting_plan`, `view_approved_cutting_plan`, `recalculate_plan`, `edit_optimizer_settings`, `print_cutting_plan`, `view_drawing_workspace`, `edit_special_drawing`, `export_dxf`, `upload_dxf`, `replace_dxf`, `approve_dxf`.
 
 `approve_dxf` اسم تاريخي محفوظ للتوافق، ومعناه التجاري الحالي اعتماد Production Cutting Plan المختارة سواء كانت System أو imported/custom.
+
+`archive_approved_plan` يفتح أرشيف الخطط المعتمدة ولا يمنح تعديل الخطة.
 
 ### Production
 
@@ -90,15 +92,11 @@ flowchart LR
 - لا يمنح أي Production action. صف `Ready for Delivery` الحالي قد يبقى ضمن بيانات اللوحة التشغيلية لأنه حالة عمل حية، وليس سجلًا تاريخيًا.
 - للعامل ذي النطاق المسند، تُظهر قائمة الطلبات المرحلة الحالية النشطة فقط (`Pending` / `In Progress` / `Paused`) عند تعطيله. مرحلة حالية مكتملة بعد آخر مرحلة (`Ready for Delivery`) ليست عملًا نشطًا لذلك تخرج من العدد والقائمة ومن `has_permission`؛ عند تفعيله تُضاف الطلبات التي أكمل فيها مرحلة سابقة.
 - فتح طلب تاريخي مباشرةً يخضع للعقد نفسه؛ معرفة اسم الطلب أو رابطه لا تتجاوز إخفاء السجل.
-- هذا القيد يخص سطح سجل الطلب نفسه، ولا يلغي وصولًا مستقلًا ومصرحًا به إلى خطة قص أو طلب تعويض مرتبط بإسناد سابق مكتمل.
-
-### Incidents & replacements
-
-`archive_approved_plan`, `view_production_incidents`, `record_incident`, `create_replacement`, `view_replacements`, `approve_replacement`, `start_replacement`, `complete_replacement`, `cancel_replacement`.
+- هذا القيد يخص سطح سجل الطلب نفسه، ولا يلغي وصولًا مستقلًا ومصرحًا به إلى خطة قص مرتبطة بإسناد سابق مكتمل.
 
 ### Reports
 
-`view_operational_reports`, `view_financial_reports`.
+تقارير الاستعلام التشغيلية والمالية لم تعد جزءًا من المنتج. قدرتا `view_operational_reports` و`view_financial_reports` متقاعدتان. عرض التكلفة الداخلية يبقى عبر `view_costs`، وطباعة تقرير التكلفة الداخلي للطلب تبقى عبر `print_internal_cost_report`.
 
 ### Workforce
 
@@ -146,7 +144,6 @@ Production Routing CRUD, Customer CRUD, Edge Banding Type CRUD عبر مفاتي
 
 - اسم DCO.
 - اسم Production Stage.
-- اسم Replacement.
 - اسم Cutting Plan.
 - اسم/URL File.
 

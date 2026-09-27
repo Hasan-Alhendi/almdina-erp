@@ -31,34 +31,6 @@ def _base_stages(order_name: str) -> list[Any]:
 def sync_order_status(order_name: str) -> str:
     """Derive visible order status from lifecycle facts and stage snapshots."""
 
-    open_replacements = (
-        frappe.db.count(
-            "Replacement Piece",
-            filters={
-                "door_cutting_order": order_name,
-                "status": ["not in", ["Completed", "Cancelled"]],
-            },
-        )
-        if frappe.db.exists("DocType", "Replacement Piece")
-        else 0
-    )
-    if open_replacements:
-        status = derive_order_status(
-            current_status=None,
-            production_path=None,
-            current_stage=None,
-            stages=(),
-            has_open_replacements=True,
-        )
-        frappe.db.set_value(
-            "Door Cutting Order",
-            order_name,
-            "status",
-            status,
-            update_modified=True,
-        )
-        return status
-
     current = frappe.db.get_value(
         "Door Cutting Order",
         order_name,
@@ -101,7 +73,6 @@ def sync_order_status(order_name: str) -> str:
             StageState(row.stage_type, row.status, row.department_label)
             for row in stages
         ),
-        has_open_replacements=False,
     )
     frappe.db.set_value(
         "Door Cutting Order",

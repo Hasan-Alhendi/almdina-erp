@@ -42,10 +42,6 @@ _PRODUCTION_OPERATOR = frozenset(
         Capability.HANDOFF_ASSIGNED_STAGE,
         Capability.VIEW_CUTTING_PLAN,
         Capability.PRINT_CUTTING_PLAN,
-        Capability.RECORD_INCIDENT,
-        Capability.VIEW_REPLACEMENTS,
-        Capability.START_REPLACEMENT,
-        Capability.COMPLETE_REPLACEMENT,
     }
 )
 _PRODUCTION_SUPERVISOR = frozenset(
@@ -58,11 +54,6 @@ _PRODUCTION_SUPERVISOR = frozenset(
         Capability.RESUME_CANCELLED_ORDER,
         Capability.MARK_DELIVERED,
         Capability.REASSIGN_WORKER,
-        Capability.CREATE_REPLACEMENT,
-        Capability.VIEW_REPLACEMENTS,
-        Capability.APPROVE_REPLACEMENT,
-        Capability.CANCEL_REPLACEMENT,
-        Capability.VIEW_OPERATIONAL_REPORTS,
     }
 )
 _PRICING_AND_DOCUMENTS = frozenset(
@@ -72,11 +63,9 @@ _PRICING_AND_DOCUMENTS = frozenset(
         Capability.EDIT_COST_SETTINGS,
         Capability.EDIT_SPECIAL_PRICE,
         Capability.APPROVE_SPECIAL_PRICE,
-        Capability.EDIT_REPLACEMENT_COST,
         Capability.PRINT_MEASUREMENTS,
         Capability.PRINT_CUSTOMER_INVOICE,
         Capability.PRINT_INTERNAL_COST_REPORT,
-        Capability.VIEW_FINANCIAL_REPORTS,
     }
 )
 _CONTROL_CENTER = frozenset(
@@ -87,11 +76,6 @@ _CONTROL_CENTER = frozenset(
         Capability.VIEW_CUTTING_PLAN,
         Capability.PRINT_CUTTING_PLAN,
         Capability.ARCHIVE_APPROVED_PLAN,
-        Capability.CREATE_REPLACEMENT,
-        Capability.VIEW_REPLACEMENTS,
-        Capability.APPROVE_REPLACEMENT,
-        Capability.CANCEL_REPLACEMENT,
-        Capability.VIEW_OPERATIONAL_REPORTS,
     }
 )
 

@@ -3,46 +3,6 @@ from __future__ import annotations
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
-from almdina_erp.almdina_erp.report.board_usage_analysis import (
-    board_usage_analysis,
-)
-from almdina_erp.almdina_erp.report.factory_operations_summary import (
-    factory_operations_summary,
-)
-from almdina_erp.almdina_erp.report.factory_order_analysis import (
-    factory_order_analysis,
-)
-from almdina_erp.almdina_erp.report.piece_size_usage_analysis import (
-    piece_size_usage_analysis,
-)
-from almdina_erp.almdina_erp.report.production_incidents_and_replacements import (
-    production_incidents_and_replacements,
-)
-
-
-class TestFreeTextReportIntegration(FrappeTestCase):
-    def test_operational_reports_compile_against_the_installed_schema(self) -> None:
-        filters = frappe._dict(
-            {
-                "from_date": "2099-01-01",
-                "to_date": "2099-01-02",
-                "customer": "",
-                "status": "",
-                "board_description": "",
-            }
-        )
-        for report in (
-            factory_order_analysis,
-            piece_size_usage_analysis,
-            board_usage_analysis,
-            factory_operations_summary,
-            production_incidents_and_replacements,
-        ):
-            with self.subTest(report=report.__name__):
-                columns, rows = report.execute(filters)
-                self.assertTrue(columns)
-                self.assertIsInstance(rows, list)
-
 
 class TestOrderNumericValidation(FrappeTestCase):
     def test_zero_board_dimension_is_rejected_instead_of_defaulted(self) -> None:

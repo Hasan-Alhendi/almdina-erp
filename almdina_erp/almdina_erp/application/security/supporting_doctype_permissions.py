@@ -19,14 +19,7 @@ SUPPORTING_DOCTYPES = (
     "Edge Banding Type",
 )
 
-_STAGE_READ_CAPABILITIES = frozenset(PRODUCTION_CAPABILITIES) | frozenset(
-    {
-        Capability.RECORD_INCIDENT,
-        Capability.CREATE_REPLACEMENT,
-        Capability.VIEW_OPERATIONAL_REPORTS,
-        Capability.VIEW_FINANCIAL_REPORTS,
-    }
-)
+_STAGE_READ_CAPABILITIES = frozenset(PRODUCTION_CAPABILITIES)
 
 # Frappe checks native Role Permission before controller-level permission hooks.
 # These are technical baseline grants only: Cutting Plan's has_permission hook

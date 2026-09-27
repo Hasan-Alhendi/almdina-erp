@@ -26,9 +26,7 @@ def load_native_permissions():
     fake_base = types.ModuleType(BASE_MODULE)
     fake_base.door_cutting_order_has_permission = lambda *_args, **_kwargs: True
     fake_base.production_stage_has_permission = lambda *_args, **_kwargs: True
-    fake_base.production_incident_has_permission = lambda *_args, **_kwargs: True
     fake_base.cutting_plan_has_permission = lambda *_args, **_kwargs: True
-    fake_base.replacement_piece_has_permission = lambda *_args, **_kwargs: True
     fake_base._requires_assigned_scope = lambda _user: True
     fake_base.worker_can_view_order = lambda _user, _order: False
 
@@ -131,9 +129,7 @@ class TestNativeDocumentPermissions(unittest.TestCase):
         doc = SimpleNamespace(name="ROW-1")
         delegates = (
             native_permissions.production_stage_has_permission,
-            native_permissions.production_incident_has_permission,
             native_permissions.cutting_plan_has_permission,
-            native_permissions.replacement_piece_has_permission,
         )
         for permission in delegates:
             for ptype in ("create", "write", "delete", "submit", "cancel", "amend"):

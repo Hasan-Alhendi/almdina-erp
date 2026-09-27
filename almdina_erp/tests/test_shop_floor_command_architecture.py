@@ -76,8 +76,6 @@ class TestShopFloorCommandArchitecture(unittest.TestCase):
         facade = PRODUCTION_COMPAT_PATH.read_text(encoding="utf-8")
         bootstrap = STAGE_BOOTSTRAP_PATH.read_text(encoding="utf-8")
         status_sync = STATUS_SYNC_PATH.read_text(encoding="utf-8")
-        shop_floor = SHOP_FLOOR_FACADE_PATH.read_text(encoding="utf-8")
-
         self.assertIn("Backward-compatible production-service facade", facade)
         self.assertIn("production_stage_bootstrap_service", facade)
         self.assertIn("order_status_sync_service", facade)
@@ -98,8 +96,8 @@ class TestShopFloorCommandArchitecture(unittest.TestCase):
         self.assertIn("frappe.db.set_value", status_sync)
         self.assertIn("def sync_order_status", status_sync)
 
-        self.assertIn("services.order_status_sync_service", shop_floor)
-        self.assertNotIn("services.production_service", shop_floor)
+        self.assertFalse(SHOP_FLOOR_FACADE_PATH.exists())
+        self.assertNotIn("services.production_service", facade)
 
     def test_runtime_has_no_internal_dependency_on_production_service(self) -> None:
         offenders: list[str] = []

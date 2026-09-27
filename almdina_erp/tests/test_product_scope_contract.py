@@ -119,34 +119,26 @@ class TestProductScopeContract(unittest.TestCase):
             / "frappe"
             / "shop_floor_command_repository.py"
         ).read_text(encoding="utf-8")
-        compatibility_service_source = (
-            ROOT / "almdina_erp" / "services" / "shop_floor_service.py"
-        ).read_text(encoding="utf-8")
-        compatibility_gateway_source = (
-            ROOT
-            / "almdina_erp"
-            / "infrastructure"
-            / "frappe"
-            / "shop_floor_gateway.py"
-        ).read_text(encoding="utf-8")
+        self.assertFalse(
+            (ROOT / "almdina_erp" / "services" / "shop_floor_service.py").exists()
+        )
+        self.assertFalse(
+            (
+                ROOT
+                / "almdina_erp"
+                / "infrastructure"
+                / "frappe"
+                / "shop_floor_gateway.py"
+            ).exists()
+        )
         for source in (
             commands_source,
             repository_source,
-            compatibility_service_source,
-            compatibility_gateway_source,
         ):
             self.assertNotIn("consume_stock", source)
             self.assertNotIn("register_remnants", source)
 
         for relative in (
-            "infrastructure/frappe/replacements/snapshot_adapter.py",
-            "services/replacement_service.py",
-            "services/replacement_creation_service.py",
-            "services/replacement_approval.py",
-            "services/replacement_execution.py",
-            "services/replacement_completion.py",
-            "services/replacement_plan_service.py",
-            "services/replacement_status_service.py",
             "services/order_lifecycle_service.py",
         ):
             source = (ROOT / "almdina_erp" / relative).read_text(encoding="utf-8")
@@ -160,65 +152,24 @@ class TestProductScopeContract(unittest.TestCase):
                 with self.subTest(module=relative, token=token):
                     self.assertNotIn(token, source)
 
-    def test_replacement_facade_and_domain_have_clean_boundaries(self) -> None:
-        facade = (
-            ROOT / "almdina_erp" / "services" / "replacement_service.py"
-        ).read_text(encoding="utf-8")
-        domain = (
+    def test_replacements_and_incidents_are_outside_the_product(self) -> None:
+        absent = (
+            ROOT / "almdina_erp" / "domain" / "replacements",
+            ROOT / "almdina_erp" / "doctype" / "replacement_piece",
+            ROOT / "almdina_erp" / "doctype" / "production_incident",
+            ROOT / "almdina_erp" / "services" / "replacement_service.py",
+            ROOT / "public" / "js" / "replacement_piece.js",
             ROOT
             / "almdina_erp"
-            / "domain"
-            / "replacements"
-            / "planning.py"
-        ).read_text(encoding="utf-8")
+            / "report"
+            / "production_incidents_and_replacements",
+        )
+        for path in absent:
+            self.assertFalse(path.exists(), path)
         hooks = (ROOT / "hooks.py").read_text(encoding="utf-8")
-
-        self.assertLess(len(facade.splitlines()), 100)
-        self.assertIn("Backward-compatible replacement API facade", facade)
-        self.assertNotIn("frappe.db.", facade)
-        self.assertNotIn("frappe.get_doc", facade)
-        self.assertNotIn("import frappe", domain)
-        self.assertNotIn("from frappe", domain)
-        self.assertNotIn(
-            '"almdina_erp.almdina_erp.services.replacement_service.'
-            'approve_replacement":',
-            hooks,
-        )
-
-    def test_replacements_use_the_same_free_text_board_identity(self) -> None:
-        payload = json.loads(
-            (
-                ROOT
-                / "almdina_erp"
-                / "doctype"
-                / "replacement_piece"
-                / "replacement_piece.json"
-            ).read_text(encoding="utf-8")
-        )
-        fields = {row["fieldname"]: row for row in payload["fields"]}
-        self.assertEqual(fields["board_description"].get("reqd"), 1)
-        self.assertNotEqual(fields["board_item"].get("reqd"), 1)
-        self.assertEqual(fields["board_item"].get("hidden"), 1)
-        for fieldname in (
-            "source_preference",
-            "selected_remnant",
-            "stock_entry",
-            "generated_remnant",
-        ):
-            self.assertEqual(fields[fieldname].get("hidden"), 1)
-
-    def test_zero_replacement_loss_is_preserved_by_the_ui(self) -> None:
-        source = (
-            ROOT / "public" / "js" / "replacement_piece.js"
-        ).read_text(encoding="utf-8")
-        self.assertNotIn(
-            "internal_loss_cost_usd: values.internal_loss_cost_usd || null",
-            source,
-        )
-        self.assertIn(
-            'values.internal_loss_cost_usd === ""',
-            source,
-        )
+        self.assertNotIn("Replacement Piece", hooks)
+        self.assertNotIn("Production Incident", hooks)
+        self.assertIn("cancel_legacy_replacement", hooks)
 
     def test_workspaces_do_not_expose_inventory_or_retired_utilities(self) -> None:
         def string_values(value: object) -> list[str]:
@@ -336,12 +287,12 @@ class TestProductScopeContract(unittest.TestCase):
             self.assertNotIn(token, source)
         self.assertIn("sync_order_board_descriptions()", source)
         self.assertIn("sync_plan_board_descriptions()", source)
-        self.assertIn("sync_replacement_board_descriptions()", source)
+        self.assertNotIn("sync_replacement_board_descriptions()", source)
         self.assertIn(
             "set source.board_description = plan.board_description",
             source,
         )
-        self.assertIn(
+        self.assertNotIn(
             "set replacement.board_description = order_doc.board_description",
             source,
         )
@@ -411,37 +362,16 @@ class TestProductScopeContract(unittest.TestCase):
                 self.assertEqual(fields[fieldname].get("hidden"), 1)
                 self.assertIn(optimizer_name, optimizer_source)
 
-    def test_operational_reports_use_free_text_board_identity(self) -> None:
+    def test_factory_query_reports_are_outside_the_product(self) -> None:
         report_root = ROOT / "almdina_erp" / "report"
         for relative in (
-            "factory_order_analysis/factory_order_analysis.py",
-            "piece_size_usage_analysis/piece_size_usage_analysis.py",
-            "board_usage_analysis/board_usage_analysis.py",
+            "factory_order_analysis",
+            "piece_size_usage_analysis",
+            "board_usage_analysis",
+            "factory_operations_summary",
+            "production_stage_performance",
         ):
-            source = (report_root / relative).read_text(encoding="utf-8")
-            self.assertIn("board_description", source)
-            for stale in (
-                "o.board_material",
-                "o.board_color",
-                "o.board_thickness_mm",
-                "src.material",
-                "src.color",
-                "src.thickness_mm",
-            ):
-                with self.subTest(report=relative, stale=stale):
-                    self.assertNotIn(stale, source)
-
-    def test_factory_operations_date_filter_uses_a_declared_order_alias(self) -> None:
-        source = (
-            ROOT
-            / "almdina_erp"
-            / "report"
-            / "factory_operations_summary"
-            / "factory_operations_summary.py"
-        ).read_text(encoding="utf-8")
-        self.assertIn("from `tabDoor Cutting Order` o", source)
-        self.assertIn("o.order_date >= %(from_date)s", source)
-        self.assertIn("o.order_date <= %(to_date)s", source)
+            self.assertFalse((report_root / relative).exists(), relative)
 
 
 if __name__ == "__main__":

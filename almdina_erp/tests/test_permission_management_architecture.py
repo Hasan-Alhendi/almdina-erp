@@ -146,7 +146,7 @@ class TestPermissionManagementArchitecture(unittest.TestCase):
         self.assertIn('surface: "factory_settings"', source)
         self.assertIn('surface: "production_routings"', source)
         self.assertIn('surface: "edge_banding_types"', source)
-        self.assertIn('surface: "report_factory_order_analysis"', source)
+        self.assertNotIn('surface: "report_factory_order_analysis"', source)
         self.assertIn("hideUnauthorizedShortcuts", source)
         self.assertNotIn("CAPABILITY_ROUTE_RULES", source)
         self.assertNotIn("frappe.user_roles", source)

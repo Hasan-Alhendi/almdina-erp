@@ -112,8 +112,6 @@ class TestAlmdinaSchemaInstall(FrappeTestCase):
             "Production Routing",
             "Production Stage",
             "Production Stage Event",
-            "Production Incident",
-            "Replacement Piece",
             "Almdina ERP Settings",
         }
         missing = sorted(name for name in required if not frappe.db.exists("DocType", name))
@@ -157,7 +155,6 @@ class TestAlmdinaSchemaInstall(FrappeTestCase):
     def test_required_workspaces_exist(self):
         required = {
             "Almdina ERP",
-            "Almdina Reports",
             "Almdina Settings",
             "Almdina Control Center",
             "Almdina Go-Live",
@@ -165,17 +162,18 @@ class TestAlmdinaSchemaInstall(FrappeTestCase):
         missing = sorted(name for name in required if not frappe.db.exists("Workspace", name))
         self.assertEqual(missing, [])
 
-    def test_required_reports_exist(self):
-        required = {
+    def test_retired_factory_reports_are_absent(self):
+        retired = {
             "Factory Order Analysis",
             "Production Stage Performance",
-            "Production Incidents and Replacements",
             "Board Usage Analysis",
             "Piece Size Usage Analysis",
             "Factory Operations Summary",
+            "Production Incidents and Replacements",
         }
-        missing = sorted(name for name in required if not frappe.db.exists("Report", name))
-        self.assertEqual(missing, [])
+        present = sorted(name for name in retired if frappe.db.exists("Report", name))
+        self.assertEqual(present, [])
+        self.assertFalse(frappe.db.exists("Workspace", "Almdina Reports"))
 
     def test_required_print_formats_exist(self):
         required = {

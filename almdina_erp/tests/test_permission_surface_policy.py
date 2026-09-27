@@ -72,9 +72,6 @@ class TestPermissionSurfacePolicy(unittest.TestCase):
         self.assertNotIn(WORKSPACE_CONTROL_CENTER, navigation["workspaces"])
 
     def test_control_center_pages_follow_their_exact_capabilities(self) -> None:
-        incidents = build_surface_access({Capability.VIEW_PRODUCTION_INCIDENTS})
-        self.assertFalse(incidents[Surface.PLAN_ARCHIVE])
-
         review = build_surface_access({Capability.REJECT_ORDER})
         self.assertNotIn("approval_queue", review)
         self.assertFalse(review[Surface.PLAN_ARCHIVE])
@@ -94,36 +91,13 @@ class TestPermissionSurfacePolicy(unittest.TestCase):
         self.assertTrue(permissions[Surface.ROLE_ADMIN])
         self.assertFalse(permissions[Surface.WORKFORCE])
 
-    def test_operational_reports_do_not_expose_financial_order_analysis(self) -> None:
+    def test_cost_view_does_not_add_a_report_surface(self) -> None:
         surfaces = build_surface_access(
-            {Capability.VIEW_ORDERS, Capability.VIEW_OPERATIONAL_REPORTS}
+            {Capability.VIEW_ORDERS, Capability.VIEW_COSTS}
         )
-        self.assertTrue(surfaces[Surface.REPORTS_WORKSPACE])
-        self.assertTrue(surfaces[Surface.REPORT_PRODUCTION_STAGE_PERFORMANCE])
-        self.assertTrue(surfaces[Surface.REPORT_BOARD_USAGE])
-        self.assertFalse(surfaces[Surface.REPORT_FACTORY_ORDER_ANALYSIS])
-
-    def test_financial_report_surface_requires_financial_access(self) -> None:
-        surfaces = build_surface_access(
-            {
-                Capability.VIEW_ORDERS,
-                Capability.VIEW_COSTS,
-                Capability.VIEW_OPERATIONAL_REPORTS,
-                Capability.VIEW_FINANCIAL_REPORTS,
-            }
-        )
-        self.assertTrue(surfaces[Surface.REPORT_FACTORY_ORDER_ANALYSIS])
-
-    def test_reports_without_order_read_are_not_advertised(self) -> None:
-        surfaces = build_surface_access({Capability.VIEW_OPERATIONAL_REPORTS})
-        self.assertFalse(surfaces[Surface.REPORTS_WORKSPACE])
-        self.assertFalse(surfaces[Surface.REPORT_PRODUCTION_STAGE_PERFORMANCE])
-
-    def test_production_incidents_have_independent_view_surface(self) -> None:
-        denied = build_surface_access({Capability.RECORD_INCIDENT})
-        allowed = build_surface_access({Capability.VIEW_PRODUCTION_INCIDENTS})
-        self.assertFalse(denied[Surface.PRODUCTION_INCIDENTS])
-        self.assertTrue(allowed[Surface.PRODUCTION_INCIDENTS])
+        self.assertNotIn("reports_workspace", surfaces)
+        self.assertNotIn("report_factory_order_analysis", surfaces)
+        self.assertTrue(surfaces[Surface.ORDERS])
 
     def test_administrator_gets_every_surface(self) -> None:
         surfaces = build_surface_access(set(), system_administrator=True)

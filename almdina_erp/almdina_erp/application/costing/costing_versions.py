@@ -12,7 +12,6 @@ class CostingInputs:
     cutting_cost_per_board_usd: float
     edge_cost_usd: float
     special_shape_total_usd: float = 0.0
-    internal_loss_cost_usd: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,7 +25,6 @@ class CostingSnapshot:
     special_shape_total_usd: float
     operational_cost_usd: float
     customer_quote_total_usd: float
-    internal_loss_cost_usd: float
     actual_cost_usd: float
 
 
@@ -41,9 +39,7 @@ def calculate_costing_snapshot(inputs: CostingInputs) -> CostingSnapshot:
         edge_cost_usd=max(0.0, float(inputs.edge_cost_usd)),
     )
     special_total = max(0.0, float(inputs.special_shape_total_usd))
-    internal_loss = max(0.0, float(inputs.internal_loss_cost_usd))
     customer_quote = operational.total_cost_usd + special_total
-    actual = operational.total_cost_usd + internal_loss
     return CostingSnapshot(
         required_boards=operational.required_boards,
         board_rate_usd=max(0.0, float(inputs.board_rate_usd)),
@@ -57,8 +53,7 @@ def calculate_costing_snapshot(inputs: CostingInputs) -> CostingSnapshot:
         special_shape_total_usd=special_total,
         operational_cost_usd=operational.total_cost_usd,
         customer_quote_total_usd=customer_quote,
-        internal_loss_cost_usd=internal_loss,
-        actual_cost_usd=actual,
+        actual_cost_usd=operational.total_cost_usd,
     )
 
 

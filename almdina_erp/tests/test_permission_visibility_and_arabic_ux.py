@@ -25,7 +25,7 @@ class TestPermissionVisibilityAndArabicUX(unittest.TestCase):
         client = (PUBLIC / "permission_context.js").read_text(encoding="utf-8")
         self.assertIn('"surfaces": surfaces', server)
         self.assertIn("surface(surfaceName)", client)
-        self.assertIn("PERMISSION_CONTEXT_VERSION = 6", server)
+        self.assertIn("PERMISSION_CONTEXT_VERSION = 7", server)
 
     def test_shared_shell_hides_dynamic_shortcuts_and_guards_direct_routes(self) -> None:
         source = (PUBLIC / "shared_shell.js").read_text(encoding="utf-8")
@@ -36,12 +36,9 @@ class TestPermissionVisibilityAndArabicUX(unittest.TestCase):
         self.assertIn("لا تملك صلاحية الوصول إلى هذا القسم", source)
         for route in (
             "customer",
-            "production-incident",
             "factory-workforce",
             "factory-permissions",
             "role",
-            "factory-order-analysis",
-            "production-stage-performance",
         ):
             self.assertIn(route, source)
         self.assertNotIn("frappe.user_roles", source)
@@ -58,14 +55,6 @@ class TestPermissionVisibilityAndArabicUX(unittest.TestCase):
             "إدارة مسارات الإنتاج": "factory_master_data",
             "طلبات قص الدرف": "orders",
             "مراحل الإنتاج": "production_stages",
-            "القطع التعويضية": "replacements",
-            "أخطاء الإنتاج": "production_incidents",
-            "ملخص عمليات المعمل": "report_factory_operations_summary",
-            "تحليل طلبات القص": "report_factory_order_analysis",
-            "تحليل استخدام الألواح": "report_board_usage_analysis",
-            "تحليل قياسات الدرف": "report_piece_size_usage_analysis",
-            "أداء مراحل الإنتاج": "report_production_stage_performance",
-            "أخطاء الإنتاج والقطع التعويضية": "report_production_incidents_and_replacements",
         }
         configured_labels = {row["label"] for row in workspace.get("shortcuts", [])}
         self.assertEqual(configured_labels, set(expected))
@@ -94,15 +83,14 @@ class TestPermissionVisibilityAndArabicUX(unittest.TestCase):
         for hidden_section in (
             "الإعدادات الأساسية",
             "إدارة النظام ومسارات العمل",
-            "التقارير التشغيلية والتكلفة",
         ):
             self.assertFalse(any(hidden_section in value for value in headers))
+        self.assertFalse(any("التقارير التشغيلية والتكلفة" in value for value in headers))
 
     def test_v16_sidebar_links_are_authorized_by_business_surface(self) -> None:
         surfaces = {
             Surface.ORDERS: True,
-            Surface.REPORT_PRODUCTION_STAGE_PERFORMANCE: False,
-            Surface.REPORT_PRODUCTION_INCIDENTS: False,
+            Surface.FACTORY_SETTINGS: False,
         }
         order_link = {
             "type": "Link",
@@ -110,21 +98,14 @@ class TestPermissionVisibilityAndArabicUX(unittest.TestCase):
             "link_to": "Door Cutting Order",
             "label": "طلبات قص الدرف",
         }
-        denied_performance = {
+        denied_settings = {
             "type": "Link",
             "parent_page": "Almdina ERP",
-            "link_to": "Production Stage Performance",
-            "label": "أداء مراحل الإنتاج",
-        }
-        denied_incidents = {
-            "type": "Link",
-            "parent_page": "Almdina ERP",
-            "link_to": "Production Incidents and Replacements",
-            "label": "أخطاء الإنتاج والقطع التعويضية",
+            "link_to": "factory-production-settings",
+            "label": "إعدادات المعمل",
         }
         self.assertIs(workspace_item_allowed(order_link, surfaces), True)
-        self.assertIs(workspace_item_allowed(denied_performance, surfaces), False)
-        self.assertIs(workspace_item_allowed(denied_incidents, surfaces), False)
+        self.assertIs(workspace_item_allowed(denied_settings, surfaces), False)
 
     def test_workspace_server_guards_cover_boot_and_desktop_endpoint(self) -> None:
         boot = (ROOT / "boot.py").read_text(encoding="utf-8")
@@ -164,7 +145,6 @@ class TestPermissionVisibilityAndArabicUX(unittest.TestCase):
             APP / "services" / "permission_management_service.py",
             APP / "services" / "workforce_service.py",
             APP / "services" / "master_data_service.py",
-            APP / "services" / "report_permission_service.py",
             APP / "domain" / "security" / "workforce.py",
         )
         forbidden = (
@@ -177,26 +157,6 @@ class TestPermissionVisibilityAndArabicUX(unittest.TestCase):
             for phrase in forbidden:
                 self.assertNotIn(phrase, source, f"{phrase!r} remains in {path}")
             self.assertTrue(any("\u0600" <= char <= "\u06ff" for char in source), path)
-
-    def test_production_incident_permission_is_explicit_and_hooked(self) -> None:
-        authorization = (APP / "domain" / "security" / "authorization.py").read_text(encoding="utf-8")
-        matrix = (APP / "application" / "security" / "permission_matrix.py").read_text(encoding="utf-8")
-        hooks = (ROOT / "hooks.py").read_text(encoding="utf-8")
-        permissions = (ROOT / "permissions.py").read_text(encoding="utf-8")
-        native = (
-            APP / "infrastructure" / "frappe" / "native_document_permissions.py"
-        ).read_text(encoding="utf-8")
-        self.assertIn('VIEW_PRODUCTION_INCIDENTS = "view_production_incidents"', authorization)
-        self.assertIn("عرض أخطاء الإنتاج", matrix)
-        self.assertIn('"Production Incident": "almdina_erp.permissions.production_incident_query"', hooks)
-        self.assertIn(
-            '"Production Incident": "almdina_erp.almdina_erp.infrastructure.frappe.native_document_permissions.production_incident_has_permission"',
-            hooks,
-        )
-        self.assertIn("Capability.VIEW_PRODUCTION_INCIDENTS", permissions)
-        self.assertIn("base_permissions.production_incident_has_permission", native)
-        self.assertIn("_NATIVE_MUTATING_PERMISSION_TYPES", native)
-
 
 if __name__ == "__main__":
     unittest.main()

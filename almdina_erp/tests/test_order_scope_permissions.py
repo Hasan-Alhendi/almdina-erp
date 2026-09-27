@@ -33,7 +33,6 @@ class TestOrderScopePermissions(unittest.TestCase):
             Capability.VIEW_COSTS,
             Capability.EDIT_COST_SETTINGS,
             Capability.REASSIGN_WORKER,
-            Capability.VIEW_OPERATIONAL_REPORTS,
         ):
             with self.subTest(capability=capability):
                 granted = {

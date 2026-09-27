@@ -6,9 +6,6 @@ from types import MappingProxyType
 from almdina_erp.almdina_erp.application.security.navigation_context import (
     build_navigation_context,
 )
-from almdina_erp.almdina_erp.application.security.report_access import (
-    build_report_access,
-)
 from almdina_erp.almdina_erp.domain.security.authorization import (
     MASTER_DATA_CAPABILITIES,
     Capability,
@@ -23,8 +20,6 @@ class Surface:
     CUSTOMER_ADMIN = "customer_admin"
     CUTTING_PLANS = "cutting_plans"
     PRODUCTION_STAGES = "production_stages"
-    PRODUCTION_INCIDENTS = "production_incidents"
-    REPLACEMENTS = "replacements"
     PLAN_ARCHIVE = "plan_archive"
     FACTORY_MASTER_DATA = "factory_master_data"
     PRODUCTION_ROUTINGS = "production_routings"
@@ -33,27 +28,7 @@ class Surface:
     WORKFORCE = "workforce"
     PERMISSIONS = "permissions"
     ROLE_ADMIN = "role_admin"
-    REPORTS_WORKSPACE = "reports_workspace"
-    REPORT_FACTORY_OPERATIONS_SUMMARY = "report_factory_operations_summary"
-    REPORT_FACTORY_ORDER_ANALYSIS = "report_factory_order_analysis"
-    REPORT_PRODUCTION_STAGE_PERFORMANCE = "report_production_stage_performance"
-    REPORT_PRODUCTION_INCIDENTS = "report_production_incidents_and_replacements"
-    REPORT_BOARD_USAGE = "report_board_usage_analysis"
-    REPORT_PIECE_SIZE_USAGE = "report_piece_size_usage_analysis"
 
-
-REPORT_SURFACES = frozenset(
-    {
-        Surface.REPORT_FACTORY_OPERATIONS_SUMMARY,
-        Surface.REPORT_FACTORY_ORDER_ANALYSIS,
-        Surface.REPORT_PRODUCTION_STAGE_PERFORMANCE,
-        Surface.REPORT_PRODUCTION_INCIDENTS,
-        Surface.REPORT_BOARD_USAGE,
-        Surface.REPORT_PIECE_SIZE_USAGE,
-    }
-)
-FINANCIAL_REPORT_SURFACES = frozenset({Surface.REPORT_FACTORY_ORDER_ANALYSIS})
-OPERATIONAL_REPORT_SURFACES = REPORT_SURFACES.difference(FINANCIAL_REPORT_SURFACES)
 
 ALL_SURFACES = frozenset(
     {
@@ -61,8 +36,6 @@ ALL_SURFACES = frozenset(
         Surface.CUSTOMER_ADMIN,
         Surface.CUTTING_PLANS,
         Surface.PRODUCTION_STAGES,
-        Surface.PRODUCTION_INCIDENTS,
-        Surface.REPLACEMENTS,
         Surface.PLAN_ARCHIVE,
         Surface.FACTORY_MASTER_DATA,
         Surface.PRODUCTION_ROUTINGS,
@@ -71,8 +44,6 @@ ALL_SURFACES = frozenset(
         Surface.WORKFORCE,
         Surface.PERMISSIONS,
         Surface.ROLE_ADMIN,
-        Surface.REPORTS_WORKSPACE,
-        *REPORT_SURFACES,
     }
 )
 
@@ -96,14 +67,6 @@ def build_surface_access(
     granted = normalize_capabilities(granted_capabilities)
     navigation = build_navigation_context(granted)
     sections = navigation["sections"]
-    report_access = build_report_access(granted)
-
-    can_open_operational_reports = (
-        report_access.operational and Capability.VIEW_ORDERS in granted
-    )
-    can_open_financial_reports = (
-        report_access.financial and Capability.VIEW_ORDERS in granted
-    )
     can_open_master_data = bool(granted.intersection(MASTER_DATA_CAPABILITIES))
 
     flags = {
@@ -113,8 +76,6 @@ def build_surface_access(
         ),
         Surface.CUTTING_PLANS: Capability.VIEW_CUTTING_PLAN in granted,
         Surface.PRODUCTION_STAGES: sections.get("production") is True,
-        Surface.PRODUCTION_INCIDENTS: Capability.VIEW_PRODUCTION_INCIDENTS in granted,
-        Surface.REPLACEMENTS: Capability.VIEW_REPLACEMENTS in granted,
         Surface.PLAN_ARCHIVE: Capability.ARCHIVE_APPROVED_PLAN in granted,
         # The factory-master-data Page is the Production Routing console. Edge
         # types and customers have their own DocType surfaces, so granting either
@@ -132,12 +93,7 @@ def build_surface_access(
         Surface.WORKFORCE: Capability.VIEW_USERS in granted,
         Surface.PERMISSIONS: Capability.MANAGE_PERMISSIONS in granted,
         Surface.ROLE_ADMIN: Capability.MANAGE_PERMISSIONS in granted,
-        Surface.REPORTS_WORKSPACE: can_open_operational_reports,
     }
-    for surface in OPERATIONAL_REPORT_SURFACES:
-        flags[surface] = can_open_operational_reports
-    for surface in FINANCIAL_REPORT_SURFACES:
-        flags[surface] = can_open_financial_reports
     return {surface: flags.get(surface, False) for surface in sorted(ALL_SURFACES)}
 
 
@@ -147,8 +103,6 @@ SURFACE_ROUTE_HINTS = MappingProxyType(
         Surface.CUSTOMER_ADMIN: ("customer",),
         Surface.CUTTING_PLANS: ("cutting-plan",),
         Surface.PRODUCTION_STAGES: ("production-stage",),
-        Surface.PRODUCTION_INCIDENTS: ("production-incident",),
-        Surface.REPLACEMENTS: ("replacement-piece",),
         Surface.PLAN_ARCHIVE: ("factory-plan-archive",),
         Surface.FACTORY_MASTER_DATA: ("factory-master-data",),
         Surface.PRODUCTION_ROUTINGS: ("production-routing",),
@@ -167,21 +121,12 @@ SURFACE_ROUTE_HINTS = MappingProxyType(
             "user-permission",
             "user",
         ),
-        Surface.REPORT_FACTORY_OPERATIONS_SUMMARY: ("factory-operations-summary",),
-        Surface.REPORT_FACTORY_ORDER_ANALYSIS: ("factory-order-analysis",),
-        Surface.REPORT_PRODUCTION_STAGE_PERFORMANCE: ("production-stage-performance",),
-        Surface.REPORT_PRODUCTION_INCIDENTS: ("production-incidents-and-replacements",),
-        Surface.REPORT_BOARD_USAGE: ("board-usage-analysis",),
-        Surface.REPORT_PIECE_SIZE_USAGE: ("piece-size-usage-analysis",),
     }
 )
 
 
 __all__ = [
     "ALL_SURFACES",
-    "FINANCIAL_REPORT_SURFACES",
-    "OPERATIONAL_REPORT_SURFACES",
-    "REPORT_SURFACES",
     "SURFACE_ROUTE_HINTS",
     "Surface",
     "build_surface_access",

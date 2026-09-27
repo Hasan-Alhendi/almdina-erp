@@ -237,7 +237,7 @@ class TestReadOnlyBootAuthorization(unittest.TestCase):
         self.assertTrue(context["navigation"]["sections"]["costing"])
         self.assertTrue(context["navigation"]["sections"]["factory_settings"])
         self.assertTrue(context["navigation"]["app_only"])
-        self.assertFalse(context["navigation"]["sections"]["reports"])
+        self.assertNotIn("reports", context["navigation"]["sections"])
 
     def test_builtin_administrator_keeps_complete_frappe_desktop(self) -> None:
         boot = BootHarness(

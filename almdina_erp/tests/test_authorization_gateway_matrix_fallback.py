@@ -148,7 +148,7 @@ class TestAuthorizationGatewayMatrixFallback(unittest.TestCase):
         )
         self.assertFalse(
             gateway.document_has_capability(
-                types.SimpleNamespace(doctype="Replacement Piece"),
+                types.SimpleNamespace(doctype="Production Stage"),
                 Capability.VIEW_COSTS,
                 user="role.user@example.com",
             )

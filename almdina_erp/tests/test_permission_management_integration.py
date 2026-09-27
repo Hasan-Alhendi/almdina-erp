@@ -123,7 +123,6 @@ class TestPermissionManagementIntegration(FrappeTestCase):
         for doctype in (
             "Door Cutting Order",
             "Cutting Plan",
-            "Replacement Piece",
             "Almdina ERP Settings",
             "Production Routing",
             "Customer",
@@ -440,75 +439,23 @@ class TestPermissionManagementIntegration(FrappeTestCase):
             )
         )
 
-    def test_control_center_and_report_grants_are_persisted_per_doctype(self) -> None:
+    def test_cost_grants_persist_without_retired_report_capabilities(self) -> None:
         from almdina_erp.almdina_erp.services.permission_management_service import (
             update_role_permissions,
-        )
-        from almdina_erp.almdina_erp.services.report_permission_service import (
-            current_report_access,
         )
 
         frappe.set_user(ADMIN_USER)
         result = update_role_permissions(
             TARGET_ROLE,
             {
-                Capability.APPROVE_REPLACEMENT: True,
-                Capability.EDIT_REPLACEMENT_COST: True,
-                Capability.VIEW_FINANCIAL_REPORTS: True,
+                Capability.VIEW_COSTS: True,
             },
         )
         capabilities = result["capabilities"]
-        for capability in (
-            Capability.VIEW_REPLACEMENTS,
-            Capability.APPROVE_REPLACEMENT,
-            Capability.EDIT_REPLACEMENT_COST,
-            Capability.VIEW_FINANCIAL_REPORTS,
-            Capability.VIEW_OPERATIONAL_REPORTS,
-            Capability.VIEW_COSTS,
-            Capability.VIEW_ORDERS,
-        ):
-            self.assertTrue(capabilities[capability], capability)
-
-        replacement_permission = frappe.db.get_value(
-            "Custom DocPerm",
-            {"parent": "Replacement Piece", "role": TARGET_ROLE, "permlevel": 0},
-            [
-                "read",
-                "write",
-                Capability.VIEW_REPLACEMENTS,
-                Capability.APPROVE_REPLACEMENT,
-                Capability.EDIT_REPLACEMENT_COST,
-            ],
-            as_dict=True,
-        )
-        self.assertEqual(int(replacement_permission.read), 1)
-        self.assertEqual(int(replacement_permission.write), 0)
-        self.assertEqual(int(replacement_permission.get(Capability.VIEW_REPLACEMENTS)), 1)
-        self.assertEqual(int(replacement_permission.get(Capability.APPROVE_REPLACEMENT)), 1)
-        self.assertEqual(int(replacement_permission.get(Capability.EDIT_REPLACEMENT_COST)), 1)
-
-        frappe.clear_cache(user=TARGET_USER)
-        frappe.clear_cache(doctype="Replacement Piece")
-        frappe.clear_cache(doctype="Door Cutting Order")
-        self.assertTrue(
-            frappe.has_permission(
-                "Replacement Piece",
-                ptype=Capability.APPROVE_REPLACEMENT,
-                user=TARGET_USER,
-            )
-        )
-        self.assertTrue(
-            frappe.has_permission(
-                "Door Cutting Order",
-                ptype=Capability.VIEW_FINANCIAL_REPORTS,
-                user=TARGET_USER,
-            )
-        )
-
-        frappe.set_user(TARGET_USER)
-        access = current_report_access()
-        self.assertTrue(access.operational)
-        self.assertTrue(access.financial)
+        self.assertTrue(capabilities[Capability.VIEW_COSTS])
+        self.assertTrue(capabilities[Capability.VIEW_ORDERS])
+        self.assertNotIn("view_operational_reports", capabilities)
+        self.assertNotIn("view_financial_reports", capabilities)
 
     def test_self_lockout_requires_explicit_confirmation(self) -> None:
         from almdina_erp.almdina_erp.services.permission_management_service import (
