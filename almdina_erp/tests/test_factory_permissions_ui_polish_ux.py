@@ -14,7 +14,7 @@ def test_permissions_polish_keeps_ui_semantics_accessible() -> None:
     for marker in (
         "apc-eyebrow",
         "apc-panel-kicker",
-        "apc-actor-icon",
+        "apc-actor-status",
         "apc-capability-copy",
         "apc-impact-section",
         'role="status"',
@@ -27,7 +27,7 @@ def test_permissions_polish_keeps_ui_semantics_accessible() -> None:
 
     assert 'aria-label="${esc(capability.label)}"' in renderer
     assert "إدارة الصلاحيات" in renderer
-    assert "المستخدم الحالي" in renderer
+    assert "الجلسة الإدارية النشطة" in renderer
 
 
 def test_permissions_polish_has_clear_enabled_dirty_and_focus_states() -> None:
@@ -52,7 +52,7 @@ def test_permissions_polish_remains_responsive_and_dense() -> None:
         assert breakpoint in css
 
     assert "grid-template-columns: repeat(4, minmax(0, 1fr))" in css
-    assert "grid-template-columns: 42px minmax(0, 1fr)" in css
+    assert "grid-template-columns: auto minmax(0, 1fr)" in css
 
 
 def test_permissions_polish_is_presentation_only() -> None:

@@ -11,6 +11,7 @@ app_include_css = [
     "/assets/almdina_erp/css/almdina_desk_theme.css",
     "/assets/almdina_erp/css/almdina_workspace_home.css?v=8",
     "/assets/almdina_erp/css/almdina_list_table.css",
+    "/assets/almdina_erp/css/edge_banding_type_form.css?v=4",
     "/assets/almdina_erp/css/door_cutting_order_measurement_structure.css",
     "/assets/almdina_erp/css/door_cutting_order_responsive.css",
     "/assets/almdina_erp/css/door_cutting_order_form_tab_layout.css",

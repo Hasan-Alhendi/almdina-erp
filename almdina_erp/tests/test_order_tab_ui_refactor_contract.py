@@ -102,6 +102,8 @@ def test_order_layout_presenter_is_presentation_only_and_loaded_after_operator_o
     assert "AlmdinaOrderCuttingMachineUX" in layout
     assert "dco-order-intake-card" in layout
     assert "dco-material-edge-card" in layout
+    assert "tab-pane.show.active:has(.dco-order-intake-card)" in layout
+    assert "function removeTopRowWrapper" in layout
     assert "dco-measurements-card" in layout
     assert "autoGrowNotes" in layout
 
@@ -118,15 +120,17 @@ def test_order_and_material_controls_follow_exact_requested_rows() -> None:
     assert "padding-inline: 44px !important" in layout
     assert "dco-measurements-mobile-scroll" in layout
     assert "padding-inline: 20px !important" in layout
-    assert "grid-template-columns: repeat(3, minmax(0, 1fr))" in layout
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in layout
     assert "dco-order-intake-card > .section-body" in layout
+    assert "const INTAKE_ROWS = Object.freeze" in layout
+    assert "function ensureIntakeRows" in layout
+    assert "dco-intake-row--pair" in layout
+    assert "dco-intake-row--notes" in layout
+    assert "dco-intake-row--machine" in layout
     assert 'dco-order-intake-card [data-fieldname="customer"]' in layout
     assert 'dco-order-intake-card [data-fieldname="order_date"]' in layout
     assert 'dco-order-intake-card [data-fieldname="order_notes"]' in layout
     assert 'dco-order-intake-card [data-fieldname="order_cutting_machine"]' in layout
-    assert "grid-column: 1 / -1" in layout
-    assert "grid-column: 3" in layout
-    assert "grid-row: 2" in layout
     assert "section-body > .dco-order-section-heading" in layout
     assert "max-width: none !important" in layout
     assert "height: 38px !important" in layout
@@ -134,6 +138,7 @@ def test_order_and_material_controls_follow_exact_requested_rows() -> None:
 
     # Material controls must be placed into two explicit visual rows using the
     # original Frappe wrappers, not left to Column Break nesting.
+    assert "pair.appendChild(node)" in layout
     assert "const MATERIAL_ROWS = Object.freeze" in layout
     assert '"board_description"' in layout
     assert '"board_length_cm"' in layout

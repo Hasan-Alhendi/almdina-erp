@@ -30,6 +30,12 @@
         edge_color: "أدخل لون القشاط",
     });
 
+    const INTAKE_ROWS = Object.freeze({
+        pair: Object.freeze(["customer", "order_date"]),
+        notes: Object.freeze(["order_notes"]),
+        machine: Object.freeze(["order_cutting_machine"]),
+    });
+
     const MATERIAL_ROWS = Object.freeze({
         primary: Object.freeze([
             "board_description",
@@ -112,6 +118,30 @@
                     width: 100% !important;
                     box-sizing: border-box !important;
                 }
+                .${ROOT_CLASS} .tab-pane.show.active:has(.dco-order-intake-card) {
+                    display: grid !important;
+                    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+                    column-gap: 14px;
+                    row-gap: 10px;
+                    width: 100% !important;
+                    max-width: 100% !important;
+                    align-items: start;
+                    box-sizing: border-box;
+                }
+                .${ROOT_CLASS} .tab-pane.show.active:has(.dco-order-intake-card) > .form-section:not(.dco-order-intake-card):not(.dco-material-edge-card) {
+                    grid-column: 1 / -1;
+                    width: 100% !important;
+                    max-width: 100% !important;
+                    min-width: 0;
+                }
+                .${ROOT_CLASS} .tab-pane.show.active:has(.dco-order-intake-card) > .dco-order-intake-card {
+                    grid-column: 1;
+                    min-width: 0;
+                }
+                .${ROOT_CLASS} .tab-pane.show.active:has(.dco-order-intake-card) > .dco-material-edge-card {
+                    grid-column: 2;
+                    min-width: 0;
+                }
                 .${ROOT_CLASS} [data-fieldname="order_details_section"],
                 .${ROOT_CLASS} [data-fieldname="board_section"],
                 .${ROOT_CLASS} [data-fieldname="pieces_section"] {
@@ -139,19 +169,15 @@
                     display: block !important;
                 }
                 .${ROOT_CLASS} .dco-order-intake-card > .section-body {
-                    display: grid !important;
-                    grid-template-columns: repeat(3, minmax(0, 1fr));
-                    gap: 12px 16px;
+                    display: block !important;
                     direction: rtl;
-                    align-items: start;
                     width: 100% !important;
                     max-width: none !important;
                     margin: 0 !important;
                     box-sizing: border-box;
                 }
                 .${ROOT_CLASS} .dco-order-intake-card > .section-body > .dco-order-section-heading {
-                    grid-column: 1 / -1;
-                    grid-row: 1;
+                    margin-bottom: 10px;
                 }
                 .${ROOT_CLASS} .dco-measurements-card {
                     margin-block: 10px 0 !important;
@@ -241,30 +267,55 @@
                     width: 100% !important;
                 }
 
-                /* Order intake: customer/date, notes, then cutting machine on one row. */
+                /* Order intake rows — explicit DOM rows (see ensureIntakeRows). */
                 .${ROOT_CLASS} .dco-order-intake-card > .section-body > .form-column {
-                    display: contents !important;
-                    padding: 0 !important;
-                    margin: 0 !important;
+                    display: none !important;
+                }
+                .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="important_note_preview"],
+                .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="important_note_comment"] {
+                    display: none !important;
+                }
+                .${ROOT_CLASS} .dco-intake-row {
+                    display: grid;
+                    direction: rtl;
+                    gap: 12px 16px;
+                    align-items: start;
+                    width: 100%;
+                }
+                .${ROOT_CLASS} .dco-intake-row + .dco-intake-row {
+                    margin-top: 12px;
+                }
+                .${ROOT_CLASS} .dco-intake-row--pair {
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                }
+                .${ROOT_CLASS} .dco-intake-row--notes,
+                .${ROOT_CLASS} .dco-intake-row--machine {
+                    grid-template-columns: minmax(0, 1fr);
+                }
+                .${ROOT_CLASS} .dco-intake-row > .frappe-control,
+                .${ROOT_CLASS} .dco-intake-row > .form-group {
+                    min-width: 0;
+                    width: 100% !important;
+                    max-width: none !important;
+                    margin-bottom: 0 !important;
+                }
+                .${ROOT_CLASS} .dco-intake-row--notes [data-fieldname="order_notes"] .form-group,
+                .${ROOT_CLASS} .dco-intake-row--notes [data-fieldname="order_notes"] .frappe-control,
+                .${ROOT_CLASS} .dco-intake-row--notes [data-fieldname="order_notes"] .control-input-wrapper,
+                .${ROOT_CLASS} .dco-intake-row--notes [data-fieldname="order_notes"] textarea {
+                    width: 100% !important;
                     max-width: none !important;
                 }
-                .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="customer"] {
-                    grid-column: 1;
-                    grid-row: 2;
-                }
-                .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="order_date"] {
-                    grid-column: 2;
-                    grid-row: 2;
-                }
-                .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="order_notes"] {
-                    grid-column: 1 / -1;
-                    grid-row: 3;
-                }
-                .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="order_cutting_machine"] {
-                    grid-column: 3;
-                    grid-row: 2;
+                .${ROOT_CLASS} .dco-intake-row--machine [data-fieldname="order_cutting_machine"] .form-group,
+                .${ROOT_CLASS} .dco-intake-row--machine [data-fieldname="order_cutting_machine"] .frappe-control,
+                .${ROOT_CLASS} .dco-intake-row--machine [data-fieldname="order_cutting_machine"] .dco-cutting-machine-host {
+                    width: 100% !important;
                     max-width: none !important;
+                }
+                .${ROOT_CLASS} .dco-intake-row--machine [data-fieldname="order_cutting_machine"] .dco-cutting-machine-row {
                     width: auto;
+                    max-width: 100%;
+                    flex-wrap: wrap;
                 }
 
                 /*
@@ -314,13 +365,13 @@
                 }
                 .${ROOT_CLASS} [data-fieldname="order_notes"] textarea {
                     min-height: 38px !important;
-                    max-height: 38px !important;
+                    max-height: 72px !important;
                     height: 38px !important;
                     resize: none !important;
-                    overflow-x: auto !important;
-                    overflow-y: hidden !important;
-                    line-height: 1.35 !important;
-                    white-space: nowrap !important;
+                    overflow-x: hidden !important;
+                    overflow-y: auto !important;
+                    line-height: 1.45 !important;
+                    white-space: normal !important;
                 }
                 .${ROOT_CLASS} .dco-order-notes-locked textarea:disabled,
                 .${ROOT_CLASS} .dco-order-notes-locked textarea[readonly],
@@ -356,8 +407,15 @@
                 }
 
                 @media (max-width: 980px) {
-                    .${ROOT_CLASS} .dco-order-intake-card > .section-body {
-                        grid-template-columns: repeat(3, minmax(0, 1fr));
+                    .${ROOT_CLASS} .tab-pane.show.active:has(.dco-order-intake-card) {
+                        grid-template-columns: 1fr;
+                    }
+                    .${ROOT_CLASS} .tab-pane.show.active:has(.dco-order-intake-card) > .dco-order-intake-card,
+                    .${ROOT_CLASS} .tab-pane.show.active:has(.dco-order-intake-card) > .dco-material-edge-card {
+                        grid-column: 1 / -1;
+                    }
+                    .${ROOT_CLASS} .dco-intake-row--pair {
+                        grid-template-columns: 1fr;
                     }
                     .${ROOT_CLASS} .dco-material-row--primary {
                         grid-template-columns: minmax(0,1.5fr) minmax(120px,1fr) minmax(120px,1fr);
@@ -381,15 +439,15 @@
                         border-radius: 12px !important;
                     }
                     .${ROOT_CLASS} .dco-order-intake-card > .section-body {
-                        grid-template-columns: 1fr;
                         gap: 9px;
+                    }
+                    .${ROOT_CLASS} .dco-intake-row--pair {
+                        grid-template-columns: 1fr;
                     }
                     .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="customer"],
                     .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="order_date"],
                     .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="order_notes"],
                     .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="order_cutting_machine"] {
-                        grid-column: 1;
-                        grid-row: auto;
                         max-width: none;
                     }
                     .${ROOT_CLASS} .dco-material-row--primary {
@@ -484,6 +542,65 @@
             ${meta}
         `;
         return section;
+    }
+
+    function removeTopRowWrapper(frm) {
+        const root = formRoot(frm);
+        if (!root) return;
+        root.querySelectorAll(".dco-order-top-row").forEach((row) => {
+            const parent = row.parentElement;
+            if (!parent) return;
+            while (row.firstElementChild) {
+                parent.insertBefore(row.firstElementChild, row);
+            }
+            row.remove();
+        });
+    }
+
+    function ensureIntakeRow(body, name) {
+        let row = body.querySelector(`:scope > .dco-intake-row--${name}`);
+        if (!row) {
+            row = document.createElement("div");
+            row.className = `dco-intake-row dco-intake-row--${name}`;
+            body.appendChild(row);
+        }
+        return row;
+    }
+
+    function ensureIntakeRows(frm) {
+        const section = sectionNode(frm, "order_details_section");
+        const body = section && section.querySelector(":scope > .section-body");
+        if (!body) return;
+
+        const heading = body.querySelector(":scope > .dco-order-section-heading");
+        const pair = ensureIntakeRow(body, "pair");
+        const notes = ensureIntakeRow(body, "notes");
+        const machine = ensureIntakeRow(body, "machine");
+
+        let anchor = heading || null;
+        [pair, notes, machine].forEach((row) => {
+            if (anchor) {
+                if (row.previousElementSibling !== anchor) {
+                    anchor.insertAdjacentElement("afterend", row);
+                }
+                anchor = row;
+            } else if (row.parentElement !== body) {
+                body.appendChild(row);
+            }
+        });
+
+        INTAKE_ROWS.pair.forEach((fieldname) => {
+            const node = fieldNode(frm, fieldname);
+            if (node && node.parentElement !== pair) pair.appendChild(node);
+        });
+        INTAKE_ROWS.notes.forEach((fieldname) => {
+            const node = fieldNode(frm, fieldname);
+            if (node && node.parentElement !== notes) notes.appendChild(node);
+        });
+        INTAKE_ROWS.machine.forEach((fieldname) => {
+            const node = fieldNode(frm, fieldname);
+            if (node && node.parentElement !== machine) machine.appendChild(node);
+        });
     }
 
     function ensureMaterialRow(body, name) {
@@ -644,6 +761,8 @@
         root.classList.add(ROOT_CLASS);
         ensureStatusShell(frm);
         Object.entries(SECTION_COPY).forEach(([fieldname, config]) => ensureHeading(frm, fieldname, config));
+        removeTopRowWrapper(frm);
+        ensureIntakeRows(frm);
         ensureMaterialRows(frm);
         keepEmptyFieldsVisible(frm);
         autoGrowNotes(frm);
