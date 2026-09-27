@@ -25,3 +25,118 @@
         --dco-tab-card-inset-block: 12px 14px;
     }
 }
+
+/* Shared Door Cutting Order canvas. Feature CSS reads these tokens. */
+body:has(.dco-operator-form),
+body:has(.dco-operator-form) .page-container,
+body:has(.dco-operator-form) .page-body,
+body:has(.dco-operator-form) .page-content,
+body:has(.dco-operator-form) .layout-main,
+body:has(.dco-operator-form) .layout-main-section-wrapper,
+body:has(.dco-operator-form) .layout-main-section,
+.dco-operator-form,
+.dco-operator-form .form-layout,
+.dco-operator-form .form-page {
+    background: var(--alm-canvas, #eef1f6) !important;
+}
+
+.dco-operator-form .form-section {
+    background: transparent;
+}
+
+body:has(.dco-operator-form) .page-head {
+    background: var(--alm-card, #fff);
+    border-bottom: 1px solid var(--alm-card-border, #e4e8ee);
+}
+
+body:has(.dco-operator-form) .page-head .page-actions .btn {
+    min-height: 34px;
+    padding: 0 14px;
+    border-radius: 999px;
+    border: 1px solid var(--alm-card-border, #e4e8ee);
+    background: var(--alm-card, #fff);
+    color: var(--text-color, #1f272e);
+    font-weight: 700;
+    box-shadow: none;
+}
+
+body:has(.dco-operator-form) .page-head .page-actions .btn.btn-danger {
+    color: #e11d48;
+    background: var(--alm-danger-soft, #fff1f2);
+    border-color: var(--alm-danger-soft-border, #fecdd3);
+}
+
+body:has(.dco-operator-form) .page-head .page-actions .dco-dispatch-toolbar-button {
+    color: var(--alm-accent, #2563eb);
+    background: var(--alm-accent-soft, #eff6ff);
+    border-color: color-mix(in srgb, var(--alm-accent, #2563eb) 35%, #fff);
+}
+
+.dco-operator-form .layout-side-section {
+    background: var(--alm-card, #fff) !important;
+}
+
+.dco-operator-form .dco-order-tracking-strip__row {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px 18px;
+    width: 100%;
+}
+
+.dco-operator-form .dco-order-tracking-strip__label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-muted, #6b7280);
+}
+
+.dco-operator-form .dco-order-tracking-strip__value {
+    margin-top: 4px;
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--text-color, #1f272e);
+}
+
+.dco-operator-form .dco-order-tracking-strip__status {
+    display: inline-flex;
+    margin-top: 4px;
+    color: var(--dco-status-color, var(--alm-warning, #b45309));
+    font-size: 14px;
+    font-weight: 800;
+}
+
+.dco-operator-form .form-section:has([data-fieldname="board_rate_usd"]) {
+    margin: 8px 0;
+    padding: 4px 18px 14px;
+    border: 1px solid var(--alm-card-border, #e4e8ee);
+    border-radius: var(--alm-radius-card, 16px);
+    background: var(--alm-card, #fff);
+    box-shadow: var(--alm-shadow-card);
+}
+
+.dco-operator-form .form-footer .after-save {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.dco-operator-form:has(a.nav-link.active[data-fieldname="cost_tab"]) .form-footer .after-save {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.dco-operator-form .comment-box,
+.dco-operator-form .new-timeline {
+    min-width: 0;
+    padding: 14px 16px;
+    border: 1px solid var(--alm-card-border, #e4e8ee);
+    border-radius: var(--alm-radius-card, 16px);
+    background: var(--alm-card, #fff);
+    box-shadow: var(--alm-shadow-card);
+}
+
+@media (max-width: 900px) {
+    .dco-operator-form .dco-order-tracking-strip__row,
+    .dco-operator-form:has(a.nav-link.active[data-fieldname="cost_tab"]) .form-footer .after-save {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
