@@ -15,6 +15,7 @@ class TestAlmdinaWorkspaceHomeUX(unittest.TestCase):
         manifest = MANIFEST.read_text(encoding="utf-8")
         self.assertIn("almdina_workspace_home.css", manifest)
         self.assertIn("almdina_workspace_home_ux.js", manifest)
+        self.assertIn("almdina_shortcut_presentation.js", manifest)
         self.assertLess(manifest.index("almdina_desk_theme.css"), manifest.index("almdina_workspace_home.css"))
         self.assertLess(manifest.index("shared_shell.js"), manifest.index("almdina_workspace_home_ux.js"))
 
@@ -34,8 +35,8 @@ class TestAlmdinaWorkspaceHomeUX(unittest.TestCase):
         self.assertIn("assignShortcutSections", source)
         self.assertIn("normalizeWorkspaceTrail", source)
         self.assertIn("shortcutMeta", source)
-        self.assertIn("es-line-chart", source)
-        self.assertIn('"close"', source)
+        self.assertIn("AlmdinaShortcutPresentation", source)
+        self.assertIn("es-line-reports", source)
 
     def test_workspace_home_css_is_scoped_to_main_workspace_route(self) -> None:
         css = CSS.read_text(encoding="utf-8")

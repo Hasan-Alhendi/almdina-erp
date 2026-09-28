@@ -317,30 +317,27 @@
         style.id = STYLE_ID;
         style.textContent = `
             .dco-plan-settings-editor {
-                margin: 0 0 14px;
-                padding: 14px;
+                margin: 0 0 8px;
+                padding: 10px 12px;
                 border: 1px solid var(--border-color, #d1d8dd);
-                border-radius: 12px;
+                border-radius: 10px;
                 background: var(--card-bg, #fff);
                 direction: rtl;
             }
             .dco-plan-settings-editor__header {
                 display: flex;
-                align-items: flex-start;
+                align-items: center;
                 justify-content: space-between;
-                gap: 12px;
-                margin-bottom: 12px;
+                gap: 8px;
+                margin-bottom: 8px;
             }
             .dco-plan-settings-editor__title {
                 margin: 0;
-                font-size: 14px;
+                font-size: 12px;
                 font-weight: 700;
             }
             .dco-plan-settings-editor__help {
-                margin: 4px 0 0;
-                color: var(--text-muted, #687481);
-                font-size: 12px;
-                line-height: 1.6;
+                display: none;
             }
             .dco-plan-settings-editor__badge {
                 flex: 0 0 auto;
@@ -358,16 +355,16 @@
             }
             .dco-plan-settings-editor__grid {
                 display: grid;
-                grid-template-columns: repeat(3, minmax(0, 1fr));
-                gap: 12px;
+                grid-template-columns: repeat(5, minmax(0, 1fr));
+                gap: 6px 8px;
             }
             .dco-plan-settings-editor__field {
                 min-width: 0;
             }
             .dco-plan-settings-editor__field label {
                 display: block;
-                margin-bottom: 6px;
-                font-size: 12px;
+                margin-bottom: 3px;
+                font-size: 10px;
                 font-weight: 600;
                 color: var(--text-color, #36414c);
             }
@@ -376,7 +373,14 @@
             }
             .dco-plan-settings-editor .form-control {
                 width: 100%;
-                min-height: 36px;
+                min-height: 30px;
+                height: 30px;
+                padding: 4px 8px;
+                font-size: 11px;
+                border: 1px solid var(--border-color, #cfd6de);
+                border-radius: 7px;
+                background: var(--card-bg, #fff);
+                box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.03);
                 text-align: start;
             }
             .dco-plan-settings-editor__input-wrap.has-suffix .form-control {
@@ -500,7 +504,6 @@
                 <div class="dco-plan-settings-editor__header">
                     <div>
                         <h4 class="dco-plan-settings-editor__title">${escapeHtml(translate("إعدادات خطة القص"))}</h4>
-                        <p class="dco-plan-settings-editor__help">${escapeHtml(translate("هذه التعديلات مستقلة عن معلومات الطلب والتكلفة، ولا تُحفظ إلا عند الضغط على حفظ خطة القص."))}</p>
                     </div>
                     <span class="dco-plan-settings-editor__badge">${escapeHtml(translate("تغييرات غير محفوظة"))}</span>
                 </div>

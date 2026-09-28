@@ -8,33 +8,14 @@
     const WORKSPACE_PAGE_TITLE = "إدارة المعمل";
     const ROOT_CLASS = "almdina-workspace-home";
     const POLISH_FLAG = "data-almdina-workspace-home-polish";
-    const REPORTS_SECTION_ICON = "es-line-reports";
+
+    const presentationApi = () => window.AlmdinaShortcutPresentation || null;
 
     const SECTION_PRESENTATION = Object.freeze({
         "الإعدادات الأساسية": { id: "master", meta: "3 وحدات رئيسية" },
         "إدارة النظام ومسارات العمل": { id: "system", meta: "4 وحدات" },
         "التشغيل اليومي": { id: "ops", meta: "سير عمل الصالة والمعمل" },
         "التقارير التشغيلية والتكلفة": { id: "reports", meta: "البيانات الإحصائية والتحليلية" },
-    });
-
-    const SHORTCUT_PRESENTATION = Object.freeze({
-        "الزبائن": { desc: "إدارة سجلات الزبائن وبيانات التواصل", icon: "users" },
-        "أنواع القشاط وأسعاره": { desc: "تعريف أنواع القشاط والأسعار والسماكات", icon: "tool" },
-        "إعدادات المعمل": { desc: "إعدادات الإنتاج والقص الافتراضية", icon: "setting" },
-        "إدارة الأدوار": { desc: "أدوار Frappe المستخدمة في المعمل", icon: "shield" },
-        "إدارة الصلاحيات": { desc: "مصفوفة صلاحيات Almdina حسب الدور", icon: "lock" },
-        "إدارة المستخدمين": { desc: "حسابات المعمل والأدوار وصفحات الدخول", icon: "hr" },
-        "إدارة مسارات الإنتاج": { desc: "مسارات الإنتاج والمراحل التشغيلية", icon: "branch" },
-        "طلبات قص الدرف": { desc: "إنشاء ومتابعة طلبات القص", icon: "clipboard" },
-        "مراحل الإنتاج": { desc: "لوحة التشغيل وصندوق الوارد", icon: "organization" },
-        "القطع التعويضية": { desc: "قطع بديلة مرتبطة بأخطاء الإنتاج", icon: "duplicate" },
-        "أخطاء الإنتاج": { desc: "تسجيل ومتابعة حوادث الإنتاج", icon: "close" },
-        "ملخص عمليات المعمل": { desc: "نظرة عامة على حركة المعمل", icon: "es-line-chart" },
-        "تحليل طلبات القص": { desc: "تحليل الطلبات والأداء", icon: "es-line-reports" },
-        "تحليل استخدام الألواح": { desc: "استهلاك الألواح والهدر", icon: "table" },
-        "تحليل قياسات الدرف": { desc: "أكثر المقاسات استخدامًا", icon: "small-file" },
-        "أداء مراحل الإنتاج": { desc: "زمن المراحل والإنتاجية", icon: "timer" },
-        "أخطاء الإنتاج والقطع التعويضية": { desc: "تقرير موحد للحوادث والتعويض", icon: "es-line-reports" },
     });
 
     let observer = null;
@@ -44,6 +25,8 @@
     let missingRootAttempts = 0;
 
     function normalizeText(value) {
+        const api = presentationApi();
+        if (api) return api.normalizeText(value);
         return String(value || "").replace(/\s+/g, " ").trim();
     }
 
@@ -92,6 +75,8 @@
     }
 
     function renderIcon(name) {
+        const api = presentationApi();
+        if (api) return api.renderIcon(name, "md");
         if (window.frappe && frappe.utils && typeof frappe.utils.icon === "function") {
             return frappe.utils.icon(name, "md");
         }
@@ -99,12 +84,8 @@
     }
 
     function shortcutMeta(label) {
-        const normalized = normalizeText(label);
-        if (SHORTCUT_PRESENTATION[normalized]) return SHORTCUT_PRESENTATION[normalized];
-        const key = Object.keys(SHORTCUT_PRESENTATION).find(
-            (candidate) => normalized.includes(candidate) || candidate.includes(normalized)
-        );
-        return key ? SHORTCUT_PRESENTATION[key] : null;
+        const api = presentationApi();
+        return api ? api.metaForLabel(label) : null;
     }
 
     function iconIsRendered(iconNode) {
@@ -115,7 +96,10 @@
     }
 
     function resolveShortcutIcon(section, meta) {
-        if (section === "reports") return meta.icon || REPORTS_SECTION_ICON;
+        const api = presentationApi();
+        if (section === "reports") {
+            return (api && api.REPORTS_SECTION_ICON) || meta.icon || "es-line-reports";
+        }
         return meta.icon;
     }
 

@@ -34,17 +34,20 @@
             <style id="dco-fast-save-css">
                 .dco-plan-stale-banner {
                     display:flex;
-                    align-items:flex-start;
-                    gap:10px;
-                    padding:11px 13px;
-                    margin:0 0 10px;
+                    align-items:center;
+                    gap:8px;
+                    padding:6px 10px;
+                    margin:0 0 6px;
                     border:1px solid #f0c36d;
-                    border-radius:11px;
+                    border-radius:8px;
                     background:#fff8e6;
                     color:#6f4b00;
-                    font-size:11px;
-                    line-height:1.65;
+                    font-size:10.5px;
+                    line-height:1.35;
                     font-weight:750;
+                    white-space:nowrap;
+                    overflow:hidden;
+                    text-overflow:ellipsis;
                 }
                 .dco-plan-stale-banner.is-calculating {
                     border-color:color-mix(in srgb, var(--alm-primary, #172033) 32%, transparent);
@@ -55,8 +58,17 @@
                     border-color:rgba(190,125,25,.4);
                     background:#fff3d8;
                 }
-                .dco-plan-stale-banner strong { display:block; font-size:12px; }
-                .dco-plan-stale-banner .icon { font-size:18px; line-height:1.2; }
+                .dco-plan-stale-banner .icon {
+                    flex:0 0 auto;
+                    font-size:14px;
+                    line-height:1;
+                }
+                .dco-plan-stale-banner .dco-plan-stale-copy {
+                    min-width:0;
+                    overflow:hidden;
+                    text-overflow:ellipsis;
+                    white-space:nowrap;
+                }
             </style>
         `);
     }
@@ -157,10 +169,7 @@
             planActions.$wrapper.prepend(`
                 <div class="dco-plan-stale-banner is-calculating${stalled ? " is-stalled" : ""}" role="status" aria-live="polite">
                     <span class="icon">⏳</span>
-                    <div>
-                        <strong>${frappe.utils.escape_html(title)}</strong>
-                        ${frappe.utils.escape_html(body)}
-                    </div>
+                    <span class="dco-plan-stale-copy">${frappe.utils.escape_html(stalled ? title : `${title} — ${body}`)}</span>
                 </div>`);
             return;
         }
@@ -168,13 +177,11 @@
         const stale = planIsStale(frm);
         if (!stale) return;
 
+        const staleLine = __("خطة القص تحتاج إعادة حساب — اضغط «إعادة الحساب بالإعدادات الحالية» بعد الانتهاء.");
         planActions.$wrapper.prepend(`
             <div class="dco-plan-stale-banner">
                 <span class="icon">⚡</span>
-                <div>
-                    <strong>خطة القص تحتاج إعادة حساب</strong>
-                    تم تغيير مدخل يؤثر على توزيع القطع. اضغط «إعادة الحساب بالإعدادات الحالية» بعد الانتهاء من التعديل.
-                </div>
+                <span class="dco-plan-stale-copy">${frappe.utils.escape_html(staleLine)}</span>
             </div>`);
         planActions.$wrapper.find(".dco-plan-dirty-note").addClass("is-visible");
     }

@@ -223,6 +223,7 @@ class TestDesignSystemContract(unittest.TestCase):
         tokens_asset = '"/assets/almdina_erp/css/almdina_design_tokens.css"'
         components_asset = '"/assets/almdina_erp/css/almdina_components.css"'
         desk_theme_asset = '"/assets/almdina_erp/css/almdina_desk_theme.css"'
+        desk_sidebar_asset = '"/assets/almdina_erp/css/almdina_desk_sidebar.css?v=2"'
         workspace_home_asset = '"/assets/almdina_erp/css/almdina_workspace_home.css?v=8"'
         ui_asset = '"/assets/almdina_erp/js/almdina_ui.js"'
         foundation_asset = '"/assets/almdina_erp/js/frontend_foundation.js"'
@@ -230,7 +231,8 @@ class TestDesignSystemContract(unittest.TestCase):
 
         self.assertLess(self.assets.index(tokens_asset), self.assets.index(components_asset))
         self.assertLess(self.assets.index(components_asset), self.assets.index(desk_theme_asset))
-        self.assertLess(self.assets.index(desk_theme_asset), self.assets.index(workspace_home_asset))
+        self.assertLess(self.assets.index(desk_theme_asset), self.assets.index(desk_sidebar_asset))
+        self.assertLess(self.assets.index(desk_sidebar_asset), self.assets.index(workspace_home_asset))
         self.assertLess(self.assets.index(workspace_home_asset), self.assets.index(notes_asset))
         self.assertLess(self.assets.index(foundation_asset), self.assets.index(ui_asset))
 

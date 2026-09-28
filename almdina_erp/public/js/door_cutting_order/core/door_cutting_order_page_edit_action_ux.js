@@ -98,7 +98,10 @@
                 .dco-plan-settings-readonly__grid {
                     display:none;
                 }
-                .dco-a53-workspace-polish [data-fieldname="plan_control_actions"][data-almdina-workspace-editing="1"]::before,
+                .dco-a53-workspace-polish [data-fieldname="plan_control_actions"][data-almdina-workspace-editing="1"]::before {
+                    content:none !important;
+                    display:none !important;
+                }
                 .dco-a53-workspace-polish [data-fieldname="order_cost_invoice_html"][data-almdina-workspace-editing="1"]::before {
                     content:"وضع التعديل مفعّل — غيّر القيم المطلوبة ثم استخدم «حفظ» أو «إلغاء» داخل هذا القسم." !important;
                 }

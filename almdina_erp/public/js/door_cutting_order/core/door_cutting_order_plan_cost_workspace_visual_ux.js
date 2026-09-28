@@ -200,15 +200,47 @@
                 font-size: 10.5px !important;
             }
             .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-editor {
-                padding-block: var(--dco-plan-card-inset-block-start) var(--dco-plan-card-inset-block-end) !important;
-                padding-inline: var(--dco-plan-card-inset-inline) !important;
+                padding-block: 8px 8px !important;
+                padding-inline: 14px !important;
             }
             .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__grid {
-                gap: 8px !important;
+                gap: 6px 8px !important;
+                grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+            }
+            .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-editor .form-control,
+            .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-editor select.form-control {
+                min-height: 30px !important;
+                height: 30px !important;
+                padding: 4px 8px !important;
+                font-size: 11px !important;
+                border: 1px solid var(--border-color, #cfd6de) !important;
+                border-radius: 7px !important;
+                background: var(--card-bg, #fff) !important;
+                box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.03) !important;
+            }
+            .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__field label {
+                margin-bottom: 3px !important;
+                font-size: 10px !important;
+            }
+            .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__help {
+                display: none !important;
+            }
+            .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__header {
+                margin-bottom: 6px !important;
+            }
+            .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__title {
+                font-size: 12px !important;
+            }
+            .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-stale-banner {
+                margin: 0 0 6px !important;
+                padding: 6px 10px !important;
+                font-size: 10.5px !important;
+                line-height: 1.45 !important;
+                align-items: center !important;
             }
             .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-actions-shell {
-                padding-block: var(--dco-plan-card-inset-block-start) var(--dco-plan-card-inset-block-end) !important;
-                padding-inline: var(--dco-plan-card-inset-inline) !important;
+                padding-block: 8px 10px !important;
+                padding-inline: 14px !important;
             }
             .${ROOT_CLASS} .dco-plan-actions-section > .section-body,
             .${ROOT_CLASS} .dco-plan-section-card.dco-layout-card > .section-body,
@@ -321,19 +353,28 @@
             }
             @keyframes dco-a53-workspace-shimmer{to{transform:translateX(110%)}}
 
-            .${ROOT_CLASS} [data-fieldname="plan_control_actions"][data-almdina-workspace-editing="1"]::before,
+            .${ROOT_CLASS} [data-fieldname="plan_controls_intro"][data-almdina-workspace-editing="1"]{
+                display:none !important;
+            }
+            .${ROOT_CLASS} [data-fieldname="plan_control_actions"][data-almdina-workspace-editing="1"]::before{
+                content:none !important;
+                display:none !important;
+            }
             .${ROOT_CLASS} [data-fieldname="order_cost_invoice_html"][data-almdina-workspace-editing="1"]::before{
                 content:"وضع التعديل مفعّل — غيّر القيم المطلوبة ثم اضغط «حفظ» من أعلى الصفحة.";
                 display:flex;align-items:center;min-height:38px;margin:0 0 10px;padding:8px 12px;
                 border:1px solid color-mix(in srgb, var(--alm-primary, #172033) 28%, transparent);border-radius:var(--dco-workspace-radius-sm);
                 background:color-mix(in srgb, var(--alm-primary, #172033) 8%, transparent);color:var(--text-color,#26313b);font-size:11px;font-weight:800;line-height:1.55;
             }
+            .${ROOT_CLASS} [data-fieldname="plan_control_actions"][data-almdina-workspace-editing="1"] .dco-plan-stale-banner{
+                margin:0 0 6px !important;
+            }
             .${ROOT_CLASS} [data-almdina-workspace-editing="1"] .almdina-workspace-field-editor{
                 padding:4px;border-radius:12px;background:color-mix(in srgb, var(--alm-primary, #172033) 6%, transparent);
             }
             .${ROOT_CLASS} [data-almdina-workspace-editing="1"] .almdina-workspace-field-editor .form-control{
-                min-height:40px;border-radius:10px;border-color:color-mix(in srgb, var(--alm-primary, #172033) 34%, transparent);background:var(--card-bg,#fff);
-                font-weight:750;box-shadow:0 1px 2px rgba(15,23,42,.035);
+                min-height:32px;border-radius:8px;border:1px solid var(--border-color,#cfd6de) !important;border-color:color-mix(in srgb, var(--alm-primary, #172033) 34%, transparent);background:var(--card-bg,#fff);
+                font-weight:750;box-shadow:inset 0 1px 2px rgba(15,23,42,.03);
             }
             .${ROOT_CLASS} [data-almdina-workspace-editing="1"] .almdina-workspace-field-editor .form-control:focus-visible,
             .${ROOT_CLASS} [data-fieldname="cutting_plan_html"] .dco-plan-tabs .btn:focus-visible,
@@ -438,7 +479,6 @@
                 .${ROOT_CLASS} .dco-cost-table th,.${ROOT_CLASS} .dco-cost-table td{padding:8px 9px}
                 .${ROOT_CLASS} .dco-invoice-total-card{padding:16px !important}
                 .${ROOT_CLASS} .dco-invoice-total-card b{font-size:25px !important}
-                .${ROOT_CLASS} [data-fieldname="plan_control_actions"][data-almdina-workspace-editing="1"]::before,
                 .${ROOT_CLASS} [data-fieldname="order_cost_invoice_html"][data-almdina-workspace-editing="1"]::before{align-items:flex-start;font-size:10.5px;}
             }
             @media (prefers-reduced-motion:reduce){
