@@ -463,15 +463,45 @@
         `;
     }
 
+    function explicitTrim(source, key) {
+        if (!source || !Object.prototype.hasOwnProperty.call(source, key)) return null;
+        return Math.max(0, num(source[key]));
+    }
+
+    function sheetBoardFrame(plan, sheet) {
+        const fullW = num(sheet && sheet.full_width_cm) || num(plan.full_board_width_cm);
+        const fullH = num(sheet && sheet.full_length_cm) || num(plan.full_board_length_cm);
+        const usableW = num(sheet && sheet.usable_width_cm) || num(sheet && sheet.w) || num(plan.usable_board_width_cm) || fullW;
+        const usableH = num(sheet && sheet.usable_length_cm) || num(sheet && sheet.h) || num(plan.usable_board_length_cm) || fullH;
+        const drawW = fullW > 0 ? fullW : usableW;
+        const drawH = fullH > 0 ? fullH : usableH;
+        const trimW = explicitTrim(sheet, "applied_trim_width_cm");
+        const trimH = explicitTrim(sheet, "applied_trim_length_cm");
+        const planTrimW = trimW === null ? explicitTrim(plan, "applied_trim_width_cm") : trimW;
+        const planTrimH = trimH === null ? explicitTrim(plan, "applied_trim_length_cm") : trimH;
+        let insetX = planTrimW === null ? (drawW > usableW && usableW > 0 ? (drawW - usableW) / 2 : 0) : planTrimW;
+        let insetY = planTrimH === null ? (drawH > usableH && usableH > 0 ? (drawH - usableH) / 2 : 0) : planTrimH;
+        insetX = Math.max(0, Math.min(insetX, drawW / 2));
+        insetY = Math.max(0, Math.min(insetY, drawH / 2));
+        const innerW = usableW > 0 ? Math.min(usableW, Math.max(0, drawW - (insetX * 2))) : Math.max(0, drawW - (insetX * 2));
+        const innerH = usableH > 0 ? Math.min(usableH, Math.max(0, drawH - (insetY * 2))) : Math.max(0, drawH - (insetY * 2));
+        return {
+            drawW,
+            drawH,
+            usableW: innerW > 0 ? innerW : usableW,
+            usableH: innerH > 0 ? innerH : usableH,
+            insetX,
+            insetY,
+            innerW: innerW > 0 ? innerW : usableW,
+            innerH: innerH > 0 ? innerH : usableH,
+        };
+    }
+
     function build_cutting_plan_html(frm, plan) {
         if (!plan || !plan.sheets || !plan.sheets.length) return "";
 
         const board_w_cm = num(plan.usable_board_width_cm);
         const board_h_cm = num(plan.usable_board_length_cm);
-        const full_board_w_cm = num(plan.full_board_width_cm);
-        const full_board_h_cm = num(plan.full_board_length_cm);
-        const kerf_cm = num(plan.kerf_cm);
-        const trim_cm = num(plan.trim_cm);
         const board_area_m2 = (board_w_cm * board_h_cm) / 10000;
         const fullBoardSheets = (plan.sheets || []).filter(
             sheet => String(sheet.resource_kind || "FULL_BOARD").toUpperCase() === "FULL_BOARD"
@@ -482,7 +512,6 @@
         const waste_percent = total_board_area_m2 ? round((waste_area_m2 / total_board_area_m2) * 100, 2) : 0;
 
         const board_width_px = 560;
-        const board_height_px = Math.max(260, Math.round(board_width_px * (board_h_cm / board_w_cm)));
 
         let html = `
             <div class="dco-cutting-plan" data-almdina-order="${escape_html(frm.doc.name || "")}" style="font-family:Arial,Tahoma,sans-serif;direction:rtl;color:#111;background:#fff;">
@@ -508,6 +537,14 @@
             const sheet_used_area_m2 = round((sheet.pieces || []).reduce((sum, p) => sum + num(p.area_m2), 0), 3);
             const sheet_waste_area_m2 = round(Math.max(0, board_area_m2 - sheet_used_area_m2), 3);
             const sheet_waste_percent = board_area_m2 ? round((sheet_waste_area_m2 / board_area_m2) * 100, 2) : 0;
+            const frame = sheetBoardFrame(plan, sheet);
+            const board_height_px = Math.max(260, Math.round(board_width_px * (frame.drawH / frame.drawW)));
+            const hasTrim = frame.insetX > 0 || frame.insetY > 0;
+            const usableLeft = frame.drawW ? (frame.insetX / frame.drawW) * 100 : 0;
+            const usableTop = frame.drawH ? (frame.insetY / frame.drawH) * 100 : 0;
+            const usableWidth = frame.drawW ? (frame.innerW / frame.drawW) * 100 : 100;
+            const usableHeight = frame.drawH ? (frame.innerH / frame.drawH) * 100 : 100;
+            const usableBorder = hasTrim ? "border:1px dashed #6b6258;" : "";
 
             html += `
                 <div class="dco-sheet-card" data-resource-kind="${isOffcut ? "OFFCUT" : "FULL_BOARD"}" style="border:1px solid #bbb;border-radius:10px;padding:10px;margin:14px 0;background:#fff;page-break-inside:avoid;break-inside:avoid;">
@@ -515,7 +552,8 @@
                         <div>${sheetTitle}</div>
                         <div>عدد القطع: ${(sheet.pieces || []).length} &nbsp; | &nbsp; الهدر: ${sheet_waste_area_m2} م² (${sheet_waste_percent}%)</div>
                     </div>
-                    <div class="dco-sheet-board" style="position:relative;direction:ltr;width:${board_width_px}px;height:${board_height_px}px;max-width:100%;border:2px solid #111;background:linear-gradient(90deg,rgba(0,0,0,0.05) 1px,transparent 1px),linear-gradient(rgba(0,0,0,0.05) 1px,transparent 1px),#fff;background-size:32px 32px;overflow:hidden;margin:0 auto 8px auto;">
+                    <div class="dco-sheet-board${hasTrim ? " dco-sheet-board-has-trim" : ""}" data-trim-width-cm="${frame.insetX}" data-trim-length-cm="${frame.insetY}" style="position:relative;direction:ltr;width:${board_width_px}px;height:${board_height_px}px;max-width:100%;border:2px solid #111;background:${hasTrim ? "#e4dfd8" : "#fff"};overflow:hidden;margin:0 auto 8px auto;">
+                    <div class="dco-usable-sheet" style="position:absolute;left:${usableLeft}%;top:${usableTop}%;width:${usableWidth}%;height:${usableHeight}%;${usableBorder}box-sizing:border-box;background:linear-gradient(90deg,rgba(0,0,0,0.05) 1px,transparent 1px),linear-gradient(rgba(0,0,0,0.05) 1px,transparent 1px),#fff;background-size:32px 32px;overflow:hidden;">
             `;
 
             (sheet.pieces || []).forEach(piece => {
@@ -525,10 +563,10 @@
                 }
                 const geometryModel = geometry.resolve(piece);
                 const placement = geometryModel.placement;
-                const left = (num(placement.xCm) / board_w_cm) * 100;
-                const top = (num(placement.yCm) / board_h_cm) * 100;
-                const width = (num(placement.widthCm) / board_w_cm) * 100;
-                const height = (num(placement.heightCm) / board_h_cm) * 100;
+                const left = (num(placement.xCm) / frame.usableW) * 100;
+                const top = (num(placement.yCm) / frame.usableH) * 100;
+                const width = (num(placement.widthCm) / frame.usableW) * 100;
+                const height = (num(placement.heightCm) / frame.usableH) * 100;
                 const special_piece_style = piece.piece_type === "Special"
                     ? "border:2px solid #7a4c13;background:linear-gradient(135deg,#fff2cf,#ffe2a3);box-shadow:inset 0 0 0 2px rgba(255,255,255,.45);"
                     : "border:1px solid #111;background:#e4f5ff;";
@@ -558,7 +596,7 @@
                 `;
             });
 
-            html += "</div></div>";
+            html += "</div></div></div>";
         });
 
         if (plan.unplaced && plan.unplaced.length) {
@@ -658,11 +696,11 @@
         const renderedH = parseFloat(firstBoard && firstBoard.style.height);
         if (renderedW > 0 && renderedH > 0) return renderedH / renderedW;
 
-        const width = num(plan && plan.usable_board_width_cm)
-            || num(plan && plan.full_board_width_cm)
+        const width = num(plan && plan.full_board_width_cm)
+            || num(plan && plan.usable_board_width_cm)
             || num(frm.doc.board_width_cm);
-        const length = num(plan && plan.usable_board_length_cm)
-            || num(plan && plan.full_board_length_cm)
+        const length = num(plan && plan.full_board_length_cm)
+            || num(plan && plan.usable_board_length_cm)
             || num(frm.doc.board_length_cm);
         return width > 0 && length > 0 ? length / width : 2;
     }
@@ -917,6 +955,14 @@ ${printHeaderCss()}
     background: #fff !important;
     overflow: hidden !important;
     box-shadow: none !important;
+}
+.dco-sheet-board.dco-sheet-board-has-trim {
+    background: #e4dfd8 !important;
+}
+.dco-usable-sheet {
+    position: absolute !important;
+    overflow: hidden !important;
+    background-color: #fff;
 }
 .dco-piece {
     overflow: hidden !important;
