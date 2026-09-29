@@ -97,6 +97,8 @@ class TestPlanContextualActionsUI(unittest.TestCase):
         self.assertNotIn("metrics.method", context)
         self.assertIn("justify-content:center", context)
         self.assertIn("dco-plan-context-approve", context)
+        self.assertNotIn("وضع تجربة الإعدادات", context)
+        self.assertIn('if (editing) {\n            target.empty();', context)
 
     def test_legacy_general_action_surface_is_edit_only(self) -> None:
         context = source(CONTEXT)

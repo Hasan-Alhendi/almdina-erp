@@ -278,7 +278,7 @@ def test_form_tab_layout_css_centers_order_and_plan_surfaces() -> None:
     assert "--dco-tab-shell-max: 1440px" in css
     assert "--dco-tab-content-gutter:" in css
     assert "order_tab_layout_ux.js" in css
-    assert "padding-inline: 20px !important" in visual
+    assert "padding-inline: 16px !important" in visual
     assert ".dco-plan-section-card.dco-layout-card > .section-body" in visual
     assert "dco-plan-settings-readonly[data-almdina-plan-settings-summary-owner=\"stable\"]" in visual
     assert "--dco-plan-card-inset-inline" in visual
@@ -286,6 +286,7 @@ def test_form_tab_layout_css_centers_order_and_plan_surfaces() -> None:
     assert ".dco-plan-section-card.dco-layout-card .form-column" in visual
     assert "border-bottom: none !important" in visual
     assert "dco-plan-settings-readonly[data-almdina-plan-settings-summary-owner=\"stable\"]" in visual
-    assert "dco-plan-cost-workspace-visual-ux-v2" in visual
+    assert 'padding: 6px 12px !important' in visual
+    assert "dco-plan-cost-workspace-visual-ux-v7" in visual
     assert ".dco-operator-form .dco-plan-section-card.dco-layout-card > .section-body" in visual
     assert "hide-border" in plan_content

@@ -109,6 +109,13 @@ def test_a53_visual_states_are_explicit_accessible_and_arabic_first() -> None:
     assert '[data-fieldname="plan_control_actions"][data-almdina-workspace-editing="1"]::before' in visual
     assert "content:none !important" in visual
     assert "dco-plan-stale-copy" in source(FAST_SAVE := ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan" / "door_cutting_order_fast_save_ux.js")
+    assert "تحتاج إعادة حساب" in FAST_SAVE.read_text(encoding="utf-8")
+    assert "dco-plan-settings-editor__action-bar" in source(VISUAL)
+    manifest = (ROOT / "frontend_assets.py").read_text(encoding="utf-8")
+    assert "door_cutting_order_plan_workspace_layout.css" in manifest
+    assert "door_cutting_order_plan_workspace_shell.css" in manifest
+    edit_session = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan" / "door_cutting_order_plan_edit_session_ux.js"
+    assert "dco-plan-settings-edit-active" in edit_session.read_text(encoding="utf-8")
 
 
 def test_a53_polishes_plan_and_cost_without_replacing_existing_presenters() -> None:
@@ -139,6 +146,78 @@ def test_a53_polishes_plan_and_cost_without_replacing_existing_presenters() -> N
     assert "AlmdinaPlanTabsUX" not in visual
     assert ".html(" not in visual
     assert "innerHTML" not in visual
+
+
+def test_plan_edit_surface_styles_stay_scoped_to_the_edit_session() -> None:
+    shell = (
+        ROOT / "public" / "css" / "door_cutting_order_plan_workspace_shell.css"
+    ).read_text(encoding="utf-8")
+    layout = (
+        ROOT / "public" / "css" / "door_cutting_order_plan_workspace_layout.css"
+    ).read_text(encoding="utf-8")
+    header = (
+        ROOT
+        / "public"
+        / "js"
+        / "door_cutting_order"
+        / "responsive"
+        / "door_cutting_order_header_ux.js"
+    ).read_text(encoding="utf-8")
+    preview = (
+        ROOT
+        / "public"
+        / "js"
+        / "door_cutting_order"
+        / "cutting_plan"
+        / "door_cutting_order_plan_preview_presenter.js"
+    ).read_text(encoding="utf-8")
+    renderer = (
+        ROOT
+        / "public"
+        / "js"
+        / "door_cutting_order"
+        / "cutting_plan"
+        / "door_cutting_order_cutting_plan_renderer.js"
+    ).read_text(encoding="utf-8")
+    edit_session = (
+        ROOT
+        / "public"
+        / "js"
+        / "door_cutting_order"
+        / "cutting_plan"
+        / "door_cutting_order_plan_edit_session_ux.js"
+    ).read_text(encoding="utf-8")
+
+    assert "body.dco-plan-settings-edit-active" in shell
+    assert ".dco-plan-tabs .btn.is-active" in shell
+    assert "dco-plan-settings-editor" in shell
+    assert "width: 100%" in shell
+    assert "form-tabs-list" not in shell
+    assert "border-radius: var(--alm-radius-card, 16px)" in header
+    assert "form-tabs-list.dco-sticky-tabs" in header
+    assert 'classList.contains("form-tabs-list")' in header
+    assert "dco-sticky-tabs" not in shell
+    assert "dco-sticky-tabs" not in layout
+    assert ".dco-board-gallery" not in shell
+    assert ".dco-piece-size-mm" not in shell
+    assert "flex-direction: column" not in shell
+    assert "dco-plan-settings-editor__lead" in shell
+    assert "display: none !important" in shell
+    # Parent .section-body must escape Frappe's 900px page-max-width + margin:auto
+    assert "--page-max-width: none" in layout
+    assert "std-form-layout" in layout
+    assert "dco-plan-results-tab-active" in layout
+    assert ".section-body" in layout
+    assert "max-width: none !important" in layout
+    assert "margin: 0 !important" in layout
+    assert "dco-piece-size-mm" in renderer
+    assert "dco-sheet-stats-read" in renderer
+    assert "dco-piece-size { display: none !important; }" in renderer
+    assert "إعدادات القص" in edit_session
+    assert "dco-plan-settings-editor__settings-row" in edit_session
+    assert "dco-plan-settings-editor__recalc-btn" in edit_session
+    assert "dco-plan-preview-badge" in preview
+    assert "color:#fff !important" in preview
 
 
 def test_a53_is_responsive_keyboard_visible_and_reduced_motion_safe() -> None:

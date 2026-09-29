@@ -66,6 +66,8 @@ def test_plan_editor_is_detached_from_retired_dco_plan_fields():
     source = PLAN_EDIT.read_text(encoding="utf-8")
 
     assert "dco-plan-settings-editor" in source
+    assert "syncEditorChrome" in source
+    assert "إعدادات القص" in source
     assert "data-almdina-plan-setting" in source
     assert "store.patchDraft" in source
     assert "validateDraft" in source

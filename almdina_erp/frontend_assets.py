@@ -13,9 +13,12 @@ app_include_css = [
     "/assets/almdina_erp/css/almdina_workspace_home.css?v=8",
     "/assets/almdina_erp/css/almdina_list_table.css",
     "/assets/almdina_erp/css/edge_banding_type_form.css?v=4",
+    "/assets/almdina_erp/css/role_form.css?v=2",
     "/assets/almdina_erp/css/door_cutting_order_measurement_structure.css",
     "/assets/almdina_erp/css/door_cutting_order_responsive.css",
     "/assets/almdina_erp/css/door_cutting_order_form_tab_layout.css",
+    "/assets/almdina_erp/css/door_cutting_order_plan_workspace_layout.css?v=12",
+    "/assets/almdina_erp/css/door_cutting_order_plan_workspace_shell.css?v=12",
     "/assets/almdina_erp/css/door_cutting_order_form_sidebar.css",
 
     "/assets/almdina_erp/css/door_cutting_order_form_sidebar.css",
@@ -175,6 +178,7 @@ doctype_js = {
     ],
     "Edge Banding Type": "public/js/edge_banding_type_ux.js",
     "Production Routing": "public/js/production_routing_ux.js",
+    "Role": "public/js/role_form_ux.js",
 }
 
 doctype_list_js = {

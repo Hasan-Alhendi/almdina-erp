@@ -366,6 +366,7 @@
             <div class="dco-piece-label" style="${labelStyle}z-index:4;direction:ltr;text-align:center;">
                 ${invalidGeometry}${special}${clippedLabel}${extra}
                 <span class="dco-piece-size">${round(piece.original_w, 1)}*${round(piece.original_h, 1)}</span>
+                <span class="dco-piece-size-mm" style="display:none">${round(num(piece.original_w) * 10, 0)} × ${round(num(piece.original_h) * 10, 0)}</span>
                 <span class="dco-piece-number" style="display:none">${escape_html(piece_number)}</span>
             </div>
         `;
@@ -499,7 +500,7 @@
                 ${render_piece_groups_summary(frm)}
                 ${render_plan_meta_strip(frm, plan)}
 
-                <div style="font-size:12px;margin-bottom:8px;"><b>طريقة الترتيب:</b> ${escape_html(plan.method_label || frm.doc.packing_method || "")}</div>
+                <div class="dco-plan-method-line" style="font-size:12px;margin-bottom:8px;"><b>طريقة الترتيب:</b> ${escape_html(plan.method_label || frm.doc.packing_method || "")}</div>
         `;
 
         plan.sheets.forEach(sheet => {
@@ -508,14 +509,23 @@
             const sheet_used_area_m2 = round((sheet.pieces || []).reduce((sum, p) => sum + num(p.area_m2), 0), 3);
             const sheet_waste_area_m2 = round(Math.max(0, board_area_m2 - sheet_used_area_m2), 3);
             const sheet_waste_percent = board_area_m2 ? round((sheet_waste_area_m2 / board_area_m2) * 100, 2) : 0;
+            const caption_width_cm = full_board_w_cm || board_w_cm;
+            const caption_length_cm = full_board_h_cm || board_h_cm;
+            const board_caption = caption_width_cm && caption_length_cm
+                ? `${round(caption_length_cm * 10, 0)} × ${round(caption_width_cm * 10, 0)}`
+                : "";
 
             html += `
                 <div class="dco-sheet-card" data-resource-kind="${isOffcut ? "OFFCUT" : "FULL_BOARD"}" style="border:1px solid #bbb;border-radius:10px;padding:10px;margin:14px 0;background:#fff;page-break-inside:avoid;break-inside:avoid;">
                     <div class="dco-sheet-title" style="display:flex;justify-content:space-between;gap:10px;margin-bottom:8px;font-size:13px;font-weight:bold;">
                         <div>${sheetTitle}</div>
-                        <div>عدد القطع: ${(sheet.pieces || []).length} &nbsp; | &nbsp; الهدر: ${sheet_waste_area_m2} م² (${sheet_waste_percent}%)</div>
+                        <div>
+                            <span class="dco-sheet-stats-read">عدد القطع: ${(sheet.pieces || []).length} &nbsp; | &nbsp; الهدر: ${sheet_waste_area_m2} م² (${sheet_waste_percent}%)</span>
+                            <span class="dco-sheet-stats-edit" style="display:none">قطع: ${(sheet.pieces || []).length} | الهدر: ${sheet_waste_area_m2} م² (${sheet_waste_percent}%)</span>
+                        </div>
                     </div>
                     <div class="dco-sheet-board" style="position:relative;direction:ltr;width:${board_width_px}px;height:${board_height_px}px;max-width:100%;border:2px solid #111;background:linear-gradient(90deg,rgba(0,0,0,0.05) 1px,transparent 1px),linear-gradient(rgba(0,0,0,0.05) 1px,transparent 1px),#fff;background-size:32px 32px;overflow:hidden;margin:0 auto 8px auto;">
+                        ${board_caption ? `<div class="dco-board-size-caption" aria-hidden="true" style="display:none">${escape_html(board_caption)}</div>` : ""}
             `;
 
             (sheet.pieces || []).forEach(piece => {
@@ -937,6 +947,9 @@ ${printHeaderCss()}
 }
 .dco-piece-kind-badge,
 .dco-piece-size { display: none !important; }
+.dco-piece-size-mm,
+.dco-board-size-caption,
+.dco-sheet-stats-edit { display: none !important; }
 .dco-piece-number {
     display: block !important;
     padding: 0 !important;

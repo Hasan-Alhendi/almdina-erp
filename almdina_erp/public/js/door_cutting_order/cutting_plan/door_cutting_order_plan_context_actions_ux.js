@@ -297,12 +297,6 @@
                 background:#fff5f4 !important;
                 border-color:#dc5a50 !important;
             }
-            .dco-plan-context-edit-note {
-                width:100%;
-                color:var(--text-muted,#667085);
-                font-size:11px;
-                line-height:1.6;
-            }
             [data-fieldname="plan_control_actions"] .dco-plan-document-actions,
             [data-fieldname="plan_control_actions"] .dco-approve-cutting-plan {
                 display:none !important;
@@ -471,25 +465,25 @@
             return false;
         }
 
+        const editing = isEditing(frm);
+        if (editing) {
+            target.empty();
+            return true;
+        }
+
         const tab = activeTab(frm);
         const row = rowForTab(frm, tab);
         const metrics = planMetrics(row);
-        const editing = isEditing(frm);
         const boardsChip = rowHasPlan(row)
             ? `<span class="dco-plan-context-chip is-boards"><span class="dco-plan-context-boards-value">${esc(metrics.boards)}</span><span class="dco-plan-context-boards-label">${esc(__("ألواح"))}</span></span>`
             : `<span class="dco-plan-context-chip">${esc(sourceLabel(tab))}</span>`;
-        const inlineTools = editing ? "" : toolsHtml(frm, row);
+        const inlineTools = toolsHtml(frm, row);
 
         target.html(`
             <div class="almdina-ui dco-plan-context-bar" data-active-plan-source="${esc(tab)}">
                 <div class="dco-plan-context-primary">
-                    ${editing
-                        ? `<span class="dco-plan-context-chip">${esc(__("وضع تجربة الإعدادات"))}</span>`
-                        : `${primaryActionHtml(frm, tab, row)}${boardsChip}${inlineTools}`}
+                    ${primaryActionHtml(frm, tab, row)}${boardsChip}${inlineTools}
                 </div>
-                ${editing
-                    ? `<div class="dco-plan-context-edit-note">${esc(__("أكمل تجربة الإعدادات من الأعلى. أوامر الاعتماد والطباعة والتصدير والرفع متوقفة حتى الحفظ أو الإلغاء."))}</div>`
-                    : ""}
             </div>
         `);
 
