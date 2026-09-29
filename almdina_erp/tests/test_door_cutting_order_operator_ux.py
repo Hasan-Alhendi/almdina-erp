@@ -189,13 +189,17 @@ def test_measurement_table_keeps_notes_readable_with_horizontal_scroll():
 
     required = [
         "overflow-x:auto !important",
-        "min-width:1180px !important",
+        "min-width:1000px !important",
         "max-width:none !important",
         "table-layout:fixed !important",
         "scrollbar-gutter:stable",
         ".dco-fast-table .dco-col-notes",
-        "min-width:300px !important",
-        ".dco-fast-table .dco-col-edges{width:188px !important;}",
+        "width:148px !important",
+        ".dco-fast-table .dco-col-edges{width:164px !important;}",
+        ".dco-fast-table .dco-col-number{width:88px !important;}",
+        ".dco-col-width .dco-fast-input",
+        ".dco-col-qty .dco-fast-input",
+        "tr:not(.dco-special-row):not(.dco-clipped-corner-row) .dco-special-sketch-button{visibility:hidden;}",
         "@media (max-width:900px)",
         "@media (max-width:720px)",
     ]
