@@ -76,6 +76,27 @@
         return rounded(Math.min(Math.max(total * 0.2, 1), total * 0.45));
     }
 
+    function defaultRemaining(total) {
+        total = num(total);
+        if (total <= 0) return 0;
+        return rounded(Math.max(total - defaultCut(total), 0.1));
+    }
+
+    function remainingFromCut(total, cut) {
+        total = num(total);
+        cut = num(cut);
+        if (total <= 0) return 0;
+        if (cut <= 0) return defaultRemaining(total);
+        return rounded(Math.max(0, total - cut));
+    }
+
+    function cutFromRemaining(total, remaining) {
+        total = num(total);
+        remaining = num(remaining);
+        if (total <= 0) return 0;
+        return rounded(Math.max(0, total - remaining));
+    }
+
     function originalDimensions(piece) {
         return {
             width: num(piece.original_w || piece.original_width_cm || piece.width_cm),
@@ -85,12 +106,18 @@
 
     function baseConfig(piece) {
         const dimensions = originalDimensions(piece || {});
+        const cutWidth = num(piece.clipped_corner_width_cm) || defaultCut(dimensions.width);
+        const cutLength = num(piece.clipped_corner_length_cm) || defaultCut(dimensions.length);
         return {
             position: POSITIONS.some(item => item.value === piece.clipped_corner_position)
                 ? piece.clipped_corner_position
                 : DEFAULT_POSITION,
-            cutWidth: num(piece.clipped_corner_width_cm) || defaultCut(dimensions.width),
-            cutLength: num(piece.clipped_corner_length_cm) || defaultCut(dimensions.length),
+            // Stored fields remain cut-from-corner distances used by geometry/DXF.
+            cutWidth,
+            cutLength,
+            // Entry UI uses the remaining length of each outer side.
+            remainingWidth: remainingFromCut(dimensions.width, cutWidth),
+            remainingLength: remainingFromCut(dimensions.length, cutLength),
             originalWidth: dimensions.width,
             originalLength: dimensions.length,
         };
@@ -197,8 +224,8 @@
     function summary(row, arabic = isArabic()) {
         if (!isCornerCut(row)) return "";
         const config = baseConfig(row);
-        const size = config.cutWidth && config.cutLength
-            ? `${rounded(config.cutWidth)}×${rounded(config.cutLength)} ${arabic ? "سم" : "cm"}`
+        const size = config.remainingWidth && config.remainingLength
+            ? `${rounded(config.remainingWidth)}×${rounded(config.remainingLength)} ${arabic ? "سم متبقي" : "cm remaining"}`
             : (arabic ? "بعد إدخال المقاس" : "after dimensions");
         return `${positionLabel(config.position, arabic)} · ${size}`;
     }
@@ -286,18 +313,18 @@
                         </div>
                     </div>
                     <div>
-                        <div class="dco-corner-section-label">${isArabic() ? "2. أدخل مسافتي القص" : "2. Enter the two cut distances"}</div>
+                        <div class="dco-corner-section-label">${isArabic() ? "2. أدخل الجزء المتبقي من كل ضلع" : "2. Enter the remaining length of each side"}</div>
                         <div class="dco-corner-input-grid">
                             <div class="dco-corner-input-wrap">
-                                <label>${isArabic() ? "على جهة العرض" : "Along width"}</label>
-                                <div class="dco-corner-input-shell"><input type="number" min="0.1" step="0.1" data-corner-cut="width" value="${rounded(config.cutWidth)}"><span>${isArabic() ? "سم" : "cm"}</span></div>
+                                <label>${isArabic() ? "المتبقي على ضلع العرض" : "Remaining on width side"}</label>
+                                <div class="dco-corner-input-shell"><input type="number" min="0.1" step="0.1" data-corner-remaining="width" value="${rounded(config.remainingWidth)}"><span>${isArabic() ? "سم" : "cm"}</span></div>
                             </div>
                             <div class="dco-corner-input-wrap">
-                                <label>${isArabic() ? "على جهة الطول" : "Along length"}</label>
-                                <div class="dco-corner-input-shell"><input type="number" min="0.1" step="0.1" data-corner-cut="length" value="${rounded(config.cutLength)}"><span>${isArabic() ? "سم" : "cm"}</span></div>
+                                <label>${isArabic() ? "المتبقي على ضلع الطول" : "Remaining on length side"}</label>
+                                <div class="dco-corner-input-shell"><input type="number" min="0.1" step="0.1" data-corner-remaining="length" value="${rounded(config.remainingLength)}"><span>${isArabic() ? "سم" : "cm"}</span></div>
                             </div>
                         </div>
-                        <button type="button" class="dco-corner-equal">${isArabic() ? "جعل المسافتين متساويتين" : "Make both distances equal"}</button>
+                        <button type="button" class="dco-corner-equal">${isArabic() ? "جعل الجزءين المتبقيين متساويين" : "Make both remaining lengths equal"}</button>
                     </div>
                     <div class="dco-corner-help" data-corner-help></div>
                 </section>
@@ -305,11 +332,16 @@
     }
 
     function readEditor(root, row) {
+        const dimensions = originalDimensions(row);
+        const remainingWidth = num(root.querySelector("[data-corner-remaining='width']")?.value);
+        const remainingLength = num(root.querySelector("[data-corner-remaining='length']")?.value);
         return {
             position: root.querySelector(".dco-corner-position.is-active")?.dataset.position || DEFAULT_POSITION,
-            cutWidth: num(root.querySelector("[data-corner-cut='width']")?.value),
-            cutLength: num(root.querySelector("[data-corner-cut='length']")?.value),
-            ...originalDimensions(row),
+            remainingWidth,
+            remainingLength,
+            cutWidth: cutFromRemaining(dimensions.width, remainingWidth),
+            cutLength: cutFromRemaining(dimensions.length, remainingLength),
+            ...dimensions,
         };
     }
 
@@ -319,14 +351,20 @@
                 ? "أدخل عرض الدرفة وطولها أولًا، ثم افتح إعداد الزاوية."
                 : "Enter the piece width and length before editing the corner.";
         }
-        if (config.cutWidth <= 0 || config.cutLength <= 0) {
-            return isArabic() ? "يجب أن تكون مسافتا القص أكبر من صفر." : "Both cut distances must be greater than zero.";
+        if (config.remainingWidth <= 0 || config.remainingLength <= 0) {
+            return isArabic()
+                ? "يجب أن يكون الجزء المتبقي من كل ضلع أكبر من صفر."
+                : "The remaining length of each side must be greater than zero.";
         }
-        if (config.cutWidth >= config.width) {
-            return isArabic() ? "قص جهة العرض يجب أن يكون أصغر من عرض الدرفة." : "The width cut must be smaller than the piece width.";
+        if (config.remainingWidth >= config.width) {
+            return isArabic()
+                ? "الجزء المتبقي على ضلع العرض يجب أن يكون أصغر من عرض الدرفة."
+                : "The remaining width-side length must be smaller than the piece width.";
         }
-        if (config.cutLength >= config.length) {
-            return isArabic() ? "قص جهة الطول يجب أن يكون أصغر من طول الدرفة." : "The length cut must be smaller than the piece length.";
+        if (config.remainingLength >= config.length) {
+            return isArabic()
+                ? "الجزء المتبقي على ضلع الطول يجب أن يكون أصغر من طول الدرفة."
+                : "The remaining length-side length must be smaller than the piece length.";
         }
         return "";
     }
@@ -366,7 +404,7 @@
                 <polygon points="${polygon}" fill="#dff1fb" stroke="#172033" stroke-width="3" stroke-linejoin="round"/>
                 <text x="${labelX}" y="${labelY - 6}" text-anchor="middle" font-size="18" font-weight="800" fill="#172033">${isArabic() ? "الدرفة" : "PIECE"}</text>
                 <text x="${labelX}" y="${labelY + 14}" text-anchor="middle" font-size="12" fill="#536577">${rounded(config.width)} × ${rounded(config.length)} ${isArabic() ? "سم" : "cm"}</text>
-                <text x="210" y="258" text-anchor="middle" font-size="11" font-weight="700" fill="#9a6207">${positionLabel(config.position)} · ${rounded(config.cutWidth)} × ${rounded(config.cutLength)} ${isArabic() ? "سم" : "cm"}</text>
+                <text x="210" y="258" text-anchor="middle" font-size="11" font-weight="700" fill="#9a6207">${positionLabel(config.position)} · ${isArabic() ? "متبقي" : "remaining"} ${rounded(config.remainingWidth)} × ${rounded(config.remainingLength)} ${isArabic() ? "سم" : "cm"}</text>
             </svg>`;
     }
 
@@ -462,13 +500,13 @@
                 renderPreview(root, row);
             });
         });
-        root.querySelectorAll("[data-corner-cut]").forEach(input => {
+        root.querySelectorAll("[data-corner-remaining]").forEach(input => {
             input.addEventListener("input", () => renderPreview(root, row));
             input.addEventListener("focus", () => input.select());
         });
         root.querySelector(".dco-corner-equal")?.addEventListener("click", () => {
-            const widthInput = root.querySelector("[data-corner-cut='width']");
-            const lengthInput = root.querySelector("[data-corner-cut='length']");
+            const widthInput = root.querySelector("[data-corner-remaining='width']");
+            const lengthInput = root.querySelector("[data-corner-remaining='length']");
             if (widthInput && lengthInput) lengthInput.value = widthInput.value;
             renderPreview(root, row);
         });
@@ -491,6 +529,8 @@
         typeIcon,
         baseConfig,
         effectiveConfig,
+        remainingFromCut,
+        cutFromRemaining,
         points,
         pointsAttribute,
         previewFrame,

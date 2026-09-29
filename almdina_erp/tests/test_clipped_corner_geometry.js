@@ -63,7 +63,12 @@ const defaults = geometry.baseConfig({
 assert.equal(defaults.position, "Top Right");
 assert.equal(defaults.cutWidth, 16);
 assert.equal(defaults.cutLength, 40);
+assert.equal(defaults.remainingWidth, 64);
+assert.equal(defaults.remainingLength, 160);
+assert.equal(geometry.remainingFromCut(100, 20), 80);
+assert.equal(geometry.cutFromRemaining(100, 80), 20);
 assert.match(geometry.summary(piece), /أعلى اليمين/);
+assert.match(geometry.summary(piece), /80×160 سم متبقي/);
 assert.equal(geometry.isClipped({ piece_type: "Regular" }), false);
 assert.equal(geometry.isCornerCut({ piece_type: "Regular" }), false);
 assert.equal(geometry.isCornerCut(piece), true);

@@ -160,8 +160,10 @@ The measurement type cell remains the native HTML `select` used by the table as 
 data-field owner. The visible Arabic order is `عادية / خاصة / زاوية / زاوية L / Extra`;
 the persisted values remain `Regular / Special / Clipped Corner / L-Shaped Corner / Extra`
 according to the existing DocType contract. `L-Shaped Corner` reuses the clipped-corner
-editor, stored cut distances, edge-price workflow, plan SVG, and DXF path; only the
+editor, stored cut-from-corner distances, edge-price workflow, plan SVG, and DXF path; only the
 polygon topology changes from a five-vertex diagonal to a six-vertex right-angle L.
+The entry UI asks for the remaining length of each outer side and converts to/from the
+stored cut distances.
 Extra owns a Windows-style cascade overlay on top of that select: mouse interaction
 opens a feature-owned type menu, hovering `Extra` shows a submenu arrow and the add-on
 checkboxes immediately, and hovering an Extra type cell in edit mode previews the

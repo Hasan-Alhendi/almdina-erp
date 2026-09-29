@@ -378,6 +378,7 @@ assert.match(pastFiftyHtml, /لوح 2/);
 assert.match(pastFiftyHtml, /لوح 1/);
 assert.ok(pastFiftyHtml.indexOf("لوح 2") < pastFiftyHtml.indexOf("لوح 1"));
 assert.doesNotMatch(html, /dco-sheet-board-has-trim/);
+assert.doesNotMatch(html, /#e4dfd8/);
 
 const trimmedPlan = {
     ...plan,
@@ -410,7 +411,9 @@ const widthInset = (1 / 122) * 100;
 const lengthInset = (0.2 / 244) * 100;
 const usableWidth = (120 / 122) * 100;
 const usableLength = (243.6 / 244) * 100;
-assert.match(trimmedHtml, /dco-sheet-board-has-trim/);
+assert.doesNotMatch(trimmedHtml, /dco-sheet-board-has-trim/);
+assert.doesNotMatch(trimmedHtml, /#e4dfd8/);
+assert.doesNotMatch(trimmedHtml, /border:1px dashed/);
 assert.match(trimmedHtml, new RegExp(`data-trim-width-cm="1"`));
 assert.match(trimmedHtml, new RegExp(`data-trim-length-cm="0.2"`));
 assert.match(trimmedHtml, new RegExp(`left:${widthInset}%;top:${lengthInset}%;width:${usableWidth}%;height:${usableLength}%`));

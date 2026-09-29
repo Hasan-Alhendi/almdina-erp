@@ -539,12 +539,10 @@
             const sheet_waste_percent = board_area_m2 ? round((sheet_waste_area_m2 / board_area_m2) * 100, 2) : 0;
             const frame = sheetBoardFrame(plan, sheet);
             const board_height_px = Math.max(260, Math.round(board_width_px * (frame.drawH / frame.drawW)));
-            const hasTrim = frame.insetX > 0 || frame.insetY > 0;
             const usableLeft = frame.drawW ? (frame.insetX / frame.drawW) * 100 : 0;
             const usableTop = frame.drawH ? (frame.insetY / frame.drawH) * 100 : 0;
             const usableWidth = frame.drawW ? (frame.innerW / frame.drawW) * 100 : 100;
             const usableHeight = frame.drawH ? (frame.innerH / frame.drawH) * 100 : 100;
-            const usableBorder = hasTrim ? "border:1px dashed #6b6258;" : "";
 
             html += `
                 <div class="dco-sheet-card" data-resource-kind="${isOffcut ? "OFFCUT" : "FULL_BOARD"}" style="border:1px solid #bbb;border-radius:10px;padding:10px;margin:14px 0;background:#fff;page-break-inside:avoid;break-inside:avoid;">
@@ -552,8 +550,8 @@
                         <div>${sheetTitle}</div>
                         <div>عدد القطع: ${(sheet.pieces || []).length} &nbsp; | &nbsp; الهدر: ${sheet_waste_area_m2} م² (${sheet_waste_percent}%)</div>
                     </div>
-                    <div class="dco-sheet-board${hasTrim ? " dco-sheet-board-has-trim" : ""}" data-trim-width-cm="${frame.insetX}" data-trim-length-cm="${frame.insetY}" style="position:relative;direction:ltr;width:${board_width_px}px;height:${board_height_px}px;max-width:100%;border:2px solid #111;background:${hasTrim ? "#e4dfd8" : "#fff"};overflow:hidden;margin:0 auto 8px auto;">
-                    <div class="dco-usable-sheet" style="position:absolute;left:${usableLeft}%;top:${usableTop}%;width:${usableWidth}%;height:${usableHeight}%;${usableBorder}box-sizing:border-box;background:linear-gradient(90deg,rgba(0,0,0,0.05) 1px,transparent 1px),linear-gradient(rgba(0,0,0,0.05) 1px,transparent 1px),#fff;background-size:32px 32px;overflow:hidden;">
+                    <div class="dco-sheet-board" data-trim-width-cm="${frame.insetX}" data-trim-length-cm="${frame.insetY}" style="position:relative;direction:ltr;width:${board_width_px}px;height:${board_height_px}px;max-width:100%;border:2px solid #111;background:linear-gradient(90deg,rgba(0,0,0,0.05) 1px,transparent 1px),linear-gradient(rgba(0,0,0,0.05) 1px,transparent 1px),#fff;background-size:32px 32px;overflow:hidden;margin:0 auto 8px auto;">
+                    <div class="dco-usable-sheet" style="position:absolute;left:${usableLeft}%;top:${usableTop}%;width:${usableWidth}%;height:${usableHeight}%;box-sizing:border-box;overflow:hidden;">
             `;
 
             (sheet.pieces || []).forEach(piece => {
@@ -956,13 +954,11 @@ ${printHeaderCss()}
     overflow: hidden !important;
     box-shadow: none !important;
 }
-.dco-sheet-board.dco-sheet-board-has-trim {
-    background: #e4dfd8 !important;
-}
 .dco-usable-sheet {
     position: absolute !important;
     overflow: hidden !important;
-    background-color: #fff;
+    border: 0 !important;
+    background: transparent !important;
 }
 .dco-piece {
     overflow: hidden !important;

@@ -101,7 +101,9 @@ def test_fast_measurements_offer_one_click_corner_settings_with_live_visual_prev
     assert "dco-clipped-corner-row" in operator
     assert "dco-corner-position-grid" in editor
     assert "data-corner-preview" in editor
-    assert "جعل المسافتين متساويتين" in editor
+    assert "جعل الجزءين المتبقيين متساويين" in editor
+    assert "المتبقي على ضلع العرض" in editor
+    assert "data-corner-remaining" in editor
     assert "المستطيل الخارجي هو المساحة المحجوزة الآمنة" in editor
     assert "let activeDialog = null" in editor
     assert "Prevent stacked corner dialogs" in editor
