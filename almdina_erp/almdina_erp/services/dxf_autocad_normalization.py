@@ -42,6 +42,36 @@ def _ensure_text_style(document: Any) -> None:
     document.styles.add(_TEXT_STYLE_NAME, font=_TEXT_STYLE_FONT)
 
 
+def _add_layer(target_document: Any, layer_name: str, *, color: int) -> None:
+    if layer_name == "0" or layer_name in target_document.layers:
+        return
+    target_document.layers.add(
+        name=layer_name,
+        color=int(color or 7),
+        linetype="CONTINUOUS",
+    )
+
+
+def _copy_source_layers(source_document: Any, target_document: Any, source_entities: list[Any]) -> None:
+    """Preserve the full source LAYER table, including unused canonical layers."""
+    for layer in source_document.layers:
+        _add_layer(
+            target_document,
+            str(layer.dxf.name),
+            color=int(getattr(layer.dxf, "color", 7) or 7),
+        )
+
+    for entity in source_entities:
+        layer_name = str(entity.dxf.layer or "0")
+        if layer_name == "0" or layer_name in target_document.layers:
+            continue
+        color = 7
+        if layer_name in source_document.layers:
+            source_layer = source_document.layers.get(layer_name)
+            color = int(getattr(source_layer.dxf, "color", 7) or 7)
+        _add_layer(target_document, layer_name, color=color)
+
+
 def _copy_text_entity(target_modelspace: Any, entity: Any) -> None:
     insert = entity.dxf.insert
     attribs = {
@@ -80,16 +110,7 @@ def rebuild_autocad_dxf(raw: bytes, ezdxf_module: Any | None = None) -> bytes:
     target_modelspace = target_document.modelspace()
     _ensure_text_style(target_document)
 
-    used_layers = {str(entity.dxf.layer or "0") for entity in source_entities}
-    for layer_name in sorted(used_layers):
-        if layer_name == "0" or layer_name in target_document.layers:
-            continue
-        source_layer = source_document.layers.get(layer_name)
-        target_document.layers.add(
-            name=layer_name,
-            color=int(source_layer.dxf.color or 7),
-            linetype="CONTINUOUS",
-        )
+    _copy_source_layers(source_document, target_document, source_entities)
 
     for entity in source_entities:
         layer = str(entity.dxf.layer or "0")

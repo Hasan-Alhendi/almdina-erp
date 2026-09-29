@@ -190,6 +190,35 @@ def test_rebuild_autocad_dxf_preserves_geometry_for_crlf_and_lf(newline):
     assert result.audit().has_errors is False
 
 
+def test_rebuild_autocad_dxf_preserves_unused_canonical_layers():
+    source = ezdxf.new("R12")
+    expected_colors = {
+        "SHEET_OUTLINE": 8,
+        "CUT_PATH": 1,
+        "OFFCUT": 2,
+        "Liner": 5,
+        "Rear Groove": 3,
+        "Handle Recess": 6,
+        "text": 7,
+    }
+    for name, color in expected_colors.items():
+        source.layers.add(name=name, color=color)
+    modelspace = source.modelspace()
+    modelspace.add_line((0, 0), (1220, 0), dxfattribs={"layer": "SHEET_OUTLINE"})
+    modelspace.add_line((10, 10), (410, 10), dxfattribs={"layer": "CUT_PATH"})
+    output = io.StringIO()
+    source.write(output)
+
+    normalized = rebuild_autocad_dxf(output.getvalue().encode("ascii"))
+    result = ezdxf.read(io.StringIO(normalized.decode("utf-8")))
+    layer_names = {str(layer.dxf.name) for layer in result.layers}
+    assert expected_colors.keys() <= layer_names
+    assert {line.dxf.layer for line in result.modelspace()} == {"SHEET_OUTLINE", "CUT_PATH"}
+    for name, color in expected_colors.items():
+        assert int(result.layers.get(name).dxf.color) == color
+    assert result.audit().has_errors is False
+
+
 def test_rebuild_autocad_dxf_rejects_non_line_geometry():
     source = ezdxf.new("R12")
     source.modelspace().add_circle((0, 0), 10)
