@@ -1,5 +1,9 @@
 from almdina_erp.almdina_erp.domain.cutting.evaluation import validate_plan
-from almdina_erp.almdina_erp.domain.cutting.primitives import rects_have_clearance
+from almdina_erp.almdina_erp.domain.cutting.primitives import (
+    expand_piece_groups,
+    rects_have_clearance,
+)
+from almdina_erp.almdina_erp.domain.cutting.registry import run_single_method
 from almdina_erp.almdina_erp.domain.cutting.strategies.maxrects import pack_maxrects
 
 
@@ -95,3 +99,63 @@ def test_maxrects_never_accepts_sub_kerf_candidate_from_overlapping_free_rects()
                 )
 
     assert validate_plan(plan, pieces, 100, 100, kerf_cm=0.5) == []
+
+
+def _door_rows():
+    return [
+        {"width_cm": 40, "length_cm": 70, "qty": 3, "allow_rotation": 1, "piece_no": 1},
+        {"width_cm": 55, "length_cm": 90, "qty": 2, "allow_rotation": 1, "piece_no": 2},
+        {"width_cm": 28, "length_cm": 40, "qty": 4, "allow_rotation": 1, "piece_no": 3},
+    ]
+
+
+def _arrangement(plan):
+    return [
+        tuple(sorted((piece["label"], bool(piece["rotated"])) for piece in sheet["pieces"]))
+        for sheet in plan["sheets"]
+    ]
+
+
+def _minimum_axis_gap(plan):
+    best = None
+    for sheet in plan["sheets"]:
+        placed = sheet["pieces"]
+        for index, first in enumerate(placed):
+            for second in placed[index + 1 :]:
+                horizontal = max(
+                    0.0,
+                    max(first["x"], second["x"])
+                    - min(first["x"] + first["w"], second["x"] + second["w"]),
+                )
+                vertical = max(
+                    0.0,
+                    max(first["y"], second["y"])
+                    - min(first["y"] + first["h"], second["y"] + second["h"]),
+                )
+                overlaps_y = vertical <= 1e-6 and horizontal > 1e-6
+                overlaps_x = horizontal <= 1e-6 and vertical > 1e-6
+                gap = horizontal if overlaps_y else vertical if overlaps_x else None
+                if gap is None:
+                    continue
+                best = gap if best is None else min(best, gap)
+    return best
+
+
+def test_larger_kerf_keeps_door_arrangement_and_widens_the_saw_gap():
+    pieces = expand_piece_groups(_door_rows())
+    narrow = run_single_method(pieces, 122, 244, 0.3, "MaxRects Best Short Side")
+    wide = run_single_method(pieces, 122, 244, 0.8, "MaxRects Best Short Side")
+
+    assert _arrangement(narrow) == _arrangement(wide)
+    assert abs(_minimum_axis_gap(narrow) - 0.3) < 1e-6
+    assert abs(_minimum_axis_gap(wide) - 0.8) < 1e-6
+    assert validate_plan(narrow, pieces, 122, 244, kerf_cm=0.3) == []
+    assert validate_plan(wide, pieces, 122, 244, kerf_cm=0.8) == []
+
+
+def test_kerf_that_no_longer_fits_the_stable_arrangement_still_validates():
+    pieces = expand_piece_groups(_door_rows())
+    plan = run_single_method(pieces, 122, 244, 8.0, "MaxRects Best Short Side")
+
+    assert not plan["unplaced"]
+    assert validate_plan(plan, pieces, 122, 244, kerf_cm=8.0) == []

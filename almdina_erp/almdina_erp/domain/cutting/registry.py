@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from .evaluation import evaluate_plan
+from .kerf_layout import pack_with_stable_kerf
 from .primitives import normalize_mode, sort_pieces
 from .strategies.guillotine import pack_guillotine
 from .strategies.maxrects import pack_maxrects
@@ -36,12 +37,13 @@ class PackingStrategy:
         kerf_cm: float,
     ) -> dict[str, Any]:
         ordered = sort_pieces(pieces, self.sort_method)
-        raw = self.packer(
+        raw = pack_with_stable_kerf(
+            self.packer,
             ordered,
             board_w_cm,
             board_h_cm,
             kerf_cm,
-            *self.args,
+            self.args,
         )
         return evaluate_plan(
             raw,
