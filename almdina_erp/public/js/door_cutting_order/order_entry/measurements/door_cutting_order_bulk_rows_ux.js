@@ -43,11 +43,11 @@
         if (document.getElementById("dco-bulk-rows-ux-css")) return;
         $("head").append(`
             <style id="dco-bulk-rows-ux-css">
-                .dco-fast-table { min-width:1180px !important; }
+                .dco-fast-table { min-width:1000px !important; }
                 .dco-fast-table .dco-select-col {
-                    width:48px !important;
-                    min-width:48px !important;
-                    max-width:48px !important;
+                    width:34px !important;
+                    min-width:34px !important;
+                    max-width:34px !important;
                     text-align:center !important;
                     padding:4px !important;
                 }
