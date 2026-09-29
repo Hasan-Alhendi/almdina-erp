@@ -45,11 +45,11 @@
 
             .dco-notes-editor {
                 display:grid;
-                grid-template-columns:minmax(220px,1fr) 31px;
+                grid-template-columns:minmax(0,1fr) 28px;
                 align-items:center;
-                gap:4px;
+                gap:3px;
                 width:100%;
-                min-width:260px;
+                min-width:0;
             }
             .dco-notes-editor .dco-notes-input {
                 min-width:0 !important;
@@ -59,9 +59,9 @@
                 padding-inline-end:7px !important;
             }
             .dco-notes-expand {
-                width:31px;
-                height:35px;
-                min-width:31px;
+                width:28px;
+                height:34px;
+                min-width:28px;
                 border:1px solid var(--border-color,#ccd3da);
                 border-radius:7px;
                 background:var(--card-bg,#fff);
@@ -130,24 +130,24 @@
             .dco-note-context b { color:var(--text-color,#172033); }
 
             .dco-fast-table .dco-col-notes {
-                width:auto !important;
-                min-width:300px !important;
+                width:148px !important;
+                min-width:148px !important;
             }
 
             @media (max-width:980px) {
                 .dco-fast-table {
-                    width:1180px !important;
-                    min-width:1180px !important;
+                    width:1000px !important;
+                    min-width:1000px !important;
                     max-width:none !important;
                 }
-                .dco-fast-table .dco-col-notes { width:auto !important; min-width:300px !important; }
+                .dco-fast-table .dco-col-notes { width:148px !important; min-width:148px !important; }
                 .dco-fast-table .dco-select-col,
                 .dco-fast-table .dco-col-no {
                     position:sticky;
                     background:var(--card-bg,#fff) !important;
                 }
                 .dco-fast-table .dco-select-col { right:0; z-index:7; }
-                .dco-fast-table .dco-col-no { right:32px; z-index:6; box-shadow:-5px 0 9px rgba(15,23,42,.055); }
+                .dco-fast-table .dco-col-no { right:34px; z-index:6; box-shadow:-5px 0 9px rgba(15,23,42,.055); }
                 .dco-fast-table thead .dco-select-col,
                 .dco-fast-table thead .dco-col-no { z-index:12; }
             }
@@ -156,8 +156,8 @@
                 /* Keep important actions reachable through horizontal scrolling. */
                 .dco-fast-table .dco-col-sketch,
                 .dco-fast-table .dco-col-delete { display:table-cell !important; }
-                .dco-fast-table { width:1180px !important; min-width:1180px !important; }
-                .dco-fast-table .dco-col-notes { width:auto !important; min-width:300px !important; }
+                .dco-fast-table { width:980px !important; min-width:980px !important; }
+                .dco-fast-table .dco-col-notes { width:132px !important; min-width:132px !important; }
                 .dco-fast-entry-toolbar { align-items:flex-start; }
             }
         `;
