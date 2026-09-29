@@ -101,6 +101,7 @@ Adaptive Trim هو Business Rule صريح تحت `domain/cutting/adaptive_trim.p
 - أبعاد اللوح الفيزيائية `full_*` لا تتغير. الذي يتغير فقط هو `usable_*` الناتج عن Applied Trim.
 - نتيجة القرار تُحفظ داخل Plan snapshot في `trim_policy` مع Preferred Trim، Applied width/length trim، المحاور المخفّضة، precision، وجودة الخطة قبل/بعد. وتبقى مفاتيح `applied_trim_*` و`margin_policy` القديمة للتوافق مع القراء الحاليين.
 - أي validation أو DXF path يعتمد حدود المساحة القابلة للاستخدام يجب أن يستهلك **Applied Trim / usable dimensions** من نتيجة الخطة، وألا يعيد فرض Preferred Trim بعد الحساب.
+- معاينة خطة القص والطباعة ترسمان اللوح الفيزيائي الكامل، وتُظهران Applied Trim كشريط حول مساحة القص. الدرف تبقى داخل المساحة القابلة للاستخدام. قرار Adaptive Trim لا يتغير: الهامش المرسوم هو المطبق فعليًا، ويُخفَّض عند الحاجة حتى لا يُفتح لوح جديد.
 
 ## 9. CuttingExecutionTrace
 
