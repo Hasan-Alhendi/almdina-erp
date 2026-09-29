@@ -123,8 +123,8 @@
                 pointer-events:none;
             }
 
-            /* Allow horizontal scroll so the notes column keeps a readable
-               width instead of being crushed into leftover form space. */
+            /* Keep horizontal scrolling available when a viewport cannot fit
+               the compact columns; longer notes remain editable in their dialog. */
             .dco-fast-entry-scroll{
                 width:100% !important;
                 max-width:100% !important;
@@ -137,7 +137,7 @@
             .dco-fast-table{
                 width:100% !important;
                 max-width:none !important;
-                min-width:1180px !important;
+                min-width:1000px !important;
                 table-layout:fixed !important;
                 border-collapse:separate;
                 border-spacing:0;
@@ -162,25 +162,28 @@
             .dco-fast-table td{height:44px;padding:4px 3px !important;}
 
             .dco-fast-table .dco-select-col{
-                width:32px !important;
-                min-width:32px !important;
-                max-width:32px !important;
+                width:34px !important;
+                min-width:34px !important;
+                max-width:34px !important;
                 padding-inline:2px !important;
             }
-            .dco-fast-table .dco-col-no{width:34px !important;}
-            .dco-fast-table .dco-col-type{width:112px !important;}
-            .dco-fast-table .dco-col-number{width:76px !important;}
-            .dco-fast-table .dco-col-qty{width:54px !important;}
-            .dco-fast-table .dco-col-rotate{width:46px !important;}
-            .dco-fast-table .dco-col-edges{width:188px !important;}
+            .dco-fast-table .dco-col-no{width:32px !important;}
+            .dco-fast-table .dco-col-type{width:104px !important;}
+            .dco-fast-table .dco-col-number{width:88px !important;}
+            .dco-fast-table .dco-col-width,
+            .dco-fast-table .dco-col-length{background:color-mix(in srgb, var(--alm-primary,#172033) 2.5%, transparent);}
+            .dco-fast-table .dco-col-qty{width:56px !important;}
+            .dco-fast-table .dco-col-rotate{width:40px !important;}
+            .dco-fast-table .dco-col-edges{width:164px !important;}
             .dco-fast-table .dco-col-edge-type{width:128px !important;}
-            .dco-fast-table .dco-col-sketch{width:50px !important;}
+            .dco-fast-table .dco-col-edge-bulk{width:104px !important;}
+            .dco-fast-table .dco-col-sketch{width:42px !important;}
             .dco-fast-table .dco-col-notes{
-                width:auto !important;
-                min-width:300px !important;
+                width:148px !important;
+                min-width:148px !important;
                 overflow:visible;
             }
-            .dco-fast-table .dco-col-delete{width:34px !important;}
+            .dco-fast-table .dco-col-delete{width:30px !important;}
 
             .dco-fast-input,
             .dco-fast-select{
@@ -193,11 +196,23 @@
             }
 
             .dco-fast-input[type="number"]{font-size:14.5px !important;font-weight:650;}
+            .dco-col-width .dco-fast-input,
+            .dco-col-length .dco-fast-input,
+            .dco-col-qty .dco-fast-input{
+                min-height:37px !important;
+                height:37px;
+                border-color:color-mix(in srgb, var(--alm-primary,#172033) 22%, var(--border-color,#ccd3da));
+                background:var(--card-bg,#fff);
+                font-size:15.5px !important;
+                font-weight:750 !important;
+            }
+            .dco-fast-table .dco-col-type .dco-fast-select{font-weight:700 !important;}
             .dco-col-notes .dco-fast-input{
                 text-align:right;
                 font-size:13px !important;
-                min-width:220px !important;
+                min-width:0 !important;
             }
+            .dco-fast-table tr:not(.dco-special-row):not(.dco-clipped-corner-row) .dco-special-sketch-button{visibility:hidden;}
             .dco-row-selector,.dco-select-all{width:17px !important;height:17px !important;}
             .dco-column-header-select{min-height:43px !important;gap:3px !important;}
             .dco-column-select-all{gap:3px !important;font-size:9px !important;}
@@ -291,14 +306,15 @@
             .dco-fast-table tbody tr:focus-within td{background:color-mix(in srgb, var(--alm-primary, #172033) 4%, transparent);}
 
             @media (max-width:900px){
-                .dco-fast-table .dco-col-type{width:102px !important;}
-                .dco-fast-table .dco-col-number{width:69px !important;}
-                .dco-fast-table .dco-col-qty{width:49px !important;}
-                .dco-fast-table .dco-col-rotate{width:42px !important;}
-                .dco-fast-table .dco-col-edges{width:164px !important;}
-                .dco-fast-table .dco-col-edge-type{width:112px !important;}
-                .dco-fast-table .dco-col-sketch{width:44px !important;}
-                .dco-fast-table .dco-col-delete{width:31px !important;}
+                .dco-fast-table .dco-col-type{width:98px !important;}
+                .dco-fast-table .dco-col-number{width:80px !important;}
+                .dco-fast-table .dco-col-qty{width:52px !important;}
+                .dco-fast-table .dco-col-rotate{width:38px !important;}
+                .dco-fast-table .dco-col-edges{width:152px !important;}
+                .dco-fast-table .dco-col-edge-type{width:108px !important;}
+                .dco-fast-table .dco-col-edge-bulk{width:96px !important;}
+                .dco-fast-table .dco-col-sketch{width:40px !important;}
+                .dco-fast-table .dco-col-delete{width:29px !important;}
                 .dco-fast-input,.dco-fast-select{padding-inline:4px !important;}
             }
 
@@ -310,12 +326,14 @@
             @media (max-width:720px){
                 .dco-fast-table .dco-col-sketch,
                 .dco-fast-table .dco-col-delete{display:none !important;}
-                .dco-fast-table .dco-col-type{width:92px !important;}
-                .dco-fast-table .dco-col-number{width:61px !important;}
-                .dco-fast-table .dco-col-qty{width:45px !important;}
-                .dco-fast-table .dco-col-rotate{width:39px !important;}
-                .dco-fast-table .dco-col-edges{width:148px !important;}
-                .dco-fast-table .dco-col-edge-type{width:94px !important;}
+                .dco-fast-table{min-width:980px !important;}
+                .dco-fast-table .dco-col-type{width:88px !important;}
+                .dco-fast-table .dco-col-number{width:76px !important;}
+                .dco-fast-table .dco-col-qty{width:48px !important;}
+                .dco-fast-table .dco-col-rotate{width:36px !important;}
+                .dco-fast-table .dco-col-edges{width:136px !important;}
+                .dco-fast-table .dco-col-edge-type{width:88px !important;}
+                .dco-fast-table .dco-col-edge-bulk{width:90px !important;}
                 .dco-fast-entry-toolbar>.dco-measurement-table-actions{width:auto !important;}
                 .dco-fast-entry-toolbar .dco-measurement-table-actions .dco-toolbar-icon-button{flex:0 0 32px !important;}
             }
