@@ -122,6 +122,39 @@ assert.deepEqual(
     [[10, 120], [210, 120], [210, 40], [170, 40], [170, 20], [10, 20]]
 );
 
+const squareFrame = geometry.previewFrame(100, 100);
+assert.equal(squareFrame.width, squareFrame.height);
+assert.equal(squareFrame.width, 220);
+assert.equal(squareFrame.x, 100);
+assert.equal(squareFrame.y, 30);
+
+const squareCuts = {
+    piece_type: "L-Shaped Corner",
+    width_cm: 100,
+    length_cm: 100,
+    clipped_corner_position: "Top Right",
+    clipped_corner_width_cm: 20,
+    clipped_corner_length_cm: 20,
+};
+const squareCutPoints = geometry.points(squareCuts, squareFrame.width, squareFrame.height);
+assert.equal(
+    squareFrame.width - squareCutPoints[1][0],
+    squareCutPoints[2][1],
+    "Equal cut distances on a square piece should use the same pixel scale on both axes"
+);
+assert.equal(squareFrame.width - squareCutPoints[1][0], 44);
+
+const diagonalSquare = geometry.points({
+    ...squareCuts,
+    piece_type: "Clipped Corner",
+}, squareFrame.width, squareFrame.height);
+assert.equal(squareFrame.width - diagonalSquare[1][0], diagonalSquare[2][1]);
+
+const tallFrame = geometry.previewFrame(40, 200);
+assert.equal(tallFrame.width / tallFrame.height, 40 / 200);
+assert.equal(tallFrame.height, 220);
+assert.equal(tallFrame.width, 44);
+
 let printed = null;
 global.frappe.msgprint = (payload) => {
     printed = payload;

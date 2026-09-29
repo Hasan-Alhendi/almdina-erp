@@ -135,6 +135,28 @@
         return byPosition[config.position] || byPosition[DEFAULT_POSITION];
     }
 
+    const PREVIEW_CANVAS_WIDTH = 360;
+    const PREVIEW_CANVAS_HEIGHT = 220;
+    const PREVIEW_PADDING = 30;
+
+    function previewFrame(widthCm, lengthCm) {
+        const pieceWidth = Math.max(num(widthCm), 0.001);
+        const pieceLength = Math.max(num(lengthCm), 0.001);
+        const scale = Math.min(
+            PREVIEW_CANVAS_WIDTH / pieceWidth,
+            PREVIEW_CANVAS_HEIGHT / pieceLength
+        );
+        const width = rounded(pieceWidth * scale);
+        const height = rounded(pieceLength * scale);
+        return {
+            x: rounded(PREVIEW_PADDING + (PREVIEW_CANVAS_WIDTH - width) / 2),
+            y: rounded(PREVIEW_PADDING + (PREVIEW_CANVAS_HEIGHT - height) / 2),
+            width,
+            height,
+            scale: rounded(scale),
+        };
+    }
+
     function pointsAttribute(piece, width = 100, height = 100) {
         return points(piece, width, height)
             .map(point => `${rounded(point[0])},${rounded(point[1])}`)
@@ -330,14 +352,20 @@
             clipped_corner_width_cm: config.cutWidth,
             clipped_corner_length_cm: config.cutLength,
         };
-        const polygon = points(sample, 360, 220).map(([x, y]) => `${x + 30},${y + 30}`).join(" ");
+        const frame = previewFrame(sample.width_cm, sample.length_cm);
+        const polygon = points(sample, frame.width, frame.height)
+            .map(([x, y]) => `${rounded(x + frame.x)},${rounded(y + frame.y)}`)
+            .join(" ");
+        const labelX = rounded(frame.x + frame.width / 2);
+        const labelY = rounded(frame.y + frame.height / 2);
         preview.innerHTML = `
-            <svg viewBox="0 0 420 280" role="img" aria-label="${isArabic() ? `معاينة ${typeLabel(row)}` : `${typeLabel(row, false)} preview`}">
+            <svg viewBox="0 0 420 280" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${isArabic() ? `معاينة ${typeLabel(row)}` : `${typeLabel(row, false)} preview`}">
                 <defs><pattern id="dco-corner-grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" fill="none" stroke="#dfe8ef" stroke-width="1"/></pattern></defs>
                 <rect x="10" y="10" width="400" height="260" rx="12" fill="url(#dco-corner-grid)" stroke="#e2e8f0"/>
+                <rect x="${frame.x}" y="${frame.y}" width="${frame.width}" height="${frame.height}" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="6 4"/>
                 <polygon points="${polygon}" fill="#dff1fb" stroke="#172033" stroke-width="3" stroke-linejoin="round"/>
-                <text x="210" y="144" text-anchor="middle" font-size="18" font-weight="800" fill="#172033">${isArabic() ? "الدرفة" : "PIECE"}</text>
-                <text x="210" y="166" text-anchor="middle" font-size="12" fill="#536577">${rounded(config.width)} × ${rounded(config.length)} ${isArabic() ? "سم" : "cm"}</text>
+                <text x="${labelX}" y="${labelY - 6}" text-anchor="middle" font-size="18" font-weight="800" fill="#172033">${isArabic() ? "الدرفة" : "PIECE"}</text>
+                <text x="${labelX}" y="${labelY + 14}" text-anchor="middle" font-size="12" fill="#536577">${rounded(config.width)} × ${rounded(config.length)} ${isArabic() ? "سم" : "cm"}</text>
                 <text x="210" y="258" text-anchor="middle" font-size="11" font-weight="700" fill="#9a6207">${positionLabel(config.position)} · ${rounded(config.cutWidth)} × ${rounded(config.cutLength)} ${isArabic() ? "سم" : "cm"}</text>
             </svg>`;
     }
@@ -465,6 +493,7 @@
         effectiveConfig,
         points,
         pointsAttribute,
+        previewFrame,
         dxfPoints,
         positionLabel,
         summary,
