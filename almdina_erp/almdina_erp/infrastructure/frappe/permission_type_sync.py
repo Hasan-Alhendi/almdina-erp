@@ -198,7 +198,7 @@ def _clear_relocated_cutting_plan_projections() -> None:
 
 
 def sync_permission_types() -> None:
-    """Install capability columns and rebuild projections from canonical state."""
+    """Install capability columns and rebuild Custom DocPerm grants from the mirror."""
 
     if not frappe.db.exists("DocType", "Permission Type"):
         return
@@ -237,16 +237,17 @@ def sync_permission_types() -> None:
         ProjectedPermissionMatrixRepository,
     )
 
-    # Canonical state is the only source of business authority. Missing state is
-    # created as deny-all; legacy projections and audit history are never read as
-    # grants. Canonical state then overwrites all Frappe projections.
+    # During cutover the canonical mirror is still dual-written by the console.
+    # Missing mirror state bootstraps deny-all, then overwrites Custom DocPerm so
+    # newly installed Permission Type columns stay aligned. Runtime authority
+    # reads Custom DocPerm columns for editable factory roles only.
     reconcile_custom_permission_projections()
     ProjectedPermissionMatrixRepository().ensure_custom_permission_baseline(
         _managed_doctypes()
     )
 
-    # A baseline may preserve native Frappe rows for compatibility, but it must
-    # never become business authority because the gateway reads canonical state.
+    # A baseline may preserve native Frappe rows for compatibility, but protected
+    # platform roles must never keep factory business columns enabled.
     revoke_automatic_role_business_grants()
 
 
