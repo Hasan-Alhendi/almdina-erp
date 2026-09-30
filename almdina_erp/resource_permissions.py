@@ -1,3 +1,12 @@
+"""Native has_permission / query hooks for master-data and settings DocTypes.
+
+These hooks never invent grants. They ask the authorization gateway whether the
+user holds the matching factory capability (from Custom DocPerm columns). Order
+entry may read Customer / Edge Banding Type for Link-field lookup via
+``CREATE_ORDER`` / ``EDIT_ORDER`` / ``CREATE_ORDER_REVISION`` without receiving
+master-data administration capabilities.
+"""
+
 from __future__ import annotations
 
 from collections.abc import Iterable

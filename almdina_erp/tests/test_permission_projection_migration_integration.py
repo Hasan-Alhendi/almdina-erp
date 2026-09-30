@@ -140,8 +140,8 @@ class TestPermissionProjectionMigrationIntegration(FrappeTestCase):
             },
         )
 
-        # Simulate stale or accidentally removed Frappe projections. The
-        # canonical role capability state remains the sole business authority.
+        # Simulate stale or accidentally removed Frappe projections. Sync must
+        # repair technical lookup reads from the saved capability grants.
         for doctype in ("Customer", "Edge Banding Type"):
             frappe.db.delete(
                 "Custom DocPerm",

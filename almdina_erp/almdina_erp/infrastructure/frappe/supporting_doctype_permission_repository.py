@@ -78,7 +78,7 @@ class SupportingDoctypePermissionRepository:
         role: str,
         state: Mapping[str, Any] | None,
     ) -> None:
-        """Persist only native supporting rights; business state stays canonical."""
+        """Persist only native supporting rights; business grants stay on Custom DocPerm."""
 
         for doctype in SUPPORTING_DOCTYPES:
             if not frappe.db.exists("DocType", doctype):

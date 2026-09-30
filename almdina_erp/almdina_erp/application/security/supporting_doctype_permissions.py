@@ -54,14 +54,15 @@ def supporting_standard_permission_projection(
 
     Frappe controller permission hooks can only deny an existing native grant;
     they cannot create a missing one. These projections provide the minimum
-    DocPerm grant while business authority remains exclusively in canonical
-    Almdina capability state.
+    native DocPerm grant while business authority remains in Custom DocPerm
+    capability columns for editable factory roles.
 
     Customer and Edge Banding Type are special here: order entry needs their
     records as Link-field lookup data. ``normalize_capability_state`` derives
     that technical read dependency from order-input capabilities, but the
-    canonical business state intentionally does not expose the corresponding
-    master-data administration surfaces.
+    business capability state intentionally does not expose the corresponding
+    master-data administration surfaces (``view_customers`` /
+    ``view_edge_banding_types`` custom columns).
     """
 
     normalized = normalize_capability_state(state)

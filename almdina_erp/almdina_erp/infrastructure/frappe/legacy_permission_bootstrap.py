@@ -91,7 +91,12 @@ def _has_explicit_matrix(role: str, doctypes: list[str]) -> bool:
 
 
 def bootstrap_legacy_role_permissions() -> list[str]:
-    """Restore historical Almdina roles without overwriting configured matrices."""
+    """Migration-only helper for historical role matrices.
+
+    Deprecated for runtime authority: do not call this from request paths.
+    Sites that already have audit rows or explicit capability grants are left
+    untouched. Prefer factory_permissions / permission management once upgraded.
+    """
 
     if not frappe.db.exists("DocType", "Custom DocPerm"):
         return []

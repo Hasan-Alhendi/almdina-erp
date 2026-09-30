@@ -201,13 +201,16 @@ class TestPermissionCustomDocPermBaseline(unittest.TestCase):
         self.assertEqual(harness.setup_calls, ["Door Cutting Order"])
         self.assertEqual(harness.inserted, [])
 
-    def test_repository_source_never_reads_docperm_as_business_authority(self) -> None:
+    def test_repository_reads_grants_via_docperm_reader_not_has_permission(self) -> None:
         source = REPOSITORY_PATH.read_text(encoding="utf-8")
-        role_state = source[source.index("    def role_state("):source.index("    def role_states(")]
-        self.assertIn("self._canonical.read", role_state)
-        self.assertNotIn("Custom DocPerm", role_state)
-        self.assertNotIn("DocPerm", role_state)
+        role_state = source[
+            source.index("    def role_state(") : source.index("    def role_states(")
+        ]
+        self.assertIn("self._grant_reader.role_state", role_state)
+        self.assertNotIn("self._canonical.read", role_state)
+        self.assertNotIn("has_permission(", role_state)
         self.assertNotIn("_effective_rows", source)
+        self.assertIn("payload[fieldname] = 0", source)
 
 
 if __name__ == "__main__":
