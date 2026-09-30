@@ -109,7 +109,13 @@
         field.$wrapper.addClass("dco-plan-actions-native");
         if (section.length) section.addClass("dco-plan-actions-section hide-border");
         const layoutSection = sectionElement(frm, "plan_section");
-        if (layoutSection.length) layoutSection.addClass("hide-border dco-plan-layout-section");
+        // Keep layout-card hooks attached so shared plan spacing CSS can target this section
+        // even when the lazy Plan UX decorator has not run yet.
+        if (layoutSection.length) {
+            layoutSection.addClass(
+                "hide-border dco-plan-layout-section dco-plan-section-card dco-layout-card"
+            );
+        }
     }
 
     function escapeHtml(value) {

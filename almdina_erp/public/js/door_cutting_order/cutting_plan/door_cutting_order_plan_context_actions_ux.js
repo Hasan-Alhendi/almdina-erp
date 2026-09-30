@@ -3,7 +3,8 @@
 
     if (window.AlmdinaPlanContextActionsUX) return;
 
-    const STYLE_ID = "dco-plan-context-actions-css";
+    const STYLE_ID = "dco-plan-context-actions-css-v2";
+    const LEGACY_STYLE_IDS = Object.freeze(["dco-plan-context-actions-css"]);
     const HOST_CLASS = "dco-plan-context-actions-host";
     const TAB_ROWS = Object.freeze({
         System: "system_draft",
@@ -192,12 +193,16 @@
     }
 
     function installStyles() {
+        LEGACY_STYLE_IDS.forEach((id) => {
+            const legacy = document.getElementById(id);
+            if (legacy) legacy.remove();
+        });
         if (document.getElementById(STYLE_ID)) return;
         const style = document.createElement("style");
         style.id = STYLE_ID;
         style.textContent = `
             .${HOST_CLASS} {
-                margin: 0 0 6px;
+                margin: 0 0 var(--dco-section-stack-gap, 8px);
                 width: 100%;
                 direction: rtl;
             }
@@ -206,13 +211,13 @@
                 box-sizing: border-box;
                 display:flex;
                 align-items:center;
-                justify-content:space-between;
+                justify-content:flex-start;
                 gap:12px;
                 flex-wrap:wrap;
                 padding:11px 12px;
-                border:1px solid var(--border-color,#dfe3e8);
-                border-radius:12px;
-                background:var(--card-bg,var(--fg-color,#fff));
+                border:1px solid var(--alm-border, var(--border-color,#dfe3e8));
+                border-radius:var(--alm-radius-md, 12px);
+                background:var(--alm-card, var(--card-bg,#fff));
                 box-shadow:0 3px 12px rgba(15,23,42,.035);
             }
             .dco-plan-context-primary {
@@ -222,6 +227,7 @@
                 flex-wrap:wrap;
                 flex:1 1 auto;
                 min-width:0;
+                width:100%;
             }
             .dco-plan-context-chip {
                 display:inline-flex;
@@ -230,52 +236,55 @@
                 padding:4px 9px;
                 border-radius:999px;
                 background:var(--subtle-fg,#f5f7f9);
-                border:1px solid var(--border-color,#e2e8f0);
-                color:var(--text-muted,#5f6b78);
+                border:1px solid var(--alm-border, var(--border-color,#e2e8f0));
+                color:var(--alm-text-muted, var(--text-muted,#5f6b78));
                 font-size:11px;
                 font-weight:700;
                 white-space:nowrap;
             }
             .dco-plan-context-chip.is-boards {
-                min-height:36px;
-                padding:6px 12px;
-                border-radius:10px;
-                background:color-mix(in srgb, var(--alm-primary, #172033) 8%, #fff);
-                border:1px solid color-mix(in srgb, var(--alm-primary, #172033) 24%, transparent);
-                color:var(--alm-primary,#172033);
-                font-weight:900;
-                gap:6px;
-                box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--alm-primary, #172033) 6%, transparent);
+                margin-inline-start: auto;
+                min-height:30px;
+                padding:5px 11px;
+                border-radius:999px;
+                border:0;
+                background:var(--alm-accent-soft, color-mix(in srgb, var(--alm-accent, #2563eb) 12%, transparent));
+                color:var(--alm-accent, #2563eb);
+                font-weight:800;
+                gap:5px;
+                box-shadow:none;
+                cursor:default;
+                pointer-events:none;
             }
             .dco-plan-context-boards-value {
-                font-size:16px;
+                font-size:14px;
                 line-height:1;
-                font-weight:900;
+                font-weight:850;
             }
             .dco-plan-context-boards-label {
                 font-size:11px;
-                font-weight:800;
+                font-weight:750;
             }
             .dco-plan-context-chip.is-approved {
-                background:#ecfdf3;
-                color:#166534;
-                border-color:#bbf7d0;
+                background:var(--alm-success-soft, #ecfdf3);
+                color:var(--alm-success, #166534);
+                border-color:color-mix(in srgb, var(--alm-success, #166534) 28%, transparent);
             }
             .dco-plan-context-bar .btn {
                 min-height:34px;
-                border-radius:9px;
+                border-radius:var(--alm-radius-sm, 9px);
                 font-weight:750;
-                box-shadow:none !important;
+                box-shadow:none;
             }
             .dco-plan-context-primary .dco-plan-context-approve,
             .dco-plan-context-primary .dco-plan-context-cancel,
             .dco-plan-context-primary .alm-btn-success.dco-plan-context-approve {
-                display:inline-flex !important;
-                align-items:center !important;
-                justify-content:center !important;
-                flex:0 0 auto !important;
+                display:inline-flex;
+                align-items:center;
+                justify-content:center;
+                flex:0 0 auto;
                 min-width:190px;
-                padding-inline:14px !important;
+                padding-inline:14px;
                 text-align:center;
                 line-height:1.2;
                 white-space:nowrap;
@@ -289,24 +298,28 @@
                 flex:0 0 auto;
             }
             .dco-plan-context-cancel {
-                color:#b42318 !important;
-                border-color:#f1b6b0 !important;
-                background:#fff !important;
+                color:var(--alm-danger, #b42318);
+                border-color:color-mix(in srgb, var(--alm-danger, #b42318) 35%, transparent);
+                background:var(--alm-card, #fff);
             }
             .dco-plan-context-cancel:hover {
-                background:#fff5f4 !important;
-                border-color:#dc5a50 !important;
+                background:var(--alm-danger-soft, #fff5f4);
+                border-color:color-mix(in srgb, var(--alm-danger, #b42318) 55%, transparent);
             }
             [data-fieldname="plan_control_actions"] .dco-plan-document-actions,
             [data-fieldname="plan_control_actions"] .dco-approve-cutting-plan {
-                display:none !important;
+                display:none;
             }
             [data-fieldname="plan_control_actions"]:has(.dco-plan-settings-editor) {
-                display:block !important;
+                display:block;
             }
             @media (max-width:767px) {
                 .dco-plan-context-bar { align-items:stretch; }
                 .dco-plan-context-primary { width:100%; }
+                .dco-plan-context-chip.is-boards {
+                    margin-inline-start: 0;
+                    order: 99;
+                }
                 .dco-plan-context-primary .btn:not(.dco-plan-context-approve):not(.dco-plan-context-cancel) {
                     justify-content:center;
                 }
@@ -475,14 +488,15 @@
         const row = rowForTab(frm, tab);
         const metrics = planMetrics(row);
         const boardsChip = rowHasPlan(row)
-            ? `<span class="dco-plan-context-chip is-boards"><span class="dco-plan-context-boards-value">${esc(metrics.boards)}</span><span class="dco-plan-context-boards-label">${esc(__("ألواح"))}</span></span>`
-            : `<span class="dco-plan-context-chip">${esc(sourceLabel(tab))}</span>`;
+            ? `<span class="dco-plan-context-chip is-boards" role="status" aria-label="${esc(`${metrics.boards} ${__("ألواح")}`)}"><span class="dco-plan-context-boards-value">${esc(metrics.boards)}</span><span class="dco-plan-context-boards-label">${esc(__("ألواح"))}</span></span>`
+            : `<span class="dco-plan-context-chip is-boards" role="status">${esc(sourceLabel(tab))}</span>`;
         const inlineTools = toolsHtml(frm, row);
 
+        // Approve/tools first; boards badge last with margin-inline-start:auto (RTL end / left).
         target.html(`
             <div class="almdina-ui dco-plan-context-bar" data-active-plan-source="${esc(tab)}">
                 <div class="dco-plan-context-primary">
-                    ${primaryActionHtml(frm, tab, row)}${boardsChip}${inlineTools}
+                    ${primaryActionHtml(frm, tab, row)}${inlineTools}${boardsChip}
                 </div>
             </div>
         `);

@@ -3,7 +3,11 @@
 
     if (window.AlmdinaOrderTabLayoutUX) return;
 
-    const STYLE_ID = "dco-order-tab-layout-css";
+    const STYLE_ID = "dco-order-tab-layout-css-v3";
+    const LEGACY_STYLE_IDS = Object.freeze([
+        "dco-order-tab-layout-css",
+        "dco-order-tab-layout-css-v2",
+    ]);
     const ROOT_CLASS = "dco-order-tab-layout";
 
     const SECTION_COPY = Object.freeze({
@@ -54,15 +58,19 @@
     }
 
     function installStyles() {
+        LEGACY_STYLE_IDS.forEach((id) => {
+            const legacy = document.getElementById(id);
+            if (legacy) legacy.remove();
+        });
         if (document.getElementById(STYLE_ID)) return;
         $("head").append(`
             <style id="${STYLE_ID}">
                 .${ROOT_CLASS} .layout-main-section .form-page,
                 .${ROOT_CLASS} .layout-main-section-wrapper .form-page {
-                    max-width: 1440px !important;
+                    max-width: var(--dco-tab-shell-max, 1440px) !important;
                     margin-inline: auto !important;
                     width: 100% !important;
-                    padding-inline: 20px !important;
+                    padding-inline: var(--dco-tab-content-gutter, 20px) !important;
                     box-sizing: border-box !important;
                 }
                 .${ROOT_CLASS} .dco-status-strip,
@@ -71,7 +79,8 @@
                 .${ROOT_CLASS} .form-section:has([data-fieldname="operator_status_strip"]) {
                     width: 100% !important;
                     max-width: none !important;
-                    margin: 0 0 6px !important;
+                    /* Vertical rhythm between sections comes from the tab-pane row-gap token. */
+                    margin: 0 !important;
                     padding: 0 !important;
                     border-bottom: none !important;
                 }
@@ -103,9 +112,9 @@
                     width: 100% !important;
                     max-width: none !important;
                     margin: 0 !important;
-                    padding-block: 14px 16px !important;
-                    padding-inline: 44px !important;
-                    border-radius: 14px !important;
+                    padding-block: 8px 9px !important;
+                    padding-inline: var(--dco-tab-card-inset-inline, 44px) !important;
+                    border-radius: 12px !important;
                     border-top: 1px solid var(--border-color,#dfe3e8) !important;
                     border-inline-end: 1px solid var(--border-color,#dfe3e8) !important;
                     border-bottom: 1px solid var(--border-color,#dfe3e8) !important;
@@ -122,10 +131,10 @@
                     display: grid !important;
                     grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
                     column-gap: 14px;
-                    row-gap: 10px;
+                    row-gap: var(--dco-section-stack-gap, 8px);
                     width: 100% !important;
                     max-width: 100% !important;
-                    align-items: start;
+                    align-items: stretch;
                     box-sizing: border-box;
                 }
                 .${ROOT_CLASS} .tab-pane.show.active:has(.dco-order-intake-card) > .form-section:not(.dco-order-intake-card):not(.dco-material-edge-card) {
@@ -149,40 +158,43 @@
                 }
                 .${ROOT_CLASS} .dco-order-intake-card,
                 .${ROOT_CLASS} .dco-material-edge-card {
-                    margin-block: 6px 10px !important;
-                    padding-block: 14px 16px !important;
-                    padding-inline: 44px !important;
+                    margin-block: 0 !important;
+                    padding-block: var(--dco-tab-card-inset-block, 12px 14px) !important;
+                    padding-inline: var(--dco-tab-card-inset-inline, 44px) !important;
                     border: 1px solid var(--alm-card-border,#e4e8ee) !important;
                     border-radius: var(--alm-radius-card,16px) !important;
                     background: var(--alm-card,#fff) !important;
                     box-shadow: var(--alm-shadow-card,0 8px 24px rgba(15,23,42,.045)) !important;
-                }
-                .${ROOT_CLASS} .dco-order-intake-card {
-                    display: block !important;
+                    display: flex !important;
+                    flex-direction: column !important;
+                    min-height: 0;
+                    height: 100%;
                 }
                 .${ROOT_CLASS} .dco-order-intake-card > .dco-order-section-heading,
                 .${ROOT_CLASS} .dco-material-edge-card > .dco-order-section-heading {
                     width: 100%;
                     box-sizing: border-box;
-                }
-                .${ROOT_CLASS} .dco-material-edge-card {
-                    display: block !important;
+                    flex: 0 0 auto;
                 }
                 .${ROOT_CLASS} .dco-order-intake-card > .section-body {
-                    display: block !important;
+                    display: flex !important;
+                    flex-direction: column !important;
+                    flex: 1 1 auto;
                     direction: rtl;
                     width: 100% !important;
                     max-width: none !important;
                     margin: 0 !important;
                     box-sizing: border-box;
+                    gap: 10px;
                 }
                 .${ROOT_CLASS} .dco-order-intake-card > .section-body > .dco-order-section-heading {
-                    margin-bottom: 10px;
+                    margin-bottom: 0;
+                    flex: 0 0 auto;
                 }
                 .${ROOT_CLASS} .dco-measurements-card {
-                    margin-block: 10px 0 !important;
-                    padding-block: 14px 16px !important;
-                    padding-inline: 44px !important;
+                    margin-block: 0 0 !important;
+                    padding-block: var(--dco-tab-card-inset-block, 12px 14px) !important;
+                    padding-inline: var(--dco-tab-card-inset-inline, 44px) !important;
                     border: 1px solid var(--alm-card-border, #e4e8ee) !important;
                     border-radius: var(--alm-radius-card, 16px) !important;
                     background: var(--alm-card, #fff) !important;
@@ -204,7 +216,7 @@
                 .${ROOT_CLASS} .dco-order-intake-card.form-section,
                 .${ROOT_CLASS} .dco-material-edge-card.form-section,
                 .${ROOT_CLASS} .dco-measurements-card.form-section {
-                    padding-inline: 44px !important;
+                    padding-inline: var(--dco-tab-card-inset-inline, 44px) !important;
                 }
                 .${ROOT_CLASS} .dco-order-intake-card .frappe-control,
                 .${ROOT_CLASS} .dco-material-edge-card .frappe-control,
@@ -278,12 +290,16 @@
                 .${ROOT_CLASS} .dco-intake-row {
                     display: grid;
                     direction: rtl;
-                    gap: 12px 16px;
+                    gap: 10px 16px;
                     align-items: start;
                     width: 100%;
+                    flex: 0 0 auto;
                 }
                 .${ROOT_CLASS} .dco-intake-row + .dco-intake-row {
-                    margin-top: 12px;
+                    margin-top: 0;
+                }
+                .${ROOT_CLASS} .dco-intake-row--machine {
+                    margin-top: 2px;
                 }
                 .${ROOT_CLASS} .dco-intake-row--pair {
                     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -325,20 +341,30 @@
                  * by Frappe. This guarantees the exact visual rows requested.
                  */
                 .${ROOT_CLASS} .dco-material-edge-card > .section-body {
-                    display: block !important;
+                    display: flex !important;
+                    flex-direction: column !important;
+                    flex: 1 1 auto;
+                    justify-content: space-between;
+                    gap: 12px;
+                    min-height: 0;
                 }
                 .${ROOT_CLASS} .dco-material-edge-card > .section-body > .form-column {
                     display: none !important;
                 }
+                .${ROOT_CLASS} .dco-material-edge-card > .section-body > .dco-order-section-heading {
+                    flex: 0 0 auto;
+                    margin-bottom: 0;
+                }
                 .${ROOT_CLASS} .dco-material-row {
                     display: grid;
                     direction: rtl;
-                    gap: 12px 14px;
+                    gap: 10px 14px;
                     align-items: start;
                     width: 100%;
+                    flex: 0 0 auto;
                 }
                 .${ROOT_CLASS} .dco-material-row + .dco-material-row {
-                    margin-top: 12px;
+                    margin-top: 0;
                 }
                 .${ROOT_CLASS} .dco-material-row--primary {
                     grid-template-columns: minmax(0,2fr) minmax(140px,1fr) minmax(140px,1fr);
@@ -409,10 +435,15 @@
                 @media (max-width: 980px) {
                     .${ROOT_CLASS} .tab-pane.show.active:has(.dco-order-intake-card) {
                         grid-template-columns: 1fr;
+                        align-items: start;
                     }
                     .${ROOT_CLASS} .tab-pane.show.active:has(.dco-order-intake-card) > .dco-order-intake-card,
                     .${ROOT_CLASS} .tab-pane.show.active:has(.dco-order-intake-card) > .dco-material-edge-card {
                         grid-column: 1 / -1;
+                        height: auto;
+                    }
+                    .${ROOT_CLASS} .dco-material-edge-card > .section-body {
+                        justify-content: flex-start;
                     }
                     .${ROOT_CLASS} .dco-intake-row--pair {
                         grid-template-columns: 1fr;
@@ -424,22 +455,23 @@
                 @media (max-width: 700px) { 
                     .${ROOT_CLASS} .layout-main-section .form-page,
                     .${ROOT_CLASS} .layout-main-section-wrapper .form-page {
-                        padding-inline: 12px !important;
+                        padding-inline: var(--dco-tab-content-gutter, 12px) !important;
                     }
                     .${ROOT_CLASS} .dco-order-intake-card,
                     .${ROOT_CLASS} .dco-material-edge-card {
-                        padding-block: 12px 14px !important;
-                        padding-inline: 32px !important;
+                        padding-block: var(--dco-tab-card-inset-block, 10px 12px) !important;
+                        padding-inline: var(--dco-tab-card-inset-inline, 32px) !important;
                         border-radius: 12px !important;
+                        height: auto;
                     }
                     .${ROOT_CLASS} [data-fieldname="operator_status_strip"] .dco-order-tracking-strip,
                     .${ROOT_CLASS} [data-fieldname="operator_status_strip"] .frappe-card {
-                        padding-block: 12px 14px !important;
-                        padding-inline: 32px !important;
+                        padding-block: 7px 8px !important;
+                        padding-inline: var(--dco-tab-card-inset-inline, 32px) !important;
                         border-radius: 12px !important;
                     }
                     .${ROOT_CLASS} .dco-order-intake-card > .section-body {
-                        gap: 9px;
+                        gap: 8px;
                     }
                     .${ROOT_CLASS} .dco-intake-row--pair {
                         grid-template-columns: 1fr;

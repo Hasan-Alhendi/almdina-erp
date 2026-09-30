@@ -42,7 +42,16 @@ def test_primary_tab_bar_is_fixed_on_scroll_and_labels_are_arabic():
     assert 'results_tab: "خطة القص"' in src
     assert 'cost_tab: "تكلفة الطلب"' in src
     assert 'frm.set_df_property(fieldname, "label", label)' in src
-    assert 'const STYLE_ID = "dco-responsive-header-css-v9"' in src
+    assert 'const STYLE_ID = "dco-responsive-header-css-v11"' in src
+    assert "width: calc(100% - (2 * var(--dco-tab-content-gutter, 20px)))" in src
+    assert "max-width: calc(var(--dco-tab-shell-max, 1440px) - (2 * var(--dco-tab-content-gutter, 20px)))" in src
+    assert "margin: 0 auto var(--dco-section-stack-gap, 8px) !important" in src
+    assert "z-index: 1020 !important" in src
+    assert "body.modal-open .dco-sticky-tabs.dco-tabs-is-fixed" in src
+    assert "function tabContentAlignRect" in src
+    assert "paddingInlineStart" in src
+    assert "tabs.style.left = `${Math.round(align.left)}px`" in src
+    assert "tabs.style.width = `${Math.round(align.width)}px`" in src
     assert "--alm-primary" in src
     assert "--alm-on-primary" in src
     assert "border-bottom: none !important" in src

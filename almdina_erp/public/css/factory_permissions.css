@@ -8,7 +8,6 @@
 .apc-shell {
     --apc-accent: var(--alm-accent, #2563eb);
     --apc-accent-soft: #eff6ff;
-    --apc-footer: #1a2b4b;
     --apc-radius-lg: 16px;
     --apc-radius-md: 14px;
     --apc-radius-sm: 10px;
@@ -805,58 +804,61 @@
     display: flex;
     justify-content: center;
     pointer-events: none;
-    padding: 0;
-    background: var(--apc-footer);
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+    background: linear-gradient(180deg, transparent, rgba(15, 23, 42, 0.04));
 }
 
 .apc-savebar-inner {
     pointer-events: auto;
-    width: min(1480px, 100%);
+    width: min(780px, calc(100vw - 30px));
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
-    padding: 12px 20px calc(12px + env(safe-area-inset-bottom, 0px));
-    background: transparent;
-    border: 0;
-    box-shadow: none;
+    gap: 12px;
+    padding: 10px 18px 10px 16px;
+    border: 1px solid var(--border-color, #dfe3e8);
+    border-radius: 15px;
+    background: var(--fg-color, #fff);
+    box-shadow: 0 14px 42px rgba(15, 23, 42, 0.16);
 }
 
 .apc-save-actions {
     display: flex;
-    gap: 8px;
+    gap: 14px;
+    align-items: center;
 }
 
-.apc-save-actions .apc-save.btn {
-    min-height: 40px;
-    padding-inline: 18px;
-    border-radius: 10px;
-    font-size: 12px;
-    font-weight: 800;
-    background: var(--apc-accent) !important;
-    border-color: var(--apc-accent) !important;
-    color: #fff !important;
-}
-
+.apc-save-actions .apc-save.btn,
 .apc-save-actions .apc-reset.btn {
-    min-height: 40px;
-    padding-inline: 16px;
-    border-radius: 10px;
-    font-size: 12px;
-    font-weight: 800;
+    min-height: 0;
+    padding: 0;
+    border: 0 !important;
+    border-radius: 0;
     background: transparent !important;
-    border: 1px solid rgba(255, 255, 255, 0.35) !important;
-    color: #fff !important;
+    box-shadow: none !important;
+    font-size: 13px;
+    font-weight: 700;
+    color: #4b5563 !important;
+}
+
+.apc-save-actions .apc-save.btn:hover,
+.apc-save-actions .apc-reset.btn:hover {
+    color: #111827 !important;
+    background: transparent !important;
+}
+
+.apc-save-actions .apc-save.btn:disabled,
+.apc-save-actions .apc-reset.btn:disabled {
+    opacity: 0.45;
 }
 
 .apc-dirty {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    color: rgba(255, 255, 255, 0.72);
-    font-size: 11px;
-    font-weight: 750;
+    color: var(--text-muted, #6b7280);
+    font-size: 12px;
+    font-weight: 700;
 }
 
 .apc-dirty::before {
@@ -865,15 +867,17 @@
     height: 8px;
     flex: 0 0 auto;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.35);
+    background: #94a3b8;
+    box-shadow: 0 0 0 4px rgba(148, 163, 184, 0.12);
 }
 
 .apc-dirty.is-dirty {
-    color: #fde68a;
+    color: #8a5b00;
 }
 
 .apc-dirty.is-dirty::before {
-    background: #fbbf24;
+    background: #d97706;
+    box-shadow: 0 0 0 4px rgba(217, 119, 6, 0.12);
 }
 
 .apc-capability-input:disabled + .apc-slider,
@@ -939,24 +943,27 @@
         grid-template-columns: auto minmax(0, 1fr);
     }
 
+    .apc-savebar {
+        padding-inline: 10px;
+    }
+
     .apc-savebar-inner {
         flex-direction: column;
         align-items: stretch;
         gap: 10px;
+        width: min(100%, calc(100vw - 20px));
         padding-inline: 14px;
     }
 
     .apc-save-actions {
         order: 1;
+        justify-content: center;
+        gap: 18px;
     }
 
     .apc-dirty {
         justify-content: center;
         order: 2;
-    }
-
-    .apc-save-actions .btn {
-        flex: 1;
     }
 }
 
