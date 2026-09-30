@@ -212,8 +212,11 @@ def test_margin_warning_is_compact_except_when_original_edge_is_used():
     assert "تم استخدام حافة أصلية من اللوح؛ افحص استقامتها قبل التنفيذ." in source
     assert "dco-margin-policy-alert__summary" in source
     assert "dco-margin-policy-alert__details" in source
+    assert "dco-margin-policy-alert__row" in source
+    assert "dco-margin-policy-alert__copy" in source
     assert "dco-margin-policy-alert__edge${zeroClass}" in source
     assert ".dco-margin-policy-alert__edge.is-zero" in styles
+    assert "justify-content:space-between" in styles
 
 
 def test_cutting_plan_sections_are_always_arabic_for_factory_operator_ui():

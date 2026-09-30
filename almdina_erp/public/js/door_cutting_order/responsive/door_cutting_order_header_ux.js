@@ -1,7 +1,7 @@
 (() => {
     "use strict";
 
-    const STYLE_ID = "dco-responsive-header-css-v8";
+    const STYLE_ID = "dco-responsive-header-css-v9";
     const LEGACY_STYLE_IDS = [
         "dco-responsive-header-css",
         "dco-responsive-header-css-v2",
@@ -10,6 +10,7 @@
         "dco-responsive-header-css-v5",
         "dco-responsive-header-css-v6",
         "dco-responsive-header-css-v7",
+        "dco-responsive-header-css-v8",
     ];
     const TAB_LABELS = {
         order_tab: "الطلب",
@@ -130,13 +131,14 @@
                 border: 0;
             }
 
-            .dco-operator-form .form-tabs-list:has(.dco-sticky-tabs) {
+            .dco-operator-form .form-tabs-list:has(> .dco-sticky-tabs):not(.dco-sticky-tabs) {
                 border-bottom: none !important;
                 border-radius: 0 !important;
                 background: transparent !important;
             }
 
-            .dco-sticky-tabs {
+            .dco-sticky-tabs,
+            .dco-operator-form .form-tabs-list.dco-sticky-tabs {
                 background: var(--card-bg, #fff) !important;
                 border: 1px solid var(--border-color, #dfe3e8) !important;
                 border-bottom: 1px solid var(--alm-card-border, #e4e8ee) !important;
@@ -153,7 +155,8 @@
             }
 
             .dco-operator-form .dco-sticky-tabs .form-tabs,
-            .dco-operator-form .dco-sticky-tabs .form-tabs-list {
+            .dco-operator-form .dco-sticky-tabs .form-tabs-list,
+            .dco-operator-form .form-tabs-list.dco-sticky-tabs > .form-tabs {
                 margin-bottom: 0 !important;
                 border-bottom: none !important;
             }
@@ -232,7 +235,9 @@
             }
 
             .dco-sticky-tabs .form-tabs-list,
-            .dco-sticky-tabs .nav-tabs {
+            .dco-sticky-tabs .nav-tabs,
+            .dco-sticky-tabs > .form-tabs,
+            .form-tabs-list.dco-sticky-tabs > .form-tabs {
                 display: flex !important;
                 flex-wrap: nowrap !important;
                 align-items: center !important;
@@ -608,12 +613,14 @@
         if (!wrapper) return;
 
         const candidates = [
-            ...wrapper.querySelectorAll(".form-tabs"),
             ...wrapper.querySelectorAll(".form-tabs-list"),
+            ...wrapper.querySelectorAll(".form-tabs"),
         ];
         if (!candidates.length) return;
 
-        const tabs = candidates.find(node => node.classList.contains("form-tabs")) || candidates[0];
+        // Prefer the shared outer form-tabs-list so card chrome + radius apply on
+        // Order / Plan / Cost tabs alike (not only when styles land on the inner ul).
+        const tabs = candidates.find(node => node.classList.contains("form-tabs-list")) || candidates[0];
         tabs.classList.add("dco-sticky-tabs");
         forceRenderedTabLabels(frm, tabs);
 

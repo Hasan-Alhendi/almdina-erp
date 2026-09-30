@@ -42,7 +42,7 @@ def test_primary_tab_bar_is_fixed_on_scroll_and_labels_are_arabic():
     assert 'results_tab: "خطة القص"' in src
     assert 'cost_tab: "تكلفة الطلب"' in src
     assert 'frm.set_df_property(fieldname, "label", label)' in src
-    assert 'const STYLE_ID = "dco-responsive-header-css-v8"' in src
+    assert 'const STYLE_ID = "dco-responsive-header-css-v9"' in src
     assert "--alm-primary" in src
     assert "--alm-on-primary" in src
     assert "border-bottom: none !important" in src

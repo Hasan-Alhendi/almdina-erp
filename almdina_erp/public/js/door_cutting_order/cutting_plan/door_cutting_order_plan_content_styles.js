@@ -3,7 +3,7 @@
 
     if (window.AlmdinaPlanContentStyles) return;
 
-    const STYLE_ID = "dco-plan-content-layout-css-v14";
+    const STYLE_ID = "dco-plan-content-layout-css-v16";
     const LEGACY_STYLE_IDS = [
         "dco-plan-content-layout-css-v8",
         "dco-plan-content-layout-css-v9",
@@ -11,6 +11,8 @@
         "dco-plan-content-layout-css-v11",
         "dco-plan-content-layout-css-v12",
         "dco-plan-content-layout-css-v13",
+        "dco-plan-content-layout-css-v14",
+        "dco-plan-content-layout-css-v15",
     ];
     const CSS_TEXT = `
         .dco-operator-form .dco-plan-settings-readonly[data-almdina-plan-settings-summary-owner="stable"],
@@ -41,21 +43,26 @@
             margin:0 !important;
         }
         .dco-operator-form .dco-plan-settings-readonly[data-almdina-plan-settings-summary-owner="stable"] {
-            margin-block:0 2px !important;
-            padding:0 !important;
-            padding-inline:var(--dco-tab-card-inset-inline, 44px) !important;
-            border:0 !important;
-            border-radius:0 !important;
-            background:transparent !important;
+            display:block !important;
+            width:100% !important;
+            max-width:none !important;
+            box-sizing:border-box !important;
+            margin:0 0 10px !important;
+            margin-inline:0 !important;
+            padding:6px 12px !important;
+            border:1px solid var(--alm-card-border, #e4e8ee) !important;
+            border-radius:var(--alm-radius-sm, 10px) !important;
+            background:var(--alm-card, #fff) !important;
             box-shadow:none !important;
         }
         .dco-operator-form .dco-plan-settings-readonly[data-almdina-plan-settings-summary-owner="stable"] .dco-plan-settings-readonly__strip {
-            display:flex;
-            flex-wrap:wrap;
-            align-items:center;
-            gap:6px 14px;
-            font-size:11px;
-            line-height:1.5;
+            display:flex !important;
+            flex-wrap:nowrap !important;
+            align-items:center !important;
+            gap:6px !important;
+            width:100% !important;
+            min-width:0 !important;
+            overflow-x:auto !important;
         }
         .dco-operator-form .dco-plan-section-card.dco-layout-card.dco-ui-card {
             padding:0 !important;
@@ -295,6 +302,21 @@
             line-height:1.25 !important;
         }
         [data-fieldname="cutting_plan_html"] .dco-margin-policy-alert__body {
+            display:flex;
+            flex-direction:column;
+            gap:4px;
+            min-width:0;
+            flex:1 1 auto;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-margin-policy-alert__row {
+            display:flex;
+            flex-direction:row;
+            align-items:center;
+            justify-content:space-between;
+            gap:10px;
+            min-width:0;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-margin-policy-alert__copy {
             min-width:0;
             flex:1 1 auto;
         }
@@ -308,22 +330,24 @@
             display:inline;
             font-size:11px !important;
             font-weight:750 !important;
-            line-height:1.55 !important;
+            line-height:1.45 !important;
         }
         [data-fieldname="cutting_plan_html"] .dco-margin-policy-alert__details {
-            margin-top:4px;
+            margin-top:0;
         }
         [data-fieldname="cutting_plan_html"] .dco-margin-policy-alert__note {
-            margin:1px 0 0;
+            margin:0;
             font-size:10.5px !important;
             font-weight:700 !important;
-            line-height:1.55 !important;
+            line-height:1.45 !important;
         }
         [data-fieldname="cutting_plan_html"] .dco-margin-policy-alert__edges {
             display:flex;
-            flex-wrap:wrap;
+            flex-wrap:nowrap;
+            align-items:center;
             gap:5px;
-            margin-top:6px;
+            flex:0 0 auto;
+            margin-top:0;
         }
         [data-fieldname="cutting_plan_html"] .dco-margin-policy-alert__edge {
             display:inline-flex;
@@ -725,9 +749,14 @@
                 align-items:stretch !important;
                 flex-direction:column !important;
             }
+            [data-fieldname="cutting_plan_html"] .dco-margin-policy-alert__row {
+                flex-wrap:wrap;
+                align-items:flex-start;
+            }
             [data-fieldname="cutting_plan_html"] .dco-margin-policy-alert__edges {
-                display:grid !important;
-                grid-template-columns:repeat(2,minmax(0,1fr));
+                display:flex !important;
+                flex-wrap:wrap;
+                margin-inline-start:auto;
             }
             [data-fieldname="cutting_plan_html"] .dco-margin-policy-alert__edge { justify-content:center; }
             [data-fieldname="cutting_plan_html"] .dco-board-gallery { gap:8px !important; }

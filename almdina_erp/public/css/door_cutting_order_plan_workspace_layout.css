@@ -1,0 +1,143 @@
+/*
+ * Cutting Plan — layout overrides while plan settings edit session is active
+ * and while the Cutting Plan tab is active.
+ *
+ * Root cause of the narrow/centered settings + right-hugged boards:
+ * Frappe desk `.std-form-layout .section-body` uses
+ * `max-width: var(--page-max-width)` (900px) + `margin: auto`.
+ * Inner width:100% cannot escape that parent. Override the parent itself.
+ *
+ * Main Order/Plan/Cost tab bar stays owned by shared header sticky-tabs styles.
+ */
+
+body.dco-plan-settings-edit-active .dco-operator-form,
+body.dco-plan-results-tab-active .dco-operator-form {
+    --page-max-width: none;
+    --dco-tab-card-inset-inline: 14px;
+    --dco-plan-card-inset-inline: 14px;
+    --dco-plan-section-gap: 10px;
+}
+
+body.dco-plan-settings-edit-active .layout-main-section .form-page,
+body.dco-plan-settings-edit-active .layout-main-section-wrapper .form-page,
+body.dco-plan-settings-edit-active .dco-order-tab-layout .layout-main-section .form-page,
+body.dco-plan-settings-edit-active .dco-order-tab-layout .layout-main-section-wrapper .form-page,
+body.dco-plan-results-tab-active .layout-main-section .form-page,
+body.dco-plan-results-tab-active .layout-main-section-wrapper .form-page {
+    max-width: none !important;
+    width: 100% !important;
+    margin-inline: 0 !important;
+    padding-inline: 16px !important;
+    box-sizing: border-box !important;
+}
+
+/* Shared horizontal track for settings + board distribution */
+body.dco-plan-settings-edit-active .dco-operator-form .dco-plan-actions-section,
+body.dco-plan-settings-edit-active .dco-operator-form .dco-plan-layout-section,
+body.dco-plan-settings-edit-active .dco-operator-form .form-section:has([data-fieldname="plan_control_actions"]),
+body.dco-plan-settings-edit-active .dco-operator-form .form-section:has([data-fieldname="cutting_plan_html"]),
+body.dco-plan-settings-edit-active .dco-operator-form .dco-plan-section-card.dco-layout-card,
+body.dco-plan-results-tab-active .dco-operator-form .dco-plan-actions-section,
+body.dco-plan-results-tab-active .dco-operator-form .dco-plan-layout-section,
+body.dco-plan-results-tab-active .dco-operator-form .form-section:has([data-fieldname="plan_control_actions"]),
+body.dco-plan-results-tab-active .dco-operator-form .form-section:has([data-fieldname="cutting_plan_html"]),
+body.dco-plan-results-tab-active .dco-operator-form .dco-plan-section-card.dco-layout-card {
+    width: 100% !important;
+    max-width: none !important;
+    margin-inline: 0 !important;
+    padding-inline: 0 !important;
+    box-sizing: border-box !important;
+}
+
+/* Beat: body:not(.full-width) .std-form-layout .section-body { max-width: 900px } */
+body.dco-plan-settings-edit-active .dco-operator-form .dco-plan-actions-section > .section-head,
+body.dco-plan-settings-edit-active .dco-operator-form .dco-plan-actions-section > .section-body,
+body.dco-plan-settings-edit-active .dco-operator-form .dco-plan-layout-section > .section-head,
+body.dco-plan-settings-edit-active .dco-operator-form .dco-plan-layout-section > .section-body,
+body.dco-plan-settings-edit-active .dco-operator-form .form-section:has([data-fieldname="plan_control_actions"]) > .section-head,
+body.dco-plan-settings-edit-active .dco-operator-form .form-section:has([data-fieldname="plan_control_actions"]) > .section-body,
+body.dco-plan-settings-edit-active .dco-operator-form .form-section:has([data-fieldname="cutting_plan_html"]) > .section-head,
+body.dco-plan-settings-edit-active .dco-operator-form .form-section:has([data-fieldname="cutting_plan_html"]) > .section-body,
+body.dco-plan-settings-edit-active .dco-operator-form .std-form-layout .dco-plan-actions-section > .section-head,
+body.dco-plan-settings-edit-active .dco-operator-form .std-form-layout .dco-plan-actions-section > .section-body,
+body.dco-plan-settings-edit-active .dco-operator-form .std-form-layout .dco-plan-layout-section > .section-head,
+body.dco-plan-settings-edit-active .dco-operator-form .std-form-layout .dco-plan-layout-section > .section-body,
+body.dco-plan-settings-edit-active .dco-operator-form .std-form-layout .form-section:has([data-fieldname="plan_control_actions"]) > .section-head,
+body.dco-plan-settings-edit-active .dco-operator-form .std-form-layout .form-section:has([data-fieldname="plan_control_actions"]) > .section-body,
+body.dco-plan-settings-edit-active .dco-operator-form .std-form-layout .form-section:has([data-fieldname="cutting_plan_html"]) > .section-head,
+body.dco-plan-settings-edit-active .dco-operator-form .std-form-layout .form-section:has([data-fieldname="cutting_plan_html"]) > .section-body,
+body.dco-plan-results-tab-active .dco-operator-form .dco-plan-actions-section > .section-head,
+body.dco-plan-results-tab-active .dco-operator-form .dco-plan-actions-section > .section-body,
+body.dco-plan-results-tab-active .dco-operator-form .dco-plan-layout-section > .section-head,
+body.dco-plan-results-tab-active .dco-operator-form .dco-plan-layout-section > .section-body,
+body.dco-plan-results-tab-active .dco-operator-form .form-section:has([data-fieldname="plan_control_actions"]) > .section-head,
+body.dco-plan-results-tab-active .dco-operator-form .form-section:has([data-fieldname="plan_control_actions"]) > .section-body,
+body.dco-plan-results-tab-active .dco-operator-form .form-section:has([data-fieldname="cutting_plan_html"]) > .section-head,
+body.dco-plan-results-tab-active .dco-operator-form .form-section:has([data-fieldname="cutting_plan_html"]) > .section-body,
+body.dco-plan-results-tab-active .dco-operator-form .std-form-layout .dco-plan-actions-section > .section-head,
+body.dco-plan-results-tab-active .dco-operator-form .std-form-layout .dco-plan-actions-section > .section-body,
+body.dco-plan-results-tab-active .dco-operator-form .std-form-layout .dco-plan-layout-section > .section-head,
+body.dco-plan-results-tab-active .dco-operator-form .std-form-layout .dco-plan-layout-section > .section-body,
+body.dco-plan-results-tab-active .dco-operator-form .std-form-layout .form-section:has([data-fieldname="plan_control_actions"]) > .section-head,
+body.dco-plan-results-tab-active .dco-operator-form .std-form-layout .form-section:has([data-fieldname="plan_control_actions"]) > .section-body,
+body.dco-plan-results-tab-active .dco-operator-form .std-form-layout .form-section:has([data-fieldname="cutting_plan_html"]) > .section-head,
+body.dco-plan-results-tab-active .dco-operator-form .std-form-layout .form-section:has([data-fieldname="cutting_plan_html"]) > .section-body {
+    max-width: none !important;
+    width: 100% !important;
+    margin: 0 !important;
+    margin-inline: 0 !important;
+    box-sizing: border-box !important;
+}
+
+body.dco-plan-settings-edit-active .dco-operator-form .form-section:has([data-fieldname="plan_control_actions"]) .form-column,
+body.dco-plan-settings-edit-active .dco-operator-form .form-section:has([data-fieldname="cutting_plan_html"]) .form-column,
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"],
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] > .frappe-control,
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="cutting_plan_html"],
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="cutting_plan_html"] > .frappe-control,
+body.dco-plan-results-tab-active .dco-operator-form .form-section:has([data-fieldname="plan_control_actions"]) .form-column,
+body.dco-plan-results-tab-active .dco-operator-form .form-section:has([data-fieldname="cutting_plan_html"]) .form-column,
+body.dco-plan-results-tab-active .dco-operator-form [data-fieldname="plan_control_actions"],
+body.dco-plan-results-tab-active .dco-operator-form [data-fieldname="plan_control_actions"] > .frappe-control,
+body.dco-plan-results-tab-active .dco-operator-form [data-fieldname="cutting_plan_html"],
+body.dco-plan-results-tab-active .dco-operator-form [data-fieldname="cutting_plan_html"] > .frappe-control {
+    width: 100% !important;
+    max-width: none !important;
+    flex: 0 0 100% !important;
+    box-sizing: border-box !important;
+}
+
+body.dco-plan-settings-edit-active .dco-operator-form .dco-plan-settings-editor,
+body.dco-plan-results-tab-active .dco-operator-form .dco-plan-settings-editor {
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 0 var(--dco-plan-section-gap, 10px) !important;
+    box-sizing: border-box !important;
+}
+
+body.dco-plan-settings-edit-active .dco-operator-form:has(.dco-plan-settings-editor) .dco-plan-actions-shell,
+body.dco-plan-results-tab-active .dco-operator-form:has(.dco-plan-settings-editor) .dco-plan-actions-shell {
+    display: none !important;
+}
+
+body.dco-plan-settings-edit-active .dco-operator-form .dco-plan-section-card.dco-layout-card > .section-head,
+body.dco-plan-settings-edit-active .dco-operator-form .dco-plan-section-card.dco-layout-card > .section-body,
+body.dco-plan-results-tab-active .dco-operator-form .dco-plan-section-card.dco-layout-card > .section-head,
+body.dco-plan-results-tab-active .dco-operator-form .dco-plan-section-card.dco-layout-card > .section-body {
+    padding-inline: var(--dco-plan-card-inset-inline, 14px) !important;
+}
+
+body.dco-plan-settings-edit-active .dco-order-tab-layout,
+body.dco-plan-results-tab-active .dco-order-tab-layout {
+    max-width: none !important;
+    width: 100% !important;
+}
+
+body.dco-plan-settings-edit-active .dco-order-tab-layout .layout-main-section,
+body.dco-plan-settings-edit-active .dco-order-tab-layout .layout-main-section-wrapper,
+body.dco-plan-results-tab-active .dco-order-tab-layout .layout-main-section,
+body.dco-plan-results-tab-active .dco-order-tab-layout .layout-main-section-wrapper {
+    max-width: none !important;
+    width: 100% !important;
+}

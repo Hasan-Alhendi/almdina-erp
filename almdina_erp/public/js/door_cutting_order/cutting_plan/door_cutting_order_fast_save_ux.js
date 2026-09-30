@@ -151,12 +151,60 @@
         return Boolean(owner && typeof owner.isActive === "function" && owner.isActive(frm));
     }
 
+    function planSettingsEditing(frm) {
+        const owner = window.AlmdinaPlanEditSessionUX;
+        return Boolean(owner && typeof owner.isEditing === "function" && owner.isEditing(frm));
+    }
+
+    function clearStaleBanners(wrapper) {
+        wrapper.find(".dco-plan-stale-banner").remove();
+        wrapper.find(".dco-plan-settings-editor__stale-copy").each(function resetCopy() {
+            const node = $(this);
+            node.text("").attr("hidden", "hidden");
+        });
+        wrapper.find(".dco-plan-settings-editor__action-bar")
+            .removeClass("is-stale is-calculating is-stalled");
+    }
+
+    function renderEditActionBar(frm, wrapper, options = {}) {
+        const editor = wrapper.find(".dco-plan-settings-editor").first();
+        if (!editor.length) return false;
+
+        const actionBar = editor.find(".dco-plan-settings-editor__action-bar").first();
+        const copy = editor.find('[data-role="stale"]').first();
+        if (!actionBar.length || !copy.length) return false;
+
+        actionBar.removeClass("is-stale is-calculating is-stalled is-edit-layout");
+        if (options.editLayout) {
+            actionBar.addClass("is-edit-layout");
+        }
+        if (options.calculating) {
+            actionBar.addClass(`is-calculating${options.stalled ? " is-stalled" : ""}`);
+        } else         if (options.stale) {
+            actionBar.addClass("is-stale");
+        } else if (options.editLayout) {
+            actionBar.addClass("is-stale");
+        }
+
+        if (options.message) {
+            copy.text(options.message).removeAttr("hidden");
+        } else {
+            copy.text("").attr("hidden", "hidden");
+        }
+        return true;
+    }
+
     function renderStaleState(frm) {
         installStyles();
         const planActions = frm.fields_dict && frm.fields_dict.plan_control_actions;
         if (!planActions || !planActions.$wrapper) return;
 
-        planActions.$wrapper.find(".dco-plan-stale-banner").remove();
+        const wrapper = planActions.$wrapper;
+        clearStaleBanners(wrapper);
+
+        const inEditLayout = planSettingsEditing(frm)
+            && wrapper.find(".dco-plan-settings-editor").length;
+
         const job = backgroundJob(frm);
         if (jobIsActive(frm)) {
             const stalled = Boolean(job && job.stalled);
@@ -166,24 +214,46 @@
             const body = stalled
                 ? __("الحفظ تم بنجاح، لكن العامل الخلفي لم يبدأ بعد. يمكنك متابعة العمل أو استخدام زر إعادة الحساب اليدوي.")
                 : __("يمكنك متابعة العمل على الطلب. ستتحدث خطة القص والتكلفة تلقائيًا عند اكتمال الحساب.");
-            planActions.$wrapper.prepend(`
+            const message = stalled ? title : `${title} — ${body}`;
+            if (inEditLayout && renderEditActionBar(frm, wrapper, {
+                calculating: true,
+                stalled,
+                message,
+                editLayout: true,
+            })) {
+                return;
+            }
+            wrapper.prepend(`
                 <div class="dco-plan-stale-banner is-calculating${stalled ? " is-stalled" : ""}" role="status" aria-live="polite">
                     <span class="icon">⏳</span>
-                    <span class="dco-plan-stale-copy">${frappe.utils.escape_html(stalled ? title : `${title} — ${body}`)}</span>
+                    <span class="dco-plan-stale-copy">${frappe.utils.escape_html(message)}</span>
                 </div>`);
             return;
         }
 
         const stale = planIsStale(frm);
+        if (inEditLayout) {
+            const staleLine = stale
+                ? __("⚡ تحتاج إعادة حساب")
+                : "";
+            renderEditActionBar(frm, wrapper, {
+                stale,
+                message: staleLine,
+                editLayout: true,
+            });
+            if (stale) wrapper.find(".dco-plan-dirty-note").addClass("is-visible");
+            return;
+        }
+
         if (!stale) return;
 
         const staleLine = __("خطة القص تحتاج إعادة حساب — اضغط «إعادة الحساب بالإعدادات الحالية» بعد الانتهاء.");
-        planActions.$wrapper.prepend(`
+        wrapper.prepend(`
             <div class="dco-plan-stale-banner">
                 <span class="icon">⚡</span>
                 <span class="dco-plan-stale-copy">${frappe.utils.escape_html(staleLine)}</span>
             </div>`);
-        planActions.$wrapper.find(".dco-plan-dirty-note").addClass("is-visible");
+        wrapper.find(".dco-plan-dirty-note").addClass("is-visible");
     }
 
     function schedule(frm) {
