@@ -323,18 +323,26 @@
 		const status = frm.doc.status || "Draft";
 		const color = STATUS_COLORS[status] || "#374151";
 		const facts = [
-			[__("القسم الحالي"), frm.doc.current_department || "-"],
-			[__("العامل"), currentAssigneeDisplayName(frm.doc.current_assignee)],
-			[__("حالة القسم"), frm.doc.department_status || "-"],
+			[__("القسم الحالي"), frm.doc.current_department || "-", "value"],
+			[__("العامل"), currentAssigneeDisplayName(frm.doc.current_assignee), "value"],
+			[__("حالة القسم"), frm.doc.department_status || "-", "value"],
 		]
 			.map(
-				([label, value]) => `<div><div class="dco-order-tracking-strip__label">${escape(label)}</div><div class="dco-order-tracking-strip__value">${escape(value)}</div></div>`
+				([label, value, kind]) => (
+					`<div class="dco-order-tracking-strip__item">`
+					+ `<span class="dco-order-tracking-strip__label">${escape(label)}:</span>`
+					+ `<span class="dco-order-tracking-strip__${kind}">${escape(value)}</span>`
+					+ `</div>`
+				)
 			)
 			.join("");
 		const html = `
 			<div class="frappe-card dco-order-tracking-strip" style="--dco-status-color:${escape(color)}">
 				<div class="dco-order-tracking-strip__row">
-					<div><div class="dco-order-tracking-strip__label">${__("حالة الطلب")}</div><div class="dco-order-tracking-strip__status">${escape(statusLabel(status))}</div></div>
+					<div class="dco-order-tracking-strip__item">
+						<span class="dco-order-tracking-strip__label">${__("حالة الطلب")}:</span>
+						<span class="dco-order-tracking-strip__status">${escape(statusLabel(status))}</span>
+					</div>
 					${facts}
 				</div>
 				${renderProgressSteps(frm)}

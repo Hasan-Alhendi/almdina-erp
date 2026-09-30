@@ -126,7 +126,7 @@
                 width:100% !important;
                 max-width:none !important;
                 box-sizing:border-box !important;
-                margin:0 0 10px !important;
+                margin:0 0 var(--dco-section-stack-gap, 8px) !important;
                 margin-inline:0 !important;
                 padding:6px 12px !important;
                 border:1px solid var(--alm-card-border,#e4e8ee) !important;

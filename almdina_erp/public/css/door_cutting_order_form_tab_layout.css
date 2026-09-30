@@ -8,7 +8,9 @@
     --dco-tab-shell-max: 1440px;
     --dco-tab-content-gutter: 20px;
     --dco-tab-card-inset-inline: 44px;
-    --dco-tab-card-inset-block: 14px 16px;
+    --dco-tab-card-inset-block: 12px 14px;
+    /* Shared vertical rhythm between order-tab sections (tabs → status → cards → measurements). */
+    --dco-section-stack-gap: 8px;
 }
 
 @media (max-width: 1200px) {
@@ -22,7 +24,8 @@
     .dco-operator-form {
         --dco-tab-content-gutter: 12px;
         --dco-tab-card-inset-inline: 32px;
-        --dco-tab-card-inset-block: 12px 14px;
+        --dco-tab-card-inset-block: 10px 12px;
+        --dco-section-stack-gap: 6px;
     }
 }
 
@@ -77,31 +80,47 @@ body:has(.dco-operator-form) .page-head .page-actions .dco-dispatch-toolbar-butt
 }
 
 .dco-operator-form .dco-order-tracking-strip__row {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 12px 18px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 18px;
     width: 100%;
+}
+
+.dco-operator-form .dco-order-tracking-strip__item {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+}
+
+.dco-operator-form .dco-order-tracking-strip__item + .dco-order-tracking-strip__item {
+    padding-inline-start: 14px;
+    border-inline-start: 1px solid var(--alm-card-border, #e4e8ee);
 }
 
 .dco-operator-form .dco-order-tracking-strip__label {
     font-size: 12px;
     font-weight: 700;
     color: var(--text-muted, #6b7280);
+    white-space: nowrap;
 }
 
 .dco-operator-form .dco-order-tracking-strip__value {
-    margin-top: 4px;
-    font-size: 14px;
+    margin-top: 0;
+    font-size: 13px;
     font-weight: 800;
     color: var(--text-color, #1f272e);
+    white-space: nowrap;
 }
 
 .dco-operator-form .dco-order-tracking-strip__status {
     display: inline-flex;
-    margin-top: 4px;
+    margin-top: 0;
     color: var(--dco-status-color, var(--alm-warning, #b45309));
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 800;
+    white-space: nowrap;
 }
 
 .dco-operator-form .form-section:has([data-fieldname="board_rate_usd"]) {
@@ -135,8 +154,12 @@ body:has(.dco-operator-form) .page-head .page-actions .dco-dispatch-toolbar-butt
 }
 
 @media (max-width: 900px) {
-    .dco-operator-form .dco-order-tracking-strip__row,
     .dco-operator-form:has(a.nav-link.active[data-fieldname="cost_tab"]) .form-footer .after-save {
         grid-template-columns: minmax(0, 1fr);
+    }
+
+    .dco-operator-form .dco-order-tracking-strip__item + .dco-order-tracking-strip__item {
+        padding-inline-start: 0;
+        border-inline-start: 0;
     }
 }

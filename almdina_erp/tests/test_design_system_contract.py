@@ -380,10 +380,13 @@ class TestDesignSystemContract(unittest.TestCase):
         self.assertNotIn("frappe.prompt", permissions_dialogs)
 
     def test_dco_plan_tabs_use_design_system_tokens(self) -> None:
-        self.assertIn('class="almdina-ui dco-plan-tabs"', self.dco_plan_tabs)
-        self.assertIn('"is-active"', self.dco_plan_tabs)
+        self.assertIn("almdina-ui dco-plan-tabs", self.dco_plan_tabs)
+        self.assertIn("dco-plan-tabs--underline", self.dco_plan_tabs)
+        self.assertIn("aria-selected", self.dco_plan_tabs)
+        self.assertIn("is-active", self.dco_plan_tabs)
         self.assertNotIn('"btn-primary"', self.dco_plan_tabs)
         self.assertIn(".almdina-ui .dco-plan-tabs .btn.is-active", self.components)
+        self.assertIn("var(--alm-primary)", self.components)
 
     def test_migrated_surfaces_reject_legacy_primary_markup(self) -> None:
         for path in MIGRATED_SURFACES:

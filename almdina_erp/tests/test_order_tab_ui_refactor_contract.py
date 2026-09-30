@@ -115,13 +115,17 @@ def test_order_and_material_controls_follow_exact_requested_rows() -> None:
     assert "dco-order-status-shell" in layout
     assert "function ensureStatusShell" in layout
     assert "border-bottom: none !important" in layout
-    assert "margin-block: 6px 10px !important" in layout
-    assert "padding-block: 14px 16px !important" in layout
-    assert "padding-inline: 44px !important" in layout
+    assert "dco-order-tab-layout-css-v3" in layout
+    assert "align-items: stretch" in layout
+    assert "row-gap: var(--dco-section-stack-gap, 8px)" in layout
+    assert "padding-block: var(--dco-tab-card-inset-block, 12px 14px) !important" in layout
+    assert "padding-inline: var(--dco-tab-card-inset-inline, 44px) !important" in layout
+    assert "padding-inline: var(--dco-tab-content-gutter, 20px) !important" in layout
     assert "dco-measurements-mobile-scroll" in layout
     assert "padding-inline: 20px !important" in layout
     assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in layout
     assert "dco-order-intake-card > .section-body" in layout
+    assert "justify-content: space-between" in layout
     assert "const INTAKE_ROWS = Object.freeze" in layout
     assert "function ensureIntakeRows" in layout
     assert "dco-intake-row--pair" in layout
@@ -158,9 +162,15 @@ def test_order_and_material_controls_follow_exact_requested_rows() -> None:
 
 def test_order_tracking_strip_exposes_layout_hook_class() -> None:
     source = SHOP_FLOOR.read_text(encoding="utf-8")
+    css = FORM_TAB_LAYOUT_CSS.read_text(encoding="utf-8")
 
     assert "dco-order-tracking-strip" in source
     assert "margin-bottom:10px" not in source
+    assert 'dco-order-tracking-strip__label">${escape(label)}:</span>' in source
+    assert '${__("حالة الطلب")}:</span>' in source
+    assert "--dco-section-stack-gap: 8px" in css
+    assert "flex-wrap: wrap" in css
+    assert "dco-order-tracking-strip__item + .dco-order-tracking-strip__item" in css
 
 
 def test_notes_and_edge_color_never_disappear_when_empty() -> None:
@@ -277,6 +287,7 @@ def test_form_tab_layout_css_centers_order_and_plan_surfaces() -> None:
     assert 'door_cutting_order_form_tab_layout.css' in manifest
     assert "--dco-tab-shell-max: 1440px" in css
     assert "--dco-tab-content-gutter:" in css
+    assert "--dco-section-stack-gap: 8px" in css
     assert "order_tab_layout_ux.js" in css
     assert "padding-inline: 16px !important" in visual
     assert ".dco-plan-section-card.dco-layout-card > .section-body" in visual
@@ -287,6 +298,6 @@ def test_form_tab_layout_css_centers_order_and_plan_surfaces() -> None:
     assert "border-bottom: none !important" in visual
     assert "dco-plan-settings-readonly[data-almdina-plan-settings-summary-owner=\"stable\"]" in visual
     assert 'padding: 6px 12px !important' in visual
-    assert "dco-plan-cost-workspace-visual-ux-v7" in visual
+    assert "dco-plan-cost-workspace-visual-ux-v8" in visual
     assert ".dco-operator-form .dco-plan-section-card.dco-layout-card > .section-body" in visual
     assert "hide-border" in plan_content

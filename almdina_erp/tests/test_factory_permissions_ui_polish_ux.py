@@ -38,6 +38,10 @@ def test_permissions_polish_has_clear_enabled_dirty_and_focus_states() -> None:
     assert ".apc-switch input:focus-visible + .apc-slider" in css
     assert "safe-area-inset-bottom" in css
     assert "prefers-reduced-motion" in css
+    assert "border-radius: 15px" in css
+    assert "لا توجد تغييرات غير محفوظة" in RENDERER.read_text(encoding="utf-8")
+    assert 'className: "apc-save"' in RENDERER.read_text(encoding="utf-8")
+    assert 'className: "apc-reset"' in RENDERER.read_text(encoding="utf-8")
 
 
 def test_permissions_polish_remains_responsive_and_dense() -> None:

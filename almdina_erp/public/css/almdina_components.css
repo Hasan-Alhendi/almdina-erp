@@ -125,10 +125,21 @@
 }
 
 .almdina-ui .dco-plan-tabs .btn.is-active {
+    position: relative;
+    background: transparent;
+    border-color: transparent;
+    color: var(--alm-primary);
+    font-weight: 800;
+}
+
+.almdina-ui .dco-plan-tabs .btn.is-active::after {
+    content: "";
+    position: absolute;
+    inset-inline: 10px;
+    bottom: 0;
+    height: 2.5px;
+    border-radius: 999px;
     background: var(--alm-primary);
-    border-color: var(--alm-primary);
-    color: var(--alm-on-primary);
-    font-weight: 700;
 }
 
 /* Frappe Control wrapper (FE-ARCH-017 / DS-11) */
