@@ -24,9 +24,11 @@ EXPECTED_APP_INCLUDE_JS = [
 
 EXPECTED_DOOR_CUTTING_ORDER_JS = [
     "public/js/door_cutting_order/core/door_cutting_order_document_context.js",
+    "public/js/door_cutting_order/core/door_cutting_order_form_sidebar_controller.js",
     "public/js/door_cutting_order/core/door_cutting_order_edit_session_coordinator.js",
     "public/js/permission_context.js",
     "public/js/door_cutting_order/core/door_cutting_order_workspace_store.js",
+    "public/js/door_cutting_order/core/door_cutting_order_workspace_keep_paint.js",
     "public/js/door_cutting_order/core/door_cutting_order_workspace_sync_coordinator.js",
     "public/js/door_cutting_order/core/door_cutting_order_workspace_field_editor.js",
     "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_api.js",

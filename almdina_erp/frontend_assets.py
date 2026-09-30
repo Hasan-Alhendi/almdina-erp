@@ -66,6 +66,7 @@ doctype_js = {
         "public/js/door_cutting_order/core/door_cutting_order_edit_session_coordinator.js",
         "public/js/permission_context.js",
         "public/js/door_cutting_order/core/door_cutting_order_workspace_store.js",
+        "public/js/door_cutting_order/core/door_cutting_order_workspace_keep_paint.js",
         "public/js/door_cutting_order/core/door_cutting_order_workspace_sync_coordinator.js",
         "public/js/door_cutting_order/core/door_cutting_order_workspace_field_editor.js",
         # Plan/Cost transport + state stay eager and lightweight so workspace

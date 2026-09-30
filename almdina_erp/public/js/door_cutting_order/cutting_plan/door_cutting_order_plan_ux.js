@@ -32,7 +32,19 @@
 
     function workspaceData(frm) {
         const state = workspaceSnapshot(frm);
+        const keeper = window.AlmdinaWorkspaceKeepPaint;
+        if (keeper && typeof keeper.presentationData === "function") {
+            return keeper.presentationData(state);
+        }
         return state && state.status === "ready" ? state.data : null;
+    }
+
+    function previewOwnsDisplay(frm) {
+        const preview = window.AlmdinaPlanPreviewSession;
+        if (!preview || typeof preview.snapshot !== "function") return false;
+        const state = preview.snapshot(frm);
+        const status = String((state && state.status) || "idle");
+        return status === "ready" || status === "saving" || status === "previewing";
     }
 
     function activePlanRow(frm) {
@@ -646,7 +658,11 @@
             renderWorkspacePending(frm);
             return false;
         }
-        renderSummary(frm);
+        // Preview Edit/Presenter owns System summary/geometry while a preview
+        // session is active. Avoid canonical summary overwrite races here.
+        if (!previewOwnsDisplay(frm)) {
+            renderSummary(frm);
+        }
         renderActions(frm);
         return true;
     }

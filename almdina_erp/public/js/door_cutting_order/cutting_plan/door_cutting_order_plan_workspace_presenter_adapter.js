@@ -12,9 +12,21 @@
         return owner && typeof owner.snapshot === "function" ? owner.snapshot(frm) : null;
     }
 
+    function keepPaint() {
+        return window.AlmdinaWorkspaceKeepPaint || null;
+    }
+
     function data(frm) {
         const state = snapshot(frm);
+        const keeper = keepPaint();
+        if (keeper && typeof keeper.presentationData === "function") {
+            return keeper.presentationData(state);
+        }
         return state && state.status === "ready" ? state.data : null;
+    }
+
+    function canPresent(frm) {
+        return Boolean(data(frm));
     }
 
     function ensureLoad(frm) {
@@ -133,6 +145,18 @@
         };
     }
 
+    function previewOwnsSystemDisplay(frm) {
+        const preview = window.AlmdinaPlanPreviewSession;
+        if (!preview) return false;
+        if (typeof preview.displayedPreviewRow === "function" && preview.displayedPreviewRow(frm)) {
+            return true;
+        }
+        if (typeof preview.snapshot !== "function") return false;
+        const state = preview.snapshot(frm);
+        const status = String((state && state.status) || "idle");
+        return status === "previewing" || status === "ready" || status === "saving";
+    }
+
     function project(frm) {
         if (!frm || !frm.doc) return false;
         const payload = data(frm);
@@ -145,11 +169,17 @@
         const systemPlan = parseSnapshot(systemRow);
         const customPlan = parseSnapshot(customRow);
         const approvedPlan = parseSnapshot(approvedRow);
+        const displayedSystem = displayedPlanForTab(frm, "System");
 
         // Transitional read-only projection for legacy renderers. The source of
         // truth is the Plan workspace store; these assignments never save DCO.
+        // While a preview owns System display, keep cutting_plan_json aligned with
+        // the displayed projection so legacy readers cannot resurrect canonical
+        // geometry over the preview the operator is reviewing.
         frm.doc.system_plan_json = systemPlan;
-        frm.doc.cutting_plan_json = systemPlan || parseSnapshot(currentRow);
+        frm.doc.cutting_plan_json = previewOwnsSystemDisplay(frm)
+            ? (displayedSystem || systemPlan || parseSnapshot(currentRow))
+            : (systemPlan || parseSnapshot(currentRow));
         frm.doc.custom_plan_json = customPlan;
         frm.doc.production_dxf = customRow && customRow.dxf ? customRow.dxf.file || null : null;
         const currentApproved = String(payload.approved_plan || "").trim();
@@ -194,11 +224,38 @@
         `);
     }
 
-    function renderPending(frm) {
-        clearLegacySummary(frm);
+    function planLayoutWrapper(frm) {
         const field = frm && frm.fields_dict && frm.fields_dict.cutting_plan_html;
-        const wrapper = field && field.$wrapper;
-        if (!wrapper || !wrapper.length) return false;
+        return field && field.$wrapper && field.$wrapper.length ? field.$wrapper : null;
+    }
+
+    function hasMountedPlanSurface(frm) {
+        const wrapper = planLayoutWrapper(frm);
+        if (!wrapper) return false;
+        return Boolean(
+            (typeof wrapper.find === "function" && wrapper.find(".dco-plan-tab-content").length)
+            || (typeof wrapper.find === "function" && wrapper.find(".dco-plan-context-actions-host").length)
+        );
+    }
+
+    function syncBusy(frm) {
+        const keeper = keepPaint();
+        const wrapper = planLayoutWrapper(frm);
+        if (!keeper || typeof keeper.markBusy !== "function" || !wrapper) return;
+        keeper.markBusy(wrapper, keeper.isPresentationBusy(snapshot(frm)));
+    }
+
+    function renderPending(frm) {
+        // Keep-last-paint: a reload that still owns retained workspace data must
+        // not erase mounted tabs/context actions. First load / hard empty still
+        // use the pending placeholder.
+        if (canPresent(frm) && hasMountedPlanSurface(frm)) {
+            syncBusy(frm);
+            return true;
+        }
+        clearLegacySummary(frm);
+        const wrapper = planLayoutWrapper(frm);
+        if (!wrapper) return false;
         const orderName = String(frm && frm.doc && frm.doc.name || "");
         wrapper
             .attr("data-almdina-order", orderName)
@@ -215,6 +272,13 @@
     function ready(frm) {
         const state = snapshot(frm);
         return Boolean(state && state.status === "ready" && state.data);
+    }
+
+    function paintPlanSurface(frm, legacyPainter) {
+        project(frm);
+        const painted = legacyPainter(frm);
+        syncBusy(frm);
+        return painted;
     }
 
     function install() {
@@ -234,9 +298,10 @@
                 return ensureLoad(frm).then(() => getPlanForTab(frm, "Approved"));
             },
             renderDualTabs(frm) {
-                if (!ready(frm)) return renderPending(frm);
-                project(frm);
-                return legacy.renderDualTabs(frm);
+                if (canPresent(frm)) {
+                    return paintPlanSurface(frm, () => legacy.renderDualTabs(frm));
+                }
+                return renderPending(frm);
             },
             printActivePlan(frm) {
                 if (!ready(frm)) {
@@ -248,9 +313,10 @@
                 return legacy.printActivePlan(frm);
             },
             afterRender(frm) {
-                if (!ready(frm)) return renderPending(frm);
-                project(frm);
-                return legacy.afterRender(frm);
+                if (canPresent(frm)) {
+                    return paintPlanSurface(frm, () => legacy.afterRender(frm));
+                }
+                return renderPending(frm);
             },
         };
         // This compatibility facade is intentionally decoratable. The later
@@ -280,6 +346,7 @@
         hasApprovedPlan,
         activeSettings,
         ready,
+        canPresent,
         renderPending,
     });
 

@@ -103,6 +103,11 @@ class TestPlanContextualActionsUI(unittest.TestCase):
         self.assertIn("${inlineTools}${boardsChip}", context)
         self.assertNotIn("وضع تجربة الإعدادات", context)
         self.assertIn('if (editing) {\n            target.empty();', context)
+        self.assertIn('data-almdina-context-tools="1"', context)
+        self.assertIn('"almdina:plan-workspace-updated"', context)
+        self.assertIn('"almdina:plan-selection-changed"', context)
+        self.assertIn('"almdina:stage-context-ready"', context)
+        self.assertIn("AlmdinaWorkspaceKeepPaint", context)
 
     def test_legacy_general_action_surface_is_edit_only(self) -> None:
         context = source(CONTEXT)

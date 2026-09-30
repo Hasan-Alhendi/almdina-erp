@@ -48,6 +48,10 @@
 
     function workspaceData(frm) {
         const state = snapshot(frm);
+        const keeper = window.AlmdinaWorkspaceKeepPaint;
+        if (keeper && typeof keeper.presentationData === "function") {
+            return keeper.presentationData(state);
+        }
         return state && state.status === "ready" ? state.data : null;
     }
 
@@ -493,8 +497,10 @@
         const inlineTools = toolsHtml(frm, row);
 
         // Approve/tools first; boards badge last with margin-inline-start:auto (RTL end / left).
+        // data-almdina-context-tools marks a completed normal-mode paint so surface
+        // recovery can detect a wiped host even when every tool gate is false.
         target.html(`
-            <div class="almdina-ui dco-plan-context-bar" data-active-plan-source="${esc(tab)}">
+            <div class="almdina-ui dco-plan-context-bar" data-active-plan-source="${esc(tab)}" data-almdina-context-tools="1">
                 <div class="dco-plan-context-primary">
                     ${primaryActionHtml(frm, tab, row)}${inlineTools}${boardsChip}
                 </div>
@@ -513,12 +519,42 @@
         if (!frm || frm.doctype !== "Door Cutting Order") return false;
         syncLegacyActionSurface(frm);
         const host = hostFor(frm);
-        return host.length ? render(frm, host) : false;
+        if (host.length) return render(frm, host);
+
+        // Host is recreated with tabs. Ask the tab owner to rebuild once when the
+        // Plan surface should be visible but the context host is missing.
+        const tabs = window.AlmdinaPlanTabsUX;
+        if (
+            tabs
+            && typeof tabs.shouldShowPlanTabs === "function"
+            && tabs.shouldShowPlanTabs(frm)
+            && typeof tabs.afterRender === "function"
+        ) {
+            return Boolean(tabs.afterRender(frm));
+        }
+        return false;
     }
 
     frappe.ui.form.on("Door Cutting Order", {
         almdina_edit_session_changed(frm) { refresh(frm); },
         refresh_plan_controls(frm) { refresh(frm); },
+    });
+
+    [
+        "almdina:plan-workspace-updated",
+        "almdina:plan-selection-changed",
+        "almdina:stage-context-ready",
+        "almdina:permissions-updated",
+    ].forEach((eventName) => {
+        window.addEventListener(eventName, (event) => {
+            const frm = eventName === "almdina:stage-context-ready"
+                || eventName === "almdina:plan-selection-changed"
+                ? event.detail && event.detail.frm
+                : window.cur_frm;
+            if (frm && frm.doctype === "Door Cutting Order" && frm === window.cur_frm) {
+                refresh(frm);
+            }
+        });
     });
 
     window.AlmdinaPlanContextActionsUX = Object.freeze({

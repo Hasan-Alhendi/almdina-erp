@@ -12,8 +12,16 @@
         return owner && typeof owner.snapshot === "function" ? owner.snapshot(frm) : null;
     }
 
+    function keepPaint() {
+        return window.AlmdinaWorkspaceKeepPaint || null;
+    }
+
     function data(frm) {
         const state = snapshot(frm);
+        const keeper = keepPaint();
+        if (keeper && typeof keeper.presentationData === "function") {
+            return keeper.presentationData(state);
+        }
         return state && state.status === "ready" ? state.data : null;
     }
 
@@ -25,6 +33,28 @@
     function ready(frm) {
         const state = snapshot(frm);
         return Boolean(state && state.status === "ready" && state.data);
+    }
+
+    function canPresent(frm) {
+        return Boolean(data(frm));
+    }
+
+    function costLayoutWrapper(frm) {
+        const field = frm && frm.fields_dict && frm.fields_dict.order_cost_invoice_html;
+        return field && field.$wrapper && field.$wrapper.length ? field.$wrapper : null;
+    }
+
+    function hasMountedCostSurface(frm) {
+        const wrapper = costLayoutWrapper(frm);
+        if (!wrapper || typeof wrapper.find !== "function") return false;
+        return Boolean(wrapper.find(".dco-cost-shell").length);
+    }
+
+    function syncBusy(frm) {
+        const keeper = keepPaint();
+        const wrapper = costLayoutWrapper(frm);
+        if (!keeper || typeof keeper.markBusy !== "function" || !wrapper) return;
+        keeper.markBusy(wrapper, keeper.isPresentationBusy(snapshot(frm)));
     }
 
     function number(value) {
@@ -170,9 +200,12 @@
     }
 
     function renderPending(frm) {
-        const field = frm && frm.fields_dict && frm.fields_dict.order_cost_invoice_html;
-        const wrapper = field && field.$wrapper;
-        if (!wrapper || !wrapper.length) return false;
+        if (canPresent(frm) && hasMountedCostSurface(frm)) {
+            syncBusy(frm);
+            return true;
+        }
+        const wrapper = costLayoutWrapper(frm);
+        if (!wrapper) return false;
         wrapper.html(`
             <div class="dco-cost-shell">
                 <div class="dco-cost-empty">${frappe.utils.escape_html(pendingMessage(frm))}</div>
@@ -305,27 +338,29 @@
             ...legacy,
             __a52WorkspaceOwned: true,
             render(frm) {
-                if (canView(frm) && !ready(frm)) {
+                if (canView(frm) && !canPresent(frm)) {
                     return paintCostHtml(frm, () => renderPending(frm));
                 }
-                if (ready(frm)) project(frm);
+                if (canPresent(frm)) project(frm);
                 const result = paintCostHtml(frm, () => legacy.render(frm));
-                if (ready(frm)) reconcileRenderedCommercialProjection(frm);
+                if (canPresent(frm)) reconcileRenderedCommercialProjection(frm);
                 reconcileActiveCostEditSession(frm);
+                syncBusy(frm);
                 return result;
             },
             refreshInvoiceSection(frm) {
-                if (canView(frm) && !ready(frm)) {
+                if (canView(frm) && !canPresent(frm)) {
                     return paintCostHtml(frm, () => renderPending(frm));
                 }
-                if (ready(frm)) project(frm);
+                if (canPresent(frm)) project(frm);
                 const result = paintCostHtml(frm, () => legacy.refreshInvoiceSection(frm));
-                if (ready(frm)) reconcileRenderedCommercialProjection(frm);
+                if (canPresent(frm)) reconcileRenderedCommercialProjection(frm);
+                syncBusy(frm);
                 return result;
             },
             invoiceLines(frm) {
-                if (canView(frm) && !ready(frm)) return [];
-                if (ready(frm)) {
+                if (canView(frm) && !canPresent(frm)) return [];
+                if (canPresent(frm)) {
                     project(frm);
                     const lines = previewLines(frm);
                     if (lines) return lines;
@@ -333,8 +368,8 @@
                 return legacy.invoiceLines(frm);
             },
             invoiceTotal(frm) {
-                if (canView(frm) && !ready(frm)) return 0;
-                if (ready(frm)) {
+                if (canView(frm) && !canPresent(frm)) return 0;
+                if (canPresent(frm)) {
                     project(frm);
                     const total = previewTotal(frm);
                     if (total !== null) return total;
@@ -342,8 +377,8 @@
                 return legacy.invoiceTotal(frm);
             },
             quoteTotal(frm) {
-                if (canView(frm) && !ready(frm)) return 0;
-                if (ready(frm)) {
+                if (canView(frm) && !canPresent(frm)) return 0;
+                if (canPresent(frm)) {
                     project(frm);
                     const total = previewTotal(frm);
                     if (total !== null) return total;
@@ -380,6 +415,7 @@
         install,
         project,
         ready,
+        canPresent,
         reconcilePermissionActions,
     });
 
