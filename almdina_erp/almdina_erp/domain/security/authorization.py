@@ -214,11 +214,19 @@ _CAPABILITY_DEFINITIONS = (
     CapabilityDefinition(Capability.CREATE_PRODUCTION_ROUTINGS, "create", _ROUTING_DOCTYPE, "master_data", False),
     CapabilityDefinition(Capability.EDIT_PRODUCTION_ROUTINGS, "write", _ROUTING_DOCTYPE, "master_data", False),
     CapabilityDefinition(Capability.DELETE_PRODUCTION_ROUTINGS, "delete", _ROUTING_DOCTYPE, "master_data", False),
-    CapabilityDefinition(Capability.VIEW_CUSTOMERS, "read", _CUSTOMER_DOCTYPE, "master_data", False),
+    # view_* are custom columns so native Customer/Edge ``read``/``select`` can
+    # stay a technical Link-field lookup grant for order entry without becoming
+    # the Almdina master-data administration capability.
+    CapabilityDefinition(Capability.VIEW_CUSTOMERS, Capability.VIEW_CUSTOMERS, _CUSTOMER_DOCTYPE, "master_data"),
     CapabilityDefinition(Capability.CREATE_CUSTOMERS, "create", _CUSTOMER_DOCTYPE, "master_data", False),
     CapabilityDefinition(Capability.EDIT_CUSTOMERS, "write", _CUSTOMER_DOCTYPE, "master_data", False),
     CapabilityDefinition(Capability.DELETE_CUSTOMERS, "delete", _CUSTOMER_DOCTYPE, "master_data", False),
-    CapabilityDefinition(Capability.VIEW_EDGE_BANDING_TYPES, "read", _EDGE_DOCTYPE, "master_data", False),
+    CapabilityDefinition(
+        Capability.VIEW_EDGE_BANDING_TYPES,
+        Capability.VIEW_EDGE_BANDING_TYPES,
+        _EDGE_DOCTYPE,
+        "master_data",
+    ),
     CapabilityDefinition(Capability.CREATE_EDGE_BANDING_TYPES, "create", _EDGE_DOCTYPE, "master_data", False),
     CapabilityDefinition(Capability.EDIT_EDGE_BANDING_TYPES, "write", _EDGE_DOCTYPE, "master_data", False),
     CapabilityDefinition(Capability.DELETE_EDGE_BANDING_TYPES, "delete", _EDGE_DOCTYPE, "master_data", False),
