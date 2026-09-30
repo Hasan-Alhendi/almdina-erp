@@ -63,15 +63,21 @@ _DEFINITIONS_BY_DOCTYPE = _definitions_by_doctype()
 
 
 class FrappePermissionMatrixRepository:
-    """Canonical Almdina business state plus Frappe permission projections.
+    """Frappe Custom DocPerm grant store with temporary canonical dual-write.
 
-    ``Almdina Role Capability State`` is the sole source of business authority.
-    DocPerm and Custom DocPerm are write-only projections for Frappe runtime
-    compatibility and are never read back as factory capability grants.
+    Runtime and console capability reads use Custom DocPerm columns for editable
+    factory roles. ``Almdina Role Capability State`` remains a dual-write mirror
+    during cutover so sites can roll back the reader without losing console
+    history; it is not the runtime authority.
     """
 
     def __init__(self) -> None:
         self._canonical = CanonicalPermissionStateRepository()
+        from almdina_erp.almdina_erp.infrastructure.frappe.custom_docperm_capability_reader import (
+            CustomDocPermCapabilityReader,
+        )
+
+        self._grant_reader = CustomDocPermCapabilityReader()
 
     def ensure_custom_permission_baseline(
         self,
@@ -110,19 +116,9 @@ class FrappePermissionMatrixRepository:
         return resolved
 
     def role_state(self, role: str) -> dict[str, Any]:
-        """Read only canonical business state; never infer from Frappe grants."""
+        """Read factory capability grants from Custom DocPerm columns."""
 
-        resolved = self.validate_role(role)
-        exists = self._canonical.exists(resolved)
-        state = self._canonical.read(resolved)
-        source = "canonical" if exists else "none"
-        return {
-            "role": resolved,
-            "capabilities": normalize_business_capability_state(state),
-            "source_by_doctype": {
-                doctype: source for doctype in sorted(_DEFINITIONS_BY_DOCTYPE)
-            },
-        }
+        return self._grant_reader.role_state(role)
 
     def role_states(
         self,
@@ -150,10 +146,10 @@ class FrappePermissionMatrixRepository:
         self,
         role_states: Mapping[str, Mapping[str, Any]],
     ) -> dict[str, dict[str, Any]]:
-        """Persist canonical business state first, then project it to Frappe.
+        """Persist Custom DocPerm grants and dual-write the canonical mirror.
 
         Order-entry lookup dependencies are intentionally excluded from the
-        canonical business state. ``standard_permission_projection`` may still
+        business capability state. ``standard_permission_projection`` may still
         derive read/select rights for Frappe Link-field UX, but those rights can
         never expose Customer/Edge administration surfaces by themselves.
         """

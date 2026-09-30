@@ -27,6 +27,13 @@ SYNC = (
     / "frappe"
     / "permission_type_sync.py"
 )
+GATEWAY = (
+    ROOT
+    / "almdina_erp"
+    / "infrastructure"
+    / "frappe"
+    / "authorization_gateway.py"
+)
 STATE_DOCTYPE = (
     ROOT
     / "almdina_erp"
@@ -46,15 +53,19 @@ class TestCanonicalPermissionStateArchitecture(unittest.TestCase):
         self.assertTrue(fields["role"]["unique"])
         self.assertTrue(fields["capabilities_json"]["read_only"])
 
-    def test_matrix_role_state_reads_canonical_store_only(self) -> None:
-        source = MATRIX_REPOSITORY.read_text(encoding="utf-8")
-        role_state = source[source.index("    def role_state("):source.index("    def role_states(")]
-        self.assertIn("self._canonical.read", role_state)
-        self.assertIn("self._canonical.exists", role_state)
-        self.assertNotIn("DocPerm", role_state)
-        self.assertNotIn("Custom DocPerm", role_state)
-        self.assertNotIn("_effective_rows", source)
-        self.assertIn("DocPerm and Custom DocPerm are write-only projections", source)
+    def test_matrix_and_gateway_read_custom_docperm_grant_reader(self) -> None:
+        matrix = MATRIX_REPOSITORY.read_text(encoding="utf-8")
+        gateway = GATEWAY.read_text(encoding="utf-8")
+        role_state = matrix[
+            matrix.index("    def role_state(") : matrix.index("    def role_states(")
+        ]
+        self.assertIn("self._grant_reader.role_state", role_state)
+        self.assertNotIn("self._canonical.read", role_state)
+        self.assertIn("CustomDocPermCapabilityReader", matrix)
+        self.assertIn("dual-write", matrix)
+        self.assertIn("_capability_grant_reader", gateway)
+        self.assertIn("reader.role_capabilities", gateway)
+        self.assertNotIn('repository.role_state(role)["capabilities"]', gateway)
 
     def test_missing_canonical_state_bootstraps_deny_all_only(self) -> None:
         canonical = CANONICAL_REPOSITORY.read_text(encoding="utf-8")

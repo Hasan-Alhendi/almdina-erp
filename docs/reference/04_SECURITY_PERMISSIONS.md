@@ -151,13 +151,15 @@ Production Routing CRUD, Customer CRUD, Edge Banding Type CRUD عبر مفاتي
 
 ## 9. Frappe DocPerm مقابل Business Capability
 
-Frappe permissions مهمة للوصول الأساسي، لكنها ليست المصدر الوحيد لسلطة المصنع.
+سلطة منح القدرة للدور (Who) تُقرأ من أعمدة `Custom DocPerm` / Permission Types لأدوار المصنع القابلة للتعديل فقط. `Almdina Role Capability State` قد يبقى طبقة كتابة/ترحيل مؤقتة أثناء الانتقال، لكنه ليس مصدر سلطة التشغيل.
 
 المبدأ:
 
-- Capability matrix = business authority.
-- DocPerm/permission level = Framework-level grant/narrowing.
-- Runtime hooks/application authorization = contextual decision.
+- Frappe Custom DocPerm (لأدوار المصنع القابلة للتعديل) = من يملك القدرة.
+- Almdina Domain/Application authorization = متى وعلى أي مستند/مرحلة يمكن استعمالها (lifecycle، scope، assignment، operational role، عزل التكلفة، IDOR).
+- `frappe.has_permission` للمستند يُستخدم تضييقًا لنطاق Door Cutting Order / Cutting Plan بعد ثبوت المنح، وليس كبديل عن قراءة أعمدة القدرة.
+- أدوار المنصة المحمية (`System Manager` وغيرها) لا تُحسب كمصدر سلطة مصنع. `Administrator` هو الاستثناء الصريح.
+- غياب الصف/العمود = رفض (fail closed).
 
 Hook يستطيع الرفض، لكنه لا يجب أن يُستخدم كطريقة عشوائية لتعويض غياب grant أساسي بلا تصميم.
 

@@ -23,7 +23,7 @@ _DEFAULT_PERMISSION_MESSAGE = "لا تملك الصلاحية المطلوبة �
 
 
 def _matrix_repository() -> tuple[Any, frozenset[str]]:
-    """Load persistence lazily so adapters import without Frappe DB setup."""
+    """Load role membership lazily so adapters import without Frappe DB setup."""
 
     from almdina_erp.almdina_erp.infrastructure.frappe.permission_matrix_repository import (
         FrappePermissionMatrixRepository,
@@ -32,8 +32,18 @@ def _matrix_repository() -> tuple[Any, frozenset[str]]:
     return FrappePermissionMatrixRepository(), PROTECTED_SYSTEM_ROLES
 
 
+def _capability_grant_reader() -> Any:
+    """Load the Custom DocPerm grant reader used as runtime capability authority."""
+
+    from almdina_erp.almdina_erp.infrastructure.frappe.custom_docperm_capability_reader import (
+        CustomDocPermCapabilityReader,
+    )
+
+    return CustomDocPermCapabilityReader()
+
+
 def _matrix_granted_capabilities(user: str) -> frozenset[str]:
-    """Resolve capabilities only from editable roles in the factory matrix."""
+    """Resolve capabilities from Custom DocPerm grants on editable factory roles."""
 
     cache = getattr(frappe.local, "almdina_matrix_capabilities", None)
     if cache is None:
@@ -43,12 +53,13 @@ def _matrix_granted_capabilities(user: str) -> frozenset[str]:
         return cache[user]
 
     repository, protected_roles = _matrix_repository()
+    reader = _capability_grant_reader()
     granted: set[str] = set()
     for role in repository.user_roles(user):
         if role in protected_roles:
             continue
         try:
-            state = repository.role_state(role)["capabilities"]
+            state = reader.role_capabilities(role)
         except ValueError:
             continue
         granted.update(
@@ -134,10 +145,11 @@ def document_has_capability(
 ) -> bool:
     """Require explicit capability first, then preserve native document scope.
 
-    The matrix is the authority. Native Frappe permissions are used only as a
-    second, narrowing check for concrete transactional documents. Cutting Plan is
-    intentionally included: its native read hook narrows access through the
-    related Door Cutting Order scope before a plan document can authorize action.
+    Custom DocPerm grants for editable factory roles are the capability
+    authority. Native Frappe permissions are used only as a second, narrowing
+    check for concrete transactional documents. Cutting Plan is intentionally
+    included: its native read hook narrows access through the related Door
+    Cutting Order scope before a plan document can authorize action.
     """
 
     definition = capability_definition(capability)
