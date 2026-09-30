@@ -59,6 +59,11 @@ def test_virtual_piece_type_change_materializes_one_row_without_rebuilding_table
     assert 'frm.script_manager.trigger("pieces_add", row.doctype, row.name)' in source
     assert 'extraAddons.renderTypePicker(' in source
     assert 'clone.classList.remove("dco-special-row", "dco-clipped-corner-row", "dco-extra-row"' in source
+    materialize = source.split("function materializeVirtualRow(frm, tr)", 1)[1].split(
+        "function updatePieceTypeVisual", 1
+    )[0]
+    assert "!tr.isConnected" in materialize
+    assert "!isEditable(frm)" in materialize
 
 
 def test_expensive_class_mutation_observer_is_replaced_by_direct_child_list_observer():

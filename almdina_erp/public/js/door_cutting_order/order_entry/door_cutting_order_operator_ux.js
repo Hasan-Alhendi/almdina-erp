@@ -286,6 +286,9 @@
     }
 
     function materializeVirtualRow(frm, tr) {
+        // Detached rows appear when edit-session recover/replace races typing.
+        // Never create a child against a wiped table row.
+        if (!tr || !tr.isConnected || !isEditable(frm)) return null;
         const currentName = tr.dataset.rowName || "";
         if (!currentName.startsWith("__virtual__")) return rowByName(frm, currentName);
         const row = createChildRow(frm);
@@ -908,7 +911,18 @@
         almdina_edit_session_changed(frm) {
             // Replacing the measurement table while Save is in-flight destroys
             // the focused cell and can swallow the original click.
-            if (editSessionPhase(frm) === "saving") return;
+            const phase = editSessionPhase(frm);
+            if (phase === "saving") return;
+            // Coordinator emits "starting" before the order adapter paints; skip
+            // a readonly flash that would immediately be wiped again.
+            if (phase === "starting") return;
+            // refreshDependentUx owns a single recover for this transition.
+            if (frm.__almdinaMeasurementRefreshOwned) {
+                installStyles();
+                decorateSections(frm);
+                renderBoardSummary(frm);
+                return;
+            }
             refreshOperatorUI(frm);
         },
         default_edge_type(frm) { refreshEdgeSelects(frm); },

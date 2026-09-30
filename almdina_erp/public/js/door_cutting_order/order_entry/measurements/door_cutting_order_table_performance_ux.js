@@ -205,6 +205,10 @@
     }
 
     function materializeVirtualRow(frm, tr) {
+        // Same race guard as FastEntry: never add_child for a row the edit-session
+        // recover/replace already removed from the live table.
+        if (!tr || !tr.isConnected || !isEditable(frm)) return null;
+
         const row = frappe.model.add_child(frm.doc, CHILD_DOCTYPE, "pieces");
         copyVirtualControlsToRow(tr, row);
         reindex(frm);
