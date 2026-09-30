@@ -98,7 +98,8 @@ function makeTab(fieldname, activeState) {
 }
 
 function simulateNativeUserClick(tab) {
-    if (tab.disabled) return false;
+    // Mirrors Frappe Tab.setup_listeners(): click always reaches set_active().
+    // Locked tabs stay enabled so the guard can refuse and explain save/cancel.
     return tab.set_active();
 }
 
@@ -228,18 +229,22 @@ function verifyEditOwnerNavigationLock() {
 
         for (const fieldname of scenario.blocked) {
             const target = frm.layout.tabs.find((tab) => tab.df.fieldname === fieldname);
-            assert.equal(target.disabled, true, `${scenario.kind} edit must natively disable ${fieldname}`);
+            assert.equal(target.disabled, false, `${scenario.kind} locked tab must stay clickable for feedback`);
             assert.equal(target.ariaDisabled, "true");
             assert.equal(target.tabIndex, "-1");
             assert.equal(target.lockedClass, true);
             assert.match(target.title, /احفظ أو ألغِ/);
 
             const beforeCount = target.activationCount;
-            assert.equal(simulateNativeUserClick(target), false, "disabled user click must not reach Frappe");
+            assert.equal(simulateNativeUserClick(target), false, "user click must reach guarded set_active and be refused");
             assert.equal(target.activationCount, beforeCount);
             assert.equal(activeState.fieldname, scenario.owner);
             assert.equal(simulateBootstrapDataApi(target, activeState), false, "Bootstrap path must remain closed");
             assert.equal(activeState.fieldname, scenario.owner);
+            assert.equal(messages.length, 1);
+            assert.equal(messages[0].title, "التعديل ما زال مفتوحًا");
+            assert.match(String(messages[0].message || ""), /احفظ أو ألغِ/);
+            messages.length = 0;
 
             const programmatic = target.set_active();
             assert.equal(programmatic, false, "programmatic activation must also be rejected");
@@ -263,7 +268,11 @@ function verifyEditOwnerNavigationLock() {
     assert.equal(activeState.fieldname, "order_tab", "drifted UI must recover to the Order edit owner");
     assert.equal(order.activationCount, beforeOrderActivation + 1);
     assert.equal(order.disabled, false);
-    assert.equal(frm.layout.tabs.find((tab) => tab.df.fieldname === "cost_tab").disabled, true);
+    assert.equal(order.lockedClass, false);
+    const driftedCost = frm.layout.tabs.find((tab) => tab.df.fieldname === "cost_tab");
+    assert.equal(driftedCost.disabled, false, "locked tabs stay enabled for click feedback");
+    assert.equal(driftedCost.lockedClass, true);
+    assert.equal(driftedCost.ariaDisabled, "true");
 
     // Save/Cancel closes the aggregate session and navigation unlocks immediately.
     editingKind = null;
@@ -296,7 +305,9 @@ function verifyEditOwnerNavigationLock() {
     frm.layout.tabs.forEach((tab) => {
         assert.notEqual(tab.set_active, tab.nativeSetActive, "rebuilt tabs must be guarded");
         assert.equal(tab.dataToggle, undefined);
-        assert.equal(tab.disabled, tab.df.fieldname !== "results_tab");
+        assert.equal(tab.disabled, false, "locked tabs stay enabled so click feedback can surface");
+        assert.equal(tab.lockedClass, tab.df.fieldname !== "results_tab");
+        assert.equal(tab.ariaDisabled, tab.df.fieldname === "results_tab" ? undefined : "true");
     });
 
     const cleanup = cleanups.get("tab-edit-lifecycle-guard");

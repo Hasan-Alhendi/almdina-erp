@@ -17,9 +17,25 @@
     const LEGACY_HANDLER_KEY = "__almdinaPageEditTabListenerHandler";
     const LOCK_CLASS = "dco-edit-navigation-locked";
     const LOCK_TITLE = "احفظ أو ألغِ التعديل الحالي قبل الانتقال إلى قسم آخر.";
+    const STYLE_ID = "dco-tab-edit-lifecycle-guard-css";
 
     function documentContext() {
         return window.AlmdinaDocumentContext || null;
+    }
+
+    function installStyles() {
+        if (typeof document === "undefined" || !document || !document.head) return;
+        if (document.getElementById(STYLE_ID)) return;
+        const style = document.createElement("style");
+        style.id = STYLE_ID;
+        style.textContent = `
+            .nav-link.${LOCK_CLASS} {
+                opacity: 0.62;
+                cursor: not-allowed;
+                pointer-events: auto !important;
+            }
+        `;
+        document.head.appendChild(style);
     }
 
     function editSessionCoordinator() {
@@ -142,23 +158,21 @@
         const control = binding && binding.bootstrapControl;
         const lockState = binding && binding.lockState;
         if (!control || !lockState || lockState.locked) return;
-        if (typeof control.prop !== "function" || typeof control.attr !== "function") return;
+        if (typeof control.attr !== "function") return;
 
+        // Keep the control clickable so Frappe's native Tab click still reaches
+        // guarded set_active(), which blocks navigation and explains why. Native
+        // disabled / Bootstrap .disabled would swallow the click with no feedback.
         lockState.locked = true;
-        lockState.disabled = Boolean(control.prop("disabled"));
         lockState.ariaDisabled = attributeSnapshot(control, "aria-disabled");
         lockState.tabIndex = attributeSnapshot(control, "tabindex");
         lockState.title = attributeSnapshot(control, "title");
-        lockState.hadDisabledClass = Boolean(
-            typeof control.hasClass === "function" && control.hasClass("disabled")
-        );
 
-        control.prop("disabled", true);
         control.attr("aria-disabled", "true");
         control.attr("tabindex", "-1");
         control.attr("title", __(LOCK_TITLE));
         if (typeof control.addClass === "function") {
-            control.addClass("disabled").addClass(LOCK_CLASS);
+            control.addClass(LOCK_CLASS);
         }
     }
 
@@ -167,21 +181,17 @@
         const lockState = binding && binding.lockState;
         if (!control || !lockState || !lockState.locked) return;
 
-        if (typeof control.prop === "function") control.prop("disabled", Boolean(lockState.disabled));
         restoreAttribute(control, "aria-disabled", lockState.ariaDisabled);
         restoreAttribute(control, "tabindex", lockState.tabIndex);
         restoreAttribute(control, "title", lockState.title);
         if (typeof control.removeClass === "function") {
             control.removeClass(LOCK_CLASS);
-            if (!lockState.hadDisabledClass) control.removeClass("disabled");
         }
 
         lockState.locked = false;
-        lockState.disabled = false;
         lockState.ariaDisabled = null;
         lockState.tabIndex = null;
         lockState.title = null;
-        lockState.hadDisabledClass = false;
     }
 
     function syncBindingLocks(frm, state) {
@@ -257,8 +267,9 @@
         // Retire the historical DOM interceptor. Frappe's own click listener calls
         // Tab.set_active(), which remains the semantic programmatic boundary below.
         // Bootstrap's data-api path is also disabled on these buttons. During an
-        // active edit, native button.disabled then closes the user-click path before
-        // any framework listener can run.
+        // active edit, locked tabs stay clickable so the guarded set_active() can
+        // refuse activation and show the save-or-cancel message.
+        installStyles();
         retireLegacyClickGuard(frm);
 
         const tabs = topLevelTabs(frm);
@@ -287,11 +298,9 @@
                     dataToggleValue: bootstrap.dataToggleValue,
                     lockState: {
                         locked: false,
-                        disabled: false,
                         ariaDisabled: null,
                         tabIndex: null,
                         title: null,
-                        hadDisabledClass: false,
                     },
                 };
                 const guardedSetActive = function almdinaGuardedTabSetActive(...args) {
