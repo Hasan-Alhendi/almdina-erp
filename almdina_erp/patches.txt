@@ -28,3 +28,4 @@ almdina_erp.patches.v1_0.null_legacy_order_cutting_machine
 almdina_erp.patches.v1_0.split_whatsapp_factory_settings_capabilities
 almdina_erp.patches.v1_0.drop_retired_replacement_columns
 almdina_erp.patches.v1_0.retire_factory_reports
+almdina_erp.patches.v1_0.retire_canonical_permission_runtime

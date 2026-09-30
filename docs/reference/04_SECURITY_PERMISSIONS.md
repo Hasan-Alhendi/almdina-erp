@@ -151,7 +151,7 @@ Production Routing CRUD, Customer CRUD, Edge Banding Type CRUD عبر مفاتي
 
 ## 9. Frappe DocPerm مقابل Business Capability
 
-سلطة منح القدرة للدور (Who) تُقرأ من أعمدة `Custom DocPerm` / Permission Types لأدوار المصنع القابلة للتعديل فقط. `Almdina Role Capability State` قد يبقى طبقة كتابة/ترحيل مؤقتة أثناء الانتقال، لكنه ليس مصدر سلطة التشغيل.
+سلطة منح القدرة للدور (Who) تُقرأ وتُكتب عبر أعمدة `Custom DocPerm` / Permission Types لأدوار المصنع القابلة للتعديل فقط. `Almdina Role Capability State` متقاعد من مسار التشغيل ويُستخدم فقط كتوافق ترحيل/تاريخي عند ترقية المواقع.
 
 المبدأ:
 

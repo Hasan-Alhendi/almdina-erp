@@ -20,11 +20,12 @@ AUDIT_DOCTYPE = "Almdina Permission Audit"
 
 
 class CanonicalPermissionStateRepository:
-    """Persist the sole authoritative Almdina capability state per role.
+    """Historical mirror of role capability state for migration compatibility.
 
-    Frappe DocPerm, Custom DocPerm, and historical audit rows are never business
-    authority. They exist only for runtime projection or historical inspection.
-    Missing canonical state always fails closed to an empty matrix.
+    Runtime factory authority now reads and writes Custom DocPerm columns for
+    editable roles. This repository remains available to patches and one-time
+    upgrade bridges; it is not a runtime authorization source. Missing state
+    always fails closed to an empty matrix.
     """
 
     @staticmethod

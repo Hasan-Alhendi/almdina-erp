@@ -6,6 +6,9 @@ from frappe.core.doctype.permission_type.permission_type import (
     get_doctype_ptype_map,
 )
 
+from almdina_erp.almdina_erp.application.security.business_capability_state import (
+    normalize_business_capability_state,
+)
 from almdina_erp.almdina_erp.domain.security.authorization import (
     CAPABILITY_CATALOG,
     CUSTOM_PERMISSION_DEFINITIONS,
@@ -21,6 +24,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.canonical_permission_state_re
     AUDIT_DOCTYPE,
     STATE_DOCTYPE,
     CanonicalPermissionStateRepository,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.custom_docperm_capability_reader import (
+    CustomDocPermCapabilityReader,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.system_role_policy import (
     PROTECTED_SYSTEM_ROLES,
@@ -69,11 +75,7 @@ def _remove_legacy_settings_read(capabilities: dict[str, bool]) -> dict[str, boo
 
 
 def _roles_requiring_reconciliation(doctypes: list[str]) -> list[str]:
-    """Collect roles that need a canonical/projection reconciliation pass.
-
-    Historical audit rows may identify old roles that still need an explicit
-    deny-all canonical record, but audit content is never imported as authority.
-    """
+    """Collect editable roles that need a DocPerm refresh pass."""
 
     roles: set[str] = set()
     if frappe.db.exists("DocType", "Custom DocPerm"):
@@ -87,6 +89,8 @@ def _roles_requiring_reconciliation(doctypes: list[str]) -> list[str]:
             )
             if role
         )
+    # Historical mirror/audit roles may still need a one-time bridge into DocPerm
+    # after new Permission Type columns are installed.
     if frappe.db.exists("DocType", STATE_DOCTYPE):
         roles.update(
             str(role)
@@ -110,13 +114,30 @@ def _roles_requiring_reconciliation(doctypes: list[str]) -> list[str]:
     return sorted(roles)
 
 
-def reconcile_custom_permission_projections() -> None:
-    """Rebuild Frappe projections exclusively from canonical Almdina state.
+def _role_state_for_reconciliation(role: str) -> dict[str, bool]:
+    """Prefer live DocPerm grants; bridge once from the retired mirror if empty."""
 
-    Legacy DocPerm/Custom DocPerm and historical audit snapshots are never
-    imported as business authority. Missing canonical state fails closed to an
-    empty matrix. Existing canonical state is projected back to Frappe, removing
-    stale permissions that native/custom baselines may still contain.
+    reader = CustomDocPermCapabilityReader()
+    try:
+        current = reader.role_capabilities(role)
+    except ValueError:
+        return normalize_business_capability_state({})
+    if any(current.values()):
+        return _remove_legacy_settings_read(current)
+
+    canonical = CanonicalPermissionStateRepository()
+    if canonical.available() and canonical.exists(role):
+        return _remove_legacy_settings_read(canonical.read(role))
+    return normalize_business_capability_state({})
+
+
+def reconcile_custom_permission_projections() -> None:
+    """Refresh Custom DocPerm grants from DocPerm authority.
+
+    Runtime authority is Custom DocPerm for editable factory roles. The retired
+    ``Almdina Role Capability State`` mirror is consulted only when a role still
+    has an empty DocPerm grant set, so sites upgrading across the cutover do not
+    lose historical matrices. Audit rows never become grants.
     """
 
     doctypes = [
@@ -124,7 +145,7 @@ def reconcile_custom_permission_projections() -> None:
         for doctype in _managed_doctypes()
         if frappe.db.exists("DocType", doctype)
     ]
-    if not doctypes or not frappe.db.exists("DocType", STATE_DOCTYPE):
+    if not doctypes:
         return
 
     roles = _roles_requiring_reconciliation(doctypes)
@@ -135,13 +156,11 @@ def reconcile_custom_permission_projections() -> None:
         ProjectedPermissionMatrixRepository,
     )
 
-    canonical = CanonicalPermissionStateRepository()
     prepared: dict[str, dict[str, bool]] = {}
     for resolved in roles:
         if resolved in PROTECTED_SYSTEM_ROLES or not frappe.db.exists("Role", resolved):
             continue
-        state = canonical.bootstrap_fail_closed(resolved)
-        prepared[resolved] = _remove_legacy_settings_read(state)
+        prepared[resolved] = _role_state_for_reconciliation(resolved)
 
     if prepared:
         ProjectedPermissionMatrixRepository().save_role_states(prepared)
@@ -198,7 +217,7 @@ def _clear_relocated_cutting_plan_projections() -> None:
 
 
 def sync_permission_types() -> None:
-    """Install capability columns and rebuild Custom DocPerm grants from the mirror."""
+    """Install capability columns and refresh Custom DocPerm factory grants."""
 
     if not frappe.db.exists("DocType", "Permission Type"):
         return
@@ -237,17 +256,13 @@ def sync_permission_types() -> None:
         ProjectedPermissionMatrixRepository,
     )
 
-    # During cutover the canonical mirror is still dual-written by the console.
-    # Missing mirror state bootstraps deny-all, then overwrites Custom DocPerm so
-    # newly installed Permission Type columns stay aligned. Runtime authority
-    # reads Custom DocPerm columns for editable factory roles only.
+    # Refresh grants from DocPerm authority (with a one-time mirror bridge when a
+    # role still has empty DocPerm grants). Then re-assert protected-role cleanup.
     reconcile_custom_permission_projections()
     ProjectedPermissionMatrixRepository().ensure_custom_permission_baseline(
         _managed_doctypes()
     )
 
-    # A baseline may preserve native Frappe rows for compatibility, but protected
-    # platform roles must never keep factory business columns enabled.
     revoke_automatic_role_business_grants()
 
 
