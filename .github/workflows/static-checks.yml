@@ -86,6 +86,7 @@ jobs:
             almdina_erp.tests.test_authorization_gateway_matrix_fallback \
             almdina_erp.tests.test_permission_matrix_application \
             almdina_erp.tests.test_frappe_native_permission_parity \
+            almdina_erp.tests.test_ignore_permissions_audit_contract \
             almdina_erp.tests.test_permission_custom_docperm_baseline \
             almdina_erp.tests.test_canonical_permission_state_architecture \
             almdina_erp.tests.test_canonical_permission_reset_patch \
