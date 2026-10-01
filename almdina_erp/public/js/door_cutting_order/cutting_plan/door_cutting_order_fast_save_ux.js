@@ -295,6 +295,7 @@
         edge_long_left(frm) { markOrderInputPlanStale(frm); },
         edge_width_top(frm) { markOrderInputPlanStale(frm); },
         edge_width_bottom(frm) { markOrderInputPlanStale(frm); },
+        edge_break(frm) { markOrderInputPlanStale(frm); },
         edge_long_right_type_override(frm) { markOrderInputPlanStale(frm); },
         edge_long_left_type_override(frm) { markOrderInputPlanStale(frm); },
         edge_width_top_type_override(frm) { markOrderInputPlanStale(frm); },

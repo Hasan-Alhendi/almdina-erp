@@ -109,7 +109,7 @@ class TestFinancialDocumentApplication(unittest.TestCase):
         )
         descriptions = [line["description"] for line in payload["lines"]]
         self.assertIn("درفة خاصة رقم 2", descriptions)
-        self.assertIn("درفة زاوية مقصوصة 3", descriptions)
+        self.assertIn("درفة الزاوية الكسر 3", descriptions)
         cut_corner = next(line for line in payload["lines"] if line["type"] == "cut_corner")
         self.assertEqual(cut_corner["amount_usd"], 7.5)
 

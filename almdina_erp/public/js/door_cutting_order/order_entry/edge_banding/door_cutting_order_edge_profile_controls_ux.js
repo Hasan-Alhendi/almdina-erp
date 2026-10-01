@@ -241,9 +241,24 @@
         schedule(frm);
     }
 
+    function lockedBreakSides(row) {
+        const geometry = window.AlmdinaClippedCornerGeometry;
+        if (
+            !row
+            || !geometry
+            || typeof geometry.locksAdjacentSidesForBreak !== "function"
+            || !geometry.locksAdjacentSidesForBreak(row)
+            || typeof geometry.breakAdjacentSides !== "function"
+        ) {
+            return new Set();
+        }
+        return new Set(geometry.breakAdjacentSides(row.clipped_corner_position));
+    }
+
     function applySideSelection(frm, tr, config, overrideType) {
         const row = materialize(frm, tr);
         if (!row) return;
+        if (lockedBreakSides(row).has(config.selectedField)) return;
         row[config.selectedField] = 1;
         row[config.overrideField] = String(overrideType || "").trim();
         notifyChanged(frm, tr, row, config.overrideField);
@@ -255,7 +270,9 @@
         const overrideType = selectedValue === BULK_DEFAULT_VALUE
             ? ""
             : String(selectedValue || "").trim();
+        const locked = lockedBreakSides(row);
         SIDE_CONFIG.forEach(config => {
+            if (locked.has(config.selectedField)) return;
             row[config.selectedField] = 1;
             row[config.overrideField] = overrideType;
         });

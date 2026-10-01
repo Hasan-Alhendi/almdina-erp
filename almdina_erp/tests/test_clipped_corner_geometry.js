@@ -73,6 +73,100 @@ assert.equal(geometry.isClipped({ piece_type: "Regular" }), false);
 assert.equal(geometry.isCornerCut({ piece_type: "Regular" }), false);
 assert.equal(geometry.isCornerCut(piece), true);
 assert.equal(geometry.cutStyle(piece), "diagonal");
+assert.equal(geometry.typeLabel(piece), "الزاوية الكسر");
+assert.deepEqual(
+    geometry.breakAdjacentSides("Bottom Right"),
+    ["edge_width_bottom", "edge_long_right"]
+);
+
+const breakPiece = {
+    ...piece,
+    edge_width_top: 1,
+    edge_long_right: 1,
+    edge_width_bottom: 1,
+    edge_break: 1,
+};
+geometry.applyEdgeBreakPolicy(breakPiece);
+assert.equal(breakPiece.edge_break, 1);
+assert.equal(breakPiece.edge_width_top, 0);
+assert.equal(breakPiece.edge_long_right, 0);
+assert.equal(breakPiece.edge_width_bottom, 1);
+
+const breakMarkup = geometry.edgeBandSvgMarkup(
+    {
+        ...piece,
+        edge_break: 1,
+        edge_width_bottom: 1,
+    },
+    100,
+    100
+);
+assert.match(breakMarkup, /dco-edge-break-svg/);
+assert.match(breakMarkup, /polyline/);
+assert.match(
+    geometry.edgeSelectionSummary({
+        piece_type: "Clipped Corner",
+        edge_break: 1,
+        edge_width_bottom: 1,
+    }),
+    /الكسر/
+);
+assert.match(
+    geometry.edgeSelectionSummary({
+        piece_type: "Clipped Corner",
+        edge_width_bottom: 1,
+    }),
+    /أسفل/
+);
+
+const planPiece = {
+    piece_type: "Clipped Corner",
+    original_w: 100,
+    original_h: 200,
+    w: 100,
+    h: 200,
+    clipped_corner_position: "Top Right",
+    clipped_corner_width_cm: 20,
+    clipped_corner_length_cm: 40,
+    edge_break: 1,
+    edge_width_top: 0,
+    edge_long_right: 0,
+    edge_width_bottom: 0,
+    edge_long_left: 0,
+};
+const planBreakMarkup = geometry.edgeBandSvgMarkup(planPiece, 100, 100);
+assert.match(
+    planBreakMarkup,
+    /dco-edge-break-svg/,
+    "Plan placed pieces must render break banding from edge_break alone"
+);
+
+const lBreakPiece = {
+    piece_type: "L-Shaped Corner",
+    width_cm: 100,
+    length_cm: 100,
+    clipped_corner_position: "Top Right",
+    clipped_corner_width_cm: 20,
+    clipped_corner_length_cm: 20,
+    edge_break: 1,
+    edge_width_top: 1,
+    edge_long_right: 1,
+    edge_width_bottom: 1,
+};
+geometry.applyEdgeBreakPolicy(lBreakPiece);
+assert.equal(lBreakPiece.edge_break, 1);
+assert.equal(lBreakPiece.edge_width_top, 1, "L corner strap must not clear outer sides");
+assert.equal(lBreakPiece.edge_long_right, 1, "L corner strap must not clear outer sides");
+assert.equal(lBreakPiece.edge_width_bottom, 1);
+assert.equal(geometry.locksAdjacentSidesForBreak(lBreakPiece), false);
+assert.equal(geometry.breakEdgeLabel(lBreakPiece), "قشاط الزاوية");
+const lBreakMarkup = geometry.edgeBandSvgMarkup(lBreakPiece, 100, 100);
+assert.match(lBreakMarkup, /dco-edge-break-svg/);
+assert.equal(
+    (lBreakMarkup.match(/dco-edge-break-svg"[^>]*points="([^"]+)"/) || [])[1].split(" ").length,
+    3,
+    "L corner strap path should cover only the inner notch (two edges)"
+);
 
 const lPiece = {
     piece_type: "L-Shaped Corner",

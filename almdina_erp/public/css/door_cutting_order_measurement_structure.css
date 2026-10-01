@@ -44,6 +44,20 @@
     gap: 6px;
 }
 
+.dco-fast-entry-shell .dco-edge-buttons.has-break-edge {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.dco-fast-entry-shell .dco-check-toggle.is-break-locked {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.dco-fast-entry-shell .dco-edge-break-toggle.is-checked {
+    background: #b42318;
+    border-color: #912018;
+}
+
 .dco-fast-entry-shell .dco-check-toggle {
     display: inline-flex;
     align-items: center;

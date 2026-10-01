@@ -105,7 +105,7 @@
 
     function pieceTypeLabel(value) {
         if (value === "Special") return "خاصة";
-        if (value === "Clipped Corner") return "زاوية مقصوصة";
+        if (value === "Clipped Corner") return "الزاوية الكسر";
         if (value === "L-Shaped Corner") return "زاوية L";
         if (value === "Extra") return "إضافية";
         return "عادية";

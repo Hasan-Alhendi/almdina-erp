@@ -51,7 +51,7 @@ def _metric(value: Any, digits: int = 3) -> float:
 def _piece_type_label(value: Any) -> str:
     return {
         "Special": "خاصة",
-        "Clipped Corner": "زاوية مقصوصة",
+        "Clipped Corner": "الزاوية الكسر",
         "L-Shaped Corner": "زاوية L",
         "Extra": "إضافية",
         "Regular": "عادية",

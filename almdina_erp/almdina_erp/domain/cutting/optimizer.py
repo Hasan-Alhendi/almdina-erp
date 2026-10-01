@@ -754,6 +754,7 @@ def _solve_cp_sat(
             "edge_long_left": 1 if piece.get("edge_long_left") else 0,
             "edge_width_top": 1 if piece.get("edge_width_top") else 0,
             "edge_width_bottom": 1 if piece.get("edge_width_bottom") else 0,
+            "edge_break": 1 if piece.get("edge_break") else 0,
             "edge_type": piece.get("edge_type") or "",
             "edge_rate_usd": num(piece.get("edge_rate_usd")),
             "edge_cost_usd": num(piece.get("edge_cost_usd")),

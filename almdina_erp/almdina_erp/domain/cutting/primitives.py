@@ -48,6 +48,7 @@ def _edge_metadata(row: dict[str, Any]) -> dict[str, Any]:
         "edge_long_left": 1 if row.get("edge_long_left") else 0,
         "edge_width_top": 1 if row.get("edge_width_top") else 0,
         "edge_width_bottom": 1 if row.get("edge_width_bottom") else 0,
+        "edge_break": 1 if row.get("edge_break") else 0,
         "edge_long_type": row.get("edge_long_type") or "",
         "edge_width_type": row.get("edge_width_type") or "",
         "edge_long_thickness_mm": num(row.get("edge_long_thickness_mm")),

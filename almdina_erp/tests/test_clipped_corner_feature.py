@@ -77,11 +77,13 @@ def test_server_validates_defaults_and_carries_geometry_through_every_plan_snaps
     assert "Clipped Corner Width must be smaller than the piece" in adapter
     assert "width." in adapter
     assert '"clipped_corner_position": row.clipped_corner_position or ""' in plan_adapter
+    assert '"edge_break": cint(getattr(row, "edge_break", 0))' in plan_adapter
 
     for source in (plan_adapter, primitives, export_service):
         assert "clipped_corner_position" in source
         assert "clipped_corner_width_cm" in source
         assert "clipped_corner_length_cm" in source
+    assert '"edge_break": 1 if row.get("edge_break") else 0' in primitives
     assert "doc._validate_special_shape_rows()" in export_service
     assert "doc._calculate_cutting_plan(settings, input_fingerprint)" in export_service
 
@@ -93,14 +95,28 @@ def test_fast_measurements_offer_one_click_corner_settings_with_live_visual_prev
     assets = ASSETS.read_text(encoding="utf-8")
 
     assert '<option value="Clipped Corner"' in operator
+    assert "الزاوية الكسر" in operator
     assert '<option value="L-Shaped Corner"' in operator
     assert 'value: "L-Shaped Corner"' in extra_addons
+    assert 'labelAr: "الزاوية الكسر"' in extra_addons
     assert "AlmdinaClippedCornerEditor.open(currentFrm, row)" in operator
     assert "if (!row || !requirePieceDimensions(row, tr)) return" in operator
     assert "isCornerCut" in operator
+    assert "dco-corner-edges-summary" in operator
+    assert "اختيار القشاط من الشكل" in operator
+    assert 'toggle("edge_break"' not in operator
+    assert "قشاط الكسر" in editor
+    assert "قشاط الزاوية" in editor
+    assert "data-corner-edge" in editor
+    assert "data-corner-edges" in editor
+    assert "applyEdgeBreakPolicy" in editor
+    assert "is-break-locked" in editor
+    assert "lByPosition" in editor
     assert "dco-clipped-corner-row" in operator
     assert "dco-corner-position-grid" in editor
     assert "data-corner-preview" in editor
+    assert "edgeBandSvgMarkup" in editor
+    assert 'set_value(row.doctype, row.name, "edge_break"' in editor
     assert "جعل الجزءين المتبقيين متساويين" in editor
     assert "المتبقي على ضلع العرض" in editor
     assert "data-corner-remaining" in editor
@@ -131,6 +147,8 @@ def test_cutting_plan_and_dxf_use_the_same_shared_corner_geometry():
     editor = CORNER_UX.read_text(encoding="utf-8")
 
     assert "window.AlmdinaClippedCornerGeometry" in piece_geometry
+    assert "render_clipped_corner_edge_lines" in order_js
+    assert "edge_break" in order_js
     assert "corner.points(piece, widthMm, heightMm)" in piece_geometry
     assert "AlmdinaCuttingPlanPieceGeometry" in order_js
     assert "dco-clipped-corner-piece" in order_js

@@ -68,7 +68,7 @@ assert.doesNotMatch(regularPicker, /dco-piece-type-trigger/);
 assert.doesNotMatch(regularPicker, /dco-extra-open-button/);
 
 const specialIndex = regularPicker.indexOf(">خاصة</option>");
-const cornerIndex = regularPicker.indexOf(">زاوية</option>");
+const cornerIndex = regularPicker.indexOf(">الزاوية الكسر</option>");
 const lCornerIndex = regularPicker.indexOf(">زاوية L</option>");
 const extraIndex = regularPicker.indexOf(">Extra</option>");
 assert.ok(specialIndex > regularPicker.indexOf(">عادية</option>"));
