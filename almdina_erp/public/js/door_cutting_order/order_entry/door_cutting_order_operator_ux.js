@@ -159,6 +159,7 @@
                 .dco-fast-table .dco-col-rotate { width:72px; text-align:center; }
                 .dco-fast-table .dco-col-edges { width:310px; }
                 .dco-fast-table .dco-col-edge-type { width:160px; }
+                .dco-fast-table .dco-col-edge-bulk { width:122px; min-width:122px; max-width:122px; text-align:center; }
                 .dco-fast-table .dco-col-calc { width:88px; text-align:center; font-variant-numeric:tabular-nums; }
                 .dco-fast-table .dco-col-notes { width:300px; min-width:300px; }
                 .dco-fast-table .dco-col-delete { width:50px; text-align:center; }
@@ -196,15 +197,24 @@
                 .dco-special-sketch-button.is-documented { border-style:solid; border-color:rgba(31,130,82,.35); background:rgba(31,130,82,.08); color:#17643f; }
                 .dco-special-sketch-button:disabled { opacity:.45; cursor:not-allowed; transform:none; box-shadow:none; }
                 .dco-special-row { background:rgba(176,112,28,.035); }
-                .dco-special-row .dco-col-edges {
+                .dco-special-row .dco-col-edges,
+                .dco-clipped-corner-row .dco-col-edges {
                     background:linear-gradient(135deg,rgba(255,248,229,.78),rgba(255,252,244,.42));
                 }
-                .dco-special-row .dco-edge-buttons {
-                    padding:3px; border:1px dashed rgba(176,112,28,.35); border-radius:10px;
+                .dco-special-edges-disabled,
+                .dco-corner-edges-summary{
+                    display:flex;flex-direction:column;align-items:stretch;gap:3px;width:100%;
+                    border:1px dashed rgba(176,112,28,.4);border-radius:10px;background:#fffaf0;
+                    color:#8a5700;padding:6px 8px;font-size:10px;font-weight:800;line-height:1.35;
+                    text-align:right;opacity:.85;
                 }
-                .dco-special-row .dco-check-toggle.is-checked {
-                    background:#b5701c; border-color:#b5701c;
-                }
+                .dco-special-edges-disabled{cursor:not-allowed}
+                .dco-corner-edges-summary{cursor:pointer}
+                .dco-corner-edges-summary:hover{background:#fff3d6;border-color:rgba(176,112,28,.65);opacity:1}
+                .dco-corner-edges-summary[disabled]{cursor:default;opacity:.7}
+                .dco-special-edges-disabled small,
+                .dco-corner-edges-summary small{font-weight:700;color:#a16207;opacity:.9}
+                .dco-special-row select[data-field="edge_type"]:disabled{opacity:.55;cursor:not-allowed}
                 .dco-fast-empty { padding:18px; text-align:center; color:var(--text-muted,#6c7680); }
                 .dco-fast-readonly-note { font-weight:700; opacity:.75; }
 
@@ -307,10 +317,59 @@
     }
 
     function localEdgeMeters(row) {
+        if ((row.piece_type || "Regular") === "Special") return 0;
         const qty = Math.max(0, num(row.qty));
         const longSides = Number(Boolean(row.edge_long_right)) + Number(Boolean(row.edge_long_left));
         const widthSides = Number(Boolean(row.edge_width_top)) + Number(Boolean(row.edge_width_bottom));
         return ((longSides * num(row.length_cm)) + (widthSides * num(row.width_cm))) * qty / 100;
+    }
+
+    function clearSpecialMeasurementEdges(row) {
+        if (!row) return;
+        row.edge_long_right = 0;
+        row.edge_long_left = 0;
+        row.edge_width_top = 0;
+        row.edge_width_bottom = 0;
+        row.edge_break = 0;
+        row.edge_type = "";
+        row.edge_long_right_type_override = "";
+        row.edge_long_left_type_override = "";
+        row.edge_width_top_type_override = "";
+        row.edge_width_bottom_type_override = "";
+    }
+
+    function edgesCellHtml(frm, data, { editable = false, virtual = false } = {}) {
+        const disabled = editable ? "" : "disabled";
+        const pieceType = (data && data.piece_type) || "Regular";
+        const isSpecial = pieceType === "Special";
+        const cornerGeometry = window.AlmdinaClippedCornerGeometry;
+        const isBreakCorner = Boolean(
+            cornerGeometry
+            && typeof cornerGeometry.isCornerCut === "function"
+            && cornerGeometry.isCornerCut({ piece_type: pieceType })
+        );
+        const toggle = (field, label, extra = "") => `
+            <button type="button" class="dco-check-toggle ${data && data[field] ? "is-checked" : ""} ${extra}" data-check-field="${field}" aria-pressed="${data && data[field] ? "true" : "false"}" ${disabled}>
+                <span class="dco-check-mark">${data && data[field] ? "✓" : ""}</span><span>${label}</span>
+            </button>`;
+        if (isBreakCorner) {
+            return `<button type="button" class="dco-corner-edges-summary" data-open-corner-edges="1" ${editable && !virtual ? "" : "disabled"} title="${isArabic() ? "افتح شكل الزاوية لاختيار جهات القشاط" : "Open the corner shape to choose banding sides"}">
+                            <span>${escapeHtml((cornerGeometry && typeof cornerGeometry.edgeSelectionSummary === "function" && cornerGeometry.edgeSelectionSummary(data)) || (isArabic() ? "بدون قشاط" : "No banding"))}</span>
+                            <small>${isArabic() ? "اختيار القشاط من الشكل" : "Choose banding on shape"}</small>
+                        </button>`;
+        }
+        if (isSpecial) {
+            return `<button type="button" class="dco-special-edges-disabled" disabled title="${isArabic() ? "القشاط غير متاح للدرفة الخاصة من جدول القياسات" : "Edge banding is disabled for special doors in the measurements table"}">
+                            <span>${isArabic() ? "غير متاح" : "Unavailable"}</span>
+                            <small>${isArabic() ? "القشاط عبر السعر الخاص" : "Banding via special price"}</small>
+                        </button>`;
+        }
+        return `<div class="dco-edge-buttons">
+                    ${toggle("edge_width_top", isArabic() ? "عرض أعلى" : "Top")}
+                    ${toggle("edge_width_bottom", isArabic() ? "عرض أسفل" : "Bottom")}
+                    ${toggle("edge_long_right", isArabic() ? "طول يمين" : "Long R")}
+                    ${toggle("edge_long_left", isArabic() ? "طول يسار" : "Long L")}
+                </div>`;
     }
 
     function updateCalculatedCells(tr, row) {
@@ -356,11 +415,6 @@
         const isSpecial = pieceType === "Special";
         const cornerGeometry = window.AlmdinaClippedCornerGeometry;
         const isClipped = Boolean(cornerGeometry && cornerGeometry.isCornerCut({ piece_type: pieceType }));
-        const isBreakCorner = Boolean(
-            cornerGeometry
-            && typeof cornerGeometry.isCornerCut === "function"
-            && cornerGeometry.isCornerCut({ piece_type: pieceType })
-        );
         const isExtra = pieceType === "Extra";
         const extraAddons = window.AlmdinaExtraDoorAddonsUX;
         const labels = CELL_LABELS[isArabic() ? "ar" : "en"];
@@ -402,6 +456,7 @@
         const pieceTypeControl = extraAddons && typeof extraAddons.renderTypePicker === "function"
             ? extraAddons.renderTypePicker(data, { editable, virtual })
             : nativePieceTypeSelect;
+        const edgeTypeDisabled = (!editable || isSpecial) ? "disabled" : "";
         return `
             <tr data-row-name="${escapeHtml(name)}" class="${virtual ? "dco-virtual-row" : ""} ${isSpecial ? "dco-special-row" : ""} ${isClipped ? "dco-clipped-corner-row" : ""} ${isExtra ? "dco-extra-row" : ""}">
                 <td class="dco-col-no" data-label="${labels.row}"><span class="dco-row-number">${index}</span></td>
@@ -410,20 +465,9 @@
                 <td class="dco-col-number dco-col-length" data-label="${labels.length}"><input class="dco-fast-input" type="number" inputmode="decimal" step="any" min="0" data-field="length_cm" value="${virtual ? "" : escapeHtml(data.length_cm || "")}" ${disabled}></td>
                 <td class="dco-col-qty" data-label="${labels.quantity}"><input class="dco-fast-input" type="number" inputmode="numeric" step="1" min="1" data-field="qty" value="${virtual ? "1" : escapeHtml(data.qty || 1)}" ${disabled}></td>
                 <td class="dco-col-rotate" data-label="${labels.rotation}">${toggle("allow_rotation", "↻", "dco-rotate-toggle")}</td>
-                <td class="dco-col-edges" data-label="${labels.edges}">${
-                    isBreakCorner
-                        ? `<button type="button" class="dco-corner-edges-summary" data-open-corner-edges="1" ${editable && !virtual ? "" : "disabled"} title="${isArabic() ? "افتح شكل الزاوية لاختيار جهات القشاط" : "Open the corner shape to choose banding sides"}">
-                            <span>${escapeHtml((cornerGeometry && typeof cornerGeometry.edgeSelectionSummary === "function" && cornerGeometry.edgeSelectionSummary(data)) || (isArabic() ? "بدون قشاط" : "No banding"))}</span>
-                            <small>${isArabic() ? "اختيار القشاط من الشكل" : "Choose banding on shape"}</small>
-                        </button>`
-                        : `<div class="dco-edge-buttons" title="${isSpecial ? (isArabic() ? "قشاط مبدئي لتقدير السعر؛ يمكن اعتماده أو تعديله بعد تصميم CNC" : "Preliminary banding for the estimate; finalize after CNC design") : ""}">
-                    ${toggle("edge_width_top", isArabic() ? "عرض أعلى" : "Top")}
-                    ${toggle("edge_width_bottom", isArabic() ? "عرض أسفل" : "Bottom")}
-                    ${toggle("edge_long_right", isArabic() ? "طول يمين" : "Long R")}
-                    ${toggle("edge_long_left", isArabic() ? "طول يسار" : "Long L")}
-                </div>`
-                }</td>
-                <td class="dco-col-edge-type" data-label="${labels.edgeType}"><select class="dco-fast-select" data-field="edge_type" ${disabled}>${edgeOptions(frm, virtual ? "" : (data.edge_type || ""))}</select></td>
+                <td class="dco-col-edges" data-label="${labels.edges}">${edgesCellHtml(frm, data, { editable, virtual })}</td>
+                <td class="dco-col-edge-type" data-label="${labels.edgeType}"><select class="dco-fast-select" data-field="edge_type" ${edgeTypeDisabled}>${edgeOptions(frm, virtual || isSpecial ? "" : (data.edge_type || ""))}</select></td>
+                <td class="dco-col-edge-bulk" data-label="${isArabic() ? "تطبيق على الأربعة" : "Apply to all four"}"></td>
                 <td class="dco-col-sketch" data-label="${labels.shape}"><button type="button" class="dco-special-sketch-button ${hasDrawing || hasExactGeometry ? "is-documented" : ""} ${hasExactGeometry ? "is-exact-geometry" : ""} ${isClipped ? "is-clipped-corner" : ""}" ${(isSpecial || isClipped) && editable && !virtual ? "" : "disabled"} title="${escapeHtml(shapeTitle)}">
                     <span aria-hidden="true">${shapeIcon}</span>
                     <span>${shapeLabel}</span>
@@ -446,7 +490,7 @@
                         <b>${isArabic() ? "إدخال سريع:" : "Fast entry:"}</b>
                         <span class="dco-keyboard-flow">${isArabic() ? "العرض" : "Width"} → <kbd>Tab</kbd> → ${isArabic() ? "الطول" : "Length"} → <kbd>Enter</kbd> → ${isArabic() ? "العرض التالي فورًا" : "next width immediately"}</span>
                         <span class="dco-help-secondary">${isArabic() ? "القشاط والتدوير: نقرة واحدة مباشرة دون تفعيل السطر." : "Edges and rotation toggle in one click without activating a row."}</span>
-                        <span class="dco-help-secondary">${isArabic() ? "في الدرفة الخاصة: جهات القشاط مبدئية وتدخل مباشرة في التكلفة التقديرية." : "For a special door, selected edge sides are preliminary and feed the estimate."}</span>
+                        <span class="dco-help-secondary">${isArabic() ? "في الدرفة الخاصة: جهات القشاط معطّلة من الجدول؛ يُدار القشاط عبر السعر الخاص." : "For a special door, edge sides are disabled in the table; banding is handled via the special price."}</span>
                         <span class="dco-help-secondary">${isArabic() ? "الخاصة مع Liner: اكتب Liner في الملاحظات، وثّق الشكل، وأدخل السعر الخاص الشامل من التكلفة." : "Special + Liner: note Liner, document the shape, and use the inclusive custom price in Cost."}</span>
                     </div>
                     ${editable ? "" : `<span class="dco-fast-readonly-note">${isArabic() ? "الطلب للعرض فقط" : "Read only"}</span>`}
@@ -462,6 +506,7 @@
                             <th class="dco-col-rotate">${isArabic() ? "تدوير" : "Rotate"}</th>
                             <th class="dco-col-edges">${isArabic() ? "جهات القشاط" : "Edge sides"}</th>
                             <th class="dco-col-edge-type">${isArabic() ? "نوع القشاط" : "Edge type"}</th>
+                            <th class="dco-col-edge-bulk">${isArabic() ? "تطبيق على الأربعة" : "Apply to all four"}</th>
                             <th class="dco-col-sketch">${isArabic() ? "الشكل" : "Shape"}</th>
                             <th class="dco-col-calc">${isArabic() ? "المساحة" : "Area"}</th>
                             <th class="dco-col-calc">${isArabic() ? "متر قشاط" : "Edge m"}</th>
@@ -489,9 +534,13 @@
         const field = frm.fields_dict.pieces_fast_entry;
         if (!field || !field.$wrapper) return;
         field.$wrapper.find("select[data-field='edge_type']").each(function () {
-            const current = this.value;
+            const tr = this.closest("tr[data-row-name]");
+            const row = tr ? rowByName(frm, tr.dataset.rowName || "") : null;
+            const special = Boolean(row && (row.piece_type || "Regular") === "Special");
+            const current = special ? "" : this.value;
             this.innerHTML = edgeOptions(frm, current);
             this.value = current;
+            this.disabled = !isEditable(frm) || special;
         });
     }
 
@@ -742,6 +791,12 @@
         if (button.disabled || button.classList.contains("is-break-locked")) return;
         const row = getOrMaterializeRow(frm, tr);
         if (!row) return;
+        if (
+            (row.piece_type || "Regular") === "Special"
+            && fieldname !== "allow_rotation"
+        ) {
+            return;
+        }
         const cornerGeometry = window.AlmdinaClippedCornerGeometry;
         if (
             fieldname !== "edge_break"
@@ -825,7 +880,9 @@
                     if (extraAddons && typeof extraAddons.reconcilePieceType === "function") {
                         extraAddons.reconcilePieceType(currentFrm, row);
                     }
-                    if (
+                    if ((row.piece_type || "Regular") === "Special") {
+                        clearSpecialMeasurementEdges(row);
+                    } else if (
                         window.AlmdinaClippedCornerGeometry
                         && typeof window.AlmdinaClippedCornerGeometry.isCornerCut === "function"
                         && window.AlmdinaClippedCornerGeometry.isCornerCut(row)
@@ -983,6 +1040,10 @@
             recover: recoverFastMeasurements,
             flush: flushMeasurementInputs,
             loadEdgeTypes,
+            clearSpecialMeasurementEdges,
+            edgesCellHtml,
+            edgeOptions,
+            isEditable,
         }
     );
 })();

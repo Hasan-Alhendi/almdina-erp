@@ -122,9 +122,12 @@ def test_operator_opens_only_new_documentation_runtime():
         assert retired not in hooks
 
 
-def test_drawing_validation_and_preliminary_edge_cost_policy_remain_server_authoritative():
+def test_drawing_validation_and_special_measurement_edge_disable_remain_authoritative():
     service = DOCUMENTATION_VALIDATOR.read_text(encoding="utf-8")
     policy = PIECE_POLICY.read_text(encoding="utf-8")
+    domain_policy = (
+        APP_ROOT / "almdina_erp" / "domain" / "orders" / "piece_policy.py"
+    ).read_text(encoding="utf-8")
     costing = COSTING_DOMAIN.read_text(encoding="utf-8")
     adapter = COSTING_ADAPTER.read_text(encoding="utf-8")
     operator = OPERATOR_UX.read_text(encoding="utf-8")
@@ -134,6 +137,10 @@ def test_drawing_validation_and_preliminary_edge_cost_policy_remain_server_autho
     assert "DOCUMENTATION_ELEMENT_TYPES" in service
     assert '"stroke", "line", "rect", "ellipse", "arrow", "dimension", "text"' in service
     assert "validate_special_shape_drawing(current_raw)" in policy
+    assert "apply_special_measurement_edge_policy" in policy
+    assert "_apply_special_measurement_edges" in policy
+    assert "measurement_edges_disabled_for_piece" in domain_policy
+    assert "apply_special_measurement_edge_policy" in domain_policy
     assert '"long_right": (' in costing
     assert "bool(piece.edge_long_right)" in costing
     assert '"width_top": (' in costing
@@ -141,9 +148,10 @@ def test_drawing_validation_and_preliminary_edge_cost_policy_remain_server_autho
     assert "long_meters = right_meters + left_meters" in costing
     assert "width_meters = top_meters + bottom_meters" in costing
     assert "summary = calculate_piece_costs(" in adapter
-    assert 'if ((row.piece_type || "Regular") === "Special") return 0' not in operator
-
-
+    assert "dco-special-edges-disabled" in operator
+    assert 'if ((row.piece_type || "Regular") === "Special") return 0' in operator
+    assert "clearSpecialMeasurementEdges" in operator
+    assert "جهات القشاط معطّلة من الجدول" in operator
 def test_price_approval_is_capability_checked_audited_and_invalidated_by_geometry_changes():
     service = SERVICE_PY.read_text(encoding="utf-8")
     policy = PIECE_POLICY.read_text(encoding="utf-8")

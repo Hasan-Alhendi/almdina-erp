@@ -104,6 +104,9 @@ def test_fast_measurements_offer_one_click_corner_settings_with_live_visual_prev
     assert "isCornerCut" in operator
     assert "dco-corner-edges-summary" in operator
     assert "اختيار القشاط من الشكل" in operator
+    assert ".dco-special-edges-disabled,\n                .dco-corner-edges-summary{" in operator
+    assert "border:1px dashed rgba(176,112,28,.4)" in operator
+    assert ".dco-clipped-corner-row .dco-col-edges" in operator
     assert 'toggle("edge_break"' not in operator
     assert "قشاط الكسر" in editor
     assert "قشاط الزاوية" in editor

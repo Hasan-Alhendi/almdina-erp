@@ -332,6 +332,30 @@ class TestOrderPiecePolicyDomain(unittest.TestCase):
         self.assertEqual(l_shaped.edge_width_bottom, 1)
         self.assertEqual(l_shaped.cleared_sides, ())
 
+    def test_special_measurement_edges_are_disabled_and_cleared(self) -> None:
+        from almdina_erp.almdina_erp.domain.orders.piece_policy import (
+            apply_special_measurement_edge_policy,
+            measurement_edges_disabled_for_piece,
+        )
+
+        self.assertTrue(measurement_edges_disabled_for_piece("Special"))
+        self.assertFalse(measurement_edges_disabled_for_piece("Regular"))
+        self.assertFalse(measurement_edges_disabled_for_piece("Extra"))
+        self.assertFalse(measurement_edges_disabled_for_piece("Clipped Corner"))
+
+        disabled = apply_special_measurement_edge_policy(piece_type="Special")
+        self.assertTrue(disabled.disabled)
+        self.assertEqual(disabled.edge_long_right, 0)
+        self.assertEqual(disabled.edge_long_left, 0)
+        self.assertEqual(disabled.edge_width_top, 0)
+        self.assertEqual(disabled.edge_width_bottom, 0)
+        self.assertEqual(disabled.edge_break, 0)
+        self.assertEqual(disabled.edge_type, "")
+        self.assertEqual(disabled.edge_long_right_type_override, "")
+
+        enabled = apply_special_measurement_edge_policy(piece_type="Regular")
+        self.assertFalse(enabled.disabled)
+
 
 if __name__ == "__main__":
     unittest.main()

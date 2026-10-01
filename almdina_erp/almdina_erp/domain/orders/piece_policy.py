@@ -94,6 +94,69 @@ def apply_edge_break_policy(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class SpecialMeasurementEdgeDecision:
+    """Cleared measurement-table edge fields for Special doors."""
+
+    edge_long_right: int
+    edge_long_left: int
+    edge_width_top: int
+    edge_width_bottom: int
+    edge_break: int
+    edge_type: str
+    edge_long_right_type_override: str
+    edge_long_left_type_override: str
+    edge_width_top_type_override: str
+    edge_width_bottom_type_override: str
+    disabled: bool
+
+
+def measurement_edges_disabled_for_piece(piece_type: str | None) -> bool:
+    """Special doors do not use side banding from the measurements table."""
+
+    return (piece_type or "Regular") == "Special"
+
+
+def apply_special_measurement_edge_policy(
+    *,
+    piece_type: str | None,
+) -> SpecialMeasurementEdgeDecision:
+    """Disable and clear measurement-table banding for Special doors.
+
+    Regular / Extra / corner pieces keep their selected sides. Special pricing
+    uses the inclusive special price (and configurable special fees), not
+    rectangular side toggles from order entry.
+    """
+
+    if not measurement_edges_disabled_for_piece(piece_type):
+        return SpecialMeasurementEdgeDecision(
+            edge_long_right=0,
+            edge_long_left=0,
+            edge_width_top=0,
+            edge_width_bottom=0,
+            edge_break=0,
+            edge_type="",
+            edge_long_right_type_override="",
+            edge_long_left_type_override="",
+            edge_width_top_type_override="",
+            edge_width_bottom_type_override="",
+            disabled=False,
+        )
+    return SpecialMeasurementEdgeDecision(
+        edge_long_right=0,
+        edge_long_left=0,
+        edge_width_top=0,
+        edge_width_bottom=0,
+        edge_break=0,
+        edge_type="",
+        edge_long_right_type_override="",
+        edge_long_left_type_override="",
+        edge_width_top_type_override="",
+        edge_width_bottom_type_override="",
+        disabled=True,
+    )
+
+
 class PiecePolicyError(ValueError):
     """Raised when a door-piece rule is violated."""
 
@@ -411,15 +474,18 @@ __all__ = [
     "EdgeBreakDecision",
     "PieceGeometry",
     "PiecePolicyError",
+    "SpecialMeasurementEdgeDecision",
     "SpecialPrice",
     "SpecialShapeDecision",
     "apply_edge_break_policy",
+    "apply_special_measurement_edge_policy",
     "break_adjacent_sides",
     "corner_cut_arabic_label",
     "drawing_token",
     "evaluate_special_shape",
     "geometry_changed",
     "is_corner_cut",
+    "measurement_edges_disabled_for_piece",
     "pricing_basis_changed",
     "protected_price_changed",
     "pending_custom_edge_price_labels",

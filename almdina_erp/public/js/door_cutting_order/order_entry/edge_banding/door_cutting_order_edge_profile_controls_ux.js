@@ -305,6 +305,16 @@
             edgeTypeCell.insertAdjacentElement("afterend", cell);
         }
 
+        // Special / corner / Extra-without-toggles still need this column so notes
+        // stay on the same horizontal level as Regular rows.
+        const hasEdgeButtons = Boolean(
+            tr.querySelector(":scope > td.dco-col-edges .dco-edge-buttons")
+        );
+        if (!hasEdgeButtons) {
+            cell.replaceChildren();
+            return;
+        }
+
         let content = cell.querySelector(":scope > .dco-edge-bulk-cell-content");
         if (!content) {
             content = document.createElement("div");
@@ -375,13 +385,13 @@
     function renderRow(frm, tr) {
         const cell = tr.querySelector(":scope > td.dco-col-edges");
         const edgeButtons = cell && cell.querySelector(":scope > .dco-edge-buttons");
-        if (!cell || !edgeButtons) return;
-
-        removeObsoleteControls(cell);
-        const row = rowByName(frm, tr.dataset.rowName) || {};
-        edgeButtons.querySelectorAll(".dco-check-toggle[data-check-field]").forEach(toggle => {
-            decorateEdgeToggle(frm, row, toggle);
-        });
+        if (cell && edgeButtons) {
+            removeObsoleteControls(cell);
+            const row = rowByName(frm, tr.dataset.rowName) || {};
+            edgeButtons.querySelectorAll(".dco-check-toggle[data-check-field]").forEach(toggle => {
+                decorateEdgeToggle(frm, row, toggle);
+            });
+        }
         ensureBulkButton(frm, tr);
     }
 

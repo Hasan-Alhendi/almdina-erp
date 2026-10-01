@@ -300,6 +300,13 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
             'edgeTypeHeader.insertAdjacentElement("afterend", header)',
             controls_source,
         )
+        self.assertIn("hasEdgeButtons", controls_source)
+        self.assertIn("cell.replaceChildren()", controls_source)
+        self.assertIn("ensureBulkButton(frm, tr)", controls_source)
+        self.assertNotIn(
+            "if (!cell || !edgeButtons) return;",
+            controls_source,
+        )
         self.assertIn(
             "tbody td{vertical-align:middle!important;", controls_source
         )

@@ -253,13 +253,21 @@
         tr.classList.toggle("dco-clipped-corner-row", clipped);
         tr.classList.toggle("dco-extra-row", extra);
 
-        const edgeButtons = tr.querySelector(".dco-edge-buttons");
-        if (edgeButtons) {
-            edgeButtons.title = special
-                ? (isArabic()
-                    ? "قشاط مبدئي لتقدير السعر؛ يمكن اعتماده أو تعديله بعد تصميم CNC"
-                    : "Preliminary banding for the estimate; finalize after CNC design")
-                : "";
+        const fastEntry = window.AlmdinaDoorCuttingFastEntry;
+        const edgesCell = tr.querySelector("td.dco-col-edges");
+        if (edgesCell && fastEntry && typeof fastEntry.edgesCellHtml === "function") {
+            edgesCell.innerHTML = fastEntry.edgesCellHtml(frm, row, {
+                editable: isEditable(frm),
+                virtual: tr.classList.contains("dco-virtual-row"),
+            });
+        }
+
+        const edgeType = tr.querySelector("select[data-field='edge_type']");
+        if (edgeType) {
+            edgeType.disabled = !isEditable(frm) || special;
+            if (special) {
+                edgeType.value = "";
+            }
         }
 
         const sketch = tr.querySelector("button.dco-special-sketch-button");
@@ -331,6 +339,19 @@
         const nextType = pieceType || "Regular";
         const changed = (row.piece_type || "Regular") !== nextType;
         row.piece_type = nextType;
+        if (nextType === "Special") {
+            const fastEntry = window.AlmdinaDoorCuttingFastEntry;
+            if (fastEntry && typeof fastEntry.clearSpecialMeasurementEdges === "function") {
+                fastEntry.clearSpecialMeasurementEdges(row);
+            } else {
+                row.edge_long_right = 0;
+                row.edge_long_left = 0;
+                row.edge_width_top = 0;
+                row.edge_width_bottom = 0;
+                row.edge_break = 0;
+                row.edge_type = "";
+            }
+        }
         if (window.AlmdinaClippedCornerGeometry && window.AlmdinaClippedCornerGeometry.isCornerCut({ piece_type: nextType }) && window.AlmdinaClippedCornerEditor) {
             window.AlmdinaClippedCornerEditor.prepare(row);
         }
