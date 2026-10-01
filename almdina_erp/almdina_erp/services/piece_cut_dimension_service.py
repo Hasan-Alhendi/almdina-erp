@@ -201,7 +201,8 @@ def build_order_piece_cut_specs(
                 side_profiles=tuple(side_profiles),
                 edge_break=(
                     1
-                    if str(getattr(row, "piece_type", "") or "Regular") == "Clipped Corner"
+                    if str(getattr(row, "piece_type", "") or "Regular")
+                    in {"Clipped Corner", "L-Shaped Corner"}
                     and _is_selected(getattr(row, "edge_break", 0))
                     else 0
                 ),

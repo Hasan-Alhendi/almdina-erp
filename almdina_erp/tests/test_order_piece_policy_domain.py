@@ -327,8 +327,7 @@ class TestOrderPiecePolicyDomain(unittest.TestCase):
             edge_width_top=0,
             edge_width_bottom=1,
         )
-        # Commit 1: edge_break applies to Clipped Corner only.
-        self.assertEqual(l_shaped.edge_break, 0)
+        self.assertEqual(l_shaped.edge_break, 1)
         self.assertEqual(l_shaped.edge_long_right, 1)
         self.assertEqual(l_shaped.edge_width_bottom, 1)
         self.assertEqual(l_shaped.cleared_sides, ())

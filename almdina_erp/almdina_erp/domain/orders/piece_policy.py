@@ -57,11 +57,13 @@ def apply_edge_break_policy(
     edge_width_top: int,
     edge_width_bottom: int,
 ) -> EdgeBreakDecision:
-    """Normalize edge_break selection for Clipped Corner pieces.
+    """Normalize edge_break selection for Clipped Corner and L-Shaped Corner.
 
-    When break banding is on, the two AABB sides that form the clipped corner are
-    cleared because they are covered by the continuous break strap. Non-clipped
-    piece types never keep edge_break. Lengths/meters are not calculated here.
+    Clipped Corner: when break banding is on, the two AABB sides that form the
+    cut corner are cleared because the break strap covers those remnants plus the
+    hypotenuse. L-Shaped Corner: the corner strap is only the inner L notch, so
+    the four outer sides stay independently selectable. Other piece types never
+    keep edge_break. Lengths/meters are not calculated here.
     """
 
     flags = {
@@ -72,10 +74,11 @@ def apply_edge_break_policy(
     }
     resolved_break = 1 if edge_break else 0
     cleared: list[str] = []
+    resolved_type = piece_type or "Regular"
 
-    if (piece_type or "Regular") != CLIPPED_CORNER_TYPE:
+    if resolved_type not in CORNER_CUT_TYPES:
         resolved_break = 0
-    elif resolved_break:
+    elif resolved_break and resolved_type == CLIPPED_CORNER_TYPE:
         for side in break_adjacent_sides(clipped_corner_position):
             if flags[side]:
                 cleared.append(side)

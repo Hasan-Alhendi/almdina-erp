@@ -106,11 +106,12 @@ def test_fast_measurements_offer_one_click_corner_settings_with_live_visual_prev
     assert "اختيار القشاط من الشكل" in operator
     assert 'toggle("edge_break"' not in operator
     assert "قشاط الكسر" in editor
+    assert "قشاط الزاوية" in editor
     assert "data-corner-edge" in editor
     assert "data-corner-edges" in editor
     assert "applyEdgeBreakPolicy" in editor
     assert "is-break-locked" in editor
-    assert "diagonalByPosition" in editor
+    assert "lByPosition" in editor
     assert "dco-clipped-corner-row" in operator
     assert "dco-corner-position-grid" in editor
     assert "data-corner-preview" in editor

@@ -141,6 +141,33 @@ assert.match(
     "Plan placed pieces must render break banding from edge_break alone"
 );
 
+const lBreakPiece = {
+    piece_type: "L-Shaped Corner",
+    width_cm: 100,
+    length_cm: 100,
+    clipped_corner_position: "Top Right",
+    clipped_corner_width_cm: 20,
+    clipped_corner_length_cm: 20,
+    edge_break: 1,
+    edge_width_top: 1,
+    edge_long_right: 1,
+    edge_width_bottom: 1,
+};
+geometry.applyEdgeBreakPolicy(lBreakPiece);
+assert.equal(lBreakPiece.edge_break, 1);
+assert.equal(lBreakPiece.edge_width_top, 1, "L corner strap must not clear outer sides");
+assert.equal(lBreakPiece.edge_long_right, 1, "L corner strap must not clear outer sides");
+assert.equal(lBreakPiece.edge_width_bottom, 1);
+assert.equal(geometry.locksAdjacentSidesForBreak(lBreakPiece), false);
+assert.equal(geometry.breakEdgeLabel(lBreakPiece), "قشاط الزاوية");
+const lBreakMarkup = geometry.edgeBandSvgMarkup(lBreakPiece, 100, 100);
+assert.match(lBreakMarkup, /dco-edge-break-svg/);
+assert.equal(
+    (lBreakMarkup.match(/dco-edge-break-svg"[^>]*points="([^"]+)"/) || [])[1].split(" ").length,
+    3,
+    "L corner strap path should cover only the inner notch (two edges)"
+);
+
 const lPiece = {
     piece_type: "L-Shaped Corner",
     width_cm: 100,
@@ -151,13 +178,9 @@ const lPiece = {
 };
 assert.equal(geometry.isClipped(lPiece), false);
 assert.equal(geometry.isLShaped(lPiece), true);
-// Commit 1: corner edge banding editor is Clipped Corner only.
-assert.equal(geometry.isCornerCut(lPiece), false);
+assert.equal(geometry.isCornerCut(lPiece), true);
 assert.equal(geometry.cutStyle(lPiece), "L");
 assert.equal(geometry.typeLabel(lPiece), "زاوية L");
-const lClearedBreak = { ...lPiece, edge_break: 1, edge_width_top: 1 };
-geometry.applyEdgeBreakPolicy(lClearedBreak);
-assert.equal(lClearedBreak.edge_break, 0);
 assert.deepEqual(
     geometry.points(lPiece, 100, 100),
     [[0, 0], [80, 0], [80, 20], [100, 20], [100, 100], [0, 100]],

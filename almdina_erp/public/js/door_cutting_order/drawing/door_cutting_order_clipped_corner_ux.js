@@ -3,8 +3,7 @@
 
     const CLIPPED_TYPE = "Clipped Corner";
     const L_TYPE = "L-Shaped Corner";
-    // Commit 1: edge banding editor applies to Clipped Corner only.
-    const CORNER_TYPES = Object.freeze([CLIPPED_TYPE]);
+    const CORNER_TYPES = Object.freeze([CLIPPED_TYPE, L_TYPE]);
     const DEFAULT_POSITION = "Top Right";
     const ROTATED_POSITION = {
         "Top Left": "Top Right",
@@ -153,7 +152,8 @@
             row.edge_break = 0;
             return row;
         }
-        if (!row.edge_break) return row;
+        // L-shaped corner strap is only the inner notch; outer sides stay free.
+        if (!row.edge_break || isLShaped(row)) return row;
         breakAdjacentSides(row.clipped_corner_position).forEach((side) => {
             row[side] = 0;
             row[`${side}_type_override`] = "";
@@ -162,10 +162,11 @@
     }
 
     function locksAdjacentSidesForBreak(piece) {
-        return Boolean(isCornerCut(piece) && piece && piece.edge_break);
+        return Boolean(isClipped(piece) && piece && piece.edge_break);
     }
 
     function breakEdgeLabel(piece, arabic = isArabic()) {
+        if (isLShaped(piece)) return arabic ? "قشاط الزاوية" : "Corner";
         return arabic ? "قشاط الكسر" : "Break";
     }
 
@@ -229,7 +230,38 @@
                 break: [[0, 0], [0, height - cutY], [cutX, height], [width, height]],
             },
         };
-        const byPosition = diagonalByPosition;
+        // L corner strap covers only the inner notch (two orthogonal cut edges).
+        const lByPosition = {
+            "Top Right": {
+                top: [[0, 0], [width - cutX, 0]],
+                right: [[width, cutY], [width, height]],
+                bottom: [[width, height], [0, height]],
+                left: [[0, height], [0, 0]],
+                break: [[width - cutX, 0], [width - cutX, cutY], [width, cutY]],
+            },
+            "Top Left": {
+                top: [[cutX, 0], [width, 0]],
+                right: [[width, 0], [width, height]],
+                bottom: [[width, height], [0, height]],
+                left: [[0, height], [0, cutY]],
+                break: [[cutX, 0], [cutX, cutY], [0, cutY]],
+            },
+            "Bottom Right": {
+                top: [[0, 0], [width, 0]],
+                right: [[width, 0], [width, height - cutY]],
+                bottom: [[width - cutX, height], [0, height]],
+                left: [[0, height], [0, 0]],
+                break: [[width, height - cutY], [width - cutX, height - cutY], [width - cutX, height]],
+            },
+            "Bottom Left": {
+                top: [[0, 0], [width, 0]],
+                right: [[width, 0], [width, height]],
+                bottom: [[width, height], [cutX, height]],
+                left: [[0, height - cutY], [0, 0]],
+                break: [[0, height - cutY], [cutX, height - cutY], [cutX, height]],
+            },
+        };
+        const byPosition = cutStyle(piece) === "L" ? lByPosition : diagonalByPosition;
         const source = byPosition[config.position] || byPosition[DEFAULT_POSITION];
         return {
             top: insetPath(source.top, width, height, amount),
@@ -378,7 +410,7 @@
         if (row.edge_width_bottom) labels.push(arabic ? "أسفل" : "Bottom");
         if (row.edge_long_right) labels.push(arabic ? "يمين" : "Right");
         if (row.edge_long_left) labels.push(arabic ? "يسار" : "Left");
-        if (row.edge_break) labels.push(arabic ? "الكسر" : "Break");
+        if (row.edge_break) labels.push(isLShaped(row) ? (arabic ? "الزاوية" : "Corner") : (arabic ? "الكسر" : "Break"));
         if (!labels.length) {
             return arabic ? "بدون قشاط" : "No banding";
         }
