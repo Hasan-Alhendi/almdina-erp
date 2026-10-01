@@ -166,11 +166,22 @@ def test_order_tracking_strip_exposes_layout_hook_class() -> None:
 
     assert "dco-order-tracking-strip" in source
     assert "margin-bottom:10px" not in source
-    assert 'dco-order-tracking-strip__label">${escape(label)}:</span>' in source
-    assert '${__("حالة الطلب")}:</span>' in source
+    assert 'dco-order-tracking-strip__label">${escape(label)}</span>' in source
+    assert 'factItem(__("حالة الطلب")' in source
+    assert 'factItem(__("القسم الحالي")' not in source
+    assert 'factItem(__("العامل")' in source
+    assert 'factItem(__("حالة القسم")' in source
+    assert 'status === "Draft"' in source
+    assert "dco-order-tracking-strip__lead" in source
+    assert "dco-order-tracking-strip__facts" in source
+    assert "dco-order-tracking-strip__path" in source
+    assert ', "badge")' in source
+    assert "dco-order-tracking-strip__badge" in css
+    assert "dco-order-tracking-strip__layout" in css
+    assert "margin-inline-start: auto" in css
     assert "--dco-section-stack-gap: 8px" in css
     assert "flex-wrap: wrap" in css
-    assert "dco-order-tracking-strip__item + .dco-order-tracking-strip__item" in css
+    assert "dco-order-tracking-strip__label::after" in css
 
 
 def test_notes_and_edge_color_never_disappear_when_empty() -> None:

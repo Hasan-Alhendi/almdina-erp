@@ -224,7 +224,7 @@ class TestDesignSystemContract(unittest.TestCase):
         components_asset = '"/assets/almdina_erp/css/almdina_components.css"'
         desk_theme_asset = '"/assets/almdina_erp/css/almdina_desk_theme.css"'
         desk_sidebar_asset = '"/assets/almdina_erp/css/almdina_desk_sidebar.css?v=2"'
-        workspace_home_asset = '"/assets/almdina_erp/css/almdina_workspace_home.css?v=8"'
+        workspace_home_asset = '"/assets/almdina_erp/css/almdina_workspace_home.css?v=10"'
         ui_asset = '"/assets/almdina_erp/js/almdina_ui.js"'
         foundation_asset = '"/assets/almdina_erp/js/frontend_foundation.js"'
         notes_asset = '"/assets/almdina_erp/css/notes.css"'
@@ -246,10 +246,17 @@ class TestDesignSystemContract(unittest.TestCase):
 
     def test_workspace_home_css_uses_design_tokens_without_global_desk_overrides(self) -> None:
         source = WORKSPACE_HOME_CSS.read_text(encoding="utf-8")
+        tokens = TOKENS.read_text(encoding="utf-8")
         self.assertIn("--alm-home-surface", source)
+        self.assertIn("var(--alm-canvas)", source)
         self.assertIn("body.almdina-workspace-home", source)
         self.assertNotIn("body .btn-primary", source)
         self.assertNotIn("#2490ef", source)
+        self.assertIn("--alm-accent-blue", tokens)
+        self.assertIn("--alm-accent-purple", tokens)
+        self.assertIn("var(--alm-accent-blue)", source)
+        self.assertIn("var(--alm-accent-purple)", source)
+        self.assertNotIn("#7c3aed", source)
 
     def test_factory_permissions_pilot_uses_design_system(self) -> None:
         self.assertIn('class="almdina-ui apc-shell"', self.permissions_renderer)

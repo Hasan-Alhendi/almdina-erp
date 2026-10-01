@@ -44,7 +44,11 @@ def test_order_creator_dispatches_directly_without_approval_or_plan_lock():
 
     assert "function openDispatchDialog(frm)" in shop_floor
     assert 'can(frm, "dispatch_order")' in shop_floor
-    assert 'frm.add_custom_button(__("إرسال للإنتاج"), () => openDispatchDialog(frm));' in shop_floor
+    assert 'frm.add_custom_button(__("إرسال للإنتاج"), () => openDispatchDialog(frm));' in shop_floor or (
+        'frm.add_custom_button(__("إرسال للإنتاج"), () => openDispatchDialog(frm))' in shop_floor
+    )
+    assert "dco-dispatch-toolbar-button" in shop_floor
+    assert 'return String($(this).text() || "").trim() === __("إرسال للإنتاج")' not in shop_floor
     assert "get_dispatch_options" in shop_floor
     assert "dispatch_order" in shop_floor
     assert "approve_order" not in shop_floor
@@ -125,7 +129,11 @@ def test_review_and_order_approval_are_retired_in_favor_of_direct_dispatch():
     dispatch_btn = shop_floor_ux.split("function addDispatchButton", 1)[1].split(
         "function revertTargetsKey", 1
     )[0]
-    assert 'frm.add_custom_button(__("إرسال للإنتاج"), () => openDispatchDialog(frm));' in dispatch_btn
+    assert 'frm.add_custom_button(__("إرسال للإنتاج"), () => openDispatchDialog(frm))' in dispatch_btn
+    assert "button.addClass(\"dco-dispatch-toolbar-button\")" in dispatch_btn or (
+        "button.addClass('dco-dispatch-toolbar-button')" in dispatch_btn
+    )
+    assert 'return String($(this).text() || "").trim() === __("إرسال للإنتاج")' not in dispatch_btn
     assert "PRODUCTION_ACTION_GROUP" not in dispatch_btn
 
     assert "إرسال الطلب للمراجعة أُلغي" in permissions

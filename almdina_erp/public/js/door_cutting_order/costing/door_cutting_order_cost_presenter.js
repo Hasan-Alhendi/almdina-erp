@@ -3,7 +3,12 @@
 
     if (window.AlmdinaOrderCostUX) return;
 
-    const STYLE_ID = "dco-capability-cost-presenter-css-v7";
+    const STYLE_ID = "dco-capability-cost-presenter-css-v8";
+    const LEGACY_STYLE_IDS = Object.freeze([
+        "dco-capability-cost-presenter-css-v7",
+        "dco-capability-cost-presenter-css-v6",
+        "dco-capability-cost-presenter-css-v5",
+    ]);
 
     function can(frm, capability) {
         const permissions = window.AlmdinaPermissions;
@@ -280,7 +285,28 @@
             : number(frm.doc.customer_quote_total_usd);
     }
 
+    function dimensionMark(value, count) {
+        // Same count contract as measurements print (one mark per edged side on that axis).
+        // Screen layout mirrors the printed look: 2 sides => line above + below; 1 side => below.
+        const safeCount = Math.max(0, Math.min(2, Number(count || 0)));
+        const line = '<span class="dco-cost-dimension-edge-line" aria-hidden="true"></span>';
+        const spacer = '<span class="dco-cost-dimension-edge-line is-spacer" aria-hidden="true"></span>';
+        const top = safeCount === 2 ? line : spacer;
+        const bottom = safeCount >= 1 ? line : spacer;
+        return (
+            `<span class="dco-cost-dimension" data-edge-marks="${safeCount}">`
+            + `<span class="dco-cost-dimension-rail">${top}</span>`
+            + `<b>${quantity(value)}</b>`
+            + `<span class="dco-cost-dimension-rail">${bottom}</span>`
+            + `</span>`
+        );
+    }
+
     function installStyles() {
+        LEGACY_STYLE_IDS.forEach((id) => {
+            const legacy = document.getElementById(id);
+            if (legacy) legacy.remove();
+        });
         if (document.getElementById(STYLE_ID)) return;
         const style = document.createElement("style");
         style.id = STYLE_ID;
@@ -304,6 +330,11 @@
             .dco-cost-table th{background:var(--subtle-fg,#f7f9fb);font-weight:900;white-space:nowrap}
             .dco-cost-table tr:last-child td{border-bottom:0}
             .dco-cost-table .text-start{text-align:right}
+            .dco-cost-dimension{display:inline-flex;min-width:2.75rem;flex-direction:column;align-items:center;gap:2px;line-height:1}
+            .dco-cost-dimension b{font-size:12px;font-weight:900}
+            .dco-cost-dimension-rail{display:flex;min-height:4px;align-items:center;justify-content:center}
+            .dco-cost-dimension-edge-line{display:block;width:1.65rem;height:1.5px;border-radius:999px;background:var(--alm-primary,#172033)}
+            .dco-cost-dimension-edge-line.is-spacer{visibility:hidden}
             .dco-invoice-pending-row td{background:rgba(190,125,25,.055)}
             .dco-invoice-pending-badge{display:inline-flex;margin-inline-start:7px;padding:2px 7px;border-radius:999px;background:#fff3d8;color:#875812;font-size:9px;font-weight:900}
             .dco-invoice-pending-value{font-weight:900;color:#9a6a1d}
@@ -353,11 +384,17 @@
         }
         return `<div class="dco-cost-table-wrap"><table class="dco-cost-table"><thead><tr>
             <th>#</th><th>النوع</th><th>العرض (سم)</th><th>الطول (سم)</th><th>العدد</th><th class="text-start">ملاحظات</th><th>نوع القشاط</th>
-        </tr></thead><tbody>${data.map(row => `<tr>
+        </tr></thead><tbody>${data.map(row => {
+            const widthCount = Number(Boolean(row.source.edge_width_top))
+                + Number(Boolean(row.source.edge_width_bottom));
+            const longCount = Number(Boolean(row.source.edge_long_right))
+                + Number(Boolean(row.source.edge_long_left));
+            return `<tr>
             <td><b>${row.index}</b></td><td>${esc(pieceTypeLabel(row.pieceType))}</td>
-            <td>${quantity(row.width)}</td><td>${quantity(row.length)}</td><td>${row.qty}</td>
+            <td>${dimensionMark(row.width, widthCount)}</td><td>${dimensionMark(row.length, longCount)}</td><td>${row.qty}</td>
             <td class="text-start">${esc(row.notes || "—")}</td><td>${esc(row.edgeType || "—")}</td>
-        </tr>`).join("")}</tbody></table></div>`;
+        </tr>`;
+        }).join("")}</tbody></table></div>`;
     }
 
     function planNeedsRecalculation(frm) {

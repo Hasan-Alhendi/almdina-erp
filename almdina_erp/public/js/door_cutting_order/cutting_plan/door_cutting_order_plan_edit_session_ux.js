@@ -23,7 +23,7 @@
         Object.freeze({
             fieldname: "trim_margin_mm",
             label: "هامش تشذيب اللوح",
-            shortLabel: "التشذيب",
+            shortLabel: "الهامش",
             fieldtype: "Float",
             min: 0,
             step: "0.1",

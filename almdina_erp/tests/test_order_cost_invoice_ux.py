@@ -87,6 +87,20 @@ def test_cost_measurements_are_compact_and_custom_edge_details_have_one_owner():
     assert "dco-notes-col" in edges
 
 
+def test_cost_measurements_table_shows_print_style_edge_dimension_marks():
+    cost = _source(COST_PRESENTER)
+
+    assert "function dimensionMark(value, count)" in cost
+    assert "row.source.edge_width_top" in cost
+    assert "row.source.edge_width_bottom" in cost
+    assert "row.source.edge_long_right" in cost
+    assert "row.source.edge_long_left" in cost
+    assert "dimensionMark(row.width, widthCount)" in cost
+    assert "dimensionMark(row.length, longCount)" in cost
+    assert "dco-cost-dimension-edge-line" in cost
+    assert "dco-capability-cost-presenter-css-v8" in cost
+
+
 def test_printed_width_and_length_keep_visual_edge_direction_marks():
     presenter = _source(PRINT_PRESENTER)
     theme = _source(PRINT_THEME)

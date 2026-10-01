@@ -107,7 +107,7 @@ class TestFactoryMasterDataArchitecture(unittest.TestCase):
         self.assertIn("factory_production_settings/controller.js", settings_page)
         self.assertIn("createLatestRequestGate", settings_state)
         self.assertIn("requests.settings.begin", settings_controller)
-        self.assertIn("الإعدادات الافتراضية للمعمل", settings_renderer)
+        self.assertIn("إعدادات تشغيل المعمل الافتراضية", settings_renderer)
         self.assertIn("@media", settings_css)
         self.assertNotIn("requestId", settings_surface)
         self.assertNotIn("frappe.user_roles", settings_surface)
