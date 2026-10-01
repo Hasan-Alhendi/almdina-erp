@@ -75,7 +75,13 @@ class TestCanonicalPermissionStateArchitecture(unittest.TestCase):
         self.assertIn("reader.role_capabilities", gateway)
         self.assertIn("_role_state_for_reconciliation", sync)
         self.assertIn("CustomDocPermCapabilityReader", sync)
+        self.assertNotIn("CanonicalPermissionStateRepository", sync)
+        self.assertNotIn("STATE_DOCTYPE", sync)
+        self.assertNotIn("AUDIT_DOCTYPE", sync)
         self.assertTrue(RETIRE_PATCH.exists())
+        retire = RETIRE_PATCH.read_text(encoding="utf-8")
+        self.assertIn("CanonicalPermissionStateRepository", retire)
+        self.assertIn("sync_permission_types()", retire)
 
     def test_canonical_repository_is_migration_only(self) -> None:
         canonical = CANONICAL_REPOSITORY.read_text(encoding="utf-8")

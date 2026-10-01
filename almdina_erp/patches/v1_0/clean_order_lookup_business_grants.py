@@ -32,9 +32,9 @@ _CUSTOMER_ADMIN_ACTIONS = frozenset(
 
 
 def execute() -> None:
-    """Remove legacy lookup-derived grants from canonical business authority.
+    """Remove legacy lookup-derived grants from business capability grants.
 
-    Older releases normalized order-entry lookup dependencies into the canonical
+    Older releases normalized order-entry lookup dependencies into the stored
     capability state itself. That made VIEW_CUSTOMERS / VIEW_EDGE_BANDING_TYPES
     indistinguishable from explicit administration grants and caused incorrect
     menu visibility.

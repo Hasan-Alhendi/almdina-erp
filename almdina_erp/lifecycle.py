@@ -33,9 +33,12 @@ from almdina_erp.install import (
 def _sync_security_foundation() -> None:
     """Repair security metadata and native projections without seeding policy.
 
-    Role names never seed business policy here. Canonical Almdina role state is
-    the sole authority; migrations only remove hidden platform authority and
-    refresh the technical Frappe grants required for its permission hooks.
+    Role names never seed business policy here. Custom DocPerm / Permission Types
+    are the business grant authority for editable factory roles; Almdina
+    application/domain authorization applies contextual constraints. ``Almdina
+    Role Capability State`` is migration/history compatibility only and is never
+    re-imported by recurring migrate/sync. Migrations only remove hidden
+    platform authority and refresh technical Frappe grant projections.
     """
 
     sync_permission_types()
