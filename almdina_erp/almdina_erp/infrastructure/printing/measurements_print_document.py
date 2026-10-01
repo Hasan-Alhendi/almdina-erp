@@ -10,7 +10,7 @@ DOCUMENTATION_SCHEMA = "almdina.special-shape-documentation"
 DRAWING_VERSION = 1
 PIECE_TYPE_LABELS = {
     "Special": "خاصة",
-    "Clipped Corner": "زاوية مقصوصة",
+    "Clipped Corner": "الزاوية الكسر",
     "L-Shaped Corner": "زاوية L",
     "Extra": "إضافية",
 }

@@ -352,6 +352,7 @@ def _edge_print_contract(spec: OrderPieceCutSpec) -> dict[str, Any]:
     }
     flags["edge_type"] = next(iter(edge_types)) if len(edge_types) == 1 else ""
     flags["edge_profiles"] = profiles
+    flags["edge_break"] = 1 if getattr(spec, "edge_break", 0) else 0
     return flags
 
 

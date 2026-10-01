@@ -52,6 +52,7 @@ class OrderPieceCutSpec:
     piece_type: str
     qty: int
     side_profiles: tuple[dict[str, Any], ...]
+    edge_break: int = 0
 
 
 def _is_selected(value: Any) -> bool:
@@ -198,6 +199,12 @@ def build_order_piece_cut_specs(
                 piece_type=str(getattr(row, "piece_type", "") or "Regular"),
                 qty=qty,
                 side_profiles=tuple(side_profiles),
+                edge_break=(
+                    1
+                    if str(getattr(row, "piece_type", "") or "Regular") == "Clipped Corner"
+                    and _is_selected(getattr(row, "edge_break", 0))
+                    else 0
+                ),
             )
         )
 

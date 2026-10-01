@@ -256,6 +256,15 @@
             .dco-col-edges .dco-check-toggle[data-check-field="edge_long_left"]::after{border-left:3px solid currentColor;}
             .dco-col-edges .dco-check-toggle[data-check-field="edge_width_top"]::after{border-top:3px solid currentColor;}
             .dco-col-edges .dco-check-toggle[data-check-field="edge_width_bottom"]::after{border-bottom:3px solid currentColor;}
+            .dco-col-edges .dco-check-toggle[data-check-field="edge_break"]::after{
+                width:18px;
+                height:18px;
+                border:none;
+                background:linear-gradient(135deg, transparent 46%, currentColor 46%, currentColor 54%, transparent 54%);
+                opacity:.9;
+            }
+            .dco-col-edges .dco-check-toggle.is-break-locked{opacity:.45;cursor:not-allowed;}
+            .dco-edge-buttons.has-break-edge{grid-template-columns:repeat(5,minmax(0,1fr));}
 
             .dco-col-edges .dco-check-toggle.is-checked{
                 color:#fff !important;

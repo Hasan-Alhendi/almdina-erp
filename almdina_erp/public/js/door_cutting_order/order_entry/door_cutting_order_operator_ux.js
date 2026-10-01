@@ -9,6 +9,7 @@
         "edge_long_left",
         "edge_width_top",
         "edge_width_bottom",
+        "edge_break",
     ]);
     const RECALC_FIELDS = new Set([
         "width_cm",
@@ -19,6 +20,7 @@
         "edge_long_left",
         "edge_width_top",
         "edge_width_bottom",
+        "edge_break",
         "edge_type",
         "piece_type",
         "notes",
@@ -354,10 +356,15 @@
         const isSpecial = pieceType === "Special";
         const cornerGeometry = window.AlmdinaClippedCornerGeometry;
         const isClipped = Boolean(cornerGeometry && cornerGeometry.isCornerCut({ piece_type: pieceType }));
+        const isBreakCorner = Boolean(
+            cornerGeometry
+            && typeof cornerGeometry.isCornerCut === "function"
+            && cornerGeometry.isCornerCut({ piece_type: pieceType })
+        );
         const isExtra = pieceType === "Extra";
         const extraAddons = window.AlmdinaExtraDoorAddonsUX;
         const labels = CELL_LABELS[isArabic() ? "ar" : "en"];
-        const toggle = (field,label,extra="") => `
+        const toggle = (field, label, extra = "") => `
             <button type="button" class="dco-check-toggle ${data[field] ? "is-checked" : ""} ${extra}" data-check-field="${field}" aria-pressed="${data[field] ? "true" : "false"}" ${disabled}>
                 <span class="dco-check-mark">${data[field] ? "✓" : ""}</span><span>${label}</span>
             </button>`;
@@ -388,7 +395,7 @@
         const nativePieceTypeSelect = `<select class="dco-fast-select" data-field="piece_type" ${disabled}>
             <option value="Regular" ${pieceType === "Regular" ? "selected" : ""}>${isArabic() ? "عادية" : "Regular"}</option>
             <option value="Special" ${pieceType === "Special" ? "selected" : ""}>${isArabic() ? "خاصة" : "Special"}</option>
-            <option value="Clipped Corner" ${pieceType === "Clipped Corner" ? "selected" : ""}>${isArabic() ? "زاوية مقصوصة" : "Clipped corner"}</option>
+            <option value="Clipped Corner" ${pieceType === "Clipped Corner" ? "selected" : ""}>${isArabic() ? "الزاوية الكسر" : "Clipped corner"}</option>
             <option value="L-Shaped Corner" ${pieceType === "L-Shaped Corner" ? "selected" : ""}>${isArabic() ? "زاوية L" : "L-shaped corner"}</option>
             <option value="Extra" ${pieceType === "Extra" ? "selected" : ""}>${isArabic() ? "إضافية" : "Extra"}</option>
         </select>`;
@@ -403,12 +410,19 @@
                 <td class="dco-col-number dco-col-length" data-label="${labels.length}"><input class="dco-fast-input" type="number" inputmode="decimal" step="any" min="0" data-field="length_cm" value="${virtual ? "" : escapeHtml(data.length_cm || "")}" ${disabled}></td>
                 <td class="dco-col-qty" data-label="${labels.quantity}"><input class="dco-fast-input" type="number" inputmode="numeric" step="1" min="1" data-field="qty" value="${virtual ? "1" : escapeHtml(data.qty || 1)}" ${disabled}></td>
                 <td class="dco-col-rotate" data-label="${labels.rotation}">${toggle("allow_rotation", "↻", "dco-rotate-toggle")}</td>
-                <td class="dco-col-edges" data-label="${labels.edges}"><div class="dco-edge-buttons" title="${isSpecial ? (isArabic() ? "قشاط مبدئي لتقدير السعر؛ يمكن اعتماده أو تعديله بعد تصميم CNC" : "Preliminary banding for the estimate; finalize after CNC design") : ""}">
+                <td class="dco-col-edges" data-label="${labels.edges}">${
+                    isBreakCorner
+                        ? `<button type="button" class="dco-corner-edges-summary" data-open-corner-edges="1" ${editable && !virtual ? "" : "disabled"} title="${isArabic() ? "افتح شكل الزاوية لاختيار جهات القشاط" : "Open the corner shape to choose banding sides"}">
+                            <span>${escapeHtml((cornerGeometry && typeof cornerGeometry.edgeSelectionSummary === "function" && cornerGeometry.edgeSelectionSummary(data)) || (isArabic() ? "بدون قشاط" : "No banding"))}</span>
+                            <small>${isArabic() ? "اختيار القشاط من الشكل" : "Choose banding on shape"}</small>
+                        </button>`
+                        : `<div class="dco-edge-buttons" title="${isSpecial ? (isArabic() ? "قشاط مبدئي لتقدير السعر؛ يمكن اعتماده أو تعديله بعد تصميم CNC" : "Preliminary banding for the estimate; finalize after CNC design") : ""}">
                     ${toggle("edge_width_top", isArabic() ? "عرض أعلى" : "Top")}
                     ${toggle("edge_width_bottom", isArabic() ? "عرض أسفل" : "Bottom")}
                     ${toggle("edge_long_right", isArabic() ? "طول يمين" : "Long R")}
                     ${toggle("edge_long_left", isArabic() ? "طول يسار" : "Long L")}
-                </div></td>
+                </div>`
+                }</td>
                 <td class="dco-col-edge-type" data-label="${labels.edgeType}"><select class="dco-fast-select" data-field="edge_type" ${disabled}>${edgeOptions(frm, virtual ? "" : (data.edge_type || ""))}</select></td>
                 <td class="dco-col-sketch" data-label="${labels.shape}"><button type="button" class="dco-special-sketch-button ${hasDrawing || hasExactGeometry ? "is-documented" : ""} ${hasExactGeometry ? "is-exact-geometry" : ""} ${isClipped ? "is-clipped-corner" : ""}" ${(isSpecial || isClipped) && editable && !virtual ? "" : "disabled"} title="${escapeHtml(shapeTitle)}">
                     <span aria-hidden="true">${shapeIcon}</span>
@@ -725,10 +739,30 @@
         const tr = button.closest("tr[data-row-name]");
         const fieldname = button.dataset.checkField;
         if (!tr || !CHECK_FIELDS.has(fieldname)) return;
+        if (button.disabled || button.classList.contains("is-break-locked")) return;
         const row = getOrMaterializeRow(frm, tr);
         if (!row) return;
+        const cornerGeometry = window.AlmdinaClippedCornerGeometry;
+        if (
+            fieldname !== "edge_break"
+            && cornerGeometry
+            && typeof cornerGeometry.locksAdjacentSidesForBreak === "function"
+            && cornerGeometry.locksAdjacentSidesForBreak(row)
+            && typeof cornerGeometry.breakAdjacentSides === "function"
+            && cornerGeometry.breakAdjacentSides(row.clipped_corner_position).includes(fieldname)
+        ) {
+            return;
+        }
         const next = row[fieldname] ? 0 : 1;
         row[fieldname] = next;
+        if (fieldname === "edge_break" && cornerGeometry && typeof cornerGeometry.applyEdgeBreakPolicy === "function") {
+            cornerGeometry.applyEdgeBreakPolicy(row);
+            frm.dirty();
+            updateCalculatedCells(tr, row);
+            triggerChildField(frm, row, fieldname, 0);
+            renderFastMeasurements(frm);
+            return;
+        }
         frm.dirty();
         button.classList.toggle("is-checked", Boolean(next));
         button.setAttribute("aria-pressed", next ? "true" : "false");
@@ -790,6 +824,16 @@
                     const extraAddons = window.AlmdinaExtraDoorAddonsUX;
                     if (extraAddons && typeof extraAddons.reconcilePieceType === "function") {
                         extraAddons.reconcilePieceType(currentFrm, row);
+                    }
+                    if (
+                        window.AlmdinaClippedCornerGeometry
+                        && typeof window.AlmdinaClippedCornerGeometry.isCornerCut === "function"
+                        && window.AlmdinaClippedCornerGeometry.isCornerCut(row)
+                        && typeof window.AlmdinaClippedCornerGeometry.applyEdgeBreakPolicy === "function"
+                    ) {
+                        window.AlmdinaClippedCornerGeometry.applyEdgeBreakPolicy(row);
+                    } else {
+                        row.edge_break = 0;
                     }
                     renderFastMeasurements(currentFrm);
                 }
@@ -856,7 +900,7 @@
                 deleteRow(currentFrm, del.closest("tr[data-row-name]"));
                 return;
             }
-            const sketch = event.target.closest(".dco-special-sketch-button");
+            const sketch = event.target.closest(".dco-special-sketch-button, .dco-corner-edges-summary");
             if (sketch && root.contains(sketch)) {
                 event.preventDefault();
                 event.stopPropagation();

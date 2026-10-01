@@ -3,7 +3,8 @@
 
     const CLIPPED_TYPE = "Clipped Corner";
     const L_TYPE = "L-Shaped Corner";
-    const CORNER_TYPES = Object.freeze([CLIPPED_TYPE, L_TYPE]);
+    // Commit 1: edge banding editor applies to Clipped Corner only.
+    const CORNER_TYPES = Object.freeze([CLIPPED_TYPE]);
     const DEFAULT_POSITION = "Top Right";
     const ROTATED_POSITION = {
         "Top Left": "Top Right",
@@ -17,6 +18,12 @@
         { value: "Bottom Right", ar: "أسفل اليمين", en: "Bottom right" },
         { value: "Bottom Left", ar: "أسفل اليسار", en: "Bottom left" },
     ];
+    const BREAK_ADJACENT_SIDES = Object.freeze({
+        "Top Right": Object.freeze(["edge_width_top", "edge_long_right"]),
+        "Top Left": Object.freeze(["edge_width_top", "edge_long_left"]),
+        "Bottom Right": Object.freeze(["edge_width_bottom", "edge_long_right"]),
+        "Bottom Left": Object.freeze(["edge_width_bottom", "edge_long_left"]),
+    });
 
     function isArabic() {
         const lang = String(
@@ -63,7 +70,7 @@
 
     function typeLabel(piece, arabic = isArabic()) {
         if (isLShaped(piece)) return arabic ? "زاوية L" : "L-shaped corner";
-        return arabic ? "زاوية مقصوصة" : "Clipped corner";
+        return arabic ? "الزاوية الكسر" : "Clipped corner";
     }
 
     function typeIcon(piece) {
@@ -134,6 +141,140 @@
             length: num(piece && piece.h) || (rotated ? base.originalWidth : base.originalLength),
             rotated,
         };
+    }
+
+    function breakAdjacentSides(position) {
+        return BREAK_ADJACENT_SIDES[position || DEFAULT_POSITION] || BREAK_ADJACENT_SIDES[DEFAULT_POSITION];
+    }
+
+    function applyEdgeBreakPolicy(piece) {
+        const row = piece || {};
+        if (!isCornerCut(row)) {
+            row.edge_break = 0;
+            return row;
+        }
+        if (!row.edge_break) return row;
+        breakAdjacentSides(row.clipped_corner_position).forEach((side) => {
+            row[side] = 0;
+            row[`${side}_type_override`] = "";
+        });
+        return row;
+    }
+
+    function locksAdjacentSidesForBreak(piece) {
+        return Boolean(isCornerCut(piece) && piece && piece.edge_break);
+    }
+
+    function breakEdgeLabel(piece, arabic = isArabic()) {
+        return arabic ? "قشاط الكسر" : "Break";
+    }
+
+    function insetPoint(point, centerX, centerY, amount) {
+        const dx = centerX - point[0];
+        const dy = centerY - point[1];
+        const length = Math.hypot(dx, dy) || 1;
+        return [point[0] + (dx / length) * amount, point[1] + (dy / length) * amount];
+    }
+
+    function insetPath(path, width, height, amount) {
+        const centerX = width / 2;
+        const centerY = height / 2;
+        return (path || []).map((point) => insetPoint(point, centerX, centerY, amount));
+    }
+
+    function clippedEdgePaths(piece, viewportWidth = 100, viewportHeight = 100) {
+        const width = Math.max(0, num(viewportWidth));
+        const height = Math.max(0, num(viewportHeight));
+        const empty = {
+            top: null,
+            bottom: null,
+            left: null,
+            right: null,
+            break: null,
+        };
+        if (!isCornerCut(piece) || !width || !height) return empty;
+
+        const config = effectiveConfig(piece || {});
+        if (!config.width || !config.length) return empty;
+        const cutX = clamp(config.cutWidth / config.width * width, 0, width * 0.95);
+        const cutY = clamp(config.cutLength / config.length * height, 0, height * 0.95);
+        const amount = Math.min(width, height) * 0.035;
+        const diagonalByPosition = {
+            "Top Right": {
+                top: [[0, 0], [width - cutX, 0]],
+                right: [[width, cutY], [width, height]],
+                bottom: [[width, height], [0, height]],
+                left: [[0, height], [0, 0]],
+                break: [[0, 0], [width - cutX, 0], [width, cutY], [width, height]],
+            },
+            "Top Left": {
+                top: [[cutX, 0], [width, 0]],
+                right: [[width, 0], [width, height]],
+                bottom: [[width, height], [0, height]],
+                left: [[0, height], [0, cutY]],
+                break: [[width, 0], [cutX, 0], [0, cutY], [0, height]],
+            },
+            "Bottom Right": {
+                top: [[0, 0], [width, 0]],
+                right: [[width, 0], [width, height - cutY]],
+                bottom: [[width - cutX, height], [0, height]],
+                left: [[0, height], [0, 0]],
+                break: [[width, 0], [width, height - cutY], [width - cutX, height], [0, height]],
+            },
+            "Bottom Left": {
+                top: [[0, 0], [width, 0]],
+                right: [[width, 0], [width, height]],
+                bottom: [[width, height], [cutX, height]],
+                left: [[0, height - cutY], [0, 0]],
+                break: [[0, 0], [0, height - cutY], [cutX, height], [width, height]],
+            },
+        };
+        const byPosition = diagonalByPosition;
+        const source = byPosition[config.position] || byPosition[DEFAULT_POSITION];
+        return {
+            top: insetPath(source.top, width, height, amount),
+            bottom: insetPath(source.bottom, width, height, amount),
+            left: insetPath(source.left, width, height, amount),
+            right: insetPath(source.right, width, height, amount),
+            break: insetPath(source.break, width, height, amount),
+        };
+    }
+
+    function edgeBandSvgMarkup(piece, viewportWidth = 100, viewportHeight = 100, options = {}) {
+        const paths = clippedEdgePaths(piece, viewportWidth, viewportHeight);
+        if (!paths.top && !paths.break) return "";
+        // Match regular-door plan edges: inherit stroke from the parent <g> and keep
+        // screen-space thickness via non-scaling-stroke (avoids fat diagonals under
+        // preserveAspectRatio="none").
+        const inheritStroke = options.inheritStroke !== false;
+        const color = options.color || "#d00000";
+        const strokeWidth = options.strokeWidth || 3;
+        const offsetX = num(options.offsetX);
+        const offsetY = num(options.offsetY);
+        const toPoints = (path) => (path || [])
+            .map(([x, y]) => `${rounded(x + offsetX)},${rounded(y + offsetY)}`)
+            .join(" ");
+        const polyline = (path, extraClass = "") => {
+            if (inheritStroke) {
+                return `<polyline class="dco-edge-line-svg ${extraClass}" fill="none" vector-effect="non-scaling-stroke" points="${toPoints(path)}"/>`;
+            }
+            return `<polyline class="dco-edge-line-svg ${extraClass}" fill="none" stroke="${color}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="${toPoints(path)}"/>`;
+        };
+        const lines = [];
+        const flags = {
+            top: Boolean(piece && piece.edge_width_top),
+            bottom: Boolean(piece && piece.edge_width_bottom),
+            left: Boolean(piece && piece.edge_long_left),
+            right: Boolean(piece && piece.edge_long_right),
+        };
+        if (flags.top && paths.top) lines.push(polyline(paths.top));
+        if (flags.bottom && paths.bottom) lines.push(polyline(paths.bottom));
+        if (flags.left && paths.left) lines.push(polyline(paths.left));
+        if (flags.right && paths.right) lines.push(polyline(paths.right));
+        if (piece && piece.edge_break && paths.break) {
+            lines.push(polyline(paths.break, "dco-edge-break-svg"));
+        }
+        return lines.join("");
     }
 
     function points(piece, viewportWidth = 100, viewportHeight = 100) {
@@ -230,6 +371,77 @@
         return `${positionLabel(config.position, arabic)} · ${size}`;
     }
 
+    function edgeSelectionSummary(row, arabic = isArabic()) {
+        if (!isCornerCut(row)) return "";
+        const labels = [];
+        if (row.edge_width_top) labels.push(arabic ? "أعلى" : "Top");
+        if (row.edge_width_bottom) labels.push(arabic ? "أسفل" : "Bottom");
+        if (row.edge_long_right) labels.push(arabic ? "يمين" : "Right");
+        if (row.edge_long_left) labels.push(arabic ? "يسار" : "Left");
+        if (row.edge_break) labels.push(arabic ? "الكسر" : "Break");
+        if (!labels.length) {
+            return arabic ? "بدون قشاط" : "No banding";
+        }
+        return labels.join(arabic ? " · " : " · ");
+    }
+
+    function cloneEdgeDraft(row) {
+        return {
+            edge_width_top: row.edge_width_top ? 1 : 0,
+            edge_width_bottom: row.edge_width_bottom ? 1 : 0,
+            edge_long_right: row.edge_long_right ? 1 : 0,
+            edge_long_left: row.edge_long_left ? 1 : 0,
+            edge_break: row.edge_break ? 1 : 0,
+            clipped_corner_position: row.clipped_corner_position || DEFAULT_POSITION,
+            piece_type: pieceType(row) || CLIPPED_TYPE,
+        };
+    }
+
+    function edgeToggleHtml(field, label, draft, locked, extra = "") {
+        const checked = Boolean(draft[field]);
+        return `
+            <button type="button" class="dco-corner-edge-toggle ${checked ? "is-checked" : ""} ${locked ? "is-break-locked" : ""} ${extra}" data-corner-edge="${field}" aria-pressed="${checked ? "true" : "false"}" ${locked ? "disabled" : ""} title="${locked ? (isArabic() ? "مشمول في قشاط الكسر" : "Included in break banding") : ""}">
+                <span class="dco-check-mark">${checked ? "✓" : ""}</span>
+                <span>${label}</span>
+            </button>`;
+    }
+
+    function edgeControlsHtml(row) {
+        if (!isCornerCut(row)) return "";
+        const draft = applyEdgeBreakPolicy(cloneEdgeDraft(row));
+        const locked = locksAdjacentSidesForBreak(draft)
+            ? new Set(breakAdjacentSides(draft.clipped_corner_position))
+            : new Set();
+        return `
+            <div data-corner-edges-section>
+                <div class="dco-corner-section-label">${isArabic() ? "3. اختر جهات القشاط على الشكل" : "3. Choose banding sides on the shape"}</div>
+                <div class="dco-corner-edges has-break" data-corner-edges>
+                    ${edgeToggleHtml("edge_width_top", isArabic() ? "عرض أعلى" : "Top", draft, locked.has("edge_width_top"))}
+                    ${edgeToggleHtml("edge_width_bottom", isArabic() ? "عرض أسفل" : "Bottom", draft, locked.has("edge_width_bottom"))}
+                    ${edgeToggleHtml("edge_long_right", isArabic() ? "طول يمين" : "Right", draft, locked.has("edge_long_right"))}
+                    ${edgeToggleHtml("edge_long_left", isArabic() ? "طول يسار" : "Left", draft, locked.has("edge_long_left"))}
+                    ${edgeToggleHtml("edge_break", breakEdgeLabel(row), draft, false, "dco-edge-break-toggle")}
+                </div>
+            </div>`;
+    }
+
+    function syncEdgeToggleVisuals(root, draft) {
+        const locked = locksAdjacentSidesForBreak(draft)
+            ? new Set(breakAdjacentSides(draft.clipped_corner_position))
+            : new Set();
+        root.querySelectorAll("[data-corner-edge]").forEach((button) => {
+            const field = button.dataset.cornerEdge;
+            const checked = Boolean(draft[field]);
+            const isLocked = field !== "edge_break" && locked.has(field);
+            button.classList.toggle("is-checked", checked);
+            button.classList.toggle("is-break-locked", isLocked);
+            button.setAttribute("aria-pressed", checked ? "true" : "false");
+            button.disabled = isLocked;
+            const mark = button.querySelector(".dco-check-mark");
+            if (mark) mark.textContent = checked ? "✓" : "";
+        });
+    }
+
     function installStyles() {
         if (document.getElementById("dco-clipped-corner-css")) return;
         const style = document.createElement("style");
@@ -260,8 +472,19 @@
             .dco-corner-input-shell input{width:100%;border:0!important;box-shadow:none!important;min-height:40px;padding:7px 10px;font-size:16px;font-weight:800;text-align:center}
             .dco-corner-input-shell span{padding:0 9px;color:#64748b;font-size:10px;border-right:1px solid #e7ebef;white-space:nowrap}
             .dco-corner-equal{align-self:flex-start;border:0;background:transparent;color:var(--alm-primary, #172033);font-size:11px;font-weight:800;padding:0;cursor:pointer}
+            .dco-corner-edges{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+            .dco-corner-edges.has-break{grid-template-columns:repeat(3,minmax(0,1fr))}
+            .dco-corner-edge-toggle{border:1px solid var(--border-color,#d9e0e6);border-radius:10px;background:var(--card-bg,#fff);min-height:40px;padding:7px 8px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;font-size:11px;font-weight:800;color:#334155}
+            .dco-corner-edge-toggle .dco-check-mark{width:14px;text-align:center}
+            .dco-corner-edge-toggle.is-checked{background:#172033;border-color:#172033;color:#fff}
+            .dco-corner-edge-toggle.is-break-locked{opacity:.45;cursor:not-allowed}
+            .dco-corner-edge-toggle.dco-edge-break-toggle.is-checked{background:#b42318;border-color:#912018}
             .dco-corner-help{margin-top:auto;border-radius:11px;padding:10px 11px;background:#f8fafc;border:1px solid #e2e8f0;font-size:10px;line-height:1.65;color:#52606d}
             .dco-corner-help.is-error{background:#fff3f1;border-color:#efb5ad;color:#9d2e23}
+            .dco-corner-edges-summary{display:flex;flex-direction:column;align-items:stretch;gap:3px;width:100%;border:1px dashed rgba(198,133,25,.55);border-radius:10px;background:#fffaf0;color:#8a5700;padding:6px 8px;font-size:10px;font-weight:800;line-height:1.35;cursor:pointer;text-align:right}
+            .dco-corner-edges-summary:hover{background:#fff3d6;border-color:#c68519}
+            .dco-corner-edges-summary[disabled]{opacity:.7;cursor:default}
+            .dco-corner-edges-summary small{font-weight:700;color:#a16207;opacity:.9}
             .dco-fast-table tr.dco-clipped-corner-row td{background:rgba(224,151,24,.045)}
             .dco-fast-table tr.dco-clipped-corner-row:focus-within td{background:rgba(224,151,24,.085)!important}
             .dco-special-sketch-button.is-clipped-corner{border-style:solid!important;border-color:rgba(198,133,25,.5)!important;background:#fff7e6!important;color:#8a5700!important}
@@ -326,6 +549,7 @@
                         </div>
                         <button type="button" class="dco-corner-equal">${isArabic() ? "جعل الجزءين المتبقيين متساويين" : "Make both remaining lengths equal"}</button>
                     </div>
+                    ${edgeControlsHtml(row)}
                     <div class="dco-corner-help" data-corner-help></div>
                 </section>
             </div>`;
@@ -382,6 +606,13 @@
         }
         if (!preview) return;
 
+        const edgeDraft = root._cornerEdgeDraft || cloneEdgeDraft(row);
+        edgeDraft.clipped_corner_position = config.position;
+        edgeDraft.piece_type = pieceType(row) || CLIPPED_TYPE;
+        applyEdgeBreakPolicy(edgeDraft);
+        root._cornerEdgeDraft = edgeDraft;
+        syncEdgeToggleVisuals(root, edgeDraft);
+
         const sample = {
             piece_type: pieceType(row) || CLIPPED_TYPE,
             width_cm: config.width || 100,
@@ -389,11 +620,22 @@
             clipped_corner_position: config.position,
             clipped_corner_width_cm: config.cutWidth,
             clipped_corner_length_cm: config.cutLength,
+            edge_width_top: edgeDraft.edge_width_top,
+            edge_width_bottom: edgeDraft.edge_width_bottom,
+            edge_long_right: edgeDraft.edge_long_right,
+            edge_long_left: edgeDraft.edge_long_left,
+            edge_break: edgeDraft.edge_break,
         };
         const frame = previewFrame(sample.width_cm, sample.length_cm);
         const polygon = points(sample, frame.width, frame.height)
             .map(([x, y]) => `${rounded(x + frame.x)},${rounded(y + frame.y)}`)
             .join(" ");
+        const edgeMarkup = edgeBandSvgMarkup(sample, frame.width, frame.height, {
+            offsetX: frame.x,
+            offsetY: frame.y,
+            inheritStroke: false,
+            strokeWidth: 3,
+        });
         const labelX = rounded(frame.x + frame.width / 2);
         const labelY = rounded(frame.y + frame.height / 2);
         preview.innerHTML = `
@@ -402,6 +644,7 @@
                 <rect x="10" y="10" width="400" height="260" rx="12" fill="url(#dco-corner-grid)" stroke="#e2e8f0"/>
                 <rect x="${frame.x}" y="${frame.y}" width="${frame.width}" height="${frame.height}" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="6 4"/>
                 <polygon points="${polygon}" fill="#dff1fb" stroke="#172033" stroke-width="3" stroke-linejoin="round"/>
+                ${edgeMarkup}
                 <text x="${labelX}" y="${labelY - 6}" text-anchor="middle" font-size="18" font-weight="800" fill="#172033">${isArabic() ? "الدرفة" : "PIECE"}</text>
                 <text x="${labelX}" y="${labelY + 14}" text-anchor="middle" font-size="12" fill="#536577">${rounded(config.width)} × ${rounded(config.length)} ${isArabic() ? "سم" : "cm"}</text>
                 <text x="210" y="258" text-anchor="middle" font-size="11" font-weight="700" fill="#9a6207">${positionLabel(config.position)} · ${isArabic() ? "متبقي" : "remaining"} ${rounded(config.remainingWidth)} × ${rounded(config.remainingLength)} ${isArabic() ? "سم" : "cm"}</text>
@@ -461,16 +704,42 @@
                     return;
                 }
 
+                const edgeDraft = applyEdgeBreakPolicy(
+                    Object.assign(
+                        cloneEdgeDraft(row),
+                        root._cornerEdgeDraft || {},
+                        {
+                            clipped_corner_position: config.position,
+                            piece_type: pieceType(row) || CLIPPED_TYPE,
+                        }
+                    )
+                );
                 Promise.all([
                     frappe.model.set_value(row.doctype, row.name, "clipped_corner_position", config.position),
                     frappe.model.set_value(row.doctype, row.name, "clipped_corner_width_cm", rounded(config.cutWidth)),
                     frappe.model.set_value(row.doctype, row.name, "clipped_corner_length_cm", rounded(config.cutLength)),
+                    frappe.model.set_value(row.doctype, row.name, "edge_width_top", edgeDraft.edge_width_top),
+                    frappe.model.set_value(row.doctype, row.name, "edge_width_bottom", edgeDraft.edge_width_bottom),
+                    frappe.model.set_value(row.doctype, row.name, "edge_long_right", edgeDraft.edge_long_right),
+                    frappe.model.set_value(row.doctype, row.name, "edge_long_left", edgeDraft.edge_long_left),
+                    frappe.model.set_value(row.doctype, row.name, "edge_break", edgeDraft.edge_break),
                 ]).then(() => {
+                    row.edge_width_top = edgeDraft.edge_width_top;
+                    row.edge_width_bottom = edgeDraft.edge_width_bottom;
+                    row.edge_long_right = edgeDraft.edge_long_right;
+                    row.edge_long_left = edgeDraft.edge_long_left;
+                    row.edge_break = edgeDraft.edge_break;
+                    if (locksAdjacentSidesForBreak(edgeDraft)) {
+                        breakAdjacentSides(config.position).forEach((side) => {
+                            row[`${side}_type_override`] = "";
+                        });
+                    }
+                    applyEdgeBreakPolicy(row);
                     frm.dirty();
                     dialog.hide();
                     refreshFastTable(frm);
                     frappe.show_alert({
-                        message: isArabic() ? "تم اعتماد الزاوية وستظهر في خطة القص." : "Corner applied and will appear in the cutting plan.",
+                        message: isArabic() ? "تم اعتماد الزاوية والقشاط وستظهر في خطة القص." : "Corner and banding applied and will appear in the cutting plan.",
                         indicator: "green",
                     });
                 });
@@ -486,6 +755,7 @@
         const field = dialog.fields_dict.corner_editor;
         field.$wrapper.html(editorHtml(row));
         const root = field.$wrapper.find(".dco-corner-editor").get(0);
+        root._cornerEdgeDraft = applyEdgeBreakPolicy(cloneEdgeDraft(row));
         if (readOnly) {
             root.querySelectorAll("input,button").forEach(control => {
                 control.disabled = true;
@@ -497,6 +767,10 @@
             button.addEventListener("click", () => {
                 root.querySelectorAll(".dco-corner-position").forEach(item => item.classList.remove("is-active"));
                 button.classList.add("is-active");
+                if (root._cornerEdgeDraft) {
+                    root._cornerEdgeDraft.clipped_corner_position = button.dataset.position || DEFAULT_POSITION;
+                    applyEdgeBreakPolicy(root._cornerEdgeDraft);
+                }
                 renderPreview(root, row);
             });
         });
@@ -510,6 +784,23 @@
             if (widthInput && lengthInput) lengthInput.value = widthInput.value;
             renderPreview(root, row);
         });
+        root.querySelectorAll("[data-corner-edge]").forEach((button) => {
+            button.addEventListener("click", () => {
+                if (button.disabled || button.classList.contains("is-break-locked")) return;
+                const fieldname = button.dataset.cornerEdge;
+                const draft = root._cornerEdgeDraft || applyEdgeBreakPolicy(cloneEdgeDraft(row));
+                draft[fieldname] = draft[fieldname] ? 0 : 1;
+                draft.clipped_corner_position = (
+                    root.querySelector(".dco-corner-position.is-active")?.dataset.position
+                    || draft.clipped_corner_position
+                    || DEFAULT_POSITION
+                );
+                draft.piece_type = pieceType(row) || CLIPPED_TYPE;
+                applyEdgeBreakPolicy(draft);
+                root._cornerEdgeDraft = draft;
+                renderPreview(root, row);
+            });
+        });
         renderPreview(root, row);
     }
 
@@ -521,6 +812,13 @@
         TYPE: CLIPPED_TYPE,
         L_TYPE,
         positions: POSITIONS.map(position => position.value),
+        breakAdjacentSides,
+        applyEdgeBreakPolicy,
+        locksAdjacentSidesForBreak,
+        breakEdgeLabel,
+        clippedEdgePaths,
+        edgeBandSvgMarkup,
+        edgeSelectionSummary,
         isClipped,
         isLShaped,
         isCornerCut,

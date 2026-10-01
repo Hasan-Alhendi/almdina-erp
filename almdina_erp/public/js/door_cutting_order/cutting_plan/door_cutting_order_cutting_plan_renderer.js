@@ -53,6 +53,7 @@
         let right = 0;
         let top = 0;
         let bottom = 0;
+        let edgeBreak = piece.edge_break ? 1 : 0;
 
         if (!piece.rotated) {
             left = piece.edge_long_left ? 1 : 0;
@@ -67,11 +68,61 @@
             left = piece.edge_width_bottom ? 1 : 0;
         }
 
-        return { left, right, top, bottom };
+        return { left, right, top, bottom, edgeBreak };
+    }
+
+    function render_clipped_corner_edge_lines(piece, geometryModel, clipId) {
+        const geometry = window.AlmdinaClippedCornerGeometry;
+        if (!geometry || typeof geometry.edgeBandSvgMarkup !== "function") return "";
+        const isCorner = (
+            (typeof geometry.isCornerCut === "function" && geometry.isCornerCut(piece))
+            || (typeof geometry.isClipped === "function" && geometry.isClipped(piece))
+        );
+        if (!isCorner) return "";
+
+        // Paths follow rotated corner geometry; remap finished-orientation flags to visual sides.
+        const edgePiece = piece.rotated
+            ? {
+                ...piece,
+                edge_width_top: piece.edge_long_left,
+                edge_width_bottom: piece.edge_long_right,
+                edge_long_right: piece.edge_width_top,
+                edge_long_left: piece.edge_width_bottom,
+            }
+            : piece;
+        const markup = geometry.edgeBandSvgMarkup(edgePiece, 100, 100, { inheritStroke: true });
+        if (!markup) return "";
+        const pathData = (
+            geometryModel
+            && geometryModel.geometry
+            && geometryModel.geometry.pathData
+        ) || "";
+        const clipDef = pathData
+            ? `<defs><clipPath id="${clipId}"><path d="${pathData}" fill-rule="evenodd" clip-rule="evenodd"/></clipPath></defs>`
+            : "";
+        const clipAttr = pathData ? ` clip-path="url(#${clipId})"` : "";
+        // Same stroke contract as regular-door vector edges in render_piece_edge_lines.
+        return `
+            <svg class="dco-piece-edge-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;z-index:3;overflow:hidden;">
+                ${clipDef}
+                <g${clipAttr} fill="none" stroke="#d00000" stroke-width="3" vector-effect="non-scaling-stroke">${markup}</g>
+            </svg>
+        `;
     }
 
     function render_piece_edge_lines(piece, geometryModel = null, clipId = "") {
-        const { left, right, top, bottom } = piece_edge_flags(piece);
+        const { left, right, top, bottom, edgeBreak } = piece_edge_flags(piece);
+        const geometry = window.AlmdinaClippedCornerGeometry;
+        const isCornerPiece = Boolean(
+            geometry
+            && (
+                (typeof geometry.isCornerCut === "function" && geometry.isCornerCut(piece))
+                || (typeof geometry.isClipped === "function" && geometry.isClipped(piece))
+            )
+        );
+        if (isCornerPiece && (left || right || top || bottom || edgeBreak)) {
+            return render_clipped_corner_edge_lines(piece, geometryModel, clipId);
+        }
 
         const color = "#d00000";
         const thickness = "3px";

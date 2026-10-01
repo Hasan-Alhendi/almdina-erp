@@ -157,7 +157,8 @@ e.g. a special door with Liner records Liner in notes/drawing and uses its inclu
 custom special price.
 
 The measurement type cell remains the native HTML `select` used by the table as the
-data-field owner. The visible Arabic order is `عادية / خاصة / زاوية / زاوية L / Extra`;
+data-field owner. The visible Arabic order is `عادية / خاصة / الزاوية الكسر / زاوية L / Extra`.
+For Clipped Corner («الزاوية الكسر»), banding sides including `edge_break` are chosen inside the corner-shape editor; the measurements table shows a summary that reopens that editor.
 the persisted values remain `Regular / Special / Clipped Corner / L-Shaped Corner / Extra`
 according to the existing DocType contract. `L-Shaped Corner` reuses the clipped-corner
 editor, stored cut-from-corner distances, edge-price workflow, plan SVG, and DXF path; only the

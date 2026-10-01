@@ -41,7 +41,7 @@
 
     function pieceTypeLabel(value) {
         if (value === "Special") return "خاصة";
-        if (value === "Clipped Corner") return "زاوية مقصوصة";
+        if (value === "Clipped Corner") return "الزاوية الكسر";
         if (value === "L-Shaped Corner") return "زاوية L";
         if (value === "Extra") return "إضافية";
         return "عادية";
@@ -430,7 +430,7 @@
     function cutCornerDoorLabel(row) {
         return row.pieceType === "L-Shaped Corner"
             ? `درفة زاوية L ${row.index}`
-            : `درفة زاوية مقصوصة ${row.index}`;
+            : `درفة الزاوية الكسر ${row.index}`;
     }
 
     function specialPriceInputValue(row) {
