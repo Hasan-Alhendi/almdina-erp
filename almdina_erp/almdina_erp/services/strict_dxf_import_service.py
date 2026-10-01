@@ -397,7 +397,13 @@ def _apply_strict_dimension_contract(
 
     for sheet in snapshot.get("sheets") or []:
         for piece in sheet.get("pieces") or []:
+            # Prefer the importer-owned index when present. After
+            # ``_public_piece`` strips private keys, Special pieces still carry
+            # label/source/copy identity that ``_topology_special_candidate``
+            # can prove uniquely against the order.
             topology_index = _topology_candidate(unmatched, piece)
+            if topology_index is None:
+                topology_index = _topology_special_candidate(unmatched, piece)
             if topology_index is not None:
                 candidate = unmatched[topology_index]
                 rotated, error = _validate_topology_candidate_dimensions(
