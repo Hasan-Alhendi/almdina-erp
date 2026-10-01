@@ -12,11 +12,9 @@ def test_production_settings_polish_has_clear_arabic_hierarchy_and_feedback() ->
     renderer = RENDERER.read_text(encoding="utf-8")
 
     for marker in (
-        "aps-eyebrow",
-        "aps-hero-assurances",
+        "aps-hero-accent",
         "aps-section-intro",
         "aps-section-kicker",
-        "aps-permission-dot",
         "aps-readonly-note",
         "aps-legacy-summary-copy",
         "aps-note-icon",
@@ -27,9 +25,11 @@ def test_production_settings_polish_has_clear_arabic_hierarchy_and_feedback() ->
     ):
         assert marker in renderer
 
-    assert "إعدادات التشغيل" in renderer
-    assert "قابل للتعديل" in renderer
-    assert "عرض فقط" in renderer
+    assert "إعدادات تشغيل المعمل الافتراضية" in renderer
+    assert "القيم التشغيلية النشطة المعتمدة في كافة عمليات ومحطات العمل" in renderer
+    assert "قابل للتعديل" not in renderer
+    assert "aps-hero-updated" not in renderer
+    assert "عرض فقط" not in renderer
     assert "بيانات إعدادات قديمة محفوظة" in renderer
     assert "للقراءة فقط" in renderer
 
@@ -44,8 +44,11 @@ def test_production_settings_polish_distinguishes_editable_and_readonly_sections
     assert ".aps-permission.readonly" in css
     assert ".aps-readonly-note" in css
     assert "AlmdinaUi.button" in renderer
-    assert 'variant: "primary"' in renderer
+    assert 'variant: "secondary"' in renderer
     assert 'className: "aps-edit"' in renderer
+    assert "aps-section-accent" in renderer
+    assert "aps-status-pill" in renderer
+    assert "grid-template-columns: repeat(3, minmax(0, 1fr))" in css
 
 
 def test_production_settings_polish_is_dense_responsive_and_motion_safe() -> None:

@@ -3,8 +3,11 @@
 
     if (window.AlmdinaPlanContextActionsUX) return;
 
-    const STYLE_ID = "dco-plan-context-actions-css-v2";
-    const LEGACY_STYLE_IDS = Object.freeze(["dco-plan-context-actions-css"]);
+    const STYLE_ID = "dco-plan-context-actions-css-v3";
+    const LEGACY_STYLE_IDS = Object.freeze([
+        "dco-plan-context-actions-css",
+        "dco-plan-context-actions-css-v2",
+    ]);
     const HOST_CLASS = "dco-plan-context-actions-host";
     const TAB_ROWS = Object.freeze({
         System: "system_draft",
@@ -278,24 +281,18 @@
             }
             .dco-plan-context-primary .dco-plan-context-approve,
             .dco-plan-context-primary .dco-plan-context-cancel,
-            .dco-plan-context-primary .alm-btn-success.dco-plan-context-approve {
-                display:inline-flex;
-                align-items:center;
-                justify-content:center;
-                flex:0 0 auto;
-                min-width:190px;
-                padding-inline:14px;
-                text-align:center;
-                line-height:1.2;
-                white-space:nowrap;
-            }
+            .dco-plan-context-primary .alm-btn-success.dco-plan-context-approve,
             .dco-plan-context-primary .btn:not(.dco-plan-context-approve):not(.dco-plan-context-cancel) {
                 display:inline-flex;
                 align-items:center;
                 justify-content:center;
                 gap:5px;
-                padding-inline:10px;
                 flex:0 0 auto;
+                min-width:0;
+                padding-inline:10px;
+                text-align:center;
+                line-height:1.2;
+                white-space:nowrap;
             }
             .dco-plan-context-cancel {
                 color:var(--alm-danger, #b42318);

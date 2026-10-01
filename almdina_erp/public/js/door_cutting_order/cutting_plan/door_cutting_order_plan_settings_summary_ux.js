@@ -10,7 +10,7 @@
     const TIME_LIMIT_HELP = "أقصى مدة يمنحها النظام لمحرك التحسين للبحث عن توزيع أفضل. قد ينتهي البحث قبلها، وزيادتها قد تحسن بعض الخطط المعقدة لكنها تجعل المعاينة أبطأ.";
     const FALLBACK_SPECS = Object.freeze([
         Object.freeze({ fieldname: "kerf_mm", shortLabel: "الشفرة", fieldtype: "Float", suffix: "مم" }),
-        Object.freeze({ fieldname: "trim_margin_mm", shortLabel: "التشذيب", fieldtype: "Float", suffix: "مم" }),
+        Object.freeze({ fieldname: "trim_margin_mm", shortLabel: "الهامش", fieldtype: "Float", suffix: "مم" }),
         Object.freeze({ fieldname: "packing_mode", shortLabel: "الخوارزمية", fieldtype: "Select" }),
         Object.freeze({ fieldname: "cutting_machine_type", shortLabel: "الآلة", fieldtype: "Select" }),
         Object.freeze({

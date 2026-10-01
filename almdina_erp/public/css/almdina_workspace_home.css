@@ -1,69 +1,71 @@
 /*
  * Almdina ERP — main workspace home (reference layout v1).
  * Presentation only; scoped to body.almdina-workspace-home.
+ * Frappe owns structure/behavior; Almdina owns appearance tokens + hierarchy.
  */
 
 body.almdina-workspace-home {
     --alm-home-max: 1320px;
     --alm-home-gap: 8px;
     --alm-home-radius: 10px;
-    --alm-home-border: #eaecf0;
-    --alm-home-surface: #f4f6f8;
+    --alm-home-border: var(--alm-border-subtle);
+    /* Light blue canvas — same identity surface as the rest of Almdina Desk. */
+    --alm-home-surface: var(--alm-canvas);
     --alm-home-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
     --alm-home-shadow-hover: 0 8px 20px rgba(16, 24, 40, 0.07);
+    --alm-section-accent: var(--alm-accent-blue);
 }
 
-/* Full-width gray canvas (Frappe page-container defaults to white + max-width). */
+/* Full-width light-blue canvas (Frappe defaults these layers to white). */
 body.almdina-workspace-home #page-Workspaces.page-container {
     background: var(--alm-home-surface) !important;
     max-width: none !important;
-    width: 100% !important;
+    width: 100%;
 }
 
 body.almdina-workspace-home #page-Workspaces .page-body,
 body.almdina-workspace-home #page-Workspaces .page-wrapper,
 body.almdina-workspace-home #page-Workspaces .page-content {
     background: transparent !important;
-    max-width: none !important;
+    max-width: none;
 }
 
 body.almdina-workspace-home #page-Workspaces .layout-main {
-    width: 100% !important;
-    max-width: none !important;
-    margin: 0 !important;
+    width: 100%;
+    max-width: none;
+    margin: 0;
     background: var(--alm-home-surface) !important;
 }
 
 body.almdina-workspace-home #page-Workspaces .layout-main-section-wrapper {
-    width: 100% !important;
-    flex: 1 1 auto !important;
-    max-width: none !important;
-    margin-top: 0 !important;
-    padding-top: 0 !important;
+    width: 100%;
+    flex: 1 1 auto;
+    max-width: none;
+    margin-top: 0;
+    padding-top: 0;
     background: var(--alm-home-surface) !important;
 }
 
 body.almdina-workspace-home #page-Workspaces .layout-main-section {
     background: transparent !important;
-    box-shadow: none !important;
-    border: 0 !important;
-    padding: 0 !important;
+    box-shadow: none;
+    border: 0;
+    padding: 0;
 }
 
-/* Page-head: same as desk List/Form (no layout overrides). */
 body.almdina-workspace-home #page-Workspaces .page-head {
-    background: var(--bg-color) !important;
-    border-bottom: 1px solid var(--border-color) !important;
+    background: var(--bg-color);
+    border-bottom: 1px solid var(--border-color);
 }
 
 body.almdina-workspace-home #page-Workspaces .navbar-breadcrumbs li:last-child .dropdown,
 body.almdina-workspace-home #page-Workspaces .navbar-breadcrumbs li:last-child .menu-btn-group,
 body.almdina-workspace-home #page-Workspaces .navbar-breadcrumbs li:last-child button {
-    display: none !important;
+    display: none;
 }
 
 body.almdina-workspace-home #page-Workspaces .workspace-header {
-    display: none !important;
+    display: none;
 }
 
 body.almdina-workspace-home #page-Workspaces .editor-js-container {
@@ -74,33 +76,33 @@ body.almdina-workspace-home #page-Workspaces .editor-js-container {
 }
 
 body.almdina-workspace-home .widget.header {
-    margin: 10px 0 4px !important;
-    padding: 0 !important;
-    border: 0 !important;
-    background: transparent !important;
-    box-shadow: none !important;
+    margin: 10px 0 4px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
 }
 
 body.almdina-workspace-home .widget.header:first-child {
-    margin-top: 2px !important;
+    margin-top: 2px;
 }
 
 body.almdina-workspace-home #page-Workspaces .ce-block__content {
-    padding: 4px 7px !important;
+    padding: 4px 7px;
 }
 
 body.almdina-workspace-home .alm-workspace-section-head {
-    display: flex !important;
+    display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
     width: 100%;
     direction: rtl;
-    margin: 0 !important;
-    padding: 0 !important;
-    font-size: 15px !important;
-    font-weight: 800 !important;
-    color: #344054 !important;
+    margin: 0;
+    padding: 0;
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--alm-text-secondary);
 }
 
 body.almdina-workspace-home .alm-workspace-section-head::before {
@@ -109,62 +111,68 @@ body.almdina-workspace-home .alm-workspace-section-head::before {
     width: 8px;
     height: 8px;
     border-radius: 999px;
-    background: var(--alm-section-accent, #2563eb);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--alm-section-accent, #2563eb) 18%, transparent);
+    background: var(--alm-section-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--alm-section-accent) 18%, transparent);
 }
 
 body.almdina-workspace-home .widget.header[data-alm-section="master"],
-body.almdina-workspace-home .shortcut-widget-box[data-alm-section="master"] {
-    --alm-section-accent: #2563eb;
+body.almdina-workspace-home .shortcut-widget-box[data-alm-section="master"],
+body.almdina-workspace-home .alm-shortcut[data-alm-section="master"] {
+    --alm-section-accent: var(--alm-accent-blue);
 }
 
 body.almdina-workspace-home .widget.header[data-alm-section="system"],
-body.almdina-workspace-home .shortcut-widget-box[data-alm-section="system"] {
-    --alm-section-accent: #7c3aed;
+body.almdina-workspace-home .shortcut-widget-box[data-alm-section="system"],
+body.almdina-workspace-home .alm-shortcut[data-alm-section="system"] {
+    --alm-section-accent: var(--alm-accent-purple);
 }
 
 body.almdina-workspace-home .widget.header[data-alm-section="ops"],
-body.almdina-workspace-home .shortcut-widget-box[data-alm-section="ops"] {
-    --alm-section-accent: #f59e0b;
+body.almdina-workspace-home .shortcut-widget-box[data-alm-section="ops"],
+body.almdina-workspace-home .alm-shortcut[data-alm-section="ops"] {
+    --alm-section-accent: var(--alm-accent-warning);
 }
 
 body.almdina-workspace-home .widget.header[data-alm-section="reports"],
-body.almdina-workspace-home .shortcut-widget-box[data-alm-section="reports"] {
-    --alm-section-accent: #10b981;
+body.almdina-workspace-home .shortcut-widget-box[data-alm-section="reports"],
+body.almdina-workspace-home .alm-shortcut[data-alm-section="reports"] {
+    --alm-section-accent: var(--alm-accent-success);
 }
 
 body.almdina-workspace-home .alm-workspace-section-meta {
     margin-inline-start: auto;
     font-size: 12px;
     font-weight: 650;
-    color: #98a2b3;
+    color: var(--alm-text-faint);
     white-space: nowrap;
 }
 
-body.almdina-workspace-home .shortcut-widget-box {
+body.almdina-workspace-home .shortcut-widget-box,
+body.almdina-workspace-home .alm-shortcut {
     position: relative;
     min-height: 0;
     height: auto;
-    padding: 10px 12px !important;
-    border-radius: var(--alm-home-radius) !important;
-    border: 1px solid var(--alm-home-border) !important;
-    background: #fff !important;
-    box-shadow: var(--alm-home-shadow) !important;
+    padding: 10px 12px;
+    border-radius: var(--alm-home-radius);
+    border: 1px solid var(--alm-home-border);
+    background: var(--alm-card);
+    box-shadow: var(--alm-home-shadow);
     transition: border-color 0.14s ease, box-shadow 0.14s ease;
 }
 
-body.almdina-workspace-home .shortcut-widget-box:hover {
-    border-color: #d0d5dd !important;
-    box-shadow: var(--alm-home-shadow-hover) !important;
+body.almdina-workspace-home .shortcut-widget-box:hover,
+body.almdina-workspace-home .alm-shortcut:hover {
+    border-color: var(--alm-border-hover);
+    box-shadow: var(--alm-home-shadow-hover);
     transform: none;
 }
 
 body.almdina-workspace-home .shortcut-widget-box .widget-head {
-    display: flex !important;
-    flex-direction: row !important;
-    align-items: center !important;
-    justify-content: flex-start !important;
-    gap: 10px !important;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
     direction: rtl;
     min-height: 0;
     width: 100%;
@@ -177,10 +185,10 @@ body.almdina-workspace-home .shortcut-widget-box .widget-label {
 }
 
 body.almdina-workspace-home .shortcut-widget-box .widget-title {
-    font-size: 13px !important;
-    font-weight: 800 !important;
-    line-height: 1.3 !important;
-    color: #101828 !important;
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.3;
+    color: var(--alm-text-strong);
 }
 
 body.almdina-workspace-home .alm-workspace-shortcut-desc {
@@ -189,7 +197,7 @@ body.almdina-workspace-home .alm-workspace-shortcut-desc {
     font-size: 11px;
     font-weight: 600;
     line-height: 1.35;
-    color: #667085;
+    color: var(--alm-text-subtle);
 }
 
 body.almdina-workspace-home .alm-workspace-shortcut-icon {
@@ -201,9 +209,9 @@ body.almdina-workspace-home .alm-workspace-shortcut-icon {
     width: 34px;
     height: 34px;
     border-radius: 9px;
-    color: var(--alm-section-accent, #2563eb);
-    background: color-mix(in srgb, var(--alm-section-accent, #2563eb) 12%, #fff);
-    border: 1px solid color-mix(in srgb, var(--alm-section-accent, #2563eb) 16%, transparent);
+    color: var(--alm-section-accent);
+    background: color-mix(in srgb, var(--alm-section-accent) 12%, #fff);
+    border: 1px solid color-mix(in srgb, var(--alm-section-accent) 16%, transparent);
     overflow: visible;
 }
 
@@ -223,17 +231,17 @@ body.almdina-workspace-home .alm-workspace-shortcut-badge {
 }
 
 body.almdina-workspace-home .alm-workspace-shortcut-badge .indicator-pill {
-    font-size: 9px !important;
-    font-weight: 800 !important;
-    border-radius: 999px !important;
+    font-size: 9px;
+    font-weight: 800;
+    border-radius: 999px;
     min-height: 16px;
     line-height: 1.1;
-    padding: 0 5px !important;
-    box-shadow: 0 0 0 2px #fff !important;
+    padding: 0 5px;
+    box-shadow: 0 0 0 2px var(--alm-card);
 }
 
 body.almdina-workspace-home .alm-workspace-shortcut-badge .indicator-pill svg {
-    display: none !important;
+    display: none;
 }
 
 body.almdina-workspace-home .alm-workspace-shortcut-arrow {
@@ -245,16 +253,16 @@ body.almdina-workspace-home .alm-workspace-shortcut-arrow {
     align-self: center;
     line-height: 0;
     opacity: 0.55;
-    --icon-stroke: #98a2b3;
+    --icon-stroke: var(--alm-text-faint);
 }
 
 body.almdina-workspace-home .alm-workspace-shortcut-arrow svg {
-    width: 12px !important;
-    height: 12px !important;
+    width: 12px;
+    height: 12px;
 }
 
 body.almdina-workspace-home .shortcut-widget-box .widget-head .widget-control {
-    display: none !important;
+    display: none;
 }
 
 body.almdina-workspace-home .ce-block__content {
@@ -262,7 +270,7 @@ body.almdina-workspace-home .ce-block__content {
 }
 
 body.almdina-workspace-home .codex-editor__redactor {
-    padding-bottom: 0 !important;
+    padding-bottom: 0;
 }
 
 @media (max-width: 768px) {
@@ -274,7 +282,8 @@ body.almdina-workspace-home .codex-editor__redactor {
         display: none;
     }
 
-    body.almdina-workspace-home .shortcut-widget-box {
-        padding: 10px 12px !important;
+    body.almdina-workspace-home .shortcut-widget-box,
+    body.almdina-workspace-home .alm-shortcut {
+        padding: 10px 12px;
     }
 }

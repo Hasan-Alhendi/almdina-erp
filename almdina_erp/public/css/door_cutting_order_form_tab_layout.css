@@ -29,15 +29,16 @@
     }
 }
 
-/* Shared Door Cutting Order canvas. Feature CSS reads these tokens. */
-body:has(.dco-operator-form),
-body:has(.dco-operator-form) .page-container,
-body:has(.dco-operator-form) .page-body,
-body:has(.dco-operator-form) .page-content,
-body:has(.dco-operator-form) .layout-main,
-body:has(.dco-operator-form) .layout-main-section-wrapper,
-body:has(.dco-operator-form) .layout-main-section,
+/*
+ * Shared Door Cutting Order canvas.
+ * Scope from .dco-operator-form (frm.wrapper). Avoid body:has() page-wide control.
+ */
 .dco-operator-form,
+.dco-operator-form .page-body,
+.dco-operator-form .page-content,
+.dco-operator-form .layout-main,
+.dco-operator-form .layout-main-section-wrapper,
+.dco-operator-form .layout-main-section,
 .dco-operator-form .form-layout,
 .dco-operator-form .form-page {
     background: var(--alm-canvas, #eef1f6) !important;
@@ -47,12 +48,12 @@ body:has(.dco-operator-form) .layout-main-section,
     background: transparent;
 }
 
-body:has(.dco-operator-form) .page-head {
+.dco-operator-form .page-head {
     background: var(--alm-card, #fff);
     border-bottom: 1px solid var(--alm-card-border, #e4e8ee);
 }
 
-body:has(.dco-operator-form) .page-head .page-actions .btn {
+.dco-operator-form .page-head .page-actions .btn {
     min-height: 34px;
     padding: 0 14px;
     border-radius: 999px;
@@ -63,13 +64,13 @@ body:has(.dco-operator-form) .page-head .page-actions .btn {
     box-shadow: none;
 }
 
-body:has(.dco-operator-form) .page-head .page-actions .btn.btn-danger {
+.dco-operator-form .page-head .page-actions .btn.btn-danger {
     color: #e11d48;
     background: var(--alm-danger-soft, #fff1f2);
     border-color: var(--alm-danger-soft-border, #fecdd3);
 }
 
-body:has(.dco-operator-form) .page-head .page-actions .dco-dispatch-toolbar-button {
+.dco-operator-form .page-head .page-actions .dco-dispatch-toolbar-button {
     color: var(--alm-accent, #2563eb);
     background: var(--alm-accent-soft, #eff6ff);
     border-color: color-mix(in srgb, var(--alm-accent, #2563eb) 35%, #fff);
@@ -79,34 +80,121 @@ body:has(.dco-operator-form) .page-head .page-actions .dco-dispatch-toolbar-butt
     background: var(--alm-card, #fff) !important;
 }
 
-.dco-operator-form .dco-order-tracking-strip__row {
+.dco-operator-form .dco-order-tracking-strip,
+.dco-order-tab-layout .dco-order-tracking-strip {
+    background:
+        linear-gradient(
+            90deg,
+            color-mix(in srgb, var(--dco-status-color, var(--alm-warning, #b45309)) 10%, transparent),
+            transparent 42%
+        ),
+        var(--alm-card, #fff);
+}
+
+.dco-operator-form .dco-order-tracking-strip__layout,
+.dco-order-tab-layout .dco-order-tracking-strip__layout {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
-    gap: 6px 18px;
+    justify-content: space-between;
+    gap: 10px 16px;
     width: 100%;
 }
 
-.dco-operator-form .dco-order-tracking-strip__item {
-    display: inline-flex;
-    align-items: baseline;
-    gap: 6px;
+.dco-operator-form .dco-order-tracking-strip__lead,
+.dco-order-tab-layout .dco-order-tracking-strip__lead {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 14px;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.dco-operator-form .dco-order-tracking-strip__facts,
+.dco-order-tab-layout .dco-order-tracking-strip__facts {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 10px 0;
+    flex: 0 0 auto;
+    margin-inline-start: auto;
     min-width: 0;
 }
 
-.dco-operator-form .dco-order-tracking-strip__item + .dco-order-tracking-strip__item {
+.dco-operator-form .dco-order-tracking-strip__item,
+.dco-order-tab-layout .dco-order-tracking-strip__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 1 auto;
+    min-width: 0;
+    padding-inline: 0 14px;
+}
+
+.dco-operator-form .dco-order-tracking-strip__facts .dco-order-tracking-strip__item + .dco-order-tracking-strip__item,
+.dco-order-tab-layout .dco-order-tracking-strip__facts .dco-order-tracking-strip__item + .dco-order-tracking-strip__item {
     padding-inline-start: 14px;
     border-inline-start: 1px solid var(--alm-card-border, #e4e8ee);
 }
 
-.dco-operator-form .dco-order-tracking-strip__label {
+.dco-operator-form .dco-order-tracking-strip__path,
+.dco-order-tab-layout .dco-order-tracking-strip__path {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.dco-operator-form .dco-order-tracking-strip__step,
+.dco-order-tab-layout .dco-order-tracking-strip__step {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border-radius: 999px;
+    padding: 5px 12px;
     font-size: 12px;
     font-weight: 700;
-    color: var(--text-muted, #6b7280);
+    white-space: nowrap;
+    background: var(--control-bg, #f3f4f6);
+    color: var(--alm-text-muted, var(--text-muted, #6b7280));
+}
+
+.dco-operator-form .dco-order-tracking-strip__step.is-current,
+.dco-order-tab-layout .dco-order-tracking-strip__step.is-current {
+    background: var(--alm-primary, #172033);
+    color: var(--alm-on-primary, #fff);
+}
+
+.dco-operator-form .dco-order-tracking-strip__step.is-done,
+.dco-order-tab-layout .dco-order-tracking-strip__step.is-done {
+    background: var(--alm-success, #15803d);
+    color: var(--alm-on-success, #fff);
+}
+
+.dco-operator-form .dco-order-tracking-strip__path-sep,
+.dco-order-tab-layout .dco-order-tracking-strip__path-sep {
+    color: var(--alm-text-muted, var(--text-muted, #9ca3af));
+    font-size: 13px;
+}
+
+.dco-operator-form .dco-order-tracking-strip__label,
+.dco-order-tab-layout .dco-order-tracking-strip__label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--alm-text-muted, var(--text-muted, #6b7280));
     white-space: nowrap;
 }
 
-.dco-operator-form .dco-order-tracking-strip__value {
+.dco-operator-form .dco-order-tracking-strip__label::after,
+.dco-order-tab-layout .dco-order-tracking-strip__label::after {
+    content: ":";
+    margin-inline-start: 2px;
+}
+
+.dco-operator-form .dco-order-tracking-strip__value,
+.dco-order-tab-layout .dco-order-tracking-strip__value {
     margin-top: 0;
     font-size: 13px;
     font-weight: 800;
@@ -114,7 +202,30 @@ body:has(.dco-operator-form) .page-head .page-actions .dco-dispatch-toolbar-butt
     white-space: nowrap;
 }
 
-.dco-operator-form .dco-order-tracking-strip__status {
+.dco-operator-form .dco-order-tracking-strip__item.is-empty .dco-order-tracking-strip__value,
+.dco-order-tab-layout .dco-order-tracking-strip__item.is-empty .dco-order-tracking-strip__value {
+    color: var(--alm-text-muted, var(--text-muted, #6b7280));
+    font-weight: 700;
+}
+
+.dco-operator-form .dco-order-tracking-strip__badge,
+.dco-order-tab-layout .dco-order-tracking-strip__badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    padding: 2px 10px;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--dco-status-color, var(--alm-warning, #b45309)) 28%, #fff);
+    background: color-mix(in srgb, var(--dco-status-color, var(--alm-warning, #b45309)) 12%, #fff);
+    color: var(--dco-status-color, var(--alm-warning, #b45309));
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.dco-operator-form .dco-order-tracking-strip__status,
+.dco-order-tab-layout .dco-order-tracking-strip__status {
     display: inline-flex;
     margin-top: 0;
     color: var(--dco-status-color, var(--alm-warning, #b45309));
@@ -158,8 +269,18 @@ body:has(.dco-operator-form) .page-head .page-actions .dco-dispatch-toolbar-butt
         grid-template-columns: minmax(0, 1fr);
     }
 
-    .dco-operator-form .dco-order-tracking-strip__item + .dco-order-tracking-strip__item {
-        padding-inline-start: 0;
-        border-inline-start: 0;
+    .dco-operator-form .dco-order-tracking-strip__layout,
+    .dco-order-tab-layout .dco-order-tracking-strip__layout {
+        flex-wrap: wrap;
+    }
+
+    .dco-operator-form .dco-order-tracking-strip__facts,
+    .dco-order-tab-layout .dco-order-tracking-strip__facts {
+        margin-inline-start: auto;
+    }
+
+    .dco-operator-form .dco-order-tracking-strip__item,
+    .dco-order-tab-layout .dco-order-tracking-strip__item {
+        padding-inline: 0;
     }
 }

@@ -32,6 +32,19 @@
     --alm-warning-bg: #fff7e8;
     --alm-danger-soft: #fff1f2;
     --alm-danger-soft-border: #fecdd3;
+
+    /* Workspace / section accents (identity palette). */
+    --alm-accent-blue: #2563eb;
+    --alm-accent-purple: #7c3aed;
+    --alm-accent-warning: #f59e0b;
+    --alm-accent-success: #10b981;
+    --alm-text-strong: #101828;
+    --alm-text-secondary: #344054;
+    --alm-text-subtle: #667085;
+    --alm-text-faint: #98a2b3;
+    --alm-border-subtle: #eaecf0;
+    --alm-border-hover: #d0d5dd;
+    --alm-surface-muted: #f4f6f8;
 }
 
 .almdina-ui {

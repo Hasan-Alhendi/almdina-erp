@@ -8,21 +8,80 @@
     const WORKSPACE_PAGE_TITLE = "إدارة المعمل";
     const ROOT_CLASS = "almdina-workspace-home";
     const POLISH_FLAG = "data-almdina-workspace-home-polish";
+    const SHORTCUT_CLASS = "alm-shortcut";
 
-    const presentationApi = () => window.AlmdinaShortcutPresentation || null;
-
-    const SECTION_PRESENTATION = Object.freeze({
-        "الإعدادات الأساسية": { id: "master", meta: "3 وحدات رئيسية" },
-        "إدارة النظام ومسارات العمل": { id: "system", meta: "4 وحدات" },
-        "التشغيل اليومي": { id: "ops", meta: "سير عمل الصالة والمعمل" },
-        "التقارير التشغيلية والتكلفة": { id: "reports", meta: "البيانات الإحصائية والتحليلية" },
+    /**
+     * Stable Editor.js block ids from workspace/almdina_erp.json — not visible labels.
+     */
+    const SECTION_BY_BLOCK_ID = Object.freeze({
+        "master-data-header": { id: "master", meta: "3 وحدات رئيسية" },
+        "system-management-header": { id: "system", meta: "4 وحدات" },
+        "factory-operations-header": { id: "ops", meta: "سير عمل الصالة والمعمل" },
+        "reports-header": { id: "reports", meta: "البيانات الإحصائية والتحليلية" },
     });
 
-    let observer = null;
-    let breadcrumbObserver = null;
+    /** Workspace content block id → Frappe link_to / route. */
+    const SHORTCUT_BLOCK_TO_LINK = Object.freeze({
+        "customers-shortcut": "Customer",
+        "edge-types-shortcut": "Edge Banding Type",
+        "settings-shortcut": "factory-production-settings",
+        "role-management-shortcut": "Role",
+        "permission-management-shortcut": "factory-permissions",
+        "user-management-shortcut": "factory-workforce",
+        "routing-management-shortcut": "factory-master-data",
+        "orders-shortcut": "Door Cutting Order",
+        "stages-shortcut": "shop-floor-inbox",
+    });
+
+    // Backward-compatible export name used by contract tests.
+    const SECTION_PRESENTATION = SECTION_BY_BLOCK_ID;
+
+    const presentationApi = () => window.AlmdinaShortcutPresentation || null;
+    const frontendApi = () => window.AlmdinaFrontend || null;
+
+    const observers = new Set();
+    let lifecycle = null;
     let scheduledFrame = null;
     let booted = false;
-    let missingRootAttempts = 0;
+    let active = false;
+    let rootObserver = null;
+    let breadcrumbObserver = null;
+    let pageWaitObserver = null;
+
+    function trackObserver(observer) {
+        if (!observer || typeof observer.disconnect !== "function") return observer;
+        observers.add(observer);
+        return observer;
+    }
+
+    function disposeObservers() {
+        observers.forEach((observer) => {
+            try {
+                observer.disconnect();
+            } catch (_error) {
+                /* ignore */
+            }
+        });
+        observers.clear();
+        rootObserver = null;
+        breadcrumbObserver = null;
+        pageWaitObserver = null;
+    }
+
+    function dispose() {
+        if (scheduledFrame !== null) {
+            const cancel = window.cancelAnimationFrame || window.clearTimeout;
+            cancel(scheduledFrame);
+            scheduledFrame = null;
+        }
+        disposeObservers();
+        if (lifecycle && typeof lifecycle.dispose === "function") {
+            lifecycle.dispose();
+        }
+        lifecycle = null;
+        active = false;
+        document.body.classList.remove(ROOT_CLASS);
+    }
 
     function normalizeText(value) {
         const api = presentationApi();
@@ -55,8 +114,12 @@
         return false;
     }
 
+    function workspacePage() {
+        return document.getElementById("page-Workspaces");
+    }
+
     function editorRoot() {
-        const page = document.getElementById("page-Workspaces");
+        const page = workspacePage();
         if (page) {
             const scoped = page.querySelector(".editor-js-container");
             if (scoped) return scoped;
@@ -64,14 +127,45 @@
         return document.querySelector(".layout-main-section .editor-js-container");
     }
 
-    function sectionKeyFromHeader(headerWidget) {
-        const text = normalizeText(headerWidget.textContent);
-        return Object.keys(SECTION_PRESENTATION).find((key) => text.includes(key)) || "";
+    function blockIdFromNode(node) {
+        if (!node || !node.closest) return "";
+        const block = node.closest(".ce-block");
+        return normalizeText((block && (block.dataset.id || block.getAttribute("data-id"))) || "");
     }
 
-    function shortcutLabel(widget) {
-        const title = widget.querySelector(".widget-title");
-        return normalizeText(title && title.textContent);
+    function sectionFromBlockId(blockId) {
+        return SECTION_BY_BLOCK_ID[blockId] || null;
+    }
+
+    function shortcutLinkTo(widget) {
+        if (!widget) return "";
+        const stamped = normalizeText(widget.getAttribute("data-alm-link-to") || "");
+        if (stamped) return stamped;
+
+        const blockId = blockIdFromNode(widget);
+        if (blockId && SHORTCUT_BLOCK_TO_LINK[blockId]) {
+            return SHORTCUT_BLOCK_TO_LINK[blockId];
+        }
+
+        const api = presentationApi();
+        if (!api) return "";
+
+        // Frappe stamps data-widget-name with the shortcut name (label), not link_to.
+        // Resolve through the stable label→link_to bridge only as a fallback.
+        const widgetName = normalizeText(widget.getAttribute("data-widget-name") || "");
+        if (widgetName && typeof api.linkToForLabel === "function") {
+            return api.linkToForLabel(widgetName) || "";
+        }
+        return "";
+    }
+
+    function shortcutMeta(linkTo) {
+        const api = presentationApi();
+        if (!api) return null;
+        if (typeof api.metaForLinkTo === "function") {
+            return api.metaForLinkTo(linkTo);
+        }
+        return null;
     }
 
     function renderIcon(name) {
@@ -81,11 +175,6 @@
             return frappe.utils.icon(name, "md");
         }
         return "";
-    }
-
-    function shortcutMeta(label) {
-        const api = presentationApi();
-        return api ? api.metaForLabel(label) : null;
     }
 
     function iconIsRendered(iconNode) {
@@ -122,20 +211,13 @@
         return iconNode;
     }
 
-    function watchShortcutControl(widget, root) {
-        if (widget.getAttribute("data-alm-control-watch") === "1") return;
-        const control = widget.querySelector(".widget-control");
-        if (!control) return;
-        const observer = new MutationObserver(() => layoutShortcutControls(root));
-        observer.observe(control, { childList: true, subtree: true });
-        widget.setAttribute("data-alm-control-watch", "1");
-    }
-
     function enhanceHeaders(root) {
-        root.querySelectorAll(".widget.header").forEach((header) => {
-            const key = sectionKeyFromHeader(header);
-            if (!key) return;
-            const presentation = SECTION_PRESENTATION[key];
+        root.querySelectorAll(".ce-block").forEach((block) => {
+            const header = block.querySelector(".widget.header");
+            if (!header) return;
+            const presentation = sectionFromBlockId(block.dataset.id || block.getAttribute("data-id") || "");
+            if (!presentation) return;
+
             header.setAttribute("data-alm-section", presentation.id);
             const titleHost = header.querySelector(".ce-header") || header.querySelector(".h4") || header;
             titleHost.classList.add("alm-workspace-section-head");
@@ -152,8 +234,8 @@
         root.querySelectorAll(".ce-block").forEach((block) => {
             const header = block.querySelector(".widget.header");
             if (header) {
-                const key = sectionKeyFromHeader(header);
-                if (key) currentSection = SECTION_PRESENTATION[key].id;
+                const presentation = sectionFromBlockId(block.dataset.id || block.getAttribute("data-id") || "");
+                if (presentation) currentSection = presentation.id;
                 return;
             }
             const widget = block.querySelector(".shortcut-widget-box");
@@ -161,10 +243,6 @@
                 widget.setAttribute("data-alm-section", currentSection);
             }
         });
-    }
-
-    function workspacePage() {
-        return document.getElementById("page-Workspaces");
     }
 
     function normalizeWorkspaceTrail(crumbs) {
@@ -210,6 +288,10 @@
         link.removeAttribute("href");
     }
 
+    /**
+     * Minimal DOM ownership: move Frappe's indicator/arrow into presentation hosts once.
+     * Re-runs are driven by the single root MutationObserver (no per-widget observers).
+     */
     function layoutShortcutControls(root) {
         root.querySelectorAll(".shortcut-widget-box").forEach((widget) => {
             const head = widget.querySelector(".widget-head");
@@ -225,7 +307,7 @@
 
             const control = head.querySelector(".widget-control");
             const iconWrap = head.querySelector(".alm-workspace-shortcut-icon");
-            const pillInControl = control?.querySelector(".indicator-pill");
+            const pillInControl = control && control.querySelector(".indicator-pill");
 
             if (iconWrap) {
                 let badge = iconWrap.querySelector(".alm-workspace-shortcut-badge");
@@ -234,7 +316,7 @@
                     badge.className = "alm-workspace-shortcut-badge";
                     iconWrap.appendChild(badge);
                 }
-                if (pillInControl) {
+                if (pillInControl && !badge.contains(pillInControl)) {
                     badge.querySelectorAll(".indicator-pill").forEach((node) => node.remove());
                     badge.appendChild(pillInControl);
                 }
@@ -245,8 +327,6 @@
                     if (!arrowHost.contains(svg)) arrowHost.appendChild(svg);
                 });
             }
-
-            watchShortcutControl(widget, root);
         });
     }
 
@@ -255,9 +335,9 @@
         if (!crumbs) return;
         normalizeWorkspaceTrail(crumbs);
         if (breadcrumbObserver) return;
-        breadcrumbObserver = new MutationObserver(() => {
+        breadcrumbObserver = trackObserver(new MutationObserver(() => {
             window.requestAnimationFrame(() => normalizeWorkspaceTrail(crumbs));
-        });
+        }));
         breadcrumbObserver.observe(crumbs, { childList: true, subtree: true });
     }
 
@@ -269,14 +349,17 @@
 
     function enhanceShortcuts(root) {
         root.querySelectorAll(".shortcut-widget-box").forEach((widget) => {
-            const label = shortcutLabel(widget);
-            const meta = shortcutMeta(label);
-            if (!meta) return;
+            const linkTo = shortcutLinkTo(widget);
+            const meta = shortcutMeta(linkTo);
+            if (!meta || !linkTo) return;
+
+            widget.classList.add(SHORTCUT_CLASS);
+            widget.setAttribute("data-alm-link-to", linkTo);
 
             const labelWrap = widget.querySelector(".widget-label");
             if (!labelWrap) return;
 
-            if (!labelWrap.querySelector(".alm-workspace-shortcut-desc")) {
+            if (!labelWrap.querySelector(".alm-workspace-shortcut-desc") && meta.desc) {
                 const desc = document.createElement("span");
                 desc.className = "alm-workspace-shortcut-desc";
                 desc.textContent = __(meta.desc);
@@ -301,11 +384,14 @@
         root.querySelectorAll(".widget.header[data-alm-section]").forEach((node) => {
             node.removeAttribute("data-alm-section");
         });
-        root.querySelectorAll(".shortcut-widget-box[data-alm-control-watch]").forEach((node) => {
-            node.removeAttribute("data-alm-control-watch");
+        root.querySelectorAll(`.shortcut-widget-box.${SHORTCUT_CLASS}`).forEach((node) => {
+            node.classList.remove(SHORTCUT_CLASS);
         });
         root.querySelectorAll(".shortcut-widget-box[data-alm-section]").forEach((node) => {
             node.removeAttribute("data-alm-section");
+        });
+        root.querySelectorAll(".shortcut-widget-box[data-alm-link-to]").forEach((node) => {
+            node.removeAttribute("data-alm-link-to");
         });
         root.querySelectorAll(".alm-workspace-shortcut-icon[data-alm-icon]").forEach((node) => {
             node.removeAttribute("data-alm-icon");
@@ -315,46 +401,62 @@
         });
     }
 
-    function polish() {
-        const active = isTargetWorkspace();
-        document.body.classList.toggle(ROOT_CLASS, active);
-        if (!active) {
-            missingRootAttempts = 0;
-            if (observer) observer.disconnect();
-            observer = null;
-            if (breadcrumbObserver) breadcrumbObserver.disconnect();
-            breadcrumbObserver = null;
-            const page = workspacePage();
-            if (page) {
-                normalizeWorkspaceTrail(page.querySelector(".navbar-breadcrumbs"));
+    function ensureRootObserver(root) {
+        if (rootObserver || !root) return;
+        rootObserver = trackObserver(new MutationObserver(() => schedule()));
+        rootObserver.observe(root, { childList: true, subtree: true });
+        root.setAttribute(POLISH_FLAG, "1");
+    }
+
+    function waitForEditorRoot(page) {
+        if (editorRoot() || pageWaitObserver || !page) return;
+        pageWaitObserver = trackObserver(new MutationObserver(() => {
+            if (!isTargetWorkspace()) return;
+            if (editorRoot()) {
+                if (pageWaitObserver) {
+                    pageWaitObserver.disconnect();
+                    observers.delete(pageWaitObserver);
+                    pageWaitObserver = null;
+                }
+                schedule();
             }
+        }));
+        pageWaitObserver.observe(page, { childList: true, subtree: true });
+    }
+
+    function deactivate() {
+        active = false;
+        document.body.classList.remove(ROOT_CLASS);
+        disposeObservers();
+        const page = workspacePage();
+        if (page) {
+            normalizeWorkspaceTrail(page.querySelector(".navbar-breadcrumbs"));
+            const root = page.querySelector(".editor-js-container");
+            if (root) clearPolishMarks(root);
+        }
+    }
+
+    function polish() {
+        if (!isTargetWorkspace()) {
+            if (active) deactivate();
             return;
         }
 
+        active = true;
+        document.body.classList.add(ROOT_CLASS);
         enhancePageHead();
 
         const root = editorRoot();
         if (!root) {
-            if (missingRootAttempts < 40) {
-                missingRootAttempts += 1;
-                window.setTimeout(schedule, 120);
-            }
+            waitForEditorRoot(workspacePage());
             return;
         }
-        missingRootAttempts = 0;
 
         enhanceHeaders(root);
         assignShortcutSections(root);
         enhanceShortcuts(root);
         layoutShortcutControls(root);
-
-        if (root.getAttribute(POLISH_FLAG) !== "1") {
-            root.setAttribute(POLISH_FLAG, "1");
-            if (!observer) {
-                observer = new MutationObserver(() => schedule());
-                observer.observe(root, { childList: true, subtree: true });
-            }
-        }
+        ensureRootObserver(root);
     }
 
     function schedule() {
@@ -376,6 +478,7 @@
             window.jQuery(document).on("page-change.almdinaWorkspaceHome", schedule);
         }
         window.addEventListener("almdina:permissions-updated", schedule);
+        window.addEventListener("beforeunload", dispose);
     }
 
     function deskReady() {
@@ -383,37 +486,42 @@
     }
 
     function boot() {
+        if (!deskReady()) return;
         if (booted) {
             schedule();
             return;
         }
-        if (!deskReady()) return;
         booted = true;
+        const frontend = frontendApi();
+        if (frontend && typeof frontend.createLifecycleScope === "function") {
+            lifecycle = frontend.createLifecycleScope();
+        }
         bindLifecycle();
         schedule();
     }
 
-    function waitForDesk(attempt) {
-        boot();
-        if (booted || attempt >= 120) return;
-        window.setTimeout(() => waitForDesk(attempt + 1), 100);
-    }
-
+    // Frappe Desk fires app_ready once boot + router exist — no polling.
     if (window.jQuery) {
-        window.jQuery(document).on("app_ready.almdinaWorkspaceHome", () => waitForDesk(0));
+        window.jQuery(document).on("app_ready.almdinaWorkspaceHome", boot);
     }
     if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", () => waitForDesk(0));
-    } else {
-        waitForDesk(0);
+        document.addEventListener("DOMContentLoaded", () => {
+            if (deskReady()) boot();
+        });
+    } else if (deskReady()) {
+        boot();
     }
 
     window.AlmdinaWorkspaceHomeUX = Object.freeze({
         WORKSPACE_SLUG,
         WORKSPACE_NAME,
+        SECTION_PRESENTATION,
+        SHORTCUT_BLOCK_TO_LINK,
         isTargetWorkspace,
         polish,
         schedule,
+        dispose,
         slugify,
+        shortcutLinkTo,
     });
 })();
