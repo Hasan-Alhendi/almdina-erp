@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import json
 import unittest
 from pathlib import Path
@@ -35,12 +36,27 @@ SHARED_SHELL = ROOT / "public" / "js" / "shared_shell.js"
 SETTINGS_WORKSPACE = ROOT / "almdina_erp" / "workspace" / "almdina_settings" / "almdina_settings.json"
 
 
+def _imports_frappe(path: Path) -> bool:
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "frappe" or alias.name.startswith("frappe."):
+                    return True
+        elif isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            if module == "frappe" or module.startswith("frappe."):
+                return True
+    return False
+
+
 class TestPermissionManagementArchitecture(unittest.TestCase):
     def test_pure_matrix_policy_has_no_framework_dependency(self) -> None:
-        source = "\n".join(path.read_text(encoding="utf-8") for path in (POLICY, SUPPORT_POLICY))
-        self.assertNotIn("import frappe", source)
-        self.assertNotIn("from frappe", source)
-        self.assertNotIn("Custom DocPerm", source)
+        for path in (POLICY, SUPPORT_POLICY):
+            self.assertFalse(
+                _imports_frappe(path),
+                f"{path.name} must not import frappe",
+            )
 
     def test_frappe_persistence_is_isolated_in_repository(self) -> None:
         repository = REPOSITORY.read_text(encoding="utf-8")

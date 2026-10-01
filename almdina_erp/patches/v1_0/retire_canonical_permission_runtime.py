@@ -26,8 +26,14 @@ def execute() -> None:
     Idempotent: roles whose Custom DocPerm grants already match the mirror are
     left unchanged. Never imports audit history as grants. Never grants access
     when both DocPerm and mirror are empty.
+
+    Recurring ``sync_permission_types()`` / ``after_migrate`` never perform this
+    bridge. After cutover, live Custom DocPerm (including explicit deny-all)
+    remains authoritative forever.
     """
 
+    # Schema + DocPerm-only reconcile first; this call must not re-import the
+    # retired mirror. The empty-DocPerm bridge below is the sole migration path.
     sync_permission_types()
     if not frappe.db.exists("DocType", STATE_DOCTYPE):
         return
