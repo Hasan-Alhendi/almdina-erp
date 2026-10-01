@@ -208,6 +208,27 @@
         return !pane || pane.classList.contains("active") || pane.classList.contains("show");
     }
 
+    function flushDeferredCostRender(frm) {
+        // Cost HTML may have been deferred while the tab was inactive. Returning via
+        // Frappe's on_tab_change (not only a click) must still paint the full shell;
+        // otherwise hosted rate settings remain visible against a stale/pending shell.
+        if (!frm || !frm._dco_cost_render_deferred) return false;
+        if (!costTabIsActive(frm)) return false;
+        const presenter = window.AlmdinaOrderCostUX;
+        if (!presenter || typeof presenter.render !== "function") return false;
+        presenter.render(frm);
+        return true;
+    }
+
+    function scheduleFlushDeferredCostRender(frm) {
+        if (!frm || !frm._dco_cost_render_deferred) return false;
+        const requestFrame = window.requestAnimationFrame || window.setTimeout;
+        requestFrame.call(window, () => {
+            flushDeferredCostRender(frm);
+        });
+        return true;
+    }
+
     function installCostGuard(frm) {
         const field = frm.fields_dict.order_cost_invoice_html;
         if (!field || !field.$wrapper) return;
@@ -261,11 +282,7 @@
             const currentFrm = root._dcoDeferredRenderForm || frm;
             const tab = event.target.closest("[data-fieldname='cost_tab']");
             if (!tab || !currentFrm._dco_cost_render_deferred) return;
-            requestAnimationFrame(() => {
-                if (window.AlmdinaOrderCostUX && window.AlmdinaOrderCostUX.render) {
-                    window.AlmdinaOrderCostUX.render(currentFrm);
-                }
-            });
+            scheduleFlushDeferredCostRender(currentFrm);
         });
     }
 
@@ -278,5 +295,18 @@
     frappe.ui.form.on("Door Cutting Order", {
         onload_post_render(frm) { install(frm); },
         refresh(frm) { install(frm); },
+        on_tab_change(frm) {
+            // Primary Frappe v16 tab signal. Click-only flush misses keyboard and
+            // host-driven activation after a deferred Cost paint.
+            install(frm);
+            scheduleFlushDeferredCostRender(frm);
+        },
+    });
+
+    window.AlmdinaSaveRenderPerformanceUX = Object.freeze({
+        costTabIsActive,
+        flushDeferredCostRender,
+        scheduleFlushDeferredCostRender,
+        install,
     });
 })();

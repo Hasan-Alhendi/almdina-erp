@@ -267,6 +267,7 @@ jobs:
           node almdina_erp/tests/js/special_price_workspace_refresh.test.js
           node almdina_erp/tests/js/cost_edit_session_lifecycle.test.js
           node almdina_erp/tests/js/cost_hosted_settings_render.test.js
+          node almdina_erp/tests/js/cost_deferred_render_flush.test.js
           node almdina_erp/tests/js/cost_workspace_abandoned_load.test.js
           node almdina_erp/tests/js/special_price_cost_session_permissions.test.js
           node almdina_erp/tests/js/special_price_cost_workspace_access.test.js
