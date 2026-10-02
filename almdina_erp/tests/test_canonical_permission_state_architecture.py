@@ -75,6 +75,8 @@ class TestCanonicalPermissionStateArchitecture(unittest.TestCase):
         self.assertIn("reader.role_capabilities", gateway)
         self.assertIn("_role_state_for_reconciliation", sync)
         self.assertIn("CustomDocPermCapabilityReader", sync)
+        self.assertNotIn("_remove_legacy_settings_read", sync)
+        self.assertIn("return current", sync)
         self.assertNotIn("CanonicalPermissionStateRepository", sync)
         self.assertNotIn("STATE_DOCTYPE", sync)
         self.assertNotIn("AUDIT_DOCTYPE", sync)

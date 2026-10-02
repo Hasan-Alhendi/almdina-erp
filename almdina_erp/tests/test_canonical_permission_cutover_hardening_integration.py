@@ -26,6 +26,7 @@ from almdina_erp.patches.v1_0.retire_canonical_permission_runtime import (
 
 
 ROLE = "Almdina Cutover Hardening Role"
+SETTINGS_ROLE = "Almdina Explicit Settings Sync Test"
 MIGRATION_PERSONAS = (
     "Order Entry",
     "Production Manager",
@@ -43,14 +44,18 @@ class TestCanonicalPermissionCutoverHardeningIntegration(FrappeTestCase):
         sync_permission_types()
         self._ensure_role(ROLE)
         self._clear_role(ROLE)
+        self._ensure_role(SETTINGS_ROLE)
+        self._clear_role(SETTINGS_ROLE)
 
     def tearDown(self):
         frappe.set_user("Administrator")
         self._clear_role(ROLE)
+        self._clear_role(SETTINGS_ROLE)
         for role in MIGRATION_PERSONAS:
             self._clear_role(role)
-        if frappe.db.exists("Role", ROLE):
-            frappe.delete_doc("Role", ROLE, force=True, ignore_permissions=True)
+        for role in (ROLE, SETTINGS_ROLE):
+            if frappe.db.exists("Role", role):
+                frappe.delete_doc("Role", role, force=True, ignore_permissions=True)
         frappe.clear_cache()
         super().tearDown()
 
@@ -71,6 +76,45 @@ class TestCanonicalPermissionCutoverHardeningIntegration(FrappeTestCase):
         self.assertFalse(
             any(state.values()),
             f"expected deny-all for {role}, got {[k for k, v in state.items() if v]}",
+        )
+
+    def _assert_explicit_settings_view_survives_recurring_sync(
+        self, companion_capability: str
+    ) -> None:
+        repository = ProjectedPermissionMatrixRepository()
+        reader = CustomDocPermCapabilityReader()
+        repository.save_role_state(
+            SETTINGS_ROLE,
+            {
+                companion_capability: True,
+                Capability.VIEW_FACTORY_SETTINGS: True,
+            },
+        )
+
+        def assert_preserved() -> None:
+            state = reader.role_capabilities(SETTINGS_ROLE)
+            self.assertTrue(state[companion_capability], companion_capability)
+            self.assertTrue(
+                state[Capability.VIEW_FACTORY_SETTINGS],
+                Capability.VIEW_FACTORY_SETTINGS,
+            )
+
+        assert_preserved()
+        sync_permission_types()
+        assert_preserved()
+        sync_permission_types()
+        assert_preserved()
+        _sync_security_foundation()
+        assert_preserved()
+
+    def test_explicit_settings_view_survives_sync_with_manage_permissions(self) -> None:
+        self._assert_explicit_settings_view_survives_recurring_sync(
+            Capability.MANAGE_PERMISSIONS
+        )
+
+    def test_explicit_settings_view_survives_sync_with_workforce_capability(self) -> None:
+        self._assert_explicit_settings_view_survives_recurring_sync(
+            Capability.VIEW_USERS
         )
 
     def test_deny_all_survives_sync_and_migrate_despite_privileged_canonical_mirror(

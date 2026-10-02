@@ -13,9 +13,6 @@ from almdina_erp.almdina_erp.domain.security.authorization import (
     CAPABILITY_CATALOG,
     CUSTOM_PERMISSION_DEFINITIONS,
     CUTTING_PLAN_DOCTYPE,
-    FACTORY_SETTINGS_CAPABILITIES,
-    WORKFORCE_CAPABILITIES,
-    Capability,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.automatic_role_permission_cleanup import (
     revoke_automatic_role_business_grants,
@@ -49,26 +46,6 @@ def _relocated_plan_permission_types() -> tuple[str, ...]:
     )
 
 
-def _remove_legacy_settings_read(capabilities: dict[str, bool]) -> dict[str, bool]:
-    """Remove the old administration-derived Settings read projection."""
-
-    normalized = dict(capabilities)
-    if not normalized.get(Capability.VIEW_FACTORY_SETTINGS):
-        return normalized
-    actual_settings_grants = FACTORY_SETTINGS_CAPABILITIES.difference(
-        {Capability.VIEW_FACTORY_SETTINGS}
-    )
-    has_settings_grant = any(
-        normalized.get(capability) for capability in actual_settings_grants
-    )
-    legacy_admin_grant = normalized.get(Capability.MANAGE_PERMISSIONS) or any(
-        normalized.get(capability) for capability in WORKFORCE_CAPABILITIES
-    )
-    if legacy_admin_grant and not has_settings_grant:
-        normalized[Capability.VIEW_FACTORY_SETTINGS] = False
-    return normalized
-
-
 def _roles_requiring_reconciliation(doctypes: list[str]) -> list[str]:
     """Collect editable roles that already have Custom DocPerm rows to refresh."""
 
@@ -100,7 +77,7 @@ def _role_state_for_reconciliation(role: str) -> dict[str, bool]:
         current = reader.role_capabilities(role)
     except ValueError:
         return normalize_business_capability_state({})
-    return _remove_legacy_settings_read(current)
+    return current
 
 
 def reconcile_custom_permission_projections() -> None:
