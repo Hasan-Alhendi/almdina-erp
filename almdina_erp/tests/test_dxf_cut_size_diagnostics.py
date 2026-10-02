@@ -16,6 +16,7 @@ from almdina_erp.almdina_erp.services.piece_cut_dimension_service import (
     OrderPieceCutSpec,
 )
 from almdina_erp.almdina_erp.services.strict_dxf_import_service import (
+    _validate_topology_candidate_dimensions,
     _with_persisted_cut_context,
 )
 from decimal import Decimal
@@ -145,6 +146,148 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
             expected=expected, unmatched_indexes=[0],
         )
         self.assertEqual(direct, (0, False, None))
+
+    @staticmethod
+    def _strict_dimension_result(
+        width_cm: float,
+        length_cm: float,
+        *,
+        piece_type: str = "Special",
+        allow_rotation: int = 0,
+    ) -> tuple[bool | None, str | None]:
+        spec = OrderPieceCutSpec(
+            row_index=1,
+            finished_width_cm=Decimal("30"),
+            finished_length_cm=Decimal("40"),
+            cut_width_cm=Decimal("30"),
+            cut_length_cm=Decimal("40"),
+            width_deduction_mm=Decimal("0"),
+            length_deduction_mm=Decimal("0"),
+            allow_rotation=allow_rotation,
+            piece_type=piece_type,
+            qty=1,
+            side_profiles=(),
+        )
+        return _validate_topology_candidate_dimensions(
+            {"w": width_cm, "h": length_cm},
+            {"label": "1.1", "spec": spec},
+        )
+
+    def test_special_bbox_accepts_exact_and_one_sided_deductions_through_two_mm(self) -> None:
+        for width_cm, length_cm in (
+            (30.00, 40.00),
+            (29.90, 40.00),
+            (30.00, 39.90),
+            (29.80, 40.00),
+            (30.00, 39.80),
+            (29.80, 39.80),
+            (29.85, 39.90),
+        ):
+            with self.subTest(width_cm=width_cm, length_cm=length_cm):
+                rotated, error = self._strict_dimension_result(width_cm, length_cm)
+                self.assertIs(rotated, False)
+                self.assertIsNone(error)
+
+    def test_special_bbox_rejects_over_deduction_and_any_oversize(self) -> None:
+        for width_cm, length_cm in (
+            (29.799, 40.00),
+            (30.00, 39.799),
+            (29.79, 40.00),
+            (30.00, 39.79),
+            (30.01, 40.00),
+            (30.00, 40.01),
+        ):
+            with self.subTest(width_cm=width_cm, length_cm=length_cm):
+                rotated, error = self._strict_dimension_result(width_cm, length_cm)
+                self.assertIsNone(rotated)
+                self.assertIsNotNone(error)
+
+    def test_special_two_mm_boundary_is_recognized_by_topology(self) -> None:
+        order = self._order((300, 400, 0))
+        order.pieces[0].piece_type = "Special"
+        _resolve_cut_topology([_rect(298, 398)], order)
+
+        rotated_order = self._order((300, 400, 1))
+        rotated_order.pieces[0].piece_type = "Special"
+        _resolve_cut_topology([_rect(398, 298)], rotated_order)
+
+    def test_special_bbox_normalizes_float_noise_at_two_mm_boundary(self) -> None:
+        rotated, error = self._strict_dimension_result(
+            29.800000000000004,
+            39.800000000000004,
+        )
+        self.assertIs(rotated, False)
+        self.assertIsNone(error)
+
+    def test_special_rotation_applies_same_deduction_rule_and_respects_permission(self) -> None:
+        exact_allowed = self._strict_dimension_result(
+            40, 30, allow_rotation=1,
+        )
+        self.assertEqual(exact_allowed, (True, None))
+
+        deducted_allowed = self._strict_dimension_result(
+            39.8, 29.8, allow_rotation=1,
+        )
+        self.assertEqual(deducted_allowed, (True, None))
+
+        exact_forbidden = self._strict_dimension_result(
+            40, 30, allow_rotation=0,
+        )
+        self.assertIsNone(exact_forbidden[0])
+        self.assertIn("التدوير غير مسموح", exact_forbidden[1] or "")
+
+    def test_non_special_piece_types_keep_exact_bbox_contract(self) -> None:
+        for piece_type in ("Regular", "Extra", "Clipped Corner", "L-Shaped Corner"):
+            with self.subTest(piece_type=piece_type):
+                rotated, error = self._strict_dimension_result(
+                    29.9, 40, piece_type=piece_type,
+                )
+                self.assertIsNone(rotated)
+                self.assertIsNotNone(error)
+
+    def test_special_acceptance_keeps_actual_geometry_and_persisted_cut_size(self) -> None:
+        from almdina_erp.almdina_erp.services.strict_dxf_import_service import (
+            _apply_strict_dimension_contract,
+        )
+
+        piece = {
+            "label": "1.1",
+            "source_piece_no": 1,
+            "copy_no": 1,
+            "piece_type": "Special",
+            "w": 29.8,
+            "h": 39.8,
+            "rotated": False,
+            "geometry": {"outer": [[0, 0], [29.8, 0], [29.8, 39.8]]},
+        }
+        snapshot = {"sheets": [{"pieces": [piece]}]}
+        spec = OrderPieceCutSpec(
+            row_index=1,
+            finished_width_cm=Decimal("30"),
+            finished_length_cm=Decimal("40"),
+            cut_width_cm=Decimal("30"),
+            cut_length_cm=Decimal("40"),
+            width_deduction_mm=Decimal("0"),
+            length_deduction_mm=Decimal("0"),
+            allow_rotation=0,
+            piece_type="Special",
+            qty=1,
+            side_profiles=(),
+        )
+        order = SimpleNamespace(pieces=[SimpleNamespace(
+            piece_instance_id="piece:special-1",
+            cut_width_cm=30,
+            cut_length_cm=40,
+            extra_full_door_double=0,
+        )])
+
+        errors = _apply_strict_dimension_contract(snapshot, [spec], order=order)
+
+        self.assertEqual(errors, [])
+        self.assertEqual((piece["w"], piece["h"]), (29.8, 39.8))
+        self.assertEqual((piece["original_w"], piece["original_h"]), (30.0, 40.0))
+        self.assertEqual((piece["cut_width_cm"], piece["cut_length_cm"]), (30.0, 40.0))
+        self.assertEqual(piece["geometry"]["outer"][1], [29.8, 0])
 
     def test_real_size_mismatch_remains_generic(self) -> None:
         with self.assertRaises(DxfImportError) as exc_info:
