@@ -80,3 +80,19 @@ def test_layer0_is_cut_path_when_sheets_are_already_known():
 
     assert sheets == ()
     assert set(cuts) == {sheet_sized_door, door}
+
+
+def test_classify_requires_exact_board_dimensions_when_board_tolerance_is_zero():
+    exact_sheet = _rect(0, 0, 1220, 2440)
+    one_mm_short = _rect(2000, 0, 3219, 2440)
+
+    sheets, cuts = classify_default_layer_polygons(
+        [exact_sheet, one_mm_short],
+        expected_width_mm=1220,
+        expected_height_mm=2440,
+        geometry_tolerance=0.25,
+        dimension_tolerance=0.0,
+    )
+
+    assert sheets == (exact_sheet,)
+    assert cuts == (one_mm_short,)

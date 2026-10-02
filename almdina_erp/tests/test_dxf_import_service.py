@@ -97,3 +97,12 @@ def test_board_area_uses_correct_cm2_to_m2_conversion():
     src = _source(DXF_IMPORT)
     assert "total_board_area_m2" in src
     assert "/ 10000.0" in src
+
+
+def test_board_dimensions_are_exact_for_sheet_outline_and_layer0_inference():
+    src = _source(DXF_IMPORT)
+    assert "BOARD_DIMENSION_TOLERANCE_MM = 0.0" in src
+    assert "dimension_tolerance=BOARD_DIMENSION_TOLERANCE_MM" in src
+    assert "abs(width_mm - expected_width_mm) > BOARD_DIMENSION_TOLERANCE_MM" in src
+    assert "abs(height_mm - expected_height_mm) > BOARD_DIMENSION_TOLERANCE_MM" in src
+    assert "تتطابق أبعاد اللوح تمامًا دون سماحية" in src
