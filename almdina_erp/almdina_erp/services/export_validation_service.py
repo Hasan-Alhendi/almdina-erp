@@ -13,6 +13,7 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
     validate_snapshot_material_layout,
 )
 from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
+    dimensions_match_exact,
     special_bbox_matches_cut_envelope_with_unrecorded_edge_deduction,
 )
 from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
@@ -266,13 +267,19 @@ def validate_cutting_plan_document(plan: Any) -> list[str]:
                 elif piece_rotated:
                     dimensions_match = (
                         expected_piece["allow_rotation"]
-                        and abs(width_cm - expected_piece["length_cm"]) <= 0.001
-                        and abs(height_cm - expected_piece["width_cm"]) <= 0.001
+                        and dimensions_match_exact(
+                            width_cm,
+                            height_cm,
+                            expected_piece["length_cm"],
+                            expected_piece["width_cm"],
+                        )
                     )
                 else:
-                    dimensions_match = (
-                        abs(width_cm - expected_piece["width_cm"]) <= 0.001
-                        and abs(height_cm - expected_piece["length_cm"]) <= 0.001
+                    dimensions_match = dimensions_match_exact(
+                        width_cm,
+                        height_cm,
+                        expected_piece["width_cm"],
+                        expected_piece["length_cm"],
                     )
                 if not dimensions_match:
                     errors.append(

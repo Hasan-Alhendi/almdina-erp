@@ -230,6 +230,46 @@ class TestSpecialExportValidation(unittest.TestCase):
                 )
                 self.assertTrue(any("dimensions/orientation" in error for error in errors))
 
+    def test_non_special_export_uses_canonical_exact_dimensions(self):
+        for piece_type in ("Regular", "Extra", "Clipped Corner", "L-Shaped Corner"):
+            with self.subTest(piece_type=piece_type, dimensions="exact"):
+                _, _, _, errors = self._validate(
+                    piece_type=piece_type,
+                    width_cm=30,
+                    length_cm=40,
+                )
+                self.assertEqual(errors, [])
+
+            for width_cm in (29.999, 30.001):
+                with self.subTest(piece_type=piece_type, width_cm=width_cm):
+                    _, _, _, errors = self._validate(
+                        piece_type=piece_type,
+                        width_cm=width_cm,
+                        length_cm=40,
+                    )
+                    self.assertTrue(
+                        any("dimensions/orientation" in error for error in errors)
+                    )
+
+    def test_non_special_rotated_dimensions_use_canonical_exact_contract(self):
+        _, _, _, errors = self._validate(
+            piece_type="Regular",
+            width_cm=40,
+            length_cm=30,
+            allow_rotation=True,
+            rotated=True,
+        )
+        self.assertEqual(errors, [])
+
+        _, _, _, errors = self._validate(
+            piece_type="Regular",
+            width_cm=39.999,
+            length_cm=30,
+            allow_rotation=True,
+            rotated=True,
+        )
+        self.assertTrue(any("dimensions/orientation" in error for error in errors))
+
     def test_accepted_special_dimensions_survive_saved_plan_validation_and_export(self):
         from decimal import Decimal
 
