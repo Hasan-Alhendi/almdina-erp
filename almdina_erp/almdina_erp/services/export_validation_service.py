@@ -12,6 +12,9 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
     snapshot_geometry_index,
     validate_snapshot_material_layout,
 )
+from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
+    special_bbox_matches_cut_envelope_with_unrecorded_edge_deduction,
+)
 from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
     ManufacturingRequirementsError,
     snapshot_manufacturing_requirement_index,
@@ -39,6 +42,7 @@ def _expected_snapshot_pieces(snapshot: dict[str, Any]) -> dict[str, dict[str, A
             "width_cm": flt(piece["cut_width_cm"]),
             "length_cm": flt(piece["cut_length_cm"]),
             "allow_rotation": bool(piece["allow_rotation"]),
+            "piece_type": str(piece.get("piece_type") or "Regular"),
             "source_piece_no": cint(piece["source_piece_no"]),
             "copy_no": cint(piece["copy_no"]),
         }
@@ -243,16 +247,34 @@ def validate_cutting_plan_document(plan: Any) -> list[str]:
                     )
                 width_cm = flt(piece.width_mm) / 10
                 height_cm = flt(piece.height_mm) / 10
-                normal = (
-                    abs(width_cm - expected_piece["width_cm"]) <= 0.001
-                    and abs(height_cm - expected_piece["length_cm"]) <= 0.001
-                )
-                rotated = (
-                    expected_piece["allow_rotation"]
-                    and abs(width_cm - expected_piece["length_cm"]) <= 0.001
-                    and abs(height_cm - expected_piece["width_cm"]) <= 0.001
-                )
-                if not (normal or rotated):
+                piece_rotated = bool(cint(piece.rotated))
+                if expected_piece["piece_type"] == "Special":
+                    if piece_rotated:
+                        dimensions_match = special_bbox_matches_cut_envelope_with_unrecorded_edge_deduction(
+                            width_cm,
+                            height_cm,
+                            expected_piece["length_cm"],
+                            expected_piece["width_cm"],
+                        )
+                    else:
+                        dimensions_match = special_bbox_matches_cut_envelope_with_unrecorded_edge_deduction(
+                            width_cm,
+                            height_cm,
+                            expected_piece["width_cm"],
+                            expected_piece["length_cm"],
+                        )
+                elif piece_rotated:
+                    dimensions_match = (
+                        expected_piece["allow_rotation"]
+                        and abs(width_cm - expected_piece["length_cm"]) <= 0.001
+                        and abs(height_cm - expected_piece["width_cm"]) <= 0.001
+                    )
+                else:
+                    dimensions_match = (
+                        abs(width_cm - expected_piece["width_cm"]) <= 0.001
+                        and abs(height_cm - expected_piece["length_cm"]) <= 0.001
+                    )
+                if not dimensions_match:
                     errors.append(
                         _("Piece {0} dimensions/orientation do not match the captured manufacturing request.").format(
                             piece.piece_label
