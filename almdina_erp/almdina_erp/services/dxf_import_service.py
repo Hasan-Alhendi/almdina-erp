@@ -242,6 +242,7 @@ def _topology_error_message(
     *,
     kerf_mm: float = 0.0,
     details: str = "",
+    order: Any = None,
 ) -> str:
     first = error.first_key if error.first_key is not None else "؟"
     second = error.second_key if error.second_key is not None else "؟"
@@ -251,6 +252,25 @@ def _topology_error_message(
             "تأكد من مقاسات محيطات القطع ومن أن المسارات الإضافية هي فتحات داخلية فقط."
         )
         return f"{message} {details}".strip()
+    if error.code == "FORBIDDEN_ROTATION":
+        pieces = _expected_order_pieces(order) if order is not None else []
+        piece = (
+            pieces[error.expected_piece_index]
+            if error.expected_piece_index is not None
+            and error.expected_piece_index < len(pieces)
+            else None
+        )
+        label = piece["source_piece_no"] if piece else error.expected_piece_index + 1
+        actual_w = _format_cm((error.actual_width or 0.0) / 10.0)
+        actual_h = _format_cm((error.actual_height or 0.0) / 10.0)
+        expected_w = _format_cm((error.expected_width or 0.0) / 10.0)
+        expected_h = _format_cm((error.expected_height or 0.0) / 10.0)
+        return (
+            f"الدرفة {label} موجودة في DXF بالمقاس {actual_w} × {actual_h} سم، "
+            f"بينما مقاس القص المحفوظ لها هو {expected_w} × {expected_h} سم. "
+            "القياسات صحيحة، لكن الدرفة مدوّرة 90°، والتدوير غير مسموح لهذه الدرفة. "
+            "أعد اتجاه الدرفة فقط ثم ارفع الملف من جديد."
+        )
     if error.code == "AMBIGUOUS_CONTOUR_OWNERSHIP":
         return (
             "تركيب مسارات CUT_PATH ملتبس فعليًا: يوجد مسار داخلي يمكن اعتباره فتحة أو قطعة مستقلة من الطلب. "
@@ -1159,6 +1179,7 @@ def _resolve_cut_topology(contours: list[dict[str, object]], order: Any) -> Reso
                 exc,
                 kerf_mm=max(0.0, flt(order.kerf_mm)),
                 details=details,
+                order=order,
             )
         ) from exc
 
