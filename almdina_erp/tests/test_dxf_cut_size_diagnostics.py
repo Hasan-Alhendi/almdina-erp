@@ -68,6 +68,21 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
         self.assertNotIn("لا يمكن مطابقة محيطات CUT_PATH", message)
         self.assertNotIn("قريب من مقاس القص", message)
 
+    def test_near_rotated_size_is_not_forbidden_rotation(self) -> None:
+        order = self._order((592, 285, 0))
+        for actual_width, actual_height in ((286, 591), (285, 591)):
+            with self.subTest(actual=(actual_width, actual_height)):
+                with self.assertRaises(DxfImportError) as exc_info:
+                    _resolve_cut_topology(
+                        [_rect(actual_width, actual_height)], order
+                    )
+                self.assertIn(
+                    "لا يمكن مطابقة محيطات CUT_PATH",
+                    str(exc_info.exception),
+                )
+                self.assertNotIn("مدوّرة 90°", str(exc_info.exception))
+                self.assertNotIn("التدوير غير مسموح", str(exc_info.exception))
+
     def test_allowed_rotation_is_accepted(self) -> None:
         _resolve_cut_topology([_rect(285, 592)], self._order((592, 285, 1)))
 
@@ -78,6 +93,21 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
             "branched": False,
         }
         _resolve_cut_topology([translated], self._order((592, 285, 0)))
+
+    def test_exact_rotation_proof_ignores_float_representation_noise(self) -> None:
+        noisy = {
+            "points": [
+                (0.1, 0.1),
+                (285.1000000000001, 0.1),
+                (285.1000000000001, 592.1),
+                (0.1, 592.1),
+            ],
+            "closed": True,
+            "branched": False,
+        }
+        with self.assertRaises(DxfImportError) as exc_info:
+            _resolve_cut_topology([noisy], self._order((592, 285, 0)))
+        self.assertIn("مدوّرة 90°", str(exc_info.exception))
 
     def test_real_size_mismatch_remains_generic(self) -> None:
         with self.assertRaises(DxfImportError) as exc_info:

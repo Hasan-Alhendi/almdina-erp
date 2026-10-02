@@ -1,5 +1,16 @@
 from pathlib import Path
 
+import pytest
+
+from almdina_erp.tests.frappe_test_stub import install_if_unavailable
+
+install_if_unavailable()
+
+from almdina_erp.almdina_erp.services.dxf_import_service import (
+    DxfImportError,
+    _validate_sheet_contours,
+)
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DXF_IMPORT = ROOT / "almdina_erp" / "services" / "dxf_import_service.py"
@@ -101,8 +112,55 @@ def test_board_area_uses_correct_cm2_to_m2_conversion():
 
 def test_board_dimensions_are_exact_for_sheet_outline_and_layer0_inference():
     src = _source(DXF_IMPORT)
-    assert "BOARD_DIMENSION_TOLERANCE_MM = 0.0" in src
-    assert "dimension_tolerance=BOARD_DIMENSION_TOLERANCE_MM" in src
-    assert "abs(width_mm - expected_width_mm) > BOARD_DIMENSION_TOLERANCE_MM" in src
-    assert "abs(height_mm - expected_height_mm) > BOARD_DIMENSION_TOLERANCE_MM" in src
+    assert "dimensions_match_exact" in src
+    assert "width_mm / 10.0" in src
+    assert "height_mm / 10.0" in src
+    assert "BOARD_DIMENSION_TOLERANCE_MM" not in src
     assert "تتطابق أبعاد اللوح تمامًا دون سماحية" in src
+
+
+def _board_contour(width_mm: float, height_mm: float) -> dict:
+    return {
+        "points": [
+            (0.0, 0.0),
+            (width_mm, 0.0),
+            (width_mm, height_mm),
+            (0.0, height_mm),
+        ],
+        "closed": True,
+        "branched": False,
+    }
+
+
+def test_sheet_outline_accepts_canonical_exact_board_dimensions():
+    sheets = _validate_sheet_contours(
+        [_board_contour(1220, 2440)],
+        expected_width_mm=1220,
+        expected_height_mm=2440,
+    )
+    assert len(sheets) == 1
+
+
+@pytest.mark.parametrize(
+    "actual_width,actual_height",
+    [(1219, 2440), (1219.9, 2440), (2440, 1220)],
+)
+def test_sheet_outline_rejects_real_or_swapped_board_dimension_difference(
+    actual_width: float,
+    actual_height: float,
+):
+    with pytest.raises(DxfImportError, match="يجب أن تتطابق أبعاد اللوح تمامًا"):
+        _validate_sheet_contours(
+            [_board_contour(actual_width, actual_height)],
+            expected_width_mm=1220,
+            expected_height_mm=2440,
+        )
+
+
+def test_sheet_outline_accepts_same_fractional_dimension_after_normalization():
+    sheets = _validate_sheet_contours(
+        [_board_contour(1220.1000000000001, 2440.0)],
+        expected_width_mm=1220.1,
+        expected_height_mm=2440.0,
+    )
+    assert len(sheets) == 1

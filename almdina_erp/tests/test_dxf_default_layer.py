@@ -20,7 +20,6 @@ def test_classify_uses_board_sized_rect_as_sheet_and_keeps_door():
         expected_width_mm=1220,
         expected_height_mm=2440,
         geometry_tolerance=0.25,
-        dimension_tolerance=2.0,
     )
 
     assert sheets == (sheet,)
@@ -58,7 +57,6 @@ def test_classify_drops_layer0_boxes_that_only_frame_extra_overlays():
         expected_height_mm=2440,
         overlays=overlays,
         geometry_tolerance=0.25,
-        dimension_tolerance=2.0,
     )
 
     assert len(sheets) == 1
@@ -74,7 +72,6 @@ def test_layer0_is_cut_path_when_sheets_are_already_known():
         expected_width_mm=1220,
         expected_height_mm=2440,
         geometry_tolerance=0.25,
-        dimension_tolerance=2.0,
         infer_sheets=False,
     )
 
@@ -82,17 +79,33 @@ def test_layer0_is_cut_path_when_sheets_are_already_known():
     assert set(cuts) == {sheet_sized_door, door}
 
 
-def test_classify_requires_exact_board_dimensions_when_board_tolerance_is_zero():
+def test_layer0_board_dimensions_use_canonical_exact_equality():
     exact_sheet = _rect(0, 0, 1220, 2440)
     one_mm_short = _rect(2000, 0, 3219, 2440)
+    fractional_short = _rect(4000, 0, 5219.9, 2440)
+    swapped = _rect(6000, 0, 8440, 1220)
 
     sheets, cuts = classify_default_layer_polygons(
-        [exact_sheet, one_mm_short],
+        [exact_sheet, one_mm_short, fractional_short, swapped],
         expected_width_mm=1220,
         expected_height_mm=2440,
         geometry_tolerance=0.25,
-        dimension_tolerance=0.0,
     )
 
     assert sheets == (exact_sheet,)
-    assert cuts == (one_mm_short,)
+    assert set(cuts) == {one_mm_short, fractional_short, swapped}
+
+
+def test_layer0_board_dimensions_normalize_float_representation_only():
+    expected_width = 1220.1
+    actual_sheet = _rect(0, 0, 1220.1000000000001, 2440.0)
+
+    sheets, cuts = classify_default_layer_polygons(
+        [actual_sheet],
+        expected_width_mm=expected_width,
+        expected_height_mm=2440.0,
+        geometry_tolerance=0.25,
+    )
+
+    assert sheets == (actual_sheet,)
+    assert cuts == ()

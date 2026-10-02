@@ -55,6 +55,9 @@ from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
     ManufacturingRequirementsError,
     require_cut_dimension_cm,
 )
+from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
+    dimensions_match_exact,
+)
 from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
     OffcutPolicyError,
     canonicalize_snapshot_sources,
@@ -80,9 +83,6 @@ SHEETS_PER_ROW = 2
 SHEET_GAP_MM = 200
 CONNECTIVITY_TOLERANCE_MM = 1.5
 DIMENSION_TOLERANCE_MM = 2.0
-# Board dimensions are an exact production contract. Unlike piece-topology
-# evidence, SHEET_OUTLINE and layer-0 inferred sheets get no manufacturing tolerance.
-BOARD_DIMENSION_TOLERANCE_MM = 0.0
 KERF_NUMERIC_TOLERANCE_MM = 0.1
 GEOMETRY_TOLERANCE_MM = 0.25
 MAX_DIAGNOSTIC_LAYERS = 8
@@ -790,7 +790,6 @@ def _default_layer_role_segments(
         expected_height_mm=expected_height_mm,
         overlays=overlays,
         geometry_tolerance=CONNECTIVITY_TOLERANCE_MM,
-        dimension_tolerance=BOARD_DIMENSION_TOLERANCE_MM,
         infer_sheets=infer_sheets,
     )
     sheet_segments = [
@@ -1066,9 +1065,11 @@ def _validate_sheet_contours(
         min_x, min_y, max_x, max_y = bbox(points)
         width_mm = max_x - min_x
         height_mm = max_y - min_y
-        if (
-            abs(width_mm - expected_width_mm) > BOARD_DIMENSION_TOLERANCE_MM
-            or abs(height_mm - expected_height_mm) > BOARD_DIMENSION_TOLERANCE_MM
+        if not dimensions_match_exact(
+            width_mm / 10.0,
+            height_mm / 10.0,
+            expected_width_mm / 10.0,
+            expected_height_mm / 10.0,
         ):
             errors.append(
                 f"أبعاد اللوح رقم {index} في DXF هي {_format_mm(width_mm)} × {_format_mm(height_mm)} مم، "
@@ -1734,7 +1735,6 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
 
 
 __all__ = [
-    "BOARD_DIMENSION_TOLERANCE_MM",
     "CUT_PATH_LAYER",
     "OFFCUT_LAYER",
     "DIMENSION_TOLERANCE_MM",

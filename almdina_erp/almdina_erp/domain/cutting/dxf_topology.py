@@ -11,6 +11,7 @@ from .dxf_geometry import (
     polygons_overlap,
     validate_polygon,
 )
+from .piece_cut_dimensions import dimensions_match_exact
 
 Point = tuple[float, float]
 Polygon = tuple[Point, ...]
@@ -420,12 +421,19 @@ def _forbidden_rotation_error(
             continue
         min_x, min_y, max_x, max_y = bbox(contour.polygon)
         width, height = max_x - min_x, max_y - min_y
-        rotated_only = (
-            abs(width - piece.height) <= dimension_tolerance
-            and abs(height - piece.width) <= dimension_tolerance
-            and (abs(width - piece.width) > dimension_tolerance
-                 or abs(height - piece.height) > dimension_tolerance)
+        actual_width_cm = width / 10.0
+        actual_height_cm = height / 10.0
+        expected_width_cm = piece.width / 10.0
+        expected_height_cm = piece.height / 10.0
+        exact_direct = dimensions_match_exact(
+            actual_width_cm, actual_height_cm,
+            expected_width_cm, expected_height_cm,
         )
+        exact_rotated = dimensions_match_exact(
+            actual_width_cm, actual_height_cm,
+            expected_height_cm, expected_width_cm,
+        )
+        rotated_only = exact_rotated and not exact_direct
         if rotated_only and piece.arbitrary_outline:
             # Special-shape acceptance diagnostics are intentionally unchanged.
             return None
