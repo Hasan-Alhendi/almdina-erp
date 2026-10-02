@@ -139,6 +139,30 @@ class TestCanonicalPermissionCutoverHardeningIntegration(FrappeTestCase):
         _sync_security_foundation()
         self._assert_deny_all(ROLE)
 
+    def test_retire_does_not_override_existing_live_deny_all(self) -> None:
+        canonical = CanonicalPermissionStateRepository()
+        repository = ProjectedPermissionMatrixRepository()
+        privileged = {
+            Capability.VIEW_ORDERS: True,
+            Capability.VIEW_COSTS: True,
+            Capability.EDIT_COST_SETTINGS: True,
+        }
+
+        repository.save_role_state(ROLE, privileged)
+        repository.save_role_state(ROLE, {})
+        canonical.save(ROLE, privileged)
+
+        self._assert_deny_all(ROLE)
+        self.assertTrue(canonical.read(ROLE)[Capability.VIEW_COSTS])
+
+        retire_canonical_permission_runtime()
+
+        self._assert_deny_all(ROLE)
+        self.assertTrue(
+            canonical.read(ROLE)[Capability.VIEW_COSTS],
+            "retirement must not mutate the historical mirror",
+        )
+
     def test_one_time_retire_bridge_is_role_name_agnostic(self) -> None:
         canonical = CanonicalPermissionStateRepository()
         repository = ProjectedPermissionMatrixRepository()
