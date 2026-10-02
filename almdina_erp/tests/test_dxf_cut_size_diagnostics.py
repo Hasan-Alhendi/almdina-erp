@@ -9,6 +9,7 @@ install_if_unavailable()
 
 from almdina_erp.almdina_erp.services.dxf_import_service import (
     DxfImportError,
+    _legacy_expected_piece_match,
     _resolve_cut_topology,
 )
 from almdina_erp.almdina_erp.services.piece_cut_dimension_service import (
@@ -108,6 +109,42 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
         with self.assertRaises(DxfImportError) as exc_info:
             _resolve_cut_topology([noisy], self._order((592, 285, 0)))
         self.assertIn("مدوّرة 90°", str(exc_info.exception))
+
+    def test_legacy_forbidden_rotation_requires_exact_swapped_dimensions(self) -> None:
+        expected = [{
+            "width_cm": 59.2,
+            "length_cm": 28.5,
+            "allow_rotation": False,
+            "label": "9",
+        }]
+
+        exact = _legacy_expected_piece_match(
+            width_cm=28.5, height_cm=59.2,
+            expected=expected, unmatched_indexes=[0],
+        )
+        self.assertIs(exact[0], None)
+        self.assertIs(exact[2], expected[0])
+
+        for width_cm, height_cm in ((28.6, 59.1), (28.5, 59.1)):
+            with self.subTest(width_cm=width_cm, height_cm=height_cm):
+                near = _legacy_expected_piece_match(
+                    width_cm=width_cm, height_cm=height_cm,
+                    expected=expected, unmatched_indexes=[0],
+                )
+                self.assertIsNone(near[2])
+
+        allowed = [{**expected[0], "allow_rotation": True}]
+        rotated = _legacy_expected_piece_match(
+            width_cm=28.5, height_cm=59.2,
+            expected=allowed, unmatched_indexes=[0],
+        )
+        self.assertEqual(rotated, (0, True, None))
+
+        direct = _legacy_expected_piece_match(
+            width_cm=59.2, height_cm=28.5,
+            expected=expected, unmatched_indexes=[0],
+        )
+        self.assertEqual(direct, (0, False, None))
 
     def test_real_size_mismatch_remains_generic(self) -> None:
         with self.assertRaises(DxfImportError) as exc_info:

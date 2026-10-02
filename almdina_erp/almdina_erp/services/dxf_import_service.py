@@ -929,7 +929,13 @@ def _legacy_expected_piece_match(
             expected[index]
             for index in unmatched_indexes
             if not expected[index]["allow_rotation"]
-            and _rotated_dimensions_match(
+            and dimensions_match_exact(
+                width_cm,
+                height_cm,
+                expected[index]["length_cm"],
+                expected[index]["width_cm"],
+            )
+            and not dimensions_match_exact(
                 width_cm,
                 height_cm,
                 expected[index]["width_cm"],
