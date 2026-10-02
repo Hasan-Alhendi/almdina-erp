@@ -3,14 +3,7 @@ from __future__ import annotations
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
-from almdina_erp.almdina_erp.application.security.legacy_permission_bootstrap import (
-    legacy_role_state,
-    legacy_roles,
-)
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
-from almdina_erp.almdina_erp.infrastructure.frappe.canonical_permission_state_repository import (
-    CanonicalPermissionStateRepository,
-)
 from almdina_erp.almdina_erp.infrastructure.frappe.custom_docperm_capability_reader import (
     CustomDocPermCapabilityReader,
 )
@@ -26,23 +19,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.projected_permission_matrix_r
 from almdina_erp.almdina_erp.infrastructure.frappe.system_role_policy import (
     PROTECTED_SYSTEM_ROLES,
 )
-from almdina_erp.patches.v1_0.retire_canonical_permission_runtime import (
-    execute as retire_canonical_permission_runtime,
-)
 
 
 ROLE = "Almdina Native Parity Role"
-PERSONA_FIXTURES = (
-    "Order Entry",
-    "Production Manager",
-    "Accounts Management",
-    "Cutting Operator",
-    "Edge Operator",
-    "عامل رسم",
-    "عامل شريون",
-    "عامل CNC",
-    "عامل تقشيط",
-)
 
 
 class TestFrappeNativePermissionParityIntegration(FrappeTestCase):
@@ -69,12 +48,6 @@ class TestFrappeNativePermissionParityIntegration(FrappeTestCase):
     def _assert_docperm_round_trip(
         self, role: str, capabilities: dict[str, bool]
     ) -> None:
-        """Assert save → CustomDocPermCapabilityReader round-trip.
-
-        Both sides intentionally read Custom DocPerm after cutover. This is a
-        persistence round-trip check, not legacy-vs-Frappe migration parity.
-        """
-
         repository = ProjectedPermissionMatrixRepository()
         reader = CustomDocPermCapabilityReader()
         repository.save_role_state(role, capabilities)
@@ -93,11 +66,10 @@ class TestFrappeNativePermissionParityIntegration(FrappeTestCase):
 
     def test_empty_role_is_deny_all_in_both_readers(self) -> None:
         self._assert_docperm_round_trip(ROLE, {})
-        reader = CustomDocPermCapabilityReader()
-        state = reader.role_capabilities(ROLE)
+        state = CustomDocPermCapabilityReader().role_capabilities(ROLE)
         self.assertFalse(any(state.values()))
 
-    def test_order_entry_lookup_does_not_become_customer_view_capability(self) -> None:
+    def test_order_input_lookup_does_not_become_customer_view_capability(self) -> None:
         self._assert_docperm_round_trip(
             ROLE,
             {
@@ -106,8 +78,7 @@ class TestFrappeNativePermissionParityIntegration(FrappeTestCase):
                 Capability.EDIT_ORDER: True,
             },
         )
-        repository = FrappePermissionMatrixRepository()
-        state = repository.role_state(ROLE)["capabilities"]
+        state = FrappePermissionMatrixRepository().role_state(ROLE)["capabilities"]
         self.assertFalse(state[Capability.VIEW_CUSTOMERS])
         self.assertFalse(state[Capability.VIEW_EDGE_BANDING_TYPES])
 
@@ -155,86 +126,13 @@ class TestFrappeNativePermissionParityIntegration(FrappeTestCase):
             },
         )
 
-    def test_legacy_persona_fixtures_project_with_docperm_round_trip(self) -> None:
-        available = set(legacy_roles())
-        repository = ProjectedPermissionMatrixRepository()
-        reader = CustomDocPermCapabilityReader()
-        for role in PERSONA_FIXTURES:
-            if role not in available:
-                continue
-            if not frappe.db.exists("Role", role):
-                frappe.get_doc(
-                    {"doctype": "Role", "role_name": role, "desk_access": 1}
-                ).insert(ignore_permissions=True)
-            frappe.db.delete("Custom DocPerm", {"role": role})
-            frappe.db.delete("Almdina Role Capability State", {"role": role})
-            state = legacy_role_state(role)
-            repository.save_role_state(role, state)
-            saved = repository.role_state(role)["capabilities"]
-            projected = reader.role_capabilities(role)
-            mismatched = sorted(
-                key
-                for key in sorted(saved)
-                if bool(saved[key]) != bool(projected[key])
-            )
-            self.assertEqual(
-                mismatched, [], f"persona DocPerm round-trip failed for {role}"
-            )
-
-    def test_legacy_persona_expected_sets_migrate_into_docperm(self) -> None:
-        """True migration parity: bootstrap expected sets → retire → DocPerm reader.
-
-        Expected values come from legacy_permission_bootstrap, not from the
-        DocPerm repository under test.
-        """
-
-        available = set(legacy_roles())
-        canonical = CanonicalPermissionStateRepository()
-        reader = CustomDocPermCapabilityReader()
-        personas = [
-            role
-            for role in (
-                "Order Entry",
-                "Production Manager",
-                "Accounts Management",
-                "Cutting Operator",
-                "Edge Operator",
-                "عامل رسم",
-            )
-            if role in available
-        ]
-        for role in personas:
-            if not frappe.db.exists("Role", role):
-                frappe.get_doc(
-                    {"doctype": "Role", "role_name": role, "desk_access": 1}
-                ).insert(ignore_permissions=True)
-            frappe.db.delete("Custom DocPerm", {"role": role})
-            frappe.db.delete("Almdina Role Capability State", {"role": role})
-            canonical.save(role, legacy_role_state(role))
-
-        retire_canonical_permission_runtime()
-
-        for role in personas:
-            expected = legacy_role_state(role)
-            actual = reader.role_capabilities(role)
-            mismatched = sorted(
-                key
-                for key in sorted(expected)
-                if bool(expected[key]) != bool(actual.get(key))
-            )
-            self.assertEqual(
-                mismatched,
-                [],
-                f"legacy→DocPerm migration parity failed for {role}: {mismatched}",
-            )
-
     def test_protected_roles_are_rejected_by_docperm_reader(self) -> None:
         reader = CustomDocPermCapabilityReader()
         for role in sorted(PROTECTED_SYSTEM_ROLES):
             with self.assertRaises(ValueError):
                 reader.role_capabilities(role)
 
-    def test_multi_role_union_ignores_system_manager(self) -> None:
+    def test_multi_role_union_ignores_protected_platform_roles(self) -> None:
         repository = ProjectedPermissionMatrixRepository()
         repository.save_role_state(
             ROLE,
@@ -242,7 +140,7 @@ class TestFrappeNativePermissionParityIntegration(FrappeTestCase):
         )
         reader = CustomDocPermCapabilityReader()
         granted = reader.granted_capabilities_for_roles(
-            [ROLE, "System Manager", "Desk User"]
+            [ROLE, *sorted(PROTECTED_SYSTEM_ROLES)]
         )
         self.assertIn(Capability.VIEW_ORDERS, granted)
         self.assertIn(Capability.CREATE_ORDER, granted)

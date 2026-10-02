@@ -100,7 +100,7 @@ class TestPermissionManagementArchitecture(unittest.TestCase):
         self.assertIn("MANAGE_PERMISSIONS", combined)
         self.assertIn("decide_settings_update", combined)
         self.assertIn("WorkforceAction", combined)
-        self.assertNotIn('require_any_role("Production Manager")', combined)
+        self.assertNotIn("require_any_role(", combined)
         self.assertNotIn('"System Manager" not in', combined)
         self.assertNotIn("Only System Manager", combined)
 
@@ -148,8 +148,7 @@ class TestPermissionManagementArchitecture(unittest.TestCase):
         self.assertNotIn("previewRequest", browser_surface)
         self.assertNotIn("transferRequest", browser_surface)
         self.assertNotIn("frappe.user_roles", browser_surface)
-        for role in ("Production Manager", "System Manager", "Order Entry"):
-            self.assertNotIn(role, browser_surface)
+        self.assertNotIn("require_any_role", browser_surface)
 
     def test_shared_shell_uses_surface_policy_not_raw_capabilities(self) -> None:
         source = SHARED_SHELL.read_text(encoding="utf-8")

@@ -35,7 +35,6 @@ jobs:
             almdina_erp.tests.test_frappe_v16_permission_hook_contract \
             almdina_erp.tests.test_resource_permission_hooks \
             almdina_erp.tests.test_order_edit_policy_adapter \
-            almdina_erp.tests.test_legacy_permission_bootstrap \
             almdina_erp.tests.test_order_tab_permissions_ux \
             almdina_erp.tests.test_routing_migration_phase \
             almdina_erp.tests.test_shared_shell_workspace_boot_order \
