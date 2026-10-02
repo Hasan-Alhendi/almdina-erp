@@ -17,6 +17,7 @@ from almdina_erp.patches.v1_0.migrate_legacy_administration_capabilities import 
 
 ROLE = "Almdina Legacy Projection Migration Test"
 LEGACY_MANAGE_USERS = "manage_users"
+LEGACY_MANAGE_FACTORY_SETTINGS = "manage_factory_settings"
 
 
 class TestPermissionProjectionMigrationIntegration(FrappeTestCase):
@@ -35,39 +36,43 @@ class TestPermissionProjectionMigrationIntegration(FrappeTestCase):
         frappe.set_user("Administrator")
         frappe.db.delete("Custom DocPerm", {"role": ROLE})
         frappe.db.delete("Almdina Role Capability State", {"role": ROLE})
-        legacy_name = frappe.db.get_value(
-            "Permission Type",
-            {"perm_type": LEGACY_MANAGE_USERS, "doc_type": "Almdina ERP Settings"},
-        )
-        if legacy_name:
-            frappe.delete_doc(
+        for permission_type in (
+            LEGACY_MANAGE_USERS,
+            LEGACY_MANAGE_FACTORY_SETTINGS,
+        ):
+            legacy_name = frappe.db.get_value(
                 "Permission Type",
-                legacy_name,
-                force=True,
-                ignore_permissions=True,
+                {"perm_type": permission_type, "doc_type": "Almdina ERP Settings"},
             )
+            if legacy_name:
+                frappe.delete_doc(
+                    "Permission Type",
+                    legacy_name,
+                    force=True,
+                    ignore_permissions=True,
+                )
         if frappe.db.exists("Role", ROLE):
             frappe.delete_doc("Role", ROLE, force=True, ignore_permissions=True)
         frappe.clear_cache()
         super().tearDown()
 
-    def _ensure_legacy_permission_type(self) -> None:
+    def _ensure_legacy_permission_type(self, permission_type: str) -> None:
         if frappe.db.exists(
             "Permission Type",
-            {"perm_type": LEGACY_MANAGE_USERS, "doc_type": "Almdina ERP Settings"},
+            {"perm_type": permission_type, "doc_type": "Almdina ERP Settings"},
         ):
             return
         frappe.get_doc(
             {
                 "doctype": "Permission Type",
-                "perm_type": LEGACY_MANAGE_USERS,
+                "perm_type": permission_type,
                 "doc_type": "Almdina ERP Settings",
             }
         ).insert(ignore_permissions=True)
         frappe.clear_cache(doctype="Custom DocPerm")
 
     def test_migrate_converts_legacy_workforce_grant_without_stale_settings_read(self) -> None:
-        self._ensure_legacy_permission_type()
+        self._ensure_legacy_permission_type(LEGACY_MANAGE_USERS)
         self.assertTrue(frappe.get_meta("Custom DocPerm").has_field(LEGACY_MANAGE_USERS))
 
         frappe.get_doc(
@@ -129,6 +134,72 @@ class TestPermissionProjectionMigrationIntegration(FrappeTestCase):
             Capability.EDIT_FACTORY_PRODUCTION_CONTROLS,
         ):
             self.assertEqual(int(row.get(capability)), 0, capability)
+
+        state = FrappePermissionMatrixRepository().role_state(ROLE)["capabilities"]
+        self.assertFalse(state[Capability.VIEW_FACTORY_SETTINGS])
+
+    def test_migrate_preserves_real_legacy_factory_settings_grant_across_sync(self) -> None:
+        self._ensure_legacy_permission_type(LEGACY_MANAGE_FACTORY_SETTINGS)
+        self.assertTrue(
+            frappe.get_meta("Custom DocPerm").has_field(
+                LEGACY_MANAGE_FACTORY_SETTINGS
+            )
+        )
+
+        frappe.get_doc(
+            {
+                "doctype": "Custom DocPerm",
+                "parent": "Almdina ERP Settings",
+                "parenttype": "DocType",
+                "parentfield": "permissions",
+                "role": ROLE,
+                "permlevel": 0,
+                "read": 1,
+                "write": 1,
+                LEGACY_MANAGE_FACTORY_SETTINGS: 1,
+            }
+        ).insert(ignore_permissions=True)
+
+        migrate_legacy_administration_capabilities()
+
+        expected = (
+            Capability.VIEW_FACTORY_SETTINGS,
+            Capability.EDIT_FACTORY_CUTTING_DEFAULTS,
+            Capability.EDIT_FACTORY_COST_DEFAULTS,
+            Capability.EDIT_FACTORY_PRODUCTION_CONTROLS,
+        )
+        repository = FrappePermissionMatrixRepository()
+        state = repository.role_state(ROLE)["capabilities"]
+        for capability in expected:
+            self.assertTrue(state[capability], capability)
+
+        row = frappe.db.get_value(
+            "Custom DocPerm",
+            {
+                "parent": "Almdina ERP Settings",
+                "role": ROLE,
+                "permlevel": 0,
+            },
+            [
+                "read",
+                "write",
+                LEGACY_MANAGE_FACTORY_SETTINGS,
+                Capability.EDIT_FACTORY_CUTTING_DEFAULTS,
+                Capability.EDIT_FACTORY_COST_DEFAULTS,
+                Capability.EDIT_FACTORY_PRODUCTION_CONTROLS,
+            ],
+            as_dict=True,
+        )
+        self.assertEqual(int(row.read), 1)
+        self.assertEqual(int(row.write), 0)
+        self.assertEqual(int(row.get(LEGACY_MANAGE_FACTORY_SETTINGS)), 1)
+        for capability in expected[1:]:
+            self.assertEqual(int(row.get(capability)), 1, capability)
+
+        sync_permission_types()
+        state_after_sync = repository.role_state(ROLE)["capabilities"]
+        for capability in expected:
+            self.assertTrue(state_after_sync[capability], capability)
 
     def test_sync_repairs_customer_and_edge_reads_from_canonical_order_editor_state(self) -> None:
         repository = FrappePermissionMatrixRepository()
