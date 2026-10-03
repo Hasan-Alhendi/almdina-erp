@@ -302,7 +302,26 @@ def _inventory_mismatch_params(
         else:
             unmatched_expected.pop(match_index)
 
+    mismatch_pairs: list[dict[str, str]] = []
+    remaining_expected = list(unmatched_expected)
+    for width_cm, height_cm in unmatched_dxf:
+        if not remaining_expected:
+            break
+        nearest = min(
+            remaining_expected,
+            key=lambda piece: abs(width_cm - piece["width_cm"]) + abs(height_cm - piece["length_cm"]),
+        )
+        remaining_expected.remove(nearest)
+        mismatch_pairs.append(
+            {
+                "label": str(nearest["label"]),
+                "expected": f"{_format_cm(nearest['width_cm'])} × {_format_cm(nearest['length_cm'])} سم",
+                "actual": f"{_format_cm(width_cm)} × {_format_cm(height_cm)} سم",
+            }
+        )
+
     return {
+        "mismatch_pairs": mismatch_pairs,
         "actual_count": len(candidates),
         "expected_count": len(expected),
         "missing_count": len(unmatched_expected),

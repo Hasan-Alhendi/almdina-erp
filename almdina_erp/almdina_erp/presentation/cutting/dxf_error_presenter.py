@@ -387,9 +387,17 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
                 f"مقاسات الدرف في DXF لا تطابق مقاسات القص في الطلب. "
                 f"في الملف: {dxf_sizes}. المطلوب: {expected_sizes}."
             )
+        pairs = params.get("mismatch_pairs") or []
+        if pairs:
+            target_text = " ".join(
+                f"الدرفة {pair['label']}: المطلوب {pair['expected']}، الموجود في الملف {pair['actual']}."
+                for pair in pairs
+            )
+        else:
+            target_text = present_target(issue.target, params=params)
         return PresentedDxfError(
             problem,
-            present_target(issue.target, params=params),
+            target_text,
             "طابق كل مسار على CUT_PATH مع مقاس القص المحفوظ (وليس المقاس النهائي).",
             code,
             issue.category,
