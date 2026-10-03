@@ -67,6 +67,53 @@ assert.equal(defaults.remainingWidth, 64);
 assert.equal(defaults.remainingLength, 160);
 assert.equal(geometry.remainingFromCut(100, 20), 80);
 assert.equal(geometry.cutFromRemaining(100, 80), 20);
+assert.equal(geometry.clampRemaining(100, 80), 80);
+assert.equal(geometry.clampRemaining(50, 80), 49.9);
+assert.equal(geometry.adjustCutForNewTotal(100, 20, 120), 40);
+assert.equal(geometry.adjustCutForNewTotal(100, 20, 100), 20);
+
+const resizedL = {
+    piece_type: "L-Shaped Corner",
+    width_cm: 120,
+    length_cm: 220,
+    clipped_corner_position: "Top Right",
+    clipped_corner_width_cm: 20,
+    clipped_corner_length_cm: 40,
+};
+assert.equal(
+    geometry.preserveRemainingOnResize(resizedL, {
+        width: 100,
+        length: 200,
+        cutWidth: 20,
+        cutLength: 40,
+    }),
+    true,
+    "Resizing an L door must rewrite cut distances to keep remaining lengths"
+);
+assert.equal(resizedL.clipped_corner_width_cm, 40);
+assert.equal(resizedL.clipped_corner_length_cm, 60);
+assert.equal(geometry.remainingFromCut(120, resizedL.clipped_corner_width_cm), 80);
+assert.equal(geometry.remainingFromCut(220, resizedL.clipped_corner_length_cm), 160);
+assert.deepEqual(
+    geometry.baseConfig(resizedL),
+    {
+        position: "Top Right",
+        cutWidth: 40,
+        cutLength: 60,
+        remainingWidth: 80,
+        remainingLength: 160,
+        originalWidth: 120,
+        originalLength: 220,
+    },
+    "Opening the shape editor after a resize must still show the same remaining sides"
+);
+assert.equal(
+    geometry.preserveRemainingOnResize(
+        { piece_type: "Regular", width_cm: 120, clipped_corner_width_cm: 20 },
+        { width: 100, cutWidth: 20, length: 200, cutLength: 40 }
+    ),
+    false
+);
 assert.match(geometry.summary(piece), /أعلى اليمين/);
 assert.match(geometry.summary(piece), /80×160 سم متبقي/);
 assert.equal(geometry.isClipped({ piece_type: "Regular" }), false);

@@ -103,6 +103,66 @@
         return rounded(Math.max(0, total - remaining));
     }
 
+    function clampRemaining(total, remaining) {
+        total = num(total);
+        remaining = num(remaining);
+        if (total <= 0) return 0;
+        // Keep a positive remaining that still leaves a positive cut distance.
+        const maxRemaining = rounded(Math.max(0.1, total - 0.1));
+        return rounded(clamp(remaining, 0.1, maxRemaining));
+    }
+
+    function adjustCutForNewTotal(previousTotal, previousCut, nextTotal) {
+        previousTotal = num(previousTotal);
+        previousCut = num(previousCut);
+        nextTotal = num(nextTotal);
+        if (previousTotal <= 0 || nextTotal <= 0 || previousCut <= 0) return null;
+        if (previousTotal === nextTotal) return rounded(previousCut);
+        const remaining = remainingFromCut(previousTotal, previousCut);
+        return cutFromRemaining(nextTotal, clampRemaining(nextTotal, remaining));
+    }
+
+    /**
+     * When outer width/length change after the operator already set remaining
+     * lengths, keep those remaining lengths and rewrite stored cut distances.
+     * `previous` must be a snapshot taken before the committed dimension edit.
+     */
+    function preserveRemainingOnResize(row, previous) {
+        if (!isCornerCut(row) || !previous) return false;
+        let changed = false;
+        const nextWidth = num(row.width_cm);
+        const nextLength = num(row.length_cm);
+        const nextCutWidth = adjustCutForNewTotal(
+            previous.width,
+            previous.cutWidth,
+            nextWidth
+        );
+        const nextCutLength = adjustCutForNewTotal(
+            previous.length,
+            previous.cutLength,
+            nextLength
+        );
+        if (nextCutWidth != null && nextCutWidth !== num(row.clipped_corner_width_cm)) {
+            row.clipped_corner_width_cm = nextCutWidth;
+            changed = true;
+        }
+        if (nextCutLength != null && nextCutLength !== num(row.clipped_corner_length_cm)) {
+            row.clipped_corner_length_cm = nextCutLength;
+            changed = true;
+        }
+        return changed;
+    }
+
+    function resizeSnapshot(row) {
+        if (!isCornerCut(row)) return null;
+        return {
+            width: num(row.width_cm),
+            length: num(row.length_cm),
+            cutWidth: num(row.clipped_corner_width_cm),
+            cutLength: num(row.clipped_corner_length_cm),
+        };
+    }
+
     function originalDimensions(piece) {
         return {
             width: num(piece.original_w || piece.original_width_cm || piece.width_cm),
@@ -862,6 +922,10 @@
         effectiveConfig,
         remainingFromCut,
         cutFromRemaining,
+        clampRemaining,
+        adjustCutForNewTotal,
+        preserveRemainingOnResize,
+        resizeSnapshot,
         points,
         pointsAttribute,
         previewFrame,

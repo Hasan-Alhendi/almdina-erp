@@ -736,6 +736,29 @@
         return row;
     }
 
+    function captureCornerResizeSnapshot(tr, row) {
+        const geometry = window.AlmdinaClippedCornerGeometry;
+        if (!tr || !row || !geometry || typeof geometry.resizeSnapshot !== "function") return;
+        if (tr._dcoCornerResizeBase) return;
+        tr._dcoCornerResizeBase = geometry.resizeSnapshot(row);
+    }
+
+    function commitCornerResizeIfNeeded(frm, tr, row) {
+        const geometry = window.AlmdinaClippedCornerGeometry;
+        const previous = tr && tr._dcoCornerResizeBase;
+        if (tr) delete tr._dcoCornerResizeBase;
+        if (!row || !previous || !geometry || typeof geometry.preserveRemainingOnResize !== "function") {
+            return false;
+        }
+        if (!geometry.preserveRemainingOnResize(row, previous)) return false;
+        frm.dirty();
+        const tablePerf = window.AlmdinaTablePerformanceUX;
+        if (tablePerf && typeof tablePerf.refreshPieceTypeVisual === "function") {
+            tablePerf.refreshPieceTypeVisual(frm, tr, row);
+        }
+        return true;
+    }
+
     function flushMeasurementInputs(frm) {
         const field = frm && frm.fields_dict && frm.fields_dict.pieces_fast_entry;
         const root = field && field.$wrapper ? field.$wrapper.get(0) : null;
@@ -861,6 +884,15 @@
         if (root._dcoFastMeasurementsBound) return;
         root._dcoFastMeasurementsBound = true;
 
+        root.addEventListener("focusin", event => {
+            const currentFrm = root._dcoFastEntryForm;
+            const input = event.target.closest("input[data-field='width_cm'],input[data-field='length_cm']");
+            if (!input || !root.contains(input) || !currentFrm) return;
+            const tr = input.closest("tr[data-row-name]");
+            const row = rowByName(currentFrm, tr && tr.dataset.rowName);
+            if (row) captureCornerResizeSnapshot(tr, row);
+        });
+
         root.addEventListener("input", event => {
             const currentFrm = root._dcoFastEntryForm;
             const input = event.target.closest(".dco-fast-input[data-field]");
@@ -901,8 +933,11 @@
             const currentFrm = root._dcoFastEntryForm;
             const input = event.target.closest("input[data-field='width_cm'],input[data-field='length_cm']");
             if (!input || !root.contains(input) || !currentFrm) return;
+            const tr = input.closest("tr[data-row-name]");
             const row = syncInputToModel(currentFrm, input, false);
-            if (row) triggerChildField(currentFrm, row, input.dataset.field, 180);
+            if (!row) return;
+            commitCornerResizeIfNeeded(currentFrm, tr, row);
+            triggerChildField(currentFrm, row, input.dataset.field, 180);
         }, true);
 
         root.addEventListener("keydown", event => {
@@ -918,6 +953,8 @@
 
             if (event.key === "Enter" && fieldname === "width_cm") {
                 event.preventDefault();
+                const row = syncInputToModel(currentFrm, input, false);
+                if (row) commitCornerResizeIfNeeded(currentFrm, tr, row);
                 const length = tr.querySelector("input[data-field='length_cm']");
                 if (length) { length.focus({ preventScroll:true }); length.select(); }
                 return;
@@ -927,7 +964,10 @@
                 event.preventDefault();
                 event.stopPropagation();
                 const row = syncInputToModel(currentFrm, input, false);
-                if (row) triggerChildField(currentFrm, row, "length_cm", 0);
+                if (row) {
+                    commitCornerResizeIfNeeded(currentFrm, tr, row);
+                    triggerChildField(currentFrm, row, "length_cm", 0);
+                }
                 moveToNextWidth(currentFrm, tr);
             }
         });

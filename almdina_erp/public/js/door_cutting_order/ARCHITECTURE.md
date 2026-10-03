@@ -164,7 +164,9 @@ according to the existing DocType contract. `L-Shaped Corner` reuses the clipped
 editor, stored cut-from-corner distances, edge-price workflow, plan SVG, and DXF path; only the
 polygon topology changes from a five-vertex diagonal to a six-vertex right-angle L.
 The entry UI asks for the remaining length of each outer side and converts to/from the
-stored cut distances.
+stored cut distances. When the operator later changes outer `width_cm` / `length_cm`,
+the committed resize rewrites those cut distances so the previously entered remaining
+lengths stay the same (clamped only when the new outer size can no longer host them).
 Extra owns a Windows-style cascade overlay on top of that select: mouse interaction
 opens a feature-owned type menu, hovering `Extra` shows a submenu arrow and the add-on
 checkboxes immediately, and hovering an Extra type cell in edit mode previews the
