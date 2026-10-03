@@ -21,7 +21,18 @@ MAX_EXPANDED_ENTITIES = 100_000
 
 
 class DxfReadError(ValueError):
-    pass
+    """Infrastructure DXF read failure with a stable machine code."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str = "DXF_UNREADABLE",
+        params: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.params = dict(params or {})
 
 
 def _annotation_point(value: Any) -> tuple[float, float]:
@@ -161,7 +172,8 @@ def _load_ezdxf_document(ezdxf: Any, file_path: str) -> Any:
             document, _auditor = recover.readfile(file_path)
         except Exception as exc:
             raise DxfReadError(
-                "تعذر قراءة بنية ملف DXF. تأكد أن الملف DXF صالح وغير تالف."
+                "تعذر قراءة بنية ملف DXF. تأكد أن الملف DXF صالح وغير تالف.",
+                code="DXF_UNREADABLE",
             ) from exc
         return document
 
@@ -231,7 +243,10 @@ def read_dxf_geometry(
         ezdxf, ezpath = _import_ezdxf()
     except ImportError:
         if legacy_line_parser is None:
-            raise DxfReadError("مكتبة قراءة DXF غير متوفرة على الخادم.")
+            raise DxfReadError(
+                "مكتبة قراءة DXF غير متوفرة على الخادم.",
+                code="DXF_LIBRARY_MISSING",
+            )
         return _geometry_from_legacy_rows(
             legacy_line_parser(),
             relevant_layers=normalized_relevant_layers,
@@ -253,14 +268,16 @@ def read_dxf_geometry(
         nonlocal expanded_entities, has_inserts, entity_seq
         if depth > MAX_INSERT_DEPTH:
             raise DxfReadError(
-                "ملف DXF يحتوي على تداخل BLOCK/INSERT أعمق من الحد الآمن المسموح. بسّط البلوكات ثم أعد الرفع."
+                "ملف DXF يحتوي على تداخل BLOCK/INSERT أعمق من الحد الآمن المسموح. بسّط البلوكات ثم أعد الرفع.",
+                code="ENTITY_LIMIT_EXCEEDED",
             )
 
         for entity in entities:
             expanded_entities += 1
             if expanded_entities > MAX_EXPANDED_ENTITIES:
                 raise DxfReadError(
-                    "ملف DXF يحتوي على عدد كبير جدًا من العناصر بعد توسيع BLOCK/INSERT. بسّط الرسم ثم أعد الرفع."
+                    "ملف DXF يحتوي على عدد كبير جدًا من العناصر بعد توسيع BLOCK/INSERT. بسّط الرسم ثم أعد الرفع.",
+                    code="ENTITY_LIMIT_EXCEEDED",
                 )
 
             entity_type = entity.dxftype().upper()
@@ -276,7 +293,9 @@ def read_dxf_geometry(
                 if _is_minsert(entity):
                     raise DxfReadError(
                         f"البلوك {block_name or '؟'} يستخدم MINSERT متعدد الصفوف/الأعمدة، وهذا الشكل غير مدعوم بأمان. "
-                        "حوّله إلى INSERT منفصلة ثم أعد الرفع."
+                        "حوّله إلى INSERT منفصلة ثم أعد الرفع.",
+                        code="MINSERT_UNSUPPORTED",
+                        params={"block_name": block_name or "؟"},
                     )
                 try:
                     virtual_entities = entity.virtual_entities()
@@ -286,7 +305,9 @@ def read_dxf_geometry(
                 except Exception as exc:
                     raise DxfReadError(
                         f"تعذر تطبيق تحويلات BLOCK/INSERT للبلوك {block_name or '؟'}. "
-                        "تحقق من البلوك ومقياسه ودورانه ثم أعد حفظ DXF."
+                        "تحقق من البلوك ومقياسه ودورانه ثم أعد حفظ DXF.",
+                        code="DXF_UNREADABLE",
+                        params={"block_name": block_name or "؟"},
                     ) from exc
                 continue
 
@@ -315,7 +336,9 @@ def read_dxf_geometry(
                 ]
             except Exception as exc:
                 raise DxfReadError(
-                    f"تعذر تحليل عنصر {entity_type} على الطبقة {layer}. أعد حفظ الرسم كـ DXF قياسي ثم حاول مجددًا."
+                    f"تعذر تحليل عنصر {entity_type} على الطبقة {layer}. أعد حفظ الرسم كـ DXF قياسي ثم حاول مجددًا.",
+                    code="UNSUPPORTED_ENTITY",
+                    params={"entity_type": entity_type, "layer": layer},
                 ) from exc
             entity_seq += 1
             closed = _entity_is_closed(entity)

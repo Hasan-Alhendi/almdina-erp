@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import html
 from typing import Any
 
 import frappe
@@ -178,19 +177,33 @@ def _attach_validated_dxf_file(plan: Any, file_row: Any) -> None:
     )
 
 
-def _throw_dxf_validation_errors(errors: list[str]) -> None:
-    clean_errors = [str(error).strip() for error in errors if str(error).strip()]
-    if not clean_errors:
-        clean_errors = ["تعذر التحقق من ملف DXF بسبب خطأ غير معروف."]
-    visible = clean_errors[:10]
-    items = "".join(f"<li>{html.escape(error)}</li>" for error in visible)
-    remaining = len(clean_errors) - len(visible)
-    extra = f"<p>وهناك {remaining} أخطاء إضافية. صحح الأخطاء الظاهرة أولًا ثم أعد الرفع.</p>" if remaining > 0 else ""
-    message = (
-        "<p><strong>لم يتم قبول ملف DXF لأن فحص خطة القص وجد الأخطاء التالية:</strong></p>"
-        f"<ul>{items}</ul>{extra}"
-        "<p>صحح الرسم ثم أعد رفع الملف. لم يتم استبدال خطة DXF الحالية في الطلب.</p>"
+def _throw_dxf_validation_errors(
+    errors: list[str] | None = None,
+    *,
+    issues: list | None = None,
+) -> None:
+    from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
+        CATEGORY_WORKFLOW,
+        LEGACY_MESSAGE,
+        issue,
     )
+    from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import (
+        render_error_cards_html,
+    )
+
+    resolved = list(issues or [])
+    if not resolved:
+        for message in errors or []:
+            text = str(message).strip()
+            if text:
+                resolved.append(
+                    issue(
+                        LEGACY_MESSAGE,
+                        CATEGORY_WORKFLOW,
+                        params={"message": text},
+                    )
+                )
+    message = render_error_cards_html(resolved)
     frappe.throw(message, title=_("تعذر قبول ملف DXF"))
 
 
@@ -260,7 +273,7 @@ def upload_production_dxf(order_name: str, file_url: str) -> dict[str, Any]:
             settings=seed_plan_settings(order.name),
         )
     except DxfImportError as error:
-        _throw_dxf_validation_errors(error.errors)
+        _throw_dxf_validation_errors(issues=getattr(error, "issues", None), errors=error.errors)
 
     validation = custom_snapshot.get("validation") or {}
     if not validation.get("is_valid"):

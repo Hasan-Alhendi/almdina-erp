@@ -129,15 +129,14 @@ def _validate_source_identity(source: Any, plan: Any, order: Any, errors: list[s
 
 
 def _topology_validation_error(exc: Exception) -> str:
-    code = getattr(exc, "code", None)
-    if code:
-        first = getattr(exc, "first_key", None) or "?"
-        second = getattr(exc, "second_key", None) or "?"
-        return _("Persisted DXF topology validation failed ({0}) between pieces {1} and {2}.").format(
-            code,
-            first,
-            second,
-        )
+    from almdina_erp.almdina_erp.domain.cutting.dxf_issue import topology_error_to_issue
+    from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import (
+        present_issue,
+    )
+
+    if getattr(exc, "code", None):
+        card = present_issue(topology_error_to_issue(exc))
+        return f"{card.code}: {card.problem} {card.target} {card.action}"
     return _("Persisted DXF topology is invalid: {0}").format(str(exc))
 
 
@@ -288,7 +287,12 @@ def validate_cutting_plan_document(plan: Any) -> list[str]:
                         )
                     )
                 if cint(piece.rotated) and not expected_piece["allow_rotation"]:
-                    errors.append(_("Piece {0} is rotated without permission.").format(piece.piece_label))
+                    # Same business code as upload-time FORBIDDEN_ROTATION.
+                    errors.append(
+                        _("FORBIDDEN_ROTATION: Piece {0} is rotated without permission.").format(
+                            piece.piece_label
+                        )
+                    )
 
     return errors
 

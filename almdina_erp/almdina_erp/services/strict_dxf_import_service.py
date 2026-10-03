@@ -24,6 +24,26 @@ from almdina_erp.almdina_erp.domain.orders.extra_addons import (
     EXTRA_ADDON_FIELD_BY_CODE,
     physical_cut_quantity,
 )
+from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
+    CATEGORY_DIMENSIONS,
+    CATEGORY_IDENTITY,
+    CATEGORY_LAYOUT,
+    CATEGORY_PERSISTENCE,
+    APPLIED_TRIM_OVERFLOW,
+    CUT_DIMENSIONS_BIND_FAILED,
+    CUT_DIMENSIONS_MISSING,
+    CUT_SIZE_MISMATCH,
+    FORBIDDEN_ROTATION,
+    PERSISTED_CUT_SPECS,
+    PERSISTED_CUT_CONTEXT_CODES,
+    PIECE_IDENTITY_MISSING,
+    PIECE_MISSING,
+    SKIP_PERSISTED_CUT_CONTEXT_CODES,
+    SPECIAL_SIZE_MISMATCH,
+    DxfValidationIssue,
+    issue,
+    piece_target,
+)
 from almdina_erp.almdina_erp.services.dxf_import_service import (
     DxfImportError,
     parse_production_dxf as _legacy_parse_production_dxf,
@@ -74,16 +94,14 @@ def _bind_persisted_cut_dimensions(
     rows = list(getattr(order, "pieces", None) or [])
     if len(rows) != len(specs):
         raise DxfImportError(
-            "تعذر ربط مقاسات القص التصنيعية المحفوظة بقطع الطلب بشكل موثوق. "
-            "احفظ الطلب ثم أعد رفع DXF."
+            issues=[issue(CUT_DIMENSIONS_BIND_FAILED, CATEGORY_PERSISTENCE)]
         )
 
     persisted_specs: list[OrderPieceCutSpec] = []
     for row_index, (row, spec) in enumerate(zip(rows, specs), start=1):
         if spec.row_index != row_index:
             raise DxfImportError(
-                "تعذر ربط مقاسات القص التصنيعية المحفوظة بقطع الطلب بشكل موثوق. "
-                "احفظ الطلب ثم أعد رفع DXF."
+                issues=[issue(CUT_DIMENSIONS_BIND_FAILED, CATEGORY_PERSISTENCE)]
             )
         try:
             cut_width_cm = Decimal(
@@ -104,8 +122,13 @@ def _bind_persisted_cut_dimensions(
             ).quantize(_CUT_QUANTUM_CM)
         except ManufacturingRequirementsError as exc:
             raise DxfImportError(
-                f"مقاسات القص التصنيعية للقطعة رقم {row_index} غير محفوظة أو غير صالحة. "
-                "احفظ الطلب لإعادة تثبيت مقاسات القص ثم أعد رفع DXF."
+                issues=[
+                    issue(
+                        CUT_DIMENSIONS_MISSING,
+                        CATEGORY_PERSISTENCE,
+                        target=piece_target(source_piece_no=row_index),
+                    )
+                ]
             ) from exc
 
         persisted_specs.append(
@@ -197,8 +220,13 @@ def _expanded_expected(
         ).strip()
         if not row_identity:
             raise DxfImportError(
-                "لا يمكن استيراد DXF لأن إحدى قطع الطلب بلا هوية فيزيائية ثابتة. "
-                "احفظ الطلب ثم أعد رفع الملف."
+                issues=[
+                    issue(
+                        PIECE_IDENTITY_MISSING,
+                        CATEGORY_IDENTITY,
+                        target=piece_target(source_piece_no=spec.row_index),
+                    )
+                ]
             )
         for copy_no in range(1, _physical_spec_qty(order, spec) + 1):
             expected.append(
@@ -283,10 +311,37 @@ def _topology_candidate(
     return matches[0] if len(matches) == 1 else None
 
 
+def _dimension_issue(
+    code: str,
+    *,
+    spec: OrderPieceCutSpec,
+    candidate: dict[str, Any],
+    actual_w: Decimal,
+    actual_h: Decimal,
+) -> DxfValidationIssue:
+    return issue(
+        code,
+        CATEGORY_DIMENSIONS,
+        target=piece_target(
+            source_piece_no=spec.row_index,
+            copy_no=int(candidate.get("copy_no") or 1),
+            label=str(candidate.get("label") or ""),
+        ),
+        params={
+            "actual_width_cm": float(actual_w),
+            "actual_height_cm": float(actual_h),
+            "expected_width_cm": float(spec.cut_width_cm),
+            "expected_height_cm": float(spec.cut_length_cm),
+            "piece_type": spec.piece_type,
+            "spec_summary": _format_spec(spec),
+        },
+    )
+
+
 def _validate_topology_candidate_dimensions(
     piece: dict[str, Any],
     candidate: dict[str, Any],
-) -> tuple[bool | None, str | None]:
+) -> tuple[bool | None, DxfValidationIssue | None]:
     """Validate a topology-owned piece against its persisted cut envelope."""
     actual_w, actual_h = _actual_dimensions(piece)
     spec: OrderPieceCutSpec = candidate["spec"]
@@ -310,17 +365,20 @@ def _validate_topology_candidate_dimensions(
         if rotated_match:
             if spec.allow_rotation:
                 return True, None
-            return None, (
-                f"القطعة {candidate['label']}: {_format_spec(spec)}. "
-                f"DXF يحتوي {_format_decimal(actual_w)} × {_format_decimal(actual_h)} سم، "
-                "ويطابق حد حسم القشاط غير المسجل بعد التدوير، لكن التدوير غير مسموح لهذه الدرفة."
+            return None, _dimension_issue(
+                FORBIDDEN_ROTATION,
+                spec=spec,
+                candidate=candidate,
+                actual_w=actual_w,
+                actual_h=actual_h,
             )
 
-        return None, (
-            f"القطعة {candidate['label']}: {_format_spec(spec)}. "
-            f"DXF يحتوي {_format_decimal(actual_w)} × {_format_decimal(actual_h)} سم. "
-            "شكل الدرفة الخاصة حر، لكن الإطار الخارجي يجب أن يساوي مقاس القص المحفوظ "
-            "أو يكون أصغر منه بما لا يتجاوز 2 مم لكل محور، دون أي زيادة."
+        return None, _dimension_issue(
+            SPECIAL_SIZE_MISMATCH,
+            spec=spec,
+            candidate=candidate,
+            actual_w=actual_w,
+            actual_h=actual_h,
         )
 
     if dimensions_match_exact(
@@ -339,16 +397,20 @@ def _validate_topology_candidate_dimensions(
     ):
         if spec.allow_rotation:
             return True, None
-        return None, (
-            f"القطعة {candidate['label']}: {_format_spec(spec)}. "
-            f"DXF يحتوي {_format_decimal(actual_w)} × {_format_decimal(actual_h)} سم، "
-            "وهو نفس مقاس القص بعد التدوير، لكن التدوير غير مسموح لهذه الدرفة."
+        return None, _dimension_issue(
+            FORBIDDEN_ROTATION,
+            spec=spec,
+            candidate=candidate,
+            actual_w=actual_w,
+            actual_h=actual_h,
         )
 
-    return None, (
-        f"القطعة {candidate['label']}: {_format_spec(spec)}. "
-        f"DXF يحتوي {_format_decimal(actual_w)} × {_format_decimal(actual_h)} سم. "
-        "شكل الدرفة الخاصة حر، لكن الإطار الخارجي للتصنيع يجب أن يطابق مقاس القص المحفوظ تمامًا."
+    return None, _dimension_issue(
+        CUT_SIZE_MISMATCH,
+        spec=spec,
+        candidate=candidate,
+        actual_w=actual_w,
+        actual_h=actual_h,
     )
 
 
@@ -424,9 +486,9 @@ def _apply_strict_dimension_contract(
     specs: list[OrderPieceCutSpec],
     *,
     order: Any | None = None,
-) -> list[str]:
+) -> list[DxfValidationIssue]:
     """Relabel pieces and enrich them with exact order + edge-print metadata."""
-    errors: list[str] = []
+    issues: list[DxfValidationIssue] = []
     unmatched = _expanded_expected(specs, order)
 
     for sheet in snapshot.get("sheets") or []:
@@ -445,7 +507,7 @@ def _apply_strict_dimension_contract(
                     candidate,
                 )
                 if error:
-                    errors.append(error)
+                    issues.append(error)
                     continue
                 unmatched.pop(topology_index)
                 _apply_piece_contract_metadata(
@@ -455,9 +517,13 @@ def _apply_strict_dimension_contract(
                 )
                 continue
             if str(piece.get("piece_type") or "") == "Special":
-                errors.append(
-                    f"تعذر ربط الدرفة الخاصة {piece.get('label') or '؟'} "
-                    "بهوية قطعة خاصة واحدة مثبتة في الطلب. أعد تصدير DXF من الخطة الحالية ثم أعد الرفع."
+                issues.append(
+                    issue(
+                        PIECE_IDENTITY_MISSING,
+                        CATEGORY_IDENTITY,
+                        target=piece_target(label=str(piece.get("label") or "؟")),
+                        params={"piece_type": "Special"},
+                    )
                 )
                 continue
 
@@ -487,11 +553,14 @@ def _apply_strict_dimension_contract(
                 )
                 if forbidden_index is not None:
                     candidate = unmatched[forbidden_index]
-                    spec = candidate["spec"]
-                    errors.append(
-                        f"القطعة {candidate['label']}: {_format_spec(spec)}. "
-                        f"DXF يحتوي {_format_decimal(actual_w)} × {_format_decimal(actual_h)} سم، "
-                        "وهو نفس مقاس القص بعد التدوير، لكن التدوير غير مسموح لهذه الدرفة."
+                    issues.append(
+                        _dimension_issue(
+                            FORBIDDEN_ROTATION,
+                            spec=candidate["spec"],
+                            candidate=candidate,
+                            actual_w=actual_w,
+                            actual_h=actual_h,
+                        )
                     )
                     continue
 
@@ -506,16 +575,28 @@ def _apply_strict_dimension_contract(
                 except (TypeError, ValueError):
                     row_hint = None
                 if row_hint:
-                    errors.append(
-                        f"القطعة {legacy_label or '؟'}: {_format_spec(row_hint)}. "
-                        f"DXF يحتوي {_format_decimal(actual_w)} × {_format_decimal(actual_h)} سم. "
-                        "يجب أن يطابق DXF مقاس القص المحسوب تمامًا؛ لا توجد سماحية لتغيير مقاس الدرفة."
+                    issues.append(
+                        _dimension_issue(
+                            CUT_SIZE_MISMATCH,
+                            spec=row_hint,
+                            candidate={
+                                "label": legacy_label or str(row_hint.row_index),
+                                "copy_no": 1,
+                            },
+                            actual_w=actual_w,
+                            actual_h=actual_h,
+                        )
                     )
                 else:
-                    errors.append(
-                        f"وجد النظام في DXF قطعة بمقاس {_format_decimal(actual_w)} × "
-                        f"{_format_decimal(actual_h)} سم لا تطابق أي مقاس قص مطلوب في الطلب تمامًا. "
-                        "لا توجد سماحية لتغيير مقاس الدرفة."
+                    issues.append(
+                        issue(
+                            CUT_SIZE_MISMATCH,
+                            CATEGORY_DIMENSIONS,
+                            params={
+                                "actual_width_cm": float(actual_w),
+                                "actual_height_cm": float(actual_h),
+                            },
+                        )
                     )
                 continue
 
@@ -529,10 +610,14 @@ def _apply_strict_dimension_contract(
             for candidate in unmatched[:8]
         )
         suffix = " ..." if len(unmatched) > 8 else ""
-        errors.append(
-            f"ملف DXF لا يحتوي على جميع مقاسات القص المطلوبة تمامًا. المتبقي: {preview}{suffix}."
+        issues.append(
+            issue(
+                PIECE_MISSING,
+                CATEGORY_IDENTITY,
+                params={"preview": f"{preview}{suffix}"},
+            )
         )
-    return errors
+    return issues
 
 
 def _with_persisted_cut_context(
@@ -540,26 +625,23 @@ def _with_persisted_cut_context(
     specs: list[OrderPieceCutSpec],
 ) -> DxfImportError:
     """Keep the original geometry diagnosis and append persisted cut specs."""
-    text = str(error)
-    if "لا يمكن مطابقة محيطات CUT_PATH" in text:
+    issue_codes = {item.code for item in error.issues}
+    if issue_codes & SKIP_PERSISTED_CUT_CONTEXT_CODES:
         return error
-    if (
-        "سماحية" not in text
-        and "لا تطابق أي قطعة" not in text
-        and "بعد تدويرها" not in text
-    ):
+    if not (issue_codes & PERSISTED_CUT_CONTEXT_CODES):
         return error
     expected = "؛ ".join(
         f"الدرفة {spec.row_index}: {_format_spec(spec)}" for spec in specs[:8]
     )
     suffix = " ..." if len(specs) > 8 else ""
-    return DxfImportError(
-        list(error.errors)
-        + [
-            "مقاسات القص التصنيعية المحفوظة في الطلب: "
-            f"{expected}{suffix}. يجب مطابقة مقاس القص وليس المقاس النهائي، ولا توجد سماحية لتغيير مقاس الدرفة."
-        ]
-    )
+    annotated = list(error.issues) + [
+        issue(
+            PERSISTED_CUT_SPECS,
+            CATEGORY_PERSISTENCE,
+            params={"preview": f"{expected}{suffix}"},
+        )
+    ]
+    return DxfImportError(issues=annotated)
 
 
 def parse_production_dxf(
@@ -581,7 +663,16 @@ def parse_production_dxf(
     try:
         specs = build_order_piece_cut_specs(order)
     except CutDimensionError as exc:
-        raise DxfImportError(exc.errors) from exc
+        raise DxfImportError(
+            issues=[
+                issue(
+                    CUT_DIMENSIONS_MISSING,
+                    CATEGORY_PERSISTENCE,
+                    params={"message": str(message)},
+                )
+                for message in (exc.errors or ["مقاسات القص غير صالحة."])
+            ]
+        ) from exc
     specs = _bind_persisted_cut_dimensions(order, specs)
 
     try:
@@ -602,12 +693,12 @@ def parse_production_dxf(
         )
     except DxfAppliedTrimError as exc:
         raise DxfImportError(
-            "هندسة DXF تتجاوز حدود اللوح الفيزيائية ولا يمكن جعلها صالحة حتى بعد تطبيق سياسة التشذيب التكيفية."
+            issues=[issue(APPLIED_TRIM_OVERFLOW, CATEGORY_LAYOUT)]
         ) from exc
 
-    exact_errors = _apply_strict_dimension_contract(snapshot, specs, order=order)
-    if exact_errors:
-        raise DxfImportError(exact_errors)
+    exact_issues = _apply_strict_dimension_contract(snapshot, specs, order=order)
+    if exact_issues:
+        raise DxfImportError(issues=exact_issues)
 
     snapshot["dimension_contract"] = {
         "mode": "exact-edge-adjusted",
