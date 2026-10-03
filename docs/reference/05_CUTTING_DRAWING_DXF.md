@@ -165,6 +165,19 @@ DXF importer يدعم قراءة Geometry ثم يطبق validation مستقلً�
 - kerf/geometric distance rules.
 - supported entity types/layers.
 
+### عقد أخطاء DXF (Validation Issue Contract)
+
+سلسلة العرض الإلزامية:
+
+`Validator → DxfValidationIssue → Arabic Presenter → RTL Dialog`
+
+- العقد الداخلي framework-free في `domain/cutting/dxf_issue.py` (`code` + `category` + `target` + `params` + `debug`).
+- العربية والصياغة للمستخدم فقط في `presentation/cutting/dxf_error_presenter.py` (`problem` / `target` / `action`).
+- ممنوع أن يعتمد Business Logic على نص رسالة عربية؛ الفرع يكون على `issue.code` فقط.
+- رقم contour ليس رقم درفة: قبل إثبات الهوية يُعرض «مسار القص رقم N»، وبعدها «الدرفة N» أو النسخة.
+- نفس المشكلة عبر Upload / Saved Plan / Export تشارك نفس business code (مثل `FORBIDDEN_ROTATION`).
+- فشل التحقق لا يرفق الملف ولا يستبدل الخطة ولا يحدّث workflow كأن الرفع نجح.
+
 AutoCAD غالبًا يحفظ المستطيلات كـ `LWPOLYLINE` حتى لو صدّر النظام `LINE`. المستورد يجب أن يقرأ الاثنين من Modelspace. لا تعتبر “الملف فتح في AutoCAD” دليلاً كافيًا أنه صالح للإنتاج.
 
 تنزيل تبويب **الخطة المرفوعة** (والمعتمدة إذا كانت هي نفسها خطة DXF مرفوعة) يعيد بايتات ملف `Cutting Plan.dxf_file` الأصلي بعد التحقق من ارتباط الملف بالخطة. تصدير **خطة النظام** يبقى DXF R12 مولَّداً من snapshot بطبقات `SHEET_OUTLINE` و`CUT_PATH`، ويعيد كتابة طبقات Extra overlay `Liner` / `Rear Groove` / `Handle Recess` عند وجودها في snapshot، ويكتب أرقام الدرف وكتابات Extra double (`دبل القشاط` / `دبل كامل`) كـ`TEXT` داخل الدرفة على طبقة `text`. بعد تطبيع أوتوكاد يُحتفظ بجدول الطبقات الكانوني كاملاً (`0` / `SHEET_OUTLINE` / `CUT_PATH` / `OFFCUT` / `Liner` / `Rear Groove` / `Handle Recess` / `text`) حتى لو لم تُستخدم بعض الطبقات بكيانات في الملف. طبقات Extra تُزاح مع Applied Trim بنفس إزاحة محيط الدرفة حتى تبقى داخل مساحة اللوح القابلة للاستخدام. طبقات إضافية يضيفها المصمم مثل `along` ليست جزءاً من عقد الاستيراد؛ تُحفظ فقط داخل الملف الأصلي ولا يعيد مولّد R12 كتابتها.
@@ -191,6 +204,8 @@ Stage 14 يثبت أن CNC لا يستطيع التصرف كعامل الرسم 
 |---|---|
 | Geometry rule | `domain/cutting/` أو `domain/orders/` |
 | Use case plan | `application/cutting/` / `application/orders/` |
+| DXF structured issue / code | `domain/cutting/dxf_issue.py` |
+| DXF Arabic error wording | `presentation/cutting/dxf_error_presenter.py` |
 | DXF parser adapter | `infrastructure/cutting/` |
 | Frappe plan persistence | `infrastructure/frappe/orders/` |
 | Endpoint/auth wiring | `services/dxf_*`, `drawing_*`, plan services |

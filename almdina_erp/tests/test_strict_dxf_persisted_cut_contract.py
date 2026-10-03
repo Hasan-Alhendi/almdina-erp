@@ -159,7 +159,7 @@ def test_strict_contract_rejects_topology_special_with_wrong_cut_envelope():
     )
 
     assert errors
-    assert "الإطار الخارجي للتصنيع" in errors[0]
+    assert errors[0].code == "SPECIAL_SIZE_MISMATCH"
 
 
 def test_strict_contract_allows_special_rotation_only_when_order_allows_it():
@@ -195,7 +195,7 @@ def test_strict_contract_allows_special_rotation_only_when_order_allows_it():
     )
 
     assert forbidden_errors
-    assert "التدوير غير مسموح" in forbidden_errors[0]
+    assert forbidden_errors[0].code == "FORBIDDEN_ROTATION"
 
 
 def test_strict_contract_keeps_regular_pieces_dimension_bound():
@@ -223,10 +223,10 @@ def test_strict_contract_keeps_regular_pieces_dimension_bound():
     )
 
     assert errors
-    joined = "\n".join(errors)
+    assert errors[0].code == "CUT_SIZE_MISMATCH"
     # Regular pieces stay dimension-bound (exact cut only); no Special identity path.
-    assert "لا توجد سماحية" in joined
-    assert "60" in joined and "59.8" in joined
+    assert float(errors[0].params["actual_width_cm"]) == 60
+    assert float(errors[0].params["expected_width_cm"]) == 59.8
 
 
 def test_strict_contract_rejects_unproven_special_identity():
@@ -254,4 +254,4 @@ def test_strict_contract_rejects_unproven_special_identity():
     )
 
     assert errors
-    assert "تعذر ربط الدرفة الخاصة" in errors[0]
+    assert errors[0].code == "PIECE_IDENTITY_MISSING"

@@ -80,8 +80,8 @@ def test_round_trip_line_parser_is_kept_as_r12_fallback():
 def test_strict_import_contract_rejects_unmatched_or_forbidden_rotation():
     src = _source(DXF_IMPORT)
     assert "DIMENSION_TOLERANCE_MM = 2.0" in src
-    assert "لا تطابق أي قطعة متبقية" in src
-    assert "التدوير غير مسموح" in src
+    assert "FORBIDDEN_ROTATION" in src
+    assert "CUT_SIZE_MISMATCH" in src
     assert "imported-" not in src
 
 
@@ -97,8 +97,8 @@ def test_validate_imported_plan_checks_count_bounds_overlap_and_kerf():
 def test_import_enforces_sheet_and_cut_contour_topology():
     src = _source(DXF_IMPORT)
     assert "is_axis_aligned_rectangle" in src
-    assert "غير مغلق" in src
-    assert "تتقاطع مع نفسها" in src
+    assert "CUT_OPEN" in src
+    assert "CUT_SELF_INTERSECTION" in src
     assert "full_width_mm" in src
     assert "full_height_mm" in src
     assert "entity_id" in src
@@ -116,7 +116,7 @@ def test_board_dimensions_are_exact_for_sheet_outline_and_layer0_inference():
     assert "width_mm / 10.0" in src
     assert "height_mm / 10.0" in src
     assert "BOARD_DIMENSION_TOLERANCE_MM" not in src
-    assert "تتطابق أبعاد اللوح تمامًا دون سماحية" in src
+    assert "SHEET_SIZE_MISMATCH" in src
 
 
 def _board_contour(width_mm: float, height_mm: float) -> dict:
@@ -149,12 +149,14 @@ def test_sheet_outline_rejects_real_or_swapped_board_dimension_difference(
     actual_width: float,
     actual_height: float,
 ):
-    with pytest.raises(DxfImportError, match="يجب أن تتطابق أبعاد اللوح تمامًا"):
+    with pytest.raises(DxfImportError) as exc_info:
         _validate_sheet_contours(
             [_board_contour(actual_width, actual_height)],
             expected_width_mm=1220,
             expected_height_mm=2440,
         )
+    assert "SHEET_SIZE_MISMATCH" in exc_info.value.codes
+    assert "أبعاد اللوح لا تطابق الطلب" in str(exc_info.value)
 
 
 def test_sheet_outline_accepts_same_fractional_dimension_after_normalization():

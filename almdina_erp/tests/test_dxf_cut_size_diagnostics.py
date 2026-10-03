@@ -61,11 +61,13 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
     def test_forbidden_rotation_has_precise_diagnostic(self) -> None:
         with self.assertRaises(DxfImportError) as exc_info:
             _resolve_cut_topology([_rect(285, 592)], self._order((592, 285, 0)))
-        message = str(exc_info.exception)
+        error = exc_info.exception
+        self.assertIn("FORBIDDEN_ROTATION", error.codes)
+        message = str(error)
         self.assertIn("الدرفة 1", message)
-        self.assertIn("28.5 × 59.2 سم", message)
-        self.assertIn("59.2 × 28.5 سم", message)
-        self.assertIn("مدوّرة 90°", message)
+        self.assertIn("28.5", message)
+        self.assertIn("59.2", message)
+        self.assertIn("مدوّرة", message)
         self.assertIn("التدوير غير مسموح", message)
         self.assertNotIn("لا يمكن مطابقة محيطات CUT_PATH", message)
         self.assertNotIn("قريب من مقاس القص", message)
@@ -109,7 +111,8 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
         }
         with self.assertRaises(DxfImportError) as exc_info:
             _resolve_cut_topology([noisy], self._order((592, 285, 0)))
-        self.assertIn("مدوّرة 90°", str(exc_info.exception))
+        self.assertIn("FORBIDDEN_ROTATION", exc_info.exception.codes)
+        self.assertIn("مدوّرة", str(exc_info.exception))
 
     def test_legacy_forbidden_rotation_requires_exact_swapped_dimensions(self) -> None:
         expected = [{
@@ -234,7 +237,8 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
             40, 30, allow_rotation=0,
         )
         self.assertIsNone(exact_forbidden[0])
-        self.assertIn("التدوير غير مسموح", exact_forbidden[1] or "")
+        self.assertIsNotNone(exact_forbidden[1])
+        self.assertEqual(exact_forbidden[1].code, "FORBIDDEN_ROTATION")
 
     def test_non_special_piece_types_keep_exact_bbox_contract(self) -> None:
         for piece_type in ("Regular", "Extra", "Clipped Corner", "L-Shaped Corner"):
@@ -346,8 +350,26 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
         self.assertIn("قريب من مقاس القص", message)
 
     def test_strict_context_keeps_original_dxf_size_and_appends_cut_specs(self) -> None:
+        from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
+            CATEGORY_DIMENSIONS,
+            CUT_SIZE_MISMATCH,
+            PERSISTED_CUT_SPECS,
+            contour_target,
+            issue,
+        )
+
         original = DxfImportError(
-            "القطعة رقم 2 أبعادها 28.9 × 74.6 سم ولا تطابق أي قطعة متبقية في الطلب ضمن سماحية ±2 مم."
+            issues=[
+                issue(
+                    CUT_SIZE_MISMATCH,
+                    CATEGORY_DIMENSIONS,
+                    target=contour_target(2),
+                    params={
+                        "actual_width_cm": 28.9,
+                        "actual_height_cm": 74.6,
+                    },
+                )
+            ]
         )
         annotated = _with_persisted_cut_context(
             original,
@@ -368,14 +390,27 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
             ],
         )
 
+        self.assertIn(PERSISTED_CUT_SPECS, annotated.codes)
         text = str(annotated)
-        self.assertIn("28.9 × 74.6", text)
+        self.assertIn("28.9", text)
+        self.assertIn("74.6", text)
         self.assertIn("مقاسات القص التصنيعية المحفوظة", text)
-        self.assertIn("لا توجد سماحية لتغيير مقاس الدرفة", text)
 
     def test_strict_context_does_not_replace_cut_path_inventory(self) -> None:
+        from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
+            CATEGORY_IDENTITY,
+            EXPECTED_PIECE_MISMATCH,
+            issue,
+        )
+
         original = DxfImportError(
-            "لا يمكن مطابقة محيطات CUT_PATH المغلقة مع قطع الطلب المطلوبة. مقاسات DXF: 28.9 × 74.6 سم."
+            issues=[
+                issue(
+                    EXPECTED_PIECE_MISMATCH,
+                    CATEGORY_IDENTITY,
+                    params={"details": "مقاسات DXF: 28.9 × 74.6 سم."},
+                )
+            ]
         )
         annotated = _with_persisted_cut_context(original, [])
         self.assertIs(annotated, original)
