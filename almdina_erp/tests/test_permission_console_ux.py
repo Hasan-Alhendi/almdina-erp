@@ -64,8 +64,8 @@ def test_section_and_global_select_all_controls_are_present() -> None:
     assert "apc-select-all-global" in renderer
     assert "onGroupToggle" in interactions
     assert "onGlobalToggle" in interactions
-    assert "تحديد الكل للكل" in renderer
-    assert "إلغاء تحديد الكل للكل" in renderer
+    assert "تحديد الكل / إلغاء" in renderer
+    assert "إلغاء تحديد الكل" in renderer
     assert "syncBulkControls" in surface
 
 

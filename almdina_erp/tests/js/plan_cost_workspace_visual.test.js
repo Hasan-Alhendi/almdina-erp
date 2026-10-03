@@ -22,6 +22,12 @@ function makeNode() {
         classList: {
             add(value) { classes.add(value); },
             contains(value) { return classes.has(value); },
+            toggle(value, force) {
+                const shouldAdd = arguments.length > 1 ? Boolean(force) : !classes.has(value);
+                if (shouldAdd) classes.add(value);
+                else classes.delete(value);
+                return shouldAdd;
+            },
         },
         setAttribute(name, value) { attributes.set(name, String(value)); },
         removeAttribute(name) { attributes.delete(name); },

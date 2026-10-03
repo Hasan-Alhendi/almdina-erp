@@ -6,6 +6,7 @@
 }
 
 .apc-shell {
+    --apc-primary: var(--alm-primary, #172033);
     --apc-accent: var(--alm-accent, #2563eb);
     --apc-accent-soft: #eff6ff;
     --apc-radius-lg: 16px;
@@ -84,7 +85,7 @@
     font-size: clamp(20px, 2vw, 24px);
     font-weight: 900;
     letter-spacing: -0.02em;
-    color: #101828;
+    color: var(--apc-primary);
 }
 
 .apc-hero-badge {

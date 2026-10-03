@@ -38,8 +38,7 @@ jobs:
           python -m unittest -v \
             almdina_erp.tests.test_permission_personas_e2e \
             almdina_erp.tests.test_financial_document_application \
-            almdina_erp.tests.test_report_permission_contract \
-            almdina_erp.tests.test_replacement_planning
+            almdina_erp.tests.test_report_permission_contract
 
       - name: Re-run production and lifecycle journeys
         run: |

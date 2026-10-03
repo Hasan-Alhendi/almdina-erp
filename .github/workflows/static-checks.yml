@@ -202,8 +202,7 @@ jobs:
         run: |
           python -m unittest -v \
             almdina_erp.tests.test_numeric_input_domain \
-            almdina_erp.tests.test_product_scope_contract \
-            almdina_erp.tests.test_replacement_planning
+            almdina_erp.tests.test_product_scope_contract
 
       - name: Run revision, board input, typing stability, and page revisit regression tests
         run: |

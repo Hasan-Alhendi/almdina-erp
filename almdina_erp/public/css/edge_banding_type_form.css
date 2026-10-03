@@ -294,17 +294,6 @@ body.ebt-form-active .ebt-form-footer .btn {
     gap: 6px;
 }
 
-body.ebt-form-active .ebt-form-footer .ebt-footer-save {
-    background: var(--alm-accent, #2563eb);
-    border-color: var(--alm-accent, #2563eb);
-    color: #fff;
-}
-
-body.ebt-form-active .ebt-form-footer .ebt-footer-cancel {
-    background: #fff;
-    border: 1px solid #d0d5dd;
-    color: #344054;
-}
 
 @media (max-width: 900px) {
     body.ebt-form-active .ebt-form-grid--2,

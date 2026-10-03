@@ -13,7 +13,7 @@ const SPECS = Object.freeze([
         route: "factory-permissions",
         source: "factory_permissions/factory_permissions.js",
         controller: "AlmdinaFactoryPermissionsController",
-        stylesheet: "/assets/almdina_erp/css/factory_permissions.css",
+        stylesheet: "/assets/almdina_erp/css/factory_permissions.css?v=4",
         loadingMarker: "جاري تحميل مصفوفة الصلاحيات",
     },
     {
