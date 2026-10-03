@@ -164,7 +164,18 @@ function makeFrm(root, pieces) {
             pieces_fast_entry: {
                 $wrapper: {
                     get() { return root; },
-                    find() { return { length: 1, each() {} }; },
+                    find() {
+                return {
+                    length: 1,
+                    each() {},
+                    get() {
+                        return {
+                            querySelectorAll() { return []; },
+                            insertAdjacentHTML() {},
+                        };
+                    },
+                };
+            },
                     html() {},
                 },
             },
