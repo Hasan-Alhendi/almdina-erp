@@ -66,8 +66,8 @@
         const cancelLabel = esc(__("إلغاء والتراجع"));
         const saveIcon = icon("tick", "sm");
         return `
-            <button type="button" class="btn btn-default ebt-footer-cancel">${cancelLabel}</button>
-            <button type="button" class="btn btn-primary ebt-footer-save"${saveDisabled}>
+            <button type="button" class="btn alm-btn-secondary ebt-footer-cancel">${cancelLabel}</button>
+            <button type="button" class="btn alm-btn-primary ebt-footer-save"${saveDisabled}>
                 <span class="ebt-footer-save-icon" aria-hidden="true">${saveIcon}</span>
                 ${saveLabel}
             </button>`;
