@@ -159,7 +159,7 @@ function makeFrm(root, pieces) {
     let dirty = false;
     return {
         doctype: "Door Cutting Order",
-        doc: { pieces, name: "DCO-1", doctype: "Door Cutting Order" },
+        doc: { pieces, name: "DCO-1", doctype: "Door Cutting Order", docstatus: 0 },
         fields_dict: {
             pieces_fast_entry: {
                 $wrapper: {
