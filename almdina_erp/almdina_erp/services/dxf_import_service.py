@@ -55,6 +55,9 @@ from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
     ManufacturingRequirementsError,
     require_cut_dimension_cm,
 )
+from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
+    dimensions_match_exact,
+)
 from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
     OffcutPolicyError,
     canonicalize_snapshot_sources,
@@ -242,6 +245,7 @@ def _topology_error_message(
     *,
     kerf_mm: float = 0.0,
     details: str = "",
+    order: Any = None,
 ) -> str:
     first = error.first_key if error.first_key is not None else "؟"
     second = error.second_key if error.second_key is not None else "؟"
@@ -251,6 +255,25 @@ def _topology_error_message(
             "تأكد من مقاسات محيطات القطع ومن أن المسارات الإضافية هي فتحات داخلية فقط."
         )
         return f"{message} {details}".strip()
+    if error.code == "FORBIDDEN_ROTATION":
+        pieces = _expected_order_pieces(order) if order is not None else []
+        piece = (
+            pieces[error.expected_piece_index]
+            if error.expected_piece_index is not None
+            and error.expected_piece_index < len(pieces)
+            else None
+        )
+        label = piece["source_piece_no"] if piece else error.expected_piece_index + 1
+        actual_w = _format_cm((error.actual_width or 0.0) / 10.0)
+        actual_h = _format_cm((error.actual_height or 0.0) / 10.0)
+        expected_w = _format_cm((error.expected_width or 0.0) / 10.0)
+        expected_h = _format_cm((error.expected_height or 0.0) / 10.0)
+        return (
+            f"الدرفة {label} موجودة في DXF بالمقاس {actual_w} × {actual_h} سم، "
+            f"بينما مقاس القص المحفوظ لها هو {expected_w} × {expected_h} سم. "
+            "القياسات صحيحة، لكن الدرفة مدوّرة 90°، والتدوير غير مسموح لهذه الدرفة. "
+            "أعد اتجاه الدرفة فقط ثم ارفع الملف من جديد."
+        )
     if error.code == "AMBIGUOUS_CONTOUR_OWNERSHIP":
         return (
             "تركيب مسارات CUT_PATH ملتبس فعليًا: يوجد مسار داخلي يمكن اعتباره فتحة أو قطعة مستقلة من الطلب. "
@@ -767,7 +790,6 @@ def _default_layer_role_segments(
         expected_height_mm=expected_height_mm,
         overlays=overlays,
         geometry_tolerance=CONNECTIVITY_TOLERANCE_MM,
-        dimension_tolerance=DIMENSION_TOLERANCE_MM,
         infer_sheets=infer_sheets,
     )
     sheet_segments = [
@@ -907,7 +929,13 @@ def _legacy_expected_piece_match(
             expected[index]
             for index in unmatched_indexes
             if not expected[index]["allow_rotation"]
-            and _rotated_dimensions_match(
+            and dimensions_match_exact(
+                width_cm,
+                height_cm,
+                expected[index]["length_cm"],
+                expected[index]["width_cm"],
+            )
+            and not dimensions_match_exact(
                 width_cm,
                 height_cm,
                 expected[index]["width_cm"],
@@ -1043,14 +1071,16 @@ def _validate_sheet_contours(
         min_x, min_y, max_x, max_y = bbox(points)
         width_mm = max_x - min_x
         height_mm = max_y - min_y
-        if (
-            abs(width_mm - expected_width_mm) > DIMENSION_TOLERANCE_MM
-            or abs(height_mm - expected_height_mm) > DIMENSION_TOLERANCE_MM
+        if not dimensions_match_exact(
+            width_mm / 10.0,
+            height_mm / 10.0,
+            expected_width_mm / 10.0,
+            expected_height_mm / 10.0,
         ):
             errors.append(
                 f"أبعاد اللوح رقم {index} في DXF هي {_format_mm(width_mm)} × {_format_mm(height_mm)} مم، "
                 f"بينما الطلب يتطلب {_format_mm(expected_width_mm)} × {_format_mm(expected_height_mm)} مم "
-                f"(السماحية ±{_format_mm(DIMENSION_TOLERANCE_MM)} مم)."
+                "ويجب أن تتطابق أبعاد اللوح تمامًا دون سماحية."
             )
             continue
         sheets.append(
@@ -1159,6 +1189,7 @@ def _resolve_cut_topology(contours: list[dict[str, object]], order: Any) -> Reso
                 exc,
                 kerf_mm=max(0.0, flt(order.kerf_mm)),
                 details=details,
+                order=order,
             )
         ) from exc
 

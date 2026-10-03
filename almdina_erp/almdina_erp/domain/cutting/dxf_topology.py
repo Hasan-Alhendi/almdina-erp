@@ -11,6 +11,7 @@ from .dxf_geometry import (
     polygons_overlap,
     validate_polygon,
 )
+from .piece_cut_dimensions import dimensions_match_exact
 
 Point = tuple[float, float]
 Polygon = tuple[Point, ...]
@@ -25,10 +26,20 @@ class DxfTopologyError(ValueError):
         *,
         first_key: str | int | None = None,
         second_key: str | int | None = None,
+        expected_piece_index: int | None = None,
+        expected_width: float | None = None,
+        expected_height: float | None = None,
+        actual_width: float | None = None,
+        actual_height: float | None = None,
     ) -> None:
         self.code = code
         self.first_key = first_key
         self.second_key = second_key
+        self.expected_piece_index = expected_piece_index
+        self.expected_width = expected_width
+        self.expected_height = expected_height
+        self.actual_width = actual_width
+        self.actual_height = actual_height
         super().__init__(code)
 
 
@@ -335,6 +346,111 @@ def _inventory_assignment(
     return tuple(contour_to_expected[index] for index in range(len(selected)))
 
 
+def _assignment_is_unique(
+    selected: Sequence[ContourCandidate],
+    expected: Sequence[ExpectedPieceEvidence],
+    assignment: tuple[int, ...],
+    *,
+    dimension_tolerance: float,
+) -> bool:
+    """Check uniqueness by excluding each chosen edge and rematching."""
+    for contour_index, expected_index in enumerate(assignment):
+        # Small bounded variant of the same bipartite matcher; no permutations.
+        candidates = [
+            [index for index, piece in enumerate(expected)
+             if index != expected_index and _dimensions_match(
+                 selected[contour_index], piece,
+                 dimension_tolerance=dimension_tolerance,
+             )]
+            if index == contour_index else [
+                other for other, piece in enumerate(expected)
+                if _dimensions_match(selected[index], piece,
+                                     dimension_tolerance=dimension_tolerance)
+            ]
+            for index in range(len(selected))
+        ]
+        owners: dict[int, int] = {}
+
+        def assign(ci: int, visited: set[int]) -> bool:
+            for ei in candidates[ci]:
+                if ei in visited:
+                    continue
+                visited.add(ei)
+                previous = owners.get(ei)
+                if previous is None or assign(previous, visited):
+                    owners[ei] = ci
+                    return True
+            return False
+
+        if all(assign(ci, set()) for ci in sorted(range(len(selected)), key=lambda ci: (len(candidates[ci]), ci))):
+            return False
+    return True
+
+
+def _forbidden_rotation_error(
+    contours: Sequence[ContourCandidate],
+    expected: Sequence[ExpectedPieceEvidence],
+    *,
+    dimension_tolerance: float,
+) -> DxfTopologyError | None:
+    """Return a diagnostic only for a unique complete relaxed assignment."""
+    relaxed = tuple(
+        ExpectedPieceEvidence(
+            width=piece.width, height=piece.height, allow_rotation=True,
+            arbitrary_outline=piece.arbitrary_outline,
+        ) for piece in expected
+    )
+    candidate_indexes = tuple(
+        contour for contour in contours
+        if _matches_any_expected(contour, relaxed, dimension_tolerance=dimension_tolerance)
+    )
+    if len(candidate_indexes) != len(expected):
+        return None
+    assignment = _inventory_assignment(
+        candidate_indexes, relaxed, dimension_tolerance=dimension_tolerance
+    )
+    if assignment is None or not _assignment_is_unique(
+        candidate_indexes, relaxed, assignment,
+        dimension_tolerance=dimension_tolerance,
+    ):
+        return None
+    forbidden = []
+    for contour, piece_index in zip(candidate_indexes, assignment):
+        piece = expected[piece_index]
+        if piece.allow_rotation:
+            continue
+        min_x, min_y, max_x, max_y = bbox(contour.polygon)
+        width, height = max_x - min_x, max_y - min_y
+        actual_width_cm = width / 10.0
+        actual_height_cm = height / 10.0
+        expected_width_cm = piece.width / 10.0
+        expected_height_cm = piece.height / 10.0
+        exact_direct = dimensions_match_exact(
+            actual_width_cm, actual_height_cm,
+            expected_width_cm, expected_height_cm,
+        )
+        exact_rotated = dimensions_match_exact(
+            actual_width_cm, actual_height_cm,
+            expected_height_cm, expected_width_cm,
+        )
+        rotated_only = exact_rotated and not exact_direct
+        if rotated_only and piece.arbitrary_outline:
+            # Special-shape acceptance diagnostics are intentionally unchanged.
+            return None
+        if (rotated_only
+        ):
+            forbidden.append((contour, piece_index, width, height, piece))
+    if len(forbidden) != 1:
+        return None
+    contour, piece_index, width, height, piece = forbidden[0]
+    return DxfTopologyError(
+        "FORBIDDEN_ROTATION", first_key=contour.key,
+        expected_piece_index=piece_index,
+        expected_width=piece.width, expected_height=piece.height,
+        actual_width=width, actual_height=height,
+    )
+
+
 def _root_contours(
     contours: Sequence[ContourCandidate],
     *,
@@ -501,6 +617,12 @@ def resolve_contour_ownership(
     )
 
     if len(selected) < len(expected):
+        diagnostic = _forbidden_rotation_error(
+            ordered_contours, expected,
+            dimension_tolerance=dimension_tolerance,
+        )
+        if diagnostic is not None:
+            raise diagnostic
         raise DxfTopologyError("EXPECTED_PIECE_MISMATCH")
     if len(selected) > len(expected):
         if _inventory_assignment(
@@ -516,6 +638,12 @@ def resolve_contour_ownership(
         dimension_tolerance=dimension_tolerance,
     )
     if assignment is None:
+        diagnostic = _forbidden_rotation_error(
+            ordered_contours, expected,
+            dimension_tolerance=dimension_tolerance,
+        )
+        if diagnostic is not None:
+            raise diagnostic
         raise DxfTopologyError("EXPECTED_PIECE_MISMATCH")
 
     topology = _classify_selection(

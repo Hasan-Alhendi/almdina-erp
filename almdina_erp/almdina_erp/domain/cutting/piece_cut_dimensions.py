@@ -6,6 +6,7 @@ from typing import Mapping
 
 CUT_DIMENSION_QUANTUM_CM = Decimal("0.001")
 MM_PER_CM = Decimal("10")
+SPECIAL_UNRECORDED_EDGE_MAX_DEDUCTION_MM = Decimal("2")
 
 SIDE_LONG_RIGHT = "long_right"
 SIDE_LONG_LEFT = "long_left"
@@ -101,6 +102,34 @@ def calculate_cut_dimensions(
         width_deduction_mm=width_deduction_mm,
         length_deduction_mm=length_deduction_mm,
         side_thickness_mm=sides,
+    )
+
+
+def special_bbox_matches_cut_envelope_with_unrecorded_edge_deduction(
+    actual_width_cm: object,
+    actual_length_cm: object,
+    expected_width_cm: object,
+    expected_length_cm: object,
+) -> bool:
+    """Match a Special bbox equal to or up to 2 mm smaller on each axis.
+
+    This models edge deductions that were not recorded on Special order rows.
+    It is a one-sided manufacturing rule, not a symmetric dimension tolerance.
+    All operands are compared at persisted cut-dimension precision.
+    """
+    actual_width = normalize_cut_cm(actual_width_cm)
+    actual_length = normalize_cut_cm(actual_length_cm)
+    expected_width = normalize_cut_cm(expected_width_cm)
+    expected_length = normalize_cut_cm(expected_length_cm)
+    max_deduction_cm = (
+        SPECIAL_UNRECORDED_EDGE_MAX_DEDUCTION_MM / MM_PER_CM
+    )
+
+    width_deduction = expected_width - actual_width
+    length_deduction = expected_length - actual_length
+    return (
+        Decimal("0") <= width_deduction <= max_deduction_cm
+        and Decimal("0") <= length_deduction <= max_deduction_cm
     )
 
 

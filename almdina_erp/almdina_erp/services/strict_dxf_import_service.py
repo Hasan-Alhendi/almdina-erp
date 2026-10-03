@@ -18,6 +18,7 @@ from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
     CutDimensionError,
     dimensions_match_exact,
     normalize_cut_cm,
+    special_bbox_matches_cut_envelope_with_unrecorded_edge_deduction,
 )
 from almdina_erp.almdina_erp.domain.orders.extra_addons import (
     EXTRA_ADDON_FIELD_BY_CODE,
@@ -286,9 +287,41 @@ def _validate_topology_candidate_dimensions(
     piece: dict[str, Any],
     candidate: dict[str, Any],
 ) -> tuple[bool | None, str | None]:
-    """Validate a topology-owned Special against its persisted cut envelope."""
+    """Validate a topology-owned piece against its persisted cut envelope."""
     actual_w, actual_h = _actual_dimensions(piece)
     spec: OrderPieceCutSpec = candidate["spec"]
+
+    if spec.piece_type == "Special":
+        direct_match = special_bbox_matches_cut_envelope_with_unrecorded_edge_deduction(
+            actual_w,
+            actual_h,
+            spec.cut_width_cm,
+            spec.cut_length_cm,
+        )
+        if direct_match:
+            return False, None
+
+        rotated_match = special_bbox_matches_cut_envelope_with_unrecorded_edge_deduction(
+            actual_w,
+            actual_h,
+            spec.cut_length_cm,
+            spec.cut_width_cm,
+        )
+        if rotated_match:
+            if spec.allow_rotation:
+                return True, None
+            return None, (
+                f"القطعة {candidate['label']}: {_format_spec(spec)}. "
+                f"DXF يحتوي {_format_decimal(actual_w)} × {_format_decimal(actual_h)} سم، "
+                "ويطابق حد حسم القشاط غير المسجل بعد التدوير، لكن التدوير غير مسموح لهذه الدرفة."
+            )
+
+        return None, (
+            f"القطعة {candidate['label']}: {_format_spec(spec)}. "
+            f"DXF يحتوي {_format_decimal(actual_w)} × {_format_decimal(actual_h)} سم. "
+            "شكل الدرفة الخاصة حر، لكن الإطار الخارجي يجب أن يساوي مقاس القص المحفوظ "
+            "أو يكون أصغر منه بما لا يتجاوز 2 مم لكل محور، دون أي زيادة."
+        )
 
     if dimensions_match_exact(
         actual_w,
@@ -539,9 +572,11 @@ def parse_production_dxf(
 
     Topology/layers/physical board bounds/kerf remain owned by the geometry
     importer. Applied Trim is resolved over that fixed physical layout through
-    ALMADINA-138. Manufacturing identity remains exact at 0.001 cm for every
-    piece. Special outlines stay topology-owned and shape-free inside that fixed
-    persisted cut envelope.
+    ALMADINA-138. Persisted cut dimensions remain the manufacturing source of
+    truth: all non-Special pieces require exact identity at 0.001 cm, while a
+    Special bbox may be up to 2 mm smaller per axis for unrecorded edge
+    deductions, with no oversize. Special outlines remain topology-owned and
+    shape-free.
     """
     try:
         specs = build_order_piece_cut_specs(order)
@@ -576,11 +611,20 @@ def parse_production_dxf(
 
     snapshot["dimension_contract"] = {
         "mode": "exact-edge-adjusted",
-        "identity": "exact-persisted-cut",
+        "identity": "persisted-cut-envelope",
         "precision_cm": "0.001",
         "finished_dimensions_immutable": True,
         "special_outline_identity": "topology-owned",
         "special_bbox_match_required": True,
+        "special_max_unrecorded_edge_deduction_mm": 2,
+        "piece_dimension_rules": {
+            "default": "exact-persisted-cut",
+            "Special": {
+                "identity": "persisted-cut-envelope",
+                "max_unrecorded_edge_deduction_mm_per_axis": 2,
+                "oversize_allowed": False,
+            },
+        },
     }
     snapshot["print_contract"] = {
         "renderer": "canonical-cutting-plan",

@@ -11,6 +11,9 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import (
     polygons_overlap,
 )
 from almdina_erp.almdina_erp.domain.cutting.dxf_topology import polygon_contains_polygon
+from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
+    dimensions_match_exact,
+)
 from almdina_erp.almdina_erp.domain.cutting.extra_overlays import (
     ExtraOverlayCandidate,
     OVERLAY_HOST_MARGIN_MM,
@@ -29,16 +32,17 @@ def matches_board_rectangle(
     expected_width_mm: float,
     expected_height_mm: float,
     geometry_tolerance: float,
-    dimension_tolerance: float,
 ) -> bool:
     """True when a closed contour is the axis-aligned board rectangle."""
 
     if not is_axis_aligned_rectangle(polygon, geometry_tolerance):
         return False
     min_x, min_y, max_x, max_y = bbox(polygon)
-    return (
-        abs((max_x - min_x) - expected_width_mm) <= dimension_tolerance
-        and abs((max_y - min_y) - expected_height_mm) <= dimension_tolerance
+    return dimensions_match_exact(
+        (max_x - min_x) / 10.0,
+        (max_y - min_y) / 10.0,
+        expected_width_mm / 10.0,
+        expected_height_mm / 10.0,
     )
 
 
@@ -83,7 +87,6 @@ def classify_default_layer_polygons(
     expected_height_mm: float,
     overlays: Sequence[ExtraOverlayCandidate] = (),
     geometry_tolerance: float = EPSILON,
-    dimension_tolerance: float = EPSILON,
     infer_sheets: bool = True,
 ) -> tuple[tuple[Polygon, ...], tuple[Polygon, ...]]:
     """Split layer-0 closed contours into board outlines and cut doors.
@@ -106,7 +109,6 @@ def classify_default_layer_polygons(
             expected_width_mm=expected_width_mm,
             expected_height_mm=expected_height_mm,
             geometry_tolerance=geometry_tolerance,
-            dimension_tolerance=dimension_tolerance,
         ):
             sheets.append(closed)
             continue
