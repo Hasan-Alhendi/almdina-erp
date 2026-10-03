@@ -80,12 +80,13 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
                     _resolve_cut_topology(
                         [_rect(actual_width, actual_height)], order
                     )
-                self.assertIn(
-                    "لا يمكن مطابقة محيطات CUT_PATH",
-                    str(exc_info.exception),
+                message = str(exc_info.exception)
+                self.assertTrue(
+                    "PIECE_MISSING" in exc_info.exception.codes
+                    or "EXPECTED_PIECE_MISMATCH" in exc_info.exception.codes
                 )
-                self.assertNotIn("مدوّرة 90°", str(exc_info.exception))
-                self.assertNotIn("التدوير غير مسموح", str(exc_info.exception))
+                self.assertNotIn("مدوّرة 90°", message)
+                self.assertNotIn("التدوير غير مسموح", message)
 
     def test_allowed_rotation_is_accepted(self) -> None:
         _resolve_cut_topology([_rect(285, 592)], self._order((592, 285, 1)))
@@ -296,15 +297,32 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
     def test_real_size_mismatch_remains_generic(self) -> None:
         with self.assertRaises(DxfImportError) as exc_info:
             _resolve_cut_topology([_rect(570, 285)], self._order((592, 285, 0)))
-        self.assertIn("لا يمكن مطابقة محيطات CUT_PATH", str(exc_info.exception))
+        self.assertIn("EXPECTED_PIECE_MISMATCH", exc_info.exception.codes)
+        self.assertIn("لا تطابق مقاسات القص", str(exc_info.exception))
         self.assertNotIn("مدوّرة 90°", str(exc_info.exception))
 
     def test_repeated_dimensions_do_not_guess_forbidden_rotation(self) -> None:
         order = self._order((592, 285, 0), (592, 285, 0))
         with self.assertRaises(DxfImportError) as exc_info:
             _resolve_cut_topology([_rect(592, 285), _rect(285, 592)], order)
-        self.assertIn("لا يمكن مطابقة محيطات CUT_PATH", str(exc_info.exception))
+        self.assertTrue(
+            "EXPECTED_PIECE_MISMATCH" in exc_info.exception.codes
+            or "PIECE_MISSING" in exc_info.exception.codes
+        )
+        self.assertNotIn("FORBIDDEN_ROTATION", exc_info.exception.codes)
         self.assertNotIn("مدوّرة 90°", str(exc_info.exception))
+
+    def test_missing_piece_message_is_plain(self) -> None:
+        order = self._order((649, 650, 0), (400, 399, 0))
+        with self.assertRaises(DxfImportError) as exc_info:
+            _resolve_cut_topology([_rect(649, 650)], order)
+        self.assertIn("PIECE_MISSING", exc_info.exception.codes)
+        message = str(exc_info.exception)
+        self.assertIn("درفة ناقصة", message)
+        self.assertIn("يحتاج 2", message)
+        self.assertIn("فيه 1", message)
+        self.assertIn("40 × 39.9 سم", message)
+        self.assertNotIn("لا يمكن مطابقة محيطات CUT_PATH", message)
 
     def test_topology_mismatch_lists_dxf_sizes_and_near_miss(self) -> None:
         order = SimpleNamespace(
@@ -343,11 +361,10 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
             )
 
         message = str(exc_info.exception)
-        self.assertIn("مقاسات DXF", message)
+        self.assertIn("EXPECTED_PIECE_MISMATCH", exc_info.exception.codes)
+        self.assertIn("لا تطابق مقاسات القص", message)
         self.assertIn("28.9 × 74.6", message)
-        self.assertIn("مقاسات القص المطلوبة", message)
         self.assertIn("74.6 × 29.9", message)
-        self.assertIn("قريب من مقاس القص", message)
 
     def test_strict_context_keeps_original_dxf_size_and_appends_cut_specs(self) -> None:
         from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
@@ -394,7 +411,7 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
         text = str(annotated)
         self.assertIn("28.9", text)
         self.assertIn("74.6", text)
-        self.assertIn("مقاسات القص التصنيعية المحفوظة", text)
+        self.assertIn("مقاسات القص المحفوظة", text)
 
     def test_strict_context_does_not_replace_cut_path_inventory(self) -> None:
         from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (

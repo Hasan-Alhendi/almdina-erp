@@ -91,6 +91,34 @@ def test_presenter_rotation_is_actionable_arabic() -> None:
     assert "28.5" in card.action
 
 
+def test_presenter_missing_piece_is_plain_arabic() -> None:
+    from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
+        CATEGORY_IDENTITY,
+        PIECE_MISSING,
+        DxfIssueTarget,
+    )
+
+    card = present_issue(
+        issue(
+            PIECE_MISSING,
+            CATEGORY_IDENTITY,
+            target=DxfIssueTarget(kind="order"),
+            params={
+                "actual_count": 1,
+                "expected_count": 2,
+                "missing_count": 1,
+                "missing_sizes": ["40 × 39.9 سم"],
+            },
+        )
+    )
+    assert card.problem == "يوجد درفة ناقصة في ملف DXF."
+    assert "يحتاج 2" in card.target
+    assert "فيه 1" in card.target
+    assert "40 × 39.9 سم" in card.action
+    assert "CUT_PATH" in card.action
+    assert "لا يمكن مطابقة" not in card.problem
+
+
 def test_presenter_groups_open_contours() -> None:
     from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import (
         present_issues,

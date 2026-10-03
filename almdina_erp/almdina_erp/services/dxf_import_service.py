@@ -250,23 +250,124 @@ def _cut_topology_mismatch_details(
     candidates: tuple[ContourCandidate, ...],
     order: Any,
 ) -> str:
-    dxf_sizes = _format_size_counts(
-        Counter(_bbox_size_label_cm(candidate.polygon) for candidate in candidates)
-    )
-    expected_sizes = _format_size_counts(
-        Counter(
-            f"{_format_cm(piece['width_cm'])} × {_format_cm(piece['length_cm'])} سم"
-            for piece in _expected_order_pieces(order)
-        )
-    )
+    """Legacy diagnostic prose kept for debug params only (not user-facing authority)."""
+    inventory = _inventory_mismatch_params(candidates, order)
     parts = [
-        f"مقاسات DXF: {dxf_sizes}.",
-        f"مقاسات القص المطلوبة: {expected_sizes}.",
-        "ارسم بمقاس القص المحفوظ وليس المقاس النهائي، ولا تترك مسارات إضافية على CUT_PATH.",
+        f"مقاسات DXF: {inventory.get('dxf_sizes_label') or 'لا توجد'}.",
+        f"مقاسات القص المطلوبة: {inventory.get('expected_sizes_label') or 'لا توجد'}.",
     ]
     parts.extend(_finished_size_hints(candidates, order)[:2])
     parts.extend(_near_miss_size_hints(candidates, order)[:2])
     return " ".join(parts)
+
+
+def _inventory_mismatch_params(
+    candidates: tuple[ContourCandidate, ...],
+    order: Any,
+) -> dict[str, Any]:
+    """Count/size facts for clear missing/extra/mismatch presentation."""
+    expected = _expected_order_pieces(order)
+    tol = DIMENSION_TOLERANCE_MM / 10.0
+    dxf_sizes: list[tuple[float, float]] = []
+    for candidate in candidates:
+        min_x, min_y, max_x, max_y = bbox(candidate.polygon)
+        dxf_sizes.append(((max_x - min_x) / 10.0, (max_y - min_y) / 10.0))
+
+    unmatched_expected = list(expected)
+    unmatched_dxf: list[tuple[float, float]] = []
+    for width_cm, height_cm in dxf_sizes:
+        match_index = None
+        for index, piece in enumerate(unmatched_expected):
+            matches = _size_matches(
+                width_cm,
+                height_cm,
+                piece["width_cm"],
+                piece["length_cm"],
+                tol=tol,
+            ) or (
+                bool(piece["allow_rotation"])
+                and _size_matches(
+                    width_cm,
+                    height_cm,
+                    piece["length_cm"],
+                    piece["width_cm"],
+                    tol=tol,
+                )
+            )
+            if matches:
+                match_index = index
+                break
+        if match_index is None:
+            unmatched_dxf.append((width_cm, height_cm))
+        else:
+            unmatched_expected.pop(match_index)
+
+    return {
+        "actual_count": len(candidates),
+        "expected_count": len(expected),
+        "missing_count": len(unmatched_expected),
+        "extra_count": len(unmatched_dxf),
+        "missing_labels": [str(piece["label"]) for piece in unmatched_expected],
+        "missing_sizes": [
+            f"{_format_cm(piece['width_cm'])} × {_format_cm(piece['length_cm'])} سم"
+            for piece in unmatched_expected
+        ],
+        "extra_sizes": [
+            f"{_format_cm(width_cm)} × {_format_cm(height_cm)} سم"
+            for width_cm, height_cm in unmatched_dxf
+        ],
+        "dxf_sizes_label": _format_size_counts(
+            Counter(_bbox_size_label_cm(candidate.polygon) for candidate in candidates)
+        ),
+        "expected_sizes_label": _format_size_counts(
+            Counter(
+                f"{_format_cm(piece['width_cm'])} × {_format_cm(piece['length_cm'])} سم"
+                for piece in expected
+            )
+        ),
+        "details": "",  # filled by caller for debug only when needed
+    }
+
+
+def _expected_piece_mismatch_issue(
+    error: DxfTopologyError,
+    *,
+    candidates: tuple[ContourCandidate, ...],
+    order: Any,
+    kerf_mm: float,
+) -> DxfValidationIssue:
+    """Map topology inventory failure to missing / extra / size-mismatch issue."""
+    params = _inventory_mismatch_params(candidates, order)
+    details = _cut_topology_mismatch_details(candidates, order)
+    params["details"] = details
+    params["kerf_mm"] = kerf_mm
+    params["topology_code"] = error.code
+
+    actual = int(params["actual_count"])
+    expected = int(params["expected_count"])
+    if actual < expected:
+        return issue(
+            PIECE_MISSING,
+            CATEGORY_IDENTITY,
+            target=DxfIssueTarget(kind="order"),
+            params=params,
+            debug={"topology_code": error.code},
+        )
+    if actual > expected:
+        return issue(
+            EXTRA_CUT_PATH,
+            CATEGORY_IDENTITY,
+            target=DxfIssueTarget(kind="order"),
+            params=params,
+            debug={"topology_code": error.code},
+        )
+    return issue(
+        EXPECTED_PIECE_MISMATCH,
+        CATEGORY_IDENTITY,
+        target=DxfIssueTarget(kind="order"),
+        params=params,
+        debug={"topology_code": error.code},
+    )
 
 
 def _size_matches(width: float, height: float, expected_w: float, expected_h: float, *, tol: float) -> bool:
@@ -1350,15 +1451,22 @@ def _resolve_cut_topology(contours: list[dict[str, object]], order: Any) -> Reso
             geometry_tolerance=GEOMETRY_TOLERANCE_MM,
         )
     except DxfTopologyError as exc:
-        details = ""
         if exc.code == "EXPECTED_PIECE_MISMATCH":
-            details = _cut_topology_mismatch_details(candidates, order)
+            raise DxfImportError(
+                issues=[
+                    _expected_piece_mismatch_issue(
+                        exc,
+                        candidates=candidates,
+                        order=order,
+                        kerf_mm=max(0.0, flt(order.kerf_mm)),
+                    )
+                ]
+            ) from exc
         raise DxfImportError(
             issues=[
                 _topology_error_issue(
                     exc,
                     kerf_mm=max(0.0, flt(order.kerf_mm)),
-                    details=details,
                     order=order,
                 )
             ]
@@ -1836,19 +1944,20 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
             piece["offcut_execution_party"] = "UNASSIGNED"
 
     expected_count = len(_expected_order_pieces(order))
-    if len(pieces) != expected_count:
+    actual_count = len(pieces)
+    if actual_count != expected_count:
+        count_code = PIECE_MISSING if actual_count < expected_count else EXTRA_CUT_PATH
         raise DxfImportError(
             issues=[
                 issue(
-                    EXPECTED_PIECE_MISMATCH,
+                    count_code,
                     CATEGORY_IDENTITY,
+                    target=DxfIssueTarget(kind="order"),
                     params={
-                        "actual_count": len(pieces),
+                        "actual_count": actual_count,
                         "expected_count": expected_count,
-                        "details": (
-                            f"عدد مسارات القطع الفعلية في DXF هو {len(pieces)} "
-                            f"بينما الطلب يتطلب {expected_count} قطعة بالضبط."
-                        ),
+                        "missing_count": max(0, expected_count - actual_count),
+                        "extra_count": max(0, actual_count - expected_count),
                     },
                 )
             ]

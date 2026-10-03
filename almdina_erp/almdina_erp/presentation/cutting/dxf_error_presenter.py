@@ -106,7 +106,16 @@ def present_target(target: DxfIssueTarget, *, params: dict[str, Any] | None = No
             return f"إحدى نسخ الدرفة {piece_no}."
         return f"الدرفة {piece_no}."
     if kind == codes.TARGET_ORDER:
-        return "الطلب / خطة القص."
+        actual = params.get("actual_count")
+        expected = params.get("expected_count")
+        if actual is not None and expected is not None:
+            return (
+                f"الطلب يحتاج {expected} "
+                f"{'درفة' if int(expected) == 1 else 'درفات'}، "
+                f"والملف فيه {actual} "
+                f"{'درفة' if int(actual) == 1 else 'درفات'}."
+            )
+        return "الطلب."
     if target.label:
         return f"{target.label}."
     return "غير محدد."
@@ -291,12 +300,8 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
             params.get("expected_width_cm", _mm_to_cm(params.get("expected_width_mm"))),
             params.get("expected_height_cm", _mm_to_cm(params.get("expected_height_mm"))),
         )
-        actual = _size_cm(
-            params.get("actual_width_cm", _mm_to_cm(params.get("actual_width_mm"))),
-            params.get("actual_height_cm", _mm_to_cm(params.get("actual_height_mm"))),
-        )
         return PresentedDxfError(
-            f"الدرفة مدوّرة والتدوير غير مسموح. الموجود {actual} بينما المطلوب {expected}.",
+            "الدرفة مدوّرة والتدوير غير مسموح.",
             target_text,
             f"أعد اتجاه الدرفة إلى {expected}.",
             code,
@@ -312,55 +317,80 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
             params.get("expected_width_cm", params.get("expected_w")),
             params.get("expected_height_cm", params.get("expected_h")),
         )
-        problem = f"مقاس القص غير مطابق. الموجود {actual}"
         if params.get("expected_width_cm") is not None or params.get("expected_w") is not None:
-            problem += f" والمطلوب {expected}"
-        problem += "."
-        action = (
-            f"اجعل CUT_PATH بمقاس {expected}."
-            if params.get("expected_width_cm") is not None or params.get("expected_w") is not None
-            else "طابق مقاس القص المحفوظ في الطلب تمامًا على CUT_PATH."
-        )
+            problem = f"مقاس القص غير مطابق. الموجود {actual} والمطلوب {expected}."
+            action = f"اجعل CUT_PATH بمقاس {expected}."
+        else:
+            problem = f"مقاس القص غير مطابق. الموجود {actual}."
+            action = "طابق مقاس القص المحفوظ في الطلب على CUT_PATH."
         return PresentedDxfError(problem, target_text, action, code, issue.category)
 
     if code == codes.SPECIAL_SIZE_MISMATCH:
-        actual = _size_cm(
-            params.get("actual_width_cm", params.get("actual_w")),
-            params.get("actual_height_cm", params.get("actual_h")),
-        )
         return PresentedDxfError(
-            f"مقاس الدرفة الخاصة خارج المجال المسموح. الموجود {actual}.",
+            "مقاس الدرفة الخاصة خارج المجال المسموح.",
             target_text,
             _special_range_action(params),
             code,
             issue.category,
         )
 
-    if code == codes.EXPECTED_PIECE_MISMATCH:
-        details = str(params.get("details") or "").strip()
-        problem = "لا يمكن مطابقة محيطات CUT_PATH المغلقة مع قطع الطلب المطلوبة."
-        if details:
-            problem = f"{problem} {details}"
+    if code == codes.PIECE_MISSING:
+        missing_sizes = [str(item) for item in (params.get("missing_sizes") or []) if item]
+        missing_count = int(params.get("missing_count") or len(missing_sizes) or 1)
+        preview = str(params.get("preview") or "").strip()
+        if missing_count == 1:
+            problem = "يوجد درفة ناقصة في ملف DXF."
+        else:
+            problem = f"يوجد {missing_count} درفات ناقصة في ملف DXF."
+        if missing_sizes:
+            action = (
+                f"أضف على CUT_PATH الدرفة الناقصة بمقاس {missing_sizes[0]}."
+                if len(missing_sizes) == 1
+                else f"أضف على CUT_PATH الدرفات الناقصة بهذه المقاسات: {'، '.join(missing_sizes)}."
+            )
+        elif preview:
+            action = f"أضف الدرفات الناقصة على CUT_PATH: {preview}."
+        else:
+            action = "أضف الدرفة الناقصة على CUT_PATH ثم أعد الرفع."
+        count_target = present_target(issue.target, params=params)
+        return PresentedDxfError(problem, count_target, action, code, issue.category)
+
+    if code == codes.EXTRA_CUT_PATH:
+        extra_sizes = [str(item) for item in (params.get("extra_sizes") or []) if item]
+        extra_count = int(params.get("extra_count") or len(extra_sizes) or 1)
+        if extra_count == 1:
+            problem = "يوجد مسار قص زائد في ملف DXF."
+        else:
+            problem = f"يوجد {extra_count} مسارات قص زائدة في ملف DXF."
+        if extra_sizes:
+            action = (
+                f"احذف من CUT_PATH المسار الزائد بمقاس {extra_sizes[0]}."
+                if len(extra_sizes) == 1
+                else f"احذف من CUT_PATH المسارات الزائدة بهذه المقاسات: {'، '.join(extra_sizes)}."
+            )
+        else:
+            action = "احذف المسارات الزائدة من CUT_PATH ثم أعد الرفع."
         return PresentedDxfError(
             problem,
-            target_text,
-            "تأكد من مقاسات محيطات القطع ومن أن المسارات الإضافية هي فتحات داخلية فقط.",
+            present_target(issue.target, params=params),
+            action,
             code,
             issue.category,
         )
 
-    if code == codes.PIECE_MISSING:
-        preview = str(params.get("preview") or "")
-        problem = "ملف DXF لا يحتوي على جميع مقاسات القص المطلوبة تمامًا."
-        if preview:
-            problem = f"{problem} المتبقي: {preview}."
-        return PresentedDxfError(problem, target_text, "أضف القطع الناقصة على CUT_PATH ثم أعد الرفع.", code, issue.category)
-
-    if code == codes.EXTRA_CUT_PATH:
+    if code == codes.EXPECTED_PIECE_MISMATCH:
+        dxf_sizes = str(params.get("dxf_sizes_label") or "").strip()
+        expected_sizes = str(params.get("expected_sizes_label") or "").strip()
+        problem = "مقاسات الدرف في DXF لا تطابق مقاسات القص في الطلب."
+        if dxf_sizes and expected_sizes:
+            problem = (
+                f"مقاسات الدرف في DXF لا تطابق مقاسات القص في الطلب. "
+                f"في الملف: {dxf_sizes}. المطلوب: {expected_sizes}."
+            )
         return PresentedDxfError(
-            "يوجد مسار CUT_PATH إضافي لا يطابق أي قطعة في الطلب.",
-            target_text,
-            "أزل المسارات الزائدة من CUT_PATH أو طابقها مع قطع الطلب.",
+            problem,
+            present_target(issue.target, params=params),
+            "طابق كل مسار على CUT_PATH مع مقاس القص المحفوظ (وليس المقاس النهائي).",
             code,
             issue.category,
         )
@@ -385,33 +415,33 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
 
     if code == codes.AMBIGUOUS_CONTOUR_OWNERSHIP:
         return PresentedDxfError(
-            "تركيب مسارات CUT_PATH ملتبس: يوجد مسار داخلي يمكن اعتباره فتحة أو قطعة مستقلة.",
+            "يوجد مسار داخلي غير واضح: هل هو فتحة أم درفة مستقلة؟",
             target_text,
-            "افصل القطعة المستقلة عن الفتحة أو اجعل الفتحة مملوكة بوضوح لمحيط خارجي واحد.",
+            "اجعل الفتحة داخل درفة واحدة بوضوح، أو افصل الدرفة المستقلة.",
             code,
             issue.category,
         )
     if code == codes.UNRESOLVED_CONTOUR_OWNERSHIP:
         return PresentedDxfError(
-            "تعذر تحديد القطع والفتحات الداخلية في CUT_PATH بشكل مؤكد.",
+            "تعذر تمييز الدرف عن الفتحات الداخلية.",
             target_text,
-            "تأكد أن كل فتحة مغلقة بالكامل داخل قطعة واحدة دون تلامس ملتبس.",
+            "أغلق كل فتحة بالكامل داخل درفتها دون تلامس ملتبس.",
             code,
             issue.category,
         )
     if code == codes.INVALID_PART_TOPOLOGY:
         return PresentedDxfError(
-            "بنية إحدى القطع أو فتحاتها الداخلية غير صالحة.",
+            "شكل إحدى الدرف أو فتحاتها غير صالح.",
             target_text,
-            "يجب أن تكون الحدود مغلقة وغير متقاطعة، وأن تبقى كل فتحة داخل محيط القطعة.",
+            "أغلق المحيط وأزل التقاطعات ثم أعد الرفع.",
             code,
             issue.category,
         )
     if code == codes.MATERIAL_OVERLAP:
         return PresentedDxfError(
-            "الدرفتان تتداخلان في مادة اللوح.",
+            "الدرفتان متداخلتان على اللوح.",
             target_text,
-            "افصل الدرفتين أو ضع الدرفة الداخلية بالكامل داخل فتحة صالحة.",
+            "افصل الدرفتين عن بعضهما.",
             code,
             issue.category,
         )
@@ -420,24 +450,24 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
         return PresentedDxfError(
             "المسافة بين الدرفتين أقل من Kerf.",
             target_text,
-            f"اجعل المسافة بينهما {kerf} مم أو أكثر.",
+            f"اجعل المسافة {kerf} مم أو أكثر.",
             code,
             issue.category,
         )
     if code == codes.HOLE_CLEARANCE_VIOLATION:
         kerf = format_mm(params.get("kerf_mm") or 0)
         return PresentedDxfError(
-            "القطعة داخل الفتحة أقرب من حافة الفتحة أكثر من المسموح.",
+            "الدرفة داخل الفتحة قريبة جدًا من حافة الفتحة.",
             target_text,
-            f"حافظ على مسافة Kerf لا تقل عن {kerf} مم من حدود الفتحة.",
+            f"اترك مسافة Kerf لا تقل عن {kerf} مم من حدود الفتحة.",
             code,
             issue.category,
         )
     if code == codes.PIECE_OUTSIDE_SHEET:
         return PresentedDxfError(
-            "الدرفة تتجاوز حدود المساحة القابلة للاستخدام من اللوح.",
+            "الدرفة خارج حدود اللوح.",
             target_text,
-            "حرّك الدرفة داخل حدود اللوح ثم أعد الرفع.",
+            "حرّك الدرفة داخل اللوح ثم أعد الرفع.",
             code,
             issue.category,
         )
@@ -467,23 +497,23 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
         )
     if code == codes.APPLIED_TRIM_OVERFLOW:
         return PresentedDxfError(
-            "هندسة DXF تتجاوز حدود اللوح الفيزيائية ولا يمكن جعلها صالحة حتى بعد التشذيب التكيفي.",
+            "الدرف تتجاوز حدود اللوح حتى بعد التشذيب.",
             "اللوح.",
-            "صحح مواضع القطع داخل اللوح ثم أعد الرفع.",
+            "حرّك الدرف داخل اللوح ثم أعد الرفع.",
             code,
             issue.category,
         )
     if code == codes.CUT_DIMENSIONS_MISSING:
         return PresentedDxfError(
-            "مقاسات القص التصنيعية غير محفوظة أو غير صالحة.",
+            "مقاسات القص غير محفوظة في الطلب.",
             target_text,
-            "احفظ الطلب لإعادة تثبيت مقاسات القص ثم أعد رفع DXF.",
+            "احفظ الطلب ثم أعد رفع DXF.",
             code,
             issue.category,
         )
     if code == codes.CUT_DIMENSIONS_BIND_FAILED:
         return PresentedDxfError(
-            "تعذر ربط مقاسات القص التصنيعية المحفوظة بقطع الطلب بشكل موثوق.",
+            "تعذر ربط مقاسات القص بصفوف الطلب.",
             "الطلب.",
             "احفظ الطلب ثم أعد رفع DXF.",
             code,
@@ -491,13 +521,13 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
         )
     if code == codes.PERSISTED_CUT_SPECS:
         preview = str(params.get("preview") or "")
-        problem = "مقاسات القص التصنيعية المحفوظة في الطلب تحتاج مطابقة دقيقة."
+        problem = "راجع مقاسات القص المحفوظة في الطلب."
         if preview:
-            problem = f"مقاسات القص التصنيعية المحفوظة في الطلب: {preview}."
+            problem = f"مقاسات القص المحفوظة: {preview}."
         return PresentedDxfError(
             problem,
             "الطلب.",
-            "يجب مطابقة مقاس القص وليس المقاس النهائي. للقطع العادية طابق المقاس تمامًا؛ وللخاصة التزم بالمجال المسموح.",
+            "طابق مقاس القص (وليس المقاس النهائي).",
             code,
             issue.category,
         )
@@ -505,27 +535,27 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
     if code == codes.OVERLAY_ON_NON_EXTRA:
         layer = params.get("layer") or issue.target.layer or "؟"
         return PresentedDxfError(
-            f"العلامة على الطبقة {layer} تقع على درفة ليست Extra.",
+            f"علامة الطبقة {layer} على درفة ليست Extra.",
             target_text,
-            "ضع علامات اللاينر وفرزة الظهر ومسكة الغطس داخل درفة Extra فقط.",
+            "ضع العلامة داخل درفة Extra فقط.",
             code,
             issue.category,
         )
     if code == codes.OVERLAY_FLOATING:
         layer = params.get("layer") or issue.target.layer or "؟"
         return PresentedDxfError(
-            f"العلامة على الطبقة {layer} ليست بالكامل داخل درفة Extra واحدة.",
+            f"علامة الطبقة {layer} ليست بالكامل داخل درفة Extra.",
             target_text,
-            "ضع العلامة بالكامل داخل درفة Extra ثم أعد الرفع.",
+            "ضع العلامة بالكامل داخل درفة Extra واحدة.",
             code,
             issue.category,
         )
     if code == codes.OVERLAY_SPANS_HOSTS:
         layer = params.get("layer") or issue.target.layer or "؟"
         return PresentedDxfError(
-            f"العلامة على الطبقة {layer} تمتد فوق أكثر من درفة.",
+            f"علامة الطبقة {layer} تمتد فوق أكثر من درفة.",
             target_text,
-            "ضع كل علامة داخل درفة Extra واحدة ثم أعد الرفع.",
+            "ضع كل علامة داخل درفة Extra واحدة.",
             code,
             issue.category,
         )
@@ -533,9 +563,9 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
         layer = params.get("layer") or "؟"
         kind_name = _OVERLAY_KIND_AR.get(str(params.get("overlay_kind") or ""), layer)
         return PresentedDxfError(
-            f"العلامة على الطبقة {layer} ({kind_name}) مرسومة دون تفعيل الخانة المطابقة في جدول القياسات.",
+            f"رسمت علامة {kind_name} دون تفعيل خانة الطلب.",
             target_text,
-            "أزل العلامة من الرسم أو فعّل الخانة في صف Extra ثم احفظ الطلب وأعد الرفع.",
+            "فعّل الخانة في جدول القياسات أو احذف العلامة من الرسم.",
             code,
             issue.category,
         )
@@ -543,9 +573,9 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
         layer = params.get("layer") or "؟"
         kind_name = _OVERLAY_KIND_AR.get(str(params.get("overlay_kind") or ""), layer)
         return PresentedDxfError(
-            f"خانة {kind_name} مفعّلة في جدول القياسات، لكن ملف DXF لا يحتوي علامة على الطبقة {layer}.",
+            f"خانة {kind_name} مفعّلة لكن العلامة ناقصة في DXF.",
             target_text,
-            f"أضف علامة {kind_name} على الطبقة {layer} داخل درفة Extra ثم أعد الرفع.",
+            f"أضف علامة {kind_name} على الطبقة {layer} داخل الدرفة.",
             code,
             issue.category,
         )
@@ -553,34 +583,34 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
         layer = params.get("layer") or "؟"
         kind_name = _OVERLAY_KIND_AR.get(str(params.get("overlay_kind") or ""), layer)
         return PresentedDxfError(
-            f"خانة {kind_name} مفعّلة مرة واحدة، لكن DXF يحتوي أكثر من علامة على الطبقة {layer}.",
+            f"يوجد أكثر من علامة {kind_name} لنفس الدرفة.",
             target_text,
-            "اترك علامة واحدة مطابقة للخانة ثم أعد الرفع.",
+            "اترك علامة واحدة فقط ثم أعد الرفع.",
             code,
             issue.category,
         )
     if code == codes.OVERLAY_INVALID_PATH:
         layer = params.get("layer") or "؟"
         return PresentedDxfError(
-            f"العلامة على الطبقة {layer} أقصر من أن تُقرأ.",
+            f"علامة الطبقة {layer} قصيرة جدًا ولا تُقرأ.",
             target_text,
-            "ارسم خطًا أو مسارًا واضحًا ثم أعد الرفع.",
+            "ارسم خطًا أو مسارًا أوضح.",
             code,
             issue.category,
         )
     if code == codes.OFFCUT_IDENTITY_MISMATCH:
         return PresentedDxfError(
-            "محيط OFFCUT لا يرتبط بقطعة فيزيائية واحدة بشكل مؤكد.",
+            "مسار OFFCUT لا يطابق درفة واحدة بوضوح.",
             target_text,
-            "يجب أن يطابق محيط OFFCUT محيط قطعة قص واحدة تمامًا دون تداخل أو تخمين.",
+            "اجعل محيط OFFCUT مطابقًا لمحيط درفة واحدة تمامًا.",
             code,
             issue.category,
         )
     if code == codes.MIXED_RESOURCE_SOURCE:
         return PresentedDxfError(
-            "لا يمكن أن يحتوي نفس مصدر القص على قطع نقص وقطع من لوح كامل.",
+            "لا تخلط درفات OFFCUT مع درفات اللوح الكامل على نفس المصدر.",
             target_text,
-            "ضع قطع OFFCUT كمصدر مستقل عن ألواح MDF الكاملة.",
+            "افصل قطع OFFCUT في مصدر مستقل.",
             code,
             issue.category,
         )
