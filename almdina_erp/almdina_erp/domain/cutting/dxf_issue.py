@@ -230,13 +230,13 @@ def sort_issues(issues: list[DxfValidationIssue]) -> list[DxfValidationIssue]:
 
 
 # Codes that receive persisted cut-spec annotation after a dimension failure.
+# Inventory count failures already name the missing/extra size in their own card.
 PERSISTED_CUT_CONTEXT_CODES: frozenset[str] = frozenset(
     {
         CUT_SIZE_MISMATCH,
         SPECIAL_SIZE_MISMATCH,
         FORBIDDEN_ROTATION,
         PIECE_IDENTITY_MISSING,
-        PIECE_MISSING,
     }
 )
 
@@ -245,6 +245,7 @@ SKIP_PERSISTED_CUT_CONTEXT_CODES: frozenset[str] = frozenset(
     {
         EXPECTED_PIECE_MISMATCH,
         EXTRA_CUT_PATH,
+        PIECE_MISSING,
     }
 )
 

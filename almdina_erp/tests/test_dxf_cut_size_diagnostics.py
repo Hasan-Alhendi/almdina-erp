@@ -432,6 +432,34 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
         annotated = _with_persisted_cut_context(original, [])
         self.assertIs(annotated, original)
 
+    def test_strict_context_does_not_append_specs_for_missing_piece(self) -> None:
+        from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
+            CATEGORY_IDENTITY,
+            PERSISTED_CUT_SPECS,
+            PIECE_MISSING,
+            DxfIssueTarget,
+            issue,
+        )
+
+        original = DxfImportError(
+            issues=[
+                issue(
+                    PIECE_MISSING,
+                    CATEGORY_IDENTITY,
+                    target=DxfIssueTarget(kind="order"),
+                    params={
+                        "actual_count": 1,
+                        "expected_count": 2,
+                        "missing_count": 1,
+                        "missing_sizes": ["40 × 39.9 سم"],
+                    },
+                )
+            ]
+        )
+        annotated = _with_persisted_cut_context(original, [])
+        self.assertIs(annotated, original)
+        self.assertNotIn(PERSISTED_CUT_SPECS, annotated.codes)
+
 
 if __name__ == "__main__":
     unittest.main()
