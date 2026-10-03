@@ -37,6 +37,9 @@ EXTRA_ADDONS = (
     DCO_JS / "order_entry" / "extra_addons" / "door_cutting_order_extra_addons_ux.js"
 )
 CORNER_UX = DCO_JS / "drawing" / "door_cutting_order_clipped_corner_ux.js"
+SAVE_RENDER_UX = (
+    DCO_JS / "core" / "door_cutting_order_save_render_performance_ux.js"
+)
 PLAN_RENDERER = DCO_JS / "cutting_plan" / "door_cutting_order_cutting_plan_renderer.js"
 PIECE_GEOMETRY = DCO_JS / "cutting_plan" / "door_cutting_order_piece_geometry.js"
 SECURE_DXF = DCO_JS / "cutting_plan" / "secure_dxf_export.js"
@@ -120,6 +123,10 @@ def test_fast_measurements_offer_one_click_corner_settings_with_live_visual_prev
     assert "data-corner-preview" in editor
     assert "edgeBandSvgMarkup" in editor
     assert 'set_value(row.doctype, row.name, "edge_break"' in editor
+    assert "refreshFastTable(frm)" in editor
+    save_render = SAVE_RENDER_UX.read_text(encoding="utf-8")
+    assert "function syncCornerEdgesSummary" in save_render
+    assert "edgeSelectionSummary" in save_render
     assert "جعل الجزءين المتبقيين متساويين" in editor
     assert "المتبقي على ضلع العرض" in editor
     assert "data-corner-remaining" in editor

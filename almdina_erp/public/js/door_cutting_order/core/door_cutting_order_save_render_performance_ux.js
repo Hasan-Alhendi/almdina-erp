@@ -119,8 +119,35 @@
         if (mark) mark.textContent = checked ? "✓" : "";
     }
 
+    function syncCornerEdgesSummary(frm, tr, row, editable) {
+        const cell = tr.querySelector(".dco-col-edges");
+        if (!cell) return;
+        const cornerGeometry = window.AlmdinaClippedCornerGeometry;
+        const isCorner = Boolean(
+            cornerGeometry
+            && typeof cornerGeometry.isCornerCut === "function"
+            && cornerGeometry.isCornerCut(row)
+        );
+        if (!isCorner) return;
+
+        // Corner rows replace edge toggles with a summary button. Value-only
+        // sync must refresh that label after «اعتماد الزاوية» without a save.
+        const summaryButton = cell.querySelector(".dco-corner-edges-summary");
+        if (summaryButton && typeof cornerGeometry.edgeSelectionSummary === "function") {
+            const label = summaryButton.querySelector("span");
+            if (label) label.textContent = cornerGeometry.edgeSelectionSummary(row);
+            return;
+        }
+
+        const fastEntry = window.AlmdinaDoorCuttingFastEntry;
+        if (fastEntry && typeof fastEntry.edgesCellHtml === "function") {
+            cell.innerHTML = fastEntry.edgesCellHtml(frm, row, { editable, virtual: false });
+        }
+    }
+
     function syncExistingTable(frm, root) {
         const active = document.activeElement;
+        const editable = currentShellEditable(root);
         (frm.doc.pieces || []).forEach((row, index) => {
             const tr = root.querySelector(`tr[data-row-name="${CSS.escape(row.name || "")}"]`);
             if (!tr) return;
@@ -139,6 +166,7 @@
             tr.querySelectorAll("button.dco-check-toggle[data-check-field]").forEach(button => {
                 syncToggle(button, Boolean(row[button.dataset.checkField]));
             });
+            syncCornerEdgesSummary(frm, tr, row, editable);
 
             const areaCell = tr.querySelector("[data-calc='area_m2']");
             const edgeCell = tr.querySelector("[data-calc='edge_meters']");
