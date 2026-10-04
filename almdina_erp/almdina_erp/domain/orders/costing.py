@@ -25,6 +25,14 @@ class PieceCostInput:
     # Transitional axis values support callers that have not adopted side overrides.
     edge_long_type: str = ""
     edge_width_type: str = ""
+    # Per-side dimension overrides. None means "use width_cm/length_cm as-is".
+    # Needed when a side's banded length differs from the piece's own axis
+    # dimension, e.g. an L-Shaped corner side shortened by the notch cut out
+    # of it. area_m2 always uses width_cm/length_cm regardless of these.
+    edge_long_right_dimension_cm: float | None = None
+    edge_long_left_dimension_cm: float | None = None
+    edge_width_top_dimension_cm: float | None = None
+    edge_width_bottom_dimension_cm: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -175,22 +183,30 @@ def calculate_piece_costs(
         side_specs = {
             "long_right": (
                 bool(piece.edge_long_right),
-                length_cm,
+                piece.edge_long_right_dimension_cm
+                if piece.edge_long_right_dimension_cm is not None
+                else length_cm,
                 piece.edge_long_right_type or piece.edge_long_type,
             ),
             "long_left": (
                 bool(piece.edge_long_left),
-                length_cm,
+                piece.edge_long_left_dimension_cm
+                if piece.edge_long_left_dimension_cm is not None
+                else length_cm,
                 piece.edge_long_left_type or piece.edge_long_type,
             ),
             "width_top": (
                 bool(piece.edge_width_top),
-                width_cm,
+                piece.edge_width_top_dimension_cm
+                if piece.edge_width_top_dimension_cm is not None
+                else width_cm,
                 piece.edge_width_top_type or piece.edge_width_type,
             ),
             "width_bottom": (
                 bool(piece.edge_width_bottom),
-                width_cm,
+                piece.edge_width_bottom_dimension_cm
+                if piece.edge_width_bottom_dimension_cm is not None
+                else width_cm,
                 piece.edge_width_bottom_type or piece.edge_width_type,
             ),
         }

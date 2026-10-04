@@ -110,6 +110,40 @@ class TestOrderCostingDomain(unittest.TestCase):
         self.assertEqual(result.edge_long_cost_usd, 0.875)
         self.assertEqual(result.edge_long_rate_usd, 0)
 
+    def test_per_side_dimension_override_shrinks_only_that_side(self) -> None:
+        """An L-Shaped corner's break-adjacent sides use a reduced dimension
+        (full side minus the notch cut out of it), while every other side
+        still uses the piece's own width/length untouched.
+        """
+
+        summary = calculate_piece_costs(
+            [
+                PieceCostInput(
+                    width_cm=25,
+                    length_cm=55,
+                    qty=1,
+                    edge_long_right=1,
+                    edge_long_left=1,
+                    edge_width_top=1,
+                    edge_width_bottom=1,
+                    # Top-right notch: 10x10cm cut out of the top and right sides.
+                    edge_width_top_dimension_cm=25 - 10,
+                    edge_long_right_dimension_cm=55 - 10,
+                )
+            ],
+            default_edge_type="2cm Regular",
+            edge_rates={"2cm Regular": 1.0},
+        )
+
+        result = summary.pieces[0]
+        self.assertEqual(result.edge_width_top_meters, 0.15)  # (25-10)/100
+        self.assertEqual(result.edge_long_right_meters, 0.45)  # (55-10)/100
+        self.assertEqual(result.edge_width_bottom_meters, 0.25)  # full width_cm
+        self.assertEqual(result.edge_long_left_meters, 0.55)  # full length_cm
+        # area_m2 must stay based on the full, unreduced dimensions.
+        self.assertEqual(result.area_m2, 0.138)  # 25*55*1/10000, rounded to 3dp
+        self.assertEqual(result.edge_meters, 1.4)  # 0.15+0.45+0.25+0.55
+
     def test_axis_profile_remains_supported_for_transitional_callers(self) -> None:
         summary = calculate_piece_costs(
             [

@@ -265,12 +265,21 @@ class TestOrderPiecePolicyDomain(unittest.TestCase):
         self.assertEqual(
             pending_custom_edge_price_labels(
                 [
-                    {"piece_type": "Clipped Corner", "clipped_corner_edge_price_status": "Unpriced"},
                     {
-                        "piece_type": "L-Shaped Corner",
+                        "piece_type": "Clipped Corner",
+                        "edge_break": 1,
                         "clipped_corner_edge_price_status": "Unpriced",
                     },
-                    {"piece_type": "Clipped Corner", "clipped_corner_edge_price_status": "Priced"},
+                    {
+                        "piece_type": "L-Shaped Corner",
+                        "edge_break": 1,
+                        "clipped_corner_edge_price_status": "Unpriced",
+                    },
+                    {
+                        "piece_type": "Clipped Corner",
+                        "edge_break": 1,
+                        "clipped_corner_edge_price_status": "Priced",
+                    },
                 ]
             ),
             ("درفة الزاوية الكسر 1", "درفة زاوية L 2"),

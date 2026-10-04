@@ -256,13 +256,12 @@ class TestFinancialDocumentApplication(unittest.TestCase):
         self.assertEqual(cut_corner["quantity"], 2)
         self.assertEqual(cut_corner["amount_usd"], 8.5)
 
-    def test_l_shaped_corner_remaining_and_adjacent_edges_are_added_to_edge_line(
-        self,
-    ) -> None:
-        """Both the non-adjacent sides (edge_meters) and the adjacent sides
-        banded at a reduced dimension (remaining_edges_meters) must land in
-        the invoice's edge-banding line, grouped with any other piece using
-        the same edge type and rate.
+    def test_l_shaped_corner_edge_meters_lands_in_edge_line(self) -> None:
+        """edge_meters/edge_cost_usd for an L-Shaped piece already include both
+        the two non-adjacent sides (full dimension) and the two break-adjacent
+        sides (shrunk by the notch cut out of them) -- the costing adapter
+        computes this upstream. The invoice only needs to fold that single
+        number into the edge-banding line like any other piece.
         """
 
         pieces = [
@@ -273,19 +272,17 @@ class TestFinancialDocumentApplication(unittest.TestCase):
                 "length_cm": 90,
                 "qty": 2,
                 "edge_type": "2cm عادي",
-                "edge_meters": 1.8,  # the two non-adjacent sides, already selected
+                "edge_meters": 3.0,
                 "edge_rate_usd": 0.5,
-                "edge_cost_usd": 0.9,
-                "remaining_edges_meters": 1.2,  # the two adjacent sides, reduced
-                "remaining_edges_cost_usd": 0.6,
+                "edge_cost_usd": 1.5,
                 "clipped_corner_edge_price_usd": 4.25,
                 "clipped_corner_edge_price_status": "Priced",
             }
         ]
         payload = build_customer_invoice_document(self.order, pieces)
         edge_line = next(line for line in payload["lines"] if line["type"] == "edge")
-        self.assertEqual(edge_line["quantity"], 3.0)  # 1.8 + 1.2
-        self.assertEqual(edge_line["amount_usd"], 1.5)  # 0.9 + 0.6
+        self.assertEqual(edge_line["quantity"], 3.0)
+        self.assertEqual(edge_line["amount_usd"], 1.5)
 
 
 if __name__ == "__main__":
