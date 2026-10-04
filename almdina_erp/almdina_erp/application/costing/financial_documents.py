@@ -191,7 +191,6 @@ def _customer_invoice_lines(
         piece
         for piece in pieces
         if _text(_value(piece, "piece_type")) == "Special"
-        or is_corner_cut(_value(piece, "piece_type"))
     ]
     edge_source = (
         [piece for piece in pieces if piece not in special_pieces]
@@ -204,6 +203,9 @@ def _customer_invoice_lines(
     for piece in edge_source:
         if _factory_quantity(piece) <= 0:
             continue
+        # Includes Clipped/L-Shaped corner pieces: sides adjacent to the break
+        # are already cleared to zero by edge-break policy before this point,
+        # so edge_meters here only ever reflects genuinely selected sides.
         meters = _number(_value(piece, "edge_meters"))
         if meters <= 0:
             continue
@@ -213,7 +215,9 @@ def _customer_invoice_lines(
         group["meters"] += meters
         group["amount"] += _number(_value(piece, "edge_cost_usd")) or meters * rate
 
-    # Add remaining edges for L-Shaped corners (edges adjacent to the corner cut)
+    # L-Shaped Corner: sides adjacent to the inner notch are banded at a
+    # reduced length/width (full dimension minus the cut), tracked separately
+    # from edge_meters above because the dimension differs from the raw side.
     for piece in pieces:
         if _factory_quantity(piece) <= 0:
             continue

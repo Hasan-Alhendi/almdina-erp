@@ -102,11 +102,18 @@ class TestFinancialDocumentApplication(unittest.TestCase):
         self.assertNotIn("operations", payload)
         self.assertNotIn("special_prices", payload)
         self.assertNotIn("classification", payload)
-        self.assertEqual(payload["totals"][0]["value_usd"], 85.5)
+        # 85.5 (material+cutting+special+cut_corner) + 1.5 (piece #3's own
+        # remaining-side edge_meters=3 @ rate 0.5, now folded into the "edge"
+        # line alongside piece #1 instead of being dropped by the old
+        # blanket corner-cut exclusion).
+        self.assertEqual(payload["totals"][0]["value_usd"], 87.0)
         self.assertEqual(
             [line["type"] for line in payload["lines"]],
             ["material", "cutting", "edge", "special", "cut_corner"],
         )
+        edge_line = next(line for line in payload["lines"] if line["type"] == "edge")
+        self.assertEqual(edge_line["quantity"], 9)
+        self.assertEqual(edge_line["amount_usd"], 4.5)
         descriptions = [line["description"] for line in payload["lines"]]
         self.assertIn("درفة خاصة رقم 2", descriptions)
         self.assertIn("درفة الزاوية الكسر 3", descriptions)
@@ -248,6 +255,37 @@ class TestFinancialDocumentApplication(unittest.TestCase):
         self.assertEqual(cut_corner["description"], "درفة زاوية L 1")
         self.assertEqual(cut_corner["quantity"], 2)
         self.assertEqual(cut_corner["amount_usd"], 8.5)
+
+    def test_l_shaped_corner_remaining_and_adjacent_edges_are_added_to_edge_line(
+        self,
+    ) -> None:
+        """Both the non-adjacent sides (edge_meters) and the adjacent sides
+        banded at a reduced dimension (remaining_edges_meters) must land in
+        the invoice's edge-banding line, grouped with any other piece using
+        the same edge type and rate.
+        """
+
+        pieces = [
+            {
+                "piece_no": 1,
+                "piece_type": "L-Shaped Corner",
+                "width_cm": 60,
+                "length_cm": 90,
+                "qty": 2,
+                "edge_type": "2cm عادي",
+                "edge_meters": 1.8,  # the two non-adjacent sides, already selected
+                "edge_rate_usd": 0.5,
+                "edge_cost_usd": 0.9,
+                "remaining_edges_meters": 1.2,  # the two adjacent sides, reduced
+                "remaining_edges_cost_usd": 0.6,
+                "clipped_corner_edge_price_usd": 4.25,
+                "clipped_corner_edge_price_status": "Priced",
+            }
+        ]
+        payload = build_customer_invoice_document(self.order, pieces)
+        edge_line = next(line for line in payload["lines"] if line["type"] == "edge")
+        self.assertEqual(edge_line["quantity"], 3.0)  # 1.8 + 1.2
+        self.assertEqual(edge_line["amount_usd"], 1.5)  # 0.9 + 0.6
 
 
 if __name__ == "__main__":
