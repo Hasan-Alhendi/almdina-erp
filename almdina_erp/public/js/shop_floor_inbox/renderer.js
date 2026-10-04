@@ -69,11 +69,11 @@
 
     function pageHero(kicker, title, description, stats = "") {
         return `
-            <header class="almdina-sf-hero">
-                <div class="almdina-sf-hero-copy">
-                    <span class="almdina-sf-eyebrow">${esc(kicker)}</span>
-                    <h2>${esc(title)}</h2>
-                    <p>${esc(description)}</p>
+            <header class="almdina-sf-hero alm-page-intro alm-page-intro--accented">
+                <div class="almdina-sf-hero-copy alm-page-intro__copy">
+                    <span class="almdina-sf-eyebrow alm-page-intro__eyebrow">${esc(kicker)}</span>
+                    <h2 class="alm-page-intro__title">${esc(title)}</h2>
+                    <p class="alm-page-intro__description">${esc(description)}</p>
                 </div>
                 ${stats ? `<div class="almdina-sf-hero-stats">${stats}</div>` : ""}
             </header>`;
@@ -276,7 +276,7 @@
                     ].join("")}</div>`
                 )}
                 <div class="almdina-sf-overview">
-                    <div class="almdina-sf-board-toolbar" aria-label="${__("تصفية لوحة الإنتاج")}">
+                    <div class="almdina-sf-board-toolbar alm-toolbar" aria-label="${__("تصفية لوحة الإنتاج")}">
                         <div class="almdina-sf-filter-field">
                             <span class="almdina-sf-field-label">${__("مسار الإنتاج")}</span>
                             <div class="almdina-sf-route-mount"></div>

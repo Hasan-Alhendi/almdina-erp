@@ -38,10 +38,10 @@ Feature CSS may keep **domain/layout** tokens. It must not redefine **foundation
 
 Shared DS stylesheets (`almdina_design_tokens.css`, `almdina_components.css`, `almdina_patterns.css`, `almdina_page_templates.css`) must not introduce Feature selectors such as `.apc-*`, `.aps-*`, `.aw-*`, `.prw-*`, `.sf-*`, `.dco-*` except entries on an explicit temporary allowlist in `test_design_system_contract.py`.
 
-Current temporary allowlist:
+Current allowlist: **empty** (Phase 6). The former entries were resolved as:
 
-- `.dco-plan-tabs` active-tab underline in `almdina_components.css` (migrate to `.alm-tabs` later)
-- `.dco-tab-edit-toolbar` compact button sizing in `almdina_components.css` (migrate with DCO toolbar pattern later)
+- `.dco-plan-tabs` active-tab underline — removed from shared CSS; it was fully shadowed by the plan-content owner (`door_cutting_order_plan_content_styles.js`), which remains the single owner.
+- `.dco-tab-edit-toolbar` compact button sizing — replaced by the generic `.alm-actions--compact` component; the DCO toolbar opts in via class.
 
 ## Migration policy (presentation only)
 
@@ -51,6 +51,10 @@ Current temporary allowlist:
 4. Migrate Admin Console pages before Workbench, Lists, then DCO.
 5. One surface family per PR when class/markup swaps begin.
 6. Admin status/risk badges use `AlmdinaUi.badge()` + `.alm-badge--*`; Feature CSS may keep layout sizing (`.aw-badge`, `.apc-badge`, `.aps-status-pill`) but must not own status palettes.
+7. Workbench — Factory Master Data overview (migrated): intro/summary/toolbar via patterns (`prw-hero alm-page-intro`, `prw-summary alm-summary-grid`, `prw-toolbar alm-toolbar`), route status via `AlmdinaUi.status()`, planning badge via `AlmdinaUi.badge()`, empty/error via `.alm-state`. The routing editor (stage rail, library, story rows) keeps its `prw-*` geometry and is not migrated yet.
+8. Workbench — Shop Floor page chrome (migrated): intro via `almdina-sf-hero alm-page-intro`, board toolbar via `alm-toolbar`, `--sf-radius-*` / `--sf-shadow` alias `--alm-*`, hero stats / board metrics / error state read `--alm-status-*`. Kanban columns, production cards (status accents, completed styling), drag/drop and the shared loading markup stay frozen as domain visualization. Legacy `.almdina-sf-*` rules injected by `shared_shell.js` (operator profiles only) were removed in Phase 6, so operators and managers now share the same Shop Floor presentation owner.
+9. Lists — Type A native Frappe lists (migrated chrome): static scales (typography, spacing, radius, shadow) are global on `:root` so native surfaces without `.almdina-ui` can read them; `almdina_list_table.css` owns row/table chrome via tokens; the list canvas belongs to `almdina_page_templates.css`. `door_cutting_order_list.css` (column geometry, pinned by `test_dco_compact_list_ux`) and `door_cutting_order_mobile_list.css` (allowlisted identity) are deferred to the DCO step.
+10. DCO — JS style-injection debt (FE-ARCH-009) is frozen by a ratchet (`DCO_STYLE_INJECTION_DEBT` in `test_design_system_contract.py`): no new DCO module may inject `<style>`, and migrated modules must be removed from the list. Several injected rules are pinned in place by existing feature tests (e.g. `test_cut_dimensions_architecture` requires the cut-size hide rule inside its module, and `measurement_presentation_readiness.test.js` forbids `!important` in `door_cutting_order_measurement_structure.css`), so each migration is an explicit contract change, not a silent move.
 
 ## Enforcement
 

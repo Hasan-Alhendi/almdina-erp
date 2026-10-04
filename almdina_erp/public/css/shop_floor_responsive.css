@@ -13,9 +13,9 @@
     --sf-text: var(--text-color, #0f172a);
     --sf-muted: var(--text-muted, #64748b);
     --sf-primary: var(--alm-primary, #172033);
-    --sf-radius-lg: 18px;
-    --sf-radius-md: 13px;
-    --sf-shadow: 0 8px 28px rgba(15, 23, 42, .065);
+    --sf-radius-lg: var(--alm-radius-lg, 18px);
+    --sf-radius-md: var(--alm-radius-md, 14px);
+    --sf-shadow: var(--alm-shadow-card);
 }
 
 .almdina-sf-content,
@@ -79,52 +79,9 @@
 }
 
 /* Hero ------------------------------------------------------------------- */
-.almdina-sf-hero {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 22px;
-    align-items: center;
-    margin-bottom: 14px;
-    padding: 18px 20px;
-    border: 1px solid var(--sf-border);
-    border-radius: var(--sf-radius-lg);
-    background:
-        linear-gradient(135deg, color-mix(in srgb, var(--alm-primary, #172033) 8%, transparent), transparent 52%),
-        var(--sf-card);
-    box-shadow: var(--sf-shadow);
-}
-
+/* Page intro chrome owned by almdina_patterns.css (.alm-page-intro). */
 .almdina-sf-hero-copy {
     min-width: 0;
-}
-
-.almdina-sf-eyebrow {
-    display: inline-flex;
-    align-items: center;
-    min-height: 24px;
-    margin-bottom: 7px;
-    padding: 3px 9px;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--alm-primary, #172033) 9%, transparent);
-    color: #1d6fac;
-    font-size: 11px;
-    font-weight: 800;
-}
-
-.almdina-sf-hero h2 {
-    margin: 0;
-    color: var(--sf-text);
-    font-size: clamp(20px, 2vw, 27px);
-    font-weight: 850;
-    line-height: 1.3;
-}
-
-.almdina-sf-hero p {
-    max-width: 720px;
-    margin: 6px 0 0;
-    color: var(--sf-muted);
-    font-size: 12px;
-    line-height: 1.8;
 }
 
 .almdina-sf-hero-stats {
@@ -145,7 +102,7 @@
 }
 
 .almdina-sf-hero-stat[data-tone="active"] { --sf-stat: var(--sf-primary); }
-.almdina-sf-hero-stat[data-tone="ready"] { --sf-stat: #16a34a; }
+.almdina-sf-hero-stat[data-tone="ready"] { --sf-stat: var(--alm-status-success-fg); }
 
 .almdina-sf-hero-stat b {
     color: var(--sf-stat);
@@ -200,8 +157,8 @@
 }
 
 .almdina-sf-state.is-error {
-    border-color: rgba(220, 38, 38, .22);
-    background: color-mix(in srgb, #dc2626 4%, var(--sf-card));
+    border-color: var(--alm-status-danger-border);
+    background: var(--alm-status-danger-bg);
 }
 
 .almdina-sf-state-icon {
@@ -211,8 +168,8 @@
     flex: 0 0 auto;
     place-items: center;
     border-radius: 50%;
-    background: rgba(220, 38, 38, .10);
-    color: #b91c1c;
+    background: var(--alm-status-danger-bg);
+    color: var(--alm-status-danger-fg);
     font-size: 17px;
     font-weight: 900;
 }
@@ -246,7 +203,7 @@
 }
 
 .almdina-sf-empty[data-tone="ready"] .almdina-sf-empty-icon {
-    color: #16a34a;
+    color: var(--alm-status-success-fg);
 }
 
 .almdina-sf-empty b {
@@ -271,17 +228,10 @@
     min-width: 0;
 }
 
+/* Toolbar chrome owned by almdina_patterns.css (.alm-toolbar); geometry stays here. */
 .almdina-sf-board-toolbar {
-    display: grid;
     grid-template-columns: minmax(190px, .72fr) minmax(250px, 1fr) minmax(430px, 1.8fr);
-    gap: 10px;
-    align-items: end;
     margin-bottom: 10px;
-    padding: 12px;
-    border: 1px solid var(--sf-border);
-    border-radius: 15px;
-    background: var(--sf-card);
-    box-shadow: 0 3px 16px rgba(15, 23, 42, .045);
 }
 
 .almdina-sf-filter-field {
@@ -343,10 +293,11 @@
     background: color-mix(in srgb, var(--sf-metric) 7%, transparent);
 }
 
-.almdina-sf-board-metric[data-tone="pending"] { --sf-metric: #d97706; }
+/* Metric tones read the shared status scale. */
+.almdina-sf-board-metric[data-tone="pending"] { --sf-metric: var(--alm-status-warning-fg); }
 .almdina-sf-board-metric[data-tone="progress"] { --sf-metric: var(--sf-primary); }
-.almdina-sf-board-metric[data-tone="paused"] { --sf-metric: #dc2626; }
-.almdina-sf-board-metric[data-tone="ready"] { --sf-metric: #16a34a; }
+.almdina-sf-board-metric[data-tone="paused"] { --sf-metric: var(--alm-status-danger-fg); }
+.almdina-sf-board-metric[data-tone="ready"] { --sf-metric: var(--alm-status-success-fg); }
 
 .almdina-sf-board-metric span {
     display: block;
@@ -1071,11 +1022,6 @@
         min-height: 44px;
     }
 
-    .almdina-sf-hero {
-        grid-template-columns: 1fr;
-        gap: 13px;
-    }
-
     .almdina-sf-hero-stats {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1108,18 +1054,12 @@
         font-size: 12px;
     }
 
-    .almdina-sf-hero {
+    /* Shop-floor phones keep a denser intro; chrome still comes from .alm-page-intro. */
+    .almdina-ui .almdina-sf-hero.alm-page-intro {
+        gap: var(--alm-space-3);
         margin-bottom: 10px;
         padding: 14px;
-        border-radius: 14px;
-    }
-
-    .almdina-sf-hero h2 {
-        font-size: 20px;
-    }
-
-    .almdina-sf-hero p {
-        font-size: 11px;
+        padding-inline-start: calc(14px + 4px);
     }
 
     .almdina-sf-hero-stats {
@@ -1136,6 +1076,9 @@
 
     .almdina-sf-board-toolbar {
         grid-template-columns: 1fr;
+    }
+
+    .almdina-ui .almdina-sf-board-toolbar.alm-toolbar {
         gap: 8px;
         padding: 10px;
     }
@@ -1221,10 +1164,6 @@
 @media (max-width: 480px) {
     .almdina-sf-shell {
         padding-bottom: 18px;
-    }
-
-    .almdina-sf-eyebrow {
-        margin-bottom: 5px;
     }
 
     .almdina-sf-hero-stats {

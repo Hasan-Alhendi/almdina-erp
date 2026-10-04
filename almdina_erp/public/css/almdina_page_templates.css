@@ -44,7 +44,16 @@
     padding-inline: 0;
 }
 
-/* Type A — Native List canvas grammar (no Feature dual-class required). */
+/* Type A — Native List canvas grammar (no Feature dual-class required).
+ * List row/table chrome lives in almdina_list_table.css. */
+body:has(.frappe-list) .page-body,
+body:has(.frappe-list) .page-content,
+body:has(.frappe-list) .layout-main,
+body:has(.frappe-list) .layout-main-section-wrapper,
+body:has(.frappe-list) .layout-main-section {
+    background: var(--alm-canvas, #eef1f6);
+}
+
 body:has(.frappe-list) .layout-main-section {
     max-width: 100%;
 }

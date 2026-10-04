@@ -36,13 +36,8 @@ FEATURE_SELECTOR_PREFIXES = (
     "apa-",
     "almdina-sf-",
 )
-# Temporary shared-layer leakage until Patterns/Tabs migration.
-SHARED_FEATURE_SELECTOR_ALLOWLIST = frozenset(
-    {
-        ".dco-plan-tabs",
-        ".dco-tab-edit-toolbar",
-    }
-)
+# Shared-layer Feature selector leakage. Emptied in Phase 6; keep it empty.
+SHARED_FEATURE_SELECTOR_ALLOWLIST: frozenset[str] = frozenset()
 PERMISSIONS_RENDERER = ROOT / "public" / "js" / "factory_permissions" / "renderer.js"
 PERMISSIONS_CONTROLLER = ROOT / "public" / "js" / "factory_permissions" / "controller.js"
 PERMISSIONS_PAGE = ROOT / "almdina_erp" / "page" / "factory_permissions" / "factory_permissions.js"
@@ -110,6 +105,36 @@ LEGACY_PRESENTATION_ALLOWLIST = frozenset(
         "almdina_ui.js",
         "notes.css",
         "door_cutting_order_mobile_list.css",
+    }
+)
+# FE-ARCH-009 migration debt: DCO modules that still inject <style> from JS.
+# Ratchet only — remove entries as styles move to static CSS; never add new ones.
+DCO_JS = ROOT / "public" / "js" / "door_cutting_order"
+DCO_STYLE_INJECTION_DEBT = frozenset(
+    {
+        "core/door_cutting_order_plan_cost_workspace_visual_ux.js",
+        "core/door_cutting_order_tab_edit_lifecycle_guard.js",
+        "core/door_cutting_order_toolbar_stability_ux.js",
+        "core/door_cutting_order_workspace_freshness_ux.js",
+        "costing/door_cutting_order_compact_pricing_ux.js",
+        "costing/door_cutting_order_cost_page_layout_ux.js",
+        "costing/door_cutting_order_cost_presenter.js",
+        "costing/door_cutting_order_multi_edge_documents_ux.js",
+        "cutting_plan/door_cutting_order_plan_content_styles.js",
+        "cutting_plan/door_cutting_order_plan_context_actions_ux.js",
+        "cutting_plan/door_cutting_order_plan_edit_session_ux.js",
+        "cutting_plan/door_cutting_order_plan_settings_summary_ux.js",
+        "drawing/door_cutting_order_clipped_corner_ux.js",
+        "order_entry/edge_banding/door_cutting_order_cut_dimensions_ux.js",
+        "order_entry/edge_banding/door_cutting_order_edge_profile_controls_ux.js",
+        "order_entry/edge_banding/door_cutting_order_edge_render_owner.js",
+        "order_entry/edge_banding/door_cutting_order_multi_edge_ux.js",
+        "order_entry/measurements/door_cutting_order_compact_measurements_ux.js",
+        "order_entry/measurements/door_cutting_order_measurement_actions_ux.js",
+        "order_entry/measurements/door_cutting_order_measurement_resilience_ux.js",
+        "order_entry/measurements/door_cutting_order_measurement_toolbar_ux.js",
+        "printing/door_cutting_order_document_compactness_ux.js",
+        "responsive/door_cutting_order_header_ux.js",
     }
 )
 LEGACY_PRIMARY_MARKERS = (
@@ -284,6 +309,60 @@ class TestDesignSystemContract(unittest.TestCase):
             "--alm-status-neutral-fg:",
         ):
             self.assertIn(token, self.tokens, msg=f"missing foundation token {token}")
+
+    def test_static_scales_are_global_for_native_frappe_surfaces(self) -> None:
+        # Native lists are not wrapped in .almdina-ui, so static scales must live
+        # in the global block, before the .almdina-ui-only Frappe-derived block.
+        scoped_block = self.tokens.index("}\n\n.almdina-ui {")
+        for token in (
+            "--alm-font-size-sm:",
+            "--alm-font-weight-bold:",
+            "--alm-space-4:",
+            "--alm-radius-xs:",
+            "--alm-shadow-card:",
+        ):
+            self.assertLess(self.tokens.index(token), scoped_block, msg=f"{token} must be global")
+
+    def test_native_list_chrome_reads_design_tokens(self) -> None:
+        list_table = (ROOT / "public" / "css" / "almdina_list_table.css").read_text(encoding="utf-8")
+        templates = PAGE_TEMPLATES.read_text(encoding="utf-8")
+
+        self.assertIn("font-size: var(--alm-font-size-sm);", list_table)
+        self.assertIn("font-weight: var(--alm-font-weight-bold);", list_table)
+        self.assertIn("border-radius: var(--alm-radius-xs);", list_table)
+        self.assertNotRegex(list_table, r"font-size:\s*\d+px")
+        self.assertNotRegex(list_table, r"border-radius:\s*\d+px")
+        self.assertNotRegex(list_table, r"font-weight:\s*\d+")
+        # One canvas owner: the page-template Type A grammar.
+        self.assertNotIn("body:has(.frappe-list) .page-body", list_table)
+        self.assertIn("body:has(.frappe-list) .page-body", templates)
+        self.assertIn("background: var(--alm-canvas, #eef1f6);", templates)
+
+    def test_dco_js_style_injection_debt_only_shrinks(self) -> None:
+        injectors = {
+            path.relative_to(DCO_JS).as_posix()
+            for path in DCO_JS.rglob("*.js")
+            if 'createElement("style")' in path.read_text(encoding="utf-8")
+        }
+        new = injectors - DCO_STYLE_INJECTION_DEBT
+        self.assertFalse(new, msg="new DCO JS style injection (use static CSS): " + ", ".join(sorted(new)))
+        stale = DCO_STYLE_INJECTION_DEBT - injectors
+        self.assertFalse(stale, msg="remove migrated entries from DCO_STYLE_INJECTION_DEBT: " + ", ".join(sorted(stale)))
+
+    def test_dco_tab_edit_toolbar_uses_generic_compact_actions(self) -> None:
+        page_edit = (DCO_JS / "core" / "door_cutting_order_page_edit_action_ux.js").read_text(encoding="utf-8")
+        self.assertIn("toolbar.className = `${TOOLBAR_CLASS} almdina-ui alm-actions--compact`;", page_edit)
+        self.assertIn(".almdina-ui .alm-actions--compact .btn.alm-btn-primary", self.components)
+        self.assertNotIn(".dco-tab-edit-toolbar", self.components)
+
+    def test_shared_shell_does_not_own_shop_floor_presentation(self) -> None:
+        shell = (ROOT / "public" / "js" / "shared_shell.js").read_text(encoding="utf-8")
+        start = shell.index("function injectStyles()")
+        styles = shell[start:shell.index("function applyShell()", start)]
+        self.assertNotIn(".almdina-sf-", styles)
+        # Shell-level and permission-hiding rules stay with the shell.
+        self.assertIn('[data-almdina-permission-hidden="1"]{display:none!important}', styles)
+        self.assertIn("body.almdina-shared-shell .navbar", styles)
 
     def test_token_ownership_contract_is_documented(self) -> None:
         self.assertTrue(TOKEN_OWNERSHIP.is_file(), msg="TOKEN_OWNERSHIP.md must exist")
@@ -545,6 +624,24 @@ class TestDesignSystemContract(unittest.TestCase):
         self.assertNotIn('class="btn btn-danger almdina-sf-logout"', self.shop_floor_renderer)
         self.assertIn("/assets/almdina_erp/js/almdina_ui.js", self.shop_floor_page)
 
+    def test_shop_floor_workbench_adopts_shared_patterns(self) -> None:
+        renderer = self.shop_floor_renderer
+        css = SHOP_FLOOR_RESPONSIVE_CSS.read_text(encoding="utf-8")
+
+        self.assertIn("almdina-sf-hero alm-page-intro alm-page-intro--accented", renderer)
+        self.assertIn("almdina-sf-eyebrow alm-page-intro__eyebrow", renderer)
+        self.assertIn("almdina-sf-board-toolbar alm-toolbar", renderer)
+
+        self.assertIn("--sf-radius-lg: var(--alm-radius-lg, 18px)", css)
+        self.assertIn("--sf-shadow: var(--alm-shadow-card)", css)
+        self.assertIn('--sf-metric: var(--alm-status-warning-fg)', css)
+        self.assertIn('--sf-metric: var(--alm-status-danger-fg)', css)
+        self.assertIn("var(--alm-status-danger-border)", css)
+        # Intro/toolbar chrome belongs to the DS; Shop Floor keeps geometry only.
+        for marker in (".almdina-sf-hero {", ".almdina-sf-hero h2", ".almdina-sf-hero p", ".almdina-sf-eyebrow {"):
+            self.assertNotIn(marker, css, msg=f"shop_floor_responsive.css still owns {marker}")
+        self.assertNotIn("box-shadow: 0 3px 16px rgba(15, 23, 42, .045);", css)
+
     def test_notes_panel_uses_design_system(self) -> None:
         self.assertIn('class="almdina-notes-panel almdina-ui"', self.notes_panel)
         self.assertIn("AlmdinaUi.button", self.notes_panel)
@@ -601,6 +698,39 @@ class TestDesignSystemContract(unittest.TestCase):
         self.assertNotIn('class="prw-search"', self.factory_master_data_page)
         self.assertNotIn("prw-status-filter", self.factory_master_data_page)
 
+    def test_factory_master_data_workbench_adopts_shared_patterns(self) -> None:
+        page = self.factory_master_data_page
+        css = FACTORY_ROUTING_WORKFLOW_CSS.read_text(encoding="utf-8")
+
+        self.assertIn("prw-hero alm-page-intro alm-page-intro--accented", page)
+        self.assertIn("prw-summary alm-summary-grid", page)
+        self.assertIn("prw-stat alm-summary-card", page)
+        self.assertIn("prw-toolbar alm-toolbar", page)
+        self.assertIn("prw-empty alm-state alm-state--empty", page)
+        self.assertIn("AlmdinaUi.status is required for factory master data rendering", page)
+        self.assertIn("AlmdinaUi.badge is required for factory master data rendering", page)
+        self.assertIn('className: "prw-status"', page)
+        self.assertIn('className: "prw-mini-badge"', page)
+        self.assertIn('this.errorStateHtml(__("تعذر فتح إدارة المسارات"), message, "prw-retry")', page)
+        self.assertNotIn('class="prw-error"', page)
+
+        # Feature CSS keeps geometry; intro/summary/status/empty chrome belongs to the DS.
+        for marker in (
+            ".prw-hero {",
+            ".prw-hero::after",
+            ".prw-summary {",
+            ".prw-stat::before",
+            '.prw-stat[data-tone="routes"]',
+            ".prw-status.is-active",
+            ".prw-status.is-disabled",
+            ".prw-error",
+            ".prw-empty b",
+        ):
+            self.assertNotIn(marker, css, msg=f"factory_routing_workflow.css still owns {marker}")
+        self.assertIn(".almdina-ui .prw-status.alm-status", css)
+        self.assertIn(".almdina-ui .prw-mini-badge.alm-badge", css)
+        self.assertIn(".prw-empty.alm-state", css)
+
     def test_factory_plan_archive_uses_design_system(self) -> None:
         self.assertIn('class="almdina-ui apa-shell alm-page alm-page--admin"', self.factory_plan_archive_page)
         self.assertIn("AlmdinaUi.button", self.factory_plan_archive_page)
@@ -645,8 +775,13 @@ class TestDesignSystemContract(unittest.TestCase):
         self.assertIn("aria-selected", self.dco_plan_tabs)
         self.assertIn("is-active", self.dco_plan_tabs)
         self.assertNotIn('"btn-primary"', self.dco_plan_tabs)
-        self.assertIn(".almdina-ui .dco-plan-tabs .btn.is-active", self.components)
-        self.assertIn("var(--alm-primary)", self.components)
+        # The plan-content owner styles the underline tabs; shared CSS stays Feature-free.
+        plan_content_styles = (
+            DCO_JS / "cutting_plan" / "door_cutting_order_plan_content_styles.js"
+        ).read_text(encoding="utf-8")
+        self.assertIn('.dco-plan-tabs--underline .btn.is-active', plan_content_styles)
+        self.assertIn("color:var(--alm-primary, #172033) !important;", plan_content_styles)
+        self.assertNotIn(".dco-plan-tabs", self.components)
 
     def test_migrated_surfaces_reject_legacy_primary_markup(self) -> None:
         for path in MIGRATED_SURFACES:

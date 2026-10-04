@@ -51,14 +51,15 @@
     opacity: 0.55;
 }
 
-.almdina-ui.dco-tab-edit-toolbar :where(.btn, button).alm-btn-primary,
-.almdina-ui.dco-tab-edit-toolbar :where(.btn, button).alm-btn-secondary,
-.almdina-ui.dco-tab-edit-toolbar .btn.alm-btn-primary,
-.almdina-ui.dco-tab-edit-toolbar .btn.alm-btn-secondary,
-.almdina-ui .dco-tab-edit-toolbar :where(.btn, button).alm-btn-primary,
-.almdina-ui .dco-tab-edit-toolbar :where(.btn, button).alm-btn-secondary,
-.almdina-ui .dco-tab-edit-toolbar .btn.alm-btn-primary,
-.almdina-ui .dco-tab-edit-toolbar .btn.alm-btn-secondary {
+/* Compact action group (e.g. DCO tab edit toolbar): denser primary/secondary buttons. */
+.almdina-ui.alm-actions--compact :where(.btn, button).alm-btn-primary,
+.almdina-ui.alm-actions--compact :where(.btn, button).alm-btn-secondary,
+.almdina-ui.alm-actions--compact .btn.alm-btn-primary,
+.almdina-ui.alm-actions--compact .btn.alm-btn-secondary,
+.almdina-ui .alm-actions--compact :where(.btn, button).alm-btn-primary,
+.almdina-ui .alm-actions--compact :where(.btn, button).alm-btn-secondary,
+.almdina-ui .alm-actions--compact .btn.alm-btn-primary,
+.almdina-ui .alm-actions--compact .btn.alm-btn-secondary {
     box-sizing: border-box !important;
     display: inline-flex !important;
     align-items: center !important;
@@ -69,8 +70,8 @@
     padding-block: var(--alm-padding-button-compact-y, 8px) !important;
     padding-inline: var(--alm-padding-button-compact-x, 18px) !important;
     line-height: 1.2 !important;
-    font-size: 12px;
-    font-weight: 800;
+    font-size: var(--alm-font-size-sm, 12px);
+    font-weight: var(--alm-font-weight-heavy, 800);
     box-shadow: none !important;
 }
 
@@ -319,24 +320,6 @@
         animation: none;
         border-top-color: color-mix(in srgb, var(--alm-primary) 45%, transparent);
     }
-}
-
-.almdina-ui .dco-plan-tabs .btn.is-active {
-    position: relative;
-    background: transparent;
-    border-color: transparent;
-    color: var(--alm-primary);
-    font-weight: 800;
-}
-
-.almdina-ui .dco-plan-tabs .btn.is-active::after {
-    content: "";
-    position: absolute;
-    inset-inline: 10px;
-    bottom: 0;
-    height: 2.5px;
-    border-radius: 999px;
-    background: var(--alm-primary);
 }
 
 /* Frappe Control wrapper (FE-ARCH-017 / DS-11) */

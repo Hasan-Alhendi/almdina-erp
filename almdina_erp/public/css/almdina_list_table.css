@@ -1,15 +1,8 @@
 /*
- * Shared desk list/table chrome.
+ * Shared desk list/table chrome (Type A — Native List).
+ * Reads global --alm-* scales; the list canvas is owned by almdina_page_templates.css.
  * Column widths and DCO row-state colors stay with their feature stylesheets.
  */
-
-body:has(.frappe-list) .page-body,
-body:has(.frappe-list) .page-content,
-body:has(.frappe-list) .layout-main,
-body:has(.frappe-list) .layout-main-section-wrapper,
-body:has(.frappe-list) .layout-main-section {
-    background: var(--alm-canvas, #eef1f6);
-}
 
 .layout-main-section .frappe-list {
     background: var(--alm-card, #fff);
@@ -20,8 +13,8 @@ body:has(.frappe-list) .layout-main-section {
     background: var(--alm-canvas, #eef1f6);
     border-bottom: 1px solid var(--alm-card-border, #e4e8ee);
     color: var(--text-muted, #6b7280);
-    font-size: 12px;
-    font-weight: 700;
+    font-size: var(--alm-font-size-sm);
+    font-weight: var(--alm-font-weight-bold);
 }
 
 .layout-main-section .frappe-list .list-row-container {
@@ -29,7 +22,7 @@ body:has(.frappe-list) .layout-main-section {
 }
 
 .layout-main-section .frappe-list .list-row-container:hover {
-    background: color-mix(in srgb, var(--alm-primary, #172033) 4%, #fff);
+    background: color-mix(in srgb, var(--alm-primary, #172033) 4%, var(--alm-card, #fff));
 }
 
 .layout-main-section .frappe-list .list-row,
@@ -42,7 +35,7 @@ body:has(.frappe-list) .layout-main-section {
 .layout-main-section .frappe-list .list-id,
 .layout-main-section .frappe-list .list-row-col.list-subject .ellipsis {
     color: var(--alm-accent, #2563eb);
-    font-weight: 700;
+    font-weight: var(--alm-font-weight-bold);
 }
 
 .layout-main-section .frappe-list .list-paging {
@@ -51,5 +44,5 @@ body:has(.frappe-list) .layout-main-section {
 }
 
 .layout-main-section .frappe-list .list-paging .btn-paging {
-    border-radius: 8px;
+    border-radius: var(--alm-radius-xs);
 }

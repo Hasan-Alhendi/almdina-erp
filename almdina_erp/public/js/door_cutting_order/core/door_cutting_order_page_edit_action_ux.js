@@ -243,7 +243,7 @@
         const slot = ensureToolbarSlot(frm);
         if (!slot) return null;
         const toolbar = document.createElement("div");
-        toolbar.className = `${TOOLBAR_CLASS} almdina-ui`;
+        toolbar.className = `${TOOLBAR_CLASS} almdina-ui alm-actions--compact`;
         toolbar.setAttribute("data-almdina-tab-edit-kind", kind);
         toolbar.setAttribute("data-compact", "1");
         slot.replaceChildren(toolbar);

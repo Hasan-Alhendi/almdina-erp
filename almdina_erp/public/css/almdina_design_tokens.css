@@ -67,14 +67,11 @@
     --alm-status-neutral-fg: #344054;
     --alm-status-neutral-bg: #f4f6f8;
     --alm-status-neutral-border: #e4e8ee;
-}
 
-.almdina-ui {
-    --alm-secondary-bg: var(--control-bg, #ffffff);
-    --alm-secondary-border: var(--border-color, #dfe3e8);
-    --alm-secondary-text: var(--text-color, #1f272e);
-    --alm-secondary-hover-bg: var(--subtle-fg, #f4f5f6);
-
+    /*
+     * Static scales live globally so native Frappe surfaces (Type A lists)
+     * can consume them without an .almdina-ui wrapper.
+     */
     /* Typography scale (keep small and intentional). */
     --alm-font-size-xs: 10px;
     --alm-font-size-sm: 12px;
@@ -121,6 +118,13 @@
     --alm-shadow-overlay: 0 18px 48px rgba(15, 23, 42, 0.16);
     --alm-shadow-button: 0 4px 12px rgba(23, 32, 51, 0.16);
     --alm-shadow-focus: 0 0 0 2px color-mix(in srgb, var(--alm-primary) 18%, transparent);
+}
+
+.almdina-ui {
+    --alm-secondary-bg: var(--control-bg, #ffffff);
+    --alm-secondary-border: var(--border-color, #dfe3e8);
+    --alm-secondary-text: var(--text-color, #1f272e);
+    --alm-secondary-hover-bg: var(--subtle-fg, #f4f5f6);
 
     --alm-height-button: 42px;
     --alm-padding-button-x: 16px;
