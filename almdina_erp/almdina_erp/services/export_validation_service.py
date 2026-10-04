@@ -422,14 +422,48 @@ def _strict_editable_snapshot(payload: dict[str, Any]) -> tuple[Any, dict[str, A
     doc._calculate_piece_rows()
     settings = doc._get_settings()
     input_fingerprint = doc._plan_input_fingerprint(settings)
-    doc._calculate_cutting_plan(settings, input_fingerprint)
+    try:
+        doc._calculate_cutting_plan(settings, input_fingerprint)
+    except DxfTopologyError as exc:
+        from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import render_error_cards_html
+
+        frappe.throw(
+            render_error_cards_html(
+                [topology_error_to_issue(exc, kerf_mm=flt(getattr(doc, "kerf_mm", 0)))],
+                context="export",
+            ),
+            title=_("تعذر تصدير DXF"),
+        )
+    except DxfGeometrySnapshotError as exc:
+        from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import render_error_cards_html
+
+        frappe.throw(
+            render_error_cards_html(
+                [issue(CUT_INVALID_GEOMETRY, CATEGORY_TOPOLOGY, debug={"exception": type(exc).__name__})],
+                context="export",
+            ),
+            title=_("تعذر تصدير DXF"),
+        )
     snapshot = frappe.parse_json(doc.cutting_plan_json or "{}") or {}
     validation = snapshot.get("validation") or {}
-    errors = list(validation.get("errors") or [])
+    validation_errors = list(validation.get("errors") or [])
+    issues: list[DxfValidationIssue] = []
+    for error in validation_errors:
+        if isinstance(error, DxfValidationIssue):
+            issues.append(error)
+        else:
+            issues.append(issue(CUT_INVALID_GEOMETRY, CATEGORY_TOPOLOGY))
     if snapshot.get("unplaced"):
-        errors.append(_("Cutting Plan contains unplaced pieces."))
-    if not validation.get("is_valid") or errors:
-        frappe.throw(_("DXF export blocked by geometry validation:\n{0}").format("\n".join(errors)))
+        issues.append(issue(PLAN_UNPLACED_PIECES, CATEGORY_IDENTITY))
+    if not validation.get("is_valid") and not issues:
+        issues.append(issue(CUT_INVALID_GEOMETRY, CATEGORY_TOPOLOGY))
+    if issues:
+        from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import render_error_cards_html
+
+        frappe.throw(
+            render_error_cards_html(issues, context="export"),
+            title=_("تعذر تصدير DXF"),
+        )
 
     return doc, _enrich_export_snapshot(snapshot, doc)
 

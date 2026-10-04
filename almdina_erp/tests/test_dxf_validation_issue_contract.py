@@ -7,8 +7,11 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
+    CUT_INVALID_GEOMETRY,
     CUT_OPEN,
     FORBIDDEN_ROTATION,
+    PIECE_INVALID_DIMENSIONS,
+    PIECE_OUTSIDE_SHEET,
     TARGET_CONTOUR,
     TARGET_PIECE,
     TARGET_CONTOUR_PAIR,
@@ -217,6 +220,38 @@ def test_html_cards_escape_xss_payload() -> None:
     assert 'onerror=alert(1)>"' not in html
     assert "تعذر قبول ملف DXF" not in html
     assert "ما المشكلة؟" in html
+
+
+def test_error_card_footer_changes_with_explicit_context():
+    item = issue(CUT_INVALID_GEOMETRY, "CONTOUR", target=contour_target(4))
+    upload = render_error_cards_html([item], context="upload")
+    export = render_error_cards_html([item], context="export")
+    assert "صحح الرسم ثم أعد رفع الملف. لم يتم استبدال خطة DXF الحالية في الطلب." in upload
+    assert "أصلح المشكلة أعلاه أو أعد حساب الخطة، ثم أعد تصدير DXF." in export
+    assert "لم يتم استبدال خطة DXF" not in export
+    assert "صحح المحيط على CUT_PATH ثم أعد التصدير." in export
+    assert "أعد الرفع" not in export
+
+
+def test_contour_dimensions_and_bounds_are_never_presented_as_a_door():
+    for code in (PIECE_OUTSIDE_SHEET, PIECE_INVALID_DIMENSIONS):
+        item = issue(code, "LAYOUT", target=contour_target(9))
+        card = present_issue(item)
+        rendered = " ".join((card.problem, card.target, card.action))
+        assert "مسار القص" in rendered
+        assert "الدرفة" not in rendered
+
+        proven = issue(code, "LAYOUT", target=piece_target(source_piece_no=9))
+        assert "الدرفة" in present_issue(proven).problem
+
+    unproven = issue(
+        PIECE_OUTSIDE_SHEET,
+        "LAYOUT",
+        target=piece_target(source_piece_no=9),
+        params={"identity_unproven": True},
+    )
+    card = present_issue(unproven)
+    assert "الدرفة" not in " ".join((card.problem, card.target, card.action))
 
 
 def test_special_presenter_formats_precomputed_domain_range_only():

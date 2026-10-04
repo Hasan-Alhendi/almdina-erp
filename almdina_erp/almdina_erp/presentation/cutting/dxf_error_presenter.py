@@ -96,6 +96,12 @@ def present_target(target: DxfIssueTarget, *, params: dict[str, Any] | None = No
         return "علامة Extra."
     if kind in {codes.TARGET_PIECE, codes.TARGET_PIECE_COPY}:
         piece_no = target.source_piece_no
+        if params.get("identity_unproven"):
+            if target.piece_index is not None:
+                return f"مسار القص رقم {target.piece_index}."
+            if target.label:
+                return f"القطعة ذات المعرّف {target.label}."
+            return "مسار قص غير محدد."
         if piece_no is None and target.piece_index is not None:
             # piece_index without proven identity is not a door number.
             return f"مسار القص رقم {target.piece_index}." if params.get("identity_unproven") else f"القطعة رقم {target.piece_index}."
@@ -122,6 +128,38 @@ def present_target(target: DxfIssueTarget, *, params: dict[str, Any] | None = No
     if target.label:
         return f"{target.label}."
     return "غير محدد."
+
+
+def _piece_noun(issue: DxfValidationIssue) -> str:
+    """Choose a door noun only when the target carries proven order identity."""
+    target = issue.target
+    if target.kind in {codes.TARGET_CONTOUR, codes.TARGET_CONTOUR_PAIR} or issue.param("identity_unproven"):
+        return "مسار القص"
+    if target.source_piece_no is not None and target.kind in {
+        codes.TARGET_PIECE,
+        codes.TARGET_PIECE_COPY,
+        codes.TARGET_OVERLAY,
+    }:
+        return "الدرفة"
+    return "القطعة"
+
+
+def _pair_nouns(issue: DxfValidationIssue) -> tuple[str, str]:
+    if issue.target.kind == codes.TARGET_PIECE_PAIR and issue.target.pair_piece_nos:
+        return "الدرفتان", "الدرفتين"
+    if issue.target.kind in {codes.TARGET_CONTOUR_PAIR, codes.TARGET_CONTOUR} or issue.param("identity_unproven"):
+        return "مسارا القص", "مساري القص"
+    return "القطعتان", "القطعتين"
+
+
+def _action_for_context(action: str, context: str) -> str:
+    if context == "upload":
+        return action
+    return (
+        action.replace("أعد رفع الملف", "أعد تصدير DXF")
+        .replace("أعد رفع DXF", "أعد تصدير DXF")
+        .replace("أعد الرفع", "أعد التصدير")
+    )
 
 
 def _special_range_action(params: dict[str, Any]) -> str:
@@ -315,10 +353,12 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
             params.get("expected_width_cm", _mm_to_cm(params.get("expected_width_mm"))),
             params.get("expected_height_cm", _mm_to_cm(params.get("expected_height_mm"))),
         )
+        noun = _piece_noun(issue)
+        adjective = "مدوّر" if noun == "مسار القص" else "مدوّرة"
         return PresentedDxfError(
-            "الدرفة مدوّرة والتدوير غير مسموح.",
+            f"{noun} {adjective} والتدوير غير مسموح.",
             target_text,
-            f"أعد اتجاه الدرفة إلى {expected}.",
+            f"أعد اتجاه {noun} إلى {expected}.",
             code,
             issue.category,
         )
@@ -341,8 +381,14 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
         return PresentedDxfError(problem, target_text, action, code, issue.category)
 
     if code == codes.SPECIAL_SIZE_MISMATCH:
+        noun = _piece_noun(issue)
+        problem = (
+            "مقاس مسار القص الخاص خارج المجال المسموح."
+            if noun == "مسار القص"
+            else f"مقاس {noun} الخاصة خارج المجال المسموح."
+        )
         return PresentedDxfError(
-            "مقاس الدرفة الخاصة خارج المجال المسموح.",
+            problem,
             target_text,
             _special_range_action(params),
             code,
@@ -399,10 +445,10 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
     if code == codes.EXPECTED_PIECE_MISMATCH:
         dxf_sizes = str(params.get("dxf_sizes_label") or "").strip()
         expected_sizes = str(params.get("expected_sizes_label") or "").strip()
-        problem = "مقاسات الدرف في DXF لا تطابق مقاسات القص في الطلب."
+        problem = "مقاسات مسارات القص في DXF لا تطابق مقاسات القص في الطلب."
         if dxf_sizes and expected_sizes:
             problem = (
-                f"مقاسات الدرف في DXF لا تطابق مقاسات القص في الطلب. "
+                f"مقاسات مسارات القص في DXF لا تطابق مقاسات القص في الطلب. "
                 f"في الملف: {dxf_sizes}. المطلوب: {expected_sizes}."
             )
         actual_sizes = [str(value) for value in (params.get("extra_sizes") or []) if value]
@@ -423,7 +469,7 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
 
     if code == codes.PIECE_IDENTITY_MISSING:
         return PresentedDxfError(
-            "تعذر ربط مسار القص بهوية درفة واحدة في الطلب.",
+            "تعذر ربط مسار القص بهوية قطعة واحدة في الطلب.",
             target_text,
             "طابق المقاس والهوية مع صف الطلب ثم أعد الرفع.",
             code,
@@ -434,7 +480,7 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
 
     if code == codes.PIECE_IDENTITY_AMBIGUOUS:
         return PresentedDxfError(
-            "هوية مسار القص ملتبسة بين أكثر من درفة.",
+            "هوية مسار القص ملتبسة بين أكثر من قطعة.",
             target_text,
             "افصل القطع المتشابهة أو اجعل الهوية قابلة للإثبات ثم أعد الرفع.",
             code,
@@ -443,44 +489,46 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
 
     if code == codes.AMBIGUOUS_CONTOUR_OWNERSHIP:
         return PresentedDxfError(
-            "يوجد مسار داخلي غير واضح: هل هو فتحة أم درفة مستقلة؟",
+            "يوجد مسار داخلي غير واضح: هل هو فتحة أم قطعة مستقلة؟",
             target_text,
-            "اجعل الفتحة داخل درفة واحدة بوضوح، أو افصل الدرفة المستقلة.",
+            "اجعل الفتحة داخل محيط واحد بوضوح، أو افصل القطعة المستقلة.",
             code,
             issue.category,
         )
     if code == codes.UNRESOLVED_CONTOUR_OWNERSHIP:
         return PresentedDxfError(
-            "تعذر تمييز الدرف عن الفتحات الداخلية.",
+            "تعذر تمييز المحيطات عن الفتحات الداخلية.",
             target_text,
-            "أغلق كل فتحة بالكامل داخل درفتها دون تلامس ملتبس.",
+            "أغلق كل فتحة بالكامل داخل محيطها دون تلامس ملتبس.",
             code,
             issue.category,
         )
     if code == codes.INVALID_PART_TOPOLOGY:
         return PresentedDxfError(
-            "شكل إحدى الدرف أو فتحاتها غير صالح.",
+            "شكل أحد محيطات القص أو فتحاته غير صالح.",
             target_text,
             "أغلق المحيط وأزل التقاطعات ثم أعد الرفع.",
             code,
             issue.category,
         )
     if code == codes.MATERIAL_OVERLAP:
-        if issue.target.kind == codes.TARGET_CONTOUR_PAIR:
+        pair_subject, pair_object = _pair_nouns(issue)
+        if pair_subject == "مسارا القص":
             return PresentedDxfError("يتداخل مسارا قص.", target_text, "افصل مسارات القص بحيث لا تتداخل مادتهما.", code, issue.category)
         return PresentedDxfError(
-            "الدرفتان متداخلتان على اللوح.",
+            f"{pair_subject} متداخلتان على اللوح.",
             target_text,
-            "افصل الدرفتين عن بعضهما.",
+            f"افصل {pair_object} عن بعضهما.",
             code,
             issue.category,
         )
     if code == codes.KERF_VIOLATION:
         kerf = format_mm(params.get("kerf_mm") or 0)
-        if issue.target.kind == codes.TARGET_CONTOUR_PAIR:
+        pair_subject, pair_object = _pair_nouns(issue)
+        if pair_subject == "مسارا القص":
             return PresentedDxfError("المسافة بين مساري القص أقل من Kerf.", target_text, f"اجعل المسافة {kerf} مم أو أكثر.", code, issue.category)
         return PresentedDxfError(
-            "المسافة بين الدرفتين أقل من Kerf.",
+            f"المسافة بين {pair_object} أقل من Kerf.",
             target_text,
             f"اجعل المسافة {kerf} مم أو أكثر.",
             code,
@@ -488,28 +536,31 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
         )
     if code == codes.HOLE_CLEARANCE_VIOLATION:
         kerf = format_mm(params.get("kerf_mm") or 0)
-        if issue.target.kind == codes.TARGET_CONTOUR_PAIR:
+        noun = _piece_noun(issue)
+        if noun == "مسار القص":
             return PresentedDxfError("مسار قص داخل فتحة قريب من حافتها.", target_text, f"اترك مسافة Kerf لا تقل عن {kerf} مم من حدود الفتحة.", code, issue.category)
         return PresentedDxfError(
-            "الدرفة داخل الفتحة قريبة جدًا من حافة الفتحة.",
+            f"{noun} داخل الفتحة قريبة جدًا من حافة الفتحة.",
             target_text,
             f"اترك مسافة Kerf لا تقل عن {kerf} مم من حدود الفتحة.",
             code,
             issue.category,
         )
     if code == codes.PIECE_OUTSIDE_SHEET:
+        noun = _piece_noun(issue)
         return PresentedDxfError(
-            "الدرفة خارج حدود اللوح.",
+            f"{noun} خارج حدود اللوح.",
             target_text,
-            "حرّك الدرفة داخل اللوح ثم أعد الرفع.",
+            f"حرّك {noun} داخل اللوح ثم أعد الرفع.",
             code,
             issue.category,
         )
     if code == codes.PIECE_INVALID_DIMENSIONS:
+        noun = _piece_noun(issue)
         return PresentedDxfError(
-            "أبعاد الدرفة غير صالحة.",
+            f"أبعاد {noun} غير صالحة.",
             target_text,
-            "صحح عرض وطول الدرفة ثم أعد الرفع.",
+            f"صحح عرض وطول {noun} ثم أعد الرفع.",
             code,
             issue.category,
         )
@@ -531,9 +582,9 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
         )
     if code == codes.APPLIED_TRIM_OVERFLOW:
         return PresentedDxfError(
-            "الدرف تتجاوز حدود اللوح حتى بعد التشذيب.",
+            "القطع تتجاوز حدود اللوح حتى بعد التشذيب.",
             "اللوح.",
-            "حرّك الدرف داخل اللوح ثم أعد الرفع.",
+            "حرّك القطع داخل اللوح ثم أعد الرفع.",
             code,
             issue.category,
         )
@@ -568,28 +619,32 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
 
     if code == codes.OVERLAY_ON_NON_EXTRA:
         layer = params.get("layer") or issue.target.layer or "؟"
+        noun = _piece_noun(issue)
         return PresentedDxfError(
-            f"علامة الطبقة {layer} على درفة ليست Extra.",
+            f"علامة الطبقة {layer} على {noun} ليست Extra.",
             target_text,
-            "ضع العلامة داخل درفة Extra فقط.",
+            f"ضع العلامة داخل {noun} من نوع Extra فقط.",
             code,
             issue.category,
         )
     if code == codes.OVERLAY_FLOATING:
         layer = params.get("layer") or issue.target.layer or "؟"
+        noun = _piece_noun(issue)
         return PresentedDxfError(
-            f"علامة الطبقة {layer} ليست بالكامل داخل درفة Extra.",
+            f"علامة الطبقة {layer} ليست بالكامل داخل {noun} من نوع Extra.",
             target_text,
-            "ضع العلامة بالكامل داخل درفة Extra واحدة.",
+            f"ضع العلامة بالكامل داخل {noun} واحد من نوع Extra.",
             code,
             issue.category,
         )
     if code == codes.OVERLAY_SPANS_HOSTS:
         layer = params.get("layer") or issue.target.layer or "؟"
+        noun = _piece_noun(issue)
+        multiple = "أكثر من درفة" if noun == "الدرفة" else "أكثر من قطعة"
         return PresentedDxfError(
-            f"علامة الطبقة {layer} تمتد فوق أكثر من درفة.",
+            f"علامة الطبقة {layer} تمتد فوق {multiple}.",
             target_text,
-            "ضع كل علامة داخل درفة Extra واحدة.",
+            f"ضع كل علامة داخل {noun} واحد من نوع Extra.",
             code,
             issue.category,
         )
@@ -606,18 +661,20 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
     if code == codes.OVERLAY_ADDON_MISSING:
         layer = params.get("layer") or "؟"
         kind_name = _OVERLAY_KIND_AR.get(str(params.get("overlay_kind") or ""), layer)
+        noun = _piece_noun(issue)
         return PresentedDxfError(
             f"خانة {kind_name} مفعّلة لكن العلامة ناقصة في DXF.",
             target_text,
-            f"أضف علامة {kind_name} على الطبقة {layer} داخل الدرفة.",
+            f"أضف علامة {kind_name} على الطبقة {layer} داخل {noun}.",
             code,
             issue.category,
         )
     if code == codes.OVERLAY_ADDON_DUPLICATE:
         layer = params.get("layer") or "؟"
         kind_name = _OVERLAY_KIND_AR.get(str(params.get("overlay_kind") or ""), layer)
+        noun = _piece_noun(issue)
         return PresentedDxfError(
-            f"يوجد أكثر من علامة {kind_name} لنفس الدرفة.",
+            f"يوجد أكثر من علامة {kind_name} لنفس {noun}.",
             target_text,
             "اترك علامة واحدة فقط ثم أعد الرفع.",
             code,
@@ -642,15 +699,15 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
         )
     if code == codes.OFFCUT_IDENTITY_MISMATCH:
         return PresentedDxfError(
-            "مسار OFFCUT لا يطابق درفة واحدة بوضوح.",
+            "مسار OFFCUT لا يطابق قطعة واحدة بوضوح.",
             target_text,
-            "اجعل محيط OFFCUT مطابقًا لمحيط درفة واحدة تمامًا.",
+            "اجعل محيط OFFCUT مطابقًا لمحيط قطعة واحدة تمامًا.",
             code,
             issue.category,
         )
     if code == codes.MIXED_RESOURCE_SOURCE:
         return PresentedDxfError(
-            "لا تخلط درفات OFFCUT مع درفات اللوح الكامل على نفس المصدر.",
+            "لا تخلط قطع OFFCUT مع قطع اللوح الكامل على نفس المصدر.",
             target_text,
             "افصل قطع OFFCUT في مصدر مستقل.",
             code,
@@ -770,20 +827,32 @@ def present_issues_as_strings(issues: Iterable[DxfValidationIssue]) -> list[str]
     lines: list[str] = []
     for item in present_issues(issues):
         lines.append(
-            f"ما المشكلة؟ {item.problem} أي درفة/لوح؟ {item.target} ماذا أفعل؟ {item.action}"
+            f"ما المشكلة؟ {item.problem} أي موضع؟ {item.target} ماذا أفعل؟ {item.action}"
         )
     return lines
 
 
-def render_error_cards_html(issues: Sequence[DxfValidationIssue], *, max_cards: int = 10) -> str:
-    """RTL HTML cards for shop-floor dialog. Escapes all dynamic values."""
+def render_error_cards_html(
+    issues: Sequence[DxfValidationIssue],
+    *,
+    context: str = "upload",
+    max_cards: int = 10,
+) -> str:
+    """Render RTL issue cards with a footer for upload or export context."""
+    if context not in {"upload", "export"}:
+        raise ValueError("DXF error-card context must be 'upload' or 'export'.")
     presented = present_issues(issues)
     if not presented:
+        fallback_action = (
+            "أصلح المشكلة أو أعد حساب الخطة ثم أعد تصدير DXF."
+            if context == "export"
+            else "صحح الرسم ثم أعد رفع الملف."
+        )
         presented = [
             PresentedDxfError(
                 "تعذر التحقق من ملف DXF بسبب خطأ غير معروف.",
                 "غير محدد.",
-                "صحح الرسم ثم أعد رفع الملف.",
+                fallback_action,
                 "UNKNOWN",
                 codes.CATEGORY_WORKFLOW,
             )
@@ -796,19 +865,25 @@ def render_error_cards_html(issues: Sequence[DxfValidationIssue], *, max_cards: 
             "<div class='alm-dxf-error-card' style='border:1px solid var(--border-color);border-radius:6px;"
             "padding:10px 12px;margin:0 0 10px;text-align:right;direction:rtl;'>"
             f"<div><strong>ما المشكلة؟</strong> {html.escape(item.problem)}</div>"
-            f"<div style='margin-top:6px;'><strong>أي درفة/لوح؟</strong> {html.escape(item.target)}</div>"
-            f"<div style='margin-top:6px;'><strong>ماذا أفعل؟</strong> {html.escape(item.action)}</div>"
+            f"<div style='margin-top:6px;'><strong>أي موضع؟</strong> {html.escape(item.target)}</div>"
+            f"<div style='margin-top:6px;'><strong>ماذا أفعل؟</strong> {html.escape(_action_for_context(item.action, context))}</div>"
             "</div>"
         )
     extra = (
         f"<p style='direction:rtl;text-align:right;'>وهناك {remaining} أخطاء إضافية. "
-        "صحح الأخطاء الظاهرة أولًا ثم أعد الرفع.</p>"
+        + ("صحح الأخطاء الظاهرة أولًا ثم أعد الرفع." if context == "upload" else "راجع الأخطاء الظاهرة أولًا ثم أعد التصدير.")
+        + "</p>"
         if remaining > 0
         else ""
+    )
+    footer = (
+        "صحح الرسم ثم أعد رفع الملف. لم يتم استبدال خطة DXF الحالية في الطلب."
+        if context == "upload"
+        else "أصلح المشكلة أعلاه أو أعد حساب الخطة، ثم أعد تصدير DXF."
     )
     return (
         "<div class='alm-dxf-error-dialog' style='direction:rtl;text-align:right;'>"
         f"{''.join(cards)}{extra}"
-        "<p>صحح الرسم ثم أعد رفع الملف. لم يتم استبدال خطة DXF الحالية في الطلب.</p>"
+        f"<p>{footer}</p>"
         "</div>"
     )

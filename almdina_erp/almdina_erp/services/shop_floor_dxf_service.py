@@ -199,7 +199,7 @@ def _throw_dxf_validation_errors(
                         params={"message": text},
                     )
                 )
-    message = render_error_cards_html(resolved)
+    message = render_error_cards_html(resolved, context="upload")
     frappe.throw(message, title=_("تعذر قبول ملف DXF"))
 
 
