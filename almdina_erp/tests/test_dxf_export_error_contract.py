@@ -119,7 +119,10 @@ def test_strict_editable_snapshot_uses_neutral_issue_for_legacy_validation_error
         def _calculate_cutting_plan(self, _settings, _fingerprint):
             self.cutting_plan_json = json.dumps(
                 {
-                    "validation": {"is_valid": False, "errors": ["legacy geometry detail"]},
+                    "validation": {
+                        "is_valid": False,
+                        "errors": ["legacy geometry detail", "legacy bounds detail"],
+                    },
                     "unplaced": ["piece-1"],
                 }
             )
@@ -142,9 +145,13 @@ def test_strict_editable_snapshot_uses_neutral_issue_for_legacy_validation_error
         export_validation_service._strict_editable_snapshot({"name": "DCO-TEST"})
 
     assert captured["context"] == "export"
-    assert captured["issues"][0].code == PLAN_VALIDATION_FAILED
-    assert captured["issues"][0].debug["legacy_validation_error"] == "legacy geometry detail"
-    assert captured["issues"][0].code != CUT_INVALID_GEOMETRY
+    validation_failures = [item for item in captured["issues"] if item.code == PLAN_VALIDATION_FAILED]
+    assert len(validation_failures) == 1
+    assert validation_failures[0].debug["legacy_validation_errors"] == [
+        "legacy geometry detail",
+        "legacy bounds detail",
+    ]
+    assert validation_failures[0].code != CUT_INVALID_GEOMETRY
     assert [item.code for item in captured["issues"]].count(PLAN_UNPLACED_PIECES) == 1
     card = present_issue(captured["issues"][0])
     assert card.problem == "خطة القص الحالية غير صالحة للتصدير."

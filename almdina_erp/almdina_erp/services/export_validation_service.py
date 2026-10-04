@@ -449,11 +449,20 @@ def _strict_editable_snapshot(payload: dict[str, Any]) -> tuple[Any, dict[str, A
     validation = snapshot.get("validation") or {}
     validation_errors = list(validation.get("errors") or [])
     issues: list[DxfValidationIssue] = []
+    legacy_validation_errors: list[str] = []
     for error in validation_errors:
         if isinstance(error, DxfValidationIssue):
             issues.append(error)
         else:
-            issues.append(issue(PLAN_VALIDATION_FAILED, CATEGORY_EXPORT, debug={"legacy_validation_error": str(error)}))
+            legacy_validation_errors.append(str(error))
+    if legacy_validation_errors:
+        issues.append(
+            issue(
+                PLAN_VALIDATION_FAILED,
+                CATEGORY_EXPORT,
+                debug={"legacy_validation_errors": legacy_validation_errors},
+            )
+        )
     if snapshot.get("unplaced"):
         issues.append(issue(PLAN_UNPLACED_PIECES, CATEGORY_IDENTITY))
     if not validation.get("is_valid") and not issues:
