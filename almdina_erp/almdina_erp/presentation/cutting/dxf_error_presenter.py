@@ -736,6 +736,14 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
         )
     if code == codes.PLAN_UNPLACED_PIECES:
         return PresentedDxfError("خطة القص تحتوي قطعًا غير موزعة.", "الخطة.", "أكمل التوزيع أو أعد الاستيراد.", code, issue.category)
+    if code == codes.PLAN_VALIDATION_FAILED:
+        return PresentedDxfError(
+            "خطة القص الحالية غير صالحة للتصدير.",
+            "خطة القص.",
+            "أعد حساب الخطة ثم حاول التصدير مرة أخرى.",
+            code,
+            issue.category,
+        )
     if code == codes.MANUFACTURING_REQUIREMENTS_MISSING:
         return PresentedDxfError(
             "خطة القص المحفوظة بلا متطلبات تصنيع صالحة.",
@@ -827,7 +835,7 @@ def present_issues_as_strings(issues: Iterable[DxfValidationIssue]) -> list[str]
     lines: list[str] = []
     for item in present_issues(issues):
         lines.append(
-            f"ما المشكلة؟ {item.problem} أي موضع؟ {item.target} ماذا أفعل؟ {item.action}"
+            f"ما المشكلة؟ {item.problem} أين المشكلة؟ {item.target} ماذا أفعل؟ {item.action}"
         )
     return lines
 
@@ -865,7 +873,7 @@ def render_error_cards_html(
             "<div class='alm-dxf-error-card' style='border:1px solid var(--border-color);border-radius:6px;"
             "padding:10px 12px;margin:0 0 10px;text-align:right;direction:rtl;'>"
             f"<div><strong>ما المشكلة؟</strong> {html.escape(item.problem)}</div>"
-            f"<div style='margin-top:6px;'><strong>أي موضع؟</strong> {html.escape(item.target)}</div>"
+            f"<div style='margin-top:6px;'><strong>أين المشكلة؟</strong> {html.escape(item.target)}</div>"
             f"<div style='margin-top:6px;'><strong>ماذا أفعل؟</strong> {html.escape(_action_for_context(item.action, context))}</div>"
             "</div>"
         )

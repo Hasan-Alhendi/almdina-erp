@@ -25,6 +25,7 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
     PIECE_COUNT_MISMATCH, PIECE_IDENTITY_MISMATCH, PIECE_INVALID_DIMENSIONS,
     PIECE_MISSING, PIECE_OUTSIDE_SHEET, PLAN_LABEL_DUPLICATE,
     PLAN_SOURCE_IDENTITY_MISMATCH, PLAN_SOURCE_MISSING, PLAN_UNPLACED_PIECES,
+    PLAN_VALIDATION_FAILED,
     PLAN_UNKNOWN_PIECES, REMNANT_IDENTITY_MISMATCH, REMNANT_NOT_FOUND,
     REMNANT_REFERENCE_MISSING, SPECIAL_SIZE_MISMATCH, DxfIssueTarget, DxfValidationIssue, issue,
     pair_target, piece_target, sheet_target, topology_error_to_issue,
@@ -156,7 +157,7 @@ def validate_cutting_plan_issues(plan: Any) -> list[DxfValidationIssue]:
                 second_no = source_by_label.get(str(exc.second_key))
                 if first_no is not None and second_no is not None and int(first_no) != int(second_no):
                     pair = (int(first_no), int(second_no))
-            issues.append(topology_error_to_issue(exc, kerf_mm=flt(plan.kerf_mm), pair_identity_proven=True, pair_source_piece_nos=pair))
+            issues.append(topology_error_to_issue(exc, kerf_mm=flt(plan.kerf_mm), pair_identity_proven=pair is not None, pair_source_piece_nos=pair))
         else:
             issues.append(issue(CUT_INVALID_GEOMETRY, CATEGORY_TOPOLOGY, debug={"exception": repr(exc)}))
 
@@ -452,11 +453,11 @@ def _strict_editable_snapshot(payload: dict[str, Any]) -> tuple[Any, dict[str, A
         if isinstance(error, DxfValidationIssue):
             issues.append(error)
         else:
-            issues.append(issue(CUT_INVALID_GEOMETRY, CATEGORY_TOPOLOGY))
+            issues.append(issue(PLAN_VALIDATION_FAILED, CATEGORY_EXPORT, debug={"legacy_validation_error": str(error)}))
     if snapshot.get("unplaced"):
         issues.append(issue(PLAN_UNPLACED_PIECES, CATEGORY_IDENTITY))
     if not validation.get("is_valid") and not issues:
-        issues.append(issue(CUT_INVALID_GEOMETRY, CATEGORY_TOPOLOGY))
+        issues.append(issue(PLAN_VALIDATION_FAILED, CATEGORY_EXPORT))
     if issues:
         from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import render_error_cards_html
 
