@@ -213,6 +213,23 @@ def _customer_invoice_lines(
         group["meters"] += meters
         group["amount"] += _number(_value(piece, "edge_cost_usd")) or meters * rate
 
+    # Add remaining edges for L-Shaped corners (edges adjacent to the corner cut)
+    for piece in pieces:
+        if _factory_quantity(piece) <= 0:
+            continue
+        piece_type = _text(_value(piece, "piece_type"), "Regular")
+        if piece_type != "L-Shaped Corner":
+            continue
+        remaining_meters = _number(_value(piece, "remaining_edges_meters"))
+        if remaining_meters <= 0:
+            continue
+        edge_type = _text(_value(piece, "edge_type"), "قشاط")
+        rate = _number(_value(piece, "edge_rate_usd"))
+        remaining_cost = _number(_value(piece, "remaining_edges_cost_usd"))
+        group = edge_groups[(edge_type, rate)]
+        group["meters"] += remaining_meters
+        group["amount"] += remaining_cost or remaining_meters * rate
+
     for (edge_type, rate), group in sorted(edge_groups.items()):
         lines.append(
             {

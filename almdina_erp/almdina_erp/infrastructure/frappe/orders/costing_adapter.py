@@ -111,6 +111,8 @@ class FrappeOrderCostingAdapter:
                 row.edge_break_cost_usd = 0
                 row.clipped_corner_edge_price_usd = 0
                 row.clipped_corner_edge_price_status = "Unpriced"
+                row.remaining_edges_meters = 0
+                row.remaining_edges_cost_usd = 0
                 continue
 
             # Resolve edge rate: use the piece's effective edge type
@@ -149,6 +151,9 @@ class FrappeOrderCostingAdapter:
             piece_type = str(row.piece_type or "Regular")
             adjacent_sides = break_adjacent_sides(row.clipped_corner_position)
 
+            row_remaining_meters = 0.0
+            row_remaining_cost = 0.0
+
             # For L-Shaped: adjacent sides have reduced length/width
             # For Clipped: remaining sides are calculated normally (already done in summary.pieces)
             if piece_type == L_SHAPED_CORNER_TYPE:
@@ -165,28 +170,36 @@ class FrappeOrderCostingAdapter:
                     side_type = str(row.edge_width_top_type_override or self.document.default_edge_type or "").strip()
                     rate = rate_map.get(side_type, 0.0) if side_type else 0.0
                     meters = reduced_width * qty / 100
-                    remaining_edges_total += meters * rate
+                    row_remaining_meters += meters
+                    row_remaining_cost += meters * rate
 
                 if 'edge_width_bottom' in adjacent_sides and cint(row.edge_width_bottom):
                     reduced_width = max(0, width_cm - corner_width_cm)
                     side_type = str(row.edge_width_bottom_type_override or self.document.default_edge_type or "").strip()
                     rate = rate_map.get(side_type, 0.0) if side_type else 0.0
                     meters = reduced_width * qty / 100
-                    remaining_edges_total += meters * rate
+                    row_remaining_meters += meters
+                    row_remaining_cost += meters * rate
 
                 if 'edge_long_right' in adjacent_sides and cint(row.edge_long_right):
                     reduced_length = max(0, length_cm - corner_length_cm)
                     side_type = str(row.edge_long_right_type_override or self.document.default_edge_type or "").strip()
                     rate = rate_map.get(side_type, 0.0) if side_type else 0.0
                     meters = reduced_length * qty / 100
-                    remaining_edges_total += meters * rate
+                    row_remaining_meters += meters
+                    row_remaining_cost += meters * rate
 
                 if 'edge_long_left' in adjacent_sides and cint(row.edge_long_left):
                     reduced_length = max(0, length_cm - corner_length_cm)
                     side_type = str(row.edge_long_left_type_override or self.document.default_edge_type or "").strip()
                     rate = rate_map.get(side_type, 0.0) if side_type else 0.0
                     meters = reduced_length * qty / 100
-                    remaining_edges_total += meters * rate
+                    row_remaining_meters += meters
+                    row_remaining_cost += meters * rate
+
+            row.remaining_edges_meters = row_remaining_meters
+            row.remaining_edges_cost_usd = row_remaining_cost
+            remaining_edges_total += row_remaining_cost
 
         self.corner_break_edge_total_usd = corner_break_total
         self.remaining_edges_total_usd = remaining_edges_total
