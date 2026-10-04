@@ -191,6 +191,13 @@ class FrappeEdgeProfileRepository:
 
     def _required_names(self) -> set[str]:
         names: set[str] = set()
+        default_edge_type = str(self.document.default_edge_type or "").strip()
+        if default_edge_type:
+            # The order-wide default is a fallback used well beyond the four
+            # regular sides below -- e.g. pricing a corner-break strap on a
+            # piece with no regular side selected -- so it must always be
+            # loaded, not just when a side happens to reference it directly.
+            names.add(default_edge_type)
         for index, row in enumerate(self.document.pieces or [], start=1):
             for side in SIDE_CONFIG:
                 edge_type = self.effective_type(row, side, index)

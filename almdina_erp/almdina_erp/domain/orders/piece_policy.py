@@ -441,15 +441,17 @@ def pending_custom_edge_price_labels(pieces: Any) -> tuple[str, ...]:
             piece_type = str(piece.get("piece_type") or "Regular")
             special_status = str(piece.get("special_shape_price_status") or "")
             clipped_status = str(piece.get("clipped_corner_edge_price_status") or "Unpriced")
+            has_edge_break = bool(piece.get("edge_break"))
         else:
             piece_type = str(getattr(piece, "piece_type", None) or "Regular")
             special_status = str(getattr(piece, "special_shape_price_status", None) or "")
             clipped_status = str(
                 getattr(piece, "clipped_corner_edge_price_status", None) or "Unpriced"
             )
+            has_edge_break = bool(getattr(piece, "edge_break", 0))
         if piece_type == "Special" and special_status != "Approved":
             pending.append(f"درفة خاصة رقم {index}")
-        elif is_corner_cut(piece_type) and clipped_status != "Priced":
+        elif is_corner_cut(piece_type) and has_edge_break and clipped_status != "Priced":
             pending.append(f"{corner_cut_arabic_label(piece_type)} {index}")
     return tuple(pending)
 
