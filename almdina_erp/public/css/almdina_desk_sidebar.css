@@ -1,0 +1,95 @@
+/*
+ * Almdina shared-shell desk sidebar polish (presentation only).
+ * Scoped to body.almdina-shared-shell; Frappe owns sidebar data and expand state.
+ */
+
+body.almdina-shared-shell .body-sidebar-top {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+}
+
+body.almdina-shared-shell .body-sidebar-top:hover,
+body.almdina-shared-shell .body-sidebar-top:focus-within {
+    scrollbar-color: color-mix(in srgb, var(--alm-on-primary, #fff) 28%, transparent) transparent;
+}
+
+body.almdina-shared-shell .body-sidebar-top::-webkit-scrollbar {
+    width: 5px;
+}
+
+body.almdina-shared-shell .body-sidebar-top::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+body.almdina-shared-shell .body-sidebar-top::-webkit-scrollbar-thumb {
+    background-color: transparent;
+    border-radius: 999px;
+}
+
+body.almdina-shared-shell .body-sidebar-top:hover::-webkit-scrollbar-thumb,
+body.almdina-shared-shell .body-sidebar-top:focus-within::-webkit-scrollbar-thumb {
+    background-color: color-mix(in srgb, var(--alm-on-primary, #fff) 28%, transparent);
+}
+
+body.almdina-shared-shell .body-sidebar-container:not(.expanded) .body-sidebar-top .standard-sidebar-item .sidebar-item-label,
+body.almdina-shared-shell .body-sidebar-container:not(.expanded) .sidebar-header .title-container,
+body.almdina-shared-shell .body-sidebar-container:not(.expanded) .section-item .sidebar-item-label,
+body.almdina-shared-shell .body-sidebar-container:not(.expanded) .onboarding-sidebar span,
+body.almdina-shared-shell .body-sidebar-container:not(.expanded) .promotional-banner-title {
+    display: none !important;
+}
+
+body.almdina-shared-shell .body-sidebar-container:not(.expanded) .standard-sidebar-item .item-anchor {
+    justify-content: center;
+    gap: 0;
+    padding-inline: 0;
+}
+
+body.almdina-shared-shell .body-sidebar-container:not(.expanded) .sidebar-header {
+    justify-content: center;
+    padding-inline: 4px;
+}
+
+body.almdina-shared-shell .body-sidebar-container:not(.expanded) .sidebar-user-button {
+    justify-content: center;
+}
+
+body.almdina-shared-shell .body-sidebar-container:not(.expanded) .sidebar-user-button .avatar-name-email {
+    display: none !important;
+}
+
+body.almdina-shared-shell .body-sidebar .sidebar-item-icon .icon,
+body.almdina-shared-shell .body-sidebar .sidebar-item-icon .es-icon {
+    --icon-stroke: currentColor;
+}
+
+/* Nav icons match sidebar title/text (on-primary white), not Frappe gray. */
+body.almdina-shared-shell .body-sidebar .sidebar-item-icon,
+body.almdina-shared-shell .body-sidebar .sidebar-item-icon.text-ink-gray-7 {
+    color: var(--alm-on-primary, #fff) !important;
+}
+
+body.almdina-shared-shell .body-sidebar .standard-sidebar-item .item-anchor .sidebar-item-icon .icon,
+body.almdina-shared-shell .body-sidebar .standard-sidebar-item .item-anchor .sidebar-item-icon .es-icon,
+body.almdina-shared-shell .body-sidebar .standard-items-sections .sidebar-item-icon .icon,
+body.almdina-shared-shell .body-sidebar .standard-items-sections .sidebar-item-icon .es-icon {
+    --icon-stroke: var(--alm-on-primary, #fff);
+    color: var(--alm-on-primary, #fff);
+}
+
+body.almdina-shared-shell .body-sidebar .standard-sidebar-item.active-sidebar .item-anchor .sidebar-item-icon,
+body.almdina-shared-shell .body-sidebar .standard-sidebar-item.active-sidebar .item-anchor .sidebar-item-icon .icon,
+body.almdina-shared-shell .body-sidebar .standard-sidebar-item.active-sidebar .item-anchor .sidebar-item-icon .es-icon,
+body.almdina-shared-shell .body-sidebar .standard-sidebar-item:not(.active-sidebar) .item-anchor .sidebar-item-icon,
+body.almdina-shared-shell .body-sidebar .standard-sidebar-item:not(.active-sidebar) .item-anchor .sidebar-item-icon .icon,
+body.almdina-shared-shell .body-sidebar .standard-sidebar-item:not(.active-sidebar) .item-anchor .sidebar-item-icon .es-icon {
+    color: var(--alm-on-primary, #fff) !important;
+    --icon-stroke: var(--alm-on-primary, #fff);
+}
+
+body.almdina-shared-shell .body-sidebar .standard-sidebar-item .item-anchor:hover .sidebar-item-icon,
+body.almdina-shared-shell .body-sidebar .standard-sidebar-item .item-anchor:hover .sidebar-item-icon .icon,
+body.almdina-shared-shell .body-sidebar .standard-sidebar-item .item-anchor:hover .sidebar-item-icon .es-icon {
+    color: var(--alm-on-primary, #fff) !important;
+    --icon-stroke: var(--alm-on-primary, #fff);
+}

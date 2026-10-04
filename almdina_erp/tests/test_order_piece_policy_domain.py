@@ -260,7 +260,7 @@ class TestOrderPiecePolicyDomain(unittest.TestCase):
         self.assertTrue(is_corner_cut(L_SHAPED_CORNER_TYPE))
         self.assertFalse(is_corner_cut("Regular"))
         self.assertFalse(is_corner_cut("Special"))
-        self.assertEqual(corner_cut_arabic_label("Clipped Corner"), "درفة زاوية مقصوصة")
+        self.assertEqual(corner_cut_arabic_label("Clipped Corner"), "درفة الزاوية الكسر")
         self.assertEqual(corner_cut_arabic_label(L_SHAPED_CORNER_TYPE), "درفة زاوية L")
         self.assertEqual(
             pending_custom_edge_price_labels(
@@ -273,8 +273,88 @@ class TestOrderPiecePolicyDomain(unittest.TestCase):
                     {"piece_type": "Clipped Corner", "clipped_corner_edge_price_status": "Priced"},
                 ]
             ),
-            ("درفة زاوية مقصوصة 1", "درفة زاوية L 2"),
+            ("درفة الزاوية الكسر 1", "درفة زاوية L 2"),
         )
+
+    def test_edge_break_policy_clears_adjacent_sides_for_clipped_corner(self) -> None:
+        from almdina_erp.almdina_erp.domain.orders.piece_policy import (
+            apply_edge_break_policy,
+            break_adjacent_sides,
+        )
+
+        self.assertEqual(
+            break_adjacent_sides("Top Right"),
+            ("edge_width_top", "edge_long_right"),
+        )
+        decision = apply_edge_break_policy(
+            piece_type="Clipped Corner",
+            clipped_corner_position="Top Left",
+            edge_break=1,
+            edge_long_right=1,
+            edge_long_left=1,
+            edge_width_top=1,
+            edge_width_bottom=1,
+        )
+        self.assertEqual(decision.edge_break, 1)
+        self.assertEqual(decision.edge_width_top, 0)
+        self.assertEqual(decision.edge_long_left, 0)
+        self.assertEqual(decision.edge_long_right, 1)
+        self.assertEqual(decision.edge_width_bottom, 1)
+        self.assertEqual(
+            decision.cleared_sides,
+            ("edge_width_top", "edge_long_left"),
+        )
+
+        regular = apply_edge_break_policy(
+            piece_type="Regular",
+            clipped_corner_position="Top Right",
+            edge_break=1,
+            edge_long_right=1,
+            edge_long_left=0,
+            edge_width_top=1,
+            edge_width_bottom=0,
+        )
+        self.assertEqual(regular.edge_break, 0)
+        self.assertEqual(regular.edge_width_top, 1)
+        self.assertEqual(regular.edge_long_right, 1)
+
+        l_shaped = apply_edge_break_policy(
+            piece_type="L-Shaped Corner",
+            clipped_corner_position="Bottom Right",
+            edge_break=1,
+            edge_long_right=1,
+            edge_long_left=0,
+            edge_width_top=0,
+            edge_width_bottom=1,
+        )
+        self.assertEqual(l_shaped.edge_break, 1)
+        self.assertEqual(l_shaped.edge_long_right, 1)
+        self.assertEqual(l_shaped.edge_width_bottom, 1)
+        self.assertEqual(l_shaped.cleared_sides, ())
+
+    def test_special_measurement_edges_are_disabled_and_cleared(self) -> None:
+        from almdina_erp.almdina_erp.domain.orders.piece_policy import (
+            apply_special_measurement_edge_policy,
+            measurement_edges_disabled_for_piece,
+        )
+
+        self.assertTrue(measurement_edges_disabled_for_piece("Special"))
+        self.assertFalse(measurement_edges_disabled_for_piece("Regular"))
+        self.assertFalse(measurement_edges_disabled_for_piece("Extra"))
+        self.assertFalse(measurement_edges_disabled_for_piece("Clipped Corner"))
+
+        disabled = apply_special_measurement_edge_policy(piece_type="Special")
+        self.assertTrue(disabled.disabled)
+        self.assertEqual(disabled.edge_long_right, 0)
+        self.assertEqual(disabled.edge_long_left, 0)
+        self.assertEqual(disabled.edge_width_top, 0)
+        self.assertEqual(disabled.edge_width_bottom, 0)
+        self.assertEqual(disabled.edge_break, 0)
+        self.assertEqual(disabled.edge_type, "")
+        self.assertEqual(disabled.edge_long_right_type_override, "")
+
+        enabled = apply_special_measurement_edge_policy(piece_type="Regular")
+        self.assertFalse(enabled.disabled)
 
 
 if __name__ == "__main__":

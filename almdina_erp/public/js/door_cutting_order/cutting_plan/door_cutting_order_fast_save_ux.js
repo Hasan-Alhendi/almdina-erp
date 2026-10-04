@@ -34,17 +34,20 @@
             <style id="dco-fast-save-css">
                 .dco-plan-stale-banner {
                     display:flex;
-                    align-items:flex-start;
-                    gap:10px;
-                    padding:11px 13px;
-                    margin:0 0 10px;
+                    align-items:center;
+                    gap:8px;
+                    padding:6px 10px;
+                    margin:0 0 6px;
                     border:1px solid #f0c36d;
-                    border-radius:11px;
+                    border-radius:8px;
                     background:#fff8e6;
                     color:#6f4b00;
-                    font-size:11px;
-                    line-height:1.65;
+                    font-size:10.5px;
+                    line-height:1.35;
                     font-weight:750;
+                    white-space:nowrap;
+                    overflow:hidden;
+                    text-overflow:ellipsis;
                 }
                 .dco-plan-stale-banner.is-calculating {
                     border-color:color-mix(in srgb, var(--alm-primary, #172033) 32%, transparent);
@@ -55,8 +58,17 @@
                     border-color:rgba(190,125,25,.4);
                     background:#fff3d8;
                 }
-                .dco-plan-stale-banner strong { display:block; font-size:12px; }
-                .dco-plan-stale-banner .icon { font-size:18px; line-height:1.2; }
+                .dco-plan-stale-banner .icon {
+                    flex:0 0 auto;
+                    font-size:14px;
+                    line-height:1;
+                }
+                .dco-plan-stale-banner .dco-plan-stale-copy {
+                    min-width:0;
+                    overflow:hidden;
+                    text-overflow:ellipsis;
+                    white-space:nowrap;
+                }
             </style>
         `);
     }
@@ -139,12 +151,60 @@
         return Boolean(owner && typeof owner.isActive === "function" && owner.isActive(frm));
     }
 
+    function planSettingsEditing(frm) {
+        const owner = window.AlmdinaPlanEditSessionUX;
+        return Boolean(owner && typeof owner.isEditing === "function" && owner.isEditing(frm));
+    }
+
+    function clearStaleBanners(wrapper) {
+        wrapper.find(".dco-plan-stale-banner").remove();
+        wrapper.find(".dco-plan-settings-editor__stale-copy").each(function resetCopy() {
+            const node = $(this);
+            node.text("").attr("hidden", "hidden");
+        });
+        wrapper.find(".dco-plan-settings-editor__action-bar")
+            .removeClass("is-stale is-calculating is-stalled");
+    }
+
+    function renderEditActionBar(frm, wrapper, options = {}) {
+        const editor = wrapper.find(".dco-plan-settings-editor").first();
+        if (!editor.length) return false;
+
+        const actionBar = editor.find(".dco-plan-settings-editor__action-bar").first();
+        const copy = editor.find('[data-role="stale"]').first();
+        if (!actionBar.length || !copy.length) return false;
+
+        actionBar.removeClass("is-stale is-calculating is-stalled is-edit-layout");
+        if (options.editLayout) {
+            actionBar.addClass("is-edit-layout");
+        }
+        if (options.calculating) {
+            actionBar.addClass(`is-calculating${options.stalled ? " is-stalled" : ""}`);
+        } else         if (options.stale) {
+            actionBar.addClass("is-stale");
+        } else if (options.editLayout) {
+            actionBar.addClass("is-stale");
+        }
+
+        if (options.message) {
+            copy.text(options.message).removeAttr("hidden");
+        } else {
+            copy.text("").attr("hidden", "hidden");
+        }
+        return true;
+    }
+
     function renderStaleState(frm) {
         installStyles();
         const planActions = frm.fields_dict && frm.fields_dict.plan_control_actions;
         if (!planActions || !planActions.$wrapper) return;
 
-        planActions.$wrapper.find(".dco-plan-stale-banner").remove();
+        const wrapper = planActions.$wrapper;
+        clearStaleBanners(wrapper);
+
+        const inEditLayout = planSettingsEditing(frm)
+            && wrapper.find(".dco-plan-settings-editor").length;
+
         const job = backgroundJob(frm);
         if (jobIsActive(frm)) {
             const stalled = Boolean(job && job.stalled);
@@ -154,29 +214,46 @@
             const body = stalled
                 ? __("الحفظ تم بنجاح، لكن العامل الخلفي لم يبدأ بعد. يمكنك متابعة العمل أو استخدام زر إعادة الحساب اليدوي.")
                 : __("يمكنك متابعة العمل على الطلب. ستتحدث خطة القص والتكلفة تلقائيًا عند اكتمال الحساب.");
-            planActions.$wrapper.prepend(`
+            const message = stalled ? title : `${title} — ${body}`;
+            if (inEditLayout && renderEditActionBar(frm, wrapper, {
+                calculating: true,
+                stalled,
+                message,
+                editLayout: true,
+            })) {
+                return;
+            }
+            wrapper.prepend(`
                 <div class="dco-plan-stale-banner is-calculating${stalled ? " is-stalled" : ""}" role="status" aria-live="polite">
                     <span class="icon">⏳</span>
-                    <div>
-                        <strong>${frappe.utils.escape_html(title)}</strong>
-                        ${frappe.utils.escape_html(body)}
-                    </div>
+                    <span class="dco-plan-stale-copy">${frappe.utils.escape_html(message)}</span>
                 </div>`);
             return;
         }
 
         const stale = planIsStale(frm);
+        if (inEditLayout) {
+            const staleLine = stale
+                ? __("⚡ تحتاج إعادة حساب")
+                : "";
+            renderEditActionBar(frm, wrapper, {
+                stale,
+                message: staleLine,
+                editLayout: true,
+            });
+            if (stale) wrapper.find(".dco-plan-dirty-note").addClass("is-visible");
+            return;
+        }
+
         if (!stale) return;
 
-        planActions.$wrapper.prepend(`
+        const staleLine = __("خطة القص تحتاج إعادة حساب — اضغط «إعادة الحساب بالإعدادات الحالية» بعد الانتهاء.");
+        wrapper.prepend(`
             <div class="dco-plan-stale-banner">
                 <span class="icon">⚡</span>
-                <div>
-                    <strong>خطة القص تحتاج إعادة حساب</strong>
-                    تم تغيير مدخل يؤثر على توزيع القطع. اضغط «إعادة الحساب بالإعدادات الحالية» بعد الانتهاء من التعديل.
-                </div>
+                <span class="dco-plan-stale-copy">${frappe.utils.escape_html(staleLine)}</span>
             </div>`);
-        planActions.$wrapper.find(".dco-plan-dirty-note").addClass("is-visible");
+        wrapper.find(".dco-plan-dirty-note").addClass("is-visible");
     }
 
     function schedule(frm) {
@@ -218,6 +295,7 @@
         edge_long_left(frm) { markOrderInputPlanStale(frm); },
         edge_width_top(frm) { markOrderInputPlanStale(frm); },
         edge_width_bottom(frm) { markOrderInputPlanStale(frm); },
+        edge_break(frm) { markOrderInputPlanStale(frm); },
         edge_long_right_type_override(frm) { markOrderInputPlanStale(frm); },
         edge_long_left_type_override(frm) { markOrderInputPlanStale(frm); },
         edge_width_top_type_override(frm) { markOrderInputPlanStale(frm); },

@@ -7,7 +7,7 @@
 
 Almdina ERP هو تطبيق Frappe/ERPNext لإدارة رحلة طلبات قص وتجهيز درف MDF من لحظة إدخال قياسات الزبون حتى انتهاء مراحل المعمل والتسليم، مع فصل واضح بين التخطيط، التشغيل، التكلفة الداخلية، ومستندات الزبون.
 
-المستند المحوري هو **Door Cutting Order (DCO)**. حوله ترتبط القياسات، خطة القص، الرسم الخاص، DXF، مراحل الإنتاج، الحوادث والتعويضات، والتكلفة.
+المستند المحوري هو **Door Cutting Order (DCO)**. حوله ترتبط القياسات، خطة القص، الرسم الخاص، DXF، مراحل الإنتاج، والتكلفة.
 
 ## 2. رحلة العمل المبسطة
 
@@ -58,9 +58,8 @@ flowchart LR
 - Cutting Plan system/custom/approved behavior.
 - Drawing workspace وDXF.
 - Production Routing وProduction Stages.
-- Incidents وReplacement Pieces.
 - Operational cost + customer quote/invoice + printing.
-- صلاحيات دقيقة وتقارير تشغيلية ومالية.
+- صلاحيات دقيقة، وحساب التكلفة، وفاتورة الزبون، والطباعة.
 
 ### Explicitly excluded from new product code
 
@@ -69,6 +68,7 @@ flowchart LR
 - Reservations/Consumption/Stock Entry.
 - Board Remnant inventory/reuse.
 - Material variance accounting المرتبط بالمخزون.
+- تقارير الاستعلام التشغيلية والمالية.
 
 قد ترى ملفاتًا أو DocTypes تاريخية لهذه الميزات؛ لا تعتبرها متطلبًا حاليًا ولا تربط Feature جديدة بها.
 

@@ -184,7 +184,6 @@ class TestShopFloorInfrastructureGateway(unittest.TestCase):
         query_adapter_source = QUERY_ADAPTER_PATH.read_text(encoding="utf-8")
         command_repository_source = COMMAND_REPOSITORY_PATH.read_text(encoding="utf-8")
         query_repository_source = QUERY_REPOSITORY_PATH.read_text(encoding="utf-8")
-        gateway_source = GATEWAY_PATH.read_text(encoding="utf-8")
 
         self.assertNotIn("import frappe", application_source)
         self.assertNotIn("from frappe", application_source)
@@ -204,12 +203,7 @@ class TestShopFloorInfrastructureGateway(unittest.TestCase):
         self.assertNotIn("stock_execution_gateway", command_repository_source)
         self.assertNotIn("remnant_execution_gateway", command_repository_source)
 
-        self.assertNotIn("import frappe", gateway_source)
-        self.assertNotIn("frappe.db", gateway_source)
-        self.assertNotIn("frappe.get_doc", gateway_source)
-        self.assertNotIn("frappe.get_all", gateway_source)
-        self.assertNotIn("frappe.new_doc", gateway_source)
-        self.assertIn("Backward-compatible facade", gateway_source)
+        self.assertFalse(GATEWAY_PATH.exists(), GATEWAY_PATH)
 
         for path in (
             AUTHORIZATION_PATH,
@@ -221,14 +215,7 @@ class TestShopFloorInfrastructureGateway(unittest.TestCase):
         self.assertFalse(STOCK_GATEWAY_PATH.exists(), STOCK_GATEWAY_PATH)
         self.assertFalse(REMNANT_GATEWAY_PATH.exists(), REMNANT_GATEWAY_PATH)
 
-    def test_legacy_gateway_preserves_created_event_only_for_legacy_callers(self) -> None:
-        gateway_source = GATEWAY_PATH.read_text(encoding="utf-8")
-        create_source = gateway_source.split("def create_stage", 1)[1].split(
-            "def close_open_pause", 1
-        )[0]
-        self.assertIn("production_stage_repository.create_stage", create_source)
-        self.assertIn("production_event_repository.log_event", create_source)
-
+    def test_command_repository_create_stage_has_no_hidden_event_side_effect(self) -> None:
         command_repository_source = COMMAND_REPOSITORY_PATH.read_text(encoding="utf-8")
         create_repository_source = command_repository_source.split(
             "def create_stage", 1

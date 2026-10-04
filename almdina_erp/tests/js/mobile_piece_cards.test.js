@@ -20,6 +20,7 @@ const cardCss = fs.readFileSync(
 const handlers = {};
 const rootClasses = new Set();
 let rootWidth = 390;
+let orderCanEdit = true;
 
 const root = {
     classList: {
@@ -27,6 +28,22 @@ const root = {
             if (enabled) rootClasses.add(name);
             else rootClasses.delete(name);
         },
+        remove(name) {
+            rootClasses.delete(name);
+        },
+    },
+    closest(selector) {
+        void selector;
+        return null;
+    },
+    querySelector(selector) {
+        if (selector === ".dco-fast-entry-shell") {
+            return {
+                classList: root.classList,
+                closest: root.closest,
+            };
+        }
+        return null;
     },
     getBoundingClientRect() {
         return { width: rootWidth };
@@ -51,6 +68,11 @@ const context = {
         documentElement: { clientWidth: 390 },
     },
     frappe: {
+        almdina: {
+            orderCanEdit() {
+                return orderCanEdit;
+            },
+        },
         ui: {
             form: {
                 on(doctype, config) {
@@ -70,6 +92,12 @@ const context = {
         addEventListener() {},
         removeEventListener() {},
     },
+    AlmdinaMeasurementLifecycle: {
+        registerFeature(key, owner) {
+            assert.strictEqual(key, "mobile-piece-layout");
+            assert.equal(typeof owner, "function");
+        },
+    },
 };
 context.window.window = context.window;
 vm.createContext(context);
@@ -84,35 +112,81 @@ const frm = {
     },
 };
 
-handlers.refresh(frm);
-assert(rootClasses.has("dco-mobile-piece-cards"), "a phone screen must force card rows");
-assert(cardCss.includes("grid-template-columns: repeat(6, minmax(0, 1fr))"), "phone cards must use a structured six-track grid");
-assert(cardCss.includes("--dco-piece-control-height: 42px"), "phone controls must remain compact and usable");
-assert(cardCss.includes("grid-template-columns: repeat(2, minmax(0, 1fr)) !important"), "edge choices must remain readable on a narrow phone");
-assert(cardCss.includes(".dco-help-secondary"), "secondary desktop help must be hidden in the mobile surface");
+const sectionClasses = new Set();
 
+const section = {
+    classList: {
+        toggle(name, enabled) {
+            if (enabled) sectionClasses.add(name);
+            else sectionClasses.delete(name);
+        },
+    },
+};
+
+root.closest = (selector) => {
+    if (String(selector).includes("dco-measurements-card")) return section;
+    return null;
+};
+
+function resetPhoneLayout() {
+    context.document.documentElement.clientWidth = 390;
+    context.window.innerWidth = 390;
+    context.window.screen.width = 390;
+    context.window.screen.height = 844;
+    rootWidth = 390;
+}
+
+orderCanEdit = true;
+resetPhoneLayout();
+handlers.refresh(frm);
+assert(!rootClasses.has("dco-mobile-piece-cards"), "inline phone must not use card rows anymore");
+assert(rootClasses.has("dco-mobile-piece-read-table"), "inline phone must use the print-like scroll table");
+assert(sectionClasses.has("dco-measurements-mobile-scroll"), "measurements section must expand full width on phone");
+assert(!rootClasses.has("dco-measurement-readonly-surface"), "editable phone keeps edit affordances");
+
+orderCanEdit = false;
+rootClasses.clear();
+handlers.refresh(frm);
+assert(rootClasses.has("dco-mobile-piece-read-table"), "read-only phone must keep the scroll table");
+assert(rootClasses.has("dco-measurement-readonly-surface"), "read-only phone must hide edit chrome");
+
+orderCanEdit = true;
 context.document.documentElement.clientWidth = 700;
 context.window.innerWidth = 700;
 context.window.screen.width = 1366;
 context.window.screen.height = 768;
 rootWidth = 620;
+rootClasses.clear();
 context.window.AlmdinaMobilePieceCardsUX.apply(frm);
-assert(!rootClasses.has("dco-mobile-piece-cards"), "a narrow laptop surface must still keep the fast table");
+assert(!rootClasses.has("dco-mobile-piece-read-table"), "a narrow laptop surface must keep the desktop table");
 
+orderCanEdit = false;
+rootClasses.clear();
+context.window.AlmdinaMobilePieceCardsUX.apply(frm);
+assert(!rootClasses.has("dco-mobile-piece-read-table"), "read-only on a laptop must keep the desktop table");
+
+orderCanEdit = true;
 context.document.documentElement.clientWidth = 844;
 context.window.innerWidth = 844;
 context.window.screen.width = 390;
 context.window.screen.height = 844;
 rootWidth = 760;
+rootClasses.clear();
 context.window.AlmdinaMobilePieceCardsUX.apply(frm);
-assert(rootClasses.has("dco-mobile-piece-cards"), "a phone in landscape must still use compact cards");
+assert(rootClasses.has("dco-mobile-piece-read-table"), "a phone in landscape must use the scroll table");
 
+orderCanEdit = true;
 context.document.documentElement.clientWidth = 700;
 context.window.innerWidth = 700;
 context.window.screen.width = 800;
 context.window.screen.height = 1280;
 rootWidth = 680;
+rootClasses.clear();
 context.window.AlmdinaMobilePieceCardsUX.apply(frm);
-assert(!rootClasses.has("dco-mobile-piece-cards"), "a tablet or laptop must retain the fast table");
+assert(!rootClasses.has("dco-mobile-piece-read-table"), "a tablet or laptop must retain the fast table");
+
+assert(cardCss.includes(".dco-mobile-piece-read-table .dco-fast-entry-scroll"), "mobile scroll css must enable horizontal scroll");
+assert(cardCss.includes("overflow-x: auto !important"), "mobile scroll css must expose sideways scrolling");
+assert(cardCss.includes("dco-measurement-readonly-surface"), "readonly mobile chrome must stay scoped");
 
 console.log("Mobile piece-card responsive simulation passed");

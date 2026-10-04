@@ -9,9 +9,19 @@ app_include_css = [
     "/assets/almdina_erp/css/almdina_design_tokens.css",
     "/assets/almdina_erp/css/almdina_components.css",
     "/assets/almdina_erp/css/almdina_desk_theme.css",
+    "/assets/almdina_erp/css/almdina_desk_sidebar.css?v=2",
+    "/assets/almdina_erp/css/almdina_workspace_home.css?v=10",
+    "/assets/almdina_erp/css/almdina_list_table.css",
+    "/assets/almdina_erp/css/edge_banding_type_form.css?v=4",
+    "/assets/almdina_erp/css/role_form.css?v=2",
     "/assets/almdina_erp/css/door_cutting_order_measurement_structure.css",
     "/assets/almdina_erp/css/door_cutting_order_responsive.css",
-    "/assets/almdina_erp/css/door_cutting_order_form_tab_layout.css",
+    "/assets/almdina_erp/css/door_cutting_order_form_tab_layout.css?v=4",
+    "/assets/almdina_erp/css/door_cutting_order_plan_workspace_layout.css?v=12",
+    "/assets/almdina_erp/css/door_cutting_order_plan_workspace_shell.css?v=12",
+    "/assets/almdina_erp/css/door_cutting_order_form_sidebar.css",
+
+    "/assets/almdina_erp/css/door_cutting_order_form_sidebar.css",
     # Raw /assets paths are not content-fingerprinted by Frappe; bump the bounded
     # DCO list revision when its presentation contract changes.
     "/assets/almdina_erp/css/door_cutting_order_list.css?v=15",
@@ -36,6 +46,9 @@ app_include_js = [
     "/assets/almdina_erp/js/responsive_device.js",
     "/assets/almdina_erp/js/shop_floor_quick_actions.js",
     "/assets/almdina_erp/js/shared_shell.js",
+    "/assets/almdina_erp/js/almdina_shortcut_presentation.js?v=2",
+    "/assets/almdina_erp/js/almdina_workspace_home_ux.js?v=11",
+    "/assets/almdina_erp/js/almdina_desk_sidebar_ux.js?v=2",
     "/assets/almdina_erp/js/arabic_operator_ui.js",
     "/assets/almdina_erp/js/input_stability.js",
     "/assets/almdina_erp/js/door_cutting_order/drawing/door_cutting_order_special_shape_geometry.js",
@@ -47,11 +60,13 @@ doctype_js = {
         # Critical bootstrap only. The document context must exist before any
         # surface or lifecycle owner registers cancellable work with it.
         "public/js/door_cutting_order/core/door_cutting_order_document_context.js",
+        "public/js/door_cutting_order/core/door_cutting_order_form_sidebar_controller.js",
         # Sole authority for DCO edit-session ownership. Feature-local edit
         # state remains a temporary projection behind registered adapters.
         "public/js/door_cutting_order/core/door_cutting_order_edit_session_coordinator.js",
         "public/js/permission_context.js",
         "public/js/door_cutting_order/core/door_cutting_order_workspace_store.js",
+        "public/js/door_cutting_order/core/door_cutting_order_workspace_keep_paint.js",
         "public/js/door_cutting_order/core/door_cutting_order_workspace_sync_coordinator.js",
         "public/js/door_cutting_order/core/door_cutting_order_workspace_field_editor.js",
         # Plan/Cost transport + state stay eager and lightweight so workspace
@@ -160,13 +175,11 @@ doctype_js = {
         "public/js/door_cutting_order/core/door_cutting_order_tab_edit_lifecycle_guard.js",
         "public/js/door_cutting_order/core/door_cutting_order_plan_cost_workspace_visual_ux.js",
         "public/js/door_cutting_order/core/door_cutting_order_workspace_freshness_ux.js",
+        "public/js/door_cutting_order/order_entry/door_cutting_order_whatsapp_delivery_ux.js",
     ],
     "Edge Banding Type": "public/js/edge_banding_type_ux.js",
     "Production Routing": "public/js/production_routing_ux.js",
-    "Replacement Piece": [
-        "public/js/permission_context.js",
-        "public/js/replacement_piece.js",
-    ],
+    "Role": "public/js/role_form_ux.js",
 }
 
 doctype_list_js = {

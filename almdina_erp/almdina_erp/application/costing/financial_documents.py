@@ -51,7 +51,7 @@ def _metric(value: Any, digits: int = 3) -> float:
 def _piece_type_label(value: Any) -> str:
     return {
         "Special": "خاصة",
-        "Clipped Corner": "زاوية مقصوصة",
+        "Clipped Corner": "الزاوية الكسر",
         "L-Shaped Corner": "زاوية L",
         "Extra": "إضافية",
         "Regular": "عادية",
@@ -386,9 +386,8 @@ def build_internal_cost_report_document(
         mdf_cost + cutting_cost + edge_cost
     )
     material_variance = _number(_value(order, "material_variance_cost_usd"))
-    internal_loss = _number(_value(order, "internal_loss_cost_usd"))
     stored_actual = _number(_value(order, "actual_cost_usd"))
-    effective_actual = stored_actual or planned_total + material_variance + internal_loss
+    effective_actual = stored_actual or planned_total + material_variance
     quote_total = _number(_value(order, "customer_quote_total_usd"))
     if not quote_total:
         quote_total = sum(
@@ -445,7 +444,6 @@ def build_internal_cost_report_document(
             {"label": "أجور القص", "amount_usd": _money(cutting_cost)},
             {"label": "تكلفة القشاط", "amount_usd": _money(edge_cost)},
             {"label": "فروقات المواد", "amount_usd": _money(material_variance)},
-            {"label": "الخسائر الداخلية", "amount_usd": _money(internal_loss)},
         ],
         "operations": [
             {"label": "عدد الألواح", "value": max(0, int(_number(_value(order, "required_boards"))))},

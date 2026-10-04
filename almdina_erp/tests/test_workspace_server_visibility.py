@@ -61,7 +61,7 @@ class TestWorkspaceServerVisibility(unittest.TestCase):
     def test_v16_sidebar_link_uses_surface_instead_of_parent_visibility(self) -> None:
         surfaces = {
             Surface.ORDERS: True,
-            Surface.REPORT_PRODUCTION_STAGE_PERFORMANCE: False,
+            Surface.FACTORY_SETTINGS: False,
         }
         order_link = {
             "type": "Link",
@@ -69,15 +69,15 @@ class TestWorkspaceServerVisibility(unittest.TestCase):
             "link_to": "Door Cutting Order",
             "label": "طلبات قص الدرف",
         }
-        report_link = {
+        settings_link = {
             "type": "Link",
             "parent_page": "Almdina ERP",
-            "link_to": "Production Stage Performance",
-            "label": "أداء مراحل الإنتاج",
+            "link_to": "factory-production-settings",
+            "label": "إعدادات المعمل",
         }
 
         self.assertIs(workspace_item_allowed(order_link, surfaces), True)
-        self.assertIs(workspace_item_allowed(report_link, surfaces), False)
+        self.assertIs(workspace_item_allowed(settings_link, surfaces), False)
 
     def test_boot_filters_frappe_v16_sidebar_pages_and_workspace_content(self) -> None:
         source = (ROOT / "boot.py").read_text(encoding="utf-8")

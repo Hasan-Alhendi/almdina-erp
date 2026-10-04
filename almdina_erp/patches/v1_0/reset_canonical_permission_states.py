@@ -4,6 +4,7 @@ import frappe
 
 from almdina_erp.almdina_erp.infrastructure.frappe.canonical_permission_state_repository import (
     STATE_DOCTYPE,
+    CanonicalPermissionStateRepository,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.projected_permission_matrix_repository import (
     ProjectedPermissionMatrixRepository,
@@ -14,16 +15,16 @@ from almdina_erp.almdina_erp.infrastructure.frappe.system_role_policy import (
 
 
 def execute() -> None:
-    """Reset legacy-derived canonical grants once, then rebuild Frappe projections.
+    """Reset legacy-derived permission state to explicit deny-all once.
 
-    This patch is the cut-over boundary to the new authorization model. Existing
-    canonical rows may have been bootstrapped from historical audit records before
-    audit provenance was removed as an authority source. Because Almdina roles and
-    permissions are intentionally being rebuilt from scratch, every editable role
-    that already has canonical state is reset to deny-all exactly once.
+    This historical patch predates the Custom DocPerm authority cutover. Keep its
+    original security meaning stable even though repository ownership changed:
+    every editable role represented in the historical canonical store is cleared
+    in both the retired mirror and the live Custom DocPerm authority.
 
-    Administrator and protected platform roles are never written here. Future
-    grants must be made explicitly through the Permission Matrix UI/API.
+    This prevents a later one-time canonical retirement bridge from resurrecting
+    grants that this reset intentionally revoked. Administrator and protected
+    platform roles remain outside editable Almdina business authority.
     """
 
     if not frappe.db.exists("DocType", STATE_DOCTYPE):
@@ -45,6 +46,10 @@ def execute() -> None:
     }
     if not prepared:
         return
+
+    canonical = CanonicalPermissionStateRepository()
+    for role in sorted(prepared):
+        canonical.save(role, {})
 
     ProjectedPermissionMatrixRepository().save_role_states(prepared)
 

@@ -22,6 +22,29 @@
     --alm-success: #15803d;
     --alm-success-hover: #166534;
     --alm-on-success: #ffffff;
+
+    --alm-canvas: #eef1f6;
+    --alm-card: #ffffff;
+    --alm-card-border: #e4e8ee;
+    --alm-accent: #2563eb;
+    --alm-accent-soft: #eff6ff;
+    --alm-warning: #b45309;
+    --alm-warning-bg: #fff7e8;
+    --alm-danger-soft: #fff1f2;
+    --alm-danger-soft-border: #fecdd3;
+
+    /* Workspace / section accents (identity palette). */
+    --alm-accent-blue: #2563eb;
+    --alm-accent-purple: #7c3aed;
+    --alm-accent-warning: #f59e0b;
+    --alm-accent-success: #10b981;
+    --alm-text-strong: #101828;
+    --alm-text-secondary: #344054;
+    --alm-text-subtle: #667085;
+    --alm-text-faint: #98a2b3;
+    --alm-border-subtle: #eaecf0;
+    --alm-border-hover: #d0d5dd;
+    --alm-surface-muted: #f4f6f8;
 }
 
 .almdina-ui {
@@ -48,4 +71,6 @@
     --alm-text-muted: var(--text-muted, #6b7280);
     --alm-surface: var(--fg-color, #ffffff);
     --alm-border: var(--border-color, #dfe3e8);
+    --alm-shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.045);
+    --alm-radius-card: 16px;
 }

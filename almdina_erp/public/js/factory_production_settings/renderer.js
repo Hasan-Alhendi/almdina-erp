@@ -42,42 +42,58 @@
             `);
         }
 
+        function statusTone(value) {
+            const normalized = String(value ?? "").trim();
+            if (normalized === t("مسموح") || normalized === "مسموح") return "is-allowed";
+            if (normalized === t("غير مسموح") || normalized === "غير مسموح") return "is-denied";
+            return "";
+        }
+
         function rowHtml(row) {
-            const value = row.multiline ? multiline(row.value) : esc(row.value);
+            const tone = row.multiline ? "" : statusTone(row.value);
+            const value = row.multiline
+                ? multiline(row.value)
+                : (
+                    tone
+                        ? `<span class="aps-status-pill ${tone}">${esc(row.value)}</span>`
+                        : esc(row.value)
+                );
             return `
-                <div class="aps-value ${row.multiline ? "is-multiline" : ""}">
-                    <span>${esc(row.label)}</span>
-                    <b>${value}</b>
+                <div class="aps-value ${row.multiline ? "is-multiline" : ""}${tone ? " has-status" : ""}">
+                    <span class="aps-value-label">${esc(row.label)}</span>
+                    <b class="aps-value-data">${value}</b>
                 </div>
             `;
         }
 
         function sectionCard(section) {
             const stateClass = section.editable ? "is-editable" : "is-readonly";
-            const stateLabel = section.editable ? t("قابل للتعديل") : t("عرض فقط");
             return `
                 <article class="aps-section ${stateClass}" data-section="${esc(section.key)}">
                     <div class="aps-section-head">
                         <div class="aps-section-copy">
-                            <span class="aps-section-kicker">${t("إعدادات القسم")}</span>
-                            <h3>${esc(section.title)}</h3>
-                            <div class="aps-section-desc">${esc(section.description)}</div>
+                            <span class="aps-section-accent" aria-hidden="true"></span>
+                            <div class="aps-section-titles">
+                                <span class="aps-section-kicker">${t("إعدادات القسم")}</span>
+                                <h3>${esc(section.title)}</h3>
+                                <div class="aps-section-desc">${esc(section.description)}</div>
+                            </div>
                         </div>
-                        <span class="aps-permission ${section.editable ? "" : "readonly"}">
-                            <span class="aps-permission-dot" aria-hidden="true"></span>${stateLabel}
-                        </span>
+                        <div class="aps-section-tools">
+                            ${section.editable ? uiButton({
+                                label: t("تعديل"),
+                                variant: "secondary",
+                                className: "aps-edit",
+                                attrs: {
+                                    "data-section": section.key,
+                                    title: t("تعديل هذا القسم"),
+                                    "aria-label": t("تعديل هذا القسم"),
+                                },
+                            }) : ""}
+                        </div>
                     </div>
                     <div class="aps-values">${section.rows.map(rowHtml).join("")}</div>
-                    ${section.editable ? `
-                        <div class="aps-actions">
-                            ${uiButton({
-                                label: t("تعديل هذا القسم"),
-                                variant: "primary",
-                                className: "aps-edit",
-                                attrs: { "data-section": section.key },
-                            })}
-                        </div>
-                    ` : `
+                    ${section.editable ? "" : `
                         <div class="aps-readonly-note">${t("يمكنك مراجعة القيم هنا، لكن تعديل هذا القسم غير متاح لصلاحياتك الحالية.")}</div>
                     `}
                 </article>
@@ -109,13 +125,11 @@
                     <header class="aps-hero">
                         <div class="aps-hero-layout">
                             <div class="aps-hero-copy">
-                                <span class="aps-eyebrow">${t("إعدادات التشغيل")}</span>
-                                <h2>${t("الإعدادات الافتراضية للمعمل")}</h2>
-                                <p>${t("هذه هي الواجهة الموحدة الوحيدة لإعدادات المعمل. جميع الإعدادات النشطة موجودة هنا، والقيم القديمة المحفوظة تظهر في قسم منفصل للقراءة فقط. كل تعديل نشط يمر عبر الصلاحيات وسجل التغييرات.")}</p>
-                            </div>
-                            <div class="aps-hero-assurances" aria-label="${t("ضمانات إدارة الإعدادات")}">
-                                <div class="aps-assurance"><span aria-hidden="true">✓</span><div><strong>${t("صلاحيات واضحة")}</strong><small>${t("كل قسم يوضح إن كان قابلًا للتعديل")}</small></div></div>
-                                <div class="aps-assurance"><span aria-hidden="true">↺</span><div><strong>${t("سجل محفوظ")}</strong><small>${t("التغييرات النشطة قابلة للمراجعة")}</small></div></div>
+                                <span class="aps-hero-accent" aria-hidden="true"></span>
+                                <div class="aps-hero-titles">
+                                    <h2>${t("إعدادات تشغيل المعمل الافتراضية")}</h2>
+                                    <p>${t("القيم التشغيلية النشطة المعتمدة في كافة عمليات ومحطات العمل")}</p>
+                                </div>
                             </div>
                         </div>
                     </header>
@@ -124,7 +138,14 @@
                         <div><span>${t("الإعدادات النشطة")}</span><strong>${t("اضبط كل مجموعة من مكانها المخصص")}</strong></div>
                         <span class="aps-section-intro-note">${t("التعديل يظهر فقط للأقسام المسموحة لك")}</span>
                     </div>
-                    <section class="aps-sections">${model.sections.map(sectionCard).join("")}</section>
+                    <section class="aps-sections">
+                        ${model.sections.map(sectionCard).join("")}
+                        ${model.canManageWhatsAppSession ? `
+                        <article class="aps-section aps-whatsapp" data-whatsapp-root>
+                            <div class="aps-whatsapp-loading">${t("جاري تحميل حالة WhatsApp...")}</div>
+                        </article>
+                        ` : ""}
+                    </section>
                     ${legacySettingsDetails(model)}
                     <div class="aps-note">
                         <span class="aps-note-icon" aria-hidden="true">i</span>
@@ -158,10 +179,113 @@
             return `<div class="aps-error" role="alert"><span class="aps-error-icon" aria-hidden="true">!</span><div><strong>${t("تعذر تحميل السجل")}</strong><span>${esc(message || t("تعذر تحميل السجل."))}</span></div></div>`;
         }
 
+        function statusLabel(status) {
+            const labels = {
+                ready: t("تعمل"),
+                created: t("أُنشئت"),
+                initializing: t("جاري التهيئة"),
+                qr_ready: t("بانتظار مسح الرمز"),
+                authenticating: t("جاري التحقق"),
+                disconnected: t("غير متصلة"),
+                action_required: t("تحتاج إجراء"),
+                failed: t("فشلت"),
+            };
+            const key = String(status || "").trim();
+            return labels[key] || (key ? key : t("غير معروفة"));
+        }
+
+        function whatsappHtml(snapshot = {}) {
+            if (snapshot.configured === false) {
+                return `
+                    <div class="aps-section-head">
+                        <div class="aps-section-copy">
+                            <span class="aps-section-accent" aria-hidden="true"></span>
+                            <div class="aps-section-titles">
+                                <span class="aps-section-kicker">${t("تكامل خارجي")}</span>
+                                <h3>${t("جلسة WhatsApp")}</h3>
+                                <div class="aps-section-desc">${esc(snapshot.reason || t("لم يتم ضبط عنوان خادم WhatsApp أو مفتاح API."))}</div>
+                            </div>
+                        </div>
+                        <div class="aps-section-tools">
+                            <span class="aps-permission readonly"><span class="aps-permission-dot" aria-hidden="true"></span>${t("غير مضبوط")}</span>
+                        </div>
+                    </div>
+                `;
+            }
+            if (!snapshot.session) {
+                return `
+                    <div class="aps-section-head">
+                        <div class="aps-section-copy">
+                            <span class="aps-section-accent" aria-hidden="true"></span>
+                            <div class="aps-section-titles">
+                                <span class="aps-section-kicker">${t("تكامل خارجي")}</span>
+                                <h3>${t("جلسة WhatsApp")}</h3>
+                                <div class="aps-section-desc">${t("اربط جلسة واحدة مع واتساب ويب لإرسال جداول القياسات للزبائن.")}</div>
+                            </div>
+                        </div>
+                        <div class="aps-section-tools">
+                            <span class="aps-permission readonly"><span class="aps-permission-dot" aria-hidden="true"></span>${t("غير مربوطة")}</span>
+                        </div>
+                    </div>
+                    <div class="aps-actions">
+                        ${uiButton({
+                            label: t("إنشاء وربط WhatsApp"),
+                            variant: "primary",
+                            className: "aps-whatsapp-create",
+                        })}
+                    </div>
+                `;
+            }
+            const session = snapshot.session || {};
+            const working = Boolean(snapshot.working);
+            const rows = [
+                [t("الحالة"), statusLabel(session.status)],
+                [t("الاسم"), session.name],
+                [t("رقم الجلسة"), session.phone],
+                [t("اسم العرض"), session.push_name],
+            ];
+            if (session.last_error) rows.push([t("آخر خطأ"), session.last_error]);
+            return `
+                <div class="aps-section-head">
+                    <div class="aps-section-copy">
+                        <span class="aps-section-accent" aria-hidden="true"></span>
+                        <div class="aps-section-titles">
+                            <span class="aps-section-kicker">${t("تكامل خارجي")}</span>
+                            <h3>${t("جلسة WhatsApp")}</h3>
+                            <div class="aps-section-desc">${working ? t("الجلسة متصلة ويمكن إرسال رسائل الزبائن.") : esc(snapshot.reason || t("الجلسة غير متصلة."))}</div>
+                        </div>
+                    </div>
+                    <div class="aps-section-tools">
+                        <span class="aps-permission ${working ? "" : "readonly"}">
+                            <span class="aps-permission-dot" aria-hidden="true"></span>${working ? t("تعمل") : t("لا تعمل")}
+                        </span>
+                    </div>
+                </div>
+                <div class="aps-values">${rows.map(([label, value]) => rowHtml({ label, value })).join("")}</div>
+                ${working ? "" : `
+                    <div class="aps-actions">
+                        ${uiButton({
+                            label: t("إعادة اتصال"),
+                            variant: "primary",
+                            className: "aps-whatsapp-reconnect",
+                        })}
+                    </div>
+                `}
+            `;
+        }
+
+        function renderWhatsApp(snapshot) {
+            const $root = $body.find("[data-whatsapp-root]");
+            if (!$root.length) return;
+            $root.html(whatsappHtml(snapshot));
+        }
+
         return Object.freeze({
             renderLoading,
             renderError,
             render,
+            renderWhatsApp,
+            whatsappHtml,
             auditHtml,
             auditLoadingHtml,
             auditErrorHtml,

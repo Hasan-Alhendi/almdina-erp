@@ -7,6 +7,9 @@ import frappe
 from almdina_erp.almdina_erp.application.security.permission_context import (
     build_permission_context,
 )
+from almdina_erp.almdina_erp.application.presentation.shortcut_icon_catalog import (
+    apply_sidebar_icon_catalog,
+)
 from almdina_erp.almdina_erp.application.security.workspace_visibility import (
     project_workspace_page,
     workspace_item_allowed,
@@ -258,6 +261,7 @@ def boot_session(bootinfo: dict[str, Any]) -> None:
     """Attach the read-only shared-shell authorization context."""
 
     _apply_shared_shell(bootinfo)
+    apply_sidebar_icon_catalog(bootinfo)
 
 
 def extend_bootinfo(bootinfo: dict[str, Any] | None = None) -> None:
@@ -265,3 +269,4 @@ def extend_bootinfo(bootinfo: dict[str, Any] | None = None) -> None:
 
     if bootinfo:
         _apply_shared_shell(bootinfo)
+        apply_sidebar_icon_catalog(bootinfo)

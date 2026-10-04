@@ -3,8 +3,17 @@
 
     if (window.AlmdinaPlanCostWorkspaceVisualUX) return;
 
-    const STYLE_ID = "dco-plan-cost-workspace-visual-ux-v2";
-    const LEGACY_STYLE_IDS = ["dco-plan-cost-workspace-visual-ux-v1"];
+    const STYLE_ID = "dco-plan-cost-workspace-visual-ux-v8";
+    const LEGACY_STYLE_IDS = [
+        "dco-plan-cost-workspace-visual-ux-v1",
+        "dco-plan-cost-workspace-visual-ux-v2",
+        "dco-plan-cost-workspace-visual-ux-v3",
+        "dco-plan-cost-workspace-visual-ux-v4",
+        "dco-plan-cost-workspace-visual-ux-v5",
+        "dco-plan-cost-workspace-visual-ux-v6",
+        "dco-plan-cost-workspace-visual-ux-v7",
+    ];
+    const TAB_ACTIVE_CLASS = "dco-results-tab-active";
     const ROOT_CLASS = "dco-a53-workspace-polish";
     const PLAN_FIELDS = Object.freeze([
         "plan_controls_intro",
@@ -36,6 +45,27 @@
 
     function pageRoot(frm) {
         return unwrap(frm && frm.page && frm.page.wrapper);
+    }
+
+    function activeTabFieldname(frm) {
+        const activeTab = frm && typeof frm.get_active_tab === "function"
+            ? frm.get_active_tab()
+            : null;
+        const fromActive = String(
+            activeTab
+            && activeTab.df
+            && activeTab.df.fieldname
+            || ""
+        ).trim();
+        if (fromActive) return fromActive;
+        return String(
+            frm
+            && frm.layout
+            && frm.layout.current_tab
+            && frm.layout.current_tab.df
+            && frm.layout.current_tab.df.fieldname
+            || ""
+        ).trim();
     }
 
     function stateFrom(owner, frm) {
@@ -102,17 +132,34 @@
                 --dco-workspace-shadow:0 6px 22px rgba(15,23,42,.055);
                 --dco-workspace-shadow-hover:0 10px 28px rgba(15,23,42,.085);
                 --dco-workspace-ring:0 0 0 3px color-mix(in srgb, var(--alm-primary, #172033) 14%, transparent);
-                --dco-plan-card-inset-inline:var(--dco-tab-card-inset-inline, 44px);
-                --dco-plan-card-inset-block-start:14px;
-                --dco-plan-card-inset-block-end:16px;
+                --dco-plan-card-inset-inline:18px;
+                --dco-plan-card-inset-block-start:16px;
+                --dco-plan-card-inset-block-end:14px;
+                --dco-plan-section-gap: var(--dco-section-stack-gap, 8px);
             }
             .${ROOT_CLASS} .layout-main-section .form-page,
-            .${ROOT_CLASS} .layout-main-section-wrapper .form-page {
-                max-width: 1440px !important;
-                margin-inline: auto !important;
+            .${ROOT_CLASS} .layout-main-section-wrapper .form-page,
+            .layout-main-section.${ROOT_CLASS} .form-page,
+            .layout-main-section-wrapper.${ROOT_CLASS} .form-page,
+            body:has(.dco-operator-form.${TAB_ACTIVE_CLASS}) .layout-main-section .form-page,
+            body:has(.dco-operator-form.${TAB_ACTIVE_CLASS}) .layout-main-section-wrapper .form-page,
+            body:has(.dco-operator-form.${TAB_ACTIVE_CLASS}) .dco-order-tab-layout .layout-main-section .form-page {
+                max-width: none !important;
+                margin-inline: 0 !important;
                 width: 100% !important;
-                padding-inline: 20px !important;
+                padding-inline: 16px !important;
                 box-sizing: border-box !important;
+            }
+            body:has(.dco-operator-form.${TAB_ACTIVE_CLASS}) .dco-operator-form {
+                --dco-tab-card-inset-inline: 18px;
+            }
+            .dco-operator-form .form-section:has([data-fieldname="plan_control_actions"]) .form-column,
+            .dco-operator-form .form-section:has([data-fieldname="cutting_plan_html"]) .form-column,
+            .${ROOT_CLASS} .form-section:has([data-fieldname="plan_control_actions"]) .form-column,
+            .${ROOT_CLASS} .form-section:has([data-fieldname="cutting_plan_html"]) .form-column {
+                width: 100% !important;
+                max-width: none !important;
+                flex: 0 0 100% !important;
             }
             .${ROOT_CLASS} [data-fieldname="plan_control_actions"] {
                 width: 100% !important;
@@ -127,20 +174,59 @@
                 margin: 0 !important;
             }
             .dco-operator-form .dco-plan-settings-readonly[data-almdina-plan-settings-summary-owner="stable"],
-            .${ROOT_CLASS} .dco-plan-settings-readonly[data-almdina-plan-settings-summary-owner="stable"],
+            .${ROOT_CLASS} .dco-plan-settings-readonly[data-almdina-plan-settings-summary-owner="stable"] {
+                width: 100% !important;
+                max-width: none !important;
+                box-sizing: border-box !important;
+                margin-inline: 0 !important;
+                margin-block: 0 var(--dco-section-stack-gap, 8px) !important;
+                padding: 6px 12px !important;
+                border: 1px solid var(--alm-card-border, #e4e8ee) !important;
+                border-radius: var(--alm-radius-sm, 10px) !important;
+                background: var(--alm-card, #fff) !important;
+                box-shadow: none !important;
+            }
             .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-readonly,
             .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-editor {
                 width: 100% !important;
                 max-width: none !important;
                 box-sizing: border-box !important;
                 margin-inline: 0 !important;
-                margin-block: 0 6px !important;
-                padding-block: var(--dco-plan-card-inset-block-start) var(--dco-plan-card-inset-block-end) !important;
+                margin-block: 0 var(--dco-plan-section-gap) !important;
+                padding: 0 !important;
+                border: 1px solid var(--border-color,#e2e8f0) !important;
+                border-radius: var(--dco-workspace-radius) !important;
+                background: var(--card-bg,#fff) !important;
+                box-shadow: var(--dco-workspace-shadow) !important;
+            }
+            .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-readonly {
+                padding-block: 8px 8px !important;
                 padding-inline: var(--dco-plan-card-inset-inline) !important;
-                border: 1px solid var(--border-color,#dfe3e8) !important;
-                border-radius: 14px !important;
-                background: var(--card-bg,var(--fg-color,#fff)) !important;
-                box-shadow: 0 2px 10px rgba(15,23,42,.035) !important;
+            }
+            .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__header,
+            .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__grid {
+                padding-inline: var(--dco-plan-card-inset-inline) !important;
+            }
+            .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__header {
+                padding-top: var(--dco-plan-card-inset-block-start) !important;
+            }
+            .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__action-bar {
+                padding-inline: var(--dco-plan-card-inset-inline) !important;
+            }
+            .${ROOT_CLASS} [data-fieldname="plan_control_actions"]:has(.dco-plan-settings-editor) .dco-plan-actions-shell {
+                display: none !important;
+            }
+            .${ROOT_CLASS} .dco-plan-settings-readonly[data-almdina-plan-settings-summary-owner="stable"] .dco-plan-settings-readonly__strip,
+            .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-readonly .dco-plan-settings-readonly__strip {
+                display: flex !important;
+                flex-wrap: nowrap !important;
+                align-items: center !important;
+                gap: 6px !important;
+                width: 100% !important;
+                min-width: 0 !important;
+                overflow-x: auto !important;
+                font-size: 11px !important;
+                line-height: 1.2 !important;
             }
             .dco-operator-form .dco-plan-section-card.dco-layout-card > .section-head,
             .dco-operator-form .dco-plan-section-card.dco-layout-card > .section-body,
@@ -179,15 +265,90 @@
                 font-size: 10.5px !important;
             }
             .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-editor {
-                padding-block: var(--dco-plan-card-inset-block-start) var(--dco-plan-card-inset-block-end) !important;
-                padding-inline: var(--dco-plan-card-inset-inline) !important;
+                padding-block: 6px !important;
+            }
+            .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__lead {
+                display: none !important;
             }
             .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__grid {
-                gap: 8px !important;
+                gap: 6px !important;
+                grid-template-columns: none !important;
+                flex-wrap: nowrap !important;
+                padding-bottom: 0 !important;
+            }
+            .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-editor .form-control,
+            .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-editor select.form-control {
+                min-height: 28px !important;
+                height: 28px !important;
+                padding: 2px 8px !important;
+                font-size: 11px !important;
+                border: 1px solid var(--border-color, #d0d5dd) !important;
+                border-radius: 8px !important;
+                background: var(--card-bg, #fff) !important;
+                box-shadow: none !important;
+            }
+            .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__field label {
+                margin: 0 !important;
+                margin-bottom: 0 !important;
+                font-size: 11px !important;
+                font-weight: 700 !important;
+                color: var(--text-muted,#667085) !important;
+            }
+            .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__help {
+                display: none !important;
+            }
+            .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__header {
+                margin-bottom: 14px !important;
+            }
+            .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__title {
+                font-size: 15px !important;
+                font-weight: 800 !important;
+                letter-spacing: -.01em !important;
+            }
+            .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__subtitle {
+                font-size: 10.5px !important;
+                font-weight: 600 !important;
+                color: var(--text-muted,#98a2b3) !important;
+            }
+            .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__action-bar {
+                padding-block: 11px !important;
+                min-height: 52px !important;
+            }
+            .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__stale-copy {
+                font-size: 11px !important;
+                font-weight: 700 !important;
+                line-height: 1.6 !important;
+            }
+            .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__recalc-btn.btn {
+                min-height: 36px !important;
+                height: 36px !important;
+                padding: 0 12px !important;
+            }
+            .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-stale-banner {
+                margin: 0 0 6px !important;
+                padding: 6px 10px !important;
+                font-size: 10.5px !important;
+                line-height: 1.45 !important;
+                align-items: center !important;
             }
             .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-actions-shell {
-                padding-block: var(--dco-plan-card-inset-block-start) var(--dco-plan-card-inset-block-end) !important;
-                padding-inline: var(--dco-plan-card-inset-inline) !important;
+                padding-block: 8px 10px !important;
+                padding-inline: 14px !important;
+            }
+            /* Beat Frappe: body:not(.full-width) .std-form-layout .section-body { max-width: 900px } */
+            body:not(.full-width) .${ROOT_CLASS} .std-form-layout .dco-plan-actions-section > .section-head,
+            body:not(.full-width) .${ROOT_CLASS} .std-form-layout .dco-plan-actions-section > .section-body,
+            body:not(.full-width) .${ROOT_CLASS} .std-form-layout .dco-plan-section-card.dco-layout-card > .section-head,
+            body:not(.full-width) .${ROOT_CLASS} .std-form-layout .dco-plan-section-card.dco-layout-card > .section-body,
+            body:not(.full-width) .${ROOT_CLASS} .std-form-layout .form-section:has([data-fieldname="plan_control_actions"]) > .section-head,
+            body:not(.full-width) .${ROOT_CLASS} .std-form-layout .form-section:has([data-fieldname="plan_control_actions"]) > .section-body,
+            body:not(.full-width) .${ROOT_CLASS} .std-form-layout .form-section:has([data-fieldname="cutting_plan_html"]) > .section-head,
+            body:not(.full-width) .${ROOT_CLASS} .std-form-layout .form-section:has([data-fieldname="cutting_plan_html"]) > .section-body {
+                max-width: none !important;
+                width: 100% !important;
+                margin: 0 !important;
+                margin-inline: 0 !important;
+                box-sizing: border-box !important;
             }
             .${ROOT_CLASS} .dco-plan-actions-section > .section-body,
             .${ROOT_CLASS} .dco-plan-section-card.dco-layout-card > .section-body,
@@ -209,8 +370,11 @@
                 margin: 0 !important;
                 padding-top: 0 !important;
             }
+            body:has(.dco-operator-form.${TAB_ACTIVE_CLASS}) .dco-operator-form {
+                --page-max-width: none;
+            }
             .${ROOT_CLASS} .dco-plan-section-card.dco-layout-card {
-                margin-block: 6px 10px !important;
+                margin-block: 0 var(--dco-plan-section-gap) !important;
                 margin-inline: 0 !important;
                 width: 100% !important;
                 max-width: none !important;
@@ -238,7 +402,7 @@
             .${ROOT_CLASS} [data-fieldname="cutting_plan_html"] .dco-plan-tabs {
                 width: 100% !important;
                 max-width: none !important;
-                margin: 0 0 12px 0 !important;
+                margin: 0 0 var(--dco-section-stack-gap, 8px) 0 !important;
                 box-sizing: border-box !important;
             }
             .${ROOT_CLASS} .dco-plan-actions-section.form-section {
@@ -252,6 +416,7 @@
             .${ROOT_CLASS} .dco-plan-actions-section > .section-head {
                 display: none !important;
             }
+            .${ROOT_CLASS} [data-fieldname="cutting_plan_html"] .dco-plan-meta-strip,
             .${ROOT_CLASS} [data-fieldname="cutting_plan_html"] .dco-plan-tab-content,
             .${ROOT_CLASS} [data-fieldname="cutting_plan_html"] .dco-extra-addon-legend,
             .${ROOT_CLASS} [data-fieldname="cutting_plan_html"] .dco-margin-policy-alert,
@@ -299,19 +464,28 @@
             }
             @keyframes dco-a53-workspace-shimmer{to{transform:translateX(110%)}}
 
-            .${ROOT_CLASS} [data-fieldname="plan_control_actions"][data-almdina-workspace-editing="1"]::before,
+            .${ROOT_CLASS} [data-fieldname="plan_controls_intro"][data-almdina-workspace-editing="1"]{
+                display:none !important;
+            }
+            .${ROOT_CLASS} [data-fieldname="plan_control_actions"][data-almdina-workspace-editing="1"]::before{
+                content:none !important;
+                display:none !important;
+            }
             .${ROOT_CLASS} [data-fieldname="order_cost_invoice_html"][data-almdina-workspace-editing="1"]::before{
                 content:"وضع التعديل مفعّل — غيّر القيم المطلوبة ثم اضغط «حفظ» من أعلى الصفحة.";
                 display:flex;align-items:center;min-height:38px;margin:0 0 10px;padding:8px 12px;
                 border:1px solid color-mix(in srgb, var(--alm-primary, #172033) 28%, transparent);border-radius:var(--dco-workspace-radius-sm);
                 background:color-mix(in srgb, var(--alm-primary, #172033) 8%, transparent);color:var(--text-color,#26313b);font-size:11px;font-weight:800;line-height:1.55;
             }
+            .${ROOT_CLASS} [data-fieldname="plan_control_actions"][data-almdina-workspace-editing="1"] .dco-plan-stale-banner{
+                margin:0 0 6px !important;
+            }
             .${ROOT_CLASS} [data-almdina-workspace-editing="1"] .almdina-workspace-field-editor{
                 padding:4px;border-radius:12px;background:color-mix(in srgb, var(--alm-primary, #172033) 6%, transparent);
             }
             .${ROOT_CLASS} [data-almdina-workspace-editing="1"] .almdina-workspace-field-editor .form-control{
-                min-height:40px;border-radius:10px;border-color:color-mix(in srgb, var(--alm-primary, #172033) 34%, transparent);background:var(--card-bg,#fff);
-                font-weight:750;box-shadow:0 1px 2px rgba(15,23,42,.035);
+                min-height:32px;border-radius:8px;border:1px solid var(--border-color,#cfd6de) !important;border-color:color-mix(in srgb, var(--alm-primary, #172033) 34%, transparent);background:var(--card-bg,#fff);
+                font-weight:750;box-shadow:inset 0 1px 2px rgba(15,23,42,.03);
             }
             .${ROOT_CLASS} [data-almdina-workspace-editing="1"] .almdina-workspace-field-editor .form-control:focus-visible,
             .${ROOT_CLASS} [data-fieldname="cutting_plan_html"] .dco-plan-tabs .btn:focus-visible,
@@ -343,10 +517,16 @@
             }
             .${ROOT_CLASS} [data-fieldname="plan_control_actions"][data-almdina-workspace-stale="1"] .dco-recalculate-plan{box-shadow:0 0 0 3px rgba(190,125,25,.12);}
             .${ROOT_CLASS} [data-fieldname="cutting_plan_html"] .dco-plan-tabs{
-                margin-bottom:14px !important;padding:5px !important;border-radius:13px !important;
-                box-shadow:0 2px 8px rgba(15,23,42,.035);
+                margin-bottom:var(--dco-section-stack-gap, 8px) !important;
+                padding:0 !important;
+                border-radius:0 !important;
+                box-shadow:none;
+                background:transparent;
             }
-            .${ROOT_CLASS} [data-fieldname="cutting_plan_html"] .dco-plan-tabs .btn{min-height:36px !important;padding-inline:13px !important;}
+            .${ROOT_CLASS} [data-fieldname="cutting_plan_html"] .dco-plan-tabs .btn{
+                min-height:36px !important;
+                padding-inline:12px !important;
+            }
             .${ROOT_CLASS} [data-fieldname="cutting_plan_html"] .dco-board-gallery > .dco-sheet-card{
                 border-radius:13px !important;box-shadow:0 2px 8px rgba(15,23,42,.035) !important;
             }
@@ -386,7 +566,6 @@
                 .${ROOT_CLASS} [data-fieldname="plan_controls_intro"] .dco-plan-intro{grid-template-columns:repeat(2,minmax(0,1fr)) !important;}
                 .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-actions{grid-template-columns:1fr !important}
                 .${ROOT_CLASS} .dco-cost-section{border-radius:14px !important}
-                .${ROOT_CLASS} .dco-plan-settings-readonly[data-almdina-plan-settings-summary-owner="stable"],
                 .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-readonly,
                 .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-editor,
                 .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-actions-shell,
@@ -394,19 +573,24 @@
                 .${ROOT_CLASS} .dco-plan-section-card.dco-layout-card > .section-body{
                     padding-inline:var(--dco-tab-card-inset-inline, 36px) !important;
                 }
+                .${ROOT_CLASS} .dco-plan-settings-readonly[data-almdina-plan-settings-summary-owner="stable"]{
+                    padding:6px 12px !important;
+                }
             }
             @media (max-width:560px){
                 .${ROOT_CLASS} [data-fieldname="cutting_plan_html"][data-almdina-workspace-status="loading"],
                 .${ROOT_CLASS} [data-fieldname="order_cost_invoice_html"][data-almdina-workspace-status="loading"]{min-height:170px;}
                 .${ROOT_CLASS} [data-fieldname="plan_controls_intro"] .dco-plan-intro{grid-template-columns:1fr !important;gap:8px !important;}
                 .${ROOT_CLASS} [data-fieldname="plan_controls_intro"] .dco-plan-card{min-height:86px;padding:12px 13px}
-                .${ROOT_CLASS} .dco-plan-settings-readonly[data-almdina-plan-settings-summary-owner="stable"],
                 .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-readonly,
                 .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-editor,
                 .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-actions-shell,
                 .${ROOT_CLASS} .dco-plan-section-card.dco-layout-card > .section-head,
                 .${ROOT_CLASS} .dco-plan-section-card.dco-layout-card > .section-body{
                     padding-inline:var(--dco-tab-card-inset-inline, 32px) !important;
+                }
+                .${ROOT_CLASS} .dco-plan-settings-readonly[data-almdina-plan-settings-summary-owner="stable"]{
+                    padding:6px 12px !important;
                 }
                 .${ROOT_CLASS} [data-fieldname="cutting_plan_html"] .dco-plan-tabs{
                     width:100% !important;overflow-x:auto;justify-content:flex-start !important;scrollbar-width:thin;
@@ -416,7 +600,6 @@
                 .${ROOT_CLASS} .dco-cost-table th,.${ROOT_CLASS} .dco-cost-table td{padding:8px 9px}
                 .${ROOT_CLASS} .dco-invoice-total-card{padding:16px !important}
                 .${ROOT_CLASS} .dco-invoice-total-card b{font-size:25px !important}
-                .${ROOT_CLASS} [data-fieldname="plan_control_actions"][data-almdina-workspace-editing="1"]::before,
                 .${ROOT_CLASS} [data-fieldname="order_cost_invoice_html"][data-almdina-workspace-editing="1"]::before{align-items:flex-start;font-size:10.5px;}
             }
             @media (prefers-reduced-motion:reduce){
@@ -433,11 +616,44 @@
         if (node && node.classList) node.classList.add(ROOT_CLASS);
     }
 
+    function syncTabScope(frm) {
+        const root = formRoot(frm);
+        const onPlanTab = activeTabFieldname(frm) === "results_tab";
+        if (root && root.classList) {
+            root.classList.toggle(TAB_ACTIVE_CLASS, onPlanTab);
+        }
+        if (typeof document !== "undefined" && document.body && document.body.classList) {
+            document.body.classList.toggle("dco-plan-results-tab-active", onPlanTab);
+        }
+        return onPlanTab;
+    }
+
+    function scopeLayoutAncestors(frm) {
+        const root = formRoot(frm);
+        if (!root) return;
+        addVisualScope(root);
+        let node = root.parentElement;
+        while (node) {
+            if (
+                node.classList
+                && (
+                    node.classList.contains("layout-main-section")
+                    || node.classList.contains("layout-main-section-wrapper")
+                    || node.classList.contains("form-page")
+                )
+            ) {
+                addVisualScope(node);
+            }
+            node = node.parentElement;
+        }
+        addVisualScope(pageRoot(frm));
+    }
+
     function refresh(frm) {
         if (!frm || frm.doctype !== "Door Cutting Order") return false;
         installStyles();
-        addVisualScope(formRoot(frm));
-        addVisualScope(pageRoot(frm));
+        syncTabScope(frm);
+        scopeLayoutAncestors(frm);
         const plan = planState(frm);
         const cost = costState(frm);
         applySurfaceState(frm, "plan", PLAN_FIELDS, plan, { stale: planIsStale(plan) });
@@ -464,6 +680,7 @@
     frappe.ui.form.on("Door Cutting Order", {
         onload_post_render(frm) { schedule(frm); },
         refresh(frm) { schedule(frm); },
+        on_tab_change(frm) { schedule(frm); },
         almdina_edit_session_changed(frm) { schedule(frm); },
         refresh_plan_controls(frm) { schedule(frm); },
     });
@@ -483,6 +700,7 @@
     window.AlmdinaPlanCostWorkspaceVisualUX = Object.freeze({
         PLAN_FIELDS,
         COST_FIELDS,
+        TAB_ACTIVE_CLASS,
         refresh,
         schedule,
     });

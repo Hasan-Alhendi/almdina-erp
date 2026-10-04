@@ -32,6 +32,7 @@ class RoutingStageCommand:
     stage_definition: str
     operational_role: str
     is_planning_stage: bool = False
+    notify_whatsapp_on_complete: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +81,7 @@ def _stage_command(value: Any, index: int) -> RoutingStageCommand:
         stage_definition=_text(value.get("stage_definition")),
         operational_role=_text(value.get("operational_role")),
         is_planning_stage=_boolean(value.get("is_planning_stage")),
+        notify_whatsapp_on_complete=_boolean(value.get("notify_whatsapp_on_complete")),
     )
 
 
@@ -149,6 +151,7 @@ def _validate_route_definition(
                 department_label=definition.stage_label,
                 operational_role=stage.operational_role,
                 is_planning_stage=stage.is_planning_stage,
+                notify_whatsapp_on_complete=stage.notify_whatsapp_on_complete,
             )
         )
 

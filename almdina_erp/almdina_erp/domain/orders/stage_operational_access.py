@@ -21,7 +21,6 @@ STAGE_SCOPED_MUTATION_CAPABILITIES = frozenset(
         Capability.APPROVE_DXF,
         Capability.RECALCULATE_PLAN,
         Capability.EDIT_OPTIMIZER_SETTINGS,
-        Capability.RECORD_INCIDENT,
     }
 )
 

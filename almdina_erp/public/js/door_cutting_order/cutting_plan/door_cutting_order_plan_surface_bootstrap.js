@@ -195,6 +195,26 @@
         return String(node && node.dataset && node.dataset.almdinaOrder || "");
     }
 
+    function isPlanEditing(frm) {
+        const editor = window.AlmdinaPlanEditSessionUX;
+        return Boolean(editor && typeof editor.isEditing === "function" && editor.isEditing(frm));
+    }
+
+    function contextActionsReady(frm, layout) {
+        // When the context-actions owner is not loaded (early bootstrap / focused
+        // unit tests), do not block Plan surface readiness on that host.
+        if (!window.AlmdinaPlanContextActionsUX) return true;
+        if (!layout || typeof layout.find !== "function") return false;
+        const host = layout.find(".dco-plan-context-actions-host");
+        if (!host.length) return false;
+        // Edit mode intentionally empties the context host.
+        if (isPlanEditing(frm)) return true;
+        return Boolean(
+            (typeof host.find === "function" && host.find(".dco-plan-context-bar").length)
+            || (typeof host.find === "function" && host.find("[data-almdina-context-tools]").length)
+        );
+    }
+
     function surfaceReady(frm) {
         const actions = wrapper(frm, "plan_control_actions");
         const layout = wrapper(frm, "cutting_plan_html");
@@ -210,6 +230,7 @@
             && actions.find(".dco-plan-actions-shell").length
             && layout.find(".dco-plan-tab-content").length
             && layout.children().length
+            && contextActionsReady(frm, layout)
             && content
             && typeof content.isReady === "function"
             && content.isReady(frm)

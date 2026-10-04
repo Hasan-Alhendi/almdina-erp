@@ -216,7 +216,6 @@ class FrappeStockAvailabilityRepository:
             where door_cutting_order = %s
               and cutting_plan = %s
               and status = 'Active'
-              and coalesce(replacement_piece, '') = ''
             order by creation desc
             limit 1
             """,

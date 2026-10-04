@@ -2,7 +2,7 @@
 
 Baseline: `Develop@453c000240b574b9739fc46ba392c17c42b766c9`
 
-This audit classifies backend legacy-risk surfaces before Stage 11 changes any runtime behavior. The machine-readable source of truth is `almdina_erp/backend_legacy_inventory.json`; the CI contract is `almdina_erp/tests/test_backend_legacy_audit_contract.py`.
+This audit classifies backend legacy-risk surfaces before Stage 11 changes any runtime behavior. The machine-readable source of truth is `almdina_erp/backend_legacy_inventory.json`; the CI contract is `almdina_erp/tests/test_backend_legacy_audit_contract.py`. Completed removals are recorded in `almdina_erp/backend_legacy_migrations.json`. Batch 10 removed the cutting and shop-floor import facades after callers moved to Domain and focused services.
 
 ## Classification rule
 
@@ -44,13 +44,11 @@ is not the active override. It remains a compatibility/migration concern and sho
 
 New cutting code belongs to `domain/cutting` and `infrastructure/cutting/domain_engine.py`.
 
-The following are compatibility-only import paths:
+The following were compatibility-only import paths and were removed after callers used `domain.cutting` and `domain_engine.py`:
 
 - `services/cutting_engine.py`
 - `services/advanced_cutting_optimizer.py`
 - `infrastructure/cutting/legacy_engine.py`
-
-They must not regain algorithms. Stage 11 should migrate remaining imports to the Domain/canonical adapter and remove these aliases only when zero consumers remain.
 
 ### 3. `cutting_plan_service.py` is a mixed boundary, not a dead service
 
@@ -60,11 +58,7 @@ Stage 11 must first separate plan persistence from compatibility endpoints. Dele
 
 ### 4. Shop-floor legacy paths are intentionally preserved
 
-`services/shop_floor_service.py` is a small lazy compatibility facade. Historical routes are redirected by `override_whitelisted_methods` to focused query, command, DXF, approval, dispatch and revision services.
-
-`infrastructure/frappe/shop_floor_gateway.py` is also a compatibility facade for old Python imports. Removed role gates deliberately fail closed rather than silently authorizing an old caller. Its historical `create_stage` compatibility semantics also preserve an implicit Created event for legacy callers.
-
-Stage 11 should migrate Python callers symbol-by-symbol. Public route compatibility must remain stable until the old routes are formally retired.
+`services/shop_floor_service.py` and `infrastructure/frappe/shop_floor_gateway.py` were removed after Python callers moved to focused services and `order_tracking_repository.get_order`. Historical HTTP method names remain redirected by `override_whitelisted_methods`.
 
 ### 5. Replacement has a deliberate compatibility facade
 
@@ -105,9 +99,9 @@ CI must fail if any audited old route silently points back to an old implementat
 ## Stage 11 execution order
 
 1. **Controller chain** — identify exactly which inherited methods the active Frappe controller still needs, migrate those responsibilities to focused adapters/application code, slim the canonical base, then remove the alternate fast/text/domain chain when imports reach zero.
-2. **Cutting imports** — replace internal imports of `cutting_engine`, `advanced_cutting_optimizer`, and `legacy_engine` with Domain/canonical imports; delete facades only after zero-consumer proof.
+2. **Cutting imports** — completed: callers use Domain/canonical imports; the import facades were removed.
 3. **Cutting-plan boundary** — split active plan snapshot persistence from historical HTTP lifecycle compatibility.
-4. **Shop floor** — migrate Python imports off `shop_floor_service` and `shop_floor_gateway`; keep old HTTP routes mapped to canonical services during migration.
+4. **Shop floor** — completed for Python facades: old HTTP routes remain mapped to canonical services.
 5. **Replacement** — move clients to focused replacement services and retire the facade only after route usage reaches zero.
 6. **Retired product modules** — prove zero internal imports, preserve fail-closed old HTTP routing, then remove obsolete stock/remnant/preflight implementations.
 

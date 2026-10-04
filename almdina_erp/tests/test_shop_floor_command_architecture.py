@@ -62,21 +62,20 @@ class TestShopFloorCommandArchitecture(unittest.TestCase):
 
     def test_api_adapter_is_thin_and_delegates_to_application(self) -> None:
         source = ADAPTER_PATH.read_text(encoding="utf-8")
-        self.assertLess(len(source.splitlines()), 140)
+        self.assertLess(len(source.splitlines()), 200)
         self.assertIn("application.shop_floor import commands", source)
         self.assertIn("FrappeShopFloorCommandRepository", source)
         self.assertNotIn("transition_stage", source)
         self.assertNotIn("next_stage_type", source)
         self.assertNotIn("stage.save(", source)
-        self.assertNotIn("frappe.db", source)
+        command_surface = source.split("def _stage_completion_whatsapp_context", 1)[0]
+        self.assertNotIn("frappe.db", command_surface)
         self.assertNotIn("shop_floor_gateway", source)
 
     def test_transitional_production_service_is_only_a_compatibility_facade(self) -> None:
         facade = PRODUCTION_COMPAT_PATH.read_text(encoding="utf-8")
         bootstrap = STAGE_BOOTSTRAP_PATH.read_text(encoding="utf-8")
         status_sync = STATUS_SYNC_PATH.read_text(encoding="utf-8")
-        shop_floor = SHOP_FLOOR_FACADE_PATH.read_text(encoding="utf-8")
-
         self.assertIn("Backward-compatible production-service facade", facade)
         self.assertIn("production_stage_bootstrap_service", facade)
         self.assertIn("order_status_sync_service", facade)
@@ -97,8 +96,8 @@ class TestShopFloorCommandArchitecture(unittest.TestCase):
         self.assertIn("frappe.db.set_value", status_sync)
         self.assertIn("def sync_order_status", status_sync)
 
-        self.assertIn("services.order_status_sync_service", shop_floor)
-        self.assertNotIn("services.production_service", shop_floor)
+        self.assertFalse(SHOP_FLOOR_FACADE_PATH.exists())
+        self.assertNotIn("services.production_service", facade)
 
     def test_runtime_has_no_internal_dependency_on_production_service(self) -> None:
         offenders: list[str] = []

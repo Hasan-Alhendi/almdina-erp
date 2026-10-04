@@ -3,7 +3,12 @@
 
     if (window.AlmdinaOrderCostUX) return;
 
-    const STYLE_ID = "dco-capability-cost-presenter-css-v7";
+    const STYLE_ID = "dco-capability-cost-presenter-css-v8";
+    const LEGACY_STYLE_IDS = Object.freeze([
+        "dco-capability-cost-presenter-css-v7",
+        "dco-capability-cost-presenter-css-v6",
+        "dco-capability-cost-presenter-css-v5",
+    ]);
 
     function can(frm, capability) {
         const permissions = window.AlmdinaPermissions;
@@ -41,7 +46,7 @@
 
     function pieceTypeLabel(value) {
         if (value === "Special") return "خاصة";
-        if (value === "Clipped Corner") return "زاوية مقصوصة";
+        if (value === "Clipped Corner") return "الزاوية الكسر";
         if (value === "L-Shaped Corner") return "زاوية L";
         if (value === "Extra") return "إضافية";
         return "عادية";
@@ -280,7 +285,28 @@
             : number(frm.doc.customer_quote_total_usd);
     }
 
+    function dimensionMark(value, count) {
+        // Same count contract as measurements print (one mark per edged side on that axis).
+        // Screen layout mirrors the printed look: 2 sides => line above + below; 1 side => below.
+        const safeCount = Math.max(0, Math.min(2, Number(count || 0)));
+        const line = '<span class="dco-cost-dimension-edge-line" aria-hidden="true"></span>';
+        const spacer = '<span class="dco-cost-dimension-edge-line is-spacer" aria-hidden="true"></span>';
+        const top = safeCount === 2 ? line : spacer;
+        const bottom = safeCount >= 1 ? line : spacer;
+        return (
+            `<span class="dco-cost-dimension" data-edge-marks="${safeCount}">`
+            + `<span class="dco-cost-dimension-rail">${top}</span>`
+            + `<b>${quantity(value)}</b>`
+            + `<span class="dco-cost-dimension-rail">${bottom}</span>`
+            + `</span>`
+        );
+    }
+
     function installStyles() {
+        LEGACY_STYLE_IDS.forEach((id) => {
+            const legacy = document.getElementById(id);
+            if (legacy) legacy.remove();
+        });
         if (document.getElementById(STYLE_ID)) return;
         const style = document.createElement("style");
         style.id = STYLE_ID;
@@ -304,6 +330,11 @@
             .dco-cost-table th{background:var(--subtle-fg,#f7f9fb);font-weight:900;white-space:nowrap}
             .dco-cost-table tr:last-child td{border-bottom:0}
             .dco-cost-table .text-start{text-align:right}
+            .dco-cost-dimension{display:inline-flex;min-width:2.75rem;flex-direction:column;align-items:center;gap:2px;line-height:1}
+            .dco-cost-dimension b{font-size:12px;font-weight:900}
+            .dco-cost-dimension-rail{display:flex;min-height:4px;align-items:center;justify-content:center}
+            .dco-cost-dimension-edge-line{display:block;width:1.65rem;height:1.5px;border-radius:999px;background:var(--alm-primary,#172033)}
+            .dco-cost-dimension-edge-line.is-spacer{visibility:hidden}
             .dco-invoice-pending-row td{background:rgba(190,125,25,.055)}
             .dco-invoice-pending-badge{display:inline-flex;margin-inline-start:7px;padding:2px 7px;border-radius:999px;background:#fff3d8;color:#875812;font-size:9px;font-weight:900}
             .dco-invoice-pending-value{font-weight:900;color:#9a6a1d}
@@ -327,13 +358,17 @@
             }
             .dco-special-price-actions{display:flex;flex-direction:column;gap:6px;min-width:118px}
             .dco-special-price-note{grid-column:1/-1;font-size:10px;color:var(--text-muted,#687481)}
-            .dco-invoice-total-card{margin:0;padding:18px 20px;border:1px solid rgba(31,130,82,.35);border-radius:0;border-top:0;background:linear-gradient(135deg,rgba(31,130,82,.12),rgba(31,130,82,.045));display:flex;align-items:center;justify-content:space-between;gap:16px}
-            .dco-invoice-total-card.is-pending{border-color:rgba(190,125,25,.4);background:linear-gradient(135deg,rgba(190,125,25,.11),rgba(190,125,25,.035))}
-            .dco-invoice-total-card span{display:block;font-size:13px;font-weight:800;color:#1f8252}
-            .dco-invoice-total-card.is-pending span{color:#875812}
+            .dco-cost-section{border-color:var(--alm-card-border,#e4e8ee);border-radius:var(--alm-radius-card,16px);box-shadow:var(--alm-shadow-card,0 8px 24px rgba(15,23,42,.045))}
+            .dco-cost-section-title{background:var(--alm-card,#fff)}
+            .dco-cost-invoice-section .dco-cost-section-title{align-items:flex-start}
+            .dco-cost-actions .btn,.dco-cost-actions .alm-btn-primary{border-radius:999px;background:var(--alm-primary,#172033);color:var(--alm-on-primary,#fff);border-color:var(--alm-primary,#172033)}
+            .dco-invoice-total-card{margin:12px;padding:16px 18px;border:1px solid var(--alm-card-border,#e4e8ee);border-radius:14px;background:var(--alm-card,#fff);display:flex;align-items:center;justify-content:space-between;gap:16px}
+            .dco-invoice-total-card.is-pending{border-color:color-mix(in srgb, var(--alm-warning,#b45309) 35%, #fff);background:var(--alm-warning-bg,#fff7e8)}
+            .dco-invoice-total-card span{display:block;font-size:13px;font-weight:800;color:var(--text-color,#1f272e)}
+            .dco-invoice-total-card.is-pending span{color:var(--alm-warning,#b45309)}
             .dco-invoice-total-card small{display:block;margin-top:4px;font-size:10px;color:var(--text-muted,#687481);font-weight:700}
-            .dco-invoice-total-card b{display:block;font-size:28px;font-weight:900;direction:ltr;text-align:left;color:#14653d;letter-spacing:.01em}
-            .dco-invoice-total-card.is-pending b{color:#875812}
+            .dco-invoice-total-card b{display:inline-flex;align-items:center;min-height:52px;padding:8px 16px;border:1px solid color-mix(in srgb, var(--alm-warning,#b45309) 45%, #fff);border-radius:12px;background:#fff;font-size:28px;font-weight:900;direction:ltr;text-align:left;color:var(--alm-warning,#b45309);letter-spacing:.01em}
+            .dco-invoice-total-card.is-pending b{color:var(--alm-warning,#b45309)}
             .dco-cost-empty{padding:24px;text-align:center;color:var(--text-muted,#687481)}
             .dco-cost-plan-stale-notice{margin:0;padding:10px 14px;border-bottom:1px solid rgba(190,125,25,.28);background:rgba(190,125,25,.08);color:#875812;font-size:11px;font-weight:800;line-height:1.55}
             @media(max-width:900px){.dco-special-price-card{grid-template-columns:1fr 1fr}.dco-special-price-actions,.dco-special-price-card>.dco-special-price-id,.dco-special-price-note{grid-column:1/-1}}
@@ -348,12 +383,18 @@
             return '<div class="dco-cost-empty">لا توجد قياسات في الطلب بعد.</div>';
         }
         return `<div class="dco-cost-table-wrap"><table class="dco-cost-table"><thead><tr>
-            <th>#</th><th>النوع</th><th>العرض (سم)</th><th>الطول (سم)</th><th>العدد</th><th>نوع القشاط</th><th class="text-start">ملاحظات</th>
-        </tr></thead><tbody>${data.map(row => `<tr>
+            <th>#</th><th>النوع</th><th>العرض (سم)</th><th>الطول (سم)</th><th>العدد</th><th class="text-start">ملاحظات</th><th>نوع القشاط</th>
+        </tr></thead><tbody>${data.map(row => {
+            const widthCount = Number(Boolean(row.source.edge_width_top))
+                + Number(Boolean(row.source.edge_width_bottom));
+            const longCount = Number(Boolean(row.source.edge_long_right))
+                + Number(Boolean(row.source.edge_long_left));
+            return `<tr>
             <td><b>${row.index}</b></td><td>${esc(pieceTypeLabel(row.pieceType))}</td>
-            <td>${quantity(row.width)}</td><td>${quantity(row.length)}</td><td>${row.qty}</td>
-            <td>${esc(row.edgeType || "—")}</td><td class="text-start">${esc(row.notes || "—")}</td>
-        </tr>`).join("")}</tbody></table></div>`;
+            <td>${dimensionMark(row.width, widthCount)}</td><td>${dimensionMark(row.length, longCount)}</td><td>${row.qty}</td>
+            <td class="text-start">${esc(row.notes || "—")}</td><td>${esc(row.edgeType || "—")}</td>
+        </tr>`;
+        }).join("")}</tbody></table></div>`;
     }
 
     function planNeedsRecalculation(frm) {
@@ -426,7 +467,7 @@
     function cutCornerDoorLabel(row) {
         return row.pieceType === "L-Shaped Corner"
             ? `درفة زاوية L ${row.index}`
-            : `درفة زاوية مقصوصة ${row.index}`;
+            : `درفة الزاوية الكسر ${row.index}`;
     }
 
     function specialPriceInputValue(row) {

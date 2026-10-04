@@ -18,8 +18,8 @@ For the full Arabic SRS and acceptance criteria, see
 - Customer quote/invoice calculation.
 - Customer invoice printing.
 - Measurement and production printing.
-- Production workflow, incidents and replacement pieces.
-- DXF import/export and operational reports.
+- Production workflow and shop-floor stages.
+- DXF import/export.
 
 ## Excluded
 
@@ -31,6 +31,8 @@ For the full Arabic SRS and acceptance criteria, see
 - Stock Entries and Stock Ledger movements.
 - Board-remnant inventory, reservation and reuse.
 - Inventory valuation and material-variance accounting.
+- Production incidents and replacement pieces.
+- Operational and financial query reports, including Factory Operations Summary, Factory Order Analysis, Production Stage Performance, Board Usage Analysis, and Piece Size Usage Analysis.
 
 Historical inventory DocTypes and services may remain temporarily in source only
 to protect existing installations during migration. They are not part of the

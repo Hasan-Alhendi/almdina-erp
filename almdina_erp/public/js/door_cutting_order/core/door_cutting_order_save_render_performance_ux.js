@@ -119,8 +119,35 @@
         if (mark) mark.textContent = checked ? "✓" : "";
     }
 
+    function syncCornerEdgesSummary(frm, tr, row, editable) {
+        const cell = tr.querySelector(".dco-col-edges");
+        if (!cell) return;
+        const cornerGeometry = window.AlmdinaClippedCornerGeometry;
+        const isCorner = Boolean(
+            cornerGeometry
+            && typeof cornerGeometry.isCornerCut === "function"
+            && cornerGeometry.isCornerCut(row)
+        );
+        if (!isCorner) return;
+
+        // Corner rows replace edge toggles with a summary button. Value-only
+        // sync must refresh that label after «اعتماد الزاوية» without a save.
+        const summaryButton = cell.querySelector(".dco-corner-edges-summary");
+        if (summaryButton && typeof cornerGeometry.edgeSelectionSummary === "function") {
+            const label = summaryButton.querySelector("span");
+            if (label) label.textContent = cornerGeometry.edgeSelectionSummary(row);
+            return;
+        }
+
+        const fastEntry = window.AlmdinaDoorCuttingFastEntry;
+        if (fastEntry && typeof fastEntry.edgesCellHtml === "function") {
+            cell.innerHTML = fastEntry.edgesCellHtml(frm, row, { editable, virtual: false });
+        }
+    }
+
     function syncExistingTable(frm, root) {
         const active = document.activeElement;
+        const editable = currentShellEditable(root);
         (frm.doc.pieces || []).forEach((row, index) => {
             const tr = root.querySelector(`tr[data-row-name="${CSS.escape(row.name || "")}"]`);
             if (!tr) return;
@@ -139,6 +166,7 @@
             tr.querySelectorAll("button.dco-check-toggle[data-check-field]").forEach(button => {
                 syncToggle(button, Boolean(row[button.dataset.checkField]));
             });
+            syncCornerEdgesSummary(frm, tr, row, editable);
 
             const areaCell = tr.querySelector("[data-calc='area_m2']");
             const edgeCell = tr.querySelector("[data-calc='edge_meters']");
@@ -208,6 +236,27 @@
         return !pane || pane.classList.contains("active") || pane.classList.contains("show");
     }
 
+    function flushDeferredCostRender(frm) {
+        // Cost HTML may have been deferred while the tab was inactive. Returning via
+        // Frappe's on_tab_change (not only a click) must still paint the full shell;
+        // otherwise hosted rate settings remain visible against a stale/pending shell.
+        if (!frm || !frm._dco_cost_render_deferred) return false;
+        if (!costTabIsActive(frm)) return false;
+        const presenter = window.AlmdinaOrderCostUX;
+        if (!presenter || typeof presenter.render !== "function") return false;
+        presenter.render(frm);
+        return true;
+    }
+
+    function scheduleFlushDeferredCostRender(frm) {
+        if (!frm || !frm._dco_cost_render_deferred) return false;
+        const requestFrame = window.requestAnimationFrame || window.setTimeout;
+        requestFrame.call(window, () => {
+            flushDeferredCostRender(frm);
+        });
+        return true;
+    }
+
     function installCostGuard(frm) {
         const field = frm.fields_dict.order_cost_invoice_html;
         if (!field || !field.$wrapper) return;
@@ -261,11 +310,7 @@
             const currentFrm = root._dcoDeferredRenderForm || frm;
             const tab = event.target.closest("[data-fieldname='cost_tab']");
             if (!tab || !currentFrm._dco_cost_render_deferred) return;
-            requestAnimationFrame(() => {
-                if (window.AlmdinaOrderCostUX && window.AlmdinaOrderCostUX.render) {
-                    window.AlmdinaOrderCostUX.render(currentFrm);
-                }
-            });
+            scheduleFlushDeferredCostRender(currentFrm);
         });
     }
 
@@ -278,5 +323,18 @@
     frappe.ui.form.on("Door Cutting Order", {
         onload_post_render(frm) { install(frm); },
         refresh(frm) { install(frm); },
+        on_tab_change(frm) {
+            // Primary Frappe v16 tab signal. Click-only flush misses keyboard and
+            // host-driven activation after a deferred Cost paint.
+            install(frm);
+            scheduleFlushDeferredCostRender(frm);
+        },
+    });
+
+    window.AlmdinaSaveRenderPerformanceUX = Object.freeze({
+        costTabIsActive,
+        flushDeferredCostRender,
+        scheduleFlushDeferredCostRender,
+        install,
     });
 })();

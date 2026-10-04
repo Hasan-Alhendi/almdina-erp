@@ -22,7 +22,6 @@ ALMDINA_WORKSPACES = frozenset(
         "Almdina ERP",
         "Shop Floor",
         "Almdina Control Center",
-        "Almdina Reports",
         "Almdina Settings",
         "Almdina Go-Live",
     }

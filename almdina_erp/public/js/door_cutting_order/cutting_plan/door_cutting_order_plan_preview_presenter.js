@@ -32,7 +32,10 @@
                 }
                 .dco-plan-preview-badge {
                     flex:0 0 auto;padding:4px 8px;border-radius:999px;background:var(--alm-primary,#172033);
-                    color:#fff;font-size:10px;font-weight:800;white-space:nowrap;
+                    color:#fff !important;font-size:10px;font-weight:800;white-space:nowrap;
+                }
+                .dco-plan-preview-banner .dco-plan-preview-badge {
+                    display:inline-flex;align-items:center;margin-top:0;color:#fff !important;
                 }
                 .dco-plan-preview-banner.is-stale .dco-plan-preview-badge { background:#b45309; }
                 .dco-plan-preview-banner.is-error .dco-plan-preview-badge { background:#b91c1c; }

@@ -43,9 +43,6 @@ doc_events = {
         "on_trash":
             "almdina_erp.almdina_erp.services.notes_projection_service.clear_important_projection_for_deleted_comment",
     },
-    "Replacement Piece": {
-        "on_update": "almdina_erp.almdina_erp.services.cost_service.on_replacement_update",
-    },
     "Cutting Plan": {
         "on_update": "almdina_erp.almdina_erp.services.cost_service.on_order_plan_update",
     },
@@ -54,9 +51,7 @@ doc_events = {
 permission_query_conditions = {
     "Door Cutting Order": "almdina_erp.permissions.door_cutting_order_query",
     "Production Stage": "almdina_erp.permissions.production_stage_query",
-    "Production Incident": "almdina_erp.permissions.production_incident_query",
     "Cutting Plan": "almdina_erp.permissions.cutting_plan_query",
-    "Replacement Piece": "almdina_erp.permissions.replacement_piece_query",
     "Customer": "almdina_erp.resource_permissions.customer_query",
     "Edge Banding Type": "almdina_erp.resource_permissions.edge_banding_type_query",
     "Production Routing": "almdina_erp.resource_permissions.production_routing_query",
@@ -65,9 +60,7 @@ permission_query_conditions = {
 has_permission = {
     "Door Cutting Order": "almdina_erp.almdina_erp.infrastructure.frappe.native_document_permissions.door_cutting_order_has_permission",
     "Production Stage": "almdina_erp.almdina_erp.infrastructure.frappe.native_document_permissions.production_stage_has_permission",
-    "Production Incident": "almdina_erp.almdina_erp.infrastructure.frappe.native_document_permissions.production_incident_has_permission",
     "Cutting Plan": "almdina_erp.almdina_erp.infrastructure.frappe.native_document_permissions.cutting_plan_has_permission",
-    "Replacement Piece": "almdina_erp.almdina_erp.infrastructure.frappe.native_document_permissions.replacement_piece_has_permission",
     "Customer": "almdina_erp.resource_permissions.customer_has_permission",
     "Edge Banding Type": "almdina_erp.resource_permissions.edge_banding_type_has_permission",
     "Production Routing": "almdina_erp.resource_permissions.production_routing_has_permission",

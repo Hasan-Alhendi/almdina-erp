@@ -12,6 +12,10 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
     snapshot_geometry_index,
     validate_snapshot_material_layout,
 )
+from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
+    dimensions_match_exact,
+    special_bbox_matches_cut_envelope_with_unrecorded_edge_deduction,
+)
 from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
     ManufacturingRequirementsError,
     snapshot_manufacturing_requirement_index,
@@ -39,6 +43,7 @@ def _expected_snapshot_pieces(snapshot: dict[str, Any]) -> dict[str, dict[str, A
             "width_cm": flt(piece["cut_width_cm"]),
             "length_cm": flt(piece["cut_length_cm"]),
             "allow_rotation": bool(piece["allow_rotation"]),
+            "piece_type": str(piece.get("piece_type") or "Regular"),
             "source_piece_no": cint(piece["source_piece_no"]),
             "copy_no": cint(piece["copy_no"]),
         }
@@ -124,15 +129,14 @@ def _validate_source_identity(source: Any, plan: Any, order: Any, errors: list[s
 
 
 def _topology_validation_error(exc: Exception) -> str:
-    code = getattr(exc, "code", None)
-    if code:
-        first = getattr(exc, "first_key", None) or "?"
-        second = getattr(exc, "second_key", None) or "?"
-        return _("Persisted DXF topology validation failed ({0}) between pieces {1} and {2}.").format(
-            code,
-            first,
-            second,
-        )
+    from almdina_erp.almdina_erp.domain.cutting.dxf_issue import topology_error_to_issue
+    from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import (
+        present_issue,
+    )
+
+    if getattr(exc, "code", None):
+        card = present_issue(topology_error_to_issue(exc))
+        return f"{card.code}: {card.problem} {card.target} {card.action}"
     return _("Persisted DXF topology is invalid: {0}").format(str(exc))
 
 
@@ -243,23 +247,52 @@ def validate_cutting_plan_document(plan: Any) -> list[str]:
                     )
                 width_cm = flt(piece.width_mm) / 10
                 height_cm = flt(piece.height_mm) / 10
-                normal = (
-                    abs(width_cm - expected_piece["width_cm"]) <= 0.001
-                    and abs(height_cm - expected_piece["length_cm"]) <= 0.001
-                )
-                rotated = (
-                    expected_piece["allow_rotation"]
-                    and abs(width_cm - expected_piece["length_cm"]) <= 0.001
-                    and abs(height_cm - expected_piece["width_cm"]) <= 0.001
-                )
-                if not (normal or rotated):
+                piece_rotated = bool(cint(piece.rotated))
+                if expected_piece["piece_type"] == "Special":
+                    if piece_rotated:
+                        dimensions_match = special_bbox_matches_cut_envelope_with_unrecorded_edge_deduction(
+                            width_cm,
+                            height_cm,
+                            expected_piece["length_cm"],
+                            expected_piece["width_cm"],
+                        )
+                    else:
+                        dimensions_match = special_bbox_matches_cut_envelope_with_unrecorded_edge_deduction(
+                            width_cm,
+                            height_cm,
+                            expected_piece["width_cm"],
+                            expected_piece["length_cm"],
+                        )
+                elif piece_rotated:
+                    dimensions_match = (
+                        expected_piece["allow_rotation"]
+                        and dimensions_match_exact(
+                            width_cm,
+                            height_cm,
+                            expected_piece["length_cm"],
+                            expected_piece["width_cm"],
+                        )
+                    )
+                else:
+                    dimensions_match = dimensions_match_exact(
+                        width_cm,
+                        height_cm,
+                        expected_piece["width_cm"],
+                        expected_piece["length_cm"],
+                    )
+                if not dimensions_match:
                     errors.append(
                         _("Piece {0} dimensions/orientation do not match the captured manufacturing request.").format(
                             piece.piece_label
                         )
                     )
                 if cint(piece.rotated) and not expected_piece["allow_rotation"]:
-                    errors.append(_("Piece {0} is rotated without permission.").format(piece.piece_label))
+                    # Same business code as upload-time FORBIDDEN_ROTATION.
+                    errors.append(
+                        _("FORBIDDEN_ROTATION: Piece {0} is rotated without permission.").format(
+                            piece.piece_label
+                        )
+                    )
 
     return errors
 
@@ -305,6 +338,7 @@ def _plan_to_export_snapshot(plan: Any) -> dict[str, Any]:
                 "edge_long_left": cint(piece.edge_long_left),
                 "edge_width_top": cint(piece.edge_width_top),
                 "edge_width_bottom": cint(piece.edge_width_bottom),
+                "edge_break": cint(getattr(piece, "edge_break", 0)),
                 "edge_type": piece.edge_type or "",
                 "notes": piece.notes or "",
                 "area_m2": flt(piece.original_width_cm) * flt(piece.original_length_cm) / 10000,

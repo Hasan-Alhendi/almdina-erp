@@ -62,6 +62,7 @@ async function run() {
         frappe: { msgprint() {}, utils: { escape_html: String }, ui: { form: { on() {} } } }, __: String, console, structuredClone });
     vm.runInContext(read("core/door_cutting_order_workspace_store.js"), context);
     window.AlmdinaWorkspaceStore = context.window.AlmdinaWorkspaceStore;
+    vm.runInContext(read("core/door_cutting_order_workspace_keep_paint.js"), context);
     vm.runInContext(read("cutting_plan/door_cutting_order_plan_preview_session.js"), context);
     vm.runInContext(read("cutting_plan/door_cutting_order_plan_workspace_state.js"), context);
     vm.runInContext(read("cutting_plan/door_cutting_order_plan_tabs_ux.js"), context);

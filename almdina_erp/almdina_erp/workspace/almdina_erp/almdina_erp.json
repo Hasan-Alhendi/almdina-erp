@@ -1,6 +1,6 @@
 {
   "charts": [],
-  "content": "[{\"id\":\"master-data-header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>الإعدادات الأساسية</b></span>\",\"col\":12}},{\"id\":\"customers-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"الزبائن\",\"col\":4}},{\"id\":\"edge-types-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"أنواع القشاط وأسعاره\",\"col\":4}},{\"id\":\"settings-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"إعدادات المعمل\",\"col\":4}},{\"id\":\"system-management-header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>إدارة النظام ومسارات العمل</b></span>\",\"col\":12}},{\"id\":\"role-management-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"إدارة الأدوار\",\"col\":3}},{\"id\":\"permission-management-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"إدارة الصلاحيات\",\"col\":3}},{\"id\":\"user-management-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"إدارة المستخدمين\",\"col\":3}},{\"id\":\"routing-management-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"إدارة مسارات الإنتاج\",\"col\":3}},{\"id\":\"factory-operations-header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>التشغيل اليومي</b></span>\",\"col\":12}},{\"id\":\"orders-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"طلبات قص الدرف\",\"col\":3}},{\"id\":\"stages-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"مراحل الإنتاج\",\"col\":3}},{\"id\":\"replacement-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"القطع التعويضية\",\"col\":3}},{\"id\":\"incidents-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"أخطاء الإنتاج\",\"col\":3}},{\"id\":\"reports-header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>التقارير التشغيلية والتكلفة</b></span>\",\"col\":12}},{\"id\":\"summary-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"ملخص عمليات المعمل\",\"col\":3}},{\"id\":\"analysis-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"تحليل طلبات القص\",\"col\":3}},{\"id\":\"board-usage-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"تحليل استخدام الألواح\",\"col\":3}},{\"id\":\"piece-usage-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"تحليل قياسات الدرف\",\"col\":3}},{\"id\":\"performance-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"أداء مراحل الإنتاج\",\"col\":3}},{\"id\":\"incidents-report-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"أخطاء الإنتاج والقطع التعويضية\",\"col\":3}}]",
+  "content": "[{\"id\":\"master-data-header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>الإعدادات الأساسية</b></span>\",\"col\":12}},{\"id\":\"customers-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"الزبائن\",\"col\":4}},{\"id\":\"edge-types-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"أنواع القشاط وأسعاره\",\"col\":4}},{\"id\":\"settings-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"إعدادات المعمل\",\"col\":4}},{\"id\":\"system-management-header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>إدارة النظام ومسارات العمل</b></span>\",\"col\":12}},{\"id\":\"role-management-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"إدارة الأدوار\",\"col\":3}},{\"id\":\"permission-management-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"إدارة الصلاحيات\",\"col\":3}},{\"id\":\"user-management-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"إدارة المستخدمين\",\"col\":3}},{\"id\":\"routing-management-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"إدارة مسارات الإنتاج\",\"col\":3}},{\"id\":\"factory-operations-header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>التشغيل اليومي</b></span>\",\"col\":12}},{\"id\":\"orders-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"طلبات قص الدرف\",\"col\":3}},{\"id\":\"stages-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"مراحل الإنتاج\",\"col\":3}}]",
   "custom_blocks": [],
   "docstatus": 0,
   "doctype": "Workspace",
@@ -19,15 +19,7 @@
     {"hidden":0,"is_query_report":0,"label":"إدارة المستخدمين","link_count":0,"link_to":"factory-workforce","link_type":"Page","onboard":0,"type":"Link"},
     {"hidden":0,"is_query_report":0,"label":"إدارة مسارات الإنتاج","link_count":0,"link_to":"factory-master-data","link_type":"Page","onboard":0,"type":"Link"},
     {"hidden":0,"is_query_report":0,"label":"طلبات قص الدرف","link_count":0,"link_to":"Door Cutting Order","link_type":"DocType","onboard":0,"type":"Link"},
-    {"hidden":0,"is_query_report":0,"label":"مراحل الإنتاج","link_count":0,"link_to":"shop-floor-inbox","link_type":"Page","onboard":0,"type":"Link"},
-    {"hidden":0,"is_query_report":0,"label":"القطع التعويضية","link_count":0,"link_to":"Replacement Piece","link_type":"DocType","onboard":0,"type":"Link"},
-    {"hidden":0,"is_query_report":0,"label":"أخطاء الإنتاج","link_count":0,"link_to":"Production Incident","link_type":"DocType","onboard":0,"type":"Link"},
-    {"hidden":0,"is_query_report":1,"label":"ملخص عمليات المعمل","link_count":0,"link_to":"Factory Operations Summary","link_type":"Report","onboard":0,"type":"Link"},
-    {"hidden":0,"is_query_report":1,"label":"تحليل طلبات القص","link_count":0,"link_to":"Factory Order Analysis","link_type":"Report","onboard":0,"type":"Link"},
-    {"hidden":0,"is_query_report":1,"label":"تحليل استخدام الألواح","link_count":0,"link_to":"Board Usage Analysis","link_type":"Report","onboard":0,"type":"Link"},
-    {"hidden":0,"is_query_report":1,"label":"تحليل قياسات الدرف","link_count":0,"link_to":"Piece Size Usage Analysis","link_type":"Report","onboard":0,"type":"Link"},
-    {"hidden":0,"is_query_report":1,"label":"أداء مراحل الإنتاج","link_count":0,"link_to":"Production Stage Performance","link_type":"Report","onboard":0,"type":"Link"},
-    {"hidden":0,"is_query_report":1,"label":"أخطاء الإنتاج والقطع التعويضية","link_count":0,"link_to":"Production Incidents and Replacements","link_type":"Report","onboard":0,"type":"Link"}
+    {"hidden":0,"is_query_report":0,"label":"مراحل الإنتاج","link_count":0,"link_to":"shop-floor-inbox","link_type":"Page","onboard":0,"type":"Link"}
   ],
   "module": "Almdina ERP",
   "name": "Almdina ERP",
@@ -46,15 +38,7 @@
     {"color":"Green","label":"إدارة المستخدمين","link_to":"factory-workforce","type":"Page"},
     {"color":"Orange","label":"إدارة مسارات الإنتاج","link_to":"factory-master-data","type":"Page"},
     {"color":"Blue","doc_view":"List","label":"طلبات قص الدرف","link_to":"Door Cutting Order","type":"DocType"},
-    {"color":"Orange","label":"مراحل الإنتاج","link_to":"shop-floor-inbox","type":"Page"},
-    {"color":"Red","doc_view":"List","label":"القطع التعويضية","link_to":"Replacement Piece","type":"DocType"},
-    {"color":"Orange","doc_view":"List","label":"أخطاء الإنتاج","link_to":"Production Incident","type":"DocType"},
-    {"color":"Blue","label":"ملخص عمليات المعمل","link_to":"Factory Operations Summary","type":"Report"},
-    {"color":"Blue","label":"تحليل طلبات القص","link_to":"Factory Order Analysis","type":"Report"},
-    {"color":"Green","label":"تحليل استخدام الألواح","link_to":"Board Usage Analysis","type":"Report"},
-    {"color":"Purple","label":"تحليل قياسات الدرف","link_to":"Piece Size Usage Analysis","type":"Report"},
-    {"color":"Blue","label":"أداء مراحل الإنتاج","link_to":"Production Stage Performance","type":"Report"},
-    {"color":"Orange","label":"أخطاء الإنتاج والقطع التعويضية","link_to":"Production Incidents and Replacements","type":"Report"}
+    {"color":"Orange","label":"مراحل الإنتاج","link_to":"shop-floor-inbox","type":"Page"}
   ],
   "title": "Almdina ERP"
 }

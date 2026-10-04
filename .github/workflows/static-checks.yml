@@ -85,6 +85,8 @@ jobs:
           python -m unittest -v \
             almdina_erp.tests.test_authorization_gateway_matrix_fallback \
             almdina_erp.tests.test_permission_matrix_application \
+            almdina_erp.tests.test_frappe_native_permission_parity \
+            almdina_erp.tests.test_ignore_permissions_audit_contract \
             almdina_erp.tests.test_permission_custom_docperm_baseline \
             almdina_erp.tests.test_canonical_permission_state_architecture \
             almdina_erp.tests.test_canonical_permission_reset_patch \
@@ -99,6 +101,7 @@ jobs:
             almdina_erp.tests.test_factory_workforce_frontend_architecture \
             almdina_erp.tests.test_factory_workforce_frontend_security \
             almdina_erp.tests.test_factory_master_data_authorization \
+            almdina_erp.tests.test_whatsapp_settings_capability_migration \
             almdina_erp.tests.test_factory_master_data_architecture \
             almdina_erp.tests.test_production_routing_management_application \
             almdina_erp.tests.test_production_routing_workflow_ux \
@@ -183,14 +186,23 @@ jobs:
         run: |
           python -m unittest -v \
             almdina_erp.tests.test_order_save_application \
-            almdina_erp.tests.test_unified_order_controller_architecture
+            almdina_erp.tests.test_unified_order_controller_architecture \
+            almdina_erp.tests.test_whatsapp_phone \
+            almdina_erp.tests.test_whatsapp_session_policy \
+            almdina_erp.tests.test_whatsapp_application \
+            almdina_erp.tests.test_whatsapp_config \
+            almdina_erp.tests.test_whatsapp_openwa_client \
+            almdina_erp.tests.test_whatsapp_frontend_contracts \
+            almdina_erp.tests.test_whatsapp_settings_capability_migration \
+            almdina_erp.tests.test_whatsapp_message_templates \
+            almdina_erp.tests.test_whatsapp_pdf_adapter \
+            almdina_erp.tests.test_measurements_print_document
 
       - name: Enforce the no-stock product boundary
         run: |
           python -m unittest -v \
             almdina_erp.tests.test_numeric_input_domain \
-            almdina_erp.tests.test_product_scope_contract \
-            almdina_erp.tests.test_replacement_planning
+            almdina_erp.tests.test_product_scope_contract
 
       - name: Run revision, board input, typing stability, and page revisit regression tests
         run: |
@@ -233,6 +245,8 @@ jobs:
       - name: Run active frontend browser simulations
         run: |
           node almdina_erp/tests/js/frontend_foundation.test.js
+          node almdina_erp/tests/js/dco_form_sidebar_controller.test.js
+          node almdina_erp/tests/js/dco_form_sidebar_controller.test.js
           node almdina_erp/tests/js/almdina_ui.test.js
           node almdina_erp/tests/js/workspace_store.test.js
           node almdina_erp/tests/js/workspace_sync_coordinator.test.js
@@ -252,6 +266,7 @@ jobs:
           node almdina_erp/tests/js/special_price_workspace_refresh.test.js
           node almdina_erp/tests/js/cost_edit_session_lifecycle.test.js
           node almdina_erp/tests/js/cost_hosted_settings_render.test.js
+          node almdina_erp/tests/js/cost_deferred_render_flush.test.js
           node almdina_erp/tests/js/cost_workspace_abandoned_load.test.js
           node almdina_erp/tests/js/special_price_cost_session_permissions.test.js
           node almdina_erp/tests/js/special_price_cost_workspace_access.test.js

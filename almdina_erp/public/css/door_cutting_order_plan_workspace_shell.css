@@ -1,0 +1,387 @@
+/*
+ * Cutting Plan — edit-session presentation shell.
+ * Scoped to body.dco-plan-settings-edit-active only.
+ * Presentation tokens from almdina_design_tokens.css. No business logic.
+ *
+ * Does NOT restyle: main Order/Plan/Cost tabs, board gallery/pieces,
+ * or the coverage+legend meta strip (those stay as the read-mode owners).
+ */
+
+body.dco-plan-settings-edit-active .dco-operator-form .dco-plan-actions-section,
+body.dco-plan-settings-edit-active .dco-operator-form .dco-plan-layout-section {
+    max-width: none !important;
+    width: 100% !important;
+    margin-inline: 0 !important;
+    box-sizing: border-box !important;
+}
+
+body.dco-plan-settings-edit-active .dco-operator-form .dco-plan-actions-section {
+    margin: 0 0 10px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+body.dco-plan-settings-edit-active .dco-operator-form .dco-plan-layout-section {
+    margin: 0 0 12px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+body.dco-plan-settings-edit-active .dco-operator-form .dco-plan-actions-section > .section-body,
+body.dco-plan-settings-edit-active .dco-operator-form .dco-plan-layout-section > .section-body,
+body.dco-plan-settings-edit-active .dco-operator-form .std-form-layout .dco-plan-actions-section > .section-body,
+body.dco-plan-settings-edit-active .dco-operator-form .std-form-layout .dco-plan-layout-section > .section-body,
+body.dco-plan-settings-edit-active .dco-operator-form .std-form-layout .form-section:has([data-fieldname="plan_control_actions"]) > .section-body,
+body.dco-plan-settings-edit-active .dco-operator-form .std-form-layout .form-section:has([data-fieldname="cutting_plan_html"]) > .section-body {
+    max-width: none !important;
+    width: 100% !important;
+    margin: 0 !important;
+    margin-inline: 0 !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+}
+
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"],
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] > .frappe-control,
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] > .form-group,
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .control-input-wrapper,
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .control-input {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+}
+
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"],
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] > .frappe-control,
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] > .form-group,
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .control-input-wrapper {
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+body.dco-plan-settings-edit-active [data-fieldname="cutting_plan_html"] .dco-plan-context-actions-host:empty {
+    display: none !important;
+}
+
+/* Settings toolbar + recalc — full content width */
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .dco-plan-settings-editor,
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__sheet,
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__header,
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__grid,
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__action-bar,
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__settings-row,
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__footer {
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+}
+
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .dco-plan-settings-editor {
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 0 10px !important;
+    padding: 6px 12px !important;
+    border: 1px solid var(--alm-card-border, #e4e8ee) !important;
+    border-radius: var(--alm-radius-sm, 10px) !important;
+    background: var(--alm-card, #fff) !important;
+    box-shadow: none !important;
+    box-sizing: border-box !important;
+}
+
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__sheet {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 8px !important;
+    width: 100% !important;
+    max-width: none !important;
+    box-sizing: border-box !important;
+    overflow-x: auto !important;
+}
+
+/* Title/icon removed so all fields stay on one compact row */
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__lead {
+    display: none !important;
+}
+
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__settings-row {
+    display: flex !important;
+    flex: 1 1 auto !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 6px !important;
+    min-width: 0 !important;
+    width: auto !important;
+}
+
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__icon {
+    display: none !important;
+}
+
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__grid {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 6px !important;
+    grid-template-columns: none !important;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    padding: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__field {
+    display: inline-flex !important;
+    flex: 0 0 auto !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 4px !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    border-inline-start: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__field:first-child {
+    border-inline-start: 0 !important;
+    padding-inline-start: 0 !important;
+}
+
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__field label {
+    margin: 0 !important;
+    margin-bottom: 0 !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    color: var(--text-muted, #667085) !important;
+    white-space: nowrap !important;
+}
+
+/* Compact Frappe .form-control / select — uniform density like Machine field */
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .dco-plan-settings-editor .form-control,
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .dco-plan-settings-editor select.form-control {
+    width: auto !important;
+    min-width: 3.25em !important;
+    max-width: 9.5em !important;
+    min-height: 28px !important;
+    height: 28px !important;
+    padding: 2px 8px !important;
+    border: 1px solid var(--border-color, #d0d5dd) !important;
+    border-radius: var(--alm-radius-button, 8px) !important;
+    background: var(--alm-card, #fff) !important;
+    box-shadow: none !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    color: var(--text-color, #1f272e) !important;
+    line-height: 1.2 !important;
+}
+
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .dco-plan-settings-editor select.form-control {
+    min-width: 7em !important;
+    max-width: 10.5em !important;
+    padding-inline-end: 22px !important;
+}
+
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .dco-plan-settings-editor .form-control:focus,
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .dco-plan-settings-editor select.form-control:focus {
+    outline: none !important;
+    border-color: var(--alm-accent, #2563eb) !important;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--alm-accent, #2563eb) 16%, transparent) !important;
+}
+
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__input-wrap.has-suffix .form-control {
+    padding-inline-start: 26px !important;
+    padding-inline-end: 8px !important;
+}
+
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__suffix {
+    color: var(--text-muted, #667085) !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+}
+
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__footer {
+    display: flex !important;
+    flex: 0 0 auto !important;
+    margin: 0 !important;
+    margin-inline-start: auto !important;
+}
+
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__action-bar {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 6px !important;
+    direction: ltr !important;
+}
+
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__stale-copy {
+    margin: 0 !important;
+    padding: 4px 8px !important;
+    border: 1px solid #f0c36d !important;
+    border-radius: 999px !important;
+    background: var(--alm-warning-bg, #fff7e8) !important;
+    color: var(--alm-warning, #b45309) !important;
+    font-size: 11px !important;
+    font-weight: 800 !important;
+    line-height: 1.3 !important;
+    white-space: nowrap !important;
+}
+
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__stale-copy[hidden] {
+    display: none !important;
+}
+
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__recalc-btn.btn::before {
+    content: "↻" !important;
+    margin-inline-end: 5px !important;
+    font-size: 12px !important;
+    line-height: 1 !important;
+}
+
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__recalc-btn.btn {
+    min-height: 36px !important;
+    height: 36px !important;
+    padding: 0 12px !important;
+    line-height: 1 !important;
+    border-radius: 999px !important;
+    border-color: var(--alm-accent, #2563eb) !important;
+    background: var(--alm-accent, #2563eb) !important;
+    color: var(--alm-on-primary, #fff) !important;
+    font-size: 11px !important;
+    font-weight: 800 !important;
+    box-shadow: 0 3px 8px color-mix(in srgb, var(--alm-accent, #2563eb) 24%, transparent) !important;
+    white-space: nowrap !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+/* Page edit actions only — do not restyle main Order/Plan/Cost tabs */
+body.dco-plan-settings-edit-active .dco-tab-edit-save.btn {
+    border-radius: 999px !important;
+    border-color: var(--alm-primary, #172033) !important;
+    background: var(--alm-primary, #172033) !important;
+    color: var(--alm-on-primary, #fff) !important;
+    font-weight: 800 !important;
+}
+
+body.dco-plan-settings-edit-active .dco-tab-edit-cancel.btn {
+    border-radius: 999px !important;
+    background: var(--alm-card, #fff) !important;
+    color: var(--text-color, #1f272e) !important;
+}
+
+body.dco-plan-settings-edit-active .page-head .page-actions .dco-whatsapp-send-measurements {
+    color: var(--alm-success, #15803d) !important;
+    background: #ecfdf3 !important;
+    border-color: #bbf7d0 !important;
+    border-radius: 999px !important;
+    font-weight: 750 !important;
+}
+
+body.dco-plan-settings-edit-active .page-head .page-actions .btn:has(.fa-paper-plane),
+body.dco-plan-settings-edit-active .page-head .page-actions button[data-label*="إنتاج"],
+body.dco-plan-settings-edit-active .page-head .page-actions button[data-label*="Production"] {
+    color: #175cd3 !important;
+    background: #eff8ff !important;
+    border-color: #b2ddff !important;
+    border-radius: 999px !important;
+}
+
+body.dco-plan-settings-edit-active .page-head .page-actions .btn-danger,
+body.dco-plan-settings-edit-active .page-head .page-actions button[data-label*="إلغاء الطلب"],
+body.dco-plan-settings-edit-active .page-head .page-actions button[data-label*="Cancel Order"] {
+    color: var(--alm-danger, #b91c1c) !important;
+    background: var(--alm-danger-soft, #fff1f2) !important;
+    border-color: var(--alm-danger-soft-border, #fecdd3) !important;
+    border-radius: 999px !important;
+}
+
+/* Shared white card track: settings editor + board distribution section */
+body.dco-plan-settings-edit-active .dco-operator-form .dco-plan-section-card.dco-layout-card.dco-ui-card {
+    background: var(--alm-card, #fff) !important;
+    border: 1px solid var(--alm-card-border, #e4e8ee) !important;
+    border-radius: var(--alm-radius-sm, 10px) !important;
+    box-shadow: none !important;
+}
+
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="cutting_plan_html"] .dco-cutting-plan {
+    background: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+}
+
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="cutting_plan_html"] .dco-cutting-plan > h2,
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="cutting_plan_html"] .dco-plan-header-cards,
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="cutting_plan_html"] .dco-summary-grid,
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="cutting_plan_html"] .dco-piece-groups,
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="cutting_plan_html"] .dco-plan-method-line {
+    display: none !important;
+}
+
+/* Plan source tabs (System/Uploaded/Approved) — underline in edit mode */
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="cutting_plan_html"] .dco-plan-tabs {
+    gap: 4px 18px !important;
+    padding: 0 !important;
+    margin: 0 0 12px !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--alm-card-border, #e4e8ee) !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="cutting_plan_html"] .dco-plan-tabs .btn {
+    min-height: 36px !important;
+    padding: 6px 2px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    border-bottom: 2px solid transparent !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: var(--text-muted, #6b7280) !important;
+    font-weight: 700 !important;
+}
+
+body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="cutting_plan_html"] .dco-plan-tabs .btn.is-active {
+    color: var(--alm-primary, #172033) !important;
+    border-bottom-color: var(--alm-primary, #172033) !important;
+    font-weight: 800 !important;
+}
+
+@media (max-width: 991px) {
+    body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__sheet {
+        flex-wrap: wrap !important;
+    }
+
+    body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__settings-row {
+        flex-wrap: wrap !important;
+        width: 100% !important;
+    }
+
+    body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__grid {
+        display: flex !important;
+        flex-wrap: wrap !important;
+    }
+
+    body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__footer {
+        width: 100% !important;
+        justify-content: flex-start !important;
+    }
+}

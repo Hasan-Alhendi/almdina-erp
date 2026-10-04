@@ -25,22 +25,12 @@ WORKSPACE_ENTRY_SURFACES: dict[str, str] = {
     "إدارة مسارات الإنتاج": Surface.FACTORY_MASTER_DATA,
     "طلبات قص الدرف": Surface.ORDERS,
     "مراحل الإنتاج": Surface.PRODUCTION_STAGES,
-    "القطع التعويضية": Surface.REPLACEMENTS,
-    "أخطاء الإنتاج": Surface.PRODUCTION_INCIDENTS,
-    "ملخص عمليات المعمل": Surface.REPORT_FACTORY_OPERATIONS_SUMMARY,
-    "تحليل طلبات القص": Surface.REPORT_FACTORY_ORDER_ANALYSIS,
-    "تحليل استخدام الألواح": Surface.REPORT_BOARD_USAGE,
-    "تحليل قياسات الدرف": Surface.REPORT_PIECE_SIZE_USAGE,
-    "أداء مراحل الإنتاج": Surface.REPORT_PRODUCTION_STAGE_PERFORMANCE,
-    "أخطاء الإنتاج والقطع التعويضية": Surface.REPORT_PRODUCTION_INCIDENTS,
     # v16 sidebar/desktop records can expose link_to instead of the translated label.
     "Door Cutting Order": Surface.ORDERS,
     "Customer": Surface.CUSTOMER_ADMIN,
     "Cutting Plan": Surface.CUTTING_PLANS,
     "Production Stage": Surface.PRODUCTION_STAGES,
     "shop-floor-inbox": Surface.PRODUCTION_STAGES,
-    "Production Incident": Surface.PRODUCTION_INCIDENTS,
-    "Replacement Piece": Surface.REPLACEMENTS,
     "factory-plan-archive": Surface.PLAN_ARCHIVE,
     "factory-master-data": Surface.FACTORY_MASTER_DATA,
     "Production Routing": Surface.PRODUCTION_ROUTINGS,
@@ -51,13 +41,6 @@ WORKSPACE_ENTRY_SURFACES: dict[str, str] = {
     "factory-permissions": Surface.PERMISSIONS,
     "Role": Surface.ROLE_ADMIN,
     "User": Surface.ROLE_ADMIN,
-    # Secondary reports workspace uses untranslated standard labels.
-    "Factory Operations Summary": Surface.REPORT_FACTORY_OPERATIONS_SUMMARY,
-    "Factory Order Analysis": Surface.REPORT_FACTORY_ORDER_ANALYSIS,
-    "Board Usage Analysis": Surface.REPORT_BOARD_USAGE,
-    "Piece Size Usage Analysis": Surface.REPORT_PIECE_SIZE_USAGE,
-    "Production Stage Performance": Surface.REPORT_PRODUCTION_STAGE_PERFORMANCE,
-    "Production Incidents and Replacements": Surface.REPORT_PRODUCTION_INCIDENTS,
 }
 
 WORKSPACE_SECTION_SURFACES: dict[str, tuple[str, ...]] = {
@@ -75,24 +58,6 @@ WORKSPACE_SECTION_SURFACES: dict[str, tuple[str, ...]] = {
     "التشغيل اليومي": (
         Surface.ORDERS,
         Surface.PRODUCTION_STAGES,
-        Surface.REPLACEMENTS,
-        Surface.PRODUCTION_INCIDENTS,
-    ),
-    "التقارير التشغيلية والتكلفة": (
-        Surface.REPORT_FACTORY_OPERATIONS_SUMMARY,
-        Surface.REPORT_FACTORY_ORDER_ANALYSIS,
-        Surface.REPORT_BOARD_USAGE,
-        Surface.REPORT_PIECE_SIZE_USAGE,
-        Surface.REPORT_PRODUCTION_STAGE_PERFORMANCE,
-        Surface.REPORT_PRODUCTION_INCIDENTS,
-    ),
-    "Factory Reports": (
-        Surface.REPORT_FACTORY_OPERATIONS_SUMMARY,
-        Surface.REPORT_FACTORY_ORDER_ANALYSIS,
-        Surface.REPORT_BOARD_USAGE,
-        Surface.REPORT_PIECE_SIZE_USAGE,
-        Surface.REPORT_PRODUCTION_STAGE_PERFORMANCE,
-        Surface.REPORT_PRODUCTION_INCIDENTS,
     ),
 }
 

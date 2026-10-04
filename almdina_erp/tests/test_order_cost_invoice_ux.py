@@ -42,7 +42,20 @@ def test_primary_tab_bar_is_fixed_on_scroll_and_labels_are_arabic():
     assert 'results_tab: "خطة القص"' in src
     assert 'cost_tab: "تكلفة الطلب"' in src
     assert 'frm.set_df_property(fieldname, "label", label)' in src
-    assert 'const STYLE_ID = "dco-responsive-header-css-v6"' in src
+    assert 'const STYLE_ID = "dco-responsive-header-css-v11"' in src
+    assert "width: calc(100% - (2 * var(--dco-tab-content-gutter, 20px)))" in src
+    assert "max-width: calc(var(--dco-tab-shell-max, 1440px) - (2 * var(--dco-tab-content-gutter, 20px)))" in src
+    assert "margin: 0 auto var(--dco-section-stack-gap, 8px) !important" in src
+    assert "z-index: 1020 !important" in src
+    assert "body.modal-open .dco-sticky-tabs.dco-tabs-is-fixed" in src
+    assert "function tabContentAlignRect" in src
+    assert "paddingInlineStart" in src
+    assert "tabs.style.left = `${Math.round(align.left)}px`" in src
+    assert "tabs.style.width = `${Math.round(align.width)}px`" in src
+    assert "--alm-primary" in src
+    assert "--alm-on-primary" in src
+    assert "border-bottom: none !important" in src
+    assert "border-radius: 0 !important" in src
     assert "@media (min-width: 721px)" in src
     assert "function reconcileSearchPlacement" in _source(
         ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_toolbar_stability_ux.js"
@@ -65,13 +78,27 @@ def test_cost_measurements_are_compact_and_custom_edge_details_have_one_owner():
     assert "<th>طول القشاط (م)</th>" not in cost
     assert "<th>طول القشاط م</th>" not in cost
     assert "<th>نوع القشاط</th>" in cost
-    assert '<th class="text-start">ملاحظات</th>' in cost
+    assert '<th class="text-start">ملاحظات</th><th>نوع القشاط</th>' in cost
 
     # The focused edge-document presenter decorates only exceptional/custom
     # per-side edge choices; the cost presenter remains the table owner.
-    assert 'headerCells[5].textContent = "القشاط المخصص"' in edges
+    assert 'headerCells[6].textContent = "القشاط المخصص"' in edges
     assert "customEdgeSummaryHtml(data[index].details)" in edges
     assert "dco-notes-col" in edges
+
+
+def test_cost_measurements_table_shows_print_style_edge_dimension_marks():
+    cost = _source(COST_PRESENTER)
+
+    assert "function dimensionMark(value, count)" in cost
+    assert "row.source.edge_width_top" in cost
+    assert "row.source.edge_width_bottom" in cost
+    assert "row.source.edge_long_right" in cost
+    assert "row.source.edge_long_left" in cost
+    assert "dimensionMark(row.width, widthCount)" in cost
+    assert "dimensionMark(row.length, longCount)" in cost
+    assert "dco-cost-dimension-edge-line" in cost
+    assert "dco-capability-cost-presenter-css-v8" in cost
 
 
 def test_printed_width_and_length_keep_visual_edge_direction_marks():
@@ -126,6 +153,9 @@ def test_invoice_has_secure_customer_action_and_shared_a4_print_layout():
     theme = _source(PRINT_THEME)
 
     assert "طباعة فاتورة الزبون" in toolbar
+    assert "إرسال الفاتورة عبر واتساب" in toolbar
+    assert "هل تريد إرسال الفاتورة للزبون؟" in toolbar
+    assert "dco-whatsapp-send-invoice" in toolbar
     assert 'can(frm, "print_customer_invoice")' in toolbar
     assert "@page{size:A4 portrait" in theme
     assert 'const invoice = mode === "invoice";' in presenter

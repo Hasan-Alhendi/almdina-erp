@@ -10,9 +10,11 @@ from almdina_erp.almdina_erp.application.security.drawing_approval_policy import
     approval_warning,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
-from almdina_erp.almdina_erp.infrastructure.frappe import shop_floor_gateway
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization import (
     require_cutting_plan_capability,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.order_tracking_repository import (
+    get_order,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.stage_assignment_access import (
     require_stage_assignment_access,
@@ -36,7 +38,7 @@ def _authorized_order(order_name: str) -> Any:
         "select name from `tabDoor Cutting Order` where name = %s for update",
         (name,),
     )
-    order = shop_floor_gateway.get_order(name)
+    order = get_order(name)
     order.check_permission("read")
     require_cutting_plan_capability(
         order,

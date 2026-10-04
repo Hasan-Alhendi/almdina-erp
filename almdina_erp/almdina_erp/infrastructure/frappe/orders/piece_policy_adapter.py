@@ -12,6 +12,8 @@ from almdina_erp.almdina_erp.domain.orders.piece_policy import (
     PieceGeometry,
     PiecePolicyError,
     SpecialPrice,
+    apply_edge_break_policy,
+    apply_special_measurement_edge_policy,
     drawing_token,
     evaluate_special_shape,
     is_corner_cut,
@@ -67,8 +69,54 @@ class FrappeOrderPiecePolicyAdapter:
             edge_long_left=cint(getattr(row, "edge_long_left", 0)),
             edge_width_top=cint(getattr(row, "edge_width_top", 0)),
             edge_width_bottom=cint(getattr(row, "edge_width_bottom", 0)),
+            edge_break=cint(getattr(row, "edge_break", 0)),
             edge_type=str(getattr(row, "edge_type", None) or ""),
         )
+
+    @staticmethod
+    def _apply_edge_break(row: Any) -> None:
+        decision = apply_edge_break_policy(
+            piece_type=str(getattr(row, "piece_type", None) or "Regular"),
+            clipped_corner_position=str(
+                getattr(row, "clipped_corner_position", None) or ""
+            ),
+            edge_break=cint(getattr(row, "edge_break", 0)),
+            edge_long_right=cint(getattr(row, "edge_long_right", 0)),
+            edge_long_left=cint(getattr(row, "edge_long_left", 0)),
+            edge_width_top=cint(getattr(row, "edge_width_top", 0)),
+            edge_width_bottom=cint(getattr(row, "edge_width_bottom", 0)),
+        )
+        row.edge_break = decision.edge_break
+        row.edge_long_right = decision.edge_long_right
+        row.edge_long_left = decision.edge_long_left
+        row.edge_width_top = decision.edge_width_top
+        row.edge_width_bottom = decision.edge_width_bottom
+        for side in decision.cleared_sides:
+            override = f"{side}_type_override"
+            if hasattr(row, override):
+                setattr(row, override, None)
+
+    @staticmethod
+    def _apply_special_measurement_edges(row: Any) -> None:
+        decision = apply_special_measurement_edge_policy(
+            piece_type=str(getattr(row, "piece_type", None) or "Regular"),
+        )
+        if not decision.disabled:
+            return
+        row.edge_long_right = decision.edge_long_right
+        row.edge_long_left = decision.edge_long_left
+        row.edge_width_top = decision.edge_width_top
+        row.edge_width_bottom = decision.edge_width_bottom
+        row.edge_break = decision.edge_break
+        row.edge_type = decision.edge_type or None
+        for field, value in (
+            ("edge_long_right_type_override", decision.edge_long_right_type_override),
+            ("edge_long_left_type_override", decision.edge_long_left_type_override),
+            ("edge_width_top_type_override", decision.edge_width_top_type_override),
+            ("edge_width_bottom_type_override", decision.edge_width_bottom_type_override),
+        ):
+            if hasattr(row, field):
+                setattr(row, field, value or None)
 
     @staticmethod
     def _price_snapshot(row: Any | None) -> SpecialPrice | None:
@@ -163,6 +211,8 @@ class FrappeOrderPiecePolicyAdapter:
                 frappe.throw(_("Row {0}: Piece Type is invalid.").format(index))
             if is_corner_cut(row.piece_type):
                 self._validate_clipped_corner(row, index)
+            self._apply_edge_break(row)
+            self._apply_special_measurement_edges(row)
 
             old_row = old_rows.get(row.name)
             current_raw = drawing_token(row.special_shape_drawing_json)
@@ -255,7 +305,7 @@ class FrappeOrderPiecePolicyAdapter:
             frappe.throw(
                 _(
                     "أدخل السعر الخاص الشامل للدرف الخاصة وسعر قشاط درف "
-                    "الزاوية المقصوصة وزاوية L قبل الحفظ أو طباعة الفاتورة. "
+                    "الزاوية الكسر وزاوية L قبل الحفظ أو طباعة الفاتورة. "
                     "المتبقي: {0}."
                 ).format("، ".join(pending))
             )

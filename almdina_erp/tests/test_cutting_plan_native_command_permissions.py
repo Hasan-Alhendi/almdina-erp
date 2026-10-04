@@ -88,15 +88,16 @@ def test_native_grant_does_not_bypass_cutting_plan_command_guard() -> None:
     assert "ignore_permissions" not in repository
 
 
-def test_migrate_reconciles_existing_canonical_roles_without_role_names() -> None:
+def test_migrate_reconciles_supporting_grants_from_docperm_without_role_names() -> None:
     lifecycle = source("lifecycle.py")
     reconciliation = source(
         "almdina_erp/infrastructure/frappe/supporting_permission_reconciliation.py"
     )
 
     assert "reconcile_supporting_permission_projections()" in lifecycle
-    assert "STATE_DOCTYPE" in reconciliation
-    assert "CanonicalPermissionStateRepository" in reconciliation
+    assert "CustomDocPermCapabilityReader" in reconciliation
+    assert "CanonicalPermissionStateRepository" not in reconciliation
+    assert "STATE_DOCTYPE" not in reconciliation
     assert "SupportingDoctypePermissionRepository" in reconciliation
     assert "PROTECTED_SYSTEM_ROLES" in reconciliation
     assert 'frappe.db.exists("Role", role)' in reconciliation

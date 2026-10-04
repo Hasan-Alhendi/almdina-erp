@@ -241,9 +241,24 @@
         schedule(frm);
     }
 
+    function lockedBreakSides(row) {
+        const geometry = window.AlmdinaClippedCornerGeometry;
+        if (
+            !row
+            || !geometry
+            || typeof geometry.locksAdjacentSidesForBreak !== "function"
+            || !geometry.locksAdjacentSidesForBreak(row)
+            || typeof geometry.breakAdjacentSides !== "function"
+        ) {
+            return new Set();
+        }
+        return new Set(geometry.breakAdjacentSides(row.clipped_corner_position));
+    }
+
     function applySideSelection(frm, tr, config, overrideType) {
         const row = materialize(frm, tr);
         if (!row) return;
+        if (lockedBreakSides(row).has(config.selectedField)) return;
         row[config.selectedField] = 1;
         row[config.overrideField] = String(overrideType || "").trim();
         notifyChanged(frm, tr, row, config.overrideField);
@@ -255,7 +270,9 @@
         const overrideType = selectedValue === BULK_DEFAULT_VALUE
             ? ""
             : String(selectedValue || "").trim();
+        const locked = lockedBreakSides(row);
         SIDE_CONFIG.forEach(config => {
+            if (locked.has(config.selectedField)) return;
             row[config.selectedField] = 1;
             row[config.overrideField] = overrideType;
         });
@@ -286,6 +303,16 @@
             cell = document.createElement("td");
             cell.className = "dco-col-edge-bulk";
             edgeTypeCell.insertAdjacentElement("afterend", cell);
+        }
+
+        // Special / corner / Extra-without-toggles still need this column so notes
+        // stay on the same horizontal level as Regular rows.
+        const hasEdgeButtons = Boolean(
+            tr.querySelector(":scope > td.dco-col-edges .dco-edge-buttons")
+        );
+        if (!hasEdgeButtons) {
+            cell.replaceChildren();
+            return;
         }
 
         let content = cell.querySelector(":scope > .dco-edge-bulk-cell-content");
@@ -358,13 +385,13 @@
     function renderRow(frm, tr) {
         const cell = tr.querySelector(":scope > td.dco-col-edges");
         const edgeButtons = cell && cell.querySelector(":scope > .dco-edge-buttons");
-        if (!cell || !edgeButtons) return;
-
-        removeObsoleteControls(cell);
-        const row = rowByName(frm, tr.dataset.rowName) || {};
-        edgeButtons.querySelectorAll(".dco-check-toggle[data-check-field]").forEach(toggle => {
-            decorateEdgeToggle(frm, row, toggle);
-        });
+        if (cell && edgeButtons) {
+            removeObsoleteControls(cell);
+            const row = rowByName(frm, tr.dataset.rowName) || {};
+            edgeButtons.querySelectorAll(".dco-check-toggle[data-check-field]").forEach(toggle => {
+                decorateEdgeToggle(frm, row, toggle);
+            });
+        }
         ensureBulkButton(frm, tr);
     }
 

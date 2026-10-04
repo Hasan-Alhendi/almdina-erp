@@ -137,7 +137,7 @@ class TestWorkforceAuthorization(unittest.TestCase):
         navigation = build_navigation_context({Capability.VIEW_USERS})
         self.assertIn(WORKSPACE_SETTINGS, navigation["workspaces"])
         self.assertTrue(navigation["sections"]["workforce"])
-        self.assertFalse(navigation["sections"]["reports"])
+        self.assertNotIn("reports", navigation["sections"])
 
 
 if __name__ == "__main__":

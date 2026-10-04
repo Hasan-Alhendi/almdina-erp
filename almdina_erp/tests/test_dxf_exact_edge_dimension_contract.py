@@ -26,7 +26,8 @@ def test_piece_contract_is_exact_at_persisted_precision_not_plus_minus_two_mm():
     domain = _source(DOMAIN)
     assert 'CUT_DIMENSION_QUANTUM_CM = Decimal("0.001")' in domain
     assert "dimensions_match_exact" in strict
-    assert "لا توجد سماحية لتغيير مقاس الدرفة" in strict
+    assert "CUT_SIZE_MISMATCH" in strict
+    assert "dimensions_match_exact" in strict
     assert "DIMENSION_TOLERANCE_MM" not in strict
 
 

@@ -151,7 +151,8 @@ class TestPermissionTransferIntegration(FrappeTestCase):
         self.assertTrue(preview["capabilities"][Capability.START_ASSIGNED_STAGE])
         self.assertTrue(preview["capabilities"][Capability.HANDOFF_ASSIGNED_STAGE])
         self.assertFalse(preview["capabilities"][Capability.DISPATCH_ORDER])
-        self.assertFalse(preview["capabilities"][Capability.VIEW_FINANCIAL_REPORTS])
+        self.assertFalse(preview["capabilities"][Capability.VIEW_COSTS])
+        self.assertNotIn("view_financial_reports", preview["capabilities"])
         self.assertEqual(frappe.db.count("Custom DocPerm", {"role": TARGET_ROLE}), 0)
         self.assertEqual(frappe.db.count("Almdina Permission Audit", {"role": TARGET_ROLE}), 0)
 

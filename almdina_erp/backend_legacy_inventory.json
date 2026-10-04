@@ -63,42 +63,6 @@
     ],
     "compatibility": [
       {
-        "path": "almdina_erp/almdina_erp/services/cutting_engine.py",
-        "canonical_owner": "almdina_erp.almdina_erp.domain.cutting",
-        "evidence": "Backward-compatible star-import facade; no cutting algorithm remains here.",
-        "stage11_action": "Preserve until Python import consumers are migrated; then remove in Stage 11 only if zero consumers."
-      },
-      {
-        "path": "almdina_erp/almdina_erp/services/advanced_cutting_optimizer.py",
-        "canonical_owner": "almdina_erp.almdina_erp.domain.cutting.optimizer",
-        "evidence": "Backward-compatible optimizer import facade.",
-        "stage11_action": "Preserve until import consumers migrate; then remove if zero consumers."
-      },
-      {
-        "path": "almdina_erp/almdina_erp/infrastructure/cutting/legacy_engine.py",
-        "canonical_owner": "almdina_erp.almdina_erp.infrastructure.cutting.domain_engine",
-        "evidence": "Legacy names are aliases of DomainCuttingEngineAdapter/domain_cutting_engine.",
-        "stage11_action": "Migrate old imports to domain_engine and remove alias module only after zero consumers."
-      },
-      {
-        "path": "almdina_erp/almdina_erp/services/shop_floor_service.py",
-        "canonical_owner": "focused shop_floor_commands, shop_floor_query_service, shop_floor_dxf_service and order_dispatch_service",
-        "evidence": "Historical whitelisted API facade with lazy delegates; owns no database/business logic.",
-        "stage11_action": "Keep old HTTP/Python compatibility while callers migrate; shrink only after route usage is proven zero."
-      },
-      {
-        "path": "almdina_erp/almdina_erp/infrastructure/frappe/shop_floor_gateway.py",
-        "canonical_owner": "focused production/order/event repositories and shop_floor_authorization",
-        "evidence": "Historical import facade; removed role gates fail closed and old create_stage semantics are explicit.",
-        "stage11_action": "Migrate imports symbol-by-symbol; never delete before callers of compatibility semantics are gone."
-      },
-      {
-        "path": "almdina_erp/almdina_erp/services/replacement_service.py",
-        "canonical_owner": "focused replacement creation/approval/execution/completion services",
-        "evidence": "Backward-compatible whitelisted facade that lazy-delegates and owns no business logic.",
-        "stage11_action": "Retain public route compatibility until clients migrate."
-      },
-      {
         "path": "almdina_erp/almdina_erp/services/legacy_endpoint_service.py",
         "canonical_owner": "capability-protected canonical services or explicit fail-closed retirement",
         "evidence": "Compatibility boundary for retired product endpoints and historical stage/replacement routes.",
@@ -106,6 +70,42 @@
       }
     ],
     "legacy": [
+      {
+        "path": "almdina_erp/almdina_erp/services/cutting_engine.py",
+        "canonical_owner": "almdina_erp.almdina_erp.domain.cutting",
+        "evidence": "Star-import facade removed after tests and runtime callers imported domain.cutting directly.",
+        "stage11_action": "Removed after zero runtime Python consumers."
+      },
+      {
+        "path": "almdina_erp/almdina_erp/services/advanced_cutting_optimizer.py",
+        "canonical_owner": "almdina_erp.almdina_erp.domain.cutting.optimizer",
+        "evidence": "Optimizer import facade removed after callers used domain.cutting.",
+        "stage11_action": "Removed after zero runtime Python consumers."
+      },
+      {
+        "path": "almdina_erp/almdina_erp/infrastructure/cutting/legacy_engine.py",
+        "canonical_owner": "almdina_erp.almdina_erp.infrastructure.cutting.domain_engine",
+        "evidence": "Legacy adapter alias removed; domain_engine is the remaining adapter.",
+        "stage11_action": "Removed after zero runtime Python consumers."
+      },
+      {
+        "path": "almdina_erp/almdina_erp/services/shop_floor_service.py",
+        "canonical_owner": "focused shop_floor_commands, shop_floor_query_service, shop_floor_dxf_service and order_dispatch_service",
+        "evidence": "Facade file removed. Historical HTTP method names stay mapped in hooks.py.",
+        "stage11_action": "Removed after Python consumers migrated; public route names remain."
+      },
+      {
+        "path": "almdina_erp/almdina_erp/infrastructure/frappe/shop_floor_gateway.py",
+        "canonical_owner": "focused production/order/event repositories and shop_floor_authorization",
+        "evidence": "Import facade removed after drawing/DXF services used order_tracking_repository.get_order.",
+        "stage11_action": "Removed after zero runtime Python consumers."
+      },
+      {
+        "path": "almdina_erp/almdina_erp/services/replacement_service.py",
+        "canonical_owner": "none; replacement pieces are outside the active product",
+        "evidence": "The replacement facade and its feature modules were removed. cancel_legacy_replacement stays fail-closed.",
+        "stage11_action": "Removed with the replacement and production-incident product scope."
+      },
       {
         "path": "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order.py",
         "evidence": "Frappe-required canonical base class still inherited by DoorCuttingOrderController, but it contains superseded save/plan/cost implementations.",
@@ -241,9 +241,9 @@
   },
   "stage11_order": [
     "Controller chain: slim the canonical DoorCuttingOrder base and remove alternate fast/text/domain controller chain only after parity and import checks.",
-    "Cutting imports: migrate callers from cutting_engine/advanced_cutting_optimizer/legacy_engine to pure domain/canonical adapters.",
+    "Cutting imports: completed; callers use domain.cutting and domain_engine.",
     "Cutting plan: split plan snapshot persistence from historical lifecycle endpoint compatibility.",
-    "Shop floor: migrate Python callers off shop_floor_service/shop_floor_gateway while preserving public HTTP routes via hooks.",
+    "Shop floor: Python facades removed; public HTTP routes remain mapped via hooks.",
     "Replacement: migrate clients to focused replacement services, then retire the facade only when public route usage is zero.",
     "Retired product modules: prove zero internal imports, preserve fail-closed old HTTP routing, then remove obsolete inventory/remnant/preflight implementations."
   ]

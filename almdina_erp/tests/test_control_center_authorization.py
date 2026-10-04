@@ -5,31 +5,15 @@ import unittest
 from almdina_erp.almdina_erp.application.security.navigation_context import (
     WORKSPACE_CONTROL_CENTER,
     WORKSPACE_MAIN,
-    WORKSPACE_REPORTS,
     build_navigation_context,
 )
 from almdina_erp.almdina_erp.application.security.permission_matrix import (
     normalize_capability_state,
-    standard_permission_projection,
-)
-from almdina_erp.almdina_erp.application.security.report_access import (
-    build_report_access,
-)
-from almdina_erp.almdina_erp.domain.replacements.replacement_authorization import (
-    ReplacementAction,
-    evaluate_replacement_action,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 
 
 class TestControlCenterAuthorization(unittest.TestCase):
-    def test_replacement_actions_require_replacement_read(self) -> None:
-        state = normalize_capability_state(
-            {Capability.APPROVE_REPLACEMENT: True}
-        )
-        self.assertTrue(state[Capability.APPROVE_REPLACEMENT])
-        self.assertTrue(state[Capability.VIEW_REPLACEMENTS])
-
     def test_archive_requires_plan_view_and_print(self) -> None:
         state = normalize_capability_state(
             {Capability.ARCHIVE_APPROVED_PLAN: True}
@@ -38,115 +22,36 @@ class TestControlCenterAuthorization(unittest.TestCase):
         self.assertTrue(state[Capability.VIEW_CUTTING_PLAN])
         self.assertTrue(state[Capability.PRINT_CUTTING_PLAN])
 
-    def test_financial_reports_require_operations_and_costs(self) -> None:
-        state = normalize_capability_state(
-            {Capability.VIEW_FINANCIAL_REPORTS: True}
-        )
-        self.assertTrue(state[Capability.VIEW_OPERATIONAL_REPORTS])
+    def test_cost_view_stays_without_retired_report_capabilities(self) -> None:
+        state = normalize_capability_state({Capability.VIEW_COSTS: True})
         self.assertTrue(state[Capability.VIEW_COSTS])
         self.assertTrue(state[Capability.VIEW_ORDERS])
+        self.assertNotIn("view_operational_reports", state)
+        self.assertNotIn("view_financial_reports", state)
 
-    def test_replacement_projection_never_grants_direct_write(self) -> None:
-        projection = standard_permission_projection(
-            "Replacement Piece",
-            {
-                Capability.APPROVE_REPLACEMENT: True,
-                Capability.EDIT_REPLACEMENT_COST: True,
-            },
-        )
-        self.assertEqual(
-            projection,
-            {
-                "read": True,
-                "select": True,
-                "create": False,
-                "write": False,
-                "delete": False,
-            },
-        )
-
-    def test_report_access_requires_explicit_financial_pair(self) -> None:
-        operational = build_report_access(
-            {Capability.VIEW_OPERATIONAL_REPORTS}
-        )
-        self.assertTrue(operational.operational)
-        self.assertFalse(operational.financial)
-
-        incomplete = build_report_access(
-            {Capability.VIEW_FINANCIAL_REPORTS}
-        )
-        self.assertFalse(incomplete.operational)
-        self.assertFalse(incomplete.financial)
-
-        financial = build_report_access(
-            {
-                Capability.VIEW_FINANCIAL_REPORTS,
-                Capability.VIEW_COSTS,
-            }
-        )
-        self.assertTrue(financial.operational)
-        self.assertTrue(financial.financial)
-
-    def test_replacement_policy_checks_capability_status_and_plan(self) -> None:
-        missing = evaluate_replacement_action(
-            set(),
-            status="Pending Approval",
-            action=ReplacementAction.APPROVE,
-        )
-        self.assertFalse(missing.allowed)
-        self.assertEqual(missing.code, "missing_capability")
-
-        wrong_status = evaluate_replacement_action(
-            {Capability.APPROVE_REPLACEMENT},
-            status="Approved",
-            action=ReplacementAction.APPROVE,
-        )
-        self.assertFalse(wrong_status.allowed)
-        self.assertEqual(wrong_status.code, "invalid_status")
-
-        missing_plan = evaluate_replacement_action(
-            {Capability.START_REPLACEMENT},
-            status="Approved",
-            action=ReplacementAction.START,
-            has_approved_plan=False,
-        )
-        self.assertFalse(missing_plan.allowed)
-        self.assertEqual(missing_plan.code, "missing_approved_plan")
-
-        allowed = evaluate_replacement_action(
-            {Capability.COMPLETE_REPLACEMENT},
-            status="In Progress",
-            action=ReplacementAction.COMPLETE,
-        )
-        self.assertTrue(allowed.allowed)
-
-    def test_operator_replacement_work_uses_shared_order_interface(self) -> None:
+    def test_operator_stage_work_uses_shared_order_interface(self) -> None:
         navigation = build_navigation_context(
             {
-                Capability.VIEW_REPLACEMENTS,
-                Capability.START_REPLACEMENT,
-                Capability.COMPLETE_REPLACEMENT,
+                Capability.START_ASSIGNED_STAGE,
+                Capability.HANDOFF_ASSIGNED_STAGE,
             }
         )
         self.assertNotIn("home_page", navigation)
         self.assertNotIn("default_route", navigation)
         self.assertEqual(navigation["workspaces"], [WORKSPACE_MAIN])
 
-    def test_management_and_reports_expand_the_correct_workspaces(self) -> None:
+    def test_management_opens_control_center_without_a_reports_section(self) -> None:
         control = build_navigation_context(
-            {Capability.VIEW_ORDERS, Capability.APPROVE_REPLACEMENT}
+            {Capability.VIEW_ORDERS, Capability.APPROVE_ORDER}
         )
         self.assertIn(WORKSPACE_CONTROL_CENTER, control["workspaces"])
-        self.assertNotIn(WORKSPACE_REPORTS, control["workspaces"])
+        self.assertNotIn("reports", control["sections"])
 
-        reports = build_navigation_context(
-            {
-                Capability.VIEW_ORDERS,
-                Capability.VIEW_OPERATIONAL_REPORTS,
-            }
+        costing = build_navigation_context(
+            {Capability.VIEW_ORDERS, Capability.VIEW_COSTS}
         )
-        self.assertIn(WORKSPACE_REPORTS, reports["workspaces"])
-        self.assertTrue(reports["sections"]["reports"])
+        self.assertTrue(costing["sections"]["costing"])
+        self.assertNotIn("reports", costing["sections"])
 
 
 if __name__ == "__main__":

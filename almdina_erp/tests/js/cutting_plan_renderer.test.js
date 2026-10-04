@@ -377,5 +377,46 @@ assert.match(pastFiftyHtml, />51</);
 assert.match(pastFiftyHtml, /لوح 2/);
 assert.match(pastFiftyHtml, /لوح 1/);
 assert.ok(pastFiftyHtml.indexOf("لوح 2") < pastFiftyHtml.indexOf("لوح 1"));
+assert.doesNotMatch(html, /dco-sheet-board-has-trim/);
+assert.doesNotMatch(html, /#e4dfd8/);
+
+const trimmedPlan = {
+    ...plan,
+    full_board_width_cm: 122,
+    full_board_length_cm: 244,
+    usable_board_width_cm: 120,
+    usable_board_length_cm: 243.6,
+    applied_trim_width_cm: 1,
+    applied_trim_length_cm: 0.2,
+    sheets: [
+        {
+            sheet_no: 1,
+            pieces: [
+                {
+                    x: 0,
+                    y: 0,
+                    w: 40,
+                    h: 50,
+                    area_m2: 0.2,
+                    label: "1.1",
+                    piece_type: "Regular",
+                    rotated: false,
+                },
+            ],
+        },
+    ],
+};
+const trimmedHtml = renderer.build(frm, trimmedPlan);
+const widthInset = (1 / 122) * 100;
+const lengthInset = (0.2 / 244) * 100;
+const usableWidth = (120 / 122) * 100;
+const usableLength = (243.6 / 244) * 100;
+assert.doesNotMatch(trimmedHtml, /dco-sheet-board-has-trim/);
+assert.doesNotMatch(trimmedHtml, /#e4dfd8/);
+assert.doesNotMatch(trimmedHtml, /border:1px dashed/);
+assert.match(trimmedHtml, new RegExp(`data-trim-width-cm="1"`));
+assert.match(trimmedHtml, new RegExp(`data-trim-length-cm="0.2"`));
+assert.match(trimmedHtml, new RegExp(`left:${widthInset}%;top:${lengthInset}%;width:${usableWidth}%;height:${usableLength}%`));
+assert.match(trimmedHtml, /dco-usable-sheet[\s\S]*dco-piece[\s\S]*left:0%;top:0%/);
 
 console.log("Cutting-plan renderer simulation passed");

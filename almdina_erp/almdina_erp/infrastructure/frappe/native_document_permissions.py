@@ -105,21 +105,6 @@ def production_stage_has_permission(
     )
 
 
-def production_incident_has_permission(
-    doc: Any,
-    user: str | None = None,
-    ptype: str | None = None,
-    permission_type: str | None = None,
-) -> bool:
-    return _command_owned_document_permission(
-        base_permissions.production_incident_has_permission,
-        doc,
-        user=user,
-        ptype=ptype,
-        permission_type=permission_type,
-    )
-
-
 def cutting_plan_has_permission(
     doc: Any,
     user: str | None = None,
@@ -149,25 +134,8 @@ def cutting_plan_has_permission(
     )
 
 
-def replacement_piece_has_permission(
-    doc: Any,
-    user: str | None = None,
-    ptype: str | None = None,
-    permission_type: str | None = None,
-) -> bool:
-    return _command_owned_document_permission(
-        base_permissions.replacement_piece_has_permission,
-        doc,
-        user=user,
-        ptype=ptype,
-        permission_type=permission_type,
-    )
-
-
 __all__ = [
     "cutting_plan_has_permission",
     "door_cutting_order_has_permission",
-    "production_incident_has_permission",
     "production_stage_has_permission",
-    "replacement_piece_has_permission",
 ]

@@ -101,6 +101,7 @@ class FactoryPermissionsFrontendArchitectureTest(unittest.TestCase):
             "apc-role-mount",
             "mountRoleControl",
             "roleSearchQuery",
+            "page_length: 100",
             "apc-capability",
             "apc-impact-panel",
             "apc-audit-panel",

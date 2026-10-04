@@ -154,6 +154,16 @@ def test_edge_profile_lists_are_custom_and_scrollable():
 
     assert "dco-all-sides-profile-button" in controls
     assert "ensureBulkButton" in controls
+    assert "hasEdgeButtons" in controls
+    assert "cell.replaceChildren()" in controls
+    assert 'class="dco-col-edge-bulk"' in (
+        Path(__file__).resolve().parents[1]
+        / "public"
+        / "js"
+        / "door_cutting_order"
+        / "order_entry"
+        / "door_cutting_order_operator_ux.js"
+    ).read_text(encoding="utf-8")
     assert "openBulkPopover" in controls
     assert "bulkPopoverOptionsHtml" in controls
     assert "overflow-y:auto" in controls

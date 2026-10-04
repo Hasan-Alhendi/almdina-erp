@@ -91,9 +91,11 @@
         if (!tr || !row) return;
         const quantity = Math.max(0, num(row.qty));
         const area = (num(row.width_cm) * num(row.length_cm) * quantity) / 10000;
-        const longSides = Number(Boolean(row.edge_long_right)) + Number(Boolean(row.edge_long_left));
-        const widthSides = Number(Boolean(row.edge_width_top)) + Number(Boolean(row.edge_width_bottom));
-        const edgeMeters = ((longSides * num(row.length_cm)) + (widthSides * num(row.width_cm))) * quantity / 100;
+        const edgeMeters = (row.piece_type || "Regular") === "Special"
+            ? 0
+            : ((Number(Boolean(row.edge_long_right)) + Number(Boolean(row.edge_long_left))) * num(row.length_cm)
+                + (Number(Boolean(row.edge_width_top)) + Number(Boolean(row.edge_width_bottom))) * num(row.width_cm))
+                * quantity / 100;
         const areaCell = tr.querySelector("[data-calc='area_m2']");
         const edgeCell = tr.querySelector("[data-calc='edge_meters']");
         if (areaCell) areaCell.textContent = area.toFixed(3);
@@ -184,7 +186,12 @@
     function refreshHeaderState(frm, root, fieldname) {
         const checkbox = checkboxForField(root, fieldname);
         if (!checkbox) return;
-        const rows = actualRows(root);
+        const isEdgeField = fieldname !== "allow_rotation";
+        const rows = actualRows(root).filter(tr => {
+            if (!isEdgeField) return true;
+            const row = rowByName(frm, tr.dataset.rowName || "");
+            return !row || (row.piece_type || "Regular") !== "Special";
+        });
         const values = rows.map(tr => {
             const row = rowByName(frm, tr.dataset.rowName || "");
             return Boolean(row && row[fieldname]);
@@ -251,9 +258,11 @@
     function applyColumnToAll(frm, root, fieldname, targetValue) {
         if (!isEditable(frm)) return;
         const changedRows = [];
+        const isEdgeField = fieldname !== "allow_rotation";
         actualRows(root).forEach(tr => {
             const row = rowByName(frm, tr.dataset.rowName || "");
             if (!row || Boolean(row[fieldname]) === targetValue) return;
+            if (isEdgeField && (row.piece_type || "Regular") === "Special") return;
             row[fieldname] = targetValue ? 1 : 0;
             changedRows.push(row);
             setVisibleToggle(tr.querySelector(`button.dco-check-toggle[data-check-field="${CSS.escape(fieldname)}"]`), targetValue);

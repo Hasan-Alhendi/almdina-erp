@@ -83,6 +83,10 @@ class TestInputStabilityUxContract(unittest.TestCase):
         self.assertIn("incomingName !== currentName", source)
         self.assertIn("existingName === currentName", source)
         self.assertIn("tagCostShell", source)
+        self.assertIn("function flushDeferredCostRender(frm)", source)
+        self.assertIn("function scheduleFlushDeferredCostRender(frm)", source)
+        self.assertIn("on_tab_change(frm)", source)
+        self.assertIn("scheduleFlushDeferredCostRender(frm)", source)
 
     def test_guard_does_not_inspect_frappe_private_handler_registry(self) -> None:
         source = INPUT_STABILITY.read_text(encoding="utf-8")

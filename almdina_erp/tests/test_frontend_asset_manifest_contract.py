@@ -24,9 +24,11 @@ EXPECTED_APP_INCLUDE_JS = [
 
 EXPECTED_DOOR_CUTTING_ORDER_JS = [
     "public/js/door_cutting_order/core/door_cutting_order_document_context.js",
+    "public/js/door_cutting_order/core/door_cutting_order_form_sidebar_controller.js",
     "public/js/door_cutting_order/core/door_cutting_order_edit_session_coordinator.js",
     "public/js/permission_context.js",
     "public/js/door_cutting_order/core/door_cutting_order_workspace_store.js",
+    "public/js/door_cutting_order/core/door_cutting_order_workspace_keep_paint.js",
     "public/js/door_cutting_order/core/door_cutting_order_workspace_sync_coordinator.js",
     "public/js/door_cutting_order/core/door_cutting_order_workspace_field_editor.js",
     "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_api.js",
@@ -93,6 +95,7 @@ EXPECTED_DOOR_CUTTING_ORDER_JS = [
     "public/js/door_cutting_order/core/door_cutting_order_tab_edit_lifecycle_guard.js",
     "public/js/door_cutting_order/core/door_cutting_order_plan_cost_workspace_visual_ux.js",
     "public/js/door_cutting_order/core/door_cutting_order_workspace_freshness_ux.js",
+    "public/js/door_cutting_order/order_entry/door_cutting_order_whatsapp_delivery_ux.js",
 ]
 
 
@@ -122,10 +125,8 @@ def test_door_cutting_order_asset_order_is_frozen_during_manifest_extraction():
     assert manifest["doctype_js"]["Door Cutting Order"] == EXPECTED_DOOR_CUTTING_ORDER_JS
     assert manifest["doctype_js"]["Edge Banding Type"] == "public/js/edge_banding_type_ux.js"
     assert manifest["doctype_js"]["Production Routing"] == "public/js/production_routing_ux.js"
-    assert manifest["doctype_js"]["Replacement Piece"] == [
-        "public/js/permission_context.js",
-        "public/js/replacement_piece.js",
-    ]
+    assert manifest["doctype_js"]["Role"] == "public/js/role_form_ux.js"
+    assert "Replacement Piece" not in manifest["doctype_js"]
     assert manifest["doctype_list_js"] == {
         "Door Cutting Order": "public/js/door_cutting_order/list_view/door_cutting_order_list.js",
     }

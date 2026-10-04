@@ -13,8 +13,6 @@
 | خطة القص | `Cutting Plan` + pieces/sources | Order planning / archive / print | Approved snapshot له قواعد immutability |
 | المسارات | `Production Routing` + stage definitions | Master Data / settings | المراحل قابلة للضبط |
 | التنفيذ | `Production Stage` + events | Shop Floor | Current assignment وstatus |
-| الجودة | `Production Incident` | Control/production flow | سجل مشكلة إنتاج |
-| التعويض | `Replacement Piece` | replacement workflow | مرتبط بطلب/قطعة أصلية |
 | القشاط | `Edge Banding Type` | Order entry / master data | rates/defaults وفق الصلاحية |
 | الإعدادات | `Almdina ERP Settings` | Production settings | أقسام settings بصلاحيات منفصلة |
 | الصلاحيات | Role + Almdina capability state/audits | Factory Permissions | Capability matrix authority |
@@ -26,7 +24,6 @@
 - `Almdina ERP`
 - `Almdina Control Center`
 - `Shop Floor`
-- `Almdina Reports`
 - `Almdina Settings`
 - `Almdina Go Live`
 
@@ -37,10 +34,10 @@ Visibility يجب أن يأتي من permission context/capabilities، لا من
 ### يومية/إدارية
 
 - `shop_floor_inbox`: Inbox/Archive للعامل والإنتاج.
-- `factory_permissions`: إدارة Capability matrix/roles.
+- `factory_permissions`: إدارة Capability matrix/roles. حقل اختيار الدور يطلب حتى 100 نتيجة حتى لا يبقى محصورًا بأول 10 نتائج الافتراضية في Frappe Link؛ البحث بالاسم يبقى متاحًا إذا زاد العدد.
 - `factory_workforce`: المستخدمون وإسناد الأدوار.
-- `factory_master_data`: البيانات الرئيسية ومنها Production Routing/Customer/Edge types حسب الصلاحيات.
-- `factory_production_settings`: إعدادات المصنع المقسمة حسب Capabilities.
+- `factory_master_data`: البيانات الرئيسية ومنها Production Routing/Customer/Edge types حسب الصلاحيات. لكل مرحلة مسار يوجد مفتاح **إرسال واتساب عند الإتمام** بجانب مفتاح مرحلة التخطيط.
+- `factory_production_settings`: إعدادات المصنع المقسمة حسب Capabilities. بطاقة جلسة WhatsApp الحية (إنشاء/حالة/QR/إعادة اتصال) تظهر فقط مع `manage_whatsapp_session`. كل موقع يحفظ `whatsapp_session_id` و`whatsapp_session_name` في حقلين مخفيين داخل `Almdina ERP Settings`. اسم الجلسة يُولَّد عشوائياً بحيث لا يطابق أي جلسة موجودة على OpenWA، ثم يُحفظ مع المعرّف. إعادة الاتصال تستخدم هذه الجلسة فقط. مفتاح API لا يُخزَّن في DocType ولا يصل إلى المتصفح. قسم **رسائل واتساب** يُعرض مع إعدادات المعمل ويُعدَّل فقط مع `edit_whatsapp_messages` (نص القياسات لأول إرسال، ونص تعديلات القياسات للإرسال اللاحق، والفاتورة، ورسائل إتمام المراحل المفعّلة على المسار).
 - `factory_plan_archive`: أرشيف الخطط المعتمدة.
 
 - استمارة `Door Cutting Order` / تاب الطلب: شريط الحالة العلوي (`operator_status_strip`) يعرض `User.full_name` في خانة العامل، وقوائم إسناد المرحلة (إرسال للإنتاج / العامل التالي / تغيير العامل) تعرض الاسم فقط. القيمة المخزّنة والأوامر تبقى هوية `User.name` في `current_assignee`.
@@ -56,6 +53,7 @@ Visibility يجب أن يأتي من permission context/capabilities، لا من
 - `factory_system_preflight`: أزيل Page source؛ بقي alias التاريخي fail-closed.
 - `factory_performance_benchmark`: أزيل Page source؛ بقي alias التاريخي fail-closed، بينما cutting engine واختبارات الأداء المشتركة بقيت.
 - `factory_approval_queue`: أزيل Page source وروابطه بعد إثبات أن عدد طلبات `Pending Review` على الموقع الحي يساوي صفرًا؛ بقيت capability constants/grants، وأغلقت API القديمة دون حذف بيانات صلاحيات.
+- `Almdina Reports` وتقارير الاستعلام الخمسة (ملخص العمليات، تحليل الطلبات، أداء المراحل، استخدام الألواح، قياسات الدرف): أزيل المصدر ومساحة العمل وقدرتا `view_operational_reports` و`view_financial_reports`. حساب التكلفة والطباعة لم يُمسا.
 
 ## 4. أين توجد الحقيقة لكل نوع بيانات؟
 
@@ -99,6 +97,20 @@ Capability catalog + authorization/application policy + Frappe/document scope.
 - حفظ قسم واحد من `factory_production_settings` يكتب الحقول المرسلة فقط؛ الحقول الإلزامية لأقسام أخرى (مثل هوية الطباعة) لا تمنع حفظ أسعار الإضافات أو التكلفة.
 - `qty` على السطر تبقى كمية الزبون الأصلية. عند اختيار دبل كامل الدرفة تصبح كمية القص المادية `qty × 2` في المحسّن وقائمة القص ومتطلبات التصنيع، بينما بند الأجرة يبقى `السعر الملتقط × الكمية الأصلية`. أمتار القشاط لا تُضاعف.
 - `Special + Liner` أو `Special + فرزة ظهر` لا يستخدم مسار Extra: تُكتب الإضافة في الملاحظات/الرسم ويظل السعر الخاص الشامل هو مصدر السعر.
+
+### جدول القياسات للزبون
+
+طباعة المتصفح عبر `AlmdinaOrderDocumentPrint.printMeasurements` (رأس المصنع، الزبون/الهاتف، اللوح، لون القشاط، آلة القص، عدد الدرف، الجدول مع القشاط المخصص وإضافات Extra والرسوم). إرسال واتساب يبني **نفس مستند القياسات** على الخادم (`measurements_print_html`) ثم يحوّله إلى PDF عبر Chromium؛ لا يُستخدم Print Format `Door Cutting Measurements` ولا HTML مرسل من المتصفح. لا تُدخل فاتورة أو تكاليف في هذا المستند. النص يُرفق مع ملف PDF في رسالة واحدة (حد 1024 حرفًا) ويُضبط من إعدادات المعمل في قسم رسائل واتساب: رسالة القياسات لأول إرسال، ورسالة تعديلات القياسات للإرسال اللاحق.
+
+في استمارة `Door Cutting Order` المسودة يظهر زر رأس (`dco-whatsapp-send-measurements`) بجانب أزرار الصفحة عندما يكون التعديل ممكناً والمستخدم يملك `print_measurements`. النص `إرسال القياسات عبر واتساب` لأول إرسال في جلسة الإنشاء، و`إرسال تعديلات القياسات عبر واتساب` بعد حفظ لاحق. الضغط يفتح نفس سؤال التأكيد المستخدم بعد الحفظ؛ لا يُرسل دون موافقة. الزر ليس في شريط جدول القياسات.
+
+### فاتورة الزبون عبر واتساب
+
+من تاب التكلفة، بجانب `طباعة فاتورة الزبون`، يظهر `إرسال الفاتورة عبر واتساب` (`dco-whatsapp-send-invoice`) للمستخدم الذي يملك `print_customer_invoice` على طلب محفوظ. الضغط يفتح سؤال تأكيد ثم يرسل في رسالة واحدة ملف PDF المطابق لطباعة فاتورة الزبون (جدول القياسات + تفاصيل عرض السعر المعتمدة) مع النص المضبوط من إعدادات المعمل (قسم رسائل واتساب). HTML يُبنى على الخادم من الحمولة المالية المصرّح بها؛ لا يُرسل HTML من المتصفح ولا بيانات التكلفة الداخلية. `{order_name}` في القالب يُستبدل برقم الطلب.
+
+### رسالة إتمام المرحلة عبر واتساب
+
+مفتاح `notify_whatsapp_on_complete` على مرحلة المسار. بعد نجاح Handoff تُرسل رسالة نصية فقط (بدون PDF) من قالب قسم رسائل واتساب الخاص بتلك المرحلة. `{order_name}` و`{stage_label}` يُستبدلان. فشل الإرسال لا يمنع إتمام المرحلة.
 
 ## 6. Snapshots
 

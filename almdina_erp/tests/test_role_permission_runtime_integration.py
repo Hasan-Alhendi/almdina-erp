@@ -54,7 +54,6 @@ class TestRolePermissionRuntimeIntegration(FrappeTestCase):
             "Door Cutting Order",
             "Cutting Plan",
             "Production Stage",
-            "Replacement Piece",
         ):
             frappe.clear_cache(doctype=doctype)
         frappe.local.role_permissions = {}

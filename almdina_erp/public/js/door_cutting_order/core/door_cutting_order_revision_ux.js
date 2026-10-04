@@ -570,23 +570,30 @@
     }
 
     function refreshDependentUx(frm) {
-        const field = frm.fields_dict && frm.fields_dict.pieces_fast_entry;
-        if (field && field.$wrapper) {
-            field.$wrapper._dcoForceHtmlReplace = true;
+        // Own one measurement recover/paint for this refresh. The edit-session
+        // trigger must not also force-replace the table, or a concurrent virtual
+        // row materialize (add piece) races the second wipe and orphans a child.
+        frm.__almdinaMeasurementRefreshOwned = true;
+        try {
+            if (typeof frm.trigger === "function") {
+                frm.trigger("almdina_edit_session_changed");
+                frm.trigger("refresh_plan_controls");
+            }
+        } finally {
+            frm.__almdinaMeasurementRefreshOwned = false;
         }
-        if (typeof frm.trigger === "function") {
-            frm.trigger("almdina_edit_session_changed");
-            frm.trigger("refresh_plan_controls");
+
+        const fastEntry = window.AlmdinaDoorCuttingFastEntry;
+        if (fastEntry && typeof fastEntry.recover === "function") {
+            fastEntry.recover(frm);
+        } else if (fastEntry && typeof fastEntry.render === "function") {
+            const field = frm.fields_dict && frm.fields_dict.pieces_fast_entry;
+            if (field && field.$wrapper) {
+                field.$wrapper._dcoForceHtmlReplace = true;
+            }
+            fastEntry.render(frm);
         }
-        if (field && field.$wrapper) {
-            field.$wrapper._dcoForceHtmlReplace = true;
-        }
-        if (
-            window.AlmdinaDoorCuttingFastEntry
-            && typeof window.AlmdinaDoorCuttingFastEntry.render === "function"
-        ) {
-            window.AlmdinaDoorCuttingFastEntry.render(frm);
-        }
+
         if (window.AlmdinaDoorCuttingPlanUX && typeof window.AlmdinaDoorCuttingPlanUX.refresh === "function") {
             window.AlmdinaDoorCuttingPlanUX.refresh(frm);
         }

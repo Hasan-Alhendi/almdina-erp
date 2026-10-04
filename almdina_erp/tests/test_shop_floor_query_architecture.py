@@ -103,21 +103,11 @@ class TestShopFloorQueryArchitecture(unittest.TestCase):
         self.assertIn("def get_shop_floor_context", source)
         self.assertNotIn("frappe.get_roles", source)
 
-    def test_legacy_service_is_only_a_small_lazy_compatibility_facade(self) -> None:
-        source = LEGACY_PATH.read_text(encoding="utf-8")
-        self.assertLess(len(source.splitlines()), 160)
-        self.assertNotIn("frappe.db", source)
-        self.assertNotIn("frappe.get_all", source)
+    def test_legacy_service_is_removed(self) -> None:
+        self.assertFalse(LEGACY_PATH.exists())
+        source = QUERY_SERVICE_PATH.read_text(encoding="utf-8")
+        self.assertIn("def get_shop_floor_context", source)
         self.assertNotIn("dco-sheet-card", source)
-        self.assertIn("from importlib import import_module", source)
-        self.assertIn("services.shop_floor_query_service", source)
-        self.assertIn("services.shop_floor_dxf_service", source)
-        self.assertIn("services.shop_floor_commands", source)
-        self.assertIn("get_shop_floor_context", source)
-        self.assertNotIn(
-            "from almdina_erp.almdina_erp.services.shop_floor_commands import",
-            source,
-        )
 
     def test_hooks_route_legacy_reads_and_drawing_actions_to_focused_services(self) -> None:
         hooks = runpy.run_path(str(HOOKS_PATH))

@@ -85,8 +85,6 @@ class TestStage15DocumentationContract(unittest.TestCase):
             "Production Routing",
             "factory_permissions",
             "factory_workforce",
-            "Incident",
-            "Replacement",
         ):
             self.assertIn(value, source)
 

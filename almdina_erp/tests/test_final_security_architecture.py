@@ -256,10 +256,9 @@ class TestFinalSecurityArchitecture(unittest.TestCase):
         self.assertNotIn("door_cutting_order_domain.DoorCuttingOrder", hooks)
 
     def test_legacy_shop_floor_facade_exposes_no_role_authorization_symbols(self) -> None:
-        service = SHOP_FLOOR_FACADE.read_text(encoding="utf-8")
-        gateway = GATEWAY_FACADE.read_text(encoding="utf-8")
-        self.assertIn("Backward-compatible shop-floor API facade", service)
-        self.assertIn("_public_delegate", service)
+        self.assertFalse(SHOP_FLOOR_FACADE.exists())
+        self.assertFalse(GATEWAY_FACADE.exists())
+        commands = (SERVICES / "shop_floor_commands.py").read_text(encoding="utf-8")
         for symbol in (
             "require_any_role",
             "_require_stage_assignee_or_admin",
@@ -267,12 +266,8 @@ class TestFinalSecurityArchitecture(unittest.TestCase):
             "ADMIN_ROLES",
             "SHOP_FLOOR_ROLES",
         ):
-            self.assertNotIn(symbol, service)
-        self.assertNotIn("frappe.db.sql", service)
-        self.assertNotIn("frappe.get_doc", service)
-        self.assertIn("_legacy_role_gate_removed()", gateway)
-        self.assertIn("raise PermissionError", gateway)
-        self.assertNotIn("frappe.get_roles", gateway)
+            self.assertNotIn(symbol, commands)
+        self.assertNotIn("frappe.get_roles", commands)
 
     def test_cutting_plan_legacy_endpoints_delegate_to_canonical_services(self) -> None:
         source = CUTTING_PLAN_SERVICE.read_text(encoding="utf-8")

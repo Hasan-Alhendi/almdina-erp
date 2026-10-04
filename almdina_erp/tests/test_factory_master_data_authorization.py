@@ -4,7 +4,6 @@ import unittest
 
 from almdina_erp.almdina_erp.application.security.navigation_context import (
     WORKSPACE_GO_LIVE,
-    WORKSPACE_REPORTS,
     WORKSPACE_SETTINGS,
     build_navigation_context,
 )
@@ -41,6 +40,31 @@ class TestFactoryMasterDataAuthorization(unittest.TestCase):
         )
         self.assertTrue(extra.allowed)
 
+        whatsapp_allowed = decide_settings_update(
+            {Capability.EDIT_WHATSAPP_MESSAGES},
+            {
+                "whatsapp_measurements_text": "قياسات {order_name}",
+                "whatsapp_measurement_amendments_text": "تعديلات {order_name}",
+                "whatsapp_invoice_text": "فاتورة {order_name}",
+                "whatsapp_stage_messages": {"CNC": "انتهى CNC {order_name}"},
+            },
+        )
+        self.assertTrue(whatsapp_allowed.allowed)
+
+        print_identity_cannot_edit_messages = decide_settings_update(
+            {Capability.EDIT_FACTORY_PRINT_IDENTITY},
+            {"whatsapp_invoice_text": "فاتورة {order_name}"},
+        )
+        self.assertFalse(print_identity_cannot_edit_messages.allowed)
+        self.assertEqual(print_identity_cannot_edit_messages.code, "missing_capability")
+
+        whatsapp_denied = decide_settings_update(
+            {Capability.EDIT_FACTORY_CUTTING_DEFAULTS},
+            {"whatsapp_invoice_text": "فاتورة {order_name}"},
+        )
+        self.assertFalse(whatsapp_denied.allowed)
+        self.assertEqual(whatsapp_denied.code, "missing_capability")
+
         back_groove = decide_settings_update(
             {Capability.EDIT_FACTORY_COST_DEFAULTS},
             {"default_extra_back_groove_unit_price_usd": 3},
@@ -67,12 +91,25 @@ class TestFactoryMasterDataAuthorization(unittest.TestCase):
                 Capability.EDIT_FACTORY_COST_DEFAULTS,
                 Capability.EDIT_FACTORY_PRODUCTION_CONTROLS,
                 Capability.EDIT_FACTORY_PRINT_IDENTITY,
+                Capability.EDIT_WHATSAPP_MESSAGES,
             }
         )
         self.assertIn(Capability.VIEW_FACTORY_SETTINGS, expanded)
         context = settings_context(expanded)
         self.assertTrue(context["can_view"])
+        self.assertFalse(context["can_manage_whatsapp_session"])
         self.assertTrue(all(section["editable"] for section in context["sections"].values()))
+
+        session_only = expand_factory_settings_capabilities(
+            {Capability.MANAGE_WHATSAPP_SESSION}
+        )
+        self.assertIn(Capability.VIEW_FACTORY_SETTINGS, session_only)
+        session_context = settings_context(session_only)
+        self.assertTrue(session_context["can_view"])
+        self.assertTrue(session_context["can_manage_whatsapp_session"])
+        self.assertFalse(
+            any(section["editable"] for section in session_context["sections"].values())
+        )
 
     def test_permission_matrix_dependencies_add_read_only_where_needed(self) -> None:
         routing = normalize_capability_state(
@@ -144,7 +181,7 @@ class TestFactoryMasterDataAuthorization(unittest.TestCase):
             {Capability.VIEW_EDGE_BANDING_TYPES}
         )
         self.assertIn(WORKSPACE_SETTINGS, navigation["workspaces"])
-        self.assertNotIn(WORKSPACE_REPORTS, navigation["workspaces"])
+        self.assertNotIn("Almdina Reports", navigation["workspaces"])
         self.assertNotIn(WORKSPACE_GO_LIVE, navigation["workspaces"])
         self.assertTrue(navigation["sections"]["master_data"])
         self.assertFalse(navigation["sections"]["administration"])
@@ -162,6 +199,25 @@ class TestFactoryMasterDataAuthorization(unittest.TestCase):
         )
         self.assertFalse(empty.allowed)
         self.assertEqual(empty.code, "empty_update")
+
+        messages_cannot_edit_print = decide_settings_update(
+            {Capability.EDIT_WHATSAPP_MESSAGES},
+            {"print_factory_name": "اسم جديد"},
+        )
+        self.assertFalse(messages_cannot_edit_print.allowed)
+        self.assertEqual(messages_cannot_edit_print.code, "missing_capability")
+
+    def test_whatsapp_session_grant_implies_settings_view_without_message_edit(self) -> None:
+        state = normalize_capability_state({Capability.MANAGE_WHATSAPP_SESSION: True})
+        self.assertTrue(state[Capability.VIEW_FACTORY_SETTINGS])
+        self.assertFalse(state[Capability.EDIT_WHATSAPP_MESSAGES])
+        self.assertFalse(state[Capability.EDIT_FACTORY_PRINT_IDENTITY])
+        settings = standard_permission_projection(
+            "Almdina ERP Settings",
+            {Capability.MANAGE_WHATSAPP_SESSION: True},
+        )
+        self.assertTrue(settings["read"])
+        self.assertFalse(settings["write"])
 
 
 if __name__ == "__main__":

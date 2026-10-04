@@ -9,6 +9,7 @@ PUBLIC = ROOT / "public"
 TOKENS = ROOT / "public" / "css" / "almdina_design_tokens.css"
 COMPONENTS = ROOT / "public" / "css" / "almdina_components.css"
 DESK_THEME = ROOT / "public" / "css" / "almdina_desk_theme.css"
+WORKSPACE_HOME_CSS = ROOT / "public" / "css" / "almdina_workspace_home.css"
 UI = ROOT / "public" / "js" / "almdina_ui.js"
 ASSETS = ROOT / "frontend_assets.py"
 PERMISSIONS_RENDERER = ROOT / "public" / "js" / "factory_permissions" / "renderer.js"
@@ -222,13 +223,17 @@ class TestDesignSystemContract(unittest.TestCase):
         tokens_asset = '"/assets/almdina_erp/css/almdina_design_tokens.css"'
         components_asset = '"/assets/almdina_erp/css/almdina_components.css"'
         desk_theme_asset = '"/assets/almdina_erp/css/almdina_desk_theme.css"'
+        desk_sidebar_asset = '"/assets/almdina_erp/css/almdina_desk_sidebar.css?v=2"'
+        workspace_home_asset = '"/assets/almdina_erp/css/almdina_workspace_home.css?v=10"'
         ui_asset = '"/assets/almdina_erp/js/almdina_ui.js"'
         foundation_asset = '"/assets/almdina_erp/js/frontend_foundation.js"'
         notes_asset = '"/assets/almdina_erp/css/notes.css"'
 
         self.assertLess(self.assets.index(tokens_asset), self.assets.index(components_asset))
         self.assertLess(self.assets.index(components_asset), self.assets.index(desk_theme_asset))
-        self.assertLess(self.assets.index(desk_theme_asset), self.assets.index(notes_asset))
+        self.assertLess(self.assets.index(desk_theme_asset), self.assets.index(desk_sidebar_asset))
+        self.assertLess(self.assets.index(desk_sidebar_asset), self.assets.index(workspace_home_asset))
+        self.assertLess(self.assets.index(workspace_home_asset), self.assets.index(notes_asset))
         self.assertLess(self.assets.index(foundation_asset), self.assets.index(ui_asset))
 
     def test_desk_theme_bridges_frappe_primary_to_alm_tokens(self) -> None:
@@ -238,6 +243,20 @@ class TestDesignSystemContract(unittest.TestCase):
         self.assertIn(".indicator-pill.blue", source)
         self.assertNotIn("body .btn-primary", source)
         self.assertNotIn("#2490ef", source)
+
+    def test_workspace_home_css_uses_design_tokens_without_global_desk_overrides(self) -> None:
+        source = WORKSPACE_HOME_CSS.read_text(encoding="utf-8")
+        tokens = TOKENS.read_text(encoding="utf-8")
+        self.assertIn("--alm-home-surface", source)
+        self.assertIn("var(--alm-canvas)", source)
+        self.assertIn("body.almdina-workspace-home", source)
+        self.assertNotIn("body .btn-primary", source)
+        self.assertNotIn("#2490ef", source)
+        self.assertIn("--alm-accent-blue", tokens)
+        self.assertIn("--alm-accent-purple", tokens)
+        self.assertIn("var(--alm-accent-blue)", source)
+        self.assertIn("var(--alm-accent-purple)", source)
+        self.assertNotIn("#7c3aed", source)
 
     def test_factory_permissions_pilot_uses_design_system(self) -> None:
         self.assertIn('class="almdina-ui apc-shell"', self.permissions_renderer)
@@ -368,10 +387,13 @@ class TestDesignSystemContract(unittest.TestCase):
         self.assertNotIn("frappe.prompt", permissions_dialogs)
 
     def test_dco_plan_tabs_use_design_system_tokens(self) -> None:
-        self.assertIn('class="almdina-ui dco-plan-tabs"', self.dco_plan_tabs)
-        self.assertIn('"is-active"', self.dco_plan_tabs)
+        self.assertIn("almdina-ui dco-plan-tabs", self.dco_plan_tabs)
+        self.assertIn("dco-plan-tabs--underline", self.dco_plan_tabs)
+        self.assertIn("aria-selected", self.dco_plan_tabs)
+        self.assertIn("is-active", self.dco_plan_tabs)
         self.assertNotIn('"btn-primary"', self.dco_plan_tabs)
         self.assertIn(".almdina-ui .dco-plan-tabs .btn.is-active", self.components)
+        self.assertIn("var(--alm-primary)", self.components)
 
     def test_migrated_surfaces_reject_legacy_primary_markup(self) -> None:
         for path in MIGRATED_SURFACES:

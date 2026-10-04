@@ -22,7 +22,139 @@ def is_corner_cut(piece_type: str | None) -> bool:
 def corner_cut_arabic_label(piece_type: str | None) -> str:
     if (piece_type or "") == L_SHAPED_CORNER_TYPE:
         return "درفة زاوية L"
-    return "درفة زاوية مقصوصة"
+    return "درفة الزاوية الكسر"
+
+
+BREAK_ADJACENT_SIDES: dict[str, tuple[str, str]] = {
+    "Top Right": ("edge_width_top", "edge_long_right"),
+    "Top Left": ("edge_width_top", "edge_long_left"),
+    "Bottom Right": ("edge_width_bottom", "edge_long_right"),
+    "Bottom Left": ("edge_width_bottom", "edge_long_left"),
+}
+
+
+@dataclass(frozen=True, slots=True)
+class EdgeBreakDecision:
+    edge_break: int
+    edge_long_right: int
+    edge_long_left: int
+    edge_width_top: int
+    edge_width_bottom: int
+    cleared_sides: tuple[str, ...]
+
+
+def break_adjacent_sides(position: str | None) -> tuple[str, str]:
+    return BREAK_ADJACENT_SIDES.get(position or "Top Right", BREAK_ADJACENT_SIDES["Top Right"])
+
+
+def apply_edge_break_policy(
+    *,
+    piece_type: str | None,
+    clipped_corner_position: str | None,
+    edge_break: int,
+    edge_long_right: int,
+    edge_long_left: int,
+    edge_width_top: int,
+    edge_width_bottom: int,
+) -> EdgeBreakDecision:
+    """Normalize edge_break selection for Clipped Corner and L-Shaped Corner.
+
+    Clipped Corner: when break banding is on, the two AABB sides that form the
+    cut corner are cleared because the break strap covers those remnants plus the
+    hypotenuse. L-Shaped Corner: the corner strap is only the inner L notch, so
+    the four outer sides stay independently selectable. Other piece types never
+    keep edge_break. Lengths/meters are not calculated here.
+    """
+
+    flags = {
+        "edge_long_right": 1 if edge_long_right else 0,
+        "edge_long_left": 1 if edge_long_left else 0,
+        "edge_width_top": 1 if edge_width_top else 0,
+        "edge_width_bottom": 1 if edge_width_bottom else 0,
+    }
+    resolved_break = 1 if edge_break else 0
+    cleared: list[str] = []
+    resolved_type = piece_type or "Regular"
+
+    if resolved_type not in CORNER_CUT_TYPES:
+        resolved_break = 0
+    elif resolved_break and resolved_type == CLIPPED_CORNER_TYPE:
+        for side in break_adjacent_sides(clipped_corner_position):
+            if flags[side]:
+                cleared.append(side)
+            flags[side] = 0
+
+    return EdgeBreakDecision(
+        edge_break=resolved_break,
+        edge_long_right=flags["edge_long_right"],
+        edge_long_left=flags["edge_long_left"],
+        edge_width_top=flags["edge_width_top"],
+        edge_width_bottom=flags["edge_width_bottom"],
+        cleared_sides=tuple(cleared),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class SpecialMeasurementEdgeDecision:
+    """Cleared measurement-table edge fields for Special doors."""
+
+    edge_long_right: int
+    edge_long_left: int
+    edge_width_top: int
+    edge_width_bottom: int
+    edge_break: int
+    edge_type: str
+    edge_long_right_type_override: str
+    edge_long_left_type_override: str
+    edge_width_top_type_override: str
+    edge_width_bottom_type_override: str
+    disabled: bool
+
+
+def measurement_edges_disabled_for_piece(piece_type: str | None) -> bool:
+    """Special doors do not use side banding from the measurements table."""
+
+    return (piece_type or "Regular") == "Special"
+
+
+def apply_special_measurement_edge_policy(
+    *,
+    piece_type: str | None,
+) -> SpecialMeasurementEdgeDecision:
+    """Disable and clear measurement-table banding for Special doors.
+
+    Regular / Extra / corner pieces keep their selected sides. Special pricing
+    uses the inclusive special price (and configurable special fees), not
+    rectangular side toggles from order entry.
+    """
+
+    if not measurement_edges_disabled_for_piece(piece_type):
+        return SpecialMeasurementEdgeDecision(
+            edge_long_right=0,
+            edge_long_left=0,
+            edge_width_top=0,
+            edge_width_bottom=0,
+            edge_break=0,
+            edge_type="",
+            edge_long_right_type_override="",
+            edge_long_left_type_override="",
+            edge_width_top_type_override="",
+            edge_width_bottom_type_override="",
+            disabled=False,
+        )
+    return SpecialMeasurementEdgeDecision(
+        edge_long_right=0,
+        edge_long_left=0,
+        edge_width_top=0,
+        edge_width_bottom=0,
+        edge_break=0,
+        edge_type="",
+        edge_long_right_type_override="",
+        edge_long_left_type_override="",
+        edge_width_top_type_override="",
+        edge_width_bottom_type_override="",
+        disabled=True,
+    )
 
 
 class PiecePolicyError(ValueError):
@@ -54,6 +186,7 @@ class PieceGeometry:
     edge_long_left: int = 0
     edge_width_top: int = 0
     edge_width_bottom: int = 0
+    edge_break: int = 0
     edge_type: str = ""
 
 
@@ -151,6 +284,7 @@ def geometry_changed(
         or old.edge_long_left != current.edge_long_left
         or old.edge_width_top != current.edge_width_top
         or old.edge_width_bottom != current.edge_width_bottom
+        or old.edge_break != current.edge_break
         or old.edge_type != current.edge_type
         or drawing_changed
     )
@@ -330,21 +464,28 @@ def _same_number(first: float, second: float) -> bool:
 
 
 __all__ = [
+    "BREAK_ADJACENT_SIDES",
     "CLIPPED_CORNER_POSITIONS",
     "CLIPPED_CORNER_TYPE",
     "CORNER_CUT_TYPES",
     "L_SHAPED_CORNER_TYPE",
     "PIECE_TYPES",
     "ClippedCorner",
+    "EdgeBreakDecision",
     "PieceGeometry",
     "PiecePolicyError",
+    "SpecialMeasurementEdgeDecision",
     "SpecialPrice",
     "SpecialShapeDecision",
+    "apply_edge_break_policy",
+    "apply_special_measurement_edge_policy",
+    "break_adjacent_sides",
     "corner_cut_arabic_label",
     "drawing_token",
     "evaluate_special_shape",
     "geometry_changed",
     "is_corner_cut",
+    "measurement_edges_disabled_for_piece",
     "pricing_basis_changed",
     "protected_price_changed",
     "pending_custom_edge_price_labels",

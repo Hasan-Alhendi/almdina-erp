@@ -179,6 +179,7 @@ def route_payload(**overrides: Any) -> dict[str, Any]:
                 "stage_definition": "Quality Check",
                 "operational_role": "عامل الجودة",
                 "is_planning_stage": False,
+                "notify_whatsapp_on_complete": True,
             },
         ],
     }
@@ -206,6 +207,8 @@ class TestProductionRoutingManagementApplication(unittest.TestCase):
             ["Drawing", "Quality Check"],
         )
         self.assertTrue(repository.saved.stages[0].is_planning_stage)
+        self.assertFalse(repository.saved.stages[0].notify_whatsapp_on_complete)
+        self.assertTrue(repository.saved.stages[1].notify_whatsapp_on_complete)
 
     def test_create_and_edit_use_distinct_capabilities(self) -> None:
         repository = FakeRoutingRepository()

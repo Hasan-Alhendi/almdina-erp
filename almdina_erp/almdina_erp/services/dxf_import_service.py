@@ -13,6 +13,66 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_default_layer import (
     classify_default_layer_polygons,
     polygon_to_segments,
 )
+from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
+    CATEGORY_CONTOUR,
+    CATEGORY_DIMENSIONS,
+    CATEGORY_FILE,
+    CATEGORY_IDENTITY,
+    CATEGORY_LAYOUT,
+    CATEGORY_OFFCUT,
+    CATEGORY_OVERLAY,
+    CATEGORY_PERSISTENCE,
+    CATEGORY_READER,
+    CATEGORY_SHEET,
+    CATEGORY_TOPOLOGY,
+    CATEGORY_WORKFLOW,
+    APPLIED_TRIM_OVERFLOW,
+    BOARD_INVALID,
+    CUT_BRANCHED,
+    CUT_DIMENSIONS_MISSING,
+    CUT_INVALID_GEOMETRY,
+    CUT_LAYER_MISSING,
+    CUT_OPEN,
+    CUT_SELF_INTERSECTION,
+    CUT_SIZE_MISMATCH,
+    DXF_LIBRARY_MISSING,
+    DXF_UNREADABLE,
+    ENTITY_LIMIT_EXCEEDED,
+    EXPECTED_PIECE_MISMATCH,
+    EXTRA_CUT_PATH,
+    FILE_MISSING,
+    FILE_REQUIRED,
+    FILE_UNREADABLE,
+    FORBIDDEN_ROTATION,
+    KERF_VIOLATION,
+    LEGACY_MESSAGE,
+    MATERIAL_OVERLAP,
+    MINSERT_UNSUPPORTED,
+    MIXED_RESOURCE_SOURCE,
+    OFFCUT_IDENTITY_MISMATCH,
+    OVERLAY_INVALID_PATH,
+    PIECE_IDENTITY_MISSING,
+    PIECE_INVALID_DIMENSIONS,
+    PIECE_MISSING,
+    PIECE_OUTSIDE_SHEET,
+    SHEET_BRANCHED,
+    SHEET_LAYER_MISSING,
+    SHEET_NOT_RECTANGLE,
+    SHEET_OPEN,
+    SHEET_SIZE_MISMATCH,
+    TRIM_EXCEEDS_BOARD,
+    UNSUPPORTED_ENTITY,
+    DxfIssueTarget,
+    DxfValidationIssue,
+    contour_target,
+    file_target,
+    issue,
+    overlay_error_to_issue,
+    layer_target,
+    piece_target,
+    sheet_target,
+    topology_error_to_issue,
+)
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import (
     assemble_contours,
     bbox,
@@ -55,6 +115,9 @@ from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
     ManufacturingRequirementsError,
     require_cut_dimension_cm,
 )
+from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
+    dimensions_match_exact,
+)
 from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
     OffcutPolicyError,
     canonicalize_snapshot_sources,
@@ -88,11 +151,68 @@ TOLERANCE_MM = CONNECTIVITY_TOLERANCE_MM  # backward-compatible public constant
 
 
 class DxfImportError(ValueError):
-    """Expected, user-fixable DXF validation failure."""
+    """Expected, user-fixable DXF validation failure.
 
-    def __init__(self, errors: str | list[str]):
-        self.errors = [errors] if isinstance(errors, str) else [str(error) for error in errors if error]
+    ``issues`` is authoritative. ``errors`` is a presented Arabic projection for
+    legacy callers/tests and must never drive business branching.
+    """
+
+    def __init__(
+        self,
+        errors: str | list[str] | DxfValidationIssue | list[DxfValidationIssue] | None = None,
+        *,
+        issues: list[DxfValidationIssue] | None = None,
+    ):
+        resolved: list[DxfValidationIssue] = []
+        if issues:
+            resolved.extend(issues)
+        if errors is not None:
+            if isinstance(errors, DxfValidationIssue):
+                resolved.append(errors)
+            elif isinstance(errors, list) and any(isinstance(item, DxfValidationIssue) for item in errors):
+                for item in errors:
+                    if isinstance(item, DxfValidationIssue):
+                        resolved.append(item)
+                    elif item:
+                        resolved.append(
+                            issue(
+                                LEGACY_MESSAGE,
+                                CATEGORY_WORKFLOW,
+                                params={"message": str(item)},
+                            )
+                        )
+            else:
+                messages = [errors] if isinstance(errors, str) else list(errors or [])
+                for message in messages:
+                    if not message:
+                        continue
+                    resolved.append(
+                        issue(
+                            LEGACY_MESSAGE,
+                            CATEGORY_WORKFLOW,
+                            params={"message": str(message)},
+                        )
+                    )
+        self.issues = resolved
+        from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import (
+            present_issue,
+        )
+
+        presented: list[str] = []
+        for item in self.issues:
+            if item.code == LEGACY_MESSAGE:
+                presented.append(str(item.param("message") or "").strip())
+                continue
+            card = present_issue(item)
+            presented.append(
+                f"ما المشكلة؟ {card.problem} أي درفة/لوح؟ {card.target} ماذا أفعل؟ {card.action}"
+            )
+        self.errors = [row for row in presented if row]
         super().__init__("\n".join(self.errors))
+
+    @property
+    def codes(self) -> list[str]:
+        return [item.code for item in self.issues]
 
 
 def _num(value: Any) -> float:
@@ -130,23 +250,143 @@ def _cut_topology_mismatch_details(
     candidates: tuple[ContourCandidate, ...],
     order: Any,
 ) -> str:
-    dxf_sizes = _format_size_counts(
-        Counter(_bbox_size_label_cm(candidate.polygon) for candidate in candidates)
-    )
-    expected_sizes = _format_size_counts(
-        Counter(
-            f"{_format_cm(piece['width_cm'])} × {_format_cm(piece['length_cm'])} سم"
-            for piece in _expected_order_pieces(order)
-        )
-    )
+    """Legacy diagnostic prose kept for debug params only (not user-facing authority)."""
+    inventory = _inventory_mismatch_params(candidates, order)
     parts = [
-        f"مقاسات DXF: {dxf_sizes}.",
-        f"مقاسات القص المطلوبة: {expected_sizes}.",
-        "ارسم بمقاس القص المحفوظ وليس المقاس النهائي، ولا تترك مسارات إضافية على CUT_PATH.",
+        f"مقاسات DXF: {inventory.get('dxf_sizes_label') or 'لا توجد'}.",
+        f"مقاسات القص المطلوبة: {inventory.get('expected_sizes_label') or 'لا توجد'}.",
     ]
     parts.extend(_finished_size_hints(candidates, order)[:2])
     parts.extend(_near_miss_size_hints(candidates, order)[:2])
     return " ".join(parts)
+
+
+def _inventory_mismatch_params(
+    candidates: tuple[ContourCandidate, ...],
+    order: Any,
+) -> dict[str, Any]:
+    """Count/size facts for clear missing/extra/mismatch presentation."""
+    expected = _expected_order_pieces(order)
+    tol = DIMENSION_TOLERANCE_MM / 10.0
+    dxf_sizes: list[tuple[float, float]] = []
+    for candidate in candidates:
+        min_x, min_y, max_x, max_y = bbox(candidate.polygon)
+        dxf_sizes.append(((max_x - min_x) / 10.0, (max_y - min_y) / 10.0))
+
+    unmatched_expected = list(expected)
+    unmatched_dxf: list[tuple[float, float]] = []
+    for width_cm, height_cm in dxf_sizes:
+        match_index = None
+        for index, piece in enumerate(unmatched_expected):
+            matches = _size_matches(
+                width_cm,
+                height_cm,
+                piece["width_cm"],
+                piece["length_cm"],
+                tol=tol,
+            ) or (
+                bool(piece["allow_rotation"])
+                and _size_matches(
+                    width_cm,
+                    height_cm,
+                    piece["length_cm"],
+                    piece["width_cm"],
+                    tol=tol,
+                )
+            )
+            if matches:
+                match_index = index
+                break
+        if match_index is None:
+            unmatched_dxf.append((width_cm, height_cm))
+        else:
+            unmatched_expected.pop(match_index)
+
+    mismatch_pairs: list[dict[str, str]] = []
+    remaining_expected = list(unmatched_expected)
+    for width_cm, height_cm in unmatched_dxf:
+        if not remaining_expected:
+            break
+        nearest = min(
+            remaining_expected,
+            key=lambda piece: abs(width_cm - piece["width_cm"]) + abs(height_cm - piece["length_cm"]),
+        )
+        remaining_expected.remove(nearest)
+        mismatch_pairs.append(
+            {
+                "label": str(nearest["label"]),
+                "expected": f"{_format_cm(nearest['width_cm'])} × {_format_cm(nearest['length_cm'])} سم",
+                "actual": f"{_format_cm(width_cm)} × {_format_cm(height_cm)} سم",
+            }
+        )
+
+    return {
+        "mismatch_pairs": mismatch_pairs,
+        "actual_count": len(candidates),
+        "expected_count": len(expected),
+        "missing_count": len(unmatched_expected),
+        "extra_count": len(unmatched_dxf),
+        "missing_labels": [str(piece["label"]) for piece in unmatched_expected],
+        "missing_sizes": [
+            f"{_format_cm(piece['width_cm'])} × {_format_cm(piece['length_cm'])} سم"
+            for piece in unmatched_expected
+        ],
+        "extra_sizes": [
+            f"{_format_cm(width_cm)} × {_format_cm(height_cm)} سم"
+            for width_cm, height_cm in unmatched_dxf
+        ],
+        "dxf_sizes_label": _format_size_counts(
+            Counter(_bbox_size_label_cm(candidate.polygon) for candidate in candidates)
+        ),
+        "expected_sizes_label": _format_size_counts(
+            Counter(
+                f"{_format_cm(piece['width_cm'])} × {_format_cm(piece['length_cm'])} سم"
+                for piece in expected
+            )
+        ),
+        "details": "",  # filled by caller for debug only when needed
+    }
+
+
+def _expected_piece_mismatch_issue(
+    error: DxfTopologyError,
+    *,
+    candidates: tuple[ContourCandidate, ...],
+    order: Any,
+    kerf_mm: float,
+) -> DxfValidationIssue:
+    """Map topology inventory failure to missing / extra / size-mismatch issue."""
+    params = _inventory_mismatch_params(candidates, order)
+    details = _cut_topology_mismatch_details(candidates, order)
+    params["details"] = details
+    params["kerf_mm"] = kerf_mm
+    params["topology_code"] = error.code
+
+    actual = int(params["actual_count"])
+    expected = int(params["expected_count"])
+    if actual < expected:
+        return issue(
+            PIECE_MISSING,
+            CATEGORY_IDENTITY,
+            target=DxfIssueTarget(kind="order"),
+            params=params,
+            debug={"topology_code": error.code},
+        )
+    if actual > expected:
+        return issue(
+            EXTRA_CUT_PATH,
+            CATEGORY_IDENTITY,
+            target=DxfIssueTarget(kind="order"),
+            params=params,
+            debug={"topology_code": error.code},
+        )
+    return issue(
+        EXPECTED_PIECE_MISMATCH,
+        CATEGORY_IDENTITY,
+        target=DxfIssueTarget(kind="order"),
+        params=params,
+        debug={"topology_code": error.code},
+    )
 
 
 def _size_matches(width: float, height: float, expected_w: float, expected_h: float, *, tol: float) -> bool:
@@ -237,107 +477,67 @@ def _near_miss_size_hints(
     return hints
 
 
+def _topology_error_issue(
+    error: DxfTopologyError,
+    *,
+    kerf_mm: float = 0.0,
+    details: str = "",
+    order: Any = None,
+) -> DxfValidationIssue:
+    source_piece_no = None
+    if error.code == "FORBIDDEN_ROTATION" and order is not None:
+        pieces = _expected_order_pieces(order)
+        piece = (
+            pieces[error.expected_piece_index]
+            if error.expected_piece_index is not None
+            and error.expected_piece_index < len(pieces)
+            else None
+        )
+        if piece:
+            source_piece_no = int(piece["source_piece_no"])
+    return topology_error_to_issue(
+        error,
+        kerf_mm=kerf_mm,
+        details=details,
+        source_piece_no=source_piece_no,
+    )
+
+
 def _topology_error_message(
     error: DxfTopologyError,
     *,
     kerf_mm: float = 0.0,
     details: str = "",
+    order: Any = None,
 ) -> str:
-    first = error.first_key if error.first_key is not None else "؟"
-    second = error.second_key if error.second_key is not None else "؟"
-    if error.code == "EXPECTED_PIECE_MISMATCH":
-        message = (
-            "لا يمكن مطابقة محيطات CUT_PATH المغلقة مع قطع الطلب المطلوبة. "
-            "تأكد من مقاسات محيطات القطع ومن أن المسارات الإضافية هي فتحات داخلية فقط."
+    """Compatibility: presented Arabic for a topology error (not authoritative)."""
+    from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import (
+        present_issue,
+    )
+
+    card = present_issue(
+        _topology_error_issue(
+            error,
+            kerf_mm=kerf_mm,
+            details=details,
+            order=order,
         )
-        return f"{message} {details}".strip()
-    if error.code == "AMBIGUOUS_CONTOUR_OWNERSHIP":
-        return (
-            "تركيب مسارات CUT_PATH ملتبس فعليًا: يوجد مسار داخلي يمكن اعتباره فتحة أو قطعة مستقلة من الطلب. "
-            "افصل القطعة المستقلة عن الفتحة أو اجعل الفتحة مملوكة بوضوح لمحيط خارجي واحد ثم أعد الرفع."
-        )
-    if error.code == "UNRESOLVED_CONTOUR_OWNERSHIP":
-        return (
-            "تعذر تحديد القطع والفتحات الداخلية في CUT_PATH بشكل مؤكد. "
-            "تأكد أن كل فتحة مغلقة بالكامل داخل قطعة واحدة، وأن أي قطعة موضوعة داخل الفتحة لا تلامس حافتها ولا تتقاطع مع مادة القطعة."
-        )
-    if error.code == "INVALID_PART_TOPOLOGY":
-        return (
-            "بنية إحدى القطع أو فتحاتها الداخلية غير صالحة. "
-            "يجب أن تكون الحدود مغلقة، غير متقاطعة، وأن تبقى كل فتحة بالكامل داخل محيط القطعة."
-        )
-    if error.code == "MATERIAL_FOOTPRINT_OVERLAP":
-        return (
-            f"القطعتان {first} و{second} تتداخلان في مادة اللوح. "
-            "وجود القطعة داخل المستطيل الخارجي لقطعة أخرى مسموح فقط عندما تكون بالكامل داخل فتحة داخلية صالحة."
-        )
-    if error.code == "HOLE_CLEARANCE_VIOLATION":
-        return (
-            f"القطعتان {first} و{second}: القطعة الموضوعة داخل الفتحة قريبة من حافة الفتحة أكثر من المسموح. "
-            f"حافظ على مسافة Kerf لا تقل عن {_format_mm(kerf_mm)} مم من حدود الفتحة."
-        )
-    if error.code == "PART_CLEARANCE_VIOLATION":
-        return (
-            f"المسافة بين القطعتين {first} و{second} أقل من Kerf المطلوب "
-            f"({_format_mm(kerf_mm)} مم). افصل القطعتين ثم أعد الرفع."
-        )
-    return "تعذر التحقق من بنية القطع والفتحات الداخلية في DXF. صحح الرسم ثم أعد الرفع."
+    )
+    return f"ما المشكلة؟ {card.problem} أي درفة/لوح؟ {card.target} ماذا أفعل؟ {card.action}"
+
+
+def _overlay_error_issue(error: ExtraOverlayError) -> DxfValidationIssue:
+    return overlay_error_to_issue(error)
 
 
 def _overlay_error_message(error: ExtraOverlayError) -> str:
-    layer = error.layer or "؟"
-    kind_name = _OVERLAY_KIND_AR.get(error.kind, layer)
-    door = _overlay_door_label(error)
-    if error.code == "extra_overlay_on_non_extra":
-        return (
-            f"العلامة على الطبقة {layer} تقع على درفة ليست Extra. "
-            "ضع علامات اللاينر وفرزة الظهر ومسكة الغطس داخل درفة Extra فقط."
-        )
-    if error.code == "extra_overlay_floating":
-        return (
-            f"العلامة على الطبقة {layer} ليست بالكامل داخل درفة Extra واحدة. "
-            "ضع العلامة بالكامل داخل درفة Extra ثم أعد الرفع."
-        )
-    if error.code == "extra_overlay_spans_hosts":
-        return (
-            f"العلامة على الطبقة {layer} تمتد فوق أكثر من درفة. "
-            "ضع كل علامة داخل درفة Extra واحدة ثم أعد الرفع."
-        )
-    if error.code == "extra_overlay_addon_not_selected":
-        return (
-            f"{door}العلامة على الطبقة {layer} ({kind_name}) مرسومة دون تفعيل الخانة المطابقة في جدول القياسات. "
-            "أزل العلامة من الرسم أو فعّل الخانة في صف Extra ثم احفظ الطلب وأعد الرفع."
-        )
-    if error.code == "extra_overlay_addon_missing":
-        return (
-            f"{door}خانة {kind_name} مفعّلة في جدول القياسات، لكن ملف DXF لا يحتوي علامة على الطبقة {layer} داخل هذه الدرفة. "
-            f"أضف علامة {kind_name} على الطبقة {layer} داخل درفة Extra ثم أعد الرفع."
-        )
-    if error.code == "extra_overlay_addon_duplicate":
-        return (
-            f"{door}خانة {kind_name} مفعّلة مرة واحدة في جدول القياسات، لكن ملف DXF يحتوي أكثر من علامة على الطبقة {layer} داخل هذه الدرفة. "
-            "اترك علامة واحدة مطابقة للخانة ثم أعد الرفع."
-        )
-    if error.code == "extra_overlay_invalid_path":
-        return (
-            f"العلامة على الطبقة {layer} أقصر من أن تُقرأ. "
-            "ارسم خطًا أو مسارًا واضحًا ثم أعد الرفع."
-        )
-    return f"تعذر التحقق من علامات Extra على الطبقة {layer}. صحح الرسم ثم أعد الرفع."
+    """Compatibility: presented Arabic for an overlay error (not authoritative)."""
+    from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import (
+        present_issue,
+    )
 
-
-_OVERLAY_KIND_AR = {
-    "liner": "اللاينر",
-    "back_groove": "فرزة الظهر",
-    "recessed_handle_cutout": "مسكة الغطس",
-}
-
-
-def _overlay_door_label(error: ExtraOverlayError) -> str:
-    label = str(error.label or error.host_key or "").strip()
-    if not label:
-        return ""
-    return f"درفة Extra رقم {label}: "
+    card = present_issue(_overlay_error_issue(error))
+    return f"ما المشكلة؟ {card.problem} أي درفة/لوح؟ {card.target} ماذا أفعل؟ {card.action}"
 
 
 def _lwpolyline_segments(current: dict[str, Any]) -> list[dict[str, Any]]:
@@ -495,7 +695,7 @@ def _read_legacy_content(file_path: str) -> str:
         with open(file_path, encoding="utf-8", errors="ignore") as handle:
             return handle.read()
     except OSError as exc:
-        raise DxfImportError("تعذر قراءة ملف DXF من الخادم. أعد رفع الملف ثم حاول مرة أخرى.") from exc
+        raise DxfImportError(issues=[issue(FILE_UNREADABLE, CATEGORY_FILE, target=file_target())]) from exc
 
 
 def _read_normalized_geometry(
@@ -523,7 +723,20 @@ def _read_normalized_geometry(
             legacy_line_parser=legacy_parser,
         )
     except DxfReadError as exc:
-        raise DxfImportError(str(exc)) from exc
+        read_code = str(getattr(exc, "code", "") or DXF_UNREADABLE)
+        mapped = {
+            "DXF_LIBRARY_MISSING": DXF_LIBRARY_MISSING,
+            "DXF_UNREADABLE": DXF_UNREADABLE,
+            "MINSERT_UNSUPPORTED": MINSERT_UNSUPPORTED,
+            "ENTITY_LIMIT_EXCEEDED": ENTITY_LIMIT_EXCEEDED,
+            "UNSUPPORTED_ENTITY": UNSUPPORTED_ENTITY,
+        }.get(read_code, DXF_UNREADABLE)
+        params = dict(getattr(exc, "params", None) or {})
+        if mapped == DXF_UNREADABLE and "reason" not in params:
+            params["reason"] = str(exc)
+        raise DxfImportError(
+            issues=[issue(mapped, CATEGORY_READER, target=file_target(), params=params)]
+        ) from exc
 
     unsupported = [
         item
@@ -534,9 +747,22 @@ def _read_normalized_geometry(
         unique = sorted({f"{item['entity_type']} على {item['layer']}" for item in unsupported})
         supported = ", ".join(sorted(SUPPORTED_DXF_ENTITY_TYPES))
         raise DxfImportError(
-            "يحتوي ملف DXF على عناصر غير مدعومة داخل طبقات القص: "
-            + "، ".join(unique)
-            + f". العناصر المدعومة هي: {supported}."
+            issues=[
+                issue(
+                    UNSUPPORTED_ENTITY,
+                    CATEGORY_READER,
+                    target=file_target(),
+                    params={
+                        "entity": "، ".join(unique),
+                        "supported": supported,
+                        "message": (
+                            "يحتوي ملف DXF على عناصر غير مدعومة داخل طبقات القص: "
+                            + "، ".join(unique)
+                            + f". العناصر المدعومة هي: {supported}."
+                        ),
+                    },
+                )
+            ]
         )
     return result.get("segments") or [], result.get("diagnostics") or {}, result.get("annotations") or []
 
@@ -738,8 +964,14 @@ def _offcut_piece_indexes(
         ]
         if len(matches) != 1:
             raise DxfImportError(
-                f"محيط OFFCUT رقم {polygon_no} لا يرتبط بقطعة فيزيائية واحدة بشكل مؤكد. "
-                "يجب أن يطابق محيط OFFCUT محيط قطعة قص واحدة تمامًا دون تداخل أو تخمين."
+                issues=[
+                    issue(
+                        OFFCUT_IDENTITY_MISMATCH,
+                        CATEGORY_OFFCUT,
+                        target=contour_target(polygon_no, layer=OFFCUT_LAYER),
+                        params={"match_count": len(matches)},
+                    )
+                ]
             )
         marked.add(matches[0])
     return marked
@@ -767,7 +999,6 @@ def _default_layer_role_segments(
         expected_height_mm=expected_height_mm,
         overlays=overlays,
         geometry_tolerance=CONNECTIVITY_TOLERANCE_MM,
-        dimension_tolerance=DIMENSION_TOLERANCE_MM,
         infer_sheets=infer_sheets,
     )
     sheet_segments = [
@@ -795,8 +1026,13 @@ def _expected_order_pieces(order: Any) -> list[dict[str, Any]]:
             )
         except ManufacturingRequirementsError as exc:
             raise DxfImportError(
-                f"مقاسات القص التصنيعية للقطعة رقم {group_index} غير محفوظة أو غير صالحة. "
-                "احفظ الطلب لإعادة تثبيت مقاسات القص ثم أعد رفع DXF."
+                issues=[
+                    issue(
+                        CUT_DIMENSIONS_MISSING,
+                        CATEGORY_PERSISTENCE,
+                        target=piece_target(source_piece_no=group_index),
+                    )
+                ]
             ) from exc
         finished_width_cm = getattr(row, "finished_width_cm", None)
         finished_length_cm = getattr(row, "finished_length_cm", None)
@@ -907,7 +1143,13 @@ def _legacy_expected_piece_match(
             expected[index]
             for index in unmatched_indexes
             if not expected[index]["allow_rotation"]
-            and _rotated_dimensions_match(
+            and dimensions_match_exact(
+                width_cm,
+                height_cm,
+                expected[index]["length_cm"],
+                expected[index]["width_cm"],
+            )
+            and not dimensions_match_exact(
                 width_cm,
                 height_cm,
                 expected[index]["width_cm"],
@@ -946,7 +1188,7 @@ def _match_pieces_to_order(pieces: list[dict[str, Any]], order: Any) -> list[dic
     expected = _expected_order_pieces(order)
     unmatched_indexes = list(range(len(expected)))
     labeled: list[dict[str, Any]] = []
-    errors: list[str] = []
+    issues: list[DxfValidationIssue] = []
 
     for piece_index, piece in enumerate(pieces, start=1):
         width_cm = _num(piece.get("w"))
@@ -958,8 +1200,13 @@ def _match_pieces_to_order(pieces: list[dict[str, Any]], order: Any) -> list[dic
             except (TypeError, ValueError):
                 expected_index = -1
             if expected_index not in unmatched_indexes:
-                errors.append(
-                    f"تعذر ربط القطعة رقم {piece_index} بهوية قطعة واحدة في الطلب."
+                issues.append(
+                    issue(
+                        PIECE_IDENTITY_MISSING,
+                        CATEGORY_IDENTITY,
+                        target=contour_target(piece_index),
+                        params={"identity_unproven": True},
+                    )
                 )
                 continue
             candidate = expected[expected_index]
@@ -978,14 +1225,34 @@ def _match_pieces_to_order(pieces: list[dict[str, Any]], order: Any) -> list[dic
 
             if expected_index is None:
                 if forbidden_rotation:
-                    errors.append(
-                        f"القطعة رقم {piece_index} أبعادها {_format_cm(width_cm)} × {_format_cm(height_cm)} سم "
-                        f"وتطابق القطعة {forbidden_rotation['label']} بعد تدويرها، لكن التدوير غير مسموح لهذه القطعة في الطلب."
+                    issues.append(
+                        issue(
+                            FORBIDDEN_ROTATION,
+                            CATEGORY_DIMENSIONS,
+                            target=piece_target(
+                                source_piece_no=int(forbidden_rotation["source_piece_no"]),
+                                label=str(forbidden_rotation.get("label") or ""),
+                            ),
+                            params={
+                                "actual_width_cm": width_cm,
+                                "actual_height_cm": height_cm,
+                                "expected_width_cm": forbidden_rotation["width_cm"],
+                                "expected_height_cm": forbidden_rotation["length_cm"],
+                            },
+                        )
                     )
                 else:
-                    errors.append(
-                        f"القطعة رقم {piece_index} أبعادها {_format_cm(width_cm)} × {_format_cm(height_cm)} سم "
-                        f"ولا تطابق أي قطعة متبقية في الطلب ضمن سماحية ±{_format_mm(DIMENSION_TOLERANCE_MM)} مم."
+                    issues.append(
+                        issue(
+                            CUT_SIZE_MISMATCH,
+                            CATEGORY_DIMENSIONS,
+                            target=contour_target(piece_index),
+                            params={
+                                "actual_width_cm": width_cm,
+                                "actual_height_cm": height_cm,
+                                "identity_unproven": True,
+                            },
+                        )
                     )
                 continue
 
@@ -1013,9 +1280,16 @@ def _match_pieces_to_order(pieces: list[dict[str, Any]], order: Any) -> list[dic
             for index in unmatched_indexes[:6]
         )
         suffix = " ..." if len(unmatched_indexes) > 6 else ""
-        errors.append(f"ملف DXF لا يحتوي على جميع قطع الطلب. القطع غير المطابقة/المفقودة: {preview}{suffix}")
-    if errors:
-        raise DxfImportError(errors)
+        issues.append(
+            issue(
+                PIECE_MISSING,
+                CATEGORY_IDENTITY,
+                target=file_target(),
+                params={"preview": f"{preview}{suffix}"},
+            )
+        )
+    if issues:
+        raise DxfImportError(issues=issues)
     return labeled
 
 
@@ -1026,31 +1300,59 @@ def _validate_sheet_contours(
     expected_height_mm: float,
 ) -> list[dict[str, Any]]:
     if not contours:
-        raise DxfImportError(f"لم يتم العثور على حدود ألواح صالحة في طبقة {SHEET_OUTLINE_LAYER}.")
-    errors: list[str] = []
+        raise DxfImportError(
+            issues=[
+                issue(
+                    SHEET_LAYER_MISSING,
+                    CATEGORY_LAYER,
+                    target=layer_target(SHEET_OUTLINE_LAYER),
+                )
+            ]
+        )
+    issues: list[DxfValidationIssue] = []
     sheets: list[dict[str, Any]] = []
     for index, contour in enumerate(contours, start=1):
         points = contour.get("points") or []
         if contour.get("branched"):
-            errors.append(f"حدود اللوح رقم {index} تحتوي على تفرع/خطوط زائدة. يجب أن تكون مستطيلاً واحدًا مغلقًا.")
+            issues.append(
+                issue(SHEET_BRANCHED, CATEGORY_SHEET, target=sheet_target(index, layer=SHEET_OUTLINE_LAYER))
+            )
             continue
         if not contour.get("closed"):
-            errors.append(f"حدود اللوح رقم {index} غير مغلقة. أغلق المسار على طبقة {SHEET_OUTLINE_LAYER} ثم أعد الرفع.")
+            issues.append(
+                issue(SHEET_OPEN, CATEGORY_SHEET, target=sheet_target(index, layer=SHEET_OUTLINE_LAYER))
+            )
             continue
         if not is_axis_aligned_rectangle(points, CONNECTIVITY_TOLERANCE_MM):
-            errors.append(f"حدود اللوح رقم {index} ليست مستطيلاً صحيحًا بمحاور مستقيمة على طبقة {SHEET_OUTLINE_LAYER}.")
+            issues.append(
+                issue(
+                    SHEET_NOT_RECTANGLE,
+                    CATEGORY_SHEET,
+                    target=sheet_target(index, layer=SHEET_OUTLINE_LAYER),
+                )
+            )
             continue
         min_x, min_y, max_x, max_y = bbox(points)
         width_mm = max_x - min_x
         height_mm = max_y - min_y
-        if (
-            abs(width_mm - expected_width_mm) > DIMENSION_TOLERANCE_MM
-            or abs(height_mm - expected_height_mm) > DIMENSION_TOLERANCE_MM
+        if not dimensions_match_exact(
+            width_mm / 10.0,
+            height_mm / 10.0,
+            expected_width_mm / 10.0,
+            expected_height_mm / 10.0,
         ):
-            errors.append(
-                f"أبعاد اللوح رقم {index} في DXF هي {_format_mm(width_mm)} × {_format_mm(height_mm)} مم، "
-                f"بينما الطلب يتطلب {_format_mm(expected_width_mm)} × {_format_mm(expected_height_mm)} مم "
-                f"(السماحية ±{_format_mm(DIMENSION_TOLERANCE_MM)} مم)."
+            issues.append(
+                issue(
+                    SHEET_SIZE_MISMATCH,
+                    CATEGORY_SHEET,
+                    target=sheet_target(index, layer=SHEET_OUTLINE_LAYER),
+                    params={
+                        "actual_width_mm": width_mm,
+                        "actual_height_mm": height_mm,
+                        "expected_width_mm": expected_width_mm,
+                        "expected_height_mm": expected_height_mm,
+                    },
+                )
             )
             continue
         sheets.append(
@@ -1063,8 +1365,8 @@ def _validate_sheet_contours(
                 "pieces": [],
             }
         )
-    if errors:
-        raise DxfImportError(errors)
+    if issues:
+        raise DxfImportError(issues=issues)
     sheets.sort(key=lambda row: (row["offset_y_mm"], row["offset_x_mm"]))
     for sheet_no, sheet in enumerate(sheets, start=1):
         sheet["sheet_no"] = sheet_no
@@ -1109,35 +1411,52 @@ def _to_plan_points(
 
 
 def _validated_cut_candidates(contours: list[dict[str, object]]) -> tuple[ContourCandidate, ...]:
-    errors: list[str] = []
+    issues: list[DxfValidationIssue] = []
     candidates: list[ContourCandidate] = []
     for contour_no, contour in enumerate(contours, start=1):
         raw_points = contour.get("points") or []
         if contour.get("branched"):
-            errors.append(f"مسار القطعة/الفتحة رقم {contour_no} يحتوي على تفرع أو خطوط زائدة ولا يشكل محيطًا واحدًا.")
+            issues.append(
+                issue(
+                    CUT_BRANCHED,
+                    CATEGORY_CONTOUR,
+                    target=contour_target(contour_no, layer=CUT_PATH_LAYER),
+                )
+            )
             continue
         if not contour.get("closed"):
-            errors.append(
-                f"مسار القطعة/الفتحة رقم {contour_no} غير مغلق على طبقة {CUT_PATH_LAYER}. "
-                "أغلق المحيط بالكامل ثم أعد الرفع."
+            issues.append(
+                issue(
+                    CUT_OPEN,
+                    CATEGORY_CONTOUR,
+                    target=contour_target(contour_no, layer=CUT_PATH_LAYER),
+                )
             )
             continue
         points_mm = simplify_polygon(raw_points, GEOMETRY_TOLERANCE_MM)
         geometry_errors = validate_polygon(points_mm, GEOMETRY_TOLERANCE_MM)
         if "self_intersection" in geometry_errors:
-            errors.append(
-                f"هندسة القطعة/الفتحة رقم {contour_no} تتقاطع مع نفسها. "
-                "عدّل المحيط بحيث لا تتقاطع أضلاعه/منحنياته."
+            issues.append(
+                issue(
+                    CUT_SELF_INTERSECTION,
+                    CATEGORY_CONTOUR,
+                    target=contour_target(contour_no, layer=CUT_PATH_LAYER),
+                )
             )
             continue
         if geometry_errors:
-            errors.append(
-                f"هندسة القطعة/الفتحة رقم {contour_no} غير صالحة: المحيط لا يكوّن مساحة قطع مغلقة صحيحة."
+            issues.append(
+                issue(
+                    CUT_INVALID_GEOMETRY,
+                    CATEGORY_CONTOUR,
+                    target=contour_target(contour_no, layer=CUT_PATH_LAYER),
+                    params={"geometry_errors": list(geometry_errors)},
+                )
             )
             continue
         candidates.append(ContourCandidate(key=contour_no, polygon=tuple(points_mm)))
-    if errors:
-        raise DxfImportError(errors)
+    if issues:
+        raise DxfImportError(issues=issues)
     return tuple(candidates)
 
 
@@ -1151,15 +1470,25 @@ def _resolve_cut_topology(contours: list[dict[str, object]], order: Any) -> Reso
             geometry_tolerance=GEOMETRY_TOLERANCE_MM,
         )
     except DxfTopologyError as exc:
-        details = ""
         if exc.code == "EXPECTED_PIECE_MISMATCH":
-            details = _cut_topology_mismatch_details(candidates, order)
+            raise DxfImportError(
+                issues=[
+                    _expected_piece_mismatch_issue(
+                        exc,
+                        candidates=candidates,
+                        order=order,
+                        kerf_mm=max(0.0, flt(order.kerf_mm)),
+                    )
+                ]
+            ) from exc
         raise DxfImportError(
-            _topology_error_message(
-                exc,
-                kerf_mm=max(0.0, flt(order.kerf_mm)),
-                details=details,
-            )
+            issues=[
+                _topology_error_issue(
+                    exc,
+                    kerf_mm=max(0.0, flt(order.kerf_mm)),
+                    order=order,
+                )
+            ]
         ) from exc
 
 
@@ -1171,14 +1500,19 @@ def _extract_pieces(
     usable_width_cm: float,
     usable_length_cm: float,
 ) -> list[dict[str, Any]]:
-    errors: list[str] = []
+    issues: list[DxfValidationIssue] = []
     pieces: list[dict[str, Any]] = []
     for piece_no, part in enumerate(topology.parts, start=1):
         points_mm = list(part.geometry.outer)
         target_sheet = _sheet_for_piece(points_mm, sheets)
         if target_sheet is None:
-            errors.append(
-                f"القطعة رقم {piece_no} ليست موجودة بالكامل داخل حدود لوح واحد من طبقة {SHEET_OUTLINE_LAYER}."
+            issues.append(
+                issue(
+                    PIECE_OUTSIDE_SHEET,
+                    CATEGORY_LAYOUT,
+                    target=contour_target(piece_no, layer=SHEET_OUTLINE_LAYER),
+                    params={"identity_unproven": True, "trim_mm": trim_mm},
+                )
             )
             continue
         plan_points = _to_plan_points(points_mm, sheet=target_sheet, trim_mm=trim_mm)
@@ -1190,8 +1524,13 @@ def _extract_pieces(
             max_y=usable_length_cm,
             tolerance=0.01,
         ):
-            errors.append(
-                f"القطعة رقم {piece_no} تتجاوز المساحة القابلة للاستخدام من اللوح بعد احتساب هامش التشذيب {_format_mm(trim_mm)} مم."
+            issues.append(
+                issue(
+                    PIECE_OUTSIDE_SHEET,
+                    CATEGORY_LAYOUT,
+                    target=contour_target(piece_no),
+                    params={"identity_unproven": True, "trim_mm": trim_mm},
+                )
             )
             continue
 
@@ -1221,8 +1560,8 @@ def _extract_pieces(
         piece["_material_area_m2"] = max(0.0, material_area_mm2) / 1_000_000.0
         pieces.append(piece)
         target_sheet["pieces"].append(piece)
-    if errors:
-        raise DxfImportError(errors)
+    if issues:
+        raise DxfImportError(issues=issues)
     return pieces
 
 
@@ -1258,16 +1597,26 @@ def _validate_piece_spacing(pieces: list[dict[str, Any]], *, kerf_mm: float) -> 
                 numeric_tolerance=KERF_NUMERIC_TOLERANCE_MM,
             )
         except DxfTopologyError as exc:
-            raise DxfImportError(_topology_error_message(exc, kerf_mm=kerf_mm)) from exc
+            raise DxfImportError(
+                issues=[_topology_error_issue(exc, kerf_mm=kerf_mm)]
+            ) from exc
 
 
 def _collect_extra_overlay_candidates(rows: list[dict[str, Any]]) -> tuple[ExtraOverlayCandidate, ...]:
-    errors: list[str] = []
+    issues: list[DxfValidationIssue] = []
     candidates: list[ExtraOverlayCandidate] = []
     next_key = 1
     for kind, layer_name in EXTRA_OVERLAY_LAYER_BY_KIND.items():
         source_paths, source_errors = _overlay_source_paths(rows, layer_name)
-        errors.extend(source_errors)
+        for message in source_errors:
+            issues.append(
+                issue(
+                    OVERLAY_INVALID_PATH,
+                    CATEGORY_OVERLAY,
+                    target=layer_target(layer_name),
+                    params={"layer": layer_name, "overlay_kind": kind, "message": message},
+                )
+            )
         for contour_no, (raw_points, closed_flag) in enumerate(
             source_paths,
             start=1,
@@ -1277,9 +1626,17 @@ def _collect_extra_overlay_candidates(rows: list[dict[str, Any]]) -> tuple[Extra
                 tolerance=GEOMETRY_TOLERANCE_MM,
             )
             if len(points_mm) < 2:
-                errors.append(
-                    f"علامة {layer_name} رقم {contour_no} أقصر من أن تُقرأ. "
-                    "ارسم خطًا أو مسارًا واضحًا ثم أعد الرفع."
+                issues.append(
+                    issue(
+                        OVERLAY_INVALID_PATH,
+                        CATEGORY_OVERLAY,
+                        target=DxfIssueTarget(
+                            kind="overlay",
+                            layer=layer_name,
+                            contour_no=contour_no,
+                        ),
+                        params={"layer": layer_name, "overlay_kind": kind},
+                    )
                 )
                 continue
             closed = bool(closed_flag) and len(points_mm) >= 3
@@ -1299,8 +1656,8 @@ def _collect_extra_overlay_candidates(rows: list[dict[str, Any]]) -> tuple[Extra
                 )
             )
             next_key += 1
-    if errors:
-        raise DxfImportError(errors)
+    if issues:
+        raise DxfImportError(issues=issues)
     return tuple(candidates)
 
 
@@ -1335,7 +1692,7 @@ def _attach_extra_overlays(
             host_margin=OVERLAY_HOST_MARGIN_MM,
         )
     except ExtraOverlayError as exc:
-        raise DxfImportError(_overlay_error_message(exc)) from exc
+        raise DxfImportError(issues=[_overlay_error_issue(exc)]) from exc
 
     sheets_by_no = {int(sheet["sheet_no"]): sheet for sheet in sheets}
     grouped: dict[int, list] = {}
@@ -1519,25 +1876,25 @@ def validate_imported_plan(
 def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
     """Parse and fully validate an uploaded production DXF without mutating it."""
     if not file_url:
-        raise DxfImportError("اختر ملف DXF ثم أعد المحاولة.")
+        raise DxfImportError(issues=[issue(FILE_REQUIRED, CATEGORY_FILE, target=file_target())])
 
     file_path = frappe.get_site_path("public", file_url.lstrip("/"))
     if not os.path.exists(file_path):
         file_path = frappe.get_site_path(file_url.lstrip("/"))
     if not os.path.exists(file_path):
-        raise DxfImportError("تعذر العثور على ملف DXF المرفوع على الخادم. أعد رفع الملف ثم حاول مرة أخرى.")
+        raise DxfImportError(issues=[issue(FILE_MISSING, CATEGORY_FILE, target=file_target())])
 
     rows, diagnostics, annotations = _read_normalized_geometry(file_path)
     trim_mm = max(0.0, flt(order.trim_margin_mm))
     full_board_width_cm = flt(order.board_width_cm) or flt(order.full_board_width_mm) / 10
     full_board_length_cm = flt(order.board_length_cm) or flt(order.full_board_length_mm) / 10
     if full_board_width_cm <= 0 or full_board_length_cm <= 0:
-        raise DxfImportError("أبعاد اللوح في الطلب غير صالحة. حدّد عرض وطول اللوح قبل رفع DXF.")
+        raise DxfImportError(issues=[issue(BOARD_INVALID, CATEGORY_SHEET)])
     trim_cm = trim_mm / 10.0
     usable_board_width_cm = max(0.0, full_board_width_cm - (2 * trim_cm))
     usable_board_length_cm = max(0.0, full_board_length_cm - (2 * trim_cm))
     if usable_board_width_cm <= 0 or usable_board_length_cm <= 0:
-        raise DxfImportError("هامش التشذيب أكبر من أبعاد اللوح ولا توجد مساحة صالحة للقص.")
+        raise DxfImportError(issues=[issue(TRIM_EXCEEDS_BOARD, CATEGORY_SHEET)])
 
     overlays = _collect_extra_overlay_candidates(rows)
     sheet_segments = _segments_for_layer(rows, SHEET_OUTLINE_LAYER)
@@ -1560,15 +1917,27 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
             sheet_segments = fallback_sheets
         if not cut_segments:
             cut_segments = fallback_cuts
-    missing: list[str] = []
+    missing_issues: list[DxfValidationIssue] = []
     if not sheet_segments:
-        missing.append(f"الطبقة {SHEET_OUTLINE_LAYER} الخاصة بحدود الألواح غير موجودة أو فارغة.")
+        missing_issues.append(
+            issue(
+                SHEET_LAYER_MISSING,
+                CATEGORY_LAYER,
+                target=layer_target(SHEET_OUTLINE_LAYER),
+                params={"details": _detected_layers_message(diagnostics)},
+            )
+        )
     if not cut_segments:
-        missing.append(f"الطبقة {CUT_PATH_LAYER} الخاصة بمسارات القطع غير موجودة أو فارغة.")
-    if missing:
-        missing.append(_detected_layers_message(diagnostics))
-        missing.extend(_missing_role_layer_guidance(diagnostics))
-        raise DxfImportError(missing)
+        missing_issues.append(
+            issue(
+                CUT_LAYER_MISSING,
+                CATEGORY_LAYER,
+                target=layer_target(CUT_PATH_LAYER),
+                params={"details": _detected_layers_message(diagnostics)},
+            )
+        )
+    if missing_issues:
+        raise DxfImportError(issues=missing_issues)
 
     sheet_contours = assemble_contours(sheet_segments, CONNECTIVITY_TOLERANCE_MM)
     sheets = _validate_sheet_contours(
@@ -1594,9 +1963,23 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
             piece["offcut_execution_party"] = "UNASSIGNED"
 
     expected_count = len(_expected_order_pieces(order))
-    if len(pieces) != expected_count:
+    actual_count = len(pieces)
+    if actual_count != expected_count:
+        count_code = PIECE_MISSING if actual_count < expected_count else EXTRA_CUT_PATH
         raise DxfImportError(
-            f"عدد مسارات القطع الفعلية في DXF هو {len(pieces)} بينما الطلب يتطلب {expected_count} قطعة بالضبط."
+            issues=[
+                issue(
+                    count_code,
+                    CATEGORY_IDENTITY,
+                    target=DxfIssueTarget(kind="order"),
+                    params={
+                        "actual_count": actual_count,
+                        "expected_count": expected_count,
+                        "missing_count": max(0, expected_count - actual_count),
+                        "extra_count": max(0, actual_count - expected_count),
+                    },
+                )
+            ]
         )
 
     _validate_piece_spacing(pieces, kerf_mm=max(0.0, flt(order.kerf_mm)))
@@ -1626,8 +2009,13 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
         validate_source_resource_homogeneity(sheets)
     except OffcutPolicyError as exc:
         raise DxfImportError(
-            "لا يمكن أن يحتوي نفس مصدر القص على قطع نقص وقطع من لوح كامل. "
-            "ضع قطع OFFCUT كمصدر مستقل عن ألواح MDF الكاملة."
+            issues=[
+                issue(
+                    MIXED_RESOURCE_SOURCE,
+                    CATEGORY_OFFCUT,
+                    params={"message": str(exc)},
+                )
+            ]
         ) from exc
 
     for sheet in sheets:
@@ -1705,7 +2093,18 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
         topology_by_piece_id=topology_by_piece_id,
     )
     if not snapshot["validation"]["is_valid"]:
-        raise DxfImportError(snapshot["validation"]["errors"])
+        # validation["errors"] remains presented strings for snapshot consumers;
+        # wrap as structured issues so business code stays authoritative.
+        raise DxfImportError(
+            issues=[
+                issue(
+                    LEGACY_MESSAGE,
+                    CATEGORY_WORKFLOW,
+                    params={"message": str(message)},
+                )
+                for message in (snapshot["validation"]["errors"] or [])
+            ]
+        )
     return snapshot
 
 

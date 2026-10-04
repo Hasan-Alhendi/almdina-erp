@@ -172,6 +172,7 @@ class TestDcoLocalRecoveryArchitecture(unittest.TestCase):
             "edge_long_left",
             "edge_width_top",
             "edge_width_bottom",
+            "edge_break",
             "edge_long_right_type_override",
             "edge_long_left_type_override",
             "edge_width_top_type_override",

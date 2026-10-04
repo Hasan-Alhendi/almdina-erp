@@ -42,7 +42,6 @@ def test_cost_fields_keep_permlevel_without_fixed_role_grants():
         "total_cost_usd",
         "customer_quote_total_usd",
         "customer_quote_status",
-        "internal_loss_cost_usd",
         "actual_cost_usd",
     }
     fields = {field["fieldname"]: field for field in schema["fields"]}

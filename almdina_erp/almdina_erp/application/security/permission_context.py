@@ -14,7 +14,7 @@ from almdina_erp.almdina_erp.domain.security.authorization import (
     normalize_capabilities,
 )
 
-PERMISSION_CONTEXT_VERSION = 6
+PERMISSION_CONTEXT_VERSION = 7
 
 
 def build_permission_context(

@@ -18,7 +18,6 @@
         "customer_quote_total_usd",
         "customer_quote_status",
         "material_variance_cost_usd",
-        "internal_loss_cost_usd",
         "actual_cost_usd",
     ];
     const PIECE_COST_FIELDS = [
@@ -496,7 +495,7 @@
         const wrapper = costWrapper(frm);
         if (!wrapper || !wrapper.find(".dco-cost-shell").length) return;
 
-        const selectors = ".dco-print-customer-invoice, .dco-secure-print-customer-invoice";
+        const selectors = ".dco-print-customer-invoice, .dco-secure-print-customer-invoice, .dco-whatsapp-send-invoice";
         if (!can(frm, "print_customer_invoice")) {
             wrapper.find(selectors).remove();
             return;

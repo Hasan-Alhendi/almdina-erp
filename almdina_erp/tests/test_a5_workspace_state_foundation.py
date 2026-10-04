@@ -176,6 +176,7 @@ class TestA5WorkspaceStateFoundation(unittest.TestCase):
         manifest = (ROOT / "frontend_assets.py").read_text(encoding="utf-8")
         registry = ASSET_REGISTRY.read_text(encoding="utf-8")
         store = "public/js/door_cutting_order/core/door_cutting_order_workspace_store.js"
+        keep_paint = "public/js/door_cutting_order/core/door_cutting_order_workspace_keep_paint.js"
         editor = "public/js/door_cutting_order/core/door_cutting_order_workspace_field_editor.js"
         plan_api = "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_api.js"
         plan_state = "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_state.js"
@@ -185,8 +186,10 @@ class TestA5WorkspaceStateFoundation(unittest.TestCase):
         plan_renderer = "door_cutting_order_cutting_plan_renderer.js"
         cost_presenter = "door_cutting_order_cost_presenter.js"
 
-        for asset in (store, editor, plan_api, plan_state, cost_api, cost_state, asset_owner):
+        for asset in (store, keep_paint, editor, plan_api, plan_state, cost_api, cost_state, asset_owner):
             self.assertEqual(manifest.count(asset), 1)
+        self.assertLess(manifest.index(store), manifest.index(keep_paint))
+        self.assertLess(manifest.index(keep_paint), manifest.index(editor))
         self.assertLess(manifest.index(store), manifest.index(editor))
         self.assertLess(manifest.index(editor), manifest.index(plan_api))
         self.assertLess(manifest.index(plan_api), manifest.index(plan_state))

@@ -18,6 +18,14 @@
             const section = String(event.currentTarget.dataset.section || "");
             if (callbacks.onEditSection) callbacks.onEditSection(section);
         });
+        $body.on(`click${EVENT_NAMESPACE}`, ".aps-whatsapp-create", event => {
+            event.preventDefault();
+            if (callbacks.onCreateWhatsApp) callbacks.onCreateWhatsApp();
+        });
+        $body.on(`click${EVENT_NAMESPACE}`, ".aps-whatsapp-reconnect", event => {
+            event.preventDefault();
+            if (callbacks.onReconnectWhatsApp) callbacks.onReconnectWhatsApp();
+        });
         lifecycle.track(() => $body.off(EVENT_NAMESPACE), "production-settings-interactions");
         return true;
     }

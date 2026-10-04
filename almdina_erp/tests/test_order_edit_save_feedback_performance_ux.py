@@ -25,6 +25,17 @@ class TestOrderEditSaveFeedbackPerformanceUx(unittest.TestCase):
         self.assertIn("scheduleDependentUxRefresh(frm);", lock)
         self.assertNotIn("refreshDependentUx(frm);", lock)
 
+    def test_dependent_refresh_owns_one_measurement_recover(self) -> None:
+        source = REVISION_UX.read_text(encoding="utf-8")
+        body = source.split("function refreshDependentUx(frm)", 1)[1].split(
+            "function scheduleDependentUxRefresh", 1
+        )[0]
+
+        self.assertIn("frm.__almdinaMeasurementRefreshOwned = true", body)
+        self.assertIn("fastEntry.recover(frm)", body)
+        self.assertNotIn("_dcoForceHtmlReplace = true", body.split("frm.__almdinaMeasurementRefreshOwned = false", 1)[0])
+        self.assertEqual(body.count("AlmdinaDoorCuttingFastEntry"), 1)
+
     def test_dependent_refresh_is_deduplicated_and_yields_before_rendering(self) -> None:
         source = REVISION_UX.read_text(encoding="utf-8")
         scheduler = source.split("function scheduleDependentUxRefresh", 1)[1].split(

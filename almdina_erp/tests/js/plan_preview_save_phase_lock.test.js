@@ -82,6 +82,7 @@ function environment() {
                 remove: () => { this.editor = false; this.fields.clear(); },
             };
         },
+        append() { return this; },
         prepend() {
             this.editor = true;
             this.fields = new Map(Object.entries(seed).map(([key, value]) => [key, new Control(key, value)]));

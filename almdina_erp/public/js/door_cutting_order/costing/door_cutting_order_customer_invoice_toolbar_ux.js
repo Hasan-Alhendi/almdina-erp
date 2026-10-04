@@ -4,7 +4,12 @@
     if (window.AlmdinaCustomerInvoiceToolbarUX) return;
 
     const CUSTOMER_CLASS = "dco-secure-print-customer-invoice";
+    const WHATSAPP_CLASS = "dco-whatsapp-send-invoice";
     const COST_API_FLAG = "__almdinaInvoiceButtonCoordinator";
+    const STATUS_METHOD = "almdina_erp.almdina_erp.services.whatsapp_service.get_whatsapp_delivery_status";
+    const SEND_METHOD = "almdina_erp.almdina_erp.services.whatsapp_service.send_order_invoice";
+    const INVOICE_CONFIRM_MESSAGE = "هل تريد إرسال الفاتورة للزبون؟";
+    const DISCONNECTED_MESSAGE = "لن يتم إرسال رسالة واتساب لأن الجلسة غير متصلة.";
 
     function can(frm, capability) {
         const permissions = window.AlmdinaPermissions;
@@ -53,6 +58,87 @@
             : currentIdentity(frm) === identity;
     }
 
+    function frontend() {
+        return window.AlmdinaFrontend || null;
+    }
+
+    function errorMessage(error, fallback) {
+        const api = frontend();
+        if (api && typeof api.errorMessage === "function") {
+            return api.errorMessage(error, fallback);
+        }
+        return String((error && error.message) || fallback || "");
+    }
+
+    function rpc(method, args, options) {
+        const api = frontend();
+        if (!api || typeof api.rpc !== "function") {
+            return Promise.reject(new Error("تعذر الاتصال بالخادم."));
+        }
+        return api.rpc(method, args, options || { freeze: true, freezeMessage: "جاري إرسال واتساب..." });
+    }
+
+    function sendInvoice(frm) {
+        const orderName = String(frm && frm.doc && frm.doc.name || "").trim();
+        if (!orderName) {
+            frappe.msgprint("تعذر تحديد الطلب لإرسال الفاتورة.");
+            return Promise.resolve(null);
+        }
+        return rpc(SEND_METHOD, { order_name: orderName }).then(result => {
+            const payload = result || {};
+            const ok = payload.ok !== false && payload.code !== "document_failed";
+            frappe.show_alert({
+                message: payload.message || (ok ? "تم إرسال فاتورة الزبون إلى الزبون عبر واتساب." : "تعذر إرسال ملف الفاتورة."),
+                indicator: ok ? "green" : "orange",
+            }, 8);
+            if (!ok && payload.message) {
+                frappe.msgprint({ title: "إرسال واتساب", message: payload.message, indicator: "orange" });
+            }
+            return payload;
+        }).catch(error => {
+            frappe.msgprint({
+                title: "تعذر إرسال واتساب",
+                message: errorMessage(error, "حدثت مشكلة أثناء إرسال فاتورة الزبون."),
+                indicator: "red",
+            });
+            return null;
+        });
+    }
+
+    function offerInvoiceSend(frm) {
+        if (!canPrint(frm) || frm.is_new()) return false;
+        const api = frontend();
+        if (!api || typeof api.rpc !== "function") {
+            frappe.msgprint({
+                title: "واتساب",
+                message: DISCONNECTED_MESSAGE,
+                indicator: "orange",
+            });
+            return false;
+        }
+        rpc(STATUS_METHOD, {}, { freeze: false }).then(status => {
+            const snapshot = status || {};
+            if (!snapshot.working) {
+                frappe.msgprint({
+                    title: "واتساب",
+                    message: snapshot.reason || DISCONNECTED_MESSAGE,
+                    indicator: "orange",
+                });
+                return;
+            }
+            frappe.confirm(INVOICE_CONFIRM_MESSAGE, () => {
+                sendInvoice(frm);
+            });
+        }).catch(error => {
+            frappe.msgprint({
+                title: "واتساب",
+                message: errorMessage(error, DISCONNECTED_MESSAGE),
+                indicator: "orange",
+            });
+        });
+        return true;
+    }
+
     function bindSecurePresenter(frm, created) {
         if (!created) return;
         const documents = window.AlmdinaFinancialDocuments;
@@ -76,6 +162,7 @@
 
         if (!visible) {
             button.remove();
+            actions.find(`.${WHATSAPP_CLASS}`).remove();
             return false;
         }
 
@@ -97,6 +184,38 @@
             .removeClass("is-plan-stale")
             .attr("aria-disabled", "false");
         bindSecurePresenter(frm, created);
+        ensureWhatsAppButton(frm, actions);
+        return true;
+    }
+
+    function ensureWhatsAppButton(frm, actions) {
+        const visible = !frm.is_new() && canPrint(frm);
+        let button = actions.find(`.${WHATSAPP_CLASS}`).first();
+        actions.find(`.${WHATSAPP_CLASS}`).slice(1).remove();
+        if (!visible) {
+            button.remove();
+            return false;
+        }
+        if (!button.length) {
+            button = $(uiButton({
+                label: __("إرسال الفاتورة عبر واتساب"),
+                variant: "secondary",
+                size: "btn-sm",
+                className: WHATSAPP_CLASS,
+            }));
+            const printButton = actions.find(`.${CUSTOMER_CLASS}`).first();
+            if (printButton.length) printButton.after(button);
+            else actions.prepend(button);
+        }
+        button
+            .prop("disabled", false)
+            .removeClass("is-plan-stale")
+            .attr("aria-disabled", "false")
+            .off("click.almdinaWhatsAppInvoice")
+            .on("click.almdinaWhatsAppInvoice", event => {
+                event.preventDefault();
+                offerInvoiceSend(frm);
+            });
         return true;
     }
 
@@ -228,8 +347,11 @@
     });
 
     window.AlmdinaCustomerInvoiceToolbarUX = Object.freeze({
+        INVOICE_CONFIRM_MESSAGE,
+        WHATSAPP_CLASS,
         install,
         ensureCostButton,
+        offerInvoiceSend,
         reconcileAuthoritativeCost,
         printCustomerInvoice,
     });

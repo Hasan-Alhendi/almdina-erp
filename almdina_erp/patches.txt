@@ -3,6 +3,7 @@
 almdina_erp.patches.v1_0.backfill_source_identity_and_validation
 almdina_erp.patches.v1_0.drop_obsolete_order_board_columns
 almdina_erp.patches.v1_0.backfill_revision_activation_state
+almdina_erp.patches.v1_0.retire_replacements_and_incidents
 
 [post_model_sync]
 almdina_erp.patches.v1_0.migrate_production_stage_library
@@ -24,3 +25,7 @@ almdina_erp.patches.v1_0.migrate_door_cutting_order_names
 almdina_erp.patches.v1_0.grant_resume_cancelled_order_capability
 almdina_erp.patches.v1_0.backfill_order_cutting_machine
 almdina_erp.patches.v1_0.null_legacy_order_cutting_machine
+almdina_erp.patches.v1_0.split_whatsapp_factory_settings_capabilities
+almdina_erp.patches.v1_0.drop_retired_replacement_columns
+almdina_erp.patches.v1_0.retire_factory_reports
+almdina_erp.patches.v1_0.retire_canonical_permission_runtime

@@ -177,7 +177,7 @@
 	};
 
 	const STATUS_COLORS = {
-		Draft: "#6b7280",
+		Draft: "#b45309",
 		"Pending Review": "#b45309",
 		Approved: "#172033",
 		"At Sharyoun": "#7c3aed",
@@ -301,15 +301,18 @@
 		const current = STATUS_STEP[frm.doc.status] || frm.doc.current_department || "";
 		const delivered = frm.doc.status === "Delivered";
 		const currentIndex = delivered ? steps.length - 1 : steps.indexOf(current);
-		return `<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:10px">${steps
+		return `<div class="dco-order-tracking-strip__path" role="list" aria-label="${frappe.utils.escape_html(String(__("مسار الطلب")))}">${steps
 			.map((step, index) => {
 				const done = delivered || index < currentIndex;
 				const active = !delivered && index === currentIndex;
-				const background = done ? "#15803d" : active ? "var(--alm-primary,#172033)" : "var(--control-bg,#f3f4f6)";
-				const color = done || active ? "#fff" : "var(--text-muted,#6b7280)";
-				return `<span style="display:inline-flex;align-items:center;gap:4px;background:${background};color:${color};border-radius:999px;padding:5px 12px;font-size:12px;font-weight:700;white-space:nowrap">${done ? "✓ " : ""}${__(step)}</span>`;
+				const state = done ? "done" : active ? "current" : "upcoming";
+				return (
+					`<span class="dco-order-tracking-strip__step is-${state}" role="listitem"${active ? ' aria-current="step"' : ""}>`
+					+ `${done ? "✓ " : ""}${frappe.utils.escape_html(String(__(step)))}`
+					+ `</span>`
+				);
 			})
-			.join('<span style="color:var(--text-muted,#9ca3af);font-size:13px">‹</span>')}</div>`;
+			.join('<span class="dco-order-tracking-strip__path-sep" aria-hidden="true">‹</span>')}</div>`;
 	}
 
 	function renderTrackingStrip(frm) {
@@ -322,22 +325,29 @@
 		const escape = (value) => frappe.utils.escape_html(String(value ?? ""));
 		const status = frm.doc.status || "Draft";
 		const color = STATUS_COLORS[status] || "#374151";
-		const facts = [
-			[__("القسم الحالي"), frm.doc.current_department || "-"],
-			[__("العامل"), currentAssigneeDisplayName(frm.doc.current_assignee)],
-			[__("حالة القسم"), frm.doc.department_status || "-"],
-		]
-			.map(
-				([label, value]) => `<div style="min-width:120px"><div style="font-size:11px;color:var(--text-muted,#6b7280);font-weight:700">${escape(label)}</div><div style="font-size:14px;font-weight:700">${escape(value)}</div></div>`
-			)
-			.join("");
+		const factItem = (label, value, kind = "value") => {
+			const text = String(value ?? "").trim() || "-";
+			const empty = text === "-";
+			return (
+				`<div class="dco-order-tracking-strip__item${empty ? " is-empty" : ""}">`
+				+ `<span class="dco-order-tracking-strip__label">${escape(label)}</span>`
+				+ `<span class="dco-order-tracking-strip__${kind}">${escape(text)}</span>`
+				+ `</div>`
+			);
+		};
+		const pathHtml = status === "Draft" ? "" : renderProgressSteps(frm);
 		const html = `
-			<div class="frappe-card dco-order-tracking-strip" style="border-inline-start:6px solid ${color}">
-				<div style="display:flex;flex-wrap:wrap;align-items:center;gap:14px 22px">
-					<div><div style="font-size:11px;color:var(--text-muted,#6b7280);font-weight:700">${__("حالة الطلب")}</div><div style="display:inline-block;background:${color};color:#fff;border-radius:999px;padding:5px 16px;font-size:15px;font-weight:800;margin-top:2px">${escape(statusLabel(status))}</div></div>
-					${facts}
+			<div class="frappe-card dco-order-tracking-strip" style="--dco-status-color:${escape(color)}" data-order-status="${escape(status)}">
+				<div class="dco-order-tracking-strip__layout">
+					<div class="dco-order-tracking-strip__lead">
+						${factItem(__("حالة الطلب"), statusLabel(status), "badge")}
+						${pathHtml}
+					</div>
+					<div class="dco-order-tracking-strip__facts">
+						${factItem(__("العامل"), currentAssigneeDisplayName(frm.doc.current_assignee))}
+						${factItem(__("حالة القسم"), frm.doc.department_status || "-")}
+					</div>
 				</div>
-				${renderProgressSteps(frm)}
 			</div>`;
 		const root = field.$wrapper.get(0);
 		if (!(root && root._almdinaTrackingStripHtml === html && field.$wrapper.children().length)) {
@@ -472,7 +482,11 @@
 			return;
 		}
 		// Standalone toolbar button — not nested under «صالة الإنتاج».
-		frm.add_custom_button(__("إرسال للإنتاج"), () => openDispatchDialog(frm));
+		// Keep the Frappe button reference; never re-find by visible label.
+		const button = frm.add_custom_button(__("إرسال للإنتاج"), () => openDispatchDialog(frm));
+		if (button && typeof button.addClass === "function") {
+			button.addClass("dco-dispatch-toolbar-button");
+		}
 	}
 
 	function revertTargetsKey(frm) {

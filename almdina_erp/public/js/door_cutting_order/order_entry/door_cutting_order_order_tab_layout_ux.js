@@ -3,7 +3,11 @@
 
     if (window.AlmdinaOrderTabLayoutUX) return;
 
-    const STYLE_ID = "dco-order-tab-layout-css";
+    const STYLE_ID = "dco-order-tab-layout-css-v3";
+    const LEGACY_STYLE_IDS = Object.freeze([
+        "dco-order-tab-layout-css",
+        "dco-order-tab-layout-css-v2",
+    ]);
     const ROOT_CLASS = "dco-order-tab-layout";
 
     const SECTION_COPY = Object.freeze({
@@ -30,6 +34,12 @@
         edge_color: "أدخل لون القشاط",
     });
 
+    const INTAKE_ROWS = Object.freeze({
+        pair: Object.freeze(["customer", "order_date"]),
+        notes: Object.freeze(["order_notes"]),
+        machine: Object.freeze(["order_cutting_machine"]),
+    });
+
     const MATERIAL_ROWS = Object.freeze({
         primary: Object.freeze([
             "board_description",
@@ -48,15 +58,19 @@
     }
 
     function installStyles() {
+        LEGACY_STYLE_IDS.forEach((id) => {
+            const legacy = document.getElementById(id);
+            if (legacy) legacy.remove();
+        });
         if (document.getElementById(STYLE_ID)) return;
         $("head").append(`
             <style id="${STYLE_ID}">
                 .${ROOT_CLASS} .layout-main-section .form-page,
                 .${ROOT_CLASS} .layout-main-section-wrapper .form-page {
-                    max-width: 1440px !important;
+                    max-width: var(--dco-tab-shell-max, 1440px) !important;
                     margin-inline: auto !important;
                     width: 100% !important;
-                    padding-inline: 20px !important;
+                    padding-inline: var(--dco-tab-content-gutter, 20px) !important;
                     box-sizing: border-box !important;
                 }
                 .${ROOT_CLASS} .dco-status-strip,
@@ -65,7 +79,8 @@
                 .${ROOT_CLASS} .form-section:has([data-fieldname="operator_status_strip"]) {
                     width: 100% !important;
                     max-width: none !important;
-                    margin: 0 0 6px !important;
+                    /* Vertical rhythm between sections comes from the tab-pane row-gap token. */
+                    margin: 0 !important;
                     padding: 0 !important;
                     border-bottom: none !important;
                 }
@@ -97,9 +112,9 @@
                     width: 100% !important;
                     max-width: none !important;
                     margin: 0 !important;
-                    padding-block: 14px 16px !important;
-                    padding-inline: 44px !important;
-                    border-radius: 14px !important;
+                    padding-block: 8px 9px !important;
+                    padding-inline: var(--dco-tab-card-inset-inline, 44px) !important;
+                    border-radius: 12px !important;
                     border-top: 1px solid var(--border-color,#dfe3e8) !important;
                     border-inline-end: 1px solid var(--border-color,#dfe3e8) !important;
                     border-bottom: 1px solid var(--border-color,#dfe3e8) !important;
@@ -112,6 +127,30 @@
                     width: 100% !important;
                     box-sizing: border-box !important;
                 }
+                .${ROOT_CLASS} .tab-pane.show.active:has(.dco-order-intake-card) {
+                    display: grid !important;
+                    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+                    column-gap: 14px;
+                    row-gap: var(--dco-section-stack-gap, 8px);
+                    width: 100% !important;
+                    max-width: 100% !important;
+                    align-items: stretch;
+                    box-sizing: border-box;
+                }
+                .${ROOT_CLASS} .tab-pane.show.active:has(.dco-order-intake-card) > .form-section:not(.dco-order-intake-card):not(.dco-material-edge-card) {
+                    grid-column: 1 / -1;
+                    width: 100% !important;
+                    max-width: 100% !important;
+                    min-width: 0;
+                }
+                .${ROOT_CLASS} .tab-pane.show.active:has(.dco-order-intake-card) > .dco-order-intake-card {
+                    grid-column: 1;
+                    min-width: 0;
+                }
+                .${ROOT_CLASS} .tab-pane.show.active:has(.dco-order-intake-card) > .dco-material-edge-card {
+                    grid-column: 2;
+                    min-width: 0;
+                }
                 .${ROOT_CLASS} [data-fieldname="order_details_section"],
                 .${ROOT_CLASS} [data-fieldname="board_section"],
                 .${ROOT_CLASS} [data-fieldname="pieces_section"] {
@@ -119,48 +158,47 @@
                 }
                 .${ROOT_CLASS} .dco-order-intake-card,
                 .${ROOT_CLASS} .dco-material-edge-card {
-                    margin-block: 6px 10px !important;
-                    padding-block: 14px 16px !important;
-                    padding-inline: 44px !important;
-                    border: 1px solid var(--border-color,#dfe3e8) !important;
-                    border-radius: 14px !important;
-                    background: var(--card-bg,var(--fg-color,#fff)) !important;
-                    box-shadow: 0 2px 10px rgba(15,23,42,.035) !important;
-                }
-                .${ROOT_CLASS} .dco-order-intake-card {
-                    display: block !important;
+                    margin-block: 0 !important;
+                    padding-block: var(--dco-tab-card-inset-block, 12px 14px) !important;
+                    padding-inline: var(--dco-tab-card-inset-inline, 44px) !important;
+                    border: 1px solid var(--alm-card-border,#e4e8ee) !important;
+                    border-radius: var(--alm-radius-card,16px) !important;
+                    background: var(--alm-card,#fff) !important;
+                    box-shadow: var(--alm-shadow-card,0 8px 24px rgba(15,23,42,.045)) !important;
+                    display: flex !important;
+                    flex-direction: column !important;
+                    min-height: 0;
+                    height: 100%;
                 }
                 .${ROOT_CLASS} .dco-order-intake-card > .dco-order-section-heading,
                 .${ROOT_CLASS} .dco-material-edge-card > .dco-order-section-heading {
                     width: 100%;
                     box-sizing: border-box;
-                }
-                .${ROOT_CLASS} .dco-material-edge-card {
-                    display: block !important;
+                    flex: 0 0 auto;
                 }
                 .${ROOT_CLASS} .dco-order-intake-card > .section-body {
-                    display: grid !important;
-                    grid-template-columns: minmax(0, 2fr) minmax(220px, 1fr);
-                    gap: 12px 16px;
+                    display: flex !important;
+                    flex-direction: column !important;
+                    flex: 1 1 auto;
                     direction: rtl;
-                    align-items: start;
                     width: 100% !important;
                     max-width: none !important;
                     margin: 0 !important;
                     box-sizing: border-box;
+                    gap: 10px;
                 }
                 .${ROOT_CLASS} .dco-order-intake-card > .section-body > .dco-order-section-heading {
-                    grid-column: 1 / -1;
-                    grid-row: 1;
+                    margin-bottom: 0;
+                    flex: 0 0 auto;
                 }
                 .${ROOT_CLASS} .dco-measurements-card {
-                    margin-block: 10px 0 !important;
-                    padding-block: 12px 0 !important;
-                    padding-inline: 44px !important;
-                    border: 0 !important;
-                    border-radius: 0 !important;
-                    background: transparent !important;
-                    box-shadow: none !important;
+                    margin-block: 0 0 !important;
+                    padding-block: var(--dco-tab-card-inset-block, 12px 14px) !important;
+                    padding-inline: var(--dco-tab-card-inset-inline, 44px) !important;
+                    border: 1px solid var(--alm-card-border, #e4e8ee) !important;
+                    border-radius: var(--alm-radius-card, 16px) !important;
+                    background: var(--alm-card, #fff) !important;
+                    box-shadow: var(--alm-shadow-card, 0 8px 24px rgba(15, 23, 42, .045)) !important;
                 }
                 .${ROOT_CLASS} .dco-order-section-heading {
                     display: flex;
@@ -178,7 +216,7 @@
                 .${ROOT_CLASS} .dco-order-intake-card.form-section,
                 .${ROOT_CLASS} .dco-material-edge-card.form-section,
                 .${ROOT_CLASS} .dco-measurements-card.form-section {
-                    padding-inline: 44px !important;
+                    padding-inline: var(--dco-tab-card-inset-inline, 44px) !important;
                 }
                 .${ROOT_CLASS} .dco-order-intake-card .frappe-control,
                 .${ROOT_CLASS} .dco-material-edge-card .frappe-control,
@@ -241,30 +279,59 @@
                     width: 100% !important;
                 }
 
-                /* Order intake: customer/date, notes, then cutting machine on one row. */
+                /* Order intake rows — explicit DOM rows (see ensureIntakeRows). */
                 .${ROOT_CLASS} .dco-order-intake-card > .section-body > .form-column {
-                    display: contents !important;
-                    padding: 0 !important;
-                    margin: 0 !important;
+                    display: none !important;
+                }
+                .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="important_note_preview"],
+                .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="important_note_comment"] {
+                    display: none !important;
+                }
+                .${ROOT_CLASS} .dco-intake-row {
+                    display: grid;
+                    direction: rtl;
+                    gap: 10px 16px;
+                    align-items: start;
+                    width: 100%;
+                    flex: 0 0 auto;
+                }
+                .${ROOT_CLASS} .dco-intake-row + .dco-intake-row {
+                    margin-top: 0;
+                }
+                .${ROOT_CLASS} .dco-intake-row--machine {
+                    margin-top: 2px;
+                }
+                .${ROOT_CLASS} .dco-intake-row--pair {
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                }
+                .${ROOT_CLASS} .dco-intake-row--notes,
+                .${ROOT_CLASS} .dco-intake-row--machine {
+                    grid-template-columns: minmax(0, 1fr);
+                }
+                .${ROOT_CLASS} .dco-intake-row > .frappe-control,
+                .${ROOT_CLASS} .dco-intake-row > .form-group {
+                    min-width: 0;
+                    width: 100% !important;
+                    max-width: none !important;
+                    margin-bottom: 0 !important;
+                }
+                .${ROOT_CLASS} .dco-intake-row--notes [data-fieldname="order_notes"] .form-group,
+                .${ROOT_CLASS} .dco-intake-row--notes [data-fieldname="order_notes"] .frappe-control,
+                .${ROOT_CLASS} .dco-intake-row--notes [data-fieldname="order_notes"] .control-input-wrapper,
+                .${ROOT_CLASS} .dco-intake-row--notes [data-fieldname="order_notes"] textarea {
+                    width: 100% !important;
                     max-width: none !important;
                 }
-                .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="customer"] {
-                    grid-column: 1;
-                    grid-row: 2;
-                }
-                .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="order_date"] {
-                    grid-column: 2;
-                    grid-row: 2;
-                }
-                .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="order_notes"] {
-                    grid-column: 1 / -1;
-                    grid-row: 3;
-                }
-                .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="order_cutting_machine"] {
-                    grid-column: 1 / -1;
-                    grid-row: 4;
+                .${ROOT_CLASS} .dco-intake-row--machine [data-fieldname="order_cutting_machine"] .form-group,
+                .${ROOT_CLASS} .dco-intake-row--machine [data-fieldname="order_cutting_machine"] .frappe-control,
+                .${ROOT_CLASS} .dco-intake-row--machine [data-fieldname="order_cutting_machine"] .dco-cutting-machine-host {
+                    width: 100% !important;
                     max-width: none !important;
+                }
+                .${ROOT_CLASS} .dco-intake-row--machine [data-fieldname="order_cutting_machine"] .dco-cutting-machine-row {
                     width: auto;
+                    max-width: 100%;
+                    flex-wrap: wrap;
                 }
 
                 /*
@@ -274,20 +341,30 @@
                  * by Frappe. This guarantees the exact visual rows requested.
                  */
                 .${ROOT_CLASS} .dco-material-edge-card > .section-body {
-                    display: block !important;
+                    display: flex !important;
+                    flex-direction: column !important;
+                    flex: 1 1 auto;
+                    justify-content: space-between;
+                    gap: 12px;
+                    min-height: 0;
                 }
                 .${ROOT_CLASS} .dco-material-edge-card > .section-body > .form-column {
                     display: none !important;
                 }
+                .${ROOT_CLASS} .dco-material-edge-card > .section-body > .dco-order-section-heading {
+                    flex: 0 0 auto;
+                    margin-bottom: 0;
+                }
                 .${ROOT_CLASS} .dco-material-row {
                     display: grid;
                     direction: rtl;
-                    gap: 12px 14px;
+                    gap: 10px 14px;
                     align-items: start;
                     width: 100%;
+                    flex: 0 0 auto;
                 }
                 .${ROOT_CLASS} .dco-material-row + .dco-material-row {
-                    margin-top: 12px;
+                    margin-top: 0;
                 }
                 .${ROOT_CLASS} .dco-material-row--primary {
                     grid-template-columns: minmax(0,2fr) minmax(140px,1fr) minmax(140px,1fr);
@@ -314,13 +391,13 @@
                 }
                 .${ROOT_CLASS} [data-fieldname="order_notes"] textarea {
                     min-height: 38px !important;
-                    max-height: 38px !important;
+                    max-height: 72px !important;
                     height: 38px !important;
                     resize: none !important;
-                    overflow-x: auto !important;
-                    overflow-y: hidden !important;
-                    line-height: 1.35 !important;
-                    white-space: nowrap !important;
+                    overflow-x: hidden !important;
+                    overflow-y: auto !important;
+                    line-height: 1.45 !important;
+                    white-space: normal !important;
                 }
                 .${ROOT_CLASS} .dco-order-notes-locked textarea:disabled,
                 .${ROOT_CLASS} .dco-order-notes-locked textarea[readonly],
@@ -356,8 +433,20 @@
                 }
 
                 @media (max-width: 980px) {
-                    .${ROOT_CLASS} .dco-order-intake-card > .section-body {
-                        grid-template-columns: minmax(0, 1.5fr) minmax(190px, 1fr);
+                    .${ROOT_CLASS} .tab-pane.show.active:has(.dco-order-intake-card) {
+                        grid-template-columns: 1fr;
+                        align-items: start;
+                    }
+                    .${ROOT_CLASS} .tab-pane.show.active:has(.dco-order-intake-card) > .dco-order-intake-card,
+                    .${ROOT_CLASS} .tab-pane.show.active:has(.dco-order-intake-card) > .dco-material-edge-card {
+                        grid-column: 1 / -1;
+                        height: auto;
+                    }
+                    .${ROOT_CLASS} .dco-material-edge-card > .section-body {
+                        justify-content: flex-start;
+                    }
+                    .${ROOT_CLASS} .dco-intake-row--pair {
+                        grid-template-columns: 1fr;
                     }
                     .${ROOT_CLASS} .dco-material-row--primary {
                         grid-template-columns: minmax(0,1.5fr) minmax(120px,1fr) minmax(120px,1fr);
@@ -366,30 +455,31 @@
                 @media (max-width: 700px) { 
                     .${ROOT_CLASS} .layout-main-section .form-page,
                     .${ROOT_CLASS} .layout-main-section-wrapper .form-page {
-                        padding-inline: 12px !important;
+                        padding-inline: var(--dco-tab-content-gutter, 12px) !important;
                     }
                     .${ROOT_CLASS} .dco-order-intake-card,
                     .${ROOT_CLASS} .dco-material-edge-card {
-                        padding-block: 12px 14px !important;
-                        padding-inline: 32px !important;
+                        padding-block: var(--dco-tab-card-inset-block, 10px 12px) !important;
+                        padding-inline: var(--dco-tab-card-inset-inline, 32px) !important;
                         border-radius: 12px !important;
+                        height: auto;
                     }
                     .${ROOT_CLASS} [data-fieldname="operator_status_strip"] .dco-order-tracking-strip,
                     .${ROOT_CLASS} [data-fieldname="operator_status_strip"] .frappe-card {
-                        padding-block: 12px 14px !important;
-                        padding-inline: 32px !important;
+                        padding-block: 7px 8px !important;
+                        padding-inline: var(--dco-tab-card-inset-inline, 32px) !important;
                         border-radius: 12px !important;
                     }
                     .${ROOT_CLASS} .dco-order-intake-card > .section-body {
+                        gap: 8px;
+                    }
+                    .${ROOT_CLASS} .dco-intake-row--pair {
                         grid-template-columns: 1fr;
-                        gap: 9px;
                     }
                     .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="customer"],
                     .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="order_date"],
                     .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="order_notes"],
                     .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="order_cutting_machine"] {
-                        grid-column: 1;
-                        grid-row: auto;
                         max-width: none;
                     }
                     .${ROOT_CLASS} .dco-material-row--primary {
@@ -406,6 +496,30 @@
                         padding-bottom: 9px;
                     }
                     .${ROOT_CLASS} .dco-order-section-heading__subtitle { max-width: 240px; }
+                    .${ROOT_CLASS} .layout-main-section .form-page:has(.dco-measurements-mobile-scroll),
+                    .${ROOT_CLASS} .layout-main-section-wrapper .form-page:has(.dco-measurements-mobile-scroll) {
+                        padding-inline: 20px !important;
+                    }
+                    .${ROOT_CLASS} .dco-measurements-card.dco-measurements-mobile-scroll,
+                    .${ROOT_CLASS} .dco-measurements-card.form-section.dco-measurements-mobile-scroll {
+                        padding-inline: 0 !important;
+                        margin-inline: 0 !important;
+                        width: 100% !important;
+                        max-width: none !important;
+                    }
+                    .${ROOT_CLASS} .dco-measurements-card.dco-measurements-mobile-scroll > .section-body,
+                    .${ROOT_CLASS} .dco-measurements-card.dco-measurements-mobile-scroll [data-fieldname="pieces_fast_entry"],
+                    .${ROOT_CLASS} .dco-measurements-card.dco-measurements-mobile-scroll [data-fieldname="pieces_fast_entry"] .frappe-control,
+                    .${ROOT_CLASS} .dco-measurements-card.dco-measurements-mobile-scroll [data-fieldname="pieces_fast_entry"] .control-input-wrapper {
+                        width: 100% !important;
+                        max-width: none !important;
+                        margin-inline: 0 !important;
+                        padding-inline: 0 !important;
+                        box-sizing: border-box !important;
+                    }
+                    .${ROOT_CLASS} .dco-measurements-card.dco-measurements-mobile-scroll > .dco-order-section-heading {
+                        padding-inline: 0 !important;
+                    }
                 }
             </style>
         `);
@@ -460,6 +574,65 @@
             ${meta}
         `;
         return section;
+    }
+
+    function removeTopRowWrapper(frm) {
+        const root = formRoot(frm);
+        if (!root) return;
+        root.querySelectorAll(".dco-order-top-row").forEach((row) => {
+            const parent = row.parentElement;
+            if (!parent) return;
+            while (row.firstElementChild) {
+                parent.insertBefore(row.firstElementChild, row);
+            }
+            row.remove();
+        });
+    }
+
+    function ensureIntakeRow(body, name) {
+        let row = body.querySelector(`:scope > .dco-intake-row--${name}`);
+        if (!row) {
+            row = document.createElement("div");
+            row.className = `dco-intake-row dco-intake-row--${name}`;
+            body.appendChild(row);
+        }
+        return row;
+    }
+
+    function ensureIntakeRows(frm) {
+        const section = sectionNode(frm, "order_details_section");
+        const body = section && section.querySelector(":scope > .section-body");
+        if (!body) return;
+
+        const heading = body.querySelector(":scope > .dco-order-section-heading");
+        const pair = ensureIntakeRow(body, "pair");
+        const notes = ensureIntakeRow(body, "notes");
+        const machine = ensureIntakeRow(body, "machine");
+
+        let anchor = heading || null;
+        [pair, notes, machine].forEach((row) => {
+            if (anchor) {
+                if (row.previousElementSibling !== anchor) {
+                    anchor.insertAdjacentElement("afterend", row);
+                }
+                anchor = row;
+            } else if (row.parentElement !== body) {
+                body.appendChild(row);
+            }
+        });
+
+        INTAKE_ROWS.pair.forEach((fieldname) => {
+            const node = fieldNode(frm, fieldname);
+            if (node && node.parentElement !== pair) pair.appendChild(node);
+        });
+        INTAKE_ROWS.notes.forEach((fieldname) => {
+            const node = fieldNode(frm, fieldname);
+            if (node && node.parentElement !== notes) notes.appendChild(node);
+        });
+        INTAKE_ROWS.machine.forEach((fieldname) => {
+            const node = fieldNode(frm, fieldname);
+            if (node && node.parentElement !== machine) machine.appendChild(node);
+        });
     }
 
     function ensureMaterialRow(body, name) {
@@ -620,6 +793,8 @@
         root.classList.add(ROOT_CLASS);
         ensureStatusShell(frm);
         Object.entries(SECTION_COPY).forEach(([fieldname, config]) => ensureHeading(frm, fieldname, config));
+        removeTopRowWrapper(frm);
+        ensureIntakeRows(frm);
         ensureMaterialRows(frm);
         keepEmptyFieldsVisible(frm);
         autoGrowNotes(frm);

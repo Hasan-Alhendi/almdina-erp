@@ -74,7 +74,6 @@ COST_LEVEL_ONE_FIELDS = {
     "edge_cost_usd",
     "total_cost_usd",
     "material_variance_cost_usd",
-    "internal_loss_cost_usd",
     "actual_cost_usd",
 }
 

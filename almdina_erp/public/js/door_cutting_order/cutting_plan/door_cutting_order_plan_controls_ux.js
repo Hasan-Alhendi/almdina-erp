@@ -50,6 +50,10 @@
 
     function workspaceData(frm) {
         const state = workspaceSnapshot(frm);
+        const keeper = window.AlmdinaWorkspaceKeepPaint;
+        if (keeper && typeof keeper.presentationData === "function") {
+            return keeper.presentationData(state);
+        }
         return state && state.status === "ready" ? state.data : null;
     }
 

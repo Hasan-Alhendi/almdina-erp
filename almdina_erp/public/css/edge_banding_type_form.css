@@ -1,0 +1,311 @@
+/*
+ * Edge Banding Type — add/edit form presentation.
+ * Scoped to body.ebt-form-active (set only on Form/Edge Banding Type).
+ */
+
+body.ebt-form-active [id="page-Edge Banding Type"].page-container {
+    background: var(--alm-canvas, #eef1f6);
+}
+
+body.ebt-form-active [id="page-Edge Banding Type"] .layout-main-section {
+    background: transparent !important;
+    padding: 12px 16px 28px !important;
+    border: 0 !important;
+    box-shadow: none !important;
+}
+
+body.ebt-form-active .form-page > .form-layout {
+    display: none !important;
+}
+
+body.ebt-form-active .form-page {
+    max-width: 980px;
+    margin-inline: auto;
+}
+
+body.ebt-form-active .page-head.ebt-form-page-head .page-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+body.ebt-form-active .page-head.ebt-form-page-head .primary-action {
+    background: var(--alm-accent, #2563eb) !important;
+    border-color: var(--alm-accent, #2563eb) !important;
+    color: #fff !important;
+    font-weight: 800;
+    border-radius: 10px;
+    min-height: 38px;
+    padding-inline: 16px;
+}
+
+body.ebt-form-active .page-head.ebt-form-page-head .btn-secondary {
+    background: #fff !important;
+    border: 1px solid #d0d5dd !important;
+    color: #344054 !important;
+    font-weight: 750;
+    border-radius: 10px;
+    min-height: 38px;
+    padding-inline: 14px;
+}
+
+body.ebt-form-active .form-layout .form-page > .form-section.ebt-form-section-empty,
+body.ebt-form-active .form-layout .form-page > .form-section.hide-control {
+    display: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    min-height: 0 !important;
+}
+
+body.ebt-form-active .ebt-form-page {
+    direction: rtl;
+}
+
+body.ebt-form-active .ebt-form-card {
+    background: var(--alm-card, #fff);
+    border: 1px solid var(--alm-card-border, #e4e8ee);
+    border-radius: 16px;
+    box-shadow: 0 10px 28px rgba(16, 24, 40, 0.06);
+    padding: 22px 22px 18px;
+}
+
+body.ebt-form-active .ebt-form-hero {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+body.ebt-form-active .ebt-form-hero-icon {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    color: var(--alm-accent, #2563eb);
+    background: var(--alm-accent-soft, #eff6ff);
+    border: 1px solid #dbeafe;
+}
+
+body.ebt-form-active .ebt-form-hero-icon .icon,
+body.ebt-form-active .ebt-form-hero-icon .es-icon {
+    width: 18px;
+    height: 18px;
+}
+
+body.ebt-form-active .ebt-form-hero-title {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 800;
+    color: #101828;
+    line-height: 1.35;
+}
+
+body.ebt-form-active .ebt-form-hero-subtitle {
+    margin: 4px 0 0;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #667085;
+    line-height: 1.55;
+}
+
+body.ebt-form-active .ebt-form-grid {
+    display: grid;
+    gap: 14px 16px;
+    margin-bottom: 14px;
+}
+
+body.ebt-form-active .ebt-form-grid:empty {
+    display: none !important;
+    margin: 0 !important;
+}
+
+body.ebt-form-active .ebt-form-fields {
+    margin: 0;
+    padding: 0;
+}
+
+body.ebt-form-active .ebt-form-callout + .ebt-form-fields:has(.frappe-control) {
+    margin-top: 12px;
+}
+
+body.ebt-form-active .ebt-form-grid--2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+body.ebt-form-active .ebt-form-grid--3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+body.ebt-form-active .ebt-form-grid .frappe-control {
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+body.ebt-form-active .ebt-form-grid .form-group {
+    margin: 0 !important;
+}
+
+body.ebt-form-active .ebt-form-grid label.control-label {
+    font-size: 12px;
+    font-weight: 750;
+    color: #344054;
+    margin-bottom: 6px;
+}
+
+body.ebt-form-active .ebt-form-grid .reqd:after {
+    color: #d92d20;
+}
+
+body.ebt-form-active .ebt-form-grid .form-control {
+    min-height: 40px;
+    border-radius: 10px;
+    border-color: #d0d5dd;
+    font-weight: 650;
+}
+
+body.ebt-form-active .ebt-form-grid [data-fieldname="english_name"] .form-control::placeholder {
+    color: #98a2b3;
+    font-weight: 600;
+}
+
+body.ebt-form-active .ebt-form-grid [data-fieldname="width_cm"] .control-input-wrapper,
+body.ebt-form-active .ebt-form-grid [data-fieldname="thickness_mm"] .control-input-wrapper,
+body.ebt-form-active .ebt-form-grid [data-fieldname="rate_usd_per_meter"] .control-input-wrapper {
+    position: relative;
+}
+
+body.ebt-form-active .ebt-form-grid [data-fieldname="width_cm"] .control-input-wrapper::after {
+    content: "سم";
+    position: absolute;
+    inset-inline-start: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 11px;
+    font-weight: 700;
+    color: #98a2b3;
+    pointer-events: none;
+}
+
+body.ebt-form-active .ebt-form-grid [data-fieldname="thickness_mm"] .control-input-wrapper::after {
+    content: "مم";
+    position: absolute;
+    inset-inline-start: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--alm-accent, #2563eb);
+    pointer-events: none;
+}
+
+body.ebt-form-active .ebt-form-grid [data-fieldname="width_cm"] .form-control,
+body.ebt-form-active .ebt-form-grid [data-fieldname="thickness_mm"] .form-control {
+    padding-inline-start: 34px;
+}
+
+body.ebt-form-active .ebt-form-grid [data-fieldname="rate_usd_per_meter"] .control-input-wrapper::before {
+    content: "USD $";
+    position: absolute;
+    inset-inline-start: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 10px;
+    font-weight: 800;
+    color: #15803d;
+    background: #ecfdf3;
+    border: 1px solid #bbf7d0;
+    border-radius: 6px;
+    padding: 2px 6px;
+    pointer-events: none;
+    z-index: 1;
+}
+
+body.ebt-form-active .ebt-form-grid [data-fieldname="rate_usd_per_meter"] .form-control {
+    padding-inline-start: 62px;
+}
+
+body.ebt-form-active .ebt-form-callout {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin: 0;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid #bfdbfe;
+    background: #eff6ff;
+    color: #1e3a8a;
+    font-size: 12px;
+    font-weight: 650;
+    line-height: 1.65;
+}
+
+body.ebt-form-active .ebt-form-callout-icon {
+    flex: 0 0 auto;
+    line-height: 0;
+    color: var(--alm-accent, #2563eb);
+}
+
+body.ebt-form-active .ebt-form-callout strong {
+    font-weight: 800;
+}
+
+body.ebt-form-active .ebt-form-disabled-row {
+    margin-bottom: 16px;
+}
+
+body.ebt-form-active .ebt-form-disabled-row .checkbox {
+    margin: 0;
+}
+
+body.ebt-form-active .ebt-form-disabled-row .label-area {
+    font-size: 13px;
+    font-weight: 700;
+    color: #344054;
+}
+
+body.ebt-form-active .ebt-form-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+}
+
+body.ebt-form-active .ebt-form-fields:has(.frappe-control) + .ebt-form-footer {
+    margin-top: 8px;
+    padding-top: 14px;
+    border-top: 1px solid #eef2f6;
+}
+
+body.ebt-form-active .ebt-form-footer .btn {
+    min-height: 40px;
+    padding-inline: 18px;
+    font-size: 13px;
+    font-weight: 800;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+
+@media (max-width: 900px) {
+    body.ebt-form-active .ebt-form-grid--2,
+    body.ebt-form-active .ebt-form-grid--3 {
+        grid-template-columns: 1fr;
+    }
+
+    body.ebt-form-active [id="page-Edge Banding Type"] .layout-main-section {
+        padding-inline: 10px !important;
+    }
+
+    body.ebt-form-active .ebt-form-card {
+        padding: 16px 14px;
+    }
+}

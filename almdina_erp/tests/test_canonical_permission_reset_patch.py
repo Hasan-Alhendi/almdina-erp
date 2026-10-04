@@ -6,19 +6,22 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PATCHES = ROOT / "patches.txt"
-RESET_PATCH = (
-    ROOT
-    / "patches"
-    / "v1_0"
-    / "reset_canonical_permission_states.py"
-)
+RESET_PATCH = ROOT / "patches" / "v1_0" / "reset_canonical_permission_states.py"
+BOOTSTRAP_PATCH = ROOT / "patches" / "v1_0" / "bootstrap_legacy_role_capabilities.py"
 LOOKUP_CLEANUP_PATCH = (
     ROOT
     / "patches"
     / "v1_0"
     / "clean_order_lookup_business_grants.py"
 )
-LEGACY_PERMISSION_BOOTSTRAP = (
+APPLICATION_LEGACY_BOOTSTRAP = (
+    ROOT
+    / "almdina_erp"
+    / "application"
+    / "security"
+    / "legacy_permission_bootstrap.py"
+)
+INFRASTRUCTURE_LEGACY_BOOTSTRAP = (
     ROOT
     / "almdina_erp"
     / "infrastructure"
@@ -51,17 +54,23 @@ class TestCanonicalPermissionResetPatch(unittest.TestCase):
         for patch in PERMISSION_PATCHES:
             self.assertLess(post.index(patch), reset_index)
 
-    def test_legacy_bootstrap_skips_protected_roles_before_repository_access(self) -> None:
-        source = LEGACY_PERMISSION_BOOTSTRAP.read_text(encoding="utf-8")
-        guard = "if role in PROTECTED_SYSTEM_ROLES:"
-        repository_read = 'before = repository.role_state(role)["capabilities"]'
+    def test_legacy_bootstrap_patch_is_role_name_neutral_compatibility_noop(self) -> None:
+        source = BOOTSTRAP_PATCH.read_text(encoding="utf-8")
+        self.assertIn("sync_permission_types()", source)
+        for forbidden in (
+            "legacy_permission_bootstrap",
+            "bootstrap_legacy_role_permissions",
+            "legacy_role_state",
+            "legacy_roles",
+            "LEGACY_ROLE_CAPABILITIES",
+            "save_role_state",
+            "save_role_states",
+        ):
+            self.assertNotIn(forbidden, source)
 
-        self.assertIn("PROTECTED_SYSTEM_ROLES", source)
-        self.assertIn(guard, source)
-        self.assertIn(repository_read, source)
-        self.assertLess(source.index(guard), source.index(repository_read))
-        guard_block = source[source.index(guard):source.index(repository_read)]
-        self.assertIn("continue", guard_block)
+    def test_fixed_role_bootstrap_modules_are_retired(self) -> None:
+        self.assertFalse(APPLICATION_LEGACY_BOOTSTRAP.exists())
+        self.assertFalse(INFRASTRUCTURE_LEGACY_BOOTSTRAP.exists())
 
     def test_reset_patch_is_registered_post_model_sync_once(self) -> None:
         registry = PATCHES.read_text(encoding="utf-8")
@@ -70,16 +79,19 @@ class TestCanonicalPermissionResetPatch(unittest.TestCase):
         post = registry[registry.index("[post_model_sync]"):]
         self.assertIn(entry, post)
 
-    def test_reset_patch_resets_only_existing_editable_canonical_roles(self) -> None:
+    def test_reset_patch_clears_historical_mirror_and_live_authority(self) -> None:
         source = RESET_PATCH.read_text(encoding="utf-8")
         self.assertIn("STATE_DOCTYPE", source)
         self.assertIn("PROTECTED_SYSTEM_ROLES", source)
-        self.assertIn("frappe.db.exists(\"Role\", role)", source)
+        self.assertIn('frappe.db.exists("Role", role)', source)
         self.assertIn("role: {}", source)
-        self.assertIn("ProjectedPermissionMatrixRepository().save_role_states(prepared)", source)
+        self.assertIn("CanonicalPermissionStateRepository", source)
+        self.assertIn("canonical.save(role, {})", source)
+        self.assertIn(
+            "ProjectedPermissionMatrixRepository().save_role_states(prepared)",
+            source,
+        )
         self.assertNotIn("latest_audited_state", source)
-        self.assertNotIn("DocPerm", source)
-        self.assertNotIn("Custom DocPerm", source)
 
     def test_lookup_business_cleanup_is_registered_after_canonical_reset(self) -> None:
         registry = PATCHES.read_text(encoding="utf-8")

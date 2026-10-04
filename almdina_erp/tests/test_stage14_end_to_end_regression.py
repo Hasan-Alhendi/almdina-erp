@@ -52,7 +52,6 @@ class StatefulFactoryRepository:
                     Capability.DISPATCH_ORDER,
                     Capability.REASSIGN_WORKER,
                     Capability.MARK_DELIVERED,
-                    Capability.VIEW_OPERATIONAL_REPORTS,
                 },
             },
             "drawing@example.com": {
@@ -93,7 +92,6 @@ class StatefulFactoryRepository:
                 "capabilities": {
                     Capability.VIEW_ORDERS,
                     Capability.VIEW_COSTS,
-                    Capability.VIEW_FINANCIAL_REPORTS,
                     Capability.PRINT_INTERNAL_COST_REPORT,
                 },
             },
@@ -613,7 +611,6 @@ class TestStage14EndToEndRegression(unittest.TestCase):
                 Capability.VIEW_ORDERS: True,
                 Capability.VIEW_COSTS: True,
                 Capability.PRINT_INTERNAL_COST_REPORT: True,
-                Capability.VIEW_FINANCIAL_REPORTS: True,
             }
         )
         self.assertTrue(order_entry_state[Capability.PRINT_CUSTOMER_INVOICE])

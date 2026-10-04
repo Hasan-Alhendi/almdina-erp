@@ -20,6 +20,10 @@ REPOSITORY_MODULE = (
     "almdina_erp.almdina_erp.infrastructure.frappe."
     "permission_matrix_repository"
 )
+READER_MODULE = (
+    "almdina_erp.almdina_erp.infrastructure.frappe."
+    "custom_docperm_capability_reader"
+)
 
 
 class TestAuthorizationGatewayMatrixFallback(unittest.TestCase):
@@ -49,24 +53,32 @@ class TestAuthorizationGatewayMatrixFallback(unittest.TestCase):
                 )
 
             @staticmethod
-            def role_state(role):
+            def role_state(_role):
+                raise AssertionError(
+                    "runtime capability authority must read Custom DocPerm grants"
+                )
+
+        class FakeReader:
+            @staticmethod
+            def role_capabilities(role):
                 if role == "System Manager":
                     raise AssertionError("protected System Manager must never be resolved")
                 return {
-                    "capabilities": {
-                        Capability.VIEW_ORDERS: True,
-                        Capability.VIEW_COSTS: True,
-                        Capability.VIEW_CUTTING_PLAN: True,
-                    }
+                    Capability.VIEW_ORDERS: True,
+                    Capability.VIEW_COSTS: True,
+                    Capability.VIEW_CUTTING_PLAN: True,
                 }
 
         repository_module = types.ModuleType(REPOSITORY_MODULE)
         repository_module.FrappePermissionMatrixRepository = FakeRepository
         repository_module.PROTECTED_ROLES = frozenset({"All", "Guest", "Desk User"})
+        reader_module = types.ModuleType(READER_MODULE)
+        reader_module.CustomDocPermCapabilityReader = FakeReader
 
         replacements = {
             "frappe": fake_frappe,
             REPOSITORY_MODULE: repository_module,
+            READER_MODULE: reader_module,
         }
         previous = {name: sys.modules.get(name) for name in replacements}
         sys.modules.update(replacements)
@@ -83,6 +95,7 @@ class TestAuthorizationGatewayMatrixFallback(unittest.TestCase):
                 FakeRepository(),
                 module.PROTECTED_SYSTEM_ROLES,
             )
+            module._capability_grant_reader = FakeReader
             return module
         finally:
             for name, original in previous.items():
@@ -117,10 +130,16 @@ class TestAuthorizationGatewayMatrixFallback(unittest.TestCase):
             def role_state(_role):
                 raise AssertionError("protected platform roles must be skipped")
 
+        class RejectingReader:
+            @staticmethod
+            def role_capabilities(_role):
+                raise AssertionError("protected platform roles must be skipped")
+
         gateway._matrix_repository = lambda: (
             SystemManagerOnlyRepository(),
             gateway.PROTECTED_SYSTEM_ROLES,
         )
+        gateway._capability_grant_reader = RejectingReader
         gateway.frappe.local.almdina_matrix_capabilities = {}
 
         self.assertEqual(
@@ -148,7 +167,7 @@ class TestAuthorizationGatewayMatrixFallback(unittest.TestCase):
         )
         self.assertFalse(
             gateway.document_has_capability(
-                types.SimpleNamespace(doctype="Replacement Piece"),
+                types.SimpleNamespace(doctype="Production Stage"),
                 Capability.VIEW_COSTS,
                 user="role.user@example.com",
             )

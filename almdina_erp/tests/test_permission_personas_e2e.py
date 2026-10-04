@@ -9,7 +9,6 @@ from almdina_erp.almdina_erp.application.security.business_capability_state impo
 from almdina_erp.almdina_erp.application.security.navigation_context import (
     WORKSPACE_GO_LIVE,
     WORKSPACE_MAIN,
-    WORKSPACE_REPORTS,
     WORKSPACE_SETTINGS,
     build_navigation_context,
 )
@@ -50,7 +49,6 @@ class TestPermissionPersonasE2E(unittest.TestCase):
             "factory_settings",
             "master_data",
             "administration",
-            "reports",
         ):
             self.assertFalse(navigation["sections"][section], section)
         self.assertFalse(state[Capability.VIEW_CUSTOMERS])
@@ -87,7 +85,6 @@ class TestPermissionPersonasE2E(unittest.TestCase):
         self.assertFalse(state[Capability.DISPATCH_ORDER])
         self.assertFalse(state[Capability.REASSIGN_WORKER])
         self.assertFalse(state[Capability.VIEW_COSTS])
-        self.assertFalse(navigation["sections"]["reports"])
 
     def test_operator_grants_use_shared_order_list_without_supervision(self) -> None:
         state, navigation = self._context(
@@ -96,10 +93,6 @@ class TestPermissionPersonasE2E(unittest.TestCase):
             Capability.HANDOFF_ASSIGNED_STAGE,
             Capability.VIEW_CUTTING_PLAN,
             Capability.PRINT_CUTTING_PLAN,
-            Capability.RECORD_INCIDENT,
-            Capability.VIEW_REPLACEMENTS,
-            Capability.START_REPLACEMENT,
-            Capability.COMPLETE_REPLACEMENT,
         )
         self.assertEqual(navigation["profile"], "shop_floor")
         self._assert_frappe_owns_home(navigation)
@@ -121,19 +114,13 @@ class TestPermissionPersonasE2E(unittest.TestCase):
             Capability.RETURN_ORDER_TO_DRAFT,
             Capability.MARK_DELIVERED,
             Capability.REASSIGN_WORKER,
-            Capability.CREATE_REPLACEMENT,
-            Capability.VIEW_REPLACEMENTS,
-            Capability.APPROVE_REPLACEMENT,
-            Capability.CANCEL_REPLACEMENT,
-            Capability.VIEW_OPERATIONAL_REPORTS,
         )
         self.assertTrue(navigation["sections"]["production"])
-        self.assertTrue(navigation["sections"]["quality"])
-        self.assertTrue(navigation["sections"]["reports"])
+        self.assertFalse(navigation["sections"]["quality"])
+        self.assertNotIn("reports", navigation["sections"])
         self.assertTrue(state[Capability.DISPATCH_ORDER])
         self.assertTrue(state[Capability.REASSIGN_WORKER])
         self.assertFalse(state[Capability.VIEW_COSTS])
-        self.assertFalse(state[Capability.VIEW_FINANCIAL_REPORTS])
         self.assertFalse(state[Capability.MANAGE_PERMISSIONS])
         self.assertNotIn(WORKSPACE_SETTINGS, navigation["workspaces"])
         self.assertNotIn(WORKSPACE_GO_LIVE, navigation["workspaces"])
@@ -145,15 +132,13 @@ class TestPermissionPersonasE2E(unittest.TestCase):
             Capability.EDIT_COST_SETTINGS,
             Capability.EDIT_SPECIAL_PRICE,
             Capability.APPROVE_SPECIAL_PRICE,
-            Capability.EDIT_REPLACEMENT_COST,
             Capability.PRINT_MEASUREMENTS,
             Capability.PRINT_CUSTOMER_INVOICE,
             Capability.PRINT_INTERNAL_COST_REPORT,
-            Capability.VIEW_FINANCIAL_REPORTS,
         )
         self.assertTrue(navigation["sections"]["costing"])
-        self.assertTrue(navigation["sections"]["reports"])
-        self.assertTrue(state[Capability.VIEW_FINANCIAL_REPORTS])
+        self.assertNotIn("reports", navigation["sections"])
+        self.assertTrue(state[Capability.VIEW_COSTS])
         self.assertTrue(state[Capability.PRINT_INTERNAL_COST_REPORT])
         self.assertFalse(state[Capability.DISPATCH_ORDER])
         self.assertFalse(state[Capability.START_ASSIGNED_STAGE])
@@ -167,19 +152,12 @@ class TestPermissionPersonasE2E(unittest.TestCase):
             Capability.VIEW_CUTTING_PLAN,
             Capability.PRINT_CUTTING_PLAN,
             Capability.ARCHIVE_APPROVED_PLAN,
-            Capability.CREATE_REPLACEMENT,
-            Capability.VIEW_REPLACEMENTS,
-            Capability.APPROVE_REPLACEMENT,
-            Capability.CANCEL_REPLACEMENT,
-            Capability.VIEW_OPERATIONAL_REPORTS,
         )
         self.assertTrue(navigation["sections"]["quality"])
-        self.assertTrue(navigation["sections"]["reports"])
+        self.assertNotIn("reports", navigation["sections"])
         self.assertTrue(state[Capability.APPROVE_ORDER])
         self.assertTrue(state[Capability.ARCHIVE_APPROVED_PLAN])
         self.assertFalse(state[Capability.VIEW_COSTS])
-        self.assertFalse(state[Capability.VIEW_FINANCIAL_REPORTS])
-        self.assertFalse(state[Capability.EDIT_REPLACEMENT_COST])
 
     def test_administration_grants_are_configuration_only(self) -> None:
         state, navigation = self._context(
@@ -212,13 +190,11 @@ class TestPermissionPersonasE2E(unittest.TestCase):
         self.assertFalse(navigation["sections"]["production"])
         self.assertFalse(navigation["sections"]["quality"])
         self.assertFalse(navigation["sections"]["costing"])
-        self.assertFalse(navigation["sections"]["reports"])
+        self.assertNotIn("reports", navigation["sections"])
         self.assertFalse(state[Capability.APPROVE_ORDER])
         self.assertFalse(state[Capability.DISPATCH_ORDER])
-        self.assertFalse(state[Capability.VIEW_OPERATIONAL_REPORTS])
-        self.assertFalse(state[Capability.VIEW_FINANCIAL_REPORTS])
+        self.assertFalse(state[Capability.VIEW_COSTS])
         self.assertIn(WORKSPACE_SETTINGS, navigation["workspaces"])
-        self.assertIn(WORKSPACE_REPORTS, navigation["workspaces"])
         self.assertIn(WORKSPACE_GO_LIVE, navigation["workspaces"])
 
 

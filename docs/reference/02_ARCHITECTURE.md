@@ -61,6 +61,7 @@ flowchart TB
 - Frappe adapters for costing/plan/piece policy.
 - DXF file reading adapter.
 - stage/routing repositories.
+- WhatsApp OpenWA adapters, and the frappe-free measurements/invoice print HTML used for the customer WhatsApp PDF.
 
 هذه الطبقة تعرف Frappe وتطبق Ports التي تحتاجها Application.
 

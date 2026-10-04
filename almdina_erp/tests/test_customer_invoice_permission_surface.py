@@ -63,6 +63,9 @@ class TestCustomerInvoicePermissionSurface(unittest.TestCase):
 
         self.assertIn("printCustomerInvoice", source)
         self.assertIn("dco-secure-print-customer-invoice", source)
+        self.assertIn("dco-whatsapp-send-invoice", source)
+        self.assertIn("function ensureWhatsAppButton", source)
+        self.assertIn("offerInvoiceSend", source)
         self.assertIn("function ensureCostButton", source)
         self.assertIn("function observeCostActions", source)
         self.assertIn("MutationObserver", source)

@@ -2,7 +2,7 @@
     "use strict";
 
     const APP_NAME = "almdina_erp";
-    const PERMISSION_CONTEXT_VERSION = 6;
+    const PERMISSION_CONTEXT_VERSION = 7;
     const FACTORY_SETTINGS_CONSOLE_ROUTE = "factory-production-settings";
     const LEGACY_FACTORY_SETTINGS_ROUTE = "almdina-erp-settings";
     const NAVIGATION_SETTLE_MS = 2500;
@@ -11,8 +11,6 @@
         { surface: "customer_admin", routes: ["customer"] },
         { surface: "cutting_plans", routes: ["cutting-plan"] },
         { surface: "production_stages", routes: ["production-stage"] },
-        { surface: "production_incidents", routes: ["production-incident"] },
-        { surface: "replacements", routes: ["replacement-piece"] },
         { surface: "plan_archive", routes: ["factory-plan-archive"] },
         { surface: "factory_master_data", routes: ["factory-master-data"] },
         { surface: "production_routings", routes: ["production-routing"] },
@@ -34,34 +32,12 @@
                 "user",
             ],
         },
-        {
-            surface: "report_factory_operations_summary",
-            routes: ["factory-operations-summary"],
-        },
-        {
-            surface: "report_factory_order_analysis",
-            routes: ["factory-order-analysis"],
-        },
-        {
-            surface: "report_production_stage_performance",
-            routes: ["production-stage-performance"],
-        },
-        {
-            surface: "report_production_incidents_and_replacements",
-            routes: ["production-incidents-and-replacements"],
-        },
-        { surface: "report_board_usage_analysis", routes: ["board-usage-analysis"] },
-        {
-            surface: "report_piece_size_usage_analysis",
-            routes: ["piece-size-usage-analysis"],
-        },
     ]);
     const ALMDINA_WORKSPACE_ROUTES = Object.freeze(
         new Set([
             "almdina-erp",
             "shop-floor",
             "almdina-control-center",
-            "almdina-reports",
             "almdina-settings",
             "almdina-go-live",
         ])

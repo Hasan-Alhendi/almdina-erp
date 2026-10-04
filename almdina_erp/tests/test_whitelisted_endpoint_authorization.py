@@ -123,6 +123,7 @@ class TestWhitelistedEndpointAuthorization(unittest.TestCase):
                 "almdina_erp.almdina_erp.services.approval_queue_service.get_approval_queue_context",
                 "almdina_erp.almdina_erp.services.approval_queue_service.get_pending_review_orders",
                 "almdina_erp.almdina_erp.services.approval_queue_service.reject_order_safely",
+                "almdina_erp.almdina_erp.services.legacy_endpoint_service.cancel_legacy_replacement",
                 "almdina_erp.almdina_erp.services.legacy_endpoint_service.retired_product_endpoint",
                 "almdina_erp.almdina_erp.services.order_review_service.reject_order",
                 "almdina_erp.almdina_erp.services.production_service.pause_stage",

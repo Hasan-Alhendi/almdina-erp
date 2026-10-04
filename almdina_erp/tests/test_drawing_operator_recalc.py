@@ -2,7 +2,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SHOP_FLOOR = ROOT / "almdina_erp" / "services" / "shop_floor_service.py"
+DXF_SERVICE = ROOT / "almdina_erp" / "services" / "shop_floor_dxf_service.py"
 DRAWING_UX = ROOT / "public" / "js" / "door_cutting_order_drawing_plan_ux.js"
 SHOP_FLOOR_UX = ROOT / "public" / "js" / "shop_floor_order_ux.js"
 
@@ -12,14 +12,15 @@ def _source(path: Path) -> str:
 
 
 def test_recalculate_drawing_plan_api_uses_configurable_capability():
-    src = _source(SHOP_FLOOR)
-    assert "shop_floor_dxf_service" in src
-    assert 'recalculate_drawing_plan = _public_delegate(_DXF, "recalculate_drawing_plan")' in src
-    dxf = _source(ROOT / "almdina_erp" / "services" / "shop_floor_dxf_service.py")
-    assert "Capability.RECALCULATE_PLAN" in dxf
-    assert "_get_recalculation_order" in dxf
-    assert "user_can_recalculate_drawing_system_plan" in dxf
-    assert "force_cutting_plan_recalculation" in dxf
+    dxf = _source(DXF_SERVICE)
+    assert "def recalculate_drawing_plan" in dxf
+    assert "recalculate_order" in dxf
+    command = _source(ROOT / "almdina_erp" / "services" / "cutting_plan_command_service.py")
+    assert "Capability.RECALCULATE_PLAN" in command
+    assert "user_can_recalculate_drawing_system_plan" in command
+    policy = _source(ROOT / "almdina_erp" / "services" / "order_edit_policy.py")
+    assert "user_can_recalculate_drawing_system_plan" in policy
+    assert "force_cutting_plan_recalculation" in policy
 
 
 def test_drawing_recalc_uses_shared_immutability_bypass():

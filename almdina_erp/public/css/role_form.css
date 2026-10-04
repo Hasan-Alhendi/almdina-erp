@@ -1,0 +1,99 @@
+/*
+ * Role (إدارة الأدوار) — compact top-field layout (presentation only).
+ * Scoped to body.role-form-layout-active on Form/Role.
+ */
+
+body.role-form-layout-active [id="page-Role"] .layout-main-section-wrapper,
+body.role-form-layout-active [id="page-Role"] .layout-main-section,
+body.role-form-layout-active [id="page-Role"] .form-page,
+body.role-form-layout-active [id="page-Role"] .form-layout {
+    max-width: none !important;
+    width: 100% !important;
+}
+
+body.role-form-layout-active [id="page-Role"] .role-form-section-full {
+    width: 100% !important;
+    max-width: none !important;
+}
+
+body.role-form-layout-active [id="page-Role"] .role-form-section-full > .section-body {
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+}
+
+body.role-form-layout-active [id="page-Role"] .role-form-section-full .form-column {
+    width: 100% !important;
+    max-width: none !important;
+    flex: 0 0 100% !important;
+}
+
+body.role-form-layout-active [id="page-Role"] .role-form-section-full .form-column.role-form-empty-column {
+    display: none !important;
+}
+
+body.role-form-layout-active [id="page-Role"] .role-form-section-full .frappe-control,
+body.role-form-layout-active [id="page-Role"] .role-form-section-full .form-group,
+body.role-form-layout-active [id="page-Role"] .role-form-section-full .control-input-wrapper,
+body.role-form-layout-active [id="page-Role"] .role-form-top-grid .input-max-width {
+    max-width: none !important;
+}
+
+body.role-form-layout-active [id="page-Role"] .role-form-top-grid {
+    width: 100%;
+    max-width: none;
+    margin-top: 8px;
+    margin-bottom: 4px;
+    box-sizing: border-box;
+}
+
+body.role-form-layout-active [id="page-Role"] .role-form-row--inputs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 16px;
+    align-items: start;
+}
+
+body.role-form-layout-active [id="page-Role"] .role-form-row--checks {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px 14px;
+    align-items: start;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border-color, #e5e7eb);
+}
+
+body.role-form-layout-active [id="page-Role"] .role-form-row--checks .frappe-control {
+    margin-bottom: 0;
+}
+
+body.role-form-layout-active [id="page-Role"] .role-form-row--checks .checkbox {
+    margin: 0;
+}
+
+body.role-form-layout-active [id="page-Role"] .role-form-row--checks .help-box {
+    margin-top: 4px;
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+body.role-form-layout-active [id="page-Role"] .role-form-column-break-hidden {
+    display: none !important;
+}
+
+@media (max-width: 991px) {
+    body.role-form-layout-active [id="page-Role"] .role-form-row--inputs {
+        grid-template-columns: 1fr;
+    }
+
+    body.role-form-layout-active [id="page-Role"] .role-form-row--checks {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 575px) {
+    body.role-form-layout-active [id="page-Role"] .role-form-row--checks {
+        grid-template-columns: 1fr;
+    }
+}

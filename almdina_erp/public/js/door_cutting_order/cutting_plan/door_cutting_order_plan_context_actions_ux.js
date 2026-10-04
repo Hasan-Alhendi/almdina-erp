@@ -3,7 +3,11 @@
 
     if (window.AlmdinaPlanContextActionsUX) return;
 
-    const STYLE_ID = "dco-plan-context-actions-css";
+    const STYLE_ID = "dco-plan-context-actions-css-v3";
+    const LEGACY_STYLE_IDS = Object.freeze([
+        "dco-plan-context-actions-css",
+        "dco-plan-context-actions-css-v2",
+    ]);
     const HOST_CLASS = "dco-plan-context-actions-host";
     const TAB_ROWS = Object.freeze({
         System: "system_draft",
@@ -47,6 +51,10 @@
 
     function workspaceData(frm) {
         const state = snapshot(frm);
+        const keeper = window.AlmdinaWorkspaceKeepPaint;
+        if (keeper && typeof keeper.presentationData === "function") {
+            return keeper.presentationData(state);
+        }
         return state && state.status === "ready" ? state.data : null;
     }
 
@@ -114,11 +122,8 @@
 
     function planMetrics(row) {
         const totals = (row && row.totals) || {};
-        const engine = (row && row.engine) || {};
         return {
             boards: Number(totals.required_boards || 0),
-            waste: Number(totals.waste_percent || 0),
-            method: String(engine.method_label || engine.method_key || "").trim(),
         };
     }
 
@@ -195,12 +200,16 @@
     }
 
     function installStyles() {
+        LEGACY_STYLE_IDS.forEach((id) => {
+            const legacy = document.getElementById(id);
+            if (legacy) legacy.remove();
+        });
         if (document.getElementById(STYLE_ID)) return;
         const style = document.createElement("style");
         style.id = STYLE_ID;
         style.textContent = `
             .${HOST_CLASS} {
-                margin: 0 0 12px;
+                margin: 0 0 var(--dco-section-stack-gap, 8px);
                 width: 100%;
                 direction: rtl;
             }
@@ -209,24 +218,24 @@
                 box-sizing: border-box;
                 display:flex;
                 align-items:center;
-                justify-content:space-between;
+                justify-content:flex-start;
                 gap:12px;
                 flex-wrap:wrap;
                 padding:11px 12px;
-                border:1px solid var(--border-color,#dfe3e8);
-                border-radius:12px;
-                background:var(--card-bg,var(--fg-color,#fff));
+                border:1px solid var(--alm-border, var(--border-color,#dfe3e8));
+                border-radius:var(--alm-radius-md, 12px);
+                background:var(--alm-card, var(--card-bg,#fff));
                 box-shadow:0 3px 12px rgba(15,23,42,.035);
             }
-            .dco-plan-context-primary,
-            .dco-plan-context-tools,
-            .dco-plan-context-summary {
+            .dco-plan-context-primary {
                 display:flex;
                 align-items:center;
                 gap:8px;
                 flex-wrap:wrap;
+                flex:1 1 auto;
+                min-width:0;
+                width:100%;
             }
-            .dco-plan-context-summary { gap:6px; }
             .dco-plan-context-chip {
                 display:inline-flex;
                 align-items:center;
@@ -234,61 +243,87 @@
                 padding:4px 9px;
                 border-radius:999px;
                 background:var(--subtle-fg,#f5f7f9);
-                border:1px solid var(--border-color,#e2e8f0);
-                color:var(--text-muted,#5f6b78);
+                border:1px solid var(--alm-border, var(--border-color,#e2e8f0));
+                color:var(--alm-text-muted, var(--text-muted,#5f6b78));
                 font-size:11px;
                 font-weight:700;
                 white-space:nowrap;
             }
+            .dco-plan-context-chip.is-boards {
+                margin-inline-start: auto;
+                min-height:30px;
+                padding:5px 11px;
+                border-radius:999px;
+                border:0;
+                background:var(--alm-accent-soft, color-mix(in srgb, var(--alm-accent, #2563eb) 12%, transparent));
+                color:var(--alm-accent, #2563eb);
+                font-weight:800;
+                gap:5px;
+                box-shadow:none;
+                cursor:default;
+                pointer-events:none;
+            }
+            .dco-plan-context-boards-value {
+                font-size:14px;
+                line-height:1;
+                font-weight:850;
+            }
+            .dco-plan-context-boards-label {
+                font-size:11px;
+                font-weight:750;
+            }
             .dco-plan-context-chip.is-approved {
-                background:#ecfdf3;
-                color:#166534;
-                border-color:#bbf7d0;
+                background:var(--alm-success-soft, #ecfdf3);
+                color:var(--alm-success, #166534);
+                border-color:color-mix(in srgb, var(--alm-success, #166534) 28%, transparent);
             }
             .dco-plan-context-bar .btn {
                 min-height:34px;
-                border-radius:9px;
+                border-radius:var(--alm-radius-sm, 9px);
                 font-weight:750;
-                box-shadow:none !important;
+                box-shadow:none;
             }
-            .dco-plan-context-primary .alm-btn-primary,
-            .dco-plan-context-primary .alm-btn-success {
-                min-width:190px;
-            }
-            .dco-plan-context-tools .btn {
+            .dco-plan-context-primary .dco-plan-context-approve,
+            .dco-plan-context-primary .dco-plan-context-cancel,
+            .dco-plan-context-primary .alm-btn-success.dco-plan-context-approve,
+            .dco-plan-context-primary .btn:not(.dco-plan-context-approve):not(.dco-plan-context-cancel) {
                 display:inline-flex;
                 align-items:center;
+                justify-content:center;
                 gap:5px;
+                flex:0 0 auto;
+                min-width:0;
                 padding-inline:10px;
+                text-align:center;
+                line-height:1.2;
+                white-space:nowrap;
             }
             .dco-plan-context-cancel {
-                color:#b42318 !important;
-                border-color:#f1b6b0 !important;
-                background:#fff !important;
+                color:var(--alm-danger, #b42318);
+                border-color:color-mix(in srgb, var(--alm-danger, #b42318) 35%, transparent);
+                background:var(--alm-card, #fff);
             }
             .dco-plan-context-cancel:hover {
-                background:#fff5f4 !important;
-                border-color:#dc5a50 !important;
-            }
-            .dco-plan-context-edit-note {
-                width:100%;
-                color:var(--text-muted,#667085);
-                font-size:11px;
-                line-height:1.6;
+                background:var(--alm-danger-soft, #fff5f4);
+                border-color:color-mix(in srgb, var(--alm-danger, #b42318) 55%, transparent);
             }
             [data-fieldname="plan_control_actions"] .dco-plan-document-actions,
             [data-fieldname="plan_control_actions"] .dco-approve-cutting-plan {
-                display:none !important;
+                display:none;
             }
             [data-fieldname="plan_control_actions"]:has(.dco-plan-settings-editor) {
-                display:block !important;
+                display:block;
             }
             @media (max-width:767px) {
                 .dco-plan-context-bar { align-items:stretch; }
-                .dco-plan-context-primary,
-                .dco-plan-context-tools { width:100%; }
-                .dco-plan-context-primary .btn { width:100%; }
-                .dco-plan-context-tools .btn { flex:1 1 auto; justify-content:center; }
+                .dco-plan-context-primary { width:100%; }
+                .dco-plan-context-chip.is-boards {
+                    margin-inline-start: 0;
+                    order: 99;
+                }
+                .dco-plan-context-primary .btn:not(.dco-plan-context-approve):not(.dco-plan-context-cancel) {
+                    justify-content:center;
+                }
             }
         `;
         document.head.appendChild(style);
@@ -444,30 +479,28 @@
             return false;
         }
 
+        const editing = isEditing(frm);
+        if (editing) {
+            target.empty();
+            return true;
+        }
+
         const tab = activeTab(frm);
         const row = rowForTab(frm, tab);
         const metrics = planMetrics(row);
-        const editing = isEditing(frm);
-        const metricChips = rowHasPlan(row)
-            ? `
-                <span class="dco-plan-context-chip">${esc(metrics.boards)} ${esc(__("ألواح"))}</span>
-                <span class="dco-plan-context-chip">${esc(__("هدر"))} ${esc(metrics.waste.toFixed(2))}%</span>
-                ${metrics.method ? `<span class="dco-plan-context-chip">${esc(metrics.method)}</span>` : ""}
-            `
-            : `<span class="dco-plan-context-chip">${esc(sourceLabel(tab))}</span>`;
+        const boardsChip = rowHasPlan(row)
+            ? `<span class="dco-plan-context-chip is-boards" role="status" aria-label="${esc(`${metrics.boards} ${__("ألواح")}`)}"><span class="dco-plan-context-boards-value">${esc(metrics.boards)}</span><span class="dco-plan-context-boards-label">${esc(__("ألواح"))}</span></span>`
+            : `<span class="dco-plan-context-chip is-boards" role="status">${esc(sourceLabel(tab))}</span>`;
+        const inlineTools = toolsHtml(frm, row);
 
+        // Approve/tools first; boards badge last with margin-inline-start:auto (RTL end / left).
+        // data-almdina-context-tools marks a completed normal-mode paint so surface
+        // recovery can detect a wiped host even when every tool gate is false.
         target.html(`
-            <div class="almdina-ui dco-plan-context-bar" data-active-plan-source="${esc(tab)}">
+            <div class="almdina-ui dco-plan-context-bar" data-active-plan-source="${esc(tab)}" data-almdina-context-tools="1">
                 <div class="dco-plan-context-primary">
-                    ${editing
-                        ? `<span class="dco-plan-context-chip">${esc(__("وضع تجربة الإعدادات"))}</span>`
-                        : primaryActionHtml(frm, tab, row)}
-                    <div class="dco-plan-context-summary">${metricChips}</div>
+                    ${primaryActionHtml(frm, tab, row)}${inlineTools}${boardsChip}
                 </div>
-                <div class="dco-plan-context-tools">${editing ? "" : toolsHtml(frm, row)}</div>
-                ${editing
-                    ? `<div class="dco-plan-context-edit-note">${esc(__("أكمل تجربة الإعدادات من الأعلى. أوامر الاعتماد والطباعة والتصدير والرفع متوقفة حتى الحفظ أو الإلغاء."))}</div>`
-                    : ""}
             </div>
         `);
 
@@ -483,12 +516,42 @@
         if (!frm || frm.doctype !== "Door Cutting Order") return false;
         syncLegacyActionSurface(frm);
         const host = hostFor(frm);
-        return host.length ? render(frm, host) : false;
+        if (host.length) return render(frm, host);
+
+        // Host is recreated with tabs. Ask the tab owner to rebuild once when the
+        // Plan surface should be visible but the context host is missing.
+        const tabs = window.AlmdinaPlanTabsUX;
+        if (
+            tabs
+            && typeof tabs.shouldShowPlanTabs === "function"
+            && tabs.shouldShowPlanTabs(frm)
+            && typeof tabs.afterRender === "function"
+        ) {
+            return Boolean(tabs.afterRender(frm));
+        }
+        return false;
     }
 
     frappe.ui.form.on("Door Cutting Order", {
         almdina_edit_session_changed(frm) { refresh(frm); },
         refresh_plan_controls(frm) { refresh(frm); },
+    });
+
+    [
+        "almdina:plan-workspace-updated",
+        "almdina:plan-selection-changed",
+        "almdina:stage-context-ready",
+        "almdina:permissions-updated",
+    ].forEach((eventName) => {
+        window.addEventListener(eventName, (event) => {
+            const frm = eventName === "almdina:stage-context-ready"
+                || eventName === "almdina:plan-selection-changed"
+                ? event.detail && event.detail.frm
+                : window.cur_frm;
+            if (frm && frm.doctype === "Door Cutting Order" && frm === window.cur_frm) {
+                refresh(frm);
+            }
+        });
     });
 
     window.AlmdinaPlanContextActionsUX = Object.freeze({

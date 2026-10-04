@@ -80,6 +80,7 @@ jobs:
           node --check almdina_erp/tests/js/dco_tab_edit_lifecycle_guard.test.js
           node --check almdina_erp/tests/js/cost_edit_session_lifecycle.test.js
           node --check almdina_erp/tests/js/cost_hosted_settings_render.test.js
+          node --check almdina_erp/tests/js/cost_deferred_render_flush.test.js
           node --check almdina_erp/tests/js/cost_workspace_abandoned_load.test.js
           node --check almdina_erp/tests/js/offcut_cost_preview_projection.test.js
           node --check almdina_erp/tests/js/plan_cost_workspace_visual.test.js
@@ -165,6 +166,9 @@ jobs:
 
       - name: Validate hosted Cost settings survive HTML replace
         run: node almdina_erp/tests/js/cost_hosted_settings_render.test.js
+
+      - name: Validate deferred Cost paint flushes on tab change
+        run: node almdina_erp/tests/js/cost_deferred_render_flush.test.js
 
       - name: Validate Cost recovers abandoned in-flight loads
         run: node almdina_erp/tests/js/cost_workspace_abandoned_load.test.js

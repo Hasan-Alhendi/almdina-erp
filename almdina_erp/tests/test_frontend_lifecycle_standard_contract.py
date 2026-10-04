@@ -127,6 +127,9 @@ class TestFrontendLifecycleStandardContract(unittest.TestCase):
                 )
 
     def test_certification_table_is_explicit_and_does_not_certify_by_helper(self) -> None:
+        self.assertIn("## DCO workspace keep-last-paint", self.standard)
+        self.assertIn("AlmdinaWorkspaceKeepPaint", self.standard)
+        self.assertIn("## DCO order-edit measurement paint ownership", self.standard)
         self.assertIn("## 8. Current Lifecycle Certification Status", self.standard)
         for row in (
             "| Factory Workforce | PAGE | Certified |",
@@ -139,7 +142,7 @@ class TestFrontendLifecycleStandardContract(unittest.TestCase):
             "| Factory Stock Settings | PAGE | Retired / Removed |",
             "| Factory System Preflight | PAGE | Retired / Removed |",
             "| Factory Performance Benchmark | PAGE | Retired / Removed |",
-            "| Door Cutting Order | FORM | Specialized lifecycle exists; certification pending |",
+            "| Door Cutting Order | FORM | Specialized lifecycle exists; keep-last-paint and order-edit measurement paint ownership landed; certification pending |",
             "| Door Cutting Order List | LIST | Certification pending |",
             "| Current Query Reports | REPORT | Frappe-owned/declarative; custom lifecycle not currently required |",
             "| Door Drawing | WORKSPACE | Existing lifecycle foundation; hardening/certification pending |",

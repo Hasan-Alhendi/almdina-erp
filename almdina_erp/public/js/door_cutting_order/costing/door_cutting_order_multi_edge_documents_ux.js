@@ -162,9 +162,9 @@
                     const label = cells[1].textContent.trim();
                     cells[1].innerHTML = `<span class="dco-piece-type ${label.includes("خاصة") ? "is-special" : ""}">${esc(label)}</span>`;
                 }
-                if (cells[6]) {
-                    cells[6].classList.add("dco-cell-notes");
-                    cells[6].classList.toggle("is-empty", cells[6].textContent.trim() === "—");
+                if (cells[5]) {
+                    cells[5].classList.add("dco-cell-notes");
+                    cells[5].classList.toggle("is-empty", cells[5].textContent.trim() === "—");
                 }
             }
         });
@@ -175,18 +175,18 @@
         const table = section && section.querySelector("table.dco-cost-table");
         if (!table) return;
         const headerCells = table.querySelectorAll("thead th");
-        if (headerCells[5] && headerCells[5].textContent !== "القشاط المخصص") {
-            headerCells[5].textContent = "القشاط المخصص";
+        if (headerCells[6] && headerCells[6].textContent !== "القشاط المخصص") {
+            headerCells[6].textContent = "القشاط المخصص";
         }
         const data = rows(frm);
         table.querySelectorAll("tbody tr").forEach((row, index) => {
             const cells = row.querySelectorAll(":scope > td");
-            if (!cells[5] || !data[index]) return;
-            cells[5].classList.add("dco-edge-detail-cell");
+            if (!cells[6] || !data[index]) return;
+            cells[6].classList.add("dco-edge-detail-cell");
             const signature = JSON.stringify(customEdgeGroups(data[index].details));
-            if (cells[5].dataset.customEdgeSignature !== signature) {
-                cells[5].dataset.customEdgeSignature = signature;
-                cells[5].innerHTML = customEdgeSummaryHtml(data[index].details);
+            if (cells[6].dataset.customEdgeSignature !== signature) {
+                cells[6].dataset.customEdgeSignature = signature;
+                cells[6].innerHTML = customEdgeSummaryHtml(data[index].details);
             }
         });
         const subtitle = section.querySelector(".dco-cost-section-title span");

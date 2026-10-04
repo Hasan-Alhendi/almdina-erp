@@ -7,7 +7,18 @@
         return field.$wrapper.get ? field.$wrapper.get(0) : field.$wrapper[0];
     }
 
-    function shouldUseCardLayout(root) {
+    function isReadOnly(frm) {
+        if (
+            frappe.almdina
+            && typeof frappe.almdina.orderCanEdit === "function"
+        ) {
+            return !frappe.almdina.orderCanEdit(frm);
+        }
+        return true;
+    }
+
+    function usesResponsiveScrollTable(root) {
+        if (!root || root.closest(".dco-measurement-entry-window")) return false;
         const responsiveDevice = window.AlmdinaResponsiveDevice;
         if (
             responsiveDevice
@@ -31,10 +42,39 @@
         }
     }
 
-    function apply(frm) {
+    function shouldUseCardLayout(root, frm) {
+        void frm;
+        void root;
+        return false;
+    }
+
+    function shouldUseReadTableLayout(root, frm) {
+        return usesResponsiveScrollTable(root) && Boolean(frm);
+    }
+
+    function measurementsSection(root) {
+        if (!root || typeof root.closest !== "function") return null;
+        return root.closest(".dco-measurements-card, [data-fieldname='pieces_section']");
+    }
+
+    function applyLayoutClasses(frm) {
         const root = rootNode(frm);
         if (!root) return;
-        root.classList.toggle("dco-mobile-piece-cards", shouldUseCardLayout(root));
+        const shell = root.querySelector(".dco-fast-entry-shell");
+        const section = measurementsSection(root);
+        const useScrollTable = shouldUseReadTableLayout(root, frm);
+        const readonly = isReadOnly(frm);
+        const targets = [root, shell].filter(Boolean);
+
+        targets.forEach((node) => {
+            node.classList.remove("dco-mobile-piece-cards");
+            node.classList.toggle("dco-mobile-piece-read-table", useScrollTable);
+            node.classList.toggle("dco-measurement-readonly-surface", useScrollTable && readonly);
+        });
+
+        if (section) {
+            section.classList.toggle("dco-measurements-mobile-scroll", useScrollTable);
+        }
     }
 
     function observe(frm) {
@@ -46,7 +86,7 @@
             window.removeEventListener("resize", frm.__dcoMobileCardsResizeHandler);
         }
 
-        const refresh = () => apply(frm);
+        const refresh = () => applyLayoutClasses(frm);
         if (typeof ResizeObserver === "function") {
             frm.__dcoMobileCardsObserver = new ResizeObserver(refresh);
             frm.__dcoMobileCardsObserver.observe(root);
@@ -57,18 +97,32 @@
     }
 
     function refresh(frm) {
-        apply(frm);
+        applyLayoutClasses(frm);
         observe(frm);
-        requestAnimationFrame(() => apply(frm));
+        requestAnimationFrame(() => applyLayoutClasses(frm));
     }
 
     frappe.ui.form.on("Door Cutting Order", {
         onload_post_render(frm) { refresh(frm); },
         refresh(frm) { refresh(frm); },
+        almdina_edit_session_changed(frm) { refresh(frm); },
     });
 
+    const measurementLifecycle = window.AlmdinaMeasurementLifecycle;
+    if (measurementLifecycle && typeof measurementLifecycle.registerFeature === "function") {
+        measurementLifecycle.registerFeature("mobile-piece-layout", () => {
+            if (window.cur_frm && window.cur_frm.doctype === "Door Cutting Order") {
+                applyLayoutClasses(window.cur_frm);
+            }
+        });
+    }
+
     window.AlmdinaMobilePieceCardsUX = Object.freeze({
-        apply,
+        apply: applyLayoutClasses,
+        refresh,
         shouldUseCardLayout,
+        shouldUseReadTableLayout,
+        isReadOnly,
+        usesResponsiveScrollTable,
     });
 })();

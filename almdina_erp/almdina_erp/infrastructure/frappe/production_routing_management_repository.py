@@ -37,6 +37,9 @@ def _stage_payload(
         "operational_role": str(row.operational_role or ""),
         "required": bool(cint(row.required)),
         "is_planning_stage": bool(cint(row.is_planning_stage)),
+        "notify_whatsapp_on_complete": bool(
+            cint(getattr(row, "notify_whatsapp_on_complete", 0))
+        ),
     }
 
 
@@ -69,6 +72,7 @@ def list_production_routings() -> list[dict[str, Any]]:
                 "operational_role",
                 "required",
                 "is_planning_stage",
+                "notify_whatsapp_on_complete",
             ],
             order_by="parent asc, sequence asc, idx asc",
         )
@@ -193,6 +197,7 @@ class FrappeProductionRoutingManagementRepository:
                     "operational_role": stage.operational_role,
                     "required": 1,
                     "is_planning_stage": int(stage.is_planning_stage),
+                    "notify_whatsapp_on_complete": int(stage.notify_whatsapp_on_complete),
                 },
             )
 

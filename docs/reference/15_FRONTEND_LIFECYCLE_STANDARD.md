@@ -20,6 +20,27 @@ settings and document identity. Invalidation or a newer request revokes an old
 response's authority over state, DOM and Save. A forced canonical Plan load is
 deferred while its workspace owns an edit draft, then reconciled after exit.
 
+## DCO workspace keep-last-paint
+
+Plan and Cost workspace presenters share `AlmdinaWorkspaceKeepPaint`. When a
+workspace reload sets `status=loading` but still retains the previous
+`data` snapshot, mounted UI must not be wiped to a full pending placeholder.
+Presenters may mark `aria-busy` and reconcile from the retained snapshot.
+Full pending/error wipe remains valid only for first load, hard empty, or error
+with no retained data. Print/export/upload context actions on the Plan tab are
+owned by `AlmdinaPlanContextActionsUX` and must be restored from retained data
+during normal-mode reloads; surface recovery treats a missing context bar
+(outside an active Plan edit session) as not-ready.
+
+## DCO order-edit measurement paint ownership
+
+Entering an order edit session owns one measurement-table recover/paint via
+`refreshDependentUx`. The `almdina_edit_session_changed` trigger must not also
+force-replace the FastEntry table during that owned refresh, and coordinator
+`starting` must not paint a disposable readonly flash. Virtual-row materialize
+must refuse detached or non-editable DOM so concurrent «add piece» cannot orphan
+a child against a wiped row.
+
 ## 1. الهدف والسلطة
 
 هذه الوثيقة هي المرجع الرسمي المتخصص لدورة حياة الواجهة في Almdina ERP. تبقى
@@ -368,6 +389,7 @@ registries وglobal owners تستخدم keys مستقرة وتستبدل الت�
 | `AlmdinaDocumentContext` | DCO document identity/generation وdata/render guards وeffects |
 | `AlmdinaMeasurementLifecycle` | measurement feature-key scheduling/cancellation + registered final reconciliation/readiness after the Operator base render |
 | `AlmdinaWorkspaceSyncCoordinator` | ordered invalidation/refresh/reconciliation للـDCO workspaces |
+| `AlmdinaWorkspaceKeepPaint` | DCO Plan/Cost keep-last-paint presentation rule أثناء `loading` مع snapshot محتفظ به |
 | Door Drawing `open/suspend/destroy` | foundation متخصصة للـStateful Workspace |
 
 لا يُضاف shared primitive جديد إلا عند وجود duplication مثبت في أكثر من owner وبعد
@@ -393,7 +415,7 @@ Architecture/asset contracts ذات الصلة خضراء. إثبات read/activ
 | Factory Stock Settings | PAGE | Retired / Removed | أزيل Page source بعد إثبات أنها orphaned وخارج Active Product Scope؛ بقيت endpoints التاريخية fail-closed وحقول optimizer المشتركة دون تغيير |
 | Factory System Preflight | PAGE | Retired / Removed | أزيل Page source؛ بقي alias التاريخي fail-closed، ولم تتغير routing/master-data/security tests المشتركة |
 | Factory Performance Benchmark | PAGE | Retired / Removed | أزيل Page source؛ بقي alias التاريخي fail-closed، ولم يتغير cutting engine أو performance regressions المشتركة |
-| Door Cutting Order | FORM | Specialized lifecycle exists; certification pending | Document Context وmeasurement/workspace owners موجودة؛ project-wide FORM certification لم تُغلق |
+| Door Cutting Order | FORM | Specialized lifecycle exists; keep-last-paint and order-edit measurement paint ownership landed; certification pending | Document Context وmeasurement/workspace keep-last-paint وpreview ownership وorder-edit single recover موجودة؛ project-wide FORM certification لم تُغلق بعد |
 | Door Cutting Order List | LIST | Certification pending | list-specific identity/refresh contract لم تُعتمد runtime بعد |
 | Current Query Reports | REPORT | Frappe-owned/declarative; custom lifecycle not currently required | التقارير الحالية filters declarative ولا تملك custom async lifecycle |
 | Door Drawing | WORKSPACE | Existing lifecycle foundation; hardening/certification pending | open generation وsuspend موجودان؛ dirty/late-bootstrap hardening خارج هذه المرحلة |

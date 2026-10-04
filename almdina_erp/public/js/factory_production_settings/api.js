@@ -40,9 +40,31 @@
         ));
     }
 
+    const WHATSAPP = "almdina_erp.almdina_erp.services.whatsapp_service";
+
+    function getWhatsAppSession(options = {}) {
+        return request(`${WHATSAPP}.get_whatsapp_session`, {}, options).then(data => data || {});
+    }
+
+    function createWhatsAppSession(options = {}) {
+        return request(`${WHATSAPP}.create_whatsapp_session`, {}, options).then(data => data || {});
+    }
+
+    function reconnectWhatsAppSession(options = {}) {
+        return request(`${WHATSAPP}.reconnect_whatsapp_session`, {}, options).then(data => data || {});
+    }
+
+    function getWhatsAppQr(options = {}) {
+        return request(`${WHATSAPP}.get_whatsapp_qr`, {}, options).then(data => data || {});
+    }
+
     window.AlmdinaFactoryProductionSettingsApi = Object.freeze({
         getSettings,
         updateSettings,
         getAudit,
+        getWhatsAppSession,
+        createWhatsAppSession,
+        reconnectWhatsAppSession,
+        getWhatsAppQr,
     });
 })();

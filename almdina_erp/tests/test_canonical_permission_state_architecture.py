@@ -27,6 +27,13 @@ SYNC = (
     / "frappe"
     / "permission_type_sync.py"
 )
+GATEWAY = (
+    ROOT
+    / "almdina_erp"
+    / "infrastructure"
+    / "frappe"
+    / "authorization_gateway.py"
+)
 STATE_DOCTYPE = (
     ROOT
     / "almdina_erp"
@@ -34,6 +41,7 @@ STATE_DOCTYPE = (
     / "almdina_role_capability_state"
     / "almdina_role_capability_state.json"
 )
+RETIRE_PATCH = ROOT / "patches" / "v1_0" / "retire_canonical_permission_runtime.py"
 
 
 class TestCanonicalPermissionStateArchitecture(unittest.TestCase):
@@ -46,34 +54,47 @@ class TestCanonicalPermissionStateArchitecture(unittest.TestCase):
         self.assertTrue(fields["role"]["unique"])
         self.assertTrue(fields["capabilities_json"]["read_only"])
 
-    def test_matrix_role_state_reads_canonical_store_only(self) -> None:
-        source = MATRIX_REPOSITORY.read_text(encoding="utf-8")
-        role_state = source[source.index("    def role_state("):source.index("    def role_states(")]
-        self.assertIn("self._canonical.read", role_state)
-        self.assertIn("self._canonical.exists", role_state)
-        self.assertNotIn("DocPerm", role_state)
-        self.assertNotIn("Custom DocPerm", role_state)
-        self.assertNotIn("_effective_rows", source)
-        self.assertIn("DocPerm and Custom DocPerm are write-only projections", source)
-
-    def test_missing_canonical_state_bootstraps_deny_all_only(self) -> None:
-        canonical = CANONICAL_REPOSITORY.read_text(encoding="utf-8")
+    def test_runtime_reads_and_writes_custom_docperm_without_canonical(self) -> None:
+        matrix = MATRIX_REPOSITORY.read_text(encoding="utf-8")
+        gateway = GATEWAY.read_text(encoding="utf-8")
         sync = SYNC.read_text(encoding="utf-8")
-        self.assertIn("latest_audited_state", canonical)
-        self.assertIn("historical inspection only", canonical)
+        role_state = matrix[
+            matrix.index("    def role_state(") : matrix.index("    def role_states(")
+        ]
+        save = matrix[
+            matrix.index("    def save_role_states(") : matrix.index(
+                "    def record_audit("
+            )
+        ]
+        self.assertIn("self._grant_reader.role_state", role_state)
+        self.assertNotIn("self._canonical", role_state)
+        self.assertNotIn("self._canonical", save)
+        self.assertNotIn("CanonicalPermissionStateRepository", matrix)
+        self.assertIn("CustomDocPermCapabilityReader", matrix)
+        self.assertIn("_capability_grant_reader", gateway)
+        self.assertIn("reader.role_capabilities", gateway)
+        self.assertIn("_role_state_for_reconciliation", sync)
+        self.assertIn("CustomDocPermCapabilityReader", sync)
+        self.assertNotIn("_remove_legacy_settings_read", sync)
+        self.assertIn("return current", sync)
+        self.assertNotIn("CanonicalPermissionStateRepository", sync)
+        self.assertNotIn("STATE_DOCTYPE", sync)
+        self.assertNotIn("AUDIT_DOCTYPE", sync)
+        self.assertTrue(RETIRE_PATCH.exists())
+        retire = RETIRE_PATCH.read_text(encoding="utf-8")
+        self.assertIn("CanonicalPermissionStateRepository", retire)
+        self.assertIn("sync_permission_types()", retire)
+
+    def test_canonical_repository_is_migration_only(self) -> None:
+        canonical = CANONICAL_REPOSITORY.read_text(encoding="utf-8")
+        self.assertIn("Historical mirror", canonical)
+        self.assertIn("not a runtime authorization source", canonical)
         self.assertIn("bootstrap_fail_closed", canonical)
         start = canonical.index("    def bootstrap_fail_closed(")
         end = canonical.index("\n\n__all__", start)
         bootstrap = canonical[start:end]
         self.assertIn("return self.save(resolved, {})", bootstrap)
         self.assertNotIn("latest_audited_state", bootstrap)
-        self.assertNotIn("AUDIT_DOCTYPE", bootstrap)
-        self.assertNotIn('frappe.get_all("DocPerm"', bootstrap)
-        self.assertNotIn('frappe.get_all("Custom DocPerm"', bootstrap)
-        self.assertNotIn('frappe.db.get_value("DocPerm"', bootstrap)
-        self.assertNotIn('frappe.db.get_value("Custom DocPerm"', bootstrap)
-        self.assertIn("canonical.bootstrap_fail_closed", sync)
-        self.assertIn("save_role_states(prepared)", sync)
 
     def test_standard_baseline_cannot_import_custom_business_fields(self) -> None:
         source = MATRIX_REPOSITORY.read_text(encoding="utf-8")

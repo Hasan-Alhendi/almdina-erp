@@ -24,6 +24,8 @@
         ".dco-print-measurements",
         ".dco-entry-window-print",
     ].join(",");
+    const WHATSAPP_SEND_SELECTOR = ".dco-whatsapp-send-measurements";
+    const WHATSAPP_INVOICE_SELECTOR = ".dco-whatsapp-send-invoice";
     const CUSTOMER_INVOICE_SELECTOR = ".dco-print-customer-invoice";
     let observerFrame = null;
 
@@ -106,11 +108,18 @@
 
     }
 
-    function protectMeasurementPrint(frm) {
-        const allowed = can(frm, "print_measurements");
-        const root = frm && frm.wrapper && (frm.wrapper[0] || frm.wrapper);
+    function formRoot(frm) {
+        return frm && frm.wrapper && (frm.wrapper[0] || frm.wrapper);
+    }
+
+    function pageRoot(frm) {
+        const wrapper = frm && frm.page && frm.page.wrapper;
+        return wrapper && (wrapper.nodeType ? wrapper : wrapper[0]);
+    }
+
+    function hideUnlessAllowed(root, selector, allowed) {
         if (!root) return;
-        root.querySelectorAll(MEASUREMENT_PRINT_SELECTOR).forEach(button => {
+        root.querySelectorAll(selector).forEach(button => {
             if (allowed) {
                 if (button.hidden) button.hidden = false;
                 button.removeAttribute("aria-hidden");
@@ -121,6 +130,15 @@
                 button.setAttribute("aria-hidden", "true");
             }
         });
+    }
+
+    function protectMeasurementPrint(frm) {
+        const allowed = can(frm, "print_measurements");
+        hideUnlessAllowed(formRoot(frm), MEASUREMENT_PRINT_SELECTOR, allowed);
+        hideUnlessAllowed(formRoot(frm), WHATSAPP_SEND_SELECTOR, allowed);
+        hideUnlessAllowed(pageRoot(frm), WHATSAPP_SEND_SELECTOR, allowed);
+        const canSendInvoice = can(frm, "print_customer_invoice");
+        hideUnlessAllowed(formRoot(frm), WHATSAPP_INVOICE_SELECTOR, canSendInvoice);
     }
 
     function protectMeasurementApi(frm) {

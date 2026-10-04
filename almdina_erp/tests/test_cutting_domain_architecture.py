@@ -54,16 +54,10 @@ class TestCuttingDomainArchitecture(unittest.TestCase):
         self.assertNotIn("def pack_guillotine", registry)
         self.assertNotIn("def pack_skyline", registry)
 
-    def test_old_service_modules_are_compatibility_facades(self) -> None:
-        cutting_source = CUTTING_SERVICE.read_text(encoding="utf-8")
-        optimizer_source = OPTIMIZER_SERVICE.read_text(encoding="utf-8")
-
-        self.assertLess(len(cutting_source.splitlines()), 20)
-        self.assertLess(len(optimizer_source.splitlines()), 25)
-        self.assertIn("domain.cutting", cutting_source)
-        self.assertIn("domain.cutting.optimizer", optimizer_source)
-        self.assertNotIn("def pack_maxrects", cutting_source)
-        self.assertNotIn("def optimize_plan", optimizer_source)
+    def test_old_service_modules_are_removed(self) -> None:
+        self.assertFalse(CUTTING_SERVICE.exists())
+        self.assertFalse(OPTIMIZER_SERVICE.exists())
+        self.assertFalse(LEGACY_ENGINE_ADAPTER.exists())
 
     def test_runtime_has_no_legacy_cutting_imports(self) -> None:
         offenders: list[str] = []
@@ -83,12 +77,8 @@ class TestCuttingDomainArchitecture(unittest.TestCase):
         self.assertNotIn("services.advanced_cutting_optimizer", source)
         self.assertIn("class DomainCuttingEngineAdapter", source)
 
-    def test_legacy_engine_adapter_is_only_an_alias(self) -> None:
-        source = LEGACY_ENGINE_ADAPTER.read_text(encoding="utf-8")
-        self.assertLess(len(source.splitlines()), 20)
-        self.assertIn("DomainCuttingEngineAdapter", source)
-        self.assertIn("domain_cutting_engine", source)
-        self.assertNotIn("def optimize", source)
+    def test_legacy_engine_adapter_is_removed(self) -> None:
+        self.assertFalse(LEGACY_ENGINE_ADAPTER.exists())
 
 
 if __name__ == "__main__":

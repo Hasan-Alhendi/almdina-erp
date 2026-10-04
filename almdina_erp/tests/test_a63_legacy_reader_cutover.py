@@ -149,42 +149,15 @@ def test_dxf_geometry_adapter_receives_plan_settings_through_a_transient_proxy()
     assert "order.trim_margin_mm" in legacy
 
 
-def test_replacement_plans_inherit_from_the_exact_approved_cutting_plan() -> None:
-    snapshot = (
-        APP / "infrastructure" / "frappe" / "replacements" / "snapshot_adapter.py"
-    ).read_text(encoding="utf-8")
-    service = (APP / "services" / "replacement_plan_service.py").read_text(
-        encoding="utf-8"
-    )
-    persistence = (
-        APP / "infrastructure" / "frappe" / "replacements" / "plan_persistence.py"
-    ).read_text(encoding="utf-8")
+def test_replacement_plans_are_removed_from_cutting_plan_commands() -> None:
     command_context = (
         APP / "infrastructure" / "frappe" / "cutting_plan_command_context.py"
     ).read_text(encoding="utf-8")
-
-    for source in (snapshot, service):
-        assert "approved_plan_for_order" in source
-        assert "order.kerf_mm" not in source
-        assert "order.trim_margin_mm" not in source
-    for forbidden in (
-        "order.board_rate_usd",
-        "order.cutting_cost_per_board_usd",
-        "ignore_permissions",
-    ):
-        assert forbidden not in service
-    assert "source_plan.board_rate_usd" in service
-    assert "source_plan.cutting_cost_per_board_usd" in service
-    assert "settings.kerf_mm" in service
-    assert "settings.trim_margin_mm" in service
-    assert "insert_replacement_plan(plan)" in service
-    assert "approve_replacement_plan(plan)" in service
-
-    assert "REPLACEMENT_PLAN_COMMAND_FLAG" in persistence
-    assert "plan.insert()" in persistence
-    assert "plan.save()" in persistence
-    assert "ignore_permissions" not in persistence
-    assert "REPLACEMENT_PLAN_COMMAND_FLAG" in command_context
+    assert not (
+        APP / "infrastructure" / "frappe" / "replacements" / "plan_persistence.py"
+    ).exists()
+    assert not (APP / "services" / "replacement_plan_service.py").exists()
+    assert "REPLACEMENT_PLAN_COMMAND_FLAG" not in command_context
     assert "Capability.APPROVE_REPLACEMENT" not in command_context
 
 

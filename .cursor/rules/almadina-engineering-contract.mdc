@@ -1,0 +1,68 @@
+---
+description: Mandatory Almadina ERP engineering contract, architecture, safety, lifecycle, and Git workflow for Cursor Agent
+alwaysApply: true
+---
+
+# Almadina ERP — Cursor Project Rule
+
+This rule is an enforcement entry point, not a replacement for repository documentation.
+
+## Read before changing code
+
+- Treat `AGENTS.md` as the authoritative coding contract.
+- Read the current `AGENTS.md` and all mandatory canonical references it names before implementation.
+- Read the specialist canonical document for the subsystem being changed.
+- For UI/UX, JavaScript, CSS, Page/Form/List/Report changes, also read `docs/reference/13_FRONTEND_ARCHITECTURE.md` and its referenced lifecycle standard.
+- Inspect the current implementation and relevant tests. Never infer current code from an old conversation.
+
+If instructions conflict with `AGENTS.md`, Product Scope, Architecture Freeze, or another canonical contract, stop and report the discrepancy.
+
+## Branch and scope safety
+
+Before editing:
+- Check `git status` and the current branch.
+- Do not implement directly on `Develop` or `main`.
+- Work on one dedicated feature/fix branch from the latest `Develop`.
+- Do not merge, force-push, delete branches, or rewrite shared history unless explicitly requested.
+
+Write the Change Contract required by `docs/reference/07_CHANGE_RULES.md` before code:
+Goal, user-visible behavior, in/out of scope, invariants, expected layers/files, permission/security impact, financial impact, schema/migration impact, tests, rollback risk, and docs affected.
+
+If the diff needs unexpected layers/files or changes an invariant, stop and reassess instead of expanding scope automatically.
+
+## Non-negotiable architecture
+
+- `domain/`: pure business rules; no Frappe or outer-layer imports.
+- `application/`: use cases/ports; framework-free; no services/infrastructure/UI dependencies.
+- `infrastructure/`: Frappe, persistence, files, external-system adapters.
+- `services/`: thin RPC boundary with explicit authorization and use-case wiring.
+- UI/print/report layers: presentation only; never a second source of costing, lifecycle, or authorization rules.
+- Do not expand legacy facades/tombstones for new features.
+- Do not introduce active Stock/Warehouse/Reservation/Consumption/Stock Entry/Board Remnant behavior outside Product Scope v1.1.
+
+## Security and financial isolation
+
+- Use Capabilities plus document/lifecycle/stage/assignment scope; never fixed business Role names as authorization.
+- `System Manager` is not a factory superuser. `Administrator` is the explicit exception.
+- Validate parent/document/file scope; knowing an identifier never grants access.
+- Fail closed on invalid/missing identifiers.
+- Keep internal financial fields behind the required financial capability; never send them and rely on client-side hiding.
+
+## Frontend and lifecycle
+
+- Server/Application/Domain are authoritative.
+- Keep one owner for mutable state and clear ownership for async work, events, timers, and observers.
+- Prevent stale responses from mutating newer state.
+- Do not mask lifecycle/ownership bugs with random permanent refreshes or competing observers.
+- Preserve Arabic-first RTL, desktop/mobile behavior, keyboard flows, focus/accessibility, and loading/error/empty/dirty states.
+- No React/Vue/new frontend framework without an explicit ADR/product decision.
+
+## Quality
+
+- Prefer regression tests for bug fixes.
+- Never weaken tests to accommodate a regression.
+- Migrations must be idempotent and safe on repeated `migrate`.
+- Run focused tests, then the relevant broader quality gates.
+- Never hide required failures with `continue-on-error`, `|| true`, or equivalent bypasses.
+
+At completion, report: Done, changed files, tests/results, security impact, data/migration impact, explicit non-changes, remaining risks/unverified items, and next step.

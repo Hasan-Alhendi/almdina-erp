@@ -1,0 +1,55 @@
+/*
+ * Shared desk list/table chrome.
+ * Column widths and DCO row-state colors stay with their feature stylesheets.
+ */
+
+body:has(.frappe-list) .page-body,
+body:has(.frappe-list) .page-content,
+body:has(.frappe-list) .layout-main,
+body:has(.frappe-list) .layout-main-section-wrapper,
+body:has(.frappe-list) .layout-main-section {
+    background: var(--alm-canvas, #eef1f6);
+}
+
+.layout-main-section .frappe-list {
+    background: var(--alm-card, #fff);
+    color: var(--text-color, #1f272e);
+}
+
+.layout-main-section .frappe-list .list-row-head {
+    background: var(--alm-canvas, #eef1f6);
+    border-bottom: 1px solid var(--alm-card-border, #e4e8ee);
+    color: var(--text-muted, #6b7280);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.layout-main-section .frappe-list .list-row-container {
+    border-bottom: 1px solid var(--alm-card-border, #e4e8ee);
+}
+
+.layout-main-section .frappe-list .list-row-container:hover {
+    background: color-mix(in srgb, var(--alm-primary, #172033) 4%, #fff);
+}
+
+.layout-main-section .frappe-list .list-row,
+.layout-main-section .frappe-list .list-row-head {
+    min-height: 44px;
+    align-items: center;
+}
+
+.layout-main-section .frappe-list .list-subject a,
+.layout-main-section .frappe-list .list-id,
+.layout-main-section .frappe-list .list-row-col.list-subject .ellipsis {
+    color: var(--alm-accent, #2563eb);
+    font-weight: 700;
+}
+
+.layout-main-section .frappe-list .list-paging {
+    background: var(--alm-card, #fff);
+    border-top: 1px solid var(--alm-card-border, #e4e8ee);
+}
+
+.layout-main-section .frappe-list .list-paging .btn-paging {
+    border-radius: 8px;
+}

@@ -63,11 +63,157 @@ const defaults = geometry.baseConfig({
 assert.equal(defaults.position, "Top Right");
 assert.equal(defaults.cutWidth, 16);
 assert.equal(defaults.cutLength, 40);
+assert.equal(defaults.remainingWidth, 64);
+assert.equal(defaults.remainingLength, 160);
+assert.equal(geometry.remainingFromCut(100, 20), 80);
+assert.equal(geometry.cutFromRemaining(100, 80), 20);
+assert.equal(geometry.clampRemaining(100, 80), 80);
+assert.equal(geometry.clampRemaining(50, 80), 49.9);
+assert.equal(geometry.adjustCutForNewTotal(100, 20, 120), 40);
+assert.equal(geometry.adjustCutForNewTotal(100, 20, 100), 20);
+
+const resizedL = {
+    piece_type: "L-Shaped Corner",
+    width_cm: 120,
+    length_cm: 220,
+    clipped_corner_position: "Top Right",
+    clipped_corner_width_cm: 20,
+    clipped_corner_length_cm: 40,
+};
+assert.equal(
+    geometry.preserveRemainingOnResize(resizedL, {
+        width: 100,
+        length: 200,
+        cutWidth: 20,
+        cutLength: 40,
+    }),
+    true,
+    "Resizing an L door must rewrite cut distances to keep remaining lengths"
+);
+assert.equal(resizedL.clipped_corner_width_cm, 40);
+assert.equal(resizedL.clipped_corner_length_cm, 60);
+assert.equal(geometry.remainingFromCut(120, resizedL.clipped_corner_width_cm), 80);
+assert.equal(geometry.remainingFromCut(220, resizedL.clipped_corner_length_cm), 160);
+assert.deepEqual(
+    geometry.baseConfig(resizedL),
+    {
+        position: "Top Right",
+        cutWidth: 40,
+        cutLength: 60,
+        remainingWidth: 80,
+        remainingLength: 160,
+        originalWidth: 120,
+        originalLength: 220,
+    },
+    "Opening the shape editor after a resize must still show the same remaining sides"
+);
+assert.equal(
+    geometry.preserveRemainingOnResize(
+        { piece_type: "Regular", width_cm: 120, clipped_corner_width_cm: 20 },
+        { width: 100, cutWidth: 20, length: 200, cutLength: 40 }
+    ),
+    false
+);
 assert.match(geometry.summary(piece), /أعلى اليمين/);
+assert.match(geometry.summary(piece), /80×160 سم متبقي/);
 assert.equal(geometry.isClipped({ piece_type: "Regular" }), false);
 assert.equal(geometry.isCornerCut({ piece_type: "Regular" }), false);
 assert.equal(geometry.isCornerCut(piece), true);
 assert.equal(geometry.cutStyle(piece), "diagonal");
+assert.equal(geometry.typeLabel(piece), "الزاوية الكسر");
+assert.deepEqual(
+    geometry.breakAdjacentSides("Bottom Right"),
+    ["edge_width_bottom", "edge_long_right"]
+);
+
+const breakPiece = {
+    ...piece,
+    edge_width_top: 1,
+    edge_long_right: 1,
+    edge_width_bottom: 1,
+    edge_break: 1,
+};
+geometry.applyEdgeBreakPolicy(breakPiece);
+assert.equal(breakPiece.edge_break, 1);
+assert.equal(breakPiece.edge_width_top, 0);
+assert.equal(breakPiece.edge_long_right, 0);
+assert.equal(breakPiece.edge_width_bottom, 1);
+
+const breakMarkup = geometry.edgeBandSvgMarkup(
+    {
+        ...piece,
+        edge_break: 1,
+        edge_width_bottom: 1,
+    },
+    100,
+    100
+);
+assert.match(breakMarkup, /dco-edge-break-svg/);
+assert.match(breakMarkup, /polyline/);
+assert.match(
+    geometry.edgeSelectionSummary({
+        piece_type: "Clipped Corner",
+        edge_break: 1,
+        edge_width_bottom: 1,
+    }),
+    /الكسر/
+);
+assert.match(
+    geometry.edgeSelectionSummary({
+        piece_type: "Clipped Corner",
+        edge_width_bottom: 1,
+    }),
+    /أسفل/
+);
+
+const planPiece = {
+    piece_type: "Clipped Corner",
+    original_w: 100,
+    original_h: 200,
+    w: 100,
+    h: 200,
+    clipped_corner_position: "Top Right",
+    clipped_corner_width_cm: 20,
+    clipped_corner_length_cm: 40,
+    edge_break: 1,
+    edge_width_top: 0,
+    edge_long_right: 0,
+    edge_width_bottom: 0,
+    edge_long_left: 0,
+};
+const planBreakMarkup = geometry.edgeBandSvgMarkup(planPiece, 100, 100);
+assert.match(
+    planBreakMarkup,
+    /dco-edge-break-svg/,
+    "Plan placed pieces must render break banding from edge_break alone"
+);
+
+const lBreakPiece = {
+    piece_type: "L-Shaped Corner",
+    width_cm: 100,
+    length_cm: 100,
+    clipped_corner_position: "Top Right",
+    clipped_corner_width_cm: 20,
+    clipped_corner_length_cm: 20,
+    edge_break: 1,
+    edge_width_top: 1,
+    edge_long_right: 1,
+    edge_width_bottom: 1,
+};
+geometry.applyEdgeBreakPolicy(lBreakPiece);
+assert.equal(lBreakPiece.edge_break, 1);
+assert.equal(lBreakPiece.edge_width_top, 1, "L corner strap must not clear outer sides");
+assert.equal(lBreakPiece.edge_long_right, 1, "L corner strap must not clear outer sides");
+assert.equal(lBreakPiece.edge_width_bottom, 1);
+assert.equal(geometry.locksAdjacentSidesForBreak(lBreakPiece), false);
+assert.equal(geometry.breakEdgeLabel(lBreakPiece), "قشاط الزاوية");
+const lBreakMarkup = geometry.edgeBandSvgMarkup(lBreakPiece, 100, 100);
+assert.match(lBreakMarkup, /dco-edge-break-svg/);
+assert.equal(
+    (lBreakMarkup.match(/dco-edge-break-svg"[^>]*points="([^"]+)"/) || [])[1].split(" ").length,
+    3,
+    "L corner strap path should cover only the inner notch (two edges)"
+);
 
 const lPiece = {
     piece_type: "L-Shaped Corner",
@@ -121,6 +267,39 @@ assert.deepEqual(
     geometry.dxfPoints(rotatedL, 10, 20, 200, 100),
     [[10, 120], [210, 120], [210, 40], [170, 40], [170, 20], [10, 20]]
 );
+
+const squareFrame = geometry.previewFrame(100, 100);
+assert.equal(squareFrame.width, squareFrame.height);
+assert.equal(squareFrame.width, 220);
+assert.equal(squareFrame.x, 100);
+assert.equal(squareFrame.y, 30);
+
+const squareCuts = {
+    piece_type: "L-Shaped Corner",
+    width_cm: 100,
+    length_cm: 100,
+    clipped_corner_position: "Top Right",
+    clipped_corner_width_cm: 20,
+    clipped_corner_length_cm: 20,
+};
+const squareCutPoints = geometry.points(squareCuts, squareFrame.width, squareFrame.height);
+assert.equal(
+    squareFrame.width - squareCutPoints[1][0],
+    squareCutPoints[2][1],
+    "Equal cut distances on a square piece should use the same pixel scale on both axes"
+);
+assert.equal(squareFrame.width - squareCutPoints[1][0], 44);
+
+const diagonalSquare = geometry.points({
+    ...squareCuts,
+    piece_type: "Clipped Corner",
+}, squareFrame.width, squareFrame.height);
+assert.equal(squareFrame.width - diagonalSquare[1][0], diagonalSquare[2][1]);
+
+const tallFrame = geometry.previewFrame(40, 200);
+assert.equal(tallFrame.width / tallFrame.height, 40 / 200);
+assert.equal(tallFrame.height, 220);
+assert.equal(tallFrame.width, 44);
 
 let printed = null;
 global.frappe.msgprint = (payload) => {

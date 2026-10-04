@@ -52,7 +52,14 @@ def test_summary_reads_canonical_plan_workspace_settings_and_identity() -> None:
     assert "AlmdinaPlanWorkspaceState" in summary
     assert 'state.status === "ready"' in summary
     assert 'data-almdina-order' in summary
-    assert "frm.doc.name" in summary
+    assert "dco-plan-settings-readonly__strip" in summary
+    assert "dco-plan-settings-readonly__field" in summary
+    assert 'class="form-control"' in summary
+    assert "readonly" in summary
+    assert "dco-plan-settings-editor__recalc" not in summary
+    assert "إعدادات الخطة" in summary
+    assert 'shortLabel: "الهامش"' in summary
+    assert 'shortLabel: "التشذيب"' not in summary
 
 
 def test_summary_recovers_from_workspace_and_surface_rerenders_without_timers() -> None:

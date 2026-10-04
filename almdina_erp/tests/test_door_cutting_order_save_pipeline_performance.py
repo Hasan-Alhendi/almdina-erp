@@ -15,8 +15,16 @@ DOCTYPE = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cuttin
 FAST_CONTROLLER = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order_fast.py"
 ACTIVE_CONTROLLER = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order_controller.py"
 DOCUMENT_ACCESS = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "orders" / "document_access.py"
-SAVE_RENDER_UX = ROOT / "public" / "js" / "door_cutting_order_save_render_performance_ux.js"
+SAVE_RENDER_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "core"
+    / "door_cutting_order_save_render_performance_ux.js"
+)
 HOOKS = ROOT / "hooks.py"
+FRONTEND_ASSETS = ROOT / "frontend_assets.py"
 
 
 def _fast_source() -> str:
@@ -138,19 +146,31 @@ def test_post_save_dom_layer_reuses_unchanged_measurement_table():
     assert "dco-fast-entry-shell" in source
     assert "wrapper._dcoFastHtmlGuardForm = frm" in source
     assert "root._dcoDeferredRenderForm = frm" in source
-    assert 'window.AlmdinaOrderCostUX.render(currentFrm)' in source
+    assert "window.AlmdinaOrderCostUX" in source
+    assert "presenter.render(frm)" in source
     # Edit-session unlock must replace HTML; value-only sync leaves disabled inputs.
     assert "htmlLooksEditable(value) !== currentShellEditable(root)" in source
     assert "_dcoForceHtmlReplace" in source
     assert "dco-fast-readonly-note" in source
+    # Corner banding summary is not a check-toggle; value-only sync must refresh it
+    # so «اعتماد الزاوية» shows straps in the table without waiting for save.
+    assert "function syncCornerEdgesSummary" in source
+    assert "edgeSelectionSummary" in source
+    assert "dco-corner-edges-summary" in source
+    assert "syncCornerEdgesSummary(frm, tr, row, editable)" in source
 
 
 def test_post_save_dom_layer_loads_after_table_and_invoice_renderers():
-    hooks = HOOKS.read_text(encoding="utf-8")
-    operator = '"public/js/door_cutting_order_operator_ux.js"'
-    table = '"public/js/door_cutting_order_table_performance_ux.js"'
-    invoice = '"public/js/door_cutting_order_cost_invoice_ux.js"'
-    performance = '"public/js/door_cutting_order_save_render_performance_ux.js"'
-    assert hooks.index(operator) < hooks.index(performance)
-    assert hooks.index(table) < hooks.index(performance)
-    assert hooks.index(invoice) < hooks.index(performance)
+    assets = FRONTEND_ASSETS.read_text(encoding="utf-8")
+    operator = "public/js/door_cutting_order/order_entry/door_cutting_order_operator_ux.js"
+    table = (
+        "public/js/door_cutting_order/order_entry/measurements/"
+        "door_cutting_order_table_performance_ux.js"
+    )
+    performance = (
+        "public/js/door_cutting_order/core/"
+        "door_cutting_order_save_render_performance_ux.js"
+    )
+    # Guard must load after the measurement table owners it wraps.
+    assert assets.index(operator) < assets.index(performance)
+    assert assets.index(table) < assets.index(performance)

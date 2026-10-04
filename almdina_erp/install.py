@@ -33,7 +33,6 @@ def sync_setup() -> None:
     sync_dual_plan_json_backfill()
     sync_order_board_descriptions()
     sync_plan_board_descriptions()
-    sync_replacement_board_descriptions()
 
 
 def after_install() -> None:
@@ -42,23 +41,6 @@ def after_install() -> None:
 
 def after_migrate() -> None:
     sync_setup()
-
-
-def sync_replacement_board_descriptions() -> None:
-    """Backfill only missing free-text identity on historical replacements."""
-
-    if not frappe.db.exists("DocType", "Replacement Piece"):
-        return
-    frappe.db.sql(
-        """
-        update `tabReplacement Piece` replacement
-        inner join `tabDoor Cutting Order` order_doc
-            on order_doc.name = replacement.door_cutting_order
-        set replacement.board_description = order_doc.board_description
-        where coalesce(replacement.board_description, '') = ''
-          and coalesce(order_doc.board_description, '') != ''
-        """
-    )
 
 
 def sync_order_board_descriptions() -> None:

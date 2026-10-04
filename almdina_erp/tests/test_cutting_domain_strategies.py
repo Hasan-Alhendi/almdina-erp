@@ -8,12 +8,9 @@ from almdina_erp.almdina_erp.domain.cutting import (
     auto_fast,
     expand_piece_groups,
     get_strategy,
-    optimize_plan,
     run_single_method,
     validate_plan,
 )
-from almdina_erp.almdina_erp.services import advanced_cutting_optimizer
-from almdina_erp.almdina_erp.services import cutting_engine
 
 
 class TestCuttingDomainStrategies(unittest.TestCase):
@@ -72,16 +69,7 @@ class TestCuttingDomainStrategies(unittest.TestCase):
         self.assertTrue(plan["method_key"].startswith("Guillotine"))
         self.assertEqual(plan["optimization_mode"], "Auto")
 
-    def test_service_facades_export_the_same_domain_functions(self) -> None:
-        self.assertIs(cutting_engine.run_single_method, run_single_method)
-        self.assertIs(advanced_cutting_optimizer.optimize_plan, optimize_plan)
-        service_plan = cutting_engine.run_single_method(
-            self._pieces(),
-            122,
-            244,
-            0.4,
-            "MaxRects Best Area",
-        )
+    def test_domain_methods_are_the_canonical_cutting_entry_points(self) -> None:
         domain_plan = run_single_method(
             self._pieces(),
             122,
@@ -89,7 +77,8 @@ class TestCuttingDomainStrategies(unittest.TestCase):
             0.4,
             "MaxRects Best Area",
         )
-        self.assertEqual(service_plan, domain_plan)
+        self.assertEqual(domain_plan["method_key"], "MaxRects Best Area")
+        self.assertEqual(validate_plan(domain_plan, self._pieces(), 122, 244), [])
 
 
 if __name__ == "__main__":

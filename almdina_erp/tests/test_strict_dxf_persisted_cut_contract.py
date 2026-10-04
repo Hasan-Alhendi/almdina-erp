@@ -57,6 +57,20 @@ def _special_snapshot(*, width: float, height: float) -> dict:
     }
 
 
+def _order_with_identity() -> SimpleNamespace:
+    """Minimal DCO row identity required by the strict import inventory."""
+    return SimpleNamespace(
+        pieces=[
+            SimpleNamespace(
+                piece_instance_id="piece:test-special-1",
+                cut_width_cm=120,
+                cut_length_cm=200,
+                extra_full_door_double=0,
+            )
+        ]
+    )
+
+
 def test_strict_import_uses_persisted_cut_dimensions_over_recomputed_spec():
     order = SimpleNamespace(
         pieces=[
@@ -95,6 +109,7 @@ def test_strict_contract_preserves_topology_special_with_exact_cut_envelope():
     errors = _apply_strict_dimension_contract(
         snapshot,
         [_spec(cut_width_cm="120", cut_length_cm="200", piece_type="Special")],
+        order=_order_with_identity(),
     )
 
     assert errors == []
@@ -105,16 +120,46 @@ def test_strict_contract_preserves_topology_special_with_exact_cut_envelope():
     assert piece["rotated"] is False
 
 
+def test_strict_contract_matches_special_after_public_piece_strips_private_index():
+    """Regression: export/reimport public pieces lose ``_expected_piece_index``."""
+    snapshot = _special_snapshot(width=12, height=15)
+    # Explicitly mirror ``_public_piece``: no private importer keys remain.
+    assert "_expected_piece_index" not in snapshot["sheets"][0]["pieces"][0]
+
+    errors = _apply_strict_dimension_contract(
+        snapshot,
+        [_spec(cut_width_cm="12", cut_length_cm="15", piece_type="Special")],
+        order=SimpleNamespace(
+            pieces=[
+                SimpleNamespace(
+                    piece_instance_id="piece:row-6",
+                    cut_width_cm=12,
+                    cut_length_cm=15,
+                    extra_full_door_double=0,
+                )
+            ]
+        ),
+    )
+
+    assert errors == []
+    piece = snapshot["sheets"][0]["pieces"][0]
+    assert piece["label"] == "1.1"
+    assert piece["piece_instance_id"] == "piece:row-6:1"
+    assert piece["cut_width_cm"] == 12
+    assert piece["cut_length_cm"] == 15
+
+
 def test_strict_contract_rejects_topology_special_with_wrong_cut_envelope():
     snapshot = _special_snapshot(width=60, height=60)
 
     errors = _apply_strict_dimension_contract(
         snapshot,
         [_spec(cut_width_cm="120", cut_length_cm="200", piece_type="Special")],
+        order=_order_with_identity(),
     )
 
     assert errors
-    assert "الإطار الخارجي للتصنيع" in errors[0]
+    assert errors[0].code == "SPECIAL_SIZE_MISMATCH"
 
 
 def test_strict_contract_allows_special_rotation_only_when_order_allows_it():
@@ -129,6 +174,7 @@ def test_strict_contract_allows_special_rotation_only_when_order_allows_it():
                 allow_rotation=1,
             )
         ],
+        order=_order_with_identity(),
     )
 
     assert allowed_errors == []
@@ -145,10 +191,11 @@ def test_strict_contract_allows_special_rotation_only_when_order_allows_it():
                 allow_rotation=0,
             )
         ],
+        order=_order_with_identity(),
     )
 
     assert forbidden_errors
-    assert "التدوير غير مسموح" in forbidden_errors[0]
+    assert forbidden_errors[0].code == "FORBIDDEN_ROTATION"
 
 
 def test_strict_contract_keeps_regular_pieces_dimension_bound():
@@ -169,10 +216,17 @@ def test_strict_contract_keeps_regular_pieces_dimension_bound():
         ]
     }
 
-    errors = _apply_strict_dimension_contract(snapshot, [_spec()])
+    errors = _apply_strict_dimension_contract(
+        snapshot,
+        [_spec()],
+        order=_order_with_identity(),
+    )
 
     assert errors
-    assert "لا تطابق" in "\n".join(errors)
+    assert errors[0].code == "CUT_SIZE_MISMATCH"
+    # Regular pieces stay dimension-bound (exact cut only); no Special identity path.
+    assert float(errors[0].params["actual_width_cm"]) == 60
+    assert float(errors[0].params["expected_width_cm"]) == 59.8
 
 
 def test_strict_contract_rejects_unproven_special_identity():
@@ -196,7 +250,8 @@ def test_strict_contract_rejects_unproven_special_identity():
     errors = _apply_strict_dimension_contract(
         snapshot,
         [_spec(piece_type="Special")],
+        order=_order_with_identity(),
     )
 
     assert errors
-    assert "تعذر ربط الدرفة الخاصة" in errors[0]
+    assert errors[0].code == "PIECE_IDENTITY_MISSING"

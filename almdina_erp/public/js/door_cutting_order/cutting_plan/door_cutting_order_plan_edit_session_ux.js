@@ -13,7 +13,8 @@
     const PLAN_SETTING_SPECS = Object.freeze([
         Object.freeze({
             fieldname: "kerf_mm",
-            label: "سماكة شفرة القص (Kerf)",
+            label: "سماكة شفرة القص (مم)",
+            shortLabel: "الشفرة",
             fieldtype: "Float",
             min: 0,
             step: "0.1",
@@ -22,6 +23,7 @@
         Object.freeze({
             fieldname: "trim_margin_mm",
             label: "هامش تشذيب اللوح",
+            shortLabel: "الهامش",
             fieldtype: "Float",
             min: 0,
             step: "0.1",
@@ -30,22 +32,25 @@
         Object.freeze({
             fieldname: "packing_mode",
             label: "خوارزمية توزيع القطع",
+            shortLabel: "الخوارزمية",
             fieldtype: "Select",
             catalog: "optimization_catalog",
         }),
         Object.freeze({
             fieldname: "cutting_machine_type",
             label: "نوع آلة القص",
+            shortLabel: "الآلة",
             fieldtype: "Select",
             catalog: "machine_type_catalog",
         }),
         Object.freeze({
             fieldname: "optimization_time_limit_sec",
             label: "مهلة التحسين",
+            shortLabel: "المهلة",
             fieldtype: "Float",
             min: 0,
             step: "1",
-            suffix: "ثانية",
+            suffix: "ث",
         }),
     ]);
     const DRAFT_LIKE = new Set(["Draft", "Pending Review", "Rejected"]);
@@ -66,7 +71,7 @@
     const ORIGINAL_DISABLED_ATTR = "data-almdina-plan-edit-original-disabled";
     const PHASE_DISABLED_ATTR = "data-almdina-plan-phase-original-disabled";
     const EDITOR_SELECTOR = ".dco-plan-settings-editor";
-    const STYLE_ID = "almdina-plan-settings-editor-style";
+    const STYLE_ID = "almdina-plan-settings-editor-style-v4";
 
     function documentContext() {
         return window.AlmdinaDocumentContext || null;
@@ -312,104 +317,226 @@
     }
 
     function installEditorStyles() {
-        if (document.getElementById(STYLE_ID)) return;
-        const style = document.createElement("style");
-        style.id = STYLE_ID;
+        ["almdina-plan-settings-editor-style", STYLE_ID].forEach((id) => {
+            if (id === STYLE_ID) return;
+            const legacy = document.getElementById(id);
+            if (legacy) legacy.remove();
+        });
+        let style = document.getElementById(STYLE_ID);
+        if (!style) {
+            style = document.createElement("style");
+            style.id = STYLE_ID;
+            document.head.appendChild(style);
+        }
         style.textContent = `
             .dco-plan-settings-editor {
-                margin: 0 0 14px;
-                padding: 14px;
-                border: 1px solid var(--border-color, #d1d8dd);
-                border-radius: 12px;
-                background: var(--card-bg, #fff);
-                direction: rtl;
-            }
-            .dco-plan-settings-editor__header {
-                display: flex;
-                align-items: flex-start;
-                justify-content: space-between;
-                gap: 12px;
-                margin-bottom: 12px;
-            }
-            .dco-plan-settings-editor__title {
                 margin: 0;
-                font-size: 14px;
-                font-weight: 700;
+                padding: 6px 12px;
+                border: 1px solid var(--alm-card-border, #e4e8ee);
+                border-radius: var(--alm-radius-sm, 10px);
+                background: var(--alm-card, #fff);
+                box-shadow: none;
+                direction: rtl;
+                overflow: visible;
+                width: 100%;
+                box-sizing: border-box;
             }
-            .dco-plan-settings-editor__help {
-                margin: 4px 0 0;
-                color: var(--text-muted, #687481);
-                font-size: 12px;
-                line-height: 1.6;
+            .dco-plan-settings-editor__sheet {
+                display: flex;
+                flex-wrap: nowrap;
+                align-items: center;
+                gap: 8px;
+                width: 100%;
+                border: 0;
+                border-radius: 0;
+                background: transparent;
+                overflow-x: auto;
+                box-shadow: none;
             }
-            .dco-plan-settings-editor__badge {
-                flex: 0 0 auto;
-                padding: 4px 8px;
-                border-radius: 999px;
-                background: var(--yellow-100, #fff3cd);
-                color: var(--yellow-900, #664d03);
-                font-size: 11px;
-                font-weight: 600;
-                opacity: 0;
-                transition: opacity .15s ease;
-            }
-            .dco-plan-settings-editor.is-dirty .dco-plan-settings-editor__badge {
-                opacity: 1;
-            }
-            .dco-plan-settings-editor__grid {
-                display: grid;
-                grid-template-columns: repeat(3, minmax(0, 1fr));
-                gap: 12px;
-            }
-            .dco-plan-settings-editor__field {
+            .dco-plan-settings-editor__settings-row {
+                display: flex;
+                flex: 1 1 auto;
+                flex-wrap: nowrap;
+                align-items: center;
+                gap: 6px;
+                padding: 0;
                 min-width: 0;
             }
-            .dco-plan-settings-editor__field label {
+            .dco-plan-settings-editor__lead {
+                display: none;
+            }
+            .dco-plan-settings-editor__icon {
+                display: none;
+            }
+            .dco-plan-settings-editor__icon svg {
+                width: 16px;
+                height: 16px;
                 display: block;
-                margin-bottom: 6px;
-                font-size: 12px;
-                font-weight: 600;
-                color: var(--text-color, #36414c);
+            }
+            .dco-plan-settings-editor__grid {
+                display: flex;
+                flex-wrap: nowrap;
+                align-items: center;
+                gap: 6px;
+                flex: 1 1 auto;
+                min-width: 0;
+                padding: 0;
+            }
+            .dco-plan-settings-editor__field {
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                min-width: 0;
+                min-height: 0;
+                padding: 0;
+                border: 0;
+                border-radius: 0;
+                background: transparent;
+                box-shadow: none;
+            }
+            .dco-plan-settings-editor__field:first-child {
+                padding-inline-start: 0;
+            }
+            .dco-plan-settings-editor__field label {
+                margin: 0;
+                margin-bottom: 0;
+                font-size: 11px;
+                font-weight: 700;
+                color: var(--text-muted, #667085);
+                white-space: nowrap;
             }
             .dco-plan-settings-editor__input-wrap {
                 position: relative;
+                flex: 0 1 auto;
+                min-width: 0;
             }
             .dco-plan-settings-editor .form-control {
-                width: 100%;
-                min-height: 36px;
+                width: auto;
+                min-width: 3.25em;
+                max-width: 9.5em;
+                min-height: 28px;
+                height: 28px;
+                padding: 2px 8px;
+                font-size: 11px;
+                font-weight: 700;
+                border: 1px solid var(--border-color, #d0d5dd);
+                border-radius: var(--alm-radius-button, 8px);
+                background: var(--alm-card, #fff);
+                box-shadow: none;
                 text-align: start;
+                color: var(--text-color, #1f272e);
+            }
+            .dco-plan-settings-editor select.form-control {
+                min-width: 7em;
+                max-width: 10.5em;
+                padding-inline-end: 22px;
+            }
+            .dco-plan-settings-editor .form-control:focus {
+                outline: none;
+                border-color: var(--alm-accent, #2563eb);
+                box-shadow: 0 0 0 2px color-mix(in srgb, var(--alm-accent, #2563eb) 16%, transparent);
             }
             .dco-plan-settings-editor__input-wrap.has-suffix .form-control {
-                padding-inline-end: 52px;
+                padding-inline-start: 26px;
+                padding-inline-end: 8px;
             }
             .dco-plan-settings-editor__suffix {
                 position: absolute;
-                inset-inline-end: 10px;
+                inset-inline-start: 8px;
+                inset-inline-end: auto;
                 top: 50%;
                 transform: translateY(-50%);
                 pointer-events: none;
-                color: var(--text-muted, #687481);
-                font-size: 11px;
+                color: var(--text-muted, #667085);
+                font-size: 10px;
+                font-weight: 700;
             }
-            @media (max-width: 991px) {
-                .dco-plan-settings-editor__grid {
-                    grid-template-columns: repeat(2, minmax(0, 1fr));
-                }
+            .dco-plan-settings-editor__footer {
+                flex: 0 0 auto;
+                margin: 0;
+                margin-inline-start: auto;
+            }
+            .dco-plan-settings-editor__action-bar,
+            .dco-plan-settings-editor__action-bar.is-edit-layout,
+            .dco-plan-settings-editor__action-bar.is-stale,
+            .dco-plan-settings-editor__action-bar.is-calculating {
+                display: flex;
+                flex-direction: row;
+                align-items: center;
+                justify-content: flex-start;
+                gap: 8px;
+                padding: 0;
+                border: 0;
+                background: transparent;
+                color: var(--alm-warning, #b45309);
+                direction: ltr;
+            }
+            .dco-plan-settings-editor__stale-copy {
+                flex: 0 1 auto;
+                margin: 0;
+                padding: 6px 12px;
+                border: 1px solid #f0c36d;
+                border-radius: 999px;
+                background: var(--alm-warning-bg, #fff7e8);
+                color: var(--alm-warning, #b45309);
+                font-size: 12px;
+                font-weight: 800;
+                line-height: 1.4;
+                white-space: nowrap;
+            }
+            .dco-plan-settings-editor__stale-copy[hidden] {
+                display: none !important;
+            }
+            .dco-plan-settings-editor__recalc-slot {
+                flex: 0 0 auto;
+            }
+            .dco-plan-settings-editor__recalc-btn.btn::before {
+                content: "↻";
+                margin-inline-end: 6px;
+                font-size: 13px;
+                line-height: 1;
+            }
+            .dco-plan-settings-editor__recalc-btn.btn {
+                min-height: 36px;
+                height: 36px;
+                padding: 0 12px;
+                line-height: 1;
+                border-radius: 999px;
+                font-size: 11px;
+                font-weight: 800;
+                border-color: var(--alm-accent, #2563eb);
+                background: var(--alm-accent, #2563eb);
+                color: var(--alm-on-primary, #fff);
+                white-space: nowrap;
+                box-shadow: 0 3px 8px color-mix(in srgb, var(--alm-accent, #2563eb) 24%, transparent);
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .dco-plan-settings-editor__recalc-btn.btn:disabled {
+                opacity: 0.55;
+            }
+            [data-fieldname="plan_control_actions"]:has(.dco-plan-settings-editor) .dco-plan-actions-shell,
+            [data-fieldname="plan_control_actions"]:has(.dco-plan-settings-editor) > .dco-plan-stale-banner {
+                display: none !important;
             }
             @media (max-width: 575px) {
-                .dco-plan-settings-editor__header {
-                    display: block;
+                .dco-plan-settings-editor__settings-row {
+                    flex-direction: column;
+                    align-items: stretch;
                 }
-                .dco-plan-settings-editor__badge {
-                    display: inline-block;
-                    margin-top: 8px;
+                .dco-plan-settings-editor__footer {
+                    margin-inline-start: 0;
+                    width: 100%;
                 }
-                .dco-plan-settings-editor__grid {
-                    grid-template-columns: 1fr;
+                .dco-plan-settings-editor__action-bar {
+                    flex-wrap: wrap;
+                }
+                .dco-plan-settings-editor__recalc-slot .btn {
+                    width: 100%;
                 }
             }
         `;
-        document.head.appendChild(style);
     }
 
     function selectOptions(spec, value) {
@@ -423,11 +550,11 @@
 
     function fieldMarkup(spec, value) {
         const fieldname = escapeHtml(spec.fieldname);
-        const label = escapeHtml(translate(spec.label));
+        const label = escapeHtml(translate(spec.shortLabel || spec.label));
         if (spec.fieldtype === "Select") {
             return `
                 <div class="dco-plan-settings-editor__field" data-fieldname="${fieldname}">
-                    <label for="dco-plan-setting-${fieldname}">${label}</label>
+                    <label for="dco-plan-setting-${fieldname}">${label}:</label>
                     <div class="dco-plan-settings-editor__input-wrap">
                         <select id="dco-plan-setting-${fieldname}" class="form-control" data-almdina-plan-setting="${fieldname}">
                             ${selectOptions(spec, value)}
@@ -440,7 +567,7 @@
         const inputClass = suffix ? "dco-plan-settings-editor__input-wrap has-suffix" : "dco-plan-settings-editor__input-wrap";
         return `
             <div class="dco-plan-settings-editor__field" data-fieldname="${fieldname}">
-                <label for="dco-plan-setting-${fieldname}">${label}</label>
+                <label for="dco-plan-setting-${fieldname}">${label}:</label>
                 <div class="${inputClass}">
                     <input
                         id="dco-plan-setting-${fieldname}"
@@ -483,6 +610,22 @@
         store.patchDraft({ [fieldname]: value });
     }
 
+    function preserveRecalculateButton(host) {
+        const button = host.find(".dco-recalculate-plan").first();
+        if (!button.length) return;
+        const shell = host.children(".dco-plan-actions-shell").first();
+        const target = shell.find(".dco-plan-actions").first();
+        if (target.length) {
+            target.append(button);
+            return;
+        }
+        if (shell.length) {
+            shell.append(button);
+            return;
+        }
+        host.append(button);
+    }
+
     function mountDraftControls(frm) {
         const store = storeFor(frm);
         const state = store && store.snapshot();
@@ -490,6 +633,7 @@
         if (!store || !state || !state.editing || !host) return false;
 
         installEditorStyles();
+        preserveRecalculateButton(host);
         host.children(EDITOR_SELECTOR).remove();
         const specs = planSettingSpecs(frm, state.draft || {});
         const fields = specs
@@ -497,14 +641,21 @@
             .join("");
         host.prepend(`
             <section class="dco-plan-settings-editor${state.dirty ? " is-dirty" : ""}" aria-label="${escapeHtml(translate("إعدادات خطة القص"))}">
-                <div class="dco-plan-settings-editor__header">
-                    <div>
-                        <h4 class="dco-plan-settings-editor__title">${escapeHtml(translate("إعدادات خطة القص"))}</h4>
-                        <p class="dco-plan-settings-editor__help">${escapeHtml(translate("هذه التعديلات مستقلة عن معلومات الطلب والتكلفة، ولا تُحفظ إلا عند الضغط على حفظ خطة القص."))}</p>
+                <div class="dco-plan-settings-editor__sheet">
+                    <div class="dco-plan-settings-editor__settings-row">
+                        <div class="dco-plan-settings-editor__lead">
+                            <span class="dco-plan-settings-editor__icon" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5h3.2M8.2 4.5h5.3M2.5 11.5h5.3M10.3 11.5h3.2"/><circle cx="7" cy="4.5" r="1.6"/><circle cx="9.2" cy="11.5" r="1.6"/></svg></span>
+                            <span class="dco-plan-settings-editor__lead-text">${escapeHtml(translate("إعدادات القص"))}</span>
+                        </div>
+                        <div class="dco-plan-settings-editor__grid">${fields}</div>
                     </div>
-                    <span class="dco-plan-settings-editor__badge">${escapeHtml(translate("تغييرات غير محفوظة"))}</span>
+                    <div class="dco-plan-settings-editor__footer">
+                        <div class="dco-plan-settings-editor__action-bar is-edit-layout">
+                            <div class="dco-plan-settings-editor__recalc-slot" data-role="recalc"></div>
+                            <p class="dco-plan-settings-editor__stale-copy" data-role="stale" hidden></p>
+                        </div>
+                    </div>
                 </div>
-                <div class="dco-plan-settings-editor__grid">${fields}</div>
             </section>
         `);
         const editor = host.children(EDITOR_SELECTOR).first();
@@ -517,6 +668,32 @@
                 markEditorDirty(host, Boolean(current && current.dirty));
             });
         return true;
+    }
+
+    function syncEditorChrome(frm) {
+        const host = editorHost(frm);
+        if (!host || !isEditing(frm)) return;
+        const editor = host.children(EDITOR_SELECTOR).first();
+        if (!editor.length) return;
+
+        const recalcSlot = editor.find('[data-role="recalc"]').first();
+        const button = host.find(".dco-recalculate-plan").first();
+        if (button.length && recalcSlot.length && !button.parent().is(recalcSlot)) {
+            recalcSlot.append(button);
+            button.addClass("dco-plan-settings-editor__recalc-btn");
+        }
+
+        const controls = window.AlmdinaPlanControlsUX;
+        if (controls && typeof controls.refresh === "function") {
+            controls.refresh(frm);
+        } else if (button.length && typeof button.prop === "function") {
+            button.prop("disabled", false);
+        }
+
+        const fastSave = window.AlmdinaFastSaveUX;
+        if (fastSave && typeof fastSave.renderStaleState === "function") {
+            fastSave.renderStaleState(frm);
+        }
     }
 
     function unmountDraftControls(frm) {
@@ -698,8 +875,18 @@
         return true;
     }
 
+    function syncEditPageScope(frm) {
+        if (typeof document === "undefined" || !document.body || !document.body.classList) return;
+        document.body.classList.toggle("dco-plan-settings-edit-active", Boolean(isEditing(frm)));
+    }
+
     function sync(frm) {
         if (!frm || frm.doctype !== "Door Cutting Order") return;
+        syncEditPageScope(frm);
+        const visual = window.AlmdinaPlanCostWorkspaceVisualUX;
+        if (visual && typeof visual.refresh === "function") {
+            visual.refresh(frm);
+        }
         if (["starting", "saving", "cancelling"].includes(planPhase(frm))) {
             syncPhaseLocks(frm);
             return;
@@ -721,6 +908,7 @@
         if (isEditing(frm)) {
             refreshFieldAccess(frm);
             mountDraftControls(frm);
+            syncEditorChrome(frm);
             setPlanActionsSuspended(frm, true);
             syncPhaseLocks(frm);
             return;

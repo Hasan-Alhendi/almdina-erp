@@ -1421,6 +1421,28 @@
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         width: 100%;
+        gap: 8px;
+    }
+
+    .prw-card-actions .btn {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .prw-card-actions .prw-duplicate-route {
+        order: 1;
+    }
+
+    .prw-card-actions .prw-toggle-route {
+        order: 2;
+    }
+
+    .prw-card-actions .prw-edit-route {
+        order: 3;
+    }
+
+    .prw-card-actions .prw-delete-route {
+        order: 4;
     }
 
     .prw-settings-card,
@@ -1461,10 +1483,6 @@
 }
 
 @media (max-width: 390px) {
-    .prw-card-actions {
-        grid-template-columns: 1fr;
-    }
-
     .prw-editor-actions {
         display: grid;
         grid-template-columns: 1fr 1fr;

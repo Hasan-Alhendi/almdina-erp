@@ -192,6 +192,46 @@
         "Exact special-shape geometry validation was preserved in the canonical Piece Policy adapter after the slimming audit exposed the former base-class dependency.",
         "Static, Security and Frappe v16 Integration are green on the same Batch 8 final SHA."
       ]
+    },
+    {
+      "batch": 9,
+      "name": "Remove replacement pieces and production incidents",
+      "status": "removed",
+      "paths": [
+        "almdina_erp/almdina_erp/services/replacement_service.py"
+      ],
+      "canonical_owner": [
+        "almdina_erp/almdina_erp/services/legacy_endpoint_service.py"
+      ],
+      "evidence": [
+        "Replacement pieces and production incidents are outside active product scope.",
+        "cancel_legacy_replacement remains mapped and fails closed."
+      ]
+    },
+    {
+      "batch": 10,
+      "name": "Remove cutting and shop-floor compatibility facades",
+      "status": "removed",
+      "paths": [
+        "almdina_erp/almdina_erp/services/cutting_engine.py",
+        "almdina_erp/almdina_erp/services/advanced_cutting_optimizer.py",
+        "almdina_erp/almdina_erp/infrastructure/cutting/legacy_engine.py",
+        "almdina_erp/almdina_erp/services/shop_floor_service.py",
+        "almdina_erp/almdina_erp/infrastructure/frappe/shop_floor_gateway.py"
+      ],
+      "canonical_owner": [
+        "almdina_erp/almdina_erp/domain/cutting/__init__.py",
+        "almdina_erp/almdina_erp/infrastructure/cutting/domain_engine.py",
+        "almdina_erp/almdina_erp/services/shop_floor_commands.py",
+        "almdina_erp/almdina_erp/services/shop_floor_query_service.py",
+        "almdina_erp/almdina_erp/services/shop_floor_dxf_service.py",
+        "almdina_erp/almdina_erp/infrastructure/frappe/order_tracking_repository.py"
+      ],
+      "evidence": [
+        "Runtime and test Python imports now use domain.cutting, domain.orders.lifecycle, and focused shop-floor services/repositories.",
+        "Historical shop_floor_service HTTP method names remain mapped in hooks.py to the canonical services.",
+        "No remaining runtime Python consumer imported the deleted facade modules."
+      ]
     }
   ]
 }

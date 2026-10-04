@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import json
 import unittest
 from pathlib import Path
@@ -35,12 +36,27 @@ SHARED_SHELL = ROOT / "public" / "js" / "shared_shell.js"
 SETTINGS_WORKSPACE = ROOT / "almdina_erp" / "workspace" / "almdina_settings" / "almdina_settings.json"
 
 
+def _imports_frappe(path: Path) -> bool:
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "frappe" or alias.name.startswith("frappe."):
+                    return True
+        elif isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            if module == "frappe" or module.startswith("frappe."):
+                return True
+    return False
+
+
 class TestPermissionManagementArchitecture(unittest.TestCase):
     def test_pure_matrix_policy_has_no_framework_dependency(self) -> None:
-        source = "\n".join(path.read_text(encoding="utf-8") for path in (POLICY, SUPPORT_POLICY))
-        self.assertNotIn("import frappe", source)
-        self.assertNotIn("from frappe", source)
-        self.assertNotIn("Custom DocPerm", source)
+        for path in (POLICY, SUPPORT_POLICY):
+            self.assertFalse(
+                _imports_frappe(path),
+                f"{path.name} must not import frappe",
+            )
 
     def test_frappe_persistence_is_isolated_in_repository(self) -> None:
         repository = REPOSITORY.read_text(encoding="utf-8")
@@ -84,7 +100,7 @@ class TestPermissionManagementArchitecture(unittest.TestCase):
         self.assertIn("MANAGE_PERMISSIONS", combined)
         self.assertIn("decide_settings_update", combined)
         self.assertIn("WorkforceAction", combined)
-        self.assertNotIn('require_any_role("Production Manager")', combined)
+        self.assertNotIn("require_any_role(", combined)
         self.assertNotIn('"System Manager" not in', combined)
         self.assertNotIn("Only System Manager", combined)
 
@@ -132,8 +148,7 @@ class TestPermissionManagementArchitecture(unittest.TestCase):
         self.assertNotIn("previewRequest", browser_surface)
         self.assertNotIn("transferRequest", browser_surface)
         self.assertNotIn("frappe.user_roles", browser_surface)
-        for role in ("Production Manager", "System Manager", "Order Entry"):
-            self.assertNotIn(role, browser_surface)
+        self.assertNotIn("require_any_role", browser_surface)
 
     def test_shared_shell_uses_surface_policy_not_raw_capabilities(self) -> None:
         source = SHARED_SHELL.read_text(encoding="utf-8")
@@ -146,7 +161,7 @@ class TestPermissionManagementArchitecture(unittest.TestCase):
         self.assertIn('surface: "factory_settings"', source)
         self.assertIn('surface: "production_routings"', source)
         self.assertIn('surface: "edge_banding_types"', source)
-        self.assertIn('surface: "report_factory_order_analysis"', source)
+        self.assertNotIn('surface: "report_factory_order_analysis"', source)
         self.assertIn("hideUnauthorizedShortcuts", source)
         self.assertNotIn("CAPABILITY_ROUTE_RULES", source)
         self.assertNotIn("frappe.user_roles", source)

@@ -136,6 +136,15 @@
                 if (!isCurrent(generation)) return null;
                 return frappe.show_alert({ message, indicator: "green" });
             },
+            whatsapp(result, generation) {
+                if (!isCurrent(generation) || !result) return null;
+                return frappe.show_alert({
+                    message: result.ok
+                        ? __("تم إرسال رسالة واتساب للزبون.")
+                        : (result.message || __("اكتملت المرحلة دون إرسال واتساب.")),
+                    indicator: result.ok ? "green" : "orange",
+                }, 6);
+            },
             error(message, generation) {
                 if (!isCurrent(generation)) return null;
                 return own(

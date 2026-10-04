@@ -157,11 +157,16 @@ e.g. a special door with Liner records Liner in notes/drawing and uses its inclu
 custom special price.
 
 The measurement type cell remains the native HTML `select` used by the table as the
-data-field owner. The visible Arabic order is `عادية / خاصة / زاوية / زاوية L / Extra`;
+data-field owner. The visible Arabic order is `عادية / خاصة / الزاوية الكسر / زاوية L / Extra`.
+For Clipped Corner («الزاوية الكسر») and L-Shaped Corner («زاوية L»), banding sides including `edge_break` are chosen inside the corner-shape editor; the measurements table shows a summary that reopens that editor, and that summary refreshes immediately on Apply without waiting for order save.
 the persisted values remain `Regular / Special / Clipped Corner / L-Shaped Corner / Extra`
 according to the existing DocType contract. `L-Shaped Corner` reuses the clipped-corner
-editor, stored cut distances, edge-price workflow, plan SVG, and DXF path; only the
+editor, stored cut-from-corner distances, edge-price workflow, plan SVG, and DXF path; only the
 polygon topology changes from a five-vertex diagonal to a six-vertex right-angle L.
+The entry UI asks for the remaining length of each outer side and converts to/from the
+stored cut distances. When the operator later changes outer `width_cm` / `length_cm`,
+the committed resize rewrites those cut distances so the previously entered remaining
+lengths stay the same (clamped only when the new outer size can no longer host them).
 Extra owns a Windows-style cascade overlay on top of that select: mouse interaction
 opens a feature-owned type menu, hovering `Extra` shows a submenu arrow and the add-on
 checkboxes immediately, and hovering an Extra type cell in edit mode previews the

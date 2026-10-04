@@ -72,6 +72,7 @@ class FrappeOrderPlanAdapter:
             "edge_long_left": cint(row.edge_long_left),
             "edge_width_top": cint(row.edge_width_top),
             "edge_width_bottom": cint(row.edge_width_bottom),
+            "edge_break": cint(getattr(row, "edge_break", 0)),
             "edge_type": row.edge_type or "",
             "edge_rate_usd": flt(row.edge_rate_usd),
             "edge_cost_usd": flt(row.edge_cost_usd),
@@ -172,6 +173,7 @@ class FrappeOrderPlanAdapter:
                     edge_long_left=cint(row.edge_long_left),
                     edge_width_top=cint(row.edge_width_top),
                     edge_width_bottom=cint(row.edge_width_bottom),
+                    edge_break=cint(getattr(row, "edge_break", 0)),
                     edge_type=str(row.edge_type or ""),
                     edge_rate_usd=self.access.normalized_number(
                         row.edge_rate_usd

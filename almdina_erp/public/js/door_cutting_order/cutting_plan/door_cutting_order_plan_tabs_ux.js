@@ -169,17 +169,18 @@
 		const buttons = tabs
 			.map((tab) => {
 				const locked = isSourceTabLocked(frm, tab.id);
+				const selected = activeTab === tab.id;
 				const lockAttrs = locked
 					? ` disabled aria-disabled="true" title="${frappe.utils.escape_html(__(SOURCE_LOCK_TITLE))}"`
 					: "";
 				return `
-				<button type="button" class="btn btn-sm btn-default ${activeTab === tab.id ? "is-active" : ""}" data-plan-tab="${tab.id}"${lockAttrs}>
+				<button type="button" role="tab" class="btn btn-sm btn-default${selected ? " is-active" : ""}" data-plan-tab="${tab.id}" aria-selected="${selected ? "true" : "false"}" tabindex="${selected ? "0" : "-1"}"${lockAttrs}>
 					${badge(tab.id)}${__(tab.label)}
 				</button>`;
 			})
 			.join("");
 		return `
-			<div class="almdina-ui dco-plan-tabs" style="display:flex;gap:8px;flex-wrap:wrap;width:100%;box-sizing:border-box;margin:0 0 10px 0;">
+			<div class="almdina-ui dco-plan-tabs dco-plan-tabs--underline" role="tablist" aria-label="${frappe.utils.escape_html(__("مصدر خطة القص"))}" style="display:flex;gap:8px;flex-wrap:wrap;width:100%;box-sizing:border-box;margin:0 0 10px 0;">
 				${buttons}
 			</div>
 		`;

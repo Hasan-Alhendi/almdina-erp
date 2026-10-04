@@ -1,13 +1,18 @@
 (() => {
     "use strict";
 
-    const STYLE_ID = "dco-responsive-header-css-v6";
+    const STYLE_ID = "dco-responsive-header-css-v11";
     const LEGACY_STYLE_IDS = [
         "dco-responsive-header-css",
         "dco-responsive-header-css-v2",
         "dco-responsive-header-css-v3",
         "dco-responsive-header-css-v4",
         "dco-responsive-header-css-v5",
+        "dco-responsive-header-css-v6",
+        "dco-responsive-header-css-v7",
+        "dco-responsive-header-css-v8",
+        "dco-responsive-header-css-v9",
+        "dco-responsive-header-css-v10",
     ];
     const TAB_LABELS = {
         order_tab: "الطلب",
@@ -128,24 +133,34 @@
                 border: 0;
             }
 
-            .dco-sticky-tabs {
+            .dco-operator-form .form-tabs-list:has(> .dco-sticky-tabs):not(.dco-sticky-tabs) {
+                border-bottom: none !important;
+                border-radius: 0 !important;
+                background: transparent !important;
+            }
+
+            .dco-sticky-tabs,
+            .dco-operator-form .form-tabs-list.dco-sticky-tabs {
                 background: var(--card-bg, #fff) !important;
                 border: 1px solid var(--border-color, #dfe3e8) !important;
-                border-radius: 14px !important;
+                border-bottom: 1px solid var(--alm-card-border, #e4e8ee) !important;
+                border-radius: var(--alm-radius-card, 16px) !important;
                 box-shadow: 0 2px 10px rgba(15, 23, 42, .04) !important;
-                margin: 0 0 14px !important;
-                padding-block: 10px 8px !important;
+                /* Match .form-page content width: same shell max minus the shared gutter. */
+                width: calc(100% - (2 * var(--dco-tab-content-gutter, 20px)));
+                max-width: calc(var(--dco-tab-shell-max, 1440px) - (2 * var(--dco-tab-content-gutter, 20px)));
+                margin: 0 auto var(--dco-section-stack-gap, 8px) !important;
+                padding-block: 8px 3px !important;
                 padding-inline: 16px 20px !important;
-                max-width: 1440px;
-                margin-inline: auto;
-                width: 100%;
                 box-sizing: border-box;
                 overflow: hidden;
             }
 
             .dco-operator-form .dco-sticky-tabs .form-tabs,
-            .dco-operator-form .dco-sticky-tabs .form-tabs-list {
+            .dco-operator-form .dco-sticky-tabs .form-tabs-list,
+            .dco-operator-form .form-tabs-list.dco-sticky-tabs > .form-tabs {
                 margin-bottom: 0 !important;
+                border-bottom: none !important;
             }
 
             .dco-operator-form .dco-tab-edit-toolbar-slot {
@@ -161,12 +176,23 @@
 
             .dco-sticky-tabs.dco-tabs-is-fixed {
                 position: fixed !important;
-                z-index: 1055 !important;
+                /* Below Bootstrap/Frappe modal backdrop (1050) and modal (1055). */
+                z-index: 1020 !important;
                 margin: 0 !important;
                 background: var(--card-bg, #fff) !important;
-                border: 1px solid var(--border-color, #dfe3e8) !important;
-                border-radius: 14px !important;
-                box-shadow: 0 4px 16px rgba(15, 23, 42, .08) !important;
+                border: 0 !important;
+                border-radius: 0 !important;
+                box-shadow: none !important;
+                max-width: none !important;
+            }
+            body.modal-open .dco-sticky-tabs.dco-tabs-is-fixed,
+            body.modal-open .dco-operator-form .form-tabs-list.dco-sticky-tabs.dco-tabs-is-fixed {
+                z-index: 1020 !important;
+            }
+
+            .dco-operator-form .form-tabs-list:has(.dco-sticky-tabs.dco-tabs-is-fixed) {
+                border: 0 !important;
+                box-shadow: none !important;
             }
 
             .dco-sticky-tabs .nav-tabs,
@@ -187,11 +213,38 @@
                 max-width: none !important;
                 flex: 0 0 auto !important;
                 min-width: 0 !important;
+                padding-block: 8px !important;
                 padding-inline: 14px !important;
+                border: 1px solid transparent !important;
+                border-radius: var(--alm-radius-button, 10px) !important;
+                background: transparent !important;
+                color: var(--text-color, #1f272e) !important;
+                box-shadow: none !important;
+            }
+
+            .dco-sticky-tabs .nav-link.active,
+            .dco-sticky-tabs .form-tab.active,
+            .dco-sticky-tabs .nav-item.active > .nav-link,
+            .dco-sticky-tabs .nav-item.active > .form-tab {
+                background: var(--alm-primary, #172033) !important;
+                border-color: var(--alm-primary, #172033) !important;
+                color: var(--alm-on-primary, #fff) !important;
+                box-shadow: none !important;
+            }
+
+            .dco-sticky-tabs .nav-link.active:hover,
+            .dco-sticky-tabs .form-tab.active:hover,
+            .dco-sticky-tabs .nav-item.active > .nav-link:hover,
+            .dco-sticky-tabs .nav-item.active > .form-tab:hover {
+                background: var(--alm-primary-hover, #0f172a) !important;
+                border-color: var(--alm-primary-hover, #0f172a) !important;
+                color: var(--alm-on-primary, #fff) !important;
             }
 
             .dco-sticky-tabs .form-tabs-list,
-            .dco-sticky-tabs .nav-tabs {
+            .dco-sticky-tabs .nav-tabs,
+            .dco-sticky-tabs > .form-tabs,
+            .form-tabs-list.dco-sticky-tabs > .form-tabs {
                 display: flex !important;
                 flex-wrap: nowrap !important;
                 align-items: center !important;
@@ -420,7 +473,9 @@
                 }
 
                 .dco-sticky-tabs {
-                    margin: 0 0 10px !important;
+                    width: calc(100% - (2 * var(--dco-tab-content-gutter, 12px)));
+                    max-width: calc(var(--dco-tab-shell-max, 1440px) - (2 * var(--dco-tab-content-gutter, 12px)));
+                    margin: 0 auto var(--dco-section-stack-gap, 6px) !important;
                     padding-block: 6px !important;
                     padding-inline: 10px !important;
                 }
@@ -509,6 +564,33 @@
         return 0;
     }
 
+    function tabContentAlignRect(frm, fallbackRect) {
+        // Match sticky tabs to the same content box as status/cards inside .form-page
+        // (shell max-width + shared horizontal gutter), not the full shell outer edge.
+        const wrapper = domNode(frm && frm.wrapper);
+        const formPage = wrapper && wrapper.querySelector(".form-page");
+        if (formPage) {
+            const rect = formPage.getBoundingClientRect();
+            const style = window.getComputedStyle(formPage);
+            const padInlineStart = parseFloat(style.paddingInlineStart || style.paddingLeft) || 0;
+            const padInlineEnd = parseFloat(style.paddingInlineEnd || style.paddingRight) || 0;
+            const width = Math.max(0, rect.width - padInlineStart - padInlineEnd);
+            return {
+                left: rect.left + padInlineStart,
+                width,
+            };
+        }
+
+        const root = wrapper && (wrapper.closest(".dco-operator-form") || wrapper.querySelector(".dco-operator-form") || wrapper);
+        const gutterRaw = root ? window.getComputedStyle(root).getPropertyValue("--dco-tab-content-gutter") : "";
+        const gutter = parseFloat(gutterRaw) || 20;
+        const base = fallbackRect || { left: 0, width: 0 };
+        return {
+            left: base.left + gutter,
+            width: Math.max(0, base.width - (2 * gutter)),
+        };
+    }
+
     function updateFixedTabs(frm) {
         const tabs = frm && frm._dco_fixed_tabs;
         const placeholder = frm && frm._dco_tabs_placeholder;
@@ -522,12 +604,13 @@
 
         if (shouldFix) {
             const widthRect = placeholder.parentElement ? placeholder.parentElement.getBoundingClientRect() : anchorRect;
+            const align = tabContentAlignRect(frm, widthRect);
             const height = Math.max(44, tabs.getBoundingClientRect().height || tabs.offsetHeight || 44);
             placeholder.style.height = `${height}px`;
             tabs.classList.add("dco-tabs-is-fixed");
             tabs.style.top = `${top}px`;
-            tabs.style.left = `${Math.round(widthRect.left)}px`;
-            tabs.style.width = `${Math.round(widthRect.width)}px`;
+            tabs.style.left = `${Math.round(align.left)}px`;
+            tabs.style.width = `${Math.round(align.width)}px`;
         } else {
             placeholder.style.height = "0px";
             tabs.classList.remove("dco-tabs-is-fixed");
@@ -567,12 +650,14 @@
         if (!wrapper) return;
 
         const candidates = [
-            ...wrapper.querySelectorAll(".form-tabs"),
             ...wrapper.querySelectorAll(".form-tabs-list"),
+            ...wrapper.querySelectorAll(".form-tabs"),
         ];
         if (!candidates.length) return;
 
-        const tabs = candidates.find(node => node.classList.contains("form-tabs")) || candidates[0];
+        // Prefer the shared outer form-tabs-list so card chrome + radius apply on
+        // Order / Plan / Cost tabs alike (not only when styles land on the inner ul).
+        const tabs = candidates.find(node => node.classList.contains("form-tabs-list")) || candidates[0];
         tabs.classList.add("dco-sticky-tabs");
         forceRenderedTabLabels(frm, tabs);
 

@@ -123,16 +123,6 @@ class OrderLifecycleDomainTests(unittest.TestCase):
         self.assertTrue(can_revert_department("مرحلة CNC", production_path=None))
         self.assertTrue(can_revert_department("Draft", production_path=None))
 
-    def test_replacement_status_has_highest_priority(self) -> None:
-        status = derive_order_status(
-            current_status="Delivered",
-            production_path="ROUTE-1",
-            current_stage=StageState("CNC", "In Progress", "مرحلة CNC"),
-            stages=(StageState("CNC", "In Progress", "مرحلة CNC"),),
-            has_open_replacements=True,
-        )
-        self.assertEqual(status, "Replacement Required")
-
     def test_ready_and_delivered_statuses_are_preserved(self) -> None:
         for current in ("Ready for Delivery", "Delivered"):
             with self.subTest(current=current):
@@ -141,7 +131,6 @@ class OrderLifecycleDomainTests(unittest.TestCase):
                     production_path="ROUTE-1",
                     current_stage=StageState("DRAW", "Pending", "الرسم"),
                     stages=(StageState("DRAW", "Pending", "الرسم"),),
-                    has_open_replacements=False,
                 )
                 self.assertEqual(status, current)
 
@@ -158,7 +147,6 @@ class OrderLifecycleDomainTests(unittest.TestCase):
                     production_path="ROUTE-1",
                     current_stage=stage,
                     stages=(),
-                    has_open_replacements=False,
                 )
                 self.assertEqual(status, stage.department_label)
 
@@ -167,7 +155,6 @@ class OrderLifecycleDomainTests(unittest.TestCase):
             production_path="ROUTE-1",
             current_stage=StageState("CNC", "Cancelled", "تشغيل CNC"),
             stages=(),
-            has_open_replacements=False,
         )
         self.assertEqual(preserved, "تشغيل CNC")
 
@@ -198,7 +185,6 @@ class OrderLifecycleDomainTests(unittest.TestCase):
                     production_path=None,
                     current_stage=None,
                     stages=iter(stages),
-                    has_open_replacements=False,
                 )
                 self.assertEqual(status, expected)
 
@@ -209,7 +195,6 @@ class OrderLifecycleDomainTests(unittest.TestCase):
                 production_path=None,
                 current_stage=None,
                 stages=(),
-                has_open_replacements=False,
             ),
             "On Hold",
         )
@@ -219,7 +204,6 @@ class OrderLifecycleDomainTests(unittest.TestCase):
                 production_path=None,
                 current_stage=None,
                 stages=(),
-                has_open_replacements=False,
             ),
             "Draft",
         )

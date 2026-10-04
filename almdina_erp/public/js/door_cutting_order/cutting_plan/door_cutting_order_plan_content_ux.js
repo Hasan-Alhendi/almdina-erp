@@ -109,7 +109,13 @@
         field.$wrapper.addClass("dco-plan-actions-native");
         if (section.length) section.addClass("dco-plan-actions-section hide-border");
         const layoutSection = sectionElement(frm, "plan_section");
-        if (layoutSection.length) layoutSection.addClass("hide-border dco-plan-layout-section");
+        // Keep layout-card hooks attached so shared plan spacing CSS can target this section
+        // even when the lazy Plan UX decorator has not run yet.
+        if (layoutSection.length) {
+            layoutSection.addClass(
+                "hide-border dco-plan-layout-section dco-plan-section-card dco-layout-card"
+            );
+        }
     }
 
     function escapeHtml(value) {
@@ -184,13 +190,7 @@
         });
     }
 
-    function marginEdgeBadges(policy) {
-        const edges = [
-            ["يمين", policy.right_mm],
-            ["يسار", policy.left_mm],
-            ["أعلى", policy.top_mm],
-            ["أسفل", policy.bottom_mm],
-        ];
+    function marginEdgeBadges(policy, edges) {
         return edges
             .filter(([, value]) => value !== null && value !== undefined && value !== "")
             .map(([label, value]) => {
@@ -208,6 +208,17 @@
             ? "تم استخدام حافة أصلية من اللوح؛ افحص استقامتها قبل التنفيذ."
             : "تم تخفيض الهامش تلقائيًا بالقدر اللازم للحفاظ على قياسات القطع.";
         const detailNotes = hasOriginalEdge ? notes : [];
+        const horizontalEdges = marginEdgeBadges(policy, [
+            ["يمين", policy.right_mm],
+            ["يسار", policy.left_mm],
+        ]);
+        const verticalEdges = marginEdgeBadges(policy, [
+            ["أعلى", policy.top_mm],
+            ["أسفل", policy.bottom_mm],
+        ]);
+        const detailsHtml = detailNotes.length
+            ? `<div class="dco-margin-policy-alert__details">${detailNotes.map(note => `<div class="dco-margin-policy-alert__note">${escapeHtml(note)}</div>`).join("")}</div>`
+            : "";
         const alert = document.createElement("div");
         alert.className = "dco-margin-policy-alert";
         alert.dataset.marginSignature = signature;
@@ -216,10 +227,17 @@
         alert.innerHTML = `
             <span class="dco-margin-policy-alert__icon" aria-hidden="true">⚠</span>
             <div class="dco-margin-policy-alert__body">
-                <strong class="dco-margin-policy-alert__title">تنبيه هامش التشذيب</strong>
-                <span class="dco-margin-policy-alert__summary">${escapeHtml(summary)}</span>
-                ${detailNotes.length ? `<div class="dco-margin-policy-alert__details">${detailNotes.map(note => `<div class="dco-margin-policy-alert__note">${escapeHtml(note)}</div>`).join("")}</div>` : ""}
-                <div class="dco-margin-policy-alert__edges">${marginEdgeBadges(policy)}</div>
+                <div class="dco-margin-policy-alert__row">
+                    <div class="dco-margin-policy-alert__copy">
+                        <strong class="dco-margin-policy-alert__title">تنبيه هامش التشذيب</strong>
+                        <span class="dco-margin-policy-alert__summary">${escapeHtml(summary)}</span>
+                    </div>
+                    <div class="dco-margin-policy-alert__edges">${horizontalEdges}</div>
+                </div>
+                <div class="dco-margin-policy-alert__row">
+                    <div class="dco-margin-policy-alert__copy">${detailsHtml}</div>
+                    <div class="dco-margin-policy-alert__edges">${verticalEdges}</div>
+                </div>
             </div>
         `;
         return alert;
@@ -306,6 +324,7 @@
                 if (!(child instanceof HTMLElement)) return;
                 if (child.classList.contains("dco-sheet-card")) return;
                 if (child.classList.contains("dco-board-gallery")) return;
+                if (child.classList.contains("dco-plan-meta-strip")) return;
                 if (child.classList.contains("dco-special-raw-coverage")) return;
                 if (child.classList.contains("dco-margin-policy-alert")) return;
                 const text = (child.textContent || "").replace(/\s+/g, " ").trim();

@@ -29,11 +29,7 @@ def test_core_factory_operator_terms_have_meaningful_arabic_labels():
         "Factory Operations": "التشغيل اليومي للمعمل",
         "Door Cutting Orders": "طلبات قص الدرف",
         "Production Stages": "مراحل تنفيذ الطلبات",
-        "Replacement Pieces": "القطع التعويضية",
-        "Production Incidents": "أخطاء ومشاكل الإنتاج",
         "Factory Settings": "إعدادات المعمل",
-        "Factory Order Analysis": "تحليل طلبات القص",
-        "Production Stage Performance": "أداء مراحل الإنتاج",
     }
     for source, expected in required.items():
         assert mapping.get(source) == expected, source

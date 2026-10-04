@@ -53,6 +53,7 @@
         let right = 0;
         let top = 0;
         let bottom = 0;
+        let edgeBreak = piece.edge_break ? 1 : 0;
 
         if (!piece.rotated) {
             left = piece.edge_long_left ? 1 : 0;
@@ -67,11 +68,61 @@
             left = piece.edge_width_bottom ? 1 : 0;
         }
 
-        return { left, right, top, bottom };
+        return { left, right, top, bottom, edgeBreak };
+    }
+
+    function render_clipped_corner_edge_lines(piece, geometryModel, clipId) {
+        const geometry = window.AlmdinaClippedCornerGeometry;
+        if (!geometry || typeof geometry.edgeBandSvgMarkup !== "function") return "";
+        const isCorner = (
+            (typeof geometry.isCornerCut === "function" && geometry.isCornerCut(piece))
+            || (typeof geometry.isClipped === "function" && geometry.isClipped(piece))
+        );
+        if (!isCorner) return "";
+
+        // Paths follow rotated corner geometry; remap finished-orientation flags to visual sides.
+        const edgePiece = piece.rotated
+            ? {
+                ...piece,
+                edge_width_top: piece.edge_long_left,
+                edge_width_bottom: piece.edge_long_right,
+                edge_long_right: piece.edge_width_top,
+                edge_long_left: piece.edge_width_bottom,
+            }
+            : piece;
+        const markup = geometry.edgeBandSvgMarkup(edgePiece, 100, 100, { inheritStroke: true });
+        if (!markup) return "";
+        const pathData = (
+            geometryModel
+            && geometryModel.geometry
+            && geometryModel.geometry.pathData
+        ) || "";
+        const clipDef = pathData
+            ? `<defs><clipPath id="${clipId}"><path d="${pathData}" fill-rule="evenodd" clip-rule="evenodd"/></clipPath></defs>`
+            : "";
+        const clipAttr = pathData ? ` clip-path="url(#${clipId})"` : "";
+        // Same stroke contract as regular-door vector edges in render_piece_edge_lines.
+        return `
+            <svg class="dco-piece-edge-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;z-index:3;overflow:hidden;">
+                ${clipDef}
+                <g${clipAttr} fill="none" stroke="#d00000" stroke-width="3" vector-effect="non-scaling-stroke">${markup}</g>
+            </svg>
+        `;
     }
 
     function render_piece_edge_lines(piece, geometryModel = null, clipId = "") {
-        const { left, right, top, bottom } = piece_edge_flags(piece);
+        const { left, right, top, bottom, edgeBreak } = piece_edge_flags(piece);
+        const geometry = window.AlmdinaClippedCornerGeometry;
+        const isCornerPiece = Boolean(
+            geometry
+            && (
+                (typeof geometry.isCornerCut === "function" && geometry.isCornerCut(piece))
+                || (typeof geometry.isClipped === "function" && geometry.isClipped(piece))
+            )
+        );
+        if (isCornerPiece && (left || right || top || bottom || edgeBreak)) {
+            return render_clipped_corner_edge_lines(piece, geometryModel, clipId);
+        }
 
         const color = "#d00000";
         const thickness = "3px";
@@ -215,10 +266,17 @@
                 <span>${escape_html(label)}</span>
             </span>`;
         }).join("");
-        return `<div class="dco-extra-addon-legend" dir="rtl" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin:8px 0 12px;padding:7px 10px;border:1px solid #c5ccd3;border-radius:8px;background:#f8fafc;font-size:11px;font-weight:700;line-height:1.2;">
-            <span class="dco-extra-addon-legend-title" style="font-weight:900;white-space:nowrap;">رموز إضافات Extra</span>
+        return `<div class="dco-extra-addon-legend" dir="rtl">
+            <span class="dco-extra-addon-legend-title">رموز إضافات Extra</span>
             ${items}
         </div>`;
+    }
+
+    function render_plan_meta_strip(frm, plan) {
+        const coverage = render_special_raw_coverage(frm, plan);
+        const legend = render_extra_addon_legend();
+        if (!coverage && !legend) return "";
+        return `<div class="dco-plan-meta-strip" dir="rtl">${coverage}${legend}</div>`;
     }
 
     function extraAddonMarkPlate(slot, kind, innerHtml) {
@@ -359,6 +417,7 @@
             <div class="dco-piece-label" style="${labelStyle}z-index:4;direction:ltr;text-align:center;">
                 ${invalidGeometry}${special}${clippedLabel}${extra}
                 <span class="dco-piece-size">${round(piece.original_w, 1)}*${round(piece.original_h, 1)}</span>
+                <span class="dco-piece-size-mm" style="display:none">${round(num(piece.original_w) * 10, 0)} × ${round(num(piece.original_h) * 10, 0)}</span>
                 <span class="dco-piece-number" style="display:none">${escape_html(piece_number)}</span>
             </div>
         `;
@@ -390,7 +449,7 @@
             : `تنبيه: دخل خطة القص <b>${placed} من ${requested}</b> فقط من الدرف الخاصة. راجع المقاسات والقطع غير الموزعة.`;
 
         return `
-            <div class="dco-special-raw-coverage" style="direction:rtl;border:1px solid;border-radius:10px;padding:9px 12px;margin:8px 0 12px;font-size:12px;font-weight:700;${tone}">
+            <div class="dco-special-raw-coverage" style="direction:rtl;border:1px solid;border-radius:10px;padding:7px 10px;font-size:12px;font-weight:700;${tone}">
                 <span style="font-size:16px;margin-left:6px">✦</span>${message}
             </div>
         `;
@@ -456,6 +515,40 @@
         `;
     }
 
+    function explicitTrim(source, key) {
+        if (!source || !Object.prototype.hasOwnProperty.call(source, key)) return null;
+        return Math.max(0, num(source[key]));
+    }
+
+    function sheetBoardFrame(plan, sheet) {
+        const fullW = num(sheet && sheet.full_width_cm) || num(plan.full_board_width_cm);
+        const fullH = num(sheet && sheet.full_length_cm) || num(plan.full_board_length_cm);
+        const usableW = num(sheet && sheet.usable_width_cm) || num(sheet && sheet.w) || num(plan.usable_board_width_cm) || fullW;
+        const usableH = num(sheet && sheet.usable_length_cm) || num(sheet && sheet.h) || num(plan.usable_board_length_cm) || fullH;
+        const drawW = fullW > 0 ? fullW : usableW;
+        const drawH = fullH > 0 ? fullH : usableH;
+        const trimW = explicitTrim(sheet, "applied_trim_width_cm");
+        const trimH = explicitTrim(sheet, "applied_trim_length_cm");
+        const planTrimW = trimW === null ? explicitTrim(plan, "applied_trim_width_cm") : trimW;
+        const planTrimH = trimH === null ? explicitTrim(plan, "applied_trim_length_cm") : trimH;
+        let insetX = planTrimW === null ? (drawW > usableW && usableW > 0 ? (drawW - usableW) / 2 : 0) : planTrimW;
+        let insetY = planTrimH === null ? (drawH > usableH && usableH > 0 ? (drawH - usableH) / 2 : 0) : planTrimH;
+        insetX = Math.max(0, Math.min(insetX, drawW / 2));
+        insetY = Math.max(0, Math.min(insetY, drawH / 2));
+        const innerW = usableW > 0 ? Math.min(usableW, Math.max(0, drawW - (insetX * 2))) : Math.max(0, drawW - (insetX * 2));
+        const innerH = usableH > 0 ? Math.min(usableH, Math.max(0, drawH - (insetY * 2))) : Math.max(0, drawH - (insetY * 2));
+        return {
+            drawW,
+            drawH,
+            usableW: innerW > 0 ? innerW : usableW,
+            usableH: innerH > 0 ? innerH : usableH,
+            insetX,
+            insetY,
+            innerW: innerW > 0 ? innerW : usableW,
+            innerH: innerH > 0 ? innerH : usableH,
+        };
+    }
+
     function build_cutting_plan_html(frm, plan) {
         if (!plan || !plan.sheets || !plan.sheets.length) return "";
 
@@ -463,8 +556,6 @@
         const board_h_cm = num(plan.usable_board_length_cm);
         const full_board_w_cm = num(plan.full_board_width_cm);
         const full_board_h_cm = num(plan.full_board_length_cm);
-        const kerf_cm = num(plan.kerf_cm);
-        const trim_cm = num(plan.trim_cm);
         const board_area_m2 = (board_w_cm * board_h_cm) / 10000;
         const fullBoardSheets = (plan.sheets || []).filter(
             sheet => String(sheet.resource_kind || "FULL_BOARD").toUpperCase() === "FULL_BOARD"
@@ -475,7 +566,6 @@
         const waste_percent = total_board_area_m2 ? round((waste_area_m2 / total_board_area_m2) * 100, 2) : 0;
 
         const board_width_px = 560;
-        const board_height_px = Math.max(260, Math.round(board_width_px * (board_h_cm / board_w_cm)));
 
         let html = `
             <div class="dco-cutting-plan" data-almdina-order="${escape_html(frm.doc.name || "")}" style="font-family:Arial,Tahoma,sans-serif;direction:rtl;color:#111;background:#fff;">
@@ -490,10 +580,9 @@
                 </div>
 
                 ${render_piece_groups_summary(frm)}
-                ${render_special_raw_coverage(frm, plan)}
+                ${render_plan_meta_strip(frm, plan)}
 
-                <div style="font-size:12px;margin-bottom:8px;"><b>طريقة الترتيب:</b> ${escape_html(plan.method_label || frm.doc.packing_method || "")}</div>
-                ${render_extra_addon_legend()}
+                <div class="dco-plan-method-line" style="font-size:12px;margin-bottom:8px;"><b>طريقة الترتيب:</b> ${escape_html(plan.method_label || frm.doc.packing_method || "")}</div>
         `;
 
         plan.sheets.forEach(sheet => {
@@ -502,14 +591,30 @@
             const sheet_used_area_m2 = round((sheet.pieces || []).reduce((sum, p) => sum + num(p.area_m2), 0), 3);
             const sheet_waste_area_m2 = round(Math.max(0, board_area_m2 - sheet_used_area_m2), 3);
             const sheet_waste_percent = board_area_m2 ? round((sheet_waste_area_m2 / board_area_m2) * 100, 2) : 0;
+            const frame = sheetBoardFrame(plan, sheet);
+            const board_height_px = Math.max(260, Math.round(board_width_px * (frame.drawH / frame.drawW)));
+            const usableLeft = frame.drawW ? (frame.insetX / frame.drawW) * 100 : 0;
+            const usableTop = frame.drawH ? (frame.insetY / frame.drawH) * 100 : 0;
+            const usableWidth = frame.drawW ? (frame.innerW / frame.drawW) * 100 : 100;
+            const usableHeight = frame.drawH ? (frame.innerH / frame.drawH) * 100 : 100;
+            const caption_width_cm = frame.drawW || full_board_w_cm || board_w_cm;
+            const caption_length_cm = frame.drawH || full_board_h_cm || board_h_cm;
+            const board_caption = caption_width_cm && caption_length_cm
+                ? `${round(caption_length_cm * 10, 0)} × ${round(caption_width_cm * 10, 0)}`
+                : "";
 
             html += `
                 <div class="dco-sheet-card" data-resource-kind="${isOffcut ? "OFFCUT" : "FULL_BOARD"}" style="border:1px solid #bbb;border-radius:10px;padding:10px;margin:14px 0;background:#fff;page-break-inside:avoid;break-inside:avoid;">
                     <div class="dco-sheet-title" style="display:flex;justify-content:space-between;gap:10px;margin-bottom:8px;font-size:13px;font-weight:bold;">
                         <div>${sheetTitle}</div>
-                        <div>عدد القطع: ${(sheet.pieces || []).length} &nbsp; | &nbsp; الهدر: ${sheet_waste_area_m2} م² (${sheet_waste_percent}%)</div>
+                        <div>
+                            <span class="dco-sheet-stats-read">عدد القطع: ${(sheet.pieces || []).length} &nbsp; | &nbsp; الهدر: ${sheet_waste_area_m2} م² (${sheet_waste_percent}%)</span>
+                            <span class="dco-sheet-stats-edit" style="display:none">قطع: ${(sheet.pieces || []).length} | الهدر: ${sheet_waste_area_m2} م² (${sheet_waste_percent}%)</span>
+                        </div>
                     </div>
-                    <div class="dco-sheet-board" style="position:relative;direction:ltr;width:${board_width_px}px;height:${board_height_px}px;max-width:100%;border:2px solid #111;background:linear-gradient(90deg,rgba(0,0,0,0.05) 1px,transparent 1px),linear-gradient(rgba(0,0,0,0.05) 1px,transparent 1px),#fff;background-size:32px 32px;overflow:hidden;margin:0 auto 8px auto;">
+                    <div class="dco-sheet-board" data-trim-width-cm="${frame.insetX}" data-trim-length-cm="${frame.insetY}" style="position:relative;direction:ltr;width:${board_width_px}px;height:${board_height_px}px;max-width:100%;border:2px solid #111;background:linear-gradient(90deg,rgba(0,0,0,0.05) 1px,transparent 1px),linear-gradient(rgba(0,0,0,0.05) 1px,transparent 1px),#fff;background-size:32px 32px;overflow:hidden;margin:0 auto 8px auto;">
+                        ${board_caption ? `<div class="dco-board-size-caption" aria-hidden="true" style="display:none">${escape_html(board_caption)}</div>` : ""}
+                        <div class="dco-usable-sheet" style="position:absolute;left:${usableLeft}%;top:${usableTop}%;width:${usableWidth}%;height:${usableHeight}%;box-sizing:border-box;overflow:hidden;">
             `;
 
             (sheet.pieces || []).forEach(piece => {
@@ -519,10 +624,10 @@
                 }
                 const geometryModel = geometry.resolve(piece);
                 const placement = geometryModel.placement;
-                const left = (num(placement.xCm) / board_w_cm) * 100;
-                const top = (num(placement.yCm) / board_h_cm) * 100;
-                const width = (num(placement.widthCm) / board_w_cm) * 100;
-                const height = (num(placement.heightCm) / board_h_cm) * 100;
+                const left = (num(placement.xCm) / frame.usableW) * 100;
+                const top = (num(placement.yCm) / frame.usableH) * 100;
+                const width = (num(placement.widthCm) / frame.usableW) * 100;
+                const height = (num(placement.heightCm) / frame.usableH) * 100;
                 const special_piece_style = piece.piece_type === "Special"
                     ? "border:2px solid #7a4c13;background:linear-gradient(135deg,#fff2cf,#ffe2a3);box-shadow:inset 0 0 0 2px rgba(255,255,255,.45);"
                     : "border:1px solid #111;background:#e4f5ff;";
@@ -552,7 +657,7 @@
                 `;
             });
 
-            html += "</div></div>";
+            html += "</div></div></div>";
         });
 
         if (plan.unplaced && plan.unplaced.length) {
@@ -652,11 +757,11 @@
         const renderedH = parseFloat(firstBoard && firstBoard.style.height);
         if (renderedW > 0 && renderedH > 0) return renderedH / renderedW;
 
-        const width = num(plan && plan.usable_board_width_cm)
-            || num(plan && plan.full_board_width_cm)
+        const width = num(plan && plan.full_board_width_cm)
+            || num(plan && plan.usable_board_width_cm)
             || num(frm.doc.board_width_cm);
-        const length = num(plan && plan.usable_board_length_cm)
-            || num(plan && plan.full_board_length_cm)
+        const length = num(plan && plan.full_board_length_cm)
+            || num(plan && plan.usable_board_length_cm)
             || num(frm.doc.board_length_cm);
         return width > 0 && length > 0 ? length / width : 2;
     }
@@ -912,6 +1017,12 @@ ${printHeaderCss()}
     overflow: hidden !important;
     box-shadow: none !important;
 }
+.dco-usable-sheet {
+    position: absolute !important;
+    overflow: hidden !important;
+    border: 0 !important;
+    background: transparent !important;
+}
 .dco-piece {
     overflow: hidden !important;
     background: #fff !important;
@@ -931,6 +1042,9 @@ ${printHeaderCss()}
 }
 .dco-piece-kind-badge,
 .dco-piece-size { display: none !important; }
+.dco-piece-size-mm,
+.dco-board-size-caption,
+.dco-sheet-stats-edit { display: none !important; }
 .dco-piece-number {
     display: block !important;
     padding: 0 !important;

@@ -138,17 +138,19 @@ def test_switching_tabs_is_blocked_at_frappe_native_activation_boundary() -> Non
 
     # Frappe v16 changes a top-level tab through each Tab object's set_active().
     # Guard that semantic boundary before native activation can mutate visual/host
-    # state, and additionally disable non-owner native buttons while editing so a
-    # click cannot reach either Frappe or Bootstrap in the first place.
+    # state, and keep locked tabs clickable so the guarded set_active() can refuse
+    # activation and explain that Save or Cancel is required first.
     assert "Array.isArray(frm.layout.tabs)" in guard
     assert 'typeof tab.set_active === "function"' in guard
     assert "tab.set_active = guardedSetActive;" in guard
     assert "if (shouldBlock(frm, targetFieldname))" in guard
     assert "return false;" in guard
     assert "originalSetActive.apply(this, args)" in guard
-    assert 'control.prop("disabled", true)' in guard
     assert 'control.attr("aria-disabled", "true")' in guard
     assert 'control.attr("tabindex", "-1")' in guard
+    assert 'control.addClass(LOCK_CLASS)' in guard
+    assert 'control.prop("disabled", true)' not in guard
+    assert 'control.addClass("disabled")' not in guard
     assert "function reconcileOwnerTab(frm, state, ownerTabFieldname)" in guard
     assert "ownerBinding.guardedSetActive.call(ownerBinding.tab)" in guard
     assert "almdina_edit_session_changed(frm) { syncNavigationLock(frm); }" in guard
@@ -156,6 +158,8 @@ def test_switching_tabs_is_blocked_at_frappe_native_activation_boundary() -> Non
     assert "registerCleanup(frm, CLEANUP_KEY" in guard
     assert "tab.set_active = originalSetActive;" in guard
     assert "احفظ أو ألغِ التعديل الحالي قبل الانتقال إلى قسم آخر" in guard
+    assert "showOpenEditMessage()" in guard
+    assert 'title: __("التعديل ما زال مفتوحًا")' in guard
 
     # The semantic guard itself must not depend on click propagation, timers, or
     # a global Frappe prototype patch.

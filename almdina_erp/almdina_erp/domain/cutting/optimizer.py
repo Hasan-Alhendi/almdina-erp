@@ -7,6 +7,7 @@ from copy import deepcopy
 from typing import Any
 
 from .evaluation import evaluate_plan, validate_plan
+from .kerf_layout import pack_with_stable_kerf
 from .primitives import num, prune_free_rects, split_free_rect
 from .registry import METHOD_CONFIGS, PACKING_OPTIONS, run_single_method
 
@@ -114,12 +115,13 @@ def _run_preordered_method(
     ordering_label: str,
 ) -> dict[str, Any]:
     label, packer, args, complexity = METHOD_CONFIGS[method_key]
-    raw = packer(
-        deepcopy(ordered_pieces),
+    raw = pack_with_stable_kerf(
+        packer,
+        ordered_pieces,
         board_w_cm,
         board_h_cm,
         kerf_cm,
-        *args,
+        args,
     )
     plan = evaluate_plan(
         raw,
@@ -752,6 +754,7 @@ def _solve_cp_sat(
             "edge_long_left": 1 if piece.get("edge_long_left") else 0,
             "edge_width_top": 1 if piece.get("edge_width_top") else 0,
             "edge_width_bottom": 1 if piece.get("edge_width_bottom") else 0,
+            "edge_break": 1 if piece.get("edge_break") else 0,
             "edge_type": piece.get("edge_type") or "",
             "edge_rate_usd": num(piece.get("edge_rate_usd")),
             "edge_cost_usd": num(piece.get("edge_cost_usd")),

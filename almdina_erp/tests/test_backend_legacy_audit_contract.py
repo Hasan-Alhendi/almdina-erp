@@ -180,36 +180,23 @@ class TestBackendLegacyAuditContract(unittest.TestCase):
     def test_known_compatibility_modules_do_not_regain_business_ownership(self) -> None:
         services = APP_ROOT / "almdina_erp" / "services"
         infrastructure = APP_ROOT / "almdina_erp" / "infrastructure"
-
-        cutting = (services / "cutting_engine.py").read_text(encoding="utf-8")
-        optimizer = (services / "advanced_cutting_optimizer.py").read_text(
-            encoding="utf-8"
-        )
-        legacy_engine = (
-            infrastructure / "cutting" / "legacy_engine.py"
+        remaining = (
+            APP_ROOT / "almdina_erp" / "services" / "legacy_endpoint_service.py"
         ).read_text(encoding="utf-8")
-        shop_floor = (services / "shop_floor_service.py").read_text(encoding="utf-8")
-        gateway = (
-            infrastructure / "frappe" / "shop_floor_gateway.py"
-        ).read_text(encoding="utf-8")
-        replacement = (services / "replacement_service.py").read_text(
-            encoding="utf-8"
-        )
 
-        self.assertIn("domain.cutting import *", cutting)
-        self.assertNotIn("def optimize", cutting)
-        self.assertIn("domain.cutting.optimizer import *", optimizer)
-        self.assertNotIn("def optimize_plan", optimizer)
-        self.assertIn("LegacyCuttingEngineAdapter = DomainCuttingEngineAdapter", legacy_engine)
-        self.assertIn("Backward-compatible shop-floor API facade", shop_floor)
-        self.assertIn("_public_delegate", shop_floor)
-        self.assertNotIn("frappe.db", shop_floor)
-        self.assertIn("Backward-compatible facade", gateway)
-        self.assertIn("_legacy_role_gate_removed()", gateway)
-        self.assertNotIn("frappe.get_roles", gateway)
-        self.assertIn("Backward-compatible replacement API facade", replacement)
-        self.assertNotIn("frappe.db.", replacement)
-        self.assertNotIn("frappe.get_doc", replacement)
+        for relative in (
+            services / "cutting_engine.py",
+            services / "advanced_cutting_optimizer.py",
+            infrastructure / "cutting" / "legacy_engine.py",
+            services / "shop_floor_service.py",
+            infrastructure / "frappe" / "shop_floor_gateway.py",
+            services / "replacement_service.py",
+        ):
+            self.assertFalse(relative.exists(), relative)
+
+        self.assertIn("def retired_product_endpoint", remaining)
+        self.assertNotIn("frappe.db.", remaining)
+        self.assertNotIn("frappe.get_roles", remaining)
 
     def test_unmigrated_legacy_boundaries_stay_visible_for_stage_11(self) -> None:
         audit = _inventory()

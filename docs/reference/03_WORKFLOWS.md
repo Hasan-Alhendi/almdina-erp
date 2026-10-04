@@ -71,6 +71,8 @@ stateDiagram-v2
 
 إذا كانت المرحلة Planning Stage، تبقى Gate الإضافية كما هي: Production plan يجب أن يكون Approved وحديثًا حتى عند استخدام Handoff المباشر.
 
+إذا كان مفتاح **إرسال واتساب عند الإتمام** مفعّلًا على مرحلة المسار، تُرسل بعد نجاح Handoff رسالة نصية للزبون من قالب قسم رسائل واتساب لتلك المرحلة. فشل الإرسال لا يُلغي إتمام المرحلة.
+
 ### Next stage
 
 Application يقرأ المرحلة التالية من Route، لا من سلسلة `if` ثابتة. يتم إنشاء/تفعيل المرحلة التالية وإسنادها للعامل المناسب.
@@ -98,7 +100,7 @@ Application يقرأ المرحلة التالية من Route، لا من سلس
 
 Supervisor capability لا تلغي كل قواعد البنية تلقائيًا؛ بعض الإجراءات ما زالت تتطلب وجود target stage صالح أو status مناسب.
 
-إلغاء الطلب (`cancel_order`) إجراء نهائي من ناحية الحالة، لكنه يحفظ snapshot للمراحل والخطة. استئناف الطلب الملغى (`resume_cancelled_order`) يعيد نفس المستند إلى المرحلة التي أُلغي منها دون طلب سبب، دون `return_order_to_draft` ودون استرجاع قطع التعويض الملغاة مع الإلغاء. بعد الإلغاء أو الاستئناف تُحدَّث واجهة الطلب فورًا لإظهار الحالة والزر المناسب.
+إلغاء الطلب (`cancel_order`) إجراء نهائي من ناحية الحالة، لكنه يحفظ snapshot للمراحل والخطة. استئناف الطلب الملغى (`resume_cancelled_order`) يعيد نفس المستند إلى المرحلة التي أُلغي منها دون طلب سبب، ودون `return_order_to_draft`. بعد الإلغاء أو الاستئناف تُحدَّث واجهة الطلب فورًا لإظهار الحالة والزر المناسب.
 
 ## 8. Drawing / planning handoff
 
@@ -116,16 +118,7 @@ Revision تحافظ على تاريخ الطلب بدل تعديل حقيقة إ
 
 لا تجعل Preview لطلب مقفل يعيد تشغيل optimizer وكأنه Draft؛ تاريخ الطلب يجب أن يبقى ثابتًا.
 
-## 10. Incidents & Replacements
-
-عند تلف/خطأ قطعة:
-
-- يسجل `Production Incident` عند امتلاك Capability المناسبة.
-- يمكن إنشاء `Replacement Piece` مرتبطة بالطلب/القطعة الأصلية.
-- التعويض له Authorization وPlanning/Execution مستقلان.
-- معرفة اسم Replacement أو DCO لا تكفي للوصول إليه؛ document scope يجب أن يثبت العلاقة.
-
-## 11. State ownership
+## 10. State ownership
 
 - Order lifecycle rules: `domain/orders/lifecycle.py`.
 - Route model: `domain/orders/production_routing.py`.
