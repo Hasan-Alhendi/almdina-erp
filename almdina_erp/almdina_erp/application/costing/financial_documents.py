@@ -263,15 +263,21 @@ def _customer_invoice_lines(
                 }
             )
         elif is_corner_cut(piece_type):
-            edge_rate = _number(_value(piece, "clipped_corner_edge_price_usd"))
+            # Quantity is the break strap's own length (meters, for the factory
+            # quantity actually billed), rate is the doubled per-meter price,
+            # and amount is their product -- matches clipped_corner_edge_price_usd
+            # (cost per single unit) times quantity exactly, just itemized.
+            unit_length_m = _number(_value(piece, "edge_break_length_cm")) / 100
+            break_meters = _metric(unit_length_m * quantity)
+            doubled_rate = _money(_number(_value(piece, "edge_break_rate_usd")) * 2)
             lines.append(
                 {
                     "type": "cut_corner",
                     "description": f"{corner_cut_arabic_label(piece_type)} {index}",
-                    "quantity": quantity,
-                    "unit": "درفة",
-                    "rate_usd": _money(edge_rate),
-                    "amount_usd": _money(edge_rate * quantity),
+                    "quantity": break_meters,
+                    "unit": "متر",
+                    "rate_usd": doubled_rate,
+                    "amount_usd": _money(break_meters * doubled_rate),
                     "note": _text(_value(piece, "clipped_corner_edge_price_note")),
                 }
             )
