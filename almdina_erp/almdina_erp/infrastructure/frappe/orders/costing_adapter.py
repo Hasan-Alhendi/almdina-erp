@@ -96,9 +96,13 @@ class FrappeOrderCostingAdapter:
         )
         from almdina_erp.almdina_erp.domain.orders.piece_policy import (
             is_corner_cut,
+            break_adjacent_sides,
+            L_SHAPED_CORNER_TYPE,
         )
 
         corner_break_total = 0.0
+        remaining_edges_total = 0.0
+
         for row in self.document.pieces or []:
             if not (is_corner_cut(row.piece_type) and cint(row.edge_break)):
                 row.edge_break_length_cm = 0
@@ -141,7 +145,51 @@ class FrappeOrderCostingAdapter:
 
             corner_break_total += break_result.break_edge_cost_usd
 
+            # Calculate remaining edges (sides not part of the corner cut)
+            piece_type = str(row.piece_type or "Regular")
+            adjacent_sides = break_adjacent_sides(row.clipped_corner_position)
+
+            # For L-Shaped: adjacent sides have reduced length/width
+            # For Clipped: remaining sides are calculated normally (already done in summary.pieces)
+            if piece_type == L_SHAPED_CORNER_TYPE:
+                width_cm = flt(row.width_cm)
+                length_cm = flt(row.length_cm)
+                corner_width_cm = flt(row.clipped_corner_width_cm)
+                corner_length_cm = flt(row.clipped_corner_length_cm)
+                qty = cint(row.qty)
+
+                # For adjacent width sides (Top/Bottom), reduce by corner_width_cm
+                # For adjacent long sides (Right/Left), reduce by corner_length_cm
+                if 'edge_width_top' in adjacent_sides and cint(row.edge_width_top):
+                    reduced_width = max(0, width_cm - corner_width_cm)
+                    side_type = str(row.edge_width_top_type_override or self.document.default_edge_type or "").strip()
+                    rate = rate_map.get(side_type, 0.0) if side_type else 0.0
+                    meters = reduced_width * qty / 100
+                    remaining_edges_total += meters * rate
+
+                if 'edge_width_bottom' in adjacent_sides and cint(row.edge_width_bottom):
+                    reduced_width = max(0, width_cm - corner_width_cm)
+                    side_type = str(row.edge_width_bottom_type_override or self.document.default_edge_type or "").strip()
+                    rate = rate_map.get(side_type, 0.0) if side_type else 0.0
+                    meters = reduced_width * qty / 100
+                    remaining_edges_total += meters * rate
+
+                if 'edge_long_right' in adjacent_sides and cint(row.edge_long_right):
+                    reduced_length = max(0, length_cm - corner_length_cm)
+                    side_type = str(row.edge_long_right_type_override or self.document.default_edge_type or "").strip()
+                    rate = rate_map.get(side_type, 0.0) if side_type else 0.0
+                    meters = reduced_length * qty / 100
+                    remaining_edges_total += meters * rate
+
+                if 'edge_long_left' in adjacent_sides and cint(row.edge_long_left):
+                    reduced_length = max(0, length_cm - corner_length_cm)
+                    side_type = str(row.edge_long_left_type_override or self.document.default_edge_type or "").strip()
+                    rate = rate_map.get(side_type, 0.0) if side_type else 0.0
+                    meters = reduced_length * qty / 100
+                    remaining_edges_total += meters * rate
+
         self.corner_break_edge_total_usd = corner_break_total
+        self.remaining_edges_total_usd = remaining_edges_total
 
     def calculate_extra_addon_prices(self) -> None:
         """Validate Extra selections and store an immutable sales-price snapshot."""
@@ -415,6 +463,8 @@ class FrappeOrderCostingAdapter:
                 ),
                 corner_break_edge_total_usd=flt(
                     getattr(self, "corner_break_edge_total_usd", 0)
+                ) + flt(
+                    getattr(self, "remaining_edges_total_usd", 0)
                 ),
             )
         except CostingError as error:

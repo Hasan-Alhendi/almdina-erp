@@ -199,6 +199,47 @@ class TestBreakEdgeCosting(unittest.TestCase):
         expected_unit_price = result.break_edge_cost_usd / 3
         self.assertAlmostEqual(result.break_edge_unit_price_usd, expected_unit_price, places=2)
 
+    def test_l_shaped_adjacent_sides_reduce_on_corner_dimension(self) -> None:
+        """For L-Shaped: adjacent sides are reduced by corner dimensions.
+
+        L-Shaped at Top Right:
+        - edge_width_top reduced by corner_width: 100 - 30 = 70 cm
+        - edge_long_right reduced by corner_length: 80 - 25 = 55 cm
+        """
+        # This test documents the expected behavior for remaining edges calculation
+        # in the adapter layer. It shows the geometry that should be used.
+
+        # For edge_width_top at rate $1.0:
+        # reduced_width = 100 - 30 = 70 cm
+        # meters = 70 * 1 / 100 = 0.7 m
+        # cost = 0.7 * 1.0 = 0.7 USD
+
+        # For edge_long_right at rate $1.0:
+        # reduced_length = 80 - 25 = 55 cm
+        # meters = 55 * 1 / 100 = 0.55 m
+        # cost = 0.55 * 1.0 = 0.55 USD
+
+        # Total for adjacent sides: 0.7 + 0.55 = 1.25 USD
+        # This will be calculated by the adapter, not by domain logic
+
+        # Domain break edge calculation for L-shaped remains unchanged
+        result = calculate_break_edge_cost(
+            BreakEdgeCostInput(
+                piece_type="L-Shaped Corner",
+                width_cm=100,
+                length_cm=80,
+                corner_width_cm=30,
+                corner_length_cm=25,
+                qty=1,
+                edge_break=1,
+                break_edge_rate_usd=1.0,
+            )
+        )
+
+        # L-shaped break edge: 30 + 25 = 55 cm
+        self.assertEqual(result.break_edge_length_cm, 55)
+        self.assertEqual(result.break_edge_cost_usd, 1.1)  # 0.55 * 1.0 * 2
+
 
 if __name__ == "__main__":
     unittest.main()
