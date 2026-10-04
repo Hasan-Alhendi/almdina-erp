@@ -22,12 +22,20 @@ frappe.pages["factory-production-settings"].on_page_load = function (wrapper) {
         single_column: true,
     });
     const $main = $(wrapper).find(".layout-main-section");
-    $main.html(`
-        <div class="aps-loading" role="status" aria-live="polite">
-            <span class="aps-loading-dot" aria-hidden="true"></span>
-            <div><strong>${__("جاري تحميل إعدادات المعمل")}</strong><span>${__("يتم تجهيز القيم والصلاحيات الحالية...")}</span></div>
-        </div>
-    `);
+    const ui = window.AlmdinaUi;
+
+    function paintState(kind, title, message) {
+        const body = ui && typeof ui.state === "function"
+            ? ui.state({ kind, title, message })
+            : `<div class="alm-state alm-state--${kind}" role="${kind === "error" ? "alert" : "status"}"><strong class="alm-state__title">${frappe.utils.escape_html(title || "")}</strong>${message ? `<span class="alm-state__message">${frappe.utils.escape_html(String(message))}</span>` : ""}</div>`;
+        $main.html(`<div class="almdina-ui">${body}</div>`);
+    }
+
+    paintState(
+        "loading",
+        __("جاري تحميل إعدادات المعمل"),
+        __("يتم تجهيز القيم والصلاحيات الحالية...")
+    );
 
     function showBootstrapError(error) {
         const fallback = __("تعذر تحميل إعدادات المعمل.");
@@ -35,8 +43,7 @@ frappe.pages["factory-production-settings"].on_page_load = function (wrapper) {
         const message = frontend && typeof frontend.errorMessage === "function"
             ? frontend.errorMessage(error, fallback)
             : String((error && error.message) || fallback);
-        const safe = frappe.utils.escape_html(String(message || fallback));
-        $main.html(`<div class="frappe-card" style="padding:24px;text-align:center">${safe}</div>`);
+        paintState("error", fallback, message);
         frappe.show_alert({ message, indicator: "red" }, 7);
     }
 

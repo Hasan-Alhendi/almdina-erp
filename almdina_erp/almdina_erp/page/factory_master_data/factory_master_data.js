@@ -233,12 +233,32 @@
             const message = this.frontend && typeof this.frontend.errorMessage === "function"
                 ? this.frontend.errorMessage(this.bootstrapError, fallback)
                 : fallback;
-            this.$main.html(`
-                <div class="frappe-card" style="padding:24px;text-align:center">
-                    <b>${fallback}</b>
-                    <p style="margin:12px 0">${this.esc(message)}</p>
-                    <button type="button" class="btn btn-default prw-bootstrap-retry">${__("إعادة المحاولة")}</button>
-                </div>`);
+            const ui = window.AlmdinaUi;
+            const retryLabel = __("إعادة المحاولة");
+            const retryHtml = ui && typeof ui.button === "function"
+                ? ui.button({
+                    label: retryLabel,
+                    variant: "secondary",
+                    className: "prw-bootstrap-retry",
+                })
+                : `<button type="button" class="btn alm-btn-secondary prw-bootstrap-retry">${this.esc(retryLabel)}</button>`;
+            if (ui && typeof ui.state === "function") {
+                this.$main.html(`<div class="almdina-ui">${ui.state({
+                    kind: "error",
+                    title: fallback,
+                    message,
+                    actionHtml: retryHtml,
+                })}</div>`);
+            } else {
+                this.$main.html(`
+                    <div class="almdina-ui">
+                        <div class="alm-state alm-state--error" role="alert">
+                            <strong class="alm-state__title">${this.esc(fallback)}</strong>
+                            <span class="alm-state__message">${this.esc(message)}</span>
+                            <div class="alm-state__action">${retryHtml}</div>
+                        </div>
+                    </div>`);
+            }
             this.$main
                 .off(".prw-bootstrap")
                 .on("click.prw-bootstrap", ".prw-bootstrap-retry", event => {
@@ -615,7 +635,7 @@
             this.disposeToolbarControls();
             this.disposeStageControls();
             this.$main.html(`
-                <main class="almdina-ui prw-shell" dir="rtl">
+                <main class="almdina-ui prw-shell alm-page alm-page--workbench" dir="rtl">
                     <section class="prw-hero">
                         <div class="prw-hero-copy">
                             <span class="prw-eyebrow">${__("Production Workflow")}</span>
@@ -845,7 +865,7 @@
             const readOnly = editor.readOnly;
             this.syncPrimaryAction();
             this.$main.html(`
-                <main class="almdina-ui prw-shell prw-editor-shell" dir="rtl">
+                <main class="almdina-ui prw-shell prw-editor-shell alm-page alm-page--workbench" dir="rtl">
                     <header class="prw-editor-topbar">
                         <div class="prw-editor-heading">
                             <button type="button" class="btn btn-default prw-close-editor" aria-label="${__("رجوع")}">→</button>

@@ -193,8 +193,9 @@ class FactoryProductionSettingsFrontendArchitectureTest(unittest.TestCase):
         self.assertNotIn("aps-section", self.controller)
 
     def test_renderer_uses_central_design_system_for_buttons(self) -> None:
-        self.assertIn('class="almdina-ui aps-shell"', self.renderer)
+        self.assertIn('class="almdina-ui aps-shell alm-page alm-page--admin"', self.renderer)
         self.assertIn("AlmdinaUi.button", self.renderer)
+        self.assertIn("AlmdinaUi.badge", self.renderer)
         self.assertNotIn('class="btn btn-primary aps-edit"', self.renderer)
         self.assertIn("/assets/almdina_erp/js/almdina_ui.js", self.page)
 

@@ -96,7 +96,7 @@
 
     function loading(shell, message) {
         shell.$content.html(`
-            <div class="almdina-ui almdina-sf-shell">
+            <div class="almdina-ui almdina-sf-shell alm-page alm-page--workbench">
                 <div class="almdina-sf-state almdina-sf-loading" role="status" aria-live="polite">
                     <span class="almdina-sf-spinner" aria-hidden="true"></span>
                     <div><b>${__("جاري التحميل")}</b><span>${esc(message)}</span></div>
@@ -106,7 +106,7 @@
 
     function renderError(shell, message) {
         shell.$content.html(`
-            <div class="almdina-ui almdina-sf-shell">
+            <div class="almdina-ui almdina-sf-shell alm-page alm-page--workbench">
                 <div class="almdina-sf-state is-error" role="alert">
                     <span class="almdina-sf-state-icon" aria-hidden="true">!</span>
                     <div><b>${__("تعذر تحديث صالة الإنتاج")}</b><span>${esc(message || __("تعذر تحميل البيانات."))}</span></div>
@@ -264,7 +264,7 @@
             : emptyState(__("لا يوجد مسار إنتاج مفعّل"), __("فعّل مسارًا من إعدادات الإنتاج ليظهر هنا."));
         const activeCount = model.counts.pending + model.counts.progress + model.counts.paused;
         shell.$content.html(`
-            <div class="almdina-ui almdina-sf-shell almdina-sf-board-shell">
+            <div class="almdina-ui almdina-sf-shell almdina-sf-board-shell alm-page alm-page--workbench">
                 ${pageHero(
                     __("صالة الإنتاج"),
                     __("متابعة مراحل الإنتاج"),
@@ -334,7 +334,7 @@
             ? __("لا يوجد عمل مسند أو سجل منتهٍ ضمن هذا القسم.")
             : __("لا يوجد عمل مسند إليك حاليًا.");
         shell.$content.html(`
-            <div class="almdina-ui almdina-sf-shell">
+            <div class="almdina-ui almdina-sf-shell alm-page alm-page--workbench">
                 ${pageHero(
                     __("قائمة العمل"),
                     __("طلباتك التشغيلية"),
@@ -362,7 +362,7 @@
         const departmentText = model.departments.join(" · ") || "—";
         const sectionText = enabledSections.join(" · ") || "—";
         shell.$content.html(`
-            <div class="almdina-ui almdina-sf-shell">
+            <div class="almdina-ui almdina-sf-shell alm-page alm-page--workbench">
                 ${pageHero(
                     __("الحساب"),
                     __("معلومات المستخدم"),

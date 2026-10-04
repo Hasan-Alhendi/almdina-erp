@@ -20,6 +20,14 @@
             return ui.button(options);
         }
 
+        function uiBadge(options) {
+            const ui = window.AlmdinaUi;
+            if (!ui || typeof ui.badge !== "function") {
+                throw new Error("AlmdinaUi.badge is required for Production Settings rendering");
+            }
+            return ui.badge(options);
+        }
+
         function multiline(value) {
             return esc(value || "—").replace(/\r?\n/g, "<br>");
         }
@@ -44,8 +52,8 @@
 
         function statusTone(value) {
             const normalized = String(value ?? "").trim();
-            if (normalized === t("مسموح") || normalized === "مسموح") return "is-allowed";
-            if (normalized === t("غير مسموح") || normalized === "غير مسموح") return "is-denied";
+            if (normalized === t("مسموح") || normalized === "مسموح") return "success";
+            if (normalized === t("غير مسموح") || normalized === "غير مسموح") return "danger";
             return "";
         }
 
@@ -55,7 +63,11 @@
                 ? multiline(row.value)
                 : (
                     tone
-                        ? `<span class="aps-status-pill ${tone}">${esc(row.value)}</span>`
+                        ? uiBadge({
+                            label: row.value,
+                            tone,
+                            className: `aps-status-pill ${tone === "success" ? "is-allowed" : "is-denied"}`,
+                        })
                         : esc(row.value)
                 );
             return `
@@ -121,22 +133,24 @@
 
         function render(model) {
             $body.html(`
-                <div class="almdina-ui aps-shell">
-                    <header class="aps-hero">
+                <div class="almdina-ui aps-shell alm-page alm-page--admin">
+                    <header class="aps-hero alm-page-intro alm-page-intro--accented">
                         <div class="aps-hero-layout">
-                            <div class="aps-hero-copy">
-                                <span class="aps-hero-accent" aria-hidden="true"></span>
+                            <div class="aps-hero-copy alm-page-intro__copy">
                                 <div class="aps-hero-titles">
-                                    <h2>${t("إعدادات تشغيل المعمل الافتراضية")}</h2>
-                                    <p>${t("القيم التشغيلية النشطة المعتمدة في كافة عمليات ومحطات العمل")}</p>
+                                    <h2 class="alm-page-intro__title">${t("إعدادات تشغيل المعمل الافتراضية")}</h2>
+                                    <p class="alm-page-intro__description">${t("القيم التشغيلية النشطة المعتمدة في كافة عمليات ومحطات العمل")}</p>
                                 </div>
                             </div>
                         </div>
                     </header>
 
-                    <div class="aps-section-intro">
-                        <div><span>${t("الإعدادات النشطة")}</span><strong>${t("اضبط كل مجموعة من مكانها المخصص")}</strong></div>
-                        <span class="aps-section-intro-note">${t("التعديل يظهر فقط للأقسام المسموحة لك")}</span>
+                    <div class="aps-section-intro alm-section-header">
+                        <div>
+                            <span class="alm-section-header__kicker">${t("الإعدادات النشطة")}</span>
+                            <strong class="alm-section-header__title">${t("اضبط كل مجموعة من مكانها المخصص")}</strong>
+                        </div>
+                        <span class="aps-section-intro-note alm-section-header__note">${t("التعديل يظهر فقط للأقسام المسموحة لك")}</span>
                     </div>
                     <section class="aps-sections">
                         ${model.sections.map(sectionCard).join("")}

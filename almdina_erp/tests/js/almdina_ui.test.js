@@ -191,6 +191,35 @@ const empty = ui.empty({ title: "لا توجد بيانات", message: "اختر
 assert.match(empty, /class="alm-empty"/);
 assert.match(empty, /لا توجد بيانات/);
 
+const badge = ui.badge({ label: "حرج", tone: "danger", className: "apc-badge" });
+assert.match(badge, /class="alm-badge alm-badge--danger apc-badge"/);
+assert.match(badge, />حرج</);
+
+const status = ui.status({ label: "فعال", tone: "success" });
+assert.match(status, /class="alm-status alm-status--success"/);
+assert.match(status, /alm-status__dot/);
+assert.match(status, /فعال/);
+
+const loadingState = ui.state({
+    kind: "loading",
+    title: "جاري التحميل",
+    message: "يتم تجهيز الصفحة...",
+});
+assert.match(loadingState, /class="alm-state alm-state--loading"/);
+assert.match(loadingState, /alm-state__spinner/);
+assert.match(loadingState, /aria-busy="true"/);
+assert.match(loadingState, /جاري التحميل/);
+
+const errorState = ui.state({
+    kind: "error",
+    title: "تعذر التحميل",
+    message: '<script>alert(1)</script>',
+});
+assert.match(errorState, /role="alert"/);
+assert.match(errorState, /class="alm-state alm-state--error"/);
+assert.doesNotMatch(errorState, /<script>/);
+assert.match(errorState, /&lt;script&gt;/);
+
 const parent = createParent();
 let changed = 0;
 const mounted = ui.control({

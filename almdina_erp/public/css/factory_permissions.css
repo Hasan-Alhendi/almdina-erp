@@ -6,46 +6,32 @@
 }
 
 .apc-shell {
+    --apc-primary: var(--alm-primary, #172033);
     --apc-accent: var(--alm-accent, #2563eb);
-    --apc-accent-soft: #eff6ff;
-    --apc-radius-lg: 16px;
-    --apc-radius-md: 14px;
-    --apc-radius-sm: 10px;
-    --apc-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 22px rgba(15, 23, 42, 0.05);
-    --apc-success-soft: rgba(21, 128, 61, 0.08);
-    --apc-warning-soft: rgba(180, 83, 9, 0.09);
-    --apc-danger-soft: rgba(185, 28, 28, 0.08);
-    --apc-purple-soft: rgba(109, 40, 217, 0.08);
-    direction: rtl;
-    max-width: 1480px;
-    margin: 0 auto;
-    padding: 0 2px 88px;
+    --apc-accent-soft: var(--alm-accent-soft, #eff6ff);
+    --apc-radius-lg: var(--alm-radius-card, 16px);
+    --apc-radius-md: var(--alm-radius-md, 14px);
+    --apc-radius-sm: var(--alm-radius-sm, 10px);
+    --apc-shadow-sm: var(--alm-shadow-card);
+    --apc-success-soft: var(--alm-status-success-bg);
+    --apc-warning-soft: var(--alm-status-warning-bg);
+    --apc-danger-soft: var(--alm-status-danger-bg);
+    --apc-purple-soft: color-mix(in srgb, var(--alm-accent-purple, #7c3aed) 8%, transparent);
+    /* Page shell owned by almdina_page_templates.css (.alm-page--admin). */
+    --alm-page-padding-bottom: 88px;
 }
 
-.apc-hero {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: flex-start;
-    gap: 20px;
-    padding: 20px 22px;
-    margin-bottom: 10px;
-    border: 1px solid var(--alm-card-border, #e4e8ee);
-    border-radius: var(--apc-radius-lg);
-    background: var(--alm-card, #fff);
-    box-shadow: var(--apc-shadow-sm);
-}
-
+/* Page intro chrome owned by almdina_patterns.css (.alm-page-intro). */
 .apc-hero-copy {
     min-width: 0;
 }
 
-.apc-eyebrow,
 .apc-panel-kicker,
 .apc-actor-label {
     display: block;
     margin-bottom: 4px;
-    color: #667085;
-    font-size: 10px;
+    color: var(--alm-text-subtle, #667085);
+    font-size: var(--alm-font-size-xs, 10px);
     font-weight: 800;
 }
 
@@ -67,7 +53,7 @@
     justify-content: center;
     width: 36px;
     height: 36px;
-    border-radius: 10px;
+    border-radius: var(--alm-radius-sm, 10px);
     color: var(--apc-accent);
     background: var(--apc-accent-soft);
     border: 1px solid #bfdbfe;
@@ -79,20 +65,12 @@
     height: 18px;
 }
 
-.apc-hero h2 {
-    margin: 0;
-    font-size: clamp(20px, 2vw, 24px);
-    font-weight: 900;
-    letter-spacing: -0.02em;
-    color: #101828;
-}
-
 .apc-hero-badge {
     display: inline-flex;
     align-items: center;
     padding: 3px 10px;
-    border-radius: 999px;
-    font-size: 10px;
+    border-radius: var(--alm-radius-pill, 999px);
+    font-size: var(--alm-font-size-xs, 10px);
     font-weight: 800;
     white-space: nowrap;
 }
@@ -107,15 +85,6 @@
     border: 1px solid #e4e7ec;
     background: #f9fafb;
     color: #475467;
-}
-
-.apc-hero p {
-    margin: 0;
-    max-width: 860px;
-    color: #667085;
-    font-size: 12.5px;
-    line-height: 1.75;
-    font-weight: 600;
 }
 
 .apc-session-card,
@@ -337,61 +306,9 @@
     font-weight: 800 !important;
 }
 
+/* Summary chrome owned by almdina_patterns.css (.alm-summary-*). */
 .apc-stats {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 8px;
-}
-
-.apc-stat {
-    padding: 10px 6px 8px;
-    border: 1px solid #eaecf0;
-    border-radius: 10px;
-    background: #f9fafb;
-    text-align: center;
-}
-
-.apc-stat-enabled {
-    border-color: #bbf7d0;
-    background: var(--apc-success-soft);
-}
-
-.apc-stat-critical {
-    border-color: #fecaca;
-    background: var(--apc-danger-soft);
-}
-
-.apc-stat-change {
-    border-color: #ddd6fe;
-    background: var(--apc-purple-soft);
-}
-
-.apc-stat strong {
-    display: block;
-    color: #101828;
-    font-size: 18px;
-    line-height: 1.05;
-    font-weight: 900;
-}
-
-.apc-stat-enabled strong {
-    color: #15803d;
-}
-
-.apc-stat-critical strong {
-    color: #b91c1c;
-}
-
-.apc-stat-change strong {
-    color: #6d28d9;
-}
-
-.apc-stat span {
-    display: block;
-    margin-top: 4px;
-    color: #667085;
-    font-size: 9px;
-    font-weight: 750;
+    margin-top: 2px;
 }
 
 .apc-content {
@@ -583,37 +500,12 @@
     flex-wrap: wrap;
 }
 
-.apc-badge {
-    border: 1px solid transparent;
-    border-radius: 999px;
+.apc-badge.alm-badge {
     padding: 2px 7px;
     font-size: 9px;
     font-weight: 850;
     white-space: nowrap;
-}
-
-.apc-badge.standard {
-    border-color: #bfdbfe;
-    background: #eff6ff;
-    color: #1d4ed8;
-}
-
-.apc-badge.permission {
-    border-color: #bfdbfe;
-    background: #eff6ff;
-    color: #1d4ed8;
-}
-
-.apc-badge.sensitive {
-    border-color: rgba(180, 83, 9, 0.12);
-    background: #fff7df;
-    color: #8a5b00;
-}
-
-.apc-badge.critical {
-    border-color: rgba(185, 28, 28, 0.15);
-    background: #ffe7e7;
-    color: #a61b1b;
+    /* Status colors owned by .alm-badge--* in almdina_components.css */
 }
 
 .apc-side {

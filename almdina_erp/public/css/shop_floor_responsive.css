@@ -31,10 +31,9 @@
 }
 
 .almdina-sf-shell {
+    /* Page shell owned by almdina_page_templates.css (.alm-page--workbench). */
     width: 100%;
-    max-width: 1260px;
-    margin-inline: auto;
-    padding-bottom: 28px;
+    --alm-page-padding-bottom: 28px;
 }
 
 /* Top navigation ---------------------------------------------------------- */

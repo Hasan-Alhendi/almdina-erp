@@ -1,7 +1,8 @@
 /*
  * Almdina ERP — shared design tokens.
  * Scope: presentation only. Feature CSS may read these variables but must not
- * redefine brand colors outside this file.
+ * redefine brand colors, typography, spacing, radius, shadow, or status scales
+ * outside this file. See docs/design_system/TOKEN_OWNERSHIP.md.
  *
  * Brand primitives also live on :root so Frappe Desk can read --alm-primary
  * through almdina_desk_theme.css without duplicating hex values.
@@ -45,6 +46,27 @@
     --alm-border-subtle: #eaecf0;
     --alm-border-hover: #d0d5dd;
     --alm-surface-muted: #f4f6f8;
+
+    /* Semantic status tones (fg / bg / border). */
+    --alm-status-success-fg: #15803d;
+    --alm-status-success-bg: rgba(21, 128, 61, 0.08);
+    --alm-status-success-border: rgba(21, 128, 61, 0.22);
+
+    --alm-status-warning-fg: #b45309;
+    --alm-status-warning-bg: rgba(180, 83, 9, 0.09);
+    --alm-status-warning-border: rgba(180, 83, 9, 0.24);
+
+    --alm-status-danger-fg: #b91c1c;
+    --alm-status-danger-bg: rgba(185, 28, 28, 0.08);
+    --alm-status-danger-border: rgba(185, 28, 28, 0.22);
+
+    --alm-status-info-fg: #2563eb;
+    --alm-status-info-bg: #eff6ff;
+    --alm-status-info-border: rgba(37, 99, 235, 0.24);
+
+    --alm-status-neutral-fg: #344054;
+    --alm-status-neutral-bg: #f4f6f8;
+    --alm-status-neutral-border: #e4e8ee;
 }
 
 .almdina-ui {
@@ -53,13 +75,52 @@
     --alm-secondary-text: var(--text-color, #1f272e);
     --alm-secondary-hover-bg: var(--subtle-fg, #f4f5f6);
 
-    --alm-radius-lg: 18px;
-    --alm-radius-md: 14px;
-    --alm-radius-sm: 10px;
-    --alm-radius-button: 10px;
+    /* Typography scale (keep small and intentional). */
+    --alm-font-size-xs: 10px;
+    --alm-font-size-sm: 12px;
+    --alm-font-size-md: 14px;
+    --alm-font-size-lg: 16px;
+    --alm-font-size-xl: 20px;
+    --alm-font-size-2xl: 24px;
 
+    --alm-line-height-tight: 1.35;
+    --alm-line-height-normal: 1.6;
+    --alm-line-height-relaxed: 1.8;
+
+    --alm-font-weight-medium: 500;
+    --alm-font-weight-semibold: 600;
+    --alm-font-weight-bold: 700;
+    --alm-font-weight-heavy: 800;
+
+    /* Spacing scale. */
+    --alm-space-0: 0;
+    --alm-space-1: 4px;
+    --alm-space-2: 8px;
+    --alm-space-3: 12px;
+    --alm-space-4: 16px;
+    --alm-space-5: 20px;
+    --alm-space-6: 24px;
+    --alm-space-8: 32px;
+    --alm-space-10: 40px;
+    --alm-space-12: 48px;
+
+    /* Radius scale. */
+    --alm-radius-xs: 8px;
+    --alm-radius-sm: 10px;
+    --alm-radius-md: 14px;
+    --alm-radius-card: 16px;
+    --alm-radius-lg: 18px;
+    --alm-radius-button: 10px;
+    --alm-radius-pill: 999px;
+
+    /* Shadow scale. */
+    --alm-shadow-none: none;
     --alm-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04), 0 5px 18px rgba(15, 23, 42, 0.045);
+    --alm-shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.045);
+    --alm-shadow-md: 0 12px 36px rgba(15, 23, 42, 0.09);
+    --alm-shadow-overlay: 0 18px 48px rgba(15, 23, 42, 0.16);
     --alm-shadow-button: 0 4px 12px rgba(23, 32, 51, 0.16);
+    --alm-shadow-focus: 0 0 0 2px color-mix(in srgb, var(--alm-primary) 18%, transparent);
 
     --alm-height-button: 42px;
     --alm-padding-button-x: 16px;
@@ -71,6 +132,4 @@
     --alm-text-muted: var(--text-muted, #6b7280);
     --alm-surface: var(--fg-color, #ffffff);
     --alm-border: var(--border-color, #dfe3e8);
-    --alm-shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.045);
-    --alm-radius-card: 16px;
 }

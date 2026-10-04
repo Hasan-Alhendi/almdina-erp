@@ -192,8 +192,12 @@ class FactoryPermissionsFrontendArchitectureTest(unittest.TestCase):
         self.assertNotIn('role="combobox"', self.controller)
 
     def test_renderer_uses_central_design_system_for_buttons(self) -> None:
-        self.assertIn('class="almdina-ui apc-shell"', self.renderer)
+        self.assertIn(
+            'class="almdina-ui apc-shell alm-page alm-page--admin"',
+            self.renderer,
+        )
         self.assertIn("AlmdinaUi.button", self.renderer)
+        self.assertIn("AlmdinaUi.badge", self.renderer)
         self.assertNotIn('class="btn btn-primary apc-save"', self.renderer)
         self.assertNotIn('type="file"', self.renderer)
         self.assertNotIn("apc-import-file", self.renderer)

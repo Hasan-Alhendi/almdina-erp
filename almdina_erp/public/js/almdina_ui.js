@@ -73,6 +73,30 @@
         return `<button type="${escapeHtml(type)}" class="${classes}"${disabled ? " disabled" : ""}${extraAttrs}>${escapeHtml(label)}</button>`;
     }
 
+    const STATUS_TONES = Object.freeze({
+        success: "success",
+        warning: "warning",
+        danger: "danger",
+        info: "info",
+        neutral: "neutral",
+    });
+
+    const STATE_KINDS = Object.freeze({
+        loading: "loading",
+        empty: "empty",
+        error: "error",
+    });
+
+    function resolveTone(tone) {
+        const key = String(tone || "neutral").trim().toLowerCase();
+        return STATUS_TONES[key] || STATUS_TONES.neutral;
+    }
+
+    function resolveStateKind(kind) {
+        const key = String(kind || "empty").trim().toLowerCase();
+        return STATE_KINDS[key] || STATE_KINDS.empty;
+    }
+
     function empty(options = {}) {
         const message = String(options.message || "");
         const title = String(options.title || "").trim();
@@ -83,6 +107,51 @@
         const actionHtml = action ? `<div class="alm-empty-action">${action}</div>` : "";
 
         return `<div class="${classes}" role="status">${titleHtml}${escapeHtml(message)}${actionHtml}</div>`;
+    }
+
+    function badge(options = {}) {
+        const label = String(options.label || "");
+        const tone = resolveTone(options.tone);
+        const className = String(options.className || "").trim();
+        const classes = ["alm-badge", `alm-badge--${tone}`, className].filter(Boolean).join(" ");
+        return `<span class="${classes}">${escapeHtml(label)}</span>`;
+    }
+
+    function status(options = {}) {
+        const label = String(options.label || "");
+        const tone = resolveTone(options.tone);
+        const className = String(options.className || "").trim();
+        const withDot = options.withDot !== false;
+        const classes = ["alm-status", `alm-status--${tone}`, className].filter(Boolean).join(" ");
+        const dotHtml = withDot
+            ? '<span class="alm-status__dot" aria-hidden="true"></span>'
+            : "";
+        return `<span class="${classes}">${dotHtml}${escapeHtml(label)}</span>`;
+    }
+
+    function state(options = {}) {
+        const kind = resolveStateKind(options.kind);
+        const title = String(options.title || "").trim();
+        const message = String(options.message || "");
+        const className = String(options.className || "").trim();
+        const action = String(options.actionHtml || "").trim();
+        const classes = ["alm-state", `alm-state--${kind}`, className].filter(Boolean).join(" ");
+        const role = kind === "error" ? "alert" : "status";
+        const live = kind === "loading" ? ' aria-live="polite" aria-busy="true"' : "";
+        const spinnerHtml = kind === "loading"
+            ? '<span class="alm-state__spinner" aria-hidden="true"></span>'
+            : "";
+        const titleHtml = title
+            ? `<strong class="alm-state__title">${escapeHtml(title)}</strong>`
+            : "";
+        const messageHtml = message
+            ? `<span class="alm-state__message">${escapeHtml(message)}</span>`
+            : "";
+        const actionHtml = action
+            ? `<div class="alm-state__action">${action}</div>`
+            : "";
+
+        return `<div class="${classes}" role="${role}"${live}>${spinnerHtml}${titleHtml}${messageHtml}${actionHtml}</div>`;
     }
 
     function resolveParent(parent) {
@@ -358,6 +427,9 @@
         fileUploader,
         fileUploaderPresets: FILE_UPLOADER_PRESETS,
         empty,
+        badge,
+        status,
+        state,
         escapeHtml,
     });
 })();

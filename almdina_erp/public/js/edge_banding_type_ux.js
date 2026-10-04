@@ -66,8 +66,8 @@
         const cancelLabel = esc(__("إلغاء والتراجع"));
         const saveIcon = icon("tick", "sm");
         return `
-            <button type="button" class="btn btn-default ebt-footer-cancel">${cancelLabel}</button>
-            <button type="button" class="btn btn-primary ebt-footer-save"${saveDisabled}>
+            <button type="button" class="btn alm-btn-secondary ebt-footer-cancel">${cancelLabel}</button>
+            <button type="button" class="btn alm-btn-primary ebt-footer-save"${saveDisabled}>
                 <span class="ebt-footer-save-icon" aria-hidden="true">${saveIcon}</span>
                 ${saveLabel}
             </button>`;
@@ -110,7 +110,7 @@
             return frm._ebtShell;
         }
         const shell = $(`
-            <div class="ebt-form-page almdina-ui">
+            <div class="ebt-form-page almdina-ui alm-page alm-page--transaction">
                 <div class="ebt-form-card">
                     <header class="ebt-form-hero">
                         <span class="ebt-form-hero-icon" aria-hidden="true"></span>

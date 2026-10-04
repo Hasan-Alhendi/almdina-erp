@@ -6,12 +6,7 @@
     --prw-subtle: var(--subtle-fg, #f8fafc);
     --prw-text: var(--text-color, #172033);
     --prw-muted: var(--text-muted, #667085);
-    direction: rtl;
-    display: grid;
-    gap: 16px;
-    max-width: 1600px;
-    margin: 0 auto;
-    padding: 4px 2px 40px;
+    /* Page shell owned by almdina_page_templates.css (.alm-page--workbench). */
     color: var(--prw-text);
 }
 

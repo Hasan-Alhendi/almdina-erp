@@ -12,7 +12,9 @@ def test_production_settings_polish_has_clear_arabic_hierarchy_and_feedback() ->
     renderer = RENDERER.read_text(encoding="utf-8")
 
     for marker in (
-        "aps-hero-accent",
+        "alm-page-intro",
+        "alm-page-intro--accented",
+        "alm-section-header",
         "aps-section-intro",
         "aps-section-kicker",
         "aps-readonly-note",

@@ -124,6 +124,203 @@
     color: var(--text-color, #1f272e);
 }
 
+/* Card / Panel primitives */
+.almdina-ui .alm-card {
+    border: 1px solid var(--alm-card-border, var(--alm-border));
+    border-radius: var(--alm-radius-card);
+    background: var(--alm-card, var(--alm-surface));
+    box-shadow: var(--alm-shadow-card);
+    padding: var(--alm-space-4);
+}
+
+.almdina-ui .alm-card--muted {
+    background: var(--alm-surface-muted);
+    box-shadow: var(--alm-shadow-none);
+}
+
+.almdina-ui .alm-card--interactive {
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.almdina-ui .alm-card--interactive:hover {
+    border-color: var(--alm-border-hover);
+    box-shadow: var(--alm-shadow-sm);
+}
+
+.almdina-ui .alm-panel {
+    border: 1px solid var(--alm-card-border, var(--alm-border));
+    border-radius: var(--alm-radius-md);
+    background: var(--alm-card, var(--alm-surface));
+    box-shadow: var(--alm-shadow-sm);
+    overflow: hidden;
+}
+
+.almdina-ui .alm-panel__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--alm-space-3);
+    padding: var(--alm-space-3) var(--alm-space-4);
+    border-bottom: 1px solid var(--alm-border-subtle);
+}
+
+.almdina-ui .alm-panel__body {
+    padding: var(--alm-space-4);
+}
+
+.almdina-ui .alm-panel__footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--alm-space-2);
+    padding: var(--alm-space-3) var(--alm-space-4);
+    border-top: 1px solid var(--alm-border-subtle);
+    background: var(--alm-surface-muted);
+}
+
+/* Badge / Status */
+.almdina-ui .alm-badge,
+.almdina-ui .alm-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+    border: 1px solid transparent;
+    border-radius: var(--alm-radius-pill);
+    font-size: var(--alm-font-size-xs);
+    font-weight: var(--alm-font-weight-heavy);
+    line-height: var(--alm-line-height-tight);
+    white-space: nowrap;
+}
+
+.almdina-ui .alm-badge {
+    padding: 2px 8px;
+}
+
+.almdina-ui .alm-status {
+    padding: 3px 10px;
+    font-size: var(--alm-font-size-sm);
+    font-weight: var(--alm-font-weight-bold);
+}
+
+.almdina-ui .alm-status__dot {
+    width: 7px;
+    height: 7px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.almdina-ui .alm-badge--success,
+.almdina-ui .alm-status--success {
+    color: var(--alm-status-success-fg);
+    background: var(--alm-status-success-bg);
+    border-color: var(--alm-status-success-border);
+}
+
+.almdina-ui .alm-badge--warning,
+.almdina-ui .alm-status--warning {
+    color: var(--alm-status-warning-fg);
+    background: var(--alm-status-warning-bg);
+    border-color: var(--alm-status-warning-border);
+}
+
+.almdina-ui .alm-badge--danger,
+.almdina-ui .alm-status--danger {
+    color: var(--alm-status-danger-fg);
+    background: var(--alm-status-danger-bg);
+    border-color: var(--alm-status-danger-border);
+}
+
+.almdina-ui .alm-badge--info,
+.almdina-ui .alm-status--info {
+    color: var(--alm-status-info-fg);
+    background: var(--alm-status-info-bg);
+    border-color: var(--alm-status-info-border);
+}
+
+.almdina-ui .alm-badge--neutral,
+.almdina-ui .alm-status--neutral {
+    color: var(--alm-status-neutral-fg);
+    background: var(--alm-status-neutral-bg);
+    border-color: var(--alm-status-neutral-border);
+}
+
+/* Loading / Empty / Error state shells */
+.almdina-ui .alm-state {
+    display: grid;
+    justify-items: center;
+    gap: var(--alm-space-2);
+    padding: var(--alm-space-8) var(--alm-space-5);
+    border: 1px dashed var(--alm-border);
+    border-radius: var(--alm-radius-md);
+    background: var(--alm-surface-muted);
+    color: var(--alm-text-subtle);
+    text-align: center;
+    line-height: var(--alm-line-height-relaxed);
+}
+
+.almdina-ui .alm-state__title {
+    display: block;
+    color: var(--alm-text-strong);
+    font-size: var(--alm-font-size-md);
+    font-weight: var(--alm-font-weight-heavy);
+}
+
+.almdina-ui .alm-state__message {
+    display: block;
+    max-width: 42rem;
+    font-size: var(--alm-font-size-sm);
+    font-weight: var(--alm-font-weight-semibold);
+}
+
+.almdina-ui .alm-state__action {
+    margin-top: var(--alm-space-2);
+}
+
+.almdina-ui .alm-state__spinner {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px solid color-mix(in srgb, var(--alm-primary) 18%, transparent);
+    border-top-color: var(--alm-primary);
+    animation: alm-state-spin 0.8s linear infinite;
+}
+
+.almdina-ui .alm-state--error {
+    border-style: solid;
+    border-color: var(--alm-status-danger-border);
+    background: var(--alm-status-danger-bg);
+    color: var(--alm-status-danger-fg);
+}
+
+.almdina-ui .alm-state--error .alm-state__title {
+    color: var(--alm-status-danger-fg);
+}
+
+.almdina-ui .alm-state--empty {
+    background: var(--alm-surface-muted);
+}
+
+.almdina-ui .alm-state--loading {
+    border-style: solid;
+    border-color: var(--alm-border-subtle);
+    background: var(--alm-card, var(--alm-surface));
+}
+
+@keyframes alm-state-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .almdina-ui .alm-state__spinner {
+        animation: none;
+        border-top-color: color-mix(in srgb, var(--alm-primary) 45%, transparent);
+    }
+}
+
 .almdina-ui .dco-plan-tabs .btn.is-active {
     position: relative;
     background: transparent;

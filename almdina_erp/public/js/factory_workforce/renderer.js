@@ -20,6 +20,14 @@
             return ui.button(options);
         }
 
+        function uiBadge(options) {
+            const ui = window.AlmdinaUi;
+            if (!ui || typeof ui.badge !== "function") {
+                throw new Error("AlmdinaUi.badge is required for Factory Workforce rendering");
+            }
+            return ui.badge(options);
+        }
+
         function renderLoading() {
             $main.html(`
                 <div class="aw-loading" role="status" aria-live="polite">
@@ -43,13 +51,13 @@
 
         function heroHtml(model) {
             return `
-                <header class="aw-hero">
-                    <div class="aw-hero-copy">
-                        <span class="aw-eyebrow">${t("إدارة القوى العاملة")}</span>
-                        <h2>${t("مستخدمو Almdina")}</h2>
-                        <p>${t("أدر حسابات المعمل وأدوارها من مكان واحد. الأدوار والصلاحيات لا تُمنح تلقائيًا؛ الصلاحيات تملكها Almdina، أما صفحة الدخول فيحددها Home Page داخل Role في Frappe.")}</p>
+                <header class="aw-hero alm-page-intro alm-page-intro--accented">
+                    <div class="aw-hero-copy alm-page-intro__copy">
+                        <span class="aw-eyebrow alm-page-intro__eyebrow">${t("إدارة القوى العاملة")}</span>
+                        <h2 class="alm-page-intro__title">${t("مستخدمو Almdina")}</h2>
+                        <p class="alm-page-intro__description">${t("أدر حسابات المعمل وأدوارها من مكان واحد. الأدوار والصلاحيات لا تُمنح تلقائيًا؛ الصلاحيات تملكها Almdina، أما صفحة الدخول فيحددها Home Page داخل Role في Frappe.")}</p>
                     </div>
-                    <div class="aw-hero-meta" aria-label="${t("ملخص القائمة الحالية")}">
+                    <div class="aw-hero-meta alm-page-intro__meta" aria-label="${t("ملخص القائمة الحالية")}">
                         <span>${t("المستخدمون الظاهرون")}</span>
                         <strong>${model.users.length}</strong>
                     </div>
@@ -59,9 +67,9 @@
 
         function toolbarHtml() {
             return `
-                <div class="aw-toolbar" role="search">
-                    <div class="aw-toolbar-heading">
-                        <span class="aw-toolbar-kicker">${t("تصفية القائمة")}</span>
+                <div class="aw-toolbar alm-toolbar" role="search">
+                    <div class="aw-toolbar-heading alm-toolbar__heading">
+                        <span class="aw-toolbar-kicker alm-toolbar__kicker">${t("تصفية القائمة")}</span>
                         <strong>${t("الوصول السريع للمستخدم")}</strong>
                     </div>
                     <div class="aw-field aw-search-field">
@@ -81,8 +89,9 @@
 
         function summaryHtml(cards) {
             const classes = ["total", "enabled", "disabled", "assignments"];
-            return `<div class="aw-summary" aria-label="${t("ملخص القوى العاملة")}">${cards.map((item, index) => `
-                <div class="aw-stat aw-stat-${classes[index] || "total"}">
+            const tones = ["neutral", "success", "danger", "info"];
+            return `<div class="aw-summary alm-summary-grid" aria-label="${t("ملخص القوى العاملة")}">${cards.map((item, index) => `
+                <div class="aw-stat aw-stat-${classes[index] || "total"} alm-summary-card" data-tone="${tones[index] || "neutral"}">
                     <span>${esc(item.label)}</span>
                     <b>${esc(item.value)}</b>
                 </div>
@@ -132,10 +141,22 @@
             }));
 
             const roleBadges = user.roles.length
-                ? user.roles.map(role => `<span class="aw-badge aw-role">${esc(role)}</span>`).join("")
-                : `<span class="aw-badge is-neutral">${t("بدون أدوار مخصصة")}</span>`;
+                ? user.roles.map(role => uiBadge({
+                    label: role,
+                    tone: "info",
+                    className: "aw-badge aw-role",
+                })).join("")
+                : uiBadge({
+                    label: t("بدون أدوار مخصصة"),
+                    tone: "neutral",
+                    className: "aw-badge",
+                });
             const activeBadge = user.activeAssignments
-                ? `<span class="aw-badge is-warning">${t("مراحل نشطة")}: ${user.activeAssignments}</span>`
+                ? uiBadge({
+                    label: `${t("مراحل نشطة")}: ${user.activeAssignments}`,
+                    tone: "warning",
+                    className: "aw-badge",
+                })
                 : "";
             const assignmentWarning = user.showActiveAssignmentWarning
                 ? `<div class="aw-active-warning"><span aria-hidden="true">!</span><span>${t("يجب إعادة إسناد المراحل النشطة قبل تعطيل المستخدم أو تغيير أدواره.")}</span></div>`
@@ -157,7 +178,11 @@
                                 <div class="aw-email">${esc(user.email)}</div>
                             </div>
                         </div>
-                        <span class="aw-badge ${user.enabled ? "is-enabled" : "is-disabled"}">${user.enabled ? t("مفعّل") : t("معطّل")}</span>
+                        ${uiBadge({
+                            label: user.enabled ? t("مفعّل") : t("معطّل"),
+                            tone: user.enabled ? "success" : "danger",
+                            className: `aw-badge ${user.enabled ? "is-enabled" : "is-disabled"}`,
+                        })}
                     </div>
                     <div class="aw-badges aw-role-row">${roleBadges}${activeBadge}</div>
                     <div class="aw-details">
@@ -184,8 +209,16 @@
                             </div>
                         </div>
                         <div class="aw-badges aw-card-statuses">
-                            <span class="aw-badge ${user.enabled ? "is-enabled" : "is-disabled"}">${user.enabled ? t("مفعّل") : t("معطّل")}</span>
-                            <span class="aw-badge is-neutral">${t("خارج المعمل")}</span>
+                            ${uiBadge({
+                                label: user.enabled ? t("مفعّل") : t("معطّل"),
+                                tone: user.enabled ? "success" : "danger",
+                                className: `aw-badge ${user.enabled ? "is-enabled" : "is-disabled"}`,
+                            })}
+                            ${uiBadge({
+                                label: t("خارج المعمل"),
+                                tone: "neutral",
+                                className: "aw-badge",
+                            })}
                         </div>
                     </div>
                     <div class="aw-details">
@@ -274,7 +307,7 @@
                 return;
             }
             $main.html(`
-                <div class="almdina-ui aw-shell">
+                <div class="almdina-ui aw-shell alm-page alm-page--admin">
                     ${heroHtml(model)}
                     ${toolbarHtml()}
                     ${summaryHtml(model.summary)}

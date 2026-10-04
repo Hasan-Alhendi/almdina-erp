@@ -63,7 +63,7 @@ frappe.pages["factory-plan-archive"].on_page_load = function (wrapper) {
 
     function loading(message) {
         disposeControls();
-        $body.html(`<div class="almdina-ui apa-shell"><div class="apa-empty">${esc(message)}</div></div>`);
+        $body.html(`<div class="almdina-ui apa-shell alm-page alm-page--admin"><div class="apa-empty">${esc(message)}</div></div>`);
     }
 
     function load() {
@@ -94,7 +94,7 @@ frappe.pages["factory-plan-archive"].on_page_load = function (wrapper) {
 
     function render() {
         $body.html(`
-            <div class="almdina-ui apa-shell">
+            <div class="almdina-ui apa-shell alm-page alm-page--admin">
                 <section class="apa-hero">
                     <h3>${__("نسخة رسمية ثابتة لكل خطة معتمدة")}</h3>
                     <p>${__("ينشئ الأرشيف ملف PDF خاصًا محفوظًا مع الطلب. إذا كان الملف موجودًا مسبقًا فلن يتم إنشاء نسخة مكررة.")}</p>
