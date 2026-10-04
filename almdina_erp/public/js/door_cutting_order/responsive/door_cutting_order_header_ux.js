@@ -77,33 +77,6 @@
         return 0;
     }
 
-    function tabContentAlignRect(frm, fallbackRect) {
-        // Match sticky tabs to the same content box as status/cards inside .form-page
-        // (shell max-width + shared horizontal gutter), not the full shell outer edge.
-        const wrapper = domNode(frm && frm.wrapper);
-        const formPage = wrapper && wrapper.querySelector(".form-page");
-        if (formPage) {
-            const rect = formPage.getBoundingClientRect();
-            const style = window.getComputedStyle(formPage);
-            const padInlineStart = parseFloat(style.paddingInlineStart || style.paddingLeft) || 0;
-            const padInlineEnd = parseFloat(style.paddingInlineEnd || style.paddingRight) || 0;
-            const width = Math.max(0, rect.width - padInlineStart - padInlineEnd);
-            return {
-                left: rect.left + padInlineStart,
-                width,
-            };
-        }
-
-        const root = wrapper && (wrapper.closest(".dco-operator-form") || wrapper.querySelector(".dco-operator-form") || wrapper);
-        const gutterRaw = root ? window.getComputedStyle(root).getPropertyValue("--dco-tab-content-gutter") : "";
-        const gutter = parseFloat(gutterRaw) || 20;
-        const base = fallbackRect || { left: 0, width: 0 };
-        return {
-            left: base.left + gutter,
-            width: Math.max(0, base.width - (2 * gutter)),
-        };
-    }
-
     function updateFixedTabs(frm) {
         const tabs = frm && frm._dco_fixed_tabs;
         const placeholder = frm && frm._dco_tabs_placeholder;
@@ -116,14 +89,12 @@
         const shouldFix = anchorRect.top <= top;
 
         if (shouldFix) {
-            const widthRect = placeholder.parentElement ? placeholder.parentElement.getBoundingClientRect() : anchorRect;
-            const align = tabContentAlignRect(frm, widthRect);
             const height = Math.max(44, tabs.getBoundingClientRect().height || tabs.offsetHeight || 44);
             placeholder.style.height = `${height}px`;
             tabs.classList.add("dco-tabs-is-fixed");
             tabs.style.top = `${top}px`;
-            tabs.style.left = `${Math.round(align.left)}px`;
-            tabs.style.width = `${Math.round(align.width)}px`;
+            tabs.style.left = `${Math.round(anchorRect.left)}px`;
+            tabs.style.width = `${Math.round(anchorRect.width)}px`;
         } else {
             placeholder.style.height = "0px";
             tabs.classList.remove("dco-tabs-is-fixed");
@@ -133,23 +104,30 @@
         }
     }
 
-    function clearFixedTabListeners(frm, schedule, root, cleanup) {
+    function clearFixedTabListeners(frm, schedule, root, observer, cleanup) {
         document.removeEventListener("scroll", schedule, true);
         window.removeEventListener("resize", schedule);
+        if (observer) observer.disconnect();
         const $root = root && window.jQuery && window.jQuery(root);
         if ($root) $root.off(HIDE_EVENT, cleanup);
         if (frm._dco_fixed_tabs_schedule === schedule) {
             frm._dco_fixed_tabs_listener_installed = false;
             frm._dco_fixed_tabs_schedule = null;
             frm._dco_fixed_tabs_listener_root = null;
+            frm._dco_fixed_tabs_resize_head = null;
+            frm._dco_fixed_tabs_resize_parent = null;
             frm._dco_fixed_tabs_listener_cleanup = null;
         }
     }
 
-    function ensureFixedTabListeners(frm, pageRoot) {
+    function ensureFixedTabListeners(frm, nodes) {
+        const pageRoot = nodes.pageWrapper || nodes.pageContainer;
+        const resizeParent = nodes.placeholder.parentElement;
         if (
             frm._dco_fixed_tabs_listener_installed
             && frm._dco_fixed_tabs_listener_root === pageRoot
+            && frm._dco_fixed_tabs_resize_head === nodes.head
+            && frm._dco_fixed_tabs_resize_parent === resizeParent
             && pageRoot.isConnected
         ) return;
         if (typeof frm._dco_fixed_tabs_listener_cleanup === "function") {
@@ -158,7 +136,12 @@
         const schedule = () => {
             scheduleFrame(frm, "header-fixed-tabs-scroll", () => updateFixedTabs(frm));
         };
-        const cleanup = () => clearFixedTabListeners(frm, schedule, pageRoot, cleanup);
+        const observer = window.ResizeObserver ? new window.ResizeObserver(schedule) : null;
+        if (observer) {
+            observer.observe(nodes.head);
+            if (resizeParent && resizeParent !== nodes.head) observer.observe(resizeParent);
+        }
+        const cleanup = () => clearFixedTabListeners(frm, schedule, pageRoot, observer, cleanup);
         const $root = pageRoot && window.jQuery && window.jQuery(pageRoot);
         if ($root) $root.on(HIDE_EVENT, cleanup);
         // Frappe may scroll a nested Desk container instead of window. Capture scrolls
@@ -167,6 +150,8 @@
         window.addEventListener("resize", schedule, { passive: true });
         frm._dco_fixed_tabs_schedule = schedule;
         frm._dco_fixed_tabs_listener_root = pageRoot;
+        frm._dco_fixed_tabs_resize_head = nodes.head;
+        frm._dco_fixed_tabs_resize_parent = resizeParent;
         frm._dco_fixed_tabs_listener_cleanup = cleanup;
         frm._dco_fixed_tabs_listener_installed = true;
         const context = documentContext();
@@ -179,7 +164,7 @@
         recoverPresentation(frm, nodes) {
             if (!frm || !nodes || !nodes.tabs || !nodes.placeholder) return false;
             forceRenderedTabLabels(frm, nodes.tabs);
-            ensureFixedTabListeners(frm, nodes.pageWrapper || nodes.pageContainer);
+            ensureFixedTabListeners(frm, nodes);
             updateFixedTabs(frm);
             return Boolean(
                 frm._dco_fixed_tabs === nodes.tabs
@@ -196,6 +181,8 @@
                 && nodes.tabs.isConnected
                 && nodes.placeholder.isConnected
                 && frm._dco_fixed_tabs_listener_root === (nodes.pageWrapper || nodes.pageContainer)
+                && frm._dco_fixed_tabs_resize_head === nodes.head
+                && frm._dco_fixed_tabs_resize_parent === nodes.placeholder.parentElement
                 && frm._dco_fixed_tabs_listener_installed
             );
         },

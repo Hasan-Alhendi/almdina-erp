@@ -187,7 +187,7 @@ def test_native_tab_row_keeps_inner_flex_contract_and_outer_sticky_geometry():
                 assert selector in inner_row_selectors, selector
 
     assert 'const tabs = frm && frm._dco_fixed_tabs' in text(HEADER)
-    assert 'tabs.style.width = `${Math.round(align.width)}px`' in text(HEADER)
+    assert 'tabs.style.width = `${Math.round(anchorRect.width)}px`' in text(HEADER)
 
     # Keep the existing native list host and action spacing contract unchanged.
     assert 'node.closest("li,.nav-item") || node' in page_edit
@@ -197,3 +197,21 @@ def test_native_tab_row_keeps_inner_flex_contract_and_outer_sticky_geometry():
     assert "margin-inline-start:auto" in page_edit
     assert ".dco-operator-form .dco-tab-edit-toolbar-slot" in css
     assert "margin-inline-start: auto !important" in css
+
+
+def test_sticky_anchor_uses_native_shell_width_without_forcing_frappes_main_column():
+    css = text(PRESENTATION_CSS)
+    header = text(HEADER)
+    placeholder = css.split(".dco-operator-form .dco-tabs-fixed-placeholder {", 1)[1].split("}", 1)[0]
+    shell = css.split(".dco-operator-form .form-tabs-list,", 1)[1].split("}", 1)[0]
+    fixed = css.split(".dco-operator-form .dco-sticky-tabs.dco-tabs-is-fixed {", 1)[1].split("}", 1)[0]
+
+    for property_name in ("width", "max-width"):
+        expected = re.search(rf"{property_name}:\s*calc\([^;]+;", shell)
+        assert expected and expected.group() in placeholder
+    assert "max-width: none !important" not in fixed
+    assert not re.search(r"\.dco-operator-form \.layout-main-section(?:-wrapper)?\s*\{[^}]*width:\s*100%\s*!important", css)
+    assert "const anchorRect = placeholder.getBoundingClientRect()" in header
+    assert "new window.ResizeObserver(schedule)" in header
+    assert "observer.observe(nodes.head)" in header
+    assert "observer.disconnect()" in header

@@ -49,10 +49,9 @@ def test_primary_tab_bar_is_fixed_on_scroll_and_labels_are_arabic():
     assert "margin: 0 auto var(--dco-section-stack-gap, 8px) !important" in css
     assert "z-index: 1020 !important" in css
     assert "body.modal-open .dco-operator-form .dco-sticky-tabs.dco-tabs-is-fixed" in css
-    assert "function tabContentAlignRect" in src
-    assert "paddingInlineStart" in src
-    assert "tabs.style.left = `${Math.round(align.left)}px`" in src
-    assert "tabs.style.width = `${Math.round(align.width)}px`" in src
+    assert "const anchorRect = placeholder.getBoundingClientRect()" in src
+    assert "tabs.style.left = `${Math.round(anchorRect.left)}px`" in src
+    assert "tabs.style.width = `${Math.round(anchorRect.width)}px`" in src
     assert "--alm-primary" in css
     assert "--alm-on-primary" in css
     assert "border-bottom: none !important" in css

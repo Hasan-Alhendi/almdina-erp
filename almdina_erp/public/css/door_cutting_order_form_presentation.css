@@ -62,20 +62,14 @@
 
 .dco-operator-form .dco-tabs-fixed-placeholder {
     display: block;
-    width: 100%;
+    /* Keep the fixed tab anchor on the same geometry as the native tab shell. */
+    width: calc(100% - (2 * var(--dco-tab-content-gutter, 20px)));
+    max-width: calc(var(--dco-tab-shell-max, 1440px) - (2 * var(--dco-tab-content-gutter, 20px)));
     height: 0;
-    margin: 0;
+    margin: 0 auto;
     padding: 0;
     border: 0;
-}
-
-/* The presentation owner applies this scope to the live Frappe form root. */
-.dco-operator-form .form-page,
-.dco-operator-form .form-layout,
-.dco-operator-form .layout-main-section,
-.dco-operator-form .layout-main-section-wrapper {
-    max-width: none !important;
-    width: 100% !important;
+    box-sizing: border-box;
 }
 
 .dco-operator-form .form-tabs-list:has(> .dco-sticky-tabs):not(.dco-sticky-tabs) {
@@ -129,7 +123,6 @@
     border: 0 !important;
     border-radius: 0 !important;
     box-shadow: none !important;
-    max-width: none !important;
 }
 body.modal-open .dco-operator-form .dco-sticky-tabs.dco-tabs-is-fixed,
 body.modal-open .dco-operator-form .form-tabs-list.dco-sticky-tabs.dco-tabs-is-fixed {
