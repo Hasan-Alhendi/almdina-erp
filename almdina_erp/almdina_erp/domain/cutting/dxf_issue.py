@@ -54,6 +54,7 @@ TARGET_LAYER = "layer"
 TARGET_OVERLAY = "overlay"
 TARGET_BLOCK = "block"
 TARGET_PIECE_PAIR = "piece_pair"
+TARGET_CONTOUR_PAIR = "contour_pair"
 TARGET_ORDER = "order"
 TARGET_UNKNOWN = "unknown"
 
@@ -69,6 +70,10 @@ DXF_LIBRARY_MISSING = "DXF_LIBRARY_MISSING"
 UNSUPPORTED_ENTITY = "UNSUPPORTED_ENTITY"
 MINSERT_UNSUPPORTED = "MINSERT_UNSUPPORTED"
 ENTITY_LIMIT_EXCEEDED = "ENTITY_LIMIT_EXCEEDED"
+BLOCK_NESTING_TOO_DEEP = "BLOCK_NESTING_TOO_DEEP"
+ENTITY_PARSE_FAILED = "ENTITY_PARSE_FAILED"
+BLOCK_TRANSFORM_FAILED = "BLOCK_TRANSFORM_FAILED"
+FILE_NOT_PRIVATE = "FILE_NOT_PRIVATE"
 
 SHEET_LAYER_MISSING = "SHEET_LAYER_MISSING"
 CUT_LAYER_MISSING = "CUT_LAYER_MISSING"
@@ -82,6 +87,7 @@ CUT_BRANCHED = "CUT_BRANCHED"
 CUT_SELF_INTERSECTION = "CUT_SELF_INTERSECTION"
 CUT_INVALID_GEOMETRY = "CUT_INVALID_GEOMETRY"
 CUT_SIZE_MISMATCH = "CUT_SIZE_MISMATCH"
+PIECE_COUNT_MISMATCH = "PIECE_COUNT_MISMATCH"
 SPECIAL_SIZE_MISMATCH = "SPECIAL_SIZE_MISMATCH"
 FORBIDDEN_ROTATION = "FORBIDDEN_ROTATION"
 PIECE_MISSING = "PIECE_MISSING"
@@ -107,9 +113,14 @@ MIXED_RESOURCE_SOURCE = "MIXED_RESOURCE_SOURCE"
 OFFCUT_IDENTITY_MISMATCH = "OFFCUT_IDENTITY_MISMATCH"
 MANUFACTURING_REQUIREMENTS_MISSING = "MANUFACTURING_REQUIREMENTS_MISSING"
 PLAN_SOURCE_MISSING = "PLAN_SOURCE_MISSING"
+PLAN_SOURCE_IDENTITY_MISMATCH = "PLAN_SOURCE_IDENTITY_MISMATCH"
+REMNANT_REFERENCE_MISSING = "REMNANT_REFERENCE_MISSING"
+REMNANT_NOT_FOUND = "REMNANT_NOT_FOUND"
+REMNANT_IDENTITY_MISMATCH = "REMNANT_IDENTITY_MISMATCH"
 PLAN_LABEL_DUPLICATE = "PLAN_LABEL_DUPLICATE"
 PLAN_UNPLACED_PIECES = "PLAN_UNPLACED_PIECES"
 PLAN_UNKNOWN_PIECES = "PLAN_UNKNOWN_PIECES"
+PIECE_IDENTITY_MISMATCH = "PIECE_IDENTITY_MISMATCH"
 TOPOLOGY_VALIDATION_FAILED = "TOPOLOGY_VALIDATION_FAILED"
 
 OVERLAY_INVALID_PATH = "OVERLAY_INVALID_PATH"
@@ -134,6 +145,7 @@ class DxfIssueTarget:
     contour_no: int | None = None
     sheet_no: int | None = None
     pair_piece_nos: tuple[int | str, int | str] | None = None
+    pair_contour_nos: tuple[int | str, int | str] | None = None
     layer: str | None = None
     label: str | None = None
     piece_index: int | None = None
@@ -213,6 +225,19 @@ def pair_target(
     )
 
 
+def contour_pair_target(
+    first: int | str,
+    second: int | str,
+    *,
+    sheet_no: int | None = None,
+) -> DxfIssueTarget:
+    return DxfIssueTarget(
+        kind=TARGET_CONTOUR_PAIR,
+        pair_contour_nos=(first, second),
+        sheet_no=sheet_no,
+    )
+
+
 def layer_target(layer: str) -> DxfIssueTarget:
     return DxfIssueTarget(kind=TARGET_LAYER, layer=layer)
 
@@ -256,6 +281,9 @@ def topology_error_to_issue(
     kerf_mm: float = 0.0,
     details: str = "",
     source_piece_no: int | None = None,
+    copy_no: int | None = None,
+    pair_identity_proven: bool = False,
+    pair_source_piece_nos: tuple[int | str, int | str] | None = None,
     debug: Mapping[str, Any] | None = None,
 ) -> DxfValidationIssue:
     """Map a domain ``DxfTopologyError`` to a structured issue."""
@@ -274,15 +302,11 @@ def topology_error_to_issue(
     if expected_index is not None:
         params["expected_piece_index"] = expected_index
 
-    piece_no = source_piece_no
-    if piece_no is None and expected_index is not None:
-        piece_no = int(expected_index) + 1
-
     if code == "FORBIDDEN_ROTATION":
         return issue(
             FORBIDDEN_ROTATION,
             CATEGORY_DIMENSIONS,
-            target=piece_target(source_piece_no=piece_no),
+            target=piece_target(source_piece_no=source_piece_no, copy_no=copy_no),
             params=params,
             debug=debug,
         )
@@ -319,26 +343,29 @@ def topology_error_to_issue(
             debug=debug,
         )
     if code == "MATERIAL_FOOTPRINT_OVERLAP":
+        pair = (first if first is not None else "؟", second if second is not None else "؟")
         return issue(
             MATERIAL_OVERLAP,
             CATEGORY_LAYOUT,
-            target=pair_target(first if first is not None else "؟", second if second is not None else "؟"),
+            target=(pair_target(*pair_source_piece_nos) if pair_identity_proven and pair_source_piece_nos else DxfIssueTarget(kind=TARGET_ORDER) if pair_identity_proven else contour_pair_target(*pair)),
             params=params,
             debug=debug,
         )
     if code == "HOLE_CLEARANCE_VIOLATION":
+        pair = (first if first is not None else "؟", second if second is not None else "؟")
         return issue(
             HOLE_CLEARANCE_VIOLATION,
             CATEGORY_LAYOUT,
-            target=pair_target(first if first is not None else "؟", second if second is not None else "؟"),
+            target=(pair_target(*pair_source_piece_nos) if pair_identity_proven and pair_source_piece_nos else DxfIssueTarget(kind=TARGET_ORDER) if pair_identity_proven else contour_pair_target(*pair)),
             params=params,
             debug=debug,
         )
     if code == "PART_CLEARANCE_VIOLATION":
+        pair = (first if first is not None else "؟", second if second is not None else "؟")
         return issue(
             KERF_VIOLATION,
             CATEGORY_LAYOUT,
-            target=pair_target(first if first is not None else "؟", second if second is not None else "؟"),
+            target=(pair_target(*pair_source_piece_nos) if pair_identity_proven and pair_source_piece_nos else DxfIssueTarget(kind=TARGET_ORDER) if pair_identity_proven else contour_pair_target(*pair)),
             params=params,
             debug=debug,
         )
@@ -369,9 +396,9 @@ def overlay_error_to_issue(error: Any) -> DxfValidationIssue:
     layer = str(getattr(error, "layer", "") or "")
     label = str(getattr(error, "label", "") or getattr(error, "host_key", "") or "")
     kind = str(getattr(error, "kind", "") or "")
+    # Overlay host labels/keys are internal references. They are not enough to
+    # establish source-piece identity for a user-facing door number.
     source_piece_no = None
-    if label.isdigit():
-        source_piece_no = int(label)
     return issue(
         code,
         CATEGORY_OVERLAY,

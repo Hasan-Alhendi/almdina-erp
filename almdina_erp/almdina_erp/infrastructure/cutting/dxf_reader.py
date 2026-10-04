@@ -269,7 +269,7 @@ def read_dxf_geometry(
         if depth > MAX_INSERT_DEPTH:
             raise DxfReadError(
                 "ملف DXF يحتوي على تداخل BLOCK/INSERT أعمق من الحد الآمن المسموح. بسّط البلوكات ثم أعد الرفع.",
-                code="ENTITY_LIMIT_EXCEEDED",
+                code="BLOCK_NESTING_TOO_DEEP",
             )
 
         for entity in entities:
@@ -306,7 +306,7 @@ def read_dxf_geometry(
                     raise DxfReadError(
                         f"تعذر تطبيق تحويلات BLOCK/INSERT للبلوك {block_name or '؟'}. "
                         "تحقق من البلوك ومقياسه ودورانه ثم أعد حفظ DXF.",
-                        code="DXF_UNREADABLE",
+                        code="BLOCK_TRANSFORM_FAILED",
                         params={"block_name": block_name or "؟"},
                     ) from exc
                 continue
@@ -337,7 +337,7 @@ def read_dxf_geometry(
             except Exception as exc:
                 raise DxfReadError(
                     f"تعذر تحليل عنصر {entity_type} على الطبقة {layer}. أعد حفظ الرسم كـ DXF قياسي ثم حاول مجددًا.",
-                    code="UNSUPPORTED_ENTITY",
+                    code="ENTITY_PARSE_FAILED",
                     params={"entity_type": entity_type, "layer": layer},
                 ) from exc
             entity_seq += 1

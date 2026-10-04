@@ -525,13 +525,11 @@ def get_validated_dxf_plan(
     if order_name and order:
         plan = _required_saved_plan(order, plan_source)
         _assert_saved_plan_fresh(order, plan)
-        errors = legacy_export.validate_cutting_plan_document(plan)
-        if errors:
-            frappe.throw(
-                _("DXF export blocked by geometry validation:\n{0}").format(
-                    "\n".join(errors)
-                )
-            )
+        issues = legacy_export.validate_cutting_plan_issues(plan)
+        if issues:
+            from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import render_error_cards_html
+
+            frappe.throw(render_error_cards_html(issues), title=_("تعذر تصدير DXF"))
         try:
             snapshot = legacy_export._plan_to_export_snapshot(plan)
         except DxfGeometrySnapshotError as exc:

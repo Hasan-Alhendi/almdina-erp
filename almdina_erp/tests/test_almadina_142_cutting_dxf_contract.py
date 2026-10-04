@@ -10,6 +10,7 @@ import ezdxf
 
 from almdina_erp.almdina_erp.services import dxf_import_service
 from almdina_erp.almdina_erp.services.dxf_import_service import DxfImportError
+from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import present_issue
 
 
 SHEET = dxf_import_service.SHEET_OUTLINE_LAYER
@@ -60,8 +61,9 @@ class TestAlmadina142CuttingDxfContract(unittest.TestCase):
                 finally:
                     Path(path).unlink(missing_ok=True)
 
-                message = str(exc_info.exception)
-                self.assertIn(missing_layer, message)
+                issues = exc_info.exception.issues
+                self.assertIn(f"{missing_layer.split('_')[0]}_LAYER_MISSING", {item.code for item in issues})
+                message = "\n".join(present_issue(item).problem for item in issues)
                 self.assertIn("الطبقات المكتشفة", message)
                 self.assertIn(present_layer, message)
                 self.assertIn("DOOR_CUT", message)

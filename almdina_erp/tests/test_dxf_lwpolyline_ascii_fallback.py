@@ -11,6 +11,7 @@ from almdina_erp.tests.frappe_test_stub import install_if_unavailable
 install_if_unavailable()
 
 from almdina_erp.almdina_erp.infrastructure.cutting import dxf_reader
+from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import present_issues
 from almdina_erp.almdina_erp.services import dxf_import_service
 from almdina_erp.almdina_erp.services.dxf_import_service import DxfImportError
 
@@ -176,7 +177,7 @@ class TestDxfLwpolylineAsciiFallback(unittest.TestCase):
         finally:
             Path(path).unlink(missing_ok=True)
 
-        message = str(exc_info.exception)
+        message = "\n".join(issue.problem for issue in present_issues(exc_info.exception.issues))
         self.assertNotIn("غير موجودة أو فارغة", message)
         self.assertNotIn("الطبقات المكتشفة: لا توجد.", message)
         self.assertIn("أبعاد اللوح", message)

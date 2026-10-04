@@ -156,7 +156,8 @@ def test_sheet_outline_rejects_real_or_swapped_board_dimension_difference(
             expected_height_mm=2440,
         )
     assert "SHEET_SIZE_MISMATCH" in exc_info.value.codes
-    assert "أبعاد اللوح لا تطابق الطلب" in str(exc_info.value)
+    from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import present_issues_as_strings
+    assert "أبعاد اللوح لا تطابق الطلب" in " ".join(present_issues_as_strings(exc_info.value.issues))
 
 
 def test_sheet_outline_accepts_same_fractional_dimension_after_normalization():

@@ -18,6 +18,7 @@ from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
     CutDimensionError,
     dimensions_match_exact,
     normalize_cut_cm,
+    special_bbox_allowed_range_cm,
     special_bbox_matches_cut_envelope_with_unrecorded_edge_deduction,
 )
 from almdina_erp.almdina_erp.domain.orders.extra_addons import (
@@ -38,8 +39,10 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
     PERSISTED_CUT_CONTEXT_CODES,
     PIECE_IDENTITY_MISSING,
     PIECE_MISSING,
+    contour_target,
     SKIP_PERSISTED_CUT_CONTEXT_CODES,
     SPECIAL_SIZE_MISMATCH,
+    DxfIssueTarget,
     DxfValidationIssue,
     issue,
     piece_target,
@@ -319,6 +322,24 @@ def _dimension_issue(
     actual_w: Decimal,
     actual_h: Decimal,
 ) -> DxfValidationIssue:
+    params = {
+        "actual_width_cm": float(actual_w),
+        "actual_height_cm": float(actual_h),
+        "expected_width_cm": float(spec.cut_width_cm),
+        "expected_height_cm": float(spec.cut_length_cm),
+        "piece_type": spec.piece_type,
+        "spec_summary": _format_spec(spec),
+    }
+    if code == SPECIAL_SIZE_MISMATCH:
+        min_w, max_w, min_h, max_h = special_bbox_allowed_range_cm(
+            spec.cut_width_cm, spec.cut_length_cm
+        )
+        params.update({
+            "allowed_min_width_cm": float(min_w),
+            "allowed_max_width_cm": float(max_w),
+            "allowed_min_height_cm": float(min_h),
+            "allowed_max_height_cm": float(max_h),
+        })
     return issue(
         code,
         CATEGORY_DIMENSIONS,
@@ -327,14 +348,7 @@ def _dimension_issue(
             copy_no=int(candidate.get("copy_no") or 1),
             label=str(candidate.get("label") or ""),
         ),
-        params={
-            "actual_width_cm": float(actual_w),
-            "actual_height_cm": float(actual_h),
-            "expected_width_cm": float(spec.cut_width_cm),
-            "expected_height_cm": float(spec.cut_length_cm),
-            "piece_type": spec.piece_type,
-            "spec_summary": _format_spec(spec),
-        },
+        params=params,
     )
 
 
@@ -521,7 +535,11 @@ def _apply_strict_dimension_contract(
                     issue(
                         PIECE_IDENTITY_MISSING,
                         CATEGORY_IDENTITY,
-                        target=piece_target(label=str(piece.get("label") or "؟")),
+                        target=(
+                            contour_target(int(piece["id"]))
+                            if str(piece.get("id") or "").isdigit()
+                            else DxfIssueTarget()
+                        ),
                         params={"piece_type": "Special"},
                     )
                 )

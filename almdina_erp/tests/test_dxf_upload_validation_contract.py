@@ -40,16 +40,17 @@ def test_upload_keeps_role_capability_native_read_and_plan_lock_guards():
 def test_upload_shows_actionable_arabic_validation_feedback():
     src = _source()
     presenter = PRESENTER.read_text(encoding="utf-8")
-    for token in [
-        "ملف DXF مطلوب",
-        "ملف غير مدعوم",
-        "الملف غير موجود",
-        "ملف DXF كبير جدًا",
-        "الملف مرتبط مسبقًا",
-        "تعذر قبول ملف DXF",
-        "render_error_cards_html",
+    for code in [
+        "FILE_REQUIRED",
+        "FILE_INVALID_EXTENSION",
+        "FILE_MISSING",
+        "FILE_NOT_PRIVATE",
+        "FILE_ATTACHED_ELSEWHERE",
+        "FILE_TOO_LARGE",
     ]:
-        assert token in src
+        assert code in src
+        assert code in presenter
+    assert "render_error_cards_html" in src
     assert "صحح الرسم ثم أعد رفع الملف" in presenter
     assert "ما المشكلة؟" in presenter
 

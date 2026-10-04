@@ -10,6 +10,7 @@ import frappe
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import SYSTEM, UPLOADED_DXF
 from almdina_erp.almdina_erp.services import cutting_plan_command_service as commands
 from almdina_erp.almdina_erp.services import shop_floor_dxf_service as dxf_service
+from almdina_erp.almdina_erp.services.dxf_import_service import DxfImportError
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -121,9 +122,10 @@ class TestA2DxfStagingSecurity(unittest.TestCase):
             attached_to_name=None,
             attached_to_field=None,
         )
-        with patch.object(dxf_service.frappe.db, "get_value", return_value=public_file):
-            with self.assertRaises(frappe.ValidationError):
+        with patch.object(dxf_service.frappe.db, "get_value", return_value=public_file, create=True):
+            with self.assertRaises(DxfImportError) as exc_info:
                 dxf_service._validate_dxf_file_metadata("/files/public.dxf")
+        self.assertEqual(exc_info.exception.issues[0].code, "FILE_NOT_PRIVATE")
 
     def test_preattached_private_file_is_rejected(self) -> None:
         attached_file = SimpleNamespace(
@@ -134,9 +136,10 @@ class TestA2DxfStagingSecurity(unittest.TestCase):
             attached_to_name="DCO-OTHER",
             attached_to_field="production_dxf",
         )
-        with patch.object(dxf_service.frappe.db, "get_value", return_value=attached_file):
-            with self.assertRaises(frappe.ValidationError):
+        with patch.object(dxf_service.frappe.db, "get_value", return_value=attached_file, create=True):
+            with self.assertRaises(DxfImportError) as exc_info:
                 dxf_service._validate_dxf_file_metadata("/private/files/attached.dxf")
+        self.assertEqual(exc_info.exception.issues[0].code, "FILE_ATTACHED_ELSEWHERE")
 
 
 class TestA2ApprovalFreshness(unittest.TestCase):
