@@ -329,6 +329,9 @@
         frm.__almdinaSurfaceSettleRun = null;
         frm._dcoToolbarObservedHead = null;
         frm._dcoMeasurementToolbarObservedRoot = null;
+        frm._dco_presentation_head = null;
+        frm._dco_presentation_root = null;
+        frm._dco_presentation_page_container = null;
         frm._dco_fixed_tabs = null;
         frm._dco_tabs_placeholder = null;
         frm._dco_fixed_tabs_listener_installed = false;

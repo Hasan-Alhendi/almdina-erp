@@ -21,13 +21,18 @@ class ClassList {
 class FakeNode {
     constructor() {
         this.nodeType = 1;
+        this.isConnected = true;
         this.classList = new ClassList();
         this.dataset = {};
         this.attributes = {};
     }
     querySelector(selector) {
-        return selector.includes("data-almdina-dco-sidebar-toggle") ? this.toggleButton || null : null;
+        return selector.includes("data-almdina-dco-sidebar-toggle") ? this.toggleButtons?.find(item => item.isConnected) || this.toggleButton || null : null;
     }
+    querySelectorAll(selector) {
+        return selector.includes("data-almdina-dco-sidebar-toggle") ? (this.toggleButtons || []).filter(item => item.isConnected) : [];
+    }
+    remove() { this.isConnected = false; }
     setAttribute(name, value) { this.attributes[name] = String(value); }
     getAttribute(name) { return this.attributes[name] ?? null; }
     click() { this.clickHandler && this.clickHandler(); }
@@ -116,6 +121,8 @@ function form(name = "DCO-1", visible = true) {
             button.classList.add(className);
             button.clickHandler = callback;
             root.toggleButton = button;
+            root.toggleButtons ||= [];
+            root.toggleButtons.push(button);
             return new FakeJQuery(button);
         },
     };
@@ -148,10 +155,10 @@ function makeForm(runtime, name, visible) {
 }
 
 const runtime = runtimeState = createRuntime();
-assert.equal(runtime.hooks.length, 1, "DCO hooks must register once");
+assert.equal(runtime.hooks.length, 0, "sidebar behavior is driven by the form presentation owner");
 const frm = makeForm(runtime, "DCO-1", true);
 
-runtime.hooks[0].onload_post_render(frm);
+runtime.controller.mount(frm);
 assert.equal(frm.root.classList.contains("almadina-dco-form-sidebar-host"), true);
 assert.equal(frm.root.classList.contains("almadina-dco-form-sidebar-native-collapsed"), true);
 assert.equal(frm.root.toggleButton.attributes["aria-expanded"], "false");
@@ -170,12 +177,22 @@ assert.equal([...runtime.storage.values()][0], "collapsed");
 
 // Toolbar.clear_icons() removes the custom icon; refresh recreates exactly one.
 const oldButton = frm.root.toggleButton;
+oldButton.isConnected = false;
 frm.root.toggleButton = null;
-runtime.hooks[0].refresh(frm);
+runtime.controller.mount(frm);
 assert.notEqual(frm.root.toggleButton, oldButton);
 assert.equal(frm.root.toggleButton.attributes["aria-expanded"], "false");
-runtime.hooks[0].refresh(frm);
+runtime.controller.mount(frm);
 assert.equal(frm.root.toggleButton.attributes["aria-expanded"], "false");
+assert.equal(frm.root.querySelectorAll("[data-almdina-dco-sidebar-toggle=\"1\"]").length, 1);
+const duplicateToggle = new FakeNode();
+duplicateToggle.isConnected = true;
+duplicateToggle.dataset.almdinaDcoSidebarToggle = "1";
+frm.root.toggleButtons.push(duplicateToggle);
+runtime.controller.mount(frm);
+assert.equal(duplicateToggle.isConnected, false, "duplicate native sidebar action is removed");
+assert.equal(frm.root.querySelectorAll("[data-almdina-dco-sidebar-toggle=\"1\"]").length, 1);
+assert.equal([...runtime.body.events["toggleSidebar.almdinaDcoFormSidebar"]].length, 1, "one body listener per mounted controller");
 
 // Route-away cleanup removes the body subscription; returning can bind again.
 new FakeJQuery(frm.root).trigger("hide");
@@ -184,8 +201,64 @@ new FakeJQuery(runtime.body).trigger("toggleSidebar");
 assert.equal(frm.root.toggleButton.attributes["aria-expanded"], "false");
 
 const second = makeForm(runtime, "DCO-2", true);
-runtime.hooks[0].onload_post_render(second);
+runtime.controller.mount(second);
 assert.equal(second.root.classList.contains("almadina-dco-form-sidebar-native-collapsed"), true, "preference survives route back");
+assert.equal(runtime.controller.isPreferenceApplied(second), true);
+
+// Expanded preference survives native refresh and a lifecycle/status transition.
+second.root.toggleButton.click();
+assert.equal(second.sidebar.sidebar.target.visible, true);
+assert.equal([...runtime.storage.values()][0], "expanded");
+second.sidebar.sidebar.target.visible = false; // Frappe's saved-document refresh can change native visibility.
+runtime.controller.mount(second);
+assert.equal(second.sidebar.sidebar.target.visible, true, "expanded preference is restored after refresh");
+second.doc.status = "In Production";
+second.sidebar.sidebar.target.visible = false;
+runtime.controller.mount(second);
+assert.equal(second.sidebar.sidebar.target.visible, true, "production transition preserves expanded preference");
+
+// A collapsed preference is likewise restored if Frappe expands its sidebar on render.
+second.root.toggleButton.click();
+assert.equal([...runtime.storage.values()][0], "collapsed");
+second.sidebar.sidebar.target.visible = true;
+runtime.controller.mount(second);
+assert.equal(second.sidebar.sidebar.target.visible, false, "collapsed preference is restored after reload");
+
+// The same frm can receive a new page/root instance; the sidebar controller
+// must detach its old hide handler and bind exactly once to the live root.
+const detachedSidebarRoot = second.root;
+detachedSidebarRoot.isConnected = false;
+const liveSidebarRoot = new FakeNode();
+second.root = liveSidebarRoot;
+second.wrapper = liveSidebarRoot;
+second.page.wrapper = liveSidebarRoot;
+second.page.add_action_icon = (_icon, callback, className) => {
+    const button = new FakeNode();
+    button.classList.add(className);
+    button.dataset.almdinaDcoSidebarToggle = "1";
+    button.clickHandler = callback;
+    liveSidebarRoot.toggleButton = button;
+    liveSidebarRoot.toggleButtons = [button];
+    return new FakeJQuery(button);
+};
+second.sidebar.sidebar.target.visible = true;
+runtime.controller.mount(second);
+assert.equal(runtime.controller.isPreferenceApplied(second), true);
+assert.equal(second.__almdinaDcoFormSidebarController.boundRoot, liveSidebarRoot);
+assert.equal(Object.values(detachedSidebarRoot.events || {}).every(handlers => handlers.size === 0), true);
+assert.equal([...runtime.body.events["toggleSidebar.almdinaDcoFormSidebar"]].length, 1);
+
+for (let i = 0; i < 10; i += 1) {
+    second.doc.status = i % 2 ? "Draft" : "In Production";
+    second.doc.current_production_stage = i % 2 ? "Cutting" : "Assembly";
+    second.__almdina_permissions = { can_edit_plan: i % 2 === 0 };
+    second.__profile = i % 2 ? "designer" : "operator";
+    second.sidebar.sidebar.target.visible = true;
+    runtime.controller.mount(second);
+    assert.equal(second.sidebar.sidebar.target.visible, false);
+    assert.equal([...runtime.storage.values()][0], "collapsed", "presentation context never rewrites preference");
+}
+assert.equal([...runtime.body.events["toggleSidebar.almdinaDcoFormSidebar"]].length, 1, "recovery does not duplicate body listeners");
 
 const other = { doctype: "Customer", page: second.page };
 assert.equal(runtime.controller.mount(other), null, "other doctypes must not be affected");
@@ -195,7 +268,7 @@ runtime.setWidth(500);
 runtimeState.mobile = true;
 const mobile = makeForm(runtime, "DCO-MOBILE", true);
 runtimeState.mobile = true;
-runtime.hooks[0].onload_post_render(mobile);
+runtime.controller.mount(mobile);
 assert.equal(mobile.root.classList.contains("almadina-dco-form-sidebar-native-collapsed"), false);
 mobile.root.toggleButton.click();
 assert.equal(mobile.root.toggleButton.attributes["aria-expanded"], "true");

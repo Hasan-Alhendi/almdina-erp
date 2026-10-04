@@ -89,17 +89,6 @@
         if (document.getElementById("dco-operator-ux-css")) return;
         $("head").append(`
             <style id="dco-operator-ux-css">
-                .dco-operator-form .form-page,
-                .dco-operator-form .form-layout,
-                .dco-operator-form .layout-main-section,
-                .dco-operator-form .layout-main-section-wrapper {
-                    max-width:none!important;
-                    width:100%!important;
-                }
-                .dco-operator-form .form-tabs-list { gap:8px; margin-bottom:8px; }
-                .dco-operator-form .form-tabs-list .nav-link {
-                    min-height:42px; padding:10px 18px!important; border-radius:10px!important; font-weight:700;
-                }
                 .dco-operator-form .dco-ui-card {
                     border:1px solid var(--border-color,#dfe3e8); border-radius:14px; margin:12px 0;
                     padding:4px 14px 14px; background:var(--card-bg,var(--fg-color,#fff));
@@ -270,7 +259,6 @@
     }
 
     function decorateSections(frm) {
-        $(frm.wrapper).addClass("dco-operator-form");
         ["order_details_section","board_section","cutting_settings_section","pieces_section","totals_section","plan_section","technical_section"].forEach(fieldname => {
             const field = frm.fields_dict[fieldname];
             if (field && field.wrapper) $(field.wrapper).closest(".form-section").addClass("dco-ui-card");

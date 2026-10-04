@@ -19,8 +19,7 @@ app_include_css = [
     "/assets/almdina_erp/css/door_cutting_order_form_tab_layout.css?v=4",
     "/assets/almdina_erp/css/door_cutting_order_plan_workspace_layout.css?v=12",
     "/assets/almdina_erp/css/door_cutting_order_plan_workspace_shell.css?v=12",
-    "/assets/almdina_erp/css/door_cutting_order_form_sidebar.css",
-
+    "/assets/almdina_erp/css/door_cutting_order_form_presentation.css",
     "/assets/almdina_erp/css/door_cutting_order_form_sidebar.css",
     # Raw /assets paths are not content-fingerprinted by Frappe; bump the bounded
     # DCO list revision when its presentation contract changes.
@@ -61,6 +60,9 @@ doctype_js = {
         # surface or lifecycle owner registers cancellable work with it.
         "public/js/door_cutting_order/core/door_cutting_order_document_context.js",
         "public/js/door_cutting_order/core/door_cutting_order_form_sidebar_controller.js",
+        # One owner reacquires the live Frappe form shell after each render and
+        # delegates focused positioning/action reconciliation to their adapters.
+        "public/js/door_cutting_order/core/door_cutting_order_form_presentation_owner.js",
         # Sole authority for DCO edit-session ownership. Feature-local edit
         # state remains a temporary projection behind registered adapters.
         "public/js/door_cutting_order/core/door_cutting_order_edit_session_coordinator.js",

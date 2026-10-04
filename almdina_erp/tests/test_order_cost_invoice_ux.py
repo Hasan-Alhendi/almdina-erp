@@ -11,6 +11,7 @@ PRINT_THEME = ROOT / "public" / "js" / "door_cutting_order" / "printing" / "door
 INVOICE_TOOLBAR = ROOT / "public" / "js" / "door_cutting_order" / "costing" / "door_cutting_order_customer_invoice_toolbar_ux.js"
 FINANCIAL_DOCUMENTS = ROOT / "public" / "js" / "door_cutting_order" / "costing" / "door_cutting_order_financial_documents_ux.js"
 HEADER_UX = ROOT / "public" / "js" / "door_cutting_order" / "responsive" / "door_cutting_order_header_ux.js"
+PRESENTATION_CSS = ROOT / "public" / "css" / "door_cutting_order_form_presentation.css"
 HOOKS = ROOT / "frontend_assets.py"
 REGISTRY = ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_workspace_asset_registry.js"
 
@@ -35,39 +36,39 @@ def test_primary_tabs_are_order_cutting_plan_then_order_cost():
 
 def test_primary_tab_bar_is_fixed_on_scroll_and_labels_are_arabic():
     src = HEADER_UX.read_text(encoding="utf-8")
-    assert ".dco-sticky-tabs" in src
-    assert ".dco-sticky-tabs.dco-tabs-is-fixed" in src
-    assert "position: fixed !important" in src
+    css = PRESENTATION_CSS.read_text(encoding="utf-8")
+    assert ".dco-sticky-tabs" in css
+    assert ".dco-sticky-tabs.dco-tabs-is-fixed" in css
+    assert "position: fixed !important" in css
     assert 'order_tab: "الطلب"' in src
     assert 'results_tab: "خطة القص"' in src
     assert 'cost_tab: "تكلفة الطلب"' in src
     assert 'frm.set_df_property(fieldname, "label", label)' in src
-    assert 'const STYLE_ID = "dco-responsive-header-css-v11"' in src
-    assert "width: calc(100% - (2 * var(--dco-tab-content-gutter, 20px)))" in src
-    assert "max-width: calc(var(--dco-tab-shell-max, 1440px) - (2 * var(--dco-tab-content-gutter, 20px)))" in src
-    assert "margin: 0 auto var(--dco-section-stack-gap, 8px) !important" in src
-    assert "z-index: 1020 !important" in src
-    assert "body.modal-open .dco-sticky-tabs.dco-tabs-is-fixed" in src
+    assert "width: calc(100% - (2 * var(--dco-tab-content-gutter, 20px)))" in css
+    assert "max-width: calc(var(--dco-tab-shell-max, 1440px) - (2 * var(--dco-tab-content-gutter, 20px)))" in css
+    assert "margin: 0 auto var(--dco-section-stack-gap, 8px) !important" in css
+    assert "z-index: 1020 !important" in css
+    assert "body.modal-open .dco-operator-form .dco-sticky-tabs.dco-tabs-is-fixed" in css
     assert "function tabContentAlignRect" in src
     assert "paddingInlineStart" in src
     assert "tabs.style.left = `${Math.round(align.left)}px`" in src
     assert "tabs.style.width = `${Math.round(align.width)}px`" in src
-    assert "--alm-primary" in src
-    assert "--alm-on-primary" in src
-    assert "border-bottom: none !important" in src
-    assert "border-radius: 0 !important" in src
-    assert "@media (min-width: 721px)" in src
+    assert "--alm-primary" in css
+    assert "--alm-on-primary" in css
+    assert "border-bottom: none !important" in css
+    assert "border-radius: 0 !important" in css
+    assert "@media (min-width: 721px)" in css
     assert "function reconcileSearchPlacement" in _source(
         ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_toolbar_stability_ux.js"
     )
-    assert ".standard-items-section" in src
-    assert "grid-template-columns: repeat(6, minmax(0, 1fr))" in src
-    assert '[data-dco-mobile-slot="primary-left"]' in src
-    assert '[data-dco-mobile-slot="utility-notes"]' in src
-    assert "search-bar[data-dco-mobile-slot=\"utility-search\"]" in src
-    assert "--control-bg" in src
-    assert "--alm-border" in src
-    assert "min-width: 0 !important" in src
+    assert ".standard-items-section" in css
+    assert "grid-template-columns: repeat(6, minmax(0, 1fr))" in css
+    assert '[data-dco-mobile-slot="primary-left"]' in css
+    assert '[data-dco-mobile-slot="utility-notes"]' in css
+    assert "search-bar[data-dco-mobile-slot=\"utility-search\"]" in css
+    assert "--control-bg" in css
+    assert "--alm-border" in css
+    assert "min-width: 0 !important" in css
 
 
 def test_cost_measurements_are_compact_and_custom_edge_details_have_one_owner():

@@ -201,6 +201,11 @@ jobs:
           node almdina_erp/tests/js/measurement_lifecycle.test.js
           node almdina_erp/tests/js/measurement_presentation_readiness.test.js
 
+      - name: Simulate DCO form shell presentation lifecycle
+        run: |
+          node almdina_erp/tests/js/dco_form_presentation_owner.test.js
+          node almdina_erp/tests/js/dco_form_sidebar_controller.test.js
+
       - name: Validate bounded DCO surface recovery
         run: node almdina_erp/tests/js/surface_settle_guard.test.js
 

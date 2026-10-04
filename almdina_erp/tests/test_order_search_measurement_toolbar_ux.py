@@ -41,6 +41,7 @@ EDGE_COLOR_UX = (
     / "door_cutting_order_edge_color_ux.js"
 )
 TOOLBAR_UX = ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_toolbar_stability_ux.js"
+PRESENTATION_CSS = ROOT / "public" / "css" / "door_cutting_order_form_presentation.css"
 
 
 def text(path: Path) -> str:
@@ -135,11 +136,12 @@ def test_customer_invoice_keeps_edge_color_once_in_shared_measurement_header():
 
 def test_toolbar_removes_legacy_edge_button_measurement_duplicate_and_dedupes_actions():
     source = text(TOOLBAR_UX)
+    css = text(PRESENTATION_CSS)
     assert "إلغاء تخصيص قشاط الدرف" in source
     assert "طباعة جدول القياسات" in source
     assert "dedupeButtons(head)" in source
-    assert "max-height:none!important" in source
-    assert "overflow:visible!important" in source
+    assert "max-height:none!important" in css
+    assert "overflow:visible!important" in css
     assert "MutationObserver" in source
 
 
