@@ -14,6 +14,17 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
     DxfTopologyError,
     validate_snapshot_material_layout,
 )
+from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
+    CATEGORY_CONTOUR,
+    CATEGORY_LAYOUT,
+    CUT_INVALID_GEOMETRY,
+    DxfIssueTarget,
+    DxfValidationIssue,
+    KERF_VIOLATION,
+    contour_pair_target,
+    issue,
+    topology_error_to_issue,
+)
 from almdina_erp.almdina_erp.domain.orders.extra_addons import (
     apply_extra_double_text_flags_to_snapshot,
 )
@@ -100,20 +111,57 @@ def _require_export_access(
     return None
 
 
-def _topology_kerf_error(exc: Exception) -> str:
-    code = getattr(exc, "code", None)
-    if code:
-        first = getattr(exc, "first_key", None) or "?"
-        second = getattr(exc, "second_key", None) or "?"
-        return _("DXF topology validation failed ({0}) between pieces {1} and {2}.").format(
-            code,
-            first,
-            second,
-        )
-    return _("Persisted DXF topology is invalid: {0}").format(str(exc))
+def _topology_pair_source_numbers(
+    snapshot: dict[str, Any],
+    exc: DxfTopologyError,
+) -> tuple[int, int] | None:
+    by_key: dict[str, int] = {}
+    for sheet in snapshot.get("sheets") or []:
+        for piece in sheet.get("pieces") or []:
+            try:
+                source_piece_no = int(piece.get("source_piece_no"))
+            except (TypeError, ValueError):
+                continue
+            if source_piece_no <= 0:
+                continue
+            for key in (piece.get("label"), piece.get("id")):
+                if key is not None:
+                    by_key[str(key)] = source_piece_no
+    first = by_key.get(str(exc.first_key)) if exc.first_key is not None else None
+    second = by_key.get(str(exc.second_key)) if exc.second_key is not None else None
+    if first is None or second is None or first == second:
+        return None
+    return first, second
 
 
-def _kerf_errors(snapshot: dict[str, Any], *, fallback_kerf_mm: float = 0.0) -> list[str]:
+def _topology_export_issue(
+    exc: DxfTopologyError,
+    snapshot: dict[str, Any],
+    *,
+    kerf_mm: float,
+) -> DxfValidationIssue:
+    pair = _topology_pair_source_numbers(snapshot, exc)
+    return topology_error_to_issue(
+        exc,
+        kerf_mm=kerf_mm,
+        pair_identity_proven=pair is not None,
+        pair_source_piece_nos=pair,
+    )
+
+
+def _export_geometry_issue(exc: DxfGeometrySnapshotError) -> DxfValidationIssue:
+    return issue(
+        CUT_INVALID_GEOMETRY,
+        CATEGORY_CONTOUR,
+        debug={"exception": type(exc).__name__},
+    )
+
+
+def _kerf_errors(
+    snapshot: dict[str, Any],
+    *,
+    fallback_kerf_mm: float = 0.0,
+) -> list[DxfValidationIssue]:
     required_kerf_cm = max(
         0.0,
         flt(snapshot.get("kerf_cm")) or (max(0.0, flt(fallback_kerf_mm)) / 10.0),
@@ -126,12 +174,14 @@ def _kerf_errors(snapshot: dict[str, Any], *, fallback_kerf_mm: float = 0.0) -> 
         ):
             return []
     except (DxfGeometrySnapshotError, DxfTopologyError) as exc:
-        return [_topology_kerf_error(exc)]
+        if isinstance(exc, DxfTopologyError):
+            return [_topology_export_issue(exc, snapshot, kerf_mm=required_kerf_cm * 10.0)]
+        return [_export_geometry_issue(exc)]
 
     if required_kerf_cm <= 0:
         return []
 
-    errors: list[str] = []
+    errors: list[DxfValidationIssue] = []
     for sheet in snapshot.get("sheets") or []:
         pieces = sheet.get("pieces") or []
         sheet_no = int(sheet.get("sheet_no") or 0)
@@ -156,14 +206,14 @@ def _kerf_errors(snapshot: dict[str, Any], *, fallback_kerf_mm: float = 0.0) -> 
                     DXF_KERF_NUMERIC_TOLERANCE_CM,
                 ):
                     continue
+                first_key = first.get("label") or first.get("id") or index + 1
+                second_key = second.get("label") or second.get("id") or index + 2
                 errors.append(
-                    _(
-                        "القطعتان {0} و{1} على اللوح رقم {2} لا تحققان مسافة المنشار المطلوبة {3:g} مم."
-                    ).format(
-                        first.get("label") or first.get("id") or "?",
-                        second.get("label") or second.get("id") or "?",
-                        sheet_no,
-                        required_kerf_cm * 10,
+                    issue(
+                        KERF_VIOLATION,
+                        CATEGORY_LAYOUT,
+                        target=contour_pair_target(first_key, second_key, sheet_no=sheet_no),
+                        params={"kerf_mm": required_kerf_cm * 10.0},
                     )
                 )
     return errors
@@ -173,11 +223,11 @@ def _assert_export_kerf(snapshot: dict[str, Any], *, fallback_kerf_mm: float = 0
     errors = _kerf_errors(snapshot, fallback_kerf_mm=fallback_kerf_mm)
     if not errors:
         return
+    from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import render_error_cards_html
+
     frappe.throw(
-        _(
-            "خطة القص الحالية لا تحقق مسافة المنشار (Kerf) المطلوبة بين جميع القطع. "
-            "أعد حساب خطة القص ثم صدّر DXF.\n{0}"
-        ).format("\n".join(errors))
+        render_error_cards_html(errors, context="export"),
+        title=_("تعذر تصدير DXF"),
     )
 
 
@@ -525,17 +575,22 @@ def get_validated_dxf_plan(
     if order_name and order:
         plan = _required_saved_plan(order, plan_source)
         _assert_saved_plan_fresh(order, plan)
-        errors = legacy_export.validate_cutting_plan_document(plan)
-        if errors:
-            frappe.throw(
-                _("DXF export blocked by geometry validation:\n{0}").format(
-                    "\n".join(errors)
-                )
-            )
+        issues = legacy_export.validate_cutting_plan_issues(plan)
+        if issues:
+            from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import render_error_cards_html
+
+            frappe.throw(render_error_cards_html(issues, context="export"), title=_("تعذر تصدير DXF"))
         try:
             snapshot = legacy_export._plan_to_export_snapshot(plan)
-        except DxfGeometrySnapshotError as exc:
-            frappe.throw(_("DXF export blocked by persisted topology validation: {0}").format(str(exc)))
+        except (DxfGeometrySnapshotError, DxfTopologyError) as exc:
+            from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import render_error_cards_html
+
+            issues = (
+                [_topology_export_issue(exc, plan.snapshot_json and frappe.parse_json(plan.snapshot_json) or {}, kerf_mm=flt(plan.kerf_mm))]
+                if isinstance(exc, DxfTopologyError)
+                else [_export_geometry_issue(exc)]
+            )
+            frappe.throw(render_error_cards_html(issues, context="export"), title=_("تعذر تصدير DXF"))
         snapshot = apply_extra_double_text_flags_to_snapshot(snapshot, order.pieces)
         _assert_export_kerf(snapshot, fallback_kerf_mm=flt(plan.kerf_mm))
         return {

@@ -24,6 +24,7 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_text_labels import (
     serialize_text_label,
 )
 from almdina_erp.almdina_erp.infrastructure.cutting.dxf_reader import read_dxf_geometry
+from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import present_issues
 from almdina_erp.almdina_erp.services import dxf_import_service
 from almdina_erp.almdina_erp.services.dxf_import_service import (
     CUT_PATH_LAYER,
@@ -218,5 +219,7 @@ def test_text_on_cut_path_still_rejects_upload():
     _rect(msp, ((0, 0), (1220, 0), (1220, 2440), (0, 2440)), layer=SHEET_OUTLINE_LAYER)
     _rect(msp, ((0, 0), (400, 0), (400, 600), (0, 600)), layer=CUT_PATH_LAYER)
     msp.add_text("1", dxfattribs={"layer": CUT_PATH_LAYER, "insert": (20, 20)})
-    with pytest.raises(DxfImportError, match="غير مدعومة"):
+    with pytest.raises(DxfImportError) as exc_info:
         _parse(doc, _order())
+    assert any(issue.code == "UNSUPPORTED_ENTITY" for issue in exc_info.value.issues)
+    assert "غير مدعوم" in " ".join(issue.problem for issue in present_issues(exc_info.value.issues))

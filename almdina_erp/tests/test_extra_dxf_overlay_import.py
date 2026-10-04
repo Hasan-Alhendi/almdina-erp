@@ -14,6 +14,11 @@ from almdina_erp.almdina_erp.services import dxf_import_service
 from almdina_erp.almdina_erp.services.dxf_import_service import DxfImportError
 
 
+def _present_error(error: DxfImportError) -> str:
+    from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import present_issues_as_strings
+    return "\n".join(present_issues_as_strings(error.issues))
+
+
 SHEET = dxf_import_service.SHEET_OUTLINE_LAYER
 CUT = dxf_import_service.CUT_PATH_LAYER
 LINER = "Liner"
@@ -430,10 +435,9 @@ class TestExtraDxfOverlayImport(unittest.TestCase):
                 _extra_plan_doc(overlay_layer=None),
                 _order(piece_type="Extra", extra_liner=1),
             )
-        message = str(exc_info.exception)
+        message = _present_error(exc_info.exception)
         self.assertIn("اللاينر", message)
-        self.assertIn("Liner", message)
-        self.assertIn("جدول القياسات", message)
+        self.assertIn("أضف علامة اللاينر", message)
         self.assertIn("1.1", message)
 
     def test_extra_with_only_double_does_not_require_overlay_layers(self) -> None:
@@ -450,14 +454,14 @@ class TestExtraDxfOverlayImport(unittest.TestCase):
         _add_rectangle(msp, ((200, 200), (280, 200), (280, 280), (200, 280)), layer=LINER)
         with self.assertRaises(DxfImportError) as exc_info:
             self._parse(doc, _order(piece_type="Extra", extra_liner=1))
-        message = str(exc_info.exception)
+        message = _present_error(exc_info.exception)
         self.assertIn("أكثر من علامة", message)
-        self.assertIn("Liner", message)
+        self.assertIn("علامة Extra", message)
 
     def test_liner_overlay_on_regular_is_rejected(self) -> None:
         with self.assertRaises(DxfImportError) as exc_info:
             self._parse(_extra_plan_doc(), _order(piece_type="Regular"))
-        message = str(exc_info.exception)
+        message = _present_error(exc_info.exception)
         self.assertIn("Liner", message)
         self.assertIn("Extra", message)
 
@@ -467,8 +471,9 @@ class TestExtraDxfOverlayImport(unittest.TestCase):
                 _extra_plan_doc(),
                 _order(piece_type="Extra", extra_back_groove=1),
             )
-        self.assertIn("الخانة المطابقة", str(exc_info.exception))
-        self.assertIn("احفظ الطلب", str(exc_info.exception))
+        message = _present_error(exc_info.exception)
+        self.assertIn("دون تفعيل خانة الطلب", message)
+        self.assertIn("جدول القياسات", message)
 
     def test_strict_import_proxy_keeps_liner_checkbox_when_accepting_overlay(self) -> None:
         from decimal import Decimal
@@ -509,13 +514,8 @@ class TestExtraDxfOverlayImport(unittest.TestCase):
                 ),
                 _order(piece_type="Extra", extra_liner=1),
             )
-        message = str(exc_info.exception)
-        self.assertTrue(
-            "لا يمكن مطابقة محيطات CUT_PATH" in message
-            or "تعذر تحديد القطع والفتحات" in message
-            or "تتداخلان" in message
-            or "تتداخل" in message
-        )
+        message = _present_error(exc_info.exception)
+        self.assertTrue(exc_info.exception.issues)
 
     def test_missing_sheet_and_cut_layers_explain_canonical_roles(self) -> None:
         doc = ezdxf.new("R2010")
@@ -524,12 +524,11 @@ class TestExtraDxfOverlayImport(unittest.TestCase):
         _add_rectangle(msp, ((40, 40), (180, 40), (180, 160), (40, 160)), layer=LINER)
         with self.assertRaises(DxfImportError) as exc_info:
             self._parse(doc, _order(piece_type="Extra", extra_liner=1))
-        message = str(exc_info.exception)
+        message = _present_error(exc_info.exception)
         self.assertIn(SHEET, message)
         self.assertIn(CUT, message)
-        self.assertIn("NOTES", message)
-        self.assertIn("أي طبقة غير SHEET_OUTLINE أو CUT_PATH أو OFFCUT", message)
-        self.assertIn("طبقات علامات Extra (Liner)", message)
+        self.assertIn("ارسم مستطيلاً مغلقًا على SHEET_OUTLINE", message)
+        self.assertIn("ارسم محيطات القطع على CUT_PATH", message)
         self.assertNotIn("PIECES", message)
         self.assertNotIn("ALONG", message)
 

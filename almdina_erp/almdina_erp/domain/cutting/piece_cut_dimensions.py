@@ -133,6 +133,26 @@ def special_bbox_matches_cut_envelope_with_unrecorded_edge_deduction(
     )
 
 
+def special_bbox_allowed_range_cm(
+    expected_width_cm: object,
+    expected_length_cm: object,
+) -> tuple[Decimal, Decimal, Decimal, Decimal]:
+    """Return the already-defined one-sided Special bbox envelope.
+
+    Validation/application code owns this calculation and may place the result
+    into a structured issue. Presentation only formats these four values.
+    """
+    width = normalize_cut_cm(expected_width_cm)
+    length = normalize_cut_cm(expected_length_cm)
+    deduction_cm = SPECIAL_UNRECORDED_EDGE_MAX_DEDUCTION_MM / MM_PER_CM
+    return (
+        max(Decimal("0"), width - deduction_cm),
+        width,
+        max(Decimal("0"), length - deduction_cm),
+        length,
+    )
+
+
 def dimensions_match_exact(
     actual_width_cm: object,
     actual_length_cm: object,
