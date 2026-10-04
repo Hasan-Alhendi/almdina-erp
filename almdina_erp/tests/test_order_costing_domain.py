@@ -251,6 +251,26 @@ class TestOrderCostingDomain(unittest.TestCase):
         self.assertEqual(summary.customer_quote_total_usd, 70)
         self.assertEqual(summary.customer_quote_status, "Approved")
 
+    def test_corner_break_edge_total_is_added_to_customer_quote(self) -> None:
+        summary = calculate_special_pricing(
+            [
+                SpecialPricingPieceInput(
+                    piece_type="Regular",
+                    qty=2,
+                    area_m2=0.96,
+                    edge_cost_usd=2.2,
+                )
+            ],
+            settings=SpecialPricingSettings(),
+            total_area_m2=0.96,
+            board_and_cutting_cost_usd=30,
+            total_cost_usd=32.2,
+            corner_break_edge_total_usd=5.5,
+        )
+
+        self.assertEqual(summary.customer_quote_status, "Automatic")
+        self.assertEqual(summary.customer_quote_total_usd, 37.7)  # 32.2 + 5.5
+
     def test_negative_special_defaults_are_rejected(self) -> None:
         with self.assertRaisesRegex(CostingError, "special_shape_defaults_negative"):
             calculate_special_pricing(

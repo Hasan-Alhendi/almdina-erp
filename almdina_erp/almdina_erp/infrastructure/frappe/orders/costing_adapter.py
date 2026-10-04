@@ -89,6 +89,60 @@ class FrappeOrderCostingAdapter:
         self.document.total_edge_meters = summary.total_edge_meters
         self.document.edge_cost_usd = summary.total_edge_cost_usd
 
+        # Calculate break-edge (corner cut) costs for Clipped Corner and L-Shaped
+        from almdina_erp.almdina_erp.domain.orders.costing import (
+            BreakEdgeCostInput,
+            calculate_break_edge_cost,
+        )
+        from almdina_erp.almdina_erp.domain.orders.piece_policy import (
+            is_corner_cut,
+        )
+
+        corner_break_total = 0.0
+        for row in self.document.pieces or []:
+            if not (is_corner_cut(row.piece_type) and cint(row.edge_break)):
+                row.edge_break_length_cm = 0
+                row.edge_break_meters = 0
+                row.edge_break_rate_usd = 0
+                row.edge_break_cost_usd = 0
+                row.clipped_corner_edge_price_usd = 0
+                row.clipped_corner_edge_price_status = "Unpriced"
+                continue
+
+            # Resolve edge rate: use the piece's effective edge type
+            edge_type = str(row.edge_type or self.document.default_edge_type or "").strip()
+            rate_map = self.profiles.rate_map()
+            break_rate = rate_map.get(edge_type, 0.0) if edge_type else 0.0
+
+            break_result = calculate_break_edge_cost(
+                BreakEdgeCostInput(
+                    piece_type=str(row.piece_type or "Regular"),
+                    width_cm=flt(row.width_cm),
+                    length_cm=flt(row.length_cm),
+                    corner_width_cm=flt(row.clipped_corner_width_cm),
+                    corner_length_cm=flt(row.clipped_corner_length_cm),
+                    qty=cint(row.qty),
+                    edge_break=cint(row.edge_break),
+                    break_edge_rate_usd=break_rate,
+                )
+            )
+
+            row.edge_break_length_cm = break_result.break_edge_length_cm
+            row.edge_break_meters = break_result.break_edge_meters
+            row.edge_break_rate_usd = break_result.break_edge_rate_usd
+            row.edge_break_cost_usd = break_result.break_edge_cost_usd
+
+            # Auto-populate the existing manual price field
+            row.clipped_corner_edge_price_usd = break_result.break_edge_unit_price_usd
+            row.clipped_corner_edge_price_status = "Priced"
+            row.clipped_corner_edge_price_note = "تم الحساب تلقائياً"
+            row.clipped_corner_edge_price_set_by = ""
+            row.clipped_corner_edge_price_set_on = None
+
+            corner_break_total += break_result.break_edge_cost_usd
+
+        self.corner_break_edge_total_usd = corner_break_total
+
     def calculate_extra_addon_prices(self) -> None:
         """Validate Extra selections and store an immutable sales-price snapshot."""
 
@@ -358,6 +412,9 @@ class FrappeOrderCostingAdapter:
                 total_cost_usd=flt(self.document.total_cost_usd),
                 extra_addons_total_usd=flt(
                     getattr(self.document, "extra_addons_total_usd", 0)
+                ),
+                corner_break_edge_total_usd=flt(
+                    getattr(self, "corner_break_edge_total_usd", 0)
                 ),
             )
         except CostingError as error:
