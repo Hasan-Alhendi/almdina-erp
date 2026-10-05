@@ -28,13 +28,13 @@ def _present_error(error: DxfImportError) -> str:
     return "\n".join(present_issues_as_strings(error.issues))
 
 
-def _rect(width_mm: float, height_mm: float) -> dict:
+def _rect(width_mm: float, height_mm: float, *, x_mm: float = 0.0) -> dict:
     return {
         "points": [
-            (0.0, 0.0),
-            (width_mm, 0.0),
-            (width_mm, height_mm),
-            (0.0, height_mm),
+            (x_mm, 0.0),
+            (x_mm + width_mm, 0.0),
+            (x_mm + width_mm, height_mm),
+            (x_mm, height_mm),
         ],
         "closed": True,
         "branched": False,
@@ -304,7 +304,7 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
         with self.assertRaises(DxfImportError) as exc_info:
             _resolve_cut_topology([_rect(570, 285)], self._order((592, 285, 0)))
         self.assertIn("EXPECTED_PIECE_MISMATCH", exc_info.exception.codes)
-        self.assertIn("لا تطابق مقاسات القص", _present_error(exc_info.exception))
+        self.assertIn("يوجد اختلاف في مقاسات القص", _present_error(exc_info.exception))
         self.assertNotIn("مدوّرة 90°", _present_error(exc_info.exception))
 
     def test_repeated_dimensions_do_not_guess_forbidden_rotation(self) -> None:
@@ -316,7 +316,64 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
             or "PIECE_MISSING" in exc_info.exception.codes
         )
         self.assertNotIn("FORBIDDEN_ROTATION", exc_info.exception.codes)
-        self.assertNotIn("مدوّرة 90°", _present_error(exc_info.exception))
+        message = _present_error(exc_info.exception)
+        self.assertNotIn("مدوّرة 90°", message)
+        self.assertNotIn("الدرفة 1", message)
+        self.assertNotIn("الدرفة 2", message)
+
+    def test_unrelated_duplicate_sizes_do_not_hide_piece_nine_rotation(self) -> None:
+        dimensions = (
+            (300, 400, 0), (300, 400, 0), (400, 500, 0),
+            (210, 310, 0), (220, 330, 0), (230, 350, 0),
+            (240, 370, 0), (250, 390, 0), (592, 285, 0),
+        )
+        contours = []
+        x_mm = 0.0
+        for index, (width, height, _) in enumerate(dimensions, start=1):
+            actual_width, actual_height = (285, 592) if index == 9 else (width, height)
+            contours.append(_rect(actual_width, actual_height, x_mm=x_mm))
+            x_mm += actual_width + 20.0
+
+        with self.assertRaises(DxfImportError) as exc_info:
+            _resolve_cut_topology(contours, self._order(*dimensions))
+
+        error = exc_info.exception
+        self.assertEqual(error.codes, ["FORBIDDEN_ROTATION"])
+        self.assertEqual(error.issues[0].target.source_piece_no, 9)
+        from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import present_issue
+
+        card = present_issue(error.issues[0])
+        self.assertEqual(card.problem, "الدرفة مدوّرة والتدوير غير مسموح.")
+        self.assertEqual(card.target, "الدرفة 9.")
+        self.assertEqual(card.action, "أعد اتجاه الدرفة إلى 59.2 × 28.5 سم.")
+        message = _present_error(error)
+        self.assertIn("الدرفة 9", message)
+        self.assertIn("التدوير غير مسموح", message)
+        self.assertIn("59.2 × 28.5 سم", message)
+        for correct_size in ("30 × 40", "40 × 50", "21 × 31", "25 × 39"):
+            self.assertNotIn(correct_size, message)
+
+    def test_generic_mismatch_shows_only_residual_sizes(self) -> None:
+        dimensions = ((300, 400, 0), (300, 400, 0), (420, 510, 0), (592, 285, 0))
+        contours = []
+        x_mm = 0.0
+        for width, height in ((300, 400), (300, 400), (420, 510), (570, 280)):
+            contours.append(_rect(width, height, x_mm=x_mm))
+            x_mm += width + 20.0
+
+        with self.assertRaises(DxfImportError) as exc_info:
+            _resolve_cut_topology(contours, self._order(*dimensions))
+
+        error = exc_info.exception
+        self.assertEqual(error.codes, ["EXPECTED_PIECE_MISMATCH"])
+        self.assertEqual(error.issues[0].params["extra_sizes"], ["57 × 28 سم"])
+        self.assertEqual(error.issues[0].params["missing_sizes"], ["59.2 × 28.5 سم"])
+        message = _present_error(error)
+        self.assertIn("في الملف: 57 × 28 سم", message)
+        self.assertIn("المطلوب: 59.2 × 28.5 سم", message)
+        for correct_size in ("30 × 40", "42 × 51"):
+            self.assertNotIn(correct_size, message)
+        self.assertNotIn("الدرفة 4", message)
 
     def test_missing_piece_message_is_plain(self) -> None:
         order = self._order((649, 650, 0), (400, 399, 0))
@@ -330,7 +387,7 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
         self.assertIn("40 × 39.9 سم", message)
         self.assertNotIn("لا يمكن مطابقة محيطات CUT_PATH", message)
 
-    def test_topology_mismatch_lists_dxf_sizes_and_near_miss(self) -> None:
+    def test_topology_mismatch_shows_residual_sizes_and_near_miss(self) -> None:
         order = SimpleNamespace(
             kerf_mm=0,
             pieces=[
@@ -368,9 +425,10 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
 
         message = _present_error(exc_info.exception)
         self.assertIn("EXPECTED_PIECE_MISMATCH", exc_info.exception.codes)
-        self.assertIn("لا تطابق مقاسات القص", message)
+        self.assertIn("يوجد اختلاف في مقاسات القص", message)
         self.assertIn("28.9 × 74.6", message)
         self.assertIn("74.6 × 29.9", message)
+        self.assertNotIn("29.9 × 89.8", message)
 
     def test_strict_context_keeps_original_dxf_size_and_appends_cut_specs(self) -> None:
         from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
