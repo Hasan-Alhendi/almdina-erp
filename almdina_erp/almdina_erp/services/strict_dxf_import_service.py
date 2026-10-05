@@ -638,6 +638,39 @@ def _apply_strict_dimension_contract(
     return issues
 
 
+def _has_self_contained_forbidden_rotation(
+    item: DxfValidationIssue,
+) -> bool:
+    """Return whether a rotation error already identifies its door and both sizes."""
+    if item.code != FORBIDDEN_ROTATION:
+        return False
+    try:
+        if int(getattr(item.target, "source_piece_no", 0) or 0) <= 0:
+            return False
+    except (TypeError, ValueError):
+        return False
+
+    params = item.params or {}
+    dimension_fields = (
+        (
+            "actual_width_cm",
+            "actual_height_cm",
+            "expected_width_cm",
+            "expected_height_cm",
+        ),
+        (
+            "actual_width_mm",
+            "actual_height_mm",
+            "expected_width_mm",
+            "expected_height_mm",
+        ),
+    )
+    return any(
+        all(params.get(field) is not None for field in fields)
+        for fields in dimension_fields
+    )
+
+
 def _with_persisted_cut_context(
     error: DxfImportError,
     specs: list[OrderPieceCutSpec],
@@ -646,7 +679,12 @@ def _with_persisted_cut_context(
     issue_codes = {item.code for item in error.issues}
     if issue_codes & SKIP_PERSISTED_CUT_CONTEXT_CODES:
         return error
-    if not (issue_codes & PERSISTED_CUT_CONTEXT_CODES):
+    needs_context = any(
+        item.code in PERSISTED_CUT_CONTEXT_CODES
+        and not _has_self_contained_forbidden_rotation(item)
+        for item in error.issues
+    )
+    if not needs_context:
         return error
     expected = "؛ ".join(
         f"الدرفة {spec.row_index}: {_format_spec(spec)}" for spec in specs[:8]

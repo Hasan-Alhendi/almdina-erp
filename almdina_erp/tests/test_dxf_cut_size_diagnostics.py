@@ -525,5 +525,68 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
         self.assertNotIn(PERSISTED_CUT_SPECS, annotated.codes)
 
 
+    def test_strict_context_omits_specs_for_identified_forbidden_rotation(self) -> None:
+        from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
+            CATEGORY_DIMENSIONS,
+            FORBIDDEN_ROTATION,
+            PERSISTED_CUT_SPECS,
+            issue,
+            piece_target,
+        )
+
+        original = DxfImportError(
+            issues=[
+                issue(
+                    FORBIDDEN_ROTATION,
+                    CATEGORY_DIMENSIONS,
+                    target=piece_target(source_piece_no=9),
+                    params={
+                        "actual_width_mm": 285,
+                        "actual_height_mm": 592,
+                        "expected_width_mm": 592,
+                        "expected_height_mm": 285,
+                    },
+                )
+            ]
+        )
+
+        annotated = _with_persisted_cut_context(original, [])
+
+        self.assertIs(annotated, original)
+        self.assertEqual(annotated.codes, ["FORBIDDEN_ROTATION"])
+        self.assertNotIn(PERSISTED_CUT_SPECS, annotated.codes)
+
+    def test_strict_context_keeps_specs_for_forbidden_rotation_without_proof(self) -> None:
+        from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
+            CATEGORY_DIMENSIONS,
+            FORBIDDEN_ROTATION,
+            PERSISTED_CUT_SPECS,
+            contour_target,
+            issue,
+        )
+
+        original = DxfImportError(
+            issues=[
+                issue(
+                    FORBIDDEN_ROTATION,
+                    CATEGORY_DIMENSIONS,
+                    target=contour_target(9),
+                    params={
+                        "actual_width_mm": 285,
+                        "actual_height_mm": 592,
+                        "expected_width_mm": 592,
+                        "expected_height_mm": 285,
+                    },
+                )
+            ]
+        )
+
+        annotated = _with_persisted_cut_context(original, [])
+
+        self.assertIsNot(annotated, original)
+        self.assertIn("FORBIDDEN_ROTATION", annotated.codes)
+        self.assertIn(PERSISTED_CUT_SPECS, annotated.codes)
+
+
 if __name__ == "__main__":
     unittest.main()
