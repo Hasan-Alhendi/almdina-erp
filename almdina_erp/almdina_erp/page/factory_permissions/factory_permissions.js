@@ -21,13 +21,16 @@ frappe.pages["factory-permissions"].on_page_load = function (wrapper) {
         single_column: true,
     });
     const $main = $(wrapper).find(".layout-main-section");
-    $main.html(`
-        <div class="almdina-ui apc-shell">
-            <div class="apc-loading apc-empty" role="status" aria-live="polite">
-                ${__("جاري تحميل مصفوفة الصلاحيات...")}
-            </div>
-        </div>
-    `);
+    const ui = window.AlmdinaUi;
+
+    function paintState(kind, title, message) {
+        const body = ui && typeof ui.state === "function"
+            ? ui.state({ kind, title, message })
+            : `<div class="alm-state alm-state--${kind}" role="${kind === "error" ? "alert" : "status"}"><strong class="alm-state__title">${frappe.utils.escape_html(title || "")}</strong>${message ? `<span class="alm-state__message">${frappe.utils.escape_html(String(message))}</span>` : ""}</div>`;
+        $main.html(`<div class="almdina-ui">${body}</div>`);
+    }
+
+    paintState("loading", __("جاري تحميل مصفوفة الصلاحيات..."));
 
     function showBootstrapError(error) {
         const fallback = __("تعذر تحميل واجهة إدارة الصلاحيات.");
@@ -35,8 +38,7 @@ frappe.pages["factory-permissions"].on_page_load = function (wrapper) {
         const message = frontend && typeof frontend.errorMessage === "function"
             ? frontend.errorMessage(error, fallback)
             : String((error && error.message) || fallback);
-        const safe = frappe.utils.escape_html(String(message || fallback));
-        $main.html(`<div class="frappe-card" style="padding:24px;text-align:center">${safe}</div>`);
+        paintState("error", fallback, message);
         frappe.show_alert({ message, indicator: "red" }, 7);
     }
 

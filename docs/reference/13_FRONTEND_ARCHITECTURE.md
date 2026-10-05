@@ -176,24 +176,37 @@ Store/selectors/actions الخالصة تحصل على Node/unit tests عند ا
 
 | الطبقة | الملف | الدور |
 |---|---|---|
-| Tokens | `public/css/almdina_design_tokens.css` | `--alm-primary` وباقي brand tokens |
-| Components | `public/css/almdina_components.css` | `.alm-btn-primary` وpatterns مشتركة |
-| Builder | `public/js/almdina_ui.js` | `AlmdinaUi.button()` / `AlmdinaUi.empty()` |
+| Ownership | [`docs/design_system/TOKEN_OWNERSHIP.md`](../design_system/TOKEN_OWNERSHIP.md) | من يملك `alm-*` مقابل feature namespaces |
+| Tokens | `public/css/almdina_design_tokens.css` | brand/semantic + typography + spacing + radius + shadow + status |
+| Components | `public/css/almdina_components.css` | `.alm-btn-*` / `.alm-control` / `.alm-empty` / `.alm-card` / `.alm-panel` / `.alm-badge` / `.alm-status` / `.alm-state` / `.alm-actions--compact` |
+| Patterns | `public/css/almdina_patterns.css` | `.alm-page-intro` / `.alm-toolbar` / `.alm-summary-*` / `.alm-section-header` |
+| Page templates | `public/css/almdina_page_templates.css` | `.alm-page--admin` / `--workbench` / `--list` / `--transaction` |
+| Builder | `public/js/almdina_ui.js` | `button()` / `empty()` / `badge()` / `status()` / `state()` / `control()` / `filterGroup()` |
 
 **القواعد:**
 
 - كل Surface جديد أو migrated يضع shell/container تحت `.almdina-ui`.
 - الأزرار الأساسية/الخطرة/النجاح تُبنى عبر `AlmdinaUi.button()` — لا `class="btn btn-primary"` في surfaces مهاجرة.
 - ألوان العلامة التجارية تقرأ `var(--alm-primary, #172033)` أو aliases مشتقة (`--sf-primary`, `--prw-primary`) — لا `var(--primary, #2490ef)`.
+- Feature CSS لا يعيد تعريف radius/shadow/typography/spacing/status scales؛ يقرأ `--alm-*` أو يعمل alias إليها.
+- Admin Console surfaces تستهلك Patterns المشتركة عبر dual-class (`aps-hero alm-page-intro`) وتبقي Feature classes لـhooks/layout فقط.
+- Workbench: نظرة Factory Master Data العامة تستهلك نفس Patterns (`prw-hero alm-page-intro` / `prw-summary alm-summary-grid` / `prw-toolbar alm-toolbar`) و`AlmdinaUi.status()` / `badge()` / `.alm-state`؛ محرر المسار (stage rail/library) يبقى domain layout غير مهاجَر بعد.
+- Lists (Type A): المقاييس الثابتة (typography/spacing/radius/shadow) على `:root` لتقرأها قوائم Frappe الأصلية بدون `.almdina-ui`؛ `almdina_list_table.css` يملك chrome الصفوف عبر tokens، و`almdina_page_templates.css` يملك canvas القائمة. CSS قائمة DCO مؤجَّل إلى خطوة DCO.
+- Workbench: Shop Floor يستهلك `alm-page-intro` / `alm-toolbar` وtokens الحالة والـradius/shadow؛ أعمدة Kanban وبطاقات الإنتاج والسحب تبقى freeze.
+- كل surface يعلن عائلة صفحته عبر `.alm-page--admin|workbench|list|transaction`؛ Feature CSS لا يعيد تعريف max-width/shell rhythm الأساسي.
+- Shared DS CSS لا يحتوي Feature selectors (`.apc-*` / `.dco-*` …)؛ allowlist في `test_design_system_contract` فارغ منذ Phase 6 ويجب أن يبقى فارغًا.
 - لا override selector-based لـ `body .btn-primary` داخل `almdina_components.css`.
 - **Frappe Desk bridge (DS-10):** `public/css/almdina_desk_theme.css` يعيد توجيه `--primary` / `--btn-primary` و`indicator-pill.blue` إلى `--alm-primary` على `:root` — بدون تغيير markup Frappe.
 - Brand primitives (`--alm-primary` …) تعيش على `:root` + `.almdina-ui` في `almdina_design_tokens.css` حتى يكفي تعديل hex واحد للـDesk وAlmdina surfaces معًا.
 - تغيير اللون الأساسي يتم من `--alm-primary` في tokens فقط، ثم `bench build --app almdina_erp` + `clear-cache`.
+- Design System migration تبقى presentation-only: لا تغيّر Domain/Application/Services أو capabilities أو lifecycle.
 
 **استثناءات مسجّلة (allowlist):**
 
 - `notes.css` — spinner/notes presentation contract منفصل.
 - `door_cutting_order_mobile_list.css` — list cards identity contract (`#2563eb`) مستقل عن admin surfaces.
+- (Phase 6) لم يعد هناك Feature selectors في `almdina_components.css`: tabs الخطة يملكها plan-content owner، وشريط تعديل التبويب يستخدم `.alm-actions--compact`.
+- DCO JS style injection (FE-ARCH-009) مجمّد بـratchet `DCO_STYLE_INJECTION_DEBT`: لا module جديد يحقن `<style>`، وكل نقل إلى CSS ثابت تغيير عقد صريح لأن عدة قواعد مثبّتة باختبارات feature.
 
 **Gate:** `almdina_erp.tests.test_design_system_contract` + `almdina_erp/tests/js/almdina_ui.test.js`.
 

@@ -110,7 +110,7 @@
             return frm._ebtShell;
         }
         const shell = $(`
-            <div class="ebt-form-page almdina-ui">
+            <div class="ebt-form-page almdina-ui alm-page alm-page--transaction">
                 <div class="ebt-form-card">
                     <header class="ebt-form-hero">
                         <span class="ebt-form-hero-icon" aria-hidden="true"></span>

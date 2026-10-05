@@ -8,6 +8,8 @@ coverage.
 app_include_css = [
     "/assets/almdina_erp/css/almdina_design_tokens.css",
     "/assets/almdina_erp/css/almdina_components.css",
+    "/assets/almdina_erp/css/almdina_patterns.css",
+    "/assets/almdina_erp/css/almdina_page_templates.css",
     "/assets/almdina_erp/css/almdina_desk_theme.css",
     "/assets/almdina_erp/css/almdina_desk_sidebar.css?v=2",
     "/assets/almdina_erp/css/almdina_workspace_home.css?v=10",

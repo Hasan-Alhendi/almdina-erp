@@ -212,8 +212,12 @@ class FactoryWorkforceFrontendArchitectureTest(unittest.TestCase):
         self.assertIn('lifecycle.track(() => dispose(), "workforce-toolbar-owner")', self.toolbar)
 
     def test_renderer_uses_central_design_system_for_buttons(self) -> None:
-        self.assertIn('class="almdina-ui aw-shell"', self.renderer)
+        self.assertIn(
+            'class="almdina-ui aw-shell alm-page alm-page--admin"',
+            self.renderer,
+        )
         self.assertIn("AlmdinaUi.button", self.renderer)
+        self.assertIn("AlmdinaUi.badge", self.renderer)
         self.assertIn("aw-search-mount", self.renderer)
         self.assertIn("aw-enabled-mount", self.renderer)
         self.assertNotIn('class="btn btn-primary aw-adopt-user"', self.renderer)

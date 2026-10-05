@@ -13,9 +13,13 @@ def test_workforce_polish_has_professional_hierarchy_and_accessibility() -> None
 
     for marker in (
         "aw-hero",
+        "alm-page-intro",
+        "alm-page-intro--accented",
         "aw-eyebrow",
         "aw-hero-meta",
+        "alm-toolbar",
         "aw-toolbar-heading",
+        "alm-summary-grid",
         "aw-search-control",
         "aw-avatar",
         "aw-role-row",
@@ -54,9 +58,10 @@ def test_workforce_polish_distinguishes_operational_states() -> None:
     assert "aw-active-warning" in renderer
     assert ".aw-card.is-enabled-user" in css
     assert ".aw-card.is-disabled-user" in css
-    assert ".aw-stat-enabled" in css
-    assert ".aw-stat-disabled" in css
-    assert ".aw-stat-assignments" in css
+    assert '["total", "enabled", "disabled", "assignments"]' in renderer
+    assert '["neutral", "success", "danger", "info"]' in renderer
+    assert "alm-summary-card" in renderer
+    assert "data-tone=" in renderer
 
 
 def test_workforce_polish_is_presentation_only() -> None:

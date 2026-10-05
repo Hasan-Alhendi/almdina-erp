@@ -28,6 +28,21 @@
             return ui.button(options);
         }
 
+        function uiBadge(options) {
+            const ui = window.AlmdinaUi;
+            if (!ui || typeof ui.badge !== "function") {
+                throw new Error("AlmdinaUi.badge is required for Factory Permissions rendering");
+            }
+            return ui.badge(options);
+        }
+
+        const CAPABILITY_BADGE_TONES = Object.freeze({
+            standard: "info",
+            permission: "info",
+            sensitive: "warning",
+            critical: "danger",
+        });
+
         function uiControl(options) {
             const ui = window.AlmdinaUi;
             if (!ui || typeof ui.control !== "function") {
@@ -40,15 +55,15 @@
 
         function renderShell() {
             $main.html(`
-                <div class="almdina-ui apc-shell">
-                    <header class="apc-hero">
-                        <div class="apc-hero-copy">
-                            <div class="apc-eyebrow">${t("إدارة الصلاحيات")}</div>
+                <div class="almdina-ui apc-shell alm-page alm-page--admin">
+                    <header class="apc-hero alm-page-intro">
+                        <div class="apc-hero-copy alm-page-intro__copy">
+                            <div class="apc-eyebrow alm-page-intro__eyebrow">${t("إدارة الصلاحيات")}</div>
                             <div class="apc-hero-title-row">
                                 <span class="apc-hero-icon" aria-hidden="true">${icon("shield", "md")}</span>
-                                <h2>${t("مصفوفة صلاحيات Almdina")}</h2>
+                                <h2 class="alm-page-intro__title">${t("مصفوفة صلاحيات Almdina")}</h2>
                             </div>
-                            <p>${t("اختر الدور ثم امنحه الصلاحيات يدويًا من الصفر. لا توجد قوالب جاهزة ولا صلاحيات تلقائية. يمكن نقل مصفوفة موجودة عبر JSON بعد معاينتها، ولن يتم الحفظ تلقائيًا.")}</p>
+                            <p class="alm-page-intro__description">${t("اختر الدور ثم امنحه الصلاحيات يدويًا من الصفر. لا توجد قوالب جاهزة ولا صلاحيات تلقائية. يمكن نقل مصفوفة موجودة عبر JSON بعد معاينتها، ولن يتم الحفظ تلقائيًا.")}</p>
                         </div>
                         <div class="apc-actor apc-session-card" aria-label="${t("المستخدم الحالي")}"></div>
                     </header>
@@ -88,11 +103,11 @@
                                     className: "apc-bulk-toggle apc-select-all-global apc-link-toggle",
                                 })}
                             </div>
-                            <div class="apc-stats">
-                                <div class="apc-stat apc-stat-total"><strong class="apc-total-count">0</strong><span>${t("إجمالي")}</span></div>
-                                <div class="apc-stat apc-stat-enabled"><strong class="apc-enabled-count">0</strong><span>${t("مفعلة")}</span></div>
-                                <div class="apc-stat apc-stat-critical"><strong class="apc-critical-count">0</strong><span>${t("حرجة")}</span></div>
-                                <div class="apc-stat apc-stat-change"><strong class="apc-change-count">0</strong><span>${t("التعيينات")}</span></div>
+                            <div class="apc-stats alm-summary-grid">
+                                <div class="apc-stat apc-stat-total alm-summary-card" data-tone="neutral"><strong class="apc-total-count">0</strong><span>${t("إجمالي")}</span></div>
+                                <div class="apc-stat apc-stat-enabled alm-summary-card" data-tone="success"><strong class="apc-enabled-count">0</strong><span>${t("مفعلة")}</span></div>
+                                <div class="apc-stat apc-stat-critical alm-summary-card" data-tone="danger"><strong class="apc-critical-count">0</strong><span>${t("حرجة")}</span></div>
+                                <div class="apc-stat apc-stat-change alm-summary-card" data-tone="info"><strong class="apc-change-count">0</strong><span>${t("التعيينات")}</span></div>
                             </div>
                         </section>
                     </div>
@@ -219,9 +234,11 @@
         }
 
         function renderCapability(capability) {
-            const badges = capability.badges.map(badge => (
-                `<span class="apc-badge ${esc(badge.kind)}">${esc(badge.label)}</span>`
-            )).join("");
+            const badges = capability.badges.map(badge => uiBadge({
+                label: badge.label,
+                tone: CAPABILITY_BADGE_TONES[badge.kind] || "neutral",
+                className: `apc-badge ${badge.kind}`,
+            })).join("");
             return `
                 <label class="apc-capability">
                     <span class="apc-switch">

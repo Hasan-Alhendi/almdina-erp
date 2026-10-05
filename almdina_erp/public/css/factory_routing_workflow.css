@@ -6,12 +6,7 @@
     --prw-subtle: var(--subtle-fg, #f8fafc);
     --prw-text: var(--text-color, #172033);
     --prw-muted: var(--text-muted, #667085);
-    direction: rtl;
-    display: grid;
-    gap: 16px;
-    max-width: 1600px;
-    margin: 0 auto;
-    padding: 4px 2px 40px;
+    /* Page shell owned by almdina_page_templates.css (.alm-page--workbench). */
     color: var(--prw-text);
 }
 
@@ -21,51 +16,64 @@
     box-sizing: border-box;
 }
 
-.prw-hero {
-    position: relative;
+/* ─── Hero banner: horizontal flex row (badge | divider | title | divider | desc) ───
+ * Overrides alm-page-intro grid with a flex row so all elements sit on one line. */
+.almdina-ui .prw-hero.alm-page-intro {
     display: flex;
+    flex-direction: row;
     align-items: center;
-    justify-content: space-between;
-    gap: 24px;
-    overflow: hidden;
-    padding: 24px 26px;
-    border: 1px solid var(--prw-border);
-    border-radius: 20px;
-    background:
-        radial-gradient(circle at 8% 18%, color-mix(in srgb, var(--prw-primary) 15%, transparent), transparent 34%),
-        linear-gradient(135deg, var(--prw-card), var(--prw-subtle));
-    box-shadow: 0 8px 30px rgba(15, 23, 42, .055);
+    gap: 0;
+    padding: 14px 20px;
+    margin-bottom: var(--alm-space-3);
 }
 
-.prw-hero::after {
-    position: absolute;
-    inset-inline-end: -55px;
-    bottom: -85px;
-    width: 190px;
-    height: 190px;
-    border: 32px solid color-mix(in srgb, var(--prw-primary) 7%, transparent);
-    border-radius: 50%;
-    content: "";
-    pointer-events: none;
+.prw-hero-badge-cell {
+    flex: 0 0 auto;
 }
 
-.prw-hero-copy {
-    position: relative;
-    z-index: 1;
-    max-width: 850px;
-}
-
-.prw-eyebrow {
-    display: block;
-    margin-bottom: 6px;
-    color: var(--prw-primary);
+.prw-hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 16px;
+    border-radius: var(--alm-radius-pill);
+    background: var(--prw-primary);
+    color: #fff;
     font-size: 10px;
-    font-weight: 850;
-    letter-spacing: .1em;
+    font-weight: 900;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
+    white-space: nowrap;
 }
 
-.prw-hero h2,
+.prw-hero-badge-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.7;
+    flex: 0 0 auto;
+}
+
+.prw-hero-divider {
+    flex: 0 0 1px;
+    align-self: stretch;
+    background: var(--alm-border-subtle);
+    margin-inline: 20px;
+}
+
+.prw-hero-title.alm-page-intro__title {
+    flex: 0 1 auto;
+    margin: 0;
+}
+
+.prw-hero-desc.alm-page-intro__description {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin-top: 0;
+}
+
 .prw-editor-heading h2 {
     margin: 0;
     color: var(--prw-text);
@@ -74,7 +82,6 @@
     line-height: 1.35;
 }
 
-.prw-hero p,
 .prw-editor-heading p {
     max-width: 760px;
     margin: 7px 0 0;
@@ -83,69 +90,103 @@
     line-height: 1.85;
 }
 
-.prw-summary {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 10px;
+/* ─── Stat cards: horizontal layout (icon left, content right) ───────────────
+ * alm-summary-card (dual-class) provides tone-based card border/bg from DS.
+ * prw-stat overrides layout geometry and owns the inner content classes. */
+.almdina-ui .alm-summary-grid {
+    gap: var(--alm-space-3);
 }
 
-.prw-stat {
-    --prw-stat-tone: #64748b;
-    position: relative;
-    min-width: 0;
-    overflow: hidden;
+/* Override DS vertical layout with horizontal flex for stat cards.
+ * alm-summary-card provides tone-based border/bg; prw-stat owns geometry + content. */
+.almdina-ui .prw-stat.alm-summary-card {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 14px;
     padding: 14px 16px;
-    border: 1px solid color-mix(in srgb, var(--prw-stat-tone) 17%, var(--prw-border));
-    border-radius: 15px;
-    background: var(--prw-card);
+    min-width: 0;
+    text-align: start;
 }
 
-.prw-stat::before {
-    position: absolute;
-    inset-block: 0;
-    inset-inline-start: 0;
-    width: 4px;
-    background: var(--prw-stat-tone);
-    content: "";
+.almdina-ui .prw-stat .prw-stat-icon {
+    display: grid;
+    flex: 0 0 42px;
+    width: 42px;
+    height: 42px;
+    place-items: center;
+    border-radius: 10px;
+    background: var(--alm-surface-muted);
+    color: var(--alm-text-subtle);
 }
 
-.prw-stat[data-tone="routes"] { --prw-stat-tone: #7c3aed; }
-.prw-stat[data-tone="active"] { --prw-stat-tone: #16a34a; }
-.prw-stat[data-tone="stages"] { --prw-stat-tone: var(--prw-primary); }
-.prw-stat[data-tone="orders"] { --prw-stat-tone: #ea580c; }
+.almdina-ui .prw-stat[data-tone="success"] .prw-stat-icon {
+    background: color-mix(in srgb, var(--alm-status-success-fg) 12%, transparent);
+    color: var(--alm-status-success-fg);
+}
 
-.prw-stat span {
+.almdina-ui .prw-stat[data-tone="warning"] .prw-stat-icon {
+    background: color-mix(in srgb, var(--alm-status-warning-fg) 12%, transparent);
+    color: var(--alm-status-warning-fg);
+}
+
+.almdina-ui .prw-stat[data-tone="info"] .prw-stat-icon {
+    background: color-mix(in srgb, var(--alm-status-info-fg) 12%, transparent);
+    color: var(--alm-status-info-fg);
+}
+
+.almdina-ui .prw-stat .prw-stat-body {
+    min-width: 0;
+    flex: 1;
+}
+
+.almdina-ui .prw-stat .prw-stat-label {
     display: block;
+    color: var(--alm-text-subtle);
+    font-size: var(--alm-font-size-xs);
+    font-weight: var(--alm-font-weight-bold);
+    white-space: nowrap;
     overflow: hidden;
-    color: var(--prw-muted);
-    font-size: 11px;
-    font-weight: 750;
     text-overflow: ellipsis;
+}
+
+.almdina-ui .prw-stat .prw-stat-value-row {
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
+    margin-top: 3px;
+    flex-wrap: nowrap;
+}
+
+.almdina-ui .prw-stat .prw-stat-hint {
+    color: var(--alm-text-subtle);
+    font-size: var(--alm-font-size-xs);
+    font-weight: var(--alm-font-weight-bold);
     white-space: nowrap;
 }
 
-.prw-stat b {
-    display: block;
-    margin-top: 4px;
-    color: var(--prw-stat-tone);
-    font-size: 25px;
-    font-weight: 850;
-    line-height: 1.1;
+.almdina-ui .prw-stat .prw-stat-value {
+    color: var(--alm-text-strong);
+    font-size: var(--alm-font-size-lg);
+    font-weight: 900;
+    line-height: 1.05;
+    white-space: nowrap;
 }
 
+.almdina-ui .prw-stat[data-tone="success"] .prw-stat-hint { color: var(--alm-status-success-fg); }
+.almdina-ui .prw-stat[data-tone="success"] .prw-stat-value { color: var(--alm-status-success-fg); }
+.almdina-ui .prw-stat[data-tone="warning"] .prw-stat-hint { color: var(--alm-status-warning-fg); }
+.almdina-ui .prw-stat[data-tone="warning"] .prw-stat-value { color: var(--alm-status-warning-fg); }
+.almdina-ui .prw-stat[data-tone="info"] .prw-stat-hint { color: var(--alm-status-info-fg); }
+.almdina-ui .prw-stat[data-tone="info"] .prw-stat-value { color: var(--alm-status-info-fg); }
+
+/* Toolbar chrome owned by almdina_patterns.css (.alm-toolbar); geometry stays here. */
 .prw-toolbar {
     position: sticky;
     top: 56px;
     z-index: 20;
-    display: grid;
     grid-template-columns: auto minmax(0, 1fr);
-    gap: 10px;
-    align-items: end;
-    padding: 10px;
-    border: 1px solid var(--prw-border);
-    border-radius: 15px;
-    background: color-mix(in srgb, var(--prw-card) 94%, transparent);
-    box-shadow: 0 8px 24px rgba(15, 23, 42, .07);
+    box-shadow: var(--alm-shadow-md);
     backdrop-filter: blur(12px);
 }
 
@@ -176,6 +217,29 @@
     background: var(--prw-card);
     color: var(--prw-text);
     box-shadow: 0 1px 5px rgba(15, 23, 42, .09);
+}
+
+/* Count bubble inside tab button */
+.prw-view-tab-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    padding: 1px 5px;
+    margin-inline-start: 5px;
+    border-radius: var(--alm-radius-pill);
+    background: var(--alm-surface-muted);
+    color: var(--alm-text-subtle);
+    font-size: 10px;
+    font-weight: var(--alm-font-weight-heavy);
+    line-height: 1.4;
+    vertical-align: middle;
+    transition: background .15s ease, color .15s ease;
+}
+
+.prw-view-tab.is-active .prw-view-tab-count {
+    background: var(--prw-primary-soft);
+    color: var(--prw-primary);
 }
 
 .prw-search-wrap {
@@ -373,81 +437,92 @@
     transform: translateY(-1px);
 }
 
+/* ─── Route card header ───────────────────────────────────────────────────────
+ * Layout: [start: title + badges + id] [end: actions]
+ * No framework panel — the card owns its own chrome. */
 .prw-route-head {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
     gap: 18px;
-    padding: 17px 18px 13px;
+    padding: 16px 18px 12px;
+}
+
+.prw-route-head-start {
+    min-width: 0;
 }
 
 .prw-route-title-line {
     display: flex;
     align-items: center;
-    gap: 9px;
+    gap: 8px;
     flex-wrap: wrap;
+    row-gap: 5px;
 }
 
-.prw-route-head h3 {
+.prw-route-title-line h3 {
     margin: 0;
     color: var(--prw-text);
     font-size: 18px;
     font-weight: 850;
 }
 
-.prw-route-head p {
+/* Count badges for stages + in-flight */
+.almdina-ui .prw-stage-count-badge.alm-badge,
+.almdina-ui .prw-inflight-badge.alm-badge {
+    padding: 2px 8px;
+    font-size: 9px;
+}
+
+/* Route system name under the title */
+.prw-route-id-line {
     margin: 4px 0 0;
     color: var(--prw-muted);
     font-size: 11px;
 }
 
-.prw-status {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 3px 8px;
-    border-radius: 999px;
-    font-size: 10px;
-    font-weight: 800;
-}
-
-.prw-status::before {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: currentColor;
-    content: "";
-}
-
-.prw-status.is-active {
-    background: #e9f8ef;
-    color: #16834f;
-}
-
-.prw-status.is-disabled {
-    background: #f1f3f5;
-    color: #667085;
-}
-
-.prw-route-counts {
+/* Card actions — flex group on the right */
+.prw-card-actions,
+.prw-editor-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 7px;
 }
 
-.prw-route-counts span {
-    display: grid;
-    min-width: 74px;
-    padding: 7px 9px;
-    border-radius: 10px;
-    background: var(--prw-subtle);
-    color: var(--prw-muted);
-    font-size: 9px;
-    text-align: center;
+.prw-card-actions .btn,
+.prw-editor-actions .btn {
+    min-height: 38px;
+    border-radius: 9px;
+    font-weight: 750;
 }
 
-.prw-route-counts b {
+/* Route meta (date + author) in footer */
+.prw-route-meta {
+    display: flex;
+    gap: 16px;
+    color: var(--prw-muted);
+    font-size: 9px;
+}
+
+.prw-route-meta b {
     color: var(--prw-text);
-    font-size: 16px;
+    font-weight: 700;
+}
+
+/* Status palette owned by almdina_components.css (.alm-status--*); sizing only here. */
+.almdina-ui .prw-status.alm-status {
+    gap: 5px;
+    padding: 3px 8px;
+    font-size: var(--alm-font-size-xs);
+}
+
+/* .prw-route-counts is the action wrapper in the card header (title end side) */
+.prw-route-counts {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 7px;
+    flex: 0 0 auto;
 }
 
 .prw-route-flow {
@@ -478,8 +553,8 @@
 }
 
 .prw-route-stage.is-planning {
-    border-color: #f0b429;
-    background: #fff9e9;
+    border-color: var(--alm-status-warning-border, #f0b429);
+    background: var(--alm-status-warning-bg, #fff9e9);
 }
 
 .prw-route-stage-number {
@@ -517,16 +592,16 @@
     font-size: 9px;
 }
 
-.prw-mini-badge {
+/* Badge palette owned by almdina_components.css (.alm-badge--*); position/size only here.
+ * The badge overlaps the stage border, so the translucent tone sits on an opaque card layer. */
+.almdina-ui .prw-mini-badge.alm-badge {
     position: absolute;
     top: -7px;
     inset-inline-end: 8px;
-    padding: 2px 6px;
-    border-radius: 999px;
-    background: #f59e0b;
-    color: #fff;
+    padding: 1px 6px;
+    background-color: var(--alm-card, #fff);
+    background-image: linear-gradient(var(--alm-status-warning-bg), var(--alm-status-warning-bg));
     font-size: 8px;
-    font-weight: 800;
 }
 
 .prw-flow-arrow {
@@ -556,35 +631,13 @@
     border-top: 1px solid var(--prw-border);
 }
 
-.prw-route-meta {
-    display: flex;
-    gap: 16px;
-    color: var(--prw-muted);
-    font-size: 9px;
+/* Empty/error chrome owned by almdina_components.css (.alm-state); Master Data keeps height + icon. */
+.prw-empty.alm-state {
+    min-height: 260px;
+    place-content: center;
 }
 
-.prw-route-meta b {
-    color: var(--prw-text);
-    font-weight: 700;
-}
-
-.prw-card-actions,
-.prw-editor-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 7px;
-}
-
-.prw-card-actions .btn,
-.prw-editor-actions .btn {
-    min-height: 38px;
-    border-radius: 9px;
-    font-weight: 750;
-}
-
-.prw-empty,
-.prw-loading,
-.prw-error {
+.prw-loading {
     display: grid;
     justify-items: center;
     gap: 7px;
@@ -608,18 +661,6 @@
     background: var(--prw-primary-soft);
     color: var(--prw-primary);
     font-size: 24px;
-}
-
-.prw-empty b,
-.prw-error b {
-    color: var(--prw-text);
-    font-size: 15px;
-}
-
-.prw-empty p {
-    max-width: 480px;
-    margin: 0;
-    line-height: 1.7;
 }
 
 .prw-spinner {
@@ -1291,10 +1332,6 @@
 }
 
 @media (max-width: 900px) {
-    .prw-summary {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
     .prw-filter-wrap {
         grid-column: 1 / -1;
     }
@@ -1336,31 +1373,24 @@
 }
 
 @media (max-width: 640px) {
-    .prw-shell {
-        gap: 11px;
-        padding-bottom: 24px;
-    }
-
-    .prw-hero {
-        align-items: stretch;
+    /* Hero collapses to vertical stack on small screens */
+    .almdina-ui .prw-hero.alm-page-intro {
         flex-direction: column;
-        padding: 18px;
-        border-radius: 16px;
+        align-items: flex-start;
+        gap: 10px;
     }
 
-    .prw-summary {
-        gap: 7px;
+    .prw-hero-divider {
+        display: none;
     }
 
-    .prw-stat {
-        padding: 11px 12px;
-        border-radius: 12px;
+    .prw-hero-title.alm-page-intro__title {
+        font-size: var(--alm-font-size-xl);
     }
 
-    .prw-stat b {
-        font-size: 21px;
-    }
+    /* Stat cards stack to 2-column on mobile (alm-summary-grid handles this at 900px) */
 
+    /* Shell, intro and summary responsiveness owned by page templates/patterns. */
     .prw-toolbar,
     .prw-editor-topbar {
         position: static;
@@ -1395,26 +1425,8 @@
     }
 
     .prw-route-counts {
+        align-items: flex-start;
         width: 100%;
-    }
-
-    .prw-route-counts span {
-        flex: 1;
-    }
-
-    .prw-route-flow {
-        scroll-snap-type: inline proximity;
-    }
-
-    .prw-route-stage {
-        min-width: 78vw;
-        scroll-snap-align: start;
-    }
-
-    .prw-route-footer,
-    .prw-route-meta {
-        align-items: stretch;
-        flex-direction: column;
     }
 
     .prw-card-actions {
@@ -1429,20 +1441,18 @@
         min-width: 0;
     }
 
-    .prw-card-actions .prw-duplicate-route {
-        order: 1;
+    .prw-card-actions .prw-duplicate-route { order: 1; }
+    .prw-card-actions .prw-toggle-route    { order: 2; }
+    .prw-card-actions .prw-edit-route      { order: 3; }
+    .prw-card-actions .prw-delete-route    { order: 4; }
+
+    .prw-route-flow {
+        scroll-snap-type: inline proximity;
     }
 
-    .prw-card-actions .prw-toggle-route {
-        order: 2;
-    }
-
-    .prw-card-actions .prw-edit-route {
-        order: 3;
-    }
-
-    .prw-card-actions .prw-delete-route {
-        order: 4;
+    .prw-route-stage {
+        min-width: 78vw;
+        scroll-snap-align: start;
     }
 
     .prw-settings-card,

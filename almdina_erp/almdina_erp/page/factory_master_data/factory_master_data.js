@@ -233,18 +233,42 @@
             const message = this.frontend && typeof this.frontend.errorMessage === "function"
                 ? this.frontend.errorMessage(this.bootstrapError, fallback)
                 : fallback;
-            this.$main.html(`
-                <div class="frappe-card" style="padding:24px;text-align:center">
-                    <b>${fallback}</b>
-                    <p style="margin:12px 0">${this.esc(message)}</p>
-                    <button type="button" class="btn btn-default prw-bootstrap-retry">${__("إعادة المحاولة")}</button>
-                </div>`);
+            this.$main.html(this.errorStateHtml(fallback, message, "prw-bootstrap-retry"));
             this.$main
                 .off(".prw-bootstrap")
                 .on("click.prw-bootstrap", ".prw-bootstrap-retry", event => {
                     $(event.currentTarget).prop("disabled", true);
                     if (typeof this.bootstrapRetry === "function") this.bootstrapRetry();
                 });
+        }
+
+        // Error paths must render even if the design-system builder failed to load.
+        errorStateHtml(title, message, retryClassName) {
+            const ui = window.AlmdinaUi;
+            const retryLabel = __("إعادة المحاولة");
+            const retryHtml = ui && typeof ui.button === "function"
+                ? ui.button({
+                    label: retryLabel,
+                    variant: "secondary",
+                    className: retryClassName,
+                })
+                : `<button type="button" class="btn alm-btn-secondary ${retryClassName}">${this.esc(retryLabel)}</button>`;
+            if (ui && typeof ui.state === "function") {
+                return `<div class="almdina-ui">${ui.state({
+                    kind: "error",
+                    title,
+                    message,
+                    actionHtml: retryHtml,
+                })}</div>`;
+            }
+            return `
+                <div class="almdina-ui">
+                    <div class="alm-state alm-state--error" role="alert">
+                        <strong class="alm-state__title">${this.esc(title)}</strong>
+                        <span class="alm-state__message">${this.esc(message)}</span>
+                        <div class="alm-state__action">${retryHtml}</div>
+                    </div>
+                </div>`;
         }
 
         dispose() {
@@ -311,6 +335,28 @@
                 throw new Error("AlmdinaUi.button is required for factory master data rendering");
             }
             return ui.button(options);
+        }
+
+        // Decorative only: Frappe sprite icons; missing sprite must not break rendering.
+        uiIcon(name, size = "sm") {
+            if (!frappe.utils || typeof frappe.utils.icon !== "function") return "";
+            return frappe.utils.icon(name, size, "", "", "", true);
+        }
+
+        uiBadge(options = {}) {
+            const ui = window.AlmdinaUi;
+            if (!ui || typeof ui.badge !== "function") {
+                throw new Error("AlmdinaUi.badge is required for factory master data rendering");
+            }
+            return ui.badge(options);
+        }
+
+        uiStatus(options = {}) {
+            const ui = window.AlmdinaUi;
+            if (!ui || typeof ui.status !== "function") {
+                throw new Error("AlmdinaUi.status is required for factory master data rendering");
+            }
+            return ui.status(options);
         }
 
         uiControl(options = {}) {
@@ -573,12 +619,7 @@
                         : __("تعذر تحميل مسارات الإنتاج.");
                     this.disposeToolbarControls();
                     this.disposeStageControls();
-                    this.$main.html(`
-                        <div class="prw-error">
-                            <b>${__("تعذر فتح إدارة المسارات")}</b>
-                            <span>${this.esc(message)}</span>
-                            <button type="button" class="btn btn-default prw-retry">${__("إعادة المحاولة")}</button>
-                        </div>`);
+                    this.$main.html(this.errorStateHtml(__("تعذر فتح إدارة المسارات"), message, "prw-retry"));
                     this.bind();
                     return null;
                 });
@@ -615,23 +656,31 @@
             this.disposeToolbarControls();
             this.disposeStageControls();
             this.$main.html(`
-                <main class="almdina-ui prw-shell" dir="rtl">
-                    <section class="prw-hero">
-                        <div class="prw-hero-copy">
-                            <span class="prw-eyebrow">${__("Production Workflow")}</span>
-                            <h2>${__("صمّم رحلة الطلب من أول مرحلة حتى التسليم")}</h2>
-                            <p>${__("رتّب مراحل العمل بصريًا، اربط كل مرحلة بالدور التشغيلي المناسب، ثم استخدم المسار مباشرة في لوحة الإنتاج.")}</p>
+                <main class="almdina-ui prw-shell alm-page alm-page--workbench" dir="rtl">
+                    <section class="prw-hero alm-page-intro alm-page-intro--accented" aria-label="${__("نظرة عامة")}">
+                        <div class="prw-hero-badge-cell">
+                            <span class="prw-hero-badge">
+                                <span class="prw-hero-badge-dot" aria-hidden="true"></span>
+                                ${__("Production Workflow")}
+                            </span>
                         </div>
+                        <span class="prw-hero-divider" aria-hidden="true"></span>
+                        <h2 class="prw-hero-title alm-page-intro__title">${__("صمّم رحلة الطلب من أول مرحلة حتى التسليم")}</h2>
+                        <span class="prw-hero-divider" aria-hidden="true"></span>
+                        <p class="prw-hero-desc alm-page-intro__description">${__("رتّب مراحل العمل بصريًا، اربط كل مرحلة بالدور التشغيلي المناسب، ثم استخدم المسار مباشرة في لوحة الإنتاج.")}</p>
                     </section>
-                    <section class="prw-summary" aria-label="${__("ملخص مسارات الإنتاج")}">
-                        ${this.statHtml(__("المسارات"), summary.routings || 0, "routes")}
-                        ${this.statHtml(__("المسارات المفعّلة"), summary.active_routings || 0, "active")}
-                        ${this.statHtml(__("إجمالي المراحل"), summary.total_stages || 0, "stages")}
-                        ${this.statHtml(__("طلبات قيد الإنتاج"), summary.in_flight_orders || 0, "orders")}
+                    <section class="prw-summary alm-summary-grid" aria-label="${__("ملخص مسارات الإنتاج")}">
+                        ${this.statHtml(__("المسارات"), summary.routings || 0, "info", "route",
+                            summary.routings && summary.active_routings !== undefined
+                                ? `${Math.round(((summary.active_routings || 0) / (summary.routings || 1)) * 100)}% ${__("نشط")}`
+                                : "")}
+                        ${this.statHtml(__("المسارات المفعّلة"), summary.active_routings || 0, "success", "circle-check", __("محمي تلقائياً"))}
+                        ${this.statHtml(__("إجمالي المراحل"), summary.total_stages || 0, "neutral", "layers", __("أدوار"))}
+                        ${this.statHtml(__("طلبات قيد الإنتاج"), summary.in_flight_orders || 0, "warning", "zap", __("نشط الآن"))}
                     </section>
-                    <section class="prw-toolbar">
+                    <section class="prw-toolbar alm-toolbar">
                         <div class="prw-view-switch" role="tablist">
-                            <button type="button" class="prw-view-tab ${this.state.section === "routings" ? "is-active" : ""}" data-section="routings">${__("المسارات")}</button>
+                            <button type="button" class="prw-view-tab ${this.state.section === "routings" ? "is-active" : ""}" data-section="routings">${__("المسارات")} (${Number((data.routings || []).length)})</button>
                             <button type="button" class="prw-view-tab ${this.state.section === "audit" ? "is-active" : ""}" data-section="audit">${__("سجل التغييرات")}</button>
                         </div>
                         <div class="prw-filter-group-mount"></div>
@@ -645,11 +694,21 @@
             this.syncPrimaryAction();
         }
 
-        statHtml(label, value, tone) {
+        statHtml(label, value, tone, icon = "", hint = "") {
+            const iconHtml = icon ? `
+                <div class="prw-stat-icon" aria-hidden="true">
+                    ${this.uiIcon(icon, "md")}
+                </div>` : "";
+            const hintHtml = hint ? `<span class="prw-stat-hint">${this.esc(hint)}</span>` : "";
             return `
-                <article class="prw-stat" data-tone="${tone}">
-                    <span>${this.esc(label)}</span>
-                    <b>${this.esc(value)}</b>
+                <article class="prw-stat alm-summary-card" data-tone="${tone}">
+                    ${iconHtml}
+                    <div class="prw-stat-body">
+                        <span class="prw-stat-label">${this.esc(label)}</span>
+                        <div class="prw-stat-value-row">
+                            ${hintHtml}<b class="prw-stat-value">${this.esc(String(value))}</b>
+                        </div>
+                    </div>
                 </article>`;
         }
 
@@ -676,10 +735,10 @@
             const routes = this.filteredRoutes();
             if (!routes.length) {
                 return `
-                    <div class="prw-empty">
+                    <div class="prw-empty alm-state alm-state--empty" role="status">
                         <span class="prw-empty-icon" aria-hidden="true">⇢</span>
-                        <b>${__("لا توجد مسارات مطابقة")}</b>
-                        <p>${__("غيّر البحث أو الفلتر، أو أنشئ مسارًا جديدًا لبدء تنظيم رحلة الإنتاج.")}</p>
+                        <strong class="alm-state__title">${__("لا توجد مسارات مطابقة")}</strong>
+                        <span class="alm-state__message">${__("غيّر البحث أو الفلتر، أو أنشئ مسارًا جديدًا لبدء تنظيم رحلة الإنتاج.")}</span>
                     </div>`;
             }
             return `<div class="prw-route-list">${routes.map(route => this.routeCardHtml(route)).join("")}</div>`;
@@ -690,6 +749,7 @@
             const canEdit = this.can("edit_production_routings");
             const canCreate = this.can("create_production_routings");
             const canDelete = this.can("delete_production_routings");
+            const inFlight = Number(route.in_flight_orders || 0);
             const stageFlow = stages.length
                 ? stages.map((stage, index) => `
                     <div class="prw-route-stage ${stage.is_planning_stage ? "is-planning" : ""}">
@@ -698,22 +758,59 @@
                             <b>${this.esc(stage.department_label || stage.stage_type)}</b>
                             <small>${this.esc(stage.operational_role || __("دون دور"))}</small>
                         </div>
-                        ${stage.is_planning_stage ? `<span class="prw-mini-badge">${__("تخطيط")}</span>` : ""}
+                        ${stage.is_planning_stage ? this.uiBadge({ label: __("تخطيط"), tone: "warning", className: "prw-mini-badge" }) : ""}
                     </div>`).join('<span class="prw-flow-arrow" aria-hidden="true">←</span>')
                 : `<span class="prw-no-stages">${__("لا توجد مراحل فعالة")}</span>`;
             return `
                 <article class="prw-route-card" data-route-name="${this.esc(route.name)}">
                     <header class="prw-route-head">
-                        <div>
+                        <div class="prw-route-head-start">
                             <div class="prw-route-title-line">
                                 <h3>${this.esc(route.label)}</h3>
-                                <span class="prw-status ${route.disabled ? "is-disabled" : "is-active"}">${route.disabled ? __("معطّل") : __("مفعّل")}</span>
+                                ${this.uiStatus({
+                                    label: route.disabled ? __("معطّل") : __("مفعّل"),
+                                    tone: route.disabled ? "neutral" : "success",
+                                    className: "prw-status",
+                                })}
+                                ${this.uiBadge({ label: `${stages.length} ${__("مراحل")}`, tone: "info", className: "prw-stage-count-badge" })}
+                                ${inFlight ? this.uiBadge({ label: `${inFlight} ${__("قيد الإنتاج")}`, tone: "warning", className: "prw-inflight-badge" }) : ""}
                             </div>
-                            <p>${this.esc(route.name)}</p>
+                            <p class="prw-route-id-line">${this.esc(route.name)}</p>
                         </div>
                         <div class="prw-route-counts">
-                            <span><b>${stages.length}</b>${__("مراحل")}</span>
-                            <span><b>${Number(route.in_flight_orders || 0)}</b>${__("قيد الإنتاج")}</span>
+                            <div class="prw-card-actions">
+                                ${this.uiButton({
+                                    label: canEdit ? __("تحرير Workflow") : __("معاينة"),
+                                    variant: "primary",
+                                    className: "prw-edit-route",
+                                    attrs: { "data-name": route.name },
+                                })}
+                                ${canDelete ? this.uiButton({
+                                    label: __("حذف"),
+                                    variant: "danger",
+                                    className: "prw-delete-route",
+                                    attrs: {
+                                        "data-name": route.name,
+                                        "data-modified": route.modified || "",
+                                    },
+                                }) : ""}
+                                ${canCreate ? this.uiButton({
+                                    label: __("نسخ"),
+                                    variant: "secondary",
+                                    className: "prw-duplicate-route",
+                                    attrs: { "data-name": route.name },
+                                }) : ""}
+                                ${canEdit ? this.uiButton({
+                                    label: route.disabled ? __("تفعيل") : __("تعطيل"),
+                                    variant: "secondary",
+                                    className: "prw-toggle-route",
+                                    attrs: {
+                                        "data-name": route.name,
+                                        "data-disabled": route.disabled ? 0 : 1,
+                                        "data-modified": route.modified || "",
+                                    },
+                                }) : ""}
+                            </div>
                         </div>
                     </header>
                     <div class="prw-route-flow" aria-label="${__("تسلسل مراحل المسار")}">${stageFlow}</div>
@@ -721,25 +818,6 @@
                         <div class="prw-route-meta">
                             <span>${__("آخر تعديل")}: <b>${this.esc(route.modified || "—")}</b></span>
                             <span>${__("بواسطة")}: <b>${this.esc(route.modified_by || "—")}</b></span>
-                        </div>
-                        <div class="prw-card-actions">
-                            ${this.uiButton({
-                                label: canEdit ? __("تحرير Workflow") : __("معاينة"),
-                                variant: "primary",
-                                className: "prw-edit-route",
-                                attrs: { "data-name": route.name },
-                            })}
-                            ${canCreate ? `<button type="button" class="btn btn-default prw-duplicate-route" data-name="${this.esc(route.name)}">${__("نسخ")}</button>` : ""}
-                            ${canEdit ? `<button type="button" class="btn btn-default prw-toggle-route" data-name="${this.esc(route.name)}" data-disabled="${route.disabled ? 0 : 1}" data-modified="${this.esc(route.modified || "")}">${route.disabled ? __("تفعيل") : __("تعطيل")}</button>` : ""}
-                            ${canDelete ? this.uiButton({
-                                label: __("حذف"),
-                                variant: "danger",
-                                className: "prw-delete-route",
-                                attrs: {
-                                    "data-name": route.name,
-                                    "data-modified": route.modified || "",
-                                },
-                            }) : ""}
                         </div>
                     </footer>
                 </article>`;
@@ -752,7 +830,7 @@
                 return JSON.stringify(row).toLocaleLowerCase().includes(query);
             });
             if (!rows.length) {
-                return `<div class="prw-empty"><span class="prw-empty-icon">◷</span><b>${__("لا توجد تغييرات مسجلة")}</b><p>${__("سيظهر هنا كل إنشاء أو تعديل أو حذف لمسارات الإنتاج.")}</p></div>`;
+                return `<div class="prw-empty alm-state alm-state--empty" role="status"><span class="prw-empty-icon" aria-hidden="true">◷</span><strong class="alm-state__title">${__("لا توجد تغييرات مسجلة")}</strong><span class="alm-state__message">${__("سيظهر هنا كل إنشاء أو تعديل أو حذف لمسارات الإنتاج.")}</span></div>`;
             }
             return `<div class="prw-audit-list">${rows.map(row => `
                 <article class="prw-audit-item">
@@ -845,7 +923,7 @@
             const readOnly = editor.readOnly;
             this.syncPrimaryAction();
             this.$main.html(`
-                <main class="almdina-ui prw-shell prw-editor-shell" dir="rtl">
+                <main class="almdina-ui prw-shell prw-editor-shell alm-page alm-page--workbench" dir="rtl">
                     <header class="prw-editor-topbar">
                         <div class="prw-editor-heading">
                             <button type="button" class="btn btn-default prw-close-editor" aria-label="${__("رجوع")}">→</button>
@@ -923,7 +1001,7 @@
                     <div class="prw-library-list">
                         ${catalog.length
                             ? catalog.map(stage => this.stageLibraryCardHtml(stage, readOnly, canManage)).join("")
-                            : `<div class="prw-empty"><b>${__("مكتبة المراحل فارغة")}</b><p>${canManage ? __("أضف أول مرحلة لبدء بناء مسارات الإنتاج.") : __("اطلب من مسؤول المسارات إضافة مراحل إلى المكتبة.")}</p></div>`}
+                            : `<div class="prw-empty alm-state alm-state--empty" role="status"><strong class="alm-state__title">${__("مكتبة المراحل فارغة")}</strong><span class="alm-state__message">${canManage ? __("أضف أول مرحلة لبدء بناء مسارات الإنتاج.") : __("اطلب من مسؤول المسارات إضافة مراحل إلى المكتبة.")}</span></div>`}
                     </div>
                     <div class="prw-library-tip">
                         <b>${__("قاعدة مهمة")}</b>

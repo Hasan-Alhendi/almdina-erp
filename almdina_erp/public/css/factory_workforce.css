@@ -1,114 +1,29 @@
 .aw-shell {
-    --aw-radius-lg: 18px;
-    --aw-radius-md: 14px;
-    --aw-radius-sm: 10px;
-    --aw-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04), 0 7px 22px rgba(15, 23, 42, 0.045);
-    --aw-shadow-md: 0 12px 36px rgba(15, 23, 42, 0.09);
+    --aw-radius-lg: var(--alm-radius-lg, 18px);
+    --aw-radius-md: var(--alm-radius-md, 14px);
+    --aw-radius-sm: var(--alm-radius-sm, 10px);
+    --aw-shadow-sm: var(--alm-shadow-sm);
+    --aw-shadow-md: var(--alm-shadow-md);
     --aw-primary-soft: color-mix(in srgb, var(--alm-primary, #172033) 8%, transparent);
     --aw-primary-border: color-mix(in srgb, var(--alm-primary, #172033) 24%, transparent);
-    --aw-success-soft: rgba(21, 128, 61, 0.08);
-    --aw-danger-soft: rgba(185, 28, 28, 0.07);
-    --aw-warning-soft: rgba(180, 83, 9, 0.09);
-    direction: rtl;
-    display: grid;
-    gap: 14px;
-    max-width: 1500px;
-    margin: 0 auto;
-    padding: 6px 4px 42px;
+    --aw-success-soft: var(--alm-status-success-bg);
+    --aw-danger-soft: var(--alm-status-danger-bg);
+    --aw-warning-soft: var(--alm-status-warning-bg);
+    /* Page shell owned by almdina_page_templates.css (.alm-page--admin). */
 }
 
-.aw-hero {
-    position: relative;
-    overflow: hidden;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 22px;
-    padding: 22px 24px;
-    border: 1px solid var(--border-color, #e5e7eb);
-    border-radius: var(--aw-radius-lg);
-    background:
-        radial-gradient(circle at 8% 12%, color-mix(in srgb, var(--alm-primary, #172033) 9%, transparent), transparent 34%),
-        linear-gradient(135deg, var(--fg-color, #fff), var(--subtle-fg, #f8fafb));
-    box-shadow: var(--aw-shadow-sm);
-}
-
-.aw-hero::before {
-    content: "";
-    position: absolute;
-    inset-block: 0;
-    inset-inline-start: 0;
-    width: 4px;
-    background: var(--alm-primary, #172033);
-}
-
+/* Page intro chrome owned by almdina_patterns.css (.alm-page-intro). */
 .aw-hero-copy {
     min-width: 0;
-}
-
-.aw-eyebrow,
-.aw-toolbar-kicker {
-    display: block;
-    color: var(--alm-primary, #172033);
-    font-size: 10px;
-    font-weight: 850;
-    letter-spacing: 0.02em;
-}
-
-.aw-hero h2 {
-    margin: 3px 0 6px;
-    color: var(--text-color, #1f2937);
-    font-size: clamp(21px, 2vw, 26px);
-    font-weight: 900;
-    letter-spacing: -0.02em;
-}
-
-.aw-hero p {
-    max-width: 820px;
-    margin: 0;
-    color: var(--text-muted, #6b7280);
-    font-size: 12px;
-    line-height: 1.85;
-}
-
-.aw-hero-meta {
-    min-width: 140px;
-    padding: 11px 14px;
-    border: 1px solid var(--aw-primary-border);
-    border-radius: 13px;
-    background: rgba(255, 255, 255, 0.58);
-    text-align: center;
-}
-
-.aw-hero-meta span {
-    display: block;
-    color: var(--text-muted, #6b7280);
-    font-size: 9px;
-    font-weight: 750;
-}
-
-.aw-hero-meta strong {
-    display: block;
-    margin-top: 2px;
-    color: var(--text-color, #1f2937);
-    font-size: 24px;
-    line-height: 1.1;
 }
 
 .aw-toolbar {
     position: sticky;
     top: 58px;
     z-index: 12;
-    display: grid;
     grid-template-columns: 180px minmax(280px, 1fr) 180px auto;
-    gap: 10px;
-    align-items: end;
-    padding: 12px 13px;
-    border: 1px solid var(--border-color, #e5e7eb);
-    border-radius: var(--aw-radius-md);
-    background: color-mix(in srgb, var(--fg-color, #fff) 94%, transparent);
-    box-shadow: var(--aw-shadow-md);
     backdrop-filter: blur(10px);
+    box-shadow: var(--aw-shadow-md);
 }
 
 .aw-toolbar-heading {
@@ -206,72 +121,9 @@
     width: 100%;
 }
 
-.aw-summary {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 9px;
-}
-
+/* Summary chrome owned by almdina_patterns.css (.alm-summary-*). */
 .aw-stat {
-    position: relative;
-    overflow: hidden;
     min-height: 82px;
-    padding: 12px 14px;
-    border: 1px solid var(--border-color, #e5e7eb);
-    border-radius: var(--aw-radius-md);
-    background: var(--fg-color, #fff);
-    box-shadow: var(--aw-shadow-sm);
-}
-
-.aw-stat::after {
-    content: "";
-    position: absolute;
-    inset-inline-start: 0;
-    top: 14px;
-    bottom: 14px;
-    width: 3px;
-    border-radius: 999px;
-    background: #94a3b8;
-    opacity: 0.72;
-}
-
-.aw-stat-enabled {
-    background: linear-gradient(135deg, var(--fg-color, #fff), var(--aw-success-soft));
-}
-
-.aw-stat-enabled::after {
-    background: #15803d;
-}
-
-.aw-stat-disabled {
-    background: linear-gradient(135deg, var(--fg-color, #fff), var(--aw-danger-soft));
-}
-
-.aw-stat-disabled::after {
-    background: #b91c1c;
-}
-
-.aw-stat-assignments {
-    background: linear-gradient(135deg, var(--fg-color, #fff), var(--aw-warning-soft));
-}
-
-.aw-stat-assignments::after {
-    background: #b45309;
-}
-
-.aw-stat span {
-    display: block;
-    color: var(--text-muted, #6b7280);
-    font-size: 10px;
-    font-weight: 750;
-}
-
-.aw-stat b {
-    display: block;
-    margin-top: 6px;
-    color: var(--text-color, #1f2937);
-    font-size: 23px;
-    line-height: 1;
 }
 
 .aw-section {
@@ -446,47 +298,14 @@
     margin-top: 9px;
 }
 
-.aw-badge {
-    display: inline-flex;
-    align-items: center;
+.aw-badge.alm-badge {
     min-height: 23px;
     padding: 3px 7px;
-    border: 1px solid transparent;
-    border-radius: 999px;
     font-size: 9px;
     font-weight: 800;
     line-height: 1.15;
     white-space: nowrap;
-}
-
-.aw-badge.is-enabled {
-    border-color: rgba(21, 128, 61, 0.12);
-    background: #e8f7ee;
-    color: #18794e;
-}
-
-.aw-badge.is-disabled {
-    border-color: rgba(185, 28, 28, 0.11);
-    background: #fdecec;
-    color: #b42318;
-}
-
-.aw-badge.is-warning {
-    border-color: rgba(180, 83, 9, 0.12);
-    background: #fff4d6;
-    color: #8a5b00;
-}
-
-.aw-badge.is-neutral {
-    border-color: rgba(71, 84, 103, 0.08);
-    background: #f2f4f7;
-    color: #475467;
-}
-
-.aw-role {
-    border-color: rgba(40, 91, 154, 0.1);
-    background: #eef5ff;
-    color: #285b9a;
+    /* Status colors owned by .alm-badge--* in almdina_components.css */
 }
 
 .aw-details {
@@ -542,9 +361,9 @@
 }
 
 .aw-active-warning {
-    border: 1px solid rgba(180, 83, 9, 0.18);
+    border: 1px solid var(--alm-status-warning-border);
     background: var(--aw-warning-soft);
-    color: #7c4a03;
+    color: var(--alm-status-warning-fg);
 }
 
 .aw-active-warning > span:first-child {
@@ -554,7 +373,7 @@
     display: grid;
     place-items: center;
     border-radius: 50%;
-    background: rgba(180, 83, 9, 0.13);
+    background: var(--alm-status-warning-bg);
     font-size: 9px;
     font-weight: 900;
 }
@@ -623,10 +442,10 @@
     align-items: flex-start;
     gap: 10px;
     padding: 18px;
-    border: 1px solid #f5b7b1;
+    border: 1px solid var(--alm-status-danger-border);
     border-radius: var(--aw-radius-md);
-    background: #fff5f4;
-    color: #9f2d20;
+    background: var(--alm-status-danger-bg);
+    color: var(--alm-status-danger-fg);
 }
 
 .aw-error-icon {
@@ -636,7 +455,7 @@
     display: grid;
     place-items: center;
     border-radius: 50%;
-    background: rgba(185, 28, 28, 0.09);
+    background: var(--alm-status-danger-bg);
     font-weight: 900;
 }
 

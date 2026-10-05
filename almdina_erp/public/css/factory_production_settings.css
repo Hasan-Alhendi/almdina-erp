@@ -1,38 +1,24 @@
 .aps-shell {
-    --aps-radius-lg: 18px;
-    --aps-radius-md: 14px;
-    --aps-radius-sm: 10px;
-    --aps-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04), 0 7px 22px rgba(15, 23, 42, 0.045);
-    --aps-shadow-md: 0 14px 40px rgba(15, 23, 42, 0.09);
+    --aps-radius-lg: var(--alm-radius-lg, 18px);
+    --aps-radius-md: var(--alm-radius-md, 14px);
+    --aps-radius-sm: var(--alm-radius-sm, 10px);
+    --aps-shadow-sm: var(--alm-shadow-sm);
+    --aps-shadow-md: var(--alm-shadow-md);
     --aps-primary-soft: color-mix(in srgb, var(--alm-primary, #172033) 8%, transparent);
     --aps-primary-border: color-mix(in srgb, var(--alm-primary, #172033) 22%, transparent);
-    --aps-success-soft: rgba(21, 128, 61, 0.08);
-    --aps-muted-soft: rgba(100, 116, 139, 0.07);
-    --aps-info-soft: rgba(37, 99, 235, 0.06);
+    --aps-success-soft: var(--alm-status-success-bg);
+    --aps-muted-soft: var(--alm-status-neutral-bg);
+    --aps-info-soft: var(--alm-status-info-bg);
     --aps-accent-cutting: var(--alm-accent-blue, #2563eb);
     --aps-accent-costing: var(--alm-success, #15803d);
     --aps-accent-extra: var(--alm-warning, #b45309);
     --aps-accent-production: var(--alm-accent-purple, #7c3aed);
     --aps-accent-print: var(--alm-accent-blue, #2563eb);
     --aps-accent-whatsapp: var(--alm-success, #15803d);
-    direction: rtl;
-    display: grid;
-    gap: 14px;
-    max-width: 1280px;
-    margin: 0 auto;
-    padding: 6px 4px 42px;
+    /* Page shell owned by almdina_page_templates.css (.alm-page--admin). */
 }
 
-.aps-hero {
-    position: relative;
-    overflow: hidden;
-    padding: 18px 20px;
-    border: 1px solid var(--alm-card-border, #e4e8ee);
-    border-radius: var(--alm-radius-card, 16px);
-    background: var(--alm-card, #fff);
-    box-shadow: var(--alm-shadow-card, var(--aps-shadow-sm));
-}
-
+/* Page intro / section header chrome owned by almdina_patterns.css. */
 .aps-hero-layout {
     display: flex;
     align-items: center;
@@ -47,70 +33,16 @@
     gap: 12px;
 }
 
-.aps-hero-accent {
-    width: 4px;
-    flex: 0 0 auto;
-    align-self: stretch;
-    min-height: 42px;
-    border-radius: 999px;
-    background: var(--alm-accent, #2563eb);
-}
-
 .aps-hero-titles {
     min-width: 0;
 }
 
-.aps-hero h2 {
-    margin: 0;
-    color: var(--alm-text-strong, #101828);
-    font-size: clamp(18px, 1.8vw, 22px);
-    font-weight: 900;
-    letter-spacing: -0.02em;
-    line-height: 1.35;
-}
-
-.aps-hero p {
-    max-width: 720px;
-    margin: 6px 0 0;
-    color: var(--alm-text-subtle, #667085);
-    font-size: 12px;
-    line-height: 1.7;
-    font-weight: 550;
-}
-
-.aps-eyebrow,
 .aps-section-kicker {
     display: block;
     color: var(--alm-primary, #172033);
-    font-size: 10px;
+    font-size: var(--alm-font-size-xs, 10px);
     font-weight: 850;
     letter-spacing: 0.02em;
-}
-
-.aps-section-intro {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 14px;
-    padding: 1px 3px;
-}
-
-.aps-section-intro > div > span,
-.aps-section-intro > div > strong {
-    display: block;
-}
-
-.aps-section-intro > div > span {
-    color: var(--text-muted, #6b7280);
-    font-size: 9px;
-    font-weight: 800;
-}
-
-.aps-section-intro > div > strong {
-    margin-top: 2px;
-    color: var(--text-color, #1f2937);
-    font-size: 14px;
-    font-weight: 900;
 }
 
 .aps-section-intro-note {
@@ -382,29 +314,14 @@
     max-width: none;
 }
 
-.aps-status-pill {
-    display: inline-flex;
-    align-items: center;
+.aps-status-pill.alm-badge {
     min-height: 24px;
     padding: 2px 10px;
-    border: 1px solid transparent;
-    border-radius: 999px;
     font-size: 11px;
     font-weight: 800;
     line-height: 1.3;
     white-space: nowrap;
-}
-
-.aps-status-pill.is-allowed {
-    border-color: color-mix(in srgb, var(--alm-success, #15803d) 28%, transparent);
-    background: color-mix(in srgb, var(--alm-success, #15803d) 10%, #fff);
-    color: var(--alm-success, #15803d);
-}
-
-.aps-status-pill.is-denied {
-    border-color: var(--alm-danger-soft-border, #fecdd3);
-    background: var(--alm-danger-soft, #fff1f2);
-    color: var(--alm-danger, #b91c1c);
+    /* Status colors owned by .alm-badge--* in almdina_components.css */
 }
 
 .aps-actions {

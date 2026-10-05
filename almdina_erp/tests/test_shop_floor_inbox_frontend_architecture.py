@@ -240,7 +240,10 @@ class ShopFloorInboxFrontendArchitectureTest(unittest.TestCase):
         self.assertNotIn("AlmdinaAsyncCommandFramework", self.quick_actions)
 
     def test_renderer_uses_central_design_system_for_buttons(self) -> None:
-        self.assertIn('class="almdina-ui almdina-sf-shell"', self.renderer)
+        self.assertIn(
+            'class="almdina-ui almdina-sf-shell alm-page alm-page--workbench"',
+            self.renderer,
+        )
         self.assertIn("AlmdinaUi.button", self.renderer)
         self.assertIn("almdina-sf-route-mount", self.renderer)
         self.assertIn("almdina-sf-search-mount", self.renderer)

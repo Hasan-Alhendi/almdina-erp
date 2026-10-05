@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ast
+import re
 import unittest
 from pathlib import Path
 
@@ -8,10 +10,34 @@ ROOT = Path(__file__).resolve().parents[1]
 PUBLIC = ROOT / "public"
 TOKENS = ROOT / "public" / "css" / "almdina_design_tokens.css"
 COMPONENTS = ROOT / "public" / "css" / "almdina_components.css"
+PATTERNS = ROOT / "public" / "css" / "almdina_patterns.css"
+PAGE_TEMPLATES = ROOT / "public" / "css" / "almdina_page_templates.css"
 DESK_THEME = ROOT / "public" / "css" / "almdina_desk_theme.css"
 WORKSPACE_HOME_CSS = ROOT / "public" / "css" / "almdina_workspace_home.css"
 UI = ROOT / "public" / "js" / "almdina_ui.js"
 ASSETS = ROOT / "frontend_assets.py"
+TOKEN_OWNERSHIP = ROOT.parent / "docs" / "design_system" / "TOKEN_OWNERSHIP.md"
+EDGE_BANDING_UX = ROOT / "public" / "js" / "edge_banding_type_ux.js"
+SHARED_DS_CSS = (
+    TOKENS,
+    COMPONENTS,
+    PATTERNS,
+    PAGE_TEMPLATES,
+    DESK_THEME,
+    ROOT / "public" / "css" / "almdina_list_table.css",
+)
+FEATURE_SELECTOR_PREFIXES = (
+    "apc-",
+    "aps-",
+    "aw-",
+    "prw-",
+    "sf-",
+    "dco-",
+    "apa-",
+    "almdina-sf-",
+)
+# Shared-layer Feature selector leakage. Emptied in Phase 6; keep it empty.
+SHARED_FEATURE_SELECTOR_ALLOWLIST: frozenset[str] = frozenset()
 PERMISSIONS_RENDERER = ROOT / "public" / "js" / "factory_permissions" / "renderer.js"
 PERMISSIONS_CONTROLLER = ROOT / "public" / "js" / "factory_permissions" / "controller.js"
 PERMISSIONS_PAGE = ROOT / "almdina_erp" / "page" / "factory_permissions" / "factory_permissions.js"
@@ -79,6 +105,36 @@ LEGACY_PRESENTATION_ALLOWLIST = frozenset(
         "almdina_ui.js",
         "notes.css",
         "door_cutting_order_mobile_list.css",
+    }
+)
+# FE-ARCH-009 migration debt: DCO modules that still inject <style> from JS.
+# Ratchet only — remove entries as styles move to static CSS; never add new ones.
+DCO_JS = ROOT / "public" / "js" / "door_cutting_order"
+DCO_STYLE_INJECTION_DEBT = frozenset(
+    {
+        "core/door_cutting_order_plan_cost_workspace_visual_ux.js",
+        "core/door_cutting_order_tab_edit_lifecycle_guard.js",
+        "core/door_cutting_order_toolbar_stability_ux.js",
+        "core/door_cutting_order_workspace_freshness_ux.js",
+        "costing/door_cutting_order_compact_pricing_ux.js",
+        "costing/door_cutting_order_cost_page_layout_ux.js",
+        "costing/door_cutting_order_cost_presenter.js",
+        "costing/door_cutting_order_multi_edge_documents_ux.js",
+        "cutting_plan/door_cutting_order_plan_content_styles.js",
+        "cutting_plan/door_cutting_order_plan_context_actions_ux.js",
+        "cutting_plan/door_cutting_order_plan_edit_session_ux.js",
+        "cutting_plan/door_cutting_order_plan_settings_summary_ux.js",
+        "drawing/door_cutting_order_clipped_corner_ux.js",
+        "order_entry/edge_banding/door_cutting_order_cut_dimensions_ux.js",
+        "order_entry/edge_banding/door_cutting_order_edge_profile_controls_ux.js",
+        "order_entry/edge_banding/door_cutting_order_edge_render_owner.js",
+        "order_entry/edge_banding/door_cutting_order_multi_edge_ux.js",
+        "order_entry/measurements/door_cutting_order_compact_measurements_ux.js",
+        "order_entry/measurements/door_cutting_order_measurement_actions_ux.js",
+        "order_entry/measurements/door_cutting_order_measurement_resilience_ux.js",
+        "order_entry/measurements/door_cutting_order_measurement_toolbar_ux.js",
+        "printing/door_cutting_order_document_compactness_ux.js",
+        "responsive/door_cutting_order_header_ux.js",
     }
 )
 LEGACY_PRIMARY_MARKERS = (
@@ -150,6 +206,37 @@ def _contains_legacy_primary(source: str) -> str | None:
     return None
 
 
+def _asset_identity(path: str) -> str:
+    return path.split("?", 1)[0]
+
+
+def _string_list_assignment(source: str, name: str) -> list[str]:
+    module = ast.parse(source)
+    for node in module.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        if len(node.targets) != 1 or not isinstance(node.targets[0], ast.Name):
+            continue
+        if node.targets[0].id != name or not isinstance(node.value, ast.List):
+            continue
+        values: list[str] = []
+        for element in node.value.elts:
+            if not isinstance(element, ast.Constant) or not isinstance(element.value, str):
+                raise AssertionError(f"{name} must contain only string literals")
+            values.append(element.value)
+        return values
+    raise AssertionError(f"Could not find string list assignment for {name}")
+
+
+def _feature_selectors(source: str) -> set[str]:
+    found: set[str] = set()
+    for match in re.finditer(r"\.([A-Za-z][A-Za-z0-9_-]*)", source):
+        class_name = match.group(1)
+        if any(class_name.startswith(prefix) for prefix in FEATURE_SELECTOR_PREFIXES):
+            found.add(f".{class_name}")
+    return found
+
+
 class TestDesignSystemContract(unittest.TestCase):
     def setUp(self) -> None:
         self.tokens = TOKENS.read_text(encoding="utf-8")
@@ -187,6 +274,134 @@ class TestDesignSystemContract(unittest.TestCase):
         self.assertIn("--alm-height-button:", self.tokens)
         self.assertIn("--alm-radius-button:", self.tokens)
 
+    def test_tokens_define_foundation_scales(self) -> None:
+        for token in (
+            "--alm-font-size-xs:",
+            "--alm-font-size-sm:",
+            "--alm-font-size-md:",
+            "--alm-font-size-lg:",
+            "--alm-font-size-xl:",
+            "--alm-font-size-2xl:",
+            "--alm-line-height-normal:",
+            "--alm-font-weight-bold:",
+            "--alm-space-1:",
+            "--alm-space-2:",
+            "--alm-space-3:",
+            "--alm-space-4:",
+            "--alm-space-6:",
+            "--alm-space-8:",
+            "--alm-radius-xs:",
+            "--alm-radius-sm:",
+            "--alm-radius-md:",
+            "--alm-radius-card:",
+            "--alm-radius-lg:",
+            "--alm-radius-pill:",
+            "--alm-shadow-sm:",
+            "--alm-shadow-card:",
+            "--alm-shadow-md:",
+            "--alm-shadow-overlay:",
+            "--alm-shadow-focus:",
+            "--alm-status-success-fg:",
+            "--alm-status-success-bg:",
+            "--alm-status-warning-fg:",
+            "--alm-status-danger-fg:",
+            "--alm-status-info-fg:",
+            "--alm-status-neutral-fg:",
+        ):
+            self.assertIn(token, self.tokens, msg=f"missing foundation token {token}")
+
+    def test_static_scales_are_global_for_native_frappe_surfaces(self) -> None:
+        # Native lists are not wrapped in .almdina-ui, so static scales must live
+        # in the global block, before the .almdina-ui-only Frappe-derived block.
+        scoped_block = self.tokens.index("}\n\n.almdina-ui {")
+        for token in (
+            "--alm-font-size-sm:",
+            "--alm-font-weight-bold:",
+            "--alm-space-4:",
+            "--alm-radius-xs:",
+            "--alm-shadow-card:",
+        ):
+            self.assertLess(self.tokens.index(token), scoped_block, msg=f"{token} must be global")
+
+    def test_native_list_chrome_reads_design_tokens(self) -> None:
+        list_table = (ROOT / "public" / "css" / "almdina_list_table.css").read_text(encoding="utf-8")
+        templates = PAGE_TEMPLATES.read_text(encoding="utf-8")
+
+        self.assertIn("font-size: var(--alm-font-size-sm);", list_table)
+        self.assertIn("font-weight: var(--alm-font-weight-bold);", list_table)
+        self.assertIn("border-radius: var(--alm-radius-xs);", list_table)
+        self.assertNotRegex(list_table, r"font-size:\s*\d+px")
+        self.assertNotRegex(list_table, r"border-radius:\s*\d+px")
+        self.assertNotRegex(list_table, r"font-weight:\s*\d+")
+        # One canvas owner: the page-template Type A grammar.
+        self.assertNotIn("body:has(.frappe-list) .page-body", list_table)
+        self.assertIn("body:has(.frappe-list) .page-body", templates)
+        self.assertIn("background: var(--alm-canvas, #eef1f6);", templates)
+
+    def test_dco_js_style_injection_debt_only_shrinks(self) -> None:
+        injectors = {
+            path.relative_to(DCO_JS).as_posix()
+            for path in DCO_JS.rglob("*.js")
+            if 'createElement("style")' in path.read_text(encoding="utf-8")
+        }
+        new = injectors - DCO_STYLE_INJECTION_DEBT
+        self.assertFalse(new, msg="new DCO JS style injection (use static CSS): " + ", ".join(sorted(new)))
+        stale = DCO_STYLE_INJECTION_DEBT - injectors
+        self.assertFalse(stale, msg="remove migrated entries from DCO_STYLE_INJECTION_DEBT: " + ", ".join(sorted(stale)))
+
+    def test_dco_tab_edit_toolbar_uses_generic_compact_actions(self) -> None:
+        page_edit = (DCO_JS / "core" / "door_cutting_order_page_edit_action_ux.js").read_text(encoding="utf-8")
+        self.assertIn("toolbar.className = `${TOOLBAR_CLASS} almdina-ui alm-actions--compact`;", page_edit)
+        self.assertIn(".almdina-ui .alm-actions--compact .btn.alm-btn-primary", self.components)
+        self.assertNotIn(".dco-tab-edit-toolbar", self.components)
+
+    def test_shared_shell_does_not_own_shop_floor_presentation(self) -> None:
+        shell = (ROOT / "public" / "js" / "shared_shell.js").read_text(encoding="utf-8")
+        start = shell.index("function injectStyles()")
+        styles = shell[start:shell.index("function applyShell()", start)]
+        self.assertNotIn(".almdina-sf-", styles)
+        # Shell-level and permission-hiding rules stay with the shell.
+        self.assertIn('[data-almdina-permission-hidden="1"]{display:none!important}', styles)
+        self.assertIn("body.almdina-shared-shell .navbar", styles)
+
+    def test_token_ownership_contract_is_documented(self) -> None:
+        self.assertTrue(TOKEN_OWNERSHIP.is_file(), msg="TOKEN_OWNERSHIP.md must exist")
+        ownership = TOKEN_OWNERSHIP.read_text(encoding="utf-8")
+        self.assertIn("`alm-*`", ownership)
+        self.assertIn("visual identity only", ownership.lower())
+        self.assertIn("Feature CSS", ownership)
+        self.assertIn("test_design_system_contract", ownership)
+
+    def test_shared_design_system_css_rejects_new_feature_selectors(self) -> None:
+        for path in SHARED_DS_CSS:
+            with self.subTest(path=path.name):
+                source = path.read_text(encoding="utf-8")
+                leaked = _feature_selectors(source) - SHARED_FEATURE_SELECTOR_ALLOWLIST
+                self.assertFalse(
+                    leaked,
+                    msg=(
+                        f"{path.name} contains Feature selectors outside allowlist: "
+                        + ", ".join(sorted(leaked))
+                    ),
+                )
+
+    def test_frontend_asset_paths_are_unique(self) -> None:
+        for list_name in ("app_include_css", "app_include_js"):
+            with self.subTest(list_name=list_name):
+                values = _string_list_assignment(self.assets, list_name)
+                identities = [_asset_identity(value) for value in values]
+                duplicates = sorted(
+                    {
+                        identity
+                        for identity in identities
+                        if identities.count(identity) > 1
+                    }
+                )
+                self.assertFalse(
+                    duplicates,
+                    msg=f"{list_name} has duplicate asset paths: " + ", ".join(duplicates),
+                )
+
     def test_components_stay_scoped_and_define_primary_button(self) -> None:
         self.assertIn(".almdina-ui .btn.alm-btn-primary", self.components)
         self.assertIn(".almdina-ui .btn.alm-btn-secondary", self.components)
@@ -203,8 +418,14 @@ class TestDesignSystemContract(unittest.TestCase):
         self.assertIn("fileUploaderPresets", self.ui)
         self.assertIn("securePrivate", self.ui)
         self.assertIn("function empty(", self.ui)
+        self.assertIn("function badge(", self.ui)
+        self.assertIn("function status(", self.ui)
+        self.assertIn("function state(", self.ui)
         self.assertIn("alm-btn-primary", self.ui)
         self.assertIn("alm-btn-secondary", self.ui)
+        self.assertIn("alm-badge--", self.ui)
+        self.assertIn("alm-status--", self.ui)
+        self.assertIn("alm-state--", self.ui)
         self.assertIn("frappe.ui.form.make_control", self.ui)
         self.assertIn("df.change = function nativeChangeBridge", self.ui)
         self.assertNotIn("input.on(\"input change\"", self.ui)
@@ -214,6 +435,51 @@ class TestDesignSystemContract(unittest.TestCase):
         self.assertNotIn("frappe.call", self.ui)
         self.assertNotIn("has_permission", self.ui)
 
+    def test_components_define_shared_composition_primitives(self) -> None:
+        for marker in (
+            ".almdina-ui .alm-card",
+            ".almdina-ui .alm-card--muted",
+            ".almdina-ui .alm-panel",
+            ".almdina-ui .alm-panel__header",
+            ".almdina-ui .alm-panel__body",
+            ".almdina-ui .alm-badge",
+            ".almdina-ui .alm-badge--success",
+            ".almdina-ui .alm-status",
+            ".almdina-ui .alm-status--danger",
+            ".almdina-ui .alm-state",
+            ".almdina-ui .alm-state--loading",
+            ".almdina-ui .alm-state--empty",
+            ".almdina-ui .alm-state--error",
+            ".almdina-ui .alm-state__spinner",
+        ):
+            self.assertIn(marker, self.components, msg=f"missing component selector {marker}")
+
+    def test_admin_pages_use_shared_bootstrap_state(self) -> None:
+        for path in (
+            PERMISSIONS_PAGE,
+            PRODUCTION_SETTINGS_PAGE,
+            WORKFORCE_PAGE,
+            SHOP_FLOOR_PAGE,
+            FACTORY_MASTER_DATA_PAGE,
+        ):
+            with self.subTest(path=path.name):
+                source = path.read_text(encoding="utf-8")
+                self.assertTrue(
+                    "ui.state({" in source or "ui.state({ kind" in source or "paintState(" in source,
+                    msg=f"{path.name} must use AlmdinaUi.state bootstrap shell",
+                )
+                self.assertTrue(
+                    'kind: "error"' in source
+                    or 'paintState("error"' in source
+                    or "alm-state--error" in source,
+                    msg=f"{path.name} must render shared error state",
+                )
+                self.assertNotIn(
+                    'style="padding:24px;text-align:center"',
+                    source,
+                    msg=f"{path.name} still uses inline bootstrap error card",
+                )
+
     def test_components_define_frappe_control_wrapper(self) -> None:
         self.assertIn(".almdina-ui .alm-control", self.components)
         self.assertIn(".almdina-ui .alm-filter-group", self.components)
@@ -222,6 +488,8 @@ class TestDesignSystemContract(unittest.TestCase):
     def test_assets_load_design_system_before_feature_css_and_after_foundation(self) -> None:
         tokens_asset = '"/assets/almdina_erp/css/almdina_design_tokens.css"'
         components_asset = '"/assets/almdina_erp/css/almdina_components.css"'
+        patterns_asset = '"/assets/almdina_erp/css/almdina_patterns.css"'
+        templates_asset = '"/assets/almdina_erp/css/almdina_page_templates.css"'
         desk_theme_asset = '"/assets/almdina_erp/css/almdina_desk_theme.css"'
         desk_sidebar_asset = '"/assets/almdina_erp/css/almdina_desk_sidebar.css?v=2"'
         workspace_home_asset = '"/assets/almdina_erp/css/almdina_workspace_home.css?v=10"'
@@ -230,11 +498,75 @@ class TestDesignSystemContract(unittest.TestCase):
         notes_asset = '"/assets/almdina_erp/css/notes.css"'
 
         self.assertLess(self.assets.index(tokens_asset), self.assets.index(components_asset))
-        self.assertLess(self.assets.index(components_asset), self.assets.index(desk_theme_asset))
+        self.assertLess(self.assets.index(components_asset), self.assets.index(patterns_asset))
+        self.assertLess(self.assets.index(patterns_asset), self.assets.index(templates_asset))
+        self.assertLess(self.assets.index(templates_asset), self.assets.index(desk_theme_asset))
         self.assertLess(self.assets.index(desk_theme_asset), self.assets.index(desk_sidebar_asset))
         self.assertLess(self.assets.index(desk_sidebar_asset), self.assets.index(workspace_home_asset))
         self.assertLess(self.assets.index(workspace_home_asset), self.assets.index(notes_asset))
         self.assertLess(self.assets.index(foundation_asset), self.assets.index(ui_asset))
+
+    def test_patterns_define_shared_admin_composition(self) -> None:
+        patterns = PATTERNS.read_text(encoding="utf-8")
+        for marker in (
+            ".almdina-ui .alm-page-intro",
+            ".almdina-ui .alm-page-intro--accented",
+            ".almdina-ui .alm-page-intro__eyebrow",
+            ".almdina-ui .alm-section-header",
+            ".almdina-ui .alm-toolbar",
+            ".almdina-ui .alm-summary-grid",
+            ".almdina-ui .alm-summary-card",
+            '.almdina-ui .alm-summary-card[data-tone="success"]',
+        ):
+            self.assertIn(marker, patterns, msg=f"missing pattern selector {marker}")
+
+    def test_admin_console_surfaces_adopt_shared_patterns(self) -> None:
+        permissions = PERMISSIONS_RENDERER.read_text(encoding="utf-8")
+        workforce = WORKFORCE_RENDERER.read_text(encoding="utf-8")
+        settings = PRODUCTION_SETTINGS_RENDERER.read_text(encoding="utf-8")
+
+        self.assertIn("apc-hero alm-page-intro", permissions)
+        self.assertIn("alm-summary-grid", permissions)
+        self.assertIn('data-tone="success"', permissions)
+
+        self.assertIn("aw-hero alm-page-intro alm-page-intro--accented", workforce)
+        self.assertIn("aw-toolbar alm-toolbar", workforce)
+        self.assertIn("aw-summary alm-summary-grid", workforce)
+
+        self.assertIn("aps-hero alm-page-intro alm-page-intro--accented", settings)
+        self.assertIn("aps-section-intro alm-section-header", settings)
+
+    def test_page_templates_define_family_grammar(self) -> None:
+        templates = PAGE_TEMPLATES.read_text(encoding="utf-8")
+        for marker in (
+            ".almdina-ui.alm-page",
+            ".almdina-ui.alm-page--admin",
+            ".almdina-ui.alm-page--workbench",
+            ".almdina-ui.alm-page--list",
+            ".almdina-ui.alm-page--transaction",
+            "body:has(.frappe-list)",
+            "--alm-page-max-width",
+        ):
+            self.assertIn(marker, templates, msg=f"missing page template marker {marker}")
+
+    def test_surfaces_adopt_page_template_families(self) -> None:
+        permissions = PERMISSIONS_RENDERER.read_text(encoding="utf-8")
+        workforce = WORKFORCE_RENDERER.read_text(encoding="utf-8")
+        settings = PRODUCTION_SETTINGS_RENDERER.read_text(encoding="utf-8")
+        master_data = FACTORY_MASTER_DATA_PAGE.read_text(encoding="utf-8")
+        shop_floor = SHOP_FLOOR_RENDERER.read_text(encoding="utf-8")
+        plan_archive = FACTORY_PLAN_ARCHIVE_PAGE.read_text(encoding="utf-8")
+        edge_banding = EDGE_BANDING_UX.read_text(encoding="utf-8")
+
+        self.assertIn("apc-shell alm-page alm-page--admin", permissions)
+        self.assertIn("aw-shell alm-page alm-page--admin", workforce)
+        self.assertIn("aps-shell alm-page alm-page--admin", settings)
+        self.assertIn("apa-shell alm-page alm-page--admin", plan_archive)
+
+        self.assertIn("prw-shell alm-page alm-page--workbench", master_data)
+        self.assertIn("almdina-sf-shell alm-page alm-page--workbench", shop_floor)
+
+        self.assertIn("ebt-form-page almdina-ui alm-page alm-page--transaction", edge_banding)
 
     def test_desk_theme_bridges_frappe_primary_to_alm_tokens(self) -> None:
         source = DESK_THEME.read_text(encoding="utf-8")
@@ -259,7 +591,7 @@ class TestDesignSystemContract(unittest.TestCase):
         self.assertNotIn("#7c3aed", source)
 
     def test_factory_permissions_pilot_uses_design_system(self) -> None:
-        self.assertIn('class="almdina-ui apc-shell"', self.permissions_renderer)
+        self.assertIn('class="almdina-ui apc-shell alm-page alm-page--admin"', self.permissions_renderer)
         self.assertIn("AlmdinaUi.button", self.permissions_renderer)
         self.assertIn("AlmdinaUi.control is required for Factory Permissions rendering", self.permissions_renderer)
         self.assertIn("mountRoleControl", self.permissions_renderer)
@@ -272,25 +604,43 @@ class TestDesignSystemContract(unittest.TestCase):
         self.assertIn("/assets/almdina_erp/js/almdina_ui.js", self.permissions_page)
 
     def test_factory_workforce_uses_design_system(self) -> None:
-        self.assertIn('class="almdina-ui aw-shell"', self.workforce_renderer)
+        self.assertIn('class="almdina-ui aw-shell alm-page alm-page--admin"', self.workforce_renderer)
         self.assertIn("AlmdinaUi.button", self.workforce_renderer)
         self.assertNotIn('class="btn btn-primary aw-adopt-user"', self.workforce_renderer)
         self.assertNotIn('class="btn btn-danger aw-toggle"', self.workforce_renderer)
         self.assertIn("/assets/almdina_erp/js/almdina_ui.js", self.workforce_page)
 
     def test_factory_production_settings_uses_design_system(self) -> None:
-        self.assertIn('class="almdina-ui aps-shell"', self.production_settings_renderer)
+        self.assertIn('class="almdina-ui aps-shell alm-page alm-page--admin"', self.production_settings_renderer)
         self.assertIn("AlmdinaUi.button", self.production_settings_renderer)
         self.assertNotIn('class="btn btn-primary aps-edit"', self.production_settings_renderer)
         self.assertIn("/assets/almdina_erp/js/almdina_ui.js", self.production_settings_page)
 
     def test_shop_floor_inbox_uses_design_system(self) -> None:
-        self.assertIn('class="almdina-ui almdina-sf-shell"', self.shop_floor_renderer)
+        self.assertIn("almdina-ui almdina-sf-shell alm-page alm-page--workbench", self.shop_floor_renderer)
         self.assertIn('class="almdina-ui almdina-sf-nav"', self.shop_floor_renderer)
         self.assertIn("AlmdinaUi.button", self.shop_floor_renderer)
         self.assertNotIn('class="btn btn-primary sf-quick-action"', self.shop_floor_renderer)
         self.assertNotIn('class="btn btn-danger almdina-sf-logout"', self.shop_floor_renderer)
         self.assertIn("/assets/almdina_erp/js/almdina_ui.js", self.shop_floor_page)
+
+    def test_shop_floor_workbench_adopts_shared_patterns(self) -> None:
+        renderer = self.shop_floor_renderer
+        css = SHOP_FLOOR_RESPONSIVE_CSS.read_text(encoding="utf-8")
+
+        self.assertIn("almdina-sf-hero alm-page-intro alm-page-intro--accented", renderer)
+        self.assertIn("almdina-sf-eyebrow alm-page-intro__eyebrow", renderer)
+        self.assertIn("almdina-sf-board-toolbar alm-toolbar", renderer)
+
+        self.assertIn("--sf-radius-lg: var(--alm-radius-lg, 18px)", css)
+        self.assertIn("--sf-shadow: var(--alm-shadow-card)", css)
+        self.assertIn('--sf-metric: var(--alm-status-warning-fg)', css)
+        self.assertIn('--sf-metric: var(--alm-status-danger-fg)', css)
+        self.assertIn("var(--alm-status-danger-border)", css)
+        # Intro/toolbar chrome belongs to the DS; Shop Floor keeps geometry only.
+        for marker in (".almdina-sf-hero {", ".almdina-sf-hero h2", ".almdina-sf-hero p", ".almdina-sf-eyebrow {"):
+            self.assertNotIn(marker, css, msg=f"shop_floor_responsive.css still owns {marker}")
+        self.assertNotIn("box-shadow: 0 3px 16px rgba(15, 23, 42, .045);", css)
 
     def test_notes_panel_uses_design_system(self) -> None:
         self.assertIn('class="almdina-notes-panel almdina-ui"', self.notes_panel)
@@ -327,7 +677,7 @@ class TestDesignSystemContract(unittest.TestCase):
         self.assertIn("/assets/almdina_erp/js/almdina_ui.js", self.special_shape_page)
 
     def test_factory_master_data_uses_design_system(self) -> None:
-        self.assertIn('class="almdina-ui prw-shell"', self.factory_master_data_page)
+        self.assertIn("almdina-ui prw-shell alm-page alm-page--workbench", self.factory_master_data_page)
         self.assertIn("uiButton(", self.factory_master_data_page)
         self.assertIn("AlmdinaUi.control is required for factory master data rendering", self.factory_master_data_page)
         self.assertIn("AlmdinaUi.filterGroup is required for factory master data rendering", self.factory_master_data_page)
@@ -348,8 +698,41 @@ class TestDesignSystemContract(unittest.TestCase):
         self.assertNotIn('class="prw-search"', self.factory_master_data_page)
         self.assertNotIn("prw-status-filter", self.factory_master_data_page)
 
+    def test_factory_master_data_workbench_adopts_shared_patterns(self) -> None:
+        page = self.factory_master_data_page
+        css = FACTORY_ROUTING_WORKFLOW_CSS.read_text(encoding="utf-8")
+
+        self.assertIn("prw-hero alm-page-intro alm-page-intro--accented", page)
+        self.assertIn("prw-summary alm-summary-grid", page)
+        self.assertIn("prw-stat alm-summary-card", page)
+        self.assertIn("prw-toolbar alm-toolbar", page)
+        self.assertIn("prw-empty alm-state alm-state--empty", page)
+        self.assertIn("AlmdinaUi.status is required for factory master data rendering", page)
+        self.assertIn("AlmdinaUi.badge is required for factory master data rendering", page)
+        self.assertIn('className: "prw-status"', page)
+        self.assertIn('className: "prw-mini-badge"', page)
+        self.assertIn('this.errorStateHtml(__("تعذر فتح إدارة المسارات"), message, "prw-retry")', page)
+        self.assertNotIn('class="prw-error"', page)
+
+        # Feature CSS keeps geometry; intro/summary/status/empty chrome belongs to the DS.
+        for marker in (
+            ".prw-hero {",
+            ".prw-hero::after",
+            ".prw-summary {",
+            ".prw-stat::before",
+            '.prw-stat[data-tone="routes"]',
+            ".prw-status.is-active",
+            ".prw-status.is-disabled",
+            ".prw-error",
+            ".prw-empty b",
+        ):
+            self.assertNotIn(marker, css, msg=f"factory_routing_workflow.css still owns {marker}")
+        self.assertIn(".almdina-ui .prw-status.alm-status", css)
+        self.assertIn(".almdina-ui .prw-mini-badge.alm-badge", css)
+        self.assertIn(".prw-empty.alm-state", css)
+
     def test_factory_plan_archive_uses_design_system(self) -> None:
-        self.assertIn('class="almdina-ui apa-shell"', self.factory_plan_archive_page)
+        self.assertIn('class="almdina-ui apa-shell alm-page alm-page--admin"', self.factory_plan_archive_page)
         self.assertIn("AlmdinaUi.button", self.factory_plan_archive_page)
         self.assertIn("AlmdinaUi.control", self.factory_plan_archive_page)
         self.assertIn("disposeControls", self.factory_plan_archive_page)
@@ -392,8 +775,13 @@ class TestDesignSystemContract(unittest.TestCase):
         self.assertIn("aria-selected", self.dco_plan_tabs)
         self.assertIn("is-active", self.dco_plan_tabs)
         self.assertNotIn('"btn-primary"', self.dco_plan_tabs)
-        self.assertIn(".almdina-ui .dco-plan-tabs .btn.is-active", self.components)
-        self.assertIn("var(--alm-primary)", self.components)
+        # The plan-content owner styles the underline tabs; shared CSS stays Feature-free.
+        plan_content_styles = (
+            DCO_JS / "cutting_plan" / "door_cutting_order_plan_content_styles.js"
+        ).read_text(encoding="utf-8")
+        self.assertIn('.dco-plan-tabs--underline .btn.is-active', plan_content_styles)
+        self.assertIn("color:var(--alm-primary, #172033) !important;", plan_content_styles)
+        self.assertNotIn(".dco-plan-tabs", self.components)
 
     def test_migrated_surfaces_reject_legacy_primary_markup(self) -> None:
         for path in MIGRATED_SURFACES:
@@ -417,6 +805,49 @@ class TestDesignSystemContract(unittest.TestCase):
     def test_shop_floor_responsive_aliases_brand_primary(self) -> None:
         source = SHOP_FLOOR_RESPONSIVE_CSS.read_text(encoding="utf-8")
         self.assertIn("--sf-primary: var(--alm-primary, #172033)", source)
+
+    def test_admin_console_shells_alias_foundation_tokens(self) -> None:
+        permissions = FACTORY_PERMISSIONS_CSS.read_text(encoding="utf-8")
+        workforce = FACTORY_WORKFORCE_CSS.read_text(encoding="utf-8")
+        settings = FACTORY_PRODUCTION_SETTINGS_CSS.read_text(encoding="utf-8")
+
+        self.assertIn("--apc-primary: var(--alm-primary, #172033)", permissions)
+        self.assertIn("--apc-radius-md: var(--alm-radius-md, 14px)", permissions)
+        self.assertIn("--apc-success-soft: var(--alm-status-success-bg)", permissions)
+
+        self.assertIn("--aw-radius-lg: var(--alm-radius-lg, 18px)", workforce)
+        self.assertIn("--aw-shadow-md: var(--alm-shadow-md)", workforce)
+        self.assertIn("--aw-danger-soft: var(--alm-status-danger-bg)", workforce)
+
+        self.assertIn("--aps-radius-sm: var(--alm-radius-sm, 10px)", settings)
+        self.assertIn("--aps-shadow-sm: var(--alm-shadow-sm)", settings)
+        self.assertIn("--aps-info-soft: var(--alm-status-info-bg)", settings)
+
+    def test_admin_console_badges_use_shared_status_tones(self) -> None:
+        permissions_js = self.permissions_renderer
+        workforce_js = self.workforce_renderer
+        settings_js = self.production_settings_renderer
+        permissions_css = FACTORY_PERMISSIONS_CSS.read_text(encoding="utf-8")
+        workforce_css = FACTORY_WORKFORCE_CSS.read_text(encoding="utf-8")
+        settings_css = FACTORY_PRODUCTION_SETTINGS_CSS.read_text(encoding="utf-8")
+
+        self.assertIn("AlmdinaUi.badge", permissions_js)
+        self.assertIn("AlmdinaUi.badge", workforce_js)
+        self.assertIn("AlmdinaUi.badge", settings_js)
+        self.assertIn('className: `apc-badge ${badge.kind}`', permissions_js)
+        self.assertIn('className: "aw-badge aw-role"', workforce_js)
+        self.assertIn("aps-status-pill", settings_js)
+
+        # Feature CSS may size badges; it must not own status palettes.
+        self.assertNotIn(".apc-badge.critical", permissions_css)
+        self.assertNotIn(".apc-badge.sensitive", permissions_css)
+        self.assertNotIn(".aw-badge.is-enabled", workforce_css)
+        self.assertNotIn(".aw-badge.is-disabled", workforce_css)
+        self.assertNotIn(".aps-status-pill.is-allowed", settings_css)
+        self.assertNotIn(".aps-status-pill.is-denied", settings_css)
+        self.assertIn(".apc-badge.alm-badge", permissions_css)
+        self.assertIn(".aw-badge.alm-badge", workforce_css)
+        self.assertIn(".aps-status-pill.alm-badge", settings_css)
 
     def test_public_presentation_assets_reject_legacy_frappe_primary(self) -> None:
         for path in _presentation_asset_paths():

@@ -1,0 +1,74 @@
+/*
+ * Almdina ERP — shared page templates.
+ * Scope: page-family layout grammar only (max-width, rhythm, canvas fit).
+ * Feature CSS may keep domain geometry; it must not invent a competing page shell.
+ * See docs/design_system/TOKEN_OWNERSHIP.md.
+ *
+ * Families:
+ *   --admin        Permissions / Workforce / Production Settings / Plan Archive
+ *   --workbench    Master Data / Shop Floor / dense builders
+ *   --list         Native Frappe lists (body:has(.frappe-list))
+ *   --transaction  Native forms with Almdina presentation chrome
+ */
+
+.almdina-ui.alm-page {
+    --alm-page-max-width: 1440px;
+    --alm-page-padding-bottom: var(--alm-space-10, 40px);
+    box-sizing: border-box;
+    direction: rtl;
+    display: grid;
+    gap: var(--alm-space-4, 16px);
+    width: 100%;
+    max-width: var(--alm-page-max-width);
+    margin: 0 auto;
+    padding: var(--alm-space-2, 8px) var(--alm-space-1, 4px) var(--alm-page-padding-bottom);
+}
+
+.almdina-ui.alm-page--admin {
+    --alm-page-max-width: 1440px;
+}
+
+.almdina-ui.alm-page--workbench {
+    --alm-page-max-width: 1600px;
+    gap: var(--alm-space-3, 12px);
+}
+
+.almdina-ui.alm-page--transaction {
+    --alm-page-max-width: 960px;
+    gap: var(--alm-space-4, 16px);
+    padding-bottom: var(--alm-space-8, 32px);
+}
+
+.almdina-ui.alm-page--list {
+    --alm-page-max-width: 100%;
+    padding-inline: 0;
+}
+
+/* Type A — Native List canvas grammar (no Feature dual-class required).
+ * List row/table chrome lives in almdina_list_table.css. */
+body:has(.frappe-list) .page-body,
+body:has(.frappe-list) .page-content,
+body:has(.frappe-list) .layout-main,
+body:has(.frappe-list) .layout-main-section-wrapper,
+body:has(.frappe-list) .layout-main-section {
+    background: var(--alm-canvas, #eef1f6);
+}
+
+body:has(.frappe-list) .layout-main-section {
+    max-width: 100%;
+}
+
+body:has(.frappe-list) .page-head {
+    background: transparent;
+}
+
+@media (max-width: 900px) {
+    .almdina-ui.alm-page {
+        padding-inline: 0;
+        padding-bottom: var(--alm-space-12, 48px);
+    }
+
+    .almdina-ui.alm-page--workbench {
+        --alm-page-max-width: 100%;
+    }
+}

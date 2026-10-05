@@ -38,11 +38,20 @@
         function renderBootstrapError(error) {
             const fallback = __("تعذر تحميل صالة الإنتاج.");
             const frontend = window.AlmdinaFrontend;
+            const ui = window.AlmdinaUi;
             const message = frontend && typeof frontend.errorMessage === "function"
                 ? frontend.errorMessage(error, fallback)
                 : String((error && error.message) || fallback);
-            const safe = frappe.utils.escape_html(String(message || fallback));
-            $main.html(`<div class="frappe-card" style="padding:24px;text-align:center">${safe}</div>`);
+            if (ui && typeof ui.state === "function") {
+                $main.html(`<div class="almdina-ui">${ui.state({
+                    kind: "error",
+                    title: fallback,
+                    message,
+                })}</div>`);
+            } else {
+                const safe = frappe.utils.escape_html(String(message || fallback));
+                $main.html(`<div class="almdina-ui"><div class="alm-state alm-state--error" role="alert"><strong class="alm-state__title">${frappe.utils.escape_html(fallback)}</strong><span class="alm-state__message">${safe}</span></div></div>`);
+            }
             frappe.show_alert({ message, indicator: "red" }, 7);
         }
 
