@@ -80,6 +80,8 @@ PIECE_DOCUMENT_FIELDS = (
     "special_shape_price_note",
     "special_shape_price_approved_by",
     "special_shape_price_approved_on",
+    "edge_break_length_cm",
+    "edge_break_rate_usd",
     "clipped_corner_edge_price_usd",
     "clipped_corner_edge_price_status",
     "clipped_corner_edge_price_note",

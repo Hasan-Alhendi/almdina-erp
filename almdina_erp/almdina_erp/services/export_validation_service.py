@@ -14,7 +14,21 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
 )
 from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
     dimensions_match_exact,
+    special_bbox_allowed_range_cm,
     special_bbox_matches_cut_envelope_with_unrecorded_edge_deduction,
+)
+from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
+    CATEGORY_DIMENSIONS, CATEGORY_EXPORT, CATEGORY_IDENTITY, CATEGORY_LAYOUT,
+    CATEGORY_PERSISTENCE, CATEGORY_TOPOLOGY, CUT_INVALID_GEOMETRY,
+    CUT_SIZE_MISMATCH, EXTRA_CUT_PATH, FORBIDDEN_ROTATION,
+    KERF_VIOLATION, MANUFACTURING_REQUIREMENTS_MISSING, MATERIAL_OVERLAP,
+    PIECE_COUNT_MISMATCH, PIECE_IDENTITY_MISMATCH, PIECE_INVALID_DIMENSIONS,
+    PIECE_MISSING, PIECE_OUTSIDE_SHEET, PLAN_LABEL_DUPLICATE,
+    PLAN_SOURCE_IDENTITY_MISMATCH, PLAN_SOURCE_MISSING, PLAN_UNPLACED_PIECES,
+    PLAN_VALIDATION_FAILED,
+    PLAN_UNKNOWN_PIECES, REMNANT_IDENTITY_MISMATCH, REMNANT_NOT_FOUND,
+    REMNANT_REFERENCE_MISSING, SPECIAL_SIZE_MISMATCH, DxfIssueTarget, DxfValidationIssue, issue,
+    pair_target, piece_target, sheet_target, topology_error_to_issue,
 )
 from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
     ManufacturingRequirementsError,
@@ -51,41 +65,44 @@ def _expected_snapshot_pieces(snapshot: dict[str, Any]) -> dict[str, dict[str, A
     }
 
 
-def _validate_source_identity(source: Any, plan: Any, order: Any, errors: list[str]) -> None:
+def _validate_source_identity(source: Any, plan: Any, order: Any) -> list[DxfValidationIssue]:
+    issues: list[DxfValidationIssue] = []
     tolerance = 0.001
     sheet_no = source.sheet_no
+    target = sheet_target(int(sheet_no))
+
+    def mismatch(code: str, field: str, expected: Any, actual: Any) -> None:
+        issues.append(issue(code, CATEGORY_EXPORT, target=target, params={"field": field, "expected": expected, "actual": actual}))
 
     if source.board_item and getattr(plan, "board_item", None) and source.board_item != plan.board_item:
-        errors.append(_("Source sheet {0} uses a different Board Item.").format(sheet_no))
+        mismatch(PLAN_SOURCE_IDENTITY_MISMATCH, "board_item", plan.board_item, source.board_item)
 
     expected_board = str(getattr(order, "board_description", "") or "").strip()
     source_board = str(getattr(source, "board_description", "") or "").strip()
     if expected_board and source_board and source_board != expected_board:
-        errors.append(
-            _("Source sheet {0} board description does not match the order snapshot.").format(sheet_no)
-        )
+        mismatch(PLAN_SOURCE_IDENTITY_MISMATCH, "board_description", expected_board, source_board)
 
     source_material = str(getattr(source, "material", "") or "").strip()
     expected_material = str(order_board_material(order) or "").strip()
     if source_material and expected_material and source_material != expected_material:
-        errors.append(_("Source sheet {0} material does not match the order snapshot.").format(sheet_no))
+        mismatch(PLAN_SOURCE_IDENTITY_MISMATCH, "material", expected_material, source_material)
 
     source_color = str(getattr(source, "color", "") or "").strip()
     expected_color = str(order_board_color(order) or "").strip()
     if source_color and expected_color and source_color != expected_color:
-        errors.append(_("Source sheet {0} color does not match the order snapshot.").format(sheet_no))
+        mismatch(PLAN_SOURCE_IDENTITY_MISMATCH, "color", expected_color, source_color)
 
     source_thickness = flt(getattr(source, "thickness_mm", 0))
     expected_thickness = order_board_thickness_mm(order)
     if source_thickness and expected_thickness and abs(source_thickness - expected_thickness) > tolerance:
-        errors.append(_("Source sheet {0} thickness does not match the order snapshot.").format(sheet_no))
+        mismatch(PLAN_SOURCE_IDENTITY_MISMATCH, "thickness_mm", expected_thickness, source_thickness)
 
     if source.source_type != "Remnant":
-        return
+        return issues
 
     if not source.remnant:
-        errors.append(_("Remnant source sheet {0} has no Board Remnant reference.").format(sheet_no))
-        return
+        issues.append(issue(REMNANT_REFERENCE_MISSING, CATEGORY_EXPORT, target=target))
+        return issues
 
     remnant = frappe.db.get_value(
         "Board Remnant",
@@ -94,54 +111,27 @@ def _validate_source_identity(source: Any, plan: Any, order: Any, errors: list[s
         as_dict=True,
     )
     if not remnant:
-        errors.append(_("Board Remnant {0} no longer exists.").format(source.remnant))
-        return
+        issues.append(issue(REMNANT_NOT_FOUND, CATEGORY_EXPORT, target=target, params={"reference": source.remnant}))
+        return issues
 
     if remnant.board_item != plan.board_item:
-        errors.append(_("Board Remnant {0} does not match the plan Board Item.").format(source.remnant))
+        mismatch(REMNANT_IDENTITY_MISMATCH, "board_item", plan.board_item, remnant.board_item)
     if (remnant.material or "") != (source.material or ""):
-        errors.append(
-            _("Board Remnant {0} material differs from the approved source snapshot.").format(
-                source.remnant
-            )
-        )
+        mismatch(REMNANT_IDENTITY_MISMATCH, "material", source.material or "", remnant.material or "")
     if (remnant.color or "") != (source.color or ""):
-        errors.append(
-            _("Board Remnant {0} color differs from the approved source snapshot.").format(
-                source.remnant
-            )
-        )
+        mismatch(REMNANT_IDENTITY_MISMATCH, "color", source.color or "", remnant.color or "")
     if abs(flt(remnant.thickness_mm) - flt(source.thickness_mm)) > tolerance:
-        errors.append(
-            _("Board Remnant {0} thickness differs from the approved source snapshot.").format(
-                source.remnant
-            )
-        )
+        mismatch(REMNANT_IDENTITY_MISMATCH, "thickness_mm", source.thickness_mm, remnant.thickness_mm)
     if (
         abs(flt(remnant.width_mm) - flt(source.full_width_mm)) > tolerance
         or abs(flt(remnant.length_mm) - flt(source.full_length_mm)) > tolerance
     ):
-        errors.append(
-            _("Board Remnant {0} dimensions differ from the approved source snapshot.").format(
-                source.remnant
-            )
-        )
+        mismatch(REMNANT_IDENTITY_MISMATCH, "dimensions_mm", (source.full_width_mm, source.full_length_mm), (remnant.width_mm, remnant.length_mm))
+    return issues
 
 
-def _topology_validation_error(exc: Exception) -> str:
-    from almdina_erp.almdina_erp.domain.cutting.dxf_issue import topology_error_to_issue
-    from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import (
-        present_issue,
-    )
-
-    if getattr(exc, "code", None):
-        card = present_issue(topology_error_to_issue(exc))
-        return f"{card.code}: {card.problem} {card.target} {card.action}"
-    return _("Persisted DXF topology is invalid: {0}").format(str(exc))
-
-
-def validate_cutting_plan_document(plan: Any) -> list[str]:
-    errors: list[str] = []
+def validate_cutting_plan_issues(plan: Any) -> list[DxfValidationIssue]:
+    issues: list[DxfValidationIssue] = []
     order = frappe.get_doc("Door Cutting Order", plan.door_cutting_order)
     source_by_sheet = {int(row.sheet_no): row for row in (plan.sources or [])}
     pieces_by_sheet: dict[int, list[Any]] = {}
@@ -155,30 +145,44 @@ def validate_cutting_plan_document(plan: Any) -> list[str]:
         )
     except (DxfGeometrySnapshotError, DxfTopologyError) as exc:
         topology_aware = True
-        errors.append(_topology_validation_error(exc))
+        if getattr(exc, "code", None):
+            source_by_label = {
+                str(piece.get("label") or piece.get("id")): piece.get("source_piece_no")
+                for sheet in (snapshot.get("sheets") or [])
+                for piece in (sheet.get("pieces") or [])
+            }
+            pair = None
+            if exc.first_key is not None and exc.second_key is not None:
+                first_no = source_by_label.get(str(exc.first_key))
+                second_no = source_by_label.get(str(exc.second_key))
+                if first_no is not None and second_no is not None and int(first_no) != int(second_no):
+                    pair = (int(first_no), int(second_no))
+            issues.append(topology_error_to_issue(exc, kerf_mm=flt(plan.kerf_mm), pair_identity_proven=pair is not None, pair_source_piece_nos=pair))
+        else:
+            issues.append(issue(CUT_INVALID_GEOMETRY, CATEGORY_TOPOLOGY, debug={"exception": repr(exc)}))
 
     if not source_by_sheet:
-        errors.append(_("Cutting Plan has no physical sources."))
+        issues.append(issue(PLAN_SOURCE_MISSING, CATEGORY_EXPORT))
 
     for piece in plan.placed_pieces or []:
         sheet_no = int(piece.sheet_no)
         label = piece.piece_label or ""
         if label in seen_labels:
-            errors.append(_("Piece label {0} is duplicated in the Cutting Plan.").format(label))
+            issues.append(issue(PLAN_LABEL_DUPLICATE, CATEGORY_IDENTITY, target=piece_target(source_piece_no=getattr(piece, "source_piece_no", None), copy_no=getattr(piece, "copy_no", None)), params={"label": label}))
         seen_labels.add(label)
         pieces_by_sheet.setdefault(sheet_no, []).append(piece)
         source = source_by_sheet.get(sheet_no)
         if not source:
-            errors.append(_("Piece {0} references missing source sheet {1}.").format(label, sheet_no))
+            issues.append(issue(PLAN_SOURCE_MISSING, CATEGORY_EXPORT, target=sheet_target(sheet_no), params={"piece_label": label}))
             continue
 
         x, y = flt(piece.x_mm), flt(piece.y_mm)
         width, height = flt(piece.width_mm), flt(piece.height_mm)
         usable_w, usable_h = flt(source.usable_width_mm), flt(source.usable_length_mm)
         if width <= 0 or height <= 0:
-            errors.append(_("Piece {0} has invalid dimensions.").format(label))
+            issues.append(issue(PIECE_INVALID_DIMENSIONS, CATEGORY_DIMENSIONS, target=piece_target(source_piece_no=getattr(piece, "source_piece_no", None), copy_no=getattr(piece, "copy_no", None)), params={"actual_width_mm": width, "actual_height_mm": height}))
         if x < -1e-7 or y < -1e-7 or x + width > usable_w + 1e-7 or y + height > usable_h + 1e-7:
-            errors.append(_("Piece {0} exceeds source sheet {1} bounds.").format(label, sheet_no))
+            issues.append(issue(PIECE_OUTSIDE_SHEET, CATEGORY_LAYOUT, target=piece_target(source_piece_no=getattr(piece, "source_piece_no", None), copy_no=getattr(piece, "copy_no", None)), params={"sheet_no": sheet_no}))
 
     if not topology_aware:
         for sheet_no, pieces in pieces_by_sheet.items():
@@ -197,30 +201,21 @@ def validate_cutting_plan_document(plan: Any) -> list[str]:
                         "h": flt(second.height_mm),
                     }
                     if _rects_overlap(first_rect, second_rect):
-                        errors.append(
-                            _("Pieces {0} and {1} overlap on source sheet {2}.").format(
-                                first.piece_label,
-                                second.piece_label,
-                                sheet_no,
-                            )
-                        )
+                        first_no, second_no = int(first.source_piece_no), int(second.source_piece_no)
+                        target = pair_target(first_no, second_no, sheet_no=sheet_no) if first_no != second_no else DxfIssueTarget(kind="order")
+                        issues.append(issue(MATERIAL_OVERLAP, CATEGORY_LAYOUT, target=target))
 
     for source in plan.sources or []:
-        _validate_source_identity(source, plan, order, errors)
+        issues.extend(_validate_source_identity(source, plan, order))
 
     if snapshot.get("unplaced"):
-        errors.append(_("Cutting Plan contains unplaced pieces."))
+        issues.append(issue(PLAN_UNPLACED_PIECES, CATEGORY_IDENTITY))
 
     if (plan.plan_kind or "Order") == "Order":
         try:
             expected = _expected_snapshot_pieces(snapshot)
         except ManufacturingRequirementsError:
-            errors.append(
-                _(
-                    "Saved Cutting Plan has no valid captured manufacturing requirements. "
-                    "Recalculate the plan or re-import the DXF before manufacturing/export."
-                )
-            )
+            issues.append(issue(MANUFACTURING_REQUIREMENTS_MISSING, CATEGORY_PERSISTENCE))
             expected = {}
 
         if expected:
@@ -228,9 +223,9 @@ def validate_cutting_plan_document(plan: Any) -> list[str]:
             missing = sorted(set(expected) - placed_labels)
             extra = sorted(placed_labels - set(expected))
             if missing:
-                errors.append(_("Cutting Plan is missing required pieces: {0}").format(", ".join(missing)))
+                issues.append(issue(PIECE_MISSING, CATEGORY_IDENTITY, target=DxfIssueTarget(kind="order"), params={"missing_labels": missing, "missing_count": len(missing)}))
             if extra:
-                errors.append(_("Cutting Plan contains unknown pieces: {0}").format(", ".join(extra)))
+                issues.append(issue(EXTRA_CUT_PATH, CATEGORY_IDENTITY, target=DxfIssueTarget(kind="order"), params={"labels": extra, "extra_count": len(extra)}))
 
             for piece in plan.placed_pieces or []:
                 expected_piece = expected.get(piece.piece_label)
@@ -240,61 +235,67 @@ def validate_cutting_plan_document(plan: Any) -> list[str]:
                     cint(piece.source_piece_no) != expected_piece["source_piece_no"]
                     or cint(piece.copy_no) != expected_piece["copy_no"]
                 ):
-                    errors.append(
-                        _("Piece {0} identity does not match the captured manufacturing request.").format(
-                            piece.piece_label
-                        )
-                    )
+                    issues.append(issue(PIECE_IDENTITY_MISMATCH, CATEGORY_IDENTITY, target=piece_target(source_piece_no=cint(piece.source_piece_no), copy_no=cint(piece.copy_no))))
                 width_cm = flt(piece.width_mm) / 10
                 height_cm = flt(piece.height_mm) / 10
                 piece_rotated = bool(cint(piece.rotated))
                 if expected_piece["piece_type"] == "Special":
-                    if piece_rotated:
-                        dimensions_match = special_bbox_matches_cut_envelope_with_unrecorded_edge_deduction(
-                            width_cm,
-                            height_cm,
-                            expected_piece["length_cm"],
-                            expected_piece["width_cm"],
-                        )
-                    else:
-                        dimensions_match = special_bbox_matches_cut_envelope_with_unrecorded_edge_deduction(
-                            width_cm,
-                            height_cm,
-                            expected_piece["width_cm"],
-                            expected_piece["length_cm"],
-                        )
-                elif piece_rotated:
-                    dimensions_match = (
-                        expected_piece["allow_rotation"]
-                        and dimensions_match_exact(
-                            width_cm,
-                            height_cm,
-                            expected_piece["length_cm"],
-                            expected_piece["width_cm"],
-                        )
+                    direct_match = special_bbox_matches_cut_envelope_with_unrecorded_edge_deduction(
+                        width_cm, height_cm, expected_piece["width_cm"], expected_piece["length_cm"]
                     )
+                    rotated_match = special_bbox_matches_cut_envelope_with_unrecorded_edge_deduction(
+                        width_cm, height_cm, expected_piece["length_cm"], expected_piece["width_cm"]
+                    )
+                    dimensions_match = (rotated_match and expected_piece["allow_rotation"]) if piece_rotated else direct_match
+                    forbidden_rotation_match = piece_rotated and not expected_piece["allow_rotation"] and rotated_match
                 else:
-                    dimensions_match = dimensions_match_exact(
-                        width_cm,
-                        height_cm,
-                        expected_piece["width_cm"],
-                        expected_piece["length_cm"],
-                    )
-                if not dimensions_match:
-                    errors.append(
-                        _("Piece {0} dimensions/orientation do not match the captured manufacturing request.").format(
-                            piece.piece_label
-                        )
-                    )
+                    direct_match = dimensions_match_exact(width_cm, height_cm, expected_piece["width_cm"], expected_piece["length_cm"])
+                    rotated_match = dimensions_match_exact(width_cm, height_cm, expected_piece["length_cm"], expected_piece["width_cm"])
+                    dimensions_match = (rotated_match and expected_piece["allow_rotation"]) if piece_rotated else direct_match
+                    forbidden_rotation_match = piece_rotated and not expected_piece["allow_rotation"] and rotated_match
+                if not dimensions_match and not forbidden_rotation_match:
+                    target = piece_target(source_piece_no=cint(piece.source_piece_no), copy_no=cint(piece.copy_no))
+                    actual_width = flt(piece.width_mm)
+                    actual_height = flt(piece.height_mm)
+                    dimension_code = SPECIAL_SIZE_MISMATCH if expected_piece["piece_type"] == "Special" else CUT_SIZE_MISMATCH
+                    params = {
+                        "actual_width_mm": actual_width,
+                        "actual_height_mm": actual_height,
+                        "actual_width_cm": actual_width / 10,
+                        "actual_height_cm": actual_height / 10,
+                        "expected_width_cm": expected_piece["width_cm"],
+                        "expected_height_cm": expected_piece["length_cm"],
+                    }
+                    if expected_piece["piece_type"] == "Special":
+                        min_w, max_w, min_h, max_h = special_bbox_allowed_range_cm(expected_piece["width_cm"], expected_piece["length_cm"])
+                        params.update({
+                            "allowed_min_width_cm": float(min_w),
+                            "allowed_max_width_cm": float(max_w),
+                            "allowed_min_height_cm": float(min_h),
+                            "allowed_max_height_cm": float(max_h),
+                        })
+                    issues.append(issue(dimension_code, CATEGORY_DIMENSIONS, target=target, params=params))
                 if cint(piece.rotated) and not expected_piece["allow_rotation"]:
-                    # Same business code as upload-time FORBIDDEN_ROTATION.
-                    errors.append(
-                        _("FORBIDDEN_ROTATION: Piece {0} is rotated without permission.").format(
-                            piece.piece_label
-                        )
-                    )
+                    issues.append(issue(
+                        FORBIDDEN_ROTATION,
+                        CATEGORY_DIMENSIONS,
+                        target=piece_target(source_piece_no=cint(piece.source_piece_no), copy_no=cint(piece.copy_no)),
+                        params={
+                            "actual_width_mm": flt(piece.width_mm),
+                            "actual_height_mm": flt(piece.height_mm),
+                            "expected_width_cm": expected_piece["width_cm"],
+                            "expected_height_cm": expected_piece["length_cm"],
+                        },
+                    ))
 
-    return errors
+    return issues
+
+
+def validate_cutting_plan_document(plan: Any) -> list[str]:
+    """Compatibility wrapper preserving the historical list-of-strings API."""
+    from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import present_issues_as_strings
+
+    return present_issues_as_strings(validate_cutting_plan_issues(plan))
 
 
 def _plan_to_export_snapshot(plan: Any) -> dict[str, Any]:
@@ -422,14 +423,57 @@ def _strict_editable_snapshot(payload: dict[str, Any]) -> tuple[Any, dict[str, A
     doc._calculate_piece_rows()
     settings = doc._get_settings()
     input_fingerprint = doc._plan_input_fingerprint(settings)
-    doc._calculate_cutting_plan(settings, input_fingerprint)
+    try:
+        doc._calculate_cutting_plan(settings, input_fingerprint)
+    except DxfTopologyError as exc:
+        from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import render_error_cards_html
+
+        frappe.throw(
+            render_error_cards_html(
+                [topology_error_to_issue(exc, kerf_mm=flt(getattr(doc, "kerf_mm", 0)))],
+                context="export",
+            ),
+            title=_("تعذر تصدير DXF"),
+        )
+    except DxfGeometrySnapshotError as exc:
+        from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import render_error_cards_html
+
+        frappe.throw(
+            render_error_cards_html(
+                [issue(CUT_INVALID_GEOMETRY, CATEGORY_TOPOLOGY, debug={"exception": type(exc).__name__})],
+                context="export",
+            ),
+            title=_("تعذر تصدير DXF"),
+        )
     snapshot = frappe.parse_json(doc.cutting_plan_json or "{}") or {}
     validation = snapshot.get("validation") or {}
-    errors = list(validation.get("errors") or [])
+    validation_errors = list(validation.get("errors") or [])
+    issues: list[DxfValidationIssue] = []
+    legacy_validation_errors: list[str] = []
+    for error in validation_errors:
+        if isinstance(error, DxfValidationIssue):
+            issues.append(error)
+        else:
+            legacy_validation_errors.append(str(error))
+    if legacy_validation_errors:
+        issues.append(
+            issue(
+                PLAN_VALIDATION_FAILED,
+                CATEGORY_EXPORT,
+                debug={"legacy_validation_errors": legacy_validation_errors},
+            )
+        )
     if snapshot.get("unplaced"):
-        errors.append(_("Cutting Plan contains unplaced pieces."))
-    if not validation.get("is_valid") or errors:
-        frappe.throw(_("DXF export blocked by geometry validation:\n{0}").format("\n".join(errors)))
+        issues.append(issue(PLAN_UNPLACED_PIECES, CATEGORY_IDENTITY))
+    if not validation.get("is_valid") and not issues:
+        issues.append(issue(PLAN_VALIDATION_FAILED, CATEGORY_EXPORT))
+    if issues:
+        from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import render_error_cards_html
+
+        frappe.throw(
+            render_error_cards_html(issues, context="export"),
+            title=_("تعذر تصدير DXF"),
+        )
 
     return doc, _enrich_export_snapshot(snapshot, doc)
 

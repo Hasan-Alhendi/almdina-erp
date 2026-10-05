@@ -19,7 +19,7 @@ from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
 from almdina_erp.almdina_erp.services.export_validation_service import (
     _expected_snapshot_pieces,
     _plan_to_export_snapshot,
-    validate_cutting_plan_document,
+    validate_cutting_plan_issues,
 )
 
 
@@ -143,7 +143,7 @@ class TestSpecialExportValidation(unittest.TestCase):
     def _validate(self, **kwargs):
         plan, order, piece, geometry = _saved_plan(**kwargs)
         with patch.object(frappe, "get_doc", return_value=order, create=True):
-            errors = validate_cutting_plan_document(plan)
+            errors = validate_cutting_plan_issues(plan)
         return plan, piece, geometry, errors
 
     def test_expected_snapshot_preserves_piece_type_from_manufacturing_requirements(self):
@@ -180,7 +180,7 @@ class TestSpecialExportValidation(unittest.TestCase):
                     width_cm=width_cm,
                     length_cm=length_cm,
                 )
-                self.assertTrue(any("dimensions/orientation" in error for error in errors))
+                self.assertTrue(any(error.code in {"CUT_SIZE_MISMATCH", "SPECIAL_SIZE_MISMATCH"} for error in errors))
 
     def test_special_export_rotation_uses_same_rule_and_requires_matching_metadata(self):
         _, _, _, errors = self._validate(
@@ -209,7 +209,7 @@ class TestSpecialExportValidation(unittest.TestCase):
             rotated=True,
         )
         self.assertNotEqual(errors, [])
-        self.assertTrue(any("rotated without permission" in error for error in errors))
+        self.assertTrue(any(error.code == "FORBIDDEN_ROTATION" for error in errors))
 
         _, _, _, errors = self._validate(
             piece_type="Special",
@@ -218,7 +218,7 @@ class TestSpecialExportValidation(unittest.TestCase):
             allow_rotation=True,
             rotated=False,
         )
-        self.assertTrue(any("dimensions/orientation" in error for error in errors))
+        self.assertTrue(any(error.code == "SPECIAL_SIZE_MISMATCH" for error in errors))
 
     def test_non_special_piece_types_remain_exact(self):
         for piece_type in ("Regular", "Extra", "Clipped Corner", "L-Shaped Corner"):
@@ -228,7 +228,7 @@ class TestSpecialExportValidation(unittest.TestCase):
                     width_cm=29.9,
                     length_cm=40,
                 )
-                self.assertTrue(any("dimensions/orientation" in error for error in errors))
+                self.assertTrue(any(error.code == "CUT_SIZE_MISMATCH" for error in errors))
 
     def test_non_special_export_uses_canonical_exact_dimensions(self):
         for piece_type in ("Regular", "Extra", "Clipped Corner", "L-Shaped Corner"):
@@ -248,7 +248,7 @@ class TestSpecialExportValidation(unittest.TestCase):
                         length_cm=40,
                     )
                     self.assertTrue(
-                        any("dimensions/orientation" in error for error in errors)
+                        any(error.code == "CUT_SIZE_MISMATCH" for error in errors)
                     )
 
     def test_non_special_rotated_dimensions_use_canonical_exact_contract(self):
@@ -268,7 +268,7 @@ class TestSpecialExportValidation(unittest.TestCase):
             allow_rotation=True,
             rotated=True,
         )
-        self.assertTrue(any("dimensions/orientation" in error for error in errors))
+        self.assertTrue(any(error.code == "CUT_SIZE_MISMATCH" for error in errors))
 
     def test_accepted_special_dimensions_survive_saved_plan_validation_and_export(self):
         from decimal import Decimal

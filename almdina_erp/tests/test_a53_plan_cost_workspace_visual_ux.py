@@ -162,6 +162,16 @@ def test_plan_edit_surface_styles_stay_scoped_to_the_edit_session() -> None:
         / "door_cutting_order"
         / "responsive"
         / "door_cutting_order_header_ux.js"
+    ).read_text(encoding="utf-8") + (
+        ROOT / "public" / "css" / "door_cutting_order_form_presentation.css"
+    ).read_text(encoding="utf-8")
+    presentation_owner = (
+        ROOT
+        / "public"
+        / "js"
+        / "door_cutting_order"
+        / "core"
+        / "door_cutting_order_form_presentation_owner.js"
     ).read_text(encoding="utf-8")
     preview = (
         ROOT
@@ -195,7 +205,7 @@ def test_plan_edit_surface_styles_stay_scoped_to_the_edit_session() -> None:
     assert "form-tabs-list" not in shell
     assert "border-radius: var(--alm-radius-card, 16px)" in header
     assert "form-tabs-list.dco-sticky-tabs" in header
-    assert 'classList.contains("form-tabs-list")' in header
+    assert 'root.querySelector(".form-tabs-list")' in presentation_owner
     assert "dco-sticky-tabs" not in shell
     assert "dco-sticky-tabs" not in layout
     assert ".dco-board-gallery" not in shell

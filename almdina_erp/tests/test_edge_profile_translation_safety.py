@@ -106,6 +106,45 @@ class TestEdgeProfileTranslationSafety(unittest.TestCase):
             "قشاط 2 سم لميع",
         )
 
+    def test_required_names_includes_default_edge_type_even_with_no_sides_selected(
+        self,
+    ) -> None:
+        """A corner piece with only edge_break on (no regular side selected)
+        still needs the order's default edge type loaded, because the
+        costing adapter falls back to it when pricing the break strap.
+        Without this, rate_map() would be missing the default type and the
+        break strap would price at a silent $0.
+        """
+
+        module = load_repository_module()
+        repository = module.FrappeEdgeProfileRepository(
+            SimpleNamespace(
+                default_edge_type="قشاط 2 سم عادي",
+                pieces=[
+                    SimpleNamespace(
+                        edge_long_right=0,
+                        edge_long_left=0,
+                        edge_width_top=0,
+                        edge_width_bottom=0,
+                        edge_long_right_type_override="",
+                        edge_long_left_type_override="",
+                        edge_width_top_type_override="",
+                        edge_width_bottom_type_override="",
+                    )
+                ],
+            )
+        )
+
+        self.assertIn("قشاط 2 سم عادي", repository._required_names())
+
+    def test_required_names_omits_empty_default_edge_type(self) -> None:
+        module = load_repository_module()
+        repository = module.FrappeEdgeProfileRepository(
+            SimpleNamespace(default_edge_type="", pieces=[])
+        )
+
+        self.assertEqual(repository._required_names(), set())
+
 
 if __name__ == "__main__":
     unittest.main()

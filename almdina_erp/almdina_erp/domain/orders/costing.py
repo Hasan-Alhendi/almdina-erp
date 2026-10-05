@@ -25,6 +25,14 @@ class PieceCostInput:
     # Transitional axis values support callers that have not adopted side overrides.
     edge_long_type: str = ""
     edge_width_type: str = ""
+    # Per-side dimension overrides. None means "use width_cm/length_cm as-is".
+    # Needed when a side's banded length differs from the piece's own axis
+    # dimension, e.g. an L-Shaped corner side shortened by the notch cut out
+    # of it. area_m2 always uses width_cm/length_cm regardless of these.
+    edge_long_right_dimension_cm: float | None = None
+    edge_long_left_dimension_cm: float | None = None
+    edge_width_top_dimension_cm: float | None = None
+    edge_width_bottom_dimension_cm: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +66,38 @@ class PieceCostSummary:
     total_area_m2: float
     total_edge_meters: float
     total_edge_cost_usd: float
+
+
+@dataclass(frozen=True, slots=True)
+class BreakEdgeCostInput:
+    piece_type: str
+    width_cm: float
+    length_cm: float
+    corner_width_cm: float
+    corner_length_cm: float
+    qty: int
+    edge_break: int
+    break_edge_rate_usd: float
+
+
+@dataclass(frozen=True, slots=True)
+class BreakEdgeCostResult:
+    break_edge_length_cm: float
+    break_edge_meters: float
+    break_edge_rate_usd: float
+    break_edge_cost_usd: float
+    break_edge_unit_price_usd: float
+
+
+_ZERO_BREAK = BreakEdgeCostResult(
+    break_edge_length_cm=0,
+    break_edge_meters=0,
+    break_edge_rate_usd=0,
+    break_edge_cost_usd=0,
+    break_edge_unit_price_usd=0,
+)
+
+_CORNER_CUT_TYPES = frozenset({"Clipped Corner", "L-Shaped Corner"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,22 +183,30 @@ def calculate_piece_costs(
         side_specs = {
             "long_right": (
                 bool(piece.edge_long_right),
-                length_cm,
+                piece.edge_long_right_dimension_cm
+                if piece.edge_long_right_dimension_cm is not None
+                else length_cm,
                 piece.edge_long_right_type or piece.edge_long_type,
             ),
             "long_left": (
                 bool(piece.edge_long_left),
-                length_cm,
+                piece.edge_long_left_dimension_cm
+                if piece.edge_long_left_dimension_cm is not None
+                else length_cm,
                 piece.edge_long_left_type or piece.edge_long_type,
             ),
             "width_top": (
                 bool(piece.edge_width_top),
-                width_cm,
+                piece.edge_width_top_dimension_cm
+                if piece.edge_width_top_dimension_cm is not None
+                else width_cm,
                 piece.edge_width_top_type or piece.edge_width_type,
             ),
             "width_bottom": (
                 bool(piece.edge_width_bottom),
-                width_cm,
+                piece.edge_width_bottom_dimension_cm
+                if piece.edge_width_bottom_dimension_cm is not None
+                else width_cm,
                 piece.edge_width_bottom_type or piece.edge_width_type,
             ),
         }
@@ -231,6 +279,49 @@ def _common_active_rate(*values: tuple[float, float]) -> float:
     return rates.pop() if len(rates) == 1 else 0.0
 
 
+def calculate_break_edge_cost(piece: BreakEdgeCostInput) -> BreakEdgeCostResult:
+    """Calculate the break-strap edge banding for corner-cut pieces.
+
+    Clipped Corner (كسر): two remnant sides + the diagonal hypotenuse.
+    L-Shaped Corner (زاوية L): two orthogonal inner-notch edges.
+    The rate is doubled because the break strap requires manual application.
+    """
+
+    if not piece.edge_break or piece.piece_type not in _CORNER_CUT_TYPES:
+        return _ZERO_BREAK
+
+    width = _finite(piece.width_cm)
+    length = _finite(piece.length_cm)
+    corner_w = _finite(piece.corner_width_cm)
+    corner_l = _finite(piece.corner_length_cm)
+    qty = max(0, int(piece.qty))
+    rate = _finite(piece.break_edge_rate_usd)
+
+    if qty <= 0 or corner_w <= 0 or corner_l <= 0:
+        return _ZERO_BREAK
+
+    if piece.piece_type == "Clipped Corner":
+        # Remnant of side 1 + diagonal (Pythagorean) + remnant of side 2
+        remnant_width = max(0.0, width - corner_w)
+        remnant_length = max(0.0, length - corner_l)
+        diagonal = math.sqrt(corner_w**2 + corner_l**2)
+        unit_length_cm = remnant_width + diagonal + remnant_length
+    else:
+        # L-Shaped: inner notch = two orthogonal segments
+        unit_length_cm = corner_w + corner_l
+
+    meters = unit_length_cm * qty / 100
+    cost = meters * rate * 2  # doubled rate
+
+    return BreakEdgeCostResult(
+        break_edge_length_cm=round_value(unit_length_cm, 3),
+        break_edge_meters=round_value(meters, 3),
+        break_edge_rate_usd=rate,
+        break_edge_cost_usd=round_value(cost, 3),
+        break_edge_unit_price_usd=round_value(cost / qty, 3) if qty > 0 else 0,
+    )
+
+
 def calculate_order_costs(
     *,
     required_boards: int,
@@ -271,6 +362,7 @@ def calculate_special_pricing(
     board_and_cutting_cost_usd: float,
     total_cost_usd: float,
     extra_addons_total_usd: float = 0,
+    corner_break_edge_total_usd: float = 0,
 ) -> SpecialPricingSummary:
     piece_list = tuple(pieces)
     fees = (
@@ -282,6 +374,7 @@ def calculate_special_pricing(
     if min(fees) < 0:
         raise CostingError("special_shape_defaults_negative")
     extra_addons_total = _finite(extra_addons_total_usd)
+    corner_break_total = _finite(corner_break_edge_total_usd)
     if extra_addons_total < 0:
         raise CostingError("extra_addons_total_negative")
 
@@ -311,7 +404,7 @@ def calculate_special_pricing(
             estimated_total_usd=0,
             final_total_usd=0,
             customer_quote_total_usd=round_value(
-                _finite(total_cost_usd) + extra_addons_total,
+                _finite(total_cost_usd) + extra_addons_total + corner_break_total,
                 3,
             ),
             customer_quote_status="Automatic",
@@ -402,7 +495,7 @@ def calculate_special_pricing(
         estimated_total_usd=round_value(estimated_total, 3),
         final_total_usd=round_value(final_total, 3),
         customer_quote_total_usd=round_value(
-            invoice_base_total + final_total + extra_addons_total,
+            invoice_base_total + final_total + extra_addons_total + corner_break_total,
             3,
         ),
         customer_quote_status=quote_status,
@@ -420,6 +513,8 @@ def _finite(value: float) -> float:
 
 
 __all__ = [
+    "BreakEdgeCostInput",
+    "BreakEdgeCostResult",
     "CostingError",
     "OrderCostSummary",
     "PieceCostInput",
@@ -430,6 +525,7 @@ __all__ = [
     "SpecialPricingSettings",
     "SpecialPricingSummary",
     "WasteSummary",
+    "calculate_break_edge_cost",
     "calculate_order_costs",
     "calculate_piece_costs",
     "calculate_special_pricing",

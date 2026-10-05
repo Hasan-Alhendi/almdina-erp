@@ -110,13 +110,23 @@ def _validate_dxf_file_metadata(file_url: str) -> tuple[str, Any]:
     """
 
     normalized_url = str(file_url or "").strip()
+    from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
+        CATEGORY_FILE,
+        FILE_ATTACHED_ELSEWHERE,
+        FILE_INVALID_EXTENSION,
+        FILE_MISSING,
+        FILE_NOT_PRIVATE,
+        FILE_REQUIRED,
+        FILE_TOO_LARGE,
+        DxfIssueTarget,
+        issue,
+    )
+    from almdina_erp.almdina_erp.services.dxf_import_service import DxfImportError
+
     if not normalized_url:
-        frappe.throw(_("اختر ملف DXF ثم أعد المحاولة."), title=_("ملف DXF مطلوب"))
+        raise DxfImportError(issues=[issue(FILE_REQUIRED, CATEGORY_FILE, target=DxfIssueTarget(kind="file"))])
     if not normalized_url.lower().split("?", 1)[0].endswith(".dxf"):
-        frappe.throw(
-            _("نوع الملف غير صحيح. ارفع ملفًا بامتداد .dxf فقط."),
-            title=_("ملف غير مدعوم"),
-        )
+        raise DxfImportError(issues=[issue(FILE_INVALID_EXTENSION, CATEGORY_FILE, target=DxfIssueTarget(kind="file"))])
 
     file_row = frappe.db.get_value(
         "File",
@@ -132,33 +142,19 @@ def _validate_dxf_file_metadata(file_url: str) -> tuple[str, Any]:
         as_dict=True,
     )
     if not file_row:
-        frappe.throw(
-            _("تعذر العثور على الملف المرفوع داخل النظام. أعد اختيار ملف DXF ورفعه مرة أخرى."),
-            title=_("الملف غير موجود"),
-        )
+        raise DxfImportError(issues=[issue(FILE_MISSING, CATEGORY_FILE, target=DxfIssueTarget(kind="file"))])
     if not cint(file_row.is_private):
-        frappe.throw(
-            _("يجب رفع ملف DXF كملف خاص Private قبل التحقق منه."),
-            title=_("ملف DXF غير خاص"),
-        )
+        raise DxfImportError(issues=[issue(FILE_NOT_PRIVATE, CATEGORY_FILE, target=DxfIssueTarget(kind="file"))])
     if (
         file_row.attached_to_doctype
         or file_row.attached_to_name
         or file_row.attached_to_field
     ):
-        frappe.throw(
-            _("ملف DXF المرفوع مرتبط مسبقًا بمستند ولا يمكن استخدامه. ارفع ملفًا خاصًا غير مرتبط ثم أعد المحاولة."),
-            title=_("الملف مرتبط مسبقًا"),
-        )
+        raise DxfImportError(issues=[issue(FILE_ATTACHED_ELSEWHERE, CATEGORY_FILE, target=DxfIssueTarget(kind="file"))])
 
     file_size = int(file_row.file_size or 0)
     if file_size > MAX_DXF_FILE_SIZE:
-        frappe.throw(
-            _("حجم ملف DXF هو {0:.1f} MB، والحد الأقصى المسموح هو 10 MB.").format(
-                file_size / (1024 * 1024)
-            ),
-            title=_("ملف DXF كبير جدًا"),
-        )
+        raise DxfImportError(issues=[issue(FILE_TOO_LARGE, CATEGORY_FILE, target=DxfIssueTarget(kind="file"), params={"maximum_mb": 10, "actual_bytes": file_size})])
     return normalized_url, file_row
 
 
@@ -203,7 +199,7 @@ def _throw_dxf_validation_errors(
                         params={"message": text},
                     )
                 )
-    message = render_error_cards_html(resolved)
+    message = render_error_cards_html(resolved, context="upload")
     frappe.throw(message, title=_("تعذر قبول ملف DXF"))
 
 
@@ -240,7 +236,11 @@ def upload_production_dxf(order_name: str, file_url: str) -> dict[str, Any]:
     # Security order is intentional and regression-tested:
     # private+unattached staging -> authorization -> geometry validation ->
     # Cutting Plan persistence -> File attachment -> order-owned workflow state.
-    normalized_url, file_row = _validate_dxf_file_metadata(file_url)
+    from almdina_erp.almdina_erp.services.dxf_import_service import DxfImportError
+    try:
+        normalized_url, file_row = _validate_dxf_file_metadata(file_url)
+    except DxfImportError as error:
+        _throw_dxf_validation_errors(issues=error.issues)
 
     order = get_order(order_name)
     from almdina_erp.almdina_erp.services.cutting_plan_command_service import (
@@ -261,7 +261,6 @@ def upload_production_dxf(order_name: str, file_url: str) -> dict[str, Any]:
     )
     replacing_existing_file = bool(existing_file)
 
-    from almdina_erp.almdina_erp.services.dxf_import_service import DxfImportError
     from almdina_erp.almdina_erp.services.strict_dxf_import_service import (
         parse_production_dxf,
     )
@@ -273,7 +272,7 @@ def upload_production_dxf(order_name: str, file_url: str) -> dict[str, Any]:
             settings=seed_plan_settings(order.name),
         )
     except DxfImportError as error:
-        _throw_dxf_validation_errors(issues=getattr(error, "issues", None), errors=error.errors)
+        _throw_dxf_validation_errors(issues=getattr(error, "issues", None))
 
     validation = custom_snapshot.get("validation") or {}
     if not validation.get("is_valid"):

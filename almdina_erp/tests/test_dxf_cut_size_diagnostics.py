@@ -22,6 +22,12 @@ from almdina_erp.almdina_erp.services.strict_dxf_import_service import (
 from decimal import Decimal
 
 
+def _present_error(error: DxfImportError) -> str:
+    from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import present_issues_as_strings
+
+    return "\n".join(present_issues_as_strings(error.issues))
+
+
 def _rect(width_mm: float, height_mm: float) -> dict:
     return {
         "points": [
@@ -63,7 +69,7 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
             _resolve_cut_topology([_rect(285, 592)], self._order((592, 285, 0)))
         error = exc_info.exception
         self.assertIn("FORBIDDEN_ROTATION", error.codes)
-        message = str(error)
+        message = _present_error(error)
         self.assertIn("الدرفة 1", message)
         self.assertIn("28.5", message)
         self.assertIn("59.2", message)
@@ -80,7 +86,7 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
                     _resolve_cut_topology(
                         [_rect(actual_width, actual_height)], order
                     )
-                message = str(exc_info.exception)
+                message = _present_error(exc_info.exception)
                 self.assertTrue(
                     "PIECE_MISSING" in exc_info.exception.codes
                     or "EXPECTED_PIECE_MISMATCH" in exc_info.exception.codes
@@ -113,7 +119,7 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
         with self.assertRaises(DxfImportError) as exc_info:
             _resolve_cut_topology([noisy], self._order((592, 285, 0)))
         self.assertIn("FORBIDDEN_ROTATION", exc_info.exception.codes)
-        self.assertIn("مدوّرة", str(exc_info.exception))
+        self.assertIn("مدوّرة", _present_error(exc_info.exception))
 
     def test_legacy_forbidden_rotation_requires_exact_swapped_dimensions(self) -> None:
         expected = [{
@@ -298,8 +304,8 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
         with self.assertRaises(DxfImportError) as exc_info:
             _resolve_cut_topology([_rect(570, 285)], self._order((592, 285, 0)))
         self.assertIn("EXPECTED_PIECE_MISMATCH", exc_info.exception.codes)
-        self.assertIn("لا تطابق مقاسات القص", str(exc_info.exception))
-        self.assertNotIn("مدوّرة 90°", str(exc_info.exception))
+        self.assertIn("لا تطابق مقاسات القص", _present_error(exc_info.exception))
+        self.assertNotIn("مدوّرة 90°", _present_error(exc_info.exception))
 
     def test_repeated_dimensions_do_not_guess_forbidden_rotation(self) -> None:
         order = self._order((592, 285, 0), (592, 285, 0))
@@ -310,14 +316,14 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
             or "PIECE_MISSING" in exc_info.exception.codes
         )
         self.assertNotIn("FORBIDDEN_ROTATION", exc_info.exception.codes)
-        self.assertNotIn("مدوّرة 90°", str(exc_info.exception))
+        self.assertNotIn("مدوّرة 90°", _present_error(exc_info.exception))
 
     def test_missing_piece_message_is_plain(self) -> None:
         order = self._order((649, 650, 0), (400, 399, 0))
         with self.assertRaises(DxfImportError) as exc_info:
             _resolve_cut_topology([_rect(649, 650)], order)
         self.assertIn("PIECE_MISSING", exc_info.exception.codes)
-        message = str(exc_info.exception)
+        message = _present_error(exc_info.exception)
         self.assertIn("درفة ناقصة", message)
         self.assertIn("يحتاج 2", message)
         self.assertIn("فيه 1", message)
@@ -360,7 +366,7 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
                 order,
             )
 
-        message = str(exc_info.exception)
+        message = _present_error(exc_info.exception)
         self.assertIn("EXPECTED_PIECE_MISMATCH", exc_info.exception.codes)
         self.assertIn("لا تطابق مقاسات القص", message)
         self.assertIn("28.9 × 74.6", message)
@@ -408,7 +414,7 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
         )
 
         self.assertIn(PERSISTED_CUT_SPECS, annotated.codes)
-        text = str(annotated)
+        text = _present_error(annotated)
         self.assertIn("28.9", text)
         self.assertIn("74.6", text)
         self.assertIn("مقاسات القص المحفوظة", text)

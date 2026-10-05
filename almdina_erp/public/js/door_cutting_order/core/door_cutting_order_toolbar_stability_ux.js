@@ -1,7 +1,6 @@
 (() => {
     "use strict";
 
-    const STYLE_ID = "dco-toolbar-stability-css";
     const REMOVE_LABELS = new Set([
         "إلغاء تخصيص قشاط الدرف",
         "إلغاء تخصيص قشاط الدرفة",
@@ -60,16 +59,6 @@
         });
     }
 
-    function scheduleDelay(frm, key, callback, delay) {
-        const context = documentContext();
-        if (context && typeof context.schedule === "function") {
-            return context.schedule(frm, key, callback, delay);
-        }
-        return setTimeout(() => {
-            if (window.cur_frm === frm) callback(frm);
-        }, delay);
-    }
-
     function text(node) {
         return String(node && node.textContent || "")
             .replace(/[\u200e\u200f]/g, "")
@@ -89,12 +78,6 @@
         return value.nodeType ? value : (value[0] && value[0].nodeType ? value[0] : null);
     }
 
-    function pageHead(frm) {
-        const wrapper = domNode(frm && frm.wrapper);
-        const page = wrapper && (wrapper.closest(".page-container") || wrapper.closest(".desk-page"));
-        return page ? page.querySelector(".page-head") : null;
-    }
-
     function measurementRoot(frm) {
         const field = frm && frm.fields_dict && frm.fields_dict.pieces_fast_entry;
         return field && field.$wrapper ? field.$wrapper.get(0) : null;
@@ -110,186 +93,6 @@
         return lang === "ar" || lang.startsWith("ar-");
     }
 
-    function installStyles() {
-        if (document.getElementById(STYLE_ID)) return;
-        const style = document.createElement("style");
-        style.id = STYLE_ID;
-        style.textContent = `
-            .page-head.dco-stable-actions-head,
-            .page-head.dco-stable-actions-head .page-head-content,
-            .page-head.dco-stable-actions-head .page-actions {
-                height:auto!important;
-                max-height:none!important;
-                overflow:visible!important;
-            }
-            .page-head.dco-stable-actions-head .page-head-content {
-                position:relative!important;
-            }
-            @media (min-width:721px){
-            .page-head.dco-stable-actions-head .page-actions,
-            .page-head.dco-stable-actions-head .custom-actions,
-            .page-head.dco-stable-actions-head .standard-actions {
-                display:flex!important;
-                visibility:visible!important;
-                opacity:1!important;
-                flex-wrap:nowrap!important;
-                align-items:center!important;
-                gap:6px!important;
-            }
-            .page-head.dco-stable-actions-head .page-actions {
-                margin:0!important;
-                justify-content:flex-start!important;
-                flex:0 0 auto!important;
-            }
-            .page-head.dco-stable-actions-head .custom-actions > .btn,
-            .page-head.dco-stable-actions-head .custom-actions > .btn-group,
-            .page-head.dco-stable-actions-head .custom-actions > .dropdown {
-                display:inline-flex!important;
-                visibility:visible!important;
-                opacity:1!important;
-                flex:0 0 auto!important;
-                margin:0!important;
-            }
-            .page-head.dco-stable-actions-head .custom-actions .btn {
-                display:inline-flex!important;
-                align-items:center!important;
-                white-space:nowrap!important;
-                visibility:visible!important;
-                opacity:1!important;
-            }
-            }
-
-            /* Measurement toolbar: exactly one centered title and three actions on the left. */
-            .dco-fast-entry-toolbar {
-                position:relative!important;
-                display:flex!important;
-                align-items:center!important;
-                justify-content:center!important;
-                min-height:42px!important;
-                padding:5px 8px!important;
-            }
-            .dco-fast-entry-toolbar > :not(.dco-fast-help):not(.dco-measurement-table-actions) {
-                display:none!important;
-            }
-            .dco-fast-entry-toolbar .dco-fast-help {
-                flex:0 1 auto!important;
-                width:auto!important;
-                min-width:0!important;
-                margin:0 auto!important;
-                padding:0 116px!important;
-                display:flex!important;
-                align-items:center!important;
-                justify-content:center!important;
-                overflow:hidden!important;
-                text-align:center!important;
-            }
-            .dco-fast-entry-toolbar .dco-fast-help > :not(.dco-measurement-title) {
-                display:none!important;
-            }
-            .dco-fast-entry-toolbar .dco-measurement-title {
-                display:block!important;
-                max-width:100%!important;
-                font-size:14px!important;
-                font-weight:850!important;
-                line-height:1.25!important;
-                text-align:center!important;
-                white-space:nowrap!important;
-                overflow:hidden!important;
-                text-overflow:ellipsis!important;
-            }
-            .dco-fast-entry-toolbar > .dco-measurement-table-actions {
-                position:absolute!important;
-                left:8px!important;
-                top:50%!important;
-                transform:translateY(-50%)!important;
-                order:100!important;
-                direction:ltr!important;
-                display:flex!important;
-                align-items:center!important;
-                gap:5px!important;
-                width:auto!important;
-                margin:0!important;
-                flex:0 0 auto!important;
-            }
-            .dco-fast-entry-toolbar .dco-input-help {
-                width:32px!important;
-                min-width:32px!important;
-                height:32px!important;
-                min-height:32px!important;
-                flex:0 0 32px!important;
-                display:inline-flex!important;
-                align-items:center!important;
-                justify-content:center!important;
-                padding:0!important;
-                border:1px solid var(--border-color,#d8dee5)!important;
-                border-radius:8px!important;
-                background:var(--card-bg,var(--fg-color,#fff))!important;
-                color:var(--text-color,#36414c)!important;
-                font-family:Georgia,serif!important;
-                font-size:17px!important;
-                font-weight:700!important;
-                font-style:italic!important;
-                line-height:1!important;
-                box-shadow:0 1px 2px rgba(15,23,42,.035)!important;
-            }
-            .dco-fast-entry-toolbar .dco-input-help:hover {
-                border-color:var(--alm-primary,#172033)!important;
-                background:color-mix(in srgb, var(--alm-primary, #172033) 6%, transparent)!important;
-                color:var(--alm-primary,#172033)!important;
-            }
-            .dco-fast-entry-toolbar .dco-input-help:focus-visible {
-                outline:2px solid var(--alm-primary,#172033)!important;
-                outline-offset:2px!important;
-            }
-
-            .page-head.dco-stable-actions-head .custom-actions {
-                min-height:34px!important;
-            }
-
-            @media(max-width:1200px){
-                .page-head.dco-stable-actions-head .page-actions {
-                    max-height:none!important;
-                    overflow:visible!important;
-                    padding-bottom:4px!important;
-                }
-            }
-            @media(min-width:992px){
-                .page-head.dco-stable-actions-head .page-actions {
-                    position:fixed!important;
-                    left:calc(16px + var(--dco-viewport-left-compensation, 0px))!important;
-                    right:auto!important;
-                    top:10px!important;
-                    transform:none!important;
-                    z-index:1025!important;
-                    width:max-content!important;
-                    max-width:calc(100vw - 32px)!important;
-                }
-            }
-            @media(max-width:991px){
-                .page-head.dco-stable-actions-head .page-actions {
-                    position:static!important;
-                    transform:none!important;
-                    margin-inline-start:auto!important;
-                }
-            }
-            @media(max-width:720px){
-                .page-head.dco-stable-actions-head .page-actions {
-                    margin-inline-start:0!important;
-                    width:100%!important;
-                    max-width:100%!important;
-                }
-            }
-            @media(max-width:560px){
-                .dco-fast-entry-toolbar .dco-fast-help {
-                    padding-inline:108px!important;
-                }
-                .dco-fast-entry-toolbar .dco-measurement-title {
-                    font-size:12px!important;
-                }
-            }
-        `;
-        document.head.appendChild(style);
-    }
 
     function showMeasurementInputHelp() {
         const title = isArabic() ? "تعليمات إدخال القياسات" : "Measurement entry help";
@@ -373,12 +176,15 @@
 
     function observeMeasurementToolbar(frm) {
         const root = measurementRoot(frm);
+        if (!root || !root.isConnected) {
+            if (frm._dcoMeasurementToolbarObserver) frm._dcoMeasurementToolbarObserver.disconnect();
+            frm._dcoMeasurementToolbarObserver = null;
+            frm._dcoMeasurementToolbarObservedRoot = null;
+            return;
+        }
         if (
-            !root
-            || (
-                frm._dcoMeasurementToolbarObservedRoot === root
-                && frm._dcoMeasurementToolbarObserver
-            )
+            frm._dcoMeasurementToolbarObservedRoot === root
+            && frm._dcoMeasurementToolbarObserver
         ) return;
         if (frm._dcoMeasurementToolbarObserver) frm._dcoMeasurementToolbarObserver.disconnect();
 
@@ -598,26 +404,29 @@
         }
     }
 
-    function reconcile(frm) {
-        installStyles();
+    function reconcile(frm, currentHead = null) {
         reconcileMeasurementToolbar(frm);
-        const head = pageHead(frm);
-        if (!head) return;
-        if (!head.classList.contains("dco-stable-actions-head")) {
-            head.classList.add("dco-stable-actions-head");
-        }
+        const head = currentHead || (frm && frm._dco_presentation_head);
+        if (!head || !head.isConnected) return false;
         removeLegacyButtons(frm, head);
         removeDrawingDxfGroup(head);
         dedupeButtons(head);
         reconcileSearchPlacement(head);
         applyMobileActionSlots(head);
         anchorActionsToViewportLeft(head);
+        return true;
     }
 
-    function observe(frm) {
+    function observe(frm, currentHead = null) {
         observeMeasurementToolbar(frm);
-        const head = pageHead(frm);
-        if (!head || (frm._dcoToolbarObservedHead === head && frm._dcoToolbarObserver)) return;
+        const head = currentHead || (frm && frm._dco_presentation_head);
+        if (!head || !head.isConnected) {
+            if (frm._dcoToolbarObserver) frm._dcoToolbarObserver.disconnect();
+            frm._dcoToolbarObserver = null;
+            frm._dcoToolbarObservedHead = null;
+            return;
+        }
+        if (frm._dcoToolbarObservedHead === head && frm._dcoToolbarObserver) return;
         if (frm._dcoToolbarObserver) frm._dcoToolbarObserver.disconnect();
         let scheduled = false;
         const observer = new MutationObserver(() => {
@@ -632,7 +441,7 @@
             scheduled = true;
             scheduleFrame(frm, "toolbar-observer-frame", () => {
                 scheduled = false;
-                reconcile(frm);
+                reconcile(frm, frm._dco_presentation_head);
             });
         });
         // Only structural changes need reconciliation. Observing our own class/style
@@ -643,29 +452,44 @@
     }
 
     function schedule(frm) {
-        installStyles();
-        reconcile(frm);
-        observe(frm);
-        [0, 180].forEach(delay => scheduleDelay(frm, `toolbar-${delay}`, () => {
-            reconcile(frm);
-            observe(frm);
-        }, delay));
+        const head = frm && frm._dco_presentation_head;
+        reconcile(frm, head);
+        observe(frm, head);
     }
 
-    frappe.ui.form.on("Door Cutting Order", {
-        onload_post_render(frm) { schedule(frm); },
-        refresh(frm) { schedule(frm); },
+    window.AlmdinaDcoToolbarStabilityUx = Object.freeze({
+        recoverPresentation(frm, head) {
+            if (!frm || !head || !head.isConnected) return false;
+            reconcile(frm, head);
+            observe(frm, head);
+            return frm._dcoToolbarObservedHead === head && Boolean(frm._dcoToolbarObserver);
+        },
+        isReady(frm, head) {
+            return Boolean(
+                frm
+                && head
+                && head.isConnected
+                && frm._dcoToolbarObservedHead === head
+                && frm._dcoToolbarObserver
+            );
+        },
+        suspendPresentation(frm) {
+            if (!frm) return false;
+            ["_dcoToolbarObserver", "_dcoMeasurementToolbarObserver"].forEach(key => {
+                if (frm[key] && typeof frm[key].disconnect === "function") frm[key].disconnect();
+                frm[key] = null;
+            });
+            frm._dcoToolbarObservedHead = null;
+            frm._dcoMeasurementToolbarObservedRoot = null;
+            return true;
+        },
     });
 
     if (typeof window.addEventListener === "function") {
-        window.addEventListener("almdina:permissions-updated", () => {
-            const frm = window.cur_frm;
-            if (frm && frm.doctype === "Door Cutting Order") schedule(frm);
-        });
         window.addEventListener("resize", () => {
             const frm = window.cur_frm;
             if (!frm || frm.doctype !== "Door Cutting Order") return;
-            scheduleFrame(frm, "toolbar-viewport-anchor", () => reconcile(frm));
+            scheduleFrame(frm, "toolbar-viewport-anchor", () => reconcile(frm, frm._dco_presentation_head));
         });
     }
 })();

@@ -282,6 +282,16 @@ timers وRAF وobservers وcleanups الخاصة بالوثيقة تُسجل ب�
 effects. `AlmdinaMeasurementLifecycle` و`AlmdinaWorkspaceSyncCoordinator` يبقيان
 primitives متخصصة تحت هذا العقد، ولا يستبدلان lifecycle الخاصة بـFrappe Form.
 
+#### `FE-LC-FORM-007` — DCO presentation shell ownership
+
+`AlmdinaDcoFormPresentationOwner` يملك أصناف غلاف نموذج DCO والرأس والتبويبات،
+ويعيد اكتساب عناصر Frappe الحية بعد `refresh` أو إعادة رسم النموذج. يسجل
+`dco-form-presentation` داخل `AlmdinaDocumentContext`؛ يجب أن يفحص readiness عناصر
+DOM الحالية واتصال المراجع، وأن يعيد `recover` تطبيق العرض فقط دون `frm.refresh()` أو
+`frm.reload_doc()`. تتولى صلاحيات القدرات إتاحة الأفعال، بينما يبقى تصميم الغلاف
+ثابتًا للحالات والمستخدمين المختلفة. تخزن لوحة Frappe الجانبية تفضيلها لكل مستخدم،
+ويعيد المالك تطبيقه بعد رسم Frappe مع الحفاظ على السلوك الأصلي للـoverlay على الهاتف.
+
 ### C1 — Collection Surface / List View
 
 #### `FE-LC-LIST-001` — List execution identity
