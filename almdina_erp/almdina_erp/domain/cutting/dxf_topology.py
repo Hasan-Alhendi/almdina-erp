@@ -295,6 +295,7 @@ def _inventory_assignment(
     expected: Sequence[ExpectedPieceEvidence],
     *,
     dimension_tolerance: float,
+    excluded_edge: tuple[int, int] | None = None,
 ) -> tuple[int, ...] | None:
     """Return one expected-piece index per selected contour, if injective.
 
@@ -305,11 +306,11 @@ def _inventory_assignment(
         return None
 
     candidate_indexes: list[list[int]] = []
-    for contour in selected:
+    for contour_index, contour in enumerate(selected):
         matches = [
             index
             for index, expected_piece in enumerate(expected)
-            if _dimensions_match(
+            if (contour_index, index) != excluded_edge and _dimensions_match(
                 contour,
                 expected_piece,
                 dimension_tolerance=dimension_tolerance,
@@ -346,54 +347,13 @@ def _inventory_assignment(
     return tuple(contour_to_expected[index] for index in range(len(selected)))
 
 
-def _assignment_is_unique(
-    selected: Sequence[ContourCandidate],
-    expected: Sequence[ExpectedPieceEvidence],
-    assignment: tuple[int, ...],
-    *,
-    dimension_tolerance: float,
-) -> bool:
-    """Check uniqueness by excluding each chosen edge and rematching."""
-    for contour_index, expected_index in enumerate(assignment):
-        # Small bounded variant of the same bipartite matcher; no permutations.
-        candidates = [
-            [index for index, piece in enumerate(expected)
-             if index != expected_index and _dimensions_match(
-                 selected[contour_index], piece,
-                 dimension_tolerance=dimension_tolerance,
-             )]
-            if index == contour_index else [
-                other for other, piece in enumerate(expected)
-                if _dimensions_match(selected[index], piece,
-                                     dimension_tolerance=dimension_tolerance)
-            ]
-            for index in range(len(selected))
-        ]
-        owners: dict[int, int] = {}
-
-        def assign(ci: int, visited: set[int]) -> bool:
-            for ei in candidates[ci]:
-                if ei in visited:
-                    continue
-                visited.add(ei)
-                previous = owners.get(ei)
-                if previous is None or assign(previous, visited):
-                    owners[ei] = ci
-                    return True
-            return False
-
-        if all(assign(ci, set()) for ci in sorted(range(len(selected)), key=lambda ci: (len(candidates[ci]), ci))):
-            return False
-    return True
-
-
 def _forbidden_rotation_error(
     contours: Sequence[ContourCandidate],
     expected: Sequence[ExpectedPieceEvidence],
     *,
     dimension_tolerance: float,
 ) -> DxfTopologyError | None:
-    """Return a diagnostic only for a unique complete relaxed assignment."""
+    """Diagnose one canonically rotated edge forced by relaxed matching."""
     relaxed = tuple(
         ExpectedPieceEvidence(
             width=piece.width, height=piece.height, allow_rotation=True,
@@ -409,13 +369,10 @@ def _forbidden_rotation_error(
     assignment = _inventory_assignment(
         candidate_indexes, relaxed, dimension_tolerance=dimension_tolerance
     )
-    if assignment is None or not _assignment_is_unique(
-        candidate_indexes, relaxed, assignment,
-        dimension_tolerance=dimension_tolerance,
-    ):
+    if assignment is None:
         return None
     forbidden = []
-    for contour, piece_index in zip(candidate_indexes, assignment):
+    for contour_index, (contour, piece_index) in enumerate(zip(candidate_indexes, assignment)):
         piece = expected[piece_index]
         if piece.allow_rotation:
             continue
@@ -437,8 +394,12 @@ def _forbidden_rotation_error(
         if rotated_only and piece.arbitrary_outline:
             # Special-shape acceptance diagnostics are intentionally unchanged.
             return None
-        if (rotated_only
-        ):
+        if rotated_only and _inventory_assignment(
+            candidate_indexes,
+            relaxed,
+            dimension_tolerance=dimension_tolerance,
+            excluded_edge=(contour_index, piece_index),
+        ) is None:
             forbidden.append((contour, piece_index, width, height, piece))
     if len(forbidden) != 1:
         return None

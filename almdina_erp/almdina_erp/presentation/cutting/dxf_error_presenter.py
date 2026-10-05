@@ -443,26 +443,18 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
         )
 
     if code == codes.EXPECTED_PIECE_MISMATCH:
-        dxf_sizes = str(params.get("dxf_sizes_label") or "").strip()
-        expected_sizes = str(params.get("expected_sizes_label") or "").strip()
-        problem = "مقاسات مسارات القص في DXF لا تطابق مقاسات القص في الطلب."
-        if dxf_sizes and expected_sizes:
-            problem = (
-                f"مقاسات مسارات القص في DXF لا تطابق مقاسات القص في الطلب. "
-                f"في الملف: {dxf_sizes}. المطلوب: {expected_sizes}."
-            )
         actual_sizes = [str(value) for value in (params.get("extra_sizes") or []) if value]
         required_sizes = [str(value) for value in (params.get("missing_sizes") or []) if value]
         target_parts = []
         if actual_sizes:
-            target_parts.append(f"في الملف: {', '.join(actual_sizes)}.")
+            target_parts.append(f"في الملف: {'، '.join(actual_sizes)}.")
         if required_sizes:
-            target_parts.append(f"المقاسات المطلوبة غير المطابقة: {', '.join(required_sizes)}.")
-        target_text = " ".join(target_parts) or present_target(issue.target, params=params)
+            target_parts.append(f"المطلوب: {'، '.join(required_sizes)}.")
+        target_text = " ".join(target_parts) or "مسارات القص في ملف DXF."
         return PresentedDxfError(
-            problem,
+            "يوجد اختلاف في مقاسات القص بين DXF والطلب.",
             target_text,
-            "طابق كل مسار على CUT_PATH مع مقاس القص المحفوظ (وليس المقاس النهائي).",
+            "صحح مسار القص غير المطابق ثم أعد رفع الملف.",
             code,
             issue.category,
         )
