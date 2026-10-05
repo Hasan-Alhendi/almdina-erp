@@ -85,6 +85,8 @@
             this.preferredExpanded = false;
             this.initialized = false;
             this.bound = false;
+            this.boundRoot = null;
+            this.bodyBound = false;
             this.disposed = false;
             this.handleNativeToggle = this.handleNativeToggle.bind(this);
             this.handleFormHide = this.dispose.bind(this);
@@ -109,21 +111,33 @@
 
         bindLifecycle(root) {
             if (this.disposed) this.disposed = false;
-            if (this.bound) return;
             const body = window.jQuery && window.jQuery(document.body);
+            if (body && !this.bodyBound) {
+                body.on(`toggleSidebar${EVENT_NAMESPACE}`, this.handleNativeToggle);
+                this.bodyBound = true;
+            }
+            if (this.boundRoot === root && root.isConnected) {
+                this.bound = true;
+                return;
+            }
+            if (this.boundRoot) {
+                const previous = window.jQuery && window.jQuery(this.boundRoot);
+                if (previous) previous.off(`hide${EVENT_NAMESPACE}`, this.handleFormHide);
+            }
             const wrapper = window.jQuery && window.jQuery(root);
-            if (body) body.on(`toggleSidebar${EVENT_NAMESPACE}`, this.handleNativeToggle);
             if (wrapper) wrapper.on(`hide${EVENT_NAMESPACE}`, this.handleFormHide);
+            this.boundRoot = root;
             this.bound = true;
         }
 
         dispose() {
             if (!this.bound) return;
             const body = window.jQuery && window.jQuery(document.body);
-            const root = pageRoot(this.frm);
-            const wrapper = window.jQuery && window.jQuery(root);
-            if (body) body.off(`toggleSidebar${EVENT_NAMESPACE}`, this.handleNativeToggle);
+            const wrapper = window.jQuery && window.jQuery(this.boundRoot);
+            if (body && this.bodyBound) body.off(`toggleSidebar${EVENT_NAMESPACE}`, this.handleNativeToggle);
             if (wrapper) wrapper.off(`hide${EVENT_NAMESPACE}`, this.handleFormHide);
+            this.bodyBound = false;
+            this.boundRoot = null;
             this.bound = false;
             this.disposed = true;
         }
@@ -156,7 +170,11 @@
         ensureToggleButton(root) {
             const wrapper = sidebarWrapper(this.frm);
             if (!wrapper || !wrapper.length) return null;
-            let button = root.querySelector(TOGGLE_SELECTOR);
+            const buttons = typeof root.querySelectorAll === "function"
+                ? [...root.querySelectorAll(TOGGLE_SELECTOR)].filter(item => item.isConnected !== false)
+                : [];
+            let button = buttons.shift() || root.querySelector(TOGGLE_SELECTOR);
+            buttons.forEach(item => item.remove());
             if (!button && this.frm.page && typeof this.frm.page.add_action_icon === "function") {
                 const created = this.frm.page.add_action_icon(
                     "panel-right",
@@ -211,13 +229,15 @@
         return frm[CONTROLLER_FIELD].mount();
     }
 
-    window.AlmdinaDcoFormSidebarController = Object.freeze({ mount });
+    function isPreferenceApplied(frm) {
+        if (!frm || frm.doctype !== DOCTYPE) return false;
+        const controller = frm[CONTROLLER_FIELD];
+        if (!controller || !controller.initialized) return false;
+        const root = pageRoot(frm);
+        if (!root || !root.isConnected || !root.classList.contains(HOST_CLASS)) return false;
+        if (isMobile()) return !root.classList.contains(FULL_WIDTH_CLASS);
+        return nativeSidebarExpanded(frm) === controller.preferredExpanded;
+    }
 
-    frappe.ui.form.on(DOCTYPE, {
-        onload_post_render(frm) { mount(frm); },
-        refresh(frm) {
-            if (frm[CONTROLLER_FIELD]) frm[CONTROLLER_FIELD].refresh();
-            else mount(frm);
-        },
-    });
+    window.AlmdinaDcoFormSidebarController = Object.freeze({ mount, isPreferenceApplied });
 })();

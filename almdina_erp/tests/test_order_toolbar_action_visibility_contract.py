@@ -56,6 +56,9 @@ class TestOrderToolbarActionVisibilityContract(unittest.TestCase):
         toolbar = (PUBLIC / "door_cutting_order/core/door_cutting_order_toolbar_stability_ux.js").read_text(
             encoding="utf-8"
         )
+        presentation_css = (ROOT / "public/css/door_cutting_order_form_presentation.css").read_text(
+            encoding="utf-8"
+        )
         production = (
             PUBLIC
             / "door_cutting_order"
@@ -73,10 +76,10 @@ class TestOrderToolbarActionVisibilityContract(unittest.TestCase):
         self.assertIn("--dco-viewport-left-compensation", toolbar)
         self.assertIn("anchorActionsToViewportLeft(head)", toolbar)
         self.assertIn("Math.min(...visibleLefts)", toolbar)
-        self.assertIn("right:auto!important", toolbar)
-        self.assertIn("position:fixed!important", toolbar)
-        self.assertIn("flex-wrap:nowrap!important", toolbar)
-        self.assertIn("[0, 180]", toolbar)
+        self.assertIn("right:auto!important", presentation_css)
+        self.assertIn("position:fixed!important", presentation_css)
+        self.assertIn("flex-wrap:nowrap!important", presentation_css)
+        self.assertNotIn("[0, 180]", toolbar)
         self.assertNotIn("[0, 80, 250, 650, 1200]", toolbar)
         self.assertNotIn("permissionVersion", production)
         self.assertIn(

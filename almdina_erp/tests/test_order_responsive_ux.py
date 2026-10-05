@@ -168,7 +168,9 @@ def test_phone_controls_are_touch_sized_and_primary_surfaces_stack():
 
 
 def test_order_header_tabs_dialogs_and_list_are_viewport_safe():
-    css = source(RESPONSIVE_CSS)
+    css = source(RESPONSIVE_CSS) + source(
+        ROOT / "public" / "css" / "door_cutting_order_form_presentation.css"
+    )
     list_source = source(LIST_UX)
     toolbar = source(
         ROOT
