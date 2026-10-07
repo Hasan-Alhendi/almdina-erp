@@ -152,7 +152,7 @@
     function resetVirtualClone(frm, clone) {
         clone.dataset.rowName = `__virtual__perf_${Date.now()}_${++virtualSequence}`;
         clone.classList.add("dco-virtual-row");
-        clone.classList.remove("dco-special-row", "dco-clipped-corner-row", "dco-extra-row", "dco-row-selected");
+        clone.classList.remove("dco-special-row", "dco-clipped-corner-row", "dco-row-selected");
 
         const selectorCell = clone.querySelector(":scope > td.dco-select-col");
         if (selectorCell) selectorCell.replaceChildren();
@@ -175,8 +175,6 @@
                 { editable: isEditable(frm), virtual: true }
             );
         }
-        clone.querySelectorAll(".dco-extra-notes-cue").forEach(cue => cue.remove());
-
         clone.querySelectorAll("button.dco-check-toggle[data-check-field]").forEach(button => {
             button.classList.remove("is-checked");
             button.setAttribute("aria-pressed", "false");
@@ -238,7 +236,6 @@
         const special = row.piece_type === "Special";
         const cornerGeometry = window.AlmdinaClippedCornerGeometry;
         const clipped = Boolean(cornerGeometry && cornerGeometry.isCornerCut(row));
-        const extra = row.piece_type === "Extra";
         const shapeOutput = window.AlmdinaShapeOutputContract;
         const drawing = Boolean(
             shapeOutput
@@ -251,7 +248,6 @@
         );
         tr.classList.toggle("dco-special-row", special);
         tr.classList.toggle("dco-clipped-corner-row", clipped);
-        tr.classList.toggle("dco-extra-row", extra);
 
         const fastEntry = window.AlmdinaDoorCuttingFastEntry;
         const edgesCell = tr.querySelector("td.dco-col-edges");

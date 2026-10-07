@@ -279,16 +279,16 @@ def _apply_values(settings: Any, payload: dict[str, Any]) -> None:
             settings.set(fieldname, flt(_finite_non_negative(payload[fieldname], label)))
 
     extra_addon_prices = {
-        "default_extra_double_unit_price_usd": _("Extra Double Price USD / Door"),
+        "default_extra_double_unit_price_usd": _("Double Price USD / Door"),
         "default_extra_full_door_double_unit_price_usd": _(
             "Full Door Double Processing Fee USD / Door"
         ),
-        "default_extra_liner_unit_price_usd": _("Extra Liner Price USD / Door"),
+        "default_extra_liner_unit_price_usd": _("Liner Price USD / Door"),
         "default_extra_back_groove_unit_price_usd": _(
-            "Extra Back Groove Price USD / Door"
+            "Back Groove Price USD / Door"
         ),
         "default_extra_recessed_handle_cutout_unit_price_usd": _(
-            "Extra Recessed Handle Cutout Price USD / Door"
+            "Recessed Handle Cutout Price USD / Door"
         ),
     }
     for fieldname, label in extra_addon_prices.items():

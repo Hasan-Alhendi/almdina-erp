@@ -305,7 +305,7 @@
             edgeTypeCell.insertAdjacentElement("afterend", cell);
         }
 
-        // Special / corner / Extra-without-toggles still need this column so notes
+        // Special / corner / rows without edge toggles still need this column so notes
         // stay on the same horizontal level as Regular rows.
         const hasEdgeButtons = Boolean(
             tr.querySelector(":scope > td.dco-col-edges .dco-edge-buttons")

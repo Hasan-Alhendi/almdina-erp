@@ -125,7 +125,7 @@
             }
             if (section === "extra_addons") {
                 return [
-                    { fieldname: "default_extra_double_unit_price_usd", fieldtype: "Currency", label: t("سعر Double لكل درفة (USD)"), description: t("سعر بيع يضاف تلقائيًا لكل درفة Extra مختارة."), default: values.default_extra_double_unit_price_usd, reqd: 1 },
+                    { fieldname: "default_extra_double_unit_price_usd", fieldtype: "Currency", label: t("سعر Double لكل درفة (USD)"), description: t("سعر بيع يضاف تلقائيًا لكل درفة مفعّل عليها الخيار."), default: values.default_extra_double_unit_price_usd, reqd: 1 },
                     { fieldname: "default_extra_full_door_double_unit_price_usd", fieldtype: "Currency", label: t("أجرة دبل كامل الدرفة (USD)"), description: t("أجرة معالجة تُضاف لكل درفة أصلية عند اختيار دبل كامل الدرفة."), default: values.default_extra_full_door_double_unit_price_usd, reqd: 1 },
                     { fieldname: "default_extra_liner_unit_price_usd", fieldtype: "Currency", label: t("سعر Liner لكل درفة (USD)"), description: t("لا يستخدم للدرفة الخاصة؛ لاينر الدرفة الخاصة يبقى ضمن سعرها الخاص الشامل."), default: values.default_extra_liner_unit_price_usd, reqd: 1 },
                     { fieldname: "default_extra_back_groove_unit_price_usd", fieldtype: "Currency", label: t("سعر فرزة ظهر لكل درفة (USD)"), description: t("لا يستخدم للدرفة الخاصة؛ فرزة ظهر الدرفة الخاصة تبقى ضمن سعرها الخاص الشامل."), default: values.default_extra_back_groove_unit_price_usd, reqd: 1 },
@@ -181,7 +181,7 @@
         function sectionTitle(section) {
             if (section === "cutting") return t("تعديل القص والمحسّن");
             if (section === "costing") return t("تعديل التكلفة الافتراضية");
-            if (section === "extra_addons") return t("تعديل أسعار إضافات Extra");
+            if (section === "extra_addons") return t("تعديل أسعار إضافات الدرف");
             if (section === "print_identity") return t("تعديل هوية أوراق الطباعة");
             if (section === "whatsapp_messages") return t("تعديل رسائل واتساب");
             return t("تعديل ضوابط الإنتاج");

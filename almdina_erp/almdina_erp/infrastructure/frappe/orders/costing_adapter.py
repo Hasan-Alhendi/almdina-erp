@@ -177,7 +177,7 @@ class FrappeOrderCostingAdapter:
         self.corner_break_edge_total_usd = corner_break_total
 
     def calculate_extra_addon_prices(self) -> None:
-        """Validate Extra selections and store an immutable sales-price snapshot."""
+        """Validate independent add-ons and store immutable sales-price snapshots."""
 
         settings = self.access.settings
         old_rows = self.access.old_piece_map()
@@ -281,50 +281,41 @@ class FrappeOrderCostingAdapter:
                 "recessed_handle_cutout": _("Recessed Handle Cutout"),
             }
             messages = {
-                "non_extra_addon_selection": _(
-                    "Extra add-ons can only be selected for a door of type Extra."
-                ),
-                "extra_addon_required": _(
-                    "Every Extra door must include at least one add-on."
-                ),
-                "extra_notes_required": _(
-                    "Notes are required for every Extra door."
+                "mutually_exclusive_double_addons": _(
+                    "Double Edge Banding and Full Door Double cannot be selected together."
                 ),
                 "extra_quantity_invalid": _(
-                    "Extra door quantity must be greater than zero."
+                    "Door quantity must be greater than zero when an add-on is selected."
                 ),
                 "extra_addon_rate_invalid": _(
-                    "Extra add-on prices must be finite and non-negative."
+                    "Door add-on prices must be finite and non-negative."
                 ),
             }
             if error.code == "extra_addon_rate_not_configured":
                 frappe.throw(
                     _(
-                        "Configure a positive factory price for {0} before using this Extra add-on."
+                        "Configure a positive factory price for {0} before using this add-on."
                     ).format(labels.get(error.addon_code, error.addon_code))
                 )
-            frappe.throw(messages.get(error.code, _("Extra door add-on data is invalid.")))
+            frappe.throw(messages.get(error.code, _("Door add-on data is invalid.")))
 
         for row, result in zip(self.document.pieces or [], summary.pieces):
             old_row = old_rows.get(row.name)
-            previously_extra = bool(
+            previously_selected = bool(
                 old_row
-                and (
-                    str(getattr(old_row, "piece_type", None) or "Regular") == "Extra"
-                    or any(
-                        cint(getattr(old_row, fieldname, 0))
-                        for fieldname in (
-                            "extra_double",
-                            "extra_full_door_double",
-                            "extra_liner",
-                            "extra_back_groove",
-                            "extra_recessed_handle_cutout",
-                        )
+                and any(
+                    cint(getattr(old_row, fieldname, 0))
+                    for fieldname in (
+                        "extra_double",
+                        "extra_full_door_double",
+                        "extra_liner",
+                        "extra_back_groove",
+                        "extra_recessed_handle_cutout",
                     )
                 )
             )
             row._extra_addon_snapshot_required = bool(
-                result.applicable or previously_extra
+                result.applicable or previously_selected
             )
             row.extra_double_unit_price_usd = result.double_unit_price_usd
             row.extra_double_total_usd = result.double_total_usd

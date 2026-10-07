@@ -40,7 +40,7 @@ def _addon_label(description: Any) -> str:
 def summarize_extra_addon_lines(
     lines: Sequence[Mapping[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Collapse customer-facing Extra add-ons to one line per add-on type.
+    """Collapse customer-facing add-ons to one line per add-on type.
 
     Stored piece-level prices and notes remain untouched.  Only the customer
     document projection is summarized, and the grouped amount is always the sum

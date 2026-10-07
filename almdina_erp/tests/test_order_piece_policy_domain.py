@@ -256,6 +256,11 @@ class TestOrderPiecePolicyDomain(unittest.TestCase):
         )
 
         self.assertIn("L-Shaped Corner", PIECE_TYPES)
+        self.assertNotIn("Extra", PIECE_TYPES)
+        self.assertEqual(
+            PIECE_TYPES,
+            frozenset(("Regular", "Clipped Corner", "L-Shaped Corner", "Special")),
+        )
         self.assertTrue(is_corner_cut("Clipped Corner"))
         self.assertTrue(is_corner_cut(L_SHAPED_CORNER_TYPE))
         self.assertFalse(is_corner_cut("Regular"))
@@ -349,7 +354,6 @@ class TestOrderPiecePolicyDomain(unittest.TestCase):
 
         self.assertTrue(measurement_edges_disabled_for_piece("Special"))
         self.assertFalse(measurement_edges_disabled_for_piece("Regular"))
-        self.assertFalse(measurement_edges_disabled_for_piece("Extra"))
         self.assertFalse(measurement_edges_disabled_for_piece("Clipped Corner"))
 
         disabled = apply_special_measurement_edge_policy(piece_type="Special")

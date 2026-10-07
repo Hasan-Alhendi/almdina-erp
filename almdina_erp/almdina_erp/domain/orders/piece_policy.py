@@ -9,7 +9,7 @@ from typing import Any, Mapping
 CLIPPED_CORNER_TYPE = "Clipped Corner"
 L_SHAPED_CORNER_TYPE = "L-Shaped Corner"
 CORNER_CUT_TYPES = frozenset({CLIPPED_CORNER_TYPE, L_SHAPED_CORNER_TYPE})
-PIECE_TYPES = frozenset({"Regular", "Clipped Corner", "L-Shaped Corner", "Special", "Extra"})
+PIECE_TYPES = frozenset({"Regular", "Clipped Corner", "L-Shaped Corner", "Special"})
 CLIPPED_CORNER_POSITIONS = frozenset(
     {"Top Right", "Top Left", "Bottom Right", "Bottom Left"}
 )
@@ -123,7 +123,7 @@ def apply_special_measurement_edge_policy(
 ) -> SpecialMeasurementEdgeDecision:
     """Disable and clear measurement-table banding for Special doors.
 
-    Regular / Extra / corner pieces keep their selected sides. Special pricing
+    Regular and corner pieces keep their selected sides. Special pricing
     uses the inclusive special price (and configurable special fees), not
     rectangular side toggles from order entry.
     """

@@ -221,7 +221,7 @@ class TestSpecialExportValidation(unittest.TestCase):
         self.assertTrue(any(error.code == "SPECIAL_SIZE_MISMATCH" for error in errors))
 
     def test_non_special_piece_types_remain_exact(self):
-        for piece_type in ("Regular", "Extra", "Clipped Corner", "L-Shaped Corner"):
+        for piece_type in ("Regular", "Clipped Corner", "L-Shaped Corner"):
             with self.subTest(piece_type=piece_type):
                 _, _, _, errors = self._validate(
                     piece_type=piece_type,
@@ -231,7 +231,7 @@ class TestSpecialExportValidation(unittest.TestCase):
                 self.assertTrue(any(error.code == "CUT_SIZE_MISMATCH" for error in errors))
 
     def test_non_special_export_uses_canonical_exact_dimensions(self):
-        for piece_type in ("Regular", "Extra", "Clipped Corner", "L-Shaped Corner"):
+        for piece_type in ("Regular", "Clipped Corner", "L-Shaped Corner"):
             with self.subTest(piece_type=piece_type, dimensions="exact"):
                 _, _, _, errors = self._validate(
                     piece_type=piece_type,

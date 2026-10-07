@@ -46,7 +46,7 @@ def _sample_order() -> dict[str, object]:
         "order_notes": "تسليم بعد الظهر",
         "pieces": [
             {
-                "piece_type": "Extra",
+                "piece_type": "Special",
                 "width_cm": 80,
                 "length_cm": 210,
                 "qty": 2,
@@ -134,7 +134,7 @@ class MeasurementsPrintDocumentTests(unittest.TestCase):
                 customer="زبون",
                 pieces=[
                     SoftDict(
-                        piece_type="Extra",
+                        piece_type="Clipped Corner",
                         width_cm=80,
                         length_cm=210,
                         qty=1,

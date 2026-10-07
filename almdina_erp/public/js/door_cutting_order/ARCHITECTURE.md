@@ -10,7 +10,7 @@ business-logic rewrites.
 - `order_entry/`: order defaults and data-entry behavior.
   - `measurements/`: row entry, keyboard flow, measurement toolbar/resilience/performance.
   - `edge_banding/`: edge selection, profiles, colors and derived cut dimensions.
-  - `extra_addons/`: Extra-door requirement selection and accessible presentation; no pricing formulas.
+  - `extra_addons/`: independent door add-on selection and accessible presentation; no pricing formulas.
 - `cutting_plan/`: plan rendering, controls, tabs/surface, drawing-plan and DXF approval/export coordination.
 - `costing/`: cost presentation, cost capabilities and customer financial actions.
 - `printing/`: print identity/theme/presenters and printable shape/document composition.
@@ -143,23 +143,22 @@ geometry retain their existing 0°/90° transform owners. Screen, board focus, p
 and print consume the same path model, while print keeps its own stroke/label/page CSS.
 No DXF is reparsed during render, and no canvas/raster conversion is permitted.
 
-### Extra-door commercial boundary
+### Door add-on commercial boundary
 
-`Extra` is a rectangular customer requirement, not a special-shape geometry type.
-`Double Edge Banding` (`دبل قشاط`), `Liner`, and recessed-handle cutout invalidate
-Cost only. `Full Door Double` (`دبل كامل الدرفة`) invalidates Plan + Cost because it
-doubles physical cut quantity without changing the stored customer `qty`. Changing
-the piece type itself retains the normal Plan + Cost impact.
-Pricing is calculated by the server Domain from factory settings and original
-quantity. The child row stores protected unit/total snapshots so later factory-price
-changes do not rewrite historical orders. A `Special` door never carries Extra flags:
-e.g. a special door with Liner records Liner in notes/drawing and uses its inclusive
-custom special price.
+The five add-on flags are independent of `piece_type` and are available to all four
+types. `extra_double` and `extra_full_door_double` are mutually exclusive. Liner,
+back groove, recessed-handle cutout, and double edge banding invalidate Cost only.
+`Full Door Double` invalidates Plan + Cost because it doubles physical cut quantity
+without changing the stored customer `qty`. Changing the piece type itself retains
+the normal Plan + Cost impact. Pricing is calculated by the server Domain from factory
+settings and original quantity. The child row stores protected unit/total snapshots so
+later factory-price changes do not rewrite historical orders. Special and corner pricing
+remain additive to the selected add-on prices.
 
 The measurement type cell remains the native HTML `select` used by the table as the
-data-field owner. The visible Arabic order is `عادية / خاصة / الزاوية الكسر / زاوية L / Extra`.
+data-field owner. The visible Arabic order is `عادية / خاصة / الزاوية الكسر / زاوية L`.
 For Clipped Corner («الزاوية الكسر») and L-Shaped Corner («زاوية L»), banding sides including `edge_break` are chosen inside the corner-shape editor; the measurements table shows a summary that reopens that editor, and that summary refreshes immediately on Apply without waiting for order save.
-the persisted values remain `Regular / Special / Clipped Corner / L-Shaped Corner / Extra`
+the persisted values remain `Regular / Special / Clipped Corner / L-Shaped Corner`
 according to the existing DocType contract. `L-Shaped Corner` reuses the clipped-corner
 editor, stored cut-from-corner distances, edge-price workflow, plan SVG, and DXF path; only the
 polygon topology changes from a five-vertex diagonal to a six-vertex right-angle L.
@@ -167,14 +166,11 @@ The entry UI asks for the remaining length of each outer side and converts to/fr
 stored cut distances. When the operator later changes outer `width_cm` / `length_cm`,
 the committed resize rewrites those cut distances so the previously entered remaining
 lengths stay the same (clamped only when the new outer size can no longer host them).
-Extra owns a Windows-style cascade overlay on top of that select: mouse interaction
-opens a feature-owned type menu, hovering `Extra` shows a submenu arrow and the add-on
-checkboxes immediately, and hovering an Extra type cell in edit mode previews the
-selected add-ons for in-place editing. Keyboard and touch keep the native select;
-choosing `Extra` that way still opens the same multi-select flyout. A compact Extra-only
-button remains available to pin the flyout. Extra does not replace table-performance
-ownership; `AlmdinaTablePerformanceUX` still mutates the row in place so changing a
-type never rebuilds the table.
+The five add-ons are compact checkbox columns in the measurement table. They reuse the
+table checkbox and design-token patterns; no popup or parallel editor owns them.
+Selecting either double option clears the other immediately, while server validation
+enforces the same invariant. `AlmdinaTablePerformanceUX` still mutates the row in place
+so changing a type never rebuilds the table.
 
 ## Frontend asset manifest
 

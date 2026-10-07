@@ -107,7 +107,6 @@
         if (value === "Special") return "خاصة";
         if (value === "Clipped Corner") return "الزاوية الكسر";
         if (value === "L-Shaped Corner") return "زاوية L";
-        if (value === "Extra") return "إضافية";
         return "عادية";
     }
 
@@ -117,7 +116,7 @@
     }
 
     function extraAddonLabels(row) {
-        if (!row || (row.piece_type || "Regular") !== "Extra") return [];
+        if (!row) return [];
         return [
             ["extra_double", "دبل قشاط"],
             ["extra_full_door_double", "دبل كامل الدرفة"],

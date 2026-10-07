@@ -248,7 +248,7 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
         self.assertEqual(exact_forbidden[1].code, "FORBIDDEN_ROTATION")
 
     def test_non_special_piece_types_keep_exact_bbox_contract(self) -> None:
-        for piece_type in ("Regular", "Extra", "Clipped Corner", "L-Shaped Corner"):
+        for piece_type in ("Regular", "Clipped Corner", "L-Shaped Corner"):
             with self.subTest(piece_type=piece_type):
                 rotated, error = self._strict_dimension_result(
                     29.9, 40, piece_type=piece_type,

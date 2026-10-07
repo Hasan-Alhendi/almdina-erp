@@ -139,11 +139,11 @@ class TestFinancialDocumentApplication(unittest.TestCase):
         self.assertEqual(special["piece_name"], "ROW-SPECIAL-2")
         self.assertIn('"width":0.5', special["special_shape_drawing_json"])
 
-    def test_extra_addons_are_itemized_from_the_historical_price_snapshot(self) -> None:
+    def test_addons_are_itemized_from_historical_snapshots_for_regular(self) -> None:
         pieces = [
             {
                 "piece_no": 4,
-                "piece_type": "Extra",
+                "piece_type": "Regular",
                 "width_cm": 50,
                 "length_cm": 90,
                 "qty": 2,
@@ -182,7 +182,7 @@ class TestFinancialDocumentApplication(unittest.TestCase):
         )
         self.assertEqual([line["rate_usd"] for line in payload["lines"]], [4.0, 2.5, 3.0])
         self.assertEqual(payload["totals"][0]["value_usd"], 19.0)
-        self.assertEqual(payload["measurements"][0]["piece_type"], "إضافية")
+        self.assertEqual(payload["measurements"][0]["piece_type"], "عادية")
         self.assertIn(
             "إضافات: دبل قشاط، Liner، فرزة ظهر",
             payload["measurements"][0]["notes"],
@@ -192,7 +192,7 @@ class TestFinancialDocumentApplication(unittest.TestCase):
         pieces = [
             {
                 "piece_no": 4,
-                "piece_type": "Extra",
+                "piece_type": "Regular",
                 "width_cm": 50,
                 "length_cm": 90,
                 "qty": 3,
@@ -220,6 +220,43 @@ class TestFinancialDocumentApplication(unittest.TestCase):
         self.assertEqual(line["quantity"], 3)
         self.assertEqual(line["rate_usd"], 6.0)
         self.assertEqual(line["amount_usd"], 18.0)
+
+    def test_special_and_corner_prices_are_additive_with_addons(self) -> None:
+        pieces = [
+            {
+                "piece_type": "Special",
+                "qty": 1,
+                "special_shape_final_unit_price_usd": 29,
+                "extra_liner": 1,
+                "extra_liner_unit_price_usd": 2.5,
+                "extra_liner_total_usd": 2.5,
+            },
+            {
+                "piece_type": "Clipped Corner",
+                "qty": 1,
+                "edge_break_length_cm": 100,
+                "edge_break_rate_usd": 2,
+                "clipped_corner_edge_price_usd": 4,
+                "extra_back_groove": 1,
+                "extra_back_groove_unit_price_usd": 3,
+                "extra_back_groove_total_usd": 3,
+            },
+        ]
+        payload = build_customer_invoice_document(
+            {
+                **self.order,
+                "required_boards": 0,
+                "mdf_cost_usd": 0,
+                "cutting_cost_usd": 0,
+                "edge_cost_usd": 0,
+            },
+            pieces,
+        )
+        self.assertEqual(
+            [line["type"] for line in payload["lines"]],
+            ["special", "extra_addon", "cut_corner", "extra_addon"],
+        )
+        self.assertEqual([line["amount_usd"] for line in payload["lines"]], [29, 2.5, 4, 3])
 
     def test_internal_report_calculates_margin_and_special_price_variance(self) -> None:
         payload = build_internal_cost_report_document(self.order, self.pieces)

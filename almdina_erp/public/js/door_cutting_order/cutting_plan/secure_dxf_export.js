@@ -138,9 +138,6 @@
     }
 
     function extraAddonFlags(piece) {
-        if (String((piece && piece.piece_type) || "") !== "Extra") {
-            return { double: false, fullDoorDouble: false };
-        }
         return {
             double: Boolean(Number(piece && piece.extra_double)),
             fullDoorDouble: Boolean(Number(piece && piece.extra_full_door_double)),

@@ -313,7 +313,7 @@ async function run() {
                     {
                         id: 1,
                         label: "1.1",
-                        piece_type: "Extra",
+                        piece_type: "Special",
                         extra_double: 1,
                         extra_full_door_double: 1,
                         x: 0,
