@@ -99,7 +99,7 @@ def test_direct_stage_actions_keep_existing_authorization_and_state_gates() -> N
         "if (stage.can_reassign_worker",
         "if (!assignedToCurrentUser(stage)) return;",
     )
-    assert "PRODUCTION_ACTION_GROUP" in reassign
+    assert "PRODUCTION_ACTION_GROUP" not in reassign
 
 
 def test_handoff_visibility_trusts_server_flag_without_local_status_whitelist() -> None:
@@ -133,4 +133,5 @@ def test_reconciliation_removes_direct_and_legacy_grouped_stage_actions() -> Non
 
     assert 'frm.remove_custom_button(__("بدء العمل"));' in cleanup
     assert 'frm.remove_custom_button(__("إنهاء وإرسال"));' in cleanup
+    assert 'frm.remove_custom_button(__("تغيير العامل"));' in cleanup
     assert 'frm.remove_custom_button(__(label), PRODUCTION_ACTION_GROUP)' in cleanup

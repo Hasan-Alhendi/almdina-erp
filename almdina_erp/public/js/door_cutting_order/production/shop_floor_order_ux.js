@@ -989,8 +989,7 @@
 			if (stage.can_reassign_worker && ACTIVE_STAGE_STATUSES.has(stageStatus) && can(frm, "reassign_worker")) {
 				frm.add_custom_button(
 					__("تغيير العامل"),
-					() => openReassignDialog(frm, stageName, assignedTo),
-					PRODUCTION_ACTION_GROUP
+					() => openReassignDialog(frm, stageName, assignedTo)
 				);
 			}
 
@@ -1043,6 +1042,7 @@
 		frm.remove_custom_button(__("إرجاع لمرحلة سابقة"));
 		frm.remove_custom_button(__("بدء العمل"));
 		frm.remove_custom_button(__("إنهاء وإرسال"));
+		frm.remove_custom_button(__("تغيير العامل"));
 		frm.remove_custom_button(__("إرجاع لمرحلة سابقة"), PRODUCTION_ACTION_GROUP);
 	}
 
