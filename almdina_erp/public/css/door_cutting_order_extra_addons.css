@@ -9,9 +9,9 @@
 }
 
 .dco-fast-table .dco-col-addon {
-    width: 46px;
-    min-width: 46px;
-    max-width: 46px;
+    width: 74px;
+    min-width: 74px;
+    max-width: 74px;
     padding-inline: 2px;
     text-align: center;
 }
@@ -19,31 +19,34 @@
 .dco-fast-table th.dco-col-addon {
     white-space: normal;
     font-size: 9px;
-    line-height: 1.2;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
 }
 
-.dco-addon-toggle {
-    width: 38px;
-    min-width: 38px;
-    min-height: 32px;
-    padding: 2px;
+.dco-fast-table .dco-addon-toggle {
+    display: inline-flex;
     flex-direction: column;
-    gap: 1px;
-}
-
-.dco-addon-toggle .dco-check-mark {
-    min-height: 11px;
-    font-size: 10px;
-    line-height: 1;
-}
-
-.dco-addon-short {
-    max-width: 34px;
+    align-items: center;
+    justify-content: center;
+    width: 68px;
+    min-width: 68px;
+    height: 40px;
+    min-height: 40px;
+    padding: 3px 2px;
     overflow: hidden;
-    text-overflow: ellipsis;
-    font-size: 8px;
+    box-sizing: border-box;
+    font-size: 9px;
     font-weight: 800;
-    line-height: 1.05;
+    line-height: 1.15;
+    text-align: center;
+}
+
+.dco-fast-table .dco-addon-toggle .dco-addon-label-line {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    white-space: nowrap;
+    text-align: center;
 }
 
 .dco-addon-toggle:focus-visible {
@@ -53,8 +56,8 @@
 
 @media (max-width: 720px) {
     .dco-fast-table .dco-col-addon {
-        width: 44px;
-        min-width: 44px;
-        max-width: 44px;
+        width: 70px;
+        min-width: 70px;
+        max-width: 70px;
     }
 }

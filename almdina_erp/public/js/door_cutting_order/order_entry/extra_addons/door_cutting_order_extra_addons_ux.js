@@ -10,11 +10,11 @@
         Object.freeze({ value: "L-Shaped Corner", labelAr: "زاوية L", labelEn: "L-shaped corner" }),
     ]);
     const FIELDS = Object.freeze([
-        Object.freeze({ fieldname: "extra_double", labelAr: "دبل قشاط", labelEn: "Double", shortAr: "دبل", shortEn: "D" }),
-        Object.freeze({ fieldname: "extra_full_door_double", labelAr: "دبل كامل", labelEn: "Full door double", shortAr: "كامل", shortEn: "FD" }),
-        Object.freeze({ fieldname: "extra_liner", labelAr: "لاينر", labelEn: "Liner", shortAr: "لاينر", shortEn: "L" }),
-        Object.freeze({ fieldname: "extra_back_groove", labelAr: "فرزة ظهر", labelEn: "Back groove", shortAr: "ظهر", shortEn: "BG" }),
-        Object.freeze({ fieldname: "extra_recessed_handle_cutout", labelAr: "مسكة غطس", labelEn: "Recessed handle", shortAr: "غطس", shortEn: "RH" }),
+        Object.freeze({ fieldname: "extra_double", labelAr: "دبل قشاط", labelEn: "Double Edge Banding", buttonAr: "دبل قشاط", buttonEn: "Double Banding" }),
+        Object.freeze({ fieldname: "extra_full_door_double", labelAr: "دبل كامل الدرفة", labelEn: "Full Door Double", buttonAr: "دبل كامل", buttonEn: "Full Double" }),
+        Object.freeze({ fieldname: "extra_liner", labelAr: "لاينر", labelEn: "Liner", buttonAr: "لاينر", buttonEn: "Liner" }),
+        Object.freeze({ fieldname: "extra_back_groove", labelAr: "فرزة ظهر", labelEn: "Back Groove", buttonAr: "فرزة ظهر", buttonEn: "Back Groove" }),
+        Object.freeze({ fieldname: "extra_recessed_handle_cutout", labelAr: "حفر مسكة غطس", labelEn: "Recessed Handle Cutout", buttonAr: "مسكة غطس", buttonEn: "Recessed Handle" }),
     ]);
     const FIELD_NAMES = new Set(FIELDS.map(item => item.fieldname));
     const PIECE_TYPE_VALUES = new Set(PIECE_TYPES.map(item => item.value));
@@ -68,9 +68,12 @@
         const selected = Boolean(Number(row && row[fieldname]));
         const disabled = options.editable === false ? "disabled" : "";
         const label = isArabic() ? definition.labelAr : definition.labelEn;
-        const shortLabel = isArabic() ? definition.shortAr : definition.shortEn;
+        const buttonLabel = isArabic() ? definition.buttonAr : definition.buttonEn;
+        const buttonLines = buttonLabel.split(/\s+/).map(word => (
+            `<span class="dco-addon-label-line">${esc(word)}</span>`
+        )).join("\n");
         return `<button type="button" class="dco-check-toggle dco-addon-toggle ${selected ? "is-checked" : ""}" data-check-field="${fieldname}" aria-pressed="${selected ? "true" : "false"}" aria-label="${esc(label)}" title="${esc(label)}" ${disabled}>
-            <span class="dco-check-mark" aria-hidden="true">${selected ? "✓" : ""}</span><span class="dco-addon-short">${esc(shortLabel)}</span>
+            ${buttonLines}
         </button>`;
     }
 
@@ -100,8 +103,6 @@
             button.classList.toggle("is-checked", selected);
             button.setAttribute("aria-pressed", selected ? "true" : "false");
             button.disabled = !editable;
-            const mark = button.querySelector(".dco-check-mark");
-            if (mark) mark.textContent = selected ? "✓" : "";
         });
         return true;
     }

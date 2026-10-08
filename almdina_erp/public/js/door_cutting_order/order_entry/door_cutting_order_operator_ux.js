@@ -503,7 +503,7 @@
                             <th class="dco-col-number">${isArabic() ? "العرض (سم)" : "Width (CM)"}</th>
                             <th class="dco-col-number">${isArabic() ? "الطول (سم)" : "Length (CM)"}</th>
                             <th class="dco-col-qty">${isArabic() ? "العدد" : "Qty"}</th>
-                            ${(extraAddons && Array.isArray(extraAddons.FIELDS) ? extraAddons.FIELDS : []).map(item => `<th class="dco-col-addon" title="${escapeHtml(isArabic() ? item.labelAr : item.labelEn)}">${escapeHtml(isArabic() ? item.shortAr : item.shortEn)}</th>`).join("")}
+                            ${(extraAddons && Array.isArray(extraAddons.FIELDS) ? extraAddons.FIELDS : []).map(item => `<th class="dco-col-addon" title="${escapeHtml(isArabic() ? item.labelAr : item.labelEn)}">${escapeHtml(isArabic() ? item.labelAr : item.labelEn)}</th>`).join("")}
                             <th class="dco-col-rotate">${isArabic() ? "تدوير" : "Rotate"}</th>
                             <th class="dco-col-edges">${isArabic() ? "جهات القشاط" : "Edge sides"}</th>
                             <th class="dco-col-edge-type">${isArabic() ? "نوع القشاط" : "Edge type"}</th>

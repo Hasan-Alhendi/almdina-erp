@@ -37,6 +37,14 @@ assert.deepEqual(
     JSON.parse(JSON.stringify(api.PIECE_TYPES.map(item => item.value))),
     ["Regular", "Special", "Clipped Corner", "L-Shaped Corner"]
 );
+assert.deepEqual(
+    JSON.parse(JSON.stringify(api.FIELDS.map(item => item.buttonAr))),
+    ["دبل قشاط", "دبل كامل", "لاينر", "فرزة ظهر", "مسكة غطس"]
+);
+assert.deepEqual(
+    JSON.parse(JSON.stringify(api.FIELDS.map(item => item.buttonEn))),
+    ["Double Banding", "Full Double", "Liner", "Back Groove", "Recessed Handle"]
+);
 
 for (const pieceType of api.PIECE_TYPES.map(item => item.value)) {
     assert.deepEqual(
@@ -66,6 +74,27 @@ assert.match(cell, /dco-col-addon|dco-addon-toggle/);
 assert.match(cell, /data-check-field="extra_liner"/);
 assert.match(cell, /aria-pressed="true"/);
 assert.match(cell, /لاينر/);
+assert.doesNotMatch(cell, /✓|dco-check-mark/);
+
+const arabicFullLabelCell = api.renderAddonCell(
+    { extra_full_door_double: 1 },
+    "extra_full_door_double",
+    { editable: true }
+);
+assert.match(arabicFullLabelCell, /دبل كامل الدرفة/);
+assert.match(arabicFullLabelCell, />دبل<\/span>\s*<span class="dco-addon-label-line">كامل<\/span>/);
+assert.doesNotMatch(arabicFullLabelCell, /✓|dco-check-mark/);
+
+context.document.documentElement.lang = "en";
+const englishFullLabelCell = api.renderAddonCell(
+    { extra_recessed_handle_cutout: 1 },
+    "extra_recessed_handle_cutout",
+    { editable: true }
+);
+assert.match(englishFullLabelCell, /Recessed Handle Cutout/);
+assert.match(englishFullLabelCell, />Recessed<\/span>\s*<span class="dco-addon-label-line">Handle<\/span>/);
+assert.doesNotMatch(englishFullLabelCell, /✓|dco-check-mark/);
+context.document.documentElement.lang = "ar";
 
 const row = { extra_double: 1, extra_full_door_double: 0 };
 assert.deepEqual(
