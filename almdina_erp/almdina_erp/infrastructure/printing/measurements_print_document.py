@@ -12,7 +12,6 @@ PIECE_TYPE_LABELS = {
     "Special": "خاصة",
     "Clipped Corner": "الزاوية الكسر",
     "L-Shaped Corner": "زاوية L",
-    "Extra": "إضافية",
 }
 EXTRA_ADDONS = (
     ("extra_double", "دبل قشاط"),
@@ -197,8 +196,6 @@ def _shared_info(order: Mapping[str, Any], phone: str) -> str:
 
 
 def _extra_addon_labels(row: Mapping[str, Any]) -> list[str]:
-    if str(row.get("piece_type") or "Regular") != "Extra":
-        return []
     return [label for fieldname, label in EXTRA_ADDONS if _truthy(row.get(fieldname))]
 
 

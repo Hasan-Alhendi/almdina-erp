@@ -797,9 +797,9 @@ def _missing_role_layer_guidance(diagnostics: dict[str, Any]) -> list[str]:
     ]
     if found_overlays:
         hints.append(
-            "طبقات علامات Extra ("
+            "طبقات علامات الإضافات ("
             + "، ".join(found_overlays)
-            + ") تُقرأ فوق درفة Extra فقط، ولا تغني عن طبقات اللوح والقص."
+            + ") تُقرأ فوق الدرفة التي فُعّلت عليها الإضافة المطابقة فقط، ولا تغني عن طبقات اللوح والقص."
         )
     if TEXT_LABEL_LAYER.upper() in detected:
         hints.append(

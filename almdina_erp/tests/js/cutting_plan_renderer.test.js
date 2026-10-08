@@ -129,7 +129,7 @@ const plan = {
                     area_m2: 0.24,
                     label: "4.1",
                     source_piece_no: 4,
-                    piece_type: "Extra",
+                    piece_type: "Regular",
                     rotated: false,
                     geometry: {
                         schema_version: 1,
@@ -213,7 +213,7 @@ assert.match(html, /<rect class="dco-extra-overlay-path dco-extra-overlay-handle
 assert.match(html, /data-overlay-kind="recessed_handle_cutout"[^>]*stroke-width="0.65"/);
 assert.doesNotMatch(html, /stroke-width="1.75"/);
 assert.match(html, /dco-extra-addon-legend/);
-assert.match(html, /رموز إضافات Extra/);
+assert.match(html, /رموز إضافات الدرف/);
 assert.match(html, /دبل قشاط/);
 assert.match(html, /دبل كامل الدرفة/);
 assert.doesNotMatch(html, /dco-extra-addon-marks/);
@@ -232,7 +232,7 @@ const doubledFrm = {
                 length_cm: 80,
                 qty: 3,
                 extra_full_door_double: 1,
-                piece_type: "Extra",
+                piece_type: "Special",
             },
         ],
     },
@@ -244,16 +244,15 @@ const extraAddonFrm = {
     doc: {
         ...frm.doc,
         pieces: [
-            { width_cm: 60, length_cm: 80, qty: 1, piece_type: "Regular" },
+            { width_cm: 60, length_cm: 80, qty: 1, piece_type: "Regular", extra_full_door_double: 1 },
             { width_cm: 62, length_cm: 80, qty: 1, piece_type: "Special" },
             { width_cm: 20, length_cm: 20, qty: 1, piece_type: "Special" },
             {
                 width_cm: 40,
                 length_cm: 60,
                 qty: 1,
-                piece_type: "Extra",
+                piece_type: "L-Shaped Corner",
                 extra_double: 1,
-                extra_full_door_double: 1,
                 extra_liner: 1,
             },
         ],
@@ -284,7 +283,6 @@ const regularOnlyFrm = {
                 length_cm: 80,
                 qty: 1,
                 piece_type: "Regular",
-                extra_double: 1,
                 extra_full_door_double: 1,
             },
         ],
@@ -300,7 +298,8 @@ const regularOnlyPlan = {
     ],
 };
 const regularOnlyHtml = renderer.build(regularOnlyFrm, regularOnlyPlan);
-assert.doesNotMatch(regularOnlyHtml, /dco-extra-addon-marks/);
+assert.match(regularOnlyHtml, /dco-extra-addon-marks/);
+assert.match(regularOnlyHtml, /data-addon-kind="full_door_double"/);
 assert.match(regularOnlyHtml, /dco-extra-addon-legend/);
 assert.doesNotMatch(regularOnlyHtml, /dco-sheet-text-labels/);
 assert.match(regularOnlyHtml, /dco-piece-number/);

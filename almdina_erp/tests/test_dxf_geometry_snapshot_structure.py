@@ -93,7 +93,7 @@ def test_snapshot_sanitizer_rejects_overlapping_holes():
         sanitize_plan_snapshot(snapshot)
 
 
-def test_canonicalize_keeps_extra_overlays_off_the_hole_contract():
+def test_canonicalize_keeps_addon_overlays_off_the_hole_contract():
     snapshot = canonicalize_snapshot_geometries(
         {
             "sheets": [
@@ -103,7 +103,7 @@ def test_canonicalize_keeps_extra_overlays_off_the_hole_contract():
                         {
                             "id": 1,
                             "label": "1.1",
-                            "piece_type": "Extra",
+                            "piece_type": "Special",
                             "geometry": _contract(((0, 0), (400, 0), (400, 600), (0, 600))),
                             "overlays": [
                                 {
@@ -133,7 +133,7 @@ def test_canonicalize_keeps_extra_overlays_off_the_hole_contract():
     assert snapshot["sheets"][0]["pieces"][0]["geometry"]["holes"] == []
 
 
-def test_canonicalize_accepts_open_overlay_line_inside_extra():
+def test_canonicalize_accepts_open_overlay_line_inside_any_piece_type():
     snapshot = canonicalize_snapshot_geometries(
         {
             "sheets": [
@@ -143,7 +143,7 @@ def test_canonicalize_accepts_open_overlay_line_inside_extra():
                         {
                             "id": 1,
                             "label": "1.1",
-                            "piece_type": "Extra",
+                            "piece_type": "L-Shaped Corner",
                             "geometry": _contract(((0, 0), (400, 0), (400, 600), (0, 600))),
                             "overlays": [
                                 {
@@ -170,7 +170,7 @@ def test_canonicalize_accepts_open_overlay_line_inside_extra():
     assert overlay["geometry"]["closed"] is False
 
 
-def test_canonicalize_rejects_overlay_on_regular_piece():
+def test_canonicalize_accepts_overlay_on_regular_piece():
     snapshot = {
         "sheets": [
             {
@@ -198,11 +198,11 @@ def test_canonicalize_rejects_overlay_on_regular_piece():
             }
         ]
     }
-    with pytest.raises(DxfGeometrySnapshotError, match="Extra"):
-        canonicalize_snapshot_geometries(snapshot)
+    canonical = canonicalize_snapshot_geometries(snapshot)
+    assert canonical["sheets"][0]["pieces"][0]["overlays"][0]["kind"] == "liner"
 
 
-def test_sanitize_keeps_extra_overlays_inside_after_applied_trim():
+def test_sanitize_keeps_addon_overlays_inside_after_applied_trim():
     from almdina_erp.almdina_erp.domain.cutting.dxf_applied_trim import (
         apply_adaptive_trim_to_fixed_dxf_layout,
     )
@@ -226,7 +226,7 @@ def test_sanitize_keeps_extra_overlays_inside_after_applied_trim():
                     {
                         "id": 1,
                         "label": "1.1",
-                        "piece_type": "Extra",
+                        "piece_type": "Regular",
                         "x": 10.0,
                         "y": 10.0,
                         "w": 33.0,

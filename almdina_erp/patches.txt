@@ -29,3 +29,4 @@ almdina_erp.patches.v1_0.split_whatsapp_factory_settings_capabilities
 almdina_erp.patches.v1_0.drop_retired_replacement_columns
 almdina_erp.patches.v1_0.retire_factory_reports
 almdina_erp.patches.v1_0.retire_canonical_permission_runtime
+almdina_erp.patches.v1_0.migrate_extra_piece_type_to_regular

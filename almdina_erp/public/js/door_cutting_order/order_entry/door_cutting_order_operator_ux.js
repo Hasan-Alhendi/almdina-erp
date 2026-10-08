@@ -10,6 +10,11 @@
         "edge_width_top",
         "edge_width_bottom",
         "edge_break",
+        "extra_double",
+        "extra_full_door_double",
+        "extra_liner",
+        "extra_back_groove",
+        "extra_recessed_handle_cutout",
     ]);
     const RECALC_FIELDS = new Set([
         "width_cm",
@@ -24,6 +29,11 @@
         "edge_type",
         "piece_type",
         "notes",
+        "extra_double",
+        "extra_full_door_double",
+        "extra_liner",
+        "extra_back_groove",
+        "extra_recessed_handle_cutout",
     ]);
     const CELL_LABELS = {
         ar: {
@@ -140,18 +150,18 @@
                 .dco-fast-table td { border-bottom:1px solid var(--border-color,#edf0f2); padding:4px; vertical-align:middle; }
                 .dco-fast-table tbody tr:hover { background:var(--subtle-fg,rgba(0,0,0,.02)); }
                 .dco-fast-table tbody tr.dco-virtual-row { background:color-mix(in srgb, var(--alm-primary, #172033) 4%, transparent); }
-                .dco-fast-table .dco-col-no { width:54px; text-align:center; font-weight:800; }
-                .dco-fast-table .dco-col-number { width:105px; }
-                .dco-fast-table .dco-col-qty { width:70px; }
-                .dco-fast-table .dco-col-type { width:112px; }
-                .dco-fast-table .dco-col-sketch { width:132px; text-align:center; }
-                .dco-fast-table .dco-col-rotate { width:72px; text-align:center; }
-                .dco-fast-table .dco-col-edges { width:310px; }
-                .dco-fast-table .dco-col-edge-type { width:160px; }
-                .dco-fast-table .dco-col-edge-bulk { width:122px; min-width:122px; max-width:122px; text-align:center; }
-                .dco-fast-table .dco-col-calc { width:88px; text-align:center; font-variant-numeric:tabular-nums; }
-                .dco-fast-table .dco-col-notes { width:300px; min-width:300px; }
-                .dco-fast-table .dco-col-delete { width:50px; text-align:center; }
+                .dco-fast-table .dco-col-no { width:46px; text-align:center; font-weight:800; }
+                .dco-fast-table .dco-col-number { width:92px; }
+                .dco-fast-table .dco-col-qty { width:62px; }
+                .dco-fast-table .dco-col-type { width:108px; }
+                .dco-fast-table .dco-col-sketch { width:90px; text-align:center; }
+                .dco-fast-table .dco-col-rotate { width:54px; text-align:center; }
+                .dco-fast-table .dco-col-edges { width:240px; }
+                .dco-fast-table .dco-col-edge-type { width:120px; }
+                .dco-fast-table .dco-col-edge-bulk { width:92px; min-width:92px; max-width:92px; text-align:center; }
+                .dco-fast-table .dco-col-calc { width:70px; text-align:center; font-variant-numeric:tabular-nums; }
+                .dco-fast-table .dco-col-notes { width:150px; min-width:150px; }
+                .dco-fast-table .dco-col-delete { width:40px; text-align:center; }
                 .dco-fast-input,.dco-fast-select {
                     width:100%; min-height:38px; border:1px solid var(--border-color,#ccd3da); border-radius:8px;
                     background:var(--control-bg,#fff); padding:6px 9px; font-size:15px; outline:none;
@@ -403,7 +413,6 @@
         const isSpecial = pieceType === "Special";
         const cornerGeometry = window.AlmdinaClippedCornerGeometry;
         const isClipped = Boolean(cornerGeometry && cornerGeometry.isCornerCut({ piece_type: pieceType }));
-        const isExtra = pieceType === "Extra";
         const extraAddons = window.AlmdinaExtraDoorAddonsUX;
         const labels = CELL_LABELS[isArabic() ? "ar" : "en"];
         const toggle = (field, label, extra = "") => `
@@ -439,19 +448,21 @@
             <option value="Special" ${pieceType === "Special" ? "selected" : ""}>${isArabic() ? "خاصة" : "Special"}</option>
             <option value="Clipped Corner" ${pieceType === "Clipped Corner" ? "selected" : ""}>${isArabic() ? "الزاوية الكسر" : "Clipped corner"}</option>
             <option value="L-Shaped Corner" ${pieceType === "L-Shaped Corner" ? "selected" : ""}>${isArabic() ? "زاوية L" : "L-shaped corner"}</option>
-            <option value="Extra" ${pieceType === "Extra" ? "selected" : ""}>${isArabic() ? "إضافية" : "Extra"}</option>
         </select>`;
         const pieceTypeControl = extraAddons && typeof extraAddons.renderTypePicker === "function"
             ? extraAddons.renderTypePicker(data, { editable, virtual })
             : nativePieceTypeSelect;
         const edgeTypeDisabled = (!editable || isSpecial) ? "disabled" : "";
         return `
-            <tr data-row-name="${escapeHtml(name)}" class="${virtual ? "dco-virtual-row" : ""} ${isSpecial ? "dco-special-row" : ""} ${isClipped ? "dco-clipped-corner-row" : ""} ${isExtra ? "dco-extra-row" : ""}">
+            <tr data-row-name="${escapeHtml(name)}" class="${virtual ? "dco-virtual-row" : ""} ${isSpecial ? "dco-special-row" : ""} ${isClipped ? "dco-clipped-corner-row" : ""}">
                 <td class="dco-col-no" data-label="${labels.row}"><span class="dco-row-number">${index}</span></td>
                 <td class="dco-col-type" data-label="${labels.type}">${pieceTypeControl}</td>
                 <td class="dco-col-number dco-col-width" data-label="${labels.width}"><input class="dco-fast-input" type="number" inputmode="decimal" step="any" min="0" data-field="width_cm" value="${virtual ? "" : escapeHtml(data.width_cm || "")}" ${disabled}></td>
                 <td class="dco-col-number dco-col-length" data-label="${labels.length}"><input class="dco-fast-input" type="number" inputmode="decimal" step="any" min="0" data-field="length_cm" value="${virtual ? "" : escapeHtml(data.length_cm || "")}" ${disabled}></td>
                 <td class="dco-col-qty" data-label="${labels.quantity}"><input class="dco-fast-input" type="number" inputmode="numeric" step="1" min="1" data-field="qty" value="${virtual ? "1" : escapeHtml(data.qty || 1)}" ${disabled}></td>
+                ${extraAddons && typeof extraAddons.renderAddonCell === "function"
+                    ? extraAddons.FIELDS.map(item => `<td class="dco-col-addon" data-label="${escapeHtml(isArabic() ? item.labelAr : item.labelEn)}">${extraAddons.renderAddonCell(data, item.fieldname, { editable })}</td>`).join("")
+                    : ""}
                 <td class="dco-col-rotate" data-label="${labels.rotation}">${toggle("allow_rotation", "↻", "dco-rotate-toggle")}</td>
                 <td class="dco-col-edges" data-label="${labels.edges}">${edgesCellHtml(frm, data, { editable, virtual })}</td>
                 <td class="dco-col-edge-type" data-label="${labels.edgeType}"><select class="dco-fast-select" data-field="edge_type" ${edgeTypeDisabled}>${edgeOptions(frm, virtual || isSpecial ? "" : (data.edge_type || ""))}</select></td>
@@ -462,13 +473,14 @@
                 </button></td>
                 <td class="dco-col-calc" data-label="${labels.area}" data-calc="area_m2">${virtual ? "0.000" : localArea(data).toFixed(3)}</td>
                 <td class="dco-col-calc" data-label="${labels.edgeMeters}" data-calc="edge_meters">${virtual ? "0.000" : localEdgeMeters(data).toFixed(3)}</td>
-                <td class="dco-col-notes" data-label="${labels.notes}"><input class="dco-fast-input" type="text" data-field="notes" value="${virtual ? "" : escapeHtml(data.notes || "")}" ${disabled}>${extraAddons && typeof extraAddons.notesCueHtml === "function" ? extraAddons.notesCueHtml(data) : ""}</td>
+                <td class="dco-col-notes" data-label="${labels.notes}"><input class="dco-fast-input" type="text" data-field="notes" value="${virtual ? "" : escapeHtml(data.notes || "")}" ${disabled}></td>
                 <td class="dco-col-delete" data-label="${labels.remove}">${editable && !virtual ? `<button type="button" class="dco-delete-row" title="${isArabic() ? "حذف السطر" : "Delete row"}">×</button>` : ""}</td>
             </tr>`;
     }
 
     function shellHtml(frm) {
         const editable = isEditable(frm);
+        const extraAddons = window.AlmdinaExtraDoorAddonsUX;
         const rows = (frm.doc.pieces || []).map(row => rowHtml(frm, row, false)).join("");
         const virtual = editable ? rowHtml(frm, { qty:1 }, true) : "";
         return `
@@ -479,7 +491,7 @@
                         <span class="dco-keyboard-flow">${isArabic() ? "العرض" : "Width"} → <kbd>Tab</kbd> → ${isArabic() ? "الطول" : "Length"} → <kbd>Enter</kbd> → ${isArabic() ? "العرض التالي فورًا" : "next width immediately"}</span>
                         <span class="dco-help-secondary">${isArabic() ? "القشاط والتدوير: نقرة واحدة مباشرة دون تفعيل السطر." : "Edges and rotation toggle in one click without activating a row."}</span>
                         <span class="dco-help-secondary">${isArabic() ? "في الدرفة الخاصة: جهات القشاط معطّلة من الجدول؛ يُدار القشاط عبر السعر الخاص." : "For a special door, edge sides are disabled in the table; banding is handled via the special price."}</span>
-                        <span class="dco-help-secondary">${isArabic() ? "الخاصة مع Liner: اكتب Liner في الملاحظات، وثّق الشكل، وأدخل السعر الخاص الشامل من التكلفة." : "Special + Liner: note Liner, document the shape, and use the inclusive custom price in Cost."}</span>
+                        <span class="dco-help-secondary">${isArabic() ? "الإضافات متاحة لكل الأنواع؛ دبل القشاط ودبل كامل لا يجتمعان." : "Add-ons are available for every type; Double and Full Door Double are mutually exclusive."}</span>
                     </div>
                     ${editable ? "" : `<span class="dco-fast-readonly-note">${isArabic() ? "الطلب للعرض فقط" : "Read only"}</span>`}
                 </div>
@@ -491,6 +503,7 @@
                             <th class="dco-col-number">${isArabic() ? "العرض (سم)" : "Width (CM)"}</th>
                             <th class="dco-col-number">${isArabic() ? "الطول (سم)" : "Length (CM)"}</th>
                             <th class="dco-col-qty">${isArabic() ? "العدد" : "Qty"}</th>
+                            ${(extraAddons && Array.isArray(extraAddons.FIELDS) ? extraAddons.FIELDS : []).map(item => `<th class="dco-col-addon" title="${escapeHtml(isArabic() ? item.labelAr : item.labelEn)}">${escapeHtml(isArabic() ? item.labelAr : item.labelEn)}</th>`).join("")}
                             <th class="dco-col-rotate">${isArabic() ? "تدوير" : "Rotate"}</th>
                             <th class="dco-col-edges">${isArabic() ? "جهات القشاط" : "Edge sides"}</th>
                             <th class="dco-col-edge-type">${isArabic() ? "نوع القشاط" : "Edge type"}</th>
@@ -802,9 +815,16 @@
         if (button.disabled || button.classList.contains("is-break-locked")) return;
         const row = getOrMaterializeRow(frm, tr);
         if (!row) return;
+        const extraAddons = window.AlmdinaExtraDoorAddonsUX;
+        const addonField = Boolean(
+            extraAddons
+            && extraAddons.FIELD_NAMES
+            && extraAddons.FIELD_NAMES.has(fieldname)
+        );
         if (
             (row.piece_type || "Regular") === "Special"
             && fieldname !== "allow_rotation"
+            && !addonField
         ) {
             return;
         }
@@ -820,7 +840,10 @@
             return;
         }
         const next = row[fieldname] ? 0 : 1;
-        row[fieldname] = next;
+        const changedFields = addonField && typeof extraAddons.enforceMutualExclusivity === "function"
+            ? extraAddons.enforceMutualExclusivity(row, fieldname, next)
+            : [fieldname];
+        if (!addonField) row[fieldname] = next;
         if (fieldname === "edge_break" && cornerGeometry && typeof cornerGeometry.applyEdgeBreakPolicy === "function") {
             cornerGeometry.applyEdgeBreakPolicy(row);
             frm.dirty();
@@ -830,12 +853,16 @@
             return;
         }
         frm.dirty();
-        button.classList.toggle("is-checked", Boolean(next));
-        button.setAttribute("aria-pressed", next ? "true" : "false");
-        const mark = button.querySelector(".dco-check-mark");
-        if (mark) mark.textContent = next ? "✓" : "";
+        if (addonField && typeof extraAddons.syncAddonButtons === "function") {
+            extraAddons.syncAddonButtons(tr, row, true);
+        } else {
+            button.classList.toggle("is-checked", Boolean(next));
+            button.setAttribute("aria-pressed", next ? "true" : "false");
+            const mark = button.querySelector(".dco-check-mark");
+            if (mark) mark.textContent = next ? "✓" : "";
+        }
         updateCalculatedCells(tr, row);
-        triggerChildField(frm, row, fieldname, 0);
+        changedFields.forEach(changedField => triggerChildField(frm, row, changedField, 0));
     }
 
     function deleteRow(frm, tr) {

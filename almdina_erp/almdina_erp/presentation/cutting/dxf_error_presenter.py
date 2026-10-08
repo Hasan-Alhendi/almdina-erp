@@ -90,10 +90,10 @@ def present_target(target: DxfIssueTarget, *, params: dict[str, Any] | None = No
         if target.source_piece_no is not None:
             return f"الدرفة {target.source_piece_no}."
         if target.label:
-            return f"علامة Extra المرتبطة بالمعرّف {target.label}."
+            return f"علامة الإضافة المرتبطة بالمعرّف {target.label}."
         if target.layer:
             return f"الطبقة {target.layer}."
-        return "علامة Extra."
+        return "علامة إضافة."
     if kind in {codes.TARGET_PIECE, codes.TARGET_PIECE_COPY}:
         piece_no = target.source_piece_no
         if params.get("identity_unproven"):
@@ -613,9 +613,9 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
         layer = params.get("layer") or issue.target.layer or "؟"
         noun = _piece_noun(issue)
         return PresentedDxfError(
-            f"علامة الطبقة {layer} على {noun} ليست Extra.",
+            f"علامة الطبقة {layer} لا تطابق إضافة مفعّلة على {noun}.",
             target_text,
-            f"ضع العلامة داخل {noun} من نوع Extra فقط.",
+            f"فعّل الإضافة المطابقة على {noun} أو احذف العلامة.",
             code,
             issue.category,
         )
@@ -623,9 +623,9 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
         layer = params.get("layer") or issue.target.layer or "؟"
         noun = _piece_noun(issue)
         return PresentedDxfError(
-            f"علامة الطبقة {layer} ليست بالكامل داخل {noun} من نوع Extra.",
+            f"علامة الطبقة {layer} ليست بالكامل داخل {noun} واحدة.",
             target_text,
-            f"ضع العلامة بالكامل داخل {noun} واحد من نوع Extra.",
+            f"ضع العلامة بالكامل داخل {noun} واحدة مفعّلة عليها الإضافة.",
             code,
             issue.category,
         )
@@ -636,7 +636,7 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
         return PresentedDxfError(
             f"علامة الطبقة {layer} تمتد فوق {multiple}.",
             target_text,
-            f"ضع كل علامة داخل {noun} واحد من نوع Extra.",
+            f"ضع كل علامة داخل {noun} واحدة مفعّلة عليها الإضافة.",
             code,
             issue.category,
         )
@@ -676,7 +676,7 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
         return PresentedDxfError(
             "علامة تصنيع في DXF غير معروفة أو غير صالحة.",
             target_text,
-            "راجع طبقات علامات Extra المدعومة ثم أعد الرفع.",
+            "راجع طبقات علامات الإضافات المدعومة ثم أعد الرفع.",
             code,
             issue.category,
         )

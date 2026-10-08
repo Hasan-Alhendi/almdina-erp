@@ -43,7 +43,7 @@ def _fields(path: Path) -> dict[str, dict]:
 
 def test_special_piece_schema_keeps_documentation_and_accounting_price_separate():
     fields = _fields(DETAIL_JSON)
-    assert fields["piece_type"]["options"] == "Regular\nClipped Corner\nL-Shaped Corner\nSpecial\nExtra"
+    assert fields["piece_type"]["options"] == "Regular\nClipped Corner\nL-Shaped Corner\nSpecial"
     assert fields["special_shape_drawing_json"]["fieldtype"] == "Long Text"
     assert fields["special_shape_status"]["read_only"] == 1
     for fieldname in (
@@ -215,7 +215,7 @@ def test_review_and_production_keep_special_drawing_optional_and_plan_approval_i
     assert "ensure_special_prices_approved" not in approval
     assert "pending_custom_edge_price_labels" in invoice
     assert "قبل طباعة الفاتورة" in invoice
-    assert placed_piece_fields["piece_type"]["options"] == "Regular\nClipped Corner\nL-Shaped Corner\nSpecial\nExtra"
+    assert placed_piece_fields["piece_type"]["options"] == "Regular\nClipped Corner\nL-Shaped Corner\nSpecial"
     assert '"piece_type": piece.get("piece_type") or "Regular"' in workspace
 
 

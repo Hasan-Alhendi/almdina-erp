@@ -175,7 +175,7 @@ def test_invoice_uses_one_aggregate_offcut_line_and_excludes_customer_execution_
         },
         [
             {
-                "piece_type": "Extra",
+                "piece_type": "Regular",
                 "qty": 5,
                 "factory_execution_qty": 4,
                 "extra_liner": 1,
@@ -324,7 +324,7 @@ def test_invoice_service_scales_edge_and_extra_totals_to_factory_physical_quanti
     row = SimpleNamespace(
         name="ROW-1",
         piece_no=1,
-        piece_type="Extra",
+        piece_type="Regular",
         qty=5,
         edge_type="2cm",
         edge_meters=10,

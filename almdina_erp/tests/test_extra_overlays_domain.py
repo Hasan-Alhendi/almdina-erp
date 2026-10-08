@@ -21,16 +21,17 @@ def _rect(x1: float, y1: float, x2: float, y2: float):
     return ((x1, y1), (x2, y1), (x2, y2), (x1, y2))
 
 
-def test_open_liner_path_and_groove_line_are_contained_in_extra():
-    extra = _rect(0, 0, 400, 600)
+def test_open_liner_path_and_groove_line_are_contained_in_host():
+    host = _rect(0, 0, 400, 600)
     liner = ((40, 40), (40, 540), (55, 540), (55, 40), (70, 40), (70, 540), (85, 540), (85, 40))
     groove = ((360, 40), (360, 560))
 
-    assert overlay_path_contained_in_polygon(extra, liner, tolerance=0.25)
-    assert overlay_path_contained_in_polygon(extra, groove, tolerance=0.25)
+    assert overlay_path_contained_in_polygon(host, liner, tolerance=0.25)
+    assert overlay_path_contained_in_polygon(host, groove, tolerance=0.25)
 
 
-def test_assign_extra_overlays_accepts_open_marks_inside_selected_extra():
+@pytest.mark.parametrize("piece_type", ["Regular", "Clipped Corner", "L-Shaped Corner", "Special"])
+def test_assign_extra_overlays_accepts_open_marks_for_all_piece_types(piece_type):
     assigned = assign_extra_overlays(
         [
             ExtraOverlayCandidate(
@@ -55,7 +56,7 @@ def test_assign_extra_overlays_accepts_open_marks_inside_selected_extra():
         [
             ExtraOverlayHost(
                 key=1,
-                piece_type="Extra",
+                piece_type=piece_type,
                 polygon=_rect(0, 0, 400, 600),
                 selected_codes=("liner", "back_groove", "recessed_handle_cutout"),
             )
@@ -72,7 +73,7 @@ def test_assign_extra_overlays_accepts_open_marks_inside_selected_extra():
     assert assigned[1].closed is False
 
 
-def test_assign_extra_overlays_rejects_overlay_on_regular():
+def test_assign_extra_overlays_rejects_overlay_without_selected_addon():
     with pytest.raises(ExtraOverlayError) as exc_info:
         assign_extra_overlays(
             [
@@ -94,14 +95,14 @@ def test_assign_extra_overlays_rejects_overlay_on_regular():
             tolerance=0.25,
         )
 
-    assert exc_info.value.code == "extra_overlay_on_non_extra"
+    assert exc_info.value.code == "extra_overlay_addon_not_selected"
     assert exc_info.value.layer == "Liner"
 
 
 def test_assign_extra_overlays_rejects_floating_and_missing_addon():
-    extra = ExtraOverlayHost(
+    host = ExtraOverlayHost(
         key=1,
-        piece_type="Extra",
+        piece_type="Special",
         polygon=_rect(0, 0, 400, 600),
         selected_codes=("back_groove",),
     )
@@ -115,7 +116,7 @@ def test_assign_extra_overlays_rejects_floating_and_missing_addon():
                     path=((500, 500), (600, 600)),
                 )
             ],
-            [extra],
+            [host],
             tolerance=0.25,
         )
     assert floating.value.code == "extra_overlay_floating"
@@ -130,7 +131,7 @@ def test_assign_extra_overlays_rejects_floating_and_missing_addon():
                     path=((40, 40), (180, 160)),
                 )
             ],
-            [extra],
+            [host],
             tolerance=0.25,
         )
     assert missing.value.code == "extra_overlay_addon_not_selected"
@@ -138,9 +139,9 @@ def test_assign_extra_overlays_rejects_floating_and_missing_addon():
 
 
 def test_assign_extra_overlays_rejects_selected_addon_without_drawn_mark():
-    extra = ExtraOverlayHost(
+    host = ExtraOverlayHost(
         key=1,
-        piece_type="Extra",
+        piece_type="Clipped Corner",
         polygon=_rect(0, 0, 400, 600),
         selected_codes=("liner", "back_groove"),
         label="1.1",
@@ -155,7 +156,7 @@ def test_assign_extra_overlays_rejects_selected_addon_without_drawn_mark():
                     path=((40, 40), (180, 160)),
                 )
             ],
-            [extra],
+            [host],
             tolerance=0.25,
         )
     assert missing.value.code == "extra_overlay_addon_missing"
@@ -165,9 +166,9 @@ def test_assign_extra_overlays_rejects_selected_addon_without_drawn_mark():
 
 
 def test_assign_extra_overlays_rejects_duplicate_mark_for_one_selected_addon():
-    extra = ExtraOverlayHost(
+    host = ExtraOverlayHost(
         key=1,
-        piece_type="Extra",
+        piece_type="L-Shaped Corner",
         polygon=_rect(0, 0, 400, 600),
         selected_codes=("liner",),
         label="2.1",
@@ -188,20 +189,20 @@ def test_assign_extra_overlays_rejects_duplicate_mark_for_one_selected_addon():
                     path=((120, 40), (180, 80)),
                 ),
             ],
-            [extra],
+            [host],
             tolerance=0.25,
         )
     assert duplicate.value.code == "extra_overlay_addon_duplicate"
     assert duplicate.value.kind == "liner"
 
 
-def test_extra_with_only_commercial_addons_does_not_require_dxf_marks():
+def test_piece_with_only_commercial_addons_does_not_require_dxf_marks():
     assigned = assign_extra_overlays(
         [],
         [
             ExtraOverlayHost(
                 key=1,
-                piece_type="Extra",
+                piece_type="Regular",
                 polygon=_rect(0, 0, 400, 600),
                 selected_codes=("double",),
             )
@@ -211,7 +212,7 @@ def test_extra_with_only_commercial_addons_does_not_require_dxf_marks():
     assert assigned == ()
 
 
-def test_assign_extra_overlays_rejects_span_across_two_extras():
+def test_assign_extra_overlays_rejects_span_across_two_hosts():
     with pytest.raises(ExtraOverlayError) as exc_info:
         assign_extra_overlays(
             [
@@ -225,13 +226,13 @@ def test_assign_extra_overlays_rejects_span_across_two_extras():
             [
                 ExtraOverlayHost(
                     key=1,
-                    piece_type="Extra",
+                    piece_type="Regular",
                     polygon=_rect(0, 0, 150, 200),
                     selected_codes=("liner",),
                 ),
                 ExtraOverlayHost(
                     key=2,
-                    piece_type="Extra",
+                    piece_type="Special",
                     polygon=_rect(160, 0, 310, 200),
                     selected_codes=("liner",),
                 ),
@@ -242,7 +243,7 @@ def test_assign_extra_overlays_rejects_span_across_two_extras():
     assert exc_info.value.code == "extra_overlay_spans_hosts"
 
 
-def test_two_overlapping_extra_cut_paths_still_fail_material_layout():
+def test_two_overlapping_cut_paths_still_fail_material_layout():
     with pytest.raises(DxfTopologyError) as exc_info:
         validate_material_layout(
             [

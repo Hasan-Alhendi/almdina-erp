@@ -215,9 +215,6 @@
     }
 
     function extraAddonFlags(frm, piece) {
-        if ((piece && piece.piece_type) !== "Extra") {
-            return { double: false, fullDoorDouble: false };
-        }
         const row = extraOrderRowForPiece(frm, piece);
         if (!row) return { double: false, fullDoorDouble: false };
         return {
@@ -267,7 +264,7 @@
             </span>`;
         }).join("");
         return `<div class="dco-extra-addon-legend" dir="rtl">
-            <span class="dco-extra-addon-legend-title">رموز إضافات Extra</span>
+            <span class="dco-extra-addon-legend-title">رموز إضافات الدرف</span>
             ${items}
         </div>`;
     }
@@ -406,16 +403,13 @@
         const clippedLabel = clipped
             ? `<span class="dco-piece-kind-badge" style="display:inline-block;margin-bottom:2px;padding:2px 6px;border-radius:999px;background:#8a5700;color:#fff;font-size:9px;font-weight:900">${clippedGeometry.typeIcon(piece)} ${clippedGeometry.typeLabel(piece)}</span><br>`
             : "";
-        const extra = piece.piece_type === "Extra"
-            ? `<span class="dco-piece-kind-badge" style="display:inline-block;margin-bottom:2px;padding:2px 6px;border-radius:999px;background:#2459a6;color:#fff;font-size:9px;font-weight:900">＋ درفة Extra</span><br>`
-            : "";
         const piece_number = print_piece_number(piece.label);
         const labelStyle = geometryModel && geometryModel.vector
             ? `position:absolute;left:${geometryModel.labelPoint.xPercent}%;top:${geometryModel.labelPoint.yPercent}%;transform:translate(-50%,-50%);max-width:84%;`
             : "position:relative;";
         return `
             <div class="dco-piece-label" style="${labelStyle}z-index:4;direction:ltr;text-align:center;">
-                ${invalidGeometry}${special}${clippedLabel}${extra}
+                ${invalidGeometry}${special}${clippedLabel}
                 <span class="dco-piece-size">${round(piece.original_w, 1)}*${round(piece.original_h, 1)}</span>
                 <span class="dco-piece-size-mm" style="display:none">${round(num(piece.original_w) * 10, 0)} × ${round(num(piece.original_h) * 10, 0)}</span>
                 <span class="dco-piece-number" style="display:none">${escape_html(piece_number)}</span>
@@ -473,7 +467,7 @@
                 ? " · ✦ خاصة (CNC)"
                 : (cornerGeometry && cornerGeometry.isCornerCut(row)
                     ? ` · ${cornerGeometry.typeIcon(row)} ${cornerGeometry.typeLabel(row)}`
-                    : (row.piece_type === "Extra" ? " · ＋ Extra" : ""));
+                    : "");
             html += `
                 <span style="display:inline-block;margin-left:16px;white-space:nowrap;">
                     ${index + 1}- ${round(row.width_cm, 1)}*${round(row.length_cm, 1)} عدد ${physicalCutQuantity(row)}${typeLabel}

@@ -139,7 +139,12 @@ class FrappeOrderPlanAdapter:
                     index=index,
                     width_cm=self.access.normalized_number(row.width_cm),
                     length_cm=self.access.normalized_number(row.length_cm),
-                    qty=cint(row.qty),
+                    qty=physical_cut_quantity(
+                        cint(row.qty),
+                        full_door_double=bool(
+                            cint(getattr(row, "extra_full_door_double", 0))
+                        ),
+                    ),
                     allow_rotation=cint(row.allow_rotation),
                     piece_type=str(row.piece_type or "Regular"),
                     clipped_corner_position=str(

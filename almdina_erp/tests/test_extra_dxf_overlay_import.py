@@ -308,11 +308,11 @@ class TestExtraDxfOverlayImport(unittest.TestCase):
         self.assertIn(SHEET, result["diagnostics"]["relevant_layers"])
         self.assertIn(CUT, result["diagnostics"]["relevant_layers"])
 
-    def test_extra_with_liner_overlay_is_accepted_and_not_counted_as_a_piece(self) -> None:
-        snapshot = self._parse(_extra_plan_doc(), _order(piece_type="Extra", extra_liner=1))
+    def test_regular_with_liner_overlay_is_accepted_and_not_counted_as_a_piece(self) -> None:
+        snapshot = self._parse(_extra_plan_doc(), _order(piece_type="Regular", extra_liner=1))
         pieces = snapshot["sheets"][0]["pieces"]
         self.assertEqual(len(pieces), 1)
-        self.assertEqual(pieces[0]["piece_type"], "Extra")
+        self.assertEqual(pieces[0]["piece_type"], "Regular")
         overlays = pieces[0]["overlays"]
         self.assertEqual(len(overlays), 1)
         self.assertEqual(overlays[0]["kind"], "liner")
@@ -325,7 +325,7 @@ class TestExtraDxfOverlayImport(unittest.TestCase):
         snapshot = self._parse(
             _reference_style_extra_plan_doc(),
             _order(
-                piece_type="Extra",
+                piece_type="Special",
                 extra_liner=1,
                 extra_back_groove=1,
                 extra_recessed_handle_cutout=1,
@@ -345,7 +345,7 @@ class TestExtraDxfOverlayImport(unittest.TestCase):
         snapshot = self._parse(
             _layer0_designer_plan_doc(),
             _order(
-                piece_type="Extra",
+                piece_type="Clipped Corner",
                 extra_liner=1,
                 extra_back_groove=1,
                 extra_recessed_handle_cutout=1,
@@ -353,7 +353,7 @@ class TestExtraDxfOverlayImport(unittest.TestCase):
         )
         pieces = snapshot["sheets"][0]["pieces"]
         self.assertEqual(len(pieces), 1)
-        self.assertEqual(pieces[0]["piece_type"], "Extra")
+        self.assertEqual(pieces[0]["piece_type"], "Clipped Corner")
         by_kind = {item["kind"]: item for item in pieces[0]["overlays"]}
         self.assertEqual(set(by_kind), {"liner", "back_groove", "recessed_handle_cutout"})
 
@@ -371,7 +371,7 @@ class TestExtraDxfOverlayImport(unittest.TestCase):
         snapshot = self._parse(
             _test1_reference_plan_doc(),
             _order(
-                piece_type="Extra",
+                piece_type="L-Shaped Corner",
                 extra_liner=1,
                 extra_back_groove=1,
                 extra_recessed_handle_cutout=1,
@@ -426,50 +426,50 @@ class TestExtraDxfOverlayImport(unittest.TestCase):
         doc = _extra_plan_doc()
         msp = doc.modelspace()
         _add_rectangle(msp, ((700, 100), (1100, 100), (1100, 700), (700, 700)), layer="0")
-        snapshot = self._parse(doc, _order(piece_type="Extra", extra_liner=1))
+        snapshot = self._parse(doc, _order(piece_type="Regular", extra_liner=1))
         self.assertEqual(len(snapshot["sheets"][0]["pieces"]), 1)
 
-    def test_extra_without_drawn_overlay_is_rejected_when_addon_is_selected(self) -> None:
+    def test_piece_without_drawn_overlay_is_rejected_when_addon_is_selected(self) -> None:
         with self.assertRaises(DxfImportError) as exc_info:
             self._parse(
                 _extra_plan_doc(overlay_layer=None),
-                _order(piece_type="Extra", extra_liner=1),
+                _order(piece_type="Special", extra_liner=1),
             )
         message = _present_error(exc_info.exception)
         self.assertIn("اللاينر", message)
         self.assertIn("أضف علامة اللاينر", message)
         self.assertIn("1.1", message)
 
-    def test_extra_with_only_double_does_not_require_overlay_layers(self) -> None:
+    def test_piece_with_only_double_does_not_require_overlay_layers(self) -> None:
         snapshot = self._parse(
             _extra_plan_doc(overlay_layer=None),
-            _order(piece_type="Extra", extra_double=1),
+            _order(piece_type="Clipped Corner", extra_double=1),
         )
         self.assertEqual(len(snapshot["sheets"][0]["pieces"]), 1)
         self.assertNotIn("overlays", snapshot["sheets"][0]["pieces"][0])
 
-    def test_duplicate_liner_on_one_extra_is_rejected(self) -> None:
+    def test_duplicate_liner_on_one_piece_is_rejected(self) -> None:
         doc = _extra_plan_doc()
         msp = doc.modelspace()
         _add_rectangle(msp, ((200, 200), (280, 200), (280, 280), (200, 280)), layer=LINER)
         with self.assertRaises(DxfImportError) as exc_info:
-            self._parse(doc, _order(piece_type="Extra", extra_liner=1))
+            self._parse(doc, _order(piece_type="L-Shaped Corner", extra_liner=1))
         message = _present_error(exc_info.exception)
         self.assertIn("أكثر من علامة", message)
-        self.assertIn("علامة Extra", message)
+        self.assertIn("علامة الإضافة", message)
 
-    def test_liner_overlay_on_regular_is_rejected(self) -> None:
+    def test_liner_overlay_without_matching_flag_is_rejected(self) -> None:
         with self.assertRaises(DxfImportError) as exc_info:
             self._parse(_extra_plan_doc(), _order(piece_type="Regular"))
         message = _present_error(exc_info.exception)
-        self.assertIn("Liner", message)
-        self.assertIn("Extra", message)
+        self.assertIn("اللاينر", message)
+        self.assertIn("دون تفعيل خانة الطلب", message)
 
-    def test_overlay_on_extra_without_matching_addon_is_rejected(self) -> None:
+    def test_overlay_without_matching_addon_is_rejected(self) -> None:
         with self.assertRaises(DxfImportError) as exc_info:
             self._parse(
                 _extra_plan_doc(),
-                _order(piece_type="Extra", extra_back_groove=1),
+                _order(piece_type="Special", extra_back_groove=1),
             )
         message = _present_error(exc_info.exception)
         self.assertIn("دون تفعيل خانة الطلب", message)
@@ -485,7 +485,7 @@ class TestExtraDxfOverlayImport(unittest.TestCase):
             _proxy_order,
         )
 
-        live_order = _order(piece_type="Extra", extra_liner=1)
+        live_order = _order(piece_type="Regular", extra_liner=1)
         spec = OrderPieceCutSpec(
             row_index=1,
             finished_width_cm=Decimal("40"),
@@ -495,7 +495,7 @@ class TestExtraDxfOverlayImport(unittest.TestCase):
             width_deduction_mm=Decimal("0"),
             length_deduction_mm=Decimal("0"),
             allow_rotation=0,
-            piece_type="Extra",
+            piece_type="Regular",
             qty=1,
             side_profiles=(),
         )
@@ -512,7 +512,7 @@ class TestExtraDxfOverlayImport(unittest.TestCase):
                     overlay_on_cut_path=True,
                     overlay_points=((300, 100), (500, 100), (500, 300), (300, 300)),
                 ),
-                _order(piece_type="Extra", extra_liner=1),
+                _order(piece_type="Clipped Corner", extra_liner=1),
             )
         message = _present_error(exc_info.exception)
         self.assertTrue(exc_info.exception.issues)
@@ -523,7 +523,7 @@ class TestExtraDxfOverlayImport(unittest.TestCase):
         _add_rectangle(msp, ((0, 0), (1220, 0), (1220, 2440), (0, 2440)), layer="NOTES")
         _add_rectangle(msp, ((40, 40), (180, 40), (180, 160), (40, 160)), layer=LINER)
         with self.assertRaises(DxfImportError) as exc_info:
-            self._parse(doc, _order(piece_type="Extra", extra_liner=1))
+            self._parse(doc, _order(piece_type="Special", extra_liner=1))
         message = _present_error(exc_info.exception)
         self.assertIn(SHEET, message)
         self.assertIn(CUT, message)

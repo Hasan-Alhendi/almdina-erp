@@ -48,7 +48,6 @@
         if (value === "Special") return "خاصة";
         if (value === "Clipped Corner") return "الزاوية الكسر";
         if (value === "L-Shaped Corner") return "زاوية L";
-        if (value === "Extra") return "إضافية";
         return "عادية";
     }
 
@@ -209,9 +208,7 @@
                     pending: !ready,
                     note: ready ? row.priceNote : "بانتظار إدخال السعر الخاص الشامل",
                 });
-                return;
-            }
-            if (isCornerCutType(row.pieceType)) {
+            } else if (isCornerCutType(row.pieceType)) {
                 const ready = cutCornerPriceReady(row);
                 result.push({
                     type: "cut_corner",
@@ -227,21 +224,18 @@
                             : "بانتظار إدخال سعر معالجة قشاط الزاوية المقصوصة"
                     ),
                 });
-                return;
             }
-            if (row.pieceType === "Extra") {
-                row.extraAddons
-                    .filter(addon => addon.selected || addon.amount > 0)
-                    .forEach(addon => result.push({
-                        type: "extra_addon",
-                        description: `إضافة ${addon.label} — درفة رقم ${row.index}`,
-                        quantity: row.qty,
-                        unit: "درفة",
-                        rate: addon.rate,
-                        amount: addon.amount || addon.rate * row.qty,
-                        note: row.notes,
-                    }));
-            }
+            row.extraAddons
+                .filter(addon => addon.selected || addon.amount > 0)
+                .forEach(addon => result.push({
+                    type: "extra_addon",
+                    description: `إضافة ${addon.label} — درفة رقم ${row.index}`,
+                    quantity: row.qty,
+                    unit: "درفة",
+                    rate: addon.rate,
+                    amount: addon.amount || addon.rate * row.qty,
+                    note: row.notes,
+                }));
         });
 
         return result;
@@ -576,7 +570,7 @@
             <div class="dco-cost-section"><div class="dco-cost-section-title"><h4>جدول قياسات الطلب</h4><span>القياسات والكميات والملاحظات</span></div>${measurementRowsHtml(frm)}</div>
             ${specialPricingHtml(frm)}
             ${cutCornerPricingHtml(frm)}
-            <div class="dco-cost-section dco-cost-invoice-section"><div class="dco-cost-section-title"><h4>تفاصيل عرض السعر</h4><span>الألواح والقص والقشاط والدرف الخاصة وإضافات Extra</span></div>${invoiceRowsHtml(frm)}${invoiceTotalCardHtml(frm)}</div>
+            <div class="dco-cost-section dco-cost-invoice-section"><div class="dco-cost-section-title"><h4>تفاصيل عرض السعر</h4><span>الألواح والقص والقشاط والدرف الخاصة وإضافات الدرف</span></div>${invoiceRowsHtml(frm)}${invoiceTotalCardHtml(frm)}</div>
         </div>`);
         bindViewDrawing(frm, field.$wrapper);
         return true;
@@ -588,7 +582,7 @@
         const section = field.$wrapper.find(".dco-cost-invoice-section");
         if (!section.length) return render(frm);
         section.html(
-            `<div class="dco-cost-section-title"><h4>تفاصيل عرض السعر</h4><span>الألواح والقص والقشاط والدرف الخاصة وإضافات Extra</span></div>${invoiceRowsHtml(frm)}${invoiceTotalCardHtml(frm)}`
+            `<div class="dco-cost-section-title"><h4>تفاصيل عرض السعر</h4><span>الألواح والقص والقشاط والدرف الخاصة وإضافات الدرف</span></div>${invoiceRowsHtml(frm)}${invoiceTotalCardHtml(frm)}`
         );
         return true;
     }

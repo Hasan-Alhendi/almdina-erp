@@ -78,7 +78,7 @@
                     [t("رسم القشاط اليدوي"), `${display(source.default_special_manual_edge_fee_usd)} USD`],
                     [t("هامش الدرف الخاصة"), `${display(source.default_special_margin_percent)}%`],
                 ], current),
-                section("extra_addons", t("إضافات الدرف Extra"), t("أسعار بيع ثابتة لكل درفة. يحفظ الطلب نسخة السعر وقت إنشائه ولا تتأثر الطلبات القديمة لاحقًا."), [
+                section("extra_addons", t("إضافات الدرف"), t("أسعار بيع ثابتة لكل درفة. يحفظ الطلب نسخة السعر وقت إنشائه ولا تتأثر الطلبات القديمة لاحقًا."), [
                     [t("Double / درفة"), `${display(source.default_extra_double_unit_price_usd)} USD`],
                     [t("أجرة دبل كامل الدرفة"), `${display(source.default_extra_full_door_double_unit_price_usd)} USD`],
                     [t("Liner / درفة"), `${display(source.default_extra_liner_unit_price_usd)} USD`],

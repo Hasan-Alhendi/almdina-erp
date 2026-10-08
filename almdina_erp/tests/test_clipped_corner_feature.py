@@ -45,7 +45,7 @@ PIECE_GEOMETRY = DCO_JS / "cutting_plan" / "door_cutting_order_piece_geometry.js
 SECURE_DXF = DCO_JS / "cutting_plan" / "secure_dxf_export.js"
 ASSETS = APP_ROOT / "frontend_assets.py"
 
-PIECE_TYPE_OPTIONS = "Regular\nClipped Corner\nL-Shaped Corner\nSpecial\nExtra"
+PIECE_TYPE_OPTIONS = "Regular\nClipped Corner\nL-Shaped Corner\nSpecial"
 
 
 def _fields(path: Path) -> dict[str, dict]:

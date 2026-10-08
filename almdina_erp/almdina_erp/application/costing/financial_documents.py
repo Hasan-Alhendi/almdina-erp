@@ -53,7 +53,6 @@ def _piece_type_label(value: Any) -> str:
         "Special": "خاصة",
         "Clipped Corner": "الزاوية الكسر",
         "L-Shaped Corner": "زاوية L",
-        "Extra": "إضافية",
         "Regular": "عادية",
     }.get(_text(value, "Regular"), "عادية")
 
@@ -281,55 +280,56 @@ def _customer_invoice_lines(
                     "note": _text(_value(piece, "clipped_corner_edge_price_note")),
                 }
             )
-        elif piece_type == "Extra":
-            specs = (
-                (
-                    "extra_double",
-                    "extra_double_unit_price_usd",
-                    "extra_double_total_usd",
-                    "دبل قشاط",
-                ),
-                (
-                    "extra_full_door_double",
-                    "extra_full_door_double_unit_price_usd",
-                    "extra_full_door_double_total_usd",
-                    "دبل كامل الدرفة",
-                ),
-                (
-                    "extra_liner",
-                    "extra_liner_unit_price_usd",
-                    "extra_liner_total_usd",
-                    "Liner",
-                ),
-                (
-                    "extra_back_groove",
-                    "extra_back_groove_unit_price_usd",
-                    "extra_back_groove_total_usd",
-                    "فرزة ظهر",
-                ),
-                (
-                    "extra_recessed_handle_cutout",
-                    "extra_recessed_handle_cutout_unit_price_usd",
-                    "extra_recessed_handle_cutout_total_usd",
-                    "حفر مسكة غطس",
-                ),
+
+        addon_quantity = _quantity(_value(piece, "qty"))
+        specs = (
+            (
+                "extra_double",
+                "extra_double_unit_price_usd",
+                "extra_double_total_usd",
+                "دبل قشاط",
+            ),
+            (
+                "extra_full_door_double",
+                "extra_full_door_double_unit_price_usd",
+                "extra_full_door_double_total_usd",
+                "دبل كامل الدرفة",
+            ),
+            (
+                "extra_liner",
+                "extra_liner_unit_price_usd",
+                "extra_liner_total_usd",
+                "Liner",
+            ),
+            (
+                "extra_back_groove",
+                "extra_back_groove_unit_price_usd",
+                "extra_back_groove_total_usd",
+                "فرزة ظهر",
+            ),
+            (
+                "extra_recessed_handle_cutout",
+                "extra_recessed_handle_cutout_unit_price_usd",
+                "extra_recessed_handle_cutout_total_usd",
+                "حفر مسكة غطس",
+            ),
+        )
+        for flag_field, rate_field, amount_field, label in specs:
+            amount = _number(_value(piece, amount_field))
+            if not _number(_value(piece, flag_field)) and amount <= 0:
+                continue
+            rate = _number(_value(piece, rate_field))
+            lines.append(
+                {
+                    "type": "extra_addon",
+                    "description": f"إضافة {label} — درفة رقم {index}",
+                    "quantity": addon_quantity,
+                    "unit": "درفة",
+                    "rate_usd": _money(rate),
+                    "amount_usd": _money(rate * addon_quantity if rate else amount),
+                    "note": _text(_value(piece, "notes")),
+                }
             )
-            for flag_field, rate_field, amount_field, label in specs:
-                amount = _number(_value(piece, amount_field))
-                if not _number(_value(piece, flag_field)) and amount <= 0:
-                    continue
-                rate = _number(_value(piece, rate_field))
-                lines.append(
-                    {
-                        "type": "extra_addon",
-                        "description": f"إضافة {label} — درفة رقم {index}",
-                        "quantity": quantity,
-                        "unit": "درفة",
-                        "rate_usd": _money(rate),
-                        "amount_usd": _money(rate * quantity if rate else amount),
-                        "note": _text(_value(piece, "notes")),
-                    }
-                )
 
     return lines
 
