@@ -22,6 +22,7 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
     piece_target,
     topology_error_to_issue,
 )
+from almdina_erp.almdina_erp.domain.cutting import dxf_issue as issue_codes
 from almdina_erp.almdina_erp.domain.cutting.dxf_topology import DxfTopologyError
 from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import (
     present_issue,
@@ -382,6 +383,27 @@ def test_every_runtime_issue_call_has_explicit_presenter_branch():
                         if isinstance(item, ast.Attribute) and isinstance(item.value, ast.Name) and item.value.id == "codes"
                     )
     assert emitted <= handled, f"issue codes missing explicit presenter mappings: {sorted(emitted - handled)}"
+
+
+def test_all_71_declared_issue_codes_have_safe_three_question_presentations():
+    catalogue = sorted(
+        value
+        for name, value in vars(issue_codes).items()
+        if name == value
+        and not name.startswith(("CATEGORY_", "TARGET_"))
+        and name.isupper()
+    )
+    assert len(catalogue) == 71
+
+    for code in catalogue:
+        card = present_issue(issue(code, "WORKFLOW"))
+        assert card.code == code, code
+        assert card.problem.strip(), code
+        assert card.target.strip(), code
+        assert card.action.strip(), code
+        text = f"ما المشكلة؟ {card.problem} أين المشكلة؟ {card.target} ماذا أفعل؟ {card.action}"
+        headings = ("ما المشكلة؟", "أين المشكلة؟", "ماذا أفعل؟")
+        assert all(text.count(heading) == 1 for heading in headings), code
 
 
 def test_unknown_issue_code_uses_safe_non_echoing_fallback():

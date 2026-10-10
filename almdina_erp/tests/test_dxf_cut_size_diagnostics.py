@@ -850,6 +850,24 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
         self.assertIn("FORBIDDEN_ROTATION", exc_info.exception.codes)
         self.assertLess(elapsed, 5.0)
 
+    def test_forbidden_rotation_diagnostic_scales_to_500_repeated_copies(self) -> None:
+        import time
+
+        order = self._order((592, 285, 0))
+        order.pieces[0].qty = 500
+        contours = [
+            _rect(285, 592, x_mm=(index % 25) * 700, y_mm=(index // 25) * 700)
+            for index in range(500)
+        ]
+
+        started = time.perf_counter()
+        with self.assertRaises(DxfImportError) as exc_info:
+            _resolve_cut_topology(contours, order)
+        elapsed = time.perf_counter() - started
+
+        self.assertIn("FORBIDDEN_ROTATION", exc_info.exception.codes)
+        self.assertLess(elapsed, 20.0)
+
     def test_offcut_layer_contour_is_counted_as_a_cut_during_missing_diagnostics(self) -> None:
         order = self._order((300, 400, 0), (200, 250, 0))
         order.trim_margin_mm = 0
