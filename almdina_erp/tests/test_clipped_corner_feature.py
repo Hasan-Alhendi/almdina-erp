@@ -107,6 +107,8 @@ def test_fast_measurements_offer_one_click_corner_settings_with_live_visual_prev
     assert 'value: "L-Shaped Corner"' in extra_addons
     assert 'labelAr: "الزاوية الكسر"' in extra_addons
     assert "AlmdinaClippedCornerEditor.open(currentFrm, row)" in operator
+    assert "frappe.model.new_names" in operator
+    assert "tr.dataset.rowName = row.name" in operator
     assert "if (!row || !requirePieceDimensions(row, tr)) return" in operator
     assert "isCornerCut" in operator
     assert "dco-corner-edges-summary" in operator
@@ -134,7 +136,11 @@ def test_fast_measurements_offer_one_click_corner_settings_with_live_visual_prev
     assert persistence.index('updates.push(["edge_break_only", 0], ["edge_break", 1])') < persistence.index(
         'updates.push(["edge_break", 0], ["edge_break_only", 1])'
     )
-    assert "persistCornerValues(row, config, edgeDraft).then" in editor
+    assert "queueCornerApply(frm, async () =>" in editor
+    assert "await persistCornerValues(frm, locator, config, edgeDraft)" in editor
+    assert "return flushPendingCornerApply(frm)" in editor
+    assert "mappedRowName" in editor
+    assert "pieceInstanceId" in editor
     assert "refreshFastTable(frm)" in editor
     save_render = SAVE_RENDER_UX.read_text(encoding="utf-8")
     assert "function syncCornerEdgesSummary" in save_render

@@ -293,6 +293,7 @@ jobs:
           node almdina_erp/tests/js/plan_source_tab_edit_lock.test.js
           node almdina_erp/tests/js/uploaded_plan_mismatch_banner.test.js
           node almdina_erp/tests/js/order_measurement_save_flush.test.js
+          node almdina_erp/tests/js/corner_edge_apply_save_lifecycle.test.js
           node almdina_erp/tests/js/factory_workforce_view_model.test.js
           node almdina_erp/tests/js/door_cutting_order_extra_addons_ux.test.js
           node almdina_erp/tests/js/door_cutting_order_extra_addons_row_integration.test.js

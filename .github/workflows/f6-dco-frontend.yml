@@ -94,6 +94,7 @@ jobs:
           node --check almdina_erp/tests/js/plan_source_tab_edit_lock.test.js
           node --check almdina_erp/tests/js/uploaded_plan_mismatch_banner.test.js
           node --check almdina_erp/tests/js/order_measurement_save_flush.test.js
+          node --check almdina_erp/tests/js/corner_edge_apply_save_lifecycle.test.js
           node --check almdina_erp/tests/js/operator_edge_ownership.test.js
           node --check almdina_erp/tests/js/surface_settle_guard.test.js
           node --check almdina_erp/tests/js/dco_recovery_projection.test.js
@@ -223,6 +224,9 @@ jobs:
 
       - name: Validate measurement cells flush into the order save path
         run: node almdina_erp/tests/js/order_measurement_save_flush.test.js
+
+      - name: Validate corner edge Apply is flushed before order Save
+        run: node almdina_erp/tests/js/corner_edge_apply_save_lifecycle.test.js
 
       - name: Validate operator and edge ownership helpers
         run: node almdina_erp/tests/js/operator_edge_ownership.test.js

@@ -278,7 +278,17 @@
     }
 
     function rowByName(frm, name) {
-        return (frm.doc.pieces || []).find(row => row.name === name) || null;
+        const requested = String(name || "").trim();
+        const names = frappe.model && frappe.model.new_names || {};
+        let current = requested;
+        const visited = new Set();
+        while (current && names[current] && !visited.has(current)) {
+            visited.add(current);
+            current = String(names[current] || "").trim();
+        }
+        return (frm.doc.pieces || []).find((row) => (
+            row.name === requested || row.name === current
+        )) || null;
     }
 
     function reindexPieces(frm) {
@@ -1023,6 +1033,7 @@
                 const tr = sketch.closest("tr[data-row-name]");
                 const row = rowByName(currentFrm, tr && tr.dataset.rowName);
                 if (!row || !requirePieceDimensions(row, tr)) return;
+                if (tr && tr.dataset.rowName !== row.name) tr.dataset.rowName = row.name;
                 if (window.AlmdinaClippedCornerGeometry && window.AlmdinaClippedCornerGeometry.isCornerCut(row) && window.AlmdinaClippedCornerEditor) {
                     window.AlmdinaClippedCornerEditor.open(currentFrm, row);
                 } else if (window.AlmdinaSpecialShapeEditor) {
