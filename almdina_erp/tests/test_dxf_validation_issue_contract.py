@@ -233,6 +233,17 @@ def test_error_card_footer_changes_with_explicit_context():
     assert "أعد الرفع" not in export
 
 
+def test_error_cards_keep_three_arabic_questions_once_and_in_order():
+    item = issue(CUT_INVALID_GEOMETRY, "CONTOUR", target=contour_target(4))
+    for context in ("upload", "export"):
+        html = render_error_cards_html([item], context=context)
+        headings = ("ما المشكلة؟", "أين المشكلة؟", "ماذا أفعل؟")
+        assert all(html.count(heading) == 1 for heading in headings)
+        positions = [html.index(heading) for heading in headings]
+        assert positions == sorted(positions)
+        assert "direction:rtl" in html
+
+
 def test_contour_dimensions_and_bounds_are_never_presented_as_a_door():
     for code in (PIECE_OUTSIDE_SHEET, PIECE_INVALID_DIMENSIONS):
         item = issue(code, "LAYOUT", target=contour_target(9))
