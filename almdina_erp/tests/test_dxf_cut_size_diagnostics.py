@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 from types import SimpleNamespace
 
 from almdina_erp.tests.frappe_test_stub import install_if_unavailable
 
 install_if_unavailable()
 
+from almdina_erp.almdina_erp.services import dxf_import_service as dxf_service
 from almdina_erp.almdina_erp.services.dxf_import_service import (
     DxfImportError,
     _legacy_expected_piece_match,
@@ -28,13 +30,13 @@ def _present_error(error: DxfImportError) -> str:
     return "\n".join(present_issues_as_strings(error.issues))
 
 
-def _rect(width_mm: float, height_mm: float, *, x_mm: float = 0.0) -> dict:
+def _rect(width_mm: float, height_mm: float, *, x_mm: float = 0.0, y_mm: float = 0.0) -> dict:
     return {
         "points": [
-            (x_mm, 0.0),
-            (x_mm + width_mm, 0.0),
-            (x_mm + width_mm, height_mm),
-            (x_mm, height_mm),
+            (x_mm, y_mm),
+            (x_mm + width_mm, y_mm),
+            (x_mm + width_mm, y_mm + height_mm),
+            (x_mm, y_mm + height_mm),
         ],
         "closed": True,
         "branched": False,
@@ -726,6 +728,215 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
         self.assertIsNot(annotated, original)
         self.assertIn("FORBIDDEN_ROTATION", annotated.codes)
         self.assertIn(PERSISTED_CUT_SPECS, annotated.codes)
+
+    def test_nested_hole_is_not_reported_as_an_extra_when_a_piece_is_missing(self) -> None:
+        order = self._order((500, 600, 0), (300, 400, 0))
+        contours = [
+            _rect(500, 600),
+            _rect(100, 100, x_mm=100, y_mm=100),
+        ]
+
+        with self.assertRaises(DxfImportError) as exc_info:
+            _resolve_cut_topology(contours, order)
+
+        issue = exc_info.exception.issues[0]
+        self.assertIn("PIECE_MISSING", exc_info.exception.codes)
+        self.assertEqual(issue.params["actual_count"], 1)
+        self.assertEqual(issue.params["expected_count"], 2)
+        self.assertEqual(issue.params["missing_count"], 1)
+        self.assertEqual(issue.params["extra_count"], 0)
+        self.assertEqual(issue.params["missing_sizes"], ["30 × 40 سم"])
+        self.assertEqual(issue.params["extra_sizes"], [])
+        self.assertNotIn("10 × 10 سم", _present_error(exc_info.exception))
+
+    def test_clear_independent_extra_path_reports_only_its_residual_size(self) -> None:
+        with self.assertRaises(DxfImportError) as exc_info:
+            _resolve_cut_topology(
+                [_rect(300, 400), _rect(150, 200, x_mm=500)],
+                self._order((300, 400, 0)),
+            )
+
+        issue = exc_info.exception.issues[0]
+        self.assertIn("EXTRA_CUT_PATH", exc_info.exception.codes)
+        self.assertEqual(issue.params["actual_count"], 2)
+        self.assertEqual(issue.params["extra_count"], 1)
+        self.assertEqual(issue.params["missing_count"], 0)
+        self.assertEqual(issue.params["extra_sizes"], ["15 × 20 سم"])
+        self.assertEqual(issue.params["missing_sizes"], [])
+
+    def test_equal_count_size_mismatch_reports_only_unmatched_residuals(self) -> None:
+        with self.assertRaises(DxfImportError) as exc_info:
+            _resolve_cut_topology(
+                [_rect(300, 400), _rect(250, 350, x_mm=500)],
+                self._order((300, 400, 0), (500, 600, 0)),
+            )
+
+        issue = exc_info.exception.issues[0]
+        self.assertIn("EXPECTED_PIECE_MISMATCH", exc_info.exception.codes)
+        self.assertEqual(issue.params["actual_count"], 2)
+        self.assertEqual(issue.params["missing_count"], 1)
+        self.assertEqual(issue.params["extra_count"], 1)
+        self.assertEqual(issue.params["missing_sizes"], ["50 × 60 سم"])
+        self.assertEqual(issue.params["extra_sizes"], ["25 × 35 سم"])
+        message = _present_error(exc_info.exception)
+        self.assertNotIn("30 × 40 سم", message)
+        self.assertNotIn("الدرفة", message)
+
+    def test_repeated_residual_sizes_are_aggregated_without_copy_identity(self) -> None:
+        with self.assertRaises(DxfImportError) as exc_info:
+            _resolve_cut_topology(
+                [
+                    _rect(300, 400),
+                    _rect(250, 350, x_mm=500),
+                    _rect(250, 350, x_mm=800),
+                ],
+                self._order((300, 400, 0), (500, 600, 0), (500, 600, 0), (500, 600, 0)),
+            )
+
+        issue = exc_info.exception.issues[0]
+        self.assertEqual(issue.params["missing_count"], 3)
+        self.assertEqual(issue.params["extra_count"], 2)
+        self.assertEqual(issue.params["missing_sizes"], ["50 × 60 سم (×3)"])
+        self.assertEqual(issue.params["extra_sizes"], ["25 × 35 سم (×2)"])
+        self.assertEqual(issue.params["missing_labels"], [])
+
+    def test_special_contour_is_counted_as_one_piece_and_nested_cut_is_a_hole(self) -> None:
+        order = self._order((500, 500, 0), (300, 400, 0))
+        order.pieces[0].piece_type = "Special"
+        special = {
+            "points": [(0, 0), (500, 0), (500, 200), (200, 200), (200, 500), (0, 500)],
+            "closed": True,
+            "branched": False,
+        }
+        hole = _rect(100, 100, x_mm=20, y_mm=20)
+
+        with self.assertRaises(DxfImportError) as exc_info:
+            _resolve_cut_topology([special, hole], order)
+
+        issue = exc_info.exception.issues[0]
+        self.assertEqual(issue.params["actual_count"], 1)
+        self.assertEqual(issue.params["missing_sizes"], ["30 × 40 سم"])
+        self.assertEqual(issue.params["extra_sizes"], [])
+
+    def test_offcut_cut_dimensions_participate_without_assuming_a_full_board(self) -> None:
+        order = self._order((300, 400, 0), (200, 250, 0))
+        order.pieces[0].piece_type = "OFFCUT"
+
+        with self.assertRaises(DxfImportError) as exc_info:
+            _resolve_cut_topology([_rect(300, 400)], order)
+
+        issue = exc_info.exception.issues[0]
+        self.assertIn("PIECE_MISSING", exc_info.exception.codes)
+        self.assertEqual(issue.params["actual_count"], 1)
+        self.assertEqual(issue.params["missing_count"], 1)
+        self.assertEqual(issue.params["extra_count"], 0)
+        self.assertEqual(issue.params["missing_sizes"], ["20 × 25 سم"])
+
+    def test_forbidden_rotation_diagnostic_scales_to_200_repeated_copies(self) -> None:
+        import time
+
+        order = self._order((592, 285, 0))
+        order.pieces[0].qty = 200
+        contours = [
+            _rect(285, 592, x_mm=(index % 20) * 700, y_mm=(index // 20) * 700)
+            for index in range(200)
+        ]
+
+        started = time.perf_counter()
+        with self.assertRaises(DxfImportError) as exc_info:
+            _resolve_cut_topology(contours, order)
+        elapsed = time.perf_counter() - started
+
+        self.assertIn("FORBIDDEN_ROTATION", exc_info.exception.codes)
+        self.assertLess(elapsed, 5.0)
+
+    def test_offcut_layer_contour_is_counted_as_a_cut_during_missing_diagnostics(self) -> None:
+        order = self._order((300, 400, 0), (200, 250, 0))
+        order.trim_margin_mm = 0
+        order.board_width_cm = 100
+        order.board_length_cm = 100
+        assembled_inputs = []
+
+        def segments_for_layer(_rows, layer):
+            if layer == dxf_service.SHEET_OUTLINE_LAYER:
+                return ["sheet"]
+            if layer == dxf_service.OFFCUT_LAYER:
+                return ["offcut"]
+            return []
+
+        def assemble(segments, _tolerance):
+            assembled_inputs.append(list(segments))
+            return [{"points": []}] if segments == ["sheet"] else [_rect(300, 400)]
+
+        with (
+            patch.object(dxf_service.frappe, "get_site_path", return_value="/tmp/input.dxf"),
+            patch.object(dxf_service.os.path, "exists", return_value=True),
+            patch.object(dxf_service, "_read_normalized_geometry", return_value=([], [], [])),
+            patch.object(dxf_service, "_collect_extra_overlay_candidates", return_value=[]),
+            patch.object(dxf_service, "_segments_for_layer", side_effect=segments_for_layer),
+            patch.object(dxf_service, "assemble_contours", side_effect=assemble),
+            patch.object(dxf_service, "_validate_sheet_contours", return_value=[]),
+        ):
+            with self.assertRaises(DxfImportError) as exc_info:
+                dxf_service.parse_production_dxf("/files/input.dxf", order)
+
+        issue = exc_info.exception.issues[0]
+        self.assertIn("PIECE_MISSING", exc_info.exception.codes)
+        self.assertEqual(assembled_inputs, [["sheet"], ["offcut"]])
+        self.assertEqual(issue.params["actual_count"], 1)
+        self.assertEqual(issue.params["missing_count"], 1)
+        self.assertEqual(issue.params["extra_count"], 0)
+        self.assertEqual(issue.params["missing_sizes"], ["20 × 25 سم"])
+
+
+    def test_repeated_missing_size_uses_plural_action_and_count(self) -> None:
+        with self.assertRaises(DxfImportError) as exc_info:
+            _resolve_cut_topology([], self._order((500, 600, 0), (500, 600, 0), (500, 600, 0)))
+
+        issue = exc_info.exception.issues[0]
+        self.assertIn("PIECE_MISSING", exc_info.exception.codes)
+        self.assertEqual(issue.params["missing_count"], 3)
+        message = _present_error(exc_info.exception)
+        self.assertIn("3 درفات ناقصة", message)
+        self.assertIn("الدرفات الناقصة بهذه المقاسات", message)
+        self.assertIn("×3", message)
+
+    def test_repeated_extra_size_uses_plural_action_and_count(self) -> None:
+        with self.assertRaises(DxfImportError) as exc_info:
+            _resolve_cut_topology(
+                [
+                    _rect(300, 400),
+                    _rect(150, 200, x_mm=500),
+                    _rect(150, 200, x_mm=800),
+                    _rect(150, 200, x_mm=1100),
+                ],
+                self._order((300, 400, 0)),
+            )
+
+        issue = exc_info.exception.issues[0]
+        self.assertIn("EXTRA_CUT_PATH", exc_info.exception.codes)
+        self.assertEqual(issue.params["extra_count"], 3)
+        self.assertEqual(issue.params["extra_sizes"], ["15 × 20 سم (×3)"])
+        message = _present_error(exc_info.exception)
+        self.assertIn("3 مسارات قص زائدة", message)
+        self.assertIn("المسارات الزائدة بهذه المقاسات", message)
+        self.assertIn("×3", message)
+
+
+    def test_nested_expected_size_candidate_remains_structured_ambiguity(self) -> None:
+        contours = [
+            _rect(302, 402),
+            _rect(300, 400, x_mm=1, y_mm=1),
+        ]
+
+        with self.assertRaises(DxfImportError) as exc_info:
+            _resolve_cut_topology(contours, self._order((300, 400, 0)))
+
+        self.assertIn("AMBIGUOUS_CONTOUR_OWNERSHIP", exc_info.exception.codes)
+        self.assertNotIn("PIECE_MISSING", exc_info.exception.codes)
+        self.assertNotIn("EXTRA_CUT_PATH", exc_info.exception.codes)
+        self.assertIn("هل هو فتحة أم قطعة", _present_error(exc_info.exception))
+
 
 
 if __name__ == "__main__":
