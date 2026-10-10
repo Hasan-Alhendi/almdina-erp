@@ -124,6 +124,7 @@ from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
 )
 from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
     dimensions_match_exact,
+    special_bbox_matches_cut_envelope_with_unrecorded_edge_deduction,
 )
 from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
     OffcutPolicyError,
@@ -280,16 +281,39 @@ def _inventory_residuals(
     actual_sizes: list[tuple[float, float]],
     expected: list[dict[str, Any]],
 ) -> tuple[list[int], list[int]]:
-    """Return maximum-cardinality unmatched actual and expected indexes."""
-    tol = DIMENSION_TOLERANCE_MM / 10.0
+    """Return unmatched sizes using persisted CUT precision and Special rules."""
     adjacency: list[list[int]] = []
     for width_cm, height_cm in actual_sizes:
         matches = []
         for expected_index, piece in enumerate(expected):
-            direct = _size_matches(width_cm, height_cm, piece["width_cm"], piece["length_cm"], tol=tol)
-            rotated = bool(piece["allow_rotation"]) and _size_matches(
-                width_cm, height_cm, piece["length_cm"], piece["width_cm"], tol=tol
-            )
+            if piece["piece_type"] == "Special":
+                direct = special_bbox_matches_cut_envelope_with_unrecorded_edge_deduction(
+                    width_cm,
+                    height_cm,
+                    piece["width_cm"],
+                    piece["length_cm"],
+                )
+                rotated = bool(piece["allow_rotation"]) and (
+                    special_bbox_matches_cut_envelope_with_unrecorded_edge_deduction(
+                        width_cm,
+                        height_cm,
+                        piece["length_cm"],
+                        piece["width_cm"],
+                    )
+                )
+            else:
+                direct = dimensions_match_exact(
+                    width_cm,
+                    height_cm,
+                    piece["width_cm"],
+                    piece["length_cm"],
+                )
+                rotated = bool(piece["allow_rotation"]) and dimensions_match_exact(
+                    width_cm,
+                    height_cm,
+                    piece["length_cm"],
+                    piece["width_cm"],
+                )
             if direct or rotated:
                 matches.append(expected_index)
         adjacency.append(matches)

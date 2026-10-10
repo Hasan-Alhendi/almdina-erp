@@ -782,6 +782,39 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
         self.assertNotIn("30 × 40 سم", message)
         self.assertNotIn("الدرفة", message)
 
+    def test_small_persisted_size_mismatch_is_not_hidden_by_another_mismatch(self) -> None:
+        order = self._order((300, 400, 0), (500, 600, 0))
+        special = self._order((400, 500, 0)).pieces[0]
+        special.piece_type = "Special"
+        order.pieces.append(special)
+        with self.assertRaises(DxfImportError) as exc_info:
+            _resolve_cut_topology(
+                [
+                    _rect(299, 400),
+                    _rect(250, 350, x_mm=500),
+                    _rect(398, 500, x_mm=1000),
+                ],
+                order,
+            )
+
+        issue = exc_info.exception.issues[0]
+        self.assertIn("EXPECTED_PIECE_MISMATCH", exc_info.exception.codes)
+        self.assertEqual(issue.params["missing_count"], 2)
+        self.assertEqual(issue.params["extra_count"], 2)
+        self.assertEqual(
+            issue.params["missing_sizes"],
+            ["30 × 40 سم", "50 × 60 سم"],
+        )
+        self.assertEqual(
+            issue.params["extra_sizes"],
+            ["29.9 × 40 سم", "25 × 35 سم"],
+        )
+        message = _present_error(exc_info.exception)
+        self.assertIn("29.9 × 40 سم", message)
+        self.assertIn("30 × 40 سم", message)
+        self.assertIn("25 × 35 سم", message)
+        self.assertIn("50 × 60 سم", message)
+
     def test_repeated_residual_sizes_are_aggregated_without_copy_identity(self) -> None:
         with self.assertRaises(DxfImportError) as exc_info:
             _resolve_cut_topology(

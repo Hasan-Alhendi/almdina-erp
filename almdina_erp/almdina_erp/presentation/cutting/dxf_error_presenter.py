@@ -7,7 +7,6 @@ Does not re-run validation or invent manufacturing decisions.
 from __future__ import annotations
 
 import html
-import json
 from dataclasses import dataclass
 from typing import Any, Iterable, Sequence
 
@@ -431,10 +430,26 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
 
     if code == codes.SPECIAL_SIZE_MISMATCH:
         noun = _piece_noun(issue)
-        problem = (
+        prefix = (
             "مقاس مسار القص الخاص خارج المجال المسموح."
             if noun == "مسار القص"
             else f"مقاس {noun} الخاصة خارج المجال المسموح."
+        )
+        actual = _size_cm(
+            params.get("actual_width_cm"),
+            params.get("actual_height_cm"),
+        )
+        expected = _size_cm(
+            params.get("expected_width_cm"),
+            params.get("expected_height_cm"),
+        )
+        problem = (
+            f"{prefix} الموجود {actual} ومقاس القص المحفوظ {expected}."
+            if params.get("actual_width_cm") is not None
+            and params.get("actual_height_cm") is not None
+            and params.get("expected_width_cm") is not None
+            and params.get("expected_height_cm") is not None
+            else prefix
         )
         return PresentedDxfError(
             problem,
@@ -819,7 +834,7 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
 
 
 def group_issues(issues: Sequence[DxfValidationIssue]) -> list[list[DxfValidationIssue]]:
-    """Group only when code, action template, and compatible targets align."""
+    """Group by cause and corrective action, retaining per-issue evidence."""
     grouped: list[list[DxfValidationIssue]] = []
     index_by_key: dict[tuple[str, ...], int] = {}
     for item in sort_issues(list(issues)):
@@ -846,19 +861,13 @@ def group_issues(issues: Sequence[DxfValidationIssue]) -> list[list[DxfValidatio
             }
         )
         if contour_group or piece_group:
-            evidence = json.dumps(
-                dict(item.params or {}),
-                sort_keys=True,
-                ensure_ascii=False,
-                default=str,
-            )
+            # Problem details and params remain on each issue for the expanded
+            # evidence list; they do not change root cause or corrective action.
             key = (
                 item.code,
                 item.category,
                 item.target.kind,
-                presented.problem,
                 presented.action,
-                evidence,
             )
             if key in index_by_key:
                 grouped[index_by_key[key]].append(item)
@@ -908,9 +917,18 @@ def present_group(group: Sequence[DxfValidationIssue]) -> PresentedDxfError:
         f"{present_issue(item).target} — {present_issue(item).problem}"
         for item in group
     )
+    if group[0].code == codes.CUT_SIZE_MISMATCH:
+        summary = "توجد مقاسات قص غير مطابقة."
+        group_target = f"{len(group)} مواضع تحتاج الإجراء نفسه."
+    elif group[0].code == codes.SPECIAL_SIZE_MISMATCH:
+        summary = "توجد مقاسات قطع خاصة خارج المجال المسموح."
+        group_target = f"{len(group)} مواضع تحتاج الإجراء نفسه."
+    else:
+        summary = first.problem
+        group_target = f"{len(group)} مواضع متطابقة السبب."
     return PresentedDxfError(
-        f"{first.problem} (عدد المواضع المتأثرة: {len(group)}).",
-        f"{len(group)} مواضع متطابقة السبب.",
+        f"{summary} (عدد المواضع المتأثرة: {len(group)}).",
+        group_target,
         first.action,
         first.code,
         first.category,

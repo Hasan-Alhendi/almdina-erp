@@ -274,6 +274,65 @@ def test_matching_piece_errors_group_without_losing_target_evidence():
     assert all(f"الدرفة {n}" in html for n in (1, 2, 3))
 
 
+def test_special_size_errors_group_by_action_and_preserve_measurements():
+    from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
+        CATEGORY_DIMENSIONS,
+        SPECIAL_SIZE_MISMATCH,
+    )
+
+    shared = {
+        "expected_width_cm": 30,
+        "expected_height_cm": 40,
+        "allowed_min_width_cm": 29.8,
+        "allowed_max_width_cm": 30,
+        "allowed_min_height_cm": 39.8,
+        "allowed_max_height_cm": 40,
+    }
+    issues = [
+        issue(
+            SPECIAL_SIZE_MISMATCH,
+            CATEGORY_DIMENSIONS,
+            target=piece_target(source_piece_no=1),
+            params={
+                **shared,
+                "actual_width_cm": 29.7,
+                "actual_height_cm": 39.5,
+                "spec_summary": "finished 31 × 41 cm",
+            },
+        ),
+        issue(
+            SPECIAL_SIZE_MISMATCH,
+            CATEGORY_DIMENSIONS,
+            target=piece_target(source_piece_no=2),
+            params={
+                **shared,
+                "actual_width_cm": 29.6,
+                "actual_height_cm": 39.4,
+                "spec_summary": "finished 32 × 42 cm",
+            },
+        ),
+    ]
+    grouped = present_issues(issues)
+
+    assert len(grouped) == 1
+    assert len(grouped[0].details) == 2
+    assert "عدد المواضع المتأثرة: 2" in grouped[0].problem
+    assert "29.7 × 39.5 سم" not in grouped[0].problem
+    assert "29.7 × 39.5 سم" in grouped[0].details[0]
+    assert "29.6 × 39.4 سم" in grouped[0].details[1]
+    assert "مقاس القص المحفوظ 30 × 40 سم" in grouped[0].details[0]
+    assert "مقاس القص المحفوظ 30 × 40 سم" in grouped[0].details[1]
+    assert "30 × 40 سم" in grouped[0].details[0]
+    assert "30 × 40 سم" in grouped[0].details[1]
+    assert "الدرفة 1" in grouped[0].details[0]
+    assert "الدرفة 2" in grouped[0].details[1]
+    assert "finished" not in str(grouped[0])
+    html = render_error_cards_html(issues)
+    assert "29.7 × 39.5 سم" in html
+    assert "29.6 × 39.4 سم" in html
+    assert "finished" not in html
+
+
 def test_error_dialog_expands_all_issues_beyond_initial_ten():
     issues = [
         issue("CUT_INVALID_GEOMETRY", "CONTOUR", target=contour_target(index))
