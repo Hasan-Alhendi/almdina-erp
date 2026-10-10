@@ -171,6 +171,34 @@
                     })),
                 ];
             }
+            if (section === "backup_restore") {
+                const weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+                return [
+                    { fieldname: "local_section", fieldtype: "Section Break", label: t("Local Backup") },
+                    { fieldname: "local_backup_enabled", fieldtype: "Check", label: t("Enable Local Backup"), default: values.local_backup_enabled },
+                    { fieldname: "local_backup_frequency", fieldtype: "Select", label: t("Schedule"), options: "Daily\nWeekly\nMonthly", default: values.local_backup_frequency || "Daily", reqd: 1 },
+                    { fieldname: "local_backup_time", fieldtype: "Time", label: t("Time"), default: values.local_backup_time || "02:00", reqd: 1 },
+                    { fieldname: "local_backup_weekday", fieldtype: "Select", label: t("Day of Week"), options: weekdays.join("\n"), default: values.local_backup_weekday || "Monday", depends_on: "eval:doc.local_backup_frequency==='Weekly'" },
+                    { fieldname: "local_backup_day_of_month", fieldtype: "Int", label: t("Day of Month"), default: values.local_backup_day_of_month || 1, depends_on: "eval:doc.local_backup_frequency==='Monthly'" },
+                    { fieldname: "local_backup_retention", fieldtype: "Int", label: t("Keep Last N Backups"), default: values.local_backup_retention || 7, reqd: 1 },
+                    { fieldname: "external_section", fieldtype: "Section Break", label: t("External Backup — SSH") },
+                    { fieldname: "external_backup_enabled", fieldtype: "Check", label: t("Enable External Backup"), default: values.external_backup_enabled },
+                    { fieldname: "external_backup_frequency", fieldtype: "Select", label: t("Schedule"), options: "Daily\nWeekly\nMonthly", default: values.external_backup_frequency || "Daily", reqd: 1 },
+                    { fieldname: "external_backup_time", fieldtype: "Time", label: t("Time"), default: values.external_backup_time || "03:00", reqd: 1 },
+                    { fieldname: "external_backup_weekday", fieldtype: "Select", label: t("Day of Week"), options: weekdays.join("\n"), default: values.external_backup_weekday || "Monday", depends_on: "eval:doc.external_backup_frequency==='Weekly'" },
+                    { fieldname: "external_backup_day_of_month", fieldtype: "Int", label: t("Day of Month"), default: values.external_backup_day_of_month || 1, depends_on: "eval:doc.external_backup_frequency==='Monthly'" },
+                    { fieldname: "external_backup_retention", fieldtype: "Int", label: t("Keep Last N Backups"), default: values.external_backup_retention || 4, reqd: 1 },
+                    { fieldname: "ssh_section", fieldtype: "Section Break", label: t("SSH Connection") },
+                    { fieldname: "ssh_host", fieldtype: "Data", label: t("SSH Host"), default: values.ssh_host || "" },
+                    { fieldname: "ssh_port", fieldtype: "Int", label: t("SSH Port"), default: values.ssh_port || 22 },
+                    { fieldname: "ssh_username", fieldtype: "Data", label: t("SSH Username"), default: values.ssh_username || "" },
+                    { fieldname: "ssh_auth_method", fieldtype: "Select", label: t("Authentication Method"), options: "Private Key\nPassword", default: values.ssh_auth_method || "Private Key" },
+                    { fieldname: "ssh_password", fieldtype: "Password", label: t("SSH Password"), description: values.ssh_password_configured ? t("كلمة المرور محفوظة. اترك الحقل فارغًا للاحتفاظ بها.") : t("تُحفظ مشفرة عبر Frappe ولا تعود إلى المتصفح."), depends_on: "eval:doc.ssh_auth_method==='Password'" },
+                    { fieldname: "ssh_private_key", fieldtype: "Code", options: "text", label: t("SSH Private Key"), description: values.ssh_private_key_configured ? t("المفتاح محفوظ. اترك الحقل فارغًا للاحتفاظ به.") : t("ألصق المفتاح الخاص؛ سيُحفظ مشفرًا عبر Frappe."), depends_on: "eval:doc.ssh_auth_method==='Private Key'" },
+                    { fieldname: "ssh_private_key_passphrase", fieldtype: "Password", label: t("Private Key Passphrase (Optional)"), description: values.ssh_private_key_passphrase_configured ? t("عبارة المرور محفوظة. اترك الحقل فارغًا للاحتفاظ بها.") : "", depends_on: "eval:doc.ssh_auth_method==='Private Key'" },
+                    { fieldname: "remote_backup_path", fieldtype: "Data", label: t("Remote Backup Path"), description: t("مسار POSIX مطلق وغير جذري. يجب تسجيل مفتاح الخادم مسبقًا في known_hosts لمستخدم bench."), default: values.remote_backup_path || "" },
+                ];
+            }
             return [
                 { fieldname: "default_production_routing", fieldtype: "Select", label: t("مسار الإنتاج الافتراضي (اختياري)"), options: ["", ...(current.routing_options || [])].join("\n"), default: values.default_production_routing || "", reqd: 0 },
                 { fieldname: "allow_stage_override", fieldtype: "Check", label: t("السماح بتجاوز تسلسل المراحل"), default: values.allow_stage_override },
@@ -184,6 +212,7 @@
             if (section === "extra_addons") return t("تعديل أسعار إضافات الدرف");
             if (section === "print_identity") return t("تعديل هوية أوراق الطباعة");
             if (section === "whatsapp_messages") return t("تعديل رسائل واتساب");
+            if (section === "backup_restore") return t("إعدادات Backup & Restore");
             return t("تعديل ضوابط الإنتاج");
         }
 
@@ -376,12 +405,53 @@
             });
         }
 
+        function openRestore(config = {}) {
+            const phrase = String(config.confirmationPhrase || "");
+            const dialog = own(new frappe.ui.Dialog({
+                title: t("استعادة نسخة احتياطية"),
+                fields: [
+                    {
+                        fieldname: "warning",
+                        fieldtype: "HTML",
+                        options: `<div class="aps-restore-warning"><strong>${escapeHtml(t("تحذير: الاستعادة تستبدل قاعدة البيانات والملفات الحالية."))}</strong><span>${escapeHtml(t("سينشئ النظام نسخة أمان كاملة أولًا، ثم يستخدم Frappe Restore ويشغّل migrate."))}</span><code>${escapeHtml(phrase)}</code></div>`,
+                    },
+                    { fieldname: "confirmation", fieldtype: "Data", label: t("اكتب عبارة التأكيد كما تظهر أعلاه"), reqd: 1 },
+                ],
+                primary_action_label: t("إنشاء نسخة أمان ثم الاستعادة"),
+                primary_action(values) {
+                    const confirmation = String(values.confirmation || "").trim();
+                    if (confirmation !== phrase) {
+                        frappe.msgprint({ title: t("تأكيد غير مطابق"), message: t("اكتب عبارة التأكيد حرفيًا."), indicator: "red" });
+                        return;
+                    }
+                    const button = dialog.get_primary_btn();
+                    button.prop("disabled", true);
+                    Promise.resolve(config.onSubmit ? config.onSubmit(confirmation) : null)
+                        .then(() => complete(dialog))
+                        .catch(error => {
+                            if (!ownedSurfaces.has(dialog)) return;
+                            frappe.msgprint({
+                                title: t("تعذر بدء الاستعادة"),
+                                message: escapeHtml(error && error.message ? error.message : t("حدث خطأ غير متوقع.")),
+                                indicator: "red",
+                            });
+                        })
+                        .finally(() => {
+                            if (ownedSurfaces.has(dialog)) button.prop("disabled", false);
+                        });
+                },
+            }));
+            dialog.show();
+            return dialog;
+        }
+
         return Object.freeze({
             sectionFields,
             sectionTitle,
             openSection,
             openAudit,
             openQr,
+            openRestore,
             showSaved,
             deactivate,
             dispose,

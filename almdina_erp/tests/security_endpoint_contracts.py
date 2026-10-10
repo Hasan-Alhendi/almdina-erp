@@ -26,6 +26,7 @@ _GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("almdina_erp.almdina_erp.doctype.door_cutting_order.door_cutting_order", D, ("recalculate_order",)),
     ("almdina_erp.almdina_erp.services.approval_queue_service", F, ("approve_order_safely", "get_approval_queue_context", "get_pending_review_orders", "reject_order_safely")),
     ("almdina_erp.almdina_erp.services.archive_service", C, ("archive_approved_plan_pdf", "get_archive_context")),
+    ("almdina_erp.almdina_erp.services.backup_restore_service", C, ("create_backup_now", "get_backup_context", "request_restore", "test_ssh_connection")),
     ("almdina_erp.almdina_erp.services.cost_document_service", C, ("get_customer_invoice_document", "get_internal_cost_report_document")),
     ("almdina_erp.almdina_erp.services.cost_permission_service", C, ("approve_special_piece_price", "get_order_cost_snapshot", "update_clipped_corner_edge_price", "update_order_cost_settings")),
     ("almdina_erp.almdina_erp.services.cost_service", C, ("refresh_order_costs",)),
