@@ -606,9 +606,10 @@
                             <span class="dco-sheet-stats-edit" style="display:none">قطع: ${(sheet.pieces || []).length} | الهدر: ${sheet_waste_area_m2} م² (${sheet_waste_percent}%)</span>
                         </div>
                     </div>
-                    <div class="dco-sheet-board" data-trim-width-cm="${frame.insetX}" data-trim-length-cm="${frame.insetY}" style="position:relative;direction:ltr;width:${board_width_px}px;height:${board_height_px}px;max-width:100%;border:2px solid #111;background:linear-gradient(90deg,rgba(0,0,0,0.05) 1px,transparent 1px),linear-gradient(rgba(0,0,0,0.05) 1px,transparent 1px),#fff;background-size:32px 32px;overflow:hidden;margin:0 auto 8px auto;">
+                    <div class="dco-sheet-board" data-trim-width-cm="${frame.insetX}" data-trim-length-cm="${frame.insetY}" style="position:relative;direction:ltr;width:${board_width_px}px;height:${board_height_px}px;max-width:100%;border:2px solid #111;background:#fff;overflow:hidden;margin:0 auto 8px auto;">
+                        <div class="dco-board-waste-hatch" aria-hidden="true" style="position:absolute;inset:0;z-index:0;pointer-events:none;background-image:repeating-linear-gradient(45deg,rgba(71,85,105,.18) 0 1px,transparent 1px 8px);"></div>
                         ${board_caption ? `<div class="dco-board-size-caption" aria-hidden="true" style="display:none">${escape_html(board_caption)}</div>` : ""}
-                        <div class="dco-usable-sheet" style="position:absolute;left:${usableLeft}%;top:${usableTop}%;width:${usableWidth}%;height:${usableHeight}%;box-sizing:border-box;overflow:hidden;">
+                        <div class="dco-usable-sheet" style="position:absolute;z-index:1;left:${usableLeft}%;top:${usableTop}%;width:${usableWidth}%;height:${usableHeight}%;box-sizing:border-box;overflow:hidden;">
             `;
 
             (sheet.pieces || []).forEach(piece => {
@@ -1002,6 +1003,23 @@ ${printHeaderCss()}
     line-height: 1 !important;
 }
 .dco-print-sheet-number { text-align: center; }
+.dco-board-original-edges {
+    display: flex !important;
+    flex-wrap: wrap;
+    gap: .2mm .8mm;
+    margin: 0 0 .25mm !important;
+    padding: 0 !important;
+    direction: rtl;
+    line-height: 1 !important;
+}
+.dco-board-original-edge {
+    position: static !important;
+    color: #6b4a12 !important;
+    font-size: 5.4pt !important;
+    font-weight: 700 !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+}
 .dco-sheet-board {
     position: relative !important;
     direction: ltr !important;

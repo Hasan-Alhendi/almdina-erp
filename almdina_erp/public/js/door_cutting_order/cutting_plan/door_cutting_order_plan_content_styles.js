@@ -454,74 +454,37 @@
             background:#fff2c9;
             color:#704700;
         }
-        [data-fieldname="cutting_plan_html"] .dco-board-original-edge {
-            position:absolute;
-            z-index:30;
-            pointer-events:none;
-            color:#7a4d00;
-        }
-        [data-fieldname="cutting_plan_html"] .dco-board-original-edge--top {
-            top:1px;
-            left:0;
-            right:0;
-            border-top:3px dashed #d18a00;
-        }
-        [data-fieldname="cutting_plan_html"] .dco-board-original-edge--bottom {
-            bottom:1px;
-            left:0;
-            right:0;
-            border-bottom:3px dashed #d18a00;
-        }
-        [data-fieldname="cutting_plan_html"] .dco-board-original-edge--left {
-            top:0;
-            bottom:0;
-            left:1px;
-            border-left:3px dashed #d18a00;
-        }
-        [data-fieldname="cutting_plan_html"] .dco-board-original-edge--right {
-            top:0;
-            bottom:0;
-            right:1px;
-            border-right:3px dashed #d18a00;
-        }
-        [data-fieldname="cutting_plan_html"] .dco-board-original-edge__label {
-            position:absolute;
-            display:inline-flex;
+        [data-fieldname="cutting_plan_html"] .dco-board-original-edges,
+        .dco-board-focus .dco-board-original-edges {
+            display:flex;
+            flex-wrap:wrap;
             align-items:center;
-            justify-content:center;
-            min-height:17px;
-            padding:1px 5px;
-            border:1px solid rgba(209,138,0,.38);
-            border-radius:999px;
-            background:rgba(255,248,225,.94);
-            box-shadow:0 1px 3px rgba(80,54,0,.08);
-            color:#704700;
+            gap:1px 6px;
+            margin:0 0 2px;
+            padding:0;
             direction:rtl;
+            line-height:1.15;
+            pointer-events:none;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-board-original-edge,
+        .dco-board-focus .dco-board-original-edge {
+            position:static;
+            color:#8a5a00;
             font-family:Tahoma,Arial,sans-serif;
-            font-size:8px;
-            font-weight:900;
-            line-height:1.1;
+            font-size:9px;
+            font-weight:700;
+            line-height:1.15;
             white-space:nowrap;
         }
-        [data-fieldname="cutting_plan_html"] .dco-board-original-edge--top .dco-board-original-edge__label {
-            top:3px;
-            left:50%;
-            transform:translateX(-50%);
-        }
-        [data-fieldname="cutting_plan_html"] .dco-board-original-edge--bottom .dco-board-original-edge__label {
-            bottom:3px;
-            left:50%;
-            transform:translateX(-50%);
-        }
-        [data-fieldname="cutting_plan_html"] .dco-board-original-edge--left .dco-board-original-edge__label {
-            top:50%;
-            left:3px;
-            transform:translate(-50%,-50%) rotate(-90deg);
-        }
-        [data-fieldname="cutting_plan_html"] .dco-board-original-edge--right .dco-board-original-edge__label {
-            top:50%;
-            right:3px;
-            transform:translate(50%,-50%) rotate(90deg);
+        [data-fieldname="cutting_plan_html"] .dco-board-original-edge--top,
+        [data-fieldname="cutting_plan_html"] .dco-board-original-edge--bottom,
+        [data-fieldname="cutting_plan_html"] .dco-board-original-edge--left,
+        [data-fieldname="cutting_plan_html"] .dco-board-original-edge--right,
+        .dco-board-focus .dco-board-original-edge--top,
+        .dco-board-focus .dco-board-original-edge--bottom,
+        .dco-board-focus .dco-board-original-edge--left,
+        .dco-board-focus .dco-board-original-edge--right {
+            position:static;
         }
         [data-fieldname="cutting_plan_html"] .dco-board-gallery {
             display:grid !important;
@@ -853,9 +816,8 @@
                 white-space:normal;
                 line-height:1.45 !important;
             }
-            [data-fieldname="cutting_plan_html"] .dco-board-original-edge__label {
-                font-size:7px;
-                padding:1px 4px;
+            [data-fieldname="cutting_plan_html"] .dco-board-original-edge {
+                font-size:8px;
             }
             .dco-board-focus { padding:2px; }
             .dco-board-focus__dialog { width:100%;height:99vh;border-radius:10px; }
