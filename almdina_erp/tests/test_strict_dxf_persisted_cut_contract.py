@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from decimal import Decimal
 from types import SimpleNamespace
 
@@ -227,6 +228,65 @@ def test_strict_contract_keeps_regular_pieces_dimension_bound():
     # Regular pieces stay dimension-bound (exact cut only); no Special identity path.
     assert float(errors[0].params["actual_width_cm"]) == 60
     assert float(errors[0].params["expected_width_cm"]) == 59.8
+
+
+def test_proven_rejected_piece_is_not_reported_missing_again():
+    snapshot = {
+        "sheets": [
+            {
+                "pieces": [
+                    {
+                        "_expected_piece_index": 0,
+                        "label": "1.1",
+                        "piece_type": "Regular",
+                        "w": 60,
+                        "h": 60,
+                    }
+                ]
+            }
+        ]
+    }
+
+    errors = _apply_strict_dimension_contract(
+        snapshot,
+        [_spec()],
+        order=_order_with_identity(),
+    )
+
+    assert [error.code for error in errors] == ["CUT_SIZE_MISMATCH"]
+    assert errors[0].target.source_piece_no == 1
+    assert errors[0].target.copy_no == 1
+
+
+def test_proven_rejected_copy_keeps_a_distinct_missing_duplicate():
+    snapshot = {
+        "sheets": [
+            {
+                "pieces": [
+                    {
+                        "_expected_piece_index": 0,
+                        "label": "1.1",
+                        "piece_type": "Regular",
+                        "w": 60,
+                        "h": 60,
+                    }
+                ]
+            }
+        ]
+    }
+    order = _order_with_identity()
+    order.pieces[0].qty = 2
+
+    errors = _apply_strict_dimension_contract(
+        snapshot,
+        [replace(_spec(), qty=2)],
+        order=order,
+    )
+
+    assert [error.code for error in errors] == ["CUT_SIZE_MISMATCH", "PIECE_MISSING"]
+    assert errors[0].target.source_piece_no == 1
+    assert errors[0].target.copy_no == 1
+    assert "1.2" in errors[1].params["preview"]
 
 
 def test_strict_contract_rejects_unproven_special_identity():

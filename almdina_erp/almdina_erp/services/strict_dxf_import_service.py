@@ -522,6 +522,11 @@ def _apply_strict_dimension_contract(
                 )
                 if error:
                     issues.append(error)
+                    # A topology-owned expected index proves which persisted
+                    # copy is present even when its dimensions are rejected.
+                    # Consume that copy so the residual inventory reports only
+                    # genuinely unmatched expected pieces.
+                    unmatched.pop(topology_index)
                     continue
                 unmatched.pop(topology_index)
                 _apply_piece_contract_metadata(
@@ -582,25 +587,27 @@ def _apply_strict_dimension_contract(
                     )
                     continue
 
-                legacy_label = str(piece.get("label") or "")
-                row_hint = None
-                try:
-                    row_no = int(legacy_label.split(".", 1)[0])
-                    row_hint = next(
-                        (spec for spec in specs if spec.row_index == row_no),
-                        None,
-                    )
-                except (TypeError, ValueError):
-                    row_hint = None
-                if row_hint:
+                # A complete canonical label identifies a specific expected
+                # copy even when its dimensions are rejected. Consume only
+                # that proven-present copy; row-only hints cannot establish
+                # copy identity and must not suppress a genuine missing-copy
+                # diagnostic.
+                legacy_label = str(piece.get("label") or "").strip()
+                identified_index = next(
+                    (
+                        index
+                        for index, candidate in enumerate(unmatched)
+                        if candidate["label"] == legacy_label
+                    ),
+                    None,
+                )
+                if identified_index is not None:
+                    candidate = unmatched.pop(identified_index)
                     issues.append(
                         _dimension_issue(
                             CUT_SIZE_MISMATCH,
-                            spec=row_hint,
-                            candidate={
-                                "label": legacy_label or str(row_hint.row_index),
-                                "copy_no": 1,
-                            },
+                            spec=candidate["spec"],
+                            candidate=candidate,
                             actual_w=actual_w,
                             actual_h=actual_h,
                         )
@@ -645,10 +652,9 @@ def _has_self_contained_forbidden_rotation(
     if item.code != FORBIDDEN_ROTATION:
         return False
     try:
-        if int(getattr(item.target, "source_piece_no", 0) or 0) <= 0:
-            return False
+        has_target_row = int(getattr(item.target, "source_piece_no", 0) or 0) > 0
     except (TypeError, ValueError):
-        return False
+        has_target_row = False
 
     params = item.params or {}
     dimension_fields = (
@@ -665,9 +671,33 @@ def _has_self_contained_forbidden_rotation(
             "expected_height_mm",
         ),
     )
-    return any(
+    if has_target_row and any(
         all(params.get(field) is not None for field in fields)
         for fields in dimension_fields
+    ):
+        return True
+
+    measurements = params.get("possible_measurements_cm")
+    candidate_rows = params.get("candidate_source_piece_nos") or ()
+    if not measurements:
+        return False
+    try:
+        has_row_evidence = (
+            has_target_row or bool(candidate_rows)
+        )
+    except (TypeError, ValueError):
+        has_row_evidence = bool(candidate_rows)
+    if not has_row_evidence:
+        return False
+    required_fields = (
+        "actual_width_cm",
+        "actual_height_cm",
+        "expected_width_cm",
+        "expected_height_cm",
+    )
+    return all(
+        all(measurement.get(field) is not None for field in required_fields)
+        for measurement in measurements
     )
 
 
