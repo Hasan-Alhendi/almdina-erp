@@ -22,9 +22,11 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
     piece_target,
     topology_error_to_issue,
 )
+from almdina_erp.almdina_erp.domain.cutting import dxf_issue as issue_codes
 from almdina_erp.almdina_erp.domain.cutting.dxf_topology import DxfTopologyError
 from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import (
     present_issue,
+    present_issues,
     present_target,
     render_error_cards_html,
 )
@@ -215,9 +217,8 @@ def test_html_cards_escape_xss_payload() -> None:
         ]
     )
     assert "<img" not in html
-    assert "&lt;img" in html
-    assert "onerror=alert(1)" in html  # escaped text content, not an executable attribute
-    assert 'onerror=alert(1)>"' not in html
+    assert "&lt;img" not in html
+    assert "onerror=alert(1)" not in html
     assert "تعذر قبول ملف DXF" not in html
     assert "ما المشكلة؟" in html
 
@@ -231,6 +232,182 @@ def test_error_card_footer_changes_with_explicit_context():
     assert "لم يتم استبدال خطة DXF" not in export
     assert "صحح المحيط على CUT_PATH ثم أعد التصدير." in export
     assert "أعد الرفع" not in export
+
+
+def test_error_cards_keep_three_arabic_questions_once_and_in_order():
+    item = issue(CUT_INVALID_GEOMETRY, "CONTOUR", target=contour_target(4))
+    for context in ("upload", "export"):
+        html = render_error_cards_html([item], context=context)
+        headings = ("ما المشكلة؟", "أين المشكلة؟", "ماذا أفعل؟")
+        assert all(html.count(heading) == 1 for heading in headings)
+        positions = [html.index(heading) for heading in headings]
+        assert positions == sorted(positions)
+        assert "direction:rtl" in html
+
+
+def test_matching_piece_errors_group_without_losing_target_evidence():
+    params = {
+        "actual_width_cm": 28.5,
+        "actual_height_cm": 59.2,
+        "expected_width_cm": 59.2,
+        "expected_height_cm": 28.5,
+    }
+    grouped = present_issues(
+        [
+            issue(FORBIDDEN_ROTATION, "DIMENSIONS", target=piece_target(source_piece_no=n), params=params)
+            for n in (1, 2, 3)
+        ]
+    )
+
+    assert len(grouped) == 1
+    assert "3" in grouped[0].problem
+    assert len(grouped[0].details) == 3
+    assert all(f"الدرفة {n}" in detail for n, detail in enumerate(grouped[0].details, start=1))
+
+    html = render_error_cards_html(
+        [
+            issue(FORBIDDEN_ROTATION, "DIMENSIONS", target=piece_target(source_piece_no=n), params=params)
+            for n in (1, 2, 3)
+        ]
+    )
+    assert "عرض كل المواضع المتأثرة" in html
+    assert all(f"الدرفة {n}" in html for n in (1, 2, 3))
+
+
+def test_special_size_errors_group_by_action_and_preserve_measurements():
+    from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
+        CATEGORY_DIMENSIONS,
+        SPECIAL_SIZE_MISMATCH,
+    )
+
+    shared = {
+        "expected_width_cm": 30,
+        "expected_height_cm": 40,
+        "allowed_min_width_cm": 29.8,
+        "allowed_max_width_cm": 30,
+        "allowed_min_height_cm": 39.8,
+        "allowed_max_height_cm": 40,
+    }
+    issues = [
+        issue(
+            SPECIAL_SIZE_MISMATCH,
+            CATEGORY_DIMENSIONS,
+            target=piece_target(source_piece_no=1),
+            params={
+                **shared,
+                "actual_width_cm": 29.7,
+                "actual_height_cm": 39.5,
+                "spec_summary": "finished 31 × 41 cm",
+            },
+        ),
+        issue(
+            SPECIAL_SIZE_MISMATCH,
+            CATEGORY_DIMENSIONS,
+            target=piece_target(source_piece_no=2),
+            params={
+                **shared,
+                "actual_width_cm": 29.6,
+                "actual_height_cm": 39.4,
+                "spec_summary": "finished 32 × 42 cm",
+            },
+        ),
+    ]
+    grouped = present_issues(issues)
+
+    assert len(grouped) == 1
+    assert len(grouped[0].details) == 2
+    assert "عدد المواضع المتأثرة: 2" in grouped[0].problem
+    assert "29.7 × 39.5 سم" not in grouped[0].problem
+    assert "\u206629.7 × 39.5\u2069 سم" in grouped[0].details[0]
+    assert "\u206629.6 × 39.4\u2069 سم" in grouped[0].details[1]
+    assert "مقاس القص المحفوظ \u206630 × 40\u2069 سم" in grouped[0].details[0]
+    assert "مقاس القص المحفوظ \u206630 × 40\u2069 سم" in grouped[0].details[1]
+    assert "\u206630 × 40\u2069 سم" in grouped[0].details[0]
+    assert "\u206630 × 40\u2069 سم" in grouped[0].details[1]
+    assert "الدرفة 1" in grouped[0].details[0]
+    assert "الدرفة 2" in grouped[0].details[1]
+    assert "finished" not in str(grouped[0])
+    html = render_error_cards_html(issues)
+    assert "\u206629.7 × 39.5\u2069 سم" in html
+    assert "\u206629.6 × 39.4\u2069 سم" in html
+    assert "finished" not in html
+
+
+def test_error_dialog_expands_all_issues_beyond_initial_ten():
+    issues = [
+        issue("CUT_INVALID_GEOMETRY", "CONTOUR", target=contour_target(index))
+        for index in range(12)
+    ]
+
+    html = render_error_cards_html(issues)
+
+    assert "عدد المواضع المتأثرة: 12" in html
+    assert html.count("alm-dxf-error-card") == 1
+    assert "<details class='alm-dxf-error-details'" in html
+    assert all(str(index) in html for index in range(12))
+
+
+def test_invalid_geometry_contours_group_by_cause_and_keep_all_evidence():
+    issues = [
+        issue(
+            CUT_INVALID_GEOMETRY,
+            "CONTOUR",
+            target=contour_target(index),
+            params={"geometry_errors": ["self_intersection"]},
+        )
+        for index in range(1, 13)
+    ]
+
+    cards = present_issues(issues)
+    html = render_error_cards_html(issues)
+
+    assert len(cards) == 1
+    assert "عدد المواضع المتأثرة: 12" in cards[0].problem
+    assert len(cards[0].details) == 12
+    assert all(f"مسار القص رقم {index}" in detail for index, detail in enumerate(cards[0].details, 1))
+    assert all("المسار يتقاطع مع نفسه" in detail for detail in cards[0].details)
+    assert html.count("alm-dxf-error-card") == 1
+    assert "<details class='alm-dxf-error-details'" in html
+    assert all(f"مسار القص رقم {index}" in html for index in range(1, 13))
+
+
+def test_invalid_geometry_with_different_causes_stays_separate():
+    cards = present_issues(
+        [
+            issue(
+                CUT_INVALID_GEOMETRY,
+                "CONTOUR",
+                target=contour_target(1),
+                params={"geometry_errors": ["self_intersection"]},
+            ),
+            issue(
+                CUT_INVALID_GEOMETRY,
+                "CONTOUR",
+                target=contour_target(2),
+                params={"geometry_errors": ["degenerate"]},
+            ),
+        ]
+    )
+
+    assert len(cards) == 2
+
+
+def test_dimension_pairs_are_isolated_left_to_right_in_arabic_messages():
+    item = issue(
+        "CUT_SIZE_MISMATCH",
+        "DIMENSIONS",
+        params={
+            "actual_width_cm": 12.3,
+            "actual_height_cm": 45.6,
+            "expected_width_cm": 78.9,
+            "expected_height_cm": 10.2,
+        },
+    )
+
+    card = present_issues([item])[0]
+
+    assert "\u206612.3 × 45.6\u2069 سم" in card.problem
+    assert "\u206678.9 × 10.2\u2069 سم" in card.action
 
 
 def test_contour_dimensions_and_bounds_are_never_presented_as_a_door():
@@ -329,6 +506,51 @@ def test_every_runtime_issue_call_has_explicit_presenter_branch():
                         if isinstance(item, ast.Attribute) and isinstance(item.value, ast.Name) and item.value.id == "codes"
                     )
     assert emitted <= handled, f"issue codes missing explicit presenter mappings: {sorted(emitted - handled)}"
+
+
+def test_all_71_declared_issue_codes_have_safe_three_question_presentations():
+    catalogue = sorted(
+        value
+        for name, value in vars(issue_codes).items()
+        if name == value
+        and not name.startswith(("CATEGORY_", "TARGET_"))
+        and name.isupper()
+    )
+    assert len(catalogue) == 71
+
+    for code in catalogue:
+        card = present_issue(issue(code, "WORKFLOW"))
+        assert card.code == code, code
+        assert card.problem.strip(), code
+        assert card.target.strip(), code
+        assert card.action.strip(), code
+        text = f"ما المشكلة؟ {card.problem} أين المشكلة؟ {card.target} ماذا أفعل؟ {card.action}"
+        headings = ("ما المشكلة؟", "أين المشكلة؟", "ماذا أفعل؟")
+        assert all(text.count(heading) == 1 for heading in headings), code
+
+
+def test_unknown_issue_code_uses_safe_non_echoing_fallback():
+    from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
+        DxfIssueTarget,
+        DxfValidationIssue,
+    )
+
+    card = present_issue(
+        DxfValidationIssue(
+            code="UNRECOGNIZED_INTERNAL_CODE",
+            category="WORKFLOW",
+            target=DxfIssueTarget(kind="file", label="private-tenant-name.dxf"),
+            params={"message": "internal stack details", "path": "/srv/private/file.dxf"},
+        )
+    )
+
+    assert card.problem == "تعذر التحقق من ملف DXF."
+    assert card.target == "تعذر تحديد موضع المشكلة بأمان."
+    assert card.action == "راجع مسؤول النظام قبل إعادة المحاولة."
+    assert "UNRECOGNIZED_INTERNAL_CODE" not in card.problem
+    assert "internal stack details" not in str(card)
+    assert "private-tenant-name.dxf" not in str(card)
+    assert "/srv/private/file.dxf" not in str(card)
 
 
 def test_architecture_forbids_arabic_substring_branching_in_strict_service() -> None:

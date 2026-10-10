@@ -22,6 +22,11 @@ _OVERLAY_KIND_AR = {
     "back_groove": "فرزة الظهر",
     "recessed_handle_cutout": "مسكة الغطس",
 }
+_GEOMETRY_ERROR_AR = {
+    "too_few_vertices": "عدد الرؤوس أقل من اللازم",
+    "zero_area": "مساحة المسار تساوي صفرًا",
+    "self_intersection": "المسار يتقاطع مع نفسه",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,6 +36,7 @@ class PresentedDxfError:
     action: str
     code: str
     category: str
+    details: tuple[str, ...] = ()
 
 
 def format_cm(value: Any) -> str:
@@ -64,8 +70,10 @@ def _size_cm(width: Any, height: Any, *, from_mm: bool = False) -> str:
         height_cm = _mm_to_cm(height)
         if width_cm is None or height_cm is None:
             return "؟"
-        return f"{format_cm(width_cm)} × {format_cm(height_cm)} سم"
-    return f"{format_cm(width)} × {format_cm(height)} سم"
+        pair = f"{format_cm(width_cm)} × {format_cm(height_cm)}"
+        return f"\u2066{pair}\u2069 سم"
+    pair = f"{format_cm(width)} × {format_cm(height)}"
+    return f"\u2066{pair}\u2069 سم"
 
 
 def present_target(target: DxfIssueTarget, *, params: dict[str, Any] | None = None) -> str:
@@ -181,11 +189,10 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
     code = issue.code
 
     if code == codes.LEGACY_MESSAGE:
-        message = str(params.get("message") or "تعذر التحقق من ملف DXF.")
         return PresentedDxfError(
-            problem=message,
-            target=target_text,
-            action="صحح الرسم ثم أعد رفع الملف.",
+            problem="تعذر التحقق من الملف بسبب رسالة قديمة غير مفصلة.",
+            target="تفاصيل الخطأ غير متاحة بأمان.",
+            action="راجع مسؤول النظام لتشخيص الخطأ ثم أعد المحاولة.",
             code=code,
             category=issue.category,
         )
@@ -349,16 +356,64 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
         )
 
     if code == codes.FORBIDDEN_ROTATION:
-        expected = _size_cm(
-            params.get("expected_width_cm", _mm_to_cm(params.get("expected_width_mm"))),
-            params.get("expected_height_cm", _mm_to_cm(params.get("expected_height_mm"))),
+        rotation_count = max(1, int(params.get("rotation_count", 1) or 1))
+        candidate_rows = tuple(
+            sorted({
+                int(row)
+                for row in (params.get("candidate_source_piece_nos") or ())
+                if str(row).isdigit()
+            })
         )
-        noun = _piece_noun(issue)
-        adjective = "مدوّر" if noun == "مسار القص" else "مدوّرة"
+        if candidate_rows and issue.target.kind == "order":
+            target_text = "الدرف المحتملة: " + "، ".join(
+                str(row) for row in candidate_rows
+            ) + "."
+
+        if rotation_count == 1 and not params.get("identity_ambiguous"):
+            expected = _size_cm(
+                params.get("expected_width_cm", _mm_to_cm(params.get("expected_width_mm"))),
+                params.get("expected_height_cm", _mm_to_cm(params.get("expected_height_mm"))),
+            )
+            noun = _piece_noun(issue)
+            adjective = "مدوّر" if noun == "مسار القص" else "مدوّرة"
+            return PresentedDxfError(
+                f"{noun} {adjective} والتدوير غير مسموح.",
+                target_text,
+                f"أعد اتجاه {noun} إلى {expected}.",
+                code,
+                issue.category,
+            )
+
+        measurements = params.get("possible_measurements_cm") or []
+        pairs = []
+        for measurement in measurements:
+            actual = _size_cm(
+                measurement.get("actual_width_cm"),
+                measurement.get("actual_height_cm"),
+            )
+            expected = _size_cm(
+                measurement.get("expected_width_cm"),
+                measurement.get("expected_height_cm"),
+            )
+            pair = f"الموجود {actual} والمطلوب {expected}"
+            if pair not in pairs:
+                pairs.append(pair)
+        if not pairs and params.get("actual_width_cm") is not None:
+            pairs.append(
+                "الموجود "
+                + _size_cm(params.get("actual_width_cm"), params.get("actual_height_cm"))
+                + " والمطلوب "
+                + _size_cm(params.get("expected_width_cm"), params.get("expected_height_cm"))
+            )
+        count_text = "قطعة واحدة" if rotation_count == 1 else f"{rotation_count} قطع"
+        problem = f"ثبت وجود تدوير ممنوع في {count_text}."
+        action = "أعد اتجاه القطع."
+        if pairs:
+            action += " المقاسات: " + "؛ ".join(pairs) + "."
         return PresentedDxfError(
-            f"{noun} {adjective} والتدوير غير مسموح.",
+            problem,
             target_text,
-            f"أعد اتجاه {noun} إلى {expected}.",
+            action,
             code,
             issue.category,
         )
@@ -382,10 +437,26 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
 
     if code == codes.SPECIAL_SIZE_MISMATCH:
         noun = _piece_noun(issue)
-        problem = (
+        prefix = (
             "مقاس مسار القص الخاص خارج المجال المسموح."
             if noun == "مسار القص"
             else f"مقاس {noun} الخاصة خارج المجال المسموح."
+        )
+        actual = _size_cm(
+            params.get("actual_width_cm"),
+            params.get("actual_height_cm"),
+        )
+        expected = _size_cm(
+            params.get("expected_width_cm"),
+            params.get("expected_height_cm"),
+        )
+        problem = (
+            f"{prefix} الموجود {actual} ومقاس القص المحفوظ {expected}."
+            if params.get("actual_width_cm") is not None
+            and params.get("actual_height_cm") is not None
+            and params.get("expected_width_cm") is not None
+            and params.get("expected_height_cm") is not None
+            else prefix
         )
         return PresentedDxfError(
             problem,
@@ -406,7 +477,7 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
         if missing_sizes:
             action = (
                 f"أضف على CUT_PATH الدرفة الناقصة بمقاس {missing_sizes[0]}."
-                if len(missing_sizes) == 1
+                if missing_count == 1
                 else f"أضف على CUT_PATH الدرفات الناقصة بهذه المقاسات: {'، '.join(missing_sizes)}."
             )
         elif preview:
@@ -429,7 +500,7 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
         elif extra_sizes:
             action = (
                 f"احذف من CUT_PATH المسار الزائد بمقاس {extra_sizes[0]}."
-                if len(extra_sizes) == 1
+                if extra_count == 1
                 else f"احذف من CUT_PATH المسارات الزائدة بهذه المقاسات: {'، '.join(extra_sizes)}."
             )
         else:
@@ -758,19 +829,65 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
         labels = ", ".join(str(value) for value in (params.get("labels") or []))
         return PresentedDxfError("خطة القص تحتوي قطعًا غير موجودة في الطلب.", labels or target_text, "أزل القطع غير المطلوبة وأعد حساب الخطة.", code, issue.category)
 
-    message = str(params.get("message") or f"تعذر قبول DXF ({code}).")
-    return PresentedDxfError(message, target_text, "صحح الرسم ثم أعد رفع الملف.", code, issue.category)
+    # Unknown and obsolete codes must fail safely: do not expose arbitrary
+    # legacy text, internal code names, or untrusted target details.
+    return PresentedDxfError(
+        "تعذر التحقق من ملف DXF.",
+        "تعذر تحديد موضع المشكلة بأمان.",
+        "راجع مسؤول النظام قبل إعادة المحاولة.",
+        code,
+        issue.category,
+    )
 
 
 def group_issues(issues: Sequence[DxfValidationIssue]) -> list[list[DxfValidationIssue]]:
-    """Group only when code, action template, and compatible targets align."""
+    """Group by cause and corrective action, retaining per-issue evidence."""
     grouped: list[list[DxfValidationIssue]] = []
-    index_by_key: dict[tuple[str, str], int] = {}
+    index_by_key: dict[tuple[str, ...], int] = {}
     for item in sort_issues(list(issues)):
         presented = present_issue(item)
         # Group open/branched contours and identical dimension-less codes.
-        if item.code in {codes.CUT_OPEN, codes.CUT_BRANCHED, codes.CUT_SELF_INTERSECTION} and item.target.contour_no is not None:
-            key = (item.code, presented.action)
+        contour_group = (
+            item.code in {
+                codes.CUT_OPEN,
+                codes.CUT_BRANCHED,
+                codes.CUT_SELF_INTERSECTION,
+                codes.CUT_INVALID_GEOMETRY,
+            }
+            and item.target.contour_no is not None
+        )
+        piece_group = (
+            item.code in {
+                codes.FORBIDDEN_ROTATION,
+                codes.CUT_SIZE_MISMATCH,
+                codes.SPECIAL_SIZE_MISMATCH,
+                codes.PIECE_MISSING,
+                codes.EXTRA_CUT_PATH,
+            }
+            and item.target.kind in {
+                codes.TARGET_PIECE,
+                codes.TARGET_PIECE_COPY,
+                codes.TARGET_PIECE_PAIR,
+                codes.TARGET_CONTOUR,
+                codes.TARGET_CONTOUR_PAIR,
+            }
+        )
+        if contour_group or piece_group:
+            # Problem details and params remain on each issue for the expanded
+            # evidence list; they do not change root cause or corrective action.
+            geometry_errors = item.params.get("geometry_errors") or ()
+            geometry_signature = (
+                tuple(sorted(str(error) for error in geometry_errors))
+                if item.code == codes.CUT_INVALID_GEOMETRY
+                else ()
+            )
+            key = (
+                item.code,
+                item.category,
+                item.target.kind,
+                presented.action,
+                geometry_signature,
+            )
             if key in index_by_key:
                 grouped[index_by_key[key]].append(item)
                 continue
@@ -815,7 +932,36 @@ def present_group(group: Sequence[DxfValidationIssue]) -> PresentedDxfError:
             group[0].code,
             group[0].category,
         )
-    return first
+    detail_lines = []
+    for item in group:
+        presented = present_issue(item)
+        detail = f"{presented.target} — {presented.problem}"
+        if item.code == codes.CUT_INVALID_GEOMETRY:
+            causes = [
+                _GEOMETRY_ERROR_AR.get(str(error), "سبب هندسي إضافي")
+                for error in (item.params.get("geometry_errors") or ())
+            ]
+            if causes:
+                detail += " التفاصيل: " + "، ".join(causes) + "."
+        detail_lines.append(detail)
+    details = tuple(detail_lines)
+    if group[0].code == codes.CUT_SIZE_MISMATCH:
+        summary = "توجد مقاسات قص غير مطابقة."
+        group_target = f"{len(group)} مواضع تحتاج الإجراء نفسه."
+    elif group[0].code == codes.SPECIAL_SIZE_MISMATCH:
+        summary = "توجد مقاسات قطع خاصة خارج المجال المسموح."
+        group_target = f"{len(group)} مواضع تحتاج الإجراء نفسه."
+    else:
+        summary = first.problem
+        group_target = f"{len(group)} مواضع متطابقة السبب."
+    return PresentedDxfError(
+        f"{summary} (عدد المواضع المتأثرة: {len(group)}).",
+        group_target,
+        first.action,
+        first.code,
+        first.category,
+        details,
+    )
 
 
 def present_issues(issues: Iterable[DxfValidationIssue]) -> list[PresentedDxfError]:
@@ -858,24 +1004,38 @@ def render_error_cards_html(
             )
         ]
     visible = presented[:max_cards]
-    remaining = len(presented) - len(visible)
-    cards: list[str] = []
-    for item in visible:
-        cards.append(
+    remaining_items = presented[max_cards:]
+
+    def render_card(item: PresentedDxfError) -> str:
+        details = ""
+        if item.details:
+            details = (
+                "<details class='alm-dxf-error-details' style='margin-top:6px;'>"
+                "<summary>عرض كل المواضع المتأثرة</summary><ul>"
+                + "".join(f"<li>{html.escape(detail)}</li>" for detail in item.details)
+                + "</ul></details>"
+            )
+        return (
             "<div class='alm-dxf-error-card' style='border:1px solid var(--border-color);border-radius:6px;"
             "padding:10px 12px;margin:0 0 10px;text-align:right;direction:rtl;'>"
             f"<div><strong>ما المشكلة؟</strong> {html.escape(item.problem)}</div>"
             f"<div style='margin-top:6px;'><strong>أين المشكلة؟</strong> {html.escape(item.target)}</div>"
             f"<div style='margin-top:6px;'><strong>ماذا أفعل؟</strong> {html.escape(_action_for_context(item.action, context))}</div>"
+            f"{details}"
             "</div>"
         )
-    extra = (
-        f"<p style='direction:rtl;text-align:right;'>وهناك {remaining} أخطاء إضافية. "
-        + ("صحح الأخطاء الظاهرة أولًا ثم أعد الرفع." if context == "upload" else "راجع الأخطاء الظاهرة أولًا ثم أعد التصدير.")
-        + "</p>"
-        if remaining > 0
-        else ""
-    )
+
+    cards = [render_card(item) for item in visible]
+    extra = ""
+    if remaining_items:
+        cards.extend(
+            [
+                "<details class='alm-dxf-error-overflow' style='margin:0 0 10px;'>"
+                f"<summary>عرض بقية الأخطاء ({len(remaining_items)})</summary>"
+                + "".join(render_card(item) for item in remaining_items)
+                + "</details>"
+            ]
+        )
     footer = (
         "صحح الرسم ثم أعد رفع الملف. لم يتم استبدال خطة DXF الحالية في الطلب."
         if context == "upload"
@@ -883,7 +1043,7 @@ def render_error_cards_html(
     )
     return (
         "<div class='alm-dxf-error-dialog' style='direction:rtl;text-align:right;'>"
-        f"{''.join(cards)}{extra}"
+        f"{''.join(cards)}"
         f"<p>{footer}</p>"
         "</div>"
     )

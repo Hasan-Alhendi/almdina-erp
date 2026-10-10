@@ -106,6 +106,7 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_topology import (
     PartGeometry,
     PlacedPartGeometry,
     ResolvedTopology,
+    diagnostic_piece_contours,
     resolve_contour_ownership,
     validate_material_layout,
 )
@@ -123,6 +124,7 @@ from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
 )
 from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
     dimensions_match_exact,
+    special_bbox_matches_cut_envelope_with_unrecorded_edge_deduction,
 )
 from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
     OffcutPolicyError,
@@ -252,63 +254,167 @@ def _cut_topology_mismatch_details(
     return " ".join(parts)
 
 
-def _inventory_mismatch_params(
+def _diagnostic_piece_candidates(
     candidates: tuple[ContourCandidate, ...],
-    order: Any,
-) -> dict[str, Any]:
-    """Count/size facts for clear missing/extra/mismatch presentation."""
-    expected = _expected_order_pieces(order)
-    tol = DIMENSION_TOLERANCE_MM / 10.0
-    dxf_sizes: list[tuple[float, float]] = []
-    for candidate in candidates:
-        min_x, min_y, max_x, max_y = bbox(candidate.polygon)
-        dxf_sizes.append(((max_x - min_x) / 10.0, (max_y - min_y) / 10.0))
+    expected: list[dict[str, Any]],
+    *,
+    include_nested_candidates: bool = True,
+) -> tuple[ContourCandidate, ...]:
+    evidence = tuple(
+        ExpectedPieceEvidence(
+            width=piece["width_cm"] * 10.0,
+            height=piece["length_cm"] * 10.0,
+            allow_rotation=bool(piece["allow_rotation"]),
+        )
+        for piece in expected
+    )
+    return diagnostic_piece_contours(
+        candidates,
+        evidence,
+        dimension_tolerance=DIMENSION_TOLERANCE_MM,
+        geometry_tolerance=GEOMETRY_TOLERANCE_MM,
+        include_nested_piece_candidates=include_nested_candidates,
+    )
 
-    unmatched_expected = list(expected)
-    unmatched_dxf: list[tuple[float, float]] = []
-    for width_cm, height_cm in dxf_sizes:
-        match_index = None
-        for index, piece in enumerate(unmatched_expected):
-            matches = _size_matches(
-                width_cm,
-                height_cm,
-                piece["width_cm"],
-                piece["length_cm"],
-                tol=tol,
-            ) or (
-                bool(piece["allow_rotation"])
-                and _size_matches(
+
+def _inventory_residuals(
+    actual_sizes: list[tuple[float, float]],
+    expected: list[dict[str, Any]],
+) -> tuple[list[int], list[int]]:
+    """Return unmatched sizes using persisted CUT precision and Special rules."""
+    adjacency: list[list[int]] = []
+    for width_cm, height_cm in actual_sizes:
+        matches = []
+        for expected_index, piece in enumerate(expected):
+            if piece["piece_type"] == "Special":
+                direct = special_bbox_matches_cut_envelope_with_unrecorded_edge_deduction(
+                    width_cm,
+                    height_cm,
+                    piece["width_cm"],
+                    piece["length_cm"],
+                )
+                rotated = bool(piece["allow_rotation"]) and (
+                    special_bbox_matches_cut_envelope_with_unrecorded_edge_deduction(
+                        width_cm,
+                        height_cm,
+                        piece["length_cm"],
+                        piece["width_cm"],
+                    )
+                )
+            else:
+                direct = dimensions_match_exact(
+                    width_cm,
+                    height_cm,
+                    piece["width_cm"],
+                    piece["length_cm"],
+                )
+                rotated = bool(piece["allow_rotation"]) and dimensions_match_exact(
                     width_cm,
                     height_cm,
                     piece["length_cm"],
                     piece["width_cm"],
-                    tol=tol,
                 )
-            )
-            if matches:
-                match_index = index
-                break
-        if match_index is None:
-            unmatched_dxf.append((width_cm, height_cm))
-        else:
-            unmatched_expected.pop(match_index)
+            if direct or rotated:
+                matches.append(expected_index)
+        adjacency.append(matches)
 
+    # Hopcroft-Karp avoids the greedy-order errors and remains practical for
+    # large repeated-piece orders where many copies have identical dimensions.
+    from collections import deque
+
+    actual_match = [-1] * len(actual_sizes)
+    expected_match = [-1] * len(expected)
+    distance = [0] * len(actual_sizes)
+    infinity = len(actual_sizes) + len(expected) + 1
+
+    def build_layers() -> bool:
+        queue = deque()
+        for actual_index, matched in enumerate(actual_match):
+            if matched == -1:
+                distance[actual_index] = 0
+                queue.append(actual_index)
+            else:
+                distance[actual_index] = infinity
+        found = False
+        while queue:
+            actual_index = queue.popleft()
+            for expected_index in adjacency[actual_index]:
+                next_actual = expected_match[expected_index]
+                if next_actual == -1:
+                    found = True
+                elif distance[next_actual] == infinity:
+                    distance[next_actual] = distance[actual_index] + 1
+                    queue.append(next_actual)
+        return found
+
+    def augment(actual_index: int) -> bool:
+        for expected_index in adjacency[actual_index]:
+            next_actual = expected_match[expected_index]
+            if next_actual == -1 or (
+                distance[next_actual] == distance[actual_index] + 1 and augment(next_actual)
+            ):
+                actual_match[actual_index] = expected_index
+                expected_match[expected_index] = actual_index
+                return True
+        distance[actual_index] = infinity
+        return False
+
+    while build_layers():
+        for actual_index, matched in enumerate(actual_match):
+            if matched == -1:
+                augment(actual_index)
+
+    return (
+        [index for index, matched in enumerate(actual_match) if matched == -1],
+        [index for index, matched in enumerate(expected_match) if matched == -1],
+    )
+
+
+def _inventory_mismatch_params(
+    candidates: tuple[ContourCandidate, ...],
+    order: Any,
+    *,
+    include_ambiguous_nested: bool = True,
+) -> dict[str, Any]:
+    """Count logical cut pieces and report only unmatched size/count residuals."""
+    expected = _expected_order_pieces(order)
+    logical_candidates = _diagnostic_piece_candidates(
+        candidates,
+        expected,
+        include_nested_candidates=include_ambiguous_nested,
+    )
+
+    dxf_sizes: list[tuple[float, float]] = []
+    for candidate in logical_candidates:
+        min_x, min_y, max_x, max_y = bbox(candidate.polygon)
+        dxf_sizes.append(((max_x - min_x) / 10.0, (max_y - min_y) / 10.0))
+
+    unmatched_dxf_indexes, unmatched_expected_indexes = _inventory_residuals(dxf_sizes, expected)
+    missing_counts = Counter(
+        f"{_format_cm(expected[index]['width_cm'])} × {_format_cm(expected[index]['length_cm'])} سم"
+        for index in unmatched_expected_indexes
+    )
+    extra_counts = Counter(
+        f"{_format_cm(dxf_sizes[index][0])} × {_format_cm(dxf_sizes[index][1])} سم"
+        for index in unmatched_dxf_indexes
+    )
     return {
-        "actual_count": len(candidates),
+        "actual_count": len(logical_candidates),
         "expected_count": len(expected),
-        "missing_count": len(unmatched_expected),
-        "extra_count": len(unmatched_dxf),
-        "missing_labels": [str(piece["label"]) for piece in unmatched_expected],
+        "missing_count": len(unmatched_expected_indexes),
+        "extra_count": len(unmatched_dxf_indexes),
+        # Deliberately omit copy labels: DXF geometry alone cannot prove them.
+        "missing_labels": [],
         "missing_sizes": [
-            f"{_format_cm(piece['width_cm'])} × {_format_cm(piece['length_cm'])} سم"
-            for piece in unmatched_expected
+            f"{size} (×{qty})" if qty > 1 else size
+            for size, qty in missing_counts.most_common()
         ],
         "extra_sizes": [
-            f"{_format_cm(width_cm)} × {_format_cm(height_cm)} سم"
-            for width_cm, height_cm in unmatched_dxf
+            f"{size} (×{qty})" if qty > 1 else size
+            for size, qty in extra_counts.most_common()
         ],
         "dxf_sizes_label": _format_size_counts(
-            Counter(_bbox_size_label_cm(candidate.polygon) for candidate in candidates)
+            Counter(_bbox_size_label_cm(candidate.polygon) for candidate in logical_candidates)
         ),
         "expected_sizes_label": _format_size_counts(
             Counter(
@@ -326,17 +432,20 @@ def _expected_piece_mismatch_issue(
     candidates: tuple[ContourCandidate, ...],
     order: Any,
     kerf_mm: float,
+    include_ambiguous_nested: bool = True,
 ) -> DxfValidationIssue:
     """Map topology inventory failure to missing / extra / size-mismatch issue."""
-    params = _inventory_mismatch_params(candidates, order)
+    params = _inventory_mismatch_params(
+        candidates, order, include_ambiguous_nested=include_ambiguous_nested
+    )
     details = _cut_topology_mismatch_details(candidates, order)
     params["details"] = details
     params["kerf_mm"] = kerf_mm
     params["topology_code"] = error.code
 
-    actual = int(params["actual_count"])
-    expected = int(params["expected_count"])
-    if actual < expected:
+    missing_count = int(params["missing_count"])
+    extra_count = int(params["extra_count"])
+    if missing_count and not extra_count:
         return issue(
             PIECE_MISSING,
             CATEGORY_IDENTITY,
@@ -344,7 +453,7 @@ def _expected_piece_mismatch_issue(
             params=params,
             debug={"topology_code": error.code},
         )
-    if actual > expected:
+    if extra_count and not missing_count:
         return issue(
             EXTRA_CUT_PATH,
             CATEGORY_IDENTITY,
@@ -449,6 +558,111 @@ def _near_miss_size_hints(
     return hints
 
 
+def _topology_error_issues(
+    error: DxfTopologyError,
+    *,
+    kerf_mm: float = 0.0,
+    details: str = "",
+    order: Any = None,
+) -> list[DxfValidationIssue]:
+    """Map precise and grouped domain rotation evidence to stable issue records."""
+    evidence = getattr(error, "rotation_evidence", ())
+    if error.code != "FORBIDDEN_ROTATION" or not evidence:
+        return [
+            _topology_error_issue(
+                error,
+                kerf_mm=kerf_mm,
+                details=details,
+                order=order,
+            )
+        ]
+
+    issues: list[DxfValidationIssue] = []
+    for group in evidence:
+        if group.expected_piece_index is not None and len(group.measurements_mm) == 1:
+            actual_width, actual_height, expected_width, expected_height = (
+                group.measurements_mm[0]
+            )
+            precise_error = DxfTopologyError(
+                "FORBIDDEN_ROTATION",
+                expected_piece_index=group.expected_piece_index,
+                actual_width=actual_width,
+                actual_height=actual_height,
+                expected_width=expected_width,
+                expected_height=expected_height,
+            )
+            mapped = _topology_error_issue(
+                precise_error,
+                kerf_mm=kerf_mm,
+                details=details,
+                order=order,
+            )
+            params = {
+                **mapped.params,
+                "rotation_count": 1,
+                "actual_width_cm": actual_width / 10.0,
+                "actual_height_cm": actual_height / 10.0,
+                "expected_width_cm": expected_width / 10.0,
+                "expected_height_cm": expected_height / 10.0,
+            }
+            issues.append(
+                issue(
+                    mapped.code,
+                    mapped.category,
+                    target=mapped.target,
+                    params=params,
+                    debug=mapped.debug,
+                )
+            )
+            continue
+
+        measurements_cm = [
+            {
+                "actual_width_cm": actual_width / 10.0,
+                "actual_height_cm": actual_height / 10.0,
+                "expected_width_cm": expected_width / 10.0,
+                "expected_height_cm": expected_height / 10.0,
+            }
+            for actual_width, actual_height, expected_width, expected_height
+            in group.measurements_mm
+        ]
+        source_piece_nos = tuple(sorted(set(group.source_piece_nos)))
+        target = (
+            piece_target(source_piece_no=source_piece_nos[0])
+            if len(source_piece_nos) == 1
+            else DxfIssueTarget(kind="order")
+        )
+        params: dict[str, Any] = {
+            "kerf_mm": kerf_mm,
+            "rotation_count": group.rotation_count,
+            "possible_measurements_cm": measurements_cm,
+            "identity_ambiguous": True,
+        }
+        if len(source_piece_nos) > 1:
+            params["candidate_source_piece_nos"] = list(source_piece_nos)
+        if len(measurements_cm) == 1:
+            params.update(measurements_cm[0])
+        elif measurements_cm:
+            params["actual_sizes_cm"] = sorted({
+                (item["actual_width_cm"], item["actual_height_cm"])
+                for item in measurements_cm
+            })
+            params["expected_sizes_cm"] = sorted({
+                (item["expected_width_cm"], item["expected_height_cm"])
+                for item in measurements_cm
+            })
+        issues.append(
+            issue(
+                FORBIDDEN_ROTATION,
+                CATEGORY_DIMENSIONS,
+                target=target,
+                params=params,
+                debug={"topology_code": "FORBIDDEN_ROTATION"},
+            )
+        )
+    return issues
+
+
 def _topology_error_issue(
     error: DxfTopologyError,
     *,
@@ -491,15 +705,19 @@ def _topology_error_message(
         present_issue,
     )
 
-    card = present_issue(
-        _topology_error_issue(
+    cards = [
+        present_issue(item)
+        for item in _topology_error_issues(
             error,
             kerf_mm=kerf_mm,
             details=details,
             order=order,
         )
+    ]
+    return "\n".join(
+        f"ما المشكلة؟ {card.problem} أي درفة/لوح؟ {card.target} ماذا أفعل؟ {card.action}"
+        for card in cards
     )
-    return f"ما المشكلة؟ {card.problem} أي درفة/لوح؟ {card.target} ماذا أفعل؟ {card.action}"
 
 
 def _overlay_error_issue(error: ExtraOverlayError) -> DxfValidationIssue:
@@ -1058,6 +1276,8 @@ def _expected_topology_evidence(order: Any) -> tuple[ExpectedPieceEvidence, ...]
             height=piece["length_cm"] * 10.0,
             allow_rotation=bool(piece["allow_rotation"]),
             arbitrary_outline=piece["piece_type"] == "Special",
+            source_piece_no=int(piece["source_piece_no"]),
+            copy_no=int(piece["copy_no"]),
         )
         for piece in _expected_order_pieces(order)
     )
@@ -1462,14 +1682,34 @@ def _resolve_cut_topology(contours: list[dict[str, object]], order: Any) -> Reso
                     )
                 ]
             ) from exc
+        if exc.code in {
+            "AMBIGUOUS_CONTOUR_OWNERSHIP",
+            "UNRESOLVED_CONTOUR_OWNERSHIP",
+        }:
+            # Independent roots are cut paths by topology evidence. When there
+            # are more roots than required copies, report their size residuals;
+            # nested candidates stay excluded because their ownership is unclear.
+            root_inventory = _inventory_mismatch_params(
+                candidates, order, include_ambiguous_nested=False
+            )
+            if root_inventory["actual_count"] > root_inventory["expected_count"]:
+                raise DxfImportError(
+                    issues=[
+                        _expected_piece_mismatch_issue(
+                            exc,
+                            candidates=candidates,
+                            order=order,
+                            kerf_mm=max(0.0, flt(order.kerf_mm)),
+                            include_ambiguous_nested=False,
+                        )
+                    ]
+                ) from exc
         raise DxfImportError(
-            issues=[
-                _topology_error_issue(
-                    exc,
-                    kerf_mm=max(0.0, flt(order.kerf_mm)),
-                    order=order,
-                )
-            ]
+            issues=_topology_error_issues(
+                exc,
+                kerf_mm=max(0.0, flt(order.kerf_mm)),
+                order=order,
+            )
         ) from exc
 
 
