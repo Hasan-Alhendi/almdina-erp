@@ -454,7 +454,7 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
         if missing_sizes:
             action = (
                 f"أضف على CUT_PATH الدرفة الناقصة بمقاس {missing_sizes[0]}."
-                if len(missing_sizes) == 1
+                if missing_count == 1
                 else f"أضف على CUT_PATH الدرفات الناقصة بهذه المقاسات: {'، '.join(missing_sizes)}."
             )
         elif preview:
@@ -477,7 +477,7 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
         elif extra_sizes:
             action = (
                 f"احذف من CUT_PATH المسار الزائد بمقاس {extra_sizes[0]}."
-                if len(extra_sizes) == 1
+                if extra_count == 1
                 else f"احذف من CUT_PATH المسارات الزائدة بهذه المقاسات: {'، '.join(extra_sizes)}."
             )
         else:

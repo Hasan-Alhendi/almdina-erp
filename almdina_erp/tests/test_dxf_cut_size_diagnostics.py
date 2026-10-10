@@ -889,6 +889,40 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
         self.assertEqual(issue.params["missing_sizes"], ["20 × 25 سم"])
 
 
+    def test_repeated_missing_size_uses_plural_action_and_count(self) -> None:
+        with self.assertRaises(DxfImportError) as exc_info:
+            _resolve_cut_topology([], self._order((500, 600, 0), (500, 600, 0), (500, 600, 0)))
+
+        issue = exc_info.exception.issues[0]
+        self.assertIn("PIECE_MISSING", exc_info.exception.codes)
+        self.assertEqual(issue.params["missing_count"], 3)
+        message = _present_error(exc_info.exception)
+        self.assertIn("3 درفات ناقصة", message)
+        self.assertIn("الدرفات الناقصة بهذه المقاسات", message)
+        self.assertIn("×3", message)
+
+    def test_repeated_extra_size_uses_plural_action_and_count(self) -> None:
+        with self.assertRaises(DxfImportError) as exc_info:
+            _resolve_cut_topology(
+                [
+                    _rect(300, 400),
+                    _rect(150, 200, x_mm=500),
+                    _rect(150, 200, x_mm=800),
+                    _rect(150, 200, x_mm=1100),
+                ],
+                self._order((300, 400, 0)),
+            )
+
+        issue = exc_info.exception.issues[0]
+        self.assertIn("EXTRA_CUT_PATH", exc_info.exception.codes)
+        self.assertEqual(issue.params["extra_count"], 3)
+        self.assertEqual(issue.params["extra_sizes"], ["15 × 20 سم (×3)"])
+        message = _present_error(exc_info.exception)
+        self.assertIn("3 مسارات قص زائدة", message)
+        self.assertIn("المسارات الزائدة بهذه المقاسات", message)
+        self.assertIn("×3", message)
+
+
 
 if __name__ == "__main__":
     unittest.main()
