@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -38,6 +39,45 @@ def _rect(width_mm: float, height_mm: float, *, x_mm: float = 0.0) -> dict:
         "closed": True,
         "branched": False,
     }
+
+
+def _collect_diagnostic_values(value, field_names: set[str]) -> list:
+    """Collect repeated scalar or grouped diagnostic evidence without fixing card shape."""
+    values = []
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if key in field_names:
+                values.extend(_flatten_scalars(item))
+                if key == "source_piece_no" and isinstance(item, int):
+                    count = value.get("count", value.get("quantity", 1))
+                    values.extend([item] * max(0, int(count) - 1))
+            else:
+                values.extend(_collect_diagnostic_values(item, field_names))
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            values.extend(_collect_diagnostic_values(item, field_names))
+    elif hasattr(value, "__dataclass_fields__"):
+        values.extend(_collect_diagnostic_values(
+            {name: getattr(value, name) for name in value.__dataclass_fields__},
+            field_names,
+        ))
+    elif hasattr(value, "__dict__"):
+        values.extend(_collect_diagnostic_values(vars(value), field_names))
+    else:
+        # Support slot-based target objects used by the diagnostic value types.
+        for name in field_names:
+            if hasattr(value, name):
+                item = getattr(value, name)
+                values.extend(_flatten_scalars(item))
+    return values
+
+
+def _flatten_scalars(value) -> list:
+    if isinstance(value, (list, tuple)):
+        return [scalar for item in value for scalar in _flatten_scalars(item)]
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return [value]
+    return []
 
 
 def _order_from_fixture(data: dict):
@@ -96,7 +136,7 @@ class TestAlmadina181DxfGoldenBaseline(unittest.TestCase):
         self.assertNotIn("source_piece_no", diagnostic.params)
 
     @unittest.expectedFailure
-    def test_multiple_forbidden_rotations_keep_piece_copy_identity_and_dimensions(self):
+    def test_multiple_forbidden_rotations_report_rows_counts_and_dimensions(self):
         data = _fixture()
         order = _order_from_fixture(data)
         contours = [_rect(*bbox) for bbox in data["scenario"]["cut_path_bboxes_mm"]]
@@ -105,20 +145,25 @@ class TestAlmadina181DxfGoldenBaseline(unittest.TestCase):
             _resolve_cut_topology(contours, order)
 
         error = raised.exception
-        self.assertEqual(error.codes, ["FORBIDDEN_ROTATION"] * 4)
-        targets = [issue.target for issue in error.issues]
-        self.assertEqual(
-            [(target.source_piece_no, target.copy_no) for target in targets],
-            [(1, 1), (2, 1), (2, 2), (3, 1)],
+        self.assertIn("FORBIDDEN_ROTATION", error.codes)
+        diagnostics = [{"target": issue.target, "params": issue.params} for issue in error.issues]
+
+        # Evidence is aggregated independently of whether diagnostics use one
+        # card per contour or a grouped card. Repeated equal pieces have no
+        # evidence-backed individual copy identity, so copy_no is never asserted.
+        rows = _collect_diagnostic_values(
+            diagnostics, {"source_piece_no", "source_piece_nos"}
         )
-        self.assertEqual(
-            [issue.params["actual_width_cm"] for issue in error.issues],
-            [89.9, 61.0, 61.0, 60.5],
+        widths = _collect_diagnostic_values(
+            diagnostics, {"actual_width_cm", "actual_widths_cm"}
         )
-        self.assertEqual(
-            [issue.params["actual_height_cm"] for issue in error.issues],
-            [29.9, 29.9, 29.9, 29.9],
+        heights = _collect_diagnostic_values(
+            diagnostics, {"actual_height_cm", "actual_heights_cm"}
         )
+
+        self.assertEqual(Counter(rows), Counter({1: 1, 2: 2, 3: 1}))
+        self.assertEqual(Counter(widths), Counter({89.9: 1, 61.0: 2, 60.5: 1}))
+        self.assertEqual(Counter(heights), Counter({29.9: 4}))
 
     def test_allowed_rotation_is_accepted_with_same_cut_dimensions(self):
         topology = resolve_contour_ownership(
