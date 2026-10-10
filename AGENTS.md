@@ -65,3 +65,13 @@ Rollback risk:
 - لا تعدّل `main` إلا ضمن Release صريح.
 - افحص Diff كاملًا قبل الدمج.
 - PR واحد = Scope مفهوم واحد قدر الإمكان.
+
+## Cursor Cloud specific instructions
+
+Cloud Agent machines keep a local Frappe v16 bench at `/home/ubuntu/frappe-bench`. The site is `dev.localhost`. `apps/almdina_erp` is a symlink to `/workspace`, and the bench virtualenv is the Python used for app tests.
+
+- Login shells should resolve `node` to `/opt/node-v24/bin/node` (Node 24). Use `python3.14` or `/home/ubuntu/frappe-bench/env/bin/python` (Python 3.14). MariaDB is 11.8.
+- On boot, `bash /home/ubuntu/.almdina-dev/start.sh` starts MariaDB and `bench start` in tmux session `frappe`. Desk is `http://127.0.0.1:8000`. If that session is already serving port 8000, do not start a second bench.
+- The local Administrator password is only in `/home/ubuntu/.almdina-dev/credentials` (`FRAPPE_ADMIN_PASSWORD`). Do not print it or commit it.
+- After a branch changes Python dependencies, run `/home/ubuntu/frappe-bench/env/bin/pip install -e '/workspace[test]'` from the bench. After a schema or patch change, run `bench --site dev.localhost migrate` from `/home/ubuntu/frappe-bench`.
+- Domain tests that do not need a site can run with the bench Python, for example `python -m unittest almdina_erp.tests.test_cut_dimensions_domain`. The full install/migrate/app-test gate remains `.github/workflows/frappe-v16-integration.yml`.
