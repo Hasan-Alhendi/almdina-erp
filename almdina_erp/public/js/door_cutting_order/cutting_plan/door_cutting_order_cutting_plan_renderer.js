@@ -54,6 +54,7 @@
         let top = 0;
         let bottom = 0;
         let edgeBreak = piece.edge_break ? 1 : 0;
+        let edgeBreakOnly = piece.edge_break_only ? 1 : 0;
 
         if (!piece.rotated) {
             left = piece.edge_long_left ? 1 : 0;
@@ -68,7 +69,7 @@
             left = piece.edge_width_bottom ? 1 : 0;
         }
 
-        return { left, right, top, bottom, edgeBreak };
+        return { left, right, top, bottom, edgeBreak, edgeBreakOnly };
     }
 
     function render_clipped_corner_edge_lines(piece, geometryModel, clipId) {
@@ -111,7 +112,7 @@
     }
 
     function render_piece_edge_lines(piece, geometryModel = null, clipId = "") {
-        const { left, right, top, bottom, edgeBreak } = piece_edge_flags(piece);
+        const { left, right, top, bottom, edgeBreak, edgeBreakOnly } = piece_edge_flags(piece);
         const geometry = window.AlmdinaClippedCornerGeometry;
         const isCornerPiece = Boolean(
             geometry
@@ -120,7 +121,7 @@
                 || (typeof geometry.isClipped === "function" && geometry.isClipped(piece))
             )
         );
-        if (isCornerPiece && (left || right || top || bottom || edgeBreak)) {
+        if (isCornerPiece && (left || right || top || bottom || edgeBreak || edgeBreakOnly)) {
             return render_clipped_corner_edge_lines(piece, geometryModel, clipId);
         }
 
