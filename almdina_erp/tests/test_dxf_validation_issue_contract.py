@@ -331,6 +331,30 @@ def test_every_runtime_issue_call_has_explicit_presenter_branch():
     assert emitted <= handled, f"issue codes missing explicit presenter mappings: {sorted(emitted - handled)}"
 
 
+def test_unknown_issue_code_uses_safe_non_echoing_fallback():
+    from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
+        DxfIssueTarget,
+        DxfValidationIssue,
+    )
+
+    card = present_issue(
+        DxfValidationIssue(
+            code="UNRECOGNIZED_INTERNAL_CODE",
+            category="WORKFLOW",
+            target=DxfIssueTarget(kind="file", label="private-tenant-name.dxf"),
+            params={"message": "internal stack details", "path": "/srv/private/file.dxf"},
+        )
+    )
+
+    assert card.problem == "تعذر التحقق من ملف DXF."
+    assert card.target == "تعذر تحديد موضع المشكلة بأمان."
+    assert card.action == "راجع مسؤول النظام قبل إعادة المحاولة."
+    assert "UNRECOGNIZED_INTERNAL_CODE" not in card.problem
+    assert "internal stack details" not in str(card)
+    assert "private-tenant-name.dxf" not in str(card)
+    assert "/srv/private/file.dxf" not in str(card)
+
+
 def test_architecture_forbids_arabic_substring_branching_in_strict_service() -> None:
     root = Path(__file__).resolve().parents[1]
     path = root / "almdina_erp" / "services" / "strict_dxf_import_service.py"

@@ -806,8 +806,15 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
         labels = ", ".join(str(value) for value in (params.get("labels") or []))
         return PresentedDxfError("خطة القص تحتوي قطعًا غير موجودة في الطلب.", labels or target_text, "أزل القطع غير المطلوبة وأعد حساب الخطة.", code, issue.category)
 
-    message = str(params.get("message") or f"تعذر قبول DXF ({code}).")
-    return PresentedDxfError(message, target_text, "صحح الرسم ثم أعد رفع الملف.", code, issue.category)
+    # Unknown and obsolete codes must fail safely: do not expose arbitrary
+    # legacy text, internal code names, or untrusted target details.
+    return PresentedDxfError(
+        "تعذر التحقق من ملف DXF.",
+        "تعذر تحديد موضع المشكلة بأمان.",
+        "راجع مسؤول النظام قبل إعادة المحاولة.",
+        code,
+        issue.category,
+    )
 
 
 def group_issues(issues: Sequence[DxfValidationIssue]) -> list[list[DxfValidationIssue]]:
