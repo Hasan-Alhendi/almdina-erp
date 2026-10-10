@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import json
 from collections import Counter
+import json
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -41,45 +41,6 @@ def _rect(width_mm: float, height_mm: float, *, x_mm: float = 0.0) -> dict:
     }
 
 
-def _collect_diagnostic_values(value, field_names: set[str]) -> list:
-    """Collect repeated scalar or grouped diagnostic evidence without fixing card shape."""
-    values = []
-    if isinstance(value, dict):
-        for key, item in value.items():
-            if key in field_names:
-                values.extend(_flatten_scalars(item))
-                if key == "source_piece_no" and isinstance(item, int):
-                    count = value.get("count", value.get("quantity", 1))
-                    values.extend([item] * max(0, int(count) - 1))
-            else:
-                values.extend(_collect_diagnostic_values(item, field_names))
-    elif isinstance(value, (list, tuple)):
-        for item in value:
-            values.extend(_collect_diagnostic_values(item, field_names))
-    elif hasattr(value, "__dataclass_fields__"):
-        values.extend(_collect_diagnostic_values(
-            {name: getattr(value, name) for name in value.__dataclass_fields__},
-            field_names,
-        ))
-    elif hasattr(value, "__dict__"):
-        values.extend(_collect_diagnostic_values(vars(value), field_names))
-    else:
-        # Support slot-based target objects used by the diagnostic value types.
-        for name in field_names:
-            if hasattr(value, name):
-                item = getattr(value, name)
-                values.extend(_flatten_scalars(item))
-    return values
-
-
-def _flatten_scalars(value) -> list:
-    if isinstance(value, (list, tuple)):
-        return [scalar for item in value for scalar in _flatten_scalars(item)]
-    if isinstance(value, (int, float)) and not isinstance(value, bool):
-        return [value]
-    return []
-
-
 def _order_from_fixture(data: dict):
     rows = []
     for piece in data["scenario"]["order_pieces"]:
@@ -117,26 +78,7 @@ class TestAlmadina181DxfGoldenBaseline(unittest.TestCase):
             len(scenario["cut_path_bboxes_mm"]),
         )
 
-    def test_current_baseline_reports_generic_inventory_mismatch_for_multiple_rotations(self):
-        data = _fixture()
-        order = _order_from_fixture(data)
-        contours = [_rect(*bbox) for bbox in data["scenario"]["cut_path_bboxes_mm"]]
-
-        with self.assertRaises(DxfImportError) as raised:
-            _resolve_cut_topology(contours, order)
-
-        self.assertEqual(raised.exception.codes, ["EXPECTED_PIECE_MISMATCH"])
-        diagnostic = raised.exception.issues[0]
-        self.assertEqual(diagnostic.target.kind, "order")
-        self.assertEqual(diagnostic.params["topology_code"], "EXPECTED_PIECE_MISMATCH")
-        self.assertEqual(diagnostic.params["actual_count"], 5)
-        self.assertEqual(diagnostic.params["expected_count"], 5)
-        self.assertEqual(diagnostic.params["missing_count"], 4)
-        self.assertEqual(diagnostic.params["extra_count"], 4)
-        self.assertNotIn("source_piece_no", diagnostic.params)
-
-    @unittest.expectedFailure
-    def test_multiple_forbidden_rotations_report_rows_counts_and_dimensions(self):
+    def test_confirmed_rotations_do_not_degrade_to_generic_inventory_mismatch(self):
         data = _fixture()
         order = _order_from_fixture(data)
         contours = [_rect(*bbox) for bbox in data["scenario"]["cut_path_bboxes_mm"]]
@@ -146,24 +88,67 @@ class TestAlmadina181DxfGoldenBaseline(unittest.TestCase):
 
         error = raised.exception
         self.assertIn("FORBIDDEN_ROTATION", error.codes)
-        diagnostics = [{"target": issue.target, "params": issue.params} for issue in error.issues]
-
-        # Evidence is aggregated independently of whether diagnostics use one
-        # card per contour or a grouped card. Repeated equal pieces have no
-        # evidence-backed individual copy identity, so copy_no is never asserted.
-        rows = _collect_diagnostic_values(
-            diagnostics, {"source_piece_no", "source_piece_nos"}
-        )
-        widths = _collect_diagnostic_values(
-            diagnostics, {"actual_width_cm", "actual_widths_cm"}
-        )
-        heights = _collect_diagnostic_values(
-            diagnostics, {"actual_height_cm", "actual_heights_cm"}
+        self.assertNotIn("EXPECTED_PIECE_MISMATCH", error.codes)
+        self.assertEqual(
+            sum(int(item.params.get("rotation_count", 1)) for item in error.issues),
+            4,
         )
 
-        self.assertEqual(Counter(rows), Counter({1: 1, 2: 2, 3: 1}))
-        self.assertEqual(Counter(widths), Counter({89.9: 1, 61.0: 2, 60.5: 1}))
-        self.assertEqual(Counter(heights), Counter({29.9: 4}))
+    def test_multiple_forbidden_rotations_report_rows_counts_and_dimensions(self):
+        data = _fixture()
+        order = _order_from_fixture(data)
+        contours = [_rect(*bbox) for bbox in data["scenario"]["cut_path_bboxes_mm"]]
+
+        with self.assertRaises(DxfImportError) as raised:
+            _resolve_cut_topology(contours, order)
+
+        rotations = [
+            item for item in raised.exception.issues
+            if item.code == "FORBIDDEN_ROTATION"
+        ]
+        row_counts = Counter()
+        measurement_counts = Counter()
+        for item in rotations:
+            count = int(item.params.get("rotation_count", 1))
+            source_piece_no = item.target.source_piece_no
+            candidate_rows = tuple(item.params.get("candidate_source_piece_nos") or ())
+            if source_piece_no is not None:
+                row_counts[source_piece_no] += count
+            elif len(candidate_rows) == 1:
+                row_counts[candidate_rows[0]] += count
+
+            measurements = item.params.get("possible_measurements_cm") or [{
+                "actual_width_cm": item.params.get("actual_width_cm"),
+                "actual_height_cm": item.params.get("actual_height_cm"),
+                "expected_width_cm": item.params.get("expected_width_cm"),
+                "expected_height_cm": item.params.get("expected_height_cm"),
+            }]
+            for measurement in measurements:
+                measurement_counts[(
+                    measurement["actual_width_cm"],
+                    measurement["actual_height_cm"],
+                    measurement["expected_width_cm"],
+                    measurement["expected_height_cm"],
+                )] += count if len(measurements) == 1 else 1
+
+        # The two equal copies in row 2 are one grouped identity: assert their
+        # quantity and dimensions, never a made-up 2.1/2.2 contour assignment.
+        self.assertEqual(row_counts, Counter({1: 1, 2: 2, 3: 1}))
+        row_2_issues = [
+            item for item in rotations
+            if item.target.source_piece_no == 2
+            or item.params.get("candidate_source_piece_nos") == [2]
+        ]
+        self.assertTrue(row_2_issues)
+        self.assertTrue(all(item.target.copy_no is None for item in row_2_issues))
+        self.assertEqual(
+            measurement_counts,
+            Counter({
+                (89.9, 29.9, 29.9, 89.9): 1,
+                (61.0, 29.9, 29.9, 61.0): 2,
+                (60.5, 29.9, 29.9, 60.5): 1,
+            }),
+        )
 
     def test_allowed_rotation_is_accepted_with_same_cut_dimensions(self):
         topology = resolve_contour_ownership(

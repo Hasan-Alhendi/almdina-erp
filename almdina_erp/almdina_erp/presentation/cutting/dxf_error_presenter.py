@@ -349,16 +349,64 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
         )
 
     if code == codes.FORBIDDEN_ROTATION:
-        expected = _size_cm(
-            params.get("expected_width_cm", _mm_to_cm(params.get("expected_width_mm"))),
-            params.get("expected_height_cm", _mm_to_cm(params.get("expected_height_mm"))),
+        rotation_count = max(1, int(params.get("rotation_count", 1) or 1))
+        candidate_rows = tuple(
+            sorted({
+                int(row)
+                for row in (params.get("candidate_source_piece_nos") or ())
+                if str(row).isdigit()
+            })
         )
-        noun = _piece_noun(issue)
-        adjective = "مدوّر" if noun == "مسار القص" else "مدوّرة"
+        if candidate_rows and issue.target.kind == "order":
+            target_text = "الدرف المحتملة: " + "، ".join(
+                str(row) for row in candidate_rows
+            ) + "."
+
+        if rotation_count == 1 and not params.get("identity_ambiguous"):
+            expected = _size_cm(
+                params.get("expected_width_cm", _mm_to_cm(params.get("expected_width_mm"))),
+                params.get("expected_height_cm", _mm_to_cm(params.get("expected_height_mm"))),
+            )
+            noun = _piece_noun(issue)
+            adjective = "مدوّر" if noun == "مسار القص" else "مدوّرة"
+            return PresentedDxfError(
+                f"{noun} {adjective} والتدوير غير مسموح.",
+                target_text,
+                f"أعد اتجاه {noun} إلى {expected}.",
+                code,
+                issue.category,
+            )
+
+        measurements = params.get("possible_measurements_cm") or []
+        pairs = []
+        for measurement in measurements:
+            actual = _size_cm(
+                measurement.get("actual_width_cm"),
+                measurement.get("actual_height_cm"),
+            )
+            expected = _size_cm(
+                measurement.get("expected_width_cm"),
+                measurement.get("expected_height_cm"),
+            )
+            pair = f"الموجود {actual} والمطلوب {expected}"
+            if pair not in pairs:
+                pairs.append(pair)
+        if not pairs and params.get("actual_width_cm") is not None:
+            pairs.append(
+                "الموجود "
+                + _size_cm(params.get("actual_width_cm"), params.get("actual_height_cm"))
+                + " والمطلوب "
+                + _size_cm(params.get("expected_width_cm"), params.get("expected_height_cm"))
+            )
+        count_text = "قطعة واحدة" if rotation_count == 1 else f"{rotation_count} قطع"
+        problem = f"ثبت وجود تدوير ممنوع في {count_text}."
+        action = "أعد اتجاه القطع."
+        if pairs:
+            action += " المقاسات: " + "؛ ".join(pairs) + "."
         return PresentedDxfError(
-            f"{noun} {adjective} والتدوير غير مسموح.",
+            problem,
             target_text,
-            f"أعد اتجاه {noun} إلى {expected}.",
+            action,
             code,
             issue.category,
         )

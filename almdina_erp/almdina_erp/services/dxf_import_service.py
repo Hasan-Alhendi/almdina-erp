@@ -449,6 +449,111 @@ def _near_miss_size_hints(
     return hints
 
 
+def _topology_error_issues(
+    error: DxfTopologyError,
+    *,
+    kerf_mm: float = 0.0,
+    details: str = "",
+    order: Any = None,
+) -> list[DxfValidationIssue]:
+    """Map precise and grouped domain rotation evidence to stable issue records."""
+    evidence = getattr(error, "rotation_evidence", ())
+    if error.code != "FORBIDDEN_ROTATION" or not evidence:
+        return [
+            _topology_error_issue(
+                error,
+                kerf_mm=kerf_mm,
+                details=details,
+                order=order,
+            )
+        ]
+
+    issues: list[DxfValidationIssue] = []
+    for group in evidence:
+        if group.expected_piece_index is not None and len(group.measurements_mm) == 1:
+            actual_width, actual_height, expected_width, expected_height = (
+                group.measurements_mm[0]
+            )
+            precise_error = DxfTopologyError(
+                "FORBIDDEN_ROTATION",
+                expected_piece_index=group.expected_piece_index,
+                actual_width=actual_width,
+                actual_height=actual_height,
+                expected_width=expected_width,
+                expected_height=expected_height,
+            )
+            mapped = _topology_error_issue(
+                precise_error,
+                kerf_mm=kerf_mm,
+                details=details,
+                order=order,
+            )
+            params = {
+                **mapped.params,
+                "rotation_count": 1,
+                "actual_width_cm": actual_width / 10.0,
+                "actual_height_cm": actual_height / 10.0,
+                "expected_width_cm": expected_width / 10.0,
+                "expected_height_cm": expected_height / 10.0,
+            }
+            issues.append(
+                issue(
+                    mapped.code,
+                    mapped.category,
+                    target=mapped.target,
+                    params=params,
+                    debug=mapped.debug,
+                )
+            )
+            continue
+
+        measurements_cm = [
+            {
+                "actual_width_cm": actual_width / 10.0,
+                "actual_height_cm": actual_height / 10.0,
+                "expected_width_cm": expected_width / 10.0,
+                "expected_height_cm": expected_height / 10.0,
+            }
+            for actual_width, actual_height, expected_width, expected_height
+            in group.measurements_mm
+        ]
+        source_piece_nos = tuple(sorted(set(group.source_piece_nos)))
+        target = (
+            piece_target(source_piece_no=source_piece_nos[0])
+            if len(source_piece_nos) == 1
+            else DxfIssueTarget(kind="order")
+        )
+        params: dict[str, Any] = {
+            "kerf_mm": kerf_mm,
+            "rotation_count": group.rotation_count,
+            "possible_measurements_cm": measurements_cm,
+            "identity_ambiguous": True,
+        }
+        if len(source_piece_nos) > 1:
+            params["candidate_source_piece_nos"] = list(source_piece_nos)
+        if len(measurements_cm) == 1:
+            params.update(measurements_cm[0])
+        elif measurements_cm:
+            params["actual_sizes_cm"] = sorted({
+                (item["actual_width_cm"], item["actual_height_cm"])
+                for item in measurements_cm
+            })
+            params["expected_sizes_cm"] = sorted({
+                (item["expected_width_cm"], item["expected_height_cm"])
+                for item in measurements_cm
+            })
+        issues.append(
+            issue(
+                FORBIDDEN_ROTATION,
+                CATEGORY_DIMENSIONS,
+                target=target,
+                params=params,
+                debug={"topology_code": "FORBIDDEN_ROTATION"},
+            )
+        )
+    return issues
+
+
 def _topology_error_issue(
     error: DxfTopologyError,
     *,
@@ -491,15 +596,19 @@ def _topology_error_message(
         present_issue,
     )
 
-    card = present_issue(
-        _topology_error_issue(
+    cards = [
+        present_issue(item)
+        for item in _topology_error_issues(
             error,
             kerf_mm=kerf_mm,
             details=details,
             order=order,
         )
+    ]
+    return "\n".join(
+        f"ما المشكلة؟ {card.problem} أي درفة/لوح؟ {card.target} ماذا أفعل؟ {card.action}"
+        for card in cards
     )
-    return f"ما المشكلة؟ {card.problem} أي درفة/لوح؟ {card.target} ماذا أفعل؟ {card.action}"
 
 
 def _overlay_error_issue(error: ExtraOverlayError) -> DxfValidationIssue:
@@ -1058,6 +1167,8 @@ def _expected_topology_evidence(order: Any) -> tuple[ExpectedPieceEvidence, ...]
             height=piece["length_cm"] * 10.0,
             allow_rotation=bool(piece["allow_rotation"]),
             arbitrary_outline=piece["piece_type"] == "Special",
+            source_piece_no=int(piece["source_piece_no"]),
+            copy_no=int(piece["copy_no"]),
         )
         for piece in _expected_order_pieces(order)
     )
@@ -1463,13 +1574,11 @@ def _resolve_cut_topology(contours: list[dict[str, object]], order: Any) -> Reso
                 ]
             ) from exc
         raise DxfImportError(
-            issues=[
-                _topology_error_issue(
-                    exc,
-                    kerf_mm=max(0.0, flt(order.kerf_mm)),
-                    order=order,
-                )
-            ]
+            issues=_topology_error_issues(
+                exc,
+                kerf_mm=max(0.0, flt(order.kerf_mm)),
+                order=order,
+            )
         ) from exc
 
 
