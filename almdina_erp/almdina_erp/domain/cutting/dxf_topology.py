@@ -820,6 +820,37 @@ def _classify_selection(
     return ResolvedTopology(parts=tuple(sorted(parts, key=lambda part: part.contour_key)))
 
 
+def diagnostic_piece_contours(
+    contours: Sequence[ContourCandidate],
+    expected_pieces: Sequence[ExpectedPieceEvidence],
+    *,
+    dimension_tolerance: float,
+    geometry_tolerance: float = EPSILON,
+    include_nested_piece_candidates: bool = True,
+) -> tuple[ContourCandidate, ...]:
+    """Return contours with the same piece evidence used by topology resolution.
+
+    This inventory view is diagnostic only. It does not accept or reject a DXF;
+    it excludes structural holes while retaining nested contours whose dimensions
+    prove they may be independent pieces.
+    """
+    ordered = tuple(sorted(contours, key=_contour_sort_key))
+    roots = _root_contours(ordered, geometry_tolerance=geometry_tolerance)
+    if not include_nested_piece_candidates:
+        return roots
+    root_keys = {contour.key for contour in roots}
+    selected_keys = root_keys | {
+        contour.key
+        for contour in ordered
+        if _matches_any_expected(
+            contour,
+            expected_pieces,
+            dimension_tolerance=dimension_tolerance,
+        )
+    }
+    return tuple(contour for contour in ordered if contour.key in selected_keys)
+
+
 def resolve_contour_ownership(
     contours: Sequence[ContourCandidate],
     expected_pieces: Sequence[ExpectedPieceEvidence],
@@ -934,6 +965,7 @@ __all__ = [
     "ResolvedPartGeometry",
     "ResolvedTopology",
     "containing_hole",
+    "diagnostic_piece_contours",
     "material_footprints_overlap",
     "polygon_contains_polygon",
     "polygon_strictly_contains_polygon",
