@@ -69,6 +69,12 @@
             edgeMeters: number(source.edge_meters),
             edgeRate: number(source.edge_rate_usd),
             edgeAmount: number(source.edge_cost_usd),
+            edgeBreak: Boolean(number(source.edge_break)),
+            edgeBreakOnly: Boolean(number(source.edge_break_only)),
+            edgeBreakLength: number(source.edge_break_length_cm),
+            edgeBreakMeters: number(source.edge_break_meters),
+            edgeBreakRate: number(source.edge_break_rate_usd),
+            edgeBreakAmount: number(source.edge_break_cost_usd),
             notes: source.notes || "",
             estimatedUnit: number(source.special_shape_estimated_unit_price_usd),
             approvedUnit: number(source.special_shape_custom_unit_price_usd),
@@ -79,9 +85,6 @@
             clippedEdgePrice: number(source.clipped_corner_edge_price_usd),
             clippedEdgeStatus: source.clipped_corner_edge_price_status || "Unpriced",
             clippedEdgeNote: source.clipped_corner_edge_price_note || "",
-            clippedPosition: source.clipped_corner_position || "",
-            clippedWidth: number(source.clipped_corner_width_cm),
-            clippedLength: number(source.clipped_corner_length_cm),
             extraAddons: [
                 {
                     selected: Boolean(number(source.extra_double)),
@@ -122,17 +125,15 @@
     }
 
     function cutCornerPriceReady(row) {
-        return row.clippedEdgeStatus === "Priced" && row.clippedEdgePrice > 0;
+        return row.clippedEdgeStatus === "Priced";
     }
 
     function invoiceLines(frm) {
         const result = [];
         const allRows = rows(frm);
-        const customDoorRows = allRows.filter(row =>
-            row.pieceType === "Special" || isCornerCutType(row.pieceType)
-        );
-        const regularRows = customDoorRows.length
-            ? allRows.filter(row => row.pieceType !== "Special" && !isCornerCutType(row.pieceType))
+        const specialDoorRows = allRows.filter(row => row.pieceType === "Special");
+        const edgeRows = specialDoorRows.length
+            ? allRows.filter(row => row.pieceType !== "Special")
             : allRows;
         const boardCount = Math.max(0, Math.trunc(number(frm.doc.required_boards)));
         const boardRate = number(frm.doc.board_rate_usd);
@@ -167,24 +168,47 @@
         }
 
         const edgeGroups = new Map();
-        regularRows.forEach(row => {
-            if (row.edgeMeters <= 0) return;
-            const key = `${row.edgeType || "قشاط"}::${row.edgeRate}`;
+        const addEdgeGroup = (row, meters, rate, amount) => {
+            if (meters <= 0) return;
+            const key = `${row.edgeType || "قشاط"}::${rate}`;
             const group = edgeGroups.get(key) || {
                 type: "edge",
                 description: `قشاط — ${row.edgeType || "غير محدد"}`,
                 quantity: 0,
                 unit: "متر",
-                rate: row.edgeRate,
+                rate,
                 amount: 0,
             };
-            group.quantity += row.edgeMeters;
-            group.amount += row.edgeAmount || row.edgeMeters * row.edgeRate;
+            group.quantity += meters;
+            group.amount += amount;
             edgeGroups.set(key, group);
+        };
+        edgeRows.forEach(row => {
+            if (row.edgeBreakOnly) {
+                addEdgeGroup(
+                    row,
+                    Math.max(0, row.edgeMeters - row.edgeBreakMeters),
+                    row.edgeRate,
+                    Math.max(0, row.edgeAmount - row.edgeBreakAmount)
+                );
+                addEdgeGroup(
+                    row,
+                    row.edgeBreakMeters,
+                    row.edgeBreakRate,
+                    row.edgeBreakAmount
+                );
+                return;
+            }
+            addEdgeGroup(
+                row,
+                row.edgeMeters,
+                row.edgeRate,
+                row.edgeAmount || row.edgeMeters * row.edgeRate
+            );
         });
         result.push(...edgeGroups.values());
 
-        if (!edgeGroups.size && !customDoorRows.length && number(frm.doc.edge_cost_usd) > 0) {
+        if (!edgeGroups.size && !specialDoorRows.length && number(frm.doc.edge_cost_usd) > 0) {
             result.push({
                 type: "edge",
                 description: "القشاط",
@@ -208,7 +232,7 @@
                     pending: !ready,
                     note: ready ? row.priceNote : "بانتظار إدخال السعر الخاص الشامل",
                 });
-            } else if (isCornerCutType(row.pieceType)) {
+            } else if (isCornerCutType(row.pieceType) && row.edgeBreak && row.edgeBreakLength > 0) {
                 const ready = cutCornerPriceReady(row);
                 result.push({
                     type: "cut_corner",
@@ -246,7 +270,7 @@
             if (row.pieceType === "Special" && !specialPriceReady(row)) {
                 return [`درفة خاصة رقم ${row.index}`];
             }
-            if (isCornerCutType(row.pieceType) && !cutCornerPriceReady(row)) {
+            if (isCornerCutType(row.pieceType) && row.edgeBreak && !cutCornerPriceReady(row)) {
                 return [cutCornerDoorLabel(row)];
             }
             return [];
@@ -469,10 +493,6 @@
         return number(row.estimatedUnit);
     }
 
-    function cutCornerPriceInputValue(row) {
-        return number(row.clippedEdgePrice);
-    }
-
     function specialPricingHtml(frm) {
         const specialRows = rows(frm).filter(row => row.pieceType === "Special");
         if (!specialRows.length) return "";
@@ -499,32 +519,6 @@
         }).join("")}</div></div>`;
     }
 
-    function cutCornerPricingHtml(frm) {
-        const cutRows = rows(frm).filter(row => isCornerCutType(row.pieceType));
-        if (!cutRows.length) return "";
-        return `<div class="dco-cost-section"><div class="dco-cost-section-title">
-            <h4>تسعير قشاط درف الزاوية المقصوصة وزاوية L</h4><span>عدّل سعر القشاط مباشرة في الحقل أثناء وضع التعديل</span>
-        </div><div class="dco-special-price-list">${cutRows.map(row => {
-            const doorLabel = cutCornerDoorLabel(row);
-            const priced = cutCornerPriceReady(row);
-            const hasDrawing = Boolean(row.clippedPosition)
-                && number(row.clippedWidth) > 0
-                && number(row.clippedLength) > 0;
-            const priceValue = cutCornerPriceInputValue(row);
-            return `<div class="dco-special-price-card" data-cut-corner-row="${esc(row.name)}" data-custom-id="${esc(doorLabel)}">
-                <div class="dco-special-price-id">${esc(doorLabel)}<small>${quantity(row.length)} × ${quantity(row.width)} سم — عدد ${row.qty}</small></div>
-                <div class="dco-special-price-cell"><span>${__("الطول × العرض")}</span><b>${quantity(row.length)} × ${quantity(row.width)} سم</b></div>
-                <div class="dco-special-price-cell ${priced ? "" : "is-unpriced"}">
-                    <span>${__("سعر القشاط ($)")}</span>
-                    <input type="number" class="dco-inline-price-input" data-price-kind="clipped" data-piece-name="${esc(row.name)}" min="0" step="0.01" value="${priceValue || ""}" disabled readonly inputmode="decimal">
-                    ${priced ? "" : `<small style="display:block;margin-top:4px;color:var(--text-muted,#8a939c)">${__("غير مسعّر")}</small>`}
-                </div>
-                <div class="dco-special-price-actions"><button type="button" class="btn btn-default btn-xs dco-view-cut-corner-sketch" ${hasDrawing ? "" : "disabled"}>${__("عرض الرسم")}</button></div>
-                ${row.clippedEdgeNote ? `<div class="dco-special-price-note">${esc(row.clippedEdgeNote)}</div>` : ""}
-            </div>`;
-        }).join("")}</div></div>`;
-    }
-
     function bindViewDrawing(frm, wrapper) {
         wrapper.find(".dco-view-special-sketch").on("click", function onViewDrawing() {
             const card = this.closest("[data-special-row]");
@@ -534,15 +528,6 @@
                 return;
             }
             window.AlmdinaSpecialShapeEditor.view(frm, source);
-        });
-        wrapper.find(".dco-view-cut-corner-sketch").on("click", function onViewCutCorner() {
-            const card = this.closest("[data-cut-corner-row]");
-            const source = (frm.doc.pieces || []).find(row => row.name === (card && card.dataset.cutCornerRow));
-            if (!source || !window.AlmdinaClippedCornerEditor || typeof window.AlmdinaClippedCornerEditor.view !== "function") {
-                frappe.msgprint(__("تعذر تحميل رسم الزاوية المقصوصة."));
-                return;
-            }
-            window.AlmdinaClippedCornerEditor.view(frm, source);
         });
     }
 
@@ -569,7 +554,6 @@
             ${offcutPriceHtml(frm)}
             <div class="dco-cost-section"><div class="dco-cost-section-title"><h4>جدول قياسات الطلب</h4><span>القياسات والكميات والملاحظات</span></div>${measurementRowsHtml(frm)}</div>
             ${specialPricingHtml(frm)}
-            ${cutCornerPricingHtml(frm)}
             <div class="dco-cost-section dco-cost-invoice-section"><div class="dco-cost-section-title"><h4>تفاصيل عرض السعر</h4><span>الألواح والقص والقشاط والدرف الخاصة وإضافات الدرف</span></div>${invoiceRowsHtml(frm)}${invoiceTotalCardHtml(frm)}</div>
         </div>`);
         bindViewDrawing(frm, field.$wrapper);

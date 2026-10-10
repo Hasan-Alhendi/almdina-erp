@@ -10,6 +10,7 @@
         "edge_width_top",
         "edge_width_bottom",
         "edge_break",
+        "edge_break_only",
         "extra_double",
         "extra_full_door_double",
         "extra_liner",
@@ -26,6 +27,7 @@
         "edge_width_top",
         "edge_width_bottom",
         "edge_break",
+        "edge_break_only",
         "edge_type",
         "piece_type",
         "notes",
@@ -329,6 +331,7 @@
         row.edge_width_top = 0;
         row.edge_width_bottom = 0;
         row.edge_break = 0;
+        row.edge_break_only = 0;
         row.edge_type = "";
         row.edge_long_right_type_override = "";
         row.edge_long_left_type_override = "";
@@ -830,7 +833,7 @@
         }
         const cornerGeometry = window.AlmdinaClippedCornerGeometry;
         if (
-            fieldname !== "edge_break"
+            !["edge_break", "edge_break_only"].includes(fieldname)
             && cornerGeometry
             && typeof cornerGeometry.locksAdjacentSidesForBreak === "function"
             && cornerGeometry.locksAdjacentSidesForBreak(row)
@@ -938,6 +941,7 @@
                         window.AlmdinaClippedCornerGeometry.applyEdgeBreakPolicy(row);
                     } else {
                         row.edge_break = 0;
+                        row.edge_break_only = 0;
                     }
                     renderFastMeasurements(currentFrm);
                 }

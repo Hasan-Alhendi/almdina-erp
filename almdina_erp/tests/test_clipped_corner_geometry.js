@@ -139,6 +139,44 @@ assert.equal(breakPiece.edge_width_top, 0);
 assert.equal(breakPiece.edge_long_right, 0);
 assert.equal(breakPiece.edge_width_bottom, 1);
 
+const mutuallyExclusive = {
+    ...piece,
+    edge_break: 0,
+    edge_break_only: 1,
+};
+geometry.toggleEdgeSelection(mutuallyExclusive, "edge_break");
+assert.equal(mutuallyExclusive.edge_break, 1);
+assert.equal(mutuallyExclusive.edge_break_only, 0);
+geometry.applyEdgeBreakPolicy(mutuallyExclusive);
+assert.equal(mutuallyExclusive.edge_break, 1, "Applying the full-path policy again must not revert it to break-only");
+assert.equal(mutuallyExclusive.edge_break_only, 0);
+geometry.toggleEdgeSelection(mutuallyExclusive, "edge_break_only");
+assert.equal(mutuallyExclusive.edge_break, 0);
+assert.equal(mutuallyExclusive.edge_break_only, 1);
+
+const breakOnlyWithOuterSides = {
+    ...piece,
+    edge_width_top: 1,
+    edge_long_right: 1,
+    edge_break_only: 1,
+};
+geometry.applyEdgeBreakPolicy(breakOnlyWithOuterSides);
+assert.equal(breakOnlyWithOuterSides.edge_break, 1);
+assert.equal(breakOnlyWithOuterSides.edge_break_only, 0);
+assert.equal(breakOnlyWithOuterSides.edge_width_top, 0);
+assert.equal(breakOnlyWithOuterSides.edge_long_right, 0);
+const breakOnlyMarkup = geometry.edgeBandSvgMarkup(
+    { ...piece, edge_break_only: 1 },
+    100,
+    100
+);
+assert.match(breakOnlyMarkup, /dco-edge-break-only-svg/);
+assert.equal(
+    (breakOnlyMarkup.match(/dco-edge-break-only-svg"[^>]*points="([^"]+)"/) || [])[1].split(" ").length,
+    2,
+    "Break-only highlighting must cover the diagonal segment only"
+);
+
 const breakMarkup = geometry.edgeBandSvgMarkup(
     {
         ...piece,
@@ -214,6 +252,15 @@ assert.equal(
     3,
     "L corner strap path should cover only the inner notch (two edges)"
 );
+const lBreakPath = geometry.clippedEdgePaths(lBreakPiece, 100, 100).break;
+assert.equal(lBreakPath[0][0], lBreakPath[1][0], "The first L strap segment must stay vertical");
+assert.equal(lBreakPath[1][1], lBreakPath[2][1], "The second L strap segment must stay horizontal");
+for (const position of ["Top Left", "Bottom Right", "Bottom Left"]) {
+    const path = geometry.clippedEdgePaths({ ...lBreakPiece, clipped_corner_position: position }, 100, 100).break;
+    const firstIsAxisAligned = path[0][0] === path[1][0] || path[0][1] === path[1][1];
+    const secondIsAxisAligned = path[1][0] === path[2][0] || path[1][1] === path[2][1];
+    assert.ok(firstIsAxisAligned && secondIsAxisAligned, `${position} L strap must follow the right-angle notch`);
+}
 
 const lPiece = {
     piece_type: "L-Shaped Corner",

@@ -27,6 +27,7 @@ PLACED_PIECE_METADATA_FIELDS = (
     "edge_width_top",
     "edge_width_bottom",
     "edge_break",
+    "edge_break_only",
     "edge_type",
     "edge_rate_usd",
     "edge_cost_usd",

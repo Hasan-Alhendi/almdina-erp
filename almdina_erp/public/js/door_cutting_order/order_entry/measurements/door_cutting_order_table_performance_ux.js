@@ -345,6 +345,7 @@
                 row.edge_width_top = 0;
                 row.edge_width_bottom = 0;
                 row.edge_break = 0;
+                row.edge_break_only = 0;
                 row.edge_type = "";
             }
         }

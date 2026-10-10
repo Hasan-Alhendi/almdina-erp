@@ -58,6 +58,8 @@ def test_measurement_and_immutable_plan_schemas_store_clipped_corner_geometry():
     placed = _fields(PLAN_PIECE_JSON)
     assert detail["piece_type"]["options"] == PIECE_TYPE_OPTIONS
     assert placed["piece_type"]["options"] == PIECE_TYPE_OPTIONS
+    assert detail["edge_break_only"]["fieldtype"] == "Check"
+    assert detail["edge_break_only"]["default"] == "0"
 
     for fields in (detail, placed):
         assert fields["clipped_corner_position"]["options"] == (
@@ -81,12 +83,14 @@ def test_server_validates_defaults_and_carries_geometry_through_every_plan_snaps
     assert "width." in adapter
     assert '"clipped_corner_position": row.clipped_corner_position or ""' in plan_adapter
     assert '"edge_break": cint(getattr(row, "edge_break", 0))' in plan_adapter
+    assert '"edge_break_only": cint(getattr(row, "edge_break_only", 0))' in plan_adapter
 
     for source in (plan_adapter, primitives, export_service):
         assert "clipped_corner_position" in source
         assert "clipped_corner_width_cm" in source
         assert "clipped_corner_length_cm" in source
     assert '"edge_break": 1 if row.get("edge_break") else 0' in primitives
+    assert '"edge_break_only": 1 if row.get("edge_break_only") else 0' in primitives
     assert "doc._validate_special_shape_rows()" in export_service
     assert "doc._calculate_cutting_plan(settings, input_fingerprint)" in export_service
 
@@ -112,6 +116,7 @@ def test_fast_measurements_offer_one_click_corner_settings_with_live_visual_prev
     assert ".dco-clipped-corner-row .dco-col-edges" in operator
     assert 'toggle("edge_break"' not in operator
     assert "قشاط الكسر" in editor
+    assert "قشاط الكسر فقط" in editor
     assert "قشاط الزاوية" in editor
     assert "data-corner-edge" in editor
     assert "data-corner-edges" in editor
@@ -122,7 +127,13 @@ def test_fast_measurements_offer_one_click_corner_settings_with_live_visual_prev
     assert "dco-corner-position-grid" in editor
     assert "data-corner-preview" in editor
     assert "edgeBandSvgMarkup" in editor
-    assert 'set_value(row.doctype, row.name, "edge_break"' in editor
+    assert "function persistCornerValues" in editor
+    persistence = editor.split("function persistCornerValues", 1)[1]
+    persistence = persistence.split("function installStyles", 1)[0]
+    assert persistence.index('updates.push(["edge_break_only", 0], ["edge_break", 1])') < persistence.index(
+        'updates.push(["edge_break", 0], ["edge_break_only", 1])'
+    )
+    assert "persistCornerValues(row, config, edgeDraft).then" in editor
     assert "refreshFastTable(frm)" in editor
     save_render = SAVE_RENDER_UX.read_text(encoding="utf-8")
     assert "function syncCornerEdgesSummary" in save_render

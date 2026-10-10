@@ -340,6 +340,7 @@ def _plan_to_export_snapshot(plan: Any) -> dict[str, Any]:
                 "edge_width_top": cint(piece.edge_width_top),
                 "edge_width_bottom": cint(piece.edge_width_bottom),
                 "edge_break": cint(getattr(piece, "edge_break", 0)),
+                "edge_break_only": cint(getattr(piece, "edge_break_only", 0)),
                 "edge_type": piece.edge_type or "",
                 "notes": piece.notes or "",
                 "area_m2": flt(piece.original_width_cm) * flt(piece.original_length_cm) / 10000,

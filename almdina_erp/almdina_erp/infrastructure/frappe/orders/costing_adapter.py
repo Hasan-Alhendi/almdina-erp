@@ -17,6 +17,7 @@ from almdina_erp.almdina_erp.domain.orders.costing import (
     calculate_piece_costs,
     calculate_special_pricing,
     calculate_waste,
+    round_value,
 )
 from almdina_erp.almdina_erp.domain.orders.extra_addons import (
     ExtraAddonError,
@@ -34,14 +35,21 @@ from .document_access import FrappeOrderDocumentAccess
 from .edge_profile_repository import FrappeEdgeProfileRepository
 
 
-def _l_shaped_dimension_overrides(row: Any) -> dict[str, float]:
-    """Shrink an L-Shaped corner's break-adjacent sides by the notch cut out of them.
+def _corner_side_dimension_overrides(row: Any) -> dict[str, float]:
+    """Use the actual remaining length for selected corner-adjacent outer sides.
 
-    Only the two sides touching the inner L notch lose length/width; the other
-    two sides keep the piece's full dimension. Returns kwargs for PieceCostInput.
+    L-shaped full-path banding and clipped-corner break-only banding keep outer
+    sides independently selectable.  The two sides touching the removed corner
+    therefore use their physical remnants rather than the bounding-box length.
     """
 
-    if str(row.piece_type or "") != L_SHAPED_CORNER_TYPE or not cint(row.edge_break):
+    piece_type = str(row.piece_type or "")
+    applies = (
+        piece_type == L_SHAPED_CORNER_TYPE and cint(row.edge_break)
+    ) or (
+        piece_type == "Clipped Corner" and cint(getattr(row, "edge_break_only", 0))
+    )
+    if not applies:
         return {}
 
     adjacent_sides = break_adjacent_sides(row.clipped_corner_position)
@@ -101,7 +109,7 @@ class FrappeOrderCostingAdapter:
                     edge_width_bottom_type=str(
                         row.edge_width_bottom_type_override or ""
                     ),
-                    **_l_shaped_dimension_overrides(row),
+                    **_corner_side_dimension_overrides(row),
                 )
                 for row in (self.document.pieces or [])
             ),
@@ -121,20 +129,20 @@ class FrappeOrderCostingAdapter:
             row.edge_cost_usd = result.edge_cost_usd
             row.edge_rate_usd = self._legacy_rate(result)
 
-        self.document.total_area_m2 = summary.total_area_m2
-        self.document.total_edge_meters = summary.total_edge_meters
-        self.document.edge_cost_usd = summary.total_edge_cost_usd
-
         # Calculate break-edge (corner cut) costs for Clipped Corner and L-Shaped.
         # The four regular sides -- including an L-Shaped piece's break-adjacent
-        # ones, already shrunk above via _l_shaped_dimension_overrides -- are
+        # ones, already shrunk above via _corner_side_dimension_overrides -- are
         # priced through the normal edge_meters/edge_cost_usd above; this only
         # prices the diagonal/notch strap itself.
         rate_map = self.profiles.rate_map()
         corner_break_total = 0.0
+        break_only_meters_total = 0.0
+        break_only_cost_total = 0.0
 
         for row in self.document.pieces or []:
-            if not (is_corner_cut(row.piece_type) and cint(row.edge_break)):
+            full_path = bool(cint(getattr(row, "edge_break", 0)))
+            break_only = bool(cint(getattr(row, "edge_break_only", 0)))
+            if not (is_corner_cut(row.piece_type) and (full_path or break_only)):
                 row.edge_break_length_cm = 0
                 row.edge_break_meters = 0
                 row.edge_break_rate_usd = 0
@@ -157,6 +165,7 @@ class FrappeOrderCostingAdapter:
                     qty=cint(row.qty),
                     edge_break=cint(row.edge_break),
                     break_edge_rate_usd=break_rate,
+                    edge_break_only=cint(getattr(row, "edge_break_only", 0)),
                 )
             )
 
@@ -172,8 +181,31 @@ class FrappeOrderCostingAdapter:
             row.clipped_corner_edge_price_set_by = ""
             row.clipped_corner_edge_price_set_on = None
 
-            corner_break_total += break_result.break_edge_cost_usd
+            if break_only:
+                row.edge_meters = round_value(
+                    flt(row.edge_meters) + break_result.break_edge_meters,
+                    3,
+                )
+                row.edge_cost_usd = round_value(
+                    flt(row.edge_cost_usd) + break_result.break_edge_cost_usd,
+                    3,
+                )
+                if not flt(row.edge_rate_usd):
+                    row.edge_rate_usd = break_result.break_edge_rate_usd
+                break_only_meters_total += break_result.break_edge_meters
+                break_only_cost_total += break_result.break_edge_cost_usd
+            else:
+                corner_break_total += break_result.break_edge_cost_usd
 
+        self.document.total_area_m2 = summary.total_area_m2
+        self.document.total_edge_meters = round_value(
+            summary.total_edge_meters + break_only_meters_total,
+            3,
+        )
+        self.document.edge_cost_usd = round_value(
+            summary.total_edge_cost_usd + break_only_cost_total,
+            3,
+        )
         self.corner_break_edge_total_usd = corner_break_total
 
     def calculate_extra_addon_prices(self) -> None:

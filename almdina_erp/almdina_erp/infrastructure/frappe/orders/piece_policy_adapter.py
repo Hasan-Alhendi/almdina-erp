@@ -70,23 +70,35 @@ class FrappeOrderPiecePolicyAdapter:
             edge_width_top=cint(getattr(row, "edge_width_top", 0)),
             edge_width_bottom=cint(getattr(row, "edge_width_bottom", 0)),
             edge_break=cint(getattr(row, "edge_break", 0)),
+            edge_break_only=cint(getattr(row, "edge_break_only", 0)),
             edge_type=str(getattr(row, "edge_type", None) or ""),
         )
 
     @staticmethod
     def _apply_edge_break(row: Any) -> None:
-        decision = apply_edge_break_policy(
-            piece_type=str(getattr(row, "piece_type", None) or "Regular"),
-            clipped_corner_position=str(
-                getattr(row, "clipped_corner_position", None) or ""
-            ),
-            edge_break=cint(getattr(row, "edge_break", 0)),
-            edge_long_right=cint(getattr(row, "edge_long_right", 0)),
-            edge_long_left=cint(getattr(row, "edge_long_left", 0)),
-            edge_width_top=cint(getattr(row, "edge_width_top", 0)),
-            edge_width_bottom=cint(getattr(row, "edge_width_bottom", 0)),
-        )
+        try:
+            decision = apply_edge_break_policy(
+                piece_type=str(getattr(row, "piece_type", None) or "Regular"),
+                clipped_corner_position=str(
+                    getattr(row, "clipped_corner_position", None) or ""
+                ),
+                edge_break=cint(getattr(row, "edge_break", 0)),
+                edge_break_only=cint(getattr(row, "edge_break_only", 0)),
+                edge_long_right=cint(getattr(row, "edge_long_right", 0)),
+                edge_long_left=cint(getattr(row, "edge_long_left", 0)),
+                edge_width_top=cint(getattr(row, "edge_width_top", 0)),
+                edge_width_bottom=cint(getattr(row, "edge_width_bottom", 0)),
+            )
+        except PiecePolicyError as error:
+            if error.code == "mutually_exclusive_corner_edge_options":
+                frappe.throw(
+                    _(
+                        "Full corner-path banding and break-only banding cannot be selected together."
+                    )
+                )
+            raise
         row.edge_break = decision.edge_break
+        row.edge_break_only = decision.edge_break_only
         row.edge_long_right = decision.edge_long_right
         row.edge_long_left = decision.edge_long_left
         row.edge_width_top = decision.edge_width_top
@@ -108,6 +120,7 @@ class FrappeOrderPiecePolicyAdapter:
         row.edge_width_top = decision.edge_width_top
         row.edge_width_bottom = decision.edge_width_bottom
         row.edge_break = decision.edge_break
+        row.edge_break_only = decision.edge_break_only
         row.edge_type = decision.edge_type or None
         for field, value in (
             ("edge_long_right_type_override", decision.edge_long_right_type_override),

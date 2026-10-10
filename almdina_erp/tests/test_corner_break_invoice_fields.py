@@ -27,8 +27,12 @@ class TestCornerBreakInvoiceFields(unittest.TestCase):
             ("cost_permission_service.py", "PIECE_COST_FIELDS"),
         ):
             fields = _tuple_constant(SERVICES / filename, constant)
+            self.assertIn("edge_break", fields, filename)
+            self.assertIn("edge_break_only", fields, filename)
             self.assertIn("edge_break_length_cm", fields, filename)
+            self.assertIn("edge_break_meters", fields, filename)
             self.assertIn("edge_break_rate_usd", fields, filename)
+            self.assertIn("edge_break_cost_usd", fields, filename)
 
 
 if __name__ == "__main__":

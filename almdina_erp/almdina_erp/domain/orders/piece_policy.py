@@ -36,6 +36,7 @@ BREAK_ADJACENT_SIDES: dict[str, tuple[str, str]] = {
 @dataclass(frozen=True, slots=True)
 class EdgeBreakDecision:
     edge_break: int
+    edge_break_only: int
     edge_long_right: int
     edge_long_left: int
     edge_width_top: int
@@ -52,6 +53,7 @@ def apply_edge_break_policy(
     piece_type: str | None,
     clipped_corner_position: str | None,
     edge_break: int,
+    edge_break_only: int = 0,
     edge_long_right: int,
     edge_long_left: int,
     edge_width_top: int,
@@ -59,11 +61,12 @@ def apply_edge_break_policy(
 ) -> EdgeBreakDecision:
     """Normalize edge_break selection for Clipped Corner and L-Shaped Corner.
 
-    Clipped Corner: when break banding is on, the two AABB sides that form the
-    cut corner are cleared because the break strap covers those remnants plus the
-    hypotenuse. L-Shaped Corner: the corner strap is only the inner L notch, so
-    the four outer sides stay independently selectable. Other piece types never
-    keep edge_break. Lengths/meters are not calculated here.
+    Clipped Corner: break-only plus both adjacent outer sides is the same physical
+    selection as the full corner path, so it is canonicalized to ``edge_break``.
+    Full-path banding then clears those two redundant side flags. L-Shaped Corner:
+    the corner strap is only the inner L notch, so the four outer sides stay
+    independently selectable. Other piece types never keep either break option.
+    Lengths/meters are not calculated here.
     """
 
     flags = {
@@ -73,19 +76,32 @@ def apply_edge_break_policy(
         "edge_width_bottom": 1 if edge_width_bottom else 0,
     }
     resolved_break = 1 if edge_break else 0
+    resolved_break_only = 1 if edge_break_only else 0
     cleared: list[str] = []
     resolved_type = piece_type or "Regular"
 
+    if resolved_break and resolved_break_only:
+        raise PiecePolicyError("mutually_exclusive_corner_edge_options")
+
     if resolved_type not in CORNER_CUT_TYPES:
         resolved_break = 0
-    elif resolved_break and resolved_type == CLIPPED_CORNER_TYPE:
-        for side in break_adjacent_sides(clipped_corner_position):
-            if flags[side]:
-                cleared.append(side)
-            flags[side] = 0
+        resolved_break_only = 0
+    elif resolved_type != CLIPPED_CORNER_TYPE:
+        resolved_break_only = 0
+    else:
+        adjacent_sides = break_adjacent_sides(clipped_corner_position)
+        if resolved_break_only and all(flags[side] for side in adjacent_sides):
+            resolved_break = 1
+            resolved_break_only = 0
+        if resolved_break:
+            for side in adjacent_sides:
+                if flags[side]:
+                    cleared.append(side)
+                flags[side] = 0
 
     return EdgeBreakDecision(
         edge_break=resolved_break,
+        edge_break_only=resolved_break_only,
         edge_long_right=flags["edge_long_right"],
         edge_long_left=flags["edge_long_left"],
         edge_width_top=flags["edge_width_top"],
@@ -103,6 +119,7 @@ class SpecialMeasurementEdgeDecision:
     edge_width_top: int
     edge_width_bottom: int
     edge_break: int
+    edge_break_only: int
     edge_type: str
     edge_long_right_type_override: str
     edge_long_left_type_override: str
@@ -135,6 +152,7 @@ def apply_special_measurement_edge_policy(
             edge_width_top=0,
             edge_width_bottom=0,
             edge_break=0,
+            edge_break_only=0,
             edge_type="",
             edge_long_right_type_override="",
             edge_long_left_type_override="",
@@ -148,6 +166,7 @@ def apply_special_measurement_edge_policy(
         edge_width_top=0,
         edge_width_bottom=0,
         edge_break=0,
+        edge_break_only=0,
         edge_type="",
         edge_long_right_type_override="",
         edge_long_left_type_override="",
@@ -187,6 +206,7 @@ class PieceGeometry:
     edge_width_top: int = 0
     edge_width_bottom: int = 0
     edge_break: int = 0
+    edge_break_only: int = 0
     edge_type: str = ""
 
 
@@ -285,6 +305,7 @@ def geometry_changed(
         or old.edge_width_top != current.edge_width_top
         or old.edge_width_bottom != current.edge_width_bottom
         or old.edge_break != current.edge_break
+        or old.edge_break_only != current.edge_break_only
         or old.edge_type != current.edge_type
         or drawing_changed
     )

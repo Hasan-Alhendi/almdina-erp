@@ -84,6 +84,7 @@ class TestFinancialDocumentApplication(unittest.TestCase):
                 "edge_meters": 3,
                 "edge_rate_usd": 0.5,
                 "edge_cost_usd": 1.5,
+                "edge_break": 1,
                 "edge_break_length_cm": 150,  # 1.5m per unit
                 "edge_break_rate_usd": 2.5,  # doubled to 5.0/m in the invoice
                 "clipped_corner_edge_price_usd": 7.5,  # 1.5m * 5.0/m
@@ -234,6 +235,7 @@ class TestFinancialDocumentApplication(unittest.TestCase):
             {
                 "piece_type": "Clipped Corner",
                 "qty": 1,
+                "edge_break": 1,
                 "edge_break_length_cm": 100,
                 "edge_break_rate_usd": 2,
                 "clipped_corner_edge_price_usd": 4,
@@ -288,6 +290,7 @@ class TestFinancialDocumentApplication(unittest.TestCase):
                 "width_cm": 60,
                 "length_cm": 90,
                 "qty": 2,
+                "edge_break": 1,
                 "edge_break_length_cm": 50,  # 0.5m per unit
                 "edge_break_rate_usd": 4.25,  # doubled to 8.5/m in the invoice
                 "clipped_corner_edge_price_usd": 4.25,  # 0.5m * 8.5/m
@@ -313,6 +316,7 @@ class TestFinancialDocumentApplication(unittest.TestCase):
                 "length_cm": 90,
                 "qty": 4,
                 "factory_execution_qty": 1,  # 1 of 4 copies made by the factory
+                "edge_break": 1,
                 "edge_break_length_cm": 50,  # 0.5m per unit
                 "edge_break_rate_usd": 2.0,  # doubled to 4.0/m
                 "clipped_corner_edge_price_usd": 2.0,  # 0.5m * 4.0/m
@@ -324,6 +328,101 @@ class TestFinancialDocumentApplication(unittest.TestCase):
         self.assertEqual(cut_corner["quantity"], 0.5)  # strap length: 0.5m * 1 copy
         self.assertEqual(cut_corner["rate_usd"], 4.0)
         self.assertEqual(cut_corner["amount_usd"], 2.0)  # 0.5 * 4.0
+
+    def test_break_only_merges_with_matching_normal_edge_group(self) -> None:
+        pieces = [
+            {
+                "piece_no": 1,
+                "piece_type": "Regular",
+                "qty": 1,
+                "edge_type": "ABS",
+                "edge_meters": 1.0,
+                "edge_rate_usd": 2.0,
+                "edge_cost_usd": 2.0,
+            },
+            {
+                "piece_no": 2,
+                "piece_type": "Clipped Corner",
+                "qty": 1,
+                "edge_type": "ABS",
+                "edge_meters": 1.5,
+                "edge_rate_usd": 2.0,
+                "edge_cost_usd": 3.0,
+                "edge_break_only": 1,
+                "edge_break_length_cm": 50,
+                "edge_break_meters": 0.5,
+                "edge_break_rate_usd": 2.0,
+                "edge_break_cost_usd": 1.0,
+            },
+        ]
+        payload = build_customer_invoice_document(
+            {
+                **self.order,
+                "required_boards": 0,
+                "mdf_cost_usd": 0,
+                "cutting_cost_usd": 0,
+                "edge_cost_usd": 0,
+            },
+            pieces,
+        )
+
+        edge_lines = [line for line in payload["lines"] if line["type"] == "edge"]
+        self.assertEqual(len(edge_lines), 1)
+        self.assertEqual(edge_lines[0]["quantity"], 2.5)
+        self.assertEqual(edge_lines[0]["rate_usd"], 2.0)
+        self.assertEqual(edge_lines[0]["amount_usd"], 5.0)
+        self.assertNotIn("cut_corner", [line["type"] for line in payload["lines"]])
+
+    def test_unselected_corner_banding_does_not_create_zero_invoice_line(self) -> None:
+        for piece_type in ("Clipped Corner", "L-Shaped Corner"):
+            with self.subTest(piece_type=piece_type):
+                payload = build_customer_invoice_document(
+                    {
+                        **self.order,
+                        "required_boards": 0,
+                        "mdf_cost_usd": 0,
+                        "cutting_cost_usd": 0,
+                        "edge_cost_usd": 0,
+                    },
+                    [{"piece_type": piece_type, "qty": 1, "edge_break": 0}],
+                )
+                self.assertNotIn(
+                    "cut_corner",
+                    [line["type"] for line in payload["lines"]],
+                )
+
+    def test_break_only_uses_factory_execution_quantity(self) -> None:
+        pieces = [
+            {
+                "piece_type": "Clipped Corner",
+                "qty": 4,
+                "factory_execution_qty": 1,
+                "edge_type": "ABS",
+                # Commercial snapshots scale these aggregate fields to one
+                # factory-executed copy before the application builder runs.
+                "edge_meters": 0.5,
+                "edge_rate_usd": 2.0,
+                "edge_cost_usd": 1.0,
+                "edge_break_only": 1,
+                "edge_break_length_cm": 50,
+                "edge_break_rate_usd": 2.0,
+            }
+        ]
+        payload = build_customer_invoice_document(
+            {
+                **self.order,
+                "required_boards": 0,
+                "mdf_cost_usd": 0,
+                "cutting_cost_usd": 0,
+                "edge_cost_usd": 0,
+            },
+            pieces,
+        )
+
+        edge_line = next(line for line in payload["lines"] if line["type"] == "edge")
+        self.assertEqual(edge_line["quantity"], 0.5)
+        self.assertEqual(edge_line["amount_usd"], 1.0)
+        self.assertNotIn("cut_corner", [line["type"] for line in payload["lines"]])
 
     def test_l_shaped_corner_edge_meters_lands_in_edge_line(self) -> None:
         """edge_meters/edge_cost_usd for an L-Shaped piece already include both

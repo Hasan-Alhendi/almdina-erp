@@ -95,9 +95,11 @@ def test_financial_print_ui_uses_server_authorized_payloads_only() -> None:
     assert "dco-cost-actions-bar" in presenter
     assert '<div class="dco-cost-kpis">' not in presenter
     assert "تسعير الدرفات الخاصة" in presenter
-    assert "تسعير قشاط درف الزاوية المقصوصة" in presenter
     assert "specialPricingHtml(frm)" in presenter
-    assert "cutCornerPricingHtml(frm)" in presenter
+    render_source = presenter.split("function render(frm)", 1)[1].split(
+        "function refreshInvoiceSection", 1
+    )[0]
+    assert "cutCornerPricingHtml(frm)" not in render_source
     assert "درفة خاصة رقم" in presenter
     assert "درفة الزاوية الكسر" in presenter
     assert "درفة زاوية L" in presenter
@@ -111,10 +113,9 @@ def test_financial_print_ui_uses_server_authorized_payloads_only() -> None:
     assert "#CutCorner-" not in presenter
     assert "pendingCustomEdgePriceLabels" in presenter
     assert "pending: !ready" in presenter
-    assert "عرض الرسم" in presenter
     assert "غير مسعّر" in presenter
     assert "السعر الخاص الشامل" in presenter
-    assert "dco-view-cut-corner-sketch" in presenter
+    assert 'data-price-kind="clipped"' not in presenter
     assert '__("تعديل السعر")' in permissions
     assert "السعر الخاص الشامل للدرفة" in permissions
     assert "update_clipped_corner_edge_price" in permissions

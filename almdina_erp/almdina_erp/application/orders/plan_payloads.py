@@ -54,6 +54,7 @@ class PlanMetadataPiece:
     area_m2: float
     notes: str
     edge_break: int = 0
+    edge_break_only: int = 0
     edge_long_type: str = ""
     edge_width_type: str = ""
     edge_long_rate_usd: float = 0
@@ -129,6 +130,7 @@ def build_plan_metadata_payload(
                 "edge_width_top": piece.edge_width_top,
                 "edge_width_bottom": piece.edge_width_bottom,
                 "edge_break": piece.edge_break,
+                "edge_break_only": piece.edge_break_only,
                 "edge_long_right_type": (
                     piece.edge_long_right_type
                     or piece.edge_long_type

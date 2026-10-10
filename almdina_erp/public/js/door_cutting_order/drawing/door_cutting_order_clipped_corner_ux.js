@@ -210,7 +210,17 @@
         const row = piece || {};
         if (!isCornerCut(row)) {
             row.edge_break = 0;
+            row.edge_break_only = 0;
             return row;
+        }
+        if (!isClipped(row)) row.edge_break_only = 0;
+        if (row.edge_break) row.edge_break_only = 0;
+        if (isClipped(row) && row.edge_break_only) {
+            const adjacentSides = breakAdjacentSides(row.clipped_corner_position);
+            if (adjacentSides.every((side) => Boolean(row[side]))) {
+                row.edge_break = 1;
+                row.edge_break_only = 0;
+            }
         }
         // L-shaped corner strap is only the inner notch; outer sides stay free.
         if (!row.edge_break || isLShaped(row)) return row;
@@ -221,13 +231,24 @@
         return row;
     }
 
+    function toggleEdgeSelection(piece, fieldname) {
+        const draft = piece || {};
+        draft[fieldname] = draft[fieldname] ? 0 : 1;
+        if (draft[fieldname] && fieldname === "edge_break") {
+            draft.edge_break_only = 0;
+        } else if (draft[fieldname] && fieldname === "edge_break_only") {
+            draft.edge_break = 0;
+        }
+        return applyEdgeBreakPolicy(draft);
+    }
+
     function locksAdjacentSidesForBreak(piece) {
         return Boolean(isClipped(piece) && piece && piece.edge_break);
     }
 
     function breakEdgeLabel(piece, arabic = isArabic()) {
         if (isLShaped(piece)) return arabic ? "قشاط الزاوية" : "Corner";
-        return arabic ? "قشاط الكسر" : "Break";
+        return arabic ? "قشاط مسار الزاوية الكامل" : "Full corner path";
     }
 
     function insetPoint(point, centerX, centerY, amount) {
@@ -241,6 +262,16 @@
         const centerX = width / 2;
         const centerY = height / 2;
         return (path || []).map((point) => insetPoint(point, centerX, centerY, amount));
+    }
+
+    function insetLBreakPath(position, width, height, cutX, cutY, amount) {
+        const paths = {
+            "Top Right": [[width - cutX - amount, amount], [width - cutX - amount, cutY + amount], [width - amount, cutY + amount]],
+            "Top Left": [[cutX + amount, amount], [cutX + amount, cutY + amount], [amount, cutY + amount]],
+            "Bottom Right": [[width - amount, height - cutY - amount], [width - cutX - amount, height - cutY - amount], [width - cutX - amount, height - amount]],
+            "Bottom Left": [[amount, height - cutY - amount], [cutX + amount, height - cutY - amount], [cutX + amount, height - amount]],
+        };
+        return paths[position] || paths[DEFAULT_POSITION];
     }
 
     function clippedEdgePaths(piece, viewportWidth = 100, viewportHeight = 100) {
@@ -321,14 +352,20 @@
                 break: [[0, height - cutY], [cutX, height - cutY], [cutX, height]],
             },
         };
-        const byPosition = cutStyle(piece) === "L" ? lByPosition : diagonalByPosition;
+        const isL = cutStyle(piece) === "L";
+        const byPosition = isL ? lByPosition : diagonalByPosition;
         const source = byPosition[config.position] || byPosition[DEFAULT_POSITION];
         return {
             top: insetPath(source.top, width, height, amount),
             bottom: insetPath(source.bottom, width, height, amount),
             left: insetPath(source.left, width, height, amount),
             right: insetPath(source.right, width, height, amount),
-            break: insetPath(source.break, width, height, amount),
+            break: isL
+                ? insetLBreakPath(config.position, width, height, cutX, cutY, amount)
+                : insetPath(source.break, width, height, amount),
+            breakOnly: isClipped(piece)
+                ? insetPath(source.break.slice(1, 3), width, height, amount)
+                : null,
         };
     }
 
@@ -365,6 +402,9 @@
         if (flags.right && paths.right) lines.push(polyline(paths.right));
         if (piece && piece.edge_break && paths.break) {
             lines.push(polyline(paths.break, "dco-edge-break-svg"));
+        }
+        if (piece && piece.edge_break_only && paths.breakOnly) {
+            lines.push(polyline(paths.breakOnly, "dco-edge-break-only-svg"));
         }
         return lines.join("");
     }
@@ -471,6 +511,7 @@
         if (row.edge_long_right) labels.push(arabic ? "يمين" : "Right");
         if (row.edge_long_left) labels.push(arabic ? "يسار" : "Left");
         if (row.edge_break) labels.push(isLShaped(row) ? (arabic ? "الزاوية" : "Corner") : (arabic ? "الكسر" : "Break"));
+        if (row.edge_break_only) labels.push(arabic ? "الكسر فقط" : "Break only");
         if (!labels.length) {
             return arabic ? "بدون قشاط" : "No banding";
         }
@@ -484,6 +525,7 @@
             edge_long_right: row.edge_long_right ? 1 : 0,
             edge_long_left: row.edge_long_left ? 1 : 0,
             edge_break: row.edge_break ? 1 : 0,
+            edge_break_only: row.edge_break_only ? 1 : 0,
             clipped_corner_position: row.clipped_corner_position || DEFAULT_POSITION,
             piece_type: pieceType(row) || CLIPPED_TYPE,
         };
@@ -513,6 +555,7 @@
                     ${edgeToggleHtml("edge_long_right", isArabic() ? "طول يمين" : "Right", draft, locked.has("edge_long_right"))}
                     ${edgeToggleHtml("edge_long_left", isArabic() ? "طول يسار" : "Left", draft, locked.has("edge_long_left"))}
                     ${edgeToggleHtml("edge_break", breakEdgeLabel(row), draft, false, "dco-edge-break-toggle")}
+                    ${isClipped(row) ? edgeToggleHtml("edge_break_only", isArabic() ? "قشاط الكسر فقط" : "Break only", draft, false, "dco-edge-break-toggle") : ""}
                 </div>
             </div>`;
     }
@@ -524,7 +567,7 @@
         root.querySelectorAll("[data-corner-edge]").forEach((button) => {
             const field = button.dataset.cornerEdge;
             const checked = Boolean(draft[field]);
-            const isLocked = field !== "edge_break" && locked.has(field);
+            const isLocked = !["edge_break", "edge_break_only"].includes(field) && locked.has(field);
             button.classList.toggle("is-checked", checked);
             button.classList.toggle("is-break-locked", isLocked);
             button.setAttribute("aria-pressed", checked ? "true" : "false");
@@ -532,6 +575,34 @@
             const mark = button.querySelector(".dco-check-mark");
             if (mark) mark.textContent = checked ? "✓" : "";
         });
+    }
+
+    function persistCornerValues(row, config, edgeDraft) {
+        const updates = [
+            ["clipped_corner_position", config.position],
+            ["clipped_corner_width_cm", rounded(config.cutWidth)],
+            ["clipped_corner_length_cm", rounded(config.cutLength)],
+            ["edge_width_top", edgeDraft.edge_width_top],
+            ["edge_width_bottom", edgeDraft.edge_width_bottom],
+            ["edge_long_right", edgeDraft.edge_long_right],
+            ["edge_long_left", edgeDraft.edge_long_left],
+        ];
+        // Clear the opposite mode before enabling the selected one. Concurrent
+        // set_value calls can otherwise expose a temporary conflicting state to
+        // child-field handlers and make a full path reopen as break-only.
+        if (edgeDraft.edge_break) {
+            updates.push(["edge_break_only", 0], ["edge_break", 1]);
+        } else if (edgeDraft.edge_break_only) {
+            updates.push(["edge_break", 0], ["edge_break_only", 1]);
+        } else {
+            updates.push(["edge_break", 0], ["edge_break_only", 0]);
+        }
+        return updates.reduce(
+            (pending, [fieldname, value]) => pending.then(
+                () => frappe.model.set_value(row.doctype, row.name, fieldname, value)
+            ),
+            Promise.resolve()
+        );
     }
 
     function installStyles() {
@@ -718,6 +789,7 @@
             edge_long_right: edgeDraft.edge_long_right,
             edge_long_left: edgeDraft.edge_long_left,
             edge_break: edgeDraft.edge_break,
+            edge_break_only: edgeDraft.edge_break_only,
         };
         const frame = previewFrame(sample.width_cm, sample.length_cm);
         const polygon = points(sample, frame.width, frame.height)
@@ -807,21 +879,13 @@
                         }
                     )
                 );
-                Promise.all([
-                    frappe.model.set_value(row.doctype, row.name, "clipped_corner_position", config.position),
-                    frappe.model.set_value(row.doctype, row.name, "clipped_corner_width_cm", rounded(config.cutWidth)),
-                    frappe.model.set_value(row.doctype, row.name, "clipped_corner_length_cm", rounded(config.cutLength)),
-                    frappe.model.set_value(row.doctype, row.name, "edge_width_top", edgeDraft.edge_width_top),
-                    frappe.model.set_value(row.doctype, row.name, "edge_width_bottom", edgeDraft.edge_width_bottom),
-                    frappe.model.set_value(row.doctype, row.name, "edge_long_right", edgeDraft.edge_long_right),
-                    frappe.model.set_value(row.doctype, row.name, "edge_long_left", edgeDraft.edge_long_left),
-                    frappe.model.set_value(row.doctype, row.name, "edge_break", edgeDraft.edge_break),
-                ]).then(() => {
+                persistCornerValues(row, config, edgeDraft).then(() => {
                     row.edge_width_top = edgeDraft.edge_width_top;
                     row.edge_width_bottom = edgeDraft.edge_width_bottom;
                     row.edge_long_right = edgeDraft.edge_long_right;
                     row.edge_long_left = edgeDraft.edge_long_left;
                     row.edge_break = edgeDraft.edge_break;
+                    row.edge_break_only = edgeDraft.edge_break_only;
                     if (locksAdjacentSidesForBreak(edgeDraft)) {
                         breakAdjacentSides(config.position).forEach((side) => {
                             row[`${side}_type_override`] = "";
@@ -882,7 +946,7 @@
                 if (button.disabled || button.classList.contains("is-break-locked")) return;
                 const fieldname = button.dataset.cornerEdge;
                 const draft = root._cornerEdgeDraft || applyEdgeBreakPolicy(cloneEdgeDraft(row));
-                draft[fieldname] = draft[fieldname] ? 0 : 1;
+                toggleEdgeSelection(draft, fieldname);
                 draft.clipped_corner_position = (
                     root.querySelector(".dco-corner-position.is-active")?.dataset.position
                     || draft.clipped_corner_position
@@ -907,6 +971,7 @@
         positions: POSITIONS.map(position => position.value),
         breakAdjacentSides,
         applyEdgeBreakPolicy,
+        toggleEdgeSelection,
         locksAdjacentSidesForBreak,
         breakEdgeLabel,
         clippedEdgePaths,

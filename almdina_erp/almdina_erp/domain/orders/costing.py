@@ -78,6 +78,7 @@ class BreakEdgeCostInput:
     qty: int
     edge_break: int
     break_edge_rate_usd: float
+    edge_break_only: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -282,12 +283,21 @@ def _common_active_rate(*values: tuple[float, float]) -> float:
 def calculate_break_edge_cost(piece: BreakEdgeCostInput) -> BreakEdgeCostResult:
     """Calculate the break-strap edge banding for corner-cut pieces.
 
-    Clipped Corner (كسر): two remnant sides + the diagonal hypotenuse.
+    Clipped Corner full path (كسر): two remnant sides + the diagonal hypotenuse.
+    Clipped Corner break-only: the diagonal hypotenuse at the normal rate.
     L-Shaped Corner (زاوية L): two orthogonal inner-notch edges.
-    The rate is doubled because the break strap requires manual application.
+    Full corner paths use the historical doubled rate.
     """
 
-    if not piece.edge_break or piece.piece_type not in _CORNER_CUT_TYPES:
+    full_path = bool(piece.edge_break)
+    break_only = bool(piece.edge_break_only)
+    if full_path and break_only:
+        raise CostingError("mutually_exclusive_corner_edge_options")
+    if piece.piece_type not in _CORNER_CUT_TYPES:
+        return _ZERO_BREAK
+    if break_only and piece.piece_type != "Clipped Corner":
+        return _ZERO_BREAK
+    if not full_path and not break_only:
         return _ZERO_BREAK
 
     width = _finite(piece.width_cm)
@@ -300,7 +310,9 @@ def calculate_break_edge_cost(piece: BreakEdgeCostInput) -> BreakEdgeCostResult:
     if qty <= 0 or corner_w <= 0 or corner_l <= 0:
         return _ZERO_BREAK
 
-    if piece.piece_type == "Clipped Corner":
+    if break_only:
+        unit_length_cm = math.sqrt(corner_w**2 + corner_l**2)
+    elif piece.piece_type == "Clipped Corner":
         # Remnant of side 1 + diagonal (Pythagorean) + remnant of side 2
         remnant_width = max(0.0, width - corner_w)
         remnant_length = max(0.0, length - corner_l)
@@ -311,7 +323,8 @@ def calculate_break_edge_cost(piece: BreakEdgeCostInput) -> BreakEdgeCostResult:
         unit_length_cm = corner_w + corner_l
 
     meters = unit_length_cm * qty / 100
-    cost = meters * rate * 2  # doubled rate
+    multiplier = 1 if break_only else 2
+    cost = meters * rate * multiplier
 
     return BreakEdgeCostResult(
         break_edge_length_cm=round_value(unit_length_cm, 3),

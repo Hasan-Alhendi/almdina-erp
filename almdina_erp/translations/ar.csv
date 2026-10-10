@@ -320,6 +320,7 @@ Description,الوصف
 Measurement Error,خطأ في القياس
 Cutting Error,خطأ أثناء القص
 Edge Banding Error,خطأ في القشاط
+Full corner-path banding and break-only banding cannot be selected together.,لا يمكن اختيار قشاط مسار الزاوية الكامل وقشاط الكسر فقط معًا.
 Damage,تلف القطعة
 Lost Piece,فقدان القطعة
 Material Defect,عيب في المادة

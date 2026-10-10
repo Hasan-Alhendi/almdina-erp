@@ -199,21 +199,54 @@ def _customer_invoice_lines(
     edge_groups: dict[tuple[str, float], dict[str, Any]] = defaultdict(
         lambda: {"meters": 0.0, "amount": 0.0}
     )
+
+    def add_edge_group(
+        edge_type: str,
+        rate: float,
+        meters: float,
+        amount: float,
+    ) -> None:
+        if meters <= 0:
+            return
+        group = edge_groups[(edge_type, rate)]
+        group["meters"] += meters
+        group["amount"] += amount
+
     for piece in edge_source:
-        if _factory_quantity(piece) <= 0:
+        factory_quantity = _factory_quantity(piece)
+        if factory_quantity <= 0:
             continue
         # Includes Clipped/L-Shaped corner pieces. Sides adjacent to the break
         # are already cleared to zero (Clipped) or shrunk to the dimension
         # remaining after the notch cut (L-Shaped) by the costing adapter, so
         # edge_meters/edge_cost_usd here are already correct as-is.
-        meters = _number(_value(piece, "edge_meters"))
-        if meters <= 0:
-            continue
         edge_type = _text(_value(piece, "edge_type"), "قشاط")
         rate = _number(_value(piece, "edge_rate_usd"))
-        group = edge_groups[(edge_type, rate)]
-        group["meters"] += meters
-        group["amount"] += _number(_value(piece, "edge_cost_usd")) or meters * rate
+        meters = _number(_value(piece, "edge_meters"))
+        amount = _number(_value(piece, "edge_cost_usd"))
+
+        if _number(_value(piece, "edge_break_only")):
+            break_rate = _number(_value(piece, "edge_break_rate_usd"))
+            break_meters = (
+                _number(_value(piece, "edge_break_length_cm"))
+                * factory_quantity
+                / 100
+            )
+            break_amount = break_meters * break_rate
+            add_edge_group(
+                edge_type,
+                rate,
+                max(0.0, meters - break_meters),
+                max(0.0, amount - break_amount),
+            )
+            add_edge_group(edge_type, break_rate, break_meters, break_amount)
+        else:
+            add_edge_group(
+                edge_type,
+                rate,
+                meters,
+                amount if amount or not rate else meters * rate,
+            )
 
     for (edge_type, rate), group in sorted(edge_groups.items()):
         lines.append(
@@ -261,7 +294,11 @@ def _customer_invoice_lines(
                     "note": _text(_value(piece, "special_shape_price_note")),
                 }
             )
-        elif is_corner_cut(piece_type):
+        elif (
+            is_corner_cut(piece_type)
+            and _number(_value(piece, "edge_break"))
+            and _number(_value(piece, "edge_break_length_cm")) > 0
+        ):
             # Quantity is the break strap's own length (meters, for the factory
             # quantity actually billed), rate is the doubled per-meter price,
             # and amount is their product -- matches clipped_corner_edge_price_usd

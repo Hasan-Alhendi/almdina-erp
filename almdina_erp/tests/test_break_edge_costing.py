@@ -1,15 +1,100 @@
 from __future__ import annotations
 
-import unittest
 import math
+import unittest
+from types import SimpleNamespace
 
 from almdina_erp.almdina_erp.domain.orders.costing import (
     BreakEdgeCostInput,
+    CostingError,
     calculate_break_edge_cost,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.orders.costing_adapter import (
+    FrappeOrderCostingAdapter,
 )
 
 
 class TestBreakEdgeCosting(unittest.TestCase):
+    def test_costing_adapter_merges_break_only_into_normal_edge_totals(self) -> None:
+        row = SimpleNamespace(
+            piece_type="Clipped Corner",
+            width_cm=50,
+            length_cm=50,
+            qty=1,
+            edge_long_right=0,
+            edge_long_left=1,
+            edge_width_top=0,
+            edge_width_bottom=0,
+            edge_long_right_type_override="",
+            edge_long_left_type_override="",
+            edge_width_top_type_override="",
+            edge_width_bottom_type_override="",
+            edge_break=0,
+            edge_break_only=1,
+            clipped_corner_position="Top Right",
+            clipped_corner_width_cm=10,
+            clipped_corner_length_cm=10,
+            edge_type="Standard",
+        )
+        document = SimpleNamespace(
+            pieces=[row],
+            default_edge_type="Standard",
+        )
+        profiles = SimpleNamespace(rate_map=lambda: {"Standard": 2.5})
+
+        adapter = FrappeOrderCostingAdapter(
+            document,
+            access=None,
+            profiles=profiles,
+            engine_version="test",
+        )
+        adapter.calculate_piece_rows()
+
+        self.assertEqual(row.edge_break_meters, 0.141)
+        self.assertEqual(row.edge_meters, 0.641)
+        self.assertEqual(row.edge_cost_usd, 1.604)
+        self.assertEqual(document.total_edge_meters, 0.641)
+        self.assertEqual(document.edge_cost_usd, 1.604)
+
+    def test_clipped_corner_break_only_uses_diagonal_and_normal_rate(self) -> None:
+        result = calculate_break_edge_cost(
+            BreakEdgeCostInput(
+                piece_type="Clipped Corner",
+                width_cm=100,
+                length_cm=80,
+                corner_width_cm=30,
+                corner_length_cm=40,
+                qty=3,
+                edge_break=0,
+                edge_break_only=1,
+                break_edge_rate_usd=2.0,
+            )
+        )
+
+        self.assertEqual(result.break_edge_length_cm, 50)
+        self.assertEqual(result.break_edge_meters, 1.5)
+        self.assertEqual(result.break_edge_cost_usd, 3.0)
+        self.assertEqual(result.break_edge_unit_price_usd, 1.0)
+
+    def test_full_path_and_break_only_are_rejected_together(self) -> None:
+        with self.assertRaisesRegex(
+            CostingError,
+            "mutually_exclusive_corner_edge_options",
+        ):
+            calculate_break_edge_cost(
+                BreakEdgeCostInput(
+                    piece_type="Clipped Corner",
+                    width_cm=100,
+                    length_cm=80,
+                    corner_width_cm=30,
+                    corner_length_cm=40,
+                    qty=1,
+                    edge_break=1,
+                    edge_break_only=1,
+                    break_edge_rate_usd=2.0,
+                )
+            )
+
     def test_clipped_corner_pythagorean_geometry(self) -> None:
         """Clipped Corner: remnant sides + diagonal hypotenuse."""
         result = calculate_break_edge_cost(

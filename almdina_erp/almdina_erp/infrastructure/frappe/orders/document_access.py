@@ -28,6 +28,7 @@ _OLD_PIECE_FIELDS = [
     "edge_width_top",
     "edge_width_bottom",
     "edge_break",
+    "edge_break_only",
     "edge_type",
     "special_shape_drawing_json",
     "special_shape_geometry_json",

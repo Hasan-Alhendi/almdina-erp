@@ -158,6 +158,10 @@ remain additive to the selected add-on prices.
 The measurement type cell remains the native HTML `select` used by the table as the
 data-field owner. The visible Arabic order is `عادية / خاصة / الزاوية الكسر / زاوية L`.
 For Clipped Corner («الزاوية الكسر») and L-Shaped Corner («زاوية L»), banding sides including `edge_break` are chosen inside the corner-shape editor; the measurements table shows a summary that reopens that editor, and that summary refreshes immediately on Apply without waiting for order save.
+For a clipped corner, selecting break-only plus both corner-adjacent outer sides is
+canonicalized to the full corner path: the three redundant flags are cleared and
+`edge_break` becomes the single persisted selection. The L-shaped break highlight
+uses an axis-aligned inset so it follows the two right-angle notch segments exactly.
 the persisted values remain `Regular / Special / Clipped Corner / L-Shaped Corner`
 according to the existing DocType contract. `L-Shaped Corner` reuses the clipped-corner
 editor, stored cut-from-corner distances, edge-price workflow, plan SVG, and DXF path; only the
