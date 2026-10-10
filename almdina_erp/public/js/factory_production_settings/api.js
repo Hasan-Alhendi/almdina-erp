@@ -41,6 +41,7 @@
     }
 
     const WHATSAPP = "almdina_erp.almdina_erp.services.whatsapp_service";
+    const BACKUPS = "almdina_erp.almdina_erp.services.backup_restore_service";
 
     function getWhatsAppSession(options = {}) {
         return request(`${WHATSAPP}.get_whatsapp_session`, {}, options).then(data => data || {});
@@ -58,6 +59,25 @@
         return request(`${WHATSAPP}.get_whatsapp_qr`, {}, options).then(data => data || {});
     }
 
+    function getBackupContext(options = {}) {
+        return request(`${BACKUPS}.get_backup_context`, {}, options).then(data => data || {});
+    }
+
+    function createBackupNow(options = {}) {
+        return request(`${BACKUPS}.create_backup_now`, {}, options).then(data => data || {});
+    }
+
+    function testSshConnection(options = {}) {
+        return request(`${BACKUPS}.test_ssh_connection`, {}, options).then(data => data || {});
+    }
+
+    function requestRestore(operationId, confirmation, options = {}) {
+        return request(`${BACKUPS}.request_restore`, {
+            operation_id: operationId,
+            confirmation,
+        }, options).then(data => data || {});
+    }
+
     window.AlmdinaFactoryProductionSettingsApi = Object.freeze({
         getSettings,
         updateSettings,
@@ -66,5 +86,9 @@
         createWhatsAppSession,
         reconnectWhatsAppSession,
         getWhatsAppQr,
+        getBackupContext,
+        createBackupNow,
+        testSshConnection,
+        requestRestore,
     });
 })();

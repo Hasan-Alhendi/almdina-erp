@@ -45,6 +45,7 @@ class FactoryProductionSettingsFrontendArchitectureTest(unittest.TestCase):
             "interactions.js",
             "dialogs.js",
             "whatsapp_panel.js",
+            "backup_panel.js",
             "controller.js",
         ):
             self.assertIn(f"/assets/almdina_erp/js/factory_production_settings/{asset}", self.page)
@@ -63,6 +64,10 @@ class FactoryProductionSettingsFrontendArchitectureTest(unittest.TestCase):
             "create_whatsapp_session",
             "reconnect_whatsapp_session",
             "get_whatsapp_qr",
+            "get_backup_context",
+            "create_backup_now",
+            "test_ssh_connection",
+            "request_restore",
         ):
             self.assertIn(endpoint, self.api)
             for other in (

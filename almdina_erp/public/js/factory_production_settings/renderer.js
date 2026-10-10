@@ -159,6 +159,11 @@
                             <div class="aps-whatsapp-loading">${t("جاري تحميل حالة WhatsApp...")}</div>
                         </article>
                         ` : ""}
+                        ${model.showBackupPanel ? `
+                        <article class="aps-section aps-backup" data-backup-root>
+                            <div class="aps-backup-loading">${t("جاري تحميل سجل النسخ الاحتياطية...")}</div>
+                        </article>
+                        ` : ""}
                     </section>
                     ${legacySettingsDetails(model)}
                     <div class="aps-note">
@@ -191,6 +196,100 @@
 
         function auditErrorHtml(message) {
             return `<div class="aps-error" role="alert"><span class="aps-error-icon" aria-hidden="true">!</span><div><strong>${t("تعذر تحميل السجل")}</strong><span>${esc(message || t("تعذر تحميل السجل."))}</span></div></div>`;
+        }
+
+        function backupStatusLabel(status) {
+            const labels = {
+                Queued: t("في الانتظار"),
+                Running: t("قيد التنفيذ"),
+                Prepared: t("تم تجهيز الاستعادة"),
+                Completed: t("مكتملة"),
+                Failed: t("فشلت"),
+            };
+            return labels[String(status || "")] || String(status || "—");
+        }
+
+        function backupStatusTone(status) {
+            if (status === "Completed") return "success";
+            if (status === "Failed") return "danger";
+            return "warning";
+        }
+
+        function sizeLabel(value) {
+            const bytes = Number(value || 0);
+            if (!Number.isFinite(bytes) || bytes <= 0) return "—";
+            if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+            if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+            return `${(bytes / 1024).toFixed(1)} KB`;
+        }
+
+        function backupHistoryHtml(snapshot = {}) {
+            const rows = Array.isArray(snapshot.history) ? snapshot.history : [];
+            const restorable = new Map((snapshot.restorable || []).map(row => [row.operation_id, row]));
+            if (!rows.length) {
+                return `<div class="aps-empty"><strong>${t("لا توجد عمليات نسخ بعد")}</strong><span>${t("استخدم Create Backup Now لإنشاء أول نسخة محلية.")}</span></div>`;
+            }
+            return `<div class="aps-backup-history">${rows.map(row => {
+                const candidate = restorable.get(row.operation_id);
+                const restoreButton = candidate && snapshot.permissions && snapshot.permissions.can_restore && snapshot.restore_runtime_ready
+                    ? uiButton({
+                        label: t("استعادة"),
+                        variant: "danger",
+                        className: "aps-backup-restore",
+                        attrs: {
+                            "data-operation-id": row.operation_id,
+                            "data-backup-identifier": row.backup_identifier || "",
+                        },
+                    })
+                    : "";
+                return `
+                    <div class="aps-backup-row">
+                        <div class="aps-backup-row-main">
+                            <div><strong>${esc(row.backup_identifier || row.operation_id || "—")}</strong><span>${esc(row.operation_type || "")} · ${esc(row.target || "")}</span></div>
+                            ${uiBadge({ label: backupStatusLabel(row.status), tone: backupStatusTone(row.status) })}
+                        </div>
+                        <div class="aps-backup-row-meta">
+                            <span>${esc(row.requested_on || "—")}</span>
+                            <span>${esc(sizeLabel(row.total_size))}</span>
+                            ${row.error_summary ? `<span class="aps-backup-error">${esc(row.error_summary)}</span>` : ""}
+                            ${restoreButton}
+                        </div>
+                    </div>
+                `;
+            }).join("")}</div>`;
+        }
+
+        function backupHtml(snapshot = {}) {
+            const canManage = Boolean(snapshot.permissions && snapshot.permissions.can_manage);
+            const canRestore = Boolean(snapshot.permissions && snapshot.permissions.can_restore);
+            return `
+                <div class="aps-section-head">
+                    <div class="aps-section-copy">
+                        <span class="aps-section-accent" aria-hidden="true"></span>
+                        <div class="aps-section-titles">
+                            <span class="aps-section-kicker">${t("الإدارة والتنفيذ")}</span>
+                            <h3>${t("Backup History & Actions")}</h3>
+                            <div class="aps-section-desc">${t("كل نسخة تُنشأ بمحرك Frappe الرسمي، وتظهر النتيجة هنا دون عرض مسارات محلية أو بيانات اعتماد.")}</div>
+                        </div>
+                    </div>
+                    <div class="aps-section-tools aps-backup-actions">
+                        ${canManage ? uiButton({ label: t("Test SSH Connection"), variant: "secondary", className: "aps-backup-test" }) : ""}
+                        ${canManage ? uiButton({ label: t("Create Backup Now"), variant: "primary", className: "aps-backup-create" }) : ""}
+                    </div>
+                </div>
+                ${canRestore && !snapshot.restore_runtime_ready ? `<div class="aps-readonly-note">${t("الاستعادة معطّلة حتى تُضبط بيانات DB root في إعداد Frappe التشغيلي.")}</div>` : ""}
+                ${backupHistoryHtml(snapshot)}
+            `;
+        }
+
+        function renderBackup(snapshot) {
+            const $root = $body.find("[data-backup-root]");
+            if ($root.length) $root.html(backupHtml(snapshot));
+        }
+
+        function renderBackupError(message) {
+            const $root = $body.find("[data-backup-root]");
+            if ($root.length) $root.html(`<div class="aps-error" role="alert"><span class="aps-error-icon" aria-hidden="true">!</span><div><strong>${t("تعذر تحميل إدارة النسخ")}</strong><span>${esc(message || t("حدث خطأ غير متوقع."))}</span></div></div>`);
         }
 
         function statusLabel(status) {
@@ -303,6 +402,8 @@
             auditHtml,
             auditLoadingHtml,
             auditErrorHtml,
+            renderBackup,
+            renderBackupError,
         });
     }
 

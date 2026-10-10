@@ -24,6 +24,10 @@ from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
     normalize_plan_settings,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
+from almdina_erp.almdina_erp.domain.backups.policy import (
+    BackupSchedule,
+    normalize_remote_path,
+)
 from almdina_erp.almdina_erp.domain.security.factory_settings import (
     FactorySettingsSection,
     decide_settings_update,
@@ -63,6 +67,35 @@ WHATSAPP_MESSAGE_DEFAULTS = {
 }
 _WHATSAPP_MESSAGE_FIELDS = tuple(WHATSAPP_MESSAGE_DEFAULTS)
 _WHATSAPP_STAGE_MESSAGES_FIELD = "whatsapp_stage_messages"
+_BACKUP_SECRET_FIELDS = frozenset(
+    {"ssh_password", "ssh_private_key", "ssh_private_key_passphrase"}
+)
+_BACKUP_BOOLEAN_FIELDS = frozenset(
+    {"local_backup_enabled", "external_backup_enabled"}
+)
+_BACKUP_INTEGER_FIELDS = frozenset(
+    {
+        "local_backup_day_of_month",
+        "local_backup_retention",
+        "external_backup_day_of_month",
+        "external_backup_retention",
+        "ssh_port",
+    }
+)
+_BACKUP_TEXT_FIELDS = frozenset(
+    {
+        "local_backup_frequency",
+        "local_backup_time",
+        "local_backup_weekday",
+        "external_backup_frequency",
+        "external_backup_time",
+        "external_backup_weekday",
+        "ssh_host",
+        "ssh_username",
+        "ssh_auth_method",
+        "remote_backup_path",
+    }
+)
 _PRINT_IDENTITY_READ_CAPABILITIES = frozenset(
     {
         Capability.VIEW_FACTORY_SETTINGS,
@@ -95,6 +128,9 @@ _SETTINGS_FIELDS = (
     *_PRINT_IDENTITY_FIELDS,
     *_WHATSAPP_MESSAGE_FIELDS,
     _WHATSAPP_STAGE_MESSAGES_FIELD,
+    *_BACKUP_BOOLEAN_FIELDS,
+    *_BACKUP_INTEGER_FIELDS,
+    *_BACKUP_TEXT_FIELDS,
 )
 _PLAN_DEFAULT_FIELDS = frozenset(
     {
@@ -357,6 +393,93 @@ def _apply_values(settings: Any, payload: dict[str, Any]) -> None:
             ),
         )
 
+    for fieldname in _BACKUP_BOOLEAN_FIELDS.intersection(payload):
+        settings.set(fieldname, 1 if cint(payload[fieldname]) else 0)
+
+    for fieldname in _BACKUP_INTEGER_FIELDS.intersection(payload):
+        value = cint(payload[fieldname])
+        if fieldname == "ssh_port":
+            if not 1 <= value <= 65535:
+                frappe.throw(_("SSH Port must be between 1 and 65535."), frappe.ValidationError)
+        elif fieldname.endswith("day_of_month"):
+            if not 1 <= value <= 31:
+                frappe.throw(_("Backup day of month must be between 1 and 31."), frappe.ValidationError)
+        elif not 1 <= value <= 365:
+            frappe.throw(_("Backup retention must be between 1 and 365."), frappe.ValidationError)
+        settings.set(fieldname, value)
+
+    for fieldname in _BACKUP_TEXT_FIELDS.intersection(payload):
+        value = str(payload[fieldname] or "").strip()
+        if len(value) > 255:
+            frappe.throw(_("Backup setting value is too long."), frappe.ValidationError)
+        if fieldname == "remote_backup_path" and value:
+            try:
+                value = normalize_remote_path(value)
+            except ValueError as exc:
+                frappe.throw(_(str(exc)), frappe.ValidationError)
+        settings.set(fieldname, value)
+
+    for fieldname in _BACKUP_SECRET_FIELDS.intersection(payload):
+        value = str(payload[fieldname] or "")
+        if not value:
+            continue
+        if len(value) > 20000:
+            frappe.throw(_("SSH credential is too long."), frappe.ValidationError)
+        settings.set(fieldname, value)
+
+    if set(payload).intersection(
+        _BACKUP_BOOLEAN_FIELDS | _BACKUP_INTEGER_FIELDS | _BACKUP_TEXT_FIELDS | _BACKUP_SECRET_FIELDS
+    ):
+        _validate_backup_settings(settings)
+
+
+def _backup_time(value: Any, default: str) -> str:
+    if hasattr(value, "total_seconds"):
+        seconds = int(value.total_seconds()) % (24 * 60 * 60)
+        return f"{seconds // 3600:02d}:{(seconds % 3600) // 60:02d}"
+    text = str(value or default).strip()
+    parts = text.split(":")
+    if len(parts) >= 2 and all(part.isdigit() for part in parts[:2]):
+        return f"{int(parts[0]):02d}:{int(parts[1]):02d}"
+    return text
+
+
+def _validate_backup_settings(settings: Any) -> None:
+    for prefix, defaults in (("local", ("02:00", 7)), ("external", ("03:00", 4))):
+        try:
+            BackupSchedule(
+                frequency=settings.get(f"{prefix}_backup_frequency") or "Daily",
+                time=_backup_time(settings.get(f"{prefix}_backup_time"), defaults[0]),
+                weekday=settings.get(f"{prefix}_backup_weekday") or "Monday",
+                day_of_month=settings.get(f"{prefix}_backup_day_of_month") or 1,
+            ).validated()
+        except ValueError as exc:
+            frappe.throw(_(str(exc)), frappe.ValidationError)
+        retention = cint(settings.get(f"{prefix}_backup_retention") or defaults[1])
+        if not 1 <= retention <= 365:
+            frappe.throw(_("Backup retention must be between 1 and 365."), frappe.ValidationError)
+
+    if not cint(settings.get("external_backup_enabled")):
+        return
+    required = {
+        "ssh_host": _("SSH Host"),
+        "ssh_username": _("SSH Username"),
+        "remote_backup_path": _("Remote Backup Path"),
+    }
+    for fieldname, label in required.items():
+        if not str(settings.get(fieldname) or "").strip():
+            frappe.throw(_("{0} is required before enabling External Backup.").format(label), frappe.ValidationError)
+    try:
+        normalize_remote_path(settings.get("remote_backup_path"))
+    except ValueError as exc:
+        frappe.throw(_(str(exc)), frappe.ValidationError)
+    method = str(settings.get("ssh_auth_method") or "Private Key").strip()
+    if method not in {"Private Key", "Password"}:
+        frappe.throw(_("SSH Authentication Method is invalid."), frappe.ValidationError)
+    secret_field = "ssh_private_key" if method == "Private Key" else "ssh_password"
+    if not settings.get_password(secret_field, raise_exception=False):
+        frappe.throw(_("The selected SSH credential is required before enabling External Backup."), frappe.ValidationError)
+
 
 def _print_identity_values(settings: Any) -> dict[str, str]:
     values: dict[str, str] = {}
@@ -514,11 +637,15 @@ def whatsapp_stage_message_template(stage_type: object) -> str:
     return stored or STAGE_COMPLETION_TEXT_TEMPLATE
 
 
-def _settings_values(settings: Any) -> dict[str, Any]:
+def _settings_values(settings: Any, *, include_backups: bool = True) -> dict[str, Any]:
     values: dict[str, Any] = {}
     print_values = _print_identity_values(settings)
     whatsapp_values = _whatsapp_message_values(settings)
     for fieldname in _SETTINGS_FIELDS:
+        if not include_backups and fieldname in (
+            _BACKUP_BOOLEAN_FIELDS | _BACKUP_INTEGER_FIELDS | _BACKUP_TEXT_FIELDS
+        ):
+            continue
         if fieldname in print_values:
             values[fieldname] = print_values[fieldname]
             continue
@@ -529,8 +656,14 @@ def _settings_values(settings: Any) -> dict[str, Any]:
             values[fieldname] = _stage_messages_dict(settings)
             continue
         value = settings.get(fieldname)
-        if fieldname in {"allow_stage_override", "allow_unplaced_approval"}:
+        if fieldname in {"allow_stage_override", "allow_unplaced_approval", *_BACKUP_BOOLEAN_FIELDS}:
             value = int(value or 0)
+        elif fieldname in _BACKUP_INTEGER_FIELDS:
+            value = cint(value)
+        elif fieldname.endswith("_backup_time"):
+            value = _backup_time(value, "03:00" if fieldname.startswith("external") else "02:00")
+        elif fieldname in _BACKUP_TEXT_FIELDS:
+            value = str(value or "")
         elif fieldname == "default_packing_mode":
             value = public_mode_value(value)
         elif fieldname not in {"default_cutting_machine_type", "default_production_routing"}:
@@ -538,6 +671,12 @@ def _settings_values(settings: Any) -> dict[str, Any]:
             if fieldname == "optimal_search_piece_limit":
                 value = cint(value)
         values[fieldname] = value
+    if include_backups:
+        values["ssh_password_configured"] = bool(settings.get_password("ssh_password", raise_exception=False))
+        values["ssh_private_key_configured"] = bool(settings.get_password("ssh_private_key", raise_exception=False))
+        values["ssh_private_key_passphrase_configured"] = bool(
+            settings.get_password("ssh_private_key_passphrase", raise_exception=False)
+        )
     return values
 
 
@@ -579,7 +718,10 @@ def get_production_settings() -> dict[str, Any]:
             pluck="name",
             order_by="routing_name asc",
         )
-    values = _settings_values(settings)
+    values = _settings_values(
+        settings,
+        include_backups=Capability.MANAGE_BACKUPS in granted,
+    )
     catalog = optimization_catalog()
     machines = machine_type_catalog()
     return {

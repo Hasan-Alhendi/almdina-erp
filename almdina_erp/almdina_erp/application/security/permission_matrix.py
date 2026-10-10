@@ -40,7 +40,7 @@ CATEGORY_PRESENTATION: dict[str, dict[str, str]] = {
     "shop_floor": {"label": "صالة الإنتاج", "description": "صلاحيات العرض الإضافية داخل صالة الإنتاج دون منح دخول أو إجراءات إنتاجية بحد ذاتها.", "icon": "list"},
     "control_center": {"label": "مركز التحكم والجودة", "description": "أرشفة الخطط وعرض حوادث الإنتاج وتسجيلها وإدارة قطع التعويض.", "icon": "dashboard"},
     "workforce": {"label": "المستخدمون والقوى العاملة", "description": "عرض حسابات المعمل وإنشاؤها وتعديلها وتفعيلها وإدارة أدوارها.", "icon": "users"},
-    "factory_settings": {"label": "إعدادات المعمل", "description": "عرض وتعديل إعدادات القص والتكلفة وضوابط الإنتاج وهوية أوراق الطباعة ورسائل واتساب وجلستها كل قسم بصورة مستقلة.", "icon": "setting-gear"},
+    "factory_settings": {"label": "إعدادات المعمل", "description": "عرض وتعديل إعدادات القص والتكلفة والإنتاج والطباعة وواتساب والنسخ الاحتياطي كل قسم بصورة مستقلة.", "icon": "setting-gear"},
     "master_data": {"label": "البيانات الأساسية", "description": "إدارة مسارات الإنتاج وأنواع القشاط مع فصل العرض والإنشاء والتعديل والحذف.", "icon": "database"},
     "administration": {"label": "إدارة الصلاحيات", "description": "تعديل مصفوفة الصلاحيات لجميع الأدوار.", "icon": "lock"},
 }
@@ -129,6 +129,8 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
     Capability.EDIT_FACTORY_PRINT_IDENTITY: _presentation("تعديل هوية الطباعة", "تعديل اسم المعمل ولمحته وعنوانه وأرقام التواصل الظاهرة على أوراق الطباعة. لا يشمل رسائل واتساب ولا ربط الجلسة.", "sensitive"),
     Capability.MANAGE_WHATSAPP_SESSION: _presentation("إدارة جلسة واتساب", "عرض حالة جلسة المصنع وإنشاؤها وربطها عبر رمز QR وإعادة الاتصال. لا تمنح تعديل الرسائل ولا إرسال ملفات الزبائن.", "critical"),
     Capability.EDIT_WHATSAPP_MESSAGES: _presentation("تعديل رسائل واتساب", "تعديل نصوص القياسات وتعديلات القياسات والفاتورة وإتمام المراحل في إعدادات المعمل. لا تمنح إنشاء الجلسة ولا إرسال الملفات.", "sensitive"),
+    Capability.MANAGE_BACKUPS: _presentation("إدارة النسخ الاحتياطي", "ضبط الجدولة والاحتفاظ واتصال SSH، وإنشاء النسخ اليدوية وعرض سجلها. لا تمنح الاستعادة.", "critical"),
+    Capability.RESTORE_BACKUPS: _presentation("استعادة النسخ الاحتياطية", "بدء استعادة مدمرة بعد تأكيد صريح ونسخة أمان تلقائية. لا تمنح تعديل إعدادات النسخ.", "critical"),
     Capability.VIEW_PRODUCTION_ROUTINGS: _presentation("عرض مسارات الإنتاج", "عرض مسارات الإنتاج وتسلسل مراحلها."),
     Capability.CREATE_PRODUCTION_ROUTINGS: _presentation("إنشاء مسار إنتاج", "إنشاء مسار إنتاج جديد.", "sensitive"),
     Capability.EDIT_PRODUCTION_ROUTINGS: _presentation("تعديل مسارات الإنتاج", "تعديل ترتيب المراحل أو تعطيل المسار.", "critical"),

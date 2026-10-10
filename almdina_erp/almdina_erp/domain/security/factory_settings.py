@@ -14,6 +14,7 @@ class FactorySettingsSection:
     PRODUCTION = "production"
     PRINT_IDENTITY = "print_identity"
     WHATSAPP_MESSAGES = "whatsapp_messages"
+    BACKUP_RESTORE = "backup_restore"
 
 
 SECTION_FIELDS = MappingProxyType(
@@ -69,6 +70,30 @@ SECTION_FIELDS = MappingProxyType(
                 "whatsapp_stage_messages",
             }
         ),
+        FactorySettingsSection.BACKUP_RESTORE: frozenset(
+            {
+                "local_backup_enabled",
+                "local_backup_frequency",
+                "local_backup_time",
+                "local_backup_weekday",
+                "local_backup_day_of_month",
+                "local_backup_retention",
+                "external_backup_enabled",
+                "external_backup_frequency",
+                "external_backup_time",
+                "external_backup_weekday",
+                "external_backup_day_of_month",
+                "external_backup_retention",
+                "ssh_host",
+                "ssh_port",
+                "ssh_username",
+                "ssh_auth_method",
+                "ssh_password",
+                "ssh_private_key",
+                "ssh_private_key_passphrase",
+                "remote_backup_path",
+            }
+        ),
     }
 )
 SECTION_CAPABILITIES = MappingProxyType(
@@ -79,11 +104,12 @@ SECTION_CAPABILITIES = MappingProxyType(
         FactorySettingsSection.PRODUCTION: Capability.EDIT_FACTORY_PRODUCTION_CONTROLS,
         FactorySettingsSection.PRINT_IDENTITY: Capability.EDIT_FACTORY_PRINT_IDENTITY,
         FactorySettingsSection.WHATSAPP_MESSAGES: Capability.EDIT_WHATSAPP_MESSAGES,
+        FactorySettingsSection.BACKUP_RESTORE: Capability.MANAGE_BACKUPS,
     }
 )
 ALL_SETTINGS_FIELDS = frozenset().union(*SECTION_FIELDS.values())
 _VIEW_IMPLIED_BY = frozenset(SECTION_CAPABILITIES.values()) | frozenset(
-    {Capability.MANAGE_WHATSAPP_SESSION}
+    {Capability.MANAGE_WHATSAPP_SESSION, Capability.RESTORE_BACKUPS}
 )
 
 
@@ -110,6 +136,8 @@ def settings_context(capabilities: Iterable[str] | None) -> dict[str, object]:
     return {
         "can_view": Capability.VIEW_FACTORY_SETTINGS in granted,
         "can_manage_whatsapp_session": Capability.MANAGE_WHATSAPP_SESSION in granted,
+        "can_manage_backups": Capability.MANAGE_BACKUPS in granted,
+        "can_restore_backups": Capability.RESTORE_BACKUPS in granted,
         "sections": {
             section: {
                 "editable": required in granted,
