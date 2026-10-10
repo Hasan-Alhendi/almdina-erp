@@ -302,6 +302,70 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
         self.assertEqual((piece["cut_width_cm"], piece["cut_length_cm"]), (30.0, 40.0))
         self.assertEqual(piece["geometry"]["outer"][1], [29.8, 0])
 
+    def test_mismatched_proven_copy_is_not_also_reported_missing(self) -> None:
+        from almdina_erp.almdina_erp.services.strict_dxf_import_service import (
+            _apply_strict_dimension_contract,
+        )
+
+        order = self._order((592, 285, 0))
+        order.pieces[0].qty = 2
+        order.pieces[0].piece_instance_id = "piece:regular-1"
+        spec = OrderPieceCutSpec(
+            row_index=1,
+            finished_width_cm=Decimal("59.2"),
+            finished_length_cm=Decimal("28.5"),
+            cut_width_cm=Decimal("59.2"),
+            cut_length_cm=Decimal("28.5"),
+            width_deduction_mm=Decimal("0"),
+            length_deduction_mm=Decimal("0"),
+            allow_rotation=0,
+            piece_type="Regular",
+            qty=2,
+            side_profiles=(),
+        )
+        snapshot = {
+            "sheets": [{"pieces": [
+                {"label": "1.1", "w": 59.2, "h": 28.5},
+                {"label": "1.2", "w": 59.1, "h": 28.5},
+            ]}]
+        }
+
+        errors = _apply_strict_dimension_contract(snapshot, [spec], order=order)
+
+        self.assertEqual([item.code for item in errors], ["CUT_SIZE_MISMATCH"])
+        self.assertEqual(errors[0].target.source_piece_no, 1)
+        self.assertEqual(errors[0].target.copy_no, 2)
+
+    def test_unidentified_copy_remains_missing_after_valid_sibling(self) -> None:
+        from almdina_erp.almdina_erp.services.strict_dxf_import_service import (
+            _apply_strict_dimension_contract,
+        )
+
+        order = self._order((592, 285, 0))
+        order.pieces[0].qty = 2
+        order.pieces[0].piece_instance_id = "piece:regular-1"
+        spec = OrderPieceCutSpec(
+            row_index=1,
+            finished_width_cm=Decimal("59.2"),
+            finished_length_cm=Decimal("28.5"),
+            cut_width_cm=Decimal("59.2"),
+            cut_length_cm=Decimal("28.5"),
+            width_deduction_mm=Decimal("0"),
+            length_deduction_mm=Decimal("0"),
+            allow_rotation=0,
+            piece_type="Regular",
+            qty=2,
+            side_profiles=(),
+        )
+        snapshot = {
+            "sheets": [{"pieces": [{"label": "1.1", "w": 59.2, "h": 28.5}]}]
+        }
+
+        errors = _apply_strict_dimension_contract(snapshot, [spec], order=order)
+
+        self.assertEqual([item.code for item in errors], ["PIECE_MISSING"])
+        self.assertIn("1.2", errors[0].params["preview"])
+
     def test_real_size_mismatch_remains_generic(self) -> None:
         with self.assertRaises(DxfImportError) as exc_info:
             _resolve_cut_topology([_rect(570, 285)], self._order((592, 285, 0)))
@@ -354,8 +418,8 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
         card = present_issue(grouped)
         self.assertIn("قطعة واحدة", card.problem)
         self.assertEqual(card.target, "الدرف المحتملة: 1، 2.")
-        self.assertIn("28.5 × 59.2 سم", card.action)
-        self.assertIn("59.2 × 28.5 سم", card.action)
+        self.assertIn("\u206628.5 × 59.2\u2069 سم", card.action)
+        self.assertIn("\u206659.2 × 28.5\u2069 سم", card.action)
 
     def test_large_duplicate_copy_set_has_deterministic_rotation_count(self) -> None:
         quantity = 80
@@ -451,11 +515,11 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
         card = present_issue(error.issues[0])
         self.assertEqual(card.problem, "الدرفة مدوّرة والتدوير غير مسموح.")
         self.assertEqual(card.target, "الدرفة 9.")
-        self.assertEqual(card.action, "أعد اتجاه الدرفة إلى 59.2 × 28.5 سم.")
+        self.assertEqual(card.action, "أعد اتجاه الدرفة إلى \u206659.2 × 28.5\u2069 سم.")
         message = _present_error(error)
         self.assertIn("الدرفة 9", message)
         self.assertIn("التدوير غير مسموح", message)
-        self.assertIn("59.2 × 28.5 سم", message)
+        self.assertIn("\u206659.2 × 28.5\u2069 سم", message)
         for correct_size in ("30 × 40", "40 × 50", "21 × 31", "25 × 39"):
             self.assertNotIn(correct_size, message)
 

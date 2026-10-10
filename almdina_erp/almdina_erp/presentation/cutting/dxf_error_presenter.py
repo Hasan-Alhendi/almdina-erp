@@ -22,6 +22,11 @@ _OVERLAY_KIND_AR = {
     "back_groove": "فرزة الظهر",
     "recessed_handle_cutout": "مسكة الغطس",
 }
+_GEOMETRY_ERROR_AR = {
+    "too_few_vertices": "عدد الرؤوس أقل من اللازم",
+    "zero_area": "مساحة المسار تساوي صفرًا",
+    "self_intersection": "المسار يتقاطع مع نفسه",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,8 +70,10 @@ def _size_cm(width: Any, height: Any, *, from_mm: bool = False) -> str:
         height_cm = _mm_to_cm(height)
         if width_cm is None or height_cm is None:
             return "؟"
-        return f"{format_cm(width_cm)} × {format_cm(height_cm)} سم"
-    return f"{format_cm(width)} × {format_cm(height)} سم"
+        pair = f"{format_cm(width_cm)} × {format_cm(height_cm)}"
+        return f"\u2066{pair}\u2069 سم"
+    pair = f"{format_cm(width)} × {format_cm(height)}"
+    return f"\u2066{pair}\u2069 سم"
 
 
 def present_target(target: DxfIssueTarget, *, params: dict[str, Any] | None = None) -> str:
@@ -841,7 +848,12 @@ def group_issues(issues: Sequence[DxfValidationIssue]) -> list[list[DxfValidatio
         presented = present_issue(item)
         # Group open/branched contours and identical dimension-less codes.
         contour_group = (
-            item.code in {codes.CUT_OPEN, codes.CUT_BRANCHED, codes.CUT_SELF_INTERSECTION}
+            item.code in {
+                codes.CUT_OPEN,
+                codes.CUT_BRANCHED,
+                codes.CUT_SELF_INTERSECTION,
+                codes.CUT_INVALID_GEOMETRY,
+            }
             and item.target.contour_no is not None
         )
         piece_group = (
@@ -863,11 +875,18 @@ def group_issues(issues: Sequence[DxfValidationIssue]) -> list[list[DxfValidatio
         if contour_group or piece_group:
             # Problem details and params remain on each issue for the expanded
             # evidence list; they do not change root cause or corrective action.
+            geometry_errors = item.params.get("geometry_errors") or ()
+            geometry_signature = (
+                tuple(sorted(str(error) for error in geometry_errors))
+                if item.code == codes.CUT_INVALID_GEOMETRY
+                else ()
+            )
             key = (
                 item.code,
                 item.category,
                 item.target.kind,
                 presented.action,
+                geometry_signature,
             )
             if key in index_by_key:
                 grouped[index_by_key[key]].append(item)
@@ -913,10 +932,19 @@ def present_group(group: Sequence[DxfValidationIssue]) -> PresentedDxfError:
             group[0].code,
             group[0].category,
         )
-    details = tuple(
-        f"{present_issue(item).target} — {present_issue(item).problem}"
-        for item in group
-    )
+    detail_lines = []
+    for item in group:
+        presented = present_issue(item)
+        detail = f"{presented.target} — {presented.problem}"
+        if item.code == codes.CUT_INVALID_GEOMETRY:
+            causes = [
+                _GEOMETRY_ERROR_AR.get(str(error), "سبب هندسي إضافي")
+                for error in (item.params.get("geometry_errors") or ())
+            ]
+            if causes:
+                detail += " التفاصيل: " + "، ".join(causes) + "."
+        detail_lines.append(detail)
+    details = tuple(detail_lines)
     if group[0].code == codes.CUT_SIZE_MISMATCH:
         summary = "توجد مقاسات قص غير مطابقة."
         group_target = f"{len(group)} مواضع تحتاج الإجراء نفسه."

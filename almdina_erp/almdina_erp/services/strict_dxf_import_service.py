@@ -587,25 +587,27 @@ def _apply_strict_dimension_contract(
                     )
                     continue
 
-                legacy_label = str(piece.get("label") or "")
-                row_hint = None
-                try:
-                    row_no = int(legacy_label.split(".", 1)[0])
-                    row_hint = next(
-                        (spec for spec in specs if spec.row_index == row_no),
-                        None,
-                    )
-                except (TypeError, ValueError):
-                    row_hint = None
-                if row_hint:
+                # A complete canonical label identifies a specific expected
+                # copy even when its dimensions are rejected. Consume only
+                # that proven-present copy; row-only hints cannot establish
+                # copy identity and must not suppress a genuine missing-copy
+                # diagnostic.
+                legacy_label = str(piece.get("label") or "").strip()
+                identified_index = next(
+                    (
+                        index
+                        for index, candidate in enumerate(unmatched)
+                        if candidate["label"] == legacy_label
+                    ),
+                    None,
+                )
+                if identified_index is not None:
+                    candidate = unmatched.pop(identified_index)
                     issues.append(
                         _dimension_issue(
                             CUT_SIZE_MISMATCH,
-                            spec=row_hint,
-                            candidate={
-                                "label": legacy_label or str(row_hint.row_index),
-                                "copy_no": 1,
-                            },
+                            spec=candidate["spec"],
+                            candidate=candidate,
                             actual_w=actual_w,
                             actual_h=actual_h,
                         )
