@@ -1658,7 +1658,13 @@ def _resolve_cut_topology(contours: list[dict[str, object]], order: Any) -> Reso
                     )
                 ]
             ) from exc
-        if exc.code == "AMBIGUOUS_CONTOUR_OWNERSHIP":
+        if exc.code in {
+            "AMBIGUOUS_CONTOUR_OWNERSHIP",
+            "UNRESOLVED_CONTOUR_OWNERSHIP",
+        }:
+            # Independent roots are cut paths by topology evidence. When there
+            # are more roots than required copies, report their size residuals;
+            # nested candidates stay excluded because their ownership is unclear.
             root_inventory = _inventory_mismatch_params(
                 candidates, order, include_ambiguous_nested=False
             )
