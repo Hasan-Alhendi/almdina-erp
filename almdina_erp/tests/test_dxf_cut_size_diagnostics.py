@@ -923,6 +923,21 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
         self.assertIn("×3", message)
 
 
+    def test_nested_expected_size_candidate_remains_structured_ambiguity(self) -> None:
+        contours = [
+            _rect(302, 402),
+            _rect(300, 400, x_mm=1, y_mm=1),
+        ]
+
+        with self.assertRaises(DxfImportError) as exc_info:
+            _resolve_cut_topology(contours, self._order((300, 400, 0)))
+
+        self.assertIn("AMBIGUOUS_CONTOUR_OWNERSHIP", exc_info.exception.codes)
+        self.assertNotIn("PIECE_MISSING", exc_info.exception.codes)
+        self.assertNotIn("EXTRA_CUT_PATH", exc_info.exception.codes)
+        self.assertIn("هل هو فتحة أم قطعة", _present_error(exc_info.exception))
+
+
 
 if __name__ == "__main__":
     unittest.main()
