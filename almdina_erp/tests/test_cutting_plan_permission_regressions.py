@@ -300,12 +300,14 @@ def test_rejected_dxf_upload_preserves_existing_plan_file_and_order_state(monkey
         lambda *_args: events.append("finalized"),
     )
 
-    with pytest.raises(frappe.ValidationError):
+    with pytest.raises(frappe.ValidationError) as raised:
         shop_floor_dxf_service.upload_production_dxf(
             "DCO-TEST",
             "/private/files/rejected-plan.dxf",
         )
 
+    assert "invalid DXF fixture" not in str(raised.value)
+    assert "مسؤول النظام" in str(raised.value)
     assert events == ["staged", "authorized", "validated"]
     assert (order.status, order.production_dxf, order.drawing_dxf_status) == original_order_state
     assert (saved_plan.name, saved_plan.snapshot_json, saved_plan.dxf_file) == (

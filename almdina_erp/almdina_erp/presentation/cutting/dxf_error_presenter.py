@@ -183,11 +183,10 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
     code = issue.code
 
     if code == codes.LEGACY_MESSAGE:
-        message = str(params.get("message") or "تعذر التحقق من ملف DXF.")
         return PresentedDxfError(
-            problem=message,
-            target=target_text,
-            action="صحح الرسم ثم أعد رفع الملف.",
+            problem="تعذر التحقق من الملف بسبب رسالة قديمة غير مفصلة.",
+            target="تفاصيل الخطأ غير متاحة بأمان.",
+            action="راجع مسؤول النظام لتشخيص الخطأ ثم أعد المحاولة.",
             code=code,
             category=issue.category,
         )

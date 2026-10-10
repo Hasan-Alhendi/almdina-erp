@@ -216,9 +216,8 @@ def test_html_cards_escape_xss_payload() -> None:
         ]
     )
     assert "<img" not in html
-    assert "&lt;img" in html
-    assert "onerror=alert(1)" in html  # escaped text content, not an executable attribute
-    assert 'onerror=alert(1)>"' not in html
+    assert "&lt;img" not in html
+    assert "onerror=alert(1)" not in html
     assert "تعذر قبول ملف DXF" not in html
     assert "ما المشكلة؟" in html
 
@@ -276,14 +275,15 @@ def test_matching_piece_errors_group_without_losing_target_evidence():
 
 def test_error_dialog_expands_all_issues_beyond_initial_ten():
     issues = [
-        issue("LEGACY_MESSAGE", "WORKFLOW", params={"message": f"حالة {index}"})
+        issue("CUT_INVALID_GEOMETRY", "CONTOUR", target=contour_target(index))
         for index in range(12)
     ]
 
     html = render_error_cards_html(issues)
 
     assert "عرض بقية الأخطاء (2)" in html
-    assert all(f"حالة {index}" in html for index in range(12))
+    assert html.count("alm-dxf-error-card") == 12
+    assert all(str(index) in html for index in range(12))
 
 
 def test_contour_dimensions_and_bounds_are_never_presented_as_a_door():
