@@ -82,6 +82,8 @@ class Capability:
     EDIT_FACTORY_PRINT_IDENTITY = "edit_factory_print_identity"
     MANAGE_WHATSAPP_SESSION = "manage_whatsapp_session"
     EDIT_WHATSAPP_MESSAGES = "edit_whatsapp_messages"
+    MANAGE_BACKUPS = "manage_backups"
+    RESTORE_BACKUPS = "restore_backups"
 
     # Master data
     VIEW_PRODUCTION_ROUTINGS = "view_production_routings"
@@ -210,6 +212,8 @@ _CAPABILITY_DEFINITIONS = (
     CapabilityDefinition(Capability.EDIT_FACTORY_PRINT_IDENTITY, Capability.EDIT_FACTORY_PRINT_IDENTITY, _SETTINGS_DOCTYPE, "factory_settings"),
     CapabilityDefinition(Capability.MANAGE_WHATSAPP_SESSION, Capability.MANAGE_WHATSAPP_SESSION, _SETTINGS_DOCTYPE, "factory_settings"),
     CapabilityDefinition(Capability.EDIT_WHATSAPP_MESSAGES, Capability.EDIT_WHATSAPP_MESSAGES, _SETTINGS_DOCTYPE, "factory_settings"),
+    CapabilityDefinition(Capability.MANAGE_BACKUPS, Capability.MANAGE_BACKUPS, _SETTINGS_DOCTYPE, "factory_settings"),
+    CapabilityDefinition(Capability.RESTORE_BACKUPS, Capability.RESTORE_BACKUPS, _SETTINGS_DOCTYPE, "factory_settings"),
     CapabilityDefinition(Capability.VIEW_PRODUCTION_ROUTINGS, "read", _ROUTING_DOCTYPE, "master_data", False),
     CapabilityDefinition(Capability.CREATE_PRODUCTION_ROUTINGS, "create", _ROUTING_DOCTYPE, "master_data", False),
     CapabilityDefinition(Capability.EDIT_PRODUCTION_ROUTINGS, "write", _ROUTING_DOCTYPE, "master_data", False),

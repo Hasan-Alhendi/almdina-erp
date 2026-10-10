@@ -46,6 +46,7 @@
         let activation = null;
         let initialLoadPending = true;
         let whatsapp = null;
+        let backups = null;
 
         if (typeof page.clear_inner_toolbar === "function") page.clear_inner_toolbar();
         page.add_inner_button(__("سجل التغييرات"), openAudit, null, "history");
@@ -64,6 +65,7 @@
             load,
             dispose() {
                 if (whatsapp && typeof whatsapp.dispose === "function") whatsapp.dispose();
+                if (backups && typeof backups.dispose === "function") backups.dispose();
                 dialogs.dispose();
                 store.dispose();
                 if (wrapper.__almdinaProductionSettingsController === instance) {
@@ -76,6 +78,7 @@
             onActivate: load,
             onDeactivate: () => {
                 if (whatsapp && typeof whatsapp.deactivate === "function") whatsapp.deactivate();
+                if (backups && typeof backups.deactivate === "function") backups.deactivate();
                 dialogs.deactivate();
                 store.deactivate();
             },
@@ -93,6 +96,19 @@
                 frontend,
                 lifecycle: store.lifecycle,
                 translate: __,
+                isActive: () => Boolean(activation && activation.isActive()),
+            });
+        }
+        const backupModule = window.AlmdinaFactoryProductionSettingsBackups;
+        if (backupModule && typeof backupModule.attach === "function") {
+            backups = backupModule.attach({
+                api,
+                renderer,
+                dialogs,
+                frontend,
+                lifecycle: store.lifecycle,
+                translate: __,
+                $body,
                 isActive: () => Boolean(activation && activation.isActive()),
             });
         }
@@ -128,6 +144,13 @@
                 && typeof whatsapp.refresh === "function"
             ) {
                 whatsapp.refresh();
+            }
+            if (
+                viewModel.page(state.current).showBackupPanel
+                && backups
+                && typeof backups.refresh === "function"
+            ) {
+                backups.refresh();
             }
         }
 

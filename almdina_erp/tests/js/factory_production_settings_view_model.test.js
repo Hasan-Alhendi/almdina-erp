@@ -125,6 +125,28 @@ assert.equal(page.canManageWhatsAppSession, true);
 assert.equal(page.sections.length, 6);
 assert.equal(page.legacy.length, 10);
 
+const backupCurrent = JSON.parse(JSON.stringify(current));
+backupCurrent.permissions.can_manage_backups = true;
+backupCurrent.permissions.can_restore_backups = false;
+backupCurrent.permissions.sections.backup_restore = { editable: true };
+backupCurrent.values.local_backup_enabled = 1;
+backupCurrent.values.local_backup_frequency = "Daily";
+backupCurrent.values.local_backup_retention = 7;
+backupCurrent.values.external_backup_enabled = 0;
+backupCurrent.values.external_backup_frequency = "Weekly";
+backupCurrent.values.external_backup_retention = 4;
+const backupPage = model.page(backupCurrent);
+assert.equal(backupPage.sections.length, 7);
+assert.equal(backupPage.sections[6].key, "backup_restore");
+assert.equal(backupPage.showBackupPanel, true);
+
+const restoreOnly = model.page({
+    values: {},
+    permissions: { can_restore_backups: true, sections: { backup_restore: { editable: false } } },
+});
+assert.equal(restoreOnly.sections.some(section => section.key === "backup_restore"), false);
+assert.equal(restoreOnly.showBackupPanel, true);
+
 const noLegacy = model.page({ values: {}, permissions: { sections: {} } });
 assert.equal(noLegacy.hasLegacy, false);
 assert.equal(noLegacy.legacy.length, 10, "legacy rows retain historical field labels even when values are absent");

@@ -28,6 +28,14 @@
             return Boolean(current && current.permissions && current.permissions.can_manage_whatsapp_session);
         }
 
+        function canManageBackups(current) {
+            return Boolean(current && current.permissions && current.permissions.can_manage_backups);
+        }
+
+        function canRestoreBackups(current) {
+            return Boolean(current && current.permissions && current.permissions.can_restore_backups);
+        }
+
         function yesNo(value) {
             return Number(value || 0) ? t("نعم") : t("لا");
         }
@@ -106,6 +114,19 @@
                         true,
                     ]),
                 ], current),
+                ...(canManageBackups(current) ? [section("backup_restore", t("Backup & Restore"), t("نسخ محلية وخارجية مستقلة مبنية على آلية Frappe الرسمية، مع احتفاظ منفصل واتصال SFTP آمن."), [
+                    [t("النسخ المحلي"), source.local_backup_enabled ? t("مفعّل") : t("معطّل")],
+                    [t("جدولة المحلي"), `${t(source.local_backup_frequency || "Daily")} · ${display(source.local_backup_time, "02:00")}`],
+                    [t("احتفاظ المحلي"), `${t("آخر")} ${display(source.local_backup_retention, 7)} ${t("نسخ")}`],
+                    [t("النسخ الخارجي"), source.external_backup_enabled ? t("مفعّل") : t("معطّل")],
+                    [t("جدولة الخارجي"), `${t(source.external_backup_frequency || "Daily")} · ${display(source.external_backup_time, "03:00")}`],
+                    [t("احتفاظ الخارجي"), `${t("آخر")} ${display(source.external_backup_retention, 4)} ${t("نسخ")}`],
+                    [t("خادم SSH"), source.ssh_host ? `${source.ssh_host}:${display(source.ssh_port, 22)}` : t("غير مضبوط")],
+                    [t("مستخدم SSH"), source.ssh_username || t("غير مضبوط")],
+                    [t("طريقة المصادقة"), t(source.ssh_auth_method || "Private Key")],
+                    [t("المسار البعيد"), source.remote_backup_path || t("غير مضبوط")],
+                    [t("بيانات الاعتماد"), (source.ssh_password_configured || source.ssh_private_key_configured) ? t("محفوظة بأمان") : t("غير مضبوطة")],
+                ], current)] : []),
             ];
         }
 
@@ -132,6 +153,7 @@
                 legacy: legacy(current),
                 hasLegacy: Boolean(current.legacy_values && typeof current.legacy_values === "object"),
                 canManageWhatsAppSession: canManageWhatsAppSession(current),
+                showBackupPanel: canManageBackups(current) || canRestoreBackups(current),
             };
         }
 
@@ -139,6 +161,8 @@
             values,
             sectionEditable,
             canManageWhatsAppSession,
+            canManageBackups,
+            canRestoreBackups,
             yesNo,
             display,
             catalogLabel,
