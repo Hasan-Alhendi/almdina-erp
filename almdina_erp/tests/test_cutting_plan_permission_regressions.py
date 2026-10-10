@@ -225,6 +225,101 @@ def test_dxf_upload_authorizes_and_validates_before_canonical_plan_attachment(mo
     assert result["drawing_dxf_status"] == "Uploaded"
 
 
+def test_rejected_dxf_upload_preserves_existing_plan_file_and_order_state(monkeypatch):
+    events: list[str] = []
+    staged_file = SimpleNamespace(
+        name="FILE-STAGED",
+        attached_to_doctype=None,
+        attached_to_name=None,
+        attached_to_field=None,
+    )
+    current_dxf = "/private/files/current-production-plan.dxf"
+    order = _UploadOrder(
+        name="DCO-TEST",
+        doctype="Door Cutting Order",
+        status="At Drawing",
+        production_path="Drawing",
+        current_department="رسم",
+        current_assignee="designer@example.com",
+        approved_plan="",
+        production_dxf=current_dxf,
+        drawing_dxf_status="Uploaded",
+    )
+    original_order_state = (
+        order.status,
+        order.production_dxf,
+        order.drawing_dxf_status,
+    )
+    saved_plan = SimpleNamespace(
+        name="CUT-PLAN-CURRENT",
+        snapshot_json=VALID_PLAN_JSON,
+        dxf_file=current_dxf,
+    )
+
+    monkeypatch.setattr(
+        shop_floor_dxf_service,
+        "_validate_dxf_file_metadata",
+        lambda file_url: (events.append("staged") or str(file_url), staged_file),
+    )
+    monkeypatch.setattr(shop_floor_dxf_service, "get_order", lambda _name: order)
+    monkeypatch.setattr(
+        cutting_plan_command_service,
+        "current_uploaded_dxf_file",
+        lambda _name: current_dxf,
+    )
+    monkeypatch.setattr(
+        shop_floor_dxf_service,
+        "required_upload_capability",
+        lambda _state: Capability.UPLOAD_DXF,
+    )
+    monkeypatch.setattr(
+        shop_floor_dxf_service,
+        "_authorize_order",
+        lambda current, _capability, **_kwargs: events.append("authorized") or current,
+    )
+    monkeypatch.setattr(shop_floor_dxf_service, "seed_plan_settings", lambda _name: None)
+
+    def reject_upload(*_args, **_kwargs):
+        events.append("validated")
+        raise strict_dxf_import_service.DxfImportError(errors=["invalid DXF fixture"])
+
+    monkeypatch.setattr(strict_dxf_import_service, "parse_production_dxf", reject_upload)
+    monkeypatch.setattr(
+        cutting_plan_command_service,
+        "save_uploaded_dxf_plan",
+        lambda *_args, **_kwargs: events.append("persisted"),
+    )
+    monkeypatch.setattr(
+        shop_floor_dxf_service,
+        "_attach_validated_dxf_file",
+        lambda *_args: events.append("attached"),
+    )
+    monkeypatch.setattr(
+        cutting_plan_command_service,
+        "finalize_uploaded_dxf_order_state",
+        lambda *_args: events.append("finalized"),
+    )
+
+    with pytest.raises(frappe.ValidationError):
+        shop_floor_dxf_service.upload_production_dxf(
+            "DCO-TEST",
+            "/private/files/rejected-plan.dxf",
+        )
+
+    assert events == ["staged", "authorized", "validated"]
+    assert (order.status, order.production_dxf, order.drawing_dxf_status) == original_order_state
+    assert (saved_plan.name, saved_plan.snapshot_json, saved_plan.dxf_file) == (
+        "CUT-PLAN-CURRENT",
+        VALID_PLAN_JSON,
+        current_dxf,
+    )
+    assert (
+        staged_file.attached_to_doctype,
+        staged_file.attached_to_name,
+        staged_file.attached_to_field,
+    ) == (None, None, None)
+
+
 def test_frontend_dxf_uploader_is_private_and_unattached():
     uploader_source = (
         APP_ROOT
