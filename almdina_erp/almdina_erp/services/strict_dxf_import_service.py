@@ -645,10 +645,9 @@ def _has_self_contained_forbidden_rotation(
     if item.code != FORBIDDEN_ROTATION:
         return False
     try:
-        if int(getattr(item.target, "source_piece_no", 0) or 0) <= 0:
-            return False
+        has_target_row = int(getattr(item.target, "source_piece_no", 0) or 0) > 0
     except (TypeError, ValueError):
-        return False
+        has_target_row = False
 
     params = item.params or {}
     dimension_fields = (
@@ -665,9 +664,33 @@ def _has_self_contained_forbidden_rotation(
             "expected_height_mm",
         ),
     )
-    return any(
+    if has_target_row and any(
         all(params.get(field) is not None for field in fields)
         for fields in dimension_fields
+    ):
+        return True
+
+    measurements = params.get("possible_measurements_cm")
+    candidate_rows = params.get("candidate_source_piece_nos") or ()
+    if not measurements:
+        return False
+    try:
+        has_row_evidence = (
+            has_target_row or bool(candidate_rows)
+        )
+    except (TypeError, ValueError):
+        has_row_evidence = bool(candidate_rows)
+    if not has_row_evidence:
+        return False
+    required_fields = (
+        "actual_width_cm",
+        "actual_height_cm",
+        "expected_width_cm",
+        "expected_height_cm",
+    )
+    return all(
+        all(measurement.get(field) is not None for field in required_fields)
+        for measurement in measurements
     )
 
 

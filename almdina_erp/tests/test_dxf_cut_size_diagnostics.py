@@ -307,19 +307,123 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
         self.assertIn("يوجد اختلاف في مقاسات القص", _present_error(exc_info.exception))
         self.assertNotIn("مدوّرة 90°", _present_error(exc_info.exception))
 
-    def test_repeated_dimensions_do_not_guess_forbidden_rotation(self) -> None:
+    def test_repeated_dimensions_report_group_without_copy_identity(self) -> None:
         order = self._order((592, 285, 0), (592, 285, 0))
         with self.assertRaises(DxfImportError) as exc_info:
             _resolve_cut_topology([_rect(592, 285), _rect(285, 592)], order)
-        self.assertTrue(
-            "EXPECTED_PIECE_MISMATCH" in exc_info.exception.codes
-            or "PIECE_MISSING" in exc_info.exception.codes
+
+        error = exc_info.exception
+        rotations = [item for item in error.issues if item.code == "FORBIDDEN_ROTATION"]
+        self.assertEqual(sum(item.params["rotation_count"] for item in rotations), 1)
+        self.assertNotIn("EXPECTED_PIECE_MISMATCH", error.codes)
+        self.assertTrue(all(item.target.source_piece_no is None for item in rotations))
+        self.assertTrue(all(item.target.copy_no is None for item in rotations))
+        candidate_rows = {
+            row
+            for item in rotations
+            for row in (item.params.get("candidate_source_piece_nos") or ())
+        }
+        self.assertEqual(candidate_rows, {1, 2})
+
+        from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
+            CATEGORY_DIMENSIONS,
+            DxfIssueTarget,
+            FORBIDDEN_ROTATION,
+            issue,
         )
-        self.assertNotIn("FORBIDDEN_ROTATION", exc_info.exception.codes)
-        message = _present_error(exc_info.exception)
-        self.assertNotIn("مدوّرة 90°", message)
-        self.assertNotIn("الدرفة 1", message)
-        self.assertNotIn("الدرفة 2", message)
+        from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import present_issue
+
+        grouped = issue(
+            FORBIDDEN_ROTATION,
+            CATEGORY_DIMENSIONS,
+            target=DxfIssueTarget(kind="order"),
+            params={
+                "rotation_count": 1,
+                "candidate_source_piece_nos": [1, 2],
+                "possible_measurements_cm": [{
+                    "actual_width_cm": 28.5,
+                    "actual_height_cm": 59.2,
+                    "expected_width_cm": 59.2,
+                    "expected_height_cm": 28.5,
+                }],
+                "identity_ambiguous": True,
+            },
+        )
+        card = present_issue(grouped)
+        self.assertIn("قطعة واحدة", card.problem)
+        self.assertEqual(card.target, "الدرف المحتملة: 1، 2.")
+        self.assertIn("28.5 × 59.2 سم", card.action)
+        self.assertIn("59.2 × 28.5 سم", card.action)
+
+    def test_large_duplicate_copy_set_has_deterministic_rotation_count(self) -> None:
+        quantity = 80
+        order = SimpleNamespace(
+            kerf_mm=0,
+            pieces=[SimpleNamespace(
+                cut_width_cm=59.2,
+                cut_length_cm=28.5,
+                width_cm=59.2,
+                length_cm=28.5,
+                qty=quantity,
+                allow_rotation=0,
+                piece_type="Regular",
+                extra_full_door_double=0,
+            )],
+        )
+        contours = [
+            _rect(
+                592 if index < quantity // 2 else 285,
+                285 if index < quantity // 2 else 592,
+                x_mm=index * 700,
+            )
+            for index in range(quantity)
+        ]
+
+        results = []
+        for _ in range(2):
+            with self.assertRaises(DxfImportError) as exc_info:
+                _resolve_cut_topology(contours, order)
+            rotations = [
+                item for item in exc_info.exception.issues
+                if item.code == "FORBIDDEN_ROTATION"
+            ]
+            self.assertEqual(
+                sum(item.params["rotation_count"] for item in rotations),
+                quantity // 2,
+            )
+            self.assertTrue(all(item.target.copy_no is None for item in rotations))
+            self.assertEqual(
+                {
+                    item.target.source_piece_no
+                    or next(iter(item.params.get("candidate_source_piece_nos", [None])))
+                    for item in rotations
+                },
+                {1},
+            )
+            normalized = []
+            for item in rotations:
+                measurements = item.params.get("possible_measurements_cm") or [{
+                    "actual_width_cm": item.params.get("actual_width_cm"),
+                    "actual_height_cm": item.params.get("actual_height_cm"),
+                    "expected_width_cm": item.params.get("expected_width_cm"),
+                    "expected_height_cm": item.params.get("expected_height_cm"),
+                }]
+                normalized.append((
+                    item.params["rotation_count"],
+                    tuple(item.params.get("candidate_source_piece_nos") or ()),
+                    tuple(sorted(
+                        tuple(measurement[field] for field in (
+                            "actual_width_cm",
+                            "actual_height_cm",
+                            "expected_width_cm",
+                            "expected_height_cm",
+                        ))
+                        for measurement in measurements
+                    )),
+                ))
+            results.append(tuple(sorted(normalized)))
+
+        self.assertEqual(results[0], results[1])
 
     def test_unrelated_duplicate_sizes_do_not_hide_piece_nine_rotation(self) -> None:
         dimensions = (
@@ -545,6 +649,42 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
                         "actual_height_mm": 592,
                         "expected_width_mm": 592,
                         "expected_height_mm": 285,
+                    },
+                )
+            ]
+        )
+
+        annotated = _with_persisted_cut_context(original, [])
+
+        self.assertIs(annotated, original)
+        self.assertEqual(annotated.codes, ["FORBIDDEN_ROTATION"])
+        self.assertNotIn(PERSISTED_CUT_SPECS, annotated.codes)
+
+    def test_strict_context_omits_specs_for_self_contained_grouped_rotation(self) -> None:
+        from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
+            CATEGORY_DIMENSIONS,
+            DxfIssueTarget,
+            FORBIDDEN_ROTATION,
+            PERSISTED_CUT_SPECS,
+            issue,
+        )
+
+        original = DxfImportError(
+            issues=[
+                issue(
+                    FORBIDDEN_ROTATION,
+                    CATEGORY_DIMENSIONS,
+                    target=DxfIssueTarget(kind="order"),
+                    params={
+                        "rotation_count": 1,
+                        "candidate_source_piece_nos": [1, 2],
+                        "possible_measurements_cm": [{
+                            "actual_width_cm": 28.5,
+                            "actual_height_cm": 59.2,
+                            "expected_width_cm": 59.2,
+                            "expected_height_cm": 28.5,
+                        }],
+                        "identity_ambiguous": True,
                     },
                 )
             ]

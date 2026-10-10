@@ -1,0 +1,64 @@
+{
+  "fixture_id": "dxf-181-multiple-forbidden-rotations",
+  "source_evidence": {
+    "source_dxf_filename": "3442.dxf",
+    "source_dxf_entity_counts_by_layer": {
+      "CUT_PATH": 47,
+      "OFFCUT": 2,
+      "Liner": 4,
+      "SHEET_OUTLINE": 4
+    },
+    "source_pdf_order_row_count": 12,
+    "source_pdf_piece_copy_count": 49,
+    "reported_swapped_dimension_count": 5,
+    "saved_allow_rotation_values_available": false
+  },
+  "scenario": {
+    "description": "Small, identity-neutral topology sample shaped from dimensions observed in the source DXF. Synthetic allow_rotation=false values reproduce the multiple-rotation failure without claiming the unavailable saved order flags.",
+    "order_pieces": [
+      {
+        "cut_width_cm": 29.9,
+        "cut_length_cm": 89.9,
+        "qty": 1,
+        "allow_rotation": false,
+        "piece_type": "Regular",
+        "resource_kind": "FULL_BOARD"
+      },
+      {
+        "cut_width_cm": 29.9,
+        "cut_length_cm": 61.0,
+        "qty": 2,
+        "allow_rotation": false,
+        "piece_type": "Regular",
+        "resource_kind": "FULL_BOARD"
+      },
+      {
+        "cut_width_cm": 29.9,
+        "cut_length_cm": 60.5,
+        "qty": 1,
+        "allow_rotation": false,
+        "piece_type": "Regular",
+        "resource_kind": "FULL_BOARD"
+      },
+      {
+        "cut_width_cm": 13.4,
+        "cut_length_cm": 40.6,
+        "qty": 1,
+        "allow_rotation": false,
+        "piece_type": "Regular",
+        "resource_kind": "FULL_BOARD"
+      }
+    ],
+    "cut_path_bboxes_mm": [
+      [899, 299],
+      [610, 299],
+      [610, 299],
+      [605, 299],
+      [134, 406]
+    ],
+    "offcut_resources": [
+      {"bbox_mm": [406, 164], "resource_kind": "OFFCUT"},
+      {"bbox_mm": [500, 134], "resource_kind": "OFFCUT"}
+    ]
+  }
+}
