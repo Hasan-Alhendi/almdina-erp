@@ -821,6 +821,34 @@
         next.scrollIntoView({ block:"nearest", inline:"nearest" });
     }
 
+    function applyCornerEdgeCheck(row, fieldname, cornerGeometry = window.AlmdinaClippedCornerGeometry) {
+        if (
+            !row
+            || !["edge_break", "edge_break_only"].includes(fieldname)
+            || !cornerGeometry
+            || typeof cornerGeometry.toggleEdgeSelection !== "function"
+        ) {
+            return [];
+        }
+        const policyFields = [
+            "edge_break",
+            "edge_break_only",
+            "edge_long_right",
+            "edge_long_left",
+            "edge_width_top",
+            "edge_width_bottom",
+            "edge_long_right_type_override",
+            "edge_long_left_type_override",
+            "edge_width_top_type_override",
+            "edge_width_bottom_type_override",
+        ];
+        const previous = Object.fromEntries(
+            policyFields.map((name) => [name, row[name]])
+        );
+        cornerGeometry.toggleEdgeSelection(row, fieldname);
+        return policyFields.filter((name) => previous[name] !== row[name]);
+    }
+
     function toggleCheck(frm, button) {
         const tr = button.closest("tr[data-row-name]");
         const fieldname = button.dataset.checkField;
@@ -852,19 +880,23 @@
         ) {
             return;
         }
+        if (
+            ["edge_break", "edge_break_only"].includes(fieldname)
+            && cornerGeometry
+            && typeof cornerGeometry.toggleEdgeSelection === "function"
+        ) {
+            const changedFields = applyCornerEdgeCheck(row, fieldname, cornerGeometry);
+            frm.dirty();
+            updateCalculatedCells(tr, row);
+            changedFields.forEach((name) => triggerChildField(frm, row, name, 0));
+            renderFastMeasurements(frm);
+            return;
+        }
         const next = row[fieldname] ? 0 : 1;
         const changedFields = addonField && typeof extraAddons.enforceMutualExclusivity === "function"
             ? extraAddons.enforceMutualExclusivity(row, fieldname, next)
             : [fieldname];
         if (!addonField) row[fieldname] = next;
-        if (fieldname === "edge_break" && cornerGeometry && typeof cornerGeometry.applyEdgeBreakPolicy === "function") {
-            cornerGeometry.applyEdgeBreakPolicy(row);
-            frm.dirty();
-            updateCalculatedCells(tr, row);
-            triggerChildField(frm, row, fieldname, 0);
-            renderFastMeasurements(frm);
-            return;
-        }
         frm.dirty();
         if (addonField && typeof extraAddons.syncAddonButtons === "function") {
             extraAddons.syncAddonButtons(tr, row, true);
@@ -1111,6 +1143,7 @@
             flush: flushMeasurementInputs,
             loadEdgeTypes,
             clearSpecialMeasurementEdges,
+            applyCornerEdgeCheck,
             edgesCellHtml,
             edgeOptions,
             isEditable,

@@ -87,6 +87,15 @@
         }
     }
 
+    // The cost read includes these selections so pricing can see them. They are
+    // owned by the order form. Copying them back replaces a newer corner Apply
+    // with the snapshot from when the cost tab was loaded. Ordinary side flags
+    // are not part of that snapshot, so the same refresh leaves them alone.
+    const ORDER_OWNED_CORNER_SELECTION_FIELDS = new Set([
+        "edge_break",
+        "edge_break_only",
+    ]);
+
     function projectPieces(frm, pieceSnapshots) {
         if (!frm || !frm.doc || !Array.isArray(frm.doc.pieces)) return;
         const byName = new Map(
@@ -103,7 +112,7 @@
             // this marker and then reloads the authoritative snapshot normally.
             if (piece && piece.__almdina_pending_price_edit) return;
             Object.entries(financial).forEach(([fieldname, value]) => {
-                if (fieldname === "name") return;
+                if (fieldname === "name" || ORDER_OWNED_CORNER_SELECTION_FIELDS.has(fieldname)) return;
                 piece[fieldname] = value;
             });
         });

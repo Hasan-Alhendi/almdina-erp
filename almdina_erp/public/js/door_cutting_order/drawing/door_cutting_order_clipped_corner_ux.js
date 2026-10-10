@@ -645,9 +645,13 @@
             ["edge_long_right", edgeDraft.edge_long_right],
             ["edge_long_left", edgeDraft.edge_long_left],
         ];
-        // Clear the opposite mode before enabling the selected one. Concurrent
-        // set_value calls can otherwise expose a temporary conflicting state to
-        // child-field handlers and make a full path reopen as break-only.
+        if (locksAdjacentSidesForBreak(edgeDraft)) {
+            breakAdjacentSides(config.position).forEach((side) => {
+                updates.push([`${side}_type_override`, ""]);
+            });
+        }
+        // Keep a deterministic trigger order inside the atomic model update:
+        // clear the opposite mode before notifying handlers about the selected one.
         if (edgeDraft.edge_break) {
             updates.push(["edge_break_only", 0], ["edge_break", 1]);
         } else if (edgeDraft.edge_break_only) {
@@ -715,11 +719,13 @@
     }
 
     async function persistCornerValues(frm, locator, config, edgeDraft) {
-        for (const [fieldname, value] of cornerValueUpdates(config, edgeDraft)) {
-            const current = resolveCurrentRow(frm, locator);
-            if (!current) throw new Error("The corner piece is no longer available in the current order.");
-            await frappe.model.set_value(current.doctype, current.name, fieldname, value);
-        }
+        const current = resolveCurrentRow(frm, locator);
+        if (!current) throw new Error("The corner piece is no longer available in the current order.");
+        // Frappe assigns every key from an object-form set_value before running
+        // any field handler. Commit one final snapshot so handlers never observe
+        // edge_break and edge_break_only in a transient/previous combination.
+        const values = Object.fromEntries(cornerValueUpdates(config, edgeDraft));
+        await frappe.model.set_value(current.doctype, current.name, values);
         return resolveCurrentRow(frm, locator);
     }
 
@@ -1068,12 +1074,6 @@
                     if (!committedRow) {
                         throw new Error("The corner piece changed while its values were being applied.");
                     }
-                    if (locksAdjacentSidesForBreak(edgeDraft)) {
-                        breakAdjacentSides(config.position).forEach((side) => {
-                            committedRow[`${side}_type_override`] = "";
-                        });
-                    }
-                    applyEdgeBreakPolicy(committedRow);
                     frm.dirty();
                     dialog.hide();
                     refreshFastTable(frm);

@@ -9,6 +9,10 @@ const CORNER_UX = path.resolve(
     __dirname,
     "../../public/js/door_cutting_order/drawing/door_cutting_order_clipped_corner_ux.js"
 );
+const OPERATOR_UX = path.resolve(
+    __dirname,
+    "../../public/js/door_cutting_order/order_entry/door_cutting_order_operator_ux.js"
+);
 
 function classList(initial = []) {
     const values = new Set(initial);
@@ -89,6 +93,8 @@ function createSandbox() {
     const dialogs = [];
     const rowsByName = Object.create(null);
     const setValueGates = [];
+    const setValueCalls = [];
+    const handlerSnapshots = [];
     const root = editorRoot();
 
     class Dialog {
@@ -129,7 +135,18 @@ function createSandbox() {
             new_names: {},
             set_value(doctype, name, fieldname, value) {
                 const row = rowsByName[name];
-                if (row && row.doctype === doctype) row[fieldname] = value;
+                const updates = fieldname && fieldname.constructor === Object
+                    ? fieldname
+                    : { [fieldname]: value };
+                if (row && row.doctype === doctype) {
+                    Object.entries(updates).forEach(([key, next]) => {
+                        row[key] = next;
+                    });
+                    // Frappe object-form set_value assigns the complete object
+                    // before the first field handler runs.
+                    handlerSnapshots.push({ ...row });
+                }
+                setValueCalls.push({ doctype, name, updates: { ...updates } });
                 return new Promise((resolve) => setValueGates.push(resolve));
             },
         },
@@ -166,7 +183,18 @@ function createSandbox() {
     window.frappe = frappe;
 
     vm.runInContext(fs.readFileSync(CORNER_UX, "utf8"), sandbox, { filename: CORNER_UX });
-    return { window, frappe, formHandlers, dialogs, rowsByName, setValueGates, root };
+    return {
+        window,
+        frappe,
+        formHandlers,
+        dialogs,
+        rowsByName,
+        setValueGates,
+        setValueCalls,
+        handlerSnapshots,
+        root,
+        sandbox,
+    };
 }
 
 function cornerRow(name, overrides = {}) {
@@ -206,6 +234,39 @@ async function drainSetValues(gates, expected) {
     }
 }
 
+function edgeDraft(overrides = {}) {
+    return {
+        edge_width_top: 0,
+        edge_width_bottom: 0,
+        edge_long_right: 0,
+        edge_long_left: 0,
+        edge_break: 0,
+        edge_break_only: 0,
+        clipped_corner_position: "Top Right",
+        piece_type: "Clipped Corner",
+        ...overrides,
+    };
+}
+
+async function applyAndSave(env, frm, row, draft) {
+    env.window.AlmdinaClippedCornerEditor.open(frm, row);
+    const dialog = env.dialogs.at(-1);
+    env.root._cornerEdgeDraft = draft;
+    const gateStart = env.setValueGates.length;
+    const applyResult = dialog.options.primary_action();
+    const saveBarrier = env.formHandlers["Door Cutting Order"].before_save(frm);
+    await waitForGate(env.setValueGates, gateStart);
+    let saveSettled = false;
+    saveBarrier.then(() => { saveSettled = true; });
+    await Promise.resolve();
+    assert.equal(saveSettled, false, "Save must wait for the atomic corner commit");
+    env.setValueGates[gateStart]();
+    await applyResult;
+    await saveBarrier;
+    const backendPayload = JSON.parse(JSON.stringify(frm.doc));
+    return JSON.parse(JSON.stringify(backendPayload.pieces[0]));
+}
+
 async function run() {
     const env = createSandbox();
     const beforeSave = env.formHandlers["Door Cutting Order"]?.before_save;
@@ -237,16 +298,11 @@ async function run() {
     env.rowsByName[persisted.name] = persisted;
     frm.doc.pieces = [persisted];
 
-    env.root._cornerEdgeDraft = {
-        edge_width_top: 0,
+    env.root._cornerEdgeDraft = edgeDraft({
         edge_width_bottom: 1,
-        edge_long_right: 0,
         edge_long_left: 1,
         edge_break: 1,
-        edge_break_only: 0,
-        clipped_corner_position: "Top Right",
-        piece_type: "Clipped Corner",
-    };
+    });
 
     const applyResult = env.dialogs[0].options.primary_action();
     assert.ok(applyResult && typeof applyResult.then === "function", "Apply must expose its completion");
@@ -256,10 +312,17 @@ async function run() {
     await Promise.resolve();
     assert.equal(saveBarrierSettled, false, "Save must wait while corner fields are still being applied");
 
-    await drainSetValues(env.setValueGates, 9);
+    await drainSetValues(env.setValueGates, 1);
     await applyResult;
     await saveBarrier;
 
+    assert.equal(env.setValueCalls.length, 1, "Apply must use one atomic model update");
+    assert.equal(env.handlerSnapshots[0].edge_break, 1);
+    assert.equal(
+        env.handlerSnapshots[0].edge_break_only,
+        0,
+        "the first field handler must already see the final mutually-exclusive values"
+    );
     assert.equal(persisted.edge_break, 1);
     assert.equal(persisted.edge_break_only, 0);
     assert.equal(persisted.edge_width_bottom, 1);
@@ -272,6 +335,128 @@ async function run() {
     assert.equal(env.dialogs.length, 2);
     assert.equal(env.root._cornerEdgeDraft.edge_break, 1);
     assert.equal(env.root._cornerEdgeDraft.edge_break_only, 0);
+
+    let reloaded = await applyAndSave(
+        env,
+        frm,
+        persisted,
+        edgeDraft({ edge_break: 0, edge_break_only: 0 })
+    );
+    assert.equal(reloaded.edge_break, 0, "full-path cancellation must survive reload");
+    assert.equal(reloaded.edge_break_only, 0);
+
+    reloaded = await applyAndSave(
+        env,
+        frm,
+        persisted,
+        edgeDraft({ edge_break_only: 1 })
+    );
+    assert.equal(reloaded.edge_break, 0);
+    assert.equal(reloaded.edge_break_only, 1, "break-only selection must survive reload");
+
+    reloaded = await applyAndSave(
+        env,
+        frm,
+        persisted,
+        edgeDraft({ edge_break: 0, edge_break_only: 0 })
+    );
+    assert.equal(reloaded.edge_break_only, 0, "break-only cancellation must preserve zero");
+
+    reloaded = await applyAndSave(
+        env,
+        frm,
+        persisted,
+        edgeDraft({ edge_break: 1 })
+    );
+    assert.equal(reloaded.edge_break, 1);
+    assert.equal(reloaded.edge_break_only, 0, "switching to full path must clear break-only");
+
+    reloaded = await applyAndSave(
+        env,
+        frm,
+        persisted,
+        edgeDraft({ edge_break_only: 1 })
+    );
+    assert.equal(reloaded.edge_break, 0, "switching to break-only must clear full path");
+    assert.equal(reloaded.edge_break_only, 1);
+
+    persisted.piece_type = "L-Shaped Corner";
+    reloaded = await applyAndSave(
+        env,
+        frm,
+        persisted,
+        edgeDraft({
+            piece_type: "L-Shaped Corner",
+            edge_width_top: 1,
+            edge_long_right: 1,
+            edge_break: 1,
+        })
+    );
+    assert.equal(reloaded.edge_break, 1, "L-shaped corner banding must survive reload");
+    assert.equal(reloaded.edge_break_only, 0);
+    assert.equal(reloaded.edge_width_top, 1, "L-shaped outer sides must stay independent");
+    assert.equal(reloaded.edge_long_right, 1);
+
+    persisted.piece_type = "Clipped Corner";
+    env.window.AlmdinaClippedCornerEditor.open(frm, persisted);
+    const rapidDialog = env.dialogs.at(-1);
+    const rapidGateStart = env.setValueGates.length;
+    env.root._cornerEdgeDraft = edgeDraft({ edge_break: 1 });
+    const firstRapid = rapidDialog.options.primary_action();
+    env.root._cornerEdgeDraft = edgeDraft({ edge_break_only: 1 });
+    const secondRapid = rapidDialog.options.primary_action();
+    const rapidSave = beforeSave(frm);
+    await waitForGate(env.setValueGates, rapidGateStart);
+    env.setValueGates[rapidGateStart]();
+    await waitForGate(env.setValueGates, rapidGateStart + 1);
+    env.setValueGates[rapidGateStart + 1]();
+    await Promise.all([firstRapid, secondRapid, rapidSave]);
+    const rapidReload = JSON.parse(JSON.stringify(frm.doc.pieces[0]));
+    assert.equal(rapidReload.edge_break, 0, "latest rapid Apply must win");
+    assert.equal(rapidReload.edge_break_only, 1);
+
+    const regular = cornerRow("regular-1", {
+        piece_type: "Regular",
+        edge_width_top: 1,
+        edge_long_right: 1,
+        edge_break: 1,
+        edge_break_only: 1,
+    });
+    env.window.AlmdinaClippedCornerGeometry.applyEdgeBreakPolicy(regular);
+    assert.equal(regular.edge_width_top, 1, "ordinary side banding must remain unchanged");
+    assert.equal(regular.edge_long_right, 1);
+    assert.equal(regular.edge_break, 0);
+    assert.equal(regular.edge_break_only, 0);
+
+    vm.runInContext(
+        fs.readFileSync(OPERATOR_UX, "utf8"),
+        env.sandbox,
+        { filename: OPERATOR_UX }
+    );
+    const fastEntry = env.window.AlmdinaDoorCuttingFastEntry;
+    const tableRow = cornerRow("table-corner", { edge_break: 1, edge_break_only: 0 });
+    let changed = fastEntry.applyCornerEdgeCheck(tableRow, "edge_break");
+    assert.ok(changed.includes("edge_break"));
+    assert.equal(tableRow.edge_break, 0, "table path must support cancelling full path");
+    assert.equal(tableRow.edge_break_only, 0);
+
+    tableRow.edge_break = 1;
+    tableRow.edge_break_only = 0;
+    changed = fastEntry.applyCornerEdgeCheck(tableRow, "edge_break_only");
+    assert.ok(changed.includes("edge_break"));
+    assert.ok(changed.includes("edge_break_only"));
+    assert.equal(tableRow.edge_break, 0, "table path must clear the opposite mode");
+    assert.equal(tableRow.edge_break_only, 1);
+
+    tableRow.edge_width_top = 1;
+    tableRow.edge_long_right = 1;
+    fastEntry.applyCornerEdgeCheck(tableRow, "edge_break_only");
+    assert.equal(
+        tableRow.edge_break,
+        0,
+        "turning break-only off must not reactivate the previous full path"
+    );
+    assert.equal(tableRow.edge_break_only, 0);
 }
 
 run().then(
