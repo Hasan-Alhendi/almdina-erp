@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 from types import SimpleNamespace
 
 from almdina_erp.tests.frappe_test_stub import install_if_unavailable
 
 install_if_unavailable()
 
+from almdina_erp.almdina_erp.services import dxf_import_service as dxf_service
 from almdina_erp.almdina_erp.services.dxf_import_service import (
     DxfImportError,
     _legacy_expected_piece_match,
@@ -847,6 +849,45 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
 
         self.assertIn("FORBIDDEN_ROTATION", exc_info.exception.codes)
         self.assertLess(elapsed, 5.0)
+
+    def test_offcut_layer_contour_is_counted_as_a_cut_during_missing_diagnostics(self) -> None:
+        order = self._order((300, 400, 0), (200, 250, 0))
+        order.trim_margin_mm = 0
+        order.board_width_cm = 100
+        order.board_length_cm = 100
+        assembled_inputs = []
+
+        def segments_for_layer(_rows, layer):
+            if layer == dxf_service.SHEET_OUTLINE_LAYER:
+                return ["sheet"]
+            if layer == dxf_service.OFFCUT_LAYER:
+                return ["offcut"]
+            return []
+
+        def assemble(segments, _tolerance):
+            assembled_inputs.append(list(segments))
+            return [{"points": []}] if segments == ["sheet"] else [_rect(300, 400)]
+
+        with (
+            patch.object(dxf_service.frappe, "get_site_path", return_value="/tmp/input.dxf"),
+            patch.object(dxf_service.os.path, "exists", return_value=True),
+            patch.object(dxf_service, "_read_normalized_geometry", return_value=([], [], [])),
+            patch.object(dxf_service, "_collect_extra_overlay_candidates", return_value=[]),
+            patch.object(dxf_service, "_segments_for_layer", side_effect=segments_for_layer),
+            patch.object(dxf_service, "assemble_contours", side_effect=assemble),
+            patch.object(dxf_service, "_validate_sheet_contours", return_value=[]),
+        ):
+            with self.assertRaises(DxfImportError) as exc_info:
+                dxf_service.parse_production_dxf("/files/input.dxf", order)
+
+        issue = exc_info.exception.issues[0]
+        self.assertIn("PIECE_MISSING", exc_info.exception.codes)
+        self.assertEqual(assembled_inputs, [["sheet"], ["offcut"]])
+        self.assertEqual(issue.params["actual_count"], 1)
+        self.assertEqual(issue.params["missing_count"], 1)
+        self.assertEqual(issue.params["extra_count"], 0)
+        self.assertEqual(issue.params["missing_sizes"], ["20 × 25 سم"])
+
 
 
 if __name__ == "__main__":
