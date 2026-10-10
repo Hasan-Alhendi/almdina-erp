@@ -7,6 +7,7 @@ Does not re-run validation or invent manufacturing decisions.
 from __future__ import annotations
 
 import html
+import json
 from dataclasses import dataclass
 from typing import Any, Iterable, Sequence
 
@@ -31,6 +32,7 @@ class PresentedDxfError:
     action: str
     code: str
     category: str
+    details: tuple[str, ...] = ()
 
 
 def format_cm(value: Any) -> str:
@@ -820,12 +822,45 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
 def group_issues(issues: Sequence[DxfValidationIssue]) -> list[list[DxfValidationIssue]]:
     """Group only when code, action template, and compatible targets align."""
     grouped: list[list[DxfValidationIssue]] = []
-    index_by_key: dict[tuple[str, str], int] = {}
+    index_by_key: dict[tuple[str, ...], int] = {}
     for item in sort_issues(list(issues)):
         presented = present_issue(item)
         # Group open/branched contours and identical dimension-less codes.
-        if item.code in {codes.CUT_OPEN, codes.CUT_BRANCHED, codes.CUT_SELF_INTERSECTION} and item.target.contour_no is not None:
-            key = (item.code, presented.action)
+        contour_group = (
+            item.code in {codes.CUT_OPEN, codes.CUT_BRANCHED, codes.CUT_SELF_INTERSECTION}
+            and item.target.contour_no is not None
+        )
+        piece_group = (
+            item.code in {
+                codes.FORBIDDEN_ROTATION,
+                codes.CUT_SIZE_MISMATCH,
+                codes.SPECIAL_SIZE_MISMATCH,
+                codes.PIECE_MISSING,
+                codes.EXTRA_CUT_PATH,
+            }
+            and item.target.kind in {
+                codes.TARGET_PIECE,
+                codes.TARGET_PIECE_COPY,
+                codes.TARGET_PIECE_PAIR,
+                codes.TARGET_CONTOUR,
+                codes.TARGET_CONTOUR_PAIR,
+            }
+        )
+        if contour_group or piece_group:
+            evidence = json.dumps(
+                dict(item.params or {}),
+                sort_keys=True,
+                ensure_ascii=False,
+                default=str,
+            )
+            key = (
+                item.code,
+                item.category,
+                item.target.kind,
+                presented.problem,
+                presented.action,
+                evidence,
+            )
             if key in index_by_key:
                 grouped[index_by_key[key]].append(item)
                 continue
@@ -870,7 +905,18 @@ def present_group(group: Sequence[DxfValidationIssue]) -> PresentedDxfError:
             group[0].code,
             group[0].category,
         )
-    return first
+    details = tuple(
+        f"{present_issue(item).target} — {present_issue(item).problem}"
+        for item in group
+    )
+    return PresentedDxfError(
+        f"{first.problem} (عدد المواضع المتأثرة: {len(group)}).",
+        f"{len(group)} مواضع متطابقة السبب.",
+        first.action,
+        first.code,
+        first.category,
+        details,
+    )
 
 
 def present_issues(issues: Iterable[DxfValidationIssue]) -> list[PresentedDxfError]:
@@ -913,24 +959,38 @@ def render_error_cards_html(
             )
         ]
     visible = presented[:max_cards]
-    remaining = len(presented) - len(visible)
-    cards: list[str] = []
-    for item in visible:
-        cards.append(
+    remaining_items = presented[max_cards:]
+
+    def render_card(item: PresentedDxfError) -> str:
+        details = ""
+        if item.details:
+            details = (
+                "<details class='alm-dxf-error-details' style='margin-top:6px;'>"
+                "<summary>عرض كل المواضع المتأثرة</summary><ul>"
+                + "".join(f"<li>{html.escape(detail)}</li>" for detail in item.details)
+                + "</ul></details>"
+            )
+        return (
             "<div class='alm-dxf-error-card' style='border:1px solid var(--border-color);border-radius:6px;"
             "padding:10px 12px;margin:0 0 10px;text-align:right;direction:rtl;'>"
             f"<div><strong>ما المشكلة؟</strong> {html.escape(item.problem)}</div>"
             f"<div style='margin-top:6px;'><strong>أين المشكلة؟</strong> {html.escape(item.target)}</div>"
             f"<div style='margin-top:6px;'><strong>ماذا أفعل؟</strong> {html.escape(_action_for_context(item.action, context))}</div>"
+            f"{details}"
             "</div>"
         )
-    extra = (
-        f"<p style='direction:rtl;text-align:right;'>وهناك {remaining} أخطاء إضافية. "
-        + ("صحح الأخطاء الظاهرة أولًا ثم أعد الرفع." if context == "upload" else "راجع الأخطاء الظاهرة أولًا ثم أعد التصدير.")
-        + "</p>"
-        if remaining > 0
-        else ""
-    )
+
+    cards = [render_card(item) for item in visible]
+    extra = ""
+    if remaining_items:
+        cards.extend(
+            [
+                "<details class='alm-dxf-error-overflow' style='margin:0 0 10px;'>"
+                f"<summary>عرض بقية الأخطاء ({len(remaining_items)})</summary>"
+                + "".join(render_card(item) for item in remaining_items)
+                + "</details>"
+            ]
+        )
     footer = (
         "صحح الرسم ثم أعد رفع الملف. لم يتم استبدال خطة DXF الحالية في الطلب."
         if context == "upload"
@@ -938,7 +998,7 @@ def render_error_cards_html(
     )
     return (
         "<div class='alm-dxf-error-dialog' style='direction:rtl;text-align:right;'>"
-        f"{''.join(cards)}{extra}"
+        f"{''.join(cards)}"
         f"<p>{footer}</p>"
         "</div>"
     )

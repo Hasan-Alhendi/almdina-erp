@@ -25,6 +25,7 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
 from almdina_erp.almdina_erp.domain.cutting.dxf_topology import DxfTopologyError
 from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import (
     present_issue,
+    present_issues,
     present_target,
     render_error_cards_html,
 )
@@ -242,6 +243,47 @@ def test_error_cards_keep_three_arabic_questions_once_and_in_order():
         positions = [html.index(heading) for heading in headings]
         assert positions == sorted(positions)
         assert "direction:rtl" in html
+
+
+def test_matching_piece_errors_group_without_losing_target_evidence():
+    params = {
+        "actual_width_cm": 28.5,
+        "actual_height_cm": 59.2,
+        "expected_width_cm": 59.2,
+        "expected_height_cm": 28.5,
+    }
+    grouped = present_issues(
+        [
+            issue(FORBIDDEN_ROTATION, "DIMENSIONS", target=piece_target(source_piece_no=n), params=params)
+            for n in (1, 2, 3)
+        ]
+    )
+
+    assert len(grouped) == 1
+    assert "3" in grouped[0].problem
+    assert len(grouped[0].details) == 3
+    assert all(f"الدرفة {n}" in detail for n, detail in enumerate(grouped[0].details, start=1))
+
+    html = render_error_cards_html(
+        [
+            issue(FORBIDDEN_ROTATION, "DIMENSIONS", target=piece_target(source_piece_no=n), params=params)
+            for n in (1, 2, 3)
+        ]
+    )
+    assert "عرض كل المواضع المتأثرة" in html
+    assert all(f"الدرفة {n}" in html for n in (1, 2, 3))
+
+
+def test_error_dialog_expands_all_issues_beyond_initial_ten():
+    issues = [
+        issue("LEGACY_MESSAGE", "WORKFLOW", params={"message": f"حالة {index}"})
+        for index in range(12)
+    ]
+
+    html = render_error_cards_html(issues)
+
+    assert "عرض بقية الأخطاء (2)" in html
+    assert all(f"حالة {index}" in html for index in range(12))
 
 
 def test_contour_dimensions_and_bounds_are_never_presented_as_a_door():
