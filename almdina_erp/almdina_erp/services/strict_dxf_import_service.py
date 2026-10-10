@@ -522,6 +522,11 @@ def _apply_strict_dimension_contract(
                 )
                 if error:
                     issues.append(error)
+                    # A topology-owned expected index proves which persisted
+                    # copy is present even when its dimensions are rejected.
+                    # Consume that copy so the residual inventory reports only
+                    # genuinely unmatched expected pieces.
+                    unmatched.pop(topology_index)
                     continue
                 unmatched.pop(topology_index)
                 _apply_piece_contract_metadata(
