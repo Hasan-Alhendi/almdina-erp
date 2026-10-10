@@ -154,6 +154,57 @@ geometry.toggleEdgeSelection(mutuallyExclusive, "edge_break_only");
 assert.equal(mutuallyExclusive.edge_break, 0);
 assert.equal(mutuallyExclusive.edge_break_only, 1);
 
+const editableCorner = {
+    ...piece,
+    edge_width_top: 0,
+    edge_long_right: 0,
+    edge_break: 0,
+    edge_break_only: 0,
+};
+geometry.toggleEdgeSelection(editableCorner, "edge_break_only");
+assert.equal(editableCorner.edge_break_only, 1, "Break-only can be added after creating the piece");
+geometry.toggleEdgeSelection(editableCorner, "edge_break_only");
+assert.equal(editableCorner.edge_break_only, 0, "Break-only can be removed after creating the piece");
+geometry.toggleEdgeSelection(editableCorner, "edge_break");
+assert.equal(editableCorner.edge_break, 1, "Full path can be added after creating the piece");
+geometry.toggleEdgeSelection(editableCorner, "edge_break");
+assert.equal(editableCorner.edge_break, 0, "Full path can be removed after creating the piece");
+editableCorner.edge_break_only = 1;
+geometry.toggleEdgeSelection(editableCorner, "edge_break");
+assert.equal(editableCorner.edge_break, 1);
+assert.equal(editableCorner.edge_break_only, 0, "Break-only can switch to full path");
+geometry.toggleEdgeSelection(editableCorner, "edge_break_only");
+assert.equal(editableCorner.edge_break, 0);
+assert.equal(editableCorner.edge_break_only, 1, "Full path can switch to break-only");
+
+const fullPathUpdates = window.AlmdinaClippedCornerEditor.cornerValueUpdates(
+    { position: "Top Right", cutWidth: 20, cutLength: 40 },
+    { ...editableCorner, edge_break: 1, edge_break_only: 0 }
+);
+assert.deepEqual(
+    fullPathUpdates.slice(-2),
+    [["edge_break_only", 0], ["edge_break", 1]],
+    "Apply must clear break-only before persisting the full path"
+);
+const reopenedCorner = {
+    ...piece,
+    ...Object.fromEntries(fullPathUpdates),
+};
+geometry.applyEdgeBreakPolicy(reopenedCorner);
+assert.equal(reopenedCorner.edge_break, 1, "Reopening must preserve the saved full path");
+assert.equal(reopenedCorner.edge_break_only, 0);
+
+const editableL = {
+    ...piece,
+    piece_type: "L-Shaped Corner",
+    edge_break: 0,
+    edge_break_only: 0,
+};
+geometry.toggleEdgeSelection(editableL, "edge_break");
+assert.equal(editableL.edge_break, 1, "L corner banding can be added after creation");
+geometry.toggleEdgeSelection(editableL, "edge_break");
+assert.equal(editableL.edge_break, 0, "L corner banding can be removed after creation");
+
 const breakOnlyWithOuterSides = {
     ...piece,
     edge_width_top: 1,
@@ -188,6 +239,8 @@ const breakMarkup = geometry.edgeBandSvgMarkup(
 );
 assert.match(breakMarkup, /dco-edge-break-svg/);
 assert.match(breakMarkup, /polyline/);
+assert.match(breakMarkup, /stroke-linecap="round"/);
+assert.match(breakMarkup, /stroke-linejoin="round"/);
 assert.match(
     geometry.edgeSelectionSummary({
         piece_type: "Clipped Corner",
@@ -202,6 +255,64 @@ assert.match(
         edge_width_bottom: 1,
     }),
     /أسفل/
+);
+
+const diagonalVertices = {
+    "Top Right": [1, 2],
+    "Top Left": [0, 4],
+    "Bottom Right": [2, 3],
+    "Bottom Left": [4, 3],
+};
+for (const position of ["Top Right", "Top Left", "Bottom Right", "Bottom Left"]) {
+    const corner = { ...piece, clipped_corner_position: position };
+    const paths = geometry.clippedEdgePaths(corner, 50, 100);
+    assert.ok(Math.abs(paths.top[0][1] - paths.top[1][1]) < 1e-7, `${position} top band must stay horizontal`);
+    assert.ok(Math.abs(paths.bottom[0][1] - paths.bottom[1][1]) < 1e-7, `${position} bottom band must stay horizontal`);
+    assert.ok(Math.abs(paths.left[0][0] - paths.left[1][0]) < 1e-7, `${position} left band must stay vertical`);
+    assert.ok(Math.abs(paths.right[0][0] - paths.right[1][0]) < 1e-7, `${position} right band must stay vertical`);
+    assert.deepEqual(
+        paths.breakOnly,
+        paths.break.slice(1, 3),
+        `${position} break-only and full path must share the same inset diagonal`
+    );
+    const diagonal = paths.breakOnly;
+    const visualDx = diagonal[1][0] - diagonal[0][0];
+    const visualDy = diagonal[1][1] - diagonal[0][1];
+    const boundary = geometry.points(corner, 50, 100);
+    const [startIndex, endIndex] = diagonalVertices[position];
+    const sourceDx = boundary[endIndex][0] - boundary[startIndex][0];
+    const sourceDy = boundary[endIndex][1] - boundary[startIndex][1];
+    assert.ok(
+        Math.abs(visualDx * sourceDy - visualDy * sourceDx) < 1e-7,
+        `${position} diagonal band must remain parallel to the clipped edge`
+    );
+    const insetDistance = Math.abs(
+        sourceDy * (diagonal[0][0] - boundary[startIndex][0])
+        - sourceDx * (diagonal[0][1] - boundary[startIndex][1])
+    ) / Math.hypot(sourceDx, sourceDy);
+    assert.ok(Math.abs(insetDistance - 1.75) < 1e-7, `${position} diagonal inset must match the outer-side inset`);
+}
+
+const shallowCorner = {
+    ...piece,
+    width_cm: 100,
+    length_cm: 100,
+    clipped_corner_width_cm: 90,
+    clipped_corner_length_cm: 1,
+};
+const shallowBoundary = geometry.points(shallowCorner, 100, 100);
+const shallowPaths = geometry.clippedEdgePaths(shallowCorner, 100, 100);
+const shallowSourceDx = shallowBoundary[2][0] - shallowBoundary[1][0];
+const shallowSourceDy = shallowBoundary[2][1] - shallowBoundary[1][1];
+const shallowVisualDx = shallowPaths.breakOnly[1][0] - shallowPaths.breakOnly[0][0];
+const shallowVisualDy = shallowPaths.breakOnly[1][1] - shallowPaths.breakOnly[0][1];
+assert.ok(
+    Math.abs(shallowVisualDx * shallowSourceDy - shallowVisualDy * shallowSourceDx) < 1e-7,
+    "A shallow clipped edge must use a bounded bevel without tilting its banding line"
+);
+assert.ok(
+    shallowPaths.break.flat().every(value => value >= 0 && value <= 100),
+    "A shallow-corner banding path must stay inside the piece viewport"
 );
 
 const planPiece = {

@@ -127,9 +127,10 @@ def test_fast_measurements_offer_one_click_corner_settings_with_live_visual_prev
     assert "dco-corner-position-grid" in editor
     assert "data-corner-preview" in editor
     assert "edgeBandSvgMarkup" in editor
+    assert "function cornerValueUpdates" in editor
     assert "function persistCornerValues" in editor
-    persistence = editor.split("function persistCornerValues", 1)[1]
-    persistence = persistence.split("function installStyles", 1)[0]
+    persistence = editor.split("function cornerValueUpdates", 1)[1]
+    persistence = persistence.split("function persistCornerValues", 1)[0]
     assert persistence.index('updates.push(["edge_break_only", 0], ["edge_break", 1])') < persistence.index(
         'updates.push(["edge_break", 0], ["edge_break_only", 1])'
     )

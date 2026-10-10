@@ -251,27 +251,84 @@
         return arabic ? "قشاط مسار الزاوية الكامل" : "Full corner path";
     }
 
-    function insetPoint(point, centerX, centerY, amount) {
-        const dx = centerX - point[0];
-        const dy = centerY - point[1];
+    function offsetBoundaryLine(start, end, amount, orientation) {
+        const dx = end[0] - start[0];
+        const dy = end[1] - start[1];
         const length = Math.hypot(dx, dy) || 1;
-        return [point[0] + (dx / length) * amount, point[1] + (dy / length) * amount];
-    }
-
-    function insetPath(path, width, height, amount) {
-        const centerX = width / 2;
-        const centerY = height / 2;
-        return (path || []).map((point) => insetPoint(point, centerX, centerY, amount));
-    }
-
-    function insetLBreakPath(position, width, height, cutX, cutY, amount) {
-        const paths = {
-            "Top Right": [[width - cutX - amount, amount], [width - cutX - amount, cutY + amount], [width - amount, cutY + amount]],
-            "Top Left": [[cutX + amount, amount], [cutX + amount, cutY + amount], [amount, cutY + amount]],
-            "Bottom Right": [[width - amount, height - cutY - amount], [width - cutX - amount, height - cutY - amount], [width - cutX - amount, height - amount]],
-            "Bottom Left": [[amount, height - cutY - amount], [cutX + amount, height - cutY - amount], [cutX + amount, height - amount]],
+        const normalX = orientation * -dy / length * amount;
+        const normalY = orientation * dx / length * amount;
+        return {
+            start: [start[0] + normalX, start[1] + normalY],
+            end: [end[0] + normalX, end[1] + normalY],
         };
-        return paths[position] || paths[DEFAULT_POSITION];
+    }
+
+    function lineIntersection(first, second) {
+        const x1 = first.start[0];
+        const y1 = first.start[1];
+        const x2 = first.end[0];
+        const y2 = first.end[1];
+        const x3 = second.start[0];
+        const y3 = second.start[1];
+        const x4 = second.end[0];
+        const y4 = second.end[1];
+        const denominator = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+        if (Math.abs(denominator) < 1e-9) return null;
+        const firstCross = x1 * y2 - y1 * x2;
+        const secondCross = x3 * y4 - y3 * x4;
+        return [
+            (firstCross * (x3 - x4) - (x1 - x2) * secondCross) / denominator,
+            (firstCross * (y3 - y4) - (y1 - y2) * secondCross) / denominator,
+        ];
+    }
+
+    function insetBoundary(boundary, amount) {
+        const polygon = boundary || [];
+        if (polygon.length < 3) return polygon.map(point => [...point]);
+        const signedArea = polygon.reduce((total, point, index) => {
+            const next = polygon[(index + 1) % polygon.length];
+            return total + point[0] * next[1] - next[0] * point[1];
+        }, 0);
+        // Screen coordinates make clockwise polygons positive. Their interior
+        // lies to the right of every directed boundary edge.
+        const orientation = signedArea >= 0 ? 1 : -1;
+        const lines = polygon.map((point, index) => offsetBoundaryLine(
+            point,
+            polygon[(index + 1) % polygon.length],
+            amount,
+            orientation
+        ));
+        const maxMiter = amount * 6;
+        return polygon.map((point, index) => {
+            const previous = lines[(index + lines.length - 1) % lines.length];
+            const next = lines[index];
+            const intersection = lineIntersection(previous, next);
+            if (intersection && Math.hypot(intersection[0] - point[0], intersection[1] - point[1]) <= maxMiter) {
+                return { miter: intersection, incoming: intersection, outgoing: intersection };
+            }
+            // Extremely shallow corners use a bevel instead of an unbounded
+            // miter. Both points still lie on their exact parallel edge.
+            return { miter: null, incoming: previous.end, outgoing: next.start };
+        });
+    }
+
+    function insetBoundaryPath(path, boundary, inset) {
+        const indices = (path || []).map((point) => boundary.findIndex(
+            candidate => Math.abs(candidate[0] - point[0]) < 1e-7
+                && Math.abs(candidate[1] - point[1]) < 1e-7
+        ));
+        if (indices.some(index => index < 0)) return (path || []).map(point => [...point]);
+        const forward = indices.length < 2
+            || (indices[1] - indices[0] + boundary.length) % boundary.length === 1;
+        return indices.flatMap((index, pathIndex) => {
+            const join = inset[index];
+            if (join.miter) return [join.miter];
+            if (pathIndex === 0) return [forward ? join.outgoing : join.incoming];
+            if (pathIndex === indices.length - 1) return [forward ? join.incoming : join.outgoing];
+            return forward
+                ? [join.incoming, join.outgoing]
+                : [join.outgoing, join.incoming];
+        });
     }
 
     function clippedEdgePaths(piece, viewportWidth = 100, viewportHeight = 100) {
@@ -283,6 +340,7 @@
             left: null,
             right: null,
             break: null,
+            breakOnly: null,
         };
         if (!isCornerCut(piece) || !width || !height) return empty;
 
@@ -352,19 +410,19 @@
                 break: [[0, height - cutY], [cutX, height - cutY], [cutX, height]],
             },
         };
-        const isL = cutStyle(piece) === "L";
-        const byPosition = isL ? lByPosition : diagonalByPosition;
+        const byPosition = cutStyle(piece) === "L" ? lByPosition : diagonalByPosition;
         const source = byPosition[config.position] || byPosition[DEFAULT_POSITION];
+        const boundary = points(piece, width, height);
+        const inset = insetBoundary(boundary, amount);
+        const insetPath = path => insetBoundaryPath(path, boundary, inset);
         return {
-            top: insetPath(source.top, width, height, amount),
-            bottom: insetPath(source.bottom, width, height, amount),
-            left: insetPath(source.left, width, height, amount),
-            right: insetPath(source.right, width, height, amount),
-            break: isL
-                ? insetLBreakPath(config.position, width, height, cutX, cutY, amount)
-                : insetPath(source.break, width, height, amount),
+            top: insetPath(source.top),
+            bottom: insetPath(source.bottom),
+            left: insetPath(source.left),
+            right: insetPath(source.right),
+            break: insetPath(source.break),
             breakOnly: isClipped(piece)
-                ? insetPath(source.break.slice(1, 3), width, height, amount)
+                ? insetPath(source.break.slice(1, 3))
                 : null,
         };
     }
@@ -385,7 +443,7 @@
             .join(" ");
         const polyline = (path, extraClass = "") => {
             if (inheritStroke) {
-                return `<polyline class="dco-edge-line-svg ${extraClass}" fill="none" vector-effect="non-scaling-stroke" points="${toPoints(path)}"/>`;
+                return `<polyline class="dco-edge-line-svg ${extraClass}" fill="none" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="${toPoints(path)}"/>`;
             }
             return `<polyline class="dco-edge-line-svg ${extraClass}" fill="none" stroke="${color}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="${toPoints(path)}"/>`;
         };
@@ -577,7 +635,7 @@
         });
     }
 
-    function persistCornerValues(row, config, edgeDraft) {
+    function cornerValueUpdates(config, edgeDraft) {
         const updates = [
             ["clipped_corner_position", config.position],
             ["clipped_corner_width_cm", rounded(config.cutWidth)],
@@ -597,7 +655,11 @@
         } else {
             updates.push(["edge_break", 0], ["edge_break_only", 0]);
         }
-        return updates.reduce(
+        return updates;
+    }
+
+    function persistCornerValues(row, config, edgeDraft) {
+        return cornerValueUpdates(config, edgeDraft).reduce(
             (pending, [fieldname, value]) => pending.then(
                 () => frappe.model.set_value(row.doctype, row.name, fieldname, value)
             ),
@@ -998,5 +1060,10 @@
         positionLabel,
         summary,
     });
-    window.AlmdinaClippedCornerEditor = Object.freeze({ open, view, prepare: prepareRow });
+    window.AlmdinaClippedCornerEditor = Object.freeze({
+        open,
+        view,
+        prepare: prepareRow,
+        cornerValueUpdates,
+    });
 })();

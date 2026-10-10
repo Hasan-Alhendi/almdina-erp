@@ -26,7 +26,6 @@ from almdina_erp.almdina_erp.domain.orders.extra_addons import (
     calculate_extra_addon_pricing,
 )
 from almdina_erp.almdina_erp.domain.orders.piece_policy import (
-    L_SHAPED_CORNER_TYPE,
     break_adjacent_sides,
     is_corner_cut,
 )
@@ -38,18 +37,13 @@ from .edge_profile_repository import FrappeEdgeProfileRepository
 def _corner_side_dimension_overrides(row: Any) -> dict[str, float]:
     """Use the actual remaining length for selected corner-adjacent outer sides.
 
-    L-shaped full-path banding and clipped-corner break-only banding keep outer
-    sides independently selectable.  The two sides touching the removed corner
-    therefore use their physical remnants rather than the bounding-box length.
+    For both corner geometries, the two outer sides touching the removed corner
+    use their physical remnants whenever selected. This is independent of the
+    corner-band mode; full-path normalization may simply clear those side flags.
     """
 
     piece_type = str(row.piece_type or "")
-    applies = (
-        piece_type == L_SHAPED_CORNER_TYPE and cint(row.edge_break)
-    ) or (
-        piece_type == "Clipped Corner" and cint(getattr(row, "edge_break_only", 0))
-    )
-    if not applies:
+    if not is_corner_cut(piece_type):
         return {}
 
     adjacent_sides = break_adjacent_sides(row.clipped_corner_position)
