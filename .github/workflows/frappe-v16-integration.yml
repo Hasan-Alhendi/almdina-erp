@@ -267,7 +267,7 @@ jobs:
             tail -n 120 "$RUNNER_TEMP/desk-bench.log"
             exit 1
           fi
-          ./env/bin/python -m pytest -q apps/almdina_erp/almdina_erp/tests/browser/test_dco_frappe_desk_edit_recovery.py
+          ./env/bin/python -m pytest -q apps/almdina_erp/almdina_erp/ci/test_dco_frappe_desk_recovery.py
 
       - name: Collect integration diagnostics
         if: failure()
