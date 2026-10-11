@@ -699,3 +699,380 @@ def test_chromium_presentation_checkpoints_direct_dco_mutations_and_reports_stat
         assert "تعذر حفظ نسخة الاسترداد محليًا" in failure["text"]
     finally:
         context.close()
+
+
+def test_chromium_new_recovery_discovery_hydration_and_pending_reconciliation_ui(
+    chromium: Browser, local_origin: str
+) -> None:
+    """Exercise real browser storage/presentation; the Frappe port is a test double."""
+    context = chromium.new_context()
+    page = recovery_page(context, local_origin)
+    try:
+        seeded = page.evaluate(
+            """async () => {
+                const recovery = window.AlmdinaDcoRecovery;
+                const repo = recovery.LocalDraftRepository.create();
+                const assets = recovery.LocalAssetRepository.create();
+                const identity = { site: location.host, user: "new-flow-user" };
+                const makePieces = (count, prefix) => Array.from({ length: count }, (_, index) => ({
+                    piece_type: index === count - 1 ? "Special" : "Liner",
+                    qty: index === 0 ? 2 : 1,
+                    width_cm: 60,
+                    length_cm: 200,
+                    notes: index === 0 ? "ملاحظة طويلة ".repeat(300) : "",
+                    extra_liner: index === 0 ? 1 : 0,
+                    edge_long_left: index === 0 ? 1 : 0,
+                    special_shape_drawing_json: index === count - 1
+                        ? JSON.stringify({ elements: [{ id: prefix + "-drawing" }] }) : "",
+                    special_shape_geometry_json: index === count - 1
+                        ? JSON.stringify({ path: "M0 0 L1200 400 Z" }) : "",
+                }));
+                const result = {};
+                for (const [draftId, customer, count] of [
+                    ["90000000-0000-4000-8000-000000000001", "مسودة للحذف", 2],
+                    ["90000000-0000-4000-8000-000000000002", "مسودة للاستكمال", 200],
+                ]) {
+                    const dco = recovery.Projection.createDcoInput({
+                        customer,
+                        board_description: "MDF 18mm",
+                        edge_color: "أبيض",
+                        order_notes: "ملاحظة رأس طويلة ".repeat(500),
+                        pieces: makePieces(count, draftId),
+                    }, { pieceKey: (_, index) => draftId + "-piece-" + index });
+                    const payload = recovery.Projection.createPayload({ dco, dirtyScope: "DCO" });
+                    const stored = await repo.write({
+                        ...identity,
+                        target_doctype: "Door Cutting Order",
+                        draft_id: draftId,
+                        tab_session_id: "seed-tab",
+                        mode: "NEW",
+                        dirty_scope: "DCO",
+                        recovery_revision: 1,
+                        expected_recovery_revision: 0,
+                        payload,
+                        asset_refs: [draftId + "-asset"],
+                    });
+                    if (!stored.ok) throw new Error("seed draft: " + stored.error.code);
+                    const asset = await assets.write(
+                        { ...identity, draft_id: draftId },
+                        draftId + "-asset",
+                        new Blob([draftId + " drawing bytes"], { type: "application/json" }),
+                        { file_name: draftId + ".json" },
+                    );
+                    if (!asset.ok) throw new Error("seed asset: " + asset.error.code);
+                    result[draftId] = { bytes: new TextEncoder().encode(
+                        recovery.Projection.serialize(payload)
+                    ).byteLength, rows: count };
+                }
+                return result;
+            }"""
+        )
+        assert seeded["90000000-0000-4000-8000-000000000002"]["rows"] == 200
+        assert seeded["90000000-0000-4000-8000-000000000002"]["bytes"] > 60_000
+
+        page.evaluate(
+            """() => {
+                window.__formHandlers = {};
+                window.__confirmAction = null;
+                window.__routes = [];
+                window.AlmdinaUi = {
+                    button({ label, className = "", attrs = {} }) {
+                        const attributes = Object.entries(attrs)
+                            .map(([key, value]) => `${key}="${String(value)}"`).join(" ");
+                        return `<button type="button" class="${className}" ${attributes}>${label}</button>`;
+                    },
+                };
+                window.AlmdinaDocumentContext = {
+                    capture: (frm) => ({ identity: frm.doctype + "::" + frm.doc.name, generation: frm.generation }),
+                    isCurrent: (frm, token) => window.cur_frm === frm
+                        && token.generation === frm.generation
+                        && token.identity === frm.doctype + "::" + frm.doc.name,
+                    isSameDocument: (frm, token) => token.identity === frm.doctype + "::" + frm.doc.name,
+                    formIdentity: (frm) => frm.doctype + "::" + frm.doc.name,
+                    registerCleanup: () => true,
+                    scheduleFrame: (_frm, _key, callback) => callback(),
+                };
+                window.AlmdinaOrderRevisionUX = { isEditSessionActive: () => true };
+                window.frappe = {
+                    boot: { sitename: location.host },
+                    session: { user: "new-flow-user" },
+                    utils: { escape_html: (value) => String(value) },
+                    datetime: { str_to_user: (value) => value },
+                    validated: true,
+                    model: {
+                        clear_table: (doc, field) => { doc[field] = []; },
+                        add_child: (doc, _doctype, field) => {
+                            const row = { __islocal: 1 };
+                            (doc[field] ||= []).push(row);
+                            return row;
+                        },
+                    },
+                    ui: {
+                        form: { on: (doctype, handlers) => {
+                            window.__formHandlers[doctype] = {
+                                ...(window.__formHandlers[doctype] || {}), ...handlers,
+                            };
+                        } },
+                        Dialog: class {
+                            constructor(options) {
+                                this.wrapper = document.createElement("div");
+                                this.wrapper.className = "modal";
+                                this.wrapper.innerHTML = options.fields[0].options;
+                                this.$wrapper = { get: () => this.wrapper };
+                            }
+                            show() { document.body.appendChild(this.wrapper); }
+                            hide() { this.wrapper.remove(); }
+                        },
+                    },
+                    confirm: (_message, yes, no) => { window.__confirmAction = { yes, no }; },
+                    msgprint: (value) => { window.__lastMessage = value; },
+                    show_alert: () => {},
+                    set_route: (...route) => { window.__routes.push(route); },
+                };
+            }"""
+        )
+        page.add_script_tag(path=str(RECOVERY / "application/door_cutting_order_new_recovery.js"))
+        page.add_script_tag(path=str(RECOVERY / "infrastructure/door_cutting_order_recovery_api.js"))
+        page.add_script_tag(path=str(RECOVERY / "presentation/door_cutting_order_local_checkpoint.js"))
+        page.evaluate(
+            """async () => {
+                const wrapper = document.createElement("div");
+                wrapper.className = "form-layout";
+                document.body.appendChild(wrapper);
+                const frm = {
+                    doctype: "Door Cutting Order",
+                    generation: 1,
+                    doc: { doctype: "Door Cutting Order", name: "__new__", pieces: [] },
+                    wrapper,
+                    is_new: () => frm.doc.name === "__new__",
+                    save: async () => {},
+                    refresh_fields: () => {},
+                    refresh_field: () => {},
+                    dirty: () => { frm.isDirty = true; },
+                };
+                window.cur_frm = frm;
+                window.__newForm = frm;
+                await window.__formHandlers["Door Cutting Order"].onload(frm);
+            }"""
+        )
+        assert page.locator(".dco-recovery-card").count() == 2
+        assert page.get_by_text("مسودة للاستكمال").count() == 1
+        page.evaluate(
+            """async () => {
+                window.frappe.validated = true;
+                await window.__formHandlers["Door Cutting Order"].before_save(window.__newForm);
+            }"""
+        )
+        assert page.evaluate("window.frappe.validated") is False
+        assert page.locator(".dco-recovery-card").count() == 2
+        page.evaluate("window.frappe.validated = true")
+
+        page.locator('[data-draft-id="90000000-0000-4000-8000-000000000001"] [data-recovery-action="delete"]').click()
+        page.evaluate("window.__confirmAction.no()")
+        assert page.locator('[data-draft-id="90000000-0000-4000-8000-000000000001"]').count() == 1
+        assert page.locator(".dco-recovery-card").count() == 2
+
+        page.locator('[data-draft-id="90000000-0000-4000-8000-000000000001"] [data-recovery-action="delete"]').click()
+        page.evaluate("window.__confirmAction.yes()")
+        page.wait_for_function("document.querySelectorAll('.dco-recovery-card').length === 1", timeout=5000)
+        deleted = page.evaluate(
+            """async () => {
+                const recovery = window.AlmdinaDcoRecovery;
+                const drafts = recovery.LocalDraftRepository.create();
+                const assets = recovery.LocalAssetRepository.create();
+                const identity = { site: location.host, user: "new-flow-user" };
+                const removedDraft = await drafts.read({ ...identity, draft_id: "90000000-0000-4000-8000-000000000001" });
+                const removedAsset = await assets.read(
+                    { ...identity, draft_id: "90000000-0000-4000-8000-000000000001" }, "90000000-0000-4000-8000-000000000001-asset"
+                );
+                const keptDraft = await drafts.read({ ...identity, draft_id: "90000000-0000-4000-8000-000000000002" });
+                const keptAsset = await assets.read(
+                    { ...identity, draft_id: "90000000-0000-4000-8000-000000000002" }, "90000000-0000-4000-8000-000000000002-asset"
+                );
+                return {
+                    removed: removedDraft.ok && removedDraft.value === null
+                        && removedAsset.ok && removedAsset.value === null,
+                    kept: keptDraft.ok && Boolean(keptDraft.value)
+                        && keptAsset.ok && Boolean(keptAsset.value),
+                };
+            }"""
+        )
+        assert deleted == {"removed": True, "kept": True}
+
+        page.locator('[data-draft-id="90000000-0000-4000-8000-000000000002"] [data-recovery-action="continue"]').click()
+        page.wait_for_function("!document.querySelector('.dco-recovery-card')", timeout=5000)
+        restored = page.evaluate(
+            """() => ({
+                name: window.__newForm.doc.name,
+                customer: window.__newForm.doc.customer,
+                count: window.__newForm.doc.pieces.length,
+                first: window.__newForm.doc.pieces[0],
+                last: window.__newForm.doc.pieces.at(-1),
+                dirty: window.__newForm.isDirty === true,
+            })"""
+        )
+        assert restored["name"] == "__new__"
+        assert restored["customer"] == "مسودة للاستكمال"
+        assert restored["count"] == 200
+        assert restored["first"]["piece_type"] == "Liner"
+        assert restored["first"]["extra_liner"] == 1
+        assert restored["last"]["piece_type"] == "Special"
+        assert restored["last"]["special_shape_geometry_json"] == '{"path":"M0 0 L1200 400 Z"}'
+        assert restored["dirty"] is True
+
+        checkpointed = page.evaluate(
+            """async () => {
+                const frm = window.__newForm;
+                frm.doc.pieces[0].qty = 3;
+                window.__formHandlers["Door Cutting Order Detail"].qty(frm);
+                const flushed = await window.AlmdinaDcoRecovery.LocalCheckpoint.flush(frm);
+                if (!flushed.ok) throw new Error("restored edit checkpoint failed");
+                const result = await window.AlmdinaDcoRecovery.LocalCheckpoint.repository().read({
+                    site: location.host,
+                    user: "new-flow-user",
+                    draft_id: "90000000-0000-4000-8000-000000000002",
+                });
+                return result.value.payload.dco.pieces[0];
+            }"""
+        )
+        assert checkpointed["piece_key"] == "90000000-0000-4000-8000-000000000002-piece-0"
+        assert checkpointed["qty"] == 3
+
+        # The explicit native Save gate persists the exact selected UUID before insert.
+        page.evaluate("window.frappe.validated = true")
+        page.evaluate(
+            """async () => window.__formHandlers["Door Cutting Order"].before_save(window.__newForm)"""
+        )
+        pending = page.evaluate(
+            """async () => {
+                const repo = window.AlmdinaDcoRecovery.LocalDraftRepository.create();
+                const record = await repo.read({
+                    site: location.host,
+                    user: "new-flow-user",
+                    draft_id: "90000000-0000-4000-8000-000000000002",
+                });
+                return {
+                    valid: window.frappe.validated,
+                    token: window.__newForm.doc.recovery_creation_token,
+                    state: window.__newForm.wrapper.querySelector(".dco-recovery-status")
+                        ?.dataset.recoveryState,
+                    recordState: record.value.official_save_state,
+                };
+            }"""
+        )
+        assert pending == {
+            "valid": True,
+            "token": "90000000-0000-4000-8000-000000000002",
+            "state": "OFFICIAL_SAVING",
+            "recordState": "PENDING_RECONCILIATION",
+        }
+        page.close()
+
+        # Reopen with a durable pending marker; only the reconciliation result
+        # can authorize local cleanup/navigation.
+        reopened = recovery_page(context, local_origin)
+        reopened.evaluate(
+            """() => {
+                window.__formHandlers = {};
+                window.__confirmAction = null;
+                window.__routes = [];
+                window.AlmdinaUi = { button: ({ label, attrs = {} }) => {
+                    const attributes = Object.entries(attrs).map(([key, value]) => `${key}="${value}"`).join(" ");
+                    return `<button type="button" ${attributes}>${label}</button>`;
+                } };
+                window.AlmdinaDocumentContext = {
+                    capture: (frm) => ({ identity: frm.doctype + "::" + frm.doc.name, generation: frm.generation }),
+                    isCurrent: (frm, token) => window.cur_frm === frm
+                        && token.generation === frm.generation
+                        && token.identity === frm.doctype + "::" + frm.doc.name,
+                    isSameDocument: (frm, token) => token.identity === frm.doctype + "::" + frm.doc.name,
+                    formIdentity: (frm) => frm.doctype + "::" + frm.doc.name,
+                    registerCleanup: () => true,
+                    scheduleFrame: (_frm, _key, callback) => callback(),
+                };
+                window.AlmdinaOrderRevisionUX = { isEditSessionActive: () => true };
+                window.frappe = {
+                    boot: { sitename: location.host }, session: { user: "new-flow-user" },
+                    utils: { escape_html: (value) => String(value) }, datetime: { str_to_user: (value) => value },
+                    validated: true, model: {
+                        clear_table: (doc, field) => { doc[field] = []; },
+                        add_child: (doc, _doctype, field) => { const row = {}; (doc[field] ||= []).push(row); return row; },
+                    }, ui: {
+                        form: { on: (doctype, handlers) => { window.__formHandlers[doctype] = {
+                            ...(window.__formHandlers[doctype] || {}), ...handlers,
+                        }; } },
+                        Dialog: class {
+                            constructor(options) { this.wrapper = document.createElement("div");
+                                this.wrapper.className = "modal"; this.wrapper.innerHTML = options.fields[0].options;
+                                this.$wrapper = { get: () => this.wrapper }; }
+                            show() { document.body.appendChild(this.wrapper); }
+                            hide() { this.wrapper.remove(); }
+                        },
+                    },
+                    confirm: (_message, yes, no) => { window.__confirmAction = { yes, no }; },
+                    msgprint: (value) => { window.__lastMessage = value; },
+                    show_alert: () => {}, set_route: (...route) => window.__routes.push(route),
+                };
+                window.__reconcileCalls = [];
+                window.AlmdinaDcoRecovery.ServerReconciliation = {
+                    reconcileNewCreation: async (token) => {
+                        window.__reconcileCalls.push(token);
+                        if (window.__recoveryOffline) throw new Error("reconciliation offline");
+                        return {
+                            status: token === "90000000-0000-4000-8000-000000000002" ? "CREATED" : "NOT_FOUND",
+                            door_cutting_order: "DCO-RECOVERED-1",
+                        };
+                    },
+                };
+            }"""
+        )
+        reopened.add_script_tag(path=str(RECOVERY / "application/door_cutting_order_new_recovery.js"))
+        reopened.add_script_tag(path=str(RECOVERY / "presentation/door_cutting_order_local_checkpoint.js"))
+        reopened.evaluate(
+            """async () => {
+                const wrapper = document.createElement("div"); wrapper.className = "form-layout";
+                document.body.appendChild(wrapper);
+                const frm = { doctype: "Door Cutting Order", generation: 2,
+                    doc: { doctype: "Door Cutting Order", name: "__new__", pieces: [] }, wrapper,
+                    is_new: () => frm.doc.name === "__new__", save: async () => {},
+                    refresh_fields: () => {}, refresh_field: () => {}, dirty: () => {}, };
+                window.cur_frm = frm; window.__newForm = frm;
+                await window.__formHandlers["Door Cutting Order"].onload(frm);
+            }"""
+        )
+        reopened.wait_for_function("document.querySelectorAll('.dco-recovery-card').length === 1", timeout=5000)
+        reopened.evaluate("window.__recoveryOffline = true")
+        reopened.locator('[data-recovery-action="continue"]').click()
+        reopened.wait_for_function("window.__lastMessage && document.querySelector('.dco-recovery-card button:not([disabled])')", timeout=5000)
+        unavailable = reopened.evaluate(
+            """async () => ({
+                routeCount: window.__routes.length,
+                dialogVisible: Boolean(document.querySelector('.dco-recovery-card')),
+                record: await window.AlmdinaDcoRecovery.LocalCheckpoint.repository().read({
+                    site: location.host,
+                    user: "new-flow-user",
+                    draft_id: "90000000-0000-4000-8000-000000000002",
+                }),
+            })"""
+        )
+        assert unavailable["routeCount"] == 0
+        assert unavailable["dialogVisible"] is True
+        assert unavailable["record"]["value"]["official_save_state"] == "PENDING_RECONCILIATION"
+        reopened.evaluate("window.__recoveryOffline = false")
+        reopened.locator('[data-recovery-action="continue"]').click()
+        reopened.wait_for_function("window.__routes.length === 1", timeout=5000)
+        assert reopened.evaluate("window.__routes[0]") == ["Form", "Door Cutting Order", "DCO-RECOVERED-1"]
+        final = reopened.evaluate(
+            """async () => {
+                const repo = window.AlmdinaDcoRecovery.LocalDraftRepository.create();
+                const assets = window.AlmdinaDcoRecovery.LocalAssetRepository.create();
+                return {
+                    draft: await repo.read({ site: location.host, user: "new-flow-user", draft_id: "90000000-0000-4000-8000-000000000002" }),
+                    asset: await assets.read({ site: location.host, user: "new-flow-user", draft_id: "90000000-0000-4000-8000-000000000002" }, "90000000-0000-4000-8000-000000000002-asset"),
+                };
+            }"""
+        )
+        assert final["draft"]["value"] is None
+        assert final["asset"]["value"] is None
+    finally:
+        context.close()
