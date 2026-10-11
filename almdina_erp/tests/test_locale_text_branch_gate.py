@@ -14,6 +14,10 @@ PRINT_PRESENTER = (
     / "printing"
     / "door_cutting_order_document_print_presenter.js"
 )
+NOTES_UI = (
+    PUBLIC_JS / "notes" / "notes_panel.js",
+    PUBLIC_JS / "notes" / "notes_dco_list_integration.js",
+)
 NESTED_TRANSLATION = re.compile(r"\bt\s*\(\s*__\s*\(")
 STORED_VALUE_TRANSLATION = re.compile(r"(?:value|options)\s*:\s*(?:__|t)\s*\(")
 ARABIC_TEXT = re.compile(r"[\u0600-\u06FF]")
@@ -65,6 +69,15 @@ class TestActiveUiHasNoLanguageTextBranches(unittest.TestCase):
             visible = visible.replace("،", "")
             if ARABIC_TEXT.search(visible):
                 leftovers.append(f"{number}: {line.strip()}")
+        self.assertEqual(leftovers, [])
+
+    def test_notes_ui_has_no_direct_arabic_literals(self) -> None:
+        leftovers = []
+        for path in NOTES_UI:
+            relative = path.relative_to(ROOT)
+            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+                if ARABIC_TEXT.search(line):
+                    leftovers.append(f"{relative}:{number}: {line.strip()}")
         self.assertEqual(leftovers, [])
 
 

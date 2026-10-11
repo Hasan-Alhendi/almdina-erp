@@ -73,11 +73,28 @@
         return frappe.call({ method, args, freeze: false }).then(response => response && response.message);
     }
 
+    function operationFailedMessage() {
+        return __("The operation could not be completed. Try again.");
+    }
+
     function errorMessage(error) {
-        if (!error) return "تعذر تنفيذ العملية. حاول مرة أخرى.";
+        if (!error) return operationFailedMessage();
         if (error.message) return String(error.message);
-        if (error.exc_type || error.exception) return "تعذر تنفيذ العملية. حاول مرة أخرى.";
+        if (error.exc_type || error.exception) return operationFailedMessage();
         return String(error);
+    }
+
+    function userLabel() {
+        return __("User");
+    }
+
+    function visibleAuthor(note) {
+        return String(note && (note.author || note.author_user) || "").trim();
+    }
+
+    function authorInitial(note) {
+        const source = visibleAuthor(note) || userLabel();
+        return escapeHtml(Array.from(source)[0] || "");
     }
 
     function creationLabel(value) {
@@ -155,10 +172,10 @@
         return `
             <header class="almdina-notes-header">
                 <div>
-                    <h2 id="almdina-notes-title">الملاحظات</h2>
+                    <h2 id="almdina-notes-title">${escapeHtml(__("Notes", null, "notes-panel"))}</h2>
                     <span class="almdina-notes-order-id">${escapeHtml(state.orderName)}</span>
                 </div>
-                <button type="button" class="almdina-notes-icon-button" data-notes-action="close" aria-label="إغلاق الملاحظات" title="إغلاق">×</button>
+                <button type="button" class="almdina-notes-icon-button" data-notes-action="close" aria-label="${escapeHtml(__("Close notes"))}" title="${escapeHtml(__("Close"))}">×</button>
             </header>
         `;
     }
@@ -167,12 +184,12 @@
         const counts = contextCounts();
         const customerDisabled = !state.context || !state.context.customer;
         return `
-            <div class="almdina-notes-tabs" role="tablist" aria-label="سياق الملاحظات">
+            <div class="almdina-notes-tabs" role="tablist" aria-label="${escapeHtml(__("Note context"))}">
                 <button type="button" role="tab" class="almdina-notes-tab ${state.activeTab === "order" ? "is-active" : ""}" data-notes-action="tab" data-notes-tab="order" aria-selected="${state.activeTab === "order" ? "true" : "false"}">
-                    الطلب <span>${counts.order}</span>
+                    ${escapeHtml(__("Order"))} <span>${counts.order}</span>
                 </button>
                 <button type="button" role="tab" class="almdina-notes-tab ${state.activeTab === "customer" ? "is-active" : ""}" data-notes-action="tab" data-notes-tab="customer" aria-selected="${state.activeTab === "customer" ? "true" : "false"}" ${customerDisabled ? "disabled" : ""}>
-                    العميل <span>${counts.customer}</span>
+                    ${escapeHtml(__("Customer"))} <span>${counts.customer}</span>
                 </button>
             </div>
         `;
@@ -183,23 +200,23 @@
         const note = state.context.important_note;
         if (!note) {
             return `
-                <section class="almdina-notes-important is-empty" aria-label="الملاحظة المهمة الحالية">
-                    <div class="almdina-notes-section-label">الملاحظة المهمة الحالية</div>
-                    <div class="almdina-notes-important-empty">لا توجد ملاحظة مهمة حاليًا.</div>
+                <section class="almdina-notes-important is-empty" aria-label="${escapeHtml(__("Current important note"))}">
+                    <div class="almdina-notes-section-label">${escapeHtml(__("Current important note"))}</div>
+                    <div class="almdina-notes-important-empty">${escapeHtml(__("No important note is currently selected."))}</div>
                 </section>
             `;
         }
         return `
-            <section class="almdina-notes-important" aria-label="الملاحظة المهمة الحالية">
+            <section class="almdina-notes-important" aria-label="${escapeHtml(__("Current important note"))}">
                 <div class="almdina-notes-important-heading">
-                    <span class="almdina-notes-section-label">الملاحظة المهمة الحالية</span>
-                    ${canManageImportant() ? '<button type="button" class="almdina-notes-link-button" data-notes-action="clear-important" ' + (state.mutating ? "disabled" : "") + '>إلغاء التعيين</button>' : ""}
+                    <span class="almdina-notes-section-label">${escapeHtml(__("Current important note"))}</span>
+                    ${canManageImportant() ? '<button type="button" class="almdina-notes-link-button" data-notes-action="clear-important" ' + (state.mutating ? "disabled" : "") + '>' + escapeHtml(__("Clear selection", null, "note-action")) + '</button>' : ""}
                 </div>
                 <div class="almdina-notes-important-card">
                     <span class="almdina-notes-star" aria-hidden="true">★</span>
                     <div>
                         <strong>${escapeHtml(note.content || "")}</strong>
-                        <div class="almdina-notes-meta">${escapeHtml(note.author || "")} ${note.creation ? `• ${escapeHtml(creationLabel(note.creation))}` : ""}${note.is_edited ? " • تم التعديل" : ""}</div>
+                        <div class="almdina-notes-meta">${escapeHtml(note.author || "")} ${note.creation ? `• ${escapeHtml(creationLabel(note.creation))}` : ""}${note.is_edited ? ` • ${escapeHtml(__("Edited"))}` : ""}</div>
                     </div>
                 </div>
             </section>
@@ -210,19 +227,19 @@
         const value = state.editDraft || "";
         return `
             <div class="almdina-note-editor" data-comment-name="${escapeHtml(note.name || "")}">
-                <textarea data-notes-input="edit-content" maxlength="${MAX_LENGTH}" rows="3" aria-label="تعديل الملاحظة" ${state.mutating ? "disabled" : ""}>${escapeHtml(value)}</textarea>
+                <textarea data-notes-input="edit-content" maxlength="${MAX_LENGTH}" rows="3" aria-label="${escapeHtml(__("Edit note"))}" ${state.mutating ? "disabled" : ""}>${escapeHtml(value)}</textarea>
                 <div class="almdina-note-editor-meta">
                     <span class="almdina-note-edit-counter">${value.length} / ${MAX_LENGTH}</span>
                     <div class="almdina-note-editor-actions">
                         ${uiButton({
-                            label: "إلغاء",
+                            label: __("Cancel"),
                             variant: "secondary",
                             size: "btn-xs",
                             disabled: state.mutating,
                             attrs: { "data-notes-action": "cancel-edit" },
                         })}
                         ${uiButton({
-                            label: state.mutating ? "جارٍ الحفظ..." : "حفظ التعديل",
+                            label: state.mutating ? __("Saving...") : __("Save edit"),
                             variant: "primary",
                             size: "btn-xs",
                             disabled: state.mutating || !value.trim(),
@@ -239,27 +256,27 @@
         const important = note && note.is_important === true;
         const editing = String(state.editingComment || "") === String(note && note.name || "");
         const pinAction = canManageImportant() && !important
-            ? `<button type="button" class="almdina-note-pin" data-notes-action="pin" data-comment-name="${escapeHtml(note.name || "")}" ${state.mutating ? "disabled" : ""} aria-label="تعيين كملاحظة مهمة" title="تعيين كملاحظة مهمة">☆</button>`
+            ? `<button type="button" class="almdina-note-pin" data-notes-action="pin" data-comment-name="${escapeHtml(note.name || "")}" ${state.mutating ? "disabled" : ""} aria-label="${escapeHtml(__("Mark as important"))}" title="${escapeHtml(__("Mark as important"))}">☆</button>`
             : important
-                ? '<span class="almdina-note-pin is-important" aria-label="ملاحظة مهمة" title="ملاحظة مهمة">★</span>'
+                ? `<span class="almdina-note-pin is-important" aria-label="${escapeHtml(__("Important note"))}" title="${escapeHtml(__("Important note"))}">★</span>`
                 : "";
         const editAction = note && note.can_edit === true && !editing
-            ? `<button type="button" class="almdina-note-action" data-notes-action="edit" data-comment-name="${escapeHtml(note.name || "")}" ${state.mutating ? "disabled" : ""}>تعديل</button>`
+            ? `<button type="button" class="almdina-note-action" data-notes-action="edit" data-comment-name="${escapeHtml(note.name || "")}" ${state.mutating ? "disabled" : ""}>${escapeHtml(__("Edit", null, "note-action"))}</button>`
             : "";
         const deleteAction = note && note.can_delete === true && !editing
-            ? `<button type="button" class="almdina-note-action is-danger" data-notes-action="delete" data-comment-name="${escapeHtml(note.name || "")}" ${state.mutating ? "disabled" : ""}>حذف</button>`
+            ? `<button type="button" class="almdina-note-action is-danger" data-notes-action="delete" data-comment-name="${escapeHtml(note.name || "")}" ${state.mutating ? "disabled" : ""}>${escapeHtml(__("Delete", null, "note-action"))}</button>`
             : "";
         const actions = pinAction || editAction || deleteAction
             ? `<div class="almdina-note-actions">${pinAction}${editAction}${deleteAction}</div>`
             : "";
         return `
             <article class="almdina-note-card ${important ? "is-important" : ""} ${editing ? "is-editing" : ""}">
-                <div class="almdina-note-avatar" aria-hidden="true">${escapeHtml(String(note.author || "م").trim().slice(0, 1) || "م")}</div>
+                <div class="almdina-note-avatar" aria-hidden="true">${authorInitial(note)}</div>
                 <div class="almdina-note-body">
                     <div class="almdina-note-head">
                         <div>
-                            <strong>${escapeHtml(note.author || note.author_user || "مستخدم")}</strong>
-                            <span>${escapeHtml(creationLabel(note.creation))}${note.is_edited ? " • تم التعديل" : ""}</span>
+                            <strong>${escapeHtml(visibleAuthor(note) || userLabel())}</strong>
+                            <span>${escapeHtml(creationLabel(note.creation))}${note.is_edited ? ` • ${escapeHtml(__("Edited"))}` : ""}</span>
                         </div>
                         ${actions}
                     </div>
@@ -273,16 +290,16 @@
         if (state.activeTab === "customer" && !customerAvailable()) {
             return `
                 <section class="almdina-notes-list-section">
-                    <div class="almdina-notes-empty-state">لا تتوفر لك صلاحية ملاحظات العميل المرتبط بهذا الطلب.</div>
+                    <div class="almdina-notes-empty-state">${escapeHtml(__("You do not have permission to view the customer notes linked to this order."))}</div>
                 </section>
             `;
         }
         const notes = currentNotes();
         return `
-            <section class="almdina-notes-list-section" aria-label="كل الملاحظات">
-                <div class="almdina-notes-section-label">كل الملاحظات</div>
+            <section class="almdina-notes-list-section" aria-label="${escapeHtml(__("All notes"))}">
+                <div class="almdina-notes-section-label">${escapeHtml(__("All notes"))}</div>
                 <div class="almdina-notes-list">
-                    ${notes.length ? notes.map(renderNote).join("") : '<div class="almdina-notes-empty-state">لا توجد ملاحظات بعد.</div>'}
+                    ${notes.length ? notes.map(renderNote).join("") : `<div class="almdina-notes-empty-state">${escapeHtml(__("No notes yet."))}</div>`}
                 </div>
             </section>
         `;
@@ -301,20 +318,20 @@
                 <label class="almdina-notes-important-toggle">
                     <input type="checkbox" data-notes-input="important" ${state.importantDraft ? "checked" : ""} ${state.mutating ? "disabled" : ""}>
                     <span aria-hidden="true">★</span>
-                    <span>تعيين كملاحظة مهمة</span>
+                    <span>${escapeHtml(__("Mark as important"))}</span>
                 </label>
             `
             : "";
         return `
-            <section class="almdina-notes-composer" aria-label="إضافة ملاحظة">
-                <label for="almdina-notes-input">إضافة ملاحظة</label>
-                <textarea id="almdina-notes-input" data-notes-input="content" maxlength="${MAX_LENGTH}" rows="3" placeholder="اكتب ملاحظة قصيرة وواضحة..." ${state.mutating ? "disabled" : ""}>${escapeHtml(value)}</textarea>
+            <section class="almdina-notes-composer" aria-label="${escapeHtml(__("Add note"))}">
+                <label for="almdina-notes-input">${escapeHtml(__("Add note"))}</label>
+                <textarea id="almdina-notes-input" data-notes-input="content" maxlength="${MAX_LENGTH}" rows="3" placeholder="${escapeHtml(__("Write a short and clear note..."))}" ${state.mutating ? "disabled" : ""}>${escapeHtml(value)}</textarea>
                 <div class="almdina-notes-composer-meta">
                     <span class="almdina-notes-counter">${value.length} / ${MAX_LENGTH}</span>
                     ${importantToggle}
                 </div>
                 ${uiButton({
-                    label: state.mutating ? "جارٍ الإضافة..." : "إضافة",
+                    label: state.mutating ? __("Adding...") : __("Add"),
                     variant: "primary",
                     className: "almdina-notes-submit",
                     disabled: state.mutating || !value.trim(),
@@ -326,15 +343,15 @@
 
     function renderBody() {
         if (state.loading) {
-            return '<div class="almdina-notes-loading" role="status" aria-live="polite"><span class="almdina-notes-spinner" aria-hidden="true"></span><span>جارٍ تحميل الملاحظات...</span></div>';
+            return `<div class="almdina-notes-loading" role="status" aria-live="polite"><span class="almdina-notes-spinner" aria-hidden="true"></span><span>${escapeHtml(__("Loading notes..."))}</span></div>`;
         }
         if (!state.context) {
             return `
                 <div class="almdina-notes-load-error" role="alert">
-                    <strong>تعذر تحميل الملاحظات.</strong>
-                    <span>${escapeHtml(state.error || "تحقق من الاتصال وحاول مرة أخرى.")}</span>
+                    <strong>${escapeHtml(__("Could not load notes."))}</strong>
+                    <span>${escapeHtml(state.error || __("Check the connection and try again."))}</span>
                     ${uiButton({
-                        label: "إعادة المحاولة",
+                        label: __("Retry"),
                         variant: "secondary",
                         attrs: { "data-notes-action": "retry-load" },
                     })}
@@ -538,7 +555,7 @@
         if (state.mutating) return;
         const note = noteByName(commentName);
         if (!note || note.can_delete !== true) return;
-        confirmDelete("هل تريد حذف هذه الملاحظة؟ لا يمكن التراجع عن الحذف.", () => {
+        confirmDelete(__("Delete this note? This action cannot be undone."), () => {
             const reference = referenceArgs();
             if (!reference || state.mutating) return;
             performMutation(METHODS.delete, {

@@ -250,8 +250,10 @@ def test_a156_notes_panel_is_reusable_rtl_and_independent_from_form_save() -> No
     assert 'const MAX_LENGTH = 500' in panel
     assert 'data-notes-tab="order"' in panel
     assert 'data-notes-tab="customer"' in panel
-    assert "تعيين كملاحظة مهمة" in panel
-    assert "الملاحظة المهمة الحالية" in panel
+    assert '__("Mark as important")' in panel
+    assert '__("Current important note")' in panel
+    assert "تعيين كملاحظة مهمة" not in panel
+    assert "الملاحظة المهمة الحالية" not in panel
     assert 'dir="rtl"' in panel
     assert "state.pendingRequest" in panel
     assert "requestIdFor(key)" in panel

@@ -65,7 +65,7 @@
         if (!important) return false;
         const entry = {
             fieldname: IMPORTANT_FIELD,
-            label: important.df.label || "ملاحظة مهمة",
+            label: important.df.label || __("Important note"),
         };
         const notesIndex = fields.findIndex(field => String(field && field.fieldname || "") === "order_notes");
         fields.splice(notesIndex >= 0 ? notesIndex + 1 : fields.length, 0, entry);
@@ -206,12 +206,12 @@
         button.type = "button";
         button.className = "dco-card-important-note";
         button.dataset.orderName = orderName;
-        button.setAttribute("aria-label", `فتح الملاحظة المهمة: ${preview}`);
+        button.setAttribute("aria-label", __("Open important note: {0}", [preview]));
         button.title = preview;
         button.innerHTML = `
             <span class="dco-card-important-note-icon" aria-hidden="true">★</span>
             <span class="dco-card-important-note-copy">
-                <span>ملاحظة مهمة</span>
+                <span>${escapeHtml(__("Important note"))}</span>
                 <strong>${escapeHtml(preview)}</strong>
             </span>
         `;
@@ -333,7 +333,7 @@
         // Keep the ListView template whitespace-free: Frappe v16.17.5 derives
         // dynamic column width from jQuery.text(), so indentation/newlines would
         // be counted as visible characters and can inflate this column.
-        return `<button type="button" class="dco-important-note-link" data-order-name="${escapeHtml(orderName)}" title="${escapeHtml(preview)}" aria-label="فتح الملاحظة المهمة: ${escapeHtml(preview)}"><span class="dco-important-note-star" aria-hidden="true">★</span><span class="dco-important-note-text">${escapeHtml(short)}</span></button>`;
+        return `<button type="button" class="dco-important-note-link" data-order-name="${escapeHtml(orderName)}" title="${escapeHtml(preview)}" aria-label="${escapeHtml(__("Open important note: {0}", [preview]))}"><span class="dco-important-note-star" aria-hidden="true">★</span><span class="dco-important-note-text">${escapeHtml(short)}</span></button>`;
     }
 
     frappe.listview_settings = frappe.listview_settings || {};

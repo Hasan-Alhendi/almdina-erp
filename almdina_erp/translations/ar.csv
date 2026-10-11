@@ -1042,3 +1042,32 @@ Exceptional customization,تخصيص استثنائي
 The print window could not be opened. Reload the page and try again.,تعذر تشغيل الطباعة. أعد تحميل الصفحة ثم حاول مرة أخرى.
 The customer invoice could not be prepared. Reload the page and try again.,تعذر تجهيز فاتورة الزبون. أعد تحميل الصفحة ثم حاول مرة أخرى.
 The document could not be prepared for printing. Reload the page and try again.,تعذر تجهيز المستند للطباعة. أعد تحميل الصفحة ثم حاول مرة أخرى.
+Notes,الملاحظات,notes-panel
+Close notes,إغلاق الملاحظات
+Note context,سياق الملاحظات
+Current important note,الملاحظة المهمة الحالية
+No important note is currently selected.,لا توجد ملاحظة مهمة حاليًا.
+Clear selection,إلغاء التعيين,note-action
+Edited,تم التعديل
+Edit note,تعديل الملاحظة
+Saving...,جارٍ الحفظ...
+Save edit,حفظ التعديل
+Mark as important,تعيين كملاحظة مهمة
+Important note,ملاحظة مهمة
+Edit,تعديل,note-action
+Delete,حذف,note-action
+User,مستخدم
+You do not have permission to view the customer notes linked to this order.,لا تتوفر لك صلاحية ملاحظات العميل المرتبط بهذا الطلب.
+All notes,كل الملاحظات
+No notes yet.,لا توجد ملاحظات بعد.
+Add note,إضافة ملاحظة
+Write a short and clear note...,اكتب ملاحظة قصيرة وواضحة...
+Adding...,جارٍ الإضافة...
+Add,إضافة
+Loading notes...,جارٍ تحميل الملاحظات...
+Could not load notes.,تعذر تحميل الملاحظات.
+Check the connection and try again.,تحقق من الاتصال وحاول مرة أخرى.
+Retry,إعادة المحاولة
+Delete this note? This action cannot be undone.,هل تريد حذف هذه الملاحظة؟ لا يمكن التراجع عن الحذف.
+Open important note: {0},فتح الملاحظة المهمة: {0}
+The operation could not be completed. Try again.,تعذر تنفيذ العملية. حاول مرة أخرى.
