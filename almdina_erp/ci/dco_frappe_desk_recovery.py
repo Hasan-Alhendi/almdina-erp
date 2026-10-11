@@ -19,10 +19,17 @@ def evaluate(page: Page, step: str, expression: str, arg=None):
         raise RuntimeError(f"Desk browser step '{step}' failed: {exc}") from exc
 
 
+def wait_for_function(page: Page, step: str, expression: str, *, arg=None, timeout: int = 30_000):
+    try:
+        page.wait_for_function(expression, arg=arg, timeout=timeout)
+    except Exception as exc:
+        raise RuntimeError(f"Desk browser wait '{step}' failed: {exc}") from exc
+
+
 def open_dco(page: Page, name: str) -> None:
     page.goto(f"{DESK_URL}/app/door-cutting-order/{name}", wait_until="domcontentloaded")
     try:
-        page.wait_for_function(
+        wait_for_function(page, f"load DCO {name}",
             "name => window.cur_frm && window.cur_frm.doc && window.cur_frm.doc.name === name",
             arg=name,
             timeout=60_000,
@@ -87,7 +94,7 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
         page.locator("#login_password").fill("admin")
         page.get_by_role("button", name=re.compile(r"^(Login|Continue)$")).click()
         try:
-            page.wait_for_function(
+            wait_for_function(page, "Administrator login establishes a Desk session",
                 "() => window.frappe && frappe.session && frappe.session.user === 'Administrator'",
                 timeout=60_000,
             )
@@ -104,7 +111,7 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
     cancelled = "Desk cancel must not persist"
     start_edit_and_set_note(page, name, cancelled, checkpoint=False)
     evaluate(page, "cancel EDIT session", "() => window.AlmdinaDcoEditSessionCoordinator.cancel(window.cur_frm, 'order')")
-    page.wait_for_function(
+    wait_for_function(page, "Cancel returns EDIT session to idle",
         "baseline => window.cur_frm && window.cur_frm.doc.order_notes === baseline && "
         "window.AlmdinaDcoEditSessionCoordinator.snapshot(window.cur_frm).phase === 'idle'",
         arg=baseline,
@@ -116,7 +123,7 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
     page.reload(wait_until="domcontentloaded")
     page.wait_for_selector('[data-edit-recovery-action="continue"]', timeout=30_000)
     page.locator('[data-edit-recovery-action="continue"]').click()
-    page.wait_for_function(
+    wait_for_function(page, "restore applies dirty EDIT snapshot",
         "value => window.cur_frm && window.cur_frm.doc.order_notes === value && "
         "window.cur_frm.is_dirty() && "
         "window.AlmdinaDcoEditSessionCoordinator.isEditing(window.cur_frm, 'order')",
@@ -124,7 +131,7 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
         timeout=30_000,
     )
     evaluate(page, "commit recovered EDIT session", "() => window.AlmdinaOrderRevisionUX.commitEditSession(window.cur_frm)")
-    page.wait_for_function(
+    wait_for_function(page, "commit ends restored EDIT session",
         "value => window.cur_frm && window.cur_frm.doc.order_notes === value && "
         "!window.cur_frm.is_dirty() && "
         "!window.AlmdinaDcoEditSessionCoordinator.isEditing(window.cur_frm, 'order')",
@@ -158,7 +165,8 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
     )
     assert dispatched_doc["modified"] != dispatch_checkpoint["expectedServerModified"]
     open_dco(page, dispatch_name)
-    page.wait_for_function("() => Boolean(window.cur_frm.doc.current_production_stage)")
+    wait_for_function(page, "dispatch exposes active production stage",
+        "() => Boolean(window.cur_frm && window.cur_frm.doc.current_production_stage)")
     expect(page.locator("body")).to_contain_text("لا يمكن استعادتها بعد بدء مرحلة الإنتاج")
     expect(page.locator('[data-edit-recovery-action="continue"]')).to_have_count(0)
     retained = evaluate(page, "verify retained EDIT snapshot after dispatch",
@@ -205,7 +213,8 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
         dispatch_name,
     )
     open_dco(page, dispatch_name)
-    page.wait_for_function("() => window.cur_frm.doc.status === 'Draft'")
+    wait_for_function(page, "Return-to-Draft updates the Desk document",
+        "() => window.cur_frm && window.cur_frm.doc.status === 'Draft'")
     assert evaluate(page, "read returned DCO notes", "() => window.cur_frm.doc.order_notes") == dispatch_baseline
     returned_doc = evaluate(page, "read returned DCO",
         """async name => frappe.xcall('frappe.client.get', {
