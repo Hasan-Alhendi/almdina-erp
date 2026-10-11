@@ -22,6 +22,7 @@ BROWSER_TRACE: list[dict[str, str | int | float | None]] = []
 PENDING_REQUESTS: dict[str, dict[str, str | float]] = {}
 TRACE_PATH: Path | None = None
 ACTIVE_STEP: str | None = None
+LAST_PAGE_STATE: dict[str, object] | None = None
 
 
 def _redact_text(value: str, limit: int = 1000) -> str:
@@ -58,6 +59,9 @@ def _safe_url(url: str) -> str:
 
 
 def attach_browser_diagnostics(page: Page) -> None:
+    global LAST_PAGE_STATE
+    LAST_PAGE_STATE = None
+
     def append(bucket: str, item: dict[str, str | int | None]) -> None:
         events = DIAGNOSTIC_EVENTS[bucket]
         events.append(item)
@@ -68,6 +72,7 @@ def attach_browser_diagnostics(page: Page) -> None:
         "navigation", url=_safe_url(frame.url)
     ) if frame == page.main_frame else None)
     def capture_document_state() -> None:
+        global LAST_PAGE_STATE
         try:
             state = page.evaluate("""() => {
                 const boot = window.frappe && frappe.boot;
@@ -87,6 +92,7 @@ def attach_browser_diagnostics(page: Page) -> None:
                     bodyText: (document.body && document.body.innerText || "").slice(0, 400),
                 };
             }""")
+            LAST_PAGE_STATE = state
             _trace_event(
                 "document_loaded",
                 url=_safe_url(str(state.get("url", ""))),
@@ -120,8 +126,17 @@ def attach_browser_diagnostics(page: Page) -> None:
         "location": _safe_url(message.location.get("url", "")) if message.location.get("url") else "",
     }), _trace_event("console", type=message.type, text=_redact_text(message.text)))
         if message.type in {"error", "warning"} else None)
-    page.on("pageerror", lambda error: (append("page_errors", {"text": _redact_text(str(error))}),
-        _trace_event("page_error", text=_redact_text(str(error)))))
+    page.on("pageerror", lambda error: (
+        append("page_errors", {
+            "text": _redact_text(str(error)),
+            "stack": _redact_text(str(getattr(error, "stack", "") or ""), 2500),
+        }),
+        _trace_event(
+            "page_error",
+            text=_redact_text(str(error)),
+            stack=_redact_text(str(getattr(error, "stack", "") or ""), 2500),
+        ),
+    ))
     page.on("requestfailed", lambda request: (PENDING_REQUESTS.pop(request.url, None), append("request_failures", {
         "url": _safe_url(request.url),
         "resource_type": request.resource_type,
@@ -177,38 +192,11 @@ def evaluate(page: Page, step: str, expression: str, arg=None):
 
 
 def read_page_state(page: Page) -> dict:
-    last_error = "document state unavailable"
-    for _ in range(3):
-        try:
-            page.wait_for_load_state("domcontentloaded", timeout=3_000)
-            return page.evaluate("""() => {
-                const boot = window.frappe && frappe.boot;
-                return {
-                    url: location.href,
-                    title: document.title,
-                    readyState: document.readyState,
-                    bodyLength: (document.body && document.body.innerText || "").length,
-                    bodyText: (document.body && document.body.innerText || "").slice(0, 1000),
-                    frappePresent: Boolean(window.frappe),
-                    bootPresent: Boolean(boot),
-                    user: window.frappe && frappe.session && frappe.session.user,
-                    setupComplete: boot && Boolean(boot.sysdefaults && boot.sysdefaults.setup_complete),
-                    sysSetupComplete: boot && boot.sysdefaults && Boolean(boot.sysdefaults.setup_complete),
-                    ajaxCount: window.frappe && frappe.request && frappe.request.ajax_count,
-                    route: window.frappe && frappe.get_route && frappe.get_route(),
-                    routePath: window.frappe && frappe.get_route
-                        ? frappe.get_route().map(String).join("/")
-                        : "",
-                    scriptAssets: [...document.scripts]
-                        .map(script => script.src).filter(Boolean).slice(-30),
-                    form: window.cur_frm && window.cur_frm.doc && window.cur_frm.doc.name,
-                    saveProbe: window.__dcoDeskSaveProbe || null,
-                };
-            }""")
-        except Exception as exc:
-            last_error = _redact_text(str(exc), 500)
-            page.wait_for_timeout(250)
-    return {"url": _safe_url(page.url), "diagnostic_error": last_error}
+    # Chromium's main thread may be unresponsive after a page error. Failure
+    # handling must not re-enter it with another evaluate or load-state wait.
+    state = dict(LAST_PAGE_STATE or {})
+    state["url"] = _safe_url(page.url)
+    return state
 
 
 def wait_for_function(page: Page, step: str, expression: str, *, arg=None, timeout: int = 30_000):
@@ -237,14 +225,7 @@ def open_dco(page: Page, name: str) -> None:
             timeout=30_000,
         )
     except Exception as exc:
-        state = evaluate(page, f"load DCO {name} diagnostics",
-            """() => ({
-                url: window.location.href,
-                route: window.frappe && window.frappe.get_route && window.frappe.get_route(),
-                user: window.frappe && window.frappe.session && window.frappe.session.user,
-                body: (document.body && document.body.innerText || '').slice(0, 1200),
-            })"""
-        )
+        state = read_page_state(page)
         raise RuntimeError(
             f"Loading DCO {name} in Desk timed out: {exc}; desk_state={state}"
         ) from exc
@@ -561,6 +542,25 @@ def certify_actual_frappe_desk_new_recovery(page: Page) -> None:
     ):
         raise RuntimeError(f"NEW official Save did not reconcile one record and clear local recovery: {saved}")
     _trace_event("phase_135_local_new_recovery_completed", draft_id=captured["draftId"])
+
+
+def certify_new_dco_form_smoke(page: Page) -> None:
+    """Stop after Login → Desk Ready → a real NEW DCO cur_frm is loaded."""
+    login_to_desk(page, "Administrator", "admin")
+    response = page.goto(
+        f"{DESK_URL}/app/door-cutting-order/new-door-cutting-order-1",
+        wait_until="domcontentloaded",
+    )
+    if response is not None and response.status >= 400:
+        raise RuntimeError(f"NEW DCO smoke navigation returned HTTP {response.status}.")
+    wait_for_function(
+        page,
+        "NEW DCO Desk Smoke cur_frm ready",
+        "() => window.cur_frm && window.cur_frm.doctype === 'Door Cutting Order' "
+        "&& window.cur_frm.is_new()",
+        timeout=30_000,
+    )
+    _trace_event("phase_135_new_form_smoke_completed")
 
 
 def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
@@ -881,7 +881,10 @@ if __name__ == "__main__":
         page.set_default_navigation_timeout(30_000)
         attach_browser_diagnostics(page)
         try:
-            certify_actual_frappe_desk_edit_recovery(page)
+            if os.environ.get("DCO_DESK_NEW_FORM_SMOKE_ONLY") == "1":
+                certify_new_dco_form_smoke(page)
+            else:
+                certify_actual_frappe_desk_edit_recovery(page)
         except BaseException as failure:
             evidence_dir.mkdir(parents=True, exist_ok=True)
             screenshot = evidence_dir / "dco-desk-failure.png"

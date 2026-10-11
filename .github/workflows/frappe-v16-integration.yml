@@ -18,6 +18,11 @@ on:
         required: false
         default: false
         type: boolean
+      new_form_smoke_only:
+        description: Run only the bounded login and NEW DCO form-load smoke
+        required: false
+        default: false
+        type: boolean
   pull_request:
     paths:
       - "almdina_erp/**"
@@ -207,7 +212,7 @@ jobs:
           bench --site test.localhost execute frappe.get_all --kwargs '{"doctype":"DocType","filters":{"module":"Almdina ERP"},"pluck":"name"}'
 
       - name: Run Almdina ERP tests
-        if: github.event_name != 'workflow_dispatch' || inputs.desk_only != true
+        if: github.event_name != 'workflow_dispatch' || (inputs.desk_only != true && inputs.new_form_smoke_only != true)
         run: |
           cd "$RUNNER_TEMP/frappe-bench"
           bench --site test.localhost set-config allow_tests true
@@ -251,6 +256,7 @@ jobs:
         env:
           DCO_DESK_FIXTURE_FILE: ${{ runner.temp }}/dco-desk-fixtures.json
           DCO_DESK_EVIDENCE_DIR: ${{ runner.temp }}/dco-desk-evidence
+          DCO_DESK_NEW_FORM_SMOKE_ONLY: ${{ inputs.new_form_smoke_only && '1' || '0' }}
           FRAPPE_DESK_URL: http://test.localhost:8000
         run: |
           set -euo pipefail
@@ -313,9 +319,20 @@ jobs:
                   "pending_api": pending,
                   "api_responses": api_responses,
                   "browser_errors": [
-                      str(item.get("text", ""))[:120]
+                      {
+                          "text": str(item.get("text", ""))[:180],
+                          "stack": str(item.get("stack", ""))[:1000],
+                      }
                       for item in diagnostics.get("page_errors", [])[-1:]
                   ],
+                  "console_errors": [
+                      {
+                          "text": str(item.get("text", ""))[:180],
+                          "location": str(item.get("location", ""))[:180],
+                      }
+                      for item in diagnostics.get("console", [])
+                      if item.get("type") == "error"
+                  ][-8:],
                   "network_failures": [
                       {"url": str(item.get("url", ""))[:100], "failure": str(item.get("failure", ""))[:100]}
                       for item in diagnostics.get("request_failures", [])[-3:]
