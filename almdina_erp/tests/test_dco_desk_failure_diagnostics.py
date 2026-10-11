@@ -37,7 +37,7 @@ def test_route_diagnostics_tolerate_frappe_returning_no_route() -> None:
     assert "user: window.frappe" not in source
 
 
-def test_new_recovery_probe_tracks_nested_promises_without_awaiting_them_in_evaluate() -> None:
+def test_new_recovery_probe_starts_without_a_post_readiness_evaluate() -> None:
     source = DESK_RUNNER.read_text(encoding="utf-8")
     tree = ast.parse(source)
     probe_script = next(
@@ -62,18 +62,13 @@ def test_new_recovery_probe_tracks_nested_promises_without_awaiting_them_in_eval
         and isinstance(node.func.value, ast.Name)
         and node.func.value.id == "page"
     ]
-    evaluate_calls = [node for node in calls if node.func.attr == "evaluate"]
-    evaluate_scripts = [
-        ast.literal_eval(node.args[0])
-        for node in evaluate_calls
-        if node.args and isinstance(node.args[0], ast.Constant)
-        and isinstance(node.args[0].value, str)
-    ]
-    assert len(evaluate_calls) >= 3
+    assert not [node for node in calls if node.func.attr == "evaluate"]
     assert any(node.func.attr == "wait_for_function" for node in calls)
+    assert "startNewFormProbe" in probe_script
+    assert "explicit_probe_started" in probe_script
+    assert "explicit_probe_settled" in probe_script
+    assert "Promise.resolve(promise).then" in probe_script
     assert "LocalDraftRepository.discover" in ast.unparse(probe)
     assert "NewRecovery.discover" in ast.unparse(probe)
     assert "LocalCheckpoint.initializeNewForm" in ast.unparse(probe)
     assert '"IndexedDB.transaction"' in source
-    assert any("Promise.resolve(promise).then" in script for script in evaluate_scripts)
-    assert all("await " not in script for script in evaluate_scripts)

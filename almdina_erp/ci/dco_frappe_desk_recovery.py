@@ -644,6 +644,74 @@ NEW_RECOVERY_PROBE_INIT_SCRIPT = r"""
         return item;
     };
     const seenDocuments = new Set();
+    function startExplicitProbe(operation, invoke, summarize = () => ({})) {
+        const id = `explicit-${operation}`;
+        probe.explicit = probe.explicit || {};
+        probe.explicit[id] = {status: "pending", operation, started_at: Math.round(performance.now())};
+        emit("explicit_probe_started", {operation, id});
+        let promise;
+        try { promise = invoke(); }
+        catch (error) {
+            probe.explicit[id].status = "rejected";
+            emit("explicit_probe_settled", {
+                operation, id, status: "rejected",
+                error_name: String(error && error.name || "Error"),
+                error_code: String(error && error.code || ""),
+            });
+            return;
+        }
+        Promise.resolve(promise).then(value => {
+            const entry = probe.explicit[id];
+            entry.status = "resolved";
+            entry.settled_at = Math.round(performance.now());
+            let summary = {};
+            try { summary = summarize(value) || {}; } catch (error) {}
+            emit("explicit_probe_settled", {operation, id, status: "resolved", ...summary});
+        }, error => {
+            probe.explicit[id].status = "rejected";
+            probe.explicit[id].settled_at = Math.round(performance.now());
+            emit("explicit_probe_settled", {
+                operation, id, status: "rejected",
+                error_name: String(error && error.name || "Error"),
+                error_code: String(error && error.code || ""),
+            });
+        });
+    }
+
+    function startNewFormProbe(frm) {
+        const recovery = window.AlmdinaDcoRecovery;
+        const factory = recovery && recovery.LocalDraftRepository;
+        const identity = {
+            site: String(frappe.boot.sitename || frappe.boot.site_name || location.host),
+            user: String(frappe.session.user),
+            target_doctype: "Door Cutting Order",
+            mode: "NEW",
+        };
+        const autoDiscoveryStarted = probe.events.some(item =>
+            item.event === "operation_started"
+            && String(item.operation || "").startsWith("NewRecovery.discover#")
+        );
+        probe.pipelineStarted = true;
+        emit("new_form_probe_started", {automatic_discovery_started: autoDiscoveryStarted});
+        if (!factory || !recovery.NewRecovery || !recovery.LocalCheckpoint) {
+            emit("new_form_probe_unavailable");
+            return;
+        }
+        startExplicitProbe("LocalDraftRepository.discover", () => {
+            const repository = factory.create();
+            return repository.discover(identity);
+        }, result => ({ok: Boolean(result && result.ok)}));
+        startExplicitProbe("NewRecovery.discover", () => {
+            return recovery.NewRecovery.discover(factory.create(), identity);
+        }, result => ({
+            ok: Boolean(result && result.ok),
+            accepted_count: result && result.value && Array.isArray(result.value.records)
+                ? result.value.records.length : 0,
+            rejected_count: result && result.value && Array.isArray(result.value.rejected)
+                ? result.value.rejected.length : 0,
+        }));
+    }
+
     window.setInterval(() => {
         const frm = window.cur_frm;
         if (!frm || frm.doctype !== "Door Cutting Order" || !frm.doc) return;
@@ -654,6 +722,9 @@ NEW_RECOVERY_PROBE_INIT_SCRIPT = r"""
         if (seenDocuments.has(key)) return;
         seenDocuments.add(key);
         emit("document_identity_transition");
+        if (!probe.pipelineStarted && typeof frm.is_new === "function" && frm.is_new()) {
+            startNewFormProbe(frm);
+        }
     }, 50);
 
     function track(label, invoke, summarize = () => ({})) {
@@ -751,8 +822,6 @@ NEW_RECOVERY_PROBE_INIT_SCRIPT = r"""
 
 def certify_new_recovery_discovery_probe(page: Page) -> None:
     """Isolate automatic NEW discovery promises before running recovery certification."""
-    trace_start = len(BROWSER_TRACE)
-
     def record_probe_event(event: dict) -> None:
         _trace_event("new_recovery_probe", **{
             ("probe_event" if key == "event" else key): value for key, value in event.items()
@@ -780,85 +849,22 @@ def certify_new_recovery_discovery_probe(page: Page) -> None:
         "&& window.cur_frm.is_new() && window.__dcoRecoveryProbe",
         timeout=30_000,
     )
+    _trace_event("new_recovery_probe_waiting_for_pipeline")
+    try:
+        page.wait_for_function(
+            "() => window.__dcoRecoveryProbe.pipelineStarted === true",
+            timeout=10_000,
+        )
+    except Exception as exc:
+        _trace_event("new_recovery_probe_did_not_start", desk_url=_safe_url(page.url))
+        raise RuntimeError(f"NEW recovery probe did not start after form readiness: {exc}") from exc
 
-    initial = page.evaluate("""() => ({
-        eventCount: window.__dcoRecoveryProbe.events.length,
-        events: window.__dcoRecoveryProbe.events.slice(-100),
-        document: (() => {
-            const frm = window.cur_frm;
-            const context = window.AlmdinaDocumentContext;
-            const token = frm && context && context.capture ? context.capture(frm) : null;
-            return {
-                name: String(frm && frm.doc && frm.doc.name || ''),
-                identity: String(token && token.identity || ''),
-                generation: Number(token && token.generation || 0),
-            };
-        })(),
-    })""")
-    _trace_event("new_recovery_probe_form_loaded", event_count=initial["eventCount"],
-        document_name=initial["document"]["name"],
-        context_identity=initial["document"]["identity"],
-        context_generation=initial["document"]["generation"])
-
-    # The form event may already have launched discovery. Keep that observation
-    # separate from the explicit probe call below.
-    prior_discovery = any(
-        item.get("event") == "operation_started"
-        and str(item.get("operation", "")).startswith("NewRecovery.discover#")
-        for item in initial["events"]
-    ) or any(
-        item.get("event") == "new_recovery_probe"
-        and item.get("probe_event") == "operation_started"
-        and str(item.get("operation", "")).startswith("NewRecovery.discover#")
-        for item in BROWSER_TRACE[trace_start:]
+    operations = (
+        "LocalDraftRepository.discover",
+        "NewRecovery.discover",
     )
-    _trace_event("new_recovery_automatic_discovery_observed", started_before_probe=prior_discovery)
-
-    for operation in ("LocalDraftRepository.discover", "NewRecovery.discover", "LocalCheckpoint.initializeNewForm"):
-        operation_id = page.evaluate("""operation => {
-            const probe = window.__dcoRecoveryProbe;
-            const frm = window.cur_frm;
-            const recovery = window.AlmdinaDcoRecovery;
-            const context = window.AlmdinaDocumentContext;
-            const token = context && context.capture ? context.capture(frm) : null;
-            const identity = {
-                site: String(frappe.boot.sitename || frappe.boot.site_name || location.host),
-                user: String(frappe.session.user),
-                target_doctype: 'Door Cutting Order',
-                mode: 'NEW',
-            };
-            const id = `explicit-${operation}`;
-            probe.explicit = probe.explicit || {};
-            probe.explicit[id] = {status: 'pending', operation, started_at: Math.round(performance.now())};
-            const settle = (status, value) => {
-                const entry = probe.explicit[id];
-                entry.status = status;
-                entry.settled_at = Math.round(performance.now());
-                if (operation === 'LocalDraftRepository.discover' || operation === 'NewRecovery.discover') {
-                    entry.ok = Boolean(value && value.ok);
-                    entry.accepted_count = value && value.value && Array.isArray(value.value.records)
-                        ? value.value.records.length : undefined;
-                    entry.rejected_count = value && value.value && Array.isArray(value.value.rejected)
-                        ? value.value.rejected.length : undefined;
-                }
-                probe.events.push({event: 'explicit_probe_settled', operation, status, ...{
-                    document_name: String(frm && frm.doc && frm.doc.name || ''),
-                    context_identity: String(token && token.identity || ''),
-                    context_generation: Number(token && token.generation || 0),
-                }});
-            };
-            let promise;
-            if (operation === 'LocalDraftRepository.discover') {
-                const repo = recovery.LocalDraftRepository.create();
-                promise = repo.discover(identity);
-            } else if (operation === 'NewRecovery.discover') {
-                promise = recovery.NewRecovery.discover(recovery.LocalDraftRepository.create(), identity);
-            } else {
-                promise = recovery.LocalCheckpoint.initializeNewForm(frm);
-            }
-            Promise.resolve(promise).then(value => settle('resolved', value), () => settle('rejected', null));
-            return id;
-        }""", operation)
+    for operation in operations:
+        operation_id = f"explicit-{operation}"
         try:
             page.wait_for_function(
                 "id => window.__dcoRecoveryProbe.explicit[id] "
@@ -867,32 +873,81 @@ def certify_new_recovery_discovery_probe(page: Page) -> None:
                 timeout=12_000,
             )
         except Exception as exc:
-            state = read_page_state(page)
-            probe_state = {}
-            try:
-                probe_state = page.evaluate("""id => ({
-                    explicit: window.__dcoRecoveryProbe.explicit[id],
-                    events: window.__dcoRecoveryProbe.events.slice(-40),
-                })""", operation_id)
-            except Exception:
-                pass
+            observed = [
+                {
+                    "probe_event": item.get("probe_event"),
+                    "operation": item.get("operation"),
+                    "status": item.get("status"),
+                    "document_name": item.get("document_name"),
+                    "context_identity": item.get("context_identity"),
+                    "context_generation": item.get("context_generation"),
+                }
+                for item in BROWSER_TRACE
+                if item.get("event") == "new_recovery_probe"
+            ][-24:]
             _trace_event("new_recovery_probe_pending", operation=operation,
-                desk_url=state.get("url"), recent_events=probe_state.get("events", [])[-12:])
+                desk_url=_safe_url(page.url), observed=observed)
             raise RuntimeError(
-                f"NEW recovery probe did not settle: {operation}; state={probe_state}; wait={exc}"
+                f"NEW recovery probe did not settle: {operation}; observed={observed}; wait={exc}"
             ) from exc
-        result = page.evaluate("id => window.__dcoRecoveryProbe.explicit[id]", operation_id)
+        settled = next((
+            item for item in reversed(BROWSER_TRACE)
+            if item.get("event") == "new_recovery_probe"
+            and item.get("probe_event") == "explicit_probe_settled"
+            and item.get("operation") == operation
+        ), None)
+        if not settled or settled.get("status") != "resolved":
+            raise RuntimeError(f"NEW recovery probe rejected or unobserved: {operation}.")
         _trace_event("new_recovery_probe_settled", operation=operation,
-            status=result.get("status"), ok=result.get("ok"),
-            accepted_count=result.get("accepted_count"),
-            rejected_count=result.get("rejected_count"),
-            document_name=initial["document"]["name"],
-            context_identity=initial["document"]["identity"],
-            context_generation=initial["document"]["generation"])
-        if result.get("status") != "resolved":
-            raise RuntimeError(f"NEW recovery probe rejected: {operation}.")
+            status=settled.get("status"), ok=settled.get("ok"),
+            accepted_count=settled.get("accepted_count"),
+            rejected_count=settled.get("rejected_count"),
+            document_name=settled.get("document_name"),
+            context_identity=settled.get("context_identity"),
+            context_generation=settled.get("context_generation"))
 
-    _trace_event("new_recovery_probe_completed", automatic_discovery_started=prior_discovery)
+    try:
+        page.wait_for_function(
+            "() => window.__dcoRecoveryProbe.events.some(item => "
+            "item.event === 'operation_started' "
+            "&& String(item.operation || '').startsWith('LocalCheckpoint.initializeNewForm#'))",
+            timeout=10_000,
+        )
+    except Exception:
+        _trace_event("new_recovery_automatic_initialize_not_observed")
+        initialize_started = False
+    else:
+        initialize_started = True
+        try:
+            page.wait_for_function(
+                "() => window.__dcoRecoveryProbe.events.some(item => "
+                "(item.event === 'operation_resolved' || item.event === 'operation_rejected') "
+                "&& String(item.operation || '').startsWith('LocalCheckpoint.initializeNewForm#'))",
+                timeout=12_000,
+            )
+        except Exception as exc:
+            _trace_event("new_recovery_automatic_initialize_pending")
+            raise RuntimeError(f"Automatic NEW initializeNewForm did not settle: {exc}") from exc
+        initialize_result = next((
+            item for item in reversed(BROWSER_TRACE)
+            if item.get("event") == "new_recovery_probe"
+            and item.get("probe_event") in {"operation_resolved", "operation_rejected"}
+            and str(item.get("operation", "")).startswith("LocalCheckpoint.initializeNewForm#")
+        ), None)
+        initialize_status = "resolved" if initialize_result and initialize_result.get("probe_event") == "operation_resolved" else "rejected"
+        _trace_event("new_recovery_automatic_initialize_settled", status=initialize_status)
+        if initialize_status != "resolved":
+            raise RuntimeError("Automatic NEW initializeNewForm rejected or was not observed.")
+
+    auto_discovery_started = any(
+        item.get("event") == "new_recovery_probe"
+        and item.get("probe_event") == "new_form_probe_started"
+        and item.get("automatic_discovery_started") is True
+        for item in BROWSER_TRACE
+    )
+    _trace_event("new_recovery_probe_completed",
+        automatic_discovery_started=auto_discovery_started,
+        automatic_initialize_started=initialize_started)
 
 
 def certify_new_dco_local_gate(browser) -> None:
