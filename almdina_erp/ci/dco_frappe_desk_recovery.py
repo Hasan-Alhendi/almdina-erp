@@ -295,6 +295,31 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
         arg=recovered,
         timeout=30_000,
     )
+    evaluate(page, "instrument recovered EDIT save", """() => {
+        const frm = window.cur_frm;
+        const probe = window.__dcoDeskSaveProbe = {
+            dirtyBeforeSave: frm.is_dirty(),
+            pendingPriceEdits: window.AlmdinaCostPermissionsUX.pendingPricePieces(frm).length,
+            session: window.AlmdinaDcoEditSessionCoordinator.snapshot(frm),
+            saveStarted: false,
+            saveSettled: null,
+        };
+        const originalSave = frm.save;
+        frm.save = function(...args) {
+            probe.saveStarted = true;
+            const result = originalSave.apply(this, args);
+            if (result && typeof result.then === 'function') {
+                result.then(
+                    () => { probe.saveSettled = 'resolved'; },
+                    error => { probe.saveSettled = String(error).slice(0, 200); },
+                );
+            } else {
+                probe.saveSettled = 'non_thenable';
+            }
+            return result;
+        };
+        return probe;
+    }""")
     evaluate(page, "commit recovered EDIT session", "() => window.AlmdinaOrderRevisionUX.commitEditSession(window.cur_frm)")
     wait_for_function(page, "commit ends restored EDIT session",
         "value => window.cur_frm && window.cur_frm.doc.order_notes === value && "
@@ -435,6 +460,7 @@ if __name__ == "__main__":
                     user: window.frappe && frappe.session && frappe.session.user,
                     route: window.frappe && frappe.get_route && frappe.get_route(),
                     form: window.cur_frm && window.cur_frm.doc && window.cur_frm.doc.name,
+                    saveProbe: window.__dcoDeskSaveProbe || null,
                 })""")
             except Exception as exc:
                 state = {"diagnostic_error": _redact_text(str(exc), 500)}

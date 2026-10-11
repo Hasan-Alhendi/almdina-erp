@@ -297,6 +297,11 @@ jobs:
               result = {
                   "failure": state.get("failure"),
                   "url": state.get("url"),
+                  "save_probe": {
+                      key: state.get("saveProbe", {}).get(key)
+                      for key in ("dirtyBeforeSave", "pendingPriceEdits", "saveStarted", "saveSettled")
+                      if key in state.get("saveProbe", {})
+                  },
                   "commit_network_events": [
                       event for event in recent_events
                       if event.get("active_step") == "commit recovered EDIT session"
