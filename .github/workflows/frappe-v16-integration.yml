@@ -294,13 +294,14 @@ jobs:
                   for item in state.get("pendingRequests", [])
                   if item.get("resource_type") in {"xhr", "fetch"}
               ][-2:]
+              save_probe = state.get("saveProbe") or {}
               result = {
                   "failure": state.get("failure"),
                   "url": state.get("url"),
                   "save_probe": {
-                      key: state.get("saveProbe", {}).get(key)
+                      key: save_probe.get(key)
                       for key in ("dirtyBeforeSave", "pendingPriceEdits", "saveStarted", "saveSettled")
-                      if key in state.get("saveProbe", {})
+                      if key in save_probe
                   },
                   "commit_network_events": [
                       event for event in recent_events
