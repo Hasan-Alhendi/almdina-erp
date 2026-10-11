@@ -247,6 +247,7 @@ jobs:
         run: |
           node almdina_erp/tests/js/frontend_foundation.test.js
           node almdina_erp/tests/js/almdina_locale.test.js
+          node almdina_erp/tests/js/factory_workforce_languages.test.js
           node almdina_erp/tests/js/dco_form_sidebar_controller.test.js
           node almdina_erp/tests/js/dco_form_presentation_owner.test.js
           node almdina_erp/tests/js/almdina_ui.test.js

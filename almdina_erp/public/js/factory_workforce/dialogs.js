@@ -83,6 +83,40 @@
             return false;
         }
 
+        function languageChoices(languages, current) {
+            const rows = [];
+            const seen = new Set();
+            (languages || []).forEach(language => {
+                const code = String(language && language.code || "").trim();
+                if (!code || seen.has(code)) return;
+                seen.add(code);
+                rows.push({
+                    value: code,
+                    label: String(language.name || code),
+                });
+            });
+            const selected = String(current || "").trim();
+            if (selected && !seen.has(selected)) {
+                rows.push({ value: selected, label: selected });
+            }
+            return rows;
+        }
+
+        function languageField(languages, current) {
+            const options = languageChoices(languages, current);
+            const codes = options.map(option => option.value);
+            const fallback = codes.includes("ar") ? "ar" : (codes[0] || "ar");
+            const selected = String(current || "").trim();
+            return {
+                fieldname: "language",
+                fieldtype: "Select",
+                label: t("Language"),
+                options,
+                default: codes.includes(selected) ? selected : fallback,
+                reqd: 1,
+            };
+        }
+
         function openCreate(config = {}) {
             const canAssignRoles = config.canAssignRoles === true;
             const draftKey = "create";
@@ -92,7 +126,7 @@
                     { fieldname: "email", fieldtype: "Data", label: t("البريد الإلكتروني"), options: "Email", reqd: 1 },
                     { fieldname: "first_name", fieldtype: "Data", label: t("الاسم"), reqd: 1 },
                     { fieldname: "last_name", fieldtype: "Data", label: t("الكنية") },
-                    { fieldname: "language", fieldtype: "Select", label: t("اللغة"), options: ["ar", "en"], default: "ar", reqd: 1 },
+                    languageField(config.languages, ""),
                     roleField([], !canAssignRoles, config.roleOptions),
                     { fieldname: "temporary_password", fieldtype: "Password", label: t("كلمة مرور مؤقتة"), reqd: 1, description: t("10 محارف على الأقل وتحتوي حرفًا ورقمًا.") },
                 ],
@@ -124,7 +158,7 @@
                 fields.push(
                     { fieldname: "first_name", fieldtype: "Data", label: t("الاسم"), reqd: 1, default: user.first_name || "" },
                     { fieldname: "last_name", fieldtype: "Data", label: t("الكنية"), default: user.last_name || "" },
-                    { fieldname: "language", fieldtype: "Select", label: t("اللغة"), options: ["ar", "en"], default: user.language || "ar", reqd: 1 }
+                    languageField(config.languages, user.language || "ar")
                 );
             }
             if (canAssignRoles) fields.push(roleField(user.roles || [], false, config.roleOptions));
