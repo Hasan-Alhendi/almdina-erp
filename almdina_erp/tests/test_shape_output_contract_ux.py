@@ -147,7 +147,8 @@ def test_customer_documents_keep_drawing_first_and_share_one_renderer():
     assert "const shapeOutput = window.AlmdinaShapeOutputContract;" in shape_print
     assert "shapeOutput.visual(piece)" in shape_print
     assert 'selected.kind === "documentation"' in shape_print
-    assert "هذا توثيق لطلب العميل وليس ملف تصنيع" in shape_print
+    assert 'translate("This documents the customer request and is not a manufacturing file.")' in shape_print
+    assert "هذا توثيق لطلب العميل وليس ملف تصنيع" not in shape_print
     assert "renderer.notesCell(row, notes" in presenter
     assert "window.AlmdinaOrderDocumentPrint" in measurement_actions
     assert "measurementDocumentBodyWithPayload(frm, quotePayload, customerPhone)" in presenter

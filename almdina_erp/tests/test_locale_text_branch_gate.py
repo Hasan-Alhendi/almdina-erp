@@ -8,8 +8,20 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PUBLIC_JS = ROOT / "public" / "js"
 LOCALE_JS = PUBLIC_JS / "almdina_locale.js"
+PRINT_PRESENTER = (
+    PUBLIC_JS
+    / "door_cutting_order"
+    / "printing"
+    / "door_cutting_order_document_print_presenter.js"
+)
 NESTED_TRANSLATION = re.compile(r"\bt\s*\(\s*__\s*\(")
 STORED_VALUE_TRANSLATION = re.compile(r"(?:value|options)\s*:\s*(?:__|t)\s*\(")
+ARABIC_TEXT = re.compile(r"[\u0600-\u06FF]")
+# Stored quote phrases matched for compatibility. They are not displayed as UI.
+PRINT_COMPATIBILITY_ARABIC = (
+    "من القشاط الافتراضي",
+    "يتضمن أطرافًا مخصصة",
+)
 
 
 class TestActiveUiHasNoLanguageTextBranches(unittest.TestCase):
@@ -41,6 +53,19 @@ class TestActiveUiHasNoLanguageTextBranches(unittest.TestCase):
         official = source.split("function officialLanguageCode(", 1)[1].split("function ", 1)[0]
         self.assertNotIn("toLowerCase", official)
         self.assertNotIn('.toLowerCase().replace(/_/g, "-")', source)
+
+    def test_browser_print_presenter_keeps_arabic_only_as_compatibility_values(self) -> None:
+        leftovers = []
+        for number, line in enumerate(PRINT_PRESENTER.read_text(encoding="utf-8").splitlines(), start=1):
+            if not ARABIC_TEXT.search(line):
+                continue
+            visible = line
+            for phrase in PRINT_COMPATIBILITY_ARABIC:
+                visible = visible.replace(phrase, "")
+            visible = visible.replace("،", "")
+            if ARABIC_TEXT.search(visible):
+                leftovers.append(f"{number}: {line.strip()}")
+        self.assertEqual(leftovers, [])
 
 
 if __name__ == "__main__":

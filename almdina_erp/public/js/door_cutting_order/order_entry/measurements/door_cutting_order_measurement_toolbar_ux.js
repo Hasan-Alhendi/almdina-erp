@@ -3,7 +3,7 @@
 
     const STYLE_ID = "dco-measurement-toolbar-ux-css";
 
-    
+
     function installStyles() {
         if (document.getElementById(STYLE_ID)) return;
         const style = document.createElement("style");

@@ -88,7 +88,7 @@ def test_measurement_print_places_drawing_inside_notes_without_adding_a_column()
     assert "rowHasDrawing(row)" in source
     assert "notes-with-drawing" in source
     assert "shapePrintCss()" in source
-    assert source.count('<th>${__("Notes")}</th>') == 1
+    assert source.count('${esc(__("Notes"))}') == 1
     assert "<th>الرسم</th>" not in source
 
 

@@ -33,7 +33,7 @@
     let activePopover = null;
     let dismissBound = false;
 
-    
+
     function escapeHtml(value) {
         return frappe.utils.escape_html(String(value ?? ""));
     }

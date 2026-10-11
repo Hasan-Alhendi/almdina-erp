@@ -3,7 +3,7 @@
 
     const STYLE_ID = "dco-cut-dimensions-css";
 
-    
+
     function rootFor(frm) {
         const field = frm && frm.fields_dict && frm.fields_dict.pieces_fast_entry;
         return field && field.$wrapper ? field.$wrapper.get(0) : null;

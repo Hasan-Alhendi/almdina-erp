@@ -54,7 +54,7 @@
     };
     let virtualSequence = 0;
 
-    
+
     function escapeHtml(value) {
         return frappe.utils.escape_html(String(value ?? ""));
     }

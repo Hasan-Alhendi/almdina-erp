@@ -83,7 +83,7 @@
         return field && field.$wrapper ? field.$wrapper.get(0) : null;
     }
 
-    
+
 
     function showMeasurementInputHelp() {
         const title = __("Measurement entry help");

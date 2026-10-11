@@ -107,11 +107,10 @@ class TestCompactInvoicePrintContract(unittest.TestCase):
         self.assertIn("function customEdgeGroups", source)
         self.assertIn(".filter(detail => Boolean(detail.custom))", source)
         self.assertIn("function customEdgeDetailsHtml", source)
-        self.assertIn('return "على الداير"', source)
-        self.assertIn(
-            'if (!groups.length) return \'<span class="custom-edge-empty"',
-            source,
-        )
+        self.assertIn('__("All around")', source)
+        self.assertNotIn('return "على الداير"', source)
+        self.assertIn('class="custom-edge-empty"', source)
+        self.assertIn('__("No customization")', source)
         self.assertIn('__("Custom edge banding")', source)
         self.assertIn(
             'if (note.includes("من القشاط الافتراضي")) return ""',

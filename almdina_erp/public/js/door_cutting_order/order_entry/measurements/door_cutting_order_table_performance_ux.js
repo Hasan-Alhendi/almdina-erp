@@ -5,7 +5,7 @@
     const CHILD_DOCTYPE = "Door Cutting Order Detail";
     let virtualSequence = 0;
 
-    
+
     function isEditable(frm) {
         if (window.frappe && frappe.almdina && frappe.almdina.orderCanEdit) {
             return frappe.almdina.orderCanEdit(frm);

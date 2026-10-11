@@ -51,7 +51,7 @@
         );
     }
 
-    
+
     function buttonLabel() {
         return __("Export DXF for AutoCAD");
     }

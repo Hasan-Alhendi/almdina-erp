@@ -4,7 +4,7 @@
     const STYLE_ID = "dco-measurement-resilience-css";
     const RESTORE_DELAYS = [0, 50];
 
-    
+
     function escapeHtml(value) {
         return frappe.utils.escape_html(String(value ?? ""));
     }

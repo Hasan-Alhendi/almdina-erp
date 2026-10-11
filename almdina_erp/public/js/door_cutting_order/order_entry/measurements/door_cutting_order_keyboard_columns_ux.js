@@ -17,7 +17,7 @@
         "button.dco-check-toggle[data-check-field]",
     ].join(",");
 
-    
+
     function isEditable(frm) {
         if (window.frappe && frappe.almdina && frappe.almdina.orderCanEdit) {
             return frappe.almdina.orderCanEdit(frm);

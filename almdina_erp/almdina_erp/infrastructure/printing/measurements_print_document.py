@@ -158,8 +158,8 @@ def _require_print_locale(language: str | None, translator: Any) -> tuple[str, s
     """Require the language that the labels will actually be written in.
 
     Message IDs are English. Frappe remains the only translation catalog, so
-    this module does not embed Arabic strings and does not announce
-    ``lang="ar"`` when the caller omitted a translator. Production passes the
+    this module does not embed an Arabic catalog and does not declare an
+    Arabic document when the caller omitted a translator. Production passes the
     active language and ``frappe._``. Tests pass ``language="en"`` with an
     identity translator, or ``language="ar"`` with a translator that returns
     Arabic.

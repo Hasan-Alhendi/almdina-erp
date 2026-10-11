@@ -14,7 +14,7 @@
         disabled: "Disabled (pause this type)",
     });
 
-    
+
     function esc(value) {
         return frappe.utils.escape_html(String(value ?? ""));
     }

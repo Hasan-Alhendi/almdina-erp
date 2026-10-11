@@ -3,7 +3,7 @@
 
     const EDITABLE_STATUSES = new Set(["Draft", "Pending Review", "Rejected"]);
 
-    
+
     function uiButton(options) {
         const ui = window.AlmdinaUi;
         if (!ui || typeof ui.button !== "function") {

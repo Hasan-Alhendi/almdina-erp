@@ -12,7 +12,7 @@
         width_bottom: { selectedField: "edge_width_bottom", overrideField: "edge_width_bottom_type_override", label: "Bottom width side", axis: "width" },
     };
 
-    
+
     function esc(value) {
         return frappe.utils.escape_html(String(value ?? ""));
     }

@@ -70,7 +70,7 @@ def test_edge_color_is_manual_and_never_defaulted_from_edge_profile():
     source = _source(DEFAULTS)
     assert "edge_banding_lookup_service.get_order_edge_banding_options" in source
     assert "loadSafeEdgeOptions(frm);" in source
-    assert "أدخل لون القشاط يدويًا لهذا الطلب." in source
+    assert '__("Enter the edge color manually for this order.")' in source
     assert 'frappe.db.get_value("Edge Banding Type"' not in source
     assert 'frm.set_value("edge_color"' not in source
     assert "apply_edge_color_default" not in source
