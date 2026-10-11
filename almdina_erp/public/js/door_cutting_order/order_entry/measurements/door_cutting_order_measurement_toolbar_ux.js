@@ -2,18 +2,7 @@
     "use strict";
 
     const STYLE_ID = "dco-measurement-toolbar-ux-css";
-    const TITLE_AR = "جدول قياسات الدرف";
-    const TITLE_EN = "Door Measurements Table";
 
-    function isArabic() {
-        const lang = String(
-            (frappe.boot && frappe.boot.lang)
-            || (frappe.boot && frappe.boot.user && frappe.boot.user.language)
-            || document.documentElement.lang
-            || ""
-        ).toLowerCase();
-        return lang === "ar" || lang.startsWith("ar-");
-    }
 
     function installStyles() {
         if (document.getElementById(STYLE_ID)) return;
@@ -46,7 +35,7 @@
     function ensureTitle(toolbar) {
         const help = toolbar.querySelector(".dco-fast-help");
         if (!help) return;
-        const title = isArabic() ? TITLE_AR : TITLE_EN;
+        const title = __("Door Measurements Table");
         const current = help.querySelector(".dco-measurement-title");
         if (current && current.textContent.trim() === title && help.children.length === 1) return;
         help.innerHTML = `<b class="dco-measurement-title">${title}</b>`;
@@ -58,9 +47,7 @@
         popover = document.createElement("div");
         popover.className = "dco-measurement-help-popover";
         popover.hidden = true;
-        popover.innerHTML = isArabic()
-            ? `<strong>تعليمات جدول القياسات</strong><ul><li>كل ضلع يأخذ نوع القشاط الافتراضي ما لم تخصصه.</li><li>لتخصيص ضلع استخدم رمز الضلع داخل صف الدرفة.</li><li>القياس النهائي يُحسب مع الخصم حسب سماكة القشاط لكل ضلع.</li></ul>`
-            : `<strong>Measurement table help</strong><ul><li>Each edge uses the default banding unless overridden.</li><li>Use the edge control in the row to override an edge.</li><li>Final size accounts for the band thickness on each edge.</li></ul>`;
+        popover.innerHTML = `<strong>${__("Measurement table help")}</strong><ul><li>${__("Each edge uses the default banding unless overridden.")}</li><li>${__("Use the edge control in the row to override an edge.")}</li><li>${__("Final size accounts for the band thickness on each edge.")}</li></ul>`;
         toolbar.appendChild(popover);
         return popover;
     }
@@ -73,7 +60,7 @@
             button.className = "btn btn-default btn-sm dco-toolbar-icon-button dco-measurement-instructions";
             actions.appendChild(button);
         }
-        const label = isArabic() ? "تعليمات" : "Instructions";
+        const label = __("Instructions");
         button.title = label;
         button.setAttribute("aria-label", label);
         button.setAttribute("aria-expanded", "false");

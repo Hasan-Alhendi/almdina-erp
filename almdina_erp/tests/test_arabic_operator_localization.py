@@ -91,8 +91,13 @@ def test_all_packing_modes_have_arabic_operator_labels():
     assert not missing, f"Missing Arabic packing modes: {missing}"
 
 
-def test_legacy_frozen_method_labels_have_arabic_display_fallbacks():
-    js = (APP_ROOT / "public" / "js" / "arabic_operator_ui.js").read_text(encoding="utf-8")
+def test_legacy_frozen_method_labels_have_arabic_catalog_entries():
+    with TRANSLATIONS.open(encoding="utf-8", newline="") as handle:
+        mapping = {
+            row[0]: row[1].strip()
+            for row in csv.reader(handle)
+            if len(row) >= 2 and row[0] and row[1].strip()
+        }
     legacy_labels = [
         "MaxRects - Best Short Side",
         "MaxRects - Best Area",
@@ -113,31 +118,22 @@ def test_legacy_frozen_method_labels_have_arabic_display_fallbacks():
         "Skyline - Best Fit",
         "Auto اختار: ",
     ]
-    missing = [label for label in legacy_labels if label not in js]
-    assert not missing, f"Missing legacy display fallbacks: {missing}"
+    missing = [label for label in legacy_labels if not _contains_arabic(mapping.get(label, ""))]
+    assert not missing, f"Missing legacy display catalog entries: {missing}"
 
 
-def test_factory_print_formats_are_arabic_first():
+def test_factory_print_formats_follow_the_active_locale():
     paths = [
         APP_ROOT / "almdina_erp" / "print_format" / "door_cutting_measurements" / "door_cutting_measurements.json",
         APP_ROOT / "almdina_erp" / "print_format" / "door_cutting_plan_production_a4" / "door_cutting_plan_production_a4.json",
         APP_ROOT / "almdina_erp" / "print_format" / "door_cutting_plan_official" / "door_cutting_plan_official.json",
     ]
-    forbidden_visible_phrases = [
-        "Measurements Table",
-        "Production Cutting Plan A4",
-        "Official Cutting Plan",
-        "Full Size MM",
-        "Usable Size MM",
-        "Edge Sides",
-        "Long Right",
-        "Long Left",
-        "Width Top",
-        "Width Bottom",
-    ]
     for path in paths:
         payload = json.loads(path.read_text(encoding="utf-8"))
         html = payload.get("html", "")
-        assert _contains_arabic(html), path
-        leaked = [phrase for phrase in forbidden_visible_phrases if phrase in html]
-        assert not leaked, f"English operator text leaked in {path.name}: {leaked}"
+        assert "is_rtl()" in html, path.name
+        assert '{{ _("' in html, path.name
+        assert 'lang="ar"' not in html
+        assert 'dir="rtl"' not in html
+        if path.name != "door_cutting_measurements.json":
+            assert "direction: ltr" in html, path.name

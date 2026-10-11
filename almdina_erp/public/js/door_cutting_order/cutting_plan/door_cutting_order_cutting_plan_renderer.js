@@ -590,7 +590,7 @@
                 ${render_piece_groups_summary(frm)}
                 ${render_plan_meta_strip(frm, plan)}
 
-                <div class="dco-plan-method-line" style="font-size:12px;margin-bottom:8px;"><b>طريقة الترتيب:</b> ${escape_html(plan.method_label || frm.doc.packing_method || "")}</div>
+                <div class="dco-plan-method-line" style="font-size:12px;margin-bottom:8px;"><b>${__("Layout method:")}</b> ${escape_html(window.AlmdinaLocale ? AlmdinaLocale.translateLabel(plan.method_label || frm.doc.packing_method || "") : (plan.method_label || frm.doc.packing_method || ""))}</div>
         `;
 
         plan.sheets.forEach(sheet => {
@@ -620,9 +620,10 @@
                             <span class="dco-sheet-stats-edit" style="display:none">قطع: ${(sheet.pieces || []).length} | الهدر: ${sheet_waste_area_m2} م² (${sheet_waste_percent}%)</span>
                         </div>
                     </div>
-                    <div class="dco-sheet-board" data-trim-width-cm="${frame.insetX}" data-trim-length-cm="${frame.insetY}" style="position:relative;direction:ltr;width:${board_width_px}px;height:${board_height_px}px;max-width:100%;border:2px solid #111;background:linear-gradient(90deg,rgba(0,0,0,0.05) 1px,transparent 1px),linear-gradient(rgba(0,0,0,0.05) 1px,transparent 1px),#fff;background-size:32px 32px;overflow:hidden;margin:0 auto 8px auto;">
+                    <div class="dco-sheet-board" data-trim-width-cm="${frame.insetX}" data-trim-length-cm="${frame.insetY}" style="position:relative;direction:ltr;width:${board_width_px}px;height:${board_height_px}px;max-width:100%;border:2px solid #111;background:#fff;overflow:hidden;margin:0 auto 8px auto;">
+                        <div class="dco-board-waste-hatch" aria-hidden="true" style="position:absolute;inset:0;z-index:0;pointer-events:none;background-image:repeating-linear-gradient(45deg,rgba(71,85,105,.18) 0 1px,transparent 1px 8px);"></div>
                         ${board_caption ? `<div class="dco-board-size-caption" aria-hidden="true" style="display:none">${escape_html(board_caption)}</div>` : ""}
-                        <div class="dco-usable-sheet" style="position:absolute;left:${usableLeft}%;top:${usableTop}%;width:${usableWidth}%;height:${usableHeight}%;box-sizing:border-box;overflow:hidden;">
+                        <div class="dco-usable-sheet" style="position:absolute;z-index:1;left:${usableLeft}%;top:${usableTop}%;width:${usableWidth}%;height:${usableHeight}%;box-sizing:border-box;overflow:hidden;">
             `;
 
             (sheet.pieces || []).forEach(piece => {
@@ -864,8 +865,11 @@
 
     function buildPrintDocument(title, frm, planRoot, plan, identity) {
         const pages = buildPrintPages(frm, planRoot, plan, identity);
+        const locale = window.AlmdinaLocale;
+        const language = locale ? locale.currentLanguage() : "ar";
+        const direction = locale ? locale.direction() : "rtl";
         return `<!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="${escape_html(language)}" dir="${escape_html(direction)}">
 <head>
 <meta charset="UTF-8">
 <title>${escape_html(title)}</title>
@@ -878,7 +882,7 @@ html, body {
     background: #fff !important;
     color: #111 !important;
     font-family: Tahoma, Arial, sans-serif;
-    direction: rtl;
+    direction: ${direction};
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
 }
@@ -1016,6 +1020,23 @@ ${printHeaderCss()}
     line-height: 1 !important;
 }
 .dco-print-sheet-number { text-align: center; }
+.dco-board-original-edges {
+    display: flex !important;
+    flex-wrap: wrap;
+    gap: .2mm .8mm;
+    margin: 0 0 .25mm !important;
+    padding: 0 !important;
+    direction: rtl;
+    line-height: 1 !important;
+}
+.dco-board-original-edge {
+    position: static !important;
+    color: #6b4a12 !important;
+    font-size: 5.4pt !important;
+    font-weight: 700 !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+}
 .dco-sheet-board {
     position: relative !important;
     direction: ltr !important;
@@ -1105,7 +1126,10 @@ ${printHeaderCss()}
         }
 
         print_window.document.open();
-        print_window.document.write('<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>جاري تجهيز خطة القص…</title></head><body style="font-family:Tahoma,Arial,sans-serif;direction:rtl;padding:24px">جاري تجهيز خطة القص للطباعة…</body></html>');
+        const locale = window.AlmdinaLocale;
+        const language = locale ? locale.currentLanguage() : "ar";
+        const direction = locale ? locale.direction() : "rtl";
+        print_window.document.write(`<!doctype html><html lang="${escape_html(language)}" dir="${escape_html(direction)}"><head><meta charset="utf-8"><title>${__("Preparing the cutting plan…")}</title></head><body style="font-family:Tahoma,Arial,sans-serif;direction:${escape_html(direction)};padding:24px">${__("Preparing the cutting plan for printing…")}</body></html>`);
         print_window.document.close();
 
         try {

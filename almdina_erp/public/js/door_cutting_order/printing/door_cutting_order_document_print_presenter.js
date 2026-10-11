@@ -103,11 +103,17 @@
         }
     }
 
+    function labelSeparator() {
+        const locale = window.AlmdinaLocale;
+        const direction = locale && typeof locale.direction === "function" ? locale.direction() : "rtl";
+        return direction === "ltr" ? ", " : "، ";
+    }
+
     function pieceTypeLabel(value) {
-        if (value === "Special") return "خاصة";
-        if (value === "Clipped Corner") return "الزاوية الكسر";
-        if (value === "L-Shaped Corner") return "زاوية L";
-        return "عادية";
+        if (value === "Special") return __("Special door");
+        if (value === "Clipped Corner") return __("Clipped corner");
+        if (value === "L-Shaped Corner") return __("L-shaped corner");
+        return __("Regular door");
     }
 
     function rowHasDrawing(row) {
@@ -118,23 +124,24 @@
     function extraAddonLabels(row) {
         if (!row) return [];
         return [
-            ["extra_double", "دبل قشاط"],
-            ["extra_full_door_double", "دبل كامل الدرفة"],
-            ["extra_liner", "Liner"],
-            ["extra_back_groove", "فرزة ظهر"],
-            ["extra_recessed_handle_cutout", "حفر مسكة غطس"],
+            ["extra_double", __("Double edge banding")],
+            ["extra_full_door_double", __("Full door double")],
+            ["extra_liner", __("Liner")],
+            ["extra_back_groove", __("Back groove")],
+            ["extra_recessed_handle_cutout", __("Recessed handle cutout")],
         ].filter(([fieldname]) => Number(row[fieldname] || 0)).map(([, label]) => label);
     }
 
     function notesCellHtml(row) {
         const renderer = shapePrintApi();
         const addons = extraAddonLabels(row);
-        const summary = addons.length ? `إضافات: ${addons.join("، ")}` : "";
+        const summary = addons.length ? `${__("Add-ons")}: ${addons.join(labelSeparator())}` : "";
         const notes = summary && row.notes ? `${summary} — ${row.notes}` : (summary || row.notes);
+        const drawingLabel = __("Door piece drawing {0}", [row.index]);
         return renderer
             ? renderer.notesCell(row, notes, {
-                label: `رسمة الدرفة رقم ${row.index}`,
-                caption: `رسمة الدرفة ${row.index}`,
+                label: drawingLabel,
+                caption: drawingLabel,
             })
             : esc(notes || "—");
     }
@@ -191,27 +198,27 @@
         (details || [])
             .filter(detail => Boolean(detail.custom))
             .forEach(detail => {
-                const type = String(detail.edge_type || "غير محدد").trim() || "غير محدد";
+                const type = String(detail.edge_type || "").trim() || __("Not specified");
                 if (!groups.has(type)) groups.set(type, { type, sides: [] });
-                groups.get(type).sides.push(detail.side_label || "ضلع");
+                groups.get(type).sides.push(detail.side_label || __("Side"));
             });
         return [...groups.values()];
     }
 
     function sideSummary(group, customSideCount) {
-        if (customSideCount === 4 && group.sides.length === 4) return "على الداير";
-        return group.sides.join("، ");
+        if (customSideCount === 4 && group.sides.length === 4) return __("All around");
+        return group.sides.join(labelSeparator());
     }
 
     function customEdgeDetailsHtml(details) {
         const groups = customEdgeGroups(details);
-        if (!groups.length) return '<span class="custom-edge-empty" aria-label="لا يوجد تخصيص"></span>';
+        if (!groups.length) return `<span class="custom-edge-empty" aria-label="${esc(__("No customization"))}"></span>`;
         const customSideCount = groups.reduce((sum, group) => sum + group.sides.length, 0);
         return `<div class="custom-edge-summary">${groups.map(group => `
             <div class="custom-edge-line">
                 <span>${esc(sideSummary(group, customSideCount))}</span>
                 <b>${esc(group.type)}</b>
-                <em>مخصص</em>
+                <em>${esc(__("Custom"))}</em>
             </div>`).join("")}</div>`;
     }
 
@@ -252,10 +259,10 @@
         if (!theme || typeof theme.headerHtml !== "function") {
             throw new Error("Unified factory print header is unavailable");
         }
-        const reference = frm.doc.name || "مسودة";
+        const reference = frm.doc.name || __("Draft");
         const date = String(frm.doc.order_date || "").trim();
         return theme.headerHtml(printIdentity, {
-            title: "جدول قياسات الطلب",
+            title: __("Order measurements table"),
             reference,
             date,
         });
@@ -269,20 +276,20 @@
         const phone = String(customerPhone || "").trim();
         return `<div class="info shared-info">
             <div class="shared-info-customer">
-                <b>الزبون</b>
+                <b>${esc(__("Customer"))}</b>
                 <span class="shared-info-primary">${esc(frm.doc.customer || "—")}</span>
-                <span class="shared-info-phone"><span class="shared-info-phone-label">الهاتف</span><span class="shared-info-phone-value">${esc(phone || "—")}</span></span>
+                <span class="shared-info-phone"><span class="shared-info-phone-label">${esc(__("Phone"))}</span><span class="shared-info-phone-value">${esc(phone || "—")}</span></span>
             </div>
-            <div><b>اللوح</b>${esc(frm.doc.board_description || "—")}</div>
-            <div><b>لون القشاط</b>${esc(frm.doc.edge_color || "غير محدد")}</div>
-            <div><b>آلة القص</b>${esc(frm.doc.order_cutting_machine || "—")}</div>
-            <div><b>عدد الدرف</b>${quantity(doorCount)}</div>
+            <div><b>${esc(__("Board"))}</b>${esc(frm.doc.board_description || "—")}</div>
+            <div><b>${esc(__("Edge color"))}</b>${esc(frm.doc.edge_color || __("Not specified"))}</div>
+            <div><b>${esc(__("Cutting machine"))}</b>${esc(frm.doc.order_cutting_machine || "—")}</div>
+            <div><b>${esc(__("Door count"))}</b>${quantity(doorCount)}</div>
         </div>`;
     }
 
     function measurementTableWithPayload(frm, payload) {
         return `<table class="table measurements">
-            <thead><tr><th>#</th><th>النوع</th><th>العرض</th><th>الطول</th><th>العدد</th><th>القشاط المخصص</th><th>ملاحظات</th></tr></thead>
+            <thead><tr><th>#</th><th>${esc(__("Type"))}</th><th>${esc(__("Width"))}</th><th>${esc(__("Length"))}</th><th>${esc(__("Qty"))}</th><th>${esc(__("Custom edge banding"))}</th><th>${esc(__("Notes"))}</th></tr></thead>
             <tbody>${measurementRowsHtmlWithPayload(frm, payload)}</tbody>
         </table>`;
     }
@@ -293,14 +300,14 @@
 
     function orderNotesHtml(frm) {
         return frm.doc.order_notes
-            ? `<div class="order-note"><b>ملاحظات الطلب:</b> ${esc(frm.doc.order_notes)}</div>`
+            ? `<div class="order-note"><b>${esc(__("Order notes:"))}</b> ${esc(frm.doc.order_notes)}</div>`
             : "";
     }
 
     function measurementDocumentBodyWithPayload(frm, payload, customerPhone = "") {
         return `
             ${sharedInfo(frm, customerPhone)}
-            <div class="title">جدول القياسات</div>
+            <div class="title">${esc(__("Measurements table"))}</div>
             ${measurementTableWithPayload(frm, payload)}
             ${orderNotesHtml(frm)}`;
     }
@@ -313,14 +320,15 @@
         const note = String(line.note || "").trim();
         if (!note) return "";
         if (line.type !== "edge") return note;
+        // Historical stored edge-note sentinels. Matched only; not shown as UI labels.
         if (note.includes("من القشاط الافتراضي")) return "";
-        return note.replace("يتضمن أطرافًا مخصصة", "تخصيص استثنائي");
+        return note.replace("يتضمن أطرافًا مخصصة", __("Exceptional customization"));
     }
 
     function quoteRowsHtml(payload) {
         const lines = Array.isArray(payload && payload.lines) ? payload.lines : [];
         if (!lines.length) {
-            return '<tr><td colspan="6">لا توجد بنود سعر متاحة لهذا الطلب.</td></tr>';
+            return `<tr><td colspan="6">${esc(__("No price lines are available for this order."))}</td></tr>`;
         }
         return lines.map((line, index) => {
             const note = quoteLineNote(line);
@@ -346,9 +354,9 @@
 
     function quoteDetailsHtml(payload) {
         return `<section class="quote-details">
-            <div class="title quote-title">تفاصيل عرض السعر</div>
-            <table class="table invoice"><thead><tr><th>#</th><th class="right">البيان</th><th>الكمية</th><th>الوحدة</th><th>سعر الوحدة $</th><th>الإجمالي $</th></tr></thead><tbody>${quoteRowsHtml(payload)}</tbody></table>
-            <div class="total"><span>الإجمالي النهائي</span><span>$ ${money(quoteTotal(payload))}</span></div>
+            <div class="title quote-title">${esc(__("Quotation details"))}</div>
+            <table class="table invoice"><thead><tr><th>#</th><th class="right">${esc(__("Description"))}</th><th>${esc(__("Quantity"))}</th><th>${esc(__("Unit"))}</th><th>${esc(__("Unit price $"))}</th><th>${esc(__("Total $"))}</th></tr></thead><tbody>${quoteRowsHtml(payload)}</tbody></table>
+            <div class="total"><span>${esc(__("Final total"))}</span><span>$ ${money(quoteTotal(payload))}</span></div>
         </section>`;
     }
 
@@ -370,13 +378,18 @@
         const identity = printIdentity || (api && typeof api.fallback === "function" ? api.fallback() : {});
         const invoice = mode === "invoice";
         const generated = frappe.datetime ? frappe.datetime.now_datetime() : new Date().toISOString();
-        return `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${invoice ? "فاتورة الزبون" : "قياسات"} الطلب ${esc(frm.doc.name || "")}</title><style>${printCss()}</style></head><body>
+        const locale = window.AlmdinaLocale;
+        const language = locale ? locale.currentLanguage() : "ar";
+        const direction = locale ? locale.direction() : "rtl";
+        const documentTitle = invoice ? __("Customer invoice") : __("Measurements");
+        const css = printCss();
+        return `<!doctype html><html dir="${esc(direction)}" lang="${esc(language)}"><head><meta charset="utf-8"><title>${esc(documentTitle)} ${esc(frm.doc.name || "")}</title><style>${css}</style></head><body>
             ${sharedHeader(frm, identity)}
             ${invoice
                 ? measurementDocumentBodyWithPayload(frm, quotePayload, customerPhone)
                 : measurementDocumentBody(frm, customerPhone)}
             ${invoice ? quoteDetailsHtml(quotePayload || {}) : ""}
-            <div class="footer"><span>رقم الطلب: ${esc(frm.doc.name || "مسودة")}</span><span>تاريخ الطباعة: ${esc(generated)}</span></div>
+            <div class="footer"><span>${esc(__("Order number:"))} ${esc(frm.doc.name || __("Draft"))}</span><span>${esc(__("Printed on:"))} ${esc(generated)}</span></div>
         </body></html>`;
     }
 
@@ -401,7 +414,7 @@
             } catch (error) {
                 console.error("Unified order print failed", error);
                 cleanup();
-                frappe.msgprint("تعذر تشغيل الطباعة. أعد تحميل الصفحة ثم حاول مرة أخرى.");
+                frappe.msgprint(__("The print window could not be opened. Reload the page and try again."));
             }
         };
         frame.srcdoc = html;
@@ -449,7 +462,7 @@
         if (financial && typeof financial.printCustomerInvoice === "function") {
             return financial.printCustomerInvoice(frm);
         }
-        frappe.msgprint("تعذر تجهيز فاتورة الزبون. أعد تحميل الصفحة ثم حاول مرة أخرى.");
+        frappe.msgprint(__("The customer invoice could not be prepared. Reload the page and try again."));
         return Promise.resolve(false);
     }
 
@@ -472,7 +485,7 @@
             const action = invoiceButton ? printInvoice(frm) : printMeasurements(frm);
             Promise.resolve(action).catch(error => {
                 console.error("Order document preparation failed", error);
-                frappe.msgprint("تعذر تجهيز المستند للطباعة. أعد تحميل الصفحة ثم حاول مرة أخرى.");
+                frappe.msgprint(__("The document could not be prepared for printing. Reload the page and try again."));
             });
         }, true);
     }

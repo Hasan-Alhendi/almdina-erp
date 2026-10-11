@@ -10,6 +10,7 @@ from almdina_erp.almdina_erp.application.security.role_home_policy import (
     analyze_role_home_pages,
 )
 from almdina_erp.almdina_erp.application.security.workforce_management import (
+    WorkforceLanguageError,
     normalize_identity,
     normalize_role_selection,
     validate_temporary_password,
@@ -31,6 +32,10 @@ from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import 
 from almdina_erp.almdina_erp.infrastructure.frappe.permission_matrix_repository import (
     FrappePermissionMatrixRepository,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.language_catalog import (
+    FrappeLanguageCatalog,
+    enabled_language_codes,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.workforce_repository import (
     FrappeWorkforceRepository,
 )
@@ -38,6 +43,13 @@ from almdina_erp.almdina_erp.infrastructure.frappe.workforce_repository import (
 
 _repository = FrappeWorkforceRepository()
 _permission_repository = FrappePermissionMatrixRepository()
+_language_catalog = FrappeLanguageCatalog()
+
+
+_LANGUAGE_ERROR_MESSAGES = {
+    "invalid_language_code": "The language code is invalid.",
+    "unsupported_language": "The selected user language is not supported.",
+}
 
 
 def _payload(value: Any) -> dict[str, Any]:
@@ -59,6 +71,22 @@ def _bool_value(value: Any) -> bool:
 
 def _granted() -> frozenset[str]:
     return granted_capabilities()
+
+
+def _raise_language_error(error: WorkforceLanguageError) -> None:
+    message = _LANGUAGE_ERROR_MESSAGES.get(error.code, "The entered data is invalid.")
+    frappe.throw(_(message), frappe.ValidationError)
+
+
+def _normalize_workforce_identity(**values: Any):
+    try:
+        return normalize_identity(
+            **values,
+            allowed_languages=enabled_language_codes(_language_catalog),
+        )
+    except WorkforceLanguageError as error:
+        _raise_language_error(error)
+        raise AssertionError("frappe.throw must interrupt execution")
 
 
 def _raise_value_error(error: ValueError) -> None:
@@ -210,6 +238,7 @@ def get_workforce_console(
         "roles": _repository.list_assignable_roles(),
         "users": [_present_user(user) for user in users],
         "available_users": [_present_available_user(user) for user in available_users],
+        "languages": _language_catalog.enabled_languages(),
         "permissions": {
             capability: capability in granted for capability in sorted(WORKFORCE_CAPABILITIES)
         },
@@ -228,7 +257,7 @@ def create_workforce_user(data: Any) -> dict[str, Any]:
     _require_action(WorkforceAction.CREATE)
     values = _payload(data)
     try:
-        identity = normalize_identity(
+        identity = _normalize_workforce_identity(
             email=values.get("email"),
             first_name=values.get("first_name"),
             last_name=values.get("last_name"),
@@ -305,7 +334,7 @@ def update_workforce_user(user: str, data: Any) -> dict[str, Any]:
     _repository.lock_user(user_name)
     try:
         before = _repository.get_user(user_name)
-        identity = normalize_identity(
+        identity = _normalize_workforce_identity(
             email=user_name,
             first_name=values.get("first_name", before["first_name"]),
             last_name=values.get("last_name", before["last_name"]),

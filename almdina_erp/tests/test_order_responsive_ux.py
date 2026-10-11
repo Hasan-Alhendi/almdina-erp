@@ -150,7 +150,7 @@ def test_phone_measurements_use_labelled_cards_without_fixed_table_width():
         "labels.remove",
     ):
         assert f'data-label="${{{label_key}}}"' in operator
-    assert 'cell.dataset.label = isArabic() ? "تحديد السطر" : "Select row"' in bulk
+    assert 'cell.dataset.label = __("Select row")' in bulk
 
 
 def test_phone_controls_are_touch_sized_and_primary_surfaces_stack():

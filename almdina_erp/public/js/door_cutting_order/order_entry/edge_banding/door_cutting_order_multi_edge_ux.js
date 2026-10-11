@@ -6,20 +6,12 @@
     const EDGE_PROFILE_SAVE_METHOD = "almdina_erp.almdina_erp.services.edge_banding_lookup_service.save_order_edge_banding_override";
     const SIDE_ORDER = ["width_top", "width_bottom", "long_right", "long_left"];
     const SIDES = {
-        long_right: { selectedField: "edge_long_right", overrideField: "edge_long_right_type_override", labelAr: "الطول الأيمن", labelEn: "Right long edge", axis: "long" },
-        long_left: { selectedField: "edge_long_left", overrideField: "edge_long_left_type_override", labelAr: "الطول الأيسر", labelEn: "Left long edge", axis: "long" },
-        width_top: { selectedField: "edge_width_top", overrideField: "edge_width_top_type_override", labelAr: "العرض العلوي", labelEn: "Top width edge", axis: "width" },
-        width_bottom: { selectedField: "edge_width_bottom", overrideField: "edge_width_bottom_type_override", labelAr: "العرض السفلي", labelEn: "Bottom width edge", axis: "width" },
+        long_right: { selectedField: "edge_long_right", overrideField: "edge_long_right_type_override", label: "Right length side", axis: "long" },
+        long_left: { selectedField: "edge_long_left", overrideField: "edge_long_left_type_override", label: "Left length side", axis: "long" },
+        width_top: { selectedField: "edge_width_top", overrideField: "edge_width_top_type_override", label: "Top width side", axis: "width" },
+        width_bottom: { selectedField: "edge_width_bottom", overrideField: "edge_width_bottom_type_override", label: "Bottom width side", axis: "width" },
     };
 
-    function isArabic() {
-        const lang = String(
-            (frappe.boot && frappe.boot.lang) ||
-            (frappe.boot && frappe.boot.user && frappe.boot.user.language) ||
-            document.documentElement.lang || ""
-        ).toLowerCase();
-        return lang === "ar" || lang.startsWith("ar-");
-    }
 
     function esc(value) {
         return frappe.utils.escape_html(String(value ?? ""));
@@ -292,7 +284,7 @@
         const config = SIDES[side];
         return {
             side,
-            side_label: isArabic() ? config.labelAr : config.labelEn,
+            side_label: __(config.label),
             axis: config.axis,
             axis_label: config.axis === "long" ? "الطول" : "العرض",
             edge_type: item.type,
@@ -348,14 +340,14 @@
 
     function indicatorTitle(frm, row, side) {
         const config = SIDES[side];
-        const label = isArabic() ? config.labelAr : config.labelEn;
+        const label = __(config.label);
         if (!sideSelected(row, side)) {
-            return isArabic() ? `${label}: لا يوجد قشاط على هذا الضلع في الطلب` : `${label}: no edge banding on this side`;
+            return __("{0}: no edge banding on this side", [label]);
         }
         const type = effectiveType(frm, row, side);
         const profile = profileFor(frm, row, side);
-        const mode = overrideType(row, side) ? (isArabic() ? "مخصص" : "Custom") : (isArabic() ? "افتراضي" : "Default");
-        let meta = isArabic() ? "نوع غير متاح" : "Unavailable profile";
+        const mode = overrideType(row, side) ? (__("Custom")) : (__("Default"));
+        let meta = __("Unavailable profile");
         if (profile) {
             meta = `${format(profile.thickness_mm)} مم`;
             if (financialProfilesAvailable(frm)) {
@@ -373,7 +365,7 @@
             indicator = document.createElement("span");
             indicator.className = "dco-side-profile-trigger";
             indicator.setAttribute("role", "button");
-            indicator.setAttribute("aria-label", isArabic() ? "اختيار نوع القشاط لهذا الضلع" : "Choose this side edge profile");
+            indicator.setAttribute("aria-label", __("Choose this side edge profile"));
             indicator.dataset.edgeSide = side;
             toggle.appendChild(indicator);
         }
@@ -429,9 +421,7 @@
             hint.className = "dco-side-edge-help";
             help.appendChild(hint);
         }
-        hint.innerHTML = isArabic()
-            ? '<b>⌄</b><span>كل ضلع يأخذ الافتراضي؛ اضغط الرمز فوق ضلع عليه قشاط لاختيار نوع مختلف</span>'
-            : '<b>⌄</b><span>Each side uses the default; use the icon on a banded side to choose a different profile</span>';
+        hint.innerHTML = `<b>⌄</b><span>${__("Each side uses the default; use the icon on a banded side to choose a different profile")}</span>`;
     }
 
     function apply(frm) {
@@ -482,14 +472,14 @@
                 edge_type: nextType,
             },
             freeze: true,
-            freeze_message: isArabic() ? "جارٍ حفظ نوع القشاط..." : "Saving edge profile...",
+            freeze_message: __("Saving edge profile..."),
         }).then(response => {
             const message = (response && response.message) || {};
             applySavedPiece(row, message.piece || {});
             if (dialog) dialog.hide();
             schedule(frm);
             frappe.show_alert({
-                message: isArabic() ? "تم حفظ نوع القشاط." : "Edge profile saved.",
+                message: __("Edge profile saved."),
                 indicator: "green",
             });
             const root = rootFor(frm);
@@ -506,8 +496,8 @@
     function defaultSummary(frm) {
         const type = String(frm.doc.default_edge_type || "").trim();
         const profile = type ? profiles(frm).get(type) || null : null;
-        if (!type) return isArabic() ? "لم يتم اختيار قشاط افتراضي للطلب." : "No default edge profile selected.";
-        if (!profile) return `${esc(type)} — ${isArabic() ? "جاري تحميل البيانات أو النوع غير متاح" : "Loading or unavailable"}`;
+        if (!type) return __("No default edge profile selected.");
+        if (!profile) return `${esc(type)} — ${__("Loading or unavailable")}`;
         let summary = `${esc(type)} — ${format(profile.thickness_mm)} مم`;
         if (financialProfilesAvailable(frm)) {
             summary += ` — $ ${money(profile.rate_usd_per_meter)}/م`;
@@ -540,10 +530,10 @@
         const row = materialize(frm, tr);
         if (!row) return;
         const config = SIDES[side];
-        const label = isArabic() ? config.labelAr : config.labelEn;
+        const label = __(config.label);
         if (!sideSelected(row, side)) {
             frappe.show_alert({
-                message: isArabic() ? `لا يوجد قشاط على ${label} في الطلب.` : `No edge banding is selected on ${label}.`,
+                message: __("No edge banding is selected on {0}.", [label]),
                 indicator: "orange",
             });
             return;
@@ -551,25 +541,23 @@
         const current = overrideType(row, side);
 
         const dialog = new frappe.ui.Dialog({
-            title: isArabic() ? `اختيار قشاط ${label}` : `Choose ${label} profile`,
+            title: __("Choose {0} profile", [label]),
             fields: [
                 {
                     fieldname: "default_summary",
                     fieldtype: "HTML",
-                    options: `<div class="dco-side-profile-summary"><strong>${isArabic() ? "القشاط الافتراضي" : "Default profile"}</strong><span>${defaultSummary(frm)}</span></div>`,
+                    options: `<div class="dco-side-profile-summary"><strong>${__("Default profile")}</strong><span>${defaultSummary(frm)}</span></div>`,
                 },
                 {
                     fieldname: "edge_type_override",
                     fieldtype: "Select",
                     options: profileSelectOptions(frm, current),
-                    label: isArabic() ? "نوع القشاط لهذا الضلع" : "Profile for this side",
-                    description: isArabic()
-                        ? "اترك الحقل فارغًا ليستخدم هذا الضلع القشاط الافتراضي للطلب."
-                        : "Leave empty to use the order default.",
+                    label: __("Profile for this side"),
+                    description: __("Leave empty to use the order default."),
                     default: current,
                 },
             ],
-            primary_action_label: isArabic() ? "حفظ النوع" : "Save profile",
+            primary_action_label: __("Save profile"),
             primary_action(values) {
                 const nextType = String(values.edge_type_override || "").trim();
                 commitOverride(frm, row, side, nextType, dialog).catch(error => {
@@ -584,7 +572,7 @@
             const reset = document.createElement("button");
             reset.type = "button";
             reset.className = "btn btn-default btn-sm";
-            reset.textContent = isArabic() ? "استخدام الافتراضي" : "Use default";
+            reset.textContent = __("Use default");
             reset.addEventListener("click", () => {
                 commitOverride(frm, row, side, "", dialog).catch(error => {
                     console.error("Failed to reset edge profile override", error);

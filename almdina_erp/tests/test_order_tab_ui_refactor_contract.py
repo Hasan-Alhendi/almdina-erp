@@ -260,11 +260,11 @@ def test_cutting_machine_radios_are_client_required_and_server_optional() -> Non
 def test_arabic_labels_reflect_the_new_information_hierarchy() -> None:
     defaults = DEFAULTS.read_text(encoding="utf-8")
 
-    assert 'order_details_section: "بيانات الطلب"' in defaults
-    assert 'board_section: "المادة والقشاط"' in defaults
-    assert 'default_edge_type: "نوع القشاط الافتراضي"' in defaults
-    assert 'edge_color: "لون القشاط"' in defaults
-    assert 'order_cutting_machine: "نوع آلة القص"' in defaults
+    assert 'order_details_section: "Order details"' in defaults
+    assert 'board_section: "Material and edge banding"' in defaults
+    assert 'default_edge_type: "Default edge banding type"' in defaults
+    assert 'edge_color: "Edge Color"' in defaults
+    assert 'order_cutting_machine: "Cutting machine type"' in defaults
     assert "cutting_settings_section" not in defaults
 
 

@@ -16,7 +16,7 @@
 | القشاط | `Edge Banding Type` | Order entry / master data | rates/defaults وفق الصلاحية |
 | الإعدادات | `Almdina ERP Settings` | Production settings | أقسام settings بصلاحيات منفصلة |
 | الصلاحيات | Role + Almdina capability state/audits | Factory Permissions | Capability matrix authority |
-| المستخدمون | Frappe `User` | Factory Workforce | Roles تُسند للمستخدم |
+| المستخدمون | Frappe `User` | Factory Workforce | لغة الواجهة هي `User.language` من اللغات المفعّلة في `Language`. أسماء البيانات التي يدخلها المستخدم، مثل اسم مرحلة أو نوع قشاط، لا تُترجم |
 | العملاء | Frappe `Customer` | Master Data / orders | CRUD محمي بCapabilities |
 
 ## 2. Workspaces الرئيسية في المصدر

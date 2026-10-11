@@ -51,18 +51,9 @@
         );
     }
 
-    function isArabic() {
-        const lang = String(
-            (frappe.boot && frappe.boot.lang) ||
-            (frappe.boot && frappe.boot.user && frappe.boot.user.language) ||
-            document.documentElement.lang ||
-            ""
-        ).toLowerCase();
-        return lang === "ar" || lang.startsWith("ar-");
-    }
 
     function buttonLabel() {
-        return isArabic() ? "تصدير DXF لأوتوكاد" : "Export DXF for AutoCAD";
+        return __("Export DXF for AutoCAD");
     }
 
     function num(value) {
@@ -618,7 +609,7 @@
     function downloadValidatedPlan(data, orderName) {
         const plan = (data && data.plan) || {};
         if (!(plan.sheets || []).length) {
-            frappe.throw(isArabic() ? "خطة القص المتحقق منها لا تحتوي على ألواح للتصدير." : "Validated cutting plan contains no sheets to export.");
+            frappe.throw(__("Validated cutting plan contains no sheets to export."));
         }
 
         let dxf;
@@ -627,9 +618,7 @@
             validateDxfText(dxf);
         } catch (error) {
             console.error("DXF self-check failed", error);
-            frappe.throw(isArabic()
-                ? "فشل ملف DXF في فحص التوافق الداخلي، لذلك تم منع تنزيل ملف تالف."
-                : "DXF export failed its compatibility self-check and was not downloaded.");
+            frappe.throw(__("DXF export failed its compatibility self-check and was not downloaded."));
         }
 
         return frappe.call({
@@ -639,9 +628,7 @@
                 content_b64: btoa(dxf),
             },
             freeze: true,
-            freeze_message: isArabic()
-                ? "جاري تجهيز ملف DXF المتوافق مع AutoCAD..."
-                : "Preparing an AutoCAD-compatible DXF...",
+            freeze_message: __("Preparing an AutoCAD-compatible DXF..."),
         }).then(response => {
             const output = (response && response.message) || {};
             if (!output.filename || !output.content_b64) {
@@ -653,9 +640,7 @@
                 "application/dxf;charset=utf-8"
             );
             frappe.show_alert({
-                message: isArabic()
-                    ? "تم تصدير ملف DXF متوافق مع AutoCAD بنجاح."
-                    : "Validated AutoCAD-compatible DXF exported successfully.",
+                message: __("Validated AutoCAD-compatible DXF exported successfully."),
                 indicator: "green",
             });
         });
@@ -666,7 +651,7 @@
             method: VALIDATED_PLAN_METHOD,
             args,
             freeze: true,
-            freeze_message: isArabic() ? "جاري التحقق من هندسة ملف DXF قبل التصدير..." : "Validating DXF geometry on server...",
+            freeze_message: __("Validating DXF geometry on server..."),
         });
     }
 
@@ -675,9 +660,7 @@
             method: ORIGINAL_DXF_METHOD,
             args,
             freeze: true,
-            freeze_message: isArabic()
-                ? "جاري تنزيل ملف DXF المرفوع..."
-                : "Downloading the uploaded DXF file...",
+            freeze_message: __("Downloading the uploaded DXF file..."),
         });
     }
 
@@ -689,9 +672,7 @@
         }
         download(filename, decodeBase64Bytes(contentB64), "application/dxf");
         frappe.show_alert({
-            message: isArabic()
-                ? "تم تنزيل ملف DXF المرفوع بنجاح."
-                : "Uploaded DXF downloaded successfully.",
+            message: __("Uploaded DXF downloaded successfully."),
             indicator: "green",
         });
     }
@@ -712,9 +693,7 @@
                     downloadOriginalUpload(r && r.message);
                 } catch (error) {
                     console.error("Uploaded DXF download failed", error);
-                    frappe.throw(isArabic()
-                        ? "تعذر تنزيل ملف DXF المرفوع."
-                        : "Could not download the uploaded DXF file.");
+                    frappe.throw(__("Could not download the uploaded DXF file."));
                 }
             });
         }

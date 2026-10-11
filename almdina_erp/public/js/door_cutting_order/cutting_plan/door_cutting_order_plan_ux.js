@@ -449,7 +449,9 @@
         const metrics = row.quality || plan.industrial_metrics || {};
         const totals = row.totals || {};
         const engine = row.engine || {};
-        const applied = engine.method_label || engine.method_key || "لم يتم الحساب بعد";
+        const applied = window.AlmdinaLocale
+            ? AlmdinaLocale.translateLabel(engine.method_label || engine.method_key || __("Not calculated yet"))
+            : (engine.method_label || engine.method_key || __("Not calculated yet"));
         const boards = Number(totals.required_boards || 0);
         const waste = Number(totals.waste_percent || 0);
         const reusable = Number(metrics.largest_reusable_free_area_m2 || 0);

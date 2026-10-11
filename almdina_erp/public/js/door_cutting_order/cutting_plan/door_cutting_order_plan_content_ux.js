@@ -280,12 +280,23 @@
         return labels[edge] || "حافة أصلية";
     }
 
-    function buildOriginalEdgeMarker(edge) {
-        const marker = document.createElement("span");
-        marker.className = `dco-board-original-edge dco-board-original-edge--${edge}`;
-        marker.setAttribute("aria-hidden", "true");
-        marker.innerHTML = `<span class="dco-board-original-edge__label">${escapeHtml(originalEdgeLabel(edge))}</span>`;
-        return marker;
+    function orderedOriginalEdges(edges) {
+        const present = new Set(edges || []);
+        return ["top", "bottom", "right", "left"].filter(edge => present.has(edge));
+    }
+
+    function buildOriginalEdgeCaption(edges) {
+        const ordered = orderedOriginalEdges(edges);
+        const caption = document.createElement("div");
+        caption.className = "dco-board-original-edges";
+        caption.setAttribute("aria-hidden", "true");
+        ordered.forEach(edge => {
+            const marker = document.createElement("span");
+            marker.className = `dco-board-original-edge dco-board-original-edge--${edge}`;
+            marker.textContent = originalEdgeLabel(edge);
+            caption.appendChild(marker);
+        });
+        return caption;
     }
 
     function ensureOriginalBoardEdges(planRoot, plan) {
@@ -293,10 +304,14 @@
         const edges = zeroMarginEdges(policy);
         const signature = edges.join("|");
 
-        planRoot.querySelectorAll(".dco-sheet-board").forEach(board => {
-            if (board.dataset.originalEdgeSignature === signature) return;
+        planRoot.querySelectorAll(".dco-sheet-card").forEach(card => {
+            const board = card.querySelector(":scope > .dco-sheet-board");
+            if (!board) return;
+            const caption = card.querySelector(":scope > .dco-board-original-edges");
+            if (board.dataset.originalEdgeSignature === signature && (!edges.length || caption)) return;
+            if (caption) caption.remove();
             board.querySelectorAll(":scope > .dco-board-original-edge").forEach(marker => marker.remove());
-            edges.forEach(edge => board.appendChild(buildOriginalEdgeMarker(edge)));
+            if (edges.length) card.insertBefore(buildOriginalEdgeCaption(edges), board);
             board.dataset.originalEdgeSignature = signature;
         });
     }
@@ -331,7 +346,9 @@
                 const isDuplicatedHeader =
                     (text.includes("الطلب:") && (text.includes("الزبون:") || text.includes("اللوح:") || text.includes("الصنف:"))) ||
                     (text.includes("مقاس اللوح الكامل") && text.includes("سماكة القص"));
-                const isMethodDuplicate = text.startsWith("طريقة الترتيب:") || text.includes("طريقة الترتيب:");
+                const isMethodDuplicate = child.classList.contains("dco-plan-method-line")
+                    || text.includes("Layout method:")
+                    || text.includes("طريقة الترتيب:");
                 if (isDuplicatedHeader || isMethodDuplicate) child.remove();
             });
 
@@ -362,7 +379,9 @@
             const cards = planRoot.querySelectorAll(".dco-sheet-card");
             if (cards.length && !planRoot.querySelector(":scope > .dco-board-gallery")) return false;
             return ![...planRoot.children].some(child =>
-                String(child.textContent || "").replace(/\s+/g, " ").includes("طريقة الترتيب:")
+                child.classList.contains("dco-plan-method-line")
+                || String(child.textContent || "").replace(/\s+/g, " ").includes("Layout method:")
+                || String(child.textContent || "").replace(/\s+/g, " ").includes("طريقة الترتيب:")
             );
         });
     }

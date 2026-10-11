@@ -61,8 +61,17 @@
         `;
     }
 
+    function documentDirection() {
+        const locale = window.AlmdinaLocale;
+        const direction = locale && typeof locale.direction === "function"
+            ? String(locale.direction() || "")
+            : "";
+        return direction === "ltr" ? "ltr" : "rtl";
+    }
+
     function css(mode, shapeCss = "") {
         const measurements = mode === "measurements";
+        const direction = documentDirection();
         const pageMargin = measurements ? "6mm" : "7mm";
         const bodySize = measurements ? "8.1pt" : "8.5pt";
         const tableSize = measurements ? "7.65pt" : "8.05pt";
@@ -73,7 +82,7 @@
         return `
             @page{size:A4 portrait;margin:${pageMargin}}
             *{box-sizing:border-box}
-            html,body{margin:0;padding:0;background:#fff;color:#172033;direction:rtl;font-family:Tahoma,"Segoe UI",Arial,sans-serif}
+            html,body{margin:0;padding:0;background:#fff;color:#172033;direction:${direction};font-family:Tahoma,"Segoe UI",Arial,sans-serif}
             body{font-size:${bodySize};line-height:1.28;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-variant-numeric:tabular-nums}
             ${headerCss()}
             .info{display:grid;gap:1.2mm;margin:0 0 2.2mm}

@@ -154,7 +154,18 @@ Event handlers وtimers وMutationObservers تكون idempotent أو قابلة 
 لا يملك shared shell CSS خاصًا بFeature محلية بعد اكتمال migration. Inline style injection الموجود حاليًا يعد migration debt، لا pattern جديدًا.
 
 ### `FE-ARCH-010` — Arabic-first professional UX
-النصوص القابلة للترجمة تمر عبر `__()`، والواجهات تدعم RTL/logical layout، keyboard/focus، touch targets، responsive behavior، reduced-motion عندما توجد حركة، وحالات loading/error/empty/disabled/dirty الواضحة.
+النصوص القابلة للترجمة تمر عبر `__()` في الواجهة و`_()` في الطبقات الخارجية وJinja. العربية تبقى اللغة الافتراضية عند غياب لغة المستخدم أو لغة الموقع. الاتجاه يأتي من لغة الصفحة: `rtl` لـ `ar` و`he` و`fa` و`ps`، و`ltr` لغير ذلك. المقاسات والأرقام والمعرفات الفنية تبقى `direction: ltr`.
+
+`window.AlmdinaLocale` يقرأ اللغة والاتجاه فقط ويفوّض الترجمة إلى `__()`، ولا يملك قاموسًا. `domain/` و`application/` لا يستوردان Frappe ولا دوال الترجمة؛ يُرجعان رموز أخطاء ثابتة وتُترجم في Service أو العرض.
+
+إضافة لغة جديدة لا تحتاج فرعًا برمجيًا خاصًا بها:
+
+1. فعّل اللغة من DocType `Language` في Frappe.
+2. أضف `translations/<language-code>.csv` بمفاتيح إنجليزية مطابقة للنص في الكود، والترجمة في العمود الثاني. العمود الثالث سياق اختياري عندما يختلف معنى المفتاح نفسه.
+3. عيّن `User.language` للمستخدم، ثم نفّذ `bench build` و`bench --site <site> clear-cache`.
+4. تحقق من `AlmdinaLocale.direction()` ومن مستند طباعة: `lang` و`dir` يتبعان اللغة، والمقاسات تبقى LTR.
+
+ترجمة الواجهة ليست ترجمة بيانات المستخدم. أسماء مراحل الإنتاج وأنواع القشاط والنصوص التي أدخلها المستخدم تبقى كما خُزنت. لا تُضاف فروع `isArabic()` لاختيار النص، ولا ترجمة عبر `MutationObserver`.
 
 ### `FE-ARCH-011` — Respect bounded frontend subsystems
 Special Shape Documentation يحتفظ ببنيته `domain/application/infrastructure/presentation`. لا تُفرض عليه بنية Frappe Page لمجرد توحيد الأسماء، ولا تُدخل هندسة التصنيع إلى عقد التوثيق.
