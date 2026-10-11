@@ -8,8 +8,9 @@ from uuid import uuid4
 import frappe
 from frappe.desk.page.setup_wizard.setup_wizard import enable_setup_wizard_complete
 
-from almdina_erp.almdina_erp.infrastructure.frappe.production_routing_management_repository import (
-    list_operational_roles,
+from almdina_erp.almdina_erp.domain.security.authorization import Capability
+from almdina_erp.almdina_erp.infrastructure.frappe.permission_matrix_repository import (
+    FrappePermissionMatrixRepository,
 )
 
 
@@ -81,10 +82,7 @@ def _edge_type(suffix: str) -> str:
     return str(edge.name)
 
 
-def _route(suffix: str) -> str:
-    operational_roles = list_operational_roles()
-    if not operational_roles:
-        frappe.throw("No eligible operational role is available for the Desk fixture.")
+def _route(suffix: str, operational_role: str) -> str:
     code = f"DeskRecovery{suffix}"
     stage = frappe.get_doc(
         {
@@ -103,7 +101,7 @@ def _route(suffix: str) -> str:
                 {
                     "sequence": 1,
                     "stage_definition": stage.name,
-                    "operational_role": operational_roles[0],
+                    "operational_role": operational_role,
                     "required": 1,
                     "is_planning_stage": 1,
                 }
@@ -147,9 +145,21 @@ def create_desk_edit_recovery_fixtures() -> dict[str, str]:
     enable_setup_wizard_complete("frappe")
     enable_setup_wizard_complete("erpnext")
     suffix = uuid4().hex[:10]
+    role = frappe.get_doc(
+        {
+            "doctype": "Role",
+            "role_name": f"DCO Recovery {suffix}",
+            "desk_access": 1,
+        }
+    )
+    role.insert(ignore_permissions=True)
+    FrappePermissionMatrixRepository().save_role_state(
+        str(role.name),
+        {Capability.VIEW_ORDERS: True, Capability.EDIT_ORDER: True},
+    )
     customer = _customer(suffix)
     edge_type = _edge_type(suffix)
-    route = _route(suffix)
+    route = _route(suffix, str(role.name))
     fixtures = {
         "restore": _order(f"restore-{suffix}", customer, edge_type, route),
         "dispatch": _order(f"dispatch-{suffix}", customer, edge_type, route),
