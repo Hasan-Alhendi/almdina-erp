@@ -577,7 +577,7 @@
                 ${render_piece_groups_summary(frm)}
                 ${render_plan_meta_strip(frm, plan)}
 
-                <div class="dco-plan-method-line" style="font-size:12px;margin-bottom:8px;"><b>طريقة الترتيب:</b> ${escape_html(plan.method_label || frm.doc.packing_method || "")}</div>
+                <div class="dco-plan-method-line" style="font-size:12px;margin-bottom:8px;"><b>${__("Layout method:")}</b> ${escape_html(window.AlmdinaLocale ? AlmdinaLocale.translateLabel(plan.method_label || frm.doc.packing_method || "") : (plan.method_label || frm.doc.packing_method || ""))}</div>
         `;
 
         plan.sheets.forEach(sheet => {

@@ -51,7 +51,6 @@ app_include_js = [
     "/assets/almdina_erp/js/almdina_shortcut_presentation.js?v=2",
     "/assets/almdina_erp/js/almdina_workspace_home_ux.js?v=11",
     "/assets/almdina_erp/js/almdina_desk_sidebar_ux.js?v=2",
-    "/assets/almdina_erp/js/arabic_operator_ui.js",
     "/assets/almdina_erp/js/input_stability.js",
     "/assets/almdina_erp/js/door_cutting_order/drawing/door_cutting_order_special_shape_geometry.js",
     "/assets/almdina_erp/js/door_cutting_order/drawing/door_cutting_order_shape_output_contract.js",

@@ -331,7 +331,9 @@
                 const isDuplicatedHeader =
                     (text.includes("الطلب:") && (text.includes("الزبون:") || text.includes("اللوح:") || text.includes("الصنف:"))) ||
                     (text.includes("مقاس اللوح الكامل") && text.includes("سماكة القص"));
-                const isMethodDuplicate = text.startsWith("طريقة الترتيب:") || text.includes("طريقة الترتيب:");
+                const isMethodDuplicate = child.classList.contains("dco-plan-method-line")
+                    || text.includes("Layout method:")
+                    || text.includes("طريقة الترتيب:");
                 if (isDuplicatedHeader || isMethodDuplicate) child.remove();
             });
 
@@ -362,7 +364,9 @@
             const cards = planRoot.querySelectorAll(".dco-sheet-card");
             if (cards.length && !planRoot.querySelector(":scope > .dco-board-gallery")) return false;
             return ![...planRoot.children].some(child =>
-                String(child.textContent || "").replace(/\s+/g, " ").includes("طريقة الترتيب:")
+                child.classList.contains("dco-plan-method-line")
+                || String(child.textContent || "").replace(/\s+/g, " ").includes("Layout method:")
+                || String(child.textContent || "").replace(/\s+/g, " ").includes("طريقة الترتيب:")
             );
         });
     }

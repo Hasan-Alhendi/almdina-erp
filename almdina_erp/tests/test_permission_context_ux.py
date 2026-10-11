@@ -33,8 +33,8 @@ def test_permission_context_and_shared_shell_load_before_global_presenters() -> 
     hooks_source = HOOKS_PATH.read_text(encoding="utf-8")
     permission_index = hooks_source.index("/assets/almdina_erp/js/permission_context.js")
     shell_index = hooks_source.index("/assets/almdina_erp/js/shared_shell.js")
-    operator_index = hooks_source.index("/assets/almdina_erp/js/arabic_operator_ui.js")
-    assert permission_index < shell_index < operator_index
+    assert permission_index < shell_index
+    assert "arabic_operator_ui.js" not in hooks_source
     assert "shop_floor_desk.js" not in hooks_source
     assert "order_entry_desk.js" not in hooks_source
 

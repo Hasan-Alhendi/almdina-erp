@@ -49,6 +49,23 @@
         return replacements === undefined ? translator(message) : translator(message, replacements);
     }
 
+    // Domain optimizer labels are stored as composed message IDs. Translate the
+    // known prefix and the remainder through Frappe; this is not a catalog.
+    const COMPOSED_LABEL_PREFIXES = ["Auto Pro اختار: ", "بحث معمق اختار: ", "Auto اختار: "];
+
+    function translateLabel(value) {
+        const text = String(value == null ? "" : value);
+        if (!text) return text;
+        const direct = translate(text);
+        if (direct !== text) return direct;
+        for (let index = 0; index < COMPOSED_LABEL_PREFIXES.length; index += 1) {
+            const prefix = COMPOSED_LABEL_PREFIXES[index];
+            if (text.indexOf(prefix) !== 0) continue;
+            return translate(prefix) + translate(text.slice(prefix.length));
+        }
+        return text;
+    }
+
     function context(language) {
         const resolved = language ? normalizeLanguage(language) : currentLanguage();
         const rtl = isRTL(language ? resolved : undefined);
@@ -64,6 +81,7 @@
         direction,
         isRTL,
         translate,
+        translateLabel,
         context,
     });
 })();

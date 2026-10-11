@@ -91,8 +91,13 @@ def test_all_packing_modes_have_arabic_operator_labels():
     assert not missing, f"Missing Arabic packing modes: {missing}"
 
 
-def test_legacy_frozen_method_labels_have_arabic_display_fallbacks():
-    js = (APP_ROOT / "public" / "js" / "arabic_operator_ui.js").read_text(encoding="utf-8")
+def test_legacy_frozen_method_labels_have_arabic_catalog_entries():
+    with TRANSLATIONS.open(encoding="utf-8", newline="") as handle:
+        mapping = {
+            row[0]: row[1].strip()
+            for row in csv.reader(handle)
+            if len(row) >= 2 and row[0] and row[1].strip()
+        }
     legacy_labels = [
         "MaxRects - Best Short Side",
         "MaxRects - Best Area",
@@ -113,8 +118,8 @@ def test_legacy_frozen_method_labels_have_arabic_display_fallbacks():
         "Skyline - Best Fit",
         "Auto اختار: ",
     ]
-    missing = [label for label in legacy_labels if label not in js]
-    assert not missing, f"Missing legacy display fallbacks: {missing}"
+    missing = [label for label in legacy_labels if not _contains_arabic(mapping.get(label, ""))]
+    assert not missing, f"Missing legacy display catalog entries: {missing}"
 
 
 def test_factory_print_formats_are_arabic_first():

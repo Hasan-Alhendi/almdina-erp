@@ -163,7 +163,7 @@
 			<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-top:12px">
 				<div class="frappe-card" style="padding:10px 12px"><span style="display:block;font-size:11px;color:var(--text-muted)">${__("الألواح")}</span><b style="font-size:19px">${sheets.length}</b></div>
 				<div class="frappe-card" style="padding:10px 12px"><span style="display:block;font-size:11px;color:var(--text-muted)">${__("الهدر")}</span><b style="font-size:19px">${wastePercent}%</b></div>
-				<div class="frappe-card" style="padding:10px 12px"><span style="display:block;font-size:11px;color:var(--text-muted)">${__("الخوارزمية")}</span><b style="font-size:13px">${escape(plan.method_label || plan.optimization_mode || "-")}</b></div>
+				<div class="frappe-card" style="padding:10px 12px"><span style="display:block;font-size:11px;color:var(--text-muted)">${__("الخوارزمية")}</span><b style="font-size:13px">${escape(window.AlmdinaLocale ? AlmdinaLocale.translateLabel(plan.method_label || plan.optimization_mode || "-") : (plan.method_label || plan.optimization_mode || "-"))}</b></div>
 			</div>`;
 	}
 

@@ -72,13 +72,12 @@ class TestDynamicLanguageFoundation(unittest.TestCase):
         source = ASSETS.read_text(encoding="utf-8")
         locale_asset = '"/assets/almdina_erp/js/almdina_locale.js"'
         foundation_asset = '"/assets/almdina_erp/js/frontend_foundation.js"'
-        operator_asset = '"/assets/almdina_erp/js/arabic_operator_ui.js"'
         self.assertEqual(source.count(locale_asset), 1)
         self.assertLess(source.index(locale_asset), source.index(foundation_asset))
-        self.assertLess(source.index(locale_asset), source.index(operator_asset))
+        self.assertNotIn("arabic_operator_ui.js", source)
 
         locale = LOCALE.read_text(encoding="utf-8")
-        for export in ("currentLanguage", "direction", "isRTL", "translate", "context"):
+        for export in ("currentLanguage", "direction", "isRTL", "translate", "translateLabel", "context"):
             self.assertIn(export, locale)
         self.assertNotIn("navigator.language", locale)
         self.assertNotIn("MutationObserver", locale)

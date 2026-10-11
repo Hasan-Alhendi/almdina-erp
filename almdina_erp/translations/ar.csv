@@ -937,4 +937,54 @@ Planning stage,مرحلة التخطيط
 "The planning stage must be the first active stage. Reorder the stages, then enable this option.",مرحلة التخطيط يجب أن تكون أول مرحلة فعالة في المسار. غيّر ترتيب المراحل أولًا ثم فعّل الخيار.
 "Build the route in the real work order and assign the operational role for each stage. The role decides who can receive the task, while permissions decide what the worker can do.",ابنِ المسار بالترتيب الفعلي للعمل، وحدد الدور المؤهل لكل مرحلة. الدور يحدد من يمكن إسناد المهمة إليه، بينما الصلاحيات تحدد ما يستطيع العامل فعله.
 Preview production route,معاينة سير الإنتاج
-Order route,سير الطلب
+Not calculated yet,لم يتم الحساب بعد
+Layout method:,طريقة الترتيب:
+Door Cutting Plan Production A4,خطة القص للتنفيذ
+Door Cutting Plan Official,خطة القص الرسمية المعتمدة
+Door Cutting Measurements,جدول قياسات الدرف
+Order Cost Settings,إعدادات تكلفة الطلب
+Cutting Plan Controls,التحكم بخطة القص
+Optimization Time Limit (Sec),مهلة البحث عن أفضل خطة (ثانية)
+Default Optimization Time Limit (Sec),مهلة البحث الافتراضية (ثانية)
+Optimal Search Exact Piece Limit,أقصى عدد قطع للبحث الأمثل الدقيق
+Default Cutting Machine Type,نوع ماكينة القص الافتراضية
+Cutting Machine Type,نوع ماكينة القص
+Industrial Plan Quality,جودة خطة القص التشغيلية
+Estimated Cut Count,عدد خطوط القص التقديري
+Estimated Cut Length M,طول القص التقديري (متر)
+Largest Empty Rectangle M2,أكبر مستطيل فارغ م²
+Rotation Count,عدد مرات تدوير القطع
+Optimization Attempts,عدد محاولات التحسين
+Optimization Mode,مستوى تحسين خطة القص
+Ordering Strategy,طريقة ترتيب القطع قبل التوزيع
+Solver Status,حالة البحث الأمثل
+Search Elapsed Sec,مدة البحث (ثانية)
+GUILLOTINE_DEEP_SEARCH,بحث معمق مناسب لمنشار الألواح
+HEURISTIC_FALLBACK,أفضل حل تجريبي ضمن المهلة
+FEASIBLE,حل صالح وجيد ضمن المهلة
+OPTIMAL,مثبت كأفضل حل ضمن النموذج
+Optimal Search,بحث أمثل
+Deep Search,بحث معمق
+Auto Pro,تلقائي متقدم - الأفضل للاستخدام اليومي
+CNC Router,راوتر CNC
+Panel Saw,منشار ألواح
+Auto Pro اختار: ,التلقائي المتقدم اختار: 
+بحث معمق اختار: ,البحث المعمق اختار: 
+Auto اختار: ,تلقائي - تم اختيار: 
+MaxRects - Best Short Side,ترتيب المستطيلات - أفضل ضلع قصير
+MaxRects - Best Area,ترتيب المستطيلات - أفضل استغلال للمساحة
+MaxRects - Bottom Left,ترتيب المستطيلات - من أسفل اليسار
+MaxRects - Contact Point,ترتيب المستطيلات - أكبر تلامس
+MaxRects - الأعرض أولاً,ترتيب المستطيلات - الأعرض أولًا
+MaxRects - الأطول أولاً,ترتيب المستطيلات - الأطول أولًا
+Shelf Packing - صفوف أفقية,ترتيب صفوف أفقية
+Shelf Packing - أعمدة عمودية,ترتيب أعمدة عمودية
+Shelf Packing - First Fit,ترتيب صفوف - أول مكان مناسب
+Shelf Packing - Next Fit,ترتيب صفوف - المكان التالي المناسب
+Guillotine - Short Axis Split,قص متتابع - التقسيم على المحور القصير
+Guillotine - Long Axis Split,قص متتابع - التقسيم على المحور الطويل
+Guillotine - Best Area Fit,قص متتابع - أفضل استغلال للمساحة
+Guillotine - Best Short Side Fit,قص متتابع - أفضل ضلع قصير
+Guillotine - Best Long Side Fit,قص متتابع - أفضل ضلع طويل
+Skyline - Bottom Left,ترتيب خط الأفق - من أسفل اليسار
+Skyline - Best Fit,ترتيب خط الأفق - أفضل موضع
