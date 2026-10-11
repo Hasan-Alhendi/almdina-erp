@@ -8,13 +8,46 @@ from uuid import uuid4
 import frappe
 
 
+def _category(doctype: str, name_field: str, parent_field: str, suffix: str) -> str:
+    leaf = frappe.db.get_value(doctype, {"is_group": 0}, "name")
+    if leaf:
+        return str(leaf)
+
+    root = frappe.db.get_value(doctype, {"is_group": 1}, "name")
+    if not root:
+        root_doc = frappe.get_doc(
+            {
+                "doctype": doctype,
+                name_field: f"DCO Recovery Fixtures {suffix}",
+                "is_group": 1,
+            }
+        )
+        root_doc.insert(ignore_permissions=True)
+        root = root_doc.name
+
+    leaf_doc = frappe.get_doc(
+        {
+            "doctype": doctype,
+            name_field: f"DCO Recovery Fixture {suffix}",
+            parent_field: root,
+            "is_group": 0,
+        }
+    )
+    leaf_doc.insert(ignore_permissions=True)
+    return str(leaf_doc.name)
+
+
 def _customer(suffix: str) -> str:
     group = frappe.db.get_single_value("Selling Settings", "customer_group")
     territory = frappe.db.get_single_value("Selling Settings", "territory")
-    group = group or frappe.db.get_value("Customer Group", {"is_group": 0}, "name")
-    territory = territory or frappe.db.get_value("Territory", {"is_group": 0}, "name")
-    if not group or not territory:
-        frappe.throw("ERPNext customer defaults are unavailable for the Desk fixture.")
+    if group and frappe.db.get_value("Customer Group", group, "is_group") != 0:
+        group = None
+    if territory and frappe.db.get_value("Territory", territory, "is_group") != 0:
+        territory = None
+    group = group or _category(
+        "Customer Group", "customer_group_name", "parent_customer_group", suffix
+    )
+    territory = territory or _category("Territory", "territory_name", "parent_territory", suffix)
     customer = frappe.get_doc(
         {
             "doctype": "Customer",
