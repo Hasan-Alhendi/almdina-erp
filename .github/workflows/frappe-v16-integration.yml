@@ -298,10 +298,16 @@ jobs:
               result = {
                   "failure": state.get("failure"),
                   "url": state.get("url"),
+                  "desk_boot": {
+                      "setup_complete": state.get("setupComplete"),
+                      "ajax_count": state.get("ajaxCount"),
+                      "route": state.get("route"),
+                  },
                   "save_probe": {
                       key: save_probe.get(key)
                       for key in (
-                          "dirtyBeforeSave", "costUxPresent", "pendingPriceEdits", "saveStarted", "saveSettled",
+                          "dirtyBeforeSave", "ajaxCountAtSave", "costUxPresent", "pendingPriceEdits",
+                          "saveStarted", "saveSettled", "scriptEvents", "runSeriallyCalls", "runSeriallySettled",
                           "beforeSaveHandlers", "beforeSaveTriggerStarted", "beforeSaveTriggerSettled",
                           "activeBeforeSaveHandler",
                       )

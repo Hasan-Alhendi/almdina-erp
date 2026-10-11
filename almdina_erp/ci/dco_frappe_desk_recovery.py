@@ -151,6 +151,8 @@ def wait_for_function(page: Page, step: str, expression: str, *, arg=None, timeo
                     return {
                         url: window.location.href,
                         route: window.frappe && frappe.get_route && frappe.get_route(),
+                        setupComplete: Boolean(window.frappe && frappe.boot && frappe.boot.setup_complete),
+                        ajaxCount: window.frappe && frappe.request && frappe.request.ajax_count,
                         form: frm && frm.doc ? {
                             name: frm.doc.name,
                             status: frm.doc.status,
@@ -263,6 +265,14 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
     except Exception as exc:
         raise RuntimeError(f"Desk login did not establish an Administrator session: {exc}") from exc
 
+    wait_for_function(page, "Desk boot and login requests settle",
+        "() => window.frappe && frappe.boot && frappe.boot.setup_complete && "
+        "frappe.session && frappe.session.user === 'Administrator' && "
+        "frappe.request && frappe.request.ajax_count === 0 && "
+        "window.location.pathname.startsWith('/desk')",
+        timeout=60_000,
+    )
+
     _trace_event("login_established", user="Administrator")
 
     # A route selected on a Draft is not dispatch. Exercise the real edit-session
@@ -300,6 +310,7 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
         const costUx = window.AlmdinaCostPermissionsUX;
         const probe = window.__dcoDeskSaveProbe = {
             dirtyBeforeSave: frm.is_dirty(),
+            ajaxCountAtSave: window.frappe.request && window.frappe.request.ajax_count,
             costUxPresent: Boolean(costUx),
             pendingPriceEdits: costUx && typeof costUx.pendingPricePieces === 'function'
                 ? costUx.pendingPricePieces(frm).length
@@ -311,6 +322,9 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
             beforeSaveTriggerStarted: false,
             beforeSaveTriggerSettled: null,
             activeBeforeSaveHandler: null,
+            scriptEvents: [],
+            runSeriallyCalls: 0,
+            runSeriallySettled: null,
         };
         const manager = frm.script_manager;
         const handlers = manager && manager.handlers && manager.handlers.before_save;
@@ -340,20 +354,43 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
         if (manager && typeof manager.trigger === 'function') {
             const originalTrigger = manager.trigger;
             manager.trigger = function(eventName, ...args) {
-                if (eventName !== 'before_save') return originalTrigger.call(this, eventName, ...args);
-                probe.beforeSaveTriggerStarted = true;
+                if (!probe.saveStarted || !['validate', 'before_save', 'after_save'].includes(eventName)) {
+                    return originalTrigger.call(this, eventName, ...args);
+                }
+                probe.scriptEvents.push({event: eventName, state: 'started'});
+                if (eventName === 'before_save') probe.beforeSaveTriggerStarted = true;
                 const result = originalTrigger.call(this, eventName, ...args);
                 if (result && typeof result.then === 'function') {
                     result.then(
-                        () => { probe.beforeSaveTriggerSettled = 'resolved'; },
-                        error => { probe.beforeSaveTriggerSettled = String(error).slice(0, 160); },
+                        () => {
+                            probe.scriptEvents.push({event: eventName, state: 'resolved'});
+                            if (eventName === 'before_save') probe.beforeSaveTriggerSettled = 'resolved';
+                        },
+                        error => {
+                            const message = String(error).slice(0, 160);
+                            probe.scriptEvents.push({event: eventName, state: message});
+                            if (eventName === 'before_save') probe.beforeSaveTriggerSettled = message;
+                        },
                     );
                 } else {
-                    probe.beforeSaveTriggerSettled = 'non_thenable';
+                    probe.scriptEvents.push({event: eventName, state: 'non_thenable'});
+                    if (eventName === 'before_save') probe.beforeSaveTriggerSettled = 'non_thenable';
                 }
                 return result;
             };
         }
+        const originalRunSerially = frappe.run_serially;
+        frappe.run_serially = function(tasks, ...args) {
+            if (probe.saveStarted) probe.runSeriallyCalls += 1;
+            const result = originalRunSerially.call(this, tasks, ...args);
+            if (probe.saveStarted && result && typeof result.then === 'function') {
+                result.then(
+                    () => { probe.runSeriallySettled = 'resolved'; },
+                    error => { probe.runSeriallySettled = String(error).slice(0, 160); },
+                );
+            }
+            return result;
+        };
         const originalSave = frm.save;
         frm.save = function(...args) {
             probe.saveStarted = true;
@@ -508,6 +545,8 @@ if __name__ == "__main__":
                     bodyLength: (document.body && document.body.innerText || '').length,
                     bodyText: (document.body && document.body.innerText || '').slice(0, 1000),
                     user: window.frappe && frappe.session && frappe.session.user,
+                    setupComplete: Boolean(window.frappe && frappe.boot && frappe.boot.setup_complete),
+                    ajaxCount: window.frappe && frappe.request && frappe.request.ajax_count,
                     route: window.frappe && frappe.get_route && frappe.get_route(),
                     form: window.cur_frm && window.cur_frm.doc && window.cur_frm.doc.name,
                     saveProbe: window.__dcoDeskSaveProbe || null,
