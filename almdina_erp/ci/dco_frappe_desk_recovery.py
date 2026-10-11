@@ -4,7 +4,7 @@ import json
 import os
 from pathlib import Path
 
-from playwright.sync_api import Page, expect
+from playwright.sync_api import Page, expect, sync_playwright
 
 
 DESK_URL = os.environ["FRAPPE_DESK_URL"].rstrip("/")
@@ -47,7 +47,7 @@ def start_edit_and_set_note(page: Page, name: str, value: str, checkpoint: bool)
     )
 
 
-def test_actual_frappe_desk_edit_recovery_boundary(page: Page) -> None:
+def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
     page.goto(DESK_URL)
     if page.locator("#login_email").count():
         page.locator("#login_email").fill("Administrator")
@@ -159,3 +159,12 @@ def test_actual_frappe_desk_edit_recovery_boundary(page: Page) -> None:
     page.locator('[data-edit-recovery-action="continue"]').click()
     expect(page.locator("body")).to_contain_text("تغير الطلب على الخادم")
     assert page.evaluate("() => window.cur_frm.doc.order_notes") == dispatch_baseline
+
+
+if __name__ == "__main__":
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        try:
+            certify_actual_frappe_desk_edit_recovery(browser.new_page())
+        finally:
+            browser.close()
