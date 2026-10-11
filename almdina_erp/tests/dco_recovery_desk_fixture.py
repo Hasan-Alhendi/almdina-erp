@@ -7,6 +7,10 @@ from uuid import uuid4
 
 import frappe
 
+from almdina_erp.almdina_erp.infrastructure.frappe.production_routing_management_repository import (
+    list_operational_roles,
+)
+
 
 def _category(doctype: str, name_field: str, parent_field: str, suffix: str) -> str:
     leaf = frappe.db.get_value(doctype, {"is_group": 0}, "name")
@@ -77,6 +81,9 @@ def _edge_type(suffix: str) -> str:
 
 
 def _route(suffix: str) -> str:
+    operational_roles = list_operational_roles()
+    if not operational_roles:
+        frappe.throw("No eligible operational role is available for the Desk fixture.")
     code = f"DeskRecovery{suffix}"
     stage = frappe.get_doc(
         {
@@ -95,7 +102,7 @@ def _route(suffix: str) -> str:
                 {
                     "sequence": 1,
                     "stage_definition": stage.name,
-                    "operational_role": "System Manager",
+                    "operational_role": operational_roles[0],
                     "required": 1,
                     "is_planning_stage": 1,
                 }
