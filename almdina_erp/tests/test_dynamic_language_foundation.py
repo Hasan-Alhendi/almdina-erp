@@ -49,6 +49,59 @@ class TestDynamicLanguageFoundation(unittest.TestCase):
             normalize_language_code("not a language", allowed_languages=enabled)
         self.assertEqual(invalid.exception.code, "invalid_language_code")
 
+    def test_official_frappe_language_codes_keep_their_casing(self) -> None:
+        from almdina_erp.almdina_erp.application.security.workforce_management import (
+            WorkforceLanguageError,
+            normalize_language_code,
+        )
+        from almdina_erp.almdina_erp.infrastructure.frappe.language_catalog import (
+            language_direction,
+            present_enabled_languages,
+            stored_language_code,
+        )
+
+        enabled = {"ar", "fr", "pt-BR", "zh-TW"}
+        self.assertEqual(normalize_language_code("ar", allowed_languages=enabled), "ar")
+        self.assertEqual(normalize_language_code("fr", allowed_languages=enabled), "fr")
+        self.assertEqual(normalize_language_code("pt-BR", allowed_languages=enabled), "pt-BR")
+        self.assertEqual(normalize_language_code("pt-br", allowed_languages=enabled), "pt-BR")
+        self.assertEqual(normalize_language_code("PT_br", allowed_languages=enabled), "pt-BR")
+        self.assertEqual(normalize_language_code("zh-TW", allowed_languages=enabled), "zh-TW")
+        self.assertEqual(normalize_language_code("zh_tw", allowed_languages=enabled), "zh-TW")
+        self.assertEqual(stored_language_code("pt_BR"), "pt-BR")
+        self.assertEqual(stored_language_code("zh-TW"), "zh-TW")
+
+        for code, direction in (
+            ("ar", "rtl"),
+            ("AR", "rtl"),
+            ("fa", "rtl"),
+            ("he", "rtl"),
+            ("ps", "rtl"),
+            ("fr", "ltr"),
+            ("pt-BR", "ltr"),
+            ("zh-TW", "ltr"),
+        ):
+            self.assertEqual(language_direction(code), direction, code)
+
+        presented = present_enabled_languages([
+            {"language_code": "pt-BR", "language_name": "Português (Brasil)"},
+            {"language_code": "zh_TW", "language_name": "繁體中文"},
+            {"language_code": "ar", "language_name": "العربية"},
+            {"language_code": "  ", "language_name": "blank"},
+        ])
+        self.assertEqual([item["code"] for item in presented], ["pt-BR", "zh-TW", "ar"])
+        self.assertEqual(presented[0]["direction"], "ltr")
+        self.assertEqual(presented[2]["direction"], "rtl")
+        self.assertNotIn("pt-br", [item["code"] for item in presented])
+
+        with self.assertRaises(WorkforceLanguageError) as disabled:
+            normalize_language_code("de", allowed_languages=enabled)
+        self.assertEqual(disabled.exception.code, "unsupported_language")
+
+        with self.assertRaises(WorkforceLanguageError) as invalid:
+            normalize_language_code("not a language", allowed_languages=enabled)
+        self.assertEqual(invalid.exception.code, "invalid_language_code")
+
     def test_service_rejects_disabled_languages_through_the_catalog(self) -> None:
         source = SERVICE.read_text(encoding="utf-8")
         self.assertIn("FrappeLanguageCatalog", source)
@@ -67,6 +120,10 @@ class TestDynamicLanguageFoundation(unittest.TestCase):
         self.assertNotIn("frappe.db.set_value", source)
         self.assertNotIn("insert(", source)
         self.assertIn('RTL_BASE_LANGUAGES = frozenset({"ar", "he", "fa", "ps"})', source)
+        self.assertIn("def stored_language_code", source)
+        self.assertIn("bypasses DocType read permissions", source)
+        helper = source.split("def stored_language_code", 1)[1].split("def ", 1)[0]
+        self.assertNotIn(".lower(", helper)
 
     def test_locale_asset_loads_before_consumers(self) -> None:
         source = ASSETS.read_text(encoding="utf-8")

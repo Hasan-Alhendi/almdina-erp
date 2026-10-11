@@ -21,6 +21,15 @@ class WorkforceLanguageError(Exception):
         super().__init__(code)
 
 
+def _language_match_key(language: str) -> str:
+    return str(language or "").strip().replace("_", "-").lower()
+
+
+def _official_language_code(language: str) -> str:
+    """Hyphenate a code without changing the casing of its official spelling."""
+    return str(language or "").strip().replace("_", "-")
+
+
 def normalize_language_code(
     language: str,
     *,
@@ -29,20 +38,21 @@ def normalize_language_code(
     """Validate a language code shape, and membership when a catalog is supplied.
 
     ``allowed_languages`` is an abstract set from the caller. This module does
-    not read Frappe or decide which languages a site has enabled.
+    not read Frappe or decide which languages a site has enabled. Comparison is
+    case-insensitive. When the catalog contains the official spelling, that
+    spelling is returned and stored (``pt-br`` matches ``pt-BR``).
     """
-    normalized = str(language or DEFAULT_USER_LANGUAGE).strip().lower().replace("_", "-")
-    if not _LANGUAGE_CODE.fullmatch(normalized):
-        raise WorkforceLanguageError("invalid_language_code", {"language": normalized})
-    if allowed_languages is not None:
-        allowed = {
-            str(item or "").strip().lower().replace("_", "-")
-            for item in allowed_languages
-            if str(item or "").strip()
-        }
-        if normalized not in allowed:
-            raise WorkforceLanguageError("unsupported_language", {"language": normalized})
-    return normalized
+    supplied = str(language or "").strip() or DEFAULT_USER_LANGUAGE
+    match_key = _language_match_key(supplied)
+    if not _LANGUAGE_CODE.fullmatch(match_key):
+        raise WorkforceLanguageError("invalid_language_code", {"language": match_key})
+    if allowed_languages is None:
+        return _official_language_code(supplied)
+    for item in allowed_languages:
+        official = _official_language_code(item)
+        if official and _language_match_key(official) == match_key:
+            return official
+    raise WorkforceLanguageError("unsupported_language", {"language": match_key})
 
 
 @dataclass(frozen=True, slots=True)

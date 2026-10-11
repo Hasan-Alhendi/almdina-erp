@@ -17,7 +17,10 @@ class TestLanguageCatalogIntegration(FrappeTestCase):
     def setUp(self) -> None:
         super().setUp()
         frappe.set_user("Administrator")
+        self._ensure_language("ar", "العربية", enabled=1)
         self._ensure_language("fr", "Français", enabled=1)
+        self._ensure_language("pt-BR", "Português (Brasil)", enabled=1)
+        self._ensure_language("zh-TW", "繁體中文", enabled=1)
         self._ensure_language("zu", "Zulu", enabled=0)
 
     def _ensure_language(self, code: str, name: str, *, enabled: int) -> None:
@@ -33,10 +36,21 @@ class TestLanguageCatalogIntegration(FrappeTestCase):
 
     def test_catalog_exposes_enabled_languages_without_extra_fields(self) -> None:
         self.assertEqual(language_direction("ar"), "rtl")
+        self.assertEqual(language_direction("AR"), "rtl")
+        self.assertEqual(language_direction("fa"), "rtl")
+        self.assertEqual(language_direction("he"), "rtl")
+        self.assertEqual(language_direction("ps"), "rtl")
         self.assertEqual(language_direction("fr"), "ltr")
+        self.assertEqual(language_direction("pt-BR"), "ltr")
+        self.assertEqual(language_direction("zh-TW"), "ltr")
         languages = FrappeLanguageCatalog().enabled_languages()
         codes = {language["code"] for language in languages}
+        self.assertIn("ar", codes)
         self.assertIn("fr", codes)
+        self.assertIn("pt-BR", codes)
+        self.assertIn("zh-TW", codes)
+        self.assertNotIn("pt-br", codes)
+        self.assertNotIn("zh-tw", codes)
         self.assertNotIn("zu", codes)
         french = next(language for language in languages if language["code"] == "fr")
         self.assertEqual(french["name"], "Français")
@@ -73,3 +87,18 @@ class TestLanguageCatalogIntegration(FrappeTestCase):
             "roles": [],
         })
         self.assertEqual(created["user"]["language"], "fr")
+        self.assertEqual(frappe.db.get_value("User", "french-worker@example.com", "language"), "fr")
+
+    def test_service_stores_the_official_language_code(self) -> None:
+        created = create_workforce_user({
+            "email": "brazil-worker@example.com",
+            "first_name": "Brazil",
+            "language": "pt-br",
+            "temporary_password": "SecurePass123!",
+            "roles": [],
+        })
+        self.assertEqual(created["user"]["language"], "pt-BR")
+        self.assertEqual(
+            frappe.db.get_value("User", "brazil-worker@example.com", "language"),
+            "pt-BR",
+        )
