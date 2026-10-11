@@ -51,9 +51,16 @@ def start_edit_and_set_note(page: Page, name: str, value: str, checkpoint: bool)
             if (!recovery.markDirty(frm, 'DCO')) throw new Error('EDIT checkpoint was not marked dirty');
             const flushed = await recovery.flush(frm);
             if (!flushed || !flushed.ok) throw new Error('IndexedDB checkpoint flush failed');
-            const found = await recovery.repository().discover({mode: 'EDIT', target_name: name});
+            const found = await recovery.repository().discover({
+                site: String(frappe.boot && (frappe.boot.sitename || frappe.boot.site_name)
+                    || window.location.host || '').trim(),
+                user: String(frappe.session && frappe.session.user || '').trim(),
+                target_doctype: 'Door Cutting Order',
+                mode: 'EDIT',
+                target_name: name,
+            });
             if (!found || !found.ok || !found.value.records.length) {
-                throw new Error('IndexedDB EDIT snapshot was not readable');
+                throw new Error(`IndexedDB EDIT snapshot was not readable: ${found && found.error && found.error.code || 'no_record'}`);
             }
             return {
                 started,
