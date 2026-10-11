@@ -13,6 +13,11 @@ on:
         required: true
         default: version-16
         type: string
+      desk_only:
+        description: Skip the full Python suite and run only real Desk certification
+        required: false
+        default: false
+        type: boolean
   pull_request:
     paths:
       - "almdina_erp/**"
@@ -202,6 +207,7 @@ jobs:
           bench --site test.localhost execute frappe.get_all --kwargs '{"doctype":"DocType","filters":{"module":"Almdina ERP"},"pluck":"name"}'
 
       - name: Run Almdina ERP tests
+        if: github.event_name != 'workflow_dispatch' || inputs.desk_only != true
         run: |
           cd "$RUNNER_TEMP/frappe-bench"
           bench --site test.localhost set-config allow_tests true
@@ -244,6 +250,7 @@ jobs:
         if: always() && !cancelled()
         env:
           DCO_DESK_FIXTURE_FILE: ${{ runner.temp }}/dco-desk-fixtures.json
+          DCO_DESK_EVIDENCE_DIR: ${{ runner.temp }}/dco-desk-evidence
           FRAPPE_DESK_URL: http://test.localhost:8000
         run: |
           set -euo pipefail
@@ -318,8 +325,7 @@ jobs:
             desk-bench.log; do
             cp "$RUNNER_TEMP/$log" "$RUNNER_TEMP/integration-diagnostics/" 2>/dev/null || true
           done
-          cp "$RUNNER_TEMP/frappe-bench/sites/common_site_config.json" "$RUNNER_TEMP/integration-diagnostics/" 2>/dev/null || true
-          cp "$RUNNER_TEMP/frappe-bench/sites/test.localhost/site_config.json" "$RUNNER_TEMP/integration-diagnostics/" 2>/dev/null || true
+          cp -R "$RUNNER_TEMP/dco-desk-evidence" "$RUNNER_TEMP/integration-diagnostics/" 2>/dev/null || true
           find "$RUNNER_TEMP/frappe-bench/sites" -maxdepth 2 -type f -print > "$RUNNER_TEMP/integration-diagnostics/site-files.txt" 2>&1
           cd "$RUNNER_TEMP/frappe-bench" && bench version > "$RUNNER_TEMP/integration-diagnostics/bench-version.txt" 2>&1
           mariadb -h 127.0.0.1 -uroot -proot -e 'SELECT VERSION(); SHOW VARIABLES LIKE "character_set_server"; SHOW VARIABLES LIKE "collation_server"; SELECT User, Host FROM mysql.user;' > "$RUNNER_TEMP/integration-diagnostics/mariadb.txt" 2>&1

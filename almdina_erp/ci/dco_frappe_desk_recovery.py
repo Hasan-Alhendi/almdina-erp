@@ -3,13 +3,82 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from playwright.sync_api import Page, expect, sync_playwright
 
 
 DESK_URL = os.environ["FRAPPE_DESK_URL"].rstrip("/")
 FIXTURES = json.loads(Path(os.environ["DCO_DESK_FIXTURE_FILE"]).read_text(encoding="utf-8"))
+DIAGNOSTIC_EVENTS: dict[str, list[dict[str, str | int | None]]] = {
+    "console": [],
+    "page_errors": [],
+    "request_failures": [],
+    "responses": [],
+}
+BROWSER_TRACE: list[dict[str, str | int | float | None]] = []
+
+
+def _redact_text(value: str, limit: int = 1000) -> str:
+    scrubbed = re.sub(r"(?i)\bAuthorization\s*:\s*Bearer\s+\S+", "Authorization: Bearer REDACTED", value)
+    scrubbed = re.sub(
+        r"(?i)\b(password|passwd|pwd|access[_-]?token|token|authorization|cookie|secret|session[_-]?id|sid)\b"
+        r"([\s\"']*[:=][\s\"']*)([^\s,;\"']+)",
+        r"\1\2REDACTED",
+        scrubbed,
+    )
+    return scrubbed[:limit]
+
+
+def _trace_event(event: str, **details: str | int | float | None) -> None:
+    BROWSER_TRACE.append({"time": round(time.time(), 3), "event": event, **details})
+    if len(BROWSER_TRACE) > 500:
+        del BROWSER_TRACE[:-500]
+
+
+def _safe_url(url: str) -> str:
+    parsed = urlsplit(url)
+    query_keys = sorted({part.split("=", 1)[0] for part in parsed.query.split("&") if part})
+    query = "?" + "&".join(f"{key}=REDACTED" for key in query_keys) if query_keys else ""
+    return f"{parsed.scheme}://{parsed.netloc}{parsed.path}{query}"
+
+
+def attach_browser_diagnostics(page: Page) -> None:
+    def append(bucket: str, item: dict[str, str | int | None]) -> None:
+        events = DIAGNOSTIC_EVENTS[bucket]
+        events.append(item)
+        if len(events) > 100:
+            del events[:-100]
+
+    page.on("framenavigated", lambda frame: _trace_event(
+        "navigation", url=_safe_url(frame.url)
+    ) if frame == page.main_frame else None)
+    page.on("console", lambda message: (append("console", {
+        "type": message.type,
+        "text": _redact_text(message.text),
+        "location": _safe_url(message.location.get("url", "")) if message.location.get("url") else "",
+    }), _trace_event("console", type=message.type, text=_redact_text(message.text)))
+        if message.type in {"error", "warning"} else None)
+    page.on("pageerror", lambda error: (append("page_errors", {"text": _redact_text(str(error))}),
+        _trace_event("page_error", text=_redact_text(str(error)))))
+    page.on("requestfailed", lambda request: (append("request_failures", {
+        "url": _safe_url(request.url),
+        "resource_type": request.resource_type,
+        "failure": _redact_text(str(request.failure), 500) if request.failure else "unknown",
+    }), _trace_event("request_failed", url=_safe_url(request.url),
+        resource_type=request.resource_type,
+        failure=_redact_text(str(request.failure), 500) if request.failure else "unknown")))
+    page.on("response", lambda response: (append("responses", {
+        "url": _safe_url(response.url),
+        "status": response.status,
+        "resource_type": response.request.resource_type,
+        "content_type": response.headers.get("content-type", "")[:120],
+    }), _trace_event("response", url=_safe_url(response.url), status=response.status,
+        resource_type=response.request.resource_type))
+        if response.request.resource_type in {"document", "script", "xhr", "fetch"}
+        or response.status >= 400 else None)
 
 
 def evaluate(page: Page, step: str, expression: str, arg=None):
@@ -58,7 +127,11 @@ def wait_for_function(page: Page, step: str, expression: str, *, arg=None, timeo
 
 
 def open_dco(page: Page, name: str) -> None:
-    page.goto(f"{DESK_URL}/app/door-cutting-order/{name}", wait_until="domcontentloaded")
+    target_url = f"{DESK_URL}/app/door-cutting-order/{name}"
+    response = page.goto(target_url, wait_until="domcontentloaded")
+    if response is None or response.status >= 400:
+        status = response.status if response is not None else None
+        raise RuntimeError(f"DCO navigation returned HTTP {status}: {_safe_url(page.url)}")
     try:
         wait_for_function(page, f"load DCO {name}",
             "name => window.cur_frm && window.cur_frm.doc && window.cur_frm.doc.name === name",
@@ -119,18 +192,23 @@ def start_edit_and_set_note(page: Page, name: str, value: str, checkpoint: bool)
 
 
 def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
-    page.goto(DESK_URL)
-    if page.locator("#login_email").count():
-        page.locator("#login_email").fill("Administrator")
-        page.locator("#login_password").fill("admin")
-        page.get_by_role("button", name=re.compile(r"^(Login|Continue)$")).click()
-        try:
-            wait_for_function(page, "Administrator login establishes a Desk session",
-                "() => window.frappe && frappe.session && frappe.session.user === 'Administrator'",
-                timeout=60_000,
-            )
-        except Exception as exc:
-            raise RuntimeError(f"Desk login did not establish an Administrator session: {exc}") from exc
+    response = page.goto(f"{DESK_URL}/login", wait_until="domcontentloaded")
+    if response is None or response.status >= 400:
+        status = response.status if response is not None else None
+        raise RuntimeError(f"Frappe login page returned HTTP {status}: {_safe_url(page.url)}")
+    page.locator("#login_email").wait_for(state="visible", timeout=15_000)
+    page.locator("#login_email").fill("Administrator")
+    page.locator("#login_password").fill("admin")
+    page.get_by_role("button", name=re.compile(r"^(Login|Continue)$")).click()
+    try:
+        wait_for_function(page, "Administrator login establishes a Desk session",
+            "() => window.frappe && frappe.session && frappe.session.user === 'Administrator'",
+            timeout=60_000,
+        )
+    except Exception as exc:
+        raise RuntimeError(f"Desk login did not establish an Administrator session: {exc}") from exc
+
+    _trace_event("login_established", user="Administrator")
 
     # A route selected on a Draft is not dispatch. Exercise the real edit-session
     # Cancel and Save adapters, and the real IndexedDB restore dialog.
@@ -265,7 +343,51 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
 if __name__ == "__main__":
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
+        context = browser.new_context()
+        page = context.new_page()
+        attach_browser_diagnostics(page)
+        evidence_dir = Path(os.environ.get("DCO_DESK_EVIDENCE_DIR", "/tmp/dco-desk-evidence"))
         try:
-            certify_actual_frappe_desk_edit_recovery(browser.new_page())
+            certify_actual_frappe_desk_edit_recovery(page)
+        except BaseException:
+            evidence_dir.mkdir(parents=True, exist_ok=True)
+            screenshot = evidence_dir / "dco-desk-failure.png"
+            trace = evidence_dir / "dco-desk-trace.json"
+            try:
+                page.screenshot(path=str(screenshot), full_page=True, timeout=10_000)
+            except Exception as exc:
+                print(f"Desk screenshot capture failed: {_redact_text(str(exc), 500)}")
+            try:
+                state = page.evaluate("""() => ({
+                    url: location.href,
+                    title: document.title,
+                    readyState: document.readyState,
+                    bodyLength: (document.body && document.body.innerText || '').length,
+                    bodyText: (document.body && document.body.innerText || '').slice(0, 1000),
+                    user: window.frappe && frappe.session && frappe.session.user,
+                    route: window.frappe && frappe.get_route && frappe.get_route(),
+                    form: window.cur_frm && window.cur_frm.doc && window.cur_frm.doc.name,
+                })""")
+            except Exception as exc:
+                state = {"diagnostic_error": _redact_text(str(exc), 500)}
+            state["url"] = _safe_url(state.get("url", ""))
+            state["bodyText"] = _redact_text(state.get("bodyText", ""))
+            diagnostic = {"state": state, **DIAGNOSTIC_EVENTS}
+            (evidence_dir / "browser-diagnostics.json").write_text(
+                json.dumps(diagnostic, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+            trace.write_text(json.dumps(BROWSER_TRACE, ensure_ascii=False, indent=2), encoding="utf-8")
+            print("DESK_BROWSER_STATE " + json.dumps(state, ensure_ascii=False))
+            print("DESK_BROWSER_EVENT_COUNTS " + json.dumps({
+                key: len(events) for key, events in DIAGNOSTIC_EVENTS.items()
+            }))
+            print("DESK_BROWSER_RECENT_NETWORK " + json.dumps({
+                "request_failures": DIAGNOSTIC_EVENTS["request_failures"][-12:],
+                "responses": DIAGNOSTIC_EVENTS["responses"][-20:],
+                "console": DIAGNOSTIC_EVENTS["console"][-12:],
+                "page_errors": DIAGNOSTIC_EVENTS["page_errors"][-12:],
+            }, ensure_ascii=False))
+            print(f"Desk failure evidence saved to {evidence_dir}")
+            raise
         finally:
             browser.close()
