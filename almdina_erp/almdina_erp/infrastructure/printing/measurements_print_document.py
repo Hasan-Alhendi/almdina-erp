@@ -141,15 +141,34 @@ def _truthy(value: object) -> bool:
 
 
 def document_locale(language: str | None = None) -> tuple[str, str]:
-    """Resolve a print document language. Missing locale stays Arabic/RTL.
+    """Return ``(code, direction)`` for a supplied print language.
 
-    The returned code keeps the caller's official spelling (``pt-BR``).
-    Direction compares the base language without regard to case.
+    The code keeps the caller's official spelling (``pt-BR``). Direction uses
+    the base language, case-insensitively, and is RTL for ``ar``, ``he``,
+    ``fa``, and ``ps``. A missing code maps to ``ar`` only inside this helper.
+    HTML builders do not use that default.
     """
     code = str(language or "ar").strip().replace("_", "-") or "ar"
     base = code.lower().split("-", 1)[0]
     direction = "rtl" if base in RTL_DOCUMENT_LANGUAGES else "ltr"
     return code, direction
+
+
+def _require_print_locale(language: str | None, translator: Any) -> tuple[str, str]:
+    """Require the language that the labels will actually be written in.
+
+    Message IDs are English. Frappe remains the only translation catalog, so
+    this module does not embed Arabic strings and does not announce
+    ``lang="ar"`` when the caller omitted a translator. Production passes the
+    active language and ``frappe._``. Tests pass ``language="en"`` with an
+    identity translator, or ``language="ar"`` with a translator that returns
+    Arabic.
+    """
+    if not str(language or "").strip():
+        raise ValueError("print_language_required")
+    if not callable(translator):
+        raise ValueError("print_translator_required")
+    return document_locale(language)
 
 
 def _label_separator(direction: str) -> str:
@@ -565,7 +584,7 @@ def _print_body_html(
     language: str | None = None,
     translator: Any = None,
 ) -> str:
-    language_code, direction = document_locale(language)
+    language_code, direction = _require_print_locale(language, translator)
     reference = str(order.get("name") or "").strip() or _label("Draft", translator)
     date = str(order.get("order_date") or "").strip()
     notes = str(order.get("order_notes") or "").strip()
@@ -597,6 +616,12 @@ def measurements_print_html(
     language: str | None = None,
     translator: Any = None,
 ) -> str:
+    """Render the measurements document.
+
+    ``language`` and ``translator`` are required. ``translator`` is ``frappe._``
+    in production. Omitting either raises ``ValueError`` instead of emitting an
+    Arabic document whose labels are still English message IDs.
+    """
     return _print_body_html(
         order,
         identity=identity,
@@ -618,15 +643,23 @@ def _quote_money(value: object) -> str:
     return f"{_number(value):,.2f}"
 
 
-def _quote_line_note(line: Mapping[str, Any]) -> str:
+# Historical stored quote phrases. They match old edge notes and are not UI labels.
+_LEGACY_DEFAULT_EDGE_NOTE = "من القشاط الافتراضي"
+_LEGACY_CUSTOM_EDGE_PHRASE = "يتضمن أطرافًا مخصصة"
+
+
+def _quote_line_note(line: Mapping[str, Any], translator: Any = None) -> str:
     note = str(line.get("note") or "").strip()
     if not note:
         return ""
     if str(line.get("type") or "") != "edge":
         return note
-    if "من القشاط الافتراضي" in note:
+    if _LEGACY_DEFAULT_EDGE_NOTE in note:
         return ""
-    return note.replace("يتضمن أطرافًا مخصصة", "تخصيص استثنائي")
+    return note.replace(
+        _LEGACY_CUSTOM_EDGE_PHRASE,
+        _label("Exceptional customization", translator),
+    )
 
 
 def _quote_total(payload: Mapping[str, Any]) -> float:
@@ -654,7 +687,7 @@ def _quote_rows_html(payload: Mapping[str, Any], translator: Any = None) -> str:
     for index, line in enumerate(lines, start=1):
         if not isinstance(line, Mapping):
             continue
-        note = _quote_line_note(line)
+        note = _quote_line_note(line, translator)
         rate = line.get("rate_usd")
         rate_html = _quote_money(rate) if rate or rate == 0 else "—"
         note_html = (
@@ -718,6 +751,12 @@ def customer_invoice_print_html(
     language: str | None = None,
     translator: Any = None,
 ) -> str:
+    """Render the customer invoice on the measurements document.
+
+    ``language`` and ``translator`` follow the same contract as
+    ``measurements_print_html``: both are required, and translation stays in
+    the supplied translator rather than a catalog inside this module.
+    """
     payload = quote_payload if isinstance(quote_payload, Mapping) else {}
     printable = _overlay_invoice_drawings(order, payload)
     return _print_body_html(

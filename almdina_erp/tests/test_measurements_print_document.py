@@ -36,6 +36,31 @@ PRESENTER = (
 )
 
 
+def _identity_translator(message: str, replacements=None) -> str:
+    text = message
+    if replacements:
+        text = text.replace("{0}", str(replacements[0]))
+    return text
+
+
+_ARABIC_LABELS = {
+    "Custom": "مخصص",
+    "Add-ons": "إضافات",
+    "Liner": "لاينر",
+    "Back groove": "فرزة ظهر",
+    "Order measurements table": "جدول قياسات الطلب",
+    "Measurements table": "جدول القياسات",
+    "Exceptional customization": "تخصيص استثنائي",
+}
+
+
+def _arabic_translator(message: str, replacements=None) -> str:
+    text = _ARABIC_LABELS.get(message, message)
+    if replacements:
+        text = text.replace("{0}", str(replacements[0]))
+    return text
+
+
 def _sample_order() -> dict[str, object]:
     return {
         "name": "26-00089",
@@ -79,12 +104,15 @@ class MeasurementsPrintDocumentTests(unittest.TestCase):
             identity={"print_factory_name": "مجمع المدينة المنورة التجاري"},
             customer_phone="0944123456",
             printed_on="2026-09-23 10:00:00",
+            language="en",
+            translator=_identity_translator,
         )
 
         self.assertIn("Order measurements table", html)
         self.assertIn("Measurements table", html)
-        self.assertIn('lang="ar"', html)
-        self.assertIn('dir="rtl"', html)
+        self.assertIn('lang="en"', html)
+        self.assertIn('dir="ltr"', html)
+        self.assertIn("direction:ltr", html)
         self.assertIn("26-00089", html)
         self.assertIn("shared-info-phone", html)
         self.assertIn("0944123456", html)
@@ -118,7 +146,9 @@ class MeasurementsPrintDocumentTests(unittest.TestCase):
                         "edge_long_right": 1,
                     }
                 ],
-            }
+            },
+            language="en",
+            translator=_identity_translator,
         )
         self.assertIn('class="custom-edge-empty"', html)
         self.assertNotIn('class="custom-edge-summary"', html)
@@ -146,7 +176,11 @@ class MeasurementsPrintDocumentTests(unittest.TestCase):
                 ],
             )
         )
-        html = measurements_print_html(payload)
+        html = measurements_print_html(
+            payload,
+            language="en",
+            translator=_identity_translator,
+        )
         self.assertEqual(payload["name"], "26-00089")
         self.assertEqual(payload["pieces"][0]["extra_liner"], 1)
         self.assertIn("Add-ons: Liner", html)
@@ -169,11 +203,29 @@ class MeasurementsPrintDocumentTests(unittest.TestCase):
         self.assertIn('title: __("Order measurements table")', presenter)
         self.assertIn('__("Cutting machine")', presenter)
         self.assertIn("shared-info-phone", presenter)
+        self.assertIn("translator=frappe._", adapter)
+        self.assertIn('language=getattr(frappe.local, "lang", None) or "ar"', adapter)
+
+    def test_missing_language_or_translator_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "print_language_required"):
+            measurements_print_html(_sample_order(), translator=_identity_translator)
+        with self.assertRaisesRegex(ValueError, "print_translator_required"):
+            measurements_print_html(_sample_order(), language="ar")
+        with self.assertRaisesRegex(ValueError, "print_translator_required"):
+            customer_invoice_print_html(_sample_order(), language="en")
 
     def test_print_direction_follows_language_and_measurements_stay_ltr(self) -> None:
-        arabic = measurements_print_html(_sample_order())
+        arabic = measurements_print_html(
+            _sample_order(),
+            language="ar",
+            translator=_arabic_translator,
+        )
         self.assertIn('lang="ar"', arabic)
         self.assertIn('dir="rtl"', arabic)
+        self.assertIn("جدول قياسات الطلب", arabic)
+        self.assertIn("إضافات: لاينر", arabic)
+        self.assertIn("مقبض", arabic)
+        self.assertNotIn("<em>Custom</em>", arabic)
         self.assertIn('class="ltr"', arabic)
 
         def french(message: str) -> str:
@@ -204,6 +256,15 @@ class MeasurementsPrintDocumentTests(unittest.TestCase):
         self.assertEqual(document_locale("pt-BR"), ("pt-BR", "ltr"))
         self.assertEqual(document_locale("pt_BR"), ("pt-BR", "ltr"))
         self.assertEqual(document_locale("zh-TW"), ("zh-TW", "ltr"))
+        portuguese = measurements_print_html(
+            _sample_order(),
+            language="pt-BR",
+            translator=_identity_translator,
+        )
+        self.assertIn('lang="pt-BR"', portuguese)
+        self.assertIn('dir="ltr"', portuguese)
+        self.assertIn("مقبض", portuguese)
+        self.assertIn("زبون &lt;تجريبي&gt;", portuguese)
 
     def test_third_language_translates_custom_and_keeps_user_text(self) -> None:
         order = _sample_order()
@@ -238,12 +299,18 @@ class MeasurementsPrintDocumentTests(unittest.TestCase):
         self.assertNotIn("رسمة الدرفة", html)
         self.assertNotIn("،", html)
 
-        arabic = measurements_print_html(order)
+        arabic = measurements_print_html(
+            order,
+            language="ar",
+            translator=_arabic_translator,
+        )
         self.assertIn('lang="ar"', arabic)
         self.assertIn('dir="rtl"', arabic)
-        self.assertIn("<em>Custom</em>", arabic)
-        self.assertIn("Add-ons: Liner، Back groove", arabic)
-        self.assertNotIn("مخصص", arabic)
+        self.assertIn("<em>مخصص</em>", arabic)
+        self.assertIn("إضافات: لاينر، فرزة ظهر", arabic)
+        self.assertIn("مقبض", arabic)
+        self.assertIn("PVC 1mm", arabic)
+        self.assertNotIn("<em>Custom</em>", arabic)
 
 
 class CustomerInvoicePrintDocumentTests(unittest.TestCase):
@@ -260,14 +327,34 @@ class CustomerInvoicePrintDocumentTests(unittest.TestCase):
                         "unit": "لوح",
                         "rate_usd": 12.5,
                         "amount_usd": 25,
-                        "note": "",
-                    }
+                        "note": "ملاحظة السعر",
+                    },
+                    {
+                        "type": "edge",
+                        "description": "PVC 1mm",
+                        "quantity": 1,
+                        "unit": "m",
+                        "rate_usd": 1,
+                        "amount_usd": 1,
+                        "note": "يتضمن أطرافًا مخصصة",
+                    },
+                    {
+                        "type": "edge",
+                        "description": "Default edge",
+                        "quantity": 1,
+                        "unit": "m",
+                        "rate_usd": 1,
+                        "amount_usd": 1,
+                        "note": "من القشاط الافتراضي",
+                    },
                 ],
                 "totals": [{"label": "الإجمالي النهائي", "value_usd": 25}],
             },
             identity={"print_factory_name": "مجمع المدينة المنورة التجاري"},
             customer_phone="0944123456",
             printed_on="2026-09-23 10:00:00",
+            language="en",
+            translator=_identity_translator,
         )
         self.assertIn("Customer invoice for order", html)
         self.assertIn("Order measurements table", html)
@@ -275,6 +362,10 @@ class CustomerInvoicePrintDocumentTests(unittest.TestCase):
         self.assertIn("quote-details", html)
         self.assertIn("Quotation details", html)
         self.assertIn("ألواح MDF — لوح أبيض", html)
+        self.assertIn("ملاحظة السعر", html)
+        self.assertIn("Exceptional customization", html)
+        self.assertNotIn("يتضمن أطرافًا مخصصة", html)
+        self.assertNotIn("من القشاط الافتراضي", html)
         self.assertIn("Unit price $", html)
         self.assertIn("25.00", html)
         self.assertIn("0944123456", html)
