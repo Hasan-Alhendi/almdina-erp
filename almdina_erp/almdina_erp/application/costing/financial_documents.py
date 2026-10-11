@@ -28,7 +28,7 @@ def _quantity(value: Any) -> int:
 
 
 def _factory_quantity(piece: Mapping[str, Any]) -> int:
-    """Use a plan-derived service quantity when OFFCUT is classified per copy."""
+    """Use the canonical factory-execution quantity, preserving legacy snapshots."""
 
     if "factory_execution_qty" not in piece:
         return _quantity(_value(piece, "qty"))
@@ -318,7 +318,6 @@ def _customer_invoice_lines(
                 }
             )
 
-        addon_quantity = _quantity(_value(piece, "qty"))
         specs = (
             (
                 "extra_double",
@@ -360,10 +359,10 @@ def _customer_invoice_lines(
                 {
                     "type": "extra_addon",
                     "description": f"إضافة {label} — درفة رقم {index}",
-                    "quantity": addon_quantity,
+                    "quantity": quantity,
                     "unit": "درفة",
                     "rate_usd": _money(rate),
-                    "amount_usd": _money(rate * addon_quantity if rate else amount),
+                    "amount_usd": _money(rate * quantity if rate else amount),
                     "note": _text(_value(piece, "notes")),
                 }
             )

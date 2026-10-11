@@ -219,9 +219,82 @@ def test_invoice_uses_one_aggregate_offcut_line_and_excludes_customer_execution_
     }]
     assert liner_lines[0]["quantity"] == 4
     assert liner_lines[0]["amount_usd"] == 12.0
+    assert document["totals"][0]["value_usd"] == 37.0
     assert edge_lines == []
     assert special_lines == []
     assert corner_lines == []
+
+
+@pytest.mark.parametrize(
+    ("factory_execution_qty", "expected_total"),
+    [(5, 100.0), (4, 85.0), (0, 25.0)],
+    ids=["full", "partial", "zero"],
+)
+def test_all_extra_addons_follow_factory_quantity_and_preserve_offcut_total(
+    factory_execution_qty: int,
+    expected_total: float,
+) -> None:
+    addon_specs = (
+        ("extra_double", "extra_double_unit_price_usd", "extra_double_total_usd"),
+        (
+            "extra_full_door_double",
+            "extra_full_door_double_unit_price_usd",
+            "extra_full_door_double_total_usd",
+        ),
+        ("extra_liner", "extra_liner_unit_price_usd", "extra_liner_total_usd"),
+        ("extra_back_groove", "extra_back_groove_unit_price_usd", "extra_back_groove_total_usd"),
+        (
+            "extra_recessed_handle_cutout",
+            "extra_recessed_handle_cutout_unit_price_usd",
+            "extra_recessed_handle_cutout_total_usd",
+        ),
+    )
+    piece: dict[str, object] = {
+        "piece_type": "Regular",
+        "qty": 5,
+        "factory_execution_qty": factory_execution_qty,
+    }
+    for flag_field, rate_field, amount_field in addon_specs:
+        piece[flag_field] = 1
+        piece[rate_field] = 3
+        # Stored service totals are projected to factory execution before the
+        # invoice builder receives them, including historical saved amounts.
+        piece[amount_field] = 3 * factory_execution_qty
+
+    document = build_customer_invoice_document(
+        {"offcut_factory_factory": True, "offcut_price_usd": 25, "required_boards": 0},
+        [piece],
+    )
+
+    addon_lines = [line for line in document["lines"] if line["type"] == "extra_addon"]
+    offcut_lines = [line for line in document["lines"] if line["type"] == "offcut"]
+    if factory_execution_qty:
+        assert len(addon_lines) == len(addon_specs)
+        assert {line["quantity"] for line in addon_lines} == {factory_execution_qty}
+        assert {line["amount_usd"] for line in addon_lines} == {3.0 * factory_execution_qty}
+    else:
+        assert addon_lines == []
+    assert len(offcut_lines) == 1
+    assert offcut_lines[0]["amount_usd"] == 25.0
+    assert document["totals"][0]["value_usd"] == expected_total
+
+
+def test_legacy_extra_invoice_uses_order_quantity_and_stored_amount() -> None:
+    document = build_customer_invoice_document(
+        {"required_boards": 0},
+        [{
+            "piece_type": "Regular",
+            "qty": 5,
+            "extra_liner": 1,
+            "extra_liner_unit_price_usd": 0,
+            "extra_liner_total_usd": 12.5,
+        }],
+    )
+
+    addon = next(line for line in document["lines"] if line["type"] == "extra_addon")
+    assert addon["quantity"] == 5
+    assert addon["amount_usd"] == 12.5
+    assert document["totals"][0]["value_usd"] == 12.5
 
 
 def test_active_stage_start_and_handoff_fail_closed_after_reclassification_removes_factory_work() -> None:
@@ -334,7 +407,10 @@ def test_invoice_service_scales_edge_and_extra_totals_to_factory_physical_quanti
         extra_liner=1,
         extra_liner_unit_price_usd=3,
         extra_liner_total_usd=15,
-        extra_addons_total_usd=15,
+        extra_back_groove=1,
+        extra_back_groove_unit_price_usd=0,
+        extra_back_groove_total_usd=10,
+        extra_addons_total_usd=25,
     )
 
     result = _commercial_piece_snapshots([row], {1: 4}, {1: 5})[0]
@@ -343,7 +419,16 @@ def test_invoice_service_scales_edge_and_extra_totals_to_factory_physical_quanti
     assert result["edge_meters"] == 8
     assert result["edge_cost_usd"] == 16
     assert result["extra_liner_total_usd"] == 12
-    assert result["extra_addons_total_usd"] == 12
+    assert result["extra_back_groove_total_usd"] == 8
+    assert result["extra_addons_total_usd"] == 20
+
+    invoice = build_customer_invoice_document({"required_boards": 0}, [result])
+    addon_lines = [line for line in invoice["lines"] if line["type"] == "extra_addon"]
+    assert [(line["quantity"], line["amount_usd"]) for line in addon_lines] == [
+        (4, 12.0),  # Unit-rate path uses the factory quantity.
+        (4, 8.0),  # Stored amount path keeps its plan-projected value.
+    ]
+    assert invoice["totals"][0]["value_usd"] == 36.0  # 16 edge + 12 liner + 8 stored add-on.
 
 
 def test_cost_price_has_one_canonical_save_boundary() -> None:
