@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import csv
+import re
 import unittest
 from io import StringIO
 from pathlib import Path
@@ -15,6 +16,17 @@ SERVICE = APP / "services" / "special_shape_workspace_service.py"
 FACADE = PUBLIC / "js" / "door_cutting_order" / "drawing" / "special_shape_facade.js"
 DOCUMENTATION = PUBLIC / "js" / "special_shape_documentation"
 CSS = PUBLIC / "css" / "special_shape_documentation.css"
+
+
+def _direction_values(css: str, selector: str) -> list[str]:
+    blocks = re.findall(r"(?:^|}|,)\s*" + re.escape(selector) + r"\s*\{([^}]*)\}", css)
+    if not blocks:
+        raise AssertionError(f"missing rule {selector}")
+    return [
+        match.group(1).strip()
+        for block in blocks
+        for match in re.finditer(r"(?<![\w-])direction\s*:\s*([^;]+)", block)
+    ]
 
 
 def _catalog_has(catalog: str, source: str, arabic: str) -> bool:
@@ -161,6 +173,23 @@ class TestSpecialShapeDocumentationWorkspaceContract(unittest.TestCase):
         self.assertNotIn("opacity: 0.72", controller)
         self.assertIn("context.globalAlpha = 1", renderer)
         self.assertNotIn("document.reference.opacity", renderer)
+
+    def test_drawing_stage_keeps_geometry_ltr_while_chrome_follows_workspace_dir(self) -> None:
+        css = CSS.read_text(encoding="utf-8")
+        shell = (DOCUMENTATION / "presentation" / "workspace_shell.js").read_text(encoding="utf-8")
+        self.assertIn("--ald-doc-ui-direction:ltr", css)
+        self.assertIn('.ald-doc-workspace[dir="rtl"] { --ald-doc-ui-direction:rtl; }', css)
+        self.assertIn('dir="${uiDirection()}"', shell)
+        for selector in (".ald-doc-layout", ".ald-doc-hint", ".ald-doc-toolbar", ".ald-doc-crop-toolbar"):
+            values = _direction_values(css, selector)
+            self.assertEqual(values, ["var(--ald-doc-ui-direction)"])
+        self.assertEqual(_direction_values(css, ".ald-doc-stage"), ["ltr"])
+        self.assertEqual(_direction_values(css, ".ald-doc-zoom-controls"), ["ltr"])
+        self.assertNotIn("direction:inherit", css)
+        for source in (css, shell):
+            self.assertNotIn("isArabic", source)
+            self.assertNotIn('["ar"', source)
+            self.assertNotIn("['ar'", source)
 
 
 if __name__ == "__main__":
