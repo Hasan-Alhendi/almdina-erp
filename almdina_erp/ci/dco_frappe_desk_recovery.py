@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 
 from playwright.sync_api import Page, expect, sync_playwright
@@ -57,7 +58,7 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
     if page.locator("#login_email").count():
         page.locator("#login_email").fill("Administrator")
         page.locator("#login_password").fill("admin")
-        page.locator("button[type='submit']").click()
+        page.get_by_role("button", name=re.compile(r"^(Login|Continue)$")).click()
         page.wait_for_function(
             "() => window.frappe && frappe.session && frappe.session.user === 'Administrator'",
             timeout=60_000,
