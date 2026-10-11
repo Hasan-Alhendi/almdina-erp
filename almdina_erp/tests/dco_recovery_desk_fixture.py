@@ -120,6 +120,7 @@ def _order(suffix: str, customer: str, edge_type: str, route: str) -> str:
             "board_description": "Recovery browser fixture MDF",
             "board_length_cm": 244,
             "board_width_cm": 122,
+            "order_cutting_machine": "CNC",
             "default_edge_type": edge_type,
             "edge_color": "White",
             "production_path": route,
