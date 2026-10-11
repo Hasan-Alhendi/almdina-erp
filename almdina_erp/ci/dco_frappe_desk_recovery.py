@@ -19,6 +19,7 @@ DIAGNOSTIC_EVENTS: dict[str, list[dict[str, str | int | None]]] = {
     "responses": [],
 }
 BROWSER_TRACE: list[dict[str, str | int | float | None]] = []
+PENDING_REQUESTS: dict[str, dict[str, str | float]] = {}
 
 
 def _redact_text(value: str, limit: int = 1000) -> str:
@@ -55,6 +56,14 @@ def attach_browser_diagnostics(page: Page) -> None:
     page.on("framenavigated", lambda frame: _trace_event(
         "navigation", url=_safe_url(frame.url)
     ) if frame == page.main_frame else None)
+    page.on("request", lambda request: (
+        PENDING_REQUESTS.__setitem__(request.url, {
+            "url": _safe_url(request.url),
+            "resource_type": request.resource_type,
+            "started": round(time.time(), 3),
+        }),
+        _trace_event("request_started", url=_safe_url(request.url), resource_type=request.resource_type),
+    ))
     page.on("console", lambda message: (append("console", {
         "type": message.type,
         "text": _redact_text(message.text),
@@ -63,14 +72,14 @@ def attach_browser_diagnostics(page: Page) -> None:
         if message.type in {"error", "warning"} else None)
     page.on("pageerror", lambda error: (append("page_errors", {"text": _redact_text(str(error))}),
         _trace_event("page_error", text=_redact_text(str(error)))))
-    page.on("requestfailed", lambda request: (append("request_failures", {
+    page.on("requestfailed", lambda request: (PENDING_REQUESTS.pop(request.url, None), append("request_failures", {
         "url": _safe_url(request.url),
         "resource_type": request.resource_type,
         "failure": _redact_text(str(request.failure), 500) if request.failure else "unknown",
     }), _trace_event("request_failed", url=_safe_url(request.url),
         resource_type=request.resource_type,
         failure=_redact_text(str(request.failure), 500) if request.failure else "unknown")))
-    page.on("response", lambda response: (append("responses", {
+    page.on("response", lambda response: (PENDING_REQUESTS.pop(response.url, None), append("responses", {
         "url": _safe_url(response.url),
         "status": response.status,
         "resource_type": response.request.resource_type,
@@ -349,7 +358,7 @@ if __name__ == "__main__":
         evidence_dir = Path(os.environ.get("DCO_DESK_EVIDENCE_DIR", "/tmp/dco-desk-evidence"))
         try:
             certify_actual_frappe_desk_edit_recovery(page)
-        except BaseException:
+        except BaseException as failure:
             evidence_dir.mkdir(parents=True, exist_ok=True)
             screenshot = evidence_dir / "dco-desk-failure.png"
             trace = evidence_dir / "dco-desk-trace.json"
@@ -372,6 +381,13 @@ if __name__ == "__main__":
                 state = {"diagnostic_error": _redact_text(str(exc), 500)}
             state["url"] = _safe_url(state.get("url", ""))
             state["bodyText"] = _redact_text(state.get("bodyText", ""))
+            state["failure"] = _redact_text(str(failure))
+            state["pendingRequests"] = list(PENDING_REQUESTS.values())[-25:]
+            state["apiResponses"] = [
+                {"url": event["url"], "status": event["status"]}
+                for event in DIAGNOSTIC_EVENTS["responses"]
+                if event.get("resource_type") in {"xhr", "fetch"}
+            ][-35:]
             diagnostic = {"state": state, **DIAGNOSTIC_EVENTS}
             (evidence_dir / "browser-diagnostics.json").write_text(
                 json.dumps(diagnostic, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -381,6 +397,10 @@ if __name__ == "__main__":
             print("DESK_BROWSER_EVENT_COUNTS " + json.dumps({
                 key: len(events) for key, events in DIAGNOSTIC_EVENTS.items()
             }))
+            print("DESK_BROWSER_API_STATE " + json.dumps({
+                "pending": state["pendingRequests"],
+                "responses": state["apiResponses"],
+            }, ensure_ascii=False))
             print("DESK_BROWSER_RECENT_NETWORK " + json.dumps({
                 "request_failures": DIAGNOSTIC_EVENTS["request_failures"][-12:],
                 "responses": DIAGNOSTIC_EVENTS["responses"][-20:],
