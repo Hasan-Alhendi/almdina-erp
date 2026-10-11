@@ -128,6 +128,7 @@ def _worker(suffix: str, role: str) -> str:
             "user_type": "System User",
             "enabled": 1,
             "send_welcome_email": 0,
+            "new_password": "dco-test-worker-password",
             MEMBERSHIP_FIELD: 1,
             "roles": [{"role": role}],
         }
@@ -277,7 +278,11 @@ def create_desk_edit_recovery_fixtures() -> dict[str, str]:
     fixtures = {
         "restore": _order(f"restore-{suffix}", customer, edge_type),
         "dispatch": _order(f"dispatch-{suffix}", customer, edge_type),
+        "identity_a": _order(f"identity-a-{suffix}", customer, edge_type),
+        "identity_b": _order(f"identity-b-{suffix}", customer, edge_type),
+        "permission": _order(f"permission-{suffix}", customer, edge_type),
         "route": route,
+        "role": str(role.name),
         "worker": worker,
     }
     destination = os.environ.get("DCO_DESK_FIXTURE_FILE")

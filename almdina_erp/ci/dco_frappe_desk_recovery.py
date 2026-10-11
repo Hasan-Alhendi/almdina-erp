@@ -290,34 +290,144 @@ def start_edit_and_set_note(page: Page, name: str, value: str, checkpoint: bool)
     )
 
 
-def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
-    _trace_event("certification_started")
+def login_to_desk(page: Page, user: str, password: str) -> None:
     response = page.goto(f"{DESK_URL}/login", wait_until="domcontentloaded")
     if response is None or response.status >= 400:
         status = response.status if response is not None else None
         raise RuntimeError(f"Frappe login page returned HTTP {status}: {_safe_url(page.url)}")
     page.locator("#login_email").wait_for(state="visible", timeout=15_000)
-    page.locator("#login_email").fill("Administrator")
-    page.locator("#login_password").fill("admin")
+    page.locator("#login_email").fill(user)
+    page.locator("#login_password").fill(password)
     page.get_by_role("button", name=re.compile(r"^(Login|Continue)$")).click()
-    try:
-        wait_for_function(page, "Administrator login establishes a Desk session",
-            "() => window.frappe && frappe.session && frappe.session.user === 'Administrator'",
-            timeout=60_000,
-        )
-    except Exception as exc:
-        raise RuntimeError(f"Desk login did not establish an Administrator session: {exc}") from exc
-
-    wait_for_function(page, "Desk boot ready for Administrator",
+    wait_for_function(page, f"{user} login establishes a Desk session",
+        f"() => window.frappe && frappe.session && frappe.session.user === {json.dumps(user)}",
+        timeout=30_000,
+    )
+    wait_for_function(page, f"Desk boot ready for {user}",
         "() => window.frappe && frappe.boot && frappe.boot.sysdefaults && "
         "Boolean(frappe.boot.sysdefaults.setup_complete) && "
-        "frappe.session && frappe.session.user === 'Administrator' && "
         "frappe.app && frappe.router && "
         "window.location.pathname.startsWith('/desk')",
         timeout=30_000,
     )
+    _trace_event("login_established", user=_redact_text(user, 80))
 
-    _trace_event("login_established", user="Administrator")
+
+def certify_worker_identity_and_dynamic_permissions(admin_page: Page) -> None:
+    browser = admin_page.context.browser
+    if browser is None:
+        raise RuntimeError("Desk identity certification requires a browser context.")
+    worker_context = browser.new_context()
+    worker_page = worker_context.new_page()
+    attach_browser_diagnostics(worker_page)
+    try:
+        worker = FIXTURES["worker"]
+        login_to_desk(worker_page, worker, "dco-test-worker-password")
+
+        identity_a = FIXTURES["identity_a"]
+        identity_b = FIXTURES["identity_b"]
+        baseline_b = worker_page.request.get(
+            f"{DESK_URL}/api/method/frappe.client.get?doctype=Door%20Cutting%20Order&name={identity_b}"
+        ).json()["message"]["order_notes"]
+        open_dco(worker_page, identity_a)
+        start_edit_and_set_note(
+            worker_page, identity_a, "Identity-bound EDIT checkpoint", checkpoint=True
+        )
+        open_dco(worker_page, identity_b)
+        expect(worker_page.locator('[data-edit-recovery-action="continue"]')).to_be_hidden()
+        assert evaluate(worker_page, "verify document B is isolated",
+            "({name, baseline}) => window.cur_frm && window.cur_frm.doc.name === name && "
+            "window.cur_frm.doc.order_notes === baseline",
+            {"name": identity_b, "baseline": baseline_b},
+        )
+        open_dco(worker_page, identity_a)
+        worker_page.locator('[data-edit-recovery-action="continue"]').wait_for(
+            state="visible", timeout=30_000
+        )
+        worker_page.locator('[data-edit-recovery-action="continue"]').click()
+        wait_for_function(worker_page, "document A restores only its own EDIT checkpoint",
+            "() => window.cur_frm && window.cur_frm.doc.name === "
+            f"{json.dumps(identity_a)} && "
+            "window.cur_frm.doc.order_notes === 'Identity-bound EDIT checkpoint'",
+            timeout=30_000,
+        )
+        evaluate(worker_page, "cancel isolated EDIT session",
+            "() => window.AlmdinaDcoEditSessionCoordinator.cancel(window.cur_frm, 'order')")
+        persisted_b = worker_page.request.get(
+            f"{DESK_URL}/api/method/frappe.client.get?doctype=Door%20Cutting%20Order&name={identity_b}"
+        ).json()["message"]["order_notes"]
+        assert persisted_b == baseline_b, "Document A recovery must not mutate document B"
+
+        permission_name = FIXTURES["permission"]
+        permission_baseline = worker_page.request.get(
+            f"{DESK_URL}/api/method/frappe.client.get?doctype=Door%20Cutting%20Order&name={permission_name}"
+        ).json()["message"]["order_notes"]
+        open_dco(worker_page, permission_name)
+        start_edit_and_set_note(
+            worker_page, permission_name, "Permission-gated EDIT checkpoint", checkpoint=True
+        )
+        worker_page.reload(wait_until="domcontentloaded")
+        worker_page.locator('[data-edit-recovery-action="continue"]').wait_for(
+            state="visible", timeout=30_000
+        )
+
+        role = FIXTURES["role"]
+        revoked = evaluate(admin_page, "revoke dynamic EDIT permission",
+            """async role => {
+                const current = await frappe.xcall(
+                    'almdina_erp.almdina_erp.services.permission_management_service.get_role_permissions',
+                    {role}
+                );
+                if (!current.capabilities || current.capabilities.edit_order !== true) {
+                    throw new Error('Fixture role did not begin with EDIT permission');
+                }
+                const capabilities = {...current.capabilities, edit_order: false};
+                return await frappe.xcall(
+                    'almdina_erp.almdina_erp.services.permission_management_service.update_role_permissions',
+                    {role, capabilities: JSON.stringify(capabilities)}
+                );
+            }""",
+            role,
+        )
+        if revoked.get("capabilities", {}).get("edit_order") is not False:
+            raise RuntimeError("The server did not revoke the fixture role's EDIT permission.")
+        permission_refresh = evaluate(worker_page, "refresh worker permission context",
+            "() => window.AlmdinaPermissions.refresh()")
+        if permission_refresh.get("capabilities", {}).get("edit_order") is not False:
+            raise RuntimeError("Desk permission refresh did not observe revoked EDIT permission.")
+        expect(worker_page.locator('[data-edit-recovery-action="continue"]')).to_be_hidden()
+        assert evaluate(worker_page, "revoked EDIT cannot restore or mutate the draft",
+            "name => window.cur_frm && window.cur_frm.doc.name === name && "
+            "window.cur_frm.doc.order_notes === " + json.dumps(permission_baseline) + " && "
+            "window.AlmdinaPermissions.canDocument(window.cur_frm, 'edit_order') === false",
+            permission_name,
+        )
+
+        restored = evaluate(admin_page, "restore fixture role EDIT permission",
+            """async role => {
+                const current = await frappe.xcall(
+                    'almdina_erp.almdina_erp.services.permission_management_service.get_role_permissions',
+                    {role}
+                );
+                const capabilities = {...current.capabilities, edit_order: true};
+                return await frappe.xcall(
+                    'almdina_erp.almdina_erp.services.permission_management_service.update_role_permissions',
+                    {role, capabilities: JSON.stringify(capabilities)}
+                );
+            }""",
+            role,
+        )
+        if restored.get("capabilities", {}).get("edit_order") is not True:
+            raise RuntimeError("Could not restore fixture role's EDIT permission after certification.")
+        _trace_event("worker_identity_and_dynamic_permissions_completed")
+    finally:
+        worker_context.close()
+
+
+def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
+    _trace_event("certification_started")
+    login_to_desk(page, "Administrator", "admin")
+
 
     # Phase B is intentionally limited to Desk startup and loading one real
     # DCO form. Recovery scenarios must never run when this smoke fails.
@@ -508,6 +618,8 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
         arg=recovered,
         timeout=30_000,
     )
+
+    certify_worker_identity_and_dynamic_permissions(page)
 
     # A local snapshot retained from before a real dispatch cannot be offered or
     # applied. Direct Frappe save is rejected; the production lifecycle command
