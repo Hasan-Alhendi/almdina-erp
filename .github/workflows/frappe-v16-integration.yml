@@ -260,7 +260,6 @@ jobs:
           desk_fail() {
             status="$1"
             trap - ERR
-            detail="$(tail -n 16 "$desk_log" 2>/dev/null | tr '\n' ' ')"
             browser_summary="$(python3 - "$RUNNER_TEMP/dco-desk-evidence" <<'PY'
           import json
           import sys
@@ -294,32 +293,14 @@ jobs:
                   for item in state.get("pendingRequests", [])
                   if item.get("resource_type") in {"xhr", "fetch"}
               ][-2:]
-              document_states = [
-                  {
-                      key: item.get(key)
-                      for key in (
-                          "url", "ready_state", "frappe_present", "boot_present", "setup_complete",
-                          "sys_setup_complete", "user", "ajax_count", "route", "body_text",
-                      )
-                      if key in item
-                  }
-                  for item in trace if item.get("event") == "document_loaded"
-              ][-4:]
-              failed_assets = [
-                  {"url": item.get("url"), "status": item.get("status")}
-                  for item in diagnostics.get("responses", [])
-                  if item.get("resource_type") == "script" and int(item.get("status", 0)) >= 400
-              ][-12:]
               api_responses = [
                   {"url": item.get("url"), "status": item.get("status")}
                   for item in diagnostics.get("responses", [])
                   if item.get("resource_type") in {"xhr", "fetch"}
-              ][-20:]
-              save_probe = state.get("saveProbe") or {}
+              ][-8:]
               result = {
                   "failure": state.get("failure"),
                   "url": state.get("url"),
-                  "document_states": document_states,
                   "desk_boot": {
                       "frappe_present": state.get("frappePresent"),
                       "boot_present": state.get("bootPresent"),
@@ -328,38 +309,22 @@ jobs:
                       "ajax_count": state.get("ajaxCount"),
                       "route": state.get("route"),
                   },
-                  "save_probe": {
-                      key: save_probe.get(key)
-                      for key in (
-                          "dirtyBeforeSave", "ajaxCountAtSave", "costUxPresent", "pendingPriceEdits",
-                          "saveStarted", "saveSettled", "scriptEvents", "runSeriallyCalls", "runSeriallySettled",
-                          "beforeSaveHandlers", "beforeSaveTriggerStarted", "beforeSaveTriggerSettled",
-                          "activeBeforeSaveHandler", "handlerCalls", "afterServerCalls",
-                      )
-                      if key in save_probe
-                  },
-                  "commit_network_events": [
-                      event for event in recent_events
-                      if event.get("active_step") == "commit recovered EDIT session"
-                  ][-8:],
-                  "last_events": recent_events[-4:],
+                  "recent_events": recent_events[-8:],
                   "pending_api": pending,
                   "api_responses": api_responses,
-                  "failed_assets": failed_assets,
                   "browser_errors": [
                       str(item.get("text", ""))[:120]
                       for item in diagnostics.get("page_errors", [])[-1:]
                   ],
                   "network_failures": [
                       {"url": str(item.get("url", ""))[:100], "failure": str(item.get("failure", ""))[:100]}
-                      for item in diagnostics.get("request_failures", [])[-2:]
+                      for item in diagnostics.get("request_failures", [])[-3:]
                   ],
               }
-              print(json.dumps(result, ensure_ascii=False, separators=(",", ":")))
+              print(json.dumps(result, ensure_ascii=False, separators=(",", ":"))[:3000])
           PY
           )"
-            browser_summary="${browser_summary:0:8000}"
-            detail="$detail browser_summary=$browser_summary"
+            detail="browser_summary=$browser_summary"
             detail="${detail//'%'/'%25'}"
             detail="${detail//$'\r'/'%0D'}"
             detail="${detail//$'\n'/'%0A'}"
@@ -367,6 +332,10 @@ jobs:
             {
               echo '### Real Frappe Desk certification failure'
               echo "Failed phase: `$phase` (exit $status)"
+              echo '#### Concise browser and network diagnosis'
+              echo '```json'
+              echo "$browser_summary"
+              echo '```'
               for log in "$desk_log" "$RUNNER_TEMP/desk-bench.log"; do
                 if [[ -f "$log" ]]; then
                   echo "#### $(basename "$log")"
