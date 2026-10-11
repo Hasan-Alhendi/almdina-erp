@@ -274,27 +274,40 @@ jobs:
               print("browser evidence not available")
           else:
               state = diagnostics.get("state", {})
+              recent_events = []
+              for item in trace:
+                  if item.get("event") not in {
+                      "navigation", "console", "page_error", "request_failed", "response",
+                      "step_started", "step_completed", "step_failed", "wait_started", "wait_failed",
+                  }:
+                      continue
+                  event = {key: item.get(key) for key in ("event", "step", "url", "status", "error") if key in item}
+                  if "url" in event:
+                      event["url"] = str(event["url"])[:100]
+                  if "step" in event:
+                      event["step"] = str(event["step"])[:50]
+                  if "error" in event:
+                      event["error"] = str(event["error"])[:100]
+                  recent_events.append(event)
               pending = [
-                  {"url": item.get("url"), "resource_type": item.get("resource_type")}
+                  {"url": str(item.get("url", ""))[:100], "resource_type": item.get("resource_type")}
                   for item in state.get("pendingRequests", [])
                   if item.get("resource_type") in {"xhr", "fetch"}
-              ][-8:]
+              ][-2:]
               result = {
                   "failure": state.get("failure"),
                   "url": state.get("url"),
-                  "console": diagnostics.get("console", [])[-3:],
-                  "page_errors": diagnostics.get("page_errors", [])[-2:],
-                  "request_failures": diagnostics.get("request_failures", [])[-3:],
-                  "last_events": [
-                      {key: item.get(key) for key in ("event", "step", "url", "status", "error") if key in item}
-                      for item in trace
-                      if item.get("event") in {
-                          "navigation", "console", "page_error", "request_failed", "response",
-                          "step_started", "step_completed", "step_failed", "wait_started", "wait_failed",
-                      }
-                  ][-8:],
-                  "pending_api": pending[-3:],
-                  "api_responses": state.get("apiResponses", [])[-3:],
+                  "last_events": recent_events[-8:],
+                  "pending_api": pending,
+                  "api_responses": state.get("apiResponses", [])[-2:],
+                  "browser_errors": [
+                      str(item.get("text", ""))[:120]
+                      for item in diagnostics.get("page_errors", [])[-1:]
+                  ],
+                  "network_failures": [
+                      {"url": str(item.get("url", ""))[:100], "failure": str(item.get("failure", ""))[:100]}
+                      for item in diagnostics.get("request_failures", [])[-2:]
+                  ],
               }
               print(json.dumps(result, ensure_ascii=False, separators=(",", ":")))
           PY
