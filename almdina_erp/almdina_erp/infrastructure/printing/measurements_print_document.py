@@ -141,10 +141,19 @@ def _truthy(value: object) -> bool:
 
 
 def document_locale(language: str | None = None) -> tuple[str, str]:
-    """Resolve a print document language. Missing locale stays Arabic/RTL."""
-    code = str(language or "ar").strip().lower().replace("_", "-") or "ar"
-    direction = "rtl" if code.split("-", 1)[0] in RTL_DOCUMENT_LANGUAGES else "ltr"
+    """Resolve a print document language. Missing locale stays Arabic/RTL.
+
+    The returned code keeps the caller's official spelling (``pt-BR``).
+    Direction compares the base language without regard to case.
+    """
+    code = str(language or "ar").strip().replace("_", "-") or "ar"
+    base = code.lower().split("-", 1)[0]
+    direction = "rtl" if base in RTL_DOCUMENT_LANGUAGES else "ltr"
     return code, direction
+
+
+def _label_separator(direction: str) -> str:
+    return "، " if direction == "rtl" else ", "
 
 
 def _label(message: str, translator: Any = None) -> str:
@@ -216,9 +225,13 @@ def _extra_addon_labels(row: Mapping[str, Any], translator: Any = None) -> list[
     return [_label(label, translator) for fieldname, label in EXTRA_ADDONS if _truthy(row.get(fieldname))]
 
 
-def _notes_text(row: Mapping[str, Any], translator: Any = None) -> str:
+def _notes_text(row: Mapping[str, Any], translator: Any = None, *, direction: str = "rtl") -> str:
     addons = _extra_addon_labels(row, translator)
-    summary = f"{_label('Add-ons', translator)}: {'، '.join(addons)}" if addons else ""
+    summary = (
+        f"{_label('Add-ons', translator)}: {_label_separator(direction).join(addons)}"
+        if addons
+        else ""
+    )
     notes = str(row.get("notes") or "").strip()
     if summary and notes:
         return f"{summary} — {notes}"
@@ -238,23 +251,29 @@ def _custom_edge_groups(row: Mapping[str, Any], translator: Any = None) -> list[
     return list(groups.values())
 
 
-def _side_summary(group: Mapping[str, Any], custom_side_count: int, translator: Any = None) -> str:
+def _side_summary(
+    group: Mapping[str, Any],
+    custom_side_count: int,
+    translator: Any = None,
+    *,
+    direction: str = "rtl",
+) -> str:
     sides = list(group.get("sides") or [])
     if custom_side_count == 4 and len(sides) == 4:
         return _label("All around", translator)
-    return "، ".join(str(side) for side in sides)
+    return _label_separator(direction).join(str(side) for side in sides)
 
 
-def _custom_edge_html(row: Mapping[str, Any], translator: Any = None) -> str:
+def _custom_edge_html(row: Mapping[str, Any], translator: Any = None, *, direction: str = "rtl") -> str:
     groups = _custom_edge_groups(row, translator)
     if not groups:
         return f'<span class="custom-edge-empty" aria-label="{_esc(_label("No customization", translator))}"></span>'
     custom_side_count = sum(len(group["sides"]) for group in groups)
     lines = "".join(
         f"""<div class="custom-edge-line">
-                <span>{_esc(_side_summary(group, custom_side_count, translator))}</span>
+                <span>{_esc(_side_summary(group, custom_side_count, translator, direction=direction))}</span>
                 <b>{_esc(group["type"])}</b>
-                <em>مخصص</em>
+                <em>{_esc(_label("Custom", translator))}</em>
             </div>"""
         for group in groups
     )
@@ -402,8 +421,12 @@ def _geometry_svg(payload: Mapping[str, Any], label: str) -> str:
     )
 
 
-def _drawing_svg(row: Mapping[str, Any], index: int) -> str:
-    label = f"رسمة الدرفة رقم {index}"
+def _drawing_caption(index: int, translator: Any = None) -> str:
+    return _label("Door piece drawing {0}", translator).replace("{0}", str(index))
+
+
+def _drawing_svg(row: Mapping[str, Any], index: int, translator: Any = None) -> str:
+    label = _drawing_caption(index, translator)
     drawing = _parse_json(row.get("special_shape_drawing_json") or row.get("drawing_json"))
     if drawing:
         schema = str(drawing.get("schema") or "")
@@ -417,24 +440,36 @@ def _drawing_svg(row: Mapping[str, Any], index: int) -> str:
     return ""
 
 
-def _notes_cell(row: Mapping[str, Any], index: int, translator: Any = None) -> str:
-    notes = _notes_text(row, translator)
-    visual = _drawing_svg(row, index)
+def _notes_cell(
+    row: Mapping[str, Any],
+    index: int,
+    translator: Any = None,
+    *,
+    direction: str = "rtl",
+) -> str:
+    notes = _notes_text(row, translator, direction=direction)
+    visual = _drawing_svg(row, index, translator)
     if not visual:
         return _esc(notes or "—")
     text = f'<div class="dco-piece-notes-text">{_esc(notes)}</div>' if notes else ""
     return (
         f'<div class="dco-piece-notes">{text}'
         f'<figure class="dco-piece-sketch">{visual}'
-        f'<figcaption>{_esc(_label("Door piece drawing {0}", translator).replace("{0}", str(index)))}</figcaption>'
+        f'<figcaption>{_esc(_drawing_caption(index, translator))}</figcaption>'
         f"<em>{_esc(_label('This documents the customer request and is not a manufacturing file.', translator))}</em></figure></div>"
     )
 
 
-def _row_html(row: Mapping[str, Any], index: int, translator: Any = None) -> str:
+def _row_html(
+    row: Mapping[str, Any],
+    index: int,
+    translator: Any = None,
+    *,
+    direction: str = "rtl",
+) -> str:
     long_count = int(_truthy(row.get("edge_long_right"))) + int(_truthy(row.get("edge_long_left")))
     width_count = int(_truthy(row.get("edge_width_top"))) + int(_truthy(row.get("edge_width_bottom")))
-    drawing = bool(_drawing_svg(row, index))
+    drawing = bool(_drawing_svg(row, index, translator))
     row_class = ' class="row-with-drawing"' if drawing else ""
     notes_class = " notes-with-drawing" if drawing else ""
     return f"""<tr{row_class}>
@@ -443,14 +478,14 @@ def _row_html(row: Mapping[str, Any], index: int, translator: Any = None) -> str
                 <td class="ltr">{_dimension_mark(row.get("width_cm"), width_count)}</td>
                 <td class="ltr">{_dimension_mark(row.get("length_cm"), long_count)}</td>
                 <td>{_qty(row)}</td>
-                <td class="right custom-edge-cell">{_custom_edge_html(row, translator)}</td>
-                <td class="right notes-cell{notes_class}">{_notes_cell(row, index, translator)}</td>
+                <td class="right custom-edge-cell">{_custom_edge_html(row, translator, direction=direction)}</td>
+                <td class="right notes-cell{notes_class}">{_notes_cell(row, index, translator, direction=direction)}</td>
             </tr>"""
 
 
-def _table_html(pieces: Sequence[Any], translator: Any = None) -> str:
+def _table_html(pieces: Sequence[Any], translator: Any = None, *, direction: str = "rtl") -> str:
     rows = [
-        _row_html(row, index, translator)
+        _row_html(row, index, translator, direction=direction)
         for index, row in enumerate(pieces, start=1)
         if isinstance(row, Mapping)
     ]
@@ -546,7 +581,7 @@ def _print_body_html(
             {_header_html(identity or {}, reference=reference, date=date, translator=translator)}
             {_shared_info(order, customer_phone, translator)}
             <div class="title">{_esc(_label("Measurements table", translator))}</div>
-            {_table_html(pieces if isinstance(pieces, Sequence) else [], translator)}
+            {_table_html(pieces if isinstance(pieces, Sequence) else [], translator, direction=direction)}
             {notes_html}
             {extra_html}
             <div class="footer"><span>{_esc(_label("Order number:", translator))} {_esc(reference)}</span><span>{_esc(_label("Printed on:", translator))} {_esc(printed_on)}</span></div>

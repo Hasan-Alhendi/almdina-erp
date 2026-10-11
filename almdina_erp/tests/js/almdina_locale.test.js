@@ -67,6 +67,22 @@ assert.equal(derived.currentLanguage(), "fr");
 assert.equal(derived.direction(), "ltr");
 assert.equal(derived.isRTL(), false);
 
+const brazil = loadLocale({ lang: "", dir: "ltr", bootLang: "pt-BR" });
+assert.equal(brazil.currentLanguage(), "pt-BR");
+assert.equal(brazil.direction(), "ltr");
+assert.equal(brazil.direction("PT_br"), "ltr");
+assert.equal(brazil.isRTL("AR"), true);
+assert.equal(brazil.isRTL("fa"), true);
+assert.equal(brazil.isRTL("he"), true);
+assert.equal(brazil.isRTL("ps"), true);
+assert.deepEqual(JSON.parse(JSON.stringify(brazil.context("zh-TW"))), {
+    language: "zh-TW",
+    direction: "ltr",
+    isRTL: false,
+});
+const underscored = loadLocale({ lang: "", dir: "", bootLang: "zh_TW" });
+assert.equal(underscored.currentLanguage(), "zh-TW");
+
 let seen = null;
 const delegated = loadLocale({
     lang: "ar",

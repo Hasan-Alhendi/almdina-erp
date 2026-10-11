@@ -5,6 +5,7 @@ import unittest
 
 from almdina_erp.almdina_erp.infrastructure.printing.measurements_print_document import (
     customer_invoice_print_html,
+    document_locale,
     measurements_print_html,
     order_print_payload,
 )
@@ -191,6 +192,58 @@ class MeasurementsPrintDocumentTests(unittest.TestCase):
         self.assertIn("Table des mesures", translated)
         self.assertIn("80", translated)
         self.assertIn("210", translated)
+        self.assertIn('class="ltr"', translated)
+
+    def test_locale_keeps_official_codes_and_rtl_bases(self) -> None:
+        self.assertEqual(document_locale("ar"), ("ar", "rtl"))
+        self.assertEqual(document_locale("fa"), ("fa", "rtl"))
+        self.assertEqual(document_locale("he"), ("he", "rtl"))
+        self.assertEqual(document_locale("ps"), ("ps", "rtl"))
+        self.assertEqual(document_locale("FA"), ("FA", "rtl"))
+        self.assertEqual(document_locale("fr"), ("fr", "ltr"))
+        self.assertEqual(document_locale("pt-BR"), ("pt-BR", "ltr"))
+        self.assertEqual(document_locale("pt_BR"), ("pt-BR", "ltr"))
+        self.assertEqual(document_locale("zh-TW"), ("zh-TW", "ltr"))
+
+    def test_third_language_translates_custom_and_keeps_user_text(self) -> None:
+        order = _sample_order()
+        order["pieces"][0]["extra_back_groove"] = 1
+        order["pieces"][0]["edge_width_bottom"] = 1
+        order["pieces"][0]["edge_width_bottom_type_override"] = "PVC 1mm"
+
+        def third(message: str) -> str:
+            return {
+                "Custom": "Sur mesure",
+                "Door piece drawing {0}": "Dessin {0}",
+                "Add-ons": "Options",
+                "Liner": "Doublure",
+                "Back groove": "Rainure",
+                "Top width edge": "Bord haut",
+                "Bottom width edge": "Bord bas",
+            }.get(message, message)
+
+        html = measurements_print_html(order, language="fr", translator=third)
+        self.assertIn('lang="fr"', html)
+        self.assertIn('dir="ltr"', html)
+        self.assertIn("direction:ltr", html)
+        self.assertIn("<em>Sur mesure</em>", html)
+        self.assertIn("Dessin 1", html)
+        self.assertIn("Options: Doublure, Rainure", html)
+        self.assertIn("Bord haut, Bord bas", html)
+        self.assertIn("مقبض", html)
+        self.assertIn("تسليم بعد الظهر", html)
+        self.assertIn("PVC 1mm", html)
+        self.assertIn('class="ltr"', html)
+        self.assertNotIn("مخصص", html)
+        self.assertNotIn("رسمة الدرفة", html)
+        self.assertNotIn("،", html)
+
+        arabic = measurements_print_html(order)
+        self.assertIn('lang="ar"', arabic)
+        self.assertIn('dir="rtl"', arabic)
+        self.assertIn("<em>Custom</em>", arabic)
+        self.assertIn("Add-ons: Liner، Back groove", arabic)
+        self.assertNotIn("مخصص", arabic)
 
 
 class CustomerInvoicePrintDocumentTests(unittest.TestCase):

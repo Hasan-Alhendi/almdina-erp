@@ -211,7 +211,7 @@
             <div class="custom-edge-line">
                 <span>${esc(sideSummary(group, customSideCount))}</span>
                 <b>${esc(group.type)}</b>
-                <em>مخصص</em>
+                <em>${__("Custom")}</em>
             </div>`).join("")}</div>`;
     }
 
@@ -374,7 +374,8 @@
         const language = locale ? locale.currentLanguage() : "ar";
         const direction = locale ? locale.direction() : "rtl";
         const documentTitle = invoice ? __("Customer invoice") : __("Measurements");
-        return `<!doctype html><html dir="${esc(direction)}" lang="${esc(language)}"><head><meta charset="utf-8"><title>${documentTitle} ${esc(frm.doc.name || "")}</title><style>${printCss()}</style></head><body>
+        const css = printCss().replace("direction:rtl", `direction:${direction}`);
+        return `<!doctype html><html dir="${esc(direction)}" lang="${esc(language)}"><head><meta charset="utf-8"><title>${documentTitle} ${esc(frm.doc.name || "")}</title><style>${css}</style></head><body>
             ${sharedHeader(frm, identity)}
             ${invoice
                 ? measurementDocumentBodyWithPayload(frm, quotePayload, customerPhone)

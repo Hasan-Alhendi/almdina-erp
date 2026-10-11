@@ -13,17 +13,21 @@
         return String(bootLanguage || htmlLanguage || "ar").trim();
     }
 
-    function normalizeLanguage(language) {
-        const value = String(language || "").trim().toLowerCase().replace(/_/g, "-");
+    function officialLanguageCode(language) {
+        const value = String(language || "").trim().replace(/_/g, "-");
         return value || "ar";
     }
 
+    function languageMatchKey(language) {
+        return officialLanguageCode(language).toLowerCase();
+    }
+
     function baseLanguage(language) {
-        return normalizeLanguage(language).split("-")[0];
+        return languageMatchKey(language).split("-")[0];
     }
 
     function currentLanguage() {
-        return normalizeLanguage(pageLanguage());
+        return officialLanguageCode(pageLanguage());
     }
 
     function pageDirection() {
@@ -67,7 +71,7 @@
     }
 
     function context(language) {
-        const resolved = language ? normalizeLanguage(language) : currentLanguage();
+        const resolved = language ? officialLanguageCode(language) : currentLanguage();
         const rtl = isRTL(language ? resolved : undefined);
         return Object.freeze({
             language: resolved,
