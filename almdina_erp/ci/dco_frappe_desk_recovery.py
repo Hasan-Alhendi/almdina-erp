@@ -43,7 +43,12 @@ def wait_for_function(page: Page, step: str, expression: str, *, arg=None, timeo
                             activeKind: session.activeKind,
                             sessionGeneration: session.sessionGeneration,
                         },
-                        body: (document.body && document.body.innerText || '').slice(-2400),
+                        recoveryButtons: [...document.querySelectorAll('[data-edit-recovery-action="continue"]')]
+                            .map(button => ({disabled: button.disabled, text: button.innerText})).slice(-4),
+                        visibleModals: [...document.querySelectorAll('.modal.show')]
+                            .map(modal => (modal.innerText || '').slice(-500)).slice(-4),
+                        alerts: [...document.querySelectorAll('.msgprint, .alert, .modal .modal-body')]
+                            .map(item => (item.innerText || '').slice(-500)).slice(-4),
                     };
                 }"""
             )
