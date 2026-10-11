@@ -209,7 +209,24 @@ jobs:
           bench --site test.localhost run-tests --app almdina_erp 2>&1 | tee "$RUNNER_TEMP/tests.log"
           test_status=${PIPESTATUS[0]}
           if (( test_status != 0 )); then
-            failure_tail="$(tail -n 35 "$RUNNER_TEMP/tests.log")"
+            failure_tail="$(python - "$RUNNER_TEMP/tests.log" <<'PY'
+          import re
+          import sys
+
+          text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+          text = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", text)
+          lines = text.splitlines()
+          pattern = re.compile(r"(?i)(?:\bFAILED\b|\bFAIL\b|\bERROR\b|Traceback|AssertionError|Exception|Ran \d+ tests)")
+          selected = set()
+          for index, line in enumerate(lines):
+              if pattern.search(line):
+                  selected.update(range(max(0, index - 1), min(len(lines), index + 2)))
+          print("\n".join(lines[index] for index in sorted(selected)[-120:]))
+          PY
+          )"
+            if [[ -z "$failure_tail" ]]; then
+              failure_tail="$(tail -n 100 "$RUNNER_TEMP/tests.log")"
+            fi
             failure_tail="${failure_tail//'%'/'%25'}"
             failure_tail="${failure_tail//$'\r'/'%0D'}"
             failure_tail="${failure_tail//$'\n'/'%0A'}"
