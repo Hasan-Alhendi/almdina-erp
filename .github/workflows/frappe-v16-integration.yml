@@ -280,71 +280,49 @@ jobs:
           evidence = Path(sys.argv[1])
           try:
               diagnostics = json.loads((evidence / "browser-diagnostics.json").read_text())
+          except (OSError, ValueError):
+              diagnostics = {}
+          try:
               trace = json.loads((evidence / "dco-desk-trace.json").read_text())
           except (OSError, ValueError):
+              trace = []
+          if not diagnostics and not trace:
               print("browser evidence not available")
           else:
               state = diagnostics.get("state", {})
-              recent_events = []
-              for item in trace:
-                  if item.get("event") not in {
-                      "navigation", "request_failed", "response", "step_started", "step_completed",
-                      "step_failed", "wait_started", "wait_failed",
-                  }:
-                      continue
-                  event = {key: item.get(key) for key in ("event", "step", "active_step", "url", "status", "error") if key in item}
-                  if "url" in event:
-                      event["url"] = str(event["url"])[:100]
-                  if "step" in event:
-                      event["step"] = str(event["step"])[:50]
-                  if "error" in event:
-                      event["error"] = str(event["error"])[:100]
-                  recent_events.append(event)
-              pending = [
-                  {"url": str(item.get("url", ""))[:100], "resource_type": item.get("resource_type")}
-                  for item in state.get("pendingRequests", [])
-                  if item.get("resource_type") in {"xhr", "fetch"}
-              ][-2:]
-              api_responses = [
-                  {"url": item.get("url"), "status": item.get("status")}
-                  for item in diagnostics.get("responses", [])
-                  if item.get("resource_type") in {"xhr", "fetch"}
-              ][-8:]
               result = {
-                  "failure": state.get("failure"),
-                  "url": state.get("url"),
-                  "desk_boot": {
-                      "frappe_present": state.get("frappePresent"),
-                      "boot_present": state.get("bootPresent"),
+                  "diagnostics_available": bool(diagnostics),
+                  "state": {
+                      "failure": state.get("failure"),
+                      "url": state.get("url"),
+                      "frappe": state.get("frappePresent"),
+                      "boot": state.get("bootPresent"),
                       "setup_complete": state.get("setupComplete"),
-                      "sys_setup_complete": state.get("sysSetupComplete"),
-                      "ajax_count": state.get("ajaxCount"),
                       "route": state.get("route"),
                   },
-                  "recent_events": recent_events[-8:],
-                  "pending_api": pending,
-                  "api_responses": api_responses,
-                  "browser_errors": [
-                      {
-                          "text": str(item.get("text", ""))[:180],
-                          "stack": str(item.get("stack", ""))[:1000],
-                      }
-                      for item in diagnostics.get("page_errors", [])[-1:]
+                  "last_trace_events": [
+                      {key: item.get(key) for key in ("event", "step", "active_step", "status", "error") if key in item}
+                      for item in trace[-16:]
+                  ],
+                  "page_errors": [
+                      {"text": str(item.get("text", ""))[:180], "stack": str(item.get("stack", ""))[:1000]}
+                      for item in diagnostics.get("page_errors", [])[-3:]
                   ],
                   "console_errors": [
-                      {
-                          "text": str(item.get("text", ""))[:180],
-                          "location": str(item.get("location", ""))[:180],
-                      }
-                      for item in diagnostics.get("console", [])
-                      if item.get("type") == "error"
+                      {"text": str(item.get("text", ""))[:180], "location": str(item.get("location", ""))[:180]}
+                      for item in diagnostics.get("console", []) if item.get("type") == "error"
                   ][-8:],
                   "network_failures": [
                       {"url": str(item.get("url", ""))[:100], "failure": str(item.get("failure", ""))[:100]}
-                      for item in diagnostics.get("request_failures", [])[-3:]
+                      for item in diagnostics.get("request_failures", [])[-4:]
                   ],
+                  "api_responses": [
+                      {"url": item.get("url"), "status": item.get("status")}
+                      for item in diagnostics.get("responses", [])
+                      if item.get("resource_type") in {"xhr", "fetch"}
+                  ][-8:],
               }
-              print(json.dumps(result, ensure_ascii=False, separators=(",", ":"))[:3000])
+              print(json.dumps(result, ensure_ascii=False, separators=(",", ":"))[:5000])
           PY
           )"
             detail="browser_summary=$browser_summary"
