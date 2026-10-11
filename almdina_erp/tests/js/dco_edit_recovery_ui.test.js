@@ -339,6 +339,9 @@ function form() {
         get_field(fieldname) {
             return { get_status() { return fieldname === "order_notes" ? "Read" : "Write"; } };
         },
+        add_child(fieldname) {
+            return fakeFrappe.model.add_child(this.doc, "Door Cutting Order Detail", fieldname);
+        },
         dirty() { this.dirtyState = true; },
         save() { officialSaves += 1; return Promise.resolve(); },
         refresh_fields() {},
@@ -368,8 +371,8 @@ function form() {
     frm.fields_dict = {
         pieces: {
             grid: {
-                is_editable() { return frm.coordinatorEditing; },
-                add_new_row() { return fakeFrappe.model.add_child(frm.doc, "Door Cutting Order Detail", "pieces"); },
+                df: { fieldname: "pieces", options: "Door Cutting Order Detail" },
+                is_editable() { return false; },
                 refresh() {},
             },
         },
@@ -461,7 +464,10 @@ async function settle() {
     assert.equal(structuralForm.doc.pieces[0], originalRow2, "persisted child object identity survives reorder");
     assert.equal(structuralForm.doc.pieces[2], originalRow1, "persisted child object identity survives reorder");
     assert.equal(structuralForm.doc.pieces[1].width_cm, 35, "local addition is materialized with saved fields");
+    assert.ok(structuralForm.doc.pieces[1].__unedited, "model-created row remains eligible for the existing Frappe row lifecycle");
     assert.equal(structuralForm.doc.pieces[1].idx, 2);
+    assert.ok(scriptEvents.some((event) => event.event === "pieces_add" && event.name === "new-row-3"),
+        "restore awaits the existing child-row add lifecycle hook");
     assert.ok(!structuralForm.doc.pieces.includes(removedRow), "rows removed by the saved draft leave the live child model");
     assert.ok(scriptEvents.some((event) => event.event === "before_pieces_remove" && event.name === "EDIT-ROW-3"));
     assert.ok(scriptEvents.some((event) => event.event === "pieces_remove" && event.name === "EDIT-ROW-3"));

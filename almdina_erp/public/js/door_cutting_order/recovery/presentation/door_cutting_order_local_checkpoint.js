@@ -1371,8 +1371,11 @@
                 && current()
             );
         };
-        if (!grid || typeof grid.is_editable !== "function" || !grid.is_editable()) {
-            throw new Error("The DCO pieces grid is not editable in the current session");
+        if (!grid
+            || !grid.df
+            || String(grid.df.fieldname || "") !== "pieces"
+            || String(grid.df.options || "") !== "Door Cutting Order Detail") {
+            throw new Error("The DCO pieces table is unavailable in the current form");
         }
         if (!current()) throw new Error("DCO edit permission or form ownership changed before restore");
 
@@ -1392,7 +1395,9 @@
             throw new Error("Frappe child-row removal is unavailable");
         }
         if (addsRows && (
-            typeof grid.add_new_row !== "function"
+            typeof frm.add_child !== "function"
+            || !frm.script_manager
+            || typeof frm.script_manager.trigger !== "function"
             || grid.cannot_add_rows
             || (grid.df && grid.df.cannot_add_rows)
         )) {
@@ -1432,16 +1437,22 @@
             if (!current()) throw new Error("DCO edit permission changed while applying the restored rows");
             let row = item.existing_name ? rowsByName.get(item.existing_name) : null;
             if (!row) {
-                if (typeof grid.add_new_row !== "function") {
+                if (typeof frm.add_child !== "function") {
                     throw new Error("Frappe cannot create a restored DCO piece row");
                 }
-                row = grid.add_new_row(null, null, false);
+                row = frm.add_child("pieces");
                 if (!row || !row.name || !Array.isArray(frm.doc.pieces)
                     || !frm.doc.pieces.includes(row)) {
                     throw new Error("Frappe did not create the restored DCO piece row");
                 }
+                row.__unedited = true;
                 addedRows.push(row);
                 pendingPieceKeys.push({ row, pieceKey: item.piece_key });
+                await frm.script_manager.trigger("pieces_add", row.doctype, row.name);
+                if (!current()) throw new Error("The DCO edit session changed while creating a restored piece");
+                if (!await freshPreDispatchOwnership()) {
+                    throw new Error("DCO lifecycle, capability, or revision changed while creating a restored piece");
+                }
             }
             Object.entries(item.values).forEach(([fieldname, value]) => {
                 if (currentPieceFieldStatus(frm, grid, row, fieldname) === "Write") {
