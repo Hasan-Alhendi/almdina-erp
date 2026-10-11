@@ -709,3 +709,6 @@ Special shape geometry has duplicate adjacent vertices.,يحتوي المسار 
 Special shape geometry must touch all four raw-piece bounds.,يجب أن يلامس المسار الهندسي حدود عرض الخام وطوله الأربعة.
 Special shape geometry area must be greater than zero.,يجب أن تكون مساحة المسار الهندسي أكبر من صفر.
 Special shape geometry edges cannot intersect.,لا يجوز أن تتقاطع أضلاع المسار الهندسي.
+The language code is invalid.,رمز اللغة غير صالح.
+The selected user language is not supported.,لغة المستخدم المحددة غير مدعومة.
+The entered data is invalid.,البيانات المدخلة غير صالحة.
