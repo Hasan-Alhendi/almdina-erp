@@ -253,7 +253,11 @@ jobs:
           desk_fail() {
             status="$1"
             trap - ERR
-            printf '::error title=Real Desk certification failed::phase=%s exit=%s\n' "$phase" "$status"
+            detail="$(tail -n 16 "$desk_log" 2>/dev/null | tr '\n' ' ')"
+            detail="${detail//'%'/'%25'}"
+            detail="${detail//$'\r'/'%0D'}"
+            detail="${detail//$'\n'/'%0A'}"
+            printf '::error title=Real Desk certification failed::phase=%s exit=%s detail=%s\n' "$phase" "$status" "$detail"
             {
               echo '### Real Frappe Desk certification failure'
               echo "Failed phase: `$phase` (exit $status)"
@@ -309,7 +313,9 @@ jobs:
             install-almdina.log \
             migrate-first.log \
             migrate-second.log \
-            tests.log; do
+            tests.log \
+            dco-desk-certification.log \
+            desk-bench.log; do
             cp "$RUNNER_TEMP/$log" "$RUNNER_TEMP/integration-diagnostics/" 2>/dev/null || true
           done
           cp "$RUNNER_TEMP/frappe-bench/sites/common_site_config.json" "$RUNNER_TEMP/integration-diagnostics/" 2>/dev/null || true
