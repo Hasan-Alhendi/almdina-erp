@@ -261,6 +261,39 @@ jobs:
             status="$1"
             trap - ERR
             detail="$(tail -n 16 "$desk_log" 2>/dev/null | tr '\n' ' ')"
+            browser_summary="$(python3 - "$RUNNER_TEMP/dco-desk-evidence" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          evidence = Path(sys.argv[1])
+          try:
+              diagnostics = json.loads((evidence / "browser-diagnostics.json").read_text())
+              trace = json.loads((evidence / "dco-desk-trace.json").read_text())
+          except (OSError, ValueError):
+              print("browser evidence not available")
+          else:
+              state = diagnostics.get("state", {})
+              pending = [
+                  {"url": item.get("url"), "resource_type": item.get("resource_type")}
+                  for item in state.get("pendingRequests", [])
+                  if item.get("resource_type") in {"xhr", "fetch"}
+              ][-8:]
+              result = {
+                  "failure": state.get("failure"),
+                  "pending_api": pending,
+                  "api_responses": state.get("apiResponses", [])[-8:],
+                  "last_steps": [
+                      {key: item.get(key) for key in ("event", "step", "url", "status", "error") if key in item}
+                      for item in trace
+                      if item.get("event") in {"step_started", "step_completed", "step_failed", "request_started", "response"}
+                  ][-8:],
+              }
+              print(json.dumps(result, ensure_ascii=False, separators=(",", ":")))
+          PY
+          )"
+            browser_summary="${browser_summary:0:1500}"
+            detail="$detail browser_summary=$browser_summary"
             detail="${detail//'%'/'%25'}"
             detail="${detail//$'\r'/'%0D'}"
             detail="${detail//$'\n'/'%0A'}"
