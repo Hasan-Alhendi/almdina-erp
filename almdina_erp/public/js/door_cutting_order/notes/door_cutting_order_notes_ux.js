@@ -224,11 +224,11 @@
         const generation = Number(frm._almdinaNotesSummaryGeneration || 0) + 1;
         frm._almdinaNotesSummaryGeneration = generation;
 
-        const request = frappe.call({
+        const request = Promise.resolve(frappe.call({
             method: CONTEXT_METHOD,
             args: { order_name: identity },
             freeze: false,
-        }).then(response => {
+        })).then(response => {
             const context = response && response.message;
             applyContextSnapshot(frm, context, identity, generation);
             return context || null;
