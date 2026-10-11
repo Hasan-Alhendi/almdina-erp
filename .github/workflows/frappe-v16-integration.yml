@@ -203,10 +203,20 @@ jobs:
 
       - name: Run Almdina ERP tests
         run: |
-          set -o pipefail
           cd "$RUNNER_TEMP/frappe-bench"
           bench --site test.localhost set-config allow_tests true
+          set +e
           bench --site test.localhost run-tests --app almdina_erp 2>&1 | tee "$RUNNER_TEMP/tests.log"
+          test_status=${PIPESTATUS[0]}
+          if (( test_status != 0 )); then
+            {
+              echo "### Almdina ERP test failure details"
+              echo '```text'
+              tail -n 100 "$RUNNER_TEMP/tests.log"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$test_status"
 
       - name: Collect integration diagnostics
         if: failure()
