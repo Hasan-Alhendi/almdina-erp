@@ -89,6 +89,7 @@ doctype_js = {
         "public/js/door_cutting_order/recovery/infrastructure/door_cutting_order_recovery_api.js",
         "public/js/door_cutting_order/recovery/application/door_cutting_order_checkpoint_session.js",
         "public/js/door_cutting_order/recovery/application/door_cutting_order_new_recovery.js",
+        "public/js/door_cutting_order/recovery/application/door_cutting_order_edit_recovery.js",
         "public/js/door_cutting_order/core/door_cutting_order_workspace_asset_registry.js",
         "public/js/door_cutting_order/core/door_cutting_order_workspace_asset_status_ux.js",
         "public/js/door_cutting_order/core/door_cutting_order_workspace_activation_lifecycle.js",

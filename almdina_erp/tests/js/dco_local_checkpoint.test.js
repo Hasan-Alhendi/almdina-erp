@@ -84,6 +84,12 @@ const fakeWindow = {
     AlmdinaOrderRevisionUX: {
         isEditSessionActive(frm) { return !frm.is_new() && frm.editSessionActive !== false; },
     },
+    AlmdinaDcoEditSessionCoordinator: {
+        snapshot(frm) {
+            const editing = !frm.is_new() && frm.editSessionActive !== false;
+            return { activeKind: editing ? "order" : null, phase: editing ? "editing" : "idle", sessionGeneration: editing ? 1 : 0 };
+        },
+    },
     AlmdinaPlanWorkspaceState: {
         storeFor() { return planStore; },
         snapshot() { return planSnapshot; },

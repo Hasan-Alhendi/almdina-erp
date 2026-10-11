@@ -12,6 +12,9 @@
     const CLEAR_ATTEMPT_MAX_TRIES = 3;
     const states = new WeakMap();
     const initializations = new WeakMap();
+    const editInitializations = new WeakMap();
+    const editDismissed = new WeakSet();
+    const editRestoreInProgress = new WeakSet();
     const dialogs = new WeakMap();
     const observedSaves = new WeakMap();
     const observedSaveOperations = new WeakMap();
@@ -88,15 +91,16 @@
         const token = context && typeof context.capture === "function"
             ? context.capture(frm)
             : null;
+        return documentTokenGuard(frm, token);
+    }
+
+    function documentTokenGuard(frm, token) {
+        const context = documentContext();
         return () => {
-            if (context && typeof context.isCurrent === "function") {
-                return context.isCurrent(frm, token);
+            if (context && typeof context.isCurrent === "function") return context.isCurrent(frm, token);
+            if (context && typeof context.isSameDocument === "function" && !context.isSameDocument(frm, token)) {
+                return false;
             }
-            if (
-                context
-                && typeof context.isSameDocument === "function"
-                && !context.isSameDocument(frm, token)
-            ) return false;
             return !window.cur_frm || window.cur_frm === frm;
         };
     }
@@ -363,7 +367,7 @@
         const token = context.capture(frm);
         if (!token) return null;
         const recovered = options.record || null;
-        const mode = recovered ? "NEW" : (isNew(frm) ? "NEW" : "EDIT");
+        const mode = recovered ? String(recovered.mode || "NEW") : (isNew(frm) ? "NEW" : "EDIT");
         const modified = mode === "EDIT" ? String(frm.doc.modified || "").trim() : null;
         if (mode === "EDIT" && !modified) return null;
         const state = {
@@ -385,8 +389,12 @@
                 draftId,
                 tabSessionId: uuid(),
                 targetName: mode === "EDIT" ? String(frm.doc.name || "").trim() : null,
-                sessionOriginModified: modified,
-                expectedServerModified: modified,
+                sessionOriginModified: mode === "EDIT"
+                    ? String(recovered && recovered.session_origin_modified || modified)
+                    : null,
+                expectedServerModified: mode === "EDIT"
+                    ? String(recovered && recovered.expected_server_modified || modified)
+                    : null,
                 recoveryRevision: recovered ? Number(recovered.recovery_revision) : 0,
                 savedRevision: recovered ? Number(recovered.recovery_revision) : 0,
                 dirtyScope: recovered ? recovered.dirty_scope : null,
@@ -419,6 +427,7 @@
                 if (dialog && typeof dialog.hide === "function") dialog.hide();
                 dialogs.delete(frm);
                 initializations.delete(frm);
+                editInitializations.delete(frm);
                 restoreSaveObserver(frm);
                 state.session.dispose();
             });
@@ -1011,6 +1020,716 @@
         return initialization.promise;
     }
 
+    function editRecoveryPermission(frm) {
+        const permissions = window.AlmdinaPermissions;
+        const revision = window.AlmdinaOrderRevisionUX;
+        return Boolean(
+            frm
+            && frm.doctype === "Door Cutting Order"
+            && !isNew(frm)
+            && Number(frm.doc && frm.doc.docstatus || 0) === 0
+            && String(frm.doc && frm.doc.status || "Draft") === "Draft"
+            && permissions
+            && typeof permissions.canDocument === "function"
+            && permissions.canDocument(frm, "edit_order") === true
+            && revision
+            && typeof revision.canOfferEditSession === "function"
+            && revision.canOfferEditSession(frm) === true
+        );
+    }
+
+    function cleanLoadedDocument(frm) {
+        if (!frm || !frm.doc || frm.doc.__unsaved) return false;
+        return typeof frm.is_dirty === "function" && frm.is_dirty() === false;
+    }
+
+    function editDiscoveryHtml(frm, summaries) {
+        const cards = summaries.map((summary) => `
+            <article class="dco-recovery-card" data-draft-id="${escapeHtml(summary.draft_id)}">
+                <div class="dco-recovery-card__title">مسودة تعديل محلية</div>
+                <div><strong>آخر تحديث:</strong> ${escapeHtml(userTimestamp(summary.captured_at))}</div>
+                <div><strong>العميل:</strong> ${escapeHtml(summary.customer || "غير محدد")}</div>
+                <div><strong>القياسات:</strong> ${summary.piece_count}</div>
+                ${summary.versionConflict
+                    ? '<div class="text-warning">تغير الطلب على الخادم منذ إنشاء هذه المسودة. لن تُطبق تلقائيًا.</div>'
+                    : ""}
+                <div class="dco-recovery-card__actions almdina-ui">
+                    ${uiButton({
+                        label: "متابعة التعديل",
+                        variant: "primary",
+                        size: "btn-sm",
+                        attrs: {
+                            "data-edit-recovery-action": "continue",
+                            disabled: !cleanLoadedDocument(frm),
+                        },
+                    })}
+                    ${uiButton({
+                        label: "حذف المسودة",
+                        variant: "danger",
+                        size: "btn-sm",
+                        attrs: { "data-edit-recovery-action": "delete" },
+                    })}
+                </div>
+            </article>
+        `).join("");
+        return `
+            <div class="dco-recovery-intro">
+                هذه مسودة محلية غير محفوظة رسميًا. ستُعاد إلى حقول الطلب بعد التحقق من نسخة الخادم، ويبقى الحفظ الرسمي بضغط «حفظ».
+            </div>
+            <div class="dco-recovery-list">${cards}</div>
+            <div class="almdina-ui" style="margin-top:12px">
+                ${uiButton({
+                    label: "لاحقًا",
+                    variant: "secondary",
+                    attrs: { "data-edit-recovery-action": "dismiss" },
+                })}
+            </div>
+        `;
+    }
+
+    function dismissEditRecoveryDialog(frm, initialization = null, markDismissed = true) {
+        if (initialization && editInitializations.get(frm) !== initialization) return false;
+        const dialog = dialogs.get(frm);
+        if (dialog && typeof dialog.hide === "function") dialog.hide();
+        if (dialogs.get(frm) === dialog) dialogs.delete(frm);
+        if (!initialization || editInitializations.get(frm) === initialization) {
+            editInitializations.delete(frm);
+        }
+        if (markDismissed) editDismissed.add(frm);
+        return true;
+    }
+
+    function displayConflictValue(value) {
+        if (value === null || value === undefined || value === "") return "—";
+        const text = typeof value === "object" ? JSON.stringify(value) : String(value);
+        return text.length > 240 ? `${text.slice(0, 237)}…` : text;
+    }
+
+    function renderEditConflict(card, details) {
+        if (!card || !details || !document || typeof document.createElement !== "function") return false;
+        const oldPanel = card.querySelector("[data-edit-recovery-conflict]");
+        if (oldPanel) oldPanel.remove();
+        const panel = document.createElement("section");
+        panel.setAttribute("data-edit-recovery-conflict", "true");
+        const differences = details.differences || [];
+        const rows = differences.slice(0, 40).map((difference) => {
+            const label = difference.section === "header"
+                ? difference.identity
+                : `${difference.identity}${difference.fieldname ? ` / ${difference.fieldname}` : ""}`;
+            const description = difference.kind === "local_addition"
+                ? "إضافة محلية"
+                : (difference.kind === "server_row_omitted"
+                    ? "صف موجود على الخادم ومحذوف في المسودة"
+                    : (difference.kind === "order"
+                        ? `ترتيب الخادم: ${displayConflictValue(difference.server_value)}؛ ترتيب المسودة: ${displayConflictValue(difference.draft_value)}`
+                        : `${displayConflictValue(difference.server_value)} ← ${displayConflictValue(difference.draft_value)}`));
+            return `<li><strong>${escapeHtml(label)}</strong>: ${escapeHtml(description)}</li>`;
+        }).join("");
+        const more = differences.length > 40
+            ? `<li>و ${differences.length - 40} فرقًا إضافيًا</li>`
+            : "";
+        panel.innerHTML = `
+            <div class="text-warning"><strong>تعارض نسخة الخادم</strong></div>
+            <div>المصدر: ${escapeHtml(details.source.target_doctype)} / ${escapeHtml(details.source.target_name)}</div>
+            <div>وقت المسودة: ${escapeHtml(details.source.captured_at || "غير محدد")}</div>
+            <div>النسخة المتوقعة: ${escapeHtml(details.versions.draft_expected)}</div>
+            <div>نسخة النموذج المحمّلة: ${escapeHtml(details.versions.loaded_form)}</div>
+            <div>نسخة الخادم الحالية: ${escapeHtml(details.versions.current_server)}</div>
+            <div>الفروقات المسموح بمراجعتها:</div>
+            <ul>${rows || "<li>لا توجد فروقات في حقول DCO المسموح بها.</li>"}${more}</ul>
+            <div>لم تُطبق المسودة. انسخ بياناتها أو احذفها بعد مراجعتها.</div>
+            <div class="almdina-ui">${uiButton({
+                label: "نسخ بيانات المسودة",
+                variant: "secondary",
+                size: "btn-sm",
+                attrs: { "data-edit-recovery-action": "copy" },
+            })}</div>
+        `;
+        card.appendChild(panel);
+        const continueButton = card.querySelector('[data-edit-recovery-action="continue"]');
+        if (continueButton) continueButton.disabled = true;
+        return true;
+    }
+
+    function currentPieceFieldStatus(frm, grid, row, fieldname) {
+        const gridRow = grid.grid_rows_by_docname && grid.grid_rows_by_docname[row.name];
+        if (gridRow && typeof gridRow.get_field === "function") {
+            try {
+                const control = gridRow.get_field(fieldname);
+                if (control && typeof control.get_status === "function") return control.get_status();
+            } catch (error) {
+                // Off-screen or non-rendered fields fall through to Frappe's permission status.
+            }
+        }
+        const meta = frappe.meta;
+        const permissions = frappe.perm;
+        if (!meta || typeof meta.get_docfield !== "function"
+            || !permissions || typeof permissions.get_field_display_status !== "function") {
+            return "Read";
+        }
+        const df = meta.get_docfield("Door Cutting Order Detail", fieldname, frm.doc.name);
+        if (!df || typeof df.get_status === "function") return "Read";
+        try {
+            // Frappe v16.17.5: frappe/form/controls/base_control.js Control.get_status()
+            // delegates to this same permission API; perm.js also checks current
+            // permlevel, read-only, dependency, workflow, submit, and set-only-once state.
+            return permissions.get_field_display_status(df, row, grid.perm) || "Read";
+        } catch (error) {
+            return "Read";
+        }
+    }
+
+    function captureEditRestoreSnapshot(frm) {
+        const doc = frm.doc;
+        const pieces = Array.isArray(doc.pieces) ? doc.pieces : [];
+        const localStore = window.locals || (frappe.model && frappe.model.locals) || null;
+        const localRegistrations = localStore ? pieces.map((row) => {
+            const doctype = String(row.doctype || "");
+            const name = String(row.name || "");
+            const table = doctype && localStore[doctype];
+            return {
+                doctype,
+                name,
+                row,
+                table,
+                exists: Boolean(table && Object.prototype.hasOwnProperty.call(table, name)),
+                value: table && table[name],
+            };
+        }) : [];
+        return {
+            doc,
+            piecesRef: doc.pieces,
+            pieces: [...pieces],
+            rows: pieces.map((row) => ({ row, values: Object.entries(row) })),
+            headers: root.Projection.HEADER_FIELDS.map((fieldname) => ({
+                fieldname,
+                exists: Object.prototype.hasOwnProperty.call(doc, fieldname),
+                value: doc[fieldname],
+            })),
+            unsavedExists: Object.prototype.hasOwnProperty.call(doc, "__unsaved"),
+            unsaved: doc.__unsaved,
+            frmDirtyExists: Object.prototype.hasOwnProperty.call(frm, "dirtyState"),
+            frmDirty: frm.dirtyState,
+            localStore,
+            localRegistrations,
+        };
+    }
+
+    function restoreEditRestoreSnapshot(frm, snapshot, addedRows = [], canRefresh = () => true) {
+        if (!snapshot || frm.doc !== snapshot.doc) return false;
+        snapshot.rows.forEach(({ row, values }) => {
+            Object.keys(row).forEach((key) => { delete row[key]; });
+            values.forEach(([key, value]) => { row[key] = value; });
+        });
+        if (Array.isArray(snapshot.piecesRef)) {
+            snapshot.piecesRef.splice(0, snapshot.piecesRef.length, ...snapshot.pieces);
+        }
+        frm.doc.pieces = snapshot.piecesRef;
+        snapshot.headers.forEach(({ fieldname, exists, value }) => {
+            if (exists) frm.doc[fieldname] = value;
+            else delete frm.doc[fieldname];
+        });
+        if (snapshot.unsavedExists) frm.doc.__unsaved = snapshot.unsaved;
+        else delete frm.doc.__unsaved;
+        if (snapshot.frmDirtyExists) frm.dirtyState = snapshot.frmDirty;
+        else delete frm.dirtyState;
+        if (snapshot.localStore) {
+            snapshot.localRegistrations.forEach((saved) => {
+                if (!saved.doctype || !saved.name) return;
+                let table = snapshot.localStore[saved.doctype];
+                if (!table && saved.table) {
+                    table = saved.table;
+                    snapshot.localStore[saved.doctype] = table;
+                }
+                if (!table) return;
+                if (saved.exists) table[saved.name] = saved.value;
+                else if (table[saved.name] === saved.row) delete table[saved.name];
+            });
+            addedRows.forEach((row) => {
+                const doctype = String(row && row.doctype || "");
+                const name = String(row && row.name || "");
+                const table = doctype && snapshot.localStore[doctype];
+                if (table && name && table[name] === row) delete table[name];
+            });
+        }
+        try {
+            if (canRefresh() && typeof frm.refresh_fields === "function") {
+                frm.refresh_fields(root.Projection.HEADER_FIELDS);
+            }
+            if (canRefresh() && typeof frm.refresh_field === "function") frm.refresh_field("pieces");
+            const grid = frm.fields_dict && frm.fields_dict.pieces && frm.fields_dict.pieces.grid;
+            if (canRefresh() && grid && typeof grid.refresh === "function") grid.refresh();
+        } catch (error) {
+            console.debug("DCO form controls could not refresh after recovery rollback", error);
+        }
+        return true;
+    }
+
+    async function applyEditProjection(frm, selected, patch, guards) {
+        const existingState = currentState(frm);
+        const state = existingState || createState(frm, { record: selected });
+        if (!state || state.mode !== "EDIT") throw new Error("Recovery session is unavailable");
+        const grid = frm.fields_dict && frm.fields_dict.pieces && frm.fields_dict.pieces.grid;
+        const current = () => Boolean(
+            guards
+            && typeof guards.isCurrent === "function"
+            && guards.isCurrent()
+            && typeof guards.isSessionCurrent === "function"
+            && guards.isSessionCurrent()
+            && typeof guards.canEdit === "function"
+            && guards.canEdit()
+        );
+        if (!grid || typeof grid.is_editable !== "function" || !grid.is_editable()) {
+            throw new Error("The DCO pieces grid is not editable in the current session");
+        }
+        if (!current()) throw new Error("DCO edit permission or form ownership changed before restore");
+
+        const originalRows = [...(frm.doc.pieces || [])];
+        const rowsByName = new Map(originalRows.map((row) => [String(row.name || ""), row]));
+        const desiredExistingNames = new Set(patch.pieces
+            .filter((item) => item.existing_name)
+            .map((item) => String(item.existing_name)));
+        const removedRows = originalRows.filter((row) => !desiredExistingNames.has(String(row.name || "")));
+        const addsRows = patch.pieces.some((item) => !item.existing_name);
+        if (removedRows.length && (
+            !frappe.model
+            || typeof frappe.model.clear_doc !== "function"
+            || !frm.script_manager
+            || typeof frm.script_manager.trigger !== "function"
+        )) {
+            throw new Error("Frappe child-row removal is unavailable");
+        }
+        if (addsRows && (
+            typeof grid.add_new_row !== "function"
+            || grid.cannot_add_rows
+            || (grid.df && grid.df.cannot_add_rows)
+        )) {
+            throw new Error("Frappe cannot create a restored DCO piece row");
+        }
+
+        const rollback = captureEditRestoreSnapshot(frm);
+        const addedRows = [];
+        const pendingPieceKeys = [];
+        editRestoreInProgress.add(frm);
+        try {
+
+        // Match Frappe GridRow.remove's documented lifecycle while keeping it awaitable.
+        // Its remove() wrapper does not return the run_serially promise.
+        for (const row of removedRows) {
+            if (!current()) throw new Error("DCO edit permission changed during row removal checks");
+            await frm.script_manager.trigger("before_pieces_remove", row.doctype, row.name);
+            if (!current()) throw new Error("The DCO edit session changed during row removal checks");
+        }
+        if (!current()) throw new Error("DCO edit permission changed before applying the restored rows");
+
+        for (const row of removedRows) {
+            if (!frappe.model || typeof frappe.model.clear_doc !== "function") {
+                throw new Error("Frappe child-row removal is unavailable");
+            }
+            frappe.model.clear_doc(row.doctype, row.name);
+        }
+
+        const restoredRows = [];
+        for (const item of patch.pieces) {
+            if (!current()) throw new Error("DCO edit permission changed while applying the restored rows");
+            let row = item.existing_name ? rowsByName.get(item.existing_name) : null;
+            if (!row) {
+                if (typeof grid.add_new_row !== "function") {
+                    throw new Error("Frappe cannot create a restored DCO piece row");
+                }
+                row = grid.add_new_row(null, null, false);
+                if (!row || !row.name || !Array.isArray(frm.doc.pieces)
+                    || !frm.doc.pieces.includes(row)) {
+                    throw new Error("Frappe did not create the restored DCO piece row");
+                }
+                addedRows.push(row);
+                pendingPieceKeys.push({ row, pieceKey: item.piece_key });
+            }
+            Object.entries(item.values).forEach(([fieldname, value]) => {
+                if (currentPieceFieldStatus(frm, grid, row, fieldname) === "Write") {
+                    row[fieldname] = cloneHydrationValue(value);
+                }
+            });
+            restoredRows.push(row);
+        }
+
+        const rows = frm.doc.pieces;
+        restoredRows.forEach((row, index) => {
+            const currentIndex = rows.indexOf(row);
+            if (currentIndex < 0) throw new Error("A restored DCO piece lost its model identity");
+            if (currentIndex !== index) rows.splice(index, 0, rows.splice(currentIndex, 1)[0]);
+            row.idx = index + 1;
+            row.piece_no = index + 1;
+        });
+
+        Object.entries(patch.headers).forEach(([fieldname, value]) => {
+            const field = typeof frm.get_field === "function"
+                ? frm.get_field(fieldname)
+                : (frm.fields_dict && frm.fields_dict[fieldname]);
+            if (field && typeof field.get_status === "function" && field.get_status() === "Write") {
+                frm.doc[fieldname] = cloneHydrationValue(value);
+            }
+        });
+        if (removedRows.length) {
+            for (const row of removedRows) {
+                if (!current()) throw new Error("The DCO edit session changed before the row removal hook");
+                await frm.script_manager.trigger("pieces_remove", row.doctype, row.name);
+                if (!current()) throw new Error("The DCO edit session changed during the row removal hook");
+            }
+        }
+        if (!current()) throw new Error("The DCO edit session changed before refreshing the restored form");
+        if (typeof frm.refresh_fields === "function") frm.refresh_fields(root.Projection.HEADER_FIELDS);
+        if (!current()) throw new Error("The DCO edit session changed before refreshing restored rows");
+        if (typeof frm.refresh_field === "function") frm.refresh_field("pieces");
+        if (!current()) throw new Error("The DCO edit session changed before rebuilding derived UI");
+        await rebuildDerivedUi(frm);
+        if (!current()) throw new Error("The DCO edit session changed while rebuilding derived UI");
+        pendingPieceKeys.forEach(({ row, pieceKey }) => state.pieceKeys.set(row, pieceKey));
+        if (!current()) throw new Error("The DCO edit session changed before marking the restore dirty");
+        if (typeof frm.dirty === "function") frm.dirty();
+        try {
+            if (!current()) throw new Error("The DCO edit session changed before checkpointing the restore");
+            state.session.markDirty("DCO");
+            if (!current()) throw new Error("The DCO edit session changed before scheduling the recovery checkpoint");
+            scheduleFlush(frm, state);
+        } catch (error) {
+            if (!current()) throw error;
+            console.debug("Restored DCO edit remains in the form but could not be checkpointed", error);
+        }
+        return true;
+        } catch (error) {
+            if (typeof guards.isCurrent === "function" && guards.isCurrent()) {
+                restoreEditRestoreSnapshot(frm, rollback, addedRows, guards.isCurrent);
+                if (!existingState && states.get(frm) === state) {
+                    states.delete(frm);
+                    if (state.statusElement) state.statusElement.remove();
+                    state.session.dispose();
+                }
+            }
+            throw error;
+        } finally {
+            editRestoreInProgress.delete(frm);
+        }
+    }
+
+    function showEditRecoveryDialog(frm, records, initialization) {
+        const app = root.EditRecovery;
+        const identity = {
+            ...recoveryIdentity(""),
+            target_name: String(frm.doc.name || "").trim(),
+        };
+        const summaries = [];
+        const accepted = new Map();
+        records.forEach((record) => {
+            try {
+                const dco = app.validateRecord(
+                    record,
+                    { ...identity, draft_id: record.draft_id },
+                    record.expected_server_modified
+                );
+                const summary = Object.freeze({
+                    draft_id: String(record.draft_id),
+                    captured_at: String(record.captured_at),
+                    customer: String(dco.customer || "").trim(),
+                    piece_count: dco.pieces.length,
+                    versionConflict: String(record.expected_server_modified || "")
+                        !== String(frm.doc.modified || ""),
+                });
+                summaries.push(summary);
+                accepted.set(summary.draft_id, record);
+            } catch (error) {
+                console.debug("Ignoring invalid DCO edit recovery record", error && error.code);
+            }
+        });
+        if (!summaries.length) {
+            editInitializations.delete(frm);
+            return null;
+        }
+        const dialog = new frappe.ui.Dialog({
+            title: "مسودات تعديل محلية",
+            static: true,
+            fields: [{ fieldtype: "HTML", fieldname: "edit_recovery_drafts", options: editDiscoveryHtml(frm, summaries) }],
+        });
+        dialogs.set(frm, dialog);
+        dialog.show();
+        const wrapper = dialog.$wrapper && typeof dialog.$wrapper.get === "function"
+            ? dialog.$wrapper.get(0)
+            : dialog.$wrapper;
+        if (!wrapper || typeof wrapper.addEventListener !== "function") return dialog;
+        const context = documentContext();
+        const ownsDiscovery = () => Boolean(
+            editInitializations.get(frm) === initialization
+            && dialogs.get(frm) === dialog
+            && (!context || !initialization.documentToken
+                || (typeof context.isCurrent === "function"
+                    ? context.isCurrent(frm, initialization.documentToken)
+                    : (typeof context.isSameDocument !== "function"
+                        || context.isSameDocument(frm, initialization.documentToken))))
+        );
+        let actionInFlight = false;
+        const buttons = () => typeof wrapper.querySelectorAll === "function"
+            ? [...wrapper.querySelectorAll("[data-edit-recovery-action]")]
+            : [];
+        const lockButtons = (locked) => buttons().forEach((button) => { button.disabled = locked; });
+        wrapper.addEventListener("click", (event) => {
+            const button = event.target.closest("[data-edit-recovery-action]");
+            if (!button || button.disabled || actionInFlight || !ownsDiscovery()) return;
+            const action = button.dataset.editRecoveryAction;
+            if (action === "dismiss") {
+                dismissEditRecoveryDialog(frm, initialization);
+                return;
+            }
+            const card = button.closest("[data-draft-id]");
+            const selected = card && accepted.get(card.dataset.draftId);
+            if (!selected) return;
+            if (action === "copy") {
+                try {
+                    const scopedIdentity = { ...identity, draft_id: selected.draft_id };
+                    const contents = root.EditRecovery.exportDcoProjection(selected, scopedIdentity);
+                    if (!frappe.utils || typeof frappe.utils.copy_to_clipboard !== "function") {
+                        throw new Error("Clipboard copy is unavailable");
+                    }
+                    frappe.utils.copy_to_clipboard(contents, "تم نسخ بيانات المسودة المحلية.");
+                } catch (error) {
+                    showRecoveryError("تعذر نسخ بيانات المسودة المحلية.");
+                }
+                return;
+            }
+            actionInFlight = true;
+            lockButtons(true);
+            if (action === "continue") {
+                let started = false;
+                const guard = documentTokenGuard(frm, initialization.documentToken);
+                const token = initialization.documentToken;
+                const coordinator = window.AlmdinaDcoEditSessionCoordinator;
+                let restoreGeneration = initialization.activeOrderSession
+                    ? Number(initialization.sessionGeneration)
+                    : null;
+                const capability = () => editRecoveryPermission(frm);
+                const isSessionCurrent = () => {
+                    return restoreGeneration !== null
+                        && coordinator
+                        && typeof coordinator.isSessionCurrent === "function"
+                        && coordinator.isSessionCurrent(frm, {
+                            kind: "order",
+                            document: token,
+                            sessionGeneration: restoreGeneration,
+                        });
+                };
+                const scopedIdentity = { ...identity, draft_id: selected.draft_id };
+                const isSessionGenerationCurrent = () => {
+                    if (!coordinator || typeof coordinator.snapshot !== "function") return false;
+                    const snapshot = coordinator.snapshot(frm);
+                    return Number(snapshot.sessionGeneration) === Number(
+                        restoreGeneration === null ? initialization.sessionGeneration : restoreGeneration,
+                    )
+                        && snapshot.phase === (restoreGeneration === null ? "idle" : "editing")
+                        && snapshot.activeKind === (restoreGeneration === null ? null : "order");
+                };
+                const operation = root.EditRecovery.restore(selected, {
+                    repository: repository(),
+                    identity: scopedIdentity,
+                    modified: String(frm.doc.modified || ""),
+                    currentModified: () => String(frm.doc.modified || ""),
+                    doc: frm.doc,
+                    isCurrent: guard,
+                    isClean: () => cleanLoadedDocument(frm),
+                    isSessionGenerationCurrent,
+                    fetchServerDocument: async () => {
+                        const response = await frappe.call({
+                            method: "frappe.client.get",
+                            type: "GET",
+                            args: { doctype: "Door Cutting Order", name: identity.target_name },
+                        });
+                        return response && response.message;
+                    },
+                    canEdit: capability,
+                    reuseSession: () => Boolean(
+                        initialization.activeOrderSession
+                        && isSessionGenerationCurrent()
+                        && isSessionCurrent()
+                    ),
+                    canStart: () => Boolean(
+                        coordinator
+                        && typeof coordinator.canStart === "function"
+                        && coordinator.canStart(frm, "order")
+                    ),
+                    startEdit: async () => {
+                        if (initialization.activeOrderSession) return isSessionCurrent();
+                        const result = await coordinator.start(frm, "order");
+                        if (result !== true) return false;
+                        const snapshot = coordinator.snapshot(frm);
+                        if (!snapshot
+                            || snapshot.phase !== "editing"
+                            || snapshot.activeKind !== "order"
+                            || Number(snapshot.sessionGeneration) !== Number(initialization.sessionGeneration) + 1) return false;
+                        // Bind once, immediately after this restore successfully starts its session.
+                        restoreGeneration = Number(snapshot.sessionGeneration);
+                        started = true;
+                        return isSessionCurrent();
+                    },
+                    isSessionCurrent,
+                    apply: (patch) => {
+                        if (!guard() || !isSessionCurrent() || !capability()) {
+                            throw new Error("DCO edit permission or form ownership changed before restore");
+                        }
+                        const active = currentState(frm) || null;
+                        if (active && active.session.snapshot().mode !== "EDIT") {
+                            throw new Error("The active recovery session does not own this DCO edit");
+                        }
+                        return applyEditProjection(frm, selected, patch, {
+                            isCurrent: guard,
+                            isSessionCurrent,
+                            canEdit: capability,
+                        });
+                    },
+                });
+                Promise.resolve(operation)
+                    .then((result) => {
+                        if (!ownsDiscovery()) return;
+                        dismissEditRecoveryDialog(frm, initialization);
+                        frappe.show_alert({
+                            message: "استُعيدت المسودة إلى نموذج التعديل. اضغط «حفظ» لاعتمادها رسميًا.",
+                            indicator: "blue",
+                        }, 6);
+                        return result;
+                    })
+                    .catch(async (error) => {
+                        if (started && guard() && isSessionCurrent()) {
+                            try { await coordinator.cancel(frm, "order"); } catch (cancelError) { /* recovery draft remains */ }
+                        }
+                        if (!ownsDiscovery()) return;
+                        actionInFlight = false;
+                        lockButtons(false);
+                        if (error && error.code === "version_conflict" && error.details) {
+                            renderEditConflict(card, error.details);
+                        }
+                        const message = error && error.code === "dirty_document"
+                            ? "احفظ أو ألغِ تغييرات النموذج الحالية قبل استعادة المسودة."
+                            : (error && error.code === "version_conflict"
+                                ? "تغير الطلب على الخادم. احتُفظ بالمسودة ولم تُطبق."
+                                : String(error && error.message || "تعذر استعادة المسودة المحلية."));
+                        showRecoveryError(message);
+                    });
+                return;
+            }
+            if (action === "delete") {
+                const discard = async () => {
+                    if (!ownsDiscovery()) return;
+                    let result;
+                    try {
+                        result = await repository().delete(
+                            { ...identity, draft_id: selected.draft_id },
+                            selected.recovery_revision,
+                            selected.official_save_attempted_at
+                        );
+                    } catch (error) {
+                        if (!ownsDiscovery()) return;
+                        actionInFlight = false;
+                        lockButtons(false);
+                        showRecoveryError("تعذر تأكيد حذف المسودة المحلية. احتُفظ بها للتحقق لاحقًا.");
+                        return;
+                    }
+                    if (!ownsDiscovery()) return;
+                    if (!result || result.ok !== true) {
+                        actionInFlight = false;
+                        lockButtons(false);
+                        showRecoveryError("تغيرت المسودة أو تعذر حذفها. احتُفظ بها للتحقق لاحقًا.");
+                        return;
+                    }
+                    accepted.delete(selected.draft_id);
+                    card.remove();
+                    if (!accepted.size) dismissEditRecoveryDialog(frm, initialization);
+                    else {
+                        actionInFlight = false;
+                        lockButtons(false);
+                    }
+                };
+                if (typeof frappe.confirm === "function") {
+                    frappe.confirm("هل تريد حذف مسودة التعديل المحلية نهائيًا؟", discard, () => {
+                        if (!ownsDiscovery()) return;
+                        actionInFlight = false;
+                        lockButtons(false);
+                    });
+                } else {
+                    actionInFlight = false;
+                    lockButtons(false);
+                }
+            }
+        });
+        return dialog;
+    }
+
+    function initializeEditForm(frm) {
+        if (!frm || isNew(frm) || currentState(frm) || editDismissed.has(frm) || !editRecoveryPermission(frm)) {
+            return Promise.resolve(currentState(frm));
+        }
+        const active = editInitializations.get(frm);
+        if (active) return active.promise;
+        const context = documentContext();
+        const documentToken = context && typeof context.capture === "function"
+            ? context.capture(frm)
+            : null;
+        const identity = {
+            ...recoveryIdentity("discovery"),
+            target_name: String(frm.doc.name || "").trim(),
+        };
+        if (!identity.site || !identity.user || !identity.target_name) return Promise.resolve(null);
+        const coordinator = window.AlmdinaDcoEditSessionCoordinator;
+        const sessionSnapshot = coordinator && typeof coordinator.snapshot === "function"
+            ? coordinator.snapshot(frm)
+            : null;
+        const revision = window.AlmdinaOrderRevisionUX;
+        const legacyOrderSessionActive = Boolean(
+            revision
+            && typeof revision.isEditSessionActive === "function"
+            && revision.isEditSessionActive(frm)
+        );
+        const coordinatorOrderSessionActive = Boolean(
+            sessionSnapshot
+            && sessionSnapshot.activeKind === "order"
+            && sessionSnapshot.phase === "editing"
+            && legacyOrderSessionActive
+        );
+        if (legacyOrderSessionActive && !coordinatorOrderSessionActive) return Promise.resolve(null);
+        const initialization = {
+            promise: null,
+            documentToken,
+            sessionGeneration: sessionSnapshot && sessionSnapshot.sessionGeneration,
+            activeOrderSession: coordinatorOrderSessionActive,
+        };
+        if (context && typeof context.registerCleanup === "function") {
+            context.registerCleanup(frm, `${DISCOVERY_CLEANUP_EFFECT}-edit`, () => {
+                if (editInitializations.get(frm) === initialization) editInitializations.delete(frm);
+                const dialog = dialogs.get(frm);
+                if (dialog && typeof dialog.hide === "function") dialog.hide();
+                if (dialogs.get(frm) === dialog) dialogs.delete(frm);
+            });
+        }
+        initialization.promise = Promise.resolve()
+            .then(() => root.EditRecovery.discover(repository(), identity))
+            .then((result) => {
+                const guard = documentTokenGuard(frm, documentToken);
+                if (!guard() || !editRecoveryPermission(frm) || currentState(frm)) return null;
+                const currentSnapshot = coordinator && coordinator.snapshot(frm);
+                const expectedPhase = initialization.activeOrderSession ? "editing" : "idle";
+                const expectedKind = initialization.activeOrderSession ? "order" : null;
+                if (!currentSnapshot
+                    || currentSnapshot.phase !== expectedPhase
+                    || currentSnapshot.activeKind !== expectedKind
+                    || Number(currentSnapshot.sessionGeneration) !== Number(initialization.sessionGeneration)) return null;
+                if (!result || result.ok !== true) return null;
+                return showEditRecoveryDialog(frm, [...result.value.records], initialization);
+            })
+            .catch((error) => {
+                console.debug("DCO EDIT recovery discovery failed safely", error);
+                if (editInitializations.get(frm) === initialization) editInitializations.delete(frm);
+                return null;
+            });
+        editInitializations.set(frm, initialization);
+        return initialization.promise;
+    }
+
     function flushState(frm, state = currentState(frm)) {
         if (!state) return Promise.resolve({ ok: true, value: null });
         return state.session.flush()
@@ -1037,6 +1756,7 @@
     }
 
     function markDirty(frm, dirtyScope = "DCO") {
+        if (editRestoreInProgress.has(frm)) return false;
         if (!isEligible(frm, dirtyScope)) return false;
         let state = currentState(frm);
         if (!state && isNew(frm)) {
@@ -1431,8 +2151,32 @@
     }
 
     const orderHandlers = {
-        onload(frm) { return isNew(frm) ? initializeNewForm(frm) : ensureState(frm); },
-        refresh(frm) { return isNew(frm) ? initializeNewForm(frm) : ensureState(frm); },
+        onload(frm) {
+            if (isNew(frm)) return initializeNewForm(frm);
+            if (currentState(frm)) return ensureState(frm);
+            if (isEditSessionActive(frm)) {
+                const coordinator = window.AlmdinaDcoEditSessionCoordinator;
+                const snapshot = coordinator && typeof coordinator.snapshot === "function"
+                    ? coordinator.snapshot(frm)
+                    : null;
+                if (!snapshot || snapshot.phase !== "editing" || snapshot.activeKind !== "order") return null;
+                if (!root.EditRecovery) return ensureState(frm);
+            }
+            return initializeEditForm(frm);
+        },
+        refresh(frm) {
+            if (isNew(frm)) return initializeNewForm(frm);
+            if (currentState(frm)) return ensureState(frm);
+            if (isEditSessionActive(frm)) {
+                const coordinator = window.AlmdinaDcoEditSessionCoordinator;
+                const snapshot = coordinator && typeof coordinator.snapshot === "function"
+                    ? coordinator.snapshot(frm)
+                    : null;
+                if (!snapshot || snapshot.phase !== "editing" || snapshot.activeKind !== "order") return null;
+                if (!root.EditRecovery) return ensureState(frm);
+            }
+            return initializeEditForm(frm);
+        },
         almdina_edit_session_changed(frm) {
             ensureWorkspaceSubscriptions(frm);
             captureDirtyWorkspace(frm);
@@ -1457,6 +2201,12 @@
     if (typeof window.addEventListener === "function") {
         window.addEventListener("almdina:plan-workspace-updated", (event) => workspaceChanged(event, "PLAN"));
         window.addEventListener("almdina:cost-workspace-updated", (event) => workspaceChanged(event, "COST"));
+        window.addEventListener("almdina:permissions-updated", () => {
+            const frm = window.cur_frm;
+            if (!frm || frm.doctype !== "Door Cutting Order" || isNew(frm)) return;
+            if (editRecoveryPermission(frm)) initializeEditForm(frm);
+            else dismissEditRecoveryDialog(frm, null, false);
+        });
         window.addEventListener("pagehide", () => { flushState(window.cur_frm); });
     }
     if (typeof document !== "undefined" && document.addEventListener) {

@@ -13,7 +13,8 @@ NEW recovery is a continuity overlay on the existing Frappe NEW Door Cutting
 Order form. It discovers site/user-scoped local `DCO` projections, requires an
 explicit choice, and returns those inputs to the current form model. It never
 creates an official DCO, canonical Cutting Plan, invoice, or remote recovery
-record. EDIT recovery remains deferred.
+record. EDIT recovery is outside ALMADINA-129 and is implemented separately under
+[16 — State Ownership](16_DCO_RECOVERY_STATE_OWNERSHIP.md).
 
 ## 2. Discovery and identity
 
