@@ -5,16 +5,7 @@
     const CHILD_DOCTYPE = "Door Cutting Order Detail";
     let virtualSequence = 0;
 
-    function isArabic() {
-        const lang = String(
-            (frappe.boot && frappe.boot.lang) ||
-            (frappe.boot && frappe.boot.user && frappe.boot.user.language) ||
-            document.documentElement.lang ||
-            ""
-        ).toLowerCase();
-        return lang === "ar" || lang.startsWith("ar-");
-    }
-
+    
     function isEditable(frm) {
         if (window.frappe && frappe.almdina && frappe.almdina.orderCanEdit) {
             return frappe.almdina.orderCanEdit(frm);
@@ -58,8 +49,8 @@
             const checkbox = document.createElement("input");
             checkbox.type = "checkbox";
             checkbox.className = "dco-select-all";
-            checkbox.setAttribute("aria-label", isArabic() ? "تحديد كل الأسطر" : "Select all rows");
-            checkbox.title = isArabic() ? "تحديد كل الأسطر" : "Select all rows";
+            checkbox.setAttribute("aria-label", __("Select all rows"));
+            checkbox.title = __("Select all rows");
             cell.appendChild(checkbox);
         }
     }
@@ -91,8 +82,8 @@
             checkbox = document.createElement("input");
             checkbox.type = "checkbox";
             checkbox.className = "dco-row-selector";
-            checkbox.setAttribute("aria-label", isArabic() ? "تحديد السطر" : "Select row");
-            checkbox.title = isArabic() ? "تحديد هذا السطر" : "Select this row";
+            checkbox.setAttribute("aria-label", __("Select row"));
+            checkbox.title = __("Select this row");
             cell.appendChild(checkbox);
         }
         checkbox.dataset.rowName = name;
@@ -189,7 +180,7 @@
             const icon = sketch.querySelector("span:first-child");
             const label = sketch.querySelector("span:last-child");
             if (icon) icon.textContent = "✎";
-            if (label) label.textContent = isArabic() ? "وثّق" : "Document";
+            if (label) label.textContent = __("Document");
         }
 
         clone.querySelectorAll("[data-calc]").forEach(cell => { cell.textContent = "0.000"; });
@@ -280,14 +271,14 @@
             if (icon) icon.textContent = clipped ? (cornerGeometry.typeIcon(row) || "⌑") : ((drawing || exact) ? "✓" : "✎");
             if (label) {
                 label.textContent = clipped
-                    ? (isArabic() ? "ضبط" : "Set")
+                    ? (__("Set"))
                     : ((drawing || exact)
-                        ? (isArabic() ? "موثقة" : "Documented")
-                        : (isArabic() ? "وثّق" : "Document"));
+                        ? (__("Documented"))
+                        : (__("Document")));
             }
             sketch.title = clipped
-                ? `${isArabic() ? `ضبط ${cornerGeometry.typeLabel(row)}` : `Configure ${cornerGeometry.typeLabel(row, false)}`}${cornerSummary ? ` — ${cornerSummary}` : ""}`
-                : (isArabic() ? "افتح توثيق الصورة والقياسات والملاحظات" : "Open image, measurements and notes documentation");
+                ? `${__("Configure {0}", [cornerGeometry.typeLabel(row)])}${cornerSummary ? ` — ${cornerSummary}` : ""}`
+                : (__("Open image, measurements and notes documentation"));
         }
 
         const extraAddons = window.AlmdinaExtraDoorAddonsUX;

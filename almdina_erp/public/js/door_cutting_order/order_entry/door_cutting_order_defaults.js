@@ -3,45 +3,35 @@
 
     const EDGE_PROFILE_LOOKUP_METHOD = "almdina_erp.almdina_erp.services.edge_banding_lookup_service.get_order_edge_banding_options";
 
-    function isArabic() {
-        const lang = String(
-            (frappe.boot && frappe.boot.lang) ||
-            (frappe.boot && frappe.boot.user && frappe.boot.user.language) ||
-            document.documentElement.lang ||
-            ""
-        ).toLowerCase();
-        return lang === "ar" || lang.startsWith("ar-");
-    }
-
     function translateOrderMaterialLabels(frm) {
-        if (!isArabic()) return;
         const labels = {
-            order_details_section: "بيانات الطلب",
-            customer: "العميل",
-            order_date: "تاريخ الطلب",
-            order_notes: "ملاحظات الطلب",
-            order_cutting_machine: "نوع آلة القص",
-            board_section: "المادة والقشاط",
-            board_description: "صنف اللوح",
-            board_length_cm: "طول اللوح (سم)",
-            board_width_cm: "عرض اللوح (سم)",
-            default_edge_type: "نوع القشاط الافتراضي",
-            edge_color: "لون القشاط",
+            order_details_section: "Order details",
+            customer: "Customer",
+            order_date: "Order Date",
+            order_notes: "Order Notes",
+            order_cutting_machine: "Cutting machine type",
+            board_section: "Material and edge banding",
+            board_description: "Board Item",
+            board_length_cm: "Board length (cm)",
+            board_width_cm: "Board width (cm)",
+            default_edge_type: "Default edge banding type",
+            edge_color: "Edge Color",
         };
-        Object.entries(labels).forEach(([fieldname, label]) => {
+        Object.entries(labels).forEach(([fieldname, message]) => {
             const field = frm.fields_dict[fieldname];
+            const label = __(message);
             if (field && field.df && field.df.label !== label) {
                 frm.set_df_property(fieldname, "label", label);
             }
         });
         if (frm.fields_dict.board_description) {
-            const description = "اكتب النوع والسماكة واللون في نص واحد، مثال: MDF أبيض 18 مم.";
+            const description = __("Write the type, thickness, and color in one line, for example: white MDF 18 mm.");
             if (frm.fields_dict.board_description.df.description !== description) {
                 frm.set_df_property("board_description", "description", description);
             }
         }
         if (frm.fields_dict.edge_color) {
-            const description = "أدخل لون القشاط يدويًا لهذا الطلب.";
+            const description = __("Enter the edge color manually for this order.");
             if (frm.fields_dict.edge_color.df.description !== description) {
                 frm.set_df_property("edge_color", "description", description);
             }

@@ -4,31 +4,22 @@
     if (window.AlmdinaExtraDoorAddonsUX) return;
 
     const PIECE_TYPES = Object.freeze([
-        Object.freeze({ value: "Regular", labelAr: "عادية", labelEn: "Regular" }),
-        Object.freeze({ value: "Special", labelAr: "خاصة", labelEn: "Special" }),
-        Object.freeze({ value: "Clipped Corner", labelAr: "الزاوية الكسر", labelEn: "Clipped corner" }),
-        Object.freeze({ value: "L-Shaped Corner", labelAr: "زاوية L", labelEn: "L-shaped corner" }),
+        Object.freeze({ value: "Regular", label: "Regular" }),
+        Object.freeze({ value: "Special", label: "Special" }),
+        Object.freeze({ value: "Clipped Corner", label: "Clipped corner" }),
+        Object.freeze({ value: "L-Shaped Corner", label: "L-shaped corner" }),
     ]);
     const FIELDS = Object.freeze([
-        Object.freeze({ fieldname: "extra_double", labelAr: "دبل قشاط", labelEn: "Double Edge Banding", buttonAr: "دبل قشاط", buttonEn: "Double Banding" }),
-        Object.freeze({ fieldname: "extra_full_door_double", labelAr: "دبل كامل الدرفة", labelEn: "Full Door Double", buttonAr: "دبل كامل", buttonEn: "Full Double" }),
-        Object.freeze({ fieldname: "extra_liner", labelAr: "لاينر", labelEn: "Liner", buttonAr: "لاينر", buttonEn: "Liner" }),
-        Object.freeze({ fieldname: "extra_back_groove", labelAr: "فرزة ظهر", labelEn: "Back Groove", buttonAr: "فرزة ظهر", buttonEn: "Back Groove" }),
-        Object.freeze({ fieldname: "extra_recessed_handle_cutout", labelAr: "حفر مسكة غطس", labelEn: "Recessed Handle Cutout", buttonAr: "مسكة غطس", buttonEn: "Recessed Handle" }),
+        Object.freeze({ fieldname: "extra_double", label: "Double Edge Banding", button: "Double Banding" }),
+        Object.freeze({ fieldname: "extra_full_door_double", label: "Full Door Double", button: "Full Double" }),
+        Object.freeze({ fieldname: "extra_liner", label: "Liner", button: "Liner" }),
+        Object.freeze({ fieldname: "extra_back_groove", label: "Back Groove", button: "Back Groove" }),
+        Object.freeze({ fieldname: "extra_recessed_handle_cutout", label: "Recessed Handle Cutout", button: "Recessed Handle" }),
     ]);
     const FIELD_NAMES = new Set(FIELDS.map(item => item.fieldname));
     const PIECE_TYPE_VALUES = new Set(PIECE_TYPES.map(item => item.value));
     const DOUBLE_FIELD = "extra_double";
     const FULL_DOUBLE_FIELD = "extra_full_door_double";
-
-    function isArabic() {
-        const lang = String(
-            (window.frappe && frappe.boot && frappe.boot.lang)
-            || document.documentElement.lang
-            || ""
-        ).toLowerCase();
-        return lang === "ar" || lang.startsWith("ar-");
-    }
 
     function esc(value) {
         if (window.frappe && frappe.utils && frappe.utils.escape_html) {
@@ -54,11 +45,11 @@
         const pieceType = typeDefinition(row && row.piece_type).value;
         const disabled = options.editable === false ? "disabled" : "";
         const choices = PIECE_TYPES.map(item => {
-            const label = isArabic() ? item.labelAr : item.labelEn;
+            const label = __(item.label);
             return `<option value="${esc(item.value)}" ${pieceType === item.value ? "selected" : ""}>${esc(label)}</option>`;
         }).join("");
         return `<div class="dco-piece-type-native" data-piece-type="${esc(pieceType)}">
-            <select class="dco-fast-select dco-piece-type-select" data-field="piece_type" aria-label="${isArabic() ? "نوع الدرفة" : "Piece type"}" ${disabled}>${choices}</select>
+            <select class="dco-fast-select dco-piece-type-select" data-field="piece_type" aria-label="${__("Piece type")}" ${disabled}>${choices}</select>
         </div>`;
     }
 
@@ -67,8 +58,8 @@
         if (!definition) return "";
         const selected = Boolean(Number(row && row[fieldname]));
         const disabled = options.editable === false ? "disabled" : "";
-        const label = isArabic() ? definition.labelAr : definition.labelEn;
-        const buttonLabel = isArabic() ? definition.buttonAr : definition.buttonEn;
+        const label = __(definition.label);
+        const buttonLabel = __(definition.button);
         const buttonLines = buttonLabel.split(/\s+/).map(word => (
             `<span class="dco-addon-label-line">${esc(word)}</span>`
         )).join("\n");

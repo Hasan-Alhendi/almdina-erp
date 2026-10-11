@@ -9,44 +9,31 @@
             side: "width_top",
             selectedField: "edge_width_top",
             overrideField: "edge_width_top_type_override",
-            labelAr: "العرض العلوي",
-            labelEn: "Top width edge",
+            label: "Top width side",
         },
         {
             side: "width_bottom",
             selectedField: "edge_width_bottom",
             overrideField: "edge_width_bottom_type_override",
-            labelAr: "العرض السفلي",
-            labelEn: "Bottom width edge",
+            label: "Bottom width side",
         },
         {
             side: "long_right",
             selectedField: "edge_long_right",
             overrideField: "edge_long_right_type_override",
-            labelAr: "الطول الأيمن",
-            labelEn: "Right long edge",
+            label: "Right length side",
         },
         {
             side: "long_left",
             selectedField: "edge_long_left",
             overrideField: "edge_long_left_type_override",
-            labelAr: "الطول الأيسر",
-            labelEn: "Left long edge",
+            label: "Left length side",
         },
     ];
     let activePopover = null;
     let dismissBound = false;
 
-    function isArabic() {
-        const lang = String(
-            (frappe.boot && frappe.boot.lang) ||
-            (frappe.boot && frappe.boot.user && frappe.boot.user.language) ||
-            document.documentElement.lang ||
-            ""
-        ).toLowerCase();
-        return lang === "ar" || lang.startsWith("ar-");
-    }
-
+    
     function escapeHtml(value) {
         return frappe.utils.escape_html(String(value ?? ""));
     }
@@ -101,7 +88,7 @@
     function profileDetails(frm, value) {
         const profile = profileMap(frm).get(value);
         if (!profile) {
-            return isArabic() ? "نوع محفوظ سابقًا" : "Previously saved profile";
+            return __("Previously saved profile");
         }
         const thickness = Number(profile.thickness_mm || 0).toLocaleString("en-US", {
             maximumFractionDigits: 3,
@@ -288,10 +275,8 @@
             header.className = "dco-col-edge-bulk";
             edgeTypeHeader.insertAdjacentElement("afterend", header);
         }
-        header.textContent = isArabic() ? "تطبيق على الأربعة" : "Apply to all four";
-        header.title = isArabic()
-            ? "تفعيل الأضلاع الأربعة وتطبيق نوع قشاط واحد عليها"
-            : "Enable all four sides and apply one profile";
+        header.textContent = __("Apply to all four");
+        header.title = __("Enable all four sides and apply one profile");
     }
 
     function ensureBulkButton(frm, tr) {
@@ -333,11 +318,9 @@
             content.appendChild(button);
         }
 
-        button.innerHTML = `<span>${isArabic() ? "تطبيق على الأربعة" : "Apply to all four"}</span><span class="dco-bulk-chevron">⌄</span>`;
+        button.innerHTML = `<span>${__("Apply to all four")}</span><span class="dco-bulk-chevron">⌄</span>`;
         button.disabled = !isEditable(frm);
-        button.title = isArabic()
-            ? "افتح قائمة قابلة للتمرير وطبّق نوعًا واحدًا على الأضلاع الأربعة"
-            : "Open a scrollable list and apply one profile to all four sides";
+        button.title = __("Open a scrollable list and apply one profile to all four sides");
         button.setAttribute("aria-haspopup", "menu");
         button.setAttribute("aria-expanded", activePopover && activePopover.anchor === button ? "true" : "false");
     }
@@ -348,7 +331,7 @@
 
     function effectiveProfileLabel(frm, current) {
         const effective = current || String(frm.doc.default_edge_type || "").trim();
-        if (!effective) return isArabic() ? "غير محدد" : "Not selected";
+        if (!effective) return __("Not selected");
         const profile = profileMap(frm).get(effective);
         return String((profile && profile.label) || effective);
     }
@@ -360,13 +343,11 @@
         const selected = Boolean(row && row[config.selectedField]);
         const effective = current || String(frm.doc.default_edge_type || "").trim();
         const missing = selected && (!effective || (frm._dco_side_edge_profiles_loaded && !profileMap(frm).has(effective)));
-        const label = isArabic() ? config.labelAr : config.labelEn;
+        const label = __(config.label);
         const mode = current
-            ? (isArabic() ? "مخصص" : "Custom")
-            : (isArabic() ? "افتراضي" : "Default");
-        const instruction = isArabic()
-            ? "نقرة للتفعيل أو الإلغاء · نقرتان لاختيار النوع"
-            : "Click to toggle · Double-click to choose profile";
+            ? (__("Custom"))
+            : (__("Default"));
+        const instruction = __("Click to toggle · Double-click to choose profile");
 
         toggle.dataset.edgeSide = config.side;
         toggle.classList.add("dco-edge-profile-target");
@@ -404,9 +385,7 @@
             hint.className = "dco-side-edge-help";
             help.appendChild(hint);
         }
-        hint.textContent = isArabic()
-            ? "القشاط: نقرة للتفعيل والتعطيل، ونقرتان على الضلع لاختيار النوع؛ القوائم قابلة للتمرير"
-            : "Edge banding: click to toggle; double-click to choose a profile; lists are scrollable";
+        hint.textContent = __("Edge banding: click to toggle; double-click to choose a profile; lists are scrollable");
     }
 
     function closePopover() {
@@ -458,10 +437,10 @@
 
     function popoverOptionsHtml(frm, current) {
         const defaultType = String(frm.doc.default_edge_type || "").trim();
-        const defaultLabel = isArabic() ? "استخدام القشاط الافتراضي" : "Use default profile";
+        const defaultLabel = __("Use default profile");
         const defaultDescription = defaultType
-            ? `${isArabic() ? "الافتراضي" : "Default"}: ${effectiveProfileLabel(frm, "")}`
-            : (isArabic() ? "لم يُحدد نوع افتراضي للطلب" : "No order default selected");
+            ? `${__("Default")}: ${effectiveProfileLabel(frm, "")}`
+            : (__("No order default selected"));
         return [
             profileOptionHtml("", defaultLabel, defaultDescription, current),
             ...profileEntries(frm, current).map(([value, label]) => (
@@ -473,12 +452,12 @@
     function bulkPopoverOptionsHtml(frm) {
         const defaultType = String(frm.doc.default_edge_type || "").trim();
         const defaultDescription = defaultType
-            ? `${isArabic() ? "الافتراضي" : "Default"}: ${effectiveProfileLabel(frm, "")}`
-            : (isArabic() ? "لم يُحدد نوع افتراضي للطلب" : "No order default selected");
+            ? `${__("Default")}: ${effectiveProfileLabel(frm, "")}`
+            : (__("No order default selected"));
         return [
             bulkProfileOptionHtml(
                 BULK_DEFAULT_VALUE,
-                isArabic() ? "الأربعة بالافتراضي" : "Default for all four",
+                __("Default for all four"),
                 defaultDescription
             ),
             ...profileEntries(frm).map(([value, label]) => (
@@ -495,7 +474,7 @@
         popover.innerHTML = `
             <div class="dco-edge-popover-head">
                 <div><strong>${escapeHtml(title)}</strong><small>${escapeHtml(subtitle)}</small></div>
-                <button type="button" class="dco-edge-popover-close" aria-label="${isArabic() ? "إغلاق" : "Close"}">×</button>
+                <button type="button" class="dco-edge-popover-close" aria-label="${__("Close")}">×</button>
             </div>
             <div class="dco-edge-popover-options">${optionsHtml}</div>`;
         return popover;
@@ -505,7 +484,8 @@
         const margin = 8;
         const anchorRect = anchor.getBoundingClientRect();
         const rect = popover.getBoundingClientRect();
-        let left = isArabic() ? anchorRect.right - rect.width : anchorRect.left;
+        const rtl = window.AlmdinaLocale ? AlmdinaLocale.isRTL() : document.documentElement.getAttribute("dir") !== "ltr";
+        let left = rtl ? anchorRect.right - rect.width : anchorRect.left;
         left = Math.max(margin, Math.min(window.innerWidth - rect.width - margin, left));
         let top = anchorRect.bottom + 6;
         if (top + rect.height > window.innerHeight - margin) {
@@ -544,12 +524,12 @@
         if (!row) return;
 
         const current = String(row[config.overrideField] || "").trim();
-        const label = isArabic() ? config.labelAr : config.labelEn;
+        const label = __(config.label);
         const popover = createPopover(
             label,
-            isArabic() ? "اختيار النوع يفعّل الضلع تلقائيًا" : "Choosing a profile enables the side",
+            __("Choosing a profile enables the side"),
             popoverOptionsHtml(frm, current),
-            isArabic() ? `اختيار قشاط ${label}` : `Choose ${label} profile`
+            __("Choose {0} profile", [label]),
         );
         mountPopover(popover, { frm, tr, config, anchor, kind: "side" });
         bindCloseButton(popover);
@@ -573,10 +553,10 @@
         closePopover();
         if (!materialize(frm, tr)) return;
 
-        const title = isArabic() ? "تطبيق على الأضلاع الأربعة" : "Apply to all four sides";
+        const title = __("Apply to all four sides");
         const popover = createPopover(
             title,
-            isArabic() ? "مرّر القائمة ثم اختر نوع القشاط" : "Scroll the list, then choose a profile",
+            __("Scroll the list, then choose a profile"),
             bulkPopoverOptionsHtml(frm),
             title
         );

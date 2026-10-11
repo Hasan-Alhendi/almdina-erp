@@ -83,37 +83,18 @@
         return field && field.$wrapper ? field.$wrapper.get(0) : null;
     }
 
-    function isArabic() {
-        const lang = String(
-            (frappe.boot && frappe.boot.lang) ||
-            (frappe.boot && frappe.boot.user && frappe.boot.user.language) ||
-            document.documentElement.lang ||
-            ""
-        ).toLowerCase();
-        return lang === "ar" || lang.startsWith("ar-");
-    }
-
+    
 
     function showMeasurementInputHelp() {
-        const title = isArabic() ? "تعليمات إدخال القياسات" : "Measurement entry help";
-        const message = isArabic()
-            ? `
-                <div dir="rtl" style="text-align:right;line-height:1.9">
-                    <div><b>الإدخال السريع:</b> أدخل العرض ثم <kbd>Tab</kbd>، ثم الطول ثم <kbd>Enter</kbd> لإضافة السطر التالي.</div>
-                    <div><b>التنقل:</b> استخدم الأسهم ← ↑ ↓ → للتنقل بين الخلايا.</div>
-                    <div><b>القشاط:</b> نقرة على الضلع للتفعيل أو التعطيل، ونقرتان على الضلع لاختيار نوع القشاط.</div>
-                    <div><b>التدوير:</b> نقرة واحدة على زر التدوير لتفعيله أو إلغائه.</div>
-                    <div><b>القوائم:</b> القوائم قابلة للتمرير عند وجود خيارات إضافية.</div>
-                    <div><b>المقاس النهائي:</b> الخصم النهائي يُحسب حسب سماكة القشاط في كل ضلع.</div>
-                </div>`
-            : `
-                <div style="text-align:left;line-height:1.8">
-                    <div><b>Fast entry:</b> enter width, press <kbd>Tab</kbd>, enter length, then <kbd>Enter</kbd> for the next row.</div>
-                    <div><b>Navigation:</b> use the arrow keys to move between cells.</div>
-                    <div><b>Edge banding:</b> click a side to toggle it; double-click a side to choose the edge type.</div>
-                    <div><b>Rotation:</b> one click toggles rotation.</div>
-                    <div><b>Lists:</b> option lists are scrollable when more choices are available.</div>
-                    <div><b>Final size:</b> trim is calculated from the edge thickness on each side.</div>
+        const title = __("Measurement entry help");
+        const message = `
+                <div style="text-align:start;line-height:1.9">
+                    <div><b>${__("Fast entry:")}</b> ${__("enter width, press {0}, enter length, then {1} for the next row.", ["<kbd>Tab</kbd>", "<kbd>Enter</kbd>"])}</div>
+                    <div><b>${__("Navigation:")}</b> ${__("use the arrow keys to move between cells.")}</div>
+                    <div><b>${__("Edge banding:")}</b> ${__("click a side to toggle it; double-click a side to choose the edge type.")}</div>
+                    <div><b>${__("Rotation:")}</b> ${__("one click toggles rotation.")}</div>
+                    <div><b>${__("Lists:")}</b> ${__("option lists are scrollable when more choices are available.")}</div>
+                    <div><b>${__("Final size:")}</b> ${__("trim is calculated from the edge thickness on each side.")}</div>
                 </div>`;
         frappe.msgprint({ title, message, indicator: "blue" });
     }
@@ -128,7 +109,7 @@
             button.textContent = "i";
             actions.appendChild(button);
         }
-        const label = isArabic() ? "تعليمات إدخال القياسات" : "Measurement entry help";
+        const label = __("Measurement entry help");
         button.title = label;
         button.setAttribute("aria-label", label);
         if (button.dataset.helpBound !== "1") {
@@ -148,7 +129,7 @@
 
         const help = toolbar.querySelector(":scope > .dco-fast-help");
         const actions = toolbar.querySelector(":scope > .dco-measurement-table-actions");
-        const titleText = isArabic() ? "جدول قياسات الدرف" : "Door Measurements Table";
+        const titleText = __("Door Measurements Table");
 
         if (help) {
             const title = help.querySelector(":scope > .dco-measurement-title");

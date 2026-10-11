@@ -3,16 +3,7 @@
 
     const EDITABLE_STATUSES = new Set(["Draft", "Pending Review", "Rejected"]);
 
-    function isArabic() {
-        const lang = String(
-            (frappe.boot && frappe.boot.lang) ||
-            (frappe.boot && frappe.boot.user && frappe.boot.user.language) ||
-            document.documentElement.lang ||
-            ""
-        ).toLowerCase();
-        return lang === "ar" || lang.startsWith("ar-");
-    }
-
+    
     function uiButton(options) {
         const ui = window.AlmdinaUi;
         if (!ui || typeof ui.button !== "function") {
@@ -140,7 +131,7 @@
             cell.className = "dco-select-col";
             tr.prepend(cell);
         }
-        cell.dataset.label = isArabic() ? "تحديد السطر" : "Select row";
+        cell.dataset.label = __("Select row");
 
         if (tr.classList.contains("dco-virtual-row")) {
             cell.innerHTML = "";
@@ -160,8 +151,8 @@
             checkbox = document.createElement("input");
             checkbox.type = "checkbox";
             checkbox.className = "dco-row-selector";
-            checkbox.setAttribute("aria-label", isArabic() ? "تحديد السطر" : "Select row");
-            checkbox.title = isArabic() ? "تحديد هذا السطر" : "Select this row";
+            checkbox.setAttribute("aria-label", __("Select row"));
+            checkbox.title = __("Select this row");
             cell.appendChild(checkbox);
         }
         checkbox.dataset.rowName = name;
@@ -182,8 +173,8 @@
             const checkbox = document.createElement("input");
             checkbox.type = "checkbox";
             checkbox.className = "dco-select-all";
-            checkbox.setAttribute("aria-label", isArabic() ? "تحديد كل الأسطر" : "Select all rows");
-            checkbox.title = isArabic() ? "تحديد كل الأسطر" : "Select all rows";
+            checkbox.setAttribute("aria-label", __("Select all rows"));
+            checkbox.title = __("Select all rows");
             cell.appendChild(checkbox);
         }
     }
@@ -202,20 +193,20 @@
                 <div class="dco-selection-actions" hidden>
                     <span class="dco-selection-count"></span>
                     ${uiButton({
-                        label: isArabic() ? "حذف الأسطر المحددة" : "Delete selected rows",
+                        label: __("Delete selected rows"),
                         variant: "danger",
                         size: "btn-sm",
                         className: "dco-delete-selected",
                     })}
                     ${uiButton({
-                        label: isArabic() ? "إلغاء التحديد" : "Clear selection",
+                        label: __("Clear selection"),
                         variant: "secondary",
                         size: "btn-sm",
                         className: "dco-clear-selection",
                     })}
                 </div>
                 ${uiButton({
-                    label: isArabic() ? "+ إضافة سطر جديد" : "+ Add new row",
+                    label: __("+ Add new row"),
                     variant: "primary",
                     size: "btn-sm",
                     className: "dco-add-row",
@@ -258,9 +249,9 @@
         const count = root.querySelector(".dco-selection-count");
         if (actions) actions.hidden = selected.size === 0;
         if (count) {
-            count.textContent = isArabic()
-                ? `تم تحديد ${selected.size} ${selected.size === 1 ? "سطر" : "أسطر"}`
-                : `${selected.size} row${selected.size === 1 ? "" : "s"} selected`;
+            count.textContent = selected.size === 1
+                ? __("{0} row selected", [selected.size])
+                : __("{0} rows selected", [selected.size]);
         }
     }
 
@@ -304,13 +295,9 @@
         const names = [...selected].filter(name => (frm.doc.pieces || []).some(row => row.name === name));
         if (!names.length) return;
 
-        const message = isArabic()
-            ? (names.length === 1
-                ? "سيتم حذف السطر المحدد من جدول القياسات. هل أنت متأكد من المتابعة؟"
-                : `سيتم حذف ${names.length} أسطر محددة من جدول القياسات. هل أنت متأكد من المتابعة؟`)
-            : (names.length === 1
-                ? "The selected row will be deleted. Continue?"
-                : `${names.length} selected rows will be deleted. Continue?`);
+        const message = names.length === 1
+            ? __("The selected row will be deleted. Continue?")
+            : __("{0} selected rows will be deleted. Continue?", [names.length]);
 
         frappe.confirm(message, () => {
             const toDelete = new Set(names);
@@ -342,9 +329,9 @@
                 .catch(error => console.error(error));
 
             frappe.show_alert({
-                message: isArabic()
-                    ? (names.length === 1 ? "تم حذف السطر المحدد" : `تم حذف ${names.length} أسطر محددة`)
-                    : (names.length === 1 ? "Selected row deleted" : `${names.length} selected rows deleted`),
+                message: names.length === 1
+                    ? __("Selected row deleted")
+                    : __("{0} selected rows deleted", [names.length]),
                 indicator: "green",
             }, 3);
         });

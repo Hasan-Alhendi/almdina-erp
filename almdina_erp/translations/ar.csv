@@ -713,3 +713,228 @@ Language,اللغة
 The language code is invalid.,رمز اللغة غير صالح.
 The selected user language is not supported.,لغة المستخدم المحددة غير مدعومة.
 The entered data is invalid.,البيانات المدخلة غير صالحة.
+Included in break banding,مشمول في قشاط الكسر
+3. Choose banding sides on the shape,3. اختر جهات القشاط على الشكل
+Top,عرض أعلى
+Bottom,عرض أسفل
+Right,طول يمين
+Left,طول يسار
+Break only,قشاط الكسر فقط
+Piece preview on the board,معاينة الدرفة داخل اللوح
+Outer size,المقاس الخارجي
+cm,سم
+Real cut path,مسار قص حقيقي
+1. Choose the corner,1. اختر مكان الزاوية
+2. Enter the remaining length of each side,2. أدخل الجزء المتبقي من كل ضلع
+Remaining on width side,المتبقي على ضلع العرض
+Remaining on length side,المتبقي على ضلع الطول
+Make both remaining lengths equal,جعل الجزءين المتبقيين متساويين
+Enter the piece width and length before editing the corner.,أدخل عرض الدرفة وطولها أولًا، ثم افتح إعداد الزاوية.
+The remaining length of each side must be greater than zero.,يجب أن يكون الجزء المتبقي من كل ضلع أكبر من صفر.
+The remaining width-side length must be smaller than the piece width.,الجزء المتبقي على ضلع العرض يجب أن يكون أصغر من عرض الدرفة.
+The remaining length-side length must be smaller than the piece length.,الجزء المتبقي على ضلع الطول يجب أن يكون أصغر من طول الدرفة.
+The preview is the final cut shape. The outer rectangle remains the safe reserved area during nesting.,المعاينة تمثل الشكل بعد القص. يبقى المستطيل الخارجي هو المساحة المحجوزة الآمنة أثناء توزيع القطع.
+PIECE,الدرفة
+remaining,متبقي
+Enter dimensions first,أدخل المقاس أولًا
+Could not open corner,تعذر فتح الزاوية
+The piece is no longer in the current measurements table. Reopen it from the table.,لم تعد الدرفة موجودة في جدول القياسات الحالي. أعد فتحها من الجدول.
+Close,إغلاق
+Apply corner,اعتماد الزاوية
+Could not apply corner,تعذر اعتماد الزاوية
+Check corner size,راجع مقاس الزاوية
+Corner and banding applied and will appear in the cutting plan.,تم اعتماد الزاوية والقشاط وستظهر في خطة القص.
+The banding changes were not fully applied. They were not saved; try again.,لم تكتمل كتابة تعديلات القشاط. بقي الطلب دون حفظ هذه التعديلات؛ حاول مرة أخرى.
+Measurement entry help,تعليمات إدخال القياسات
+Door Measurements Table,جدول قياسات الدرف
+Enter the board description and dimensions first.,أدخل صنف اللوح ومقاساته أولًا.
+mm,مم
+Full Board Size,المقاس الكامل للوح
+Open the corner shape to choose banding sides,افتح شكل الزاوية لاختيار جهات القشاط
+No banding,بدون قشاط
+Choose banding on shape,اختيار القشاط من الشكل
+Edge banding is disabled for special doors in the measurements table,القشاط غير متاح للدرفة الخاصة من جدول القياسات
+Unavailable,غير متاح
+Banding via special price,القشاط عبر السعر الخاص
+Long R,طول يمين
+Long L,طول يسار
+Use default edge,القشاط الرئيسي
+en,ar
+Set,ضبط
+Document,وثّق
+"Open image, measurements and notes documentation",افتح توثيق الصورة والقياسات والملاحظات
+Clipped corner,الزاوية الكسر
+L-shaped corner,زاوية L
+Apply to all four,تطبيق على الأربعة
+Delete row,حذف السطر
+Fast entry:,إدخال سريع:
+Width,العرض
+Length,الطول
+next width immediately,العرض التالي فورًا
+Edges and rotation toggle in one click without activating a row.,القشاط والتدوير: نقرة واحدة مباشرة دون تفعيل السطر.
+"For a special door, edge sides are disabled in the table; banding is handled via the special price.",في الدرفة الخاصة: جهات القشاط معطّلة من الجدول؛ يُدار القشاط عبر السعر الخاص.
+Add-ons are available for every type; Double and Full Door Double are mutually exclusive.,الإضافات متاحة لكل الأنواع؛ دبل القشاط ودبل كامل لا يجتمعان.
+Read only,الطلب للعرض فقط
+Piece type,نوع الدرفة
+Qty,العدد
+Rotate,تدوير
+Edge sides,جهات القشاط
+Edge type,نوع القشاط
+Shape,الشكل
+Area,المساحة
+Edge m,متر قشاط
+Enter the piece width and length before opening the shape.,أدخل عرض الدرفة وطولها أولًا، ثم افتح توثيق الشكل.
+Export DXF for AutoCAD,تصدير DXF لأوتوكاد
+DXF export failed its compatibility self-check and was not downloaded.,فشل ملف DXF في فحص التوافق الداخلي، لذلك تم منع تنزيل ملف تالف.
+Preparing an AutoCAD-compatible DXF...,جاري تجهيز ملف DXF المتوافق مع AutoCAD...
+Validated AutoCAD-compatible DXF exported successfully.,تم تصدير ملف DXF متوافق مع AutoCAD بنجاح.
+Downloading the uploaded DXF file...,جاري تنزيل ملف DXF المرفوع...
+Uploaded DXF downloaded successfully.,تم تنزيل ملف DXF المرفوع بنجاح.
+Could not download the uploaded DXF file.,تعذر تنزيل ملف DXF المرفوع.
+Order is read only,الطلب للعرض فقط
+🔒 Read only,🔒 عرض فقط
+Print measurements,طباعة القياسات
+Expand measurement table,تكبير جدول الإدخال
+Open measurement table in a separate window,فتح جدول الإدخال في نافذة مستقلة
+Allow piece rotation,السماح بتدوير الدرفة
+Notes...,ملاحظات...
+Open large note editor,فتح محرر ملاحظة كبيرة
+Long multi-line notes are supported.,يمكن كتابة ملاحظة طويلة متعددة الأسطر.
+Full notes,الملاحظات الكاملة
+Save note,حفظ الملاحظة
+Piece note updated.,تم تحديث ملاحظة الدرفة.
+Select row,تحديد السطر
+Select this row,تحديد هذا السطر
+Select all rows,تحديد كل الأسطر
+Delete selected rows,حذف الأسطر المحددة
+Clear selection,إلغاء التحديد
++ Add new row,+ إضافة سطر جديد
+Instructions,تعليمات
+Clear all,إلغاء تحديد الكل
+Select all,تحديد الكل
+All,الكل
+move between cells,للتنقل بين الخلايا
+Finished input → deduction follows each side,المدخل نهائي ← الخصم حسب سماكة كل ضلع
+Previously saved profile,نوع محفوظ سابقًا
+Enable all four sides and apply one profile,تفعيل الأضلاع الأربعة وتطبيق نوع قشاط واحد عليها
+Open a scrollable list and apply one profile to all four sides,افتح قائمة قابلة للتمرير وطبّق نوعًا واحدًا على الأضلاع الأربعة
+Not selected,غير محدد
+Custom,مخصص
+Default,افتراضي
+Click to toggle · Double-click to choose profile,نقرة للتفعيل أو الإلغاء · نقرتان لاختيار النوع
+Edge banding: click to toggle; double-click to choose a profile; lists are scrollable,القشاط: نقرة للتفعيل والتعطيل، ونقرتان على الضلع لاختيار النوع؛ القوائم قابلة للتمرير
+Use default profile,استخدام القشاط الافتراضي
+No order default selected,لم يُحدد نوع افتراضي للطلب
+Default for all four,الأربعة بالافتراضي
+Choosing a profile enables the side,اختيار النوع يفعّل الضلع تلقائيًا
+Apply to all four sides,تطبيق على الأضلاع الأربعة
+"Scroll the list, then choose a profile",مرّر القائمة ثم اختر نوع القشاط
+Unavailable profile,نوع غير متاح
+Choose this side edge profile,اختيار نوع القشاط لهذا الضلع
+Saving edge profile...,جارٍ حفظ نوع القشاط...
+Edge profile saved.,تم حفظ نوع القشاط.
+No default edge profile selected.,لم يتم اختيار قشاط افتراضي للطلب.
+Loading or unavailable,جاري تحميل البيانات أو النوع غير متاح
+Default profile,القشاط الافتراضي
+Profile for this side,نوع القشاط لهذا الضلع
+Leave empty to use the order default.,اترك الحقل فارغًا ليستخدم هذا الضلع القشاط الافتراضي للطلب.
+Save profile,حفظ النوع
+Use default,استخدام الافتراضي
+Row number,رقم السطر
+Width (cm),العرض (سم)
+Length (cm),الطول (سم)
+Allow rotation,السماح بالتدوير
+Shape and drawing,الشكل والرسم
+Edge metres,متر القشاط
+Right length side,الطول الأيمن
+Left length side,الطول الأيسر
+Top width side,العرض العلوي
+Bottom width side,العرض السفلي
+Top width edge,قشاط العرض العلوي
+Bottom width edge,قشاط العرض السفلي
+Right long edge,قشاط الطول الأيمن
+Left long edge,قشاط الطول الأيسر
+Long right,طول يمين
+Long left,طول يسار
+Double Edge Banding,دبل قشاط
+Double Banding,دبل قشاط
+Full Door Double,دبل كامل الدرفة
+Full Double,دبل كامل
+Liner,لاينر
+Back Groove,فرزة ظهر
+Recessed Handle Cutout,حفر مسكة غطس
+Recessed Handle,مسكة غطس
+Top right,أعلى اليمين
+Top left,أعلى اليسار
+Bottom right,أسفل اليمين
+Bottom left,أسفل اليسار
+Order details,بيانات الطلب
+Cutting machine type,نوع آلة القص
+Material and edge banding,المادة والقشاط
+Board length (cm),طول اللوح (سم)
+Board width (cm),عرض اللوح (سم)
+Default edge banding type,نوع القشاط الافتراضي
+Edge banding type name,اسم نوع القشاط
+English name (optional),الاسم الإنجليزي (اختياري)
+Edge thickness (mm),سماكة القشاط (مم)
+Price per meter in USD,سعر المتر بالدولار
+Disabled (pause this type),موقوف (إيقاف هذا النوع مؤقتاً)
+"enter width, press {0}, enter length, then {1} for the next row.",أدخل العرض ثم {0}، ثم الطول ثم {1} لإضافة السطر التالي.
+Navigation:,التنقل:
+use the arrow keys to move between cells.,استخدم الأسهم للتنقل بين الخلايا.
+Edge banding:,القشاط:
+click a side to toggle it; double-click a side to choose the edge type.,نقرة على الضلع للتفعيل أو التعطيل، ونقرتان على الضلع لاختيار نوع القشاط.
+Rotation:,التدوير:
+one click toggles rotation.,نقرة واحدة على زر التدوير لتفعيله أو إلغائه.
+Lists:,القوائم:
+option lists are scrollable when more choices are available.,القوائم قابلة للتمرير عند وجود خيارات إضافية.
+Final size:,المقاس النهائي:
+trim is calculated from the edge thickness on each side.,الخصم النهائي يُحسب حسب سماكة القشاط في كل ضلع.
+Corner banding,قشاط الزاوية
+Full corner path,قشاط مسار الزاوية الكامل
+cm remaining,سم متبقي
+after dimensions,بعد إدخال المقاس
+Top edge,أعلى
+Bottom edge,أسفل
+Right edge,يمين
+Left edge,يسار
+Corner,الزاوية
+Break,الكسر
+{0} preview,معاينة {0}
+{0} {1} — {2},{0} {1} — {2}
+Edit,إعداد
+Door piece {0},الدرفة {0}
+"Write the type, thickness, and color in one line, for example: white MDF 18 mm.",اكتب النوع والسماكة واللون في نص واحد، مثال: MDF أبيض 18 مم.
+Enter the edge color manually for this order.,أدخل لون القشاط يدويًا لهذا الطلب.
+Configure {0},ضبط {0}
+corner,الزاوية
+Choose {0} profile,اختيار قشاط {0}
+{0}: no edge banding on this side,{0}: لا يوجد قشاط على هذا الضلع في الطلب
+Each side uses the default; use the icon on a banded side to choose a different profile,كل ضلع يأخذ الافتراضي؛ اضغط الرمز فوق ضلع عليه قشاط لاختيار نوع مختلف
+No edge banding is selected on {0}.,لا يوجد قشاط على {0} في الطلب.
+{0} row selected,تم تحديد {0} سطر
+{0} rows selected,تم تحديد {0} أسطر
+The selected row will be deleted. Continue?,سيتم حذف السطر المحدد من جدول القياسات. هل أنت متأكد من المتابعة؟
+{0} selected rows will be deleted. Continue?,سيتم حذف {0} أسطر محددة من جدول القياسات. هل أنت متأكد من المتابعة؟
+Selected row deleted,تم حذف السطر المحدد
+{0} selected rows deleted,تم حذف {0} أسطر محددة
+Open full note — {0} characters,فتح الملاحظة كاملة — {0} حرف
+Piece {0} notes,ملاحظات الدرفة رقم {0}
+Door piece,الدرفة
+Measurement table help,تعليمات جدول القياسات
+Each edge uses the default banding unless overridden.,كل ضلع يأخذ نوع القشاط الافتراضي ما لم تخصصه.
+Use the edge control in the row to override an edge.,لتخصيص ضلع استخدم رمز الضلع داخل صف الدرفة.
+Final size accounts for the band thickness on each edge.,القياس النهائي يُحسب مع الخصم حسب سماكة القشاط لكل ضلع.
+Unnamed stage,مرحلة غير مسماة
+No role,دون دور
+Add at least one active stage.,أضف مرحلة فعالة واحدة على الأقل.
+Planning,تخطيط
+Role,الدور
+"The order can enter the planning stage before approval, but it cannot leave that stage before the cutting plan is approved.",يمكن إرسال الطلب إلى مرحلة التخطيط دون اعتماد مسبق، لكن لا يمكن مغادرتها قبل اعتماد خطة القص.
+The order can go directly to the first execution stage without approving the cutting plan first.,يمكن إرسال الطلب مباشرة إلى أول مرحلة تنفيذ دون اشتراط اعتماد خطة القص مسبقًا.
+Cutting plan gate,بوابة خطة القص
+Planning stage,مرحلة التخطيط
+"The planning stage must be the first active stage. Reorder the stages, then enable this option.",مرحلة التخطيط يجب أن تكون أول مرحلة فعالة في المسار. غيّر ترتيب المراحل أولًا ثم فعّل الخيار.
+"Build the route in the real work order and assign the operational role for each stage. The role decides who can receive the task, while permissions decide what the worker can do.",ابنِ المسار بالترتيب الفعلي للعمل، وحدد الدور المؤهل لكل مرحلة. الدور يحدد من يمكن إسناد المهمة إليه، بينما الصلاحيات تحدد ما يستطيع العامل فعله.
+Preview production route,معاينة سير الإنتاج
+Order route,سير الطلب

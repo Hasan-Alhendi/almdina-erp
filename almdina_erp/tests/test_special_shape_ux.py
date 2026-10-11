@@ -151,7 +151,9 @@ def test_drawing_validation_and_special_measurement_edge_disable_remain_authorit
     assert "dco-special-edges-disabled" in operator
     assert 'if ((row.piece_type || "Regular") === "Special") return 0' in operator
     assert "clearSpecialMeasurementEdges" in operator
-    assert "جهات القشاط معطّلة من الجدول" in operator
+    assert "Edge banding is disabled for special doors in the measurements table" in operator
+
+
 def test_price_approval_is_capability_checked_audited_and_invalidated_by_geometry_changes():
     service = SERVICE_PY.read_text(encoding="utf-8")
     policy = PIECE_POLICY.read_text(encoding="utf-8")
