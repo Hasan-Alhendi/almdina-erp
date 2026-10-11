@@ -14,11 +14,14 @@ FIXTURES = json.loads(Path(os.environ["DCO_DESK_FIXTURE_FILE"]).read_text(encodi
 
 def open_dco(page: Page, name: str) -> None:
     page.goto(f"{DESK_URL}/app/door-cutting-order/{name}", wait_until="domcontentloaded")
-    page.wait_for_function(
-        "name => window.cur_frm && window.cur_frm.doc && window.cur_frm.doc.name === name",
-        arg=name,
-        timeout=60_000,
-    )
+    try:
+        page.wait_for_function(
+            "name => window.cur_frm && window.cur_frm.doc && window.cur_frm.doc.name === name",
+            arg=name,
+            timeout=60_000,
+        )
+    except Exception as exc:
+        raise RuntimeError(f"Loading DCO {name} in Desk timed out: {exc}") from exc
 
 
 def start_edit_and_set_note(page: Page, name: str, value: str, checkpoint: bool) -> dict:
@@ -59,10 +62,13 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
         page.locator("#login_email").fill("Administrator")
         page.locator("#login_password").fill("admin")
         page.get_by_role("button", name=re.compile(r"^(Login|Continue)$")).click()
-        page.wait_for_function(
-            "() => window.frappe && frappe.session && frappe.session.user === 'Administrator'",
-            timeout=60_000,
-        )
+        try:
+            page.wait_for_function(
+                "() => window.frappe && frappe.session && frappe.session.user === 'Administrator'",
+                timeout=60_000,
+            )
+        except Exception as exc:
+            raise RuntimeError(f"Desk login did not establish an Administrator session: {exc}") from exc
 
     # A route selected on a Draft is not dispatch. Exercise the real edit-session
     # Cancel and Save adapters, and the real IndexedDB restore dialog.
