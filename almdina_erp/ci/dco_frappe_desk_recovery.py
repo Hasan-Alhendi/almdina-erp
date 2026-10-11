@@ -21,7 +21,17 @@ def open_dco(page: Page, name: str) -> None:
             timeout=60_000,
         )
     except Exception as exc:
-        raise RuntimeError(f"Loading DCO {name} in Desk timed out: {exc}") from exc
+        state = page.evaluate(
+            """() => ({
+                url: window.location.href,
+                route: window.frappe && window.frappe.get_route && window.frappe.get_route(),
+                user: window.frappe && window.frappe.session && window.frappe.session.user,
+                body: (document.body && document.body.innerText || '').slice(0, 1200),
+            })"""
+        )
+        raise RuntimeError(
+            f"Loading DCO {name} in Desk timed out: {exc}; desk_state={state}"
+        ) from exc
 
 
 def start_edit_and_set_note(page: Page, name: str, value: str, checkpoint: bool) -> dict:
