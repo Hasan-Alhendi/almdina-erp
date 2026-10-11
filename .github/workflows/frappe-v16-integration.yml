@@ -277,11 +277,11 @@ jobs:
               recent_events = []
               for item in trace:
                   if item.get("event") not in {
-                      "navigation", "console", "page_error", "request_failed", "response",
-                      "step_started", "step_completed", "step_failed", "wait_started", "wait_failed",
+                      "navigation", "request_failed", "response", "step_started", "step_completed",
+                      "step_failed", "wait_started", "wait_failed",
                   }:
                       continue
-                  event = {key: item.get(key) for key in ("event", "step", "url", "status", "error") if key in item}
+                  event = {key: item.get(key) for key in ("event", "step", "active_step", "url", "status", "error") if key in item}
                   if "url" in event:
                       event["url"] = str(event["url"])[:100]
                   if "step" in event:
@@ -297,7 +297,11 @@ jobs:
               result = {
                   "failure": state.get("failure"),
                   "url": state.get("url"),
-                  "last_events": recent_events[-8:],
+                  "commit_network_events": [
+                      event for event in recent_events
+                      if event.get("active_step") == "commit recovered EDIT session"
+                  ][-8:],
+                  "last_events": recent_events[-4:],
                   "pending_api": pending,
                   "api_responses": state.get("apiResponses", [])[-2:],
                   "browser_errors": [

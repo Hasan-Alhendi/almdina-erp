@@ -21,6 +21,7 @@ DIAGNOSTIC_EVENTS: dict[str, list[dict[str, str | int | None]]] = {
 BROWSER_TRACE: list[dict[str, str | int | float | None]] = []
 PENDING_REQUESTS: dict[str, dict[str, str | float]] = {}
 TRACE_PATH: Path | None = None
+ACTIVE_STEP: str | None = None
 
 
 def _redact_text(value: str, limit: int = 1000) -> str:
@@ -72,7 +73,8 @@ def attach_browser_diagnostics(page: Page) -> None:
             "resource_type": request.resource_type,
             "started": round(time.time(), 3),
         }),
-        _trace_event("request_started", url=_safe_url(request.url), resource_type=request.resource_type),
+        _trace_event("request_started", url=_safe_url(request.url), resource_type=request.resource_type,
+            active_step=ACTIVE_STEP),
     ))
     page.on("console", lambda message: (append("console", {
         "type": message.type,
@@ -95,12 +97,14 @@ def attach_browser_diagnostics(page: Page) -> None:
         "resource_type": response.request.resource_type,
         "content_type": response.headers.get("content-type", "")[:120],
     }), _trace_event("response", url=_safe_url(response.url), status=response.status,
-        resource_type=response.request.resource_type))
+        resource_type=response.request.resource_type, active_step=ACTIVE_STEP))
         if response.request.resource_type in {"document", "script", "xhr", "fetch"}
         or response.status >= 400 else None)
 
 
 def evaluate(page: Page, step: str, expression: str, arg=None):
+    global ACTIVE_STEP
+    ACTIVE_STEP = step
     _trace_event("step_started", step=step)
     try:
         # page.evaluate has no operation timeout. Bound async xcall/IndexedDB
@@ -124,9 +128,11 @@ def evaluate(page: Page, step: str, expression: str, arg=None):
         """
         result = page.evaluate(wrapped_expression, {"arg": arg, "timeoutMs": 90_000})
         _trace_event("step_completed", step=step)
+        ACTIVE_STEP = None
         return result
     except Exception as exc:
         _trace_event("step_failed", step=step, error=_redact_text(str(exc)))
+        ACTIVE_STEP = None
         raise RuntimeError(f"Desk browser step '{step}' failed: {exc}") from exc
 
 
