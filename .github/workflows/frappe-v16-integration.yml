@@ -6,13 +6,18 @@ on:
       frappe_ref:
         description: Frappe tag or branch to certify
         required: true
-        default: version-16
+        default: v16.17.5
         type: string
       erpnext_ref:
         description: ERPNext tag or branch to certify
         required: true
-        default: version-16
+        default: v16.17.0
         type: string
+      desk_only:
+        description: Skip the full Python suite and run only real Desk certification
+        required: false
+        default: false
+        type: boolean
   pull_request:
     paths:
       - "almdina_erp/**"
@@ -106,7 +111,7 @@ jobs:
 
       - name: Initialize Frappe v16 bench
         env:
-          FRAPPE_REF: ${{ inputs.frappe_ref || 'version-16' }}
+          FRAPPE_REF: ${{ inputs.frappe_ref || 'v16.17.5' }}
         run: |
           bench init "$RUNNER_TEMP/frappe-bench" \
             --frappe-branch "$FRAPPE_REF" \
@@ -116,7 +121,7 @@ jobs:
       - name: Install ERPNext v16 and local app source
         env:
           APP_SOURCE: ${{ github.workspace }}
-          ERPNEXT_REF: ${{ inputs.erpnext_ref || 'version-16' }}
+          ERPNEXT_REF: ${{ inputs.erpnext_ref || 'v16.17.0' }}
         run: |
           cd "$RUNNER_TEMP/frappe-bench"
           bench get-app erpnext --branch "$ERPNEXT_REF"
@@ -138,8 +143,8 @@ jobs:
 
       - name: Record and verify application source refs
         env:
-          FRAPPE_REF: ${{ inputs.frappe_ref || 'version-16' }}
-          ERPNEXT_REF: ${{ inputs.erpnext_ref || 'version-16' }}
+          FRAPPE_REF: ${{ inputs.frappe_ref || 'v16.17.5' }}
+          ERPNEXT_REF: ${{ inputs.erpnext_ref || 'v16.17.0' }}
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP/frappe-bench"
@@ -202,6 +207,7 @@ jobs:
           bench --site test.localhost execute frappe.get_all --kwargs '{"doctype":"DocType","filters":{"module":"Almdina ERP"},"pluck":"name"}'
 
       - name: Run Almdina ERP tests
+        if: github.event_name != 'workflow_dispatch' || inputs.desk_only != true
         run: |
           cd "$RUNNER_TEMP/frappe-bench"
           bench --site test.localhost set-config allow_tests true
@@ -244,6 +250,7 @@ jobs:
         if: always() && !cancelled()
         env:
           DCO_DESK_FIXTURE_FILE: ${{ runner.temp }}/dco-desk-fixtures.json
+          DCO_DESK_EVIDENCE_DIR: ${{ runner.temp }}/dco-desk-evidence
           FRAPPE_DESK_URL: http://test.localhost:8000
         run: |
           set -euo pipefail
@@ -253,7 +260,71 @@ jobs:
           desk_fail() {
             status="$1"
             trap - ERR
-            detail="$(tail -n 16 "$desk_log" 2>/dev/null | tr '\n' ' ')"
+            browser_summary="$(python3 - "$RUNNER_TEMP/dco-desk-evidence" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          evidence = Path(sys.argv[1])
+          try:
+              diagnostics = json.loads((evidence / "browser-diagnostics.json").read_text())
+              trace = json.loads((evidence / "dco-desk-trace.json").read_text())
+          except (OSError, ValueError):
+              print("browser evidence not available")
+          else:
+              state = diagnostics.get("state", {})
+              recent_events = []
+              for item in trace:
+                  if item.get("event") not in {
+                      "navigation", "request_failed", "response", "step_started", "step_completed",
+                      "step_failed", "wait_started", "wait_failed",
+                  }:
+                      continue
+                  event = {key: item.get(key) for key in ("event", "step", "active_step", "url", "status", "error") if key in item}
+                  if "url" in event:
+                      event["url"] = str(event["url"])[:100]
+                  if "step" in event:
+                      event["step"] = str(event["step"])[:50]
+                  if "error" in event:
+                      event["error"] = str(event["error"])[:100]
+                  recent_events.append(event)
+              pending = [
+                  {"url": str(item.get("url", ""))[:100], "resource_type": item.get("resource_type")}
+                  for item in state.get("pendingRequests", [])
+                  if item.get("resource_type") in {"xhr", "fetch"}
+              ][-2:]
+              api_responses = [
+                  {"url": item.get("url"), "status": item.get("status")}
+                  for item in diagnostics.get("responses", [])
+                  if item.get("resource_type") in {"xhr", "fetch"}
+              ][-8:]
+              result = {
+                  "failure": state.get("failure"),
+                  "url": state.get("url"),
+                  "desk_boot": {
+                      "frappe_present": state.get("frappePresent"),
+                      "boot_present": state.get("bootPresent"),
+                      "setup_complete": state.get("setupComplete"),
+                      "sys_setup_complete": state.get("sysSetupComplete"),
+                      "ajax_count": state.get("ajaxCount"),
+                      "route": state.get("route"),
+                  },
+                  "recent_events": recent_events[-8:],
+                  "pending_api": pending,
+                  "api_responses": api_responses,
+                  "browser_errors": [
+                      str(item.get("text", ""))[:120]
+                      for item in diagnostics.get("page_errors", [])[-1:]
+                  ],
+                  "network_failures": [
+                      {"url": str(item.get("url", ""))[:100], "failure": str(item.get("failure", ""))[:100]}
+                      for item in diagnostics.get("request_failures", [])[-3:]
+                  ],
+              }
+              print(json.dumps(result, ensure_ascii=False, separators=(",", ":"))[:3000])
+          PY
+          )"
+            detail="browser_summary=$browser_summary"
             detail="${detail//'%'/'%25'}"
             detail="${detail//$'\r'/'%0D'}"
             detail="${detail//$'\n'/'%0A'}"
@@ -261,6 +332,10 @@ jobs:
             {
               echo '### Real Frappe Desk certification failure'
               echo "Failed phase: `$phase` (exit $status)"
+              echo '#### Concise browser and network diagnosis'
+              echo '```json'
+              echo "$browser_summary"
+              echo '```'
               for log in "$desk_log" "$RUNNER_TEMP/desk-bench.log"; do
                 if [[ -f "$log" ]]; then
                   echo "#### $(basename "$log")"
@@ -277,6 +352,8 @@ jobs:
           }
           trap 'desk_fail $?' ERR
           bench build --app almdina_erp 2>&1 | tee -a "$desk_log"
+          phase="Phase A: pinned runtime, setup wizard, and site preflight"
+          bench --site test.localhost execute 'frappe.get_attr("almdina_erp.tests.dco_recovery_desk_fixture.prepare_desk_test_site")()' 2>&1 | tee -a "$desk_log"
           phase="isolated ERPNext and DCO fixtures"
           bench --site test.localhost execute 'frappe.get_attr("almdina_erp.tests.dco_recovery_desk_fixture.create_desk_edit_recovery_fixtures")()' 2>&1 | tee -a "$desk_log"
           phase="Playwright install"
@@ -300,7 +377,7 @@ jobs:
             desk_fail 1
           fi
           phase="Desk EDIT recovery browser certification"
-          ./env/bin/python -u apps/almdina_erp/almdina_erp/ci/dco_frappe_desk_recovery.py 2>&1 | tee -a "$desk_log"
+          timeout --signal=INT --kill-after=45s 480s ./env/bin/python -u apps/almdina_erp/almdina_erp/ci/dco_frappe_desk_recovery.py 2>&1 | tee -a "$desk_log"
 
       - name: Collect integration diagnostics
         if: failure()
@@ -318,8 +395,7 @@ jobs:
             desk-bench.log; do
             cp "$RUNNER_TEMP/$log" "$RUNNER_TEMP/integration-diagnostics/" 2>/dev/null || true
           done
-          cp "$RUNNER_TEMP/frappe-bench/sites/common_site_config.json" "$RUNNER_TEMP/integration-diagnostics/" 2>/dev/null || true
-          cp "$RUNNER_TEMP/frappe-bench/sites/test.localhost/site_config.json" "$RUNNER_TEMP/integration-diagnostics/" 2>/dev/null || true
+          cp -R "$RUNNER_TEMP/dco-desk-evidence" "$RUNNER_TEMP/integration-diagnostics/" 2>/dev/null || true
           find "$RUNNER_TEMP/frappe-bench/sites" -maxdepth 2 -type f -print > "$RUNNER_TEMP/integration-diagnostics/site-files.txt" 2>&1
           cd "$RUNNER_TEMP/frappe-bench" && bench version > "$RUNNER_TEMP/integration-diagnostics/bench-version.txt" 2>&1
           mariadb -h 127.0.0.1 -uroot -proot -e 'SELECT VERSION(); SHOW VARIABLES LIKE "character_set_server"; SHOW VARIABLES LIKE "collation_server"; SELECT User, Host FROM mysql.user;' > "$RUNNER_TEMP/integration-diagnostics/mariadb.txt" 2>&1
