@@ -34,7 +34,7 @@ def test_order_keeps_required_manual_edge_color() -> None:
     assert "manually" in edge_color["description"].lower()
 
     defaults = DEFAULTS.read_text(encoding="utf-8")
-    assert "أدخل لون القشاط يدويًا لهذا الطلب." in defaults
+    assert '__("Enter the edge color manually for this order.")' in defaults
     assert "apply_edge_color_default" not in defaults
     assert 'frm.set_value("edge_color"' not in defaults
 

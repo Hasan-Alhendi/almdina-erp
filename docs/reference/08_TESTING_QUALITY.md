@@ -129,7 +129,8 @@ Persona لا يملك `VIEW_COSTS` يجب ألا يحصل على Internal factor
 
 يفضل اختبار فعلي عند المساس بـ:
 
-- Print layout عربي/RTL.
+- Print layout يتبع لغة الطلب: عربي/RTL افتراضيًا، ولغة LTR ثالثة عندما تكون مفعّلة. المقاسات تبقى LTR.
+- بوابة `test_translation_catalog_gate` تمنع تكرار مفاتيح `ar.csv` واختلاف الـplaceholders وحصر اللغة في `ar/en`.
 - DXF مع البرامج/الماكينة الفعلية.
 - Tablet/pen/drawing interactions.
 - mobile shop floor.

@@ -39,7 +39,7 @@
 
         function renderError(message) {
             $main.html(`
-                <div class="aw-error" dir="rtl" role="alert">
+                <div class="aw-error" role="alert">
                     <div class="aw-error-icon" aria-hidden="true">!</div>
                     <div>
                         <b>${t("تعذر تحميل إدارة المستخدمين")}</b>
@@ -318,7 +318,7 @@
         }
 
         function auditHtml(events) {
-            return `<div class="aw-audit" dir="rtl">${events.map(event => `
+            return `<div class="aw-audit">${events.map(event => `
                 <div class="aw-audit-item">
                     <div class="aw-audit-title"><span>${esc(event.action || "")}</span><span>${esc(event.changed_on || "")}</span></div>
                     <div class="aw-audit-meta">${esc(event.changed_by || "")}${event.changed_fields ? ` · ${esc(event.changed_fields)}` : ""}</div>

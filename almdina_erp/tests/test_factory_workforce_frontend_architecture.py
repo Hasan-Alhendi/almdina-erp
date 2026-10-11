@@ -238,6 +238,16 @@ class FactoryWorkforceFrontendArchitectureTest(unittest.TestCase):
         self.assertNotIn("<style", self.renderer)
         self.assertNotIn("<style", self.controller)
 
+    def test_language_choices_come_from_the_server_catalog(self) -> None:
+        combined = "\n".join((self.dialogs, self.view_model, self.controller, self.state))
+        self.assertNotIn('["ar", "en"]', combined)
+        self.assertNotIn('user.language === "en"', self.view_model)
+        self.assertIn("languageField(config.languages", self.dialogs)
+        self.assertIn("languageName(user.language, data && data.languages)", self.view_model)
+        self.assertIn("data.languages = Array.isArray(payload.languages)", self.state)
+        self.assertIn("languages: state.languages", self.controller)
+        self.assertNotIn('dir="rtl"', self.renderer)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -24,16 +24,6 @@
         "Bottom Left": Object.freeze(["edge_width_bottom", "edge_long_left"]),
     });
 
-    function isArabic() {
-        const lang = String(
-            (frappe.boot && frappe.boot.lang) ||
-            (frappe.boot && frappe.boot.user && frappe.boot.user.language) ||
-            document.documentElement.lang ||
-            ""
-        ).toLowerCase();
-        return lang === "ar" || lang.startsWith("ar-");
-    }
-
     function num(value) {
         const result = Number(String(value ?? "").replace(",", "."));
         return Number.isFinite(result) ? result : 0;
@@ -67,9 +57,9 @@
         return isLShaped(piece) ? "L" : "diagonal";
     }
 
-    function typeLabel(piece, arabic = isArabic()) {
-        if (isLShaped(piece)) return arabic ? "زاوية L" : "L-shaped corner";
-        return arabic ? "الزاوية الكسر" : "Clipped corner";
+    function typeLabel(piece) {
+        if (isLShaped(piece)) return __("L-shaped corner");
+        return __("Clipped corner");
     }
 
     function typeIcon(piece) {
@@ -246,9 +236,9 @@
         return Boolean(isClipped(piece) && piece && piece.edge_break);
     }
 
-    function breakEdgeLabel(piece, arabic = isArabic()) {
-        if (isLShaped(piece)) return arabic ? "قشاط الزاوية" : "Corner";
-        return arabic ? "قشاط مسار الزاوية الكامل" : "Full corner path";
+    function breakEdgeLabel(piece) {
+        if (isLShaped(piece)) return __("Corner banding");
+        return __("Full corner path");
     }
 
     function offsetBoundaryLine(start, end, amount, orientation) {
@@ -528,9 +518,9 @@
         ]);
     }
 
-    function positionLabel(value, arabic = isArabic()) {
+    function positionLabel(value) {
         const item = POSITIONS.find(position => position.value === value) || POSITIONS[0];
-        return arabic ? item.ar : item.en;
+        return __(item.en);
     }
 
     function prepareRow(row) {
@@ -552,28 +542,26 @@
         return changed;
     }
 
-    function summary(row, arabic = isArabic()) {
+    function summary(row) {
         if (!isCornerCut(row)) return "";
         const config = baseConfig(row);
         const size = config.remainingWidth && config.remainingLength
-            ? `${rounded(config.remainingWidth)}×${rounded(config.remainingLength)} ${arabic ? "سم متبقي" : "cm remaining"}`
-            : (arabic ? "بعد إدخال المقاس" : "after dimensions");
-        return `${positionLabel(config.position, arabic)} · ${size}`;
+            ? `${rounded(config.remainingWidth)}×${rounded(config.remainingLength)} ${__("cm remaining")}`
+            : __("after dimensions");
+        return `${positionLabel(config.position)} · ${size}`;
     }
 
-    function edgeSelectionSummary(row, arabic = isArabic()) {
+    function edgeSelectionSummary(row) {
         if (!isCornerCut(row)) return "";
         const labels = [];
-        if (row.edge_width_top) labels.push(arabic ? "أعلى" : "Top");
-        if (row.edge_width_bottom) labels.push(arabic ? "أسفل" : "Bottom");
-        if (row.edge_long_right) labels.push(arabic ? "يمين" : "Right");
-        if (row.edge_long_left) labels.push(arabic ? "يسار" : "Left");
-        if (row.edge_break) labels.push(isLShaped(row) ? (arabic ? "الزاوية" : "Corner") : (arabic ? "الكسر" : "Break"));
-        if (row.edge_break_only) labels.push(arabic ? "الكسر فقط" : "Break only");
-        if (!labels.length) {
-            return arabic ? "بدون قشاط" : "No banding";
-        }
-        return labels.join(arabic ? " · " : " · ");
+        if (row.edge_width_top) labels.push(__("Top edge"));
+        if (row.edge_width_bottom) labels.push(__("Bottom edge"));
+        if (row.edge_long_right) labels.push(__("Right edge"));
+        if (row.edge_long_left) labels.push(__("Left edge"));
+        if (row.edge_break) labels.push(isLShaped(row) ? __("Corner") : __("Break"));
+        if (row.edge_break_only) labels.push(__("Break only"));
+        if (!labels.length) return __("No banding");
+        return labels.join(" · ");
     }
 
     function cloneEdgeDraft(row) {
@@ -592,7 +580,7 @@
     function edgeToggleHtml(field, label, draft, locked, extra = "") {
         const checked = Boolean(draft[field]);
         return `
-            <button type="button" class="dco-corner-edge-toggle ${checked ? "is-checked" : ""} ${locked ? "is-break-locked" : ""} ${extra}" data-corner-edge="${field}" aria-pressed="${checked ? "true" : "false"}" ${locked ? "disabled" : ""} title="${locked ? (isArabic() ? "مشمول في قشاط الكسر" : "Included in break banding") : ""}">
+            <button type="button" class="dco-corner-edge-toggle ${checked ? "is-checked" : ""} ${locked ? "is-break-locked" : ""} ${extra}" data-corner-edge="${field}" aria-pressed="${checked ? "true" : "false"}" ${locked ? "disabled" : ""} title="${locked ? (__("Included in break banding")) : ""}">
                 <span class="dco-check-mark">${checked ? "✓" : ""}</span>
                 <span>${label}</span>
             </button>`;
@@ -606,14 +594,14 @@
             : new Set();
         return `
             <div data-corner-edges-section>
-                <div class="dco-corner-section-label">${isArabic() ? "3. اختر جهات القشاط على الشكل" : "3. Choose banding sides on the shape"}</div>
+                <div class="dco-corner-section-label">${__("3. Choose banding sides on the shape")}</div>
                 <div class="dco-corner-edges has-break" data-corner-edges>
-                    ${edgeToggleHtml("edge_width_top", isArabic() ? "عرض أعلى" : "Top", draft, locked.has("edge_width_top"))}
-                    ${edgeToggleHtml("edge_width_bottom", isArabic() ? "عرض أسفل" : "Bottom", draft, locked.has("edge_width_bottom"))}
-                    ${edgeToggleHtml("edge_long_right", isArabic() ? "طول يمين" : "Right", draft, locked.has("edge_long_right"))}
-                    ${edgeToggleHtml("edge_long_left", isArabic() ? "طول يسار" : "Left", draft, locked.has("edge_long_left"))}
+                    ${edgeToggleHtml("edge_width_top", __("Top"), draft, locked.has("edge_width_top"))}
+                    ${edgeToggleHtml("edge_width_bottom", __("Bottom"), draft, locked.has("edge_width_bottom"))}
+                    ${edgeToggleHtml("edge_long_right", __("Right"), draft, locked.has("edge_long_right"))}
+                    ${edgeToggleHtml("edge_long_left", __("Left"), draft, locked.has("edge_long_left"))}
                     ${edgeToggleHtml("edge_break", breakEdgeLabel(row), draft, false, "dco-edge-break-toggle")}
-                    ${isClipped(row) ? edgeToggleHtml("edge_break_only", isArabic() ? "قشاط الكسر فقط" : "Break only", draft, false, "dco-edge-break-toggle") : ""}
+                    ${isClipped(row) ? edgeToggleHtml("edge_break_only", __("Break only"), draft, false, "dco-edge-break-toggle") : ""}
                 </div>
             </div>`;
     }
@@ -843,37 +831,37 @@
                 <section class="dco-corner-preview-panel">
                     <div class="dco-corner-preview-head">
                         <div>
-                            <strong>${isArabic() ? "معاينة الدرفة داخل اللوح" : "Piece preview on the board"}</strong>
-                            <span>${isArabic() ? "المقاس الخارجي" : "Outer size"}: ${rounded(dimensions.width)} × ${rounded(dimensions.length)} ${isArabic() ? "سم" : "cm"}</span>
+                            <strong>${__("Piece preview on the board")}</strong>
+                            <span>${__("Outer size")}: ${rounded(dimensions.width)} × ${rounded(dimensions.length)} ${__("cm")}</span>
                         </div>
-                        <span class="dco-corner-badge">${typeIcon(row)} ${isArabic() ? "مسار قص حقيقي" : "Real cut path"}</span>
+                        <span class="dco-corner-badge">${typeIcon(row)} ${__("Real cut path")}</span>
                     </div>
                     <div class="dco-corner-preview" data-corner-preview></div>
                 </section>
                 <section class="dco-corner-controls">
                     <div>
-                        <div class="dco-corner-section-label">${isArabic() ? "1. اختر مكان الزاوية" : "1. Choose the corner"}</div>
+                        <div class="dco-corner-section-label">${__("1. Choose the corner")}</div>
                         <div class="dco-corner-position-grid">
                             ${POSITIONS.map(position => `
                                 <button type="button" class="dco-corner-position ${position.value === config.position ? "is-active" : ""}" data-position="${position.value}">
                                     ${cornerIcon(position.value, row)}
-                                    <span>${isArabic() ? position.ar : position.en}</span>
+                                    <span>${__(position.en)}</span>
                                 </button>`).join("")}
                         </div>
                     </div>
                     <div>
-                        <div class="dco-corner-section-label">${isArabic() ? "2. أدخل الجزء المتبقي من كل ضلع" : "2. Enter the remaining length of each side"}</div>
+                        <div class="dco-corner-section-label">${__("2. Enter the remaining length of each side")}</div>
                         <div class="dco-corner-input-grid">
                             <div class="dco-corner-input-wrap">
-                                <label>${isArabic() ? "المتبقي على ضلع العرض" : "Remaining on width side"}</label>
-                                <div class="dco-corner-input-shell"><input type="number" min="0.1" step="0.1" data-corner-remaining="width" value="${rounded(config.remainingWidth)}"><span>${isArabic() ? "سم" : "cm"}</span></div>
+                                <label>${__("Remaining on width side")}</label>
+                                <div class="dco-corner-input-shell"><input type="number" min="0.1" step="0.1" data-corner-remaining="width" value="${rounded(config.remainingWidth)}"><span>${__("cm")}</span></div>
                             </div>
                             <div class="dco-corner-input-wrap">
-                                <label>${isArabic() ? "المتبقي على ضلع الطول" : "Remaining on length side"}</label>
-                                <div class="dco-corner-input-shell"><input type="number" min="0.1" step="0.1" data-corner-remaining="length" value="${rounded(config.remainingLength)}"><span>${isArabic() ? "سم" : "cm"}</span></div>
+                                <label>${__("Remaining on length side")}</label>
+                                <div class="dco-corner-input-shell"><input type="number" min="0.1" step="0.1" data-corner-remaining="length" value="${rounded(config.remainingLength)}"><span>${__("cm")}</span></div>
                             </div>
                         </div>
-                        <button type="button" class="dco-corner-equal">${isArabic() ? "جعل الجزءين المتبقيين متساويين" : "Make both remaining lengths equal"}</button>
+                        <button type="button" class="dco-corner-equal">${__("Make both remaining lengths equal")}</button>
                     </div>
                     ${edgeControlsHtml(row)}
                     <div class="dco-corner-help" data-corner-help></div>
@@ -897,24 +885,16 @@
 
     function validationMessage(config) {
         if (!config.width || !config.length) {
-            return isArabic()
-                ? "أدخل عرض الدرفة وطولها أولًا، ثم افتح إعداد الزاوية."
-                : "Enter the piece width and length before editing the corner.";
+            return __("Enter the piece width and length before editing the corner.");
         }
         if (config.remainingWidth <= 0 || config.remainingLength <= 0) {
-            return isArabic()
-                ? "يجب أن يكون الجزء المتبقي من كل ضلع أكبر من صفر."
-                : "The remaining length of each side must be greater than zero.";
+            return __("The remaining length of each side must be greater than zero.");
         }
         if (config.remainingWidth >= config.width) {
-            return isArabic()
-                ? "الجزء المتبقي على ضلع العرض يجب أن يكون أصغر من عرض الدرفة."
-                : "The remaining width-side length must be smaller than the piece width.";
+            return __("The remaining width-side length must be smaller than the piece width.");
         }
         if (config.remainingLength >= config.length) {
-            return isArabic()
-                ? "الجزء المتبقي على ضلع الطول يجب أن يكون أصغر من طول الدرفة."
-                : "The remaining length-side length must be smaller than the piece length.";
+            return __("The remaining length-side length must be smaller than the piece length.");
         }
         return "";
     }
@@ -926,9 +906,7 @@
         const help = root.querySelector("[data-corner-help]");
         if (help) {
             help.classList.toggle("is-error", Boolean(message));
-            help.textContent = message || (isArabic()
-                ? "المعاينة تمثل الشكل بعد القص. يبقى المستطيل الخارجي هو المساحة المحجوزة الآمنة أثناء توزيع القطع."
-                : "The preview is the final cut shape. The outer rectangle remains the safe reserved area during nesting.");
+            help.textContent = message || (__("The preview is the final cut shape. The outer rectangle remains the safe reserved area during nesting."));
         }
         if (!preview) return;
 
@@ -966,15 +944,15 @@
         const labelX = rounded(frame.x + frame.width / 2);
         const labelY = rounded(frame.y + frame.height / 2);
         preview.innerHTML = `
-            <svg viewBox="0 0 420 280" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${isArabic() ? `معاينة ${typeLabel(row)}` : `${typeLabel(row, false)} preview`}">
+            <svg viewBox="0 0 420 280" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${__("{0} preview", [typeLabel(row)])}">
                 <defs><pattern id="dco-corner-grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" fill="none" stroke="#dfe8ef" stroke-width="1"/></pattern></defs>
                 <rect x="10" y="10" width="400" height="260" rx="12" fill="url(#dco-corner-grid)" stroke="#e2e8f0"/>
                 <rect x="${frame.x}" y="${frame.y}" width="${frame.width}" height="${frame.height}" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="6 4"/>
                 <polygon points="${polygon}" fill="#dff1fb" stroke="#172033" stroke-width="3" stroke-linejoin="round"/>
                 ${edgeMarkup}
-                <text x="${labelX}" y="${labelY - 6}" text-anchor="middle" font-size="18" font-weight="800" fill="#172033">${isArabic() ? "الدرفة" : "PIECE"}</text>
-                <text x="${labelX}" y="${labelY + 14}" text-anchor="middle" font-size="12" fill="#536577">${rounded(config.width)} × ${rounded(config.length)} ${isArabic() ? "سم" : "cm"}</text>
-                <text x="210" y="258" text-anchor="middle" font-size="11" font-weight="700" fill="#9a6207">${positionLabel(config.position)} · ${isArabic() ? "متبقي" : "remaining"} ${rounded(config.remainingWidth)} × ${rounded(config.remainingLength)} ${isArabic() ? "سم" : "cm"}</text>
+                <text x="${labelX}" y="${labelY - 6}" text-anchor="middle" font-size="18" font-weight="800" fill="#172033">${__("PIECE")}</text>
+                <text x="${labelX}" y="${labelY + 14}" text-anchor="middle" font-size="12" fill="#536577">${rounded(config.width)} × ${rounded(config.length)} ${__("cm")}</text>
+                <text x="210" y="258" text-anchor="middle" font-size="11" font-weight="700" fill="#9a6207">${positionLabel(config.position)} · ${__("remaining")} ${rounded(config.remainingWidth)} × ${rounded(config.remainingLength)} ${__("cm")}</text>
             </svg>`;
     }
 
@@ -994,10 +972,8 @@
         const dimensions = originalDimensions(liveRow);
         if (!dimensions.width || !dimensions.length) {
             frappe.msgprint({
-                title: isArabic() ? "أدخل المقاس أولًا" : "Enter dimensions first",
-                message: isArabic()
-                    ? "أدخل عرض الدرفة وطولها أولًا، ثم افتح إعداد الزاوية."
-                    : "Enter the piece width and length before editing the corner.",
+                title: __("Enter dimensions first"),
+                message: __("Enter the piece width and length before editing the corner."),
                 indicator: "orange",
             });
             return;
@@ -1005,10 +981,8 @@
         liveRow = currentRow();
         if (!liveRow || !isCornerCut(liveRow)) {
             frappe.msgprint({
-                title: isArabic() ? "تعذر فتح الزاوية" : "Could not open corner",
-                message: isArabic()
-                    ? "لم تعد الدرفة موجودة في جدول القياسات الحالي. أعد فتحها من الجدول."
-                    : "The piece is no longer in the current measurements table. Reopen it from the table.",
+                title: __("Could not open corner"),
+                message: __("The piece is no longer in the current measurements table. Reopen it from the table."),
                 indicator: "orange",
             });
             return;
@@ -1024,13 +998,15 @@
         }
 
         const dialog = new frappe.ui.Dialog({
-            title: isArabic()
-                ? `${readOnly ? "عرض" : "إعداد"} ${typeLabel(liveRow)} — الدرفة ${liveRow.piece_no || liveRow.idx || ""}`
-                : `${readOnly ? "View" : "Edit"} ${typeLabel(liveRow, false)} — piece ${liveRow.piece_no || liveRow.idx || ""}`,
+            title: __("{0} {1} — {2}", [
+                readOnly ? __("View") : __("Edit"),
+                typeLabel(liveRow),
+                __("Door piece {0}", [liveRow.piece_no || liveRow.idx || ""]),
+            ]),
             fields: [{ fieldname: "corner_editor", fieldtype: "HTML" }],
             primary_action_label: readOnly
-                ? (isArabic() ? "إغلاق" : "Close")
-                : (isArabic() ? "اعتماد الزاوية" : "Apply corner"),
+                ? (__("Close"))
+                : (__("Apply corner")),
             primary_action() {
                 if (readOnly) {
                     dialog.hide();
@@ -1041,10 +1017,8 @@
                 const latestRow = currentRow();
                 if (!latestRow) {
                     frappe.msgprint({
-                        title: isArabic() ? "تعذر اعتماد الزاوية" : "Could not apply corner",
-                        message: isArabic()
-                            ? "لم تعد الدرفة موجودة في جدول القياسات الحالي. أعد فتح محررها من الجدول."
-                            : "The piece is no longer in the current measurements table. Reopen it from the table.",
+                        title: __("Could not apply corner"),
+                        message: __("The piece is no longer in the current measurements table. Reopen it from the table."),
                         indicator: "orange",
                     });
                     return Promise.resolve(false);
@@ -1052,7 +1026,7 @@
                 const config = readEditor(root, latestRow);
                 const message = validationMessage(config);
                 if (message) {
-                    frappe.msgprint({ title: isArabic() ? "راجع مقاس الزاوية" : "Check corner size", message, indicator: "orange" });
+                    frappe.msgprint({ title: __("Check corner size"), message, indicator: "orange" });
                     return Promise.resolve(false);
                 }
 
@@ -1078,7 +1052,7 @@
                     dialog.hide();
                     refreshFastTable(frm);
                     frappe.show_alert({
-                        message: isArabic() ? "تم اعتماد الزاوية والقشاط وستظهر في خطة القص." : "Corner and banding applied and will appear in the cutting plan.",
+                        message: __("Corner and banding applied and will appear in the cutting plan."),
                         indicator: "green",
                     });
                     return committedRow;
@@ -1089,10 +1063,8 @@
                     }
                     if (!result.ok) {
                         frappe.msgprint({
-                            title: isArabic() ? "تعذر اعتماد الزاوية" : "Could not apply corner",
-                            message: isArabic()
-                                ? "لم تكتمل كتابة تعديلات القشاط. بقي الطلب دون حفظ هذه التعديلات؛ حاول مرة أخرى."
-                                : "The banding changes were not fully applied. They were not saved; try again.",
+                            title: __("Could not apply corner"),
+                            message: __("The banding changes were not fully applied. They were not saved; try again."),
                             indicator: "red",
                         });
                     }

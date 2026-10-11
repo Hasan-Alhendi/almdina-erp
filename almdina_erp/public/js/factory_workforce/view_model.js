@@ -74,6 +74,13 @@
             ];
         }
 
+        function languageName(code, languages) {
+            const normalized = String(code || "").trim();
+            const match = (languages || []).find(language => language && language.code === normalized);
+            if (match && match.name) return String(match.name);
+            return normalized;
+        }
+
         function userModel(user, data) {
             const activeAssignments = Number(user && user.active_assignments || 0);
             const roles = Array.isArray(user && user.roles) ? user.roles : [];
@@ -87,7 +94,7 @@
                 enabled: Boolean(user.enabled),
                 activeAssignments,
                 roles,
-                languageLabel: user.language === "en" ? "English" : t("العربية"),
+                languageLabel: languageName(user.language, data && data.languages),
                 defaultWorkspace: user.default_workspace || "—",
                 lastActive: user.last_active || "—",
                 roleHomeSummary: configuredRoutes.length ? configuredRoutes.join(" · ") : t("حسب Frappe / غير محددة"),
@@ -132,6 +139,7 @@
             normalizeRoute,
             roleHomePolicy,
             roleOptions,
+            languageName,
             summaryCards,
             userModel,
             availableUserModel,

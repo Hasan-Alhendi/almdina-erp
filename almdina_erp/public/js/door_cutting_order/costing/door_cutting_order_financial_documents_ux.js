@@ -183,7 +183,8 @@
         });
     }
 
-    function printCss() {
+    function printCss(direction) {
+        const documentDirection = direction === "ltr" ? "ltr" : "rtl";
         const theme = printThemeApi();
         if (!theme || typeof theme.headerCss !== "function") {
             throw new Error("Unified factory print header styles are unavailable");
@@ -191,7 +192,7 @@
         return `
             @page{size:A4 landscape;margin:11mm}
             *{box-sizing:border-box}
-            body{font-family:Tahoma,Arial,sans-serif;color:#172033;margin:0;direction:rtl;font-size:10px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+            body{font-family:Tahoma,Arial,sans-serif;color:#172033;margin:0;direction:${documentDirection};font-size:10px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
             ${theme.headerCss()}
             .financial-meta,.financial-summary{display:grid;gap:7px;margin-top:10px}
             .financial-meta{grid-template-columns:repeat(3,minmax(0,1fr))}
@@ -224,7 +225,10 @@
                 ? identityApi.fallback()
                 : {}
         );
-        return `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${esc(payload.title)} — ${esc(payload.order_name)}</title><style>${printCss()}</style></head><body>
+        const locale = window.AlmdinaLocale;
+        const language = locale ? locale.currentLanguage() : "ar";
+        const direction = locale ? locale.direction() : "rtl";
+        return `<!doctype html><html dir="${esc(direction)}" lang="${esc(language)}"><head><meta charset="utf-8"><title>${esc(payload.title)} — ${esc(payload.order_name)}</title><style>${printCss(direction)}</style></head><body>
             ${printHeaderHtml(payload, identity)}
             ${metaHtml(payload)}${summaryHtml(payload)}
             ${costBreakdownHtml(payload.cost_breakdown)}

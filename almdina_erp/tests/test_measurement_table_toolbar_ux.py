@@ -44,8 +44,8 @@ def test_measurement_toolbar_is_single_row_and_actions_stay_on_physical_left():
 def test_measurement_toolbar_shows_only_measurement_table_title():
     source = _source()
 
-    assert "جدول قياسات الدرف" in source
-    assert "Door Measurements Table" in source
+    assert '__("Door Measurements Table")' in source
+    assert "جدول قياسات الدرف" not in source
     assert 'class="dco-measurement-title"' in source
     assert ".dco-fast-entry-toolbar>.dco-fast-readonly-note" in source
     assert ".dco-fast-entry-toolbar>.dco-order-edge-color-badge" in source

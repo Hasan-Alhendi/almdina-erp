@@ -21,6 +21,7 @@
             users: [],
             availableUsers: [],
             roles: [],
+            languages: [],
             permissions: {},
             summary: {},
             search: "",
@@ -36,6 +37,7 @@
             data.users = Array.isArray(payload.users) ? payload.users : [];
             data.availableUsers = Array.isArray(payload.available_users) ? payload.available_users : [];
             data.roles = Array.isArray(payload.roles) ? payload.roles : [];
+            data.languages = Array.isArray(payload.languages) ? payload.languages : [];
             data.permissions = payload.permissions || {};
             data.summary = payload.summary || {};
         }

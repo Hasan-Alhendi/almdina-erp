@@ -6,23 +6,14 @@
     const ENGLISH_PLACEHOLDER = "e.g. PVC Edge Banding White Matt 1mm";
 
     const LABELS = Object.freeze({
-        edge_type_name: "اسم نوع القشاط",
-        english_name: "الاسم الإنجليزي (اختياري)",
-        width_cm: "العرض (سم)",
-        thickness_mm: "سماكة القشاط (مم)",
-        rate_usd_per_meter: "سعر المتر بالدولار",
-        disabled: "موقوف (إيقاف هذا النوع مؤقتاً)",
+        edge_type_name: "Edge banding type name",
+        english_name: "English name (optional)",
+        width_cm: "Width (cm)",
+        thickness_mm: "Edge thickness (mm)",
+        rate_usd_per_meter: "Price per meter in USD",
+        disabled: "Disabled (pause this type)",
     });
 
-    function isArabic() {
-        const lang = String(
-            (frappe.boot && frappe.boot.lang) ||
-                (frappe.boot && frappe.boot.user && frappe.boot.user.language) ||
-                document.documentElement.lang ||
-                ""
-        ).toLowerCase();
-        return lang === "ar" || lang.startsWith("ar-");
-    }
 
     function esc(value) {
         return frappe.utils.escape_html(String(value ?? ""));
@@ -168,10 +159,9 @@
 
     function applyLabels(frm) {
         frm.set_df_property("english_name", "placeholder", ENGLISH_PLACEHOLDER);
-        if (!isArabic()) return;
-        Object.entries(LABELS).forEach(([fieldname, label]) => {
+        Object.entries(LABELS).forEach(([fieldname, message]) => {
             if (frm.fields_dict[fieldname]) {
-                frm.set_df_property(fieldname, "label", label);
+                frm.set_df_property(fieldname, "label", __(message));
             }
         });
         frm.set_df_property("thickness_mm", "description", "");

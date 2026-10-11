@@ -3,15 +3,6 @@
 
     const STYLE_ID = "dco-cut-dimensions-css";
 
-    function isArabic() {
-        const lang = String(
-            (frappe.boot && frappe.boot.lang) ||
-            (frappe.boot && frappe.boot.user && frappe.boot.user.language) ||
-            document.documentElement.lang ||
-            ""
-        ).toLowerCase();
-        return lang === "ar" || lang.startsWith("ar-");
-    }
 
     function rootFor(frm) {
         const field = frm && frm.fields_dict && frm.fields_dict.pieces_fast_entry;
@@ -45,9 +36,7 @@
         if (!help || help.querySelector(".dco-cut-rule-hint")) return;
         const hint = document.createElement("span");
         hint.className = "dco-cut-rule-hint";
-        hint.textContent = isArabic()
-            ? "المدخل نهائي ← الخصم حسب سماكة كل ضلع"
-            : "Finished input → deduction follows each side";
+        hint.textContent = __("Finished input → deduction follows each side");
         help.appendChild(hint);
     }
 
