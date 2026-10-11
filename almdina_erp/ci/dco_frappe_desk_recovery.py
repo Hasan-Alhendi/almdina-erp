@@ -563,6 +563,20 @@ def certify_new_dco_form_smoke(page: Page) -> None:
     _trace_event("phase_135_new_form_smoke_completed")
 
 
+def certify_new_dco_local_gate(browser) -> None:
+    """Run NEW certification in an isolated Frappe Desk page/context."""
+    context = browser.new_context()
+    page = context.new_page()
+    page.set_default_timeout(30_000)
+    page.set_default_navigation_timeout(30_000)
+    attach_browser_diagnostics(page)
+    try:
+        login_to_desk(page, "Administrator", "admin")
+        certify_actual_frappe_desk_new_recovery(page)
+    finally:
+        context.close()
+
+
 def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
     _trace_event("certification_started")
     login_to_desk(page, "Administrator", "admin")
@@ -866,7 +880,10 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
     expect(page.locator("body")).to_contain_text("تغير الطلب على الخادم")
     assert evaluate(page, "verify conflict preserved DCO notes", "() => window.cur_frm.doc.order_notes") == dispatch_baseline
     _trace_event("certification_completed")
-    certify_actual_frappe_desk_new_recovery(page)
+    browser = page.context.browser
+    if browser is None:
+        raise RuntimeError("Local NEW certification requires a browser context.")
+    certify_new_dco_local_gate(browser)
 
 
 if __name__ == "__main__":
@@ -883,6 +900,8 @@ if __name__ == "__main__":
         try:
             if os.environ.get("DCO_DESK_NEW_FORM_SMOKE_ONLY") == "1":
                 certify_new_dco_form_smoke(page)
+            elif os.environ.get("DCO_DESK_NEW_LOCAL_GATE_ONLY") == "1":
+                certify_new_dco_local_gate(browser)
             else:
                 certify_actual_frappe_desk_edit_recovery(page)
         except BaseException as failure:
