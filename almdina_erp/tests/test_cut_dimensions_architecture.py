@@ -356,7 +356,7 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
         )
         self.assertIn(".dco-print-customer-invoice", print_source)
         self.assertIn("event.stopImmediatePropagation()", print_source)
-        self.assertIn("القشاط المخصص", print_source)
+        self.assertIn('__("Custom edge banding")', print_source)
         self.assertIn(
             ".filter(detail => Boolean(detail.custom))", print_source
         )

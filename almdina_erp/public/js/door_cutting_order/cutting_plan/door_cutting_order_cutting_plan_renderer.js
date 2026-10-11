@@ -851,8 +851,11 @@
 
     function buildPrintDocument(title, frm, planRoot, plan, identity) {
         const pages = buildPrintPages(frm, planRoot, plan, identity);
+        const locale = window.AlmdinaLocale;
+        const language = locale ? locale.currentLanguage() : "ar";
+        const direction = locale ? locale.direction() : "rtl";
         return `<!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="${escape_html(language)}" dir="${escape_html(direction)}">
 <head>
 <meta charset="UTF-8">
 <title>${escape_html(title)}</title>
@@ -865,7 +868,7 @@ html, body {
     background: #fff !important;
     color: #111 !important;
     font-family: Tahoma, Arial, sans-serif;
-    direction: rtl;
+    direction: ${direction};
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
 }
@@ -1092,7 +1095,10 @@ ${printHeaderCss()}
         }
 
         print_window.document.open();
-        print_window.document.write('<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>جاري تجهيز خطة القص…</title></head><body style="font-family:Tahoma,Arial,sans-serif;direction:rtl;padding:24px">جاري تجهيز خطة القص للطباعة…</body></html>');
+        const locale = window.AlmdinaLocale;
+        const language = locale ? locale.currentLanguage() : "ar";
+        const direction = locale ? locale.direction() : "rtl";
+        print_window.document.write(`<!doctype html><html lang="${escape_html(language)}" dir="${escape_html(direction)}"><head><meta charset="utf-8"><title>${__("Preparing the cutting plan…")}</title></head><body style="font-family:Tahoma,Arial,sans-serif;direction:${escape_html(direction)};padding:24px">${__("Preparing the cutting plan for printing…")}</body></html>`);
         print_window.document.close();
 
         try {

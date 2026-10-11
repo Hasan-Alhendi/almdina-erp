@@ -112,7 +112,7 @@ class TestCompactInvoicePrintContract(unittest.TestCase):
             'if (!groups.length) return \'<span class="custom-edge-empty"',
             source,
         )
-        self.assertIn("القشاط المخصص", source)
+        self.assertIn('__("Custom edge banding")', source)
         self.assertIn(
             'if (note.includes("من القشاط الافتراضي")) return ""',
             source,
@@ -176,12 +176,12 @@ class TestCompactInvoicePrintContract(unittest.TestCase):
         self.assertEqual(
             presenter.count("const customerPhone = resolvedCustomer.phone;"), 2
         )
-        self.assertIn('title: "جدول قياسات الطلب"', presenter)
+        self.assertIn('title: __("Order measurements table")', presenter)
         self.assertIn("reference,", presenter)
         self.assertIn("date,", presenter)
         self.assertIn('class="shared-info-phone"', shared_info)
         self.assertIn('${esc(phone || "—")}', shared_info)
-        self.assertIn("<b>آلة القص</b>", shared_info)
+        self.assertIn('__("Cutting machine")', shared_info)
         self.assertIn("order_cutting_machine", shared_info)
         self.assertNotIn("<b>رقم الطلب</b>", shared_info)
         self.assertNotIn("<b>نوع القشاط</b>", shared_info)

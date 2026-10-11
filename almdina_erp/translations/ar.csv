@@ -988,3 +988,74 @@ Guillotine - Best Short Side Fit,قص متتابع - أفضل ضلع قصير
 Guillotine - Best Long Side Fit,قص متتابع - أفضل ضلع طويل
 Skyline - Bottom Left,ترتيب خط الأفق - من أسفل اليسار
 Skyline - Best Fit,ترتيب خط الأفق - أفضل موضع
+Order measurements table,جدول قياسات الطلب
+Measurements table,جدول القياسات
+Order measurements,قياسات الطلب
+Customer invoice for order,فاتورة الزبون الطلب
+Customer invoice,فاتورة الزبون
+Measurements,قياسات
+Phone,الهاتف
+Edge color,لون القشاط
+Cutting machine,آلة القص
+Door count,عدد الدرف
+Not specified,غير محدد
+Type,النوع
+Custom edge banding,القشاط المخصص
+Add-ons,إضافات
+Order notes:,ملاحظات الطلب:
+Order number:,رقم الطلب:
+Printed on:,تاريخ الطباعة:
+Special door,خاصة
+Regular door,عادية
+Double edge banding,دبل قشاط
+Full door double,دبل كامل الدرفة
+Back groove,فرزة ظهر
+Recessed handle cutout,حفر مسكة غطس
+Right length edge,الطول الأيمن
+Left length edge,الطول الأيسر
+All around,على الداير
+No customization,لا يوجد تخصيص
+Door piece drawing {0},رسمة الدرفة {0}
+This documents the customer request and is not a manufacturing file.,هذا توثيق لطلب العميل وليس ملف تصنيع
+Quotation details,تفاصيل عرض السعر
+Unit price $,سعر الوحدة $
+Total $,الإجمالي $
+Final total,الإجمالي النهائي
+No price lines are available for this order.,لا توجد بنود سعر متاحة لهذا الطلب.
+Door measurements table,جدول قياسات الدرف
+Official approved cutting plan,خطة القص الرسمية المعتمدة
+The official copy cannot be printed before the cutting plan is approved.,لا يمكن طباعة النسخة الرسمية قبل اعتماد خطة القص.
+Production cutting plan,خطة القص للتنفيذ
+Approve the cutting plan before printing the production copy.,يجب اعتماد خطة القص قبل طباعة نسخة التنفيذ.
+Preparing the cutting plan…,جاري تجهيز خطة القص…
+Preparing the cutting plan for printing…,جاري تجهيز خطة القص للطباعة…
+Order:,الطلب:
+Revision number:,رقم المراجعة:
+Customer:,العميل:
+Board:,اللوح:
+Size:,المقاس:
+Piece layout method:,طريقة ترتيب القطع:
+Automatic -,تلقائي -
+Saw kerf:,سماكة خط المنشار:
+Edge trim margin:,هامش تسوية الحواف:
+Plan check date:,تاريخ فحص الخطة:
+Approval date:,تاريخ الاعتماد:
+Cutting plan number:,رقم خطة القص:
+Plan number:,رقم الخطة:
+New boards,الألواح الجديدة
+Cut area,مساحة القطع
+Waste area,مساحة الهدر
+Waste ratio,نسبة الهدر
+Full size (mm):,المقاس الكامل (مم):
+Usable cut size (mm):,المقاس المتاح للقص (مم):
+Source area:,مساحة المصدر:
+Cut area:,مساحة القطع:
+Waste area:,مساحة الهدر:
+Waste:,الهدر:
+Piece:,القطعة:
+Right:,يمين:
+Left:,يسار:
+Top:,أعلى:
+Bottom:,أسفل:
+Sheet,لوح
+All measurements are in centimeters. The default edge banding is hidden; this column shows custom exceptions only.,جميع المقاسات بالسنتيمتر. لا يظهر القشاط الافتراضي؛ يعرض العمود الاستثناءات المخصصة فقط.

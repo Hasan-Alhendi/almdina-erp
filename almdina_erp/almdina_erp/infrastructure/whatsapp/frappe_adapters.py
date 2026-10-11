@@ -70,6 +70,8 @@ class FrappeMeasurementPdfAdapter:
                 identity=_print_identity(),
                 customer_phone=phone,
                 printed_on=str(frappe.utils.now_datetime() or ""),
+                language=getattr(frappe.local, "lang", None) or "ar",
+                translator=frappe._,
             )
             if not str(html or "").strip():
                 raise WhatsAppError("pdf_failed", PDF_FAILED_MESSAGE)
@@ -99,6 +101,8 @@ class FrappeInvoicePdfAdapter:
                 identity=_print_identity(),
                 customer_phone=phone,
                 printed_on=str(frappe.utils.now_datetime() or ""),
+                language=getattr(frappe.local, "lang", None) or "ar",
+                translator=frappe._,
             )
             if not str(html or "").strip() or "quote-details" not in html:
                 raise WhatsAppError("pdf_failed", INVOICE_PDF_FAILED_MESSAGE)

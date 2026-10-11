@@ -80,24 +80,26 @@ class MeasurementsPrintDocumentTests(unittest.TestCase):
             printed_on="2026-09-23 10:00:00",
         )
 
-        self.assertIn("جدول قياسات الطلب", html)
-        self.assertIn("جدول القياسات", html)
+        self.assertIn("Order measurements table", html)
+        self.assertIn("Measurements table", html)
+        self.assertIn('lang="ar"', html)
+        self.assertIn('dir="rtl"', html)
         self.assertIn("26-00089", html)
         self.assertIn("shared-info-phone", html)
         self.assertIn("0944123456", html)
-        self.assertIn("آلة القص", html)
+        self.assertIn("Cutting machine", html)
         self.assertIn("CNC", html)
-        self.assertIn("القشاط المخصص", html)
+        self.assertIn("Custom edge banding", html)
         self.assertIn("PVC 1mm", html)
-        self.assertIn("مخصص", html)
-        self.assertIn("إضافات: Liner", html)
+        self.assertIn("Add-ons: Liner", html)
         self.assertIn("مقبض", html)
         self.assertIn("تسليم بعد الظهر", html)
         self.assertIn("dco-piece-sketch", html)
+        self.assertIn('class="ltr"', html)
         self.assertIn("زبون &lt;تجريبي&gt;", html)
         self.assertNotIn("زبون <تجريبي>", html)
         self.assertNotIn("quote-details", html)
-        self.assertNotIn("فاتورة الزبون", html)
+        self.assertNotIn("Customer invoice", html)
         self.assertNotIn("سعر الوحدة", html)
         self.assertNotIn("default_edge_type", html)
         self.assertNotIn("نوع القشاط", html)
@@ -146,7 +148,7 @@ class MeasurementsPrintDocumentTests(unittest.TestCase):
         html = measurements_print_html(payload)
         self.assertEqual(payload["name"], "26-00089")
         self.assertEqual(payload["pieces"][0]["extra_liner"], 1)
-        self.assertIn("إضافات: Liner", html)
+        self.assertIn("Add-ons: Liner", html)
 
     def test_builder_stays_frappe_free(self) -> None:
         source = PRINT_DOCUMENT.read_text(encoding="utf-8")
@@ -163,9 +165,32 @@ class MeasurementsPrintDocumentTests(unittest.TestCase):
         self.assertIn("FrappeInvoicePdfAdapter", adapter)
         self.assertNotIn("get_print", adapter)
         self.assertNotIn("Door Cutting Measurements", adapter)
-        self.assertIn('title: "جدول قياسات الطلب"', presenter)
-        self.assertIn("<b>آلة القص</b>", presenter)
+        self.assertIn('title: __("Order measurements table")', presenter)
+        self.assertIn('__("Cutting machine")', presenter)
         self.assertIn("shared-info-phone", presenter)
+
+    def test_print_direction_follows_language_and_measurements_stay_ltr(self) -> None:
+        arabic = measurements_print_html(_sample_order())
+        self.assertIn('lang="ar"', arabic)
+        self.assertIn('dir="rtl"', arabic)
+        self.assertIn('class="ltr"', arabic)
+
+        def french(message: str) -> str:
+            if message == "Order measurements table":
+                return "Table des mesures"
+            return message
+
+        translated = measurements_print_html(
+            _sample_order(),
+            language="fr",
+            translator=french,
+        )
+        self.assertIn('lang="fr"', translated)
+        self.assertIn('dir="ltr"', translated)
+        self.assertIn("direction:ltr", translated)
+        self.assertIn("Table des mesures", translated)
+        self.assertIn("80", translated)
+        self.assertIn("210", translated)
 
 
 class CustomerInvoicePrintDocumentTests(unittest.TestCase):
@@ -191,13 +216,13 @@ class CustomerInvoicePrintDocumentTests(unittest.TestCase):
             customer_phone="0944123456",
             printed_on="2026-09-23 10:00:00",
         )
-        self.assertIn("فاتورة الزبون الطلب", html)
-        self.assertIn("جدول قياسات الطلب", html)
-        self.assertIn("جدول القياسات", html)
+        self.assertIn("Customer invoice for order", html)
+        self.assertIn("Order measurements table", html)
+        self.assertIn("Measurements table", html)
         self.assertIn("quote-details", html)
-        self.assertIn("تفاصيل عرض السعر", html)
+        self.assertIn("Quotation details", html)
         self.assertIn("ألواح MDF — لوح أبيض", html)
-        self.assertIn("سعر الوحدة $", html)
+        self.assertIn("Unit price $", html)
         self.assertIn("25.00", html)
         self.assertIn("0944123456", html)
         self.assertNotIn("cost_breakdown", html)

@@ -8,23 +8,26 @@ from typing import Any
 
 DOCUMENTATION_SCHEMA = "almdina.special-shape-documentation"
 DRAWING_VERSION = 1
+# Same base languages as frappe.utils.jinja_globals.is_rtl. Kept local so this
+# builder can be tested without importing Frappe.
+RTL_DOCUMENT_LANGUAGES = frozenset({"ar", "he", "fa", "ps"})
 PIECE_TYPE_LABELS = {
-    "Special": "خاصة",
-    "Clipped Corner": "الزاوية الكسر",
-    "L-Shaped Corner": "زاوية L",
+    "Special": "Special door",
+    "Clipped Corner": "Clipped corner",
+    "L-Shaped Corner": "L-shaped corner",
 }
 EXTRA_ADDONS = (
-    ("extra_double", "دبل قشاط"),
-    ("extra_full_door_double", "دبل كامل الدرفة"),
+    ("extra_double", "Double edge banding"),
+    ("extra_full_door_double", "Full door double"),
     ("extra_liner", "Liner"),
-    ("extra_back_groove", "فرزة ظهر"),
-    ("extra_recessed_handle_cutout", "حفر مسكة غطس"),
+    ("extra_back_groove", "Back groove"),
+    ("extra_recessed_handle_cutout", "Recessed handle cutout"),
 )
 EDGE_SIDES = (
-    ("edge_width_top", "edge_width_top_type_override", "العرض العلوي"),
-    ("edge_width_bottom", "edge_width_bottom_type_override", "العرض السفلي"),
-    ("edge_long_right", "edge_long_right_type_override", "الطول الأيمن"),
-    ("edge_long_left", "edge_long_left_type_override", "الطول الأيسر"),
+    ("edge_width_top", "edge_width_top_type_override", "Top width edge"),
+    ("edge_width_bottom", "edge_width_bottom_type_override", "Bottom width edge"),
+    ("edge_long_right", "edge_long_right_type_override", "Right length edge"),
+    ("edge_long_left", "edge_long_left_type_override", "Left length edge"),
 )
 PRINT_IDENTITY_DEFAULTS = {
     "print_factory_name": "مجمع المدينة المنورة التجاري",
@@ -37,6 +40,7 @@ MEASUREMENTS_PRINT_CSS = """
 @page{size:A4 portrait;margin:6mm}
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;background:#fff;color:#172033;direction:rtl;font-family:Tahoma,"Segoe UI",Arial,sans-serif}
+.ltr{direction:ltr;unicode-bidi:isolate;display:inline-block}
 body{font-size:8.1pt;line-height:1.28;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-variant-numeric:tabular-nums}
 .dco-unified-print-header{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(42mm,.62fr);align-items:start;gap:5mm;padding-bottom:1.5mm;margin-bottom:1.6mm;border-bottom:1.2pt solid #172033}
 .dco-unified-print-brand{min-width:0;text-align:right;line-height:1.25;overflow-wrap:anywhere}
@@ -136,9 +140,22 @@ def _truthy(value: object) -> bool:
         return bool(value)
 
 
-def _piece_type_label(value: object) -> str:
+def document_locale(language: str | None = None) -> tuple[str, str]:
+    """Resolve a print document language. Missing locale stays Arabic/RTL."""
+    code = str(language or "ar").strip().lower().replace("_", "-") or "ar"
+    direction = "rtl" if code.split("-", 1)[0] in RTL_DOCUMENT_LANGUAGES else "ltr"
+    return code, direction
+
+
+def _label(message: str, translator: Any = None) -> str:
+    if translator is None:
+        return message
+    return str(translator(message))
+
+
+def _piece_type_label(value: object, translator: Any = None) -> str:
     key = str(value or "Regular").strip() or "Regular"
-    return PIECE_TYPE_LABELS.get(key, "عادية")
+    return _label(PIECE_TYPE_LABELS.get(key, "Regular door"), translator)
 
 
 def _qty(row: Mapping[str, Any]) -> int:
@@ -154,7 +171,7 @@ def _identity_value(identity: Mapping[str, Any], fieldname: str) -> str:
     return stored or PRINT_IDENTITY_DEFAULTS[fieldname]
 
 
-def _header_html(identity: Mapping[str, Any], *, reference: str, date: str) -> str:
+def _header_html(identity: Mapping[str, Any], *, reference: str, date: str, translator: Any = None) -> str:
     contacts = _contact_lines(_identity_value(identity, "print_factory_contacts"))
     contact_html = ""
     if contacts:
@@ -172,43 +189,43 @@ def _header_html(identity: Mapping[str, Any], *, reference: str, date: str) -> s
                 {contact_html}
             </div>
             <div class="dco-unified-print-document">
-                <h1>جدول قياسات الطلب</h1>
+                <h1>{_esc(_label("Order measurements table", translator))}</h1>
                 <div class="dco-unified-print-reference">{_esc(reference)}</div>
                 {date_html}
             </div>
         </header>"""
 
 
-def _shared_info(order: Mapping[str, Any], phone: str) -> str:
+def _shared_info(order: Mapping[str, Any], phone: str, translator: Any = None) -> str:
     pieces = order.get("pieces") or []
     door_count = sum(_qty(row) for row in pieces if isinstance(row, Mapping))
     return f"""<div class="info shared-info">
             <div class="shared-info-customer">
-                <b>الزبون</b>
+                <b>{_esc(_label("Customer", translator))}</b>
                 <span class="shared-info-primary">{_esc(order.get("customer") or "—")}</span>
-                <span class="shared-info-phone"><span class="shared-info-phone-label">الهاتف</span><span class="shared-info-phone-value">{_esc(phone or "—")}</span></span>
+                <span class="shared-info-phone"><span class="shared-info-phone-label">{_esc(_label("Phone", translator))}</span><span class="shared-info-phone-value">{_esc(phone or "—")}</span></span>
             </div>
-            <div><b>اللوح</b>{_esc(order.get("board_description") or "—")}</div>
-            <div><b>لون القشاط</b>{_esc(order.get("edge_color") or "غير محدد")}</div>
-            <div><b>آلة القص</b>{_esc(order.get("order_cutting_machine") or "—")}</div>
-            <div><b>عدد الدرف</b>{_quantity(door_count)}</div>
+            <div><b>{_esc(_label("Board", translator))}</b>{_esc(order.get("board_description") or "—")}</div>
+            <div><b>{_esc(_label("Edge color", translator))}</b>{_esc(order.get("edge_color") or _label("Not specified", translator))}</div>
+            <div><b>{_esc(_label("Cutting machine", translator))}</b>{_esc(order.get("order_cutting_machine") or "—")}</div>
+            <div><b>{_esc(_label("Door count", translator))}</b>{_quantity(door_count)}</div>
         </div>"""
 
 
-def _extra_addon_labels(row: Mapping[str, Any]) -> list[str]:
-    return [label for fieldname, label in EXTRA_ADDONS if _truthy(row.get(fieldname))]
+def _extra_addon_labels(row: Mapping[str, Any], translator: Any = None) -> list[str]:
+    return [_label(label, translator) for fieldname, label in EXTRA_ADDONS if _truthy(row.get(fieldname))]
 
 
-def _notes_text(row: Mapping[str, Any]) -> str:
-    addons = _extra_addon_labels(row)
-    summary = f"إضافات: {'، '.join(addons)}" if addons else ""
+def _notes_text(row: Mapping[str, Any], translator: Any = None) -> str:
+    addons = _extra_addon_labels(row, translator)
+    summary = f"{_label('Add-ons', translator)}: {'، '.join(addons)}" if addons else ""
     notes = str(row.get("notes") or "").strip()
     if summary and notes:
         return f"{summary} — {notes}"
     return summary or notes
 
 
-def _custom_edge_groups(row: Mapping[str, Any]) -> list[dict[str, Any]]:
+def _custom_edge_groups(row: Mapping[str, Any], translator: Any = None) -> list[dict[str, Any]]:
     groups: dict[str, dict[str, Any]] = {}
     for selected_field, override_field, side_label in EDGE_SIDES:
         if not _truthy(row.get(selected_field)):
@@ -217,25 +234,25 @@ def _custom_edge_groups(row: Mapping[str, Any]) -> list[dict[str, Any]]:
         if not override:
             continue
         group = groups.setdefault(override, {"type": override, "sides": []})
-        group["sides"].append(side_label)
+        group["sides"].append(_label(side_label, translator))
     return list(groups.values())
 
 
-def _side_summary(group: Mapping[str, Any], custom_side_count: int) -> str:
+def _side_summary(group: Mapping[str, Any], custom_side_count: int, translator: Any = None) -> str:
     sides = list(group.get("sides") or [])
     if custom_side_count == 4 and len(sides) == 4:
-        return "على الداير"
+        return _label("All around", translator)
     return "، ".join(str(side) for side in sides)
 
 
-def _custom_edge_html(row: Mapping[str, Any]) -> str:
-    groups = _custom_edge_groups(row)
+def _custom_edge_html(row: Mapping[str, Any], translator: Any = None) -> str:
+    groups = _custom_edge_groups(row, translator)
     if not groups:
-        return '<span class="custom-edge-empty" aria-label="لا يوجد تخصيص"></span>'
+        return f'<span class="custom-edge-empty" aria-label="{_esc(_label("No customization", translator))}"></span>'
     custom_side_count = sum(len(group["sides"]) for group in groups)
     lines = "".join(
         f"""<div class="custom-edge-line">
-                <span>{_esc(_side_summary(group, custom_side_count))}</span>
+                <span>{_esc(_side_summary(group, custom_side_count, translator))}</span>
                 <b>{_esc(group["type"])}</b>
                 <em>مخصص</em>
             </div>"""
@@ -400,8 +417,8 @@ def _drawing_svg(row: Mapping[str, Any], index: int) -> str:
     return ""
 
 
-def _notes_cell(row: Mapping[str, Any], index: int) -> str:
-    notes = _notes_text(row)
+def _notes_cell(row: Mapping[str, Any], index: int, translator: Any = None) -> str:
+    notes = _notes_text(row, translator)
     visual = _drawing_svg(row, index)
     if not visual:
         return _esc(notes or "—")
@@ -409,12 +426,12 @@ def _notes_cell(row: Mapping[str, Any], index: int) -> str:
     return (
         f'<div class="dco-piece-notes">{text}'
         f'<figure class="dco-piece-sketch">{visual}'
-        f'<figcaption>{_esc(f"رسمة الدرفة {index}")}</figcaption>'
-        "<em>هذا توثيق لطلب العميل وليس ملف تصنيع</em></figure></div>"
+        f'<figcaption>{_esc(_label("Door piece drawing {0}", translator).replace("{0}", str(index)))}</figcaption>'
+        f"<em>{_esc(_label('This documents the customer request and is not a manufacturing file.', translator))}</em></figure></div>"
     )
 
 
-def _row_html(row: Mapping[str, Any], index: int) -> str:
+def _row_html(row: Mapping[str, Any], index: int, translator: Any = None) -> str:
     long_count = int(_truthy(row.get("edge_long_right"))) + int(_truthy(row.get("edge_long_left")))
     width_count = int(_truthy(row.get("edge_width_top"))) + int(_truthy(row.get("edge_width_bottom")))
     drawing = bool(_drawing_svg(row, index))
@@ -422,24 +439,24 @@ def _row_html(row: Mapping[str, Any], index: int) -> str:
     notes_class = " notes-with-drawing" if drawing else ""
     return f"""<tr{row_class}>
                 <td><b>{index}</b></td>
-                <td>{_esc(_piece_type_label(row.get("piece_type")))}</td>
-                <td>{_dimension_mark(row.get("width_cm"), width_count)}</td>
-                <td>{_dimension_mark(row.get("length_cm"), long_count)}</td>
+                <td>{_esc(_piece_type_label(row.get("piece_type"), translator))}</td>
+                <td class="ltr">{_dimension_mark(row.get("width_cm"), width_count)}</td>
+                <td class="ltr">{_dimension_mark(row.get("length_cm"), long_count)}</td>
                 <td>{_qty(row)}</td>
-                <td class="right custom-edge-cell">{_custom_edge_html(row)}</td>
-                <td class="right notes-cell{notes_class}">{_notes_cell(row, index)}</td>
+                <td class="right custom-edge-cell">{_custom_edge_html(row, translator)}</td>
+                <td class="right notes-cell{notes_class}">{_notes_cell(row, index, translator)}</td>
             </tr>"""
 
 
-def _table_html(pieces: Sequence[Any]) -> str:
+def _table_html(pieces: Sequence[Any], translator: Any = None) -> str:
     rows = [
-        _row_html(row, index)
+        _row_html(row, index, translator)
         for index, row in enumerate(pieces, start=1)
         if isinstance(row, Mapping)
     ]
     body = "".join(rows)
     return f"""<table class="table measurements">
-            <thead><tr><th>#</th><th>النوع</th><th>العرض</th><th>الطول</th><th>العدد</th><th>القشاط المخصص</th><th>ملاحظات</th></tr></thead>
+            <thead><tr><th>#</th><th>{_esc(_label("Type", translator))}</th><th>{_esc(_label("Width", translator))}</th><th>{_esc(_label("Length", translator))}</th><th>{_esc(_label("Qty", translator))}</th><th>{_esc(_label("Custom edge banding", translator))}</th><th>{_esc(_label("Notes", translator))}</th></tr></thead>
             <tbody>{body}</tbody>
         </table>"""
 
@@ -510,23 +527,29 @@ def _print_body_html(
     printed_on: str,
     title_prefix: str,
     extra_html: str = "",
+    language: str | None = None,
+    translator: Any = None,
 ) -> str:
-    reference = str(order.get("name") or "مسودة").strip() or "مسودة"
+    language_code, direction = document_locale(language)
+    reference = str(order.get("name") or "").strip() or _label("Draft", translator)
     date = str(order.get("order_date") or "").strip()
     notes = str(order.get("order_notes") or "").strip()
     notes_html = (
-        f'<div class="order-note"><b>ملاحظات الطلب:</b> {_esc(notes)}</div>' if notes else ""
+        f'<div class="order-note"><b>{_esc(_label("Order notes:", translator))}</b> {_esc(notes)}</div>'
+        if notes
+        else ""
     )
     pieces = order.get("pieces") or []
-    title = f"{title_prefix} {_esc(reference)}"
-    return f"""<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>{title}</title><style>{MEASUREMENTS_PRINT_CSS}</style></head><body>
-            {_header_html(identity or {}, reference=reference, date=date)}
-            {_shared_info(order, customer_phone)}
-            <div class="title">جدول القياسات</div>
-            {_table_html(pieces if isinstance(pieces, Sequence) else [])}
+    title = f"{_esc(_label(title_prefix, translator))} {_esc(reference)}"
+    css = MEASUREMENTS_PRINT_CSS.replace("direction:rtl", f"direction:{direction}", 1)
+    return f"""<!doctype html><html dir="{direction}" lang="{_esc(language_code)}"><head><meta charset="utf-8"><title>{title}</title><style>{css}</style></head><body>
+            {_header_html(identity or {}, reference=reference, date=date, translator=translator)}
+            {_shared_info(order, customer_phone, translator)}
+            <div class="title">{_esc(_label("Measurements table", translator))}</div>
+            {_table_html(pieces if isinstance(pieces, Sequence) else [], translator)}
             {notes_html}
             {extra_html}
-            <div class="footer"><span>رقم الطلب: {_esc(reference)}</span><span>تاريخ الطباعة: {_esc(printed_on)}</span></div>
+            <div class="footer"><span>{_esc(_label("Order number:", translator))} {_esc(reference)}</span><span>{_esc(_label("Printed on:", translator))} {_esc(printed_on)}</span></div>
         </body></html>"""
 
 
@@ -536,13 +559,17 @@ def measurements_print_html(
     identity: Mapping[str, Any] | None = None,
     customer_phone: str = "",
     printed_on: str = "",
+    language: str | None = None,
+    translator: Any = None,
 ) -> str:
     return _print_body_html(
         order,
         identity=identity,
         customer_phone=customer_phone,
         printed_on=printed_on,
-        title_prefix="قياسات الطلب",
+        title_prefix="Order measurements",
+        language=language,
+        translator=translator,
     )
 
 
@@ -583,10 +610,11 @@ def _quote_total(payload: Mapping[str, Any]) -> float:
     )
 
 
-def _quote_rows_html(payload: Mapping[str, Any]) -> str:
+def _quote_rows_html(payload: Mapping[str, Any], translator: Any = None) -> str:
     lines = payload.get("lines") or []
     if not isinstance(lines, Sequence) or not lines:
-        return '<tr><td colspan="6">لا توجد بنود سعر متاحة لهذا الطلب.</td></tr>'
+        empty = _esc(_label("No price lines are available for this order.", translator))
+        return f'<tr><td colspan="6">{empty}</td></tr>'
     rows: list[str] = []
     for index, line in enumerate(lines, start=1):
         if not isinstance(line, Mapping):
@@ -607,14 +635,14 @@ def _quote_rows_html(payload: Mapping[str, Any]) -> str:
                 <td><b>{_quote_money(line.get("amount_usd"))}</b></td>
             </tr>"""
         )
-    return "".join(rows) or '<tr><td colspan="6">لا توجد بنود سعر متاحة لهذا الطلب.</td></tr>'
+    return "".join(rows) or f'<tr><td colspan="6">{_esc(_label("No price lines are available for this order.", translator))}</td></tr>'
 
 
-def _quote_details_html(payload: Mapping[str, Any]) -> str:
+def _quote_details_html(payload: Mapping[str, Any], translator: Any = None) -> str:
     return f"""<section class="quote-details">
-            <div class="title quote-title">تفاصيل عرض السعر</div>
-            <table class="table invoice"><thead><tr><th>#</th><th class="right">البيان</th><th>الكمية</th><th>الوحدة</th><th>سعر الوحدة $</th><th>الإجمالي $</th></tr></thead><tbody>{_quote_rows_html(payload)}</tbody></table>
-            <div class="total"><span>الإجمالي النهائي</span><span>$ {_quote_money(_quote_total(payload))}</span></div>
+            <div class="title quote-title">{_esc(_label("Quotation details", translator))}</div>
+            <table class="table invoice"><thead><tr><th>#</th><th class="right">{_esc(_label("Description", translator))}</th><th>{_esc(_label("Quantity", translator))}</th><th>{_esc(_label("Unit", translator))}</th><th>{_esc(_label("Unit price $", translator))}</th><th>{_esc(_label("Total $", translator))}</th></tr></thead><tbody>{_quote_rows_html(payload, translator)}</tbody></table>
+            <div class="total"><span>{_esc(_label("Final total", translator))}</span><span>$ {_quote_money(_quote_total(payload))}</span></div>
         </section>"""
 
 
@@ -652,6 +680,8 @@ def customer_invoice_print_html(
     identity: Mapping[str, Any] | None = None,
     customer_phone: str = "",
     printed_on: str = "",
+    language: str | None = None,
+    translator: Any = None,
 ) -> str:
     payload = quote_payload if isinstance(quote_payload, Mapping) else {}
     printable = _overlay_invoice_drawings(order, payload)
@@ -660,8 +690,10 @@ def customer_invoice_print_html(
         identity=identity,
         customer_phone=customer_phone,
         printed_on=printed_on,
-        title_prefix="فاتورة الزبون الطلب",
-        extra_html=_quote_details_html(payload),
+        title_prefix="Customer invoice for order",
+        extra_html=_quote_details_html(payload, translator),
+        language=language,
+        translator=translator,
     )
 
 

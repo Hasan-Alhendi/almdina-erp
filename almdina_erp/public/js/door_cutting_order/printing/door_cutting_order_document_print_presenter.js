@@ -255,7 +255,7 @@
         const reference = frm.doc.name || "مسودة";
         const date = String(frm.doc.order_date || "").trim();
         return theme.headerHtml(printIdentity, {
-            title: "جدول قياسات الطلب",
+            title: __("Order measurements table"),
             reference,
             date,
         });
@@ -275,14 +275,14 @@
             </div>
             <div><b>اللوح</b>${esc(frm.doc.board_description || "—")}</div>
             <div><b>لون القشاط</b>${esc(frm.doc.edge_color || "غير محدد")}</div>
-            <div><b>آلة القص</b>${esc(frm.doc.order_cutting_machine || "—")}</div>
+            <div><b>${__("Cutting machine")}</b>${esc(frm.doc.order_cutting_machine || "—")}</div>
             <div><b>عدد الدرف</b>${quantity(doorCount)}</div>
         </div>`;
     }
 
     function measurementTableWithPayload(frm, payload) {
         return `<table class="table measurements">
-            <thead><tr><th>#</th><th>النوع</th><th>العرض</th><th>الطول</th><th>العدد</th><th>القشاط المخصص</th><th>ملاحظات</th></tr></thead>
+            <thead><tr><th>#</th><th>${__("Type")}</th><th>${__("Width")}</th><th>${__("Length")}</th><th>${__("Qty")}</th><th>${__("Custom edge banding")}</th><th>${__("Notes")}</th></tr></thead>
             <tbody>${measurementRowsHtmlWithPayload(frm, payload)}</tbody>
         </table>`;
     }
@@ -370,7 +370,11 @@
         const identity = printIdentity || (api && typeof api.fallback === "function" ? api.fallback() : {});
         const invoice = mode === "invoice";
         const generated = frappe.datetime ? frappe.datetime.now_datetime() : new Date().toISOString();
-        return `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${invoice ? "فاتورة الزبون" : "قياسات"} الطلب ${esc(frm.doc.name || "")}</title><style>${printCss()}</style></head><body>
+        const locale = window.AlmdinaLocale;
+        const language = locale ? locale.currentLanguage() : "ar";
+        const direction = locale ? locale.direction() : "rtl";
+        const documentTitle = invoice ? __("Customer invoice") : __("Measurements");
+        return `<!doctype html><html dir="${esc(direction)}" lang="${esc(language)}"><head><meta charset="utf-8"><title>${documentTitle} ${esc(frm.doc.name || "")}</title><style>${printCss()}</style></head><body>
             ${sharedHeader(frm, identity)}
             ${invoice
                 ? measurementDocumentBodyWithPayload(frm, quotePayload, customerPhone)
