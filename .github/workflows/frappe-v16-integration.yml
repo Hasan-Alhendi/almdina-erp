@@ -281,13 +281,20 @@ jobs:
               ][-8:]
               result = {
                   "failure": state.get("failure"),
-                  "pending_api": pending,
-                  "api_responses": state.get("apiResponses", [])[-8:],
-                  "last_steps": [
+                  "url": state.get("url"),
+                  "console": diagnostics.get("console", [])[-3:],
+                  "page_errors": diagnostics.get("page_errors", [])[-2:],
+                  "request_failures": diagnostics.get("request_failures", [])[-3:],
+                  "last_events": [
                       {key: item.get(key) for key in ("event", "step", "url", "status", "error") if key in item}
                       for item in trace
-                      if item.get("event") in {"step_started", "step_completed", "step_failed", "request_started", "response"}
+                      if item.get("event") in {
+                          "navigation", "console", "page_error", "request_failed", "response",
+                          "step_started", "step_completed", "step_failed", "wait_started", "wait_failed",
+                      }
                   ][-8:],
+                  "pending_api": pending[-3:],
+                  "api_responses": state.get("apiResponses", [])[-3:],
               }
               print(json.dumps(result, ensure_ascii=False, separators=(",", ":")))
           PY
