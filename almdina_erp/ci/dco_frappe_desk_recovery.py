@@ -41,7 +41,12 @@ def start_edit_and_set_note(page: Page, name: str, value: str, checkpoint: bool)
             if (!found || !found.ok || !found.value.records.length) {
                 throw new Error('IndexedDB EDIT snapshot was not readable');
             }
-            return {started, dirty: frm.is_dirty(), draftId: found.value.records[0].draft_id};
+            return {
+                started,
+                dirty: frm.is_dirty(),
+                draftId: found.value.records[0].draft_id,
+                expectedServerModified: found.value.records[0].expected_server_modified,
+            };
         }""",
         {"name": name, "value": value, "checkpoint": checkpoint},
     )
@@ -102,7 +107,10 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
     dispatch_name = FIXTURES["dispatch"]
     open_dco(page, dispatch_name)
     dispatch_baseline = page.evaluate("() => window.cur_frm.doc.order_notes")
-    start_edit_and_set_note(page, dispatch_name, "Must remain local after dispatch", checkpoint=True)
+    dispatch_checkpoint = start_edit_and_set_note(
+        page, dispatch_name, "Must remain local after dispatch", checkpoint=True
+    )
+    page.wait_for_timeout(1100)
     page.evaluate(
         """async ({name, route}) => {
             await frappe.xcall('almdina_erp.almdina_erp.services.order_dispatch_service.dispatch_order', {
@@ -111,6 +119,13 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
         }""",
         {"name": dispatch_name, "route": FIXTURES["route"]},
     )
+    dispatched_doc = page.evaluate(
+        """async name => frappe.xcall('frappe.client.get', {
+            doctype: 'Door Cutting Order', name
+        })""",
+        dispatch_name,
+    )
+    assert dispatched_doc["modified"] != dispatch_checkpoint["expectedServerModified"]
     open_dco(page, dispatch_name)
     page.wait_for_function("() => Boolean(window.cur_frm.doc.current_production_stage)")
     expect(page.locator("body")).to_contain_text("لا يمكن استعادتها بعد بدء مرحلة الإنتاج")
@@ -143,6 +158,7 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
     ).json()["message"]
     assert persisted["order_notes"] == dispatch_baseline
 
+    page.wait_for_timeout(1100)
     page.evaluate(
         """async name => frappe.xcall(
             'almdina_erp.almdina_erp.services.order_lifecycle_service.return_order_to_draft',
@@ -153,6 +169,13 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
     open_dco(page, dispatch_name)
     page.wait_for_function("() => window.cur_frm.doc.status === 'Draft'")
     assert page.evaluate("() => window.cur_frm.doc.order_notes") == dispatch_baseline
+    returned_doc = page.evaluate(
+        """async name => frappe.xcall('frappe.client.get', {
+            doctype: 'Door Cutting Order', name
+        })""",
+        dispatch_name,
+    )
+    assert returned_doc["modified"] != dispatch_checkpoint["expectedServerModified"]
     page.wait_for_selector('[data-edit-recovery-action="continue"]', timeout=30_000)
     # Continue is explicit after Return-to-Draft; a changed official modified
     # value must produce a conflict without applying any recovered field.

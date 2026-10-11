@@ -278,7 +278,7 @@ jobs:
           trap 'desk_fail $?' ERR
           bench build --app almdina_erp 2>&1 | tee -a "$desk_log"
           phase="isolated ERPNext and DCO fixtures"
-          bench --site test.localhost execute almdina_erp.tests.dco_recovery_desk_fixture.create_desk_edit_recovery_fixtures 2>&1 | tee -a "$desk_log"
+          bench --site test.localhost execute 'frappe.get_attr("almdina_erp.tests.dco_recovery_desk_fixture.create_desk_edit_recovery_fixtures")()' 2>&1 | tee -a "$desk_log"
           phase="Playwright install"
           ./env/bin/pip install playwright 2>&1 | tee -a "$desk_log"
           phase="Chromium install"
