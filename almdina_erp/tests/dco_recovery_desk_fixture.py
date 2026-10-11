@@ -137,7 +137,7 @@ def _worker(suffix: str, role: str) -> str:
     return str(user.name)
 
 
-def _order(suffix: str, customer: str, edge_type: str, route: str) -> str:
+def _order(suffix: str, customer: str, edge_type: str) -> str:
     order = frappe.get_doc(
         {
             "doctype": "Door Cutting Order",
@@ -148,7 +148,6 @@ def _order(suffix: str, customer: str, edge_type: str, route: str) -> str:
             "order_cutting_machine": "CNC",
             "default_edge_type": edge_type,
             "edge_color": "White",
-            "production_path": route,
             "order_notes": f"Official baseline {suffix}",
             "pieces": [
                 {
@@ -276,8 +275,8 @@ def create_desk_edit_recovery_fixtures() -> dict[str, str]:
     edge_type = _edge_type(suffix)
     route = _route(suffix, str(role.name))
     fixtures = {
-        "restore": _order(f"restore-{suffix}", customer, edge_type, route),
-        "dispatch": _order(f"dispatch-{suffix}", customer, edge_type, route),
+        "restore": _order(f"restore-{suffix}", customer, edge_type),
+        "dispatch": _order(f"dispatch-{suffix}", customer, edge_type),
         "route": route,
         "worker": worker,
     }
