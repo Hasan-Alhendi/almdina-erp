@@ -20,6 +20,7 @@ DIAGNOSTIC_EVENTS: dict[str, list[dict[str, str | int | None]]] = {
 }
 BROWSER_TRACE: list[dict[str, str | int | float | None]] = []
 PENDING_REQUESTS: dict[str, dict[str, str | float]] = {}
+TRACE_PATH: Path | None = None
 
 
 def _redact_text(value: str, limit: int = 1000) -> str:
@@ -37,6 +38,15 @@ def _trace_event(event: str, **details: str | int | float | None) -> None:
     BROWSER_TRACE.append({"time": round(time.time(), 3), "event": event, **details})
     if len(BROWSER_TRACE) > 500:
         del BROWSER_TRACE[:-500]
+    if TRACE_PATH is not None:
+        temporary_path = TRACE_PATH.with_suffix(".tmp")
+        try:
+            temporary_path.write_text(
+                json.dumps(BROWSER_TRACE, ensure_ascii=False), encoding="utf-8"
+            )
+            temporary_path.replace(TRACE_PATH)
+        except OSError:
+            pass
 
 
 def _safe_url(url: str) -> str:
@@ -93,7 +103,26 @@ def attach_browser_diagnostics(page: Page) -> None:
 def evaluate(page: Page, step: str, expression: str, arg=None):
     _trace_event("step_started", step=step)
     try:
-        result = page.evaluate(expression) if arg is None else page.evaluate(expression, arg)
+        # page.evaluate has no operation timeout. Bound async xcall/IndexedDB
+        # work in the browser so an unresolved Promise cannot hang certification.
+        wrapped_expression = """
+            async payload => {
+                const operation = """ + expression + """;
+                let timeoutHandle;
+                const timeout = new Promise((_, reject) => {
+                    timeoutHandle = setTimeout(
+                        () => reject(new Error(`Browser operation timed out after ${payload.timeoutMs}ms`)),
+                        payload.timeoutMs,
+                    );
+                });
+                try {
+                    return await Promise.race([Promise.resolve(operation(payload.arg)), timeout]);
+                } finally {
+                    clearTimeout(timeoutHandle);
+                }
+            }
+        """
+        result = page.evaluate(wrapped_expression, {"arg": arg, "timeoutMs": 90_000})
         _trace_event("step_completed", step=step)
         return result
     except Exception as exc:
@@ -364,11 +393,15 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
 
 if __name__ == "__main__":
     with sync_playwright() as playwright:
+        evidence_dir = Path(os.environ.get("DCO_DESK_EVIDENCE_DIR", "/tmp/dco-desk-evidence"))
+        evidence_dir.mkdir(parents=True, exist_ok=True)
+        TRACE_PATH = evidence_dir / "dco-desk-trace.json"
         browser = playwright.chromium.launch()
         context = browser.new_context()
         page = context.new_page()
+        page.set_default_timeout(30_000)
+        page.set_default_navigation_timeout(30_000)
         attach_browser_diagnostics(page)
-        evidence_dir = Path(os.environ.get("DCO_DESK_EVIDENCE_DIR", "/tmp/dco-desk-evidence"))
         try:
             certify_actual_frappe_desk_edit_recovery(page)
         except BaseException as failure:
