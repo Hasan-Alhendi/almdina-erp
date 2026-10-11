@@ -65,7 +65,7 @@
         if (!important) return false;
         const entry = {
             fieldname: IMPORTANT_FIELD,
-            label: important.df.label || __("Important note"),
+            label: __("Important note"),
         };
         const notesIndex = fields.findIndex(field => String(field && field.fieldname || "") === "order_notes");
         fields.splice(notesIndex >= 0 ? notesIndex + 1 : fields.length, 0, entry);

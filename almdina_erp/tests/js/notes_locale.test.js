@@ -193,7 +193,7 @@ const fakeWindow = {
         },
         meta: {
             get_docfield() {
-                return { label: "" };
+                return { label: "ملاحظة مهمة" };
             },
         },
     },
@@ -350,13 +350,12 @@ opened.then(loaded => {
     const stored = JSON.parse(listview.list_view_settings.fields);
     assert.equal(stored[1].fieldname, "important_note_preview");
     assert.equal(stored[1].label, "Note importante");
+    assert.notEqual(stored[1].label, "ملاحظة مهمة");
 
-    fakeWindow.frappe.meta.get_docfield = () => ({ label: "ملاحظة مهمة" });
+    active = arabic;
     listview.list_view_settings.fields = JSON.stringify([{ fieldname: "order_notes" }]);
     assert.equal(list.ensureImportantFieldInListSettings(listview), true);
     assert.equal(JSON.parse(listview.list_view_settings.fields)[1].label, "ملاحظة مهمة");
-
-    active = arabic;
     return panel.refresh();
 }).then(() => {
     const html = body.children[0].named.content.innerHTML;

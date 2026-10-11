@@ -80,6 +80,11 @@ class TestActiveUiHasNoLanguageTextBranches(unittest.TestCase):
                     leftovers.append(f"{relative}:{number}: {line.strip()}")
         self.assertEqual(leftovers, [])
 
+    def test_important_note_column_label_ignores_doctype_text(self) -> None:
+        source = (PUBLIC_JS / "notes" / "notes_dco_list_integration.js").read_text(encoding="utf-8")
+        self.assertNotIn("important.df.label ||", source)
+        self.assertIn('label: __("Important note")', source)
+
 
 if __name__ == "__main__":
     unittest.main()
