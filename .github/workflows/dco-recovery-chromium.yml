@@ -27,4 +27,4 @@ jobs:
         run: python -m playwright install --with-deps chromium
 
       - name: Certify DCO recovery in Chromium
-        run: python -m pytest -q -s almdina_erp/tests/browser/test_dco_local_recovery_chromium.py
+        run: python -m pytest -q -s tests/browser/test_dco_local_recovery_chromium.py

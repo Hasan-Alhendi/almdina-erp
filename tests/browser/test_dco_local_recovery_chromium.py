@@ -11,7 +11,7 @@ import pytest
 from playwright.sync_api import Browser, BrowserContext, Page, sync_playwright
 
 
-REPOSITORY = Path(__file__).resolve().parents[3]
+REPOSITORY = Path(__file__).resolve().parents[2]
 RECOVERY = REPOSITORY / "almdina_erp/public/js/door_cutting_order/recovery"
 SCRIPTS = (
     RECOVERY / "application/door_cutting_order_recovery_projection.js",
