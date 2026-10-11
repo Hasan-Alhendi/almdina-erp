@@ -21,6 +21,9 @@ let confirmCallbacks = null;
 let latestServerDocument = null;
 let clipboardCopy = null;
 let pauseRemovalHook = null;
+let pauseDerivedRebuild = null;
+let recoveryDiscoveries = 0;
+const recoveryAlerts = [];
 
 function makeDialog(options) {
     const buttonNames = ["continue", "delete", "dismiss"];
@@ -85,10 +88,23 @@ const fakeWindow = {
     location: { host: "erp.example.test" },
     structuredClone,
     cur_frm: null,
+    AlmdinaDoorCuttingFastEntry: {
+        async render() {
+            if (pauseDerivedRebuild) {
+                pauseDerivedRebuild.started();
+                await pauseDerivedRebuild.wait;
+            }
+        },
+    },
     addEventListener(name, callback) { windowListeners.set(name, callback); },
-    AlmdinaPermissions: { canDocument() { return permission; } },
+    AlmdinaPermissions: {
+        canDocument() { return permission; },
+        async refresh() { return { capabilities: { edit_order: permission } }; },
+    },
     AlmdinaOrderRevisionUX: {
-        canOfferEditSession() { return permission; },
+        canOfferEditSession(frm) {
+            return permission && !String(frm.doc.current_production_stage || "").trim();
+        },
         isEditSessionActive(frm) { return Boolean(frm.coordinatorEditing); },
     },
 };
@@ -105,6 +121,7 @@ const fakeDocument = {
 const repository = {
     createIdentity() { return `local-id-${writes.length + 1}`; },
     async discover(scope) {
+        recoveryDiscoveries += 1;
         repository.lastDiscovery = scope;
         return { ok: true, value: { records: selectedRecord ? [selectedRecord] : [], rejected: [] } };
     },
@@ -217,7 +234,7 @@ const fakeFrappe = {
         return { message: latestServerDocument || fakeWindow.cur_frm.doc };
     },
     confirm(message, yes, no) { confirmCallbacks = { message, yes, no }; },
-    show_alert() {},
+    show_alert(payload) { recoveryAlerts.push(payload); },
     msgprint(message) { fakeFrappe.lastMessage = message; },
 };
 fakeWindow.AlmdinaUi = {
@@ -305,6 +322,9 @@ function form() {
             modified: "2026-09-12 09:30:00.000000",
             docstatus: 0,
             status: "Draft",
+            revision_state: "Current",
+            production_path: "ROUTE-ONLY-BEFORE-DISPATCH",
+            current_production_stage: null,
             customer: "SERVER-CUSTOMER",
             order_notes: "SERVER-NOTE",
             pieces: [
@@ -381,7 +401,7 @@ async function settle() {
     dialogs.at(-1).wrapper.fire("continue");
     await settle();
     assert.equal(coordinatorStarts, 1);
-    assert.equal(frm.doc.customer, "LOCAL-CUSTOMER");
+    assert.equal(frm.doc.customer, "LOCAL-CUSTOMER", JSON.stringify(fakeFrappe.lastMessage));
     assert.equal(frm.doc.order_notes, "SERVER-NOTE", "locked header fields stay at the current form value");
     assert.equal(frm.doc.pieces.map((row) => row.name).join(","), "EDIT-ROW-1,EDIT-ROW-2");
     assert.equal(frm.doc.pieces.map((row) => row.width_cm).join(","), "44,82");
@@ -482,6 +502,120 @@ async function settle() {
     assert.equal(interruptedForm.doc.customer, "SERVER-CUSTOMER", "stale restore does not apply header values after the hook");
     assert.equal(interruptedForm.dirtyState, false, "stale restore does not mark the replacement session dirty");
     assert.equal(deletes, deletesBeforeInterruptedRestore, "stale restore keeps the local checkpoint");
+
+    const discoveriesBeforeActiveStageChecks = recoveryDiscoveries;
+    const dialogsBeforeActiveStageChecks = dialogs.length;
+    const alertsBeforeActiveStageChecks = recoveryAlerts.length;
+    const deletesBeforeActiveStageChecks = deletes;
+    for (const stageId of ["DYNAMIC-CUTTING-STAGE-7", "DYNAMIC-FINISHING-STAGE-19"]) {
+        const activeStageForm = form();
+        activeStageForm.doc.current_production_stage = stageId;
+        fakeWindow.cur_frm = activeStageForm;
+        selectedRecord = makeRecord();
+        await handlers["Door Cutting Order"].onload(activeStageForm);
+        await settle();
+        assert.equal(activeStageForm.doc.current_production_stage, stageId);
+    }
+    assert.equal(recoveryDiscoveries, discoveriesBeforeActiveStageChecks + 2,
+        "active dynamic production stages inspect only the existing local draft to explain retention");
+    assert.equal(dialogs.length, dialogsBeforeActiveStageChecks,
+        "active dynamic production stages never offer EDIT recovery");
+    assert.equal(recoveryAlerts.length, alertsBeforeActiveStageChecks + 2);
+    assert.ok(recoveryAlerts.at(-1).message.includes("لا يمكن استعادتها بعد بدء مرحلة الإنتاج"),
+        "an ineligible local draft remains stored and receives a non-actionable Arabic explanation");
+    assert.equal(deletes, deletesBeforeActiveStageChecks, "an ineligible draft is never silently deleted");
+
+    const dispatchedDuringRestore = form();
+    const pendingRemovedRow = {
+        doctype: "Door Cutting Order Detail",
+        name: "EDIT-ROW-3",
+        idx: 3,
+        width_cm: 30,
+    };
+    dispatchedDuringRestore.doc.pieces.push(pendingRemovedRow);
+    fakeWindow.cur_frm = dispatchedDuringRestore;
+    selectedRecord = makeRecord({ payload: fakeWindow.AlmdinaDcoRecovery.Projection.createPayload({
+        dco: fakeWindow.AlmdinaDcoRecovery.Projection.createDcoInput({
+            customer: "LOCAL-CUSTOMER",
+            pieces: [
+                { name: "EDIT-ROW-1", width_cm: 44, length_cm: 60, qty: 2 },
+                { name: "EDIT-ROW-2", width_cm: 82, length_cm: 90, qty: 1 },
+            ],
+        }),
+        dirtyScope: "DCO",
+    }) });
+    await handlers["Door Cutting Order"].onload(dispatchedDuringRestore);
+    let signalDispatchPause;
+    const dispatchPause = new Promise((resolve) => { signalDispatchPause = resolve; });
+    let resumeDispatchPause;
+    const dispatchWait = new Promise((resolve) => { resumeDispatchPause = resolve; });
+    pauseRemovalHook = { event: "before_pieces_remove", started: signalDispatchPause, wait: dispatchWait };
+    const originalDispatchRows = [...dispatchedDuringRestore.doc.pieces];
+    const originalDispatchCustomer = dispatchedDuringRestore.doc.customer;
+    const deletesBeforeDispatch = deletes;
+    dialogs.at(-1).wrapper.fire("continue");
+    await dispatchPause;
+    latestServerDocument = {
+        ...dispatchedDuringRestore.doc,
+        current_production_stage: "DYNAMIC-STAGE-ACTIVATED-DURING-RESTORE",
+    };
+    resumeDispatchPause();
+    pauseRemovalHook = null;
+    await settle();
+    assert.deepEqual(dispatchedDuringRestore.doc.pieces, originalDispatchRows,
+        "a newly active server stage stops restore before any row mutation");
+    assert.equal(dispatchedDuringRestore.doc.customer, originalDispatchCustomer,
+        "a newly active server stage stops restore before any header mutation");
+    assert.equal(dispatchedDuringRestore.dirtyState, false);
+    assert.equal(deletes, deletesBeforeDispatch, "dispatch conflict retains the EDIT draft");
+    latestServerDocument = null;
+
+    const changedDuringRebuild = form();
+    const changedRow = { doctype: "Door Cutting Order Detail", name: "EDIT-ROW-3", idx: 3, width_cm: 30 };
+    changedDuringRebuild.doc.pieces.push(changedRow);
+    fakeFrappe.model.locals["Door Cutting Order Detail"][changedRow.name] = changedRow;
+    const originalRebuildRows = [...changedDuringRebuild.doc.pieces];
+    fakeWindow.cur_frm = changedDuringRebuild;
+    selectedRecord = makeRecord({ payload: fakeWindow.AlmdinaDcoRecovery.Projection.createPayload({
+        dco: fakeWindow.AlmdinaDcoRecovery.Projection.createDcoInput({
+            customer: "LOCAL-CUSTOMER",
+            pieces: [
+                { name: "EDIT-ROW-1", width_cm: 44, length_cm: 60, qty: 2 },
+                { name: "EDIT-ROW-2", width_cm: 82, length_cm: 90, qty: 1 },
+            ],
+        }),
+        dirtyScope: "DCO",
+    }) });
+    await handlers["Door Cutting Order"].onload(changedDuringRebuild);
+    let signalRebuildStarted;
+    const rebuildStarted = new Promise((resolve) => { signalRebuildStarted = resolve; });
+    let resumeRebuild;
+    const rebuildWait = new Promise((resolve) => { resumeRebuild = resolve; });
+    pauseDerivedRebuild = { started: signalRebuildStarted, wait: rebuildWait };
+    const writesBeforeRebuildConflict = writes.length;
+    const deletesBeforeRebuildConflict = deletes;
+    dialogs.at(-1).wrapper.fire("continue");
+    await rebuildStarted;
+    assert.equal(changedDuringRebuild.doc.customer, "LOCAL-CUSTOMER",
+        "the race test pauses after model application and before dirty/checkpoint");
+    latestServerDocument = {
+        ...changedDuringRebuild.doc,
+        current_production_stage: "DYNAMIC-STAGE-ACTIVATED-DURING-UI-REBUILD",
+    };
+    resumeRebuild();
+    pauseDerivedRebuild = null;
+    await settle();
+    assert.equal(changedDuringRebuild.doc.customer, "SERVER-CUSTOMER",
+        "a lifecycle change during derived UI rebuild rolls the recovery back");
+    assert.deepEqual(changedDuringRebuild.doc.pieces, originalRebuildRows,
+        "rollback restores the original row set and object identities");
+    assert.equal(changedDuringRebuild.dirtyState, false,
+        "a post-rebuild ownership conflict cannot dirty the live form");
+    assert.equal(writes.length, writesBeforeRebuildConflict,
+        "a post-rebuild ownership conflict cannot checkpoint partial recovery state");
+    assert.equal(deletes, deletesBeforeRebuildConflict,
+        "the EDIT draft remains retained after a post-rebuild conflict");
+    latestServerDocument = null;
 
     const postHookForm = form();
     const postHookRemovedRow = { doctype: "Door Cutting Order Detail", name: "EDIT-ROW-3", idx: 3, width_cm: 30, notes: "keep me" };
@@ -597,6 +731,32 @@ async function settle() {
     assert.equal(coordinatorStarts, startsBeforeStaleServer, "stale canonical response cannot start or apply recovery");
     assert.equal(staleServerForm.doc.customer, "SERVER-CUSTOMER");
     fakeFrappe.call = originalCall;
+
+    const revokedDuringFetchForm = form();
+    fakeWindow.cur_frm = revokedDuringFetchForm;
+    selectedRecord = makeRecord();
+    permission = true;
+    await handlers["Door Cutting Order"].onload(revokedDuringFetchForm);
+    const revokedDuringFetchDialog = dialogs.at(-1);
+    const writesBeforeRevocation = writes.length;
+    const deletesBeforeRevocation = deletes;
+    fakeFrappe.call = async (options) => {
+        const response = await originalCall(options);
+        permission = false;
+        return response;
+    };
+    revokedDuringFetchDialog.wrapper.fire("continue");
+    await settle();
+    assert.equal(revokedDuringFetchForm.doc.customer, "SERVER-CUSTOMER",
+        "capability revoked during canonical GET prevents applying the recovery projection");
+    assert.equal(revokedDuringFetchForm.dirtyState, false,
+        "capability revocation during the GET does not dirty the form");
+    assert.equal(writes.length, writesBeforeRevocation,
+        "capability revocation during the GET does not checkpoint recovery");
+    assert.equal(deletes, deletesBeforeRevocation,
+        "capability revocation during the GET retains the recovery draft");
+    fakeFrappe.call = originalCall;
+    permission = true;
 
     const discardForm = form();
     fakeWindow.cur_frm = discardForm;

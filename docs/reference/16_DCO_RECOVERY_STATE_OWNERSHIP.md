@@ -281,20 +281,42 @@ existing Edit Session and Document Context owners.
 7. Cancel discards the current form edit according to existing behavior. It must
    not implicitly publish or apply a recovery projection.
 
-The implemented restore path is limited to a clean, loaded Draft DCO with the
-current `edit_order` capability. It accepts only the allowlisted DCO input
-projection, resolves persisted child names, and restores saved row additions,
-removals, and order with a matching `expected_server_modified`. Plan, Cost,
-invoice, and workflow projections are not hydrated. Before entering edit mode,
-restore rereads the canonical DCO from Frappe and compares its `modified` value
-with both the loaded form and draft tokens. A mismatch shows the source, all three
-versions, and allowlisted DCO differences; it leaves the form untouched and offers
-copy or explicit discard. Unknown fetch outcomes also fail closed and retain the
-draft. Field hydration uses current Frappe field writeability: rendered child
-controls use `Control.get_status()`, and other rows use
-`frappe.perm.get_field_display_status`; unknown custom field status is treated as
-read-only. Restore leaves the form dirty for the existing explicit Save/Cancel
-actions.
+### 5.1 Final business boundary: EDIT before production only
+
+EDIT Recovery is available only for a persisted DCO that is an editable
+pre-dispatch Draft, the current actor can start the existing edit session, and
+the server, loaded form, recovery version, identity, and generation agree. The
+shared `is_pre_dispatch_draft(status, current_production_stage)` lifecycle
+predicate owns the lifecycle boundary: a selected `production_path` by itself
+does not mean dispatch, while an active production stage blocks recovery even
+if stale data still says `Draft` or the actor has `edit_order`.
+
+After actual dispatch, no user-authored DCO input may be edited or recovered,
+fully or partially. This includes header requirements, piece rows, extras,
+special-shape requirements, and order-input notes. Recovery must leave the old
+snapshot intact and explain that production has started; it must not apply any
+field. This rule does not block authorized production lifecycle facts, which
+remain owned by their existing production services, or controlled order
+revision workflows.
+
+An official Return to Draft is not permission to replay an old snapshot. A
+later, explicit recovery request must recheck current lifecycle state, the
+official revision, current dynamic capability, target identity, and edit
+session. No recovery happens automatically on that transition.
+
+The implemented restore path accepts only the allowlisted DCO input projection,
+resolves persisted child names, and restores saved row additions, removals, and
+order with a matching `expected_server_modified`. Plan, Cost, invoice, and
+workflow projections are not hydrated. Before entering edit mode, restore must
+re-read the canonical DCO from Frappe and compare its lifecycle, `modified`
+value, and identity with the loaded form and draft tokens. A mismatch shows the
+source, versions, and allowlisted DCO differences; it leaves the form untouched
+and offers copy or explicit discard. Unknown fetch outcomes fail closed and
+retain the draft. Field hydration uses current Frappe field writeability;
+unknown custom field status is read-only. Restore leaves the form dirty for the
+existing explicit Save/Cancel actions. Eligibility also obeys Section 5.1:
+route-only Draft remains eligible, but any active stage denies the whole EDIT
+recovery operation rather than permitting partial field hydration.
 
 Focused Node contract and presentation simulations pass. Browser/runtime
 certification against pinned Frappe v16.17.5 and ERPNext v16.17.0 remains pending.

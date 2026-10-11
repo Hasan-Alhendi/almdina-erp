@@ -14,6 +14,7 @@
     const initializations = new WeakMap();
     const editInitializations = new WeakMap();
     const editDismissed = new WeakSet();
+    const editIneligibleNotified = new WeakSet();
     const editRestoreInProgress = new WeakSet();
     const dialogs = new WeakMap();
     const observedSaves = new WeakMap();
@@ -1029,6 +1030,7 @@
             && !isNew(frm)
             && Number(frm.doc && frm.doc.docstatus || 0) === 0
             && String(frm.doc && frm.doc.status || "Draft") === "Draft"
+            && !String(frm.doc && frm.doc.current_production_stage || "").trim()
             && permissions
             && typeof permissions.canDocument === "function"
             && permissions.canDocument(frm, "edit_order") === true
@@ -1036,6 +1038,60 @@
             && typeof revision.canOfferEditSession === "function"
             && revision.canOfferEditSession(frm) === true
         );
+    }
+
+    function lifecycleIneligibleForEditRecovery(frm) {
+        return Boolean(
+            !frm
+            || !frm.doc
+            || Number(frm.doc.docstatus || 0) !== 0
+            || String(frm.doc.status || "Draft") !== "Draft"
+            || String(frm.doc.current_production_stage || "").trim()
+        );
+    }
+
+    function notifyRetainedEditDraft(frm) {
+        if (!lifecycleIneligibleForEditRecovery(frm)
+            || editIneligibleNotified.has(frm)
+            || !root.EditRecovery) return Promise.resolve(null);
+        const documentToken = documentContext() && documentContext().capture(frm);
+        const identity = {
+            ...recoveryIdentity("discovery"),
+            target_name: String(frm.doc.name || "").trim(),
+        };
+        if (!identity.site || !identity.user || !identity.target_name) return Promise.resolve(null);
+        editIneligibleNotified.add(frm);
+        return root.EditRecovery.discover(repository(), identity)
+            .then((result) => {
+                const context = documentContext();
+                const current = !context || !documentToken
+                    || (typeof context.isCurrent === "function"
+                        ? context.isCurrent(frm, documentToken)
+                        : context.isSameDocument(frm, documentToken));
+                if (!current || !result || result.ok !== true) return null;
+                const retained = (result.value && result.value.records || []).some((record) => {
+                    try {
+                        root.EditRecovery.validateRecord(
+                            record,
+                            { ...identity, draft_id: record.draft_id },
+                            record.expected_server_modified,
+                        );
+                        return true;
+                    } catch (error) {
+                        return false;
+                    }
+                });
+                if (!retained) return null;
+                frappe.show_alert({
+                    message: "توجد مسودة تعديل محلية محفوظة. لا يمكن استعادتها بعد بدء مرحلة الإنتاج؛ استخدم «إعادة للمسودة» بعد الإذن المناسب.",
+                    indicator: "orange",
+                }, 8);
+                return true;
+            })
+            .catch((error) => {
+                console.debug("Ineligible DCO EDIT draft notice failed safely", error);
+                return null;
+            });
     }
 
     function cleanLoadedDocument(frm) {
@@ -1279,6 +1335,42 @@
             && typeof guards.canEdit === "function"
             && guards.canEdit()
         );
+        const freshPreDispatchOwnership = async () => {
+            if (!current()
+                || typeof guards.refreshCapabilities !== "function"
+                || typeof guards.fetchServerDocument !== "function") return false;
+            let serverDoc;
+            try {
+                serverDoc = await guards.fetchServerDocument();
+            } catch (error) {
+                return false;
+            }
+            let capabilities;
+            try {
+                capabilities = await guards.refreshCapabilities();
+            } catch (error) {
+                return false;
+            }
+            if (!current()
+                || !capabilities
+                || !capabilities.capabilities
+                || capabilities.capabilities.edit_order !== true) return false;
+            return Boolean(
+                serverDoc
+                && Object.prototype.hasOwnProperty.call(serverDoc, "docstatus")
+                && Object.prototype.hasOwnProperty.call(serverDoc, "status")
+                && Object.prototype.hasOwnProperty.call(serverDoc, "current_production_stage")
+                && Object.prototype.hasOwnProperty.call(serverDoc, "revision_state")
+                && Object.prototype.hasOwnProperty.call(serverDoc, "modified")
+                && String(serverDoc.name || "") === String(frm.doc.name || "")
+                && Number(serverDoc.docstatus || 0) === 0
+                && String(serverDoc.status) === "Draft"
+                && !String(serverDoc.current_production_stage || "").trim()
+                && String(serverDoc.revision_state || "Current") !== "Superseded"
+                && String(serverDoc.modified || "") === String(guards.expectedModified || "")
+                && current()
+            );
+        };
         if (!grid || typeof grid.is_editable !== "function" || !grid.is_editable()) {
             throw new Error("The DCO pieces grid is not editable in the current session");
         }
@@ -1319,8 +1411,14 @@
             if (!current()) throw new Error("DCO edit permission changed during row removal checks");
             await frm.script_manager.trigger("before_pieces_remove", row.doctype, row.name);
             if (!current()) throw new Error("The DCO edit session changed during row removal checks");
+            if (!await freshPreDispatchOwnership()) {
+                throw new Error("DCO lifecycle, capability, or revision changed during row removal checks");
+            }
         }
         if (!current()) throw new Error("DCO edit permission changed before applying the restored rows");
+        if (!await freshPreDispatchOwnership()) {
+            throw new Error("DCO lifecycle, capability, or revision changed before applying the restored rows");
+        }
 
         for (const row of removedRows) {
             if (!frappe.model || typeof frappe.model.clear_doc !== "function") {
@@ -1375,6 +1473,9 @@
                 if (!current()) throw new Error("The DCO edit session changed before the row removal hook");
                 await frm.script_manager.trigger("pieces_remove", row.doctype, row.name);
                 if (!current()) throw new Error("The DCO edit session changed during the row removal hook");
+                if (!await freshPreDispatchOwnership()) {
+                    throw new Error("DCO lifecycle, capability, or revision changed during the row removal hook");
+                }
             }
         }
         if (!current()) throw new Error("The DCO edit session changed before refreshing the restored form");
@@ -1384,6 +1485,9 @@
         if (!current()) throw new Error("The DCO edit session changed before rebuilding derived UI");
         await rebuildDerivedUi(frm);
         if (!current()) throw new Error("The DCO edit session changed while rebuilding derived UI");
+        if (!await freshPreDispatchOwnership()) {
+            throw new Error("DCO lifecycle, capability, or revision changed while rebuilding derived UI");
+        }
         pendingPieceKeys.forEach(({ row, pieceKey }) => state.pieceKeys.set(row, pieceKey));
         if (!current()) throw new Error("The DCO edit session changed before marking the restore dirty");
         if (typeof frm.dirty === "function") frm.dirty();
@@ -1544,6 +1648,12 @@
                         return response && response.message;
                     },
                     canEdit: capability,
+                    refreshCapabilities: async () => {
+                        const permissions = window.AlmdinaPermissions;
+                        if (!permissions || typeof permissions.refresh !== "function") return null;
+                        return permissions.refresh();
+                    },
+                    expectedModified: String(frm.doc.modified || ""),
                     reuseSession: () => Boolean(
                         initialization.activeOrderSession
                         && isSessionGenerationCurrent()
@@ -1581,6 +1691,20 @@
                             isCurrent: guard,
                             isSessionCurrent,
                             canEdit: capability,
+                            refreshCapabilities: async () => {
+                                const permissions = window.AlmdinaPermissions;
+                                if (!permissions || typeof permissions.refresh !== "function") return null;
+                                return permissions.refresh();
+                            },
+                            fetchServerDocument: async () => {
+                                const response = await frappe.call({
+                                    method: "frappe.client.get",
+                                    type: "GET",
+                                    args: { doctype: "Door Cutting Order", name: identity.target_name },
+                                });
+                                return response && response.message;
+                            },
+                            expectedModified: String(frm.doc.modified || ""),
                         });
                     },
                 });
@@ -1661,6 +1785,10 @@
     }
 
     function initializeEditForm(frm) {
+        if (lifecycleIneligibleForEditRecovery(frm)) {
+            notifyRetainedEditDraft(frm);
+            return Promise.resolve(null);
+        }
         if (!frm || isNew(frm) || currentState(frm) || editDismissed.has(frm) || !editRecoveryPermission(frm)) {
             return Promise.resolve(currentState(frm));
         }
@@ -2153,6 +2281,7 @@
     const orderHandlers = {
         onload(frm) {
             if (isNew(frm)) return initializeNewForm(frm);
+            if (lifecycleIneligibleForEditRecovery(frm)) notifyRetainedEditDraft(frm);
             if (currentState(frm)) return ensureState(frm);
             if (isEditSessionActive(frm)) {
                 const coordinator = window.AlmdinaDcoEditSessionCoordinator;
@@ -2166,6 +2295,7 @@
         },
         refresh(frm) {
             if (isNew(frm)) return initializeNewForm(frm);
+            if (lifecycleIneligibleForEditRecovery(frm)) notifyRetainedEditDraft(frm);
             if (currentState(frm)) return ensureState(frm);
             if (isEditSessionActive(frm)) {
                 const coordinator = window.AlmdinaDcoEditSessionCoordinator;

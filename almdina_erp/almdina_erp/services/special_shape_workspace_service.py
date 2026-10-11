@@ -87,6 +87,7 @@ def _edit_state(order: Any) -> dict[str, Any]:
     allowed = user_can_edit_order(
         getattr(order, "status", None),
         revision_state=getattr(order, "revision_state", None),
+        current_production_stage=getattr(order, "current_production_stage", None),
     )
     return {"can_edit": bool(allowed), "reason": "" if allowed else _("يمكن تعديل التوثيق عندما يسمح وضع الطلب بذلك."), "stage": None}
 

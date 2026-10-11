@@ -240,6 +240,35 @@ jobs:
           fi
           exit "$test_status"
 
+      - name: Certify DCO EDIT recovery in real Frappe Desk
+        if: always() && !cancelled()
+        env:
+          DCO_DESK_FIXTURE_FILE: ${{ runner.temp }}/dco-desk-fixtures.json
+          FRAPPE_DESK_URL: http://test.localhost:8000
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/frappe-bench"
+          bench build --app almdina_erp
+          bench --site test.localhost execute almdina_erp.tests.dco_recovery_desk_fixture.create_desk_edit_recovery_fixtures
+          ./env/bin/pip install pytest pytest-playwright
+          ./env/bin/python -m playwright install --with-deps chromium
+          bench start > "$RUNNER_TEMP/desk-bench.log" 2>&1 &
+          bench_pid=$!
+          trap 'kill "$bench_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in $(seq 1 90); do
+            if curl --fail --silent "$FRAPPE_DESK_URL/api/method/ping" >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          if [[ "$ready" != 1 ]]; then
+            tail -n 120 "$RUNNER_TEMP/desk-bench.log"
+            exit 1
+          fi
+          ./env/bin/python -m pytest -q apps/almdina_erp/almdina_erp/tests/browser/test_dco_frappe_desk_edit_recovery.py
+
       - name: Collect integration diagnostics
         if: failure()
         run: |

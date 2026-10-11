@@ -19,10 +19,19 @@ def _source(path: Path) -> str:
 
 def test_order_entry_can_edit_after_dispatch_via_shared_policy():
     policy = _source(POLICY)
+    editability = _source(ROOT / "almdina_erp" / "domain" / "orders" / "editability.py")
     assert "Capability.RECALCULATE_PLAN" in policy
     assert "frappe.get_roles" not in policy
     assert "LOCKED_ORDER_STATUSES" in policy
     assert "def user_can_edit_order" in policy
+    assert "is_pre_dispatch_draft" in policy
+    assert "def is_pre_dispatch_draft" in editability
+    assert "current_production_stage" in _source(
+        ROOT / "almdina_erp" / "infrastructure" / "frappe" / "orders" / "document_access.py"
+    )
+    assert '"revision_state"' in _source(
+        ROOT / "almdina_erp" / "infrastructure" / "frappe" / "orders" / "document_access.py"
+    )
     assert "def user_can_recalculate_drawing_system_plan" in policy
     assert "def enforce_order_immutability_on_save" in policy
     assert "enforce_order_immutability_on_save" in _source(ORDER_PY)
@@ -45,6 +54,9 @@ def test_client_editable_checks_use_shared_order_can_edit_helper():
     assert "is_order_editor()" in workflow
     assert 'frm.add_custom_button(__("إعادة للمسودة")' in workflow
     assert "return_order_to_draft" in workflow
+    assert 'String(frm.doc.current_production_stage || "").trim()' in _source(
+        ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_revision_ux.js"
+    )
     assert "frappe.almdina.orderCanEdit" in _source(OPERATOR)
     # The plan surface deliberately opts out: the cutting algorithm has its own
     # capability and must not depend on the order edit session.

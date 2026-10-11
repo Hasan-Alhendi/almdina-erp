@@ -75,7 +75,12 @@ class FrappeOrderDocumentAccess:
             flags._order_old_header = frappe.db.get_value(
                 "Door Cutting Order",
                 self.document.name,
-                ["status", "default_edge_type"],
+                [
+                    "status",
+                    "current_production_stage",
+                    "revision_state",
+                    "default_edge_type",
+                ],
                 as_dict=True,
             )
             flags._order_old_header_loaded = True
@@ -134,7 +139,7 @@ class FrappeOrderDocumentAccess:
         return round(flt(value), 6)
 
     def enforce_immutability(self) -> None:
-        if self.document.is_new() or self.document.flags.get("allow_approved_edit"):
+        if self.document.is_new():
             return
         old = self.old_header()
         if not old:

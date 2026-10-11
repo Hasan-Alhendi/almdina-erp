@@ -43,6 +43,7 @@
         if (!frm || !frm.doc || Number(frm.doc.docstatus || 0) !== 0) return false;
         if (frm.is_new()) return can(frm, "create_order");
         if ((frm.doc.revision_state || "Current") === "Superseded") return false;
+        if (String(frm.doc.current_production_stage || "").trim()) return false;
 
         const revisionUx = window.AlmdinaOrderRevisionUX;
         if (revisionUx && typeof revisionUx.isEditableDraft === "function") {
