@@ -375,6 +375,13 @@ if __name__ == "__main__":
             evidence_dir.mkdir(parents=True, exist_ok=True)
             screenshot = evidence_dir / "dco-desk-failure.png"
             trace = evidence_dir / "dco-desk-trace.json"
+            failure_text = _redact_text(str(failure))
+            _trace_event("certification_failed", error=failure_text)
+            trace.write_text(json.dumps(BROWSER_TRACE, ensure_ascii=False, indent=2), encoding="utf-8")
+            diagnostic_path = evidence_dir / "browser-diagnostics.json"
+            diagnostic_path.write_text(json.dumps({
+                "state": {"failure": failure_text}, **DIAGNOSTIC_EVENTS,
+            }, ensure_ascii=False, indent=2), encoding="utf-8")
             try:
                 page.screenshot(path=str(screenshot), full_page=True, timeout=10_000)
             except Exception as exc:
@@ -405,7 +412,7 @@ if __name__ == "__main__":
             (evidence_dir / "browser-diagnostics.json").write_text(
                 json.dumps(diagnostic, ensure_ascii=False, indent=2), encoding="utf-8"
             )
-            trace.write_text(json.dumps(BROWSER_TRACE, ensure_ascii=False, indent=2), encoding="utf-8")
+            diagnostic_path.write_text(json.dumps(diagnostic, ensure_ascii=False, indent=2), encoding="utf-8")
             print("DESK_BROWSER_STATE " + json.dumps(state, ensure_ascii=False))
             print("DESK_BROWSER_EVENT_COUNTS " + json.dumps({
                 key: len(events) for key, events in DIAGNOSTIC_EVENTS.items()

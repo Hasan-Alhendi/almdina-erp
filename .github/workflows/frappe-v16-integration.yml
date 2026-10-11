@@ -307,7 +307,7 @@ jobs:
             desk_fail 1
           fi
           phase="Desk EDIT recovery browser certification"
-          timeout --signal=INT --kill-after=30s 480s ./env/bin/python -u apps/almdina_erp/almdina_erp/ci/dco_frappe_desk_recovery.py 2>&1 | tee -a "$desk_log"
+          timeout --signal=INT --kill-after=45s 480s ./env/bin/python -u apps/almdina_erp/almdina_erp/ci/dco_frappe_desk_recovery.py 2>&1 | tee -a "$desk_log"
 
       - name: Collect integration diagnostics
         if: failure()
