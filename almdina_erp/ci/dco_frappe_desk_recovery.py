@@ -307,7 +307,53 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
             session: window.AlmdinaDcoEditSessionCoordinator.snapshot(frm),
             saveStarted: false,
             saveSettled: null,
+            beforeSaveHandlers: null,
+            beforeSaveTriggerStarted: false,
+            beforeSaveTriggerSettled: null,
+            activeBeforeSaveHandler: null,
         };
+        const manager = frm.script_manager;
+        const handlers = manager && manager.handlers && manager.handlers.before_save;
+        if (Array.isArray(handlers)) {
+            probe.beforeSaveHandlers = handlers.length;
+            handlers.forEach((entry, index) => {
+                const key = typeof entry === 'function' ? null : 'handler';
+                const handler = key ? entry && entry[key] : entry;
+                if (typeof handler !== 'function') return;
+                const wrapped = function(...args) {
+                    probe.activeBeforeSaveHandler = index;
+                    const result = handler.apply(this, args);
+                    if (result && typeof result.then === 'function') {
+                        result.then(
+                            () => { if (probe.activeBeforeSaveHandler === index) probe.activeBeforeSaveHandler = null; },
+                            () => { if (probe.activeBeforeSaveHandler === index) probe.activeBeforeSaveHandler = null; },
+                        );
+                    } else if (probe.activeBeforeSaveHandler === index) {
+                        probe.activeBeforeSaveHandler = null;
+                    }
+                    return result;
+                };
+                if (key) entry[key] = wrapped;
+                else handlers[index] = wrapped;
+            });
+        }
+        if (manager && typeof manager.trigger === 'function') {
+            const originalTrigger = manager.trigger;
+            manager.trigger = function(eventName, ...args) {
+                if (eventName !== 'before_save') return originalTrigger.call(this, eventName, ...args);
+                probe.beforeSaveTriggerStarted = true;
+                const result = originalTrigger.call(this, eventName, ...args);
+                if (result && typeof result.then === 'function') {
+                    result.then(
+                        () => { probe.beforeSaveTriggerSettled = 'resolved'; },
+                        error => { probe.beforeSaveTriggerSettled = String(error).slice(0, 160); },
+                    );
+                } else {
+                    probe.beforeSaveTriggerSettled = 'non_thenable';
+                }
+                return result;
+            };
+        }
         const originalSave = frm.save;
         frm.save = function(...args) {
             probe.saveStarted = true;
