@@ -138,9 +138,10 @@ def wait_for_function(page: Page, step: str, expression: str, *, arg=None, timeo
 def open_dco(page: Page, name: str) -> None:
     target_url = f"{DESK_URL}/app/door-cutting-order/{name}"
     response = page.goto(target_url, wait_until="domcontentloaded")
-    if response is None or response.status >= 400:
-        status = response.status if response is not None else None
-        raise RuntimeError(f"DCO navigation returned HTTP {status}: {_safe_url(page.url)}")
+    # Desk may satisfy this navigation through its SPA router and history API;
+    # Playwright then returns None because there was no top-level HTTP response.
+    if response is not None and response.status >= 400:
+        raise RuntimeError(f"DCO navigation returned HTTP {response.status}: {_safe_url(page.url)}")
     try:
         wait_for_function(page, f"load DCO {name}",
             "name => window.cur_frm && window.cur_frm.doc && window.cur_frm.doc.name === name",
