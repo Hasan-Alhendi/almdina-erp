@@ -261,7 +261,9 @@ def _find_exact_candidate(
     *,
     rotated: bool,
     require_rotation_allowed: bool = True,
+    piece: dict[str, Any] | None = None,
 ) -> int | None:
+    matches: list[int] = []
     for index, candidate in enumerate(unmatched):
         spec: OrderPieceCutSpec = candidate["spec"]
         if rotated:
@@ -271,8 +273,80 @@ def _find_exact_candidate(
         else:
             expected_w, expected_h = spec.cut_width_cm, spec.cut_length_cm
         if dimensions_match_exact(actual_w, actual_h, expected_w, expected_h):
-            return index
-    return None
+            matches.append(index)
+    if len(matches) <= 1 or piece is None:
+        return matches[0] if matches else None
+    identified = _unique_corner_contour_candidate(unmatched, matches, piece)
+    return matches[0] if identified is None else identified
+
+
+def _corner_band_tokens(spec: OrderPieceCutSpec) -> dict[str, str]:
+    """Token per semantic edge. Equal tokens mean a swap does not move a band."""
+
+    profiles = {
+        str(profile.get("side") or ""): profile
+        for profile in spec.side_profiles
+    }
+
+    def side_token(side: str) -> str:
+        profile = profiles.get(side)
+        if not profile:
+            return "0"
+        return (
+            "1|"
+            f"{profile.get('edge_type') or ''}|"
+            f"{profile.get('thickness_mm') or 0}"
+        )
+
+    if spec.edge_break:
+        notch = "break"
+    elif spec.edge_break_only and spec.piece_type == "Clipped Corner":
+        notch = "break-only"
+    else:
+        notch = "open"
+    return {
+        "top": side_token("width_top"),
+        "bottom": side_token("width_bottom"),
+        "left": side_token("long_left"),
+        "right": side_token("long_right"),
+        "inner_horizontal": notch,
+        "inner_vertical": notch,
+        "chord": notch,
+    }
+
+
+def _unique_corner_contour_candidate(
+    unmatched: list[dict[str, Any]],
+    matches: list[int],
+    piece: dict[str, Any],
+) -> int | None:
+    """Pick the one corner row whose full contour matches when outer size does not.
+
+    Identical contours keep the existing first-match order. A contour that
+    matches none, or more than one row, does not guess a row here.
+    """
+
+    if not all(is_corner_cut(unmatched[index]["spec"].piece_type) for index in matches):
+        return None
+    outer = _outer_ring_mm(piece)
+    if outer is None:
+        return None
+    identified: list[int] = []
+    for index in matches:
+        spec: OrderPieceCutSpec = unmatched[index]["spec"]
+        match = match_corner_contour(
+            outer,
+            piece_type=spec.piece_type,
+            position=str(spec.clipped_corner_position or ""),
+            width_cm=float(spec.cut_width_cm),
+            length_cm=float(spec.cut_length_cm),
+            cut_width_cm=float(spec.clipped_corner_width_cm),
+            cut_length_cm=float(spec.clipped_corner_length_cm),
+            edge_bands=_corner_band_tokens(spec),
+        )
+        if match.reason == "unique":
+            identified.append(index)
+    return identified[0] if len(identified) == 1 else None
 
 
 def _topology_special_candidate(
@@ -535,11 +609,11 @@ def _bind_corner_edge_rotation(
     piece: dict[str, Any],
     candidate: dict[str, Any],
 ) -> DxfValidationIssue | None:
-    """Record the unique geometric quarter-turn used to place corner edge bands.
+    """Record the unique dihedral transform used to place corner edge bands.
 
     ``rotated`` stays the bbox flag owned by dimension matching. It cannot tell
-    0° from 180° or 90° from 270°, so corner bands do not read it. The imported
-    contour itself is not transformed here.
+    0° from 180°, 90° from 270°, or a reflection from either, so corner bands
+    do not read it. The imported contour itself is not transformed here.
     """
 
     spec: OrderPieceCutSpec = candidate["spec"]
@@ -556,6 +630,7 @@ def _bind_corner_edge_rotation(
             length_cm=float(spec.cut_length_cm),
             cut_width_cm=float(spec.clipped_corner_width_cm),
             cut_length_cm=float(spec.clipped_corner_length_cm),
+            edge_bands=_corner_band_tokens(spec),
         )
         if outer is not None
         else None
@@ -586,6 +661,7 @@ def _bind_corner_edge_rotation(
         )
 
     piece["corner_rotation_quarter_turns"] = int(match.quarter_turns)
+    piece["corner_mirrored"] = 1 if match.mirrored else 0
     return None
 
 
@@ -653,12 +729,14 @@ def _apply_strict_dimension_contract(
                 actual_w,
                 actual_h,
                 rotated=False,
+                piece=piece,
             )
             rotated_index = _find_exact_candidate(
                 unmatched,
                 actual_w,
                 actual_h,
                 rotated=True,
+                piece=piece,
             )
             match_index = direct_index if direct_index is not None else rotated_index
             rotated = direct_index is None and rotated_index is not None
@@ -670,6 +748,7 @@ def _apply_strict_dimension_contract(
                     actual_h,
                     rotated=True,
                     require_rotation_allowed=False,
+                    piece=piece,
                 )
                 if forbidden_index is not None:
                     candidate = unmatched[forbidden_index]

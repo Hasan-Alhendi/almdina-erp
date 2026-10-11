@@ -83,12 +83,16 @@
 
         // System plans encode only 0°/90° in `rotated`, and both the outline and
         // the bands are generated from that flag. An imported DXF contour is
-        // already in its drawn orientation, so its bands follow the geometric
-        // quarter-turn instead of applying `rotated` a second time.
+        // already in its drawn orientation, so its bands follow the stored
+        // quarter-turn and single reflection instead of transforming it again.
         let edgePiece = piece;
         if (geometryModel && geometryModel.source === "dxf") {
             edgePiece = typeof geometry.pieceForQuarterTurns === "function"
-                ? geometry.pieceForQuarterTurns(piece, piece.corner_rotation_quarter_turns)
+                ? geometry.pieceForQuarterTurns(
+                    piece,
+                    piece.corner_rotation_quarter_turns,
+                    piece.corner_mirrored
+                )
                 : null;
             if (!edgePiece) return "";
         } else if (piece.rotated) {

@@ -1,15 +1,18 @@
-"""Bind an imported corner contour to one clockwise quarter-turn.
+"""Bind an imported corner contour to one dihedral transform.
 
 Edge identity is the unordered set of boundary edges after collinear vertices
 are collapsed. Vertex order, the start point, and winding are not used.
-A match is accepted only when exactly one of 0°/90°/180°/270° fits.
+The eight candidates are the four clockwise quarter-turns, plus one horizontal
+reflection followed by those same four turns. A vertical reflection is not a
+separate candidate: it is one of those eight. Several representations are
+accepted only when they place every semantic edge on the same physical edge.
 """
 
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Sequence
+from typing import Mapping, Sequence
 
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
     GEOMETRY_TOLERANCE_MM,
@@ -28,6 +31,7 @@ Point = tuple[float, float]
 class CornerContourMatch:
     quarter_turns: int | None
     reason: str
+    mirrored: bool = False
 
 
 def match_corner_contour(
@@ -40,8 +44,9 @@ def match_corner_contour(
     cut_width_cm: float,
     cut_length_cm: float,
     tolerance_mm: float = GEOMETRY_TOLERANCE_MM,
+    edge_bands: Mapping[str, str] | None = None,
 ) -> CornerContourMatch:
-    """Return the unique clockwise quarter-turn of the saved corner, or no match."""
+    """Return the unique dihedral transform of the saved corner, or no match."""
 
     if not is_corner_cut(piece_type):
         return CornerContourMatch(None, "invalid")
@@ -76,21 +81,170 @@ def match_corner_contour(
         return CornerContourMatch(None, "none")
     actual = _localize(_collapse_collinear(actual, tolerance_mm))
 
-    matches: list[int] = []
-    points = canonical
-    box_width = width_mm
-    box_height = height_mm
-    for quarter_turns in range(4):
-        expected = _localize(_collapse_collinear(points, tolerance_mm))
-        if _same_edge_set(actual, expected, tolerance_mm):
-            matches.append(quarter_turns)
-        points, box_width, box_height = _rotate_clockwise(points, box_width, box_height)
+    groups: dict[frozenset[tuple[int, str]], list[tuple[bool, int]]] = {}
+    for mirrored in (False, True):
+        for quarter_turns in range(4):
+            signature = _contour_signature(
+                actual,
+                canonical,
+                mirrored=mirrored,
+                quarter_turns=quarter_turns,
+                width=width_mm,
+                height=height_mm,
+                tolerance_mm=tolerance_mm,
+                edge_bands=edge_bands,
+            )
+            if signature is None:
+                continue
+            groups.setdefault(signature, []).append((mirrored, quarter_turns))
 
-    if len(matches) == 1:
-        return CornerContourMatch(matches[0], "unique")
-    if len(matches) > 1:
+    if not groups:
+        return CornerContourMatch(None, "none")
+    if len(groups) > 1:
         return CornerContourMatch(None, "ambiguous")
-    return CornerContourMatch(None, "none")
+    mirrored, quarter_turns = min(
+        next(iter(groups.values())),
+        key=lambda item: (item[0], item[1]),
+    )
+    return CornerContourMatch(quarter_turns, "unique", mirrored)
+
+
+def _transform_point(
+    point: Point,
+    *,
+    mirrored: bool,
+    quarter_turns: int,
+    width: float,
+    height: float,
+) -> Point:
+    """Apply the horizontal reflection first, then clockwise quarter-turns."""
+
+    x, y = point
+    box_width, box_height = width, height
+    if mirrored:
+        x = box_width - x
+    for _ in range(quarter_turns):
+        x, y = box_height - y, x
+        box_width, box_height = box_height, box_width
+    return (x, y)
+
+
+def _transform_polygon(
+    points: Sequence[Point],
+    *,
+    mirrored: bool,
+    quarter_turns: int,
+    width: float,
+    height: float,
+) -> list[Point]:
+    current = [
+        _transform_point(
+            point,
+            mirrored=mirrored,
+            quarter_turns=0,
+            width=width,
+            height=height,
+        )
+        if mirrored
+        else point
+        for point in points
+    ]
+    box_width, box_height = width, height
+    for _ in range(quarter_turns):
+        current, box_width, box_height = _rotate_clockwise(current, box_width, box_height)
+    return current
+
+
+def _edge_role(start: Point, end: Point, width: float, height: float) -> str:
+    """Name a canonical edge before any transform. The name travels with the edge."""
+
+    limit = GEOMETRY_TOLERANCE_MM
+    horizontal = abs(start[1] - end[1]) <= limit
+    vertical = abs(start[0] - end[0]) <= limit
+    if horizontal and abs(start[1]) <= limit and abs(end[1]) <= limit:
+        return "top"
+    if horizontal and abs(start[1] - height) <= limit and abs(end[1] - height) <= limit:
+        return "bottom"
+    if vertical and abs(start[0]) <= limit and abs(end[0]) <= limit:
+        return "left"
+    if vertical and abs(start[0] - width) <= limit and abs(end[0] - width) <= limit:
+        return "right"
+    if horizontal:
+        return "inner_horizontal"
+    if vertical:
+        return "inner_vertical"
+    return "chord"
+
+
+def _contour_signature(
+    actual: Sequence[Point],
+    canonical: Sequence[Point],
+    *,
+    mirrored: bool,
+    quarter_turns: int,
+    width: float,
+    height: float,
+    tolerance_mm: float,
+    edge_bands: Mapping[str, str] | None = None,
+) -> frozenset[tuple[int, str]] | None:
+    transformed = _transform_polygon(
+        canonical,
+        mirrored=mirrored,
+        quarter_turns=quarter_turns,
+        width=width,
+        height=height,
+    )
+    prepared = _collapse_collinear(transformed, tolerance_mm)
+    if len(prepared) < 3:
+        return None
+    origin_x = min(point[0] for point in prepared)
+    origin_y = min(point[1] for point in prepared)
+    localized = [(point[0] - origin_x, point[1] - origin_y) for point in prepared]
+    if not _same_edge_set(actual, localized, tolerance_mm):
+        return None
+
+    actual_edges = _edges(actual)
+    unused = set(range(len(actual_edges)))
+    signature: list[tuple[int, str]] = []
+    for index, start in enumerate(canonical):
+        end = canonical[(index + 1) % len(canonical)]
+        moved = (
+            _transform_point(
+                start,
+                mirrored=mirrored,
+                quarter_turns=quarter_turns,
+                width=width,
+                height=height,
+            ),
+            _transform_point(
+                end,
+                mirrored=mirrored,
+                quarter_turns=quarter_turns,
+                width=width,
+                height=height,
+            ),
+        )
+        local_edge = (
+            (moved[0][0] - origin_x, moved[0][1] - origin_y),
+            (moved[1][0] - origin_x, moved[1][1] - origin_y),
+        )
+        match = next(
+            (
+                edge_index
+                for edge_index in unused
+                if _same_undirected_edge(local_edge, actual_edges[edge_index], tolerance_mm)
+            ),
+            None,
+        )
+        if match is None:
+            return None
+        unused.remove(match)
+        role = _edge_role(start, end, width, height)
+        token = role if edge_bands is None else str(edge_bands.get(role, role))
+        signature.append((match, token))
+    if unused:
+        return None
+    return frozenset(signature)
 
 
 def _corner_polygon_mm(

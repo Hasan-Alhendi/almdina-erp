@@ -67,6 +67,19 @@ def _turned(points, turns):
     return current, width, height
 
 
+def _reflect_x(points, width=WIDTH_MM):
+    return [(width - x, y) for x, y in points]
+
+
+def _reflect_y(points, height=HEIGHT_MM):
+    return [(x, height - y) for x, y in points]
+
+
+def _mirror_then_turn(points, turns):
+    reflected = _reflect_x(points)
+    return _turned(reflected, turns)
+
+
 def _disturb(points):
     """Shift the start vertex, reverse the winding, and split one edge."""
     shifted = list(points[2:] + points[:2])
@@ -95,6 +108,62 @@ def test_contour_match_is_independent_of_vertex_order(piece_type, position, turn
 
     assert match.reason == "unique"
     assert match.quarter_turns == turns
+    assert match.mirrored is False
+
+
+@pytest.mark.parametrize("piece_type", ["L-Shaped Corner", "Clipped Corner"])
+@pytest.mark.parametrize("position", ["Top Right", "Bottom Left"])
+@pytest.mark.parametrize("turns", [0, 1, 2, 3])
+def test_mirrored_contour_matches_one_reflection_then_rotation(piece_type, position, turns):
+    transformed, _width, _height = _mirror_then_turn(_POLYGONS[(piece_type, position)], turns)
+
+    match = match_corner_contour(
+        _disturb(transformed),
+        piece_type=piece_type,
+        position=position,
+        width_cm=40,
+        length_cm=80,
+        cut_width_cm=8,
+        cut_length_cm=16,
+    )
+
+    assert match.reason == "unique"
+    assert match.mirrored is True
+    assert match.quarter_turns == turns
+
+
+def test_vertical_reflection_collapses_to_one_horizontal_mirror():
+    reflected = _reflect_y(_POLYGONS[("L-Shaped Corner", "Top Right")])
+
+    match = match_corner_contour(
+        reflected,
+        piece_type="L-Shaped Corner",
+        position="Top Right",
+        width_cm=40,
+        length_cm=80,
+        cut_width_cm=8,
+        cut_length_cm=16,
+    )
+
+    assert match.reason == "unique"
+    assert match.mirrored is True
+    assert match.quarter_turns == 2
+
+
+def test_wrong_cavity_is_not_a_rotation_or_a_mirror():
+    match = match_corner_contour(
+        _POLYGONS[("L-Shaped Corner", "Top Right")],
+        piece_type="L-Shaped Corner",
+        position="Top Right",
+        width_cm=40,
+        length_cm=80,
+        cut_width_cm=12,
+        cut_length_cm=16,
+    )
+
+    assert match.reason == "none"
+    assert match.quarter_turns is None
+    assert match.mirrored is False
 
 
 def test_mirrored_or_rectangular_contour_is_not_a_guessed_rotation():
@@ -124,20 +193,46 @@ def test_mirrored_or_rectangular_contour_is_not_a_guessed_rotation():
         cut_width_cm=8,
         cut_length_cm=16,
     )
+    square = [
+        (0.0, 0.0),
+        (400.0, 0.0),
+        (400.0, 320.0),
+        (320.0, 320.0),
+        (320.0, 400.0),
+        (0.0, 400.0),
+    ]
     ambiguous = match_corner_contour(
-        _POLYGONS[("L-Shaped Corner", "Top Right")],
+        square,
         piece_type="L-Shaped Corner",
-        position="Top Right",
+        position="Bottom Right",
         width_cm=40,
-        length_cm=80,
+        length_cm=40,
         cut_width_cm=8,
-        cut_length_cm=16,
-        tolerance_mm=100,
+        cut_length_cm=8,
+    )
+    equivalent = match_corner_contour(
+        square,
+        piece_type="L-Shaped Corner",
+        position="Bottom Right",
+        width_cm=40,
+        length_cm=40,
+        cut_width_cm=8,
+        cut_length_cm=8,
+        edge_bands={
+            "top": "band",
+            "bottom": "band",
+            "left": "band",
+            "right": "band",
+            "inner_horizontal": "notch",
+            "inner_vertical": "notch",
+            "chord": "notch",
+        },
     )
 
-    assert mirror.reason == "none" and mirror.quarter_turns is None
-    assert rectangle.reason == "none" and rectangle.quarter_turns is None
-    assert ambiguous.reason == "ambiguous" and ambiguous.quarter_turns is None
+    assert mirror.reason == "unique" and mirror.mirrored is True and mirror.quarter_turns == 0
+    assert rectangle.reason == "none" and rectangle.quarter_turns is None and rectangle.mirrored is False
+    assert ambiguous.reason == "ambiguous" and ambiguous.quarter_turns is None and ambiguous.mirrored is False
+    assert equivalent.reason == "unique" and equivalent.mirrored is False and equivalent.quarter_turns == 0
 
 
 def _spec(**overrides) -> OrderPieceCutSpec:
@@ -176,14 +271,15 @@ def _spec(**overrides) -> OrderPieceCutSpec:
     return OrderPieceCutSpec(**values)
 
 
-def _order():
+def _order(count=1):
     return SimpleNamespace(
         pieces=[
             SimpleNamespace(
-                piece_instance_id="piece:corner-1",
+                piece_instance_id=f"piece:corner-{index + 1}",
                 extra_full_door_double=0,
                 qty=1,
             )
+            for index in range(count)
         ]
     )
 
@@ -239,7 +335,9 @@ def test_snapshot_keeps_corner_contract_and_geometric_quarter_turns(piece_type, 
     assert piece["edge_break"] == 1
     assert piece["edge_break_only"] == (1 if piece_type == "Clipped Corner" else 0)
     assert piece["corner_rotation_quarter_turns"] == turns
+    assert piece["corner_mirrored"] == 0
     assert piece["rotated"] is (turns % 2 == 1)
+    assert piece["geometry"]["outer"] == _disturb(rotated)
 
 
 def test_half_turn_without_rotation_permission_is_rejected():
@@ -313,4 +411,178 @@ def test_regular_dxf_piece_does_not_receive_corner_binding():
     assert piece["piece_type"] == "Regular"
     assert "clipped_corner_position" not in piece
     assert "corner_rotation_quarter_turns" not in piece
+    assert "corner_mirrored" not in piece
     assert piece["rotated"] is False
+
+
+@pytest.mark.parametrize("piece_type", ["L-Shaped Corner", "Clipped Corner"])
+@pytest.mark.parametrize("turns", [0, 1, 2, 3])
+def test_snapshot_accepts_a_reflected_corner_without_rewriting_dxf(piece_type, turns):
+    transformed, width_mm, height_mm = _mirror_then_turn(
+        _POLYGONS[(piece_type, "Top Right")],
+        turns,
+    )
+    outer = _disturb(transformed)
+    snapshot = _snapshot(outer, width_cm=width_mm / 10.0, height_cm=height_mm / 10.0)
+
+    errors = _apply_strict_dimension_contract(
+        snapshot,
+        [_spec(piece_type=piece_type)],
+        order=_order(),
+    )
+
+    piece = snapshot["sheets"][0]["pieces"][0]
+    assert errors == []
+    assert piece["corner_mirrored"] == 1
+    assert piece["corner_rotation_quarter_turns"] == turns
+    assert piece["geometry"]["outer"] == outer
+    assert piece["edge_width_top"] == 1
+    assert piece["edge_long_left"] == 1
+    assert piece["edge_profiles"]["width_top"]["edge_type"] == "PVC"
+    assert piece["edge_profiles"]["long_left"]["thickness_mm"] == 1.0
+
+
+def test_reflection_does_not_bypass_a_forbidden_rotation():
+    transformed, width_mm, height_mm = _mirror_then_turn(
+        _POLYGONS[("L-Shaped Corner", "Top Right")],
+        1,
+    )
+    snapshot = _snapshot(
+        _disturb(transformed),
+        width_cm=width_mm / 10.0,
+        height_cm=height_mm / 10.0,
+    )
+
+    errors = _apply_strict_dimension_contract(
+        snapshot,
+        [_spec(allow_rotation=0)],
+        order=_order(),
+    )
+
+    piece = snapshot["sheets"][0]["pieces"][0]
+    assert "FORBIDDEN_ROTATION" in [error.code for error in errors]
+    assert "corner_mirrored" not in piece
+    assert "corner_rotation_quarter_turns" not in piece
+
+
+def test_unrotated_reflection_is_allowed_when_rotation_is_off():
+    transformed, width_mm, height_mm = _mirror_then_turn(
+        _POLYGONS[("Clipped Corner", "Top Right")],
+        0,
+    )
+    snapshot = _snapshot(
+        _disturb(transformed),
+        width_cm=width_mm / 10.0,
+        height_cm=height_mm / 10.0,
+    )
+
+    errors = _apply_strict_dimension_contract(
+        snapshot,
+        [_spec(piece_type="Clipped Corner", allow_rotation=0, edge_break_only=1)],
+        order=_order(),
+    )
+
+    piece = snapshot["sheets"][0]["pieces"][0]
+    assert errors == []
+    assert piece["corner_mirrored"] == 1
+    assert piece["corner_rotation_quarter_turns"] == 0
+    assert piece["rotated"] is False
+
+
+def test_half_turn_reflection_still_requires_rotation_permission():
+    transformed, width_mm, height_mm = _mirror_then_turn(
+        _POLYGONS[("L-Shaped Corner", "Top Right")],
+        2,
+    )
+    snapshot = _snapshot(
+        _disturb(transformed),
+        width_cm=width_mm / 10.0,
+        height_cm=height_mm / 10.0,
+    )
+
+    errors = _apply_strict_dimension_contract(
+        snapshot,
+        [_spec(allow_rotation=0)],
+        order=_order(),
+    )
+
+    piece = snapshot["sheets"][0]["pieces"][0]
+    assert [error.code for error in errors] == ["FORBIDDEN_ROTATION"]
+    assert "corner_mirrored" not in piece
+
+
+def test_same_outer_size_does_not_bind_the_other_cavity():
+    outer = _disturb(_POLYGONS[("L-Shaped Corner", "Top Right")])
+    snapshot = _snapshot(outer, width_cm=40, height_cm=80)
+    first = _spec(row_index=1, clipped_corner_width_cm=Decimal("12"))
+    second = _spec(row_index=2, clipped_corner_width_cm=Decimal("8"))
+
+    errors = _apply_strict_dimension_contract(
+        snapshot,
+        [first, second],
+        order=_order(2),
+    )
+
+    piece = snapshot["sheets"][0]["pieces"][0]
+    assert [error.code for error in errors] == ["PIECE_MISSING"]
+    assert piece["label"] == "2.1"
+    assert piece["source_piece_no"] == 2
+    assert piece["clipped_corner_width_cm"] == 8
+    assert piece["corner_mirrored"] == 0
+    assert piece["corner_rotation_quarter_turns"] == 0
+
+
+_SQUARE_L = [
+    [0.0, 0.0],
+    [400.0, 0.0],
+    [400.0, 320.0],
+    [320.0, 320.0],
+    [320.0, 400.0],
+    [0.0, 400.0],
+]
+
+
+def _square_spec(**overrides):
+    return _spec(
+        finished_width_cm=Decimal("40"),
+        finished_length_cm=Decimal("40"),
+        cut_width_cm=Decimal("40"),
+        cut_length_cm=Decimal("40"),
+        clipped_corner_position="Bottom Right",
+        clipped_corner_width_cm=Decimal("8"),
+        clipped_corner_length_cm=Decimal("8"),
+        **overrides,
+    )
+
+
+def test_symmetric_corner_accepts_one_transform_when_swapped_bands_match():
+    snapshot = _snapshot(_SQUARE_L, width_cm=40, height_cm=40)
+
+    errors = _apply_strict_dimension_contract(snapshot, [_square_spec()], order=_order())
+
+    piece = snapshot["sheets"][0]["pieces"][0]
+    assert errors == []
+    assert piece["corner_mirrored"] == 0
+    assert piece["corner_rotation_quarter_turns"] == 0
+
+
+def test_symmetric_corner_rejects_when_swapped_edges_have_different_bands():
+    snapshot = _snapshot(_SQUARE_L, width_cm=40, height_cm=40)
+    top_only = (
+        {
+            "side": "width_top",
+            "side_label": "العرض العلوي",
+            "edge_type": "PVC",
+            "thickness_mm": Decimal("1"),
+        },
+    )
+
+    errors = _apply_strict_dimension_contract(
+        snapshot,
+        [_square_spec(side_profiles=top_only)],
+        order=_order(),
+    )
+
+    assert [error.code for error in errors] == ["CORNER_EDGE_UNRESOLVED"]
+    assert errors[0].params["reason"] == "ambiguous"
+    assert "corner_rotation_quarter_turns" not in snapshot["sheets"][0]["pieces"][0]

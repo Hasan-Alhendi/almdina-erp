@@ -11,6 +11,36 @@
         "Bottom Right": "Bottom Left",
         "Bottom Left": "Top Left",
     };
+    const MIRRORED_POSITION = {
+        "Top Left": "Top Right",
+        "Top Right": "Top Left",
+        "Bottom Left": "Bottom Right",
+        "Bottom Right": "Bottom Left",
+    };
+    const ROTATED_SIDE = {
+        width_top: "long_left",
+        width_bottom: "long_right",
+        long_right: "width_top",
+        long_left: "width_bottom",
+    };
+    const MIRRORED_SIDE = {
+        width_top: "width_top",
+        width_bottom: "width_bottom",
+        long_left: "long_right",
+        long_right: "long_left",
+    };
+    const SIDE_FLAG = {
+        width_top: "edge_width_top",
+        width_bottom: "edge_width_bottom",
+        long_left: "edge_long_left",
+        long_right: "edge_long_right",
+    };
+    const SIDE_OVERRIDE = {
+        width_top: "edge_width_top_type_override",
+        width_bottom: "edge_width_bottom_type_override",
+        long_left: "edge_long_left_type_override",
+        long_right: "edge_long_right_type_override",
+    };
     const POSITIONS = [
         { value: "Top Right", ar: "أعلى اليمين", en: "Top right" },
         { value: "Top Left", ar: "أعلى اليسار", en: "Top left" },
@@ -202,32 +232,73 @@
         };
     }
 
-    function pieceForQuarterTurns(piece, quarterTurns) {
+    function mirrorFlag(value) {
+        if (value === undefined || value === null || value === false || value === 0 || value === "0") {
+            return false;
+        }
+        if (value === true || value === 1 || value === "1") return true;
+        return null;
+    }
+
+    function permuteSideState(state, mapping) {
+        const nextFlags = {};
+        const nextOverrides = {};
+        const nextProfiles = {};
+        Object.keys(mapping).forEach((side) => {
+            const sourceSide = mapping[side];
+            nextFlags[SIDE_FLAG[side]] = state.flags[SIDE_FLAG[sourceSide]] ? 1 : 0;
+            nextOverrides[SIDE_OVERRIDE[side]] = state.overrides[SIDE_OVERRIDE[sourceSide]] || "";
+            if (state.profiles[sourceSide]) {
+                nextProfiles[side] = { ...state.profiles[sourceSide], side };
+            }
+        });
+        return {
+            flags: nextFlags,
+            overrides: nextOverrides,
+            profiles: nextProfiles,
+        };
+    }
+
+    function pieceForQuarterTurns(piece, quarterTurns, mirrored) {
         const turns = Number(quarterTurns);
         const source = piece || {};
+        const reflected = mirrorFlag(mirrored === undefined ? source.corner_mirrored : mirrored);
+        if (reflected === null) return null;
         if (!Number.isInteger(turns) || turns < 0 || turns > 3) return null;
         if (!POSITIONS.some(item => item.value === source.clipped_corner_position)) return null;
         let position = source.clipped_corner_position;
         let cutWidth = num(source.clipped_corner_width_cm);
         let cutLength = num(source.clipped_corner_length_cm);
         if (!(cutWidth > 0) || !(cutLength > 0)) return null;
-        let top = source.edge_width_top ? 1 : 0;
-        let bottom = source.edge_width_bottom ? 1 : 0;
-        let left = source.edge_long_left ? 1 : 0;
-        let right = source.edge_long_right ? 1 : 0;
+        let sideState = {
+            flags: {
+                edge_width_top: source.edge_width_top ? 1 : 0,
+                edge_width_bottom: source.edge_width_bottom ? 1 : 0,
+                edge_long_left: source.edge_long_left ? 1 : 0,
+                edge_long_right: source.edge_long_right ? 1 : 0,
+            },
+            overrides: {
+                edge_width_top_type_override: source.edge_width_top_type_override || "",
+                edge_width_bottom_type_override: source.edge_width_bottom_type_override || "",
+                edge_long_left_type_override: source.edge_long_left_type_override || "",
+                edge_long_right_type_override: source.edge_long_right_type_override || "",
+            },
+            profiles: (source.edge_profiles && typeof source.edge_profiles === "object")
+                ? source.edge_profiles
+                : {},
+        };
+        // Reflection is applied once, before rotation, matching the domain matcher.
+        // The DXF contour is already drawn; this copy only renames its edges.
+        if (reflected) {
+            position = MIRRORED_POSITION[position] || position;
+            sideState = permuteSideState(sideState, MIRRORED_SIDE);
+        }
         for (let index = 0; index < turns; index += 1) {
             position = ROTATED_POSITION[position] || position;
             const nextCutWidth = cutLength;
             cutLength = cutWidth;
             cutWidth = nextCutWidth;
-            const nextTop = left;
-            const nextBottom = right;
-            const nextRight = top;
-            const nextLeft = bottom;
-            top = nextTop;
-            bottom = nextBottom;
-            right = nextRight;
-            left = nextLeft;
+            sideState = permuteSideState(sideState, ROTATED_SIDE);
         }
         return {
             ...source,
@@ -235,10 +306,15 @@
             clipped_corner_position: position,
             clipped_corner_width_cm: cutWidth,
             clipped_corner_length_cm: cutLength,
-            edge_width_top: top,
-            edge_width_bottom: bottom,
-            edge_long_left: left,
-            edge_long_right: right,
+            edge_width_top: sideState.flags.edge_width_top,
+            edge_width_bottom: sideState.flags.edge_width_bottom,
+            edge_long_left: sideState.flags.edge_long_left,
+            edge_long_right: sideState.flags.edge_long_right,
+            edge_width_top_type_override: sideState.overrides.edge_width_top_type_override,
+            edge_width_bottom_type_override: sideState.overrides.edge_width_bottom_type_override,
+            edge_long_left_type_override: sideState.overrides.edge_long_left_type_override,
+            edge_long_right_type_override: sideState.overrides.edge_long_right_type_override,
+            edge_profiles: sideState.profiles,
         };
     }
 

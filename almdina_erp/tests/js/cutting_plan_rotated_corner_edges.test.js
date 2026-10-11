@@ -252,3 +252,103 @@ const rectangle = {
 const rectangleHtml = renderer.build(frm, planFor(rectangle));
 assert.match(rectangleHtml, /border-top:3px solid #d00000/, "a rotated rectangle keeps the bbox edge marker");
 assert.doesNotMatch(rectangleHtml, /dco-edge-break-svg/);
+
+function reflectX(points, width) {
+    return points.map(([x, y]) => [width - x, y]);
+}
+
+["L-Shaped Corner", "Clipped Corner"].forEach((pieceType) => {
+    const plain = turnedGeometry(pieceType, 0);
+    [0, 1, 2, 3].forEach((turns) => {
+        let points = reflectX(geometry.points({ ...basePiece(pieceType), rotated: false }, 400, 800), 400);
+        let width = 400;
+        let height = 800;
+        for (let index = 0; index < turns; index += 1) {
+            const rotated = rotateClockwise(points, width, height);
+            points = rotated.points;
+            width = rotated.width;
+            height = rotated.height;
+        }
+        const visual = {
+            ...basePiece(pieceType),
+            w: width / 10,
+            h: height / 10,
+            rotated: turns % 2 === 1,
+            corner_rotation_quarter_turns: turns,
+            corner_mirrored: 1,
+            edge_profiles: {
+                width_top: { side: "width_top", edge_type: "TOP", thickness_mm: 1.1 },
+                long_left: { side: "long_left", edge_type: "LEFT", thickness_mm: 2.2 },
+            },
+            edge_width_top_type_override: "TOP",
+            edge_long_left_type_override: "LEFT",
+        };
+        const oriented = geometry.pieceForQuarterTurns(visual, turns, 1);
+        samePointSet(geometry.points(oriented, width, height), points);
+        const storedOuter = points.map(([x, y]) => [x + 100, y + 200]);
+        const piece = {
+            ...visual,
+            geometry: {
+                schema_version: 1,
+                unit: "mm",
+                coordinate_space: "usable_sheet",
+                outer: storedOuter,
+                holes: [],
+            },
+        };
+        const html = renderer.build(frm, planFor(piece));
+        const expected = polylines(geometry.edgeBandSvgMarkup(oriented, 100, 100, { inheritStroke: true }));
+        assert.deepEqual(polylines(html), expected, `${pieceType} mirror turn ${turns} bands`);
+        assert.equal(piece.geometry.outer, storedOuter, `${pieceType} mirror turn ${turns} does not rewrite DXF`);
+        assert.match(html, /dco-edge-break-svg/, `${pieceType} mirror turn ${turns} keeps the corner strap`);
+        if (turns === 0) {
+            assert.notEqual(expected.join("|"), polylines(geometry.edgeBandSvgMarkup(plain.oriented, 100, 100, { inheritStroke: true })).join("|"));
+            assert.equal(oriented.edge_profiles.long_right.edge_type, "LEFT");
+            assert.equal(oriented.edge_profiles.long_right.thickness_mm, 2.2);
+            assert.equal(oriented.edge_profiles.width_top.edge_type, "TOP");
+            assert.equal(oriented.edge_profiles.width_top.thickness_mm, 1.1);
+            assert.equal(oriented.edge_long_right_type_override, "LEFT");
+            assert.equal(oriented.edge_width_top_type_override, "TOP");
+            assert.equal(oriented.edge_long_left, 0);
+            assert.equal(oriented.edge_long_right, 1);
+        }
+    });
+});
+
+const systemIgnoringMirror = {
+    ...systemPiece,
+    corner_mirrored: 1,
+    corner_rotation_quarter_turns: 3,
+};
+assert.deepEqual(
+    polylines(renderer.build(frm, planFor(systemIgnoringMirror))),
+    systemBands,
+    "system plans keep the boolean rotation and ignore imported mirror metadata"
+);
+assert.equal(geometry.pieceForQuarterTurns(basePiece("L-Shaped Corner"), 0, "sideways"), null);
+
+const clippedChord = {
+    ...basePiece("Clipped Corner"),
+    edge_break: 0,
+    edge_break_only: 1,
+    edge_width_top: 0,
+    edge_width_bottom: 0,
+    edge_long_left: 0,
+    edge_long_right: 0,
+};
+const lNotch = {
+    ...basePiece("L-Shaped Corner"),
+    edge_break: 1,
+    edge_width_top: 0,
+    edge_width_bottom: 0,
+    edge_long_left: 0,
+    edge_long_right: 0,
+};
+const chordPlain = geometry.edgeBandSvgMarkup(geometry.pieceForQuarterTurns(clippedChord, 0, false), 400, 800, { inheritStroke: true });
+const chordMirror = geometry.edgeBandSvgMarkup(geometry.pieceForQuarterTurns(clippedChord, 0, true), 400, 800, { inheritStroke: true });
+const notchPlain = geometry.edgeBandSvgMarkup(geometry.pieceForQuarterTurns(lNotch, 0, false), 400, 800, { inheritStroke: true });
+const notchMirror = geometry.edgeBandSvgMarkup(geometry.pieceForQuarterTurns(lNotch, 0, true), 400, 800, { inheritStroke: true });
+assert.match(chordPlain, /dco-edge-break-only-svg/);
+assert.match(notchPlain, /dco-edge-break-svg/);
+assert.notEqual(polylines(chordPlain).join("|"), polylines(chordMirror).join("|"), "the clipped diagonal follows the reflection");
+assert.notEqual(polylines(notchPlain).join("|"), polylines(notchMirror).join("|"), "the L notch follows the reflection");
