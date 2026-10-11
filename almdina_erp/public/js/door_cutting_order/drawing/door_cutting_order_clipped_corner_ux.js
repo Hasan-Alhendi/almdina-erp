@@ -202,6 +202,46 @@
         };
     }
 
+    function pieceForQuarterTurns(piece, quarterTurns) {
+        const turns = Number(quarterTurns);
+        const source = piece || {};
+        if (!Number.isInteger(turns) || turns < 0 || turns > 3) return null;
+        if (!POSITIONS.some(item => item.value === source.clipped_corner_position)) return null;
+        let position = source.clipped_corner_position;
+        let cutWidth = num(source.clipped_corner_width_cm);
+        let cutLength = num(source.clipped_corner_length_cm);
+        if (!(cutWidth > 0) || !(cutLength > 0)) return null;
+        let top = source.edge_width_top ? 1 : 0;
+        let bottom = source.edge_width_bottom ? 1 : 0;
+        let left = source.edge_long_left ? 1 : 0;
+        let right = source.edge_long_right ? 1 : 0;
+        for (let index = 0; index < turns; index += 1) {
+            position = ROTATED_POSITION[position] || position;
+            const nextCutWidth = cutLength;
+            cutLength = cutWidth;
+            cutWidth = nextCutWidth;
+            const nextTop = left;
+            const nextBottom = right;
+            const nextRight = top;
+            const nextLeft = bottom;
+            top = nextTop;
+            bottom = nextBottom;
+            right = nextRight;
+            left = nextLeft;
+        }
+        return {
+            ...source,
+            rotated: false,
+            clipped_corner_position: position,
+            clipped_corner_width_cm: cutWidth,
+            clipped_corner_length_cm: cutLength,
+            edge_width_top: top,
+            edge_width_bottom: bottom,
+            edge_long_left: left,
+            edge_long_right: right,
+        };
+    }
+
     function breakAdjacentSides(position) {
         return BREAK_ADJACENT_SIDES[position || DEFAULT_POSITION] || BREAK_ADJACENT_SIDES[DEFAULT_POSITION];
     }
@@ -1197,6 +1237,7 @@
         typeIcon,
         baseConfig,
         effectiveConfig,
+        pieceForQuarterTurns,
         remainingFromCut,
         cutFromRemaining,
         clampRemaining,

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any, Callable, Iterable
 
 from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
@@ -53,6 +53,17 @@ class OrderPieceCutSpec:
     qty: int
     side_profiles: tuple[dict[str, Any], ...]
     edge_break: int = 0
+    edge_break_only: int = 0
+    clipped_corner_position: str = ""
+    clipped_corner_width_cm: Decimal = Decimal("0")
+    clipped_corner_length_cm: Decimal = Decimal("0")
+
+
+def _optional_cm(value: Any) -> Decimal:
+    try:
+        return Decimal(str(value if value not in (None, "") else 0))
+    except (InvalidOperation, ValueError, ArithmeticError):
+        return Decimal("0")
 
 
 def _is_selected(value: Any) -> bool:
@@ -186,6 +197,7 @@ def build_order_piece_cut_specs(
             errors.append(f"الدرفة رقم {row_index}: الكمية يجب أن تكون أكبر من صفر.")
             continue
 
+        piece_type = str(getattr(row, "piece_type", "") or "Regular")
         specs.append(
             OrderPieceCutSpec(
                 row_index=row_index,
@@ -196,16 +208,24 @@ def build_order_piece_cut_specs(
                 width_deduction_mm=result.width_deduction_mm,
                 length_deduction_mm=result.length_deduction_mm,
                 allow_rotation=1 if _is_selected(getattr(row, "allow_rotation", 0)) else 0,
-                piece_type=str(getattr(row, "piece_type", "") or "Regular"),
+                piece_type=piece_type,
                 qty=qty,
                 side_profiles=tuple(side_profiles),
                 edge_break=(
                     1
-                    if str(getattr(row, "piece_type", "") or "Regular")
-                    in {"Clipped Corner", "L-Shaped Corner"}
+                    if piece_type in {"Clipped Corner", "L-Shaped Corner"}
                     and _is_selected(getattr(row, "edge_break", 0))
                     else 0
                 ),
+                edge_break_only=(
+                    1
+                    if piece_type == "Clipped Corner"
+                    and _is_selected(getattr(row, "edge_break_only", 0))
+                    else 0
+                ),
+                clipped_corner_position=str(getattr(row, "clipped_corner_position", "") or ""),
+                clipped_corner_width_cm=_optional_cm(getattr(row, "clipped_corner_width_cm", 0)),
+                clipped_corner_length_cm=_optional_cm(getattr(row, "clipped_corner_length_cm", 0)),
             )
         )
 

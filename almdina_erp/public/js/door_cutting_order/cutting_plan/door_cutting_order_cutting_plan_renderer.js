@@ -81,16 +81,25 @@
         );
         if (!isCorner) return "";
 
-        // Paths follow rotated corner geometry; remap finished-orientation flags to visual sides.
-        const edgePiece = piece.rotated
-            ? {
+        // System plans encode only 0°/90° in `rotated`, and both the outline and
+        // the bands are generated from that flag. An imported DXF contour is
+        // already in its drawn orientation, so its bands follow the geometric
+        // quarter-turn instead of applying `rotated` a second time.
+        let edgePiece = piece;
+        if (geometryModel && geometryModel.source === "dxf") {
+            edgePiece = typeof geometry.pieceForQuarterTurns === "function"
+                ? geometry.pieceForQuarterTurns(piece, piece.corner_rotation_quarter_turns)
+                : null;
+            if (!edgePiece) return "";
+        } else if (piece.rotated) {
+            edgePiece = {
                 ...piece,
                 edge_width_top: piece.edge_long_left,
                 edge_width_bottom: piece.edge_long_right,
                 edge_long_right: piece.edge_width_top,
                 edge_long_left: piece.edge_width_bottom,
-            }
-            : piece;
+            };
+        }
         const markup = geometry.edgeBandSvgMarkup(edgePiece, 100, 100, { inheritStroke: true });
         if (!markup) return "";
         const pathData = (

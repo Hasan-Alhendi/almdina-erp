@@ -6,6 +6,9 @@ from types import SimpleNamespace
 from typing import Any
 
 from almdina_erp.almdina_erp.application.cutting.plan_revisions import PlanSettings
+from almdina_erp.almdina_erp.domain.cutting.corner_contour_rotation import (
+    match_corner_contour,
+)
 from almdina_erp.almdina_erp.domain.cutting.dxf_applied_trim import (
     DxfAppliedTrimError,
     apply_adaptive_trim_to_fixed_dxf_layout,
@@ -25,12 +28,15 @@ from almdina_erp.almdina_erp.domain.orders.extra_addons import (
     EXTRA_ADDON_FIELD_BY_CODE,
     physical_cut_quantity,
 )
+from almdina_erp.almdina_erp.domain.orders.piece_policy import is_corner_cut
 from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
     CATEGORY_DIMENSIONS,
     CATEGORY_IDENTITY,
     CATEGORY_LAYOUT,
     CATEGORY_PERSISTENCE,
+    CATEGORY_TOPOLOGY,
     APPLIED_TRIM_OVERFLOW,
+    CORNER_EDGE_UNRESOLVED,
     CUT_DIMENSIONS_BIND_FAILED,
     CUT_DIMENSIONS_MISSING,
     CUT_SIZE_MISMATCH,
@@ -462,6 +468,8 @@ def _edge_print_contract(spec: OrderPieceCutSpec) -> dict[str, Any]:
     flags["edge_type"] = next(iter(edge_types)) if len(edge_types) == 1 else ""
     flags["edge_profiles"] = profiles
     flags["edge_break"] = 1 if getattr(spec, "edge_break", 0) else 0
+    if is_corner_cut(spec.piece_type):
+        flags["edge_break_only"] = 1 if getattr(spec, "edge_break_only", 0) else 0
     return flags
 
 
@@ -492,7 +500,93 @@ def _apply_piece_contract_metadata(
     piece["cut_length_cm"] = float(spec.cut_length_cm)
     piece["edge_width_deduction_mm"] = float(spec.width_deduction_mm)
     piece["edge_length_deduction_mm"] = float(spec.length_deduction_mm)
+    if is_corner_cut(spec.piece_type):
+        piece["clipped_corner_position"] = str(spec.clipped_corner_position or "")
+        piece["clipped_corner_width_cm"] = float(spec.clipped_corner_width_cm)
+        piece["clipped_corner_length_cm"] = float(spec.clipped_corner_length_cm)
     piece.update(_edge_print_contract(spec))
+
+
+def _corner_edge_markers_selected(piece: dict[str, Any]) -> bool:
+    return any(
+        piece.get(fieldname)
+        for fieldname in (
+            "edge_long_right",
+            "edge_long_left",
+            "edge_width_top",
+            "edge_width_bottom",
+            "edge_break",
+            "edge_break_only",
+        )
+    )
+
+
+def _outer_ring_mm(piece: dict[str, Any]) -> list[list[float]] | None:
+    geometry = piece.get("geometry")
+    if not isinstance(geometry, dict):
+        return None
+    outer = geometry.get("outer")
+    if isinstance(outer, (str, bytes)) or not isinstance(outer, list) or len(outer) < 3:
+        return None
+    return outer
+
+
+def _bind_corner_edge_rotation(
+    piece: dict[str, Any],
+    candidate: dict[str, Any],
+) -> DxfValidationIssue | None:
+    """Record the unique geometric quarter-turn used to place corner edge bands.
+
+    ``rotated`` stays the bbox flag owned by dimension matching. It cannot tell
+    0° from 180° or 90° from 270°, so corner bands do not read it. The imported
+    contour itself is not transformed here.
+    """
+
+    spec: OrderPieceCutSpec = candidate["spec"]
+    if not is_corner_cut(spec.piece_type) or not _corner_edge_markers_selected(piece):
+        return None
+
+    outer = _outer_ring_mm(piece)
+    match = (
+        match_corner_contour(
+            outer,
+            piece_type=spec.piece_type,
+            position=str(spec.clipped_corner_position or ""),
+            width_cm=float(spec.cut_width_cm),
+            length_cm=float(spec.cut_length_cm),
+            cut_width_cm=float(spec.clipped_corner_width_cm),
+            cut_length_cm=float(spec.clipped_corner_length_cm),
+        )
+        if outer is not None
+        else None
+    )
+    if match is None or match.quarter_turns is None:
+        return issue(
+            CORNER_EDGE_UNRESOLVED,
+            CATEGORY_TOPOLOGY,
+            target=piece_target(
+                source_piece_no=spec.row_index,
+                copy_no=int(candidate.get("copy_no") or 1),
+                label=str(candidate.get("label") or ""),
+            ),
+            params={
+                "piece_type": spec.piece_type,
+                "reason": match.reason if match is not None else "none",
+            },
+        )
+
+    if match.quarter_turns and not spec.allow_rotation:
+        actual_w, actual_h = _actual_dimensions(piece)
+        return _dimension_issue(
+            FORBIDDEN_ROTATION,
+            spec=spec,
+            candidate=candidate,
+            actual_w=actual_w,
+            actual_h=actual_h,
+        )
+
+    piece["corner_rotation_quarter_turns"] = int(match.quarter_turns)
+    return None
 
 
 def _apply_strict_dimension_contract(
@@ -534,6 +628,9 @@ def _apply_strict_dimension_contract(
                     candidate,
                     rotated=bool(rotated),
                 )
+                binding_error = _bind_corner_edge_rotation(piece, candidate)
+                if binding_error:
+                    issues.append(binding_error)
                 continue
             if str(piece.get("piece_type") or "") == "Special":
                 issues.append(
@@ -627,6 +724,9 @@ def _apply_strict_dimension_contract(
 
             candidate = unmatched.pop(match_index)
             _apply_piece_contract_metadata(piece, candidate, rotated=rotated)
+            binding_error = _bind_corner_edge_rotation(piece, candidate)
+            if binding_error:
+                issues.append(binding_error)
 
     if unmatched:
         preview = "، ".join(

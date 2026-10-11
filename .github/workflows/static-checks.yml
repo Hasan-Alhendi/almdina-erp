@@ -222,6 +222,7 @@ jobs:
             almdina_erp/tests/test_dxf_lwpolyline_ascii_fallback.py \
             almdina_erp/tests/test_dxf_cut_size_diagnostics.py \
             almdina_erp/tests/test_dxf_original_upload_download.py \
+            almdina_erp/tests/test_corner_dxf_edge_binding.py \
             almdina_erp/tests/test_arabic_operator_localization.py \
             almdina_erp/tests/test_compact_invoice_print_contract.py \
             almdina_erp/tests/test_advanced_cutting_optimizer.py
@@ -276,6 +277,7 @@ jobs:
           node almdina_erp/tests/js/cutting_plan_piece_geometry.test.js
           node almdina_erp/tests/js/cutting_plan_renderer.test.js
           node almdina_erp/tests/js/cutting_plan_break_only_edge.test.js
+          node almdina_erp/tests/js/cutting_plan_rotated_corner_edges.test.js
           node almdina_erp/tests/js/document_context.test.js
           node almdina_erp/tests/js/document_context_async.test.js
           node almdina_erp/tests/js/approved_plan_navigation.test.js

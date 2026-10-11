@@ -354,6 +354,14 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
             code,
             issue.category,
         )
+    if code == codes.CORNER_EDGE_UNRESOLVED:
+        return PresentedDxfError(
+            "تعذر ربط قشاط الزاوية بأضلاع المحيط لأن شكل الدرفة لا يطابق زاوية الطلب بعد دوران واضح.",
+            target_text,
+            "اجعل محيط الدرفة مطابقًا لزاوية L أو الزاوية الكسر في الطلب بعد دوران 0 أو 90 أو 180 أو 270 درجة فقط، دون انعكاس.",
+            code,
+            issue.category,
+        )
 
     if code == codes.FORBIDDEN_ROTATION:
         rotation_count = max(1, int(params.get("rotation_count", 1) or 1))
