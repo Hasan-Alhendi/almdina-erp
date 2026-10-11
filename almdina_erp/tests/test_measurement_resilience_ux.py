@@ -45,7 +45,8 @@ def test_long_notes_have_ellipsis_full_text_hint_and_large_editor():
     assert "has-long-note" in source
     assert "Small Text" in source
     assert "min-height:240px" in source
-    assert "فتح الملاحظة كاملة" in source
+    assert '__("Open full note — {0} characters", [length])' in source
+    assert "فتح الملاحظة كاملة" not in source
     assert "row.notes = value" in source
     assert 'frm.script_manager.trigger("notes", row.doctype, row.name)' in source
 

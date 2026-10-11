@@ -197,6 +197,7 @@
             if (generation === null) return;
             dialogs.openCreate({
                 canAssignRoles: can("assign_user_roles"),
+                languages: state.languages,
                 roleOptions,
                 validateRoles,
                 onSubmit: payload => runMutation(
@@ -221,6 +222,7 @@
                 user,
                 canEdit,
                 canAssignRoles,
+                languages: state.languages,
                 roleOptions,
                 validateRoles,
                 onSubmit: payload => runMutation(

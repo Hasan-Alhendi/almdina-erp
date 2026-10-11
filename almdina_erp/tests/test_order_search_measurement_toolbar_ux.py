@@ -104,8 +104,8 @@ def test_full_screen_entry_reuses_live_grid_and_preserves_all_existing_editing_b
 
 def test_measurement_print_is_the_shared_base_and_invoice_only_appends_quote():
     source = text(PRINT_PRESENTER)
-    for label in ("النوع", "العرض", "الطول", "العدد", "القشاط المخصص", "ملاحظات"):
-        assert label in source
+    for label in ("Type", "Width", "Length", "Qty", "Custom edge banding", "Notes"):
+        assert f'__("{label}")' in source
     assert "function measurementTable(frm)" in source
     assert 'function measurementDocumentBody(frm, customerPhone = "")' in source
     assert 'printHtml(documentHtml(frm, "measurements", printIdentity, null, customerPhone))' in source
@@ -125,7 +125,8 @@ def test_customer_invoice_keeps_edge_color_once_in_shared_measurement_header():
     print_source = text(PRINT_PRESENTER)
     edge_color_patch = text(EDGE_COLOR_UX)
 
-    assert print_source.count("<b>لون القشاط</b>") == 1
+    assert print_source.count('__("Edge color")') == 1
+    assert "<b>لون القشاط</b>" not in print_source
     assert "<th>لون القشاط</th>" not in print_source
     assert "<b>نوع القشاط</b>" not in print_source
     assert "patchMeasurementTable" not in edge_color_patch

@@ -322,14 +322,13 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
             "activePopover.element.contains(event.target)", controls_source
         )
         self.assertIn("is-edge-custom", controls_source)
-        self.assertIn("نقرة للتفعيل والتعطيل", controls_source)
+        self.assertIn('__("Click to toggle · Double-click to choose profile")', controls_source)
         self.assertIn(
             'document.addEventListener("pointerdown"', controls_source
         )
         self.assertIn('document.addEventListener("keydown"', controls_source)
-        self.assertIn("الافتراضي", controls_source)
-        self.assertIn("تطبيق على الأربعة", controls_source)
-        self.assertIn("الأربعة بالافتراضي", controls_source)
+        self.assertIn('__("Apply to all four")', controls_source)
+        self.assertIn('__("Default for all four")', controls_source)
         self.assertIn("applySideSelection", controls_source)
         self.assertIn("applyAllSides", controls_source)
         self.assertIn('row[config.selectedField] = 1', controls_source)
@@ -346,7 +345,7 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
         self.assertNotIn(
             'header.textContent = isArabic() ? "مقاس القص"', cut_source
         )
-        self.assertIn("الخصم حسب سماكة كل ضلع", cut_source)
+        self.assertIn('__("Finished input → deduction follows each side")', cut_source)
 
         self.assertIn("module.details(frm, source)", print_source)
         self.assertIn(
@@ -357,7 +356,7 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
         )
         self.assertIn(".dco-print-customer-invoice", print_source)
         self.assertIn("event.stopImmediatePropagation()", print_source)
-        self.assertIn("القشاط المخصص", print_source)
+        self.assertIn('__("Custom edge banding")', print_source)
         self.assertIn(
             ".filter(detail => Boolean(detail.custom))", print_source
         )
@@ -374,7 +373,7 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
         self.assertIn("سطر مستقل لكل نوع قشاط", document_source)
         self.assertNotIn("tbody.innerHTML = invoiceRowsHtml", document_source)
         self.assertNotIn("group.amount += num(detail.amount)", document_source)
-        self.assertIn("سماكة القشاط (مم)", edge_source)
+        self.assertIn("Edge thickness (mm)", edge_source)
 
 
 if __name__ == "__main__":

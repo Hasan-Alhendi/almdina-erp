@@ -20,7 +20,8 @@ def test_measurement_toolbar_allows_only_centered_title_and_three_actions():
     source = _source()
     css = _css()
 
-    assert "جدول قياسات الدرف" in source
+    assert '__("Door Measurements Table")' in source
+    assert "جدول قياسات الدرف" not in source
     assert "justify-content:center!important;" in css
     assert "position:absolute!important;" in css
     assert "left:8px!important;" in css
@@ -34,12 +35,11 @@ def test_measurement_help_action_contains_previous_entry_guidance():
 
     assert "function ensureMeasurementHelpAction(actions)" in source
     assert 'button.className = "btn btn-default btn-sm dco-input-help"' in source
-    assert "تعليمات إدخال القياسات" in source
-    assert "العرض ثم <kbd>Tab</kbd>" in source
-    assert "الطول ثم <kbd>Enter</kbd>" in source
-    assert "استخدم الأسهم ← ↑ ↓ →" in source
-    assert "نقرتان على الضلع لاختيار نوع القشاط" in source
-    assert "الخصم النهائي يُحسب حسب سماكة القشاط في كل ضلع" in source
+    assert '__("Measurement entry help")' in source
+    assert '__("enter width, press {0}, enter length, then {1} for the next row.", ["<kbd>Tab</kbd>", "<kbd>Enter</kbd>"])' in source
+    assert '__("use the arrow keys to move between cells.")' in source
+    assert '__("click a side to toggle it; double-click a side to choose the edge type.")' in source
+    assert '__("trim is calculated from the edge thickness on each side.")' in source
 
 
 def test_existing_print_and_separate_window_actions_are_not_reimplemented_here():

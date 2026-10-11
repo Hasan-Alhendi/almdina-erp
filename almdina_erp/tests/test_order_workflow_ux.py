@@ -70,8 +70,8 @@ def test_measurement_table_has_print_and_full_window_actions():
 
 def test_measurement_print_is_shared_base_without_quote_details():
     source = text(PRINT_PRESENTER)
-    for label in ("النوع", "العرض", "الطول", "العدد", "القشاط المخصص", "ملاحظات"):
-        assert label in source
+    for label in ("Type", "Width", "Length", "Qty", "Custom edge banding", "Notes"):
+        assert f'__("{label}")' in source
     assert "function measurementTable(frm)" in source
     assert 'function measurementDocumentBody(frm, customerPhone = "")' in source
     assert 'printHtml(documentHtml(frm, "measurements", printIdentity, null, customerPhone))' in source
@@ -87,7 +87,8 @@ def test_edge_color_is_kept_in_shared_print_header_without_duplicate_columns():
     measurement_source = text(MEASUREMENT_UX)
 
     assert "<b>نوع القشاط</b>" not in print_source
-    assert print_source.count("<b>لون القشاط</b>") == 1
+    assert print_source.count('__("Edge color")') == 1
+    assert "<b>لون القشاط</b>" not in print_source
     assert "<th>لون القشاط</th>" not in print_source
     assert "patchMeasurementTable" not in edge_source
     assert "patchInvoiceLines" not in edge_source

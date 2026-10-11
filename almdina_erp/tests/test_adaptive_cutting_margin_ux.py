@@ -190,11 +190,16 @@ def test_zero_margin_edges_are_visually_marked_without_touching_cut_geometry():
 
     assert "function zeroMarginEdges" in source
     assert "function ensureOriginalBoardEdges" in source
-    assert "function buildOriginalEdgeMarker" in source
+    assert "function buildOriginalEdgeCaption" in source
+    assert "dco-board-original-edges" in source
+    assert "card.insertBefore(buildOriginalEdgeCaption(edges), board)" in source
+    assert "board.appendChild(buildOriginalEdgeMarker" not in source
     assert "dco-board-original-edge--top" in styles
     assert "dco-board-original-edge--bottom" in styles
     assert "dco-board-original-edge--left" in styles
     assert "dco-board-original-edge--right" in styles
+    assert "dco-board-original-edges" in styles
+    assert "position:static" in styles
     assert "حافة أصلية · أعلى" in source
     assert "حافة أصلية · أسفل" in source
     assert "originalEdgeSignature" in source

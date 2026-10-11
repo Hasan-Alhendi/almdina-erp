@@ -102,24 +102,23 @@ def test_fast_measurements_offer_one_click_corner_settings_with_live_visual_prev
     assets = ASSETS.read_text(encoding="utf-8")
 
     assert '<option value="Clipped Corner"' in operator
-    assert "الزاوية الكسر" in operator
+    assert '__("Clipped corner")' in operator
     assert '<option value="L-Shaped Corner"' in operator
     assert 'value: "L-Shaped Corner"' in extra_addons
-    assert 'labelAr: "الزاوية الكسر"' in extra_addons
+    assert 'label: "Clipped corner"' in extra_addons
     assert "AlmdinaClippedCornerEditor.open(currentFrm, row)" in operator
     assert "frappe.model.new_names" in operator
     assert "tr.dataset.rowName = row.name" in operator
     assert "if (!row || !requirePieceDimensions(row, tr)) return" in operator
     assert "isCornerCut" in operator
     assert "dco-corner-edges-summary" in operator
-    assert "اختيار القشاط من الشكل" in operator
+    assert '__("Choose banding on shape")' in operator
     assert ".dco-special-edges-disabled,\n                .dco-corner-edges-summary{" in operator
     assert "border:1px dashed rgba(176,112,28,.4)" in operator
     assert ".dco-clipped-corner-row .dco-col-edges" in operator
     assert 'toggle("edge_break"' not in operator
-    assert "قشاط الكسر" in editor
-    assert "قشاط الكسر فقط" in editor
-    assert "قشاط الزاوية" in editor
+    assert '__("Break only")' in editor
+    assert '__("Corner banding")' in editor
     assert "data-corner-edge" in editor
     assert "data-corner-edges" in editor
     assert "applyEdgeBreakPolicy" in editor
@@ -145,13 +144,13 @@ def test_fast_measurements_offer_one_click_corner_settings_with_live_visual_prev
     save_render = SAVE_RENDER_UX.read_text(encoding="utf-8")
     assert "function syncCornerEdgesSummary" in save_render
     assert "edgeSelectionSummary" in save_render
-    assert "جعل الجزءين المتبقيين متساويين" in editor
-    assert "المتبقي على ضلع العرض" in editor
+    assert '__("Make both remaining lengths equal")' in editor
+    assert '__("Remaining on width side")' in editor
     assert "data-corner-remaining" in editor
     assert "preserveRemainingOnResize" in editor
     assert "commitCornerResizeIfNeeded" in operator
     assert "captureCornerResizeSnapshot" in operator
-    assert "المستطيل الخارجي هو المساحة المحجوزة الآمنة" in editor
+    assert "outer rectangle remains the safe reserved area" in editor
     assert "let activeDialog = null" in editor
     assert "Prevent stacked corner dialogs" in editor
     open_fn = editor.split("function open(frm, row, options = {}) {", 1)[1]
@@ -163,7 +162,7 @@ def test_fast_measurements_offer_one_click_corner_settings_with_live_visual_prev
     assert open_fn.index("if (!dimensions.width || !dimensions.length)") < open_fn.index(
         "new frappe.ui.Dialog"
     )
-    assert "أدخل عرض الدرفة وطولها أولًا، ثم افتح إعداد الزاوية." in open_fn
+    assert "Enter the piece width and length before editing the corner." in open_fn
     assert 'const L_TYPE = "L-Shaped Corner"' in editor
     assert "cutStyle" in editor
     assert assets.index("door_cutting_order_clipped_corner_ux.js") < assets.index(

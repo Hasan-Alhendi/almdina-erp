@@ -40,9 +40,9 @@ def test_primary_tab_bar_is_fixed_on_scroll_and_labels_are_arabic():
     assert ".dco-sticky-tabs" in css
     assert ".dco-sticky-tabs.dco-tabs-is-fixed" in css
     assert "position: fixed !important" in css
-    assert 'order_tab: "الطلب"' in src
-    assert 'results_tab: "خطة القص"' in src
-    assert 'cost_tab: "تكلفة الطلب"' in src
+    assert 'order_tab: "Order"' in src
+    assert 'results_tab: "Cutting Plan"' in src
+    assert 'cost_tab: "Order Cost"' in src
     assert 'frm.set_df_property(fieldname, "label", label)' in src
     assert "width: calc(100% - (2 * var(--dco-tab-content-gutter, 20px)))" in css
     assert "max-width: calc(var(--dco-tab-shell-max, 1440px) - (2 * var(--dco-tab-content-gutter, 20px)))" in css
@@ -126,7 +126,9 @@ def test_edge_color_is_order_owned_and_customer_documents_show_it_once():
 
     presenter = _source(PRINT_PRESENTER)
     cost = _source(COST_PRESENTER)
-    assert '<div><b>لون القشاط</b>${esc(frm.doc.edge_color || "غير محدد")}</div>' in presenter
+    assert '${esc(__("Edge color"))}' in presenter
+    assert 'frm.doc.edge_color || __("Not specified")' in presenter
+    assert "<b>لون القشاط</b>" not in presenter
     assert '<span class="label">إجمالي القشاط</span>' not in cost
     assert '<div><b>إجمالي القشاط</b>' not in cost
 
@@ -162,7 +164,7 @@ def test_invoice_has_secure_customer_action_and_shared_a4_print_layout():
     assert "measurementDocumentBodyWithPayload(frm, quotePayload, customerPhone)" in presenter
     assert '${invoice ? quoteDetailsHtml(quotePayload || {}) : ""}' in presenter
     assert "renderer.notesCell(row, notes" in presenter
-    assert '<th>ملاحظات</th>' in presenter
+    assert '${esc(__("Notes"))}' in presenter
 
 
 def test_invoice_printing_uses_isolated_iframe_not_popup_window():

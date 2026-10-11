@@ -23,28 +23,16 @@ def _read_js(name: str) -> str:
     return (PUBLIC_JS / name).read_text(encoding="utf-8")
 
 
-def test_arabic_runtime_localization_is_batched_without_losing_dynamic_support():
-    js = _read_js("arabic_operator_ui.js")
-
-    # Keep the Arabic fallback layer available for dynamic/legacy labels, but do
-    # not attach it to documentElement where every Desk mutation wakes it up.
-    assert "observer.observe(document.documentElement" not in js
-    assert "observer.observe(document.body, { childList: true, subtree: true })" in js
-    assert "requestAnimationFrame" in js
-    assert "pendingRoots" in js
-    assert "mutation.addedNodes.forEach(queueNode)" in js
-
-    # Regression guard: important Arabic operator fallbacks remain present.
-    required_labels = [
-        "إدارة المعمل",
-        "طلبات قص الدرف",
-        "التشغيل اليومي للمعمل",
-        "ترتيب المستطيلات - أفضل ضلع قصير",
-        "راوتر CNC",
-        "منشار ألواح",
-    ]
-    for label in required_labels:
-        assert label in js, label
+def test_dom_wide_text_translation_does_not_return():
+    assert not (PUBLIC_JS / "arabic_operator_ui.js").exists()
+    assets = (APP_ROOT / "frontend_assets.py").read_text(encoding="utf-8")
+    assert "arabic_operator_ui.js" not in assets
+    offenders = []
+    for path in PUBLIC_JS.rglob("*.js"):
+        text = path.read_text(encoding="utf-8")
+        if "MutationObserver" in text and "node.nodeValue" in text:
+            offenders.append(str(path.relative_to(APP_ROOT)))
+    assert offenders == []
 
 
 def test_shared_shell_scans_are_batched_and_stop_after_navigation_settles():
