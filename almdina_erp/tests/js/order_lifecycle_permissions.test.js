@@ -225,6 +225,15 @@ function makePlanEditForm(overrides = {}) {
     assert.equal(loaded.api.orderCanEdit(editForm), false);
     editForm.__almdina_edit_session = { active: true };
     assert.equal(loaded.api.orderCanEdit(editForm), true);
+    editForm.doc.production_path = "ROUTE-ONLY-BEFORE-DISPATCH";
+    assert.equal(loaded.api.orderCanEdit(editForm), true,
+        "a planned route without an active stage remains an editable Draft");
+    for (const stageId of ["DYNAMIC-CUTTING-STAGE-7", "DYNAMIC-FINISHING-STAGE-19"]) {
+        editForm.doc.current_production_stage = stageId;
+        assert.equal(loaded.api.orderCanEdit(editForm), false,
+            `an active dynamic production stage ${stageId} blocks the EDIT offer`);
+    }
+    editForm.doc.current_production_stage = null;
 
     const frm = makeForm("DCO-TEST-001", "At Drawing");
     await loaded.api.loadContext(frm);

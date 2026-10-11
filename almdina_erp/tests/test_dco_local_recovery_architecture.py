@@ -47,6 +47,10 @@ class TestDcoLocalRecoveryArchitecture(unittest.TestCase):
             "public/js/door_cutting_order/recovery/application/"
             "door_cutting_order_new_recovery.js"
         )
+        edit_recovery = (
+            "public/js/door_cutting_order/recovery/application/"
+            "door_cutting_order_edit_recovery.js"
+        )
         revision_owner = "public/js/door_cutting_order/core/door_cutting_order_revision_ux.js"
         integration = (
             "public/js/door_cutting_order/recovery/presentation/"
@@ -61,6 +65,7 @@ class TestDcoLocalRecoveryArchitecture(unittest.TestCase):
             recovery_api,
             checkpoint_session,
             new_recovery,
+            edit_recovery,
             integration,
         ):
             self.assertEqual(manifest.count(asset), 1)
@@ -73,6 +78,8 @@ class TestDcoLocalRecoveryArchitecture(unittest.TestCase):
         self.assertLess(manifest.index(asset_repository), manifest.index(recovery_api))
         self.assertLess(manifest.index(recovery_api), manifest.index(checkpoint_session))
         self.assertLess(manifest.index(checkpoint_session), manifest.index(new_recovery))
+        self.assertLess(manifest.index(new_recovery), manifest.index(edit_recovery))
+        self.assertLess(manifest.index(edit_recovery), manifest.index(revision_owner))
         self.assertLess(manifest.index(revision_owner), manifest.index(integration))
 
     def test_browser_storage_is_bounded_to_infrastructure(self) -> None:

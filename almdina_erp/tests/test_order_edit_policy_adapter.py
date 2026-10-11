@@ -89,6 +89,155 @@ class TestOrderEditPolicyAdapter(unittest.TestCase):
         self.assertFalse(allowed_policy.user_can_edit_order("At CNC", "editor@example.com"))
         self.assertFalse(allowed_policy.user_can_edit_order("Draft", revision_state="Superseded"))
 
+    def test_active_dynamic_stage_blocks_edit_offer_and_ordinary_save_with_stale_draft_status(self) -> None:
+        harness = AdapterHarness(can_recalculate=False)
+        policy = harness.load()
+        for stage_id in ("DYNAMIC-STAGE-ALPHA-9", "DYNAMIC-STAGE-OMEGA-27"):
+            with self.subTest(stage_id=stage_id):
+                self.assertFalse(policy.user_can_edit_order(
+                    "Draft",
+                    current_production_stage=stage_id,
+                ))
+                with self.assertRaises(RuntimeError):
+                    policy.assert_order_editable({
+                        "name": "DCO-TEST-1",
+                        "status": "Draft",
+                        "current_production_stage": stage_id,
+                    })
+                with self.assertRaises(RuntimeError):
+                    policy.enforce_order_immutability_on_save(
+                        types.SimpleNamespace(
+                            status="Draft",
+                            current_production_stage=stage_id,
+                            revision_state="Current",
+                            flags={},
+                            is_new=lambda: False,
+                        ),
+                        {
+                            "status": "Draft",
+                            "current_production_stage": stage_id,
+                            "revision_state": "Current",
+                        },
+                    )
+
+    def test_ordinary_save_requires_both_persisted_and_proposed_states_pre_dispatch(self) -> None:
+        policy = AdapterHarness().load()
+        old_draft = {
+            "name": "DCO-TEST-1",
+            "status": "Draft",
+            "current_production_stage": None,
+            "revision_state": "Current",
+        }
+
+        route_only = types.SimpleNamespace(
+            name="DCO-TEST-1",
+            status="Draft",
+            production_path="DYNAMIC-ROUTE-ALPHA",
+            current_production_stage=None,
+            revision_state="Current",
+            flags={},
+            is_new=lambda: False,
+        )
+        policy.enforce_order_immutability_on_save(route_only, old_draft)
+
+        dispatched_proposal = types.SimpleNamespace(
+            **{**route_only.__dict__, "current_production_stage": "DYNAMIC-STAGE-ALPHA-9"}
+        )
+        with self.assertRaises(RuntimeError):
+            policy.enforce_order_immutability_on_save(dispatched_proposal, old_draft)
+
+        dispatched_old = {
+            **old_draft,
+            "status": "In Production",
+            "current_production_stage": "DYNAMIC-STAGE-OMEGA-27",
+        }
+        cleared_without_override = types.SimpleNamespace(
+            **{**route_only.__dict__, "production_path": None}
+        )
+        with self.assertRaises(RuntimeError):
+            policy.enforce_order_immutability_on_save(cleared_without_override, dispatched_old)
+
+        superseded_old = {**old_draft, "revision_state": "Superseded"}
+        with self.assertRaises(RuntimeError):
+            policy.enforce_order_immutability_on_save(route_only, superseded_old)
+
+    def test_allow_approved_edit_is_limited_to_the_cleared_return_to_draft_shape(self) -> None:
+        policy = AdapterHarness().load()
+        dispatched_old = {
+            "name": "DCO-TEST-1",
+            "status": "In Production",
+            "production_path": "ROUTE-OLD",
+            "current_department": "CUTTING",
+            "current_assignee": "operator@example.test",
+            "department_status": "Active",
+            "current_production_stage": "DYNAMIC-STAGE-ALPHA-9",
+            "approved_plan": "PLAN-1",
+            "revision_state": "Current",
+        }
+        cleared_return = types.SimpleNamespace(
+            name="DCO-TEST-1",
+            status="Draft",
+            production_path=None,
+            current_department=None,
+            current_assignee=None,
+            department_status=None,
+            current_production_stage=None,
+            approved_plan=None,
+            revision_state="Current",
+            flags={"allow_approved_edit": True},
+            is_new=lambda: False,
+        )
+        policy.enforce_order_immutability_on_save(cleared_return, dispatched_old)
+
+        active_stage_return = types.SimpleNamespace(
+            **{**cleared_return.__dict__, "current_production_stage": "DYNAMIC-STAGE-ALPHA-9"}
+        )
+        with self.assertRaises(RuntimeError):
+            policy.enforce_order_immutability_on_save(active_stage_return, dispatched_old)
+
+        uncleared_route = types.SimpleNamespace(
+            **{**cleared_return.__dict__, "production_path": "ROUTE-RETAINED"}
+        )
+        with self.assertRaises(RuntimeError):
+            policy.enforce_order_immutability_on_save(uncleared_route, dispatched_old)
+
+    def test_capability_guarded_plan_recalculation_exception_remains_scoped(self) -> None:
+        allowed_harness = AdapterHarness(can_recalculate=True)
+        allowed_policy = allowed_harness.load()
+        recalc_only = types.SimpleNamespace(
+            name="DCO-PLAN-ONLY",
+            status="Draft",
+            current_production_stage="DYNAMIC-STAGE-ALPHA-9",
+            production_path="Route A",
+            approved_plan="PLAN-1",
+            revision_state="Current",
+            flags={"force_cutting_plan_recalculation": True},
+            is_new=lambda: False,
+        )
+        allowed_policy.enforce_order_immutability_on_save(
+            recalc_only,
+            {
+                "status": "Draft",
+                "current_production_stage": "DYNAMIC-STAGE-ALPHA-9",
+                "revision_state": "Current",
+            },
+        )
+
+        denied_harness = AdapterHarness(can_recalculate=False)
+        denied_policy = denied_harness.load()
+        recalc_without_capability = types.SimpleNamespace(
+            **{**recalc_only.__dict__, "flags": {"force_cutting_plan_recalculation": True}}
+        )
+        with self.assertRaises(RuntimeError):
+            denied_policy.enforce_order_immutability_on_save(
+                recalc_without_capability,
+                {
+                    "status": "Draft",
+                    "current_production_stage": "DYNAMIC-STAGE-ALPHA-9",
+                    "revision_state": "Current",
+                },
+            )
+
     def test_drawing_recalculation_permission_still_short_circuits_before_stage_lookup(self) -> None:
         denied = AdapterHarness(can_recalculate=False)
         denied_policy = denied.load()

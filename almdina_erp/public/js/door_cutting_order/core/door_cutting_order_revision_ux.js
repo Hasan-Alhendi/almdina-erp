@@ -436,6 +436,7 @@
         if (!frm || !frm.doc || frm.is_new()) return false;
         if (Number(frm.doc.docstatus || 0) !== 0) return false;
         if (revisionState(frm) === "Superseded") return false;
+        if (String(frm.doc.current_production_stage || "").trim()) return false;
         if (!can(frm, "edit_order")) return false;
         // In-place editing is Draft-only; other states need return-to-draft or a revision.
         return (frm.doc.status || "Draft") === "Draft";

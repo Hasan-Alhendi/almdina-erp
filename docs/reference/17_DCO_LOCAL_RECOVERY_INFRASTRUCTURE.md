@@ -11,8 +11,9 @@
 ALMADINA-128 adds browser-local checkpoint infrastructure for Door Cutting Order.
 Its ALMADINA-129 consumer now adds bounded NEW discovery/hydration and first-insert
 reconciliation as specified by
-[18 — NEW DCO Recovery](18_DCO_NEW_RECOVERY.md). It still does not add EDIT
-recovery, remote recovery, or cross-device synchronization. A local
+[18 — NEW DCO Recovery](18_DCO_NEW_RECOVERY.md). ALMADINA-131 adds bounded EDIT
+discovery and DCO-only restore/conflict handling on this checkpoint infrastructure.
+The subsystem does not add remote recovery or cross-device synchronization. A local
 checkpoint is temporary recovery state; it is not an official DCO Save and is not
 a new business source of truth.
 
@@ -237,7 +238,7 @@ checkpointing its stable `asset_id` reference.
 
 The following remain explicitly deferred to later stories:
 
-- EDIT restore/conflict UX and external edit resolution;
+- external edit resolution and field-specific partial restore;
 - activation of local assets in Special Shape recovery;
 - invoice, canonical Cutting Plan, lost calculation, and remote recovery behavior;
 - BroadcastChannel/soft-lease multi-tab hints.

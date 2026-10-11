@@ -102,6 +102,7 @@ def _authorize_profile_override(order: Any) -> str:
     if can_edit_order and user_can_edit_order(
         getattr(order, "status", None),
         revision_state=getattr(order, "revision_state", None),
+        current_production_stage=getattr(order, "current_production_stage", None),
     ):
         return "order"
 

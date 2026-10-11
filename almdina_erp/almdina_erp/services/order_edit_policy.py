@@ -8,8 +8,8 @@ from frappe import _
 from almdina_erp.almdina_erp.domain.orders.editability import (
     DRAFT_LIKE_STATUSES,
     LOCKED_ORDER_STATUSES,
-    can_edit_order,
     can_recalculate_drawing_system_plan,
+    is_pre_dispatch_draft,
     is_draft_like as domain_is_draft_like,
     is_drawing_stage,
     is_locked_status as domain_is_locked_status,
@@ -88,6 +88,7 @@ def user_can_edit_order(
     user: str | None = None,
     *,
     revision_state: str | None = None,
+    current_production_stage: str | None = None,
 ) -> bool:
     """In-place edits are allowed only while the order is still a Draft.
 
@@ -98,12 +99,19 @@ def user_can_edit_order(
     del user
     if str(revision_state or "Current") == "Superseded":
         return False
-    return can_edit_order(status)
+    return is_pre_dispatch_draft(
+        status=status,
+        current_production_stage=current_production_stage,
+    )
 
 
 def assert_order_editable(order: Any) -> None:
     status = order_status(order)
-    if user_can_edit_order(status, revision_state=_revision_state(order)):
+    if user_can_edit_order(
+        status,
+        revision_state=_revision_state(order),
+        current_production_stage=_value(order, "current_production_stage"),
+    ):
         return
     frappe.throw(
         _(
@@ -112,16 +120,61 @@ def assert_order_editable(order: Any) -> None:
     )
 
 
+def _is_return_to_draft_save(order: Any, old: Any) -> bool:
+    """Accept only the cleared shape produced by the controlled reset action."""
+
+    if not order.flags.get("allow_approved_edit"):
+        return False
+    cleared_fields = (
+        "production_path",
+        "current_department",
+        "current_assignee",
+        "department_status",
+        "current_production_stage",
+        "approved_plan",
+    )
+    return bool(
+        order_status(order) == "Draft"
+        and all(not _value(order, fieldname) for fieldname in cleared_fields)
+        and user_can_edit_order(
+            order_status(order),
+            revision_state=_revision_state(order),
+            current_production_stage=_value(order, "current_production_stage"),
+        )
+        and not user_can_edit_order(
+            order_status(old),
+            revision_state=_revision_state(old),
+            current_production_stage=_value(old, "current_production_stage"),
+        )
+    )
+
+
 def enforce_order_immutability_on_save(order: Any, old: Any) -> None:
-    if getattr(order, "is_new", lambda: False)() or order.flags.get("allow_approved_edit"):
+    if getattr(order, "is_new", lambda: False)():
         return
     if not old:
         return
 
-    if user_can_edit_order(order_status(old), revision_state=_revision_state(old)):
+    old_is_editable = user_can_edit_order(
+        order_status(old),
+        revision_state=_revision_state(old),
+        current_production_stage=_value(old, "current_production_stage"),
+    )
+    proposed_is_editable = user_can_edit_order(
+        order_status(order),
+        revision_state=_revision_state(order),
+        current_production_stage=_value(order, "current_production_stage"),
+    )
+
+    if _is_return_to_draft_save(order, old):
+        return
+
+    if old_is_editable and proposed_is_editable:
         return
 
     if order.flags.get("force_cutting_plan_recalculation") and user_can_recalculate_drawing_system_plan(order):
         return
 
+    if not proposed_is_editable:
+        assert_order_editable(order)
     assert_order_editable(old)

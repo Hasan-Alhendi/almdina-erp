@@ -240,6 +240,68 @@ jobs:
           fi
           exit "$test_status"
 
+      - name: Certify DCO EDIT recovery in real Frappe Desk
+        if: always() && !cancelled()
+        env:
+          DCO_DESK_FIXTURE_FILE: ${{ runner.temp }}/dco-desk-fixtures.json
+          FRAPPE_DESK_URL: http://test.localhost:8000
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/frappe-bench"
+          desk_log="$RUNNER_TEMP/dco-desk-certification.log"
+          phase="app asset build"
+          desk_fail() {
+            status="$1"
+            trap - ERR
+            detail="$(tail -n 16 "$desk_log" 2>/dev/null | tr '\n' ' ')"
+            detail="${detail//'%'/'%25'}"
+            detail="${detail//$'\r'/'%0D'}"
+            detail="${detail//$'\n'/'%0A'}"
+            printf '::error title=Real Desk certification failed::phase=%s exit=%s detail=%s\n' "$phase" "$status" "$detail"
+            {
+              echo '### Real Frappe Desk certification failure'
+              echo "Failed phase: `$phase` (exit $status)"
+              for log in "$desk_log" "$RUNNER_TEMP/desk-bench.log"; do
+                if [[ -f "$log" ]]; then
+                  echo "#### $(basename "$log")"
+                  echo '```text'
+                  tail -n 100 "$log"
+                  echo '```'
+                fi
+              done
+            } >> "$GITHUB_STEP_SUMMARY"
+            for log in "$desk_log" "$RUNNER_TEMP/desk-bench.log"; do
+              if [[ -f "$log" ]]; then tail -n 100 "$log"; fi
+            done
+            exit "$status"
+          }
+          trap 'desk_fail $?' ERR
+          bench build --app almdina_erp 2>&1 | tee -a "$desk_log"
+          phase="isolated ERPNext and DCO fixtures"
+          bench --site test.localhost execute 'frappe.get_attr("almdina_erp.tests.dco_recovery_desk_fixture.create_desk_edit_recovery_fixtures")()' 2>&1 | tee -a "$desk_log"
+          phase="Playwright install"
+          ./env/bin/pip install playwright 2>&1 | tee -a "$desk_log"
+          phase="Chromium install"
+          ./env/bin/python -m playwright install --with-deps chromium 2>&1 | tee -a "$desk_log"
+          phase="Bench start"
+          bench start > "$RUNNER_TEMP/desk-bench.log" 2>&1 &
+          bench_pid=$!
+          trap 'kill "$bench_pid" 2>/dev/null || true' EXIT
+          phase="Desk server readiness"
+          ready=0
+          for attempt in $(seq 1 90); do
+            if curl --fail --silent "$FRAPPE_DESK_URL/api/method/ping" >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          if [[ "$ready" != 1 ]]; then
+            desk_fail 1
+          fi
+          phase="Desk EDIT recovery browser certification"
+          ./env/bin/python -u apps/almdina_erp/almdina_erp/ci/dco_frappe_desk_recovery.py 2>&1 | tee -a "$desk_log"
+
       - name: Collect integration diagnostics
         if: failure()
         run: |
@@ -251,7 +313,9 @@ jobs:
             install-almdina.log \
             migrate-first.log \
             migrate-second.log \
-            tests.log; do
+            tests.log \
+            dco-desk-certification.log \
+            desk-bench.log; do
             cp "$RUNNER_TEMP/$log" "$RUNNER_TEMP/integration-diagnostics/" 2>/dev/null || true
           done
           cp "$RUNNER_TEMP/frappe-bench/sites/common_site_config.json" "$RUNNER_TEMP/integration-diagnostics/" 2>/dev/null || true

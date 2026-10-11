@@ -54,9 +54,11 @@ class TestOrderRevisionContract(unittest.TestCase):
         in_place = lifecycle.split("def return_order_to_draft", 1)[1]
         self.assertIn("_IN_PLACE_DRAFT_FIELDS", lifecycle)
         self.assertIn('"status": "Draft"', lifecycle)
+        self.assertIn('"current_production_stage": None', lifecycle)
         self.assertIn('"in_place": True', in_place)
         self.assertIn("_cancel_stages", in_place)
         self.assertIn("OrderLifecycleAction.RETURN_TO_DRAFT", in_place)
+        self.assertIn("order.flags.allow_approved_edit = True", in_place)
         self.assertNotIn("frappe.copy_doc", in_place)
 
     def test_revision_service_resets_new_copy_without_mutating_source_plan(self) -> None:

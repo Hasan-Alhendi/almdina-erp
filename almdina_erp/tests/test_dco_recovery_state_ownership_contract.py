@@ -73,21 +73,21 @@ class TestDcoRecoveryStateOwnershipContract(unittest.TestCase):
     def test_new_recovery_and_edit_recovery_have_separate_story_boundaries(self) -> None:
         contract = source(RECOVERY_CONTRACT)
         new_lifecycle = contract.split("## 4. NEW lifecycle contract", 1)[1].split(
-            "## 5. EDIT lifecycle contract: session ownership and deferred recovery", 1
+            "## 5. EDIT lifecycle contract: session ownership and bounded recovery", 1
         )[0]
         edit_contract = contract.split(
-            "## 5. EDIT lifecycle contract: session ownership and deferred recovery", 1
+            "## 5. EDIT lifecycle contract: session ownership and bounded recovery", 1
         )[1].split("## 6. Version-token semantics", 1)[0]
         new_recovery = source(REFERENCE / "18_DCO_NEW_RECOVERY.md")
 
         self.assertIn("NEW recovery behavior belongs to `ALMADINA-129`", contract)
-        self.assertIn("EDIT recovery and restore behavior are deferred to `ALMADINA-131`", contract)
+        self.assertIn("ALMADINA-131 consumes this contract", contract)
         self.assertIn("The first Save uses the existing DCO insert path", new_lifecycle)
         self.assertIn("does not autosave", new_lifecycle)
         self.assertIn("ALMADINA-131", edit_contract)
-        self.assertIn("does not implement EDIT checkpointing", edit_contract)
+        self.assertIn("ALMADINA-127 did not implement EDIT checkpointing", edit_contract)
         self.assertIn("expected_server_modified", edit_contract)
-        self.assertIn("EDIT recovery remains deferred", new_recovery)
+        self.assertIn("EDIT recovery is outside ALMADINA-129", new_recovery)
 
     def test_field_ownership_manifest_matches_projection_allowlists(self) -> None:
         contract = source(RECOVERY_CONTRACT)
