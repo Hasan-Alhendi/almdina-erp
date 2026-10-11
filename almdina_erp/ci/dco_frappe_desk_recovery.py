@@ -91,16 +91,22 @@ def attach_browser_diagnostics(page: Page) -> None:
 
 
 def evaluate(page: Page, step: str, expression: str, arg=None):
+    _trace_event("step_started", step=step)
     try:
-        return page.evaluate(expression) if arg is None else page.evaluate(expression, arg)
+        result = page.evaluate(expression) if arg is None else page.evaluate(expression, arg)
+        _trace_event("step_completed", step=step)
+        return result
     except Exception as exc:
+        _trace_event("step_failed", step=step, error=_redact_text(str(exc)))
         raise RuntimeError(f"Desk browser step '{step}' failed: {exc}") from exc
 
 
 def wait_for_function(page: Page, step: str, expression: str, *, arg=None, timeout: int = 30_000):
+    _trace_event("wait_started", step=step)
     try:
         page.wait_for_function(expression, arg=arg, timeout=timeout)
     except Exception as exc:
+        _trace_event("wait_failed", step=step, error=_redact_text(str(exc)))
         try:
             state = page.evaluate(
                 """() => {
@@ -133,10 +139,12 @@ def wait_for_function(page: Page, step: str, expression: str, *, arg=None, timeo
         except Exception as diagnostic_error:
             state = f"unavailable: {diagnostic_error}"
         raise RuntimeError(f"Desk browser wait '{step}' failed: {exc}; desk_state={state}") from exc
+    _trace_event("wait_completed", step=step)
 
 
 def open_dco(page: Page, name: str) -> None:
     target_url = f"{DESK_URL}/app/door-cutting-order/{name}"
+    _trace_event("open_dco_started", url=_safe_url(target_url))
     response = page.goto(target_url, wait_until="domcontentloaded")
     # Desk may satisfy this navigation through its SPA router and history API;
     # Playwright then returns None because there was no top-level HTTP response.
@@ -160,6 +168,7 @@ def open_dco(page: Page, name: str) -> None:
         raise RuntimeError(
             f"Loading DCO {name} in Desk timed out: {exc}; desk_state={state}"
         ) from exc
+    _trace_event("open_dco_completed", url=_safe_url(page.url))
 
 
 def start_edit_and_set_note(page: Page, name: str, value: str, checkpoint: bool) -> dict:
@@ -202,6 +211,7 @@ def start_edit_and_set_note(page: Page, name: str, value: str, checkpoint: bool)
 
 
 def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
+    _trace_event("certification_started")
     response = page.goto(f"{DESK_URL}/login", wait_until="domcontentloaded")
     if response is None or response.status >= 400:
         status = response.status if response is not None else None
@@ -223,6 +233,7 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
     # A route selected on a Draft is not dispatch. Exercise the real edit-session
     # Cancel and Save adapters, and the real IndexedDB restore dialog.
     name = FIXTURES["restore"]
+    _trace_event("scenario_started", scenario="cancel_and_restore")
     baseline = page.request.get(
         f"{DESK_URL}/api/method/frappe.client.get?doctype=Door%20Cutting%20Order&name={name}"
     ).json()["message"]["order_notes"]
@@ -348,6 +359,7 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
     page.locator('[data-edit-recovery-action="continue"]').click()
     expect(page.locator("body")).to_contain_text("تغير الطلب على الخادم")
     assert evaluate(page, "verify conflict preserved DCO notes", "() => window.cur_frm.doc.order_notes") == dispatch_baseline
+    _trace_event("certification_completed")
 
 
 if __name__ == "__main__":
