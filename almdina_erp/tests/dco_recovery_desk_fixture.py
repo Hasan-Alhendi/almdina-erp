@@ -12,6 +12,9 @@ from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.permission_matrix_repository import (
     FrappePermissionMatrixRepository,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.shop_floor_authorization import (
+    assert_enabled_user_has_role,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.workforce_membership import (
     MEMBERSHIP_FIELD,
 )
@@ -130,6 +133,7 @@ def _worker(suffix: str, role: str) -> str:
         }
     )
     user.insert(ignore_permissions=True)
+    assert_enabled_user_has_role(str(user.name), role)
     return str(user.name)
 
 

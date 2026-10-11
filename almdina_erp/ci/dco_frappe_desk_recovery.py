@@ -519,14 +519,29 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
         page, dispatch_name, "Must remain local after dispatch", checkpoint=True
     )
     page.wait_for_timeout(1100)
-    evaluate(page, "dispatch DCO",
+    dispatch_result = evaluate(page, "dispatch DCO",
         """async ({name, route, worker}) => {
-            await frappe.xcall('almdina_erp.almdina_erp.services.order_dispatch_service.dispatch_order', {
-                order_name: name, path: route, assignee: worker
-            });
+            try {
+                const result = await frappe.xcall(
+                    'almdina_erp.almdina_erp.services.order_dispatch_service.dispatch_order',
+                    {order_name: name, path: route, assignee: worker}
+                );
+                return {ok: true, result};
+            } catch (error) {
+                const response = window.frappe && frappe.last_response || {};
+                return {
+                    ok: false,
+                    error: error == null ? String(error) : String(error),
+                    excType: response.exc_type || '',
+                    errorMessage: response._error_message || '',
+                    serverMessages: String(response._server_messages || '').slice(0, 800),
+                };
+            }
         }""",
         {"name": dispatch_name, "route": FIXTURES["route"], "worker": FIXTURES["worker"]},
     )
+    if not dispatch_result.get("ok"):
+        raise RuntimeError(f"Dispatch service rejected the test order: {dispatch_result}")
     dispatched_doc = evaluate(page, "read dispatched DCO",
         """async name => frappe.xcall('frappe.client.get', {
             doctype: 'Door Cutting Order', name
