@@ -6,6 +6,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import frappe
+from frappe.desk.page.setup_wizard.setup_wizard import enable_setup_wizard_complete
 
 from almdina_erp.almdina_erp.infrastructure.frappe.production_routing_management_repository import (
     list_operational_roles,
@@ -143,6 +144,8 @@ def create_desk_edit_recovery_fixtures() -> dict[str, str]:
     """Create isolated real Frappe records used only by Desk browser CI."""
 
     frappe.set_user("Administrator")
+    enable_setup_wizard_complete("frappe")
+    enable_setup_wizard_complete("erpnext")
     suffix = uuid4().hex[:10]
     customer = _customer(suffix)
     edge_type = _edge_type(suffix)
