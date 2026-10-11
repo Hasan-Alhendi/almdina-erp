@@ -59,7 +59,7 @@ def test_order_search_includes_customer_and_explains_id_or_customer_search():
 def test_measurement_table_has_print_and_full_window_actions():
     source = text(MEASUREMENT_UX)
     assert 'class="btn btn-default btn-sm dco-print-measurements"' in source
-    assert "فتح جدول الإدخال في نافذة مستقلة" in source
+    assert 'translateCopy("Open the entry table in a separate window")' in source
     assert "function openEditableMeasurements(frm)" in source
     assert 'const EDITOR_CLASS = "dco-measurement-entry-window"' in source
     assert "window.AlmdinaOrderDocumentPrint" in source
@@ -96,7 +96,7 @@ def test_edge_color_is_kept_in_shared_print_header_without_duplicate_columns():
     assert "removeLegacyColorDuplicates" in edge_source
 
     assert "orderEdgeColor(frm)" in measurement_source
-    assert "لون القشاط:" in measurement_source
+    assert 'emphasizedValue("Edge color: {0}"' in measurement_source
     assert "function printDocumentHtml" not in measurement_source
     assert "dco-measurements-print-frame" not in measurement_source
 

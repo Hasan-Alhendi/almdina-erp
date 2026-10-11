@@ -125,6 +125,30 @@ class TestActiveUiHasNoLanguageTextBranches(unittest.TestCase):
                     leftovers.append(f"{relative}:{number}: {line.strip()}")
         self.assertEqual(leftovers, [])
 
+    def test_order_entry_visible_copy_uses_english_message_ids(self) -> None:
+        paths = (
+            PUBLIC_JS / "door_cutting_order" / "order_entry" / "door_cutting_order_order_tab_layout_ux.js",
+            PUBLIC_JS / "door_cutting_order" / "order_entry" / "door_cutting_order_cutting_machine_ux.js",
+            PUBLIC_JS / "door_cutting_order" / "order_entry" / "door_cutting_order_whatsapp_delivery_ux.js",
+            PUBLIC_JS / "door_cutting_order" / "order_entry" / "measurements" / "door_cutting_order_measurement_actions_ux.js",
+            PUBLIC_JS / "door_cutting_order" / "order_entry" / "measurements" / "door_cutting_order_measurement_toolbar_ux.js",
+            PUBLIC_JS / "door_cutting_order" / "order_entry" / "edge_banding" / "door_cutting_order_edge_color_ux.js",
+            PUBLIC_JS / "door_cutting_order" / "order_entry" / "edge_banding" / "door_cutting_order_multi_edge_ux.js",
+            PUBLIC_JS / "door_cutting_order" / "order_entry" / "edge_banding" / "door_cutting_order_edge_profile_controls_ux.js",
+            PUBLIC_JS / "door_cutting_order" / "order_entry" / "edge_banding" / "door_cutting_order_edge_profile_double_click_guard.js",
+        )
+        allowed = ("مشرحة", "لون القشاط")
+        leftovers = []
+        for path in paths:
+            relative = path.relative_to(ROOT)
+            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+                visible = line
+                for phrase in allowed:
+                    visible = visible.replace(phrase, "")
+                if ARABIC_TEXT.search(visible):
+                    leftovers.append(f"{relative}:{number}: {line.strip()}")
+        self.assertEqual(leftovers, [])
+
 
 if __name__ == "__main__":
     unittest.main()

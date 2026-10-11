@@ -16,11 +16,11 @@
             .dco-measurement-table-actions .dco-toolbar-icon-button{width:32px!important;min-width:32px!important;height:32px!important;min-height:32px!important;padding:0!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;border:1px solid var(--border-color,#d8dee5)!important;border-radius:8px!important;background:var(--card-bg,#fff)!important;color:var(--text-color,#36414c)!important}
             .dco-measurement-table-actions .dco-toolbar-icon-button:hover{border-color:var(--alm-primary,#172033)!important;background:color-mix(in srgb, var(--alm-primary, #172033) 6%, transparent)!important;color:var(--alm-primary,#172033)!important}
             .dco-measurement-table-actions .dco-toolbar-icon-button svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
-            .dco-measurement-help-popover{position:absolute;z-index:35;top:calc(100% + 7px);left:8px;width:min(360px,calc(100vw - 32px));padding:10px 12px;border:1px solid var(--border-color,#d9e0e6);border-radius:10px;background:var(--card-bg,#fff);box-shadow:0 12px 30px rgba(15,23,42,.16);direction:rtl;color:var(--text-color,#36414c);font-size:11px;line-height:1.75}
+            .dco-measurement-help-popover{position:absolute;z-index:35;top:calc(100% + 7px);inset-inline-start:8px;width:min(360px,calc(100vw - 32px));padding:10px 12px;border:1px solid var(--border-color,#d9e0e6);border-radius:10px;background:var(--card-bg,#fff);box-shadow:0 12px 30px rgba(15,23,42,.16);color:var(--text-color,#36414c);font-size:11px;line-height:1.75}
             .dco-measurement-help-popover[hidden]{display:none!important}
             .dco-measurement-help-popover strong{display:block;margin-bottom:4px;font-size:12px}
             .dco-measurement-help-popover ul{margin:0;padding-inline-start:18px}
-            @media(max-width:720px){.dco-measurement-help-popover{left:6px;right:6px;width:auto}}
+            @media(max-width:720px){.dco-measurement-help-popover{inset-inline:6px;width:auto}}
         `;
         document.head.appendChild(style);
     }
@@ -47,6 +47,9 @@
         popover = document.createElement("div");
         popover.className = "dco-measurement-help-popover";
         popover.hidden = true;
+        const locale = window.AlmdinaLocale;
+        const direction = locale && typeof locale.direction === "function" ? locale.direction() : "";
+        if (direction === "ltr" || direction === "rtl") popover.setAttribute("dir", direction);
         popover.innerHTML = `<strong>${__("Measurement table help")}</strong><ul><li>${__("Each edge uses the default banding unless overridden.")}</li><li>${__("Use the edge control in the row to override an edge.")}</li><li>${__("Final size accounts for the band thickness on each edge.")}</li></ul>`;
         toolbar.appendChild(popover);
         return popover;

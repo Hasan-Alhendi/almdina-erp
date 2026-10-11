@@ -1302,3 +1302,47 @@ Designer notes must not exceed {0} characters.,ملاحظات المصمم يج�
 The door documentation source is not supported.,مصدر توثيق الدرفة غير مدعوم.
 The selected ready-made shape is not supported.,الشكل الجاهز المحدد غير مدعوم.
 Add a reference image or at least one explanatory element before saving.,أضف صورة مرجعية أو عنصرًا توضيحيًا واحدًا على الأقل قبل الحفظ.
+Customer and basic order information.,معلومات العميل والطلب الأساسية.
+Choose the board and the default edge banding for this order.,حدد اللوح والقشاط الافتراضي لهذا الطلب.
+Door measurements,قياسات الدرف
+Enter piece dimensions and quantities; this is the main work surface for the order.,أدخل أبعاد وكميات القطع؛ هذا هو سطح العمل الرئيسي للطلب.
+Add an order note…,أضف ملاحظة للطلب…
+Choose the cutting machine,اختر آلة القص
+Enter the edge color,أدخل لون القشاط
+{0} pieces,{0} قطعة
+Custom for this order,معدل لهذا الطلب
+Taken automatically from the edge type,مأخوذ تلقائيًا من نوع القشاط
+Select the cutting machine type,يجب اختيار نوع آلة القص
+Send the measurements file to the customer?,هل تريد إرسال ملف القياسات للزبون؟
+Send the measurement changes to the customer?,هل تريد إرسال تعديلات القياسات للزبون؟
+A WhatsApp message will not be sent because the session is disconnected.,لن يتم إرسال رسالة واتساب لأن الجلسة غير متصلة.
+"Save the order first, then send the measurements table.",احفظ الطلب أولاً ثم أرسل جدول القياسات.
+Send measurements via WhatsApp,إرسال القياسات عبر واتساب
+Send measurement changes via WhatsApp,إرسال تعديلات القياسات عبر واتساب
+Sending WhatsApp…,جاري إرسال واتساب...
+Could not reach the server.,تعذر الاتصال بالخادم.
+Could not identify the order for sending measurements.,تعذر تحديد الطلب لإرسال القياسات.
+The measurements table was sent to the customer via WhatsApp.,تم إرسال جدول القياسات إلى الزبون عبر واتساب.
+Could not send the measurements file.,تعذر إرسال ملف القياسات.
+WhatsApp send,إرسال واتساب
+Could not send WhatsApp,تعذر إرسال واتساب
+Something went wrong while sending the measurements table.,حدثت مشكلة أثناء إرسال جدول القياسات.
+WhatsApp,واتساب
+Edit order,تعديل
+Close and return,إغلاق والعودة
+Could not prepare the measurements print. Reload the page and try again.,تعذر تجهيز طباعة القياسات. أعد تحميل الصفحة ثم حاول مرة أخرى.
+Unsaved changes,توجد تعديلات غير محفوظة
+All changes are saved,جميع التعديلات محفوظة
+Could not open the entry table. Reload the order and try again.,تعذر فتح جدول الإدخال. أعد تحميل الطلب ثم حاول مرة أخرى.
+Door measurement entry table,جدول إدخال قياسات الدرف
+No customer,بدون عميل
+Door entry table,جدول إدخال الدرف
+{0} · {1},{0} · {1}
+Edge type: {0},نوع القشاط: {0}
+Edge color: {0},لون القشاط: {0}
+Open the entry table in a separate window,فتح جدول الإدخال في نافذة مستقلة
+Order edge color,لون القشاط العام للطلب
+{0} mm · $ {1}/m,{0} مم · $ {1}/م
+{0} mm,{0} مم
+{0} mm — $ {1}/m,{0} مم — $ {1}/م
+{0} — {1} — {2} — {3},{0} — {1} — {2} — {3}
