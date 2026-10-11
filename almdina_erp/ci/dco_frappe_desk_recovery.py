@@ -12,6 +12,13 @@ DESK_URL = os.environ["FRAPPE_DESK_URL"].rstrip("/")
 FIXTURES = json.loads(Path(os.environ["DCO_DESK_FIXTURE_FILE"]).read_text(encoding="utf-8"))
 
 
+def evaluate(page: Page, step: str, expression: str, arg=None):
+    try:
+        return page.evaluate(expression) if arg is None else page.evaluate(expression, arg)
+    except Exception as exc:
+        raise RuntimeError(f"Desk browser step '{step}' failed: {exc}") from exc
+
+
 def open_dco(page: Page, name: str) -> None:
     page.goto(f"{DESK_URL}/app/door-cutting-order/{name}", wait_until="domcontentloaded")
     try:
@@ -21,7 +28,7 @@ def open_dco(page: Page, name: str) -> None:
             timeout=60_000,
         )
     except Exception as exc:
-        state = page.evaluate(
+        state = evaluate(page, f"load DCO {name} diagnostics",
             """() => ({
                 url: window.location.href,
                 route: window.frappe && window.frappe.get_route && window.frappe.get_route(),
@@ -35,7 +42,7 @@ def open_dco(page: Page, name: str) -> None:
 
 
 def start_edit_and_set_note(page: Page, name: str, value: str, checkpoint: bool) -> dict:
-    return page.evaluate(
+    return evaluate(page, f"start EDIT for {name}",
         """async ({name, value, checkpoint}) => {
             const frm = window.cur_frm;
             const coordinator = window.AlmdinaDcoEditSessionCoordinator;
@@ -96,7 +103,7 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
     open_dco(page, name)
     cancelled = "Desk cancel must not persist"
     start_edit_and_set_note(page, name, cancelled, checkpoint=False)
-    page.evaluate("() => window.AlmdinaDcoEditSessionCoordinator.cancel(window.cur_frm, 'order')")
+    evaluate(page, "cancel EDIT session", "() => window.AlmdinaDcoEditSessionCoordinator.cancel(window.cur_frm, 'order')")
     page.wait_for_function(
         "baseline => window.cur_frm && window.cur_frm.doc.order_notes === baseline && "
         "window.AlmdinaDcoEditSessionCoordinator.snapshot(window.cur_frm).phase === 'idle'",
@@ -116,7 +123,7 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
         arg=recovered,
         timeout=30_000,
     )
-    page.evaluate("() => window.AlmdinaOrderRevisionUX.commitEditSession(window.cur_frm)")
+    evaluate(page, "commit recovered EDIT session", "() => window.AlmdinaOrderRevisionUX.commitEditSession(window.cur_frm)")
     page.wait_for_function(
         "value => window.cur_frm && window.cur_frm.doc.order_notes === value && "
         "!window.cur_frm.is_dirty() && "
@@ -130,12 +137,12 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
     # and official Return-to-Draft remain available through their own services.
     dispatch_name = FIXTURES["dispatch"]
     open_dco(page, dispatch_name)
-    dispatch_baseline = page.evaluate("() => window.cur_frm.doc.order_notes")
+    dispatch_baseline = evaluate(page, "read dispatch baseline", "() => window.cur_frm.doc.order_notes")
     dispatch_checkpoint = start_edit_and_set_note(
         page, dispatch_name, "Must remain local after dispatch", checkpoint=True
     )
     page.wait_for_timeout(1100)
-    page.evaluate(
+    evaluate(page, "dispatch DCO",
         """async ({name, route}) => {
             await frappe.xcall('almdina_erp.almdina_erp.services.order_dispatch_service.dispatch_order', {
                 order_name: name, path: route, assignee: 'Administrator'
@@ -143,7 +150,7 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
         }""",
         {"name": dispatch_name, "route": FIXTURES["route"]},
     )
-    dispatched_doc = page.evaluate(
+    dispatched_doc = evaluate(page, "read dispatched DCO",
         """async name => frappe.xcall('frappe.client.get', {
             doctype: 'Door Cutting Order', name
         })""",
@@ -154,7 +161,7 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
     page.wait_for_function("() => Boolean(window.cur_frm.doc.current_production_stage)")
     expect(page.locator("body")).to_contain_text("لا يمكن استعادتها بعد بدء مرحلة الإنتاج")
     expect(page.locator('[data-edit-recovery-action="continue"]')).to_have_count(0)
-    retained = page.evaluate(
+    retained = evaluate(page, "verify retained EDIT snapshot after dispatch",
         """async name => {
             const result = await window.AlmdinaDcoRecovery.LocalCheckpoint.repository()
                 .discover({
@@ -171,7 +178,7 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
     )
     assert retained, "Dispatch must retain the old local snapshot without offering restoration"
 
-    direct_save_rejected = page.evaluate(
+    direct_save_rejected = evaluate(page, "reject direct save after dispatch",
         """async () => {
             const doc = JSON.parse(JSON.stringify(window.cur_frm.doc));
             doc.order_notes = 'Forged direct save after dispatch';
@@ -190,7 +197,7 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
     assert persisted["order_notes"] == dispatch_baseline
 
     page.wait_for_timeout(1100)
-    page.evaluate(
+    evaluate(page, "return DCO to Draft",
         """async name => frappe.xcall(
             'almdina_erp.almdina_erp.services.order_lifecycle_service.return_order_to_draft',
             {order_name: name, reason: 'Desk recovery lifecycle certification'}
@@ -199,8 +206,8 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
     )
     open_dco(page, dispatch_name)
     page.wait_for_function("() => window.cur_frm.doc.status === 'Draft'")
-    assert page.evaluate("() => window.cur_frm.doc.order_notes") == dispatch_baseline
-    returned_doc = page.evaluate(
+    assert evaluate(page, "read returned DCO notes", "() => window.cur_frm.doc.order_notes") == dispatch_baseline
+    returned_doc = evaluate(page, "read returned DCO",
         """async name => frappe.xcall('frappe.client.get', {
             doctype: 'Door Cutting Order', name
         })""",
@@ -212,7 +219,7 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
     # value must produce a conflict without applying any recovered field.
     page.locator('[data-edit-recovery-action="continue"]').click()
     expect(page.locator("body")).to_contain_text("تغير الطلب على الخادم")
-    assert page.evaluate("() => window.cur_frm.doc.order_notes") == dispatch_baseline
+    assert evaluate(page, "verify conflict preserved DCO notes", "() => window.cur_frm.doc.order_notes") == dispatch_baseline
 
 
 if __name__ == "__main__":
