@@ -284,6 +284,8 @@ def create_desk_edit_recovery_fixtures() -> dict[str, str]:
         "route": route,
         "role": str(role.name),
         "worker": worker,
+        "customer": customer,
+        "edge_type": edge_type,
     }
     destination = os.environ.get("DCO_DESK_FIXTURE_FILE")
     if not destination:

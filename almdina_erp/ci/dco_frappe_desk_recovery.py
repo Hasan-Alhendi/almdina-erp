@@ -424,6 +424,145 @@ def certify_worker_identity_and_dynamic_permissions(admin_page: Page) -> None:
         worker_context.close()
 
 
+def certify_actual_frappe_desk_new_recovery(page: Page) -> None:
+    """Exercise real NEW DCO hydration and official Save in the pinned Desk."""
+    new_route = f"{DESK_URL}/app/door-cutting-order/new-door-cutting-order-1"
+    response = page.goto(new_route, wait_until="domcontentloaded")
+    if response is not None and response.status >= 400:
+        raise RuntimeError(f"NEW DCO navigation returned HTTP {response.status}.")
+    wait_for_function(
+        page,
+        "open a real NEW DCO form",
+        "() => window.cur_frm && window.cur_frm.doctype === 'Door Cutting Order' "
+        "&& window.cur_frm.is_new()",
+        timeout=30_000,
+    )
+
+    captured = evaluate(
+        page,
+        "capture a 200-piece NEW recovery draft in real Desk",
+        """async ({customer, edgeType}) => {
+            const frm = window.cur_frm;
+            const recovery = window.AlmdinaDcoRecovery.LocalCheckpoint;
+            if (!frm || !frm.is_new() || !recovery) throw new Error('NEW recovery form is unavailable');
+            await recovery.initializeNewForm(frm);
+            await frm.set_value({
+                customer,
+                order_notes: 'Local gate long notes '.repeat(400),
+                board_description: 'Local recovery MDF 18mm',
+                board_length_cm: 244,
+                board_width_cm: 122,
+                default_edge_type: edgeType,
+                edge_color: 'White',
+                order_cutting_machine: 'CNC',
+            });
+            const specialGeometry = JSON.stringify({
+                schema: 'special-shape-geometry',
+                version: 1,
+                elements: [{kind: 'polyline', points: Array.from({length: 64}, (_, i) => [i, i * 2])}],
+            });
+            for (let index = 0; index < 200; index += 1) {
+                const row = frm.add_child('pieces');
+                Object.assign(row, {
+                    piece_type: index === 199 ? 'Special' : 'Liner',
+                    width_cm: 60,
+                    length_cm: 200,
+                    qty: index === 0 ? 4 : 1,
+                    notes: index === 0 ? 'piece note '.repeat(180) : '',
+                    extra_liner: index === 0 ? 1 : 0,
+                    edge_long_left: index === 0 ? 1 : 0,
+                    special_shape_geometry_json: index === 199 ? specialGeometry : '',
+                });
+            }
+            frm.refresh_field('pieces');
+            if (!recovery.ensureState(frm) || !recovery.markDirty(frm, 'DCO')) {
+                throw new Error('NEW checkpoint session did not start');
+            }
+            const flushed = await recovery.flush(frm);
+            if (!flushed || !flushed.ok) throw new Error('NEW checkpoint was not acknowledged');
+            const state = recovery.snapshot(frm);
+            const record = await recovery.repository().read({
+                site: String(frappe.boot.sitename || frappe.boot.site_name || location.host),
+                user: String(frappe.session.user),
+                draft_id: state.draft_id,
+            });
+            if (!record || !record.ok || !record.value) throw new Error('NEW checkpoint is not readable');
+            return {
+                draftId: state.draft_id,
+                revision: record.value.recovery_revision,
+                pieceCount: record.value.payload.dco.pieces.length,
+                first: record.value.payload.dco.pieces[0],
+                last: record.value.payload.dco.pieces[199],
+            };
+        }""",
+        {"customer": FIXTURES["customer"], "edgeType": FIXTURES["edge_type"]},
+    )
+    if captured["pieceCount"] != 200 or captured["revision"] < 1:
+        raise RuntimeError(f"NEW checkpoint did not capture the complete fixture: {captured}")
+
+    page.reload(wait_until="domcontentloaded")
+    page.locator('[data-recovery-action="continue"]').wait_for(state="visible", timeout=30_000)
+    page.locator('[data-recovery-action="continue"]').click()
+    wait_for_function(
+        page,
+        "restore NEW recovery values and special geometry",
+        "draftId => window.cur_frm && window.cur_frm.is_new() "
+        "&& window.cur_frm.doc.recovery_creation_token === draftId "
+        "&& window.cur_frm.doc.pieces.length === 200 "
+        "&& window.cur_frm.doc.pieces[0].qty === 4 "
+        "&& window.cur_frm.doc.pieces[0].extra_liner === 1 "
+        "&& window.cur_frm.doc.pieces[0].edge_long_left === 1 "
+        "&& window.cur_frm.doc.pieces[199].special_shape_geometry_json.includes('special-shape-geometry')",
+        arg=captured["draftId"],
+        timeout=30_000,
+    )
+
+    saved = evaluate(
+        page,
+        "officially save the restored NEW DCO",
+        """async draftId => {
+            const frm = window.cur_frm;
+            if (!frm || !frm.is_new()) throw new Error('Recovered form is no longer NEW');
+            await frm.save();
+            const token = draftId;
+            const matches = await frappe.call({
+                method: 'frappe.client.get_list',
+                args: {
+                    doctype: 'Door Cutting Order',
+                    filters: {recovery_creation_token: token},
+                    fields: ['name'],
+                    limit_page_length: 5,
+                },
+            });
+            const records = matches && matches.message || [];
+            const local = await window.AlmdinaDcoRecovery.LocalCheckpoint.repository().read({
+                site: String(frappe.boot.sitename || frappe.boot.site_name || location.host),
+                user: String(frappe.session.user),
+                draft_id: token,
+            });
+            return {
+                name: frm.doc.name,
+                isNew: frm.is_new(),
+                token: frm.doc.recovery_creation_token,
+                countByToken: records.length,
+                localCode: local && local.error && local.error.code,
+                localFound: Boolean(local && local.value),
+                dirty: frm.is_dirty(),
+            };
+        }""",
+        captured["draftId"],
+    )
+    if (
+        saved["isNew"]
+        or not saved["name"]
+        or saved["countByToken"] != 1
+        or saved["localFound"]
+        or saved["dirty"]
+    ):
+        raise RuntimeError(f"NEW official Save did not reconcile one record and clear local recovery: {saved}")
+    _trace_event("phase_135_local_new_recovery_completed", draft_id=captured["draftId"])
+
+
 def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
     _trace_event("certification_started")
     login_to_desk(page, "Administrator", "admin")
@@ -727,6 +866,7 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
     expect(page.locator("body")).to_contain_text("تغير الطلب على الخادم")
     assert evaluate(page, "verify conflict preserved DCO notes", "() => window.cur_frm.doc.order_notes") == dispatch_baseline
     _trace_event("certification_completed")
+    certify_actual_frappe_desk_new_recovery(page)
 
 
 if __name__ == "__main__":
