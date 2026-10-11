@@ -99,6 +99,7 @@ jobs:
             almdina_erp.tests.test_workforce_authorization \
             almdina_erp.tests.test_dynamic_language_foundation \
             almdina_erp.tests.test_locale_text_branch_gate \
+            almdina_erp.tests.test_translation_catalog_gate \
             almdina_erp.tests.test_workforce_management_architecture \
             almdina_erp.tests.test_factory_workforce_frontend_architecture \
             almdina_erp.tests.test_factory_workforce_frontend_security \
