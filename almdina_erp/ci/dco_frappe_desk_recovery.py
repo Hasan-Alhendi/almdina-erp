@@ -84,11 +84,13 @@ def attach_browser_diagnostics(page: Page) -> None:
                     bootPresent: Boolean(boot),
                     setupComplete: boot && Boolean(boot.sysdefaults && boot.sysdefaults.setup_complete),
                     sysSetupComplete: boot && boot.sysdefaults && Boolean(boot.sysdefaults.setup_complete),
-                    user: window.frappe && frappe.session && frappe.session.user,
                     ajaxCount: window.frappe && frappe.request && frappe.request.ajax_count,
-                    route: window.frappe && frappe.get_route
-                        ? frappe.get_route().map(String).join("/")
-                        : "",
+                    route: (() => {
+                        const value = window.frappe && typeof frappe.get_route === "function"
+                            ? frappe.get_route()
+                            : null;
+                        return Array.isArray(value) ? value.map(String).join("/") : "";
+                    })(),
                     bodyText: (document.body && document.body.innerText || "").slice(0, 400),
                 };
             }""")
@@ -102,7 +104,6 @@ def attach_browser_diagnostics(page: Page) -> None:
                 boot_present=bool(state.get("bootPresent")),
                 setup_complete=bool(state.get("setupComplete")),
                 sys_setup_complete=bool(state.get("sysSetupComplete")),
-                user=_redact_text(str(state.get("user") or ""), 80),
                 ajax_count=state.get("ajaxCount") if isinstance(state.get("ajaxCount"), int) else None,
                 route=_redact_text(str(state.get("route", "")), 120),
                 body_text=_redact_text(str(state.get("bodyText", "")), 400),
@@ -291,7 +292,7 @@ def login_to_desk(page: Page, user: str, password: str) -> None:
         "window.location.pathname.startsWith('/desk')",
         timeout=30_000,
     )
-    _trace_event("login_established", user=_redact_text(user, 80))
+    _trace_event("login_established")
 
 
 def certify_worker_identity_and_dynamic_permissions(admin_page: Page) -> None:
@@ -606,6 +607,292 @@ def certify_new_dco_form_smoke(page: Page) -> None:
         timeout=30_000,
     )
     _trace_event("phase_135_new_form_smoke_completed")
+
+
+NEW_RECOVERY_PROBE_INIT_SCRIPT = r"""
+(() => {
+    "use strict";
+    const probe = window.__dcoRecoveryProbe = {events: [], sequence: 0};
+    const emit = (event, details = {}) => {
+        const frm = window.cur_frm;
+        const context = window.AlmdinaDocumentContext;
+        let token = null;
+        try {
+            if (frm && context && typeof context.capture === "function") token = context.capture(frm);
+        } catch (error) {}
+        const route = window.frappe && typeof frappe.get_route === "function"
+            ? frappe.get_route()
+            : null;
+        const item = {
+            sequence: ++probe.sequence,
+            at: Math.round(performance.now()),
+            event,
+            route: Array.isArray(route) ? route.map(String).join("/") : "",
+            doctype: String(frm && (frm.doc.doctype || frm.doctype) || ""),
+            document_name: String(frm && frm.doc && frm.doc.name || ""),
+            context_identity: String(token && token.identity || ""),
+            context_generation: Number(token && token.generation || 0),
+            ...details,
+        };
+        probe.events.push(item);
+        if (probe.events.length > 400) probe.events.splice(0, probe.events.length - 400);
+        try {
+            if (typeof window.__dcoEmitProbeEvent === "function") {
+                window.__dcoEmitProbeEvent(item);
+            }
+        } catch (error) {}
+        return item;
+    };
+    const seenDocuments = new Set();
+    window.setInterval(() => {
+        const frm = window.cur_frm;
+        if (!frm || frm.doctype !== "Door Cutting Order" || !frm.doc) return;
+        const context = window.AlmdinaDocumentContext;
+        let token = null;
+        try { token = context && context.capture ? context.capture(frm) : null; } catch (error) {}
+        const key = `${frm.doc.name || ""}::${token && token.generation || 0}`;
+        if (seenDocuments.has(key)) return;
+        seenDocuments.add(key);
+        emit("document_identity_transition");
+    }, 50);
+
+    function track(label, invoke, summarize = () => ({})) {
+        return function (...args) {
+            const operation = `${label}#${++probe.sequence}`;
+            emit("operation_started", {operation});
+            let result;
+            try { result = invoke.apply(this, args); }
+            catch (error) {
+                emit("operation_rejected", {
+                    operation,
+                    error_name: String(error && error.name || "Error"),
+                    error_code: String(error && error.code || ""),
+                });
+                throw error;
+            }
+            return Promise.resolve(result).then(value => {
+                let summary = {};
+                try { summary = summarize(value) || {}; } catch (error) {}
+                emit("operation_resolved", {operation, ...summary});
+                return value;
+            }, error => {
+                emit("operation_rejected", {
+                    operation,
+                    error_name: String(error && error.name || "Error"),
+                    error_code: String(error && error.code || ""),
+                });
+                throw error;
+            });
+        };
+    }
+
+    function wrapApi(key, value) {
+        if (!value || typeof value !== "object") return value;
+        if (key === "NewRecovery" && typeof value.discover === "function") {
+            const discover = track("NewRecovery.discover", value.discover, result => ({
+                ok: Boolean(result && result.ok),
+                accepted_count: result && result.value && Array.isArray(result.value.records)
+                    ? result.value.records.length : 0,
+                rejected_count: result && result.value && Array.isArray(result.value.rejected)
+                    ? result.value.rejected.length : 0,
+            }));
+            return Object.freeze({...value, discover});
+        }
+        if (key === "LocalDraftRepository" && typeof value.create === "function") {
+            const create = (...args) => {
+                const repository = value.create(...args);
+                if (!repository || typeof repository.discover !== "function") return repository;
+                const discover = track("LocalDraftRepository.discover", repository.discover,
+                    result => ({ok: Boolean(result && result.ok)}));
+                return Object.freeze({...repository, discover});
+            };
+            return Object.freeze({...value, create});
+        }
+        if (key === "IndexedDb" && typeof value.createGateway === "function") {
+            const createGateway = (...args) => {
+                const gateway = value.createGateway(...args);
+                return Object.freeze({
+                    ...gateway,
+                    open: track("IndexedDB.open", gateway.open),
+                    transaction: track("IndexedDB.transaction", gateway.transaction,
+                        (_result) => ({})),
+                });
+            };
+            return Object.freeze({...value, createGateway});
+        }
+        if (key === "LocalCheckpoint" && typeof value.initializeNewForm === "function") {
+            const initializeNewForm = track("LocalCheckpoint.initializeNewForm", value.initializeNewForm,
+                result => ({has_state: Boolean(result)}));
+            return Object.freeze({...value, initializeNewForm});
+        }
+        return value;
+    }
+
+    let recoveryRoot = null;
+    Object.defineProperty(window, "AlmdinaDcoRecovery", {
+        configurable: true,
+        get() { return recoveryRoot; },
+        set(value) {
+            if (value === recoveryRoot) return;
+            if (value && typeof value === "object") {
+                recoveryRoot = new Proxy(value, {
+                    set(target, key, next) {
+                        return Reflect.set(target, key, wrapApi(String(key), next), target);
+                    },
+                });
+            } else {
+                recoveryRoot = value;
+            }
+        },
+    });
+})();
+"""
+
+
+def certify_new_recovery_discovery_probe(page: Page) -> None:
+    """Isolate automatic NEW discovery promises before running recovery certification."""
+    trace_start = len(BROWSER_TRACE)
+
+    def record_probe_event(event: dict) -> None:
+        _trace_event("new_recovery_probe", **{
+            ("probe_event" if key == "event" else key): value for key, value in event.items()
+            if key in {
+                "sequence", "at", "event", "operation", "status", "route",
+                "doctype", "document_name", "context_identity", "context_generation",
+                "ok", "accepted_count", "rejected_count", "has_state",
+                "error_name", "error_code",
+            }
+        })
+
+    page.expose_function("__dcoEmitProbeEvent", record_probe_event)
+    page.add_init_script(NEW_RECOVERY_PROBE_INIT_SCRIPT)
+    login_to_desk(page, "Administrator", "admin")
+    response = page.goto(
+        f"{DESK_URL}/app/door-cutting-order/new-door-cutting-order-1",
+        wait_until="domcontentloaded",
+    )
+    if response is not None and response.status >= 400:
+        raise RuntimeError(f"NEW recovery probe navigation returned HTTP {response.status}.")
+    wait_for_function(
+        page,
+        "NEW recovery probe form ready",
+        "() => window.cur_frm && window.cur_frm.doctype === 'Door Cutting Order' "
+        "&& window.cur_frm.is_new() && window.__dcoRecoveryProbe",
+        timeout=30_000,
+    )
+
+    initial = page.evaluate("""() => ({
+        eventCount: window.__dcoRecoveryProbe.events.length,
+        events: window.__dcoRecoveryProbe.events.slice(-100),
+        document: (() => {
+            const frm = window.cur_frm;
+            const context = window.AlmdinaDocumentContext;
+            const token = frm && context && context.capture ? context.capture(frm) : null;
+            return {
+                name: String(frm && frm.doc && frm.doc.name || ''),
+                identity: String(token && token.identity || ''),
+                generation: Number(token && token.generation || 0),
+            };
+        })(),
+    })""")
+    _trace_event("new_recovery_probe_form_loaded", event_count=initial["eventCount"],
+        document_name=initial["document"]["name"],
+        context_identity=initial["document"]["identity"],
+        context_generation=initial["document"]["generation"])
+
+    # The form event may already have launched discovery. Keep that observation
+    # separate from the explicit probe call below.
+    prior_discovery = any(
+        item.get("event") == "operation_started"
+        and str(item.get("operation", "")).startswith("NewRecovery.discover#")
+        for item in initial["events"]
+    ) or any(
+        item.get("event") == "new_recovery_probe"
+        and item.get("probe_event") == "operation_started"
+        and str(item.get("operation", "")).startswith("NewRecovery.discover#")
+        for item in BROWSER_TRACE[trace_start:]
+    )
+    _trace_event("new_recovery_automatic_discovery_observed", started_before_probe=prior_discovery)
+
+    for operation in ("LocalDraftRepository.discover", "NewRecovery.discover", "LocalCheckpoint.initializeNewForm"):
+        operation_id = page.evaluate("""operation => {
+            const probe = window.__dcoRecoveryProbe;
+            const frm = window.cur_frm;
+            const recovery = window.AlmdinaDcoRecovery;
+            const context = window.AlmdinaDocumentContext;
+            const token = context && context.capture ? context.capture(frm) : null;
+            const identity = {
+                site: String(frappe.boot.sitename || frappe.boot.site_name || location.host),
+                user: String(frappe.session.user),
+                target_doctype: 'Door Cutting Order',
+                mode: 'NEW',
+            };
+            const id = `explicit-${operation}`;
+            probe.explicit = probe.explicit || {};
+            probe.explicit[id] = {status: 'pending', operation, started_at: Math.round(performance.now())};
+            const settle = (status, value) => {
+                const entry = probe.explicit[id];
+                entry.status = status;
+                entry.settled_at = Math.round(performance.now());
+                if (operation === 'LocalDraftRepository.discover' || operation === 'NewRecovery.discover') {
+                    entry.ok = Boolean(value && value.ok);
+                    entry.accepted_count = value && value.value && Array.isArray(value.value.records)
+                        ? value.value.records.length : undefined;
+                    entry.rejected_count = value && value.value && Array.isArray(value.value.rejected)
+                        ? value.value.rejected.length : undefined;
+                }
+                probe.events.push({event: 'explicit_probe_settled', operation, status, ...{
+                    document_name: String(frm && frm.doc && frm.doc.name || ''),
+                    context_identity: String(token && token.identity || ''),
+                    context_generation: Number(token && token.generation || 0),
+                }});
+            };
+            let promise;
+            if (operation === 'LocalDraftRepository.discover') {
+                const repo = recovery.LocalDraftRepository.create();
+                promise = repo.discover(identity);
+            } else if (operation === 'NewRecovery.discover') {
+                promise = recovery.NewRecovery.discover(recovery.LocalDraftRepository.create(), identity);
+            } else {
+                promise = recovery.LocalCheckpoint.initializeNewForm(frm);
+            }
+            Promise.resolve(promise).then(value => settle('resolved', value), () => settle('rejected', null));
+            return id;
+        }""", operation)
+        try:
+            page.wait_for_function(
+                "id => window.__dcoRecoveryProbe.explicit[id] "
+                "&& window.__dcoRecoveryProbe.explicit[id].status !== 'pending'",
+                arg=operation_id,
+                timeout=12_000,
+            )
+        except Exception as exc:
+            state = read_page_state(page)
+            probe_state = {}
+            try:
+                probe_state = page.evaluate("""id => ({
+                    explicit: window.__dcoRecoveryProbe.explicit[id],
+                    events: window.__dcoRecoveryProbe.events.slice(-40),
+                })""", operation_id)
+            except Exception:
+                pass
+            _trace_event("new_recovery_probe_pending", operation=operation,
+                desk_url=state.get("url"), recent_events=probe_state.get("events", [])[-12:])
+            raise RuntimeError(
+                f"NEW recovery probe did not settle: {operation}; state={probe_state}; wait={exc}"
+            ) from exc
+        result = page.evaluate("id => window.__dcoRecoveryProbe.explicit[id]", operation_id)
+        _trace_event("new_recovery_probe_settled", operation=operation,
+            status=result.get("status"), ok=result.get("ok"),
+            accepted_count=result.get("accepted_count"),
+            rejected_count=result.get("rejected_count"),
+            document_name=initial["document"]["name"],
+            context_identity=initial["document"]["identity"],
+            context_generation=initial["document"]["generation"])
+        if result.get("status") != "resolved":
+            raise RuntimeError(f"NEW recovery probe rejected: {operation}.")
+
+    _trace_event("new_recovery_probe_completed", automatic_discovery_started=prior_discovery)
 
 
 def certify_new_dco_local_gate(browser) -> None:
@@ -945,6 +1232,8 @@ if __name__ == "__main__":
         try:
             if os.environ.get("DCO_DESK_NEW_FORM_SMOKE_ONLY") == "1":
                 certify_new_dco_form_smoke(page)
+            elif os.environ.get("DCO_DESK_NEW_DISCOVERY_PROBE_ONLY") == "1":
+                certify_new_recovery_discovery_probe(page)
             elif os.environ.get("DCO_DESK_NEW_LOCAL_GATE_ONLY") == "1":
                 certify_new_dco_local_gate(browser)
             else:
