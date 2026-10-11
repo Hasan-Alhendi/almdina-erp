@@ -12,6 +12,9 @@ from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.permission_matrix_repository import (
     FrappePermissionMatrixRepository,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.workforce_membership import (
+    MEMBERSHIP_FIELD,
+)
 
 
 def _category(doctype: str, name_field: str, parent_field: str, suffix: str) -> str:
@@ -110,6 +113,24 @@ def _route(suffix: str, operational_role: str) -> str:
     )
     route.insert(ignore_permissions=True)
     return str(route.name)
+
+
+def _worker(suffix: str, role: str) -> str:
+    email = f"dco-recovery-{suffix}@example.com"
+    user = frappe.get_doc(
+        {
+            "doctype": "User",
+            "email": email,
+            "first_name": f"DCO Recovery {suffix}",
+            "user_type": "System User",
+            "enabled": 1,
+            "send_welcome_email": 0,
+            MEMBERSHIP_FIELD: 1,
+            "roles": [{"role": role}],
+        }
+    )
+    user.insert(ignore_permissions=True)
+    return str(user.name)
 
 
 def _order(suffix: str, customer: str, edge_type: str, route: str) -> str:
@@ -246,6 +267,7 @@ def create_desk_edit_recovery_fixtures() -> dict[str, str]:
         str(role.name),
         {Capability.VIEW_ORDERS: True, Capability.EDIT_ORDER: True},
     )
+    worker = _worker(suffix, str(role.name))
     customer = _customer(suffix)
     edge_type = _edge_type(suffix)
     route = _route(suffix, str(role.name))
@@ -253,6 +275,7 @@ def create_desk_edit_recovery_fixtures() -> dict[str, str]:
         "restore": _order(f"restore-{suffix}", customer, edge_type, route),
         "dispatch": _order(f"dispatch-{suffix}", customer, edge_type, route),
         "route": route,
+        "worker": worker,
     }
     destination = os.environ.get("DCO_DESK_FIXTURE_FILE")
     if not destination:

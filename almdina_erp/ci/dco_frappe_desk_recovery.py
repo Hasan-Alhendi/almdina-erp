@@ -520,12 +520,12 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
     )
     page.wait_for_timeout(1100)
     evaluate(page, "dispatch DCO",
-        """async ({name, route}) => {
+        """async ({name, route, worker}) => {
             await frappe.xcall('almdina_erp.almdina_erp.services.order_dispatch_service.dispatch_order', {
-                order_name: name, path: route, assignee: 'Administrator'
+                order_name: name, path: route, assignee: worker
             });
         }""",
-        {"name": dispatch_name, "route": FIXTURES["route"]},
+        {"name": dispatch_name, "route": FIXTURES["route"], "worker": FIXTURES["worker"]},
     )
     dispatched_doc = evaluate(page, "read dispatched DCO",
         """async name => frappe.xcall('frappe.client.get', {
