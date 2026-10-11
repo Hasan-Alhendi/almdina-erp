@@ -297,9 +297,13 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
     )
     evaluate(page, "instrument recovered EDIT save", """() => {
         const frm = window.cur_frm;
+        const costUx = window.AlmdinaCostPermissionsUX;
         const probe = window.__dcoDeskSaveProbe = {
             dirtyBeforeSave: frm.is_dirty(),
-            pendingPriceEdits: window.AlmdinaCostPermissionsUX.pendingPricePieces(frm).length,
+            costUxPresent: Boolean(costUx),
+            pendingPriceEdits: costUx && typeof costUx.pendingPricePieces === 'function'
+                ? costUx.pendingPricePieces(frm).length
+                : null,
             session: window.AlmdinaDcoEditSessionCoordinator.snapshot(frm),
             saveStarted: false,
             saveSettled: null,

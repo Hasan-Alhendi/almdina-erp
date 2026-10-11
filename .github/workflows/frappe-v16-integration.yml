@@ -300,7 +300,7 @@ jobs:
                   "url": state.get("url"),
                   "save_probe": {
                       key: save_probe.get(key)
-                      for key in ("dirtyBeforeSave", "pendingPriceEdits", "saveStarted", "saveSettled")
+                      for key in ("dirtyBeforeSave", "costUxPresent", "pendingPriceEdits", "saveStarted", "saveSettled")
                       if key in save_probe
                   },
                   "commit_network_events": [
