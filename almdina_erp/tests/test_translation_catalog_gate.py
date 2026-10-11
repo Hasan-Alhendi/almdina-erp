@@ -21,6 +21,20 @@ ROOT = Path(__file__).resolve().parents[1]
 CATALOG = ROOT / "translations" / "ar.csv"
 PUBLIC_JS = ROOT / "public" / "js"
 PLACEHOLDER = re.compile(r"\{[0-9]+\}")
+DISAMBIGUATED_KEY = re.compile(r" \([23]\)$")
+TRANSLATION_CALL = re.compile(
+    r"""(?:__|\b_|\bt)\(\s*(["'])((?:\\.|[^\\])*?)\1"""
+)
+LOWERCASED_LANGUAGE_CODE = '.strip().lower().replace("_", "-")'
+
+# Locale foundation only. Legacy services may still translate at import;
+# this gate does not require that wider cleanup.
+LOCALE_FOUNDATION = (
+    ROOT / "almdina_erp" / "infrastructure" / "frappe" / "language_catalog.py",
+    ROOT / "almdina_erp" / "infrastructure" / "printing" / "measurements_print_document.py",
+    ROOT / "almdina_erp" / "application" / "security" / "workforce_management.py",
+    ROOT / "almdina_erp" / "services" / "workforce_service.py",
+)
 
 # Historical or retired trees. Active DCO, DXF, workforce, shop floor, and
 # print documents are not on this list.
@@ -110,6 +124,72 @@ class TestTranslationCatalogGate(unittest.TestCase):
             text = path.read_text(encoding="utf-8")
             self.assertNotIn('lang="ar"', text, path.name)
             self.assertNotIn('dir="rtl"', text, path.name)
+
+    def test_catalog_and_calls_do_not_use_synthetic_disambiguation_keys(self) -> None:
+        catalog_offenders = [
+            index
+            for index, row in _catalog_rows()
+            if DISAMBIGUATED_KEY.search(row[0].strip())
+        ]
+        self.assertEqual(catalog_offenders, [])
+
+        call_offenders = []
+        roots = (
+            ROOT / "almdina_erp",
+            ROOT / "public" / "js",
+            ROOT / "almdina_erp" / "print_format",
+        )
+        for root in roots:
+            for path in root.rglob("*"):
+                if path.suffix not in {".py", ".js", ".json"}:
+                    continue
+                relative = str(path.relative_to(ROOT))
+                if relative.startswith("almdina_erp/patches/"):
+                    continue
+                text = path.read_text(encoding="utf-8")
+                for _quote, message in TRANSLATION_CALL.findall(text):
+                    if DISAMBIGUATED_KEY.search(message.strip()):
+                        call_offenders.append(relative + ": " + message)
+        self.assertEqual(call_offenders, [])
+
+    def test_locale_foundation_keeps_message_ids_until_the_request(self) -> None:
+        for path in LOCALE_FOUNDATION:
+            text = path.read_text(encoding="utf-8")
+            module_level = [
+                line.strip()
+                for line in text.splitlines()
+                if re.match(r"^[A-Za-z_][A-Za-z0-9_]*\s*=\s*_\(", line)
+            ]
+            self.assertEqual(module_level, [], path.name)
+            self.assertNotIn(LOWERCASED_LANGUAGE_CODE, text, path.name)
+
+        service = (ROOT / "almdina_erp" / "services" / "workforce_service.py").read_text(encoding="utf-8")
+        messages = service.split("_LANGUAGE_ERROR_MESSAGES = {", 1)[1].split("}", 1)[0]
+        self.assertNotIn("_(", messages)
+        self.assertIn('"The language code is invalid."', messages)
+
+        catalog = (ROOT / "almdina_erp" / "infrastructure" / "frappe" / "language_catalog.py").read_text(
+            encoding="utf-8"
+        )
+        stored = catalog.split("def stored_language_code(", 1)[1].split("def ", 1)[0]
+        self.assertNotIn(".lower(", stored)
+        document = (
+            ROOT / "almdina_erp" / "infrastructure" / "printing" / "measurements_print_document.py"
+        ).read_text(encoding="utf-8")
+        locale = document.split("def document_locale(", 1)[1].split("def ", 1)[0]
+        assignment = next(line for line in locale.splitlines() if line.strip().startswith("code ="))
+        self.assertNotIn(".lower(", assignment)
+
+    def test_inner_layers_do_not_translate_with_frappe(self) -> None:
+        offenders = []
+        for layer in ("domain", "application"):
+            root = ROOT / "almdina_erp" / layer
+            for path in root.rglob("*.py"):
+                text = path.read_text(encoding="utf-8")
+                relative = str(path.relative_to(ROOT))
+                if "import frappe" in text or "frappe._(" in text or "from frappe import _" in text:
+                    offenders.append(relative)
+        self.assertEqual(offenders, [])
 
     def test_third_language_fixture_is_not_a_production_catalog(self) -> None:
         translations = ROOT / "translations"
