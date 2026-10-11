@@ -67,6 +67,44 @@ def attach_browser_diagnostics(page: Page) -> None:
     page.on("framenavigated", lambda frame: _trace_event(
         "navigation", url=_safe_url(frame.url)
     ) if frame == page.main_frame else None)
+    def capture_document_state() -> None:
+        try:
+            state = page.evaluate("""() => {
+                const boot = window.frappe && frappe.boot;
+                return {
+                    url: location.href,
+                    title: document.title,
+                    readyState: document.readyState,
+                    frappePresent: Boolean(window.frappe),
+                    bootPresent: Boolean(boot),
+                    setupComplete: boot && Boolean(boot.setup_complete),
+                    sysSetupComplete: boot && boot.sysdefaults && Boolean(boot.sysdefaults.setup_complete),
+                    user: window.frappe && frappe.session && frappe.session.user,
+                    ajaxCount: window.frappe && frappe.request && frappe.request.ajax_count,
+                    route: window.frappe && frappe.get_route
+                        ? frappe.get_route().map(String).join("/")
+                        : "",
+                    bodyText: (document.body && document.body.innerText || "").slice(0, 400),
+                };
+            }""")
+            _trace_event(
+                "document_loaded",
+                url=_safe_url(str(state.get("url", ""))),
+                title=_redact_text(str(state.get("title", "")), 120),
+                ready_state=str(state.get("readyState", "")),
+                frappe_present=bool(state.get("frappePresent")),
+                boot_present=bool(state.get("bootPresent")),
+                setup_complete=bool(state.get("setupComplete")),
+                sys_setup_complete=bool(state.get("sysSetupComplete")),
+                user=_redact_text(str(state.get("user") or ""), 80),
+                ajax_count=state.get("ajaxCount") if isinstance(state.get("ajaxCount"), int) else None,
+                route=_redact_text(str(state.get("route", "")), 120),
+                body_text=_redact_text(str(state.get("bodyText", "")), 400),
+            )
+        except Exception as exc:
+            _trace_event("document_state_unavailable", error=_redact_text(str(exc), 180))
+
+    page.on("load", lambda: capture_document_state())
     page.on("request", lambda request: (
         PENDING_REQUESTS.__setitem__(request.url, {
             "url": _safe_url(request.url),
@@ -138,45 +176,48 @@ def evaluate(page: Page, step: str, expression: str, arg=None):
         raise RuntimeError(f"Desk browser step '{step}' failed: {exc}") from exc
 
 
+def read_page_state(page: Page) -> dict:
+    last_error = "document state unavailable"
+    for _ in range(3):
+        try:
+            page.wait_for_load_state("domcontentloaded", timeout=3_000)
+            return page.evaluate("""() => {
+                const boot = window.frappe && frappe.boot;
+                return {
+                    url: location.href,
+                    title: document.title,
+                    readyState: document.readyState,
+                    bodyLength: (document.body && document.body.innerText || "").length,
+                    bodyText: (document.body && document.body.innerText || "").slice(0, 1000),
+                    frappePresent: Boolean(window.frappe),
+                    bootPresent: Boolean(boot),
+                    user: window.frappe && frappe.session && frappe.session.user,
+                    setupComplete: boot && Boolean(boot.setup_complete),
+                    sysSetupComplete: boot && boot.sysdefaults && Boolean(boot.sysdefaults.setup_complete),
+                    ajaxCount: window.frappe && frappe.request && frappe.request.ajax_count,
+                    route: window.frappe && frappe.get_route && frappe.get_route(),
+                    routePath: window.frappe && frappe.get_route
+                        ? frappe.get_route().map(String).join("/")
+                        : "",
+                    scriptAssets: [...document.scripts]
+                        .map(script => script.src).filter(Boolean).slice(-30),
+                    form: window.cur_frm && window.cur_frm.doc && window.cur_frm.doc.name,
+                    saveProbe: window.__dcoDeskSaveProbe || null,
+                };
+            }""")
+        except Exception as exc:
+            last_error = _redact_text(str(exc), 500)
+            page.wait_for_timeout(250)
+    return {"url": _safe_url(page.url), "diagnostic_error": last_error}
+
+
 def wait_for_function(page: Page, step: str, expression: str, *, arg=None, timeout: int = 30_000):
     _trace_event("wait_started", step=step)
     try:
         page.wait_for_function(expression, arg=arg, timeout=timeout)
     except Exception as exc:
         _trace_event("wait_failed", step=step, error=_redact_text(str(exc)))
-        try:
-            state = page.evaluate(
-                """() => {
-                    const frm = window.cur_frm;
-                    const coordinator = window.AlmdinaDcoEditSessionCoordinator;
-                    const session = frm && coordinator && coordinator.snapshot(frm);
-                    return {
-                        url: window.location.href,
-                        route: window.frappe && frappe.get_route && frappe.get_route(),
-                        setupComplete: Boolean(window.frappe && frappe.boot && frappe.boot.setup_complete),
-                        ajaxCount: window.frappe && frappe.request && frappe.request.ajax_count,
-                        form: frm && frm.doc ? {
-                            name: frm.doc.name,
-                            status: frm.doc.status,
-                            order_notes: frm.doc.order_notes,
-                            dirty: frm.is_dirty(),
-                        } : null,
-                        editSession: session && {
-                            phase: session.phase,
-                            activeKind: session.activeKind,
-                            sessionGeneration: session.sessionGeneration,
-                        },
-                        recoveryButtons: [...document.querySelectorAll('[data-edit-recovery-action="continue"]')]
-                            .map(button => ({disabled: button.disabled, text: button.innerText})).slice(-4),
-                        visibleModals: [...document.querySelectorAll('.modal.show')]
-                            .map(modal => (modal.innerText || '').slice(-500)).slice(-4),
-                        alerts: [...document.querySelectorAll('.msgprint, .alert, .modal .modal-body')]
-                            .map(item => (item.innerText || '').slice(-500)).slice(-4),
-                    };
-                }"""
-            )
-        except Exception as diagnostic_error:
-            state = f"unavailable: {diagnostic_error}"
+        state = read_page_state(page)
         raise RuntimeError(f"Desk browser wait '{step}' failed: {exc}; desk_state={state}") from exc
     _trace_event("wait_completed", step=step)
 
@@ -576,22 +617,7 @@ if __name__ == "__main__":
                 page.screenshot(path=str(screenshot), full_page=True, timeout=10_000)
             except Exception as exc:
                 print(f"Desk screenshot capture failed: {_redact_text(str(exc), 500)}")
-            try:
-                state = page.evaluate("""() => ({
-                    url: location.href,
-                    title: document.title,
-                    readyState: document.readyState,
-                    bodyLength: (document.body && document.body.innerText || '').length,
-                    bodyText: (document.body && document.body.innerText || '').slice(0, 1000),
-                    user: window.frappe && frappe.session && frappe.session.user,
-                    setupComplete: Boolean(window.frappe && frappe.boot && frappe.boot.setup_complete),
-                    ajaxCount: window.frappe && frappe.request && frappe.request.ajax_count,
-                    route: window.frappe && frappe.get_route && frappe.get_route(),
-                    form: window.cur_frm && window.cur_frm.doc && window.cur_frm.doc.name,
-                    saveProbe: window.__dcoDeskSaveProbe || null,
-                })""")
-            except Exception as exc:
-                state = {"diagnostic_error": _redact_text(str(exc), 500)}
+            state = read_page_state(page)
             state["url"] = _safe_url(state.get("url", ""))
             state["bodyText"] = _redact_text(state.get("bodyText", ""))
             state["failure"] = _redact_text(str(failure))
