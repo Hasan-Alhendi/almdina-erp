@@ -6,12 +6,12 @@ on:
       frappe_ref:
         description: Frappe tag or branch to certify
         required: true
-        default: version-16
+        default: v16.17.5
         type: string
       erpnext_ref:
         description: ERPNext tag or branch to certify
         required: true
-        default: version-16
+        default: v16.17.0
         type: string
       desk_only:
         description: Skip the full Python suite and run only real Desk certification
@@ -111,7 +111,7 @@ jobs:
 
       - name: Initialize Frappe v16 bench
         env:
-          FRAPPE_REF: ${{ inputs.frappe_ref || 'version-16' }}
+          FRAPPE_REF: ${{ inputs.frappe_ref || 'v16.17.5' }}
         run: |
           bench init "$RUNNER_TEMP/frappe-bench" \
             --frappe-branch "$FRAPPE_REF" \
@@ -121,7 +121,7 @@ jobs:
       - name: Install ERPNext v16 and local app source
         env:
           APP_SOURCE: ${{ github.workspace }}
-          ERPNEXT_REF: ${{ inputs.erpnext_ref || 'version-16' }}
+          ERPNEXT_REF: ${{ inputs.erpnext_ref || 'v16.17.0' }}
         run: |
           cd "$RUNNER_TEMP/frappe-bench"
           bench get-app erpnext --branch "$ERPNEXT_REF"
@@ -143,8 +143,8 @@ jobs:
 
       - name: Record and verify application source refs
         env:
-          FRAPPE_REF: ${{ inputs.frappe_ref || 'version-16' }}
-          ERPNEXT_REF: ${{ inputs.erpnext_ref || 'version-16' }}
+          FRAPPE_REF: ${{ inputs.frappe_ref || 'v16.17.5' }}
+          ERPNEXT_REF: ${{ inputs.erpnext_ref || 'v16.17.0' }}
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP/frappe-bench"
@@ -383,6 +383,8 @@ jobs:
           }
           trap 'desk_fail $?' ERR
           bench build --app almdina_erp 2>&1 | tee -a "$desk_log"
+          phase="Phase A: pinned runtime, setup wizard, and site preflight"
+          bench --site test.localhost execute 'frappe.get_attr("almdina_erp.tests.dco_recovery_desk_fixture.prepare_desk_test_site")()' 2>&1 | tee -a "$desk_log"
           phase="isolated ERPNext and DCO fixtures"
           bench --site test.localhost execute 'frappe.get_attr("almdina_erp.tests.dco_recovery_desk_fixture.create_desk_edit_recovery_fixtures")()' 2>&1 | tee -a "$desk_log"
           phase="Playwright install"

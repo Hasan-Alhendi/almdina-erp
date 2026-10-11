@@ -77,7 +77,7 @@ def attach_browser_diagnostics(page: Page) -> None:
                     readyState: document.readyState,
                     frappePresent: Boolean(window.frappe),
                     bootPresent: Boolean(boot),
-                    setupComplete: boot && Boolean(boot.setup_complete),
+                    setupComplete: boot && Boolean(boot.sysdefaults && boot.sysdefaults.setup_complete),
                     sysSetupComplete: boot && boot.sysdefaults && Boolean(boot.sysdefaults.setup_complete),
                     user: window.frappe && frappe.session && frappe.session.user,
                     ajaxCount: window.frappe && frappe.request && frappe.request.ajax_count,
@@ -192,7 +192,7 @@ def read_page_state(page: Page) -> dict:
                     frappePresent: Boolean(window.frappe),
                     bootPresent: Boolean(boot),
                     user: window.frappe && frappe.session && frappe.session.user,
-                    setupComplete: boot && Boolean(boot.setup_complete),
+                    setupComplete: boot && Boolean(boot.sysdefaults && boot.sysdefaults.setup_complete),
                     sysSetupComplete: boot && boot.sysdefaults && Boolean(boot.sysdefaults.setup_complete),
                     ajaxCount: window.frappe && frappe.request && frappe.request.ajax_count,
                     route: window.frappe && frappe.get_route && frappe.get_route(),
@@ -234,7 +234,7 @@ def open_dco(page: Page, name: str) -> None:
         wait_for_function(page, f"load DCO {name}",
             "name => window.cur_frm && window.cur_frm.doc && window.cur_frm.doc.name === name",
             arg=name,
-            timeout=60_000,
+            timeout=30_000,
         )
     except Exception as exc:
         state = evaluate(page, f"load DCO {name} diagnostics",
@@ -308,19 +308,32 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
     except Exception as exc:
         raise RuntimeError(f"Desk login did not establish an Administrator session: {exc}") from exc
 
-    wait_for_function(page, "Desk boot and login requests settle",
-        "() => window.frappe && frappe.boot && frappe.boot.setup_complete && "
+    wait_for_function(page, "Desk boot ready for Administrator",
+        "() => window.frappe && frappe.boot && frappe.boot.sysdefaults && "
+        "Boolean(frappe.boot.sysdefaults.setup_complete) && "
         "frappe.session && frappe.session.user === 'Administrator' && "
-        "frappe.request && frappe.request.ajax_count === 0 && "
+        "frappe.app && frappe.router && "
         "window.location.pathname.startsWith('/desk')",
-        timeout=60_000,
+        timeout=30_000,
     )
 
     _trace_event("login_established", user="Administrator")
 
+    # Phase B is intentionally limited to Desk startup and loading one real
+    # DCO form. Recovery scenarios must never run when this smoke fails.
+    name = FIXTURES["restore"]
+    _trace_event("phase_b_desk_smoke_started", target_doctype="Door Cutting Order")
+    open_dco(page, name)
+    wait_for_function(page, "DCO form is ready",
+        "name => window.cur_frm && window.cur_frm.doc && "
+        "window.cur_frm.doc.name === name && window.cur_frm.doctype === 'Door Cutting Order'",
+        arg=name,
+        timeout=30_000,
+    )
+    _trace_event("phase_b_desk_smoke_completed", doctype="Door Cutting Order")
+
     # A route selected on a Draft is not dispatch. Exercise the real edit-session
     # Cancel and Save adapters, and the real IndexedDB restore dialog.
-    name = FIXTURES["restore"]
     _trace_event("scenario_started", scenario="cancel_and_restore")
     baseline = page.request.get(
         f"{DESK_URL}/api/method/frappe.client.get?doctype=Door%20Cutting%20Order&name={name}"
