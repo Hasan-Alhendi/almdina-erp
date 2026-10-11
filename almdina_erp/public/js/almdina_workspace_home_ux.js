@@ -5,7 +5,7 @@
 
     const WORKSPACE_SLUG = "almdina-erp";
     const WORKSPACE_NAME = "Almdina ERP";
-    const WORKSPACE_PAGE_TITLE = "إدارة المعمل";
+    const WORKSPACE_PAGE_TITLE = "Factory management";
     const ROOT_CLASS = "almdina-workspace-home";
     const POLISH_FLAG = "data-almdina-workspace-home-polish";
     const SHORTCUT_CLASS = "alm-shortcut";
@@ -14,10 +14,26 @@
      * Stable Editor.js block ids from workspace/almdina_erp.json — not visible labels.
      */
     const SECTION_BY_BLOCK_ID = Object.freeze({
-        "master-data-header": { id: "master", meta: "3 وحدات رئيسية" },
-        "system-management-header": { id: "system", meta: "4 وحدات" },
-        "factory-operations-header": { id: "ops", meta: "سير عمل الصالة والمعمل" },
-        "reports-header": { id: "reports", meta: "البيانات الإحصائية والتحليلية" },
+        "master-data-header": {
+            id: "master",
+            title: "Basic settings",
+            meta: "3 core units",
+        },
+        "system-management-header": {
+            id: "system",
+            title: "System and workflow management",
+            meta: "4 units",
+        },
+        "factory-operations-header": {
+            id: "ops",
+            title: "Daily operations",
+            meta: "Shop floor and factory workflow",
+        },
+        "reports-header": {
+            id: "reports",
+            title: "Operational reports and cost",
+            meta: "Statistical and analytical data",
+        },
     });
 
     /** Workspace content block id → Frappe link_to / route. */
@@ -211,6 +227,15 @@
         return iconNode;
     }
 
+    function writeTranslatedText(node, messageId) {
+        if (!node || !messageId) return;
+        const translated = __(messageId);
+        if (node.textContent !== translated) node.textContent = translated;
+        if (typeof node.hasAttribute === "function" && node.hasAttribute("title")) {
+            node.setAttribute("title", translated);
+        }
+    }
+
     function enhanceHeaders(root) {
         root.querySelectorAll(".ce-block").forEach((block) => {
             const header = block.querySelector(".widget.header");
@@ -221,11 +246,16 @@
             header.setAttribute("data-alm-section", presentation.id);
             const titleHost = header.querySelector(".ce-header") || header.querySelector(".h4") || header;
             titleHost.classList.add("alm-workspace-section-head");
-            if (header.querySelector(".alm-workspace-section-meta")) return;
-            const meta = document.createElement("span");
-            meta.className = "alm-workspace-section-meta";
-            meta.textContent = __(presentation.meta);
-            titleHost.appendChild(meta);
+            const titleNode = titleHost.querySelector("b") || titleHost.querySelector(".h4");
+            writeTranslatedText(titleNode, presentation.title);
+
+            let meta = header.querySelector(".alm-workspace-section-meta");
+            if (!meta && presentation.meta) {
+                meta = document.createElement("span");
+                meta.className = "alm-workspace-section-meta";
+                titleHost.appendChild(meta);
+            }
+            writeTranslatedText(meta, presentation.meta);
         });
     }
 
@@ -359,11 +389,18 @@
             const labelWrap = widget.querySelector(".widget-label");
             if (!labelWrap) return;
 
-            if (!labelWrap.querySelector(".alm-workspace-shortcut-desc") && meta.desc) {
-                const desc = document.createElement("span");
-                desc.className = "alm-workspace-shortcut-desc";
-                desc.textContent = __(meta.desc);
-                labelWrap.appendChild(desc);
+            const titleNode = labelWrap.querySelector(".widget-title .ellipsis")
+                || labelWrap.querySelector(".widget-title");
+            writeTranslatedText(titleNode, meta.label);
+
+            if (meta.desc) {
+                let desc = labelWrap.querySelector(".alm-workspace-shortcut-desc");
+                if (!desc) {
+                    desc = document.createElement("span");
+                    desc.className = "alm-workspace-shortcut-desc";
+                    labelWrap.appendChild(desc);
+                }
+                writeTranslatedText(desc, meta.desc);
             }
 
             const section = widget.getAttribute("data-alm-section");

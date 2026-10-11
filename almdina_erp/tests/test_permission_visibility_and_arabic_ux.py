@@ -33,7 +33,13 @@ class TestPermissionVisibilityAndArabicUX(unittest.TestCase):
         self.assertIn("hideUnauthorizedShortcuts", source)
         self.assertIn("guardCurrentRoute", source)
         self.assertIn("surfaceAllowed", source)
-        self.assertIn("لا تملك صلاحية الوصول إلى هذا القسم", source)
+        self.assertIn('__("You do not have permission to access this section.")', source)
+        self.assertNotIn("لا تملك صلاحية الوصول إلى هذا القسم", source)
+        catalog = (ROOT / "translations" / "ar.csv").read_text(encoding="utf-8")
+        self.assertIn(
+            "You do not have permission to access this section.,لا تملك صلاحية الوصول إلى هذا القسم.",
+            catalog,
+        )
         for route in (
             "customer",
             "factory-workforce",

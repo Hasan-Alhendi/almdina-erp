@@ -1071,3 +1071,46 @@ Retry,إعادة المحاولة
 Delete this note? This action cannot be undone.,هل تريد حذف هذه الملاحظة؟ لا يمكن التراجع عن الحذف.
 Open important note: {0},فتح الملاحظة المهمة: {0}
 The operation could not be completed. Try again.,تعذر تنفيذ العملية. حاول مرة أخرى.
+Factory management,إدارة المعمل
+Basic settings,الإعدادات الأساسية
+3 core units,3 وحدات رئيسية
+System and workflow management,إدارة النظام ومسارات العمل
+4 units,4 وحدات
+Daily operations,التشغيل اليومي
+Shop floor and factory workflow,سير عمل الصالة والمعمل
+Operational reports and cost,التقارير التشغيلية والتكلفة
+Statistical and analytical data,البيانات الإحصائية والتحليلية
+Customers,الزبائن
+Edge banding types and prices,أنواع القشاط وأسعاره
+Role management,إدارة الأدوار
+Permission management,إدارة الصلاحيات
+User management,إدارة المستخدمين
+Production route management,إدارة مسارات الإنتاج
+Door cutting orders,طلبات قص الدرف
+Production stages,مراحل الإنتاج
+Replacement parts,القطع التعويضية
+Production errors,أخطاء الإنتاج
+Factory operations summary,ملخص عمليات المعمل
+Cutting order analysis,تحليل طلبات القص
+Board usage analysis,تحليل استخدام الألواح
+Door measurement analysis,تحليل قياسات الدرف
+Production stage performance,أداء مراحل الإنتاج
+Production errors and replacement parts,أخطاء الإنتاج والقطع التعويضية
+Manage customer records and contact details,إدارة سجلات الزبائن وبيانات التواصل
+Define edge banding types and their prices and thicknesses,تعريف أنواع القشاط والأسعار والسماكات
+Default production and cutting settings,إعدادات الإنتاج والقص الافتراضية
+Frappe roles used in the factory,أدوار Frappe المستخدمة في المعمل
+Almdina permission matrix by role,مصفوفة صلاحيات Almdina حسب الدور
+"Factory accounts, roles, and entry pages",حسابات المعمل والأدوار وصفحات الدخول
+Production routes and operational stages,مسارات الإنتاج والمراحل التشغيلية
+Create and follow cutting orders,إنشاء ومتابعة طلبات القص
+Shop floor board and inbox,لوحة التشغيل وصندوق الوارد
+Replacement parts linked to production errors,قطع بديلة مرتبطة بأخطاء الإنتاج
+Record and follow production incidents,تسجيل ومتابعة حوادث الإنتاج
+Overview of factory activity,نظرة عامة على حركة المعمل
+Order and performance analysis,تحليل الطلبات والأداء
+Board consumption and waste,استهلاك الألواح والهدر
+Most used measurements,أكثر المقاسات استخدامًا
+Stage time and productivity,زمن المراحل والإنتاجية
+Combined incident and compensation report,تقرير موحد للحوادث والتعويض
+You do not have permission to access this section.,لا تملك صلاحية الوصول إلى هذا القسم.

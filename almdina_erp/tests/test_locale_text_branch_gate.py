@@ -85,6 +85,28 @@ class TestActiveUiHasNoLanguageTextBranches(unittest.TestCase):
         self.assertNotIn("important.df.label ||", source)
         self.assertIn('label: __("Important note")', source)
 
+    def test_workspace_navigation_visible_copy_uses_english_message_ids(self) -> None:
+        home = (PUBLIC_JS / "almdina_workspace_home_ux.js").read_text(encoding="utf-8")
+        title = home.split("const WORKSPACE_PAGE_TITLE", 1)[1].split("const ROOT_CLASS", 1)[0]
+        sections = home.split("const SECTION_BY_BLOCK_ID", 1)[1].split("const SHORTCUT_BLOCK_TO_LINK", 1)[0]
+        self.assertIsNone(ARABIC_TEXT.search(title))
+        self.assertIsNone(ARABIC_TEXT.search(sections))
+        self.assertIn("Factory management", title)
+        self.assertIn("title:", sections)
+
+        presentation = (PUBLIC_JS / "almdina_shortcut_presentation.js").read_text(encoding="utf-8")
+        catalog = presentation.split("const SHORTCUT_BY_LINK_TO", 1)[1].split("const LABEL_TO_LINK_TO", 1)[0]
+        compatibility = presentation.split("const LABEL_TO_LINK_TO", 1)[1].split(
+            "const SHORTCUT_PRESENTATION", 1
+        )[0]
+        self.assertIsNone(ARABIC_TEXT.search(catalog))
+        self.assertIn("label:", catalog)
+        self.assertIsNotNone(ARABIC_TEXT.search(compatibility))
+
+        shell = (PUBLIC_JS / "shared_shell.js").read_text(encoding="utf-8")
+        self.assertIn('__("You do not have permission to access this section.")', shell)
+        self.assertNotIn("لا تملك صلاحية الوصول إلى هذا القسم", shell)
+
 
 if __name__ == "__main__":
     unittest.main()
