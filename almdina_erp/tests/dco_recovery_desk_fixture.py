@@ -174,7 +174,7 @@ def _complete_setup_wizard(suffix: str) -> dict[str, object]:
         frappe.throw(
             f"Official Setup Wizard did not complete Frappe and ERPNext: {app_states}; result={result}"
         )
-    if not frappe.db.exists("Company"):
+    if frappe.db.count("Company") == 0:
         frappe.throw("Official Setup Wizard did not create the required test Company.")
     return {"setup_result": result, "installed_app_setup": app_states}
 
