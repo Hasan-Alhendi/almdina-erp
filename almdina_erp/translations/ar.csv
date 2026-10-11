@@ -1037,3 +1037,8 @@ Top:,أعلى:
 Bottom:,أسفل:
 Sheet,لوح
 All measurements are in centimeters. The default edge banding is hidden; this column shows custom exceptions only.,جميع المقاسات بالسنتيمتر. لا يظهر القشاط الافتراضي؛ يعرض العمود الاستثناءات المخصصة فقط.
+Side,ضلع
+Exceptional customization,تخصيص استثنائي
+The print window could not be opened. Reload the page and try again.,تعذر تشغيل الطباعة. أعد تحميل الصفحة ثم حاول مرة أخرى.
+The customer invoice could not be prepared. Reload the page and try again.,تعذر تجهيز فاتورة الزبون. أعد تحميل الصفحة ثم حاول مرة أخرى.
+The document could not be prepared for printing. Reload the page and try again.,تعذر تجهيز المستند للطباعة. أعد تحميل الصفحة ثم حاول مرة أخرى.
