@@ -232,8 +232,74 @@
         if (!state || !context || typeof context.isSameDocument !== "function") return state || null;
         if (context.isSameDocument(frm, state.documentToken)) return state;
         state.session.dispose();
+        if (state.statusElement) state.statusElement.remove();
         states.delete(frm);
         return null;
+    }
+
+    function domNode(value) {
+        if (value && value.nodeType === 1) return value;
+        if (value && typeof value.get === "function") return value.get(0) || null;
+        return value && value[0] && value[0].nodeType === 1 ? value[0] : null;
+    }
+
+    function checkpointStatusText(snapshot) {
+        const messages = {
+            DIRTY: "هناك تغييرات لم تُحفظ محليًا بعد.",
+            LOCAL_SAVING: "جارٍ حفظ نسخة الاسترداد محليًا…",
+            LOCAL_SAVED: "تم تأكيد حفظ نسخة محلية؛ لم يُحفظ الطلب رسميًا على الخادم.",
+            OFFICIAL_SAVING: "جارٍ حفظ الطلب رسميًا على الخادم…",
+            PENDING_RECONCILIATION: "أُرسل الحفظ الرسمي، ويجري التحقق من نتيجته قبل متابعة الاسترداد.",
+            RESTORING: "جارٍ استعادة المسودة المحلية…",
+            COMPLETED: "اكتمل الحفظ الرسمي للطلب.",
+            ERROR: "تعذر حفظ نسخة الاسترداد محليًا. تابع العمل مع إبقاء الصفحة مفتوحة حتى تعالج المسودة.",
+        };
+        return messages[String(snapshot && snapshot.state || "")] || "";
+    }
+
+    function renderCheckpointStatus(frm, state, snapshot) {
+        const message = checkpointStatusText(snapshot);
+        let element = state && state.statusElement;
+        if (!element || !element.isConnected) {
+            const pageRoot = domNode(frm && frm.page && frm.page.wrapper);
+            const formRoot = domNode(frm && (frm.$wrapper || frm.wrapper));
+            const host = pageRoot && pageRoot.querySelector(".page-head") || formRoot || pageRoot;
+            if (!host || typeof document.createElement !== "function") {
+                if (snapshot && snapshot.state === "ERROR" && typeof frappe.show_alert === "function") {
+                    frappe.show_alert({
+                        message,
+                        indicator: "red",
+                    });
+                }
+                return false;
+            }
+            element = host.querySelector(".dco-recovery-status");
+            if (!element) {
+                element = document.createElement("div");
+                element.className = "dco-recovery-status alert";
+                element.setAttribute("role", "status");
+                host.appendChild(element);
+            }
+            if (state) state.statusElement = element;
+        }
+        element.hidden = !message;
+        element.dataset.recoveryState = String(snapshot && snapshot.state || "");
+        element.className = "dco-recovery-status alert";
+        if (snapshot && snapshot.state === "ERROR") {
+            element.classList.add("alert-danger");
+            element.setAttribute("role", "alert");
+            element.setAttribute("aria-live", "assertive");
+        } else if (snapshot && snapshot.state === "LOCAL_SAVED") {
+            element.classList.add("alert-success");
+            element.setAttribute("role", "status");
+            element.setAttribute("aria-live", "polite");
+        } else {
+            element.classList.add("alert-info");
+            element.setAttribute("role", "status");
+            element.setAttribute("aria-live", "polite");
+        }
+        element.textContent = message;
+        return true;
     }
 
     async function workspaceProjection(frm, state, dirtyScope) {
@@ -288,7 +354,12 @@
         const context = documentContext();
         const repo = repository();
         const factory = root.CheckpointSession;
-        if (!context || !repo || !factory || typeof factory.create !== "function") return null;
+        if (repo && (!context || !factory || typeof factory.create !== "function")) return null;
+        if (!repo) {
+            renderCheckpointStatus(frm, null, { state: "ERROR" });
+            return null;
+        }
+        if (!context || !factory || typeof factory.create !== "function") return null;
         const token = context.capture(frm);
         if (!token) return null;
         const recovered = options.record || null;
@@ -327,6 +398,7 @@
                     : null,
                 capture: ({ dirtyScope }) => workspaceProjection(frm, state, dirtyScope),
                 onStateChange: (snapshot) => {
+                    renderCheckpointStatus(frm, state, snapshot);
                     if (snapshot.state === factory.STATES.ERROR) {
                         console.debug("DCO local recovery checkpoint failed safely", snapshot.error);
                     }
@@ -342,6 +414,7 @@
             context.registerCleanup(frm, CLEANUP_EFFECT, () => {
                 const active = states.get(frm);
                 if (active === state) states.delete(frm);
+                if (state.statusElement) state.statusElement.remove();
                 const dialog = dialogs.get(frm);
                 if (dialog && typeof dialog.hide === "function") dialog.hide();
                 dialogs.delete(frm);
@@ -981,6 +1054,7 @@
             scheduleFlush(frm, state);
             return true;
         } catch (error) {
+            renderCheckpointStatus(frm, null, { state: "ERROR" });
             console.debug("DCO local recovery mutation was not checkpointed", error);
             return false;
         }

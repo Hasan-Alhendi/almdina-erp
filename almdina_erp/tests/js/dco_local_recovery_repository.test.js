@@ -77,7 +77,7 @@ async function verifiesDatabaseInitialization() {
     const indexedDB = {
         open(name, version) {
             assert.equal(name, "almdina_erp_dco_recovery");
-            assert.equal(version, 1);
+            assert.equal(version, 2);
             const request = {
                 result: database,
                 transaction: {

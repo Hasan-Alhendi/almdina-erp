@@ -2,6 +2,17 @@ name: Frappe v16 Integration
 
 on:
   workflow_dispatch:
+    inputs:
+      frappe_ref:
+        description: Frappe tag or branch to certify
+        required: true
+        default: version-16
+        type: string
+      erpnext_ref:
+        description: ERPNext tag or branch to certify
+        required: true
+        default: version-16
+        type: string
   pull_request:
     paths:
       - "almdina_erp/**"
@@ -94,18 +105,21 @@ jobs:
           redis-cli -h 127.0.0.1 -p 11000 ping | grep -qx PONG
 
       - name: Initialize Frappe v16 bench
+        env:
+          FRAPPE_REF: ${{ inputs.frappe_ref || 'version-16' }}
         run: |
           bench init "$RUNNER_TEMP/frappe-bench" \
-            --frappe-branch version-16 \
+            --frappe-branch "$FRAPPE_REF" \
             --python python3.14 \
             --skip-redis-config-generation
 
       - name: Install ERPNext v16 and local app source
         env:
           APP_SOURCE: ${{ github.workspace }}
+          ERPNEXT_REF: ${{ inputs.erpnext_ref || 'version-16' }}
         run: |
           cd "$RUNNER_TEMP/frappe-bench"
-          bench get-app erpnext --branch version-16
+          bench get-app erpnext --branch "$ERPNEXT_REF"
           git clone "$APP_SOURCE" apps/almdina_erp
           ./env/bin/pip install -e 'apps/almdina_erp[test]'
           python - <<'PY'
@@ -121,6 +135,24 @@ jobs:
               apps.append("almdina_erp")
           apps_path.write_text("\n".join(apps) + "\n", encoding="utf-8")
           PY
+
+      - name: Record and verify application source refs
+        env:
+          FRAPPE_REF: ${{ inputs.frappe_ref || 'version-16' }}
+          ERPNEXT_REF: ${{ inputs.erpnext_ref || 'version-16' }}
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/frappe-bench"
+          FRAPPE_SHA="$(git -C apps/frappe rev-parse HEAD)"
+          ERPNEXT_SHA="$(git -C apps/erpnext rev-parse HEAD)"
+          printf 'Frappe ref=%s sha=%s\nERPNext ref=%s sha=%s\n' \
+            "$FRAPPE_REF" "$FRAPPE_SHA" "$ERPNEXT_REF" "$ERPNEXT_SHA"
+          if [[ "$FRAPPE_REF" == "v16.17.5" ]]; then
+            test "$FRAPPE_SHA" = "75baafaa0bde07a86bf28764383b93b5df97bc7e"
+          fi
+          if [[ "$ERPNEXT_REF" == "v16.17.0" ]]; then
+            test "$ERPNEXT_SHA" = "7b494dc9e8e47d288de5427bae25ce8a52c37d96"
+          fi
 
       - name: Configure Redis URLs
         run: |
