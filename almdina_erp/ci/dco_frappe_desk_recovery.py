@@ -157,7 +157,14 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
     retained = page.evaluate(
         """async name => {
             const result = await window.AlmdinaDcoRecovery.LocalCheckpoint.repository()
-                .discover({mode: 'EDIT', target_name: name});
+                .discover({
+                    site: String(frappe.boot && (frappe.boot.sitename || frappe.boot.site_name)
+                        || window.location.host || '').trim(),
+                    user: String(frappe.session && frappe.session.user || '').trim(),
+                    target_doctype: 'Door Cutting Order',
+                    mode: 'EDIT',
+                    target_name: name,
+                });
             return Boolean(result && result.ok && result.value.records.length);
         }""",
         dispatch_name,
