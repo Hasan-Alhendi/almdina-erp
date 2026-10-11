@@ -107,6 +107,24 @@ class TestActiveUiHasNoLanguageTextBranches(unittest.TestCase):
         self.assertIn('__("You do not have permission to access this section.")', shell)
         self.assertNotIn("لا تملك صلاحية الوصول إلى هذا القسم", shell)
 
+    def test_special_shape_documentation_visible_copy_uses_english_message_ids(self) -> None:
+        paths = (
+            PUBLIC_JS / "special_shape_documentation" / "application" / "templates.js",
+            PUBLIC_JS / "special_shape_documentation" / "presentation" / "workspace_shell.js",
+            PUBLIC_JS / "special_shape_documentation" / "presentation" / "workspace_controller.js",
+            PUBLIC_JS / "door_cutting_order" / "drawing" / "special_shape_facade.js",
+            ROOT / "almdina_erp" / "page" / "door_drawing" / "door_drawing.js",
+            ROOT / "almdina_erp" / "services" / "special_shape_workspace_service.py",
+            ROOT / "almdina_erp" / "services" / "special_shape_drawing_validation_service.py",
+        )
+        leftovers = []
+        for path in paths:
+            relative = path.relative_to(ROOT)
+            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+                if ARABIC_TEXT.search(line):
+                    leftovers.append(f"{relative}:{number}: {line.strip()}")
+        self.assertEqual(leftovers, [])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import ast
+import csv
 import unittest
+from io import StringIO
 from pathlib import Path
 
 
@@ -13,6 +15,10 @@ SERVICE = APP / "services" / "special_shape_workspace_service.py"
 FACADE = PUBLIC / "js" / "door_cutting_order" / "drawing" / "special_shape_facade.js"
 DOCUMENTATION = PUBLIC / "js" / "special_shape_documentation"
 CSS = PUBLIC / "css" / "special_shape_documentation.css"
+
+
+def _catalog_has(catalog: str, source: str, arabic: str) -> bool:
+    return any(len(row) >= 2 and row[0] == source and row[1] == arabic for row in csv.reader(StringIO(catalog)))
 
 
 def _function_calls(source: str, function_name: str) -> set[str]:
@@ -105,17 +111,28 @@ class TestSpecialShapeDocumentationWorkspaceContract(unittest.TestCase):
         shell = (DOCUMENTATION / "presentation" / "workspace_shell.js").read_text(encoding="utf-8")
         controller = (DOCUMENTATION / "presentation" / "workspace_controller.js").read_text(encoding="utf-8")
         renderer = (DOCUMENTATION / "presentation" / "canvas_renderer.js").read_text(encoding="utf-8")
-        for label in ("رفع صورة", "مسح بالسكانر", "التقاط بالكاميرا", "شكل جاهز", "قلم ذكي", "ملاحظات المصمم", "حفظ التوثيق"):
+        catalog = (ROOT / "translations" / "ar.csv").read_text(encoding="utf-8")
+        for label, arabic in (
+            ("Upload an image", "رفع صورة"),
+            ("Scan", "مسح بالسكانر"),
+            ("Capture with the camera", "التقاط بالكاميرا"),
+            ("Ready-made shape", "شكل جاهز"),
+            ("Smart pen", "قلم ذكي"),
+            ("Designer notes", "ملاحظات المصمم"),
+            ("Save documentation", "حفظ التوثيق"),
+            ("Download the original image for the designer", "تنزيل الصورة الأصلية للمصمم"),
+            ("This documents the customer order and is not a manufacturing file", "هذا توثيق لطلب العميل وليس ملف تصنيع"),
+            ("Download the scanner program — one-time setup", "تنزيل برنامج السكانر — تثبيت مرة واحدة"),
+        ):
             self.assertIn(label, shell)
+            self.assertTrue(_catalog_has(catalog, label, arabic))
         self.assertIn('class="ald-doc-workspace almdina-ui"', shell)
         self.assertIn("AlmdinaUi.button", shell)
         self.assertNotIn('class="ald-doc-primary"', shell)
-        self.assertIn("تنزيل الصورة الأصلية للمصمم", shell)
-        self.assertIn("هذا توثيق لطلب العميل وليس ملف تصنيع", shell)
         self.assertIn("pointerdown", controller)
         self.assertIn("Scanner.health()", controller)
         self.assertIn("Scanner.scan()", controller)
-        self.assertIn("تنزيل برنامج السكانر — تثبيت مرة واحدة", shell)
+        self.assertIn("Download the scanner program — one-time setup", shell)
         self.assertIn("Scanner.INSTALLER_URL", controller)
         self.assertNotIn("PowerShell", controller)
         self.assertIn("getCoalescedEvents", controller)
@@ -125,8 +142,16 @@ class TestSpecialShapeDocumentationWorkspaceContract(unittest.TestCase):
         self.assertIn("renderer.zoomAt", controller)
         self.assertIn("Ctrl+Z", shell)
         self.assertIn("Ctrl+Y", shell)
-        for label in ("اقتصاص الصورة", "اقتصاص تلقائي", "إعادة ضبط", "إلغاء", "تطبيق"):
+        for label, arabic in (
+            ("Crop the image", "اقتصاص الصورة"),
+            ("Auto crop", "اقتصاص تلقائي"),
+            ("Reset", "إعادة ضبط"),
+            ("Apply", "تطبيق"),
+        ):
             self.assertIn(label, shell)
+            self.assertTrue(_catalog_has(catalog, label, arabic))
+        self.assertIn('"Cancel"', shell)
+        self.assertTrue(_catalog_has(catalog, "Cancel", "إلغاء"))
         self.assertIn("renderer.cropRegion", controller)
         self.assertIn("renderer.suggestReferenceCrop", controller)
         self.assertIn("renderer.referenceImageSize", controller)

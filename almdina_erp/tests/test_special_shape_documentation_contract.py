@@ -11,6 +11,17 @@ from almdina_erp.almdina_erp.services.special_shape_drawing_validation_service i
 )
 
 
+def _bind_standalone_frappe_flags() -> None:
+    """Let frappe.throw raise when pytest runs without a site context."""
+    try:
+        frappe.flags.mute_messages
+    except RuntimeError:
+        frappe.local.flags = frappe._dict(mute_messages=True)
+
+
+_bind_standalone_frappe_flags()
+
+
 def _documentation() -> dict:
     return {
         "schema": DOCUMENTATION_SCHEMA,

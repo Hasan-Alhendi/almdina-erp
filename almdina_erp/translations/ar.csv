@@ -1114,3 +1114,191 @@ Most used measurements,أكثر المقاسات استخدامًا
 Stage time and productivity,زمن المراحل والإنتاجية
 Combined incident and compensation report,تقرير موحد للحوادث والتعويض
 You do not have permission to access this section.,لا تملك صلاحية الوصول إلى هذا القسم.
+Clipped corner shape,زاوية مقصوصة
+Top arch,قوس علوي
+Side arch,قوس جانبي
+Trapezoid,شبه منحرف
+Inner opening,فتحة داخلية
+Slanted edge,حافة مائلة
+Special door documentation,توثيق الدرفة الخاصة
+Back to the order,العودة للطلب
+Door {0},الدرفة {0}
+{0} × {1} cm,{0} × {1} سم
+Saved,محفوظ
+Save documentation,حفظ التوثيق
+Start here,ابدأ من هنا
+Reference image,صورة مرجعية
+Choose a suitable source — up to 8 MB,اختر المصدر المناسب — حتى 8 MB
+Upload an image,رفع صورة
+Scan,مسح بالسكانر
+Capture with the camera,التقاط بالكاميرا
+Download the scanner program — one-time setup,تنزيل برنامج السكانر — تثبيت مرة واحدة
+Ready-made shape,شكل جاهز
+Draw with the pen,رسم بالقلم
+Automatic cleanup and alignment,تنظيف وتثبيت تلقائي
+Locked,مقفلة
+Crop the image,اقتصاص الصورة
+Restore the full image,إعادة الصورة كاملة
+Lock the image,قفل الصورة
+Download the original image for the designer,تنزيل الصورة الأصلية للمصمم
+Remove the image,مسح الصورة
+Door documentation canvas,لوحة توثيق الدرفة
+"Choose an image, a ready-made shape, or start with the smart pen",اختر صورة أو شكلًا جاهزًا أو ابدأ بالقلم الذكي
+Image crop tools,أدوات اقتصاص الصورة
+Drag the frame or its handles,اسحب الإطار أو مقابضه
+Auto crop,اقتصاص تلقائي
+Reset,إعادة ضبط
+Apply,تطبيق
+Documentation tools,أدوات التوثيق
+Select,تحديد
+Smart pen,قلم ذكي
+Line,خط
+Rectangle,مستطيل
+Circle,دائرة
+Dimension,قياس
+Note,ملاحظة
+Undo Ctrl+Z,تراجع Ctrl+Z
+Undo,تراجع
+Redo Ctrl+Y or Ctrl+Shift+Z,إعادة Ctrl+Y أو Ctrl+Shift+Z
+Redo,إعادة
+Zoom the drawing area,تكبير مساحة الرسم
+Zoom out,تصغير
+Zoom in,تكبير
+Fit the drawing (F),ملاءمة الرسم (F)
+Fit the drawing,ملاءمة الرسم
+Fit,ملاءمة
+Documentation details,تفاصيل التوثيق
+Designer notes,ملاحظات المصمم
+Write what the designer should pay attention to…,اكتب ما يجب أن ينتبه إليه المصمم…
+Layers,الطبقات
+This documents the customer order and is not a manufacturing file,هذا توثيق لطلب العميل وليس ملف تصنيع
+Documentation summary,ملخص التوثيق
+For print and the designer,للطباعة والمصمم
+Documentation measurements,القياسات
+Documentation notes,الملاحظات
+Crop the reference image,اقتصاص الصورة المرجعية
+Saving…,جار الحفظ…
+Opening the scanner…,جار فتح السكانر…
+Unlocked,غير مقفلة
+Image is open,مفتوحة
+Pen stroke {0},رسم بالقلم {0}
+Line {0},خط {0}
+Rectangle {0},مستطيل {0}
+Circle {0},دائرة {0}
+Arrow {0},سهم {0}
+Dimension {0},قياس {0}
+Note {0},ملاحظة {0}
+Element {0},عنصر {0}
+No layers yet.,لا توجد طبقات بعد.
+Image,صورة
+Mixed,مختلط
+Present,موجودة
+Click an element to select it. Use Delete to remove it.,انقر على عنصر لتحديده. استخدم Delete للحذف.
+Draw freely; the line will be cleaned and its directions fixed.,ارسم بحرية؛ سننظف الخط ونثبت اتجاهاته.
+Drag from the start of the line to its end.,اسحب من بداية الخط إلى نهايته.
+Drag to draw a rectangle.,اسحب لرسم مستطيل.
+Drag to draw a circle or ellipse.,اسحب لرسم دائرة أو قطع ناقص.
+Drag between the two measurement points.,اسحب بين نقطتي القياس.
+Click where the note should go.,انقر في موضع الملاحظة.
+Note text,نص الملاحظة
+Add a note,إضافة ملاحظة
+"Drag inside the frame to move it, or drag a handle to choose the required part.",اسحب داخل الإطار لتحريكه، أو اسحب أحد المقابض لتحديد الجزء المطلوب.
+Crop in progress,اقتصاص قيد التعديل
+Unsaved,غير محفوظ
+Apply or cancel the crop before saving the documentation.,طبّق الاقتصاص أو ألغِه قبل حفظ التوثيق.
+Add a reference image or an explanatory element before saving.,أضف صورة مرجعية أو عنصرًا توضيحيًا قبل الحفظ.
+Door documentation was saved.,تم حفظ توثيق الدرفة.
+Save failed,فشل الحفظ
+"Could not save the documentation. Check the data and permissions, then try again.",تعذر حفظ التوثيق. تحقق من البيانات والصلاحيات ثم حاول مرة أخرى.
+The crop has not been applied yet. Go back and cancel the crop?,لم يُطبّق الاقتصاص بعد. هل تريد الرجوع وإلغاء الاقتصاص؟
+You have unsaved changes. Go back without saving?,لديك تعديلات غير محفوظة. هل تريد الرجوع دون حفظ؟
+The image is larger than 8 MB.,حجم الصورة يتجاوز 8 MB.
+Uploading the image…,جار رفع الصورة…
+The image was uploaded and added to the documentation.,تم رفع الصورة وإضافتها إلى التوثيق.
+"Could not upload the image. Use JPG, PNG, or WEBP no larger than 8 MB.",تعذر رفع الصورة. استخدم JPG أو PNG أو WEBP بحجم لا يتجاوز 8 MB.
+"This site is not allowed by the scanner bridge. Ask a system administrator to add it, then restart the bridge.",هذا الموقع غير مضاف إلى المواقع المسموحة في جسر السكانر. اطلب من مسؤول النظام إضافته ثم إعادة تشغيل الجسر.
+"The scanner is busy with another job. Wait until it finishes, then try again.",السكانر مشغول بعملية أخرى. انتظر انتهاءها ثم أعد المحاولة.
+"No compatible scanner was found. Make sure it is connected and recognized by Windows, then try again.",لم يتم العثور على سكانر متوافق. تأكد من توصيله وأن Windows يتعرف عليه ثم أعد المحاولة.
+The scanner returned an unsupported image and it could not be converted. Send the Scanner Bridge log to a system administrator.,أعاد السكانر صورة غير مدعومة وتعذر تحويلها. أرسل سجل Scanner Bridge لمسؤول النظام.
+The scan could not be completed. Check that Windows sees the scanner and that no other program is using it.,تعذر إتمام المسح. تحقق من أن Windows يرى السكانر وأنه غير مستخدم من برنامج آخر.
+The scanned image is larger than 8 MB. Lower the scan resolution and try again.,الصورة الناتجة من السكانر تتجاوز 8 MB. خفّض دقة المسح ثم حاول مرة أخرى.
+The scanner response is invalid. Restart Almdina Scanner Bridge and try again.,استجابة السكانر غير صالحة. أعد تشغيل Almdina Scanner Bridge ثم حاول مرة أخرى.
+"The scanner program is not installed or is stopped. Install it once, or open it from the Start menu if it is already installed.",برنامج السكانر غير مثبت أو متوقف. ثبّته مرة واحدة، أو افتحه من قائمة ابدأ إذا كان مثبتًا.
+Windows will ask you to choose the scanner and the scan settings.,سيظهر مربع Windows لاختيار جهاز السكانر وإعدادات المسح.
+The scan was cancelled and no image was added.,تم إلغاء عملية المسح ولم تُضف صورة.
+The scan finished and the image was added to the documentation.,تم المسح وإضافة الصورة إلى التوثيق.
+The scanner image was added. You can now draw or add dimensions.,تمت إضافة صورة السكانر. يمكنك الآن الرسم أو إضافة القياسات.
+Could not add the scanner image to the documentation.,تعذر إضافة صورة السكانر إلى التوثيق.
+Remove the reference image from the documentation?,هل تريد مسح الصورة المرجعية من التوثيق؟
+No clear white margins were found. Adjust the frame manually.,لم نتمكن من تمييز هوامش بيضاء واضحة. عدّل الإطار يدويًا.
+The end is close to the start. Close the shape?,النهاية قريبة من البداية. هل تريد إغلاق الشكل؟
+The photo was captured and added to the documentation.,تم التقاط الصورة وإضافتها إلى التوثيق.
+Loading door documentation…,جار تحميل توثيق الدرفة…
+Could not load the door. Open the documentation from the order and check the permissions.,تعذر تحميل الدرفة. افتح التوثيق من الطلب وتحقق من الصلاحيات.
+Save the order before opening the documentation.,احفظ الطلب أولًا قبل فتح التوثيق.
+Enter the size first,أدخل المقاس أولًا
+"Enter the door width and length first, then open the shape documentation.",أدخل عرض الدرفة وطولها أولًا، ثم افتح توثيق الشكل.
+You do not have permission to open the special door documentation.,ليس لديك صلاحية فتح توثيق الدرفة الخاصة.
+Could not open the documentation. Save the order and try again.,تعذر فتح التوثيق. احفظ الطلب ثم حاول مرة أخرى.
+Opening door documentation…,جار فتح توثيق الدرفة…
+Preparing the image and drawing tools,نجهّز الصورة وأدوات الرسم
+Could not load the documentation workspace. Reload the page and try again.,تعذر تحميل مساحة التوثيق. أعد تحميل الصفحة ثم حاول مرة أخرى.
+The documentation link is incomplete. Open it from the order.,رابط التوثيق غير مكتمل. افتحه من داخل الطلب.
+You do not have permission to open the special door documentation workspace for this order.,لا تملك صلاحية فتح مساحة توثيق الدرفة الخاصة لهذا الطلب.
+The documentation workspace is available for special doors only.,مساحة التوثيق متاحة للدرف الخاصة فقط.
+The selected door does not belong to this order.,الدرفة المحددة لا تنتمي إلى هذا الطلب.
+You do not have permission to edit special door documentation.,ليس لديك صلاحية تعديل توثيق الدرف الخاصة.
+You are not allowed to edit special door documentation.,لا تملك صلاحية تعديل توثيق الدرف الخاصة.
+Documentation can be edited when the order state allows it.,يمكن تعديل التوثيق عندما يسمح وضع الطلب بذلك.
+The documentation workspace accepts only the current contract.,مساحة التوثيق تقبل العقد الحالي فقط.
+The documentation width does not match the door width.,عرض التوثيق لا يطابق عرض الدرفة.
+The documentation length does not match the door length.,طول التوثيق لا يطابق طول الدرفة.
+The reference image does not belong to this door.,الصورة المرجعية لا تنتمي إلى هذه الدرفة.
+"Use a JPG, PNG, or WEBP image only.",استخدم صورة JPG أو PNG أو WEBP فقط.
+Could not read the image content.,تعذر قراءة محتوى الصورة.
+The image content does not match the file extension.,محتوى الصورة لا يطابق امتداد الملف.
+Add documentation before saving.,أضف توثيقًا قبل الحفظ.
+The door documentation is too large. Simplify the drawing and try again.,توثيق الدرفة كبير جدًا. بسّط الرسم ثم حاول مرة أخرى.
+The door documentation contains invalid JSON.,توثيق الدرفة يحتوي JSON غير صالح.
+The door documentation contains values that cannot be saved.,توثيق الدرفة يحتوي قيمًا غير قابلة للحفظ.
+The door documentation must be a JSON object.,توثيق الدرفة يجب أن يكون كائن JSON.
+{0} must be a valid number.,{0} يجب أن يكون رقمًا صالحًا.
+{0} is outside the documentation area.,{0} خارج نطاق مساحة التوثيق.
+{0} must be greater than zero.,{0} يجب أن يكون أكبر من صفر.
+{0} must be a valid point.,{0} يجب أن يكون نقطة صالحة.
+X coordinate,إحداثي X
+Y coordinate,إحداثي Y
+The reference image data is invalid.,بيانات الصورة المرجعية غير صالحة.
+The reference image link is invalid.,رابط الصورة المرجعية غير صالح.
+Image rotation,تدوير الصورة
+The image rotation angle is invalid.,زاوية تدوير الصورة غير صالحة.
+The image opacity is invalid.,شفافية الصورة غير صالحة.
+Image opacity must be between 10% and 100%.,شفافية الصورة يجب أن تكون بين 10% و100%.
+The image lock state is invalid.,حالة قفل الصورة غير صالحة.
+The image crop data is invalid.,بيانات اقتصاص الصورة غير صالحة.
+The image crop bounds are outside the original image.,حدود اقتصاص الصورة خارج نطاق الصورة الأصلية.
+The original image dimensions are required to save the crop.,أبعاد الصورة الأصلية مطلوبة لحفظ الاقتصاص.
+The original image dimensions are invalid.,أبعاد الصورة الأصلية غير صالحة.
+Documentation element {0} is invalid.,عنصر التوثيق رقم {0} غير صالح.
+Documentation element {0} has an invalid or duplicate identifier.,معرّف عنصر التوثيق رقم {0} غير صالح أو مكرر.
+Documentation element {0} has an unsupported type.,نوع عنصر التوثيق رقم {0} غير مدعوم.
+Pen stroke {0} has an invalid number of points.,ضربة القلم رقم {0} تحتوي عدد نقاط غير صالح.
+Pen point {0},نقطة القلم {0}
+Element start,بداية العنصر
+Element end,نهاية العنصر
+Dimension value,قيمة القياس
+The measurement unit is not supported.,وحدة القياس غير مدعومة.
+X position,موضع X
+Y position,موضع Y
+Note position,موضع الملاحظة
+Note text must not exceed {0} characters.,نص الملاحظة يجب ألا يتجاوز {0} حرفًا.
+The door documentation contract is not supported.,عقد توثيق الدرفة غير مدعوم.
+The door documentation version is not supported.,إصدار توثيق الدرفة غير مدعوم.
+The documentation canvas size is invalid.,مقاس لوحة التوثيق غير صالح.
+Door width,عرض الدرفة
+Door length,طول الدرفة
+The door documentation has too many elements or is invalid.,عناصر توثيق الدرفة كثيرة جدًا أو غير صالحة.
+Designer notes must not exceed {0} characters.,ملاحظات المصمم يجب ألا تتجاوز {0} حرفًا.
+The door documentation source is not supported.,مصدر توثيق الدرفة غير مدعوم.
+The selected ready-made shape is not supported.,الشكل الجاهز المحدد غير مدعوم.
+Add a reference image or at least one explanatory element before saving.,أضف صورة مرجعية أو عنصرًا توضيحيًا واحدًا على الأقل قبل الحفظ.
