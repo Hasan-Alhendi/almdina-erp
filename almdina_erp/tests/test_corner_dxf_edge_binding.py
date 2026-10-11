@@ -3,17 +3,24 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from almdina_erp.almdina_erp.domain.cutting.corner_contour_rotation import (
+    _corner_polygon_mm,
     match_corner_contour,
 )
-from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import present_issue
+from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import (
+    present_issue,
+    render_error_cards_html,
+)
 from almdina_erp.almdina_erp.services.piece_cut_dimension_service import OrderPieceCutSpec
 from almdina_erp.almdina_erp.services.strict_dxf_import_service import (
     _apply_strict_dimension_contract,
+    _contour_notch_cm,
+    _l_corner_cut,
 )
 
 WIDTH_MM = 400.0
@@ -586,3 +593,336 @@ def test_symmetric_corner_rejects_when_swapped_edges_have_different_bands():
     assert [error.code for error in errors] == ["CORNER_EDGE_UNRESOLVED"]
     assert errors[0].params["reason"] == "ambiguous"
     assert "corner_rotation_quarter_turns" not in snapshot["sheets"][0]["pieces"][0]
+
+
+def _mm_ring(piece_type, position, width_mm, height_mm, cut_x_mm, cut_y_mm):
+    polygon = _corner_polygon_mm(
+        piece_type=piece_type,
+        position=position,
+        width_mm=width_mm,
+        height_mm=height_mm,
+        cut_x_mm=cut_x_mm,
+        cut_y_mm=cut_y_mm,
+    )
+    assert polygon is not None
+    return [[point[0], point[1]] for point in polygon]
+
+
+def _l_contract(**overrides):
+    values = dict(
+        side_profiles=(),
+        edge_break=0,
+        edge_break_thickness_mm=None,
+        clipped_corner_position="Bottom Right",
+        clipped_corner_width_cm=Decimal("8"),
+        clipped_corner_length_cm=Decimal("16"),
+        allow_rotation=1,
+    )
+    values.update(overrides)
+    return _spec(**values)
+
+
+def _import_l(outer, spec, *, width_cm, height_cm):
+    snapshot = _snapshot(outer, width_cm=width_cm, height_cm=height_cm)
+    errors = _apply_strict_dimension_contract(snapshot, [spec], order=_order())
+    return errors, snapshot["sheets"][0]["pieces"][0]
+
+
+def test_l_without_inner_band_accepts_the_raw_notch_and_keeps_finished_fields():
+    spec = _l_contract(
+        cut_width_cm=Decimal("39.9"),
+        width_deduction_mm=Decimal("1"),
+        side_profiles=(
+            {
+                "side": "long_left",
+                "side_label": "الطول الأيسر",
+                "edge_type": "PVC",
+                "thickness_mm": Decimal("1"),
+            },
+        ),
+    )
+    errors, piece = _import_l(
+        _mm_ring("L-Shaped Corner", "Bottom Right", 399, 800, 80, 160),
+        spec,
+        width_cm=39.9,
+        height_cm=80,
+    )
+    assert errors == []
+    assert piece["clipped_corner_width_cm"] == 8
+    assert piece["clipped_corner_length_cm"] == 16
+    assert piece["corner_mirrored"] == 0
+    assert piece["corner_rotation_quarter_turns"] == 0
+
+
+def test_l_with_one_millimetre_inner_band_accepts_the_raw_cavity():
+    spec = _l_contract(edge_break=1, edge_break_thickness_mm=Decimal("1"))
+    errors, piece = _import_l(
+        _mm_ring("L-Shaped Corner", "Bottom Right", 400, 800, 81, 161),
+        spec,
+        width_cm=40,
+        height_cm=80,
+    )
+    assert errors == []
+    assert piece["corner_rotation_quarter_turns"] == 0
+    assert piece["clipped_corner_width_cm"] == 8
+
+
+def test_l_inner_band_rejects_a_cavity_that_ignores_its_thickness():
+    spec = _l_contract(edge_break=1, edge_break_thickness_mm=Decimal("1"))
+    errors, piece = _import_l(
+        _mm_ring("L-Shaped Corner", "Bottom Right", 400, 800, 80, 161),
+        spec,
+        width_cm=40,
+        height_cm=80,
+    )
+    assert [error.code for error in errors] == ["L_CORNER_NOTCH_MISMATCH"]
+    assert "corner_rotation_quarter_turns" not in piece
+    axis = errors[0].params["axes"]
+    assert [item["axis"] for item in axis] == ["width"]
+    assert axis[0]["finished_remaining_cm"] == "32.000"
+    assert axis[0]["band_mm"] == "1"
+    assert axis[0]["expected_raw_cm"] == "31.900"
+    assert axis[0]["actual_raw_cm"] == "32.000"
+    card = present_issue(errors[0])
+    html = render_error_cards_html(errors)
+    assert card.target == "الدرفة 1 — زاوية L."
+    assert "بعد احتساب سماكات القشاطات" in card.problem
+    assert "32 سم" in card.details[1]
+    assert "1 مم" in card.details[2]
+    assert "31.9 سم" in card.details[3]
+    assert "32 سم" in card.details[4]
+    assert "1 مم" in card.details[5]
+    assert "زيادة" in card.details[5]
+    assert "تفاصيل الاختلاف" in html
+    assert "ما المشكلة؟" in html
+
+
+def test_two_millimetre_inner_band_uses_its_own_thickness():
+    spec = _l_contract(edge_break=1, edge_break_thickness_mm=Decimal("2"))
+    accepted, _piece = _import_l(
+        _mm_ring("L-Shaped Corner", "Bottom Right", 400, 800, 82, 162),
+        spec,
+        width_cm=40,
+        height_cm=80,
+    )
+    rejected, _piece = _import_l(
+        _mm_ring("L-Shaped Corner", "Bottom Right", 400, 800, 80, 162),
+        spec,
+        width_cm=40,
+        height_cm=80,
+    )
+    assert accepted == []
+    assert rejected[0].params["axes"][0]["band_mm"] == "2"
+    assert rejected[0].params["axes"][0]["expected_raw_cm"] == "31.800"
+    assert "2 مم" in present_issue(rejected[0]).details[2]
+
+
+def test_two_bands_on_one_axis_are_added_and_the_other_axis_is_not():
+    spec = _l_contract(
+        edge_break=1,
+        edge_break_thickness_mm=Decimal("1"),
+        cut_width_cm=Decimal("39.9"),
+        width_deduction_mm=Decimal("1"),
+        side_profiles=(
+            {
+                "side": "long_left",
+                "side_label": "الطول الأيسر",
+                "edge_type": "PVC",
+                "thickness_mm": Decimal("1"),
+            },
+        ),
+    )
+    accepted, _piece = _import_l(
+        _mm_ring("L-Shaped Corner", "Bottom Right", 399, 800, 81, 161),
+        spec,
+        width_cm=39.9,
+        height_cm=80,
+    )
+    rejected, _piece = _import_l(
+        _mm_ring("L-Shaped Corner", "Bottom Right", 399, 800, 80, 161),
+        spec,
+        width_cm=39.9,
+        height_cm=80,
+    )
+    assert accepted == []
+    axes = rejected[0].params["axes"]
+    assert [item["axis"] for item in axes] == ["width"]
+    assert axes[0]["band_mm"] == "2"
+    assert axes[0]["expected_raw_cm"] == "31.800"
+    assert axes[0]["actual_raw_cm"] == "31.900"
+
+
+def test_bands_on_different_axes_are_not_added_onto_one_dimension():
+    spec = _l_contract(
+        cut_width_cm=Decimal("39.9"),
+        cut_length_cm=Decimal("79.8"),
+        width_deduction_mm=Decimal("1"),
+        length_deduction_mm=Decimal("2"),
+        side_profiles=(
+            {
+                "side": "long_left",
+                "side_label": "الطول الأيسر",
+                "edge_type": "PVC",
+                "thickness_mm": Decimal("1"),
+            },
+            {
+                "side": "width_top",
+                "side_label": "العرض العلوي",
+                "edge_type": "PVC",
+                "thickness_mm": Decimal("2"),
+            },
+        ),
+    )
+    accepted, _piece = _import_l(
+        _mm_ring("L-Shaped Corner", "Bottom Right", 399, 798, 80, 160),
+        spec,
+        width_cm=39.9,
+        height_cm=79.8,
+    )
+    rejected, _piece = _import_l(
+        _mm_ring("L-Shaped Corner", "Bottom Right", 399, 798, 83, 160),
+        spec,
+        width_cm=39.9,
+        height_cm=79.8,
+    )
+    assert accepted == []
+    card = present_issue(rejected[0])
+    assert rejected[0].params["axes"][0]["axis"] == "width"
+    assert rejected[0].params["axes"][0]["band_mm"] == "1"
+    assert "على الطول" not in " ".join(card.details)
+    assert "1 مم" in card.details[2]
+
+
+def test_outer_notch_band_and_inner_band_are_not_deducted_twice():
+    spec = _l_contract(
+        edge_break=1,
+        edge_break_thickness_mm=Decimal("1"),
+        cut_width_cm=Decimal("39.9"),
+        width_deduction_mm=Decimal("1"),
+        side_profiles=(
+            {
+                "side": "long_right",
+                "side_label": "الطول الأيمن",
+                "edge_type": "PVC",
+                "thickness_mm": Decimal("1"),
+            },
+        ),
+    )
+    accepted, _piece = _import_l(
+        _mm_ring("L-Shaped Corner", "Bottom Right", 399, 800, 80, 161),
+        spec,
+        width_cm=39.9,
+        height_cm=80,
+    )
+    rejected, _piece = _import_l(
+        _mm_ring("L-Shaped Corner", "Bottom Right", 399, 800, 81, 161),
+        spec,
+        width_cm=39.9,
+        height_cm=80,
+    )
+    assert accepted == []
+    assert rejected[0].params["axes"][0]["band_mm"] == "1"
+    assert rejected[0].params["axes"][0]["expected_raw_cm"] == "31.900"
+    assert "نقصان" in present_issue(rejected[0]).details[5]
+
+
+@pytest.mark.parametrize("turns", [0, 1, 2, 3])
+def test_raw_l_notch_matches_after_each_quarter_turn(turns):
+    spec = _l_contract(edge_break=1, edge_break_thickness_mm=Decimal("1"))
+    ring = _mm_ring("L-Shaped Corner", "Bottom Right", 400, 800, 81, 161)
+    rotated, width_mm, height_mm = _turned(ring, turns)
+    errors, piece = _import_l(
+        rotated,
+        spec,
+        width_cm=width_mm / 10.0,
+        height_cm=height_mm / 10.0,
+    )
+    assert errors == []
+    assert piece["corner_mirrored"] == 0
+    assert piece["corner_rotation_quarter_turns"] == turns
+
+
+@pytest.mark.parametrize("turns", [0, 1, 2, 3])
+def test_raw_l_notch_matches_after_a_mirror_and_each_quarter_turn(turns):
+    spec = _l_contract(edge_break=1, edge_break_thickness_mm=Decimal("1"))
+    ring = [(point[0], point[1]) for point in _mm_ring("L-Shaped Corner", "Bottom Right", 400, 800, 81, 161)]
+    transformed, width_mm, height_mm = _mirror_then_turn(ring, turns)
+    errors, piece = _import_l(
+        transformed,
+        spec,
+        width_cm=width_mm / 10.0,
+        height_cm=height_mm / 10.0,
+    )
+    assert errors == []
+    assert piece["corner_mirrored"] == 1
+    assert piece["corner_rotation_quarter_turns"] == turns
+
+
+def test_unmatchable_corner_shape_keeps_the_geometric_error():
+    spec = _l_contract(edge_break=1, edge_break_thickness_mm=Decimal("1"))
+    clipped = _mm_ring("Clipped Corner", "Bottom Right", 400, 800, 81, 161)
+    errors, _piece = _import_l(clipped, spec, width_cm=40, height_cm=80)
+    assert [error.code for error in errors] == ["CORNER_EDGE_UNRESOLVED"]
+    assert errors[0].params["reason"] == "none"
+    card = present_issue(errors[0])
+    assert "دوران أو انعكاس" in card.problem
+    assert card.details == ()
+    assert "مقاس القص الخام" not in card.problem
+
+
+def test_unproven_inner_thickness_does_not_show_a_guessed_deduction():
+    spec = _l_contract(edge_break=1, edge_break_thickness_mm=None)
+    errors, _piece = _import_l(
+        _mm_ring("L-Shaped Corner", "Bottom Right", 400, 800, 80, 161),
+        spec,
+        width_cm=40,
+        height_cm=80,
+    )
+    assert [error.code for error in errors] == ["CORNER_EDGE_UNRESOLVED"]
+    assert errors[0].params["reason"] == "break_thickness_unknown"
+    card = present_issue(errors[0])
+    assert "غير معروفة" in card.problem
+    assert card.details == ()
+    assert "31.9" not in card.problem
+    assert "1 مم" not in card.action
+
+
+def test_failed_dxf_import_throws_before_replacing_the_saved_plan():
+    root = Path(__file__).resolve().parents[1]
+    source = (root / "almdina_erp" / "services" / "shop_floor_dxf_service.py").read_text(
+        encoding="utf-8"
+    )
+    upload = source.split("def upload_production_dxf", 1)[1].split(
+        "def recalculate_drawing_plan",
+        1,
+    )[0]
+    rejected = upload.index("_throw_dxf_validation_errors(issues=getattr(error, \"issues\", None))")
+    invalid = upload.index("if not validation.get(\"is_valid\")")
+    persisted = upload.index("save_uploaded_dxf_plan(")
+    assert rejected < persisted
+    assert invalid < persisted
+
+
+def test_clipped_regular_and_special_do_not_use_the_l_raw_notch():
+    clipped = _l_contract(
+        piece_type="Clipped Corner",
+        edge_break=1,
+        edge_break_thickness_mm=Decimal("2"),
+    )
+    regular = _l_contract(piece_type="Regular", edge_break=0)
+    special = _l_contract(piece_type="Special", edge_break=1, edge_break_thickness_mm=Decimal("2"))
+    assert _l_corner_cut(clipped) is None
+    assert _l_corner_cut(regular) is None
+    assert _l_corner_cut(special) is None
+    assert _contour_notch_cm(clipped) == (8.0, 16.0)
+
+    errors, piece = _import_l(
+        _mm_ring("Clipped Corner", "Bottom Right", 400, 800, 80, 160),
+        clipped,
+        width_cm=40,
+        height_cm=80,
+    )
+    assert errors == []
+    assert piece["piece_type"] == "Clipped Corner"
+    assert piece["clipped_corner_width_cm"] == 8
+    assert piece["corner_rotation_quarter_turns"] == 0

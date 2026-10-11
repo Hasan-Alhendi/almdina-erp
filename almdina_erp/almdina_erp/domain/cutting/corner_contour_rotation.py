@@ -109,6 +109,66 @@ def match_corner_contour(
     return CornerContourMatch(quarter_turns, "unique", mirrored)
 
 
+def measure_l_remainings_cm(
+    outer_mm: Sequence[Sequence[float]],
+    *,
+    rotated: bool,
+    tolerance_mm: float = GEOMETRY_TOLERANCE_MM,
+) -> tuple[float, float] | None:
+    """Return order-frame L remnants, or None when the ring is not one L notch.
+
+    The two edges at the single reflex vertex are the notch bites. A remnant is
+    the bounding side minus the bite parallel to it. ``rotated`` swaps the axes
+    back into the order frame after a 90° or 270° bbox match; it does not apply
+    another transform to the contour.
+    """
+
+    points = _prepare_ring(outer_mm, tolerance_mm)
+    points = _localize(_collapse_collinear(points, tolerance_mm))
+    if len(points) != 6:
+        return None
+    crosses = [
+        _turn_cross(points[index - 1], points[index], points[(index + 1) % 6])
+        for index in range(6)
+    ]
+    limit = tolerance_mm * tolerance_mm
+    reflex = [index for index, cross in enumerate(crosses) if abs(cross) > limit]
+    if len(reflex) != 6:
+        return None
+    positive = [index for index in reflex if crosses[index] > 0]
+    negative = [index for index in reflex if crosses[index] < 0]
+    if len(positive) == 1 and len(negative) == 5:
+        reflex_index = positive[0]
+    elif len(negative) == 1 and len(positive) == 5:
+        reflex_index = negative[0]
+    else:
+        return None
+
+    previous = points[reflex_index - 1]
+    current = points[reflex_index]
+    following = points[(reflex_index + 1) % 6]
+    horizontal: list[float] = []
+    vertical: list[float] = []
+    for start, end in ((previous, current), (current, following)):
+        if abs(start[1] - end[1]) <= tolerance_mm and abs(start[0] - end[0]) > tolerance_mm:
+            horizontal.append(math.dist(start, end))
+        elif abs(start[0] - end[0]) <= tolerance_mm and abs(start[1] - end[1]) > tolerance_mm:
+            vertical.append(math.dist(start, end))
+    if len(horizontal) != 1 or len(vertical) != 1:
+        return None
+    span_x = max(point[0] for point in points) - min(point[0] for point in points)
+    span_y = max(point[1] for point in points) - min(point[1] for point in points)
+    if rotated:
+        return (span_y - vertical[0]) / 10.0, (span_x - horizontal[0]) / 10.0
+    return (span_x - horizontal[0]) / 10.0, (span_y - vertical[0]) / 10.0
+
+
+def _turn_cross(start: Point, corner: Point, end: Point) -> float:
+    return (corner[0] - start[0]) * (end[1] - corner[1]) - (corner[1] - start[1]) * (
+        end[0] - corner[0]
+    )
+
+
 def _transform_point(
     point: Point,
     *,

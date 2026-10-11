@@ -160,6 +160,52 @@ def _pair_nouns(issue: DxfValidationIssue) -> tuple[str, str]:
     return "القطعتان", "القطعتين"
 
 
+def _ltr_measure(value: Any, unit: str, *, millimeters: bool = False) -> str:
+    text = format_mm(value) if millimeters else format_cm(value)
+    return f"\u2066{text} {unit}\u2069"
+
+
+def _l_notch_difference_lines(axes: Any) -> tuple[str, ...]:
+    if not isinstance(axes, (list, tuple)):
+        return ()
+    lines: list[str] = []
+    axis_names = {"width": "العرض", "length": "الطول"}
+    for axis in axes:
+        if not isinstance(axis, dict):
+            continue
+        if any(
+            axis.get(key) in (None, "")
+            for key in (
+                "finished_remaining_cm",
+                "band_mm",
+                "expected_raw_cm",
+                "actual_raw_cm",
+                "delta_mm",
+            )
+        ):
+            continue
+        try:
+            delta = float(axis.get("delta_mm"))
+        except (TypeError, ValueError):
+            continue
+        if delta == 0:
+            continue
+        direction = "زيادة" if delta > 0 else "نقصان"
+        name = axis_names.get(str(axis.get("axis") or ""))
+        if name:
+            lines.append(f"على {name}:")
+        lines.extend(
+            (
+                f"البعد المتبقي المطلوب بعد القشاط: {_ltr_measure(axis.get('finished_remaining_cm'), 'سم')}.",
+                f"سماكة القشاطات المؤثرة على هذا البعد: {_ltr_measure(axis.get('band_mm'), 'مم', millimeters=True)}.",
+                f"مقاس القص الخام المطلوب: {_ltr_measure(axis.get('expected_raw_cm'), 'سم')}.",
+                f"المقاس الموجود في DXF: {_ltr_measure(axis.get('actual_raw_cm'), 'سم')}.",
+                f"الفرق: {_ltr_measure(abs(delta), 'مم', millimeters=True)} {direction}.",
+            )
+        )
+    return tuple(lines)
+
+
 def _action_for_context(action: str, context: str) -> str:
     if context == "upload":
         return action
@@ -355,12 +401,29 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
             issue.category,
         )
     if code == codes.CORNER_EDGE_UNRESOLVED:
+        reason = str(params.get("reason") or "")
+        if reason == "break_thickness_unknown":
+            problem = "تعذر التحقق من أبعاد زاوية L لأن سماكة قشاط الزاوية الداخلي غير معروفة."
+            action = "حدّد نوع قشاط الزاوية وسماكته في الطلب، ثم أعد رفع الملف. لا يمكن احتساب خصم غير مثبت."
+        elif reason == "ambiguous":
+            problem = "تعذر ربط قشاط الزاوية بأضلاع المحيط لأن أكثر من دوران أو انعكاس يضع القشاط على أضلاع مختلفة."
+            action = "اجعل محيط الدرفة مطابقًا لزاوية L أو الزاوية الكسر في الطلب بعد دوران 0 أو 90 أو 180 أو 270 درجة، أو بعد انعكاس واحد مع إحدى هذه الدورانات، بشرط أن يبقى القشاط على نفس الضلع. المقاس الخارجي وحده لا يكفي."
+        elif reason == "invalid":
+            problem = "تعذر ربط قشاط الزاوية بأضلاع المحيط لأن بيانات زاوية الطلب لا تكفي لبناء شكل الدرفة."
+            action = "راجع موضع الزاوية ومسافات القص في الطلب، ثم أعد رفع الملف."
+        else:
+            problem = "تعذر ربط قشاط الزاوية بأضلاع المحيط لأن شكل الدرفة لا يطابق زاوية الطلب بعد دوران أو انعكاس واضح."
+            action = "اجعل محيط الدرفة مطابقًا لزاوية L أو الزاوية الكسر في الطلب بعد دوران 0 أو 90 أو 180 أو 270 درجة، أو بعد انعكاس واحد مع إحدى هذه الدورانات. المقاس الخارجي وحده لا يكفي."
+        return PresentedDxfError(problem, target_text, action, code, issue.category)
+    if code == codes.L_CORNER_NOTCH_MISMATCH:
+        l_target = target_text[:-1] + " — زاوية L." if target_text.endswith(".") else f"{target_text} — زاوية L."
         return PresentedDxfError(
-            "تعذر ربط قشاط الزاوية بأضلاع المحيط لأن شكل الدرفة لا يطابق زاوية الطلب بعد دوران أو انعكاس واضح.",
-            target_text,
-            "اجعل محيط الدرفة مطابقًا لزاوية L أو الزاوية الكسر في الطلب بعد دوران 0 أو 90 أو 180 أو 270 درجة، أو بعد انعكاس واحد مع إحدى هذه الدورانات. المقاس الخارجي وحده لا يكفي.",
+            "أبعاد زاوية L في ملف DXF لا تطابق أبعاد القص المطلوبة بعد احتساب سماكات القشاطات.",
+            l_target,
+            "راجع أبعاد التجويف الداخلي في AutoCAD، وعدّل البعد الموضح ليطابق مقاس القص الخام المطلوب، ثم أعد رفع الملف.",
             code,
             issue.category,
+            _l_notch_difference_lines(params.get("axes")),
         )
 
     if code == codes.FORBIDDEN_ROTATION:
@@ -1017,9 +1080,14 @@ def render_error_cards_html(
     def render_card(item: PresentedDxfError) -> str:
         details = ""
         if item.details:
+            summary = (
+                "تفاصيل الاختلاف"
+                if item.code == codes.L_CORNER_NOTCH_MISMATCH
+                else "عرض كل المواضع المتأثرة"
+            )
             details = (
                 "<details class='alm-dxf-error-details' style='margin-top:6px;'>"
-                "<summary>عرض كل المواضع المتأثرة</summary><ul>"
+                f"<summary>{summary}</summary><ul>"
                 + "".join(f"<li>{html.escape(detail)}</li>" for detail in item.details)
                 + "</ul></details>"
             )

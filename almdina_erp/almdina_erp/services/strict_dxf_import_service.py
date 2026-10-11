@@ -8,6 +8,7 @@ from typing import Any
 from almdina_erp.almdina_erp.application.cutting.plan_revisions import PlanSettings
 from almdina_erp.almdina_erp.domain.cutting.corner_contour_rotation import (
     match_corner_contour,
+    measure_l_remainings_cm,
 )
 from almdina_erp.almdina_erp.domain.cutting.dxf_applied_trim import (
     DxfAppliedTrimError,
@@ -19,7 +20,9 @@ from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
 )
 from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
     CutDimensionError,
+    MM_PER_CM,
     dimensions_match_exact,
+    l_shaped_raw_cut,
     normalize_cut_cm,
     special_bbox_allowed_range_cm,
     special_bbox_matches_cut_envelope_with_unrecorded_edge_deduction,
@@ -37,6 +40,7 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
     CATEGORY_TOPOLOGY,
     APPLIED_TRIM_OVERFLOW,
     CORNER_EDGE_UNRESOLVED,
+    L_CORNER_NOTCH_MISMATCH,
     CUT_DIMENSIONS_BIND_FAILED,
     CUT_DIMENSIONS_MISSING,
     CUT_SIZE_MISMATCH,
@@ -334,14 +338,15 @@ def _unique_corner_contour_candidate(
     identified: list[int] = []
     for index in matches:
         spec: OrderPieceCutSpec = unmatched[index]["spec"]
+        notch_width_cm, notch_length_cm = _contour_notch_cm(spec)
         match = match_corner_contour(
             outer,
             piece_type=spec.piece_type,
             position=str(spec.clipped_corner_position or ""),
             width_cm=float(spec.cut_width_cm),
             length_cm=float(spec.cut_length_cm),
-            cut_width_cm=float(spec.clipped_corner_width_cm),
-            cut_length_cm=float(spec.clipped_corner_length_cm),
+            cut_width_cm=notch_width_cm,
+            cut_length_cm=notch_length_cm,
             edge_bands=_corner_band_tokens(spec),
         )
         if match.reason == "unique":
@@ -595,6 +600,114 @@ def _corner_edge_markers_selected(piece: dict[str, Any]) -> bool:
     )
 
 
+def _side_thickness_mm(spec: OrderPieceCutSpec) -> dict[str, Decimal]:
+    thicknesses = {
+        side: Decimal("0")
+        for side in ("long_right", "long_left", "width_top", "width_bottom")
+    }
+    for profile in spec.side_profiles:
+        side = str(profile.get("side") or "")
+        if side in thicknesses:
+            thicknesses[side] = Decimal(str(profile.get("thickness_mm") or 0))
+    return thicknesses
+
+
+def _l_corner_cut(spec: OrderPieceCutSpec):
+    if spec.piece_type != "L-Shaped Corner":
+        return None
+    return l_shaped_raw_cut(
+        finished_width_cm=spec.finished_width_cm,
+        finished_length_cm=spec.finished_length_cm,
+        notch_width_cm=spec.clipped_corner_width_cm,
+        notch_length_cm=spec.clipped_corner_length_cm,
+        position=str(spec.clipped_corner_position or ""),
+        side_thickness_mm=_side_thickness_mm(spec),
+        edge_break=bool(spec.edge_break),
+        edge_break_thickness_mm=spec.edge_break_thickness_mm,
+    )
+
+
+def _contour_notch_cm(spec: OrderPieceCutSpec) -> tuple[float, float]:
+    """Notch passed to the contour matcher, in centimetres.
+
+    L corners use the raw bite once the inner-band thickness is proven. Clipped
+    corners, and an L whose inner thickness cannot be loaded, keep the stored
+    finished cut distance.
+    """
+
+    finished = (
+        float(spec.clipped_corner_width_cm),
+        float(spec.clipped_corner_length_cm),
+    )
+    raw = _l_corner_cut(spec)
+    if (
+        raw is None
+        or not raw.proven
+        or raw.raw_notch_width_cm is None
+        or raw.raw_notch_length_cm is None
+    ):
+        return finished
+    return float(raw.raw_notch_width_cm), float(raw.raw_notch_length_cm)
+
+
+def _l_notch_mismatch_issue(
+    piece: dict[str, Any],
+    spec: OrderPieceCutSpec,
+    candidate: dict[str, Any],
+    outer: list[list[float]],
+) -> DxfValidationIssue | None:
+    raw = _l_corner_cut(spec)
+    if raw is None or not raw.proven:
+        return None
+    measured = measure_l_remainings_cm(outer, rotated=bool(piece.get("rotated")))
+    if measured is None:
+        return None
+    axes: list[dict[str, str]] = []
+    for name, axis_cut, actual in (
+        ("width", raw.width, measured[0]),
+        ("length", raw.length, measured[1]),
+    ):
+        if axis_cut.expected_raw_cm is None or axis_cut.band_mm is None:
+            return None
+        actual_cm = normalize_cut_cm(actual)
+        if actual_cm == axis_cut.expected_raw_cm:
+            continue
+        axes.append(
+            {
+                "axis": name,
+                "finished_remaining_cm": str(axis_cut.finished_remaining_cm),
+                "band_mm": str(axis_cut.band_mm),
+                "expected_raw_cm": str(axis_cut.expected_raw_cm),
+                "actual_raw_cm": str(actual_cm),
+                "delta_mm": str((actual_cm - axis_cut.expected_raw_cm) * MM_PER_CM),
+            }
+        )
+    if not axes:
+        return None
+    return issue(
+        L_CORNER_NOTCH_MISMATCH,
+        CATEGORY_DIMENSIONS,
+        target=piece_target(
+            source_piece_no=spec.row_index,
+            copy_no=int(candidate.get("copy_no") or 1),
+            label=str(candidate.get("label") or ""),
+        ),
+        params={"piece_type": spec.piece_type, "axes": axes},
+    )
+
+
+def _l_break_thickness_unproven(
+    piece: dict[str, Any],
+    spec: OrderPieceCutSpec,
+    outer: list[list[float]],
+) -> bool:
+    if spec.piece_type != "L-Shaped Corner" or not spec.edge_break:
+        return False
+    if spec.edge_break_thickness_mm is not None:
+        return False
+    return measure_l_remainings_cm(outer, rotated=bool(piece.get("rotated"))) is not None
+
+
 def _outer_ring_mm(piece: dict[str, Any]) -> list[list[float]] | None:
     geometry = piece.get("geometry")
     if not isinstance(geometry, dict):
@@ -621,6 +734,7 @@ def _bind_corner_edge_rotation(
         return None
 
     outer = _outer_ring_mm(piece)
+    notch_width_cm, notch_length_cm = _contour_notch_cm(spec)
     match = (
         match_corner_contour(
             outer,
@@ -628,14 +742,25 @@ def _bind_corner_edge_rotation(
             position=str(spec.clipped_corner_position or ""),
             width_cm=float(spec.cut_width_cm),
             length_cm=float(spec.cut_length_cm),
-            cut_width_cm=float(spec.clipped_corner_width_cm),
-            cut_length_cm=float(spec.clipped_corner_length_cm),
+            cut_width_cm=notch_width_cm,
+            cut_length_cm=notch_length_cm,
             edge_bands=_corner_band_tokens(spec),
         )
         if outer is not None
         else None
     )
     if match is None or match.quarter_turns is None:
+        if outer is not None:
+            mismatch = _l_notch_mismatch_issue(piece, spec, candidate, outer)
+            if mismatch is not None:
+                return mismatch
+        reason = match.reason if match is not None else "none"
+        if (
+            reason == "none"
+            and outer is not None
+            and _l_break_thickness_unproven(piece, spec, outer)
+        ):
+            reason = "break_thickness_unknown"
         return issue(
             CORNER_EDGE_UNRESOLVED,
             CATEGORY_TOPOLOGY,
@@ -646,7 +771,7 @@ def _bind_corner_edge_rotation(
             ),
             params={
                 "piece_type": spec.piece_type,
-                "reason": match.reason if match is not None else "none",
+                "reason": reason,
             },
         )
 

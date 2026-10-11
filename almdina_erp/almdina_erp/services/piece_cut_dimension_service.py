@@ -57,6 +57,7 @@ class OrderPieceCutSpec:
     clipped_corner_position: str = ""
     clipped_corner_width_cm: Decimal = Decimal("0")
     clipped_corner_length_cm: Decimal = Decimal("0")
+    edge_break_thickness_mm: Decimal | None = None
 
 
 def _optional_cm(value: Any) -> Decimal:
@@ -70,6 +71,45 @@ def _is_selected(value: Any) -> bool:
     if isinstance(value, str):
         return value.strip().lower() not in {"", "0", "false", "no"}
     return bool(value)
+
+
+def _l_break_type_name(order: Any, row: Any) -> str:
+    """Edge type shared with costing for the inner L strap. Empty when unused."""
+
+    if str(getattr(row, "piece_type", "") or "") != "L-Shaped Corner":
+        return ""
+    if not _is_selected(getattr(row, "edge_break", 0)):
+        return ""
+    return (
+        str(getattr(row, "edge_type", "") or "").strip()
+        or str(getattr(order, "default_edge_type", "") or "").strip()
+    )
+
+
+def _l_break_thickness_mm(
+    order: Any,
+    row: Any,
+    profiles: dict[str, dict[str, Any]],
+) -> Decimal | None:
+    """Proven inner-band thickness, or None when the type cannot be loaded.
+
+    A missing thickness does not block the order. DXF matching then refuses to
+    invent a deduction.
+    """
+
+    edge_type = _l_break_type_name(order, row)
+    if not edge_type:
+        return None
+    profile = profiles.get(edge_type)
+    if not profile or _is_selected(profile.get("disabled")):
+        return None
+    try:
+        thickness = decimal_value(profile.get("thickness_mm"), label="سماكة قشاط الزاوية")
+    except CutDimensionError:
+        return None
+    if thickness < 0:
+        return None
+    return thickness
 
 
 def _effective_type(order: Any, row: Any, side: str) -> str:
@@ -115,6 +155,9 @@ def build_order_piece_cut_specs(
             edge_type = _effective_type(order, row, side)
             if edge_type:
                 effective_names.add(edge_type)
+        break_type = _l_break_type_name(order, row)
+        if break_type:
+            effective_names.add(break_type)
 
     profiles = loader(effective_names)
     specs: list[OrderPieceCutSpec] = []
@@ -226,6 +269,7 @@ def build_order_piece_cut_specs(
                 clipped_corner_position=str(getattr(row, "clipped_corner_position", "") or ""),
                 clipped_corner_width_cm=_optional_cm(getattr(row, "clipped_corner_width_cm", 0)),
                 clipped_corner_length_cm=_optional_cm(getattr(row, "clipped_corner_length_cm", 0)),
+                edge_break_thickness_mm=_l_break_thickness_mm(order, row, profiles),
             )
         )
 
