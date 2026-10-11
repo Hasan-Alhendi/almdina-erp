@@ -309,7 +309,7 @@ jobs:
                           "dirtyBeforeSave", "ajaxCountAtSave", "costUxPresent", "pendingPriceEdits",
                           "saveStarted", "saveSettled", "scriptEvents", "runSeriallyCalls", "runSeriallySettled",
                           "beforeSaveHandlers", "beforeSaveTriggerStarted", "beforeSaveTriggerSettled",
-                          "activeBeforeSaveHandler",
+                          "activeBeforeSaveHandler", "handlerCalls", "afterServerCalls",
                       )
                       if key in save_probe
                   },

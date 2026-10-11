@@ -113,10 +113,11 @@ def evaluate(page: Page, step: str, expression: str, arg=None):
             async payload => {
                 const operation = """ + expression + """;
                 let timeoutHandle;
+                const timeoutMs = payload.timeoutMs;
                 const timeout = new Promise((_, reject) => {
                     timeoutHandle = setTimeout(
-                        () => reject(new Error(`Browser operation timed out after ${payload.timeoutMs}ms`)),
-                        payload.timeoutMs,
+                        () => reject(new Error(`Browser operation timed out after ${timeoutMs}ms`)),
+                        timeoutMs,
                     );
                 });
                 try {
@@ -126,7 +127,8 @@ def evaluate(page: Page, step: str, expression: str, arg=None):
                 }
             }
         """
-        result = page.evaluate(wrapped_expression, {"arg": arg, "timeoutMs": 90_000})
+        timeout_ms = 35_000 if step == "commit recovered EDIT session" else 90_000
+        result = page.evaluate(wrapped_expression, {"arg": arg, "timeoutMs": timeout_ms})
         _trace_event("step_completed", step=step)
         ACTIVE_STEP = None
         return result
@@ -322,34 +324,71 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
             beforeSaveTriggerStarted: false,
             beforeSaveTriggerSettled: null,
             activeBeforeSaveHandler: null,
+            handlerCalls: [],
+            afterServerCalls: [],
             scriptEvents: [],
             runSeriallyCalls: 0,
             runSeriallySettled: null,
         };
         const manager = frm.script_manager;
-        const handlers = manager && manager.handlers && manager.handlers.before_save;
-        if (Array.isArray(handlers)) {
-            probe.beforeSaveHandlers = handlers.length;
-            handlers.forEach((entry, index) => {
-                const key = typeof entry === 'function' ? null : 'handler';
-                const handler = key ? entry && entry[key] : entry;
-                if (typeof handler !== 'function') return;
-                const wrapped = function(...args) {
-                    probe.activeBeforeSaveHandler = index;
-                    const result = handler.apply(this, args);
+        if (manager && typeof manager.get_handlers === 'function') {
+            const originalGetHandlers = manager.get_handlers;
+            manager.get_handlers = function(eventName, doctype) {
+                const result = originalGetHandlers.call(this, eventName, doctype);
+                if (!probe.saveStarted || !['validate', 'before_save'].includes(eventName)) return result;
+                if (eventName === 'before_save') {
+                    probe.beforeSaveHandlers = result.new_style.length + result.old_style.length;
+                }
+                result.new_style = result.new_style.map((handler, index) => function(...args) {
+                    const record = {event: eventName, style: 'new', index, state: 'started'};
+                    probe.handlerCalls.push(record);
+                    if (eventName === 'before_save') probe.activeBeforeSaveHandler = index;
+                    let handlerResult;
+                    try {
+                        handlerResult = handler.apply(this, args);
+                    } catch (error) {
+                        record.state = String(error).slice(0, 160);
+                        throw error;
+                    }
+                    if (handlerResult && typeof handlerResult.then === 'function') {
+                        handlerResult.then(
+                            () => {
+                                record.state = 'resolved';
+                                if (probe.activeBeforeSaveHandler === index) probe.activeBeforeSaveHandler = null;
+                            },
+                            error => {
+                                record.state = String(error).slice(0, 160);
+                                if (probe.activeBeforeSaveHandler === index) probe.activeBeforeSaveHandler = null;
+                            },
+                        );
+                    } else {
+                        record.state = 'resolved';
+                        if (probe.activeBeforeSaveHandler === index) probe.activeBeforeSaveHandler = null;
+                    }
+                    return handlerResult;
+                });
+                return result;
+            };
+        }
+        if (window.frappe && typeof frappe.after_server_call === 'function') {
+            const originalAfterServerCall = frappe.after_server_call;
+            frappe.after_server_call = function(...args) {
+                const result = originalAfterServerCall.apply(this, args);
+                if (probe.saveStarted) {
+                    const record = {
+                        ajaxCount: frappe.request && frappe.request.ajax_count,
+                        state: result && typeof result.then === 'function' ? 'waiting' : 'resolved',
+                    };
+                    probe.afterServerCalls.push(record);
                     if (result && typeof result.then === 'function') {
                         result.then(
-                            () => { if (probe.activeBeforeSaveHandler === index) probe.activeBeforeSaveHandler = null; },
-                            () => { if (probe.activeBeforeSaveHandler === index) probe.activeBeforeSaveHandler = null; },
+                            () => { record.state = 'resolved'; },
+                            error => { record.state = String(error).slice(0, 160); },
                         );
-                    } else if (probe.activeBeforeSaveHandler === index) {
-                        probe.activeBeforeSaveHandler = null;
                     }
-                    return result;
-                };
-                if (key) entry[key] = wrapped;
-                else handlers[index] = wrapped;
-            });
+                }
+                return result;
+            };
         }
         if (manager && typeof manager.trigger === 'function') {
             const originalTrigger = manager.trigger;
