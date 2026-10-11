@@ -23,7 +23,33 @@ def wait_for_function(page: Page, step: str, expression: str, *, arg=None, timeo
     try:
         page.wait_for_function(expression, arg=arg, timeout=timeout)
     except Exception as exc:
-        raise RuntimeError(f"Desk browser wait '{step}' failed: {exc}") from exc
+        try:
+            state = page.evaluate(
+                """() => {
+                    const frm = window.cur_frm;
+                    const coordinator = window.AlmdinaDcoEditSessionCoordinator;
+                    const session = frm && coordinator && coordinator.snapshot(frm);
+                    return {
+                        url: window.location.href,
+                        route: window.frappe && frappe.get_route && frappe.get_route(),
+                        form: frm && frm.doc ? {
+                            name: frm.doc.name,
+                            status: frm.doc.status,
+                            order_notes: frm.doc.order_notes,
+                            dirty: frm.is_dirty(),
+                        } : null,
+                        editSession: session && {
+                            phase: session.phase,
+                            activeKind: session.activeKind,
+                            sessionGeneration: session.sessionGeneration,
+                        },
+                        body: (document.body && document.body.innerText || '').slice(-2400),
+                    };
+                }"""
+            )
+        except Exception as diagnostic_error:
+            state = f"unavailable: {diagnostic_error}"
+        raise RuntimeError(f"Desk browser wait '{step}' failed: {exc}; desk_state={state}") from exc
 
 
 def open_dco(page: Page, name: str) -> None:
