@@ -164,6 +164,21 @@ class TestActiveUiHasNoLanguageTextBranches(unittest.TestCase):
                     leftovers.append(f"{relative}:{number}: {line.strip()}")
         self.assertEqual(leftovers, [])
 
+    def test_plan_preview_visible_copy_uses_english_message_ids(self) -> None:
+        paths = (
+            PUBLIC_JS / "door_cutting_order" / "cutting_plan" / "door_cutting_order_plan_preview_session.js",
+            PUBLIC_JS / "door_cutting_order" / "cutting_plan" / "door_cutting_order_plan_preview_presenter.js",
+            PUBLIC_JS / "door_cutting_order" / "cutting_plan" / "door_cutting_order_plan_preview_edit_ux.js",
+            PUBLIC_JS / "door_cutting_order" / "cutting_plan" / "door_cutting_order_plan_controls_ux.js",
+        )
+        leftovers = []
+        for path in paths:
+            relative = path.relative_to(ROOT)
+            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+                if ARABIC_TEXT.search(line):
+                    leftovers.append(f"{relative}:{number}: {line.strip()}")
+        self.assertEqual(leftovers, [])
+
 
 if __name__ == "__main__":
     unittest.main()

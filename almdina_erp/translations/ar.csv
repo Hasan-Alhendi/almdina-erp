@@ -1400,3 +1400,101 @@ Saving the selected cutting plan...,جاري حفظ خطة القص المختا
 Approving the cutting plan...,جاري اعتماد خطة القص...
 Cancelling the cutting plan approval...,جاري إلغاء اعتماد خطة القص...
 Saving the offcut classification...,جارٍ حفظ تصنيف قطع النقص...
+Could not load the cutting plan preview service. Reload the page.,تعذر تحميل خدمة معاينة خطة القص. أعد تحميل الصفحة.
+Could not create the preview.,تعذر إنشاء المعاينة.
+Could not save the preview.,تعذر حفظ المعاينة.
+The requested trim margin was kept,تم الاحتفاظ بهامش التشذيب المطلوب
+Trim was reduced so every piece could be placed,تم تخفيض التشذيب لإتاحة توزيع جميع القطع
+Trim was reduced to avoid an unnecessary extra board,تم تخفيض التشذيب لتجنب لوح إضافي غير ضروري
+Ready to try,جاهز للتجربة
+"Change the settings, then press “Recalculate with the current settings”. The saved plan has not changed.",غيّر الإعدادات ثم اضغط «إعادة الحساب بالإعدادات الحالية». الخطة المحفوظة لم تتغير.
+Trial,تجربة
+The previous preview is out of date,المعاينة السابقة أصبحت قديمة
+You changed a setting after the last preview. The plan shown below is the saved plan; recalculate to see the new result.,غيّرت أحد الإعدادات بعد آخر معاينة. الخطة المعروضة أدناه هي الخطة المحفوظة؛ أعد الحساب لرؤية النتيجة الجديدة.
+Recalculate,أعد الحساب
+Calculating the preview,جاري حساب المعاينة
+The engine is running on the current settings without saving any change.,يتم تشغيل المحرك على الإعدادات الحالية دون حفظ أي تغيير.
+Calculating,جاري الحساب
+The preview failed,تعذرت المعاينة
+"Nothing was saved. Review the settings, then recalculate.",لم يتم حفظ أي تغيير. راجع الإعدادات ثم أعد الحساب.
+Not saved,لم تُحفظ
+Requested algorithm,الخوارزمية المطلوبة
+Strategy used,الاستراتيجية المستخدمة
+Kerf used,Kerf المستخدم
+Requested trim,Trim المطلوب
+Applied trim,Trim الفعلي
+Width {0} mm / length {1} mm,عرض {0} مم / طول {1} مم
+Attempts,المحاولات
+Calculation time,وقت الحساب
+{0} s,{0} ث
+Trim decision,قرار التشذيب
+Solver status,حالة Solver
+Board count,عدد الألواح
+Waste percent,نسبة الهدر
+Cut lines,خطوط القص
+Expected plan cost,تكلفة الخطة المتوقعة
+Saving the selected preview,جاري حفظ المعاينة المختارة
+Preview cannot be saved,معاينة غير صالحة للحفظ
+Unsaved preview,معاينة غير محفوظة
+The same plan you see is being saved without running the algorithm again.,يتم الآن تثبيت نفس الخطة التي تراها دون إعادة تشغيل الخوارزمية.
+"The result is shown for review, but it did not pass the engineering check. Try other settings before saving.",تم عرض النتيجة للمراجعة، لكنها لم تنجح في التحقق الهندسي. جرّب إعدادات أخرى قبل الحفظ.
+This plan and its cost are only a preview. They both become official when you press “Save”.,هذه الخطة وتكلفتها المعروضة للمعاينة فقط. ستصبحان رسميتين معًا عند الضغط على «حفظ».
+This plan is only a preview. The new plan becomes official when you press “Save”.,هذه الخطة للمعاينة فقط. ستصبح الخطة الجديدة رسمية عند الضغط على «حفظ».
+Not valid,غير صالحة
+PREVIEW,PREVIEW
+Save or cancel the cutting plan edit before changing the plan source.,احفظ أو ألغِ تعديل خطة القص قبل تغيير مصدر الخطة.
+Press “Edit” to try other settings or algorithms. The saved plan will not change while you are trying them.,اضغط «تعديل» لتجربة إعدادات أو خوارزميات أخرى. لن تتغير الخطة المحفوظة أثناء التجربة.
+"Change the settings as you like, then press “Recalculate with the current settings” to preview the result. Saving stays unavailable until you preview.",عدّل الإعدادات كما تريد ثم اضغط «إعادة الحساب بالإعدادات الحالية» لمعاينة النتيجة. الحفظ لن يتفعل قبل المعاينة.
+The settings were changed. Recalculate to preview the new plan before saving.,تم تعديل الإعدادات. أعد الحساب لمعاينة الخطة الجديدة قبل الحفظ.
+A temporary preview is being calculated. Nothing is saved during the preview.,جاري حساب معاينة مؤقتة. لا يتم حفظ أي تغيير أثناء المعاينة.
+Saving the same plan and cost that were previewed.,جاري حفظ نفس الخطة والتكلفة التي تمت معاينتها.
+Saving the same plan that was previewed.,جاري حفظ نفس الخطة التي تمت معاينتها.
+"The preview failed. Adjust the settings if needed, then recalculate.",تعذرت المعاينة. عدّل الإعدادات عند الحاجة ثم أعد الحساب.
+The current preview is ready to save. The cost shown is an estimate for this plan and becomes official when you save.,المعاينة الحالية جاهزة للحفظ. التكلفة الظاهرة تقديرية لهذه الخطة، وتصبح رسمية عند الحفظ.
+The current preview is ready to save. Press “Save” to adopt the same plan shown.,المعاينة الحالية جاهزة للحفظ. اضغط «حفظ» لاعتماد نفس الخطة المعروضة.
+"The preview was shown but cannot be saved. Try other settings, then recalculate.",تم عرض المعاينة لكنها غير صالحة للحفظ. جرّب إعدادات أخرى ثم أعد الحساب.
+Wait until the plan preview finishes.,انتظر حتى تكتمل معاينة الخطة.
+Saving the selected plan.,جاري حفظ الخطة المختارة.
+"The previous preview failed. Recalculate, then save.",تعذرت المعاينة السابقة. أعد الحساب ثم احفظ.
+"The current preview did not pass the engineering check. Try other settings, then recalculate.",المعاينة الحالية لم تنجح في التحقق الهندسي. جرّب إعدادات أخرى ثم أعد الحساب.
+"Recalculate with these settings first, then save the plan shown in front of you.",أعد الحساب بهذه الإعدادات أولًا، ثم احفظ الخطة التي تظهر أمامك.
+Save the preview plan shown now,حفظ نفس خطة المعاينة المعروضة الآن
+The preview plan was saved and its related cost was updated.,تم حفظ خطة المعاينة وتحديث التكلفة المرتبطة بها.
+"The preview plan was saved, but the view could not be refreshed. Reload the page to see the latest plan and cost.",تم حفظ خطة المعاينة بنجاح، لكن تعذر تحديث العرض الآن. حدّث الصفحة لرؤية آخر خطة وتكلفة.
+The order has left the active production stages and the cutting plan cannot be edited.,الطلب غادر مراحل الإنتاج النشطة ولا يمكن تعديل خطة القص.
+You can only view the plan because the current stage is assigned to another user.,يمكنك عرض الخطة فقط لأن المرحلة الحالية مسندة إلى مستخدم آخر.
+Assign the current stage to a user before editing the cutting plan.,أسند المرحلة الحالية إلى مستخدم قبل تعديل خطة القص.
+Save the order before calculating the cutting plan.,احفظ الطلب أولًا قبل حساب خطة القص.
+Wait until the cutting plan finishes loading.,انتظر حتى يكتمل تحميل خطة القص.
+"Press “Edit” to try new settings, then recalculate to preview.",اضغط «تعديل» لتجربة إعدادات جديدة ثم أعد الحساب للمعاينة.
+Wait until the current preview or save finishes.,انتظر حتى تكتمل عملية المعاينة أو الحفظ الحالية.
+The approved plan cannot be recalculated outside the planning stage.,الخطة المعتمدة لا يمكن إعادة حسابها خارج مرحلة التخطيط.
+You need the “Recalculate plan” permission to run the engine.,تحتاج صلاحية «إعادة حساب الخطة» لتشغيل المحرك.
+"Enter the board item, its dimensions, and at least one valid measurement before calculating the cutting plan.",أدخل صنف اللوح ومقاساته وقياسًا واحدًا صحيحًا على الأقل قبل حساب خطة القص.
+Could not prepare the cutting plan service. Reload the page and try again.,تعذر تجهيز خدمة خطة القص. أعد تحميل الصفحة ثم حاول مرة أخرى.
+"The first cutting plan was created, saved, and the cost was updated.",تم إنشاء خطة القص الأولى وحفظها وتحديث التكلفة.
+"A new preview was created. Review it, then press “Save” to apply this change to the plan.",تم إنشاء معاينة جديدة. راجعها ثم اضغط «حفظ» لاعتماد هذا التعديل على الخطة.
+Save or cancel the plan settings edit before approval.,احفظ أو ألغِ تعديل إعدادات الخطة قبل الاعتماد.
+"The order data changed. Upload a new DXF that matches the current measurements, then approve the plan.",بيانات الطلب تغيّرت. ارفع DXF جديدًا يطابق القياسات الحالية ثم اعتمد الخطة.
+Recalculate the cutting plan and review the new result before approval.,أعد حساب خطة القص وراجع النتيجة الجديدة قبل الاعتماد.
+You do not have permission to approve the cutting plan.,ليست لديك صلاحية اعتماد خطة القص.
+There is no valid plan to approve in the current state.,لا توجد خطة صالحة للاعتماد في الحالة الحالية.
+Uploaded DXF plan,خطة DXF المرفوعة
+Current system plan,خطة النظام الحالية
+An approval already exists. Continuing will create a new approval and replace the current approved plan.,يوجد اعتماد سابق. سيؤدي المتابعة إلى إنشاء اعتماد جديد واستبدال الخطة المعتمدة الحالية.
+This plan will be fixed as the final production copy.,سيتم تثبيت هذه الخطة كنسخة الإنتاج النهائية.
+The cutting plan was approved for production.,تم اعتماد خطة القص للإنتاج.
+Approve DXF plan,اعتماد خطة DXF
+Approve cutting plan,اعتماد خطة القص
+Upload a new DXF that matches the current order data before approval,ارفع DXF جديدًا يطابق بيانات الطلب الحالية قبل الاعتماد
+Recalculate the plan before approving it,أعد حساب الخطة قبل اعتمادها
+"Approval is unavailable in the current order state, or you do not have permission",الاعتماد غير متاح في حالة الطلب الحالية أو لا توجد صلاحية
+Calculate the cutting plan,حساب خطة القص
+Recalculate with the current settings,إعادة الحساب بالإعدادات الحالية
+Create and save the first cutting plan and update the cost automatically,إنشاء وحفظ أول خطة قص وتحديث التكلفة تلقائيًا
+Create a temporary preview with these settings before saving the change,إنشاء معاينة مؤقتة بهذه الإعدادات قبل حفظ التعديل
+Start with “Calculate the cutting plan”. You can edit the settings first or use the current factory settings. The plan will be saved and the cost updated automatically.,ابدأ بـ«حساب خطة القص». يمكنك تعديل الإعدادات أولًا أو استخدام إعدادات المصنع الحالية. سيتم حفظ الخطة وتحديث التكلفة تلقائيًا.
+Start with “Calculate the cutting plan”. The current plan settings or factory settings will be used and the cost will update automatically. Changing the settings needs a separate permission.,ابدأ بـ«حساب خطة القص». ستستخدم إعدادات الخطة الحالية/إعدادات المصنع وتُحدَّث التكلفة تلقائيًا. تغيير الإعدادات يحتاج صلاحية مستقلة.
+"Press “Edit” to try algorithms and settings. Recalculation creates a preview, and the change is not saved until you press “Save”.",اضغط «تعديل» لتجربة الخوارزميات والإعدادات. إعادة الحساب تنشئ معاينة، ولا يُحفظ التعديل حتى تضغط «حفظ».
+"The engine can be run again with the saved settings. Changing the algorithm, kerf, or trim needs the “Edit cutting algorithm” permission.",يمكن إعادة تشغيل المحرك بالإعدادات المحفوظة. تغيير الخوارزمية أو Kerf أو Trim يحتاج صلاحية «تعديل خوارزمية القص».
+You need the “Recalculate plan” permission to run the cutting plan engine.,تحتاج صلاحية «إعادة حساب الخطة» لتشغيل محرك خطة القص.

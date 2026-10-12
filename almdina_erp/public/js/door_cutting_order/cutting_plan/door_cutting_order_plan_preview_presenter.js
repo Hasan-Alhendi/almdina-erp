@@ -5,9 +5,34 @@
 
     const STYLE_ID = "almdina-plan-preview-style";
     const TRIM_REASON_LABELS = Object.freeze({
-        preferred_retained: "تم الاحتفاظ بهامش التشذيب المطلوب",
-        improved_feasibility: "تم تخفيض التشذيب لإتاحة توزيع جميع القطع",
-        avoided_extra_board: "تم تخفيض التشذيب لتجنب لوح إضافي غير ضروري",
+        preferred_retained: "The requested trim margin was kept",
+        improved_feasibility: "Trim was reduced so every piece could be placed",
+        avoided_extra_board: "Trim was reduced to avoid an unnecessary extra board",
+    });
+    const SETTING_MESSAGE_IDS = Object.freeze({
+        optimization_mode: Object.freeze({
+            auto: "Automatic",
+            auto_pro: "Auto Pro (recommended)",
+            deep_search: "Deep Search",
+            optimal: "Optimal Search",
+            maxrects: "MaxRects",
+            guillotine: "Guillotine",
+            shelf: "Shelf packing",
+            skyline: "Skyline",
+            cp_sat_ortools: "Constraint programming — CP-SAT",
+            mip_cbc: "Mixed-integer programming — CBC",
+            scip: "SCIP solver",
+            highs: "HiGHS solver",
+            gecode: "Gecode constraint solver",
+            chuffed: "Chuffed constraint solver",
+            genetic: "Genetic algorithm",
+            simulated_annealing: "Simulated annealing",
+        }),
+        machine_type: Object.freeze({
+            Auto: "Automatic",
+            "CNC Router": "CNC Router",
+            "Panel Saw": "Panel Saw",
+        }),
     });
 
     function installStyles() {
@@ -17,7 +42,7 @@
                 .dco-plan-preview-banner {
                     display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
                     margin:0 0 12px;padding:11px 13px;border:1px solid color-mix(in srgb, var(--alm-primary, #172033) 28%, transparent);
-                    border-radius:11px;background:color-mix(in srgb, var(--alm-primary, #172033) 6%, transparent);direction:rtl;
+                    border-radius:11px;background:color-mix(in srgb, var(--alm-primary, #172033) 6%, transparent);
                 }
                 .dco-plan-preview-banner.is-stale {
                     border-color:rgba(217,119,6,.30);background:rgba(245,158,11,.075);
@@ -40,7 +65,7 @@
                 .dco-plan-preview-banner.is-stale .dco-plan-preview-badge { background:#b45309; }
                 .dco-plan-preview-banner.is-error .dco-plan-preview-badge { background:#b91c1c; }
                 .dco-plan-preview-summary {
-                    display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:9px;direction:rtl;
+                    display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:9px;
                 }
                 .dco-plan-preview-summary__item {
                     padding:10px 12px;border:1px solid color-mix(in srgb, var(--alm-primary, #172033) 18%, transparent);
@@ -61,11 +86,11 @@
                 .dco-plan-preview-summary__item strong {
                     display:block;margin-top:4px;font-size:13px;font-weight:850;
                 }
-                .dco-plan-preview-summary__item.is-cost strong { color:#14653d;direction:ltr;text-align:right; }
+                .dco-plan-preview-summary__item.is-cost strong { color:#14653d;direction:ltr;text-align:start; }
                 .dco-plan-preview-summary__item.is-adaptive strong { color:#8a4b08; }
                 .dco-plan-preview-status {
                     padding:12px 14px;border:1px dashed var(--border-color,#ccd3da);
-                    border-radius:11px;background:var(--subtle-fg,#fafafa);direction:rtl;
+                    border-radius:11px;background:var(--subtle-fg,#fafafa);
                 }
                 .dco-plan-preview-status strong { display:block;font-size:12px;font-weight:850; }
                 .dco-plan-preview-status span {
@@ -81,8 +106,40 @@
         `);
     }
 
-    function escape(value) {
-        return frappe.utils.escape_html(__(String(value ?? "")));
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        return String(message == null ? "" : message);
+    }
+
+    function uiDirection() {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.direction === "function") {
+            const value = locale.direction();
+            if (value === "ltr" || value === "rtl") return value;
+        }
+        const dir = document.documentElement && document.documentElement.getAttribute("dir");
+        return dir === "ltr" ? "ltr" : "rtl";
+    }
+
+    function escapeHtml(value) {
+        return frappe.utils.escape_html(String(value ?? ""));
+    }
+
+    function htmlMessage(message, replacements) {
+        return escapeHtml(translate(message, replacements));
+    }
+
+    function knownSettingText(kind, value) {
+        const raw = String(value || "").trim();
+        if (!raw) return "—";
+        const catalog = SETTING_MESSAGE_IDS[kind] || {};
+        return catalog[raw] ? translate(catalog[raw]) : raw;
     }
 
     function money(value) {
@@ -149,7 +206,7 @@
             const isSystem = tab.attr("data-plan-tab") === "System";
             tab.prop("disabled", !isSystem);
             if (!isSystem) {
-                tab.attr("title", __("احفظ أو ألغِ تعديل خطة القص قبل تغيير مصدر الخطة."));
+                tab.attr("title", translate("Save or cancel the cutting plan edit before changing the plan source."));
             } else {
                 tab.removeAttr("title");
             }
@@ -159,24 +216,24 @@
     function statusCopy(status) {
         const copy = {
             idle: [
-                "جاهز للتجربة",
-                "غيّر الإعدادات ثم اضغط «إعادة الحساب بالإعدادات الحالية». الخطة المحفوظة لم تتغير.",
-                "تجربة",
+                "Ready to try",
+                "Change the settings, then press “Recalculate with the current settings”. The saved plan has not changed.",
+                "Trial",
             ],
             stale: [
-                "المعاينة السابقة أصبحت قديمة",
-                "غيّرت أحد الإعدادات بعد آخر معاينة. الخطة المعروضة أدناه هي الخطة المحفوظة؛ أعد الحساب لرؤية النتيجة الجديدة.",
-                "أعد الحساب",
+                "The previous preview is out of date",
+                "You changed a setting after the last preview. The plan shown below is the saved plan; recalculate to see the new result.",
+                "Recalculate",
             ],
             previewing: [
-                "جاري حساب المعاينة",
-                "يتم تشغيل المحرك على الإعدادات الحالية دون حفظ أي تغيير.",
-                "جاري الحساب",
+                "Calculating the preview",
+                "The engine is running on the current settings without saving any change.",
+                "Calculating",
             ],
             error: [
-                "تعذرت المعاينة",
-                "لم يتم حفظ أي تغيير. راجع الإعدادات ثم أعد الحساب.",
-                "لم تُحفظ",
+                "The preview failed",
+                "Nothing was saved. Review the settings, then recalculate.",
+                "Not saved",
             ],
         };
         return copy[status] || copy.idle;
@@ -189,32 +246,36 @@
         const adaptive = trace.adaptive_trim || {};
         const optimizer = trace.optimizer || {};
         const items = [
-            ["الخوارزمية المطلوبة", String(requested.optimization_mode || "—"), "is-trace"],
-            ["الاستراتيجية المستخدمة", String(optimizer.method_label || optimizer.method_key || "—"), "is-trace"],
-            ["آلة القص", String(requested.machine_type || "—"), "is-trace"],
-            ["Kerf المستخدم", `${numberText(requested.kerf_mm)} مم`, "is-trace"],
-            ["Trim المطلوب", `${numberText(requested.preferred_trim_mm)} مم`, "is-trace"],
+            ["Requested algorithm", knownSettingText("optimization_mode", requested.optimization_mode), "is-trace"],
+            ["Strategy used", String(optimizer.method_label || optimizer.method_key || "—"), "is-trace"],
+            ["Cutting machine", knownSettingText("machine_type", requested.machine_type), "is-trace"],
+            ["Kerf used", translate("{0} mm", [numberText(requested.kerf_mm)]), "is-trace"],
+            ["Requested trim", translate("{0} mm", [numberText(requested.preferred_trim_mm)]), "is-trace"],
             [
-                "Trim الفعلي",
-                `عرض ${numberText(adaptive.applied_width_trim_mm)} مم / طول ${numberText(adaptive.applied_length_trim_mm)} مم`,
+                "Applied trim",
+                translate("Width {0} mm / length {1} mm", [
+                    numberText(adaptive.applied_width_trim_mm),
+                    numberText(adaptive.applied_length_trim_mm),
+                ]),
                 adaptive.applied ? "is-adaptive" : "is-trace",
             ],
         ];
         if (hasTraceValue(optimizer.attempts)) {
-            items.push(["المحاولات", numberText(optimizer.attempts, 0), "is-trace"]);
+            items.push(["Attempts", numberText(optimizer.attempts, 0), "is-trace"]);
         }
         if (hasTraceValue(optimizer.elapsed_sec)) {
-            items.push(["وقت الحساب", `${numberText(optimizer.elapsed_sec, 3)} ث`, "is-trace"]);
+            items.push(["Calculation time", translate("{0} s", [numberText(optimizer.elapsed_sec, 3)]), "is-trace"]);
         }
         if (adaptive.reason) {
+            const reasonId = TRIM_REASON_LABELS[adaptive.reason];
             items.push([
-                "قرار التشذيب",
-                TRIM_REASON_LABELS[adaptive.reason] || String(adaptive.reason),
+                "Trim decision",
+                reasonId ? translate(reasonId) : String(adaptive.reason),
                 adaptive.applied ? "is-adaptive" : "is-trace",
             ]);
         }
         if (optimizer.solver_status) {
-            items.push(["حالة Solver", String(optimizer.solver_status), "is-trace"]);
+            items.push(["Solver status", String(optimizer.solver_status), "is-trace"]);
         }
         return items;
     }
@@ -225,22 +286,22 @@
         const totals = (summary && summary.totals) || {};
         const quality = (summary && summary.quality) || {};
         const items = [
-            ["عدد الألواح", `${Number(totals.required_boards || 0)}`, ""],
-            ["نسبة الهدر", `${Number(totals.waste_percent || 0).toFixed(2)}%`, ""],
-            ["خطوط القص", `${Number(quality.estimated_cut_count || 0)}`, ""],
+            ["Board count", `${Number(totals.required_boards || 0)}`, ""],
+            ["Waste percent", `${Number(totals.waste_percent || 0).toFixed(2)}%`, ""],
+            ["Cut lines", `${Number(quality.estimated_cut_count || 0)}`, ""],
             ...executionItems(plan),
         ];
         const cost = summary && summary.cost;
         if (cost) {
-            items.push(["تكلفة الخطة المتوقعة", `$ ${money(cost.total_cost_usd)}`, "is-cost"]);
+            items.push(["Expected plan cost", `$ ${money(cost.total_cost_usd)}`, "is-cost"]);
         }
         const markup = items.map(([label, value, className]) => `
             <div class="dco-plan-preview-summary__item ${className}">
-                <span>${escape(label)}</span>
+                <span>${htmlMessage(label)}</span>
                 <strong>${frappe.utils.escape_html(String(value))}</strong>
             </div>
         `).join("");
-        wrapper.html(`<div class="dco-plan-preview-summary">${markup}</div>`);
+        wrapper.html(`<div class="dco-plan-preview-summary" dir="${escapeHtml(uiDirection())}">${markup}</div>`);
     }
 
     function renderPersistedEditingState(frm, status) {
@@ -260,9 +321,9 @@
                     ? " is-error"
                     : "";
             content.prepend(`
-                <div class="dco-plan-preview-banner${stateClass}">
-                    <div><strong>${escape(title)}</strong><span>${escape(description)}</span></div>
-                    <span class="dco-plan-preview-badge">${escape(badge)}</span>
+                <div class="dco-plan-preview-banner${stateClass}" dir="${escapeHtml(uiDirection())}">
+                    <div><strong>${htmlMessage(title)}</strong><span>${htmlMessage(description)}</span></div>
+                    <span class="dco-plan-preview-badge">${htmlMessage(badge)}</span>
                 </div>
             `);
         }
@@ -270,9 +331,9 @@
         const summary = summaryWrapper(frm);
         if (summary) {
             summary.html(`
-                <div class="dco-plan-preview-status">
-                    <strong>${escape(title)}</strong>
-                    <span>${escape(description)}</span>
+                <div class="dco-plan-preview-status" dir="${escapeHtml(uiDirection())}">
+                    <strong>${htmlMessage(title)}</strong>
+                    <span>${htmlMessage(description)}</span>
                 </div>
             `);
         }
@@ -299,26 +360,26 @@
         const invalid = !saving && !committable;
         const hasCost = Boolean(payload.summary && payload.summary.cost);
         const title = saving
-            ? "جاري حفظ المعاينة المختارة"
+            ? "Saving the selected preview"
             : invalid
-                ? "معاينة غير صالحة للحفظ"
-                : "معاينة غير محفوظة";
+                ? "Preview cannot be saved"
+                : "Unsaved preview";
         const description = saving
-            ? "يتم الآن تثبيت نفس الخطة التي تراها دون إعادة تشغيل الخوارزمية."
+            ? "The same plan you see is being saved without running the algorithm again."
             : invalid
-                ? "تم عرض النتيجة للمراجعة، لكنها لم تنجح في التحقق الهندسي. جرّب إعدادات أخرى قبل الحفظ."
+                ? "The result is shown for review, but it did not pass the engineering check. Try other settings before saving."
                 : hasCost
-                    ? "هذه الخطة وتكلفتها المعروضة للمعاينة فقط. ستصبحان رسميتين معًا عند الضغط على «حفظ»."
-                    : "هذه الخطة للمعاينة فقط. ستصبح الخطة الجديدة رسمية عند الضغط على «حفظ».";
+                    ? "This plan and its cost are only a preview. They both become official when you press “Save”."
+                    : "This plan is only a preview. The new plan becomes official when you press “Save”.";
         const stateClass = invalid ? " is-error" : "";
-        const badge = saving ? "حفظ" : invalid ? "غير صالحة" : "PREVIEW";
+        const badge = saving ? "Save" : invalid ? "Not valid" : "PREVIEW";
 
         // Tabs render the displayed plan through the workspace owner. This
         // presenter owns only the transient status and summary around it.
         content.prepend(`
-            <div class="dco-plan-preview-banner${stateClass}">
-                <div><strong>${escape(title)}</strong><span>${escape(description)}</span></div>
-                <span class="dco-plan-preview-badge">${escape(badge)}</span>
+            <div class="dco-plan-preview-banner${stateClass}" dir="${escapeHtml(uiDirection())}">
+                <div><strong>${htmlMessage(title)}</strong><span>${htmlMessage(description)}</span></div>
+                <span class="dco-plan-preview-badge">${htmlMessage(badge)}</span>
             </div>
         `);
         lockSourceTabs(frm);
@@ -332,29 +393,30 @@
         const wrapper = actionWrapper(frm);
         const note = wrapper && wrapper.find(".dco-plan-note").first();
         if (!note || !note.length) return;
+        note.attr("dir", uiDirection());
         if (!editing) {
-            note.text(__("اضغط «تعديل» لتجربة إعدادات أو خوارزميات أخرى. لن تتغير الخطة المحفوظة أثناء التجربة."));
+            note.text(translate("Press “Edit” to try other settings or algorithms. The saved plan will not change while you are trying them."));
             return;
         }
         const hasCost = previewCostVisible(frm);
         const messages = {
-            idle: "عدّل الإعدادات كما تريد ثم اضغط «إعادة الحساب بالإعدادات الحالية» لمعاينة النتيجة. الحفظ لن يتفعل قبل المعاينة.",
-            stale: "تم تعديل الإعدادات. أعد الحساب لمعاينة الخطة الجديدة قبل الحفظ.",
-            previewing: "جاري حساب معاينة مؤقتة. لا يتم حفظ أي تغيير أثناء المعاينة.",
+            idle: "Change the settings as you like, then press “Recalculate with the current settings” to preview the result. Saving stays unavailable until you preview.",
+            stale: "The settings were changed. Recalculate to preview the new plan before saving.",
+            previewing: "A temporary preview is being calculated. Nothing is saved during the preview.",
             saving: hasCost
-                ? "جاري حفظ نفس الخطة والتكلفة التي تمت معاينتها."
-                : "جاري حفظ نفس الخطة التي تمت معاينتها.",
-            error: "تعذرت المعاينة. عدّل الإعدادات عند الحاجة ثم أعد الحساب.",
+                ? "Saving the same plan and cost that were previewed."
+                : "Saving the same plan that was previewed.",
+            error: "The preview failed. Adjust the settings if needed, then recalculate.",
         };
         if (status === "ready") {
-            note.text(__(committable
+            note.text(translate(committable
                 ? hasCost
-                    ? "المعاينة الحالية جاهزة للحفظ. التكلفة الظاهرة تقديرية لهذه الخطة، وتصبح رسمية عند الحفظ."
-                    : "المعاينة الحالية جاهزة للحفظ. اضغط «حفظ» لاعتماد نفس الخطة المعروضة."
-                : "تم عرض المعاينة لكنها غير صالحة للحفظ. جرّب إعدادات أخرى ثم أعد الحساب."));
+                    ? "The current preview is ready to save. The cost shown is an estimate for this plan and becomes official when you save."
+                    : "The current preview is ready to save. Press “Save” to adopt the same plan shown."
+                : "The preview was shown but cannot be saved. Try other settings, then recalculate."));
             return;
         }
-        note.text(__(messages[status] || messages.idle));
+        note.text(translate(messages[status] || messages.idle));
     }
 
     function restorePersistedPresentation(frm) {
