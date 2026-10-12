@@ -337,6 +337,28 @@
         return layer || "";
     }
 
+    function positiveKerf(value) {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    }
+
+    function cutterDiameterMm(plan) {
+        const millimetres = positiveKerf(plan && plan.kerf_mm);
+        const centimetres = positiveKerf(plan && plan.kerf_cm);
+        const fromCentimetres = centimetres == null ? null : centimetres * 10;
+        if (millimetres != null && fromCentimetres != null && Math.abs(millimetres - fromCentimetres) > 0.05) {
+            const error = new Error(
+                `سماكة الشفرة متعارضة: ${millimetres} مم مقابل ${fromCentimetres} مم في خطة القص، ولم يُصدَّر الملف.`
+            );
+            error.linerExport = true;
+            error.code = "cutter_diameter_conflict";
+            return error;
+        }
+        if (millimetres != null) return millimetres;
+        if (fromCentimetres != null) return fromCentimetres;
+        return 0;
+    }
+
     function linerExportError(piece, code) {
         const messages = {
             cutter_diameter_invalid: "حدّد سماكة الشفرة أكبر من صفر قبل تصدير مسارات اللاينر.",
@@ -344,6 +366,10 @@
             liner_extension_off_board: "امتداد ريشة اللاينر يخرج خارج اللوح، ولا يمكن ضمان أمان القص.",
             liner_extension_hits_piece: "امتداد ريشة اللاينر يتداخل مع قطعة مجاورة.",
             liner_extension_unsafe: "تعذر تمديد مسار اللاينر حتى خط القص.",
+            strip_outside: "شريط اللاينر يخرج خارج الدرفة.",
+            offset_invalid: "بعد اللاينر غير صالح.",
+            width_invalid: "عرض اللاينر غير صالح.",
+            side_unavailable: "جهة اللاينر غير متاحة لهذه الدرفة.",
         };
         const label = String((piece && (piece.label || piece.piece_no || piece.id)) || "").split(".")[0] || "؟";
         const error = new Error(`الدرفة ${label}: ${messages[code] || code}`);
@@ -355,8 +381,7 @@
     function exportOverlays(piece, kerfMm) {
         const overlays = Array.isArray(piece && piece.overlays) ? piece.overlays.slice() : [];
         if (overlays.some(item => item && item.kind === "liner")) return overlays;
-        const requiresLiner = Boolean(num(piece && piece.extra_liner))
-            && String(piece && piece.liner_reference_side || "").trim()
+        const requiresLiner = Boolean(String(piece && piece.liner_reference_side || "").trim())
             && num(piece && piece.liner_width_cm) > 0;
         const liner = window.AlmdinaLinerGeometry;
         if (!liner || typeof liner.syntheticOverlay !== "function") {
@@ -364,7 +389,7 @@
             return overlays;
         }
         const synthetic = liner.syntheticOverlay(Object.assign({}, piece, {
-            kerf_mm: num(piece && piece.kerf_mm) || num(kerfMm),
+            kerf_mm: num(kerfMm),
         }));
         if (requiresLiner && (!synthetic || synthetic.error)) {
             throw linerExportError(piece, (synthetic && synthetic.error) || "liner_extension_unsafe");
@@ -446,6 +471,8 @@
     }
 
     function buildDxf(plan) {
+        const cutterMm = cutterDiameterMm(plan);
+        if (cutterMm && cutterMm.linerExport) throw cutterMm;
         const sheets = plan.sheets || [];
         const perRow = 2;
         const gapMm = 200;
@@ -463,7 +490,7 @@
                 const trim = transform.appliedTrim || { width: 0, length: 0 };
                 const fullW = num(sheet.full_width_cm || plan.full_board_width_cm) * 10;
                 const fullH = num(sheet.full_length_cm || plan.full_board_length_cm) * 10;
-                const conflict = liner.extensionConflict(overlay.path, num(plan.kerf_mm), {
+                const conflict = liner.extensionConflict(overlay.path, cutterMm, {
                     minX: -num(trim.width),
                     minY: -num(trim.length),
                     maxX: fullW - num(trim.width),
@@ -511,7 +538,7 @@
                             topologyDxfPoints(hole, transform)
                         );
                     });
-                    persistedOverlays(piece, plan.kerf_mm).forEach(overlay => {
+                    persistedOverlays(piece, cutterMm).forEach(overlay => {
                         entities += emitOverlayEntity(overlay, transform, sheet, piece);
                     });
                     const bounds = polygonBounds(topology.outer);
@@ -566,7 +593,7 @@
                     : cutLayer === "OFFCUT"
                         ? rectangle(cutLayer, x, y, pieceWidth, pieceHeight)
                         : rectangle("CUT_PATH", x, y, pieceWidth, pieceHeight);
-                persistedOverlays(piece, plan.kerf_mm).forEach(overlay => {
+                persistedOverlays(piece, cutterMm).forEach(overlay => {
                     entities += emitOverlayEntity(
                         overlay,
                         { offsetX, offsetY, fullHeight, appliedTrim },
@@ -679,8 +706,39 @@
         return String(value || "door_cutting_order").replace(/[^\w\-]+/g, "_");
     }
 
-    function downloadValidatedPlan(data, orderName) {
+    function orderRowForPlanPiece(rows, piece) {
+        const sourceNo = Math.floor(Number(piece && piece.source_piece_no));
+        const group = sourceNo >= 1
+            ? sourceNo
+            : Math.floor(Number(String((piece && piece.label) || "").split(".")[0]));
+        if (!(group >= 1) || group > rows.length) return null;
+        return rows[group - 1] || null;
+    }
+
+    function applyOrderLinerSpecs(plan, frm) {
+        const rows = (frm && frm.doc && frm.doc.pieces) || [];
+        if (!rows.length) return;
+        (plan.sheets || []).forEach(sheet => {
+            (sheet.pieces || []).forEach(piece => {
+                if ((piece.overlays || []).some(item => item && item.kind === "liner")) return;
+                const row = orderRowForPlanPiece(rows, piece);
+                if (!row || !num(row.extra_liner)) return;
+                const side = String(row.liner_reference_side || "").trim();
+                if (!side || !(num(row.liner_width_cm) > 0)) return;
+                piece.extra_liner = 1;
+                if (!String(piece.liner_reference_side || "").trim()) {
+                    piece.liner_reference_side = side;
+                    piece.liner_offset_cm = row.liner_offset_cm;
+                    piece.liner_width_cm = row.liner_width_cm;
+                }
+                if (!piece.piece_type && row.piece_type) piece.piece_type = row.piece_type;
+            });
+        });
+    }
+
+    function downloadValidatedPlan(data, orderName, frm) {
         const plan = (data && data.plan) || {};
+        applyOrderLinerSpecs(plan, frm);
         if (!(plan.sheets || []).length) {
             frappe.throw(__("Validated cutting plan contains no sheets to export."));
         }
@@ -757,7 +815,7 @@
         const args = { doc: JSON.stringify(frm.doc) };
         if (!frm.is_new()) args.order_name = frm.doc.name;
 
-        return fetchValidatedPlan(args).then(r => downloadValidatedPlan(r.message, frm.doc.name));
+        return fetchValidatedPlan(args).then(r => downloadValidatedPlan(r.message, frm.doc.name, frm));
     }
 
     function exportOrderDxf(orderName, planSource = null, options = null) {
@@ -774,7 +832,7 @@
             });
         }
         return fetchValidatedPlan(args).then(r =>
-            downloadValidatedPlan(r.message, orderName)
+            downloadValidatedPlan(r.message, orderName, options && options.frm)
         );
     }
 

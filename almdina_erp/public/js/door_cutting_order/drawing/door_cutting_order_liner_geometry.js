@@ -386,6 +386,20 @@
         return points;
     }
 
+    function centerlineMm(piece, side, offsetCm, widthCm) {
+        const error = validationCode(piece, side, offsetCm, widthCm);
+        if (error) {
+            const failure = new Error(error);
+            failure.code = error;
+            throw failure;
+        }
+        const polygon = piecePolygonMm(piece);
+        const reference = edgePaths(piece)[side];
+        const sign = inwardSign(reference, polygon);
+        const distance = (num(offsetCm) * 10) + ((num(widthCm) * 10) / 2);
+        return offsetPolyline(reference, distance, sign);
+    }
+
     function toolpathMm(piece, side, offsetCm, widthCm, cutterDiameterMm) {
         const error = validationCode(piece, side, offsetCm, widthCm);
         if (error) {
@@ -515,21 +529,74 @@
         return Math.round(value * 1000) / 1000;
     }
 
-    function syntheticOverlay(piece) {
+    function linerRequested(piece) {
+        return Boolean(String(piece && piece.liner_reference_side || "").trim())
+            && num(piece && piece.liner_width_cm) > 0;
+    }
+
+    function placeLocalPath(piece, linerPiece, local) {
+        const turns = piece.rotated ? 1 : 0;
+        const mirrored = Boolean(piece.corner_mirrored);
+        const originX = num(piece.x) * 10;
+        const originY = num(piece.y) * 10;
+        return local.map(point => {
+            const placed = transformPoint(
+                point,
+                mirrored,
+                turns,
+                linerPiece.widthCm * 10,
+                linerPiece.lengthCm * 10
+            );
+            return [roundMm(placed[0] + originX), roundMm(placed[1] + originY)];
+        });
+    }
+
+    function linerOverlayGate(piece) {
         if (!piece) return null;
         const overlays = Array.isArray(piece.overlays) ? piece.overlays : [];
         if (overlays.some(overlay => overlay && overlay.kind === "liner")) return null;
         if (piece.geometry && Array.isArray(piece.geometry.outer) && overlays.length) return null;
-        if (!Number(piece.extra_liner) || !piece.liner_reference_side || !(num(piece.liner_width_cm) > 0)) {
-            return null;
+        if (!linerRequested(piece)) return null;
+        return pieceFromRow(piece);
+    }
+
+    function centerlineOverlay(piece) {
+        const linerPiece = linerOverlayGate(piece);
+        if (!linerPiece) return null;
+        let local;
+        try {
+            local = centerlineMm(
+                linerPiece,
+                piece.liner_reference_side,
+                piece.liner_offset_cm,
+                piece.liner_width_cm
+            );
+        } catch (error) {
+            return {
+                kind: "liner",
+                layer: "Liner",
+                synthetic: true,
+                error: error.code || "liner_extension_unsafe",
+            };
         }
-        const linerPiece = pieceFromRow(piece);
-        if (validationCode(
-            linerPiece,
-            piece.liner_reference_side,
-            piece.liner_offset_cm,
-            piece.liner_width_cm
-        )) return null;
+        return {
+            kind: "liner",
+            layer: "Liner",
+            synthetic: true,
+            geometry: {
+                schema_version: 1,
+                unit: "mm",
+                coordinate_space: "usable_sheet",
+                closed: false,
+                toolpath: false,
+                path: placeLocalPath(piece, linerPiece, local),
+            },
+        };
+    }
+
+    function syntheticOverlay(piece) {
+        const linerPiece = linerOverlayGate(piece);
+        if (!linerPiece) return null;
         const diameter = num(piece.kerf_mm);
         if (!(diameter > TOLERANCE_MM)) {
             return { kind: "liner", layer: "Liner", synthetic: true, error: "cutter_diameter_invalid" };
@@ -551,17 +618,6 @@
                 error: error.code || "liner_extension_unsafe",
             };
         }
-        const turns = piece.rotated ? 1 : 0;
-        const mirrored = Boolean(piece.corner_mirrored);
-        const placed = local.map(point => transformPoint(
-            point,
-            mirrored,
-            turns,
-            linerPiece.widthCm * 10,
-            linerPiece.lengthCm * 10
-        ));
-        const originX = num(piece.x) * 10;
-        const originY = num(piece.y) * 10;
         return {
             kind: "liner",
             layer: "Liner",
@@ -572,7 +628,7 @@
                 coordinate_space: "usable_sheet",
                 closed: false,
                 toolpath: true,
-                path: placed.map(point => [roundMm(point[0] + originX), roundMm(point[1] + originY)]),
+                path: placeLocalPath(piece, linerPiece, local),
             },
         };
     }
@@ -620,12 +676,14 @@
         validationCode,
         stripPolygonMm,
         cutterCenterOffsetsMm,
+        centerlineMm,
         toolpathMm,
         extensionConflict,
         placedPolygonMm,
         contourNotchCm,
         contourNotchFromOrder,
         transformPoint,
+        centerlineOverlay,
         syntheticOverlay,
         summary,
     });

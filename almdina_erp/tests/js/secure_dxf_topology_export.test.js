@@ -400,6 +400,116 @@ async function run() {
     assert.match(downloadedDxf, /1\r\n50\r\n/);
     assert.match(downloadedDxf, /1\r\n51\r\n/);
 
+    const linerSource = fs.readFileSync(
+        path.resolve(__dirname, "../../public/js/door_cutting_order/drawing/door_cutting_order_liner_geometry.js"),
+        "utf8"
+    );
+    vm.runInContext(linerSource, context, { filename: "door_cutting_order_liner_geometry.js" });
+
+    function linerVertices(dxf) {
+        const entities = dxf.split("0\r\nLWPOLYLINE\r\n").filter(part => part.startsWith("8\r\nLiner\r\n"));
+        assert.equal(entities.length, 1);
+        const lines = entities[0].split("\r\n");
+        assert.equal(lines[2], "90");
+        assert.equal(lines[4], "70");
+        assert.equal(lines[5], "0");
+        const count = Number(lines[3]);
+        const points = [];
+        for (let index = 6; index + 3 < lines.length; index += 4) {
+            if (lines[index] !== "10" || lines[index + 2] !== "20") break;
+            points.push([Number(lines[index + 1]), Number(lines[index + 3])]);
+        }
+        assert.equal(points.length, count);
+        return points;
+    }
+
+    const orderForm = {
+        is_new() { return false; },
+        doc: {
+            name: "26-00103",
+            kerf_mm: 5,
+            pieces: [{
+                extra_liner: 1,
+                liner_reference_side: "edge_width_top",
+                liner_offset_cm: 0,
+                liner_width_cm: 1.8,
+                piece_type: "Regular",
+                width_cm: 40,
+                length_cm: 60,
+            }],
+        },
+    };
+    function linerPlan(kerf) {
+        return {
+            full_board_width_cm: 122,
+            full_board_length_cm: 244,
+            usable_board_width_cm: 121,
+            usable_board_length_cm: 243,
+            trim_cm: 0.5,
+            ...kerf,
+            sheets: [{
+                sheet_no: 1,
+                full_width_cm: 122,
+                full_length_cm: 244,
+                pieces: [{
+                    id: 1,
+                    label: "1.1",
+                    piece_type: "Regular",
+                    extra_liner: 1,
+                    liner_reference_side: "edge_width_top",
+                    liner_offset_cm: 0,
+                    liner_width_cm: 1.8,
+                    x: 5,
+                    y: 5,
+                    w: 40,
+                    h: 60,
+                    width_cm: 40,
+                    length_cm: 60,
+                    geometry: geometry([[50, 50], [450, 50], [450, 650], [50, 650]]),
+                }],
+            }],
+        };
+    }
+
+    async function assertOpenLinerToolpath(plan, exportCall) {
+        nextPlan = plan;
+        downloadedDxf = "";
+        await exportCall();
+        const exported = linerVertices(downloadedDxf);
+        assert.equal(exported.length, 8);
+        const span = axis => Math.max(...exported.map(point => point[axis])) - Math.min(...exported.map(point => point[axis]));
+        const spans = [span(0), span(1)].sort((left, right) => left - right);
+        assert.equal(Math.round(spans[0] * 10) / 10, 13);
+        assert.equal(Math.round(spans[1] * 10) / 10, 405);
+        assert.match(downloadedDxf, /0\r\nLWPOLYLINE\r\n8\r\nLiner\r\n/);
+        assert.match(downloadedDxf, /70\r\n0\r\n/);
+    }
+
+    const savedPlanExport = () => fakeFrappe.almdina.export_order_dxf("26-00103", "system");
+    await assertOpenLinerToolpath(linerPlan({ kerf_cm: 0.5 }), savedPlanExport);
+    await assertOpenLinerToolpath(linerPlan({ kerf_mm: 5 }), savedPlanExport);
+    await assertOpenLinerToolpath(linerPlan({ kerf_mm: 5, kerf_cm: 0.5 }), savedPlanExport);
+
+    const openOrderPlan = linerPlan({ kerf_cm: 0.5 });
+    delete openOrderPlan.sheets[0].pieces[0].extra_liner;
+    delete openOrderPlan.sheets[0].pieces[0].liner_reference_side;
+    delete openOrderPlan.sheets[0].pieces[0].liner_offset_cm;
+    delete openOrderPlan.sheets[0].pieces[0].liner_width_cm;
+    await assertOpenLinerToolpath(
+        openOrderPlan,
+        () => fakeFrappe.almdina.export_validated_dxf(orderForm)
+    );
+
+    nextPlan = linerPlan({ kerf_mm: 5, kerf_cm: 0.3 });
+    downloadedDxf = "";
+    await assert.rejects(savedPlanExport(), /متعارضة/);
+    assert.equal(downloadedDxf, "");
+
+    nextPlan = linerPlan({});
+    downloadedDxf = "";
+    await assert.rejects(savedPlanExport(), /حدّد سماكة الشفرة/);
+    assert.equal(downloadedDxf, "");
+
     console.log("Secure DXF topology export simulation passed");
 }
 

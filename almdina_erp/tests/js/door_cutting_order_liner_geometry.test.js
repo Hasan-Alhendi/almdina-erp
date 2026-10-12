@@ -191,6 +191,25 @@ const centers = copy(geometry.cutterCenterOffsetsMm(18, 5)).map(value => Math.ro
 assert.deepEqual(centers, [2.5, 7.5, 10.5, 15.5]);
 assert.deepEqual(copy(geometry.cutterCenterOffsetsMm(5, 5)), [2.5]);
 assert.throws(() => geometry.cutterCenterOffsetsMm(4, 5), /liner_narrower_than_cutter/);
+const center = geometry.centerlineMm(regular, "edge_width_top", 2, 1.5);
+assert.deepEqual(copy(center), [[0, 27.5], [400, 27.5]]);
+const lCenter = geometry.centerlineMm(shapedLiner, "edge_break", 0, 1.8);
+assert.equal(lCenter.length, 3);
+const display = geometry.centerlineOverlay({
+    piece_type: "Regular",
+    width_cm: 40,
+    length_cm: 60,
+    extra_liner: 1,
+    liner_reference_side: "edge_width_top",
+    liner_offset_cm: 2,
+    liner_width_cm: 1.5,
+    rotated: true,
+    x: 0,
+    y: 0,
+});
+assert.equal(display.geometry.toolpath, false);
+assert.equal(display.geometry.closed, false);
+assert.deepEqual(copy(display.geometry.path), [[572.5, 0], [572.5, 400]]);
 const toolpath = geometry.toolpathMm(regular, "edge_width_top", 0, 1.8, 5);
 const toolXs = toolpath.map(point => point[0]);
 const toolYs = [...new Set(toolpath.map(point => Math.round(point[1] * 1000) / 1000))].sort((a, b) => a - b);

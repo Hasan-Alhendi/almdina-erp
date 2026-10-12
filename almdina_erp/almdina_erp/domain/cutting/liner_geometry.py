@@ -583,6 +583,29 @@ def cutter_center_offsets_mm(width_mm: float, diameter_mm: float) -> list[float]
     return leading + trailing
 
 
+def liner_centerline_mm(
+    piece: LinerPiece,
+    side: str,
+    offset_cm: float,
+    width_cm: float,
+) -> list[Point]:
+    """One open line through the middle of the liner strip.
+
+    The distance from the reference edge is the ordered offset plus half the
+    liner width. The line follows that edge, including an L bend or a clipped
+    diagonal, and is not a cutter toolpath.
+    """
+
+    error = validation_code(piece, side, offset_cm, width_cm)
+    if error:
+        raise LinerGeometryError(error)
+    polygon = piece_polygon_mm(piece)
+    reference = reference_polyline_mm(piece, side)
+    sign = _inward_sign(reference, polygon)
+    distance = _mm(offset_cm) + (_mm(width_cm) / 2.0)
+    return _offset_polyline(reference, distance, sign)
+
+
 def liner_toolpath_mm(
     piece: LinerPiece,
     side: str,

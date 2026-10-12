@@ -90,6 +90,7 @@ class FrappeOrderPlanAdapter:
         offset = flt(getattr(row, "liner_offset_cm", 0))
         width = flt(getattr(row, "liner_width_cm", 0))
         if cint(getattr(row, "extra_liner", 0)) and side and width > 0:
+            piece["extra_liner"] = 1
             piece["liner_reference_side"] = side
             piece["liner_offset_cm"] = offset
             piece["liner_width_cm"] = width

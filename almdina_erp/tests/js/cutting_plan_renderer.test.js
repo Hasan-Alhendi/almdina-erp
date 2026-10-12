@@ -30,6 +30,7 @@ const context = vm.createContext({
     Number,
     String,
     Math,
+    __: value => value,
 });
 vm.runInContext(geometrySource, context, {
     filename: "door_cutting_order_special_shape_geometry.js",
@@ -422,5 +423,63 @@ assert.match(trimmedHtml, new RegExp(`data-trim-width-cm="1"`));
 assert.match(trimmedHtml, new RegExp(`data-trim-length-cm="0.2"`));
 assert.match(trimmedHtml, new RegExp(`left:${widthInset}%;top:${lengthInset}%;width:${usableWidth}%;height:${usableLength}%`));
 assert.match(trimmedHtml, /dco-usable-sheet[\s\S]*dco-piece[\s\S]*left:0%;top:0%/);
+
+vm.runInContext(
+    fs.readFileSync(
+        path.resolve(__dirname, "../../public/js/door_cutting_order/drawing/door_cutting_order_liner_geometry.js"),
+        "utf8"
+    ),
+    context,
+    { filename: "door_cutting_order_liner_geometry.js" }
+);
+const linerPlan = {
+    usable_board_width_cm: 122,
+    usable_board_length_cm: 244,
+    full_board_width_cm: 122,
+    full_board_length_cm: 244,
+    trim_cm: 0.5,
+    kerf_mm: 5,
+    sheets: [{
+        sheet_no: 1,
+        pieces: [{
+            x: 5,
+            y: 5,
+            w: 40,
+            h: 60,
+            original_w: 40,
+            original_h: 60,
+            label: "1.1",
+            piece_type: "Regular",
+            rotated: false,
+        }],
+    }],
+};
+const linerFrm = {
+    doc: {
+        name: "26-00103",
+        kerf_mm: 5,
+        pieces: [{
+            extra_liner: 1,
+            liner_reference_side: "edge_width_top",
+            liner_offset_cm: 0,
+            liner_width_cm: 1.8,
+            piece_type: "Regular",
+            width_cm: 40,
+            length_cm: 60,
+        }],
+    },
+};
+const linerHtml = renderer.build(linerFrm, linerPlan);
+const linerPath = linerHtml.match(/data-overlay-kind="liner"[^>]*d="([^"]+)"/);
+assert.ok(linerPath, linerHtml);
+assert.equal((linerPath[1].match(/L/g) || []).length, 1);
+assert.match(linerPath[1], /^M[\d.]+ [\d.]+ L[\d.]+ [\d.]+$/);
+assert.match(linerHtml, /data-overlay-kind="liner"[^>]*stroke-dasharray="3 2.2"/);
+assert.doesNotMatch(linerHtml, /data-overlay-kind="liner"[^>]* Z"/);
+assert.doesNotMatch(linerHtml, /data-liner-toolpath-error/);
+assert.match(linerHtml, /<div class="dco-sheet-card"[\s\S]*data-overlay-kind="liner"/);
+const linerYs = linerPath[1].match(/[\d.]+/g).filter((_, index) => index % 2 === 1).map(Number);
+assert.equal(linerYs[0], linerYs[1]);
+assert.ok(Math.abs(linerYs[0] - 1.5) < 0.05);
 
 console.log("Cutting-plan renderer simulation passed");

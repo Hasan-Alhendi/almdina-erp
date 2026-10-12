@@ -22,6 +22,7 @@ from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
     contour_notch_cm,
     liner_activation_error,
     cutter_center_offsets_mm,
+    liner_centerline_mm,
     liner_toolpath_mm,
     liner_strip_polygon_mm,
     piece_polygon_mm,
@@ -320,6 +321,19 @@ def test_cutter_centers_cover_width_without_crossing_it():
         cutter_center_offsets_mm(4, 5)
     with pytest.raises(Exception):
         cutter_center_offsets_mm(18, 0)
+
+
+def test_centerline_follows_the_middle_of_the_strip():
+    piece = _regular()
+    line = liner_centerline_mm(piece, "edge_width_top", 2, 1.5)
+    assert line == pytest.approx([(0, 27.5), (400, 27.5)])
+    shaped = _l_piece("Top Right")
+    bent = liner_centerline_mm(shaped, "edge_break", 0, 1.8)
+    assert len(bent) == 3
+    assert _has_corner(bent)
+    clipped = _clipped("Top Right")
+    diagonal = liner_centerline_mm(clipped, "edge_break", 0, 1.8)
+    assert any(point[0] != diagonal[0][0] and point[1] != diagonal[0][1] for point in diagonal)
 
 
 def test_regular_toolpath_extends_by_the_tool_radius():

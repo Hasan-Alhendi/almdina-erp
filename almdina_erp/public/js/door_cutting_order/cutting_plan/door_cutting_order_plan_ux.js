@@ -509,7 +509,7 @@
             return false;
         }
         if (frappe.almdina && typeof frappe.almdina.export_order_dxf === "function") {
-            return frappe.almdina.export_order_dxf(frm.doc.name);
+            return frappe.almdina.export_order_dxf(frm.doc.name, null, { frm });
         }
         frappe.msgprint("تعذر تشغيل مصدر DXF الآمن. أعد تحميل الصفحة.");
         return false;
