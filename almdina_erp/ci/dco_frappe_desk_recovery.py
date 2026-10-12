@@ -719,9 +719,10 @@ NEW_RECOVERY_PROBE_INIT_SCRIPT = r"""
         let token = null;
         try { token = context && context.capture ? context.capture(frm) : null; } catch (error) {}
         const key = `${frm.doc.name || ""}::${token && token.generation || 0}`;
-        if (seenDocuments.has(key)) return;
-        seenDocuments.add(key);
-        emit("document_identity_transition");
+        if (!seenDocuments.has(key)) {
+            seenDocuments.add(key);
+            emit("document_identity_transition");
+        }
         if (!probe.pipelineStarted && typeof frm.is_new === "function" && frm.is_new()) {
             startNewFormProbe(frm);
         }

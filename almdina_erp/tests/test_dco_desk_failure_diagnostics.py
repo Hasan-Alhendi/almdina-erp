@@ -68,6 +68,13 @@ def test_new_recovery_probe_starts_without_a_post_readiness_evaluate() -> None:
     assert "explicit_probe_started" in probe_script
     assert "explicit_probe_settled" in probe_script
     assert "Promise.resolve(promise).then" in probe_script
+    assert "if (seenDocuments.has(key)) return" not in probe_script
+    dedup_start = probe_script.index("if (!seenDocuments.has(key))")
+    pipeline_start = probe_script.index(
+        'if (!probe.pipelineStarted && typeof frm.is_new === "function"'
+    )
+    assert dedup_start < pipeline_start
+    assert 'emit("document_identity_transition");\n        }\n        if (!probe.pipelineStarted' in probe_script
     assert "LocalDraftRepository.discover" in ast.unparse(probe)
     assert "NewRecovery.discover" in ast.unparse(probe)
     assert "LocalCheckpoint.initializeNewForm" in ast.unparse(probe)
