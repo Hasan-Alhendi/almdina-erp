@@ -114,7 +114,6 @@ DCO_STYLE_INJECTION_DEBT = frozenset(
     {
         "core/door_cutting_order_plan_cost_workspace_visual_ux.js",
         "core/door_cutting_order_tab_edit_lifecycle_guard.js",
-        "core/door_cutting_order_toolbar_stability_ux.js",
         "core/door_cutting_order_workspace_freshness_ux.js",
         "costing/door_cutting_order_compact_pricing_ux.js",
         "costing/door_cutting_order_cost_page_layout_ux.js",
@@ -134,7 +133,6 @@ DCO_STYLE_INJECTION_DEBT = frozenset(
         "order_entry/measurements/door_cutting_order_measurement_resilience_ux.js",
         "order_entry/measurements/door_cutting_order_measurement_toolbar_ux.js",
         "printing/door_cutting_order_document_compactness_ux.js",
-        "responsive/door_cutting_order_header_ux.js",
     }
 )
 LEGACY_PRIMARY_MARKERS = (

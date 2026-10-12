@@ -32,6 +32,12 @@ _REVIEWED_SITES: dict[str, str] = {
     "almdina_erp/infrastructure/frappe/production_stage_repository.py": "SAFE",
     "almdina_erp/infrastructure/frappe/supporting_doctype_permission_repository.py": "SAFE",
     "almdina_erp/infrastructure/frappe/workforce_repository.py": "SAFE",
+    # Writes are only reached by capability-checked backup/restore RPCs or
+    # internal scheduler/worker paths; this repository has no whitelisted API.
+    "almdina_erp/infrastructure/backups/history.py": "SAFE",
+    # Restore finalization is invoked by the internal bench runner and validates
+    # the site-private request path and payload site before recreating audit rows.
+    "almdina_erp/infrastructure/backups/restore_runner.py": "SAFE",
     "almdina_erp/services/archive_service.py": "SAFE",
     "almdina_erp/services/cost_permission_service.py": "SAFE",
     "almdina_erp/services/order_lifecycle_permission_service.py": "SAFE",
