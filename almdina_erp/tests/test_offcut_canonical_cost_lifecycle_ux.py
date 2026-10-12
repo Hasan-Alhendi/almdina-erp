@@ -98,12 +98,18 @@ def test_required_regression_invoice_total_is_exactly_54() -> None:
             "qty": 2,
             "factory_execution_qty": 2,
             "clipped_corner_edge_price_usd": 2,
+            "edge_break": 1,
+            "edge_break_length_cm": 100,
+            "edge_break_rate_usd": 1,
         },
         {
             "piece_type": "L-Shaped Corner",
             "qty": 2,
             "factory_execution_qty": 1,
             "clipped_corner_edge_price_usd": 1,
+            "edge_break": 1,
+            "edge_break_length_cm": 100,
+            "edge_break_rate_usd": 0.5,
         },
     ]
 

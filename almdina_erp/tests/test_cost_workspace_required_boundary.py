@@ -140,8 +140,13 @@ def test_cost_save_commits_server_snapshot_without_post_save_reload_race() -> No
     assert 'typeof owner.commit === "function"' in ux
     assert "owner.commit(frm, saved);" in ux
     save_body = ux.split("async function saveEditing", 1)[1].split("function sync", 1)[0]
-    assert "owner.load(" not in save_body
-    assert "force: true" not in save_body
+    settings_body, pending_body = save_body.split("hadPendingPrices", 1)
+    assert "owner.commit(frm, saved);" in settings_body
+    assert "owner.load(" not in settings_body
+    assert "force: true" not in settings_body
+    assert "pendingPricePieces(frm).length > 0" in save_body
+    assert "flushPendingPriceEdits(frm, { refresh: false })" in pending_body
+    assert "owner.load(frm, { force: true })" in pending_body
 
 
 def test_cost_save_keeps_editor_open_when_server_does_not_return_authoritative_snapshot() -> None:

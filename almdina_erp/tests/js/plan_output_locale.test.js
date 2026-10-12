@@ -64,6 +64,22 @@ for (const name of files) {
     assert.doesNotMatch(source, /translate\(\s*["'`][^"'`]*[\u0600-\u06FF]/, name);
 }
 
+const styleSource = fs.readFileSync(
+    path.join(root, planDir, "door_cutting_order_plan_content_styles.js"),
+    "utf8"
+);
+assert.doesNotMatch(styleSource, /direction:\s*rtl/i);
+assert.doesNotMatch(styleSource, /direction:\s*ltr/i);
+for (const selector of [
+    ".dco-plan-meta-strip",
+    ".dco-margin-policy-alert",
+    ".dco-uploaded-plan-mismatch-banner",
+    ".dco-board-original-edges",
+    ".dco-board-focus__dialog",
+]) {
+    assert.match(styleSource, new RegExp(`${selector.replace(/[.]/g, "\\.")}[\\s\\S]{0,500}direction:\\s*inherit`));
+}
+
 const dxfSource = fs.readFileSync(path.join(root, planDir, "secure_dxf_export.js"), "utf8");
 assert.match(dxfSource, /const EXTRA_DOUBLE_DXF_TEXT = "دبل القشاط"/);
 assert.match(dxfSource, /const EXTRA_FULL_DOOR_DOUBLE_DXF_TEXT = "دبل كامل"/);
@@ -265,6 +281,9 @@ assert.match(rtlHtml, /MaxRects côté court/);
 assert.match(rtlHtml, /زبون خام/);
 assert.match(rtlHtml, /لوح خاص/);
 assert.match(rtlHtml, /لون خاص/);
+assert.match(ltrHtml, /زبون خام/);
+assert.match(ltrHtml, /لوح خاص/);
+assert.match(ltrHtml, /لون خاص/);
 assert.doesNotMatch(rtlHtml, /أفضل ضلع قصير/);
 assert.equal(calls.some((message) => /[\u0600-\u06FF]/.test(message)), false);
 const rtlPiece = rtlHtml.match(/left:([\d.]+)%;top:([\d.]+)%/);
@@ -309,3 +328,136 @@ messages.length = 0;
 fakeWindow.frappe = context.frappe;
 context.frappe.almdina.upload_production_dxf({ is_new: () => true });
 assert.deepEqual(messages, ["Enregistrez la commande avant le DXF."]);
+
+function focusNode(options = {}) {
+    const node = {
+        className: options.className || "",
+        attrs: {},
+        children: options.children || [],
+        textContent: options.text || "",
+        style: {
+            width: options.width || "",
+            setProperty() {},
+            removeProperty() {},
+        },
+        handlers: {},
+        dataset: {},
+        classList: { add() {}, remove() {} },
+        setAttribute(name, value) { node.attrs[name] = String(value); },
+        getAttribute(name) { return node.attrs[name]; },
+        appendChild(child) {
+            child.parent = node;
+            node.children.push(child);
+            return child;
+        },
+        remove() {},
+        addEventListener(type, handler) { node.handlers[type] = handler; },
+        focus() {},
+        contains(target) {
+            if (target === node) return true;
+            return node.children.some(child => child === target || (child.contains && child.contains(target)));
+        },
+        querySelector(selector) {
+            if (selector === ":scope > :first-child") return node.children[0] || null;
+            if (selector === ":scope > :nth-child(2)") return node.children[1] || null;
+            const wanted = selector.replace(/^\./, "");
+            const walk = (current) => {
+                if ((current.className || "").split(/\s+/).includes(wanted)) return current;
+                for (const child of current.children || []) {
+                    const found = walk(child);
+                    if (found) return found;
+                }
+                return null;
+            };
+            return walk(node);
+        },
+        querySelectorAll(selector) {
+            const wanted = selector.replace(/^\./, "");
+            const found = [];
+            const walk = (current) => {
+                if ((current.className || "").split(/\s+/).includes(wanted)) found.push(current);
+                (current.children || []).forEach(walk);
+            };
+            walk(node);
+            return found;
+        },
+        cloneNode() {
+            return focusNode({
+                className: node.className,
+                text: node.textContent,
+                width: node.style.width,
+                children: node.children.map(child => child.cloneNode()),
+            });
+        },
+        closest(selector) {
+            const wanted = selector.replace(/^\./, "");
+            let current = node;
+            while (current) {
+                if ((current.className || "").split(/\s+/).includes(wanted)) return current;
+                current = current.parent || null;
+            }
+            return null;
+        },
+    };
+    Object.defineProperty(node, "innerHTML", {
+        set(value) {
+            node.children = [
+                focusNode({ className: "dco-board-focus__body" }),
+                focusNode({ className: "dco-board-focus__close" }),
+                focusNode({ className: "dco-board-focus__zoom-value", text: "100%" }),
+            ];
+            node.children.forEach(child => { child.parent = node; });
+            node.html = value;
+        },
+    });
+    node.children.forEach(child => { child.parent = node; });
+    return node;
+}
+
+function openBoardFocus(localeDirection) {
+    const body = focusNode({ className: "body" });
+    const boardContext = vm.createContext({
+        window: {
+            innerWidth: 1280,
+            innerHeight: 800,
+            AlmdinaLocale: { direction: () => localeDirection, translate: (message) => message },
+        },
+        document: {
+            documentElement: { getAttribute: () => localeDirection },
+            body,
+            createElement: () => focusNode(),
+            querySelector: (selector) => body.querySelector(selector),
+            addEventListener() {},
+        },
+        console,
+    });
+    vm.runInContext(
+        fs.readFileSync(path.join(root, planDir, "door_cutting_order_plan_board_presenter.js"), "utf8"),
+        boardContext,
+        { filename: "door_cutting_order_plan_board_presenter.js" }
+    );
+    const title = focusNode({
+        className: "dco-sheet-title",
+        children: [
+            focusNode({ text: "لوح خام 1" }),
+            focusNode({ text: "left:10%;top:20%" }),
+        ],
+    });
+    const board = focusNode({ className: "dco-sheet-board", width: "180px" });
+    const trigger = focusNode({ className: "dco-board-focus-trigger" });
+    const card = focusNode({ className: "dco-sheet-card", children: [title, board, trigger] });
+    const rootNode = focusNode({ className: "dco-board-gallery", children: [card] });
+    boardContext.window.AlmdinaPlanBoardPresenter.installInteractions(rootNode);
+    rootNode.handlers.click({
+        target: trigger,
+        preventDefault() {},
+        stopPropagation() {},
+    });
+    const overlay = body.querySelector(".dco-board-focus");
+    assert.ok(overlay, "board focus overlay must be attached to document.body");
+    assert.equal(overlay.getAttribute("dir"), localeDirection);
+    assert.equal(overlay.getAttribute("aria-label"), "لوح خام 1");
+}
+
+openBoardFocus("rtl");
+openBoardFocus("ltr");

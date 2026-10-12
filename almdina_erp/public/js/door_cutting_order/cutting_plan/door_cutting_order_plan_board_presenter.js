@@ -14,6 +14,17 @@
         return String(message == null ? "" : message);
     }
 
+    function uiDirection() {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.direction === "function") {
+            const value = locale.direction();
+            if (value === "ltr" || value === "rtl") return value;
+        }
+        const root = typeof document !== "undefined" ? document.documentElement : null;
+        const dir = root && root.getAttribute("dir");
+        return dir === "ltr" ? "ltr" : "rtl";
+    }
+
     const BOARD_GAP_PX = 8;
     const BOARD_CARD_CHROME_PX = 12;
     const BOARD_VIEWPORT_HEIGHT_RATIO = 0.68;
@@ -163,6 +174,7 @@
         const statsText = (title?.querySelector(":scope > :nth-child(2)")?.textContent || "").replace(/\s+/g, " ").trim();
         const overlay = document.createElement("div");
         overlay.className = "dco-board-focus";
+        overlay.setAttribute("dir", uiDirection());
         overlay.setAttribute("role", "dialog");
         overlay.setAttribute("aria-modal", "true");
         overlay.setAttribute("aria-label", titleText);

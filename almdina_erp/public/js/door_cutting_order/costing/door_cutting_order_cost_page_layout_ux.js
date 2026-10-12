@@ -58,7 +58,7 @@
             .dco-cost-invoice-section>.dco-cost-section-title{align-items:center;gap:14px}
             .dco-cost-invoice-heading{display:grid;gap:3px;min-width:0;flex:1}
             .dco-cost-invoice-heading>h4{margin:0}
-            .dco-cost-invoice-heading>span{display:block;max-width:100%;text-align:right}
+            .dco-cost-invoice-heading>span{display:block;max-width:100%;text-align:start}
             .dco-cost-invoice-actions{display:flex;align-items:center;justify-content:flex-start;gap:7px;flex:0 0 auto;margin-inline-start:auto}
             .dco-cost-invoice-actions .btn{width:auto!important;min-height:32px;padding:6px 12px;border-radius:9px;font-size:11px;font-weight:850;white-space:nowrap;box-shadow:none}
             .dco-cost-measurements-section>.dco-cost-section-title{cursor:default}

@@ -44,6 +44,19 @@ for (const name of files) {
     assert.doesNotMatch(source, /translate\(\s*["'`][^"'`]*[\u0600-\u06FF]/, name);
 }
 
+for (const name of [
+    "door_cutting_order_multi_edge_documents_ux.js",
+    "door_cutting_order_cost_page_layout_ux.js",
+]) {
+    const source = fs.readFileSync(path.join(root, costDir, name), "utf8");
+    assert.doesNotMatch(source, /text-align:\s*(?:right|left)\b/, name);
+}
+const edgeStyles = fs.readFileSync(
+    path.join(root, costDir, "door_cutting_order_multi_edge_documents_ux.js"),
+    "utf8"
+);
+assert.match(edgeStyles, /\.dco-cost-table--invoice td:nth-last-child\(-n\+2\)\{direction:ltr/);
+
 const addonSource = fs.readFileSync(
     path.join(root, costDir, "door_cutting_order_customer_invoice_addon_summary.js"),
     "utf8"

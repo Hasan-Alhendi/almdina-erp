@@ -275,6 +275,39 @@ class TestActiveUiHasNoLanguageTextBranches(unittest.TestCase):
                     leftovers.append(f"{relative}:{number}: {line.strip()}")
         self.assertEqual(leftovers, [])
 
+    def test_bidirectional_layout_uses_inherited_direction_and_logical_alignment(self) -> None:
+        styles = (
+            PUBLIC_JS
+            / "door_cutting_order"
+            / "cutting_plan"
+            / "door_cutting_order_plan_content_styles.js"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("direction:rtl", styles.replace(" ", ""))
+        self.assertNotIn("direction:ltr", styles.replace(" ", ""))
+        for selector in (
+            ".dco-plan-meta-strip",
+            ".dco-margin-policy-alert",
+            ".dco-uploaded-plan-mismatch-banner",
+            ".dco-board-original-edges",
+            ".dco-board-focus__dialog",
+        ):
+            self.assertIn(selector, styles)
+            self.assertIn("direction:inherit", styles)
+
+        for relative in (
+            "door_cutting_order_multi_edge_documents_ux.js",
+            "door_cutting_order_cost_page_layout_ux.js",
+        ):
+            source = (PUBLIC_JS / "door_cutting_order" / "costing" / relative).read_text(encoding="utf-8")
+            self.assertNotRegex(source, r"text-align:\s*(?:right|left)\b")
+        edge_styles = (
+            PUBLIC_JS
+            / "door_cutting_order"
+            / "costing"
+            / "door_cutting_order_multi_edge_documents_ux.js"
+        ).read_text(encoding="utf-8")
+        self.assertIn(".dco-cost-table--invoice td:nth-last-child(-n+2){direction:ltr", edge_styles)
+
 
 if __name__ == "__main__":
     unittest.main()

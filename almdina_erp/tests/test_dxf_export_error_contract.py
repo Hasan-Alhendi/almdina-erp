@@ -56,9 +56,10 @@ def test_export_kerf_validation_returns_structured_issue_and_keeps_clearance_rul
     def throw(message, *_args, **_kwargs):
         raise ValueError(str(message))
 
-    with patch.object(dxf_export_service.frappe, "throw", throw):
-        with pytest.raises(ValueError) as exc_info:
-            dxf_export_service._assert_export_kerf(_rect_snapshot(10.2))
+    with patch.object(dxf_export_service, "_", lambda message, *_args, **_kwargs: message):
+        with patch.object(dxf_export_service.frappe, "throw", throw):
+            with pytest.raises(ValueError) as exc_info:
+                dxf_export_service._assert_export_kerf(_rect_snapshot(10.2))
     assert "المسافة بين مساري القص أقل من Kerf" in str(exc_info.value)
     assert "أعد تصدير DXF" in str(exc_info.value)
     assert "لم يتم استبدال خطة DXF" not in str(exc_info.value)
