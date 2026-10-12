@@ -1768,3 +1768,132 @@ Cutting charge / board,أجور القص / لوح
 A problem occurred while sending the customer invoice.,حدثت مشكلة أثناء إرسال فاتورة الزبون.
 Waiting for the L-shaped corner edge price,بانتظار إدخال سعر معالجة قشاط زاوية L
 Waiting for the clipped-corner edge price,بانتظار إدخال سعر معالجة قشاط الزاوية المقصوصة
+A damaged or incompatible local draft was ignored without applying any of it.,تم تجاهل مسودة محلية تالفة أو غير متوافقة دون تطبيق أي جزء منها.
+A draft copy was created and the original order and plan were kept.,تم إنشاء نسخة مسودة مع الحفاظ على الطلب والخطة الأصلية.
+A newer copy of this draft exists in another tab. Reopen the order before saving.,توجد نسخة أحدث من هذه المسودة في تبويب آخر. أعد فتح الطلب قبل الحفظ.
+A newer copy of this draft exists in another tab. Reopen the order to restore it before saving.,توجد نسخة أحدث من هذه المسودة في تبويب آخر. أعد فتح الطلب لاستعادتها قبل الحفظ.
+A newer save attempt for this draft exists in another tab. Reopen the order to check it.,توجد محاولة حفظ أحدث لهذه المسودة في تبويب آخر. أعد فتح الطلب للتحقق منها.
+Active production stages that can be cancelled safely will be cancelled.,سيتم إلغاء مراحل الإنتاج النشطة التي يمكن إلغاؤها بأمان.
+Active production stages will be cancelled and the same order will be returned to draft so it can be edited.,سيتم إلغاء مراحل الإنتاج النشطة وإعادة نفس الطلب إلى المسودة حتى يمكن تعديله.
+All statuses,كل الحالات
+All workers,كل العمال
+An edit copy is already linked to this order.,توجد نسخة تعديل مرتبطة بهذا الطلب.
+Another tab is verifying a save attempt for this draft. Reopen the order to check it.,توجد محاولة حفظ قيد التحقق لهذه المسودة في تبويب آخر. أعد فتح الطلب للتحقق منها.
+Approving the order...,جاري اعتماد الطلب...
+Cancel the order,إلغاء الطلب
+Cancelling the order...,جاري إلغاء الطلب...
+"Check the internet connection, then try again.",تحقق من اتصال الإنترنت ثم أعد المحاولة.
+Checking the current stage assignment...,جاري التحقق من إسناد المرحلة الحالية...
+Choose Continue a local draft or Start a new order before saving.,اختر متابعة مسودة محلية أو بدء طلب جديد قبل الحفظ.
+Confirm delivery of the order to the customer?,هل تؤكد تسليم الطلب للعميل؟
+Confirm finishing work on the order?,هل تريد تأكيد إنهاء العمل على الطلب؟
+Confirm return,تأكيد الإعادة
+Continue the order,متابعة الطلب
+Could not confirm that the draft is ready to continue.,تعذر تأكيد جاهزية المسودة للمتابعة.
+Could not delete the local draft.,تعذر حذف المسودة المحلية.
+Could not load the data.,تعذر تحميل البيانات.
+Could not load {0},تعذر تحميل {0}
+Could not restore the draft,تعذر استعادة المسودة
+Could not store the reconciliation result locally.,تعذر تثبيت نتيجة المصالحة محليًا.
+Could not verify the local draft.,تعذر التحقق من المسودة المحلية.
+Could not verify the previous save attempt. The insert was not retried.,تعذر التحقق من نتيجة محاولة الحفظ السابقة. لم تتم إعادة الإدراج.
+Create an edit copy,إنشاء نسخة تعديل
+Create the draft copy,إنشاء النسخة المسودة
+Creates an independent draft document without editing the current order directly.,ينشئ مستندًا مسودة مستقلاً دون تعديل الطلب الحالي مباشرة.
+Creating an independent edit copy...,جاري إنشاء نسخة تعديل مستقلة...
+Current worker,العامل الحالي
+Customer name or order number,اسم العميل أو رقم الطلب
+Data that affects the cost changed. Previous values are shown as context only and are not final until they are saved and refreshed.,تم تغيير بيانات تؤثر على التكلفة. القيم السابقة معروضة كسياق فقط ولا تعتبر نهائية حتى الحفظ والتحديث.
+Default sort,الترتيب الافتراضي
+Delete the draft,حذف المسودة
+Do you want to permanently delete this local draft?,هل تريد حذف هذه المسودة المحلية نهائيًا؟
+Do you want to start work on the order?,هل تريد بدء العمل على الطلب؟
+Edge color:,لون القشاط:
+"Edit mode is on. Change the pieces and fields, then press Save to apply the edit and lock the fields again.",وضع التعديل مفعّل. عدّل الدرف والحقول، ثم اضغط «حفظ» لاعتماد التعديل وإعادة قفل الحقول.
+"Edit mode is on. Change the required values, then use Save or Cancel in this section.",وضع التعديل مفعّل — غيّر القيم المطلوبة ثم استخدم «حفظ» أو «إلغاء» داخل هذا القسم.
+Finish work,إنهاء العمل
+Hide the side panel,إخفاء اللوحة الجانبية
+In progress,قيد التنفيذ
+Includes special door data,تتضمن بيانات درفة خاصة
+"It is no longer valid after the pricing basis changed, and it will not be used as a final value.",لم يعد صالحًا بعد تغيير أساس التسعير، ولن يدخل كقيمة نهائية.
+Kerf thickness,سماكة القص Kerf
+Last update:,آخر تحديث:
+Loading edit permissions...,جاري تحميل صلاحيات التعديل...
+Loading {0} on this device for the first time.,يتم تحميل {0} لأول مرة على هذا الجهاز.
+Local save preparation finished. Press Save again to finish creating the order.,اكتمل تجهيز الحفظ المحلي. اضغط حفظ مرة أخرى لإتمام إنشاء الطلب.
+Measurements:,القياسات:
+Open the edit copy,فتح نسخة التعديل
+Open the order,فتح الطلب
+Open the original order,فتح الطلب الأصلي
+Order ID,ID الطلب
+Order completed,تم الإنجاز
+Order copies,نسخ الطلب
+Order cost,تكلفة الطلب
+Order information,معلومات الطلب
+Order lifecycle,دورة الطلب
+Plan settings:,إعدادات الخطة:
+Preparing the section,جاري تجهيز القسم
+Previous price,السعر السابق
+Ready for delivery,جاهز للتسليم
+Ready to start,جاهز للبدء
+Reason for cancelling the order,سبب إلغاء الطلب
+Reason for creating the edit copy (optional),سبب إنشاء نسخة التعديل (اختياري)
+Reason for returning the order to draft (optional),سبب إعادة الطلب للمسودة (اختياري)
+Restore an incomplete cutting order,استعادة طلب قص غير مكتمل
+Resuming the order...,جاري استئناف الطلب...
+Return the order to draft,إعادة الطلب للمسودة
+Returning the order to draft...,جاري إعادة الطلب للمسودة...
+Save or cancel the current edit before moving to another section.,احفظ أو ألغِ التعديل الحالي قبل الانتقال إلى قسم آخر.
+Saved changes affect piece placement. Board and cutting costs are not final until the cutting plan is recalculated and the new result is saved.,تم حفظ تغييرات تؤثر على توزيع القطع. تكلفة الألواح والقص لن تعتبر نهائية حتى إعادة حساب خطة القص وحفظ النتيجة الجديدة.
+Search by customer name or order number,ابحث باسم العميل أو رقم الطلب (ID)
+"Search by customer name or order number, for example DCO-2026-00004",ابحث باسم العميل أو رقم الطلب مثل DCO-2026-00004
+Show the side panel,إظهار اللوحة الجانبية
+Start a new order,بدء طلب جديد
+Start work,بدء العمل
+Submitting the order for review...,جاري إرسال الطلب للمراجعة...
+Synchronizing the cost,جاري مزامنة التكلفة
+The changes were saved. Board and cutting costs are not final until the automatic calculation finishes.,تم حفظ التغييرات. تكلفة الألواح والقص لن تعتبر نهائية حتى يكتمل الحساب التلقائي.
+The cost calculation is still waiting,حساب التكلفة ما زال في الانتظار
+The cost data needs an update,بيانات التكلفة تحتاج تحديثًا
+The cost is waiting for the new cutting plan,التكلفة بانتظار خطة القص الجديدة
+The cutting plan preview is being applied,يتم الآن اعتماد معاينة خطة القص
+The draft changed in another tab. Reopen the order before continuing it.,تغيرت المسودة في تبويب آخر. أعد فتح الطلب قبل متابعتها.
+The draft changed in another tab. Reopen the order before deleting it.,تغيرت المسودة في تبويب آخر. أعد فتح الطلب قبل حذفها.
+"The edit button is available, but the fields open only while the order is in Draft. Use Return to draft first.",زر التعديل متاح لك، لكن فتح الحقول يتطلب أن يكون الطلب في حالة «مسودة». استخدم «إعادة للمسودة» أولًا.
+The edit is still open,التعديل ما زال مفتوحًا
+The edit was saved and the fields were locked again. Approving the order or plan for production uses a separate button when needed.,تم حفظ التعديل وإعادة قفل الحقول. اعتماد الطلب/الخطة للإنتاج يتم بزر منفصل إن لزم.
+"The fields are locked. Press Edit to open the fields, then Save to apply the edit and lock them again.",الحقول مقفلة. اضغط «تعديل» لفتح الحقول، ثم «حفظ» لاعتماد التعديل وإعادة القفل.
+The local draft could not be read safely. You can start a new order.,تعذر قراءة المسودة المحلية بأمان. يمكنك بدء طلب جديد.
+"The measurement, quantity, or piece type changed. The previous approved price is no longer valid and will not be treated as a current value. Save the order to keep the change, then enter the new price.",تم تغيير القياس أو العدد أو نوع القطعة. السعر المعتمد السابق لم يعد صالحًا، ولن يُعامل كقيمة حالية. احفظ الطلب لتثبيت التغيير ثم أدخل السعر الجديد.
+The measurements were saved. Board and cutting costs will update when the background worker starts or after a manual recalculation.,تم حفظ القياسات. تكلفة الألواح والقص ستتحدث عند بدء العامل الخلفي أو بعد إعادة الحساب اليدوي.
+The official cost below belongs to the saved plan. The current preview uses {0} boards and its expected cost is $ {1}. Save the cutting plan to apply these values.,التكلفة الرسمية أدناه تخص الخطة المحفوظة. المعاينة الحالية تستخدم {0} لوحًا وتكلفتها المتوقعة $ {1}. احفظ خطة القص لاعتماد هذه القيم.
+The order and its related production stages were cancelled.,تم إلغاء الطلب ومراحل الإنتاج المرتبطة به.
+The order and the current plan will be approved. Do you want to continue?,سيتم اعتماد الطلب والخطة الحالية. هل تريد المتابعة؟
+The order can be edited only while it is in draft.,يمكن تعديل الطلب فقط وهو في حالة المسودة.
+The order was approved.,تم اعتماد الطلب بنجاح.
+The order was resumed to its previous stage.,تم استئناف الطلب إلى مرحلته السابقة.
+The order was submitted for review.,تم إرسال الطلب للمراجعة.
+The order will be submitted for review and editing will be blocked after approval. Do you want to continue?,سيتم إرسال الطلب للمراجعة ومنع التعديل عليه بعد الاعتماد. هل تريد المتابعة؟
+The order will resume from the stage where it was cancelled. Do you want to continue?,سيتم استئناف الطلب من المرحلة التي أُلغي فيها. هل تريد المتابعة؟
+The plan is approved and locked,الخطة معتمدة ومقفلة
+The same order was returned to draft.,تمت إعادة الطلب نفسه إلى المسودة.
+The saved cutting plan changed. The cost is being updated from the server copy.,تم تغيير خطة القص المحفوظة. يتم تحديث التكلفة من النسخة المعتمدة على الخادم.
+The special door pricing basis changed,تغيّر أساس تسعير درفة خاصة
+There is an unsaved plan preview,هناك معاينة خطة غير محفوظة
+This action cancels the order and the active production stages. Do you want to continue?,هذا الإجراء يلغي الطلب ومراحل الإنتاج النشطة. هل تريد المتابعة؟
+This data is an unofficial local draft. A formal order is created only when you press Save after continuing.,هذه البيانات مسودة محلية غير محفوظة رسميًا. لن يُنشأ طلب رسمي إلا عند ضغط «حفظ» بعد المتابعة.
+This is a historical copy that was replaced by a newer copy. It is for reading and documentation only.,هذه نسخة تاريخية تم استبدالها بنسخة أحدث، وهي للقراءة والتوثيق فقط.
+"This is an inactive edit copy. It can be prepared and reviewed, but it will not be sent to production before it is approved and safely replaces the previous copy.",هذه نسخة تعديل غير مفعّلة. يمكن تجهيزها ومراجعتها، لكنها لن تُرسل للإنتاج قبل اعتمادها واستبدال النسخة السابقة بأمان.
+This is the current copy in the order revision chain.,هذه هي النسخة الحالية ضمن سلسلة مراجعات الطلب.
+Trim margin,هامش التشذيب
+Try again,إعادة المحاولة
+Unsaved local draft,مسودة غير محفوظة محليًا
+Update the cost before printing a final invoice.,حدّث التكلفة أولًا قبل طباعة فاتورة نهائية.
+Waiting for update,بانتظار التحديث
+"You can search by customer name or order number, for example DCO-2026-00004",يمكن البحث باسم العميل أو رقم الطلب مثل DCO-2026-00004
+You can view this order only. Assign the current stage to a user before making any change.,يمكنك عرض هذا الطلب فقط. أسند المرحلة الحالية إلى مستخدم قبل تنفيذ أي تعديل.
+You can view this order only. The current stage is assigned to another user.,يمكنك عرض هذا الطلب فقط. المرحلة الحالية مسندة إلى مستخدم آخر.
+You can view this order only. The order has left the active production stages.,يمكنك عرض هذا الطلب فقط. الطلب غادر مراحل الإنتاج النشطة.
+You do not have permission to edit the optimizer settings,لا تملك صلاحية تعديل إعدادات المحسّن
+You do not have permission to recalculate the cutting plan,لا تملك صلاحية إعادة حساب خطة القص
+s,ث

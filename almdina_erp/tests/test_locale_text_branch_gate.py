@@ -275,6 +275,84 @@ class TestActiveUiHasNoLanguageTextBranches(unittest.TestCase):
                     leftovers.append(f"{relative}:{number}: {line.strip()}")
         self.assertEqual(leftovers, [])
 
+        self.assertEqual(leftovers, [])
+
+    def test_operational_shell_visible_copy_uses_english_message_ids(self) -> None:
+        """Legacy cleanup labels and stored department values stay raw; visible UI uses English IDs."""
+        paths = (
+            PUBLIC_JS / "door_cutting_order" / "core" / "order_lifecycle.js",
+            PUBLIC_JS / "door_cutting_order" / "core" / "door_cutting_order_revision_ux.js",
+            PUBLIC_JS / "door_cutting_order" / "core" / "door_cutting_order_toolbar_stability_ux.js",
+            PUBLIC_JS / "door_cutting_order" / "core" / "door_cutting_order_page_edit_action_ux.js",
+            PUBLIC_JS / "door_cutting_order" / "core" / "door_cutting_order_action_permission_guard.js",
+            PUBLIC_JS / "door_cutting_order" / "core" / "door_cutting_order_form_sidebar_controller.js",
+            PUBLIC_JS / "door_cutting_order" / "core" / "door_cutting_order_workspace_freshness_ux.js",
+            PUBLIC_JS / "door_cutting_order" / "core" / "door_cutting_order_workspace_asset_status_ux.js",
+            PUBLIC_JS / "door_cutting_order" / "core" / "door_cutting_order_document_context.js",
+            PUBLIC_JS / "door_cutting_order" / "core" / "door_cutting_order_tab_edit_lifecycle_guard.js",
+            PUBLIC_JS / "door_cutting_order" / "core" / "door_cutting_order_plan_cost_workspace_visual_ux.js",
+            PUBLIC_JS / "door_cutting_order" / "core" / "door_cutting_order_save_render_performance_ux.js",
+            PUBLIC_JS / "door_cutting_order" / "core" / "door_cutting_order_workspace_store.js",
+            PUBLIC_JS / "door_cutting_order" / "list_view" / "door_cutting_order_list.js",
+            PUBLIC_JS / "door_cutting_order" / "recovery" / "presentation" / "door_cutting_order_local_checkpoint.js",
+        )
+        allowed = (
+            "دورة الطلب",
+            "إرسال للمراجعة",
+            "اعتماد الطلب",
+            "اعتماد التعديل",
+            "تعديل الطلب",
+            "نسخ الطلب",
+            "إنشاء نسخة تعديل",
+            "إلغاء تخصيص قشاط الدرف",
+            "إلغاء تخصيص قشاط الدرفة",
+            "إلغاء تخصيص القشاط",
+            "طباعة جدول القياسات",
+            "طباعة القياسات",
+            "طباعة خطة القص",
+            "طباعة فاتورة الزبون",
+            "تصدير DXF لأوتوكاد",
+            "تصدير DXF",
+            "تصدير",
+            "تنزيل DXF المرفوع",
+            "تصدير DXF للرسم",
+            "تصدير DXF للتعديل",
+            "تنزيل DXF للإنتاج",
+            "رفع ملف DXF",
+            "استبدال ملف DXF",
+            "اعتماد الرسم",
+            "إعادة اعتماد الرسم",
+            "الرسم / DXF",
+            "طباعة",
+            "إرسال للإنتاج",
+            "إلغاء الطلب",
+            "استئناف الطلب",
+            "إعادة حساب خطة القص",
+            "إعادة للمسودة",
+            "إرجاع لمرحلة سابقة",
+            "عرض",
+            "صالة الإنتاج",
+            "الملاحظات",
+            "بحث",
+            "صلاحية",
+            "رقم الطلب",
+            "قيد العمل",
+            "تم التسليم",
+            "جاهز للتسليم",
+            "تسليم",
+        )
+        leftovers = []
+        ordered = tuple(sorted(allowed, key=len, reverse=True))
+        for path in paths:
+            relative = path.relative_to(ROOT)
+            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+                visible = line
+                for phrase in ordered:
+                    visible = visible.replace(phrase, "")
+                if ARABIC_TEXT.search(visible):
+                    leftovers.append(f"{relative}:{number}: {line.strip()}")
+        self.assertEqual(leftovers, [])
+
     def test_bidirectional_layout_uses_inherited_direction_and_logical_alignment(self) -> None:
         styles = (
             PUBLIC_JS

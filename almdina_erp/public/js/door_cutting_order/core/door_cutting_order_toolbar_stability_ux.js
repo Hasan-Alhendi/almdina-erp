@@ -1,7 +1,26 @@
 (() => {
     "use strict";
 
-    const REMOVE_LABELS = new Set([
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split("{" + index + "}").join(String(value));
+            });
+        }
+        return text;
+    }
+
+    // Labels owned by modules outside this phase, or by older builds. They are matched
+    // only so existing buttons can be removed or placed. They are not displayed from here.
+    const LEGACY_REMOVE_LABELS = new Set([
         "إلغاء تخصيص قشاط الدرف",
         "إلغاء تخصيص قشاط الدرفة",
         "إلغاء تخصيص القشاط",
@@ -26,24 +45,74 @@
         "Reset Piece Edge Customization",
         "Reset Edge Customization",
     ]);
-    const MOBILE_PRIMARY_LEFT = new Set(["إرسال للإنتاج", "Send to Production"]);
-    const MOBILE_PRIMARY_RIGHT = new Set([
+    const ACTIVE_REMOVE_IDS = Object.freeze([
+        "Print cutting plan",
+        "Print the customer invoice",
+        "Export DXF for AutoCAD",
+        "Export DXF",
+        "Download uploaded DXF",
+        "Upload a DXF plan",
+        "Replace the uploaded plan",
+    ]);
+    const LEGACY_BUTTON_GROUPS = Object.freeze(["الرسم / DXF", "دورة الطلب", "طباعة"]);
+    const LEGACY_MOBILE_PRIMARY_LEFT = new Set(["إرسال للإنتاج", "Send to Production"]);
+    const LEGACY_MOBILE_PRIMARY_RIGHT = new Set([
         "إلغاء الطلب",
         "Cancel Order",
         "استئناف الطلب",
         "Resume Order",
     ]);
-    const ORDER = new Map([
+    const LEGACY_BUTTON_ORDER = new Map([
         ["إرسال للإنتاج", 5],
+        ["Send to Production", 5],
         ["إعادة حساب خطة القص", 10],
         ["إعادة للمسودة", 35],
+        ["Return to draft", 35],
         ["إرجاع لمرحلة سابقة", 36],
         ["نسخ الطلب", 70],
         ["إلغاء الطلب", 90],
+        ["Cancel Order", 90],
         ["استئناف الطلب", 91],
+        ["Resume Order", 91],
         ["عرض", 50],
     ]);
-    const ASYNC_ACTION_GROUPS = new Set(["صالة الإنتاج"]);
+    const ACTIVE_BUTTON_ORDER = Object.freeze([
+        ["Send to production", 5],
+        ["Recalculate the cutting plan", 10],
+        ["Return to draft", 35],
+        ["Return to a previous stage", 36],
+        ["Copy the order", 70],
+        ["Cancel the order", 90],
+        ["Resume the order", 91],
+        ["View", 50],
+    ]);
+    const LEGACY_ASYNC_ACTION_GROUPS = new Set(["صالة الإنتاج"]);
+    const LEGACY_DRAWING_GROUP = "الرسم / DXF";
+    const LEGACY_NOTES_LABEL = "الملاحظات";
+
+    function matchesTranslated(label, messageId) {
+        return label === messageId || label === translate(messageId);
+    }
+
+    function isRemovedLabel(label) {
+        if (LEGACY_REMOVE_LABELS.has(label)) return true;
+        return ACTIVE_REMOVE_IDS.some((messageId) => matchesTranslated(label, messageId));
+    }
+
+    function buttonGroups() {
+        return [
+            ...LEGACY_BUTTON_GROUPS,
+            translate("Drawing / DXF"),
+            translate("Order lifecycle"),
+            translate("Print"),
+        ];
+    }
+
+    function buttonOrder(label) {
+        if (LEGACY_BUTTON_ORDER.has(label)) return LEGACY_BUTTON_ORDER.get(label);
+        const active = ACTIVE_BUTTON_ORDER.find(([messageId]) => matchesTranslated(label, messageId));
+        return active ? active[1] : undefined;
+    }
 
     function documentContext() {
         return window.AlmdinaDocumentContext || null;
@@ -184,18 +253,24 @@
     }
 
     function removeLegacyButtons(frm, head) {
-        REMOVE_LABELS.forEach(label => {
+        const labels = new Set(LEGACY_REMOVE_LABELS);
+        ACTIVE_REMOVE_IDS.forEach((messageId) => {
+            labels.add(messageId);
+            labels.add(translate(messageId));
+        });
+        const groups = buttonGroups();
+        labels.forEach(label => {
             try { frm.remove_custom_button(label); } catch (error) { /* button may not exist */ }
-            try { frm.remove_custom_button(label, __("الرسم / DXF")); } catch (error) { /* optional group */ }
-            try { frm.remove_custom_button(label, __("دورة الطلب")); } catch (error) { /* optional group */ }
-            try { frm.remove_custom_button(label, __("طباعة")); } catch (error) { /* optional group */ }
+            groups.forEach(group => {
+                try { frm.remove_custom_button(label, group); } catch (error) { /* optional group */ }
+            });
         });
         head.querySelectorAll(".page-actions button,.page-actions a,.page-actions .dropdown-item").forEach(node => {
             const label = text(node);
-            const isPlanPrint = label === "طباعة خطة القص" || /^print\s*cutting\s*plan$/i.test(label);
-            const isDxfExport = /تصدير\s*DXF/i.test(label) || /^export\s*dxf/i.test(label);
-            const isCustomerInvoicePrint = label === "طباعة فاتورة الزبون" || /^print\s*customer\s*invoice$/i.test(label);
-            if (REMOVE_LABELS.has(label) || isPlanPrint || isDxfExport || isCustomerInvoicePrint) {
+            const isPlanPrint = matchesTranslated(label, "Print cutting plan") || /^print\s*cutting\s*plan$/i.test(label);
+            const isDxfExport = /تصدير\s*DXF/i.test(label) || matchesTranslated(label, "Export DXF") || /^export\s*dxf/i.test(label);
+            const isCustomerInvoicePrint = matchesTranslated(label, "Print the customer invoice") || /^print\s*customer\s*invoice$/i.test(label);
+            if (isRemovedLabel(label) || isPlanPrint || isDxfExport || isCustomerInvoicePrint) {
                 const group = node.closest(".btn-group,.dropdown");
                 if (node.matches(".dropdown-item") && group) node.remove();
                 else (group && actionLabel(group) === text(node) ? group : node).remove();
@@ -206,7 +281,7 @@
     function removeDrawingDxfGroup(head) {
         head.querySelectorAll(".custom-actions > .btn-group,.custom-actions > .dropdown").forEach(group => {
             const label = actionLabel(group);
-            if (label === "الرسم / DXF" || /^drawing\s*\/\s*dxf$/i.test(label)) {
+            if (label === LEGACY_DRAWING_GROUP || matchesTranslated(label, "Drawing / DXF") || /^drawing\s*\/\s*dxf$/i.test(label)) {
                 group.remove();
             }
         });
@@ -279,17 +354,17 @@
             const label = actionLabel(node);
             if (
                 node.classList.contains("dco-notes-toolbar-button")
-                || label === "الملاحظات"
-                || label === "Notes"
+                || label === LEGACY_NOTES_LABEL
+                || matchesTranslated(label, "Notes")
             ) {
                 node.setAttribute("data-dco-mobile-slot", "utility-notes");
                 return;
             }
-            if (MOBILE_PRIMARY_LEFT.has(label)) {
+            if (LEGACY_MOBILE_PRIMARY_LEFT.has(label) || matchesTranslated(label, "Send to production")) {
                 node.setAttribute("data-dco-mobile-slot", "primary-left");
                 return;
             }
-            if (MOBILE_PRIMARY_RIGHT.has(label)) {
+            if (LEGACY_MOBILE_PRIMARY_RIGHT.has(label) || matchesTranslated(label, "Cancel the order") || matchesTranslated(label, "Resume the order")) {
                 node.setAttribute("data-dco-mobile-slot", "primary-right");
                 return;
             }
@@ -330,7 +405,7 @@
                 return;
             }
             seen.set(label, node);
-            const order = ORDER.get(label);
+            const order = buttonOrder(label);
             if (order !== undefined && node.style.order !== String(order)) {
                 node.style.order = String(order);
             }
@@ -338,7 +413,7 @@
 
         head.querySelectorAll(".dropdown-menu").forEach(menu => {
             const group = menu.closest(".btn-group,.dropdown");
-            if (ASYNC_ACTION_GROUPS.has(actionLabel(group))) return;
+            if (LEGACY_ASYNC_ACTION_GROUPS.has(actionLabel(group)) || matchesTranslated(actionLabel(group), "Production floor")) return;
             const menuSeen = new Set();
             menu.querySelectorAll(".dropdown-item").forEach(item => {
                 const label = text(item);

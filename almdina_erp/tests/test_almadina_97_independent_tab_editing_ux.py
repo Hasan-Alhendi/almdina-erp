@@ -157,9 +157,9 @@ def test_each_tab_has_its_own_local_edit_save_cancel_toolbar():
     assert "function toolbarSlotHost(frm)" in source
     assert "function ensureToolbarSlot(frm)" in source
     assert "slot.replaceChildren(toolbar)" in source
-    assert 'const EDIT_LABEL = "تعديل"' in source
-    assert 'const SAVE_LABEL = "حفظ"' in source
-    assert 'const CANCEL_LABEL = "إلغاء"' in source
+    assert 'const EDIT_LABEL = "Edit order"' in source
+    assert 'const SAVE_LABEL = "Save"' in source
+    assert 'const CANCEL_LABEL = "Cancel"' in source
     assert 'data-almdina-tab-edit-kind' in source
     assert 'dco-tab-edit-start' in source
     assert 'dco-tab-edit-save' in source
@@ -191,7 +191,7 @@ def test_tab_local_actions_delegate_through_the_aggregate_session_owner():
     assert "coordinator.save(frm, kind)" in source
     assert "coordinator.cancel(frm, kind)" in source
     assert "activeEditingKind(frm)" in source
-    assert "احفظ أو ألغِ التعديل المفتوح في القسم الآخر أولًا" in source
+    assert "Save or cancel the edit that is open in the other section first." in source
     assert "frappe.call" not in source
 
 
@@ -209,8 +209,8 @@ def test_tab_local_edit_buttons_fail_closed_against_each_session_permission_poli
     assert "COST_SETTINGS_EDITABLE_ORDER_STATUSES" not in cost_source
     assert 'typeof api.canEditCostWorkspace === "function"' in page_source
     assert 'can(frm, "edit_order")' in order_source
-    assert "لا تملك صلاحية تعديل إعدادات خطة القص" in page_source
-    assert "تعديل التكلفة أو تسعير الدرف الخاصة" in page_source
+    assert "You do not have permission to edit the cutting plan settings" in page_source
+    assert "You do not have permission to edit the cost or the special door prices" in page_source
 
 
 def test_plan_read_mode_restores_canonical_settings_without_restoring_dco_fields():
@@ -222,13 +222,13 @@ def test_plan_read_mode_restores_canonical_settings_without_restoring_dco_fields
     assert 'owner.activePlan(frm, "System")' in source
     assert "const settings = row.settings || {}" in source
     for label in (
-        "الخوارزمية",
-        "آلة القص",
-        "سماكة القص Kerf",
-        "هامش التشذيب",
-        "مهلة التحسين",
+        "Algorithm",
+        "Cutting machine",
+        "Kerf thickness",
+        "Trim margin",
+        "Optimization time limit",
     ):
-        assert label in source
+        assert f'translate("{label}")' in source
     assert "board_length_cm" not in source
     assert "board_width_cm" not in source
 

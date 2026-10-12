@@ -104,8 +104,8 @@ def test_a53_visual_states_are_explicit_accessible_and_arabic_first() -> None:
     assert 'node.setAttribute("aria-busy", "true")' in visual
     assert 'node.setAttribute("aria-live", "polite")' in visual
     assert '"idle", "loading", "ready", "error"' in visual
-    assert "وضع التعديل مفعّل" in visual
-    assert "اضغط «حفظ» من أعلى الصفحة" in visual
+    assert "data-dco-edit-banner" in visual
+    assert "content:attr(data-dco-edit-banner)" in visual
     assert '[data-fieldname="plan_control_actions"][data-almdina-workspace-editing="1"]::before' in visual
     assert "content:none !important" in visual
     assert "dco-plan-stale-copy" in source(FAST_SAVE := ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan" / "door_cutting_order_fast_save_ux.js")

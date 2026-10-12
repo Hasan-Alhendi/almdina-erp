@@ -40,9 +40,9 @@ def test_mobile_card_matches_approved_reference_hierarchy() -> None:
     ):
         assert marker in js
 
-    assert 'renderInfoTile("لون اللوح", model.boardColor' in js
-    assert 'renderInfoTile("لون القشاط", model.edgeColor' in js
-    assert 'renderInfoTile("نوع القشاط", model.edgeType' in js
+    assert 'renderInfoTile("Board color", model.boardColor' in js
+    assert 'renderInfoTile("Edge color", model.edgeColor' in js
+    assert 'renderInfoTile("Edge type", model.edgeType' in js
     assert '"default_edge_type"' in js
     assert 'class="dco-card-workflow"' not in js
     assert 'class="dco-card-assignee"' not in js
@@ -57,11 +57,11 @@ def test_mobile_card_matches_approved_reference_hierarchy() -> None:
 
     # The three approved visual states have separate themes.
     assert ".dco-mobile-order-card.is-ready" in css
-    assert ".dco-mobile-order-card.is-progress" in css
+    assert ".dco-mobile-order-card.is-in-progress" in css
     assert ".dco-mobile-order-card.is-completed" in css
-    assert 'label: __("جاهز للبدء")' in js
-    assert 'label: __("قيد التنفيذ")' in js
-    assert 'label: __("تم الإنجاز")' in js
+    assert 'label: "Ready to start"' in js
+    assert 'label: "In progress"' in js
+    assert 'label: "Order completed"' in js
 
 
 def test_mobile_card_keeps_server_authorized_actions_as_the_only_action_source() -> None:

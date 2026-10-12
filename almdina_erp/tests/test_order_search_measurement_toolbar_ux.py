@@ -53,8 +53,8 @@ def test_order_search_includes_customer_and_explains_id_or_customer_search():
     search_fields = {value.strip() for value in doctype["search_fields"].split(",") if value.strip()}
     assert {"customer", "board_description"}.issubset(search_fields)
     source = text(LIST_UX)
-    assert "ابحث باسم العميل أو رقم الطلب (ID)" in source
-    assert "اسم العميل أو رقم الطلب" in source
+    assert 'translate("Search by customer name or order number")' in source
+    assert 'translate("Customer name or order number")' in source
     assert '"customer", "order_date", "status"' in source
 
 
