@@ -79,6 +79,22 @@ class TestPermissionMatrixApplication(unittest.TestCase):
                 self.assertTrue(edge["read"])
                 self.assertTrue(edge["select"])
 
+    def test_create_only_order_grant_does_not_project_existing_order_write(self) -> None:
+        state = {Capability.CREATE_ORDER: True}
+
+        dco = standard_permission_projection("Door Cutting Order", state)
+        customer = standard_permission_projection("Customer", state)
+        business_state = normalize_business_capability_state(state)
+
+        self.assertTrue(dco["read"])
+        self.assertTrue(dco["select"])
+        self.assertTrue(dco["create"])
+        self.assertFalse(dco["write"])
+        self.assertTrue(customer["read"])
+        self.assertTrue(customer["select"])
+        self.assertFalse(customer["write"])
+        self.assertFalse(business_state[Capability.VIEW_CUSTOMERS])
+
     def test_order_input_lookup_dependencies_are_not_business_grants(self) -> None:
         state = normalize_business_capability_state(
             {

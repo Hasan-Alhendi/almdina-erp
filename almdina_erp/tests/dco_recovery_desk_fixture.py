@@ -9,8 +9,8 @@ import frappe
 from frappe.desk.page.setup_wizard.setup_wizard import setup_complete as run_setup_wizard
 
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
-from almdina_erp.almdina_erp.infrastructure.frappe.permission_matrix_repository import (
-    FrappePermissionMatrixRepository,
+from almdina_erp.almdina_erp.infrastructure.frappe.projected_permission_matrix_repository import (
+    ProjectedPermissionMatrixRepository,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.shop_floor_authorization import (
     assert_enabled_user_has_role,
@@ -138,6 +138,168 @@ def _worker(suffix: str, role: str) -> str:
     return str(user.name)
 
 
+def _permission_rows(table: str, doctype: str, roles: list[str]) -> list[dict[str, object]]:
+    permission_fields = (
+        "read",
+        "select",
+        "create",
+        "write",
+        "delete",
+        "submit",
+        "cancel",
+        "amend",
+        "print",
+        "email",
+        "report",
+        "export",
+        "import",
+        "share",
+    )
+    meta = frappe.get_meta(table)
+    fields = ["role", "permlevel", *(name for name in permission_fields if meta.has_field(name))]
+    if meta.has_field("view_customers"):
+        fields.append("view_customers")
+    return [
+        dict(row)
+        for row in frappe.get_all(
+            table,
+            filters={"parent": doctype, "role": ["in", roles]},
+            fields=fields,
+            order_by="permlevel asc",
+        )
+    ]
+
+
+def _assert_creator_permission_contract(
+    role: str,
+    creator: str,
+    customer: str,
+    existing_order: str,
+) -> dict[str, object]:
+    """Verify the real DocPerm projection and lookup access of CREATE_ORDER."""
+    from frappe.permissions import get_role_permissions, has_permission
+
+    dco_rights = get_role_permissions("Door Cutting Order", user=creator)
+    customer_rights = get_role_permissions("Customer", user=creator)
+    customer_field = frappe.get_meta("Door Cutting Order").get_field("customer")
+    from frappe.permissions import get_roles
+
+    business_roles = sorted(get_roles(creator, with_standard=False))
+    if business_roles != [role]:
+        frappe.throw(f"Unexpected non-standard roles on CREATE_ORDER fixture: {business_roles}")
+    effective_roles = sorted(get_roles(creator))
+
+    dco_docperm_rows = _permission_rows("DocPerm", "Door Cutting Order", effective_roles)
+    dco_custom_docperm_rows = _permission_rows(
+        "Custom DocPerm", "Door Cutting Order", effective_roles
+    )
+    customer_docperm_rows = _permission_rows("DocPerm", "Customer", effective_roles)
+    customer_custom_docperm_rows = _permission_rows("Custom DocPerm", "Customer", effective_roles)
+    dco_field_permission_rows = [
+        row for row in (*dco_docperm_rows, *dco_custom_docperm_rows)
+        if int(row.get("permlevel") or 0) > 0
+    ]
+    customer_field_permission_rows = [
+        row for row in (*customer_docperm_rows, *customer_custom_docperm_rows)
+        if int(row.get("permlevel") or 0) > 0
+    ]
+    field_contract = {
+        "permlevel": int(customer_field.permlevel or 0),
+        "hidden": bool(customer_field.hidden),
+        "read_only": bool(customer_field.read_only),
+    }
+    if field_contract != {"permlevel": 0, "hidden": False, "read_only": False}:
+        frappe.throw(f"Unexpected DCO Customer field metadata: {field_contract}")
+
+    if not (dco_rights.read and dco_rights.create) or dco_rights.write:
+        frappe.throw(f"CREATE_ORDER DCO projection is not create-only: {dict(dco_rights)}")
+    if (
+        not (customer_rights.read and customer_rights.select)
+        or customer_rights.create
+        or customer_rights.write
+    ):
+        frappe.throw(
+            f"CREATE_ORDER Customer lookup projection is incorrect: {dict(customer_rights)}"
+        )
+    field_rights = (
+        "read",
+        "select",
+        "create",
+        "write",
+        "delete",
+        "submit",
+        "cancel",
+        "amend",
+        "print",
+        "email",
+        "report",
+        "export",
+        "import",
+        "share",
+    )
+    for doctype, rows in (
+        ("Door Cutting Order", dco_field_permission_rows),
+        ("Customer", customer_field_permission_rows),
+    ):
+        if any(bool(row.get(right)) for row in rows for right in field_rights):
+            frappe.throw(
+                f"CREATE_ORDER user has unexpected {doctype} field grants: {rows}"
+            )
+    customer_view_grants = [
+        row
+        for row in customer_custom_docperm_rows
+        if int(row.get("permlevel") or 0) == 0 and bool(row.get("view_customers"))
+    ]
+    if customer_view_grants:
+        frappe.throw(
+            "CREATE_ORDER fixture received an effective VIEW_CUSTOMERS business grant "
+            f"through assigned roles: {customer_view_grants}"
+        )
+    creator_can_create_dco = bool(has_permission("Door Cutting Order", "create", user=creator))
+    if not creator_can_create_dco:
+        frappe.throw("CREATE_ORDER fixture lacks Frappe's server-side DCO create permission.")
+    if not has_permission("Customer", "read", customer, user=creator):
+        frappe.throw("CREATE_ORDER user cannot read the fixture Customer for Link selection.")
+    if has_permission("Door Cutting Order", "write", existing_order, user=creator):
+        frappe.throw("CREATE_ORDER user unexpectedly has write access to an existing DCO.")
+
+    administrator_access = {
+        "customer_read": bool(has_permission("Customer", "read", customer, user="Administrator")),
+        "existing_dco_write": bool(
+            has_permission("Door Cutting Order", "write", existing_order, user="Administrator")
+        ),
+    }
+    if not all(administrator_access.values()):
+        frappe.throw(f"Administrator comparison did not have expected access: {administrator_access}")
+
+    return {
+        "creator": {
+            "dco_effective_p0": {
+                right: bool(dco_rights.get(right)) for right in ("read", "select", "create", "write")
+            },
+            "non_standard_roles": business_roles,
+            "customer_effective_p0": {
+                right: bool(customer_rights.get(right))
+                for right in ("read", "select", "create", "write")
+            },
+            "dco_docperm_rows": dco_docperm_rows,
+            "dco_custom_docperm_rows": dco_custom_docperm_rows,
+            "dco_field_permission_rows": dco_field_permission_rows,
+            "customer_field_permission_rows": customer_field_permission_rows,
+            "effective_roles": effective_roles,
+            "business_roles": business_roles,
+            "customer_docperm_rows": customer_docperm_rows,
+            "customer_custom_docperm_rows": customer_custom_docperm_rows,
+            "customer_field": field_contract,
+            "view_customers_business_grants": customer_view_grants,
+            "customer_record_read": True,
+            "dco_create": creator_can_create_dco,
+            "existing_dco_write": False,
+        },
+        "administrator": administrator_access,
+    }
+
+
 def _order(suffix: str, customer: str, edge_type: str) -> str:
     order = frappe.get_doc(
         {
@@ -251,7 +413,7 @@ def prepare_desk_test_site() -> dict[str, object]:
     return result
 
 
-def create_desk_edit_recovery_fixtures() -> dict[str, str]:
+def create_desk_edit_recovery_fixtures() -> dict[str, object]:
     """Create isolated real Frappe records used only by Desk browser CI."""
 
     frappe.set_user("Administrator")
@@ -267,7 +429,7 @@ def create_desk_edit_recovery_fixtures() -> dict[str, str]:
         }
     )
     role.insert(ignore_permissions=True)
-    FrappePermissionMatrixRepository().save_role_state(
+    ProjectedPermissionMatrixRepository().save_role_state(
         str(role.name),
         {Capability.VIEW_ORDERS: True, Capability.EDIT_ORDER: True},
     )
@@ -281,7 +443,7 @@ def create_desk_edit_recovery_fixtures() -> dict[str, str]:
         }
     )
     creator_role.insert(ignore_permissions=True)
-    FrappePermissionMatrixRepository().save_role_state(
+    ProjectedPermissionMatrixRepository().save_role_state(
         str(creator_role.name),
         {Capability.CREATE_ORDER: True},
     )
@@ -290,7 +452,7 @@ def create_desk_edit_recovery_fixtures() -> dict[str, str]:
     customer = _customer(suffix)
     edge_type = _edge_type(suffix)
     route = _route(suffix, str(role.name))
-    fixtures = {
+    fixtures: dict[str, object] = {
         "restore": _order(f"restore-{suffix}", customer, edge_type),
         "dispatch": _order(f"dispatch-{suffix}", customer, edge_type),
         "identity_a": _order(f"identity-a-{suffix}", customer, edge_type),
@@ -303,6 +465,12 @@ def create_desk_edit_recovery_fixtures() -> dict[str, str]:
         "customer": customer,
         "edge_type": edge_type,
     }
+    fixtures["permission_evidence"] = _assert_creator_permission_contract(
+        str(creator_role.name),
+        creator,
+        customer,
+        str(fixtures["permission"]),
+    )
     destination = os.environ.get("DCO_DESK_FIXTURE_FILE")
     if not destination:
         frappe.throw("DCO_DESK_FIXTURE_FILE must point to an isolated CI temp file.")

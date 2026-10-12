@@ -221,6 +221,11 @@ def test_new_desk_smokes_use_a_fixture_actor_with_native_create_permission() -> 
         if isinstance(node, ast.FunctionDef)
         and node.name == "create_desk_edit_recovery_fixtures"
     )
+    permission_check = next(
+        node for node in fixture_tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "_assert_creator_permission_contract"
+    )
     runner_tree = ast.parse(DESK_RUNNER.read_text(encoding="utf-8"))
     comparison = next(
         node for node in runner_tree.body
@@ -236,14 +241,47 @@ def test_new_desk_smokes_use_a_fixture_actor_with_native_create_permission() -> 
         if isinstance(node, ast.FunctionDef) and node.name == "certify_new_dco_local_gate"
     )
     fixture_contract = ast.unparse(fixture_builder)
+    permission_contract = ast.unparse(permission_check)
     comparison_contract = ast.unparse(comparison)
 
     assert "Capability.CREATE_ORDER: True" in fixture_contract
+    assert "ProjectedPermissionMatrixRepository().save_role_state" in fixture_contract
+    assert "FrappePermissionMatrixRepository" not in fixture_contract
     assert "'creator': creator" in fixture_contract
+    assert "get_role_permissions" in permission_contract
+    assert "dco_custom_docperm_rows" in permission_contract
+    assert "customer_custom_docperm_rows" in permission_contract
+    assert "existing_dco_write" in permission_contract
+    assert "Administrator" in permission_contract
     assert "FIXTURES['creator']" in comparison_contract
     assert "case in {'B', 'C', 'D'}" in comparison_contract
     assert "FIXTURES['creator']" in ast.unparse(smoke)
     assert "FIXTURES['creator']" in ast.unparse(local_gate)
+
+
+def test_customer_smoke_records_live_frappe_field_permissions_after_form_readiness() -> None:
+    tree = ast.parse(DESK_RUNNER.read_text(encoding="utf-8"))
+    dom_capture = next(
+        node for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "capture_new_form_dom_evidence"
+    )
+    customer_smoke = next(
+        node for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "certify_new_customer_field_smoke"
+    )
+
+    capture_contract = ast.unparse(dom_capture)
+    customer_contract = ast.unparse(customer_smoke)
+    assert "frappeFormState" in capture_contract
+    assert "displayStatus" in capture_contract
+    assert "inputEnabled" in capture_contract
+    assert "permlevel" in capture_contract
+    assert "customerNativeP0" in capture_contract
+    assert "stage='before_customer_interaction'" in customer_contract
+    assert "timeout_ms=1500" in customer_contract
+    assert customer_contract.index("wait_for_new_form_loaded") < customer_contract.index(
+        "capture_new_form_dom_evidence"
+    )
 
 
 def test_new_form_path_does_not_run_optional_dom_poll_before_readiness() -> None:

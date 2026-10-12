@@ -367,6 +367,12 @@ def capture_new_form_dom_evidence(
                 '.frappe-control[data-fieldname="customer"]'
             )];
             const inputs = customer.flatMap(wrapper => [...wrapper.querySelectorAll('input')]);
+            const frm = window.cur_frm;
+            const customerField = frm && frm.fields_dict && frm.fields_dict.customer;
+            const dcoPermission = frm && frm.perm && frm.perm[0] || {};
+            const customerPermission = window.frappe && frappe.perm
+                ? frappe.perm.get_perm('Customer')[0] || {}
+                : {};
             return JSON.stringify({
                 route: location.pathname,
                 documentReadyState: document.readyState,
@@ -384,6 +390,36 @@ def capture_new_form_dom_evidence(
                 customerInputs: inputs.length,
                 visibleCustomerInputs: inputs.filter(visible).length,
                 enabledCustomerInputs: inputs.filter(input => !input.disabled).length,
+                frappeFormState: frm ? {
+                    doctype: frm.doctype,
+                    isNew: Boolean(frm.is_new && frm.is_new()),
+                    dcoP0: {
+                        read: Boolean(dcoPermission.read),
+                        create: Boolean(dcoPermission.create),
+                        write: Boolean(dcoPermission.write),
+                    },
+                    customerNativeP0: {
+                        read: Boolean(customerPermission.read),
+                        select: Boolean(customerPermission.select),
+                        write: Boolean(customerPermission.write),
+                    },
+                    createCapability: Boolean(window.AlmdinaPermissions
+                        && window.AlmdinaPermissions.canDocument
+                        && window.AlmdinaPermissions.canDocument(frm, 'create_order')),
+                    customerField: customerField ? {
+                        hidden: Boolean(customerField.df && customerField.df.hidden),
+                        hiddenDueToDependency: Boolean(customerField.df
+                            && customerField.df.hidden_due_to_dependency),
+                        readOnly: Boolean(customerField.df && customerField.df.read_only),
+                        permlevel: Number(customerField.df && customerField.df.permlevel || 0),
+                        displayStatus: String(customerField.disp_status || ''),
+                        inputPresent: Boolean(customerField.$input && customerField.$input.length),
+                        inputEnabled: Boolean(customerField.$input && customerField.$input.length
+                            && !customerField.$input.prop('disabled')),
+                        wrapperVisible: Boolean(customerField.$wrapper
+                            && customerField.$wrapper.is(':visible')),
+                    } : null,
+                } : null,
                 customerOwnerClasses: inputs[0]
                     ? [inputs[0].parentElement, inputs[0].parentElement?.parentElement,
                         inputs[0].parentElement?.parentElement?.parentElement]
@@ -883,6 +919,12 @@ def certify_new_dco_form_smoke(page: Page) -> None:
 def certify_new_customer_field_smoke(page: Page) -> None:
     """Prove the active NEW form's Customer link is interactive without recovery."""
     form_page = wait_for_new_form_loaded(page, "NEW Customer field Smoke")
+    capture_new_form_dom_evidence(
+        page,
+        "NEW Customer field Smoke",
+        stage="before_customer_interaction",
+        timeout_ms=1_500,
+    )
     customer = wait_for_customer_interactive(page, form_page, "NEW Customer field Smoke")
     customer_name = FIXTURES["customer"]
     ui_step(page, "NEW Customer field Smoke: fill customer", lambda: customer.fill(customer_name))
@@ -1453,6 +1495,12 @@ if __name__ == "__main__":
         page.set_default_timeout(30_000)
         page.set_default_navigation_timeout(30_000)
         attach_browser_diagnostics(page)
+        permission_evidence = FIXTURES.get("permission_evidence")
+        if permission_evidence is not None:
+            _trace_event(
+                "fixture_permission_evidence",
+                evidence=json.dumps(permission_evidence, ensure_ascii=False),
+            )
         try:
             comparison_case = os.environ.get("DCO_DESK_COMPARISON_CASE")
             if comparison_case:

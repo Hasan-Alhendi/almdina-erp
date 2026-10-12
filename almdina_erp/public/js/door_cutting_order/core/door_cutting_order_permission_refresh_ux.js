@@ -52,6 +52,86 @@
         return JSON.stringify(capabilities);
     }
 
+    function canEnterNewOrderFields(frm, permissions) {
+        return Boolean(
+            frm
+            && frm.doctype === "Door Cutting Order"
+            && typeof frm.is_new === "function"
+            && frm.is_new()
+            && frm.perm
+            && frm.perm[0]
+            && frm.perm[0].create
+            && permissions
+            && typeof permissions.canDocument === "function"
+            && permissions.canDocument(frm, "create_order")
+        );
+    }
+
+    function isFieldFlagSet(value) {
+        return value === true || Number(value || 0) !== 0;
+    }
+
+    function installCreateFieldPresentation(frm) {
+        Object.values(frm.fields_dict || {}).forEach(field => {
+            if (
+                !field
+                || !field.df
+                || typeof field.get_status !== "function"
+                || typeof field.refresh !== "function"
+                || typeof field.df.get_status === "function"
+                || field.__almdinaCreateFieldStatusInstalled
+                || Object.prototype.hasOwnProperty.call(field, "get_status")
+            ) {
+                return;
+            }
+
+            const getStatus = field.get_status;
+            field.get_status = function(explain) {
+                const status = getStatus.call(this, explain);
+                const df = this.df || {};
+                if (
+                    this.frm !== frm
+                    || frm.__almdinaCreateOrderFieldEntry !== true
+                    || typeof frm.is_new !== "function"
+                    || !frm.is_new()
+                    || Number(df.permlevel || 0) !== 0
+                    || isFieldFlagSet(df.hidden)
+                    || isFieldFlagSet(df.hidden_due_to_dependency)
+                    || isFieldFlagSet(df.read_only)
+                    || isFieldFlagSet(df.is_virtual)
+                    || isFieldFlagSet(df.disabled)
+                    || df.fieldtype === "Read Only"
+                ) {
+                    return status;
+                }
+
+                // Frappe v16 derives field input display from p.write/p.read and
+                // does not treat p.create as permission to enter a new document.
+                // Keep this projection on this unsaved form's controls only;
+                // never mutate frm.perm or Frappe's shared permission cache.
+                return "Write";
+            };
+            field.__almdinaCreateFieldStatusInstalled = true;
+        });
+    }
+
+    function syncCreateFieldPresentation(frm, permissions) {
+        if (!frm || frm.doctype !== "Door Cutting Order") return false;
+
+        installCreateFieldPresentation(frm);
+        const enabled = canEnterNewOrderFields(frm, permissions);
+        const previous = frm.__almdinaCreateOrderFieldEntry;
+        frm.__almdinaCreateOrderFieldEntry = enabled;
+
+        if (
+            (previous === undefined && enabled)
+            || (previous !== undefined && previous !== enabled)
+        ) {
+            if (typeof frm.refresh_fields === "function") frm.refresh_fields();
+        }
+        return enabled;
+    }
+
     function surfaceNeedsRecovery(frm, permissions) {
         if (!frm || !permissions) return false;
 
@@ -164,6 +244,7 @@
             .then(() => {
                 if (!isCurrent(frm, identity)) return false;
                 markFresh(frm, identity);
+                syncCreateFieldPresentation(frm, permissions);
                 const changed = permissionSignature(permissions) !== beforeSignature;
                 if (changed || surfaceNeedsRecovery(frm, permissions)) {
                     applySurfaces(frm);
@@ -206,6 +287,7 @@
         // refreshed from the server. Mark this document identity fresh so the
         // form hooks do not immediately issue the same request again.
         markFresh(frm, capture(frm));
+        syncCreateFieldPresentation(frm, window.AlmdinaPermissions);
 
         // Edge-profile selection is capability-driven too. Reconcile it on every
         // authoritative permission update even when the cost/plan surfaces are

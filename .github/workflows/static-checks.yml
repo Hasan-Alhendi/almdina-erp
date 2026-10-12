@@ -290,6 +290,7 @@ jobs:
           node almdina_erp/tests/js/shop_floor_worker_display.test.js
           node almdina_erp/tests/js/shop_floor_inbox_view_model.test.js
           node almdina_erp/tests/js/order_tab_visibility.test.js
+          node almdina_erp/tests/js/dco_create_form_permissions.test.js
           node almdina_erp/tests/js/cutting_machine_inline_row.test.js
           node almdina_erp/tests/js/plan_source_tab_edit_lock.test.js
           node almdina_erp/tests/js/uploaded_plan_mismatch_banner.test.js

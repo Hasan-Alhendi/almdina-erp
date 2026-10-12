@@ -288,7 +288,7 @@ jobs:
           fi
           exit "$test_status"
 
-      - name: Certify DCO ${{ inputs.phase_a_comparison_case == 'B_C' && 'Phase A cases B and C' || inputs.phase_a_comparison_case == 'B' && 'Phase A case B' || inputs.phase_a_comparison_only && 'Phase A comparison' || inputs.new_local_gate_only && 'NEW recovery' || inputs.new_form_smoke_only && 'NEW form smoke' || inputs.new_stress_only && 'NEW stress' || 'EDIT recovery' }} in real Frappe Desk
+      - name: Certify DCO ${{ inputs.phase_a_comparison_case == 'B_C' && 'Phase A cases B and C' || inputs.phase_a_comparison_case == 'B' && 'Phase A case B' || inputs.phase_a_comparison_only && 'Phase A comparison' || inputs.new_local_gate_only && 'NEW recovery' || inputs.new_customer_field_smoke_only && 'NEW Customer field smoke' || inputs.new_form_smoke_only && 'NEW form smoke' || inputs.new_stress_only && 'NEW stress' || 'EDIT recovery' }} in real Frappe Desk
         if: always() && !cancelled()
         env:
           DCO_DESK_FIXTURE_FILE: ${{ runner.temp }}/dco-desk-fixtures.json

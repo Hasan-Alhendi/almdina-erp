@@ -93,6 +93,55 @@ class TestFrappeNativePermissionParityIntegration(FrappeTestCase):
         self.assertEqual(int(customer.select), 1)
         self.assertEqual(int(customer.get(Capability.VIEW_CUSTOMERS) or 0), 0)
 
+    def test_create_only_order_grant_projects_minimum_native_lookup_rights(self) -> None:
+        self._assert_docperm_round_trip(
+            ROLE,
+            {Capability.CREATE_ORDER: True},
+        )
+
+        dco = frappe.db.get_value(
+            "Custom DocPerm",
+            {"parent": "Door Cutting Order", "role": ROLE, "permlevel": 0},
+            ["read", "select", "create", "write"],
+            as_dict=True,
+        )
+        self.assertIsNotNone(dco)
+        self.assertEqual(int(dco.read), 1)
+        self.assertEqual(int(dco.select), 1)
+        self.assertEqual(int(dco.create), 1)
+        self.assertEqual(int(dco.write), 0)
+
+        customer = frappe.db.get_value(
+            "Custom DocPerm",
+            {"parent": "Customer", "role": ROLE, "permlevel": 0},
+            ["read", "select", "create", "write", Capability.VIEW_CUSTOMERS],
+            as_dict=True,
+        )
+        self.assertIsNotNone(customer)
+        self.assertEqual(int(customer.read), 1)
+        self.assertEqual(int(customer.select), 1)
+        self.assertEqual(int(customer.create), 0)
+        self.assertEqual(int(customer.write), 0)
+        self.assertEqual(int(customer.get(Capability.VIEW_CUSTOMERS) or 0), 0)
+
+        customer_field = frappe.get_meta("Door Cutting Order").get_field("customer")
+        self.assertEqual(int(customer_field.permlevel or 0), 0)
+        self.assertFalse(customer_field.hidden)
+        self.assertFalse(customer_field.read_only)
+        for permission_doctype in ("DocPerm", "Custom DocPerm"):
+            for right in ("read", "write"):
+                self.assertFalse(
+                    frappe.db.exists(
+                        permission_doctype,
+                        {
+                            "parent": "Door Cutting Order",
+                            "role": ROLE,
+                            "permlevel": 1,
+                            right: 1,
+                        },
+                    )
+                )
+
     def test_explicit_customer_view_writes_custom_column(self) -> None:
         self._assert_docperm_round_trip(
             ROLE,
