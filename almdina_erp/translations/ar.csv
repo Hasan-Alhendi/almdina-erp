@@ -1346,3 +1346,57 @@ Order edge color,لون القشاط العام للطلب
 {0} mm,{0} مم
 {0} mm — $ {1}/m,{0} مم — $ {1}/م
 {0} — {1} — {2} — {3},{0} — {1} — {2} — {3}
+Saw blade thickness (mm),سماكة شفرة القص (مم)
+Blade,الشفرة
+Board trim margin,هامش تشذيب اللوح
+Margin,الهامش
+Piece packing algorithm,خوارزمية توزيع القطع
+Algorithm,الخوارزمية
+Optimization time limit,مهلة التحسين
+Time limit,المهلة
+seconds,ث
+"The maximum time the optimizer may spend searching for a better layout. The search may finish sooner. Increasing it can improve some complex plans, but it makes the preview slower.",أقصى مدة يمنحها النظام لمحرك التحسين للبحث عن توزيع أفضل. قد ينتهي البحث قبلها، وزيادتها قد تحسن بعض الخطط المعقدة لكنها تجعل المعاينة أبطأ.
+Cutting plan settings,إعدادات خطة القص
+Cutting settings,إعدادات القص
+{0} — currently unavailable,{0} — غير متاح حاليًا
+A valid value is required for {0}.,يجب تحديد قيمة صالحة للحقل «{0}».
+The value entered for {0} is not valid.,القيمة المدخلة في «{0}» غير صالحة.
+{0} cannot be negative.,لا يمكن أن تكون قيمة «{0}» سالبة.
+You do not have permission to edit the cutting plan settings.,لا تملك صلاحية تعديل إعدادات خطة القص.
+Save or cancel the current order changes before editing the cutting plan settings.,احفظ أو ألغِ تعديلات الطلب الحالية قبل فتح تعديل إعدادات خطة القص.
+The current order status does not allow editing the cutting plan settings.,حالة الطلب الحالية لا تسمح بتعديل إعدادات خطة القص.
+There is no cutting plan whose settings can be edited right now.,لا توجد خطة قص قابلة لتعديل الإعدادات حاليًا.
+The current order status no longer allows you to edit the cutting plan settings.,لم تعد حالة الطلب الحالية تسمح لك بتعديل إعدادات خطة القص.
+The cutting plan settings were saved. Recalculate to update the result.,تم حفظ إعدادات خطة القص. أعد الحساب لتحديث النتيجة.
+Auto Pro (recommended),تلقائي متقدم (موصى به)
+MaxRects,تعبئة المستطيلات القصوى
+Guillotine,القص المقصلي
+Shelf packing,التعبئة بالرفوف
+Skyline,التعبئة بخط الأفق
+Constraint programming — CP-SAT,البرمجة بالقيود — CP-SAT
+Mixed-integer programming — CBC,البرمجة الصحيحة المختلطة — CBC
+SCIP solver,محلّل SCIP
+HiGHS solver,محلّل HiGHS
+Gecode constraint solver,محلّل القيود Gecode
+Chuffed constraint solver,محلّل القيود Chuffed
+Genetic algorithm,الخوارزمية الجينية
+Simulated annealing,التلدين المُحاكى
+Plan settings,إعدادات الخطة
+Could not persist the measurement changes before calculating the cutting plan. Open the order for editing and try again.,تعذر تثبيت تعديلات القياسات قبل حساب خطة القص. افتح الطلب للتعديل ثم حاول مرة أخرى.
+Could not persist the measurement changes before calculating the cutting plan. Reload the page and try again.,تعذر تثبيت تعديلات القياسات قبل حساب خطة القص. أعد تحميل الصفحة ثم حاول مرة أخرى.
+Measurement changes are saved first so they are not lost when the cutting plan is recalculated.,يتم حفظ تعديلات القياسات أولًا حتى لا تفقد عند إعادة حساب خطة القص.
+Cutting plan calculation is still waiting,حساب خطة القص ما زال في الانتظار
+Recalculating the cutting plan and cost in the background,جاري إعادة حساب خطة القص والتكلفة في الخلفية
+"The save succeeded, but the background worker has not started yet. You can keep working or use manual recalculation.",الحفظ تم بنجاح، لكن العامل الخلفي لم يبدأ بعد. يمكنك متابعة العمل أو استخدام زر إعادة الحساب اليدوي.
+You can keep working on the order. The cutting plan and cost will update automatically when the calculation finishes.,يمكنك متابعة العمل على الطلب. ستتحدث خطة القص والتكلفة تلقائيًا عند اكتمال الحساب.
+{0} — {1},{0} — {1}
+⚡ Recalculation needed,⚡ تحتاج إعادة حساب
+The cutting plan needs recalculation — press “Recalculate with the current settings” when you finish.,خطة القص تحتاج إعادة حساب — اضغط «إعادة الحساب بالإعدادات الحالية» بعد الانتهاء.
+Saving cutting plan settings...,جاري حفظ إعدادات خطة القص...
+Recalculating the cutting plan...,جاري إعادة حساب خطة القص...
+Creating the first cutting plan...,جاري إنشاء خطة القص الأولى...
+Previewing the plan with these settings...,جاري معاينة الخطة بهذه الإعدادات...
+Saving the selected cutting plan...,جاري حفظ خطة القص المختارة...
+Approving the cutting plan...,جاري اعتماد خطة القص...
+Cancelling the cutting plan approval...,جاري إلغاء اعتماد خطة القص...
+Saving the offcut classification...,جارٍ حفظ تصنيف قطع النقص...

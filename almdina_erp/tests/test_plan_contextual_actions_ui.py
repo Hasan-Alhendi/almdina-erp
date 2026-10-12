@@ -131,7 +131,7 @@ class TestPlanContextualActionsUI(unittest.TestCase):
     def test_optimizer_time_limit_has_operator_help(self) -> None:
         summary = source(SETTINGS_SUMMARY)
         self.assertIn("TIME_LIMIT_HELP", summary)
-        self.assertIn("أقصى مدة يمنحها النظام لمحرك التحسين للبحث عن توزيع أفضل", summary)
+        self.assertIn("The maximum time the optimizer may spend searching for a better layout.", summary)
         self.assertIn('cursor:help', summary)
         self.assertIn('title=', summary)
 
