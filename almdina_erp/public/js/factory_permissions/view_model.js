@@ -26,12 +26,12 @@
             if (missing.length) {
                 groups.push({
                     key: "unclassified",
-                    label: t("صلاحيات أخرى"),
-                    description: t("صلاحيات موجودة في الخادم ولم تكن مصنفة في واجهة الإدارة. تظهر هنا تلقائيًا حتى لا تُحجب أي صلاحية قابلة للإسناد."),
+                    label: t("Other permissions"),
+                    description: t("Permissions that exist on the server but were not categorized in the management interface. They appear here automatically so that no assignable permission is hidden."),
                     capabilities: missing.sort().map(key => ({
                         key,
                         label: key,
-                        description: t("صلاحية نظام مسجلة في مصفوفة الدور."),
+                        description: t("System permission registered in the role matrix."),
                         risk: "normal",
                         standard: false,
                         permission_type: key,
@@ -68,10 +68,10 @@
         function permissionBadge(capability) {
             if (!capability.standard) return null;
             const labels = {
-                read: t("قراءة + اختيار"),
-                create: t("إنشاء"),
-                write: t("تعديل"),
-                delete: t("حذف"),
+                read: t("Read + select"),
+                create: t("Create"),
+                write: t("Edit"),
+                delete: t("Delete"),
             };
             const permissionType = String(capability.permission_type || "");
             const permission = labels[permissionType] || permissionType;
@@ -82,9 +82,9 @@
             const badges = [];
             const permission = permissionBadge(capability);
             if (permission) badges.push(permission);
-            if (capability.standard) badges.push({ kind: "standard", label: t("صلاحية Frappe أساسية") });
-            if (capability.risk === "critical") badges.push({ kind: "critical", label: t("حرجة") });
-            else if (capability.risk === "sensitive") badges.push({ kind: "sensitive", label: t("حساسة") });
+            if (capability.standard) badges.push({ kind: "standard", label: t("Core Frappe permission") });
+            if (capability.risk === "critical") badges.push({ kind: "critical", label: t("Critical") });
+            else if (capability.risk === "sensitive") badges.push({ kind: "sensitive", label: t("Sensitive") });
             return {
                 key: String(capability.key || ""),
                 label: String(capability.label || ""),
@@ -142,27 +142,27 @@
             const changes = Array.isArray(resolved.changes) ? resolved.changes : [];
             const sections = navigation.sections || {};
             const sectionLabels = {
-                orders: t("الطلبات"),
-                costing: t("التكلفة"),
-                planning: t("خطة القص"),
-                drawing: t("الرسم"),
-                production: t("الإنتاج"),
-                quality: t("الجودة"),
-                workforce: t("المستخدمون"),
-                factory_settings: t("الإعدادات"),
-                master_data: t("البيانات الأساسية"),
-                administration: t("الإدارة"),
-                reports: t("التقارير"),
+                orders: t("Orders"),
+                costing: t("Cost"),
+                planning: t("Cutting plan"),
+                drawing: t("Drawing"),
+                production: t("Production"),
+                quality: t("Quality"),
+                workforce: t("Users"),
+                factory_settings: t("Settings"),
+                master_data: t("Basic data"),
+                administration: t("Administration"),
+                reports: t("Reports"),
             };
             const home = navigation.home_page === "shop-floor-inbox"
-                ? t("صالة الإنتاج")
+                ? t("Production floor")
                 : navigation.home_page === "almdina-erp"
-                    ? t("واجهة Almdina الرئيسية")
-                    : t("لا يغيّر الصفحة الرئيسية");
+                    ? t("Almdina main interface")
+                    : t("Does not change the home page");
             const source = resolved.source
                 ? resolved.source.kind === "import"
-                    ? t("المصدر: ملف JSON من الدور {0}", [String(resolved.source.role || "")])
-                    : t("مصدر خارجي للمعاينة")
+                    ? t("Source: JSON file from role {0}", [String(resolved.source.role || "")])
+                    : t("External preview source")
                 : "";
             return {
                 home,
@@ -171,12 +171,12 @@
                     .filter(key => sections[key] === true)
                     .map(key => sectionLabels[key] || key),
                 warning: resolved.requires_self_lockout_confirmation
-                    ? t("هذا التغيير يزيل آخر صلاحية لديك لإدارة الصلاحيات. بعد الحفظ قد لا تستطيع العودة إلى الصفحة.")
+                    ? t("This change removes your last permission to manage permissions. After saving you may not be able to return to the page.")
                     : "",
                 source,
                 changes: changes.slice(0, 12).map(change => ({
                     label: String(change.label || change.key || ""),
-                    action: change.after ? t("منح") : t("إلغاء"),
+                    action: change.after ? t("Grant") : t("Cancel"),
                 })),
             };
         }

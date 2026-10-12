@@ -80,8 +80,8 @@ assert.equal(model.sectionEditable(current, "costing"), false);
 assert.equal(model.sectionEditable(current, "missing"), false);
 assert.equal(model.canManageWhatsAppSession(current), true);
 assert.equal(model.canManageWhatsAppSession({ permissions: { sections: {} } }), false);
-assert.equal(model.yesNo(1), "نعم");
-assert.equal(model.yesNo(0), "لا");
+assert.equal(model.yesNo(1), "Yes");
+assert.equal(model.yesNo(0), "No");
 assert.equal(model.display(null), "—");
 assert.equal(model.values(current).default_kerf_mm, 5);
 
@@ -104,8 +104,8 @@ assert.equal(sections[2].rows[1].value, "6 USD");
 assert.equal(sections[2].rows[2].value, "2.5 USD");
 assert.equal(sections[2].rows[3].value, "3 USD");
 assert.equal(sections[2].rows[4].value, "1.25 USD");
-assert.equal(sections[3].rows[1].value, "غير مسموح");
-assert.equal(sections[3].rows[2].value, "مسموح");
+assert.equal(sections[3].rows[1].value, "Denied");
+assert.equal(sections[3].rows[2].value, "Allowed");
 assert.equal(sections[4].rows[3].multiline, true);
 assert.equal(sections[5].rows[0].multiline, true);
 assert.equal(sections[5].rows[0].value, "قياسات {order_name}");
@@ -115,7 +115,7 @@ assert.equal(sections[5].rows[3].value, "انتهى CNC {order_name}");
 
 const legacy = model.legacy(current);
 assert.equal(legacy.length, 10);
-assert.equal(legacy[0].value, "نعم");
+assert.equal(legacy[0].value, "Yes");
 assert.equal(legacy[1].value, "Old WH");
 assert.equal(legacy[9].value, "5 USD");
 

@@ -532,7 +532,6 @@
     min-height: 88px;
     padding: 13px 18px 16px;
     overflow-x: auto;
-    direction: rtl;
     background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--prw-subtle) 75%, transparent));
     overscroll-behavior-inline: contain;
     scrollbar-width: thin;
@@ -1311,7 +1310,6 @@
 }
 
 .prw-validation-list {
-    direction: rtl;
     margin: 0;
     padding-inline-start: 20px;
     text-align: start;

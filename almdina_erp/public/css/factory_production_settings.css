@@ -188,8 +188,9 @@
     border-radius: var(--alm-radius-sm, 10px);
     background: var(--alm-surface, #fff);
     color: var(--alm-text-strong, #101828);
-    text-align: left;
+    text-align: start;
     user-select: all;
+    unicode-bidi: isolate;
 }
 
 .aps-whatsapp-qr {
@@ -198,7 +199,6 @@
     justify-items: center;
     text-align: center;
     padding: 8px 4px 4px;
-    direction: rtl;
 }
 
 .aps-whatsapp-qr img {

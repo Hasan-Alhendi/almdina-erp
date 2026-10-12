@@ -2025,3 +2025,514 @@ Work list,قائمة العمل
 Worker responsible for the first stage,العامل المسؤول عن أول مرحلة
 Your operational orders,طلباتك التشغيلية
 {0} will be fixed as the final production copy under your name. Do you want to continue?,سيتم تثبيت {0} كنسخة الإنتاج النهائية باسمك. هل تريد المتابعة؟
+A clear name shown when the order is sent to production.,اسم واضح يظهر عند إرسال الطلب إلى الإنتاج.
+Absolute non-root POSIX path. The server key must be registered beforehand in known_hosts for the bench user.,مسار POSIX مطلق وغير جذري. يجب تسجيل مفتاح الخادم مسبقًا في known_hosts لمستخدم bench.
+Account status,حالة الحساب
+"Account {0} will be added to the factory scope without automatically granting any role or operational permission, and without changing Default Workspace or Default App in Frappe. Do you want to continue?",سيتم إضافة الحساب {0} إلى نطاق المعمل بدون منحه أي دور أو صلاحية تشغيلية تلقائيًا، وبدون تغيير Default Workspace أو Default App في Frappe. هل تريد المتابعة؟
+"Accounts added to Almdina. Roles determine permissions, and Frappe Role.Home Page determines the login page.",الحسابات التي تم ضمها إلى Almdina. الأدوار تحدد الصلاحيات، وFrappe Role.Home Page يحدد صفحة الدخول.
+Active admin session,الجلسة الإدارية النشطة
+Active now,نشط الآن
+Active operating values approved for all operations and workstations,القيم التشغيلية النشطة المعتمدة في كافة عمليات ومحطات العمل
+Active role,الدور النشط
+Active role and permission transfer,الدور النشط ونقل الصلاحيات
+Active settings,الإعدادات النشطة
+Active stages,مراحل نشطة
+Active stages must be reassigned before disabling the user or changing their roles.,يجب إعادة إسناد المراحل النشطة قبل تعطيل المستخدم أو تغيير أدواره.
+Activity log,سجل النشاط
+Add at least one stage.,أضف مرحلة واحدة على الأقل.
+Add new stage,إضافة مرحلة جديدة
+Add stage,إضافة مرحلة
+Add stages in the actual order the order goes through.,أضف المراحل بالترتيب الحقيقي الذي يمر به الطلب.
+Add the first stage to start building production routes.,أضف أول مرحلة لبدء بناء مسارات الإنتاج.
+Add the stage,إضافة المرحلة
+Add to factory,إضافة إلى المعمل
+Add user to factory,إضافة مستخدم للمعمل
+Adding backup to the queue...,جاري إضافة النسخة إلى قائمة الانتظار...
+"Adding them to the factory does not automatically grant any role or operational permission, and does not change Default Workspace or Default App. The login page remains managed by Frappe.",إضافته إلى المعمل لا تمنحه أي دور أو صلاحية تشغيلية تلقائيًا، ولا تغيّر Default Workspace أو Default App. صفحة الدخول تبقى تحت إدارة Frappe.
+Adding user to the factory...,جاري إضافة المستخدم إلى المعمل...
+Address,العنوان
+Administration and execution,الإدارة والتنفيذ
+Allow bypassing stage sequence,السماح بتجاوز تسلسل المراحل
+Allowed,مسموح
+Almdina main interface,واجهة Almdina الرئيسية
+Almdina permission matrix,مصفوفة صلاحيات Almdina
+Almdina users,مستخدمو Almdina
+An unexpected error occurred.,حدث خطأ غير متوقع.
+Approve unallocated pieces,اعتماد قطع غير موزعة
+Approved cutting plans archive,أرشيف خطط القص المعتمدة
+Archive official PDF,أرشفة PDF الرسمي
+"Arrange work stages visually, link each stage to the appropriate operational role, then use the route directly in the production board.",رتّب مراحل العمل بصريًا، اربط كل مرحلة بالدور التشغيلي المناسب، ثم استخدم المسار مباشرة في لوحة الإنتاج.
+Ask the route administrator to add stages to the library.,اطلب من مسؤول المسارات إضافة مراحل إلى المكتبة.
+Assigned active stages,المراحل النشطة المسندة
+Assignments,التعيينات
+"At least 10 characters, including a letter and a number.",10 محارف على الأقل وتحتوي حرفًا ورقمًا.
+Attached with the PDF file in a single message on first send. Limit is 1024 characters. Use,تُرفق مع ملف PDF في رسالة واحدة عند أول إرسال. الحد 1024 حرفًا. استخدم
+Attached with the PDF file in a single message when sending edits. Limit is 1024 characters. Use,تُرفق مع ملف PDF في رسالة واحدة عند إرسال التعديلات. الحد 1024 حرفًا. استخدم
+Attached with the PDF file in a single message. Limit is 1024 characters. Use,تُرفق مع ملف PDF في رسالة واحدة. الحد 1024 حرفًا. استخدم
+Authentication method,طريقة المصادقة
+Automatically protected,محمي تلقائياً
+Back,رجوع
+Back groove / door leaf,فرزة ظهر / درفة
+Back groove price per door leaf (USD),سعر فرزة ظهر لكل درفة (USD)
+Backup,نسخة
+Backup & Restore settings,إعدادات Backup & Restore
+Backup copy,النسخة
+Backup scheduling failed.,فشلت جدولة النسخة.
+Backups,نسخ
+Basic data,البيانات الأساسية
+Before saving,قبل الحفظ
+By,بواسطة
+By Frappe / not specified,حسب Frappe / غير محددة
+Bypass stage sequence,تجاوز تسلسل المراحل
+Change log,سجل التغييرات
+Change log for {0},سجل تغييرات {0}
+"Change the search or filter, or create a new route to start organizing the production journey.",غيّر البحث أو الفلتر، أو أنشئ مسارًا جديدًا لبدء تنظيم رحلة الإنتاج.
+Changed fields,الحقول المتغيرة
+Changes,التغييرات
+Click any stage in the library to add it to the route immediately.,اضغط على أي مرحلة من المكتبة لتُضاف فورًا إلى المسار.
+Click the stage to add it immediately. Stage names and codes are managed from the library only.,اضغط على المرحلة لإضافتها فورًا. تُدار أسماء المراحل ورموزها من المكتبة فقط.
+Click to add immediately,اضغط للإضافة فورًا
+Complete the route details,أكمل بيانات المسار
+Completion message,رسالة إتمام
+Configure each group from its dedicated place,اضبط كل مجموعة من مكانها المخصص
+Confirmation does not match,تأكيد غير مطابق
+Contact numbers,أرقام التواصل
+Core Frappe permission,صلاحية Frappe أساسية
+Could not calculate permission impact.,تعذر حساب أثر الصلاحيات.
+Could not connect to the remote server.,تعذر الاتصال بالخادم البعيد.
+Could not create WhatsApp session.,تعذر إنشاء جلسة WhatsApp.
+Could not create the backup,تعذر إنشاء النسخة
+Could not export,تعذر التصدير
+Could not fetch the QR code.,تعذر جلب رمز QR.
+Could not find the route. Refresh the page.,تعذر العثور على المسار. حدّث الصفحة.
+Could not find the stage. Refresh the page.,تعذر العثور على المرحلة. حدّث الصفحة.
+Could not load WhatsApp status.,تعذر تحميل حالة WhatsApp.
+Could not load backup management,تعذر تحميل إدارة النسخ
+Could not load backup management.,تعذر تحميل إدارة النسخ.
+Could not load data.,تعذر تحميل البيانات.
+Could not load factory settings,تعذر تحميل إعدادات المعمل
+Could not load factory settings.,تعذر تحميل إعدادات المعمل.
+Could not load permissions,تعذر تحميل الصلاحيات
+Could not load production routes.,تعذر تحميل مسارات الإنتاج.
+Could not load role permissions.,تعذر تحميل صلاحيات الدور.
+Could not load the log,تعذر تحميل السجل
+Could not load the log.,تعذر تحميل السجل.
+Could not load the permission management interface.,تعذر تحميل واجهة إدارة الصلاحيات.
+Could not load the plans archive.,تعذر تحميل أرشيف الخطط.
+Could not load the production route management layout.,تعذر تحميل تصميم إدارة مسارات الإنتاج.
+Could not load the users and workforce interface.,تعذر تحميل واجهة المستخدمين والقوى العاملة.
+Could not load user management,تعذر تحميل إدارة المستخدمين
+Could not open permission management.,تعذر فتح إدارة الصلاحيات.
+Could not open route management,تعذر فتح إدارة المسارات
+Could not read the file,تعذر قراءة الملف
+Could not read the file as a valid JSON object. No permissions were changed.,تعذر قراءة الملف ككائن JSON صحيح. لم يتم تغيير أي صلاحية.
+Could not reconnect WhatsApp.,تعذر إعادة اتصال WhatsApp.
+Could not save,تعذر الحفظ
+Could not save permissions.,تعذر حفظ الصلاحيات.
+Could not start the restore,تعذر بدء الاستعادة
+Create,إنشاء
+Create and link WhatsApp,إنشاء وربط WhatsApp
+"Create backup, then Restore",إنشاء نسخة أمان ثم الاستعادة
+Create new production route,إنشاء مسار إنتاج جديد
+Create new user,إنشاء مستخدم جديد
+Create user,إنشاء المستخدم
+Creating WhatsApp session...,جاري إنشاء جلسة WhatsApp...
+Creating official PDF file...,جاري إنشاء ملف PDF الرسمي...
+Creating user...,جاري إنشاء المستخدم...
+Credentials,بيانات الاعتماد
+Critical,حرجة
+Current app,التطبيق الحالي
+Current list summary,ملخص القائمة الحالية
+Current user,المستخدم الحالي
+Currently unavailable,غير متاح حاليًا
+Custom CNC drawing,رسم CNC الخاص
+Custom CNC drawing / piece,رسم CNC الخاص / قطعة
+Custom design drawing,رسم التصميم الخاص
+Custom design drawing / piece,رسم التصميم الخاص / قطعة
+Cutting and optimizer,القص والمحسّن
+Cutting fee / board,أجرة القص / لوح
+Cutting fee per board (USD),أجرة القص لكل لوح (USD)
+"Cutting fee, special door leaf charges, and their default margins.",أجرة القص ورسوم الدرف الخاصة وهوامشها الافتراضية.
+Default Workspace is set for this user and may override the Role's Home Page in Frappe. Review it in the user settings if you want the Role to be the source of the login page.,Default Workspace مضبوط لهذا المستخدم وقد يتغلب على Home Page الخاصة بالدور في Frappe. راجعه من إعداد المستخدم إذا أردت أن يكون الدور هو مصدر صفحة الدخول.
+Default cost,التكلفة الافتراضية
+Default factory operating settings,إعدادات تشغيل المعمل الافتراضية
+"Default geometry, distribution algorithm, and search limits.",الهندسة الافتراضية وخوارزمية التوزيع وحدود البحث.
+Default interface,الواجهة الافتراضية
+Default kerf (mm),Kerf الافتراضي (مم)
+Default production route,مسار الإنتاج الافتراضي
+Default production route (optional),مسار الإنتاج الافتراضي (اختياري)
+Delete from route,حذف من المسار
+Delete stage,حذف المرحلة
+Delete stage from route,حذف المرحلة من المسار
+Deleting stage...,جاري حذف المرحلة...
+Deletion will be rejected if the route is used in an order or setting. Do you want to continue?,سيُرفض الحذف إذا كان المسار مستخدمًا في طلب أو إعداد. هل تريد المتابعة؟
+Denied,غير مسموح
+Deselect all,إلغاء تحديد الكل
+Design the order journey from the first stage to delivery,صمّم رحلة الطلب من أول مرحلة حتى التسليم
+Desk access,وصول Desk
+Disable,تعطيل
+Disable stage,تعطيل المرحلة
+Disabled accounts,الحسابات المعطلة
+Disabling stage...,جاري تعطيل المرحلة...
+Display name,اسم العرض
+Distribution algorithm,خوارزمية التوزيع
+Do you want to create or retrieve the official approved copy for this order?,هل تريد إنشاء أو استرجاع النسخة الرسمية المعتمدة لهذا الطلب؟
+Do you want to discard unsaved changes?,هل تريد تجاهل التغييرات غير المحفوظة؟
+Do you want to {0} user {1}?,هل تريد {0} المستخدم {1}؟
+Does not change the home page,لا يغيّر الصفحة الرئيسية
+Door leaf add-ons,إضافات الدرف
+Double / door leaf,Double / درفة
+Double price per door leaf (USD),سعر Double لكل درفة (USD)
+Drag to reorder,اسحب لتغيير الترتيب
+Duplicate stage,المرحلة مكررة
+Each card represents a workstation. The order here is the order that will appear in the production board.,كل بطاقة تمثل محطة عمل. الترتيب هنا هو الترتيب الذي سيظهر في لوحة الإنتاج.
+Edit WhatsApp messages,تعديل رسائل واتساب
+Edit Workflow,تحرير Workflow
+Edit a stage,تعديل مرحلة
+Edit cutting and optimizer,تعديل القص والمحسّن
+Edit default cost,تعديل التكلفة الافتراضية
+Edit door leaf add-on prices,تعديل أسعار إضافات الدرف
+Edit print sheet identity,تعديل هوية أوراق الطباعة
+Edit production controls,تعديل ضوابط الإنتاج
+Edit production route,تحرير مسار الإنتاج
+Edit stage,تعديل المرحلة
+Edit this section,تعديل هذا القسم
+Edit user {0},تعديل المستخدم {0}
+Editing is shown only for sections you are allowed to edit,التعديل يظهر فقط للأقسام المسموحة لك
+Email,البريد الإلكتروني
+Enable,تفعيل
+Enable stage,تفعيل المرحلة
+Enabled accounts,الحسابات المفعلة
+Enabled routes,المسارات المفعّلة
+Enabling stage...,جاري تفعيل المرحلة...
+"Every backup is created with the official Frappe engine, and the result appears here without exposing local paths or credentials.",كل نسخة تُنشأ بمحرك Frappe الرسمي، وتظهر النتيجة هنا دون عرض مسارات محلية أو بيانات اعتماد.
+"Every creation, edit, or deletion of production routes will appear here.",سيظهر هنا كل إنشاء أو تعديل أو حذف لمسارات الإنتاج.
+Example: Drawing → CNC → Peeling,مثال: رسم ← CNC ← تقشيط
+Exceptional approval of unallocated pieces,السماح الاستثنائي باعتماد قطع غير موزعة
+Execution stage,مرحلة تنفيذ
+Export,تصدير
+External backup,النسخ الخارجي
+External integration,تكامل خارجي
+External preview source,مصدر خارجي للمعاينة
+External retention,احتفاظ الخارجي
+External schedule,جدولة الخارجي
+Factory brief overview,لمحة مختصرة عن المعمل
+Factory name,اسم المعمل
+Factory overview,لمحة عن المعمل
+Factory permission management,إدارة صلاحيات المعمل
+Factory settings,إعدادات المعمل
+Factory settings change log,سجل تغييرات إعدادات المعمل
+Factory settings updated.,تم تحديث إعدادات المعمل.
+Factory users,مستخدمو المعمل
+Fields,الحقول
+File already exists.,الملف موجود مسبقًا.
+File archived successfully.,تمت أرشفة الملف بنجاح.
+File is too large,ملف كبير جدًا
+File validated and loaded for preview only. The role will not change before saving.,تم التحقق من الملف وتحميله للمعاينة فقط. لن يتغير الدور قبل الحفظ.
+Filter list,تصفية القائمة
+Fixed identifier,المعرّف الثابت
+Fixed official copy for each approved plan,نسخة رسمية ثابتة لكل خطة معتمدة
+"Fixed sale prices per door leaf. The order stores a copy of the price at the time it is created, and existing orders are not affected later.",أسعار بيع ثابتة لكل درفة. يحفظ الطلب نسخة السعر وقت إنشائه ولا تتأثر الطلبات القديمة لاحقًا.
+Full door leaf double fee,أجرة دبل كامل الدرفة
+Full door leaf double fee (USD),أجرة دبل كامل الدرفة (USD)
+Grant,منح
+Hidden handle cutout / door leaf,تفريغ مسكة مخفية / درفة
+Hidden handle cutout price per door leaf (USD),سعر تفريغ المسكة المخفية لكل درفة (USD)
+Historical values kept for documentation that do not affect current operations,قيم تاريخية محفوظة للتوثيق ولا تدخل في التشغيل الحالي
+Home Page for Roles,Home Page للأدوار
+Import,استيراد
+Import JSON,استيراد JSON
+Import loads permissions for preview only; saving remains a separate step.,الاستيراد يحمّل الصلاحيات للمعاينة فقط؛ الحفظ يبقى خطوة مستقلة.
+Important rule,قاعدة مهمة
+In production,قيد الإنتاج
+"Independent local and external backups built on the official Frappe mechanism, with separate retention and a secure SFTP connection.",نسخ محلية وخارجية مستقلة مبنية على آلية Frappe الرسمية، مع احتفاظ منفصل واتصال SFTP آمن.
+Initializing,جاري التهيئة
+Invalid JSON file,ملف JSON غير صالح
+Invoice message,رسالة الفاتورة
+Key is saved. Leave the field empty to keep it.,المفتاح محفوظ. اترك الحقل فارغًا للاحتفاظ به.
+Last activity,آخر نشاط
+Last error,آخر خطأ
+Last modified,آخر تعديل
+Last name,الكنية
+Legacy default warehouse,المستودع الافتراضي القديم
+Legacy settings data kept,بيانات إعدادات قديمة محفوظة
+Legacy stock control,التحكم القديم بالمخزون
+Liner / door leaf,Liner / درفة
+Liner price per door leaf (USD),سعر Liner لكل درفة (USD)
+Link one session with WhatsApp Web to send measurement sheets to customers.,اربط جلسة واحدة مع واتساب ويب لإرسال جداول القياسات للزبائن.
+Loading WhatsApp status...,جاري تحميل حالة WhatsApp...
+Loading backup history...,جاري تحميل سجل النسخ الاحتياطية...
+Loading factory settings,جاري تحميل إعدادات المعمل
+Loading factory users...,جاري تحميل مستخدمي المعمل...
+Loading orders with approved plans...,جاري تحميل الطلبات ذات الخطط المعتمدة...
+Loading permission matrix...,جاري تحميل مصفوفة الصلاحيات...
+Loading production routes...,جاري تحميل مسارات الإنتاج...
+Loading role permissions...,جاري تحميل صلاحيات الدور...
+Loading the log...,جاري تحميل السجل...
+Local backup,النسخ المحلي
+Local backup scheduled in the background.,تمت جدولة النسخة المحلية في الخلفية.
+Local retention,احتفاظ المحلي
+Local schedule,جدولة المحلي
+Login page,صفحة الدخول
+Login page conflict,تعارض في صفحة الدخول
+Login page not specified,صفحة الدخول غير محددة
+"Manage factory accounts and their roles from one place. Roles and permissions are not granted automatically; permissions are owned by Almdina, while the login page is determined by the Home Page in the Frappe Role.",أدر حسابات المعمل وأدوارها من مكان واحد. الأدوار والصلاحيات لا تُمنح تلقائيًا؛ الصلاحيات تملكها Almdina، أما صفحة الدخول فيحددها Home Page داخل Role في Frappe.
+Manual edge banding drawing,رسم القشاط اليدوي
+Manual edge banding drawing / piece,رسم القشاط اليدوي / قطعة
+Measurement changes message,رسالة تعديلات القياسات
+Measurements message,رسالة القياسات
+Minimum remnant area (m²),أدنى مساحة للبقايا (م²)
+Minimum remnant length (mm),أدنى طول للبقايا (مم)
+Minimum remnant width (mm),أدنى عرض للبقايا (مم)
+More than one Role defines a different Home Page. Edit the roles in Frappe before changing them for this user.,هناك أكثر من Role يحدد Home Page مختلفة. عدّل الأدوار في Frappe قبل تغييرها لهذا المستخدم.
+Move down,تحريك للأسفل
+Move up,تحريك للأعلى
+Needs action,تحتاج إجراء
+New production route,مسار إنتاج جديد
+No System User accounts outside the factory match the current search.,لا توجد حسابات System User خارج المعمل مطابقة للبحث الحالي.
+No accounts available,لا توجد حسابات متاحة
+No backups yet,لا توجد عمليات نسخ بعد
+No changes,لا توجد تغييرات
+No changes.,لا توجد تغييرات.
+No custom roles,بدون أدوار مخصصة
+No default app,بدون تطبيق افتراضي
+No effective stages,لا توجد مراحل فعالة
+No factory users match the current search.,لا يوجد مستخدمون في المعمل مطابقون للبحث الحالي.
+No log,لا يوجد سجل
+No log yet,لا يوجد سجل بعد
+No log yet.,لا يوجد سجل بعد.
+No manageable roles.,لا توجد أدوار قابلة للإدارة.
+No matching orders with an approved plan.,لا توجد طلبات مطابقة ذات خطة معتمدة.
+No matching routes,لا توجد مسارات مطابقة
+No permissions recorded.,لا توجد صلاحيات مسجلة.
+No recorded changes,لا توجد تغييرات مسجلة
+No recorded changes.,لا توجد تغييرات مسجلة.
+No results,لا توجد نتائج
+No unsaved changes,لا توجد تغييرات غير محفوظة
+Not configured,غير مضبوط
+Not connected,غير متصلة
+Not linked,غير مربوطة
+Not running,لا تعمل
+Not set up,غير مضبوطة
+Not shown when sending a new order,لا يظهر عند إرسال طلب جديد
+Not used for the special door leaf; the special door leaf's back groove stays within its all-inclusive special price.,لا يستخدم للدرفة الخاصة؛ فرزة ظهر الدرفة الخاصة تبقى ضمن سعرها الخاص الشامل.
+Not used for the special door leaf; the special door leaf's liner stays within its all-inclusive special price.,لا يستخدم للدرفة الخاصة؛ لاينر الدرفة الخاصة يبقى ضمن سعرها الخاص الشامل.
+Nothing,لا شيء
+One separate line for each number: landline / mobile / WhatsApp.,سطر مستقل لكل رقم: أرضي / موبايل / واتس اب.
+"Only one planning stage can be selected, and it must be the first stage in the route.",يمكن تحديد مرحلة تخطيط واحدة فقط، ويجب أن تكون أول مرحلة في المسار.
+Only one planning stage can be selected.,يمكن تحديد مرحلة تخطيط واحدة فقط.
+Open archived file,فتح الملف المؤرشف
+Operational role,الدور التشغيلي
+Operational role is required.,الدور التشغيلي مطلوب.
+Optimization timeout (s),مهلة التحسين (ث)
+Optimization timeout (seconds),مهلة التحسين (ثانية)
+Orders in production,طلبات قيد الإنتاج
+Other permissions,صلاحيات أخرى
+Outside the factory,خارج المعمل
+Overview,نظرة عامة
+Passphrase is saved. Leave the field empty to keep it.,عبارة المرور محفوظة. اترك الحقل فارغًا للاحتفاظ بها.
+Password is saved. Leave the field empty to keep it.,كلمة المرور محفوظة. اترك الحقل فارغًا للاحتفاظ بها.
+Password updated without logging its value.,تم تحديث كلمة المرور دون تسجيل قيمتها.
+Paste the private key; it will be stored encrypted through Frappe.,ألصق المفتاح الخاص؛ سيُحفظ مشفرًا عبر Frappe.
+Permanently delete stage from the library,حذف المرحلة نهائيًا من المكتبة
+Permission details,تفاصيل الصلاحيات
+Permission impact,أثر الصلاحيات
+Permission summary,ملخص الصلاحيات
+Permissions and changes log,سجل الصلاحيات والتغييرات
+Permissions file,ملف الصلاحيات
+Permissions file exported.,تم تصدير ملف الصلاحيات.
+Permissions file size exceeds the allowed limit.,حجم ملف الصلاحيات يتجاوز الحد المسموح.
+Permissions that exist on the server but were not categorized in the management interface. They appear here automatically so that no assignable permission is hidden.,صلاحيات موجودة في الخادم ولم تكن مصنفة في واجهة الإدارة. تظهر هنا تلقائيًا حتى لا تُحجب أي صلاحية قابلة للإسناد.
+Piece limit for optimal search,حد القطع للبحث الأمثل
+Planning stage by default,مرحلة تخطيط افتراضيًا
+Prefer board remnants before full boards,تفضيل بقايا الألواح قبل الألواح الكاملة
+Preparation of the backup and restore started in the background.,بدأ تجهيز نسخة الأمان والاستعادة في الخلفية.
+Preparing current values and permissions...,يتم تجهيز القيم والصلاحيات الحالية...
+Preparing the code...,جاري تجهيز الرمز...
+Preparing the permissions file...,جاري تجهيز ملف الصلاحيات...
+Preparing the restore request...,جاري تجهيز طلب الاستعادة...
+Preview,معاينة
+Preview updates immediately without auto-save.,تُحدَّث المعاينة فورًا دون حفظ تلقائي.
+Print sheet identity,هوية أوراق الطباعة
+Processing fee added per original door leaf when full door leaf double is selected.,أجرة معالجة تُضاف لكل درفة أصلية عند اختيار دبل كامل الدرفة.
+Production controls,ضوابط الإنتاج
+Production flow story,قصة سير الإنتاج
+Production route deleted.,تم حذف مسار الإنتاج.
+Production route name,اسم مسار الإنتاج
+Production route name is required.,اسم مسار الإنتاج مطلوب.
+Production route saved successfully.,تم حفظ مسار الإنتاج بنجاح.
+Production route summary,ملخص مسارات الإنتاج
+Production stage library,مكتبة مراحل الإنتاج
+QR code,رمز QR
+Quick look,نظرة سريعة
+Read + select,قراءة + اختيار
+Read-only,للقراءة فقط
+Reconnect,إعادة اتصال
+Reconnecting...,جاري إعادة الاتصال...
+Remnant cost policy,سياسة تكلفة البقايا
+Remnant price / m²,سعر البقايا / م²
+Remote path,المسار البعيد
+Require cutting plan approval before handoff to the next stage,تتطلب اعتماد خطة القص قبل التسليم للمرحلة التالية
+Reserve stock on approval,حجز المخزون عند الاعتماد
+Restore,استعادة
+Restore backup,استعادة نسخة احتياطية
+Restore is disabled until DB root credentials are configured in the operational Frappe settings.,الاستعادة معطّلة حتى تُضبط بيانات DB root في إعداد Frappe التشغيلي.
+Restore prepared,تم تجهيز الاستعادة
+Restoring the latest factory settings changes.,يتم استرجاع آخر تغييرات إعدادات المعمل.
+Role permissions saved.,تم حفظ صلاحيات الدور.
+Role without Desk,دور بدون Desk
+Roles,أدوار
+Roles with different login pages cannot be assigned. Edit the Home Page on the Role in Frappe or leave it empty on secondary roles.,لا يمكن إسناد أدوار تحتوي صفحات دخول مختلفة. عدّل Home Page في Role داخل Frappe أو اتركها فارغة في الأدوار الثانوية.
+Route identity,هوية المسار
+Route is disabled,المسار معطّل
+Route stage sequence,تسلسل مراحل المسار
+Route status updated.,تم تحديث حالة المسار.
+Running,تعمل
+SSH connection and remote path are valid.,اتصال SSH والمسار البعيد صالحان.
+SSH server,خادم SSH
+SSH test failed,فشل اختبار SSH
+SSH user,مستخدم SSH
+Sale price added automatically for each door leaf with the option enabled.,سعر بيع يضاف تلقائيًا لكل درفة مفعّل عليها الخيار.
+Save changes,حفظ التغييرات
+Save password,حفظ كلمة المرور
+Save permission changes,حفظ تغييرات الصلاحيات
+Save permissions,حفظ الصلاحيات
+Save route,حفظ المسار
+Saved securely,محفوظة بأمان
+Saving permissions...,جاري حفظ الصلاحيات...
+Saving production route...,جاري حفظ مسار الإنتاج...
+Saving settings...,جاري حفظ الإعدادات...
+Saving stage...,جاري حفظ المرحلة...
+Saving user...,جاري حفظ المستخدم...
+Scan WhatsApp code,مسح رمز WhatsApp
+Scan the code from WhatsApp,امسح الرمز من واتساب
+Search,بحث
+Search and select a role...,ابحث واختر دورًا...
+Search by name or email,بحث بالاسم أو البريد
+"Search by name, stage, or role...",ابحث بالاسم أو المرحلة أو الدور...
+Search by order number or customer name...,ابحث برقم الطلب أو اسم الزبون...
+Section settings,إعدادات القسم
+Select a JSON file first.,اختر ملف JSON أولاً.
+"Select a role, then grant it permissions manually from scratch. There are no ready-made templates or automatic permissions. An existing matrix can be transferred via JSON after previewing it, and nothing is saved automatically.",اختر الدور ثم امنحه الصلاحيات يدويًا من الصفر. لا توجد قوالب جاهزة ولا صلاحيات تلقائية. يمكن نقل مصفوفة موجودة عبر JSON بعد معاينتها، ولن يتم الحفظ تلقائيًا.
+Select all / Clear,تحديد الكل / إلغاء
+Select role,اختر الدور
+Select the required roles and permissions. The login page comes from the Home Page on the Role in Frappe and is not determined by the Almdina system.,اختر الأدوار والصلاحيات المطلوبة. صفحة الدخول تأتي من Home Page في Role داخل Frappe ولا يحددها نظام Almdina.
+Select the stage from the library.,اختر المرحلة من المكتبة.
+Selected roles have different login pages.,الأدوار المحددة تحتوي صفحات دخول مختلفة.
+Send WhatsApp on completion,إرسال واتساب عند الإتمام
+Sensitive,حساسة
+Sensitive sections,الأقسام الحساسة
+Sent when this stage is completed. Use,تُرسل عند إتمام هذه المرحلة. استخدم
+Session is connected and customer messages can be sent.,الجلسة متصلة ويمكن إرسال رسائل الزبائن.
+Session is not connected.,الجلسة غير متصلة.
+Session number,رقم الجلسة
+Set temporary password,تعيين كلمة مرور مؤقتة
+Settings,الإعدادات
+Source: JSON file from role {0},المصدر: ملف JSON من الدور {0}
+Special door leaf margin,هامش الدرف الخاصة
+Stage added,تمت إضافة المرحلة
+Stage added to the library.,تمت إضافة المرحلة إلى المكتبة.
+Stage already exists,المرحلة موجودة بالفعل
+Stage code,رمز المرحلة
+Stage code is fixed after creation to protect route identity.,رمز المرحلة ثابت بعد الإنشاء لحماية هوية المسار.
+Stage deleted from the library.,تم حذف المرحلة من المكتبة.
+Stage disabled.,تم تعطيل المرحلة.
+Stage enabled.,تم تفعيل المرحلة.
+Stage is disabled,المرحلة معطّلة
+Stage library,مكتبة المراحل
+Stage library is empty,مكتبة المراحل فارغة
+Stage management,إدارة المرحلة
+Stage name,اسم المرحلة
+Stage not found in the library,المرحلة غير موجودة في المكتبة
+Stage updated.,تم تعديل المرحلة.
+Start by adding the first stage,ابدأ بإضافة أول مرحلة
+Stock consumption point,نقطة استهلاك المخزون
+Stored encrypted through Frappe and never returned to the browser.,تُحفظ مشفرة عبر Frappe ولا تعود إلى المتصفح.
+System User accounts that exist in Frappe and have not yet been added to the Almdina scope.,حسابات System User الموجودة في Frappe ولم تُضم بعد إلى نطاق Almdina.
+System permission registered in the role matrix.,صلاحية نظام مسجلة في مصفوفة الدور.
+Temporary password,كلمة المرور المؤقتة
+Testing SSH connection and remote path...,جاري اختبار اتصال SSH والمسار البعيد...
+"The archive creates a private PDF file saved with the order. If the file already exists, no duplicate copy will be created.",ينشئ الأرشيف ملف PDF خاصًا محفوظًا مع الطلب. إذا كان الملف موجودًا مسبقًا فلن يتم إنشاء نسخة مكررة.
+The browser could not read the permissions file.,لم يتمكن المتصفح من قراءة ملف الصلاحيات.
+The code refreshes every 5 seconds. Scan it from WhatsApp on your phone.,يُحدَّث الرمز كل 5 ثوانٍ. امسحه من واتساب على الجوال.
+The default route can be left empty and routes built from the route management screen. A real route must be selected when sending the order to production.,يمكن ترك المسار الافتراضي فارغًا وبناء المسارات من شاشة إدارة المسارات. عند إرسال الطلب للإنتاج يجب اختيار مسار فعلي.
+"The legacy Almdina ERP Settings form link is now a historical route only and will be redirected to this page automatically. No value is deleted from the log on redirect, and contact numbers accept multiple lines such as: landline, mobile, WhatsApp.",الرابط القديم لنموذج Almdina ERP Settings أصبح مسارًا تاريخيًا فقط وسيتم تحويله تلقائيًا إلى هذه الصفحة. لا يتم حذف أي قيمة من السجل عند التحويل، وأرقام التواصل تقبل عدة أسطر مثل: أرضي، موبايل، واتس اب.
+"The measurements text, its edits, and the invoice are attached with the PDF file in one message limited to 1024 characters. Stage completion messages remain text from the production route. Use",نص القياسات وتعديلاتها والفاتورة يُرفق مع ملف PDF في رسالة واحدة بحد 1024 حرفًا. رسائل إتمام المراحل تبقى نصًا من مسار الإنتاج. استخدم
+The planning stage must be the first stage.,مرحلة التخطيط يجب أن تكون أول مرحلة.
+The planning stage must be the first stage. Move the stage first.,مرحلة التخطيط يجب أن تكون أول مرحلة. حرّك المرحلة أولًا.
+"The system will first create a full backup, then use Frappe Restore and run migrate.",سينشئ النظام نسخة أمان كاملة أولًا، ثم يستخدم Frappe Restore ويشغّل migrate.
+"These values were used in legacy stock and board remnant functions that have been operationally retired. We did not delete them from the database, and they appear here only so that all factory settings data stays in one place without losing any historical value.",هذه القيم كانت مستخدمة في وظائف مخزون وبقايا ألواح قديمة تم إيقافها تشغيليًا. لم نحذفها من قاعدة البيانات، وتظهر هنا فقط حتى تبقى جميع بيانات إعدادات المعمل في مكان واحد دون فقدان أي قيمة تاريخية.
+This change removes your last permission to manage permissions. After saving you may not be able to return to the page.,هذا التغيير يزيل آخر صلاحية لديك لإدارة الصلاحيات. بعد الحفظ قد لا تستطيع العودة إلى الصفحة.
+"This data appears automatically on the measurements printout, cutting plan, and customer invoice.",تظهر هذه البيانات تلقائيًا في طباعة القياسات وخطة القص وفاتورة الزبون.
+This save will remove your last permission to manage permissions. Do you want to continue?,سيؤدي هذا الحفظ إلى إزالة آخر صلاحية لديك لإدارة الصلاحيات. هل تريد المتابعة؟
+This stage's text field appears in Factory settings → WhatsApp messages,يظهر حقل نص هذه المرحلة في إعدادات المعمل → رسائل واتساب
+Total,إجمالي
+Total factory accounts,إجمالي حسابات المعمل
+Total stages,إجمالي المراحل
+Trimming margin (mm),هامش التشذيب (مم)
+Type the confirmation phrase as shown above,اكتب عبارة التأكيد كما تظهر أعلاه
+Type the confirmation phrase exactly.,اكتب عبارة التأكيد حرفيًا.
+Type to search...,اكتب للبحث...
+Unknown,غير معروفة
+Updating password...,جاري تحديث كلمة المرور...
+Updating route status...,جاري تحديث حالة المسار...
+Updating the account...,جاري تحديث الحساب...
+Use Create Backup Now to create the first local backup.,استخدم Create Backup Now لإنشاء أول نسخة محلية.
+"Use a short, fixed code, such as CNC or Cutting.",استخدم رمزًا قصيرًا وثابتًا، مثل CNC أو Cutting.
+User added to the factory. You can now assign their roles.,تمت إضافة المستخدم إلى المعمل. يمكنك الآن تعيين أدواره.
+User created.,تم إنشاء المستخدم.
+User quick access,الوصول السريع للمستخدم
+User status updated.,تم تحديث حالة المستخدم.
+User updated.,تم تحديث المستخدم.
+Users,المستخدمون
+Users and workforce,المستخدمون والقوى العاملة
+Users not added to the factory,مستخدمون غير مضافين إلى المعمل
+Verifying,جاري التحقق
+Verifying and deleting the route...,جاري التحقق وحذف المسار...
+Verifying permissions...,جاري التحقق من الصلاحيات...
+Visible users,المستخدمون الظاهرون
+Waiting for code scan,بانتظار مسح الرمز
+Warning: Restore replaces the current database and files.,تحذير: الاستعادة تستبدل قاعدة البيانات والملفات الحالية.
+WhatsApp linked.,تم ربط WhatsApp.
+WhatsApp messages,رسائل واتساب
+WhatsApp server address or API key is not configured.,لم يتم ضبط عنوان خادم WhatsApp أو مفتاح API.
+WhatsApp session,جلسة WhatsApp
+Without a role,دون دور
+Workforce management,إدارة القوى العاملة
+Workforce summary,ملخص القوى العاملة
+Workspace,مساحة العمل
+Workspaces,مساحات العمل
+"You can review the values here, but editing this section is not available for your current permissions.",يمكنك مراجعة القيم هنا، لكن تعديل هذا القسم غير متاح لصلاحياتك الحالية.
+You have unsaved changes,لديك تغييرات غير محفوظة
+You have unsaved changes. Do you want to discard them and refresh the page?,لديك تغييرات غير محفوظة. هل تريد تجاهلها وتحديث الصفحة؟
+You have unsaved changes. Do you want to discard them?,لديك تغييرات غير محفوظة. هل تريد تجاهلها؟
+and,و
+for the order number and,لرقم الطلب و
+for the order number.,لرقم الطلب.
+for the stage name.,لاسم المرحلة.
+Authentication Method,طريقة المصادقة
+Backup & Restore,النسخ الاحتياطي والاستعادة
+Backup History & Actions,سجل النسخ والإجراءات
+Create Backup Now,إنشاء نسخة الآن
+Day of Month,يوم الشهر
+Day of Week,يوم الأسبوع
+Default Workspace,Default Workspace
+Enable External Backup,تفعيل النسخ الخارجي
+Enable Local Backup,تفعيل النسخ المحلي
+External Backup — SSH,النسخ الخارجي — SSH
+Frappe: {0},Frappe: {0}
+Keep Last N Backups,الاحتفاظ بآخر N نسخ
+Local Backup,النسخ المحلي
+Private Key Passphrase (Optional),عبارة مرور المفتاح الخاص (اختياري)
+Production Workflow,مسار العمل الإنتاجي
+Remote Backup Path,المسار البعيد للنسخ
+SSH Connection,اتصال SSH
+SSH Host,خادم SSH
+SSH Password,كلمة مرور SSH
+SSH Port,منفذ SSH
+SSH Private Key,المفتاح الخاص لـ SSH
+SSH Username,مستخدم SSH
+Schedule,الجدولة
+Test SSH Connection,اختبار اتصال SSH
+Time,الوقت
+Workflow Story,قصة سير الإنتاج

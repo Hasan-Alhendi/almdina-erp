@@ -27,13 +27,13 @@ def test_production_settings_polish_has_clear_arabic_hierarchy_and_feedback() ->
     ):
         assert marker in renderer
 
-    assert "إعدادات تشغيل المعمل الافتراضية" in renderer
-    assert "القيم التشغيلية النشطة المعتمدة في كافة عمليات ومحطات العمل" in renderer
+    assert "Default factory operating settings" in renderer
+    assert "Active operating values approved for all operations and workstations" in renderer
     assert "قابل للتعديل" not in renderer
     assert "aps-hero-updated" not in renderer
     assert "عرض فقط" not in renderer
-    assert "بيانات إعدادات قديمة محفوظة" in renderer
-    assert "للقراءة فقط" in renderer
+    assert "Legacy settings data kept" in renderer
+    assert "Read-only" in renderer
 
 
 def test_production_settings_polish_distinguishes_editable_and_readonly_sections() -> None:

@@ -688,7 +688,7 @@ class TestDesignSystemContract(unittest.TestCase):
         self.assertIn("prw-stage-role-mount", self.factory_master_data_page)
         self.assertIn("search_operational_roles", self.factory_master_data_page)
         self.assertNotIn('data-stage-field="operational_role"', self.factory_master_data_page)
-        self.assertIn('page.set_primary_action(__("مسار إنتاج جديد")', self.factory_master_data_page)
+        self.assertIn('page.set_primary_action(translate("New production route")', self.factory_master_data_page)
         self.assertIn("syncPrimaryAction()", self.factory_master_data_page)
         self.assertNotIn("prw-new-route", self.factory_master_data_page)
         self.assertNotIn('class="btn btn-primary prw-save-route"', self.factory_master_data_page)
@@ -709,7 +709,7 @@ class TestDesignSystemContract(unittest.TestCase):
         self.assertIn("AlmdinaUi.badge is required for factory master data rendering", page)
         self.assertIn('className: "prw-status"', page)
         self.assertIn('className: "prw-mini-badge"', page)
-        self.assertIn('this.errorStateHtml(__("تعذر فتح إدارة المسارات"), message, "prw-retry")', page)
+        self.assertIn('this.errorStateHtml(translate("Could not open route management"), message, "prw-retry")', page)
         self.assertNotIn('class="prw-error"', page)
 
         # Feature CSS keeps geometry; intro/summary/status/empty chrome belongs to the DS.
@@ -745,18 +745,18 @@ class TestDesignSystemContract(unittest.TestCase):
 
     def test_migrated_admin_pages_use_frappe_page_toolbar_actions(self) -> None:
         self.assertNotIn("aw-refresh", self.workforce_renderer)
-        self.assertIn('add_inner_button(__("تحديث"), load, null, "refresh")', self.workforce_controller)
-        self.assertIn('set_primary_action(__("إنشاء مستخدم جديد"), openCreateDialog, "add")', self.workforce_controller)
+        self.assertIn('add_inner_button(translate("Refresh"), load, null, "refresh")', self.workforce_controller)
+        self.assertIn('set_primary_action(translate("Create new user"), openCreateDialog, "add")', self.workforce_controller)
 
         self.assertNotIn("almdina-sf-refresh", self.shop_floor_renderer)
         self.assertNotIn("almdina-sf-refresh", self.shop_floor_interactions)
-        self.assertIn('add_inner_button(__("تحديث"), refresh, null, "refresh")', self.shop_floor_controller)
+        self.assertIn('add_inner_button(translate("Refresh"), refresh, null, "refresh")', self.shop_floor_controller)
         self.assertIn("syncRefreshButtonVisibility", self.shop_floor_controller)
 
-        self.assertIn('page.set_primary_action(__("مسار إنتاج جديد")', self.factory_master_data_page)
+        self.assertIn('page.set_primary_action(translate("New production route")', self.factory_master_data_page)
         self.assertIn("syncPrimaryAction()", self.factory_master_data_page)
         self.assertIn('this.page.add_inner_button(', self.factory_master_data_page)
-        self.assertIn('page.set_primary_action(__("تحديث"), load, "refresh")', self.factory_plan_archive_page)
+        self.assertIn('page.set_primary_action(translate("Refresh"), load, "refresh")', self.factory_plan_archive_page)
 
     def test_migrated_admin_dialogs_reject_structured_prompts(self) -> None:
         shop_floor_dialogs = (ROOT / "public" / "js" / "shop_floor_inbox" / "dialogs.js").read_text(encoding="utf-8")

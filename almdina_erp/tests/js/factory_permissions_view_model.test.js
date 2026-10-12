@@ -65,8 +65,8 @@ assert.equal(groups[0].capabilities[0].checked, true);
 assert.deepEqual(
     JSON.parse(JSON.stringify(groups[0].capabilities[0].badges)),
     [
-        { kind: "permission", label: "Frappe: قراءة + اختيار" },
-        { kind: "standard", label: "صلاحية Frappe أساسية" },
+        { kind: "permission", label: "Frappe: Read + select" },
+        { kind: "standard", label: "Core Frappe permission" },
     ]
 );
 assert.equal(groups[1].key, "unclassified");
@@ -116,11 +116,11 @@ const impact = model.impact({
         },
     },
 });
-assert.equal(impact.home, "صالة الإنتاج");
-assert.deepEqual(JSON.parse(JSON.stringify(impact.sections)), ["الطلبات"]);
-assert.equal(impact.source, "المصدر: ملف JSON من الدور CNC");
-assert.equal(impact.changes[0].action, "إلغاء");
-assert.ok(impact.warning.includes("آخر صلاحية"));
+assert.equal(impact.home, "Production floor");
+assert.deepEqual(JSON.parse(JSON.stringify(impact.sections)), ["Orders"]);
+assert.equal(impact.source, "Source: JSON file from role CNC");
+assert.equal(impact.changes[0].action, "Cancel");
+assert.ok(impact.warning.includes("last permission"));
 
 const audit = model.audit(Array.from({ length: 12 }, (_, index) => ({
     changed_by: `user-${index}`,

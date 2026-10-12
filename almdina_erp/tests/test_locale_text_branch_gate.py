@@ -426,6 +426,64 @@ class TestActiveUiHasNoLanguageTextBranches(unittest.TestCase):
         self.assertRegex(renderer, r'<b dir="ltr">\$\{esc\(model\.user\)\}</b>')
         self.assertNotIn("direction:rtl", renderer.replace(" ", ""))
 
+    def test_factory_management_surfaces_use_english_message_ids_and_dynamic_direction(self) -> None:
+        """Factory management UI copy is English IDs; only legacy status display compare stays Arabic."""
+        paths = (
+            ROOT / "almdina_erp" / "page" / "factory_permissions" / "factory_permissions.js",
+            PUBLIC_JS / "factory_permissions" / "controller.js",
+            PUBLIC_JS / "factory_permissions" / "dialogs.js",
+            PUBLIC_JS / "factory_permissions" / "renderer.js",
+            PUBLIC_JS / "factory_permissions" / "view_model.js",
+            ROOT / "almdina_erp" / "page" / "factory_workforce" / "factory_workforce.js",
+            PUBLIC_JS / "factory_workforce" / "controller.js",
+            PUBLIC_JS / "factory_workforce" / "dialogs.js",
+            PUBLIC_JS / "factory_workforce" / "renderer.js",
+            PUBLIC_JS / "factory_workforce" / "toolbar.js",
+            PUBLIC_JS / "factory_workforce" / "view_model.js",
+            ROOT / "almdina_erp" / "page" / "factory_production_settings" / "factory_production_settings.js",
+            PUBLIC_JS / "factory_production_settings" / "backup_panel.js",
+            PUBLIC_JS / "factory_production_settings" / "controller.js",
+            PUBLIC_JS / "factory_production_settings" / "dialogs.js",
+            PUBLIC_JS / "factory_production_settings" / "renderer.js",
+            PUBLIC_JS / "factory_production_settings" / "view_model.js",
+            PUBLIC_JS / "factory_production_settings" / "whatsapp_panel.js",
+            ROOT / "almdina_erp" / "page" / "factory_master_data" / "factory_master_data.js",
+            ROOT / "almdina_erp" / "page" / "factory_plan_archive" / "factory_plan_archive.js",
+        )
+        allowed = ("غير مسموح", "مسموح")
+        leftovers = []
+        for path in paths:
+            relative = path.relative_to(ROOT)
+            text = path.read_text(encoding="utf-8")
+            self.assertIsNone(re.search(r"^(?:const|let|var)\s+\w+\s*=\s*(?:translate|__)\(", text, re.M))
+            self.assertNotRegex(text, r"direction:\s*rtl")
+            self.assertNotRegex(text, r'\bdir\s*=\s*["\']rtl["\']')
+            for number, line in enumerate(text.splitlines(), start=1):
+                visible = line
+                for phrase in allowed:
+                    visible = visible.replace(phrase, "")
+                if ARABIC_TEXT.search(visible):
+                    leftovers.append(f"{relative}:{number}: {line.strip()}")
+        self.assertEqual(leftovers, [])
+
+        permissions_renderer = (PUBLIC_JS / "factory_permissions" / "renderer.js").read_text(encoding="utf-8")
+        self.assertIn('dir="${uiDirection()}"', permissions_renderer)
+        self.assertIn('dir="ltr"', permissions_renderer)
+
+        workforce_renderer = (PUBLIC_JS / "factory_workforce" / "renderer.js").read_text(encoding="utf-8")
+        self.assertIn('dir="${uiDirection()}"', workforce_renderer)
+        self.assertIn('class="aw-email" dir="ltr"', workforce_renderer)
+
+        settings_renderer = (PUBLIC_JS / "factory_production_settings" / "renderer.js").read_text(encoding="utf-8")
+        self.assertIn('dir="${uiDirection()}"', settings_renderer)
+        self.assertIn('normalized === t("Allowed") || normalized === "مسموح"', settings_renderer)
+
+        master_data = (
+            ROOT / "almdina_erp" / "page" / "factory_master_data" / "factory_master_data.js"
+        ).read_text(encoding="utf-8")
+        self.assertIn('dir="${uiDirection()}"', master_data)
+        self.assertNotIn('dir="rtl"', master_data)
+
     def test_bidirectional_layout_uses_inherited_direction_and_logical_alignment(self) -> None:
         styles = (
             PUBLIC_JS

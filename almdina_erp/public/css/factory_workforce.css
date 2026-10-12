@@ -277,9 +277,10 @@
     margin-top: 2px;
     color: var(--text-muted, #6b7280);
     font-size: 10px;
-    text-align: right;
+    text-align: start;
     text-overflow: ellipsis;
     white-space: nowrap;
+    unicode-bidi: isolate;
 }
 
 .aw-badges {

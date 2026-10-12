@@ -1,6 +1,35 @@
 (() => {
     "use strict";
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split("{" + index + "}").join(String(value));
+            });
+        }
+        return text;
+    }
+
+    function uiDirection() {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.direction === "function") {
+            const value = locale.direction();
+            if (value === "ltr" || value === "rtl") return value;
+        }
+        const root = typeof document !== "undefined" ? document.documentElement : null;
+        const dir = root && root.getAttribute("dir");
+        return dir === "ltr" ? "ltr" : "rtl";
+    }
+
+
     const STYLE_ASSETS = Object.freeze([
         ["/assets/almdina_erp/css/factory_routing_workflow.css", "almdina-routing-workflow-style"],
         ["/assets/almdina_erp/css/factory_stage_library.css", "almdina-stage-library-style"],
@@ -21,7 +50,7 @@
     function bootstrapLoadingHtml() {
         return `
             <div class="prw-loading" data-almdina-loading-owner="factory-master-data-bootstrap" role="status" aria-live="polite">
-                <span class="prw-spinner"></span>${__("جاري تحميل مسارات الإنتاج...")}
+                <span class="prw-spinner"></span>${translate("Loading production routes...")}
             </div>`;
     }
 
@@ -66,10 +95,10 @@
 
         init() {
             if (this.initialized || this.disposed) return this;
-            this.page.set_primary_action(__("مسار إنتاج جديد"), () => this.openEditor(), "add");
+            this.page.set_primary_action(translate("New production route"), () => this.openEditor(), "add");
             this.syncPrimaryAction();
             this.$refreshButton = this.page.add_inner_button(
-                __("تحديث"),
+                translate("Refresh"),
                 () => this.refresh(),
                 null,
                 "refresh"
@@ -229,7 +258,7 @@
         renderBootstrapError() {
             const current = this.activation ? this.isActive() : this.isHostCurrent();
             if (!this.isOwner() || !current || !this.bootstrapError) return;
-            const fallback = __("تعذر تحميل تصميم إدارة مسارات الإنتاج.");
+            const fallback = translate("Could not load the production route management layout.");
             const message = this.frontend && typeof this.frontend.errorMessage === "function"
                 ? this.frontend.errorMessage(this.bootstrapError, fallback)
                 : fallback;
@@ -245,7 +274,7 @@
         // Error paths must render even if the design-system builder failed to load.
         errorStateHtml(title, message, retryClassName) {
             const ui = window.AlmdinaUi;
-            const retryLabel = __("إعادة المحاولة");
+            const retryLabel = translate("Retry");
             const retryHtml = ui && typeof ui.button === "function"
                 ? ui.button({
                     label: retryLabel,
@@ -377,25 +406,25 @@
 
         statusFilterLabel(value) {
             const labels = {
-                all: __("الكل"),
-                active: __("مفعّل"),
-                disabled: __("معطّل"),
+                all: translate("All"),
+                active: translate("Enabled"),
+                disabled: translate("Disabled"),
             };
             return labels[String(value || "all")] || labels.all;
         }
 
         statusFilterValue(label) {
             const entries = [
-                ["all", __("الكل")],
-                ["active", __("مفعّل")],
-                ["disabled", __("معطّل")],
+                ["all", translate("All")],
+                ["active", translate("Enabled")],
+                ["disabled", translate("Disabled")],
             ];
             const match = entries.find(([, text]) => text === label);
             return match ? match[0] : "all";
         }
 
         statusFilterOptions() {
-            return [__("الكل"), __("مفعّل"), __("معطّل")].join("\n");
+            return [translate("All"), translate("Enabled"), translate("Disabled")].join("\n");
         }
 
         disposeToolbarControls() {
@@ -420,7 +449,7 @@
                 fieldname: "operational_role",
                 fieldtype: "Link",
                 options: "Role",
-                placeholder: __("اختر الدور"),
+                placeholder: translate("Select role"),
                 value: stage.operational_role || "",
                 readOnly,
                 required: !readOnly,
@@ -466,14 +495,14 @@
             const fields = [{
                 fieldname: "search",
                 fieldtype: "Data",
-                label: __("بحث"),
-                placeholder: __("ابحث بالاسم أو المرحلة أو الدور..."),
+                label: translate("Search"),
+                placeholder: translate("Search by name, stage, or role..."),
             }];
             if (this.state.section === "routings") {
                 fields.push({
                     fieldname: "status",
                     fieldtype: "Select",
-                    label: __("الحالة"),
+                    label: translate("Status"),
                     options: this.statusFilterOptions(),
                 });
             }
@@ -616,10 +645,10 @@
                     if (!this.isCurrentGeneration(generation) || !this.readGate.isCurrent(token)) return null;
                     const message = error && error.message
                         ? error.message
-                        : __("تعذر تحميل مسارات الإنتاج.");
+                        : translate("Could not load production routes.");
                     this.disposeToolbarControls();
                     this.disposeStageControls();
-                    this.$main.html(this.errorStateHtml(__("تعذر فتح إدارة المسارات"), message, "prw-retry"));
+                    this.$main.html(this.errorStateHtml(translate("Could not open route management"), message, "prw-retry"));
                     this.bind();
                     return null;
                 });
@@ -631,7 +660,7 @@
                 const generation = this.activeGeneration();
                 const workingId = this.state.editor.workingId;
                 return this.confirmForGeneration(
-                    __("لديك تغييرات غير محفوظة. هل تريد تجاهلها وتحديث الصفحة؟"),
+                    translate("You have unsaved changes. Do you want to discard them and refresh the page?"),
                     generation,
                     () => {
                         if (!this.state.editor || this.state.editor.workingId !== workingId) return null;
@@ -656,32 +685,32 @@
             this.disposeToolbarControls();
             this.disposeStageControls();
             this.$main.html(`
-                <main class="almdina-ui prw-shell alm-page alm-page--workbench" dir="rtl">
-                    <section class="prw-hero alm-page-intro alm-page-intro--accented" aria-label="${__("نظرة عامة")}">
+                <main class="almdina-ui prw-shell alm-page alm-page--workbench" dir="${uiDirection()}">
+                    <section class="prw-hero alm-page-intro alm-page-intro--accented" aria-label="${translate("Overview")}">
                         <div class="prw-hero-badge-cell">
                             <span class="prw-hero-badge">
                                 <span class="prw-hero-badge-dot" aria-hidden="true"></span>
-                                ${__("Production Workflow")}
+                                ${translate("Production Workflow")}
                             </span>
                         </div>
                         <span class="prw-hero-divider" aria-hidden="true"></span>
-                        <h2 class="prw-hero-title alm-page-intro__title">${__("صمّم رحلة الطلب من أول مرحلة حتى التسليم")}</h2>
+                        <h2 class="prw-hero-title alm-page-intro__title">${translate("Design the order journey from the first stage to delivery")}</h2>
                         <span class="prw-hero-divider" aria-hidden="true"></span>
-                        <p class="prw-hero-desc alm-page-intro__description">${__("رتّب مراحل العمل بصريًا، اربط كل مرحلة بالدور التشغيلي المناسب، ثم استخدم المسار مباشرة في لوحة الإنتاج.")}</p>
+                        <p class="prw-hero-desc alm-page-intro__description">${translate("Arrange work stages visually, link each stage to the appropriate operational role, then use the route directly in the production board.")}</p>
                     </section>
-                    <section class="prw-summary alm-summary-grid" aria-label="${__("ملخص مسارات الإنتاج")}">
-                        ${this.statHtml(__("المسارات"), summary.routings || 0, "info", "route",
+                    <section class="prw-summary alm-summary-grid" aria-label="${translate("Production route summary")}">
+                        ${this.statHtml(translate("Routes"), summary.routings || 0, "info", "route",
                             summary.routings && summary.active_routings !== undefined
-                                ? `${Math.round(((summary.active_routings || 0) / (summary.routings || 1)) * 100)}% ${__("نشط")}`
+                                ? `${Math.round(((summary.active_routings || 0) / (summary.routings || 1)) * 100)}% ${translate("Active")}`
                                 : "")}
-                        ${this.statHtml(__("المسارات المفعّلة"), summary.active_routings || 0, "success", "circle-check", __("محمي تلقائياً"))}
-                        ${this.statHtml(__("إجمالي المراحل"), summary.total_stages || 0, "neutral", "layers", __("أدوار"))}
-                        ${this.statHtml(__("طلبات قيد الإنتاج"), summary.in_flight_orders || 0, "warning", "zap", __("نشط الآن"))}
+                        ${this.statHtml(translate("Enabled routes"), summary.active_routings || 0, "success", "circle-check", translate("Automatically protected"))}
+                        ${this.statHtml(translate("Total stages"), summary.total_stages || 0, "neutral", "layers", translate("Roles"))}
+                        ${this.statHtml(translate("Orders in production"), summary.in_flight_orders || 0, "warning", "zap", translate("Active now"))}
                     </section>
                     <section class="prw-toolbar alm-toolbar">
                         <div class="prw-view-switch" role="tablist">
-                            <button type="button" class="prw-view-tab ${this.state.section === "routings" ? "is-active" : ""}" data-section="routings">${__("المسارات")} (${Number((data.routings || []).length)})</button>
-                            <button type="button" class="prw-view-tab ${this.state.section === "audit" ? "is-active" : ""}" data-section="audit">${__("سجل التغييرات")}</button>
+                            <button type="button" class="prw-view-tab ${this.state.section === "routings" ? "is-active" : ""}" data-section="routings">${translate("Routes")} (${Number((data.routings || []).length)})</button>
+                            <button type="button" class="prw-view-tab ${this.state.section === "audit" ? "is-active" : ""}" data-section="audit">${translate("Change log")}</button>
                         </div>
                         <div class="prw-filter-group-mount"></div>
                     </section>
@@ -737,8 +766,8 @@
                 return `
                     <div class="prw-empty alm-state alm-state--empty" role="status">
                         <span class="prw-empty-icon" aria-hidden="true">⇢</span>
-                        <strong class="alm-state__title">${__("لا توجد مسارات مطابقة")}</strong>
-                        <span class="alm-state__message">${__("غيّر البحث أو الفلتر، أو أنشئ مسارًا جديدًا لبدء تنظيم رحلة الإنتاج.")}</span>
+                        <strong class="alm-state__title">${translate("No matching routes")}</strong>
+                        <span class="alm-state__message">${translate("Change the search or filter, or create a new route to start organizing the production journey.")}</span>
                     </div>`;
             }
             return `<div class="prw-route-list">${routes.map(route => this.routeCardHtml(route)).join("")}</div>`;
@@ -756,11 +785,11 @@
                         <span class="prw-route-stage-number">${index + 1}</span>
                         <div>
                             <b>${this.esc(stage.department_label || stage.stage_type)}</b>
-                            <small>${this.esc(stage.operational_role || __("دون دور"))}</small>
+                            <small>${this.esc(stage.operational_role || translate("Without a role"))}</small>
                         </div>
-                        ${stage.is_planning_stage ? this.uiBadge({ label: __("تخطيط"), tone: "warning", className: "prw-mini-badge" }) : ""}
+                        ${stage.is_planning_stage ? this.uiBadge({ label: translate("Planning"), tone: "warning", className: "prw-mini-badge" }) : ""}
                     </div>`).join('<span class="prw-flow-arrow" aria-hidden="true">←</span>')
-                : `<span class="prw-no-stages">${__("لا توجد مراحل فعالة")}</span>`;
+                : `<span class="prw-no-stages">${translate("No effective stages")}</span>`;
             return `
                 <article class="prw-route-card" data-route-name="${this.esc(route.name)}">
                     <header class="prw-route-head">
@@ -768,25 +797,25 @@
                             <div class="prw-route-title-line">
                                 <h3>${this.esc(route.label)}</h3>
                                 ${this.uiStatus({
-                                    label: route.disabled ? __("معطّل") : __("مفعّل"),
+                                    label: route.disabled ? translate("Disabled") : translate("Enabled"),
                                     tone: route.disabled ? "neutral" : "success",
                                     className: "prw-status",
                                 })}
-                                ${this.uiBadge({ label: `${stages.length} ${__("مراحل")}`, tone: "info", className: "prw-stage-count-badge" })}
-                                ${inFlight ? this.uiBadge({ label: `${inFlight} ${__("قيد الإنتاج")}`, tone: "warning", className: "prw-inflight-badge" }) : ""}
+                                ${this.uiBadge({ label: `${stages.length} ${translate("Stages")}`, tone: "info", className: "prw-stage-count-badge" })}
+                                ${inFlight ? this.uiBadge({ label: `${inFlight} ${translate("In production")}`, tone: "warning", className: "prw-inflight-badge" }) : ""}
                             </div>
                             <p class="prw-route-id-line">${this.esc(route.name)}</p>
                         </div>
                         <div class="prw-route-counts">
                             <div class="prw-card-actions">
                                 ${this.uiButton({
-                                    label: canEdit ? __("تحرير Workflow") : __("معاينة"),
+                                    label: canEdit ? translate("Edit Workflow") : translate("Preview"),
                                     variant: "primary",
                                     className: "prw-edit-route",
                                     attrs: { "data-name": route.name },
                                 })}
                                 ${canDelete ? this.uiButton({
-                                    label: __("حذف"),
+                                    label: translate("Delete"),
                                     variant: "danger",
                                     className: "prw-delete-route",
                                     attrs: {
@@ -795,13 +824,13 @@
                                     },
                                 }) : ""}
                                 ${canCreate ? this.uiButton({
-                                    label: __("نسخ"),
+                                    label: translate("Backups"),
                                     variant: "secondary",
                                     className: "prw-duplicate-route",
                                     attrs: { "data-name": route.name },
                                 }) : ""}
                                 ${canEdit ? this.uiButton({
-                                    label: route.disabled ? __("تفعيل") : __("تعطيل"),
+                                    label: route.disabled ? translate("Enable") : translate("Disable"),
                                     variant: "secondary",
                                     className: "prw-toggle-route",
                                     attrs: {
@@ -813,11 +842,11 @@
                             </div>
                         </div>
                     </header>
-                    <div class="prw-route-flow" aria-label="${__("تسلسل مراحل المسار")}">${stageFlow}</div>
+                    <div class="prw-route-flow" aria-label="${translate("Route stage sequence")}">${stageFlow}</div>
                     <footer class="prw-route-footer">
                         <div class="prw-route-meta">
-                            <span>${__("آخر تعديل")}: <b>${this.esc(route.modified || "—")}</b></span>
-                            <span>${__("بواسطة")}: <b>${this.esc(route.modified_by || "—")}</b></span>
+                            <span>${translate("Last modified")}: <b>${this.esc(route.modified || "—")}</b></span>
+                            <span>${translate("By")}: <b>${this.esc(route.modified_by || "—")}</b></span>
                         </div>
                     </footer>
                 </article>`;
@@ -830,15 +859,15 @@
                 return JSON.stringify(row).toLocaleLowerCase().includes(query);
             });
             if (!rows.length) {
-                return `<div class="prw-empty alm-state alm-state--empty" role="status"><span class="prw-empty-icon" aria-hidden="true">◷</span><strong class="alm-state__title">${__("لا توجد تغييرات مسجلة")}</strong><span class="alm-state__message">${__("سيظهر هنا كل إنشاء أو تعديل أو حذف لمسارات الإنتاج.")}</span></div>`;
+                return `<div class="prw-empty alm-state alm-state--empty" role="status"><span class="prw-empty-icon" aria-hidden="true">◷</span><strong class="alm-state__title">${translate("No recorded changes")}</strong><span class="alm-state__message">${translate("Every creation, edit, or deletion of production routes will appear here.")}</span></div>`;
             }
             return `<div class="prw-audit-list">${rows.map(row => `
                 <article class="prw-audit-item">
                     <span class="prw-audit-dot" aria-hidden="true"></span>
                     <div class="prw-audit-body">
                         <div><b>${this.esc(row.target_name)}</b><time>${this.esc(row.changed_on)}</time></div>
-                        <p>${this.esc(row.action)} · ${__("بواسطة")} ${this.esc(row.changed_by)}</p>
-                        ${row.changed_fields ? `<small>${__("الحقول المتغيرة")}: ${this.esc(row.changed_fields)}</small>` : ""}
+                        <p>${this.esc(row.action)} · ${translate("By")} ${this.esc(row.changed_by)}</p>
+                        ${row.changed_fields ? `<small>${translate("Changed fields")}: ${this.esc(row.changed_fields)}</small>` : ""}
                     </div>
                 </article>`).join("")}</div>`;
         }
@@ -872,7 +901,7 @@
                 revision: duplicate ? 1 : 0,
                 name: isNew ? null : source.name,
                 routing_name: source
-                    ? `${source.label}${duplicate ? ` - ${__("نسخة")}` : ""}`
+                    ? `${source.label}${duplicate ? ` - ${translate("Backup")}` : ""}`
                     : "",
                 disabled: source ? Boolean(source.disabled) : false,
                 expected_modified: isNew ? null : String(source.modified || ""),
@@ -902,7 +931,7 @@
                 ? (this.state.data.routings || []).find(route => route.name === name)
                 : null;
             if (name && !source) {
-                frappe.show_alert({message: __("تعذر العثور على المسار. حدّث الصفحة."), indicator: "orange"});
+                frappe.show_alert({message: translate("Could not find the route. Refresh the page."), indicator: "orange"});
                 return;
             }
             this.state.editor = this.editorDraft(source, {duplicate});
@@ -919,25 +948,25 @@
             }
             this.disposeToolbarControls();
             this.disposeStageControls();
-            const title = editor.name ? __("تحرير مسار الإنتاج") : __("إنشاء مسار إنتاج جديد");
+            const title = editor.name ? translate("Edit production route") : translate("Create new production route");
             const readOnly = editor.readOnly;
             this.syncPrimaryAction();
             this.$main.html(`
-                <main class="almdina-ui prw-shell prw-editor-shell alm-page alm-page--workbench" dir="rtl">
+                <main class="almdina-ui prw-shell prw-editor-shell alm-page alm-page--workbench" dir="${uiDirection()}">
                     <header class="prw-editor-topbar">
                         <div class="prw-editor-heading">
-                            <button type="button" class="btn btn-default prw-close-editor" aria-label="${__("رجوع")}">→</button>
+                            <button type="button" class="btn btn-default prw-close-editor" aria-label="${translate("Back")}">→</button>
                             <div>
-                                <span class="prw-eyebrow">${__("Workflow Story")}</span>
+                                <span class="prw-eyebrow">${translate("Workflow Story")}</span>
                                 <h2>${title}</h2>
-                                ${editor.name ? `<p>${__("المعرّف الثابت")}: ${this.esc(editor.name)}</p>` : `<p>${__("أضف المراحل بالترتيب الحقيقي الذي يمر به الطلب.")}</p>`}
+                                ${editor.name ? `<p>${translate("Fixed identifier")}: ${this.esc(editor.name)}</p>` : `<p>${translate("Add stages in the actual order the order goes through.")}</p>`}
                             </div>
                         </div>
                         <div class="prw-editor-actions">
-                            <span class="prw-save-state ${editor.dirty ? "is-dirty" : ""}">${editor.dirty ? __("تغييرات غير محفوظة") : __("لا توجد تغييرات")}</span>
-                            <button type="button" class="btn btn-default prw-close-editor">${__("إلغاء")}</button>
+                            <span class="prw-save-state ${editor.dirty ? "is-dirty" : ""}">${editor.dirty ? translate("Unsaved changes") : translate("No changes")}</span>
+                            <button type="button" class="btn btn-default prw-close-editor">${translate("Cancel")}</button>
                             ${readOnly ? "" : this.uiButton({
-                                label: this.state.saving ? __("جاري الحفظ...") : __("حفظ المسار"),
+                                label: this.state.saving ? translate("Saving...") : translate("Save route"),
                                 variant: "primary",
                                 className: "prw-save-route",
                                 disabled: this.state.saving || !editor.dirty,
@@ -948,30 +977,30 @@
                         <section class="prw-editor-main">
                             <article class="prw-settings-card">
                                 <div class="prw-section-heading">
-                                    <div><span>01</span><h3>${__("هوية المسار")}</h3></div>
-                                    <p>${__("اسم واضح يظهر عند إرسال الطلب إلى الإنتاج.")}</p>
+                                    <div><span>01</span><h3>${translate("Route identity")}</h3></div>
+                                    <p>${translate("A clear name shown when the order is sent to production.")}</p>
                                 </div>
                                 <div class="prw-settings-grid">
                                     <label class="prw-field prw-field-wide">
-                                        <span>${__("اسم مسار الإنتاج")} <em>*</em></span>
-                                        <input class="form-control" data-editor-field="routing_name" value="${this.esc(editor.routing_name)}" placeholder="${__("مثال: رسم ← CNC ← تقشيط")}" ${readOnly ? "disabled" : ""}>
+                                        <span>${translate("Production route name")} <em>*</em></span>
+                                        <input class="form-control" data-editor-field="routing_name" value="${this.esc(editor.routing_name)}" placeholder="${translate("Example: Drawing → CNC → Peeling")}" ${readOnly ? "disabled" : ""}>
                                     </label>
                                     <label class="prw-switch-field">
                                         <input type="checkbox" data-editor-field="disabled" ${editor.disabled ? "checked" : ""} ${readOnly ? "disabled" : ""}>
                                         <span class="prw-switch" aria-hidden="true"></span>
-                                        <span><b>${__("المسار معطّل")}</b><small>${__("لا يظهر عند إرسال طلب جديد")}</small></span>
+                                        <span><b>${translate("Route is disabled")}</b><small>${translate("Not shown when sending a new order")}</small></span>
                                     </label>
                                 </div>
                             </article>
                             <article class="prw-workflow-card">
                                 <div class="prw-section-heading">
-                                    <div><span>02</span><h3>${__("قصة سير الإنتاج")}</h3></div>
-                                    <p>${__("كل بطاقة تمثل محطة عمل. الترتيب هنا هو الترتيب الذي سيظهر في لوحة الإنتاج.")}</p>
+                                    <div><span>02</span><h3>${translate("Production flow story")}</h3></div>
+                                    <p>${translate("Each card represents a workstation. The order here is the order that will appear in the production board.")}</p>
                                 </div>
                                 <div class="prw-workflow-story ${editor.stages.length ? "" : "is-empty"}">
                                     ${editor.stages.length
                                         ? editor.stages.map((stage, index) => this.editorStageHtml(stage, index, readOnly)).join("")
-                                        : `<div class="prw-story-empty"><span>＋</span><b>${__("ابدأ بإضافة أول مرحلة")}</b><p>${__("اضغط على أي مرحلة من المكتبة لتُضاف فورًا إلى المسار.")}</p></div>`}
+                                        : `<div class="prw-story-empty"><span>＋</span><b>${translate("Start by adding the first stage")}</b><p>${translate("Click any stage in the library to add it to the route immediately.")}</p></div>`}
                                 </div>
                             </article>
                         </section>
@@ -986,14 +1015,14 @@
             const canManage = this.canManageLibrary() && !readOnly;
             const catalog = (this.state.data.stage_catalog || []).filter(stage => canManage || !stage.disabled);
             return `
-                <aside class="prw-stage-library" aria-label="${__("مكتبة مراحل الإنتاج")}">
+                <aside class="prw-stage-library" aria-label="${translate("Production stage library")}">
                     <div class="prw-library-heading-row">
                         <div class="prw-section-heading prw-library-heading">
-                            <div><span>03</span><h3>${__("مكتبة المراحل")}</h3></div>
-                            <p>${__("اضغط على المرحلة لإضافتها فورًا. تُدار أسماء المراحل ورموزها من المكتبة فقط.")}</p>
+                            <div><span>03</span><h3>${translate("Stage library")}</h3></div>
+                            <p>${translate("Click the stage to add it immediately. Stage names and codes are managed from the library only.")}</p>
                         </div>
                         ${canManage ? this.uiButton({
-                            label: `＋ ${__("إضافة مرحلة")}`,
+                            label: `＋ ${translate("Add stage")}`,
                             variant: "primary",
                             className: "prw-library-add",
                         }) : ""}
@@ -1001,11 +1030,11 @@
                     <div class="prw-library-list">
                         ${catalog.length
                             ? catalog.map(stage => this.stageLibraryCardHtml(stage, readOnly, canManage)).join("")
-                            : `<div class="prw-empty alm-state alm-state--empty" role="status"><strong class="alm-state__title">${__("مكتبة المراحل فارغة")}</strong><span class="alm-state__message">${canManage ? __("أضف أول مرحلة لبدء بناء مسارات الإنتاج.") : __("اطلب من مسؤول المسارات إضافة مراحل إلى المكتبة.")}</span></div>`}
+                            : `<div class="prw-empty alm-state alm-state--empty" role="status"><strong class="alm-state__title">${translate("Stage library is empty")}</strong><span class="alm-state__message">${canManage ? translate("Add the first stage to start building production routes.") : translate("Ask the route administrator to add stages to the library.")}</span></div>`}
                     </div>
                     <div class="prw-library-tip">
-                        <b>${__("قاعدة مهمة")}</b>
-                        <p>${__("يمكن تحديد مرحلة تخطيط واحدة فقط، ويجب أن تكون أول مرحلة في المسار.")}</p>
+                        <b>${translate("Important rule")}</b>
+                        <p>${translate("Only one planning stage can be selected, and it must be the first stage in the route.")}</p>
                     </div>
                 </aside>`;
         }
@@ -1015,7 +1044,7 @@
             const name = this.esc(stage.name || stage.stage_definition || stage.stage_type);
             const clickable = !readOnly && !disabled;
             const roleAttrs = clickable
-                ? `role="button" tabindex="0" aria-label="${this.esc(__("إضافة المرحلة") + " " + (stage.label || stage.stage_type))}"`
+                ? `role="button" tabindex="0" aria-label="${this.esc(translate("Add the stage") + " " + (stage.label || stage.stage_type))}"`
                 : `role="group" aria-disabled="${disabled ? "true" : "false"}"`;
             return `
                 <div class="prw-library-card ${disabled ? "is-disabled" : ""}" ${roleAttrs} data-stage-definition="${name}">
@@ -1023,17 +1052,17 @@
                         <div class="prw-library-card-title">
                             <b>${this.esc(stage.label || stage.stage_label || stage.stage_type)}</b>
                             <span class="prw-stage-code-chip">${this.esc(stage.stage_type || stage.stage_code || stage.name)}</span>
-                            ${stage.planning ? `<span class="prw-stage-status-chip is-planning">${__("تخطيط")}</span>` : ""}
-                            ${disabled ? `<span class="prw-stage-status-chip is-disabled">${__("معطّلة")}</span>` : ""}
+                            ${stage.planning ? `<span class="prw-stage-status-chip is-planning">${translate("Planning")}</span>` : ""}
+                            ${disabled ? `<span class="prw-stage-status-chip is-disabled">${translate("Disabled")}</span>` : ""}
                         </div>
                         ${stage.description ? `<small>${this.esc(stage.description)}</small>` : ""}
-                        ${clickable ? `<span class="prw-library-card-add-hint"><span aria-hidden="true">＋</span>${__("اضغط للإضافة فورًا")}</span>` : ""}
+                        ${clickable ? `<span class="prw-library-card-add-hint"><span aria-hidden="true">＋</span>${translate("Click to add immediately")}</span>` : ""}
                     </div>
                     ${canManage ? `
-                        <div class="prw-library-card-actions" aria-label="${__("إدارة المرحلة")}">
-                            <button type="button" class="prw-library-action prw-edit-stage-definition" data-name="${name}" title="${__("تعديل")}" aria-label="${__("تعديل المرحلة")}">✎</button>
-                            <button type="button" class="prw-library-action prw-toggle-stage-definition" data-name="${name}" data-disabled="${disabled ? 0 : 1}" data-modified="${this.esc(stage.modified || "")}" title="${disabled ? __("تفعيل") : __("تعطيل")}" aria-label="${disabled ? __("تفعيل المرحلة") : __("تعطيل المرحلة")}">${disabled ? "▶" : "⊘"}</button>
-                            <button type="button" class="prw-library-action is-danger prw-delete-stage-definition" data-name="${name}" data-modified="${this.esc(stage.modified || "")}" title="${__("حذف")}" aria-label="${__("حذف المرحلة")}">⌫</button>
+                        <div class="prw-library-card-actions" aria-label="${translate("Stage management")}">
+                            <button type="button" class="prw-library-action prw-edit-stage-definition" data-name="${name}" title="${translate("Edit")}" aria-label="${translate("Edit stage")}">✎</button>
+                            <button type="button" class="prw-library-action prw-toggle-stage-definition" data-name="${name}" data-disabled="${disabled ? 0 : 1}" data-modified="${this.esc(stage.modified || "")}" title="${disabled ? translate("Enable") : translate("Disable")}" aria-label="${disabled ? translate("Enable stage") : translate("Disable stage")}">${disabled ? "▶" : "⊘"}</button>
+                            <button type="button" class="prw-library-action is-danger prw-delete-stage-definition" data-name="${name}" data-modified="${this.esc(stage.modified || "")}" title="${translate("Delete")}" aria-label="${translate("Delete stage")}">⌫</button>
                         </div>` : ""}
                 </div>`;
         }
@@ -1048,40 +1077,40 @@
                     <article class="prw-stage-editor ${stage.is_planning_stage ? "is-planning" : ""}">
                         <header>
                             <div class="prw-stage-title">
-                                <span class="prw-drag-handle" title="${__("اسحب لتغيير الترتيب")}" aria-hidden="true">⋮⋮</span>
+                                <span class="prw-drag-handle" title="${translate("Drag to reorder")}" aria-hidden="true">⋮⋮</span>
                                 <div>
-                                    <b>${this.esc(stage.department_label || stage.stage_type || __("مرحلة"))}</b>
-                                    <small>${stage.is_planning_stage ? __("مرحلة تخطيط") : __("مرحلة تنفيذ")}</small>
+                                    <b>${this.esc(stage.department_label || stage.stage_type || translate("Stage"))}</b>
+                                    <small>${stage.is_planning_stage ? translate("Planning stage") : translate("Execution stage")}</small>
                                 </div>
                             </div>
                             ${readOnly ? "" : `
                                 <div class="prw-stage-actions">
-                                    <button type="button" class="prw-icon-btn prw-move-stage" data-direction="-1" data-stage-id="${stage.clientId}" ${index === 0 ? "disabled" : ""} title="${__("تحريك للأعلى")}">↑</button>
-                                    <button type="button" class="prw-icon-btn prw-move-stage" data-direction="1" data-stage-id="${stage.clientId}" ${index === this.state.editor.stages.length - 1 ? "disabled" : ""} title="${__("تحريك للأسفل")}">↓</button>
-                                    <button type="button" class="prw-icon-btn is-danger prw-remove-stage" data-stage-id="${stage.clientId}" title="${__("حذف من المسار")}">×</button>
+                                    <button type="button" class="prw-icon-btn prw-move-stage" data-direction="-1" data-stage-id="${stage.clientId}" ${index === 0 ? "disabled" : ""} title="${translate("Move up")}">↑</button>
+                                    <button type="button" class="prw-icon-btn prw-move-stage" data-direction="1" data-stage-id="${stage.clientId}" ${index === this.state.editor.stages.length - 1 ? "disabled" : ""} title="${translate("Move down")}">↓</button>
+                                    <button type="button" class="prw-icon-btn is-danger prw-remove-stage" data-stage-id="${stage.clientId}" title="${translate("Delete from route")}">×</button>
                                 </div>`}
                         </header>
                         <div class="prw-stage-fields">
                             <label class="prw-field">
-                                <span>${__("المرحلة")}</span>
+                                <span>${translate("Stage")}</span>
                                 <div class="prw-stage-identity">
                                     <b>${this.esc(stage.department_label || stage.stage_type)}</b>
                                     <span class="prw-stage-code-chip">${this.esc(stage.stage_type)}</span>
                                 </div>
                             </label>
                             <label class="prw-field">
-                                <span>${__("الدور التشغيلي")} <em>*</em></span>
+                                <span>${translate("Operational role")} <em>*</em></span>
                                 <div class="prw-stage-role-mount" data-stage-id="${stage.clientId}"></div>
                             </label>
                             <label class="prw-switch-field prw-stage-planning-toggle">
                                 <input type="checkbox" data-stage-field="is_planning_stage" data-stage-id="${stage.clientId}" ${stage.is_planning_stage ? "checked" : ""} ${readOnly ? "disabled" : ""}>
                                 <span class="prw-switch" aria-hidden="true"></span>
-                                <span><b>${__("مرحلة تخطيط")}</b><small>${__("تتطلب اعتماد خطة القص قبل التسليم للمرحلة التالية")}</small></span>
+                                <span><b>${translate("Planning stage")}</b><small>${translate("Require cutting plan approval before handoff to the next stage")}</small></span>
                             </label>
                             <label class="prw-switch-field prw-stage-whatsapp-toggle">
                                 <input type="checkbox" data-stage-field="notify_whatsapp_on_complete" data-stage-id="${stage.clientId}" ${stage.notify_whatsapp_on_complete ? "checked" : ""} ${readOnly ? "disabled" : ""}>
                                 <span class="prw-switch" aria-hidden="true"></span>
-                                <span><b>${__("إرسال واتساب عند الإتمام")}</b><small>${__("يظهر حقل نص هذه المرحلة في إعدادات المعمل → رسائل واتساب")}</small></span>
+                                <span><b>${translate("Send WhatsApp on completion")}</b><small>${translate("This stage's text field appears in Factory settings → WhatsApp messages")}</small></span>
                             </label>
                         </div>
                     </article>
@@ -1164,7 +1193,7 @@
                 if (index !== 0) {
                     element.checked = false;
                     frappe.show_alert({
-                        message: __("مرحلة التخطيط يجب أن تكون أول مرحلة. حرّك المرحلة أولًا."),
+                        message: translate("The planning stage must be the first stage. Move the stage first."),
                         indicator: "orange",
                     });
                     return;
@@ -1184,7 +1213,7 @@
             this.state.editor.dirty = true;
             this.state.editor.revision += 1;
             const $state = this.$main.find(".prw-save-state");
-            $state.addClass("is-dirty").text(__("تغييرات غير محفوظة"));
+            $state.addClass("is-dirty").text(translate("Unsaved changes"));
             this.$main.find(".prw-save-route").prop("disabled", this.state.saving);
         }
 
@@ -1200,7 +1229,7 @@
                 stage => String(stage.stage_definition).toLocaleLowerCase() === String(name).toLocaleLowerCase()
             );
             if (duplicate) {
-                frappe.show_alert({message: __("المرحلة موجودة بالفعل"), indicator: "orange"});
+                frappe.show_alert({message: translate("Stage already exists"), indicator: "orange"});
                 return;
             }
             const draft = this.stageDraft({
@@ -1215,7 +1244,7 @@
             this.markDirty();
             this.renderEditor();
             frappe.show_alert({
-                message: `${__("تمت إضافة المرحلة")}: ${definition.label}`,
+                message: `${translate("Stage added")}: ${definition.label}`,
                 indicator: "green",
             }, 3);
             const row = this.$main.find(`[data-stage-id="${draft.clientId}"]`).get(0);
@@ -1229,7 +1258,7 @@
             const generation = this.activeGeneration();
             const workingId = this.state.editor.workingId;
             return this.confirmForGeneration(
-                `${__("حذف المرحلة من المسار")} «${stage.department_label || stage.stage_type}»؟`,
+                `${translate("Delete stage from route")} «${stage.department_label || stage.stage_type}»?`,
                 generation,
                 () => {
                     if (!this.state.editor || this.state.editor.workingId !== workingId) return null;
@@ -1289,25 +1318,25 @@
         validateEditor() {
             const editor = this.state.editor;
             const errors = [];
-            if (!String(editor.routing_name || "").trim()) errors.push(__("اسم مسار الإنتاج مطلوب."));
-            if (!editor.stages.length) errors.push(__("أضف مرحلة واحدة على الأقل."));
+            if (!String(editor.routing_name || "").trim()) errors.push(translate("Production route name is required."));
+            if (!editor.stages.length) errors.push(translate("Add at least one stage."));
             const seen = new Set();
             let planningCount = 0;
             editor.stages.forEach((stage, index) => {
                 const number = index + 1;
                 const definition = String(stage.stage_definition || "").trim();
-                if (!definition) errors.push(`${__("المرحلة")} ${number}: ${__("اختر المرحلة من المكتبة.")}`);
-                if (!String(stage.operational_role || "").trim()) errors.push(`${__("المرحلة")} ${number}: ${__("الدور التشغيلي مطلوب.")}`);
+                if (!definition) errors.push(`${translate("Stage")} ${number}: ${translate("Select the stage from the library.")}`);
+                if (!String(stage.operational_role || "").trim()) errors.push(`${translate("Stage")} ${number}: ${translate("Operational role is required.")}`);
                 const key = definition.toLocaleLowerCase();
-                if (key && seen.has(key)) errors.push(`${__("المرحلة مكررة")}: ${stage.department_label || stage.stage_type}`);
+                if (key && seen.has(key)) errors.push(`${translate("Duplicate stage")}: ${stage.department_label || stage.stage_type}`);
                 if (key) seen.add(key);
                 const catalog = this.catalogStage(definition);
-                if (!catalog) errors.push(`${__("المرحلة غير موجودة في المكتبة")}: ${stage.department_label || stage.stage_type}`);
-                if (catalog && catalog.disabled) errors.push(`${__("المرحلة معطّلة")}: ${catalog.label}`);
+                if (!catalog) errors.push(`${translate("Stage not found in the library")}: ${stage.department_label || stage.stage_type}`);
+                if (catalog && catalog.disabled) errors.push(`${translate("Stage is disabled")}: ${catalog.label}`);
                 if (stage.is_planning_stage) planningCount += 1;
-                if (stage.is_planning_stage && index !== 0) errors.push(__("مرحلة التخطيط يجب أن تكون أول مرحلة."));
+                if (stage.is_planning_stage && index !== 0) errors.push(translate("The planning stage must be the first stage."));
             });
-            if (planningCount > 1) errors.push(__("يمكن تحديد مرحلة تخطيط واحدة فقط."));
+            if (planningCount > 1) errors.push(translate("Only one planning stage can be selected."));
             return [...new Set(errors)];
         }
 
@@ -1319,7 +1348,7 @@
             const errors = this.validateEditor();
             if (errors.length) {
                 this.showMessage({
-                    title: __("أكمل بيانات المسار"),
+                    title: translate("Complete the route details"),
                     indicator: "orange",
                     message: `<ul class="prw-validation-list">${errors.map(error => `<li>${this.esc(error)}</li>`).join("")}</ul>`,
                 });
@@ -1337,7 +1366,7 @@
             const revision = editor.revision;
             const token = this.mutationGate.begin({type: "save", generation, workingId, revision});
             this.state.saving = true;
-            this.$main.find(".prw-save-route").prop("disabled", true).text(__("جاري الحفظ..."));
+            this.$main.find(".prw-save-route").prop("disabled", true).text(translate("Saving..."));
             const payload = {
                 name: editor.name,
                 routing_name: String(editor.routing_name).trim(),
@@ -1350,7 +1379,7 @@
                     notify_whatsapp_on_complete: Boolean(stage.notify_whatsapp_on_complete),
                 })),
             };
-            const operation = this.call(METHODS.save, {payload}, __("جاري حفظ مسار الإنتاج..."))
+            const operation = this.call(METHODS.save, {payload}, translate("Saving production route..."))
                 .then(data => {
                     const tokenCurrent = this.mutationGate.isCurrent(token);
                     const sameEditor = Boolean(
@@ -1368,7 +1397,7 @@
                         }
                         return data;
                     }
-                    frappe.show_alert({message: __("تم حفظ مسار الإنتاج بنجاح."), indicator: "green"});
+                    frappe.show_alert({message: translate("Production route saved successfully."), indicator: "green"});
                     this.state.editor = null;
                     this.completedSave = null;
                     this.reconciliationPending = true;
@@ -1381,7 +1410,7 @@
                     );
                     if (tokenCurrent && sameEditor) this.state.saving = false;
                     if (tokenCurrent && sameEditor && this.isCurrentGeneration(generation)) {
-                        this.$main.find(".prw-save-route").prop("disabled", false).text(__("حفظ المسار"));
+                        this.$main.find(".prw-save-route").prop("disabled", false).text(translate("Save route"));
                     }
                     console.error("Failed to save production routing", error);
                     return false;
@@ -1397,44 +1426,44 @@
             if (!this.isActive() || !this.canManageLibrary()) return;
             const source = name ? this.catalogStage(name) : null;
             if (name && !source) {
-                frappe.show_alert({message: __("تعذر العثور على المرحلة. حدّث الصفحة."), indicator: "orange"});
+                frappe.show_alert({message: translate("Could not find the stage. Refresh the page."), indicator: "orange"});
                 return;
             }
             const dialog = new frappe.ui.Dialog({
-                title: source ? __("تعديل مرحلة") : __("إضافة مرحلة جديدة"),
+                title: source ? translate("Edit a stage") : translate("Add new stage"),
                 fields: [
                     {
                         fieldname: "stage_label",
                         fieldtype: "Data",
-                        label: __("اسم المرحلة"),
+                        label: translate("Stage name"),
                         reqd: 1,
                         default: source ? source.label : "",
                     },
                     {
                         fieldname: "stage_code",
                         fieldtype: "Data",
-                        label: __("رمز المرحلة"),
+                        label: translate("Stage code"),
                         reqd: 1,
                         read_only: Boolean(source),
                         default: source ? source.stage_type : "",
                         description: source
-                            ? __("رمز المرحلة ثابت بعد الإنشاء لحماية هوية المسار.")
-                            : __("استخدم رمزًا قصيرًا وثابتًا، مثل CNC أو Cutting."),
+                            ? translate("Stage code is fixed after creation to protect route identity.")
+                            : translate("Use a short, fixed code, such as CNC or Cutting."),
                     },
                     {
                         fieldname: "description",
                         fieldtype: "Small Text",
-                        label: __("الوصف"),
+                        label: translate("Description"),
                         default: source ? source.description : "",
                     },
                     {
                         fieldname: "is_planning_default",
                         fieldtype: "Check",
-                        label: __("مرحلة تخطيط افتراضيًا"),
+                        label: translate("Planning stage by default"),
                         default: source && source.planning ? 1 : 0,
                     },
                 ],
-                primary_action_label: source ? __("حفظ التعديل") : __("إضافة المرحلة"),
+                primary_action_label: source ? translate("Save edit") : translate("Add the stage"),
                 primary_action: values => {
                     this.saveStageDefinition(source, values).then(saved => {
                         if (saved) dialog.hide();
@@ -1460,7 +1489,7 @@
                 expected_modified: source ? source.modified : null,
             };
             const {generation, token} = mutation;
-            const operation = this.call(METHODS.saveStage, {payload}, __("جاري حفظ المرحلة..."))
+            const operation = this.call(METHODS.saveStage, {payload}, translate("Saving stage..."))
                 .then(data => {
                     if (!this.libraryMutationGate.isCurrent(token) || !this.isCurrentGeneration(generation)) {
                         this.reconciliationPending = !this.disposed;
@@ -1468,7 +1497,7 @@
                     }
                     this.applyStageCatalog(data.stage_catalog || []);
                     frappe.show_alert({
-                        message: source ? __("تم تعديل المرحلة.") : __("تمت إضافة المرحلة إلى المكتبة."),
+                        message: source ? translate("Stage updated.") : translate("Stage added to the library."),
                         indicator: "green",
                     });
                     return true;
@@ -1490,7 +1519,7 @@
                 name: dataset.name,
                 disabled,
                 expected_modified: dataset.modified,
-            }, disabled ? __("جاري تعطيل المرحلة...") : __("جاري تفعيل المرحلة..."))
+            }, disabled ? translate("Disabling stage...") : translate("Enabling stage..."))
                 .then(data => {
                     if (!this.libraryMutationGate.isCurrent(token) || !this.isCurrentGeneration(generation)) {
                         this.reconciliationPending = !this.disposed;
@@ -1498,7 +1527,7 @@
                     }
                     this.applyStageCatalog(data.stage_catalog || []);
                     frappe.show_alert({
-                        message: disabled ? __("تم تعطيل المرحلة.") : __("تم تفعيل المرحلة."),
+                        message: disabled ? translate("Stage disabled.") : translate("Stage enabled."),
                         indicator: "green",
                     });
                     return true;
@@ -1516,7 +1545,7 @@
             const stage = this.catalogStage(dataset.name);
             const generation = this.activeGeneration();
             return this.confirmForGeneration(
-                `${__("حذف المرحلة نهائيًا من المكتبة")} «${stage ? stage.label : dataset.name}»؟`,
+                `${translate("Permanently delete stage from the library")} «${stage ? stage.label : dataset.name}»?`,
                 generation,
                 () => {
                     const mutation = this.beginLibraryMutation({type: "delete-stage", name: dataset.name});
@@ -1525,14 +1554,14 @@
                     const operation = this.call(METHODS.removeStageDefinition, {
                         name: dataset.name,
                         expected_modified: dataset.modified,
-                    }, __("جاري حذف المرحلة..."))
+                    }, translate("Deleting stage..."))
                         .then(data => {
                             if (!this.libraryMutationGate.isCurrent(token) || !this.isCurrentGeneration(mutationGeneration)) {
                                 this.reconciliationPending = !this.disposed;
                                 return true;
                             }
                             this.applyStageCatalog(data.stage_catalog || []);
-                            frappe.show_alert({message: __("تم حذف المرحلة من المكتبة."), indicator: "green"});
+                            frappe.show_alert({message: translate("Stage deleted from the library."), indicator: "green"});
                             return true;
                         })
                         .catch(error => {
@@ -1577,7 +1606,7 @@
             };
             if (this.state.editor && this.state.editor.dirty) {
                 return this.confirmForGeneration(
-                    __("هل تريد تجاهل التغييرات غير المحفوظة؟"),
+                    translate("Do you want to discard unsaved changes?"),
                     generation,
                     close
                 );
@@ -1589,9 +1618,9 @@
             if (!this.isActive()) return null;
             const generation = this.activeGeneration();
             const disabled = Number(dataset.disabled || 0);
-            const action = disabled ? __("تعطيل") : __("تفعيل");
+            const action = disabled ? translate("Disable") : translate("Enable");
             return this.confirmForGeneration(
-                `${action} ${__("مسار الإنتاج")} «${dataset.name}»؟`,
+                `${action} ${translate("Production route")} «${dataset.name}»?`,
                 generation,
                 () => {
                     const token = this.mutationGate.begin({type: "toggle", generation, name: dataset.name});
@@ -1599,11 +1628,11 @@
                         name: dataset.name,
                         disabled,
                         expected_modified: dataset.modified,
-                    }, __("جاري تحديث حالة المسار..."))
+                    }, translate("Updating route status..."))
                         .then(data => {
                             this.reconciliationPending = !this.disposed;
                             if (!this.mutationGate.isCurrent(token) || !this.isCurrentGeneration(generation)) return data;
-                            frappe.show_alert({message: __("تم تحديث حالة المسار."), indicator: "green"});
+                            frappe.show_alert({message: translate("Route status updated."), indicator: "green"});
                             return this.reconcileWhenSafe().then(() => data);
                         });
                 }
@@ -1614,18 +1643,18 @@
             if (!this.isActive()) return null;
             const generation = this.activeGeneration();
             return this.confirmForGeneration(
-                __("سيُرفض الحذف إذا كان المسار مستخدمًا في طلب أو إعداد. هل تريد المتابعة؟"),
+                translate("Deletion will be rejected if the route is used in an order or setting. Do you want to continue?"),
                 generation,
                 () => {
                     const token = this.mutationGate.begin({type: "delete", generation, name: dataset.name});
                     return this.call(METHODS.remove, {
                         name: dataset.name,
                         expected_modified: dataset.modified,
-                    }, __("جاري التحقق وحذف المسار..."))
+                    }, translate("Verifying and deleting the route..."))
                         .then(data => {
                             this.reconciliationPending = !this.disposed;
                             if (!this.mutationGate.isCurrent(token) || !this.isCurrentGeneration(generation)) return data;
-                            frappe.show_alert({message: __("تم حذف مسار الإنتاج."), indicator: "green"});
+                            frappe.show_alert({message: translate("Production route deleted."), indicator: "green"});
                             return this.reconcileWhenSafe().then(() => data);
                         });
                 }
@@ -1651,7 +1680,7 @@
         if (previous && typeof previous.dispose === "function") previous.dispose();
         const page = frappe.ui.make_app_page({
             parent: wrapper,
-            title: __("إدارة مسارات الإنتاج"),
+            title: translate("Production route management"),
             single_column: true,
         });
         $(wrapper).find(".layout-main-section").html(bootstrapLoadingHtml());
