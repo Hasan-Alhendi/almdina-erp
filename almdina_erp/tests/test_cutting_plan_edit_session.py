@@ -262,7 +262,10 @@ class TestPlanSettingsEditService(TestCase):
             patch.object(service.frappe, "get_doc", return_value=doc),
             patch.object(service.frappe, "get_meta", return_value=_cutting_plan_meta()),
             patch.object(service, "require_cutting_plan_capability") as capability_gate,
-            patch.object(service, "require_stage_assignment_access"),
+            patch.object(
+                service,
+                "require_stage_assignment_access",
+            ) as assignment_gate,
             patch.object(
                 command_service,
                 "save_system_plan_settings",
@@ -281,6 +284,7 @@ class TestPlanSettingsEditService(TestCase):
         self.fake_db.sql.assert_called_once()
         self.assertEqual(doc.checked_permissions, ["read"])
         capability_gate.assert_called_once()
+        assignment_gate.assert_called_once_with(doc)
         save_command.assert_called_once_with(
             doc,
             {
@@ -308,7 +312,10 @@ class TestPlanSettingsEditService(TestCase):
             patch.object(service.frappe, "get_doc", return_value=doc),
             patch.object(service.frappe, "get_meta", return_value=_cutting_plan_meta()),
             patch.object(service, "require_cutting_plan_capability") as capability_gate,
-            patch.object(service, "require_stage_assignment_access"),
+            patch.object(
+                service,
+                "require_stage_assignment_access",
+            ) as assignment_gate,
             patch.object(
                 command_service,
                 "save_system_plan_settings",
@@ -322,6 +329,7 @@ class TestPlanSettingsEditService(TestCase):
 
         self.fake_db.sql.assert_called_once()
         capability_gate.assert_called_once()
+        assignment_gate.assert_called_once_with(doc)
         save_command.assert_called_once_with(doc, {"kerf_mm": 4.0})
         self.assertEqual(result, expected)
 

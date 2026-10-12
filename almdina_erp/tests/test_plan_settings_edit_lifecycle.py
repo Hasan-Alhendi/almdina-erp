@@ -2,15 +2,28 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 import frappe
 
-from almdina_erp.almdina_erp.services.plan_settings_edit_service import (
-    assert_plan_settings_edit_lifecycle,
-)
+from almdina_erp.almdina_erp.services import plan_settings_edit_service as service
+
+
+def _deterministic_throw(message, exc=None, *_args, **_kwargs):
+    error_type = exc if isinstance(exc, type) else frappe.ValidationError
+    raise error_type(message)
 
 
 class TestPlanSettingsEditLifecycle(unittest.TestCase):
+    def setUp(self) -> None:
+        bindings = (
+            patch.object(service, "_", lambda message: message),
+            patch.object(service.frappe, "throw", _deterministic_throw),
+        )
+        for binding in bindings:
+            binding.start()
+            self.addCleanup(binding.stop)
+
     @staticmethod
     def order(**overrides):
         values = {
@@ -33,7 +46,7 @@ class TestPlanSettingsEditLifecycle(unittest.TestCase):
 
         # The caller already passed the focused EDIT_OPTIMIZER_SETTINGS capability
         # check. Lifecycle validation must not add a second actor-role gate.
-        assert_plan_settings_edit_lifecycle(order)
+        service.assert_plan_settings_edit_lifecycle(order)
 
     def test_finished_route_without_active_stage_is_locked(self):
         order = self.order(
@@ -43,13 +56,13 @@ class TestPlanSettingsEditLifecycle(unittest.TestCase):
         )
 
         with self.assertRaises(frappe.PermissionError):
-            assert_plan_settings_edit_lifecycle(order)
+            service.assert_plan_settings_edit_lifecycle(order)
 
     def test_preproduction_draft_remains_editable(self):
-        assert_plan_settings_edit_lifecycle(self.order(status="Draft"))
+        service.assert_plan_settings_edit_lifecycle(self.order(status="Draft"))
 
     def test_preproduction_draft_remains_editable_with_approved_plan_and_planned_route(self):
-        assert_plan_settings_edit_lifecycle(
+        service.assert_plan_settings_edit_lifecycle(
             self.order(
                 approved_plan="CP-0001",
                 production_path="ROUTE-1",
@@ -58,7 +71,7 @@ class TestPlanSettingsEditLifecycle(unittest.TestCase):
 
     def test_approved_plan_is_locked_after_leaving_draft_and_drawing(self):
         with self.assertRaises(frappe.ValidationError):
-            assert_plan_settings_edit_lifecycle(
+            service.assert_plan_settings_edit_lifecycle(
                 self.order(
                     status="At CNC",
                     approved_plan="CP-0001",
@@ -74,7 +87,7 @@ class TestPlanSettingsEditLifecycle(unittest.TestCase):
         for order in locked_orders:
             with self.subTest(order=order):
                 with self.assertRaises(frappe.ValidationError):
-                    assert_plan_settings_edit_lifecycle(order)
+                    service.assert_plan_settings_edit_lifecycle(order)
 
 
 if __name__ == "__main__":
