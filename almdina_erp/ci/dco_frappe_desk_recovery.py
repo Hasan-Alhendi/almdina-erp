@@ -441,13 +441,57 @@ def certify_actual_frappe_desk_new_recovery(page: Page, *, piece_count: int = 10
         "&& window.cur_frm.is_new()",
         timeout=30_000,
     )
+
+    def require_visible_field(fieldname: str, control_selector: str = "input"):
+        control = page.locator(f'[data-fieldname="{fieldname}"] {control_selector}').first
+        try:
+            control.wait_for(state="visible", timeout=15_000)
+        except Exception as exc:
+            wrappers = page.locator(f'[data-fieldname="{fieldname}"]')
+            wrapper_count = wrappers.count()
+            wrapper_diagnostics = []
+            for index in range(wrapper_count):
+                wrapper = wrappers.nth(index)
+                controls = {}
+                for tag in ("input", "textarea", "select"):
+                    matches = wrapper.locator(tag)
+                    count = matches.count()
+                    controls[tag] = {
+                        "count": count,
+                        "visible_count": sum(
+                            1 for control_index in range(count)
+                            if matches.nth(control_index).is_visible()
+                        ),
+                    }
+                wrapper_diagnostics.append({
+                    "class_name": (wrapper.get_attribute("class") or "")[:120],
+                    "visible": wrapper.is_visible(),
+                    "controls": controls,
+                })
+            state = {
+                "url": page.url,
+                "control_selector": control_selector,
+                "wrapper_count": wrapper_count,
+                "wrappers": wrapper_diagnostics,
+            }
+            safe_state = {
+                **state,
+                "url": _safe_url(str(state.get("url", ""))),
+            }
+            _trace_event("new_form_field_not_ready", fieldname=fieldname,
+                diagnostic=json.dumps(safe_state, ensure_ascii=False))
+            raise RuntimeError(
+                f"NEW DCO UI field {fieldname!r} did not become visible: {safe_state}"
+            ) from exc
+        return control
+
     def fill_link(fieldname: str, value: str) -> None:
-        control = page.locator(f'[data-fieldname="{fieldname}"] input').first
+        control = require_visible_field(fieldname)
         control.fill(value)
         page.locator(".awesomplete li").filter(has_text=value).first.click(timeout=10_000)
 
     fill_link("customer", FIXTURES["customer"])
-    page.locator('[data-fieldname="order_notes"] textarea').fill(
+    require_visible_field("order_notes", "textarea").fill(
         "Local Recovery checkpoint long note — " + "قطع MDF وملاحظات المعمل؛ " * 24
     )
     page.locator('[data-fieldname="board_description"] input').fill("MDF أبيض 18 مم")
@@ -615,18 +659,11 @@ def certify_new_dco_form_smoke(page: Page) -> None:
 
 
 
-def certify_new_dco_local_gate(browser) -> None:
-    """Run NEW certification in an isolated Frappe Desk page/context."""
-    context = browser.new_context()
-    page = context.new_page()
-    page.set_default_timeout(30_000)
-    page.set_default_navigation_timeout(30_000)
-    attach_browser_diagnostics(page)
-    try:
+def certify_new_dco_local_gate(page: Page, *, login: bool = True) -> None:
+    """Run NEW certification in the already-isolated Desk test context."""
+    if login:
         login_to_desk(page, "Administrator", "admin")
-        certify_actual_frappe_desk_new_recovery(page)
-    finally:
-        context.close()
+    certify_actual_frappe_desk_new_recovery(page)
 
 
 def certify_new_dco_recovery_stress(browser, piece_count: int) -> None:
@@ -948,10 +985,7 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
     expect(page.locator("body")).to_contain_text("تغير الطلب على الخادم")
     assert evaluate(page, "verify conflict preserved DCO notes", "() => window.cur_frm.doc.order_notes") == dispatch_baseline
     _trace_event("certification_completed")
-    browser = page.context.browser
-    if browser is None:
-        raise RuntimeError("Local NEW certification requires a browser context.")
-    certify_new_dco_local_gate(browser)
+    certify_new_dco_local_gate(page, login=False)
 
 
 if __name__ == "__main__":
@@ -972,7 +1006,7 @@ if __name__ == "__main__":
                 stress_piece_count = int(os.environ.get("DCO_DESK_NEW_STRESS_PIECE_COUNT", "200"))
                 certify_new_dco_recovery_stress(browser, stress_piece_count)
             elif os.environ.get("DCO_DESK_NEW_LOCAL_GATE_ONLY") == "1":
-                certify_new_dco_local_gate(browser)
+                certify_new_dco_local_gate(page)
             else:
                 certify_actual_frappe_desk_edit_recovery(page)
         except BaseException as failure:

@@ -50,6 +50,25 @@ def test_new_local_gate_uses_desk_interactions_without_recovery_instrumentation(
         if isinstance(node, ast.FunctionDef)
         and node.name == "certify_new_dco_recovery_stress"
     )
+    local_gate = next(
+        node for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "certify_new_dco_local_gate"
+    )
+    local_gate_calls = [
+        node for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "certify_new_dco_local_gate"
+    ]
+    note_field_checks = [
+        node for node in ast.walk(certification)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "require_visible_field"
+        and [ast.literal_eval(argument) for argument in node.args
+            if isinstance(argument, ast.Constant)] == ["order_notes", "textarea"]
+    ]
     arguments = certification.args.kwonlyargs
     assert arguments[0].arg == "piece_count"
     assert ast.literal_eval(certification.args.kw_defaults[0]) == 10
@@ -68,3 +87,11 @@ def test_new_local_gate_uses_desk_interactions_without_recovery_instrumentation(
     assert "range(piece_count)" in ast.unparse(certification)
     assert "initializeNewForm(frm)" not in ast.unparse(certification)
     assert "piece_count not in {200, 500}" in ast.unparse(stress)
+    assert [argument.arg for argument in local_gate.args.args] == ["page"]
+    assert "new_context" not in ast.unparse(local_gate)
+    assert "require_visible_field" in ast.unparse(certification)
+    assert "new_form_field_not_ready" in ast.unparse(certification)
+    assert len(note_field_checks) == 1
+    assert len(local_gate_calls) == 2
+    assert all(call.args and isinstance(call.args[0], ast.Name)
+        and call.args[0].id == "page" for call in local_gate_calls)
