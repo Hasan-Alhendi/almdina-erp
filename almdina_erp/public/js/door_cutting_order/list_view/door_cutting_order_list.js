@@ -1530,11 +1530,11 @@
             return listview._dcoRoleFlagsPendingPromise;
         }
 
-        const request = frappe.call({
+        const request = Promise.resolve(frappe.call({
             method: METHODS.roleFlags,
             args: { order_names: names },
             freeze: false,
-        }).then(response => {
+        })).then(response => {
             if (Number(listview._dcoRoleFlagGeneration || 0) !== generation) return null;
             const payload = response && response.message;
             listview._dcoRoleFlagsPayload = payload || { personal_view: false, can_view_history: false, orders: {} };

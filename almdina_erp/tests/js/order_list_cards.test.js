@@ -1480,3 +1480,88 @@ lifecycleSetup.then(result => {
     console.error(error);
     process.exitCode = 1;
 });
+
+// Frappe v16 may return a jqXHR-like thenable without Promise.finally. Exercise
+// the actual list refresh owner and verify both projection and in-flight reset.
+function deferredRoleFlags() {
+    let resolve;
+    let reject;
+    const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
+    return { promise, resolve, reject };
+}
+
+function jqueryRoleFlagsThenable(promise) {
+    return {
+        then(onFulfilled, onRejected) {
+            return jqueryRoleFlagsThenable(promise.then(onFulfilled, onRejected));
+        },
+        catch(onRejected) {
+            return jqueryRoleFlagsThenable(promise.catch(onRejected));
+        },
+    };
+}
+
+(async () => {
+    const frames = [];
+    const roleCalls = [];
+    const handledFailures = [];
+    context.console = { ...console, debug: (...args) => handledFailures.push(args) };
+    context.window.requestAnimationFrame = callback => frames.push(callback);
+    context.window.addEventListener = () => {};
+    context.window.matchMedia = () => ({ matches: false });
+    context.window.frappe = context.frappe;
+    context.frappe.call = ({ method }) => {
+        if (method.endsWith("get_order_operational_role_flags")) {
+            const call = deferredRoleFlags();
+            roleCalls.push(call);
+            return jqueryRoleFlagsThenable(call.promise);
+        }
+        return jqueryRoleFlagsThenable(Promise.resolve({ message: [] }));
+    };
+
+    const result = { querySelectorAll: () => [] };
+    const root = {
+        nodeType: 1,
+        classList: { add() {}, toggle() {}, contains() { return false; } },
+        querySelector(selector) { return selector === ".result" ? result : null; },
+        querySelectorAll: () => [],
+    };
+    const doc = { name: "DCO-ROLE-1", status: "Draft" };
+    const listview = { page: { wrapper: root }, data: [doc] };
+
+    listSettings.refresh(listview);
+    frames.shift()();
+    assert.equal(roleCalls.length, 1);
+    assert.equal(typeof listview._dcoRoleFlagsPendingPromise.finally, "function");
+    roleCalls[0].resolve({
+        message: {
+            personal_view: false,
+            can_view_history: false,
+            orders: { [doc.name]: { can_start_stage: true } },
+        },
+    });
+    await listview._dcoRoleFlagsPendingPromise;
+    assert.equal(doc.__almdinaProductionActionContext.canStart, true);
+    assert.equal(listview._dcoRoleFlagsPendingKey, null);
+    assert.equal(listview._dcoRoleFlagsPendingPromise, null);
+
+    listSettings.refresh(listview);
+    frames.shift()();
+    assert.equal(roleCalls.length, 2, "a settled request must not block a later refresh");
+    const rejectedRequest = listview._dcoRoleFlagsPendingPromise;
+    roleCalls[1].reject(new Error("network failure"));
+    assert.equal(await rejectedRequest, null);
+    assert.equal(handledFailures.length, 1);
+    assert.equal(listview._dcoRoleFlagsPendingKey, null);
+    assert.equal(listview._dcoRoleFlagsPendingPromise, null);
+
+    listSettings.refresh(listview);
+    frames.shift()();
+    assert.equal(roleCalls.length, 3, "a failed request must allow a retry");
+    roleCalls[2].resolve({ message: { personal_view: false, orders: {} } });
+    await listview._dcoRoleFlagsPendingPromise;
+    console.log("Door Cutting Order jqXHR role-flag lifecycle simulation passed");
+})().catch(error => {
+    console.error(error);
+    process.exitCode = 1;
+});

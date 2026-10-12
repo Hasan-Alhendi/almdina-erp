@@ -33,6 +33,14 @@ on:
         required: false
         default: false
         type: boolean
+      phase_a_comparison_case:
+        description: Run all Phase A comparisons or only DCO list navigation after a focused fix
+        required: false
+        default: all
+        type: choice
+        options:
+          - all
+          - B
       new_local_gate_only:
         description: Run only real Desk NEW recovery, hydration and official Save
         required: false
@@ -240,7 +248,7 @@ jobs:
           bench --site test.localhost execute frappe.get_all --kwargs '{"doctype":"DocType","filters":{"module":"Almdina ERP"},"pluck":"name"}'
 
       - name: Run Almdina ERP tests
-        if: github.event_name != 'workflow_dispatch' || (inputs.desk_only != true && inputs.new_form_smoke_only != true && inputs.new_customer_field_smoke_only != true && inputs.phase_a_comparison_only != true && inputs.new_local_gate_only != true && inputs.new_stress_only != true)
+        if: github.event_name != 'workflow_dispatch' || (inputs.desk_only != true && inputs.new_form_smoke_only != true && inputs.new_customer_field_smoke_only != true && inputs.phase_a_comparison_only != true && inputs.phase_a_comparison_case != 'B' && inputs.new_local_gate_only != true && inputs.new_stress_only != true)
         run: |
           cd "$RUNNER_TEMP/frappe-bench"
           bench --site test.localhost set-config allow_tests true
@@ -279,14 +287,15 @@ jobs:
           fi
           exit "$test_status"
 
-      - name: Certify DCO ${{ inputs.phase_a_comparison_only && 'Phase A comparison' || inputs.new_local_gate_only && 'NEW recovery' || inputs.new_form_smoke_only && 'NEW form smoke' || inputs.new_customer_field_smoke_only && 'NEW Customer smoke' || inputs.new_stress_only && 'NEW stress' || 'EDIT recovery' }} in real Frappe Desk
+      - name: Certify DCO ${{ inputs.phase_a_comparison_case == 'B' && 'Phase A case B' || inputs.phase_a_comparison_only && 'Phase A comparison' || inputs.new_local_gate_only && 'NEW recovery' || inputs.new_form_smoke_only && 'NEW form smoke' || inputs.new_customer_field_smoke_only && 'NEW Customer smoke' || inputs.new_stress_only && 'NEW stress' || 'EDIT recovery' }} in real Frappe Desk
         if: always() && !cancelled()
         env:
           DCO_DESK_FIXTURE_FILE: ${{ runner.temp }}/dco-desk-fixtures.json
           DCO_DESK_EVIDENCE_DIR: ${{ runner.temp }}/dco-desk-evidence
           DCO_DESK_NEW_FORM_SMOKE_ONLY: ${{ inputs.new_form_smoke_only && '1' || '0' }}
           DCO_DESK_NEW_CUSTOMER_FIELD_SMOKE_ONLY: ${{ inputs.new_customer_field_smoke_only && '1' || '0' }}
-          DCO_DESK_PHASE_A_COMPARISON_ONLY: ${{ inputs.phase_a_comparison_only && '1' || '0' }}
+          DCO_DESK_PHASE_A_COMPARISON_ONLY: ${{ (inputs.phase_a_comparison_only || inputs.phase_a_comparison_case == 'B') && '1' || '0' }}
+          DCO_DESK_PHASE_A_COMPARISON_CASE: ${{ inputs.phase_a_comparison_case || 'all' }}
           DCO_DESK_NEW_LOCAL_GATE_ONLY: ${{ inputs.new_local_gate_only && '1' || '0' }}
           DCO_DESK_NEW_STRESS_ONLY: ${{ inputs.new_stress_only && '1' || '0' }}
           DCO_DESK_NEW_STRESS_PIECE_COUNT: ${{ inputs.new_stress_piece_count || '200' }}
@@ -435,7 +444,13 @@ jobs:
           if [[ "$DCO_DESK_PHASE_A_COMPARISON_ONLY" == 1 ]]; then
             comparison_failed=0
             mkdir -p "$RUNNER_TEMP/dco-desk-evidence"
-            for comparison_case in D A B C; do
+            comparison_cases=(D A B C)
+            case "$DCO_DESK_PHASE_A_COMPARISON_CASE" in
+              all) ;;
+              B) comparison_cases=(B) ;;
+              *) printf 'Unsupported Phase A comparison case\n' >&2; desk_fail 2 ;;
+            esac
+            for comparison_case in "${comparison_cases[@]}"; do
               phase="Phase A comparison $comparison_case"
               case_evidence="$RUNNER_TEMP/dco-desk-evidence/case-$comparison_case"
               case_log="$RUNNER_TEMP/dco-desk-evidence/case-$comparison_case.log"
