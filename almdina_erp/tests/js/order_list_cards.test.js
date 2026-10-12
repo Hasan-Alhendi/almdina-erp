@@ -51,6 +51,10 @@ const context = {
             if (query === "(hover: none)") return { matches: noHover };
             return { matches: false };
         },
+        AlmdinaLocale: {
+            translate(message) { return message; },
+            direction() { return cardDirection; },
+        },
         AlmdinaShopFloorQuickActions: {
             actionFor(actionContext) {
                 if (actionContext.canDeliver) {
@@ -68,6 +72,8 @@ const context = {
     },
     __(value) { return value; },
 };
+let cardDirection = "rtl";
+context.document.documentElement.getAttribute = () => cardDirection;
 context.window.window = context.window;
 vm.createContext(context);
 vm.runInContext(responsiveSource, context);
@@ -172,7 +178,9 @@ assert.strictEqual(model.edgeType, "PVC 2 مم");
 assert.strictEqual(model.productionStageLabel, "شريون");
 assert.strictEqual(model.stageLabel, "شريون");
 
+cardDirection = "rtl";
 const html = api.buildCard(doc, true);
+assert(html.includes('dir="rtl"'), "Arabic/RTL sessions must render the card with dir=rtl");
 assert(html.includes("dco-mobile-order-card is-ready"), "the ready order must render with the blue ready theme");
 assert(html.includes('class="dco-card-customer-block"'), "customer identity must be the primary header block");
 assert(html.includes('class="dco-card-header-meta"'), "stage and queue state must share a compact header meta column");
@@ -198,6 +206,13 @@ assert(html.includes('data-action-kind="start"'));
 assert(html.includes("is-start"));
 assert(!html.includes("dco-card-open"), "the redundant open-order footer button must stay removed");
 assert(!html.includes("<select"), "the card must not expose an arbitrary status selector");
+
+cardDirection = "ltr";
+const ltrHtml = api.buildCard(doc, true);
+assert(ltrHtml.includes('dir="ltr"'), "LTR sessions must render the same card with dir=ltr");
+assert(ltrHtml.includes("عميل الاختبار"), "customer names stay raw across directions");
+assert(ltrHtml.includes("DCO-2026-00010"), "order IDs stay raw across directions");
+assert(!source.includes('dir="rtl"'), "the card template must not hard-code dir=rtl");
 
 const inProgress = {
     ...doc,

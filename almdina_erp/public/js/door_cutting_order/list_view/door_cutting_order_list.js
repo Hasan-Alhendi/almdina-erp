@@ -448,12 +448,22 @@
         ];
     }
 
-    function statusFilterConfig() {
+    function statusFilterConfig(options = {}) {
+        const localize = options.localize !== false;
+        const labelFor = (message) => (localize ? translate(message) : message);
         return {
             fieldtype: "Select",
             fieldname: STATUS_FILTER_FIELDNAME,
-            label: translate("Status"),
-            options: statusFilterOptions(),
+            label: labelFor("Status"),
+            options: localize
+                ? statusFilterOptions()
+                : [
+                    { value: "", label: STATUS_FILTER_ALL_LABEL },
+                    ...loadedStatusOptions.map(option => ({
+                        value: option.value,
+                        label: option.label,
+                    })),
+                ],
             condition: "=",
         };
     }
@@ -468,12 +478,22 @@
         ];
     }
 
-    function assigneeFilterConfig() {
+    function assigneeFilterConfig(options = {}) {
+        const localize = options.localize !== false;
+        const labelFor = (message) => (localize ? translate(message) : message);
         return {
             fieldtype: "Select",
             fieldname: ASSIGNEE_FILTER_FIELDNAME,
-            label: translate("Current worker"),
-            options: assigneeFilterOptions(),
+            label: labelFor("Current worker"),
+            options: localize
+                ? assigneeFilterOptions()
+                : [
+                    { value: "", label: ASSIGNEE_FILTER_ALL_LABEL },
+                    ...loadedAssigneeOptions.map(option => ({
+                        value: option.value,
+                        label: option.label,
+                    })),
+                ],
             condition: "=",
         };
     }
@@ -537,6 +557,10 @@
 
     function applyStatusFilterHint(listview) {
         const field = statusFilterField(listview);
+        if (field && field.df) {
+            field.df.label = translate("Status");
+            if (typeof field.set_label === "function") field.set_label(translate("Status"));
+        }
         const wrapper = controlWrapper(field);
         if (!wrapper || typeof wrapper.querySelector !== "function") return;
         const select = wrapper.querySelector("select");
@@ -547,6 +571,10 @@
 
     function applyAssigneeFilterHint(listview) {
         const field = assigneeFilterField(listview);
+        if (field && field.df) {
+            field.df.label = translate("Current worker");
+            if (typeof field.set_label === "function") field.set_label(translate("Current worker"));
+        }
         const wrapper = controlWrapper(field);
         if (!wrapper || typeof wrapper.querySelector !== "function") return;
         const select = wrapper.querySelector("select");
@@ -959,7 +987,7 @@
                 data-order-name="${escapeHtml(doc.name)}"
                 data-card-state="${escapeHtml(model.state.key)}"
                 data-selectable="${hasSelection ? "1" : "0"}"
-                dir="rtl"
+                dir="${escapeHtml(uiDirection())}"
             >
                 <header class="dco-card-header">
                     ${renderCustomer(model)}
@@ -1673,8 +1701,8 @@
         ])],
         custom_filter_configs: [
             ...(Array.isArray(existing.custom_filter_configs) ? existing.custom_filter_configs : []),
-            statusFilterConfig(),
-            assigneeFilterConfig(),
+            statusFilterConfig({ localize: false }),
+            assigneeFilterConfig({ localize: false }),
         ],
         formatters: Object.assign({}, existing.formatters || {}, {
             current_department(value, df, doc) {

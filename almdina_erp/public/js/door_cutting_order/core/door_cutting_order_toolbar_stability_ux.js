@@ -47,7 +47,7 @@
     ]);
     const ACTIVE_REMOVE_IDS = Object.freeze([
         "Print cutting plan",
-        "Print the customer invoice",
+        "Print customer invoice",
         "Export DXF for AutoCAD",
         "Export DXF",
         "Download uploaded DXF",
@@ -269,7 +269,7 @@
             const label = text(node);
             const isPlanPrint = matchesTranslated(label, "Print cutting plan") || /^print\s*cutting\s*plan$/i.test(label);
             const isDxfExport = /تصدير\s*DXF/i.test(label) || matchesTranslated(label, "Export DXF") || /^export\s*dxf/i.test(label);
-            const isCustomerInvoicePrint = matchesTranslated(label, "Print the customer invoice") || /^print\s*customer\s*invoice$/i.test(label);
+            const isCustomerInvoicePrint = matchesTranslated(label, "Print customer invoice") || /^print\s*customer\s*invoice$/i.test(label);
             if (isRemovedLabel(label) || isPlanPrint || isDxfExport || isCustomerInvoicePrint) {
                 const group = node.closest(".btn-group,.dropdown");
                 if (node.matches(".dropdown-item") && group) node.remove();

@@ -308,7 +308,9 @@ def test_order_list_status_filter_uses_frappe_standard_filter_contract():
     list_source = source(LIST_UX)
 
     assert "custom_filter_configs:" in list_source
-    assert "function statusFilterConfig()" in list_source
+    assert "function statusFilterConfig(options = {})" in list_source
+    assert "statusFilterConfig({ localize: false })" in list_source
+    assert "assigneeFilterConfig({ localize: false })" in list_source
     assert "function reconcileStatusFilterLayout(listview)" in list_source
     assert "function reconcileMobileListToolbarLayout(listview)" in list_source
     assert "data-dco-list-toolbar-slot" in list_source
@@ -316,7 +318,8 @@ def test_order_list_status_filter_uses_frappe_standard_filter_contract():
     assert 'STATUS_FILTER_FIELDNAME = "status"' in list_source
     assert 'STATUS_FILTER_ALL_LABEL = "All statuses"' in list_source
     assert "get_status_filter_options" in list_source
-    assert 'label: translate("Status")' in list_source
+    assert 'label: labelFor("Status")' in list_source
+    assert 'field.df.label = translate("Status")' in list_source
     assert ".dco-status-filter-slot" in css
     assert ".dco-order-list .dco-status-filter-slot" in css
     assert ".dco-order-list.dco-order-card-layout .page-form" in css

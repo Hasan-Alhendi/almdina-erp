@@ -353,6 +353,29 @@ class TestActiveUiHasNoLanguageTextBranches(unittest.TestCase):
                     leftovers.append(f"{relative}:{number}: {line.strip()}")
         self.assertEqual(leftovers, [])
 
+    def test_operational_shell_avoids_hardcoded_dir_and_translated_label_rtl(self) -> None:
+        """Translated surfaces inherit direction; only the Order ID link may force LTR."""
+        list_js = (
+            PUBLIC_JS / "door_cutting_order" / "list_view" / "door_cutting_order_list.js"
+        ).read_text(encoding="utf-8")
+        self.assertNotRegex(list_js, r'\bdir\s*=\s*["\']rtl["\']')
+        self.assertNotRegex(list_js, r'\bdir\s*=\s*["\']ltr["\']')
+        self.assertIn('dir="${escapeHtml(uiDirection())}"', list_js)
+
+        mobile_css = (ROOT / "public" / "css" / "door_cutting_order_mobile_list.css").read_text(
+            encoding="utf-8"
+        )
+        order_row = mobile_css.split(".dco-card-order-row {", 1)[1].split("}", 1)[0]
+        order_label = mobile_css.split(".dco-card-order-label {", 1)[1].split("}", 1)[0]
+        order_link = mobile_css.split(".dco-card-order-link {", 1)[1].split("}", 1)[0]
+        self.assertNotRegex(order_row, r"direction\s*:\s*(?:rtl|ltr)")
+        self.assertRegex(order_label, r"direction\s*:\s*inherit")
+        self.assertNotRegex(order_label, r"direction\s*:\s*rtl")
+        self.assertRegex(order_link, r"direction\s*:\s*ltr")
+        self.assertRegex(order_link, r"text-align\s*:\s*start")
+        self.assertNotRegex(order_link, r"text-align\s*:\s*left")
+        self.assertNotRegex(mobile_css, r"\.dco-card-order-label\s*\{[^}]*direction\s*:\s*rtl", re.S)
+
     def test_bidirectional_layout_uses_inherited_direction_and_logical_alignment(self) -> None:
         styles = (
             PUBLIC_JS

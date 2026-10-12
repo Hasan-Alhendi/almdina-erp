@@ -70,6 +70,66 @@ const compatibility = [
     "تسليم",
 ];
 
+const DIRECT_PATTERNS = [
+    /translate\(\s*"((?:\\.|[^"\\])*)"/g,
+    /deny\(\s*"((?:\\.|[^"\\])*)"/g,
+    /deny\(\s*[\w.]+\s*\|\|\s*"((?:\\.|[^"\\])*)"/g,
+    /labelText\(\s*"((?:\\.|[^"\\])*)"/g,
+    /matchesTranslated\(\s*[^,]*,\s*"((?:\\.|[^"\\])*)"/g,
+    /renderInfoTile\(\s*"((?:\\.|[^"\\])*)"/g,
+];
+
+const MAP_BLOCKS = [
+    "ACTIVE_REMOVE_IDS",
+    "ACTIVE_BUTTON_ORDER",
+    "LABELS",
+    "STATUS_LABELS",
+    "MOBILE_CARD_STATES",
+    "MOBILE_ACTION_PRESENTATION",
+];
+
+const MAP_CONSTANTS = [
+    "STATUS_FILTER_ALL_LABEL",
+    "ASSIGNEE_FILTER_ALL_LABEL",
+    "OVERVIEW_DEFAULT_SORT_LABEL",
+];
+
+function collectMessageIds(source) {
+    const ids = new Set();
+    for (const pattern of DIRECT_PATTERNS) {
+        pattern.lastIndex = 0;
+        for (const match of source.matchAll(pattern)) {
+            const value = match[1];
+            if (value && /[A-Za-z]/.test(value) && !/[\u0600-\u06FF]/.test(value)) {
+                ids.add(value);
+            }
+        }
+    }
+    for (const block of MAP_BLOCKS) {
+        const match = source.match(
+            new RegExp(`${block}\\s*=\\s*Object\\.freeze\\((?:\\{|\\[)([\\s\\S]*?)(?:\\}|\\])\\)`)
+        );
+        if (!match) continue;
+        for (const entry of match[1].matchAll(/"((?:\\.|[^"\\])*)"/g)) {
+            const value = entry[1];
+            if (
+                value
+                && /[A-Za-z ]/.test(value)
+                && !/[\u0600-\u06FF]/.test(value)
+                && !/^(?:is-|dco-)/.test(value)
+                && !["play", "activity", "check", "circle-check", "package", "package-check", "truck", "x", "user", "board", "droplet", "layers", "calendar", "chevron"].includes(value)
+            ) {
+                ids.add(value);
+            }
+        }
+    }
+    for (const name of MAP_CONSTANTS) {
+        const match = source.match(new RegExp(`${name}\\s*=\\s*"((?:\\\\.|[^"\\\\])*)"`));
+        if (match) ids.add(match[1]);
+    }
+    return ids;
+}
+
 const catalog = fs.readFileSync(path.join(root, "translations/ar.csv"), "utf8");
 const messageIds = new Set();
 
@@ -81,11 +141,11 @@ for (const relative of files) {
     assert.doesNotMatch(visible, /[\u0600-\u06FF]/, relative);
     assert.doesNotMatch(source, /^(?:const|let|var)\s+\w+\s*=\s*__\(/m, relative);
     assert.doesNotMatch(source, /^(?:const|let|var)\s+\w+\s*=\s*translate\(/m, relative);
-    assert.doesNotMatch(source, /direction:\s*rtl|text-align:\s*(?:right|left)\b|placeholder\*=['"]ابحث/, relative);
+    assert.doesNotMatch(source, /direction:\s*rtl|text-align:\s*(?:right|left)\b|placeholder\*=/, relative);
     assert.doesNotMatch(source, /translate\(\s*["'`][^"'`]*[\u0600-\u06FF]/, relative);
-    for (const match of source.matchAll(/translate\(\s*"((?:\\.|[^"\\])*)"/g)) {
-        messageIds.add(match[1]);
-    }
+    assert.doesNotMatch(source, /\bdir\s*=\s*["']rtl["']/, relative);
+    assert.doesNotMatch(source, /\bdir\s*=\s*["']ltr["']/, relative);
+    for (const id of collectMessageIds(source)) messageIds.add(id);
 }
 
 const catalogRows = new Set();
@@ -100,7 +160,27 @@ for (const line of catalog.split(/\r?\n/)) {
     if (comma > 0) catalogRows.add(line.slice(0, comma));
 }
 for (const messageId of messageIds) {
-    assert.ok(catalogRows.has(messageId), messageId);
+    assert.ok(catalogRows.has(messageId), `missing ar.csv key: ${messageId}`);
+}
+
+for (const required of [
+    "Return to draft",
+    "Resume the order",
+    "Submit for review",
+    "Approve the order",
+    "Edit the order",
+    "Order rejected",
+    "Order on hold",
+    "You do not have permission to print the customer invoice.",
+    "You do not have permission to print the measurements.",
+    "Send to production",
+    "Recalculate the cutting plan",
+    "Return to a previous stage",
+    "Copy the order",
+    "Production floor",
+]) {
+    assert.ok(catalogRows.has(required), `catalog missing ${required}`);
+    assert.ok(messageIds.has(required), `runtime missing ${required}`);
 }
 
 let direction = "rtl";
@@ -144,6 +224,12 @@ const french = {
     "Order information": "Informations commande",
     "Cutting plan": "Plan de coupe",
     "Order cost": "Cout de la commande",
+    "Ready to start": "Pret a demarrer",
+    "In progress": "En cours",
+    "Order completed": "Commande terminee",
+    "Cancelled": "Annulee",
+    "Start work": "Demarrer le travail",
+    "Finish work": "Terminer le travail",
 };
 
 function translate(message, replacements) {
@@ -266,11 +352,134 @@ const listSource = fs.readFileSync(
 );
 assert.match(listSource, /data-dco-order-search/);
 assert.doesNotMatch(listSource, /placeholder\*=/);
-assert.match(listSource, /data-dco-order-search/);
+assert.match(listSource, /dir="\$\{escapeHtml\(uiDirection\(\)\)\}"/);
+assert.doesNotMatch(listSource, /\bdir\s*=\s*["']rtl["']/);
 assert.match(listSource, /department_status \|\| ""\)\.trim\(\) === "قيد العمل"/);
 assert.match(listSource, /department === "تم التسليم"/);
 assert.match(listSource, /METHODS\.statusFilterOptions/);
 assert.match(listSource, /METHODS\.assigneeFilterOptions/);
+assert.doesNotMatch(listSource, /translate\(\s*(?:model\.)?(?:customer|orderId|boardColor|edgeColor)/);
+
+const listCss = fs.readFileSync(
+    path.join(root, "public/css/door_cutting_order_mobile_list.css"),
+    "utf8"
+);
+assert.match(listCss, /\.dco-card-order-row\s*\{[^}]*margin-inline:\s*0\s+auto/s);
+assert.doesNotMatch(
+    listCss.split(".dco-card-order-row {")[1].split("}")[0],
+    /direction\s*:\s*(?:rtl|ltr)/
+);
+assert.match(
+    listCss.split(".dco-card-order-label {")[1].split("}")[0],
+    /direction\s*:\s*inherit/
+);
+assert.doesNotMatch(
+    listCss.split(".dco-card-order-label {")[1].split("}")[0],
+    /direction\s*:\s*rtl/
+);
+const orderLinkBlock = listCss.split(".dco-card-order-link {")[1].split("}")[0];
+assert.match(orderLinkBlock, /direction\s*:\s*ltr/);
+assert.match(orderLinkBlock, /text-align\s*:\s*start/);
+assert.doesNotMatch(orderLinkBlock, /text-align\s*:\s*left/);
+assert.equal(
+    (listCss.match(/\.dco-card-order-(?:row|label)\s*\{[^}]*direction\s*:\s*ltr/gs) || []).length,
+    0,
+    "only the Order ID link may force LTR"
+);
+
+function loadListApi() {
+    let cardDirection = "rtl";
+    const context = {
+        console,
+        document: {
+            documentElement: {
+                clientWidth: 390,
+                getAttribute: () => cardDirection,
+            },
+        },
+        frappe: {
+            datetime: { str_to_user: value => `date:${value}` },
+            listview_settings: {},
+            model: {
+                get_std_field(fieldname) {
+                    return { fieldname, fieldtype: "Data", label: "ID", parent: "Door Cutting Order" };
+                },
+            },
+            session: { user: "cutting@example.com" },
+            utils: {
+                escape_html(value) {
+                    return String(value).replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+                },
+            },
+            views: { KanbanView: function KanbanView() {} },
+        },
+        window: {
+            innerWidth: 390,
+            screen: { width: 390, height: 844 },
+            matchMedia() {
+                return { matches: false };
+            },
+            AlmdinaLocale: {
+                translate,
+                direction: () => cardDirection,
+            },
+            AlmdinaShopFloorQuickActions: {
+                actionFor() {
+                    return null;
+                },
+            },
+        },
+        __(value) { return value; },
+    };
+    context.window.window = context.window;
+    const sandbox = vm.createContext(context);
+    armed = false;
+    vm.runInContext(
+        fs.readFileSync(path.join(root, "public/js/responsive_device.js"), "utf8"),
+        sandbox
+    );
+    vm.runInContext(listSource, sandbox);
+    armed = true;
+    return {
+        api: sandbox.window.AlmdinaDoorCuttingOrderListUX,
+        setDirection(value) {
+            cardDirection = value;
+        },
+    };
+}
+
+const list = loadListApi();
+const sampleDoc = {
+    name: "DCO-2026-00010",
+    customer: "عميل الاختبار",
+    order_date: "2026-08-02",
+    status: "At Sharyoun",
+    board_description: "أبيض لولو",
+    edge_color: "أسود",
+    default_edge_type: "PVC 2 مم",
+    current_department: "شريون",
+    department_status: "بحاجة للعمل",
+    __almdinaProductionActionContext: {
+        canStart: false,
+        canHandoff: false,
+        canDeliver: false,
+        assignmentState: "assigned",
+        queueState: "ready",
+    },
+};
+list.setDirection("rtl");
+const rtlCard = list.api.buildCard(sampleDoc, false);
+assert.match(rtlCard, /\bdir="rtl"/);
+assert.match(rtlCard, /عميل الاختبار/);
+assert.match(rtlCard, /DCO-2026-00010/);
+assert.doesNotMatch(rtlCard, /translate\(.*عميل/);
+list.setDirection("ltr");
+const ltrCard = list.api.buildCard(sampleDoc, false);
+assert.match(ltrCard, /\bdir="ltr"/);
+assert.match(ltrCard, /عميل الاختبار/);
+assert.match(ltrCard, /DCO-2026-00010/);
+assert.equal(sampleDoc.department_status, "بحاجة للعمل");
+assert.equal(sampleDoc.current_department, "شريون");
 
 const recoverySource = fs.readFileSync(
     path.join(root, "public/js/door_cutting_order/recovery/presentation/door_cutting_order_local_checkpoint.js"),

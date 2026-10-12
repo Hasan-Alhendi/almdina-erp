@@ -90,7 +90,7 @@
         }
         const toolbar = window.AlmdinaCustomerInvoiceToolbarUX;
         if (!toolbar || typeof toolbar.printCustomerInvoice !== "function") {
-            deny("The secure customer invoice service could not be loaded. Reload the page.");
+            deny("Could not load the customer invoice print service. Reload the page and try again.");
             return Promise.resolve(false);
         }
         return Promise.resolve(toolbar.printCustomerInvoice(frm));
@@ -262,14 +262,14 @@
                     event.preventDefault();
                     event.stopPropagation();
                     event.stopImmediatePropagation();
-                    deny("The plan is approved and locked and cannot be recalculated.");
+                    deny("The plan is approved and locked");
                     return;
                 }
                 if (!can(activeFrm, "recalculate_plan")) {
                     event.preventDefault();
                     event.stopPropagation();
                     event.stopImmediatePropagation();
-                    deny("You do not have permission to recalculate the cutting plan.");
+                    deny("You do not have permission to recalculate the cutting plan");
                     return;
                 }
                 const documentContext = window.AlmdinaDocumentContext;
@@ -291,7 +291,7 @@
                     event.preventDefault();
                     event.stopPropagation();
                     event.stopImmediatePropagation();
-                    deny("You do not have permission to change the optimizer settings.");
+                    deny("You do not have permission to edit the optimizer settings");
                 }
             }
         }, true);

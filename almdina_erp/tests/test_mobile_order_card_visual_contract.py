@@ -62,6 +62,18 @@ def test_mobile_card_matches_approved_reference_hierarchy() -> None:
     assert 'label: "Ready to start"' in js
     assert 'label: "In progress"' in js
     assert 'label: "Order completed"' in js
+    assert 'dir="${escapeHtml(uiDirection())}"' in js
+    assert 'dir="rtl"' not in js
+    order_row = css.split(".dco-card-order-row {", 1)[1].split("}", 1)[0]
+    order_label = css.split(".dco-card-order-label {", 1)[1].split("}", 1)[0]
+    order_link = css.split(".dco-card-order-link {", 1)[1].split("}", 1)[0]
+    assert "direction: ltr" not in order_row
+    assert "direction: rtl" not in order_row
+    assert "direction: inherit" in order_label
+    assert "direction: rtl" not in order_label
+    assert "direction: ltr" in order_link
+    assert "text-align: start" in order_link
+    assert "text-align: left" not in order_link
 
 
 def test_mobile_card_keeps_server_authorized_actions_as_the_only_action_source() -> None:

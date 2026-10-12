@@ -1897,3 +1897,18 @@ You can view this order only. The order has left the active production stages.,�
 You do not have permission to edit the optimizer settings,لا تملك صلاحية تعديل إعدادات المحسّن
 You do not have permission to recalculate the cutting plan,لا تملك صلاحية إعادة حساب خطة القص
 s,ث
+Approve the order,اعتماد الطلب
+Copy the order,نسخ الطلب
+Edit the order,تعديل الطلب
+Order on hold,الطلب معلق
+Order rejected,الطلب مرفوض
+Production floor,صالة الإنتاج
+Recalculate the cutting plan,إعادة حساب خطة القص
+Resume the order,استئناف الطلب
+Return to a previous stage,إرجاع لمرحلة سابقة
+Return to draft,إعادة للمسودة
+Send to production,إرسال للإنتاج
+Submit for review,إرسال للمراجعة
+You can view this order only. Its current stage is outside your operational roles.,يمكنك عرض هذا الطلب فقط. مرحلته الحالية خارج أدوارك التشغيلية.
+You do not have permission to print the customer invoice.,لا تملك صلاحية طباعة فاتورة الزبون.
+You do not have permission to print the measurements.,لا تملك صلاحية طباعة القياسات.
