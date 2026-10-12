@@ -34,13 +34,14 @@ on:
         default: false
         type: boolean
       phase_a_comparison_case:
-        description: Run all Phase A comparisons or only DCO list navigation after a focused fix
+        description: Run all Phase A comparisons, B only, or B and C after focused fixes
         required: false
         default: all
         type: choice
         options:
           - all
           - B
+          - B_C
       new_local_gate_only:
         description: Run only real Desk NEW recovery, hydration and official Save
         required: false
@@ -248,7 +249,7 @@ jobs:
           bench --site test.localhost execute frappe.get_all --kwargs '{"doctype":"DocType","filters":{"module":"Almdina ERP"},"pluck":"name"}'
 
       - name: Run Almdina ERP tests
-        if: github.event_name != 'workflow_dispatch' || (inputs.desk_only != true && inputs.new_form_smoke_only != true && inputs.new_customer_field_smoke_only != true && inputs.phase_a_comparison_only != true && inputs.phase_a_comparison_case != 'B' && inputs.new_local_gate_only != true && inputs.new_stress_only != true)
+        if: github.event_name != 'workflow_dispatch' || (inputs.desk_only != true && inputs.new_form_smoke_only != true && inputs.new_customer_field_smoke_only != true && inputs.phase_a_comparison_only != true && inputs.phase_a_comparison_case != 'B' && inputs.phase_a_comparison_case != 'B_C' && inputs.new_local_gate_only != true && inputs.new_stress_only != true)
         run: |
           cd "$RUNNER_TEMP/frappe-bench"
           bench --site test.localhost set-config allow_tests true
@@ -287,14 +288,14 @@ jobs:
           fi
           exit "$test_status"
 
-      - name: Certify DCO ${{ inputs.phase_a_comparison_case == 'B' && 'Phase A case B' || inputs.phase_a_comparison_only && 'Phase A comparison' || inputs.new_local_gate_only && 'NEW recovery' || inputs.new_form_smoke_only && 'NEW form smoke' || inputs.new_customer_field_smoke_only && 'NEW Customer smoke' || inputs.new_stress_only && 'NEW stress' || 'EDIT recovery' }} in real Frappe Desk
+      - name: Certify DCO ${{ inputs.phase_a_comparison_case == 'B_C' && 'Phase A cases B and C' || inputs.phase_a_comparison_case == 'B' && 'Phase A case B' || inputs.phase_a_comparison_only && 'Phase A comparison' || inputs.new_local_gate_only && 'NEW recovery' || inputs.new_form_smoke_only && 'NEW form smoke' || inputs.new_stress_only && 'NEW stress' || 'EDIT recovery' }} in real Frappe Desk
         if: always() && !cancelled()
         env:
           DCO_DESK_FIXTURE_FILE: ${{ runner.temp }}/dco-desk-fixtures.json
           DCO_DESK_EVIDENCE_DIR: ${{ runner.temp }}/dco-desk-evidence
           DCO_DESK_NEW_FORM_SMOKE_ONLY: ${{ inputs.new_form_smoke_only && '1' || '0' }}
           DCO_DESK_NEW_CUSTOMER_FIELD_SMOKE_ONLY: ${{ inputs.new_customer_field_smoke_only && '1' || '0' }}
-          DCO_DESK_PHASE_A_COMPARISON_ONLY: ${{ (inputs.phase_a_comparison_only || inputs.phase_a_comparison_case == 'B') && '1' || '0' }}
+          DCO_DESK_PHASE_A_COMPARISON_ONLY: ${{ (inputs.phase_a_comparison_only || inputs.phase_a_comparison_case == 'B' || inputs.phase_a_comparison_case == 'B_C') && '1' || '0' }}
           DCO_DESK_PHASE_A_COMPARISON_CASE: ${{ inputs.phase_a_comparison_case || 'all' }}
           DCO_DESK_NEW_LOCAL_GATE_ONLY: ${{ inputs.new_local_gate_only && '1' || '0' }}
           DCO_DESK_NEW_STRESS_ONLY: ${{ inputs.new_stress_only && '1' || '0' }}
@@ -342,7 +343,42 @@ jobs:
               open_api_requests = json.loads(latest_form_diagnosis.get("pending_api_requests", "[]"))
           except (TypeError, ValueError):
               open_api_requests = []
-          if not diagnostics and not trace:
+          comparison_cases = []
+          for case_dir in sorted(evidence.glob("case-*")):
+              if not case_dir.is_dir():
+                  continue
+              try:
+                  case_trace = json.loads((case_dir / "dco-desk-trace.json").read_text())
+              except (OSError, ValueError):
+                  case_trace = []
+              try:
+                  case_diagnostics = json.loads((case_dir / "browser-diagnostics.json").read_text())
+              except (OSError, ValueError):
+                  case_diagnostics = {}
+              key_events = [
+                  {key: str(item[key])[:220] for key in
+                      ("event", "step", "status", "batches", "events", "tasks")
+                      if key in item}
+                  for item in case_trace if item.get("event") in {
+                      "comparison_case_completed", "comparison_case_failed",
+                      "comparison_form_ready", "comparison_renderer_heartbeat_failed",
+                      "cdp_renderer_main_identified", "cdp_renderer_main_long_tasks",
+                      "comparison_cdp_tracing_complete", "comparison_cdp_flush_timeout",
+                      "page_error", "step_failed",
+                  }
+              ][-8:]
+              pending = case_diagnostics.get("state", {}).get("pendingRequests", [])
+              comparison_cases.append({
+                  "case": case_dir.name.removeprefix("case-"),
+                  "events": key_events,
+                  "pending_methods": [
+                      str(item.get("url", "")).split("/api/method/", 1)[-1]
+                      for item in pending if "/api/method/" in str(item.get("url", ""))
+                  ][-4:],
+              })
+          if comparison_cases:
+              print(json.dumps({"comparison_cases": comparison_cases}, ensure_ascii=False, separators=(",", ":")))
+          elif not diagnostics and not trace:
               print("browser evidence not available")
           else:
               state = diagnostics.get("state", {})
@@ -448,6 +484,7 @@ jobs:
             case "$DCO_DESK_PHASE_A_COMPARISON_CASE" in
               all) ;;
               B) comparison_cases=(B) ;;
+              B_C) comparison_cases=(B C) ;;
               *) printf 'Unsupported Phase A comparison case\n' >&2; desk_fail 2 ;;
             esac
             for comparison_case in "${comparison_cases[@]}"; do
@@ -485,9 +522,10 @@ jobs:
               "comparison_list_new_action_click_started", "comparison_list_new_action_clicked",
               "comparison_form_ready", "comparison_navigation_started",
               "comparison_navigation_response", "comparison_cdp_unavailable",
-              "comparison_cdp_stop_failed",
+              "comparison_cdp_stop_failed", "comparison_cdp_flush_timeout",
               "comparison_renderer_heartbeat_completed", "comparison_renderer_heartbeat_failed",
               "comparison_cdp_started", "comparison_cdp_stopped",
+              "comparison_cdp_tracing_complete",
               "cdp_renderer_main_identified", "cdp_renderer_main_long_tasks",
               "phase_135_new_customer_field_smoke_completed",
               "cdp_performance_metrics", "new_form_dom_evidence",
@@ -498,7 +536,7 @@ jobs:
           events = [
               {key: item[key] for key in ("event", "stage", "step", "status", "method",
                   "result_class", "elapsed_seconds", "route", "doctype", "metrics", "tasks",
-                  "thread_count")
+                  "thread_count", "batches", "events")
                   if key in item}
               for item in trace if item.get("event") in selected_events
           ]

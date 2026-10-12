@@ -906,9 +906,12 @@ def _start_comparison_cdp(browser, page):
     browser_session = browser.new_browser_cdp_session()
     page_session = page.context.new_cdp_session(page)
     renderer_main_threads = set()
+    trace_state = {"complete": False, "batches": 0, "events": 0}
 
     def on_trace_data(message):
         events = message.get("value", [])
+        trace_state["batches"] += 1
+        trace_state["events"] += len(events)
         previous_thread_count = len(renderer_main_threads)
         renderer_main_threads.update(
             (event.get("pid"), event.get("tid"))
@@ -930,6 +933,11 @@ def _start_comparison_cdp(browser, page):
         if len(renderer_main_threads) > previous_thread_count:
             _trace_event("cdp_renderer_main_identified", thread_count=len(renderer_main_threads))
 
+    def on_trace_complete(_message):
+        trace_state["complete"] = True
+        _trace_event("comparison_cdp_tracing_complete",
+            batches=trace_state["batches"], events=trace_state["events"])
+
     def on_metrics(message):
         selected = {
             metric["name"]: round(metric["value"], 3)
@@ -940,6 +948,7 @@ def _start_comparison_cdp(browser, page):
             _trace_event("cdp_performance_metrics", metrics=json.dumps(selected))
 
     browser_session.on("Tracing.dataCollected", on_trace_data)
+    browser_session.on("Tracing.tracingComplete", on_trace_complete)
     page_session.on("Performance.metrics", on_metrics)
     page_session.send("Performance.enable")
     browser_session.send("Tracing.start", {
@@ -948,7 +957,22 @@ def _start_comparison_cdp(browser, page):
         "transferMode": "ReportEvents",
     })
     _trace_event("comparison_cdp_started")
-    return browser_session
+    return browser_session, trace_state
+
+
+def _stop_comparison_cdp(browser_session, trace_state, page: Page, case: str) -> None:
+    """Let CDP deliver trace events after Tracing.end before closing Chromium."""
+    browser_session.send("Tracing.end")
+    deadline = time.monotonic() + 2.5
+    while not trace_state["complete"] and time.monotonic() < deadline:
+        # This advances Playwright's dispatcher; it does not wait for Desk.
+        page.wait_for_timeout(100)
+    _trace_event(
+        "comparison_cdp_stopped" if trace_state["complete"] else "comparison_cdp_flush_timeout",
+        case=case,
+        batches=trace_state["batches"],
+        events=trace_state["events"],
+    )
 
 
 def _comparison_renderer_heartbeat(page: Page, case: str) -> None:
@@ -1000,9 +1024,10 @@ def certify_phase_a_comparison_case(browser, page: Page, case: str) -> None:
             raise RuntimeError(failure)
     else:
         cdp_session = None
+        cdp_trace_state = None
         if case in {"B", "C"}:
             try:
-                cdp_session = _start_comparison_cdp(browser, page)
+                cdp_session, cdp_trace_state = _start_comparison_cdp(browser, page)
             except Exception as exc:
                 _trace_event("comparison_cdp_unavailable", case=case,
                     error=_redact_text(str(exc), 250))
@@ -1064,11 +1089,8 @@ def certify_phase_a_comparison_case(browser, page: Page, case: str) -> None:
             raise
         finally:
             if cdp_session is not None:
-                # The case result is already persisted; a stalled renderer may
-                # prevent tracing from flushing, but cannot erase earlier events.
                 try:
-                    cdp_session.send("Tracing.end")
-                    _trace_event("comparison_cdp_stopped", case=case)
+                    _stop_comparison_cdp(cdp_session, cdp_trace_state, page, case)
                 except Exception as exc:
                     _trace_event("comparison_cdp_stop_failed", case=case,
                         error=_redact_text(str(exc), 250))
