@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import unittest
 from pathlib import Path
 
@@ -22,6 +23,24 @@ def source(path: Path) -> str:
 
 
 class TestDcoRecoveryStateOwnershipContract(unittest.TestCase):
+    @staticmethod
+    def projection_fields(name: str) -> list[str]:
+        projection = source(
+            PUBLIC
+            / "door_cutting_order"
+            / "recovery"
+            / "application"
+            / "door_cutting_order_recovery_projection.js"
+        )
+        match = re.search(
+            rf"const {name} = Object\.freeze\(\[(.*?)\]\);",
+            projection,
+            re.DOTALL,
+        )
+        if not match:
+            raise AssertionError(f"missing projection allowlist: {name}")
+        return re.findall(r'"([^"]+)"', match.group(1))
+
     def test_r1_contract_is_indexed_and_covers_every_required_decision(self) -> None:
         index = source(REFERENCE / "README.md")
         contract = source(RECOVERY_CONTRACT)
@@ -50,6 +69,83 @@ class TestDcoRecoveryStateOwnershipContract(unittest.TestCase):
             "No timer delay is evidence",
         ):
             self.assertIn(forbidden_scope, contract)
+
+    def test_new_recovery_and_edit_recovery_have_separate_story_boundaries(self) -> None:
+        contract = source(RECOVERY_CONTRACT)
+        new_lifecycle = contract.split("## 4. NEW lifecycle contract", 1)[1].split(
+            "## 5. EDIT lifecycle contract: session ownership and deferred recovery", 1
+        )[0]
+        edit_contract = contract.split(
+            "## 5. EDIT lifecycle contract: session ownership and deferred recovery", 1
+        )[1].split("## 6. Version-token semantics", 1)[0]
+        new_recovery = source(REFERENCE / "18_DCO_NEW_RECOVERY.md")
+
+        self.assertIn("NEW recovery behavior belongs to `ALMADINA-129`", contract)
+        self.assertIn("EDIT recovery and restore behavior are deferred to `ALMADINA-131`", contract)
+        self.assertIn("The first Save uses the existing DCO insert path", new_lifecycle)
+        self.assertIn("does not autosave", new_lifecycle)
+        self.assertIn("ALMADINA-131", edit_contract)
+        self.assertIn("does not implement EDIT checkpointing", edit_contract)
+        self.assertIn("expected_server_modified", edit_contract)
+        self.assertIn("EDIT recovery remains deferred", new_recovery)
+
+    def test_field_ownership_manifest_matches_projection_allowlists(self) -> None:
+        contract = source(RECOVERY_CONTRACT)
+        manifest = contract.split(
+            "### 3.3 Field Ownership / Mutation Capture Manifest", 1
+        )[1].split("### 3.4 Workspace draft projections", 1)[0]
+
+        for allowlist in ("HEADER_FIELDS", "PIECE_FIELDS", "PLAN_DRAFT_FIELDS", "COST_DRAFT_FIELDS"):
+            for fieldname in self.projection_fields(allowlist):
+                self.assertIn(
+                    f"`{fieldname}`",
+                    manifest,
+                    f"{fieldname} has no owner/capture boundary in the manifest",
+                )
+
+        for required_boundary in (
+            "Fast Entry",
+            "apply to all four",
+            "DOM toggle classes are presentation only",
+            "Special Shape Documentation workspace",
+            "view_costs",
+            "Protected manual prices",
+            "must not be replayed by recovery",
+            "canonical live input",
+        ):
+            self.assertIn(required_boundary, manifest)
+
+        captured_fields = set(
+            self.projection_fields("HEADER_FIELDS")
+            + self.projection_fields("PIECE_FIELDS")
+            + self.projection_fields("COST_DRAFT_FIELDS")
+        )
+        for protected_field in (
+            "special_shape_custom_unit_price_usd",
+            "clipped_corner_edge_price_usd",
+            "extra_double_unit_price_usd",
+            "extra_double_total_usd",
+            "customer_quote_total_usd",
+            "total_cost_usd",
+        ):
+            self.assertNotIn(protected_field, captured_fields)
+
+    def test_contract_pins_source_review_and_separates_runtime_evidence(self) -> None:
+        contract = source(RECOVERY_CONTRACT)
+        for evidence in (
+            "Frappe v16.17.5",
+            "ERPNext v16.17.0",
+            "75baafaa0bde07a86bf28764383b93b5df97bc7e",
+            "7b494dc9e8e47d288de5427bae25ce8a52c37d96",
+            "frm.save()",
+            "TimestampMismatchError",
+            "source-level compatibility evidence only",
+            "does not prove behavior for the pinned target",
+            "A — Architecture, static, and characterization",
+            "B — actual target-version Frappe",
+        ):
+            self.assertIn(evidence, contract)
+        self.assertIn("Server permissions, document authorization, and optimistic concurrency remain", contract)
 
     def test_existing_document_and_edit_session_owners_are_characterized(self) -> None:
         document_context = source(
