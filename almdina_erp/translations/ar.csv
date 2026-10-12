@@ -1912,3 +1912,116 @@ Submit for review,إرسال للمراجعة
 You can view this order only. Its current stage is outside your operational roles.,يمكنك عرض هذا الطلب فقط. مرحلته الحالية خارج أدوارك التشغيلية.
 You do not have permission to print the customer invoice.,لا تملك صلاحية طباعة فاتورة الزبون.
 You do not have permission to print the measurements.,لا تملك صلاحية طباعة القياسات.
+A WhatsApp message was sent to the customer.,تم إرسال رسالة واتساب للزبون.
+Account,الحساب
+Administration,الإدارة
+All routes,كل المسارات
+Approve the drawing,اعتماد الرسم
+Approved production plan,الخطة المعتمدة للإنتاج
+Assign,إسناد
+Assigned,مسندة
+Assigned orders,الطلبات المسندة
+Available system sections,أقسام النظام المتاحة
+Back to orders,العودة إلى الطلبات
+Back to the shop floor,رجوع لصالة الإنتاج
+Change worker,تغيير العامل
+Choose a worker,اختر العامل
+Choose the next worker first.,اختر العامل التالي أولاً.
+Choose the plan you reviewed. Your approval will be recorded under the current user.,اختر الخطة التي راجعتها. سيتم تسجيل اعتمادك باسم المستخدم الحالي.
+Completed orders,الطلبات المنتهية
+Confirm finishing the last stage and marking the order ready for delivery?,تأكيد إنهاء آخر مرحلة واعتبار الطلب جاهزًا للتسليم؟
+Confirm sign-out?,تأكيد تسجيل الخروج؟
+Costing,التكلفة
+Could not complete the operation.,تعذر تنفيذ العملية.
+Could not load account information.,تعذر تحميل معلومات الحساب.
+Could not load production orders.,تعذر تحميل طلبات الإنتاج.
+Could not load the shop floor.,تعذر تحميل صالة الإنتاج.
+Could not load workers for the next department.,تعذر تحميل عمال القسم التالي.
+Could not move the order.,تعذر نقل الطلب.
+Could not open DXF upload.,تعذر فتح رفع DXF.
+Could not refresh the shop floor,تعذر تحديث صالة الإنتاج
+Could not run the action.,تعذر تنفيذ الإجراء.
+Delivery was recorded.,تم تسجيل التسليم.
+Department,القسم
+Department status,حالة القسم
+Download production DXF,تنزيل DXF للإنتاج
+Drag to the next stage,اسحب للمرحلة التالية
+Drawing and DXF,الرسم وDXF
+Enable a route from production settings to show it here.,فعّل مسارًا من إعدادات الإنتاج ليظهر هنا.
+Export DXF for drawing,تصدير DXF للرسم
+Filter the production board,تصفية لوحة الإنتاج
+Finish and send,إنهاء وإرسال
+Follow production stages,متابعة مراحل الإنتاج
+Follow the orders assigned to you and run the available action for each order.,تابع الطلبات المسندة إليك ونفّذ الإجراء المتاح لكل طلب.
+In follow-up,قيد المتابعة
+Loading,جاري التحميل
+Loading account information...,جاري تحميل معلومات الحساب...
+Loading...,جاري التحميل...
+Movement follows the route order and the user's permissions.,الانتقال يتبع ترتيب المسار وصلاحيات المستخدم.
+Name,الاسم
+Needs work,بحاجة للعمل
+New worker,العامل الجديد
+Next department,القسم التالي
+Next worker,العامل التالي
+No customer details,بدون بيانات زبون
+No orders,لا توجد طلبات
+No other worker is available for this department.,لا يوجد عامل آخر متاح لهذا القسم.
+No production route is enabled,لا يوجد مسار إنتاج مفعّل
+No production route is enabled. Create a route from master data first.,لا يوجد مسار إنتاج مفعّل. أنشئ مسارًا من البيانات الأساسية أولًا.
+No workers are available for role {0} in the next department.,لا يوجد عمال متاحون للدور {0} في القسم التالي.
+Operational departments,الأقسام التشغيلية
+Order list,قائمة الطلبات
+"Order number, customer, worker...",رقم الطلب، الزبون، العامل...
+Order route,مسار الطلب
+Order status,حالة الطلب
+Order status summary,ملخص حالات الطلبات
+Orders that enter your operational role will appear here.,ستظهر هنا الطلبات التي أصبحت ضمن دورك التشغيلي.
+Preparing the shop floor...,جاري تجهيز صالة الإنتاج...
+Production board,لوحة الإنتاج
+Production route,مسار الإنتاج
+Qualified departments,الأقسام المؤهل لها
+Quick search,بحث سريع
+Re-approve the drawing,إعادة اعتماد الرسم
+Ready,جاهز
+Recording order delivery...,جاري تسجيل تسليم الطلب...
+Reports,التقارير
+Revert,إرجاع
+Review your operational identity and the departments available to you in the system.,راجع هويتك التشغيلية والأقسام المتاحة لك في النظام.
+Route,المسار
+Routes,المسارات
+Running the operation...,جاري تنفيذ العملية...
+Send,إرسال
+Send to the next department,إرسال للقسم التالي
+Shop floor navigation,التنقل في صالة الإنتاج
+Shop floor sections,أقسام صالة الإنتاج
+Sign out,تسجيل الخروج
+Signing out ends the current work session on this device.,تسجيل الخروج ينهي جلسة العمل الحالية على هذا الجهاز.
+Signing out...,جاري تسجيل الخروج...
+"Start with assigned orders, then review completed work in the lower section.",ابدأ بالطلبات المسندة، ثم راجع ما أنهيته في القسم السفلي.
+The drawing was approved and the approved designer was recorded.,تم اعتماد الرسم وإثبات المصمم المعتمد.
+The new worker will be responsible for starting and handing off the stage.,سيصبح العامل الجديد مسؤولًا عن بدء المرحلة وتسليمها.
+The order is ready for delivery.,الطلب جاهز للتسليم.
+The order was delivered to the customer.,تم تسليم الطلب للعميل.
+The order was returned to the selected stage.,تم إرجاع الطلب للمرحلة المحددة.
+The order was sent to production.,تم إرسال الطلب للإنتاج.
+The order was sent to the next department.,تم إرسال الطلب للقسم التالي.
+The order was sent.,تم إرسال الطلب.
+The stage completed without sending WhatsApp.,اكتملت المرحلة دون إرسال واتساب.
+The stage was finished and the order was sent to the next department.,تم إنهاء المرحلة وإرسال الطلب للقسم التالي.
+The worker responsible for the stage was changed.,تم تغيير العامل المسؤول عن المرحلة.
+There are no assigned orders,لا توجد طلبات مسندة
+There are no orders right now,لا توجد طلبات حاليًا
+There are no stages that can be reverted to.,لا توجد مراحل يمكن الرجوع إليها.
+There is no assigned work or completed history in this section.,لا يوجد عمل مسند أو سجل منتهٍ ضمن هذا القسم.
+There is no work assigned to you right now.,لا يوجد عمل مسند إليك حاليًا.
+This action is no longer available in the current order state.,لم يعد هذا الإجراء متاحًا في حالة الطلب الحالية.
+Unspecified route,مسار غير محدد
+Updating the production route...,جاري تحديث مسار الإنتاج...
+Use the action button on the card. On desktop you can also drag an in-progress card to the next stage; the server re-checks permissions before running the action.,استخدم زر الإجراء داخل البطاقة. على الكمبيوتر يمكنك أيضًا سحب بطاقة قيد العمل إلى المرحلة التالية؛ الخادم يعيد التحقق من الصلاحيات قبل التنفيذ.
+User information,معلومات المستخدم
+View orders by route and run the available action without leaving the board.,شاهد الطلبات حسب مسارها، ونفّذ الإجراء المتاح دون مغادرة اللوحة.
+Work has started.,تم بدء العمل.
+Work list,قائمة العمل
+Worker responsible for the first stage,العامل المسؤول عن أول مرحلة
+Your operational orders,طلباتك التشغيلية
+{0} will be fixed as the final production copy under your name. Do you want to continue?,سيتم تثبيت {0} كنسخة الإنتاج النهائية باسمك. هل تريد المتابعة؟

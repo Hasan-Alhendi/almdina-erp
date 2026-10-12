@@ -72,14 +72,14 @@ owner.promptWorker({
     next_department: "CNC",
 }, 7, () => { workerRuns += 1; });
 assert.equal(workerDialogs.length, 1, "handoff worker selection must use the shared dropdown dialog");
-assert.equal(workerDialogs[0].config.title, "إرسال للقسم التالي");
+assert.equal(workerDialogs[0].config.title, "Send to the next department");
 assert.equal(workerDialogs[0].config.workers[0].full_name, "Worker");
 owner.noWorkers({ operational_role: "CNC" }, 7);
 owner.error("failed", 7);
 owner.success("saved", 7);
 assert.equal(alerts.length, 1);
 assert.equal(workerDialogs.length, 1, "handoff worker selection must use the shared dropdown dialog");
-assert.equal(workerDialogs[0].config.title, "إرسال للقسم التالي");
+assert.equal(workerDialogs[0].config.title, "Send to the next department");
 
 active = false;
 owner.deactivate();

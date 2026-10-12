@@ -376,6 +376,56 @@ class TestActiveUiHasNoLanguageTextBranches(unittest.TestCase):
         self.assertNotRegex(order_link, r"text-align\s*:\s*left")
         self.assertNotRegex(mobile_css, r"\.dco-card-order-label\s*\{[^}]*direction\s*:\s*rtl", re.S)
 
+    def test_shop_floor_surfaces_use_english_message_ids_and_dynamic_direction(self) -> None:
+        """Shop floor / production UI copy is English IDs; only user/email LTR is fixed."""
+        paths = (
+            PUBLIC_JS / "door_cutting_order" / "production" / "shop_floor_order_ux.js",
+            ROOT / "almdina_erp" / "page" / "shop_floor_inbox" / "shop_floor_inbox.js",
+            PUBLIC_JS / "shop_floor_inbox" / "controller.js",
+            PUBLIC_JS / "shop_floor_inbox" / "dialogs.js",
+            PUBLIC_JS / "shop_floor_inbox" / "renderer.js",
+            PUBLIC_JS / "shop_floor_quick_actions.js",
+            PUBLIC_JS / "production_routing_ux.js",
+        )
+        allowed = (
+            "إرسال للإنتاج",
+            "تم التسليم",
+            "إرجاع لمرحلة سابقة",
+            "بدء العمل",
+            "إرسال للقسم التالي",
+            "جاهزة للتسليم",
+            "إنهاء وإرسال",
+            "تغيير العامل",
+            "رجوع لصالة الإنتاج",
+            "العودة إلى الطلبات",
+            "رسم",
+            "شريون",
+            "تقشيط",
+            "تسليم",
+            "صالة الإنتاج",
+        )
+        ordered = tuple(sorted(allowed, key=len, reverse=True))
+        leftovers = []
+        for path in paths:
+            relative = path.relative_to(ROOT)
+            text = path.read_text(encoding="utf-8")
+            self.assertIsNone(re.search(r"^(?:const|let|var)\s+\w+\s*=\s*(?:translate|__)\(", text, re.M))
+            self.assertNotRegex(text, r"direction:\s*rtl")
+            self.assertNotRegex(text, r'\bdir\s*=\s*["\']rtl["\']')
+            for number, line in enumerate(text.splitlines(), start=1):
+                visible = line
+                for phrase in ordered:
+                    visible = visible.replace(phrase, "")
+                if ARABIC_TEXT.search(visible):
+                    leftovers.append(f"{relative}:{number}: {line.strip()}")
+        self.assertEqual(leftovers, [])
+
+        renderer = (PUBLIC_JS / "shop_floor_inbox" / "renderer.js").read_text(encoding="utf-8")
+        self.assertIn('dir="ltr"', renderer)
+        self.assertIn('$section.attr("dir", pageDir)', renderer)
+        self.assertRegex(renderer, r'<b dir="ltr">\$\{esc\(model\.user\)\}</b>')
+        self.assertNotIn("direction:rtl", renderer.replace(" ", ""))
+
     def test_bidirectional_layout_uses_inherited_direction_and_logical_alignment(self) -> None:
         styles = (
             PUBLIC_JS

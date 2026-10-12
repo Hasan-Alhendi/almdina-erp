@@ -1,6 +1,35 @@
 (() => {
     "use strict";
 
+
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split("{" + index + "}").join(String(value));
+            });
+        }
+        return text;
+    }
+
+    function uiDirection() {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.direction === "function") {
+            const value = locale.direction();
+            if (value === "ltr" || value === "rtl") return value;
+        }
+        const root = typeof document !== "undefined" ? document.documentElement : null;
+        const dir = root && root.getAttribute("dir");
+        return dir === "ltr" ? "ltr" : "rtl";
+    }
+
     const Api = window.AlmdinaShopFloorInboxApi;
     const State = window.AlmdinaShopFloorInboxState;
     const ViewModel = window.AlmdinaShopFloorInboxViewModel;
@@ -53,7 +82,7 @@
         const dialogs = Dialogs.create({ isCurrentGeneration });
 
         if (typeof page.add_inner_button === "function") {
-            $refreshButton = page.add_inner_button(__("تحديث"), refresh, null, "refresh");
+            $refreshButton = page.add_inner_button(translate("Refresh"), refresh, null, "refresh");
         }
         syncRefreshButtonVisibility();
 
@@ -166,13 +195,13 @@
         }
 
         function allRoutesLabel() {
-            return __("كل المسارات");
+            return translate("All routes");
         }
 
         function routeFilterCatalog(routes) {
             const entries = (routes || []).map(route => [
                 String(route.name || ""),
-                String(route.label || route.name || __("مسار غير محدد")),
+                String(route.label || route.name || translate("Unspecified route")),
             ]);
             const options = [allRoutesLabel(), ...entries.map(([, label]) => label)].join("\n");
             return { entries, options };
@@ -224,7 +253,7 @@
                 parent: $searchMount,
                 fieldname: "board_search",
                 fieldtype: "Data",
-                placeholder: __("رقم الطلب، الزبون، العامل..."),
+                placeholder: translate("Order number, customer, worker..."),
                 value: snapshot.search || "",
                 className: "almdina-sf-search-control-mount",
                 onlyInput: true,
@@ -259,7 +288,7 @@
         async function renderAccount({ freshContext = false } = {}) {
             const requestedMode = "account";
             Renderer.syncTabs(shell, requestedMode);
-            beginLoading(__("جاري تحميل معلومات الحساب..."));
+            beginLoading(translate("Loading account information..."));
             try {
                 const context = await loadSessionContext({ fresh: freshContext });
                 if (!isActive() || state.mode() !== requestedMode || !context) return null;
@@ -269,7 +298,7 @@
                 if (isActive() && state.mode() === requestedMode) {
                     disposeBoardToolbarControls();
                     boardToolbarMounted = false;
-                    Renderer.error(shell, errorMessage(error, __("تعذر تحميل معلومات الحساب.")));
+                    Renderer.error(shell, errorMessage(error, translate("Could not load account information.")));
                 }
                 return null;
             }
@@ -279,7 +308,7 @@
             const requestedMode = state.mode();
             if (requestedMode === "account") return renderAccount({ freshContext });
             const token = state.beginListRequest({ mode: requestedMode });
-            beginLoading(__("جاري التحميل..."));
+            beginLoading(translate("Loading..."));
             try {
                 const context = await loadSessionContext({ fresh: freshContext });
                 if (
@@ -316,7 +345,7 @@
                 if (isActive() && state.isCurrentListRequest(token) && state.mode() === requestedMode) {
                     disposeBoardToolbarControls();
                     boardToolbarMounted = false;
-                    Renderer.error(shell, errorMessage(error, __("تعذر تحميل طلبات الإنتاج.")));
+                    Renderer.error(shell, errorMessage(error, translate("Could not load production orders.")));
                 }
                 return null;
             }
@@ -407,13 +436,13 @@
                 lifecycle,
                 onSuccess: () => loadList({ freshContext: false }),
                 onError: error => dialogs.error(
-                    errorMessage(error, __("تعذر تنفيذ الإجراء.")),
+                    errorMessage(error, translate("Could not run the action.")),
                     generation
                 ),
             });
             return Promise.resolve(operation).catch(error => {
                 if (lifecycle.isCurrent()) {
-                    dialogs.error(errorMessage(error, __("تعذر تنفيذ الإجراء.")), generation);
+                    dialogs.error(errorMessage(error, translate("Could not run the action.")), generation);
                 }
                 return null;
             });
@@ -428,7 +457,7 @@
                     return scheduleMutationReconciliation().then(() => data);
                 }
                 dialogs.success(
-                    context.next ? __("تم إرسال الطلب للقسم التالي.") : __("الطلب جاهز للتسليم."),
+                    context.next ? translate("The order was sent to the next department.") : translate("The order is ready for delivery."),
                     generation
                 );
                 if (data && data.whatsapp && typeof dialogs.whatsapp === "function") {
@@ -437,7 +466,7 @@
                 return loadList({ freshContext: false }).then(() => data);
             }).catch(error => {
                 if (current()) {
-                    dialogs.error(errorMessage(error, __("تعذر نقل الطلب.")), generation);
+                    dialogs.error(errorMessage(error, translate("Could not move the order.")), generation);
                 }
                 return null;
             });
@@ -465,7 +494,7 @@
                 });
             }).catch(error => {
                 if (current()) {
-                    dialogs.error(errorMessage(error, __("تعذر تحميل عمال القسم التالي.")), generation);
+                    dialogs.error(errorMessage(error, translate("Could not load workers for the next department.")), generation);
                 }
                 return null;
             });
@@ -475,7 +504,7 @@
             const generation = activeGeneration();
             if (generation === null) return;
             dialogs.confirmLogout(generation, () => {
-                Api.logout(__("جاري تسجيل الخروج..."))
+                Api.logout(translate("Signing out..."))
                     .catch(() => null)
                     .finally(() => {
                         logoutCompleted = true;
