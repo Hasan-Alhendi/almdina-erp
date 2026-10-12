@@ -6,12 +6,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCTYPE = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.json"
-BOARD_UX = ROOT / "public" / "js" / "door_cutting_order_board_text_ux.js"
-DEFAULTS_UX = ROOT / "public" / "js" / "door_cutting_order_defaults.js"
-COST_UX = ROOT / "public" / "js" / "door_cutting_order_cost_invoice_ux.js"
-MEASUREMENT_UX = ROOT / "public" / "js" / "door_cutting_order_measurement_actions_ux.js"
-PLAN_UX = ROOT / "public" / "js" / "door_cutting_order_plan_ux.js"
-FAST_SAVE_UX = ROOT / "public" / "js" / "door_cutting_order_fast_save_ux.js"
+BOARD_UX = ROOT / "public" / "js" / "door_cutting_order" / "order_entry" / "door_cutting_order_board_text_ux.js"
+DEFAULTS_UX = ROOT / "public" / "js" / "door_cutting_order" / "order_entry" / "door_cutting_order_defaults.js"
+COST_UX = ROOT / "public" / "js" / "door_cutting_order" / "costing" / "door_cutting_order_cost_presenter.js"
+DOCUMENT_PRINT_PRESENTER = (
+    ROOT / "public" / "js" / "door_cutting_order" / "printing" / "door_cutting_order_document_print_presenter.js"
+)
+PLAN_CONTROLS = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan" / "door_cutting_order_plan_controls_ux.js"
+FAST_SAVE_UX = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan" / "door_cutting_order_fast_save_ux.js"
 
 
 def _source(path: Path) -> str:
@@ -60,13 +62,14 @@ def test_board_text_ux_keeps_default_dimensions_and_hidden_mm_snapshot_in_sync()
 
 def test_board_form_labels_and_help_are_operator_friendly():
     source = _source(DEFAULTS_UX)
-    for text in (
-        "صنف اللوح",
-        "طول اللوح (سم)",
-        "عرض اللوح (سم)",
-        "MDF أبيض 18 مم",
+    assert "const label = __(message);" in source
+    for message_id in (
+        'board_description: "Board Item"',
+        'board_length_cm: "Board length (cm)"',
+        'board_width_cm: "Board width (cm)"',
     ):
-        assert text in source
+        assert message_id in source
+    assert '__("Write the type, thickness, and color in one line, for example: white MDF 18 mm.")' in source
 
 
 def test_native_stock_board_fields_are_not_required_by_order_save_pipeline():
@@ -112,7 +115,7 @@ def test_invoice_and_measurement_prints_use_only_board_description_as_visible_la
     assert "frm.doc.board_item" not in board_source
     assert "PRINT_TRIGGER_SELECTOR" not in board_source
 
-    for path in (COST_UX, MEASUREMENT_UX):
+    for path in (COST_UX, DOCUMENT_PRINT_PRESENTER):
         source = _source(path)
         assert "frm.doc.board_description" in source
         assert "frm.doc.board_description || frm.doc.board_item" not in source
@@ -120,16 +123,14 @@ def test_invoice_and_measurement_prints_use_only_board_description_as_visible_la
 
 def test_fast_save_and_plan_controls_use_free_text_board_validation():
     fast_save = _source(FAST_SAVE_UX)
-    plan_ux = _source(PLAN_UX)
+    plan_controls = _source(PLAN_CONTROLS)
     board_ux = _source(BOARD_UX)
     assert "function canCalculatePlan(frm)" in board_ux
-    assert "const boardUX = window.AlmdinaBoardTextUX" in fast_save
-    assert "boardUX.canCalculatePlan(frm)" in fast_save
-    assert "AlmdinaBoardTextUX.canCalculatePlan" in plan_ux
-    assert "!frm.doc.board_item" not in fast_save
-    assert "!frm.doc.board_item" not in plan_ux
-    assert "اختر اللوح وأدخل القياسات" not in fast_save
-    assert "اختر اللوح وأدخل القياسات" not in plan_ux
+    for source in (fast_save, plan_controls):
+        assert "const boardUX = window.AlmdinaBoardTextUX" in source
+        assert "boardUX.canCalculatePlan(frm)" in source
+        assert "!frm.doc.board_item" not in source
+        assert "اختر اللوح وأدخل القياسات" not in source
 
 
 def test_preview_api_serializes_free_text_board_fields_only():
