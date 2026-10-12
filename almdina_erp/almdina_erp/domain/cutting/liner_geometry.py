@@ -12,9 +12,16 @@ import math
 from dataclasses import dataclass
 from typing import Sequence
 
-from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import point_in_polygon
+from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import (
+    has_self_intersection,
+    point_in_polygon,
+)
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
     GEOMETRY_TOLERANCE_MM,
+)
+from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
+    CutDimensionError,
+    l_shaped_raw_cut,
 )
 from almdina_erp.almdina_erp.domain.orders.piece_policy import (
     CLIPPED_CORNER_TYPE,
@@ -234,16 +241,38 @@ def _offset_segment(start: Point, end: Point, distance: float, sign: float) -> t
     )
 
 
+def _intersect_offset_lines(
+    first: tuple[Point, Point],
+    second: tuple[Point, Point],
+) -> Point | None:
+    """Miter where two neighbouring offset lines meet. Parallel lines have none."""
+
+    start, end = first
+    other_start, other_end = second
+    direction = (end[0] - start[0], end[1] - start[1])
+    other = (other_end[0] - other_start[0], other_end[1] - other_start[1])
+    denominator = direction[0] * other[1] - direction[1] * other[0]
+    if abs(denominator) <= 1e-9:
+        return None
+    step = (
+        (other_start[0] - start[0]) * other[1]
+        - (other_start[1] - start[1]) * other[0]
+    ) / denominator
+    return (start[0] + direction[0] * step, start[1] + direction[1] * step)
+
+
 def _offset_polyline(polyline: Sequence[Point], distance: float, sign: float) -> list[Point]:
     segments = [
         _offset_segment(start, end, distance, sign)
         for start, end in zip(polyline, polyline[1:])
     ]
+    if not segments:
+        return []
     points = [segments[0][0]]
-    for index, segment in enumerate(segments):
-        if index and math.dist(points[-1], segment[0]) > 1e-6:
-            points.append(segment[0])
-        points.append(segment[1])
+    for previous, current in zip(segments, segments[1:]):
+        joint = _intersect_offset_lines(previous, current)
+        points.append(joint if joint is not None else previous[1])
+    points.append(segments[-1][1])
     return points
 
 
@@ -283,12 +312,14 @@ def validation_code(piece: LinerPiece, side: str, offset_cm: float, width_cm: fl
     polygon = piece_polygon_mm(piece)
     reference = reference_polyline_mm(piece, side)
     sign = _inward_sign(reference, polygon)
-    for point in _offset_polyline(reference, _mm(offset) + _mm(width), sign):
+    near = _offset_polyline(reference, _mm(offset), sign)
+    far = _offset_polyline(reference, _mm(offset) + _mm(width), sign)
+    strip = near + list(reversed(far))
+    for point in strip:
         if not point_in_polygon(point, polygon, tolerance=GEOMETRY_TOLERANCE_MM):
             return "strip_outside"
-    for point in _offset_polyline(reference, _mm(offset), sign):
-        if not point_in_polygon(point, polygon, tolerance=GEOMETRY_TOLERANCE_MM):
-            return "strip_outside"
+    if has_self_intersection(strip, GEOMETRY_TOLERANCE_MM):
+        return "strip_outside"
     return ""
 
 
@@ -313,48 +344,77 @@ def _distances(path: Sequence[Point], reference: Sequence[Point]) -> list[float]
     return distances
 
 
-def _coverage(path: Sequence[Point], reference: Sequence[Point]) -> tuple[float, float, float]:
-    segments = list(zip(reference, reference[1:]))
-    lengths = [math.dist(start, end) for start, end in segments]
-    total = sum(lengths)
-    if total <= 0:
-        return 0.0, 0.0, 0.0
-    projections: list[float] = []
-    for point in path:
-        best_distance = None
-        best_along = 0.0
-        cursor = 0.0
-        for (start, end), length in zip(segments, lengths):
-            distance, ratio = _segment_distance(point, start, end)
-            along = cursor + ratio * length
-            if best_distance is None or distance < best_distance:
-                best_distance = distance
-                best_along = along
-            cursor += length
-        projections.append(best_along)
-    return min(projections), max(projections), total
-
-
 def _fmt_cm(value_mm: float) -> str:
     return f"{value_mm / CM_TO_MM:.3f}"
 
 
-def _straight_run_points(
+def _closed_ring(path: Sequence[Point]) -> list[Point]:
+    ring = list(path)
+    if len(ring) >= 2 and math.dist(ring[0], ring[-1]) <= GEOMETRY_TOLERANCE_MM:
+        ring = ring[:-1]
+    return ring
+
+
+def _simplify_collinear(path: Sequence[Point]) -> list[Point]:
+    """Drop extra vertices that sit on the straight edge between their neighbours."""
+
+    ring = _closed_ring(path)
+    if len(ring) < 3:
+        return ring
+    changed = True
+    while changed and len(ring) >= 3:
+        changed = False
+        simplified: list[Point] = []
+        count = len(ring)
+        for index, point in enumerate(ring):
+            previous = ring[(index - 1) % count]
+            nxt = ring[(index + 1) % count]
+            distance, ratio = _segment_distance(point, previous, nxt)
+            if distance <= GEOMETRY_TOLERANCE_MM and -1e-9 <= ratio <= 1.0 + 1e-9:
+                changed = True
+                continue
+            simplified.append(point)
+        ring = simplified
+    return ring
+
+
+def _same_ring(path: Sequence[Point], expected: Sequence[Point]) -> bool:
+    left = _simplify_collinear(path)
+    right = _simplify_collinear(expected)
+    if len(left) != len(right) or len(left) < 3:
+        return False
+    count = len(left)
+    for reversed_ring in (False, True):
+        sequence = list(reversed(right)) if reversed_ring else list(right)
+        for shift in range(count):
+            if all(
+                math.dist(left[index], sequence[(index + shift) % count])
+                <= GEOMETRY_TOLERANCE_MM
+                for index in range(count)
+            ):
+                return True
+    return False
+
+
+def _boundary_bands(
     path: Sequence[Point],
     reference: Sequence[Point],
-    radius: float,
-) -> list[Point]:
-    """Drop vertices next to an interior corner so a bevel does not change the band thickness."""
+) -> tuple[float, float] | None:
+    """Near distance and thickness when every vertex lies on one of two boundaries."""
 
-    corners = list(reference[1:-1])
-    if not corners:
-        return list(path)
-    kept = [
-        point
-        for point in path
-        if all(math.dist(point, corner) > radius for corner in corners)
-    ]
-    return kept or list(path)
+    distances = _distances(path, reference)
+    if not distances:
+        return None
+    near = min(distances)
+    far = max(distances)
+    if far - near <= GEOMETRY_TOLERANCE_MM:
+        return None
+    if any(
+        min(abs(distance - near), abs(distance - far)) > GEOMETRY_TOLERANCE_MM
+        for distance in distances
+    ):
+        return None
+    return near, far - near
 
 
 def _measure_against_side(
@@ -364,18 +424,11 @@ def _measure_against_side(
     offset_cm: float,
     width_cm: float,
 ) -> LinerMeasurement:
+    if len(path) < 2:
+        return LinerMeasurement(False, LINER_SHAPE_MISMATCH, "shape", side, "", "empty_path", side)
     reference = reference_polyline_mm(piece, side)
-    body = _straight_run_points(
-        path,
-        reference,
-        _mm(offset_cm) + _mm(width_cm) + GEOMETRY_TOLERANCE_MM,
-    )
-    distances = _distances(body, reference)
-    if not distances:
-        return LinerMeasurement(False, LINER_SHAPE_MISMATCH, "shape", "", "", "empty_path")
-    measured_offset = min(distances)
-    measured_width = max(distances) - measured_offset
-    if measured_width <= GEOMETRY_TOLERANCE_MM:
+    distances = _distances(path, reference)
+    if distances and max(distances) - min(distances) <= GEOMETRY_TOLERANCE_MM:
         return LinerMeasurement(
             False,
             LINER_WIDTH_NOT_MEASURABLE,
@@ -386,13 +439,29 @@ def _measure_against_side(
         )
     expected_offset = _mm(offset_cm)
     expected_width = _mm(width_cm)
-    start, end, total = _coverage(path, reference)
-    covers = start <= GEOMETRY_TOLERANCE_MM and end >= total - GEOMETRY_TOLERANCE_MM
-    offset_ok = abs(measured_offset - expected_offset) <= GEOMETRY_TOLERANCE_MM
-    width_ok = abs(measured_width - expected_width) <= GEOMETRY_TOLERANCE_MM
-    if offset_ok and width_ok and covers:
+    try:
+        expected = liner_strip_polygon_mm(piece, side, offset_cm, width_cm)
+    except LinerGeometryError:
+        expected = None
+    if (
+        expected is not None
+        and _same_ring(path, expected)
+        and not has_self_intersection(path, GEOMETRY_TOLERANCE_MM)
+    ):
         return LinerMeasurement(True, matched_side=side)
-    if not offset_ok:
+    bands = _boundary_bands(path, reference)
+    if bands is None:
+        return LinerMeasurement(
+            False,
+            LINER_SHAPE_MISMATCH,
+            "shape",
+            side,
+            "",
+            "path_does_not_follow_edge",
+            side,
+        )
+    measured_offset, measured_width = bands
+    if abs(measured_offset - expected_offset) > GEOMETRY_TOLERANCE_MM:
         return LinerMeasurement(
             False,
             LINER_OFFSET_MISMATCH,
@@ -402,7 +471,7 @@ def _measure_against_side(
             "offset_mismatch",
             side,
         )
-    if not width_ok:
+    if abs(measured_width - expected_width) > GEOMETRY_TOLERANCE_MM:
         return LinerMeasurement(
             False,
             LINER_WIDTH_MISMATCH,
@@ -452,6 +521,76 @@ def compare_liner_path(
                 candidate,
             )
     return selected
+
+
+def contour_notch_cm(
+    *,
+    piece_type: str | None,
+    finished_width_cm: float,
+    finished_length_cm: float,
+    notch_width_cm: float,
+    notch_length_cm: float,
+    position: str,
+    side_thickness_mm: dict | None = None,
+    edge_break: bool = False,
+    edge_break_thickness_mm: float | None = None,
+) -> tuple[float, float]:
+    """Notch used by the liner and by the L cut contour.
+
+    Finished corner distances stay on the order. An L door uses the raw bite
+    from the existing strap rule once the inner thickness is known. An unknown
+    inner thickness keeps the stored finished notch instead of inventing one.
+    """
+
+    finished = (float(notch_width_cm or 0), float(notch_length_cm or 0))
+    if piece_type != L_SHAPED_CORNER_TYPE:
+        return finished
+    try:
+        raw = l_shaped_raw_cut(
+            finished_width_cm=finished_width_cm,
+            finished_length_cm=finished_length_cm,
+            notch_width_cm=notch_width_cm,
+            notch_length_cm=notch_length_cm,
+            position=position,
+            side_thickness_mm=side_thickness_mm or {},
+            edge_break=edge_break,
+            edge_break_thickness_mm=edge_break_thickness_mm,
+        )
+    except CutDimensionError:
+        return finished
+    if (
+        not raw.proven
+        or raw.raw_notch_width_cm is None
+        or raw.raw_notch_length_cm is None
+    ):
+        return finished
+    return float(raw.raw_notch_width_cm), float(raw.raw_notch_length_cm)
+
+
+def liner_activation_error(
+    *,
+    enabled: bool,
+    piece_type: str | None,
+    side: str,
+    offset_cm: float,
+    width_cm: float,
+    legacy_checkbox_only: bool,
+) -> str:
+    """Reject a new enabled liner that has no usable parameters.
+
+    A saved checkbox-only row stays valid. Special doors have no liner geometry.
+    """
+
+    if not enabled or not available_liner_sides(piece_type):
+        return ""
+    blank = (
+        not str(side or "").strip()
+        and float(offset_cm or 0) <= 0
+        and float(width_cm or 0) <= 0
+    )
+    if blank and not legacy_checkbox_only:
+        return "liner_parameters_required"
+    return ""
 
 
 def transform_point(
@@ -541,6 +680,8 @@ __all__ = [
     "available_liner_sides",
     "canonical_path",
     "compare_liner_path",
+    "contour_notch_cm",
+    "liner_activation_error",
     "inverse_transform_point",
     "liner_parameters_active",
     "liner_strip_polygon_mm",

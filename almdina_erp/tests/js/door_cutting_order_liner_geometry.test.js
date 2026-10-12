@@ -165,5 +165,104 @@ const ux = fs.readFileSync(
 );
 assert.match(operator, /fieldname === "extra_liner"/);
 assert.match(ux, /commitChildValues/);
+assert.match(ux, /resolveChildRow/);
+assert.match(ux, /queueChildApply/);
+assert.match(ux, /if \(saved\) dialog.hide\(\)/);
 assert.match(ux, /extra_liner: 0/);
 assert.doesNotMatch(ux, /createElement\("style"\)/);
+
+const shapedLiner = geometry.pieceFromRow({
+    piece_type: "L-Shaped Corner",
+    width_cm: 100,
+    length_cm: 80,
+    clipped_corner_position: "Top Right",
+    clipped_corner_width_cm: 20,
+    clipped_corner_length_cm: 30,
+});
+assert.deepEqual(
+    copy(geometry.stripPolygonMm(shapedLiner, "edge_break", 1, 0.8).map(point => point.map(value => Math.round(value)))),
+    [[790, 0], [790, 310], [1000, 310], [1000, 318], [782, 318], [782, 0]]
+);
+assert.deepEqual(
+    copy(geometry.contourNotchCm({
+        pieceType: "L-Shaped Corner",
+        notchWidthCm: 8,
+        notchLengthCm: 16,
+        position: "Top Right",
+        sideThicknessMm: { long_right: 3, width_top: 2, width_bottom: 1 },
+        edgeBreak: true,
+        innerMm: 1,
+    })),
+    { cutWidthCm: 7.8, cutLengthCm: 15.9 }
+);
+assert.deepEqual(
+    copy(geometry.contourNotchCm({
+        pieceType: "L-Shaped Corner",
+        notchWidthCm: 8,
+        notchLengthCm: 16,
+        position: "Top Right",
+        edgeBreak: true,
+        innerMm: null,
+    })),
+    { cutWidthCm: 8, cutLengthCm: 16 }
+);
+
+async function persistenceChecks() {
+context.frappe.msgprint = () => {};
+context.frappe.model = { set_value() { throw new Error("stale row write"); } };
+const writes = [];
+let releaseSave = () => {};
+const saveGate = new Promise(resolve => { releaseSave = resolve; });
+const currentRow = {
+    doctype: "Door Cutting Order Detail",
+    name: "current-row",
+    piece_type: "Regular",
+    width_cm: 40,
+    length_cm: 60,
+};
+const staleRow = {
+    doctype: "Door Cutting Order Detail",
+    name: "stale-row",
+    piece_type: "Regular",
+    width_cm: 40,
+    length_cm: 60,
+};
+fakeWindow.AlmdinaClippedCornerEditor = {
+    resolveChildRow() { return currentRow; },
+    queueChildApply(_frm, task) { return task(); },
+    commitChildValues(_frm, row, values) {
+        writes.push({ name: row.name, values });
+        return saveGate;
+    },
+};
+fakeWindow.AlmdinaDoorCuttingFastEntry = { render() {} };
+const frm = { dirty() {}, doc: {} };
+const linerValues = {
+    extra_liner: 1,
+    liner_reference_side: "edge_width_top",
+    liner_offset_cm: 2,
+    liner_width_cm: 1.5,
+};
+const firstSave = editor.applyLiner(frm, staleRow, linerValues);
+const secondSave = editor.applyLiner(frm, staleRow, linerValues);
+assert.equal(await secondSave, false);
+releaseSave();
+assert.equal(await firstSave, true);
+assert.equal(writes.length, 1);
+assert.equal(writes[0].name, "current-row");
+
+fakeWindow.AlmdinaClippedCornerEditor.resolveChildRow = () => null;
+assert.equal(await editor.applyLiner(frm, staleRow, linerValues), false);
+assert.equal(writes.length, 1);
+
+fakeWindow.AlmdinaClippedCornerEditor.resolveChildRow = () => Object.assign({}, currentRow, {
+    piece_type: "Special",
+});
+assert.equal(await editor.applyLiner(frm, staleRow, linerValues), false);
+assert.equal(writes.length, 1);
+}
+
+persistenceChecks().catch(error => {
+    console.error(error);
+    process.exit(1);
+});

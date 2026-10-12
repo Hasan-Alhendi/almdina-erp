@@ -368,12 +368,23 @@
     function pieceWithLinerSpec(frm, piece) {
         const row = extraOrderRowForPiece(frm, piece);
         if (!row) return piece;
-        return Object.assign({}, piece, {
+        const copy = Object.assign({}, piece, {
             extra_liner: row.extra_liner,
             liner_reference_side: row.liner_reference_side,
             liner_offset_cm: row.liner_offset_cm,
             liner_width_cm: row.liner_width_cm,
+            piece_type: row.piece_type || piece.piece_type,
+            clipped_corner_position: row.clipped_corner_position || piece.clipped_corner_position,
+            clipped_corner_width_cm: row.clipped_corner_width_cm,
+            clipped_corner_length_cm: row.clipped_corner_length_cm,
         });
+        const liner = window.AlmdinaLinerGeometry;
+        if (liner && typeof liner.contourNotchFromOrder === "function") {
+            const notch = liner.contourNotchFromOrder(frm, row);
+            copy.clipped_corner_width_cm = notch.cutWidthCm;
+            copy.clipped_corner_length_cm = notch.cutLengthCm;
+        }
+        return copy;
     }
 
     function drawingOverlays(piece, geometryModel) {

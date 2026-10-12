@@ -183,8 +183,66 @@
         }
     }
 
-    async function commit(frm, row, values) {
+    function hostPiece(frm, row) {
+        const api = geometry();
+        const piece = api.pieceFromRow(row);
+        const size = dimensions(row);
+        piece.widthCm = size.width || piece.widthCm;
+        piece.lengthCm = size.length || piece.lengthCm;
+        if (typeof api.contourNotchFromOrder === "function") {
+            const notch = api.contourNotchFromOrder(frm, row);
+            piece.cutWidthCm = notch.cutWidthCm;
+            piece.cutLengthCm = notch.cutLengthCm;
+        }
+        return piece;
+    }
+
+    function failureText(error) {
+        if (!error) return __("Could not save the liner.");
+        return String(error.message || error);
+    }
+
+    const applyGate = { running: false };
+
+    async function writeLiner(frm, sourceRow, values) {
         const editor = window.AlmdinaClippedCornerEditor;
+        const row = editor && typeof editor.resolveChildRow === "function"
+            ? editor.resolveChildRow(frm, sourceRow)
+            : sourceRow;
+        if (!row) {
+            frappe.msgprint({
+                title: __("Liner"),
+                message: __("This door piece is no longer in the order."),
+                indicator: "orange",
+            });
+            return false;
+        }
+        const api = geometry();
+        if (!api.availableSides(row.piece_type || "Regular").length) {
+            frappe.msgprint({
+                title: __("Liner"),
+                message: __("This piece type no longer supports a liner."),
+                indicator: "orange",
+            });
+            return false;
+        }
+        if (Number(values.extra_liner)) {
+            const piece = hostPiece(frm, row);
+            const code = api.validationCode(
+                piece,
+                values.liner_reference_side,
+                values.liner_offset_cm,
+                values.liner_width_cm
+            );
+            if (code) {
+                frappe.msgprint({
+                    title: __("Check liner"),
+                    message: MESSAGES[code] || code,
+                    indicator: "orange",
+                });
+                return false;
+            }
+        }
         if (!editor || typeof editor.commitChildValues !== "function") {
             await frappe.model.set_value(row.doctype, row.name, values);
         } else {
@@ -192,6 +250,40 @@
         }
         frm.dirty();
         refreshTable(frm);
+        return true;
+    }
+
+    async function applyLiner(frm, sourceRow, values) {
+        if (applyGate.running) return false;
+        applyGate.running = true;
+        const editor = window.AlmdinaClippedCornerEditor;
+        const queued = editor && typeof editor.queueChildApply === "function"
+            ? editor.queueChildApply(frm, () => writeLiner(frm, sourceRow, values))
+            : writeLiner(frm, sourceRow, values);
+        try {
+            const result = await queued;
+            if (result && typeof result.ok === "boolean") {
+                if (!result.ok) {
+                    frappe.msgprint({
+                        title: __("Liner"),
+                        message: failureText(result.error),
+                        indicator: "red",
+                    });
+                    return false;
+                }
+                return result.value !== false;
+            }
+            return result !== false;
+        } catch (error) {
+            frappe.msgprint({
+                title: __("Liner"),
+                message: failureText(error),
+                indicator: "red",
+            });
+            return false;
+        } finally {
+            applyGate.running = false;
+        }
     }
 
     let activeDialog = null;
@@ -216,9 +308,7 @@
             try { activeDialog.hide(); } catch (error) { /* previous dialog */ }
             activeDialog = null;
         }
-        const piece = api.pieceFromRow(row);
-        piece.widthCm = size.width;
-        piece.lengthCm = size.length;
+        const piece = hostPiece(frm, row);
         let draft = draftFromRow(row);
         draft.piece = piece;
         const dialog = new frappe.ui.Dialog({
@@ -234,12 +324,17 @@
                     frappe.msgprint({ title: __("Check liner"), message, indicator: "orange" });
                     return Promise.resolve(false);
                 }
-                return commit(frm, row, {
+                const button = dialog.get_primary_btn && dialog.get_primary_btn();
+                if (button) button.prop("disabled", true);
+                return applyLiner(frm, row, {
                     extra_liner: 1,
                     liner_reference_side: draft.side,
                     liner_offset_cm: draft.offsetCm,
                     liner_width_cm: draft.widthCm,
-                }).then(() => dialog.hide());
+                }).then(saved => {
+                    if (saved) dialog.hide();
+                    else if (button) button.prop("disabled", Boolean(paint(root, draft, dialog)));
+                });
             },
         });
         activeDialog = dialog;
@@ -258,12 +353,17 @@
                 return;
             }
             if (event.target.closest("[data-liner-remove]")) {
-                commit(frm, row, {
+                const remove = event.target.closest("[data-liner-remove]");
+                remove.disabled = true;
+                applyLiner(frm, row, {
                     extra_liner: 0,
                     liner_reference_side: "",
                     liner_offset_cm: 0,
                     liner_width_cm: 0,
-                }).then(() => dialog.hide());
+                }).then(saved => {
+                    if (saved) dialog.hide();
+                    else remove.disabled = false;
+                });
             }
         });
         root.addEventListener("input", () => {
@@ -275,6 +375,7 @@
 
     window.AlmdinaLinerEditor = Object.freeze({
         open,
+        applyLiner,
         previewSvg,
         validationMessage,
         draftFromRow,

@@ -1305,6 +1305,10 @@
         prepare: prepareRow,
         cornerValueUpdates,
         ensureStyles: installStyles,
+        resolveChildRow(frm, row) {
+            return resolveCurrentRow(frm, captureRowLocator(row));
+        },
+        queueChildApply: queueCornerApply,
         commitChildValues(frm, row, values) {
             const locator = captureRowLocator(row);
             return (async () => {

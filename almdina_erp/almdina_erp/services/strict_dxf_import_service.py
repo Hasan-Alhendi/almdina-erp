@@ -16,6 +16,7 @@ from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
     LinerPiece,
     canonical_path,
     compare_liner_path,
+    contour_notch_cm,
     liner_parameters_active,
     localize_path,
 )
@@ -641,26 +642,19 @@ def _l_corner_cut(spec: OrderPieceCutSpec):
 
 
 def _contour_notch_cm(spec: OrderPieceCutSpec) -> tuple[float, float]:
-    """Notch passed to the contour matcher, in centimetres.
+    """Notch passed to the contour matcher and to liner checks, in centimetres."""
 
-    L corners use the raw bite once the inner-band thickness is proven. Clipped
-    corners, and an L whose inner thickness cannot be loaded, keep the stored
-    finished cut distance.
-    """
-
-    finished = (
-        float(spec.clipped_corner_width_cm),
-        float(spec.clipped_corner_length_cm),
+    return contour_notch_cm(
+        piece_type=spec.piece_type,
+        finished_width_cm=float(spec.finished_width_cm),
+        finished_length_cm=float(spec.finished_length_cm),
+        notch_width_cm=float(spec.clipped_corner_width_cm),
+        notch_length_cm=float(spec.clipped_corner_length_cm),
+        position=str(spec.clipped_corner_position or ""),
+        side_thickness_mm=_side_thickness_mm(spec),
+        edge_break=bool(spec.edge_break),
+        edge_break_thickness_mm=spec.edge_break_thickness_mm,
     )
-    raw = _l_corner_cut(spec)
-    if (
-        raw is None
-        or not raw.proven
-        or raw.raw_notch_width_cm is None
-        or raw.raw_notch_length_cm is None
-    ):
-        return finished
-    return float(raw.raw_notch_width_cm), float(raw.raw_notch_length_cm)
 
 
 def _l_notch_mismatch_issue(

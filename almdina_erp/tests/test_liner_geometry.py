@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import pytest
 
+from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import has_self_intersection
+from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
+    GEOMETRY_TOLERANCE_MM,
+)
 from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
     LINER_OFFSET_MISMATCH,
     LINER_SHAPE_MISMATCH,
@@ -12,6 +16,8 @@ from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
     available_liner_sides,
     canonical_path,
     compare_liner_path,
+    contour_notch_cm,
+    liner_activation_error,
     liner_strip_polygon_mm,
     transform_point,
     validation_code,
@@ -179,6 +185,118 @@ def test_plan_pieces_keep_one_liner_spec_without_touching_edges():
     assert placed["liner_offset_cm"] == 2
     assert placed["liner_width_cm"] == 1.5
     assert placed["edge_width_top"] == 1
+
+
+def _round_points(points):
+    return [(round(x, 3), round(y, 3)) for x, y in points]
+
+
+def test_skewed_band_is_rejected_when_min_and_max_still_match():
+    piece = _regular()
+    skewed = [(20, 20), (380, 20), (400, 35), (0, 35)]
+    measurement = compare_liner_path(skewed, piece, "edge_width_top", 2, 1.5)
+    assert measurement.code == LINER_SHAPE_MISMATCH
+    assert not measurement.ok
+
+
+def test_start_shift_reversal_and_collinear_points_still_match():
+    piece = _regular()
+    strip = liner_strip_polygon_mm(piece, "edge_width_top", 2, 1.5)
+    shifted = strip[1:] + strip[:1]
+    assert compare_liner_path(shifted, piece, "edge_width_top", 2, 1.5).ok
+    assert compare_liner_path(list(reversed(strip)), piece, "edge_width_top", 2, 1.5).ok
+    midpoint = ((strip[0][0] + strip[1][0]) / 2, (strip[0][1] + strip[1][1]) / 2)
+    with_extra = [strip[0], midpoint, *strip[1:]]
+    assert compare_liner_path(with_extra, piece, "edge_width_top", 2, 1.5).ok
+
+
+def test_l_break_miter_stays_inside_and_keeps_constant_width():
+    piece = _l_piece("Top Right")
+    assert validation_code(piece, "edge_break", 0, 0.8) == ""
+    strip = liner_strip_polygon_mm(piece, "edge_break", 1, 0.8)
+    assert _round_points(strip) == [
+        (790, 0),
+        (790, 310),
+        (1000, 310),
+        (1000, 318),
+        (782, 318),
+        (782, 0),
+    ]
+    assert not has_self_intersection(strip, GEOMETRY_TOLERANCE_MM)
+    assert compare_liner_path(strip, piece, "edge_break", 1, 0.8).ok
+    clipped = _clipped("Top Right")
+    diagonal = liner_strip_polygon_mm(clipped, "edge_break", 1, 0.8)
+    assert validation_code(clipped, "edge_break", 1, 0.8) == ""
+    assert not has_self_intersection(diagonal, GEOMETRY_TOLERANCE_MM)
+    assert compare_liner_path(diagonal, clipped, "edge_break", 1, 0.8).ok
+
+
+def test_new_blank_liner_is_rejected_and_legacy_special_are_kept():
+    assert liner_activation_error(
+        enabled=True,
+        piece_type="Regular",
+        side="",
+        offset_cm=0,
+        width_cm=0,
+        legacy_checkbox_only=False,
+    ) == "liner_parameters_required"
+    assert liner_activation_error(
+        enabled=True,
+        piece_type="Regular",
+        side="",
+        offset_cm=0,
+        width_cm=0,
+        legacy_checkbox_only=True,
+    ) == ""
+    assert liner_activation_error(
+        enabled=True,
+        piece_type="Special",
+        side="edge_width_top",
+        offset_cm=2,
+        width_cm=1.5,
+        legacy_checkbox_only=False,
+    ) == ""
+    assert liner_activation_error(
+        enabled=True,
+        piece_type="Regular",
+        side="edge_width_top",
+        offset_cm=0,
+        width_cm=1.5,
+        legacy_checkbox_only=False,
+    ) == ""
+    assert validation_code(_regular(), "edge_width_top", 0, 1.5) == ""
+
+
+def test_l_inner_strap_uses_the_raw_notch_for_the_liner():
+    raw_width, raw_length = contour_notch_cm(
+        piece_type="L-Shaped Corner",
+        finished_width_cm=40,
+        finished_length_cm=60,
+        notch_width_cm=8,
+        notch_length_cm=16,
+        position="Top Right",
+        side_thickness_mm={"long_right": 3, "width_top": 2, "width_bottom": 1},
+        edge_break=True,
+        edge_break_thickness_mm=1,
+    )
+    assert (raw_width, raw_length) == pytest.approx((7.8, 15.9))
+    unproven_width, unproven_length = contour_notch_cm(
+        piece_type="L-Shaped Corner",
+        finished_width_cm=40,
+        finished_length_cm=60,
+        notch_width_cm=8,
+        notch_length_cm=16,
+        position="Top Right",
+        side_thickness_mm={"long_right": 3, "width_top": 2},
+        edge_break=True,
+        edge_break_thickness_mm=None,
+    )
+    assert (unproven_width, unproven_length) == pytest.approx((8, 16))
+    raw_piece = LinerPiece("L-Shaped Corner", 40, 60, "Top Right", raw_width, raw_length)
+    finished_piece = LinerPiece("L-Shaped Corner", 40, 60, "Top Right", 8, 16)
+    strip = liner_strip_polygon_mm(raw_piece, "edge_break", 1, 0.8)
+    assert compare_liner_path(strip, raw_piece, "edge_break", 1, 0.8).ok
+    assert not compare_liner_path(strip, finished_piece, "edge_break", 1, 0.8).ok
 
 
 def test_changing_offset_and_width_moves_the_band():

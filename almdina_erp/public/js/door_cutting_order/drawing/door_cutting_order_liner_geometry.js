@@ -206,6 +206,18 @@
         return pointInPolygon(probe, polygon) ? 1 : -1;
     }
 
+    function intersectOffsetLines(first, second) {
+        const direction = [first[1][0] - first[0][0], first[1][1] - first[0][1]];
+        const other = [second[1][0] - second[0][0], second[1][1] - second[0][1]];
+        const denominator = (direction[0] * other[1]) - (direction[1] * other[0]);
+        if (Math.abs(denominator) <= 1e-9) return null;
+        const step = (
+            ((second[0][0] - first[0][0]) * other[1])
+            - ((second[0][1] - first[0][1]) * other[0])
+        ) / denominator;
+        return [first[0][0] + (direction[0] * step), first[0][1] + (direction[1] * step)];
+    }
+
     function offsetPolyline(polyline, distance, sign) {
         const segments = [];
         for (let index = 0; index < polyline.length - 1; index += 1) {
@@ -216,12 +228,43 @@
                 [polyline[index + 1][0] + shift[0], polyline[index + 1][1] + shift[1]],
             ]);
         }
+        if (!segments.length) return [];
         const points = [segments[0][0]];
-        segments.forEach((segment, index) => {
-            if (index && dist(points[points.length - 1], segment[0]) > 1e-6) points.push(segment[0]);
-            points.push(segment[1]);
-        });
+        for (let index = 1; index < segments.length; index += 1) {
+            const joint = intersectOffsetLines(segments[index - 1], segments[index]);
+            points.push(joint || segments[index - 1][1]);
+        }
+        points.push(segments[segments.length - 1][1]);
         return points;
+    }
+
+    function quantizeCm(value) {
+        return Math.round(num(value) * 1000) / 1000;
+    }
+
+    function contourNotchCm(input) {
+        const source = input || {};
+        const finished = {
+            cutWidthCm: num(source.notchWidthCm),
+            cutLengthCm: num(source.notchLengthCm),
+        };
+        if (source.pieceType !== L_SHAPED) return finished;
+        if (source.edgeBreak && (source.innerMm === null || source.innerMm === undefined)) {
+            return finished;
+        }
+        const pair = {
+            "Top Right": ["long_right", "width_top"],
+            "Bottom Right": ["long_right", "width_bottom"],
+            "Top Left": ["long_left", "width_top"],
+            "Bottom Left": ["long_left", "width_bottom"],
+        }[source.position || "Top Right"];
+        if (!pair) return finished;
+        const inner = source.edgeBreak ? num(source.innerMm) : 0;
+        const sides = source.sideThicknessMm || {};
+        return {
+            cutWidthCm: quantizeCm(finished.cutWidthCm - (num(sides[pair[0]]) / 10) + (inner / 10)),
+            cutLengthCm: quantizeCm(finished.cutLengthCm - (num(sides[pair[1]]) / 10) + (inner / 10)),
+        };
     }
 
     function validationCode(piece, side, offsetCm, widthCm) {
@@ -330,6 +373,34 @@
         };
     }
 
+    function contourNotchFromOrder(frm, row) {
+        const source = row || {};
+        const banding = window.AlmdinaMultiEdgeBanding;
+        const calculated = banding && typeof banding.calculate === "function"
+            ? banding.calculate(frm, source)
+            : null;
+        const sides = (calculated && calculated.sides) || {};
+        const thickness = {};
+        ["long_right", "long_left", "width_top", "width_bottom"].forEach(side => {
+            thickness[side] = sides[side] && sides[side].selected ? num(sides[side].thickness) : 0;
+        });
+        const typeName = source.edge_type || (frm && frm.doc && frm.doc.default_edge_type) || "";
+        let inner = null;
+        if (!Number(source.edge_break)) inner = 0;
+        else if (banding && typeof banding.thicknessForType === "function") {
+            inner = banding.thicknessForType(frm, typeName);
+        }
+        return contourNotchCm({
+            pieceType: source.piece_type,
+            notchWidthCm: source.clipped_corner_width_cm,
+            notchLengthCm: source.clipped_corner_length_cm,
+            position: source.clipped_corner_position,
+            sideThicknessMm: thickness,
+            edgeBreak: Boolean(Number(source.edge_break)),
+            innerMm: inner,
+        });
+    }
+
     function summary(row) {
         if (!row || !Number(row.extra_liner) || !row.liner_reference_side) return "";
         const piece = pieceFromRow(row);
@@ -344,6 +415,8 @@
         edgePaths,
         validationCode,
         stripPolygonMm,
+        contourNotchCm,
+        contourNotchFromOrder,
         transformPoint,
         syntheticOverlay,
         summary,

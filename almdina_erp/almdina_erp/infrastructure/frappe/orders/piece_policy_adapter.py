@@ -9,6 +9,9 @@ from frappe.utils import cint, flt, get_datetime, now_datetime
 from almdina_erp.almdina_erp.domain.cutting import round_value
 from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
     LinerPiece,
+    available_liner_sides,
+    contour_notch_cm,
+    liner_activation_error,
     validation_code,
 )
 from almdina_erp.almdina_erp.domain.orders.piece_policy import (
@@ -209,8 +212,45 @@ class FrappeOrderPiecePolicyAdapter:
             getattr(row, "length_cm", 0),
         )
 
-    def _apply_liner_parameters(self, row: Any, index: int) -> None:
+    def _legacy_liner_checkbox(self, old_row: Any) -> bool:
+        if old_row is None or not cint(getattr(old_row, "extra_liner", 0)):
+            return False
+        return (
+            not str(getattr(old_row, "liner_reference_side", "") or "").strip()
+            and flt(getattr(old_row, "liner_offset_cm", 0)) <= 0
+            and flt(getattr(old_row, "liner_width_cm", 0)) <= 0
+        )
+
+    def _liner_notch_cm(self, row: Any) -> tuple[float, float]:
+        return contour_notch_cm(
+            piece_type=row.piece_type or "Regular",
+            finished_width_cm=flt(row.width_cm),
+            finished_length_cm=flt(row.length_cm),
+            notch_width_cm=flt(getattr(row, "clipped_corner_width_cm", 0)),
+            notch_length_cm=flt(getattr(row, "clipped_corner_length_cm", 0)),
+            position=str(getattr(row, "clipped_corner_position", "") or ""),
+            side_thickness_mm=self._liner_side_thickness_mm(row),
+            edge_break=bool(cint(getattr(row, "edge_break", 0))),
+            edge_break_thickness_mm=getattr(row, "edge_break_thickness_mm", None),
+        )
+
+    def _liner_side_thickness_mm(self, row: Any) -> dict[str, float]:
+        long_thickness = flt(getattr(row, "edge_long_thickness_mm", 0))
+        width_thickness = flt(getattr(row, "edge_width_thickness_mm", 0))
+        return {
+            "long_right": long_thickness if cint(getattr(row, "edge_long_right", 0)) else 0,
+            "long_left": long_thickness if cint(getattr(row, "edge_long_left", 0)) else 0,
+            "width_top": width_thickness if cint(getattr(row, "edge_width_top", 0)) else 0,
+            "width_bottom": width_thickness if cint(getattr(row, "edge_width_bottom", 0)) else 0,
+        }
+
+    def _apply_liner_parameters(self, row: Any, index: int, old_row: Any) -> None:
         if not cint(getattr(row, "extra_liner", 0)):
+            row.liner_reference_side = ""
+            row.liner_offset_cm = 0
+            row.liner_width_cm = 0
+            return
+        if not available_liner_sides(row.piece_type or "Regular"):
             row.liner_reference_side = ""
             row.liner_offset_cm = 0
             row.liner_width_cm = 0
@@ -218,10 +258,23 @@ class FrappeOrderPiecePolicyAdapter:
         side = str(getattr(row, "liner_reference_side", "") or "").strip()
         offset = flt(getattr(row, "liner_offset_cm", 0))
         width = flt(getattr(row, "liner_width_cm", 0))
+        activation = liner_activation_error(
+            enabled=True,
+            piece_type=row.piece_type or "Regular",
+            side=side,
+            offset_cm=offset,
+            width_cm=width,
+            legacy_checkbox_only=self._legacy_liner_checkbox(old_row),
+        )
+        if activation:
+            frappe.throw(
+                _("Row {0}: Liner needs a reference side and a width greater than zero.").format(index)
+            )
         if not side and offset <= 0 and width <= 0:
             return
         width_cm = flt(getattr(row, "cut_width_cm", 0)) or flt(row.width_cm)
         length_cm = flt(getattr(row, "cut_length_cm", 0)) or flt(row.length_cm)
+        notch_width_cm, notch_length_cm = self._liner_notch_cm(row)
         code = validation_code(
             LinerPiece(
                 piece_type=row.piece_type or "Regular",
@@ -230,8 +283,8 @@ class FrappeOrderPiecePolicyAdapter:
                 clipped_corner_position=str(
                     getattr(row, "clipped_corner_position", "") or ""
                 ),
-                clipped_corner_width_cm=flt(getattr(row, "clipped_corner_width_cm", 0)),
-                clipped_corner_length_cm=flt(getattr(row, "clipped_corner_length_cm", 0)),
+                clipped_corner_width_cm=notch_width_cm,
+                clipped_corner_length_cm=notch_length_cm,
             ),
             side,
             offset,
@@ -259,7 +312,7 @@ class FrappeOrderPiecePolicyAdapter:
             row.piece_type = row.piece_type or "Regular"
             if row.piece_type not in PIECE_TYPES:
                 frappe.throw(_("Row {0}: Piece Type is invalid.").format(index))
-            self._apply_liner_parameters(row, index)
+            self._apply_liner_parameters(row, index, old_rows.get(row.name))
             if is_corner_cut(row.piece_type):
                 self._validate_clipped_corner(row, index)
             self._apply_edge_break(row)
