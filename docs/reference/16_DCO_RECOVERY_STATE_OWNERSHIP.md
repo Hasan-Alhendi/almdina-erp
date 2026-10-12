@@ -3,7 +3,7 @@
 > **Status:** Architecture and lifecycle contract baseline for `ALMADINA-127`<br>
 > **Scope:** State ownership and lifecycle contract characterization only. NEW recovery behavior belongs to `ALMADINA-129`; EDIT recovery and restore behavior are deferred to `ALMADINA-131`.<br>
 > **Runtime effect:** None. This document does not implement persistence or change product behavior.<br>
-> **Baseline:** `Develop` at `6c4264acb629955fe7735a3888375fdd99455ee3`
+> **Baseline:** `Develop` at `17e526b6648d35983967c03549e2348b05cb2839`
 
 ## 1. Purpose and hard boundaries
 
