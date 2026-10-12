@@ -470,7 +470,6 @@ def wait_for_new_form_loaded(page: Page, step: str):
 
 
 def wait_for_customer_interactive(page: Page, form_page, step: str):
-    capture_new_form_dom_evidence(page, step, stage="before_customer_wait")
     try:
         customer = ui_step(
             page,
@@ -702,7 +701,6 @@ def open_new_dco_form(page: Page, step: str):
     response = ui_step(page, f"{step}: navigate to NEW DCO", lambda: page.goto(new_route, wait_until="domcontentloaded"))
     if response is not None and response.status >= 400:
         raise RuntimeError(f"NEW DCO navigation returned HTTP {response.status} at {_safe_page_url(page)}.")
-    capture_new_form_dom_evidence(page, f"{step}: DOM after navigation", stage="after_navigation")
     return wait_for_new_form_loaded(page, step)
 
 
@@ -877,7 +875,7 @@ def certify_actual_frappe_desk_new_recovery(page: Page, *, piece_count: int = 10
 
 def certify_new_dco_form_smoke(page: Page) -> None:
     """Stop at visible NEW DCO form content; no field-interaction claim."""
-    login_to_desk(page, "Administrator", "admin")
+    login_to_desk(page, FIXTURES["creator"], "dco-test-worker-password")
     open_new_dco_form(page, "NEW DCO Desk form-loaded Smoke")
     _trace_event("phase_135_new_form_smoke_completed")
 
@@ -992,7 +990,10 @@ def certify_phase_a_comparison_case(browser, page: Page, case: str) -> None:
     if case not in {"A", "B", "C", "D"}:
         raise ValueError(f"Unsupported Phase A comparison case: {case}")
     _trace_event("comparison_case_started", case=case)
-    login_to_desk(page, "Administrator", "admin")
+    if case in {"B", "C", "D"}:
+        login_to_desk(page, FIXTURES["creator"], "dco-test-worker-password")
+    else:
+        login_to_desk(page, "Administrator", "admin")
 
     if case == "D":
         failed_services = []
@@ -1062,8 +1063,6 @@ def certify_phase_a_comparison_case(browser, page: Page, case: str) -> None:
                 new_action.click(timeout=15_000)
                 _trace_event("comparison_list_new_action_clicked", case=case)
                 _comparison_renderer_heartbeat(page, case)
-                capture_new_form_dom_evidence(page, "DCO NEW from Desk list",
-                    stage="after_navigation", timeout_ms=1_200)
                 wait_for_new_form_loaded(page, "DCO NEW from Desk list")
                 certify_new_customer_field_smoke(page)
                 _trace_event("comparison_form_ready", case=case, doctype="Door Cutting Order")
@@ -1077,8 +1076,6 @@ def certify_phase_a_comparison_case(browser, page: Page, case: str) -> None:
                 if response is not None and response.status >= 400:
                     raise RuntimeError(f"Direct DCO route returned HTTP {response.status}")
                 _comparison_renderer_heartbeat(page, case)
-                capture_new_form_dom_evidence(page, "DCO NEW via direct route",
-                    stage="after_navigation", timeout_ms=1_200)
                 wait_for_new_form_loaded(page, "DCO NEW via direct route")
                 certify_new_customer_field_smoke(page)
                 _trace_event("comparison_form_ready", case=case, doctype="Door Cutting Order")
@@ -1113,7 +1110,7 @@ def certify_new_dco_local_gate(browser) -> None:
     page.set_default_navigation_timeout(30_000)
     attach_browser_diagnostics(page)
     try:
-        login_to_desk(page, "Administrator", "admin")
+        login_to_desk(page, FIXTURES["creator"], "dco-test-worker-password")
         certify_actual_frappe_desk_new_recovery(page)
     finally:
         context.close()
@@ -1129,7 +1126,7 @@ def certify_new_dco_recovery_stress(browser, piece_count: int) -> None:
     page.set_default_navigation_timeout(30_000)
     attach_browser_diagnostics(page)
     try:
-        login_to_desk(page, "Administrator", "admin")
+        login_to_desk(page, FIXTURES["creator"], "dco-test-worker-password")
         certify_actual_frappe_desk_new_recovery(page, piece_count=piece_count)
     finally:
         context.close()

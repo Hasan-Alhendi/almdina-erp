@@ -211,6 +211,68 @@ def test_customer_field_smoke_is_independent_of_recovery_and_has_dispatch_input(
     assert "DCO_DESK_NEW_CUSTOMER_FIELD_SMOKE_ONLY:" in workflow
 
 
+def test_new_desk_smokes_use_a_fixture_actor_with_native_create_permission() -> None:
+    fixture_source = (APP_ROOT / "tests" / "dco_recovery_desk_fixture.py").read_text(
+        encoding="utf-8"
+    )
+    fixture_tree = ast.parse(fixture_source)
+    fixture_builder = next(
+        node for node in fixture_tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "create_desk_edit_recovery_fixtures"
+    )
+    runner_tree = ast.parse(DESK_RUNNER.read_text(encoding="utf-8"))
+    comparison = next(
+        node for node in runner_tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "certify_phase_a_comparison_case"
+    )
+    smoke = next(
+        node for node in runner_tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "certify_new_dco_form_smoke"
+    )
+    local_gate = next(
+        node for node in runner_tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "certify_new_dco_local_gate"
+    )
+    fixture_contract = ast.unparse(fixture_builder)
+    comparison_contract = ast.unparse(comparison)
+
+    assert "Capability.CREATE_ORDER: True" in fixture_contract
+    assert "'creator': creator" in fixture_contract
+    assert "FIXTURES['creator']" in comparison_contract
+    assert "case in {'B', 'C', 'D'}" in comparison_contract
+    assert "FIXTURES['creator']" in ast.unparse(smoke)
+    assert "FIXTURES['creator']" in ast.unparse(local_gate)
+
+
+def test_new_form_path_does_not_run_optional_dom_poll_before_readiness() -> None:
+    tree = ast.parse(DESK_RUNNER.read_text(encoding="utf-8"))
+    open_form = next(
+        node for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "open_new_dco_form"
+    )
+    customer_wait = next(
+        node for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "wait_for_customer_interactive"
+    )
+    form_failure = next(
+        node for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "capture_form_wait_failure"
+    )
+
+    assert "capture_new_form_dom_evidence" not in ast.unparse(open_form)
+    assert "capture_new_form_dom_evidence" not in ast.unparse(customer_wait)
+    assert "capture_new_form_dom_evidence" in ast.unparse(form_failure)
+
+
+def test_phase_a_new_button_selector_matches_frappe_page_primary_action_contract() -> None:
+    source = DESK_RUNNER.read_text(encoding="utf-8")
+    assert 'page.locator(".page-actions .primary-action").first' in source
+    assert 'new_action.wait_for(state="visible", timeout=15_000)' in source
+    assert 'new_action.click(timeout=15_000)' in source
+
+
 def test_interrupt_trace_records_active_or_last_failed_step() -> None:
     source = DESK_RUNNER.read_text(encoding="utf-8")
     assert 'step=ACTIVE_STEP or LAST_FAILED_STEP' in source

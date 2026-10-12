@@ -272,6 +272,21 @@ def create_desk_edit_recovery_fixtures() -> dict[str, str]:
         {Capability.VIEW_ORDERS: True, Capability.EDIT_ORDER: True},
     )
     worker = _worker(suffix, str(role.name))
+
+    creator_role = frappe.get_doc(
+        {
+            "doctype": "Role",
+            "role_name": f"DCO Recovery Creator {suffix}",
+            "desk_access": 1,
+        }
+    )
+    creator_role.insert(ignore_permissions=True)
+    FrappePermissionMatrixRepository().save_role_state(
+        str(creator_role.name),
+        {Capability.CREATE_ORDER: True},
+    )
+    creator = _worker(f"creator-{suffix}", str(creator_role.name))
+
     customer = _customer(suffix)
     edge_type = _edge_type(suffix)
     route = _route(suffix, str(role.name))
@@ -284,6 +299,7 @@ def create_desk_edit_recovery_fixtures() -> dict[str, str]:
         "route": route,
         "role": str(role.name),
         "worker": worker,
+        "creator": creator,
         "customer": customer,
         "edge_type": edge_type,
     }
