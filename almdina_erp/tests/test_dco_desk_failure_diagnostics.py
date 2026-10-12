@@ -132,6 +132,10 @@ def test_page_failure_diagnostics_respect_page_lifecycle_and_trace_ui_steps() ->
         node for node in tree.body
         if isinstance(node, ast.FunctionDef) and node.name == "capture_new_form_dom_evidence"
     )
+    failure_capture = next(
+        node for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "capture_form_wait_failure"
+    )
     document_capture = next(
         node for node in tree.body
         if isinstance(node, ast.FunctionDef) and node.name == "capture_page_document_state"
@@ -160,12 +164,24 @@ def test_page_failure_diagnostics_respect_page_lifecycle_and_trace_ui_steps() ->
     assert "page.evaluate" not in ast.unparse(dom_capture)
     assert "page.evaluate" not in ast.unparse(document_capture)
     assert "form_page.evaluate" not in ast.unparse(dom_capture)
-    assert "timeout=5000" in ast.unparse(dom_capture)
+    assert "timeout=timeout_ms" in ast.unparse(dom_capture)
+    assert "timeout_ms=1500" in ast.unparse(failure_capture)
     assert "timeout=5000" in ast.unparse(document_capture)
     assert "page.evaluate" not in ast.unparse(attach)
     assert "layoutMainSections" in ast.unparse(dom_capture)
     assert "visibleCustomerInputs" in ast.unparse(dom_capture)
     assert "customerOwnerClasses" in ast.unparse(dom_capture)
+    assert "stage='at_wait_failure'" in ast.unparse(failure_capture)
+    assert "pending_api_requests" in ast.unparse(failure_capture)
+
+
+def test_final_form_dom_and_open_requests_are_in_github_step_summary() -> None:
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+
+    assert 'item.get("stage") == "at_wait_failure"' in workflow
+    assert '"dom_snapshot_at_wait_failure": latest_dom_snapshot' in workflow
+    assert '"open_api_requests_at_wait_failure": open_api_requests' in workflow
+    assert 'echo "$browser_summary"' in workflow
 
 
 def test_customer_field_smoke_is_independent_of_recovery_and_has_dispatch_input() -> None:
@@ -198,3 +214,25 @@ def test_customer_field_smoke_is_independent_of_recovery_and_has_dispatch_input(
 def test_interrupt_trace_records_active_or_last_failed_step() -> None:
     source = DESK_RUNNER.read_text(encoding="utf-8")
     assert 'step=ACTIVE_STEP or LAST_FAILED_STEP' in source
+
+
+def test_form_wait_timeout_captures_final_dom_and_pending_api_requests() -> None:
+    source = DESK_RUNNER.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    wait_loaded = next(
+        node for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "wait_for_new_form_loaded"
+    )
+    failure_capture = next(
+        node for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "capture_form_wait_failure"
+    )
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+
+    assert "capture_form_wait_failure(page, step, exc)" in ast.unparse(wait_loaded)
+    assert "stage='at_wait_failure'" in ast.unparse(failure_capture)
+    assert "'/api/method/'" in ast.unparse(failure_capture)
+    assert "pending_api_requests" in ast.unparse(failure_capture)
+    assert 'item.get("stage") == "at_wait_failure"' in workflow
+    assert '"dom_snapshot_at_wait_failure": latest_dom_snapshot' in workflow
+    assert '"open_api_requests_at_wait_failure": open_api_requests' in workflow

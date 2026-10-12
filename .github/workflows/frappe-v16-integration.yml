@@ -307,6 +307,26 @@ jobs:
               trace = json.loads((evidence / "dco-desk-trace.json").read_text())
           except (OSError, ValueError):
               trace = []
+          latest_form_diagnosis = next(
+              (item for item in reversed(trace) if item.get("event") == "new_form_wait_diagnosis"),
+              {},
+          )
+          latest_dom_event = next(
+              (
+                  item for item in reversed(trace)
+                  if item.get("event") == "new_form_dom_evidence"
+                  and item.get("stage") == "at_wait_failure"
+              ),
+              {},
+          )
+          try:
+              latest_dom_snapshot = json.loads(latest_dom_event.get("diagnostic", ""))
+          except (TypeError, ValueError):
+              latest_dom_snapshot = None
+          try:
+              open_api_requests = json.loads(latest_form_diagnosis.get("pending_api_requests", "[]"))
+          except (TypeError, ValueError):
+              open_api_requests = []
           if not diagnostics and not trace:
               print("browser evidence not available")
           else:
@@ -325,6 +345,14 @@ jobs:
                       {key: item.get(key) for key in ("event", "step", "active_step", "status", "error") if key in item}
                       for item in trace[-16:]
                   ],
+                  "last_form_wait_diagnosis": {
+                      "step": latest_form_diagnosis.get("step"),
+                      "failed_step": latest_form_diagnosis.get("failed_step"),
+                      "failure": latest_form_diagnosis.get("failure"),
+                      "snapshot_capture_failure": latest_form_diagnosis.get("dom_capture_failure"),
+                  },
+                  "dom_snapshot_at_wait_failure": latest_dom_snapshot,
+                  "open_api_requests_at_wait_failure": open_api_requests,
                   "page_errors": [
                       {"text": str(item.get("text", ""))[:180], "stack": str(item.get("stack", ""))[:1000]}
                       for item in diagnostics.get("page_errors", [])[-3:]
@@ -354,7 +382,7 @@ jobs:
             {
               echo '### Real Frappe Desk certification failure'
               echo "Failed phase: `$phase` (exit $status)"
-              echo '#### Concise browser and network diagnosis'
+              echo '#### Browser, final DOM, and open API diagnosis'
               echo '```json'
               echo "$browser_summary"
               echo '```'

@@ -330,17 +330,13 @@ def active_form_page(page: Page, step: str):
     return page_locator
 
 
-def wait_for_new_form_loaded(page: Page, step: str):
-    form_page = active_form_page(page, step)
-    ui_step(
-        page,
-        f"{step}: verify visible DCO form control",
-        lambda: expect(form_page.locator(".frappe-control:visible").first).to_be_visible(),
-    )
-    return form_page
-
-
-def capture_new_form_dom_evidence(page: Page, step: str) -> dict[str, object]:
+def capture_new_form_dom_evidence(
+    page: Page,
+    step: str,
+    *,
+    stage: str,
+    timeout_ms: int = 2_500,
+) -> dict[str, object] | None:
     def inspect():
         result = page.wait_for_function("""() => {
             const visible = element => {
@@ -349,23 +345,41 @@ def capture_new_form_dom_evidence(page: Page, step: str) -> dict[str, object]:
                 return rect.width > 0 && rect.height > 0
                     && style.visibility !== 'hidden' && style.display !== 'none';
             };
+            const summarize = element => {
+                const rect = element.getBoundingClientRect();
+                const style = getComputedStyle(element);
+                return {
+                    tag: element.tagName,
+                    classes: String(element.className || '').slice(0, 140),
+                    visible: visible(element),
+                    display: style.display,
+                    visibility: style.visibility,
+                    width: Math.round(rect.width),
+                    height: Math.round(rect.height),
+                };
+            };
             const roots = [...document.querySelectorAll('.form-page')];
             const containers = [...document.querySelectorAll('.layout-main-section')];
-            const root = containers.filter(visible).at(-1) || containers.at(-1);
-            const customer = root ? [...root.querySelectorAll(
+            const wrapper = containers.filter(visible).at(-1) || containers.at(-1) || document;
+            const controls = [...wrapper.querySelectorAll('.frappe-control')];
+            const customer = [...wrapper.querySelectorAll(
                 '.frappe-control[data-fieldname="customer"]'
-            )] : [];
+            )];
             const inputs = customer.flatMap(wrapper => [...wrapper.querySelectorAll('input')]);
             return JSON.stringify({
                 route: location.pathname,
                 documentReadyState: document.readyState,
+                visibilityState: document.visibilityState,
                 formPages: roots.length,
                 visibleFormPages: roots.filter(visible).length,
+                formPageDom: roots.slice(-4).map(summarize),
                 layoutMainSections: containers.length,
                 visibleLayoutMainSections: containers.filter(visible).length,
-                visibleControls: root ? [...root.querySelectorAll('.frappe-control')].filter(visible).length : 0,
-                visibleSections: root ? [...root.querySelectorAll('.form-section')].filter(visible).length : 0,
+                layoutMainDom: containers.slice(-4).map(summarize),
+                visibleControls: controls.filter(visible).length,
+                visibleSections: [...wrapper.querySelectorAll('.form-section')].filter(visible).length,
                 customerWrappers: customer.length,
+                visibleCustomerWrappers: customer.filter(visible).length,
                 customerInputs: inputs.length,
                 visibleCustomerInputs: inputs.filter(visible).length,
                 enabledCustomerInputs: inputs.filter(input => !input.disabled).length,
@@ -375,29 +389,101 @@ def capture_new_form_dom_evidence(page: Page, step: str) -> dict[str, object]:
                         .filter(Boolean).map(element => String(element.className || '').slice(0, 120))
                     : [],
             });
-        }""", timeout=5_000)
+        }""", timeout=timeout_ms)
         try:
             return json.loads(result.json_value())
         finally:
             result.dispose()
 
-    evidence = ui_step(page, f"{step}: capture scoped DOM evidence", inspect)
-    _trace_event("new_form_dom_evidence", step=step, diagnostic=json.dumps(evidence, ensure_ascii=False))
+    try:
+        evidence = ui_step(page, f"{step}: capture DOM evidence ({stage})", inspect)
+    except Exception as exc:
+        _trace_event(
+            "new_form_dom_capture_failed",
+            step=step,
+            stage=stage,
+            error=_redact_text(str(exc), 300),
+        )
+        return None
+    _trace_event(
+        "new_form_dom_evidence",
+        step=step,
+        stage=stage,
+        diagnostic=json.dumps(evidence, ensure_ascii=False),
+    )
     return evidence
 
 
-def wait_for_customer_interactive(page: Page, form_page, step: str):
-    capture_new_form_dom_evidence(page, step)
-    customer = ui_step(
-        page,
-        f"{step}: locate Customer input in active form page",
-        lambda: form_page.locator('.frappe-control[data-fieldname="customer"] input').first,
+def capture_form_wait_failure(page: Page, step: str, failure: Exception) -> None:
+    global LAST_FAILED_STEP
+    failed_step = LAST_FAILED_STEP or step
+    snapshot = None
+    capture_failure = None
+    if not _page_unusable(page):
+        try:
+            snapshot = capture_new_form_dom_evidence(
+                page,
+                step,
+                stage="at_wait_failure",
+                timeout_ms=1_500,
+            )
+            if snapshot is None:
+                capture_failure = "DOM snapshot unavailable; see new_form_dom_capture_failed trace event"
+        except Exception as exc:
+            capture_failure = _redact_text(str(exc), 300)
+
+    now = time.time()
+    pending_methods = [
+        {
+            "url": item["url"],
+            "resource_type": item["resource_type"],
+            "age_seconds": round(max(0, now - float(item["started"])), 1),
+        }
+        for item in PENDING_REQUESTS.values()
+        if "/api/method/" in str(item.get("url", ""))
+    ][-20:]
+    _trace_event(
+        "new_form_wait_diagnosis",
+        step=step,
+        failed_step=failed_step,
+        failure=_redact_text(str(failure), 500),
+        dom_snapshot=json.dumps(snapshot, ensure_ascii=False) if snapshot else "unavailable",
+        dom_capture_failure=capture_failure,
+        pending_api_requests=json.dumps(pending_methods, ensure_ascii=False),
     )
-    ui_step(page, f"{step}: wait for visible Customer control", lambda: customer.wait_for(state="visible", timeout=15_000))
-    enabled = ui_step(page, f"{step}: verify Customer control enabled", customer.is_enabled)
-    if not enabled:
-        raise RuntimeError(f"Customer field is visible but disabled during {step}.")
-    return customer
+    LAST_FAILED_STEP = failed_step
+
+
+def wait_for_new_form_loaded(page: Page, step: str):
+    try:
+        form_page = active_form_page(page, step)
+        ui_step(
+            page,
+            f"{step}: verify visible DCO form control",
+            lambda: expect(form_page.locator(".frappe-control:visible").first).to_be_visible(),
+        )
+        return form_page
+    except Exception as exc:
+        capture_form_wait_failure(page, step, exc)
+        raise
+
+
+def wait_for_customer_interactive(page: Page, form_page, step: str):
+    capture_new_form_dom_evidence(page, step, stage="before_customer_wait")
+    try:
+        customer = ui_step(
+            page,
+            f"{step}: locate Customer input in active form page",
+            lambda: form_page.locator('.frappe-control[data-fieldname="customer"] input').first,
+        )
+        ui_step(page, f"{step}: wait for visible Customer control", lambda: customer.wait_for(state="visible", timeout=15_000))
+        enabled = ui_step(page, f"{step}: verify Customer control enabled", customer.is_enabled)
+        if not enabled:
+            raise RuntimeError(f"Customer field is visible but disabled during {step}.")
+        return customer
+    except Exception as exc:
+        capture_form_wait_failure(page, step, exc)
+        raise
 
 
 def ui_fill(page: Page, form_page, step: str, selector: str, value: str) -> None:
@@ -615,7 +701,7 @@ def open_new_dco_form(page: Page, step: str):
     response = ui_step(page, f"{step}: navigate to NEW DCO", lambda: page.goto(new_route, wait_until="domcontentloaded"))
     if response is not None and response.status >= 400:
         raise RuntimeError(f"NEW DCO navigation returned HTTP {response.status} at {_safe_page_url(page)}.")
-    capture_new_form_dom_evidence(page, f"{step}: initial DOM after navigation")
+    capture_new_form_dom_evidence(page, f"{step}: DOM after navigation", stage="after_navigation")
     return wait_for_new_form_loaded(page, step)
 
 
