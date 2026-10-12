@@ -317,18 +317,30 @@ def wait_for_function(page: Page, step: str, expression: str, *, arg=None, timeo
 
 
 def active_form_page(page: Page, step: str):
-    page_locator = ui_step(page, f"{step}: locate active form page", lambda: page.locator(".form-page:visible").last)
-    ui_step(page, f"{step}: wait for visible form page", lambda: page_locator.wait_for(state="visible", timeout=30_000))
+    page_locator = ui_step(
+        page,
+        f"{step}: locate active form container",
+        lambda: page.locator(".layout-main-section:visible").last,
+    )
+    ui_step(
+        page,
+        f"{step}: wait for visible form container",
+        lambda: page_locator.wait_for(state="visible", timeout=15_000),
+    )
     return page_locator
 
 
 def wait_for_new_form_loaded(page: Page, step: str):
     form_page = active_form_page(page, step)
-    ui_step(page, f"{step}: verify rendered form section", lambda: expect(form_page.locator(".form-section:visible").first).to_be_visible())
+    ui_step(
+        page,
+        f"{step}: verify visible DCO form control",
+        lambda: expect(form_page.locator(".frappe-control:visible").first).to_be_visible(),
+    )
     return form_page
 
 
-def capture_new_form_dom_evidence(page: Page, form_page, step: str) -> dict[str, object]:
+def capture_new_form_dom_evidence(page: Page, step: str) -> dict[str, object]:
     def inspect():
         result = page.wait_for_function("""() => {
             const visible = element => {
@@ -337,20 +349,31 @@ def capture_new_form_dom_evidence(page: Page, form_page, step: str) -> dict[str,
                 return rect.width > 0 && rect.height > 0
                     && style.visibility !== 'hidden' && style.display !== 'none';
             };
-            const roots = [...document.querySelectorAll('.form-page')].filter(visible);
-            const root = roots.at(-1);
-            if (!root) return false;
-            const customer = [...root.querySelectorAll(
+            const roots = [...document.querySelectorAll('.form-page')];
+            const containers = [...document.querySelectorAll('.layout-main-section')];
+            const root = containers.filter(visible).at(-1) || containers.at(-1);
+            const customer = root ? [...root.querySelectorAll(
                 '.frappe-control[data-fieldname="customer"]'
-            )];
+            )] : [];
             const inputs = customer.flatMap(wrapper => [...wrapper.querySelectorAll('input')]);
             return JSON.stringify({
-                visibleFormPages: roots.length,
-                visibleSections: [...root.querySelectorAll('.form-section')].filter(visible).length,
+                route: location.pathname,
+                documentReadyState: document.readyState,
+                formPages: roots.length,
+                visibleFormPages: roots.filter(visible).length,
+                layoutMainSections: containers.length,
+                visibleLayoutMainSections: containers.filter(visible).length,
+                visibleControls: root ? [...root.querySelectorAll('.frappe-control')].filter(visible).length : 0,
+                visibleSections: root ? [...root.querySelectorAll('.form-section')].filter(visible).length : 0,
                 customerWrappers: customer.length,
                 customerInputs: inputs.length,
                 visibleCustomerInputs: inputs.filter(visible).length,
                 enabledCustomerInputs: inputs.filter(input => !input.disabled).length,
+                customerOwnerClasses: inputs[0]
+                    ? [inputs[0].parentElement, inputs[0].parentElement?.parentElement,
+                        inputs[0].parentElement?.parentElement?.parentElement]
+                        .filter(Boolean).map(element => String(element.className || '').slice(0, 120))
+                    : [],
             });
         }""", timeout=5_000)
         try:
@@ -364,7 +387,7 @@ def capture_new_form_dom_evidence(page: Page, form_page, step: str) -> dict[str,
 
 
 def wait_for_customer_interactive(page: Page, form_page, step: str):
-    capture_new_form_dom_evidence(page, form_page, step)
+    capture_new_form_dom_evidence(page, step)
     customer = ui_step(
         page,
         f"{step}: locate Customer input in active form page",
@@ -592,6 +615,7 @@ def open_new_dco_form(page: Page, step: str):
     response = ui_step(page, f"{step}: navigate to NEW DCO", lambda: page.goto(new_route, wait_until="domcontentloaded"))
     if response is not None and response.status >= 400:
         raise RuntimeError(f"NEW DCO navigation returned HTTP {response.status} at {_safe_page_url(page)}.")
+    capture_new_form_dom_evidence(page, f"{step}: initial DOM after navigation")
     return wait_for_new_form_loaded(page, step)
 
 

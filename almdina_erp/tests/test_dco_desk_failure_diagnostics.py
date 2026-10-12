@@ -70,6 +70,10 @@ def test_new_local_gate_uses_desk_interactions_without_recovery_instrumentation(
         node for node in tree.body
         if isinstance(node, ast.FunctionDef) and node.name == "active_form_page"
     )
+    form_readiness = next(
+        node for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "wait_for_new_form_loaded"
+    )
     edit_certification = next(
         node for node in tree.body
         if isinstance(node, ast.FunctionDef)
@@ -98,7 +102,8 @@ def test_new_local_gate_uses_desk_interactions_without_recovery_instrumentation(
     assert "cur_frm" not in ast.unparse(certification)
     assert "cur_frm" not in ast.unparse(smoke)
     assert "open_new_dco_form" in ast.unparse(certification)
-    assert "form-page:visible" in ast.unparse(form_loader)
+    assert ".layout-main-section:visible" in ast.unparse(form_loader)
+    assert ".frappe-control:visible" in ast.unparse(form_readiness)
     assert "wait_for_customer_interactive" in ast.unparse(certification)
     assert "step_started" in source
     assert "certify_edit_to_new_transition(page)" in ast.unparse(edit_certification)
@@ -158,6 +163,9 @@ def test_page_failure_diagnostics_respect_page_lifecycle_and_trace_ui_steps() ->
     assert "timeout=5000" in ast.unparse(dom_capture)
     assert "timeout=5000" in ast.unparse(document_capture)
     assert "page.evaluate" not in ast.unparse(attach)
+    assert "layoutMainSections" in ast.unparse(dom_capture)
+    assert "visibleCustomerInputs" in ast.unparse(dom_capture)
+    assert "customerOwnerClasses" in ast.unparse(dom_capture)
 
 
 def test_customer_field_smoke_is_independent_of_recovery_and_has_dispatch_input() -> None:
