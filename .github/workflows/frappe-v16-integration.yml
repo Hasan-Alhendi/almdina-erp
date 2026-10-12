@@ -23,6 +23,11 @@ on:
         required: false
         default: false
         type: boolean
+      new_customer_field_smoke_only:
+        description: Run NEW form-load and interactive Customer field smoke without Recovery
+        required: false
+        default: false
+        type: boolean
       new_local_gate_only:
         description: Run only real Desk NEW recovery, hydration and official Save
         required: false
@@ -230,7 +235,7 @@ jobs:
           bench --site test.localhost execute frappe.get_all --kwargs '{"doctype":"DocType","filters":{"module":"Almdina ERP"},"pluck":"name"}'
 
       - name: Run Almdina ERP tests
-        if: github.event_name != 'workflow_dispatch' || (inputs.desk_only != true && inputs.new_form_smoke_only != true && inputs.new_local_gate_only != true && inputs.new_stress_only != true)
+        if: github.event_name != 'workflow_dispatch' || (inputs.desk_only != true && inputs.new_form_smoke_only != true && inputs.new_customer_field_smoke_only != true && inputs.new_local_gate_only != true && inputs.new_stress_only != true)
         run: |
           cd "$RUNNER_TEMP/frappe-bench"
           bench --site test.localhost set-config allow_tests true
@@ -275,6 +280,7 @@ jobs:
           DCO_DESK_FIXTURE_FILE: ${{ runner.temp }}/dco-desk-fixtures.json
           DCO_DESK_EVIDENCE_DIR: ${{ runner.temp }}/dco-desk-evidence
           DCO_DESK_NEW_FORM_SMOKE_ONLY: ${{ inputs.new_form_smoke_only && '1' || '0' }}
+          DCO_DESK_NEW_CUSTOMER_FIELD_SMOKE_ONLY: ${{ inputs.new_customer_field_smoke_only && '1' || '0' }}
           DCO_DESK_NEW_LOCAL_GATE_ONLY: ${{ inputs.new_local_gate_only && '1' || '0' }}
           DCO_DESK_NEW_STRESS_ONLY: ${{ inputs.new_stress_only && '1' || '0' }}
           DCO_DESK_NEW_STRESS_PIECE_COUNT: ${{ inputs.new_stress_piece_count || '200' }}

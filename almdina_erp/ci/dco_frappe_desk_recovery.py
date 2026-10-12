@@ -22,7 +22,11 @@ BROWSER_TRACE: list[dict[str, str | int | float | None]] = []
 PENDING_REQUESTS: dict[str, dict[str, str | float]] = {}
 TRACE_PATH: Path | None = None
 ACTIVE_STEP: str | None = None
+LAST_FAILED_STEP: str | None = None
 LAST_PAGE_STATE: dict[str, object] | None = None
+LAST_ACTIVE_PAGE: Page | None = None
+PAGE_STATE_CACHE: dict[int, dict[str, object]] = {}
+PAGE_LIFECYCLE: dict[int, dict[str, object]] = {}
 
 
 def _redact_text(value: str, limit: int = 1000) -> str:
@@ -80,9 +84,60 @@ def _savedocs_request_data(request) -> tuple[dict[str, object], str]:
     return (document if isinstance(document, dict) else {}), action
 
 
+def _page_lifecycle(page: Page) -> dict[str, object]:
+    return PAGE_LIFECYCLE.setdefault(id(page), {
+        "closed": False,
+        "crashed": False,
+        "url": "",
+        "last_event": "attached",
+    })
+
+
+def _page_unusable(page: Page) -> bool:
+    lifecycle = _page_lifecycle(page)
+    return bool(lifecycle["closed"] or lifecycle["crashed"])
+
+
+def _safe_page_url(page: Page) -> str:
+    lifecycle = _page_lifecycle(page)
+    # URL comes only from main-frame navigation events so diagnostics never
+    # query a renderer that may already be stalled.
+    return _safe_url(str(lifecycle.get("url") or ""))
+
+
+def ui_step(page: Page, step: str, action):
+    """Trace each user-like locator operation before touching the page."""
+    global ACTIVE_STEP, LAST_ACTIVE_PAGE, LAST_FAILED_STEP
+    LAST_ACTIVE_PAGE = page
+    ACTIVE_STEP = step
+    LAST_FAILED_STEP = None
+    # The trace writer persists atomically before the Playwright action starts.
+    _trace_event("step_started", step=step)
+    try:
+        result = action()
+    except Exception as exc:
+        LAST_FAILED_STEP = step
+        _trace_event("step_failed", step=step, error=_redact_text(str(exc)))
+        ACTIVE_STEP = None
+        raise RuntimeError(f"Desk UI step '{step}' failed: {exc}") from exc
+    _trace_event("step_completed", step=step)
+    ACTIVE_STEP = None
+    return result
+
+
 def attach_browser_diagnostics(page: Page) -> None:
     global LAST_PAGE_STATE
     LAST_PAGE_STATE = None
+    lifecycle = _page_lifecycle(page)
+    PAGE_STATE_CACHE[id(page)] = {}
+
+    def mark_lifecycle(event: str, **details) -> None:
+        lifecycle["last_event"] = event
+        if event == "page_closed":
+            lifecycle["closed"] = True
+        elif event == "page_crashed":
+            lifecycle["crashed"] = True
+        _trace_event(event, **details)
 
     def append(bucket: str, item: dict[str, str | int | None]) -> None:
         events = DIAGNOSTIC_EVENTS[bucket]
@@ -90,50 +145,21 @@ def attach_browser_diagnostics(page: Page) -> None:
         if len(events) > 100:
             del events[:-100]
 
-    page.on("framenavigated", lambda frame: _trace_event(
-        "navigation", url=_safe_url(frame.url)
-    ) if frame == page.main_frame else None)
-    def capture_document_state() -> None:
-        global LAST_PAGE_STATE
+    def on_frame_navigated(frame) -> None:
         try:
-            state = page.evaluate("""() => {
-                const boot = window.frappe && frappe.boot;
-                return {
-                    url: location.href,
-                    title: document.title,
-                    readyState: document.readyState,
-                    frappePresent: Boolean(window.frappe),
-                    bootPresent: Boolean(boot),
-                    setupComplete: boot && Boolean(boot.sysdefaults && boot.sysdefaults.setup_complete),
-                    sysSetupComplete: boot && boot.sysdefaults && Boolean(boot.sysdefaults.setup_complete),
-                    ajaxCount: window.frappe && frappe.request && frappe.request.ajax_count,
-                    route: (() => {
-                        const value = window.frappe && typeof frappe.get_route === "function"
-                            ? frappe.get_route()
-                            : null;
-                        return Array.isArray(value) ? value.map(String).join("/") : "";
-                    })(),
-                    bodyText: (document.body && document.body.innerText || "").slice(0, 400),
-                };
-            }""")
-            LAST_PAGE_STATE = state
-            _trace_event(
-                "document_loaded",
-                url=_safe_url(str(state.get("url", ""))),
-                title=_redact_text(str(state.get("title", "")), 120),
-                ready_state=str(state.get("readyState", "")),
-                frappe_present=bool(state.get("frappePresent")),
-                boot_present=bool(state.get("bootPresent")),
-                setup_complete=bool(state.get("setupComplete")),
-                sys_setup_complete=bool(state.get("sysSetupComplete")),
-                ajax_count=state.get("ajaxCount") if isinstance(state.get("ajaxCount"), int) else None,
-                route=_redact_text(str(state.get("route", "")), 120),
-                body_text=_redact_text(str(state.get("bodyText", "")), 400),
-            )
+            if frame == page.main_frame:
+                lifecycle["url"] = frame.url
+                mark_lifecycle("navigation", url=_safe_url(frame.url))
         except Exception as exc:
-            _trace_event("document_state_unavailable", error=_redact_text(str(exc), 180))
+            mark_lifecycle("navigation_event_unavailable", error=_redact_text(str(exc), 180))
 
-    page.on("load", lambda: capture_document_state())
+    page.on("close", lambda: mark_lifecycle("page_closed", url=_safe_url(str(lifecycle.get("url", "")))))
+    page.on("crash", lambda: mark_lifecycle("page_crashed", url=_safe_url(str(lifecycle.get("url", "")))))
+    page.on("framenavigated", on_frame_navigated)
+
+    page.on("load", lambda: _trace_event(
+        "page_load_event", url=_safe_url(str(lifecycle.get("url") or ""))
+    ))
     page.on("request", lambda request: (
         PENDING_REQUESTS.__setitem__(request.url, {
             "url": _safe_url(request.url),
@@ -178,8 +204,57 @@ def attach_browser_diagnostics(page: Page) -> None:
         or response.status >= 400 else None)
 
 
+def capture_page_document_state(page: Page, step: str) -> dict[str, object]:
+    def snapshot() -> dict[str, object]:
+        result = page.wait_for_function("""() => JSON.stringify((() => {
+                const boot = window.frappe && frappe.boot;
+                return {
+                    url: location.href,
+                    title: document.title,
+                    readyState: document.readyState,
+                    frappePresent: Boolean(window.frappe),
+                    bootPresent: Boolean(boot),
+                    setupComplete: boot && Boolean(boot.sysdefaults && boot.sysdefaults.setup_complete),
+                    sysSetupComplete: boot && boot.sysdefaults && Boolean(boot.sysdefaults.setup_complete),
+                    ajaxCount: window.frappe && frappe.request && frappe.request.ajax_count,
+                    route: (() => {
+                        const value = window.frappe && typeof frappe.get_route === "function"
+                            ? frappe.get_route()
+                            : null;
+                        return Array.isArray(value) ? value.map(String).join("/") : "";
+                    })(),
+                    bodyText: (document.body && document.body.innerText || "").slice(0, 400),
+                };
+            })())""", timeout=5_000)
+        try:
+            state = json.loads(result.json_value())
+        finally:
+            result.dispose()
+        return state
+
+    state = ui_step(page, step, snapshot)
+    global LAST_PAGE_STATE
+    LAST_PAGE_STATE = state
+    PAGE_STATE_CACHE[id(page)] = dict(state)
+    _trace_event(
+        "document_loaded",
+        url=_safe_url(str(state.get("url", ""))),
+        title=_redact_text(str(state.get("title", "")), 120),
+        ready_state=str(state.get("readyState", "")),
+        frappe_present=bool(state.get("frappePresent")),
+        boot_present=bool(state.get("bootPresent")),
+        setup_complete=bool(state.get("setupComplete")),
+        sys_setup_complete=bool(state.get("sysSetupComplete")),
+        ajax_count=state.get("ajaxCount") if isinstance(state.get("ajaxCount"), int) else None,
+        route=_redact_text(str(state.get("route", "")), 120),
+        body_text=_redact_text(str(state.get("bodyText", "")), 400),
+    )
+    return state
+
+
 def evaluate(page: Page, step: str, expression: str, arg=None):
-    global ACTIVE_STEP
+    global ACTIVE_STEP, LAST_ACTIVE_PAGE
+    LAST_ACTIVE_PAGE = page
     ACTIVE_STEP = step
     _trace_event("step_started", step=step)
     try:
@@ -217,12 +292,20 @@ def evaluate(page: Page, step: str, expression: str, arg=None):
 def read_page_state(page: Page) -> dict:
     # Chromium's main thread may be unresponsive after a page error. Failure
     # handling must not re-enter it with another evaluate or load-state wait.
-    state = dict(LAST_PAGE_STATE or {})
-    state["url"] = _safe_url(page.url)
+    state = dict(PAGE_STATE_CACHE.get(id(page), LAST_PAGE_STATE or {}))
+    state["url"] = _safe_page_url(page)
+    lifecycle = _page_lifecycle(page)
+    state["pageLifecycle"] = {
+        "closed": lifecycle["closed"],
+        "crashed": lifecycle["crashed"],
+        "last_event": lifecycle["last_event"],
+    }
     return state
 
 
 def wait_for_function(page: Page, step: str, expression: str, *, arg=None, timeout: int = 30_000):
+    global LAST_ACTIVE_PAGE
+    LAST_ACTIVE_PAGE = page
     _trace_event("wait_started", step=step)
     try:
         page.wait_for_function(expression, arg=arg, timeout=timeout)
@@ -233,6 +316,80 @@ def wait_for_function(page: Page, step: str, expression: str, *, arg=None, timeo
     _trace_event("wait_completed", step=step)
 
 
+def active_form_page(page: Page, step: str):
+    page_locator = ui_step(page, f"{step}: locate active form page", lambda: page.locator(".form-page:visible").last)
+    ui_step(page, f"{step}: wait for visible form page", lambda: page_locator.wait_for(state="visible", timeout=30_000))
+    return page_locator
+
+
+def wait_for_new_form_loaded(page: Page, step: str):
+    form_page = active_form_page(page, step)
+    ui_step(page, f"{step}: verify rendered form section", lambda: expect(form_page.locator(".form-section:visible").first).to_be_visible())
+    return form_page
+
+
+def capture_new_form_dom_evidence(page: Page, form_page, step: str) -> dict[str, object]:
+    def inspect():
+        result = page.wait_for_function("""() => {
+            const visible = element => {
+                const rect = element.getBoundingClientRect();
+                const style = getComputedStyle(element);
+                return rect.width > 0 && rect.height > 0
+                    && style.visibility !== 'hidden' && style.display !== 'none';
+            };
+            const roots = [...document.querySelectorAll('.form-page')].filter(visible);
+            const root = roots.at(-1);
+            if (!root) return false;
+            const customer = [...root.querySelectorAll(
+                '.frappe-control[data-fieldname="customer"]'
+            )];
+            const inputs = customer.flatMap(wrapper => [...wrapper.querySelectorAll('input')]);
+            return JSON.stringify({
+                visibleFormPages: roots.length,
+                visibleSections: [...root.querySelectorAll('.form-section')].filter(visible).length,
+                customerWrappers: customer.length,
+                customerInputs: inputs.length,
+                visibleCustomerInputs: inputs.filter(visible).length,
+                enabledCustomerInputs: inputs.filter(input => !input.disabled).length,
+            });
+        }""", timeout=5_000)
+        try:
+            return json.loads(result.json_value())
+        finally:
+            result.dispose()
+
+    evidence = ui_step(page, f"{step}: capture scoped DOM evidence", inspect)
+    _trace_event("new_form_dom_evidence", step=step, diagnostic=json.dumps(evidence, ensure_ascii=False))
+    return evidence
+
+
+def wait_for_customer_interactive(page: Page, form_page, step: str):
+    capture_new_form_dom_evidence(page, form_page, step)
+    customer = ui_step(
+        page,
+        f"{step}: locate Customer input in active form page",
+        lambda: form_page.locator('.frappe-control[data-fieldname="customer"] input').first,
+    )
+    ui_step(page, f"{step}: wait for visible Customer control", lambda: customer.wait_for(state="visible", timeout=15_000))
+    enabled = ui_step(page, f"{step}: verify Customer control enabled", customer.is_enabled)
+    if not enabled:
+        raise RuntimeError(f"Customer field is visible but disabled during {step}.")
+    return customer
+
+
+def ui_fill(page: Page, form_page, step: str, selector: str, value: str) -> None:
+    ui_step(page, step, lambda: form_page.locator(selector).first.fill(value))
+
+
+def ui_select(page: Page, form_page, step: str, selector: str, *, label: str) -> None:
+    ui_step(page, step, lambda: form_page.locator(selector).first.select_option(label=label))
+
+
+def ui_click(page: Page, step: str, selector: str, *, scope=None) -> None:
+    root = scope if scope is not None else page
+    ui_step(page, step, lambda: root.locator(selector).first.click())
+
+
 def open_dco(page: Page, name: str) -> None:
     target_url = f"{DESK_URL}/app/door-cutting-order/{name}"
     _trace_event("open_dco_started", url=_safe_url(target_url))
@@ -240,7 +397,7 @@ def open_dco(page: Page, name: str) -> None:
     # Desk may satisfy this navigation through its SPA router and history API;
     # Playwright then returns None because there was no top-level HTTP response.
     if response is not None and response.status >= 400:
-        raise RuntimeError(f"DCO navigation returned HTTP {response.status}: {_safe_url(page.url)}")
+        raise RuntimeError(f"DCO navigation returned HTTP {response.status}: {_safe_page_url(page)}")
     try:
         wait_for_function(page, f"load DCO {name}",
             "name => window.cur_frm && window.cur_frm.doc && window.cur_frm.doc.name === name",
@@ -252,7 +409,7 @@ def open_dco(page: Page, name: str) -> None:
         raise RuntimeError(
             f"Loading DCO {name} in Desk timed out: {exc}; desk_state={state}"
         ) from exc
-    _trace_event("open_dco_completed", url=_safe_url(page.url))
+    _trace_event("open_dco_completed", url=_safe_page_url(page))
 
 
 def start_edit_and_set_note(page: Page, name: str, value: str, checkpoint: bool) -> dict:
@@ -298,11 +455,12 @@ def login_to_desk(page: Page, user: str, password: str) -> None:
     response = page.goto(f"{DESK_URL}/login", wait_until="domcontentloaded")
     if response is None or response.status >= 400:
         status = response.status if response is not None else None
-        raise RuntimeError(f"Frappe login page returned HTTP {status}: {_safe_url(page.url)}")
-    page.locator("#login_email").wait_for(state="visible", timeout=15_000)
-    page.locator("#login_email").fill(user)
-    page.locator("#login_password").fill(password)
-    page.get_by_role("button", name=re.compile(r"^(Login|Continue)$")).click()
+        raise RuntimeError(f"Frappe login page returned HTTP {status}: {_safe_page_url(page)}")
+    email = ui_step(page, f"{user} login: locate email field", lambda: page.locator("#login_email"))
+    ui_step(page, f"{user} login: wait for email field", lambda: email.wait_for(state="visible", timeout=15_000))
+    ui_step(page, f"{user} login: enter email", lambda: email.fill(user))
+    ui_step(page, f"{user} login: enter password", lambda: page.locator("#login_password").fill(password))
+    ui_step(page, f"{user} login: submit credentials", lambda: page.get_by_role("button", name=re.compile(r"^(Login|Continue)$")).click())
     wait_for_function(page, f"{user} login establishes a Desk session",
         f"() => window.frappe && frappe.session && frappe.session.user === {json.dumps(user)}",
         timeout=30_000,
@@ -314,6 +472,7 @@ def login_to_desk(page: Page, user: str, password: str) -> None:
         "window.location.pathname.startsWith('/desk')",
         timeout=30_000,
     )
+    capture_page_document_state(page, f"capture {user} Desk boot state")
     _trace_event("login_established")
 
 
@@ -428,95 +587,67 @@ def certify_worker_identity_and_dynamic_permissions(admin_page: Page) -> None:
         worker_context.close()
 
 
+def open_new_dco_form(page: Page, step: str):
+    new_route = f"{DESK_URL}/app/door-cutting-order/new-door-cutting-order-1"
+    response = ui_step(page, f"{step}: navigate to NEW DCO", lambda: page.goto(new_route, wait_until="domcontentloaded"))
+    if response is not None and response.status >= 400:
+        raise RuntimeError(f"NEW DCO navigation returned HTTP {response.status} at {_safe_page_url(page)}.")
+    return wait_for_new_form_loaded(page, step)
+
+
 def certify_actual_frappe_desk_new_recovery(page: Page, *, piece_count: int = 10) -> None:
     """Exercise NEW recovery through Desk UI; the 200-piece path is stress-only."""
-    new_route = f"{DESK_URL}/app/door-cutting-order/new-door-cutting-order-1"
-    response = page.goto(new_route, wait_until="domcontentloaded")
-    if response is not None and response.status >= 400:
-        raise RuntimeError(f"NEW DCO navigation returned HTTP {response.status}.")
-    wait_for_function(
-        page,
-        "open a real NEW DCO form",
-        "() => window.cur_frm && window.cur_frm.doctype === 'Door Cutting Order' "
-        "&& window.cur_frm.is_new()",
-        timeout=30_000,
-    )
-
-    def require_visible_field(fieldname: str, control_selector: str = "input"):
-        control = page.locator(f'[data-fieldname="{fieldname}"] {control_selector}').first
-        try:
-            control.wait_for(state="visible", timeout=15_000)
-        except Exception as exc:
-            wrappers = page.locator(f'[data-fieldname="{fieldname}"]')
-            wrapper_count = wrappers.count()
-            wrapper_diagnostics = []
-            for index in range(wrapper_count):
-                wrapper = wrappers.nth(index)
-                controls = {}
-                for tag in ("input", "textarea", "select"):
-                    matches = wrapper.locator(tag)
-                    count = matches.count()
-                    controls[tag] = {
-                        "count": count,
-                        "visible_count": sum(
-                            1 for control_index in range(count)
-                            if matches.nth(control_index).is_visible()
-                        ),
-                    }
-                wrapper_diagnostics.append({
-                    "class_name": (wrapper.get_attribute("class") or "")[:120],
-                    "visible": wrapper.is_visible(),
-                    "controls": controls,
-                })
-            state = {
-                "url": page.url,
-                "control_selector": control_selector,
-                "wrapper_count": wrapper_count,
-                "wrappers": wrapper_diagnostics,
-            }
-            safe_state = {
-                **state,
-                "url": _safe_url(str(state.get("url", ""))),
-            }
-            _trace_event("new_form_field_not_ready", fieldname=fieldname,
-                diagnostic=json.dumps(safe_state, ensure_ascii=False))
-            raise RuntimeError(
-                f"NEW DCO UI field {fieldname!r} did not become visible: {safe_state}"
-            ) from exc
-        return control
+    form_page = open_new_dco_form(page, "NEW DCO form loaded")
+    customer = wait_for_customer_interactive(page, form_page, "NEW customer field interactive readiness")
 
     def fill_link(fieldname: str, value: str) -> None:
-        control = require_visible_field(fieldname)
-        control.fill(value)
-        page.locator(".awesomplete li").filter(has_text=value).first.click(timeout=10_000)
+        if fieldname == "customer":
+            control = customer
+        else:
+            control = ui_step(
+                page,
+                f"NEW {fieldname}: locate control in active form page",
+                lambda: form_page.locator(f'.frappe-control[data-fieldname="{fieldname}"] input').first,
+            )
+            ui_step(page, f"NEW {fieldname}: wait for visible control", lambda: control.wait_for(state="visible", timeout=15_000))
+        ui_step(page, f"NEW {fieldname}: fill Link field", lambda: control.fill(value))
+        ui_step(
+            page,
+            f"NEW {fieldname}: choose Link suggestion",
+            lambda: page.locator(".awesomplete li").filter(has_text=value).first.click(timeout=10_000),
+        )
 
     fill_link("customer", FIXTURES["customer"])
-    require_visible_field("order_notes", "textarea").fill(
-        "Local Recovery checkpoint long note — " + "قطع MDF وملاحظات المعمل؛ " * 24
+    ui_fill(
+        page, form_page, "NEW fill long order notes",
+        '.frappe-control[data-fieldname="order_notes"] textarea',
+        "Local Recovery checkpoint long note — " + "قطع MDF وملاحظات المعمل؛ " * 24,
     )
-    page.locator('[data-fieldname="board_description"] input').fill("MDF أبيض 18 مم")
-    page.locator('[data-fieldname="board_length_cm"] input').fill("244")
-    page.locator('[data-fieldname="board_width_cm"] input').fill("122")
+    ui_fill(page, form_page, "NEW fill board description", '.frappe-control[data-fieldname="board_description"] input', "MDF أبيض 18 مم")
+    ui_fill(page, form_page, "NEW fill board length", '.frappe-control[data-fieldname="board_length_cm"] input', "244")
+    ui_fill(page, form_page, "NEW fill board width", '.frappe-control[data-fieldname="board_width_cm"] input', "122")
     fill_link("default_edge_type", FIXTURES["edge_type"])
-    page.locator('[data-fieldname="edge_color"] input').fill("White")
-    page.locator('[data-fieldname="order_cutting_machine"] select').select_option(label="CNC")
+    ui_fill(page, form_page, "NEW fill edge color", '.frappe-control[data-fieldname="edge_color"] input', "White")
+    ui_select(page, form_page, "NEW select cutting machine", '.frappe-control[data-fieldname="order_cutting_machine"] select', label="CNC")
 
-    table = page.locator('[data-fieldname="pieces_fast_entry"] .dco-fast-table')
-    expect(table).to_be_visible()
+    ui_step(
+        page,
+        "NEW measurements table visible in active form page",
+        lambda: expect(form_page.locator('[data-fieldname="pieces_fast_entry"] .dco-fast-table')).to_be_visible(),
+    )
     for index in range(piece_count):
-        virtual = table.locator("tbody tr.dco-virtual-row")
-        virtual.locator('input[data-field="width_cm"]').fill(str(40 + index))
-        row = table.locator("tbody tr[data-row-name]:not(.dco-virtual-row)").last
-        row.locator('input[data-field="length_cm"]').fill(str(180 + index))
-        row.locator('input[data-field="qty"]').fill(str(1 + index % 3))
-        row.locator('input[data-field="notes"]').fill(f"قياس القطعة {index + 1}: ملاحظة معملية طويلة " * 4)
+        ui_step(page, f"NEW piece {index + 1}: enter width", lambda index=index: form_page.locator('[data-fieldname="pieces_fast_entry"] .dco-fast-table tbody tr.dco-virtual-row input[data-field="width_cm"]').fill(str(40 + index)))
+        row_selector = '[data-fieldname="pieces_fast_entry"] .dco-fast-table tbody tr[data-row-name]:not(.dco-virtual-row)'
+        ui_step(page, f"NEW piece {index + 1}: enter length", lambda index=index: form_page.locator(row_selector).last.locator('input[data-field="length_cm"]').fill(str(180 + index)))
+        ui_step(page, f"NEW piece {index + 1}: enter quantity", lambda index=index: form_page.locator(row_selector).last.locator('input[data-field="qty"]').fill(str(1 + index % 3)))
+        ui_step(page, f"NEW piece {index + 1}: enter notes", lambda index=index: form_page.locator(row_selector).last.locator('input[data-field="notes"]').fill(f"قياس القطعة {index + 1}: ملاحظة معملية طويلة " * 4))
         if index % 2 == 0:
-            row.locator('button[data-check-field="extra_liner"]').click()
+            ui_step(page, f"NEW piece {index + 1}: select Liner extra", lambda: form_page.locator(row_selector).last.locator('button[data-check-field="extra_liner"]').click())
         if index == 0:
-            row.locator('button[data-check-field="extra_back_groove"]').click()
+            ui_step(page, "NEW piece 1: select Back Groove extra", lambda: form_page.locator(row_selector).last.locator('button[data-check-field="extra_back_groove"]').click())
 
-    expect(table.locator("tbody tr[data-row-name]:not(.dco-virtual-row)")).to_have_count(piece_count)
-    expect(page.locator(".dco-recovery-status[data-recovery-state='LOCAL_SAVED']")).to_be_visible(timeout=30_000)
+    ui_step(page, "NEW checkpoint: verify row count", lambda: expect(form_page.locator('[data-fieldname="pieces_fast_entry"] .dco-fast-table tbody tr[data-row-name]:not(.dco-virtual-row)')).to_have_count(piece_count))
+    ui_step(page, "NEW checkpoint: wait for LOCAL_SAVED acknowledgement", lambda: expect(page.locator(".dco-recovery-status[data-recovery-state='LOCAL_SAVED']")).to_be_visible(timeout=30_000))
     _trace_event("new_recovery_checkpoint_confirmed", piece_count=piece_count)
 
     save_requests = []
@@ -527,52 +658,46 @@ def certify_actual_frappe_desk_new_recovery(page: Page, *, piece_count: int = 10
         save_requests.append({"document": document, "action": action})
 
     page.on("request", record_save_request)
-    page.reload(wait_until="domcontentloaded")
-    wait_for_function(
-        page,
-        "NEW DCO form ready after refresh",
-        "() => window.cur_frm && window.cur_frm.doctype === 'Door Cutting Order' && window.cur_frm.is_new()",
-        timeout=30_000,
-    )
-    recovery_dialog = page.locator('[data-recovery-action="continue"]')
-    recovery_dialog.wait_for(state="visible", timeout=30_000)
-    recovery_dialog.click()
+    ui_step(page, "NEW recovery: reload Desk form", lambda: page.reload(wait_until="domcontentloaded"))
+    form_page = wait_for_new_form_loaded(page, "NEW DCO form loaded after refresh")
+    wait_for_customer_interactive(page, form_page, "NEW customer field ready after refresh")
+    ui_step(page, "NEW recovery: wait for Continue action", lambda: page.locator('[data-recovery-action="continue"]').wait_for(state="visible", timeout=30_000))
+    ui_click(page, "NEW recovery: Continue draft", '[data-recovery-action="continue"]')
+    ui_step(page, "NEW recovery: wait for Continue dialog to close", lambda: page.locator('[data-recovery-action="continue"]').wait_for(state="hidden", timeout=30_000))
 
-    recovery_dialog.wait_for(state="hidden", timeout=30_000)
-    expect(table.locator("tbody tr[data-row-name]:not(.dco-virtual-row)")).to_have_count(piece_count)
-    expect(page.locator('[data-fieldname="customer"] input')).to_have_value(FIXTURES["customer"])
-    expect(page.locator('[data-fieldname="order_notes"] textarea')).to_have_value(
-        "Local Recovery checkpoint long note — " + "قطع MDF وملاحظات المعمل؛ " * 24
-    )
-    expect(page.locator('[data-fieldname="board_description"] input')).to_have_value("MDF أبيض 18 مم")
-    expect(page.locator('[data-fieldname="board_length_cm"] input')).to_have_value("244")
-    expect(page.locator('[data-fieldname="board_width_cm"] input')).to_have_value("122")
-    expect(page.locator('[data-fieldname="default_edge_type"] input')).to_have_value(FIXTURES["edge_type"])
-    expect(page.locator('[data-fieldname="edge_color"] input')).to_have_value("White")
-    expect(page.locator('[data-fieldname="order_cutting_machine"] select')).to_have_value("CNC")
-    rows = table.locator("tbody tr[data-row-name]:not(.dco-virtual-row)")
-    expect(rows).to_have_count(piece_count)
+    table_selector = '[data-fieldname="pieces_fast_entry"] .dco-fast-table'
+    ui_step(page, "NEW recovery: verify customer restored", lambda: expect(form_page.locator('.frappe-control[data-fieldname="customer"] input')).to_have_value(FIXTURES["customer"]))
+    ui_step(page, "NEW recovery: verify order notes restored", lambda: expect(form_page.locator('.frappe-control[data-fieldname="order_notes"] textarea')).to_have_value("Local Recovery checkpoint long note — " + "قطع MDF وملاحظات المعمل؛ " * 24))
+    ui_step(page, "NEW recovery: verify board description restored", lambda: expect(form_page.locator('.frappe-control[data-fieldname="board_description"] input')).to_have_value("MDF أبيض 18 مم"))
+    ui_step(page, "NEW recovery: verify board length restored", lambda: expect(form_page.locator('.frappe-control[data-fieldname="board_length_cm"] input')).to_have_value("244"))
+    ui_step(page, "NEW recovery: verify board width restored", lambda: expect(form_page.locator('.frappe-control[data-fieldname="board_width_cm"] input')).to_have_value("122"))
+    ui_step(page, "NEW recovery: verify edge type restored", lambda: expect(form_page.locator('.frappe-control[data-fieldname="default_edge_type"] input')).to_have_value(FIXTURES["edge_type"]))
+    ui_step(page, "NEW recovery: verify edge color restored", lambda: expect(form_page.locator('.frappe-control[data-fieldname="edge_color"] input')).to_have_value("White"))
+    ui_step(page, "NEW recovery: verify cutting machine restored", lambda: expect(form_page.locator('.frappe-control[data-fieldname="order_cutting_machine"] select')).to_have_value("CNC"))
+    rows_selector = f"{table_selector} tbody tr[data-row-name]:not(.dco-virtual-row)"
+    ui_step(page, "NEW recovery: verify restored row count", lambda: expect(form_page.locator(rows_selector)).to_have_count(piece_count))
     for index in range(piece_count):
-        expect(rows.nth(index).locator('input[data-field="width_cm"]')).to_have_value(str(40 + index))
-        expect(rows.nth(index).locator('input[data-field="length_cm"]')).to_have_value(str(180 + index))
-        expect(rows.nth(index).locator('input[data-field="qty"]')).to_have_value(str(1 + index % 3))
-        expect(rows.nth(index).locator('input[data-field="notes"]')).to_have_value(
-            f"قياس القطعة {index + 1}: ملاحظة معملية طويلة " * 4
-        )
-        expect(rows.nth(index).locator('button[data-check-field="extra_liner"]')).to_have_attribute(
-            "aria-pressed", "true" if index % 2 == 0 else "false"
-        )
-        expect(rows.nth(index).locator('button[data-check-field="extra_back_groove"]')).to_have_attribute(
-            "aria-pressed", "true" if index == 0 else "false"
-        )
+        ui_step(page, f"NEW recovery: verify piece {index + 1} width", lambda index=index: expect(form_page.locator(rows_selector).nth(index).locator('input[data-field="width_cm"]')).to_have_value(str(40 + index)))
+        ui_step(page, f"NEW recovery: verify piece {index + 1} length", lambda index=index: expect(form_page.locator(rows_selector).nth(index).locator('input[data-field="length_cm"]')).to_have_value(str(180 + index)))
+        ui_step(page, f"NEW recovery: verify piece {index + 1} quantity", lambda index=index: expect(form_page.locator(rows_selector).nth(index).locator('input[data-field="qty"]')).to_have_value(str(1 + index % 3)))
+        ui_step(page, f"NEW recovery: verify piece {index + 1} notes", lambda index=index: expect(form_page.locator(rows_selector).nth(index).locator('input[data-field="notes"]')).to_have_value(f"قياس القطعة {index + 1}: ملاحظة معملية طويلة " * 4))
+        ui_step(page, f"NEW recovery: verify piece {index + 1} Liner extra", lambda index=index: expect(form_page.locator(rows_selector).nth(index).locator('button[data-check-field="extra_liner"]')).to_have_attribute("aria-pressed", "true" if index % 2 == 0 else "false"))
+        ui_step(page, f"NEW recovery: verify piece {index + 1} Back Groove extra", lambda index=index: expect(form_page.locator(rows_selector).nth(index).locator('button[data-check-field="extra_back_groove"]')).to_have_attribute("aria-pressed", "true" if index == 0 else "false"))
     _trace_event("new_recovery_restore_verified", piece_count=piece_count)
 
-    with page.expect_response(
-        lambda candidate: "/api/method/frappe.desk.form.save.savedocs" in candidate.url,
-        timeout=30_000,
-    ) as save_response_info:
-        page.locator(".page-head .primary-action").get_by_text("Save", exact=True).click()
-    save_response = save_response_info.value
+    def click_official_save_and_wait_for_response():
+        with page.expect_response(
+            lambda candidate: "/api/method/frappe.desk.form.save.savedocs" in candidate.url,
+            timeout=30_000,
+        ) as save_response_info:
+            page.locator(".page-head .primary-action").get_by_text("Save", exact=True).click()
+        return save_response_info.value
+
+    save_response = ui_step(
+        page,
+        "NEW recovery: official Save response",
+        click_official_save_and_wait_for_response,
+    )
     try:
         save_result = save_response.json()
     except Exception as exc:
@@ -640,30 +765,50 @@ def certify_actual_frappe_desk_new_recovery(page: Page, *, piece_count: int = 10
 
 
 def certify_new_dco_form_smoke(page: Page) -> None:
-    """Stop after Login → Desk Ready → a real NEW DCO cur_frm is loaded."""
+    """Stop at visible NEW DCO form content; no field-interaction claim."""
     login_to_desk(page, "Administrator", "admin")
-    response = page.goto(
-        f"{DESK_URL}/app/door-cutting-order/new-door-cutting-order-1",
-        wait_until="domcontentloaded",
-    )
-    if response is not None and response.status >= 400:
-        raise RuntimeError(f"NEW DCO smoke navigation returned HTTP {response.status}.")
-    wait_for_function(
-        page,
-        "NEW DCO Desk Smoke cur_frm ready",
-        "() => window.cur_frm && window.cur_frm.doctype === 'Door Cutting Order' "
-        "&& window.cur_frm.is_new()",
-        timeout=30_000,
-    )
+    open_new_dco_form(page, "NEW DCO Desk form-loaded Smoke")
     _trace_event("phase_135_new_form_smoke_completed")
 
 
+def certify_new_customer_field_smoke(page: Page) -> None:
+    """Prove the active NEW form's Customer link is interactive without recovery."""
+    form_page = wait_for_new_form_loaded(page, "NEW Customer field Smoke")
+    customer = wait_for_customer_interactive(page, form_page, "NEW Customer field Smoke")
+    customer_name = FIXTURES["customer"]
+    ui_step(page, "NEW Customer field Smoke: fill customer", lambda: customer.fill(customer_name))
+    ui_step(
+        page,
+        "NEW Customer field Smoke: select customer suggestion",
+        lambda: page.locator(".awesomplete li").filter(has_text=customer_name).first.click(timeout=10_000),
+    )
+    ui_step(
+        page,
+        "NEW Customer field Smoke: assert exact selected customer",
+        lambda: expect(customer).to_have_value(customer_name),
+    )
+    _trace_event("phase_135_new_customer_field_smoke_completed")
 
-def certify_new_dco_local_gate(page: Page, *, login: bool = True) -> None:
-    """Run NEW certification in the already-isolated Desk test context."""
-    if login:
+
+def certify_edit_to_new_transition(page: Page) -> None:
+    """Preserve the real EDIT → NEW navigation in the EDIT certification page."""
+    form_page = open_new_dco_form(page, "EDIT to NEW transition")
+    wait_for_customer_interactive(page, form_page, "EDIT to NEW Customer field readiness")
+    _trace_event("edit_to_new_transition_completed", url=_safe_page_url(page))
+
+
+def certify_new_dco_local_gate(browser) -> None:
+    """Run NEW certification in a fresh browser context independent of EDIT."""
+    context = browser.new_context()
+    page = context.new_page()
+    page.set_default_timeout(30_000)
+    page.set_default_navigation_timeout(30_000)
+    attach_browser_diagnostics(page)
+    try:
         login_to_desk(page, "Administrator", "admin")
-    certify_actual_frappe_desk_new_recovery(page)
+        certify_actual_frappe_desk_new_recovery(page)
+    finally:
+        context.close()
 
 
 def certify_new_dco_recovery_stress(browser, piece_count: int) -> None:
@@ -985,7 +1130,11 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
     expect(page.locator("body")).to_contain_text("تغير الطلب على الخادم")
     assert evaluate(page, "verify conflict preserved DCO notes", "() => window.cur_frm.doc.order_notes") == dispatch_baseline
     _trace_event("certification_completed")
-    certify_new_dco_local_gate(page, login=False)
+    certify_edit_to_new_transition(page)
+    browser = page.context.browser
+    if browser is None:
+        raise RuntimeError("NEW Local Gate requires a browser after the EDIT→NEW transition.")
+    certify_new_dco_local_gate(browser)
 
 
 if __name__ == "__main__":
@@ -1002,11 +1151,14 @@ if __name__ == "__main__":
         try:
             if os.environ.get("DCO_DESK_NEW_FORM_SMOKE_ONLY") == "1":
                 certify_new_dco_form_smoke(page)
+            elif os.environ.get("DCO_DESK_NEW_CUSTOMER_FIELD_SMOKE_ONLY") == "1":
+                certify_new_dco_form_smoke(page)
+                certify_new_customer_field_smoke(page)
             elif os.environ.get("DCO_DESK_NEW_STRESS_ONLY") == "1":
                 stress_piece_count = int(os.environ.get("DCO_DESK_NEW_STRESS_PIECE_COUNT", "200"))
                 certify_new_dco_recovery_stress(browser, stress_piece_count)
             elif os.environ.get("DCO_DESK_NEW_LOCAL_GATE_ONLY") == "1":
-                certify_new_dco_local_gate(page)
+                certify_new_dco_local_gate(browser)
             else:
                 certify_actual_frappe_desk_edit_recovery(page)
         except BaseException as failure:
@@ -1014,17 +1166,21 @@ if __name__ == "__main__":
             screenshot = evidence_dir / "dco-desk-failure.png"
             trace = evidence_dir / "dco-desk-trace.json"
             failure_text = _redact_text(str(failure))
-            _trace_event("certification_failed", error=failure_text)
+            _trace_event(
+                "certification_failed",
+                error=failure_text,
+                step=ACTIVE_STEP or LAST_FAILED_STEP,
+            )
             trace.write_text(json.dumps(BROWSER_TRACE, ensure_ascii=False, indent=2), encoding="utf-8")
             diagnostic_path = evidence_dir / "browser-diagnostics.json"
             diagnostic_path.write_text(json.dumps({
                 "state": {"failure": failure_text}, **DIAGNOSTIC_EVENTS,
             }, ensure_ascii=False, indent=2), encoding="utf-8")
-            try:
-                page.screenshot(path=str(screenshot), full_page=True, timeout=10_000)
-            except Exception as exc:
-                print(f"Desk screenshot capture failed: {_redact_text(str(exc), 500)}")
-            state = read_page_state(page)
+            # A renderer timeout can leave the page unresponsive without a
+            # close/crash event. Do not issue another Playwright command here.
+            _trace_event("screenshot_skipped_after_failure", step=ACTIVE_STEP or LAST_FAILED_STEP)
+            diagnostic_page = LAST_ACTIVE_PAGE or page
+            state = read_page_state(diagnostic_page)
             state["url"] = _safe_url(state.get("url", ""))
             state["bodyText"] = _redact_text(state.get("bodyText", ""))
             state["failure"] = _redact_text(str(failure))
