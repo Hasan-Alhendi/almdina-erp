@@ -27,18 +27,21 @@ def _snapshot(*resource_kinds: str) -> dict:
     }
 
 
+def _patch_plan_write(monkeypatch, set_value):
+    monkeypatch.setattr(
+        offcut_service,
+        "frappe",
+        SimpleNamespace(db=SimpleNamespace(set_value=set_value)),
+    )
+
+
 def test_required_boards_reconciles_from_physical_sources_without_mutating_snapshot(monkeypatch) -> None:
     snapshot = _snapshot("FULL_BOARD", "FULL_BOARD", "OFFCUT")
     original = copy.deepcopy(snapshot)
     plan = SimpleNamespace(name="CP-OFFCUT-COST", required_boards=3)
     writes: list[tuple[tuple, dict]] = []
 
-    monkeypatch.setattr(
-        offcut_service.frappe.db,
-        "set_value",
-        lambda *args, **kwargs: writes.append((args, kwargs)),
-        raising=False,
-    )
+    _patch_plan_write(monkeypatch, lambda *args, **kwargs: writes.append((args, kwargs)))
 
     required = offcut_service._reconcile_required_boards(plan, snapshot)
 
@@ -55,12 +58,7 @@ def test_required_boards_reconciles_from_physical_sources_without_mutating_snaps
 
 def test_all_offcut_reconciles_to_zero_new_board_cost_basis(monkeypatch) -> None:
     plan = SimpleNamespace(name="CP-ALL-OFFCUT", required_boards=4)
-    monkeypatch.setattr(
-        offcut_service.frappe.db,
-        "set_value",
-        lambda *args, **kwargs: None,
-        raising=False,
-    )
+    _patch_plan_write(monkeypatch, lambda *args, **kwargs: None)
 
     required = offcut_service._reconcile_required_boards(
         plan,
@@ -73,12 +71,7 @@ def test_all_offcut_reconciles_to_zero_new_board_cost_basis(monkeypatch) -> None
 
 def test_full_board_only_reconciliation_is_unchanged(monkeypatch) -> None:
     plan = SimpleNamespace(name="CP-FULL", required_boards=2)
-    monkeypatch.setattr(
-        offcut_service.frappe.db,
-        "set_value",
-        lambda *args, **kwargs: None,
-        raising=False,
-    )
+    _patch_plan_write(monkeypatch, lambda *args, **kwargs: None)
 
     required = offcut_service._reconcile_required_boards(
         plan,

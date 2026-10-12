@@ -1,6 +1,23 @@
 (() => {
     "use strict";
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split(`{${index}}`).join(String(value));
+            });
+        }
+        return text;
+    }
+
     const STYLE_ID = "dco-side-edge-documents-css";
 
     function api() {
@@ -33,9 +50,10 @@
         (details || [])
             .filter(detail => Boolean(detail.custom))
             .forEach(detail => {
-                const type = String(detail.edge_type || "غير محدد").trim() || "غير محدد";
-                if (!groups.has(type)) groups.set(type, { type, sides: [] });
-                groups.get(type).sides.push(detail.side_label || "ضلع");
+                const type = String(detail.edge_type || "").trim();
+                const key = type || "\0";
+                if (!groups.has(key)) groups.set(key, { type, sides: [] });
+                groups.get(key).sides.push(String(detail.side_label || "").trim());
             });
         return [...groups.values()];
     }
@@ -43,17 +61,19 @@
     function customEdgeSummaryHtml(details) {
         const groups = customEdgeGroups(details);
         if (!groups.length) {
-            return '<span class="dco-edge-default-note" title="لا يوجد تخصيص">—</span>';
+            return `<span class="dco-edge-default-note" title="${esc(translate("No custom edge"))}">—</span>`;
         }
         const sideCount = groups.reduce((sum, group) => sum + group.sides.length, 0);
         return `<div class="dco-custom-edge-list">${groups.map(group => {
+            const sideLabels = group.sides.map(side => side || translate("Side"));
             const sides = sideCount === 4 && group.sides.length === 4
-                ? "على الداير"
-                : group.sides.join("، ");
+                ? translate("All around")
+                : sideLabels.join(", ");
+            const typeLabel = group.type || translate("Unspecified");
             return `<span class="dco-custom-edge-chip">
                 <span class="dco-custom-edge-sides">${esc(sides)}</span>
-                <b>${esc(group.type)}</b>
-                <em>مخصص</em>
+                <b>${esc(typeLabel)}</b>
+                <em>${esc(translate("Custom"))}</em>
             </span>`;
         }).join("")}</div>`;
     }
@@ -160,7 +180,8 @@
             if (kind === "measurements") {
                 if (cells[1] && !cells[1].querySelector(".dco-piece-type")) {
                     const label = cells[1].textContent.trim();
-                    cells[1].innerHTML = `<span class="dco-piece-type ${label.includes("خاصة") ? "is-special" : ""}">${esc(label)}</span>`;
+                    const pieceType = cells[1].getAttribute("data-piece-type") || "";
+                    cells[1].innerHTML = `<span class="dco-piece-type ${pieceType === "Special" ? "is-special" : ""}">${esc(label)}</span>`;
                 }
                 if (cells[5]) {
                     cells[5].classList.add("dco-cell-notes");
@@ -171,12 +192,13 @@
     }
 
     function patchMeasurements(frm, wrapper) {
-        const section = findSection(wrapper, "جدول قياسات الطلب");
+        const section = findSection(wrapper, translate("Order measurement table"));
         const table = section && section.querySelector("table.dco-cost-table");
         if (!table) return;
         const headerCells = table.querySelectorAll("thead th");
-        if (headerCells[6] && headerCells[6].textContent !== "القشاط المخصص") {
-            headerCells[6].textContent = "القشاط المخصص";
+        const customHeader = translate("Custom edge banding");
+        if (headerCells[6] && headerCells[6].textContent !== customHeader) {
+            headerCells[6].textContent = customHeader;
         }
         const data = rows(frm);
         table.querySelectorAll("tbody tr").forEach((row, index) => {
@@ -190,21 +212,21 @@
             }
         });
         const subtitle = section.querySelector(".dco-cost-section-title span");
-        const text = "التخصيص الاستثنائي فقط؛ قشاط الأطراف الافتراضي محدد في بيانات الطلب";
+        const text = translate("Exceptional customization only; the default edge banding is set in the order data");
         if (subtitle && subtitle.textContent !== text) subtitle.textContent = text;
         decorateTable(table, "measurements");
     }
 
     function patchInvoice(_frm, wrapper) {
-        const section = findSection(wrapper, "تفاصيل عرض السعر")
-            || findSection(wrapper, "تفاصيل الفاتورة");
+        const section = findSection(wrapper, translate("Quotation details"))
+            || findSection(wrapper, translate("Invoice details"));
         const table = section && section.querySelector("table.dco-cost-table");
         if (!table) return;
 
         // Presentation only.  The tbody and total remain owned by
         // AlmdinaOrderCostUX and therefore by the persisted server-cost snapshot.
         const subtitle = section.querySelector(".dco-cost-section-title span");
-        const markup = '<span class="dco-edge-pricing-note">سطر مستقل لكل نوع قشاط وسعره — من تكلفة الطلب المحفوظة</span>';
+        const markup = `<span class="dco-edge-pricing-note">${esc(translate("A separate line for each edge type and its price — from the saved order cost"))}</span>`;
         if (subtitle && subtitle.innerHTML !== markup) subtitle.innerHTML = markup;
         decorateTable(table, "invoice");
     }

@@ -237,6 +237,44 @@ class TestActiveUiHasNoLanguageTextBranches(unittest.TestCase):
                     leftovers.append(f"{relative}:{number}: {line.strip()}")
         self.assertEqual(leftovers, [])
 
+    def test_cost_invoice_visible_copy_uses_english_message_ids(self) -> None:
+        """Compatibility leftovers match historical stored addon descriptions only."""
+        paths = (
+            PUBLIC_JS / "door_cutting_order" / "costing" / "door_cutting_order_compact_pricing_ux.js",
+            PUBLIC_JS / "door_cutting_order" / "costing" / "door_cutting_order_cost_edit_session_ux.js",
+            PUBLIC_JS / "door_cutting_order" / "costing" / "door_cutting_order_cost_offcut_assignment_ux.js",
+            PUBLIC_JS / "door_cutting_order" / "costing" / "door_cutting_order_cost_page_layout_ux.js",
+            PUBLIC_JS / "door_cutting_order" / "costing" / "door_cutting_order_cost_permissions_ux.js",
+            PUBLIC_JS / "door_cutting_order" / "costing" / "door_cutting_order_cost_presenter.js",
+            PUBLIC_JS / "door_cutting_order" / "costing" / "door_cutting_order_cost_workspace_api.js",
+            PUBLIC_JS / "door_cutting_order" / "costing" / "door_cutting_order_cost_workspace_presenter_adapter.js",
+            PUBLIC_JS / "door_cutting_order" / "costing" / "door_cutting_order_cost_workspace_state.js",
+            PUBLIC_JS / "door_cutting_order" / "costing" / "door_cutting_order_customer_invoice_addon_summary.js",
+            PUBLIC_JS / "door_cutting_order" / "costing" / "door_cutting_order_customer_invoice_toolbar_ux.js",
+            PUBLIC_JS / "door_cutting_order" / "costing" / "door_cutting_order_financial_documents_ux.js",
+            PUBLIC_JS / "door_cutting_order" / "costing" / "door_cutting_order_multi_edge_documents_ux.js",
+        )
+        allowed = (
+            "تفريغ مسكة مخفية",
+            "حفر مسكة غطس",
+            "مسكة غطس",
+            "لاينر",
+            "إضافة",
+            "درفة",
+            "رقم",
+        )
+        leftovers = []
+        ordered = tuple(sorted(allowed, key=len, reverse=True))
+        for path in paths:
+            relative = path.relative_to(ROOT)
+            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+                visible = line
+                for phrase in ordered:
+                    visible = visible.replace(phrase, "")
+                if ARABIC_TEXT.search(visible):
+                    leftovers.append(f"{relative}:{number}: {line.strip()}")
+        self.assertEqual(leftovers, [])
+
 
 if __name__ == "__main__":
     unittest.main()

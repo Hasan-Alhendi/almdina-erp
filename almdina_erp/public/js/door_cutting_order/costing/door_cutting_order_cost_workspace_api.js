@@ -1,6 +1,23 @@
 (() => {
     "use strict";
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split(`{${index}}`).join(String(value));
+            });
+        }
+        return text;
+    }
+
     if (window.AlmdinaCostWorkspaceAPI) return;
 
     const READ_METHOD =
@@ -74,7 +91,7 @@
             },
             {
                 freeze: true,
-                freezeMessage: __("جاري حفظ إعدادات التكلفة..."),
+                freezeMessage: translate("Saving the cost settings..."),
             }
         );
     }

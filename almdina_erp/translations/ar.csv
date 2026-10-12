@@ -1652,3 +1652,119 @@ Margin left,يسار
 Margin top,أعلى
 Margin bottom,أسفل
 Print,طباعة
+Order measurement table,جدول قياسات الطلب
+Special door pricing,تسعير الدرفات الخاصة
+Clipped-corner and L-shaped edge pricing,تسعير قشاط درف الزاوية المقصوصة وزاوية L
+Cost settings,إعدادات التكلفة
+Base prices and special door pricing,الأسعار الأساسية وتسعير الدرف الخاصة
+Sending WhatsApp...,جاري إرسال واتساب...
+Could not identify the order for sending the invoice.,تعذر تحديد الطلب لإرسال الفاتورة.
+Print customer invoice,طباعة فاتورة الزبون
+Send the invoice on WhatsApp,إرسال الفاتورة عبر واتساب
+Could not load the customer invoice print service. Reload the page and try again.,تعذر تحميل خدمة طباعة فاتورة الزبون. أعد تحميل الصفحة ثم حاول مرة أخرى.
+Could not prepare the customer invoice. Reload the page and try again.,تعذر تجهيز فاتورة الزبون. أعد تحميل الصفحة ثم حاول مرة أخرى.
+Required fields,حقول مطلوبة
+Enter these cost-page values before saving: {0},يجب إدخال القيم التالية من صفحة التكلفة قبل الحفظ: {0}
+You do not have permission to edit the cost or special-door prices for this document.,لا تملك صلاحية تعديل التكلفة أو تسعير الدرف الخاصة لهذا المستند.
+Save or cancel the current order edits before opening cost editing.,احفظ أو ألغِ تعديلات الطلب الحالية قبل فتح تعديل التكلفة.
+Could not load the cost,تعذر تحميل التكلفة
+Could not load the current cost data. Reload the order and try again.,تعذر تحميل بيانات التكلفة الحالية. أعد تحميل الطلب ثم حاول مرة أخرى.
+Could not load the current cost data.,تعذر تحميل بيانات التكلفة الحالية.
+Could not start editing,تعذر بدء التعديل
+The cost data is not ready for editing. Try again after loading finishes.,لم تصبح بيانات التكلفة جاهزة لوضع التعديل. أعد المحاولة بعد اكتمال التحميل.
+Your permissions or this document state no longer allow editing this section.,لم تعد صلاحياتك أو حالة هذا المستند تسمح بتعديل هذا القسم.
+Could not save the cost,تعذر حفظ التكلفة
+The server did not return the saved cost data. Editing was not closed.,لم يعُد الخادم ببيانات التكلفة المحفوظة. لم يتم إغلاق وضع التعديل.
+The cost edits were saved and the section returned to read-only.,تم حفظ تعديلات التكلفة وإعادة القسم إلى وضع القراءة.
+MDF boards — {0},ألواح MDF — {0}
+MDF boards,ألواح MDF
+Board cutting and preparation,أجور قص وتجهيز الألواح
+Edge banding — {0},قشاط — {0}
+Edge banding — unspecified,قشاط — غير محدد
+Edge banding,القشاط
+Special door number {0},درفة خاصة رقم {0}
+Door,درفة
+Waiting for the inclusive special price,بانتظار إدخال السعر الخاص الشامل
+This order has no measurements yet.,لا توجد قياسات في الطلب بعد.
+Board count and cutting charges use the last calculated plan. Calculate the cutting plan to update the invoice with the final values.,عدد الألواح وأجور القص مبنية على آخر خطة محسوبة. احسب خطة القص لتحديث الفاتورة بالقيم النهائية.
+Offcut price,سعر الفضلة
+One total price for the group,سعر إجمالي واحد للمجموعة
+Offcut price ($),سعر الفضلة ($)
+Save the order and calculate the cutting plan to show the price details.,احفظ الطلب واحسب خطة القص لتظهر تفاصيل السعر.
+Unit price ($),سعر الوحدة ($)
+Total ($),الإجمالي ($)
+Unpriced,غير مسعّر
+Final invoice total,الإجمالي النهائي للفاتورة
+Current total before unpriced items,الإجمالي الحالي قبل الأسعار غير المسعرة
+This is not a final total until these items are priced: {0},لا يعتبر إجماليًا نهائيًا حتى تسعير: {0}
+L-shaped corner door {0},درفة زاوية L {0}
+Clipped-corner door {0},درفة الزاوية الكسر {0}
+Enter the inclusive special price for each door while editing,أدخل السعر الخاص الشامل لكل درفة أثناء وضع التعديل
+{0} × {1} cm — quantity {2},{0} × {1} سم — عدد {2}
+Length × width,الطول × العرض
+Inclusive special price ($),السعر الخاص الشامل ($)
+View documentation,عرض التوثيق
+Could not load the special door documentation.,تعذر تحميل توثيق الدرفة الخاصة.
+"Measurements, quantities, and notes",القياسات والكميات والملاحظات
+"Boards, cutting, edge banding, special doors, and door add-ons",الألواح والقص والقشاط والدرف الخاصة وإضافات الدرف
+Priced,مسعّر
+{0} of {1} are unpriced,{0} غير مسعّرة من {1}
+{0} priced,تم تسعير {0}
+Saving the cost settings...,جاري حفظ إعدادات التكلفة...
+Add-on,إضافة
+Could not load the cost data. Try again.,تعذر تحميل بيانات التكلفة. أعد المحاولة.
+Loading the cost data...,جاري تحميل بيانات التكلفة...
+No custom edge,لا يوجد تخصيص
+Unspecified,غير محدد
+Exceptional customization only; the default edge banding is set in the order data,التخصيص الاستثنائي فقط؛ قشاط الأطراف الافتراضي محدد في بيانات الطلب
+Invoice details,تفاصيل الفاتورة
+A separate line for each edge type and its price — from the saved order cost,سطر مستقل لكل نوع قشاط وسعره — من تكلفة الطلب المحفوظة
+Source: customer · made at the factory,المصدر الزبون · التنفيذ في المعمل
+Source: factory · made at the factory,المصدر المعمل · التنفيذ في المعمل
+Source: customer · made at the customer,المصدر الزبون · التنفيذ عند الزبون
+Offcut pieces,قطع النقص
+Choose one of the three options for each door.,اختر أحد الخيارات الثلاثة لكل درفة.
+{0} doors,{0} درفة
+Cost source and execution place,مصدر الكلفة ومكان التنفيذ
+Could not load the offcut save path.,تعذر تحميل مسار حفظ قطع النقص.
+The offcut classification was saved.,تم حفظ تصنيف قطع النقص.
+Operating cost breakdown,تفصيل التكلفة التشغيلية
+Cost item,البند
+Amount $,القيمة $
+Breakdown total,مجموع البنود التفصيلية
+Operations and waste indicators,مؤشرات التشغيل والهدر
+Special door price review,مراجعة أسعار الدرف الخاصة
+Estimated / unit $,التقديري / وحدة $
+Approved / unit $,المعتمد / وحدة $
+Final / unit $,النهائي / وحدة $
+Total variance $,الفرق الإجمالي $
+Approved by,اعتمده
+Approval date,تاريخ الاعتماد
+Internal,داخلي
+Created by: {0},أنشئ بواسطة: {0}
+Created on: {0},تاريخ الإنشاء: {0}
+Revision: {0},المراجعة: {0}
+Could not start printing. Reload the page and try again.,تعذر تشغيل الطباعة. أعد تحميل الصفحة ثم حاول مرة أخرى.
+An incomplete invoice cannot be printed. Enter the special door inclusive price and the clipped-corner edge price first. Remaining: {0}.,لا يمكن طباعة فاتورة غير مكتملة. أدخل السعر الخاص الشامل للدرف الخاصة وسعر قشاط درف الزاوية المقصوصة أولًا. المتبقي: {0}.
+You do not have permission to print this document.,ليس لديك صلاحية طباعة هذا المستند.
+Save the order before printing the document.,احفظ الطلب قبل طباعة المستند.
+Preparing the internal cost report...,جاري تجهيز تقرير التكلفة الداخلي...
+Preparing the customer invoice...,جاري تجهيز فاتورة الزبون...
+Print internal cost report,طباعة تقرير التكلفة الداخلي
+Saving the edge prices...,جاري اعتماد أسعار القشاط...
+Saving the special door prices...,جاري اعتماد أسعار الدرف الخاصة...
+Inclusive special door price,السعر الخاص الشامل للدرفة
+L-shaped corner edge processing cost,تكلفة معالجة قشاط زاوية L
+Clipped-corner edge processing cost,تكلفة معالجة قشاط الزاوية المقصوصة
+Price,السعر
+Edit price,تعديل السعر
+Send the invoice to the customer?,هل تريد إرسال الفاتورة للزبون؟
+WhatsApp will not be sent because the session is disconnected.,لن يتم إرسال رسالة واتساب لأن الجلسة غير متصلة.
+Could not load the cost data.,تعذر تحميل بيانات التكلفة.
+The server did not return the order revision after saving the price.,لم يعُد الخادم بنسخة الطلب بعد حفظ السعر.
+Could not verify the current order revision. Reload the order and try again.,تعذر التحقق من نسخة الطلب الحالية. أعد تحميل الطلب ثم حاول مرة أخرى.
+Board price,سعر اللوح
+Cutting charge / board,أجور القص / لوح
+A problem occurred while sending the customer invoice.,حدثت مشكلة أثناء إرسال فاتورة الزبون.
+Waiting for the L-shaped corner edge price,بانتظار إدخال سعر معالجة قشاط زاوية L
+Waiting for the clipped-corner edge price,بانتظار إدخال سعر معالجة قشاط الزاوية المقصوصة
