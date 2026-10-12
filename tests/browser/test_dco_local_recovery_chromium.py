@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Iterator
 
 import pytest
-from playwright.sync_api import Browser, BrowserContext, Page, sync_playwright
+from playwright.sync_api import Browser, BrowserContext, Page, Playwright, sync_playwright
 
 
 REPOSITORY = Path(__file__).resolve().parents[2]
@@ -44,19 +44,24 @@ def local_origin() -> Iterator[str]:
 
 
 @pytest.fixture(scope="session")
-def chromium() -> Iterator[Browser]:
+def playwright_instance() -> Iterator[Playwright]:
     with sync_playwright() as playwright:
-        executable = os.environ.get("CHROMIUM_PATH") or shutil.which("chromium")
-        args = ["--no-sandbox"] if os.geteuid() == 0 else []
-        browser = playwright.chromium.launch(
-            headless=True,
-            executable_path=executable,
-            args=args,
-        )
-        try:
-            yield browser
-        finally:
-            browser.close()
+        yield playwright
+
+
+@pytest.fixture(scope="session")
+def chromium(playwright_instance: Playwright) -> Iterator[Browser]:
+    executable = os.environ.get("CHROMIUM_PATH") or shutil.which("chromium")
+    args = ["--no-sandbox"] if os.geteuid() == 0 else []
+    browser = playwright_instance.chromium.launch(
+        headless=True,
+        executable_path=executable,
+        args=args,
+    )
+    try:
+        yield browser
+    finally:
+        browser.close()
 
 
 def recovery_page(context: BrowserContext, local_origin: str) -> Page:
@@ -427,6 +432,103 @@ def test_chromium_draft_reads_and_discovery_are_scoped_by_site_and_user(
         ]
     finally:
         context.close()
+
+
+def test_chromium_recovery_survives_full_browser_restart(
+    playwright_instance: Playwright, local_origin: str, tmp_path: Path
+) -> None:
+    executable = os.environ.get("CHROMIUM_PATH") or shutil.which("chromium")
+    args = ["--no-sandbox"] if os.geteuid() == 0 else []
+    profile = str(tmp_path / "chromium-profile")
+    context = playwright_instance.chromium.launch_persistent_context(
+        user_data_dir=profile,
+        headless=True,
+        executable_path=executable,
+        args=args,
+    )
+    try:
+        page = context.new_page()
+        page.goto(local_origin, wait_until="domcontentloaded")
+        for script in SCRIPTS:
+            page.add_script_tag(path=str(script))
+        saved = page.evaluate(
+            """async () => {
+                const recovery = window.AlmdinaDcoRecovery;
+                const identity = {
+                    site: location.host,
+                    user: "chromium-restart-test",
+                    draft_id: "full-browser-restart",
+                    tab_session_id: "persistent-profile-tab",
+                    mode: "NEW",
+                    dirty_scope: "DCO",
+                    recovery_revision: 1,
+                    expected_recovery_revision: 0,
+                };
+                const payload = recovery.Projection.createPayload({
+                    dco: recovery.Projection.createDcoInput(
+                        { customer: "Persisted across browser close", pieces: [] },
+                        { pieceKey: () => "unused" }
+                    ),
+                    dirtyScope: "DCO",
+                });
+                const draft = await recovery.LocalDraftRepository.create().write({
+                    ...identity,
+                    payload,
+                });
+                const asset = await recovery.LocalAssetRepository.create().write(
+                    identity,
+                    "restart-drawing",
+                    new Blob(["persisted blob bytes"], { type: "application/json" }),
+                    { file_name: "drawing.json" }
+                );
+                return { draftAcknowledged: draft.ok, assetAcknowledged: asset.ok };
+            }"""
+        )
+    finally:
+        context.close()
+
+    reopened = playwright_instance.chromium.launch_persistent_context(
+        user_data_dir=profile,
+        headless=True,
+        executable_path=executable,
+        args=args,
+    )
+    try:
+        page = reopened.new_page()
+        page.goto(local_origin, wait_until="domcontentloaded")
+        for script in SCRIPTS:
+            page.add_script_tag(path=str(script))
+        persisted = page.evaluate(
+            """async () => {
+                const recovery = window.AlmdinaDcoRecovery;
+                const identity = {
+                    site: location.host,
+                    user: "chromium-restart-test",
+                    draft_id: "full-browser-restart",
+                };
+                const draft = await recovery.LocalDraftRepository.create().read(identity);
+                const asset = await recovery.LocalAssetRepository.create().read(
+                    identity,
+                    "restart-drawing"
+                );
+                return {
+                    draftOk: draft.ok,
+                    customer: draft.value && draft.value.payload.dco.customer,
+                    assetOk: asset.ok,
+                    assetText: asset.value && await asset.value.blob.text(),
+                };
+            }"""
+        )
+    finally:
+        reopened.close()
+
+    assert saved == {"draftAcknowledged": True, "assetAcknowledged": True}
+    assert persisted == {
+        "draftOk": True,
+        "customer": "Persisted across browser close",
+        "assetOk": True,
+        "assetText": "persisted blob bytes",
+    }
 
 
 def test_chromium_schema_upgrade_preserves_legacy_scope_records(
