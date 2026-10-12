@@ -855,6 +855,15 @@
             return;
         }
         if (
+            fieldname === "extra_liner"
+            && (row.piece_type || "Regular") !== "Special"
+            && window.AlmdinaLinerEditor
+            && typeof window.AlmdinaLinerEditor.open === "function"
+        ) {
+            window.AlmdinaLinerEditor.open(frm, row);
+            return;
+        }
+        if (
             ["edge_break", "edge_break_only"].includes(fieldname)
             && cornerGeometry
             && typeof cornerGeometry.toggleEdgeSelection === "function"

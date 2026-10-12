@@ -328,8 +328,17 @@
         return layer || "";
     }
 
+    function exportOverlays(piece) {
+        const overlays = Array.isArray(piece && piece.overlays) ? piece.overlays.slice() : [];
+        if (overlays.some(item => item && item.kind === "liner")) return overlays;
+        const liner = window.AlmdinaLinerGeometry;
+        if (!liner || typeof liner.syntheticOverlay !== "function") return overlays;
+        const synthetic = liner.syntheticOverlay(piece);
+        return synthetic ? overlays.concat(synthetic) : overlays;
+    }
+
     function persistedOverlays(piece) {
-        const overlays = Array.isArray(piece && piece.overlays) ? piece.overlays : [];
+        const overlays = exportOverlays(piece);
         return overlays.map((overlay, index) => {
             const layerName = overlayLayerName(overlay);
             if (!layerName) {

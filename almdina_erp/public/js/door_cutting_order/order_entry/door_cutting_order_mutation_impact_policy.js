@@ -38,6 +38,9 @@
         "clipped_corner_length_cm",
         "special_shape_geometry_json",
         "extra_full_door_double",
+        "liner_reference_side",
+        "liner_offset_cm",
+        "liner_width_cm",
     ];
     const PIECE_COST_ONLY_FIELDS = [
         "extra_double",

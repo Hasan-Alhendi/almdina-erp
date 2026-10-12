@@ -59,7 +59,7 @@ class FrappeOrderPlanAdapter:
     @staticmethod
     def piece_row_as_dict(row: Any) -> dict[str, Any]:
         piece_instance_id = str(getattr(row, "piece_instance_id", "") or "").strip()
-        return {
+        piece = {
             "piece_instance_id": piece_instance_id,
             "width_cm": flt(row.width_cm),
             "length_cm": flt(row.length_cm),
@@ -86,6 +86,14 @@ class FrappeOrderPlanAdapter:
             ),
             "notes": row.notes or "",
         }
+        side = str(getattr(row, "liner_reference_side", "") or "")
+        offset = flt(getattr(row, "liner_offset_cm", 0))
+        width = flt(getattr(row, "liner_width_cm", 0))
+        if cint(getattr(row, "extra_liner", 0)) and side and width > 0:
+            piece["liner_reference_side"] = side
+            piece["liner_offset_cm"] = offset
+            piece["liner_width_cm"] = width
+        return piece
 
     def _plan_input_payload(
         self,

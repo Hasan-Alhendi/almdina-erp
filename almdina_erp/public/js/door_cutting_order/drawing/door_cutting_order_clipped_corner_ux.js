@@ -1304,5 +1304,17 @@
         view,
         prepare: prepareRow,
         cornerValueUpdates,
+        ensureStyles: installStyles,
+        commitChildValues(frm, row, values) {
+            const locator = captureRowLocator(row);
+            return (async () => {
+                const current = resolveCurrentRow(frm, locator);
+                if (!current) {
+                    throw new Error("The piece is no longer available in the current order.");
+                }
+                await frappe.model.set_value(current.doctype, current.name, values);
+                return resolveCurrentRow(frm, locator);
+            })();
+        },
     });
 })();

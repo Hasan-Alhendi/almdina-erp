@@ -59,11 +59,14 @@
         const selected = Boolean(Number(row && row[fieldname]));
         const disabled = options.editable === false ? "disabled" : "";
         const label = __(definition.label);
+        const liner = fieldname === "extra_liner" && window.AlmdinaLinerGeometry;
+        const linerSummary = liner && selected ? window.AlmdinaLinerGeometry.summary(row) : "";
+        const title = linerSummary ? `${label} — ${linerSummary}` : label;
         const buttonLabel = __(definition.button);
         const buttonLines = buttonLabel.split(/\s+/).map(word => (
             `<span class="dco-addon-label-line">${esc(word)}</span>`
         )).join("\n");
-        return `<button type="button" class="dco-check-toggle dco-addon-toggle ${selected ? "is-checked" : ""}" data-check-field="${fieldname}" aria-pressed="${selected ? "true" : "false"}" aria-label="${esc(label)}" title="${esc(label)}" ${disabled}>
+        return `<button type="button" class="dco-check-toggle dco-addon-toggle ${selected ? "is-checked" : ""}" data-check-field="${fieldname}" aria-pressed="${selected ? "true" : "false"}" aria-label="${esc(label)}" title="${esc(title)}" ${disabled}>
             ${buttonLines}
         </button>`;
     }

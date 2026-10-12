@@ -50,6 +50,11 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
     FORBIDDEN_ROTATION,
     KERF_VIOLATION,
     LEGACY_MESSAGE,
+    LINER_OFFSET_MISMATCH,
+    LINER_SHAPE_MISMATCH,
+    LINER_SIDE_MISMATCH,
+    LINER_WIDTH_MISMATCH,
+    LINER_WIDTH_NOT_MEASURABLE,
     MATERIAL_OVERLAP,
     MINSERT_UNSUPPORTED,
     MIXED_RESOURCE_SOURCE,
@@ -109,6 +114,13 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_topology import (
     diagnostic_piece_contours,
     resolve_contour_ownership,
     validate_material_layout,
+)
+from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
+    LinerPiece,
+    canonical_path,
+    compare_liner_path,
+    liner_parameters_active,
+    localize_path,
 )
 from almdina_erp.almdina_erp.domain.cutting.extra_overlays import (
     ExtraOverlayCandidate,
@@ -1264,6 +1276,9 @@ def _expected_order_pieces(order: Any) -> list[dict[str, Any]]:
                     "source_piece_no": group_index,
                     "copy_no": copy_no,
                     "selected_codes": selected_codes,
+                    "liner_reference_side": str(getattr(row, "liner_reference_side", "") or ""),
+                    "liner_offset_cm": _num(getattr(row, "liner_offset_cm", 0)),
+                    "liner_width_cm": _num(getattr(row, "liner_width_cm", 0)),
                 }
             )
     return expected
@@ -1469,6 +1484,9 @@ def _match_pieces_to_order(pieces: list[dict[str, Any]], order: Any) -> list[dic
         piece["rotated"] = rotated
         piece["piece_type"] = candidate["piece_type"]
         piece["_extra_selected_codes"] = tuple(candidate.get("selected_codes") or ())
+        piece["_liner_side"] = str(candidate.get("liner_reference_side") or "")
+        piece["_liner_offset_cm"] = _num(candidate.get("liner_offset_cm"))
+        piece["_liner_width_cm"] = _num(candidate.get("liner_width_cm"))
         if "_material_area_m2" in piece:
             piece["area_m2"] = round(_num(piece["_material_area_m2"]), 4)
         else:
@@ -1888,6 +1906,102 @@ def _collect_extra_overlay_candidates(rows: list[dict[str, Any]]) -> tuple[Extra
     return tuple(candidates)
 
 
+_LINER_ISSUE_BY_CODE = {
+    "liner_offset_mismatch": LINER_OFFSET_MISMATCH,
+    "liner_width_mismatch": LINER_WIDTH_MISMATCH,
+    "liner_side_mismatch": LINER_SIDE_MISMATCH,
+    "liner_shape_mismatch": LINER_SHAPE_MISMATCH,
+    "liner_width_not_measurable": LINER_WIDTH_NOT_MEASURABLE,
+}
+
+
+def liner_geometry_issue(
+    measurement,
+    *,
+    source_piece_no: int,
+    copy_no: int,
+    piece_type: str,
+):
+    return _liner_issue(
+        measurement,
+        source_piece_no=source_piece_no,
+        copy_no=copy_no,
+        piece_type=piece_type,
+    )
+
+
+def _liner_issue(
+    measurement,
+    *,
+    source_piece_no: int,
+    copy_no: int,
+    piece_type: str,
+):
+    if measurement.ok:
+        return None
+    return issue(
+        _LINER_ISSUE_BY_CODE[measurement.code],
+        CATEGORY_OVERLAY,
+        target=piece_target(source_piece_no=source_piece_no, copy_no=copy_no),
+        params={
+            "property_code": measurement.property_code,
+            "expected": measurement.expected,
+            "measured": measurement.measured,
+            "reason_code": measurement.reason_code,
+            "piece_type": piece_type,
+        },
+    )
+
+
+def _regular_liner_issue(piece: dict[str, Any], items, sheet: dict[str, Any], trim_mm: float):
+    """Geometric liner check for a rectangular door once its 0/90 orientation is known."""
+
+    piece_type = str(piece.get("piece_type") or "Regular")
+    if piece_type != "Regular":
+        return None
+    enabled = "liner" in tuple(piece.get("_extra_selected_codes") or ())
+    side = str(piece.get("_liner_side") or "")
+    offset_cm = _num(piece.get("_liner_offset_cm"))
+    width_cm = _num(piece.get("_liner_width_cm"))
+    if not liner_parameters_active(
+        enabled=enabled,
+        side=side,
+        offset_cm=offset_cm,
+        width_cm=width_cm,
+    ):
+        return None
+    liners = [item for item in items if item.kind == "liner"]
+    if len(liners) != 1:
+        return None
+    outline = tuple((point[0] * 10.0, point[1] * 10.0) for point in piece.get("_outline_cm") or ())
+    if len(outline) < 3:
+        return None
+    path_cm = _to_plan_points(list(liners[0].path), sheet=sheet, trim_mm=trim_mm)
+    local = localize_path(tuple((point[0] * 10.0, point[1] * 10.0) for point in path_cm), outline)
+    width_mm = _num(piece.get("original_w")) * 10.0
+    height_mm = _num(piece.get("original_h")) * 10.0
+    canonical = canonical_path(
+        local,
+        mirrored=False,
+        quarter_turns=1 if piece.get("rotated") else 0,
+        width_mm=width_mm,
+        height_mm=height_mm,
+    )
+    measurement = compare_liner_path(
+        canonical,
+        LinerPiece(piece_type, _num(piece.get("original_w")), _num(piece.get("original_h"))),
+        side,
+        offset_cm,
+        width_cm,
+    )
+    return _liner_issue(
+        measurement,
+        source_piece_no=int(piece.get("source_piece_no") or 0),
+        copy_no=int(piece.get("copy_no") or 1),
+        piece_type=piece_type,
+    )
+
+
 def _attach_extra_overlays(
     pieces: list[dict[str, Any]],
     *,
@@ -1925,6 +2039,21 @@ def _attach_extra_overlays(
     grouped: dict[int, list] = {}
     for item in assigned:
         grouped.setdefault(int(item.host_key), []).append(item)
+    liner_issues = []
+    for piece in pieces:
+        sheet = sheets_by_no.get(int(piece["_sheet_no"]))
+        if sheet is None:
+            continue
+        liner_issue = _regular_liner_issue(
+            piece,
+            grouped.get(int(piece["id"])) or [],
+            sheet,
+            trim_mm,
+        )
+        if liner_issue is not None:
+            liner_issues.append(liner_issue)
+    if liner_issues:
+        raise DxfImportError(issues=liner_issues)
     for piece in pieces:
         items = grouped.get(int(piece["id"])) or []
         if not items:

@@ -42,6 +42,15 @@ def clone_pieces(pieces: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return deepcopy(pieces)
 
 
+def liner_metadata(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "extra_liner": 1 if row.get("extra_liner") else 0,
+        "liner_reference_side": str(row.get("liner_reference_side") or ""),
+        "liner_offset_cm": num(row.get("liner_offset_cm")),
+        "liner_width_cm": num(row.get("liner_width_cm")),
+    }
+
+
 def _edge_metadata(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "edge_long_right": 1 if row.get("edge_long_right") else 0,
@@ -100,6 +109,7 @@ def expand_piece_groups(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     "allow_rotation": 1 if row.get("allow_rotation") else 0,
                     "area_m2": (width_cm * length_cm) / 10000,
                     "notes": row.get("notes") or "",
+                    **liner_metadata(row),
                     **_edge_metadata(row),
                 }
             )
@@ -160,6 +170,7 @@ def make_placed_piece(
         "rotated": bool(rotated),
         "area_m2": num(piece.get("area_m2")),
         "notes": piece.get("notes") or "",
+        **liner_metadata(piece),
         **_edge_metadata(piece),
     }
 

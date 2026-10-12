@@ -365,8 +365,29 @@
         return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
     }
 
-    function render_piece_overlays(piece, geometryModel) {
-        const overlays = Array.isArray(piece && piece.overlays) ? piece.overlays : [];
+    function pieceWithLinerSpec(frm, piece) {
+        const row = extraOrderRowForPiece(frm, piece);
+        if (!row) return piece;
+        return Object.assign({}, piece, {
+            extra_liner: row.extra_liner,
+            liner_reference_side: row.liner_reference_side,
+            liner_offset_cm: row.liner_offset_cm,
+            liner_width_cm: row.liner_width_cm,
+        });
+    }
+
+    function drawingOverlays(piece, geometryModel) {
+        const overlays = Array.isArray(piece && piece.overlays) ? piece.overlays.slice() : [];
+        if (geometryModel && geometryModel.source === "dxf") return overlays;
+        if (overlays.some(item => item && item.kind === "liner")) return overlays;
+        const liner = window.AlmdinaLinerGeometry;
+        if (!liner || typeof liner.syntheticOverlay !== "function") return overlays;
+        const synthetic = liner.syntheticOverlay(piece);
+        return synthetic ? overlays.concat(synthetic) : overlays;
+    }
+
+    function render_piece_overlays(frm, piece, geometryModel) {
+        const overlays = drawingOverlays(pieceWithLinerSpec(frm, piece), geometryModel);
         if (!overlays.length || !geometryModel) return "";
         const originX = num(geometryModel.placement.xCm) * 10;
         const originY = num(geometryModel.placement.yCm) * 10;
@@ -392,6 +413,12 @@
                 return `<rect class="dco-extra-overlay-path dco-extra-overlay-handle" ${attrs} x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" stroke-width="0.65" stroke-linejoin="miter"/>`;
             }
             const closed = Boolean(geometry && geometry.closed) && local.length >= 3;
+            if (kind === "liner" && overlay.synthetic && closed) {
+                const strip = local
+                    .map((point, pointIndex) => `${pointIndex ? "L" : "M"}${point[0]} ${point[1]}`)
+                    .join(" ") + " Z";
+                return `<path class="dco-extra-overlay-path dco-liner-strip" ${attrs} d="${strip}" fill="rgba(29,111,191,.16)" stroke-width="0.7" stroke-linejoin="round"/>`;
+            }
             const strokePoints = kind === "liner" ? overlaySingleLine(local, closed) : local;
             const d = strokePoints
                 .map((point, pointIndex) => `${pointIndex ? "L" : "M"}${point[0]} ${point[1]}`)
@@ -658,7 +685,7 @@
                 html += `
                     <div class="dco-piece ${piece.piece_type === "Special" ? "dco-special-raw-piece" : ""} ${exactSpecial ? "dco-special-exact-piece" : ""} ${clipped ? "dco-clipped-corner-piece" : ""} ${shaped ? "dco-vector-piece" : ""}" data-piece-type="${escape_html(piece.piece_type || "Regular")}" data-geometry-source="${escape_html(geometryModel.source)}" data-geometry-id="${escape_html(geometryModel.geometryIdentity)}" style="position:absolute;left:${left}%;top:${top}%;width:${width}%;height:${height}%;${pieceStyle}color:#111;overflow:hidden;padding:2px;font-size:10px;line-height:1.2;text-align:center;box-sizing:border-box;display:flex;align-items:center;justify-content:center;">
                         ${shapeOutline}
-                        ${render_piece_overlays(piece, geometryModel)}
+                        ${render_piece_overlays(frm, piece, geometryModel)}
                         ${edgeLines}
                         ${render_piece_addon_marks(frm, piece)}
                         ${render_piece_label(piece, geometryModel)}

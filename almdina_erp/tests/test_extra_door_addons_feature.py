@@ -97,6 +97,10 @@ def test_pricing_plan_quantity_and_mutation_impacts_stay_in_their_owners() -> No
     assert "extra_full_door_double" in plan_fields
     assert "extra_double" not in plan_fields
     assert "extra_liner" in cost_fields
+    assert "extra_liner" not in plan_fields
+    assert "liner_reference_side" in plan_fields
+    assert "liner_offset_cm" in plan_fields
+    assert "liner_width_cm" in plan_fields
     assert "extra_back_groove" in cost_fields
 
 

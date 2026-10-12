@@ -7,6 +7,10 @@ from frappe import _
 from frappe.utils import cint, flt, get_datetime, now_datetime
 
 from almdina_erp.almdina_erp.domain.cutting import round_value
+from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
+    LinerPiece,
+    validation_code,
+)
 from almdina_erp.almdina_erp.domain.orders.piece_policy import (
     PIECE_TYPES,
     PieceGeometry,
@@ -205,6 +209,39 @@ class FrappeOrderPiecePolicyAdapter:
             getattr(row, "length_cm", 0),
         )
 
+    def _apply_liner_parameters(self, row: Any, index: int) -> None:
+        if not cint(getattr(row, "extra_liner", 0)):
+            row.liner_reference_side = ""
+            row.liner_offset_cm = 0
+            row.liner_width_cm = 0
+            return
+        side = str(getattr(row, "liner_reference_side", "") or "").strip()
+        offset = flt(getattr(row, "liner_offset_cm", 0))
+        width = flt(getattr(row, "liner_width_cm", 0))
+        if not side and offset <= 0 and width <= 0:
+            return
+        width_cm = flt(getattr(row, "cut_width_cm", 0)) or flt(row.width_cm)
+        length_cm = flt(getattr(row, "cut_length_cm", 0)) or flt(row.length_cm)
+        code = validation_code(
+            LinerPiece(
+                piece_type=row.piece_type or "Regular",
+                width_cm=width_cm,
+                length_cm=length_cm,
+                clipped_corner_position=str(
+                    getattr(row, "clipped_corner_position", "") or ""
+                ),
+                clipped_corner_width_cm=flt(getattr(row, "clipped_corner_width_cm", 0)),
+                clipped_corner_length_cm=flt(getattr(row, "clipped_corner_length_cm", 0)),
+            ),
+            side,
+            offset,
+            width,
+        )
+        if code:
+            frappe.throw(
+                _("Row {0}: Liner settings are invalid ({1}).").format(index, code)
+            )
+
     def validate_rows(self) -> None:
         old_rows = self.access.old_piece_map()
         old_header = self.access.old_header()
@@ -222,6 +259,7 @@ class FrappeOrderPiecePolicyAdapter:
             row.piece_type = row.piece_type or "Regular"
             if row.piece_type not in PIECE_TYPES:
                 frappe.throw(_("Row {0}: Piece Type is invalid.").format(index))
+            self._apply_liner_parameters(row, index)
             if is_corner_cut(row.piece_type):
                 self._validate_clipped_corner(row, index)
             self._apply_edge_break(row)

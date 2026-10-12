@@ -229,6 +229,60 @@ def _special_range_action(params: dict[str, Any]) -> str:
     )
 
 
+_LINER_SIDE_AR = {
+    "edge_width_top": "أعلى",
+    "edge_width_bottom": "أسفل",
+    "edge_long_left": "يسار",
+    "edge_long_right": "يمين",
+    "edge_break": "الكسر الكامل",
+    "edge_break_only": "الكسر فقط",
+}
+
+
+def _liner_side_label(value: object, piece_type: object) -> str:
+    side = str(value or "")
+    if side == "edge_break" and str(piece_type or "") == "L-Shaped Corner":
+        return "زاوية L"
+    return _LINER_SIDE_AR.get(side, side or "؟")
+
+
+def _present_liner_mismatch(issue: DxfValidationIssue, target_text: str) -> PresentedDxfError:
+    params = issue.params or {}
+    piece_type = params.get("piece_type")
+    code = issue.code
+    action = "صحّح اللاينر في ملف DXF ثم أعد الرفع. لا يُعدَّل الملف تلقائيًا."
+    if code == codes.LINER_WIDTH_NOT_MEASURABLE:
+        problem = (
+            "عرض اللاينر غير قابل للقياس من مسار الطبقة. "
+            "المسار خط بلا سماكة هندسية، والمطلوب "
+            f"{params.get('expected') or '؟'} سم."
+        )
+    elif code == codes.LINER_OFFSET_MISMATCH:
+        problem = (
+            "مسافة اللاينر عن الجهة المرجعية غير مطابقة. "
+            f"المطلوب {params.get('expected') or '؟'} سم، "
+            f"والمقاس من DXF {params.get('measured') or '؟'} سم."
+        )
+    elif code == codes.LINER_WIDTH_MISMATCH:
+        problem = (
+            "عرض اللاينر غير مطابق. "
+            f"المطلوب {params.get('expected') or '؟'} سم، "
+            f"والمقاس من DXF {params.get('measured') or '؟'} سم."
+        )
+    elif code == codes.LINER_SIDE_MISMATCH:
+        problem = (
+            "جهة اللاينر غير مطابقة. "
+            f"المطلوب {_liner_side_label(params.get('expected'), piece_type)}، "
+            f"والمقاس من DXF {_liner_side_label(params.get('measured'), piece_type)}."
+        )
+    else:
+        problem = (
+            "مسار اللاينر لا يطابق شكل الجهة المطلوبة "
+            f"({_liner_side_label(params.get('expected'), piece_type)})."
+        )
+    return PresentedDxfError(problem, target_text, action, code, issue.category)
+
+
 def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
     params = dict(issue.params or {})
     target_text = present_target(issue.target, params=params)
@@ -814,6 +868,14 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
             code,
             issue.category,
         )
+    if code in {
+        codes.LINER_OFFSET_MISMATCH,
+        codes.LINER_WIDTH_MISMATCH,
+        codes.LINER_SIDE_MISMATCH,
+        codes.LINER_SHAPE_MISMATCH,
+        codes.LINER_WIDTH_NOT_MEASURABLE,
+    }:
+        return _present_liner_mismatch(issue, target_text)
     if code == codes.OVERLAY_UNKNOWN:
         return PresentedDxfError(
             "علامة تصنيع في DXF غير معروفة أو غير صالحة.",

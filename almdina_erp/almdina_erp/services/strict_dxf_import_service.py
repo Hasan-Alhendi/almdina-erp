@@ -10,6 +10,15 @@ from almdina_erp.almdina_erp.domain.cutting.corner_contour_rotation import (
     match_corner_contour,
     measure_l_remainings_cm,
 )
+from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
+    LINER_SHAPE_MISMATCH as LINER_SHAPE_CODE,
+    LinerMeasurement,
+    LinerPiece,
+    canonical_path,
+    compare_liner_path,
+    liner_parameters_active,
+    localize_path,
+)
 from almdina_erp.almdina_erp.domain.cutting.dxf_applied_trim import (
     DxfAppliedTrimError,
     apply_adaptive_trim_to_fixed_dxf_layout,
@@ -59,6 +68,7 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
 )
 from almdina_erp.almdina_erp.services.dxf_import_service import (
     DxfImportError,
+    liner_geometry_issue,
     parse_production_dxf as _legacy_parse_production_dxf,
 )
 from almdina_erp.almdina_erp.services.piece_cut_dimension_service import (
@@ -205,6 +215,9 @@ def _proxy_order(
                 finished_length_cm=float(spec.finished_length_cm),
                 allow_rotation=spec.allow_rotation,
                 piece_type=spec.piece_type,
+                liner_reference_side=str(getattr(row, "liner_reference_side", "") or ""),
+                liner_offset_cm=float(getattr(row, "liner_offset_cm", 0) or 0),
+                liner_width_cm=float(getattr(row, "liner_width_cm", 0) or 0),
             )
         )
     return SimpleNamespace(
@@ -790,6 +803,86 @@ def _bind_corner_edge_rotation(
     return None
 
 
+def _corner_liner_issue(piece: dict[str, Any], spec: OrderPieceCutSpec, order: Any | None):
+    if not is_corner_cut(spec.piece_type) or order is None:
+        return None
+    row = _row_for_spec(order, spec)
+    enabled = bool(int(getattr(row, "extra_liner", 0) or 0)) if row else False
+    side = str(getattr(row, "liner_reference_side", "") or "") if row else ""
+    offset_cm = float(getattr(row, "liner_offset_cm", 0) or 0) if row else 0.0
+    width_cm = float(getattr(row, "liner_width_cm", 0) or 0) if row else 0.0
+    if not liner_parameters_active(
+        enabled=enabled,
+        side=side,
+        offset_cm=offset_cm,
+        width_cm=width_cm,
+    ):
+        return None
+    liners = [
+        overlay
+        for overlay in (piece.get("overlays") or [])
+        if isinstance(overlay, dict) and overlay.get("kind") == "liner"
+    ]
+    if len(liners) != 1:
+        return None
+    geometry = piece.get("geometry") if isinstance(piece.get("geometry"), dict) else {}
+    outer = geometry.get("outer") or ()
+    path = ((liners[0].get("geometry") or {}).get("path") or ())
+    if len(outer) < 3 or len(path) < 2:
+        return None
+    notch_width_cm, notch_length_cm = _contour_notch_cm(spec)
+    if "corner_rotation_quarter_turns" in piece:
+        turns = int(piece.get("corner_rotation_quarter_turns") or 0)
+        mirrored = bool(int(piece.get("corner_mirrored") or 0))
+    else:
+        match = match_corner_contour(
+            outer,
+            piece_type=spec.piece_type,
+            position=str(spec.clipped_corner_position or ""),
+            width_cm=float(spec.cut_width_cm),
+            length_cm=float(spec.cut_length_cm),
+            cut_width_cm=notch_width_cm,
+            cut_length_cm=notch_length_cm,
+        )
+        if match.quarter_turns is None:
+            return liner_geometry_issue(
+                LinerMeasurement(False, LINER_SHAPE_CODE, "shape", side, "", "orientation_unresolved"),
+                source_piece_no=spec.row_index,
+                copy_no=int(piece.get("copy_no") or 1),
+                piece_type=spec.piece_type,
+            )
+        turns = int(match.quarter_turns)
+        mirrored = bool(match.mirrored)
+    local = localize_path(path, outer)
+    canonical = canonical_path(
+        local,
+        mirrored=mirrored,
+        quarter_turns=turns,
+        width_mm=float(spec.cut_width_cm) * 10.0,
+        height_mm=float(spec.cut_length_cm) * 10.0,
+    )
+    measurement = compare_liner_path(
+        canonical,
+        LinerPiece(
+            spec.piece_type,
+            float(spec.cut_width_cm),
+            float(spec.cut_length_cm),
+            str(spec.clipped_corner_position or ""),
+            notch_width_cm,
+            notch_length_cm,
+        ),
+        side,
+        offset_cm,
+        width_cm,
+    )
+    return liner_geometry_issue(
+        measurement,
+        source_piece_no=spec.row_index,
+        copy_no=int(piece.get("copy_no") or 1),
+        piece_type=spec.piece_type,
+    )
+
+
 def _apply_strict_dimension_contract(
     snapshot: dict[str, Any],
     specs: list[OrderPieceCutSpec],
@@ -832,6 +925,10 @@ def _apply_strict_dimension_contract(
                 binding_error = _bind_corner_edge_rotation(piece, candidate)
                 if binding_error:
                     issues.append(binding_error)
+                else:
+                    liner_issue = _corner_liner_issue(piece, candidate["spec"], order)
+                    if liner_issue is not None:
+                        issues.append(liner_issue)
                 continue
             if str(piece.get("piece_type") or "") == "Special":
                 issues.append(
@@ -931,6 +1028,10 @@ def _apply_strict_dimension_contract(
             binding_error = _bind_corner_edge_rotation(piece, candidate)
             if binding_error:
                 issues.append(binding_error)
+            else:
+                liner_issue = _corner_liner_issue(piece, candidate["spec"], order)
+                if liner_issue is not None:
+                    issues.append(liner_issue)
 
     if unmatched:
         preview = "، ".join(

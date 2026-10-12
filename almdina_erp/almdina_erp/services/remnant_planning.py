@@ -32,6 +32,10 @@ def _piece_rows(order: Any) -> list[dict[str, Any]]:
             "clipped_corner_position": row.clipped_corner_position or "",
             "clipped_corner_width_cm": flt(row.clipped_corner_width_cm),
             "clipped_corner_length_cm": flt(row.clipped_corner_length_cm),
+            "extra_liner": cint(getattr(row, "extra_liner", 0)),
+            "liner_reference_side": getattr(row, "liner_reference_side", "") or "",
+            "liner_offset_cm": flt(getattr(row, "liner_offset_cm", 0)),
+            "liner_width_cm": flt(getattr(row, "liner_width_cm", 0)),
             "special_shape_geometry_json": (
                 getattr(row, "special_shape_geometry_json", "") or ""
             ),
