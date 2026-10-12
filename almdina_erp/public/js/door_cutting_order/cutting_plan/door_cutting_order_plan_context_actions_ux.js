@@ -96,6 +96,28 @@
         return frappe.utils.escape_html(String(value ?? ""));
     }
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        return String(message == null ? "" : message);
+    }
+
+    function uiDirection() {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.direction === "function") {
+            const value = locale.direction();
+            if (value === "ltr" || value === "rtl") return value;
+        }
+        const root = typeof document !== "undefined" ? document.documentElement : null;
+        const dir = root && root.getAttribute("dir");
+        return dir === "ltr" ? "ltr" : "rtl";
+    }
+
     function uiButton(options) {
         const ui = window.AlmdinaUi;
         if (!ui || typeof ui.button !== "function") {
@@ -105,19 +127,19 @@
     }
 
     function sourceLabel(tab) {
-        if (tab === "Custom") return __("الخطة المرفوعة");
-        if (tab === "Approved") return __("الخطة المعتمدة");
-        return __("خطة النظام");
+        if (tab === "Custom") return translate("Uploaded plan");
+        if (tab === "Approved") return translate("Approved plan");
+        return translate("System plan");
     }
 
     function approveLabel(frm, tab) {
         const hasApproved = Boolean(String((workspaceData(frm) || {}).approved_plan || "").trim());
         if (!hasApproved) {
-            return tab === "Custom" ? __("اعتماد الخطة المرفوعة") : __("اعتماد خطة النظام");
+            return tab === "Custom" ? translate("Approve the uploaded plan") : translate("Approve the system plan");
         }
         return tab === "Custom"
-            ? __("استبدال الخطة المعتمدة بالخطة المرفوعة")
-            : __("استبدال الخطة المعتمدة بخطة النظام");
+            ? translate("Replace the approved plan with the uploaded plan")
+            : translate("Replace the approved plan with the system plan");
     }
 
     function planMetrics(row) {
@@ -211,7 +233,7 @@
             .${HOST_CLASS} {
                 margin: 0 0 var(--dco-section-stack-gap, 8px);
                 width: 100%;
-                direction: rtl;
+                direction: inherit;
             }
             .dco-plan-context-bar {
                 width: 100%;
@@ -357,7 +379,7 @@
     async function runApproval(frm) {
         const controls = window.AlmdinaPlanControlsUX;
         if (!controls || typeof controls.runApproval !== "function") {
-            frappe.msgprint(__("تعذر تحميل أمر اعتماد خطة القص. أعد تحميل الصفحة ثم حاول مرة أخرى."));
+            frappe.msgprint(translate("Could not load the cutting plan approval command. Reload the page and try again."));
             return false;
         }
         return controls.runApproval(frm);
@@ -366,19 +388,19 @@
     async function runCancelApproval(frm) {
         const api = window.AlmdinaPlanWorkspaceAPI;
         if (!api || typeof api.cancelApproval !== "function") {
-            frappe.msgprint(__("تعذر تحميل أمر إلغاء اعتماد خطة القص. أعد تحميل الصفحة ثم حاول مرة أخرى."));
+            frappe.msgprint(translate("Could not load the command that cancels cutting plan approval. Reload the page and try again."));
             return false;
         }
         return new Promise((resolve) => {
             frappe.confirm(
-                __("سيتم إلغاء اعتماد خطة الإنتاج الحالية مع الاحتفاظ بها في سجل المراجعات، ولن تتحول الخطة القديمة إلى مسودة قابلة للتعديل. هل تريد المتابعة؟"),
+                translate("The current production plan approval will be cancelled and kept in the revision history. The old plan will not become an editable draft. Do you want to continue?"),
                 async () => {
                     try {
                         await api.cancelApproval(frm.doc.name);
                         frm.__almdina_active_plan_tab = "System";
                         await refreshWorkspace(frm);
                         frappe.show_alert({
-                            message: __("تم إلغاء اعتماد خطة القص مع الاحتفاظ بسجلها."),
+                            message: translate("Cutting plan approval was cancelled and its history was kept."),
                             indicator: "green",
                         }, 5);
                         resolve(true);
@@ -401,7 +423,7 @@
 
     function runExport(frm) {
         if (!frappe.almdina || typeof frappe.almdina.export_order_dxf !== "function") {
-            frappe.msgprint(__("تعذر تحميل خدمة تصدير DXF الآمنة."));
+            frappe.msgprint(translate("Could not load the secure DXF export service."));
             return false;
         }
         return frappe.almdina.export_order_dxf(frm.doc.name, activeTab(frm), {
@@ -411,7 +433,7 @@
 
     function runUpload(frm) {
         if (!frappe.almdina || typeof frappe.almdina.upload_production_dxf !== "function") {
-            frappe.msgprint(__("تعذر تحميل خدمة رفع DXF الآمنة."));
+            frappe.msgprint(translate("Could not load the secure DXF upload service."));
             return false;
         }
         return frappe.almdina.upload_production_dxf(frm);
@@ -420,10 +442,10 @@
     function primaryActionHtml(frm, tab, row) {
         if (tab === "Approved") {
             return `
-                <span class="dco-plan-context-chip is-approved">✓ ${esc(__("الخطة المعتمدة للإنتاج"))}</span>
+                <span class="dco-plan-context-chip is-approved">✓ ${esc(translate("Plan approved for production"))}</span>
                 ${canCancelApproval(frm, tab)
                     ? uiButton({
-                        label: __("إلغاء اعتماد الخطة"),
+                        label: translate("Cancel plan approval"),
                         variant: "secondary",
                         size: "btn-sm",
                         className: "dco-plan-context-cancel",
@@ -448,21 +470,21 @@
 
     function exportLabel(tab, row) {
         if (tab === "Custom" || (tab === "Approved" && hasOriginalDxfFile(row))) {
-            return __("تنزيل DXF المرفوع");
+            return translate("Download uploaded DXF");
         }
-        return __("تصدير DXF");
+        return translate("Export DXF");
     }
 
     function toolsHtml(frm, row) {
         const tab = activeTab(frm);
         const print = canPrint(frm, row)
-            ? `<button type="button" class="btn btn-default btn-sm dco-print-cutting-plan"><span aria-hidden="true">▣</span>${esc(__("طباعة"))}</button>`
+            ? `<button type="button" class="btn btn-default btn-sm dco-print-cutting-plan"><span aria-hidden="true">▣</span>${esc(translate("Print"))}</button>`
             : "";
         const exportDxf = canExport(frm, row)
             ? `<button type="button" class="btn btn-default btn-sm dco-export-dxf"><span aria-hidden="true">↓</span>${esc(exportLabel(tab, row))}</button>`
             : "";
         const upload = canUpload(frm)
-            ? `<button type="button" class="btn btn-default btn-sm dco-upload-dxf-plan"><span aria-hidden="true">↑</span>${esc(uploadedFile(frm) ? __("استبدال الخطة المرفوعة") : __("رفع خطة DXF"))}</button>`
+            ? `<button type="button" class="btn btn-default btn-sm dco-upload-dxf-plan"><span aria-hidden="true">↑</span>${esc(uploadedFile(frm) ? translate("Replace the uploaded plan") : translate("Upload a DXF plan"))}</button>`
             : "";
         return `${upload}${exportDxf}${print}`;
     }
@@ -489,7 +511,7 @@
         const row = rowForTab(frm, tab);
         const metrics = planMetrics(row);
         const boardsChip = rowHasPlan(row)
-            ? `<span class="dco-plan-context-chip is-boards" role="status" aria-label="${esc(`${metrics.boards} ${__("ألواح")}`)}"><span class="dco-plan-context-boards-value">${esc(metrics.boards)}</span><span class="dco-plan-context-boards-label">${esc(__("ألواح"))}</span></span>`
+            ? `<span class="dco-plan-context-chip is-boards" role="status" aria-label="${esc(translate("{0} sheets", [metrics.boards]))}"><span class="dco-plan-context-boards-value" style="direction:ltr;">${esc(metrics.boards)}</span><span class="dco-plan-context-boards-label">${esc(translate("Sheets"))}</span></span>`
             : `<span class="dco-plan-context-chip is-boards" role="status">${esc(sourceLabel(tab))}</span>`;
         const inlineTools = toolsHtml(frm, row);
 
@@ -497,7 +519,7 @@
         // data-almdina-context-tools marks a completed normal-mode paint so surface
         // recovery can detect a wiped host even when every tool gate is false.
         target.html(`
-            <div class="almdina-ui dco-plan-context-bar" data-active-plan-source="${esc(tab)}" data-almdina-context-tools="1">
+            <div class="almdina-ui dco-plan-context-bar" dir="${esc(uiDirection())}" data-active-plan-source="${esc(tab)}" data-almdina-context-tools="1">
                 <div class="dco-plan-context-primary">
                     ${primaryActionHtml(frm, tab, row)}${inlineTools}${boardsChip}
                 </div>

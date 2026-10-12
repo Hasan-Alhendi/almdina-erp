@@ -179,6 +179,64 @@ class TestActiveUiHasNoLanguageTextBranches(unittest.TestCase):
                     leftovers.append(f"{relative}:{number}: {line.strip()}")
         self.assertEqual(leftovers, [])
 
+    def test_plan_output_visible_copy_uses_english_message_ids(self) -> None:
+        """Compatibility leftovers are data or legacy detectors, not visible UI copy."""
+        paths = (
+            PUBLIC_JS / "door_cutting_order" / "cutting_plan" / "door_cutting_order_cutting_plan_renderer.js",
+            PUBLIC_JS / "door_cutting_order" / "cutting_plan" / "door_cutting_order_drawing_approval_ux.js",
+            PUBLIC_JS / "door_cutting_order" / "cutting_plan" / "door_cutting_order_drawing_plan_ux.js",
+            PUBLIC_JS / "door_cutting_order" / "cutting_plan" / "door_cutting_order_plan_board_presenter.js",
+            PUBLIC_JS / "door_cutting_order" / "cutting_plan" / "door_cutting_order_plan_content_ux.js",
+            PUBLIC_JS / "door_cutting_order" / "cutting_plan" / "door_cutting_order_plan_context_actions_ux.js",
+            PUBLIC_JS / "door_cutting_order" / "cutting_plan" / "door_cutting_order_plan_source_presentation.js",
+            PUBLIC_JS / "door_cutting_order" / "cutting_plan" / "door_cutting_order_plan_surface_bootstrap.js",
+            PUBLIC_JS / "door_cutting_order" / "cutting_plan" / "door_cutting_order_plan_tabs_ux.js",
+            PUBLIC_JS / "door_cutting_order" / "cutting_plan" / "door_cutting_order_plan_ux.js",
+            PUBLIC_JS / "door_cutting_order" / "cutting_plan" / "door_cutting_order_plan_workspace_presenter_adapter.js",
+            PUBLIC_JS / "door_cutting_order" / "cutting_plan" / "door_cutting_order_text_board_plan_ux.js",
+            PUBLIC_JS / "door_cutting_order" / "cutting_plan" / "secure_dxf_export.js",
+            PUBLIC_JS / "door_cutting_order" / "cutting_plan" / "secure_dxf_upload.js",
+        )
+        # Historical department value, production DXF text, and labels used only to remove or detect old UI.
+        allowed = (
+            "رسم",
+            "دبل القشاط",
+            "دبل كامل",
+            "الرسم / DXF",
+            "دورة الطلب",
+            "تصدير DXF",
+            "تصدير DXF للرسم",
+            "تصدير DXF للتعديل",
+            "تصدير DXF لأوتوكاد",
+            "تنزيل DXF المرفوع",
+            "تنزيل DXF للإنتاج",
+            "رفع ملف DXF",
+            "استبدال ملف DXF",
+            "اعتماد الرسم",
+            "إعادة اعتماد الرسم",
+            "طباعة خطة القص",
+            "تصدير",
+            "تنزيل",
+            "الطلب:",
+            "الزبون:",
+            "اللوح:",
+            "الصنف:",
+            "مقاس اللوح الكامل",
+            "سماكة القص",
+            "طريقة الترتيب:",
+        )
+        leftovers = []
+        ordered = tuple(sorted(allowed, key=len, reverse=True))
+        for path in paths:
+            relative = path.relative_to(ROOT)
+            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+                visible = line
+                for phrase in ordered:
+                    visible = visible.replace(phrase, "")
+                if ARABIC_TEXT.search(visible):
+                    leftovers.append(f"{relative}:{number}: {line.strip()}")
+        self.assertEqual(leftovers, [])
+
 
 if __name__ == "__main__":
     unittest.main()

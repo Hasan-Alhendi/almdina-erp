@@ -1498,3 +1498,157 @@ Start with “Calculate the cutting plan”. The current plan settings or factor
 "Press “Edit” to try algorithms and settings. Recalculation creates a preview, and the change is not saved until you press “Save”.",اضغط «تعديل» لتجربة الخوارزميات والإعدادات. إعادة الحساب تنشئ معاينة، ولا يُحفظ التعديل حتى تضغط «حفظ».
 "The engine can be run again with the saved settings. Changing the algorithm, kerf, or trim needs the “Edit cutting algorithm” permission.",يمكن إعادة تشغيل المحرك بالإعدادات المحفوظة. تغيير الخوارزمية أو Kerf أو Trim يحتاج صلاحية «تعديل خوارزمية القص».
 You need the “Recalculate plan” permission to run the cutting plan engine.,تحتاج صلاحية «إعادة حساب الخطة» لتشغيل محرك خطة القص.
+ · {0} s, · {0} ث
+A plan setting changed. Recalculate to apply the change to the drawing and the results.,تم تغيير أحد إعدادات الخطة. أعد الحساب لتطبيق التغيير على الرسم والنتائج.
+About {0} m · {1} rotations · {2} attempts,حوالي {0} م · {1} تدوير · {2} محاولة
+All special doors were placed in the cutting plan:,تم إدخال جميع الدرف الخاصة في خطة القص:
+An original board edge was used; check that it is straight before cutting.,تم استخدام حافة أصلية من اللوح؛ افحص استقامتها قبل التنفيذ.
+Approval source,مصدر الاعتماد
+Approve drawing,اعتماد الرسم
+Approve for production,اعتماد للإنتاج
+Approve the system plan,اعتماد خطة النظام
+Approve the uploaded plan,اعتماد الخطة المرفوعة
+Approved for production,معتمدة للإنتاج
+Approved plan,الخطة المعتمدة
+Approving the drawing plan...,جاري اعتماد خطة الرسم...
+Board color,لون اللوح
+Board details,تفاصيل اللوح
+Board size,قياس اللوح
+Board type,نوع اللوح
+Board {0},لوح {0}
+Calculation and cost details,تفاصيل الحساب والتكلفة
+Cancel plan approval,إلغاء اعتماد الخطة
+Changing the algorithm needs the “Edit cutting algorithm” permission. You can recalculate with the current algorithm.,تغيير الخوارزمية يحتاج صلاحية «تعديل خوارزمية القص». يمكنك إعادة الحساب بالخوارزمية الحالية.
+Choose the final version you want to approve for production.,اختر النسخة النهائية التي تريد اعتمادها للإنتاج.
+Could not display the geometric path,تعذر عرض المسار الهندسي
+Could not display the plan.,تعذر عرض الخطة.
+Could not load the command that cancels cutting plan approval. Reload the page and try again.,تعذر تحميل أمر إلغاء اعتماد خطة القص. أعد تحميل الصفحة ثم حاول مرة أخرى.
+Could not load the cutting plan approval command. Reload the page and try again.,تعذر تحميل أمر اعتماد خطة القص. أعد تحميل الصفحة ثم حاول مرة أخرى.
+Could not load the cutting plan recalculation command. Reload the page and try again.,تعذر تحميل أمر إعادة حساب خطة القص. أعد تحميل الصفحة ثم حاول مرة أخرى.
+Could not load the cutting plan. Try again.,تعذر تحميل خطة القص. أعد المحاولة.
+Could not load the secure DXF export service.,تعذر تحميل خدمة تصدير DXF الآمنة.
+Could not load the secure DXF upload service.,تعذر تحميل خدمة رفع DXF الآمنة.
+Could not load the secure DXF upload service. Reload the page and try again.,تعذر تحميل خدمة رفع DXF الآمنة. أعد تحميل الصفحة ثم حاول مرة أخرى.
+Could not prepare printing.,تعذر تجهيز الطباعة.
+Could not prepare the cutting plan for printing. Reload the page and try again.,تعذر تجهيز خطة القص للطباعة. أعد تحميل الصفحة ثم حاول مرة أخرى.
+Could not prepare the cutting plan print. Reload the page.,تعذر تجهيز طباعة خطة القص. أعد تحميل الصفحة.
+Could not start the secure DXF source. Reload the page.,تعذر تشغيل مصدر DXF الآمن. أعد تحميل الصفحة.
+Current plan result,نتيجة الخطة الحالية
+Current result,النتيجة الحالية
+Customer name,اسم الزبون
+Cut execution settings,إعدادات تنفيذ القص
+Cuts: {0} | waste: {1} m² ({2}%),قطع: {0} | الهدر: {1} م² ({2}%)
+Cutting plan,خطة القص
+Cutting plan - {0},خطة قص - {0}
+Cutting plan approval was cancelled and its history was kept.,تم إلغاء اعتماد خطة القص مع الاحتفاظ بسجلها.
+Cutting plan commands,أوامر خطة القص
+Cutting plan engine,محرك خطة القص
+Cutting plan source,مصدر خطة القص
+Door add-on symbols,رموز إضافات الدرف
+Door list:,قائمة الدرف:
+Download uploaded DXF,تنزيل DXF المرفوع
+Drawing / DXF,الرسم / DXF
+Drawing plan engine,محرك خطة الرسم
+Ease of cutting,سهولة التنفيذ
+Edge banding double,دبل قشاط
+"Edit the plan settings from “Edit cutting plan”, save them, then recalculate.",عدّل إعدادات الخطة من «تعديل خطة القص»، احفظها، ثم أعد الحساب.
+Enlarge board,تكبير اللوح
+Enter a board length and width greater than zero before calculating the cutting plan.,أدخل طول اللوح وعرضه بقيم أكبر من الصفر قبل حساب خطة القص.
+Enter at least one valid measurement before calculating the cutting plan.,أدخل قياسًا واحدًا صحيحًا على الأقل قبل حساب خطة القص.
+"Enter the board item first, for example: MDF white 18 mm.",أدخل صنف اللوح أولًا، مثال: MDF أبيض 18 مم.
+Largest free area,أكبر مساحة فارغة
+Loading the cutting plan...,جاري تحميل خطة القص...
+Offcut,نقص
+Order date,تاريخ الطلب
+Order number,رقم الطلب
+Original edge,حافة أصلية
+Original edge · bottom,حافة أصلية · أسفل
+Original edge · left,حافة أصلية · يسار
+Original edge · right,حافة أصلية · يمين
+Original edge · top,حافة أصلية · أعلى
+Page {0} of {1},صفحة {0} من {1}
+Piece count,عدد القطع
+Piece layout on the boards,توزيع القطع على الألواح
+Pieces: {0} | waste: {1} m² ({2}%),عدد القطع: {0} | الهدر: {1} م² ({2}%)
+Plan approved for production,الخطة المعتمدة للإنتاج
+Plan settings are read-only in the current state.,إعدادات الخطة للعرض فقط في الحالة الحالية.
+Plan uploaded from DXF,الخطة المرفوعة من DXF
+Plan waste,الهدر
+Preview only,معاينة فقط
+Print cutting plan,طباعة خطة القص
+Qty {0},عدد {0}
+Re-approve drawing,إعادة اعتماد الرسم
+Recalculate plan,إعادة الحساب
+Recalculating the plan is not available in the current state.,إعادة حساب الخطة غير متاحة في الحالة الحالية.
+Recalculation and algorithm changes follow cutting plan permissions and do not need the cost permission.,إعادة الحساب وتغيير الخوارزمية يتبعان صلاحيات خطة القص، ولا يحتاجان صلاحية التكلفة.
+Recalculation is available,إعادة الحساب متاحة
+Recessed handle,مسكة غطس
+Replace the DXF cutting plan,استبدال خطة القص DXF
+Replace the approved plan with the system plan,استبدال الخطة المعتمدة بخطة النظام
+Replace the approved plan with the uploaded plan,استبدال الخطة المعتمدة بالخطة المرفوعة
+Replace the uploaded plan,استبدال الخطة المرفوعة
+Save the order before uploading a DXF file.,احفظ الطلب قبل رفع ملف DXF.
+Selected method,الطريقة الفعلية المختارة
+Sheets,ألواح
+Show the result,عرض النتيجة
+Special (CNC),خاصة (CNC)
+Special door · CNC raw,درفة خاصة · خام CNC
+Special door · geometric path,درفة خاصة · مسار هندسي
+System plan,خطة النظام
+The DXF file was replaced and validated.,تم استبدال ملف DXF والتحقق منه.
+The DXF file was uploaded and validated.,تم رفع ملف DXF والتحقق منه.
+The browser blocked the print window. Allow pop-ups and try again.,المتصفح منع فتح نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم جرّب مرة أخرى.
+The current production plan approval will be cancelled and kept in the revision history. The old plan will not become an editable draft. Do you want to continue?,سيتم إلغاء اعتماد خطة الإنتاج الحالية مع الاحتفاظ بها في سجل المراجعات، ولن تتحول الخطة القديمة إلى مسودة قابلة للتعديل. هل تريد المتابعة؟
+The direct result after applying the current cutting plan settings.,النتيجة المباشرة بعد تطبيق إعدادات خطة القص الحالية.
+The drawing approval was updated and replaced the previous approved plan.,تم تحديث اعتماد الرسم واستبدال الخطة المعتمدة السابقة.
+The drawing was approved for production.,تم اعتماد الرسم للإنتاج.
+The largest empty rectangle inside the board after the pieces are placed.,أكبر مستطيل فارغ داخل اللوح بعد توزيع القطع.
+The margin was reduced automatically by the amount needed to keep the piece measurements.,تم تخفيض الهامش تلقائيًا بالقدر اللازم للحفاظ على قياسات القطع.
+The plan does not match the order,الخطة غير مطابقة للطلب
+The system plan was updated.,تم تحديث خطة النظام.
+There is no approved plan to print.,لا توجد خطة معتمدة للطباعة.
+There is no cutting plan to print.,لا يوجد مخطط قص للطباعة.
+There is no cutting plan to print. Recalculate the cutting plan first.,لا يوجد مخطط قص للطباعة. اضغط أولًا على إعادة حساب خطة القص.
+There is no data to display in the approved plan.,لا توجد بيانات لعرضها في الخطة المعتمدة.
+There is no plan approved for production.,لا توجد خطة معتمدة للإنتاج.
+There is no system plan to display.,لا توجد خطة نظام لعرضها.
+There is no uploaded plan,لا يوجد خطة مرفوعة
+There is no uploaded plan to print.,لا يوجد خطة مرفوعة للطباعة.
+There is no valid plan to approve.,لا توجد خطة صالحة للاعتماد.
+This is a preview result. The order was not changed.,هذه نتيجة معاينة. لم يطرأ أي تغيير على الطلب.
+This order was changed and the plan no longer matches,بيانات هذا الطلب تم تعديلها وأصبحت الخطة غير مطابقة
+Trim margin warning,تنبيه هامش التشذيب
+Try any algorithm and compare the result. This is a preview only and does not change the saved order plan.,جرّب أي خوارزمية وقارن النتيجة. هذه معاينة فقط ولا تغيّر خطة الطلب المحفوظة.
+Try cutting algorithms,تجربة خوارزميات القص
+Trying the algorithm...,جاري تجربة الخوارزمية...
+Unassigned,غير محدد
+Upload a DXF plan,رفع خطة DXF
+Upload a cutting plan as a DXF file,رفع خطة قص كملف DXF
+Validating the DXF file and applying the plan...,جاري التحقق من ملف DXF وتطبيق الخطة...
+"Wait until the cutting plan finishes loading, then print again.",انتظر حتى يكتمل تحميل خطة القص ثم أعد الطباعة.
+Warning:,تنبيه:
+Warning: a plan was already approved for this order. Continuing creates a new approval and replaces the current approved plan. Do you want to continue?,تنبيه: تم اعتماد خطة لهذا الطلب سابقًا. المتابعة ستنشئ اعتمادًا جديدًا وتستبدل الخطة المعتمدة الحالية. هل تريد المتابعة؟
+Warning: only,تنبيه: فقط
+You do not have permission to export DXF.,ليست لديك صلاحية تصدير DXF.
+You do not have permission to print the cutting plan.,ليست لديك صلاحية طباعة خطة القص.
+You do not have permission to upload the cutting plan as a DXF file.,ليست لديك صلاحية رفع خطة القص كملف DXF.
+You do not have permission to view the cutting plan tabs.,لا توجد صلاحية لعرض تبويبات خطة القص.
+Zoom the board,تكبير وتصغير اللوح
+special doors were placed in the cutting plan. Review the measurements and the unplaced pieces.,من الدرف الخاصة دخلت خطة القص. راجع المقاسات والقطع غير الموزعة.
+{0} boards · waste {1}%,{0} لوح · هدر {1}%
+{0} cut lines,{0} خط قص
+{0} m²,{0} م²
+{0} of {1},{0} من {1}
+"{0} pieces were not placed on the boards. Review the measurements, the board size, or the rotation allowance.",توجد {0} قطعة لم تدخل ضمن الألواح. راجع المقاسات أو مقاس اللوح أو سماحية التدوير.
+{0} sheets,{0} ألواح
+A quick comparison of the basic algorithms.,مقارنة سريعة بين الخوارزميات الأساسية.
+The recommended daily choice: several attempts and a local improvement of the result.,الخيار اليومي الموصى به: محاولات متعددة وتحسين محلي للنتيجة.
+A wider search within the time limit for a better layout.,بحث أوسع ضمن المهلة المحددة للحصول على توزيع أفضل.
+"A solver search for suitable cases, keeping the best valid solution within the time limit.",بحث Solver للحالات المناسبة مع الاحتفاظ بأفضل حل صالح ضمن المهلة.
+A manual choice of one layout algorithm.,اختيار يدوي لخوارزمية ترتيب محددة.
+Calculating the cutting plan...,جاري حساب خطة القص...
+Margin right,يمين
+Margin left,يسار
+Margin top,أعلى
+Margin bottom,أسفل
+Print,طباعة

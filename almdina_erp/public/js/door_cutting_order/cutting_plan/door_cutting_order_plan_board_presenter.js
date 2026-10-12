@@ -3,6 +3,17 @@
 
     if (window.AlmdinaPlanBoardPresenter) return;
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        return String(message == null ? "" : message);
+    }
+
     const BOARD_GAP_PX = 8;
     const BOARD_CARD_CHROME_PX = 12;
     const BOARD_VIEWPORT_HEIGHT_RATIO = 0.68;
@@ -48,8 +59,8 @@
         const button = document.createElement("button");
         button.type = "button";
         button.className = "dco-board-focus-trigger";
-        button.setAttribute("aria-label", "تكبير اللوح");
-        button.setAttribute("title", "تكبير اللوح");
+        button.setAttribute("aria-label", translate("Enlarge board"));
+        button.setAttribute("title", translate("Enlarge board"));
         button.innerHTML = '<span aria-hidden="true">⤢</span>';
         title.appendChild(button);
     }
@@ -148,7 +159,7 @@
         }
 
         const title = card.querySelector(".dco-sheet-title");
-        const titleText = (title?.querySelector(":scope > :first-child")?.textContent || "تفاصيل اللوح").trim();
+        const titleText = (title?.querySelector(":scope > :first-child")?.textContent || translate("Board details")).trim();
         const statsText = (title?.querySelector(":scope > :nth-child(2)")?.textContent || "").replace(/\s+/g, " ").trim();
         const overlay = document.createElement("div");
         overlay.className = "dco-board-focus";
@@ -163,13 +174,13 @@
                         <span class="dco-board-focus__stats">${escapeHtml(statsText)}</span>
                     </div>
                     <div class="dco-board-focus__actions">
-                        <button type="button" class="dco-board-focus__fit">ملاءمة</button>
-                        <div class="dco-board-focus__zoom" role="group" aria-label="تكبير وتصغير اللوح">
-                            <button type="button" data-focus-zoom="out" aria-label="تصغير">−</button>
+                        <button type="button" class="dco-board-focus__fit">${escapeHtml(translate("Fit"))}</button>
+                        <div class="dco-board-focus__zoom" role="group" aria-label="${escapeHtml(translate("Zoom the board"))}">
+                            <button type="button" data-focus-zoom="out" aria-label="${escapeHtml(translate("Zoom out"))}">−</button>
                             <span class="dco-board-focus__zoom-value">100%</span>
-                            <button type="button" data-focus-zoom="in" aria-label="تكبير">+</button>
+                            <button type="button" data-focus-zoom="in" aria-label="${escapeHtml(translate("Zoom in"))}">+</button>
                         </div>
-                        <button type="button" class="dco-board-focus__close" aria-label="إغلاق">×</button>
+                        <button type="button" class="dco-board-focus__close" aria-label="${escapeHtml(translate("Close"))}">×</button>
                     </div>
                 </div>
                 <div class="dco-board-focus__body"></div>
