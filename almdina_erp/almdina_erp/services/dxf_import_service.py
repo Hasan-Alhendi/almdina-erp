@@ -1953,7 +1953,13 @@ def _liner_issue(
     )
 
 
-def _regular_liner_issue(piece: dict[str, Any], items, sheet: dict[str, Any], trim_mm: float):
+def _regular_liner_issue(
+    piece: dict[str, Any],
+    items,
+    sheet: dict[str, Any],
+    trim_mm: float,
+    cutter_diameter_mm: float | None = None,
+):
     """Geometric liner check for a rectangular door once its 0/90 orientation is known."""
 
     piece_type = str(piece.get("piece_type") or "Regular")
@@ -1993,6 +1999,7 @@ def _regular_liner_issue(piece: dict[str, Any], items, sheet: dict[str, Any], tr
         side,
         offset_cm,
         width_cm,
+        cutter_diameter_mm,
     )
     return _liner_issue(
         measurement,
@@ -2008,6 +2015,7 @@ def _attach_extra_overlays(
     overlays: Sequence[ExtraOverlayCandidate],
     sheets: list[dict[str, Any]],
     trim_mm: float,
+    cutter_diameter_mm: float | None = None,
 ) -> None:
     hosts = tuple(
         ExtraOverlayHost(
@@ -2049,6 +2057,7 @@ def _attach_extra_overlays(
             grouped.get(int(piece["id"])) or [],
             sheet,
             trim_mm,
+            cutter_diameter_mm,
         )
         if liner_issue is not None:
             liner_issues.append(liner_issue)
@@ -2381,11 +2390,13 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
 
     _validate_piece_spacing(pieces, kerf_mm=max(0.0, flt(order.kerf_mm)))
     labeled = _match_pieces_to_order(pieces, order)
+    cutter_diameter_mm = flt(order.kerf_mm)
     _attach_extra_overlays(
         labeled,
         overlays=overlays,
         sheets=sheets,
         trim_mm=trim_mm,
+        cutter_diameter_mm=cutter_diameter_mm if cutter_diameter_mm > 0 else None,
     )
     _attach_text_labels(
         sheets,

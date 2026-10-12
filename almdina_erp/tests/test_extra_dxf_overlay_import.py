@@ -597,8 +597,8 @@ class TestExtraDxfOverlayImport(unittest.TestCase):
         with self.assertRaises(DxfImportError) as caught:
             self._parse(doc, self._liner_order())
         message = _present_error(caught.exception)
-        self.assertIn("غير قابل للقياس", message)
-        self.assertIn("1.500", message)
+        self.assertIn("الدرفة 1", message)
+        self.assertIn("لا يطابق", message)
 
     def test_rotated_dxf_liner_matches_the_unrotated_top_side(self) -> None:
         doc = ezdxf.new("R2010")

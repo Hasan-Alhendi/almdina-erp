@@ -868,6 +868,11 @@ def _corner_liner_issue(piece: dict[str, Any], spec: OrderPieceCutSpec, order: A
         side,
         offset_cm,
         width_cm,
+        (
+            float(getattr(order, "kerf_mm", 0) or 0)
+            if float(getattr(order, "kerf_mm", 0) or 0) > 0
+            else None
+        ),
     )
     return liner_geometry_issue(
         measurement,

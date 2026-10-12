@@ -107,13 +107,16 @@ const overlay = geometry.syntheticOverlay({
     liner_reference_side: "edge_width_top",
     liner_offset_cm: 2,
     liner_width_cm: 1.5,
+    kerf_mm: 5,
     rotated: true,
     x: 0,
     y: 0,
 });
 assert.equal(overlay.kind, "liner");
 assert.equal(overlay.synthetic, true);
-assert.equal(overlay.geometry.closed, true);
+assert.equal(overlay.geometry.closed, false);
+assert.equal(overlay.geometry.toolpath, true);
+assert.ok(overlay.geometry.path.length > 4);
 const xs = overlay.geometry.path.map(point => point[0]);
 const ys = overlay.geometry.path.map(point => point[1]);
 assert.ok(Math.min(...xs) > 540);
@@ -183,6 +186,39 @@ assert.deepEqual(
     copy(geometry.stripPolygonMm(shapedLiner, "edge_break", 1, 0.8).map(point => point.map(value => Math.round(value)))),
     [[790, 0], [790, 310], [1000, 310], [1000, 318], [782, 318], [782, 0]]
 );
+
+const centers = copy(geometry.cutterCenterOffsetsMm(18, 5)).map(value => Math.round(value * 1000) / 1000);
+assert.deepEqual(centers[0], 2.5);
+assert.deepEqual(centers[centers.length - 1], 15.5);
+assert.equal(centers.length, 4);
+assert.deepEqual(copy(geometry.cutterCenterOffsetsMm(5, 5)), [2.5]);
+assert.throws(() => geometry.cutterCenterOffsetsMm(4, 5), /liner_narrower_than_cutter/);
+const toolpath = geometry.toolpathMm(regular, "edge_width_top", 0, 1.8, 5);
+const toolXs = toolpath.map(point => point[0]);
+const toolYs = [...new Set(toolpath.map(point => Math.round(point[1] * 1000) / 1000))].sort((a, b) => a - b);
+assert.equal(Math.round(Math.min(...toolXs) * 10) / 10, -2.5);
+assert.equal(Math.round(Math.max(...toolXs) * 10) / 10, 402.5);
+assert.deepEqual(copy(toolYs), [2.5, 6.833, 11.167, 15.5]);
+const widerBit = geometry.toolpathMm(regular, "edge_width_top", 0, 1.8, 6);
+assert.notDeepEqual(copy(toolpath), copy(widerBit));
+const missingBit = geometry.syntheticOverlay({
+    piece_type: "Regular",
+    width_cm: 40,
+    length_cm: 60,
+    extra_liner: 1,
+    liner_reference_side: "edge_width_top",
+    liner_offset_cm: 0,
+    liner_width_cm: 1.8,
+});
+assert.equal(missingBit.error, "cutter_diameter_invalid");
+const blocked = geometry.extensionConflict(toolpath, 5, {
+    minX: 0, minY: 0, maxX: 400, maxY: 600,
+}, []);
+assert.equal(blocked, "liner_extension_off_board");
+const clear = geometry.extensionConflict(toolpath, 5, {
+    minX: -10, minY: -10, maxX: 410, maxY: 610,
+}, []);
+assert.equal(clear, "");
 assert.deepEqual(
     copy(geometry.contourNotchCm({
         pieceType: "L-Shaped Corner",

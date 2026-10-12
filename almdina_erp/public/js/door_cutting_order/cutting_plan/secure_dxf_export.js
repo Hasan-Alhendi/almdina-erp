@@ -242,6 +242,15 @@
         return result;
     }
 
+    function lwpolyline(layerName, points) {
+        if (!Array.isArray(points) || points.length < 2) return "";
+        let result = pair(0, "LWPOLYLINE") + pair(8, layerName || "0") + pair(90, points.length) + pair(70, 0);
+        points.forEach(point => {
+            result += pair(10, dxfNumber(point[0])) + pair(20, dxfNumber(point[1]));
+        });
+        return result;
+    }
+
     function overlayPath(layerName, points, closed) {
         if (!Array.isArray(points) || points.length < 2) return "";
         let result = "";
@@ -328,17 +337,20 @@
         return layer || "";
     }
 
-    function exportOverlays(piece) {
+    function exportOverlays(piece, kerfMm) {
         const overlays = Array.isArray(piece && piece.overlays) ? piece.overlays.slice() : [];
         if (overlays.some(item => item && item.kind === "liner")) return overlays;
         const liner = window.AlmdinaLinerGeometry;
         if (!liner || typeof liner.syntheticOverlay !== "function") return overlays;
-        const synthetic = liner.syntheticOverlay(piece);
-        return synthetic ? overlays.concat(synthetic) : overlays;
+        const synthetic = liner.syntheticOverlay(Object.assign({}, piece, {
+            kerf_mm: num(piece && piece.kerf_mm) || num(kerfMm),
+        }));
+        if (!synthetic || synthetic.error) return overlays;
+        return overlays.concat(synthetic);
     }
 
-    function persistedOverlays(piece) {
-        const overlays = exportOverlays(piece);
+    function persistedOverlays(piece, kerfMm) {
+        const overlays = exportOverlays(piece, kerfMm);
         return overlays.map((overlay, index) => {
             const layerName = overlayLayerName(overlay);
             if (!layerName) {
@@ -367,6 +379,7 @@
                 closed: usesPath
                     ? Boolean(geometry.closed) && Array.isArray(path) && path.length >= 3
                     : Array.isArray(path) && path.length >= 3,
+                toolpath: Boolean(geometry.toolpath) && !geometry.closed,
                 path: overlayPolyline(path, `overlays[${index}].geometry.path`),
             };
         });
@@ -418,6 +431,30 @@
         let extmaxX = 0;
         let extmaxY = 0;
 
+        function emitOverlayEntity(overlay, transform, sheet, piece) {
+            const points = topologyDxfPoints(overlay.path, transform);
+            if (!overlay.toolpath) return overlayPath(overlay.layer, points, overlay.closed);
+            const liner = window.AlmdinaLinerGeometry;
+            if (liner && typeof liner.extensionConflict === "function") {
+                const trim = transform.appliedTrim || { width: 0, length: 0 };
+                const fullW = num(sheet.full_width_cm || plan.full_board_width_cm) * 10;
+                const fullH = num(sheet.full_length_cm || plan.full_board_length_cm) * 10;
+                const conflict = liner.extensionConflict(overlay.path, num(plan.kerf_mm), {
+                    minX: -num(trim.width),
+                    minY: -num(trim.length),
+                    maxX: fullW - num(trim.width),
+                    maxY: fullH - num(trim.length),
+                }, (sheet.pieces || []).filter(other => other !== piece).map(other => ({
+                    minX: num(other.x) * 10,
+                    minY: num(other.y) * 10,
+                    maxX: (num(other.x) + num(other.w)) * 10,
+                    maxY: (num(other.y) + num(other.h)) * 10,
+                })));
+                if (conflict) return "";
+            }
+            return lwpolyline(overlay.layer, points);
+        }
+
         sheets.forEach((sheet, index) => {
             const fullWidth = num(sheet.full_width_cm || plan.full_board_width_cm) * 10;
             const fullHeight = num(sheet.full_length_cm || plan.full_board_length_cm) * 10;
@@ -444,12 +481,8 @@
                             topologyDxfPoints(hole, transform)
                         );
                     });
-                    persistedOverlays(piece).forEach(overlay => {
-                        entities += overlayPath(
-                            overlay.layer,
-                            topologyDxfPoints(overlay.path, transform),
-                            overlay.closed
-                        );
+                    persistedOverlays(piece, plan.kerf_mm).forEach(overlay => {
+                        entities += emitOverlayEntity(overlay, transform, sheet, piece);
                     });
                     const bounds = polygonBounds(topology.outer);
                     const [labelX, labelY] = topologyDxfPoints(
@@ -503,11 +536,12 @@
                     : cutLayer === "OFFCUT"
                         ? rectangle(cutLayer, x, y, pieceWidth, pieceHeight)
                         : rectangle("CUT_PATH", x, y, pieceWidth, pieceHeight);
-                persistedOverlays(piece).forEach(overlay => {
-                    entities += overlayPath(
-                        overlay.layer,
-                        topologyDxfPoints(overlay.path, { offsetX, offsetY, fullHeight, appliedTrim }),
-                        overlay.closed
+                persistedOverlays(piece, plan.kerf_mm).forEach(overlay => {
+                    entities += emitOverlayEntity(
+                        overlay,
+                        { offsetX, offsetY, fullHeight, appliedTrim },
+                        sheet,
+                        piece
                     );
                 });
                 entities += textEntity(

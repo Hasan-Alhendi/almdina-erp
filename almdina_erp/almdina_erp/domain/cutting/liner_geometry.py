@@ -498,29 +498,299 @@ def compare_liner_path(
     side: str,
     offset_cm: float,
     width_cm: float,
+    cutter_diameter_mm: float | None = None,
 ) -> LinerMeasurement:
-    """Compare a canonical-frame path with the ordered liner band."""
+    """Compare a canonical-frame path with the ordered liner band or toolpath.
+
+    A closed strip is still the geometry representation. An open zigzag is the
+    cutter-center toolpath and is judged only when the plan blade kerf is a
+    positive diameter. A missing diameter never becomes an assumed default.
+    """
 
     selected = _measure_against_side(path, piece, side, offset_cm, width_cm)
     if selected.ok:
         return selected
-    if selected.code == LINER_WIDTH_NOT_MEASURABLE:
-        return selected
-    for candidate in available_liner_sides(piece.piece_type):
-        if candidate == side:
-            continue
-        other = _measure_against_side(path, piece, candidate, offset_cm, width_cm)
-        if other.ok:
-            return LinerMeasurement(
-                False,
-                LINER_SIDE_MISMATCH,
-                "side",
-                side,
-                candidate,
-                "side_mismatch",
-                candidate,
-            )
+    tool = None
+    if _positive_diameter(cutter_diameter_mm):
+        tool = _measure_toolpath(
+            path,
+            piece,
+            side,
+            offset_cm,
+            width_cm,
+            float(cutter_diameter_mm or 0),
+        )
+        if tool.ok:
+            return tool
+    if selected.code != LINER_WIDTH_NOT_MEASURABLE or tool is not None:
+        for candidate in available_liner_sides(piece.piece_type):
+            if candidate == side:
+                continue
+            other = _measure_against_side(path, piece, candidate, offset_cm, width_cm)
+            if other.ok or (
+                tool is not None
+                and _measure_toolpath(
+                    path,
+                    piece,
+                    candidate,
+                    offset_cm,
+                    width_cm,
+                    float(cutter_diameter_mm or 0),
+                ).ok
+            ):
+                return LinerMeasurement(
+                    False,
+                    LINER_SIDE_MISMATCH,
+                    "side",
+                    side,
+                    candidate,
+                    "side_mismatch",
+                    candidate,
+                )
+    if tool is not None and selected.code in {LINER_SHAPE_MISMATCH, LINER_WIDTH_NOT_MEASURABLE}:
+        return tool
     return selected
+
+
+def cutter_center_offsets_mm(width_mm: float, diameter_mm: float) -> list[float]:
+    """Centers across the liner width, measured from the edge nearest the reference.
+
+    The first center sits one radius in from that edge and the last sits one
+    radius in from the far edge. Intermediate centers share the remainder so
+    neighbouring cuts touch or overlap and the tool never crosses the width.
+    """
+
+    if (
+        not math.isfinite(width_mm)
+        or not math.isfinite(diameter_mm)
+        or diameter_mm <= GEOMETRY_TOLERANCE_MM
+        or width_mm <= GEOMETRY_TOLERANCE_MM
+    ):
+        raise LinerGeometryError("cutter_diameter_invalid")
+    if width_mm + GEOMETRY_TOLERANCE_MM < diameter_mm:
+        raise LinerGeometryError("liner_narrower_than_cutter")
+    radius = diameter_mm / 2.0
+    if abs(width_mm - diameter_mm) <= GEOMETRY_TOLERANCE_MM:
+        return [width_mm / 2.0]
+    span = width_mm - diameter_mm
+    passes = int(math.ceil((span / diameter_mm) - 1e-9)) + 1
+    step = span / (passes - 1)
+    return [radius + (step * index) for index in range(passes)]
+
+
+def liner_toolpath_mm(
+    piece: LinerPiece,
+    side: str,
+    offset_cm: float,
+    width_cm: float,
+    cutter_diameter_mm: float,
+) -> list[Point]:
+    """One open zigzag of cutter centers for the existing liner strip."""
+
+    error = validation_code(piece, side, offset_cm, width_cm)
+    if error:
+        raise LinerGeometryError(error)
+    width_mm = _mm(width_cm)
+    centers = cutter_center_offsets_mm(width_mm, float(cutter_diameter_mm))
+    polygon = piece_polygon_mm(piece)
+    reference = reference_polyline_mm(piece, side)
+    sign = _inward_sign(reference, polygon)
+    radius = float(cutter_diameter_mm) / 2.0
+    lines = [
+        _extend_centerline(
+            _offset_polyline(reference, _mm(offset_cm) + center, sign),
+            radius,
+            polygon,
+        )
+        for center in centers
+    ]
+    path: list[Point] = []
+    for index, line in enumerate(lines):
+        sequence = line if index % 2 == 0 else list(reversed(line))
+        if path and math.dist(path[-1], sequence[0]) <= 1e-6:
+            sequence = sequence[1:]
+        path.extend(sequence)
+    return path
+
+
+def _positive_diameter(value: float | None) -> bool:
+    try:
+        diameter = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return False
+    return math.isfinite(diameter) and diameter > GEOMETRY_TOLERANCE_MM
+
+
+def _boundary_distance(point: Point, polygon: Sequence[Point]) -> float:
+    edges = list(zip(polygon, polygon[1:]))
+    if polygon and math.dist(polygon[0], polygon[-1]) > 1e-9:
+        edges.append((polygon[-1], polygon[0]))
+    if not edges:
+        return math.inf
+    return min(_segment_distance(point, start, end)[0] for start, end in edges)
+
+
+def _ray_exit(origin: Point, direction: Point, polygon: Sequence[Point]) -> Point | None:
+    edges = list(zip(polygon, polygon[1:]))
+    if polygon and math.dist(polygon[0], polygon[-1]) > 1e-9:
+        edges.append((polygon[-1], polygon[0]))
+    best: float | None = None
+    for start, end in edges:
+        edge = (end[0] - start[0], end[1] - start[1])
+        denominator = direction[0] * edge[1] - direction[1] * edge[0]
+        if abs(denominator) <= 1e-12:
+            continue
+        offset = (start[0] - origin[0], start[1] - origin[1])
+        travel = (offset[0] * edge[1] - offset[1] * edge[0]) / denominator
+        along = (offset[0] * direction[1] - offset[1] * direction[0]) / denominator
+        if travel <= 1e-6 or along < -1e-6 or along > 1.0 + 1e-6:
+            continue
+        if best is None or travel < best:
+            best = travel
+    if best is None:
+        return None
+    return (origin[0] + direction[0] * best, origin[1] + direction[1] * best)
+
+
+def _extend_centerline(
+    polyline: Sequence[Point],
+    extension: float,
+    polygon: Sequence[Point],
+) -> list[Point]:
+    points = list(polyline)
+    if len(points) < 2:
+        raise LinerGeometryError("liner_extension_unsafe")
+    for index, other_index in ((0, 1), (-1, -2)):
+        origin = points[index]
+        toward = points[other_index]
+        direction = (origin[0] - toward[0], origin[1] - toward[1])
+        length = math.hypot(direction[0], direction[1]) or 1.0
+        direction = (direction[0] / length, direction[1] / length)
+        if _boundary_distance(origin, polygon) <= GEOMETRY_TOLERANCE_MM:
+            hit = origin
+        else:
+            hit = _ray_exit(origin, direction, polygon)
+            if hit is None:
+                raise LinerGeometryError("liner_extension_unsafe")
+        points[index] = (
+            hit[0] + direction[0] * extension,
+            hit[1] + direction[1] * extension,
+        )
+    return points
+
+
+def _path_distance(point: Point, path: Sequence[Point]) -> float:
+    if len(path) < 2:
+        return math.inf
+    return min(
+        _segment_distance(point, start, end)[0]
+        for start, end in zip(path, path[1:])
+    )
+
+
+def _sample_width(reference: Sequence[Point], polygon: Sequence[Point], distance: float) -> list[Point]:
+    sign = _inward_sign(reference, polygon)
+    samples: list[Point] = []
+    for start, end in zip(reference, reference[1:]):
+        length = math.dist(start, end)
+        if length <= GEOMETRY_TOLERANCE_MM:
+            continue
+        steps = max(2, int(length // 40.0))
+        for step in range(1, steps):
+            ratio = step / steps
+            anchor = (
+                start[0] + (end[0] - start[0]) * ratio,
+                start[1] + (end[1] - start[1]) * ratio,
+            )
+            normal = _left_normal(start, end)
+            samples.append((
+                anchor[0] + sign * normal[0] * distance,
+                anchor[1] + sign * normal[1] * distance,
+            ))
+    return samples
+
+
+def _measure_toolpath(
+    path: Sequence[Point],
+    piece: LinerPiece,
+    side: str,
+    offset_cm: float,
+    width_cm: float,
+    cutter_diameter_mm: float,
+) -> LinerMeasurement:
+    try:
+        expected = liner_toolpath_mm(piece, side, offset_cm, width_cm, cutter_diameter_mm)
+        centers = cutter_center_offsets_mm(_mm(width_cm), cutter_diameter_mm)
+    except LinerGeometryError as error:
+        code = LINER_WIDTH_MISMATCH if error.code == "liner_narrower_than_cutter" else LINER_SHAPE_MISMATCH
+        return LinerMeasurement(
+            False,
+            code,
+            "width" if code == LINER_WIDTH_MISMATCH else "shape",
+            _fmt_cm(_mm(width_cm)),
+            _fmt_cm(cutter_diameter_mm),
+            error.code,
+            side,
+        )
+    radius = cutter_diameter_mm / 2.0
+    polygon = piece_polygon_mm(piece)
+    reference = reference_polyline_mm(piece, side)
+    offset_mm = _mm(offset_cm)
+    width_mm = _mm(width_cm)
+    inside = []
+    for station in (0.2, 0.5, 0.8):
+        inside.extend(_sample_width(reference, polygon, offset_mm + (width_mm * station)))
+    outside_gap = max(1.0, GEOMETRY_TOLERANCE_MM * 4)
+    outside = _sample_width(reference, polygon, offset_mm - outside_gap)
+    outside.extend(_sample_width(reference, polygon, offset_mm + width_mm + outside_gap))
+    if any(_path_distance(point, path) > radius + GEOMETRY_TOLERANCE_MM for point in inside):
+        return LinerMeasurement(
+            False,
+            LINER_SHAPE_MISMATCH,
+            "shape",
+            side,
+            "",
+            "coverage_gap",
+            side,
+        )
+    if any(_path_distance(point, path) <= radius - GEOMETRY_TOLERANCE_MM for point in outside):
+        near = _sample_width(reference, polygon, offset_mm - outside_gap)
+        near_cut = any(_path_distance(point, path) <= radius - GEOMETRY_TOLERANCE_MM for point in near)
+        return LinerMeasurement(
+            False,
+            LINER_OFFSET_MISMATCH if near_cut else LINER_WIDTH_MISMATCH,
+            "offset" if near_cut else "width",
+            _fmt_cm(offset_mm if near_cut else width_mm),
+            "",
+            "tool_overcut",
+            side,
+        )
+    end_short = any(
+        _path_distance(point, path) > GEOMETRY_TOLERANCE_MM
+        for point in (expected[0], expected[-1])
+    )
+    outside_path = [
+        point for point in path
+        if not point_in_polygon(point, polygon, tolerance=GEOMETRY_TOLERANCE_MM)
+    ]
+    if any(
+        _boundary_distance(point, polygon) > radius + GEOMETRY_TOLERANCE_MM
+        for point in outside_path
+    ):
+        end_short = True
+    if end_short:
+        return LinerMeasurement(
+            False,
+            LINER_SHAPE_MISMATCH,
+            "shape",
+            _fmt_cm(radius),
+            "",
+            "extension_short",
+            side,
+        )
+    if not centers:
+        return LinerMeasurement(False, LINER_SHAPE_MISMATCH, "shape", side, "", "coverage_gap", side)
+    return LinerMeasurement(True, matched_side=side)
 
 
 def contour_notch_cm(
@@ -684,6 +954,8 @@ __all__ = [
     "liner_activation_error",
     "inverse_transform_point",
     "liner_parameters_active",
+    "cutter_center_offsets_mm",
+    "liner_toolpath_mm",
     "liner_strip_polygon_mm",
     "localize_path",
     "piece_polygon_mm",

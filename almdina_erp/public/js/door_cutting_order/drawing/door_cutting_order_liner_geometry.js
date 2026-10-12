@@ -305,6 +305,161 @@
         return near.concat(far.slice().reverse());
     }
 
+    function cutterCenterOffsetsMm(widthMm, diameterMm) {
+        if (!Number.isFinite(widthMm) || !Number.isFinite(diameterMm) || diameterMm <= TOLERANCE_MM || widthMm <= TOLERANCE_MM) {
+            const error = new Error("cutter_diameter_invalid");
+            error.code = "cutter_diameter_invalid";
+            throw error;
+        }
+        if (widthMm + TOLERANCE_MM < diameterMm) {
+            const error = new Error("liner_narrower_than_cutter");
+            error.code = "liner_narrower_than_cutter";
+            throw error;
+        }
+        const radius = diameterMm / 2;
+        if (Math.abs(widthMm - diameterMm) <= TOLERANCE_MM) return [widthMm / 2];
+        const span = widthMm - diameterMm;
+        const passes = Math.ceil((span / diameterMm) - 1e-9) + 1;
+        const step = span / (passes - 1);
+        const centers = [];
+        for (let index = 0; index < passes; index += 1) centers.push(radius + (step * index));
+        return centers;
+    }
+
+    function boundaryDistance(point, polygon) {
+        const edges = polygon.map((start, index) => [start, polygon[(index + 1) % polygon.length]]);
+        return Math.min(...edges.map(edge => pointSegDist(point, edge[0], edge[1])));
+    }
+
+    function pointSegDist(point, start, end) {
+        const dx = end[0] - start[0];
+        const dy = end[1] - start[1];
+        const lengthSq = (dx * dx) + (dy * dy);
+        if (lengthSq <= 1e-12) return dist(point, start);
+        const ratio = Math.min(1, Math.max(0, (((point[0] - start[0]) * dx) + ((point[1] - start[1]) * dy)) / lengthSq));
+        return dist(point, [start[0] + (dx * ratio), start[1] + (dy * ratio)]);
+    }
+
+    function rayExit(origin, direction, polygon) {
+        let best = null;
+        polygon.forEach((start, index) => {
+            const end = polygon[(index + 1) % polygon.length];
+            const edge = [end[0] - start[0], end[1] - start[1]];
+            const denominator = (direction[0] * edge[1]) - (direction[1] * edge[0]);
+            if (Math.abs(denominator) <= 1e-12) return;
+            const offset = [start[0] - origin[0], start[1] - origin[1]];
+            const travel = ((offset[0] * edge[1]) - (offset[1] * edge[0])) / denominator;
+            const along = ((offset[0] * direction[1]) - (offset[1] * direction[0])) / denominator;
+            if (travel <= 1e-6 || along < -1e-6 || along > 1 + 1e-6) return;
+            if (best === null || travel < best) best = travel;
+        });
+        if (best === null) return null;
+        return [origin[0] + (direction[0] * best), origin[1] + (direction[1] * best)];
+    }
+
+    function extendCenterline(polyline, extension, polygon) {
+        const points = polyline.map(point => point.slice());
+        if (points.length < 2) {
+            const error = new Error("liner_extension_unsafe");
+            error.code = "liner_extension_unsafe";
+            throw error;
+        }
+        [[0, 1], [points.length - 1, points.length - 2]].forEach(pair => {
+            const origin = points[pair[0]];
+            const toward = points[pair[1]];
+            const delta = [origin[0] - toward[0], origin[1] - toward[1]];
+            const length = Math.hypot(delta[0], delta[1]) || 1;
+            const direction = [delta[0] / length, delta[1] / length];
+            const hit = boundaryDistance(origin, polygon) <= TOLERANCE_MM
+                ? origin
+                : rayExit(origin, direction, polygon);
+            if (!hit) {
+                const error = new Error("liner_extension_unsafe");
+                error.code = "liner_extension_unsafe";
+                throw error;
+            }
+            points[pair[0]] = [hit[0] + (direction[0] * extension), hit[1] + (direction[1] * extension)];
+        });
+        return points;
+    }
+
+    function toolpathMm(piece, side, offsetCm, widthCm, cutterDiameterMm) {
+        const error = validationCode(piece, side, offsetCm, widthCm);
+        if (error) {
+            const failure = new Error(error);
+            failure.code = error;
+            throw failure;
+        }
+        const centers = cutterCenterOffsetsMm(num(widthCm) * 10, num(cutterDiameterMm));
+        const polygon = piecePolygonMm(piece);
+        const reference = edgePaths(piece)[side];
+        const sign = inwardSign(reference, polygon);
+        const radius = num(cutterDiameterMm) / 2;
+        const lines = centers.map(center => extendCenterline(
+            offsetPolyline(reference, (num(offsetCm) * 10) + center, sign),
+            radius,
+            polygon
+        ));
+        const path = [];
+        lines.forEach((line, index) => {
+            const sequence = index % 2 ? line.slice().reverse() : line;
+            if (path.length && dist(path[path.length - 1], sequence[0]) <= 1e-6) sequence.shift();
+            sequence.forEach(point => path.push(point));
+        });
+        return path;
+    }
+
+    function segmentsCross(a, b, c, d) {
+        function side(p, q, r) {
+            return ((q[0] - p[0]) * (r[1] - p[1])) - ((q[1] - p[1]) * (r[0] - p[0]));
+        }
+        const ab = side(a, b, c) * side(a, b, d);
+        const cd = side(c, d, a) * side(c, d, b);
+        return ab < -1e-8 && cd < -1e-8;
+    }
+
+    function extensionConflict(path, diameterMm, board, obstacles) {
+        const radius = num(diameterMm) / 2;
+        const offBoard = path.some(point => (
+            point[0] < board.minX + radius - TOLERANCE_MM
+            || point[1] < board.minY + radius - TOLERANCE_MM
+            || point[0] > board.maxX - radius + TOLERANCE_MM
+            || point[1] > board.maxY - radius + TOLERANCE_MM
+        ));
+        if (offBoard) return "liner_extension_off_board";
+        const blocks = obstacles || [];
+        for (let index = 0; index < path.length - 1; index += 1) {
+            const start = path[index];
+            const end = path[index + 1];
+            for (let obstacleIndex = 0; obstacleIndex < blocks.length; obstacleIndex += 1) {
+                const rect = blocks[obstacleIndex];
+                const corners = [
+                    [rect.minX, rect.minY],
+                    [rect.maxX, rect.minY],
+                    [rect.maxX, rect.maxY],
+                    [rect.minX, rect.maxY],
+                ];
+                const inside = pointInPolygon(start, corners) || pointInPolygon(end, corners);
+                const crossing = corners.some((corner, cornerIndex) => segmentsCross(
+                    start,
+                    end,
+                    corner,
+                    corners[(cornerIndex + 1) % 4]
+                ));
+                if (inside || crossing) return "liner_extension_hits_piece";
+                const gap = Math.min(
+                    ...corners.map(corner => pointSegDist(corner, start, end)),
+                    ...corners.map((corner, cornerIndex) => Math.min(
+                        pointSegDist(start, corner, corners[(cornerIndex + 1) % 4]),
+                        pointSegDist(end, corner, corners[(cornerIndex + 1) % 4])
+                    ))
+                );
+                if (gap < radius - TOLERANCE_MM) return "liner_extension_hits_piece";
+            }
+        }
+        return "";
+    }
+
     function transformPoint(point, mirrored, quarterTurns, width, height) {
         let x = point[0];
         let y = point[1];
@@ -342,12 +497,27 @@
             piece.liner_offset_cm,
             piece.liner_width_cm
         )) return null;
-        const local = stripPolygonMm(
-            linerPiece,
-            piece.liner_reference_side,
-            piece.liner_offset_cm,
-            piece.liner_width_cm
-        );
+        const diameter = num(piece.kerf_mm);
+        if (!(diameter > TOLERANCE_MM)) {
+            return { kind: "liner", layer: "Liner", synthetic: true, error: "cutter_diameter_invalid" };
+        }
+        let local;
+        try {
+            local = toolpathMm(
+                linerPiece,
+                piece.liner_reference_side,
+                piece.liner_offset_cm,
+                piece.liner_width_cm,
+                diameter
+            );
+        } catch (error) {
+            return {
+                kind: "liner",
+                layer: "Liner",
+                synthetic: true,
+                error: error.code || "liner_extension_unsafe",
+            };
+        }
         const turns = piece.rotated ? 1 : 0;
         const mirrored = Boolean(piece.corner_mirrored);
         const placed = local.map(point => transformPoint(
@@ -367,7 +537,8 @@
                 schema_version: 1,
                 unit: "mm",
                 coordinate_space: "usable_sheet",
-                closed: true,
+                closed: false,
+                toolpath: true,
                 path: placed.map(point => [roundMm(point[0] + originX), roundMm(point[1] + originY)]),
             },
         };
@@ -415,6 +586,9 @@
         edgePaths,
         validationCode,
         stripPolygonMm,
+        cutterCenterOffsetsMm,
+        toolpathMm,
+        extensionConflict,
         contourNotchCm,
         contourNotchFromOrder,
         transformPoint,

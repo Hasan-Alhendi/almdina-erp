@@ -373,6 +373,7 @@
             liner_reference_side: row.liner_reference_side,
             liner_offset_cm: row.liner_offset_cm,
             liner_width_cm: row.liner_width_cm,
+            kerf_mm: num(frm && frm.doc && frm.doc.kerf_mm),
             piece_type: row.piece_type || piece.piece_type,
             clipped_corner_position: row.clipped_corner_position || piece.clipped_corner_position,
             clipped_corner_width_cm: row.clipped_corner_width_cm,
@@ -397,8 +398,50 @@
         return synthetic ? overlays.concat(synthetic) : overlays;
     }
 
-    function render_piece_overlays(frm, piece, geometryModel) {
-        const overlays = drawingOverlays(pieceWithLinerSpec(frm, piece), geometryModel);
+    const LINER_TOOLPATH_MESSAGES = Object.freeze({
+        cutter_diameter_invalid: "حدّد سماكة الشفرة أكبر من صفر لمسارات اللاينر",
+        liner_narrower_than_cutter: "عرض اللاينر أصغر من سماكة الشفرة",
+        liner_extension_off_board: "امتداد اللاينر يخرج خارج اللوح",
+        liner_extension_hits_piece: "امتداد اللاينر يتداخل مع قطعة أخرى",
+        liner_extension_unsafe: "تعذر تمديد مسار اللاينر بأمان",
+    });
+
+    function guardLinerToolpath(frm, piece, sheet, frame, overlays) {
+        const liner = window.AlmdinaLinerGeometry;
+        if (!liner || typeof liner.extensionConflict !== "function" || !sheet || !frame) return overlays;
+        const board = {
+            minX: -num(frame.insetX) * 10,
+            minY: -num(frame.insetY) * 10,
+            maxX: (num(frame.drawW) - num(frame.insetX)) * 10,
+            maxY: (num(frame.drawH) - num(frame.insetY)) * 10,
+        };
+        const obstacles = (sheet.pieces || []).filter(other => other !== piece).map(other => ({
+            minX: num(other.x) * 10,
+            minY: num(other.y) * 10,
+            maxX: (num(other.x) + num(other.w)) * 10,
+            maxY: (num(other.y) + num(other.h)) * 10,
+        }));
+        return overlays.map(overlay => {
+            if (!overlay || !overlay.synthetic || !overlay.geometry || !overlay.geometry.toolpath) return overlay;
+            const conflict = liner.extensionConflict(
+                overlay.geometry.path,
+                num(frm && frm.doc && frm.doc.kerf_mm),
+                board,
+                obstacles
+            );
+            if (!conflict) return overlay;
+            return { kind: "liner", layer: "Liner", synthetic: true, error: conflict };
+        });
+    }
+
+    function render_piece_overlays(frm, piece, geometryModel, sheet, frame) {
+        const overlays = guardLinerToolpath(
+            frm,
+            piece,
+            sheet,
+            frame,
+            drawingOverlays(pieceWithLinerSpec(frm, piece), geometryModel)
+        );
         if (!overlays.length || !geometryModel) return "";
         const originX = num(geometryModel.placement.xCm) * 10;
         const originY = num(geometryModel.placement.yCm) * 10;
@@ -408,6 +451,10 @@
         const paths = overlays.map((overlay, index) => {
             const kind = String((overlay && overlay.kind) || "").trim();
             const geometry = overlay && overlay.geometry;
+            if (overlay && overlay.error) {
+                const message = LINER_TOOLPATH_MESSAGES[overlay.error] || overlay.error;
+                return `<text data-liner-toolpath-error="${escape_html(overlay.error)}" x="50" y="50" text-anchor="middle" font-size="8" fill="#9a6207">${escape_html(message)}</text>`;
+            }
             const points = geometry && Array.isArray(geometry.path)
                 ? geometry.path
                 : (geometry && Array.isArray(geometry.outer) ? geometry.outer : []);
@@ -424,17 +471,13 @@
                 return `<rect class="dco-extra-overlay-path dco-extra-overlay-handle" ${attrs} x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" stroke-width="0.65" stroke-linejoin="miter"/>`;
             }
             const closed = Boolean(geometry && geometry.closed) && local.length >= 3;
-            if (kind === "liner" && overlay.synthetic && closed) {
-                const strip = local
-                    .map((point, pointIndex) => `${pointIndex ? "L" : "M"}${point[0]} ${point[1]}`)
-                    .join(" ") + " Z";
-                return `<path class="dco-extra-overlay-path dco-liner-strip" ${attrs} d="${strip}" fill="rgba(29,111,191,.16)" stroke-width="0.7" stroke-linejoin="round"/>`;
-            }
-            const strokePoints = kind === "liner" ? overlaySingleLine(local, closed) : local;
+            const openToolpath = kind === "liner" && !closed && local.length > 2;
+            const strokePoints = kind === "liner" && !openToolpath ? overlaySingleLine(local, closed) : local;
             const d = strokePoints
                 .map((point, pointIndex) => `${pointIndex ? "L" : "M"}${point[0]} ${point[1]}`)
                 .join(" ") + (kind === "liner" ? "" : (closed ? " Z" : ""));
-            return `<path class="dco-extra-overlay-path" ${attrs} d="${d}" stroke-width="0.7" stroke-dasharray="3 2.2" stroke-linejoin="round" stroke-linecap="round"/>`;
+            const toolClass = openToolpath ? " dco-liner-toolpath" : "";
+            return `<path class="dco-extra-overlay-path${toolClass}" ${attrs} d="${d}" stroke-width="0.7" stroke-dasharray="3 2.2" stroke-linejoin="round" stroke-linecap="round"/>`;
         }).filter(Boolean).join("");
         if (!paths) return "";
         return `<svg class="dco-extra-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;z-index:2;overflow:visible;pointer-events:none">${paths}</svg>`;
@@ -661,7 +704,7 @@
                     <div class="dco-sheet-board" data-trim-width-cm="${frame.insetX}" data-trim-length-cm="${frame.insetY}" style="position:relative;direction:ltr;width:${board_width_px}px;height:${board_height_px}px;max-width:100%;border:2px solid #111;background:#fff;overflow:hidden;margin:0 auto 8px auto;">
                         <div class="dco-board-waste-hatch" aria-hidden="true" style="position:absolute;inset:0;z-index:0;pointer-events:none;background-image:repeating-linear-gradient(45deg,rgba(71,85,105,.18) 0 1px,transparent 1px 8px);"></div>
                         ${board_caption ? `<div class="dco-board-size-caption" aria-hidden="true" style="display:none">${escape_html(board_caption)}</div>` : ""}
-                        <div class="dco-usable-sheet" style="position:absolute;z-index:1;left:${usableLeft}%;top:${usableTop}%;width:${usableWidth}%;height:${usableHeight}%;box-sizing:border-box;overflow:hidden;">
+                        <div class="dco-usable-sheet" style="position:absolute;z-index:1;left:${usableLeft}%;top:${usableTop}%;width:${usableWidth}%;height:${usableHeight}%;box-sizing:border-box;overflow:visible;">
             `;
 
             (sheet.pieces || []).forEach(piece => {
@@ -694,9 +737,9 @@
                 const edgeLines = render_piece_edge_lines(piece, geometryModel, clipId);
 
                 html += `
-                    <div class="dco-piece ${piece.piece_type === "Special" ? "dco-special-raw-piece" : ""} ${exactSpecial ? "dco-special-exact-piece" : ""} ${clipped ? "dco-clipped-corner-piece" : ""} ${shaped ? "dco-vector-piece" : ""}" data-piece-type="${escape_html(piece.piece_type || "Regular")}" data-geometry-source="${escape_html(geometryModel.source)}" data-geometry-id="${escape_html(geometryModel.geometryIdentity)}" style="position:absolute;left:${left}%;top:${top}%;width:${width}%;height:${height}%;${pieceStyle}color:#111;overflow:hidden;padding:2px;font-size:10px;line-height:1.2;text-align:center;box-sizing:border-box;display:flex;align-items:center;justify-content:center;">
+                    <div class="dco-piece ${piece.piece_type === "Special" ? "dco-special-raw-piece" : ""} ${exactSpecial ? "dco-special-exact-piece" : ""} ${clipped ? "dco-clipped-corner-piece" : ""} ${shaped ? "dco-vector-piece" : ""}" data-piece-type="${escape_html(piece.piece_type || "Regular")}" data-geometry-source="${escape_html(geometryModel.source)}" data-geometry-id="${escape_html(geometryModel.geometryIdentity)}" style="position:absolute;left:${left}%;top:${top}%;width:${width}%;height:${height}%;${pieceStyle}color:#111;overflow:visible;padding:2px;font-size:10px;line-height:1.2;text-align:center;box-sizing:border-box;display:flex;align-items:center;justify-content:center;">
                         ${shapeOutline}
-                        ${render_piece_overlays(frm, piece, geometryModel)}
+                        ${render_piece_overlays(frm, piece, geometryModel, sheet, frame)}
                         ${edgeLines}
                         ${render_piece_addon_marks(frm, piece)}
                         ${render_piece_label(piece, geometryModel)}
@@ -1086,12 +1129,12 @@ ${printHeaderCss()}
 }
 .dco-usable-sheet {
     position: absolute !important;
-    overflow: hidden !important;
+    overflow: visible !important;
     border: 0 !important;
     background: transparent !important;
 }
 .dco-piece {
-    overflow: hidden !important;
+    overflow: visible !important;
     background: #fff !important;
     border-color: #111 !important;
     color: #111 !important;

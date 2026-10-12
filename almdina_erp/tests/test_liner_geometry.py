@@ -18,6 +18,8 @@ from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
     compare_liner_path,
     contour_notch_cm,
     liner_activation_error,
+    cutter_center_offsets_mm,
+    liner_toolpath_mm,
     liner_strip_polygon_mm,
     transform_point,
     validation_code,
@@ -297,6 +299,68 @@ def test_l_inner_strap_uses_the_raw_notch_for_the_liner():
     strip = liner_strip_polygon_mm(raw_piece, "edge_break", 1, 0.8)
     assert compare_liner_path(strip, raw_piece, "edge_break", 1, 0.8).ok
     assert not compare_liner_path(strip, finished_piece, "edge_break", 1, 0.8).ok
+
+
+def test_cutter_centers_cover_width_without_crossing_it():
+    centers = cutter_center_offsets_mm(18, 5)
+    assert centers[0] == pytest.approx(2.5)
+    assert centers[-1] == pytest.approx(15.5)
+    assert len(centers) == 4
+    radius = 2.5
+    for left, right in zip(centers, centers[1:]):
+        assert right - left <= 5 + 1e-9
+    assert centers[0] - radius == pytest.approx(0)
+    assert centers[-1] + radius == pytest.approx(18)
+    assert cutter_center_offsets_mm(15, 5) == pytest.approx([2.5, 7.5, 12.5])
+    assert cutter_center_offsets_mm(5, 5) == pytest.approx([2.5])
+    with pytest.raises(Exception):
+        cutter_center_offsets_mm(4, 5)
+    with pytest.raises(Exception):
+        cutter_center_offsets_mm(18, 0)
+
+
+def test_regular_toolpath_extends_by_the_tool_radius():
+    piece = _regular()
+    path = liner_toolpath_mm(piece, "edge_width_top", 0, 1.8, 5)
+    ys = sorted({round(point[1], 3) for point in path})
+    assert ys == pytest.approx([2.5, 6.833, 11.167, 15.5])
+    xs = [point[0] for point in path]
+    assert min(xs) == pytest.approx(-2.5)
+    assert max(xs) == pytest.approx(402.5)
+    assert compare_liner_path(path, piece, "edge_width_top", 0, 1.8, 5).ok
+    short = [(max(point[0], 0), point[1]) for point in path]
+    assert compare_liner_path(short, piece, "edge_width_top", 0, 1.8, 5).code == LINER_SHAPE_MISMATCH
+    assert not compare_liner_path(path, piece, "edge_width_top", 0, 1.8, None).ok
+
+
+def test_toolpath_follows_diameter_change_and_corner_breaks():
+    piece = _regular()
+    narrow = liner_toolpath_mm(piece, "edge_long_left", 0, 1.8, 6)
+    assert sorted({round(point[0], 3) for point in narrow}) == pytest.approx([3, 9, 15])
+    for side in ("edge_width_top", "edge_width_bottom", "edge_long_left", "edge_long_right"):
+        generated = liner_toolpath_mm(piece, side, 1, 1.5, 5)
+        assert compare_liner_path(generated, piece, side, 1, 1.5, 5).ok
+    shaped = _l_piece("Top Right")
+    bent = liner_toolpath_mm(shaped, "edge_break", 1, 0.8, 4)
+    assert any(abs(point[0] - 790) < 1 and abs(point[1] - 310) < 20 for point in bent) or any(
+        point[0] < 800 and point[1] > 300 for point in bent
+    )
+    assert compare_liner_path(bent, shaped, "edge_break", 1, 0.8, 4).ok
+    clipped = _clipped("Top Right")
+    diagonal = liner_toolpath_mm(clipped, "edge_break", 1, 0.8, 4)
+    assert compare_liner_path(diagonal, clipped, "edge_break", 1, 0.8, 4).ok
+    turned = [
+        transform_point(point, mirrored=True, quarter_turns=1, width=400, height=600)
+        for point in liner_toolpath_mm(piece, "edge_width_top", 2, 1.5, 5)
+    ]
+    restored = canonical_path(
+        turned,
+        mirrored=True,
+        quarter_turns=1,
+        width_mm=400,
+        height_mm=600,
+    )
+    assert compare_liner_path(restored, piece, "edge_width_top", 2, 1.5, 5).ok
 
 
 def test_changing_offset_and_width_moves_the_band():
