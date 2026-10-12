@@ -28,11 +28,19 @@ on:
         required: false
         default: false
         type: boolean
-      new_discovery_probe_only:
-        description: Run bounded NEW discovery promise diagnostics without recovery certification
+      new_stress_only:
+        description: Run the independent 200–500-piece NEW Recovery Stress/Performance path
         required: false
         default: false
         type: boolean
+      new_stress_piece_count:
+        description: Piece count for NEW Recovery Stress/Performance
+        required: false
+        default: '200'
+        type: choice
+        options:
+          - '200'
+          - '500'
   pull_request:
     paths:
       - "almdina_erp/**"
@@ -222,7 +230,7 @@ jobs:
           bench --site test.localhost execute frappe.get_all --kwargs '{"doctype":"DocType","filters":{"module":"Almdina ERP"},"pluck":"name"}'
 
       - name: Run Almdina ERP tests
-        if: github.event_name != 'workflow_dispatch' || (inputs.desk_only != true && inputs.new_form_smoke_only != true && inputs.new_local_gate_only != true && inputs.new_discovery_probe_only != true)
+        if: github.event_name != 'workflow_dispatch' || (inputs.desk_only != true && inputs.new_form_smoke_only != true && inputs.new_local_gate_only != true && inputs.new_stress_only != true)
         run: |
           cd "$RUNNER_TEMP/frappe-bench"
           bench --site test.localhost set-config allow_tests true
@@ -268,7 +276,8 @@ jobs:
           DCO_DESK_EVIDENCE_DIR: ${{ runner.temp }}/dco-desk-evidence
           DCO_DESK_NEW_FORM_SMOKE_ONLY: ${{ inputs.new_form_smoke_only && '1' || '0' }}
           DCO_DESK_NEW_LOCAL_GATE_ONLY: ${{ inputs.new_local_gate_only && '1' || '0' }}
-          DCO_DESK_NEW_DISCOVERY_PROBE_ONLY: ${{ inputs.new_discovery_probe_only && '1' || '0' }}
+          DCO_DESK_NEW_STRESS_ONLY: ${{ inputs.new_stress_only && '1' || '0' }}
+          DCO_DESK_NEW_STRESS_PIECE_COUNT: ${{ inputs.new_stress_piece_count || '200' }}
           FRAPPE_DESK_URL: http://test.localhost:8000
         run: |
           set -euo pipefail

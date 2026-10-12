@@ -5,7 +5,7 @@ import os
 import re
 import time
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 from playwright.sync_api import Page, expect, sync_playwright
 
@@ -56,6 +56,28 @@ def _safe_url(url: str) -> str:
     query_keys = sorted({part.split("=", 1)[0] for part in parsed.query.split("&") if part})
     query = "?" + "&".join(f"{key}=REDACTED" for key in query_keys) if query_keys else ""
     return f"{parsed.scheme}://{parsed.netloc}{parsed.path}{query}"
+
+
+def _savedocs_request_data(request) -> tuple[dict[str, object], str]:
+    """Read document and Save action from the observed official-save request."""
+    body = request.post_data or ""
+    try:
+        payload = json.loads(body)
+    except (TypeError, ValueError):
+        fields = parse_qs(body, keep_blank_values=True)
+        raw_doc = fields.get("doc", [""])[0]
+        try:
+            payload = json.loads(raw_doc)
+        except (TypeError, ValueError):
+            return {}, str(fields.get("action", [""])[0])
+    document = payload.get("doc") if isinstance(payload, dict) else None
+    action = str(payload.get("action") or "") if isinstance(payload, dict) else ""
+    if isinstance(document, str):
+        try:
+            document = json.loads(document)
+        except (TypeError, ValueError):
+            return {}, action
+    return (document if isinstance(document, dict) else {}), action
 
 
 def attach_browser_diagnostics(page: Page) -> None:
@@ -406,8 +428,8 @@ def certify_worker_identity_and_dynamic_permissions(admin_page: Page) -> None:
         worker_context.close()
 
 
-def certify_actual_frappe_desk_new_recovery(page: Page) -> None:
-    """Exercise real NEW DCO hydration and official Save in the pinned Desk."""
+def certify_actual_frappe_desk_new_recovery(page: Page, *, piece_count: int = 10) -> None:
+    """Exercise NEW recovery through Desk UI; the 200-piece path is stress-only."""
     new_route = f"{DESK_URL}/app/door-cutting-order/new-door-cutting-order-1"
     response = page.goto(new_route, wait_until="domcontentloaded")
     if response is not None and response.status >= 400:
@@ -419,175 +441,158 @@ def certify_actual_frappe_desk_new_recovery(page: Page) -> None:
         "&& window.cur_frm.is_new()",
         timeout=30_000,
     )
+    def fill_link(fieldname: str, value: str) -> None:
+        control = page.locator(f'[data-fieldname="{fieldname}"] input').first
+        control.fill(value)
+        page.locator(".awesomplete li").filter(has_text=value).first.click(timeout=10_000)
 
-    evaluate(
-        page,
-        "initialize local recovery for a NEW DCO",
-        """async () => {
-            const frm = window.cur_frm;
-            const recovery = window.AlmdinaDcoRecovery.LocalCheckpoint;
-            if (!frm || !frm.is_new() || !recovery) throw new Error('NEW recovery form is unavailable');
-            await recovery.initializeNewForm(frm);
-            return Boolean(recovery.ensureState(frm));
-        }""",
+    fill_link("customer", FIXTURES["customer"])
+    page.locator('[data-fieldname="order_notes"] textarea').fill(
+        "Local Recovery checkpoint long note — " + "قطع MDF وملاحظات المعمل؛ " * 24
     )
-    evaluate(
-        page,
-        "fill required NEW DCO header fields",
-        """async ({customer, edgeType}) => {
-            const frm = window.cur_frm;
-            await frm.set_value({
-                customer,
-                order_notes: 'Local gate long notes '.repeat(400),
-                board_description: 'Local recovery MDF 18mm',
-                board_length_cm: 244,
-                board_width_cm: 122,
-                default_edge_type: edgeType,
-                edge_color: 'White',
-                order_cutting_machine: 'CNC',
-            });
-            return frm.doc.customer;
-        }""",
-        {"customer": FIXTURES["customer"], "edgeType": FIXTURES["edge_type"]},
-    )
+    page.locator('[data-fieldname="board_description"] input').fill("MDF أبيض 18 مم")
+    page.locator('[data-fieldname="board_length_cm"] input').fill("244")
+    page.locator('[data-fieldname="board_width_cm"] input').fill("122")
+    fill_link("default_edge_type", FIXTURES["edge_type"])
+    page.locator('[data-fieldname="edge_color"] input').fill("White")
+    page.locator('[data-fieldname="order_cutting_machine"] select').select_option(label="CNC")
 
-    special_geometry = json.dumps({
-        "schema": "special-shape-geometry",
-        "version": 1,
-        "elements": [{"kind": "polyline", "points": [[i, i * 2] for i in range(64)]}],
-    })
-    for start in range(0, 200, 20):
-        end = start + 20
-        evaluate(
-            page,
-            f"materialize NEW DCO rows {start + 1}-{end}",
-            """({start, end, specialGeometry}) => {
-                const frm = window.cur_frm;
-                for (let index = start; index < end; index += 1) {
-                    const row = frm.add_child('pieces');
-                    Object.assign(row, {
-                        piece_type: index === 199 ? 'Special' : 'Liner',
-                        width_cm: 60,
-                        length_cm: 200,
-                        qty: index === 0 ? 4 : 1,
-                        notes: index === 0 ? 'piece note '.repeat(180) : '',
-                        extra_liner: index === 0 ? 1 : 0,
-                        edge_long_left: index === 0 ? 1 : 0,
-                        special_shape_geometry_json: index === 199 ? specialGeometry : '',
-                    });
-                }
-                return frm.doc.pieces.length;
-            }""",
-            {"start": start, "end": end, "specialGeometry": special_geometry},
-        )
-    piece_count = evaluate(
-        page,
-        "refresh the 200-piece NEW DCO table",
-        "() => { window.cur_frm.refresh_field('pieces'); return window.cur_frm.doc.pieces.length; }",
-    )
-    if piece_count != 200:
-        raise RuntimeError(f"Expected 200 NEW DCO rows, found {piece_count}.")
+    table = page.locator('[data-fieldname="pieces_fast_entry"] .dco-fast-table')
+    expect(table).to_be_visible()
+    for index in range(piece_count):
+        virtual = table.locator("tbody tr.dco-virtual-row")
+        virtual.locator('input[data-field="width_cm"]').fill(str(40 + index))
+        row = table.locator("tbody tr[data-row-name]:not(.dco-virtual-row)").last
+        row.locator('input[data-field="length_cm"]').fill(str(180 + index))
+        row.locator('input[data-field="qty"]').fill(str(1 + index % 3))
+        row.locator('input[data-field="notes"]').fill(f"قياس القطعة {index + 1}: ملاحظة معملية طويلة " * 4)
+        if index % 2 == 0:
+            row.locator('button[data-check-field="extra_liner"]').click()
+        if index == 0:
+            row.locator('button[data-check-field="extra_back_groove"]').click()
 
-    checkpoint = evaluate(
-        page,
-        "acknowledge the real NEW DCO checkpoint",
-        """async () => {
-            const frm = window.cur_frm;
-            const recovery = window.AlmdinaDcoRecovery.LocalCheckpoint;
-            if (!recovery.ensureState(frm) || !recovery.markDirty(frm, 'DCO')) {
-                throw new Error('NEW checkpoint session did not start');
-            }
-            const flushed = await recovery.flush(frm);
-            if (!flushed || !flushed.ok) throw new Error('NEW checkpoint was not acknowledged');
-            const state = recovery.snapshot(frm);
-            return {draftId: state.draft_id, revision: state.recovery_revision};
-        }""",
-    )
-    captured = evaluate(
-        page,
-        "verify persisted NEW checkpoint content",
-        """async draftId => {
-            const recovery = window.AlmdinaDcoRecovery.LocalCheckpoint;
-            const record = await recovery.repository().read({
-                site: String(frappe.boot.sitename || frappe.boot.site_name || location.host),
-                user: String(frappe.session.user),
-                draft_id: draftId,
-            });
-            if (!record || !record.ok || !record.value) throw new Error('NEW checkpoint is not readable');
-            return {
-                revision: record.value.recovery_revision,
-                pieceCount: record.value.payload.dco.pieces.length,
-                first: record.value.payload.dco.pieces[0],
-                last: record.value.payload.dco.pieces[199],
-            };
-        }""",
-        checkpoint["draftId"],
-    )
-    if captured["pieceCount"] != 200 or checkpoint["revision"] < 1:
-        raise RuntimeError(f"NEW checkpoint did not capture the complete fixture: {captured}")
+    expect(table.locator("tbody tr[data-row-name]:not(.dco-virtual-row)")).to_have_count(piece_count)
+    expect(page.locator(".dco-recovery-status[data-recovery-state='LOCAL_SAVED']")).to_be_visible(timeout=30_000)
+    _trace_event("new_recovery_checkpoint_confirmed", piece_count=piece_count)
 
-    _trace_event("new_gate_reload_started")
+    save_requests = []
+    def record_save_request(request) -> None:
+        if request.method != "POST" or "/api/method/frappe.desk.form.save.savedocs" not in request.url:
+            return
+        document, action = _savedocs_request_data(request)
+        save_requests.append({"document": document, "action": action})
+
+    page.on("request", record_save_request)
     page.reload(wait_until="domcontentloaded")
-    _trace_event("new_gate_reload_completed")
-    _trace_event("new_gate_waiting_for_discovery_dialog")
-    page.locator('[data-recovery-action="continue"]').wait_for(state="visible", timeout=30_000)
-    _trace_event("new_gate_click_continue")
-    page.locator('[data-recovery-action="continue"]').click()
     wait_for_function(
         page,
-        "restore NEW recovery values and special geometry",
-        "draftId => window.cur_frm && window.cur_frm.is_new() "
-        "&& window.cur_frm.doc.recovery_creation_token === draftId "
-        "&& window.cur_frm.doc.pieces.length === 200 "
-        "&& window.cur_frm.doc.pieces[0].qty === 4 "
-        "&& window.cur_frm.doc.pieces[0].extra_liner === 1 "
-        "&& window.cur_frm.doc.pieces[0].edge_long_left === 1 "
-        "&& window.cur_frm.doc.pieces[199].special_shape_geometry_json.includes('special-shape-geometry')",
-        arg=checkpoint["draftId"],
+        "NEW DCO form ready after refresh",
+        "() => window.cur_frm && window.cur_frm.doctype === 'Door Cutting Order' && window.cur_frm.is_new()",
         timeout=30_000,
     )
+    recovery_dialog = page.locator('[data-recovery-action="continue"]')
+    recovery_dialog.wait_for(state="visible", timeout=30_000)
+    recovery_dialog.click()
 
-    saved = evaluate(
-        page,
-        "officially save the restored NEW DCO",
-        """async draftId => {
-            const frm = window.cur_frm;
-            if (!frm || !frm.is_new()) throw new Error('Recovered form is no longer NEW');
-            await frm.save();
-            const matches = await frappe.call({
-                method: 'frappe.client.get_list',
-                args: {
-                    doctype: 'Door Cutting Order',
-                    filters: {recovery_creation_token: draftId},
-                    fields: ['name'],
-                    limit_page_length: 5,
-                },
-            });
-            const records = matches && matches.message || [];
-            const local = await window.AlmdinaDcoRecovery.LocalCheckpoint.repository().read({
-                site: String(frappe.boot.sitename || frappe.boot.site_name || location.host),
-                user: String(frappe.session.user),
-                draft_id: draftId,
-            });
-            return {
-                name: frm.doc.name,
-                isNew: frm.is_new(),
-                countByToken: records.length,
-                localFound: Boolean(local && local.value),
-                dirty: frm.is_dirty(),
-            };
-        }""",
-        checkpoint["draftId"],
+    recovery_dialog.wait_for(state="hidden", timeout=30_000)
+    expect(table.locator("tbody tr[data-row-name]:not(.dco-virtual-row)")).to_have_count(piece_count)
+    expect(page.locator('[data-fieldname="customer"] input')).to_have_value(FIXTURES["customer"])
+    expect(page.locator('[data-fieldname="order_notes"] textarea')).to_have_value(
+        "Local Recovery checkpoint long note — " + "قطع MDF وملاحظات المعمل؛ " * 24
     )
+    expect(page.locator('[data-fieldname="board_description"] input')).to_have_value("MDF أبيض 18 مم")
+    expect(page.locator('[data-fieldname="board_length_cm"] input')).to_have_value("244")
+    expect(page.locator('[data-fieldname="board_width_cm"] input')).to_have_value("122")
+    expect(page.locator('[data-fieldname="default_edge_type"] input')).to_have_value(FIXTURES["edge_type"])
+    expect(page.locator('[data-fieldname="edge_color"] input')).to_have_value("White")
+    expect(page.locator('[data-fieldname="order_cutting_machine"] select')).to_have_value("CNC")
+    rows = table.locator("tbody tr[data-row-name]:not(.dco-virtual-row)")
+    expect(rows).to_have_count(piece_count)
+    for index in range(piece_count):
+        expect(rows.nth(index).locator('input[data-field="width_cm"]')).to_have_value(str(40 + index))
+        expect(rows.nth(index).locator('input[data-field="length_cm"]')).to_have_value(str(180 + index))
+        expect(rows.nth(index).locator('input[data-field="qty"]')).to_have_value(str(1 + index % 3))
+        expect(rows.nth(index).locator('input[data-field="notes"]')).to_have_value(
+            f"قياس القطعة {index + 1}: ملاحظة معملية طويلة " * 4
+        )
+        expect(rows.nth(index).locator('button[data-check-field="extra_liner"]')).to_have_attribute(
+            "aria-pressed", "true" if index % 2 == 0 else "false"
+        )
+        expect(rows.nth(index).locator('button[data-check-field="extra_back_groove"]')).to_have_attribute(
+            "aria-pressed", "true" if index == 0 else "false"
+        )
+    _trace_event("new_recovery_restore_verified", piece_count=piece_count)
+
+    with page.expect_response(
+        lambda candidate: "/api/method/frappe.desk.form.save.savedocs" in candidate.url,
+        timeout=30_000,
+    ) as save_response_info:
+        page.locator(".page-head .primary-action").get_by_text("Save", exact=True).click()
+    save_response = save_response_info.value
+    try:
+        save_result = save_response.json()
+    except Exception as exc:
+        raise RuntimeError(f"Official NEW Save returned unreadable JSON: {exc}") from exc
     if (
-        saved["isNew"]
-        or not saved["name"]
-        or saved["countByToken"] != 1
-        or saved["localFound"]
-        or saved["dirty"]
+        save_response.status != 200
+        or not isinstance(save_result, dict)
+        or save_result.get("exc")
+        or save_result.get("exception")
     ):
-        raise RuntimeError(f"NEW official Save did not reconcile one record and clear local recovery: {saved}")
-    _trace_event("phase_135_local_new_recovery_completed", draft_id=checkpoint["draftId"])
+        raise RuntimeError(
+            f"Official NEW Save failed: HTTP {save_response.status}; "
+            f"response_keys={sorted(save_result) if isinstance(save_result, dict) else []}."
+        )
+    if len(save_requests) != 1:
+        raise RuntimeError(f"Expected one official DCO Save request, observed {len(save_requests)}.")
+    saved_document = save_requests[0]["document"]
+    if save_requests[0]["action"] != "Save":
+        raise RuntimeError("The observed official DCO action was not the NEW Save operation.")
+    creation_token = str(saved_document.get("recovery_creation_token") or "").strip()
+    saved_name = str(saved_document.get("name") or "").strip()
+    if not creation_token or not saved_name:
+        raise RuntimeError("Official Save request did not carry the recovered DCO identity token.")
+
+    canonical_response = page.context.request.get(
+        f"{DESK_URL}/api/method/frappe.client.get_list",
+        params={
+            "doctype": "Door Cutting Order",
+            "filters": json.dumps({"recovery_creation_token": creation_token}),
+            "fields": json.dumps(["name", "recovery_creation_token"]),
+            "limit_page_length": "5",
+        },
+        timeout=20_000,
+    )
+    if canonical_response.status != 200:
+        raise RuntimeError(f"Canonical NEW DCO lookup returned HTTP {canonical_response.status}.")
+    canonical_rows = canonical_response.json().get("message", [])
+    if len(canonical_rows) != 1:
+        raise RuntimeError(
+            "Official Save did not produce exactly one canonical DCO for its creation token."
+        )
+    canonical_name = str(canonical_rows[0].get("name") or "").strip()
+    if not canonical_name:
+        raise RuntimeError("Canonical DCO lookup returned no permanent document identity.")
+    if canonical_name != saved_name and not saved_name.startswith("new-"):
+        # Frappe may rename a NEW form during savedocs; the payload name is then
+        # temporary, while the canonical server record is authoritative.
+        raise RuntimeError("The canonical DCO identity differs from the non-temporary saved document.")
+    expect(page.locator(".dco-recovery-status[data-recovery-state='COMPLETED']")).to_be_visible(
+        timeout=15_000
+    )
+    page.wait_for_function(
+        "route => location.pathname === route",
+        arg=f"/app/door-cutting-order/{canonical_name}",
+        timeout=15_000,
+    )
+    _trace_event(
+        "phase_135_local_new_recovery_completed" if piece_count == 10
+        else "phase_135_new_recovery_stress_completed",
+        piece_count=piece_count,
+        official_save_requests=len(save_requests),
+        official_save_http=save_response.status,
+        canonical_record_count=len(canonical_rows),
+    )
 
 
 def certify_new_dco_form_smoke(page: Page) -> None:
@@ -609,347 +614,6 @@ def certify_new_dco_form_smoke(page: Page) -> None:
     _trace_event("phase_135_new_form_smoke_completed")
 
 
-NEW_RECOVERY_PROBE_INIT_SCRIPT = r"""
-(() => {
-    "use strict";
-    const probe = window.__dcoRecoveryProbe = {events: [], sequence: 0};
-    const emit = (event, details = {}) => {
-        const frm = window.cur_frm;
-        const context = window.AlmdinaDocumentContext;
-        let token = null;
-        try {
-            if (frm && context && typeof context.capture === "function") token = context.capture(frm);
-        } catch (error) {}
-        const route = window.frappe && typeof frappe.get_route === "function"
-            ? frappe.get_route()
-            : null;
-        const item = {
-            sequence: ++probe.sequence,
-            at: Math.round(performance.now()),
-            event,
-            route: Array.isArray(route) ? route.map(String).join("/") : "",
-            doctype: String(frm && (frm.doc.doctype || frm.doctype) || ""),
-            document_name: String(frm && frm.doc && frm.doc.name || ""),
-            context_identity: String(token && token.identity || ""),
-            context_generation: Number(token && token.generation || 0),
-            ...details,
-        };
-        probe.events.push(item);
-        if (probe.events.length > 400) probe.events.splice(0, probe.events.length - 400);
-        try {
-            if (typeof window.__dcoEmitProbeEvent === "function") {
-                window.__dcoEmitProbeEvent(item);
-            }
-        } catch (error) {}
-        return item;
-    };
-    const seenDocuments = new Set();
-    function startExplicitProbe(operation, invoke, summarize = () => ({})) {
-        const id = `explicit-${operation}`;
-        probe.explicit = probe.explicit || {};
-        probe.explicit[id] = {status: "pending", operation, started_at: Math.round(performance.now())};
-        emit("explicit_probe_started", {operation, id});
-        let promise;
-        try { promise = invoke(); }
-        catch (error) {
-            probe.explicit[id].status = "rejected";
-            emit("explicit_probe_settled", {
-                operation, id, status: "rejected",
-                error_name: String(error && error.name || "Error"),
-                error_code: String(error && error.code || ""),
-            });
-            return;
-        }
-        Promise.resolve(promise).then(value => {
-            const entry = probe.explicit[id];
-            entry.status = "resolved";
-            entry.settled_at = Math.round(performance.now());
-            let summary = {};
-            try { summary = summarize(value) || {}; } catch (error) {}
-            emit("explicit_probe_settled", {operation, id, status: "resolved", ...summary});
-        }, error => {
-            probe.explicit[id].status = "rejected";
-            probe.explicit[id].settled_at = Math.round(performance.now());
-            emit("explicit_probe_settled", {
-                operation, id, status: "rejected",
-                error_name: String(error && error.name || "Error"),
-                error_code: String(error && error.code || ""),
-            });
-        });
-    }
-
-    function startNewFormProbe(frm) {
-        const recovery = window.AlmdinaDcoRecovery;
-        const factory = recovery && recovery.LocalDraftRepository;
-        const identity = {
-            site: String(frappe.boot.sitename || frappe.boot.site_name || location.host),
-            user: String(frappe.session.user),
-            target_doctype: "Door Cutting Order",
-            mode: "NEW",
-        };
-        const autoDiscoveryStarted = probe.events.some(item =>
-            item.event === "operation_started"
-            && String(item.operation || "").startsWith("NewRecovery.discover#")
-        );
-        probe.pipelineStarted = true;
-        emit("new_form_probe_started", {automatic_discovery_started: autoDiscoveryStarted});
-        if (!factory || !recovery.NewRecovery || !recovery.LocalCheckpoint) {
-            emit("new_form_probe_unavailable");
-            return;
-        }
-        startExplicitProbe("LocalDraftRepository.discover", () => {
-            const repository = factory.create();
-            return repository.discover(identity);
-        }, result => ({ok: Boolean(result && result.ok)}));
-        startExplicitProbe("NewRecovery.discover", () => {
-            return recovery.NewRecovery.discover(factory.create(), identity);
-        }, result => ({
-            ok: Boolean(result && result.ok),
-            accepted_count: result && result.value && Array.isArray(result.value.records)
-                ? result.value.records.length : 0,
-            rejected_count: result && result.value && Array.isArray(result.value.rejected)
-                ? result.value.rejected.length : 0,
-        }));
-    }
-
-    window.setInterval(() => {
-        const frm = window.cur_frm;
-        if (!frm || frm.doctype !== "Door Cutting Order" || !frm.doc) return;
-        const context = window.AlmdinaDocumentContext;
-        let token = null;
-        try { token = context && context.capture ? context.capture(frm) : null; } catch (error) {}
-        const key = `${frm.doc.name || ""}::${token && token.generation || 0}`;
-        if (!seenDocuments.has(key)) {
-            seenDocuments.add(key);
-            emit("document_identity_transition");
-        }
-        if (!probe.pipelineStarted && typeof frm.is_new === "function" && frm.is_new()) {
-            startNewFormProbe(frm);
-        }
-    }, 50);
-
-    function track(label, invoke, summarize = () => ({})) {
-        return function (...args) {
-            const operation = `${label}#${++probe.sequence}`;
-            emit("operation_started", {operation});
-            let result;
-            try { result = invoke.apply(this, args); }
-            catch (error) {
-                emit("operation_rejected", {
-                    operation,
-                    error_name: String(error && error.name || "Error"),
-                    error_code: String(error && error.code || ""),
-                });
-                throw error;
-            }
-            return Promise.resolve(result).then(value => {
-                let summary = {};
-                try { summary = summarize(value) || {}; } catch (error) {}
-                emit("operation_resolved", {operation, ...summary});
-                return value;
-            }, error => {
-                emit("operation_rejected", {
-                    operation,
-                    error_name: String(error && error.name || "Error"),
-                    error_code: String(error && error.code || ""),
-                });
-                throw error;
-            });
-        };
-    }
-
-    function wrapApi(key, value) {
-        if (!value || typeof value !== "object") return value;
-        if (key === "NewRecovery" && typeof value.discover === "function") {
-            const discover = track("NewRecovery.discover", value.discover, result => ({
-                ok: Boolean(result && result.ok),
-                accepted_count: result && result.value && Array.isArray(result.value.records)
-                    ? result.value.records.length : 0,
-                rejected_count: result && result.value && Array.isArray(result.value.rejected)
-                    ? result.value.rejected.length : 0,
-            }));
-            return Object.freeze({...value, discover});
-        }
-        if (key === "LocalDraftRepository" && typeof value.create === "function") {
-            const create = (...args) => {
-                const repository = value.create(...args);
-                if (!repository || typeof repository.discover !== "function") return repository;
-                const discover = track("LocalDraftRepository.discover", repository.discover,
-                    result => ({ok: Boolean(result && result.ok)}));
-                return Object.freeze({...repository, discover});
-            };
-            return Object.freeze({...value, create});
-        }
-        if (key === "IndexedDb" && typeof value.createGateway === "function") {
-            const createGateway = (...args) => {
-                const gateway = value.createGateway(...args);
-                return Object.freeze({
-                    ...gateway,
-                    open: track("IndexedDB.open", gateway.open),
-                    transaction: track("IndexedDB.transaction", gateway.transaction,
-                        (_result) => ({})),
-                });
-            };
-            return Object.freeze({...value, createGateway});
-        }
-        if (key === "LocalCheckpoint" && typeof value.initializeNewForm === "function") {
-            const initializeNewForm = track("LocalCheckpoint.initializeNewForm", value.initializeNewForm,
-                result => ({has_state: Boolean(result)}));
-            return Object.freeze({...value, initializeNewForm});
-        }
-        return value;
-    }
-
-    let recoveryRoot = null;
-    Object.defineProperty(window, "AlmdinaDcoRecovery", {
-        configurable: true,
-        get() { return recoveryRoot; },
-        set(value) {
-            if (value === recoveryRoot) return;
-            if (value && typeof value === "object") {
-                recoveryRoot = new Proxy(value, {
-                    set(target, key, next) {
-                        return Reflect.set(target, key, wrapApi(String(key), next), target);
-                    },
-                });
-            } else {
-                recoveryRoot = value;
-            }
-        },
-    });
-})();
-"""
-
-
-def certify_new_recovery_discovery_probe(page: Page) -> None:
-    """Isolate automatic NEW discovery promises before running recovery certification."""
-    def record_probe_event(event: dict) -> None:
-        _trace_event("new_recovery_probe", **{
-            ("probe_event" if key == "event" else key): value for key, value in event.items()
-            if key in {
-                "sequence", "at", "event", "operation", "status", "route",
-                "doctype", "document_name", "context_identity", "context_generation",
-                "ok", "accepted_count", "rejected_count", "has_state",
-                "error_name", "error_code",
-            }
-        })
-
-    page.expose_function("__dcoEmitProbeEvent", record_probe_event)
-    page.add_init_script(NEW_RECOVERY_PROBE_INIT_SCRIPT)
-    login_to_desk(page, "Administrator", "admin")
-    response = page.goto(
-        f"{DESK_URL}/app/door-cutting-order/new-door-cutting-order-1",
-        wait_until="domcontentloaded",
-    )
-    if response is not None and response.status >= 400:
-        raise RuntimeError(f"NEW recovery probe navigation returned HTTP {response.status}.")
-    wait_for_function(
-        page,
-        "NEW recovery probe form ready",
-        "() => window.cur_frm && window.cur_frm.doctype === 'Door Cutting Order' "
-        "&& window.cur_frm.is_new() && window.__dcoRecoveryProbe",
-        timeout=30_000,
-    )
-    _trace_event("new_recovery_probe_waiting_for_pipeline")
-    try:
-        page.wait_for_function(
-            "() => window.__dcoRecoveryProbe.pipelineStarted === true",
-            timeout=10_000,
-        )
-    except Exception as exc:
-        _trace_event("new_recovery_probe_did_not_start", desk_url=_safe_url(page.url))
-        raise RuntimeError(f"NEW recovery probe did not start after form readiness: {exc}") from exc
-
-    operations = (
-        "LocalDraftRepository.discover",
-        "NewRecovery.discover",
-    )
-    for operation in operations:
-        operation_id = f"explicit-{operation}"
-        try:
-            page.wait_for_function(
-                "id => window.__dcoRecoveryProbe.explicit[id] "
-                "&& window.__dcoRecoveryProbe.explicit[id].status !== 'pending'",
-                arg=operation_id,
-                timeout=12_000,
-            )
-        except Exception as exc:
-            observed = [
-                {
-                    "probe_event": item.get("probe_event"),
-                    "operation": item.get("operation"),
-                    "status": item.get("status"),
-                    "document_name": item.get("document_name"),
-                    "context_identity": item.get("context_identity"),
-                    "context_generation": item.get("context_generation"),
-                }
-                for item in BROWSER_TRACE
-                if item.get("event") == "new_recovery_probe"
-            ][-24:]
-            _trace_event("new_recovery_probe_pending", operation=operation,
-                desk_url=_safe_url(page.url), observed=observed)
-            raise RuntimeError(
-                f"NEW recovery probe did not settle: {operation}; observed={observed}; wait={exc}"
-            ) from exc
-        settled = next((
-            item for item in reversed(BROWSER_TRACE)
-            if item.get("event") == "new_recovery_probe"
-            and item.get("probe_event") == "explicit_probe_settled"
-            and item.get("operation") == operation
-        ), None)
-        if not settled or settled.get("status") != "resolved":
-            raise RuntimeError(f"NEW recovery probe rejected or unobserved: {operation}.")
-        _trace_event("new_recovery_probe_settled", operation=operation,
-            status=settled.get("status"), ok=settled.get("ok"),
-            accepted_count=settled.get("accepted_count"),
-            rejected_count=settled.get("rejected_count"),
-            document_name=settled.get("document_name"),
-            context_identity=settled.get("context_identity"),
-            context_generation=settled.get("context_generation"))
-
-    try:
-        page.wait_for_function(
-            "() => window.__dcoRecoveryProbe.events.some(item => "
-            "item.event === 'operation_started' "
-            "&& String(item.operation || '').startsWith('LocalCheckpoint.initializeNewForm#'))",
-            timeout=10_000,
-        )
-    except Exception:
-        _trace_event("new_recovery_automatic_initialize_not_observed")
-        initialize_started = False
-    else:
-        initialize_started = True
-        try:
-            page.wait_for_function(
-                "() => window.__dcoRecoveryProbe.events.some(item => "
-                "(item.event === 'operation_resolved' || item.event === 'operation_rejected') "
-                "&& String(item.operation || '').startsWith('LocalCheckpoint.initializeNewForm#'))",
-                timeout=12_000,
-            )
-        except Exception as exc:
-            _trace_event("new_recovery_automatic_initialize_pending")
-            raise RuntimeError(f"Automatic NEW initializeNewForm did not settle: {exc}") from exc
-        initialize_result = next((
-            item for item in reversed(BROWSER_TRACE)
-            if item.get("event") == "new_recovery_probe"
-            and item.get("probe_event") in {"operation_resolved", "operation_rejected"}
-            and str(item.get("operation", "")).startswith("LocalCheckpoint.initializeNewForm#")
-        ), None)
-        initialize_status = "resolved" if initialize_result and initialize_result.get("probe_event") == "operation_resolved" else "rejected"
-        _trace_event("new_recovery_automatic_initialize_settled", status=initialize_status)
-        if initialize_status != "resolved":
-            raise RuntimeError("Automatic NEW initializeNewForm rejected or was not observed.")
-
-    auto_discovery_started = any(
-        item.get("event") == "new_recovery_probe"
-        and item.get("probe_event") == "new_form_probe_started"
-        and item.get("automatic_discovery_started") is True
-        for item in BROWSER_TRACE
-    )
-    _trace_event("new_recovery_probe_completed",
-        automatic_discovery_started=auto_discovery_started,
-        automatic_initialize_started=initialize_started)
-
 
 def certify_new_dco_local_gate(browser) -> None:
     """Run NEW certification in an isolated Frappe Desk page/context."""
@@ -961,6 +625,22 @@ def certify_new_dco_local_gate(browser) -> None:
     try:
         login_to_desk(page, "Administrator", "admin")
         certify_actual_frappe_desk_new_recovery(page)
+    finally:
+        context.close()
+
+
+def certify_new_dco_recovery_stress(browser, piece_count: int) -> None:
+    """Run the independent 200/500-piece Stress/Performance path through Desk UI."""
+    if piece_count not in {200, 500}:
+        raise ValueError("NEW recovery stress piece count must be 200 or 500.")
+    context = browser.new_context()
+    page = context.new_page()
+    page.set_default_timeout(30_000)
+    page.set_default_navigation_timeout(30_000)
+    attach_browser_diagnostics(page)
+    try:
+        login_to_desk(page, "Administrator", "admin")
+        certify_actual_frappe_desk_new_recovery(page, piece_count=piece_count)
     finally:
         context.close()
 
@@ -1288,8 +968,9 @@ if __name__ == "__main__":
         try:
             if os.environ.get("DCO_DESK_NEW_FORM_SMOKE_ONLY") == "1":
                 certify_new_dco_form_smoke(page)
-            elif os.environ.get("DCO_DESK_NEW_DISCOVERY_PROBE_ONLY") == "1":
-                certify_new_recovery_discovery_probe(page)
+            elif os.environ.get("DCO_DESK_NEW_STRESS_ONLY") == "1":
+                stress_piece_count = int(os.environ.get("DCO_DESK_NEW_STRESS_PIECE_COUNT", "200"))
+                certify_new_dco_recovery_stress(browser, stress_piece_count)
             elif os.environ.get("DCO_DESK_NEW_LOCAL_GATE_ONLY") == "1":
                 certify_new_dco_local_gate(browser)
             else:

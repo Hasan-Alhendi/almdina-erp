@@ -37,45 +37,34 @@ def test_route_diagnostics_tolerate_frappe_returning_no_route() -> None:
     assert "user: window.frappe" not in source
 
 
-def test_new_recovery_probe_starts_without_a_post_readiness_evaluate() -> None:
+def test_new_local_gate_uses_desk_interactions_without_recovery_instrumentation() -> None:
     source = DESK_RUNNER.read_text(encoding="utf-8")
     tree = ast.parse(source)
-    probe_script = next(
-        ast.literal_eval(node.value)
-        for node in tree.body
-        if isinstance(node, ast.Assign)
-        and any(
-            isinstance(target, ast.Name)
-            and target.id == "NEW_RECOVERY_PROBE_INIT_SCRIPT"
-            for target in node.targets
-        )
-    )
-    probe = next(
+    certification = next(
         node for node in tree.body
         if isinstance(node, ast.FunctionDef)
-        and node.name == "certify_new_recovery_discovery_probe"
+        and node.name == "certify_actual_frappe_desk_new_recovery"
     )
-    calls = [
-        node for node in ast.walk(probe)
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Attribute)
-        and isinstance(node.func.value, ast.Name)
-        and node.func.value.id == "page"
-    ]
-    assert not [node for node in calls if node.func.attr == "evaluate"]
-    assert any(node.func.attr == "wait_for_function" for node in calls)
-    assert "startNewFormProbe" in probe_script
-    assert "explicit_probe_started" in probe_script
-    assert "explicit_probe_settled" in probe_script
-    assert "Promise.resolve(promise).then" in probe_script
-    assert "if (seenDocuments.has(key)) return" not in probe_script
-    dedup_start = probe_script.index("if (!seenDocuments.has(key))")
-    pipeline_start = probe_script.index(
-        'if (!probe.pipelineStarted && typeof frm.is_new === "function"'
+    stress = next(
+        node for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "certify_new_dco_recovery_stress"
     )
-    assert dedup_start < pipeline_start
-    assert 'emit("document_identity_transition");\n        }\n        if (!probe.pipelineStarted' in probe_script
-    assert "LocalDraftRepository.discover" in ast.unparse(probe)
-    assert "NewRecovery.discover" in ast.unparse(probe)
-    assert "LocalCheckpoint.initializeNewForm" in ast.unparse(probe)
-    assert '"IndexedDB.transaction"' in source
+    arguments = certification.args.kwonlyargs
+    assert arguments[0].arg == "piece_count"
+    assert ast.literal_eval(certification.args.kw_defaults[0]) == 10
+    assert "NEW_RECOVERY_PROBE_INIT_SCRIPT" not in source
+    assert "Object.defineProperty(window, \"AlmdinaDcoRecovery\"" not in source
+    assert "new Proxy(value" not in source
+    assert "page.add_init_script" not in ast.unparse(certification)
+    assert "page.evaluate" not in ast.unparse(certification)
+    assert "tbody tr.dco-virtual-row" in ast.unparse(certification)
+    assert "page.reload" in ast.unparse(certification)
+    assert 'data-recovery-action="continue"' in ast.unparse(certification)
+    assert "expect_response" in ast.unparse(certification)
+    assert "canonical_record_count=len(canonical_rows)" in ast.unparse(certification)
+    assert "recovery_creation_token" in ast.unparse(certification)
+    assert 'data-recovery-state=\'COMPLETED\'' in ast.unparse(certification)
+    assert "range(piece_count)" in ast.unparse(certification)
+    assert "initializeNewForm(frm)" not in ast.unparse(certification)
+    assert "piece_count not in {200, 500}" in ast.unparse(stress)
