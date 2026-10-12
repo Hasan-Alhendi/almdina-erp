@@ -34,6 +34,29 @@
             "Panel Saw": "Panel Saw",
         }),
     });
+    const STRATEGY_MESSAGE_IDS = Object.freeze({
+        Auto: "Auto",
+        "Auto Pro": "Auto Pro",
+        "Deep Search": "Deep Search",
+        "Optimal Search": "Optimal Search",
+        "MaxRects Best Short Side": "MaxRects Best Short Side",
+        "MaxRects Best Area": "MaxRects Best Area",
+        "MaxRects Bottom Left": "MaxRects Bottom Left",
+        "MaxRects Contact Point": "MaxRects Contact Point",
+        "MaxRects Width": "MaxRects Width",
+        "MaxRects Length": "MaxRects Length",
+        "Shelf Horizontal": "Shelf Horizontal",
+        "Shelf Vertical": "Shelf Vertical",
+        "Shelf First Fit": "Shelf First Fit",
+        "Shelf Next Fit": "Shelf Next Fit",
+        "Guillotine Short Axis": "Guillotine Short Axis",
+        "Guillotine Long Axis": "Guillotine Long Axis",
+        "Guillotine Best Area Fit": "Guillotine Best Area Fit",
+        "Guillotine Best Short Side Fit": "Guillotine Best Short Side Fit",
+        "Guillotine Best Long Side Fit": "Guillotine Best Long Side Fit",
+        "Skyline Bottom Left": "Skyline Bottom Left",
+        "Skyline Best Fit": "Skyline Best Fit",
+    });
 
     function installStyles() {
         if (document.getElementById(STYLE_ID)) return;
@@ -142,6 +165,15 @@
         return catalog[raw] ? translate(catalog[raw]) : raw;
     }
 
+    function knownStrategyText(methodKey, methodLabel) {
+        const key = String(methodKey ?? "").trim();
+        const messageId = key && STRATEGY_MESSAGE_IDS[key];
+        if (messageId) return translate(messageId);
+        const label = String(methodLabel ?? "").trim();
+        if (label) return label;
+        return key || "—";
+    }
+
     function money(value) {
         const numeric = Number(value || 0);
         return numeric.toLocaleString("en-US", {
@@ -247,7 +279,7 @@
         const optimizer = trace.optimizer || {};
         const items = [
             ["Requested algorithm", knownSettingText("optimization_mode", requested.optimization_mode), "is-trace"],
-            ["Strategy used", String(optimizer.method_label || optimizer.method_key || "—"), "is-trace"],
+            ["Strategy used", knownStrategyText(optimizer.method_key, optimizer.method_label), "is-trace"],
             ["Cutting machine", knownSettingText("machine_type", requested.machine_type), "is-trace"],
             ["Kerf used", translate("{0} mm", [numberText(requested.kerf_mm)]), "is-trace"],
             ["Requested trim", translate("{0} mm", [numberText(requested.preferred_trim_mm)]), "is-trace"],

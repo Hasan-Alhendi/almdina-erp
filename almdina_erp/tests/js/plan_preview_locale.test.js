@@ -50,6 +50,7 @@ const french = {
     "Recalculate with the current settings": "Recalculer avec les réglages actuels",
     "Press “Edit” to try algorithms and settings. Recalculation creates a preview, and the change is not saved until you press “Save”.": "Appuyez sur Modifier.",
     "Auto Pro (recommended)": "Auto Pro recommandé",
+    "MaxRects Best Short Side": "MaxRects côté court",
     "Expected plan cost": "Coût prévu du plan",
     "{0} mm": "{0} mm",
     "Width {0} mm / length {1} mm": "Largeur {0} mm / longueur {1} mm",
@@ -340,7 +341,8 @@ presenter.renderPreviewPlan(traced, {
                     reason: "سبب غير معروف",
                 },
                 optimizer: {
-                    method_label: "MaxRects Best Short Side",
+                    method_key: "MaxRects Best Short Side",
+                    method_label: "Auto اختار: MaxRects - أفضل ضلع قصير",
                     solver_status: "FEASIBLE",
                     attempts: 4,
                     elapsed_sec: 1,
@@ -352,16 +354,41 @@ presenter.renderPreviewPlan(traced, {
 assert.match(summary.html, /Auto Pro recommandé/);
 assert.match(summary.html, /بيانات عشوائية/);
 assert.match(summary.html, /سبب غير معروف/);
-assert.match(summary.html, /MaxRects Best Short Side/);
+assert.match(summary.html, /MaxRects côté court/);
+assert.equal(summary.html.includes("Auto اختار: MaxRects - أفضل ضلع قصير"), false);
 assert.match(summary.html, /FEASIBLE/);
 assert.match(summary.html, /dir="rtl"/);
 assert.equal(summary.html.includes("Coût prévu du plan"), false);
 assert.equal(calls.includes("بيانات عشوائية"), false);
 assert.equal(calls.includes("سبب غير معروف"), false);
-assert.equal(calls.includes("MaxRects Best Short Side"), false);
+assert.equal(calls.includes("MaxRects Best Short Side"), true);
+assert.equal(calls.includes("Auto اختار: MaxRects - أفضل ضلع قصير"), false);
 assert.equal(calls.includes("FEASIBLE"), false);
 assert.match(content.html, /APERÇU/);
 assert.equal(content.html.includes("Coût prévu du plan"), false);
+
+const callsBeforeUnknown = calls.length;
+presenter.renderPreviewPlan(traced, {
+    status: "ready",
+    payload: {
+        summary: { totals: {}, quality: {} },
+        plan: {
+            sheets: [{ name: "sheet" }],
+            execution_trace: {
+                version: 1,
+                requested: {},
+                adaptive_trim: {},
+                optimizer: {
+                    method_key: "vendor_custom_strategy",
+                    method_label: "Custom vendor strategy",
+                },
+            },
+        },
+    },
+}, true);
+assert.match(summary.html, /Custom vendor strategy/);
+assert.equal(calls.slice(callsBeforeUnknown).includes("vendor_custom_strategy"), false);
+assert.equal(calls.slice(callsBeforeUnknown).includes("Custom vendor strategy"), false);
 
 presenter.renderPreviewPlan(traced, {
     status: "ready",
