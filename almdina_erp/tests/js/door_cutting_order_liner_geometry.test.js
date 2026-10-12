@@ -188,9 +188,7 @@ assert.deepEqual(
 );
 
 const centers = copy(geometry.cutterCenterOffsetsMm(18, 5)).map(value => Math.round(value * 1000) / 1000);
-assert.deepEqual(centers[0], 2.5);
-assert.deepEqual(centers[centers.length - 1], 15.5);
-assert.equal(centers.length, 4);
+assert.deepEqual(centers, [2.5, 7.5, 10.5, 15.5]);
 assert.deepEqual(copy(geometry.cutterCenterOffsetsMm(5, 5)), [2.5]);
 assert.throws(() => geometry.cutterCenterOffsetsMm(4, 5), /liner_narrower_than_cutter/);
 const toolpath = geometry.toolpathMm(regular, "edge_width_top", 0, 1.8, 5);
@@ -198,7 +196,25 @@ const toolXs = toolpath.map(point => point[0]);
 const toolYs = [...new Set(toolpath.map(point => Math.round(point[1] * 1000) / 1000))].sort((a, b) => a - b);
 assert.equal(Math.round(Math.min(...toolXs) * 10) / 10, -2.5);
 assert.equal(Math.round(Math.max(...toolXs) * 10) / 10, 402.5);
-assert.deepEqual(copy(toolYs), [2.5, 6.833, 11.167, 15.5]);
+assert.deepEqual(copy(toolYs), [2.5, 7.5, 10.5, 15.5]);
+const lPiece = geometry.pieceFromRow({
+    piece_type: "L-Shaped Corner",
+    width_cm: 100,
+    length_cm: 80,
+    clipped_corner_position: "Top Right",
+    clipped_corner_width_cm: 20,
+    clipped_corner_length_cm: 30,
+});
+const lPath = geometry.toolpathMm(lPiece, "edge_break", 0, 1.8, 5);
+assert.equal(lPath.length, 12);
+const notchPath = [[900, 100], [900, 200]];
+const lPolygon = geometry.piecePolygonMm(lPiece);
+assert.equal(geometry.extensionConflict(notchPath, 5, {
+    minX: -20, minY: -20, maxX: 1100, maxY: 900,
+}, [{ polygon: lPolygon }]), "");
+assert.equal(geometry.extensionConflict(notchPath, 5, {
+    minX: -20, minY: -20, maxX: 1100, maxY: 900,
+}, [{ minX: 0, minY: 0, maxX: 1000, maxY: 800 }]), "liner_extension_hits_piece");
 const widerBit = geometry.toolpathMm(regular, "edge_width_top", 0, 1.8, 6);
 assert.notDeepEqual(copy(toolpath), copy(widerBit));
 const missingBit = geometry.syntheticOverlay({

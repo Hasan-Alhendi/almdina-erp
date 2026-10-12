@@ -415,12 +415,16 @@
             maxX: (num(frame.drawW) - num(frame.insetX)) * 10,
             maxY: (num(frame.drawH) - num(frame.insetY)) * 10,
         };
-        const obstacles = (sheet.pieces || []).filter(other => other !== piece).map(other => ({
-            minX: num(other.x) * 10,
-            minY: num(other.y) * 10,
-            maxX: (num(other.x) + num(other.w)) * 10,
-            maxY: (num(other.y) + num(other.h)) * 10,
-        }));
+        const obstacles = (sheet.pieces || []).filter(other => other !== piece).map(other => {
+            const polygon = typeof liner.placedPolygonMm === "function" ? liner.placedPolygonMm(other) : [];
+            if (polygon.length >= 3) return { polygon };
+            return {
+                minX: num(other.x) * 10,
+                minY: num(other.y) * 10,
+                maxX: (num(other.x) + num(other.w)) * 10,
+                maxY: (num(other.y) + num(other.h)) * 10,
+            };
+        });
         return overlays.map(overlay => {
             if (!overlay || !overlay.synthetic || !overlay.geometry || !overlay.geometry.toolpath) return overlay;
             const conflict = liner.extensionConflict(

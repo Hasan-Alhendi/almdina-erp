@@ -318,12 +318,15 @@
         }
         const radius = diameterMm / 2;
         if (Math.abs(widthMm - diameterMm) <= TOLERANCE_MM) return [widthMm / 2];
-        const span = widthMm - diameterMm;
-        const passes = Math.ceil((span / diameterMm) - 1e-9) + 1;
-        const step = span / (passes - 1);
-        const centers = [];
-        for (let index = 0; index < passes; index += 1) centers.push(radius + (step * index));
-        return centers;
+        const leading = [radius];
+        const trailing = [widthMm - radius];
+        while (trailing[0] - leading[leading.length - 1] > diameterMm + 1e-9) {
+            leading.push(leading[leading.length - 1] + diameterMm);
+            if (trailing[0] - leading[leading.length - 1] > diameterMm + 1e-9) {
+                trailing.unshift(trailing[0] - diameterMm);
+            }
+        }
+        return leading.concat(trailing);
     }
 
     function boundaryDistance(point, polygon) {
@@ -432,32 +435,62 @@
             const start = path[index];
             const end = path[index + 1];
             for (let obstacleIndex = 0; obstacleIndex < blocks.length; obstacleIndex += 1) {
-                const rect = blocks[obstacleIndex];
-                const corners = [
-                    [rect.minX, rect.minY],
-                    [rect.maxX, rect.minY],
-                    [rect.maxX, rect.maxY],
-                    [rect.minX, rect.maxY],
-                ];
-                const inside = pointInPolygon(start, corners) || pointInPolygon(end, corners);
-                const crossing = corners.some((corner, cornerIndex) => segmentsCross(
+                const ring = obstacleRing(blocks[obstacleIndex]);
+                if (ring.length < 3) continue;
+                if (pointInPolygon(start, ring) || pointInPolygon(end, ring)) {
+                    return "liner_extension_hits_piece";
+                }
+                const crossing = ring.some((corner, cornerIndex) => segmentsCross(
                     start,
                     end,
                     corner,
-                    corners[(cornerIndex + 1) % 4]
+                    ring[(cornerIndex + 1) % ring.length]
                 ));
-                if (inside || crossing) return "liner_extension_hits_piece";
+                if (crossing) return "liner_extension_hits_piece";
                 const gap = Math.min(
-                    ...corners.map(corner => pointSegDist(corner, start, end)),
-                    ...corners.map((corner, cornerIndex) => Math.min(
-                        pointSegDist(start, corner, corners[(cornerIndex + 1) % 4]),
-                        pointSegDist(end, corner, corners[(cornerIndex + 1) % 4])
+                    ...ring.map(corner => pointSegDist(corner, start, end)),
+                    ...ring.map((corner, cornerIndex) => Math.min(
+                        pointSegDist(start, corner, ring[(cornerIndex + 1) % ring.length]),
+                        pointSegDist(end, corner, ring[(cornerIndex + 1) % ring.length])
                     ))
                 );
                 if (gap < radius - TOLERANCE_MM) return "liner_extension_hits_piece";
             }
         }
         return "";
+    }
+
+    function obstacleRing(obstacle) {
+        if (obstacle && Array.isArray(obstacle.polygon) && obstacle.polygon.length >= 3) {
+            return obstacle.polygon;
+        }
+        const rect = obstacle || {};
+        return [
+            [num(rect.minX), num(rect.minY)],
+            [num(rect.maxX), num(rect.minY)],
+            [num(rect.maxX), num(rect.maxY)],
+            [num(rect.minX), num(rect.maxY)],
+        ];
+    }
+
+    function placedPolygonMm(piece) {
+        const linerPiece = pieceFromRow(piece);
+        const polygon = piecePolygonMm(linerPiece);
+        if (!polygon) return [];
+        const turns = piece && piece.rotated ? 1 : 0;
+        const mirrored = Boolean(piece && piece.corner_mirrored);
+        const originX = num(piece && piece.x) * 10;
+        const originY = num(piece && piece.y) * 10;
+        return polygon.map(point => {
+            const placed = transformPoint(
+                point,
+                mirrored,
+                turns,
+                linerPiece.widthCm * 10,
+                linerPiece.lengthCm * 10
+            );
+            return [placed[0] + originX, placed[1] + originY];
+        });
     }
 
     function transformPoint(point, mirrored, quarterTurns, width, height) {
@@ -589,6 +622,7 @@
         cutterCenterOffsetsMm,
         toolpathMm,
         extensionConflict,
+        placedPolygonMm,
         contourNotchCm,
         contourNotchFromOrder,
         transformPoint,

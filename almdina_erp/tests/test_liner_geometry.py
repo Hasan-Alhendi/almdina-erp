@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import pytest
 
-from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import has_self_intersection
+from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import (
+    has_self_intersection,
+    point_in_polygon,
+)
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
     GEOMETRY_TOLERANCE_MM,
 )
@@ -21,6 +24,7 @@ from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
     cutter_center_offsets_mm,
     liner_toolpath_mm,
     liner_strip_polygon_mm,
+    piece_polygon_mm,
     transform_point,
     validation_code,
 )
@@ -303,9 +307,8 @@ def test_l_inner_strap_uses_the_raw_notch_for_the_liner():
 
 def test_cutter_centers_cover_width_without_crossing_it():
     centers = cutter_center_offsets_mm(18, 5)
-    assert centers[0] == pytest.approx(2.5)
-    assert centers[-1] == pytest.approx(15.5)
-    assert len(centers) == 4
+    assert centers == pytest.approx([2.5, 7.5, 10.5, 15.5])
+    assert [right - left for left, right in zip(centers, centers[1:])] == pytest.approx([5, 3, 5])
     radius = 2.5
     for left, right in zip(centers, centers[1:]):
         assert right - left <= 5 + 1e-9
@@ -323,7 +326,7 @@ def test_regular_toolpath_extends_by_the_tool_radius():
     piece = _regular()
     path = liner_toolpath_mm(piece, "edge_width_top", 0, 1.8, 5)
     ys = sorted({round(point[1], 3) for point in path})
-    assert ys == pytest.approx([2.5, 6.833, 11.167, 15.5])
+    assert ys == pytest.approx([2.5, 7.5, 10.5, 15.5])
     xs = [point[0] for point in path]
     assert min(xs) == pytest.approx(-2.5)
     assert max(xs) == pytest.approx(402.5)
@@ -361,6 +364,60 @@ def test_toolpath_follows_diameter_change_and_corner_breaks():
         height_mm=600,
     )
     assert compare_liner_path(restored, piece, "edge_width_top", 2, 1.5, 5).ok
+
+
+def _has_corner(path):
+    for first, middle, last in zip(path, path[1:], path[2:]):
+        area = (middle[0] - first[0]) * (last[1] - first[1]) - (middle[1] - first[1]) * (last[0] - first[0])
+        if abs(area) > 1:
+            return True
+    return False
+
+
+def _edge_distance(point, polygon):
+    import math
+
+    best = math.inf
+    ring = list(polygon) + [polygon[0]]
+    for start, finish in zip(ring, ring[1:]):
+        length = math.dist(start, finish) or 1.0
+        area = abs(
+            (point[0] - start[0]) * (finish[1] - start[1])
+            - (point[1] - start[1]) * (finish[0] - start[0])
+        )
+        best = min(best, area / length)
+    return best
+
+
+def test_l_toolpath_follows_the_bend_and_extends_once():
+    assert cutter_center_offsets_mm(12, 5) == pytest.approx([2.5, 7.5, 9.5])
+    assert cutter_center_offsets_mm(23, 5) == pytest.approx([2.5, 7.5, 12.5, 15.5, 20.5])
+    assert cutter_center_offsets_mm(18, 3)[0] == pytest.approx(1.5)
+    assert cutter_center_offsets_mm(18, 6) == pytest.approx([3, 9, 15])
+    raw_width, raw_length = contour_notch_cm(
+        piece_type="L-Shaped Corner",
+        finished_width_cm=40,
+        finished_length_cm=60,
+        notch_width_cm=8,
+        notch_length_cm=16,
+        position="Top Right",
+        side_thickness_mm={"long_right": 3, "width_top": 2},
+        edge_break=True,
+        edge_break_thickness_mm=1,
+    )
+    raw_piece = LinerPiece("L-Shaped Corner", 40, 60, "Top Right", raw_width, raw_length)
+    strapped = liner_toolpath_mm(raw_piece, "edge_break", 1, 0.8, 4)
+    assert compare_liner_path(strapped, raw_piece, "edge_break", 1, 0.8, 4).ok
+    for position in ("Top Right", "Top Left", "Bottom Right", "Bottom Left"):
+        piece = _l_piece(position)
+        path = liner_toolpath_mm(piece, "edge_break", 0, 1.8, 5)
+        polygon = piece_polygon_mm(piece)
+        assert len(path) == 12
+        assert _has_corner(path)
+        assert compare_liner_path(path, piece, "edge_break", 0, 1.8, 5).ok
+        for end in (path[0], path[-1]):
+            assert not point_in_polygon(end, polygon, tolerance=GEOMETRY_TOLERANCE_MM)
+            assert _edge_distance(end, polygon) == pytest.approx(2.5, abs=0.05)
 
 
 def test_changing_offset_and_width_moves_the_band():

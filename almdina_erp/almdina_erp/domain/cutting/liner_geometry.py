@@ -572,10 +572,15 @@ def cutter_center_offsets_mm(width_mm: float, diameter_mm: float) -> list[float]
     radius = diameter_mm / 2.0
     if abs(width_mm - diameter_mm) <= GEOMETRY_TOLERANCE_MM:
         return [width_mm / 2.0]
-    span = width_mm - diameter_mm
-    passes = int(math.ceil((span / diameter_mm) - 1e-9)) + 1
-    step = span / (passes - 1)
-    return [radius + (step * index) for index in range(passes)]
+    # Full tool steps from both edges. The leftover, which is at most one
+    # diameter, sits in one interior gap instead of being spread evenly.
+    leading = [radius]
+    trailing = [width_mm - radius]
+    while trailing[0] - leading[-1] > diameter_mm + 1e-9:
+        leading.append(leading[-1] + diameter_mm)
+        if trailing[0] - leading[-1] > diameter_mm + 1e-9:
+            trailing.insert(0, trailing[0] - diameter_mm)
+    return leading + trailing
 
 
 def liner_toolpath_mm(

@@ -337,14 +337,38 @@
         return layer || "";
     }
 
+    function linerExportError(piece, code) {
+        const messages = {
+            cutter_diameter_invalid: "حدّد سماكة الشفرة أكبر من صفر قبل تصدير مسارات اللاينر.",
+            liner_narrower_than_cutter: "عرض اللاينر أصغر من سماكة الشفرة.",
+            liner_extension_off_board: "امتداد ريشة اللاينر يخرج خارج اللوح، ولا يمكن ضمان أمان القص.",
+            liner_extension_hits_piece: "امتداد ريشة اللاينر يتداخل مع قطعة مجاورة.",
+            liner_extension_unsafe: "تعذر تمديد مسار اللاينر حتى خط القص.",
+        };
+        const label = String((piece && (piece.label || piece.piece_no || piece.id)) || "").split(".")[0] || "؟";
+        const error = new Error(`الدرفة ${label}: ${messages[code] || code}`);
+        error.linerExport = true;
+        error.code = code;
+        return error;
+    }
+
     function exportOverlays(piece, kerfMm) {
         const overlays = Array.isArray(piece && piece.overlays) ? piece.overlays.slice() : [];
         if (overlays.some(item => item && item.kind === "liner")) return overlays;
+        const requiresLiner = Boolean(num(piece && piece.extra_liner))
+            && String(piece && piece.liner_reference_side || "").trim()
+            && num(piece && piece.liner_width_cm) > 0;
         const liner = window.AlmdinaLinerGeometry;
-        if (!liner || typeof liner.syntheticOverlay !== "function") return overlays;
+        if (!liner || typeof liner.syntheticOverlay !== "function") {
+            if (requiresLiner) throw linerExportError(piece, "liner_extension_unsafe");
+            return overlays;
+        }
         const synthetic = liner.syntheticOverlay(Object.assign({}, piece, {
             kerf_mm: num(piece && piece.kerf_mm) || num(kerfMm),
         }));
+        if (requiresLiner && (!synthetic || synthetic.error)) {
+            throw linerExportError(piece, (synthetic && synthetic.error) || "liner_extension_unsafe");
+        }
         if (!synthetic || synthetic.error) return overlays;
         return overlays.concat(synthetic);
     }
@@ -444,13 +468,19 @@
                     minY: -num(trim.length),
                     maxX: fullW - num(trim.width),
                     maxY: fullH - num(trim.length),
-                }, (sheet.pieces || []).filter(other => other !== piece).map(other => ({
-                    minX: num(other.x) * 10,
-                    minY: num(other.y) * 10,
-                    maxX: (num(other.x) + num(other.w)) * 10,
-                    maxY: (num(other.y) + num(other.h)) * 10,
-                })));
-                if (conflict) return "";
+                }, (sheet.pieces || []).filter(other => other !== piece).map(other => {
+                    const polygon = typeof liner.placedPolygonMm === "function"
+                        ? liner.placedPolygonMm(other)
+                        : [];
+                    if (polygon.length >= 3) return { polygon };
+                    return {
+                        minX: num(other.x) * 10,
+                        minY: num(other.y) * 10,
+                        maxX: (num(other.x) + num(other.w)) * 10,
+                        maxY: (num(other.y) + num(other.h)) * 10,
+                    };
+                }));
+                if (conflict) throw linerExportError(piece, conflict);
             }
             return lwpolyline(overlay.layer, points);
         }
@@ -660,6 +690,9 @@
             dxf = buildDxf(plan);
             validateDxfText(dxf);
         } catch (error) {
+            if (error && error.linerExport) {
+                frappe.throw(__(error.message));
+            }
             console.error("DXF self-check failed", error);
             frappe.throw(__("DXF export failed its compatibility self-check and was not downloaded."));
         }
