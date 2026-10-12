@@ -28,6 +28,11 @@ on:
         required: false
         default: false
         type: boolean
+      phase_a_comparison_only:
+        description: Compare standard form, Desk list navigation, direct DCO route, and DCO services
+        required: false
+        default: false
+        type: boolean
       new_local_gate_only:
         description: Run only real Desk NEW recovery, hydration and official Save
         required: false
@@ -235,7 +240,7 @@ jobs:
           bench --site test.localhost execute frappe.get_all --kwargs '{"doctype":"DocType","filters":{"module":"Almdina ERP"},"pluck":"name"}'
 
       - name: Run Almdina ERP tests
-        if: github.event_name != 'workflow_dispatch' || (inputs.desk_only != true && inputs.new_form_smoke_only != true && inputs.new_customer_field_smoke_only != true && inputs.new_local_gate_only != true && inputs.new_stress_only != true)
+        if: github.event_name != 'workflow_dispatch' || (inputs.desk_only != true && inputs.new_form_smoke_only != true && inputs.new_customer_field_smoke_only != true && inputs.phase_a_comparison_only != true && inputs.new_local_gate_only != true && inputs.new_stress_only != true)
         run: |
           cd "$RUNNER_TEMP/frappe-bench"
           bench --site test.localhost set-config allow_tests true
@@ -274,13 +279,14 @@ jobs:
           fi
           exit "$test_status"
 
-      - name: Certify DCO EDIT recovery in real Frappe Desk
+      - name: Certify DCO ${{ inputs.phase_a_comparison_only && 'Phase A comparison' || inputs.new_local_gate_only && 'NEW recovery' || inputs.new_form_smoke_only && 'NEW form smoke' || inputs.new_customer_field_smoke_only && 'NEW Customer smoke' || inputs.new_stress_only && 'NEW stress' || 'EDIT recovery' }} in real Frappe Desk
         if: always() && !cancelled()
         env:
           DCO_DESK_FIXTURE_FILE: ${{ runner.temp }}/dco-desk-fixtures.json
           DCO_DESK_EVIDENCE_DIR: ${{ runner.temp }}/dco-desk-evidence
           DCO_DESK_NEW_FORM_SMOKE_ONLY: ${{ inputs.new_form_smoke_only && '1' || '0' }}
           DCO_DESK_NEW_CUSTOMER_FIELD_SMOKE_ONLY: ${{ inputs.new_customer_field_smoke_only && '1' || '0' }}
+          DCO_DESK_PHASE_A_COMPARISON_ONLY: ${{ inputs.phase_a_comparison_only && '1' || '0' }}
           DCO_DESK_NEW_LOCAL_GATE_ONLY: ${{ inputs.new_local_gate_only && '1' || '0' }}
           DCO_DESK_NEW_STRESS_ONLY: ${{ inputs.new_stress_only && '1' || '0' }}
           DCO_DESK_NEW_STRESS_PIECE_COUNT: ${{ inputs.new_stress_piece_count || '200' }}
@@ -381,7 +387,7 @@ jobs:
             printf '::error title=Real Desk certification failed::phase=%s exit=%s detail=%s\n' "$phase" "$status" "$detail"
             {
               echo '### Real Frappe Desk certification failure'
-              echo "Failed phase: `$phase` (exit $status)"
+              printf 'Failed phase: %s (exit %s)\n' "$phase" "$status"
               echo '#### Browser, final DOM, and open API diagnosis'
               echo '```json'
               echo "$browser_summary"
@@ -426,8 +432,116 @@ jobs:
           if [[ "$ready" != 1 ]]; then
             desk_fail 1
           fi
-          phase="Desk EDIT recovery browser certification"
-          timeout --signal=INT --kill-after=45s 480s ./env/bin/python -u apps/almdina_erp/almdina_erp/ci/dco_frappe_desk_recovery.py 2>&1 | tee -a "$desk_log"
+          if [[ "$DCO_DESK_PHASE_A_COMPARISON_ONLY" == 1 ]]; then
+            comparison_failed=0
+            mkdir -p "$RUNNER_TEMP/dco-desk-evidence"
+            for comparison_case in D A B C; do
+              phase="Phase A comparison $comparison_case"
+              case_evidence="$RUNNER_TEMP/dco-desk-evidence/case-$comparison_case"
+              case_log="$RUNNER_TEMP/dco-desk-evidence/case-$comparison_case.log"
+              if DCO_DESK_COMPARISON_CASE="$comparison_case" DCO_DESK_EVIDENCE_DIR="$case_evidence" \
+                  timeout --signal=INT --kill-after=5s 90s ./env/bin/python -u \
+                    apps/almdina_erp/almdina_erp/ci/dco_frappe_desk_recovery.py > "$case_log" 2>&1; then
+                case_status=0
+              else
+                case_status=$?
+                comparison_failed=1
+              fi
+              printf '%s\t%s\n' "$comparison_case" "$case_status" \
+                >> "$RUNNER_TEMP/dco-desk-evidence/comparison-results.tsv"
+              python3 - "$comparison_case" "$case_status" "$case_evidence" <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          import sys
+          import time
+          from pathlib import Path
+
+          case, status, evidence_dir = sys.argv[1], int(sys.argv[2]), Path(sys.argv[3])
+          try:
+              trace = json.loads((evidence_dir / "dco-desk-trace.json").read_text())
+          except (OSError, ValueError):
+              trace = []
+          try:
+              diagnostics = json.loads((evidence_dir / "browser-diagnostics.json").read_text())
+          except (OSError, ValueError):
+              diagnostics = {}
+          selected_events = {
+              "comparison_service_completed", "comparison_service_failed",
+              "comparison_list_new_action_wait_started", "comparison_list_new_action_ready",
+              "comparison_list_new_action_click_started", "comparison_list_new_action_clicked",
+              "comparison_form_ready", "comparison_navigation_started",
+              "comparison_navigation_response", "comparison_cdp_unavailable",
+              "comparison_cdp_stop_failed",
+              "comparison_renderer_heartbeat_completed", "comparison_renderer_heartbeat_failed",
+              "comparison_cdp_started", "comparison_cdp_stopped",
+              "cdp_renderer_main_identified", "cdp_renderer_main_long_tasks",
+              "phase_135_new_customer_field_smoke_completed",
+              "cdp_performance_metrics", "new_form_dom_evidence",
+              "new_form_dom_capture_failed", "new_form_wait_diagnosis",
+              "comparison_case_completed", "comparison_case_failed",
+              "step_failed", "wait_failed", "certification_failed",
+          }
+          events = [
+              {key: item[key] for key in ("event", "stage", "step", "status", "method",
+                  "result_class", "elapsed_seconds", "route", "doctype", "metrics", "tasks",
+                  "thread_count")
+                  if key in item}
+              for item in trace if item.get("event") in selected_events
+          ]
+          latest_dom_event = next(
+              (item for item in reversed(trace) if item.get("event") == "new_form_dom_evidence"),
+              {},
+          )
+          try:
+              latest_dom = json.loads(latest_dom_event.get("diagnostic", ""))
+          except (TypeError, ValueError):
+              latest_dom = None
+          pending = diagnostics.get("state", {}).get("pendingRequests", [])
+          first_failure = next(
+              (item for item in trace if item.get("event") in
+                  {"step_failed", "wait_failed", "comparison_service_failed", "comparison_case_failed"}),
+              {},
+          )
+          last_active = next(
+              (item for item in reversed(trace) if item.get("event") in {
+                  "step_started", "wait_started", "comparison_service_started",
+                  "comparison_navigation_started", "comparison_list_new_action_wait_started",
+                  "comparison_list_new_action_click_started",
+              }),
+              {},
+          )
+          result = {
+              "case": case, "exit": status, "trace_available": bool(trace),
+              "events": events[-18:],
+              "first_failure": {
+                  key: str(first_failure[key])[:300]
+                  for key in ("event", "step", "method", "error") if key in first_failure
+              },
+              "last_started_step": {
+                  key: str(last_active[key])[:180]
+                  for key in ("event", "step", "method", "route") if key in last_active
+              },
+              "latest_dom_snapshot": latest_dom,
+              "pending_api_requests": [
+                  {"url": item.get("url"), "age_seconds": round(max(0, time.time() - item.get("started", 0)), 1)}
+                  for item in pending if "/api/method/" in str(item.get("url", ""))
+              ][-8:],
+              "page_errors": len(diagnostics.get("page_errors", [])),
+              "request_failures": len(diagnostics.get("request_failures", [])),
+          }
+          print(f"#### Phase A comparison {case}")
+          print("```json")
+          print(json.dumps(result, ensure_ascii=False, separators=(",", ":")))
+          print("```")
+          PY
+              printf 'Phase A case %s exited %s\n' "$comparison_case" "$case_status" >> "$desk_log"
+            done
+            phase="Phase A comparative results"
+            if [[ "$comparison_failed" != 0 ]]; then desk_fail 1; fi
+          else
+            phase="Desk browser certification"
+            timeout --signal=INT --kill-after=45s 480s ./env/bin/python -u \
+              apps/almdina_erp/almdina_erp/ci/dco_frappe_desk_recovery.py 2>&1 | tee -a "$desk_log"
+          fi
 
       - name: Collect integration diagnostics
         if: failure()

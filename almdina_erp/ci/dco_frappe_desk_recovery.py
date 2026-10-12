@@ -247,7 +247,8 @@ def capture_page_document_state(page: Page, step: str) -> dict[str, object]:
         sys_setup_complete=bool(state.get("sysSetupComplete")),
         ajax_count=state.get("ajaxCount") if isinstance(state.get("ajaxCount"), int) else None,
         route=_redact_text(str(state.get("route", "")), 120),
-        body_text=_redact_text(str(state.get("bodyText", "")), 400),
+        body_text="" if os.environ.get("DCO_DESK_COMPARISON_CASE") else
+            _redact_text(str(state.get("bodyText", "")), 400),
     )
     return state
 
@@ -900,6 +901,181 @@ def certify_new_customer_field_smoke(page: Page) -> None:
     _trace_event("phase_135_new_customer_field_smoke_completed")
 
 
+def _start_comparison_cdp(browser, page):
+    """Record only browser timing metadata, before DCO navigation begins."""
+    browser_session = browser.new_browser_cdp_session()
+    page_session = page.context.new_cdp_session(page)
+    renderer_main_threads = set()
+
+    def on_trace_data(message):
+        events = message.get("value", [])
+        previous_thread_count = len(renderer_main_threads)
+        renderer_main_threads.update(
+            (event.get("pid"), event.get("tid"))
+            for event in events
+            if event.get("name") == "thread_name"
+            and (event.get("args") or {}).get("name") == "CrRendererMain"
+        )
+        long_tasks = [
+            {
+                "name": str(event.get("name", ""))[:80],
+                "duration_ms": round(event.get("dur", 0) / 1000, 1),
+            }
+            for event in events
+            if isinstance(event.get("dur"), (int, float)) and event["dur"] >= 100_000
+            and (event.get("pid"), event.get("tid")) in renderer_main_threads
+        ]
+        if long_tasks:
+            _trace_event("cdp_renderer_main_long_tasks", tasks=json.dumps(long_tasks[:12]))
+        if len(renderer_main_threads) > previous_thread_count:
+            _trace_event("cdp_renderer_main_identified", thread_count=len(renderer_main_threads))
+
+    def on_metrics(message):
+        selected = {
+            metric["name"]: round(metric["value"], 3)
+            for metric in message.get("metrics", [])
+            if metric.get("name") in {"TaskDuration", "ScriptDuration", "JSHeapUsedSize"}
+        }
+        if selected:
+            _trace_event("cdp_performance_metrics", metrics=json.dumps(selected))
+
+    browser_session.on("Tracing.dataCollected", on_trace_data)
+    page_session.on("Performance.metrics", on_metrics)
+    page_session.send("Performance.enable")
+    browser_session.send("Tracing.start", {
+        "categories": "devtools.timeline,v8.execute,toplevel",
+        "options": "record-continuously",
+        "transferMode": "ReportEvents",
+    })
+    _trace_event("comparison_cdp_started")
+    return browser_session
+
+
+def _comparison_renderer_heartbeat(page: Page, case: str) -> None:
+    """Check a trivial renderer task before interpreting a DOM inspection."""
+    try:
+        handle = page.wait_for_function("() => true", timeout=1_200)
+        handle.dispose()
+    except Exception as exc:
+        _trace_event("comparison_renderer_heartbeat_failed", case=case,
+            error=_redact_text(str(exc), 200))
+    else:
+        _trace_event("comparison_renderer_heartbeat_completed", case=case)
+
+
+def certify_phase_a_comparison_case(browser, page: Page, case: str) -> None:
+    """One independently bounded case; the workflow runs all four processes."""
+    if case not in {"A", "B", "C", "D"}:
+        raise ValueError(f"Unsupported Phase A comparison case: {case}")
+    _trace_event("comparison_case_started", case=case)
+    login_to_desk(page, "Administrator", "admin")
+
+    if case == "D":
+        failed_services = []
+        for method in (
+            "almdina_erp.almdina_erp.services.order_defaults_service.get_order_defaults",
+            "almdina_erp.almdina_erp.services.edge_banding_lookup_service.get_order_edge_banding_options",
+        ):
+            started = time.monotonic()
+            _trace_event("comparison_service_started", case=case, method=method)
+            try:
+                response = page.request.get(f"{DESK_URL}/api/method/{method}", timeout=10_000)
+                status = response.status
+                payload = response.json()
+                result_class = "ok" if isinstance(payload, dict) and "message" in payload \
+                    and not ("exc" in payload or "exception" in payload) else "error_payload"
+            except Exception as exc:
+                _trace_event("comparison_service_failed", case=case, method=method,
+                    error=_redact_text(str(exc), 250), elapsed_seconds=round(time.monotonic() - started, 1))
+                failed_services.append(method)
+                continue
+            _trace_event("comparison_service_completed", case=case, method=method,
+                status=status, result_class=result_class,
+                elapsed_seconds=round(time.monotonic() - started, 1))
+            if status != 200 or result_class != "ok":
+                failed_services.append(method)
+        if failed_services:
+            failure = f"Phase A services failed: {', '.join(failed_services)}"
+            _trace_event("comparison_case_failed", case=case, error=failure)
+            raise RuntimeError(failure)
+    else:
+        cdp_session = None
+        if case in {"B", "C"}:
+            try:
+                cdp_session = _start_comparison_cdp(browser, page)
+            except Exception as exc:
+                _trace_event("comparison_cdp_unavailable", case=case,
+                    error=_redact_text(str(exc), 250))
+        try:
+            if case == "A":
+                route = f"{DESK_URL}/app/todo/new-todo-1"
+                _trace_event("comparison_navigation_started", case=case, route="/app/todo/new-todo-1")
+                response = page.goto(route, wait_until="domcontentloaded", timeout=20_000)
+                _trace_event("comparison_navigation_response", case=case,
+                    status=response.status if response else None)
+                if response is not None and response.status >= 400:
+                    raise RuntimeError(f"Standard ToDo form returned HTTP {response.status}")
+                _comparison_renderer_heartbeat(page, case)
+                form = active_form_page(page, "standard Frappe ToDo form")
+                form.locator(".frappe-control:visible").first.wait_for(state="visible", timeout=15_000)
+                _trace_event("comparison_form_ready", case=case, doctype="ToDo")
+            elif case == "B":
+                _trace_event("comparison_navigation_started", case=case, route="/app/door-cutting-order")
+                response = page.goto(f"{DESK_URL}/app/door-cutting-order",
+                    wait_until="domcontentloaded", timeout=20_000)
+                _trace_event("comparison_navigation_response", case=case,
+                    status=response.status if response else None)
+                if response is not None and response.status >= 400:
+                    raise RuntimeError(f"DCO list returned HTTP {response.status}")
+                # v16.17.5 list_view.js calls page.set_primary_action(...,
+                # make_new_doc); page.js places it under .page-actions.
+                new_action = page.locator(".page-actions .primary-action").first
+                _trace_event("comparison_list_new_action_wait_started", case=case)
+                new_action.wait_for(state="visible", timeout=15_000)
+                _trace_event("comparison_list_new_action_ready", case=case)
+                _trace_event("comparison_list_new_action_click_started", case=case)
+                new_action.click(timeout=15_000)
+                _trace_event("comparison_list_new_action_clicked", case=case)
+                _comparison_renderer_heartbeat(page, case)
+                capture_new_form_dom_evidence(page, "DCO NEW from Desk list",
+                    stage="after_navigation", timeout_ms=1_200)
+                wait_for_new_form_loaded(page, "DCO NEW from Desk list")
+                certify_new_customer_field_smoke(page)
+                _trace_event("comparison_form_ready", case=case, doctype="Door Cutting Order")
+            else:
+                _trace_event("comparison_navigation_started", case=case,
+                    route="/app/door-cutting-order/new-door-cutting-order-1")
+                response = page.goto(f"{DESK_URL}/app/door-cutting-order/new-door-cutting-order-1",
+                    wait_until="domcontentloaded", timeout=20_000)
+                _trace_event("comparison_navigation_response", case=case,
+                    status=response.status if response else None)
+                if response is not None and response.status >= 400:
+                    raise RuntimeError(f"Direct DCO route returned HTTP {response.status}")
+                _comparison_renderer_heartbeat(page, case)
+                capture_new_form_dom_evidence(page, "DCO NEW via direct route",
+                    stage="after_navigation", timeout_ms=1_200)
+                wait_for_new_form_loaded(page, "DCO NEW via direct route")
+                certify_new_customer_field_smoke(page)
+                _trace_event("comparison_form_ready", case=case, doctype="Door Cutting Order")
+            _trace_event("comparison_case_completed", case=case)
+        except Exception as exc:
+            _trace_event("comparison_case_failed", case=case,
+                error=_redact_text(str(exc), 300))
+            raise
+        finally:
+            if cdp_session is not None:
+                # The case result is already persisted; a stalled renderer may
+                # prevent tracing from flushing, but cannot erase earlier events.
+                try:
+                    cdp_session.send("Tracing.end")
+                    _trace_event("comparison_cdp_stopped", case=case)
+                except Exception as exc:
+                    _trace_event("comparison_cdp_stop_failed", case=case,
+                        error=_redact_text(str(exc), 250))
+    if case == "D":
+        _trace_event("comparison_case_completed", case=case)
+
+
 def certify_edit_to_new_transition(page: Page) -> None:
     """Preserve the real EDIT → NEW navigation in the EDIT certification page."""
     form_page = open_new_dco_form(page, "EDIT to NEW transition")
@@ -1259,7 +1435,10 @@ if __name__ == "__main__":
         page.set_default_navigation_timeout(30_000)
         attach_browser_diagnostics(page)
         try:
-            if os.environ.get("DCO_DESK_NEW_FORM_SMOKE_ONLY") == "1":
+            comparison_case = os.environ.get("DCO_DESK_COMPARISON_CASE")
+            if comparison_case:
+                certify_phase_a_comparison_case(browser, page, comparison_case)
+            elif os.environ.get("DCO_DESK_NEW_FORM_SMOKE_ONLY") == "1":
                 certify_new_dco_form_smoke(page)
             elif os.environ.get("DCO_DESK_NEW_CUSTOMER_FIELD_SMOKE_ONLY") == "1":
                 certify_new_dco_form_smoke(page)
@@ -1292,7 +1471,10 @@ if __name__ == "__main__":
             diagnostic_page = LAST_ACTIVE_PAGE or page
             state = read_page_state(diagnostic_page)
             state["url"] = _safe_url(state.get("url", ""))
-            state["bodyText"] = _redact_text(state.get("bodyText", ""))
+            if os.environ.get("DCO_DESK_COMPARISON_CASE"):
+                state.pop("bodyText", None)
+            else:
+                state["bodyText"] = _redact_text(state.get("bodyText", ""))
             state["failure"] = _redact_text(str(failure))
             state["pendingRequests"] = list(PENDING_REQUESTS.values())[-25:]
             state["apiResponses"] = [
