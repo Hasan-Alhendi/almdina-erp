@@ -1774,6 +1774,7 @@ def _extract_pieces(
             "_holes_cm": holes_cm,
             "_sheet_no": target_sheet["sheet_no"],
             "_expected_piece_index": part.expected_piece_index,
+            "_proven_source_piece_no": part.proven_source_piece_no,
         }
         material_area_mm2 = polygon_area(points_mm) - sum(
             polygon_area(hole) for hole in holes_mm
@@ -1803,6 +1804,7 @@ def _validate_piece_spacing(pieces: list[dict[str, Any]], *, kerf_mm: float) -> 
     for piece in pieces:
         by_sheet.setdefault(int(piece["_sheet_no"]), []).append(piece)
     for sheet_pieces in by_sheet.values():
+        pieces_by_id = {int(piece["id"]): piece for piece in sheet_pieces}
         placed = tuple(
             PlacedPartGeometry(
                 key=int(piece["id"]),
@@ -1818,12 +1820,18 @@ def _validate_piece_spacing(pieces: list[dict[str, Any]], *, kerf_mm: float) -> 
                 numeric_tolerance=KERF_NUMERIC_TOLERANCE_MM,
             )
         except DxfTopologyError as exc:
+            first = pieces_by_id.get(exc.first_key, {})
+            second = pieces_by_id.get(exc.second_key, {})
+            first_source = first.get("_proven_source_piece_no")
+            second_source = second.get("_proven_source_piece_no")
+            pair_proven = first_source is not None and second_source is not None
             raise DxfImportError(
                 issues=[
                     topology_error_to_issue(
                         exc,
                         kerf_mm=kerf_mm,
-                        pair_identity_proven=False,
+                        pair_identity_proven=pair_proven,
+                        pair_source_piece_nos=(first_source, second_source) if pair_proven else None,
                     )
                 ]
             ) from exc
