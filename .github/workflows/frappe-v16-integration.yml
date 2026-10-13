@@ -396,6 +396,55 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           cat "$AL129_CONCURRENCY_EVIDENCE_FILE"
 
+      - name: Run six ALMADINA-129 functional integration tests
+        if: github.event_name == 'workflow_dispatch' && inputs.suite == 'al129_new_desk'
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/frappe-bench"
+          bench --site test.localhost set-config allow_tests true
+          set +e
+          bench --site test.localhost run-tests --module almdina_erp.tests.test_new_order_recovery_integration \
+            --test test_lost_response_reconciles_to_one_native_insert \
+            --test test_reconciliation_rejects_unauthenticated_token_probing \
+            --test test_unbound_identity_is_proven_without_creating_a_dco \
+            --test test_acknowledged_creation_binding_is_immutable \
+            --test test_insert_binds_token_to_session_user_and_rejects_malformed_token \
+            --test test_reconciliation_scopes_tokens_and_checks_real_document_read_permission \
+            2>&1 | tee "$RUNNER_TEMP/al129-functional-integration.log"
+          test_status=${PIPESTATUS[0]}
+          set -e
+          if (( test_status != 0 )); then
+            {
+              echo '### ALMADINA-129 functional integration: FAIL'
+              echo '```text'
+              tail -n 100 "$RUNNER_TEMP/al129-functional-integration.log"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit "$test_status"
+          fi
+          if ! grep -Eq 'Ran 6 tests? in ' "$RUNNER_TEMP/al129-functional-integration.log" \
+            || ! grep -Eq '^OK$' "$RUNNER_TEMP/al129-functional-integration.log" \
+            || grep -Eq 'OK \(skipped=[1-9][0-9]*' "$RUNNER_TEMP/al129-functional-integration.log"; then
+            {
+              echo '### ALMADINA-129 functional integration: FAIL / INCONCLUSIVE'
+              echo 'The six requested tests did not all complete successfully without skips.'
+              echo '```text'
+              tail -n 100 "$RUNNER_TEMP/al129-functional-integration.log"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          {
+            echo '### ALMADINA-129 functional integration: PASS'
+            echo 'Runtime: Frappe v16.17.5 / ERPNext v16.17.0'
+            echo 'Ran exactly six targeted functional integration tests; no tests were skipped.'
+            echo '```text'
+            tail -n 35 "$RUNNER_TEMP/al129-functional-integration.log"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          tail -n 35 "$RUNNER_TEMP/al129-functional-integration.log"
+        timeout-minutes: 10
+
       - name: Install Chromium for targeted Desk certification
         if: github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance' || inputs.suite == 'al129_new_desk')
         uses: actions/setup-python@v5
@@ -559,6 +608,7 @@ jobs:
             ${{ runner.temp }}/al129-desk-failure.png
             ${{ runner.temp }}/al129-fixture-setup.log
             ${{ runner.temp }}/al129-integration-tests.log
+            ${{ runner.temp }}/al129-functional-integration.log
             ${{ runner.temp }}/al129-concurrency-evidence.json
             ${{ runner.temp }}/al129-pytest-collect.log
             ${{ runner.temp }}/desk-pytest.log
@@ -622,6 +672,7 @@ jobs:
             al129-fixture-setup.log \
             al129-fixture-create.log \
             al129-integration-tests.log \
+            al129-functional-integration.log \
             al129-pytest-collect.log \
             desk-pytest.log \
             tests.log; do

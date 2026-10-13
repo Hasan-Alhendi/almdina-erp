@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 import json
 import os
 from pathlib import Path
+import re
 from threading import Event
 from time import monotonic, sleep
 from unittest import mock
@@ -237,14 +238,6 @@ class TestNewOrderRecoveryIntegration(FrappeTestCase):
         token = str(uuid4())
         self.tokens.append(token)
         site = frappe.local.site
-        duplicate_errors = tuple(
-            error
-            for error in (
-                getattr(frappe, "DuplicateEntryError", None),
-                getattr(frappe, "UniqueValidationError", None),
-            )
-            if isinstance(error, type)
-        )
         evidence: dict[str, object] = {
             "test": "test_concurrent_database_inserts_reject_duplicate_creation_token",
             "boundary": "MariaDB unique index on recovery_creation_token",
@@ -316,7 +309,18 @@ class TestNewOrderRecoveryIntegration(FrappeTestCase):
             except Exception as error:
                 if connected:
                     frappe.db.rollback()
-                if isinstance(error, duplicate_errors):
+                errno = None
+                violated_index = None
+                if isinstance(error, pymysql.err.IntegrityError):
+                    errno = error.args[0] if error.args else None
+                    detail = str(error.args[1] if len(error.args) > 1 else error)
+                    key_match = re.search(
+                        r"for key\s+[`'\"]([^`'\"]+)[`'\"]",
+                        detail,
+                        re.IGNORECASE,
+                    )
+                    violated_index = key_match.group(1) if key_match else None
+                if errno == 1062 and violated_index == "recovery_creation_token":
                     kind = "unique_conflict"
                 elif isinstance(error, TimeoutError):
                     kind = "coordination_timeout"
@@ -328,6 +332,8 @@ class TestNewOrderRecoveryIntegration(FrappeTestCase):
                     "connection_id": connection_id,
                     "kind": kind,
                     "error_type": type(error).__name__,
+                    "errno": errno,
+                    "violated_index": violated_index,
                     "error": message,
                 }
             finally:
@@ -349,7 +355,6 @@ class TestNewOrderRecoveryIntegration(FrappeTestCase):
             )
             evidence["unique_index_verified"] = True
             evidence["unique_index_names"] = index_names
-            self.assertTrue(duplicate_errors, "Frappe must expose its unique-entry failure type")
             root_password = os.environ.get("AL129_DB_ROOT_PASSWORD")
             self.assertTrue(
                 root_password,
@@ -456,6 +461,20 @@ class TestNewOrderRecoveryIntegration(FrappeTestCase):
                 f"timeouts, deadlocks, and barrier failures are test failures: {outcomes}",
             )
             winner = next(row for row in outcomes if row["kind"] == "inserted")
+            winner_worker = int(winner["worker"])
+            winner_connection_id = int(winner["connection_id"])
+            evidence["winner_worker"] = winner_worker
+            evidence["winner_connection_id"] = winner_connection_id
+            self.assertEqual(
+                winner_connection_id,
+                connection_ids.get(winner_worker),
+                "the committed insert outcome must retain its independent MariaDB connection identity",
+            )
+            self.assertEqual(
+                str(winner["name"]).rsplit("-", 1)[-1],
+                str(winner_worker),
+                "the committed DCO name must identify the worker connection that won the race",
+            )
             committed_names = frappe.db.sql(
                 "SELECT name FROM `tabDoor Cutting Order` WHERE recovery_creation_token = %s",
                 (token,),
