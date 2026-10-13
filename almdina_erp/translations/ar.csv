@@ -839,6 +839,22 @@ Double Banding,دبل قشاط
 Full Door Double,دبل كامل الدرفة
 Full Double,دبل كامل
 Liner,لاينر
+Liner Settings,إعدادات اللاينر
+Reference Side,الجهة المرجعية
+Edge Offset,المسافة عن الحافة
+Liner Width,عرض اللاينر
+Liner Start Position,بداية اللاينر
+Liner Length,طول اللاينر
+Available Length,الطول المتاح
+Measurement Direction,اتجاه القياس
+Top to bottom,من الأعلى إلى الأسفل
+Left to right,من اليسار إلى اليمين
+Along the selected edge,على امتداد الجهة المختارة
+Liner start must be zero or greater.,بداية اللاينر يجب أن تكون صفراً أو أكبر.
+Liner length must be greater than zero.,طول اللاينر يجب أن يكون أكبر من صفر.
+Liner start plus length exceeds the reference side.,بداية اللاينر وطوله يتجاوزان طول الجهة.
+A flat end cannot be machined with this bit and length.,النهاية المستقيمة غير قابلة للتنفيذ بهذه الريشة وهذا الطول.
+The liner limit sits on a bend that has no single direction.,حد اللاينر يقع على انعطاف بلا اتجاه واحد.
 Back Groove,فرزة ظهر
 Recessed Handle Cutout,حفر مسكة غطس
 Recessed Handle,مسكة غطس

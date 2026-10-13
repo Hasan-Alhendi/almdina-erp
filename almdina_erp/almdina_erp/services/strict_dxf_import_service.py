@@ -219,6 +219,8 @@ def _proxy_order(
                 liner_reference_side=str(getattr(row, "liner_reference_side", "") or ""),
                 liner_offset_cm=float(getattr(row, "liner_offset_cm", 0) or 0),
                 liner_width_cm=float(getattr(row, "liner_width_cm", 0) or 0),
+                liner_start_cm=float(getattr(row, "liner_start_cm", 0) or 0),
+                liner_length_cm=float(getattr(row, "liner_length_cm", 0) or 0),
             )
         )
     return SimpleNamespace(
@@ -873,6 +875,8 @@ def _corner_liner_issue(piece: dict[str, Any], spec: OrderPieceCutSpec, order: A
             if float(getattr(order, "kerf_mm", 0) or 0) > 0
             else None
         ),
+        float(getattr(row, "liner_start_cm", 0) or 0) if row else None,
+        float(getattr(row, "liner_length_cm", 0) or 0) if row else None,
     )
     return liner_geometry_issue(
         measurement,

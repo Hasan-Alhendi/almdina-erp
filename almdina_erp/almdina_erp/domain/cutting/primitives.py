@@ -48,6 +48,8 @@ def liner_metadata(row: dict[str, Any]) -> dict[str, Any]:
         "liner_reference_side": str(row.get("liner_reference_side") or ""),
         "liner_offset_cm": num(row.get("liner_offset_cm")),
         "liner_width_cm": num(row.get("liner_width_cm")),
+        "liner_start_cm": num(row.get("liner_start_cm")),
+        "liner_length_cm": num(row.get("liner_length_cm")),
     }
 
 

@@ -13,7 +13,28 @@
         offset_invalid: "المسافة يجب أن تكون صفرًا أو أكبر.",
         width_invalid: "عرض اللاينر يجب أن يكون أكبر من صفر.",
         strip_outside: "اللاينر يخرج خارج الدرفة. قلّل المسافة أو العرض.",
+        liner_start_invalid: "Liner start must be zero or greater.",
+        liner_length_invalid: "Liner length must be greater than zero.",
+        liner_span_exceeds_edge: "Liner start plus length exceeds the reference side.",
+        liner_flat_end_unmachinable: "A flat end cannot be machined with this bit and length.",
+        liner_span_on_corner: "The liner limit sits on a bend that has no single direction.",
     };
+
+    const DIRECTION = {
+        edge_long_right: "Top to bottom",
+        edge_long_left: "Top to bottom",
+        edge_width_top: "Left to right",
+        edge_width_bottom: "Left to right",
+    };
+
+    function edgeCm(piece, side) {
+        const path = (geometry().edgePaths(piece) || {})[side] || [];
+        let length = 0;
+        for (let index = 1; index < path.length; index += 1) {
+            length += Math.hypot(path[index][0] - path[index - 1][0], path[index][1] - path[index - 1][1]);
+        }
+        return length / 10;
+    }
 
     function num(value) {
         const parsed = Number(value);
@@ -40,18 +61,37 @@
         const piece = api.pieceFromRow(row);
         const sides = api.availableSides(piece.pieceType);
         const stored = sides.includes(row.liner_reference_side) ? row.liner_reference_side : (sides[0] || "");
+        const edge = edgeCm(piece, stored);
+        const storedLength = num(row.liner_length_cm);
         return {
             piece,
+            row,
             side: stored,
             offsetCm: row.liner_reference_side ? num(row.liner_offset_cm) : 2,
             widthCm: row.liner_reference_side ? num(row.liner_width_cm) : 1.5,
+            startCm: num(row.liner_start_cm),
+            lengthCm: storedLength > 0 ? storedLength : edge,
+            edgeCm: edge,
             enabled: Boolean(Number(row.extra_liner)),
         };
     }
 
     function validationMessage(draft) {
         const code = geometry().validationCode(draft.piece, draft.side, draft.offsetCm, draft.widthCm);
-        return code ? (MESSAGES[code] || code) : "";
+        if (code) return __(MESSAGES[code] || code);
+        try {
+            geometry().centerlineMm(
+                draft.piece,
+                draft.side,
+                draft.offsetCm,
+                draft.widthCm,
+                draft.startCm,
+                draft.lengthCm
+            );
+        } catch (error) {
+            return __(MESSAGES[error.code] || error.code || "Liner settings are invalid.");
+        }
+        return "";
     }
 
     function mapPoint(point, frame, piece) {
@@ -73,8 +113,42 @@
             ? corner.previewFrame(piece.widthCm, piece.lengthCm)
             : { x: 30, y: 30, width: 300, height: 180, scale: 1 };
         const outline = api.piecePolygonMm(piece).map(point => mapPoint(point, frame, piece));
+        const source = draft.row || {};
+        const cornerPiece = corner && typeof corner.isCornerCut === "function" && corner.isCornerCut(source);
+        const bands = cornerPiece && typeof corner.edgeBandSvgMarkup === "function"
+            ? corner.edgeBandSvgMarkup(source, frame.width, frame.height, {
+                offsetX: frame.x,
+                offsetY: frame.y,
+                inheritStroke: false,
+                color: "#b42318",
+                strokeWidth: 3,
+            })
+            : [
+                [Number(source.edge_width_top), [[frame.x, frame.y], [frame.x + frame.width, frame.y]]],
+                [Number(source.edge_width_bottom), [[frame.x, frame.y + frame.height], [frame.x + frame.width, frame.y + frame.height]]],
+                [Number(source.edge_long_left), [[frame.x, frame.y], [frame.x, frame.y + frame.height]]],
+                [Number(source.edge_long_right), [[frame.x + frame.width, frame.y], [frame.x + frame.width, frame.y + frame.height]]],
+            ].filter(entry => entry[0]).map((entry, index) => (
+                `<polyline data-liner-edge="1" data-liner-edge-index="${index}" points="${pointsAttr(entry[1])}" fill="none" stroke="#b42318" stroke-width="3" stroke-linecap="round"/>`
+            )).join("");
         const paths = api.edgePaths(piece);
         const message = validationMessage(draft);
+        let center = "";
+        if (!message && draft.side) {
+            try {
+                const line = api.centerlineMm(
+                    piece,
+                    draft.side,
+                    draft.offsetCm,
+                    draft.widthCm,
+                    draft.startCm,
+                    draft.lengthCm
+                ).map(point => mapPoint(point, frame, piece));
+                center = `<polyline data-liner-center="1" points="${pointsAttr(line)}" fill="none" stroke="#1d6fbf" stroke-width="1.8" stroke-dasharray="5 3" stroke-linecap="butt"/>`;
+            } catch (error) {
+                center = "";
+            }
+        }
         let strip = "";
         let measures = "";
         if (!message && draft.side && paths[draft.side]) {
@@ -104,8 +178,10 @@
         }).join("");
         return `<svg viewBox="0 0 420 280" role="img" aria-label="${esc(__("Liner preview"))}">
             <polygon points="${pointsAttr(outline)}" fill="#fff7e8" stroke="#8a5700" stroke-width="2"/>
+            ${bands}
             ${hits}
             ${strip}
+            ${center}
             ${measures}
             <text x="210" y="268" text-anchor="middle" font-size="12" fill="#536577">${rounded(piece.widthCm)} × ${rounded(piece.lengthCm)} ${esc(__("cm"))}</text>
         </svg>`;
@@ -128,34 +204,52 @@
                 <div class="dco-corner-preview" data-liner-preview>${previewSvg(draft)}</div>
             </section>
             <section class="dco-corner-controls">
-                <div class="dco-corner-section-label">${esc(__("Reference side"))}</div>
+                <div class="dco-corner-section-label">${esc(__("Reference Side"))}</div>
                 <div class="dco-corner-position-grid" data-liner-sides>${sides}</div>
                 <div class="dco-corner-section-label">${esc(__("Distance and width"))}</div>
                 <div class="dco-corner-input-grid">
                     <div class="dco-corner-input-wrap">
-                        <label>${esc(__("Distance from side"))}</label>
+                        <label>${esc(__("Edge Offset"))}</label>
                         <div class="dco-corner-input-shell"><input type="number" min="0" step="0.1" data-liner-offset value="${rounded(draft.offsetCm)}"><span>${esc(__("cm"))}</span></div>
                     </div>
                     <div class="dco-corner-input-wrap">
-                        <label>${esc(__("Liner width"))}</label>
+                        <label>${esc(__("Liner Width"))}</label>
                         <div class="dco-corner-input-shell"><input type="number" min="0.1" step="0.1" data-liner-width value="${rounded(draft.widthCm)}"><span>${esc(__("cm"))}</span></div>
                     </div>
+                    <div class="dco-corner-input-wrap">
+                        <label>${esc(__("Liner Start Position"))}</label>
+                        <div class="dco-corner-input-shell"><input type="number" min="0" step="0.1" data-liner-start value="${rounded(draft.startCm)}"><span>${esc(__("cm"))}</span></div>
+                    </div>
+                    <div class="dco-corner-input-wrap">
+                        <label>${esc(__("Liner Length"))}</label>
+                        <div class="dco-corner-input-shell"><input type="number" min="0.1" step="0.1" data-liner-length value="${rounded(draft.lengthCm)}"><span>${esc(__("cm"))}</span></div>
+                    </div>
                 </div>
+                <div class="dco-corner-help" data-liner-available>${esc(__("Available Length"))}: ${rounded(draft.edgeCm)} ${esc(__("cm"))}</div>
+                <div class="dco-corner-help" data-liner-direction>${esc(__("Measurement Direction"))}: ${esc(__(DIRECTION[draft.side] || "Along the selected edge"))}</div>
                 <div class="dco-corner-help" data-liner-help></div>
+                <button type="button" class="btn btn-default btn-sm" data-liner-cancel>${esc(__("Cancel"))}</button>
                 ${remove}
             </section>
         </div>`;
     }
 
-    function readDraft(root, piece, enabled) {
+    function readDraft(root, piece, enabled, row) {
         const offset = root.querySelector("[data-liner-offset]");
         const width = root.querySelector("[data-liner-width]");
+        const start = root.querySelector("[data-liner-start]");
+        const length = root.querySelector("[data-liner-length]");
         const active = root.querySelector("[data-liner-sides] .is-active");
+        const side = active ? active.getAttribute("data-liner-side") : "";
         return {
             piece,
-            side: active ? active.getAttribute("data-liner-side") : "",
+            row: row || null,
+            side,
             offsetCm: offset ? Number(offset.value) : NaN,
             widthCm: width ? Number(width.value) : NaN,
+            startCm: start ? Number(start.value) : 0,
+            lengthCm: length ? Number(length.value) : NaN,
+            edgeCm: edgeCm(piece, side),
             enabled,
         };
     }
@@ -169,7 +263,13 @@
             button.setAttribute("aria-pressed", selected ? "true" : "false");
         });
         const help = root.querySelector("[data-liner-help]");
+        const available = root.querySelector("[data-liner-available]");
+        const direction = root.querySelector("[data-liner-direction]");
         const message = validationMessage(draft);
+        if (available) available.textContent = `${__("Available Length")}: ${rounded(draft.edgeCm)} ${__("cm")}`;
+        if (direction) {
+            direction.textContent = `${__("Measurement Direction")}: ${__(DIRECTION[draft.side] || "Along the selected edge")}`;
+        }
         if (help) help.textContent = message;
         if (dialog && dialog.get_primary_btn) {
             dialog.get_primary_btn().prop("disabled", Boolean(message));
@@ -314,11 +414,11 @@
         const dialog = new frappe.ui.Dialog({
             title: __("Liner — Door piece {0}", [row.piece_no || row.idx || ""]),
             fields: [{ fieldname: "liner_editor", fieldtype: "HTML" }],
-            primary_action_label: __("Apply liner"),
+            primary_action_label: __("Save"),
             primary_action() {
                 const root = dialog.$wrapper.find("[data-liner-editor]").get(0);
                 if (!root) return;
-                draft = readDraft(root, piece, true);
+                draft = readDraft(root, piece, true, row);
                 const message = paint(root, draft, dialog);
                 if (message) {
                     frappe.msgprint({ title: __("Check liner"), message, indicator: "orange" });
@@ -331,6 +431,8 @@
                     liner_reference_side: draft.side,
                     liner_offset_cm: draft.offsetCm,
                     liner_width_cm: draft.widthCm,
+                    liner_start_cm: draft.startCm,
+                    liner_length_cm: draft.lengthCm,
                 }).then(saved => {
                     if (saved) dialog.hide();
                     else if (button) button.prop("disabled", Boolean(paint(root, draft, dialog)));
@@ -347,9 +449,28 @@
         root.addEventListener("click", (event) => {
             const side = event.target.closest("[data-liner-side]");
             if (side && root.contains(side)) {
-                draft = readDraft(root, piece, draft.enabled);
-                draft.side = side.getAttribute("data-liner-side");
+                const previousEdge = draft.edgeCm;
+                const previousLength = draft.lengthCm;
+                const previousStart = draft.startCm;
+                draft = readDraft(root, piece, draft.enabled, row);
+                const nextSide = side.getAttribute("data-liner-side");
+                const nextEdge = edgeCm(piece, nextSide);
+                const wasFull = previousStart <= 0.05 && Math.abs(previousLength - previousEdge) < 0.05;
+                draft.side = nextSide;
+                draft.edgeCm = nextEdge;
+                if (wasFull || draft.startCm + draft.lengthCm > nextEdge + 0.05) {
+                    if (wasFull || draft.startCm >= nextEdge) draft.startCm = 0;
+                    draft.lengthCm = Math.max(0.1, nextEdge - draft.startCm);
+                }
+                const startInput = root.querySelector("[data-liner-start]");
+                const lengthInput = root.querySelector("[data-liner-length]");
+                if (startInput) startInput.value = rounded(draft.startCm);
+                if (lengthInput) lengthInput.value = rounded(draft.lengthCm);
                 paint(root, draft, dialog);
+                return;
+            }
+            if (event.target.closest("[data-liner-cancel]")) {
+                dialog.hide();
                 return;
             }
             if (event.target.closest("[data-liner-remove]")) {
@@ -360,6 +481,8 @@
                     liner_reference_side: "",
                     liner_offset_cm: 0,
                     liner_width_cm: 0,
+                    liner_start_cm: 0,
+                    liner_length_cm: 0,
                 }).then(saved => {
                     if (saved) dialog.hide();
                     else remove.disabled = false;
@@ -367,7 +490,7 @@
             }
         });
         root.addEventListener("input", () => {
-            draft = readDraft(root, piece, draft.enabled);
+            draft = readDraft(root, piece, draft.enabled, row);
             paint(root, draft, dialog);
         });
         return true;

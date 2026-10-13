@@ -1279,6 +1279,8 @@ def _expected_order_pieces(order: Any) -> list[dict[str, Any]]:
                     "liner_reference_side": str(getattr(row, "liner_reference_side", "") or ""),
                     "liner_offset_cm": _num(getattr(row, "liner_offset_cm", 0)),
                     "liner_width_cm": _num(getattr(row, "liner_width_cm", 0)),
+                    "liner_start_cm": _num(getattr(row, "liner_start_cm", 0)),
+                    "liner_length_cm": _num(getattr(row, "liner_length_cm", 0)),
                 }
             )
     return expected
@@ -1487,6 +1489,8 @@ def _match_pieces_to_order(pieces: list[dict[str, Any]], order: Any) -> list[dic
         piece["_liner_side"] = str(candidate.get("liner_reference_side") or "")
         piece["_liner_offset_cm"] = _num(candidate.get("liner_offset_cm"))
         piece["_liner_width_cm"] = _num(candidate.get("liner_width_cm"))
+        piece["_liner_start_cm"] = _num(candidate.get("liner_start_cm"))
+        piece["_liner_length_cm"] = _num(candidate.get("liner_length_cm"))
         if "_material_area_m2" in piece:
             piece["area_m2"] = round(_num(piece["_material_area_m2"]), 4)
         else:
@@ -2000,6 +2004,8 @@ def _regular_liner_issue(
         offset_cm,
         width_cm,
         cutter_diameter_mm,
+        piece.get("_liner_start_cm"),
+        piece.get("_liner_length_cm"),
     )
     return _liner_issue(
         measurement,

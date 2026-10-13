@@ -61,6 +61,8 @@ def _order(
     allow_rotation: int = 0,
     offset_cm: float = 10,
     width_liner_cm: float = 1.8,
+    liner_start_cm: float = 0,
+    liner_length_cm: float = 0,
     piece_type: str = "Regular",
 ):
     return SimpleNamespace(
@@ -87,6 +89,8 @@ def _order(
                 liner_reference_side=side,
                 liner_offset_cm=offset_cm,
                 liner_width_cm=width_liner_cm,
+                liner_start_cm=liner_start_cm,
+                liner_length_cm=liner_length_cm,
                 edge_long_right=0,
                 edge_long_left=0,
                 edge_width_top=0,
@@ -138,11 +142,11 @@ def _import(path: str, order, *, kerf_mm: float):
         return parse_production_dxf(path, order, settings=_settings(kerf_mm))
 
 
-def _placed_toolpath(piece, side, *, turns=0, origin=(0.0, 0.0)):
+def _placed_toolpath(piece, side, *, turns=0, origin=(0.0, 0.0), start_cm=0, length_cm=0):
     width_mm = piece.width_cm * 10.0
     height_mm = piece.length_cm * 10.0
     outline = ((0.0, 0.0), (width_mm, 0.0), (width_mm, height_mm), (0.0, height_mm))
-    liner = liner_toolpath_mm(piece, side, 10, 1.8, 5)
+    liner = liner_toolpath_mm(piece, side, 10, 1.8, 5, start_cm, length_cm)
     if turns:
         outline = tuple(
             transform_point(point, mirrored=False, quarter_turns=turns, width=width_mm, height=height_mm)
@@ -267,6 +271,27 @@ def test_rectangle_reimports_unrotated_and_after_a_quarter_turn():
         kerf_mm=5,
     )
     assert snapshot["sheets"][0]["pieces"][0]["rotated"] is True
+
+
+def test_partial_export_normalizes_and_reimports():
+    piece = LinerPiece("Regular", 50, 50)
+    outline, liner = _placed_toolpath(piece, "edge_long_right", start_cm=10, length_cm=30)
+    path = _normalize(_write_plan(outline, liner))
+    order = _order(
+        width_cm=50,
+        length_cm=50,
+        side="edge_long_right",
+        liner_start_cm=10,
+        liner_length_cm=30,
+    )
+    snapshot = _import(path, order, kerf_mm=5)
+    assert snapshot["sheets"][0]["pieces"][0]["overlays"][0]["kind"] == "liner"
+    try:
+        _import(path, _order(width_cm=50, length_cm=50, side="edge_long_right", liner_start_cm=10, liner_length_cm=20), kerf_mm=5)
+    except DxfImportError as error:
+        assert error.issues[0].code == "LINER_SHAPE_MISMATCH"
+    else:
+        raise AssertionError("a shorter ordered length must reject the longer toolpath")
 
 
 def test_upload_settings_follow_the_system_draft_not_a_stale_uploaded_revision(monkeypatch):

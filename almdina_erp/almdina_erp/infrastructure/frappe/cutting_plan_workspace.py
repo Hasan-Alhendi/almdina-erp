@@ -449,6 +449,8 @@ def _apply_snapshot(
                     "liner_reference_side": piece.get("liner_reference_side") or "",
                     "liner_offset_cm": flt(piece.get("liner_offset_cm")),
                     "liner_width_cm": flt(piece.get("liner_width_cm")),
+                    "liner_start_cm": flt(piece.get("liner_start_cm")),
+                    "liner_length_cm": flt(piece.get("liner_length_cm")),
                     "special_shape_geometry_json": piece.get("special_shape_geometry_json") or "",
                     "rotated": 1 if piece.get("rotated") else 0,
                     "edge_long_right": 1 if piece.get("edge_long_right") else 0,

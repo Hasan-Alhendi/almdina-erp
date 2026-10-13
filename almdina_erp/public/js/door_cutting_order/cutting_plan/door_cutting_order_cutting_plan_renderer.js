@@ -373,6 +373,8 @@
             liner_reference_side: row.liner_reference_side,
             liner_offset_cm: row.liner_offset_cm,
             liner_width_cm: row.liner_width_cm,
+            liner_start_cm: row.liner_start_cm,
+            liner_length_cm: row.liner_length_cm,
             kerf_mm: num(frm && frm.doc && frm.doc.kerf_mm),
             piece_type: row.piece_type || piece.piece_type,
             clipped_corner_position: row.clipped_corner_position || piece.clipped_corner_position,
@@ -388,17 +390,15 @@
         return copy;
     }
 
-    function drawingOverlays(piece, geometryModel) {
+    function drawingOverlays(piece) {
         const overlays = Array.isArray(piece && piece.overlays) ? piece.overlays.slice() : [];
-        if (geometryModel && geometryModel.source === "dxf") return overlays;
-        if (overlays.some(item => item && item.kind === "liner")) return overlays;
         const liner = window.AlmdinaLinerGeometry;
-        const drawCenter = liner && typeof liner.centerlineOverlay === "function"
-            ? liner.centerlineOverlay
-            : (liner && liner.syntheticOverlay);
-        if (!drawCenter) return overlays;
-        const synthetic = drawCenter(piece);
-        return synthetic ? overlays.concat(synthetic) : overlays;
+        const drawCenter = liner && typeof liner.visualCenterline === "function"
+            ? liner.visualCenterline
+            : null;
+        const visual = drawCenter ? drawCenter(piece) : null;
+        if (!visual) return overlays;
+        return overlays.filter(item => !(item && item.kind === "liner")).concat(visual);
     }
 
     const LINER_TOOLPATH_MESSAGES = Object.freeze({
@@ -411,6 +411,11 @@
         offset_invalid: "بعد اللاينر غير صالح",
         width_invalid: "عرض اللاينر غير صالح",
         side_unavailable: "جهة اللاينر غير متاحة لهذه الدرفة",
+        liner_start_invalid: "بداية اللاينر غير صالحة",
+        liner_length_invalid: "طول اللاينر غير صالح",
+        liner_span_exceeds_edge: "البداية والطول يتجاوزان طول الجهة",
+        liner_flat_end_unmachinable: "نهاية اللاينر المستقيمة غير قابلة للتنفيذ بهذه الريشة",
+        liner_span_on_corner: "بداية اللاينر أو نهايته تقع على انعطاف بلا اتجاه واحد",
     });
 
     function samePlacedPiece(left, right) {
@@ -469,7 +474,7 @@
             spec,
             sheet,
             frame,
-            drawingOverlays(spec, geometryModel)
+            drawingOverlays(spec)
         );
         if (!overlays.length || !geometryModel) return "";
         const originX = num(geometryModel.placement.xCm) * 10;

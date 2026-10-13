@@ -378,6 +378,11 @@
             offset_invalid: "بعد اللاينر غير صالح.",
             width_invalid: "عرض اللاينر غير صالح.",
             side_unavailable: "جهة اللاينر غير متاحة لهذه الدرفة.",
+            liner_start_invalid: "بداية اللاينر غير صالحة.",
+            liner_length_invalid: "طول اللاينر غير صالح.",
+            liner_span_exceeds_edge: "بداية اللاينر وطوله يتجاوزان طول الجهة.",
+            liner_flat_end_unmachinable: "النهاية المستقيمة غير قابلة للتنفيذ بريشة دائرية في تمريرة واحدة، أو طول المنطقة أقصر من قطر الريشة.",
+            liner_span_on_corner: "بداية اللاينر أو نهايته تقع على انعطاف لا يملك اتجاهاً واحداً للنهاية المستقيمة.",
         };
         const label = String((piece && (piece.label || piece.piece_no || piece.id)) || "").split(".")[0] || "؟";
         const error = new Error(`الدرفة ${label}: ${messages[code] || code}`);
@@ -738,6 +743,10 @@
                     piece.liner_reference_side = side;
                     piece.liner_offset_cm = row.liner_offset_cm;
                     piece.liner_width_cm = row.liner_width_cm;
+                }
+                if (String(piece.liner_reference_side || "") === side) {
+                    piece.liner_start_cm = row.liner_start_cm;
+                    piece.liner_length_cm = row.liner_length_cm;
                 }
                 if (!piece.piece_type && row.piece_type) piece.piece_type = row.piece_type;
             });

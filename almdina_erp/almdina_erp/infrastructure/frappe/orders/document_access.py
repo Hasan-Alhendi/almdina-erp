@@ -48,6 +48,8 @@ _OLD_PIECE_FIELDS = [
     "liner_reference_side",
     "liner_offset_cm",
     "liner_width_cm",
+    "liner_start_cm",
+    "liner_length_cm",
     "extra_liner_unit_price_usd",
     "extra_back_groove",
     "extra_back_groove_unit_price_usd",

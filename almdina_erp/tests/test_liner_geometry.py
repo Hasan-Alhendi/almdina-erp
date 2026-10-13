@@ -15,6 +15,7 @@ from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
     LINER_SIDE_MISMATCH,
     LINER_WIDTH_MISMATCH,
     LINER_WIDTH_NOT_MEASURABLE,
+    LinerGeometryError,
     LinerPiece,
     available_liner_sides,
     canonical_path,
@@ -432,6 +433,48 @@ def test_l_toolpath_follows_the_bend_and_extends_once():
         for end in (path[0], path[-1]):
             assert not point_in_polygon(end, polygon, tolerance=GEOMETRY_TOLERANCE_MM)
             assert _edge_distance(end, polygon) == pytest.approx(2.5, abs=0.05)
+
+
+def test_partial_liner_uses_a_flat_end_and_keeps_the_full_edge():
+    piece = LinerPiece("Regular", 50, 50)
+    center = liner_centerline_mm(piece, "edge_long_right", 10, 1.8, 10, 30)
+    assert center == pytest.approx([(391.0, 100.0), (391.0, 400.0)])
+    path = liner_toolpath_mm(piece, "edge_long_right", 10, 1.8, 5, 10, 30)
+    assert min(point[1] for point in path) == pytest.approx(102.5)
+    assert max(point[1] for point in path) == pytest.approx(397.5)
+    assert compare_liner_path(path, piece, "edge_long_right", 10, 1.8, 5, 10, 30).ok
+    assert not compare_liner_path(path, piece, "edge_long_right", 10, 1.8, 5, 10, 20).ok
+    assert not compare_liner_path(path, piece, "edge_long_right", 10, 1.8, 5, 12, 30).ok
+    full = liner_toolpath_mm(piece, "edge_long_right", 10, 1.8, 5, 0, 0)
+    assert min(point[1] for point in full) == pytest.approx(-2.5)
+    assert max(point[1] for point in full) == pytest.approx(502.5)
+    with pytest.raises(LinerGeometryError) as too_short:
+        liner_toolpath_mm(piece, "edge_long_right", 10, 1.8, 5, 10, 0.3)
+    assert too_short.value.code == "liner_flat_end_unmachinable"
+    with pytest.raises(LinerGeometryError) as one_pass:
+        liner_toolpath_mm(piece, "edge_long_right", 0, 0.5, 5, 10, 20)
+    assert one_pass.value.code == "liner_flat_end_unmachinable"
+    horizontal = liner_toolpath_mm(piece, "edge_width_top", 2, 1.8, 5, 5, 20)
+    assert min(point[0] for point in horizontal) == pytest.approx(52.5)
+    assert max(point[0] for point in horizontal) == pytest.approx(247.5)
+    stops_inside = liner_toolpath_mm(piece, "edge_long_left", 0, 1.8, 5, 0, 20)
+    assert min(point[1] for point in stops_inside) == pytest.approx(-2.5)
+    assert max(point[1] for point in stops_inside) == pytest.approx(197.5)
+    starts_inside = liner_toolpath_mm(piece, "edge_long_left", 0, 1.8, 5, 15, 35)
+    assert min(point[1] for point in starts_inside) == pytest.approx(152.5)
+    assert max(point[1] for point in starts_inside) == pytest.approx(502.5)
+
+
+def test_partial_liner_follows_a_diagonal_and_an_l_before_the_bend():
+    clipped = _clipped()
+    diagonal = liner_toolpath_mm(clipped, "edge_break", 0, 1.8, 5, 2, 8)
+    assert compare_liner_path(diagonal, clipped, "edge_break", 0, 1.8, 5, 2, 8).ok
+    shaped = _l_piece()
+    bent = liner_toolpath_mm(shaped, "edge_break", 0, 1.8, 5, 2, 8)
+    assert compare_liner_path(bent, shaped, "edge_break", 0, 1.8, 5, 2, 8).ok
+    with pytest.raises(LinerGeometryError) as on_corner:
+        liner_toolpath_mm(shaped, "edge_break", 0, 1.8, 5, 0, 30)
+    assert on_corner.value.code == "liner_span_on_corner"
 
 
 def test_changing_offset_and_width_moves_the_band():

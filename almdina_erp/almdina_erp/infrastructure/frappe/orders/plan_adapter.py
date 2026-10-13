@@ -94,6 +94,8 @@ class FrappeOrderPlanAdapter:
             piece["liner_reference_side"] = side
             piece["liner_offset_cm"] = offset
             piece["liner_width_cm"] = width
+            piece["liner_start_cm"] = flt(getattr(row, "liner_start_cm", 0))
+            piece["liner_length_cm"] = flt(getattr(row, "liner_length_cm", 0))
         return piece
 
     def _plan_input_payload(

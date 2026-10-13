@@ -12,6 +12,7 @@ from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
     available_liner_sides,
     contour_notch_cm,
     liner_activation_error,
+    resolved_liner_span_mm,
     validation_code,
 )
 from almdina_erp.almdina_erp.domain.orders.piece_policy import (
@@ -249,11 +250,15 @@ class FrappeOrderPiecePolicyAdapter:
             row.liner_reference_side = ""
             row.liner_offset_cm = 0
             row.liner_width_cm = 0
+            row.liner_start_cm = 0
+            row.liner_length_cm = 0
             return
         if not available_liner_sides(row.piece_type or "Regular"):
             row.liner_reference_side = ""
             row.liner_offset_cm = 0
             row.liner_width_cm = 0
+            row.liner_start_cm = 0
+            row.liner_length_cm = 0
             return
         side = str(getattr(row, "liner_reference_side", "") or "").strip()
         offset = flt(getattr(row, "liner_offset_cm", 0))
@@ -293,6 +298,25 @@ class FrappeOrderPiecePolicyAdapter:
         if code:
             frappe.throw(
                 _("Row {0}: Liner settings are invalid ({1}).").format(index, code)
+            )
+        _start_mm, _length_mm, span_error = resolved_liner_span_mm(
+            LinerPiece(
+                piece_type=row.piece_type or "Regular",
+                width_cm=width_cm,
+                length_cm=length_cm,
+                clipped_corner_position=str(
+                    getattr(row, "clipped_corner_position", "") or ""
+                ),
+                clipped_corner_width_cm=notch_width_cm,
+                clipped_corner_length_cm=notch_length_cm,
+            ),
+            side,
+            flt(getattr(row, "liner_start_cm", 0)),
+            flt(getattr(row, "liner_length_cm", 0)),
+        )
+        if span_error:
+            frappe.throw(
+                _("Row {0}: Liner settings are invalid ({1}).").format(index, span_error)
             )
 
     def validate_rows(self) -> None:
