@@ -86,3 +86,31 @@ Goal: إثبات مسارات A→B بحالات قابلة للتكرار. In s
 | 12 | DOM قبل الحفظ | input قديم A يكتب في doc B إذا ظل موجودًا | تجاهله | RED مشروط؛ دورة Frappe الحقيقية معلقة |
 
 **ما يلزم لفك BLOCKED:** تشغيل اختبارات Desk/Browser على Frappe 16.17.5 وERPNext 16.17.0 ببيانات وهمية، التقاط صفحة الطباعة الناتجة بعد تغيير الطلب أثناء `await`، إثبات/نفي وصول اللون إلى حمولة Save ثم DB ضمن معاملة اختبار معزولة، وفحص مسار Recovery الحالي. لا بيانات إنتاج أو ادعاء بسبب الحادثة قبل ذلك.
+
+## G. Phase 1B — شهادة التشغيل المعزول
+
+**القرار المعماري:** لا يُعد VM في القسم F دليلًا على إعادة استخدام `frm` داخل Desk؛ تبقى R1–R4 وR6–R9 فرضيات تشغيلية مشروطة بنتيجة المتصفح. ينتج الاختبار الجديد طلبين مختلفين في موقع CI مؤقت بإصداري Frappe `v16.17.5` وERPNext `v16.17.0` مع تحقق SHA (`75baafaa0bde07a86bf28764383b93b5df97bc7e` و`7b494dc9e8e47d288de5427bae25ce8a52c37d96`). أسماء صفوف القطع يولدها Frappe ويتحقق fixture من اختلافها. لا يستعمل أي موقع إنتاج.
+
+**التنفيذ:** `almdina_erp/tests/cross_order_p0_runtime_fixture.py` ينشئ A أبيض بمقاس 42×81 وكلفة 11 وB أسود بمقاس 57×93 وكلفة 19 ثم يحذف هذه السجلات في نهاية المهمة. `almdina_erp/tests/browser/test_cross_order_p0_runtime.py` يسجل أحداث `before_load/onload/refresh` ومراجع `frm` و`doc` وSnapshot وحقل الإدخال؛ يحقن Snapshot على B عبر Store/Presenter الإنتاجي ويعترض `savedocs` ثم يقرأ B من `frappe.client.get`. الحقن مضبوط ويُفصل صراحة عن التنقل الطبيعي. يمسك `window.open` قبل الطباعة ويحتفظ بـHTML النهائي بعد تأخير هوية المصنع وتنقل Desk. لا يرسل شيئًا إلى طابعة. تحتفظ مهمة CI بـ`runtime-evidence.json` و`final-print.html` ولقطة شاشة وسجلات الإعداد/المتصفح إذا وصلت إلى تلك المراحل.
+
+**تدقيق مستقل:** فحص Python syntax و`git diff --check` ناجح؛ ضوابط Node الثلاثة السابقة ناجحة. فرق الملفات مع Base SHA يقتصر على الاختبارات، التقرير وWorkflow؛ لم يتغير كود إنتاج أو Recovery. صفوف القطع الحقيقية ذات أسماء متميزة، لذا لا يجوز نقل نتيجة اصطدام الاسم المصطنع في اختبار VM إلى حكم عن تلوث القطع الحقيقية. يحتاج اختبار Recovery الفعلي، ومسودات Plan/Cost، إلى نتائج Desk صريحة؛ مجرد ظهور API ليس إثبات restore/cancel.
+
+| بوابة | نتيجة التشغيل | التصنيف |
+|---|---|---|
+| 1 — دورة Desk | قيد نتيجة مهمة runtime | `NOT_TESTED` حتى قراءة artifact |
+| 2 — Native Save وDB | قيد نتيجة مهمة runtime | `NOT_TESTED` حتى قراءة payload وDB |
+| 3 — HTML النهائي | قيد نتيجة مهمة runtime | `NOT_TESTED` حتى قراءة HTML |
+| 4 — Recovery وNEW/EDIT ومسودات | ضوابط NEW→Saved وEdit القديمة نجحت في VM؛ Desk restore/cancel قيد الإثبات | جزئي؛ لا اعتماد تشغيلي |
+
+### تصنيف إخفاقات CI السابقة على اختبار Desk المثبت
+
+| المجموعة | دليل CI / مقارنة Base `17e526b` | التصنيف |
+|---|---|---|
+| `Cross-order P0 RED baseline` | 12 RED مقصودة، 3 controls ناجحة؛ بقيت توقعات RED دون تعديل | `Intentional RED` |
+| `Frappe v16 Integration` | Run Base `38259469697` أنشأ الموقع ونفذ suite ثم أخفق في العقود الثلاثة نفسها المسجلة في Run PR `38412055297`: نص `loading/error/empty/disabled/dirty` الغائب، سجل style debt، ومواقع `ignore_permissions`. يستخدم workflow فرعي `version-16` المتحركين (في PR: Frappe `16.51.1` وERPNext `16.50.0`)، فلا يثبت الإصدارات المطلوبة ولا Browser Desk | `Baseline` |
+| `Static Checks` | النص/debt الثابتان نفسيهما؛ ملفات العقد ومراجع الإنتاج لم تتغير في هذه PR | `Baseline` |
+| `F6` و`F7` | `test_virtual_piece_type_change_materializes_one_row_without_rebuilding_table` يفشل في كلا المسارين؛ مصدره ومصدر الإنتاج ثابتان قياسًا بـBase | `Baseline` |
+| `Security and Protected UI Regressions` | تحميل `almdina_erp/public/js/arabic_operator_ui.js` المفقود؛ خارج تغيير الاختبارات | `Baseline` |
+| أي إخفاق في مهمة Desk المثبتة | يحدد بسجل تلك المهمة وحده؛ لا يخلط بإخفاقات العقود العامة | `New Regression` في أداة الإثبات حتى تشخيصه |
+
+الفرع `Recovery-test` يبقى مرجعًا مستقلًا؛ لم يُدمج أي commit منه مع `Develop`. أداة الاختبار تستخدم نمط Setup Wizard والإصدارات المثبتة الذي اختبره ذلك الفرع، دون نقل كود Recovery أو تعديل سلوكه.

@@ -14,6 +14,7 @@ def test_cross_order_desk_runtime():
     a, b = fixture["orders"]["A"], fixture["orders"]["B"]
     evidence = {"versions": fixture["versions"], "orders": fixture["orders"], "stages": {}}
     page = None
+    diagnostics = []
 
     def stage(name, callback):
         try:
@@ -25,16 +26,35 @@ def test_cross_order_desk_runtime():
         browser = playwright.chromium.launch(headless=True)
         try:
             page = browser.new_page(accept_downloads=False)
-            page.on("console", lambda message: None)
+            page.on("pageerror", lambda error: diagnostics.append({"kind": "pageerror", "message": str(error)[:500]}))
+            page.on("console", lambda message: diagnostics.append({"kind": "console", "message": message.text[:500]})
+                    if message.type == "error" else None)
+            page.on("response", lambda response: diagnostics.append({"kind": "http", "url": response.url.split("?")[0],
+                    "status": response.status}) if response.status >= 400 else None)
             page.goto(os.environ["FRAPPE_DESK_URL"] + "/login", wait_until="domcontentloaded")
             page.locator("#login_email").fill("Administrator")
             page.locator("#login_password").fill(os.environ["P0_ADMIN_PASSWORD"])
             page.locator(".btn-login").click()
             page.wait_for_function("!!window.frappe?.set_route && frappe.session?.user === 'Administrator'", timeout=60000)
+            page.wait_for_function("!!window.frappe?.boot?.sysdefaults?.setup_complete && !!frappe.router && !!frappe.app", timeout=45000)
 
-            def route(name):
-                page.evaluate("name => frappe.set_route('Form', 'Door Cutting Order', name)", name)
-                page.wait_for_function("name => window.cur_frm?.doc?.name === name", arg=name, timeout=45000)
+            def route(name, initial=False):
+                if initial:
+                    page.goto(os.environ["FRAPPE_DESK_URL"] + "/app/door-cutting-order/" + name,
+                              wait_until="domcontentloaded", timeout=60000)
+                else:
+                    page.evaluate("name => frappe.set_route('Form', 'Door Cutting Order', name)", name)
+                try:
+                    page.wait_for_function("name => window.cur_frm?.doc?.name === name", arg=name, timeout=45000)
+                except Exception:
+                    snapshot = page.evaluate("""() => ({href:location.href,
+                        route:frappe.get_route?.(),curName:window.cur_frm?.doc?.name,
+                        doctype:window.cur_frm?.doctype,bootReady:!!frappe.boot?.sysdefaults?.setup_complete,
+                        visibleText:document.body.innerText.slice(-1200)})""")
+                    evidence["route_failure"] = {"requested": name, "initial": initial,
+                                                 "snapshot": snapshot, "diagnostics": diagnostics[-30:]}
+                    print("P0_ROUTE_DIAGNOSTIC=" + json.dumps(evidence["route_failure"], ensure_ascii=False), flush=True)
+                    raise
                 page.wait_for_function("!!window.AlmdinaCostWorkspaceState && !!window.AlmdinaCuttingPlanRender", timeout=45000)
                 return page.evaluate("""() => ({
                     name: cur_frm.doc.name,
@@ -45,7 +65,7 @@ def test_cross_order_desk_runtime():
                     plan: AlmdinaPlanWorkspaceState.snapshot(cur_frm)
                 })""")
 
-            state_a = route(a["name"])
+            state_a = route(a["name"], initial=True)
             page.evaluate("""() => {
                 window.__p0FrmA = cur_frm;
                 window.__p0DocA = cur_frm.doc;
@@ -170,6 +190,12 @@ def test_cross_order_desk_runtime():
             })"""))
             page.screenshot(path=str(evidence_dir / "desk.png"), full_page=True)
         finally:
+            evidence["diagnostics"] = diagnostics[-30:]
+            if page:
+                try:
+                    page.screenshot(path=str(evidence_dir / "last-desk.png"), full_page=True)
+                except Exception:
+                    pass
             (evidence_dir / "runtime-evidence.json").write_text(
                 json.dumps(evidence, ensure_ascii=False, indent=2), encoding="utf-8")
             browser.close()

@@ -3,11 +3,6 @@ name: Cross Order P0 Pinned Runtime
 on:
   workflow_call:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - 'almdina_erp/tests/browser/test_cross_order_p0_runtime.py'
-      - 'almdina_erp/tests/cross_order_p0_runtime_fixture.py'
-      - '.github/workflows/cross-order-p0-runtime.yml'
 
 permissions:
   contents: read
