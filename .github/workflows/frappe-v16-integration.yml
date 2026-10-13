@@ -309,38 +309,92 @@ jobs:
           test -s "$DCO_AL129_FIXTURE_FILE"
           echo "DCO_AL129_FIXTURE_FILE=$DCO_AL129_FIXTURE_FILE" >> "$GITHUB_ENV"
 
-      - name: Run ALMADINA-129 token, permission, and concurrency integration tests
+      - name: Run the ALMADINA-129 concurrent token database race test
         if: github.event_name == 'workflow_dispatch' && inputs.suite == 'al129_new_desk'
+        env:
+          AL129_DB_ROOT_HOST: 127.0.0.1
+          AL129_DB_ROOT_USER: root
+          AL129_DB_ROOT_PASSWORD: root
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP/frappe-bench"
           bench --site test.localhost set-config allow_tests true
+          export AL129_CONCURRENCY_EVIDENCE_FILE="$RUNNER_TEMP/al129-concurrency-evidence.json"
+          rm -f "$AL129_CONCURRENCY_EVIDENCE_FILE"
           set +e
           bench --site test.localhost run-tests --module almdina_erp.tests.test_new_order_recovery_integration \
+            --test test_concurrent_database_inserts_reject_duplicate_creation_token \
             2>&1 | tee "$RUNNER_TEMP/al129-integration-tests.log"
           test_status=${PIPESTATUS[0]}
           set -e
           if (( test_status != 0 )); then
             {
-              echo '### ALMADINA-129 Frappe integration tests: FAIL'
+              echo '### ALMADINA-129 concurrent token race: FAIL'
               echo '```text'
               tail -n 100 "$RUNNER_TEMP/al129-integration-tests.log"
               echo '```'
+              if [[ -s "$AL129_CONCURRENCY_EVIDENCE_FILE" ]]; then
+                echo 'Database race evidence:'
+                echo '```json'
+                cat "$AL129_CONCURRENCY_EVIDENCE_FILE"
+                echo '```'
+              else
+                echo 'The concurrency test did not produce its evidence file.'
+              fi
             } >> "$GITHUB_STEP_SUMMARY"
+            if [[ -s "$AL129_CONCURRENCY_EVIDENCE_FILE" ]]; then
+              cat "$AL129_CONCURRENCY_EVIDENCE_FILE"
+            fi
             exit "$test_status"
+          fi
+          if ! grep -Eq 'Ran 1 tests? in ' "$RUNNER_TEMP/al129-integration-tests.log"; then
+            {
+              echo '### ALMADINA-129 concurrent token race: FAIL'
+              echo 'The requested single test was not proven to run exactly once.'
+              echo '```text'
+              tail -n 100 "$RUNNER_TEMP/al129-integration-tests.log"
+              echo '```'
+              if [[ -s "$AL129_CONCURRENCY_EVIDENCE_FILE" ]]; then
+                echo '```json'
+                cat "$AL129_CONCURRENCY_EVIDENCE_FILE"
+                echo '```'
+              fi
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
           fi
           if grep -Fq 'INCONCLUSIVE concurrent insert outcome' "$RUNNER_TEMP/al129-integration-tests.log" \
             || grep -Eq 'OK \(skipped=[1-9][0-9]*' "$RUNNER_TEMP/al129-integration-tests.log"; then
             {
-              echo '### ALMADINA-129 Frappe integration tests: INCONCLUSIVE'
-              echo 'The independent-connection insert race did not prove one insert plus one unique conflict. The gate remains blocked; see the test log.'
+              echo '### ALMADINA-129 concurrent token race: INCONCLUSIVE'
+              echo 'The test was skipped; the concurrency gate remains blocked.'
               echo '```text'
-              grep -F 'INCONCLUSIVE concurrent insert outcome' "$RUNNER_TEMP/al129-integration-tests.log" | tail -n 20
+              tail -n 100 "$RUNNER_TEMP/al129-integration-tests.log"
               echo '```'
+              if [[ -s "$AL129_CONCURRENCY_EVIDENCE_FILE" ]]; then
+                echo '```json'
+                cat "$AL129_CONCURRENCY_EVIDENCE_FILE"
+                echo '```'
+              fi
+            } >> "$GITHUB_STEP_SUMMARY"
+            if [[ -s "$AL129_CONCURRENCY_EVIDENCE_FILE" ]]; then
+              cat "$AL129_CONCURRENCY_EVIDENCE_FILE"
+            fi
+            exit 1
+          fi
+          if [[ ! -s "$AL129_CONCURRENCY_EVIDENCE_FILE" ]]; then
+            {
+              echo '### ALMADINA-129 concurrent token race: FAIL'
+              echo 'The targeted test passed without writing its database race evidence.'
             } >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
-          echo '### ALMADINA-129 Frappe integration tests: PASS' >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo '### ALMADINA-129 concurrent token race: PASS'
+            echo '```json'
+            cat "$AL129_CONCURRENCY_EVIDENCE_FILE"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat "$AL129_CONCURRENCY_EVIDENCE_FILE"
 
       - name: Install Chromium for targeted Desk certification
         if: github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance' || inputs.suite == 'al129_new_desk')
@@ -505,6 +559,7 @@ jobs:
             ${{ runner.temp }}/al129-desk-failure.png
             ${{ runner.temp }}/al129-fixture-setup.log
             ${{ runner.temp }}/al129-integration-tests.log
+            ${{ runner.temp }}/al129-concurrency-evidence.json
             ${{ runner.temp }}/al129-pytest-collect.log
             ${{ runner.temp }}/desk-pytest.log
           if-no-files-found: warn

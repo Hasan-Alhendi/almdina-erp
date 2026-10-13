@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from threading import Barrier, BrokenBarrierError
+import json
+import os
+from pathlib import Path
+from threading import Event
+from time import monotonic, sleep
 from unittest import mock
 from uuid import uuid4
 
 import frappe
+import pymysql
 from frappe.tests.utils import FrappeTestCase
 
 from almdina_erp.almdina_erp.services.new_order_recovery_service import (
@@ -228,20 +233,10 @@ class TestNewOrderRecoveryIntegration(FrappeTestCase):
         with self.assertRaises(frappe.PermissionError):
             reconcile_new_order_creation(str(uuid4()))
 
-    def test_concurrent_native_inserts_bind_one_creation_token(self) -> None:
+    def test_concurrent_database_inserts_reject_duplicate_creation_token(self) -> None:
         token = str(uuid4())
         self.tokens.append(token)
-        insert_barrier = Barrier(2)
         site = frappe.local.site
-        from frappe.model.document import Document
-
-        original_db_insert = Document.db_insert
-
-        def synchronize_at_database_insert(document, *args, **kwargs):
-            if document.doctype == "Door Cutting Order":
-                insert_barrier.wait(timeout=10)
-            return original_db_insert(document, *args, **kwargs)
-
         duplicate_errors = tuple(
             error
             for error in (
@@ -250,91 +245,265 @@ class TestNewOrderRecoveryIntegration(FrappeTestCase):
             )
             if isinstance(error, type)
         )
-        self.assertTrue(duplicate_errors, "Frappe must expose its unique-entry failure type")
+        evidence: dict[str, object] = {
+            "test": "test_concurrent_database_inserts_reject_duplicate_creation_token",
+            "boundary": "MariaDB unique index on recovery_creation_token",
+            "status": "INCOMPLETE",
+            "unique_index_verified": False,
+            "connection_ids": [],
+            "observed_unique_lock_wait": None,
+            "outcomes": [],
+            "committed_row_count": None,
+        }
+        insert_sql = """
+            INSERT INTO `tabDoor Cutting Order`
+                (`name`, `owner`, `creation`, `modified`, `modified_by`,
+                 `docstatus`, `idx`, `recovery_creation_token`, `recovery_creation_user`)
+            VALUES (%s, %s, NOW(6), NOW(6), %s, 0, 0, %s, %s)
+        """
+        first_insert_completed = Event()
+        competitor_attempting_insert = Event()
+        allow_first_commit = Event()
+        connection_ids: dict[int, int] = {}
 
-        def insert_on_independent_connection(worker: int) -> tuple[str, str]:
-            frappe.init(site=site)
-            frappe.connect()
-            frappe.set_user("Administrator")
+        def write_evidence() -> None:
+            evidence_path = os.environ.get("AL129_CONCURRENCY_EVIDENCE_FILE")
+            if evidence_path:
+                Path(evidence_path).write_text(
+                    json.dumps(evidence, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
+
+        def insert_on_independent_connection(worker: int) -> dict[str, object]:
+            connection_id: int | None = None
+            connected = False
+            order_name = f"DCO-RECOVERY-RACE-{uuid4().hex[:12]}-{worker}"
             try:
-                order = frappe.new_doc("Door Cutting Order")
-                order.name = f"DCO-RECOVERY-RACE-{token[:8]}-{worker}"
-                order.recovery_creation_token = token
-                order.flags._order_save_gateway = _NoopOrderSaveGateway()
-                order.insert(ignore_permissions=True, ignore_mandatory=True)
-                frappe.db.commit()
-                return "inserted", order.name
+                frappe.init(site=site)
+                frappe.connect()
+                connected = True
+                frappe.set_user("Administrator")
+                frappe.db.sql("START TRANSACTION")
+                connection_id = int(frappe.db.sql("SELECT CONNECTION_ID()", pluck=True)[0])
+                connection_ids[worker] = connection_id
+                if worker == 1 and not first_insert_completed.wait(timeout=10):
+                    raise TimeoutError("winner transaction did not reach its uncommitted insert")
+                if worker == 1:
+                    competitor_attempting_insert.set()
+                frappe.db.sql(
+                    insert_sql,
+                    (
+                        order_name,
+                        "Administrator",
+                        "Administrator",
+                        token,
+                        "Administrator",
+                    ),
+                )
+                if worker == 0:
+                    first_insert_completed.set()
+                    if not allow_first_commit.wait(timeout=10):
+                        raise TimeoutError("coordinator did not release the first insert transaction")
+                    frappe.db.commit()
+                else:
+                    frappe.db.commit()
+                return {
+                    "worker": worker,
+                    "connection_id": connection_id,
+                    "kind": "inserted",
+                    "name": order_name,
+                }
             except Exception as error:
-                frappe.db.rollback()
+                if connected:
+                    frappe.db.rollback()
                 if isinstance(error, duplicate_errors):
-                    return "duplicate", type(error).__name__
-                error_name = type(error).__name__.lower()
-                error_text = str(error).lower()
-                if any(
-                    marker in error_name or marker in error_text
-                    for marker in (
-                        "deadlock",
-                        "timeout",
-                        "lock wait",
-                        "lockwait",
-                        "brokenbarrier",
-                        "barrier",
-                    )
-                ):
-                    return "inconclusive", f"{type(error).__name__}: {error}"
-                return "error", f"{type(error).__name__}: {error}"
+                    kind = "unique_conflict"
+                elif isinstance(error, TimeoutError):
+                    kind = "coordination_timeout"
+                else:
+                    kind = "error"
+                message = str(error).replace(token, "[redacted-creation-token]")
+                return {
+                    "worker": worker,
+                    "connection_id": connection_id,
+                    "kind": kind,
+                    "error_type": type(error).__name__,
+                    "error": message,
+                }
             finally:
-                frappe.destroy()
+                if connected:
+                    frappe.destroy()
 
+        observer_connection = None
         try:
+            unique_indexes = frappe.db.sql(
+                "SHOW INDEX FROM `tabDoor Cutting Order` "
+                "WHERE Column_name = %s AND Non_unique = 0",
+                ("recovery_creation_token",),
+                as_dict=True,
+            )
+            index_names = sorted({str(row.Key_name) for row in unique_indexes})
+            self.assertTrue(
+                index_names,
+                "the installed DCO schema must have a unique recovery_creation_token index",
+            )
+            evidence["unique_index_verified"] = True
+            evidence["unique_index_names"] = index_names
+            self.assertTrue(duplicate_errors, "Frappe must expose its unique-entry failure type")
+            root_password = os.environ.get("AL129_DB_ROOT_PASSWORD")
+            self.assertTrue(
+                root_password,
+                "the isolated MariaDB observer credential must be configured for this race test",
+            )
+
             frappe.db.commit()
-            with (
-                mock.patch(
-                    "almdina_erp.almdina_erp.doctype.door_cutting_order."
-                    "door_cutting_order_controller.invalidate_stale_draft_plans"
-                ),
-                mock.patch(
-                    "almdina_erp.almdina_erp.doctype.door_cutting_order."
-                    "door_cutting_order_controller.refresh_order_commercial_totals"
-                ),
-                mock.patch.object(Document, "db_insert", new=synchronize_at_database_insert),
-                ThreadPoolExecutor(max_workers=2) as pool,
-            ):
-                outcomes = list(pool.map(insert_on_independent_connection, range(2)))
-            inconclusive = [value for kind, value in outcomes if kind == "inconclusive"]
-            if inconclusive:
-                self.skipTest(f"INCONCLUSIVE concurrent insert outcome: {outcomes}")
-            self.assertFalse(
-                [value for kind, value in outcomes if kind == "error"],
-                f"Unexpected concurrent insert errors: {outcomes}",
+            observer_connection = pymysql.connect(
+                host=os.environ.get("AL129_DB_HOST", "127.0.0.1"),
+                port=int(os.environ.get("AL129_DB_PORT", "3306")),
+                user=os.environ.get("AL129_DB_ROOT_USER", "root"),
+                password=root_password,
+                database=str(frappe.conf.db_name),
+                autocommit=True,
+                cursorclass=pymysql.cursors.DictCursor,
+            )
+            lock_wait_query = """
+                SELECT requesting.trx_mysql_thread_id AS waiting_connection_id,
+                       blocking.trx_mysql_thread_id AS blocking_connection_id,
+                       requested.lock_table,
+                       requested.lock_index
+                  FROM information_schema.INNODB_LOCK_WAITS AS waits
+                  JOIN information_schema.INNODB_TRX AS requesting
+                    ON requesting.trx_id = waits.requesting_trx_id
+                  JOIN information_schema.INNODB_TRX AS blocking
+                    ON blocking.trx_id = waits.blocking_trx_id
+                  JOIN information_schema.INNODB_LOCKS AS requested
+                    ON requested.lock_id = waits.requested_lock_id
+                 WHERE requesting.trx_mysql_thread_id = %s
+            """
+            outcomes: list[dict[str, object]] = []
+            winner_reached_insert = False
+            competitor_reached_insert = False
+            observer_error: str | None = None
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                futures = [pool.submit(insert_on_independent_connection, worker) for worker in range(2)]
+                try:
+                    winner_reached_insert = first_insert_completed.wait(timeout=10)
+                    competitor_reached_insert = competitor_attempting_insert.wait(timeout=10)
+                    observed_wait = None
+                    second_connection_id = connection_ids.get(1)
+                    if winner_reached_insert and competitor_reached_insert and second_connection_id:
+                        deadline = monotonic() + 10
+                        while monotonic() < deadline:
+                            with observer_connection.cursor() as cursor:
+                                cursor.execute(lock_wait_query, (second_connection_id,))
+                                observed_wait = cursor.fetchone()
+                            if observed_wait:
+                                break
+                            sleep(0.025)
+                    evidence["observed_unique_lock_wait"] = observed_wait
+                except Exception as error:
+                    observer_error = f"{type(error).__name__}: {error}"
+                finally:
+                    allow_first_commit.set()
+                    for future in futures:
+                        try:
+                            outcomes.append(future.result(timeout=15))
+                        except Exception as error:
+                            outcomes.append(
+                                {
+                                    "kind": "worker_exception",
+                                    "error_type": type(error).__name__,
+                                    "error": str(error).replace(token, "[redacted-creation-token]"),
+                                }
+                            )
+            evidence["outcomes"] = outcomes
+            worker_connection_ids = [row.get("connection_id") for row in outcomes]
+            evidence["connection_ids"] = worker_connection_ids
+            evidence["winner_reached_insert"] = winner_reached_insert
+            evidence["competitor_reached_insert"] = competitor_reached_insert
+            evidence["observer_error"] = observer_error
+            self.assertTrue(winner_reached_insert, "winner did not leave an uncommitted unique-key row")
+            self.assertTrue(competitor_reached_insert, "competitor did not reach the SQL insert boundary")
+            self.assertIsNone(observer_error, f"MariaDB lock observer failed: {observer_error}")
+            self.assertTrue(
+                all(worker_connection_ids) and len(set(worker_connection_ids)) == 2,
+                f"workers must use two independent MariaDB connections: {outcomes}",
+            )
+            observed_wait = evidence["observed_unique_lock_wait"]
+            self.assertIsInstance(
+                observed_wait,
+                dict,
+                "the competitor must be observed waiting inside MariaDB before winner commit",
+            )
+            self.assertEqual(
+                int(observed_wait["waiting_connection_id"]),
+                int(connection_ids[1]),
+            )
+            self.assertEqual(
+                int(observed_wait["blocking_connection_id"]),
+                int(connection_ids[0]),
+            )
+            self.assertIn("tabDoor Cutting Order", str(observed_wait["lock_table"]))
+            self.assertIn(
+                str(observed_wait["lock_index"]),
+                index_names,
+                "the observed wait must be on the unique index containing the creation token",
             )
             self.assertCountEqual(
-                [kind for kind, _value in outcomes],
-                ["inserted", "duplicate"],
-                f"The concurrent race must produce one commit and one unique conflict: {outcomes}",
+                [row["kind"] for row in outcomes],
+                ["inserted", "unique_conflict"],
+                f"The race must produce one committed insert and one native unique conflict; "
+                f"timeouts, deadlocks, and barrier failures are test failures: {outcomes}",
             )
-            winner = next(value for kind, value in outcomes if kind == "inserted")
-            names = frappe.get_all(
-                "Door Cutting Order",
-                filters={"recovery_creation_token": token},
-                pluck="name",
+            winner = next(row for row in outcomes if row["kind"] == "inserted")
+            committed_names = frappe.db.sql(
+                "SELECT name FROM `tabDoor Cutting Order` WHERE recovery_creation_token = %s",
+                (token,),
+                pluck=True,
             )
-            self.assertEqual(names, [winner], "only the concurrent winner may commit")
-            reconciliation = reconcile_new_order_creation(token)
-            self.assertEqual(reconciliation["status"], "CREATED")
-            self.assertEqual(reconciliation["door_cutting_order"], winner)
+            evidence["committed_row_count"] = len(committed_names)
+            name_matches_winner = (
+                len(committed_names) == 1
+                and str(committed_names[0]) == str(winner["name"])
+            )
+            evidence["committed_name_matches_winner"] = name_matches_winner
+            self.assertEqual(
+                len(committed_names),
+                1,
+                "exactly one competing insert may commit for a creation token",
+            )
+            self.assertTrue(
+                name_matches_winner,
+                "the only committed row must be the worker that won the unique-index race",
+            )
+            evidence["status"] = "PASS"
+        except Exception as error:
+            evidence["status"] = "FAIL"
+            evidence["failure"] = (
+                f"{type(error).__name__}: "
+                f"{str(error).replace(token, '[redacted-creation-token]')}"
+            )
+            raise
         finally:
-            frappe.db.rollback()
-            committed_names = frappe.get_all(
-                "Door Cutting Order",
-                filters={"recovery_creation_token": token},
-                pluck="name",
-            )
-            for name in committed_names:
-                frappe.delete_doc(
-                    "Door Cutting Order",
-                    name,
-                    force=True,
-                    ignore_permissions=True,
+            allow_first_commit.set()
+            try:
+                frappe.db.rollback()
+                frappe.db.sql(
+                    "DELETE FROM `tabDoor Cutting Order` WHERE recovery_creation_token = %s",
+                    (token,),
                 )
-            frappe.db.commit()
+                frappe.db.commit()
+            except Exception as error:
+                evidence["status"] = "FAIL"
+                evidence["cleanup_error"] = (
+                    f"{type(error).__name__}: {str(error).replace(token, '[redacted-creation-token]')}"
+                )
+                raise
+            finally:
+                if observer_connection is not None:
+                    try:
+                        observer_connection.close()
+                    except Exception as error:
+                        evidence["status"] = "FAIL"
+                        evidence["observer_close_error"] = f"{type(error).__name__}: {error}"
+                write_evidence()
