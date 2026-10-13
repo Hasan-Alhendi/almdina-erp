@@ -341,7 +341,7 @@ jobs:
 
           text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
           text = text.replace("al128-isolated-ci-password", "[redacted test credential]")
-          print("\n".join(text.splitlines()[-60:]))
+          print("\n".join(text.splitlines()[-180:]))
           PY
           )"
             failure_tail="${failure_tail//'%'/'%25'}"
@@ -356,7 +356,7 @@ jobs:
 
           text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
           text = text.replace("al128-isolated-ci-password", "[redacted test credential]")
-          print("\n".join(text.splitlines()[-60:]))
+          print("\n".join(text.splitlines()[-180:]))
           PY
               echo '```'
             } >> "$GITHUB_STEP_SUMMARY"

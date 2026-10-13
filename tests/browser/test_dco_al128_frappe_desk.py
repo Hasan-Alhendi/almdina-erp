@@ -434,6 +434,28 @@ def _percentile(values: list[float], percentile: float) -> float:
     return round(ordered[max(0, math.ceil(percentile * len(ordered)) - 1)], 2)
 
 
+def _prime_checkpoint_with_real_measurement_edit(page: Page) -> None:
+    """Create the initial checkpoint through the same keyboard path being measured."""
+    width = page.locator(
+        '[data-fieldname="pieces_fast_entry"] .dco-fast-table '
+        'tbody tr[data-row-name]:not(.dco-virtual-row) input[data-field="width_cm"]'
+    ).first
+    width.click()
+    width.press("Control+A")
+    width.press_sequentially("41.2")
+    width.press("Tab")
+    page.wait_for_function(
+        "() => {"
+        " const state = AlmdinaDcoRecovery.LocalCheckpoint.snapshot(cur_frm);"
+        " return state && state.state === 'LOCAL_SAVED'"
+        "   && state.saved_revision > 0"
+        "   && state.saved_revision === state.recovery_revision;"
+        "}",
+        timeout=30_000,
+    )
+    trace("measurement_benchmark_checkpoint_primed_by_keyboard")
+
+
 def _benchmark_order(
     browser: Browser,
     fixture: dict[str, Any],
@@ -459,6 +481,7 @@ def _benchmark_order(
         _login(page, fixture["editor"], fixture["password"])
         _open_order(page, name, count)
         _start_real_edit_session(page)
+        _prime_checkpoint_with_real_measurement_edit(page)
         page.evaluate(
             """() => {
                 const root = cur_frm.fields_dict.pieces_fast_entry.$wrapper.get(0);
