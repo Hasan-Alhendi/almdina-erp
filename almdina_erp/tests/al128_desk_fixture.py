@@ -133,6 +133,24 @@ def _edge_type(suffix: str) -> str:
     return str(edge.name)
 
 
+def _configure_fixture_extra_rates() -> dict[str, float]:
+    """Provide required commercial data only on the disposable acceptance site."""
+    settings = frappe.get_single("Almdina ERP Settings")
+    settings.default_extra_liner_unit_price_usd = 2.5
+    settings.flags.ignore_permissions = True
+    settings.flags.ignore_mandatory = True
+    settings.save(ignore_permissions=True)
+    liner_rate = float(
+        frappe.db.get_single_value(
+            "Almdina ERP Settings", "default_extra_liner_unit_price_usd"
+        )
+        or 0
+    )
+    if liner_rate <= 0:
+        frappe.throw("The isolated ALMADINA-128 site requires a positive Liner fixture price.")
+    return {"liner_unit_price_usd": liner_rate}
+
+
 def _user(suffix: str, role: str) -> str:
     email = f"al128-{suffix}@example.com"
     user = frappe.get_doc(
@@ -215,6 +233,7 @@ def create_al128_desk_fixtures() -> dict[str, object]:
     customer = _customer(suffix)
     edge_type = _edge_type(suffix)
     bulk_edge_type = _edge_type(f"bulk-{suffix}")
+    fixture_rates = _configure_fixture_extra_rates()
     edit_role = frappe.get_doc(
         {"doctype": "Role", "role_name": f"AL128 Desk Editor {suffix}", "desk_access": 1}
     )
@@ -246,6 +265,7 @@ def create_al128_desk_fixtures() -> dict[str, object]:
         "customer": customer,
         "edge_type": edge_type,
         "bulk_edge_type": bulk_edge_type,
+        "fixture_rates": fixture_rates,
         "editor": editor,
         "viewer": viewer,
         "password": "al128-isolated-ci-password",
