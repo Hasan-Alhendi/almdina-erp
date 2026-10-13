@@ -53,3 +53,19 @@ jobs:
           path: ${{ runner.temp }}/al128-native-quota-evidence.json
           if-no-files-found: warn
           retention-days: 7
+
+      - name: Publish native Chromium quota evidence
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.suite == 'native_quota'
+        env:
+          QUOTA_EVIDENCE_FILE: ${{ runner.temp }}/al128-native-quota-evidence.json
+        run: |
+          {
+            echo '### ALMADINA-128 native Chromium quota evidence'
+            if [ -s "$QUOTA_EVIDENCE_FILE" ]; then
+              echo '```json'
+              cat "$QUOTA_EVIDENCE_FILE"
+              echo '```'
+            else
+              echo 'No evidence file was produced; the native quota case is NOT TESTED.'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
