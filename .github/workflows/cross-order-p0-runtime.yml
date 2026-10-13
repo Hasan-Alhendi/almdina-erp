@@ -1,0 +1,126 @@
+name: Cross Order P0 Pinned Runtime
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'almdina_erp/tests/browser/test_cross_order_p0_runtime.py'
+      - 'almdina_erp/tests/cross_order_p0_runtime_fixture.py'
+      - '.github/workflows/cross-order-p0-runtime.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  desk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    services:
+      mariadb:
+        image: mariadb:11.8
+        env:
+          MARIADB_ROOT_PASSWORD: root
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -proot"
+          --health-interval=10s --health-timeout=5s --health-retries=20
+      redis-cache:
+        image: redis:7-alpine
+        ports: ['13000:6379']
+      redis-queue:
+        image: redis:7-alpine
+        ports: ['11000:6379']
+    env:
+      P0_FIXTURE_PATH: ${{ runner.temp }}/p0-fixture.json
+      P0_EVIDENCE_DIR: ${{ runner.temp }}/p0-evidence
+      P0_ADMIN_PASSWORD: p0-disposable-only
+      FRAPPE_DESK_URL: http://test.localhost:8000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mariadb-client libmariadb-dev libffi-dev libssl-dev pkg-config wkhtmltopdf xvfb redis-tools
+          sudo npm install -g yarn
+          python -m pip install --upgrade pip frappe-bench
+      - name: Create pinned isolated bench
+        run: |
+          set -euo pipefail
+          bench init "$RUNNER_TEMP/frappe-bench" --frappe-branch v16.17.5 --python python3.14 --skip-redis-config-generation 2>&1 | tee "$RUNNER_TEMP/bench-init.log"
+          cd "$RUNNER_TEMP/frappe-bench"
+          test "$(git -C apps/frappe rev-parse HEAD)" = 75baafaa0bde07a86bf28764383b93b5df97bc7e
+          bench get-app erpnext --branch v16.17.0 2>&1 | tee "$RUNNER_TEMP/erpnext-install.log"
+          test "$(git -C apps/erpnext rev-parse HEAD)" = 7b494dc9e8e47d288de5427bae25ce8a52c37d96
+          git clone "$GITHUB_WORKSPACE" apps/almdina_erp
+          ./env/bin/pip install -e 'apps/almdina_erp[test]'
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('sites/apps.txt')
+          apps=p.read_text().splitlines()
+          if 'almdina_erp' not in apps: p.write_text('\n'.join([*apps,'almdina_erp'])+'\n')
+          PY
+          bench set-config -g redis_cache redis://127.0.0.1:13000
+          bench set-config -g redis_queue redis://127.0.0.1:11000
+          bench set-config -g redis_socketio redis://127.0.0.1:11000
+      - name: Build and create disposable site
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/frappe-bench"
+          bench new-site test.localhost --db-host 127.0.0.1 --db-root-username root --db-root-password root --admin-password "$P0_ADMIN_PASSWORD" --no-mariadb-socket 2>&1 | tee "$RUNNER_TEMP/site.log"
+          bench --site test.localhost install-app erpnext 2>&1 | tee "$RUNNER_TEMP/erpnext-site.log"
+          bench --site test.localhost install-app almdina_erp 2>&1 | tee "$RUNNER_TEMP/almdina-site.log"
+          bench --site test.localhost migrate 2>&1 | tee "$RUNNER_TEMP/migrate.log"
+          bench build --app almdina_erp 2>&1 | tee "$RUNNER_TEMP/build.log"
+          bench --site test.localhost execute almdina_erp.tests.cross_order_p0_runtime_fixture.prepare 2>&1 | tee "$RUNNER_TEMP/fixture.log"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install browser and serve Desk
+        run: |
+          python -m pip install 'pytest>=9,<10' 'playwright==1.55.0'
+          python -m playwright install --with-deps chromium
+          echo '127.0.0.1 test.localhost' | sudo tee -a /etc/hosts
+          cd "$RUNNER_TEMP/frappe-bench"
+          nohup bench serve --port 8000 > "$RUNNER_TEMP/serve.log" 2>&1 &
+          for attempt in $(seq 1 45); do
+            if curl --fail --silent --output /dev/null "$FRAPPE_DESK_URL/login"; then exit 0; fi
+            sleep 2
+          done
+          cat "$RUNNER_TEMP/serve.log"
+          exit 1
+      - name: Run Desk runtime proof
+        run: |
+          set -o pipefail
+          python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" 2>&1 | tee "$RUNNER_TEMP/browser.log"
+      - name: Dispose of fixture data
+        if: always()
+        run: |
+          if test -f "$P0_FIXTURE_PATH"; then
+            cd "$RUNNER_TEMP/frappe-bench"
+            bench --site test.localhost execute almdina_erp.tests.cross_order_p0_runtime_fixture.cleanup || true
+          fi
+      - name: Upload runtime evidence and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cross-order-p0-runtime-evidence
+          path: |
+            ${{ runner.temp }}/p0-evidence
+            ${{ runner.temp }}/bench-init.log
+            ${{ runner.temp }}/erpnext-install.log
+            ${{ runner.temp }}/site.log
+            ${{ runner.temp }}/erpnext-site.log
+            ${{ runner.temp }}/almdina-site.log
+            ${{ runner.temp }}/migrate.log
+            ${{ runner.temp }}/build.log
+            ${{ runner.temp }}/fixture.log
+            ${{ runner.temp }}/serve.log
+            ${{ runner.temp }}/browser.log
+          if-no-files-found: warn
+          retention-days: 14
