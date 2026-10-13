@@ -23,6 +23,7 @@ on:
           - al128_desk
           - al128_desk_edit
           - al128_performance
+          - al129_new_desk
       comparison_base:
         description: PR base branch used for AL128 before/after measurements
         required: true
@@ -37,6 +38,8 @@ on:
       - ".github/workflows/frappe-v16-integration.yml"
       - "almdina_erp/tests/al128_desk_fixture.py"
       - "tests/browser/test_dco_al128_frappe_desk.py"
+      - "almdina_erp/tests/al129_desk_fixture.py"
+      - "tests/browser/test_dco_al129_frappe_desk.py"
 
 permissions:
   contents: read
@@ -123,19 +126,19 @@ jobs:
           redis-cli -h 127.0.0.1 -p 13000 ping | grep -qx PONG
           redis-cli -h 127.0.0.1 -p 11000 ping | grep -qx PONG
 
-      - name: Require ALMADINA-128 target runtime refs
-        if: github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance')
+      - name: Require pinned Desk acceptance runtime refs
+        if: github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance' || inputs.suite == 'al129_new_desk')
         env:
           FRAPPE_REF: ${{ inputs.frappe_ref }}
           ERPNEXT_REF: ${{ inputs.erpnext_ref }}
         run: |
           set -euo pipefail
           test "$FRAPPE_REF" = "v16.17.5" || {
-            echo "AL128 Desk requires Frappe v16.17.5; received '$FRAPPE_REF'." >&2
+            echo "Pinned Desk acceptance requires Frappe v16.17.5; received '$FRAPPE_REF'." >&2
             exit 1
           }
           test "$ERPNEXT_REF" = "v16.17.0" || {
-            echo "AL128 Desk requires ERPNext v16.17.0; received '$ERPNEXT_REF'." >&2
+            echo "Pinned Desk acceptance requires ERPNext v16.17.0; received '$ERPNEXT_REF'." >&2
             exit 1
           }
 
@@ -183,7 +186,7 @@ jobs:
           ERPNEXT_SHA="$(git -C apps/erpnext rev-parse HEAD)"
           printf 'Frappe ref=%s sha=%s\nERPNext ref=%s sha=%s\n' \
             "$FRAPPE_REF" "$FRAPPE_SHA" "$ERPNEXT_REF" "$ERPNEXT_SHA"
-          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" && ("$TARGET_SUITE" == "al128_desk" || "$TARGET_SUITE" == "al128_desk_edit" || "$TARGET_SUITE" == "al128_performance") ]]; then
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" && ("$TARGET_SUITE" == "al128_desk" || "$TARGET_SUITE" == "al128_desk_edit" || "$TARGET_SUITE" == "al128_performance" || "$TARGET_SUITE" == "al129_new_desk") ]]; then
             test "$FRAPPE_SHA" = "75baafaa0bde07a86bf28764383b93b5df97bc7e"
             test "$ERPNEXT_SHA" = "7b494dc9e8e47d288de5427bae25ce8a52c37d96"
           else
@@ -277,26 +280,88 @@ jobs:
           test -s "$DCO_AL128_FIXTURE_FILE"
           echo "DCO_AL128_FIXTURE_FILE=$DCO_AL128_FIXTURE_FILE" >> "$GITHUB_ENV"
 
+      - name: Prepare isolated ALMADINA-129 Desk fixtures
+        if: github.event_name == 'workflow_dispatch' && inputs.suite == 'al129_new_desk'
+        env:
+          DCO_AL129_FIXTURE_FILE: ${{ runner.temp }}/al129-desk-fixtures.json
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/frappe-bench"
+          run_fixture_step() {
+            local method="$1"
+            local log_file="$2"
+            set +e
+            bench --site test.localhost execute "$method" 2>&1 | tee "$RUNNER_TEMP/$log_file"
+            local status=${PIPESTATUS[0]}
+            set -e
+            if (( status != 0 )); then
+              {
+                echo "### ALMADINA-129 fixture preparation failed: $method"
+                echo '```text'
+                tail -n 70 "$RUNNER_TEMP/$log_file"
+                echo '```'
+              } >> "$GITHUB_STEP_SUMMARY"
+              return "$status"
+            fi
+          }
+          run_fixture_step almdina_erp.tests.al129_desk_fixture.prepare_al129_desk_site al129-fixture-setup.log
+          run_fixture_step almdina_erp.tests.al129_desk_fixture.create_al129_desk_fixtures al129-fixture-create.log
+          test -s "$DCO_AL129_FIXTURE_FILE"
+          echo "DCO_AL129_FIXTURE_FILE=$DCO_AL129_FIXTURE_FILE" >> "$GITHUB_ENV"
+
+      - name: Run ALMADINA-129 token, permission, and concurrency integration tests
+        if: github.event_name == 'workflow_dispatch' && inputs.suite == 'al129_new_desk'
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/frappe-bench"
+          bench --site test.localhost set-config allow_tests true
+          set +e
+          bench --site test.localhost run-tests --module almdina_erp.tests.test_new_order_recovery_integration \
+            2>&1 | tee "$RUNNER_TEMP/al129-integration-tests.log"
+          test_status=${PIPESTATUS[0]}
+          set -e
+          if (( test_status != 0 )); then
+            {
+              echo '### ALMADINA-129 Frappe integration tests: FAIL'
+              echo '```text'
+              tail -n 100 "$RUNNER_TEMP/al129-integration-tests.log"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit "$test_status"
+          fi
+          if grep -Fq 'INCONCLUSIVE concurrent insert outcome' "$RUNNER_TEMP/al129-integration-tests.log" \
+            || grep -Eq 'OK \(skipped=[1-9][0-9]*' "$RUNNER_TEMP/al129-integration-tests.log"; then
+            {
+              echo '### ALMADINA-129 Frappe integration tests: INCONCLUSIVE'
+              echo 'The independent-connection insert race did not prove one insert plus one unique conflict. The gate remains blocked; see the test log.'
+              echo '```text'
+              grep -F 'INCONCLUSIVE concurrent insert outcome' "$RUNNER_TEMP/al129-integration-tests.log" | tail -n 20
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo '### ALMADINA-129 Frappe integration tests: PASS' >> "$GITHUB_STEP_SUMMARY"
+
       - name: Install Chromium for targeted Desk certification
-        if: github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance')
+        if: github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance' || inputs.suite == 'al129_new_desk')
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Install Playwright and Chromium for targeted Desk certification
-        if: github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance')
+        if: github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance' || inputs.suite == 'al129_new_desk')
         run: |
           python -m pip install 'pytest>=9,<10' 'playwright==1.55.0'
           python -m playwright install --with-deps chromium
 
       - name: Build Almdina ERP Desk assets
-        if: github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance')
+        if: github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance' || inputs.suite == 'al129_new_desk')
         run: |
           cd "$RUNNER_TEMP/frappe-bench"
           bench build --app almdina_erp
 
       - name: Start isolated Frappe Desk server
-        if: github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance')
+        if: github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance' || inputs.suite == 'al129_new_desk')
         run: |
           set -euo pipefail
           echo '127.0.0.1 test.localhost' | sudo tee -a /etc/hosts >/dev/null
@@ -316,35 +381,49 @@ jobs:
             exit 1
           fi
 
-      - name: Run one targeted ALMADINA-128 Desk or performance acceptance case
-        if: github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance')
+      - name: Run targeted pinned Desk acceptance case
+        if: github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance' || inputs.suite == 'al129_new_desk')
         env:
           FRAPPE_DESK_URL: http://test.localhost:8000
           DCO_AL128_FIXTURE_FILE: ${{ runner.temp }}/al128-desk-fixtures.json
+          DCO_AL129_FIXTURE_FILE: ${{ runner.temp }}/al129-desk-fixtures.json
           AL128_COMPARISON_BASE: ${{ inputs.comparison_base }}
-          AL128_TARGET_CASE: ${{ inputs.suite }}
+          TARGET_CASE: ${{ inputs.suite }}
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
-          git check-ref-format --branch "$AL128_COMPARISON_BASE"
-          git fetch origin "$AL128_COMPARISON_BASE:refs/remotes/origin/$AL128_COMPARISON_BASE"
-          AL128_BASE_SHA="$(git merge-base HEAD "refs/remotes/origin/$AL128_COMPARISON_BASE")"
-          export AL128_BASE_SHA
-          git cat-file -e "$AL128_BASE_SHA^{commit}"
-          printf 'ALMADINA-128 comparison base=%s merge-base=%s\n' \
-            "$AL128_COMPARISON_BASE" "$AL128_BASE_SHA" | tee -a "$GITHUB_STEP_SUMMARY"
-          if [[ "$AL128_TARGET_CASE" == "al128_performance" ]]; then
+          if [[ "$TARGET_CASE" == "al129_new_desk" ]]; then
+            test -s "$DCO_AL129_FIXTURE_FILE"
+            python -m pytest --collect-only -q tests/browser/test_dco_al129_frappe_desk.py \
+              | tee "$RUNNER_TEMP/al129-pytest-collect.log"
+            test_target="tests/browser/test_dco_al129_frappe_desk.py"
+          else
+            test -s "$DCO_AL128_FIXTURE_FILE"
+          fi
+          if [[ "$TARGET_CASE" != "al129_new_desk" ]]; then
+            git check-ref-format --branch "$AL128_COMPARISON_BASE"
+            git fetch origin "$AL128_COMPARISON_BASE:refs/remotes/origin/$AL128_COMPARISON_BASE"
+            AL128_BASE_SHA="$(git merge-base HEAD "refs/remotes/origin/$AL128_COMPARISON_BASE")"
+            export AL128_BASE_SHA
+            git cat-file -e "$AL128_BASE_SHA^{commit}"
+            printf 'ALMADINA-128 comparison base=%s merge-base=%s\n' \
+              "$AL128_COMPARISON_BASE" "$AL128_BASE_SHA" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+          if [[ "$TARGET_CASE" == "al129_new_desk" ]]; then
+            test_target="tests/browser/test_dco_al129_frappe_desk.py"
+            export DCO_AL129_FIXTURE_FILE
+          elif [[ "$TARGET_CASE" == "al128_performance" ]]; then
             test_target="tests/browser/test_dco_al128_frappe_desk.py::test_actual_measurement_entry_performance_200_and_500_before_after"
           else
             test_target="tests/browser/test_dco_al128_frappe_desk.py::test_real_desk_edits_checkpoint_and_permission_isolation"
           fi
           set +e
           python -m pytest -q -s "$test_target" 2>&1 \
-            | tee "$RUNNER_TEMP/al128-desk-pytest.log"
+            | tee "$RUNNER_TEMP/desk-pytest.log"
           test_status=${PIPESTATUS[0]}
           set -e
           if (( test_status != 0 )); then
-            failure_tail="$(python - "$RUNNER_TEMP/al128-desk-pytest.log" <<'PY'
+            failure_tail="$(python - "$RUNNER_TEMP/desk-pytest.log" <<'PY'
           import re
           import sys
 
@@ -367,11 +446,11 @@ jobs:
             failure_tail="${failure_tail//'%'/'%25'}"
             failure_tail="${failure_tail//$'\r'/'%0D'}"
             failure_tail="${failure_tail//$'\n'/'%0A'}"
-            printf '::error title=AL128 real Desk test failure::%s\n' "$failure_tail"
+            printf '::error title=Real Desk test failure::%s\n' "$failure_tail"
             {
-              echo '### ALMADINA-128 real Desk test failure details'
+              echo "### $TARGET_CASE real Desk test failure details"
               echo '```text'
-              python - "$RUNNER_TEMP/al128-desk-pytest.log" <<'PY'
+              python - "$RUNNER_TEMP/desk-pytest.log" <<'PY'
           import sys
 
           text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
@@ -380,25 +459,59 @@ jobs:
           PY
               echo '```'
             } >> "$GITHUB_STEP_SUMMARY"
+            if [[ "$TARGET_CASE" == "al129_new_desk" && -s "$RUNNER_TEMP/al129-new-desk-evidence.json" ]]; then
+              {
+                echo '### ALMADINA-129 evidence completed before failure'
+                echo '```json'
+                cat "$RUNNER_TEMP/al129-new-desk-evidence.json"
+                echo '```'
+              } >> "$GITHUB_STEP_SUMMARY"
+            fi
+          else
+            {
+              echo "### $TARGET_CASE real Desk acceptance: PASS"
+              echo 'Runtime: Frappe v16.17.5 / ERPNext v16.17.0'
+              echo 'Browser: isolated Chromium; see uploaded Desk evidence for per-scenario results.'
+            } >> "$GITHUB_STEP_SUMMARY"
+            if [[ "$TARGET_CASE" == "al129_new_desk" ]]; then
+              python - "$RUNNER_TEMP/al129-new-desk-evidence.json" <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          import sys
+          from pathlib import Path
+
+          path = Path(sys.argv[1])
+          evidence = json.loads(path.read_text(encoding="utf-8"))
+          print("```json")
+          print(json.dumps(evidence, ensure_ascii=False, indent=2))
+          print("```")
+          PY
+            fi
           fi
           exit "$test_status"
-        timeout-minutes: 10
+        timeout-minutes: 20
 
-      - name: Upload ALMADINA-128 Desk evidence
-        if: always() && github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance')
+      - name: Upload Desk acceptance evidence
+        if: always() && github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance' || inputs.suite == 'al129_new_desk')
         uses: actions/upload-artifact@v4
         with:
-          name: al128-real-desk-evidence
+          name: ${{ inputs.suite }}-real-desk-evidence
           path: |
             ${{ runner.temp }}/al128-desk-evidence.json
             ${{ runner.temp }}/al128-desk-trace.json
             ${{ runner.temp }}/al128-desk-failure.png
             ${{ runner.temp }}/al128-desk-server.log
+            ${{ runner.temp }}/al129-new-desk-evidence.json
+            ${{ runner.temp }}/al129-new-desk-trace.json
+            ${{ runner.temp }}/al129-desk-failure.png
+            ${{ runner.temp }}/al129-fixture-setup.log
+            ${{ runner.temp }}/al129-integration-tests.log
+            ${{ runner.temp }}/al129-pytest-collect.log
+            ${{ runner.temp }}/desk-pytest.log
           if-no-files-found: warn
           retention-days: 7
 
       - name: Run Almdina ERP tests
-        if: github.event_name != 'workflow_dispatch' || (inputs.suite != 'al128_desk' && inputs.suite != 'al128_desk_edit' && inputs.suite != 'al128_performance')
+        if: github.event_name != 'workflow_dispatch' || (inputs.suite != 'al128_desk' && inputs.suite != 'al128_desk_edit' && inputs.suite != 'al128_performance' && inputs.suite != 'al129_new_desk')
         run: |
           cd "$RUNNER_TEMP/frappe-bench"
           bench --site test.localhost set-config allow_tests true
@@ -451,6 +564,11 @@ jobs:
             al128-fixture-prepare.log \
             al128-fixture-create.log \
             al128-desk-pytest.log \
+            al129-fixture-setup.log \
+            al129-fixture-create.log \
+            al129-integration-tests.log \
+            al129-pytest-collect.log \
+            desk-pytest.log \
             tests.log; do
             cp "$RUNNER_TEMP/$log" "$RUNNER_TEMP/integration-diagnostics/" 2>/dev/null || true
           done

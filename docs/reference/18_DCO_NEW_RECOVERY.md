@@ -106,21 +106,26 @@ unused token.
 | Outcome | Local state / action |
 |---|---|
 | Client/server validation or definite responded failure | Return to `ACTIVE`; retain the draft. |
-| Transport failure with unknown outcome | Remain `PENDING_RECONCILIATION`; do not retry or delete. |
-| Reconciliation says `NOT_FOUND` | Server has proved absence; return to `ACTIVE`; the next explicit Save may reuse the same token. |
+| Transport failure with unknown outcome | Remain `PENDING_RECONCILIATION`; retain the exact checkpoint and creation token. |
+| Reconciliation says `NOT_FOUND` | No committed row is visible now; this does not prove an earlier insert is no longer in flight. Keep `PENDING_RECONCILIATION`. |
 | Acknowledged insert or reconciliation says `CREATED` | Enter `COMPLETED`, then delete the local draft/assets, and use the server-returned permanent DCO. |
-| Reconciliation unavailable | Do not hydrate a pending draft and do not retry insert; retain local state. |
+| Reconciliation unavailable | Retain local state and do not begin a native retry until the saved identity can be checked. |
 
 Cleanup ordering is server proof, `COMPLETED`, then local delete. A failed local
 delete leaves a discoverable pending record that resolves idempotently next time.
 An exact same-revision retry preserves a stored `PENDING_RECONCILIATION` marker;
 higher checkpoint revisions are refused while that insert attempt is pending, so
-the attempted payload cannot move underneath an acknowledged result. Only the
-explicit server-proven `NOT_FOUND` transition may return the record to `ACTIVE`.
-That transition is compare-and-set against both the recovery revision and the exact
-`official_save_attempted_at` it reconciled. The timestamp is retained as the last
-attempt fence while `ACTIVE`, and each later attempt advances it monotonically, so
-a late `NOT_FOUND` cannot clear a newer pending attempt from another tab.
+the attempted payload cannot move underneath an acknowledged result. After a
+`NOT_FOUND`, an explicit retry may submit only the unchanged, saved projection with
+the same token. The unique DCO token allows at most one native insert to commit;
+the retry never rotates the token, advances the checkpoint, or clears pending
+state on its own failure. A form whose current projection differs from the saved
+pending checkpoint cannot perform this retry. A definite failure response from the
+original request may return its exact pending attempt to `ACTIVE`; the transition
+is compare-and-set against both the recovery revision and the exact
+`official_save_attempted_at` it created. The timestamp is retained as a fence while
+`ACTIVE`, and each later attempt advances it monotonically, so a late response
+cannot clear a newer pending attempt from another tab.
 Pending reconciliation and hydration also retain the source DocumentContext token,
 and require `AlmdinaDocumentContext.isCurrent`, so a late response cannot mutate a
 departed form, change global Save validation, delete its checkpoint, or route the
