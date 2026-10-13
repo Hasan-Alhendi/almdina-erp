@@ -21,6 +21,9 @@ RUNNER_TEMP = Path(os.environ.get("RUNNER_TEMP", "/tmp"))
 EVIDENCE_PATH = RUNNER_TEMP / "al129-new-desk-evidence.json"
 TRACE_PATH = RUNNER_TEMP / "al129-new-desk-trace.json"
 TRACE: list[dict[str, Any]] = []
+PAGE_RUNTIME_DIAGNOSTICS: dict[int, list[dict[str, str]]] = {}
+NEW_FORM_IDENTITIES: dict[int, dict[str, Any]] = {}
+DIAGNOSTIC_REDACTIONS: set[str] = set()
 
 
 def trace(event: str, **details: Any) -> None:
@@ -36,7 +39,20 @@ def trace(event: str, **details: Any) -> None:
 def _fixtures() -> dict[str, Any]:
     if not DESK_URL or not FIXTURE_PATH:
         pytest.fail("Pinned Frappe Desk URL and isolated AL129 fixture are required.")
-    return json.loads(Path(FIXTURE_PATH).read_text(encoding="utf-8"))
+    fixture = json.loads(Path(FIXTURE_PATH).read_text(encoding="utf-8"))
+    DIAGNOSTIC_REDACTIONS.update(
+        str(fixture[key])
+        for key in ("password", "customer", "user", "second_user")
+        if fixture.get(key)
+    )
+    return fixture
+
+
+def _safe_diagnostic_text(value: str, *, limit: int = 240) -> str:
+    result = value.splitlines()[0] if value else ""
+    for secret in sorted(DIAGNOSTIC_REDACTIONS, key=len, reverse=True):
+        result = result.replace(secret, "[redacted]")
+    return result[:limit]
 
 
 def _browser(playwright_instance) -> Browser:
@@ -50,22 +66,55 @@ def _browser(playwright_instance) -> Browser:
 
 
 def _attach_diagnostics(page: Page) -> None:
-    page.on("pageerror", lambda error: trace("page_error", message=str(error)[:700]))
+    diagnostics: list[dict[str, str]] = []
+    PAGE_RUNTIME_DIAGNOSTICS[id(page)] = diagnostics
+
+    def record_runtime_error(kind: str, message: str) -> None:
+        diagnostics.append({"kind": kind, "message": _safe_diagnostic_text(message)})
+        del diagnostics[:-20]
+
+    def record_page_error(error) -> None:
+        message = _safe_diagnostic_text(str(error), limit=700)
+        record_runtime_error("pageerror", message)
+        trace("page_error", message=message)
+
     page.on(
         "requestfailed",
-        lambda request: trace(
-            "request_failed",
-            method=request.method,
-            path=urlsplit(request.url).path,
-            failure=str(request.failure or "unknown")[:240],
-        ),
+        lambda request: record_failed_request(request, diagnostics),
     )
+
+    def record_console_error(message) -> None:
+        safe_message = _safe_diagnostic_text(message.text, limit=500)
+        record_runtime_error("console_error", safe_message)
+        trace("console_error", message=safe_message)
+
     page.on(
         "console",
-        lambda message: trace("console_error", message=message.text[:500])
-        if message.type == "error"
+        lambda message: record_console_error(message) if message.type == "error" else None,
+    )
+    page.on("pageerror", record_page_error)
+    page.on(
+        "response",
+        lambda response: record_http_error(response, diagnostics)
+        if response.status >= 400
         else None,
     )
+
+
+def record_failed_request(request, diagnostics: list[dict[str, str]]) -> None:
+    path = urlsplit(request.url).path
+    failure = _safe_diagnostic_text(str(request.failure or "unknown"))
+    diagnostics.append({"kind": "requestfailed", "message": f"{request.method} {path}: {failure}"})
+    del diagnostics[:-20]
+    trace("request_failed", method=request.method, path=path, failure=failure)
+
+
+def record_http_error(response, diagnostics: list[dict[str, str]]) -> None:
+    path = urlsplit(response.url).path
+    message = f"{response.request.method} {path}: HTTP {response.status}"
+    diagnostics.append({"kind": "http_error", "message": message})
+    del diagnostics[:-20]
+    trace("http_error_response", method=response.request.method, path=path, status=response.status)
 
 
 def _login(page: Page, fixture: dict[str, Any], user: str | None = None) -> None:
@@ -122,18 +171,48 @@ def _track_reconciliation_responses(page: Page, statuses: list[str]) -> None:
     page.on("response", record)
 
 
-def _open_new_form(page: Page, suffix: str) -> None:
-    page.goto(
+def _open_new_form(page: Page, suffix: str, *, expected_state: str) -> None:
+    if expected_state not in {"ready_for_entry", "awaiting_draft_selection"}:
+        raise ValueError(f"Unsupported NEW form state: {expected_state}")
+    PAGE_RUNTIME_DIAGNOSTICS.setdefault(id(page), []).clear()
+    response = page.goto(
         f"{DESK_URL}/app/door-cutting-order/new-door-cutting-order-al129-{suffix}",
         wait_until="domcontentloaded",
         timeout=60_000,
     )
+    trace("new_form_navigation_response", status=response.status if response else None)
     page.wait_for_function(
         "() => window.cur_frm && cur_frm.doctype === 'Door Cutting Order' "
         "&& cur_frm.is_new() && cur_frm.fields_dict.pieces_fast_entry "
         "&& cur_frm.fields_dict.pieces_fast_entry.$wrapper",
         timeout=60_000,
     )
+    if expected_state == "awaiting_draft_selection":
+        page.wait_for_function(
+            "() => { const modal = document.querySelector('.modal.show');"
+            " return Boolean(modal && modal.querySelector('[data-recovery-action=\"continue\"]')"
+            " && modal.querySelector('[data-recovery-action=\"new\"]')); }",
+            timeout=30_000,
+        )
+        state = page.evaluate(
+            "() => ({name: cur_frm.doc.name, isNew: cur_frm.is_new(),"
+            " continueActions: document.querySelectorAll("
+            "'.modal.show [data-recovery-action=\"continue\"]').length,"
+            " newActions: document.querySelectorAll("
+            "'.modal.show [data-recovery-action=\"new\"]').length})"
+        )
+        assert state["isNew"] is True
+        assert state["continueActions"] >= 1 and state["newActions"] == 1
+        NEW_FORM_IDENTITIES[id(page)] = {"name": state["name"], "is_new": state["isNew"]}
+        trace(
+            "real_new_dco_awaiting_draft_selection",
+            name=state["name"],
+            continue_actions=state["continueActions"],
+            new_actions=state["newActions"],
+            checkpoint_not_required=True,
+        )
+        return
+
     page.wait_for_function(
         "() => window.AlmdinaDcoRecovery && AlmdinaDcoRecovery.LocalCheckpoint "
         "&& AlmdinaDcoRecovery.LocalCheckpoint.snapshot(cur_frm)",
@@ -142,7 +221,16 @@ def _open_new_form(page: Page, suffix: str) -> None:
     expect(page.locator("[data-fieldname='pieces_fast_entry'] .dco-fast-table")).to_be_visible(
         timeout=30_000
     )
-    trace("real_new_dco_form_ready", name=page.evaluate("() => cur_frm.doc.name"))
+    state = page.evaluate(
+        "() => ({name: cur_frm.doc.name, isNew: cur_frm.is_new(),"
+        " checkpoint: Boolean(AlmdinaDcoRecovery.LocalCheckpoint.snapshot(cur_frm)),"
+        " discoveryVisible: Boolean(document.querySelector("
+        "'.modal.show [data-recovery-action=\"continue\"]'))})"
+    )
+    assert state["isNew"] is True and state["checkpoint"] is True
+    assert state["discoveryVisible"] is False
+    NEW_FORM_IDENTITIES[id(page)] = {"name": state["name"], "is_new": state["isNew"]}
+    trace("real_new_dco_form_ready", name=state["name"], checkpoint=True)
 
 
 def _read_local_drafts(page: Page) -> dict[str, Any]:
@@ -159,7 +247,97 @@ def _read_local_drafts(page: Page) -> dict[str, Any]:
 
 
 def _set_link(page: Page, fieldname: str, value: str) -> None:
-    control = page.locator(f"[data-fieldname='{fieldname}'] input").first
+    if fieldname == "customer":
+        state = page.evaluate(
+            "() => {"
+            " const frm = window.cur_frm;"
+            " const field = frm && frm.fields_dict && frm.fields_dict.customer;"
+            " const unwrap = value => value && typeof value.get === 'function'"
+            " ? value.get(0) : (value && value[0]) || value || null;"
+            " const wrapper = unwrap(field && field.$wrapper);"
+            " const input = unwrap(field && field.$input);"
+            " const visible = node => { if (!node || !node.isConnected) return false;"
+            " const style = getComputedStyle(node); return node.getClientRects().length > 0"
+            " && style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0'; };"
+            " const matches = [...document.querySelectorAll(\"[data-fieldname='customer'] input\")];"
+            " const modals = [...document.querySelectorAll('.modal.show')].filter(visible);"
+            " const activeTabs = [...document.querySelectorAll('.nav-link.active, .tab-pane.active')]"
+            " .map(node => ({kind: node.matches('.tab-pane') ? 'pane' : 'tab',"
+            " label: (node.getAttribute('aria-label') || node.textContent || '').trim().slice(0, 80),"
+            " fieldname: node.getAttribute('data-fieldname'), visible: visible(node)}));"
+            " const route = window.frappe && typeof frappe.get_route === 'function'"
+            " ? frappe.get_route() : null;"
+            " const allInputs = [...document.querySelectorAll('input')];"
+            " const pane = wrapper && wrapper.closest('.tab-pane');"
+            " const formWrapper = unwrap(frm && (frm.$wrapper || frm.wrapper));"
+            " return {documentName: frm && frm.doc && frm.doc.name || null,"
+            " isNew: frm && typeof frm.is_new === 'function' ? frm.is_new() : null,"
+            " doctype: frm && frm.doctype || null,"
+            " route: Array.isArray(route) ? route.join('/') : null,"
+            " customerFieldExists: Boolean(field),"
+            " fieldType: field && field.df && field.df.fieldtype || null,"
+            " hidden: field && field.df ? Boolean(field.df.hidden) : null,"
+            " readOnly: field ? Boolean(field.read_only || (field.df && field.df.read_only)) : null,"
+            " permlevel: field && field.df ? field.df.permlevel : null,"
+            " dispStatus: field && field.disp_status || null,"
+            " wrapperExists: Boolean(wrapper), wrapperConnected: Boolean(wrapper && wrapper.isConnected),"
+            " wrapperVisible: visible(wrapper), wrapperHiddenAttribute: Boolean(wrapper && wrapper.hidden),"
+            " tabPaneVisible: pane ? visible(pane) : null,"
+            " fieldInputExists: Boolean(input), fieldInputConnected: Boolean(input && input.isConnected),"
+            " fieldInputVisible: visible(input), fieldInputTag: input && input.tagName || null,"
+            " fieldInputId: input && input.id || null,"
+            " fieldInputIndex: input ? allInputs.indexOf(input) : -1,"
+            " fieldInputDisabled: input ? Boolean(input.disabled) : null,"
+            " fieldInputReadOnly: input ? Boolean(input.readOnly) : null,"
+            " fieldInputAriaLabel: input && input.getAttribute('aria-label') || null,"
+            " customerDomMatchCount: matches.length,"
+            " visibleCustomerDomMatchCount: matches.filter(visible).length,"
+            " overlays: modals.map(modal => ({recoveryContinue: modal.querySelectorAll("
+            "'[data-recovery-action=\"continue\"]').length, recoveryNew: modal.querySelectorAll("
+            "'[data-recovery-action=\"new\"]').length})),"
+            " activeTabs, formRendering: Boolean(formWrapper && formWrapper.isConnected),"
+            " formVisible: visible(formWrapper),"
+            " pageReadyState: document.readyState}; }"
+        )
+        initial_identity = NEW_FORM_IDENTITIES.get(id(page), {})
+        state["identityUnchangedSinceOpen"] = (
+            state.get("documentName") == initial_identity.get("name")
+            and state.get("isNew") is initial_identity.get("is_new") is True
+        )
+        state["runtimeErrors"] = PAGE_RUNTIME_DIAGNOSTICS.get(id(page), [])[-12:]
+        trace("customer_field_state_before_fill", **state)
+        if not state.get("identityUnchangedSinceOpen"):
+            raise AssertionError(f"Customer field is not on the NEW document verified by _open_new_form: {state}")
+        if (
+            state.get("hidden")
+            or state.get("readOnly")
+            or not state.get("fieldInputVisible")
+            or state.get("fieldInputDisabled")
+            or state.get("fieldInputReadOnly")
+        ):
+            raise AssertionError(f"Customer Frappe input is not an enabled visible user control: {state}")
+
+        input_id = state.get("fieldInputId")
+        input_index = state.get("fieldInputIndex", -1)
+        if isinstance(input_id, str) and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]*", input_id):
+            control = page.locator(f"#{input_id}")
+        elif isinstance(input_index, int) and input_index >= 0:
+            control = page.locator("input").nth(input_index)
+        else:
+            raise AssertionError(f"Frappe exposes no addressable visible Customer input: {state}")
+        if control.count() != 1 or not control.is_visible():
+            raise AssertionError(f"Resolved Customer input is not uniquely visible: {state}")
+        is_frappe_customer_input = control.evaluate(
+            "node => { const field = window.cur_frm && cur_frm.fields_dict.customer;"
+            " const input = field && field.$input;"
+            " const element = input && typeof input.get === 'function'"
+            " ? input.get(0) : (input && input[0]) || input;"
+            " return element === node; }"
+        )
+        if not is_frappe_customer_input:
+            raise AssertionError(f"Resolved locator no longer matches Frappe's Customer control: {state}")
+    else:
+        control = page.locator(f"[data-fieldname='{fieldname}'] input").first
     control.fill(value)
     suggestions = page.locator(".awesomplete ul li:visible")
     expect(suggestions.first).to_be_visible(timeout=20_000)
@@ -268,7 +446,7 @@ def test_real_desk_multiple_drafts_start_new_delete_and_restore_geometry() -> No
         _attach_diagnostics(page)
         try:
             _login(page, fixture)
-            _open_new_form(page, "multiple-drafts")
+            _open_new_form(page, "multiple-drafts", expected_state="ready_for_entry")
             _seed_recovery_record(
                 page, draft_id=first_id, user=fixture["user"], fixture=fixture,
                 count=10, with_geometry=False,
@@ -281,7 +459,7 @@ def test_real_desk_multiple_drafts_start_new_delete_and_restore_geometry() -> No
                 page, draft_id=foreign_id, user="other-user@example.com", fixture=fixture,
                 count=1, with_geometry=False,
             )
-            _open_new_form(page, "discover-multiple")
+            _open_new_form(page, "discover-multiple", expected_state="awaiting_draft_selection")
             modal = page.locator(".modal.show").last
             expect(modal.locator("[data-recovery-action='continue']")).to_have_count(2, timeout=30_000)
             expect(modal.locator(f"[data-draft-id='{foreign_id}']")).to_have_count(0)
@@ -305,14 +483,14 @@ def test_real_desk_multiple_drafts_start_new_delete_and_restore_geometry() -> No
             assert retained == 1
 
             _logout_and_login_as(page, fixture, fixture["second_user"])
-            _open_new_form(page, "second-user-scope")
+            _open_new_form(page, "second-user-scope", expected_state="ready_for_entry")
             second_user_drafts = _read_local_drafts(page)
             assert second_user_drafts["records"] == []
             expect(page.locator(".modal.show [data-recovery-action='continue']")).to_have_count(0)
             trace("browser_user_switch_isolated_first_users_drafts")
 
             _logout_and_login_as(page, fixture, fixture["user"])
-            _open_new_form(page, "return-first-user")
+            _open_new_form(page, "return-first-user", expected_state="awaiting_draft_selection")
             modal = page.locator(".modal.show").last
             expect(modal.locator(f"[data-draft-id='{retained_id}']")).to_be_visible(timeout=30_000)
 
@@ -326,7 +504,7 @@ def test_real_desk_multiple_drafts_start_new_delete_and_restore_geometry() -> No
             assert [item["draft_id"] for item in saved["records"]] == [retained_id]
             trace("start_new_retained_other_users_draft", remaining_count=1)
 
-            _open_new_form(page, "continue-retained")
+            _open_new_form(page, "continue-retained", expected_state="awaiting_draft_selection")
             modal = page.locator(".modal.show").last
             expect(modal.locator(f"[data-draft-id='{retained_id}']")).to_be_visible(timeout=30_000)
             modal.locator(f"[data-draft-id='{retained_id}'] [data-recovery-action='continue']").click()
@@ -392,7 +570,7 @@ def test_real_desk_100_piece_checkpoint_restore_and_lost_save_response() -> None
         page.on("request", record_save_request)
         try:
             _login(page, fixture)
-            _open_new_form(page, "create-100")
+            _open_new_form(page, "create-100", expected_state="ready_for_entry")
             _fill_header(page, fixture, "Recovery notes with عربي طويل\n" + ("Batch note. " * 80))
             expected = _enter_real_measurements(page, 100)
             first_row = page.locator(
@@ -455,7 +633,7 @@ def test_real_desk_100_piece_checkpoint_restore_and_lost_save_response() -> None
             _attach_diagnostics(page)
             page.on("request", record_save_request)
             _login(page, fixture)
-            _open_new_form(page, "restore-after-page-close")
+            _open_new_form(page, "restore-after-page-close", expected_state="awaiting_draft_selection")
             dialog = page.locator(".modal.show").last
             expect(dialog.locator("[data-recovery-action='continue']")).to_have_count(1)
             dialog.locator("[data-recovery-action='continue']").click()
@@ -581,7 +759,7 @@ def test_real_desk_100_piece_checkpoint_restore_and_lost_save_response() -> None
             retry_page.on("request", record_save_request)
             _track_reconciliation_responses(retry_page, retry_reconciliation_statuses)
             _login(retry_page, fixture)
-            _open_new_form(retry_page, "same-token-retry")
+            _open_new_form(retry_page, "same-token-retry", expected_state="ready_for_entry")
             _fill_header(retry_page, fixture, "Same-token retry after confirmed pre-delivery abort")
             _enter_real_measurements(retry_page, 1)
             retry_page.wait_for_function(
