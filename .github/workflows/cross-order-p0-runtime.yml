@@ -32,12 +32,14 @@ jobs:
         image: redis:7-alpine
         ports: ['11000:6379']
     env:
-      P0_FIXTURE_PATH: ${{ runner.temp }}/p0-fixture.json
-      P0_EVIDENCE_DIR: ${{ runner.temp }}/p0-evidence
       P0_ADMIN_PASSWORD: p0-disposable-only
       FRAPPE_DESK_URL: http://test.localhost:8000
     steps:
       - uses: actions/checkout@v4
+      - name: Set isolated evidence paths
+        run: |
+          echo "P0_FIXTURE_PATH=$RUNNER_TEMP/p0-fixture.json" >> "$GITHUB_ENV"
+          echo "P0_EVIDENCE_DIR=$RUNNER_TEMP/p0-evidence" >> "$GITHUB_ENV"
       - uses: actions/setup-python@v5
         with:
           python-version: '3.14'
