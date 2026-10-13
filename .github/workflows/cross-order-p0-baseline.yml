@@ -5,6 +5,8 @@ on:
     branches: [Develop]
     paths:
       - 'almdina_erp/tests/js/cross_order_p0_baseline.test.js'
+      - 'almdina_erp/tests/browser/test_cross_order_p0_runtime.py'
+      - 'almdina_erp/tests/cross_order_p0_runtime_fixture.py'
       - 'almdina_erp/public/js/door_cutting_order/**'
       - '.github/workflows/cross-order-p0-baseline.yml'
   workflow_dispatch:
@@ -19,3 +21,6 @@ jobs:
           node-version: '22'
       - name: Run intentional RED regression suite
         run: node almdina_erp/tests/js/cross_order_p0_baseline.test.js
+
+  pinned-desk-runtime:
+    uses: ./.github/workflows/cross-order-p0-runtime.yml
