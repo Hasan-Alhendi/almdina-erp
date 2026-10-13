@@ -1,0 +1,21 @@
+name: Cross-order P0 RED baseline
+
+on:
+  pull_request:
+    branches: [Develop]
+    paths:
+      - 'almdina_erp/tests/js/cross_order_p0_baseline.test.js'
+      - 'almdina_erp/public/js/door_cutting_order/**'
+      - '.github/workflows/cross-order-p0-baseline.yml'
+  workflow_dispatch:
+
+jobs:
+  identity-regressions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run intentional RED regression suite
+        run: node almdina_erp/tests/js/cross_order_p0_baseline.test.js
