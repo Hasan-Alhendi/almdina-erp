@@ -56,6 +56,13 @@ const fakeFrappe = {
             if (process.env.LINER_DXF_OUT && clientDxf.includes("0\r\nLWPOLYLINE\r\n") && clientDxf.includes("8\r\nLiner\r\n")) {
                 fs.writeFileSync(process.env.LINER_DXF_OUT, clientDxf);
             }
+            if (
+                process.env.SQUARE_LINER_DXF_OUT
+                && opts.args
+                && opts.args.order_name === "26-00105"
+            ) {
+                fs.writeFileSync(process.env.SQUARE_LINER_DXF_OUT, clientDxf);
+            }
             return Promise.resolve({
                 message: {
                     filename: "cutting_plan_DCO-TOPOLOGY_AutoCAD2011_2026.dxf",
@@ -518,6 +525,43 @@ async function run() {
     downloadedDxf = "";
     await assert.rejects(savedPlanExport(), /حدّد سماكة الشفرة/);
     assert.equal(downloadedDxf, "");
+
+    nextPlan = {
+        full_board_width_cm: 122,
+        full_board_length_cm: 244,
+        usable_board_width_cm: 121,
+        usable_board_length_cm: 243,
+        trim_cm: 0.5,
+        kerf_mm: 5,
+        kerf_cm: 0.5,
+        sheets: [{
+            sheet_no: 1,
+            full_width_cm: 122,
+            full_length_cm: 244,
+            pieces: [{
+                id: 1,
+                label: "1",
+                piece_type: "Regular",
+                extra_liner: 1,
+                liner_reference_side: "edge_long_right",
+                liner_offset_cm: 10,
+                liner_width_cm: 1.8,
+                x: 0,
+                y: 193,
+                w: 50,
+                h: 50,
+                width_cm: 50,
+                length_cm: 50,
+                geometry: geometry([[0, 1930], [500, 1930], [500, 2430], [0, 2430]]),
+            }],
+        }],
+    };
+    downloadedDxf = "";
+    await fakeFrappe.almdina.export_order_dxf("26-00105", "system");
+    assert.match(downloadedDxf, /0\r\nLWPOLYLINE\r\n/);
+    assert.match(downloadedDxf, /8\r\nLiner\r\n/);
+    assert.match(downloadedDxf, /10\r\n402\.5\r\n20\r\n507\.5\r\n/);
+    assert.match(downloadedDxf, /10\r\n389\.5\r\n20\r\n2\.5\r\n/);
 
     console.log("Secure DXF topology export simulation passed");
 }
