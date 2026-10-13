@@ -247,8 +247,31 @@ jobs:
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP/frappe-bench"
-          bench --site test.localhost execute almdina_erp.tests.al128_desk_fixture.prepare_al128_desk_site
-          bench --site test.localhost execute almdina_erp.tests.al128_desk_fixture.create_al128_desk_fixtures
+          run_fixture_step() {
+            local method="$1"
+            local log_file="$2"
+            set +e
+            bench --site test.localhost execute "$method" 2>&1 | tee "$RUNNER_TEMP/$log_file"
+            local command_status=${PIPESTATUS[0]}
+            set -e
+            if (( command_status != 0 )); then
+              local failure_tail
+              failure_tail="$(tail -n 60 "$RUNNER_TEMP/$log_file")"
+              failure_tail="${failure_tail//'%'/'%25'}"
+              failure_tail="${failure_tail//$'\r'/'%0D'}"
+              failure_tail="${failure_tail//$'\n'/'%0A'}"
+              printf '::error title=AL128 fixture preparation failure::%s\n' "$failure_tail"
+              {
+                echo "### ALMADINA-128 fixture preparation failed: $method"
+                echo '```text'
+                tail -n 60 "$RUNNER_TEMP/$log_file"
+                echo '```'
+              } >> "$GITHUB_STEP_SUMMARY"
+              return "$command_status"
+            fi
+          }
+          run_fixture_step almdina_erp.tests.al128_desk_fixture.prepare_al128_desk_site al128-fixture-prepare.log
+          run_fixture_step almdina_erp.tests.al128_desk_fixture.create_al128_desk_fixtures al128-fixture-create.log
           test -s "$DCO_AL128_FIXTURE_FILE"
           echo "DCO_AL128_FIXTURE_FILE=$DCO_AL128_FIXTURE_FILE" >> "$GITHUB_ENV"
 
@@ -374,6 +397,8 @@ jobs:
             install-almdina.log \
             migrate-first.log \
             migrate-second.log \
+            al128-fixture-prepare.log \
+            al128-fixture-create.log \
             tests.log; do
             cp "$RUNNER_TEMP/$log" "$RUNNER_TEMP/integration-diagnostics/" 2>/dev/null || true
           done
