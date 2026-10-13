@@ -466,32 +466,56 @@ def test_real_desk_edits_checkpoint_and_permission_isolation() -> None:
             browser.close()
 
 
-def _install_base_source_overrides(
+def _install_base_metadata_overrides(
     context: BrowserContext,
     base_sha: str,
 ) -> set[str]:
     replaced: set[str] = set()
 
-    def replace_source(route) -> None:
-        path = urlsplit(route.request.url).path
-        for suffix, repository_path in BASE_FILES.items():
-            if path.endswith(suffix):
-                body = subprocess.check_output(
-                    ["git", "show", f"{base_sha}:{repository_path}"],
-                    cwd=REPOSITORY,
-                    text=True,
-                )
-                route.fulfill(
-                    status=200,
-                    content_type="application/javascript",
-                    headers={"cache-control": "no-store"},
-                    body=body,
-                )
-                replaced.add(suffix)
-                return
-        route.continue_()
+    def replace_doctype_metadata(route) -> None:
+        response = route.fetch()
+        payload = response.json()
+        documents = payload.get("docs") or []
+        metadata = next(
+            (item for item in documents if item.get("name") == "Door Cutting Order"),
+            None,
+        )
+        if metadata is None:
+            route.fulfill(response=response)
+            return
 
-    context.route("**/*.js", replace_source)
+        script = str(metadata.get("__js") or "")
+        if not script:
+            raise AssertionError("Frappe DCO metadata response did not contain __js.")
+        for suffix, repository_path in BASE_FILES.items():
+            head_source = subprocess.check_output(
+                ["git", "show", f"HEAD:{repository_path}"],
+                cwd=REPOSITORY,
+                text=True,
+            )
+            base_source = subprocess.check_output(
+                ["git", "show", f"{base_sha}:{repository_path}"],
+                cwd=REPOSITORY,
+                text=True,
+            )
+            if head_source in script:
+                script = script.replace(head_source, base_source, 1)
+            elif base_source not in script:
+                raise AssertionError(
+                    f"Frappe DCO __js did not contain either revision of {repository_path}."
+                )
+            replaced.add(suffix)
+
+        metadata["__js"] = script
+        headers = {
+            key: value
+            for key, value in response.headers.items()
+            if key not in {"content-length", "content-encoding", "transfer-encoding"}
+        }
+        route.fulfill(status=response.status, headers=headers, json=payload)
+        trace("base_doctype_metadata_overridden", assets=sorted(replaced))
+
+    context.route("**/api/method/frappe.desk.form.load.getdoctype**", replace_doctype_metadata)
     return replaced
 
 
@@ -533,7 +557,7 @@ def _benchmark_order(
     context = browser.new_context(viewport={"width": 1800, "height": 1200})
     replaced: set[str] = set()
     if variant == "base":
-        replaced = _install_base_source_overrides(context, base_sha)
+        replaced = _install_base_metadata_overrides(context, base_sha)
     page = context.new_page()
     attach_diagnostics(page)
     save_requests: list[str] = []
@@ -546,22 +570,10 @@ def _benchmark_order(
     try:
         _login(page, fixture["editor"], fixture["password"])
         _open_order(page, name, count)
-        if variant == "base" and replaced != set(BASE_FILES):
-            loaded_scripts = page.evaluate(
-                "() => performance.getEntriesByType('resource')"
-                ".map(entry => new URL(entry.name).pathname)"
-                ".filter(path => path.endsWith('.js')"
-                " && (path.includes('/recovery/') || path.includes('door_cutting_order.bundle')))"
-                ".sort()"
-            )
-            trace(
-                "base_asset_interception_incomplete",
-                matched=sorted(replaced),
-                loaded_scripts=loaded_scripts,
-            )
+        if variant == "base":
             assert replaced == set(BASE_FILES), (
-                "Base recovery assets were not served as separate matching requests; "
-                f"matched={sorted(replaced)}, loaded JavaScript resources={loaded_scripts}"
+                "Frappe DCO metadata did not supply all base recovery assets; "
+                f"matched={sorted(replaced)}"
             )
         _start_real_edit_session(page)
         _prime_checkpoint_with_real_measurement_edit(page)
@@ -639,7 +651,7 @@ def _benchmark_order(
         assert len(checkpoint_ms) == 90
         assert not save_requests, "Measurement checkpoint unexpectedly invoked Official Save."
         if variant == "base":
-            assert replaced == set(BASE_FILES), f"Base asset intercept missed: {set(BASE_FILES) - replaced}"
+            assert replaced == set(BASE_FILES), f"Base metadata replacement missed: {set(BASE_FILES) - replaced}"
         result = {
             "variant": variant,
             "rows": count,
