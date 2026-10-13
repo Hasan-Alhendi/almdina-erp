@@ -262,6 +262,22 @@ def test_real_desk_edits_checkpoint_and_permission_isolation() -> None:
                 "#dco-edge-profile-popover "
                 f"[data-bulk-profile-value={json.dumps(fixture['bulk_edge_type'])}]"
             ).click()
+            bulk_edge_state_after_action = page.evaluate(
+                "pieceName => {"
+                " const row = cur_frm.doc.pieces.find(item => item.name === pieceName);"
+                " return Object.fromEntries(["
+                "  'edge_long_left', 'edge_long_right', 'edge_width_top', 'edge_width_bottom',"
+                "  'edge_long_left_type_override', 'edge_long_right_type_override',"
+                "  'edge_width_top_type_override', 'edge_width_bottom_type_override'"
+                " ].map(field => [field, row && row[field]]));"
+                "}",
+                piece_names[1],
+            )
+            trace("bulk_edge_profile_form_state", state=bulk_edge_state_after_action)
+            assert bulk_edge_state_after_action["edge_width_top"] == 1, (
+                "Bulk edge profile action did not set the live form model: "
+                f"{bulk_edge_state_after_action}"
+            )
 
             special = rows.nth(2)
             special.locator('input[data-field="notes"]').fill("AL128 special geometry checkpoint note")
@@ -288,8 +304,14 @@ def test_real_desk_edits_checkpoint_and_permission_isolation() -> None:
             assert int(first_saved["qty"]) == 4
             assert int(first_saved["edge_long_left"]) == 0
             assert int(second_saved["extra_liner"]) == 1
-            assert int(second_saved["edge_width_top"]) == 1
-            assert second_saved["edge_width_top_type_override"] == fixture["bulk_edge_type"]
+            assert int(second_saved["edge_width_top"]) == 1, (
+                "Bulk edge profile reached the live form model but not the checkpoint; "
+                f"form={bulk_edge_state_after_action}, checkpoint={second_saved}"
+            )
+            assert second_saved["edge_width_top_type_override"] == fixture["bulk_edge_type"], (
+                "Bulk edge profile override was not captured in the checkpoint; "
+                f"form={bulk_edge_state_after_action}, checkpoint={second_saved}"
+            )
             assert special_saved["notes"] == "AL128 special geometry checkpoint note"
             special_geometry = json.loads(special_saved["special_shape_geometry_json"])
             assert special_geometry["kind"] == "polygon"
