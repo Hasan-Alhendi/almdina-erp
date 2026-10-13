@@ -280,7 +280,33 @@ def test_real_desk_edits_checkpoint_and_permission_isolation() -> None:
             )
 
             special = rows.nth(2)
-            special.locator('input[data-field="notes"]').fill("AL128 special geometry checkpoint note")
+            special_notes = "AL128 special geometry checkpoint note"
+            revision_before_special_notes = page.evaluate(
+                "() => AlmdinaDcoRecovery.LocalCheckpoint.snapshot(cur_frm).recovery_revision"
+            )
+            special.locator('input[data-field="notes"]').fill(special_notes)
+            page.wait_for_function(
+                "({pieceName, value}) => cur_frm.doc.pieces.some(row =>"
+                " row.name === pieceName && row.notes === value)",
+                arg={"pieceName": piece_names[2], "value": special_notes},
+                timeout=10_000,
+            )
+            page.wait_for_function(
+                "revision => {"
+                " const state = AlmdinaDcoRecovery.LocalCheckpoint.snapshot(cur_frm);"
+                " return state && state.recovery_revision > revision;"
+                "}",
+                arg=revision_before_special_notes,
+                timeout=10_000,
+            )
+            page.wait_for_function(
+                "() => {"
+                " const state = AlmdinaDcoRecovery.LocalCheckpoint.snapshot(cur_frm);"
+                " return state && state.state === 'LOCAL_SAVED'"
+                "   && state.saved_revision === state.recovery_revision;"
+                "}",
+                timeout=30_000,
+            )
             page.wait_for_function(
                 "() => {"
                 " const state = AlmdinaDcoRecovery.LocalCheckpoint.snapshot(cur_frm);"
