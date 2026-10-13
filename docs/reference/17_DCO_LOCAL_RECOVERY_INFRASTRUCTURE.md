@@ -243,3 +243,29 @@ The following remain explicitly deferred to later stories:
 - BroadcastChannel/soft-lease multi-tab hints.
 
 Server authorization and optimistic concurrency remain authoritative in every tab.
+
+## 8. ALMADINA-128 target-version certification
+
+The `Frappe v16 Integration` workflow has a manual `al128_desk` suite that reuses
+its isolated MariaDB/Redis services, Bench, and site setup. Dispatch it with the
+exact Frappe `v16.17.5` and ERPNext `v16.17.0` tags; it verifies both expected
+source SHAs before installing the isolated site. The fixture preflight rejects
+any other runtime and completes an incomplete test site only through Frappe's official
+Setup Wizard. The Desk scenario uses real Chromium sessions and capability-backed
+test users. It edits an existing DCO through Fast Entry and edge controls, checks
+the acknowledged IndexedDB projection after reload, compares server data before
+and after, and records any `savedocs` request so a local checkpoint cannot be
+mistaken for Official Save.
+
+The measurement benchmark uses 200- and 500-piece DCOs and compares the three
+ALMADINA-128 recovery scripts from the selected PR base with the PR versions in
+isolated browser contexts. For each size/version it records 90 keyboard-driven
+measurement samples, P50/P95 input-to-next-paint-frame time, and P50/P95
+checkpoint acknowledgement time inside Chromium. No latency acceptance threshold
+is defined here, so the results are comparative evidence and do not independently
+certify an absolute performance target. The separate Chromium storage test applies a per-origin quota
+through CDP in a temporary persistent profile, records native IndexedDB quota
+failure, checks preservation of the acknowledged revision and Arabic error
+status, then removes the override and profile. Injected storage failures remain
+useful repository regressions but are not evidence for this browser-native quota
+certification.

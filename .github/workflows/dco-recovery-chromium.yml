@@ -3,6 +3,15 @@ name: DCO Recovery Chromium Certification
 on:
   pull_request:
   workflow_dispatch:
+    inputs:
+      suite:
+        description: Select the Chromium certification to run
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - native_quota
 
 permissions:
   contents: read
@@ -27,4 +36,20 @@ jobs:
         run: python -m playwright install --with-deps chromium
 
       - name: Certify DCO recovery in Chromium
+        if: github.event_name != 'workflow_dispatch' || inputs.suite != 'native_quota'
         run: python -m pytest -q -s tests/browser/test_dco_local_recovery_chromium.py
+
+      - name: Certify native Chromium quota for ALMADINA-128
+        if: github.event_name == 'workflow_dispatch' && inputs.suite == 'native_quota'
+        run: >-
+          python -m pytest -q -s
+          tests/browser/test_dco_local_recovery_chromium.py::test_chromium_native_origin_quota_preserves_acknowledged_checkpoint
+
+      - name: Upload native Chromium quota evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: al128-native-chromium-quota-evidence
+          path: ${{ runner.temp }}/al128-native-quota-evidence.json
+          if-no-files-found: warn
+          retention-days: 7

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import threading
@@ -935,3 +936,282 @@ def test_chromium_repository_unavailable_status_is_removed_on_document_cleanup(
         assert result["remainsAfterGenerationCleanup"] is False
     finally:
         context.close()
+
+
+def test_chromium_native_origin_quota_preserves_acknowledged_checkpoint(
+    playwright_instance: Playwright,
+    local_origin: str,
+    tmp_path: Path,
+) -> None:
+    """Exercise Chromium's real per-origin quota without patching IndexedDB."""
+    profile = tmp_path / "al128-native-quota-profile"
+    executable = os.environ.get("CHROMIUM_PATH") or shutil.which("chromium")
+    args = ["--no-sandbox"] if os.geteuid() == 0 else []
+    context = playwright_instance.chromium.launch_persistent_context(
+        user_data_dir=str(profile),
+        headless=True,
+        executable_path=executable,
+        args=args,
+    )
+    page: Page | None = None
+    cdp = None
+    override_removed = False
+    quota_evidence: dict[str, object] | None = {
+        "result": "NOT_TESTED",
+        "profile_isolated": True,
+        "origin": local_origin,
+        "requested_quota_bytes": 1024 * 1024,
+    }
+    quota_assertions_passed = False
+    try:
+        page = recovery_page(context, local_origin)
+        origin = local_origin
+        cdp = context.new_cdp_session(page)
+        cdp.send("Storage.enable")
+        cdp.send("Storage.clearDataForOrigin", {"origin": origin, "storageTypes": "all"})
+        cdp.send(
+            "Storage.overrideQuotaForOrigin",
+            {"origin": origin, "quotaSize": 1024 * 1024},
+        )
+        applied_quota = cdp.send("Storage.getUsageAndQuota", {"origin": origin})
+        assert applied_quota["quota"] == 1024 * 1024
+        assert applied_quota["overrideActive"] is True
+        quota_evidence.update(
+            {
+                "applied_quota_bytes": applied_quota["quota"],
+                "storage_usage_bytes_at_application": applied_quota["usage"],
+                "override_active": applied_quota["overrideActive"],
+            }
+        )
+
+        page.set_content('<div id="form" class="form-layout"></div>')
+        page.evaluate(
+            """() => {
+                window.__formHandlers = {};
+                window.AlmdinaDocumentContext = {
+                    capture: frm => ({ identity: frm.doctype + "::" + frm.doc.name, generation: 1 }),
+                    isSameDocument: (frm, token) => token.identity === frm.doctype + "::" + frm.doc.name,
+                    formIdentity: frm => frm.doctype + "::" + frm.doc.name,
+                    registerCleanup: () => true,
+                    scheduleFrame: (_frm, _key, callback) => requestAnimationFrame(callback),
+                };
+                window.AlmdinaOrderRevisionUX = { isEditSessionActive: () => true };
+                window.frappe = {
+                    boot: { sitename: location.host },
+                    session: { user: "al128-quota-operator" },
+                    utils: { escape_html: value => String(value) },
+                    datetime: {},
+                    model: {
+                        clear_table: (doc, field) => { doc[field] = []; },
+                        add_child: (doc, _doctype, field) => {
+                            const row = { name: "quota-row", __islocal: 1 };
+                            (doc[field] ||= []).push(row);
+                            return row;
+                        },
+                    },
+                    ui: { form: { on: (doctype, handlers) => {
+                        window.__formHandlers[doctype] = {
+                            ...(window.__formHandlers[doctype] || {}),
+                            ...handlers,
+                        };
+                    } } },
+                    show_alert: () => {},
+                    msgprint: () => {},
+                };
+            }"""
+        )
+        page.add_script_tag(
+            path=str(RECOVERY / "presentation/door_cutting_order_local_checkpoint.js")
+        )
+        checkpoint = page.evaluate(
+            """async () => {
+                const wrapper = document.querySelector("#form");
+                const row = {
+                    name: "quota-row-1",
+                    piece_type: "Regular",
+                    width_cm: 60,
+                    length_cm: 100,
+                    qty: 1,
+                    notes: "",
+                };
+                const frm = {
+                    doctype: "Door Cutting Order",
+                    doc: {
+                        doctype: "Door Cutting Order",
+                        name: "DCO-AL128-QUOTA",
+                        modified: "2026-10-13 00:00:00",
+                        customer: "Quota Test Customer",
+                        pieces: [row],
+                    },
+                    wrapper,
+                    is_new: () => false,
+                };
+                window.cur_frm = frm;
+                window.__quotaForm = frm;
+                const owner = window.AlmdinaDcoRecovery.LocalCheckpoint;
+                owner.ensureState(frm);
+                const handlers = window.__formHandlers["Door Cutting Order Detail"];
+                const randomText = length => {
+                    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+                    const output = new Array(length);
+                    const bytes = new Uint8Array(65536);
+                    for (let offset = 0; offset < length; offset += bytes.length) {
+                        const count = Math.min(bytes.length, length - offset);
+                        crypto.getRandomValues(bytes.subarray(0, count));
+                        for (let index = 0; index < count; index += 1) {
+                            output[offset + index] = alphabet[bytes[index] % alphabet.length];
+                        }
+                    }
+                    return output.join("");
+                };
+                row.notes = randomText(120000);
+                handlers.notes(frm);
+                const acknowledged = await owner.flush(frm);
+                const firstSnapshot = owner.snapshot(frm);
+                const identity = {
+                    site: location.host,
+                    user: frappe.session.user,
+                    target_doctype: "Door Cutting Order",
+                    draft_id: firstSnapshot.draft_id,
+                };
+                const firstRecord = await owner.repository().read(identity);
+                if (!acknowledged.ok || !firstRecord.ok) {
+                    throw new Error("Initial native-quota checkpoint was not acknowledged");
+                }
+
+                row.notes = randomText(1450000);
+                handlers.notes(frm);
+                const failedWrite = await owner.flush(frm);
+                const failedSnapshot = owner.snapshot(frm);
+                const preserved = await owner.repository().read(identity);
+                const failedStatus = wrapper.querySelector(".dco-recovery-status");
+                let nativeFailure = { name: "", code: "" };
+                try {
+                    const gateway = window.AlmdinaDcoRecovery.IndexedDb.createGateway();
+                    await gateway.transaction(
+                        [window.AlmdinaDcoRecovery.IndexedDb.DRAFT_STORE],
+                        "readwrite",
+                        stores => stores[window.AlmdinaDcoRecovery.IndexedDb.DRAFT_STORE].put({
+                            storage_key: "native-quota-evidence-only",
+                            namespace_key: "native-quota-evidence-only",
+                            payload: randomText(1450000),
+                        })
+                    );
+                } catch (error) {
+                    nativeFailure = {
+                        name: String(error && error.cause && error.cause.name || error.name || ""),
+                        code: String(error && error.code || ""),
+                    };
+                }
+                return {
+                    initialAcknowledged: acknowledged.ok,
+                    firstRevision: firstSnapshot.saved_revision,
+                    firstRecordRevision: firstRecord.value.recovery_revision,
+                    firstNotesLength: firstRecord.value.payload.dco.pieces[0].notes.length,
+                    failedCode: failedWrite.error && failedWrite.error.code,
+                    failedState: failedSnapshot.state,
+                    failedRevision: failedSnapshot.recovery_revision,
+                    savedRevisionAfterFailure: failedSnapshot.saved_revision,
+                    preservedRevision: preserved.value && preserved.value.recovery_revision,
+                    preservedNotesLength: preserved.value && preserved.value.payload.dco.pieces[0].notes.length,
+                    statusState: failedStatus && failedStatus.dataset.recoveryState,
+                    statusRole: failedStatus && failedStatus.getAttribute("role"),
+                    statusText: failedStatus && failedStatus.textContent,
+                    nativeFailure,
+                    failedCheckpointPayloadBytes: new TextEncoder().encode(
+                        window.AlmdinaDcoRecovery.Projection.serialize(
+                            window.AlmdinaDcoRecovery.Projection.createPayload({
+                                dco: window.AlmdinaDcoRecovery.Projection.createDcoInput(
+                                    { customer: "Quota Test Customer", pieces: [row] },
+                                    { pieceKey: () => row.name }
+                                ),
+                                dirtyScope: "DCO",
+                            })
+                        )
+                    ).byteLength,
+                };
+            }"""
+        )
+        quota_evidence["checkpoint"] = {
+            "initial_acknowledged": checkpoint["initialAcknowledged"],
+            "acknowledged_revision": checkpoint["firstRevision"],
+            "failed_code": checkpoint["failedCode"],
+            "failed_state": checkpoint["failedState"],
+            "failed_revision": checkpoint["failedRevision"],
+            "saved_revision_after_failure": checkpoint["savedRevisionAfterFailure"],
+            "preserved_revision": checkpoint["preservedRevision"],
+            "preserved_data_length": checkpoint["preservedNotesLength"],
+            "failed_payload_bytes": checkpoint["failedCheckpointPayloadBytes"],
+            "native_error_name": checkpoint["nativeFailure"]["name"],
+            "native_error_code": checkpoint["nativeFailure"]["code"],
+            "user_status": checkpoint["statusState"],
+            "user_status_role": checkpoint["statusRole"],
+            "user_status_text": checkpoint["statusText"],
+        }
+        assert checkpoint["initialAcknowledged"] is True
+        assert checkpoint["firstRevision"] == checkpoint["firstRecordRevision"] == 1
+        assert checkpoint["firstNotesLength"] == 120000
+        assert checkpoint["failedCode"] == "quota_exceeded"
+        assert checkpoint["failedState"] == "ERROR"
+        assert checkpoint["failedRevision"] == 2
+        assert checkpoint["savedRevisionAfterFailure"] == 1
+        assert checkpoint["preservedRevision"] == 1
+        assert checkpoint["preservedNotesLength"] == 120000
+        assert checkpoint["statusState"] == "ERROR"
+        assert checkpoint["statusRole"] == "alert"
+        assert "تعذر حفظ نسخة الاسترداد محليًا" in checkpoint["statusText"]
+        assert checkpoint["nativeFailure"] == {
+            "name": "QuotaExceededError",
+            "code": "quota_exceeded",
+        }
+        assert checkpoint["failedCheckpointPayloadBytes"] < 1792 * 1024
+        assert applied_quota["usage"] < applied_quota["quota"]
+
+        cdp.send("Storage.clearDataForOrigin", {"origin": origin, "storageTypes": "all"})
+        cdp.send("Storage.overrideQuotaForOrigin", {"origin": origin, "quotaSize": 0})
+        removed_quota = cdp.send("Storage.getUsageAndQuota", {"origin": origin})
+        override_removed = removed_quota["overrideActive"] is False
+        assert override_removed is True
+        quota_evidence["override_removed"] = override_removed
+        quota_assertions_passed = True
+    finally:
+        if cdp is not None and not override_removed:
+            try:
+                cdp.send("Storage.overrideQuotaForOrigin", {"origin": local_origin, "quotaSize": 0})
+                removed_quota = cdp.send("Storage.getUsageAndQuota", {"origin": local_origin})
+                override_removed = removed_quota["overrideActive"] is False
+            except Exception:
+                pass
+        cleanup_errors: list[str] = []
+        try:
+            context.close()
+        except Exception as error:
+            cleanup_errors.append(f"browser_context_close: {error}")
+        if profile.exists():
+            try:
+                shutil.rmtree(profile)
+            except OSError as error:
+                cleanup_errors.append(f"profile_removal: {error}")
+        if quota_evidence is not None:
+            quota_evidence["override_removed"] = override_removed
+            quota_evidence["profile_removed_after_close"] = not profile.exists()
+            quota_evidence["cleanup_errors"] = cleanup_errors
+            quota_evidence["test_assertions_passed"] = quota_assertions_passed
+            has_applied_override = "applied_quota_bytes" in quota_evidence
+            quota_evidence["result"] = (
+                "PASS"
+                if quota_assertions_passed
+                and override_removed
+                and quota_evidence["profile_removed_after_close"]
+                and not cleanup_errors
+                else "NOT_CONFIRMED" if has_applied_override else "NOT_TESTED"
+            )
+            evidence_path = Path(os.environ.get("RUNNER_TEMP", str(tmp_path))) / "al128-native-quota-evidence.json"
+            evidence_path.parent.mkdir(parents=True, exist_ok=True)
+            evidence_path.write_text(
+                json.dumps(quota_evidence, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            print(f"AL128_NATIVE_QUOTA_EVIDENCE {quota_evidence}")
+            if cleanup_errors or not quota_evidence["profile_removed_after_close"] or not override_removed:
+                raise AssertionError("The native-quota override or isolated profile was not cleaned up.")
