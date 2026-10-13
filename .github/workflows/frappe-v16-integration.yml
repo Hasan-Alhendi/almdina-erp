@@ -344,24 +344,24 @@ jobs:
           set -e
           if (( test_status != 0 )); then
             failure_tail="$(python - "$RUNNER_TEMP/al128-desk-pytest.log" <<'PY'
-import re
-import sys
+          import re
+          import sys
 
-text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
-text = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", text)
-text = text.replace("al128-isolated-ci-password", "[redacted test credential]")
-lines = text.splitlines()
-selected = [
-    line[:900]
-    for line in lines
-    if line.startswith("E ")
-    or line.startswith("FAILED ")
-    or line.startswith("ERROR ")
-    or "FAILURES" in line
-    or re.match(r"^_{3,} test_", line)
-]
-print("\n".join(selected[-24:])[-3400:])
-PY
+          text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+          text = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", text)
+          text = text.replace("al128-isolated-ci-password", "[redacted test credential]")
+          lines = text.splitlines()
+          selected = [
+              line[:900]
+              for line in lines
+              if line.startswith("E ")
+              or line.startswith("FAILED ")
+              or line.startswith("ERROR ")
+              or "FAILURES" in line
+              or re.match(r"^_{3,} test_", line)
+          ]
+          print("\n".join(selected[-24:])[-3400:])
+          PY
             )"
             failure_tail="${failure_tail//'%'/'%25'}"
             failure_tail="${failure_tail//$'\r'/'%0D'}"
