@@ -51,6 +51,15 @@
                 ? current[catalogName]
                 : [];
             const entry = catalog.find(item => String(item && item.id || "").trim() === normalized);
+            const labels = window.AlmdinaFactoryProductionSettingsCatalogLabels;
+            if (labels && typeof labels.resolveLabel === "function") {
+                return labels.resolveLabel(
+                    catalogName,
+                    normalized,
+                    entry ? entry.label : normalized,
+                    t
+                );
+            }
             return entry ? String(entry.label || entry.id || normalized) : normalized;
         }
 
@@ -74,8 +83,8 @@
                 section("cutting", t("Cutting and optimizer"), t("Default geometry, distribution algorithm, and search limits."), [
                     [t("Default kerf (mm)"), source.default_kerf_mm],
                     [t("Trimming margin (mm)"), source.default_trim_margin_mm],
-                    [t("Algorithm"), t(catalogLabel(current, "optimization_catalog", source.default_packing_mode))],
-                    [t("Cutting machine type"), t(catalogLabel(current, "machine_type_catalog", source.default_cutting_machine_type))],
+                    [t("Algorithm"), catalogLabel(current, "optimization_catalog", source.default_packing_mode)],
+                    [t("Cutting machine type"), catalogLabel(current, "machine_type_catalog", source.default_cutting_machine_type)],
                     [t("Optimization timeout (s)"), source.default_optimization_time_limit_sec],
                     [t("Piece limit for optimal search"), source.optimal_search_piece_limit],
                 ], current),
@@ -117,10 +126,10 @@
                 ...(canManageBackups(current) ? [section("backup_restore", t("Backup & Restore"), t("Independent local and external backups built on the official Frappe mechanism, with separate retention and a secure SFTP connection."), [
                     [t("Local backup"), source.local_backup_enabled ? t("Enabled") : t("Disabled")],
                     [t("Local schedule"), `${t(source.local_backup_frequency || "Daily")} · ${display(source.local_backup_time, "02:00")}`],
-                    [t("Local retention"), `${t("Other")} ${display(source.local_backup_retention, 7)} ${t("Backups")}`],
+                    [t("Local retention"), t("Last {0} backups", [display(source.local_backup_retention, 7)])],
                     [t("External backup"), source.external_backup_enabled ? t("Enabled") : t("Disabled")],
                     [t("External schedule"), `${t(source.external_backup_frequency || "Daily")} · ${display(source.external_backup_time, "03:00")}`],
-                    [t("External retention"), `${t("Other")} ${display(source.external_backup_retention, 4)} ${t("Backups")}`],
+                    [t("External retention"), t("Last {0} backups", [display(source.external_backup_retention, 4)])],
                     [t("SSH server"), source.ssh_host ? `${source.ssh_host}:${display(source.ssh_port, 22)}` : t("Not configured")],
                     [t("SSH user"), source.ssh_username || t("Not configured")],
                     [t("Authentication method"), t(source.ssh_auth_method || "Private Key")],

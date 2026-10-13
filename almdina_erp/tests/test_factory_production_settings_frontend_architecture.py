@@ -40,6 +40,7 @@ class FactoryProductionSettingsFrontendArchitectureTest(unittest.TestCase):
         for asset in (
             "api.js",
             "state.js",
+            "catalog_labels.js",
             "view_model.js",
             "renderer.js",
             "interactions.js",

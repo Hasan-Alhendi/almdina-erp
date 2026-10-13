@@ -5,6 +5,10 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
+const catalogSource = fs.readFileSync(
+    path.resolve(__dirname, "../../public/js/factory_production_settings/catalog_labels.js"),
+    "utf8"
+);
 const source = fs.readFileSync(
     path.resolve(__dirname, "../../public/js/factory_production_settings/view_model.js"),
     "utf8"
@@ -12,17 +16,35 @@ const source = fs.readFileSync(
 
 const fakeWindow = {};
 const context = vm.createContext({ window: fakeWindow, Object, Array, Boolean, Number, String });
+vm.runInContext(catalogSource, context);
 vm.runInContext(source, context);
 
 const moduleApi = fakeWindow.AlmdinaFactoryProductionSettingsViewModel;
 assert.ok(moduleApi && typeof moduleApi.create === "function");
-const model = moduleApi.create({ translate: value => value });
+const model = moduleApi.create({
+    translate(message, replacements) {
+        let value = String(message == null ? "" : message);
+        (replacements || []).forEach((replacement, index) => {
+            value = value.split(`{${index}}`).join(String(replacement));
+        });
+        return value;
+    },
+});
 
 const current = {
+    optimization_catalog: [
+        { id: "auto", label: "تلقائي", available: true },
+        { id: "auto_pro", label: "Auto Pro", available: true },
+        { id: "legacy_unknown", label: "خوارزمية قديمة", available: false },
+    ],
+    machine_type_catalog: [
+        { id: "Panel Saw", label: "منشار ألواح" },
+        { id: "CNC Router", label: "راوتر" },
+    ],
     values: {
         default_kerf_mm: 5,
         default_trim_margin_mm: 5,
-        default_packing_mode: "Auto",
+        default_packing_mode: "auto",
         default_cutting_machine_type: "Panel Saw",
         default_optimization_time_limit_sec: 10,
         optimal_search_piece_limit: 20,
@@ -112,6 +134,10 @@ assert.equal(sections[5].rows[0].value, "قياسات {order_name}");
 assert.equal(sections[5].rows[1].value, "تعديلات {order_name}");
 assert.equal(sections[5].rows.length, 4);
 assert.equal(sections[5].rows[3].value, "انتهى CNC {order_name}");
+assert.equal(sections[0].rows[2].value, "Automatic");
+assert.equal(sections[0].rows[3].value, "Panel Saw");
+assert.equal(model.catalogLabel(current, "optimization_catalog", "legacy_unknown"), "خوارزمية قديمة");
+assert.equal(model.catalogLabel(current, "optimization_catalog", "ghost_id"), "ghost_id");
 
 const legacy = model.legacy(current);
 assert.equal(legacy.length, 10);
@@ -139,6 +165,30 @@ const backupPage = model.page(backupCurrent);
 assert.equal(backupPage.sections.length, 7);
 assert.equal(backupPage.sections[6].key, "backup_restore");
 assert.equal(backupPage.showBackupPanel, true);
+assert.equal(backupPage.sections[6].rows[2].value, "Last 7 backups");
+assert.equal(backupPage.sections[6].rows[5].value, "Last 4 backups");
+
+const arModel = moduleApi.create({
+    translate(message, replacements) {
+        const catalog = {
+            "Last {0} backups": "آخر {0} نسخ احتياطية",
+            "Automatic": "تلقائي",
+            "Panel Saw": "منشار ألواح",
+            Enabled: "مفعّل",
+            Disabled: "معطّل",
+            Daily: "يومي",
+            Weekly: "أسبوعي",
+        };
+        let value = Object.prototype.hasOwnProperty.call(catalog, message) ? catalog[message] : message;
+        (replacements || []).forEach((replacement, index) => {
+            value = String(value).split(`{${index}}`).join(String(replacement));
+        });
+        return value;
+    },
+});
+const arBackup = arModel.page(backupCurrent);
+assert.equal(arBackup.sections[6].rows[2].value, "آخر 7 نسخ احتياطية");
+assert.equal(arModel.sections(current)[0].rows[2].value, "تلقائي");
 
 const restoreOnly = model.page({
     values: {},

@@ -60,23 +60,33 @@
             drafts.clear();
         }
 
-        function optimizationCatalog(current = {}) {
-            return (current.optimization_catalog || [])
-                .map((entry) => ({
-                    id: String(entry && entry.id || "").trim(),
-                    label: String(entry && entry.label || entry && entry.id || "").trim(),
-                    available: entry && entry.available !== false,
-                }))
+        function localizeCatalog(catalogName, rows) {
+            const labels = window.AlmdinaFactoryProductionSettingsCatalogLabels;
+            return (rows || [])
+                .map((entry) => {
+                    if (labels && typeof labels.localizeEntry === "function") {
+                        const localized = labels.localizeEntry(catalogName, entry, t);
+                        return {
+                            id: localized.id,
+                            label: localized.label,
+                            available: localized.available,
+                        };
+                    }
+                    return {
+                        id: String(entry && entry.id || "").trim(),
+                        label: String(entry && entry.label || entry && entry.id || "").trim(),
+                        available: entry && entry.available !== false,
+                    };
+                })
                 .filter((entry) => entry.id && entry.label);
         }
 
+        function optimizationCatalog(current = {}) {
+            return localizeCatalog("optimization_catalog", current.optimization_catalog);
+        }
+
         function machineCatalog(current = {}) {
-            return (current.machine_type_catalog || [])
-                .map((entry) => ({
-                    id: String(entry && entry.id || "").trim(),
-                    label: String(entry && entry.label || entry && entry.id || "").trim(),
-                }))
-                .filter((entry) => entry.id && entry.label);
+            return localizeCatalog("machine_type_catalog", current.machine_type_catalog);
         }
 
         function catalogWithCurrent(catalog, value) {

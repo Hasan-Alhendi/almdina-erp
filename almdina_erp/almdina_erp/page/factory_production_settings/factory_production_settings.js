@@ -36,6 +36,7 @@ frappe.pages["factory-production-settings"].on_page_load = function (wrapper) {
         "/assets/almdina_erp/js/almdina_ui.js",
         "/assets/almdina_erp/js/factory_production_settings/api.js",
         "/assets/almdina_erp/js/factory_production_settings/state.js",
+        "/assets/almdina_erp/js/factory_production_settings/catalog_labels.js",
         "/assets/almdina_erp/js/factory_production_settings/view_model.js",
         "/assets/almdina_erp/js/factory_production_settings/renderer.js",
         "/assets/almdina_erp/js/factory_production_settings/interactions.js",

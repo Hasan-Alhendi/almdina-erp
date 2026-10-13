@@ -149,7 +149,7 @@ Created,تم الإنشاء
 Added to Workforce,إضافة إلى المعمل
 Identity Updated,تحديث الهوية
 Roles Changed,تغيير الأدوار
-Enabled,تمكين
+Enabled,مفعّل
 Password Reset,إعادة تعيين كلمة المرور
 Start,بدء,action
 Pause,إيقاف مؤقت
@@ -880,7 +880,7 @@ Corner,الزاوية
 Break,الكسر
 {0} preview,معاينة {0}
 {0} {1} — {2},{0} {1} — {2}
-Edit,إعداد
+Edit,تعديل
 Door piece {0},الدرفة {0}
 "Write the type, thickness, and color in one line, for example: white MDF 18 mm.",اكتب النوع والسماكة واللون في نص واحد، مثال: MDF أبيض 18 مم.
 Enter the edge color manually for this order.,أدخل لون القشاط يدويًا لهذا الطلب.
@@ -2536,3 +2536,149 @@ Schedule,الجدولة
 Test SSH Connection,اختبار اتصال SSH
 Time,الوقت
 Workflow Story,قصة سير الإنتاج
+Last {0} backups,آخر {0} نسخ احتياطية
+Costing and pricing,التكلفة والتسعير
+Documents and printing,المستندات والطباعة
+Production and assignment,الإنتاج والإسناد
+Control center and quality,مركز التحكم والجودة
+Master data,البيانات الأساسية
+"Create, review, approve, and manage the lifecycle of an order.",إنشاء الطلب ومراجعته واعتماده وإدارة دورة حياته.
+"View costs, edit cost settings, and approve internal prices.",عرض التكلفة وتعديل إعداداتها واعتماد الأسعار الداخلية.
+"Print measurements, the customer invoice, and the confidential internal report.",طباعة القياسات وفاتورة الزبون والتقرير الداخلي السري.
+"View the plan tabs (system / uploaded / approved), calculate plans, edit optimizer settings, approve plans, and print them.",عرض تبويبات الخطة (نظام / مرفوعة / معتمدة) وحسابها وتعديل إعدادات المحسّن واعتمادها وطباعتها.
+"Special drawing, plus exporting, uploading, and replacing DXF files.",الرسم الخاص وتصدير ملفات DXF ورفعها واستبدالها.
+"Dispatch orders, start stages, hand them off, revert them, and reassign them.",إرسال الطلب وبدء المراحل وتسليمها والرجوع وإعادة الإسناد.
+"Additional view permissions within the Production floor, without granting access or any production actions by themselves.",صلاحيات العرض الإضافية داخل صالة الإنتاج دون منح دخول أو إجراءات إنتاجية بحد ذاتها.
+"Archive plans, view and record production incidents, and manage replacement pieces.",أرشفة الخطط وعرض حوادث الإنتاج وتسجيلها وإدارة قطع التعويض.
+"View, create, edit, and enable factory accounts, and manage their roles.",عرض حسابات المعمل وإنشاؤها وتعديلها وتفعيلها وإدارة أدوارها.
+"View and edit cutting, costing, production, printing, WhatsApp, and backup settings, each section independently.",عرض وتعديل إعدادات القص والتكلفة والإنتاج والطباعة وواتساب والنسخ الاحتياطي كل قسم بصورة مستقلة.
+"Manage production routings and edge banding types, with separate view, create, edit, and delete permissions.",إدارة مسارات الإنتاج وأنواع القشاط مع فصل العرض والإنشاء والتعديل والحذف.
+Edit the permission matrix for all roles.,تعديل مصفوفة الصلاحيات لجميع الأدوار.
+View orders,عرض الطلبات
+View the orders you are allowed to see and open their basic details.,عرض الطلبات المسموح بها وفتح تفاصيلها الأساسية.
+View all orders,عرض جميع الطلبات
+Bypass the assignment scope and view the orders of all workers. Grant to authorized management only.,تجاوز نطاق الإسناد وعرض طلبات جميع العاملين. تُمنح للإدارة المخولة فقط.
+Create order,إنشاء طلب
+Create new cutting orders.,إنشاء طلبات قص جديدة.
+"Enable edit mode on an order only while it is a draft. After dispatch to production, use return to draft or an edit revision.",تفعيل وضع التعديل على الطلب وهو في حالة المسودة فقط. بعد الإرسال للإنتاج استخدم إعادة للمسودة أو نسخة تعديل.
+Create edit revision,إنشاء نسخة تعديل
+Create a new revision while leaving the historical order unchanged.,إنشاء Revision جديد مع إبقاء الطلب التاريخي دون تغيير.
+Submit for review (retired),إرسال للمراجعة (ملغاة)
+Retired. The order is dispatched directly to production without going through review.,أُلغيت. الطلب يُرسل مباشرة إلى الإنتاج دون مرور بالمراجعة.
+Approve order (retired),اعتماد الطلب (ملغاة)
+Retired. Use 'Dispatch to production' directly. Cutting plan approval remains a separate permission.,أُلغيت. استخدم «إرسال للإنتاج» مباشرة. اعتماد خطة القص يبقى صلاحية منفصلة.
+Reject order,رفض الطلب
+Reject an order stuck in the legacy review queue and send it back for editing.,رفض طلب عالق في قائمة المراجعة القديمة وإعادته للتعديل.
+Cancel order,إلغاء الطلب
+Cancel the order according to lifecycle rules.,إلغاء الطلب وفق ضوابط دورة الحياة.
+Resume cancelled order,استئناف الطلب الملغى
+"Return a cancelled order to the production stage it was cancelled from, without resetting the routing or returning it to draft.",إعادة الطلب الملغى إلى مرحلة الإنتاج التي أُلغي منها دون تصفير المسار أو إعادته للمسودة.
+Add internal note,إضافة ملاحظة داخلية
+Add collaborative notes on the order and its linked customer without editing the order or entering the save and revision cycle.,إضافة ملاحظات تعاونية على الطلب والزبون المرتبط به دون تعديل الطلب أو الدخول في دورة الحفظ والمراجعات.
+Set important note,تعيين الملاحظة المهمة
+Select or clear the order's current important note; it appears directly in the order list and on the mobile card.,اختيار أو إلغاء الملاحظة المهمة الحالية للطلب؛ تظهر مباشرة في قائمة الطلبات وداخل بطاقة الموبايل.
+View costs,عرض التكلفة
+"View protected cost, price, and profitability data.",عرض بيانات التكلفة والأسعار والربحية المحمية.
+Edit cost settings,تعديل إعدادات التكلفة
+"Edit the board price and cutting fee, and recalculate the cost.",تعديل سعر اللوح وأجرة القص وإعادة حساب التكلفة.
+Edit approved price,تعديل سعر معتمد
+Change the price of a special door leaf after it was previously approved.,تغيير سعر درفة خاصة بعد اعتماده سابقًا.
+Approve special price,اعتماد سعر خاص
+Approve the final price of special door leaves.,اعتماد السعر النهائي للدرف الخاصة.
+Print the measurements document without any prices.,طباعة مستند القياسات دون أي أسعار.
+Print the customer's financial document without internal data.,طباعة مستند الزبون المالي دون البيانات الداخلية.
+Print the confidential report that includes operating cost and profitability.,طباعة التقرير السري الذي يتضمن التكلفة التشغيلية والربحية.
+View cutting plan section,عرض قسم خطة القص
+Show the cutting results tab. Grant the tab permissions below to control which plans can be viewed.,إظهار تبويب نتائج القص. امنح صلاحيات التبويبات أدناه لتحديد أي خطط يمكن مشاهدتها.
+View system plan,عرض خطة النظام
+View the tab for the cutting plan calculated by the system.,مشاهدة تبويب خطة القص المحسوبة بواسطة النظام.
+View uploaded plan,عرض الخطة المرفوعة
+View the tab for the uploaded cutting plan (DXF / custom).,مشاهدة تبويب خطة القص المرفوعة (DXF/مخصصة).
+View approved plan,عرض الخطة المعتمدة
+View the tab for the plan approved for production.,مشاهدة تبويب الخطة المعتمدة للإنتاج.
+Rerun the engine that distributes pieces across boards.,إعادة تشغيل محرك توزيع القطع على الألواح.
+Edit cutting algorithm,تعديل خوارزمية القص
+"Change the cutting algorithm offered by the system, the margins, kerf, and search settings, then recalculate and view the result in 'System plan'. This permission is fully independent of 'Edit order': whoever can edit an order cannot change the algorithm without it.",تغيير خوارزمية القص التي يقدمها النظام والهوامش وKerf وإعدادات البحث، ثم إعادة الحساب ومشاهدة النتيجة في «خطة النظام». صلاحية مستقلة تمامًا عن «تعديل الطلب»: من يملك تعديل الطلب لا يستطيع تغيير الخوارزمية بدونها.
+Print the plan you are authorized to view.,طباعة الخطة المصرح بعرضها.
+Set source and execution of shortage pieces,تحديد مصدر وتنفيذ قطع النقص
+"Allows setting whether the shortage offcut comes from the factory or from the customer, and whether it is executed at the factory or at the customer's site, within permitted cases only.",يسمح بتحديد ما إذا كانت فضلة النقص من المعمل أو من الزبون، وتحديد ما إذا كان تنفيذها في المعمل أو عند الزبون، ضمن الحالات المسموحة فقط.
+Approve the current system plan or the uploaded DXF plan as the final source for production after reviewing it.,اعتماد خطة النظام الحالية أو خطة DXF المرفوعة كمصدر نهائي للإنتاج بعد مراجعتها.
+Open drawing workspace,فتح مساحة الرسم
+Show the special drawing tools and the DXF plan.,عرض أدوات الرسم الخاصة وخطة DXF.
+Edit special drawing,تعديل الرسم الخاص
+Edit the geometry and notes of special door leaves.,تحرير هندسة وملاحظات الدرف الخاصة.
+Export the production drawing in DXF format.,تصدير رسم الإنتاج بصيغة DXF.
+Upload DXF cutting plan,رفع خطة قص DXF
+"Upload a cutting plan as a DXF file, with validation before it is approved. Intended for the drawing worker.",رفع خطة قص كملف DXF مع التحقق قبل اعتمادها. مخصصة لعامل الرسم.
+Replace DXF cutting plan,استبدال خطة قص DXF
+Replace the previously uploaded DXF file after validation. Intended for the drawing worker.,استبدال ملف DXF المرفوع سابقًا بعد التحقق. مخصصة لعامل الرسم.
+Dispatch order to production,إرسال الطلب للإنتاج
+"Choose the production routing and the first worker, and create the stages.",اختيار مسار الإنتاج والعامل الأول وإنشاء المراحل.
+Start assigned stage,بدء المرحلة المسندة
+Start the current stage when it is assigned to the same user.,بدء المرحلة الحالية عندما تكون مسندة للمستخدم نفسه.
+Hand off assigned stage,تسليم المرحلة المسندة
+Finish the stage and send the order to the next worker.,إنهاء المرحلة وإرسال الطلب إلى العامل التالي.
+Revert order to a previous department,إرجاع الطلب لقسم سابق
+Return the order to a previous stage or department with an audit trail.,إعادة الطلب إلى مرحلة أو قسم سابق مع سجل تدقيق.
+Return order to draft,إعادة الطلب للمسودة
+"Return the same order to draft after cancelling the active production stages, without creating a new revision.",إعادة نفس الطلب إلى المسودة بعد إلغاء مراحل الإنتاج النشطة، دون إنشاء نسخة جديدة.
+Confirm delivery,تأكيد التسليم
+Change the order status to Delivered.,تغيير حالة الطلب إلى تم التسليم.
+Reassign the current stage to another qualified worker.,إعادة إسناد المرحلة الحالية إلى عامل مؤهل آخر.
+View completed orders history,عرض سجل الطلبات المنجزة
+"View completed orders that already fall within the user's scope. Does not grant access to the Production floor, nor any action or additional order scope.",عرض الطلبات المنتهية التي تقع أصلًا ضمن نطاق المستخدم. لا تمنح دخول صالة الإنتاج ولا أي إجراء أو نطاق طلبات إضافي.
+Archive approved plan,أرشفة الخطة المعتمدة
+Generate and save an official PDF of the approved plan.,إنشاء وحفظ PDF رسمي خاص بالخطة المعتمدة.
+View factory users,عرض مستخدمي المعمل
+"View Almdina accounts only, along with their status and assigned roles.",عرض حسابات Almdina فقط وحالتها والأدوار المسندة لها.
+Create a new system account for the factory with a temporary password.,إنشاء حساب نظام جديد للمعمل مع كلمة مرور مؤقتة.
+Edit user details,تعديل بيانات المستخدم
+"Edit the name, language, and non-financial account details.",تعديل الاسم واللغة وبيانات الحساب غير المالية.
+Assign roles to user,إسناد الأدوار للمستخدم
+Add or remove system roles on an Almdina user account.,إضافة أو إزالة أدوار النظام من حساب مستخدم Almdina.
+Enable user,تفعيل المستخدم
+Re-enable a disabled factory account.,إعادة تفعيل حساب معمل معطّل.
+Disable user,تعطيل المستخدم
+Disable an account after confirming there are no active production stages.,تعطيل حساب بعد التأكد من عدم وجود مراحل إنتاج نشطة.
+Reset password,إعادة كلمة المرور
+Set a new temporary password without displaying it or storing it in the log.,تعيين كلمة مرور مؤقتة جديدة دون إظهارها أو تخزينها في السجل.
+View factory settings,عرض إعدادات المعمل
+"View cutting settings, costing, production controls, print sheet identity, and WhatsApp messages, without editing or linking a session.",عرض إعدادات القص والتكلفة وضوابط الإنتاج وهوية أوراق الطباعة ورسائل واتساب دون تعديل أو ربط جلسة.
+Edit cutting defaults,تعديل افتراضيات القص
+"Edit kerf, margin, algorithm, machine type, and search limits.",تعديل Kerf والهامش والخوارزمية ونوع الآلة وحدود البحث.
+Edit cost defaults,تعديل افتراضيات التكلفة
+"Edit the cutting fee, special door leaf charges, and their margins.",تعديل أجرة القص ورسوم الدرف الخاصة وهوامشها.
+Edit the default routing and sensitive operational exceptions.,تعديل المسار الافتراضي والاستثناءات التشغيلية الحساسة.
+Edit print identity,تعديل هوية الطباعة
+"Edit the factory name, tagline, address, and contact numbers shown on printed sheets. Does not include WhatsApp messages or session linking.",تعديل اسم المعمل ولمحته وعنوانه وأرقام التواصل الظاهرة على أوراق الطباعة. لا يشمل رسائل واتساب ولا ربط الجلسة.
+Manage WhatsApp session,إدارة جلسة واتساب
+"View the factory session status, create it, link it via QR code, and reconnect. Does not grant message editing or sending customer files.",عرض حالة جلسة المصنع وإنشاؤها وربطها عبر رمز QR وإعادة الاتصال. لا تمنح تعديل الرسائل ولا إرسال ملفات الزبائن.
+"Edit the texts for measurements, measurement changes, the invoice, and stage completion in the factory settings. Does not grant session creation or file sending.",تعديل نصوص القياسات وتعديلات القياسات والفاتورة وإتمام المراحل في إعدادات المعمل. لا تمنح إنشاء الجلسة ولا إرسال الملفات.
+Manage backups,إدارة النسخ الاحتياطي
+"Configure scheduling, retention, and the SSH connection, create manual backups, and view their log. Does not grant restore.",ضبط الجدولة والاحتفاظ واتصال SSH، وإنشاء النسخ اليدوية وعرض سجلها. لا تمنح الاستعادة.
+Restore backups,استعادة النسخ الاحتياطية
+Start a destructive restore after explicit confirmation and an automatic safety backup. Does not grant editing backup settings.,بدء استعادة مدمرة بعد تأكيد صريح ونسخة أمان تلقائية. لا تمنح تعديل إعدادات النسخ.
+View production routings,عرض مسارات الإنتاج
+View production routings and their stage sequence.,عرض مسارات الإنتاج وتسلسل مراحلها.
+Create production routing,إنشاء مسار إنتاج
+Create a new production routing.,إنشاء مسار إنتاج جديد.
+Edit production routings,تعديل مسارات الإنتاج
+Edit the stage order or disable the routing.,تعديل ترتيب المراحل أو تعطيل المسار.
+Delete production routing,حذف مسار إنتاج
+Delete a routing that is unused and not set as the default.,حذف مسار غير مستخدم وغير معيّن كافتراضي.
+View edge banding types,عرض أنواع القشاط
+"View edge banding types with their thickness, price, and status.",عرض أنواع القشاط والسماكة والسعر والحالة.
+Create edge banding type,إنشاء نوع قشاط
+Add a new edge banding type.,إضافة نوع قشاط جديد.
+Edit edge banding types,تعديل أنواع القشاط
+"Edit the thickness, price, and properties, or disable the type.",تعديل السماكة والسعر والخصائص أو تعطيل النوع.
+Delete edge banding type,حذف نوع قشاط
+Delete a type that is not used in any order or piece.,حذف نوع غير مستخدم في أي طلب أو قطعة.
+View customers,عرض الزبائن
+"View the customer list and manage it from the master data workspace, and select the customer on orders.",عرض قائمة الزبائن وإدارتها من مساحة البيانات الأساسية، واختيار الزبون في الطلبات.
+Create customer,إنشاء زبون
+Add a new customer from the customer list or from the selection field on the order.,إضافة زبون جديد من قائمة الزبائن أو من حقل الاختيار في الطلب.
+Edit customers,تعديل الزبائن
+Edit the existing customer details.,تعديل بيانات الزبون الحالية.
+Delete customer,حذف زبون
+Delete a customer who is not linked to any saved orders.,حذف زبون غير مرتبط بطلبات محفوظة.

@@ -78,6 +78,11 @@
             return { kind: "permission", label: t("Frappe: {0}", [permission]) };
         }
 
+        function displayCopy(value) {
+            const text = String(value == null ? "" : value);
+            return text ? t(text) : "";
+        }
+
         function capabilityModel(capability, working) {
             const badges = [];
             const permission = permissionBadge(capability);
@@ -87,8 +92,8 @@
             else if (capability.risk === "sensitive") badges.push({ kind: "sensitive", label: t("Sensitive") });
             return {
                 key: String(capability.key || ""),
-                label: String(capability.label || ""),
-                description: String(capability.description || ""),
+                label: displayCopy(capability.label),
+                description: displayCopy(capability.description),
                 checked: working && working[capability.key] === true,
                 badges,
             };
@@ -97,8 +102,8 @@
         function permissionGroups(catalog, working) {
             return completeCatalog(catalog, working).map(group => ({
                 key: String(group.key || ""),
-                label: String(group.label || ""),
-                description: String(group.description || ""),
+                label: displayCopy(group.label),
+                description: displayCopy(group.description),
                 count: group.capabilities.length,
                 capabilities: group.capabilities.map(item => capabilityModel(item, working)),
             }));
@@ -175,7 +180,7 @@
                     : "",
                 source,
                 changes: changes.slice(0, 12).map(change => ({
-                    label: String(change.label || change.key || ""),
+                    label: displayCopy(change.label || change.key || ""),
                     action: change.after ? t("Grant") : t("Cancel"),
                 })),
             };

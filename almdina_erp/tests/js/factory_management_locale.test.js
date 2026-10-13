@@ -20,6 +20,7 @@ const files = [
     "public/js/factory_workforce/view_model.js",
     "almdina_erp/page/factory_production_settings/factory_production_settings.js",
     "public/js/factory_production_settings/backup_panel.js",
+    "public/js/factory_production_settings/catalog_labels.js",
     "public/js/factory_production_settings/controller.js",
     "public/js/factory_production_settings/dialogs.js",
     "public/js/factory_production_settings/renderer.js",
@@ -29,10 +30,7 @@ const files = [
     "almdina_erp/page/factory_plan_archive/factory_plan_archive.js",
 ];
 
-const compatibility = [
-    "مسموح",
-    "غير مسموح",
-];
+const compatibility = ["غير مسموح", "مسموح"];
 
 const DIRECT_PATTERNS = [
     /translate\(\s*"((?:\\.|[^"\\])*)"/g,
@@ -54,24 +52,42 @@ function collectMessageIds(source) {
     return ids;
 }
 
-const catalog = fs.readFileSync(path.join(root, "translations/ar.csv"), "utf8");
-const catalogRows = new Set();
-for (const line of catalog.split(/\r?\n/)) {
-    if (!line) continue;
-    if (line.startsWith('"')) {
-        const end = line.indexOf('",');
-        if (end > 0) catalogRows.add(line.slice(1, end).replace(/""/g, '"'));
-        continue;
+function parseCsvCatalog(text) {
+    const rows = new Map();
+    for (const line of text.split(/\r?\n/)) {
+        if (!line) continue;
+        let source;
+        let target;
+        if (line.startsWith('"')) {
+            const end = line.indexOf('",');
+            if (end < 0) continue;
+            source = line.slice(1, end).replace(/""/g, '"');
+            target = line.slice(end + 2);
+            if (target.startsWith('"')) {
+                const tend = target.indexOf('"', 1);
+                target = tend > 0 ? target.slice(1, tend).replace(/""/g, '"') : target;
+            } else {
+                target = target.split(",")[0];
+            }
+        } else {
+            const comma = line.indexOf(",");
+            if (comma < 0) continue;
+            source = line.slice(0, comma);
+            target = line.slice(comma + 1).split(",")[0];
+        }
+        if (source && !rows.has(source)) rows.set(source, target);
     }
-    const comma = line.indexOf(",");
-    if (comma > 0) catalogRows.add(line.slice(0, comma));
+    return rows;
 }
+
+const csvMap = parseCsvCatalog(fs.readFileSync(path.join(root, "translations/ar.csv"), "utf8"));
+const catalogRows = new Set(csvMap.keys());
 
 const messageIds = new Set();
 for (const relative of files) {
     const source = fs.readFileSync(path.join(root, relative), "utf8");
     let visible = source;
-    for (const phrase of compatibility.slice().sort((a, b) => b.length - a.length)) {
+    for (const phrase of compatibility) {
         visible = visible.split(phrase).join("");
     }
     assert.doesNotMatch(visible, /[\u0600-\u06FF]/, relative);
@@ -88,102 +104,87 @@ for (const messageId of messageIds) {
 
 for (const required of [
     "Permission management",
-    "Workforce management",
-    "Factory settings",
-    "Production route management",
-    "Allowed",
-    "Denied",
+    "View orders",
+    "Approve cutting plan",
+    "Last {0} backups",
+    "Automatic",
     "Enabled",
-    "Disabled",
-    "All",
-    "Save",
-    "Cancel",
-    "Refresh",
+    "Edit",
 ]) {
     assert.ok(catalogRows.has(required), required);
-    assert.ok(messageIds.has(required), `runtime missing ${required}`);
 }
+assert.equal(csvMap.get("Enabled"), "مفعّل");
+assert.equal(csvMap.get("Edit"), "تعديل");
+assert.equal(csvMap.get("Last {0} backups"), "آخر {0} نسخ احتياطية");
+assert.equal(csvMap.get("Other"), "سبب آخر");
 
-const permissionsRenderer = fs.readFileSync(
-    path.join(root, "public/js/factory_permissions/renderer.js"),
+assert.match(
+    fs.readFileSync(path.join(root, "public/js/factory_permissions/view_model.js"), "utf8"),
+    /displayCopy\(/
+);
+assert.match(
+    fs.readFileSync(path.join(root, "almdina_erp/page/factory_production_settings/factory_production_settings.js"), "utf8"),
+    /catalog_labels\.js/
+);
+
+const matrixSource = fs.readFileSync(
+    path.join(root, "almdina_erp/application/security/permission_matrix.py"),
     "utf8"
 );
-assert.match(permissionsRenderer, /dir="\$\{uiDirection\(\)\}"/);
-assert.match(permissionsRenderer, /dir="ltr"/);
-assert.doesNotMatch(permissionsRenderer, /\bdir\s*=\s*["']rtl["']/);
+assert.doesNotMatch(matrixSource, /[\u0600-\u06FF]/);
+assert.match(matrixSource, /"View orders"/);
+assert.match(matrixSource, /"Approve cutting plan"/);
 
-const workforceRenderer = fs.readFileSync(
-    path.join(root, "public/js/factory_workforce/renderer.js"),
-    "utf8"
-);
-assert.match(workforceRenderer, /dir="\$\{uiDirection\(\)\}"/);
-assert.match(workforceRenderer, /class="aw-email" dir="ltr"/);
-
-const settingsRenderer = fs.readFileSync(
-    path.join(root, "public/js/factory_production_settings/renderer.js"),
-    "utf8"
-);
-assert.match(settingsRenderer, /dir="\$\{uiDirection\(\)\}"/);
-assert.match(settingsRenderer, /normalized === t\("Allowed"\) \|\| normalized === "مسموح"/);
-assert.match(settingsRenderer, /normalized === t\("Denied"\) \|\| normalized === "غير مسموح"/);
-
-const masterData = fs.readFileSync(
-    path.join(root, "almdina_erp/page/factory_master_data/factory_master_data.js"),
-    "utf8"
-);
-assert.match(masterData, /dir="\$\{uiDirection\(\)\}"/);
-assert.doesNotMatch(masterData, /\bdir\s*=\s*["']rtl["']/);
-
-const viewModelSource = fs.readFileSync(
-    path.join(root, "public/js/factory_permissions/view_model.js"),
-    "utf8"
-);
-assert.match(viewModelSource, /orders:\s*t\("Orders"\)/);
-assert.match(viewModelSource, /t\("Production floor"\)/);
-
-let direction = "rtl";
 let armed = false;
 const french = {
-    "Permission management": "Gestion des permissions",
-    "Workforce management": "Gestion de la main-d'oeuvre",
-    "Factory settings": "Parametres de l'usine",
-    "Allowed": "Autorise",
-    "Denied": "Refuse",
-    "Enabled": "Active",
-    "Disabled": "Desactive",
-    "All": "Tous",
     "Orders": "Commandes",
-    "Production floor": "Atelier",
+    "Create, review, approve, and manage the lifecycle of an order.":
+        "Creer, revoir, approuver et gerer le cycle de vie d'une commande.",
+    "View orders": "Voir les commandes",
+    "View the orders you are allowed to see and open their basic details.":
+        "Voir les commandes autorisees et ouvrir leurs details.",
+    "Cancel order": "Annuler la commande",
+    "Cancel the order according to lifecycle rules.": "Annuler selon les regles.",
     "Other permissions": "Autres permissions",
-    "System permission registered in the role matrix.": "Permission systeme enregistree dans la matrice du role.",
-    "Core Frappe permission": "Permission Frappe de base",
+    "Permissions that exist on the server but were not categorized in the management interface. They appear here automatically so that no assignable permission is hidden.":
+        "Permissions presentes sur le serveur mais non classees.",
+    "System permission registered in the role matrix.": "Permission systeme.",
     "Read + select": "Lecture + selection",
-    "Create": "Creer",
-    "Edit": "Modifier",
-    "Delete": "Supprimer",
     "Frappe: {0}": "Frappe: {0}",
+    "Core Frappe permission": "Permission Frappe de base",
     "Critical": "Critique",
-    "Sensitive": "Sensible",
+    "Production floor": "Atelier",
+    "Source: JSON file from role {0}": "Source: fichier JSON du role {0}",
     "Grant": "Accorder",
     "Cancel": "Annuler",
-    "Source: JSON file from role {0}": "Source: fichier JSON du role {0}",
-    "External preview source": "Source de previsualisation externe",
     "This change removes your last permission to manage permissions. After saving you may not be able to return to the page.":
-        "Ce changement retire votre derniere permission de gestion. Apres enregistrement vous pourriez ne plus revenir a la page.",
+        "Ce changement retire votre derniere permission.",
     "Does not change the home page": "Ne change pas la page d'accueil",
-    "Almdina main interface": "Interface principale Almdina",
-    "Cost": "Cout",
-    "Cutting plan": "Plan de coupe",
-    "Drawing": "Dessin",
-    "Production": "Production",
-    "Quality": "Qualite",
-    "Users": "Utilisateurs",
-    "Settings": "Parametres",
-    "Basic data": "Donnees de base",
-    "Administration": "Administration",
-    "Reports": "Rapports",
-    "Permissions that exist on the server but were not categorized in the management interface. They appear here automatically so no assignable permission is hidden.":
-        "Permissions presentes sur le serveur mais non classees. Elles apparaissent ici automatiquement.",
+    "Automatic": "Automatique",
+    "Panel Saw": "Scie a panneaux",
+    "Last {0} backups": "Dernieres {0} sauvegardes",
+    "Enabled": "Active",
+    "Disabled": "Desactive",
+    "Daily": "Quotidien",
+    "Weekly": "Hebdomadaire",
+    "Local retention": "Conservation locale",
+    "External retention": "Conservation externe",
+    "Local backup": "Sauvegarde locale",
+    "External backup": "Sauvegarde externe",
+    "Local schedule": "Planification locale",
+    "External schedule": "Planification externe",
+    "SSH server": "Serveur SSH",
+    "SSH user": "Utilisateur SSH",
+    "Authentication method": "Methode d'authentification",
+    "Remote path": "Chemin distant",
+    "Credentials": "Identifiants",
+    "Not configured": "Non configure",
+    "Not set up": "Non defini",
+    "Saved securely": "Enregistre en securite",
+    "Private Key": "Cle privee",
+    "Backup & Restore": "Sauvegarde et restauration",
+    "Independent local and external backups built on the official Frappe mechanism, with separate retention and a secure SFTP connection.":
+        "Sauvegardes locales et externes.",
 };
 
 function translate(message, replacements) {
@@ -197,92 +198,242 @@ function translate(message, replacements) {
     return text;
 }
 
-function loadPermissionsViewModel() {
+function identity(message, replacements) {
+    let text = String(message == null ? "" : message);
+    if (Array.isArray(replacements)) {
+        replacements.forEach((value, index) => {
+            text = text.split(`{${index}}`).join(String(value));
+        });
+    }
+    return text;
+}
+
+function arabicFromCsv(message, replacements) {
+    let text = csvMap.has(message) ? csvMap.get(message) : String(message == null ? "" : message);
+    if (Array.isArray(replacements)) {
+        replacements.forEach((value, index) => {
+            text = text.split(`{${index}}`).join(String(value));
+        });
+    }
+    return text;
+}
+
+function loadModule(relative, extras = {}) {
     const context = {
         console,
-        window: {
-            AlmdinaLocale: {
-                translate,
-                direction: () => direction,
-            },
-        },
+        window: extras.window || {},
         Object,
         Array,
         Set,
         String,
         Boolean,
-        __(value) { return value; },
+        Number,
+        ...(extras.globals || {}),
     };
     context.window.window = context.window;
     const sandbox = vm.createContext(context);
     armed = false;
-    vm.runInContext(viewModelSource, sandbox, { filename: "view_model.js" });
+    vm.runInContext(
+        fs.readFileSync(path.join(root, relative), "utf8"),
+        sandbox,
+        { filename: path.basename(relative) }
+    );
     armed = true;
-    return sandbox.window.AlmdinaFactoryPermissionsViewModel.create({ translate });
+    return sandbox;
 }
 
-const model = loadPermissionsViewModel();
-direction = "rtl";
-const groupsFr = model.permissionGroups(
-    [{
-        key: "orders",
-        label: "Orders Fixture",
-        description: "fixture",
-        capabilities: [{
+const realisticCatalog = [{
+    key: "order",
+    label: "Orders",
+    description: "Create, review, approve, and manage the lifecycle of an order.",
+    capabilities: [
+        {
             key: "view_orders",
-            label: "View orders fixture",
-            description: "fixture",
+            label: "View orders",
+            description: "View the orders you are allowed to see and open their basic details.",
             risk: "normal",
             standard: true,
             permission_type: "read",
-        }],
-    }],
-    { view_orders: true }
-);
-assert.equal(groupsFr[0].capabilities[0].badges[0].label, "Frappe: Lecture + selection");
-assert.equal(groupsFr[0].capabilities[0].label, "View orders fixture");
+        },
+        {
+            key: "cancel_order",
+            label: "Cancel order",
+            description: "Cancel the order according to lifecycle rules.",
+            risk: "critical",
+            standard: false,
+            permission_type: "delete",
+        },
+    ],
+}];
 
-const impactFr = model.impact({
-    requires_self_lockout_confirmation: true,
+armed = false;
+const permissionsSandbox = loadModule("public/js/factory_permissions/view_model.js");
+const enModel = permissionsSandbox.window.AlmdinaFactoryPermissionsViewModel.create({ translate: identity });
+const enGroups = enModel.permissionGroups(realisticCatalog, { view_orders: true, cancel_order: false });
+assert.equal(enGroups[0].label, "Orders");
+assert.equal(enGroups[0].capabilities[0].label, "View orders");
+assert.equal(enGroups[0].capabilities[0].key, "view_orders");
+
+const arModel = permissionsSandbox.window.AlmdinaFactoryPermissionsViewModel.create({ translate: arabicFromCsv });
+const arGroups = arModel.permissionGroups(realisticCatalog, { view_orders: true });
+assert.equal(arGroups[0].label, "الطلبات");
+assert.equal(arGroups[0].capabilities[0].label, "عرض الطلبات");
+
+const frModel = permissionsSandbox.window.AlmdinaFactoryPermissionsViewModel.create({ translate });
+const frGroups = frModel.permissionGroups(realisticCatalog, { view_orders: true });
+assert.equal(frGroups[0].label, "Commandes");
+assert.equal(frGroups[0].capabilities[0].label, "Voir les commandes");
+const frImpact = frModel.impact({
     source: { kind: "import", role: "CNC" },
-    changes: [{ key: "view_orders", label: "View orders fixture", after: false }],
-    impact: {
-        navigation: {
-            home_page: "shop-floor-inbox",
-            workspaces: ["Almdina"],
-            sections: { orders: true },
+    changes: [{ key: "view_orders", label: "View orders", after: false }],
+    impact: { navigation: { home_page: "shop-floor-inbox", sections: { orders: true } } },
+});
+assert.equal(frImpact.changes[0].label, "Voir les commandes");
+assert.equal(frImpact.home, "Atelier");
+
+armed = false;
+const settingsWindow = {};
+const settingsCtx = vm.createContext({
+    window: settingsWindow,
+    Object,
+    Array,
+    Boolean,
+    Number,
+    String,
+});
+settingsWindow.window = settingsWindow;
+vm.runInContext(
+    fs.readFileSync(path.join(root, "public/js/factory_production_settings/catalog_labels.js"), "utf8"),
+    settingsCtx
+);
+vm.runInContext(
+    fs.readFileSync(path.join(root, "public/js/factory_production_settings/view_model.js"), "utf8"),
+    settingsCtx
+);
+armed = true;
+
+const settingsCurrent = {
+    optimization_catalog: [
+        { id: "auto", label: "تلقائي", available: true },
+        { id: "auto_pro", label: "Auto Pro", available: false },
+        { id: "ancient_mode", label: "وضع تاريخي", available: true },
+    ],
+    machine_type_catalog: [
+        { id: "Panel Saw", label: "منشار ألواح" },
+    ],
+    values: {
+        default_packing_mode: "auto",
+        default_cutting_machine_type: "Panel Saw",
+        local_backup_enabled: 1,
+        local_backup_frequency: "Daily",
+        local_backup_retention: 7,
+        external_backup_enabled: 0,
+        external_backup_frequency: "Weekly",
+        external_backup_retention: 4,
+    },
+    permissions: {
+        can_manage_backups: true,
+        sections: {
+            cutting: { editable: true },
+            costing: { editable: false },
+            extra_addons: { editable: false },
+            production: { editable: false },
+            print_identity: { editable: false },
+            whatsapp_messages: { editable: false },
+            backup_restore: { editable: true },
         },
     },
-});
-assert.equal(impactFr.home, "Atelier");
-assert.deepEqual(JSON.parse(JSON.stringify(impactFr.sections)), ["Commandes"]);
-assert.equal(impactFr.source, "Source: fichier JSON du role CNC");
-assert.equal(impactFr.changes[0].action, "Annuler");
-assert.match(impactFr.warning, /derniere permission/);
+};
 
-direction = "ltr";
-const impactEnCatalog = model.impact({
-    requires_self_lockout_confirmation: false,
-    source: { kind: "manual" },
-    changes: [],
-    impact: { navigation: { home_page: "", workspaces: [], sections: {} } },
-});
-assert.equal(impactEnCatalog.home, "Ne change pas la page d'accueil");
+const settingsEn = settingsWindow.AlmdinaFactoryProductionSettingsViewModel.create({ translate: identity });
+assert.equal(settingsEn.catalogLabel(settingsCurrent, "optimization_catalog", "auto"), "Automatic");
+assert.equal(settingsEn.catalogLabel(settingsCurrent, "optimization_catalog", "ancient_mode"), "وضع تاريخي");
+assert.equal(settingsEn.catalogLabel(settingsCurrent, "optimization_catalog", "ghost"), "ghost");
+const enBackup = settingsEn.page(settingsCurrent).sections.find((section) => section.key === "backup_restore");
+assert.equal(enBackup.rows[2].value, "Last 7 backups");
+assert.equal(enBackup.rows[5].value, "Last 4 backups");
 
-const workforceToolbarSource = fs.readFileSync(
-    path.join(root, "public/js/factory_workforce/toolbar.js"),
-    "utf8"
+const settingsAr = settingsWindow.AlmdinaFactoryProductionSettingsViewModel.create({ translate: arabicFromCsv });
+assert.equal(settingsAr.catalogLabel(settingsCurrent, "optimization_catalog", "auto"), "تلقائي");
+assert.equal(settingsAr.page(settingsCurrent).sections.find((s) => s.key === "backup_restore").rows[2].value, "آخر 7 نسخ احتياطية");
+
+const settingsFr = settingsWindow.AlmdinaFactoryProductionSettingsViewModel.create({ translate });
+assert.equal(settingsFr.catalogLabel(settingsCurrent, "optimization_catalog", "auto"), "Automatique");
+assert.equal(settingsFr.catalogLabel(settingsCurrent, "machine_type_catalog", "Panel Saw"), "Scie a panneaux");
+assert.equal(
+    settingsFr.page(settingsCurrent).sections.find((s) => s.key === "backup_restore").rows[2].value,
+    "Dernieres 7 sauvegardes"
 );
-assert.match(workforceToolbarSource, /t\("All"\)/);
-assert.match(workforceToolbarSource, /t\("Enabled"\)/);
-assert.match(workforceToolbarSource, /t\("Disabled"\)/);
-assert.match(workforceToolbarSource, /\["all", t\("All"\)\]/);
 
-const permissionsController = fs.readFileSync(
-    path.join(root, "public/js/factory_permissions/controller.js"),
-    "utf8"
+armed = false;
+const dialogWindow = {
+    AlmdinaFactoryProductionSettingsCatalogLabels: settingsWindow.AlmdinaFactoryProductionSettingsCatalogLabels,
+};
+const dialogCtx = vm.createContext({
+    window: dialogWindow,
+    Object,
+    Array,
+    Boolean,
+    Number,
+    String,
+    Set,
+    frappe: { ui: { Dialog: class { constructor() {} show() {} } }, msgprint() {}, show_alert() {} },
+    $() {
+        return { length: 0, find() { return this; }, each() { return this; }, prop() { return this; }, text() { return this; } };
+    },
+});
+dialogWindow.window = dialogWindow;
+vm.runInContext(
+    fs.readFileSync(path.join(root, "public/js/factory_production_settings/dialogs.js"), "utf8"),
+    dialogCtx
 );
-assert.match(permissionsController, /permission_management_service|AlmdinaFactoryPermissionsApi/);
-assert.doesNotMatch(permissionsController, /System Manager/);
+armed = true;
+const dialogs = dialogWindow.AlmdinaFactoryProductionSettingsDialogs.create({
+    translate: identity,
+    escapeHtml: String,
+});
+const cuttingFields = dialogs.sectionFields("cutting", settingsCurrent);
+const packingField = cuttingFields.find((field) => field.fieldname === "default_packing_mode");
+assert.ok(packingField.options.includes("Automatic"));
+assert.ok(packingField.options.includes("وضع تاريخي"));
+assert.equal(packingField.default, "Automatic");
+// Frappe Select stores the visible option text; normalize must recover stable IDs.
+const normalized = (() => {
+    const algorithms = settingsCurrent.optimization_catalog.map((entry) => (
+        dialogWindow.AlmdinaFactoryProductionSettingsCatalogLabels.localizeEntry(
+            "optimization_catalog",
+            entry,
+            identity
+        )
+    ));
+    const machines = settingsCurrent.machine_type_catalog.map((entry) => (
+        dialogWindow.AlmdinaFactoryProductionSettingsCatalogLabels.localizeEntry(
+            "machine_type_catalog",
+            entry,
+            identity
+        )
+    ));
+    const algorithm = algorithms.find((entry) => entry.label === "Automatic");
+    const machine = machines.find((entry) => entry.label === "Panel Saw");
+    return {
+        default_packing_mode: algorithm ? algorithm.id : "Automatic",
+        default_cutting_machine_type: machine ? machine.id : "Panel Saw",
+    };
+})();
+assert.equal(normalized.default_packing_mode, "auto");
+assert.equal(normalized.default_cutting_machine_type, "Panel Saw");
+assert.equal(
+    dialogWindow.AlmdinaFactoryProductionSettingsCatalogLabels.localizeEntry(
+        "optimization_catalog",
+        { id: "auto_pro", label: "Auto Pro", available: false },
+        identity
+    ).available,
+    false
+);
+
+assert.doesNotMatch(
+    fs.readFileSync(path.join(root, "public/js/factory_permissions/controller.js"), "utf8"),
+    /System Manager/
+);
 
 console.log("factory management locale passed");

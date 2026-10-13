@@ -123,8 +123,8 @@ def test_a156_collaboration_actions_are_explicit_assignable_capabilities() -> No
     assert add_definition.custom is True
     assert important_definition.custom is True
 
-    assert CAPABILITY_PRESENTATION[Capability.ADD_INTERNAL_NOTE]["label"] == "إضافة ملاحظة داخلية"
-    assert CAPABILITY_PRESENTATION[Capability.MANAGE_IMPORTANT_NOTE]["label"] == "تعيين الملاحظة المهمة"
+    assert CAPABILITY_PRESENTATION[Capability.ADD_INTERNAL_NOTE]["label"] == "Add internal note"
+    assert CAPABILITY_PRESENTATION[Capability.MANAGE_IMPORTANT_NOTE]["label"] == "Set important note"
     assert CAPABILITY_PRESENTATION[Capability.MANAGE_IMPORTANT_NOTE]["risk"] == "sensitive"
 
     normalized = normalize_capability_state({Capability.ADD_INTERNAL_NOTE: True})

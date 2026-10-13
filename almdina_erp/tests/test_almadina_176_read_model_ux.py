@@ -112,8 +112,7 @@ def test_cost_tab_uses_canonical_offcut_projection_and_one_batch_save_path():
 def test_factory_permission_presentation_matches_jira_contract():
     presentation = CAPABILITY_PRESENTATION[Capability.SET_OFFCUT_EXECUTION_OWNER]
 
-    assert presentation["label"] == "تحديد مصدر وتنفيذ قطع النقص"
+    assert presentation["label"] == "Set source and execution of shortage pieces"
     assert presentation["description"] == (
-        "يسمح بتحديد ما إذا كانت فضلة النقص من المعمل أو من الزبون، "
-        "وتحديد ما إذا كان تنفيذها في المعمل أو عند الزبون، ضمن الحالات المسموحة فقط."
+        "Allows setting whether the shortage offcut comes from the factory or from the customer, and whether it is executed at the factory or at the customer's site, within permitted cases only."
     )
