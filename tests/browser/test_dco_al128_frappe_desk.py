@@ -443,6 +443,9 @@ def test_real_desk_edits_checkpoint_and_permission_isolation() -> None:
                 "server_permission_checks": server_permissions,
                 "checkpoint_revision": record["recovery_revision"],
                 "changed_measurement_qty_edge_extra_special_notes": True,
+                "special_geometry_mutation_via_supported_ui": (
+                    "NOT_TESTED_NO_SUPPORTED_MANUFACTURING_EDITOR"
+                ),
                 "special_geometry_in_checkpoint": True,
                 "special_geometry_preserved": True,
                 "checkpoint_survived_reload": True,
@@ -498,13 +501,22 @@ def _install_base_metadata_overrides(
                 cwd=REPOSITORY,
                 text=True,
             )
+            if head_source == base_source:
+                raise AssertionError(
+                    f"{repository_path} is unchanged between Base and HEAD; it cannot distinguish the benchmark variants."
+                )
             if head_source in script:
                 script = script.replace(head_source, base_source, 1)
+                replaced.add(suffix)
             elif base_source not in script:
                 raise AssertionError(
                     f"Frappe DCO __js did not contain either revision of {repository_path}."
                 )
-            replaced.add(suffix)
+            else:
+                raise AssertionError(
+                    f"Frappe DCO __js already contains Base content for {repository_path}; "
+                    "the Base variant was not produced from the checked-out HEAD source."
+                )
 
         metadata["__js"] = script
         headers = {
@@ -525,7 +537,7 @@ def _percentile(values: list[float], percentile: float) -> float:
 
 
 def _prime_checkpoint_with_real_measurement_edit(page: Page) -> None:
-    """Create the initial checkpoint through the same keyboard path being measured."""
+    """Create an acknowledged starting checkpoint before collecting metrics."""
     width = page.locator(
         '[data-fieldname="pieces_fast_entry"] .dco-fast-table '
         'tbody tr[data-row-name]:not(.dco-virtual-row) input[data-field="width_cm"]'
@@ -543,7 +555,7 @@ def _prime_checkpoint_with_real_measurement_edit(page: Page) -> None:
         "}",
         timeout=30_000,
     )
-    trace("measurement_benchmark_checkpoint_primed_by_keyboard")
+    trace("measurement_benchmark_initial_checkpoint_acknowledged")
 
 
 def _benchmark_order(
@@ -580,29 +592,37 @@ def _benchmark_order(
         page.evaluate(
             """() => {
                 const root = cur_frm.fields_dict.pieces_fast_entry.$wrapper.get(0);
-                window.__al128FrameSamples = [];
+                window.__al128KeyboardFrameSamples = [];
                 window.__al128CheckpointSamples = [];
-                window.__al128MeasureAction = null;
+                window.__al128KeyboardAction = null;
+                window.__al128AckAction = null;
                 root.addEventListener("input", () => {
-                    const action = window.__al128MeasureAction;
-                    if (!action || action.started) return;
-                    action.started = true;
-                    action.startedAt = performance.now();
-                    const startedAt = action.startedAt;
-                    requestAnimationFrame(() => requestAnimationFrame(() => {
-                        window.__al128FrameSamples.push(performance.now() - startedAt);
-                    }));
-                    const awaitCheckpoint = () => {
-                        const state = AlmdinaDcoRecovery.LocalCheckpoint.snapshot(cur_frm);
-                        if (state && state.state === "LOCAL_SAVED"
-                            && state.saved_revision > action.savedRevision) {
-                            window.__al128CheckpointSamples.push(performance.now() - startedAt);
-                            action.completed = true;
-                            return;
-                        }
+                    const keyboardAction = window.__al128KeyboardAction;
+                    if (keyboardAction && !keyboardAction.started) {
+                        keyboardAction.started = true;
+                        const startedAt = performance.now();
+                        requestAnimationFrame(() => requestAnimationFrame(() => {
+                            window.__al128KeyboardFrameSamples.push(performance.now() - startedAt);
+                        }));
+                    }
+                    const ackAction = window.__al128AckAction;
+                    if (ackAction && !ackAction.started) {
+                        ackAction.started = true;
+                        ackAction.startedAt = performance.now();
+                        const awaitCheckpoint = () => {
+                            const state = AlmdinaDcoRecovery.LocalCheckpoint.snapshot(cur_frm);
+                            if (state && state.state === "LOCAL_SAVED"
+                                && state.saved_revision > ackAction.savedRevision) {
+                                window.__al128CheckpointSamples.push(
+                                    performance.now() - ackAction.startedAt
+                                );
+                                ackAction.completed = true;
+                                return;
+                            }
+                            setTimeout(awaitCheckpoint, 16);
+                        };
                         setTimeout(awaitCheckpoint, 16);
-                    };
-                    setTimeout(awaitCheckpoint, 16);
+                    }
                 }, true);
             }"""
         )
@@ -610,53 +630,81 @@ def _benchmark_order(
             '[data-fieldname="pieces_fast_entry"] .dco-fast-table '
             'tbody tr[data-row-name]:not(.dco-virtual-row)'
         ).first
-        sample_specs = (
-            ("width_cm", lambda index: 45 + (index % 20) / 10),
-            ("length_cm", lambda index: 90 + (index % 20) / 10),
-            ("qty", lambda index: 2 + index % 2),
+        sample_count = 40
+        width_control = row.locator('[data-field="width_cm"]')
+
+        # Measure key-to-paint independently. These edits are batched and do not
+        # wait for IndexedDB between keystrokes; the final checkpoint is verified
+        # once before the separate acknowledgement sample set begins.
+        for index in range(sample_count):
+            before = page.evaluate("() => window.__al128KeyboardFrameSamples.length")
+            page.evaluate("() => { window.__al128KeyboardAction = { started: false }; }")
+            width_control.click()
+            width_control.press("Control+A")
+            width_control.press_sequentially(str(round(45 + (index % 20) / 10, 1)))
+            width_control.press("Tab")
+            page.wait_for_function(
+                "count => window.__al128KeyboardFrameSamples.length > count",
+                arg=before,
+                timeout=5_000,
+            )
+            page.evaluate("() => { window.__al128KeyboardAction = null; }")
+        page.wait_for_function(
+            "() => {"
+            " const state = AlmdinaDcoRecovery.LocalCheckpoint.snapshot(cur_frm);"
+            " return state && state.state === 'LOCAL_SAVED'"
+            "   && state.saved_revision === state.recovery_revision;"
+            "}",
+            timeout=30_000,
         )
-        for index in range(30):
-            for fieldname, value_for in sample_specs:
-                sample_count = page.evaluate(
-                    "() => window.__al128CheckpointSamples.length"
-                )
-                page.evaluate(
-                    "() => {"
-                    " const state = AlmdinaDcoRecovery.LocalCheckpoint.snapshot(cur_frm);"
-                    " window.__al128MeasureAction = {"
-                    "   started: false, completed: false, savedRevision: state.saved_revision"
-                    " };"
-                    "}"
-                )
-                control = row.locator(f'[data-field="{fieldname}"]')
-                control.click()
-                control.press("Control+A")
-                control.press_sequentially(str(value_for(index)))
-                control.press("Tab")
-                page.wait_for_function(
-                    "count => window.__al128CheckpointSamples.length > count",
-                    arg=sample_count,
-                    timeout=10_000,
-                )
-                page.evaluate("() => { window.__al128MeasureAction = null; }")
+
+        # Measure checkpoint acknowledgement separately, with enough independent
+        # writes to report descriptive empirical P50/P95 values.
+        for index in range(sample_count):
+            before = page.evaluate("() => window.__al128CheckpointSamples.length")
+            page.evaluate(
+                "() => {"
+                " const state = AlmdinaDcoRecovery.LocalCheckpoint.snapshot(cur_frm);"
+                " window.__al128AckAction = {"
+                "   started: false, completed: false, savedRevision: state.saved_revision"
+                " };"
+                "}"
+            )
+            width_control.click()
+            width_control.press("Control+A")
+            width_control.press_sequentially(str(round(50 + (index % 20) / 10, 1)))
+            width_control.press("Tab")
+            page.wait_for_function(
+                "count => window.__al128CheckpointSamples.length > count",
+                arg=before,
+                timeout=10_000,
+            )
+            page.evaluate("() => { window.__al128AckAction = null; }")
+
         samples = page.evaluate(
             "() => ({"
-            " frame: window.__al128FrameSamples.slice(-90),"
-            " checkpoint: window.__al128CheckpointSamples.slice(-90)"
+            " keyboard: window.__al128KeyboardFrameSamples.slice(-40),"
+            " checkpoint: window.__al128CheckpointSamples.slice(-40)"
             "})"
         )
-        frame_ms = samples["frame"]
+        frame_ms = samples["keyboard"]
         checkpoint_ms = samples["checkpoint"]
-        assert len(frame_ms) == 90, f"Expected 90 real input-frame samples, got {len(frame_ms)}"
-        assert len(checkpoint_ms) == 90
+        assert len(frame_ms) == sample_count, (
+            f"Expected {sample_count} key-to-paint samples, got {len(frame_ms)}"
+        )
+        assert len(checkpoint_ms) == sample_count
         assert not save_requests, "Measurement checkpoint unexpectedly invoked Official Save."
         if variant == "base":
             assert replaced == set(BASE_FILES), f"Base metadata replacement missed: {set(BASE_FILES) - replaced}"
         result = {
             "variant": variant,
             "rows": count,
+            "keyboard_samples": len(frame_ms),
+            "checkpoint_ack_samples": len(checkpoint_ms),
+            "keyboard_response_and_checkpoint_ack_measured_separately": True,
             "input_samples": len(frame_ms),
-            "input_to_next_paint_frame_ms": {
+            "keyboard_response_method": "first input event to second requestAnimationFrame",
+            "input_to_second_animation_frame_ms": {
                 "p50": _percentile(frame_ms, 0.50),
                 "p95": _percentile(frame_ms, 0.95),
             },
@@ -732,12 +780,14 @@ def test_actual_measurement_entry_performance_200_and_500_before_after() -> None
                     2,
                 ),
             }
-            for metric in ("input_to_next_paint_frame_ms", "checkpoint_ack_ms")
+            for metric in ("input_to_second_animation_frame_ms", "checkpoint_ack_ms")
         }
     evidence = {
         "interaction_run": "PASS",
         "performance_rating": "NOT_ASSESSED_NO_ACCEPTANCE_THRESHOLD_DEFINED",
         "performance_metrics_are_comparative_evidence": True,
+        "sample_method": "40 independent samples per metric, Base and HEAD, for each row count",
+        "performance_test_budget_minutes": 10,
         "versions": fixture["versions"],
         "base_sha": base_sha,
         "benchmarks": results,
@@ -765,3 +815,12 @@ def pytest_sessionfinish(session, exitstatus) -> None:
             output.write("```json\n")
             output.write(json.dumps(summary, ensure_ascii=False, indent=2))
             output.write("\n```\n")
+            if any(
+                result.get("test") == "real_desk_edit_checkpoint_permissions"
+                for result in TEST_RESULTS
+            ):
+                output.write(
+                    "\nSpecial manufacturing geometry mutation remains NOT TESTED: "
+                    "the current Special Shape Desk control is documentation-only, "
+                    "and `special_shape_geometry_json` has no supported editable control.\n"
+                )

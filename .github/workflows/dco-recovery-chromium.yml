@@ -12,6 +12,7 @@ on:
         options:
           - all
           - native_quota
+          - without_native_quota
 
 permissions:
   contents: read
@@ -36,8 +37,15 @@ jobs:
         run: python -m playwright install --with-deps chromium
 
       - name: Certify DCO recovery in Chromium
-        if: github.event_name != 'workflow_dispatch' || inputs.suite != 'native_quota'
+        if: github.event_name != 'workflow_dispatch' || (inputs.suite != 'native_quota' && inputs.suite != 'without_native_quota')
         run: python -m pytest -q -s tests/browser/test_dco_local_recovery_chromium.py
+
+      - name: Certify DCO recovery in Chromium without native quota case
+        if: github.event_name == 'workflow_dispatch' && inputs.suite == 'without_native_quota'
+        run: >-
+          python -m pytest -q -s
+          tests/browser/test_dco_local_recovery_chromium.py
+          -k 'not test_chromium_native_origin_quota_preserves_acknowledged_checkpoint'
 
       - name: Certify native Chromium quota for ALMADINA-128
         if: github.event_name == 'workflow_dispatch' && inputs.suite == 'native_quota'

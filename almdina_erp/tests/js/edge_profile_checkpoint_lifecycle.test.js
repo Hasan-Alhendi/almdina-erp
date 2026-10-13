@@ -62,9 +62,12 @@ const row = {
     edge_width_top: 0,
     edge_width_bottom: 0,
 };
+let dirtyCalls = 0;
+let officialSaveCalls = 0;
 const form = {
     doc: { pieces: [row] },
-    dirty() {},
+    dirty() { dirtyCalls += 1; },
+    save() { officialSaveCalls += 1; return Promise.resolve(); },
     script_manager: {
         trigger(fieldname, doctype, name) {
             triggeredFields.push({ fieldname, doctype, name });
@@ -101,5 +104,11 @@ assert.equal(row.edge_long_left_type_override, "Bulk Edge");
 assert.equal(row.edge_long_right_type_override, "Bulk Edge");
 assert.equal(row.edge_width_top_type_override, "Bulk Edge");
 assert.equal(row.edge_width_bottom_type_override, "Bulk Edge");
+assert.equal(dirtyCalls, 1);
+
+window.AlmdinaEdgeProfileControls.applyAllSides(form, tableRow, "Bulk Edge");
+assert.equal(triggeredFields.length, 8, "an unchanged bulk selection must not retrigger field lifecycles");
+assert.equal(dirtyCalls, 1, "an unchanged bulk selection must not dirty the form again");
+assert.equal(officialSaveCalls, 0, "local edge lifecycle capture must not call Official Save");
 
 console.log("Bulk edge profile checkpoint lifecycle passed");

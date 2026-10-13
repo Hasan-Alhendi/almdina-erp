@@ -1168,7 +1168,7 @@ def test_chromium_native_origin_quota_preserves_acknowledged_checkpoint(
         assert applied_quota["usage"] < applied_quota["quota"]
 
         cdp.send("Storage.clearDataForOrigin", {"origin": origin, "storageTypes": "all"})
-        cdp.send("Storage.overrideQuotaForOrigin", {"origin": origin, "quotaSize": 0})
+        cdp.send("Storage.overrideQuotaForOrigin", {"origin": origin})
         removed_quota = cdp.send("Storage.getUsageAndQuota", {"origin": origin})
         override_removed = removed_quota["overrideActive"] is False
         assert override_removed is True
@@ -1177,7 +1177,7 @@ def test_chromium_native_origin_quota_preserves_acknowledged_checkpoint(
     finally:
         if cdp is not None and not override_removed:
             try:
-                cdp.send("Storage.overrideQuotaForOrigin", {"origin": local_origin, "quotaSize": 0})
+                cdp.send("Storage.overrideQuotaForOrigin", {"origin": local_origin})
                 removed_quota = cdp.send("Storage.getUsageAndQuota", {"origin": local_origin})
                 override_removed = removed_quota["overrideActive"] is False
             except Exception:
