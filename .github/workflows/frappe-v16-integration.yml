@@ -333,7 +333,7 @@ jobs:
           printf 'ALMADINA-128 comparison base=%s merge-base=%s\n' \
             "$AL128_COMPARISON_BASE" "$AL128_BASE_SHA" | tee -a "$GITHUB_STEP_SUMMARY"
           if [[ "$AL128_TARGET_CASE" == "al128_desk_edit" ]]; then
-            test_target="tests/browser/test_dco_al128_frappe_desk.py::test_real_desk_edit_checkpoint_and_permission_isolation"
+            test_target="tests/browser/test_dco_al128_frappe_desk.py::test_real_desk_edits_checkpoint_and_permission_isolation"
           else
             test_target="tests/browser/test_dco_al128_frappe_desk.py"
           fi
