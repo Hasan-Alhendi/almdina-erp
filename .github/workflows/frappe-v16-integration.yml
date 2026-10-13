@@ -330,7 +330,38 @@ jobs:
           git cat-file -e "$AL128_BASE_SHA^{commit}"
           printf 'ALMADINA-128 comparison base=%s merge-base=%s\n' \
             "$AL128_COMPARISON_BASE" "$AL128_BASE_SHA" | tee -a "$GITHUB_STEP_SUMMARY"
-          python -m pytest -q -s tests/browser/test_dco_al128_frappe_desk.py
+          set +e
+          python -m pytest -q -s tests/browser/test_dco_al128_frappe_desk.py 2>&1 \
+            | tee "$RUNNER_TEMP/al128-desk-pytest.log"
+          test_status=${PIPESTATUS[0]}
+          set -e
+          if (( test_status != 0 )); then
+            failure_tail="$(python - "$RUNNER_TEMP/al128-desk-pytest.log" <<'PY'
+          import sys
+
+          text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+          text = text.replace("al128-isolated-ci-password", "[redacted test credential]")
+          print("\n".join(text.splitlines()[-60:]))
+          PY
+          )"
+            failure_tail="${failure_tail//'%'/'%25'}"
+            failure_tail="${failure_tail//$'\r'/'%0D'}"
+            failure_tail="${failure_tail//$'\n'/'%0A'}"
+            printf '::error title=AL128 real Desk test failure::%s\n' "$failure_tail"
+            {
+              echo '### ALMADINA-128 real Desk test failure details'
+              echo '```text'
+              python - "$RUNNER_TEMP/al128-desk-pytest.log" <<'PY'
+          import sys
+
+          text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+          text = text.replace("al128-isolated-ci-password", "[redacted test credential]")
+          print("\n".join(text.splitlines()[-60:]))
+          PY
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$test_status"
         timeout-minutes: 30
 
       - name: Upload ALMADINA-128 Desk evidence
@@ -399,6 +430,7 @@ jobs:
             migrate-second.log \
             al128-fixture-prepare.log \
             al128-fixture-create.log \
+            al128-desk-pytest.log \
             tests.log; do
             cp "$RUNNER_TEMP/$log" "$RUNNER_TEMP/integration-diagnostics/" 2>/dev/null || true
           done
