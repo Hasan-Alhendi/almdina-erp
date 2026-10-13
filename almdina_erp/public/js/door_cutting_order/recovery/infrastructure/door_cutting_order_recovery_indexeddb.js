@@ -5,7 +5,7 @@
     if (root.IndexedDb) return;
 
     const DATABASE_NAME = "almdina_erp_dco_recovery";
-    const DATABASE_VERSION = 1;
+    const DATABASE_VERSION = 2;
     const DRAFT_STORE = "dco_recovery_drafts";
     const ASSET_STORE = "dco_recovery_assets";
 
@@ -85,11 +85,18 @@
             }
             if (openPromise) return openPromise;
             openPromise = new Promise((resolve, reject) => {
+                let settled = false;
+                const rejectOpen = (error) => {
+                    if (settled) return;
+                    settled = true;
+                    openPromise = null;
+                    reject(error);
+                };
                 let request;
                 try {
                     request = indexedDb.open(DATABASE_NAME, DATABASE_VERSION);
                 } catch (error) {
-                    reject(storageError(error, "open_failure", "IndexedDB could not be opened"));
+                    rejectOpen(storageError(error, "open_failure", "IndexedDB could not be opened"));
                     return;
                 }
                 request.onupgradeneeded = () => {
@@ -97,11 +104,16 @@
                         installSchema(request.result, request.transaction);
                     } catch (error) {
                         try { request.transaction.abort(); } catch (abortError) { /* best effort */ }
-                        reject(storageError(error, "schema_failure", "Recovery schema could not be installed"));
+                        rejectOpen(storageError(error, "schema_failure", "Recovery schema could not be installed"));
                     }
                 };
                 request.onsuccess = () => {
                     const database = request.result;
+                    if (settled) {
+                        database.close();
+                        return;
+                    }
+                    settled = true;
                     database.onversionchange = () => {
                         database.close();
                         openPromise = null;
@@ -109,12 +121,10 @@
                     resolve(database);
                 };
                 request.onerror = () => {
-                    openPromise = null;
-                    reject(storageError(request.error, "open_failure", "IndexedDB open failed"));
+                    rejectOpen(storageError(request.error, "open_failure", "IndexedDB open failed"));
                 };
                 request.onblocked = () => {
-                    openPromise = null;
-                    reject(new RecoveryStorageError(
+                    rejectOpen(new RecoveryStorageError(
                         "open_blocked",
                         "IndexedDB upgrade is blocked by another tab"
                     ));

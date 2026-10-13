@@ -205,9 +205,16 @@
         });
     }
 
-    function notifyChanged(frm, tr, row, fieldname) {
+    function notifyChanged(frm, tr, row, fieldname, changedFields = []) {
         frm.dirty();
         syncToggleVisuals(tr, row);
+
+        if (frm.script_manager && typeof frm.script_manager.trigger === "function") {
+            changedFields.forEach(name => {
+                Promise.resolve(frm.script_manager.trigger(name, row.doctype, row.name))
+                    .catch(error => console.error(error));
+            });
+        }
 
         const root = rootFor(frm);
         if (root) {
@@ -246,9 +253,19 @@
         const row = materialize(frm, tr);
         if (!row) return;
         if (lockedBreakSides(row).has(config.selectedField)) return;
-        row[config.selectedField] = 1;
-        row[config.overrideField] = String(overrideType || "").trim();
-        notifyChanged(frm, tr, row, config.overrideField);
+        const selectedType = String(overrideType || "").trim();
+        const changedFields = [];
+        if (Number(row[config.selectedField] || 0) !== 1) {
+            row[config.selectedField] = 1;
+            changedFields.push(config.selectedField);
+        }
+        if (String(row[config.overrideField] || "").trim() !== selectedType) {
+            row[config.overrideField] = selectedType;
+            changedFields.push(config.overrideField);
+        }
+        if (changedFields.length) {
+            notifyChanged(frm, tr, row, config.overrideField, changedFields);
+        }
     }
 
     function applyAllSides(frm, tr, selectedValue) {
@@ -258,12 +275,21 @@
             ? ""
             : String(selectedValue || "").trim();
         const locked = lockedBreakSides(row);
+        const changedFields = [];
         SIDE_CONFIG.forEach(config => {
             if (locked.has(config.selectedField)) return;
-            row[config.selectedField] = 1;
-            row[config.overrideField] = overrideType;
+            if (Number(row[config.selectedField] || 0) !== 1) {
+                row[config.selectedField] = 1;
+                changedFields.push(config.selectedField);
+            }
+            if (String(row[config.overrideField] || "").trim() !== overrideType) {
+                row[config.overrideField] = overrideType;
+                changedFields.push(config.overrideField);
+            }
         });
-        notifyChanged(frm, tr, row, "all_side_edge_profiles");
+        if (changedFields.length) {
+            notifyChanged(frm, tr, row, "all_side_edge_profiles", changedFields);
+        }
     }
 
     function ensureBulkHeader(root) {

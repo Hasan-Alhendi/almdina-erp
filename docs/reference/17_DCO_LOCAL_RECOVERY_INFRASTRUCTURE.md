@@ -34,7 +34,14 @@ concurrency. Those remain with `AlmdinaDocumentContext`,
 
 ## 2. IndexedDB schema
 
-Database: `almdina_erp_dco_recovery`, version `1`.
+Database: `almdina_erp_dco_recovery`, version `2`.
+
+Version 2 is a structural upgrade. It creates any missing recovery stores and
+indexes in the version-change transaction and leaves existing records and Blob
+bytes untouched. Record schema versions remain independent: record v1 stays
+readable as `official_save_state=ACTIVE`, including historical PLAN, COST, and
+SPECIAL_SHAPE scopes. Reads never rewrite or delete legacy records; only a later
+successful checkpoint/state transition writes the current record schema.
 
 ### `dco_recovery_drafts`
 
@@ -198,6 +205,34 @@ No failure is allowed to block form editing, current Save/Cancel, Plan/Cost beha
 or scanner/crop behavior. Record v1 is compatibility-read and lazily rewritten as
 v2 only by a later checkpoint or official-save state transition.
 
+The repository payload limit is configurable as `maxPayloadBytes`. Chromium
+measurement of the canonical projection was 479,745 bytes for 200 rows with
+512-character piece notes and 1,449,645 bytes for 500 rows with 2,048-character
+piece notes; both scenarios also included a 20,000-character order note, a
+280,000-character drawing JSON value, and a 45,000-character geometry JSON value.
+The default is 1,835,008 bytes (1.75 MiB), which leaves 26.6% over the measured
+500-row fixture. The Chromium suite records P95 write latency across seven writes
+in each fixture and requires it to remain below two seconds. This is capacity for
+that measured fixture, not a guarantee for
+every possible future 500-row payload. Payloads above the configured cap fail
+visibly and remain in the live form; the browser's own origin quota remains an
+independent limit.
+
+Checkpoint UI status distinguishes an acknowledged local write from an in-flight
+local write and the official server Save. A repository ERROR is announced in the
+form with Arabic text; it is never reported only through the developer console.
+
+### Browser-local asset support boundary
+
+The current DCO scanner/crop and special-shape drawing flows upload through the
+existing private Frappe File path. They do not create a browser-local asset draft.
+Accordingly, the active DCO projection declares no local asset references and
+continues to reject Blob, File, `blob:`, and `data:` values. The independent
+`LocalAssetRepository` supports durable, hash-verified Blob storage for an
+explicit future local-only flow; current upload/scan/drawing behavior is not
+claimed to use that seam. Any future producer must persist the asset before
+checkpointing its stable `asset_id` reference.
+
 ## 7. Deferred behavior
 
 The following remain explicitly deferred to later stories:
@@ -208,3 +243,29 @@ The following remain explicitly deferred to later stories:
 - BroadcastChannel/soft-lease multi-tab hints.
 
 Server authorization and optimistic concurrency remain authoritative in every tab.
+
+## 8. ALMADINA-128 target-version certification
+
+The `Frappe v16 Integration` workflow has a manual `al128_desk` suite that reuses
+its isolated MariaDB/Redis services, Bench, and site setup. Dispatch it with the
+exact Frappe `v16.17.5` and ERPNext `v16.17.0` tags; it verifies both expected
+source SHAs before installing the isolated site. The fixture preflight rejects
+any other runtime and completes an incomplete test site only through Frappe's official
+Setup Wizard. The Desk scenario uses real Chromium sessions and capability-backed
+test users. It edits an existing DCO through Fast Entry and edge controls, checks
+the acknowledged IndexedDB projection after reload, compares server data before
+and after, and records any `savedocs` request so a local checkpoint cannot be
+mistaken for Official Save.
+
+The measurement benchmark uses 200- and 500-piece DCOs and compares the three
+ALMADINA-128 recovery scripts from the selected PR base with the PR versions in
+isolated browser contexts. For each size/version it records 90 keyboard-driven
+measurement samples, P50/P95 input-to-next-paint-frame time, and P50/P95
+checkpoint acknowledgement time inside Chromium. No latency acceptance threshold
+is defined here, so the results are comparative evidence and do not independently
+certify an absolute performance target. The separate Chromium storage test applies a per-origin quota
+through CDP in a temporary persistent profile, records native IndexedDB quota
+failure, checks preservation of the acknowledged revision and Arabic error
+status, then removes the override and profile. Injected storage failures remain
+useful repository regressions but are not evidence for this browser-native quota
+certification.
