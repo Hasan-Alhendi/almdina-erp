@@ -11,6 +11,7 @@ from unittest import mock
 from uuid import uuid4
 
 import frappe
+import MySQLdb
 import pymysql
 from frappe.tests.utils import FrappeTestCase
 
@@ -238,9 +239,15 @@ class TestNewOrderRecoveryIntegration(FrappeTestCase):
         token = str(uuid4())
         self.tokens.append(token)
         site = frappe.local.site
+        use_mysqlclient = frappe.conf.get("use_mysqlclient", 1)
+        frappe_db_driver = "mysqlclient" if use_mysqlclient else "pymysql"
+        frappe_integrity_error = (
+            MySQLdb.IntegrityError if use_mysqlclient else pymysql.err.IntegrityError
+        )
         evidence: dict[str, object] = {
             "test": "test_concurrent_database_inserts_reject_duplicate_creation_token",
             "boundary": "MariaDB unique index on recovery_creation_token",
+            "frappe_mariadb_driver": frappe_db_driver,
             "status": "INCOMPLETE",
             "unique_index_verified": False,
             "connection_ids": [],
@@ -311,8 +318,11 @@ class TestNewOrderRecoveryIntegration(FrappeTestCase):
                     frappe.db.rollback()
                 errno = None
                 violated_index = None
-                if isinstance(error, pymysql.err.IntegrityError):
-                    errno = error.args[0] if error.args else None
+                if isinstance(error, frappe_integrity_error):
+                    try:
+                        errno = int(error.args[0]) if error.args else None
+                    except (TypeError, ValueError):
+                        errno = None
                     detail = str(error.args[1] if len(error.args) > 1 else error)
                     key_match = re.search(
                         r"for key\s+[`'\"]([^`'\"]+)[`'\"]",
@@ -332,6 +342,11 @@ class TestNewOrderRecoveryIntegration(FrappeTestCase):
                     "connection_id": connection_id,
                     "kind": kind,
                     "error_type": type(error).__name__,
+                    "error_type_module": type(error).__module__,
+                    "error_args": [
+                        str(argument).replace(token, "[redacted-creation-token]")
+                        for argument in error.args
+                    ],
                     "errno": errno,
                     "violated_index": violated_index,
                     "error": message,
