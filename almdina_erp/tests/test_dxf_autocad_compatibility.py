@@ -24,7 +24,8 @@ def _source(path: Path) -> str:
 
 def test_secure_export_uses_r12_ascii_and_simple_line_entities():
     src = _source(SECURE_DXF)
-    assert 'const DXF_VERSION = "AC1009"' in src
+    assert 'const DXF_VERSION = "AC1015"' in src
+    assert 'pair(100, "AcDbPolyline")' in src
     assert 'pair(0, "LINE")' in src
     assert 'pair(10, dxfNumber(x1))' in src
     assert 'pair(11, dxfNumber(x2))' in src
@@ -225,7 +226,7 @@ def test_rebuild_autocad_dxf_rejects_non_line_geometry():
     output = io.StringIO()
     source.write(output)
 
-    with pytest.raises(ValueError, match="LINE and TEXT entities only"):
+    with pytest.raises(ValueError, match="unsupported entities: CIRCLE"):
         rebuild_autocad_dxf(output.getvalue().encode("ascii"))
 
 
@@ -285,6 +286,47 @@ def test_rebuild_autocad_dxf_decodes_arabic_text_escapes():
     assert {label.dxf.text for label in labels} == {"دبل القشاط", "دبل كامل"}
     assert all(str(label.dxf.style) == "Tahoma" for label in labels)
     assert all(str(label.dxf.layer) == "text" for label in labels)
+
+def test_exported_linear_dxf_survives_autocad_normalization(tmp_path):
+    import os
+    import subprocess
+
+    client_path = tmp_path / "client.dxf"
+    env = os.environ.copy()
+    env["LINER_DXF_OUT"] = str(client_path)
+    subprocess.run(
+        ["node", str(ROOT / "tests" / "js" / "secure_dxf_topology_export.test.js")],
+        check=True,
+        env=env,
+    )
+    raw = client_path.read_bytes()
+    source = ezdxf.read(io.StringIO(raw.decode("ascii").replace("\r\n", "\n")))
+    source_entities = list(source.modelspace())
+    source_types = [entity.dxftype() for entity in source_entities]
+    assert "LINE" in source_types
+    assert "TEXT" in source_types
+    source_paths = [entity for entity in source_entities if entity.dxftype() == "LWPOLYLINE"]
+    assert len(source_paths) == 1
+    assert str(source_paths[0].dxf.layer) == "Liner"
+    assert source_paths[0].closed is False
+    source_points = [(float(point[0]), float(point[1])) for point in source_paths[0].get_points("xy")]
+    assert len(source_points) == 8
+    assert {entity.dxf.layer for entity in source_entities if entity.dxftype() == "LINE"} >= {"SHEET_OUTLINE", "CUT_PATH"}
+
+    normalized = rebuild_autocad_dxf(raw)
+    result = ezdxf.read(io.StringIO(normalized.decode("utf-8")))
+    assert result.dxfversion == "AC1024"
+    result_entities = list(result.modelspace())
+    assert len(result_entities) == len(source_entities)
+    result_paths = [entity for entity in result_entities if entity.dxftype() == "LWPOLYLINE"]
+    assert len(result_paths) == 1
+    assert str(result_paths[0].dxf.layer) == "Liner"
+    assert result_paths[0].closed is False
+    assert [(float(point[0]), float(point[1])) for point in result_paths[0].get_points("xy")] == source_points
+    assert {entity.dxf.layer for entity in result_entities if entity.dxftype() == "LINE"} >= {"SHEET_OUTLINE", "CUT_PATH"}
+    assert any(entity.dxftype() == "TEXT" for entity in result_entities)
+    assert result.audit().has_errors is False
+
 
 def test_secure_dxf_export_asset_is_cache_busted():
     registry = ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_workspace_asset_registry.js"

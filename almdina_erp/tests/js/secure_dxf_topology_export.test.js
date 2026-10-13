@@ -52,13 +52,15 @@ const fakeFrappe = {
             return Promise.resolve({ message: originalUpload });
         }
         if (lastCallMethod.includes("normalize_dxf_for_autocad")) {
+            const clientDxf = Buffer.from(String((opts.args && opts.args.content_b64) || ""), "base64").toString("utf8");
+            if (process.env.LINER_DXF_OUT && clientDxf.includes("0\r\nLWPOLYLINE\r\n") && clientDxf.includes("8\r\nLiner\r\n")) {
+                fs.writeFileSync(process.env.LINER_DXF_OUT, clientDxf);
+            }
             return Promise.resolve({
                 message: {
                     filename: "cutting_plan_DCO-TOPOLOGY_AutoCAD2011_2026.dxf",
                     content_b64: Buffer.from(
-                        Buffer.from(String((opts.args && opts.args.content_b64) || ""), "base64")
-                            .toString("utf8")
-                            .replace("AC1009", "AC1024"),
+                        clientDxf.replace("AC1009", "AC1024").replace("AC1015", "AC1024"),
                         "utf8"
                     ).toString("base64"),
                 },
@@ -407,18 +409,25 @@ async function run() {
     vm.runInContext(linerSource, context, { filename: "door_cutting_order_liner_geometry.js" });
 
     function linerVertices(dxf) {
-        const entities = dxf.split("0\r\nLWPOLYLINE\r\n").filter(part => part.startsWith("8\r\nLiner\r\n"));
+        const entities = dxf.split("0\r\nLWPOLYLINE\r\n").filter(part => part.includes("8\r\nLiner\r\n"));
         assert.equal(entities.length, 1);
         const lines = entities[0].split("\r\n");
-        assert.equal(lines[2], "90");
-        assert.equal(lines[4], "70");
-        assert.equal(lines[5], "0");
-        const count = Number(lines[3]);
+        let count = null;
+        let flags = null;
         const points = [];
-        for (let index = 6; index + 3 < lines.length; index += 4) {
-            if (lines[index] !== "10" || lines[index + 2] !== "20") break;
-            points.push([Number(lines[index + 1]), Number(lines[index + 3])]);
+        for (let index = 0; index + 1 < lines.length; index += 2) {
+            const code = lines[index];
+            const value = lines[index + 1];
+            if (code === "0") break;
+            if (code === "90") count = Number(value);
+            if (code === "70") flags = value;
+            if (code === "10") {
+                assert.equal(lines[index + 2], "20");
+                points.push([Number(value), Number(lines[index + 3])]);
+                index += 2;
+            }
         }
+        assert.equal(flags, "0");
         assert.equal(points.length, count);
         return points;
     }
@@ -481,7 +490,7 @@ async function run() {
         const spans = [span(0), span(1)].sort((left, right) => left - right);
         assert.equal(Math.round(spans[0] * 10) / 10, 13);
         assert.equal(Math.round(spans[1] * 10) / 10, 405);
-        assert.match(downloadedDxf, /0\r\nLWPOLYLINE\r\n8\r\nLiner\r\n/);
+        assert.match(downloadedDxf, /0\r\nLWPOLYLINE\r\n100\r\nAcDbEntity\r\n8\r\nLiner\r\n/);
         assert.match(downloadedDxf, /70\r\n0\r\n/);
     }
 

@@ -4,7 +4,10 @@
     if (window.__almdinaSecureDxfExportLoaded) return;
     window.__almdinaSecureDxfExportLoaded = true;
 
-    const DXF_VERSION = "AC1009"; // Valid R12 ASCII: the widest AutoCAD compatibility, including AutoCAD 2021+.
+    // AutoCAD 2000. LWPOLYLINE is not a valid R12 entity, and ezdxf drops its
+    // layer when the header stays AC1009. The server still rebuilds the
+    // downloaded file as AutoCAD 2010.
+    const DXF_VERSION = "AC1015";
     const TOPOLOGY_SCHEMA_VERSION = 1;
     const TOPOLOGY_UNIT = "mm";
     // R12 TABLE records must declare the exact number of entries. The exporter
@@ -244,7 +247,12 @@
 
     function lwpolyline(layerName, points) {
         if (!Array.isArray(points) || points.length < 2) return "";
-        let result = pair(0, "LWPOLYLINE") + pair(8, layerName || "0") + pair(90, points.length) + pair(70, 0);
+        let result = pair(0, "LWPOLYLINE")
+            + pair(100, "AcDbEntity")
+            + pair(8, layerName || "0")
+            + pair(100, "AcDbPolyline")
+            + pair(90, points.length)
+            + pair(70, 0);
         points.forEach(point => {
             result += pair(10, dxfNumber(point[0])) + pair(20, dxfNumber(point[1]));
         });
