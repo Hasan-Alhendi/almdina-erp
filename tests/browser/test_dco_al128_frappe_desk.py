@@ -284,13 +284,15 @@ def test_real_desk_edits_checkpoint_and_permission_isolation() -> None:
             revision_before_special_notes = page.evaluate(
                 "() => AlmdinaDcoRecovery.LocalCheckpoint.snapshot(cur_frm).recovery_revision"
             )
-            special.locator('input[data-field="notes"]').fill(special_notes)
+            special_notes_input = special.locator('input[data-field="notes"]')
+            special_notes_input.fill(special_notes)
             page.wait_for_function(
                 "({pieceName, value}) => cur_frm.doc.pieces.some(row =>"
                 " row.name === pieceName && row.notes === value)",
                 arg={"pieceName": piece_names[2], "value": special_notes},
                 timeout=10_000,
             )
+            special_notes_input.press("Tab")
             page.wait_for_function(
                 "revision => {"
                 " const state = AlmdinaDcoRecovery.LocalCheckpoint.snapshot(cur_frm);"
