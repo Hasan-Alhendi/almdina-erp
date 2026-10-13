@@ -151,7 +151,13 @@ def _server_document(page: Page, name: str) -> dict[str, Any]:
         "   order_notes: doc.order_notes,"
         "   pieces: (doc.pieces || []).map(row => ({"
         "     name: row.name, width_cm: row.width_cm, length_cm: row.length_cm,"
-        "     qty: row.qty, extra_liner: row.extra_liner, edge_long_left: row.edge_long_left"
+        "     qty: row.qty, extra_liner: row.extra_liner, edge_long_left: row.edge_long_left,"
+        "     edge_long_right: row.edge_long_right, edge_width_top: row.edge_width_top,"
+        "     edge_width_bottom: row.edge_width_bottom, notes: row.notes,"
+        "     edge_long_left_type_override: row.edge_long_left_type_override,"
+        "     edge_long_right_type_override: row.edge_long_right_type_override,"
+        "     edge_width_top_type_override: row.edge_width_top_type_override,"
+        "     edge_width_bottom_type_override: row.edge_width_bottom_type_override"
         "   }))"
         " };"
         "}",
@@ -540,6 +546,21 @@ def _benchmark_order(
     try:
         _login(page, fixture["editor"], fixture["password"])
         _open_order(page, name, count)
+        if variant == "base" and replaced != set(BASE_FILES):
+            loaded_scripts = page.evaluate(
+                "() => performance.getEntriesByType('resource')"
+                ".map(entry => new URL(entry.name).pathname)"
+                ".filter(path => path.endsWith('.js')).sort()"
+            )
+            trace(
+                "base_asset_interception_incomplete",
+                matched=sorted(replaced),
+                loaded_scripts=loaded_scripts,
+            )
+            assert replaced == set(BASE_FILES), (
+                "Base recovery assets were not served as separate matching requests; "
+                f"matched={sorted(replaced)}, loaded JavaScript resources={loaded_scripts}"
+            )
         _start_real_edit_session(page)
         _prime_checkpoint_with_real_measurement_edit(page)
         page.evaluate(
