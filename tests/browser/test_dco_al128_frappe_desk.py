@@ -491,7 +491,7 @@ def _install_base_source_overrides(
                 return
         route.continue_()
 
-    context.route("**/assets/almdina_erp/js/door_cutting_order/recovery/**", replace_source)
+    context.route("**/*.js", replace_source)
     return replaced
 
 
@@ -550,7 +550,9 @@ def _benchmark_order(
             loaded_scripts = page.evaluate(
                 "() => performance.getEntriesByType('resource')"
                 ".map(entry => new URL(entry.name).pathname)"
-                ".filter(path => path.endsWith('.js')).sort()"
+                ".filter(path => path.endsWith('.js')"
+                " && (path.includes('/recovery/') || path.includes('door_cutting_order.bundle')))"
+                ".sort()"
             )
             trace(
                 "base_asset_interception_incomplete",
