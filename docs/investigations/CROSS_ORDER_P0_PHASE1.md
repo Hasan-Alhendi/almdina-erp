@@ -2,7 +2,7 @@
 
 **Base `Develop`:** `17e526b6648d35983967c03549e2348b05cb2839`، وقت الاستنساخ 2026-10-13.
 **النطاق:** اختبارات وتشخيص فقط؛ لم يتغير كود الإنتاج أو بيانات العملاء.
-**القرار:** `BLOCKED` لاعتماد المرحلة الأولى كاملًا: اختبارات Node تثبت عيوب واجهة محددة، لكن لم يُشغّل Desk على Frappe 16.17.5 / ERPNext 16.17.0، ولم تُختبر نافذة الطباعة الحقيقية أو كتابة قاعدة البيانات. لا يُدمج هذا الـPR الأحمر.
+**القرار:** `RUNTIME CERTIFICATION BLOCKED`. وصل CI إلى Desk على Frappe 16.17.5 / ERPNext 16.17.0 وأنشأ بيانات اختبار فعلية، لكن فتح Form A توقف في Router قبل إنشاء `cur_frm`. لذلك لم تُختبر الطباعة أو Native Save/DB، ولا يُدمج هذا الـPR الأحمر.
 
 ## Change Contract
 
@@ -97,11 +97,13 @@ Goal: إثبات مسارات A→B بحالات قابلة للتكرار. In s
 
 **محاولتا Desk الأوليان:** نجح تثبيت الإصدارات وإنشاء الموقع والطلبين، ثم علق فتح A قبل دورة Form. السجل في Run `38425288478` حدد مهلة `cur_frm`; التشخيص المعزز في Run `38426381356` أظهر `/desk/door-cutting-order/26-00001` مع `cur_frm=null` و`Page door-cutting-order not found`، و`RangeError: Incorrect locale information provided` في `AltShortcutGroup` قبل إنشاء الصفحة. مصدر Frappe `v16.17.5` يستدعي `new Intl.Locale(navigator.language)` هناك؛ سياق Playwright الآن يحدد `en-US` ويتحقق من قابليته للتحليل قبل الملاحة. `socket.io` على `bench serve` أعاد 404 أيضًا، لكنه ليس سبب `RangeError` المثبت. لا نتيجة عن `frm` أو Save أو Print من هاتين المحاولتين.
 
+**المحاولة الأخيرة:** Run `38427504655` ثبت نسختي `16.17.5` و`16.17.0` وأنشأ A `26-00001` أبيض وB `26-00002` أسود، وصفين مولدين باسمي `r6jr9719nq` و`r6kifgmbc7` مختلفين. زال خطأ Locale؛ بقيت استجابة `404` لـ`frappe.desk.desk_page.getpage`، وواجهة “Page door-cutting-order not found” للمسار `/desk/door-cutting-order/26-00001`، مع `cur_frm=null`. هذا **مانع Router في الموقع التجريبي قبل lifecycle**. في مصدر Frappe المثبت يبني `frappe.router.setup()` مسارات Doctype من `frappe.boot.user.can_read`، ثم يعامل slug غير المسجل كصفحة؛ نقص تسجيل مسار DCO في صلاحيات boot تفسير مرجح **لم يُقَس مباشرة**. يجب فحص `frappe.boot.user.can_read` و`frappe.router.routes['door-cutting-order']`، ثم منح مستخدم اختبار دور القراءة/القدرات اللازمة ضمن الموقع المعزول فقط. لا تُكرر محاولة بالمقدمات الحالية. `socket.io` 404 مستقل ولا يفسر سقوط Route.
+
 | بوابة | نتيجة التشغيل | التصنيف |
 |---|---|---|
-| 1 — دورة Desk | قيد نتيجة مهمة runtime | `NOT_TESTED` حتى قراءة artifact |
-| 2 — Native Save وDB | قيد نتيجة مهمة runtime | `NOT_TESTED` حتى قراءة payload وDB |
-| 3 — HTML النهائي | قيد نتيجة مهمة runtime | `NOT_TESTED` حتى قراءة HTML |
+| 1 — دورة Desk | أُنشئ الموقع والطلبان؛ تعذر دخول Form A بسبب `404` في Router و`cur_frm=null` قبل `before_load` | `NOT_TESTED`: إعادة استخدام `frm` ووقت hooks وSnapshot/DOM/model مجهولة |
+| 2 — Native Save وDB | صفوف فعلية مختلفة الأسماء، لكن لم يفتح Form B ولم ترسل `savedocs` | `NOT_TESTED`: لا إثبات لحفظ اللون الخاطئ ولا نفيه |
+| 3 — HTML النهائي | لم يصل Browser إلى زر الطباعة أو Renderer؛ لا `final-print.html` من التشغيل | `NOT_TESTED`: هوية الخطة/الإصدار والهندسة والترويسة غير معتمدة |
 | 4 — Recovery وNEW/EDIT ومسودات | ستة اختبارات Node مركزة لـcheckpoint وNEW Save وprojection وEdit وPlan/Cost session نجحت على `Develop`؛ Desk restore/cancel قيد الإثبات. تشغيل Chromium للفرع `Recovery-test` في Run `38413457104` ألغي، ولا يثبت توافقًا هناك | جزئي؛ لا اعتماد تشغيلي |
 
 ### تصنيف إخفاقات CI السابقة على اختبار Desk المثبت
@@ -115,4 +117,6 @@ Goal: إثبات مسارات A→B بحالات قابلة للتكرار. In s
 | `Security and Protected UI Regressions` | تحميل `almdina_erp/public/js/arabic_operator_ui.js` المفقود؛ خارج تغيير الاختبارات | `Baseline` |
 | أي إخفاق في مهمة Desk المثبتة | يحدد بسجل تلك المهمة وحده؛ لا يخلط بإخفاقات العقود العامة | `New Regression` في أداة الإثبات حتى تشخيصه |
 
-الفرع `Recovery-test` يبقى مرجعًا مستقلًا؛ لم يُدمج أي commit منه مع `Develop`. أداة الاختبار تستخدم نمط Setup Wizard والإصدارات المثبتة الذي اختبره ذلك الفرع، دون نقل كود Recovery أو تعديل سلوكه.
+الأداة الجديدة لا تكفي وحدها بعد فتح Form: حقن Cost مضبوط وليس إعادة إنتاج طبيعية؛ وخطة A المستخدمة للطباعة في الأداة مصطنعة، لا استجابة GET متأخرة لخطة محفوظة. بعد إصلاح Route ينبغي أولًا قياس lifecycle ثم إضافة fixture لخطة A حقيقية وتأخير جوابها، تشغيل Print من تبويب B، وتوثيق HTML النهائي والهوية/المراجعة، ثم اختبار restore/cancel وNEW→Saved وEdit ومسودات Plan/Cost على Desk. ما لم ينفذ ذلك تبقى البوابات غير معتمدة. الفرع `Recovery-test` مرجع مستقل؛ لم يُدمج أي commit منه مع `Develop` ولم يتغير Recovery.
+
+**Artifacts:** [المحاولة الأخيرة وسجلها](https://github.com/Hasan-Alhendi/almdina-erp/actions/runs/38427504655)، [حزمة الأدلة والتشخيص](https://github.com/Hasan-Alhendi/almdina-erp/actions/runs/38427504655/artifacts/11829302666)، [المحاولة ذات خطأ Locale](https://github.com/Hasan-Alhendi/almdina-erp/actions/runs/38426381356)، [Base integration](https://github.com/Hasan-Alhendi/almdina-erp/actions/runs/38259469697). حزمة المحاولة الأخيرة تتضمن `runtime-evidence.json` و`last-desk.png` وسجلات bench/site/fixture/serve/browser؛ لا تتضمن HTML طباعة أو حمولة Save لأن Form لم يفتح. حُذفت سجلات A وB من موقع CI المؤقت في خطوة cleanup، وانتهى Runner.
