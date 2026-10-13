@@ -536,6 +536,40 @@ def _percentile(values: list[float], percentile: float) -> float:
     return round(ordered[max(0, math.ceil(percentile * len(ordered)) - 1)], 2)
 
 
+def _publish_benchmark_progress(result: dict[str, Any]) -> None:
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not summary_path:
+        return
+    keyboard = result["input_to_second_animation_frame_ms"]
+    checkpoint = result["checkpoint_ack_ms"]
+    with open(summary_path, "a", encoding="utf-8") as output:
+        output.write(
+            f"\n### AL128 measurement benchmark — {result['rows']} pieces, "
+            f"{result['variant']}\n\n"
+        )
+        output.write(
+            f"- Keyboard input → second animation frame: "
+            f"P50 {keyboard['p50']} ms, P95 {keyboard['p95']} ms "
+            f"({result['keyboard_samples']} samples).\n"
+        )
+        output.write(
+            f"- IndexedDB checkpoint acknowledgement: "
+            f"P50 {checkpoint['p50']} ms, P95 {checkpoint['p95']} ms "
+            f"({result['checkpoint_ack_samples']} samples).\n"
+        )
+        output.write(
+            f"- Phase durations: `{json.dumps(result['phase_durations_seconds'], sort_keys=True)}`\n"
+        )
+        output.write(f"- Official Save requests: {result['official_save_requests']}\n")
+
+
+def _remaining_benchmark_timeout_ms(deadline: float) -> int:
+    remaining = int((deadline - time.monotonic()) * 1000)
+    if remaining <= 0:
+        raise TimeoutError("AL128 benchmark exceeded its 8-minute measurement budget.")
+    return remaining
+
+
 def _prime_checkpoint_with_real_measurement_edit(page: Page) -> None:
     """Create an acknowledged starting checkpoint before collecting metrics."""
     width = page.locator(
@@ -565,9 +599,12 @@ def _benchmark_order(
     count: int,
     variant: str,
     base_sha: str,
+    deadline: float,
 ) -> dict[str, Any]:
     context = browser.new_context(viewport={"width": 1800, "height": 1200})
     replaced: set[str] = set()
+    phase_durations: dict[str, float] = {}
+    phase = "login"
     if variant == "base":
         replaced = _install_base_metadata_overrides(context, base_sha)
     page = context.new_page()
@@ -580,15 +617,25 @@ def _benchmark_order(
         else None,
     )
     try:
+        phase_started = time.monotonic()
         _login(page, fixture["editor"], fixture["password"])
+        phase_durations["login"] = round(time.monotonic() - phase_started, 2)
+        phase = "open_order"
+        phase_started = time.monotonic()
         _open_order(page, name, count)
+        phase_durations["open_order"] = round(time.monotonic() - phase_started, 2)
         if variant == "base":
             assert replaced == set(BASE_FILES), (
                 "Frappe DCO metadata did not supply all base recovery assets; "
                 f"matched={sorted(replaced)}"
             )
+        phase = "edit_session_and_initial_checkpoint"
+        phase_started = time.monotonic()
         _start_real_edit_session(page)
         _prime_checkpoint_with_real_measurement_edit(page)
+        phase_durations["edit_session_and_initial_checkpoint"] = round(
+            time.monotonic() - phase_started, 2
+        )
         page.evaluate(
             """() => {
                 const root = cur_frm.fields_dict.pieces_fast_entry.$wrapper.get(0);
@@ -633,34 +680,44 @@ def _benchmark_order(
         sample_count = 40
         width_control = row.locator('[data-field="width_cm"]')
 
-        # Measure key-to-paint independently. These edits are batched and do not
-        # wait for IndexedDB between keystrokes; the final checkpoint is verified
-        # once before the separate acknowledgement sample set begins.
+        # Capture each input-to-paint sample independently, but wait for the
+        # complete sample set only once. IndexedDB acknowledgement is measured
+        # separately below, so per-sample Playwright polling adds no evidence.
+        phase = "keyboard_ui_samples"
+        phase_started = time.monotonic()
         for index in range(sample_count):
-            before = page.evaluate("() => window.__al128KeyboardFrameSamples.length")
             page.evaluate("() => { window.__al128KeyboardAction = { started: false }; }")
             width_control.click()
             width_control.press("Control+A")
             width_control.press_sequentially(str(round(45 + (index % 20) / 10, 1)))
             width_control.press("Tab")
-            page.wait_for_function(
-                "count => window.__al128KeyboardFrameSamples.length > count",
-                arg=before,
-                timeout=5_000,
-            )
             page.evaluate("() => { window.__al128KeyboardAction = null; }")
+        page.wait_for_function(
+            "count => window.__al128KeyboardFrameSamples.length >= count",
+            arg=sample_count,
+            timeout=min(30_000, _remaining_benchmark_timeout_ms(deadline)),
+        )
+        phase_durations["keyboard_ui_samples"] = round(time.monotonic() - phase_started, 2)
+        phase = "keyboard_ui_checkpoint_settle"
+        phase_started = time.monotonic()
         page.wait_for_function(
             "() => {"
             " const state = AlmdinaDcoRecovery.LocalCheckpoint.snapshot(cur_frm);"
             " return state && state.state === 'LOCAL_SAVED'"
             "   && state.saved_revision === state.recovery_revision;"
             "}",
-            timeout=30_000,
+            timeout=min(30_000, _remaining_benchmark_timeout_ms(deadline)),
+        )
+        phase_durations["keyboard_ui_checkpoint_settle"] = round(
+            time.monotonic() - phase_started, 2
         )
 
         # Measure checkpoint acknowledgement separately, with enough independent
         # writes to report descriptive empirical P50/P95 values.
+        phase = "checkpoint_ack_samples"
+        phase_started = time.monotonic()
         for index in range(sample_count):
+            phase = f"checkpoint_ack_sample_{index + 1}_of_{sample_count}"
             before = page.evaluate("() => window.__al128CheckpointSamples.length")
             page.evaluate(
                 "() => {"
@@ -677,9 +734,10 @@ def _benchmark_order(
             page.wait_for_function(
                 "count => window.__al128CheckpointSamples.length > count",
                 arg=before,
-                timeout=10_000,
+                timeout=min(10_000, _remaining_benchmark_timeout_ms(deadline)),
             )
             page.evaluate("() => { window.__al128AckAction = null; }")
+        phase_durations["checkpoint_ack_samples"] = round(time.monotonic() - phase_started, 2)
 
         samples = page.evaluate(
             "() => ({"
@@ -714,16 +772,31 @@ def _benchmark_order(
             },
             "base_assets_replaced": sorted(replaced),
             "official_save_requests": len(save_requests),
+            "phase_durations_seconds": phase_durations,
         }
         trace("measurement_entry_benchmark_completed", **result)
+        _publish_benchmark_progress(result)
         return result
     except Exception as error:
         trace(
             "measurement_entry_benchmark_failed",
             variant=variant,
             rows=count,
+            phase=phase,
+            phase_durations_seconds=phase_durations,
             error=str(error)[:900],
         )
+        summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+        if summary_path:
+            with open(summary_path, "a", encoding="utf-8") as output:
+                output.write(
+                    f"\n### AL128 measurement benchmark — {count} pieces, {variant}: "
+                    "NOT CERTIFIED\n\n"
+                    f"- Failed phase: `{phase}`.\n"
+                    f"- Time in failed phase: `{round(time.monotonic() - phase_started, 2)} s`.\n"
+                    f"- Completed phase durations: `{json.dumps(phase_durations, sort_keys=True)}`\n"
+                    f"- Error: `{str(error)[:700]}`\n"
+                )
         try:
             page.screenshot(path=str(TRACE_PATH.parent / "al128-desk-failure.png"), timeout=5_000)
         except Exception:
@@ -740,6 +813,7 @@ def test_actual_measurement_entry_performance_200_and_500_before_after() -> None
         pytest.fail("AL128_BASE_SHA is required to compare the pinned PR base and HEAD behavior.")
     subprocess.run(["git", "cat-file", "-e", f"{base_sha}^{{commit}}"], cwd=REPOSITORY, check=True)
     results = []
+    benchmark_deadline = time.monotonic() + 8 * 60
     with sync_playwright() as playwright_instance:
         browser = _browser(playwright_instance)
         try:
@@ -755,6 +829,7 @@ def test_actual_measurement_entry_performance_200_and_500_before_after() -> None
                         count,
                         variant,
                         base_sha,
+                        benchmark_deadline,
                     )
                     results.append(result)
         finally:

@@ -967,7 +967,6 @@ def test_chromium_native_origin_quota_preserves_acknowledged_checkpoint(
         page = recovery_page(context, local_origin)
         origin = local_origin
         cdp = context.new_cdp_session(page)
-        cdp.send("Storage.enable")
         cdp.send("Storage.clearDataForOrigin", {"origin": origin, "storageTypes": "all"})
         cdp.send(
             "Storage.overrideQuotaForOrigin",
