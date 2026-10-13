@@ -25,7 +25,10 @@ def test_cross_order_desk_runtime():
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
-            page = browser.new_page(accept_downloads=False)
+            context = browser.new_context(locale="en-US", accept_downloads=False)
+            page = context.new_page()
+            evidence["browser_locale"] = page.evaluate("""() => ({language:navigator.language,
+                parsed:new Intl.Locale(navigator.language).language})""")
             page.on("pageerror", lambda error: diagnostics.append({"kind": "pageerror", "message": str(error)[:500]}))
             page.on("console", lambda message: diagnostics.append({"kind": "console", "message": message.text[:500]})
                     if message.type == "error" else None)

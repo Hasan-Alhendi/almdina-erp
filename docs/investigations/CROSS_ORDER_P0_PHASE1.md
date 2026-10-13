@@ -95,12 +95,14 @@ Goal: إثبات مسارات A→B بحالات قابلة للتكرار. In s
 
 **تدقيق مستقل:** فحص Python syntax و`git diff --check` ناجح؛ ضوابط Node الثلاثة السابقة ناجحة. فرق الملفات مع Base SHA يقتصر على الاختبارات، التقرير وWorkflow؛ لم يتغير كود إنتاج أو Recovery. صفوف القطع الحقيقية ذات أسماء متميزة، لذا لا يجوز نقل نتيجة اصطدام الاسم المصطنع في اختبار VM إلى حكم عن تلوث القطع الحقيقية. يحتاج اختبار Recovery الفعلي، ومسودات Plan/Cost، إلى نتائج Desk صريحة؛ مجرد ظهور API ليس إثبات restore/cancel.
 
+**محاولتا Desk الأوليان:** نجح تثبيت الإصدارات وإنشاء الموقع والطلبين، ثم علق فتح A قبل دورة Form. السجل في Run `38425288478` حدد مهلة `cur_frm`; التشخيص المعزز في Run `38426381356` أظهر `/desk/door-cutting-order/26-00001` مع `cur_frm=null` و`Page door-cutting-order not found`، و`RangeError: Incorrect locale information provided` في `AltShortcutGroup` قبل إنشاء الصفحة. مصدر Frappe `v16.17.5` يستدعي `new Intl.Locale(navigator.language)` هناك؛ سياق Playwright الآن يحدد `en-US` ويتحقق من قابليته للتحليل قبل الملاحة. `socket.io` على `bench serve` أعاد 404 أيضًا، لكنه ليس سبب `RangeError` المثبت. لا نتيجة عن `frm` أو Save أو Print من هاتين المحاولتين.
+
 | بوابة | نتيجة التشغيل | التصنيف |
 |---|---|---|
 | 1 — دورة Desk | قيد نتيجة مهمة runtime | `NOT_TESTED` حتى قراءة artifact |
 | 2 — Native Save وDB | قيد نتيجة مهمة runtime | `NOT_TESTED` حتى قراءة payload وDB |
 | 3 — HTML النهائي | قيد نتيجة مهمة runtime | `NOT_TESTED` حتى قراءة HTML |
-| 4 — Recovery وNEW/EDIT ومسودات | ضوابط NEW→Saved وEdit القديمة نجحت في VM؛ Desk restore/cancel قيد الإثبات | جزئي؛ لا اعتماد تشغيلي |
+| 4 — Recovery وNEW/EDIT ومسودات | ستة اختبارات Node مركزة لـcheckpoint وNEW Save وprojection وEdit وPlan/Cost session نجحت على `Develop`؛ Desk restore/cancel قيد الإثبات. تشغيل Chromium للفرع `Recovery-test` في Run `38413457104` ألغي، ولا يثبت توافقًا هناك | جزئي؛ لا اعتماد تشغيلي |
 
 ### تصنيف إخفاقات CI السابقة على اختبار Desk المثبت
 
