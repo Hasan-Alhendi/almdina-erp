@@ -202,19 +202,25 @@ class TestNewOrderRecoveryIntegration(FrappeTestCase):
         self.tokens.append(owner_token)
         self._insert(owner_token)
 
-        create_only_user = self._create_user(can_create=True)
-        frappe.set_user(create_only_user)
+        creator_user = self._create_user(can_create=True)
+        frappe.set_user(creator_user)
+        self.assertTrue(
+            frappe.has_permission("Door Cutting Order", "read", user=creator_user),
+            "CREATE_ORDER grants VIEW_ORDERS and native DCO read by contract",
+        )
+        # Another user's token is indistinguishable from an unused token.
         self.assertEqual(reconcile_new_order_creation(owner_token), {"status": "NOT_FOUND"})
 
         own_token = str(uuid4())
         self.tokens.append(own_token)
         own_order = self._insert(own_token)
-        self.assertFalse(
-            frappe.has_permission("Door Cutting Order", "read", own_order, user=create_only_user),
-            "the fixture must lack native document read permission",
+        self.assertTrue(
+            frappe.has_permission("Door Cutting Order", "read", own_order, user=creator_user),
+            "the creator's real projected Frappe permission allows reading the bound DCO",
         )
-        with self.assertRaises(frappe.PermissionError):
-            reconcile_new_order_creation(own_token)
+        own_result = reconcile_new_order_creation(own_token)
+        self.assertEqual(own_result["status"], "CREATED")
+        self.assertEqual(own_result["door_cutting_order"], own_order.name)
 
         frappe.set_user("Administrator")
         no_create_user = self._create_user(can_create=False)
