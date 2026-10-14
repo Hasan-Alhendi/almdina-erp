@@ -141,6 +141,19 @@ assert.deepEqual(invalidations[0], {
         reason: "order_inputs_changed",
     }, "removing a piece must invalidate both Plan and Cost even when no row field event survives");
 
+    detailHandlers.qty(frm, "Door Cutting Order Detail", "ROW-1");
+    let finishRefresh;
+    fakeCoordinator.refresh = () => new Promise((resolve) => { finishRefresh = resolve; });
+    const previousPiece = frm.doc.pieces[0];
+    const pending = policy.reconcileAfterSave(frm);
+    await Promise.resolve();
+    frm.doc = { name: "DCO-2", pieces: [{ name: "ROW-2" }] };
+    finishRefresh([]);
+    assert.equal(await pending, false, "an A save callback must not finalize against B");
+    assert.equal(previousPiece.__almdina_special_price_basis_stale, true);
+    assert.equal(frm.doc.pieces[0].__almdina_special_price_basis_stale, undefined);
+    assert.equal(await policy.reconcileAfterSave(frm), false);
+
     console.log("DCO workspace mutation impact simulation passed");
 })().catch((error) => {
     console.error(error);

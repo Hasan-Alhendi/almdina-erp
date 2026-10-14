@@ -91,6 +91,7 @@ const frm = {
 
 function costSnapshot(cost = 7.25) {
     return {
+        order_name: "DCO-CORNER-TAB",
         order: { board_rate_usd: 12 },
         pieces: pieces.map((row) => ({
             name: row.name,

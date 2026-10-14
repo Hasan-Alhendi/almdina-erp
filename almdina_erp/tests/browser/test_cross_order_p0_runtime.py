@@ -59,6 +59,113 @@ def test_desk_route_preflight():
             browser.close()
 
 
+def test_phase2a_isolated_desk_boundary():
+    """A controlled stale workspace may not modify B or its native save."""
+    fixture = json.loads(Path(os.environ["P0_FIXTURE_PATH"]).read_text())
+    evidence_dir = Path(os.environ["P0_EVIDENCE_DIR"])
+    a, b = fixture["orders"]["A"], fixture["orders"]["B"]
+    evidence = {"kind": "controlled stale snapshot, not natural reproduction"}
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(locale="en-US")
+            _login(page, fixture)
+            for order in (a, b):
+                page.evaluate("name => { frappe.set_route('Form','Door Cutting Order',name); }",
+                              order["name"])
+                page.wait_for_function("name => cur_frm?.doc?.name === name",
+                                       arg=order["name"], timeout=45000)
+                if order is a:
+                    evidence["a_token"] = page.evaluate("AlmdinaDocumentContext.capture(cur_frm)")
+            evidence["before"] = page.evaluate("""() => ({name:cur_frm.doc.name,
+                board:cur_frm.doc.board_description,
+                customer:cur_frm.doc.customer,
+                piece:cur_frm.doc.pieces[0].name,
+                width:cur_frm.doc.pieces[0].width_cm,
+                boardRate:cur_frm.doc.board_rate_usd})""")
+            page.evaluate("""async () => {
+                await AlmdinaDcoWorkspaceAssetRegistry.ensure('cost');
+                await AlmdinaDcoWorkspaceAssetRegistry.ensure('plan');
+            }""")
+            evidence["projection"] = page.evaluate("""args => {
+                const frm=cur_frm, identity=args.token.identity;
+                const cost=AlmdinaCostWorkspaceState.storeFor(frm);
+                cost.reset(identity);
+                cost.resolveLoad(identity,cost.beginLoad(identity),{
+                    order_name:args.a.name,
+                    order:{customer:'Stale A Customer',board_description:args.a.board,
+                        board_length_cm:111,board_rate_usd:987},
+                    pieces:[{name:args.a.piece_name,width_cm:11,qty:77}]
+                });
+                const plan=AlmdinaPlanWorkspaceState.storeFor(frm);
+                plan.reset(identity);
+                plan.resolveLoad(identity,plan.beginLoad(identity),{
+                    order_name:args.a.name,plans:{system_draft:{name:'STALE-A',
+                        snapshot_json:JSON.stringify({sheets:[{sheet_no:'A'}]})}}
+                });
+                return {costAccepted:AlmdinaCostWorkspacePresenterAdapter.project(frm),
+                    planAccepted:AlmdinaPlanWorkspacePresenterAdapter.project(frm),
+                    costState:AlmdinaCostWorkspaceState.snapshot(frm),
+                    planState:AlmdinaPlanWorkspaceState.snapshot(frm),
+                    name:frm.doc.name,board:frm.doc.board_description,
+                    customer:frm.doc.customer,boardRate:frm.doc.board_rate_usd,
+                    width:frm.doc.pieces[0].width_cm,
+                    piece:frm.doc.pieces[0].name,planJson:frm.doc.cutting_plan_json??null};
+            }""", {"token": evidence["a_token"], "a": a})
+            assert not evidence["projection"]["costAccepted"]
+            assert not evidence["projection"]["planAccepted"]
+            assert evidence["projection"]["board"] == b["board"]
+            assert evidence["projection"]["customer"] == evidence["before"]["customer"]
+            assert evidence["projection"]["boardRate"] == evidence["before"]["boardRate"]
+            assert evidence["projection"]["width"] == b["width_cm"]
+            assert evidence["projection"]["piece"] != a["piece_name"]
+            assert evidence["projection"]["planJson"] is None
+            page.evaluate("""() => {
+                AlmdinaCostWorkspaceState.reset(cur_frm);
+                AlmdinaPlanWorkspaceState.reset(cur_frm);
+            }""")
+            payloads = []
+
+            def capture(request):
+                if "savedocs" not in request.url:
+                    return
+                raw = request.post_data or ""
+                values = json.loads(raw) if raw.startswith("{") else {
+                    key: entries[0] for key, entries in parse_qs(raw).items()
+                }
+                doc = values.get("doc")
+                payloads.append(json.loads(doc) if isinstance(doc, str) else doc)
+
+            page.on("request", capture)
+            try:
+                evidence["native_save"] = page.evaluate("""async () => {
+                    cur_frm.dirty(); await cur_frm.save();
+                    return {name:cur_frm.doc.name,board:cur_frm.doc.board_description};
+                }""")
+            finally:
+                page.remove_listener("request", capture)
+            evidence["savedocs"] = [{"name": doc["name"],
+                "board": doc.get("board_description"),
+                "piece_names": [row["name"] for row in doc.get("pieces", [])]}
+                for doc in payloads]
+            assert evidence["savedocs"] and all(
+                doc["name"] == b["name"] and doc["board"] == b["board"]
+                and a["piece_name"] not in doc["piece_names"]
+                for doc in evidence["savedocs"]), evidence
+            evidence["server_read"] = page.evaluate("""async name => {
+                const response=await frappe.call({method:'frappe.client.get',
+                    args:{doctype:'Door Cutting Order',name}});
+                return {name:response.message.name,
+                    board:response.message.board_description};
+            }""", b["name"])
+            assert evidence["server_read"] == {"name": b["name"], "board": b["board"]}
+        finally:
+            evidence_dir.mkdir(parents=True, exist_ok=True)
+            (evidence_dir / "phase2a-runtime-isolation.json").write_text(
+                json.dumps(evidence, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+            browser.close()
+
+
 def test_cross_order_desk_runtime():
     fixture = json.loads(Path(os.environ["P0_FIXTURE_PATH"]).read_text())
     evidence_dir = Path(os.environ["P0_EVIDENCE_DIR"])

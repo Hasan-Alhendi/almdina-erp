@@ -284,6 +284,8 @@
 
     function resetDocumentState(frm) {
         cancelDocumentEffects(frm);
+        frm.__almdinaWorkspaceMutationImpact = null;
+        frm.__almdina_offcut_pending_assignments = null;
         frm._dco_calc_version = Number(frm._dco_calc_version || 0) + 1;
 
         frm._dco_selected_piece_rows = new Set();
@@ -694,6 +696,19 @@
         frm[IDENTITY_ALIASES_FIELD] = new Set([identity]);
         frm[PENDING_INSERT_FIELD] = null;
         resetDocumentState(frm);
+        // Frappe reuses one Form object across documents. Invalidate every
+        // workspace owned by the previous visit before the new form can paint.
+        // NEW -> Saved is handled by promotePendingInsert above and keeps its
+        // generation, drafts and pending reconciliation intact.
+        if (window.AlmdinaPlanWorkspaceState?.reset) {
+            window.AlmdinaPlanWorkspaceState.reset(frm);
+        }
+        if (window.AlmdinaCostWorkspaceState?.reset) {
+            window.AlmdinaCostWorkspaceState.reset(frm);
+        }
+        if (window.AlmdinaPlanPreviewSession?.reset) {
+            window.AlmdinaPlanPreviewSession.reset(frm);
+        }
         clearDocumentHtml(frm);
         return true;
     }

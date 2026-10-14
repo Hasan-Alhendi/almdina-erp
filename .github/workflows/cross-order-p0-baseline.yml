@@ -19,6 +19,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Run Phase 2A ownership and compatibility regressions
+        run: |
+          node almdina_erp/tests/js/cross_order_phase2a_ownership.test.js
+          node almdina_erp/tests/js/dco_workspace_lifecycle.test.js
+          node almdina_erp/tests/js/cost_edit_session_lifecycle.test.js
+          node almdina_erp/tests/js/plan_preview_state_ownership.test.js
+          node almdina_erp/tests/js/corner_edge_tab_navigation.test.js
+          node almdina_erp/tests/js/special_price_workspace_refresh.test.js
       - name: Run intentional RED regression suite
         run: node almdina_erp/tests/js/cross_order_p0_baseline.test.js
 

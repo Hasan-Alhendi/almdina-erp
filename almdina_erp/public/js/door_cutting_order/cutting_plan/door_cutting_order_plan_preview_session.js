@@ -43,6 +43,13 @@
     function stateFor(frm) {
         if (!frm) return emptyState();
         if (!frm[STATE_KEY]) frm[STATE_KEY] = emptyState();
+        const state = frm[STATE_KEY];
+        const context = window.AlmdinaDocumentContext;
+        if (state.identity && (context?.isSameDocument
+            ? !context.isSameDocument(frm, state.documentToken || state.identity)
+            : state.identity !== identity(frm))) {
+            frm[STATE_KEY] = { ...emptyState(), generation: state.generation + 1 };
+        }
         return frm[STATE_KEY];
     }
 
@@ -164,10 +171,12 @@
         state.activeRequestGeneration = generation;
         state.requestedSettings = requested;
         state.identity = requestIdentity;
+        state.documentToken = window.AlmdinaDocumentContext?.capture?.(frm) || requestIdentity;
         const current = () => frm[STATE_KEY] === state
             && state.generation === generation
             && state.activeRequestGeneration === generation
-            && identity(frm) === requestIdentity;
+            && identity(frm) === requestIdentity
+            && (window.AlmdinaDocumentContext?.isSameDocument?.(frm, state.documentToken) !== false);
         state.status = "previewing";
         state.previewId = null;
         state.payload = null;
@@ -208,11 +217,13 @@
         const previewId = state.previewId;
         const commitGeneration = state.generation;
         const requestIdentity = identity(frm);
+        const requestToken = window.AlmdinaDocumentContext?.capture?.(frm) || requestIdentity;
         const current = () => frm[STATE_KEY] === state
             && state.generation === commitGeneration
             && state.previewId === previewId
             && state.status === "saving"
-            && identity(frm) === requestIdentity;
+            && identity(frm) === requestIdentity
+            && (window.AlmdinaDocumentContext?.isSameDocument?.(frm, requestToken) !== false);
         state.status = "saving";
         state.error = null;
         dispatch(frm);

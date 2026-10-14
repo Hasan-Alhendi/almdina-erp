@@ -50,7 +50,7 @@ async function run() {
         AlmdinaPlanWorkspaceAPI: {
             preview(_name, requested) { const job = pending(); calls.push({ job, requested }); return job.promise; },
             commitPreview(_name, id) { calls.push({ commit: id }); return Promise.resolve(true); },
-            load() { return Promise.resolve({ plans: { system_draft: { snapshot_json: frm.doc.system_plan_json } } }); },
+            load() { return Promise.resolve({ order_name: frm.doc.name, plans: { system_draft: { snapshot_json: frm.doc.system_plan_json } } }); },
         },
         AlmdinaPermissions: { canDocument() { return true; } },
         AlmdinaCuttingPlanRender: { build(_frm, plan) { return `<geometry id="${plan.sheets[0].id}"></geometry>`; } },

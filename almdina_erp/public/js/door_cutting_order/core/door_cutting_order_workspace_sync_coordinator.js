@@ -19,6 +19,20 @@
         return `${frm.doctype || frm.doc.doctype || ""}::${frm.doc.name || "__new__"}`;
     }
 
+    function capture(frm) {
+        const context = window.AlmdinaDocumentContext;
+        return context && typeof context.capture === "function"
+            ? context.capture(frm)
+            : { identity: formIdentity(frm) };
+    }
+
+    function owns(frm, token) {
+        const context = window.AlmdinaDocumentContext;
+        return context && typeof context.isSameDocument === "function"
+            ? context.isSameDocument(frm, token)
+            : formIdentity(frm) === token.identity;
+    }
+
     function currentTabFieldname(frm) {
         // Use the same active-tab authority as the DCO Frappe lifecycle adapter.
         // In Frappe v16 layout.current_tab may lag behind the visibly selected tab,
@@ -131,9 +145,11 @@
 
     async function refresh(frm, names, options = {}) {
         const refreshed = [];
+        const owner = options.ownerToken || capture(frm);
         // Deliberately preserve caller order. Cost can depend on the canonical Plan,
         // so Plan -> Cost refreshes must not race each other through Promise.all().
         for (const name of normalizeNames(names)) {
+            if (!owns(frm, owner)) break;
             const descriptor = descriptorFor(name);
             if (!descriptor || typeof descriptor.load !== "function") continue;
             if (options.activeOnly === true && !descriptorIsActive(frm, descriptor)) {
@@ -146,9 +162,10 @@
                 continue;
             }
             await descriptor.load(frm, { force: options.force !== false });
+            if (!owns(frm, owner)) break;
             refreshed.push(name);
         }
-        if (refreshed.length) {
+        if (refreshed.length && owns(frm, owner)) {
             dispatch(frm, {
                 action: "refresh",
                 resources: refreshed,
@@ -160,6 +177,7 @@
 
     async function activateCurrent(frm, options = {}) {
         if (!frm || !frm.doc) return [];
+        const owner = capture(frm);
         const names = options.fieldname
             ? activeResourceNames(frm, options.fieldname)
             : activeResourceNames(frm);
@@ -172,6 +190,7 @@
 
         const loaded = [];
         for (const name of names) {
+            if (!owns(frm, owner)) break;
             const descriptor = descriptorFor(name);
             if (!descriptor || typeof descriptor.load !== "function") continue;
             if (
@@ -181,6 +200,7 @@
                 continue;
             }
             await descriptor.load(frm, { force: options.force === true });
+            if (!owns(frm, owner)) break;
             loaded.push(name);
         }
         return loaded;
@@ -206,6 +226,8 @@
     }
 
     async function reconcile(frm, effects = {}, options = {}) {
+        const owner = options.ownerToken || capture(frm);
+        if (!owns(frm, owner)) return { changed: [], invalidated: [], documentModifiedSynced: false };
         const changed = normalizeNames(effects.changed || effects.refresh || []);
         const invalidated = normalizeNames(effects.invalidated || []);
         const reason = String(effects.reason || options.reason || "mutation_completed");
@@ -219,8 +241,10 @@
                 force: true,
                 activeOnly: options.activeOnly === true,
                 reason,
+                ownerToken: owner,
             });
         }
+        if (!owns(frm, owner)) return { changed: [], invalidated: [], documentModifiedSynced: false };
         return {
             changed,
             invalidated,
