@@ -48,7 +48,7 @@ def _fixtures() -> dict[str, Any]:
     fixture = json.loads(Path(FIXTURE_PATH).read_text(encoding="utf-8"))
     DIAGNOSTIC_REDACTIONS.update(
         str(fixture[key])
-        for key in ("password", "customer", "user", "second_user")
+        for key in ("password", "customer", "user", "second_user", "write_user")
         if fixture.get(key)
     )
     return fixture
@@ -397,6 +397,145 @@ def _set_link(page: Page, fieldname: str, value: str) -> None:
         arg={"fieldname": fieldname, "value": value},
         timeout=10_000,
     )
+
+
+def _customer_permission_state(page: Page) -> dict[str, Any]:
+    return page.evaluate(
+        "() => {"
+        " const frm = window.cur_frm;"
+        " const field = frm && frm.fields_dict && frm.fields_dict.customer;"
+        " const permission = frm && frm.perm && field ? frm.perm[field.df.permlevel || 0] : null;"
+        " const unwrap = value => value && typeof value.get === 'function'"
+        " ? value.get(0) : (value && value[0]) || value || null;"
+        " const wrapper = unwrap(field && field.$wrapper);"
+        " const input = unwrap(field && field.$input);"
+        " const originalColumn = wrapper && wrapper.closest('.form-column');"
+        " const pairRow = wrapper && wrapper.closest('.dco-intake-row--pair');"
+        " const intakeCard = wrapper && wrapper.closest('.dco-order-intake-card');"
+        " const visible = node => { if (!node || !node.isConnected) return false;"
+        " const style = getComputedStyle(node); return node.getClientRects().length > 0"
+        " && style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0'; };"
+        " const wrapperPath = []; let node = wrapper;"
+        " for (let index = 0; node && index < 7; index++, node = node.parentElement) {"
+        " const style = getComputedStyle(node); wrapperPath.push({tag: node.tagName,"
+        " classes: String(node.className || '').slice(0, 180), visible: visible(node),"
+        " display: style.display, visibility: style.visibility}); }"
+        " const route = window.frappe && typeof frappe.get_route === 'function' ? frappe.get_route() : null;"
+        " const activeTab = [...document.querySelectorAll('.nav-link.active, .tab-pane.active')]"
+        " .map(item => ({kind: item.matches('.tab-pane') ? 'pane' : 'tab',"
+        " label: (item.getAttribute('aria-label') || item.textContent || '').trim().slice(0, 60),"
+        " visible: visible(item)}));"
+        " let fieldPermissionStatus = null; let fieldPermissionError = null;"
+        " let controlStatus = null; let controlStatusError = null;"
+        " try { fieldPermissionStatus = frappe.perm.get_field_display_status(field.df, frm.doc, frm.perm); }"
+        " catch (error) { fieldPermissionError = String(error).slice(0, 160); }"
+        " try { controlStatus = field.get_status(); }"
+        " catch (error) { controlStatusError = String(error).slice(0, 160); }"
+        " return {doctype: frm && frm.doctype || null, documentName: frm && frm.doc && frm.doc.name || null,"
+        " isNew: Boolean(frm && frm.is_new()), route: Array.isArray(route) ? route.join('/') : null,"
+        " activeTab, permission: permission ? {read: Boolean(permission.read), write: Boolean(permission.write),"
+        " create: Boolean(permission.create)} : null, fieldPermissionStatus, fieldPermissionError,"
+        " controlStatus, controlStatusError, dispStatus: field && field.disp_status || null,"
+        " fieldType: field && field.df && field.df.fieldtype || null,"
+        " hidden: field && field.df ? Boolean(field.df.hidden) : null,"
+        " hiddenDueToDependency: field && field.df ? Boolean(field.df.hidden_due_to_dependency) : null,"
+        " readOnly: field ? Boolean(field.read_only || field.df.read_only) : null,"
+        " permlevel: field && field.df ? field.df.permlevel : null,"
+        " hideEmptyReadOnlyFields: frappe.boot && frappe.boot.sysdefaults"
+        " ? frappe.boot.sysdefaults.hide_empty_read_only_fields : null,"
+        " wrapperConnected: Boolean(wrapper && wrapper.isConnected), wrapperVisible: visible(wrapper),"
+        " hideControl: Boolean(wrapper && wrapper.classList.contains('hide-control')), wrapperPath,"
+        " insideIntakePair: Boolean(pairRow), insideIntakeCard: Boolean(intakeCard),"
+        " hasOriginalFormColumnAncestor: Boolean(originalColumn),"
+        " originalFormColumnDisplay: originalColumn ? getComputedStyle(originalColumn).display : null,"
+        " inputExists: Boolean(input), inputConnected: Boolean(input && input.isConnected),"
+        " inputVisible: visible(input), inputDisabled: input ? Boolean(input.disabled) : null}; }"
+    )
+
+
+def test_real_desk_customer_field_permission_differential() -> None:
+    """Record the native NEW Customer control under create-only and create+edit roles."""
+    fixture = _fixtures()
+    assert fixture["versions"] == {"frappe": "16.17.5", "erpnext": "16.17.0"}
+    assert fixture["permission_differential"] == {
+        "create_only": {"create": True, "read": True, "write": False},
+        "create_and_edit": {"create": True, "read": True, "write": True},
+    }
+    outcomes: dict[str, dict[str, Any]] = {}
+
+    with sync_playwright() as playwright_instance:
+        browser = _browser(playwright_instance)
+        context = browser.new_context(viewport={"width": 1800, "height": 1200})
+        page = context.new_page()
+        _attach_diagnostics(page)
+        try:
+            for case_name, user in (
+                ("create_only", fixture["user"]),
+                ("create_and_edit", fixture["write_user"]),
+            ):
+                if case_name == "create_only":
+                    _login(page, fixture, user=user)
+                else:
+                    _logout_and_login_as(page, fixture, user=user)
+                suffix = f"customer-permission-{case_name}"
+                _open_new_form(page, suffix, expected_state="ready_for_entry")
+                state = _customer_permission_state(page)
+                outcomes[case_name] = state
+                trace(f"customer_permission_case_{case_name}", **state)
+                assert state["doctype"] == "Door Cutting Order" and state["isNew"] is True
+                assert state["permission"] is not None
+                assert state["permission"]["create"] is True
+                assert state["permission"]["read"] is True
+                assert state["hidden"] is False
+                assert state["hiddenDueToDependency"] is False
+                assert state["readOnly"] is False
+
+                if case_name == "create_only":
+                    assert state["permission"]["write"] is False
+                    assert state["fieldPermissionStatus"] == "Read"
+                    assert state["hideEmptyReadOnlyFields"] in (1, "1", True)
+                    assert state["controlStatus"] == "None"
+                    assert state["hideControl"] is True
+                    assert state["inputExists"] is False
+                    assert state["wrapperVisible"] is False
+                    outcomes[case_name]["customerEnterable"] = False
+                else:
+                    assert state["permission"]["write"] is True
+                    assert state["fieldPermissionStatus"] == "Write"
+                    assert state["controlStatus"] == "Write"
+                    assert state["hideControl"] is False
+                    assert state["inputExists"] is True and state["inputVisible"] is True
+                    _set_link(page, "customer", fixture["customer"])
+                    selected = page.evaluate(
+                        "expected => cur_frm && cur_frm.is_new() && cur_frm.doc.customer === expected",
+                        fixture["customer"],
+                    )
+                    assert selected is True
+                    outcomes[case_name]["customerEnterable"] = True
+                trace("customer_permission_case_classified", case=case_name,
+                      customer_enterable=outcomes[case_name]["customerEnterable"])
+
+            assert all(item["insideIntakePair"] for item in outcomes.values())
+            assert all(not item["hasOriginalFormColumnAncestor"] for item in outcomes.values())
+            trace(
+                "customer_permission_differential_complete",
+                create_only_enterable=outcomes["create_only"]["customerEnterable"],
+                create_and_edit_enterable=outcomes["create_and_edit"]["customerEnterable"],
+                product_root_classification="native field write permission",
+            )
+            _capture_evidence({
+                "create_only_customer_enterable": outcomes["create_only"]["customerEnterable"],
+                "create_and_edit_customer_enterable": outcomes["create_and_edit"]["customerEnterable"],
+                "field_permission_state": outcomes["create_only"]["fieldPermissionStatus"],
+                "control_display_state": outcomes["create_only"]["controlStatus"],
+            })
+        except Exception as error:
+            page.screenshot(path=str(RUNNER_TEMP / "al129-desk-failure.png"), full_page=True)
+            trace("customer_permission_differential_failed", message=str(error)[:900], outcomes=outcomes)
+            raise
+        finally:
+            context.close()
+            browser.close()
 
 
 def _fill_header(page: Page, fixture: dict[str, Any], notes: str) -> None:

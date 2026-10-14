@@ -25,6 +25,7 @@ on:
           - al128_performance
           - al129_new_desk
           - al129_desk_only
+          - al129_customer_permission_smoke
       comparison_base:
         description: PR base branch used for AL128 before/after measurements
         required: true
@@ -50,8 +51,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
-      # PR #505 already has passing integration evidence; this update reruns Desk only.
-      TARGET_SUITE: ${{ inputs.suite || (github.event_name == 'pull_request' && github.head_ref == 'codex/ALMADINA-129-clean-from-recovery-test' && 'al129_desk_only') || 'full' }}
+      # Keep PR #505's next runtime attempt limited to the Customer permission differential.
+      TARGET_SUITE: ${{ inputs.suite || (github.event_name == 'pull_request' && github.head_ref == 'codex/ALMADINA-129-clean-from-recovery-test' && 'al129_customer_permission_smoke') || 'full' }}
       FRAPPE_REF: ${{ inputs.frappe_ref || (github.event_name == 'pull_request' && github.head_ref == 'codex/ALMADINA-129-clean-from-recovery-test' && 'v16.17.5') || 'version-16' }}
       ERPNEXT_REF: ${{ inputs.erpnext_ref || (github.event_name == 'pull_request' && github.head_ref == 'codex/ALMADINA-129-clean-from-recovery-test' && 'v16.17.0') || 'version-16' }}
 
@@ -133,7 +134,7 @@ jobs:
           redis-cli -h 127.0.0.1 -p 11000 ping | grep -qx PONG
 
       - name: Require pinned Desk acceptance runtime refs
-        if: env.TARGET_SUITE == 'al128_desk' || env.TARGET_SUITE == 'al128_desk_edit' || env.TARGET_SUITE == 'al128_performance' || env.TARGET_SUITE == 'al129_new_desk' || env.TARGET_SUITE == 'al129_desk_only'
+        if: env.TARGET_SUITE == 'al128_desk' || env.TARGET_SUITE == 'al128_desk_edit' || env.TARGET_SUITE == 'al128_performance' || env.TARGET_SUITE == 'al129_new_desk' || env.TARGET_SUITE == 'al129_desk_only' || env.TARGET_SUITE == 'al129_customer_permission_smoke'
         run: |
           set -euo pipefail
           test "$FRAPPE_REF" = "v16.17.5" || {
@@ -182,7 +183,7 @@ jobs:
           ERPNEXT_SHA="$(git -C apps/erpnext rev-parse HEAD)"
           printf 'Frappe ref=%s sha=%s\nERPNext ref=%s sha=%s\n' \
             "$FRAPPE_REF" "$FRAPPE_SHA" "$ERPNEXT_REF" "$ERPNEXT_SHA"
-          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" && ("$TARGET_SUITE" == "al128_desk" || "$TARGET_SUITE" == "al128_desk_edit" || "$TARGET_SUITE" == "al128_performance" || "$TARGET_SUITE" == "al129_new_desk" || "$TARGET_SUITE" == "al129_desk_only") ]]; then
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" && ("$TARGET_SUITE" == "al128_desk" || "$TARGET_SUITE" == "al128_desk_edit" || "$TARGET_SUITE" == "al128_performance" || "$TARGET_SUITE" == "al129_new_desk" || "$TARGET_SUITE" == "al129_desk_only" || "$TARGET_SUITE" == "al129_customer_permission_smoke") ]]; then
             test "$FRAPPE_SHA" = "75baafaa0bde07a86bf28764383b93b5df97bc7e"
             test "$ERPNEXT_SHA" = "7b494dc9e8e47d288de5427bae25ce8a52c37d96"
           else
@@ -277,7 +278,7 @@ jobs:
           echo "DCO_AL128_FIXTURE_FILE=$DCO_AL128_FIXTURE_FILE" >> "$GITHUB_ENV"
 
       - name: Prepare isolated ALMADINA-129 Desk fixtures
-        if: env.TARGET_SUITE == 'al129_new_desk' || env.TARGET_SUITE == 'al129_desk_only'
+        if: env.TARGET_SUITE == 'al129_new_desk' || env.TARGET_SUITE == 'al129_desk_only' || env.TARGET_SUITE == 'al129_customer_permission_smoke'
         env:
           DCO_AL129_FIXTURE_FILE: ${{ runner.temp }}/al129-desk-fixtures.json
         run: |
@@ -442,25 +443,25 @@ jobs:
         timeout-minutes: 10
 
       - name: Install Chromium for targeted Desk certification
-        if: env.TARGET_SUITE == 'al128_desk' || env.TARGET_SUITE == 'al128_desk_edit' || env.TARGET_SUITE == 'al128_performance' || env.TARGET_SUITE == 'al129_new_desk' || env.TARGET_SUITE == 'al129_desk_only'
+        if: env.TARGET_SUITE == 'al128_desk' || env.TARGET_SUITE == 'al128_desk_edit' || env.TARGET_SUITE == 'al128_performance' || env.TARGET_SUITE == 'al129_new_desk' || env.TARGET_SUITE == 'al129_desk_only' || env.TARGET_SUITE == 'al129_customer_permission_smoke'
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Install Playwright and Chromium for targeted Desk certification
-        if: env.TARGET_SUITE == 'al128_desk' || env.TARGET_SUITE == 'al128_desk_edit' || env.TARGET_SUITE == 'al128_performance' || env.TARGET_SUITE == 'al129_new_desk' || env.TARGET_SUITE == 'al129_desk_only'
+        if: env.TARGET_SUITE == 'al128_desk' || env.TARGET_SUITE == 'al128_desk_edit' || env.TARGET_SUITE == 'al128_performance' || env.TARGET_SUITE == 'al129_new_desk' || env.TARGET_SUITE == 'al129_desk_only' || env.TARGET_SUITE == 'al129_customer_permission_smoke'
         run: |
           python -m pip install 'pytest>=9,<10' 'playwright==1.55.0'
           python -m playwright install --with-deps chromium
 
       - name: Build Almdina ERP Desk assets
-        if: env.TARGET_SUITE == 'al128_desk' || env.TARGET_SUITE == 'al128_desk_edit' || env.TARGET_SUITE == 'al128_performance' || env.TARGET_SUITE == 'al129_new_desk' || env.TARGET_SUITE == 'al129_desk_only'
+        if: env.TARGET_SUITE == 'al128_desk' || env.TARGET_SUITE == 'al128_desk_edit' || env.TARGET_SUITE == 'al128_performance' || env.TARGET_SUITE == 'al129_new_desk' || env.TARGET_SUITE == 'al129_desk_only' || env.TARGET_SUITE == 'al129_customer_permission_smoke'
         run: |
           cd "$RUNNER_TEMP/frappe-bench"
           bench build --app almdina_erp
 
       - name: Start isolated Frappe Desk server
-        if: env.TARGET_SUITE == 'al128_desk' || env.TARGET_SUITE == 'al128_desk_edit' || env.TARGET_SUITE == 'al128_performance' || env.TARGET_SUITE == 'al129_new_desk' || env.TARGET_SUITE == 'al129_desk_only'
+        if: env.TARGET_SUITE == 'al128_desk' || env.TARGET_SUITE == 'al128_desk_edit' || env.TARGET_SUITE == 'al128_performance' || env.TARGET_SUITE == 'al129_new_desk' || env.TARGET_SUITE == 'al129_desk_only' || env.TARGET_SUITE == 'al129_customer_permission_smoke'
         run: |
           set -euo pipefail
           echo '127.0.0.1 test.localhost' | sudo tee -a /etc/hosts >/dev/null
@@ -481,7 +482,7 @@ jobs:
           fi
 
       - name: Run targeted pinned Desk acceptance case
-        if: env.TARGET_SUITE == 'al128_desk' || env.TARGET_SUITE == 'al128_desk_edit' || env.TARGET_SUITE == 'al128_performance' || env.TARGET_SUITE == 'al129_new_desk' || env.TARGET_SUITE == 'al129_desk_only'
+        if: env.TARGET_SUITE == 'al128_desk' || env.TARGET_SUITE == 'al128_desk_edit' || env.TARGET_SUITE == 'al128_performance' || env.TARGET_SUITE == 'al129_new_desk' || env.TARGET_SUITE == 'al129_desk_only' || env.TARGET_SUITE == 'al129_customer_permission_smoke'
         env:
           FRAPPE_DESK_URL: http://test.localhost:8000
           DCO_AL128_FIXTURE_FILE: ${{ runner.temp }}/al128-desk-fixtures.json
@@ -491,18 +492,22 @@ jobs:
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
-          if [[ "$TARGET_CASE" == "al129_new_desk" || "$TARGET_CASE" == "al129_desk_only" ]]; then
+          if [[ "$TARGET_CASE" == "al129_new_desk" || "$TARGET_CASE" == "al129_desk_only" || "$TARGET_CASE" == "al129_customer_permission_smoke" ]]; then
             test -s "$DCO_AL129_FIXTURE_FILE"
-            test_targets=(
-              "tests/browser/test_dco_al129_frappe_desk.py::test_real_desk_multiple_drafts_start_new_delete_and_restore_geometry"
-              "tests/browser/test_dco_al129_frappe_desk.py::test_real_desk_100_piece_checkpoint_restore_and_lost_save_response"
-            )
+            if [[ "$TARGET_CASE" == "al129_customer_permission_smoke" ]]; then
+              test_targets=("tests/browser/test_dco_al129_frappe_desk.py::test_real_desk_customer_field_permission_differential")
+            else
+              test_targets=(
+                "tests/browser/test_dco_al129_frappe_desk.py::test_real_desk_multiple_drafts_start_new_delete_and_restore_geometry"
+                "tests/browser/test_dco_al129_frappe_desk.py::test_real_desk_100_piece_checkpoint_restore_and_lost_save_response"
+              )
+            fi
             python -m pytest --collect-only -q "${test_targets[@]}" \
               | tee "$RUNNER_TEMP/al129-pytest-collect.log"
           else
             test -s "$DCO_AL128_FIXTURE_FILE"
           fi
-          if [[ "$TARGET_CASE" != "al129_new_desk" && "$TARGET_CASE" != "al129_desk_only" ]]; then
+          if [[ "$TARGET_CASE" != "al129_new_desk" && "$TARGET_CASE" != "al129_desk_only" && "$TARGET_CASE" != "al129_customer_permission_smoke" ]]; then
             git check-ref-format --branch "$AL128_COMPARISON_BASE"
             git fetch origin "$AL128_COMPARISON_BASE:refs/remotes/origin/$AL128_COMPARISON_BASE"
             AL128_BASE_SHA="$(git merge-base HEAD "refs/remotes/origin/$AL128_COMPARISON_BASE")"
@@ -511,7 +516,7 @@ jobs:
             printf 'ALMADINA-128 comparison base=%s merge-base=%s\n' \
               "$AL128_COMPARISON_BASE" "$AL128_BASE_SHA" | tee -a "$GITHUB_STEP_SUMMARY"
           fi
-          if [[ "$TARGET_CASE" == "al129_new_desk" || "$TARGET_CASE" == "al129_desk_only" ]]; then
+          if [[ "$TARGET_CASE" == "al129_new_desk" || "$TARGET_CASE" == "al129_desk_only" || "$TARGET_CASE" == "al129_customer_permission_smoke" ]]; then
             export DCO_AL129_FIXTURE_FILE
           elif [[ "$TARGET_CASE" == "al128_performance" ]]; then
             test_target="tests/browser/test_dco_al128_frappe_desk.py::test_actual_measurement_entry_performance_200_and_500_before_after"
@@ -529,7 +534,7 @@ jobs:
           test_status=${PIPESTATUS[0]}
           set -e
           publish_al129_desk_trace() {
-            if [[ ("$TARGET_CASE" == "al129_new_desk" || "$TARGET_CASE" == "al129_desk_only") && -s "$RUNNER_TEMP/al129-new-desk-trace.json" ]]; then
+            if [[ ("$TARGET_CASE" == "al129_new_desk" || "$TARGET_CASE" == "al129_desk_only" || "$TARGET_CASE" == "al129_customer_permission_smoke") && -s "$RUNNER_TEMP/al129-new-desk-trace.json" ]]; then
               {
                 echo '### ALMADINA-129 Desk diagnostic events'
                 echo '```json'
@@ -613,7 +618,7 @@ jobs:
           PY
               echo '```'
             } >> "$GITHUB_STEP_SUMMARY"
-            if [[ ("$TARGET_CASE" == "al129_new_desk" || "$TARGET_CASE" == "al129_desk_only") && -s "$RUNNER_TEMP/al129-new-desk-evidence.json" ]]; then
+            if [[ ("$TARGET_CASE" == "al129_new_desk" || "$TARGET_CASE" == "al129_desk_only" || "$TARGET_CASE" == "al129_customer_permission_smoke") && -s "$RUNNER_TEMP/al129-new-desk-evidence.json" ]]; then
               {
                 echo '### ALMADINA-129 evidence completed before failure'
                 echo '```json'
@@ -623,12 +628,20 @@ jobs:
             fi
             publish_al129_desk_trace
           else
-            {
-              echo "### $TARGET_CASE real Desk acceptance: PASS"
-              echo 'Runtime: Frappe v16.17.5 / ERPNext v16.17.0'
-              echo 'Browser: isolated Chromium; see uploaded Desk evidence for per-scenario results.'
-            } >> "$GITHUB_STEP_SUMMARY"
-            if [[ "$TARGET_CASE" == "al129_new_desk" || "$TARGET_CASE" == "al129_desk_only" ]]; then
+            if [[ "$TARGET_CASE" == "al129_customer_permission_smoke" ]]; then
+              {
+                echo '### ALMADINA-129 Customer permission differential: diagnostic completed'
+                echo 'Runtime: Frappe v16.17.5 / ERPNext v16.17.0'
+                echo 'This result records the A/B root-cause probe; it is not a product acceptance claim.'
+              } >> "$GITHUB_STEP_SUMMARY"
+            else
+              {
+                echo "### $TARGET_CASE real Desk acceptance: PASS"
+                echo 'Runtime: Frappe v16.17.5 / ERPNext v16.17.0'
+                echo 'Browser: isolated Chromium; see uploaded Desk evidence for per-scenario results.'
+              } >> "$GITHUB_STEP_SUMMARY"
+            fi
+            if [[ "$TARGET_CASE" == "al129_new_desk" || "$TARGET_CASE" == "al129_desk_only" || "$TARGET_CASE" == "al129_customer_permission_smoke" ]]; then
               python - "$RUNNER_TEMP/al129-new-desk-evidence.json" <<'PY' >> "$GITHUB_STEP_SUMMARY"
           import json
           import sys
@@ -647,7 +660,7 @@ jobs:
         timeout-minutes: 20
 
       - name: Upload Desk acceptance evidence
-        if: always() && (env.TARGET_SUITE == 'al128_desk' || env.TARGET_SUITE == 'al128_desk_edit' || env.TARGET_SUITE == 'al128_performance' || env.TARGET_SUITE == 'al129_new_desk' || env.TARGET_SUITE == 'al129_desk_only')
+        if: always() && (env.TARGET_SUITE == 'al128_desk' || env.TARGET_SUITE == 'al128_desk_edit' || env.TARGET_SUITE == 'al128_performance' || env.TARGET_SUITE == 'al129_new_desk' || env.TARGET_SUITE == 'al129_desk_only' || env.TARGET_SUITE == 'al129_customer_permission_smoke')
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.TARGET_SUITE }}-real-desk-evidence

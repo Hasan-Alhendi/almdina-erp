@@ -170,14 +170,23 @@ def create_al129_desk_fixtures() -> dict[str, object]:
         {"doctype": "Role", "role_name": role_name, "desk_access": 1}
     )
     role.insert(ignore_permissions=True)
+    write_role = frappe.get_doc(
+        {"doctype": "Role", "role_name": f"AL129 Desk Create Edit {suffix}", "desk_access": 1}
+    )
+    write_role.insert(ignore_permissions=True)
+    create_capabilities = {
+        Capability.CREATE_ORDER: True,
+        Capability.VIEW_ORDERS: True,
+        Capability.VIEW_CUSTOMERS: True,
+        Capability.VIEW_EDGE_BANDING_TYPES: True,
+    }
     ProjectedPermissionMatrixRepository().save_role_states(
         {
-            str(role.name): {
-                Capability.CREATE_ORDER: True,
-                Capability.VIEW_ORDERS: True,
-                Capability.VIEW_CUSTOMERS: True,
-                Capability.VIEW_EDGE_BANDING_TYPES: True,
-            }
+            str(role.name): create_capabilities,
+            str(write_role.name): {
+                **create_capabilities,
+                Capability.EDIT_ORDER: True,
+            },
         }
     )
     email = f"al129-{suffix}@example.com"
@@ -185,13 +194,17 @@ def create_al129_desk_fixtures() -> dict[str, object]:
     _create_user(email, str(role.name), password)
     second_email = f"al129-second-{suffix}@example.com"
     _create_user(second_email, str(role.name), password)
+    write_email = f"al129-write-{suffix}@example.com"
+    _create_user(write_email, str(write_role.name), password)
     frappe.clear_cache(user=email)
+    frappe.clear_cache(user=write_email)
     frappe.clear_cache(doctype="Door Cutting Order")
     frappe.local.role_permissions = {}
     if hasattr(frappe.local, "almdina_matrix_capabilities"):
         del frappe.local.almdina_matrix_capabilities
 
     dco_permissions = get_role_permissions("Door Cutting Order", user=email)
+    write_dco_permissions = get_role_permissions("Door Cutting Order", user=write_email)
     customer_permissions = get_role_permissions("Customer", user=email)
     edge_permissions = get_role_permissions("Edge Banding Type", user=email)
     evidence = {
@@ -216,6 +229,25 @@ def create_al129_desk_fixtures() -> dict[str, object]:
     }
     if not all(evidence.values()):
         frappe.throw(f"The dynamic recovery user lacks required native permissions: {evidence}")
+    permission_differential = {
+        "create_only": {
+            "create": bool(dco_permissions.get("create")),
+            "read": bool(dco_permissions.get("read")),
+            "write": bool(dco_permissions.get("write")),
+        },
+        "create_and_edit": {
+            "create": bool(write_dco_permissions.get("create")),
+            "read": bool(write_dco_permissions.get("read")),
+            "write": bool(write_dco_permissions.get("write")),
+        },
+    }
+    if (
+        not permission_differential["create_only"]["create"]
+        or not permission_differential["create_only"]["read"]
+        or permission_differential["create_only"]["write"]
+        or not all(permission_differential["create_and_edit"].values())
+    ):
+        frappe.throw(f"AL129 customer permission differential is invalid: {permission_differential}")
 
     settings = frappe.get_single("Almdina ERP Settings")
     settings.default_extra_liner_unit_price_usd = max(
@@ -229,14 +261,21 @@ def create_al129_desk_fixtures() -> dict[str, object]:
         "versions": setup["versions"],
         "user": email,
         "second_user": second_email,
+        "write_user": write_email,
         "password": password,
         "customer": customer,
         "edge_type": edge_type,
         "permission_evidence": evidence,
+        "permission_differential": permission_differential,
     }
     frappe.db.commit()
     destination = os.environ.get("DCO_AL129_FIXTURE_FILE")
     if not destination:
         frappe.throw("DCO_AL129_FIXTURE_FILE must point to runner.temp in this isolated CI job.")
     Path(destination).write_text(json.dumps(fixture), encoding="utf-8")
-    return {"site": frappe.local.site, "versions": setup["versions"], "permission_evidence": evidence}
+    return {
+        "site": frappe.local.site,
+        "versions": setup["versions"],
+        "permission_evidence": evidence,
+        "permission_differential": permission_differential,
+    }
