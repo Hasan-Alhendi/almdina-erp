@@ -92,10 +92,21 @@ jobs:
           done
           cat "$RUNNER_TEMP/serve.log"
           exit 1
+      - name: Preflight actual Desk Form routing
+        run: |
+          set -o pipefail
+          python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" -k test_desk_route_preflight 2>&1 | tee "$RUNNER_TEMP/preflight.log"
       - name: Run Desk runtime proof
         run: |
           set -o pipefail
-          python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" 2>&1 | tee "$RUNNER_TEMP/browser.log"
+          python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" -k test_cross_order_desk_runtime 2>&1 | tee "$RUNNER_TEMP/browser.log"
+      - name: Audit committed test-site database
+        if: always()
+        run: |
+          if test -f "$P0_FIXTURE_PATH"; then
+            cd "$RUNNER_TEMP/frappe-bench"
+            bench --site test.localhost execute almdina_erp.tests.cross_order_p0_runtime_fixture.audit_db 2>&1 | tee "$RUNNER_TEMP/database-audit.log"
+          fi
       - name: Dispose of fixture data
         if: always()
         run: |
@@ -120,5 +131,7 @@ jobs:
             ${{ runner.temp }}/fixture.log
             ${{ runner.temp }}/serve.log
             ${{ runner.temp }}/browser.log
+            ${{ runner.temp }}/preflight.log
+            ${{ runner.temp }}/database-audit.log
           if-no-files-found: warn
           retention-days: 14

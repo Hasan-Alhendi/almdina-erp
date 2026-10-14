@@ -7,6 +7,57 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 
+def _login(page, fixture):
+    page.goto(os.environ["FRAPPE_DESK_URL"] + "/login", wait_until="domcontentloaded")
+    page.locator("#login_email").fill(fixture["user"])
+    page.locator("#login_password").fill(fixture["password"])
+    page.locator(".btn-login").click()
+    page.wait_for_function("user => !!frappe?.set_route && frappe.session?.user === user",
+                           arg=fixture["user"], timeout=60000)
+    page.wait_for_function("!!frappe.boot?.user?.can_read && !!frappe.router?.routes && !!frappe.app",
+                           timeout=45000)
+
+
+def test_desk_route_preflight():
+    fixture = json.loads(Path(os.environ["P0_FIXTURE_PATH"]).read_text())
+    evidence_dir = Path(os.environ["P0_EVIDENCE_DIR"])
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    evidence = {"server": fixture["route_preflight"], "versions": fixture["versions"]}
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(locale="en-US")
+            _login(page, fixture)
+            evidence["boot"] = page.evaluate("""() => ({
+                user:frappe.session.user, setupComplete:frappe.boot.setup_complete,
+                canReadDco:frappe.boot.user.can_read.includes('Door Cutting Order'),
+                canReadCustomer:frappe.boot.user.can_read.includes('Customer'),
+                routeDco:frappe.router.routes['door-cutting-order'] || null,
+                routeCustomer:frappe.router.routes.customer || null,
+                routeCount:Object.keys(frappe.router.routes).length
+            })""")
+            assert evidence["boot"]["canReadDco"] and evidence["boot"]["routeDco"], evidence
+            assert evidence["boot"]["canReadCustomer"] and evidence["boot"]["routeCustomer"], evidence
+            for doctype, name in (("Customer", fixture["customer"]),
+                                  ("Door Cutting Order", fixture["orders"]["A"]["name"])):
+                page.evaluate("args => frappe.set_route('Form', args[0], args[1])", [doctype, name])
+                try:
+                    page.wait_for_function("args => cur_frm?.doctype === args[0] && cur_frm?.doc?.name === args[1]",
+                                           arg=[doctype, name], timeout=45000)
+                    evidence[doctype] = page.evaluate("""() => ({href:location.href,
+                        route:frappe.get_route(),frmName:cur_frm.doc.name,
+                        frmDoctype:cur_frm.doctype})""")
+                except Exception:
+                    evidence[doctype] = page.evaluate("""() => ({href:location.href,
+                        route:frappe.get_route(),frmName:cur_frm?.doc?.name || null,
+                        body:document.body.innerText.slice(-1200)})""")
+                    raise AssertionError(f"Frappe Form route unavailable: {doctype}: {evidence[doctype]}")
+        finally:
+            (evidence_dir / "route-preflight.json").write_text(
+                json.dumps(evidence, ensure_ascii=False, indent=2), encoding="utf-8")
+            browser.close()
+
+
 def test_cross_order_desk_runtime():
     fixture = json.loads(Path(os.environ["P0_FIXTURE_PATH"]).read_text())
     evidence_dir = Path(os.environ["P0_EVIDENCE_DIR"])
@@ -34,19 +85,10 @@ def test_cross_order_desk_runtime():
                     if message.type == "error" else None)
             page.on("response", lambda response: diagnostics.append({"kind": "http", "url": response.url.split("?")[0],
                     "status": response.status}) if response.status >= 400 else None)
-            page.goto(os.environ["FRAPPE_DESK_URL"] + "/login", wait_until="domcontentloaded")
-            page.locator("#login_email").fill("Administrator")
-            page.locator("#login_password").fill(os.environ["P0_ADMIN_PASSWORD"])
-            page.locator(".btn-login").click()
-            page.wait_for_function("!!window.frappe?.set_route && frappe.session?.user === 'Administrator'", timeout=60000)
-            page.wait_for_function("!!window.frappe?.boot?.sysdefaults?.setup_complete && !!frappe.router && !!frappe.app", timeout=45000)
+            _login(page, fixture)
 
-            def route(name, initial=False):
-                if initial:
-                    page.goto(os.environ["FRAPPE_DESK_URL"] + "/app/door-cutting-order/" + name,
-                              wait_until="domcontentloaded", timeout=60000)
-                else:
-                    page.evaluate("name => frappe.set_route('Form', 'Door Cutting Order', name)", name)
+            def route(name):
+                page.evaluate("name => frappe.set_route('Form', 'Door Cutting Order', name)", name)
                 try:
                     page.wait_for_function("name => window.cur_frm?.doc?.name === name", arg=name, timeout=45000)
                 except Exception:
@@ -54,7 +96,7 @@ def test_cross_order_desk_runtime():
                         route:frappe.get_route?.(),curName:window.cur_frm?.doc?.name,
                         doctype:window.cur_frm?.doctype,bootReady:!!frappe.boot?.sysdefaults?.setup_complete,
                         visibleText:document.body.innerText.slice(-1200)})""")
-                    evidence["route_failure"] = {"requested": name, "initial": initial,
+                    evidence["route_failure"] = {"requested": name,
                                                  "snapshot": snapshot, "diagnostics": diagnostics[-30:]}
                     print("P0_ROUTE_DIAGNOSTIC=" + json.dumps(evidence["route_failure"], ensure_ascii=False), flush=True)
                     raise
@@ -68,23 +110,30 @@ def test_cross_order_desk_runtime():
                     plan: AlmdinaPlanWorkspaceState.snapshot(cur_frm)
                 })""")
 
-            state_a = route(a["name"], initial=True)
-            page.evaluate("""() => {
+            state_a = route(a["name"])
+            a_identity = page.evaluate("""() => {
                 window.__p0FrmA = cur_frm;
                 window.__p0DocA = cur_frm.doc;
+                const context = AlmdinaDocumentContext;
+                const capture = context.capture(cur_frm);
                 window.__p0Events = [];
                 for (const event of ['before_load','onload','refresh']) {
                     frappe.ui.form.on('Door Cutting Order', {[event]: frm => {
                         window.__p0Events.push({event, name:frm.doc.name,
                             sameFrm:frm === window.__p0FrmA,
+                            modified:frm.doc.modified,
                             costStatus:window.AlmdinaCostWorkspaceState?.snapshot(frm)?.status,
                             planStatus:window.AlmdinaPlanWorkspaceState?.snapshot(frm)?.status});
                     }});
                 }
+                return {name:cur_frm.doc.name, formIdentity:context.formIdentity(cur_frm),
+                    generation:capture?.generation ?? null, modified:cur_frm.doc.modified,
+                    planName:cur_frm.doc.system_plan || null,
+                    planRevision:cur_frm.doc.system_plan_revision || null};
             }""")
             state_b = route(b["name"])
             evidence["stages"]["lifecycle"] = {"status": "OBSERVED", "value": {
-                "a": state_a, "b": state_b,
+                "a": state_a, "a_identity_before_navigation": a_identity, "b": state_b,
                 "transition": page.evaluate("""() => ({sameFrm:cur_frm===window.__p0FrmA,
                     sameDoc:cur_frm.doc===window.__p0DocA,
                     events:window.__p0Events,
@@ -100,7 +149,7 @@ def test_cross_order_desk_runtime():
                     const original = {board:frm.doc.board_description,
                         width:frm.doc.pieces[0].width_cm};
                     const store = owner.storeFor(frm);
-                    const identity = AlmdinaDocumentContext.formIdentity(window.__p0FrmA);
+                    const identity = args.identity.formIdentity;
                     store.reset(identity);
                     const requestId = store.beginLoad(identity);
                     store.resolveLoad(identity,requestId,{order_name:args.a.name,
@@ -111,7 +160,7 @@ def test_cross_order_desk_runtime():
                         width:frm.doc.pieces[0].width_cm,
                         input:frm.fields_dict.board_description?.$input?.val() ?? null,
                         state:owner.snapshot(frm)?.identity};
-                }""", {"a": a})
+                }""", {"a": a, "identity": a_identity})
                 payloads = []
 
                 def capture(request):
@@ -127,8 +176,7 @@ def test_cross_order_desk_runtime():
                     }""")
                 finally:
                     page.remove_listener("request", capture)
-                # Read server state through frappe.client.get, which uses the DB rather
-                # than the open form's local document cache.
+                # A separate bench process will read the database after this browser exits.
                 db = page.evaluate("""async name => {
                     const response = await frappe.call({method:'frappe.client.get',
                         args:{doctype:'Door Cutting Order',name}});
@@ -138,11 +186,11 @@ def test_cross_order_desk_runtime():
                 }""", b["name"])
                 return {"method": "controlled A cost store projected on B via production presenter",
                         "projected": projected, "save": save_result,
-                        "native_savedocs_requests": payloads, "db": db}
+                        "native_savedocs_requests": payloads, "frappe_client_get": db}
 
             stage("save", save_probe)
-            # Re-open B to remove the save probe's local state before print evidence.
-            page.reload(wait_until="domcontentloaded")
+            # Frappe navigation makes a fresh B visit without reloading the browser.
+            route(a["name"])
             state_b_print = route(b["name"])
 
             def print_probe():
@@ -162,10 +210,13 @@ def test_cross_order_desk_runtime():
                         sheets:[{sheet_no:1,pieces:[{x:0,y:0,w:a.width_cm,h:a.length_cm,
                             original_w:a.width_cm,original_h:a.length_cm,
                             label:'P0-A-GEOMETRY',piece_type:'Regular',rotated:false}]}]};
+                    window.__p0PrintStart={name:cur_frm.doc.name,
+                        identity:AlmdinaDocumentContext.formIdentity(cur_frm),
+                        modified:cur_frm.doc.modified};
                     window.__p0PrintResult=AlmdinaCuttingPlanRender.print(cur_frm,plan);
                 }""")
                 page.wait_for_function("!!window.__p0ResolveIdentity", timeout=10000)
-                before = page.evaluate("""() => ({name:cur_frm.doc.name,
+                before = page.evaluate("""() => ({...window.__p0PrintStart,
                     writes:window.__p0PrintWrites.length})""")
                 # Route change while identity lookup is pending is a real Desk navigation.
                 state_a_during = route(a["name"])
@@ -174,8 +225,9 @@ def test_cross_order_desk_runtime():
                 html = page.evaluate("window.__p0PrintWrites.at(-1)")
                 (evidence_dir / "final-print.html").write_text(html, encoding="utf-8")
                 result = page.evaluate("""async () => await window.__p0PrintResult""")
-                return {"method": "production renderer with controlled A geometry and deferred identity; real B to A Desk route",
-                        "before": before, "a_during": state_a_during, "result": result,
+                return {"method": "controlled A geometry; renderer started for immutable B identity, then real B to A Desk route during identity await",
+                        "before": before, "b_before_print": state_b_print,
+                        "a_during": state_a_during, "result": result,
                         "html_file": "final-print.html", "html_checks": {
                             "dco_a": a["name"] in html, "dco_b": b["name"] in html,
                             "board_a": a["board"] in html, "board_b": b["board"] in html,
