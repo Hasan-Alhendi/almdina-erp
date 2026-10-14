@@ -487,10 +487,10 @@ class TestDesignSystemContract(unittest.TestCase):
         tokens_asset = '"/assets/almdina_erp/css/almdina_design_tokens.css"'
         components_asset = '"/assets/almdina_erp/css/almdina_components.css"'
         patterns_asset = '"/assets/almdina_erp/css/almdina_patterns.css"'
-        templates_asset = '"/assets/almdina_erp/css/almdina_page_templates.css"'
+        templates_asset = '"/assets/almdina_erp/css/almdina_page_templates.css?v=1"'
         desk_theme_asset = '"/assets/almdina_erp/css/almdina_desk_theme.css"'
         desk_sidebar_asset = '"/assets/almdina_erp/css/almdina_desk_sidebar.css?v=2"'
-        workspace_home_asset = '"/assets/almdina_erp/css/almdina_workspace_home.css?v=10"'
+        workspace_home_asset = '"/assets/almdina_erp/css/almdina_workspace_home.css?v=11"'
         ui_asset = '"/assets/almdina_erp/js/almdina_ui.js"'
         foundation_asset = '"/assets/almdina_erp/js/frontend_foundation.js"'
         notes_asset = '"/assets/almdina_erp/css/notes.css"'
@@ -544,8 +544,11 @@ class TestDesignSystemContract(unittest.TestCase):
             ".almdina-ui.alm-page--transaction",
             "body:has(.frappe-list)",
             "--alm-page-max-width",
+            "text-align: start",
         ):
             self.assertIn(marker, templates, msg=f"missing page template marker {marker}")
+        self.assertNotIn("direction: rtl", templates)
+        self.assertNotIn("direction:rtl", templates)
 
     def test_surfaces_adopt_page_template_families(self) -> None:
         permissions = PERMISSIONS_RENDERER.read_text(encoding="utf-8")

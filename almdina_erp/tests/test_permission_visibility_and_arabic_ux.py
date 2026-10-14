@@ -85,10 +85,10 @@ class TestPermissionVisibilityAndArabicUX(unittest.TestCase):
         }
 
         self.assertEqual({"طلبات قص الدرف"}, shortcut_names)
-        self.assertTrue(any("التشغيل اليومي" in value for value in headers))
+        self.assertTrue(any("Daily operations" in value for value in headers))
         for hidden_section in (
-            "الإعدادات الأساسية",
-            "إدارة النظام ومسارات العمل",
+            "Basic settings",
+            "System and workflow management",
         ):
             self.assertFalse(any(hidden_section in value for value in headers))
         self.assertFalse(any("التقارير التشغيلية والتكلفة" in value for value in headers))

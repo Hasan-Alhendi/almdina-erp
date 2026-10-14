@@ -227,24 +227,38 @@
         return iconNode;
     }
 
+    function translateMessage(messageId) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(messageId);
+        }
+        return __(messageId);
+    }
+
     function writeTranslatedText(node, messageId) {
         if (!node || !messageId) return;
-        const translated = __(messageId);
+        const translated = translateMessage(messageId);
         if (node.textContent !== translated) node.textContent = translated;
         if (typeof node.hasAttribute === "function" && node.hasAttribute("title")) {
             node.setAttribute("title", translated);
         }
     }
 
+    function sectionHeaderHost(block) {
+        return block.querySelector(".widget.header") || block.querySelector(".ce-header");
+    }
+
     function enhanceHeaders(root) {
         root.querySelectorAll(".ce-block").forEach((block) => {
-            const header = block.querySelector(".widget.header");
+            const header = sectionHeaderHost(block);
             if (!header) return;
             const presentation = sectionFromBlockId(block.dataset.id || block.getAttribute("data-id") || "");
             if (!presentation) return;
 
             header.setAttribute("data-alm-section", presentation.id);
-            const titleHost = header.querySelector(".ce-header") || header.querySelector(".h4") || header;
+            const titleHost = header.classList.contains("ce-header")
+                ? header
+                : (header.querySelector(".ce-header") || header.querySelector(".h4") || header);
             titleHost.classList.add("alm-workspace-section-head");
             const titleNode = titleHost.querySelector("b") || titleHost.querySelector(".h4");
             writeTranslatedText(titleNode, presentation.title);
@@ -262,7 +276,7 @@
     function assignShortcutSections(root) {
         let currentSection = "";
         root.querySelectorAll(".ce-block").forEach((block) => {
-            const header = block.querySelector(".widget.header");
+            const header = sectionHeaderHost(block);
             if (header) {
                 const presentation = sectionFromBlockId(block.dataset.id || block.getAttribute("data-id") || "");
                 if (presentation) currentSection = presentation.id;
@@ -418,7 +432,7 @@
         root.querySelectorAll(".alm-workspace-shortcut-arrow").forEach((node) => node.remove());
         root.querySelectorAll(".alm-workspace-shortcut-badge").forEach((node) => node.remove());
         root.querySelectorAll(".alm-workspace-section-meta").forEach((node) => node.remove());
-        root.querySelectorAll(".widget.header[data-alm-section]").forEach((node) => {
+        root.querySelectorAll(".widget.header[data-alm-section], .ce-header[data-alm-section]").forEach((node) => {
             node.removeAttribute("data-alm-section");
         });
         root.querySelectorAll(`.shortcut-widget-box.${SHORTCUT_CLASS}`).forEach((node) => {

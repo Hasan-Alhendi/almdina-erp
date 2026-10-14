@@ -46,7 +46,7 @@
 
         function renderLoading() {
             $body.html(`
-                <div class="aps-loading" role="status" aria-live="polite">
+                <div class="aps-loading" dir="${uiDirection()}" role="status" aria-live="polite">
                     <span class="aps-loading-dot" aria-hidden="true"></span>
                     <div><strong>${t("Loading factory settings")}</strong><span>${t("Preparing current values and permissions...")}</span></div>
                 </div>
@@ -55,7 +55,7 @@
 
         function renderError(message) {
             $body.html(`
-                <div class="aps-error" role="alert">
+                <div class="aps-error" dir="${uiDirection()}" role="alert">
                     <span class="aps-error-icon" aria-hidden="true">!</span>
                     <div><strong>${t("Could not load factory settings")}</strong><span>${esc(message || t("Could not load factory settings."))}</span></div>
                 </div>
@@ -69,8 +69,16 @@
             return "";
         }
 
+        function needsLtrIsolate(value) {
+            const text = String(value || "").trim();
+            if (!text || text === "—") return false;
+            if (/[\u0600-\u06FF]/.test(text)) return false;
+            return /\d/.test(text);
+        }
+
         function rowHtml(row) {
             const tone = row.multiline ? "" : statusTone(row.value);
+            const isolate = !tone && !row.multiline && needsLtrIsolate(row.value);
             const value = row.multiline
                 ? multiline(row.value)
                 : (
@@ -85,7 +93,7 @@
             return `
                 <div class="aps-value ${row.multiline ? "is-multiline" : ""}${tone ? " has-status" : ""}">
                     <span class="aps-value-label">${esc(row.label)}</span>
-                    <b class="aps-value-data">${value}</b>
+                    <b class="aps-value-data${isolate ? " aps-ltr-value" : ""}"${isolate ? ' dir="ltr"' : ""}>${value}</b>
                 </div>
             `;
         }
@@ -190,11 +198,11 @@
             if (!rows.length) {
                 return `<div class="aps-empty"><strong>${t("No log yet")}</strong><span>${t("No recorded changes.")}</span></div>`;
             }
-            return `<div class="aps-audit">${rows.map(row => `
+            return `<div class="aps-audit" dir="${uiDirection()}">${rows.map(row => `
                 <div class="aps-audit-item">
                     <span class="aps-audit-dot" aria-hidden="true"></span>
                     <div class="aps-audit-content">
-                        <div class="aps-audit-head"><strong>${esc(row.action)}</strong><span>${esc(row.changed_on)}</span></div>
+                        <div class="aps-audit-head"><strong>${esc(row.action)}</strong><span class="aps-ltr-value" dir="ltr">${esc(row.changed_on)}</span></div>
                         <div class="aps-audit-meta">${t("By")}: ${esc(row.changed_by)} · ${esc(row.source || "")}</div>
                         ${row.changed_fields ? `<div class="aps-audit-fields">${t("Fields")}: ${esc(row.changed_fields)}</div>` : ""}
                     </div>
@@ -203,11 +211,11 @@
         }
 
         function auditLoadingHtml() {
-            return `<div class="aps-empty" role="status" aria-live="polite"><strong>${t("Loading the log...")}</strong><span>${t("Restoring the latest factory settings changes.")}</span></div>`;
+            return `<div class="aps-empty" dir="${uiDirection()}" role="status" aria-live="polite"><strong>${t("Loading the log...")}</strong><span>${t("Restoring the latest factory settings changes.")}</span></div>`;
         }
 
         function auditErrorHtml(message) {
-            return `<div class="aps-error" role="alert"><span class="aps-error-icon" aria-hidden="true">!</span><div><strong>${t("Could not load the log")}</strong><span>${esc(message || t("Could not load the log."))}</span></div></div>`;
+            return `<div class="aps-error" dir="${uiDirection()}" role="alert"><span class="aps-error-icon" aria-hidden="true">!</span><div><strong>${t("Could not load the log")}</strong><span>${esc(message || t("Could not load the log."))}</span></div></div>`;
         }
 
         function backupStatusLabel(status) {
@@ -257,12 +265,12 @@
                 return `
                     <div class="aps-backup-row">
                         <div class="aps-backup-row-main">
-                            <div><strong>${esc(row.backup_identifier || row.operation_id || "—")}</strong><span>${esc(row.operation_type || "")} · ${esc(row.target || "")}</span></div>
+                            <div><strong class="aps-ltr-value" dir="ltr">${esc(row.backup_identifier || row.operation_id || "—")}</strong><span>${esc(row.operation_type || "")} · ${esc(row.target || "")}</span></div>
                             ${uiBadge({ label: backupStatusLabel(row.status), tone: backupStatusTone(row.status) })}
                         </div>
                         <div class="aps-backup-row-meta">
                             <span>${esc(row.requested_on || "—")}</span>
-                            <span>${esc(sizeLabel(row.total_size))}</span>
+                            <span class="aps-ltr-value" dir="ltr">${esc(sizeLabel(row.total_size))}</span>
                             ${row.error_summary ? `<span class="aps-backup-error">${esc(row.error_summary)}</span>` : ""}
                             ${restoreButton}
                         </div>

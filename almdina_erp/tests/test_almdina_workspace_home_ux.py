@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import unittest
 from pathlib import Path
 
@@ -84,6 +85,41 @@ class TestAlmdinaWorkspaceHomeUX(unittest.TestCase):
         important_count = css.count("!important")
         self.assertLessEqual(important_count, 8)
         self.assertIn("var(--alm-canvas)", css)
+
+    def test_workspace_section_titles_are_english_message_ids(self) -> None:
+        workspace = json.loads((ROOT / "almdina_erp" / "workspace" / "almdina_erp" / "almdina_erp.json").read_text(encoding="utf-8"))
+        headers = [
+            block.get("data", {}).get("text", "")
+            for block in json.loads(workspace["content"])
+            if block.get("type") == "header"
+        ]
+        joined = "\n".join(headers)
+        for message_id in (
+            "Basic settings",
+            "System and workflow management",
+            "Daily operations",
+        ):
+            self.assertIn(message_id, joined)
+        for stored_arabic in (
+            "الإعدادات الأساسية",
+            "إدارة النظام ومسارات العمل",
+            "التشغيل اليومي",
+        ):
+            self.assertNotIn(stored_arabic, joined)
+
+    def test_workspace_home_direction_follows_the_page(self) -> None:
+        css = CSS.read_text(encoding="utf-8")
+        self.assertNotIn("direction: rtl", css)
+        self.assertNotIn("direction:rtl", css)
+        self.assertNotIn("text-align: right", css)
+        self.assertNotIn("text-align:right", css)
+        self.assertNotIn("row-reverse", css)
+        self.assertIn("text-align: start", css)
+        self.assertIn("margin-inline-start", css)
+        self.assertIn("flex-direction: row", css)
+        manifest = MANIFEST.read_text(encoding="utf-8")
+        self.assertIn("almdina_workspace_home.css?v=11", manifest)
+        self.assertIn("almdina_workspace_home_ux.js?v=12", manifest)
 
 
 if __name__ == "__main__":

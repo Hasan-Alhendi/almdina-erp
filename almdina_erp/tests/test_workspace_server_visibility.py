@@ -53,9 +53,9 @@ class TestWorkspaceServerVisibility(unittest.TestCase):
         }
 
         self.assertEqual({"طلبات قص الدرف"}, shortcut_names)
-        self.assertTrue(any("التشغيل اليومي" in value for value in header_text))
-        self.assertFalse(any("الإعدادات الأساسية" in value for value in header_text))
-        self.assertFalse(any("إدارة النظام ومسارات العمل" in value for value in header_text))
+        self.assertTrue(any("Daily operations" in value for value in header_text))
+        self.assertFalse(any("Basic settings" in value for value in header_text))
+        self.assertFalse(any("System and workflow management" in value for value in header_text))
         self.assertFalse(any("التقارير التشغيلية والتكلفة" in value for value in header_text))
 
     def test_v16_sidebar_link_uses_surface_instead_of_parent_visibility(self) -> None:

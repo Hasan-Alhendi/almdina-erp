@@ -12,6 +12,10 @@ const french = {
     "Factory management": "Gestion de l'usine",
     "Basic settings": "Paramètres de base",
     "3 core units": "3 unités principales",
+    "System and workflow management": "Gestion du système et des flux",
+    "4 units": "4 unités",
+    "Daily operations": "Opérations quotidiennes",
+    "Shop floor and factory workflow": "Flux de l'atelier et de l'usine",
     "Operational reports and cost": "Rapports opérationnels et coût",
     "Statistical and analytical data": "Données statistiques et analytiques",
     Customers: "Clients",
@@ -447,6 +451,36 @@ assert.equal(icon.getAttribute("data-alm-sidebar-icon"), "users");
 assert.equal(customer.getAttribute("data-id"), "customers-shortcut");
 assert.equal(home.SECTION_PRESENTATION["reports-header"].id, "reports");
 assert.equal(translationCalls.every((message) => !arabicText.test(message)), true);
+
+function readonlyHeaderBlock(id, storedTitle) {
+    const block = el("div", "ce-block");
+    block.setAttribute("data-id", id);
+    const host = el("div", "ce-header");
+    const heading = el("span", "h4");
+    heading.appendChild(el("b", "", storedTitle));
+    host.appendChild(heading);
+    block.appendChild(host);
+    return block;
+}
+
+const readonlySystem = readonlyHeaderBlock("system-management-header", "System and workflow management");
+const readonlyOps = readonlyHeaderBlock("factory-operations-header", "Daily operations");
+editor.appendChild(readonlySystem);
+editor.appendChild(readonlyOps);
+home.polish();
+home.polish();
+
+assert.equal(readonlySystem.querySelector(".widget.header"), null);
+assert.equal(readonlySystem.querySelector(".ce-header").getAttribute("data-alm-section"), "system");
+assert.equal(readonlySystem.querySelector("b").textContent, french["System and workflow management"]);
+assert.equal(readonlySystem.querySelectorAll(".alm-workspace-section-meta").length, 1);
+assert.equal(readonlySystem.querySelector(".alm-workspace-section-meta").textContent, french["4 units"]);
+assert.equal(readonlyOps.querySelector(".ce-header").getAttribute("data-alm-section"), "ops");
+assert.equal(readonlyOps.querySelector("b").textContent, french["Daily operations"]);
+assert.equal(readonlyOps.querySelectorAll(".alm-workspace-section-meta").length, 1);
+assert.equal(editor.querySelectorAll(".alm-workspace-section-meta").length, 4);
+assert.equal(customer.querySelectorAll(".alm-workspace-shortcut-desc").length, 1);
+assert.equal(customer.querySelectorAll(".alm-workspace-shortcut-icon").length, 1);
 
 context.frappe.get_route_str = () => "customer";
 context.frappe.router.current_route = ["customer"];

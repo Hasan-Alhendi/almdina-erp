@@ -89,3 +89,46 @@ def test_production_settings_polish_is_presentation_only() -> None:
 
     assert "aps-edit" in renderer
     assert "data-section=" in renderer
+
+
+def test_production_settings_direction_uses_logical_properties() -> None:
+    css = CSS.read_text(encoding="utf-8")
+    templates = (ROOT / "public" / "css" / "almdina_page_templates.css").read_text(encoding="utf-8")
+    renderer = RENDERER.read_text(encoding="utf-8")
+
+    assert "function uiDirection()" in renderer
+    assert "AlmdinaLocale" in renderer
+    assert 'document.documentElement' in renderer
+    assert 'dir="${uiDirection()}"' in renderer
+    assert "text-align: start" in templates
+    assert "direction: rtl" not in templates
+
+    for forbidden in (
+        "margin-left",
+        "margin-right",
+        "padding-left",
+        "padding-right",
+        "text-align: left",
+        "text-align: right",
+        "text-align:left",
+        "text-align:right",
+        "direction: rtl",
+        "direction:rtl",
+    ):
+        assert forbidden not in css
+    assert "left:" not in css
+    assert "right:" not in css
+    assert "inset-inline-start: 50%" in css
+    assert "text-align: start" in css
+    assert "margin-inline-start" in css
+    assert "margin-inline-end" in css
+
+    ltr_rules = [
+        block.strip()
+        for block in css.split("}")
+        if "direction: ltr" in block or "direction:ltr" in block
+    ]
+    assert ltr_rules
+    for block in ltr_rules:
+        assert "unicode-bidi: isolate" in block or "unicode-bidi:isolate" in block
+        assert ".aps-ltr-value" in block or ".aps-restore-warning code" in block

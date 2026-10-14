@@ -15,7 +15,7 @@
     --alm-page-max-width: 1440px;
     --alm-page-padding-bottom: var(--alm-space-10, 40px);
     box-sizing: border-box;
-    direction: rtl;
+    text-align: start;
     display: grid;
     gap: var(--alm-space-4, 16px);
     width: 100%;
