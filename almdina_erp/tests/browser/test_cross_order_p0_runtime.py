@@ -101,7 +101,8 @@ def test_cross_order_desk_runtime():
                                                  "snapshot": snapshot, "diagnostics": diagnostics[-30:]}
                     print("P0_ROUTE_DIAGNOSTIC=" + json.dumps(evidence["route_failure"], ensure_ascii=False), flush=True)
                     raise
-                page.wait_for_function("!!window.AlmdinaCostWorkspaceState && !!window.AlmdinaCuttingPlanRender", timeout=45000)
+                page.wait_for_function("!!window.AlmdinaCostWorkspaceState && !!window.AlmdinaPlanWorkspaceState",
+                                       timeout=45000)
                 return page.evaluate("""() => ({
                     name: cur_frm.doc.name,
                     board: cur_frm.doc.board_description,
@@ -141,6 +142,14 @@ def test_cross_order_desk_runtime():
                     aCostReadOnB:AlmdinaCostWorkspaceState.snapshot(cur_frm)?.data?.order?.board_description,
                     model:cur_frm.doc.board_description,
                     input:cur_frm.fields_dict.board_description?.$input?.val() ?? null})""")}}
+
+            # Production loads action/presenter assets when their tabs activate.
+            # The order tab alone never loads the cutting renderer.
+            evidence["stages"]["workspace_activation"] = {"status": "OBSERVED", "value":
+                page.evaluate("""async () => ({cost:await AlmdinaDcoWorkspaceAssetRegistry.ensure('cost'),
+                    plan:await AlmdinaDcoWorkspaceAssetRegistry.ensure('plan'),
+                    presenter:!!window.AlmdinaCostWorkspacePresenterAdapter,
+                    renderer:!!window.AlmdinaCuttingPlanRender})""")}
 
             def save_probe():
                 # A real A-shaped workspace snapshot, projected through the production
@@ -341,6 +350,7 @@ def test_saved_server_plan_print_runtime():
 
             # Controlled identity-defense probe, using the unmodified response
             # returned by the real server for a saved A plan.
+            page.evaluate("async () => await AlmdinaDcoWorkspaceAssetRegistry.ensure('plan')")
             evidence["controlled_projection"] = page.evaluate("""args => {
                 const frm=cur_frm, store=AlmdinaPlanWorkspaceState.storeFor(frm);
                 store.reset(args.identity);

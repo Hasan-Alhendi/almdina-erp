@@ -93,6 +93,7 @@ jobs:
           cat "$RUNNER_TEMP/serve.log"
           exit 1
       - name: Preflight actual Desk Form routing
+        id: route_preflight
         run: |
           set -o pipefail
           python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" -k test_desk_route_preflight 2>&1 | tee "$RUNNER_TEMP/preflight.log"
@@ -100,6 +101,18 @@ jobs:
         run: |
           set -o pipefail
           python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" -k test_cross_order_desk_runtime 2>&1 | tee "$RUNNER_TEMP/browser.log"
+      - name: Persist actual System plan A on the isolated site
+        id: saved_plan
+        if: always() && steps.route_preflight.outcome == 'success'
+        run: |
+          set -o pipefail
+          cd "$RUNNER_TEMP/frappe-bench"
+          bench --site test.localhost execute almdina_erp.tests.cross_order_p0_runtime_fixture.prepare_saved_plan 2>&1 | tee "$RUNNER_TEMP/saved-plan.log"
+      - name: Print the saved server plan through Desk
+        if: always() && steps.saved_plan.outcome == 'success'
+        run: |
+          set -o pipefail
+          python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" -k test_saved_server_plan_print_runtime 2>&1 | tee "$RUNNER_TEMP/saved-plan-browser.log"
       - name: Audit committed test-site database
         if: always()
         run: |
@@ -133,5 +146,7 @@ jobs:
             ${{ runner.temp }}/browser.log
             ${{ runner.temp }}/preflight.log
             ${{ runner.temp }}/database-audit.log
+            ${{ runner.temp }}/saved-plan.log
+            ${{ runner.temp }}/saved-plan-browser.log
           if-no-files-found: warn
           retention-days: 14
