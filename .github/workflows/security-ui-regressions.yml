@@ -56,7 +56,9 @@ jobs:
 
       - name: Validate changed browser modules
         run: |
-          node --check almdina_erp/public/js/arabic_operator_ui.js
+          # The former Arabic-only operator shim was retired by the locale migration.
+          # Syntax-check the active locale source, never re-add the deleted shim.
+          node --check almdina_erp/public/js/almdina_locale.js
           node --check almdina_erp/public/js/permission_context.js
           node --check almdina_erp/public/js/shared_shell.js
           node --check almdina_erp/public/js/door_cutting_order/list_view/door_cutting_order_list.js
