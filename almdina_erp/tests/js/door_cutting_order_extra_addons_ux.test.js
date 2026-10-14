@@ -14,9 +14,21 @@ const source = fs.readFileSync(
 );
 
 const fakeWindow = {};
+const documentStub = { documentElement: { lang: "ar" } };
+const csv = fs.readFileSync(path.resolve(__dirname, "../../translations/ar.csv"), "utf8");
+const translations = new Map(csv.split(/\r?\n/).map(line => {
+    const delimiter = line.indexOf(",");
+    return delimiter < 0 ? ["", ""] : [line.slice(0, delimiter), line.slice(delimiter + 1).split(",")[0]];
+}));
+function translate(message) {
+    return documentStub.documentElement.lang === "ar"
+        ? (translations.get(String(message)) || String(message))
+        : String(message);
+}
 const context = vm.createContext({
     window: fakeWindow,
-    document: { documentElement: { lang: "ar" } },
+    document: documentStub,
+    __: translate,
     frappe: {
         boot: { lang: "ar" },
         utils: { escape_html(value) { return String(value); } },
@@ -38,11 +50,11 @@ assert.deepEqual(
     ["Regular", "Special", "Clipped Corner", "L-Shaped Corner"]
 );
 assert.deepEqual(
-    JSON.parse(JSON.stringify(api.FIELDS.map(item => item.buttonAr))),
+    JSON.parse(JSON.stringify(api.FIELDS.map(item => translate(item.button)))),
     ["دبل قشاط", "دبل كامل", "لاينر", "فرزة ظهر", "مسكة غطس"]
 );
 assert.deepEqual(
-    JSON.parse(JSON.stringify(api.FIELDS.map(item => item.buttonEn))),
+    JSON.parse(JSON.stringify(api.FIELDS.map(item => item.button))),
     ["Double Banding", "Full Double", "Liner", "Back Groove", "Recessed Handle"]
 );
 
@@ -63,7 +75,7 @@ assert.equal(api.physicalCutQuantity({ qty: 3, extra_liner: 1 }), 3);
 const picker = api.renderTypePicker({ piece_type: "Regular" }, { editable: true });
 assert.match(picker, /<select class="dco-fast-select dco-piece-type-select"/);
 assert.match(picker, /data-field="piece_type"/);
-assert.match(picker, />عادية<\/option>/);
+assert.match(picker, />عادي<\/option>/);
 assert.match(picker, />خاصة<\/option>/);
 assert.match(picker, />الزاوية الكسر<\/option>/);
 assert.match(picker, />زاوية L<\/option>/);
