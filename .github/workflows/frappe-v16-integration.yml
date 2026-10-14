@@ -585,7 +585,15 @@ jobs:
               "login_boot_wait_started",
               "login_boot_ready",
               "desk_login_and_boot_ready",
+              "new_form_navigation_started",
               "new_form_navigation_response",
+              "new_form_navigation_commit_failed",
+              "new_form_domcontentloaded_wait_started",
+              "new_form_domcontentloaded_completed",
+              "new_form_domcontentloaded_failed",
+              "new_form_cur_frm_wait_started",
+              "new_form_cur_frm_ready",
+              "new_form_cur_frm_wait_failed",
               "real_new_dco_form_ready",
               "real_new_dco_awaiting_draft_selection",
               "customer_field_state_before_fill",
@@ -610,7 +618,14 @@ jobs:
               [*key_records[-12:], *runtime_records[-12:]],
               key=lambda record: record.get("time", 0),
           )
-          print(json.dumps(selected, ensure_ascii=False, indent=2))
+          last_event = records[-1] if records else {}
+          print(json.dumps({
+              "last_recorded_event": {
+                  "time": last_event.get("time"),
+                  "event": last_event.get("event"),
+              },
+              "events": selected,
+          }, ensure_ascii=False, indent=2))
           PY
                 echo '```'
               } >> "$GITHUB_STEP_SUMMARY"

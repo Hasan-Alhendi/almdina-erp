@@ -53,6 +53,15 @@ STEP_SUMMARY_EVENTS = {
     "login_boot_wait_started",
     "login_boot_ready",
     "desk_login_and_boot_ready",
+    "new_form_navigation_started",
+    "new_form_navigation_response",
+    "new_form_navigation_commit_failed",
+    "new_form_domcontentloaded_wait_started",
+    "new_form_domcontentloaded_completed",
+    "new_form_domcontentloaded_failed",
+    "new_form_cur_frm_wait_started",
+    "new_form_cur_frm_ready",
+    "new_form_cur_frm_wait_failed",
 }
 
 
@@ -71,7 +80,13 @@ def trace(event: str, **details: Any) -> None:
             # Only emit fixed phase names and durations; never emit credentials or identities.
             safe_details = {
                 key: record[key]
-                for key in ("duration_ms", "timeout_seconds", "stack_dump_after_seconds")
+                for key in (
+                    "duration_ms",
+                    "timeout_seconds",
+                    "stack_dump_after_seconds",
+                    "status",
+                    "error_type",
+                )
                 if key in record
             }
             with Path(summary_path).open("a", encoding="utf-8") as summary:
@@ -282,17 +297,62 @@ def _open_new_form(page: Page, suffix: str, *, expected_state: str) -> None:
     if expected_state not in {"ready_for_entry", "awaiting_draft_selection"}:
         raise ValueError(f"Unsupported NEW form state: {expected_state}")
     PAGE_RUNTIME_DIAGNOSTICS.setdefault(id(page), []).clear()
-    response = page.goto(
-        f"{DESK_URL}/app/door-cutting-order/new-door-cutting-order-al129-{suffix}",
-        wait_until="domcontentloaded",
-        timeout=60_000,
+    target_url = f"{DESK_URL}/app/door-cutting-order/new-door-cutting-order-al129-{suffix}"
+    navigation_started = time.monotonic()
+    trace("new_form_navigation_started", timeout_seconds=20)
+    try:
+        # Commit isolates server/navigation response from Frappe's JavaScript boot.
+        # DOMContentLoaded and app readiness remain explicit acceptance conditions below.
+        response = page.goto(target_url, wait_until="commit", timeout=20_000)
+    except Exception as error:
+        trace(
+            "new_form_navigation_commit_failed",
+            duration_ms=round((time.monotonic() - navigation_started) * 1000),
+            error_type=type(error).__name__,
+        )
+        raise
+    trace(
+        "new_form_navigation_response",
+        status=response.status if response else None,
+        duration_ms=round((time.monotonic() - navigation_started) * 1000),
     )
-    trace("new_form_navigation_response", status=response.status if response else None)
-    page.wait_for_function(
-        "() => window.cur_frm && cur_frm.doctype === 'Door Cutting Order' "
-        "&& cur_frm.is_new() && cur_frm.fields_dict.pieces_fast_entry "
-        "&& cur_frm.fields_dict.pieces_fast_entry.$wrapper",
-        timeout=60_000,
+
+    domcontentloaded_started = time.monotonic()
+    trace("new_form_domcontentloaded_wait_started", timeout_seconds=20)
+    try:
+        page.wait_for_load_state("domcontentloaded", timeout=20_000)
+    except Exception as error:
+        trace(
+            "new_form_domcontentloaded_failed",
+            duration_ms=round((time.monotonic() - domcontentloaded_started) * 1000),
+            error_type=type(error).__name__,
+        )
+        raise
+    trace(
+        "new_form_domcontentloaded_completed",
+        duration_ms=round((time.monotonic() - domcontentloaded_started) * 1000),
+    )
+
+    cur_frm_started = time.monotonic()
+    trace("new_form_cur_frm_wait_started", timeout_seconds=30)
+    try:
+        page.wait_for_function(
+            "() => window.cur_frm && cur_frm.doctype === 'Door Cutting Order' "
+            "&& cur_frm.is_new() && cur_frm.fields_dict.pieces_fast_entry "
+            "&& cur_frm.fields_dict.pieces_fast_entry.$wrapper",
+            timeout=30_000,
+        )
+    except Exception as error:
+        trace(
+            "new_form_cur_frm_wait_failed",
+            duration_ms=round((time.monotonic() - cur_frm_started) * 1000),
+            error_type=type(error).__name__,
+        )
+        raise
+    trace(
+        "new_form_cur_frm_ready",
+        duration_ms=round((time.monotonic() - cur_frm_started) * 1000),
+        expected_state=expected_state,
     )
     if expected_state == "awaiting_draft_selection":
         page.wait_for_function(
