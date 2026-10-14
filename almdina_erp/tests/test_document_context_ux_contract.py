@@ -211,12 +211,12 @@ class TestDocumentContextUxContract(unittest.TestCase):
         ].split("function recalcCurrentOrder", 1)[0]
         self.assertNotIn("reload_doc", preview)
         self.assertNotIn("frm.doc.packing_mode =", preview)
-        self.assertIn("معاينة", preview)
+        self.assertIn('translate("This is a preview result. The order was not changed.")', preview)
 
     def test_finished_route_is_not_treated_as_pre_production(self) -> None:
         source = DOCUMENT_CONTEXT.read_text(encoding="utf-8")
         self.assertIn('return !String(frm.doc.production_path || "").trim();', source)
-        self.assertIn("غادر مراحل الإنتاج النشطة", source)
+        self.assertIn("The order has left the active production stages.", source)
 
     def test_identity_transition_invalidates_document_scoped_state(self) -> None:
         source = DOCUMENT_CONTEXT.read_text(encoding="utf-8")
