@@ -468,13 +468,20 @@ def test_recovery_new_saved_intersection():
             # registered. Construct the NEW document through its model API and
             # navigate by the standard Form route to exercise Desk lifecycle.
             page.evaluate("""() => {
-                const name=frappe.model.make_new_doc_and_get_name('Door Cutting Order');
-                frappe.set_route('Form','Door Cutting Order',name);
+                window.__p0NewName=frappe.model.make_new_doc_and_get_name('Door Cutting Order');
             }""")
+            evidence["new_name"] = page.evaluate("window.__p0NewName")
+            mark_step("NEW_model_created")
+            page.evaluate("""() => {
+                frappe.set_route('Form','Door Cutting Order',window.__p0NewName);
+            }""")
+            mark_step("NEW_route_requested")
             page.wait_for_function("() => cur_frm?.doctype === 'Door Cutting Order' && !!cur_frm.is_new()",
                                    timeout=45000)
+            mark_step("NEW_route_open")
             page.wait_for_function("() => !!AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(cur_frm)",
                                    timeout=15000)
+            mark_step("NEW_checkpoint_ready")
             evidence["new_before_save"] = page.evaluate("""() => ({
                 identity:AlmdinaDocumentContext.formIdentity(cur_frm),
                 generation:AlmdinaDocumentContext.capture(cur_frm)?.generation,
@@ -482,21 +489,35 @@ def test_recovery_new_saved_intersection():
                 recovery:AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(cur_frm) || null,
                 edit:AlmdinaDcoEditSessionCoordinator?.snapshot(cur_frm) || null})""")
             mark_step("NEW_Form_open")
-            evidence["input"] = page.evaluate("""async args => {
-                const frm=cur_frm;
-                for (const [field,value] of Object.entries(args.fields)) await frm.set_value(field,value);
-                const piece=frappe.model.add_child(frm.doc,'Door Cutting Order Detail','pieces');
-                piece.piece_type='Regular'; piece.width_cm=31; piece.length_cm=62; piece.qty=1;
-                frm.refresh_field('pieces');
-                AlmdinaDcoRecovery?.LocalCheckpoint?.markDirty(frm);
-                return {name:frm.doc.name,board:frm.doc.board_description,
-                    pieces:frm.doc.pieces.map(row=>({name:row.name,width_cm:row.width_cm})),
-                    recovery:AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(frm) || null};
+            page.evaluate("""args => {
+                window.__p0Input={status:'pending',field:null};
+                (async () => {
+                    const frm=cur_frm;
+                    for (const [field,value] of Object.entries(args.fields)) {
+                        window.__p0Input.field=field;
+                        await frm.set_value(field,value);
+                    }
+                    const piece=frappe.model.add_child(frm.doc,'Door Cutting Order Detail','pieces');
+                    piece.piece_type='Regular'; piece.width_cm=31; piece.length_cm=62; piece.qty=1;
+                    frm.refresh_field('pieces');
+                    AlmdinaDcoRecovery?.LocalCheckpoint?.markDirty(frm);
+                    window.__p0Input={status:'settled',name:frm.doc.name,
+                        board:frm.doc.board_description,
+                        pieces:frm.doc.pieces.map(row=>({name:row.name,width_cm:row.width_cm})),
+                        recovery:AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(frm) || null};
+                })().catch(error=>window.__p0Input={status:'rejected',error:String(error)});
             }""", {"fields": {"customer": fixture["customer"],
                 "board_description": fixture["recovery_board"],
                 "board_width_cm": 122, "board_length_cm": 244,
                 "default_edge_type": fixture["edge_type"], "edge_color": "P0 Recovery edge",
                 "board_rate_usd": 7, "cutting_cost_per_board_usd": 2}})
+            mark_step("NEW_input_started")
+            try:
+                page.wait_for_function("window.__p0Input?.status !== 'pending'", timeout=20000)
+            finally:
+                evidence["input"] = page.evaluate("window.__p0Input")
+                mark_step("NEW_input_wait_finished")
+            assert evidence["input"]["status"] == "settled", evidence["input"]
             mark_step("NEW_input_complete")
             page.evaluate("""() => {
                 window.__p0Flush={status:'pending'};
