@@ -143,6 +143,55 @@ def test_normal_plan_keeps_preferred_trim_and_has_no_warning():
     assert "⚠" not in outcome.packing_score
 
 
+def test_slack_on_a_later_sheet_is_split_across_both_edges():
+    outcome = optimize_order_plan(
+        _command(
+            [
+                {
+                    "width_cm": 122,
+                    "length_cm": 244,
+                    "qty": 1,
+                    "allow_rotation": 0,
+                },
+                {
+                    "width_cm": 40,
+                    "length_cm": 40,
+                    "qty": 3,
+                    "allow_rotation": 0,
+                },
+            ],
+            kerf_cm=0.5,
+        ),
+        engine=domain_cutting_engine,
+    )
+
+    snapshot = outcome.snapshot
+    assert not snapshot["unplaced"]
+    assert outcome.required_boards == 2
+    assert snapshot["applied_trim_width_cm"] == 0
+    assert snapshot["applied_trim_length_cm"] == 0
+    sheets = snapshot["sheets"]
+    full = next(
+        sheet for sheet in sheets
+        if any(piece["w"] >= 122 and piece["h"] >= 244 for piece in sheet["pieces"])
+    )
+    row = next(sheet for sheet in sheets if sheet is not full)
+    assert full["applied_trim_width_cm"] == 0
+    assert full["applied_trim_length_cm"] == 0
+    door = full["pieces"][0]
+    assert (door["x"], door["y"], door["w"], door["h"]) == (0, 0, 122, 244)
+    assert row["applied_trim_width_cm"] == 0.5
+    assert row["applied_trim_length_cm"] == 0.5
+    pieces = row["pieces"]
+    assert len(pieces) == 3
+    assert min(piece["x"] for piece in pieces) == 0
+    assert max(piece["x"] + piece["w"] for piece in pieces) == 121
+    assert max(piece["y"] + piece["h"] for piece in pieces) == 243
+    xs = sorted(piece["x"] for piece in pieces)
+    assert xs[1] - (xs[0] + 40) == 0.5
+    assert xs[2] - (xs[1] + 40) == 0.5
+
+
 def test_impossible_piece_is_not_hidden_by_margin_relaxation():
     outcome = optimize_order_plan(
         _command(

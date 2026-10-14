@@ -626,10 +626,12 @@
         const radius = num(cutterDiameterMm) / 2;
         const startSawn = resolveSawn(ends && ends.startSawn, prepared.boundaryStart);
         const endSawn = resolveSawn(ends && ends.endSawn, prepared.boundaryEnd);
+        const extendStart = prepared.boundaryStart;
+        const extendEnd = prepared.boundaryEnd;
         const needsFlat = !startSawn || !endSawn;
         if (needsFlat && centers.length < 2) fail("liner_flat_end_unmachinable");
-        const trimStart = startSawn ? 0 : radius;
-        const trimEnd = endSawn ? 0 : radius;
+        const trimStart = extendStart ? 0 : radius;
+        const trimEnd = extendEnd ? 0 : radius;
         if (polylineLength(prepared.clipped) + TOLERANCE_MM < trimStart + trimEnd) {
             fail("liner_flat_end_unmachinable");
         }
@@ -638,10 +640,10 @@
             if (trimStart) line = subpolyline(line, trimStart, polylineLength(line));
             if (trimEnd) line = subpolyline(line, 0, polylineLength(line) - trimEnd);
             if (line.length < 2) fail("liner_flat_end_unmachinable");
-            if (startSawn || endSawn) {
+            if (extendStart || extendEnd) {
                 line = extendCenterline(line, radius, polygon, {
-                    start: startSawn,
-                    end: endSawn,
+                    start: extendStart,
+                    end: extendEnd,
                 });
             }
             return line;

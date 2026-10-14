@@ -14,6 +14,9 @@ from almdina_erp.almdina_erp.domain.cutting.adaptive_trim import (
     TRIM_PRECISION_CM,
     resolve_adaptive_trim,
 )
+from almdina_erp.almdina_erp.domain.cutting.sheet_edge_trim import (
+    realize_sheet_edge_trim,
+)
 from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
     PlanSettings,
     normalize_plan_settings,
@@ -169,12 +172,6 @@ def optimize_order_plan(
     usable_length_cm = applied_trim.usable_length_cm(
         full_length_cm=board.full_length_cm
     )
-    validation_errors = engine.validate(
-        plan,
-        expanded,
-        usable_width_cm,
-        usable_length_cm,
-    )
     margin_notes = _build_margin_notes(board, applied_trim)
 
     metrics = dict(plan.get("industrial_metrics") or {})
@@ -195,6 +192,20 @@ def optimize_order_plan(
         sheet.setdefault("usable_length_cm", usable_length_cm)
         sheet["applied_trim_width_cm"] = applied_trim.width_trim_cm
         sheet["applied_trim_length_cm"] = applied_trim.length_trim_cm
+    realize_sheet_edge_trim(
+        sheets,
+        full_width_cm=board.full_width_cm,
+        full_length_cm=board.full_length_cm,
+        preferred_width_trim_cm=trim_decision.preferred.width_trim_cm,
+        preferred_length_trim_cm=trim_decision.preferred.length_trim_cm,
+    )
+    plan["sheets"] = sheets
+    validation_errors = engine.validate(
+        plan,
+        expanded,
+        usable_width_cm,
+        usable_length_cm,
+    )
 
     trim_policy = _trim_policy_metadata(
         board=board,

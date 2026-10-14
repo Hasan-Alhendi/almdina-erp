@@ -531,6 +531,22 @@ def compare_liner_path(
         )
         if tool.ok:
             return tool
+        if tool.reason_code in {"end_not_closed", "extension_short"}:
+            legacy = _measure_toolpath(
+                path,
+                piece,
+                side,
+                offset_cm,
+                width_cm,
+                float(cutter_diameter_mm or 0),
+                start_cm,
+                length_cm,
+                start_sawn=start_sawn,
+                end_sawn=end_sawn,
+                flat_contour=True,
+            )
+            if legacy.ok:
+                return legacy
     if selected.code != LINER_WIDTH_NOT_MEASURABLE or tool is not None:
         for candidate in available_liner_sides(piece.piece_type):
             if candidate == side:
@@ -771,13 +787,16 @@ def _cutter_passes(
     *,
     start_sawn: bool | None = None,
     end_sawn: bool | None = None,
+    flat_contour: bool = False,
 ) -> tuple[list[list[Point]], bool, bool]:
     """Parallel cutter passes for one liner span.
 
-    An end closed by a real separating or trim cut extends by the bit radius
-    into that saw zone. An end on an original board edge, or an end that stops
-    inside the span, is not on a saw, so the pass stops one radius short and
-    the liner path closes it. The sheet outline is not a closer.
+    A contour end extends by the bit radius past the door, including when that
+    face is the raw board edge and the bit leaves the sheet. Missing trim is
+    not a reason to shorten it. An internal end stops one radius short. A real
+    saw closes a contour end; otherwise the liner path itself closes it.
+    ``flat_contour`` keeps the older board-edge shorten-and-close path so a
+    previously exported file still matches.
     """
 
     error = validation_code(piece, side, offset_cm, width_cm)
@@ -792,11 +811,13 @@ def _cutter_passes(
     radius = float(cutter_diameter_mm) / 2.0
     saw_start = _resolve_sawn(start_sawn, boundary_start)
     saw_end = _resolve_sawn(end_sawn, boundary_end)
+    extend_start = boundary_start and not (flat_contour and not saw_start)
+    extend_end = boundary_end and not (flat_contour and not saw_end)
     needs_flat = not saw_start or not saw_end
     if needs_flat and len(centers) < 2:
         raise LinerGeometryError("liner_flat_end_unmachinable")
-    trim_start = 0.0 if saw_start else radius
-    trim_end = 0.0 if saw_end else radius
+    trim_start = 0.0 if extend_start else radius
+    trim_end = 0.0 if extend_end else radius
     if _polyline_length(clipped) + GEOMETRY_TOLERANCE_MM < trim_start + trim_end:
         raise LinerGeometryError("liner_flat_end_unmachinable")
     lines: list[list[Point]] = []
@@ -808,13 +829,13 @@ def _cutter_passes(
             line = _subpolyline(line, 0.0, _polyline_length(line) - trim_end)
         if len(line) < 2:
             raise LinerGeometryError("liner_flat_end_unmachinable")
-        if saw_start or saw_end:
+        if extend_start or extend_end:
             line = _extend_centerline(
                 line,
                 radius,
                 polygon,
-                extend_start=saw_start,
-                extend_end=saw_end,
+                extend_start=extend_start,
+                extend_end=extend_end,
             )
         lines.append(line)
     return lines, saw_start, saw_end
@@ -892,15 +913,17 @@ def liner_toolpath_mm(
     *,
     start_sawn: bool | None = None,
     end_sawn: bool | None = None,
+    flat_contour: bool = False,
 ) -> list[Point]:
     """Parallel cutter passes, with a straight close only where no saw finishes the end.
 
-    A contour end whose face is a real separating or trim cut extends by the
-    bit radius into that saw zone. ``CUT_PATH`` closes it, and the cutter may
-    leave the sheet. An end on an original board edge, or an internal end,
-    stops one radius short so the disk is tangent to the limit, and the path
-    travels straight across those centers. The sheet outline is never a closer,
-    and the close stays on the liner path.
+    Every contour end extends by the bit radius past the door, even when the
+    face is the raw board edge and the cutter leaves the sheet. ``CUT_PATH``
+    closes that end only when the face is a real separating or trim cut.
+    Otherwise the liner path travels straight across the extended centers.
+    An internal end stops one radius short and is closed the same way. The
+    sheet outline is never a closer. ``flat_contour`` reproduces the older
+    board-edge path that stopped one radius inside.
     """
 
     lines, saw_start, saw_end = _cutter_passes(
@@ -913,6 +936,7 @@ def liner_toolpath_mm(
         length_cm,
         start_sawn=start_sawn,
         end_sawn=end_sawn,
+        flat_contour=flat_contour,
     )
     path: list[Point] = []
     for index, line in enumerate(lines):
@@ -1074,6 +1098,7 @@ def _measure_toolpath(
     *,
     start_sawn: bool | None = None,
     end_sawn: bool | None = None,
+    flat_contour: bool = False,
 ) -> LinerMeasurement:
     try:
         expected = liner_toolpath_mm(
@@ -1086,6 +1111,7 @@ def _measure_toolpath(
             length_cm,
             start_sawn=start_sawn,
             end_sawn=end_sawn,
+            flat_contour=flat_contour,
         )
         centers = cutter_center_offsets_mm(_mm(width_cm), cutter_diameter_mm)
         reference, clipped, start_mm, end_mm, boundary_start, boundary_end = _prepared_reference(
@@ -1159,6 +1185,7 @@ def _measure_toolpath(
         length_cm,
         start_sawn=start_sawn,
         end_sawn=end_sawn,
+        flat_contour=flat_contour,
     )
     if not saw_start and not _span_present(path, [line[0] for line in passes]):
         return LinerMeasurement(False, LINER_SHAPE_MISMATCH, "start", side, "", "end_not_closed", side)

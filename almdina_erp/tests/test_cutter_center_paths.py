@@ -417,8 +417,8 @@ def test_full_board_door_has_no_perimeter_cut_and_the_liner_closes_itself(tmp_pa
     assert liner.closed is False
     points = [tuple(point[:2]) for point in liner.get_points("xy")]
     xs = [point[0] for point in points]
-    assert min(xs) == pytest.approx(2.5, abs=0.05)
-    assert max(xs) == pytest.approx(1217.5, abs=0.05)
+    assert min(xs) == pytest.approx(-2.5, abs=0.05)
+    assert max(xs) == pytest.approx(1222.5, abs=0.05)
     assert sorted(span for span in _vertical_spans(points) if span > 10) == pytest.approx([13, 13], abs=0.05)
 
     normalized = rebuild_autocad_dxf(client_path.read_bytes())
@@ -442,6 +442,69 @@ def test_full_board_door_has_no_perimeter_cut_and_the_liner_closes_itself(tmp_pa
     pieces = _import(str(normalized_path), order, kerf_mm=5, trim_mm=0)["sheets"][0]["pieces"]
     assert [(piece["w"], piece["h"]) for piece in pieces] == [(122, 244)]
     assert sum(1 for piece in pieces if piece.get("overlays")) == 1
+
+
+def test_split_trim_exports_saw_centers_and_reimports(tmp_path):
+    client_path = tmp_path / "trim-gaps.dxf"
+    env = os.environ.copy()
+    env["TRIM_GAPS_DXF_OUT"] = str(client_path)
+    subprocess.run(
+        ["node", str(ROOT / "tests" / "js" / "secure_dxf_topology_export.test.js")],
+        check=True,
+        env=env,
+    )
+    source = ezdxf.readfile(str(client_path))
+    cuts = [
+        entity for entity in source.modelspace()
+        if entity.dxftype() == "LINE" and entity.dxf.layer == "CUT_PATH"
+    ]
+
+    def vertical(value):
+        return [
+            entity for entity in cuts
+            if abs(entity.dxf.start.x - value) < 0.05 and abs(entity.dxf.end.x - value) < 0.05
+        ]
+
+    def horizontal(value):
+        return [
+            entity for entity in cuts
+            if abs(entity.dxf.start.y - value) < 0.05 and abs(entity.dxf.end.y - value) < 0.05
+        ]
+
+    assert len(vertical(2.5)) == 1
+    assert len(vertical(407.5)) == 1
+    assert len(vertical(812.5)) == 1
+    assert len(vertical(1217.5)) == 1
+    assert len(horizontal(2.5)) == 1
+    assert vertical(0) == []
+    assert vertical(1220) == []
+    geometry = [
+        entity for entity in source.modelspace()
+        if entity.dxftype() == "LINE" and entity.dxf.layer == "GEOMETRY"
+    ]
+    rights = sorted(
+        max(entity.dxf.start.x, entity.dxf.end.x)
+        for entity in geometry
+        if abs(entity.dxf.start.x - entity.dxf.end.x) < 0.05
+    )
+    assert rights[-1] == pytest.approx(1215, abs=0.05)
+    assert min(
+        min(entity.dxf.start.x, entity.dxf.end.x) for entity in geometry
+    ) == pytest.approx(5, abs=0.05)
+
+    normalized = rebuild_autocad_dxf(client_path.read_bytes())
+    audited = ezdxf.read(io.StringIO(normalized.decode("utf-8")))
+    assert audited.audit().has_errors is False
+    normalized_path = tmp_path / "trim-gaps-normalized.dxf"
+    normalized_path.write_bytes(normalized)
+    order = _order([
+        _piece(piece_instance_id="door-1", width_cm=40, length_cm=40, cut_width_cm=40, cut_length_cm=40),
+        _piece(piece_instance_id="door-2", width_cm=40, length_cm=40, cut_width_cm=40, cut_length_cm=40),
+        _piece(piece_instance_id="door-3", width_cm=40, length_cm=40, cut_width_cm=40, cut_length_cm=40),
+    ])
+    imported = _import(str(normalized_path), order, kerf_mm=5, trim_mm=5)
+    sizes = sorted((piece["w"], piece["h"]) for piece in imported["sheets"][0]["pieces"])
+    assert sizes == [(40, 40), (40, 40), (40, 40)]
 
 
 def test_reference_file_uses_the_same_radius_offset():

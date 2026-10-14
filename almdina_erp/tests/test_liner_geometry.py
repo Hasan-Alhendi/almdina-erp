@@ -566,8 +566,8 @@ def test_an_uncut_board_edge_closes_the_liner_and_a_real_cut_does_not():
     closed = liner_toolpath_mm(
         full, "edge_width_top", 0, 1.8, 5, start_sawn=False, end_sawn=False
     )
-    assert min(point[0] for point in closed) == pytest.approx(2.5)
-    assert max(point[0] for point in closed) == pytest.approx(1217.5)
+    assert min(point[0] for point in closed) == pytest.approx(-2.5)
+    assert max(point[0] for point in closed) == pytest.approx(1222.5)
     assert _straight_span(closed, 0) == pytest.approx(13)
     assert compare_liner_path(
         closed, full, "edge_width_top", 0, 1.8, 5, start_sawn=False, end_sawn=False
@@ -587,7 +587,7 @@ def test_an_uncut_board_edge_closes_the_liner_and_a_real_cut_does_not():
     mixed = liner_toolpath_mm(
         inside, "edge_width_top", 0, 1.8, 5, start_sawn=False, end_sawn=True
     )
-    assert min(point[0] for point in mixed) == pytest.approx(2.5)
+    assert min(point[0] for point in mixed) == pytest.approx(-2.5)
     assert max(point[0] for point in mixed) == pytest.approx(402.5)
     assert _straight_span(mixed, 0) == pytest.approx(13)
     assert compare_liner_path(
@@ -632,3 +632,22 @@ def test_an_uncut_board_edge_closes_the_liner_and_a_real_cut_does_not():
     )
     assert break_start is False
     assert break_end is True
+
+
+def test_previously_exported_board_edge_liner_still_matches():
+    full = LinerPiece("Regular", 122, 244)
+    legacy = liner_toolpath_mm(
+        full,
+        "edge_width_top",
+        0,
+        1.8,
+        5,
+        start_sawn=False,
+        end_sawn=False,
+        flat_contour=True,
+    )
+    assert min(point[0] for point in legacy) == pytest.approx(2.5)
+    assert max(point[0] for point in legacy) == pytest.approx(1217.5)
+    assert compare_liner_path(
+        legacy, full, "edge_width_top", 0, 1.8, 5, start_sawn=False, end_sawn=False
+    ).ok

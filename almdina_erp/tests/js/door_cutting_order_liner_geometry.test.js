@@ -296,15 +296,15 @@ const fullBoard = geometry.syntheticOverlay(placedLiner({
 }));
 assert.equal(fullBoard.error, undefined);
 const fullXs = fullBoard.geometry.path.map(point => point[0]);
-assert.equal(Math.round(Math.min(...fullXs) * 10) / 10, 2.5);
-assert.equal(Math.round(Math.max(...fullXs) * 10) / 10, 1217.5);
+assert.equal(Math.round(Math.min(...fullXs) * 10) / 10, -2.5);
+assert.equal(Math.round(Math.max(...fullXs) * 10) / 10, 1222.5);
 assert.ok(straightSpan(fullBoard.geometry.path, 0) > 10);
 const flushLeft = geometry.syntheticOverlay(placedLiner({
     width_cm: 40,
     board: { minX: 0, minY: 0, maxX: 1220, maxY: 2440 },
 }));
 const flushXs = flushLeft.geometry.path.map(point => point[0]);
-assert.equal(Math.round(Math.min(...flushXs) * 10) / 10, 2.5);
+assert.equal(Math.round(Math.min(...flushXs) * 10) / 10, -2.5);
 assert.equal(Math.round(Math.max(...flushXs) * 10) / 10, 402.5);
 const insetDoor = geometry.syntheticOverlay(placedLiner({
     x: 5,
