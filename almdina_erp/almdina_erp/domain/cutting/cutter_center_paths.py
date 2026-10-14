@@ -28,8 +28,15 @@ def cutter_center_segments(
     radius_mm: float,
     *,
     tolerance: float = COLLINEAR_TOLERANCE_MM,
+    board: Sequence[float] | None = None,
 ) -> list[Segment]:
-    """Return unique saw-center segments for every outer ring and hole."""
+    """Return unique saw-center segments for every outer ring and hole.
+
+    ``board`` is ``(min_x, min_y, max_x, max_y)`` in the same coordinates as
+    the rings. A finished edge lying on that physical boundary is not a cut.
+    Trim, a shared kerf, and every edge that leaves the board are still
+    emitted. Omitting ``board`` keeps every edge.
+    """
 
     radius = max(0.0, float(radius_mm or 0.0))
     prepared = [(_open_ring(outer), [_open_ring(hole) for hole in holes]) for outer, holes in shapes]
@@ -47,11 +54,34 @@ def cutter_center_segments(
                 offset = _offset_closed(ring, radius, sign)
             if len(offset) < 3:
                 continue
-            for index, start in enumerate(offset):
+            count = len(ring)
+            for index, finished_start in enumerate(ring):
+                finished_end = ring[(index + 1) % count]
+                if board is not None and _edge_on_board(
+                    finished_start, finished_end, board, tolerance
+                ):
+                    continue
+                start = offset[index]
                 end = offset[(index + 1) % len(offset)]
                 if math.dist(start, end) > tolerance:
                     segments.append((start, end))
     return _merge_collinear(segments, tolerance)
+
+
+def _edge_on_board(
+    start: Point,
+    end: Point,
+    board: Sequence[float],
+    tolerance: float,
+) -> bool:
+    """True when both endpoints lie on the same side of the physical board."""
+
+    min_x, min_y, max_x, max_y = (float(value) for value in board)
+    sides = ((0, min_x), (0, max_x), (1, min_y), (1, max_y))
+    return any(
+        abs(start[axis] - value) <= tolerance and abs(end[axis] - value) <= tolerance
+        for axis, value in sides
+    )
 
 
 def _open_ring(points: Sequence[Point]) -> list[Point]:

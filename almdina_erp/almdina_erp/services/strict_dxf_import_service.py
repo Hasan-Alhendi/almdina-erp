@@ -12,6 +12,7 @@ from almdina_erp.almdina_erp.domain.cutting.corner_contour_rotation import (
 )
 from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
     LINER_SHAPE_MISMATCH as LINER_SHAPE_CODE,
+    LinerGeometryError,
     LinerMeasurement,
     LinerPiece,
     canonical_path,
@@ -19,6 +20,7 @@ from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
     contour_notch_cm,
     liner_parameters_active,
     localize_path,
+    sawn_liner_ends,
 )
 from almdina_erp.almdina_erp.domain.cutting.dxf_applied_trim import (
     DxfAppliedTrimError,
@@ -799,12 +801,39 @@ def _bind_corner_edge_rotation(
     return None
 
 
+def _shifted_board_mm(sheet: dict[str, Any] | None) -> tuple[float, float, float, float] | None:
+    """Physical board in the post-adaptive usable frame.
+
+    Legacy ingestion for a strict import does not subtract trim. Adaptive trim
+    then shifts piece coordinates by the applied inset, so the board origin in
+    that frame sits one applied inset outside usable ``(0, 0)``. The inset is
+    the symmetric difference between the physical sheet and its usable size.
+    """
+
+    if not sheet:
+        return None
+    full_w = float(sheet.get("full_width_cm") or 0.0) * 10.0
+    full_h = float(sheet.get("full_length_cm") or 0.0) * 10.0
+    if full_w <= 0.0 or full_h <= 0.0:
+        return None
+    usable_w = sheet.get("usable_width_cm")
+    usable_h = sheet.get("usable_length_cm")
+    if usable_w is None:
+        usable_w = sheet.get("w")
+    if usable_h is None:
+        usable_h = sheet.get("h")
+    applied_w = max(0.0, (full_w - float(usable_w) * 10.0) / 2.0) if usable_w is not None else 0.0
+    applied_l = max(0.0, (full_h - float(usable_h) * 10.0) / 2.0) if usable_h is not None else 0.0
+    return (-applied_w, -applied_l, full_w - applied_w, full_h - applied_l)
+
+
 def _corner_liner_issue(
     piece: dict[str, Any],
     spec: OrderPieceCutSpec,
     order: Any | None,
     *,
     cutter_diameter_mm: float | None = None,
+    sheet: dict[str, Any] | None = None,
 ):
     if not is_corner_cut(spec.piece_type) or order is None:
         return None
@@ -863,16 +892,32 @@ def _corner_liner_issue(
         width_mm=float(spec.cut_width_cm) * 10.0,
         height_mm=float(spec.cut_length_cm) * 10.0,
     )
+    liner_piece = LinerPiece(
+        spec.piece_type,
+        float(spec.cut_width_cm),
+        float(spec.cut_length_cm),
+        str(spec.clipped_corner_position or ""),
+        notch_width_cm,
+        notch_length_cm,
+    )
+    start_cm = float(getattr(row, "liner_start_cm", 0) or 0) if row else None
+    length_cm = float(getattr(row, "liner_length_cm", 0) or 0) if row else None
+    try:
+        start_sawn, end_sawn = sawn_liner_ends(
+            liner_piece,
+            side,
+            origin_mm=(float(piece.get("x") or 0.0) * 10.0, float(piece.get("y") or 0.0) * 10.0),
+            mirrored=mirrored,
+            quarter_turns=turns,
+            board=_shifted_board_mm(sheet),
+            start_cm=start_cm,
+            length_cm=length_cm,
+        )
+    except LinerGeometryError:
+        start_sawn, end_sawn = None, None
     measurement = compare_liner_path(
         canonical,
-        LinerPiece(
-            spec.piece_type,
-            float(spec.cut_width_cm),
-            float(spec.cut_length_cm),
-            str(spec.clipped_corner_position or ""),
-            notch_width_cm,
-            notch_length_cm,
-        ),
+        liner_piece,
         side,
         offset_cm,
         width_cm,
@@ -881,8 +926,10 @@ def _corner_liner_issue(
             if cutter_diameter_mm is not None and float(cutter_diameter_mm) > 0
             else None
         ),
-        float(getattr(row, "liner_start_cm", 0) or 0) if row else None,
-        float(getattr(row, "liner_length_cm", 0) or 0) if row else None,
+        start_cm,
+        length_cm,
+        start_sawn=start_sawn,
+        end_sawn=end_sawn,
     )
     return liner_geometry_issue(
         measurement,
@@ -941,6 +988,7 @@ def _apply_strict_dimension_contract(
                         candidate["spec"],
                         order,
                         cutter_diameter_mm=cutter_diameter_mm,
+                        sheet=sheet,
                     )
                     if liner_issue is not None:
                         issues.append(liner_issue)
@@ -1049,6 +1097,7 @@ def _apply_strict_dimension_contract(
                     candidate["spec"],
                     order,
                     cutter_diameter_mm=cutter_diameter_mm,
+                    sheet=sheet,
                 )
                 if liner_issue is not None:
                     issues.append(liner_issue)

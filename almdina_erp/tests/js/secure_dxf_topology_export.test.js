@@ -83,6 +83,13 @@ const fakeFrappe = {
             ) {
                 fs.writeFileSync(process.env.SAW_CENTER_DXF_OUT, clientDxf);
             }
+            if (
+                process.env.FULL_BOARD_DXF_OUT
+                && opts.args
+                && opts.args.order_name === "26-FULL-BOARD"
+            ) {
+                fs.writeFileSync(process.env.FULL_BOARD_DXF_OUT, clientDxf);
+            }
             return Promise.resolve({
                 message: {
                     filename: "cutting_plan_DCO-TOPOLOGY_AutoCAD2011_2026.dxf",
@@ -403,7 +410,8 @@ async function run() {
     assert.match(downloadedDxf, /2\r\nRear Groove\r\n/);
     assert.equal((downloadedDxf.match(/8\r\nLiner\r\n/g) || []).length, 4);
     assert.equal((downloadedDxf.match(/8\r\nRear Groove\r\n/g) || []).length, 1);
-    assert.equal(cutPathLineCount(downloadedDxf), 4);
+    // The door is flush to the board on the left and the top, so those edges are not cuts.
+    assert.equal(cutPathLineCount(downloadedDxf), 2);
     assert.match(downloadedDxf, /2\r\nTEXT\r\n/);
     assert.match(downloadedDxf, /2\r\nGEOMETRY\r\n/);
     assert.match(downloadedDxf, /0\r\nTEXT\r\n/);
@@ -763,23 +771,24 @@ async function run() {
             length_cm: 50,
         }, fields);
     }
-    function linerEndPlan(pieces) {
+    function linerEndPlan(pieces, trimCm) {
+        const trim = trimCm || 0;
         return {
             full_board_width_cm: 122,
             full_board_length_cm: 244,
-            usable_board_width_cm: 122,
-            usable_board_length_cm: 244,
-            applied_trim_width_cm: 0,
-            applied_trim_length_cm: 0,
-            trim_cm: 0,
+            usable_board_width_cm: 122 - (trim * 2),
+            usable_board_length_cm: 244 - (trim * 2),
+            applied_trim_width_cm: trim,
+            applied_trim_length_cm: trim,
+            trim_cm: trim,
             kerf_mm: 5,
             kerf_cm: 0.5,
             sheets: [{
                 sheet_no: 1,
                 full_width_cm: 122,
                 full_length_cm: 244,
-                applied_trim_width_cm: 0,
-                applied_trim_length_cm: 0,
+                applied_trim_width_cm: trim,
+                applied_trim_length_cm: trim,
                 pieces,
             }],
         };
@@ -788,8 +797,81 @@ async function run() {
     downloadedDxf = "";
     await fakeFrappe.almdina.export_order_dxf("26-LINER-ENDS", "system");
     const boardEdgeXs = polylinePoints(downloadedDxf, "Liner").map(point => point[0]);
-    assert.equal(Math.round(Math.min(...boardEdgeXs) * 10) / 10, -2.5);
-    assert.equal(Math.round(Math.max(...boardEdgeXs) * 10) / 10, 1222.5);
+    assert.equal(Math.round(Math.min(...boardEdgeXs) * 10) / 10, 2.5);
+    assert.equal(Math.round(Math.max(...boardEdgeXs) * 10) / 10, 1217.5);
+    assert.equal(constantAxisRuns(polylinePoints(downloadedDxf, "Liner"), 0, 10), 2);
+    const shortDoorCuts = layerLines(downloadedDxf, "CUT_PATH");
+    assert.equal(shortDoorCuts.length, 1);
+    assert.ok(shortDoorCuts.every(edge => Math.abs(edge.y1 - 1937.5) < 0.02 && Math.abs(edge.y2 - 1937.5) < 0.02));
+
+    nextPlan = linerEndPlan([linerDoor({
+        w: 122,
+        h: 244,
+        width_cm: 122,
+        length_cm: 244,
+    })]);
+    downloadedDxf = "";
+    await fakeFrappe.almdina.export_order_dxf("26-FULL-BOARD", "system");
+    assert.equal(layerLines(downloadedDxf, "CUT_PATH").length, 0);
+    assert.ok(layerLines(downloadedDxf, "GEOMETRY").some(edge => (
+        Math.abs(edge.x1) < 0.02 && Math.abs(edge.x2 - 1220) < 0.02
+        && Math.abs(edge.y1) < 0.02 && Math.abs(edge.y2) < 0.02
+    )));
+    assert.ok(layerLines(downloadedDxf, "SHEET_OUTLINE").some(edge => (
+        Math.abs(edge.x1) < 0.02 && Math.abs(edge.x2 - 1220) < 0.02
+    )));
+    const fullLiner = polylinePoints(downloadedDxf, "Liner");
+    const fullXs = fullLiner.map(point => point[0]);
+    assert.equal(Math.round(Math.min(...fullXs) * 10) / 10, 2.5);
+    assert.equal(Math.round(Math.max(...fullXs) * 10) / 10, 1217.5);
+    assert.equal(constantAxisRuns(fullLiner, 0, 10), 2);
+    assert.equal((downloadedDxf.match(/8\r\nLiner\r\n/g) || []).length, 1);
+    assert.equal((downloadedDxf.match(/0\r\nLINE\r\n8\r\nLiner\r\n/g) || []).length, 0);
+
+    nextPlan = linerEndPlan([linerDoor({ x: 5, w: 40, width_cm: 40 })]);
+    downloadedDxf = "";
+    await fakeFrappe.almdina.export_order_dxf("26-LINER-ENDS", "system");
+    const insetXs = polylinePoints(downloadedDxf, "Liner").map(point => point[0]);
+    assert.equal(Math.round(Math.min(...insetXs) * 10) / 10, 47.5);
+    assert.equal(Math.round(Math.max(...insetXs) * 10) / 10, 452.5);
+    assert.ok(layerLines(downloadedDxf, "CUT_PATH").some(edge => Math.abs(edge.x1 - 47.5) < 0.02 && Math.abs(edge.x2 - 47.5) < 0.02));
+
+    nextPlan = linerEndPlan([linerDoor({ w: 40, width_cm: 40 })]);
+    downloadedDxf = "";
+    await fakeFrappe.almdina.export_order_dxf("26-LINER-ENDS", "system");
+    const flushXs = polylinePoints(downloadedDxf, "Liner").map(point => point[0]);
+    assert.equal(Math.round(Math.min(...flushXs) * 10) / 10, 2.5);
+    assert.equal(Math.round(Math.max(...flushXs) * 10) / 10, 402.5);
+    assert.equal(layerLines(downloadedDxf, "CUT_PATH").some(edge => (
+        Math.abs(edge.x1 + 2.5) < 0.02 && Math.abs(edge.x2 + 2.5) < 0.02
+    )), false);
+
+    nextPlan = linerEndPlan([
+        linerDoor({ id: 1, label: "1.1", w: 40, width_cm: 40 }),
+        linerDoor({ id: 2, label: "2.1", x: 40.5, w: 40, width_cm: 40, extra_liner: 0, liner_reference_side: "" }),
+    ]);
+    downloadedDxf = "";
+    await fakeFrappe.almdina.export_order_dxf("26-LINER-ENDS", "system");
+    const kerfCuts = layerLines(downloadedDxf, "CUT_PATH").filter(edge => (
+        Math.abs(edge.x1 - 402.5) < 0.02 && Math.abs(edge.x2 - 402.5) < 0.02
+    ));
+    assert.equal(kerfCuts.length, 1);
+    const kerfXs = polylinePoints(downloadedDxf, "Liner").map(point => point[0]);
+    assert.equal(Math.round(Math.min(...kerfXs) * 10) / 10, 2.5);
+    assert.equal(Math.round(Math.max(...kerfXs) * 10) / 10, 402.5);
+
+    nextPlan = linerEndPlan([linerDoor({
+        w: 120,
+        h: 242,
+        width_cm: 120,
+        length_cm: 242,
+    })], 1);
+    downloadedDxf = "";
+    await fakeFrappe.almdina.export_order_dxf("26-LINER-ENDS", "system");
+    const trimXs = polylinePoints(downloadedDxf, "Liner").map(point => point[0]);
+    assert.equal(Math.round(Math.min(...trimXs) * 10) / 10, 7.5);
+    assert.equal(Math.round(Math.max(...trimXs) * 10) / 10, 1212.5);
+    assert.ok(layerLines(downloadedDxf, "CUT_PATH").some(edge => Math.abs(edge.x1 - 7.5) < 0.02 && Math.abs(edge.x2 - 7.5) < 0.02));
 
     nextPlan = linerEndPlan([
         linerDoor({ id: 1, label: "1.1", x: 20, w: 40, width_cm: 40 }),
@@ -874,6 +956,24 @@ function layerLines(dxf, layerName) {
         });
     }
     return edges;
+}
+
+function constantAxisRuns(points, axis, minimum) {
+    let count = 0;
+    let run = [points[0]];
+    function commit(span) {
+        if (span.length >= 2 && Math.abs(span[span.length - 1][1 - axis] - span[0][1 - axis]) > minimum) count += 1;
+    }
+    for (let index = 1; index < points.length; index += 1) {
+        if (Math.abs(points[index][axis] - points[index - 1][axis]) <= 0.05) {
+            run.push(points[index]);
+            continue;
+        }
+        commit(run);
+        run = [points[index]];
+    }
+    commit(run);
+    return count;
 }
 
 function polylinePoints(dxf, layerName) {

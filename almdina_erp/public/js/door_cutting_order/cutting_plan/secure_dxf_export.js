@@ -603,7 +603,21 @@
         return [start[0] + direction[0] * step, start[1] + direction[1] * step];
     }
 
-    function cutterCenterSegments(shapes, radius) {
+    function finishedEdgeOnBoard(start, end, board) {
+        if (!board) return false;
+        const sides = [
+            [0, num(board.minX)],
+            [0, num(board.maxX)],
+            [1, num(board.minY)],
+            [1, num(board.maxY)],
+        ];
+        return sides.some(([axis, value]) => (
+            Math.abs(start[axis] - value) <= COLLINEAR_TOLERANCE_MM
+            && Math.abs(end[axis] - value) <= COLLINEAR_TOLERANCE_MM
+        ));
+    }
+
+    function cutterCenterSegments(shapes, radius, board) {
         const safeRadius = Math.max(0, num(radius));
         const prepared = shapes.map(shape => ({
             outer: openRing(shape.outer),
@@ -616,10 +630,13 @@
                     ? ring
                     : offsetClosed(ring, safeRadius, wasteSign(ring, prepared, safeRadius));
                 if (offset.length < 3) return;
-                offset.forEach((start, index) => {
-                    const end = offset[(index + 1) % offset.length];
-                    if (Math.hypot(end[0] - start[0], end[1] - start[1]) > COLLINEAR_TOLERANCE_MM) {
-                        segments.push([start, end]);
+                ring.forEach((start, index) => {
+                    const finishedEnd = ring[(index + 1) % ring.length];
+                    if (finishedEdgeOnBoard(start, finishedEnd, board)) return;
+                    const offsetStart = offset[index];
+                    const offsetEnd = offset[(index + 1) % offset.length];
+                    if (Math.hypot(offsetEnd[0] - offsetStart[0], offsetEnd[1] - offsetStart[1]) > COLLINEAR_TOLERANCE_MM) {
+                        segments.push([offsetStart, offsetEnd]);
                     }
                 });
             });
@@ -850,7 +867,13 @@
                     piece
                 );
             });
-            cutterCenterSegments(shapes, num(cutterMm) / 2).forEach(segment => {
+            const physicalBoard = {
+                minX: offsetX,
+                minY: offsetY,
+                maxX: offsetX + fullWidth,
+                maxY: offsetY + fullHeight,
+            };
+            cutterCenterSegments(shapes, num(cutterMm) / 2, physicalBoard).forEach(segment => {
                 entities += line(SAW_CENTER_LAYER, segment[0][0], segment[0][1], segment[1][0], segment[1][1]);
             });
         });

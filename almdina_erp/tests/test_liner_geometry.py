@@ -25,6 +25,7 @@ from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
     cutter_center_offsets_mm,
     liner_centerline_mm,
     liner_toolpath_mm,
+    sawn_liner_ends,
     liner_strip_polygon_mm,
     piece_polygon_mm,
     transform_point,
@@ -554,3 +555,80 @@ def test_cut_path_closes_a_full_edge_and_an_internal_end_closes_itself():
         internal = liner_toolpath_mm(shaped, "edge_width_bottom", 0, 1.8, 5, 4, 12)
         assert compare_liner_path(internal, shaped, "edge_width_bottom", 0, 1.8, 5, 4, 12).ok
         assert _straight_span(internal, 0) > 10
+
+
+def test_an_uncut_board_edge_closes_the_liner_and_a_real_cut_does_not():
+    board = (0.0, 0.0, 1220.0, 2440.0)
+    full = LinerPiece("Regular", 122, 244)
+    assert sawn_liner_ends(
+        full, "edge_width_top", origin_mm=(0.0, 0.0), mirrored=False, quarter_turns=0, board=board
+    ) == (False, False)
+    closed = liner_toolpath_mm(
+        full, "edge_width_top", 0, 1.8, 5, start_sawn=False, end_sawn=False
+    )
+    assert min(point[0] for point in closed) == pytest.approx(2.5)
+    assert max(point[0] for point in closed) == pytest.approx(1217.5)
+    assert _straight_span(closed, 0) == pytest.approx(13)
+    assert compare_liner_path(
+        closed, full, "edge_width_top", 0, 1.8, 5, start_sawn=False, end_sawn=False
+    ).ok
+    extended = liner_toolpath_mm(full, "edge_width_top", 0, 1.8, 5)
+    assert compare_liner_path(
+        extended, full, "edge_width_top", 0, 1.8, 5, start_sawn=False, end_sawn=False
+    ).reason_code == "end_not_closed"
+
+    inside = LinerPiece("Regular", 40, 50)
+    assert sawn_liner_ends(
+        inside, "edge_width_top", origin_mm=(50.0, 50.0), mirrored=False, quarter_turns=0, board=board
+    ) == (True, True)
+    assert sawn_liner_ends(
+        inside, "edge_width_top", origin_mm=(0.0, 0.0), mirrored=False, quarter_turns=0, board=board
+    ) == (False, True)
+    mixed = liner_toolpath_mm(
+        inside, "edge_width_top", 0, 1.8, 5, start_sawn=False, end_sawn=True
+    )
+    assert min(point[0] for point in mixed) == pytest.approx(2.5)
+    assert max(point[0] for point in mixed) == pytest.approx(402.5)
+    assert _straight_span(mixed, 0) == pytest.approx(13)
+    assert compare_liner_path(
+        mixed, inside, "edge_width_top", 0, 1.8, 5, start_sawn=False, end_sawn=True
+    ).ok
+
+    partial = liner_toolpath_mm(full, "edge_width_top", 0, 1.8, 5, 10, 20, start_sawn=False, end_sawn=False)
+    assert min(point[0] for point in partial) == pytest.approx(102.5)
+    assert max(point[0] for point in partial) == pytest.approx(297.5)
+    assert compare_liner_path(
+        partial, full, "edge_width_top", 0, 1.8, 5, 10, 20, start_sawn=False, end_sawn=False
+    ).ok
+
+    trim_board = (-10.0, -10.0, 1210.0, 2430.0)
+    assert sawn_liner_ends(
+        full, "edge_width_top", origin_mm=(0.0, 0.0), mirrored=False, quarter_turns=0, board=trim_board
+    ) == (True, True)
+    assert sawn_liner_ends(
+        inside, "edge_width_top", origin_mm=(0.0, 0.0), mirrored=False, quarter_turns=0, board=board
+    )[1] is True
+    assert sawn_liner_ends(
+        inside, "edge_width_top", origin_mm=(405.0, 0.0), mirrored=False, quarter_turns=0, board=board
+    ) == (True, True)
+
+    clipped_start, clipped_end = sawn_liner_ends(
+        _clipped("Top Right"),
+        "edge_width_top",
+        origin_mm=(0.0, 0.0),
+        mirrored=False,
+        quarter_turns=0,
+        board=board,
+    )
+    assert clipped_start is False
+    assert clipped_end is True
+    break_start, break_end = sawn_liner_ends(
+        _l_piece("Top Right"),
+        "edge_break",
+        origin_mm=(0.0, 0.0),
+        mirrored=False,
+        quarter_turns=0,
+        board=board,
+    )
+    assert break_start is False
+    assert break_end is True

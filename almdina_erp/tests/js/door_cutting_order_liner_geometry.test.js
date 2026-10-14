@@ -289,6 +289,31 @@ assert.equal(boardEdge.error, undefined);
 const boardXs = boardEdge.geometry.path.map(point => point[0]);
 assert.equal(Math.round(Math.min(...boardXs) * 10) / 10, -2.5);
 assert.equal(Math.round(Math.max(...boardXs) * 10) / 10, 1222.5);
+const fullBoard = geometry.syntheticOverlay(placedLiner({
+    width_cm: 122,
+    length_cm: 244,
+    board: { minX: 0, minY: 0, maxX: 1220, maxY: 2440 },
+}));
+assert.equal(fullBoard.error, undefined);
+const fullXs = fullBoard.geometry.path.map(point => point[0]);
+assert.equal(Math.round(Math.min(...fullXs) * 10) / 10, 2.5);
+assert.equal(Math.round(Math.max(...fullXs) * 10) / 10, 1217.5);
+assert.ok(straightSpan(fullBoard.geometry.path, 0) > 10);
+const flushLeft = geometry.syntheticOverlay(placedLiner({
+    width_cm: 40,
+    board: { minX: 0, minY: 0, maxX: 1220, maxY: 2440 },
+}));
+const flushXs = flushLeft.geometry.path.map(point => point[0]);
+assert.equal(Math.round(Math.min(...flushXs) * 10) / 10, 2.5);
+assert.equal(Math.round(Math.max(...flushXs) * 10) / 10, 402.5);
+const insetDoor = geometry.syntheticOverlay(placedLiner({
+    x: 5,
+    width_cm: 40,
+    board: { minX: 0, minY: 0, maxX: 1220, maxY: 2440 },
+}));
+const insetXs = insetDoor.geometry.path.map(point => point[0]);
+assert.equal(Math.round(Math.min(...insetXs) * 10) / 10, 47.5);
+assert.equal(Math.round(Math.max(...insetXs) * 10) / 10, 452.5);
 const openBoard = { minX: 0, minY: 0, maxX: 1220, maxY: 2440 };
 assert.equal(geometry.extensionConflict(boardEdge.geometry.path, 5, openBoard, []), "");
 const betweenDoors = geometry.syntheticOverlay(placedLiner({ x: 20, width_cm: 40 }));

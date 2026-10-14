@@ -15,6 +15,7 @@
     const SIDE_BREAK_ONLY = "edge_break_only";
     const OUTER_SIDES = [SIDE_TOP, SIDE_BOTTOM, SIDE_LEFT, SIDE_RIGHT];
     const TOLERANCE_MM = 0.25;
+    const BOARD_EDGE_TOLERANCE_MM = 0.05;
     const SIDE_LABELS = {
         [SIDE_TOP]: "أعلى",
         [SIDE_BOTTOM]: "أسفل",
@@ -536,7 +537,86 @@
         return points;
     }
 
-    function toolpathMm(piece, side, offsetCm, widthCm, cutterDiameterMm, startCm, lengthCm) {
+    function resolveSawn(explicit, boundary) {
+        if (explicit == null) return boundary;
+        return Boolean(explicit) && boundary;
+    }
+
+    function boardEdge(start, end, board) {
+        if (!board) return false;
+        const sides = [
+            [0, num(board.minX)],
+            [0, num(board.maxX)],
+            [1, num(board.minY)],
+            [1, num(board.maxY)],
+        ];
+        return sides.some(([axis, value]) => (
+            Math.abs(start[axis] - value) <= BOARD_EDGE_TOLERANCE_MM
+            && Math.abs(end[axis] - value) <= BOARD_EDGE_TOLERANCE_MM
+        ));
+    }
+
+    function transformDirection(direction, mirrored, quarterTurns, width, height) {
+        const origin = transformPoint([0, 0], mirrored, quarterTurns, width, height);
+        const moved = transformPoint(direction, mirrored, quarterTurns, width, height);
+        return [moved[0] - origin[0], moved[1] - origin[1]];
+    }
+
+    function faceEdge(polygon, point, direction) {
+        const length = Math.hypot(direction[0], direction[1]) || 1;
+        const unit = [direction[0] / length, direction[1] / length];
+        let best = null;
+        let bestScore = -1;
+        polygon.forEach((start, index) => {
+            const end = polygon[(index + 1) % polygon.length];
+            if (pointSegDist(point, start, end) > TOLERANCE_MM) return;
+            const normal = leftNormal(start, end);
+            const score = Math.abs((normal[0] * unit[0]) + (normal[1] * unit[1]));
+            if (score > bestScore) {
+                best = [start, end];
+                bestScore = score;
+            }
+        });
+        return best;
+    }
+
+    function sawnBoundaryEnds(piece, linerPiece, board) {
+        if (!board) return null;
+        const prepared = preparedReference(
+            linerPiece,
+            piece.liner_reference_side,
+            piece.liner_start_cm,
+            piece.liner_length_cm
+        );
+        const polygon = placedPolygonMm(piece);
+        const width = linerPiece.widthCm * 10;
+        const height = linerPiece.lengthCm * 10;
+        const mirrored = Boolean(piece.corner_mirrored);
+        const turns = piece.rotated ? 1 : 0;
+        function endSawn(atStart, boundary) {
+            if (!boundary) return false;
+            const clipped = prepared.clipped;
+            const origin = atStart ? clipped[0] : clipped[clipped.length - 1];
+            const toward = atStart ? clipped[1] : clipped[clipped.length - 2];
+            const direction = transformDirection(
+                [origin[0] - toward[0], origin[1] - toward[1]],
+                mirrored,
+                turns,
+                width,
+                height
+            );
+            const placed = placeLocalPath(piece, linerPiece, [origin])[0];
+            const edge = faceEdge(polygon, placed, direction);
+            if (!edge) return true;
+            return !boardEdge(edge[0], edge[1], board);
+        }
+        return {
+            startSawn: endSawn(true, prepared.boundaryStart),
+            endSawn: endSawn(false, prepared.boundaryEnd),
+        };
+    }
+
+    function toolpathMm(piece, side, offsetCm, widthCm, cutterDiameterMm, startCm, lengthCm, ends) {
         const error = validationCode(piece, side, offsetCm, widthCm);
         if (error) fail(error);
         const centers = cutterCenterOffsetsMm(num(widthCm) * 10, num(cutterDiameterMm));
@@ -544,10 +624,12 @@
         const prepared = preparedReference(piece, side, startCm, lengthCm);
         const sign = inwardSign(prepared.reference, polygon);
         const radius = num(cutterDiameterMm) / 2;
-        const partial = !prepared.boundaryStart || !prepared.boundaryEnd;
-        if (partial && centers.length < 2) fail("liner_flat_end_unmachinable");
-        const trimStart = prepared.boundaryStart ? 0 : radius;
-        const trimEnd = prepared.boundaryEnd ? 0 : radius;
+        const startSawn = resolveSawn(ends && ends.startSawn, prepared.boundaryStart);
+        const endSawn = resolveSawn(ends && ends.endSawn, prepared.boundaryEnd);
+        const needsFlat = !startSawn || !endSawn;
+        if (needsFlat && centers.length < 2) fail("liner_flat_end_unmachinable");
+        const trimStart = startSawn ? 0 : radius;
+        const trimEnd = endSawn ? 0 : radius;
         if (polylineLength(prepared.clipped) + TOLERANCE_MM < trimStart + trimEnd) {
             fail("liner_flat_end_unmachinable");
         }
@@ -556,10 +638,10 @@
             if (trimStart) line = subpolyline(line, trimStart, polylineLength(line));
             if (trimEnd) line = subpolyline(line, 0, polylineLength(line) - trimEnd);
             if (line.length < 2) fail("liner_flat_end_unmachinable");
-            if (prepared.boundaryStart || prepared.boundaryEnd) {
+            if (startSawn || endSawn) {
                 line = extendCenterline(line, radius, polygon, {
-                    start: prepared.boundaryStart,
-                    end: prepared.boundaryEnd,
+                    start: startSawn,
+                    end: endSawn,
                 });
             }
             return line;
@@ -570,8 +652,8 @@
             if (path.length && dist(path[path.length - 1], sequence[0]) <= 1e-6) sequence.shift();
             sequence.forEach(point => path.push(point));
         });
-        if (!prepared.boundaryStart) path = prependClosure(path, lines.map(line => line[0]));
-        if (!prepared.boundaryEnd) path = appendClosure(path, lines.map(line => line[line.length - 1]), lines[lines.length - 1]);
+        if (!startSawn) path = prependClosure(path, lines.map(line => line[0]));
+        if (!endSawn) path = appendClosure(path, lines.map(line => line[line.length - 1]), lines[lines.length - 1]);
         return path;
     }
 
@@ -783,6 +865,7 @@
         }
         let local;
         try {
+            const ends = piece.board ? sawnBoundaryEnds(piece, linerPiece, piece.board) : null;
             local = toolpathMm(
                 linerPiece,
                 piece.liner_reference_side,
@@ -790,7 +873,8 @@
                 piece.liner_width_cm,
                 diameter,
                 piece.liner_start_cm,
-                piece.liner_length_cm
+                piece.liner_length_cm,
+                ends
             );
         } catch (error) {
             return {

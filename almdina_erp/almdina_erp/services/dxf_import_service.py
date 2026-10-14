@@ -116,11 +116,13 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_topology import (
     validate_material_layout,
 )
 from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
+    LinerGeometryError,
     LinerPiece,
     canonical_path,
     compare_liner_path,
     liner_parameters_active,
     localize_path,
+    sawn_liner_ends,
 )
 from almdina_erp.almdina_erp.domain.cutting.extra_overlays import (
     ExtraOverlayCandidate,
@@ -2031,22 +2033,45 @@ def _regular_liner_issue(
     local = localize_path(tuple((point[0] * 10.0, point[1] * 10.0) for point in path_cm), outline)
     width_mm = _num(piece.get("original_w")) * 10.0
     height_mm = _num(piece.get("original_h")) * 10.0
+    quarter_turns = 1 if piece.get("rotated") else 0
     canonical = canonical_path(
         local,
         mirrored=False,
-        quarter_turns=1 if piece.get("rotated") else 0,
+        quarter_turns=quarter_turns,
         width_mm=width_mm,
         height_mm=height_mm,
     )
+    liner_piece = LinerPiece(piece_type, _num(piece.get("original_w")), _num(piece.get("original_h")))
+    trim = max(0.0, float(trim_mm or 0.0))
+    try:
+        start_sawn, end_sawn = sawn_liner_ends(
+            liner_piece,
+            side,
+            origin_mm=(_num(piece.get("x")) * 10.0, _num(piece.get("y")) * 10.0),
+            mirrored=False,
+            quarter_turns=quarter_turns,
+            board=(
+                -trim,
+                -trim,
+                _num(sheet.get("full_width_mm")) - trim,
+                _num(sheet.get("full_height_mm")) - trim,
+            ),
+            start_cm=piece.get("_liner_start_cm"),
+            length_cm=piece.get("_liner_length_cm"),
+        )
+    except LinerGeometryError:
+        start_sawn, end_sawn = None, None
     measurement = compare_liner_path(
         canonical,
-        LinerPiece(piece_type, _num(piece.get("original_w")), _num(piece.get("original_h"))),
+        liner_piece,
         side,
         offset_cm,
         width_cm,
         cutter_diameter_mm,
         piece.get("_liner_start_cm"),
         piece.get("_liner_length_cm"),
+        start_sawn=start_sawn,
+        end_sawn=end_sawn,
     )
     return _liner_issue(
         measurement,

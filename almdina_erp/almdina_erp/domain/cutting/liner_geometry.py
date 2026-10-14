@@ -501,6 +501,9 @@ def compare_liner_path(
     cutter_diameter_mm: float | None = None,
     start_cm: float | None = None,
     length_cm: float | None = None,
+    *,
+    start_sawn: bool | None = None,
+    end_sawn: bool | None = None,
 ) -> LinerMeasurement:
     """Compare a canonical-frame path with the ordered liner band or toolpath.
 
@@ -523,6 +526,8 @@ def compare_liner_path(
             float(cutter_diameter_mm or 0),
             start_cm,
             length_cm,
+            start_sawn=start_sawn,
+            end_sawn=end_sawn,
         )
         if tool.ok:
             return tool
@@ -743,6 +748,18 @@ def liner_centerline_mm(
     return _offset_polyline(clipped, distance, sign)
 
 
+def _resolve_sawn(explicit: bool | None, boundary: bool) -> bool:
+    """A contour end is saw-closed only when the caller says that edge is cut.
+
+    ``None`` keeps the historical rule: the sheet is unknown, so a contour end
+    is treated as sawn. An internal end is never saw-closed.
+    """
+
+    if explicit is None:
+        return boundary
+    return bool(explicit) and boundary
+
+
 def _cutter_passes(
     piece: LinerPiece,
     side: str,
@@ -751,13 +768,16 @@ def _cutter_passes(
     cutter_diameter_mm: float,
     start_cm: float | None,
     length_cm: float | None,
+    *,
+    start_sawn: bool | None = None,
+    end_sawn: bool | None = None,
 ) -> tuple[list[list[Point]], bool, bool]:
     """Parallel cutter passes for one liner span.
 
-    An end that reaches the finished contour is closed later by ``CUT_PATH``:
-    every finished edge, including one lying on the physical board, gets a saw
-    center. The sheet outline is not that closer. An end that stops inside the
-    span is not on a sawn edge, so the liner path has to close it itself.
+    An end closed by a real separating or trim cut extends by the bit radius
+    into that saw zone. An end on an original board edge, or an end that stops
+    inside the span, is not on a saw, so the pass stops one radius short and
+    the liner path closes it. The sheet outline is not a closer.
     """
 
     error = validation_code(piece, side, offset_cm, width_cm)
@@ -770,11 +790,13 @@ def _cutter_passes(
     )
     sign = _inward_sign(reference, polygon)
     radius = float(cutter_diameter_mm) / 2.0
-    partial = not boundary_start or not boundary_end
-    if partial and len(centers) < 2:
+    saw_start = _resolve_sawn(start_sawn, boundary_start)
+    saw_end = _resolve_sawn(end_sawn, boundary_end)
+    needs_flat = not saw_start or not saw_end
+    if needs_flat and len(centers) < 2:
         raise LinerGeometryError("liner_flat_end_unmachinable")
-    trim_start = 0.0 if boundary_start else radius
-    trim_end = 0.0 if boundary_end else radius
+    trim_start = 0.0 if saw_start else radius
+    trim_end = 0.0 if saw_end else radius
     if _polyline_length(clipped) + GEOMETRY_TOLERANCE_MM < trim_start + trim_end:
         raise LinerGeometryError("liner_flat_end_unmachinable")
     lines: list[list[Point]] = []
@@ -786,16 +808,16 @@ def _cutter_passes(
             line = _subpolyline(line, 0.0, _polyline_length(line) - trim_end)
         if len(line) < 2:
             raise LinerGeometryError("liner_flat_end_unmachinable")
-        if boundary_start or boundary_end:
+        if saw_start or saw_end:
             line = _extend_centerline(
                 line,
                 radius,
                 polygon,
-                extend_start=boundary_start,
-                extend_end=boundary_end,
+                extend_start=saw_start,
+                extend_end=saw_end,
             )
         lines.append(line)
-    return lines, boundary_start, boundary_end
+    return lines, saw_start, saw_end
 
 
 def _collinear_point(start: Point, middle: Point, end: Point) -> bool:
@@ -867,18 +889,30 @@ def liner_toolpath_mm(
     cutter_diameter_mm: float,
     start_cm: float | None = None,
     length_cm: float | None = None,
+    *,
+    start_sawn: bool | None = None,
+    end_sawn: bool | None = None,
 ) -> list[Point]:
-    """Parallel cutter passes, with a straight close only where the saw does not close the end.
+    """Parallel cutter passes, with a straight close only where no saw finishes the end.
 
-    A contour end extends by the bit radius into the saw zone. ``CUT_PATH`` on
-    that finished edge closes the liner, even when the edge is the board edge
-    and the cutter leaves the sheet. An internal end stops one radius short of
-    its limit and the path travels straight across that line. The sheet outline
-    never counts as the closer.
+    A contour end whose face is a real separating or trim cut extends by the
+    bit radius into that saw zone. ``CUT_PATH`` closes it, and the cutter may
+    leave the sheet. An end on an original board edge, or an internal end,
+    stops one radius short so the disk is tangent to the limit, and the path
+    travels straight across those centers. The sheet outline is never a closer,
+    and the close stays on the liner path.
     """
 
-    lines, boundary_start, boundary_end = _cutter_passes(
-        piece, side, offset_cm, width_cm, cutter_diameter_mm, start_cm, length_cm
+    lines, saw_start, saw_end = _cutter_passes(
+        piece,
+        side,
+        offset_cm,
+        width_cm,
+        cutter_diameter_mm,
+        start_cm,
+        length_cm,
+        start_sawn=start_sawn,
+        end_sawn=end_sawn,
     )
     path: list[Point] = []
     for index, line in enumerate(lines):
@@ -886,9 +920,9 @@ def liner_toolpath_mm(
         if path and math.dist(path[-1], sequence[0]) <= 1e-6:
             sequence = sequence[1:]
         path.extend(sequence)
-    if not boundary_start:
+    if not saw_start:
         path = _prepend_closure(path, [line[0] for line in lines])
-    if not boundary_end:
+    if not saw_end:
         path = _append_closure(path, [line[-1] for line in lines], lines[-1])
     return path
 
@@ -1037,6 +1071,9 @@ def _measure_toolpath(
     cutter_diameter_mm: float,
     start_cm: float | None = None,
     length_cm: float | None = None,
+    *,
+    start_sawn: bool | None = None,
+    end_sawn: bool | None = None,
 ) -> LinerMeasurement:
     try:
         expected = liner_toolpath_mm(
@@ -1047,6 +1084,8 @@ def _measure_toolpath(
             cutter_diameter_mm,
             start_cm,
             length_cm,
+            start_sawn=start_sawn,
+            end_sawn=end_sawn,
         )
         centers = cutter_center_offsets_mm(_mm(width_cm), cutter_diameter_mm)
         reference, clipped, start_mm, end_mm, boundary_start, boundary_end = _prepared_reference(
@@ -1110,12 +1149,20 @@ def _measure_toolpath(
             "tool_overcut",
             side,
         )
-    passes, _closed_start, _closed_end = _cutter_passes(
-        piece, side, offset_cm, width_cm, cutter_diameter_mm, start_cm, length_cm
+    passes, saw_start, saw_end = _cutter_passes(
+        piece,
+        side,
+        offset_cm,
+        width_cm,
+        cutter_diameter_mm,
+        start_cm,
+        length_cm,
+        start_sawn=start_sawn,
+        end_sawn=end_sawn,
     )
-    if not boundary_start and not _span_present(path, [line[0] for line in passes]):
+    if not saw_start and not _span_present(path, [line[0] for line in passes]):
         return LinerMeasurement(False, LINER_SHAPE_MISMATCH, "start", side, "", "end_not_closed", side)
-    if not boundary_end and not _span_present(path, [line[-1] for line in passes]):
+    if not saw_end and not _span_present(path, [line[-1] for line in passes]):
         return LinerMeasurement(False, LINER_SHAPE_MISMATCH, "length", side, "", "end_not_closed", side)
     end_short = any(
         _path_distance(point, path) > GEOMETRY_TOLERANCE_MM
@@ -1235,6 +1282,153 @@ def transform_point(
     return (x, y)
 
 
+_BOARD_EDGE_TOLERANCE_MM = 0.05
+
+
+def _transform_direction(
+    direction: Point,
+    *,
+    mirrored: bool,
+    quarter_turns: int,
+    width: float,
+    height: float,
+) -> Point:
+    origin = transform_point(
+        (0.0, 0.0),
+        mirrored=mirrored,
+        quarter_turns=quarter_turns,
+        width=width,
+        height=height,
+    )
+    moved = transform_point(
+        direction,
+        mirrored=mirrored,
+        quarter_turns=quarter_turns,
+        width=width,
+        height=height,
+    )
+    return (moved[0] - origin[0], moved[1] - origin[1])
+
+
+def _ring_edges(polygon: Sequence[Point]) -> list[tuple[Point, Point]]:
+    points = [(float(point[0]), float(point[1])) for point in polygon]
+    if len(points) >= 2 and math.dist(points[0], points[-1]) <= 1e-9:
+        points = points[:-1]
+    if len(points) < 2:
+        return []
+    return list(zip(points, points[1:] + points[:1]))
+
+
+def _edge_lies_on_board(
+    start: Point,
+    end: Point,
+    board: Sequence[float],
+    tolerance: float = _BOARD_EDGE_TOLERANCE_MM,
+) -> bool:
+    min_x, min_y, max_x, max_y = (float(value) for value in board)
+    sides = ((0, min_x), (0, max_x), (1, min_y), (1, max_y))
+    return any(
+        abs(start[axis] - value) <= tolerance and abs(end[axis] - value) <= tolerance
+        for axis, value in sides
+    )
+
+
+def _face_edge(
+    polygon: Sequence[Point],
+    point: Point,
+    direction: Point,
+) -> tuple[Point, Point] | None:
+    """The contour edge the liner runs into, not the edge it travels along."""
+
+    length = math.hypot(direction[0], direction[1]) or 1.0
+    unit = (direction[0] / length, direction[1] / length)
+    best: tuple[Point, Point] | None = None
+    best_score = -1.0
+    for start, end in _ring_edges(polygon):
+        if _segment_distance(point, start, end)[0] > GEOMETRY_TOLERANCE_MM:
+            continue
+        normal = _left_normal(start, end)
+        score = abs(normal[0] * unit[0] + normal[1] * unit[1])
+        if score > best_score:
+            best = (start, end)
+            best_score = score
+    return best
+
+
+def sawn_liner_ends(
+    piece: LinerPiece,
+    side: str,
+    *,
+    origin_mm: Point,
+    mirrored: bool,
+    quarter_turns: int,
+    board: Sequence[float] | None,
+    start_cm: float | None = None,
+    length_cm: float | None = None,
+) -> tuple[bool, bool]:
+    """Whether each contour end is finished by a real saw cut.
+
+    ``board is None`` means the sheet is unknown, so a contour end is treated
+    as sawn. A known board, ``(min_x, min_y, max_x, max_y)`` in the same
+    coordinates as the placed piece, saws a contour end only when the edge
+    that end runs into is not the physical board edge. Each end is independent.
+    """
+
+    _reference, clipped, _start, _end, boundary_start, boundary_end = _prepared_reference(
+        piece, side, start_cm, length_cm
+    )
+    if len(clipped) < 2:
+        return boundary_start, boundary_end
+    width = _mm(piece.width_cm)
+    height = _mm(piece.length_cm)
+    polygon = [
+        transform_point(
+            point,
+            mirrored=mirrored,
+            quarter_turns=quarter_turns,
+            width=width,
+            height=height,
+        )
+        for point in piece_polygon_mm(piece)
+    ]
+    placed = [
+        (point[0] + float(origin_mm[0]), point[1] + float(origin_mm[1]))
+        for point in polygon
+    ]
+
+    def sawn(at_start: bool, boundary: bool) -> bool:
+        if not boundary:
+            return False
+        if board is None:
+            return True
+        origin = clipped[0] if at_start else clipped[-1]
+        toward = clipped[1] if at_start else clipped[-2]
+        direction = _transform_direction(
+            (origin[0] - toward[0], origin[1] - toward[1]),
+            mirrored=mirrored,
+            quarter_turns=quarter_turns,
+            width=width,
+            height=height,
+        )
+        placed_origin = transform_point(
+            origin,
+            mirrored=mirrored,
+            quarter_turns=quarter_turns,
+            width=width,
+            height=height,
+        )
+        placed_point = (
+            placed_origin[0] + float(origin_mm[0]),
+            placed_origin[1] + float(origin_mm[1]),
+        )
+        edge = _face_edge(placed, placed_point, direction)
+        if edge is None:
+            return True
+        return not _edge_lies_on_board(edge[0], edge[1], board)
+
+    return sawn(True, boundary_start), sawn(False, boundary_end)
+
+
 def inverse_transform_point(
     point: Point,
     *,
@@ -1312,6 +1506,7 @@ __all__ = [
     "localize_path",
     "piece_polygon_mm",
     "reference_polyline_mm",
+    "sawn_liner_ends",
     "transform_point",
     "validation_code",
 ]
