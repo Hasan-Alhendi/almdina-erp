@@ -37,6 +37,8 @@ app_include_css = [
 
 app_include_js = [
     "/assets/almdina_erp/js/almdina_locale.js",
+    # Desk app-name menu language item. Loads after locale; binds sidebar_setup.
+    "/assets/almdina_erp/js/almdina_language_switcher.js",
     "/assets/almdina_erp/js/permission_context.js",
     "/assets/almdina_erp/js/frontend_foundation.js",
     "/assets/almdina_erp/js/almdina_ui.js",

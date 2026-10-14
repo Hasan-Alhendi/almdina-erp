@@ -467,13 +467,23 @@
             </tr>`;
     }
 
+    function shellDirection() {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.direction === "function") {
+            const value = locale.direction();
+            if (value === "ltr" || value === "rtl") return value;
+        }
+        const dir = document.documentElement && document.documentElement.getAttribute("dir");
+        return dir === "ltr" ? "ltr" : "rtl";
+    }
+
     function shellHtml(frm) {
         const editable = isEditable(frm);
         const extraAddons = window.AlmdinaExtraDoorAddonsUX;
         const rows = (frm.doc.pieces || []).map(row => rowHtml(frm, row, false)).join("");
         const virtual = editable ? rowHtml(frm, { qty:1 }, true) : "";
         return `
-            <div class="dco-fast-entry-shell">
+            <div class="dco-fast-entry-shell" dir="${shellDirection()}">
                 <div class="dco-fast-entry-toolbar">
                     <div class="dco-fast-help">
                         <b>${__("Fast entry:")}</b>

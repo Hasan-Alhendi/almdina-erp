@@ -9,9 +9,15 @@
  */
 
 .dco-fast-entry-shell {
-    direction: rtl;
+    /* Do not force RTL. Direction comes from html[dir] / the shell dir attribute. */
     width: 100%;
     max-width: 100%;
+}
+
+.dco-fast-entry-shell .dco-fast-input[type="number"] {
+    direction: ltr;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
 }
 
 .dco-fast-entry-shell .dco-fast-entry-toolbar {

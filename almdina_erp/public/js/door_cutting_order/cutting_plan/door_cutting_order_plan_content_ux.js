@@ -123,7 +123,7 @@
             cut_geometry_section: translate("Cut execution settings"),
             optimizer_section: translate("Cutting plan engine"),
             plan_result_section: translate("Current plan result"),
-            plan_section: translate("Piece layout on the boards"),
+            plan_section: translate("Piece layout on boards"),
             totals_section: translate("Calculation and cost details"),
         };
         Object.entries(labels).forEach(([fieldname, label]) => {

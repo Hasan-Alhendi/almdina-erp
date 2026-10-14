@@ -13,9 +13,15 @@ const switcherSource = fs.readFileSync(
     path.resolve(__dirname, "../../public/js/almdina_language_switcher.js"),
     "utf8"
 );
+const assetsSource = fs.readFileSync(
+    path.resolve(__dirname, "../../frontend_assets.py"),
+    "utf8"
+);
 
 const METHOD = "almdina_erp.almdina_erp.services.user_language_service.set_current_user_language";
 const EVENT = "sidebar_setup.almdinaLanguageSwitcher";
+const DIRTY_MESSAGE =
+    "You have unsaved changes. Do you want to discard them and refresh the page?";
 
 function menuFixture() {
     return [
@@ -36,6 +42,7 @@ function load(options) {
     const handlers = {};
     const calls = [];
     const notices = [];
+    const confirms = [];
     const reloads = [];
     const items = menuFixture();
     const sidebar = {};
@@ -59,6 +66,11 @@ function load(options) {
             msgprint(notice) {
                 notices.push(notice);
             },
+            confirm(message, onYes, onNo) {
+                confirms.push({ message, onYes, onNo });
+                if (settings.confirmChoice === "yes" && typeof onYes === "function") onYes();
+                if (settings.confirmChoice === "no" && typeof onNo === "function") onNo();
+            },
         },
         jQuery() {
             return {
@@ -79,6 +91,7 @@ function load(options) {
             },
         },
         document: {},
+        cur_frm: settings.cur_frm || null,
         queueMicrotask,
         Promise,
         Object,
@@ -89,7 +102,7 @@ function load(options) {
     const context = vm.createContext(fakeWindow);
     vm.runInContext(localeSource, context, { filename: "almdina_locale.js" });
     vm.runInContext(switcherSource, context, { filename: "almdina_language_switcher.js" });
-    return { window: fakeWindow, handlers, calls, notices, reloads, items, sidebar };
+    return { window: fakeWindow, handlers, calls, notices, confirms, reloads, items, sidebar };
 }
 
 async function flush() {
@@ -106,6 +119,12 @@ async function openSidebar(loaded, sidebar) {
 }
 
 (async () => {
+    assert.match(assetsSource, /almdina_language_switcher\.js/);
+    assert.ok(
+        assetsSource.indexOf("almdina_locale.js")
+            < assetsSource.indexOf("almdina_language_switcher.js")
+    );
+
     const languages = [
         { code: "ar", name: "العربية", direction: "rtl" },
         { code: "en", name: "English", direction: "ltr" },
@@ -126,11 +145,10 @@ async function openSidebar(loaded, sidebar) {
     assert.equal(switcher.icon, "globe");
     assert.deepEqual(
         switcher.items.map((item) => item.label),
-        ["العربية", "English", "Türkçe"]
+        ["العربية", "English"]
     );
     assert.equal(switcher.items[0].icon, "check");
     assert.equal(switcher.items[1].icon, undefined);
-    assert.equal(switcher.items[2].icon, undefined);
 
     switcher.items[0].onClick();
     assert.equal(placed.calls.length, 0);
@@ -146,7 +164,7 @@ async function openSidebar(loaded, sidebar) {
     const choosing = load({ headerReady: true, languages: languages, lang: "ar" });
     const choosingItem = languageItem(choosing.items);
     choosingItem.items[1].onClick();
-    choosingItem.items[2].onClick();
+    choosingItem.items[0].onClick();
     assert.equal(choosing.calls.length, 1);
     assert.equal(choosing.calls[0].method, METHOD);
     assert.equal(choosing.calls[0].type, "POST");
@@ -158,6 +176,32 @@ async function openSidebar(loaded, sidebar) {
     choosing.calls[0].callback({ message: { language: "en" } });
     choosing.calls[0].callback({ message: { language: "en" } });
     assert.equal(choosing.reloads.length, 1);
+    assert.equal(choosing.confirms.length, 0);
+
+    const dirtyCancel = load({
+        headerReady: true,
+        languages: languages,
+        lang: "ar",
+        cur_frm: { is_dirty() { return true; } },
+        confirmChoice: "no",
+    });
+    languageItem(dirtyCancel.items).items[1].onClick();
+    dirtyCancel.calls[0].callback({ message: { language: "en" } });
+    assert.equal(dirtyCancel.confirms.length, 1);
+    assert.equal(dirtyCancel.confirms[0].message, DIRTY_MESSAGE);
+    assert.equal(dirtyCancel.reloads.length, 0);
+
+    const dirtyProceed = load({
+        headerReady: true,
+        languages: languages,
+        lang: "ar",
+        cur_frm: { is_dirty() { return true; } },
+        confirmChoice: "yes",
+    });
+    languageItem(dirtyProceed.items).items[1].onClick();
+    dirtyProceed.calls[0].callback({ message: { language: "en" } });
+    assert.equal(dirtyProceed.confirms.length, 1);
+    assert.equal(dirtyProceed.reloads.length, 1);
 
     const failed = load({
         headerReady: true,
@@ -172,26 +216,27 @@ async function openSidebar(loaded, sidebar) {
     assert.equal(languageItem(failed.items).items[0].icon, "check");
     assert.equal(failed.notices.length, 1);
     assert.equal(failed.notices[0].message, "Could not change language.");
-    failedItem.items[2].onClick();
-    assert.equal(failed.calls.length, 2);
-    assert.equal(failed.calls[1].args.language, "tr");
-    assert.equal(failed.reloads.length, 0);
+    assert.equal(failedItem.items.length, 2);
 
     const regional = load({
         headerReady: true,
-        lang: "pt-BR",
+        lang: "en",
         languages: [
-            { code: "pt", name: "Português", direction: "ltr" },
+            { code: "ar", name: "العربية", direction: "rtl" },
+            { code: "en", name: "English", direction: "ltr" },
             { code: "pt-BR", name: "Português (Brasil)", direction: "ltr" },
         ],
     });
     const regionalItem = languageItem(regional.items);
-    assert.equal(regionalItem.items[0].icon, undefined);
+    assert.deepEqual(
+        regionalItem.items.map((item) => item.label),
+        ["العربية", "English"]
+    );
     assert.equal(regionalItem.items[1].icon, "check");
     regionalItem.items[1].onClick();
     assert.equal(regional.calls.length, 0);
     regionalItem.items[0].onClick();
-    assert.equal(regional.calls[0].args.language, "pt");
+    assert.equal(regional.calls[0].args.language, "ar");
 
     const guest = load({ headerReady: true, languages: languages, user: "Guest" });
     assert.equal(languageItem(guest.items), undefined);
@@ -199,15 +244,20 @@ async function openSidebar(loaded, sidebar) {
     const bootOnly = load({
         headerReady: true,
         lang: "tr",
-        languages: [{ code: "tr", name: "Türkçe", direction: "ltr" }],
+        languages: [
+            { code: "tr", name: "Türkçe", direction: "ltr" },
+            { code: "ar", name: "العربية", direction: "rtl" },
+        ],
     });
     assert.deepEqual(
         languageItem(bootOnly.items).items.map((item) => item.name),
-        ["almdina-language:tr"]
+        ["almdina-language:ar"]
     );
 
     assert.equal(switcherSource.includes('["ar", "en"]'), false);
     assert.equal(switcherSource.includes("MutationObserver"), false);
+    assert.equal(switcherSource.includes("ResizeObserver"), false);
+    assert.match(switcherSource, /is_dirty/);
 
     console.log("Almdina language switcher simulation passed");
 })().catch((error) => {

@@ -7,6 +7,12 @@
     const RELOAD_ACTION = "frappe.ui.toolbar.clear_cache()";
     const EVENT = "sidebar_setup.almdinaLanguageSwitcher";
     const METHOD = "almdina_erp.almdina_erp.services.user_language_service.set_current_user_language";
+    // Display filter for this menu only. The UI catalog stays open for later
+    // translation files; do not treat this as a closed language set.
+    const MENU_LANGUAGE_AR = "ar";
+    const MENU_LANGUAGE_EN = "en";
+    const DIRTY_RELOAD_MESSAGE =
+        "You have unsaved changes. Do you want to discard them and refresh the page?";
 
     let pending = false;
     let reloading = false;
@@ -18,6 +24,11 @@
 
     function languageMatchKey(language) {
         return String(language || "").trim().replace(/_/g, "-").toLowerCase();
+    }
+
+    function isMenuLanguage(code) {
+        const key = languageMatchKey(code);
+        return key === MENU_LANGUAGE_AR || key === MENU_LANGUAGE_EN;
     }
 
     function currentLanguageKey() {
@@ -36,7 +47,10 @@
         const boot = window.frappe && frappe.boot;
         const rows = boot && boot.almdina_ui_languages;
         if (!Array.isArray(rows)) return [];
-        return rows.filter((row) => row && String(row.code || "").trim());
+        return rows.filter((row) => {
+            const code = row && String(row.code || "").trim();
+            return Boolean(code) && isMenuLanguage(code);
+        });
     }
 
     function languageMenuItems() {
@@ -60,6 +74,7 @@
         if (!items.length) return null;
         return {
             name: ITEM_NAME,
+            // Message id: Frappe create_menu runs __(item.label) when rendering.
             label: "Language",
             icon: "globe",
             items: items,
@@ -92,9 +107,10 @@
             return;
         }
         if (existing >= 0) {
-            items[existing].label = entry.label;
-            items[existing].icon = entry.icon;
-            items[existing].items = entry.items;
+            const current = items[existing];
+            if (current.label !== entry.label) current.label = entry.label;
+            if (current.icon !== entry.icon) current.icon = entry.icon;
+            current.items = entry.items;
             return;
         }
         const reloadIndex = items.findIndex((item) => item && item.action === RELOAD_ACTION);
@@ -118,6 +134,41 @@
         }
     }
 
+    function hasUnsavedFormChanges() {
+        const frm = window.cur_frm;
+        if (!frm) return false;
+        if (typeof frm.is_dirty === "function") return Boolean(frm.is_dirty());
+        return Boolean(frm.doc && frm.doc.__unsaved);
+    }
+
+    function reloadAfterLanguageChange() {
+        if (reloading) return;
+        const proceed = function () {
+            if (reloading) return;
+            reloading = true;
+            window.location.reload();
+        };
+        if (!hasUnsavedFormChanges()) {
+            proceed();
+            return;
+        }
+        const message = translate(DIRTY_RELOAD_MESSAGE);
+        if (window.frappe && typeof frappe.confirm === "function") {
+            frappe.confirm(
+                message,
+                proceed,
+                function () {
+                    pending = false;
+                    if (window.frappe && typeof frappe.unfreeze === "function") {
+                        frappe.unfreeze();
+                    }
+                }
+            );
+            return;
+        }
+        proceed();
+    }
+
     function chooseLanguage(code) {
         if (pending || reloading) return;
         if (!code || languageMatchKey(code) === currentLanguageKey()) return;
@@ -139,9 +190,7 @@
                     reportFailure();
                     return;
                 }
-                if (reloading) return;
-                reloading = true;
-                window.location.reload();
+                reloadAfterLanguageChange();
             },
             error() {
                 reportFailure();

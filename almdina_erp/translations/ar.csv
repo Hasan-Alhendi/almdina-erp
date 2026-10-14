@@ -105,7 +105,7 @@ Edge Rate USD,سعر متر القشاط بالدولار
 Edge Cost USD,تكلفة القشاط بالدولار
 Area M2,المساحة م²
 Edge Meters,أمتار القشاط
-Notes,ملاحظات
+Notes,الملاحظات
 Draft,مسودة
 Pending Review,بانتظار المراجعة
 Approved,معتمد
@@ -688,6 +688,8 @@ Special shape geometry must touch all four raw-piece bounds.,يجب أن يلا�
 Special shape geometry area must be greater than zero.,يجب أن تكون مساحة المسار الهندسي أكبر من صفر.
 Special shape geometry edges cannot intersect.,لا يجوز أن تتقاطع أضلاع المسار الهندسي.
 Language,اللغة
+Could not change language.,تعذر تغيير اللغة.
+Changing language...,جارٍ تغيير اللغة...
 The language code is invalid.,رمز اللغة غير صالح.
 The selected user language is not supported.,لغة المستخدم المحددة غير مدعومة.
 The entered data is invalid.,البيانات المدخلة غير صالحة.
@@ -1054,6 +1056,9 @@ Saving...,جارٍ الحفظ...
 Save edit,حفظ التعديل
 Mark as important,تعيين كملاحظة مهمة
 Important note,ملاحظة مهمة
+Important note: {0},ملاحظة مهمة: {0}
+Open notes,فتح الملاحظات
+The notes interface could not be loaded. Reload the page and try again.,تعذر تحميل واجهة الملاحظات. حدّث الصفحة وحاول مرة أخرى.
 Edit,تعديل,note-action
 Delete,حذف,note-action
 User,مستخدم
@@ -1569,6 +1574,7 @@ Original edge · top,حافة أصلية · أعلى
 Page {0} of {1},صفحة {0} من {1}
 Piece count,عدد القطع
 Piece layout on the boards,توزيع القطع على الألواح
+Piece layout on boards,توزيع القطع على الألواح
 Pieces: {0} | waste: {1} m² ({2}%),عدد القطع: {0} | الهدر: {1} م² ({2}%)
 Plan approved for production,الخطة المعتمدة للإنتاج
 Plan settings are read-only in the current state.,إعدادات الخطة للعرض فقط في الحالة الحالية.

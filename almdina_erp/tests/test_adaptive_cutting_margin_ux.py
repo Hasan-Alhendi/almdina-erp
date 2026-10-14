@@ -224,12 +224,12 @@ def test_margin_warning_is_compact_except_when_original_edge_is_used():
     assert "justify-content:space-between" in styles
 
 
-def test_cutting_plan_sections_are_always_arabic_for_factory_operator_ui():
+def test_cutting_plan_sections_use_locale_message_ids():
     source = PLAN_CONTENT_UX.read_text(encoding="utf-8")
 
     assert "function applyArabicPlanLabels" in source
     assert "function isArabic" not in source
-    assert 'cut_geometry_section: "إعدادات تنفيذ القص"' in source
-    assert 'optimizer_section: "محرك خطة القص"' in source
-    assert 'plan_section: "توزيع القطع على الألواح"' in source
+    assert 'cut_geometry_section: translate("Cut execution settings")' in source
+    assert 'optimizer_section: translate("Cutting plan engine")' in source
+    assert 'plan_section: translate("Piece layout on boards")' in source
     assert "applyArabicPlanLabels(frm);" in source
