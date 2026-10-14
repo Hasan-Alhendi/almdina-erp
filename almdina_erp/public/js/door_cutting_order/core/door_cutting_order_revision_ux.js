@@ -19,6 +19,7 @@
         "default_edge_type",
         "edge_color",
     ];
+    const NEW_CREATE_FIELD_PROJECTION = "__almdina_new_create_field_projection";
 
     function can(frm, capability) {
         const permissions = window.AlmdinaPermissions;
@@ -48,6 +49,92 @@
         } catch (error) {
             return false;
         }
+    }
+
+    function nativeMayCreate(frm) {
+        if (!frm || typeof frm.has_perm !== "function") return false;
+        try {
+            return Boolean(frm.has_perm("create"));
+        } catch (error) {
+            return false;
+        }
+    }
+
+    function clearNewCreateFieldProjection(frm) {
+        const projection = frm && frm[NEW_CREATE_FIELD_PROJECTION];
+        if (!projection) return false;
+        projection.fields.forEach(snapshot => {
+            if (snapshot.hadOwnPermission) {
+                snapshot.field.perm = snapshot.permission;
+            } else {
+                delete snapshot.field.perm;
+            }
+            if (typeof snapshot.field.refresh === "function") snapshot.field.refresh();
+        });
+        delete frm[NEW_CREATE_FIELD_PROJECTION];
+        return true;
+    }
+
+    // Frappe treats NEW fields with create but without write as read-only controls.
+    // Project create permission only onto these controls; server checks stay authoritative.
+    function applyNewCreateFieldProjection(frm) {
+        if (
+            !frm
+            || !frm.doc
+            || !frm.is_new()
+            || !permissionsResolved()
+            || !can(frm, "create_order")
+            || !nativeMayCreate(frm)
+        ) {
+            clearNewCreateFieldProjection(frm);
+            return false;
+        }
+
+        const version = window.AlmdinaPermissions.version();
+        const current = frm[NEW_CREATE_FIELD_PROJECTION];
+        if (
+            current
+            && current.doc === frm.doc
+            && current.name === frm.doc.name
+            && current.version === version
+            && current.fields.every(snapshot => (
+                frm.fields_dict && frm.fields_dict[snapshot.fieldname] === snapshot.field
+            ))
+        ) return true;
+        clearNewCreateFieldProjection(frm);
+
+        const projection = {
+            doc: frm.doc,
+            name: frm.doc.name,
+            version,
+            fields: [],
+        };
+        ORDER_INPUT_FIELDS.forEach(fieldname => {
+            const field = frm.fields_dict && frm.fields_dict[fieldname];
+            if (!field) return;
+            const hadOwnPermission = Object.prototype.hasOwnProperty.call(field, "perm");
+            const nativePermission = Array.isArray(field.perm) ? field.perm : frm.perm;
+            const permlevel = Number(field.df && field.df.permlevel || 0);
+            const permission = Array.isArray(nativePermission)
+                ? nativePermission[permlevel]
+                : null;
+            if (permission && permission.create && !permission.write) {
+                projection.fields.push({
+                    fieldname,
+                    field,
+                    hadOwnPermission,
+                    permission: field.perm,
+                });
+                field.perm = nativePermission.map((level, index) => (
+                    index === permlevel ? { ...level, write: true } : level
+                ));
+                if (typeof field.refresh === "function") field.refresh();
+            }
+        });
+
+        if (!projection.fields.length) return false;
+        frm[NEW_CREATE_FIELD_PROJECTION] = projection;
+        return true;
     }
 
     function canShowEditAction(frm) {
@@ -468,6 +555,11 @@
     function applyEditableFields(frm) {
         const editable = orderCanEdit(frm);
         frm.toggle_enable(ORDER_INPUT_FIELDS, editable);
+        if (frm && frm.is_new() && editable) {
+            applyNewCreateFieldProjection(frm);
+        } else {
+            clearNewCreateFieldProjection(frm);
+        }
         syncPrimaryAction(frm);
     }
 
@@ -475,6 +567,11 @@
         if (!frm || !frm.page) return;
 
         if (frm.is_new()) {
+            if (!orderCanEdit(frm) || !nativeMayCreate(frm)) {
+                frm.save_disabled = true;
+                if (typeof frm.disable_save === "function") frm.disable_save();
+                return;
+            }
             if (
                 frm.__almdinaPrimaryActionMode !== "new"
                 || primaryActionLabel(frm) !== SAVE_LABEL
@@ -487,7 +584,11 @@
                     frm.enable_save();
                 }
             } else {
+                const wasSaveDisabled = Boolean(frm.save_disabled);
                 frm.save_disabled = false;
+                if (wasSaveDisabled && typeof frm.enable_save === "function") {
+                    frm.enable_save();
+                }
             }
             return;
         }
@@ -863,6 +964,9 @@
         after_save(frm) {
             const preserveSession = Boolean(frm.__almdina_preserve_edit_session_after_save);
             frm.__almdina_preserve_edit_session_after_save = false;
+            if (clearNewCreateFieldProjection(frm)) {
+                applyEditableFields(frm);
+            }
             if (preserveSession && isEditSessionActive(frm)) {
                 frm.__almdina_lock_after_save = false;
                 markEditSessionSticky(frm);

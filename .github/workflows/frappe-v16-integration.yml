@@ -51,7 +51,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
-      # Keep PR #505's next runtime attempt limited to the Customer permission differential.
+      # Keep PR #505's automatic run scoped to its create-permission acceptance.
       TARGET_SUITE: ${{ inputs.suite || (github.event_name == 'pull_request' && github.head_ref == 'codex/ALMADINA-129-clean-from-recovery-test' && 'al129_customer_permission_smoke') || 'full' }}
       FRAPPE_REF: ${{ inputs.frappe_ref || (github.event_name == 'pull_request' && github.head_ref == 'codex/ALMADINA-129-clean-from-recovery-test' && 'v16.17.5') || 'version-16' }}
       ERPNEXT_REF: ${{ inputs.erpnext_ref || (github.event_name == 'pull_request' && github.head_ref == 'codex/ALMADINA-129-clean-from-recovery-test' && 'v16.17.0') || 'version-16' }}
@@ -496,6 +496,12 @@ jobs:
             test -s "$DCO_AL129_FIXTURE_FILE"
             if [[ "$TARGET_CASE" == "al129_customer_permission_smoke" ]]; then
               test_targets=("tests/browser/test_dco_al129_frappe_desk.py::test_real_desk_customer_field_permission_differential")
+            elif [[ "$TARGET_CASE" == "al129_desk_only" ]]; then
+              test_targets=(
+                "tests/browser/test_dco_al129_frappe_desk.py::test_real_desk_customer_field_permission_differential"
+                "tests/browser/test_dco_al129_frappe_desk.py::test_real_desk_multiple_drafts_start_new_delete_and_restore_geometry"
+                "tests/browser/test_dco_al129_frappe_desk.py::test_real_desk_100_piece_checkpoint_restore_and_lost_save_response"
+              )
             else
               test_targets=(
                 "tests/browser/test_dco_al129_frappe_desk.py::test_real_desk_multiple_drafts_start_new_delete_and_restore_geometry"
@@ -630,9 +636,9 @@ jobs:
           else
             if [[ "$TARGET_CASE" == "al129_customer_permission_smoke" ]]; then
               {
-                echo '### ALMADINA-129 Customer permission differential: diagnostic completed'
+                echo '### ALMADINA-129 NEW permission boundary acceptance: PASS'
                 echo 'Runtime: Frappe v16.17.5 / ERPNext v16.17.0'
-                echo 'This result records the A/B root-cause probe; it is not a product acceptance claim.'
+                echo 'Covers create-only NEW input/save, permission revoke/restore, persisted write denial, create+edit, and no-create denial.'
               } >> "$GITHUB_STEP_SUMMARY"
             else
               {

@@ -48,7 +48,7 @@ def _fixtures() -> dict[str, Any]:
     fixture = json.loads(Path(FIXTURE_PATH).read_text(encoding="utf-8"))
     DIAGNOSTIC_REDACTIONS.update(
         str(fixture[key])
-        for key in ("password", "customer", "user", "second_user", "write_user")
+        for key in ("password", "customer", "user", "second_user", "write_user", "no_create_user")
         if fixture.get(key)
     )
     return fixture
@@ -405,6 +405,10 @@ def _customer_permission_state(page: Page) -> dict[str, Any]:
         " const frm = window.cur_frm;"
         " const field = frm && frm.fields_dict && frm.fields_dict.customer;"
         " const permission = frm && frm.perm && field ? frm.perm[field.df.permlevel || 0] : null;"
+        " const fieldPermission = field && Array.isArray(field.perm)"
+        " ? field.perm[field.df.permlevel || 0] : permission;"
+        " const doctypeCache = frappe.perm && frappe.perm.doctype_perm"
+        " ? frappe.perm.doctype_perm['Door Cutting Order'] : null;"
         " const unwrap = value => value && typeof value.get === 'function'"
         " ? value.get(0) : (value && value[0]) || value || null;"
         " const wrapper = unwrap(field && field.$wrapper);"
@@ -435,6 +439,12 @@ def _customer_permission_state(page: Page) -> dict[str, Any]:
         " isNew: Boolean(frm && frm.is_new()), route: Array.isArray(route) ? route.join('/') : null,"
         " activeTab, permission: permission ? {read: Boolean(permission.read), write: Boolean(permission.write),"
         " create: Boolean(permission.create)} : null, fieldPermissionStatus, fieldPermissionError,"
+        " fieldPermission: fieldPermission ? {read: Boolean(fieldPermission.read),"
+        " write: Boolean(fieldPermission.write), create: Boolean(fieldPermission.create)} : null,"
+        " doctypeCacheWrite: Boolean(doctypeCache && doctypeCache[0] && doctypeCache[0].write),"
+        " formCanCreate: Boolean(frm && frm.has_perm && frm.has_perm('create')),"
+        " formCanWrite: Boolean(frm && frm.has_perm && frm.has_perm('write')),"
+        " createProjectionActive: Boolean(frm && frm.__almdina_new_create_field_projection),"
         " controlStatus, controlStatusError, dispStatus: field && field.disp_status || null,"
         " fieldType: field && field.df && field.df.fieldtype || null,"
         " hidden: field && field.df ? Boolean(field.df.hidden) : null,"
@@ -453,88 +463,361 @@ def _customer_permission_state(page: Page) -> dict[str, Any]:
     )
 
 
+def _capture_failure_screenshot(page: Page, event: str, error: Exception) -> None:
+    trace(event, message=_safe_diagnostic_text(str(error), limit=900))
+    try:
+        page.screenshot(
+            path=str(RUNNER_TEMP / "al129-desk-failure.png"),
+            full_page=False,
+            timeout=3_000,
+        )
+    except Exception as screenshot_error:
+        trace(
+            "failure_screenshot_unavailable",
+            message=_safe_diagnostic_text(str(screenshot_error), limit=300),
+        )
+
+
+def _save_new_document(page: Page) -> str:
+    button = page.locator(".page-actions .primary-action").first
+    expect(button).to_be_visible(timeout=15_000)
+    expect(button).to_be_enabled(timeout=15_000)
+    assert re.search(r"Save|حفظ", button.inner_text(), re.I)
+    button.click()
+    page.wait_for_function(
+        "() => window.cur_frm && cur_frm.doctype === 'Door Cutting Order'"
+        " && !cur_frm.is_new() && Boolean(cur_frm.doc.name)",
+        timeout=45_000,
+    )
+    return str(page.evaluate("() => cur_frm.doc.name"))
+
+
 def test_real_desk_customer_field_permission_differential() -> None:
-    """Record the native NEW Customer control under create-only and create+edit roles."""
+    """Certify create-only NEW input, persisted write denial, and no-create denial."""
     fixture = _fixtures()
     assert fixture["versions"] == {"frappe": "16.17.5", "erpnext": "16.17.0"}
     assert fixture["permission_differential"] == {
         "create_only": {"create": True, "read": True, "write": False},
         "create_and_edit": {"create": True, "read": True, "write": True},
+        "no_create": {
+            "create": False,
+            "read": True,
+            "write": False,
+            "server_can_create": False,
+        },
     }
     outcomes: dict[str, dict[str, Any]] = {}
 
     with sync_playwright() as playwright_instance:
         browser = _browser(playwright_instance)
-        context = browser.new_context(viewport={"width": 1800, "height": 1200})
-        page = context.new_page()
-        _attach_diagnostics(page)
         try:
             for case_name, user in (
                 ("create_only", fixture["user"]),
                 ("create_and_edit", fixture["write_user"]),
             ):
-                if case_name == "create_only":
+                context = browser.new_context(viewport={"width": 1800, "height": 1200})
+                page = context.new_page()
+                _attach_diagnostics(page)
+                try:
                     _login(page, fixture, user=user)
-                else:
-                    _logout_and_login_as(page, fixture, user=user)
-                suffix = f"customer-permission-{case_name}"
-                _open_new_form(page, suffix, expected_state="ready_for_entry")
-                state = _customer_permission_state(page)
-                outcomes[case_name] = state
-                trace(f"customer_permission_case_{case_name}", **state)
-                assert state["doctype"] == "Door Cutting Order" and state["isNew"] is True
-                assert state["permission"] is not None
-                assert state["permission"]["create"] is True
-                assert state["permission"]["read"] is True
-                assert state["hidden"] is False
-                assert state["hiddenDueToDependency"] is False
-                assert state["readOnly"] is False
+                    suffix = f"customer-permission-{case_name}"
+                    _open_new_form(page, suffix, expected_state="ready_for_entry")
+                    state = _customer_permission_state(page)
+                    outcomes[case_name] = state
+                    trace(f"customer_permission_case_{case_name}", **state)
+                    assert state["doctype"] == "Door Cutting Order" and state["isNew"] is True
+                    assert state["permission"] is not None
+                    assert state["permission"]["create"] is True
+                    assert state["permission"]["read"] is True
+                    assert state["hidden"] is False
+                    assert state["hiddenDueToDependency"] is False
+                    assert state["readOnly"] is False
+                    assert state["insideIntakePair"] is True
+                    assert state["hasOriginalFormColumnAncestor"] is False
 
-                if case_name == "create_only":
-                    assert state["permission"]["write"] is False
-                    assert state["fieldPermissionStatus"] == "Read"
-                    assert state["hideEmptyReadOnlyFields"] in (1, "1", True)
-                    assert state["controlStatus"] == "None"
-                    assert state["hideControl"] is True
-                    assert state["inputExists"] is False
-                    assert state["wrapperVisible"] is False
-                    outcomes[case_name]["customerEnterable"] = False
-                else:
-                    assert state["permission"]["write"] is True
-                    assert state["fieldPermissionStatus"] == "Write"
-                    assert state["controlStatus"] == "Write"
-                    assert state["hideControl"] is False
-                    assert state["inputExists"] is True and state["inputVisible"] is True
-                    _set_link(page, "customer", fixture["customer"])
-                    selected = page.evaluate(
-                        "expected => cur_frm && cur_frm.is_new() && cur_frm.doc.customer === expected",
-                        fixture["customer"],
+                    if case_name == "create_only":
+                        assert state["permission"]["write"] is False
+                        assert state["fieldPermissionStatus"] == "Read"
+                        assert state["hideEmptyReadOnlyFields"] in (1, "1", True)
+                        assert state["fieldPermission"]["create"] is True
+                        assert state["fieldPermission"]["write"] is True
+                        assert state["controlStatus"] == "Write"
+                        assert state["hideControl"] is False
+                        assert state["inputExists"] is True and state["inputVisible"] is True
+                        assert state["formCanWrite"] is False
+                        assert state["doctypeCacheWrite"] is False
+                        assert state["createProjectionActive"] is True
+
+                        permission_transition = page.evaluate(
+                            "() => { const frm = cur_frm;"
+                            " const cached = frappe.perm.doctype_perm[frm.doctype];"
+                            " if (!cached || !cached[0]) throw new Error('doctype permission cache unavailable');"
+                            " const original = cached[0].create; let revoked;"
+                            " try { cached[0].create = 0;"
+                            " window.dispatchEvent(new CustomEvent('almdina:permissions-updated'));"
+                            " const button = document.querySelector('.page-actions .primary-action');"
+                            " revoked = {nativeCreate: frm.has_perm('create'), saveDisabled: frm.save_disabled,"
+                            " saveActionPresent: Boolean(button), projection: Boolean(frm.__almdina_new_create_field_projection)};"
+                            " } finally { cached[0].create = original;"
+                            " window.dispatchEvent(new CustomEvent('almdina:permissions-updated')); }"
+                            " const button = document.querySelector('.page-actions .primary-action');"
+                            " return {revoked, restored: {nativeCreate: frm.has_perm('create'),"
+                            " saveDisabled: frm.save_disabled, saveActionPresent: Boolean(button),"
+                            " saveActionDisabled: button ? Boolean(button.disabled"
+                            " || button.getAttribute('aria-disabled') === 'true') : null,"
+                            " projection: Boolean(frm.__almdina_new_create_field_projection)}}; }"
+                        )
+                        assert permission_transition["revoked"] == {
+                            "nativeCreate": False,
+                            "saveDisabled": True,
+                            "saveActionPresent": False,
+                            "projection": False,
+                        }
+                        assert permission_transition["restored"]["nativeCreate"] is True
+                        assert permission_transition["restored"]["saveDisabled"] is False
+                        assert permission_transition["restored"]["saveActionPresent"] is True
+                        assert permission_transition["restored"]["saveActionDisabled"] is False
+                        assert permission_transition["restored"]["projection"] is True
+                        expect(page.locator(".page-actions .primary-action").first).to_be_enabled(
+                            timeout=5_000
+                        )
+                        trace("create_only_native_permission_revoke_restore", **permission_transition)
+
+                        _fill_header(page, fixture, "Create-only official save permission check")
+                        _enter_real_measurements(page, 1)
+                        save_requests: list[str] = []
+                        page.on(
+                            "request",
+                            lambda request: save_requests.append(request.url)
+                            if request.method == "POST"
+                            and "frappe.desk.form.save.savedocs" in request.url
+                            else None,
+                        )
+                        order_name = _save_new_document(page)
+                        assert len(save_requests) == 1
+                        after_save = _customer_permission_state(page)
+                        assert after_save["isNew"] is False
+                        assert after_save["formCanWrite"] is False
+                        assert after_save["permission"]["write"] is False
+                        assert after_save["doctypeCacheWrite"] is False
+                        assert after_save["createProjectionActive"] is False
+                        assert after_save["controlStatus"] == "Read"
+
+                        persisted = page.evaluate(
+                            "name => frappe.xcall('frappe.client.get',"
+                            " {doctype: 'Door Cutting Order', name})",
+                            order_name,
+                        )
+                        assert persisted["customer"] == fixture["customer"]
+                        assert persisted["board_description"] == "AL129 recovery test MDF"
+                        assert len(persisted["pieces"]) == 1
+                        denied_write = page.evaluate(
+                            "async name => { try { await frappe.xcall('frappe.client.set_value',"
+                            " {doctype: 'Door Cutting Order', name, fieldname: 'order_notes',"
+                            " value: 'unauthorized write'}); return {denied: false, permissionDenied: false};"
+                            " } catch (error) { const details = [error && error.message,"
+                            " error && error.exception, error && error.exc_type,"
+                            " error && error.responseJSON && error.responseJSON.exc_type].join(' ');"
+                            " return {denied: true, permissionDenied: /permission|not permitted/i.test(details)}; } }",
+                            order_name,
+                        )
+                        assert denied_write["denied"] is True
+                        assert denied_write["permissionDenied"] is True
+                        unchanged = page.evaluate(
+                            "name => frappe.xcall('frappe.client.get',"
+                            " {doctype: 'Door Cutting Order', name})",
+                            order_name,
+                        )
+                        assert unchanged["order_notes"] == "Create-only official save permission check"
+                        outcomes[case_name].update({
+                            "customerEnterable": True,
+                            "officialSave": True,
+                            "savedDocumentWriteDenied": denied_write["permissionDenied"],
+                            "doctypeCacheWriteAfterSave": after_save["doctypeCacheWrite"],
+                            "postSaveProjectionRemoved": not after_save["createProjectionActive"],
+                        })
+                        trace(
+                            "create_only_official_save_and_existing_write_denial",
+                            official_save_requests=len(save_requests),
+                            native_write_after_save=after_save["formCanWrite"],
+                            direct_api_write_denied=denied_write["permissionDenied"],
+                            stored_value_unchanged=unchanged["order_notes"]
+                            == "Create-only official save permission check",
+                        )
+                    else:
+                        assert state["permission"]["write"] is True
+                        assert state["fieldPermissionStatus"] == "Write"
+                        assert state["controlStatus"] == "Write"
+                        assert state["hideControl"] is False
+                        assert state["inputExists"] is True and state["inputVisible"] is True
+                        assert state["doctypeCacheWrite"] is True
+                        _fill_header(page, fixture, "Create and edit input check")
+                        _enter_real_measurements(page, 1)
+                        order_name = _save_new_document(page)
+                        page.wait_for_function(
+                            "() => window.AlmdinaOrderRevisionUX"
+                            " && cur_frm.__almdinaPrimaryActionMode === 'edit'",
+                            timeout=20_000,
+                        )
+                        page.locator(".page-actions .primary-action").first.click()
+                        page.wait_for_function(
+                            "() => window.AlmdinaOrderRevisionUX"
+                            " && AlmdinaOrderRevisionUX.isEditableDraft(cur_frm)",
+                            timeout=20_000,
+                        )
+                        editing = _customer_permission_state(page)
+                        assert editing["documentName"] == order_name
+                        assert editing["isNew"] is False
+                        assert editing["permission"]["write"] is True
+                        assert editing["controlStatus"] == "Write"
+                        assert editing["inputExists"] is True and editing["inputVisible"] is True
+                        outcomes[case_name].update({
+                            "customerEnterable": True,
+                            "officialSave": True,
+                            "existingEditSession": True,
+                        })
+                        trace(
+                            "create_and_edit_user_new_and_existing_edit_passed",
+                            official_save=True,
+                            existing_edit_session=True,
+                        )
+                except Exception as error:
+                    _capture_failure_screenshot(
+                        page,
+                        f"customer_permission_case_{case_name}_failed",
+                        error,
                     )
-                    assert selected is True
-                    outcomes[case_name]["customerEnterable"] = True
-                trace("customer_permission_case_classified", case=case_name,
-                      customer_enterable=outcomes[case_name]["customerEnterable"])
+                    raise
+                finally:
+                    context.close()
 
-            assert all(item["insideIntakePair"] for item in outcomes.values())
-            assert all(not item["hasOriginalFormColumnAncestor"] for item in outcomes.values())
+            context = browser.new_context(viewport={"width": 1800, "height": 1200})
+            page = context.new_page()
+            _attach_diagnostics(page)
+            try:
+                _login(page, fixture, user=fixture["no_create_user"])
+                create_attempt = page.evaluate(
+                    "async customer => { try { await frappe.xcall('frappe.client.insert',"
+                    " {doc: {doctype: 'Door Cutting Order', customer,"
+                    " order_date: frappe.datetime.get_today(), board_description: 'Denied',"
+                    " board_length_cm: 244, board_width_cm: 122}});"
+                    " return {created: true, permissionDenied: false};"
+                    " } catch (error) { const details = [error && error.message,"
+                    " error && error.exception, error && error.exc_type,"
+                    " error && error.responseJSON && error.responseJSON.exc_type].join(' ');"
+                    " return {created: false, permissionDenied: /permission|not permitted/i.test(details)}; } }",
+                    fixture["customer"],
+                )
+                assert create_attempt["created"] is False
+                assert create_attempt["permissionDenied"] is True
+
+                response = page.goto(
+                    f"{DESK_URL}/app/door-cutting-order",
+                    wait_until="domcontentloaded",
+                    timeout=60_000,
+                )
+                trace("no_create_desk_list_navigation", status=response.status if response else None)
+                page.wait_for_function(
+                    "() => { const route = window.frappe && frappe.get_route && frappe.get_route();"
+                    " return Boolean(window.frappe && frappe.router && frappe.app"
+                    " && Array.isArray(route) && route[0] === 'List'"
+                    " && route[1] === 'Door Cutting Order'); }",
+                    timeout=30_000,
+                )
+                list_state = page.evaluate(
+                    "() => { const buttons = [...document.querySelectorAll("
+                    "'.page-actions button, .page-actions a')];"
+                    " const isNew = node => /(^|\\b)(new|add)(\\b|$)|جديد|إنشاء/i"
+                    " .test((node.textContent || '').trim());"
+                    " return {route: frappe.get_route().join('/'),"
+                    " canCreate: frappe.perm.has_perm('Door Cutting Order', 0, 'create'),"
+                    " enabledNewActions: buttons.filter(node => isNew(node)"
+                    " && !node.disabled && node.getAttribute('aria-disabled') !== 'true')"
+                    " .map(node => (node.textContent || '').trim().slice(0, 40))}; }"
+                )
+                assert list_state["canCreate"] is False
+                assert list_state["enabledNewActions"] == []
+                form_response = page.goto(
+                    f"{DESK_URL}/app/door-cutting-order/new-door-cutting-order-al129-no-create",
+                    wait_until="domcontentloaded",
+                    timeout=60_000,
+                )
+                trace(
+                    "no_create_new_form_navigation",
+                    status=form_response.status if form_response else None,
+                )
+                page.wait_for_function(
+                    "() => { if (!window.frappe || !frappe.boot"
+                    " || typeof frappe.get_route !== 'function') return false;"
+                    " const frm = window.cur_frm; const route = frappe.get_route() || [];"
+                    " const text = [...document.querySelectorAll('.msgprint-dialog, .alert')]."
+                    "map(node => node.innerText || '').join(' ').toLowerCase();"
+                    " const permissionDenied = /not permitted|permission|صلاحية|غير مخول/.test(text);"
+                    " if (permissionDenied) return true;"
+                    " if (!route.length) return false;"
+                    " if (route[0] === 'Form' && route[1] === 'Door Cutting Order')"
+                    " return Boolean(frm && frm.doctype === 'Door Cutting Order' && frm.is_new()"
+                    " && frm.has_perm && !frm.has_perm('create'))"
+                    " const expectedPath = '/app/door-cutting-order/new-door-cutting-order-al129-no-create';"
+                    " return location.pathname.replace(/\\/$/, '') !== expectedPath; }",
+                    timeout=30_000,
+                )
+                form_state = page.evaluate(
+                    "() => { const frm = window.cur_frm; const button ="
+                    " document.querySelector('.page-actions .primary-action');"
+                    " const route = frappe.get_route() || [];"
+                    " const messages = [...document.querySelectorAll('.msgprint-dialog, .alert')]"
+                    " .map(node => node.innerText || '').join(' ');"
+                    " return {doctype: frm && frm.doctype || null,"
+                    " isNew: Boolean(frm && frm.is_new && frm.is_new()),"
+                    " nativeCreate: Boolean(frm && frm.has_perm && frm.has_perm('create')),"
+                    " saveDisabled: Boolean(frm && frm.save_disabled),"
+                    " buttonText: (button?.innerText || '').trim().slice(0, 40),"
+                    " buttonDisabled: button ? Boolean(button.disabled"
+                    " || button.getAttribute('aria-disabled') === 'true') : null,"
+                    " route: route.join('/'),"
+                    " path: location.pathname,"
+                    " permissionMessage: /not permitted|permission|صلاحية|غير مخول/i"
+                    " .test(messages)}; }"
+                )
+                trace("no_create_direct_desk_result", **form_state)
+                if form_state["doctype"] == "Door Cutting Order" and form_state["isNew"]:
+                    assert form_state["nativeCreate"] is False
+                    assert form_state["saveDisabled"] is True or form_state["buttonDisabled"] is True
+                else:
+                    assert form_state["permissionMessage"] is True or not form_state["route"].startswith(
+                        "Form/Door Cutting Order/"
+                    )
+                outcomes["no_create"] = {
+                    "uiNewActionUnavailable": True,
+                    "directDeskCreationUnavailable": True,
+                    "officialApiCreateDenied": create_attempt["permissionDenied"],
+                    "deskRoute": list_state["route"],
+                }
+                trace("no_create_denied_by_desk_and_server", **outcomes["no_create"])
+            except Exception as error:
+                _capture_failure_screenshot(page, "no_create_case_failed", error)
+                raise
+            finally:
+                context.close()
+
             trace(
                 "customer_permission_differential_complete",
                 create_only_enterable=outcomes["create_only"]["customerEnterable"],
                 create_and_edit_enterable=outcomes["create_and_edit"]["customerEnterable"],
-                product_root_classification="native field write permission",
+                no_create_denied=outcomes["no_create"]["officialApiCreateDenied"],
+                shared_doctype_write_unchanged=True,
             )
             _capture_evidence({
-                "create_only_customer_enterable": outcomes["create_only"]["customerEnterable"],
-                "create_and_edit_customer_enterable": outcomes["create_and_edit"]["customerEnterable"],
-                "field_permission_state": outcomes["create_only"]["fieldPermissionStatus"],
-                "control_display_state": outcomes["create_only"]["controlStatus"],
+                "runtime_versions": fixture["versions"],
+                "create_only_new_entry_and_save": "PASS",
+                "create_only_saved_document_write_denied": "PASS",
+                "create_and_edit_new_and_edit_session": "PASS",
+                "no_create_desk_and_api_denied": "PASS",
+                "permission_cases": outcomes,
+                "shared_doctype_write_unchanged": True,
             })
-        except Exception as error:
-            page.screenshot(path=str(RUNNER_TEMP / "al129-desk-failure.png"), full_page=True)
-            trace("customer_permission_differential_failed", message=str(error)[:900], outcomes=outcomes)
-            raise
         finally:
-            context.close()
             browser.close()
 
 
@@ -631,6 +914,7 @@ def test_real_desk_multiple_drafts_start_new_delete_and_restore_geometry() -> No
         browser = _browser(playwright_instance)
         context = browser.new_context(viewport={"width": 1800, "height": 1200})
         page = context.new_page()
+        diagnostic_page = page
         _attach_diagnostics(page)
         try:
             _login(page, fixture)
@@ -723,8 +1007,7 @@ def test_real_desk_multiple_drafts_start_new_delete_and_restore_geometry() -> No
                 "geometry_restore_100_rows": "PASS",
             })
         except Exception as error:
-            page.screenshot(path=str(RUNNER_TEMP / "al129-desk-failure.png"), full_page=True)
-            trace("multi_draft_test_failed", message=str(error)[:900])
+            _capture_failure_screenshot(page, "multi_draft_test_failed", error)
             raise
         finally:
             context.close()
@@ -899,6 +1182,7 @@ def test_real_desk_100_piece_checkpoint_restore_and_lost_save_response() -> None
                 args=args,
             )
             recovery_page = context.new_page()
+            diagnostic_page = recovery_page
             _attach_diagnostics(recovery_page)
             recovery_page.on("request", record_save_request)
             _login(recovery_page, fixture)
@@ -943,6 +1227,7 @@ def test_real_desk_100_piece_checkpoint_restore_and_lost_save_response() -> None
 
             retry_reconciliation_statuses: list[str] = []
             retry_page = context.new_page()
+            diagnostic_page = retry_page
             _attach_diagnostics(retry_page)
             retry_page.on("request", record_save_request)
             _track_reconciliation_responses(retry_page, retry_reconciliation_statuses)
@@ -1038,11 +1323,7 @@ def test_real_desk_100_piece_checkpoint_restore_and_lost_save_response() -> None
             })
             trace("same_token_not_found_retry_created_one_document")
         except Exception as error:
-            try:
-                page.screenshot(path=str(RUNNER_TEMP / "al129-desk-failure.png"), full_page=True)
-            except Exception:
-                pass
-            trace("new_save_test_failed", message=str(error)[:900])
+            _capture_failure_screenshot(diagnostic_page, "new_save_test_failed", error)
             raise
         finally:
             context.close()

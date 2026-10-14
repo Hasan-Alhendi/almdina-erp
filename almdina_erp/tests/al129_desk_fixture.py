@@ -174,6 +174,10 @@ def create_al129_desk_fixtures() -> dict[str, object]:
         {"doctype": "Role", "role_name": f"AL129 Desk Create Edit {suffix}", "desk_access": 1}
     )
     write_role.insert(ignore_permissions=True)
+    read_role = frappe.get_doc(
+        {"doctype": "Role", "role_name": f"AL129 Desk Read Only {suffix}", "desk_access": 1}
+    )
+    read_role.insert(ignore_permissions=True)
     create_capabilities = {
         Capability.CREATE_ORDER: True,
         Capability.VIEW_ORDERS: True,
@@ -187,6 +191,11 @@ def create_al129_desk_fixtures() -> dict[str, object]:
                 **create_capabilities,
                 Capability.EDIT_ORDER: True,
             },
+            str(read_role.name): {
+                Capability.VIEW_ORDERS: True,
+                Capability.VIEW_CUSTOMERS: True,
+                Capability.VIEW_EDGE_BANDING_TYPES: True,
+            },
         }
     )
     email = f"al129-{suffix}@example.com"
@@ -196,8 +205,11 @@ def create_al129_desk_fixtures() -> dict[str, object]:
     _create_user(second_email, str(role.name), password)
     write_email = f"al129-write-{suffix}@example.com"
     _create_user(write_email, str(write_role.name), password)
+    no_create_email = f"al129-no-create-{suffix}@example.com"
+    _create_user(no_create_email, str(read_role.name), password)
     frappe.clear_cache(user=email)
     frappe.clear_cache(user=write_email)
+    frappe.clear_cache(user=no_create_email)
     frappe.clear_cache(doctype="Door Cutting Order")
     frappe.local.role_permissions = {}
     if hasattr(frappe.local, "almdina_matrix_capabilities"):
@@ -205,6 +217,7 @@ def create_al129_desk_fixtures() -> dict[str, object]:
 
     dco_permissions = get_role_permissions("Door Cutting Order", user=email)
     write_dco_permissions = get_role_permissions("Door Cutting Order", user=write_email)
+    no_create_permissions = get_role_permissions("Door Cutting Order", user=no_create_email)
     customer_permissions = get_role_permissions("Customer", user=email)
     edge_permissions = get_role_permissions("Edge Banding Type", user=email)
     evidence = {
@@ -240,12 +253,24 @@ def create_al129_desk_fixtures() -> dict[str, object]:
             "read": bool(write_dco_permissions.get("read")),
             "write": bool(write_dco_permissions.get("write")),
         },
+        "no_create": {
+            "create": bool(no_create_permissions.get("create")),
+            "read": bool(no_create_permissions.get("read")),
+            "write": bool(no_create_permissions.get("write")),
+            "server_can_create": bool(
+                has_permission("Door Cutting Order", "create", user=no_create_email)
+            ),
+        },
     }
     if (
         not permission_differential["create_only"]["create"]
         or not permission_differential["create_only"]["read"]
         or permission_differential["create_only"]["write"]
         or not all(permission_differential["create_and_edit"].values())
+        or permission_differential["no_create"]["create"]
+        or not permission_differential["no_create"]["read"]
+        or permission_differential["no_create"]["write"]
+        or permission_differential["no_create"]["server_can_create"]
     ):
         frappe.throw(f"AL129 customer permission differential is invalid: {permission_differential}")
 
@@ -262,6 +287,7 @@ def create_al129_desk_fixtures() -> dict[str, object]:
         "user": email,
         "second_user": second_email,
         "write_user": write_email,
+        "no_create_user": no_create_email,
         "password": password,
         "customer": customer,
         "edge_type": edge_type,
