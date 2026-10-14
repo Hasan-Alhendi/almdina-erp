@@ -103,12 +103,14 @@
     const COST_RESULT_FIELDS = Object.freeze([
         ...COST_SETTING_FIELDS,
         "mdf_cost_usd", "cutting_cost_usd", "edge_cost_usd", "total_cost_usd",
+        "total_edge_meters",
         "special_shapes_baseline_cost_usd", "special_shapes_estimated_total_usd",
         "special_shapes_final_total_usd", "extra_addons_total_usd",
         "customer_quote_total_usd", "customer_quote_status",
         "material_variance_cost_usd", "actual_cost_usd",
     ]);
     const COST_PIECE_FIELDS = new Set([
+        "edge_meters", "edge_break_length_cm", "edge_break_meters",
         "edge_long_rate_usd", "edge_width_rate_usd", "edge_long_cost_usd",
         "edge_width_cost_usd", "edge_cost_usd", "edge_rate_usd",
         "special_shape_estimated_unit_price_usd", "special_shape_custom_unit_price_usd",

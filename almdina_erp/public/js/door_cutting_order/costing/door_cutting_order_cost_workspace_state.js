@@ -223,9 +223,8 @@
             return store.snapshot();
         }
 
-        const pending = owns(frm, frm[LOAD_OWNER_KEY] || {})
-            ? frm[LOAD_PROMISE_KEY] : null;
-        if (pending) {
+        const pending = frm[LOAD_PROMISE_KEY];
+        if (pending && owns(frm, frm[LOAD_OWNER_KEY] || {})) {
             if (!options.force) return pending;
 
             // A forced lifecycle refresh must not race a still-current read. Wait
