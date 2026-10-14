@@ -75,7 +75,7 @@ assert.equal(api.physicalCutQuantity({ qty: 3, extra_liner: 1 }), 3);
 const picker = api.renderTypePicker({ piece_type: "Regular" }, { editable: true });
 assert.match(picker, /<select class="dco-fast-select dco-piece-type-select"/);
 assert.match(picker, /data-field="piece_type"/);
-assert.match(picker, />عادي<\/option>/);
+assert.match(picker, />عادية<\/option>/);
 assert.match(picker, />خاصة<\/option>/);
 assert.match(picker, />الزاوية الكسر<\/option>/);
 assert.match(picker, />زاوية L<\/option>/);
