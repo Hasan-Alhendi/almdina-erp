@@ -12,7 +12,13 @@ from urllib.parse import urlsplit
 from uuid import uuid4
 
 import pytest
-from playwright.sync_api import Browser, Page, expect, sync_playwright
+from playwright.sync_api import (
+    Browser,
+    Page,
+    TimeoutError as PlaywrightTimeoutError,
+    expect,
+    sync_playwright,
+)
 
 
 DESK_URL = os.environ.get("FRAPPE_DESK_URL", "").rstrip("/")
@@ -259,7 +265,7 @@ def _read_local_drafts(page: Page) -> dict[str, Any]:
 
 def _set_link(page: Page, fieldname: str, value: str) -> None:
     if fieldname == "customer":
-        state = page.evaluate(
+        customer_state_script = (
             "() => {"
             " const frm = window.cur_frm;"
             " const field = frm && frm.fields_dict && frm.fields_dict.customer;"
@@ -311,11 +317,43 @@ def _set_link(page: Page, fieldname: str, value: str) -> None:
             " pageReadyState: document.readyState}; }"
         )
         initial_identity = NEW_FORM_IDENTITIES.get(id(page), {})
+        try:
+            page.wait_for_function(
+                "expectedName => {"
+                " const frm = window.cur_frm;"
+                " if (!frm || frm.doctype !== 'Door Cutting Order'"
+                " || !Boolean(frm.is_new()) || frm.doc.name !== expectedName) return false;"
+                " const field = frm.fields_dict && frm.fields_dict.customer;"
+                " const control = field && field.$input;"
+                " const input = control && typeof control.get === 'function'"
+                " ? control.get(0) : control && control[0];"
+                " if (!input || !input.isConnected || !input.getClientRects().length) return false;"
+                " const style = getComputedStyle(input);"
+                " return style.display !== 'none' && style.visibility !== 'hidden'"
+                " && style.opacity !== '0'; }",
+                arg=initial_identity.get("name"),
+                timeout=5_000,
+            )
+        except PlaywrightTimeoutError as error:
+            state = page.evaluate(customer_state_script)
+            state["identityUnchangedSinceOpen"] = (
+                state.get("documentName") == initial_identity.get("name")
+                and state.get("isNew") is initial_identity.get("is_new") is True
+            )
+            state["runtimeErrors"] = PAGE_RUNTIME_DIAGNOSTICS.get(id(page), [])[-12:]
+            state["customerInputReadyWait"] = "timed_out_after_5000ms"
+            trace("customer_field_state_before_fill", **state)
+            raise AssertionError(
+                f"Customer Frappe input did not render as a visible user control: {state}"
+            ) from error
+
+        state = page.evaluate(customer_state_script)
         state["identityUnchangedSinceOpen"] = (
             state.get("documentName") == initial_identity.get("name")
             and state.get("isNew") is initial_identity.get("is_new") is True
         )
         state["runtimeErrors"] = PAGE_RUNTIME_DIAGNOSTICS.get(id(page), [])[-12:]
+        state["customerInputReadyWait"] = "visible"
         trace("customer_field_state_before_fill", **state)
         if not state.get("identityUnchangedSinceOpen"):
             raise AssertionError(f"Customer field is not on the NEW document verified by _open_new_form: {state}")
