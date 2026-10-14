@@ -323,7 +323,7 @@ def test_saved_server_plan_print_runtime():
                 identity:AlmdinaDocumentContext.formIdentity(cur_frm),
                 generation:AlmdinaDocumentContext.capture(cur_frm).generation,
                 modified:cur_frm.doc.modified})""")
-            page.evaluate("window.__p0FrmA=cur_frm")
+            page.evaluate("() => { window.__p0FrmA=cur_frm; }")
             # Start the production Plan state transport while A is visible, hold
             # its *real* HTTP response, then navigate B before releasing it.
             with page.expect_request(lambda request: "get_plan_workspace_snapshot" in request.url
@@ -356,7 +356,12 @@ def test_saved_server_plan_print_runtime():
 
             # Controlled identity-defense probe, using the unmodified response
             # returned by the real server for a saved A plan.
-            page.evaluate("async () => await AlmdinaDcoWorkspaceAssetRegistry.ensure('plan')")
+            page.get_by_text("Cutting Plan", exact=True).first.click()
+            page.evaluate("""async () => {
+                await AlmdinaDcoWorkspaceAssetRegistry.ensure('plan');
+                await AlmdinaPlanWorkspaceState.load(cur_frm,{force:true});
+            }""")
+            page.locator(".dco-print-cutting-plan:visible").first.wait_for(timeout=15000)
             evidence["controlled_projection"] = page.evaluate("""args => {
                 const frm=cur_frm, store=AlmdinaPlanWorkspaceState.storeFor(frm);
                 store.reset(args.identity);
@@ -383,10 +388,11 @@ def test_saved_server_plan_print_runtime():
                     window.__p0PrintResult=original(frm,plan);
                     return window.__p0PrintResult;
                 };
-                AlmdinaPlanTabsUX.printActivePlan(cur_frm);
             }""")
+            page.locator(".dco-print-cutting-plan:visible").first.click()
             page.wait_for_function("!!window.__p0ResolveIdentity", timeout=10000)
             evidence["print_start"] = page.evaluate("window.__p0PrintedSource")
+            evidence["print_invocation"] = "clicked visible .dco-print-cutting-plan on B"
             page.evaluate("name => { frappe.set_route('Form','Door Cutting Order',name); }", a["name"])
             page.wait_for_function("name => cur_frm?.doc?.name === name", arg=a["name"], timeout=45000)
             page.evaluate("window.__p0ResolveIdentity({})")
@@ -405,6 +411,15 @@ def test_saved_server_plan_print_runtime():
                 "revision_rendered": None,
                 "revision_note": "Renderer has no plan revision field; compare API/source identity"}
             evidence["final_html_file"] = "saved-plan-final-print.html"
+        except Exception as exc:
+            evidence["failure"] = repr(exc)
+            evidence["browser_state"] = page.evaluate("""() => ({route:frappe.get_route?.(),
+                current:cur_frm?.doc?.name, canView:AlmdinaPlanWorkspaceState?.canView(cur_frm),
+                planState:AlmdinaPlanWorkspaceState?.snapshot(cur_frm)?.status,
+                planAssets:AlmdinaDcoWorkspaceAssetRegistry?.isLoaded('plan'),
+                body:document.body.innerText.slice(-700)})""")
+            page.screenshot(path=str(evidence_dir / "saved-plan-failure.png"), full_page=True)
+            raise
         finally:
             (evidence_dir / "saved-plan-print-evidence.json").write_text(
                 json.dumps(evidence, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
@@ -431,7 +446,13 @@ def test_recovery_new_saved_intersection():
                 recovery:AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(cur_frm) || null,
                 plan:AlmdinaPlanWorkspaceState.snapshot(cur_frm),
                 cost:AlmdinaCostWorkspaceState.snapshot(cur_frm)})""")
-            page.evaluate("() => { frappe.new_doc('Door Cutting Order'); }")
+            # Pinned Frappe new_doc opens Quick Entry when no create route is
+            # registered. Construct the NEW document through its model API and
+            # navigate by the standard Form route to exercise Desk lifecycle.
+            page.evaluate("""() => {
+                const name=frappe.model.make_new_doc_and_get_name('Door Cutting Order');
+                frappe.set_route('Form','Door Cutting Order',name);
+            }""")
             page.wait_for_function("() => cur_frm?.doctype === 'Door Cutting Order' && !!cur_frm.is_new()",
                                    timeout=45000)
             page.wait_for_function("() => !!AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(cur_frm)",
@@ -479,6 +500,14 @@ def test_recovery_new_saved_intersection():
                     recovery:AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(cur_frm) || null,
                     plan:AlmdinaPlanWorkspaceState.snapshot(cur_frm),
                     cost:AlmdinaCostWorkspaceState.snapshot(cur_frm)})""")
+        except Exception as exc:
+            evidence["failure"] = repr(exc)
+            evidence["browser_state"] = page.evaluate("""() => ({route:frappe.get_route?.(),
+                current:cur_frm?.doc?.name,isNew:!!cur_frm?.is_new?.(),
+                modal:document.querySelector('.modal.show')?.innerText.slice(0,600) || null,
+                body:document.body.innerText.slice(-700)})""")
+            page.screenshot(path=str(evidence_dir / "recovery-failure.png"), full_page=True)
+            raise
         finally:
             evidence_dir.mkdir(parents=True, exist_ok=True)
             (evidence_dir / "recovery-intersection.json").write_text(
