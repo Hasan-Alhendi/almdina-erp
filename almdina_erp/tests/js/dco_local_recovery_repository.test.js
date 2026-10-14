@@ -77,7 +77,7 @@ async function verifiesDatabaseInitialization() {
     const indexedDB = {
         open(name, version) {
             assert.equal(name, "almdina_erp_dco_recovery");
-            assert.equal(version, 1);
+            assert.equal(version, 2);
             const request = {
                 result: database,
                 transaction: {
@@ -661,6 +661,72 @@ function dcoPayload(pieceKey = "piece-local-1") {
     });
     assert.equal(oversizedWrite.ok, false);
     assert.equal(oversizedWrite.error.code, "payload_too_large");
+
+    const maxPayloadBytes = Recovery.LocalDraftRepository.DEFAULT_MAX_PAYLOAD_BYTES;
+    assert.equal(maxPayloadBytes, 1792 * 1024);
+    const boundedIdentity = {
+        site: "erp.example.test",
+        user: "bounded-operator@example.test",
+        target_doctype: "Door Cutting Order",
+        draft_id: "33333333-3333-4333-8333-333333333333",
+    };
+    const boundedRepository = Recovery.LocalDraftRepository.create({
+        gateway,
+        TextEncoder,
+    });
+    const payloadAtLimit = (noteLength) => {
+        const dco = dcoProjection("bounded-piece");
+        dco.order_notes = "x".repeat(noteLength);
+        return Recovery.Projection.createPayload({ dco, dirtyScope: "DCO" });
+    };
+    const emptyNotesBytes = new TextEncoder().encode(
+        Recovery.Projection.serialize(payloadAtLimit(0))
+    ).byteLength;
+    const exactLimitPayload = payloadAtLimit(maxPayloadBytes - emptyNotesBytes);
+    assert.equal(
+        new TextEncoder().encode(Recovery.Projection.serialize(exactLimitPayload)).byteLength,
+        maxPayloadBytes,
+        "the documented byte limit itself remains writable"
+    );
+    const atLimitWrite = await boundedRepository.write({
+        ...boundedIdentity,
+        mode: "EDIT",
+        dirty_scope: "DCO",
+        target_name: "DCO-BOUNDED-0001",
+        session_origin_modified: "2026-08-29 08:00:00.000000",
+        expected_server_modified: "2026-08-29 09:00:00.000000",
+        tab_session_id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+        recovery_revision: 1,
+        expected_recovery_revision: 0,
+        payload: exactLimitPayload,
+        asset_refs: [],
+    });
+    assert.equal(atLimitWrite.ok, true);
+    const overLimitWrite = await boundedRepository.write({
+        ...boundedIdentity,
+        mode: "EDIT",
+        dirty_scope: "DCO",
+        target_name: "DCO-BOUNDED-0001",
+        session_origin_modified: "2026-08-29 08:00:00.000000",
+        expected_server_modified: "2026-08-29 09:00:00.000000",
+        tab_session_id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+        recovery_revision: 2,
+        expected_recovery_revision: 1,
+        payload: payloadAtLimit(maxPayloadBytes - emptyNotesBytes + 1),
+        asset_refs: [],
+    });
+    assert.equal(overLimitWrite.ok, false);
+    assert.equal(overLimitWrite.error.code, "payload_too_large");
+    const retainedAtLimit = await boundedRepository.read(boundedIdentity);
+    assert.equal(retainedAtLimit.ok, true);
+    assert.equal(retainedAtLimit.value.recovery_revision, 1);
+    assert.equal(
+        new TextEncoder().encode(
+            Recovery.Projection.serialize(retainedAtLimit.value.payload)
+        ).byteLength,
+        maxPayloadBytes,
+        "an over-limit write must leave the acknowledged at-limit checkpoint intact"
+    );
 
     const smallAssetRepository = Recovery.LocalAssetRepository.create({
         gateway,
