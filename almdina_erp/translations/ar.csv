@@ -1893,6 +1893,14 @@ This is a historical copy that was replaced by a newer copy. It is for reading a
 This is the current copy in the order revision chain.,هذه هي النسخة الحالية ضمن سلسلة مراجعات الطلب.
 Trim margin,هامش التشذيب
 Try again,إعادة المحاولة
+Changes have not been saved locally yet.,هناك تغييرات لم تُحفظ محليًا بعد.
+Saving a local recovery copy…,جارٍ حفظ نسخة الاسترداد محليًا…
+A local recovery copy is saved; the order has not been officially saved on the server.,تم تأكيد حفظ نسخة محلية؛ لم يُحفظ الطلب رسميًا على الخادم.
+Saving the order officially on the server…,جارٍ حفظ الطلب رسميًا على الخادم…
+The official save was sent. Its result is being verified before recovery can continue.,أُرسل الحفظ الرسمي، ويجري التحقق من نتيجته قبل متابعة الاسترداد.
+Restoring the local draft…,جارٍ استعادة المسودة المحلية…
+The order was officially saved.,اكتمل الحفظ الرسمي للطلب.
+Could not save the local recovery copy. Keep this page open until the draft is resolved.,تعذر حفظ نسخة الاسترداد محليًا. تابع العمل مع إبقاء الصفحة مفتوحة حتى تعالج المسودة.
 Unsaved local draft,مسودة غير محفوظة محليًا
 Update the cost before printing a final invoice.,حدّث التكلفة أولًا قبل طباعة فاتورة نهائية.
 Waiting for update,بانتظار التحديث

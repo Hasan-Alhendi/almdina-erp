@@ -297,16 +297,16 @@
 
     function checkpointStatusText(snapshot) {
         const messages = {
-            DIRTY: "هناك تغييرات لم تُحفظ محليًا بعد.",
-            LOCAL_SAVING: "جارٍ حفظ نسخة الاسترداد محليًا…",
-            LOCAL_SAVED: "تم تأكيد حفظ نسخة محلية؛ لم يُحفظ الطلب رسميًا على الخادم.",
-            OFFICIAL_SAVING: "جارٍ حفظ الطلب رسميًا على الخادم…",
-            PENDING_RECONCILIATION: "أُرسل الحفظ الرسمي، ويجري التحقق من نتيجته قبل متابعة الاسترداد.",
-            RESTORING: "جارٍ استعادة المسودة المحلية…",
-            COMPLETED: "اكتمل الحفظ الرسمي للطلب.",
-            ERROR: "تعذر حفظ نسخة الاسترداد محليًا. تابع العمل مع إبقاء الصفحة مفتوحة حتى تعالج المسودة.",
+            DIRTY: "Changes have not been saved locally yet.",
+            LOCAL_SAVING: "Saving a local recovery copy…",
+            LOCAL_SAVED: "A local recovery copy is saved; the order has not been officially saved on the server.",
+            OFFICIAL_SAVING: "Saving the order officially on the server…",
+            PENDING_RECONCILIATION: "The official save was sent. Its result is being verified before recovery can continue.",
+            RESTORING: "Restoring the local draft…",
+            COMPLETED: "The order was officially saved.",
+            ERROR: "Could not save the local recovery copy. Keep this page open until the draft is resolved.",
         };
-        return messages[String(snapshot && snapshot.state || "")] || "";
+        return translate(messages[String(snapshot && snapshot.state || "")] || "");
     }
 
     function renderCheckpointStatus(frm, state, snapshot) {
