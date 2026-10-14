@@ -195,22 +195,25 @@ def _open_new_form(page: Page, suffix: str, *, expected_state: str) -> None:
             timeout=30_000,
         )
         state = page.evaluate(
-            "() => ({name: cur_frm.doc.name, isNew: cur_frm.is_new(),"
+            "() => ({name: cur_frm.doc.name, doctype: cur_frm.doctype,"
+            " isNew: Boolean(cur_frm.is_new()),"
             " continueActions: document.querySelectorAll("
             "'.modal.show [data-recovery-action=\"continue\"]').length,"
             " newActions: document.querySelectorAll("
             "'.modal.show [data-recovery-action=\"new\"]').length})"
         )
-        assert state["isNew"] is True
-        assert state["continueActions"] >= 1 and state["newActions"] == 1
-        NEW_FORM_IDENTITIES[id(page)] = {"name": state["name"], "is_new": state["isNew"]}
         trace(
             "real_new_dco_awaiting_draft_selection",
             name=state["name"],
+            doctype=state["doctype"],
+            is_new=state["isNew"],
             continue_actions=state["continueActions"],
             new_actions=state["newActions"],
             checkpoint_not_required=True,
         )
+        assert state["isNew"] is True
+        assert state["continueActions"] >= 1 and state["newActions"] == 1
+        NEW_FORM_IDENTITIES[id(page)] = {"name": state["name"], "is_new": state["isNew"]}
         return
 
     page.wait_for_function(
@@ -222,15 +225,23 @@ def _open_new_form(page: Page, suffix: str, *, expected_state: str) -> None:
         timeout=30_000
     )
     state = page.evaluate(
-        "() => ({name: cur_frm.doc.name, isNew: cur_frm.is_new(),"
+        "() => ({name: cur_frm.doc.name, doctype: cur_frm.doctype,"
+        " isNew: Boolean(cur_frm.is_new()),"
         " checkpoint: Boolean(AlmdinaDcoRecovery.LocalCheckpoint.snapshot(cur_frm)),"
         " discoveryVisible: Boolean(document.querySelector("
         "'.modal.show [data-recovery-action=\"continue\"]'))})"
     )
+    trace(
+        "real_new_dco_form_ready",
+        name=state["name"],
+        doctype=state["doctype"],
+        is_new=state["isNew"],
+        checkpoint=state["checkpoint"],
+        discovery_visible=state["discoveryVisible"],
+    )
     assert state["isNew"] is True and state["checkpoint"] is True
     assert state["discoveryVisible"] is False
     NEW_FORM_IDENTITIES[id(page)] = {"name": state["name"], "is_new": state["isNew"]}
-    trace("real_new_dco_form_ready", name=state["name"], checkpoint=True)
 
 
 def _read_local_drafts(page: Page) -> dict[str, Any]:
@@ -271,7 +282,7 @@ def _set_link(page: Page, fieldname: str, value: str) -> None:
             " const pane = wrapper && wrapper.closest('.tab-pane');"
             " const formWrapper = unwrap(frm && (frm.$wrapper || frm.wrapper));"
             " return {documentName: frm && frm.doc && frm.doc.name || null,"
-            " isNew: frm && typeof frm.is_new === 'function' ? frm.is_new() : null,"
+            " isNew: Boolean(cur_frm && typeof cur_frm.is_new === 'function' && cur_frm.is_new()),"
             " doctype: frm && frm.doctype || null,"
             " route: Array.isArray(route) ? route.join('/') : null,"
             " customerFieldExists: Boolean(field),"
