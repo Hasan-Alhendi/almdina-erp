@@ -112,5 +112,5 @@ def test_plan_and_current_dxf_paths_use_exact_special_polygon_when_available():
     assert "geometry.resolve(piece)" in plan_renderer
     assert "shapeOutput.dxfPoints(piece" in secure_dxf
     assert "dco-special-exact-piece" in plan_renderer
-    assert "htmlText("Special door · geometric path")" in plan_renderer
+    assert 'htmlText("Special door · geometric path")' in plan_renderer
     assert not (ROOT / "public" / "js" / "door_cutting_order_workflow.js").exists()

@@ -84,8 +84,8 @@ def test_hidden_legacy_values_are_preserved_and_visible_read_only() -> None:
     assert "whatsapp_session_name" not in renderer_source
     assert "legacy_values" in service_source
     assert "LEGACY_PRESERVED_FIELDS" in service_source
-    assert "t("Legacy settings data kept")" in renderer_source
-    assert "t("Read-only")" in renderer_source
+    assert 't("Legacy settings data kept")' in renderer_source
+    assert 't("Read-only")' in renderer_source
     assert "aps-legacy" in renderer_source
     assert 'data-section="legacy"' not in renderer_source
     for fieldname in LEGACY_PRESERVED_FIELDS:

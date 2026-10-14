@@ -172,7 +172,7 @@ def test_operator_warning_is_visible_idempotent_and_mobile_friendly():
     assert "function ensureMarginPolicyAlert" in source
     assert "normalizedMarginNotes" in source
     assert 'className = "dco-margin-policy-alert"' in source
-    assert "translate("Trim margin warning")" in source
+    assert 'translate("Trim margin warning")' in source
     assert "marginSignature" in source
     assert 'existing.dataset.marginSignature === signature' in source
     assert 'role", "status"' in source
@@ -200,8 +200,8 @@ def test_zero_margin_edges_are_visually_marked_without_touching_cut_geometry():
     assert "dco-board-original-edge--right" in styles
     assert "dco-board-original-edges" in styles
     assert "position:static" in styles
-    assert ""Original edge · top"" in source
-    assert ""Original edge · bottom"" in source
+    assert '"Original edge · top"' in source
+    assert '"Original edge · bottom"' in source
     assert "originalEdgeSignature" in source
     assert "ZERO_MARGIN_EPSILON_MM" in source
     assert "ensureOriginalBoardEdges(planRoot, plan)" in source
@@ -213,8 +213,8 @@ def test_margin_warning_is_compact_except_when_original_edge_is_used():
 
     assert "const hasOriginalEdge = zeroEdges.length > 0" in source
     assert "const detailNotes = hasOriginalEdge ? notes : []" in source
-    assert "translate("The margin was reduced automatically by the amount needed to keep the piece measurements.")" in source
-    assert "translate("An original board edge was used; check that it is straight before cutting.")" in source
+    assert 'translate("The margin was reduced automatically by the amount needed to keep the piece measurements.")' in source
+    assert 'translate("An original board edge was used; check that it is straight before cutting.")' in source
     assert "dco-margin-policy-alert__summary" in source
     assert "dco-margin-policy-alert__details" in source
     assert "dco-margin-policy-alert__row" in source
