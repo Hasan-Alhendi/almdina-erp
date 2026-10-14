@@ -286,7 +286,7 @@
             side,
             side_label: __(config.label),
             axis: config.axis,
-            axis_label: config.axis === "long" ? "الطول" : "العرض",
+            axis_label: __(config.axis === "long" ? "Length" : "Width"),
             edge_type: item.type,
             custom: item.custom,
             thickness_mm: item.thickness,
@@ -349,12 +349,11 @@
         const mode = overrideType(row, side) ? (__("Custom")) : (__("Default"));
         let meta = __("Unavailable profile");
         if (profile) {
-            meta = `${format(profile.thickness_mm)} مم`;
-            if (financialProfilesAvailable(frm)) {
-                meta += ` · $ ${money(profile.rate_usd_per_meter)}/م`;
-            }
+            meta = financialProfilesAvailable(frm)
+                ? __("{0} mm · $ {1}/m", [format(profile.thickness_mm), money(profile.rate_usd_per_meter)])
+                : __("{0} mm", [format(profile.thickness_mm)]);
         }
-        return `${label} — ${type || "—"} — ${mode} — ${meta}`;
+        return __("{0} — {1} — {2} — {3}", [label, type || "—", mode, meta]);
     }
 
     function decorateToggle(frm, row, toggle) {
@@ -498,11 +497,10 @@
         const profile = type ? profiles(frm).get(type) || null : null;
         if (!type) return __("No default edge profile selected.");
         if (!profile) return `${esc(type)} — ${__("Loading or unavailable")}`;
-        let summary = `${esc(type)} — ${format(profile.thickness_mm)} مم`;
         if (financialProfilesAvailable(frm)) {
-            summary += ` — $ ${money(profile.rate_usd_per_meter)}/م`;
+            return `${esc(type)} — ${esc(__("{0} mm — $ {1}/m", [format(profile.thickness_mm), money(profile.rate_usd_per_meter)]))}`;
         }
-        return summary;
+        return `${esc(type)} — ${esc(__("{0} mm", [format(profile.thickness_mm)]))}`;
     }
 
     function profileSelectOptions(frm, current = "") {

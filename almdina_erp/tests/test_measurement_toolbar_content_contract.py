@@ -16,15 +16,18 @@ def _css() -> str:
     return PRESENTATION_CSS.read_text(encoding="utf-8")
 
 
-def test_measurement_toolbar_allows_only_centered_title_and_three_actions():
+def test_measurement_toolbar_allows_only_title_and_three_actions_in_flow():
     source = _source()
     css = _css()
 
     assert '__("Door Measurements Table")' in source
     assert "جدول قياسات الدرف" not in source
-    assert "justify-content:center!important;" in css
-    assert "position:absolute!important;" in css
-    assert "left:8px!important;" in css
+    assert "justify-content:flex-start!important;" in css
+    assert "position:static!important;" in css
+    assert "margin-inline-start:auto!important;" in css
+    assert "direction:inherit!important;" in css
+    assert "left:8px!important;" not in css
+    assert "padding:0 116px!important;" not in css
     assert ".dco-fast-entry-toolbar > :not(.dco-fast-help):not(.dco-measurement-table-actions)" in css
     assert 'child.matches(".dco-print-measurements,.dco-open-measurements-window,.dco-input-help")' in source
     assert "if (child !== help && child !== actions) child.remove();" in source

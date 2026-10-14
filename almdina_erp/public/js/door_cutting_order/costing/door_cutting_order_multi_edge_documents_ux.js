@@ -1,6 +1,23 @@
 (() => {
     "use strict";
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split(`{${index}}`).join(String(value));
+            });
+        }
+        return text;
+    }
+
     const STYLE_ID = "dco-side-edge-documents-css";
 
     function api() {
@@ -33,9 +50,10 @@
         (details || [])
             .filter(detail => Boolean(detail.custom))
             .forEach(detail => {
-                const type = String(detail.edge_type || "غير محدد").trim() || "غير محدد";
-                if (!groups.has(type)) groups.set(type, { type, sides: [] });
-                groups.get(type).sides.push(detail.side_label || "ضلع");
+                const type = String(detail.edge_type || "").trim();
+                const key = type || "\0";
+                if (!groups.has(key)) groups.set(key, { type, sides: [] });
+                groups.get(key).sides.push(String(detail.side_label || "").trim());
             });
         return [...groups.values()];
     }
@@ -43,17 +61,19 @@
     function customEdgeSummaryHtml(details) {
         const groups = customEdgeGroups(details);
         if (!groups.length) {
-            return '<span class="dco-edge-default-note" title="لا يوجد تخصيص">—</span>';
+            return `<span class="dco-edge-default-note" title="${esc(translate("No custom edge"))}">—</span>`;
         }
         const sideCount = groups.reduce((sum, group) => sum + group.sides.length, 0);
         return `<div class="dco-custom-edge-list">${groups.map(group => {
+            const sideLabels = group.sides.map(side => side || translate("Side"));
             const sides = sideCount === 4 && group.sides.length === 4
-                ? "على الداير"
-                : group.sides.join("، ");
+                ? translate("All around")
+                : sideLabels.join(", ");
+            const typeLabel = group.type || translate("Unspecified");
             return `<span class="dco-custom-edge-chip">
                 <span class="dco-custom-edge-sides">${esc(sides)}</span>
-                <b>${esc(group.type)}</b>
-                <em>مخصص</em>
+                <b>${esc(typeLabel)}</b>
+                <em>${esc(translate("Custom"))}</em>
             </span>`;
         }).join("")}</div>`;
     }
@@ -89,7 +109,7 @@
             .dco-cost-section{border-color:var(--border-color,#dfe4e8)!important;box-shadow:0 8px 24px rgba(23,32,51,.045)}
             .dco-cost-section-title{padding:15px 18px!important;background:linear-gradient(180deg,var(--subtle-fg,#fafbfc),var(--card-bg,#fff))!important}
             .dco-cost-section-title h4{font-size:15px!important;letter-spacing:-.1px}
-            .dco-cost-section-title>span{max-width:66%;font-size:11px!important;line-height:1.55;text-align:left}
+            .dco-cost-section-title>span{max-width:66%;font-size:11px!important;line-height:1.55;text-align:end}
             .dco-cost-table-wrap{padding:12px;overflow:auto;background:var(--card-bg,#fff)}
             .dco-cost-table{min-width:820px!important;border-collapse:separate!important;border-spacing:0!important;border:1px solid var(--border-color,#dfe4e8);border-radius:13px;overflow:hidden;font-size:12.5px!important;background:var(--card-bg,#fff)}
             .dco-cost-table thead th{position:sticky;top:0;z-index:2;padding:11px 10px!important;background:var(--subtle-fg,#f5f7f9)!important;color:var(--text-color,#29333d);font-size:11px;letter-spacing:.05px;border-bottom:1px solid var(--border-color,#d8dee4)!important}
@@ -105,7 +125,7 @@
             .dco-cost-table .dco-edge-detail-cell{width:30%;min-width:250px;white-space:normal}
             .dco-edge-default-note{color:var(--text-muted,#7a858f);font-size:16px;line-height:1}
             .dco-custom-edge-list{display:grid;gap:6px}
-            .dco-custom-edge-chip{display:grid;grid-template-columns:minmax(90px,.85fr) minmax(120px,1.25fr) auto;align-items:center;gap:8px;padding:7px 9px;border:1px solid #dfbd55;border-radius:10px;background:linear-gradient(135deg,#fffdf4,#fff7da);text-align:right;box-shadow:0 2px 7px rgba(139,100,0,.055)}
+            .dco-custom-edge-chip{display:grid;grid-template-columns:minmax(90px,.85fr) minmax(120px,1.25fr) auto;align-items:center;gap:8px;padding:7px 9px;border:1px solid #dfbd55;border-radius:10px;background:linear-gradient(135deg,#fffdf4,#fff7da);text-align:start;box-shadow:0 2px 7px rgba(139,100,0,.055)}
             .dco-custom-edge-sides{font-size:10px;font-weight:800;color:#5e6266;line-height:1.35}
             .dco-custom-edge-chip b{font-size:11px;font-weight:900;line-height:1.35;overflow-wrap:anywhere}
             .dco-custom-edge-chip em{padding:3px 7px;border:1px solid currentColor;border-radius:999px;color:#805b00;font-size:8px;font-style:normal;font-weight:900;white-space:nowrap}
@@ -115,7 +135,7 @@
             .dco-edge-pricing-note{display:inline-flex;align-items:center;gap:5px;padding:5px 9px;border-radius:999px;background:rgba(31,130,82,.09);color:#17643f;font-weight:850}
             @media(max-width:900px){
                 .dco-cost-section-title{align-items:flex-start!important;flex-direction:column}
-                .dco-cost-section-title>span{max-width:100%;text-align:right}
+                .dco-cost-section-title>span{max-width:100%;text-align:start}
             }
             @media(max-width:760px){
                 .dco-cost-table-wrap{padding:8px;overflow:visible}
@@ -123,10 +143,10 @@
                 .dco-cost-table--enhanced thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
                 .dco-cost-table--enhanced tbody{display:grid;gap:10px}
                 .dco-cost-table--enhanced tbody tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;border:1px solid var(--border-color,#dfe4e8);border-radius:13px;background:var(--card-bg,#fff)!important;overflow:hidden;box-shadow:0 5px 16px rgba(23,32,51,.05)}
-                .dco-cost-table--enhanced tbody td{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0!important;width:auto!important;padding:10px 11px!important;border-bottom:1px solid var(--border-color,#edf0f2)!important;text-align:left!important}
-                .dco-cost-table--enhanced tbody td::before{content:attr(data-label);color:var(--text-muted,#66727d);font-size:9px;font-weight:850;text-align:right}
+                .dco-cost-table--enhanced tbody td{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0!important;width:auto!important;padding:10px 11px!important;border-bottom:1px solid var(--border-color,#edf0f2)!important;text-align:end!important}
+                .dco-cost-table--enhanced tbody td::before{content:attr(data-label);color:var(--text-muted,#66727d);font-size:9px;font-weight:850;text-align:start}
                 .dco-cost-table--enhanced tbody td.dco-cell-notes,.dco-cost-table--enhanced tbody td.dco-edge-detail-cell,.dco-cost-table--invoice tbody td:nth-child(2){grid-column:1/-1}
-                .dco-cost-table--enhanced tbody td.dco-cell-notes,.dco-cost-table--enhanced tbody td.dco-edge-detail-cell{align-items:flex-start;flex-direction:column;text-align:right!important}
+                .dco-cost-table--enhanced tbody td.dco-cell-notes,.dco-cost-table--enhanced tbody td.dco-edge-detail-cell{align-items:flex-start;flex-direction:column;text-align:start!important}
                 .dco-cost-table--enhanced tbody td:last-child{border-bottom:0!important}
                 .dco-custom-edge-list{width:100%}
                 .dco-custom-edge-chip{grid-template-columns:1fr;gap:3px;width:100%}
@@ -160,7 +180,8 @@
             if (kind === "measurements") {
                 if (cells[1] && !cells[1].querySelector(".dco-piece-type")) {
                     const label = cells[1].textContent.trim();
-                    cells[1].innerHTML = `<span class="dco-piece-type ${label.includes("خاصة") ? "is-special" : ""}">${esc(label)}</span>`;
+                    const pieceType = cells[1].getAttribute("data-piece-type") || "";
+                    cells[1].innerHTML = `<span class="dco-piece-type ${pieceType === "Special" ? "is-special" : ""}">${esc(label)}</span>`;
                 }
                 if (cells[5]) {
                     cells[5].classList.add("dco-cell-notes");
@@ -171,12 +192,13 @@
     }
 
     function patchMeasurements(frm, wrapper) {
-        const section = findSection(wrapper, "جدول قياسات الطلب");
+        const section = findSection(wrapper, translate("Order measurement table"));
         const table = section && section.querySelector("table.dco-cost-table");
         if (!table) return;
         const headerCells = table.querySelectorAll("thead th");
-        if (headerCells[6] && headerCells[6].textContent !== "القشاط المخصص") {
-            headerCells[6].textContent = "القشاط المخصص";
+        const customHeader = translate("Custom edge banding");
+        if (headerCells[6] && headerCells[6].textContent !== customHeader) {
+            headerCells[6].textContent = customHeader;
         }
         const data = rows(frm);
         table.querySelectorAll("tbody tr").forEach((row, index) => {
@@ -190,21 +212,21 @@
             }
         });
         const subtitle = section.querySelector(".dco-cost-section-title span");
-        const text = "التخصيص الاستثنائي فقط؛ قشاط الأطراف الافتراضي محدد في بيانات الطلب";
+        const text = translate("Exceptional customization only; the default edge banding is set in the order data");
         if (subtitle && subtitle.textContent !== text) subtitle.textContent = text;
         decorateTable(table, "measurements");
     }
 
     function patchInvoice(_frm, wrapper) {
-        const section = findSection(wrapper, "تفاصيل عرض السعر")
-            || findSection(wrapper, "تفاصيل الفاتورة");
+        const section = findSection(wrapper, translate("Quotation details"))
+            || findSection(wrapper, translate("Invoice details"));
         const table = section && section.querySelector("table.dco-cost-table");
         if (!table) return;
 
         // Presentation only.  The tbody and total remain owned by
         // AlmdinaOrderCostUX and therefore by the persisted server-cost snapshot.
         const subtitle = section.querySelector(".dco-cost-section-title span");
-        const markup = '<span class="dco-edge-pricing-note">سطر مستقل لكل نوع قشاط وسعره — من تكلفة الطلب المحفوظة</span>';
+        const markup = `<span class="dco-edge-pricing-note">${esc(translate("A separate line for each edge type and its price — from the saved order cost"))}</span>`;
         if (subtitle && subtitle.innerHTML !== markup) subtitle.innerHTML = markup;
         decorateTable(table, "invoice");
     }

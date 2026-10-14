@@ -105,7 +105,7 @@ Edge Rate USD,سعر متر القشاط بالدولار
 Edge Cost USD,تكلفة القشاط بالدولار
 Area M2,المساحة م²
 Edge Meters,أمتار القشاط
-Notes,ملاحظات
+Notes,الملاحظات
 Draft,مسودة
 Pending Review,بانتظار المراجعة
 Approved,معتمد
@@ -149,7 +149,7 @@ Created,تم الإنشاء
 Added to Workforce,إضافة إلى المعمل
 Identity Updated,تحديث الهوية
 Roles Changed,تغيير الأدوار
-Enabled,تمكين
+Enabled,مفعّل
 Password Reset,إعادة تعيين كلمة المرور
 Start,بدء,action
 Pause,إيقاف مؤقت
@@ -688,6 +688,8 @@ Special shape geometry must touch all four raw-piece bounds.,يجب أن يلا�
 Special shape geometry area must be greater than zero.,يجب أن تكون مساحة المسار الهندسي أكبر من صفر.
 Special shape geometry edges cannot intersect.,لا يجوز أن تتقاطع أضلاع المسار الهندسي.
 Language,اللغة
+Could not change language.,تعذر تغيير اللغة.
+Changing language...,جارٍ تغيير اللغة...
 The language code is invalid.,رمز اللغة غير صالح.
 The selected user language is not supported.,لغة المستخدم المحددة غير مدعومة.
 The entered data is invalid.,البيانات المدخلة غير صالحة.
@@ -880,7 +882,7 @@ Corner,الزاوية
 Break,الكسر
 {0} preview,معاينة {0}
 {0} {1} — {2},{0} {1} — {2}
-Edit,إعداد
+Edit,تعديل
 Door piece {0},الدرفة {0}
 "Write the type, thickness, and color in one line, for example: white MDF 18 mm.",اكتب النوع والسماكة واللون في نص واحد، مثال: MDF أبيض 18 مم.
 Enter the edge color manually for this order.,أدخل لون القشاط يدويًا لهذا الطلب.
@@ -1042,3 +1044,1647 @@ Exceptional customization,تخصيص استثنائي
 The print window could not be opened. Reload the page and try again.,تعذر تشغيل الطباعة. أعد تحميل الصفحة ثم حاول مرة أخرى.
 The customer invoice could not be prepared. Reload the page and try again.,تعذر تجهيز فاتورة الزبون. أعد تحميل الصفحة ثم حاول مرة أخرى.
 The document could not be prepared for printing. Reload the page and try again.,تعذر تجهيز المستند للطباعة. أعد تحميل الصفحة ثم حاول مرة أخرى.
+Notes,الملاحظات,notes-panel
+Close notes,إغلاق الملاحظات
+Note context,سياق الملاحظات
+Current important note,الملاحظة المهمة الحالية
+No important note is currently selected.,لا توجد ملاحظة مهمة حاليًا.
+Clear selection,إلغاء التعيين,note-action
+Edited,تم التعديل
+Edit note,تعديل الملاحظة
+Saving...,جارٍ الحفظ...
+Save edit,حفظ التعديل
+Mark as important,تعيين كملاحظة مهمة
+Important note,ملاحظة مهمة
+Important note: {0},ملاحظة مهمة: {0}
+Open notes,فتح الملاحظات
+The notes interface could not be loaded. Reload the page and try again.,تعذر تحميل واجهة الملاحظات. حدّث الصفحة وحاول مرة أخرى.
+Edit,تعديل,note-action
+Delete,حذف,note-action
+User,مستخدم
+You do not have permission to view the customer notes linked to this order.,لا تتوفر لك صلاحية ملاحظات العميل المرتبط بهذا الطلب.
+All notes,كل الملاحظات
+No notes yet.,لا توجد ملاحظات بعد.
+Add note,إضافة ملاحظة
+Write a short and clear note...,اكتب ملاحظة قصيرة وواضحة...
+Adding...,جارٍ الإضافة...
+Add,إضافة
+Loading notes...,جارٍ تحميل الملاحظات...
+Could not load notes.,تعذر تحميل الملاحظات.
+Check the connection and try again.,تحقق من الاتصال وحاول مرة أخرى.
+Retry,إعادة المحاولة
+Delete this note? This action cannot be undone.,هل تريد حذف هذه الملاحظة؟ لا يمكن التراجع عن الحذف.
+Open important note: {0},فتح الملاحظة المهمة: {0}
+The operation could not be completed. Try again.,تعذر تنفيذ العملية. حاول مرة أخرى.
+Factory management,إدارة المعمل
+Basic settings,الإعدادات الأساسية
+3 core units,3 وحدات رئيسية
+System and workflow management,إدارة النظام ومسارات العمل
+4 units,4 وحدات
+Daily operations,التشغيل اليومي
+Shop floor and factory workflow,سير عمل الصالة والمعمل
+Operational reports and cost,التقارير التشغيلية والتكلفة
+Statistical and analytical data,البيانات الإحصائية والتحليلية
+Customers,الزبائن
+Edge banding types and prices,أنواع القشاط وأسعاره
+Role management,إدارة الأدوار
+Permission management,إدارة الصلاحيات
+User management,إدارة المستخدمين
+Production route management,إدارة مسارات الإنتاج
+Door cutting orders,طلبات قص الدرف
+Production stages,مراحل الإنتاج
+Replacement parts,القطع التعويضية
+Production errors,أخطاء الإنتاج
+Factory operations summary,ملخص عمليات المعمل
+Cutting order analysis,تحليل طلبات القص
+Board usage analysis,تحليل استخدام الألواح
+Door measurement analysis,تحليل قياسات الدرف
+Production stage performance,أداء مراحل الإنتاج
+Production errors and replacement parts,أخطاء الإنتاج والقطع التعويضية
+Manage customer records and contact details,إدارة سجلات الزبائن وبيانات التواصل
+Define edge banding types and their prices and thicknesses,تعريف أنواع القشاط والأسعار والسماكات
+Default production and cutting settings,إعدادات الإنتاج والقص الافتراضية
+Frappe roles used in the factory,أدوار Frappe المستخدمة في المعمل
+Almdina permission matrix by role,مصفوفة صلاحيات Almdina حسب الدور
+"Factory accounts, roles, and entry pages",حسابات المعمل والأدوار وصفحات الدخول
+Production routes and operational stages,مسارات الإنتاج والمراحل التشغيلية
+Create and follow cutting orders,إنشاء ومتابعة طلبات القص
+Shop floor board and inbox,لوحة التشغيل وصندوق الوارد
+Replacement parts linked to production errors,قطع بديلة مرتبطة بأخطاء الإنتاج
+Record and follow production incidents,تسجيل ومتابعة حوادث الإنتاج
+Overview of factory activity,نظرة عامة على حركة المعمل
+Order and performance analysis,تحليل الطلبات والأداء
+Board consumption and waste,استهلاك الألواح والهدر
+Most used measurements,أكثر المقاسات استخدامًا
+Stage time and productivity,زمن المراحل والإنتاجية
+Combined incident and compensation report,تقرير موحد للحوادث والتعويض
+You do not have permission to access this section.,لا تملك صلاحية الوصول إلى هذا القسم.
+Clipped corner shape,زاوية مقصوصة
+Top arch,قوس علوي
+Side arch,قوس جانبي
+Trapezoid,شبه منحرف
+Inner opening,فتحة داخلية
+Slanted edge,حافة مائلة
+Special door documentation,توثيق الدرفة الخاصة
+Back to the order,العودة للطلب
+Door {0},الدرفة {0}
+{0} × {1} cm,{0} × {1} سم
+Saved,محفوظ
+Save documentation,حفظ التوثيق
+Start here,ابدأ من هنا
+Reference image,صورة مرجعية
+Choose a suitable source — up to 8 MB,اختر المصدر المناسب — حتى 8 MB
+Upload an image,رفع صورة
+Scan,مسح بالسكانر
+Capture with the camera,التقاط بالكاميرا
+Download the scanner program — one-time setup,تنزيل برنامج السكانر — تثبيت مرة واحدة
+Ready-made shape,شكل جاهز
+Draw with the pen,رسم بالقلم
+Automatic cleanup and alignment,تنظيف وتثبيت تلقائي
+Locked,مقفلة
+Crop the image,اقتصاص الصورة
+Restore the full image,إعادة الصورة كاملة
+Lock the image,قفل الصورة
+Download the original image for the designer,تنزيل الصورة الأصلية للمصمم
+Remove the image,مسح الصورة
+Door documentation canvas,لوحة توثيق الدرفة
+"Choose an image, a ready-made shape, or start with the smart pen",اختر صورة أو شكلًا جاهزًا أو ابدأ بالقلم الذكي
+Image crop tools,أدوات اقتصاص الصورة
+Drag the frame or its handles,اسحب الإطار أو مقابضه
+Auto crop,اقتصاص تلقائي
+Reset,إعادة ضبط
+Apply,تطبيق
+Documentation tools,أدوات التوثيق
+Select,تحديد
+Smart pen,قلم ذكي
+Line,خط
+Rectangle,مستطيل
+Circle,دائرة
+Dimension,قياس
+Note,ملاحظة
+Undo Ctrl+Z,تراجع Ctrl+Z
+Undo,تراجع
+Redo Ctrl+Y or Ctrl+Shift+Z,إعادة Ctrl+Y أو Ctrl+Shift+Z
+Redo,إعادة
+Zoom the drawing area,تكبير مساحة الرسم
+Zoom out,تصغير
+Zoom in,تكبير
+Fit the drawing (F),ملاءمة الرسم (F)
+Fit the drawing,ملاءمة الرسم
+Fit,ملاءمة
+Documentation details,تفاصيل التوثيق
+Designer notes,ملاحظات المصمم
+Write what the designer should pay attention to…,اكتب ما يجب أن ينتبه إليه المصمم…
+Layers,الطبقات
+This documents the customer order and is not a manufacturing file,هذا توثيق لطلب العميل وليس ملف تصنيع
+Documentation summary,ملخص التوثيق
+For print and the designer,للطباعة والمصمم
+Documentation measurements,القياسات
+Documentation notes,الملاحظات
+Crop the reference image,اقتصاص الصورة المرجعية
+Saving…,جار الحفظ…
+Opening the scanner…,جار فتح السكانر…
+Unlocked,غير مقفلة
+Image is open,مفتوحة
+Pen stroke {0},رسم بالقلم {0}
+Line {0},خط {0}
+Rectangle {0},مستطيل {0}
+Circle {0},دائرة {0}
+Arrow {0},سهم {0}
+Dimension {0},قياس {0}
+Note {0},ملاحظة {0}
+Element {0},عنصر {0}
+No layers yet.,لا توجد طبقات بعد.
+Image,صورة
+Mixed,مختلط
+Present,موجودة
+Click an element to select it. Use Delete to remove it.,انقر على عنصر لتحديده. استخدم Delete للحذف.
+Draw freely; the line will be cleaned and its directions fixed.,ارسم بحرية؛ سننظف الخط ونثبت اتجاهاته.
+Drag from the start of the line to its end.,اسحب من بداية الخط إلى نهايته.
+Drag to draw a rectangle.,اسحب لرسم مستطيل.
+Drag to draw a circle or ellipse.,اسحب لرسم دائرة أو قطع ناقص.
+Drag between the two measurement points.,اسحب بين نقطتي القياس.
+Click where the note should go.,انقر في موضع الملاحظة.
+Note text,نص الملاحظة
+Add a note,إضافة ملاحظة
+"Drag inside the frame to move it, or drag a handle to choose the required part.",اسحب داخل الإطار لتحريكه، أو اسحب أحد المقابض لتحديد الجزء المطلوب.
+Crop in progress,اقتصاص قيد التعديل
+Unsaved,غير محفوظ
+Apply or cancel the crop before saving the documentation.,طبّق الاقتصاص أو ألغِه قبل حفظ التوثيق.
+Add a reference image or an explanatory element before saving.,أضف صورة مرجعية أو عنصرًا توضيحيًا قبل الحفظ.
+Door documentation was saved.,تم حفظ توثيق الدرفة.
+Save failed,فشل الحفظ
+"Could not save the documentation. Check the data and permissions, then try again.",تعذر حفظ التوثيق. تحقق من البيانات والصلاحيات ثم حاول مرة أخرى.
+The crop has not been applied yet. Go back and cancel the crop?,لم يُطبّق الاقتصاص بعد. هل تريد الرجوع وإلغاء الاقتصاص؟
+You have unsaved changes. Go back without saving?,لديك تعديلات غير محفوظة. هل تريد الرجوع دون حفظ؟
+The image is larger than 8 MB.,حجم الصورة يتجاوز 8 MB.
+Uploading the image…,جار رفع الصورة…
+The image was uploaded and added to the documentation.,تم رفع الصورة وإضافتها إلى التوثيق.
+"Could not upload the image. Use JPG, PNG, or WEBP no larger than 8 MB.",تعذر رفع الصورة. استخدم JPG أو PNG أو WEBP بحجم لا يتجاوز 8 MB.
+"This site is not allowed by the scanner bridge. Ask a system administrator to add it, then restart the bridge.",هذا الموقع غير مضاف إلى المواقع المسموحة في جسر السكانر. اطلب من مسؤول النظام إضافته ثم إعادة تشغيل الجسر.
+"The scanner is busy with another job. Wait until it finishes, then try again.",السكانر مشغول بعملية أخرى. انتظر انتهاءها ثم أعد المحاولة.
+"No compatible scanner was found. Make sure it is connected and recognized by Windows, then try again.",لم يتم العثور على سكانر متوافق. تأكد من توصيله وأن Windows يتعرف عليه ثم أعد المحاولة.
+The scanner returned an unsupported image and it could not be converted. Send the Scanner Bridge log to a system administrator.,أعاد السكانر صورة غير مدعومة وتعذر تحويلها. أرسل سجل Scanner Bridge لمسؤول النظام.
+The scan could not be completed. Check that Windows sees the scanner and that no other program is using it.,تعذر إتمام المسح. تحقق من أن Windows يرى السكانر وأنه غير مستخدم من برنامج آخر.
+The scanned image is larger than 8 MB. Lower the scan resolution and try again.,الصورة الناتجة من السكانر تتجاوز 8 MB. خفّض دقة المسح ثم حاول مرة أخرى.
+The scanner response is invalid. Restart Almdina Scanner Bridge and try again.,استجابة السكانر غير صالحة. أعد تشغيل Almdina Scanner Bridge ثم حاول مرة أخرى.
+"The scanner program is not installed or is stopped. Install it once, or open it from the Start menu if it is already installed.",برنامج السكانر غير مثبت أو متوقف. ثبّته مرة واحدة، أو افتحه من قائمة ابدأ إذا كان مثبتًا.
+Windows will ask you to choose the scanner and the scan settings.,سيظهر مربع Windows لاختيار جهاز السكانر وإعدادات المسح.
+The scan was cancelled and no image was added.,تم إلغاء عملية المسح ولم تُضف صورة.
+The scan finished and the image was added to the documentation.,تم المسح وإضافة الصورة إلى التوثيق.
+The scanner image was added. You can now draw or add dimensions.,تمت إضافة صورة السكانر. يمكنك الآن الرسم أو إضافة القياسات.
+Could not add the scanner image to the documentation.,تعذر إضافة صورة السكانر إلى التوثيق.
+Remove the reference image from the documentation?,هل تريد مسح الصورة المرجعية من التوثيق؟
+No clear white margins were found. Adjust the frame manually.,لم نتمكن من تمييز هوامش بيضاء واضحة. عدّل الإطار يدويًا.
+The end is close to the start. Close the shape?,النهاية قريبة من البداية. هل تريد إغلاق الشكل؟
+The photo was captured and added to the documentation.,تم التقاط الصورة وإضافتها إلى التوثيق.
+Loading door documentation…,جار تحميل توثيق الدرفة…
+Could not load the door. Open the documentation from the order and check the permissions.,تعذر تحميل الدرفة. افتح التوثيق من الطلب وتحقق من الصلاحيات.
+Save the order before opening the documentation.,احفظ الطلب أولًا قبل فتح التوثيق.
+Enter the size first,أدخل المقاس أولًا
+"Enter the door width and length first, then open the shape documentation.",أدخل عرض الدرفة وطولها أولًا، ثم افتح توثيق الشكل.
+You do not have permission to open the special door documentation.,ليس لديك صلاحية فتح توثيق الدرفة الخاصة.
+Could not open the documentation. Save the order and try again.,تعذر فتح التوثيق. احفظ الطلب ثم حاول مرة أخرى.
+Opening door documentation…,جار فتح توثيق الدرفة…
+Preparing the image and drawing tools,نجهّز الصورة وأدوات الرسم
+Could not load the documentation workspace. Reload the page and try again.,تعذر تحميل مساحة التوثيق. أعد تحميل الصفحة ثم حاول مرة أخرى.
+The documentation link is incomplete. Open it from the order.,رابط التوثيق غير مكتمل. افتحه من داخل الطلب.
+You do not have permission to open the special door documentation workspace for this order.,لا تملك صلاحية فتح مساحة توثيق الدرفة الخاصة لهذا الطلب.
+The documentation workspace is available for special doors only.,مساحة التوثيق متاحة للدرف الخاصة فقط.
+The selected door does not belong to this order.,الدرفة المحددة لا تنتمي إلى هذا الطلب.
+You do not have permission to edit special door documentation.,ليس لديك صلاحية تعديل توثيق الدرف الخاصة.
+You are not allowed to edit special door documentation.,لا تملك صلاحية تعديل توثيق الدرف الخاصة.
+Documentation can be edited when the order state allows it.,يمكن تعديل التوثيق عندما يسمح وضع الطلب بذلك.
+The documentation workspace accepts only the current contract.,مساحة التوثيق تقبل العقد الحالي فقط.
+The documentation width does not match the door width.,عرض التوثيق لا يطابق عرض الدرفة.
+The documentation length does not match the door length.,طول التوثيق لا يطابق طول الدرفة.
+The reference image does not belong to this door.,الصورة المرجعية لا تنتمي إلى هذه الدرفة.
+"Use a JPG, PNG, or WEBP image only.",استخدم صورة JPG أو PNG أو WEBP فقط.
+Could not read the image content.,تعذر قراءة محتوى الصورة.
+The image content does not match the file extension.,محتوى الصورة لا يطابق امتداد الملف.
+Add documentation before saving.,أضف توثيقًا قبل الحفظ.
+The door documentation is too large. Simplify the drawing and try again.,توثيق الدرفة كبير جدًا. بسّط الرسم ثم حاول مرة أخرى.
+The door documentation contains invalid JSON.,توثيق الدرفة يحتوي JSON غير صالح.
+The door documentation contains values that cannot be saved.,توثيق الدرفة يحتوي قيمًا غير قابلة للحفظ.
+The door documentation must be a JSON object.,توثيق الدرفة يجب أن يكون كائن JSON.
+{0} must be a valid number.,{0} يجب أن يكون رقمًا صالحًا.
+{0} is outside the documentation area.,{0} خارج نطاق مساحة التوثيق.
+{0} must be greater than zero.,{0} يجب أن يكون أكبر من صفر.
+{0} must be a valid point.,{0} يجب أن يكون نقطة صالحة.
+X coordinate,إحداثي X
+Y coordinate,إحداثي Y
+The reference image data is invalid.,بيانات الصورة المرجعية غير صالحة.
+The reference image link is invalid.,رابط الصورة المرجعية غير صالح.
+Image rotation,تدوير الصورة
+The image rotation angle is invalid.,زاوية تدوير الصورة غير صالحة.
+The image opacity is invalid.,شفافية الصورة غير صالحة.
+Image opacity must be between 10% and 100%.,شفافية الصورة يجب أن تكون بين 10% و100%.
+The image lock state is invalid.,حالة قفل الصورة غير صالحة.
+The image crop data is invalid.,بيانات اقتصاص الصورة غير صالحة.
+The image crop bounds are outside the original image.,حدود اقتصاص الصورة خارج نطاق الصورة الأصلية.
+The original image dimensions are required to save the crop.,أبعاد الصورة الأصلية مطلوبة لحفظ الاقتصاص.
+The original image dimensions are invalid.,أبعاد الصورة الأصلية غير صالحة.
+Documentation element {0} is invalid.,عنصر التوثيق رقم {0} غير صالح.
+Documentation element {0} has an invalid or duplicate identifier.,معرّف عنصر التوثيق رقم {0} غير صالح أو مكرر.
+Documentation element {0} has an unsupported type.,نوع عنصر التوثيق رقم {0} غير مدعوم.
+Pen stroke {0} has an invalid number of points.,ضربة القلم رقم {0} تحتوي عدد نقاط غير صالح.
+Pen point {0},نقطة القلم {0}
+Element start,بداية العنصر
+Element end,نهاية العنصر
+Dimension value,قيمة القياس
+The measurement unit is not supported.,وحدة القياس غير مدعومة.
+X position,موضع X
+Y position,موضع Y
+Note position,موضع الملاحظة
+Note text must not exceed {0} characters.,نص الملاحظة يجب ألا يتجاوز {0} حرفًا.
+The door documentation contract is not supported.,عقد توثيق الدرفة غير مدعوم.
+The door documentation version is not supported.,إصدار توثيق الدرفة غير مدعوم.
+The documentation canvas size is invalid.,مقاس لوحة التوثيق غير صالح.
+Door width,عرض الدرفة
+Door length,طول الدرفة
+The door documentation has too many elements or is invalid.,عناصر توثيق الدرفة كثيرة جدًا أو غير صالحة.
+Designer notes must not exceed {0} characters.,ملاحظات المصمم يجب ألا تتجاوز {0} حرفًا.
+The door documentation source is not supported.,مصدر توثيق الدرفة غير مدعوم.
+The selected ready-made shape is not supported.,الشكل الجاهز المحدد غير مدعوم.
+Add a reference image or at least one explanatory element before saving.,أضف صورة مرجعية أو عنصرًا توضيحيًا واحدًا على الأقل قبل الحفظ.
+Customer and basic order information.,معلومات العميل والطلب الأساسية.
+Choose the board and the default edge banding for this order.,حدد اللوح والقشاط الافتراضي لهذا الطلب.
+Door measurements,قياسات الدرف
+Enter piece dimensions and quantities; this is the main work surface for the order.,أدخل أبعاد وكميات القطع؛ هذا هو سطح العمل الرئيسي للطلب.
+Add an order note…,أضف ملاحظة للطلب…
+Choose the cutting machine,اختر آلة القص
+Enter the edge color,أدخل لون القشاط
+{0} pieces,{0} قطعة
+Custom for this order,معدل لهذا الطلب
+Taken automatically from the edge type,مأخوذ تلقائيًا من نوع القشاط
+Select the cutting machine type,يجب اختيار نوع آلة القص
+Send the measurements file to the customer?,هل تريد إرسال ملف القياسات للزبون؟
+Send the measurement changes to the customer?,هل تريد إرسال تعديلات القياسات للزبون؟
+A WhatsApp message will not be sent because the session is disconnected.,لن يتم إرسال رسالة واتساب لأن الجلسة غير متصلة.
+"Save the order first, then send the measurements table.",احفظ الطلب أولاً ثم أرسل جدول القياسات.
+Send measurements via WhatsApp,إرسال القياسات عبر واتساب
+Send measurement changes via WhatsApp,إرسال تعديلات القياسات عبر واتساب
+Sending WhatsApp…,جاري إرسال واتساب...
+Could not reach the server.,تعذر الاتصال بالخادم.
+Could not identify the order for sending measurements.,تعذر تحديد الطلب لإرسال القياسات.
+The measurements table was sent to the customer via WhatsApp.,تم إرسال جدول القياسات إلى الزبون عبر واتساب.
+Could not send the measurements file.,تعذر إرسال ملف القياسات.
+WhatsApp send,إرسال واتساب
+Could not send WhatsApp,تعذر إرسال واتساب
+Something went wrong while sending the measurements table.,حدثت مشكلة أثناء إرسال جدول القياسات.
+WhatsApp,واتساب
+Edit order,تعديل
+Close and return,إغلاق والعودة
+Could not prepare the measurements print. Reload the page and try again.,تعذر تجهيز طباعة القياسات. أعد تحميل الصفحة ثم حاول مرة أخرى.
+Unsaved changes,توجد تعديلات غير محفوظة
+All changes are saved,جميع التعديلات محفوظة
+Could not open the entry table. Reload the order and try again.,تعذر فتح جدول الإدخال. أعد تحميل الطلب ثم حاول مرة أخرى.
+Door measurement entry table,جدول إدخال قياسات الدرف
+No customer,بدون عميل
+Door entry table,جدول إدخال الدرف
+{0} · {1},{0} · {1}
+Edge type: {0},نوع القشاط: {0}
+Edge color: {0},لون القشاط: {0}
+Open the entry table in a separate window,فتح جدول الإدخال في نافذة مستقلة
+Order edge color,لون القشاط العام للطلب
+{0} mm · $ {1}/m,{0} مم · $ {1}/م
+{0} mm,{0} مم
+{0} mm — $ {1}/m,{0} مم — $ {1}/م
+{0} — {1} — {2} — {3},{0} — {1} — {2} — {3}
+Saw blade thickness (mm),سماكة شفرة القص (مم)
+Blade,الشفرة
+Board trim margin,هامش تشذيب اللوح
+Margin,الهامش
+Piece packing algorithm,خوارزمية توزيع القطع
+Algorithm,الخوارزمية
+Optimization time limit,مهلة التحسين
+Time limit,المهلة
+seconds,ث
+"The maximum time the optimizer may spend searching for a better layout. The search may finish sooner. Increasing it can improve some complex plans, but it makes the preview slower.",أقصى مدة يمنحها النظام لمحرك التحسين للبحث عن توزيع أفضل. قد ينتهي البحث قبلها، وزيادتها قد تحسن بعض الخطط المعقدة لكنها تجعل المعاينة أبطأ.
+Cutting plan settings,إعدادات خطة القص
+Cutting settings,إعدادات القص
+{0} — currently unavailable,{0} — غير متاح حاليًا
+A valid value is required for {0}.,يجب تحديد قيمة صالحة للحقل «{0}».
+The value entered for {0} is not valid.,القيمة المدخلة في «{0}» غير صالحة.
+{0} cannot be negative.,لا يمكن أن تكون قيمة «{0}» سالبة.
+You do not have permission to edit the cutting plan settings.,لا تملك صلاحية تعديل إعدادات خطة القص.
+Save or cancel the current order changes before editing the cutting plan settings.,احفظ أو ألغِ تعديلات الطلب الحالية قبل فتح تعديل إعدادات خطة القص.
+The current order status does not allow editing the cutting plan settings.,حالة الطلب الحالية لا تسمح بتعديل إعدادات خطة القص.
+There is no cutting plan whose settings can be edited right now.,لا توجد خطة قص قابلة لتعديل الإعدادات حاليًا.
+The current order status no longer allows you to edit the cutting plan settings.,لم تعد حالة الطلب الحالية تسمح لك بتعديل إعدادات خطة القص.
+The cutting plan settings were saved. Recalculate to update the result.,تم حفظ إعدادات خطة القص. أعد الحساب لتحديث النتيجة.
+Auto Pro (recommended),تلقائي متقدم (موصى به)
+MaxRects,تعبئة المستطيلات القصوى
+Guillotine,القص المقصلي
+Shelf packing,التعبئة بالرفوف
+Skyline,التعبئة بخط الأفق
+Constraint programming — CP-SAT,البرمجة بالقيود — CP-SAT
+Mixed-integer programming — CBC,البرمجة الصحيحة المختلطة — CBC
+SCIP solver,محلّل SCIP
+HiGHS solver,محلّل HiGHS
+Gecode constraint solver,محلّل القيود Gecode
+Chuffed constraint solver,محلّل القيود Chuffed
+Genetic algorithm,الخوارزمية الجينية
+Simulated annealing,التلدين المُحاكى
+Plan settings,إعدادات الخطة
+Could not persist the measurement changes before calculating the cutting plan. Open the order for editing and try again.,تعذر تثبيت تعديلات القياسات قبل حساب خطة القص. افتح الطلب للتعديل ثم حاول مرة أخرى.
+Could not persist the measurement changes before calculating the cutting plan. Reload the page and try again.,تعذر تثبيت تعديلات القياسات قبل حساب خطة القص. أعد تحميل الصفحة ثم حاول مرة أخرى.
+Measurement changes are saved first so they are not lost when the cutting plan is recalculated.,يتم حفظ تعديلات القياسات أولًا حتى لا تفقد عند إعادة حساب خطة القص.
+Cutting plan calculation is still waiting,حساب خطة القص ما زال في الانتظار
+Recalculating the cutting plan and cost in the background,جاري إعادة حساب خطة القص والتكلفة في الخلفية
+"The save succeeded, but the background worker has not started yet. You can keep working or use manual recalculation.",الحفظ تم بنجاح، لكن العامل الخلفي لم يبدأ بعد. يمكنك متابعة العمل أو استخدام زر إعادة الحساب اليدوي.
+You can keep working on the order. The cutting plan and cost will update automatically when the calculation finishes.,يمكنك متابعة العمل على الطلب. ستتحدث خطة القص والتكلفة تلقائيًا عند اكتمال الحساب.
+{0} — {1},{0} — {1}
+⚡ Recalculation needed,⚡ تحتاج إعادة حساب
+The cutting plan needs recalculation — press “Recalculate with the current settings” when you finish.,خطة القص تحتاج إعادة حساب — اضغط «إعادة الحساب بالإعدادات الحالية» بعد الانتهاء.
+Saving cutting plan settings...,جاري حفظ إعدادات خطة القص...
+Recalculating the cutting plan...,جاري إعادة حساب خطة القص...
+Creating the first cutting plan...,جاري إنشاء خطة القص الأولى...
+Previewing the plan with these settings...,جاري معاينة الخطة بهذه الإعدادات...
+Saving the selected cutting plan...,جاري حفظ خطة القص المختارة...
+Approving the cutting plan...,جاري اعتماد خطة القص...
+Cancelling the cutting plan approval...,جاري إلغاء اعتماد خطة القص...
+Saving the offcut classification...,جارٍ حفظ تصنيف قطع النقص...
+Could not load the cutting plan preview service. Reload the page.,تعذر تحميل خدمة معاينة خطة القص. أعد تحميل الصفحة.
+Could not create the preview.,تعذر إنشاء المعاينة.
+Could not save the preview.,تعذر حفظ المعاينة.
+The requested trim margin was kept,تم الاحتفاظ بهامش التشذيب المطلوب
+Trim was reduced so every piece could be placed,تم تخفيض التشذيب لإتاحة توزيع جميع القطع
+Trim was reduced to avoid an unnecessary extra board,تم تخفيض التشذيب لتجنب لوح إضافي غير ضروري
+Ready to try,جاهز للتجربة
+"Change the settings, then press “Recalculate with the current settings”. The saved plan has not changed.",غيّر الإعدادات ثم اضغط «إعادة الحساب بالإعدادات الحالية». الخطة المحفوظة لم تتغير.
+Trial,تجربة
+The previous preview is out of date,المعاينة السابقة أصبحت قديمة
+You changed a setting after the last preview. The plan shown below is the saved plan; recalculate to see the new result.,غيّرت أحد الإعدادات بعد آخر معاينة. الخطة المعروضة أدناه هي الخطة المحفوظة؛ أعد الحساب لرؤية النتيجة الجديدة.
+Recalculate,أعد الحساب
+Calculating the preview,جاري حساب المعاينة
+The engine is running on the current settings without saving any change.,يتم تشغيل المحرك على الإعدادات الحالية دون حفظ أي تغيير.
+Calculating,جاري الحساب
+The preview failed,تعذرت المعاينة
+"Nothing was saved. Review the settings, then recalculate.",لم يتم حفظ أي تغيير. راجع الإعدادات ثم أعد الحساب.
+Not saved,لم تُحفظ
+Requested algorithm,الخوارزمية المطلوبة
+Strategy used,الاستراتيجية المستخدمة
+Kerf used,Kerf المستخدم
+Requested trim,Trim المطلوب
+Applied trim,Trim الفعلي
+Width {0} mm / length {1} mm,عرض {0} مم / طول {1} مم
+Attempts,المحاولات
+Calculation time,وقت الحساب
+{0} s,{0} ث
+Trim decision,قرار التشذيب
+Solver status,حالة Solver
+Board count,عدد الألواح
+Waste percent,نسبة الهدر
+Cut lines,خطوط القص
+Expected plan cost,تكلفة الخطة المتوقعة
+Saving the selected preview,جاري حفظ المعاينة المختارة
+Preview cannot be saved,معاينة غير صالحة للحفظ
+Unsaved preview,معاينة غير محفوظة
+The same plan you see is being saved without running the algorithm again.,يتم الآن تثبيت نفس الخطة التي تراها دون إعادة تشغيل الخوارزمية.
+"The result is shown for review, but it did not pass the engineering check. Try other settings before saving.",تم عرض النتيجة للمراجعة، لكنها لم تنجح في التحقق الهندسي. جرّب إعدادات أخرى قبل الحفظ.
+This plan and its cost are only a preview. They both become official when you press “Save”.,هذه الخطة وتكلفتها المعروضة للمعاينة فقط. ستصبحان رسميتين معًا عند الضغط على «حفظ».
+This plan is only a preview. The new plan becomes official when you press “Save”.,هذه الخطة للمعاينة فقط. ستصبح الخطة الجديدة رسمية عند الضغط على «حفظ».
+Not valid,غير صالحة
+PREVIEW,PREVIEW
+Save or cancel the cutting plan edit before changing the plan source.,احفظ أو ألغِ تعديل خطة القص قبل تغيير مصدر الخطة.
+Press “Edit” to try other settings or algorithms. The saved plan will not change while you are trying them.,اضغط «تعديل» لتجربة إعدادات أو خوارزميات أخرى. لن تتغير الخطة المحفوظة أثناء التجربة.
+"Change the settings as you like, then press “Recalculate with the current settings” to preview the result. Saving stays unavailable until you preview.",عدّل الإعدادات كما تريد ثم اضغط «إعادة الحساب بالإعدادات الحالية» لمعاينة النتيجة. الحفظ لن يتفعل قبل المعاينة.
+The settings were changed. Recalculate to preview the new plan before saving.,تم تعديل الإعدادات. أعد الحساب لمعاينة الخطة الجديدة قبل الحفظ.
+A temporary preview is being calculated. Nothing is saved during the preview.,جاري حساب معاينة مؤقتة. لا يتم حفظ أي تغيير أثناء المعاينة.
+Saving the same plan and cost that were previewed.,جاري حفظ نفس الخطة والتكلفة التي تمت معاينتها.
+Saving the same plan that was previewed.,جاري حفظ نفس الخطة التي تمت معاينتها.
+"The preview failed. Adjust the settings if needed, then recalculate.",تعذرت المعاينة. عدّل الإعدادات عند الحاجة ثم أعد الحساب.
+The current preview is ready to save. The cost shown is an estimate for this plan and becomes official when you save.,المعاينة الحالية جاهزة للحفظ. التكلفة الظاهرة تقديرية لهذه الخطة، وتصبح رسمية عند الحفظ.
+The current preview is ready to save. Press “Save” to adopt the same plan shown.,المعاينة الحالية جاهزة للحفظ. اضغط «حفظ» لاعتماد نفس الخطة المعروضة.
+"The preview was shown but cannot be saved. Try other settings, then recalculate.",تم عرض المعاينة لكنها غير صالحة للحفظ. جرّب إعدادات أخرى ثم أعد الحساب.
+Wait until the plan preview finishes.,انتظر حتى تكتمل معاينة الخطة.
+Saving the selected plan.,جاري حفظ الخطة المختارة.
+"The previous preview failed. Recalculate, then save.",تعذرت المعاينة السابقة. أعد الحساب ثم احفظ.
+"The current preview did not pass the engineering check. Try other settings, then recalculate.",المعاينة الحالية لم تنجح في التحقق الهندسي. جرّب إعدادات أخرى ثم أعد الحساب.
+"Recalculate with these settings first, then save the plan shown in front of you.",أعد الحساب بهذه الإعدادات أولًا، ثم احفظ الخطة التي تظهر أمامك.
+Save the preview plan shown now,حفظ نفس خطة المعاينة المعروضة الآن
+The preview plan was saved and its related cost was updated.,تم حفظ خطة المعاينة وتحديث التكلفة المرتبطة بها.
+"The preview plan was saved, but the view could not be refreshed. Reload the page to see the latest plan and cost.",تم حفظ خطة المعاينة بنجاح، لكن تعذر تحديث العرض الآن. حدّث الصفحة لرؤية آخر خطة وتكلفة.
+The order has left the active production stages and the cutting plan cannot be edited.,الطلب غادر مراحل الإنتاج النشطة ولا يمكن تعديل خطة القص.
+You can only view the plan because the current stage is assigned to another user.,يمكنك عرض الخطة فقط لأن المرحلة الحالية مسندة إلى مستخدم آخر.
+Assign the current stage to a user before editing the cutting plan.,أسند المرحلة الحالية إلى مستخدم قبل تعديل خطة القص.
+Save the order before calculating the cutting plan.,احفظ الطلب أولًا قبل حساب خطة القص.
+Wait until the cutting plan finishes loading.,انتظر حتى يكتمل تحميل خطة القص.
+"Press “Edit” to try new settings, then recalculate to preview.",اضغط «تعديل» لتجربة إعدادات جديدة ثم أعد الحساب للمعاينة.
+Wait until the current preview or save finishes.,انتظر حتى تكتمل عملية المعاينة أو الحفظ الحالية.
+The approved plan cannot be recalculated outside the planning stage.,الخطة المعتمدة لا يمكن إعادة حسابها خارج مرحلة التخطيط.
+You need the “Recalculate plan” permission to run the engine.,تحتاج صلاحية «إعادة حساب الخطة» لتشغيل المحرك.
+"Enter the board item, its dimensions, and at least one valid measurement before calculating the cutting plan.",أدخل صنف اللوح ومقاساته وقياسًا واحدًا صحيحًا على الأقل قبل حساب خطة القص.
+Could not prepare the cutting plan service. Reload the page and try again.,تعذر تجهيز خدمة خطة القص. أعد تحميل الصفحة ثم حاول مرة أخرى.
+"The first cutting plan was created, saved, and the cost was updated.",تم إنشاء خطة القص الأولى وحفظها وتحديث التكلفة.
+"A new preview was created. Review it, then press “Save” to apply this change to the plan.",تم إنشاء معاينة جديدة. راجعها ثم اضغط «حفظ» لاعتماد هذا التعديل على الخطة.
+Save or cancel the plan settings edit before approval.,احفظ أو ألغِ تعديل إعدادات الخطة قبل الاعتماد.
+"The order data changed. Upload a new DXF that matches the current measurements, then approve the plan.",بيانات الطلب تغيّرت. ارفع DXF جديدًا يطابق القياسات الحالية ثم اعتمد الخطة.
+Recalculate the cutting plan and review the new result before approval.,أعد حساب خطة القص وراجع النتيجة الجديدة قبل الاعتماد.
+You do not have permission to approve the cutting plan.,ليست لديك صلاحية اعتماد خطة القص.
+There is no valid plan to approve in the current state.,لا توجد خطة صالحة للاعتماد في الحالة الحالية.
+Uploaded DXF plan,خطة DXF المرفوعة
+Current system plan,خطة النظام الحالية
+An approval already exists. Continuing will create a new approval and replace the current approved plan.,يوجد اعتماد سابق. سيؤدي المتابعة إلى إنشاء اعتماد جديد واستبدال الخطة المعتمدة الحالية.
+This plan will be fixed as the final production copy.,سيتم تثبيت هذه الخطة كنسخة الإنتاج النهائية.
+The cutting plan was approved for production.,تم اعتماد خطة القص للإنتاج.
+Approve DXF plan,اعتماد خطة DXF
+Approve cutting plan,اعتماد خطة القص
+Upload a new DXF that matches the current order data before approval,ارفع DXF جديدًا يطابق بيانات الطلب الحالية قبل الاعتماد
+Recalculate the plan before approving it,أعد حساب الخطة قبل اعتمادها
+"Approval is unavailable in the current order state, or you do not have permission",الاعتماد غير متاح في حالة الطلب الحالية أو لا توجد صلاحية
+Calculate the cutting plan,حساب خطة القص
+Recalculate with the current settings,إعادة الحساب بالإعدادات الحالية
+Create and save the first cutting plan and update the cost automatically,إنشاء وحفظ أول خطة قص وتحديث التكلفة تلقائيًا
+Create a temporary preview with these settings before saving the change,إنشاء معاينة مؤقتة بهذه الإعدادات قبل حفظ التعديل
+Start with “Calculate the cutting plan”. You can edit the settings first or use the current factory settings. The plan will be saved and the cost updated automatically.,ابدأ بـ«حساب خطة القص». يمكنك تعديل الإعدادات أولًا أو استخدام إعدادات المصنع الحالية. سيتم حفظ الخطة وتحديث التكلفة تلقائيًا.
+Start with “Calculate the cutting plan”. The current plan settings or factory settings will be used and the cost will update automatically. Changing the settings needs a separate permission.,ابدأ بـ«حساب خطة القص». ستستخدم إعدادات الخطة الحالية/إعدادات المصنع وتُحدَّث التكلفة تلقائيًا. تغيير الإعدادات يحتاج صلاحية مستقلة.
+"Press “Edit” to try algorithms and settings. Recalculation creates a preview, and the change is not saved until you press “Save”.",اضغط «تعديل» لتجربة الخوارزميات والإعدادات. إعادة الحساب تنشئ معاينة، ولا يُحفظ التعديل حتى تضغط «حفظ».
+"The engine can be run again with the saved settings. Changing the algorithm, kerf, or trim needs the “Edit cutting algorithm” permission.",يمكن إعادة تشغيل المحرك بالإعدادات المحفوظة. تغيير الخوارزمية أو Kerf أو Trim يحتاج صلاحية «تعديل خوارزمية القص».
+You need the “Recalculate plan” permission to run the cutting plan engine.,تحتاج صلاحية «إعادة حساب الخطة» لتشغيل محرك خطة القص.
+ · {0} s, · {0} ث
+A plan setting changed. Recalculate to apply the change to the drawing and the results.,تم تغيير أحد إعدادات الخطة. أعد الحساب لتطبيق التغيير على الرسم والنتائج.
+About {0} m · {1} rotations · {2} attempts,حوالي {0} م · {1} تدوير · {2} محاولة
+All special doors were placed in the cutting plan:,تم إدخال جميع الدرف الخاصة في خطة القص:
+An original board edge was used; check that it is straight before cutting.,تم استخدام حافة أصلية من اللوح؛ افحص استقامتها قبل التنفيذ.
+Approval source,مصدر الاعتماد
+Approve drawing,اعتماد الرسم
+Approve for production,اعتماد للإنتاج
+Approve the system plan,اعتماد خطة النظام
+Approve the uploaded plan,اعتماد الخطة المرفوعة
+Approved for production,معتمدة للإنتاج
+Approved plan,الخطة المعتمدة
+Approving the drawing plan...,جاري اعتماد خطة الرسم...
+Board color,لون اللوح
+Board details,تفاصيل اللوح
+Board size,قياس اللوح
+Board type,نوع اللوح
+Board {0},لوح {0}
+Calculation and cost details,تفاصيل الحساب والتكلفة
+Cancel plan approval,إلغاء اعتماد الخطة
+Changing the algorithm needs the “Edit cutting algorithm” permission. You can recalculate with the current algorithm.,تغيير الخوارزمية يحتاج صلاحية «تعديل خوارزمية القص». يمكنك إعادة الحساب بالخوارزمية الحالية.
+Choose the final version you want to approve for production.,اختر النسخة النهائية التي تريد اعتمادها للإنتاج.
+Could not display the geometric path,تعذر عرض المسار الهندسي
+Could not display the plan.,تعذر عرض الخطة.
+Could not load the command that cancels cutting plan approval. Reload the page and try again.,تعذر تحميل أمر إلغاء اعتماد خطة القص. أعد تحميل الصفحة ثم حاول مرة أخرى.
+Could not load the cutting plan approval command. Reload the page and try again.,تعذر تحميل أمر اعتماد خطة القص. أعد تحميل الصفحة ثم حاول مرة أخرى.
+Could not load the cutting plan recalculation command. Reload the page and try again.,تعذر تحميل أمر إعادة حساب خطة القص. أعد تحميل الصفحة ثم حاول مرة أخرى.
+Could not load the cutting plan. Try again.,تعذر تحميل خطة القص. أعد المحاولة.
+Could not load the secure DXF export service.,تعذر تحميل خدمة تصدير DXF الآمنة.
+Could not load the secure DXF upload service.,تعذر تحميل خدمة رفع DXF الآمنة.
+Could not load the secure DXF upload service. Reload the page and try again.,تعذر تحميل خدمة رفع DXF الآمنة. أعد تحميل الصفحة ثم حاول مرة أخرى.
+Could not prepare printing.,تعذر تجهيز الطباعة.
+Could not prepare the cutting plan for printing. Reload the page and try again.,تعذر تجهيز خطة القص للطباعة. أعد تحميل الصفحة ثم حاول مرة أخرى.
+Could not prepare the cutting plan print. Reload the page.,تعذر تجهيز طباعة خطة القص. أعد تحميل الصفحة.
+Could not start the secure DXF source. Reload the page.,تعذر تشغيل مصدر DXF الآمن. أعد تحميل الصفحة.
+Current plan result,نتيجة الخطة الحالية
+Current result,النتيجة الحالية
+Customer name,اسم الزبون
+Cut execution settings,إعدادات تنفيذ القص
+Cuts: {0} | waste: {1} m² ({2}%),قطع: {0} | الهدر: {1} م² ({2}%)
+Cutting plan,خطة القص
+Cutting plan - {0},خطة قص - {0}
+Cutting plan approval was cancelled and its history was kept.,تم إلغاء اعتماد خطة القص مع الاحتفاظ بسجلها.
+Cutting plan commands,أوامر خطة القص
+Cutting plan engine,محرك خطة القص
+Cutting plan source,مصدر خطة القص
+Door add-on symbols,رموز إضافات الدرف
+Door list:,قائمة الدرف:
+Download uploaded DXF,تنزيل DXF المرفوع
+Drawing / DXF,الرسم / DXF
+Drawing plan engine,محرك خطة الرسم
+Ease of cutting,سهولة التنفيذ
+Edge banding double,دبل قشاط
+"Edit the plan settings from “Edit cutting plan”, save them, then recalculate.",عدّل إعدادات الخطة من «تعديل خطة القص»، احفظها، ثم أعد الحساب.
+Enlarge board,تكبير اللوح
+Enter a board length and width greater than zero before calculating the cutting plan.,أدخل طول اللوح وعرضه بقيم أكبر من الصفر قبل حساب خطة القص.
+Enter at least one valid measurement before calculating the cutting plan.,أدخل قياسًا واحدًا صحيحًا على الأقل قبل حساب خطة القص.
+"Enter the board item first, for example: MDF white 18 mm.",أدخل صنف اللوح أولًا، مثال: MDF أبيض 18 مم.
+Largest free area,أكبر مساحة فارغة
+Loading the cutting plan...,جاري تحميل خطة القص...
+Offcut,نقص
+Order date,تاريخ الطلب
+Order number,رقم الطلب
+Original edge,حافة أصلية
+Original edge · bottom,حافة أصلية · أسفل
+Original edge · left,حافة أصلية · يسار
+Original edge · right,حافة أصلية · يمين
+Original edge · top,حافة أصلية · أعلى
+Page {0} of {1},صفحة {0} من {1}
+Piece count,عدد القطع
+Piece layout on the boards,توزيع القطع على الألواح
+Piece layout on boards,توزيع القطع على الألواح
+Pieces: {0} | waste: {1} m² ({2}%),عدد القطع: {0} | الهدر: {1} م² ({2}%)
+Plan approved for production,الخطة المعتمدة للإنتاج
+Plan settings are read-only in the current state.,إعدادات الخطة للعرض فقط في الحالة الحالية.
+Plan uploaded from DXF,الخطة المرفوعة من DXF
+Plan waste,الهدر
+Preview only,معاينة فقط
+Print cutting plan,طباعة خطة القص
+Qty {0},عدد {0}
+Re-approve drawing,إعادة اعتماد الرسم
+Recalculate plan,إعادة الحساب
+Recalculating the plan is not available in the current state.,إعادة حساب الخطة غير متاحة في الحالة الحالية.
+Recalculation and algorithm changes follow cutting plan permissions and do not need the cost permission.,إعادة الحساب وتغيير الخوارزمية يتبعان صلاحيات خطة القص، ولا يحتاجان صلاحية التكلفة.
+Recalculation is available,إعادة الحساب متاحة
+Recessed handle,مسكة غطس
+Replace the DXF cutting plan,استبدال خطة القص DXF
+Replace the approved plan with the system plan,استبدال الخطة المعتمدة بخطة النظام
+Replace the approved plan with the uploaded plan,استبدال الخطة المعتمدة بالخطة المرفوعة
+Replace the uploaded plan,استبدال الخطة المرفوعة
+Save the order before uploading a DXF file.,احفظ الطلب قبل رفع ملف DXF.
+Selected method,الطريقة الفعلية المختارة
+Sheets,ألواح
+Show the result,عرض النتيجة
+Special (CNC),خاصة (CNC)
+Special door · CNC raw,درفة خاصة · خام CNC
+Special door · geometric path,درفة خاصة · مسار هندسي
+System plan,خطة النظام
+The DXF file was replaced and validated.,تم استبدال ملف DXF والتحقق منه.
+The DXF file was uploaded and validated.,تم رفع ملف DXF والتحقق منه.
+The browser blocked the print window. Allow pop-ups and try again.,المتصفح منع فتح نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم جرّب مرة أخرى.
+The current production plan approval will be cancelled and kept in the revision history. The old plan will not become an editable draft. Do you want to continue?,سيتم إلغاء اعتماد خطة الإنتاج الحالية مع الاحتفاظ بها في سجل المراجعات، ولن تتحول الخطة القديمة إلى مسودة قابلة للتعديل. هل تريد المتابعة؟
+The direct result after applying the current cutting plan settings.,النتيجة المباشرة بعد تطبيق إعدادات خطة القص الحالية.
+The drawing approval was updated and replaced the previous approved plan.,تم تحديث اعتماد الرسم واستبدال الخطة المعتمدة السابقة.
+The drawing was approved for production.,تم اعتماد الرسم للإنتاج.
+The largest empty rectangle inside the board after the pieces are placed.,أكبر مستطيل فارغ داخل اللوح بعد توزيع القطع.
+The margin was reduced automatically by the amount needed to keep the piece measurements.,تم تخفيض الهامش تلقائيًا بالقدر اللازم للحفاظ على قياسات القطع.
+The plan does not match the order,الخطة غير مطابقة للطلب
+The system plan was updated.,تم تحديث خطة النظام.
+There is no approved plan to print.,لا توجد خطة معتمدة للطباعة.
+There is no cutting plan to print.,لا يوجد مخطط قص للطباعة.
+There is no cutting plan to print. Recalculate the cutting plan first.,لا يوجد مخطط قص للطباعة. اضغط أولًا على إعادة حساب خطة القص.
+There is no data to display in the approved plan.,لا توجد بيانات لعرضها في الخطة المعتمدة.
+There is no plan approved for production.,لا توجد خطة معتمدة للإنتاج.
+There is no system plan to display.,لا توجد خطة نظام لعرضها.
+There is no uploaded plan,لا يوجد خطة مرفوعة
+There is no uploaded plan to print.,لا يوجد خطة مرفوعة للطباعة.
+There is no valid plan to approve.,لا توجد خطة صالحة للاعتماد.
+This is a preview result. The order was not changed.,هذه نتيجة معاينة. لم يطرأ أي تغيير على الطلب.
+This order was changed and the plan no longer matches,بيانات هذا الطلب تم تعديلها وأصبحت الخطة غير مطابقة
+Trim margin warning,تنبيه هامش التشذيب
+Try any algorithm and compare the result. This is a preview only and does not change the saved order plan.,جرّب أي خوارزمية وقارن النتيجة. هذه معاينة فقط ولا تغيّر خطة الطلب المحفوظة.
+Try cutting algorithms,تجربة خوارزميات القص
+Trying the algorithm...,جاري تجربة الخوارزمية...
+Unassigned,غير محدد
+Upload a DXF plan,رفع خطة DXF
+Upload a cutting plan as a DXF file,رفع خطة قص كملف DXF
+Validating the DXF file and applying the plan...,جاري التحقق من ملف DXF وتطبيق الخطة...
+"Wait until the cutting plan finishes loading, then print again.",انتظر حتى يكتمل تحميل خطة القص ثم أعد الطباعة.
+Warning:,تنبيه:
+Warning: a plan was already approved for this order. Continuing creates a new approval and replaces the current approved plan. Do you want to continue?,تنبيه: تم اعتماد خطة لهذا الطلب سابقًا. المتابعة ستنشئ اعتمادًا جديدًا وتستبدل الخطة المعتمدة الحالية. هل تريد المتابعة؟
+Warning: only,تنبيه: فقط
+You do not have permission to export DXF.,ليست لديك صلاحية تصدير DXF.
+You do not have permission to print the cutting plan.,ليست لديك صلاحية طباعة خطة القص.
+You do not have permission to upload the cutting plan as a DXF file.,ليست لديك صلاحية رفع خطة القص كملف DXF.
+You do not have permission to view the cutting plan tabs.,لا توجد صلاحية لعرض تبويبات خطة القص.
+Zoom the board,تكبير وتصغير اللوح
+special doors were placed in the cutting plan. Review the measurements and the unplaced pieces.,من الدرف الخاصة دخلت خطة القص. راجع المقاسات والقطع غير الموزعة.
+{0} boards · waste {1}%,{0} لوح · هدر {1}%
+{0} cut lines,{0} خط قص
+{0} m²,{0} م²
+{0} of {1},{0} من {1}
+"{0} pieces were not placed on the boards. Review the measurements, the board size, or the rotation allowance.",توجد {0} قطعة لم تدخل ضمن الألواح. راجع المقاسات أو مقاس اللوح أو سماحية التدوير.
+{0} sheets,{0} ألواح
+A quick comparison of the basic algorithms.,مقارنة سريعة بين الخوارزميات الأساسية.
+The recommended daily choice: several attempts and a local improvement of the result.,الخيار اليومي الموصى به: محاولات متعددة وتحسين محلي للنتيجة.
+A wider search within the time limit for a better layout.,بحث أوسع ضمن المهلة المحددة للحصول على توزيع أفضل.
+"A solver search for suitable cases, keeping the best valid solution within the time limit.",بحث Solver للحالات المناسبة مع الاحتفاظ بأفضل حل صالح ضمن المهلة.
+A manual choice of one layout algorithm.,اختيار يدوي لخوارزمية ترتيب محددة.
+Calculating the cutting plan...,جاري حساب خطة القص...
+Margin right,يمين
+Margin left,يسار
+Margin top,أعلى
+Margin bottom,أسفل
+Print,طباعة
+Order measurement table,جدول قياسات الطلب
+Special door pricing,تسعير الدرفات الخاصة
+Clipped-corner and L-shaped edge pricing,تسعير قشاط درف الزاوية المقصوصة وزاوية L
+Cost settings,إعدادات التكلفة
+Base prices and special door pricing,الأسعار الأساسية وتسعير الدرف الخاصة
+Sending WhatsApp...,جاري إرسال واتساب...
+Could not identify the order for sending the invoice.,تعذر تحديد الطلب لإرسال الفاتورة.
+Print customer invoice,طباعة فاتورة الزبون
+Send the invoice on WhatsApp,إرسال الفاتورة عبر واتساب
+Could not load the customer invoice print service. Reload the page and try again.,تعذر تحميل خدمة طباعة فاتورة الزبون. أعد تحميل الصفحة ثم حاول مرة أخرى.
+Could not prepare the customer invoice. Reload the page and try again.,تعذر تجهيز فاتورة الزبون. أعد تحميل الصفحة ثم حاول مرة أخرى.
+Required fields,حقول مطلوبة
+Enter these cost-page values before saving: {0},يجب إدخال القيم التالية من صفحة التكلفة قبل الحفظ: {0}
+You do not have permission to edit the cost or special-door prices for this document.,لا تملك صلاحية تعديل التكلفة أو تسعير الدرف الخاصة لهذا المستند.
+Save or cancel the current order edits before opening cost editing.,احفظ أو ألغِ تعديلات الطلب الحالية قبل فتح تعديل التكلفة.
+Could not load the cost,تعذر تحميل التكلفة
+Could not load the current cost data. Reload the order and try again.,تعذر تحميل بيانات التكلفة الحالية. أعد تحميل الطلب ثم حاول مرة أخرى.
+Could not load the current cost data.,تعذر تحميل بيانات التكلفة الحالية.
+Could not start editing,تعذر بدء التعديل
+The cost data is not ready for editing. Try again after loading finishes.,لم تصبح بيانات التكلفة جاهزة لوضع التعديل. أعد المحاولة بعد اكتمال التحميل.
+Your permissions or this document state no longer allow editing this section.,لم تعد صلاحياتك أو حالة هذا المستند تسمح بتعديل هذا القسم.
+Could not save the cost,تعذر حفظ التكلفة
+The server did not return the saved cost data. Editing was not closed.,لم يعُد الخادم ببيانات التكلفة المحفوظة. لم يتم إغلاق وضع التعديل.
+The cost edits were saved and the section returned to read-only.,تم حفظ تعديلات التكلفة وإعادة القسم إلى وضع القراءة.
+MDF boards — {0},ألواح MDF — {0}
+MDF boards,ألواح MDF
+Board cutting and preparation,أجور قص وتجهيز الألواح
+Edge banding — {0},قشاط — {0}
+Edge banding — unspecified,قشاط — غير محدد
+Edge banding,القشاط
+Special door number {0},درفة خاصة رقم {0}
+Door,درفة
+Waiting for the inclusive special price,بانتظار إدخال السعر الخاص الشامل
+This order has no measurements yet.,لا توجد قياسات في الطلب بعد.
+Board count and cutting charges use the last calculated plan. Calculate the cutting plan to update the invoice with the final values.,عدد الألواح وأجور القص مبنية على آخر خطة محسوبة. احسب خطة القص لتحديث الفاتورة بالقيم النهائية.
+Offcut price,سعر الفضلة
+One total price for the group,سعر إجمالي واحد للمجموعة
+Offcut price ($),سعر الفضلة ($)
+Save the order and calculate the cutting plan to show the price details.,احفظ الطلب واحسب خطة القص لتظهر تفاصيل السعر.
+Unit price ($),سعر الوحدة ($)
+Total ($),الإجمالي ($)
+Unpriced,غير مسعّر
+Final invoice total,الإجمالي النهائي للفاتورة
+Current total before unpriced items,الإجمالي الحالي قبل الأسعار غير المسعرة
+This is not a final total until these items are priced: {0},لا يعتبر إجماليًا نهائيًا حتى تسعير: {0}
+L-shaped corner door {0},درفة زاوية L {0}
+Clipped-corner door {0},درفة الزاوية الكسر {0}
+Enter the inclusive special price for each door while editing,أدخل السعر الخاص الشامل لكل درفة أثناء وضع التعديل
+{0} × {1} cm — quantity {2},{0} × {1} سم — عدد {2}
+Length × width,الطول × العرض
+Inclusive special price ($),السعر الخاص الشامل ($)
+View documentation,عرض التوثيق
+Could not load the special door documentation.,تعذر تحميل توثيق الدرفة الخاصة.
+"Measurements, quantities, and notes",القياسات والكميات والملاحظات
+"Boards, cutting, edge banding, special doors, and door add-ons",الألواح والقص والقشاط والدرف الخاصة وإضافات الدرف
+Priced,مسعّر
+{0} of {1} are unpriced,{0} غير مسعّرة من {1}
+{0} priced,تم تسعير {0}
+Saving the cost settings...,جاري حفظ إعدادات التكلفة...
+Add-on,إضافة
+Could not load the cost data. Try again.,تعذر تحميل بيانات التكلفة. أعد المحاولة.
+Loading the cost data...,جاري تحميل بيانات التكلفة...
+No custom edge,لا يوجد تخصيص
+Unspecified,غير محدد
+Exceptional customization only; the default edge banding is set in the order data,التخصيص الاستثنائي فقط؛ قشاط الأطراف الافتراضي محدد في بيانات الطلب
+Invoice details,تفاصيل الفاتورة
+A separate line for each edge type and its price — from the saved order cost,سطر مستقل لكل نوع قشاط وسعره — من تكلفة الطلب المحفوظة
+Source: customer · made at the factory,المصدر الزبون · التنفيذ في المعمل
+Source: factory · made at the factory,المصدر المعمل · التنفيذ في المعمل
+Source: customer · made at the customer,المصدر الزبون · التنفيذ عند الزبون
+Offcut pieces,قطع النقص
+Choose one of the three options for each door.,اختر أحد الخيارات الثلاثة لكل درفة.
+{0} doors,{0} درفة
+Cost source and execution place,مصدر الكلفة ومكان التنفيذ
+Could not load the offcut save path.,تعذر تحميل مسار حفظ قطع النقص.
+The offcut classification was saved.,تم حفظ تصنيف قطع النقص.
+Operating cost breakdown,تفصيل التكلفة التشغيلية
+Cost item,البند
+Amount $,القيمة $
+Breakdown total,مجموع البنود التفصيلية
+Operations and waste indicators,مؤشرات التشغيل والهدر
+Special door price review,مراجعة أسعار الدرف الخاصة
+Estimated / unit $,التقديري / وحدة $
+Approved / unit $,المعتمد / وحدة $
+Final / unit $,النهائي / وحدة $
+Total variance $,الفرق الإجمالي $
+Approved by,اعتمده
+Approval date,تاريخ الاعتماد
+Internal,داخلي
+Created by: {0},أنشئ بواسطة: {0}
+Created on: {0},تاريخ الإنشاء: {0}
+Revision: {0},المراجعة: {0}
+Could not start printing. Reload the page and try again.,تعذر تشغيل الطباعة. أعد تحميل الصفحة ثم حاول مرة أخرى.
+An incomplete invoice cannot be printed. Enter the special door inclusive price and the clipped-corner edge price first. Remaining: {0}.,لا يمكن طباعة فاتورة غير مكتملة. أدخل السعر الخاص الشامل للدرف الخاصة وسعر قشاط درف الزاوية المقصوصة أولًا. المتبقي: {0}.
+You do not have permission to print this document.,ليس لديك صلاحية طباعة هذا المستند.
+Save the order before printing the document.,احفظ الطلب قبل طباعة المستند.
+Preparing the internal cost report...,جاري تجهيز تقرير التكلفة الداخلي...
+Preparing the customer invoice...,جاري تجهيز فاتورة الزبون...
+Print internal cost report,طباعة تقرير التكلفة الداخلي
+Saving the edge prices...,جاري اعتماد أسعار القشاط...
+Saving the special door prices...,جاري اعتماد أسعار الدرف الخاصة...
+Inclusive special door price,السعر الخاص الشامل للدرفة
+L-shaped corner edge processing cost,تكلفة معالجة قشاط زاوية L
+Clipped-corner edge processing cost,تكلفة معالجة قشاط الزاوية المقصوصة
+Price,السعر
+Edit price,تعديل السعر
+Send the invoice to the customer?,هل تريد إرسال الفاتورة للزبون؟
+WhatsApp will not be sent because the session is disconnected.,لن يتم إرسال رسالة واتساب لأن الجلسة غير متصلة.
+Could not load the cost data.,تعذر تحميل بيانات التكلفة.
+The server did not return the order revision after saving the price.,لم يعُد الخادم بنسخة الطلب بعد حفظ السعر.
+Could not verify the current order revision. Reload the order and try again.,تعذر التحقق من نسخة الطلب الحالية. أعد تحميل الطلب ثم حاول مرة أخرى.
+Board price,سعر اللوح
+Cutting charge / board,أجور القص / لوح
+A problem occurred while sending the customer invoice.,حدثت مشكلة أثناء إرسال فاتورة الزبون.
+Waiting for the L-shaped corner edge price,بانتظار إدخال سعر معالجة قشاط زاوية L
+Waiting for the clipped-corner edge price,بانتظار إدخال سعر معالجة قشاط الزاوية المقصوصة
+A damaged or incompatible local draft was ignored without applying any of it.,تم تجاهل مسودة محلية تالفة أو غير متوافقة دون تطبيق أي جزء منها.
+A draft copy was created and the original order and plan were kept.,تم إنشاء نسخة مسودة مع الحفاظ على الطلب والخطة الأصلية.
+A newer copy of this draft exists in another tab. Reopen the order before saving.,توجد نسخة أحدث من هذه المسودة في تبويب آخر. أعد فتح الطلب قبل الحفظ.
+A newer copy of this draft exists in another tab. Reopen the order to restore it before saving.,توجد نسخة أحدث من هذه المسودة في تبويب آخر. أعد فتح الطلب لاستعادتها قبل الحفظ.
+A newer save attempt for this draft exists in another tab. Reopen the order to check it.,توجد محاولة حفظ أحدث لهذه المسودة في تبويب آخر. أعد فتح الطلب للتحقق منها.
+Active production stages that can be cancelled safely will be cancelled.,سيتم إلغاء مراحل الإنتاج النشطة التي يمكن إلغاؤها بأمان.
+Active production stages will be cancelled and the same order will be returned to draft so it can be edited.,سيتم إلغاء مراحل الإنتاج النشطة وإعادة نفس الطلب إلى المسودة حتى يمكن تعديله.
+All statuses,كل الحالات
+All workers,كل العمال
+An edit copy is already linked to this order.,توجد نسخة تعديل مرتبطة بهذا الطلب.
+Another tab is verifying a save attempt for this draft. Reopen the order to check it.,توجد محاولة حفظ قيد التحقق لهذه المسودة في تبويب آخر. أعد فتح الطلب للتحقق منها.
+Approving the order...,جاري اعتماد الطلب...
+Cancel the order,إلغاء الطلب
+Cancelling the order...,جاري إلغاء الطلب...
+"Check the internet connection, then try again.",تحقق من اتصال الإنترنت ثم أعد المحاولة.
+Checking the current stage assignment...,جاري التحقق من إسناد المرحلة الحالية...
+Choose Continue a local draft or Start a new order before saving.,اختر متابعة مسودة محلية أو بدء طلب جديد قبل الحفظ.
+Confirm delivery of the order to the customer?,هل تؤكد تسليم الطلب للعميل؟
+Confirm finishing work on the order?,هل تريد تأكيد إنهاء العمل على الطلب؟
+Confirm return,تأكيد الإعادة
+Continue the order,متابعة الطلب
+Could not confirm that the draft is ready to continue.,تعذر تأكيد جاهزية المسودة للمتابعة.
+Could not delete the local draft.,تعذر حذف المسودة المحلية.
+Could not load the data.,تعذر تحميل البيانات.
+Could not load {0},تعذر تحميل {0}
+Could not restore the draft,تعذر استعادة المسودة
+Could not store the reconciliation result locally.,تعذر تثبيت نتيجة المصالحة محليًا.
+Could not verify the local draft.,تعذر التحقق من المسودة المحلية.
+Could not verify the previous save attempt. The insert was not retried.,تعذر التحقق من نتيجة محاولة الحفظ السابقة. لم تتم إعادة الإدراج.
+Create an edit copy,إنشاء نسخة تعديل
+Create the draft copy,إنشاء النسخة المسودة
+Creates an independent draft document without editing the current order directly.,ينشئ مستندًا مسودة مستقلاً دون تعديل الطلب الحالي مباشرة.
+Creating an independent edit copy...,جاري إنشاء نسخة تعديل مستقلة...
+Current worker,العامل الحالي
+Customer name or order number,اسم العميل أو رقم الطلب
+Data that affects the cost changed. Previous values are shown as context only and are not final until they are saved and refreshed.,تم تغيير بيانات تؤثر على التكلفة. القيم السابقة معروضة كسياق فقط ولا تعتبر نهائية حتى الحفظ والتحديث.
+Default sort,الترتيب الافتراضي
+Delete the draft,حذف المسودة
+Do you want to permanently delete this local draft?,هل تريد حذف هذه المسودة المحلية نهائيًا؟
+Do you want to start work on the order?,هل تريد بدء العمل على الطلب؟
+Edge color:,لون القشاط:
+"Edit mode is on. Change the pieces and fields, then press Save to apply the edit and lock the fields again.",وضع التعديل مفعّل. عدّل الدرف والحقول، ثم اضغط «حفظ» لاعتماد التعديل وإعادة قفل الحقول.
+"Edit mode is on. Change the required values, then use Save or Cancel in this section.",وضع التعديل مفعّل — غيّر القيم المطلوبة ثم استخدم «حفظ» أو «إلغاء» داخل هذا القسم.
+Finish work,إنهاء العمل
+Hide the side panel,إخفاء اللوحة الجانبية
+In progress,قيد التنفيذ
+Includes special door data,تتضمن بيانات درفة خاصة
+"It is no longer valid after the pricing basis changed, and it will not be used as a final value.",لم يعد صالحًا بعد تغيير أساس التسعير، ولن يدخل كقيمة نهائية.
+Kerf thickness,سماكة القص Kerf
+Last update:,آخر تحديث:
+Loading edit permissions...,جاري تحميل صلاحيات التعديل...
+Loading {0} on this device for the first time.,يتم تحميل {0} لأول مرة على هذا الجهاز.
+Local save preparation finished. Press Save again to finish creating the order.,اكتمل تجهيز الحفظ المحلي. اضغط حفظ مرة أخرى لإتمام إنشاء الطلب.
+Measurements:,القياسات:
+Open the edit copy,فتح نسخة التعديل
+Open the order,فتح الطلب
+Open the original order,فتح الطلب الأصلي
+Order ID,ID الطلب
+Order completed,تم الإنجاز
+Order copies,نسخ الطلب
+Order cost,تكلفة الطلب
+Order information,معلومات الطلب
+Order lifecycle,دورة الطلب
+Plan settings:,إعدادات الخطة:
+Preparing the section,جاري تجهيز القسم
+Previous price,السعر السابق
+Ready for delivery,جاهز للتسليم
+Ready to start,جاهز للبدء
+Reason for cancelling the order,سبب إلغاء الطلب
+Reason for creating the edit copy (optional),سبب إنشاء نسخة التعديل (اختياري)
+Reason for returning the order to draft (optional),سبب إعادة الطلب للمسودة (اختياري)
+Restore an incomplete cutting order,استعادة طلب قص غير مكتمل
+Resuming the order...,جاري استئناف الطلب...
+Return the order to draft,إعادة الطلب للمسودة
+Returning the order to draft...,جاري إعادة الطلب للمسودة...
+Save or cancel the current edit before moving to another section.,احفظ أو ألغِ التعديل الحالي قبل الانتقال إلى قسم آخر.
+Saved changes affect piece placement. Board and cutting costs are not final until the cutting plan is recalculated and the new result is saved.,تم حفظ تغييرات تؤثر على توزيع القطع. تكلفة الألواح والقص لن تعتبر نهائية حتى إعادة حساب خطة القص وحفظ النتيجة الجديدة.
+Search by customer name or order number,ابحث باسم العميل أو رقم الطلب (ID)
+"Search by customer name or order number, for example DCO-2026-00004",ابحث باسم العميل أو رقم الطلب مثل DCO-2026-00004
+Show the side panel,إظهار اللوحة الجانبية
+Start a new order,بدء طلب جديد
+Start work,بدء العمل
+Submitting the order for review...,جاري إرسال الطلب للمراجعة...
+Synchronizing the cost,جاري مزامنة التكلفة
+The changes were saved. Board and cutting costs are not final until the automatic calculation finishes.,تم حفظ التغييرات. تكلفة الألواح والقص لن تعتبر نهائية حتى يكتمل الحساب التلقائي.
+The cost calculation is still waiting,حساب التكلفة ما زال في الانتظار
+The cost data needs an update,بيانات التكلفة تحتاج تحديثًا
+The cost is waiting for the new cutting plan,التكلفة بانتظار خطة القص الجديدة
+The cutting plan preview is being applied,يتم الآن اعتماد معاينة خطة القص
+The draft changed in another tab. Reopen the order before continuing it.,تغيرت المسودة في تبويب آخر. أعد فتح الطلب قبل متابعتها.
+The draft changed in another tab. Reopen the order before deleting it.,تغيرت المسودة في تبويب آخر. أعد فتح الطلب قبل حذفها.
+"The edit button is available, but the fields open only while the order is in Draft. Use Return to draft first.",زر التعديل متاح لك، لكن فتح الحقول يتطلب أن يكون الطلب في حالة «مسودة». استخدم «إعادة للمسودة» أولًا.
+The edit is still open,التعديل ما زال مفتوحًا
+The edit was saved and the fields were locked again. Approving the order or plan for production uses a separate button when needed.,تم حفظ التعديل وإعادة قفل الحقول. اعتماد الطلب/الخطة للإنتاج يتم بزر منفصل إن لزم.
+"The fields are locked. Press Edit to open the fields, then Save to apply the edit and lock them again.",الحقول مقفلة. اضغط «تعديل» لفتح الحقول، ثم «حفظ» لاعتماد التعديل وإعادة القفل.
+The local draft could not be read safely. You can start a new order.,تعذر قراءة المسودة المحلية بأمان. يمكنك بدء طلب جديد.
+"The measurement, quantity, or piece type changed. The previous approved price is no longer valid and will not be treated as a current value. Save the order to keep the change, then enter the new price.",تم تغيير القياس أو العدد أو نوع القطعة. السعر المعتمد السابق لم يعد صالحًا، ولن يُعامل كقيمة حالية. احفظ الطلب لتثبيت التغيير ثم أدخل السعر الجديد.
+The measurements were saved. Board and cutting costs will update when the background worker starts or after a manual recalculation.,تم حفظ القياسات. تكلفة الألواح والقص ستتحدث عند بدء العامل الخلفي أو بعد إعادة الحساب اليدوي.
+The official cost below belongs to the saved plan. The current preview uses {0} boards and its expected cost is $ {1}. Save the cutting plan to apply these values.,التكلفة الرسمية أدناه تخص الخطة المحفوظة. المعاينة الحالية تستخدم {0} لوحًا وتكلفتها المتوقعة $ {1}. احفظ خطة القص لاعتماد هذه القيم.
+The order and its related production stages were cancelled.,تم إلغاء الطلب ومراحل الإنتاج المرتبطة به.
+The order and the current plan will be approved. Do you want to continue?,سيتم اعتماد الطلب والخطة الحالية. هل تريد المتابعة؟
+The order can be edited only while it is in draft.,يمكن تعديل الطلب فقط وهو في حالة المسودة.
+The order was approved.,تم اعتماد الطلب بنجاح.
+The order was resumed to its previous stage.,تم استئناف الطلب إلى مرحلته السابقة.
+The order was submitted for review.,تم إرسال الطلب للمراجعة.
+The order will be submitted for review and editing will be blocked after approval. Do you want to continue?,سيتم إرسال الطلب للمراجعة ومنع التعديل عليه بعد الاعتماد. هل تريد المتابعة؟
+The order will resume from the stage where it was cancelled. Do you want to continue?,سيتم استئناف الطلب من المرحلة التي أُلغي فيها. هل تريد المتابعة؟
+The plan is approved and locked,الخطة معتمدة ومقفلة
+The same order was returned to draft.,تمت إعادة الطلب نفسه إلى المسودة.
+The saved cutting plan changed. The cost is being updated from the server copy.,تم تغيير خطة القص المحفوظة. يتم تحديث التكلفة من النسخة المعتمدة على الخادم.
+The special door pricing basis changed,تغيّر أساس تسعير درفة خاصة
+There is an unsaved plan preview,هناك معاينة خطة غير محفوظة
+This action cancels the order and the active production stages. Do you want to continue?,هذا الإجراء يلغي الطلب ومراحل الإنتاج النشطة. هل تريد المتابعة؟
+This data is an unofficial local draft. A formal order is created only when you press Save after continuing.,هذه البيانات مسودة محلية غير محفوظة رسميًا. لن يُنشأ طلب رسمي إلا عند ضغط «حفظ» بعد المتابعة.
+This is a historical copy that was replaced by a newer copy. It is for reading and documentation only.,هذه نسخة تاريخية تم استبدالها بنسخة أحدث، وهي للقراءة والتوثيق فقط.
+"This is an inactive edit copy. It can be prepared and reviewed, but it will not be sent to production before it is approved and safely replaces the previous copy.",هذه نسخة تعديل غير مفعّلة. يمكن تجهيزها ومراجعتها، لكنها لن تُرسل للإنتاج قبل اعتمادها واستبدال النسخة السابقة بأمان.
+This is the current copy in the order revision chain.,هذه هي النسخة الحالية ضمن سلسلة مراجعات الطلب.
+Trim margin,هامش التشذيب
+Try again,إعادة المحاولة
+Unsaved local draft,مسودة غير محفوظة محليًا
+Update the cost before printing a final invoice.,حدّث التكلفة أولًا قبل طباعة فاتورة نهائية.
+Waiting for update,بانتظار التحديث
+"You can search by customer name or order number, for example DCO-2026-00004",يمكن البحث باسم العميل أو رقم الطلب مثل DCO-2026-00004
+You can view this order only. Assign the current stage to a user before making any change.,يمكنك عرض هذا الطلب فقط. أسند المرحلة الحالية إلى مستخدم قبل تنفيذ أي تعديل.
+You can view this order only. The current stage is assigned to another user.,يمكنك عرض هذا الطلب فقط. المرحلة الحالية مسندة إلى مستخدم آخر.
+You can view this order only. The order has left the active production stages.,يمكنك عرض هذا الطلب فقط. الطلب غادر مراحل الإنتاج النشطة.
+You do not have permission to edit the optimizer settings,لا تملك صلاحية تعديل إعدادات المحسّن
+You do not have permission to recalculate the cutting plan,لا تملك صلاحية إعادة حساب خطة القص
+s,ث
+Approve the order,اعتماد الطلب
+Copy the order,نسخ الطلب
+Edit the order,تعديل الطلب
+Order on hold,الطلب معلق
+Order rejected,الطلب مرفوض
+Production floor,صالة الإنتاج
+Recalculate the cutting plan,إعادة حساب خطة القص
+Resume the order,استئناف الطلب
+Return to a previous stage,إرجاع لمرحلة سابقة
+Return to draft,إعادة للمسودة
+Send to production,إرسال للإنتاج
+Submit for review,إرسال للمراجعة
+You can view this order only. Its current stage is outside your operational roles.,يمكنك عرض هذا الطلب فقط. مرحلته الحالية خارج أدوارك التشغيلية.
+You do not have permission to print the customer invoice.,لا تملك صلاحية طباعة فاتورة الزبون.
+You do not have permission to print the measurements.,لا تملك صلاحية طباعة القياسات.
+A WhatsApp message was sent to the customer.,تم إرسال رسالة واتساب للزبون.
+Account,الحساب
+Administration,الإدارة
+All routes,كل المسارات
+Approve the drawing,اعتماد الرسم
+Approved production plan,الخطة المعتمدة للإنتاج
+Assign,إسناد
+Assigned,مسندة
+Assigned orders,الطلبات المسندة
+Available system sections,أقسام النظام المتاحة
+Back to orders,العودة إلى الطلبات
+Back to the shop floor,رجوع لصالة الإنتاج
+Change worker,تغيير العامل
+Choose a worker,اختر العامل
+Choose the next worker first.,اختر العامل التالي أولاً.
+Choose the plan you reviewed. Your approval will be recorded under the current user.,اختر الخطة التي راجعتها. سيتم تسجيل اعتمادك باسم المستخدم الحالي.
+Completed orders,الطلبات المنتهية
+Confirm finishing the last stage and marking the order ready for delivery?,تأكيد إنهاء آخر مرحلة واعتبار الطلب جاهزًا للتسليم؟
+Confirm sign-out?,تأكيد تسجيل الخروج؟
+Costing,التكلفة
+Could not complete the operation.,تعذر تنفيذ العملية.
+Could not load account information.,تعذر تحميل معلومات الحساب.
+Could not load production orders.,تعذر تحميل طلبات الإنتاج.
+Could not load the shop floor.,تعذر تحميل صالة الإنتاج.
+Could not load workers for the next department.,تعذر تحميل عمال القسم التالي.
+Could not move the order.,تعذر نقل الطلب.
+Could not open DXF upload.,تعذر فتح رفع DXF.
+Could not refresh the shop floor,تعذر تحديث صالة الإنتاج
+Could not run the action.,تعذر تنفيذ الإجراء.
+Delivery was recorded.,تم تسجيل التسليم.
+Department,القسم
+Department status,حالة القسم
+Download production DXF,تنزيل DXF للإنتاج
+Drag to the next stage,اسحب للمرحلة التالية
+Drawing and DXF,الرسم وDXF
+Enable a route from production settings to show it here.,فعّل مسارًا من إعدادات الإنتاج ليظهر هنا.
+Export DXF for drawing,تصدير DXF للرسم
+Filter the production board,تصفية لوحة الإنتاج
+Finish and send,إنهاء وإرسال
+Follow production stages,متابعة مراحل الإنتاج
+Follow the orders assigned to you and run the available action for each order.,تابع الطلبات المسندة إليك ونفّذ الإجراء المتاح لكل طلب.
+In follow-up,قيد المتابعة
+Loading,جاري التحميل
+Loading account information...,جاري تحميل معلومات الحساب...
+Loading...,جاري التحميل...
+Movement follows the route order and the user's permissions.,الانتقال يتبع ترتيب المسار وصلاحيات المستخدم.
+Name,الاسم
+Needs work,بحاجة للعمل
+New worker,العامل الجديد
+Next department,القسم التالي
+Next worker,العامل التالي
+No customer details,بدون بيانات زبون
+No orders,لا توجد طلبات
+No other worker is available for this department.,لا يوجد عامل آخر متاح لهذا القسم.
+No production route is enabled,لا يوجد مسار إنتاج مفعّل
+No production route is enabled. Create a route from master data first.,لا يوجد مسار إنتاج مفعّل. أنشئ مسارًا من البيانات الأساسية أولًا.
+No workers are available for role {0} in the next department.,لا يوجد عمال متاحون للدور {0} في القسم التالي.
+Operational departments,الأقسام التشغيلية
+Order list,قائمة الطلبات
+"Order number, customer, worker...",رقم الطلب، الزبون، العامل...
+Order route,مسار الطلب
+Order status,حالة الطلب
+Order status summary,ملخص حالات الطلبات
+Orders that enter your operational role will appear here.,ستظهر هنا الطلبات التي أصبحت ضمن دورك التشغيلي.
+Preparing the shop floor...,جاري تجهيز صالة الإنتاج...
+Production board,لوحة الإنتاج
+Production route,مسار الإنتاج
+Qualified departments,الأقسام المؤهل لها
+Quick search,بحث سريع
+Re-approve the drawing,إعادة اعتماد الرسم
+Ready,جاهز
+Recording order delivery...,جاري تسجيل تسليم الطلب...
+Reports,التقارير
+Revert,إرجاع
+Review your operational identity and the departments available to you in the system.,راجع هويتك التشغيلية والأقسام المتاحة لك في النظام.
+Route,المسار
+Routes,المسارات
+Running the operation...,جاري تنفيذ العملية...
+Send,إرسال
+Send to the next department,إرسال للقسم التالي
+Shop floor navigation,التنقل في صالة الإنتاج
+Shop floor sections,أقسام صالة الإنتاج
+Sign out,تسجيل الخروج
+Signing out ends the current work session on this device.,تسجيل الخروج ينهي جلسة العمل الحالية على هذا الجهاز.
+Signing out...,جاري تسجيل الخروج...
+"Start with assigned orders, then review completed work in the lower section.",ابدأ بالطلبات المسندة، ثم راجع ما أنهيته في القسم السفلي.
+The drawing was approved and the approved designer was recorded.,تم اعتماد الرسم وإثبات المصمم المعتمد.
+The new worker will be responsible for starting and handing off the stage.,سيصبح العامل الجديد مسؤولًا عن بدء المرحلة وتسليمها.
+The order is ready for delivery.,الطلب جاهز للتسليم.
+The order was delivered to the customer.,تم تسليم الطلب للعميل.
+The order was returned to the selected stage.,تم إرجاع الطلب للمرحلة المحددة.
+The order was sent to production.,تم إرسال الطلب للإنتاج.
+The order was sent to the next department.,تم إرسال الطلب للقسم التالي.
+The order was sent.,تم إرسال الطلب.
+The stage completed without sending WhatsApp.,اكتملت المرحلة دون إرسال واتساب.
+The stage was finished and the order was sent to the next department.,تم إنهاء المرحلة وإرسال الطلب للقسم التالي.
+The worker responsible for the stage was changed.,تم تغيير العامل المسؤول عن المرحلة.
+There are no assigned orders,لا توجد طلبات مسندة
+There are no orders right now,لا توجد طلبات حاليًا
+There are no stages that can be reverted to.,لا توجد مراحل يمكن الرجوع إليها.
+There is no assigned work or completed history in this section.,لا يوجد عمل مسند أو سجل منتهٍ ضمن هذا القسم.
+There is no work assigned to you right now.,لا يوجد عمل مسند إليك حاليًا.
+This action is no longer available in the current order state.,لم يعد هذا الإجراء متاحًا في حالة الطلب الحالية.
+Unspecified route,مسار غير محدد
+Updating the production route...,جاري تحديث مسار الإنتاج...
+Use the action button on the card. On desktop you can also drag an in-progress card to the next stage; the server re-checks permissions before running the action.,استخدم زر الإجراء داخل البطاقة. على الكمبيوتر يمكنك أيضًا سحب بطاقة قيد العمل إلى المرحلة التالية؛ الخادم يعيد التحقق من الصلاحيات قبل التنفيذ.
+User information,معلومات المستخدم
+View orders by route and run the available action without leaving the board.,شاهد الطلبات حسب مسارها، ونفّذ الإجراء المتاح دون مغادرة اللوحة.
+Work has started.,تم بدء العمل.
+Work list,قائمة العمل
+Worker responsible for the first stage,العامل المسؤول عن أول مرحلة
+Your operational orders,طلباتك التشغيلية
+{0} will be fixed as the final production copy under your name. Do you want to continue?,سيتم تثبيت {0} كنسخة الإنتاج النهائية باسمك. هل تريد المتابعة؟
+A clear name shown when the order is sent to production.,اسم واضح يظهر عند إرسال الطلب إلى الإنتاج.
+Absolute non-root POSIX path. The server key must be registered beforehand in known_hosts for the bench user.,مسار POSIX مطلق وغير جذري. يجب تسجيل مفتاح الخادم مسبقًا في known_hosts لمستخدم bench.
+Account status,حالة الحساب
+"Account {0} will be added to the factory scope without automatically granting any role or operational permission, and without changing Default Workspace or Default App in Frappe. Do you want to continue?",سيتم إضافة الحساب {0} إلى نطاق المعمل بدون منحه أي دور أو صلاحية تشغيلية تلقائيًا، وبدون تغيير Default Workspace أو Default App في Frappe. هل تريد المتابعة؟
+"Accounts added to Almdina. Roles determine permissions, and Frappe Role.Home Page determines the login page.",الحسابات التي تم ضمها إلى Almdina. الأدوار تحدد الصلاحيات، وFrappe Role.Home Page يحدد صفحة الدخول.
+Active admin session,الجلسة الإدارية النشطة
+Active now,نشط الآن
+Active operating values approved for all operations and workstations,القيم التشغيلية النشطة المعتمدة في كافة عمليات ومحطات العمل
+Active role,الدور النشط
+Active role and permission transfer,الدور النشط ونقل الصلاحيات
+Active settings,الإعدادات النشطة
+Active stages,مراحل نشطة
+Active stages must be reassigned before disabling the user or changing their roles.,يجب إعادة إسناد المراحل النشطة قبل تعطيل المستخدم أو تغيير أدواره.
+Activity log,سجل النشاط
+Add at least one stage.,أضف مرحلة واحدة على الأقل.
+Add new stage,إضافة مرحلة جديدة
+Add stage,إضافة مرحلة
+Add stages in the actual order the order goes through.,أضف المراحل بالترتيب الحقيقي الذي يمر به الطلب.
+Add the first stage to start building production routes.,أضف أول مرحلة لبدء بناء مسارات الإنتاج.
+Add the stage,إضافة المرحلة
+Add to factory,إضافة إلى المعمل
+Add user to factory,إضافة مستخدم للمعمل
+Adding backup to the queue...,جاري إضافة النسخة إلى قائمة الانتظار...
+"Adding them to the factory does not automatically grant any role or operational permission, and does not change Default Workspace or Default App. The login page remains managed by Frappe.",إضافته إلى المعمل لا تمنحه أي دور أو صلاحية تشغيلية تلقائيًا، ولا تغيّر Default Workspace أو Default App. صفحة الدخول تبقى تحت إدارة Frappe.
+Adding user to the factory...,جاري إضافة المستخدم إلى المعمل...
+Address,العنوان
+Administration and execution,الإدارة والتنفيذ
+Allow bypassing stage sequence,السماح بتجاوز تسلسل المراحل
+Allowed,مسموح
+Almdina main interface,واجهة Almdina الرئيسية
+Almdina permission matrix,مصفوفة صلاحيات Almdina
+Almdina users,مستخدمو Almdina
+An unexpected error occurred.,حدث خطأ غير متوقع.
+Approve unallocated pieces,اعتماد قطع غير موزعة
+Approved cutting plans archive,أرشيف خطط القص المعتمدة
+Archive official PDF,أرشفة PDF الرسمي
+"Arrange work stages visually, link each stage to the appropriate operational role, then use the route directly in the production board.",رتّب مراحل العمل بصريًا، اربط كل مرحلة بالدور التشغيلي المناسب، ثم استخدم المسار مباشرة في لوحة الإنتاج.
+Ask the route administrator to add stages to the library.,اطلب من مسؤول المسارات إضافة مراحل إلى المكتبة.
+Assigned active stages,المراحل النشطة المسندة
+Assignments,التعيينات
+"At least 10 characters, including a letter and a number.",10 محارف على الأقل وتحتوي حرفًا ورقمًا.
+Attached with the PDF file in a single message on first send. Limit is 1024 characters. Use,تُرفق مع ملف PDF في رسالة واحدة عند أول إرسال. الحد 1024 حرفًا. استخدم
+Attached with the PDF file in a single message when sending edits. Limit is 1024 characters. Use,تُرفق مع ملف PDF في رسالة واحدة عند إرسال التعديلات. الحد 1024 حرفًا. استخدم
+Attached with the PDF file in a single message. Limit is 1024 characters. Use,تُرفق مع ملف PDF في رسالة واحدة. الحد 1024 حرفًا. استخدم
+Authentication method,طريقة المصادقة
+Automatically protected,محمي تلقائياً
+Back,رجوع
+Back groove / door leaf,فرزة ظهر / درفة
+Back groove price per door leaf (USD),سعر فرزة ظهر لكل درفة (USD)
+Backup,نسخة
+Backup & Restore settings,إعدادات Backup & Restore
+Backup copy,النسخة
+Backup scheduling failed.,فشلت جدولة النسخة.
+Backups,نسخ
+Basic data,البيانات الأساسية
+Before saving,قبل الحفظ
+By,بواسطة
+By Frappe / not specified,حسب Frappe / غير محددة
+Bypass stage sequence,تجاوز تسلسل المراحل
+Change log,سجل التغييرات
+Change log for {0},سجل تغييرات {0}
+"Change the search or filter, or create a new route to start organizing the production journey.",غيّر البحث أو الفلتر، أو أنشئ مسارًا جديدًا لبدء تنظيم رحلة الإنتاج.
+Changed fields,الحقول المتغيرة
+Changes,التغييرات
+Click any stage in the library to add it to the route immediately.,اضغط على أي مرحلة من المكتبة لتُضاف فورًا إلى المسار.
+Click the stage to add it immediately. Stage names and codes are managed from the library only.,اضغط على المرحلة لإضافتها فورًا. تُدار أسماء المراحل ورموزها من المكتبة فقط.
+Click to add immediately,اضغط للإضافة فورًا
+Complete the route details,أكمل بيانات المسار
+Completion message,رسالة إتمام
+Configure each group from its dedicated place,اضبط كل مجموعة من مكانها المخصص
+Confirmation does not match,تأكيد غير مطابق
+Contact numbers,أرقام التواصل
+Core Frappe permission,صلاحية Frappe أساسية
+Could not calculate permission impact.,تعذر حساب أثر الصلاحيات.
+Could not connect to the remote server.,تعذر الاتصال بالخادم البعيد.
+Could not create WhatsApp session.,تعذر إنشاء جلسة WhatsApp.
+Could not create the backup,تعذر إنشاء النسخة
+Could not export,تعذر التصدير
+Could not fetch the QR code.,تعذر جلب رمز QR.
+Could not find the route. Refresh the page.,تعذر العثور على المسار. حدّث الصفحة.
+Could not find the stage. Refresh the page.,تعذر العثور على المرحلة. حدّث الصفحة.
+Could not load WhatsApp status.,تعذر تحميل حالة WhatsApp.
+Could not load backup management,تعذر تحميل إدارة النسخ
+Could not load backup management.,تعذر تحميل إدارة النسخ.
+Could not load data.,تعذر تحميل البيانات.
+Could not load factory settings,تعذر تحميل إعدادات المعمل
+Could not load factory settings.,تعذر تحميل إعدادات المعمل.
+Could not load permissions,تعذر تحميل الصلاحيات
+Could not load production routes.,تعذر تحميل مسارات الإنتاج.
+Could not load role permissions.,تعذر تحميل صلاحيات الدور.
+Could not load the log,تعذر تحميل السجل
+Could not load the log.,تعذر تحميل السجل.
+Could not load the permission management interface.,تعذر تحميل واجهة إدارة الصلاحيات.
+Could not load the plans archive.,تعذر تحميل أرشيف الخطط.
+Could not load the production route management layout.,تعذر تحميل تصميم إدارة مسارات الإنتاج.
+Could not load the users and workforce interface.,تعذر تحميل واجهة المستخدمين والقوى العاملة.
+Could not load user management,تعذر تحميل إدارة المستخدمين
+Could not open permission management.,تعذر فتح إدارة الصلاحيات.
+Could not open route management,تعذر فتح إدارة المسارات
+Could not read the file,تعذر قراءة الملف
+Could not read the file as a valid JSON object. No permissions were changed.,تعذر قراءة الملف ككائن JSON صحيح. لم يتم تغيير أي صلاحية.
+Could not reconnect WhatsApp.,تعذر إعادة اتصال WhatsApp.
+Could not save,تعذر الحفظ
+Could not save permissions.,تعذر حفظ الصلاحيات.
+Could not start the restore,تعذر بدء الاستعادة
+Create,إنشاء
+Create and link WhatsApp,إنشاء وربط WhatsApp
+"Create backup, then Restore",إنشاء نسخة أمان ثم الاستعادة
+Create new production route,إنشاء مسار إنتاج جديد
+Create new user,إنشاء مستخدم جديد
+Create user,إنشاء المستخدم
+Creating WhatsApp session...,جاري إنشاء جلسة WhatsApp...
+Creating official PDF file...,جاري إنشاء ملف PDF الرسمي...
+Creating user...,جاري إنشاء المستخدم...
+Credentials,بيانات الاعتماد
+Critical,حرجة
+Current app,التطبيق الحالي
+Current list summary,ملخص القائمة الحالية
+Current user,المستخدم الحالي
+Currently unavailable,غير متاح حاليًا
+Custom CNC drawing,رسم CNC الخاص
+Custom CNC drawing / piece,رسم CNC الخاص / قطعة
+Custom design drawing,رسم التصميم الخاص
+Custom design drawing / piece,رسم التصميم الخاص / قطعة
+Cutting and optimizer,القص والمحسّن
+Cutting fee / board,أجرة القص / لوح
+Cutting fee per board (USD),أجرة القص لكل لوح (USD)
+"Cutting fee, special door leaf charges, and their default margins.",أجرة القص ورسوم الدرف الخاصة وهوامشها الافتراضية.
+Default Workspace is set for this user and may override the Role's Home Page in Frappe. Review it in the user settings if you want the Role to be the source of the login page.,Default Workspace مضبوط لهذا المستخدم وقد يتغلب على Home Page الخاصة بالدور في Frappe. راجعه من إعداد المستخدم إذا أردت أن يكون الدور هو مصدر صفحة الدخول.
+Default cost,التكلفة الافتراضية
+Default factory operating settings,إعدادات تشغيل المعمل الافتراضية
+"Default geometry, distribution algorithm, and search limits.",الهندسة الافتراضية وخوارزمية التوزيع وحدود البحث.
+Default interface,الواجهة الافتراضية
+Default kerf (mm),Kerf الافتراضي (مم)
+Default production route,مسار الإنتاج الافتراضي
+Default production route (optional),مسار الإنتاج الافتراضي (اختياري)
+Delete from route,حذف من المسار
+Delete stage,حذف المرحلة
+Delete stage from route,حذف المرحلة من المسار
+Deleting stage...,جاري حذف المرحلة...
+Deletion will be rejected if the route is used in an order or setting. Do you want to continue?,سيُرفض الحذف إذا كان المسار مستخدمًا في طلب أو إعداد. هل تريد المتابعة؟
+Denied,غير مسموح
+Deselect all,إلغاء تحديد الكل
+Design the order journey from the first stage to delivery,صمّم رحلة الطلب من أول مرحلة حتى التسليم
+Desk access,وصول Desk
+Disable,تعطيل
+Disable stage,تعطيل المرحلة
+Disabled accounts,الحسابات المعطلة
+Disabling stage...,جاري تعطيل المرحلة...
+Display name,اسم العرض
+Distribution algorithm,خوارزمية التوزيع
+Do you want to create or retrieve the official approved copy for this order?,هل تريد إنشاء أو استرجاع النسخة الرسمية المعتمدة لهذا الطلب؟
+Do you want to discard unsaved changes?,هل تريد تجاهل التغييرات غير المحفوظة؟
+Do you want to {0} user {1}?,هل تريد {0} المستخدم {1}؟
+Does not change the home page,لا يغيّر الصفحة الرئيسية
+Door leaf add-ons,إضافات الدرف
+Double / door leaf,Double / درفة
+Double price per door leaf (USD),سعر Double لكل درفة (USD)
+Drag to reorder,اسحب لتغيير الترتيب
+Duplicate stage,المرحلة مكررة
+Each card represents a workstation. The order here is the order that will appear in the production board.,كل بطاقة تمثل محطة عمل. الترتيب هنا هو الترتيب الذي سيظهر في لوحة الإنتاج.
+Edit WhatsApp messages,تعديل رسائل واتساب
+Edit Workflow,تحرير Workflow
+Edit a stage,تعديل مرحلة
+Edit cutting and optimizer,تعديل القص والمحسّن
+Edit default cost,تعديل التكلفة الافتراضية
+Edit door leaf add-on prices,تعديل أسعار إضافات الدرف
+Edit print sheet identity,تعديل هوية أوراق الطباعة
+Edit production controls,تعديل ضوابط الإنتاج
+Edit production route,تحرير مسار الإنتاج
+Edit stage,تعديل المرحلة
+Edit this section,تعديل هذا القسم
+Edit user {0},تعديل المستخدم {0}
+Editing is shown only for sections you are allowed to edit,التعديل يظهر فقط للأقسام المسموحة لك
+Email,البريد الإلكتروني
+Enable,تفعيل
+Enable stage,تفعيل المرحلة
+Enabled accounts,الحسابات المفعلة
+Enabled routes,المسارات المفعّلة
+Enabling stage...,جاري تفعيل المرحلة...
+"Every backup is created with the official Frappe engine, and the result appears here without exposing local paths or credentials.",كل نسخة تُنشأ بمحرك Frappe الرسمي، وتظهر النتيجة هنا دون عرض مسارات محلية أو بيانات اعتماد.
+"Every creation, edit, or deletion of production routes will appear here.",سيظهر هنا كل إنشاء أو تعديل أو حذف لمسارات الإنتاج.
+Example: Drawing → CNC → Peeling,مثال: رسم ← CNC ← تقشيط
+Exceptional approval of unallocated pieces,السماح الاستثنائي باعتماد قطع غير موزعة
+Execution stage,مرحلة تنفيذ
+Export,تصدير
+External backup,النسخ الخارجي
+External integration,تكامل خارجي
+External preview source,مصدر خارجي للمعاينة
+External retention,احتفاظ الخارجي
+External schedule,جدولة الخارجي
+Factory brief overview,لمحة مختصرة عن المعمل
+Factory name,اسم المعمل
+Factory overview,لمحة عن المعمل
+Factory permission management,إدارة صلاحيات المعمل
+Factory settings,إعدادات المعمل
+Factory settings change log,سجل تغييرات إعدادات المعمل
+Factory settings updated.,تم تحديث إعدادات المعمل.
+Factory users,مستخدمو المعمل
+Fields,الحقول
+File already exists.,الملف موجود مسبقًا.
+File archived successfully.,تمت أرشفة الملف بنجاح.
+File is too large,ملف كبير جدًا
+File validated and loaded for preview only. The role will not change before saving.,تم التحقق من الملف وتحميله للمعاينة فقط. لن يتغير الدور قبل الحفظ.
+Filter list,تصفية القائمة
+Fixed identifier,المعرّف الثابت
+Fixed official copy for each approved plan,نسخة رسمية ثابتة لكل خطة معتمدة
+"Fixed sale prices per door leaf. The order stores a copy of the price at the time it is created, and existing orders are not affected later.",أسعار بيع ثابتة لكل درفة. يحفظ الطلب نسخة السعر وقت إنشائه ولا تتأثر الطلبات القديمة لاحقًا.
+Full door leaf double fee,أجرة دبل كامل الدرفة
+Full door leaf double fee (USD),أجرة دبل كامل الدرفة (USD)
+Grant,منح
+Hidden handle cutout / door leaf,تفريغ مسكة مخفية / درفة
+Hidden handle cutout price per door leaf (USD),سعر تفريغ المسكة المخفية لكل درفة (USD)
+Historical values kept for documentation that do not affect current operations,قيم تاريخية محفوظة للتوثيق ولا تدخل في التشغيل الحالي
+Home Page for Roles,Home Page للأدوار
+Import,استيراد
+Import JSON,استيراد JSON
+Import loads permissions for preview only; saving remains a separate step.,الاستيراد يحمّل الصلاحيات للمعاينة فقط؛ الحفظ يبقى خطوة مستقلة.
+Important rule,قاعدة مهمة
+In production,قيد الإنتاج
+"Independent local and external backups built on the official Frappe mechanism, with separate retention and a secure SFTP connection.",نسخ محلية وخارجية مستقلة مبنية على آلية Frappe الرسمية، مع احتفاظ منفصل واتصال SFTP آمن.
+Initializing,جاري التهيئة
+Invalid JSON file,ملف JSON غير صالح
+Invoice message,رسالة الفاتورة
+Key is saved. Leave the field empty to keep it.,المفتاح محفوظ. اترك الحقل فارغًا للاحتفاظ به.
+Last activity,آخر نشاط
+Last error,آخر خطأ
+Last modified,آخر تعديل
+Last name,الكنية
+Legacy default warehouse,المستودع الافتراضي القديم
+Legacy settings data kept,بيانات إعدادات قديمة محفوظة
+Legacy stock control,التحكم القديم بالمخزون
+Liner / door leaf,Liner / درفة
+Liner price per door leaf (USD),سعر Liner لكل درفة (USD)
+Link one session with WhatsApp Web to send measurement sheets to customers.,اربط جلسة واحدة مع واتساب ويب لإرسال جداول القياسات للزبائن.
+Loading WhatsApp status...,جاري تحميل حالة WhatsApp...
+Loading backup history...,جاري تحميل سجل النسخ الاحتياطية...
+Loading factory settings,جاري تحميل إعدادات المعمل
+Loading factory users...,جاري تحميل مستخدمي المعمل...
+Loading orders with approved plans...,جاري تحميل الطلبات ذات الخطط المعتمدة...
+Loading permission matrix...,جاري تحميل مصفوفة الصلاحيات...
+Loading production routes...,جاري تحميل مسارات الإنتاج...
+Loading role permissions...,جاري تحميل صلاحيات الدور...
+Loading the log...,جاري تحميل السجل...
+Local backup,النسخ المحلي
+Local backup scheduled in the background.,تمت جدولة النسخة المحلية في الخلفية.
+Local retention,احتفاظ المحلي
+Local schedule,جدولة المحلي
+Login page,صفحة الدخول
+Login page conflict,تعارض في صفحة الدخول
+Login page not specified,صفحة الدخول غير محددة
+"Manage factory accounts and their roles from one place. Roles and permissions are not granted automatically; permissions are owned by Almdina, while the login page is determined by the Home Page in the Frappe Role.",أدر حسابات المعمل وأدوارها من مكان واحد. الأدوار والصلاحيات لا تُمنح تلقائيًا؛ الصلاحيات تملكها Almdina، أما صفحة الدخول فيحددها Home Page داخل Role في Frappe.
+Manual edge banding drawing,رسم القشاط اليدوي
+Manual edge banding drawing / piece,رسم القشاط اليدوي / قطعة
+Measurement changes message,رسالة تعديلات القياسات
+Measurements message,رسالة القياسات
+Minimum remnant area (m²),أدنى مساحة للبقايا (م²)
+Minimum remnant length (mm),أدنى طول للبقايا (مم)
+Minimum remnant width (mm),أدنى عرض للبقايا (مم)
+More than one Role defines a different Home Page. Edit the roles in Frappe before changing them for this user.,هناك أكثر من Role يحدد Home Page مختلفة. عدّل الأدوار في Frappe قبل تغييرها لهذا المستخدم.
+Move down,تحريك للأسفل
+Move up,تحريك للأعلى
+Needs action,تحتاج إجراء
+New production route,مسار إنتاج جديد
+No System User accounts outside the factory match the current search.,لا توجد حسابات System User خارج المعمل مطابقة للبحث الحالي.
+No accounts available,لا توجد حسابات متاحة
+No backups yet,لا توجد عمليات نسخ بعد
+No changes,لا توجد تغييرات
+No changes.,لا توجد تغييرات.
+No custom roles,بدون أدوار مخصصة
+No default app,بدون تطبيق افتراضي
+No effective stages,لا توجد مراحل فعالة
+No factory users match the current search.,لا يوجد مستخدمون في المعمل مطابقون للبحث الحالي.
+No log,لا يوجد سجل
+No log yet,لا يوجد سجل بعد
+No log yet.,لا يوجد سجل بعد.
+No manageable roles.,لا توجد أدوار قابلة للإدارة.
+No matching orders with an approved plan.,لا توجد طلبات مطابقة ذات خطة معتمدة.
+No matching routes,لا توجد مسارات مطابقة
+No permissions recorded.,لا توجد صلاحيات مسجلة.
+No recorded changes,لا توجد تغييرات مسجلة
+No recorded changes.,لا توجد تغييرات مسجلة.
+No results,لا توجد نتائج
+No unsaved changes,لا توجد تغييرات غير محفوظة
+Not configured,غير مضبوط
+Not connected,غير متصلة
+Not linked,غير مربوطة
+Not running,لا تعمل
+Not set up,غير مضبوطة
+Not shown when sending a new order,لا يظهر عند إرسال طلب جديد
+Not used for the special door leaf; the special door leaf's back groove stays within its all-inclusive special price.,لا يستخدم للدرفة الخاصة؛ فرزة ظهر الدرفة الخاصة تبقى ضمن سعرها الخاص الشامل.
+Not used for the special door leaf; the special door leaf's liner stays within its all-inclusive special price.,لا يستخدم للدرفة الخاصة؛ لاينر الدرفة الخاصة يبقى ضمن سعرها الخاص الشامل.
+Nothing,لا شيء
+One separate line for each number: landline / mobile / WhatsApp.,سطر مستقل لكل رقم: أرضي / موبايل / واتس اب.
+"Only one planning stage can be selected, and it must be the first stage in the route.",يمكن تحديد مرحلة تخطيط واحدة فقط، ويجب أن تكون أول مرحلة في المسار.
+Only one planning stage can be selected.,يمكن تحديد مرحلة تخطيط واحدة فقط.
+Open archived file,فتح الملف المؤرشف
+Operational role,الدور التشغيلي
+Operational role is required.,الدور التشغيلي مطلوب.
+Optimization timeout (s),مهلة التحسين (ث)
+Optimization timeout (seconds),مهلة التحسين (ثانية)
+Orders in production,طلبات قيد الإنتاج
+Other permissions,صلاحيات أخرى
+Outside the factory,خارج المعمل
+Overview,نظرة عامة
+Passphrase is saved. Leave the field empty to keep it.,عبارة المرور محفوظة. اترك الحقل فارغًا للاحتفاظ بها.
+Password is saved. Leave the field empty to keep it.,كلمة المرور محفوظة. اترك الحقل فارغًا للاحتفاظ بها.
+Password updated without logging its value.,تم تحديث كلمة المرور دون تسجيل قيمتها.
+Paste the private key; it will be stored encrypted through Frappe.,ألصق المفتاح الخاص؛ سيُحفظ مشفرًا عبر Frappe.
+Permanently delete stage from the library,حذف المرحلة نهائيًا من المكتبة
+Permission details,تفاصيل الصلاحيات
+Permission impact,أثر الصلاحيات
+Permission summary,ملخص الصلاحيات
+Permissions and changes log,سجل الصلاحيات والتغييرات
+Permissions file,ملف الصلاحيات
+Permissions file exported.,تم تصدير ملف الصلاحيات.
+Permissions file size exceeds the allowed limit.,حجم ملف الصلاحيات يتجاوز الحد المسموح.
+Permissions that exist on the server but were not categorized in the management interface. They appear here automatically so that no assignable permission is hidden.,صلاحيات موجودة في الخادم ولم تكن مصنفة في واجهة الإدارة. تظهر هنا تلقائيًا حتى لا تُحجب أي صلاحية قابلة للإسناد.
+Piece limit for optimal search,حد القطع للبحث الأمثل
+Planning stage by default,مرحلة تخطيط افتراضيًا
+Prefer board remnants before full boards,تفضيل بقايا الألواح قبل الألواح الكاملة
+Preparation of the backup and restore started in the background.,بدأ تجهيز نسخة الأمان والاستعادة في الخلفية.
+Preparing current values and permissions...,يتم تجهيز القيم والصلاحيات الحالية...
+Preparing the code...,جاري تجهيز الرمز...
+Preparing the permissions file...,جاري تجهيز ملف الصلاحيات...
+Preparing the restore request...,جاري تجهيز طلب الاستعادة...
+Preview,معاينة
+Preview updates immediately without auto-save.,تُحدَّث المعاينة فورًا دون حفظ تلقائي.
+Print sheet identity,هوية أوراق الطباعة
+Processing fee added per original door leaf when full door leaf double is selected.,أجرة معالجة تُضاف لكل درفة أصلية عند اختيار دبل كامل الدرفة.
+Production controls,ضوابط الإنتاج
+Production flow story,قصة سير الإنتاج
+Production route deleted.,تم حذف مسار الإنتاج.
+Production route name,اسم مسار الإنتاج
+Production route name is required.,اسم مسار الإنتاج مطلوب.
+Production route saved successfully.,تم حفظ مسار الإنتاج بنجاح.
+Production route summary,ملخص مسارات الإنتاج
+Production stage library,مكتبة مراحل الإنتاج
+QR code,رمز QR
+Quick look,نظرة سريعة
+Read + select,قراءة + اختيار
+Read-only,للقراءة فقط
+Reconnect,إعادة اتصال
+Reconnecting...,جاري إعادة الاتصال...
+Remnant cost policy,سياسة تكلفة البقايا
+Remnant price / m²,سعر البقايا / م²
+Remote path,المسار البعيد
+Require cutting plan approval before handoff to the next stage,تتطلب اعتماد خطة القص قبل التسليم للمرحلة التالية
+Reserve stock on approval,حجز المخزون عند الاعتماد
+Restore,استعادة
+Restore backup,استعادة نسخة احتياطية
+Restore is disabled until DB root credentials are configured in the operational Frappe settings.,الاستعادة معطّلة حتى تُضبط بيانات DB root في إعداد Frappe التشغيلي.
+Restore prepared,تم تجهيز الاستعادة
+Restoring the latest factory settings changes.,يتم استرجاع آخر تغييرات إعدادات المعمل.
+Role permissions saved.,تم حفظ صلاحيات الدور.
+Role without Desk,دور بدون Desk
+Roles,أدوار
+Roles with different login pages cannot be assigned. Edit the Home Page on the Role in Frappe or leave it empty on secondary roles.,لا يمكن إسناد أدوار تحتوي صفحات دخول مختلفة. عدّل Home Page في Role داخل Frappe أو اتركها فارغة في الأدوار الثانوية.
+Route identity,هوية المسار
+Route is disabled,المسار معطّل
+Route stage sequence,تسلسل مراحل المسار
+Route status updated.,تم تحديث حالة المسار.
+Running,تعمل
+SSH connection and remote path are valid.,اتصال SSH والمسار البعيد صالحان.
+SSH server,خادم SSH
+SSH test failed,فشل اختبار SSH
+SSH user,مستخدم SSH
+Sale price added automatically for each door leaf with the option enabled.,سعر بيع يضاف تلقائيًا لكل درفة مفعّل عليها الخيار.
+Save changes,حفظ التغييرات
+Save password,حفظ كلمة المرور
+Save permission changes,حفظ تغييرات الصلاحيات
+Save permissions,حفظ الصلاحيات
+Save route,حفظ المسار
+Saved securely,محفوظة بأمان
+Saving permissions...,جاري حفظ الصلاحيات...
+Saving production route...,جاري حفظ مسار الإنتاج...
+Saving settings...,جاري حفظ الإعدادات...
+Saving stage...,جاري حفظ المرحلة...
+Saving user...,جاري حفظ المستخدم...
+Scan WhatsApp code,مسح رمز WhatsApp
+Scan the code from WhatsApp,امسح الرمز من واتساب
+Search,بحث
+Search and select a role...,ابحث واختر دورًا...
+Search by name or email,بحث بالاسم أو البريد
+"Search by name, stage, or role...",ابحث بالاسم أو المرحلة أو الدور...
+Search by order number or customer name...,ابحث برقم الطلب أو اسم الزبون...
+Section settings,إعدادات القسم
+Select a JSON file first.,اختر ملف JSON أولاً.
+"Select a role, then grant it permissions manually from scratch. There are no ready-made templates or automatic permissions. An existing matrix can be transferred via JSON after previewing it, and nothing is saved automatically.",اختر الدور ثم امنحه الصلاحيات يدويًا من الصفر. لا توجد قوالب جاهزة ولا صلاحيات تلقائية. يمكن نقل مصفوفة موجودة عبر JSON بعد معاينتها، ولن يتم الحفظ تلقائيًا.
+Select all / Clear,تحديد الكل / إلغاء
+Select role,اختر الدور
+Select the required roles and permissions. The login page comes from the Home Page on the Role in Frappe and is not determined by the Almdina system.,اختر الأدوار والصلاحيات المطلوبة. صفحة الدخول تأتي من Home Page في Role داخل Frappe ولا يحددها نظام Almdina.
+Select the stage from the library.,اختر المرحلة من المكتبة.
+Selected roles have different login pages.,الأدوار المحددة تحتوي صفحات دخول مختلفة.
+Send WhatsApp on completion,إرسال واتساب عند الإتمام
+Sensitive,حساسة
+Sensitive sections,الأقسام الحساسة
+Sent when this stage is completed. Use,تُرسل عند إتمام هذه المرحلة. استخدم
+Session is connected and customer messages can be sent.,الجلسة متصلة ويمكن إرسال رسائل الزبائن.
+Session is not connected.,الجلسة غير متصلة.
+Session number,رقم الجلسة
+Set temporary password,تعيين كلمة مرور مؤقتة
+Settings,الإعدادات
+Source: JSON file from role {0},المصدر: ملف JSON من الدور {0}
+Special door leaf margin,هامش الدرف الخاصة
+Stage added,تمت إضافة المرحلة
+Stage added to the library.,تمت إضافة المرحلة إلى المكتبة.
+Stage already exists,المرحلة موجودة بالفعل
+Stage code,رمز المرحلة
+Stage code is fixed after creation to protect route identity.,رمز المرحلة ثابت بعد الإنشاء لحماية هوية المسار.
+Stage deleted from the library.,تم حذف المرحلة من المكتبة.
+Stage disabled.,تم تعطيل المرحلة.
+Stage enabled.,تم تفعيل المرحلة.
+Stage is disabled,المرحلة معطّلة
+Stage library,مكتبة المراحل
+Stage library is empty,مكتبة المراحل فارغة
+Stage management,إدارة المرحلة
+Stage name,اسم المرحلة
+Stage not found in the library,المرحلة غير موجودة في المكتبة
+Stage updated.,تم تعديل المرحلة.
+Start by adding the first stage,ابدأ بإضافة أول مرحلة
+Stock consumption point,نقطة استهلاك المخزون
+Stored encrypted through Frappe and never returned to the browser.,تُحفظ مشفرة عبر Frappe ولا تعود إلى المتصفح.
+System User accounts that exist in Frappe and have not yet been added to the Almdina scope.,حسابات System User الموجودة في Frappe ولم تُضم بعد إلى نطاق Almdina.
+System permission registered in the role matrix.,صلاحية نظام مسجلة في مصفوفة الدور.
+Temporary password,كلمة المرور المؤقتة
+Testing SSH connection and remote path...,جاري اختبار اتصال SSH والمسار البعيد...
+"The archive creates a private PDF file saved with the order. If the file already exists, no duplicate copy will be created.",ينشئ الأرشيف ملف PDF خاصًا محفوظًا مع الطلب. إذا كان الملف موجودًا مسبقًا فلن يتم إنشاء نسخة مكررة.
+The browser could not read the permissions file.,لم يتمكن المتصفح من قراءة ملف الصلاحيات.
+The code refreshes every 5 seconds. Scan it from WhatsApp on your phone.,يُحدَّث الرمز كل 5 ثوانٍ. امسحه من واتساب على الجوال.
+The default route can be left empty and routes built from the route management screen. A real route must be selected when sending the order to production.,يمكن ترك المسار الافتراضي فارغًا وبناء المسارات من شاشة إدارة المسارات. عند إرسال الطلب للإنتاج يجب اختيار مسار فعلي.
+"The legacy Almdina ERP Settings form link is now a historical route only and will be redirected to this page automatically. No value is deleted from the log on redirect, and contact numbers accept multiple lines such as: landline, mobile, WhatsApp.",الرابط القديم لنموذج Almdina ERP Settings أصبح مسارًا تاريخيًا فقط وسيتم تحويله تلقائيًا إلى هذه الصفحة. لا يتم حذف أي قيمة من السجل عند التحويل، وأرقام التواصل تقبل عدة أسطر مثل: أرضي، موبايل، واتس اب.
+"The measurements text, its edits, and the invoice are attached with the PDF file in one message limited to 1024 characters. Stage completion messages remain text from the production route. Use",نص القياسات وتعديلاتها والفاتورة يُرفق مع ملف PDF في رسالة واحدة بحد 1024 حرفًا. رسائل إتمام المراحل تبقى نصًا من مسار الإنتاج. استخدم
+The planning stage must be the first stage.,مرحلة التخطيط يجب أن تكون أول مرحلة.
+The planning stage must be the first stage. Move the stage first.,مرحلة التخطيط يجب أن تكون أول مرحلة. حرّك المرحلة أولًا.
+"The system will first create a full backup, then use Frappe Restore and run migrate.",سينشئ النظام نسخة أمان كاملة أولًا، ثم يستخدم Frappe Restore ويشغّل migrate.
+"These values were used in legacy stock and board remnant functions that have been operationally retired. We did not delete them from the database, and they appear here only so that all factory settings data stays in one place without losing any historical value.",هذه القيم كانت مستخدمة في وظائف مخزون وبقايا ألواح قديمة تم إيقافها تشغيليًا. لم نحذفها من قاعدة البيانات، وتظهر هنا فقط حتى تبقى جميع بيانات إعدادات المعمل في مكان واحد دون فقدان أي قيمة تاريخية.
+This change removes your last permission to manage permissions. After saving you may not be able to return to the page.,هذا التغيير يزيل آخر صلاحية لديك لإدارة الصلاحيات. بعد الحفظ قد لا تستطيع العودة إلى الصفحة.
+"This data appears automatically on the measurements printout, cutting plan, and customer invoice.",تظهر هذه البيانات تلقائيًا في طباعة القياسات وخطة القص وفاتورة الزبون.
+This save will remove your last permission to manage permissions. Do you want to continue?,سيؤدي هذا الحفظ إلى إزالة آخر صلاحية لديك لإدارة الصلاحيات. هل تريد المتابعة؟
+This stage's text field appears in Factory settings → WhatsApp messages,يظهر حقل نص هذه المرحلة في إعدادات المعمل → رسائل واتساب
+Total,إجمالي
+Total factory accounts,إجمالي حسابات المعمل
+Total stages,إجمالي المراحل
+Trimming margin (mm),هامش التشذيب (مم)
+Type the confirmation phrase as shown above,اكتب عبارة التأكيد كما تظهر أعلاه
+Type the confirmation phrase exactly.,اكتب عبارة التأكيد حرفيًا.
+Type to search...,اكتب للبحث...
+Unknown,غير معروفة
+Updating password...,جاري تحديث كلمة المرور...
+Updating route status...,جاري تحديث حالة المسار...
+Updating the account...,جاري تحديث الحساب...
+Use Create Backup Now to create the first local backup.,استخدم Create Backup Now لإنشاء أول نسخة محلية.
+"Use a short, fixed code, such as CNC or Cutting.",استخدم رمزًا قصيرًا وثابتًا، مثل CNC أو Cutting.
+User added to the factory. You can now assign their roles.,تمت إضافة المستخدم إلى المعمل. يمكنك الآن تعيين أدواره.
+User created.,تم إنشاء المستخدم.
+User quick access,الوصول السريع للمستخدم
+User status updated.,تم تحديث حالة المستخدم.
+User updated.,تم تحديث المستخدم.
+Users,المستخدمون
+Users and workforce,المستخدمون والقوى العاملة
+Users not added to the factory,مستخدمون غير مضافين إلى المعمل
+Verifying,جاري التحقق
+Verifying and deleting the route...,جاري التحقق وحذف المسار...
+Verifying permissions...,جاري التحقق من الصلاحيات...
+Visible users,المستخدمون الظاهرون
+Waiting for code scan,بانتظار مسح الرمز
+Warning: Restore replaces the current database and files.,تحذير: الاستعادة تستبدل قاعدة البيانات والملفات الحالية.
+WhatsApp linked.,تم ربط WhatsApp.
+WhatsApp messages,رسائل واتساب
+WhatsApp server address or API key is not configured.,لم يتم ضبط عنوان خادم WhatsApp أو مفتاح API.
+WhatsApp session,جلسة WhatsApp
+Without a role,دون دور
+Workforce management,إدارة القوى العاملة
+Workforce summary,ملخص القوى العاملة
+Workspace,مساحة العمل
+Workspaces,مساحات العمل
+"You can review the values here, but editing this section is not available for your current permissions.",يمكنك مراجعة القيم هنا، لكن تعديل هذا القسم غير متاح لصلاحياتك الحالية.
+You have unsaved changes,لديك تغييرات غير محفوظة
+You have unsaved changes. Do you want to discard them and refresh the page?,لديك تغييرات غير محفوظة. هل تريد تجاهلها وتحديث الصفحة؟
+You have unsaved changes. Do you want to discard them?,لديك تغييرات غير محفوظة. هل تريد تجاهلها؟
+and,و
+for the order number and,لرقم الطلب و
+for the order number.,لرقم الطلب.
+for the stage name.,لاسم المرحلة.
+Authentication Method,طريقة المصادقة
+Backup & Restore,النسخ الاحتياطي والاستعادة
+Backup History & Actions,سجل النسخ والإجراءات
+Create Backup Now,إنشاء نسخة الآن
+Day of Month,يوم الشهر
+Day of Week,يوم الأسبوع
+Default Workspace,Default Workspace
+Enable External Backup,تفعيل النسخ الخارجي
+Enable Local Backup,تفعيل النسخ المحلي
+External Backup — SSH,النسخ الخارجي — SSH
+Frappe: {0},Frappe: {0}
+Keep Last N Backups,الاحتفاظ بآخر N نسخ
+Local Backup,النسخ المحلي
+Private Key Passphrase (Optional),عبارة مرور المفتاح الخاص (اختياري)
+Production Workflow,مسار العمل الإنتاجي
+Remote Backup Path,المسار البعيد للنسخ
+SSH Connection,اتصال SSH
+SSH Host,خادم SSH
+SSH Password,كلمة مرور SSH
+SSH Port,منفذ SSH
+SSH Private Key,المفتاح الخاص لـ SSH
+SSH Username,مستخدم SSH
+Schedule,الجدولة
+Test SSH Connection,اختبار اتصال SSH
+Time,الوقت
+Workflow Story,قصة سير الإنتاج
+Last {0} backups,آخر {0} نسخ احتياطية
+Costing and pricing,التكلفة والتسعير
+Documents and printing,المستندات والطباعة
+Production and assignment,الإنتاج والإسناد
+Control center and quality,مركز التحكم والجودة
+Master data,البيانات الأساسية
+"Create, review, approve, and manage the lifecycle of an order.",إنشاء الطلب ومراجعته واعتماده وإدارة دورة حياته.
+"View costs, edit cost settings, and approve internal prices.",عرض التكلفة وتعديل إعداداتها واعتماد الأسعار الداخلية.
+"Print measurements, the customer invoice, and the confidential internal report.",طباعة القياسات وفاتورة الزبون والتقرير الداخلي السري.
+"View the plan tabs (system / uploaded / approved), calculate plans, edit optimizer settings, approve plans, and print them.",عرض تبويبات الخطة (نظام / مرفوعة / معتمدة) وحسابها وتعديل إعدادات المحسّن واعتمادها وطباعتها.
+"Special drawing, plus exporting, uploading, and replacing DXF files.",الرسم الخاص وتصدير ملفات DXF ورفعها واستبدالها.
+"Dispatch orders, start stages, hand them off, revert them, and reassign them.",إرسال الطلب وبدء المراحل وتسليمها والرجوع وإعادة الإسناد.
+"Additional view permissions within the Production floor, without granting access or any production actions by themselves.",صلاحيات العرض الإضافية داخل صالة الإنتاج دون منح دخول أو إجراءات إنتاجية بحد ذاتها.
+"Archive plans, view and record production incidents, and manage replacement pieces.",أرشفة الخطط وعرض حوادث الإنتاج وتسجيلها وإدارة قطع التعويض.
+"View, create, edit, and enable factory accounts, and manage their roles.",عرض حسابات المعمل وإنشاؤها وتعديلها وتفعيلها وإدارة أدوارها.
+"View and edit cutting, costing, production, printing, WhatsApp, and backup settings, each section independently.",عرض وتعديل إعدادات القص والتكلفة والإنتاج والطباعة وواتساب والنسخ الاحتياطي كل قسم بصورة مستقلة.
+"Manage production routings and edge banding types, with separate view, create, edit, and delete permissions.",إدارة مسارات الإنتاج وأنواع القشاط مع فصل العرض والإنشاء والتعديل والحذف.
+Edit the permission matrix for all roles.,تعديل مصفوفة الصلاحيات لجميع الأدوار.
+View orders,عرض الطلبات
+View the orders you are allowed to see and open their basic details.,عرض الطلبات المسموح بها وفتح تفاصيلها الأساسية.
+View all orders,عرض جميع الطلبات
+Bypass the assignment scope and view the orders of all workers. Grant to authorized management only.,تجاوز نطاق الإسناد وعرض طلبات جميع العاملين. تُمنح للإدارة المخولة فقط.
+Create order,إنشاء طلب
+Create new cutting orders.,إنشاء طلبات قص جديدة.
+"Enable edit mode on an order only while it is a draft. After dispatch to production, use return to draft or an edit revision.",تفعيل وضع التعديل على الطلب وهو في حالة المسودة فقط. بعد الإرسال للإنتاج استخدم إعادة للمسودة أو نسخة تعديل.
+Create edit revision,إنشاء نسخة تعديل
+Create a new revision while leaving the historical order unchanged.,إنشاء Revision جديد مع إبقاء الطلب التاريخي دون تغيير.
+Submit for review (retired),إرسال للمراجعة (ملغاة)
+Retired. The order is dispatched directly to production without going through review.,أُلغيت. الطلب يُرسل مباشرة إلى الإنتاج دون مرور بالمراجعة.
+Approve order (retired),اعتماد الطلب (ملغاة)
+Retired. Use 'Dispatch to production' directly. Cutting plan approval remains a separate permission.,أُلغيت. استخدم «إرسال للإنتاج» مباشرة. اعتماد خطة القص يبقى صلاحية منفصلة.
+Reject order,رفض الطلب
+Reject an order stuck in the legacy review queue and send it back for editing.,رفض طلب عالق في قائمة المراجعة القديمة وإعادته للتعديل.
+Cancel order,إلغاء الطلب
+Cancel the order according to lifecycle rules.,إلغاء الطلب وفق ضوابط دورة الحياة.
+Resume cancelled order,استئناف الطلب الملغى
+"Return a cancelled order to the production stage it was cancelled from, without resetting the routing or returning it to draft.",إعادة الطلب الملغى إلى مرحلة الإنتاج التي أُلغي منها دون تصفير المسار أو إعادته للمسودة.
+Add internal note,إضافة ملاحظة داخلية
+Add collaborative notes on the order and its linked customer without editing the order or entering the save and revision cycle.,إضافة ملاحظات تعاونية على الطلب والزبون المرتبط به دون تعديل الطلب أو الدخول في دورة الحفظ والمراجعات.
+Set important note,تعيين الملاحظة المهمة
+Select or clear the order's current important note; it appears directly in the order list and on the mobile card.,اختيار أو إلغاء الملاحظة المهمة الحالية للطلب؛ تظهر مباشرة في قائمة الطلبات وداخل بطاقة الموبايل.
+View costs,عرض التكلفة
+"View protected cost, price, and profitability data.",عرض بيانات التكلفة والأسعار والربحية المحمية.
+Edit cost settings,تعديل إعدادات التكلفة
+"Edit the board price and cutting fee, and recalculate the cost.",تعديل سعر اللوح وأجرة القص وإعادة حساب التكلفة.
+Edit approved price,تعديل سعر معتمد
+Change the price of a special door leaf after it was previously approved.,تغيير سعر درفة خاصة بعد اعتماده سابقًا.
+Approve special price,اعتماد سعر خاص
+Approve the final price of special door leaves.,اعتماد السعر النهائي للدرف الخاصة.
+Print the measurements document without any prices.,طباعة مستند القياسات دون أي أسعار.
+Print the customer's financial document without internal data.,طباعة مستند الزبون المالي دون البيانات الداخلية.
+Print the confidential report that includes operating cost and profitability.,طباعة التقرير السري الذي يتضمن التكلفة التشغيلية والربحية.
+View cutting plan section,عرض قسم خطة القص
+Show the cutting results tab. Grant the tab permissions below to control which plans can be viewed.,إظهار تبويب نتائج القص. امنح صلاحيات التبويبات أدناه لتحديد أي خطط يمكن مشاهدتها.
+View system plan,عرض خطة النظام
+View the tab for the cutting plan calculated by the system.,مشاهدة تبويب خطة القص المحسوبة بواسطة النظام.
+View uploaded plan,عرض الخطة المرفوعة
+View the tab for the uploaded cutting plan (DXF / custom).,مشاهدة تبويب خطة القص المرفوعة (DXF/مخصصة).
+View approved plan,عرض الخطة المعتمدة
+View the tab for the plan approved for production.,مشاهدة تبويب الخطة المعتمدة للإنتاج.
+Rerun the engine that distributes pieces across boards.,إعادة تشغيل محرك توزيع القطع على الألواح.
+Edit cutting algorithm,تعديل خوارزمية القص
+"Change the cutting algorithm offered by the system, the margins, kerf, and search settings, then recalculate and view the result in 'System plan'. This permission is fully independent of 'Edit order': whoever can edit an order cannot change the algorithm without it.",تغيير خوارزمية القص التي يقدمها النظام والهوامش وKerf وإعدادات البحث، ثم إعادة الحساب ومشاهدة النتيجة في «خطة النظام». صلاحية مستقلة تمامًا عن «تعديل الطلب»: من يملك تعديل الطلب لا يستطيع تغيير الخوارزمية بدونها.
+Print the plan you are authorized to view.,طباعة الخطة المصرح بعرضها.
+Set source and execution of shortage pieces,تحديد مصدر وتنفيذ قطع النقص
+"Allows setting whether the shortage offcut comes from the factory or from the customer, and whether it is executed at the factory or at the customer's site, within permitted cases only.",يسمح بتحديد ما إذا كانت فضلة النقص من المعمل أو من الزبون، وتحديد ما إذا كان تنفيذها في المعمل أو عند الزبون، ضمن الحالات المسموحة فقط.
+Approve the current system plan or the uploaded DXF plan as the final source for production after reviewing it.,اعتماد خطة النظام الحالية أو خطة DXF المرفوعة كمصدر نهائي للإنتاج بعد مراجعتها.
+Open drawing workspace,فتح مساحة الرسم
+Show the special drawing tools and the DXF plan.,عرض أدوات الرسم الخاصة وخطة DXF.
+Edit special drawing,تعديل الرسم الخاص
+Edit the geometry and notes of special door leaves.,تحرير هندسة وملاحظات الدرف الخاصة.
+Export the production drawing in DXF format.,تصدير رسم الإنتاج بصيغة DXF.
+Upload DXF cutting plan,رفع خطة قص DXF
+"Upload a cutting plan as a DXF file, with validation before it is approved. Intended for the drawing worker.",رفع خطة قص كملف DXF مع التحقق قبل اعتمادها. مخصصة لعامل الرسم.
+Replace DXF cutting plan,استبدال خطة قص DXF
+Replace the previously uploaded DXF file after validation. Intended for the drawing worker.,استبدال ملف DXF المرفوع سابقًا بعد التحقق. مخصصة لعامل الرسم.
+Dispatch order to production,إرسال الطلب للإنتاج
+"Choose the production routing and the first worker, and create the stages.",اختيار مسار الإنتاج والعامل الأول وإنشاء المراحل.
+Start assigned stage,بدء المرحلة المسندة
+Start the current stage when it is assigned to the same user.,بدء المرحلة الحالية عندما تكون مسندة للمستخدم نفسه.
+Hand off assigned stage,تسليم المرحلة المسندة
+Finish the stage and send the order to the next worker.,إنهاء المرحلة وإرسال الطلب إلى العامل التالي.
+Revert order to a previous department,إرجاع الطلب لقسم سابق
+Return the order to a previous stage or department with an audit trail.,إعادة الطلب إلى مرحلة أو قسم سابق مع سجل تدقيق.
+Return order to draft,إعادة الطلب للمسودة
+"Return the same order to draft after cancelling the active production stages, without creating a new revision.",إعادة نفس الطلب إلى المسودة بعد إلغاء مراحل الإنتاج النشطة، دون إنشاء نسخة جديدة.
+Confirm delivery,تأكيد التسليم
+Change the order status to Delivered.,تغيير حالة الطلب إلى تم التسليم.
+Reassign the current stage to another qualified worker.,إعادة إسناد المرحلة الحالية إلى عامل مؤهل آخر.
+View completed orders history,عرض سجل الطلبات المنجزة
+"View completed orders that already fall within the user's scope. Does not grant access to the Production floor, nor any action or additional order scope.",عرض الطلبات المنتهية التي تقع أصلًا ضمن نطاق المستخدم. لا تمنح دخول صالة الإنتاج ولا أي إجراء أو نطاق طلبات إضافي.
+Archive approved plan,أرشفة الخطة المعتمدة
+Generate and save an official PDF of the approved plan.,إنشاء وحفظ PDF رسمي خاص بالخطة المعتمدة.
+View factory users,عرض مستخدمي المعمل
+"View Almdina accounts only, along with their status and assigned roles.",عرض حسابات Almdina فقط وحالتها والأدوار المسندة لها.
+Create a new system account for the factory with a temporary password.,إنشاء حساب نظام جديد للمعمل مع كلمة مرور مؤقتة.
+Edit user details,تعديل بيانات المستخدم
+"Edit the name, language, and non-financial account details.",تعديل الاسم واللغة وبيانات الحساب غير المالية.
+Assign roles to user,إسناد الأدوار للمستخدم
+Add or remove system roles on an Almdina user account.,إضافة أو إزالة أدوار النظام من حساب مستخدم Almdina.
+Enable user,تفعيل المستخدم
+Re-enable a disabled factory account.,إعادة تفعيل حساب معمل معطّل.
+Disable user,تعطيل المستخدم
+Disable an account after confirming there are no active production stages.,تعطيل حساب بعد التأكد من عدم وجود مراحل إنتاج نشطة.
+Reset password,إعادة كلمة المرور
+Set a new temporary password without displaying it or storing it in the log.,تعيين كلمة مرور مؤقتة جديدة دون إظهارها أو تخزينها في السجل.
+View factory settings,عرض إعدادات المعمل
+"View cutting settings, costing, production controls, print sheet identity, and WhatsApp messages, without editing or linking a session.",عرض إعدادات القص والتكلفة وضوابط الإنتاج وهوية أوراق الطباعة ورسائل واتساب دون تعديل أو ربط جلسة.
+Edit cutting defaults,تعديل افتراضيات القص
+"Edit kerf, margin, algorithm, machine type, and search limits.",تعديل Kerf والهامش والخوارزمية ونوع الآلة وحدود البحث.
+Edit cost defaults,تعديل افتراضيات التكلفة
+"Edit the cutting fee, special door leaf charges, and their margins.",تعديل أجرة القص ورسوم الدرف الخاصة وهوامشها.
+Edit the default routing and sensitive operational exceptions.,تعديل المسار الافتراضي والاستثناءات التشغيلية الحساسة.
+Edit print identity,تعديل هوية الطباعة
+"Edit the factory name, tagline, address, and contact numbers shown on printed sheets. Does not include WhatsApp messages or session linking.",تعديل اسم المعمل ولمحته وعنوانه وأرقام التواصل الظاهرة على أوراق الطباعة. لا يشمل رسائل واتساب ولا ربط الجلسة.
+Manage WhatsApp session,إدارة جلسة واتساب
+"View the factory session status, create it, link it via QR code, and reconnect. Does not grant message editing or sending customer files.",عرض حالة جلسة المصنع وإنشاؤها وربطها عبر رمز QR وإعادة الاتصال. لا تمنح تعديل الرسائل ولا إرسال ملفات الزبائن.
+"Edit the texts for measurements, measurement changes, the invoice, and stage completion in the factory settings. Does not grant session creation or file sending.",تعديل نصوص القياسات وتعديلات القياسات والفاتورة وإتمام المراحل في إعدادات المعمل. لا تمنح إنشاء الجلسة ولا إرسال الملفات.
+Manage backups,إدارة النسخ الاحتياطي
+"Configure scheduling, retention, and the SSH connection, create manual backups, and view their log. Does not grant restore.",ضبط الجدولة والاحتفاظ واتصال SSH، وإنشاء النسخ اليدوية وعرض سجلها. لا تمنح الاستعادة.
+Restore backups,استعادة النسخ الاحتياطية
+Start a destructive restore after explicit confirmation and an automatic safety backup. Does not grant editing backup settings.,بدء استعادة مدمرة بعد تأكيد صريح ونسخة أمان تلقائية. لا تمنح تعديل إعدادات النسخ.
+View production routings,عرض مسارات الإنتاج
+View production routings and their stage sequence.,عرض مسارات الإنتاج وتسلسل مراحلها.
+Create production routing,إنشاء مسار إنتاج
+Create a new production routing.,إنشاء مسار إنتاج جديد.
+Edit production routings,تعديل مسارات الإنتاج
+Edit the stage order or disable the routing.,تعديل ترتيب المراحل أو تعطيل المسار.
+Delete production routing,حذف مسار إنتاج
+Delete a routing that is unused and not set as the default.,حذف مسار غير مستخدم وغير معيّن كافتراضي.
+View edge banding types,عرض أنواع القشاط
+"View edge banding types with their thickness, price, and status.",عرض أنواع القشاط والسماكة والسعر والحالة.
+Create edge banding type,إنشاء نوع قشاط
+Add a new edge banding type.,إضافة نوع قشاط جديد.
+Edit edge banding types,تعديل أنواع القشاط
+"Edit the thickness, price, and properties, or disable the type.",تعديل السماكة والسعر والخصائص أو تعطيل النوع.
+Delete edge banding type,حذف نوع قشاط
+Delete a type that is not used in any order or piece.,حذف نوع غير مستخدم في أي طلب أو قطعة.
+View customers,عرض الزبائن
+"View the customer list and manage it from the master data workspace, and select the customer on orders.",عرض قائمة الزبائن وإدارتها من مساحة البيانات الأساسية، واختيار الزبون في الطلبات.
+Create customer,إنشاء زبون
+Add a new customer from the customer list or from the selection field on the order.,إضافة زبون جديد من قائمة الزبائن أو من حقل الاختيار في الطلب.
+Edit customers,تعديل الزبائن
+Edit the existing customer details.,تعديل بيانات الزبون الحالية.
+Delete customer,حذف زبون
+Delete a customer who is not linked to any saved orders.,حذف زبون غير مرتبط بطلبات محفوظة.

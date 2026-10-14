@@ -177,6 +177,52 @@
         return frappe.utils.escape_html(String(value ?? ""));
     }
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split(`{${index}}`).join(String(value));
+            });
+        }
+        return text;
+    }
+
+    function uiDirection() {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.direction === "function") {
+            const value = locale.direction();
+            if (value === "ltr" || value === "rtl") return value;
+        }
+        const root = typeof document !== "undefined" ? document.documentElement : null;
+        const dir = root && root.getAttribute("dir");
+        return dir === "ltr" ? "ltr" : "rtl";
+    }
+
+    const KNOWN_STRATEGY_KEYS = new Set([
+        "Auto", "Auto Pro", "Deep Search", "Optimal Search",
+        "MaxRects Best Short Side", "MaxRects Best Area", "MaxRects Bottom Left",
+        "MaxRects Contact Point", "MaxRects Width", "MaxRects Length",
+        "Shelf Horizontal", "Shelf Vertical", "Shelf First Fit", "Shelf Next Fit",
+        "Guillotine Short Axis", "Guillotine Long Axis", "Guillotine Best Area Fit",
+        "Guillotine Best Short Side Fit", "Guillotine Best Long Side Fit",
+        "Skyline Bottom Left", "Skyline Best Fit",
+    ]);
+
+    function knownStrategyText(methodKey, methodLabel) {
+        const key = String(methodKey ?? "").trim();
+        if (KNOWN_STRATEGY_KEYS.has(key)) return translate(key);
+        const label = String(methodLabel ?? "").trim();
+        if (label) return label;
+        return key;
+    }
+
     function uiButton(options) {
         const ui = window.AlmdinaUi;
         if (!ui || typeof ui.button !== "function") {
@@ -201,12 +247,12 @@
 
     function modeDescription(mode) {
         const descriptions = {
-            "Auto": "مقارنة سريعة بين الخوارزميات الأساسية.",
-            "Auto Pro": "الخيار اليومي الموصى به: محاولات متعددة وتحسين محلي للنتيجة.",
-            "Deep Search": "بحث أوسع ضمن المهلة المحددة للحصول على توزيع أفضل.",
-            "Optimal Search": "بحث Solver للحالات المناسبة مع الاحتفاظ بأفضل حل صالح ضمن المهلة.",
+            "Auto": "A quick comparison of the basic algorithms.",
+            "Auto Pro": "The recommended daily choice: several attempts and a local improvement of the result.",
+            "Deep Search": "A wider search within the time limit for a better layout.",
+            "Optimal Search": "A solver search for suitable cases, keeping the best valid solution within the time limit.",
         };
-        return descriptions[mode] || "اختيار يدوي لخوارزمية ترتيب محددة.";
+        return translate(descriptions[mode] || "A manual choice of one layout algorithm.");
     }
 
     function installStyles() {
@@ -449,9 +495,8 @@
         const metrics = row.quality || plan.industrial_metrics || {};
         const totals = row.totals || {};
         const engine = row.engine || {};
-        const applied = window.AlmdinaLocale
-            ? AlmdinaLocale.translateLabel(engine.method_label || engine.method_key || __("Not calculated yet"))
-            : (engine.method_label || engine.method_key || __("Not calculated yet"));
+        const applied = knownStrategyText(engine.method_key, engine.method_label)
+            || translate("Not calculated yet");
         const boards = Number(totals.required_boards || 0);
         const waste = Number(totals.waste_percent || 0);
         const reusable = Number(metrics.largest_reusable_free_area_m2 || 0);
@@ -465,26 +510,26 @@
         const solver = engine.solver_status || plan.solver_status || "";
 
         field.$wrapper.html(`
-            <div class="dco-plan-intro">
+            <div class="dco-plan-intro" dir="${esc(uiDirection())}">
                 <div class="dco-plan-card">
-                    <span class="label">النتيجة الحالية</span>
-                    <span class="value">${boards} لوح · هدر ${num(waste,2)}%</span>
-                    <span class="sub">النتيجة المباشرة بعد تطبيق إعدادات خطة القص الحالية.</span>
+                    <span class="label">${esc(translate("Current result"))}</span>
+                    <span class="value" style="direction:ltr;">${esc(translate("{0} boards · waste {1}%", [boards, num(waste, 2)]))}</span>
+                    <span class="sub">${esc(translate("The direct result after applying the current cutting plan settings."))}</span>
                 </div>
                 <div class="dco-plan-card">
-                    <span class="label">الطريقة الفعلية المختارة</span>
+                    <span class="label">${esc(translate("Selected method"))}</span>
                     <span class="value small">${esc(applied)}</span>
                     ${solver ? `<span class="dco-solver-badge">${esc(solver)}</span>` : ""}
                 </div>
                 <div class="dco-plan-card">
-                    <span class="label">أكبر مساحة فارغة</span>
-                    <span class="value">${num(reusable,3)} م²</span>
-                    <span class="sub">أكبر مستطيل فارغ داخل اللوح بعد توزيع القطع.</span>
+                    <span class="label">${esc(translate("Largest free area"))}</span>
+                    <span class="value" style="direction:ltr;">${esc(translate("{0} m²", [num(reusable, 3)]))}</span>
+                    <span class="sub">${esc(translate("The largest empty rectangle inside the board after the pieces are placed."))}</span>
                 </div>
                 <div class="dco-plan-card">
-                    <span class="label">سهولة التنفيذ</span>
-                    <span class="value">${cuts} خط قص</span>
-                    <span class="sub">${num(cutLengthM,2)} م تقريبًا · ${rotations} تدوير · ${attempts} محاولة${elapsed ? ` · ${num(elapsed,2)} ث` : ""}</span>
+                    <span class="label">${esc(translate("Ease of cutting"))}</span>
+                    <span class="value" style="direction:ltr;">${esc(translate("{0} cut lines", [cuts]))}</span>
+                    <span class="sub" style="direction:ltr;">${esc(translate("About {0} m · {1} rotations · {2} attempts", [num(cutLengthM, 2), rotations, attempts]))}${elapsed ? esc(translate(" · {0} s", [num(elapsed, 2)])) : ""}</span>
                 </div>
             </div>
         `);
@@ -492,26 +537,26 @@
 
     function printCuttingPlan(frm) {
         if (!canPrintCuttingPlan(frm)) {
-            frappe.msgprint("ليست لديك صلاحية طباعة خطة القص.");
+            frappe.msgprint(translate("You do not have permission to print the cutting plan."));
             return false;
         }
         if (window.AlmdinaPlanTabsUX && typeof window.AlmdinaPlanTabsUX.printActivePlan === "function") {
             window.AlmdinaPlanTabsUX.printActivePlan(frm);
             return true;
         }
-        frappe.msgprint("تعذر تجهيز طباعة خطة القص. أعد تحميل الصفحة.");
+        frappe.msgprint(translate("Could not prepare the cutting plan print. Reload the page."));
         return false;
     }
 
     function exportCuttingPlanDxf(frm) {
         if (!canExportDxf(frm)) {
-            frappe.msgprint(__(stageMutationBlockReason(frm) || "ليست لديك صلاحية تصدير DXF."));
+            frappe.msgprint(stageMutationBlockReason(frm) || translate("You do not have permission to export DXF."));
             return false;
         }
         if (frappe.almdina && typeof frappe.almdina.export_order_dxf === "function") {
             return frappe.almdina.export_order_dxf(frm.doc.name);
         }
-        frappe.msgprint("تعذر تشغيل مصدر DXF الآمن. أعد تحميل الصفحة.");
+        frappe.msgprint(translate("Could not start the secure DXF source. Reload the page."));
         return false;
     }
 
@@ -519,7 +564,7 @@
         if (!canUploadDxf(frm)) {
             frappe.msgprint(__(
                 stageMutationBlockReason(frm)
-                || "ليست لديك صلاحية رفع خطة القص كملف DXF."
+                || translate("You do not have permission to upload the cutting plan as a DXF file.")
             ));
             return false;
         }
@@ -529,7 +574,7 @@
         // Fail closed: A2.2 requires DXF to be Private + Unattached before
         // authorization and geometry validation. Never fall back to a DCO-bound
         // FileUploader or attach first and validate later.
-        frappe.msgprint(__("تعذر تحميل خدمة رفع DXF الآمنة. أعد تحميل الصفحة ثم حاول مرة أخرى."));
+        frappe.msgprint(translate("Could not load the secure DXF upload service. Reload the page and try again."));
         return false;
     }
 
@@ -542,17 +587,17 @@
         return `
             <div class="dco-plan-document-actions">
                 ${printAllowed
-                    ? `<button type="button" class="btn btn-default btn-sm dco-print-cutting-plan">طباعة خطة القص</button>`
+                    ? `<button type="button" class="btn btn-default btn-sm dco-print-cutting-plan">${esc(translate("Print cutting plan"))}</button>`
                     : ""}
                 ${exportAllowed
-                    ? `<button type="button" class="btn btn-default btn-sm dco-export-dxf">تصدير DXF لأوتوكاد</button>`
+                    ? `<button type="button" class="btn btn-default btn-sm dco-export-dxf">${esc(translate("Export DXF for AutoCAD"))}</button>`
                     : ""}
                 ${uploadAllowed
-                    ? `<button type="button" class="btn btn-default btn-sm dco-upload-dxf-plan">${uploadedDxfFile(frm) ? "استبدال خطة القص DXF" : "رفع خطة قص كملف DXF"}</button>`
+                    ? `<button type="button" class="btn btn-default btn-sm dco-upload-dxf-plan">${esc(uploadedDxfFile(frm) ? translate("Replace the DXF cutting plan") : translate("Upload a cutting plan as a DXF file"))}</button>`
                     : ""}
             </div>
             ${blockReason
-                ? `<div class="text-muted" style="font-size:12px;margin-top:8px;">${esc(__(blockReason))}</div>`
+                ? `<div class="text-muted" style="font-size:12px;margin-top:8px;">${esc(blockReason)}</div>`
                 : ""}
         `;
     }
@@ -570,16 +615,16 @@
         const blockReason = stageMutationBlockReason(frm);
 
         wrapper.append(`
-            <div class="almdina-ui dco-plan-actions-shell">
-                <div class="dco-plan-dirty-note">تم تغيير أحد إعدادات الخطة. أعد الحساب لتطبيق التغيير على الرسم والنتائج.</div>
+            <div class="almdina-ui dco-plan-actions-shell" dir="${esc(uiDirection())}">
+                <div class="dco-plan-dirty-note">${esc(translate("A plan setting changed. Recalculate to apply the change to the drawing and the results."))}</div>
                 <div class="dco-plan-actions-title">
-                    <strong>أوامر خطة القص</strong>
+                    <strong>${esc(translate("Cutting plan commands"))}</strong>
                     <span class="dco-plan-mode-hint">${esc(modeDescription(mode))}</span>
                 </div>
                 ${mayMutate ? `
                     <div class="dco-plan-actions">
                         ${uiButton({
-                            label: "إعادة الحساب بالإعدادات الحالية",
+                            label: translate("Recalculate with the current settings"),
                             variant: "primary",
                             size: "btn-sm",
                             className: "dco-recalculate-plan",
@@ -589,10 +634,10 @@
                 ${documentActionsHtml(frm)}
                 <div class="dco-plan-note">
                     ${blockReason
-                        ? esc(__(blockReason))
+                        ? esc(blockReason)
                         : mayMutate
-                            ? "عدّل إعدادات الخطة من «تعديل خطة القص»، احفظها، ثم أعد الحساب."
-                            : "إعدادات الخطة للعرض فقط في الحالة الحالية."}
+                            ? esc(translate("Edit the plan settings from “Edit cutting plan”, save them, then recalculate."))
+                            : esc(translate("Plan settings are read-only in the current state."))}
                 </div>
             </div>
         `);
@@ -607,7 +652,7 @@
     async function recalculate(frm) {
         if (!canRecalculatePlan(frm)) {
             const reason = stageMutationBlockReason(frm);
-            frappe.msgprint(reason || "إعادة حساب الخطة غير متاحة في الحالة الحالية.");
+            frappe.msgprint(reason || translate("Recalculating the plan is not available in the current state."));
             return false;
         }
 
@@ -615,7 +660,7 @@
         if (!controls || typeof controls.runRecalculation !== "function") {
             // Fail closed instead of falling back to frm.save()/frm.call(). Plan
             // commands are owned by PlanControls + PlanWorkspaceAPI in A5.2.
-            frappe.msgprint(__("تعذر تحميل أمر إعادة حساب خطة القص. أعد تحميل الصفحة ثم حاول مرة أخرى."));
+            frappe.msgprint(translate("Could not load the cutting plan recalculation command. Reload the page and try again."));
             return false;
         }
         return controls.runRecalculation(frm);

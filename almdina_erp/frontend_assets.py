@@ -9,10 +9,10 @@ app_include_css = [
     "/assets/almdina_erp/css/almdina_design_tokens.css",
     "/assets/almdina_erp/css/almdina_components.css",
     "/assets/almdina_erp/css/almdina_patterns.css",
-    "/assets/almdina_erp/css/almdina_page_templates.css",
+    "/assets/almdina_erp/css/almdina_page_templates.css?v=1",
     "/assets/almdina_erp/css/almdina_desk_theme.css",
     "/assets/almdina_erp/css/almdina_desk_sidebar.css?v=2",
-    "/assets/almdina_erp/css/almdina_workspace_home.css?v=10",
+    "/assets/almdina_erp/css/almdina_workspace_home.css?v=11",
     "/assets/almdina_erp/css/almdina_list_table.css",
     "/assets/almdina_erp/css/edge_banding_type_form.css?v=4",
     "/assets/almdina_erp/css/role_form.css?v=2",
@@ -25,10 +25,11 @@ app_include_css = [
     "/assets/almdina_erp/css/door_cutting_order_form_sidebar.css",
     # Raw /assets paths are not content-fingerprinted by Frappe; bump the bounded
     # DCO list revision when its presentation contract changes.
-    "/assets/almdina_erp/css/door_cutting_order_list.css?v=15",
+    "/assets/almdina_erp/css/door_cutting_order_list.css?v=16",
     # Subject-direction correction must load after the list presentation owner:
-    # keep Frappe's checkbox at the RTL edge while isolating only ID text as LTR.
-    "/assets/almdina_erp/css/door_cutting_order_list_rtl_subject.css?v=1",
+    # inherit page direction so the checkbox stays at the logical start, and
+    # isolate only ID text as LTR.
+    "/assets/almdina_erp/css/door_cutting_order_list_rtl_subject.css?v=2",
     "/assets/almdina_erp/css/door_cutting_order_extra_addons.css",
     "/assets/almdina_erp/css/notes.css",
     "/assets/almdina_erp/css/notes_interactions.css",
@@ -36,6 +37,8 @@ app_include_css = [
 
 app_include_js = [
     "/assets/almdina_erp/js/almdina_locale.js",
+    # Desk app-name menu language item. Loads after locale; binds sidebar_setup.
+    "/assets/almdina_erp/js/almdina_language_switcher.js",
     "/assets/almdina_erp/js/permission_context.js",
     "/assets/almdina_erp/js/frontend_foundation.js",
     "/assets/almdina_erp/js/almdina_ui.js",
@@ -49,7 +52,7 @@ app_include_js = [
     "/assets/almdina_erp/js/shop_floor_quick_actions.js",
     "/assets/almdina_erp/js/shared_shell.js",
     "/assets/almdina_erp/js/almdina_shortcut_presentation.js?v=2",
-    "/assets/almdina_erp/js/almdina_workspace_home_ux.js?v=11",
+    "/assets/almdina_erp/js/almdina_workspace_home_ux.js?v=12",
     "/assets/almdina_erp/js/almdina_desk_sidebar_ux.js?v=2",
     "/assets/almdina_erp/js/input_stability.js",
     "/assets/almdina_erp/js/door_cutting_order/drawing/door_cutting_order_special_shape_geometry.js",

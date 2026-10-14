@@ -1,6 +1,35 @@
 (() => {
     "use strict";
 
+
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split("{" + index + "}").join(String(value));
+            });
+        }
+        return text;
+    }
+
+    function uiDirection() {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.direction === "function") {
+            const value = locale.direction();
+            if (value === "ltr" || value === "rtl") return value;
+        }
+        const root = typeof document !== "undefined" ? document.documentElement : null;
+        const dir = root && root.getAttribute("dir");
+        return dir === "ltr" ? "ltr" : "rtl";
+    }
+
     const PAGE_ROUTE = "shop-floor-inbox";
     const FOUNDATION = "/assets/almdina_erp/js/frontend_foundation.js";
     const PAGE_LIFECYCLE = "/assets/almdina_erp/js/page_revisit_refresh.js";
@@ -20,23 +49,25 @@
     frappe.pages[PAGE_ROUTE].on_page_load = function (wrapper) {
         const page = frappe.ui.make_app_page({
             parent: wrapper,
-            title: __("صالة الإنتاج"),
+            title: translate("Production floor"),
             single_column: true,
         });
         const $main = $(wrapper).find(".layout-main-section");
+        const pageDir = uiDirection();
+        $main.attr("dir", pageDir);
         $main.html(`
-            <div class="almdina-sf-content">
-                <div class="almdina-sf-shell" data-almdina-loading-owner="shop-floor-bootstrap">
+            <div class="almdina-sf-content" dir="${pageDir}">
+                <div class="almdina-sf-shell" data-almdina-loading-owner="shop-floor-bootstrap" dir="${pageDir}">
                     <div class="almdina-sf-state almdina-sf-loading" role="status" aria-live="polite">
                         <span class="almdina-sf-spinner" aria-hidden="true"></span>
-                        <div><b>${__("جاري التحميل")}</b><span>${__("جاري تجهيز صالة الإنتاج...")}</span></div>
+                        <div><b>${translate("Loading")}</b><span>${translate("Preparing the shop floor...")}</span></div>
                     </div>
                 </div>
             </div>
         `);
 
         function renderBootstrapError(error) {
-            const fallback = __("تعذر تحميل صالة الإنتاج.");
+            const fallback = translate("Could not load the shop floor.");
             const frontend = window.AlmdinaFrontend;
             const ui = window.AlmdinaUi;
             const message = frontend && typeof frontend.errorMessage === "function"

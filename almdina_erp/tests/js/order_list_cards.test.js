@@ -51,16 +51,20 @@ const context = {
             if (query === "(hover: none)") return { matches: noHover };
             return { matches: false };
         },
+        AlmdinaLocale: {
+            translate(message) { return message; },
+            direction() { return cardDirection; },
+        },
         AlmdinaShopFloorQuickActions: {
             actionFor(actionContext) {
                 if (actionContext.canDeliver) {
-                    return { kind: "deliver", label: "تم التسليم", indicator: "success" };
+                    return { kind: "deliver", label: "Delivered", indicator: "success" };
                 }
                 if (actionContext.canStart) {
-                    return { kind: "start", label: "بدء العمل", indicator: "primary" };
+                    return { kind: "start", label: "Start work", indicator: "primary" };
                 }
                 if (actionContext.canHandoff) {
-                    return { kind: "handoff", label: "إنهاء وإرسال", indicator: "success" };
+                    return { kind: "handoff", label: "Finish and send", indicator: "success" };
                 }
                 return null;
             },
@@ -68,6 +72,8 @@ const context = {
     },
     __(value) { return value; },
 };
+let cardDirection = "rtl";
+context.document.documentElement.getAttribute = () => cardDirection;
 context.window.window = context.window;
 vm.createContext(context);
 vm.runInContext(responsiveSource, context);
@@ -164,7 +170,7 @@ const doc = {
 
 const model = api.cardViewModel(doc);
 assert.strictEqual(model.state.key, "ready");
-assert.strictEqual(model.state.label, "جاهز للبدء");
+assert.strictEqual(model.state.label, "Ready to start");
 assert.strictEqual(model.state.icon, "play");
 assert.strictEqual(model.boardColor, "أبيض لولو");
 assert.strictEqual(model.edgeColor, "أسود");
@@ -172,7 +178,9 @@ assert.strictEqual(model.edgeType, "PVC 2 مم");
 assert.strictEqual(model.productionStageLabel, "شريون");
 assert.strictEqual(model.stageLabel, "شريون");
 
+cardDirection = "rtl";
 const html = api.buildCard(doc, true);
+assert(html.includes('dir="rtl"'), "Arabic/RTL sessions must render the card with dir=rtl");
 assert(html.includes("dco-mobile-order-card is-ready"), "the ready order must render with the blue ready theme");
 assert(html.includes('class="dco-card-customer-block"'), "customer identity must be the primary header block");
 assert(html.includes('class="dco-card-header-meta"'), "stage and queue state must share a compact header meta column");
@@ -180,24 +188,31 @@ assert(html.includes('class="dco-card-stage"'), "the current production stage mu
 assert(html.includes("شريون"), "the worker card must show the current department name");
 assert(html.includes('class="dco-card-state-pill"'), "the card must expose a visual workflow-state pill");
 assert(html.includes('class="dco-card-state-icon"'), "each workflow state must expose a semantic icon in addition to color");
-assert(html.includes("جاهز للبدء"), "the initial production state must be clear");
+assert(html.includes("Ready to start"), "the initial production state must be clear");
 assert(html.includes('class="dco-card-order-link"'), "the order ID must be the detail-navigation affordance");
 assert(html.includes("DCO-2026-00010"));
 assert(html.includes("عميل الاختبار"));
-assert(html.includes("لون اللوح"));
+assert(html.includes("Board color"));
 assert(html.includes("أبيض لولو"));
-assert(html.includes("لون القشاط"));
+assert(html.includes("Edge color"));
 assert(html.includes("أسود"));
-assert(html.includes("نوع القشاط"));
+assert(html.includes("Edge type"));
 assert(html.includes("PVC 2 مم"));
 assert(html.includes("date:2026-08-02"));
 assert.strictEqual((html.match(/dco-card-info-tile/g) || []).length, 3, "the approved card has exactly three information tiles");
 assert(!html.includes("dco-card-workflow"), "stage/assignee internals must not compete with the approved card hierarchy");
-assert(html.includes("بدء العمل"), "the authorized assigned worker must get the start action");
+assert(html.includes("Start work"), "the authorized assigned worker must get the start action");
 assert(html.includes('data-action-kind="start"'));
 assert(html.includes("is-start"));
 assert(!html.includes("dco-card-open"), "the redundant open-order footer button must stay removed");
 assert(!html.includes("<select"), "the card must not expose an arbitrary status selector");
+
+cardDirection = "ltr";
+const ltrHtml = api.buildCard(doc, true);
+assert(ltrHtml.includes('dir="ltr"'), "LTR sessions must render the same card with dir=ltr");
+assert(ltrHtml.includes("عميل الاختبار"), "customer names stay raw across directions");
+assert(ltrHtml.includes("DCO-2026-00010"), "order IDs stay raw across directions");
+assert(!source.includes('dir="rtl"'), "the card template must not hard-code dir=rtl");
 
 const inProgress = {
     ...doc,
@@ -218,11 +233,11 @@ assert.strictEqual(inProgressModel.state.icon, "activity");
 assert(inProgressHtml.includes("dco-mobile-order-card is-in-progress"));
 assert(inProgressHtml.includes("dco-card-stage"));
 assert(inProgressHtml.includes("شريون"));
-assert(inProgressHtml.includes("قيد التنفيذ"));
-assert(inProgressHtml.includes("إنهاء العمل"), "an active mobile assignment must expose a clear finish action");
+assert(inProgressHtml.includes("In progress"));
+assert(inProgressHtml.includes("Finish work"), "an active mobile assignment must expose a clear finish action");
 assert(inProgressHtml.includes('data-action-kind="handoff"'));
 assert(inProgressHtml.includes("is-finish"));
-assert(!inProgressHtml.includes("إنهاء وإرسال"), "the compact mobile label should describe the worker action, not routing internals");
+assert(!inProgressHtml.includes("Finish and send"), "the compact mobile label should describe the worker action, not routing internals");
 
 // Capability denial is represented only by the server-authorized action flags.
 // The card may still describe the stage state, but it must render no action.
@@ -239,13 +254,13 @@ const permissionDenied = {
     },
 };
 const permissionDeniedHtml = api.buildCard(permissionDenied, false);
-assert(permissionDeniedHtml.includes("جاهز للبدء"));
+assert(permissionDeniedHtml.includes("Ready to start"));
 assert(
     !permissionDeniedHtml.includes("dco-card-production-action"),
     "an assigned worker without the server-granted production capability must not see a workflow button"
 );
-assert(!permissionDeniedHtml.includes("بدء العمل"));
-assert(!permissionDeniedHtml.includes("إنهاء العمل"));
+assert(!permissionDeniedHtml.includes("Start work"));
+assert(!permissionDeniedHtml.includes("Finish work"));
 
 const readyForDelivery = {
     ...doc,
@@ -263,13 +278,13 @@ const readyForDelivery = {
 const readyForDeliveryModel = api.cardViewModel(readyForDelivery);
 const readyForDeliveryHtml = api.buildCard(readyForDelivery, false);
 assert.strictEqual(readyForDeliveryModel.state.key, "ready_for_delivery");
-assert.strictEqual(readyForDeliveryModel.state.label, "جاهز للتسليم");
+assert.strictEqual(readyForDeliveryModel.state.label, "Ready for delivery");
 assert.strictEqual(readyForDeliveryModel.state.icon, "package");
 assert.strictEqual(readyForDeliveryModel.history, false);
 assert(readyForDeliveryHtml.includes("dco-mobile-order-card is-ready-for-delivery"));
 assert.strictEqual(readyForDeliveryModel.productionStageLabel, "");
 assert(!readyForDeliveryHtml.includes("dco-card-stage"), "delivery cards must not repeat a production-stage chip");
-assert(readyForDeliveryHtml.includes("جاهز للتسليم"), "production-complete orders must have an explicit waiting-for-delivery state");
+assert(readyForDeliveryHtml.includes("Ready for delivery"), "production-complete orders must have an explicit waiting-for-delivery state");
 assert(!readyForDeliveryHtml.includes("dco-card-complete-state"), "ready for delivery is still actionable work, not history");
 assert(!readyForDeliveryHtml.includes("dco-card-production-action"), "delivery capability must still come only from the server");
 assert(!readyForDeliveryHtml.includes("dco-list-row-completed"), "ready for delivery must not inherit completed green styling");
@@ -289,11 +304,11 @@ const deliveryAuthorizedModel = api.cardViewModel(deliveryAuthorized);
 const deliveryAuthorizedHtml = api.buildCard(deliveryAuthorized, false);
 assert.strictEqual(deliveryAuthorizedModel.state.key, "ready_for_delivery");
 assert.strictEqual(deliveryAuthorizedModel.action.kind, "deliver");
-assert.strictEqual(deliveryAuthorizedModel.action.label, "تم التسليم");
-assert(deliveryAuthorizedHtml.includes("جاهز للتسليم"), "delivery authorization must not replace the actual card state");
+assert.strictEqual(deliveryAuthorizedModel.action.label, "Delivered");
+assert(deliveryAuthorizedHtml.includes("Ready for delivery"), "delivery authorization must not replace the actual card state");
 assert(deliveryAuthorizedHtml.includes('data-action-kind="deliver"'), "server-authorized delivery must render as the mobile quick action");
 assert(deliveryAuthorizedHtml.includes("is-deliver"), "delivery must have its own purple action identity");
-assert(deliveryAuthorizedHtml.includes("تم التسليم"), "the delivery action must use the agreed Arabic label");
+assert(deliveryAuthorizedHtml.includes("Delivered"), "the delivery action must use the agreed label");
 
 const completed = {
     ...doc,
@@ -311,11 +326,11 @@ const completed = {
 const completedModel = api.cardViewModel(completed);
 const completedHtml = api.buildCard(completed, false);
 assert.strictEqual(completedModel.state.key, "completed");
-assert.strictEqual(completedModel.state.label, "تم الإنجاز");
+assert.strictEqual(completedModel.state.label, "Order completed");
 assert.strictEqual(completedModel.state.icon, "circle-check");
 assert.strictEqual(completedModel.history, true);
 assert(completedHtml.includes("dco-mobile-order-card is-completed"));
-assert(completedHtml.includes("تم الإنجاز"), "completed mobile work must show a non-interactive completion state");
+assert(completedHtml.includes("Order completed"), "completed mobile work must show a non-interactive completion state");
 assert(completedHtml.includes("dco-card-complete-state"));
 assert(!completedHtml.includes("dco-card-production-action"), "completed history must not expose a workflow button");
 
@@ -335,7 +350,7 @@ const delivered = {
 const deliveredModel = api.cardViewModel(delivered);
 const deliveredHtml = api.buildCard(delivered, false);
 assert.strictEqual(deliveredModel.state.key, "delivered");
-assert.strictEqual(deliveredModel.state.label, "تم التسليم");
+assert.strictEqual(deliveredModel.state.label, "Delivered");
 assert.strictEqual(deliveredModel.state.icon, "truck");
 assert.strictEqual(deliveredModel.history, true);
 assert.strictEqual(deliveredModel.action, null);
@@ -343,7 +358,7 @@ assert(deliveredHtml.includes("dco-mobile-order-card is-delivered"));
 assert.strictEqual(deliveredModel.productionStageLabel, "");
 assert(!deliveredHtml.includes("dco-card-stage"), "delivered cards must not repeat a production-stage chip");
 assert(deliveredHtml.includes("dco-card-complete-state"));
-assert(deliveredHtml.includes("تم التسليم"), "a delivered order must retain a non-interactive delivered state");
+assert(deliveredHtml.includes("Delivered"), "a delivered order must retain a non-interactive delivered state");
 assert(!deliveredHtml.includes("dco-card-production-action"), "a delivered order must never render another workflow button");
 
 const cancelled = {
@@ -362,19 +377,19 @@ const cancelled = {
 const cancelledModel = api.cardViewModel(cancelled);
 const cancelledHtml = api.buildCard(cancelled, false);
 assert.strictEqual(cancelledModel.state.key, "cancelled");
-assert.strictEqual(cancelledModel.state.label, "ملغى");
+assert.strictEqual(cancelledModel.state.label, "Cancelled");
 assert.strictEqual(cancelledModel.state.icon, "x");
 assert.strictEqual(cancelledModel.history, true);
 assert.strictEqual(cancelledModel.action, null);
 assert(cancelledHtml.includes("dco-mobile-order-card is-cancelled"));
 assert(cancelledHtml.includes("dco-card-complete-state"));
-assert(cancelledHtml.includes("ملغى"), "a cancelled order must retain a non-interactive cancelled state");
+assert(cancelledHtml.includes("Cancelled"), "a cancelled order must retain a non-interactive cancelled state");
 assert(!cancelledHtml.includes("dco-card-production-action"), "a cancelled order must never render another workflow button");
 assert(!cancelledHtml.includes("is-delivered"), "cancelled must not inherit delivered green styling");
 
 assert.strictEqual(api.overviewStageLabel({ status: "At CNC", current_department: "CNC" }), "CNC");
-assert.strictEqual(api.overviewStageLabel({ status: "Ready for Delivery" }), "جاهز للتسليم");
-assert.strictEqual(api.overviewStageLabel({ status: "Delivered" }), "تم التسليم");
+assert.strictEqual(api.overviewStageLabel({ status: "Ready for Delivery" }), "Ready for delivery");
+assert.strictEqual(api.overviewStageLabel({ status: "Delivered" }), "Delivered");
 assert.strictEqual(api.productionStageLabel({ status: "At CNC", current_department: "CNC" }), "CNC");
 assert.strictEqual(api.productionStageLabel({ status: "At Sharyoun", current_department: "شريون" }), "شريون");
 assert.strictEqual(api.productionStageLabel({ status: "Ready for Delivery", current_department: "شريون" }), "");
@@ -403,7 +418,7 @@ assert.strictEqual(overviewCncModel.stageLabel, "CNC");
 assert.strictEqual(overviewCncModel.productionStageLabel, "CNC");
 assert(overviewCncHtml.includes("dco-card-stage"));
 assert(!overviewCncHtml.includes("dco-mobile-order-card is-completed"));
-assert(!overviewCncHtml.includes("تم الإنجاز"), "all-orders mobile cards must not treat unassigned work as worker-completed");
+assert(!overviewCncHtml.includes("Order completed"), "all-orders mobile cards must not treat unassigned work as worker-completed");
 assert(overviewCncHtml.includes("dco-card-complete-state"));
 assert(overviewCncHtml.includes("CNC"), "the all-orders footer must show the current stage name");
 assert(!overviewCncHtml.includes("dco-card-production-action"));
@@ -417,7 +432,7 @@ const overviewReadyForDelivery = {
 };
 const overviewReadyHtml = api.buildCard(overviewReadyForDelivery, false);
 assert(overviewReadyHtml.includes("dco-card-complete-state"), "all-orders ready-for-delivery must keep the footer bar");
-assert(overviewReadyHtml.includes("جاهز للتسليم"));
+assert(overviewReadyHtml.includes("Ready for delivery"));
 assert(!overviewReadyHtml.includes("dco-card-production-action"), "delivery capability must still come only from the server");
 
 const overviewDelivered = {
@@ -429,7 +444,7 @@ const overviewDelivered = {
 };
 const overviewDeliveredHtml = api.buildCard(overviewDelivered, false);
 assert(overviewDeliveredHtml.includes("dco-card-complete-state"));
-assert(overviewDeliveredHtml.includes("تم التسليم"));
+assert(overviewDeliveredHtml.includes("Delivered"));
 assert(!overviewDeliveredHtml.includes("dco-card-production-action"));
 
 const overviewAuthorizedDelivery = {
@@ -693,7 +708,7 @@ assert.strictEqual(typeof api.overviewListOrderBy, "undefined");
 assert(!source.includes("IN ('Delivered')"));
 assert(!source.includes("args.order_by = overviewListOrderBy"));
 assert.strictEqual(api.overviewDefaultSortField, "__dco_default_sort");
-assert.strictEqual(api.overviewDefaultSortLabel, "الترتيب الافتراضي");
+assert.strictEqual(api.overviewDefaultSortLabel, "Default sort");
 assert.strictEqual(
     api.overviewDefaultSortSql(),
     "`tabDoor Cutting Order`.`modified` desc"
@@ -1265,7 +1280,7 @@ assert.strictEqual(statusConfig.condition, "=");
 assert.strictEqual(statusConfig.label, "Status");
 const statusOptions = api.statusFilterOptions();
 assert.strictEqual(statusOptions[0].value, "");
-assert.strictEqual(statusOptions[0].label, "كل الحالات");
+assert.strictEqual(statusOptions[0].label, "All statuses");
 assert.deepStrictEqual(
     hostOptions(statusOptions.slice(1)),
     [
@@ -1279,9 +1294,9 @@ const assigneeConfig = api.assigneeFilterConfig();
 assert.strictEqual(assigneeConfig.fieldtype, "Select");
 assert.strictEqual(assigneeConfig.fieldname, "current_assignee");
 assert.strictEqual(assigneeConfig.condition, "=");
-assert.strictEqual(assigneeConfig.label, "العامل الحالي");
+assert.strictEqual(assigneeConfig.label, "Current worker");
 assert.deepStrictEqual(hostOptions(api.assigneeFilterOptions()), [
-    { value: "", label: "كل العمال" },
+    { value: "", label: "All workers" },
 ]);
 
 assert.deepStrictEqual(
@@ -1321,7 +1336,7 @@ api.applyLoadedAssigneeFilterOptions({
     { value: "worker-b@example.com", label: "باسم" },
 ]);
 assert.deepStrictEqual(hostOptions(api.assigneeFilterOptions()), [
-    { value: "", label: "كل العمال" },
+    { value: "", label: "All workers" },
     { value: "worker-a@example.com", label: "أحمد" },
     { value: "worker-b@example.com", label: "باسم" },
 ]);

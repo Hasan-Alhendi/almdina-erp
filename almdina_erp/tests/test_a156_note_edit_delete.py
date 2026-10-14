@@ -98,8 +98,10 @@ def test_panel_has_inline_edit_and_confirmed_delete_without_dco_save() -> None:
     assert 'data-notes-action="save-edit"' in panel
     assert 'data-notes-action="cancel-edit"' in panel
     assert 'data-notes-input="edit-content"' in panel
-    assert "حفظ التعديل" in panel
-    assert "هل تريد حذف هذه الملاحظة؟ لا يمكن التراجع عن الحذف." in panel
+    assert '__("Save edit")' in panel
+    assert '__("Delete this note? This action cannot be undone.")' in panel
+    assert "حفظ التعديل" not in panel
+    assert "هل تريد حذف هذه الملاحظة؟ لا يمكن التراجع عن الحذف." not in panel
     assert "frappe.confirm" in panel
     assert "frm.save(" not in panel
     assert "frm.set_value" not in panel

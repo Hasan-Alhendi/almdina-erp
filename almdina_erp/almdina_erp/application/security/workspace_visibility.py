@@ -43,22 +43,30 @@ WORKSPACE_ENTRY_SURFACES: dict[str, str] = {
     "User": Surface.ROLE_ADMIN,
 }
 
+_BASIC_SETTINGS = (
+    Surface.CUSTOMER_ADMIN,
+    Surface.EDGE_BANDING_TYPES,
+    Surface.FACTORY_SETTINGS,
+)
+_SYSTEM_WORKFLOW = (
+    Surface.ROLE_ADMIN,
+    Surface.PERMISSIONS,
+    Surface.WORKFORCE,
+    Surface.FACTORY_MASTER_DATA,
+)
+_DAILY_OPERATIONS = (
+    Surface.ORDERS,
+    Surface.PRODUCTION_STAGES,
+)
+
 WORKSPACE_SECTION_SURFACES: dict[str, tuple[str, ...]] = {
-    "الإعدادات الأساسية": (
-        Surface.CUSTOMER_ADMIN,
-        Surface.EDGE_BANDING_TYPES,
-        Surface.FACTORY_SETTINGS,
-    ),
-    "إدارة النظام ومسارات العمل": (
-        Surface.ROLE_ADMIN,
-        Surface.PERMISSIONS,
-        Surface.WORKFORCE,
-        Surface.FACTORY_MASTER_DATA,
-    ),
-    "التشغيل اليومي": (
-        Surface.ORDERS,
-        Surface.PRODUCTION_STAGES,
-    ),
+    "Basic settings": _BASIC_SETTINGS,
+    "System and workflow management": _SYSTEM_WORKFLOW,
+    "Daily operations": _DAILY_OPERATIONS,
+    # Stored copies that still use the previous Arabic labels keep the same surfaces.
+    "الإعدادات الأساسية": _BASIC_SETTINGS,
+    "إدارة النظام ومسارات العمل": _SYSTEM_WORKFLOW,
+    "التشغيل اليومي": _DAILY_OPERATIONS,
 }
 
 _TAG_RE = re.compile(r"<[^>]+>")

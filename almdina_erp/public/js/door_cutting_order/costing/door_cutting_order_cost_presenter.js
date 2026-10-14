@@ -44,11 +44,44 @@
         });
     }
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split(`{${index}}`).join(String(value));
+            });
+        }
+        return text;
+    }
+
+    function uiDirection() {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.direction === "function") {
+            const value = locale.direction();
+            if (value === "ltr" || value === "rtl") return value;
+        }
+        const root = typeof document !== "undefined" ? document.documentElement : null;
+        const dir = root && root.getAttribute("dir");
+        return dir === "ltr" ? "ltr" : "rtl";
+    }
+
+    function htmlText(message, replacements) {
+        return esc(translate(message, replacements));
+    }
+
     function pieceTypeLabel(value) {
-        if (value === "Special") return "خاصة";
-        if (value === "Clipped Corner") return "الزاوية الكسر";
-        if (value === "L-Shaped Corner") return "زاوية L";
-        return "عادية";
+        if (value === "Special") return translate("Special");
+        if (value === "Clipped Corner") return translate("Clipped corner");
+        if (value === "L-Shaped Corner") return translate("L-shaped corner");
+        if (value === "Regular" || value == null || value === "") return translate("Regular");
+        return String(value);
     }
 
     function isCornerCutType(value) {
@@ -88,13 +121,13 @@
             extraAddons: [
                 {
                     selected: Boolean(number(source.extra_double)),
-                    label: "دبل قشاط",
+                    label: "Edge banding double",
                     rate: number(source.extra_double_unit_price_usd),
                     amount: number(source.extra_double_total_usd),
                 },
                 {
                     selected: Boolean(number(source.extra_full_door_double)),
-                    label: "دبل كامل الدرفة",
+                    label: "Full door double",
                     rate: number(source.extra_full_door_double_unit_price_usd),
                     amount: number(source.extra_full_door_double_total_usd),
                 },
@@ -106,13 +139,13 @@
                 },
                 {
                     selected: Boolean(number(source.extra_back_groove)),
-                    label: "فرزة ظهر",
+                    label: "Back groove",
                     rate: number(source.extra_back_groove_unit_price_usd),
                     amount: number(source.extra_back_groove_total_usd),
                 },
                 {
                     selected: Boolean(number(source.extra_recessed_handle_cutout)),
-                    label: "حفر مسكة غطس",
+                    label: "Recessed handle",
                     rate: number(source.extra_recessed_handle_cutout_unit_price_usd),
                     amount: number(source.extra_recessed_handle_cutout_total_usd),
                 },
@@ -148,9 +181,11 @@
         if (boardCount || boardAmount) {
             result.push({
                 type: "material",
-                description: `ألواح MDF${frm.doc.board_description ? ` — ${frm.doc.board_description}` : ""}`,
+                description: frm.doc.board_description
+                    ? translate("MDF boards — {0}", [frm.doc.board_description])
+                    : translate("MDF boards"),
                 quantity: boardCount || (boardRate ? boardAmount / boardRate : 0),
-                unit: "لوح",
+                unit: translate("Board"),
                 rate: boardRate,
                 amount: boardAmount,
             });
@@ -159,9 +194,9 @@
         if (boardCount || cuttingAmount) {
             result.push({
                 type: "cutting",
-                description: "أجور قص وتجهيز الألواح",
+                description: translate("Board cutting and preparation"),
                 quantity: boardCount || (cuttingRate ? cuttingAmount / cuttingRate : 0),
-                unit: "لوح",
+                unit: translate("Board"),
                 rate: cuttingRate,
                 amount: cuttingAmount,
             });
@@ -170,12 +205,15 @@
         const edgeGroups = new Map();
         const addEdgeGroup = (row, meters, rate, amount) => {
             if (meters <= 0) return;
-            const key = `${row.edgeType || "قشاط"}::${rate}`;
+            const edgeName = String(row.edgeType || "");
+            const key = `${edgeName}::${rate}`;
             const group = edgeGroups.get(key) || {
                 type: "edge",
-                description: `قشاط — ${row.edgeType || "غير محدد"}`,
+                description: edgeName
+                    ? translate("Edge banding — {0}", [edgeName])
+                    : translate("Edge banding — unspecified"),
                 quantity: 0,
-                unit: "متر",
+                unit: translate("Meter"),
                 rate,
                 amount: 0,
             };
@@ -211,9 +249,9 @@
         if (!edgeGroups.size && !specialDoorRows.length && number(frm.doc.edge_cost_usd) > 0) {
             result.push({
                 type: "edge",
-                description: "القشاط",
+                description: translate("Edge banding"),
                 quantity: number(frm.doc.total_edge_meters),
-                unit: "متر",
+                unit: translate("Meter"),
                 rate: 0,
                 amount: number(frm.doc.edge_cost_usd),
             });
@@ -224,13 +262,13 @@
                 const ready = specialPriceReady(row);
                 result.push({
                     type: "special",
-                    description: `درفة خاصة رقم ${row.index}`,
+                    description: translate("Special door number {0}", [row.index]),
                     quantity: row.qty,
-                    unit: "درفة",
+                    unit: translate("Door"),
                     rate: ready ? row.approvedUnit : null,
                     amount: ready ? row.approvedUnit * row.qty : 0,
                     pending: !ready,
-                    note: ready ? row.priceNote : "بانتظار إدخال السعر الخاص الشامل",
+                    note: ready ? row.priceNote : translate("Waiting for the inclusive special price"),
                 });
             } else if (isCornerCutType(row.pieceType) && row.edgeBreak && row.edgeBreakLength > 0) {
                 const ready = cutCornerPriceReady(row);
@@ -238,14 +276,14 @@
                     type: "cut_corner",
                     description: cutCornerDoorLabel(row),
                     quantity: row.qty,
-                    unit: "درفة",
+                    unit: translate("Door"),
                     rate: ready ? row.clippedEdgePrice : null,
                     amount: ready ? row.clippedEdgePrice * row.qty : 0,
                     pending: !ready,
-                    note: ready ? row.clippedEdgeNote : (
+                    note: ready ? row.clippedEdgeNote : translate(
                         row.pieceType === "L-Shaped Corner"
-                            ? "بانتظار إدخال سعر معالجة قشاط زاوية L"
-                            : "بانتظار إدخال سعر معالجة قشاط الزاوية المقصوصة"
+                            ? "Waiting for the L-shaped corner edge price"
+                            : "Waiting for the clipped-corner edge price"
                     ),
                 });
             }
@@ -253,9 +291,9 @@
                 .filter(addon => addon.selected || addon.amount > 0)
                 .forEach(addon => result.push({
                     type: "extra_addon",
-                    description: `إضافة ${addon.label} — درفة رقم ${row.index}`,
+                    description: `Add-on ${addon.label} — door number ${row.index}`,
                     quantity: row.qty,
-                    unit: "درفة",
+                    unit: translate("Door"),
                     rate: addon.rate,
                     amount: addon.amount || addon.rate * row.qty,
                     note: row.notes,
@@ -268,7 +306,7 @@
     function pendingCustomEdgePriceLabels(frm) {
         return rows(frm).flatMap(row => {
             if (row.pieceType === "Special" && !specialPriceReady(row)) {
-                return [`درفة خاصة رقم ${row.index}`];
+                return [translate("Special door number {0}", [row.index])];
             }
             if (isCornerCutType(row.pieceType) && row.edgeBreak && !cutCornerPriceReady(row)) {
                 return [cutCornerDoorLabel(row)];
@@ -329,7 +367,7 @@
         const style = document.createElement("style");
         style.id = STYLE_ID;
         style.textContent = `
-            .dco-cost-shell{direction:rtl;max-width:1440px;margin:0 auto;padding:4px 0 18px}
+            .dco-cost-shell{max-width:1440px;margin:0 auto;padding:4px 0 18px}
             .dco-cost-actions-bar{display:flex;justify-content:flex-start;margin:0 0 12px;min-height:32px}
             .dco-cost-actions{display:flex;gap:8px;flex-wrap:wrap}
             .dco-cost-actions .btn{border-radius:9px;font-weight:800}
@@ -340,14 +378,14 @@
             .dco-offcut-price-body{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px}
             .dco-offcut-price-body>span{font-size:12px;font-weight:800;color:var(--text-muted,#687481)}
             .dco-offcut-price-control{min-width:150px;display:flex;justify-content:flex-end}
-            .dco-offcut-price-input{max-width:150px;direction:ltr;text-align:right;font-weight:900}
+            .dco-offcut-price-input{max-width:150px;direction:ltr;text-align:end;font-weight:900}
             .dco-offcut-price-input:disabled,.dco-offcut-price-input[readonly]{background:transparent;border-color:transparent;box-shadow:none;color:inherit;opacity:1;cursor:default;padding-inline:0}
             .dco-cost-table-wrap{overflow:auto}
             .dco-cost-table{width:100%;min-width:760px;border-collapse:collapse;font-size:12px}
             .dco-cost-table th,.dco-cost-table td{padding:9px 10px;border-bottom:1px solid var(--border-color,#e7ebef);text-align:center;vertical-align:middle}
             .dco-cost-table th{background:var(--subtle-fg,#f7f9fb);font-weight:900;white-space:nowrap}
             .dco-cost-table tr:last-child td{border-bottom:0}
-            .dco-cost-table .text-start{text-align:right}
+            .dco-cost-table .text-start{text-align:start}
             .dco-cost-dimension{display:inline-flex;min-width:2.75rem;flex-direction:column;align-items:center;gap:2px;line-height:1}
             .dco-cost-dimension b{font-size:12px;font-weight:900}
             .dco-cost-dimension-rail{display:flex;min-height:4px;align-items:center;justify-content:center}
@@ -362,11 +400,11 @@
             .dco-special-price-id small{display:block;margin-top:3px;font-size:10px;font-weight:700;color:var(--text-muted,#687481);letter-spacing:0}
             .dco-special-price-cell{padding:8px 9px;border-radius:10px;background:var(--subtle-fg,#f7f9fa)}
             .dco-special-price-cell span{display:block;font-size:9px;color:var(--text-muted,#687481);margin-bottom:3px}
-            .dco-special-price-cell b{display:block;direction:ltr;text-align:right}
+            .dco-special-price-cell b{display:block;direction:ltr;text-align:end}
             .dco-special-price-cell.is-unpriced b{color:var(--text-muted,#8a939c);font-weight:800}
             .dco-inline-price-input{
                 width:100%;max-width:140px;box-sizing:border-box;padding:6px 8px;border:1px solid var(--border-color,#d0d7de);
-                border-radius:8px;background:#fff;font-size:13px;font-weight:800;direction:ltr;text-align:right;
+                border-radius:8px;background:#fff;font-size:13px;font-weight:800;direction:ltr;text-align:end;
             }
             .dco-inline-price-input:disabled,.dco-inline-price-input[readonly]{
                 background:transparent;border-color:transparent;color:inherit;padding-inline:0;cursor:default;
@@ -398,17 +436,17 @@
     function measurementRowsHtml(frm) {
         const data = rows(frm);
         if (!data.length) {
-            return '<div class="dco-cost-empty">لا توجد قياسات في الطلب بعد.</div>';
+            return `<div class="dco-cost-empty">${htmlText("This order has no measurements yet.")}</div>`;
         }
         return `<div class="dco-cost-table-wrap"><table class="dco-cost-table"><thead><tr>
-            <th>#</th><th>النوع</th><th>العرض (سم)</th><th>الطول (سم)</th><th>العدد</th><th class="text-start">ملاحظات</th><th>نوع القشاط</th>
+            <th>#</th><th>${htmlText("Type")}</th><th>${htmlText("Width (cm)")}</th><th>${htmlText("Length (cm)")}</th><th>${htmlText("Quantity")}</th><th class="text-start">${htmlText("Notes")}</th><th>${htmlText("Edge type")}</th>
         </tr></thead><tbody>${data.map(row => {
             const widthCount = Number(Boolean(row.source.edge_width_top))
                 + Number(Boolean(row.source.edge_width_bottom));
             const longCount = Number(Boolean(row.source.edge_long_right))
                 + Number(Boolean(row.source.edge_long_left));
             return `<tr>
-            <td><b>${row.index}</b></td><td>${esc(pieceTypeLabel(row.pieceType))}</td>
+            <td><b>${row.index}</b></td><td data-piece-type="${esc(row.pieceType)}">${esc(pieceTypeLabel(row.pieceType))}</td>
             <td>${dimensionMark(row.width, widthCount)}</td><td>${dimensionMark(row.length, longCount)}</td><td>${row.qty}</td>
             <td class="text-start">${esc(row.notes || "—")}</td><td>${esc(row.edgeType || "—")}</td>
         </tr>`;
@@ -422,7 +460,7 @@
     function stalePlanNoticeHtml(frm) {
         if (!planNeedsRecalculation(frm)) return "";
         return `<div class="dco-cost-plan-stale-notice" role="status">
-            ${__("عدد الألواح وأجور القص مبنية على آخر خطة محسوبة. احسب خطة القص لتحديث الفاتورة بالقيم النهائية.")}
+            ${htmlText("Board count and cutting charges use the last calculated plan. Calculate the cutting plan to update the invoice with the final values.")}
         </div>`;
     }
 
@@ -436,12 +474,12 @@
         const value = number(frm.doc.offcut_price_usd);
         return `<div class="dco-cost-section dco-offcut-price-section" data-offcut-price-section>
             <div class="dco-cost-section-title">
-                <h4>${__("سعر الفضلة")}</h4><span>${__("سعر إجمالي واحد للمجموعة")}</span>
+                <h4>${htmlText("Offcut price")}</h4><span>${htmlText("One total price for the group")}</span>
             </div>
             <div class="dco-offcut-price-body">
-                <span>${__("سعر الفضلة ($)")}</span>
+                <span>${htmlText("Offcut price ($)")}</span>
                 <div class="dco-offcut-price-control" data-offcut-price-control>
-                    <input class="form-control dco-offcut-price-input" data-offcut-price-input type="number" min="0" step="0.01" value="${esc(value)}" disabled readonly inputmode="decimal" aria-label="${esc(__("سعر الفضلة ($)"))}">
+                    <input class="form-control dco-offcut-price-input" data-offcut-price-input type="number" min="0" step="0.01" value="${esc(value)}" disabled readonly inputmode="decimal" aria-label="${htmlText("Offcut price ($)")}">
                 </div>
             </div>
         </div>`;
@@ -450,12 +488,12 @@
     function invoiceRowsHtml(frm) {
         const lines = effectiveInvoiceLines(frm);
         if (!lines.length) {
-            return '<div class="dco-cost-empty">احفظ الطلب واحسب خطة القص لتظهر تفاصيل السعر.</div>';
+            return `<div class="dco-cost-empty">${htmlText("Save the order and calculate the cutting plan to show the price details.")}</div>`;
         }
         return `${stalePlanNoticeHtml(frm)}<div class="dco-cost-table-wrap"><table class="dco-cost-table"><thead><tr>
-            <th>#</th><th class="text-start">البيان</th><th>الكمية</th><th>الوحدة</th><th>سعر الوحدة ($)</th><th>الإجمالي ($)</th>
+            <th>#</th><th class="text-start">${htmlText("Description")}</th><th>${htmlText("Quantity")}</th><th>${htmlText("Unit")}</th><th>${htmlText("Unit price ($)")}</th><th>${htmlText("Total ($)")}</th>
         </tr></thead><tbody>${lines.map((line, index) => `<tr class="${line.pending ? "dco-invoice-pending-row" : ""}">
-            <td>${index + 1}</td><td class="text-start"><b>${esc(line.description)}</b>${line.pending ? `<span class="dco-invoice-pending-badge">${__("غير مسعّر")}</span>` : ""}${line.note ? `<small style="display:block">${esc(line.note)}</small>` : ""}</td>
+            <td>${index + 1}</td><td class="text-start"><b>${esc(line.description)}</b>${line.pending ? `<span class="dco-invoice-pending-badge">${htmlText("Unpriced")}</span>` : ""}${line.note ? `<small style="display:block">${esc(line.note)}</small>` : ""}</td>
             <td>${quantity(line.quantity)}</td><td>${esc(line.unit)}</td>
             <td class="${line.pending ? "dco-invoice-pending-value" : ""}">${line.pending ? "—" : money(line.rate)}</td>
             <td class="${line.pending ? "dco-invoice-pending-value" : ""}">${line.pending ? "—" : `<b>${money(line.amount)}</b>`}</td>
@@ -465,7 +503,7 @@
     function invoiceTotalCardHtml(frm) {
         const total = quoteTotal(frm);
         const pending = pendingCustomEdgePriceLabels(frm);
-        const finalLabel = __("الإجمالي النهائي للفاتورة");
+        const finalLabel = htmlText("Final invoice total");
         if (!pending.length) {
             return `<div class="dco-invoice-total-card">
                 <span>${finalLabel}</span>
@@ -473,19 +511,19 @@
             </div>`;
         }
         return `<div class="dco-invoice-total-card is-pending">
-            <span>${__("الإجمالي الحالي قبل الأسعار غير المسعرة")}<small>${__("لا يعتبر إجماليًا نهائيًا حتى تسعير: {0}").replace("{0}", pending.join("، "))}</small></span>
+            <span>${htmlText("Current total before unpriced items")}<small>${htmlText("This is not a final total until these items are priced: {0}", [pending.join(", ")])}</small></span>
             <b>$ ${money(total)}</b>
         </div>`;
     }
 
     function specialDoorLabel(row) {
-        return `درفة خاصة رقم ${row.index}`;
+        return translate("Special door number {0}", [row.index]);
     }
 
     function cutCornerDoorLabel(row) {
         return row.pieceType === "L-Shaped Corner"
-            ? `درفة زاوية L ${row.index}`
-            : `درفة الزاوية الكسر ${row.index}`;
+            ? translate("L-shaped corner door {0}", [row.index])
+            : translate("Clipped-corner door {0}", [row.index]);
     }
 
     function specialPriceInputValue(row) {
@@ -497,7 +535,7 @@
         const specialRows = rows(frm).filter(row => row.pieceType === "Special");
         if (!specialRows.length) return "";
         return `<div class="dco-cost-section"><div class="dco-cost-section-title">
-            <h4>تسعير الدرفات الخاصة</h4><span>أدخل السعر الخاص الشامل لكل درفة أثناء وضع التعديل</span>
+            <h4>${htmlText("Special door pricing")}</h4><span>${htmlText("Enter the inclusive special price for each door while editing")}</span>
         </div><div class="dco-special-price-list">${specialRows.map(row => {
             const doorLabel = specialDoorLabel(row);
             const priced = specialPriceReady(row);
@@ -506,14 +544,14 @@
                 || Boolean(String(row.source.special_shape_drawing_json || "").trim());
             const priceValue = specialPriceInputValue(row);
             return `<div class="dco-special-price-card" data-special-row="${esc(row.name)}" data-custom-id="${esc(doorLabel)}">
-                <div class="dco-special-price-id">${esc(doorLabel)}<small>${quantity(row.length)} × ${quantity(row.width)} سم — عدد ${row.qty}</small></div>
-                <div class="dco-special-price-cell"><span>${__("الطول × العرض")}</span><b>${quantity(row.length)} × ${quantity(row.width)} سم</b></div>
+                <div class="dco-special-price-id">${esc(doorLabel)}<small>${htmlText("{0} × {1} cm — quantity {2}", [quantity(row.length), quantity(row.width), row.qty])}</small></div>
+                <div class="dco-special-price-cell"><span>${htmlText("Length × width")}</span><b>${htmlText("{0} × {1} cm", [quantity(row.length), quantity(row.width)])}</b></div>
                 <div class="dco-special-price-cell ${priced ? "" : "is-unpriced"}">
-                    <span>${__("السعر الخاص الشامل ($)")}</span>
-                    <input type="number" class="dco-inline-price-input" data-price-kind="special" data-piece-name="${esc(row.name)}" min="0" step="0.01" value="${priceValue || ""}" disabled readonly inputmode="decimal">
-                    ${priced ? "" : `<small style="display:block;margin-top:4px;color:var(--text-muted,#8a939c)">${__("غير مسعّر")}</small>`}
+                    <span>${htmlText("Inclusive special price ($)")}</span>
+                    <input type="number" class="dco-inline-price-input" data-price-kind="special" data-piece-name="${esc(row.name)}" min="0" step="0.01" value="${esc(priceValue)}" disabled readonly inputmode="decimal">
+                    ${priced ? "" : `<small style="display:block;margin-top:4px;color:var(--text-muted,#8a939c)">${htmlText("Unpriced")}</small>`}
                 </div>
-                <div class="dco-special-price-actions"><button type="button" class="btn btn-default btn-xs dco-view-special-sketch" ${documented ? "" : "disabled"}>${__("عرض التوثيق")}</button></div>
+                <div class="dco-special-price-actions"><button type="button" class="btn btn-default btn-xs dco-view-special-sketch" ${documented ? "" : "disabled"}>${htmlText("View documentation")}</button></div>
                 ${row.priceNote ? `<div class="dco-special-price-note">${esc(row.priceNote)}</div>` : ""}
             </div>`;
         }).join("")}</div></div>`;
@@ -524,7 +562,7 @@
             const card = this.closest("[data-special-row]");
             const source = (frm.doc.pieces || []).find(row => row.name === (card && card.dataset.specialRow));
             if (!source || !window.AlmdinaSpecialShapeEditor || typeof window.AlmdinaSpecialShapeEditor.view !== "function") {
-                frappe.msgprint(__("تعذر تحميل توثيق الدرفة الخاصة."));
+                frappe.msgprint(translate("Could not load the special door documentation."));
                 return;
             }
             window.AlmdinaSpecialShapeEditor.view(frm, source);
@@ -545,16 +583,16 @@
         installStyles();
         const actionShell = '<div class="dco-cost-actions-bar"><div class="dco-cost-actions"></div></div>';
         if (!canView) {
-            field.$wrapper.html(`<div class="dco-cost-shell">${actionShell}</div>`);
+            field.$wrapper.html(`<div class="dco-cost-shell" dir="${esc(uiDirection())}">${actionShell}</div>`);
             return true;
         }
 
-        field.$wrapper.html(`<div class="dco-cost-shell">
+        field.$wrapper.html(`<div class="dco-cost-shell" dir="${esc(uiDirection())}">
             ${actionShell}
             ${offcutPriceHtml(frm)}
-            <div class="dco-cost-section"><div class="dco-cost-section-title"><h4>جدول قياسات الطلب</h4><span>القياسات والكميات والملاحظات</span></div>${measurementRowsHtml(frm)}</div>
+            <div class="dco-cost-section"><div class="dco-cost-section-title"><h4>${htmlText("Order measurement table")}</h4><span>${htmlText("Measurements, quantities, and notes")}</span></div>${measurementRowsHtml(frm)}</div>
             ${specialPricingHtml(frm)}
-            <div class="dco-cost-section dco-cost-invoice-section"><div class="dco-cost-section-title"><h4>تفاصيل عرض السعر</h4><span>الألواح والقص والقشاط والدرف الخاصة وإضافات الدرف</span></div>${invoiceRowsHtml(frm)}${invoiceTotalCardHtml(frm)}</div>
+            <div class="dco-cost-section dco-cost-invoice-section"><div class="dco-cost-section-title"><h4>${htmlText("Quotation details")}</h4><span>${htmlText("Boards, cutting, edge banding, special doors, and door add-ons")}</span></div>${invoiceRowsHtml(frm)}${invoiceTotalCardHtml(frm)}</div>
         </div>`);
         bindViewDrawing(frm, field.$wrapper);
         return true;
@@ -566,7 +604,7 @@
         const section = field.$wrapper.find(".dco-cost-invoice-section");
         if (!section.length) return render(frm);
         section.html(
-            `<div class="dco-cost-section-title"><h4>تفاصيل عرض السعر</h4><span>الألواح والقص والقشاط والدرف الخاصة وإضافات الدرف</span></div>${invoiceRowsHtml(frm)}${invoiceTotalCardHtml(frm)}`
+            `<div class="dco-cost-section-title"><h4>${htmlText("Quotation details")}</h4><span>${htmlText("Boards, cutting, edge banding, special doors, and door add-ons")}</span></div>${invoiceRowsHtml(frm)}${invoiceTotalCardHtml(frm)}`
         );
         return true;
     }

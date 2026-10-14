@@ -76,8 +76,8 @@ class TestOrderRevisionContract(unittest.TestCase):
         self.assertIn('can(frm, "create_order_revision")', revision_source)
         self.assertIn('can(frm, "edit_order")', revision_source)
         self.assertIn("canOfferEditSession", revision_source)
-        self.assertIn('__("تعديل")', revision_source)
-        self.assertIn('__("حفظ")', revision_source)
+        self.assertIn('const EDIT_LABEL = "Edit order"', revision_source)
+        self.assertIn('const SAVE_LABEL = "Save"', revision_source)
         self.assertIn("commitEditSession", revision_source)
         self.assertIn("lockEditSession", revision_source)
         self.assertIn("after_save(frm)", revision_source)
@@ -87,8 +87,8 @@ class TestOrderRevisionContract(unittest.TestCase):
         self.assertIn("syncPrimaryAction", revision_source)
         self.assertIn("schedulePrimaryActionSync", revision_source)
         self.assertIn("setPrimaryActionMode", revision_source)
-        self.assertIn('"edit", EDIT_LABEL', revision_source)
-        self.assertIn('"save", SAVE_LABEL', revision_source)
+        self.assertIn('editLabel()', revision_source)
+        self.assertIn('saveLabel()', revision_source)
         self.assertIn("editSessionRecalculated", revision_source)
         self.assertIn("markEditSessionRecalculated", revision_source)
         self.assertIn('=== "Draft"', revision_source)
@@ -111,7 +111,7 @@ class TestOrderRevisionContract(unittest.TestCase):
         self.assertIn('LABELS.return_to_draft', lifecycle_source)
         self.assertIn("order_revision_service.return_order_to_draft", lifecycle_source)
         self.assertIn("removeLifecycleButtons(frm)", lifecycle_source)
-        self.assertIn("إعادة نفس الطلب إلى المسودة", lifecycle_source)
+        self.assertIn("the same order will be returned to draft", lifecycle_source)
 
 
 if __name__ == "__main__":

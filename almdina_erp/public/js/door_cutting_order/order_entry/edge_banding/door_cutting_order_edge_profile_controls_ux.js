@@ -96,7 +96,7 @@
         const rate = Number(profile.rate_usd_per_meter || 0).toLocaleString("en-US", {
             maximumFractionDigits: 2,
         });
-        return `${thickness} مم · $ ${rate}/م`;
+        return __("{0} mm · $ {1}/m", [thickness, rate]);
     }
 
     function installStyles() {
@@ -144,7 +144,7 @@
                 position:fixed;z-index:1065;width:min(292px,calc(100vw - 20px));max-height:min(390px,calc(100vh - 20px));
                 display:flex;flex-direction:column;border:1px solid var(--border-color,#cbd2d9);border-radius:12px;
                 background:var(--card-bg,#fff);box-shadow:0 14px 38px rgba(15,23,42,.22);overflow:hidden;
-                direction:rtl;color:var(--text-color,#172033)
+                color:var(--text-color,#172033)
             }
             #${POPOVER_ID} .dco-edge-popover-head{
                 flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 10px 7px;
@@ -471,6 +471,9 @@
         popover.id = POPOVER_ID;
         popover.setAttribute("role", "menu");
         popover.setAttribute("aria-label", ariaLabel);
+        const locale = window.AlmdinaLocale;
+        const direction = locale && typeof locale.direction === "function" ? locale.direction() : "";
+        if (direction === "ltr" || direction === "rtl") popover.setAttribute("dir", direction);
         popover.innerHTML = `
             <div class="dco-edge-popover-head">
                 <div><strong>${escapeHtml(title)}</strong><small>${escapeHtml(subtitle)}</small></div>

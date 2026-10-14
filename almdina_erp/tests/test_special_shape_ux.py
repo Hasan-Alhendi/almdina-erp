@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import csv
 import json
+from io import StringIO
 from pathlib import Path
 
 
@@ -67,6 +69,10 @@ def test_order_schema_has_customer_quote_separate_from_internal_planned_cost():
     assert "Approved" in fields["customer_quote_status"]["options"]
 
 
+def _catalog_has(catalog: str, source: str, arabic: str) -> bool:
+    return any(len(row) >= 2 and row[0] == source and row[1] == arabic for row in csv.reader(StringIO(catalog)))
+
+
 def test_special_estimate_defaults_are_configurable_and_start_at_zero():
     fields = _fields(SETTINGS_JSON)
     for fieldname in (
@@ -96,15 +102,28 @@ def test_operator_opens_only_new_documentation_runtime():
     assert "__documentationOnly: true" in entry
     assert "__manufacturingGeometrySeparated: true" in entry
     assert "function hasBlankDimensions(row)" in entry
-    assert "أدخل عرض الدرفة وطولها أولًا، ثم افتح توثيق الشكل." in entry
+    catalog = (APP_ROOT / "translations" / "ar.csv").read_text(encoding="utf-8")
+    assert '__("Enter the door width and length first, then open the shape documentation.")' in entry
+    assert _catalog_has(
+        catalog,
+        "Enter the door width and length first, then open the shape documentation.",
+        "أدخل عرض الدرفة وطولها أولًا، ثم افتح توثيق الشكل.",
+    )
     assert entry.index("if (!hasBlankDimensions(row))") < entry.index("await persistedRow")
     assert "function requirePieceDimensions(row, tr)" in operator
     assert "if (!row || !requirePieceDimensions(row, tr)) return" in operator
     assert "door_drawing_v4" not in entry
     for tool in ("select", "pen", "line", "rect", "ellipse", "dimension", "text"):
         assert f'tool("{tool}"' in shell
-    for label in ("رفع صورة", "مسح بالسكانر", "التقاط بالكاميرا", "شكل جاهز", "ملاحظات المصمم"):
+    for label, arabic in (
+        ("Upload an image", "رفع صورة"),
+        ("Scan", "مسح بالسكانر"),
+        ("Capture with the camera", "التقاط بالكاميرا"),
+        ("Ready-made shape", "شكل جاهز"),
+        ("Designer notes", "ملاحظات المصمم"),
+    ):
         assert label in shell
+        assert _catalog_has(catalog, label, arabic)
     assert "Api.save(context.order.name, context.piece.name, D.toStored(document))" in controller
     assert "geometry" not in controller.lower()
     assert "function simplify(" in pen

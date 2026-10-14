@@ -163,11 +163,11 @@ class TestShopFloorHistoryPermission(unittest.TestCase):
         self.assertNotIn(Capability.VIEW_SHOP_FLOOR_HISTORY, PRODUCTION_OPERATOR_CAPABILITIES)
         self.assertNotIn(Capability.VIEW_SHOP_FLOOR_HISTORY, PRODUCTION_SUPERVISOR_CAPABILITIES)
 
-    def test_history_permission_keeps_stable_key_and_requested_arabic_label(self) -> None:
+    def test_history_permission_keeps_stable_key_and_english_presentation_label(self) -> None:
         self.assertEqual(Capability.VIEW_SHOP_FLOOR_HISTORY, "view_shop_floor_history")
         self.assertEqual(
             CAPABILITY_PRESENTATION[Capability.VIEW_SHOP_FLOOR_HISTORY]["label"],
-            "عرض سجل الطلبات المنجزة",
+            "View completed orders history",
         )
 
     def test_history_only_does_not_promote_order_scope_or_shop_floor_entry(self) -> None:

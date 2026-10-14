@@ -93,12 +93,12 @@ def test_cost_workspace_save_keeps_both_values_mandatory() -> None:
     assert "cutting_cost_per_board_usd: float | None = None" in service
 
     assert "validateRequiredCostSettings" in ux
-    assert 'board_rate_usd: "سعر اللوح"' in ux
-    assert 'cutting_cost_per_board_usd: "أجور القص / لوح"' in ux
+    assert 'board_rate_usd: "Board price"' in ux
+    assert 'cutting_cost_per_board_usd: "Cutting charge / board"' in ux
     assert 'control.attr("required", "required")' in ux
     assert "const captured = captureCostSettings(frm, state.draft || {});" in ux
-    assert "if (!validateRequiredCostSettings(frm, captured)) return false;" in ux
-    assert "api.saveSettings(frm.doc.name, payload)" in ux
+    assert "if (pending.dirty && !validateRequiredCostSettings(frm, captured))" in ux
+    assert "api.saveSettings(orderName, payload)" in ux
 
 
 def test_cost_workspace_validation_does_not_make_whole_order_required() -> None:
@@ -122,7 +122,7 @@ def test_cost_save_uses_one_visible_payload_for_validation_dirty_check_and_trans
     assert "store.replaceDraft(payload);" in ux
     assert "const pending = store.snapshot();" in ux
     assert "if (pending.dirty)" in ux
-    assert "api.saveSettings(frm.doc.name, payload)" in ux
+    assert "api.saveSettings(orderName, payload)" in ux
     assert "api.saveSettings(frm.doc.name, state.draft || {})" not in ux
 
 
@@ -135,13 +135,18 @@ def test_cost_save_commits_server_snapshot_without_post_save_reload_race() -> No
     assert "dispatch(frm, snapshot);" in state
     assert "commit," in state
 
-    assert "const saved = await api.saveSettings(frm.doc.name, payload);" in ux
+    assert "const saved = await api.saveSettings(orderName, payload);" in ux
     assert "validSavedSnapshot(saved)" in ux
     assert 'typeof owner.commit === "function"' in ux
     assert "owner.commit(frm, saved);" in ux
     save_body = ux.split("async function saveEditing", 1)[1].split("function sync", 1)[0]
-    assert "owner.load(" not in save_body
-    assert "force: true" not in save_body
+    settings_body, pending_body = save_body.split("hadPendingPrices", 1)
+    assert "owner.commit(frm, saved);" in settings_body
+    assert "owner.load(" not in settings_body
+    assert "force: true" not in settings_body
+    assert "pendingPricePieces(frm).length > 0" in save_body
+    assert "flushPendingPriceEdits(frm, { refresh: false })" in pending_body
+    assert "owner.load(frm, { force: true })" in pending_body
 
 
 def test_cost_save_keeps_editor_open_when_server_does_not_return_authoritative_snapshot() -> None:
@@ -151,7 +156,7 @@ def test_cost_save_keeps_editor_open_when_server_does_not_return_authoritative_s
     invalid_guard = save_body.index("if (!validSavedSnapshot(saved))")
     unmount = save_body.index("unmountDraftControls(frm);")
     assert invalid_guard < unmount
-    assert "لم يتم إغلاق وضع التعديل" in save_body
+    assert "Editing was not closed." in save_body
 
 
 def test_cost_settings_edit_is_not_gated_by_order_status() -> None:

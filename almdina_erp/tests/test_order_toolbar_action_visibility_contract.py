@@ -75,10 +75,13 @@ class TestOrderToolbarActionVisibilityContract(unittest.TestCase):
         )
         self.assertIn("--dco-viewport-left-compensation", toolbar)
         self.assertIn("anchorActionsToViewportLeft(head)", toolbar)
-        self.assertIn("Math.min(...visibleLefts)", toolbar)
-        self.assertIn("right:auto!important", presentation_css)
-        self.assertIn("position:fixed!important", presentation_css)
-        self.assertIn("flex-wrap:nowrap!important", presentation_css)
+        self.assertIn('removeProperty("--dco-viewport-left-compensation")', toolbar)
+        self.assertNotIn("Math.min(...visibleLefts)", toolbar)
+        self.assertIn("position:static!important", presentation_css)
+        self.assertIn("margin-inline-start:auto!important", presentation_css)
+        self.assertIn("flex-wrap:wrap!important", presentation_css)
+        self.assertNotIn("top:10px!important", presentation_css)
+        self.assertNotIn("right:auto!important", presentation_css)
         self.assertNotIn("[0, 180]", toolbar)
         self.assertNotIn("[0, 80, 250, 650, 1200]", toolbar)
         self.assertNotIn("permissionVersion", production)
@@ -98,9 +101,9 @@ class TestOrderToolbarActionVisibilityContract(unittest.TestCase):
             encoding="utf-8"
         )
 
-        self.assertIn('const REVISION_GROUP = __("نسخ الطلب")', source)
-        self.assertIn('const LEGACY_LIFECYCLE_GROUP = __("دورة الطلب")', source)
-        self.assertEqual(source.count('__("دورة الطلب")'), 1)
+        self.assertIn('function revisionGroup()', source)
+        self.assertIn('const LEGACY_REVISION_GROUP = "نسخ الطلب"', source)
+        self.assertIn('const LEGACY_LIFECYCLE_GROUP = "دورة الطلب"', source)
 
 
 if __name__ == "__main__":

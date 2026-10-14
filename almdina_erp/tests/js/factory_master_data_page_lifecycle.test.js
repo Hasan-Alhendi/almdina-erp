@@ -431,7 +431,7 @@ function makeEditorDirty(owner, value = "Dirty route") {
 async function testColdBootstrapOwnership() {
     const runtime = createRuntime({coldCore: true, pendingStyle: true});
     const bootstrap = runtime.loadPage();
-    assert.equal(runtime.page.options.title, "إدارة مسارات الإنتاج");
+    assert.equal(runtime.page.options.title, "Production route management");
     assert.match(runtime.main.html, /data-almdina-loading-owner="factory-master-data-bootstrap"/);
     assert.equal(runtime.main.writes.length, 1, "the synchronous scaffold must own one neutral loading surface");
 
@@ -615,7 +615,7 @@ async function testSaveCompletionAndNewerDraft() {
     await flush();
     assert.equal(JSON.stringify(owner.state.editor), newerSnapshot, "old save A cannot overwrite generation B working state");
     assert.equal(owner.reconciliationPending, true);
-    assert.doesNotMatch(runtime.main.html, /جاري الحفظ/,
+    assert.doesNotMatch(runtime.main.html, /Saving\.\.\./,
         "generation B must own settlement UI and cannot remain stuck in saving state");
 
     const saveB = runtime.enqueue(METHODS.save);

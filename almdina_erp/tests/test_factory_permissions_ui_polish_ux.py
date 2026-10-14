@@ -26,8 +26,8 @@ def test_permissions_polish_keeps_ui_semantics_accessible() -> None:
         assert marker in renderer
 
     assert 'aria-label="${esc(capability.label)}"' in renderer
-    assert "إدارة الصلاحيات" in renderer
-    assert "الجلسة الإدارية النشطة" in renderer
+    assert "Permission management" in renderer
+    assert "Active admin session" in renderer
 
 
 def test_permissions_polish_has_clear_enabled_dirty_and_focus_states() -> None:
@@ -39,7 +39,7 @@ def test_permissions_polish_has_clear_enabled_dirty_and_focus_states() -> None:
     assert "safe-area-inset-bottom" in css
     assert "prefers-reduced-motion" in css
     assert "border-radius: 15px" in css
-    assert "لا توجد تغييرات غير محفوظة" in RENDERER.read_text(encoding="utf-8")
+    assert "No unsaved changes" in RENDERER.read_text(encoding="utf-8")
     assert 'className: "apc-save"' in RENDERER.read_text(encoding="utf-8")
     assert 'className: "apc-reset"' in RENDERER.read_text(encoding="utf-8")
 

@@ -27,7 +27,7 @@ const SPECS = Object.freeze([
         route: "factory-production-settings",
         source: "factory_production_settings/factory_production_settings.js",
         controller: "AlmdinaFactoryProductionSettingsController",
-        stylesheet: "/assets/almdina_erp/css/factory_production_settings.css",
+        stylesheet: "/assets/almdina_erp/css/factory_production_settings.css?v=1",
         loadingMarker: "جاري تحميل إعدادات المعمل",
     },
     {

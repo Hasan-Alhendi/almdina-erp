@@ -190,10 +190,10 @@ assert.match(qrHtml[1], /جاري تجهيز الرمز/);
 
 const delivery = loadDelivery();
 assert.equal(delivery.fakeWindow.AlmdinaDcoEditSessionCoordinator.kind, "order");
-assert.equal(delivery.ux.CONFIRM_MESSAGE, "هل تريد إرسال ملف القياسات للزبون؟");
-assert.equal(delivery.ux.AMENDMENT_CONFIRM_MESSAGE, "هل تريد إرسال تعديلات القياسات للزبون؟");
-assert.equal(delivery.ux.BUTTON_ACTION_LABEL, "إرسال القياسات عبر واتساب");
-assert.equal(delivery.ux.BUTTON_LABEL_AMENDMENT, "إرسال تعديلات القياسات عبر واتساب");
+assert.equal(delivery.ux.CONFIRM_MESSAGE, "Send the measurements file to the customer?");
+assert.equal(delivery.ux.AMENDMENT_CONFIRM_MESSAGE, "Send the measurement changes to the customer?");
+assert.equal(delivery.ux.BUTTON_ACTION_LABEL, "Send measurements via WhatsApp");
+assert.equal(delivery.ux.BUTTON_LABEL_AMENDMENT, "Send measurement changes via WhatsApp");
 
 const invoiceToolbarSource = fs.readFileSync(
     path.resolve(
