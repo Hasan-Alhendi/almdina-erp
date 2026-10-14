@@ -26,7 +26,10 @@ function elementFrom(html) {
 
 const fakeWindow = {};
 const documentStub = {
-    documentElement: { lang: "ar" },
+    documentElement: {
+        lang: "ar",
+        getAttribute(name) { return name === "dir" ? "rtl" : name === "lang" ? this.lang : null; },
+    },
     getElementById() { return null; },
     createElement() { return elementFrom(""); },
     head: { appendChild() {} },
