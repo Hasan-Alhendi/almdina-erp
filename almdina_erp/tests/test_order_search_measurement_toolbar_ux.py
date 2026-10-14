@@ -71,7 +71,7 @@ def test_visible_id_filter_is_replaced_with_combined_name_or_customer_search():
 
 def test_measurement_table_has_print_and_editable_full_screen_actions():
     source = text(MEASUREMENT_UX)
-    assert 'class="btn btn-default btn-sm dco-print-measurements"' in source
+    assert 'printButton.className = "btn btn-default btn-sm dco-toolbar-icon-button dco-print-measurements"' in source
     assert 'translateCopy("Open the entry table in a separate window")' in source
     assert "openEditableMeasurements(frm)" in source
     assert "dco-measurement-entry-window" in source
