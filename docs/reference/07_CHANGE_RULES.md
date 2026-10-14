@@ -16,6 +16,7 @@
 ```text
 Goal:
 User-visible behavior:
+Localization/i18n impact:
 In scope:
 Out of scope:
 Invariants that must stay unchanged:
@@ -110,6 +111,7 @@ Docs affected:
 - حافظ على نفس البيانات الأساسية بين desktop/mobile، واختلف في layout فقط حيث يمكن.
 - لا تجعل حل mobile يفسد جدول desktop أو العكس.
 - حافظ على keyboard flow في شاشات الإدخال الكثيف.
+- أي نص واجهة أو رسالة/تقرير/طباعة يُضاف أو يتغيّر يجب أن يستوفي `FE-ARCH-010 — Localization by Design` تلقائيًا؛ لا تُؤجل الترجمة لما بعد انتهاء الـFeature.
 - Button visibility تأتي من permission/action context؛ Server يظل الحارس.
 - عند إصلاح stale data بعد navigation، أصلح ownership/async lifecycle بدل إضافة `refresh()` عشوائي دائمًا.
 
@@ -147,6 +149,7 @@ Feature/Fix غير منتهية إذا كان أحد التالي مفقودًا
 
 - behavior صحيح.
 - authorization صحيح.
+- نصوص التطبيق الجديدة أو المعدلة الموجهة للمستخدم قابلة للترجمة، وترجماتها المطلوبة واختباراتها مستوفاة وفق `FE-ARCH-010`.
 - unrelated regression غير موجود وفق الاختبارات المتاحة.
 - migration آمنة إن وجدت.
 - CI خضراء.
