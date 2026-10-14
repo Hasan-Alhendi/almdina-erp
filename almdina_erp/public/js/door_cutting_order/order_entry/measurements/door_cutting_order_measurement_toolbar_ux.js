@@ -12,7 +12,7 @@
             .dco-fast-entry-toolbar{position:relative}
             .dco-fast-entry-toolbar .dco-fast-help{flex:1 1 auto!important;min-width:0!important;overflow:hidden!important}
             .dco-fast-entry-toolbar .dco-fast-help .dco-measurement-title{display:block;font-size:13px;font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-color,#36414c)}
-            .dco-measurement-table-actions{display:flex!important;align-items:center!important;gap:5px!important;flex:0 0 auto!important;width:auto!important;margin:0!important;direction:ltr!important}
+            .dco-measurement-table-actions{display:flex!important;align-items:center!important;gap:5px!important;flex:0 0 auto!important;width:auto!important;margin:0!important;margin-inline-start:auto!important;direction:inherit!important}
             .dco-measurement-table-actions .dco-toolbar-icon-button{width:32px!important;min-width:32px!important;height:32px!important;min-height:32px!important;padding:0!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;border:1px solid var(--border-color,#d8dee5)!important;border-radius:8px!important;background:var(--card-bg,#fff)!important;color:var(--text-color,#36414c)!important}
             .dco-measurement-table-actions .dco-toolbar-icon-button:hover{border-color:var(--alm-primary,#172033)!important;background:color-mix(in srgb, var(--alm-primary, #172033) 6%, transparent)!important;color:var(--alm-primary,#172033)!important}
             .dco-measurement-table-actions .dco-toolbar-icon-button svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
@@ -55,31 +55,11 @@
         return popover;
     }
 
-    function ensureHelpButton(toolbar, actions) {
-        let button = actions.querySelector(".dco-measurement-instructions");
-        if (!button) {
-            button = document.createElement("button");
-            button.type = "button";
-            button.className = "btn btn-default btn-sm dco-toolbar-icon-button dco-measurement-instructions";
-            actions.appendChild(button);
-        }
-        const label = __("Instructions");
-        button.title = label;
-        button.setAttribute("aria-label", label);
-        button.setAttribute("aria-expanded", "false");
-        button.innerHTML = icon("help");
-
-        if (button.dataset.dcoHelpBound !== "1") {
-            button.dataset.dcoHelpBound = "1";
-            button.addEventListener("click", event => {
-                event.preventDefault();
-                event.stopPropagation();
-                const popover = ensureHelpPopover(toolbar);
-                const open = popover.hidden;
-                popover.hidden = !open;
-                button.setAttribute("aria-expanded", open ? "true" : "false");
-            });
-        }
+    function ensureHelpButton(_toolbar, actions) {
+        // Visible help is owned by toolbar_stability (.dco-input-help + msgprint).
+        // Do not mount a competing .dco-measurement-instructions control here.
+        const legacy = actions && actions.querySelector(".dco-measurement-instructions");
+        if (legacy) legacy.remove();
     }
 
     function polish(frm) {
@@ -93,18 +73,6 @@
         const actions = toolbar.querySelector(".dco-measurement-table-actions");
         if (!actions) return false;
         ensureHelpButton(toolbar, actions);
-        ensureHelpPopover(toolbar);
-
-        if (!root._dcoMeasurementToolbarOutsideBound) {
-            root._dcoMeasurementToolbarOutsideBound = true;
-            document.addEventListener("click", event => {
-                if (!root.isConnected || toolbar.contains(event.target)) return;
-                const popover = toolbar.querySelector(".dco-measurement-help-popover");
-                const button = toolbar.querySelector(".dco-measurement-instructions");
-                if (popover) popover.hidden = true;
-                if (button) button.setAttribute("aria-expanded", "false");
-            });
-        }
         return true;
     }
 

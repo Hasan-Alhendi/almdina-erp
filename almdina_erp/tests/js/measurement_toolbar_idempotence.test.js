@@ -239,7 +239,11 @@ loaded.actions.ensureActions(frm);
 assert.equal(loaded.mutations(), afterRestore, "Restoring the icon must not schedule another structural write");
 
 assert.equal(toolbar.querySelectorAll(".dco-measurement-table-actions").length, 1);
-assert.equal(toolbar.querySelectorAll(".dco-input-help").length, 1);
+assert.equal(
+    toolbar.querySelectorAll(".dco-input-help").length,
+    0,
+    "Help button is owned by toolbar_stability, not ensureActions"
+);
 assert.equal(toolbar.querySelectorAll(".dco-measurement-instructions").length, 0);
 assert.equal(toolbar.querySelectorAll(".dco-measurement-title").length, 1);
 assert.equal(toolbar.querySelectorAll(".dco-open-measurements-window").length, 1);

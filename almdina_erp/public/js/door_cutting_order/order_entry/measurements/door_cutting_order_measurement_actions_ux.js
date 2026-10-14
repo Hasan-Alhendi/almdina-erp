@@ -348,14 +348,52 @@
         });
     }
 
+    function toolbarIconSvg(kind) {
+        if (kind === "print") {
+            return `
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M7 8V4h10v4"></path>
+                    <path d="M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"></path>
+                    <path d="M7 14h10v6H7z"></path>
+                    <path d="M17.5 11.5h.01"></path>
+                </svg>`;
+        }
+        return `
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M8 3H3v5"></path>
+                <path d="M16 3h5v5"></path>
+                <path d="M21 16v5h-5"></path>
+                <path d="M3 16v5h5"></path>
+            </svg>`;
+    }
+
+    function decorateToolbarIconButton(button, { label, title, kind }) {
+        if (!button) return;
+        const resolvedLabel = String(label || "").trim();
+        const resolvedTitle = String(title || resolvedLabel).trim();
+        if (button.classList && typeof button.classList.add === "function") {
+            button.classList.add("dco-toolbar-icon-button");
+        } else if (!/\bdco-toolbar-icon-button\b/.test(String(button.className || ""))) {
+            button.className = `${String(button.className || "").trim()} dco-toolbar-icon-button`.trim();
+        }
+        if (button.title !== resolvedTitle) button.title = resolvedTitle;
+        if (button.getAttribute("aria-label") !== resolvedLabel) {
+            button.setAttribute("aria-label", resolvedLabel);
+        }
+        // Preserve an existing SVG; only restore when another layer wiped the icon.
+        if (!button.querySelector("svg")) {
+            button.innerHTML = toolbarIconSvg(kind);
+        }
+    }
+
     function installStyles() {
         if (document.getElementById(STYLE_ID)) return;
         const style = document.createElement("style");
         style.id = STYLE_ID;
         style.textContent = `
-            .dco-measurement-table-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-inline-start:auto}
-            .dco-measurement-table-actions .btn{border-radius:8px!important;font-weight:800!important;white-space:nowrap}
-            .dco-measurement-table-actions .dco-open-measurements-window{display:inline-flex;align-items:center;gap:5px}
+            .dco-measurement-table-actions{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-inline-start:auto;direction:inherit}
+            .dco-measurement-table-actions .dco-toolbar-icon-button{width:32px!important;min-width:32px!important;height:32px!important;min-height:32px!important;padding:0!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;overflow:hidden!important;border-radius:8px!important}
+            .dco-measurement-table-actions .dco-toolbar-icon-button svg{width:16px;height:16px;display:block;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
             body.dco-measurement-entry-open{overflow:hidden!important}
             .${EDITOR_CLASS}{position:fixed;inset:0;z-index:1040;display:flex;flex-direction:column;background:var(--bg-color,#f4f6f8);color:var(--text-color,#172033)}
             .dco-entry-window-header{display:flex;flex-direction:column;gap:8px;padding:10px 16px;border-bottom:1px solid var(--border-color,#dfe3e8);background:var(--card-bg,#fff);box-shadow:0 4px 18px rgba(15,23,42,.08)}
@@ -369,7 +407,7 @@
             .dco-entry-window-icon-label{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
             .dco-entry-window-actions .dco-entry-window-order-edit-action{display:inline-flex;align-items:center;gap:6px}
             .dco-entry-window-body{flex:1;min-height:0;padding:10px}.dco-entry-window-host{height:100%;min-height:0}.dco-entry-window-host>[data-fieldname="pieces_fast_entry"],.dco-entry-window-host>.frappe-control{height:100%;margin:0!important}.dco-entry-window-host .dco-fast-entry-shell{height:100%;display:flex;flex-direction:column;border-radius:12px}.dco-entry-window-host .dco-fast-entry-toolbar{flex:0 0 auto}.dco-entry-window-host .dco-fast-entry-scroll{flex:1 1 auto;max-height:none!important;height:auto!important;min-height:0;overflow:auto!important}.dco-entry-window-host .dco-fast-table{min-width:1180px}.dco-entry-window-host .dco-measurement-table-actions{display:none!important}
-            @media(max-width:760px){.dco-measurement-table-actions{width:100%;margin-inline-start:0}.dco-measurement-table-actions .btn{flex:1 1 auto}.dco-entry-window-header{padding:9px 12px;gap:7px}.dco-entry-window-top{align-items:center;gap:8px}.dco-entry-window-icon-button{width:40px!important;min-width:40px!important;height:40px!important;min-height:40px!important}.dco-entry-window-body{padding:6px}}
+            @media(max-width:760px){.dco-measurement-table-actions{width:100%;margin-inline-start:0}.dco-entry-window-header{padding:9px 12px;gap:7px}.dco-entry-window-top{align-items:center;gap:8px}.dco-entry-window-icon-button{width:40px!important;min-width:40px!important;height:40px!important;min-height:40px!important}.dco-entry-window-body{padding:6px}}
         `;
         document.head.appendChild(style);
     }
@@ -378,46 +416,53 @@
         installStyles();
         const root = measurementRoot(frm);
         const toolbar = root && root.querySelector(".dco-fast-entry-toolbar");
-        if (!toolbar) return;
+        if (!toolbar) return false;
         let actions = toolbar.querySelector(".dco-measurement-table-actions");
         if (!actions) {
             actions = document.createElement("div");
             actions.className = "dco-measurement-table-actions";
-            actions.innerHTML = `
-                <button type="button" class="btn btn-default btn-sm dco-print-measurements"></button>
-                <button type="button" class="btn btn-default btn-sm dco-open-measurements-window"><span aria-hidden="true">⛶</span><span></span></button>`;
             toolbar.appendChild(actions);
         }
-        const printButton = actions.querySelector(".dco-print-measurements");
-        const openButton = actions.querySelector(".dco-open-measurements-window span:last-child");
-        if (printButton) printButton.textContent = translateCopy(PRINT_LABEL);
-        if (openButton) openButton.textContent = translateCopy("Open the entry table in a separate window");
+        let printButton = actions.querySelector(".dco-print-measurements");
+        if (!printButton) {
+            printButton = document.createElement("button");
+            printButton.type = "button";
+            printButton.className = "btn btn-default btn-sm dco-toolbar-icon-button dco-print-measurements";
+            actions.appendChild(printButton);
+        }
+        let openButton = actions.querySelector(".dco-open-measurements-window");
+        if (!openButton) {
+            openButton = document.createElement("button");
+            openButton.type = "button";
+            openButton.className = "btn btn-default btn-sm dco-toolbar-icon-button dco-open-measurements-window";
+            actions.appendChild(openButton);
+        }
+        decorateToolbarIconButton(printButton, {
+            label: translateCopy(PRINT_LABEL),
+            kind: "print",
+        });
+        decorateToolbarIconButton(openButton, {
+            label: translateCopy("Expand measurement table"),
+            title: translateCopy("Open measurement table in a separate window"),
+            kind: "expand",
+        });
         if (!root._dcoMeasurementActionsBound) {
             root._dcoMeasurementActionsBound = true;
             root.addEventListener("click", event => {
-                const printButton = event.target.closest(".dco-print-measurements");
-                if (printButton && root.contains(printButton)) {
+                const clickedPrint = event.target.closest(".dco-print-measurements");
+                if (clickedPrint && root.contains(clickedPrint)) {
                     event.preventDefault();
                     printMeasurements(frm);
                     return;
                 }
-                const openButton = event.target.closest(".dco-open-measurements-window");
-                if (openButton && root.contains(openButton)) {
+                const clickedOpen = event.target.closest(".dco-open-measurements-window");
+                if (clickedOpen && root.contains(clickedOpen)) {
                     event.preventDefault();
                     openEditableMeasurements(frm);
                 }
             });
         }
-        if (!root._dcoMeasurementActionsObserver) {
-            let scheduled = false;
-            const observer = new MutationObserver(() => {
-                if (scheduled) return;
-                scheduled = true;
-                requestAnimationFrame(() => { scheduled = false; ensureActions(frm); });
-            });
-            observer.observe(root, { childList: true, subtree: true });
-            root._dcoMeasurementActionsObserver = observer;
-        }
+        return true;
     }
 
     function schedule(frm) {
@@ -471,5 +516,6 @@
         print: printMeasurements,
         open: openEditableMeasurements,
         close: closeEditableMeasurements,
+        ensureActions,
     };
 })();
