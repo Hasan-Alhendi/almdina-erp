@@ -233,7 +233,7 @@ function verifyEditOwnerNavigationLock() {
             assert.equal(target.ariaDisabled, "true");
             assert.equal(target.tabIndex, "-1");
             assert.equal(target.lockedClass, true);
-            assert.match(target.title, /احفظ أو ألغِ/);
+            assert.match(target.title, /Save or cancel the current edit/);
 
             const beforeCount = target.activationCount;
             assert.equal(simulateNativeUserClick(target), false, "user click must reach guarded set_active and be refused");
@@ -242,8 +242,8 @@ function verifyEditOwnerNavigationLock() {
             assert.equal(simulateBootstrapDataApi(target, activeState), false, "Bootstrap path must remain closed");
             assert.equal(activeState.fieldname, scenario.owner);
             assert.equal(messages.length, 1);
-            assert.equal(messages[0].title, "التعديل ما زال مفتوحًا");
-            assert.match(String(messages[0].message || ""), /احفظ أو ألغِ/);
+            assert.equal(messages[0].title, "The edit is still open");
+            assert.match(String(messages[0].message || ""), /Save or cancel the current edit/);
             messages.length = 0;
 
             const programmatic = target.set_active();
@@ -251,7 +251,7 @@ function verifyEditOwnerNavigationLock() {
             assert.equal(target.activationCount, beforeCount);
             assert.equal(activeState.fieldname, scenario.owner);
             assert.equal(messages.length, 1);
-            assert.equal(messages[0].title, "التعديل ما زال مفتوحًا");
+            assert.equal(messages[0].title, "The edit is still open");
             messages.length = 0;
         }
     }

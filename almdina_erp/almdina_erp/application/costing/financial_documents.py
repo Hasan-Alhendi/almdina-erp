@@ -318,7 +318,9 @@ def _customer_invoice_lines(
                 }
             )
 
-        addon_quantity = _quantity(_value(piece, "qty"))
+        # Customer-billed execution services must exclude OFFCUT/external copies.
+        # The per-copy execution projection above is the billing authority.
+        addon_quantity = quantity
         specs = (
             (
                 "extra_double",
