@@ -8,34 +8,36 @@ const vm = require("node:vm");
 const FOUNDATION = "/assets/almdina_erp/js/frontend_foundation.js";
 const PAGE_LIFECYCLE = "/assets/almdina_erp/js/page_revisit_refresh.js";
 
+// The test locale is the identity fallback (__(value) => value); assert stable
+// message IDs here, while the catalog tests validate their Arabic translations.
 const SPECS = Object.freeze([
     {
         route: "factory-permissions",
         source: "factory_permissions/factory_permissions.js",
         controller: "AlmdinaFactoryPermissionsController",
         stylesheet: "/assets/almdina_erp/css/factory_permissions.css?v=4",
-        loadingMarker: "جاري تحميل مصفوفة الصلاحيات",
+        loadingMarker: "Loading permission matrix...",
     },
     {
         route: "factory-workforce",
         source: "factory_workforce/factory_workforce.js",
         controller: "AlmdinaFactoryWorkforceController",
         stylesheet: "/assets/almdina_erp/css/factory_workforce.css",
-        loadingMarker: "جاري تحميل مستخدمي المعمل",
+        loadingMarker: "Loading factory users...",
     },
     {
         route: "factory-production-settings",
         source: "factory_production_settings/factory_production_settings.js",
         controller: "AlmdinaFactoryProductionSettingsController",
         stylesheet: "/assets/almdina_erp/css/factory_production_settings.css?v=1",
-        loadingMarker: "جاري تحميل إعدادات المعمل",
+        loadingMarker: "Loading factory settings",
     },
     {
         route: "shop-floor-inbox",
         source: "shop_floor_inbox/shop_floor_inbox.js",
         controller: "AlmdinaShopFloorInboxController",
         stylesheet: "/assets/almdina_erp/css/shop_floor_responsive.css",
-        loadingMarker: "جاري تجهيز صالة الإنتاج",
+        loadingMarker: "Preparing the shop floor...",
     },
 ]);
 
