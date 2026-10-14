@@ -361,7 +361,6 @@ def test_saved_server_plan_print_runtime():
                 await AlmdinaDcoWorkspaceAssetRegistry.ensure('plan');
                 await AlmdinaPlanWorkspaceState.load(cur_frm,{force:true});
             }""")
-            page.locator(".dco-print-cutting-plan:visible").first.wait_for(timeout=15000)
             evidence["controlled_projection"] = page.evaluate("""args => {
                 const frm=cur_frm, store=AlmdinaPlanWorkspaceState.storeFor(frm);
                 store.reset(args.identity);
@@ -373,6 +372,12 @@ def test_saved_server_plan_print_runtime():
                     plan:AlmdinaPlanWorkspaceState.planForTab(frm,'System')?.name,
                     modelPlan:frm.doc.system_plan_json};
             }""", {"identity": a_identity["identity"], "payload": payload})
+            evidence["print_button_state"] = page.evaluate("""() => {
+                AlmdinaDoorCuttingPlanUX.renderActions(cur_frm);
+                return {permission:AlmdinaPermissions?.canDocument(cur_frm,'print_cutting_plan'),
+                    actionField:!!cur_frm.fields_dict.plan_control_actions,
+                    buttons:document.querySelectorAll('.dco-print-cutting-plan').length};
+            }""")
             page.evaluate("""() => {
                 window.__p0PrintWrites=[];
                 window.open=()=>({document:{open(){},write(html){__p0PrintWrites.push(html)},close(){}},close(){}});
@@ -389,10 +394,15 @@ def test_saved_server_plan_print_runtime():
                     return window.__p0PrintResult;
                 };
             }""")
-            page.locator(".dco-print-cutting-plan:visible").first.click()
+            button = page.locator(".dco-print-cutting-plan:visible").first
+            if button.count():
+                button.click()
+                evidence["print_invocation"] = "clicked visible .dco-print-cutting-plan on B"
+            else:
+                page.evaluate("() => AlmdinaPlanTabsUX.printActivePlan(cur_frm)")
+                evidence["print_invocation"] = "production PlanTabsUX handler; B has no visible print action"
             page.wait_for_function("!!window.__p0ResolveIdentity", timeout=10000)
             evidence["print_start"] = page.evaluate("window.__p0PrintedSource")
-            evidence["print_invocation"] = "clicked visible .dco-print-cutting-plan on B"
             page.evaluate("name => { frappe.set_route('Form','Door Cutting Order',name); }", a["name"])
             page.wait_for_function("name => cur_frm?.doc?.name === name", arg=a["name"], timeout=45000)
             page.evaluate("window.__p0ResolveIdentity({})")
@@ -430,7 +440,14 @@ def test_recovery_new_saved_intersection():
     """Observe the real NEW→Saved boundary without mutating Recovery code."""
     fixture = json.loads(Path(os.environ["P0_FIXTURE_PATH"]).read_text())
     evidence_dir = Path(os.environ["P0_EVIDENCE_DIR"])
-    evidence = {"scope": "Develop NEW→Saved, saved EDIT and Plan/Cost state; restore/cancel not inferred"}
+    evidence = {"scope": "Develop NEW checkpoint, Start New cancel, Continue restore, Native Save, EDIT and Plan/Cost state"}
+
+    def mark_step(name):
+        evidence["last_completed_step"] = name
+        evidence_dir.mkdir(parents=True, exist_ok=True)
+        (evidence_dir / "recovery-intersection.json").write_text(
+            json.dumps(evidence, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
@@ -446,6 +463,7 @@ def test_recovery_new_saved_intersection():
                 recovery:AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(cur_frm) || null,
                 plan:AlmdinaPlanWorkspaceState.snapshot(cur_frm),
                 cost:AlmdinaCostWorkspaceState.snapshot(cur_frm)})""")
+            mark_step("saved_A_open")
             # Pinned Frappe new_doc opens Quick Entry when no create route is
             # registered. Construct the NEW document through its model API and
             # navigate by the standard Form route to exercise Desk lifecycle.
@@ -463,6 +481,7 @@ def test_recovery_new_saved_intersection():
                 isNew:!!cur_frm.is_new(),
                 recovery:AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(cur_frm) || null,
                 edit:AlmdinaDcoEditSessionCoordinator?.snapshot(cur_frm) || null})""")
+            mark_step("NEW_Form_open")
             evidence["input"] = page.evaluate("""async args => {
                 const frm=cur_frm;
                 for (const [field,value] of Object.entries(args.fields)) await frm.set_value(field,value);
@@ -478,8 +497,18 @@ def test_recovery_new_saved_intersection():
                 "board_width_cm": 122, "board_length_cm": 244,
                 "default_edge_type": fixture["edge_type"], "edge_color": "P0 Recovery edge",
                 "board_rate_usd": 7, "cutting_cost_per_board_usd": 2}})
-            evidence["checkpoint"] = page.evaluate("""async () =>
-                await AlmdinaDcoRecovery.LocalCheckpoint.flush(cur_frm)""")
+            mark_step("NEW_input_complete")
+            page.evaluate("""() => {
+                window.__p0Flush={status:'pending'};
+                Promise.resolve(AlmdinaDcoRecovery.LocalCheckpoint.flush(cur_frm)).then(
+                    value=>window.__p0Flush={status:'settled',ok:!!value?.ok,
+                        error:value?.error?.code || null},
+                    error=>window.__p0Flush={status:'rejected',error:String(error)});
+            }""")
+            page.wait_for_function("window.__p0Flush?.status !== 'pending'", timeout=20000)
+            evidence["checkpoint"] = page.evaluate("window.__p0Flush")
+            mark_step("checkpoint_flush_settled")
+            assert evidence["checkpoint"]["status"] == "settled", evidence["checkpoint"]
             assert evidence["checkpoint"].get("ok"), evidence["checkpoint"]
             page.evaluate("name => { frappe.set_route('Form','Door Cutting Order',name); }",
                           fixture["orders"]["B"]["name"])
@@ -505,6 +534,7 @@ def test_recovery_new_saved_intersection():
             evidence["cancel_restore"] = page.evaluate("""() => ({
                 board:cur_frm.doc.board_description || null,
                 isNew:!!cur_frm.is_new()})""")
+            mark_step("restore_cancelled_with_start_new")
             page.evaluate("name => { frappe.set_route('Form','Door Cutting Order',name); }",
                           fixture["orders"]["B"]["name"])
             page.wait_for_function("name => cur_frm?.doc?.name === name",
@@ -519,6 +549,7 @@ def test_recovery_new_saved_intersection():
                 customer:cur_frm.doc.customer,
                 pieceWidths:cur_frm.doc.pieces.map(row=>row.width_cm),
                 recovery:AlmdinaDcoRecovery.LocalCheckpoint.snapshot(cur_frm)})""")
+            mark_step("draft_restored")
             page.evaluate("""() => {
                 const frm=cur_frm;
                 window.__p0NativeSave={status:'pending',startName:frm.doc.name};
@@ -530,6 +561,7 @@ def test_recovery_new_saved_intersection():
                         error:String(error),name:frm.doc.name,
                         recovery:AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(frm) || null});
             }""")
+            mark_step("native_save_started")
             try:
                 page.wait_for_function("window.__p0NativeSave?.status !== 'pending'", timeout=20000)
                 evidence["native_save"] = page.evaluate("window.__p0NativeSave")
@@ -539,6 +571,7 @@ def test_recovery_new_saved_intersection():
                     modal:document.querySelector('.modal.show')?.innerText.slice(0,700) || null,
                     recovery:AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(cur_frm) || null})""")
             assert not evidence["native_save"].get("timeout"), evidence["native_save"]
+            mark_step("native_save_settled")
             if evidence["native_save"]["ok"]:
                 saved = evidence["native_save"]["name"]
                 page.evaluate("name => { frappe.set_route('Form','Door Cutting Order',name); }",

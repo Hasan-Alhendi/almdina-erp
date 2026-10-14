@@ -235,6 +235,16 @@ def prepare_saved_plan() -> dict[str, object]:
     """Persist a real System plan for A on this disposable site."""
     fixture = json.loads(Path(os.environ["P0_FIXTURE_PATH"]).read_text(encoding="utf-8"))
     frappe.set_user("Administrator")
+    before_reset = audit_db()
+    directory = Path(os.environ["P0_EVIDENCE_DIR"])
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "post-save-before-print-reset.json").write_text(
+        json.dumps(before_reset, ensure_ascii=False, indent=2), encoding="utf-8")
+    # Keep the print experiment's B visibly black, after preserving the
+    # independent proof that the controlled Native Save had committed white.
+    frappe.db.set_value("Door Cutting Order", fixture["orders"]["B"]["name"],
+                        "board_description", fixture["orders"]["B"]["board"])
+    frappe.db.commit()
     from almdina_erp.almdina_erp.services.cutting_plan_command_service import (
         recalculate_system_plan,
     )
@@ -251,8 +261,6 @@ def prepare_saved_plan() -> dict[str, object]:
                "first_piece": ((snapshot.get("sheets") or [{}])[0].get("pieces") or [{}])[0]}
     if not summary["sheet_count"]:
         raise AssertionError(f"Saved System plan has no printable sheets: {summary}")
-    directory = Path(os.environ["P0_EVIDENCE_DIR"])
-    directory.mkdir(parents=True, exist_ok=True)
     (directory / "saved-plan-fixture.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
     return {key: value for key, value in summary.items() if key != "first_piece"}
