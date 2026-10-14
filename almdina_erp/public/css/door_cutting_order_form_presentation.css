@@ -19,23 +19,39 @@
 
 .dco-form-presentation-shell .page-head.dco-responsive-head .page-title,
 .dco-form-presentation-shell .page-head.dco-responsive-head .title-area {
-    flex: 1 1 100% !important;
-    width: 100% !important;
+    /* Share the head row with actions; wrap to a full row when space is tight. */
+    flex: 1 1 14rem !important;
+    width: auto !important;
     min-width: 0 !important;
     max-width: 100% !important;
 }
 
-.dco-form-presentation-shell .page-head.dco-responsive-head .page-actions {
-    flex: 1 1 100% !important;
-    width: 100% !important;
+.dco-form-presentation-shell .page-head.dco-responsive-head .page-title .ellipsis,
+.dco-form-presentation-shell .page-head.dco-responsive-head .page-title .title-text,
+.dco-form-presentation-shell .page-head.dco-responsive-head .title-area .ellipsis {
     min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+
+.dco-form-presentation-shell .page-head.dco-responsive-head .page-actions {
+    /* Stay in normal flow so title/breadcrumb and actions never paint over each other. */
+    position: static !important;
+    inset: auto !important;
+    flex: 1 1 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: calc(100%) !important;
     margin: 0 !important;
+    margin-inline-start: auto !important;
     display: flex !important;
     align-items: center !important;
     justify-content: flex-start !important;
     flex-wrap: wrap !important;
     gap: 6px !important;
     overflow: visible !important;
+    transform: none !important;
 }
 
 .dco-form-presentation-shell .page-head.dco-responsive-head .page-actions .custom-actions,
@@ -209,22 +225,27 @@ body.modal-open .dco-operator-form .form-tabs-list.dco-sticky-tabs.dco-tabs-is-f
 @media (min-width: 721px) {
     .dco-form-presentation-shell .page-head.dco-responsive-head .standard-items-section {
         display: flex !important;
-        flex-wrap: nowrap !important;
+        flex-wrap: wrap !important;
         align-items: center !important;
         gap: 6px !important;
         width: auto !important;
-        flex: 0 1 auto !important;
+        flex: 1 1 auto !important;
         min-width: 0 !important;
+        max-width: calc(100%) !important;
     }
 
     .dco-form-presentation-shell .page-head.dco-responsive-head .page-actions,
     .dco-form-presentation-shell .page-head.dco-responsive-head.dco-stable-actions-head .page-actions {
         display: flex !important;
-        flex-wrap: nowrap !important;
+        flex-wrap: wrap !important;
         align-items: center !important;
         width: auto !important;
-        max-width: none !important;
-        flex: 0 1 auto !important;
+        max-width: calc(100%) !important;
+        flex: 1 1 auto !important;
+        position: static !important;
+        inset: auto !important;
+        transform: none !important;
+        margin-inline-start: auto !important;
     }
 
     .dco-form-presentation-shell .page-head.dco-responsive-head .page-actions .custom-actions,
@@ -232,10 +253,12 @@ body.modal-open .dco-operator-form .form-tabs-list.dco-sticky-tabs.dco-tabs-is-f
     .dco-form-presentation-shell .page-head.dco-responsive-head .page-actions .standard-actions,
     .dco-form-presentation-shell .page-head.dco-responsive-head .page-actions .menu-btn-group {
         display: flex !important;
-        flex-wrap: nowrap !important;
+        flex-wrap: wrap !important;
         align-items: center !important;
         width: auto !important;
-        flex: 0 0 auto !important;
+        max-width: calc(100%) !important;
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
     }
 
     .dco-form-presentation-shell .page-head.dco-responsive-head .standard-actions > .search-bar {
@@ -463,14 +486,20 @@ body.modal-open .dco-operator-form .form-tabs-list.dco-sticky-tabs.dco-tabs-is-f
     display:flex!important;
     visibility:visible!important;
     opacity:1!important;
-    flex-wrap:nowrap!important;
+    flex-wrap:wrap!important;
     align-items:center!important;
     gap:6px!important;
 }
 .dco-form-presentation-shell .page-head.dco-stable-actions-head .page-actions {
+    position:static!important;
+    inset:auto!important;
+    transform:none!important;
     margin:0!important;
+    margin-inline-start:auto!important;
     justify-content:flex-start!important;
-    flex:0 0 auto!important;
+    flex:1 1 auto!important;
+    width:auto!important;
+    max-width:calc(100%)!important;
 }
 .dco-form-presentation-shell .page-head.dco-stable-actions-head .custom-actions > .btn,
 .dco-form-presentation-shell .page-head.dco-stable-actions-head .custom-actions > .btn-group,
@@ -586,19 +615,19 @@ body.modal-open .dco-operator-form .form-tabs-list.dco-sticky-tabs.dco-tabs-is-f
 }
 @media(min-width:992px){
     .dco-form-presentation-shell .page-head.dco-stable-actions-head .page-actions {
-        position:fixed!important;
-        left:calc(16px + var(--dco-viewport-left-compensation, 0px))!important;
-        right:auto!important;
-        top:10px!important;
+        position:static!important;
+        inset:auto!important;
         transform:none!important;
-        z-index:1025!important;
-        width:max-content!important;
-        max-width:calc(100vw - 32px)!important;
+        z-index:auto!important;
+        width:auto!important;
+        max-width:calc(100%)!important;
+        margin-inline-start:auto!important;
     }
 }
 @media(max-width:991px){
     .dco-form-presentation-shell .page-head.dco-stable-actions-head .page-actions {
         position:static!important;
+        inset:auto!important;
         transform:none!important;
         margin-inline-start:auto!important;
     }
@@ -607,7 +636,7 @@ body.modal-open .dco-operator-form .form-tabs-list.dco-sticky-tabs.dco-tabs-is-f
     .dco-form-presentation-shell .page-head.dco-stable-actions-head .page-actions {
         margin-inline-start:0!important;
         width:100%!important;
-        max-width:100%!important;
+        max-width:calc(100%)!important;
     }
 }
 @media(max-width:560px){
