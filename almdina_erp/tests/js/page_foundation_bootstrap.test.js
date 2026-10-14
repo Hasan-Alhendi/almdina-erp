@@ -64,6 +64,14 @@ async function simulate(spec, { foundationReady = false, legacyLoader = false } 
     const wrapper = { route: spec.route };
     const main = {
         content: "",
+        attributes: {},
+        attr(name, value) {
+            if (arguments.length > 1) {
+                this.attributes[name] = String(value);
+                return this;
+            }
+            return this.attributes[name];
+        },
         html(value) {
             this.content = String(value || "");
             return this;
@@ -192,6 +200,11 @@ async function simulateShowHideWhileAssetsArePending(spec) {
     const otherPage = {};
     const main = {
         content: "",
+        attributes: {},
+        attr(name, value) {
+            if (arguments.length > 1) { this.attributes[name] = String(value); return this; }
+            return this.attributes[name];
+        },
         html(value) { this.content = String(value || ""); return this; },
     };
     const mounts = [];
