@@ -165,6 +165,7 @@ def prepare() -> dict[str, object]:
         raise RuntimeError("P0_FIXTURE_PATH is required in the isolated CI job")
     fixture = {"versions": versions, "customer": str(customer.name),
                "edge_type": str(edge.name), "orders": orders,
+               "recovery_board": f"P0 Recovery {suffix}",
                "user": email, "password": password, "role": str(role.name),
                "route_preflight": {"administrator": administrator, "test_user": test_user}}
     Path(destination).write_text(json.dumps(fixture, ensure_ascii=False), encoding="utf-8")
@@ -179,6 +180,11 @@ def cleanup() -> None:
         return
     fixture = json.loads(Path(path).read_text(encoding="utf-8"))
     frappe.set_user("Administrator")
+    for name in frappe.get_all("Door Cutting Order",
+                               filters={"board_description": fixture["recovery_board"]},
+                               pluck="name"):
+        frappe.delete_doc("Door Cutting Order", name, force=True,
+                          ignore_permissions=True)
     for row in fixture["orders"].values():
         for plan_name in frappe.get_all("Cutting Plan",
                                         filters={"door_cutting_order": row["name"]},
@@ -213,7 +219,10 @@ def audit_db() -> dict[str, object]:
                        "pieces": [{"name": piece.name, "width_cm": piece.width_cm,
                                    "length_cm": piece.length_cm} for piece in order.pieces]}
     result = {"status": "OBSERVED", "rows": rows,
-              "distinct_child_names": rows["A"]["pieces"][0]["name"] != rows["B"]["pieces"][0]["name"]}
+              "distinct_child_names": rows["A"]["pieces"][0]["name"] != rows["B"]["pieces"][0]["name"],
+              "recovery_saved_names": frappe.get_all(
+                  "Door Cutting Order", filters={"board_description": fixture.get("recovery_board")},
+                  pluck="name")}
     evidence_dir = os.environ.get("P0_EVIDENCE_DIR")
     if evidence_dir:
         Path(evidence_dir).mkdir(parents=True, exist_ok=True)

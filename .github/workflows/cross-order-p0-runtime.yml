@@ -113,6 +113,11 @@ jobs:
         run: |
           set -o pipefail
           python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" -k test_saved_server_plan_print_runtime 2>&1 | tee "$RUNNER_TEMP/saved-plan-browser.log"
+      - name: Observe NEW to Saved Recovery intersection
+        if: always() && steps.route_preflight.outcome == 'success'
+        run: |
+          set -o pipefail
+          python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" -k test_recovery_new_saved_intersection 2>&1 | tee "$RUNNER_TEMP/recovery-browser.log"
       - name: Audit committed test-site database
         if: always()
         run: |
@@ -148,5 +153,6 @@ jobs:
             ${{ runner.temp }}/database-audit.log
             ${{ runner.temp }}/saved-plan.log
             ${{ runner.temp }}/saved-plan-browser.log
+            ${{ runner.temp }}/recovery-browser.log
           if-no-files-found: warn
           retention-days: 14

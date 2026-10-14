@@ -311,20 +311,26 @@ def test_saved_server_plan_print_runtime():
                     held.append((route, None))
                     response = route.fetch()
                     held[-1] = (route, response)
+                    page.evaluate("window.__p0PlanHeld = true")
                 else:
                     route.continue_()
 
             page.route("**/api/method/*get_plan_workspace_snapshot*", delay_actual_a_plan)
-            with page.expect_request(lambda request: "get_plan_workspace_snapshot" in request.url
-                                     and a["name"] in (request.url + (request.post_data or "")),
-                                     timeout=45000):
-                page.evaluate("name => { frappe.set_route('Form','Door Cutting Order',name); }", a["name"])
+            page.evaluate("name => { frappe.set_route('Form','Door Cutting Order',name); }", a["name"])
             page.wait_for_function("name => cur_frm?.doc?.name === name", arg=a["name"], timeout=45000)
+            page.wait_for_function("() => AlmdinaPlanWorkspaceState?.canView(cur_frm)", timeout=15000)
             a_identity = page.evaluate("""() => ({name:cur_frm.doc.name,
                 identity:AlmdinaDocumentContext.formIdentity(cur_frm),
                 generation:AlmdinaDocumentContext.capture(cur_frm).generation,
                 modified:cur_frm.doc.modified})""")
             page.evaluate("window.__p0FrmA=cur_frm")
+            # Start the production Plan state transport while A is visible, hold
+            # its *real* HTTP response, then navigate B before releasing it.
+            with page.expect_request(lambda request: "get_plan_workspace_snapshot" in request.url
+                                     and a["name"] in (request.url + (request.post_data or "")),
+                                     timeout=15000):
+                page.evaluate("() => { AlmdinaPlanWorkspaceState.load(cur_frm,{force:true}); }")
+            page.wait_for_function("window.__p0PlanHeld === true", timeout=15000)
             assert held and held[0][1], "No real A Plan API response was intercepted"
             payload = held[0][1].json().get("message")
             assert payload and payload.get("order_name") == a["name"], payload
@@ -388,13 +394,93 @@ def test_saved_server_plan_print_runtime():
             html = page.evaluate("window.__p0PrintWrites.at(-1)")
             (evidence_dir / "saved-plan-final-print.html").write_text(html, encoding="utf-8")
             evidence["print_result"] = page.evaluate("async () => await window.__p0PrintResult")
+            a_piece = saved_plan["first_piece"]
+            a_geometry = f"{int(float(a_piece['w']) * 10)} × {int(float(a_piece['h']) * 10)}"
+            b_geometry = f"{b['width_cm'] * 10} × {b['length_cm'] * 10}"
             evidence["html_checks"] = {"title_b": f"خطة قص - {b['name']}" in html,
                 "title_a": f"خطة قص - {a['name']}" in html,
                 "board_a": a["board"] in html, "board_b": b["board"] in html,
+                "geometry_a": a_geometry in html, "geometry_b": b_geometry in html,
                 "plan_name_rendered": saved_plan["name"] in html,
-                "revision_rendered": str(saved_plan["revision"]) in html}
+                "revision_rendered": None,
+                "revision_note": "Renderer has no plan revision field; compare API/source identity"}
             evidence["final_html_file"] = "saved-plan-final-print.html"
         finally:
             (evidence_dir / "saved-plan-print-evidence.json").write_text(
+                json.dumps(evidence, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+            browser.close()
+
+
+def test_recovery_new_saved_intersection():
+    """Observe the real NEW→Saved boundary without mutating Recovery code."""
+    fixture = json.loads(Path(os.environ["P0_FIXTURE_PATH"]).read_text())
+    evidence_dir = Path(os.environ["P0_EVIDENCE_DIR"])
+    evidence = {"scope": "Develop NEW→Saved, saved EDIT and Plan/Cost state; restore/cancel not inferred"}
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(locale="en-US")
+            _login(page, fixture)
+            page.evaluate("name => { frappe.set_route('Form','Door Cutting Order',name); }",
+                          fixture["orders"]["A"]["name"])
+            page.wait_for_function("name => cur_frm?.doc?.name === name",
+                                   arg=fixture["orders"]["A"]["name"], timeout=45000)
+            evidence["saved_a"] = page.evaluate("""() => ({name:cur_frm.doc.name,
+                isNew:!!cur_frm.is_new(),
+                edit:AlmdinaDcoEditSessionCoordinator?.snapshot(cur_frm) || null,
+                recovery:AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(cur_frm) || null,
+                plan:AlmdinaPlanWorkspaceState.snapshot(cur_frm),
+                cost:AlmdinaCostWorkspaceState.snapshot(cur_frm)})""")
+            page.evaluate("() => { frappe.new_doc('Door Cutting Order'); }")
+            page.wait_for_function("() => cur_frm?.doctype === 'Door Cutting Order' && !!cur_frm.is_new()",
+                                   timeout=45000)
+            page.wait_for_function("() => !!AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(cur_frm)",
+                                   timeout=15000)
+            evidence["new_before_save"] = page.evaluate("""() => ({
+                identity:AlmdinaDocumentContext.formIdentity(cur_frm),
+                generation:AlmdinaDocumentContext.capture(cur_frm)?.generation,
+                isNew:!!cur_frm.is_new(),
+                recovery:AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(cur_frm) || null,
+                edit:AlmdinaDcoEditSessionCoordinator?.snapshot(cur_frm) || null})""")
+            evidence["input"] = page.evaluate("""async args => {
+                const frm=cur_frm;
+                for (const [field,value] of Object.entries(args.fields)) await frm.set_value(field,value);
+                const piece=frappe.model.add_child(frm.doc,'Door Cutting Order Detail','pieces');
+                piece.piece_type='Regular'; piece.width_cm=31; piece.length_cm=62; piece.qty=1;
+                frm.refresh_field('pieces');
+                AlmdinaDcoRecovery?.LocalCheckpoint?.markDirty(frm);
+                return {name:frm.doc.name,board:frm.doc.board_description,
+                    pieces:frm.doc.pieces.map(row=>({name:row.name,width_cm:row.width_cm})),
+                    recovery:AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(frm) || null};
+            }""", {"fields": {"customer": fixture["customer"],
+                "board_description": fixture["recovery_board"],
+                "board_width_cm": 122, "board_length_cm": 244,
+                "default_edge_type": fixture["edge_type"], "edge_color": "P0 Recovery edge",
+                "board_rate_usd": 7, "cutting_cost_per_board_usd": 2}})
+            evidence["native_save"] = page.evaluate("""async () => {
+                const frm=cur_frm;
+                try {await frm.save(); return {ok:!frm.is_new(),name:frm.doc.name,
+                    board:frm.doc.board_description,
+                    recovery:AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(frm) || null};}
+                catch(error) {return {ok:false,error:String(error),name:frm.doc.name,
+                    recovery:AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(frm) || null};}
+            }""")
+            if evidence["native_save"]["ok"]:
+                saved = evidence["native_save"]["name"]
+                page.evaluate("name => { frappe.set_route('Form','Door Cutting Order',name); }",
+                              fixture["orders"]["B"]["name"])
+                page.wait_for_function("name => cur_frm?.doc?.name === name",
+                                       arg=fixture["orders"]["B"]["name"], timeout=45000)
+                page.evaluate("name => { frappe.set_route('Form','Door Cutting Order',name); }", saved)
+                page.wait_for_function("name => cur_frm?.doc?.name === name", arg=saved, timeout=45000)
+                evidence["saved_reopen"] = page.evaluate("""() => ({name:cur_frm.doc.name,
+                    board:cur_frm.doc.board_description,
+                    edit:AlmdinaDcoEditSessionCoordinator?.snapshot(cur_frm) || null,
+                    recovery:AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(cur_frm) || null,
+                    plan:AlmdinaPlanWorkspaceState.snapshot(cur_frm),
+                    cost:AlmdinaCostWorkspaceState.snapshot(cur_frm)})""")
+        finally:
+            evidence_dir.mkdir(parents=True, exist_ok=True)
+            (evidence_dir / "recovery-intersection.json").write_text(
                 json.dumps(evidence, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
             browser.close()
