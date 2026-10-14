@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import faulthandler
 import json
 import os
 import re
 import shutil
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -30,6 +32,28 @@ TRACE: list[dict[str, Any]] = []
 PAGE_RUNTIME_DIAGNOSTICS: dict[int, list[dict[str, str]]] = {}
 NEW_FORM_IDENTITIES: dict[int, dict[str, Any]] = {}
 DIAGNOSTIC_REDACTIONS: set[str] = set()
+STEP_SUMMARY_EVENTS = {
+    "permission_smoke_watchdog_armed",
+    "browser_launch_started",
+    "browser_launch_completed",
+    "browser_context_create_started",
+    "browser_context_create_completed",
+    "browser_page_create_started",
+    "browser_page_create_completed",
+    "login_navigation_started",
+    "login_navigation_completed",
+    "login_existing_session_check_started",
+    "login_existing_session_check_completed",
+    "login_form_fill_started",
+    "login_form_fill_completed",
+    "login_submit_started",
+    "login_submit_completed",
+    "login_session_wait_started",
+    "login_session_ready",
+    "login_boot_wait_started",
+    "login_boot_ready",
+    "desk_login_and_boot_ready",
+}
 
 
 def trace(event: str, **details: Any) -> None:
@@ -40,6 +64,18 @@ def trace(event: str, **details: Any) -> None:
     RUNNER_TEMP.mkdir(parents=True, exist_ok=True)
     TRACE_PATH.write_text(json.dumps(TRACE, ensure_ascii=False), encoding="utf-8")
     print(json.dumps(record, ensure_ascii=False), flush=True)
+    if event in STEP_SUMMARY_EVENTS:
+        summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+        if summary_path:
+            # Keep live progress useful if the outer process deadline stops pytest.
+            # Only emit fixed phase names and durations; never emit credentials or identities.
+            safe_details = {
+                key: record[key]
+                for key in ("duration_ms", "timeout_seconds", "stack_dump_after_seconds")
+                if key in record
+            }
+            with Path(summary_path).open("a", encoding="utf-8") as summary:
+                summary.write(f"- `{event}` {json.dumps(safe_details, sort_keys=True)}\n")
 
 
 def _fixtures() -> dict[str, Any]:
@@ -64,11 +100,16 @@ def _safe_diagnostic_text(value: str, *, limit: int = 240) -> str:
 def _browser(playwright_instance) -> Browser:
     executable = os.environ.get("CHROMIUM_PATH") or shutil.which("chromium")
     args = ["--no-sandbox", "--disable-dev-shm-usage"] if os.geteuid() == 0 else ["--disable-dev-shm-usage"]
-    return playwright_instance.chromium.launch(
+    started = time.monotonic()
+    trace("browser_launch_started")
+    browser = playwright_instance.chromium.launch(
         headless=True,
         executable_path=executable,
         args=args,
+        timeout=30_000,
     )
+    trace("browser_launch_completed", duration_ms=round((time.monotonic() - started) * 1000))
+    return browser
 
 
 def _attach_diagnostics(page: Page) -> None:
@@ -125,33 +166,93 @@ def record_http_error(response, diagnostics: list[dict[str, str]]) -> None:
 
 def _login(page: Page, fixture: dict[str, Any], user: str | None = None) -> None:
     expected_user = user or fixture["user"]
-    response = page.goto(f"{DESK_URL}/login", wait_until="domcontentloaded", timeout=60_000)
-    assert response is not None and response.status == 200
-    current_user = page.evaluate(
-        "() => window.frappe && frappe.session ? frappe.session.user : null"
+    page.set_default_timeout(15_000)
+    page.set_default_navigation_timeout(45_000)
+    started = time.monotonic()
+    trace("login_navigation_started")
+    response = page.goto(f"{DESK_URL}/login", wait_until="domcontentloaded", timeout=45_000)
+    trace(
+        "login_navigation_completed",
+        duration_ms=round((time.monotonic() - started) * 1000),
     )
-    if current_user == expected_user:
+    assert response is not None and response.status == 200
+
+    session_probe_started = time.monotonic()
+    trace("login_existing_session_check_started")
+    try:
+        page.wait_for_function(
+            "user => window.frappe && frappe.session && frappe.session.user === user",
+            arg=expected_user,
+            timeout=1_000,
+        )
+    except PlaywrightTimeoutError:
+        trace(
+            "login_existing_session_check_completed",
+            duration_ms=round((time.monotonic() - session_probe_started) * 1000),
+        )
+    else:
+        trace(
+            "login_existing_session_check_completed",
+            duration_ms=round((time.monotonic() - session_probe_started) * 1000),
+        )
+        boot_started = time.monotonic()
+        trace("login_boot_wait_started")
         page.wait_for_function(
             "() => window.frappe && frappe.boot && frappe.boot.sysdefaults "
             "&& Boolean(frappe.boot.sysdefaults.setup_complete) && frappe.router && frappe.app",
             timeout=45_000,
         )
-        trace("desk_existing_session_and_boot_ready")
+        trace("login_boot_ready", duration_ms=round((time.monotonic() - boot_started) * 1000))
+        trace("desk_login_and_boot_ready")
         return
+
+    fill_started = time.monotonic()
+    trace("login_form_fill_started")
     page.locator("#login_email").fill(expected_user)
     page.locator("#login_password").fill(fixture["password"])
+    trace("login_form_fill_completed", duration_ms=round((time.monotonic() - fill_started) * 1000))
+    submit_started = time.monotonic()
+    trace("login_submit_started")
     page.get_by_role("button", name=re.compile(r"^(Login|Continue)$")).click()
+    trace("login_submit_completed", duration_ms=round((time.monotonic() - submit_started) * 1000))
+    session_started = time.monotonic()
+    trace("login_session_wait_started")
     page.wait_for_function(
         "user => window.frappe && frappe.session && frappe.session.user === user",
         arg=expected_user,
         timeout=45_000,
     )
+    trace("login_session_ready", duration_ms=round((time.monotonic() - session_started) * 1000))
+    boot_started = time.monotonic()
+    trace("login_boot_wait_started")
     page.wait_for_function(
         "() => window.frappe && frappe.boot && frappe.boot.sysdefaults "
         "&& Boolean(frappe.boot.sysdefaults.setup_complete) && frappe.router && frappe.app",
         timeout=45_000,
     )
+    trace("login_boot_ready", duration_ms=round((time.monotonic() - boot_started) * 1000))
     trace("desk_login_and_boot_ready")
+
+
+def _new_traced_desk_page(browser: Browser, case_name: str):
+    started = time.monotonic()
+    trace("browser_context_create_started", case=case_name)
+    context = browser.new_context(viewport={"width": 1800, "height": 1200})
+    trace(
+        "browser_context_create_completed",
+        case=case_name,
+        duration_ms=round((time.monotonic() - started) * 1000),
+    )
+    started = time.monotonic()
+    trace("browser_page_create_started", case=case_name)
+    page = context.new_page()
+    trace(
+        "browser_page_create_completed",
+        case=case_name,
+        duration_ms=round((time.monotonic() - started) * 1000),
+    )
+    _attach_diagnostics(page)
+    return context, page
 
 
 def _logout_and_login_as(page: Page, fixture: dict[str, Any], user: str) -> None:
@@ -529,6 +630,13 @@ def test_real_desk_customer_field_permission_differential() -> None:
     }
     outcomes: dict[str, dict[str, Any]] = {}
 
+    faulthandler.enable(file=sys.stderr)
+    faulthandler.dump_traceback_later(120, repeat=False, file=sys.stderr)
+    trace(
+        "permission_smoke_watchdog_armed",
+        timeout_seconds=180,
+        stack_dump_after_seconds=120,
+    )
     with sync_playwright() as playwright_instance:
         browser = _browser(playwright_instance)
         try:
@@ -536,9 +644,7 @@ def test_real_desk_customer_field_permission_differential() -> None:
                 ("create_only", fixture["user"]),
                 ("create_and_edit", fixture["write_user"]),
             ):
-                context = browser.new_context(viewport={"width": 1800, "height": 1200})
-                page = context.new_page()
-                _attach_diagnostics(page)
+                context, page = _new_traced_desk_page(browser, case_name)
                 try:
                     _login(page, fixture, user=user)
                     suffix = f"customer-permission-{case_name}"
@@ -765,9 +871,7 @@ def test_real_desk_customer_field_permission_differential() -> None:
                 finally:
                     context.close()
 
-            context = browser.new_context(viewport={"width": 1800, "height": 1200})
-            page = context.new_page()
-            _attach_diagnostics(page)
+            context, page = _new_traced_desk_page(browser, "no_create")
             try:
                 _login(page, fixture, user=fixture["no_create_user"])
                 create_attempt = page.evaluate(
@@ -892,7 +996,10 @@ def test_real_desk_customer_field_permission_differential() -> None:
                 "shared_doctype_write_unchanged": True,
             })
         finally:
-            browser.close()
+            try:
+                browser.close()
+            finally:
+                faulthandler.cancel_dump_traceback_later()
 
 
 def _fill_header(page: Page, fixture: dict[str, Any], notes: str) -> None:

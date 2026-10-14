@@ -530,7 +530,16 @@ jobs:
             test_target="tests/browser/test_dco_al128_frappe_desk.py::test_real_desk_edits_checkpoint_and_permission_isolation"
           fi
           set +e
-          if [[ -n "${test_target:-}" ]]; then
+          if [[ "$TARGET_CASE" == "al129_customer_permission_smoke" ]]; then
+            {
+              echo '### ALMADINA-129 Customer Permission Smoke'
+              echo 'Frappe v16.17.5 / ERPNext v16.17.0; pytest hard limit: 180 seconds.'
+              echo 'Progress events are appended live; Python stack dump is scheduled at 120 seconds.'
+            } >> "$GITHUB_STEP_SUMMARY"
+            timeout --signal=TERM --kill-after=10s 180s \
+              python -m pytest -q -s "${test_target}" 2>&1 \
+              | tee "$RUNNER_TEMP/desk-pytest.log"
+          elif [[ -n "${test_target:-}" ]]; then
             python -m pytest -q -s "$test_target" 2>&1 \
               | tee "$RUNNER_TEMP/desk-pytest.log"
           else
@@ -556,6 +565,26 @@ jobs:
               print(json.dumps({"trace_unavailable": str(error)[:180]}))
               raise SystemExit(0)
           key_events = {
+              "permission_smoke_watchdog_armed",
+              "browser_launch_started",
+              "browser_launch_completed",
+              "browser_context_create_started",
+              "browser_context_create_completed",
+              "browser_page_create_started",
+              "browser_page_create_completed",
+              "login_navigation_started",
+              "login_navigation_completed",
+              "login_existing_session_check_started",
+              "login_existing_session_check_completed",
+              "login_form_fill_started",
+              "login_form_fill_completed",
+              "login_submit_started",
+              "login_submit_completed",
+              "login_session_wait_started",
+              "login_session_ready",
+              "login_boot_wait_started",
+              "login_boot_ready",
+              "desk_login_and_boot_ready",
               "new_form_navigation_response",
               "real_new_dco_form_ready",
               "real_new_dco_awaiting_draft_selection",
@@ -608,12 +637,22 @@ jobs:
           print("\n".join(selected[-24:])[-3400:])
           PY
             )"
+            if [[ -z "$failure_tail" ]]; then
+              if (( test_status == 124 )); then
+                failure_tail="Customer Permission Smoke exceeded its 180-second hard limit (exit 124)."
+              else
+                failure_tail="Customer Permission Smoke exited with status $test_status."
+              fi
+            fi
             failure_tail="${failure_tail//'%'/'%25'}"
             failure_tail="${failure_tail//$'\r'/'%0D'}"
             failure_tail="${failure_tail//$'\n'/'%0A'}"
             printf '::error title=Real Desk test failure::%s\n' "$failure_tail"
             {
               echo "### $TARGET_CASE real Desk test failure details"
+              if (( test_status == 124 )); then
+                echo 'The targeted smoke was stopped by its 180-second hard limit; the Python stack and last completed phase follow.'
+              fi
               echo '```text'
               python - "$RUNNER_TEMP/desk-pytest.log" <<'PY'
           import sys
