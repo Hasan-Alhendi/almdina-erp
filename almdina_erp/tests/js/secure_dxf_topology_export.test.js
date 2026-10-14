@@ -53,7 +53,13 @@ const fakeFrappe = {
         }
         if (lastCallMethod.includes("normalize_dxf_for_autocad")) {
             const clientDxf = Buffer.from(String((opts.args && opts.args.content_b64) || ""), "base64").toString("utf8");
-            if (process.env.LINER_DXF_OUT && clientDxf.includes("0\r\nLWPOLYLINE\r\n") && clientDxf.includes("8\r\nLiner\r\n")) {
+            if (
+                process.env.LINER_DXF_OUT
+                && opts.args
+                && opts.args.order_name === "26-00105"
+                && clientDxf.includes("0\r\nLWPOLYLINE\r\n")
+                && clientDxf.includes("8\r\nLiner\r\n")
+            ) {
                 fs.writeFileSync(process.env.LINER_DXF_OUT, clientDxf);
             }
             if (
@@ -62,6 +68,20 @@ const fakeFrappe = {
                 && opts.args.order_name === "26-00105"
             ) {
                 fs.writeFileSync(process.env.SQUARE_LINER_DXF_OUT, clientDxf);
+            }
+            if (
+                process.env.L_NOTCH_DXF_OUT
+                && opts.args
+                && opts.args.order_name === "26-L-NOTCH"
+            ) {
+                fs.writeFileSync(process.env.L_NOTCH_DXF_OUT, clientDxf);
+            }
+            if (
+                process.env.SAW_CENTER_DXF_OUT
+                && opts.args
+                && opts.args.order_name === "26-SAW-CENTER"
+            ) {
+                fs.writeFileSync(process.env.SAW_CENTER_DXF_OUT, clientDxf);
             }
             return Promise.resolve({
                 message: {
@@ -139,6 +159,24 @@ const context = vm.createContext({
 });
 
 vm.runInContext(source, context, { filename: "secure_dxf_export.js" });
+for (const relativePath of [
+    "../../public/js/door_cutting_order/drawing/door_cutting_order_liner_geometry.js",
+    "../../public/js/door_cutting_order/drawing/door_cutting_order_clipped_corner_ux.js",
+]) {
+    vm.runInContext(
+        fs.readFileSync(path.resolve(__dirname, relativePath), "utf8"),
+        context,
+        { filename: relativePath }
+    );
+}
+fakeWindow.AlmdinaMultiEdgeBanding = {
+    calculate() {
+        return { sides: {} };
+    },
+    thicknessForType() {
+        return 1;
+    },
+};
 
 function geometry(outer, holes = []) {
     return {
@@ -366,7 +404,8 @@ async function run() {
     assert.equal((downloadedDxf.match(/8\r\nLiner\r\n/g) || []).length, 4);
     assert.equal((downloadedDxf.match(/8\r\nRear Groove\r\n/g) || []).length, 1);
     assert.equal(cutPathLineCount(downloadedDxf), 4);
-    assert.match(downloadedDxf, /2\r\ntext\r\n/);
+    assert.match(downloadedDxf, /2\r\nTEXT\r\n/);
+    assert.match(downloadedDxf, /2\r\nGEOMETRY\r\n/);
     assert.match(downloadedDxf, /0\r\nTEXT\r\n/);
     assert.match(downloadedDxf, /1\r\n1\r\n/);
     assert.equal((downloadedDxf.match(/0\r\nTEXT\r\n/g) || []).length, 3);
@@ -403,7 +442,7 @@ async function run() {
     downloadedDxf = "";
     await fakeFrappe.almdina.export_order_dxf("DCO-TEXT-NUMBERS", "system");
     assert.equal((downloadedDxf.match(/0\r\nTEXT\r\n/g) || []).length, 4);
-    assert.match(downloadedDxf, /8\r\ntext\r\n/);
+    assert.match(downloadedDxf, /8\r\nTEXT\r\n/);
     assert.match(downloadedDxf, /1\r\n1\r\n/);
     assert.match(downloadedDxf, /1\r\n2\r\n/);
     assert.match(downloadedDxf, /1\r\n50\r\n/);
@@ -563,7 +602,293 @@ async function run() {
     assert.match(downloadedDxf, /10\r\n402\.5\r\n20\r\n507\.5\r\n/);
     assert.match(downloadedDxf, /10\r\n389\.5\r\n20\r\n2\.5\r\n/);
 
+    function cutPathLengths(dxf) {
+        const lines = dxf.split("\r\n");
+        const lengths = [];
+        for (let index = 0; index < lines.length - 12; index += 1) {
+            if (lines[index] !== "LINE" || lines[index + 2] !== "GEOMETRY") continue;
+            const x1 = Number(lines[index + 4]);
+            const y1 = Number(lines[index + 6]);
+            const x2 = Number(lines[index + 10]);
+            const y2 = Number(lines[index + 12]);
+            lengths.push(Math.round(Math.hypot(x2 - x1, y2 - y1) * 1000) / 1000);
+        }
+        return lengths;
+    }
+
+    const lOrder = {
+        is_new() { return false; },
+        doc: {
+            name: "26-L-NOTCH",
+            default_edge_type: "band-1",
+            pieces: [{
+                piece_instance_id: "l-1",
+                piece_type: "L-Shaped Corner",
+                width_cm: 40,
+                length_cm: 40,
+                cut_width_cm: 40,
+                cut_length_cm: 40,
+                qty: 1,
+                allow_rotation: 0,
+                clipped_corner_position: "Top Right",
+                clipped_corner_width_cm: 20,
+                clipped_corner_length_cm: 30,
+                edge_break: 1,
+                extra_liner: 1,
+                liner_reference_side: "edge_break",
+                liner_offset_cm: 2,
+                liner_width_cm: 1.5,
+                liner_start_cm: 0,
+                liner_length_cm: 0,
+            }],
+        },
+    };
+    nextPlan = {
+        full_board_width_cm: 122,
+        full_board_length_cm: 244,
+        kerf_mm: 3,
+        trim_cm: 0.5,
+        sheets: [{
+            sheet_no: 1,
+            full_width_cm: 122,
+            full_length_cm: 244,
+            pieces: [{
+                id: 1,
+                label: "1.1",
+                piece_type: "L-Shaped Corner",
+                clipped_corner_position: "Top Right",
+                clipped_corner_width_cm: 20,
+                clipped_corner_length_cm: 30,
+                x: 0,
+                y: 0,
+                w: 40,
+                h: 40,
+                extra_liner: 1,
+                liner_reference_side: "edge_break",
+                liner_offset_cm: 2,
+                liner_width_cm: 1.5,
+            }],
+        }],
+    };
+    downloadedDxf = "";
+    await fakeFrappe.almdina.export_validated_dxf(lOrder);
+    let lengths = cutPathLengths(downloadedDxf);
+    assert.ok(lengths.includes(199), lengths.join(","));
+    assert.ok(lengths.includes(99), lengths.join(","));
+    assert.equal(lengths.includes(200), false);
+    assert.equal(lengths.includes(100), false);
+    downloadedDxf = "";
+    await fakeFrappe.almdina.export_validated_dxf(lOrder);
+    lengths = cutPathLengths(downloadedDxf);
+    assert.ok(lengths.includes(199));
+    assert.ok(lengths.includes(99));
+    assert.equal(lengths.includes(200), false);
+
+    nextPlan = {
+        full_board_width_cm: 122,
+        full_board_length_cm: 244,
+        kerf_mm: 5,
+        trim_cm: 1,
+        sheets: [{
+            sheet_no: 1,
+            full_width_cm: 122,
+            full_length_cm: 244,
+            pieces: [
+                {
+                    id: 1,
+                    label: "1.1",
+                    piece_type: "Regular",
+                    x: 0,
+                    y: 0,
+                    w: 20,
+                    h: 50,
+                    width_cm: 20,
+                    length_cm: 50,
+                    extra_liner: 1,
+                    liner_reference_side: "edge_long_left",
+                    liner_offset_cm: 2,
+                    liner_width_cm: 1.8,
+                    liner_start_cm: 0,
+                    liner_length_cm: 0,
+                },
+                {
+                    id: 2,
+                    label: "2.1",
+                    piece_type: "Regular",
+                    x: 20.5,
+                    y: 0,
+                    w: 30,
+                    h: 40,
+                    width_cm: 30,
+                    length_cm: 40,
+                },
+            ],
+        }],
+    };
+    downloadedDxf = "";
+    await fakeFrappe.almdina.export_order_dxf("26-SAW-CENTER", "system");
+    const sawLines = layerLines(downloadedDxf, "CUT_PATH");
+    const finishedLines = layerLines(downloadedDxf, "GEOMETRY");
+    assert.ok(finishedLines.some(edge => edge.x1 === 10 && edge.x2 === 210));
+    assert.ok(finishedLines.some(edge => edge.x1 === 215 && edge.x2 === 515));
+    const shared = sawLines.filter(edge => Math.abs(edge.x1 - 212.5) < 0.02 && Math.abs(edge.x2 - 212.5) < 0.02);
+    assert.equal(shared.length, 1);
+    assert.ok(Math.abs(Math.min(shared[0].y1, shared[0].y2) - 1927.5) < 0.02);
+    assert.ok(Math.abs(Math.max(shared[0].y1, shared[0].y2) - 2432.5) < 0.02);
+    const trimCenters = sawLines.filter(edge => Math.abs(edge.x1 - 7.5) < 0.02 && Math.abs(edge.x2 - 7.5) < 0.02);
+    assert.equal(trimCenters.length, 1);
+    assert.equal(sawLines.some(edge => Math.abs(edge.x1 - 5) < 0.02 && Math.abs(edge.x2 - 5) < 0.02), false);
+    const linerPoints = polylinePoints(downloadedDxf, "Liner");
+    const linerYs = linerPoints.map(point => point[1]);
+    assert.ok(Math.min(...linerYs) <= 1927.5 + 0.05);
+    assert.ok(Math.max(...linerYs) >= 2432.5 - 0.05);
+    assert.match(downloadedDxf, /8\r\nSHEET_OUTLINE\r\n/);
+    assert.match(downloadedDxf, /8\r\nTEXT\r\n/);
+    assert.doesNotMatch(downloadedDxf, /8\r\n0\r\n/);
+
+    function linerDoor(fields) {
+        return Object.assign({
+            id: 1,
+            label: "1.1",
+            piece_type: "Regular",
+            extra_liner: 1,
+            liner_reference_side: "edge_width_top",
+            liner_offset_cm: 0,
+            liner_width_cm: 1.8,
+            x: 0,
+            y: 0,
+            w: 40,
+            h: 50,
+            width_cm: 40,
+            length_cm: 50,
+        }, fields);
+    }
+    function linerEndPlan(pieces) {
+        return {
+            full_board_width_cm: 122,
+            full_board_length_cm: 244,
+            usable_board_width_cm: 122,
+            usable_board_length_cm: 244,
+            applied_trim_width_cm: 0,
+            applied_trim_length_cm: 0,
+            trim_cm: 0,
+            kerf_mm: 5,
+            kerf_cm: 0.5,
+            sheets: [{
+                sheet_no: 1,
+                full_width_cm: 122,
+                full_length_cm: 244,
+                applied_trim_width_cm: 0,
+                applied_trim_length_cm: 0,
+                pieces,
+            }],
+        };
+    }
+    nextPlan = linerEndPlan([linerDoor({ w: 122, width_cm: 122 })]);
+    downloadedDxf = "";
+    await fakeFrappe.almdina.export_order_dxf("26-LINER-ENDS", "system");
+    const boardEdgeXs = polylinePoints(downloadedDxf, "Liner").map(point => point[0]);
+    assert.equal(Math.round(Math.min(...boardEdgeXs) * 10) / 10, -2.5);
+    assert.equal(Math.round(Math.max(...boardEdgeXs) * 10) / 10, 1222.5);
+
+    nextPlan = linerEndPlan([
+        linerDoor({ id: 1, label: "1.1", x: 20, w: 40, width_cm: 40 }),
+        linerDoor({ id: 2, label: "2.1", x: 0, w: 19.5, width_cm: 19.5, extra_liner: 0, liner_reference_side: "" }),
+        linerDoor({ id: 3, label: "3.1", x: 60.5, w: 30, width_cm: 30, extra_liner: 0, liner_reference_side: "" }),
+    ]);
+    downloadedDxf = "";
+    await fakeFrappe.almdina.export_order_dxf("26-LINER-ENDS", "system");
+    assert.equal((downloadedDxf.match(/8\r\nLiner\r\n/g) || []).length, 1);
+
+    nextPlan = linerEndPlan([
+        linerDoor({ id: 1, label: "1.1", w: 40, width_cm: 40 }),
+        linerDoor({ id: 2, label: "2.1", x: 40.1, w: 30, width_cm: 30, extra_liner: 0, liner_reference_side: "" }),
+    ]);
+    downloadedDxf = "";
+    await assert.rejects(
+        fakeFrappe.almdina.export_order_dxf("26-LINER-ENDS", "system"),
+        /يتداخل مع قطعة مجاورة/
+    );
+
+    nextPlan = linerEndPlan([linerDoor({
+        w: 122,
+        width_cm: 122,
+        liner_start_cm: 10,
+        liner_length_cm: 20,
+    })]);
+    downloadedDxf = "";
+    await fakeFrappe.almdina.export_order_dxf("26-LINER-ENDS", "system");
+    const partialPoints = polylinePoints(downloadedDxf, "Liner");
+    const partialXs = partialPoints.map(point => point[0]);
+    assert.ok(Math.min(...partialXs) > 100);
+    assert.ok(Math.max(...partialXs) < 300);
+    let closedSpan = 0;
+    let run = [partialPoints[0]];
+    for (let index = 1; index < partialPoints.length; index += 1) {
+        if (Math.abs(partialPoints[index][0] - partialPoints[index - 1][0]) <= 0.05) {
+            run.push(partialPoints[index]);
+            continue;
+        }
+        if (run.length >= 2) {
+            closedSpan = Math.max(closedSpan, Math.abs(run[run.length - 1][1] - run[0][1]));
+        }
+        run = [partialPoints[index]];
+    }
+    if (run.length >= 2) {
+        closedSpan = Math.max(closedSpan, Math.abs(run[run.length - 1][1] - run[0][1]));
+    }
+    assert.ok(closedSpan > 10);
+
+    for (const pieceType of ["Clipped Corner", "L-Shaped Corner"]) {
+        nextPlan = linerEndPlan([linerDoor({
+            piece_type: pieceType,
+            w: 100,
+            h: 80,
+            width_cm: 100,
+            length_cm: 80,
+            clipped_corner_position: "Top Right",
+            clipped_corner_width_cm: 20,
+            clipped_corner_length_cm: 30,
+            liner_reference_side: "edge_break",
+            liner_offset_cm: 1,
+            liner_width_cm: 0.8,
+        })]);
+        downloadedDxf = "";
+        await fakeFrappe.almdina.export_order_dxf("26-LINER-ENDS", "system");
+        assert.ok(polylinePoints(downloadedDxf, "Liner").length > 2);
+    }
+
     console.log("Secure DXF topology export simulation passed");
+}
+
+function layerLines(dxf, layerName) {
+    const lines = dxf.split("\r\n");
+    const edges = [];
+    for (let index = 0; index < lines.length - 12; index += 1) {
+        if (lines[index] !== "LINE" || lines[index + 2] !== layerName) continue;
+        edges.push({
+            x1: Number(lines[index + 4]),
+            y1: Number(lines[index + 6]),
+            x2: Number(lines[index + 10]),
+            y2: Number(lines[index + 12]),
+        });
+    }
+    return edges;
+}
+
+function polylinePoints(dxf, layerName) {
+    const lines = dxf.split("\r\n");
+    const points = [];
+    for (let index = 0; index < lines.length; index += 1) {
+        if (lines[index] !== "LWPOLYLINE" || lines[index + 4] !== layerName) continue;
+        const count = Number(lines[index + 8]);
+        let cursor = index + 11;
+        for (let point = 0; point < count; point += 1) {
+            points.push([Number(lines[cursor + 1]), Number(lines[cursor + 3])]);
+            cursor += 4;
+        }
+    }
+    return points;
 }
 
 run().catch(error => {

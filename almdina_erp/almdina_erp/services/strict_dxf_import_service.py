@@ -799,7 +799,13 @@ def _bind_corner_edge_rotation(
     return None
 
 
-def _corner_liner_issue(piece: dict[str, Any], spec: OrderPieceCutSpec, order: Any | None):
+def _corner_liner_issue(
+    piece: dict[str, Any],
+    spec: OrderPieceCutSpec,
+    order: Any | None,
+    *,
+    cutter_diameter_mm: float | None = None,
+):
     if not is_corner_cut(spec.piece_type) or order is None:
         return None
     row = _row_for_spec(order, spec)
@@ -871,8 +877,8 @@ def _corner_liner_issue(piece: dict[str, Any], spec: OrderPieceCutSpec, order: A
         offset_cm,
         width_cm,
         (
-            float(getattr(order, "kerf_mm", 0) or 0)
-            if float(getattr(order, "kerf_mm", 0) or 0) > 0
+            float(cutter_diameter_mm)
+            if cutter_diameter_mm is not None and float(cutter_diameter_mm) > 0
             else None
         ),
         float(getattr(row, "liner_start_cm", 0) or 0) if row else None,
@@ -891,6 +897,7 @@ def _apply_strict_dimension_contract(
     specs: list[OrderPieceCutSpec],
     *,
     order: Any | None = None,
+    cutter_diameter_mm: float | None = None,
 ) -> list[DxfValidationIssue]:
     """Relabel pieces and enrich them with exact order + edge-print metadata."""
     issues: list[DxfValidationIssue] = []
@@ -929,7 +936,12 @@ def _apply_strict_dimension_contract(
                 if binding_error:
                     issues.append(binding_error)
                 else:
-                    liner_issue = _corner_liner_issue(piece, candidate["spec"], order)
+                    liner_issue = _corner_liner_issue(
+                        piece,
+                        candidate["spec"],
+                        order,
+                        cutter_diameter_mm=cutter_diameter_mm,
+                    )
                     if liner_issue is not None:
                         issues.append(liner_issue)
                 continue
@@ -1032,7 +1044,12 @@ def _apply_strict_dimension_contract(
             if binding_error:
                 issues.append(binding_error)
             else:
-                liner_issue = _corner_liner_issue(piece, candidate["spec"], order)
+                liner_issue = _corner_liner_issue(
+                    piece,
+                    candidate["spec"],
+                    order,
+                    cutter_diameter_mm=cutter_diameter_mm,
+                )
                 if liner_issue is not None:
                     issues.append(liner_issue)
 
@@ -1190,7 +1207,12 @@ def parse_production_dxf(
             issues=[issue(APPLIED_TRIM_OVERFLOW, CATEGORY_LAYOUT)]
         ) from exc
 
-    exact_issues = _apply_strict_dimension_contract(snapshot, specs, order=order)
+    exact_issues = _apply_strict_dimension_contract(
+        snapshot,
+        specs,
+        order=order,
+        cutter_diameter_mm=settings.kerf_mm,
+    )
     if exact_issues:
         raise DxfImportError(issues=exact_issues)
 

@@ -159,6 +159,13 @@ from almdina_erp.almdina_erp.infrastructure.cutting.dxf_reader import (
 SHEET_OUTLINE_LAYER = "SHEET_OUTLINE"
 CUT_PATH_LAYER = "CUT_PATH"
 OFFCUT_LAYER = "OFFCUT"
+GEOMETRY_LAYER = "GEOMETRY"
+# Finished door contours in the new export are LINE entities. A closed
+# LWPOLYLINE on GEOMETRY is an illustrative region (liner strip or addon
+# boundary) and is not a door. If a file has GEOMETRY but no LINE, every
+# GEOMETRY contour is a candidate so a later save that converted the doors
+# is rejected by topology instead of being read from the saw centers.
+_GEOMETRY_PIECE_ENTITY_TYPES = frozenset({"LINE", "POLYLINE"})
 SHEETS_PER_ROW = 2
 SHEET_GAP_MM = 200
 CONNECTIVITY_TOLERANCE_MM = 1.5
@@ -922,6 +929,7 @@ def _read_normalized_geometry(
                 SHEET_OUTLINE_LAYER,
                 CUT_PATH_LAYER,
                 OFFCUT_LAYER,
+                GEOMETRY_LAYER,
                 DESIGNER_DEFAULT_LAYER,
                 TEXT_LABEL_LAYER,
                 *EXTRA_OVERLAY_LAYER_NAMES,
@@ -1009,9 +1017,10 @@ def _missing_role_layer_guidance(diagnostics: dict[str, Any]) -> list[str]:
         if str(layer or "").strip()
     }
     hints = [
-        "أي طبقة غير SHEET_OUTLINE أو CUT_PATH أو OFFCUT لا تُستخدم كحدود لوح أو مسار قص. "
-        "ضع مستطيل كل لوح على SHEET_OUTLINE، ومحيط الدرفة الكاملة على CUT_PATH، "
-        "ومحيط الدرفة الناقصة على OFFCUT. طبقة text تحمل أرقام الدرف داخل DXF فقط ولا تُعد قصًا."
+        "إذا وُجدت طبقة GEOMETRY فهي الحدود النهائية للدرفات، وCUT_PATH هو مركز ريشة القص لا حدود الدرفة. "
+        "حدود مناطق الإضافات على GEOMETRY تُرسم للتوضيح ولا تُحسب درفات. "
+        "إذا غابت GEOMETRY يبقى التنسيق القديم: محيط الدرفة على CUT_PATH ومحيط الدرفة الناقصة على OFFCUT.",
+        "طبقة TEXT أو text لأرقام الدرف داخل DXF فقط ولا تُعد قصًا.",
     ]
     if DESIGNER_DEFAULT_LAYER in detected:
         hints.append(
@@ -1036,6 +1045,38 @@ def _missing_role_layer_guidance(diagnostics: dict[str, Any]) -> list[str]:
             "طبقة text تحمل أرقام الدرف داخل DXF فقط ولا تُعد قصًا."
         )
     return hints
+
+
+def _geometry_piece_segments(
+    rows: list[dict[str, Any]],
+) -> list[tuple[tuple[float, float], tuple[float, float]]] | None:
+    """Finished contours when the file is the new GEOMETRY export.
+
+    ``None`` means the layer is absent, so the caller keeps the legacy
+    CUT_PATH reading. An empty list means the layer exists but has no piece
+    lines; CUT_PATH centers must not fill that gap.
+    """
+
+    wanted = GEOMETRY_LAYER.upper()
+    geometry_rows = [
+        row
+        for row in rows
+        if str(row.get("layer") or "").strip().upper() == wanted
+    ]
+    if not geometry_rows:
+        return None
+    has_finished_lines = any(
+        str(row.get("entity_type") or "").strip().upper() == "LINE"
+        for row in geometry_rows
+    )
+    chosen = geometry_rows
+    if has_finished_lines:
+        chosen = [
+            row
+            for row in geometry_rows
+            if str(row.get("entity_type") or "").strip().upper() in _GEOMETRY_PIECE_ENTITY_TYPES
+        ]
+    return [(row["start"], row["end"]) for row in chosen]
 
 
 def _segments_for_layer(rows: list[dict[str, Any]], layer: str) -> list[tuple[tuple[float, float], tuple[float, float]]]:
@@ -2045,6 +2086,7 @@ def _attach_extra_overlays(
             hosts,
             tolerance=GEOMETRY_TOLERANCE_MM,
             host_margin=OVERLAY_HOST_MARGIN_MM,
+            cutter_radius_mm=(float(cutter_diameter_mm or 0.0) / 2.0),
         )
     except ExtraOverlayError as exc:
         raise DxfImportError(issues=[_overlay_error_issue(exc)]) from exc
@@ -2310,13 +2352,19 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
 
     overlays = _collect_extra_overlay_candidates(rows)
     sheet_segments = _segments_for_layer(rows, SHEET_OUTLINE_LAYER)
-    cut_segments = _segments_for_layer(rows, CUT_PATH_LAYER)
     offcut_segments = _segments_for_layer(rows, OFFCUT_LAYER)
-    if offcut_segments:
-        # OFFCUT is an input classification, not a validation bypass. Its
-        # contours enter the same topology, spacing, bounds and exact-size
-        # pipeline as ordinary CUT_PATH contours.
-        cut_segments = [*cut_segments, *offcut_segments]
+    geometry_piece_segments = _geometry_piece_segments(rows)
+    if geometry_piece_segments is not None:
+        # New export: GEOMETRY is the finished door. CUT_PATH is the saw
+        # center and must not be assembled as another door.
+        cut_segments = geometry_piece_segments
+    else:
+        cut_segments = _segments_for_layer(rows, CUT_PATH_LAYER)
+        if offcut_segments:
+            # OFFCUT is an input classification, not a validation bypass. Its
+            # contours enter the same topology, spacing, bounds and exact-size
+            # pipeline as ordinary CUT_PATH contours.
+            cut_segments = [*cut_segments, *offcut_segments]
     if not sheet_segments or not cut_segments:
         fallback_sheets, fallback_cuts = _default_layer_role_segments(
             rows,
@@ -2515,6 +2563,7 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
 
 __all__ = [
     "CUT_PATH_LAYER",
+    "GEOMETRY_LAYER",
     "OFFCUT_LAYER",
     "DIMENSION_TOLERANCE_MM",
     "DxfImportError",

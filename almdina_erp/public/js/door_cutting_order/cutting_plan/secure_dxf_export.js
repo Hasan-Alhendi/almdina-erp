@@ -11,9 +11,12 @@
     const TOPOLOGY_SCHEMA_VERSION = 1;
     const TOPOLOGY_UNIT = "mm";
     // R12 TABLE records must declare the exact number of entries. The exporter
-    // writes four base layers, three manufacturing overlay layers, and text.
-    const DXF_LAYER_COUNT = 8;
-    const TEXT_LABEL_LAYER = "text";
+    // writes the base layers, GEOMETRY, three manufacturing overlay layers, and TEXT.
+    const DXF_LAYER_COUNT = 9;
+    const TEXT_LABEL_LAYER = "TEXT";
+    const FINISHED_GEOMETRY_LAYER = "GEOMETRY";
+    const SAW_CENTER_LAYER = "CUT_PATH";
+    const COLLINEAR_TOLERANCE_MM = 0.05;
     const EXTRA_DOUBLE_DXF_TEXT = "دبل القشاط";
     const EXTRA_FULL_DOOR_DOUBLE_DXF_TEXT = "دبل كامل";
     const TOPOLOGY_COORDINATE_SPACE = "usable_sheet";
@@ -188,17 +191,6 @@
         return entities;
     }
 
-    function boundsFromPoints(points) {
-        const xs = points.map(point => point[0]);
-        const ys = points.map(point => point[1]);
-        return {
-            minX: Math.min(...xs),
-            minY: Math.min(...ys),
-            maxX: Math.max(...xs),
-            maxY: Math.max(...ys),
-        };
-    }
-
     function polygonBounds(points) {
         const xs = points.map(point => point[0]);
         const ys = points.map(point => point[1]);
@@ -245,14 +237,14 @@
         return result;
     }
 
-    function lwpolyline(layerName, points) {
+    function lwpolyline(layerName, points, closed) {
         if (!Array.isArray(points) || points.length < 2) return "";
         let result = pair(0, "LWPOLYLINE")
             + pair(100, "AcDbEntity")
             + pair(8, layerName || "0")
             + pair(100, "AcDbPolyline")
             + pair(90, points.length)
-            + pair(70, 0);
+            + pair(70, closed ? 1 : 0);
         points.forEach(point => {
             result += pair(10, dxfNumber(point[0])) + pair(20, dxfNumber(point[1]));
         });
@@ -371,7 +363,6 @@
         const messages = {
             cutter_diameter_invalid: "حدّد سماكة الشفرة أكبر من صفر قبل تصدير مسارات اللاينر.",
             liner_narrower_than_cutter: "عرض اللاينر أصغر من سماكة الشفرة.",
-            liner_extension_off_board: "امتداد ريشة اللاينر يخرج خارج اللوح، ولا يمكن ضمان أمان القص.",
             liner_extension_hits_piece: "امتداد ريشة اللاينر يتداخل مع قطعة مجاورة.",
             liner_extension_unsafe: "تعذر تمديد مسار اللاينر حتى خط القص.",
             strip_outside: "شريط اللاينر يخرج خارج الدرفة.",
@@ -391,7 +382,19 @@
         return error;
     }
 
-    function exportOverlays(piece, kerfMm) {
+    function usableBoardMm(plan, sheet, appliedTrim) {
+        const fullW = num(sheet.full_width_cm || plan.full_board_width_cm) * 10;
+        const fullH = num(sheet.full_length_cm || plan.full_board_length_cm) * 10;
+        const trim = appliedTrim || { width: 0, length: 0 };
+        return {
+            minX: -num(trim.width),
+            minY: -num(trim.length),
+            maxX: fullW - num(trim.width),
+            maxY: fullH - num(trim.length),
+        };
+    }
+
+    function exportOverlays(piece, kerfMm, board) {
         const overlays = Array.isArray(piece && piece.overlays) ? piece.overlays.slice() : [];
         if (overlays.some(item => item && item.kind === "liner")) return overlays;
         const requiresLiner = Boolean(String(piece && piece.liner_reference_side || "").trim())
@@ -403,6 +406,7 @@
         }
         const synthetic = liner.syntheticOverlay(Object.assign({}, piece, {
             kerf_mm: num(kerfMm),
+            board: board || null,
         }));
         if (requiresLiner && (!synthetic || synthetic.error)) {
             throw linerExportError(piece, (synthetic && synthetic.error) || "liner_extension_unsafe");
@@ -411,8 +415,8 @@
         return overlays.concat(synthetic);
     }
 
-    function persistedOverlays(piece, kerfMm) {
-        const overlays = exportOverlays(piece, kerfMm);
+    function persistedOverlays(piece, kerfMm, board) {
+        const overlays = exportOverlays(piece, kerfMm, board);
         return overlays.map((overlay, index) => {
             const layerName = overlayLayerName(overlay);
             if (!layerName) {
@@ -483,6 +487,264 @@
         ]);
     }
 
+    function openRing(points) {
+        const ring = (points || []).map(point => [num(point[0]), num(point[1])]);
+        if (ring.length >= 2 && Math.hypot(ring[0][0] - ring[ring.length - 1][0], ring[0][1] - ring[ring.length - 1][1]) <= 1e-9) {
+            ring.pop();
+        }
+        const cleaned = [];
+        ring.forEach(point => {
+            const previous = cleaned[cleaned.length - 1];
+            if (!previous || Math.hypot(point[0] - previous[0], point[1] - previous[1]) > 1e-6) {
+                cleaned.push(point);
+            }
+        });
+        if (cleaned.length >= 2) {
+            const first = cleaned[0];
+            const last = cleaned[cleaned.length - 1];
+            if (Math.hypot(first[0] - last[0], first[1] - last[1]) <= 1e-6) cleaned.pop();
+        }
+        return cleaned;
+    }
+
+    function leftNormal(start, end) {
+        const dx = end[0] - start[0];
+        const dy = end[1] - start[1];
+        const length = Math.hypot(dx, dy) || 1;
+        return [-dy / length, dx / length];
+    }
+
+    function pointInRing(point, ring) {
+        const x = point[0];
+        const y = point[1];
+        let inside = false;
+        for (let index = 0; index < ring.length; index += 1) {
+            const start = ring[index];
+            const end = ring[(index + 1) % ring.length];
+            const dx = end[0] - start[0];
+            const dy = end[1] - start[1];
+            const length = Math.hypot(dx, dy) || 1;
+            const along = ((x - start[0]) * dx + (y - start[1]) * dy) / (length * length);
+            if (along >= -1e-9 && along <= 1 + 1e-9) {
+                const px = start[0] + along * dx;
+                const py = start[1] + along * dy;
+                if (Math.hypot(x - px, y - py) <= 1e-6) return true;
+            }
+            if ((start[1] > y) === (end[1] > y)) continue;
+            const crossing = start[0] + (y - start[1]) * (end[0] - start[0]) / (end[1] - start[1]);
+            if (crossing > x) inside = !inside;
+        }
+        return inside;
+    }
+
+    function isMaterial(point, shapes) {
+        return shapes.some(shape => (
+            pointInRing(point, shape.outer)
+            && !shape.holes.some(hole => pointInRing(point, hole))
+        ));
+    }
+
+    function wasteSign(ring, shapes, radius) {
+        let start = ring[0];
+        let end = ring[1];
+        let best = -1;
+        ring.forEach((point, index) => {
+            const next = ring[(index + 1) % ring.length];
+            const length = Math.hypot(next[0] - point[0], next[1] - point[1]);
+            if (length > best) {
+                best = length;
+                start = point;
+                end = next;
+            }
+        });
+        const normal = leftNormal(start, end);
+        const midpoint = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2];
+        const probe = Math.min(1, radius * 0.5);
+        const left = [midpoint[0] + normal[0] * probe, midpoint[1] + normal[1] * probe];
+        const right = [midpoint[0] - normal[0] * probe, midpoint[1] - normal[1] * probe];
+        const leftMaterial = isMaterial(left, shapes);
+        const rightMaterial = isMaterial(right, shapes);
+        if (leftMaterial && !rightMaterial) return -1;
+        if (rightMaterial && !leftMaterial) return 1;
+        if (pointInRing(left, ring)) return leftMaterial ? -1 : 1;
+        return rightMaterial ? 1 : -1;
+    }
+
+    function offsetClosed(ring, distance, sign) {
+        const shifted = ring.map((point, index) => {
+            const next = ring[(index + 1) % ring.length];
+            const normal = leftNormal(point, next);
+            const shift = [sign * normal[0] * distance, sign * normal[1] * distance];
+            return [
+                [point[0] + shift[0], point[1] + shift[1]],
+                [next[0] + shift[0], next[1] + shift[1]],
+            ];
+        });
+        return shifted.map((segment, index) => {
+            const previous = shifted[(index - 1 + shifted.length) % shifted.length];
+            const joint = offsetIntersection(previous, segment);
+            return joint || segment[0];
+        });
+    }
+
+    function offsetIntersection(first, second) {
+        const start = first[0];
+        const end = first[1];
+        const otherStart = second[0];
+        const otherEnd = second[1];
+        const direction = [end[0] - start[0], end[1] - start[1]];
+        const other = [otherEnd[0] - otherStart[0], otherEnd[1] - otherStart[1]];
+        const denominator = direction[0] * other[1] - direction[1] * other[0];
+        if (Math.abs(denominator) <= 1e-9) return null;
+        const step = (
+            (otherStart[0] - start[0]) * other[1]
+            - (otherStart[1] - start[1]) * other[0]
+        ) / denominator;
+        return [start[0] + direction[0] * step, start[1] + direction[1] * step];
+    }
+
+    function cutterCenterSegments(shapes, radius) {
+        const safeRadius = Math.max(0, num(radius));
+        const prepared = shapes.map(shape => ({
+            outer: openRing(shape.outer),
+            holes: (shape.holes || []).map(openRing).filter(hole => hole.length >= 3),
+        })).filter(shape => shape.outer.length >= 3);
+        const segments = [];
+        prepared.forEach(shape => {
+            [shape.outer].concat(shape.holes).forEach(ring => {
+                const offset = safeRadius <= COLLINEAR_TOLERANCE_MM
+                    ? ring
+                    : offsetClosed(ring, safeRadius, wasteSign(ring, prepared, safeRadius));
+                if (offset.length < 3) return;
+                offset.forEach((start, index) => {
+                    const end = offset[(index + 1) % offset.length];
+                    if (Math.hypot(end[0] - start[0], end[1] - start[1]) > COLLINEAR_TOLERANCE_MM) {
+                        segments.push([start, end]);
+                    }
+                });
+            });
+        });
+        return mergeCollinear(segments);
+    }
+
+    function mergeCollinear(segments) {
+        const unused = new Set(segments.map((_, index) => index));
+        const merged = [];
+        while (unused.size) {
+            const seedIndex = unused.values().next().value;
+            unused.delete(seedIndex);
+            const origin = segments[seedIndex][0];
+            const end = segments[seedIndex][1];
+            const dx = end[0] - origin[0];
+            const dy = end[1] - origin[1];
+            const length = Math.hypot(dx, dy);
+            if (length <= COLLINEAR_TOLERANCE_MM) continue;
+            const direction = [dx / length, dy / length];
+            const normal = [-direction[1], direction[0]];
+            const cluster = [[origin, end]];
+            Array.from(unused).forEach(otherIndex => {
+                const start = segments[otherIndex][0];
+                const finish = segments[otherIndex][1];
+                const lineDistance = point => Math.abs(
+                    (point[0] - origin[0]) * normal[0] + (point[1] - origin[1]) * normal[1]
+                );
+                if (lineDistance(start) > COLLINEAR_TOLERANCE_MM || lineDistance(finish) > COLLINEAR_TOLERANCE_MM) return;
+                const otherDx = finish[0] - start[0];
+                const otherDy = finish[1] - start[1];
+                const otherLength = Math.hypot(otherDx, otherDy);
+                if (otherLength <= COLLINEAR_TOLERANCE_MM) {
+                    unused.delete(otherIndex);
+                    return;
+                }
+                const sine = Math.abs(direction[0] * otherDy - direction[1] * otherDx) / otherLength;
+                if (sine > COLLINEAR_TOLERANCE_MM) return;
+                cluster.push([start, finish]);
+                unused.delete(otherIndex);
+            });
+            const intervals = cluster.map(([start, finish]) => {
+                const startT = (start[0] - origin[0]) * direction[0] + (start[1] - origin[1]) * direction[1];
+                const endT = (finish[0] - origin[0]) * direction[0] + (finish[1] - origin[1]) * direction[1];
+                return [Math.min(startT, endT), Math.max(startT, endT)];
+            }).sort((left, right) => left[0] - right[0]);
+            const spans = [];
+            intervals.forEach(([startT, endT]) => {
+                const current = spans[spans.length - 1];
+                if (!current || startT > current[1] + COLLINEAR_TOLERANCE_MM) spans.push([startT, endT]);
+                else current[1] = Math.max(current[1], endT);
+            });
+            spans.forEach(([startT, endT]) => {
+                if (endT - startT <= COLLINEAR_TOLERANCE_MM) return;
+                merged.push([
+                    [origin[0] + direction[0] * startT, origin[1] + direction[1] * startT],
+                    [origin[0] + direction[0] * endT, origin[1] + direction[1] * endT],
+                ]);
+            });
+        }
+        return merged;
+    }
+
+    function finishedRings(piece, placement) {
+        const topology = persistedTopology(piece);
+        if (topology) {
+            return {
+                outer: topologyDxfPoints(topology.outer, placement),
+                holes: topology.holes.map(hole => topologyDxfPoints(hole, placement)),
+            };
+        }
+        const pieceWidth = num(piece.w) * 10;
+        const pieceHeight = num(piece.h) * 10;
+        const { offsetX, offsetY, fullHeight, appliedTrim } = placement;
+        const x = offsetX + appliedTrim.width + num(piece.x) * 10;
+        const y = offsetY + fullHeight - appliedTrim.length - num(piece.y) * 10 - pieceHeight;
+        const clippedGeometry = window.AlmdinaClippedCornerGeometry;
+        const shapeOutput = window.AlmdinaShapeOutputContract;
+        const clipped = clippedGeometry && clippedGeometry.isCornerCut(piece);
+        const exactSpecial = shapeOutput && shapeOutput.hasExactCutPath(piece);
+        const cutPath = clipped
+            ? clippedGeometry.dxfPoints(piece, x, y, pieceWidth, pieceHeight)
+            : (exactSpecial
+                ? shapeOutput.dxfPoints(piece, x, y, pieceWidth, pieceHeight)
+                : null);
+        return {
+            outer: cutPath || [
+                [x, y],
+                [x + pieceWidth, y],
+                [x + pieceWidth, y + pieceHeight],
+                [x, y + pieceHeight],
+            ],
+            holes: [],
+        };
+    }
+
+    function linerRegionPoints(piece, placement) {
+        const liner = window.AlmdinaLinerGeometry;
+        if (!liner || typeof liner.stripPolygonMm !== "function" || typeof liner.pieceFromRow !== "function") return null;
+        if (!String(piece && piece.liner_reference_side || "").trim() || !(num(piece && piece.liner_width_cm) > 0)) return null;
+        let linerPiece;
+        let local;
+        try {
+            linerPiece = liner.pieceFromRow(piece);
+            local = liner.stripPolygonMm(
+                linerPiece,
+                piece.liner_reference_side,
+                piece.liner_offset_cm,
+                piece.liner_width_cm
+            );
+        } catch (error) {
+            return null;
+        }
+        if (!Array.isArray(local) || local.length < 3 || typeof liner.transformPoint !== "function") return null;
+        const turns = piece.rotated ? 1 : 0;
+        const mirrored = Boolean(piece.corner_mirrored);
+        const originX = num(piece.x) * 10;
+        const originY = num(piece.y) * 10;
+        const placed = local.map(point => {
+            const next = liner.transformPoint(point, mirrored, turns, linerPiece.widthCm * 10, linerPiece.lengthCm * 10);
+            return [next[0] + originX, next[1] + originY];
+        });
+        return topologyDxfPoints(placed, placement);
+    }
+
     function buildDxf(plan) {
         const cutterMm = cutterDiameterMm(plan);
         if (cutterMm && cutterMm.linerExport) throw cutterMm;
@@ -501,14 +763,11 @@
             const liner = window.AlmdinaLinerGeometry;
             if (liner && typeof liner.extensionConflict === "function") {
                 const trim = transform.appliedTrim || { width: 0, length: 0 };
-                const fullW = num(sheet.full_width_cm || plan.full_board_width_cm) * 10;
-                const fullH = num(sheet.full_length_cm || plan.full_board_length_cm) * 10;
-                const conflict = liner.extensionConflict(overlay.path, cutterMm, {
-                    minX: -num(trim.width),
-                    minY: -num(trim.length),
-                    maxX: fullW - num(trim.width),
-                    maxY: fullH - num(trim.length),
-                }, (sheet.pieces || []).filter(other => other !== piece).map(other => {
+                const conflict = liner.extensionConflict(
+                    overlay.path,
+                    cutterMm,
+                    usableBoardMm(plan, sheet, trim),
+                    (sheet.pieces || []).filter(other => other !== piece).map(other => {
                     const polygon = typeof liner.placedPolygonMm === "function"
                         ? liner.placedPolygonMm(other)
                         : [];
@@ -535,99 +794,64 @@
             extmaxY = Math.max(extmaxY, offsetY + fullHeight);
 
             entities += rectangle("SHEET_OUTLINE", offsetX, offsetY, fullWidth, fullHeight);
+            const placement = { offsetX, offsetY, fullHeight, appliedTrim };
+            const shapes = [];
 
             (sheet.pieces || []).forEach(piece => {
-                const cutLayer = cutLayerForPiece(piece);
-                const topology = persistedTopology(piece);
-                if (topology) {
-                    const transform = { offsetX, offsetY, fullHeight, appliedTrim };
-                    entities += closedPath(
-                        cutLayer,
-                        topologyDxfPoints(topology.outer, transform)
-                    );
-                    topology.holes.forEach(hole => {
-                        entities += closedPath(
-                            cutLayer,
-                            topologyDxfPoints(hole, transform)
-                        );
-                    });
-                    persistedOverlays(piece, cutterMm).forEach(overlay => {
-                        entities += emitOverlayEntity(overlay, transform, sheet, piece);
-                    });
-                    const bounds = polygonBounds(topology.outer);
-                    const [labelX, labelY] = topologyDxfPoints(
-                        [[(bounds.minX + bounds.maxX) / 2, (bounds.minY + bounds.maxY) / 2]],
-                        transform
-                    )[0];
-                    entities += textEntity(
-                        TEXT_LABEL_LAYER,
-                        labelX,
-                        labelY,
-                        doorNumberHeight(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY),
-                        doorNumberText(piece)
-                    );
-                    const dxfBounds = boundsFromPoints(topologyDxfPoints(
-                        [
-                            [bounds.minX, bounds.minY],
-                            [bounds.maxX, bounds.minY],
-                            [bounds.maxX, bounds.maxY],
-                            [bounds.minX, bounds.maxY],
-                        ],
-                        transform
-                    ));
-                    entities += extraAddonTextEntities(
-                        dxfBounds.minX,
-                        dxfBounds.minY,
-                        dxfBounds.maxX,
-                        dxfBounds.maxY,
-                        piece
-                    );
-                    return;
-                }
-
-                const pieceWidth = num(piece.w) * 10;
-                const pieceHeight = num(piece.h) * 10;
-                // x/y/w/h are the authoritative optimizer cut-path geometry. The
-                // optimizer already reserves kerf between pieces, so keep those
-                // coordinates unchanged and add only the physical-sheet translation.
-                const x = offsetX + appliedTrim.width + num(piece.x) * 10;
-                const y = offsetY + fullHeight - appliedTrim.length - num(piece.y) * 10 - pieceHeight;
-                const clippedGeometry = window.AlmdinaClippedCornerGeometry;
-                const shapeOutput = window.AlmdinaShapeOutputContract;
-                const clipped = clippedGeometry && clippedGeometry.isCornerCut(piece);
-                const exactSpecial = shapeOutput && shapeOutput.hasExactCutPath(piece);
-                const cutPath = clipped
-                    ? clippedGeometry.dxfPoints(piece, x, y, pieceWidth, pieceHeight)
-                    : (exactSpecial
-                        ? shapeOutput.dxfPoints(piece, x, y, pieceWidth, pieceHeight)
-                        : null);
-                entities += cutPath
-                    ? closedPath(cutLayer, cutPath)
-                    : cutLayer === "OFFCUT"
-                        ? rectangle(cutLayer, x, y, pieceWidth, pieceHeight)
-                        : rectangle("CUT_PATH", x, y, pieceWidth, pieceHeight);
-                persistedOverlays(piece, cutterMm).forEach(overlay => {
-                    entities += emitOverlayEntity(
-                        overlay,
-                        { offsetX, offsetY, fullHeight, appliedTrim },
-                        sheet,
-                        piece
-                    );
+                // Finished size stays on the optimizer coordinates. The saw center
+                // is derived from that ring; the kerf gap itself is not rewritten.
+                const rings = finishedRings(piece, placement);
+                shapes.push(rings);
+                entities += closedPath(FINISHED_GEOMETRY_LAYER, rings.outer);
+                rings.holes.forEach(hole => {
+                    entities += closedPath(FINISHED_GEOMETRY_LAYER, hole);
                 });
+                if (cutLayerForPiece(piece) === "OFFCUT") {
+                    entities += closedPath("OFFCUT", rings.outer);
+                    rings.holes.forEach(hole => {
+                        entities += closedPath("OFFCUT", hole);
+                    });
+                }
+                const overlays = persistedOverlays(
+                    piece,
+                    cutterMm,
+                    usableBoardMm(plan, sheet, appliedTrim)
+                );
+                overlays.forEach(overlay => {
+                    entities += emitOverlayEntity(overlay, placement, sheet, piece);
+                });
+                let regionEmitted = false;
+                overlays.forEach(overlay => {
+                    if (overlay.toolpath || !overlay.closed) return;
+                    entities += lwpolyline(
+                        FINISHED_GEOMETRY_LAYER,
+                        topologyDxfPoints(overlay.path, placement),
+                        true
+                    );
+                    if (overlay.layer === "Liner") regionEmitted = true;
+                });
+                if (!regionEmitted) {
+                    const region = linerRegionPoints(piece, placement);
+                    if (region) entities += lwpolyline(FINISHED_GEOMETRY_LAYER, region, true);
+                }
+                const bounds = polygonBounds(rings.outer);
                 entities += textEntity(
                     TEXT_LABEL_LAYER,
-                    x + pieceWidth / 2,
-                    y + pieceHeight / 2,
-                    doorNumberHeight(pieceWidth, pieceHeight),
+                    (bounds.minX + bounds.maxX) / 2,
+                    (bounds.minY + bounds.maxY) / 2,
+                    doorNumberHeight(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY),
                     doorNumberText(piece)
                 );
                 entities += extraAddonTextEntities(
-                    x,
-                    y,
-                    x + pieceWidth,
-                    y + pieceHeight,
+                    bounds.minX,
+                    bounds.minY,
+                    bounds.maxX,
+                    bounds.maxY,
                     piece
                 );
+            });
+            cutterCenterSegments(shapes, num(cutterMm) / 2).forEach(segment => {
+                entities += line(SAW_CENTER_LAYER, segment[0][0], segment[0][1], segment[1][0], segment[1][1]);
             });
         });
 
@@ -644,7 +868,8 @@
         dxf += pair(0, "ENDTAB");
         dxf += pair(0, "TABLE") + pair(2, "LAYER") + pair(70, DXF_LAYER_COUNT);
         dxf += layer("0", 7) + layer("SHEET_OUTLINE", 8) + layer("CUT_PATH", 1)
-            + layer("OFFCUT", EXTRA_OVERLAY_LAYER_COLORS.OFFCUT);
+            + layer("OFFCUT", EXTRA_OVERLAY_LAYER_COLORS.OFFCUT)
+            + layer(FINISHED_GEOMETRY_LAYER, 4);
         dxf += layer("Liner", EXTRA_OVERLAY_LAYER_COLORS.Liner)
             + layer("Rear Groove", EXTRA_OVERLAY_LAYER_COLORS["Rear Groove"])
             + layer("Handle Recess", EXTRA_OVERLAY_LAYER_COLORS["Handle Recess"]);
@@ -728,13 +953,26 @@
         return rows[group - 1] || null;
     }
 
+    function applyManufacturingNotch(piece, frm, row) {
+        const liner = window.AlmdinaLinerGeometry;
+        if (!row || !liner || typeof liner.contourNotchFromOrder !== "function") return;
+        if (String(row.piece_type || "") !== "L-Shaped Corner") return;
+        if (piece.geometry && Array.isArray(piece.geometry.outer)) return;
+        const notch = liner.contourNotchFromOrder(frm, row);
+        piece.piece_type = row.piece_type;
+        piece.clipped_corner_position = row.clipped_corner_position || piece.clipped_corner_position;
+        piece.clipped_corner_width_cm = notch.cutWidthCm;
+        piece.clipped_corner_length_cm = notch.cutLengthCm;
+    }
+
     function applyOrderLinerSpecs(plan, frm) {
         const rows = (frm && frm.doc && frm.doc.pieces) || [];
         if (!rows.length) return;
         (plan.sheets || []).forEach(sheet => {
             (sheet.pieces || []).forEach(piece => {
-                if ((piece.overlays || []).some(item => item && item.kind === "liner")) return;
                 const row = orderRowForPlanPiece(rows, piece);
+                applyManufacturingNotch(piece, frm, row);
+                if ((piece.overlays || []).some(item => item && item.kind === "liner")) return;
                 if (!row || !num(row.extra_liner)) return;
                 const side = String(row.liner_reference_side || "").trim();
                 if (!side || !(num(row.liner_width_cm) > 0)) return;

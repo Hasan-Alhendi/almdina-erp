@@ -462,7 +462,10 @@
                 error.code = "liner_extension_unsafe";
                 throw error;
             }
-            points[pair[0]] = [hit[0] + (direction[0] * extension), hit[1] + (direction[1] * extension)];
+            const amount = pair[0] === 0
+                ? (which.startExtension != null ? which.startExtension : extension)
+                : (which.endExtension != null ? which.endExtension : extension);
+            points[pair[0]] = [hit[0] + (direction[0] * amount), hit[1] + (direction[1] * amount)];
         });
         return points;
     }
@@ -476,6 +479,61 @@
         const distance = (num(offsetCm) * 10) + ((num(widthCm) * 10) / 2);
         const reference = prepared.clipped;
         return offsetPolyline(reference, distance, sign);
+    }
+
+    function collinearPoint(start, middle, end) {
+        const area = Math.abs(
+            ((middle[0] - start[0]) * (end[1] - start[1]))
+            - ((middle[1] - start[1]) * (end[0] - start[0]))
+        );
+        return area <= TOLERANCE_MM * Math.max(dist(start, end), 1);
+    }
+
+    function chainPresent(path, points) {
+        if (points.length < 2) return true;
+        for (let startIndex = 0; startIndex < path.length; startIndex += 1) {
+            if (dist(path[startIndex], points[0]) > TOLERANCE_MM) continue;
+            let cursor = 1;
+            for (let laterIndex = startIndex + 1; laterIndex < path.length; laterIndex += 1) {
+                const later = path[laterIndex];
+                if (dist(later, points[cursor]) <= TOLERANCE_MM) {
+                    cursor += 1;
+                    if (cursor === points.length) return true;
+                    continue;
+                }
+                if (!collinearPoint(points[cursor - 1], later, points[cursor])) break;
+            }
+        }
+        return false;
+    }
+
+    function spanPresent(path, endpoints) {
+        return chainPresent(path, endpoints) || chainPresent(path, endpoints.slice().reverse());
+    }
+
+    function prependClosure(path, endpoints) {
+        if (spanPresent(path, endpoints)) return path;
+        const ordered = endpoints.slice();
+        if (dist(ordered[ordered.length - 1], path[0]) > TOLERANCE_MM) ordered.reverse();
+        if (dist(ordered[ordered.length - 1], path[0]) > TOLERANCE_MM) fail("liner_extension_unsafe");
+        return ordered.slice(0, -1).concat(path);
+    }
+
+    function appendClosure(path, endpoints, returnPass) {
+        if (spanPresent(path, endpoints)) return path.slice();
+        const points = path.slice();
+        const nearEnd = Math.min(dist(points[points.length - 1], endpoints[0]), dist(points[points.length - 1], endpoints[endpoints.length - 1]));
+        if (nearEnd > TOLERANCE_MM) {
+            const retrace = returnPass.slice();
+            if (dist(points[points.length - 1], retrace[0]) > TOLERANCE_MM) retrace.reverse();
+            if (dist(points[points.length - 1], retrace[0]) > TOLERANCE_MM) fail("liner_extension_unsafe");
+            retrace.slice(1).forEach(point => points.push(point));
+        }
+        const ordered = endpoints.slice();
+        if (dist(points[points.length - 1], ordered[0]) > TOLERANCE_MM) ordered.reverse();
+        if (dist(points[points.length - 1], ordered[0]) > TOLERANCE_MM) fail("liner_extension_unsafe");
+        ordered.slice(1).forEach(point => points.push(point));
+        return points;
     }
 
     function toolpathMm(piece, side, offsetCm, widthCm, cutterDiameterMm, startCm, lengthCm) {
@@ -506,12 +564,14 @@
             }
             return line;
         });
-        const path = [];
+        let path = [];
         lines.forEach((line, index) => {
-            const sequence = index % 2 ? line.slice().reverse() : line;
+            const sequence = index % 2 ? line.slice().reverse() : line.slice();
             if (path.length && dist(path[path.length - 1], sequence[0]) <= 1e-6) sequence.shift();
             sequence.forEach(point => path.push(point));
         });
+        if (!prepared.boundaryStart) path = prependClosure(path, lines.map(line => line[0]));
+        if (!prepared.boundaryEnd) path = appendClosure(path, lines.map(line => line[line.length - 1]), lines[lines.length - 1]);
         return path;
     }
 
@@ -526,13 +586,6 @@
 
     function extensionConflict(path, diameterMm, board, obstacles) {
         const radius = num(diameterMm) / 2;
-        const offBoard = path.some(point => (
-            point[0] < board.minX + radius - TOLERANCE_MM
-            || point[1] < board.minY + radius - TOLERANCE_MM
-            || point[0] > board.maxX - radius + TOLERANCE_MM
-            || point[1] > board.maxY - radius + TOLERANCE_MM
-        ));
-        if (offBoard) return "liner_extension_off_board";
         const blocks = obstacles || [];
         for (let index = 0; index < path.length - 1; index += 1) {
             const start = path[index];

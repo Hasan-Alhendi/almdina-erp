@@ -477,6 +477,19 @@ def test_partial_liner_follows_a_diagonal_and_an_l_before_the_bend():
     assert on_corner.value.code == "liner_span_on_corner"
 
 
+def test_full_break_toolpath_covers_the_miter_and_a_gap_does_not():
+    piece = LinerPiece("Clipped Corner", 84, 63, "Top Right", 54, 23)
+    path = liner_toolpath_mm(piece, "edge_break", 10, 1.5, 3)
+    assert compare_liner_path(path, piece, "edge_break", 10, 1.5, 3).ok
+    assert compare_liner_path(path, piece, "edge_break", 10, 1.5, None).reason_code == (
+        "path_does_not_follow_edge"
+    )
+    gapped = path[:7] + path[-7:]
+    assert compare_liner_path(gapped, piece, "edge_break", 10, 1.5, 3).reason_code == (
+        "coverage_gap"
+    )
+
+
 def test_changing_offset_and_width_moves_the_band():
     piece = _regular()
     first = _bbox(liner_strip_polygon_mm(piece, "edge_long_left", 2, 1))
@@ -484,3 +497,60 @@ def test_changing_offset_and_width_moves_the_band():
     assert first[0] == pytest.approx(20)
     assert second[0] == pytest.approx(50)
     assert second[2] - second[0] == pytest.approx(30)
+
+
+def _straight_span(path, axis):
+    best = 0.0
+    run = [path[0]]
+    for previous, point in zip(path, path[1:]):
+        same = abs(point[axis] - previous[axis]) <= 0.05
+        if same:
+            run.append(point)
+            continue
+        if len(run) >= 2:
+            best = max(best, abs(run[-1][1 - axis] - run[0][1 - axis]))
+        run = [point]
+    if len(run) >= 2:
+        best = max(best, abs(run[-1][1 - axis] - run[0][1 - axis]))
+    return best
+
+
+def test_cut_path_closes_a_full_edge_and_an_internal_end_closes_itself():
+    piece = _regular()
+    full = liner_toolpath_mm(piece, "edge_width_top", 0, 1.8, 5)
+    assert min(point[0] for point in full) == pytest.approx(-2.5)
+    assert max(point[0] for point in full) == pytest.approx(402.5)
+    assert compare_liner_path(full, piece, "edge_width_top", 0, 1.8, 5).ok
+    stopped_on_the_edge = [(min(400, max(0, point[0])), point[1]) for point in full]
+    assert not compare_liner_path(stopped_on_the_edge, piece, "edge_width_top", 0, 1.8, 5).ok
+
+    wide = LinerPiece("Regular", 122, 50)
+    board_edge = liner_toolpath_mm(wide, "edge_width_top", 0, 1.8, 5)
+    assert min(point[0] for point in board_edge) == pytest.approx(-2.5)
+    assert max(point[0] for point in board_edge) == pytest.approx(1222.5)
+    assert compare_liner_path(board_edge, wide, "edge_width_top", 0, 1.8, 5).ok
+
+    partial = liner_toolpath_mm(piece, "edge_width_top", 0, 1.8, 5, 5, 20)
+    assert _straight_span(partial, 0) == pytest.approx(13)
+    assert compare_liner_path(partial, piece, "edge_width_top", 0, 1.8, 5, 5, 20).ok
+    without_close = partial[3:]
+    assert compare_liner_path(
+        without_close, piece, "edge_width_top", 0, 1.8, 5, 5, 20
+    ).reason_code == "end_not_closed"
+
+    starts_inside = liner_toolpath_mm(piece, "edge_width_top", 0, 1.8, 5, 5, None)
+    assert min(point[0] for point in starts_inside) == pytest.approx(52.5)
+    assert max(point[0] for point in starts_inside) == pytest.approx(402.5)
+    assert _straight_span(starts_inside, 0) == pytest.approx(13)
+    assert compare_liner_path(starts_inside, piece, "edge_width_top", 0, 1.8, 5, 5, None).ok
+    ends_inside = liner_toolpath_mm(piece, "edge_width_top", 0, 1.8, 5, 0, 20)
+    assert min(point[0] for point in ends_inside) == pytest.approx(-2.5)
+    assert max(point[0] for point in ends_inside) == pytest.approx(197.5)
+    assert compare_liner_path(ends_inside, piece, "edge_width_top", 0, 1.8, 5, 0, 20).ok
+
+    for shaped in (_clipped("Top Right"), _l_piece("Top Right")):
+        generated = liner_toolpath_mm(shaped, "edge_break", 1, 0.8, 4)
+        assert compare_liner_path(generated, shaped, "edge_break", 1, 0.8, 4).ok
+        internal = liner_toolpath_mm(shaped, "edge_width_bottom", 0, 1.8, 5, 4, 12)
+        assert compare_liner_path(internal, shaped, "edge_width_bottom", 0, 1.8, 5, 4, 12).ok
+        assert _straight_span(internal, 0) > 10

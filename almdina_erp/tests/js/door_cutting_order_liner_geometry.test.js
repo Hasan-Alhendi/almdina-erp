@@ -249,11 +249,98 @@ assert.equal(missingBit.error, "cutter_diameter_invalid");
 const blocked = geometry.extensionConflict(toolpath, 5, {
     minX: 0, minY: 0, maxX: 400, maxY: 600,
 }, []);
-assert.equal(blocked, "liner_extension_off_board");
+assert.equal(blocked, "");
 const clear = geometry.extensionConflict(toolpath, 5, {
     minX: -10, minY: -10, maxX: 410, maxY: 610,
 }, []);
 assert.equal(clear, "");
+
+function placedLiner(fields) {
+    return Object.assign({
+        piece_type: "Regular",
+        width_cm: 40,
+        length_cm: 50,
+        extra_liner: 1,
+        liner_reference_side: "edge_width_top",
+        liner_offset_cm: 0,
+        liner_width_cm: 1.8,
+        kerf_mm: 5,
+        x: 0,
+        y: 0,
+    }, fields);
+}
+function straightSpan(path, axis) {
+    let best = 0;
+    let run = [path[0]];
+    for (let index = 1; index < path.length; index += 1) {
+        const same = Math.abs(path[index][axis] - path[index - 1][axis]) <= 0.05;
+        if (same) {
+            run.push(path[index]);
+            continue;
+        }
+        if (run.length >= 2) best = Math.max(best, Math.abs(run[run.length - 1][1 - axis] - run[0][1 - axis]));
+        run = [path[index]];
+    }
+    if (run.length >= 2) best = Math.max(best, Math.abs(run[run.length - 1][1 - axis] - run[0][1 - axis]));
+    return best;
+}
+const boardEdge = geometry.syntheticOverlay(placedLiner({ width_cm: 122, length_cm: 50 }));
+assert.equal(boardEdge.error, undefined);
+const boardXs = boardEdge.geometry.path.map(point => point[0]);
+assert.equal(Math.round(Math.min(...boardXs) * 10) / 10, -2.5);
+assert.equal(Math.round(Math.max(...boardXs) * 10) / 10, 1222.5);
+const openBoard = { minX: 0, minY: 0, maxX: 1220, maxY: 2440 };
+assert.equal(geometry.extensionConflict(boardEdge.geometry.path, 5, openBoard, []), "");
+const betweenDoors = geometry.syntheticOverlay(placedLiner({ x: 20, width_cm: 40 }));
+const leftNeighbor = geometry.placedPolygonMm(placedLiner({ x: 0, width_cm: 19.5, length_cm: 50 }));
+const rightNeighbor = geometry.placedPolygonMm(placedLiner({ x: 60.5, width_cm: 30, length_cm: 50 }));
+assert.equal(geometry.extensionConflict(betweenDoors.geometry.path, 5, openBoard, [
+    { polygon: leftNeighbor },
+    { polygon: rightNeighbor },
+]), "");
+const crowded = geometry.placedPolygonMm(placedLiner({ x: 40.1, width_cm: 30, length_cm: 50 }));
+assert.equal(geometry.extensionConflict(betweenDoors.geometry.path, 5, openBoard, [{ polygon: crowded }]), "liner_extension_hits_piece");
+const partial = geometry.syntheticOverlay(placedLiner({
+    liner_start_cm: 5,
+    liner_length_cm: 20,
+}));
+assert.equal(partial.error, undefined);
+assert.ok(straightSpan(partial.geometry.path, 0) > 10);
+const startsInside = geometry.syntheticOverlay(placedLiner({ liner_start_cm: 5 }));
+assert.equal(Math.round(Math.min(...startsInside.geometry.path.map(point => point[0])) * 10) / 10, 52.5);
+assert.equal(Math.round(Math.max(...startsInside.geometry.path.map(point => point[0])) * 10) / 10, 402.5);
+assert.ok(straightSpan(startsInside.geometry.path, 0) > 10);
+const endsInside = geometry.syntheticOverlay(placedLiner({ liner_length_cm: 20 }));
+assert.equal(Math.round(Math.min(...endsInside.geometry.path.map(point => point[0])) * 10) / 10, -2.5);
+assert.equal(Math.round(Math.max(...endsInside.geometry.path.map(point => point[0])) * 10) / 10, 197.5);
+["Clipped Corner", "L-Shaped Corner"].forEach(pieceType => {
+    const shaped = geometry.syntheticOverlay(placedLiner({
+        piece_type: pieceType,
+        width_cm: 100,
+        length_cm: 80,
+        clipped_corner_position: "Top Right",
+        clipped_corner_width_cm: 20,
+        clipped_corner_length_cm: 30,
+        liner_reference_side: "edge_break",
+        liner_offset_cm: 1,
+        liner_width_cm: 0.8,
+        kerf_mm: 4,
+    }));
+    assert.equal(shaped.error, undefined);
+    const internal = geometry.syntheticOverlay(placedLiner({
+        piece_type: pieceType,
+        width_cm: 100,
+        length_cm: 80,
+        clipped_corner_position: "Top Right",
+        clipped_corner_width_cm: 20,
+        clipped_corner_length_cm: 30,
+        liner_reference_side: "edge_width_bottom",
+        liner_start_cm: 4,
+        liner_length_cm: 12,
+    }));
+    assert.equal(internal.error, undefined);
+    assert.ok(straightSpan(internal.geometry.path, 0) > 10);
+});
 assert.deepEqual(
     copy(geometry.contourNotchCm({
         pieceType: "L-Shaped Corner",
@@ -276,6 +363,54 @@ assert.deepEqual(
         innerMm: null,
     })),
     { cutWidthCm: 8, cutLengthCm: 16 }
+);
+for (const position of ["Top Right", "Top Left", "Bottom Right", "Bottom Left"]) {
+    assert.deepEqual(
+        copy(geometry.contourNotchCm({
+            pieceType: "L-Shaped Corner",
+            notchWidthCm: 20,
+            notchLengthCm: 30,
+            position,
+            sideThicknessMm: {},
+            edgeBreak: true,
+            innerMm: 1,
+        })),
+        { cutWidthCm: 20.1, cutLengthCm: 30.1 }
+    );
+}
+assert.deepEqual(
+    copy(geometry.contourNotchCm({
+        pieceType: "L-Shaped Corner",
+        notchWidthCm: 20,
+        notchLengthCm: 30,
+        position: "Top Right",
+        sideThicknessMm: { long_right: 1 },
+        edgeBreak: true,
+        innerMm: 1,
+    })),
+    { cutWidthCm: 20, cutLengthCm: 30.1 }
+);
+assert.deepEqual(
+    copy(geometry.contourNotchCm({
+        pieceType: "L-Shaped Corner",
+        notchWidthCm: 20,
+        notchLengthCm: 30,
+        position: "Top Right",
+        edgeBreak: false,
+        innerMm: 0,
+    })),
+    { cutWidthCm: 20, cutLengthCm: 30 }
+);
+assert.deepEqual(
+    copy(geometry.contourNotchCm({
+        pieceType: "Clipped Corner",
+        notchWidthCm: 54,
+        notchLengthCm: 23,
+        position: "Top Right",
+        edgeBreak: true,
+        innerMm: 1,
+    })),
+    { cutWidthCm: 54, cutLengthCm: 23 }
 );
 
 async function persistenceChecks() {

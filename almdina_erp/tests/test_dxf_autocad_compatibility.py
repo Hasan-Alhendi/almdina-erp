@@ -78,7 +78,8 @@ def test_autocad_export_button_is_distinct_from_legacy_exporter():
 def test_export_keeps_required_cut_and_preview_layers():
     src = _source(SECURE_DXF)
     assert 'rectangle("SHEET_OUTLINE"' in src
-    assert 'rectangle("CUT_PATH"' in src
+    assert 'line(SAW_CENTER_LAYER' in src
+    assert 'closedPath(FINISHED_GEOMETRY_LAYER' in src
     assert 'const fullWidth = num(sheet.full_width_cm || plan.full_board_width_cm) * 10' in src
     assert 'const pieceWidth = num(piece.w) * 10' in src
     assert 'pair(0, "LINE")' in src
@@ -149,7 +150,7 @@ def test_dxf_import_service_is_wired_for_round_trip():
 
 def test_secure_export_declares_exact_layer_table_count():
     src = _source(SECURE_DXF)
-    assert "const DXF_LAYER_COUNT = 8" in src
+    assert "const DXF_LAYER_COUNT = 9" in src
     assert 'pair(2, "LAYER") + pair(70, DXF_LAYER_COUNT)' in src
 
 
@@ -305,25 +306,47 @@ def test_exported_linear_dxf_survives_autocad_normalization(tmp_path):
     source_types = [entity.dxftype() for entity in source_entities]
     assert "LINE" in source_types
     assert "TEXT" in source_types
-    source_paths = [entity for entity in source_entities if entity.dxftype() == "LWPOLYLINE"]
+    source_paths = [
+        entity for entity in source_entities
+        if entity.dxftype() == "LWPOLYLINE" and entity.dxf.layer == "Liner"
+    ]
     assert len(source_paths) == 1
-    assert str(source_paths[0].dxf.layer) == "Liner"
     assert source_paths[0].closed is False
     source_points = [(float(point[0]), float(point[1])) for point in source_paths[0].get_points("xy")]
     assert len(source_points) == 8
-    assert {entity.dxf.layer for entity in source_entities if entity.dxftype() == "LINE"} >= {"SHEET_OUTLINE", "CUT_PATH"}
+    source_regions = [
+        entity for entity in source_entities
+        if entity.dxftype() == "LWPOLYLINE" and entity.dxf.layer == "GEOMETRY"
+    ]
+    assert source_regions and all(entity.closed for entity in source_regions)
+    assert {entity.dxf.layer for entity in source_entities if entity.dxftype() == "LINE"} >= {
+        "SHEET_OUTLINE",
+        "CUT_PATH",
+        "GEOMETRY",
+    }
 
     normalized = rebuild_autocad_dxf(raw)
     result = ezdxf.read(io.StringIO(normalized.decode("utf-8")))
     assert result.dxfversion == "AC1024"
     result_entities = list(result.modelspace())
     assert len(result_entities) == len(source_entities)
-    result_paths = [entity for entity in result_entities if entity.dxftype() == "LWPOLYLINE"]
+    result_paths = [
+        entity for entity in result_entities
+        if entity.dxftype() == "LWPOLYLINE" and entity.dxf.layer == "Liner"
+    ]
     assert len(result_paths) == 1
-    assert str(result_paths[0].dxf.layer) == "Liner"
     assert result_paths[0].closed is False
     assert [(float(point[0]), float(point[1])) for point in result_paths[0].get_points("xy")] == source_points
-    assert {entity.dxf.layer for entity in result_entities if entity.dxftype() == "LINE"} >= {"SHEET_OUTLINE", "CUT_PATH"}
+    result_regions = [
+        entity for entity in result_entities
+        if entity.dxftype() == "LWPOLYLINE" and entity.dxf.layer == "GEOMETRY"
+    ]
+    assert len(result_regions) == len(source_regions)
+    assert {entity.dxf.layer for entity in result_entities if entity.dxftype() == "LINE"} >= {
+        "SHEET_OUTLINE",
+        "CUT_PATH",
+        "GEOMETRY",
+    }
     assert any(entity.dxftype() == "TEXT" for entity in result_entities)
     assert result.audit().has_errors is False
 

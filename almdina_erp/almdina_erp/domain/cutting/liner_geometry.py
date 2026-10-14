@@ -743,28 +743,27 @@ def liner_centerline_mm(
     return _offset_polyline(clipped, distance, sign)
 
 
-def liner_toolpath_mm(
+def _cutter_passes(
     piece: LinerPiece,
     side: str,
     offset_cm: float,
     width_cm: float,
     cutter_diameter_mm: float,
-    start_cm: float | None = None,
-    length_cm: float | None = None,
-) -> list[Point]:
-    """One open zigzag of cutter centers for the ordered liner span.
+    start_cm: float | None,
+    length_cm: float | None,
+) -> tuple[list[list[Point]], bool, bool]:
+    """Parallel cutter passes for one liner span.
 
-    A full edge still extends each outer center by the bit radius past the cut.
-    An end that stops inside the door is flat: every pass stops one radius
-    short of that limit, so the disks share a straight tangent and do not cut
-    past it. A single pass cannot form that flat end.
+    An end that reaches the finished contour is closed later by ``CUT_PATH``:
+    every finished edge, including one lying on the physical board, gets a saw
+    center. The sheet outline is not that closer. An end that stops inside the
+    span is not on a sawn edge, so the liner path has to close it itself.
     """
 
     error = validation_code(piece, side, offset_cm, width_cm)
     if error:
         raise LinerGeometryError(error)
-    width_mm = _mm(width_cm)
-    centers = cutter_center_offsets_mm(width_mm, float(cutter_diameter_mm))
+    centers = cutter_center_offsets_mm(_mm(width_cm), float(cutter_diameter_mm))
     polygon = piece_polygon_mm(piece)
     reference, clipped, _start, _end, boundary_start, boundary_end = _prepared_reference(
         piece, side, start_cm, length_cm
@@ -778,7 +777,7 @@ def liner_toolpath_mm(
     trim_end = 0.0 if boundary_end else radius
     if _polyline_length(clipped) + GEOMETRY_TOLERANCE_MM < trim_start + trim_end:
         raise LinerGeometryError("liner_flat_end_unmachinable")
-    lines = []
+    lines: list[list[Point]] = []
     for center in centers:
         line = _offset_polyline(clipped, _mm(offset_cm) + center, sign)
         if trim_start:
@@ -796,12 +795,101 @@ def liner_toolpath_mm(
                 extend_end=boundary_end,
             )
         lines.append(line)
+    return lines, boundary_start, boundary_end
+
+
+def _collinear_point(start: Point, middle: Point, end: Point) -> bool:
+    area = abs(
+        (middle[0] - start[0]) * (end[1] - start[1])
+        - (middle[1] - start[1]) * (end[0] - start[0])
+    )
+    return area <= GEOMETRY_TOLERANCE_MM * max(math.dist(start, end), 1.0)
+
+
+def _chain_present(path: Sequence[Point], points: Sequence[Point]) -> bool:
+    if len(points) < 2:
+        return True
+    for start_index, vertex in enumerate(path):
+        if math.dist(vertex, points[0]) > GEOMETRY_TOLERANCE_MM:
+            continue
+        cursor = 1
+        for later in path[start_index + 1 :]:
+            if math.dist(later, points[cursor]) <= GEOMETRY_TOLERANCE_MM:
+                cursor += 1
+                if cursor == len(points):
+                    return True
+                continue
+            if not _collinear_point(points[cursor - 1], later, points[cursor]):
+                break
+    return False
+
+
+def _span_present(path: Sequence[Point], endpoints: Sequence[Point]) -> bool:
+    return _chain_present(path, endpoints) or _chain_present(path, list(reversed(endpoints)))
+
+
+def _prepend_closure(path: list[Point], endpoints: Sequence[Point]) -> list[Point]:
+    if _span_present(path, endpoints):
+        return path
+    ordered = list(endpoints)
+    if math.dist(ordered[-1], path[0]) > GEOMETRY_TOLERANCE_MM:
+        ordered.reverse()
+    if math.dist(ordered[-1], path[0]) > GEOMETRY_TOLERANCE_MM:
+        raise LinerGeometryError("liner_extension_unsafe")
+    return ordered[:-1] + path
+
+
+def _append_closure(path: list[Point], endpoints: Sequence[Point], return_pass: Sequence[Point]) -> list[Point]:
+    if _span_present(path, endpoints):
+        return path
+    points = list(path)
+    if min(math.dist(points[-1], endpoints[0]), math.dist(points[-1], endpoints[-1])) > GEOMETRY_TOLERANCE_MM:
+        retrace = list(return_pass)
+        if math.dist(points[-1], retrace[0]) > GEOMETRY_TOLERANCE_MM:
+            retrace.reverse()
+        if math.dist(points[-1], retrace[0]) > GEOMETRY_TOLERANCE_MM:
+            raise LinerGeometryError("liner_extension_unsafe")
+        points.extend(retrace[1:])
+    ordered = list(endpoints)
+    if math.dist(points[-1], ordered[0]) > GEOMETRY_TOLERANCE_MM:
+        ordered.reverse()
+    if math.dist(points[-1], ordered[0]) > GEOMETRY_TOLERANCE_MM:
+        raise LinerGeometryError("liner_extension_unsafe")
+    points.extend(ordered[1:])
+    return points
+
+
+def liner_toolpath_mm(
+    piece: LinerPiece,
+    side: str,
+    offset_cm: float,
+    width_cm: float,
+    cutter_diameter_mm: float,
+    start_cm: float | None = None,
+    length_cm: float | None = None,
+) -> list[Point]:
+    """Parallel cutter passes, with a straight close only where the saw does not close the end.
+
+    A contour end extends by the bit radius into the saw zone. ``CUT_PATH`` on
+    that finished edge closes the liner, even when the edge is the board edge
+    and the cutter leaves the sheet. An internal end stops one radius short of
+    its limit and the path travels straight across that line. The sheet outline
+    never counts as the closer.
+    """
+
+    lines, boundary_start, boundary_end = _cutter_passes(
+        piece, side, offset_cm, width_cm, cutter_diameter_mm, start_cm, length_cm
+    )
     path: list[Point] = []
     for index, line in enumerate(lines):
         sequence = line if index % 2 == 0 else list(reversed(line))
         if path and math.dist(path[-1], sequence[0]) <= 1e-6:
             sequence = sequence[1:]
         path.extend(sequence)
+    if not boundary_start:
+        path = _prepend_closure(path, [line[0] for line in lines])
+    if not boundary_end:
+        path = _append_closure(path, [line[-1] for line in lines], lines[-1])
     return path
 
 
@@ -851,6 +939,8 @@ def _extend_centerline(
     *,
     extend_start: bool = True,
     extend_end: bool = True,
+    start_extension: float | None = None,
+    end_extension: float | None = None,
 ) -> list[Point]:
     points = list(polyline)
     if len(points) < 2:
@@ -872,9 +962,14 @@ def _extend_centerline(
             hit = _ray_exit(origin, direction, polygon)
             if hit is None:
                 raise LinerGeometryError("liner_extension_unsafe")
+        amount = extension
+        if index == 0 and start_extension is not None:
+            amount = start_extension
+        if index != 0 and end_extension is not None:
+            amount = end_extension
         points[index] = (
-            hit[0] + direction[0] * extension,
-            hit[1] + direction[1] * extension,
+            hit[0] + direction[0] * amount,
+            hit[1] + direction[1] * amount,
         )
     return points
 
@@ -889,23 +984,25 @@ def _path_distance(point: Point, path: Sequence[Point]) -> float:
 
 
 def _sample_width(reference: Sequence[Point], polygon: Sequence[Point], distance: float) -> list[Point]:
+    """Samples on the mitered offset, which is the band the cutter actually follows.
+
+    A per-segment normal near a bend lands outside that band, in the wedge the
+    miter cuts off. Those points are not unmilled liner material.
+    """
+
     sign = _inward_sign(reference, polygon)
+    curve = _offset_polyline(reference, distance, sign)
     samples: list[Point] = []
-    for start, end in zip(reference, reference[1:]):
+    for start, end in zip(curve, curve[1:]):
         length = math.dist(start, end)
         if length <= GEOMETRY_TOLERANCE_MM:
             continue
         steps = max(2, int(length // 40.0))
         for step in range(1, steps):
             ratio = step / steps
-            anchor = (
+            samples.append((
                 start[0] + (end[0] - start[0]) * ratio,
                 start[1] + (end[1] - start[1]) * ratio,
-            )
-            normal = _left_normal(start, end)
-            samples.append((
-                anchor[0] + sign * normal[0] * distance,
-                anchor[1] + sign * normal[1] * distance,
             ))
     return samples
 
@@ -943,7 +1040,13 @@ def _measure_toolpath(
 ) -> LinerMeasurement:
     try:
         expected = liner_toolpath_mm(
-            piece, side, offset_cm, width_cm, cutter_diameter_mm, start_cm, length_cm
+            piece,
+            side,
+            offset_cm,
+            width_cm,
+            cutter_diameter_mm,
+            start_cm,
+            length_cm,
         )
         centers = cutter_center_offsets_mm(_mm(width_cm), cutter_diameter_mm)
         reference, clipped, start_mm, end_mm, boundary_start, boundary_end = _prepared_reference(
@@ -1007,6 +1110,13 @@ def _measure_toolpath(
             "tool_overcut",
             side,
         )
+    passes, _closed_start, _closed_end = _cutter_passes(
+        piece, side, offset_cm, width_cm, cutter_diameter_mm, start_cm, length_cm
+    )
+    if not boundary_start and not _span_present(path, [line[0] for line in passes]):
+        return LinerMeasurement(False, LINER_SHAPE_MISMATCH, "start", side, "", "end_not_closed", side)
+    if not boundary_end and not _span_present(path, [line[-1] for line in passes]):
+        return LinerMeasurement(False, LINER_SHAPE_MISMATCH, "length", side, "", "end_not_closed", side)
     end_short = any(
         _path_distance(point, path) > GEOMETRY_TOLERANCE_MM
         for point in (expected[0], expected[-1])

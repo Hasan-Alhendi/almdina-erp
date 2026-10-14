@@ -404,7 +404,6 @@
     const LINER_TOOLPATH_MESSAGES = Object.freeze({
         cutter_diameter_invalid: "حدّد سماكة الشفرة أكبر من صفر لمسارات اللاينر",
         liner_narrower_than_cutter: "عرض اللاينر أصغر من سماكة الشفرة",
-        liner_extension_off_board: "امتداد اللاينر يخرج خارج اللوح",
         liner_extension_hits_piece: "امتداد اللاينر يتداخل مع قطعة أخرى",
         liner_extension_unsafe: "تعذر تمديد مسار اللاينر بأمان",
         strip_outside: "شريط اللاينر يخرج خارج الدرفة",
@@ -435,18 +434,18 @@
         const kept = overlays.filter(overlay => !(overlay && overlay.geometry && overlay.geometry.toolpath));
         if (!liner || typeof liner.syntheticOverlay !== "function" || !sheet || !frame) return kept;
         if (kept.some(item => item && item.error)) return kept;
-        const tool = liner.syntheticOverlay(piece);
-        if (!tool) return kept;
-        if (tool.error) {
-            return kept.concat({ kind: "liner", layer: "Liner", synthetic: true, error: tool.error });
-        }
-        if (typeof liner.extensionConflict !== "function" || !tool.geometry) return kept;
         const board = {
             minX: -num(frame.insetX) * 10,
             minY: -num(frame.insetY) * 10,
             maxX: (num(frame.drawW) - num(frame.insetX)) * 10,
             maxY: (num(frame.drawH) - num(frame.insetY)) * 10,
         };
+        const tool = liner.syntheticOverlay(Object.assign({}, piece, { board }));
+        if (!tool) return kept;
+        if (tool.error) {
+            return kept.concat({ kind: "liner", layer: "Liner", synthetic: true, error: tool.error });
+        }
+        if (typeof liner.extensionConflict !== "function" || !tool.geometry) return kept;
         const obstacles = (sheet.pieces || []).filter(other => !samePlacedPiece(other, piece)).map(other => {
             const polygon = typeof liner.placedPolygonMm === "function" ? liner.placedPolygonMm(other) : [];
             if (polygon.length >= 3) return { polygon };
@@ -746,7 +745,8 @@
                 if (!geometry || typeof geometry.resolve !== "function") {
                     throw new Error("Canonical cutting-plan piece geometry is unavailable");
                 }
-                const geometryModel = geometry.resolve(piece);
+                const manufacturingPiece = pieceWithLinerSpec(frm, piece);
+                const geometryModel = geometry.resolve(manufacturingPiece);
                 const placement = geometryModel.placement;
                 const left = (num(placement.xCm) / frame.usableW) * 100;
                 const top = (num(placement.yCm) / frame.usableH) * 100;
@@ -768,12 +768,12 @@
                     : special_piece_style;
                 const clipId = `dco-clip-${sheet.sheet_no || 0}-${piece.id || piece.label || 0}-${geometryModel.geometryIdentity}`
                     .replace(/[^a-zA-Z0-9_-]/g, "-");
-                const edgeLines = render_piece_edge_lines(piece, geometryModel, clipId);
+                const edgeLines = render_piece_edge_lines(manufacturingPiece, geometryModel, clipId);
 
                 html += `
                     <div class="dco-piece ${piece.piece_type === "Special" ? "dco-special-raw-piece" : ""} ${exactSpecial ? "dco-special-exact-piece" : ""} ${clipped ? "dco-clipped-corner-piece" : ""} ${shaped ? "dco-vector-piece" : ""}" data-piece-type="${escape_html(piece.piece_type || "Regular")}" data-geometry-source="${escape_html(geometryModel.source)}" data-geometry-id="${escape_html(geometryModel.geometryIdentity)}" style="position:absolute;left:${left}%;top:${top}%;width:${width}%;height:${height}%;${pieceStyle}color:#111;overflow:visible;padding:2px;font-size:10px;line-height:1.2;text-align:center;box-sizing:border-box;display:flex;align-items:center;justify-content:center;">
                         ${shapeOutline}
-                        ${render_piece_overlays(frm, piece, geometryModel, sheet, frame)}
+                        ${render_piece_overlays(frm, manufacturingPiece, geometryModel, sheet, frame)}
                         ${edgeLines}
                         ${render_piece_addon_marks(frm, piece)}
                         ${render_piece_label(piece, geometryModel)}
