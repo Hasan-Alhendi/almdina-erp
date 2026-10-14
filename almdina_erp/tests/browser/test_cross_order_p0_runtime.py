@@ -3,6 +3,7 @@
 import json
 import os
 from pathlib import Path
+from urllib.parse import parse_qs
 
 from playwright.sync_api import sync_playwright
 
@@ -88,7 +89,7 @@ def test_cross_order_desk_runtime():
             _login(page, fixture)
 
             def route(name):
-                page.evaluate("name => frappe.set_route('Form', 'Door Cutting Order', name)", name)
+                page.evaluate("name => { frappe.set_route('Form', 'Door Cutting Order', name); }", name)
                 try:
                     page.wait_for_function("name => window.cur_frm?.doc?.name === name", arg=name, timeout=45000)
                 except Exception:
@@ -165,7 +166,22 @@ def test_cross_order_desk_runtime():
 
                 def capture(request):
                     if "savedocs" in request.url:
-                        payloads.append({"url": request.url, "body": request.post_data})
+                        raw = request.post_data or ""
+                        try:
+                            values = json.loads(raw) if raw.startswith("{") else {
+                                key: entries[0] for key, entries in parse_qs(raw).items()
+                            }
+                            doc = values.get("doc")
+                            doc = json.loads(doc) if isinstance(doc, str) else doc
+                            parsed = {"action": values.get("action"),
+                                      "name": doc.get("name"),
+                                      "board": doc.get("board_description"),
+                                      "pieces": [{"name": row.get("name"),
+                                                  "width_cm": row.get("width_cm")}
+                                                 for row in doc.get("pieces", [])]}
+                        except (ValueError, AttributeError, TypeError) as exc:
+                            parsed = {"parse_error": repr(exc)}
+                        payloads.append({"url": request.url, "body": raw, "parsed": parsed})
 
                 page.on("request", capture)
                 try:
@@ -186,7 +202,14 @@ def test_cross_order_desk_runtime():
                 }""", b["name"])
                 return {"method": "controlled A cost store projected on B via production presenter",
                         "projected": projected, "save": save_result,
-                        "native_savedocs_requests": payloads, "frappe_client_get": db}
+                        "native_savedocs_requests": payloads, "frappe_client_get": db,
+                        "classification_at_browser": (
+                            "PAYLOAD" if any(row["parsed"].get("name") == b["name"]
+                                             and row["parsed"].get("board") == a["board"]
+                                             for row in payloads)
+                            else "MODEL" if projected["model"] == a["board"]
+                            else "UI_ONLY" if projected["input"] == a["board"]
+                            else "NOT_REPRODUCED")}
 
             stage("save", save_probe)
             # Frappe navigation makes a fresh B visit without reloading the browser.
@@ -256,3 +279,112 @@ def test_cross_order_desk_runtime():
             browser.close()
     assert all(evidence["stages"].get(gate, {}).get("status") == "OBSERVED"
                for gate in ("lifecycle", "save", "print")), evidence
+
+
+def test_saved_server_plan_print_runtime():
+    """Separate real persisted Plan response from controlled cross-order injection."""
+    fixture = json.loads(Path(os.environ["P0_FIXTURE_PATH"]).read_text())
+    evidence_dir = Path(os.environ["P0_EVIDENCE_DIR"])
+    saved_plan = json.loads((evidence_dir / "saved-plan-fixture.json").read_text())
+    a, b = fixture["orders"]["A"], fixture["orders"]["B"]
+    evidence = {"saved_plan": {key: value for key, value in saved_plan.items()
+                               if key != "first_piece"}, "orders": fixture["orders"]}
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(locale="en-US")
+            _login(page, fixture)
+            held = []
+
+            def delay_actual_a_plan(route):
+                request = route.request
+                if a["name"] in (request.url + (request.post_data or "")):
+                    held.append((route, None))
+                    response = route.fetch()
+                    held[-1] = (route, response)
+                else:
+                    route.continue_()
+
+            page.route("**/api/method/*get_plan_workspace_snapshot*", delay_actual_a_plan)
+            with page.expect_request(lambda request: "get_plan_workspace_snapshot" in request.url
+                                     and a["name"] in (request.url + (request.post_data or "")),
+                                     timeout=45000):
+                page.evaluate("name => { frappe.set_route('Form','Door Cutting Order',name); }", a["name"])
+            page.wait_for_function("name => cur_frm?.doc?.name === name", arg=a["name"], timeout=45000)
+            a_identity = page.evaluate("""() => ({name:cur_frm.doc.name,
+                identity:AlmdinaDocumentContext.formIdentity(cur_frm),
+                generation:AlmdinaDocumentContext.capture(cur_frm).generation,
+                modified:cur_frm.doc.modified})""")
+            page.evaluate("window.__p0FrmA=cur_frm")
+            assert held and held[0][1], "No real A Plan API response was intercepted"
+            payload = held[0][1].json().get("message")
+            assert payload and payload.get("order_name") == a["name"], payload
+            row = payload.get("plans", {}).get("system_draft") or {}
+            assert row.get("name") == saved_plan["name"] and row.get("revision") == saved_plan["revision"], row
+            evidence["actual_api"] = {"order_name": payload["order_name"],
+                                      "plan_name": row["name"], "revision": row["revision"],
+                                      "snapshot_json": row.get("snapshot_json")}
+
+            page.evaluate("name => { frappe.set_route('Form','Door Cutting Order',name); }", b["name"])
+            page.wait_for_function("name => cur_frm?.doc?.name === name", arg=b["name"], timeout=45000)
+            before_release = page.evaluate("""() => ({sameFrm:cur_frm===window.__p0FrmA,
+                name:cur_frm.doc.name,board:cur_frm.doc.board_description,
+                state:AlmdinaPlanWorkspaceState.snapshot(cur_frm)})""")
+            held[0][0].fulfill(response=held[0][1])
+            page.unroute("**/api/method/*get_plan_workspace_snapshot*", delay_actual_a_plan)
+            page.wait_for_function("() => AlmdinaPlanWorkspaceState.snapshot(cur_frm)?.status !== 'loading'",
+                                   timeout=10000)
+            evidence["natural_late_response"] = {"before": before_release,
+                "after": page.evaluate("""() => ({name:cur_frm.doc.name,
+                    board:cur_frm.doc.board_description,
+                    state:AlmdinaPlanWorkspaceState.snapshot(cur_frm)})""")}
+
+            # Controlled identity-defense probe, using the unmodified response
+            # returned by the real server for a saved A plan.
+            evidence["controlled_projection"] = page.evaluate("""args => {
+                const frm=cur_frm, store=AlmdinaPlanWorkspaceState.storeFor(frm);
+                store.reset(args.identity);
+                const requestId=store.beginLoad(args.identity);
+                const accepted=store.resolveLoad(args.identity,requestId,args.payload);
+                const projected=AlmdinaPlanWorkspacePresenterAdapter.project(frm);
+                return {accepted,projected,name:frm.doc.name,
+                    board:frm.doc.board_description,
+                    plan:AlmdinaPlanWorkspaceState.planForTab(frm,'System')?.name,
+                    modelPlan:frm.doc.system_plan_json};
+            }""", {"identity": a_identity["identity"], "payload": payload})
+            page.evaluate("""() => {
+                window.__p0PrintWrites=[];
+                window.open=()=>({document:{open(){},write(html){__p0PrintWrites.push(html)},close(){}},close(){}});
+                const oldIdentity=AlmdinaFactoryPrintIdentity;
+                window.AlmdinaFactoryPrintIdentity={...oldIdentity,
+                    get:()=>new Promise(resolve=>window.__p0ResolveIdentity=resolve)};
+                const renderer=AlmdinaCuttingPlanRender;
+                const original=renderer.print;
+                renderer.print=(frm,plan)=>{
+                    window.__p0PrintedSource={dco:frm.doc.name,
+                        planName:AlmdinaPlanWorkspaceState.planForTab(frm,'System')?.name,
+                        revision:AlmdinaPlanWorkspaceState.planForTab(frm,'System')?.revision};
+                    window.__p0PrintResult=original(frm,plan);
+                    return window.__p0PrintResult;
+                };
+                AlmdinaPlanTabsUX.printActivePlan(cur_frm);
+            }""")
+            page.wait_for_function("!!window.__p0ResolveIdentity", timeout=10000)
+            evidence["print_start"] = page.evaluate("window.__p0PrintedSource")
+            page.evaluate("name => { frappe.set_route('Form','Door Cutting Order',name); }", a["name"])
+            page.wait_for_function("name => cur_frm?.doc?.name === name", arg=a["name"], timeout=45000)
+            page.evaluate("window.__p0ResolveIdentity({})")
+            page.wait_for_function("window.__p0PrintWrites.length >= 2", timeout=10000)
+            html = page.evaluate("window.__p0PrintWrites.at(-1)")
+            (evidence_dir / "saved-plan-final-print.html").write_text(html, encoding="utf-8")
+            evidence["print_result"] = page.evaluate("async () => await window.__p0PrintResult")
+            evidence["html_checks"] = {"title_b": f"خطة قص - {b['name']}" in html,
+                "title_a": f"خطة قص - {a['name']}" in html,
+                "board_a": a["board"] in html, "board_b": b["board"] in html,
+                "plan_name_rendered": saved_plan["name"] in html,
+                "revision_rendered": str(saved_plan["revision"]) in html}
+            evidence["final_html_file"] = "saved-plan-final-print.html"
+        finally:
+            (evidence_dir / "saved-plan-print-evidence.json").write_text(
+                json.dumps(evidence, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+            browser.close()

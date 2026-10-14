@@ -125,7 +125,7 @@ def prepare() -> dict[str, object]:
     administrator = {
         "metadata": bool(frappe.db.exists("DocType", "Door Cutting Order")),
         "has_read": bool(frappe.has_permission("Door Cutting Order", "read", user="Administrator")),
-        "can_read_route": "Door Cutting Order" in frappe.get_user("Administrator").get_can_read(),
+        "can_read_route": "Door Cutting Order" in frappe.get_user().get_can_read(),
     }
     role = frappe.get_doc({"doctype": "Role", "role_name": f"P0 Desk {suffix}",
                            "desk_access": 1}).insert(ignore_permissions=True)
@@ -153,8 +153,8 @@ def prepare() -> dict[str, object]:
     test_user = {
         "metadata": bool(frappe.db.exists("DocType", "Door Cutting Order")),
         "has_read": bool(frappe.has_permission("Door Cutting Order", "read", user=email)),
-        "can_read_route": "Door Cutting Order" in frappe.get_user(email).get_can_read(),
-        "can_read_customer": "Customer" in frappe.get_user(email).get_can_read(),
+        "can_read_route": "Door Cutting Order" in frappe.get_user().get_can_read(),
+        "can_read_customer": "Customer" in frappe.get_user().get_can_read(),
     }
     if not all(test_user.values()):
         raise AssertionError(f"Isolated user cannot enter real DCO Form: {test_user}; Administrator: {administrator}")
@@ -180,6 +180,11 @@ def cleanup() -> None:
     fixture = json.loads(Path(path).read_text(encoding="utf-8"))
     frappe.set_user("Administrator")
     for row in fixture["orders"].values():
+        for plan_name in frappe.get_all("Cutting Plan",
+                                        filters={"door_cutting_order": row["name"]},
+                                        pluck="name"):
+            frappe.delete_doc("Cutting Plan", plan_name, force=True,
+                              ignore_permissions=True)
         frappe.delete_doc("Door Cutting Order", row["name"], force=True,
                           ignore_permissions=True)
     frappe.delete_doc("Customer", fixture["customer"], force=True,
@@ -215,3 +220,30 @@ def audit_db() -> dict[str, object]:
         (Path(evidence_dir) / "database-audit.json").write_text(
             json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     return result
+
+
+def prepare_saved_plan() -> dict[str, object]:
+    """Persist a real System plan for A on this disposable site."""
+    fixture = json.loads(Path(os.environ["P0_FIXTURE_PATH"]).read_text(encoding="utf-8"))
+    frappe.set_user("Administrator")
+    from almdina_erp.almdina_erp.services.cutting_plan_command_service import (
+        recalculate_system_plan,
+    )
+
+    order = frappe.get_doc("Door Cutting Order", fixture["orders"]["A"]["name"])
+    result = recalculate_system_plan(order)
+    frappe.db.commit()
+    plan = frappe.get_doc("Cutting Plan", result["cutting_plan"])
+    snapshot = frappe.parse_json(plan.snapshot_json or "{}") or {}
+    summary = {"order_name": order.name, "name": plan.name,
+               "revision": int(plan.revision or 0),
+               "board": plan.board_description,
+               "sheet_count": len(snapshot.get("sheets") or []),
+               "first_piece": ((snapshot.get("sheets") or [{}])[0].get("pieces") or [{}])[0]}
+    if not summary["sheet_count"]:
+        raise AssertionError(f"Saved System plan has no printable sheets: {summary}")
+    directory = Path(os.environ["P0_EVIDENCE_DIR"])
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "saved-plan-fixture.json").write_text(
+        json.dumps(summary, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+    return {key: value for key, value in summary.items() if key != "first_piece"}
