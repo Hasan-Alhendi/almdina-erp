@@ -59,7 +59,8 @@ def test_order_search_includes_customer_and_explains_id_or_customer_search():
 def test_measurement_table_has_print_and_full_window_actions():
     source = text(MEASUREMENT_UX)
     assert 'printButton.className = "btn btn-default btn-sm dco-toolbar-icon-button dco-print-measurements"' in source
-    assert 'translateCopy("Open the entry table in a separate window")' in source
+    assert 'title: translateCopy("Open measurement table in a separate window")' in source
+    assert 'openButton.className = "btn btn-default btn-sm dco-toolbar-icon-button dco-open-measurements-window"' in source
     assert "function openEditableMeasurements(frm)" in source
     assert 'const EDITOR_CLASS = "dco-measurement-entry-window"' in source
     assert "window.AlmdinaOrderDocumentPrint" in source
