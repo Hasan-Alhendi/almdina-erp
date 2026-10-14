@@ -404,11 +404,16 @@ def _customer_permission_state(page: Page) -> dict[str, Any]:
         "() => {"
         " const frm = window.cur_frm;"
         " const field = frm && frm.fields_dict && frm.fields_dict.customer;"
-        " const permission = frm && frm.perm && field ? frm.perm[field.df.permlevel || 0] : null;"
+        " const level = Number(field && field.df && field.df.permlevel || 0);"
+        " const permission = frm && frm.perm && field ? frm.perm[level] : null;"
         " const fieldPermission = field && Array.isArray(field.perm)"
-        " ? field.perm[field.df.permlevel || 0] : permission;"
+        " ? field.perm[level] : permission;"
         " const doctypeCache = frappe.perm && frappe.perm.doctype_perm"
         " ? frappe.perm.doctype_perm['Door Cutting Order'] : null;"
+        " const nativePermission = doctypeCache && doctypeCache[level] || null;"
+        " const projection = frm && frm.__almdina_new_create_field_projection;"
+        " const permissionFlags = rows => Array.isArray(rows) ? rows.map(row => row ? {"
+        " read: Boolean(row.read), write: Boolean(row.write), create: Boolean(row.create)} : null) : null;"
         " const unwrap = value => value && typeof value.get === 'function'"
         " ? value.get(0) : (value && value[0]) || value || null;"
         " const wrapper = unwrap(field && field.$wrapper);"
@@ -424,27 +429,42 @@ def _customer_permission_state(page: Page) -> dict[str, Any]:
         " const style = getComputedStyle(node); wrapperPath.push({tag: node.tagName,"
         " classes: String(node.className || '').slice(0, 180), visible: visible(node),"
         " display: style.display, visibility: style.visibility}); }"
+        " const guardedFields = {};"
+        " for (const name of ['status', 'total_cost_usd', 'board_item', 'recovery_creation_token']) {"
+        " const guarded = frm.fields_dict && frm.fields_dict[name]; if (!guarded) continue;"
+        " let status = null; try { status = guarded.get_status(); } catch (_error) {}"
+        " guardedFields[name] = {hidden: Boolean(guarded.df && guarded.df.hidden),"
+        " readOnly: Boolean(guarded.read_only || (guarded.df && guarded.df.read_only)),"
+        " permlevel: Number(guarded.df && guarded.df.permlevel || 0), status}; }"
         " const route = window.frappe && typeof frappe.get_route === 'function' ? frappe.get_route() : null;"
         " const activeTab = [...document.querySelectorAll('.nav-link.active, .tab-pane.active')]"
         " .map(item => ({kind: item.matches('.tab-pane') ? 'pane' : 'tab',"
         " label: (item.getAttribute('aria-label') || item.textContent || '').trim().slice(0, 60),"
         " visible: visible(item)}));"
         " let fieldPermissionStatus = null; let fieldPermissionError = null;"
+        " let nativeFieldPermissionStatus = null; let nativeFieldPermissionError = null;"
         " let controlStatus = null; let controlStatusError = null;"
         " try { fieldPermissionStatus = frappe.perm.get_field_display_status(field.df, frm.doc, frm.perm); }"
         " catch (error) { fieldPermissionError = String(error).slice(0, 160); }"
+        " try { nativeFieldPermissionStatus = frappe.perm.get_field_display_status(field.df, frm.doc, doctypeCache); }"
+        " catch (error) { nativeFieldPermissionError = String(error).slice(0, 160); }"
         " try { controlStatus = field.get_status(); }"
         " catch (error) { controlStatusError = String(error).slice(0, 160); }"
         " return {doctype: frm && frm.doctype || null, documentName: frm && frm.doc && frm.doc.name || null,"
         " isNew: Boolean(frm && frm.is_new()), route: Array.isArray(route) ? route.join('/') : null,"
         " activeTab, permission: permission ? {read: Boolean(permission.read), write: Boolean(permission.write),"
         " create: Boolean(permission.create)} : null, fieldPermissionStatus, fieldPermissionError,"
+        " nativePermission: nativePermission ? {read: Boolean(nativePermission.read),"
+        " write: Boolean(nativePermission.write), create: Boolean(nativePermission.create)} : null,"
+        " nativePermissionRows: permissionFlags(doctypeCache), formPermissionRows: permissionFlags(frm && frm.perm),"
+        " nativeFieldPermissionStatus, nativeFieldPermissionError,"
         " fieldPermission: fieldPermission ? {read: Boolean(fieldPermission.read),"
         " write: Boolean(fieldPermission.write), create: Boolean(fieldPermission.create)} : null,"
         " doctypeCacheWrite: Boolean(doctypeCache && doctypeCache[0] && doctypeCache[0].write),"
         " formCanCreate: Boolean(frm && frm.has_perm && frm.has_perm('create')),"
         " formCanWrite: Boolean(frm && frm.has_perm && frm.has_perm('write')),"
-        " createProjectionActive: Boolean(frm && frm.__almdina_new_create_field_projection),"
+        " createProjectionActive: Boolean(projection),"
+        " projectionPermissionLevels: projection ? projection.permissionLevels : [],"
         " controlStatus, controlStatusError, dispStatus: field && field.disp_status || null,"
         " fieldType: field && field.df && field.df.fieldtype || null,"
         " hidden: field && field.df ? Boolean(field.df.hidden) : null,"
@@ -453,6 +473,7 @@ def _customer_permission_state(page: Page) -> dict[str, Any]:
         " permlevel: field && field.df ? field.df.permlevel : null,"
         " hideEmptyReadOnlyFields: frappe.boot && frappe.boot.sysdefaults"
         " ? frappe.boot.sysdefaults.hide_empty_read_only_fields : null,"
+        " guardedFields,"
         " wrapperConnected: Boolean(wrapper && wrapper.isConnected), wrapperVisible: visible(wrapper),"
         " hideControl: Boolean(wrapper && wrapper.classList.contains('hide-control')), wrapperPath,"
         " insideIntakePair: Boolean(pairRow), insideIntakeCard: Boolean(intakeCard),"
@@ -528,16 +549,37 @@ def test_real_desk_customer_field_permission_differential() -> None:
                     assert state["doctype"] == "Door Cutting Order" and state["isNew"] is True
                     assert state["permission"] is not None
                     assert state["permission"]["create"] is True
+                    assert state["nativePermission"] is not None
+                    assert state["nativePermission"]["create"] is True
                     assert state["permission"]["read"] is True
                     assert state["hidden"] is False
                     assert state["hiddenDueToDependency"] is False
                     assert state["readOnly"] is False
                     assert state["insideIntakePair"] is True
                     assert state["hasOriginalFormColumnAncestor"] is False
+                    assert set(state["guardedFields"]) == {
+                        "status",
+                        "total_cost_usd",
+                        "board_item",
+                        "recovery_creation_token",
+                    }
+                    assert state["guardedFields"]["status"]["hidden"] is True
+                    assert state["guardedFields"]["status"]["readOnly"] is True
+                    assert state["guardedFields"]["board_item"]["hidden"] is True
+                    assert state["guardedFields"]["recovery_creation_token"]["hidden"] is True
+                    assert state["guardedFields"]["recovery_creation_token"]["readOnly"] is True
+                    assert state["guardedFields"]["total_cost_usd"]["readOnly"] is True
+                    assert state["guardedFields"]["total_cost_usd"]["permlevel"] == 1
+                    assert all(
+                        field["status"] != "Write"
+                        for field in state["guardedFields"].values()
+                    )
 
                     if case_name == "create_only":
-                        assert state["permission"]["write"] is False
-                        assert state["fieldPermissionStatus"] == "Read"
+                        assert state["nativePermission"]["write"] is False
+                        assert state["permission"]["write"] is True
+                        assert state["nativeFieldPermissionStatus"] == "Read"
+                        assert state["fieldPermissionStatus"] == "Write"
                         assert state["hideEmptyReadOnlyFields"] in (1, "1", True)
                         assert state["fieldPermission"]["create"] is True
                         assert state["fieldPermission"]["write"] is True
@@ -547,6 +589,16 @@ def test_real_desk_customer_field_permission_differential() -> None:
                         assert state["formCanWrite"] is False
                         assert state["doctypeCacheWrite"] is False
                         assert state["createProjectionActive"] is True
+                        assert state["projectionPermissionLevels"] == [0]
+                        assert state["nativePermissionRows"] is not None
+                        assert state["formPermissionRows"] == [
+                            (
+                                {**row, "write": True}
+                                if row and row["create"] and not row["write"]
+                                else row
+                            )
+                            for row in state["nativePermissionRows"]
+                        ]
 
                         permission_transition = page.evaluate(
                             "() => { const frm = cur_frm;"
@@ -629,12 +681,29 @@ def test_real_desk_customer_field_permission_differential() -> None:
                             order_name,
                         )
                         assert unchanged["order_notes"] == "Create-only official save permission check"
+                        _open_new_form(
+                            page,
+                            f"{suffix}-next-document",
+                            expected_state="ready_for_entry",
+                        )
+                        next_form = _customer_permission_state(page)
+                        assert next_form["documentName"] != order_name
+                        assert next_form["isNew"] is True
+                        assert next_form["nativePermission"]["write"] is False
+                        assert next_form["permission"]["write"] is True
+                        assert next_form["formCanWrite"] is False
+                        assert next_form["doctypeCacheWrite"] is False
+                        assert next_form["createProjectionActive"] is True
                         outcomes[case_name].update({
                             "customerEnterable": True,
                             "officialSave": True,
                             "savedDocumentWriteDenied": denied_write["permissionDenied"],
                             "doctypeCacheWriteAfterSave": after_save["doctypeCacheWrite"],
                             "postSaveProjectionRemoved": not after_save["createProjectionActive"],
+                            "nextNewDocumentHasIsolatedProjection": (
+                                next_form["documentName"] != order_name
+                                and next_form["createProjectionActive"]
+                            ),
                         })
                         trace(
                             "create_only_official_save_and_existing_write_denial",
@@ -643,9 +712,14 @@ def test_real_desk_customer_field_permission_differential() -> None:
                             direct_api_write_denied=denied_write["permissionDenied"],
                             stored_value_unchanged=unchanged["order_notes"]
                             == "Create-only official save permission check",
+                            next_document_projection_isolated=(
+                                next_form["documentName"] != order_name
+                                and next_form["createProjectionActive"]
+                            ),
                         )
                     else:
                         assert state["permission"]["write"] is True
+                        assert state["nativePermission"]["write"] is True
                         assert state["fieldPermissionStatus"] == "Write"
                         assert state["controlStatus"] == "Write"
                         assert state["hideControl"] is False

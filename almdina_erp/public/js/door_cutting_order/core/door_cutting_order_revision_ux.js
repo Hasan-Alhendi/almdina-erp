@@ -63,20 +63,28 @@
     function clearNewCreateFieldProjection(frm) {
         const projection = frm && frm[NEW_CREATE_FIELD_PROJECTION];
         if (!projection) return false;
-        projection.fields.forEach(snapshot => {
-            if (snapshot.hadOwnPermission) {
-                snapshot.field.perm = snapshot.permission;
-            } else {
-                delete snapshot.field.perm;
-            }
-            if (typeof snapshot.field.refresh === "function") snapshot.field.refresh();
-        });
+        if (frm.perm === projection.projectedPermissions) {
+            frm.perm = projection.originalPermissions;
+        }
         delete frm[NEW_CREATE_FIELD_PROJECTION];
+        refreshPermissionLevels(frm, projection.permissionLevels);
         return true;
     }
 
-    // Frappe treats NEW fields with create but without write as read-only controls.
-    // Project create permission only onto these controls; server checks stay authoritative.
+    function refreshPermissionLevels(frm, permissionLevels) {
+        if (!frm || !frm.fields_dict || !Array.isArray(permissionLevels)) return;
+        Object.values(frm.fields_dict).forEach(field => {
+            const level = Number(field && field.df && field.df.permlevel || 0);
+            if (
+                permissionLevels.includes(level)
+                && typeof field.refresh === "function"
+            ) field.refresh();
+        });
+    }
+
+    // Frappe's form controls use frm.perm.write to render editable inputs, even
+    // when the user has create but no write permission. Project create-enabled
+    // levels on this NEW form only; never mutate Frappe's shared permission cache.
     function applyNewCreateFieldProjection(frm) {
         if (
             !frm
@@ -97,43 +105,32 @@
             && current.doc === frm.doc
             && current.name === frm.doc.name
             && current.version === version
-            && current.fields.every(snapshot => (
-                frm.fields_dict && frm.fields_dict[snapshot.fieldname] === snapshot.field
-            ))
+            && frm.perm === current.projectedPermissions
         ) return true;
         clearNewCreateFieldProjection(frm);
+
+        const originalPermissions = Array.isArray(frm.perm) ? frm.perm : null;
+        if (!originalPermissions) return false;
+
+        const permissionLevels = [];
+        const projectedPermissions = originalPermissions.map((level, index) => {
+            if (!level || !level.create || level.write) return level;
+            permissionLevels.push(index);
+            return { ...level, write: true };
+        });
+        if (!permissionLevels.length) return false;
 
         const projection = {
             doc: frm.doc,
             name: frm.doc.name,
             version,
-            fields: [],
+            originalPermissions,
+            projectedPermissions,
+            permissionLevels,
         };
-        ORDER_INPUT_FIELDS.forEach(fieldname => {
-            const field = frm.fields_dict && frm.fields_dict[fieldname];
-            if (!field) return;
-            const hadOwnPermission = Object.prototype.hasOwnProperty.call(field, "perm");
-            const nativePermission = Array.isArray(field.perm) ? field.perm : frm.perm;
-            const permlevel = Number(field.df && field.df.permlevel || 0);
-            const permission = Array.isArray(nativePermission)
-                ? nativePermission[permlevel]
-                : null;
-            if (permission && permission.create && !permission.write) {
-                projection.fields.push({
-                    fieldname,
-                    field,
-                    hadOwnPermission,
-                    permission: field.perm,
-                });
-                field.perm = nativePermission.map((level, index) => (
-                    index === permlevel ? { ...level, write: true } : level
-                ));
-                if (typeof field.refresh === "function") field.refresh();
-            }
-        });
-
-        if (!projection.fields.length) return false;
+        frm.perm = projectedPermissions;
         frm[NEW_CREATE_FIELD_PROJECTION] = projection;
+        refreshPermissionLevels(frm, permissionLevels);
         return true;
     }
 
