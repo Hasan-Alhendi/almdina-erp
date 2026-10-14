@@ -38,6 +38,7 @@ _CONTEXTUAL_RULES: dict[str, tuple[ContextualRule, ...]] = {
     Capability.RESUME_CANCELLED_ORDER: ("lifecycle", "document_scope"),
     Capability.EDIT_SPECIAL_PRICE: ("lifecycle", "document_scope"),
     Capability.APPROVE_SPECIAL_PRICE: ("lifecycle", "document_scope"),
+    Capability.APPROVE_FINAL_PRICE: ("lifecycle", "document_scope"),
     Capability.VIEW_COSTS: ("permlevel", "document_scope"),
     Capability.EDIT_COST_SETTINGS: ("permlevel", "document_scope"),
     Capability.VIEW_ORDERS: ("document_scope",),

@@ -84,6 +84,7 @@ Capability catalog + authorization/application policy + Frappe/document scope.
 - **Operational:** قياسات، حالة، مرحلة، assignee، geometry اللازمة للعمل، ونوع آلة القص التشغيلي على الطلب (`order_cutting_machine`: `CNC` / `مشرحة`) المعروض في تاب بيانات الطلب كتسمية وخياري اختيار في سطر واحد، وفي طباعة جدول القياسات. الإلزام واجهة فقط: الحفظ من النموذج يرفض القيمة الفارغة برسالة خطأ، بينما الخادم يقبل `null`. الطلبات السابقة تُصفَّر إلى `null` عبر patch. هذا الحقل مستقل عن `Cutting Plan.machine_type` الخاص بالمحسّن.
 - **Customer-facing sales:** ما يلزم عرض/طباعة مستند الزبون وفق capability.
 - **Internal financial:** board/cutting/edge/internal cost breakdown وغيرها من بيانات التكلفة المحمية.
+- **Final price approval (order total):** `Door Cutting Order.price_approval_status` (`Unapproved` / `Approved`) حالة مستقلة عن `status` التشغيلي وعن `customer_quote_status` وعن اعتماد خطة القص. الرابط المحمي `current_price_approval` يشير إلى سجل `Door Cutting Price Approval` (مبلغ معتمد، عملة، بصمة أساس التسعير، Active/Invalidated). المرحلة الأولى تجهّز الحقول والسجل والقدرة `approve_final_price` فقط؛ لا زر اعتماد ولا قفل تكلفة ولا إبطال تلقائي بعد.
 
 لا تخلط Internal Financial داخل payload تشغيلية عامة فقط لتسهيل الـfrontend.
 

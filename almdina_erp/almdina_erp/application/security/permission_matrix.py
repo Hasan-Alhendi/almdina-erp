@@ -78,6 +78,11 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
     Capability.EDIT_COST_SETTINGS: _presentation("Edit cost settings", "Edit the board price and cutting fee, and recalculate the cost.", "critical"),
     Capability.EDIT_SPECIAL_PRICE: _presentation("Edit approved price", "Change the price of a special door leaf after it was previously approved.", "critical"),
     Capability.APPROVE_SPECIAL_PRICE: _presentation("Approve special price", "Approve the final price of special door leaves.", "critical"),
+    Capability.APPROVE_FINAL_PRICE: _presentation(
+        "Approve final price",
+        "Approve the final order price, record the approval data, and lock cost settings.",
+        "critical",
+    ),
     Capability.PRINT_MEASUREMENTS: _presentation("Print measurements", "Print the measurements document without any prices."),
     Capability.PRINT_CUSTOMER_INVOICE: _presentation("Print customer invoice", "Print the customer's financial document without internal data.", "sensitive"),
     Capability.PRINT_INTERNAL_COST_REPORT: _presentation("Print internal cost report", "Print the confidential report that includes operating cost and profitability.", "critical"),
@@ -150,6 +155,7 @@ _COST_VIEW_ACTIONS = frozenset({
     Capability.EDIT_COST_SETTINGS,
     Capability.EDIT_SPECIAL_PRICE,
     Capability.APPROVE_SPECIAL_PRICE,
+    Capability.APPROVE_FINAL_PRICE,
     Capability.PRINT_INTERNAL_COST_REPORT,
 })
 _PLAN_VIEW_ACTIONS = frozenset({

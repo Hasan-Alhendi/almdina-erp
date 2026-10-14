@@ -27,6 +27,7 @@ class Capability:
     EDIT_COST_SETTINGS = "edit_cost_settings"
     EDIT_SPECIAL_PRICE = "edit_special_price"
     APPROVE_SPECIAL_PRICE = "approve_special_price"
+    APPROVE_FINAL_PRICE = "approve_final_price"
     PRINT_MEASUREMENTS = "print_measurements"
     PRINT_CUSTOMER_INVOICE = "print_customer_invoice"
     PRINT_INTERNAL_COST_REPORT = "print_internal_cost_report"
@@ -150,6 +151,7 @@ _CAPABILITY_DEFINITIONS = (
     CapabilityDefinition(Capability.EDIT_COST_SETTINGS, Capability.EDIT_COST_SETTINGS, CUTTING_PLAN_DOCTYPE, "costing"),
     CapabilityDefinition(Capability.EDIT_SPECIAL_PRICE, Capability.EDIT_SPECIAL_PRICE, _ORDER_DOCTYPE, "costing"),
     CapabilityDefinition(Capability.APPROVE_SPECIAL_PRICE, Capability.APPROVE_SPECIAL_PRICE, _ORDER_DOCTYPE, "costing"),
+    CapabilityDefinition(Capability.APPROVE_FINAL_PRICE, Capability.APPROVE_FINAL_PRICE, _ORDER_DOCTYPE, "costing"),
     CapabilityDefinition(Capability.PRINT_MEASUREMENTS, Capability.PRINT_MEASUREMENTS, _ORDER_DOCTYPE, "documents"),
     CapabilityDefinition(Capability.PRINT_CUSTOMER_INVOICE, Capability.PRINT_CUSTOMER_INVOICE, _ORDER_DOCTYPE, "documents"),
     CapabilityDefinition(Capability.PRINT_INTERNAL_COST_REPORT, Capability.PRINT_INTERNAL_COST_REPORT, _ORDER_DOCTYPE, "documents"),

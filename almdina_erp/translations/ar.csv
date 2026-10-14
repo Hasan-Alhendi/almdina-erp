@@ -2688,3 +2688,24 @@ Edit customers,تعديل الزبائن
 Edit the existing customer details.,تعديل بيانات الزبون الحالية.
 Delete customer,حذف زبون
 Delete a customer who is not linked to any saved orders.,حذف زبون غير مرتبط بطلبات محفوظة.
+Price approval status,حالة السعر
+Current price approval,اعتماد السعر الحالي
+Door Cutting Price Approval,اعتماد سعر القص
+Cost reference Cutting Plan,خطة التكلفة المرجعية
+Approved final amount,المبلغ النهائي المعتمد
+Approved on,وقت الاعتماد
+Pricing basis fingerprint,بصمة أساس التسعير
+Fingerprint formula version,إصدار صيغة البصمة
+Validity status,حالة صلاحية الاعتماد
+Invalidated on,وقت الإبطال
+Invalidation reason,سبب الإبطال
+Approve final price,اعتماد السعر
+"Approve the final order price, record the approval data, and lock cost settings.",اعتماد السعر النهائي للطلب، وتثبيت بيانات الاعتماد وقفل إعدادات التكلفة.
+Unapproved,غير معتمد
+Price approval status and current approval link are command-owned and cannot be changed through ordinary document save.,حالة السعر ورابط الاعتماد الحالي مملوكان للأمر المعتمد ولا يمكن تغييرهما عبر حفظ المستند العادي.
+Door Cutting Price Approval records can only be created by an authorized command.,يمكن إنشاء سجلات اعتماد سعر القص فقط عبر أمر مخوّل.
+Door Cutting Price Approval records cannot be deleted.,لا يمكن حذف سجلات اعتماد سعر القص.
+Door Cutting Price Approval records are immutable after insert.,سجلات اعتماد سعر القص غير قابلة للتعديل بعد الإنشاء.
+Only an Active price approval may transition to Invalidated.,يمكن إبطال اعتماد السعر النشط فقط.
+Invalidating a price approval cannot rewrite historical approval details.,إبطال اعتماد السعر لا يجوز أن يعيد كتابة تفاصيل الاعتماد التاريخية.
+The selected Cutting Plan belongs to another order.,خطة القص المحددة تتبع طلبًا آخر.

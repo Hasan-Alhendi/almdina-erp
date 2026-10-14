@@ -67,7 +67,9 @@ flowchart LR
 
 ### Costing & documents
 
-`view_costs`, `edit_cost_settings`, `edit_special_price`, `approve_special_price`, `print_measurements`, `print_customer_invoice`, `print_internal_cost_report`.
+`view_costs`, `edit_cost_settings`, `edit_special_price`, `approve_special_price`, `approve_final_price`, `print_measurements`, `print_customer_invoice`, `print_internal_cost_report`.
+
+`approve_final_price` يعتمد السعر النهائي لإجمالي طلب القص ويثبّت سجل اعتماد مستقل ويقفل إعدادات التكلفة لاحقًا. هي مستقلة عن اعتماد أسعار الدرف الخاصة وعن اعتماد خطة القص، ولا تُمنح لأي دور افتراضيًا. المرحلة الأولى تجهّز الحقل والقدرة والسجل فقط دون زر/endpoint اعتماد.
 
 ### Cutting plan / drawing / DXF
 
