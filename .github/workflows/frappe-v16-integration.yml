@@ -537,7 +537,7 @@ jobs:
               echo 'Progress events are appended live; Python stack dump is scheduled at 120 seconds.'
             } >> "$GITHUB_STEP_SUMMARY"
             timeout --signal=TERM --kill-after=10s 180s \
-              python -m pytest -q -s "${test_target}" 2>&1 \
+              python -m pytest -q -s "${test_targets[@]}" 2>&1 \
               | tee "$RUNNER_TEMP/desk-pytest.log"
           elif [[ -n "${test_target:-}" ]]; then
             python -m pytest -q -s "$test_target" 2>&1 \
