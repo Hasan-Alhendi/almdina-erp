@@ -5,7 +5,12 @@ import os
 from pathlib import Path
 from urllib.parse import parse_qs
 
-from playwright.sync_api import sync_playwright
+
+def browser_playwright():
+    # The general Frappe integration job discovers this module without the
+    # browser extra installed; the pinned Desk job supplies Playwright.
+    from playwright.sync_api import sync_playwright
+    return sync_playwright()
 
 
 def _login(page, fixture):
@@ -24,7 +29,7 @@ def test_desk_route_preflight():
     evidence_dir = Path(os.environ["P0_EVIDENCE_DIR"])
     evidence_dir.mkdir(parents=True, exist_ok=True)
     evidence = {"server": fixture["route_preflight"], "versions": fixture["versions"]}
-    with sync_playwright() as playwright:
+    with browser_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
             page = browser.new_page(locale="en-US")
@@ -65,7 +70,7 @@ def test_phase2a_isolated_desk_boundary():
     evidence_dir = Path(os.environ["P0_EVIDENCE_DIR"])
     a, b = fixture["orders"]["A"], fixture["orders"]["B"]
     evidence = {"kind": "controlled stale snapshot, not natural reproduction"}
-    with sync_playwright() as playwright:
+    with browser_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
             page = browser.new_page(locale="en-US")
@@ -181,7 +186,7 @@ def test_cross_order_desk_runtime():
         except Exception as exc:
             evidence["stages"][name] = {"status": "NOT_TESTED", "reason": repr(exc)}
 
-    with sync_playwright() as playwright:
+    with browser_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
             context = browser.new_context(locale="en-US", accept_downloads=False)
@@ -405,7 +410,7 @@ def test_saved_server_plan_print_runtime():
     a, b = fixture["orders"]["A"], fixture["orders"]["B"]
     evidence = {"saved_plan": {key: value for key, value in saved_plan.items()
                                if key != "first_piece"}, "orders": fixture["orders"]}
-    with sync_playwright() as playwright:
+    with browser_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
             page = browser.new_page(locale="en-US")
@@ -555,7 +560,7 @@ def test_recovery_new_saved_intersection():
         (evidence_dir / "recovery-intersection.json").write_text(
             json.dumps(evidence, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
 
-    with sync_playwright() as playwright:
+    with browser_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
             page = browser.new_page(locale="en-US")
