@@ -810,8 +810,12 @@ def test_chromium_presentation_checkpoints_direct_dco_mutations_and_reports_stat
             3, 1, 1, '{"points":[1,2]}',
         ]
         assert captured["snapshot"]["state"] == "LOCAL_SAVED"
-        assert "تم تأكيد حفظ نسخة محلية" in captured["statusText"]
-        assert "لم يُحفظ الطلب رسميًا" in captured["statusText"]
+        # This standalone Chromium fixture has no Frappe locale bundle: English
+        # message IDs are the designed fallback. Arabic catalog content is
+        # separately verified by test_locale_text_branch_gate.py.
+        assert captured["statusText"] == (
+            "A local recovery copy is saved; the order has not been officially saved on the server."
+        )
 
         official = page.evaluate(
             """async () => {
@@ -821,7 +825,7 @@ def test_chromium_presentation_checkpoints_direct_dco_mutations_and_reports_stat
             }"""
         )
         assert official["state"] == "OFFICIAL_SAVING"
-        assert "رسميًا على الخادم" in official["text"]
+        assert official["text"] == "Saving the order officially on the server…"
 
         failure = page.evaluate(
             """async () => {
@@ -865,7 +869,9 @@ def test_chromium_presentation_checkpoints_direct_dco_mutations_and_reports_stat
         assert failure["result"] == "quota_exceeded"
         assert failure["state"] == "ERROR"
         assert failure["role"] == "alert"
-        assert "تعذر حفظ نسخة الاسترداد محليًا" in failure["text"]
+        assert failure["text"] == (
+            "Could not save the local recovery copy. Keep this page open until the draft is resolved."
+        )
     finally:
         context.close()
 
@@ -1158,7 +1164,9 @@ def test_chromium_native_origin_quota_preserves_acknowledged_checkpoint(
         assert checkpoint["preservedNotesLength"] == 120000
         assert checkpoint["statusState"] == "ERROR"
         assert checkpoint["statusRole"] == "alert"
-        assert "تعذر حفظ نسخة الاسترداد محليًا" in checkpoint["statusText"]
+        assert checkpoint["statusText"] == (
+            "Could not save the local recovery copy. Keep this page open until the draft is resolved."
+        )
         assert checkpoint["nativeFailure"] == {
             "name": "QuotaExceededError",
             "code": "quota_exceeded",
