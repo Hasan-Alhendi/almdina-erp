@@ -299,7 +299,7 @@ Professional UI لا يعني المزيد من animation أو cards؛ يعني 
 لكل surface نراجع:
 
 - **Hierarchy:** primary action واضح، secondary actions أقل بروزًا.
-- **Feedback:** loading/save/processing/success/error states مرئية ولا تعتمد على التخمين.
+- **Feedback:** loading/error/empty/disabled/dirty states، وكذلك save/processing/success، مرئية ولا تعتمد على التخمين.
 - **Density:** desktop يستفيد من العرض، mobile يعيد ترتيب المحتوى بدل تصغيره فقط.
 - **Input safety:** لا يعاد render أثناء الكتابة بطريقة تفقد focus أو تحذف أحرفًا.
 - **Navigation:** reopening/revisit يعرض record الصحيح ولا state من record سابق.

@@ -310,7 +310,16 @@ class TestFinalSecurityArchitecture(unittest.TestCase):
         self.assertIn("previewImport", controller)
         self.assertIn("previewExternal", controller)
         self.assertIn("updateRole", controller)
-        self.assertIn("لن يتم الحفظ تلقائيًا", browser_surface)
+        # The UI now stores English message IDs in JS and Arabic in translations/ar.csv.
+        message_id = "Import loads permissions for preview only; saving remains a separate step."
+        self.assertIn(f't("{message_id}")', browser_surface)
+        import csv
+        with (ROOT / "translations" / "ar.csv").open(encoding="utf-8", newline="") as handle:
+            translations = {row[0]: row[1] for row in csv.reader(handle) if len(row) >= 2}
+        self.assertEqual(
+            translations.get(message_id),
+            "الاستيراد يحمّل الصلاحيات للمعاينة فقط؛ الحفظ يبقى خطوة مستقلة.",
+        )
         policy = TRANSFER_POLICY.read_text(encoding="utf-8")
         self.assertIn("build_permission_bundle", policy)
         self.assertIn("parse_permission_bundle", policy)

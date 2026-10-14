@@ -36,8 +36,19 @@ class _FakeFrappe(types.ModuleType):
         self.local = SimpleNamespace()
         self.cache = lambda: _FakeCache()
         self.get_roles = lambda user=None: ["Some Role"]
+        self.get_all = self._get_all
         self._ = lambda value: value
         self.PermissionError = PermissionError
+
+
+    @staticmethod
+    def _get_all(doctype, **kwargs):
+        if doctype != "Language" or kwargs.get("filters") != {"enabled": 1}:
+            raise AssertionError("Boot may list only enabled Language records")
+        return [
+            {"language_code": "en", "language_name": "English"},
+            {"language_code": "ar", "language_name": "العربية"},
+        ]
 
 
 class BootHarness:
