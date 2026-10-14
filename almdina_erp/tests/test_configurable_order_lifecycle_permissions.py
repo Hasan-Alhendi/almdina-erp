@@ -158,7 +158,8 @@ def test_return_and_revert_are_capability_only_without_status_gates():
     revert_btn = shop_floor.split("function addRevertButton", 1)[1].split(
         "function addDeliveryButtons", 1
     )[0]
-    assert 'frm.add_custom_button(__("إرجاع لمرحلة سابقة"), () => openRevertDialog(frm));' in revert_btn
+    assert 'frm.add_custom_button(translate("Return to a previous stage"), () => openRevertDialog(frm));' in revert_btn
+    assert "if (current && rows.length)" in revert_btn
     assert "PRODUCTION_ACTION_GROUP" not in revert_btn
     assert 'frm.doc.production_path && status !== "Delivered" && can(frm, "revert_department")' not in shop_floor
     assert "Capability alone authorizes revert" in production_auth

@@ -12,6 +12,18 @@
         }
         const t = (message, replacements) => replacements ? translate(message, replacements) : translate(message);
 
+        function uiDirection() {
+            const locale = window.AlmdinaLocale;
+            if (locale && typeof locale.direction === "function") {
+                const value = locale.direction();
+                if (value === "ltr" || value === "rtl") return value;
+            }
+            const root = typeof document !== "undefined" ? document.documentElement : null;
+            const dir = root && root.getAttribute("dir");
+            return dir === "ltr" ? "ltr" : "rtl";
+        }
+
+
         function uiButton(options) {
             const ui = window.AlmdinaUi;
             if (!ui || typeof ui.button !== "function") {
@@ -34,31 +46,39 @@
 
         function renderLoading() {
             $body.html(`
-                <div class="aps-loading" role="status" aria-live="polite">
+                <div class="aps-loading" dir="${uiDirection()}" role="status" aria-live="polite">
                     <span class="aps-loading-dot" aria-hidden="true"></span>
-                    <div><strong>${t("جاري تحميل إعدادات المعمل")}</strong><span>${t("يتم تجهيز القيم والصلاحيات الحالية...")}</span></div>
+                    <div><strong>${t("Loading factory settings")}</strong><span>${t("Preparing current values and permissions...")}</span></div>
                 </div>
             `);
         }
 
         function renderError(message) {
             $body.html(`
-                <div class="aps-error" role="alert">
+                <div class="aps-error" dir="${uiDirection()}" role="alert">
                     <span class="aps-error-icon" aria-hidden="true">!</span>
-                    <div><strong>${t("تعذر تحميل إعدادات المعمل")}</strong><span>${esc(message || t("تعذر تحميل إعدادات المعمل."))}</span></div>
+                    <div><strong>${t("Could not load factory settings")}</strong><span>${esc(message || t("Could not load factory settings."))}</span></div>
                 </div>
             `);
         }
 
         function statusTone(value) {
             const normalized = String(value ?? "").trim();
-            if (normalized === t("مسموح") || normalized === "مسموح") return "success";
-            if (normalized === t("غير مسموح") || normalized === "غير مسموح") return "danger";
+            if (normalized === t("Allowed") || normalized === "مسموح") return "success";
+            if (normalized === t("Denied") || normalized === "غير مسموح") return "danger";
             return "";
+        }
+
+        function needsLtrIsolate(value) {
+            const text = String(value || "").trim();
+            if (!text || text === "—") return false;
+            if (/[\u0600-\u06FF]/.test(text)) return false;
+            return /\d/.test(text);
         }
 
         function rowHtml(row) {
             const tone = row.multiline ? "" : statusTone(row.value);
+            const isolate = !tone && !row.multiline && needsLtrIsolate(row.value);
             const value = row.multiline
                 ? multiline(row.value)
                 : (
@@ -73,7 +93,7 @@
             return `
                 <div class="aps-value ${row.multiline ? "is-multiline" : ""}${tone ? " has-status" : ""}">
                     <span class="aps-value-label">${esc(row.label)}</span>
-                    <b class="aps-value-data">${value}</b>
+                    <b class="aps-value-data${isolate ? " aps-ltr-value" : ""}"${isolate ? ' dir="ltr"' : ""}>${value}</b>
                 </div>
             `;
         }
@@ -86,27 +106,27 @@
                         <div class="aps-section-copy">
                             <span class="aps-section-accent" aria-hidden="true"></span>
                             <div class="aps-section-titles">
-                                <span class="aps-section-kicker">${t("إعدادات القسم")}</span>
+                                <span class="aps-section-kicker">${t("Section settings")}</span>
                                 <h3>${esc(section.title)}</h3>
                                 <div class="aps-section-desc">${esc(section.description)}</div>
                             </div>
                         </div>
                         <div class="aps-section-tools">
                             ${section.editable ? uiButton({
-                                label: t("تعديل"),
+                                label: t("Edit"),
                                 variant: "secondary",
                                 className: "aps-edit",
                                 attrs: {
                                     "data-section": section.key,
-                                    title: t("تعديل هذا القسم"),
-                                    "aria-label": t("تعديل هذا القسم"),
+                                    title: t("Edit this section"),
+                                    "aria-label": t("Edit this section"),
                                 },
                             }) : ""}
                         </div>
                     </div>
                     <div class="aps-values">${section.rows.map(rowHtml).join("")}</div>
                     ${section.editable ? "" : `
-                        <div class="aps-readonly-note">${t("يمكنك مراجعة القيم هنا، لكن تعديل هذا القسم غير متاح لصلاحياتك الحالية.")}</div>
+                        <div class="aps-readonly-note">${t("You can review the values here, but editing this section is not available for your current permissions.")}</div>
                     `}
                 </article>
             `;
@@ -119,12 +139,12 @@
                     <summary>
                         <span class="aps-legacy-summary-copy">
                             <span class="aps-legacy-icon" aria-hidden="true">↺</span>
-                            <span><strong>${t("بيانات إعدادات قديمة محفوظة")}</strong><small>${t("قيم تاريخية محفوظة للتوثيق ولا تدخل في التشغيل الحالي")}</small></span>
+                            <span><strong>${t("Legacy settings data kept")}</strong><small>${t("Historical values kept for documentation that do not affect current operations")}</small></span>
                         </span>
-                        <span class="aps-readonly-chip">${t("للقراءة فقط")}</span>
+                        <span class="aps-readonly-chip">${t("Read-only")}</span>
                     </summary>
                     <div class="aps-legacy-body">
-                        <div class="aps-legacy-copy">${t("هذه القيم كانت مستخدمة في وظائف مخزون وبقايا ألواح قديمة تم إيقافها تشغيليًا. لم نحذفها من قاعدة البيانات، وتظهر هنا فقط حتى تبقى جميع بيانات إعدادات المعمل في مكان واحد دون فقدان أي قيمة تاريخية.")}</div>
+                        <div class="aps-legacy-copy">${t("These values were used in legacy stock and board remnant functions that have been operationally retired. We did not delete them from the database, and they appear here only so that all factory settings data stays in one place without losing any historical value.")}</div>
                         <div class="aps-legacy-grid">${model.legacy.map(rowHtml).join("")}</div>
                     </div>
                 </details>
@@ -133,13 +153,13 @@
 
         function render(model) {
             $body.html(`
-                <div class="almdina-ui aps-shell alm-page alm-page--admin">
+                <div class="almdina-ui aps-shell alm-page alm-page--admin" dir="${uiDirection()}">
                     <header class="aps-hero alm-page-intro alm-page-intro--accented">
                         <div class="aps-hero-layout">
                             <div class="aps-hero-copy alm-page-intro__copy">
                                 <div class="aps-hero-titles">
-                                    <h2 class="alm-page-intro__title">${t("إعدادات تشغيل المعمل الافتراضية")}</h2>
-                                    <p class="alm-page-intro__description">${t("القيم التشغيلية النشطة المعتمدة في كافة عمليات ومحطات العمل")}</p>
+                                    <h2 class="alm-page-intro__title">${t("Default factory operating settings")}</h2>
+                                    <p class="alm-page-intro__description">${t("Active operating values approved for all operations and workstations")}</p>
                                 </div>
                             </div>
                         </div>
@@ -147,28 +167,28 @@
 
                     <div class="aps-section-intro alm-section-header">
                         <div>
-                            <span class="alm-section-header__kicker">${t("الإعدادات النشطة")}</span>
-                            <strong class="alm-section-header__title">${t("اضبط كل مجموعة من مكانها المخصص")}</strong>
+                            <span class="alm-section-header__kicker">${t("Active settings")}</span>
+                            <strong class="alm-section-header__title">${t("Configure each group from its dedicated place")}</strong>
                         </div>
-                        <span class="aps-section-intro-note alm-section-header__note">${t("التعديل يظهر فقط للأقسام المسموحة لك")}</span>
+                        <span class="aps-section-intro-note alm-section-header__note">${t("Editing is shown only for sections you are allowed to edit")}</span>
                     </div>
                     <section class="aps-sections">
                         ${model.sections.map(sectionCard).join("")}
                         ${model.canManageWhatsAppSession ? `
                         <article class="aps-section aps-whatsapp" data-whatsapp-root>
-                            <div class="aps-whatsapp-loading">${t("جاري تحميل حالة WhatsApp...")}</div>
+                            <div class="aps-whatsapp-loading">${t("Loading WhatsApp status...")}</div>
                         </article>
                         ` : ""}
                         ${model.showBackupPanel ? `
                         <article class="aps-section aps-backup" data-backup-root>
-                            <div class="aps-backup-loading">${t("جاري تحميل سجل النسخ الاحتياطية...")}</div>
+                            <div class="aps-backup-loading">${t("Loading backup history...")}</div>
                         </article>
                         ` : ""}
                     </section>
                     ${legacySettingsDetails(model)}
                     <div class="aps-note">
                         <span class="aps-note-icon" aria-hidden="true">i</span>
-                        <div>${t("الرابط القديم لنموذج Almdina ERP Settings أصبح مسارًا تاريخيًا فقط وسيتم تحويله تلقائيًا إلى هذه الصفحة. لا يتم حذف أي قيمة من السجل عند التحويل، وأرقام التواصل تقبل عدة أسطر مثل: أرضي، موبايل، واتس اب.")}</div>
+                        <div>${t("The legacy Almdina ERP Settings form link is now a historical route only and will be redirected to this page automatically. No value is deleted from the log on redirect, and contact numbers accept multiple lines such as: landline, mobile, WhatsApp.")}</div>
                     </div>
                 </div>
             `);
@@ -176,35 +196,35 @@
 
         function auditHtml(rows) {
             if (!rows.length) {
-                return `<div class="aps-empty"><strong>${t("لا يوجد سجل بعد")}</strong><span>${t("لا توجد تغييرات مسجلة.")}</span></div>`;
+                return `<div class="aps-empty"><strong>${t("No log yet")}</strong><span>${t("No recorded changes.")}</span></div>`;
             }
-            return `<div class="aps-audit">${rows.map(row => `
+            return `<div class="aps-audit" dir="${uiDirection()}">${rows.map(row => `
                 <div class="aps-audit-item">
                     <span class="aps-audit-dot" aria-hidden="true"></span>
                     <div class="aps-audit-content">
-                        <div class="aps-audit-head"><strong>${esc(row.action)}</strong><span>${esc(row.changed_on)}</span></div>
-                        <div class="aps-audit-meta">${t("بواسطة")}: ${esc(row.changed_by)} · ${esc(row.source || "")}</div>
-                        ${row.changed_fields ? `<div class="aps-audit-fields">${t("الحقول")}: ${esc(row.changed_fields)}</div>` : ""}
+                        <div class="aps-audit-head"><strong>${esc(row.action)}</strong><span class="aps-ltr-value" dir="ltr">${esc(row.changed_on)}</span></div>
+                        <div class="aps-audit-meta">${t("By")}: ${esc(row.changed_by)} · ${esc(row.source || "")}</div>
+                        ${row.changed_fields ? `<div class="aps-audit-fields">${t("Fields")}: ${esc(row.changed_fields)}</div>` : ""}
                     </div>
                 </div>
             `).join("")}</div>`;
         }
 
         function auditLoadingHtml() {
-            return `<div class="aps-empty" role="status" aria-live="polite"><strong>${t("جاري تحميل السجل...")}</strong><span>${t("يتم استرجاع آخر تغييرات إعدادات المعمل.")}</span></div>`;
+            return `<div class="aps-empty" dir="${uiDirection()}" role="status" aria-live="polite"><strong>${t("Loading the log...")}</strong><span>${t("Restoring the latest factory settings changes.")}</span></div>`;
         }
 
         function auditErrorHtml(message) {
-            return `<div class="aps-error" role="alert"><span class="aps-error-icon" aria-hidden="true">!</span><div><strong>${t("تعذر تحميل السجل")}</strong><span>${esc(message || t("تعذر تحميل السجل."))}</span></div></div>`;
+            return `<div class="aps-error" dir="${uiDirection()}" role="alert"><span class="aps-error-icon" aria-hidden="true">!</span><div><strong>${t("Could not load the log")}</strong><span>${esc(message || t("Could not load the log."))}</span></div></div>`;
         }
 
         function backupStatusLabel(status) {
             const labels = {
-                Queued: t("في الانتظار"),
-                Running: t("قيد التنفيذ"),
-                Prepared: t("تم تجهيز الاستعادة"),
-                Completed: t("مكتملة"),
-                Failed: t("فشلت"),
+                Queued: t("Pending"),
+                Running: t("In progress"),
+                Prepared: t("Restore prepared"),
+                Completed: t("Completed"),
+                Failed: t("Failed"),
             };
             return labels[String(status || "")] || String(status || "—");
         }
@@ -227,13 +247,13 @@
             const rows = Array.isArray(snapshot.history) ? snapshot.history : [];
             const restorable = new Map((snapshot.restorable || []).map(row => [row.operation_id, row]));
             if (!rows.length) {
-                return `<div class="aps-empty"><strong>${t("لا توجد عمليات نسخ بعد")}</strong><span>${t("استخدم Create Backup Now لإنشاء أول نسخة محلية.")}</span></div>`;
+                return `<div class="aps-empty"><strong>${t("No backups yet")}</strong><span>${t("Use Create Backup Now to create the first local backup.")}</span></div>`;
             }
             return `<div class="aps-backup-history">${rows.map(row => {
                 const candidate = restorable.get(row.operation_id);
                 const restoreButton = candidate && snapshot.permissions && snapshot.permissions.can_restore && snapshot.restore_runtime_ready
                     ? uiButton({
-                        label: t("استعادة"),
+                        label: t("Restore"),
                         variant: "danger",
                         className: "aps-backup-restore",
                         attrs: {
@@ -245,12 +265,12 @@
                 return `
                     <div class="aps-backup-row">
                         <div class="aps-backup-row-main">
-                            <div><strong>${esc(row.backup_identifier || row.operation_id || "—")}</strong><span>${esc(row.operation_type || "")} · ${esc(row.target || "")}</span></div>
+                            <div><strong class="aps-ltr-value" dir="ltr">${esc(row.backup_identifier || row.operation_id || "—")}</strong><span>${esc(row.operation_type || "")} · ${esc(row.target || "")}</span></div>
                             ${uiBadge({ label: backupStatusLabel(row.status), tone: backupStatusTone(row.status) })}
                         </div>
                         <div class="aps-backup-row-meta">
                             <span>${esc(row.requested_on || "—")}</span>
-                            <span>${esc(sizeLabel(row.total_size))}</span>
+                            <span class="aps-ltr-value" dir="ltr">${esc(sizeLabel(row.total_size))}</span>
                             ${row.error_summary ? `<span class="aps-backup-error">${esc(row.error_summary)}</span>` : ""}
                             ${restoreButton}
                         </div>
@@ -267,9 +287,9 @@
                     <div class="aps-section-copy">
                         <span class="aps-section-accent" aria-hidden="true"></span>
                         <div class="aps-section-titles">
-                            <span class="aps-section-kicker">${t("الإدارة والتنفيذ")}</span>
+                            <span class="aps-section-kicker">${t("Administration and execution")}</span>
                             <h3>${t("Backup History & Actions")}</h3>
-                            <div class="aps-section-desc">${t("كل نسخة تُنشأ بمحرك Frappe الرسمي، وتظهر النتيجة هنا دون عرض مسارات محلية أو بيانات اعتماد.")}</div>
+                            <div class="aps-section-desc">${t("Every backup is created with the official Frappe engine, and the result appears here without exposing local paths or credentials.")}</div>
                         </div>
                     </div>
                     <div class="aps-section-tools aps-backup-actions">
@@ -277,7 +297,7 @@
                         ${canManage ? uiButton({ label: t("Create Backup Now"), variant: "primary", className: "aps-backup-create" }) : ""}
                     </div>
                 </div>
-                ${canRestore && !snapshot.restore_runtime_ready ? `<div class="aps-readonly-note">${t("الاستعادة معطّلة حتى تُضبط بيانات DB root في إعداد Frappe التشغيلي.")}</div>` : ""}
+                ${canRestore && !snapshot.restore_runtime_ready ? `<div class="aps-readonly-note">${t("Restore is disabled until DB root credentials are configured in the operational Frappe settings.")}</div>` : ""}
                 ${backupHistoryHtml(snapshot)}
             `;
         }
@@ -289,22 +309,22 @@
 
         function renderBackupError(message) {
             const $root = $body.find("[data-backup-root]");
-            if ($root.length) $root.html(`<div class="aps-error" role="alert"><span class="aps-error-icon" aria-hidden="true">!</span><div><strong>${t("تعذر تحميل إدارة النسخ")}</strong><span>${esc(message || t("حدث خطأ غير متوقع."))}</span></div></div>`);
+            if ($root.length) $root.html(`<div class="aps-error" role="alert"><span class="aps-error-icon" aria-hidden="true">!</span><div><strong>${t("Could not load backup management")}</strong><span>${esc(message || t("An unexpected error occurred."))}</span></div></div>`);
         }
 
         function statusLabel(status) {
             const labels = {
-                ready: t("تعمل"),
-                created: t("أُنشئت"),
-                initializing: t("جاري التهيئة"),
-                qr_ready: t("بانتظار مسح الرمز"),
-                authenticating: t("جاري التحقق"),
-                disconnected: t("غير متصلة"),
-                action_required: t("تحتاج إجراء"),
-                failed: t("فشلت"),
+                ready: t("Running"),
+                created: t("Created"),
+                initializing: t("Initializing"),
+                qr_ready: t("Waiting for code scan"),
+                authenticating: t("Verifying"),
+                disconnected: t("Not connected"),
+                action_required: t("Needs action"),
+                failed: t("Failed"),
             };
             const key = String(status || "").trim();
-            return labels[key] || (key ? key : t("غير معروفة"));
+            return labels[key] || (key ? key : t("Unknown"));
         }
 
         function whatsappHtml(snapshot = {}) {
@@ -314,13 +334,13 @@
                         <div class="aps-section-copy">
                             <span class="aps-section-accent" aria-hidden="true"></span>
                             <div class="aps-section-titles">
-                                <span class="aps-section-kicker">${t("تكامل خارجي")}</span>
-                                <h3>${t("جلسة WhatsApp")}</h3>
-                                <div class="aps-section-desc">${esc(snapshot.reason || t("لم يتم ضبط عنوان خادم WhatsApp أو مفتاح API."))}</div>
+                                <span class="aps-section-kicker">${t("External integration")}</span>
+                                <h3>${t("WhatsApp session")}</h3>
+                                <div class="aps-section-desc">${esc(snapshot.reason || t("WhatsApp server address or API key is not configured."))}</div>
                             </div>
                         </div>
                         <div class="aps-section-tools">
-                            <span class="aps-permission readonly"><span class="aps-permission-dot" aria-hidden="true"></span>${t("غير مضبوط")}</span>
+                            <span class="aps-permission readonly"><span class="aps-permission-dot" aria-hidden="true"></span>${t("Not configured")}</span>
                         </div>
                     </div>
                 `;
@@ -331,18 +351,18 @@
                         <div class="aps-section-copy">
                             <span class="aps-section-accent" aria-hidden="true"></span>
                             <div class="aps-section-titles">
-                                <span class="aps-section-kicker">${t("تكامل خارجي")}</span>
-                                <h3>${t("جلسة WhatsApp")}</h3>
-                                <div class="aps-section-desc">${t("اربط جلسة واحدة مع واتساب ويب لإرسال جداول القياسات للزبائن.")}</div>
+                                <span class="aps-section-kicker">${t("External integration")}</span>
+                                <h3>${t("WhatsApp session")}</h3>
+                                <div class="aps-section-desc">${t("Link one session with WhatsApp Web to send measurement sheets to customers.")}</div>
                             </div>
                         </div>
                         <div class="aps-section-tools">
-                            <span class="aps-permission readonly"><span class="aps-permission-dot" aria-hidden="true"></span>${t("غير مربوطة")}</span>
+                            <span class="aps-permission readonly"><span class="aps-permission-dot" aria-hidden="true"></span>${t("Not linked")}</span>
                         </div>
                     </div>
                     <div class="aps-actions">
                         ${uiButton({
-                            label: t("إنشاء وربط WhatsApp"),
+                            label: t("Create and link WhatsApp"),
                             variant: "primary",
                             className: "aps-whatsapp-create",
                         })}
@@ -352,25 +372,25 @@
             const session = snapshot.session || {};
             const working = Boolean(snapshot.working);
             const rows = [
-                [t("الحالة"), statusLabel(session.status)],
-                [t("الاسم"), session.name],
-                [t("رقم الجلسة"), session.phone],
-                [t("اسم العرض"), session.push_name],
+                [t("Status"), statusLabel(session.status)],
+                [t("Name"), session.name],
+                [t("Session number"), session.phone],
+                [t("Display name"), session.push_name],
             ];
-            if (session.last_error) rows.push([t("آخر خطأ"), session.last_error]);
+            if (session.last_error) rows.push([t("Last error"), session.last_error]);
             return `
                 <div class="aps-section-head">
                     <div class="aps-section-copy">
                         <span class="aps-section-accent" aria-hidden="true"></span>
                         <div class="aps-section-titles">
-                            <span class="aps-section-kicker">${t("تكامل خارجي")}</span>
-                            <h3>${t("جلسة WhatsApp")}</h3>
-                            <div class="aps-section-desc">${working ? t("الجلسة متصلة ويمكن إرسال رسائل الزبائن.") : esc(snapshot.reason || t("الجلسة غير متصلة."))}</div>
+                            <span class="aps-section-kicker">${t("External integration")}</span>
+                            <h3>${t("WhatsApp session")}</h3>
+                            <div class="aps-section-desc">${working ? t("Session is connected and customer messages can be sent.") : esc(snapshot.reason || t("Session is not connected."))}</div>
                         </div>
                     </div>
                     <div class="aps-section-tools">
                         <span class="aps-permission ${working ? "" : "readonly"}">
-                            <span class="aps-permission-dot" aria-hidden="true"></span>${working ? t("تعمل") : t("لا تعمل")}
+                            <span class="aps-permission-dot" aria-hidden="true"></span>${working ? t("Running") : t("Not running")}
                         </span>
                     </div>
                 </div>
@@ -378,7 +398,7 @@
                 ${working ? "" : `
                     <div class="aps-actions">
                         ${uiButton({
-                            label: t("إعادة اتصال"),
+                            label: t("Reconnect"),
                             variant: "primary",
                             className: "aps-whatsapp-reconnect",
                         })}

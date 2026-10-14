@@ -1,6 +1,35 @@
 (() => {
     "use strict";
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split("{" + index + "}").join(String(value));
+            });
+        }
+        return text;
+    }
+
+    function uiDirection() {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.direction === "function") {
+            const value = locale.direction();
+            if (value === "ltr" || value === "rtl") return value;
+        }
+        const root = typeof document !== "undefined" ? document.documentElement : null;
+        const dir = root && root.getAttribute("dir");
+        return dir === "ltr" ? "ltr" : "rtl";
+    }
+
+
     if (window.AlmdinaFactoryPermissionsController) return;
 
     function mount(wrapper) {
@@ -41,21 +70,21 @@
         const stable = store.stable;
         const unique = store.unique;
         const isDirty = store.isDirty;
-        const viewModel = viewModelModule.create({ translate: __ });
+        const viewModel = viewModelModule.create({ translate });
         if (!wrapper.page) throw new Error("Factory permissions page shell is unavailable");
 
         const $main = $(wrapper).find(".layout-main-section");
         const renderer = rendererModule.create({
             $main,
             escapeHtml: value => frappe.utils.escape_html(String(value ?? "")),
-            translate: __,
+            translate,
         });
         let activation = null;
         let featureShellReady = false;
         let reconcileAfterSave = false;
         const ownedTransients = new Set();
         const dialogs = dialogsModule.create({
-            translate: __,
+            translate,
             ownTransient,
             releaseTransient(surface) {
                 ownedTransients.delete(surface);
@@ -190,7 +219,7 @@
             };
             if (!isDirty()) return selectRole();
             return confirmForGeneration(
-                __("لديك تغييرات غير محفوظة. هل تريد تجاهلها؟"),
+                translate("You have unsaved changes. Do you want to discard them?"),
                 generation,
                 selectRole,
                 () => renderer.setRolePickerValue(state.selectedRole)
@@ -211,13 +240,13 @@
                 state.roles = Array.isArray(resolved.roles) ? resolved.roles : [];
                 state.transfer = resolved.transfer || {};
                 renderer.renderActor(resolved.actor || {});
-                if (!state.roles.length) return showEmpty(__("لا توجد أدوار قابلة للإدارة."));
+                if (!state.roles.length) return showEmpty(translate("No manageable roles."));
                 const selected = state.roles.find(role => String(role.name || "") === state.selectedRole);
                 const role = String((selected || state.roles[0]).name || "");
                 return loadRole(role, { reconcile });
             }).catch(error => {
                 if (!isActive() || !store.requests.console.isCurrent(token)) return null;
-                showError(error, __("تعذر فتح إدارة الصلاحيات."));
+                showError(error, translate("Could not open permission management."));
                 return null;
             });
         }
@@ -230,7 +259,7 @@
             state.selectedRole = role;
             store.requests.transfer.invalidate();
             renderer.setRolePickerValue(role);
-            renderer.showRoleLoading(__("جاري تحميل صلاحيات الدور..."));
+            renderer.showRoleLoading(translate("Loading role permissions..."));
             return api.getRole(role, { freeze: false }).then(data => {
                 if (!isActive() || !store.requests.role.isCurrent(token) || role !== state.selectedRole) return null;
                 const resolved = data || {};
@@ -242,7 +271,7 @@
                 renderer.showLoaded();
             }).catch(error => {
                 if (isActive() && store.requests.role.isCurrent(token)) {
-                    showError(error, __("تعذر تحميل صلاحيات الدور."));
+                    showError(error, translate("Could not load role permissions."));
                 }
                 return null;
             });
@@ -323,7 +352,7 @@
                 return applyPreview(data || {});
             }).catch(error => {
                 if (isActive() && store.requests.preview.isCurrent(token)) {
-                    frappe.show_alert({ message: errorMessage(error, __("تعذر حساب أثر الصلاحيات.")), indicator: "red" });
+                    frappe.show_alert({ message: errorMessage(error, translate("Could not calculate permission impact.")), indicator: "red" });
                 }
                 return null;
             });
@@ -353,8 +382,8 @@
             }).catch(error => {
                 if (isActive() && store.requests.transfer.isCurrent(token)) {
                     showMessage({
-                        title: __("تعذر تحميل الصلاحيات"),
-                        message: frappe.utils.escape_html(String(errorMessage(error, __("حدث خطأ غير متوقع.")) || "")),
+                        title: translate("Could not load permissions"),
+                        message: frappe.utils.escape_html(String(errorMessage(error, translate("An unexpected error occurred.")) || "")),
                         indicator: "red",
                     });
                 }
@@ -368,7 +397,7 @@
             const token = store.requests.transfer.begin({ role: requestedRole, operation: "export" });
             api.exportRole(requestedRole, {
                 freeze: true,
-                freezeMessage: __("جاري تجهيز ملف الصلاحيات..."),
+                freezeMessage: translate("Preparing the permissions file..."),
             }).then(documentData => {
                 if (
                     !isActive()
@@ -379,12 +408,12 @@
                 }
                 const filename = `almdina-permissions-${requestedRole.replace(/[^a-zA-Z0-9_-]+/g, "-")}.json`;
                 renderer.downloadJson(filename, documentData || {});
-                frappe.show_alert({ message: __("تم تصدير ملف الصلاحيات."), indicator: "green" });
+                frappe.show_alert({ message: translate("Permissions file exported."), indicator: "green" });
             }).catch(error => {
                 if (!isActive() || !store.requests.transfer.isCurrent(token)) return;
                 showMessage({
-                    title: __("تعذر التصدير"),
-                    message: frappe.utils.escape_html(String(errorMessage(error, __("حدث خطأ غير متوقع.")) || "")),
+                    title: translate("Could not export"),
+                    message: frappe.utils.escape_html(String(errorMessage(error, translate("An unexpected error occurred.")) || "")),
                     indicator: "red",
                 });
             });
@@ -444,7 +473,7 @@
                         requestedRole,
                         requestedState,
                         confirmSelfLockout,
-                        { freeze: true, freezeMessage: __("جاري حفظ الصلاحيات...") }
+                        { freeze: true, freezeMessage: translate("Saving permissions...") }
                     );
                     if (!isCurrentGeneration(generation) || requestedRole !== state.selectedRole) {
                         reconcileAfterSave = true;
@@ -458,12 +487,12 @@
                     renderPermissionState(resolved.audit || []);
                     await refreshRuntimePermissions();
                     if (isCurrentGeneration(generation)) {
-                        frappe.show_alert({ message: __("تم حفظ صلاحيات الدور."), indicator: "green" });
+                        frappe.show_alert({ message: translate("Role permissions saved."), indicator: "green" });
                     }
                     return true;
                 } catch (error) {
                     if (isCurrentGeneration(generation)) {
-                        frappe.show_alert({ message: errorMessage(error, __("تعذر حفظ الصلاحيات.")), indicator: "red" }, 7);
+                        frappe.show_alert({ message: errorMessage(error, translate("Could not save permissions.")), indicator: "red" }, 7);
                     }
                     return false;
                 } finally {
@@ -482,7 +511,7 @@
                 if (!isCurrentGeneration(generation) || !preview || !isDirty()) return false;
                 if (preview.requires_self_lockout_confirmation) {
                     confirmForGeneration(
-                        __("سيؤدي هذا الحفظ إلى إزالة آخر صلاحية لديك لإدارة الصلاحيات. هل تريد المتابعة؟"),
+                        translate("This save will remove your last permission to manage permissions. Do you want to continue?"),
                         generation,
                         () => executeSave(true)
                     );

@@ -44,8 +44,8 @@ def test_order_creator_dispatches_directly_without_approval_or_plan_lock():
 
     assert "function openDispatchDialog(frm)" in shop_floor
     assert 'can(frm, "dispatch_order")' in shop_floor
-    assert 'frm.add_custom_button(__("إرسال للإنتاج"), () => openDispatchDialog(frm));' in shop_floor or (
-        'frm.add_custom_button(__("إرسال للإنتاج"), () => openDispatchDialog(frm))' in shop_floor
+    assert 'frm.add_custom_button(translate("Send to production"), () => openDispatchDialog(frm));' in shop_floor or (
+        'frm.add_custom_button(translate("Send to production"), () => openDispatchDialog(frm))' in shop_floor
     )
     assert "dco-dispatch-toolbar-button" in shop_floor
     assert 'return String($(this).text() || "").trim() === __("إرسال للإنتاج")' not in shop_floor
@@ -129,7 +129,7 @@ def test_review_and_order_approval_are_retired_in_favor_of_direct_dispatch():
     dispatch_btn = shop_floor_ux.split("function addDispatchButton", 1)[1].split(
         "function revertTargetsKey", 1
     )[0]
-    assert 'frm.add_custom_button(__("إرسال للإنتاج"), () => openDispatchDialog(frm))' in dispatch_btn
+    assert 'frm.add_custom_button(translate("Send to production"), () => openDispatchDialog(frm))' in dispatch_btn
     assert "button.addClass(\"dco-dispatch-toolbar-button\")" in dispatch_btn or (
         "button.addClass('dco-dispatch-toolbar-button')" in dispatch_btn
     )
@@ -179,11 +179,11 @@ def test_assignment_scoped_drawing_approval_preserves_shop_floor_status():
 def test_drawing_form_exposes_reapproval_with_warning():
     ux = _source(DRAWING_APPROVAL_UX)
     assert 'permissions.canDocument(frm, "approve_dxf")' in ux
-    assert 'const APPROVE_LABEL = __("اعتماد الرسم")' in ux
-    assert 'const REAPPROVE_LABEL = __("إعادة اعتماد الرسم")' in ux
+    assert 'const APPROVE_LABEL_ID = "Approve drawing"' in ux
+    assert 'const REAPPROVE_LABEL_ID = "Re-approve drawing"' in ux
     assert "approve_production_dxf" in ux
     assert "plan_source: source" in ux
-    assert "تم اعتماد خطة لهذا الطلب سابقًا" in ux
+    assert "Warning: a plan was already approved for this order." in ux
     assert "current_assignee" not in ux
     assert "isAssignedToCurrentUser" not in ux
     assert "lock_cutting_plan" not in ux

@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 APP_ROOT = Path(__file__).resolve().parents[1]
-SOURCE = (
+COMPACT = (
     APP_ROOT
     / "public"
     / "js"
@@ -13,51 +13,72 @@ SOURCE = (
     / "measurements"
     / "door_cutting_order_compact_measurements_ux.js"
 )
+ACTIONS = (
+    APP_ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "measurements"
+    / "door_cutting_order_measurement_actions_ux.js"
+)
 
 
-def _source() -> str:
-    return SOURCE.read_text(encoding="utf-8")
+def _compact() -> str:
+    return COMPACT.read_text(encoding="utf-8")
 
 
-def test_measurement_toolbar_uses_compact_accessible_icon_actions():
-    source = _source()
-
-    assert 'classList.add("dco-toolbar-icon-button")' in source
-    assert 'printButton.setAttribute("aria-label", label)' in source
-    assert 'openButton.setAttribute("aria-label", label)' in source
-    assert 'printButton.innerHTML = toolbarIconSvg("print")' in source
-    assert 'openButton.innerHTML = toolbarIconSvg("expand")' in source
+def _actions() -> str:
+    return ACTIONS.read_text(encoding="utf-8")
 
 
-def test_measurement_toolbar_is_single_row_and_actions_stay_on_physical_left():
-    source = _source()
+def test_measurement_toolbar_icon_actions_are_owned_by_actions_ux():
+    actions = _actions()
 
-    assert ".dco-fast-entry-toolbar{" in source
-    assert "flex-wrap:nowrap !important;" in source
-    assert ".dco-fast-entry-toolbar>.dco-measurement-table-actions" in source
-    assert "order:100;" in source
-    assert "direction:ltr;" in source
-    assert "width:32px !important;" in source
-    assert "min-height:42px !important;" in source
+    assert "function decorateToolbarIconButton" in actions
+    assert 'button.setAttribute("aria-label", resolvedLabel)' in actions
+    assert "button.innerHTML = toolbarIconSvg(kind)" in actions
+    assert 'kind: "print"' in actions
+    assert 'kind: "expand"' in actions
+    assert 'if (!button.querySelector("svg"))' in actions
+    assert "printButton.textContent" not in actions
+    assert "MutationObserver" not in actions.split("function ensureActions", 1)[1].split(
+        "function schedule", 1
+    )[0]
+
+
+def test_measurement_toolbar_follows_page_direction_in_normal_flow():
+    compact = _compact()
+
+    assert ".dco-fast-entry-toolbar{" in compact
+    assert "flex-wrap:wrap !important;" in compact
+    assert ".dco-fast-entry-toolbar>.dco-measurement-table-actions" in compact
+    assert "direction:inherit;" in compact
+    assert "margin-inline-start:auto !important;" in compact
+    assert "direction:ltr;" not in compact
+    assert "width:32px !important;" in compact
+    assert "min-height:42px !important;" in compact
 
 
 def test_measurement_toolbar_shows_only_measurement_table_title():
-    source = _source()
+    compact = _compact()
 
-    assert '__("Door Measurements Table")' in source
-    assert "جدول قياسات الدرف" not in source
-    assert 'class="dco-measurement-title"' in source
-    assert ".dco-fast-entry-toolbar>.dco-fast-readonly-note" in source
-    assert ".dco-fast-entry-toolbar>.dco-order-edge-color-badge" in source
-    assert "display:none !important;" in source
-    assert "إدخال سريع:" not in source
-    assert "القشاط: نقرة" not in source
-    assert "الأسهم للتنقل بين الحقول" not in source
+    assert '__("Door Measurements Table")' in compact
+    assert "جدول قياسات الدرف" not in compact
+    assert 'class="dco-measurement-title"' in compact
+    assert ".dco-fast-entry-toolbar>.dco-fast-readonly-note" in compact
+    assert ".dco-fast-entry-toolbar>.dco-order-edge-color-badge" in compact
+    assert "display:none !important;" in compact
+    assert "إدخال سريع:" not in compact
+    assert "القشاط: نقرة" not in compact
+    assert "الأسهم للتنقل بين الحقول" not in compact
 
 
-def test_measurement_toolbar_polish_survives_dynamic_action_rendering():
-    source = _source()
+def test_compact_toolbar_polish_does_not_rewrite_action_icons():
+    compact = _compact()
 
-    assert "function observeToolbar(root)" in source
-    assert "observer.observe(toolbar, { childList:true, subtree:true });" in source
-    assert "polishToolbar(root);" in source
+    assert "function polishToolbar(root)" in compact
+    assert "compactReadonlyNote(root);" in compact
+    assert 'printButton.innerHTML = toolbarIconSvg("print")' not in compact
+    assert 'openButton.innerHTML = toolbarIconSvg("expand")' not in compact
+    assert "compactIconReady" not in compact

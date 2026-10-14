@@ -3,6 +3,23 @@
 
     if (window.AlmdinaWorkspaceStore) return;
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split("{" + index + "}").join(String(value));
+            });
+        }
+        return text;
+    }
+
     function clone(value) {
         if (value === undefined) return undefined;
         if (value === null) return null;
@@ -121,7 +138,7 @@
             state.draft = null;
             state.dirty = false;
             state.editing = false;
-            state.error = String(error && (error.message || error) || "تعذر تحميل البيانات.");
+            state.error = String(error && (error.message || error) || translate("Could not load the data."));
             emit();
             return true;
         }

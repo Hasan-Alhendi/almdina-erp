@@ -208,9 +208,13 @@
     function pendingMessage(frm) {
         const state = snapshot(frm);
         if (state && state.status === "error") {
-            return __("تعذر تحميل خطة القص. أعد المحاولة.");
+            return (window.AlmdinaLocale && AlmdinaLocale.translate)
+                ? AlmdinaLocale.translate("Could not load the cutting plan. Try again.")
+                : __("Could not load the cutting plan. Try again.");
         }
-        return __("جاري تحميل خطة القص...");
+        return (window.AlmdinaLocale && AlmdinaLocale.translate)
+            ? AlmdinaLocale.translate("Loading the cutting plan...")
+            : __("Loading the cutting plan...");
     }
 
     function clearLegacySummary(frm) {
@@ -306,7 +310,9 @@
             printActivePlan(frm) {
                 if (!ready(frm)) {
                     ensureLoad(frm);
-                    frappe.msgprint(__("انتظر حتى يكتمل تحميل خطة القص ثم أعد الطباعة."));
+                    frappe.msgprint((window.AlmdinaLocale && AlmdinaLocale.translate)
+                        ? AlmdinaLocale.translate("Wait until the cutting plan finishes loading, then print again.")
+                        : __("Wait until the cutting plan finishes loading, then print again."));
                     return false;
                 }
                 project(frm);

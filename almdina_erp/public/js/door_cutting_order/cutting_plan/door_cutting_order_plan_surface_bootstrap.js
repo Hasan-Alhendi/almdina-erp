@@ -294,9 +294,7 @@
             const layout = wrapper(frm, "cutting_plan_html");
             if (layout && !layout.children().length) {
                 layout.html(
-                    `<div class="dco-plan-tab-content" style="padding:16px;color:#666;text-align:center;border:1px dashed #ccd3da;border-radius:12px;background:#fafafa;">${__(
-                        "لا توجد صلاحية لعرض تبويبات خطة القص."
-                    )}</div>`
+                    `<div class="dco-plan-tab-content" style="padding:16px;color:#666;text-align:center;border:1px dashed #ccd3da;border-radius:12px;background:#fafafa;">${frappe.utils.escape_html((window.AlmdinaLocale && AlmdinaLocale.translate) ? AlmdinaLocale.translate("You do not have permission to view the cutting plan tabs.") : __("You do not have permission to view the cutting plan tabs."))}</div>`
                 );
             }
         }

@@ -255,8 +255,8 @@
     justify-content: start;
     gap: 10px;
     width: min(100%, 310px);
-    margin: 0 0 17px auto;
-    direction: ltr;
+    margin-block: 0 17px;
+    margin-inline: 0 auto;
 }
 
 .dco-order-list.dco-order-card-layout .dco-card-order-label {
@@ -264,7 +264,8 @@
     font-size: 11px;
     font-weight: 700;
     line-height: 1.2;
-    direction: rtl;
+    direction: inherit;
+    text-align: start;
     white-space: nowrap;
 }
 
@@ -283,8 +284,9 @@
     font-size: 14px;
     font-weight: 850;
     line-height: 1.2;
+    /* Order IDs stay LTR regardless of card UI direction. */
     direction: ltr;
-    text-align: left;
+    text-align: start;
     cursor: pointer;
     box-shadow: 0 2px 8px color-mix(in srgb, var(--dco-accent) 10%, transparent);
     transition: transform .15s ease, box-shadow .15s ease, background-color .15s ease;
@@ -551,7 +553,7 @@
     .dco-order-list.dco-order-card-layout .dco-card-order-row {
         width: min(100%, 285px);
         gap: 8px;
-        margin-bottom: 14px;
+        margin-block-end: 14px;
     }
 
     .dco-order-list.dco-order-card-layout .dco-card-order-label {

@@ -94,8 +94,8 @@ def test_simple_controls_keep_only_current_settings_recalculation_action():
         assert selector in controls
     assert "find(DUPLICATED_ACTIONS)" in controls
     assert "duplicated.remove()" in controls
-    assert "إعادة الحساب بالإعدادات الحالية" in controls
-    assert "إعادة الحساب بالإعدادات الحالية" in plan
+    assert "Recalculate with the current settings" in controls
+    assert "Recalculate with the current settings" in plan
 
 
 def test_recalculation_button_uses_preview_session_without_full_document_plan_save():

@@ -82,10 +82,6 @@
     direction: ltr;
 }
 
-.prw-stage-status-chip {
-    direction: rtl;
-}
-
 .prw-stage-status-chip.is-planning {
     color: var(--alm-primary, #172033);
 }

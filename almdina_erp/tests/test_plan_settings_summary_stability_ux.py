@@ -57,9 +57,9 @@ def test_summary_reads_canonical_plan_workspace_settings_and_identity() -> None:
     assert 'class="form-control"' in summary
     assert "readonly" in summary
     assert "dco-plan-settings-editor__recalc" not in summary
-    assert "إعدادات الخطة" in summary
-    assert 'shortLabel: "الهامش"' in summary
-    assert 'shortLabel: "التشذيب"' not in summary
+    assert 'translate("Plan settings")' in summary
+    assert 'shortLabel: "Margin"' in summary
+    assert 'shortLabel: "Trim"' not in summary
 
 
 def test_summary_recovers_from_workspace_and_surface_rerenders_without_timers() -> None:

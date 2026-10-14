@@ -231,7 +231,7 @@ class TestCapabilityExecutionContract(unittest.TestCase):
         self.assertIn("plan_needs_recalculation", command)
         self.assertNotIn("recalculate_system_plan", approval_command)
         self.assertNotIn("force_cutting_plan_recalculation", approval_command)
-        self.assertIn('"اعتماد خطة القص"', controls)
+        self.assertIn('translate(source === "Custom" ? "Approve DXF plan" : "Approve cutting plan")', controls)
         self.assertIn('can(frm, "approve_dxf")', controls)
         # Browser staleness comes from the Plan read model, not the DCO
         # compatibility projection. Server approval still revalidates under lock.

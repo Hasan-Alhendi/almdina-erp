@@ -2,12 +2,12 @@
     "use strict";
     const root = window.AlmdinaSpecialShapeDocumentation = window.AlmdinaSpecialShapeDocumentation || Object.create(null);
     const DEFINITIONS = Object.freeze([
-        Object.freeze({ id: "clipped-corner", label: "زاوية مقصوصة", icon: "⌜" }),
-        Object.freeze({ id: "top-arch", label: "قوس علوي", icon: "∩" }),
-        Object.freeze({ id: "side-arch", label: "قوس جانبي", icon: "◖" }),
-        Object.freeze({ id: "trapezoid", label: "شبه منحرف", icon: "⏢" }),
-        Object.freeze({ id: "inner-opening", label: "فتحة داخلية", icon: "▣" }),
-        Object.freeze({ id: "slanted-edge", label: "حافة مائلة", icon: "◩" }),
+        Object.freeze({ id: "clipped-corner", label: "Clipped corner shape", icon: "⌜" }),
+        Object.freeze({ id: "top-arch", label: "Top arch", icon: "∩" }),
+        Object.freeze({ id: "side-arch", label: "Side arch", icon: "◖" }),
+        Object.freeze({ id: "trapezoid", label: "Trapezoid", icon: "⏢" }),
+        Object.freeze({ id: "inner-opening", label: "Inner opening", icon: "▣" }),
+        Object.freeze({ id: "slanted-edge", label: "Slanted edge", icon: "◩" }),
     ]);
     const p = (xMm, yMm) => ({ xMm, yMm });
     function documentContract() {

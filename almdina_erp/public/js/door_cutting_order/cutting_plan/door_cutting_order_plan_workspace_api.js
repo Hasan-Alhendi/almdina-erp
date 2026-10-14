@@ -20,6 +20,22 @@
     const SAVE_OFFCUT_ASSIGNMENTS_METHOD =
         "almdina_erp.almdina_erp.services.offcut_service.set_offcut_execution_owner";
 
+    const FREEZE_SAVE_SETTINGS = "Saving cutting plan settings...";
+    const FREEZE_RECALCULATE = "Recalculating the cutting plan...";
+    const FREEZE_BOOTSTRAP = "Creating the first cutting plan...";
+    const FREEZE_PREVIEW = "Previewing the plan with these settings...";
+    const FREEZE_COMMIT = "Saving the selected cutting plan...";
+    const FREEZE_APPROVE = "Approving the cutting plan...";
+    const FREEZE_CANCEL_APPROVAL = "Cancelling the cutting plan approval...";
+    const FREEZE_OFFCUT = "Saving the offcut classification...";
+
+    function translateCopy(message) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") return locale.translate(message);
+        if (typeof __ === "function") return __(message);
+        return String(message == null ? "" : message);
+    }
+
     async function call(method, args, options = {}) {
         const response = await frappe.call({
             method,
@@ -52,7 +68,7 @@
             settingsArgs(orderName, settings),
             {
                 freeze: true,
-                freezeMessage: __("جاري حفظ إعدادات خطة القص..."),
+                freezeMessage: translateCopy(FREEZE_SAVE_SETTINGS),
             }
         );
     }
@@ -63,7 +79,7 @@
             settingsArgs(orderName, settings),
             {
                 freeze: true,
-                freezeMessage: __("جاري إعادة حساب خطة القص..."),
+                freezeMessage: translateCopy(FREEZE_RECALCULATE),
             }
         );
     }
@@ -74,7 +90,7 @@
             settingsArgs(orderName, settings),
             {
                 freeze: true,
-                freezeMessage: __("جاري إنشاء خطة القص الأولى..."),
+                freezeMessage: translateCopy(FREEZE_BOOTSTRAP),
             }
         );
     }
@@ -85,7 +101,7 @@
             settingsArgs(orderName, settings),
             {
                 freeze: true,
-                freezeMessage: __("جاري معاينة الخطة بهذه الإعدادات..."),
+                freezeMessage: translateCopy(FREEZE_PREVIEW),
             }
         );
     }
@@ -99,7 +115,7 @@
             },
             {
                 freeze: true,
-                freezeMessage: __("جاري حفظ خطة القص المختارة..."),
+                freezeMessage: translateCopy(FREEZE_COMMIT),
             }
         );
     }
@@ -113,7 +129,7 @@
             },
             {
                 freeze: true,
-                freezeMessage: __("جاري اعتماد خطة القص..."),
+                freezeMessage: translateCopy(FREEZE_APPROVE),
             }
         );
     }
@@ -124,7 +140,7 @@
             { order_name: orderName },
             {
                 freeze: true,
-                freezeMessage: __("جاري إلغاء اعتماد خطة القص..."),
+                freezeMessage: translateCopy(FREEZE_CANCEL_APPROVAL),
             }
         );
     }
@@ -138,7 +154,7 @@
             },
             {
                 freeze: true,
-                freezeMessage: __("جارٍ حفظ تصنيف قطع النقص..."),
+                freezeMessage: translateCopy(FREEZE_OFFCUT),
             }
         );
     }

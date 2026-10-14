@@ -186,14 +186,14 @@ assert.match(qrHtml[0], /data:image\/png;base64,xx/);
 assert.match(qrHtml[0], /امسح الرمز من واتساب/);
 surface.setQr("http://evil.example/qr.png", "qr_ready");
 assert.doesNotMatch(qrHtml[1], /http:\/\/evil\.example/);
-assert.match(qrHtml[1], /جاري تجهيز الرمز/);
+assert.match(qrHtml[1], /Preparing the code\.\.\./);
 
 const delivery = loadDelivery();
 assert.equal(delivery.fakeWindow.AlmdinaDcoEditSessionCoordinator.kind, "order");
-assert.equal(delivery.ux.CONFIRM_MESSAGE, "هل تريد إرسال ملف القياسات للزبون؟");
-assert.equal(delivery.ux.AMENDMENT_CONFIRM_MESSAGE, "هل تريد إرسال تعديلات القياسات للزبون؟");
-assert.equal(delivery.ux.BUTTON_ACTION_LABEL, "إرسال القياسات عبر واتساب");
-assert.equal(delivery.ux.BUTTON_LABEL_AMENDMENT, "إرسال تعديلات القياسات عبر واتساب");
+assert.equal(delivery.ux.CONFIRM_MESSAGE, "Send the measurements file to the customer?");
+assert.equal(delivery.ux.AMENDMENT_CONFIRM_MESSAGE, "Send the measurement changes to the customer?");
+assert.equal(delivery.ux.BUTTON_ACTION_LABEL, "Send measurements via WhatsApp");
+assert.equal(delivery.ux.BUTTON_LABEL_AMENDMENT, "Send measurement changes via WhatsApp");
 
 const invoiceToolbarSource = fs.readFileSync(
     path.resolve(
@@ -202,11 +202,11 @@ const invoiceToolbarSource = fs.readFileSync(
     ),
     "utf8"
 );
-assert.match(invoiceToolbarSource, /إرسال الفاتورة عبر واتساب/);
-assert.match(invoiceToolbarSource, /هل تريد إرسال الفاتورة للزبون؟/);
+assert.match(invoiceToolbarSource, /Send the invoice on WhatsApp/);
+assert.match(invoiceToolbarSource, /Send the invoice to the customer\?/);
 assert.match(invoiceToolbarSource, /dco-whatsapp-send-invoice/);
 assert.match(invoiceToolbarSource, /send_order_invoice/);
-assert.match(invoiceToolbarSource, /frappe\.confirm\(INVOICE_CONFIRM_MESSAGE/);
+assert.match(invoiceToolbarSource, /frappe\.confirm\(translate\(INVOICE_CONFIRM_MESSAGE/);
 assert.doesNotMatch(invoiceToolbarSource, /print_measurements/);
 
 const skipped = delivery.ux.offerAfterOrderSave({

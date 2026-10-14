@@ -27,7 +27,7 @@ class TestMainWorkspaceAdministrationEntryPoints(unittest.TestCase):
             if block.get("type") == "header"
         ]
         self.assertTrue(
-            any("إدارة النظام ومسارات العمل" in text for text in header_texts)
+            any("System and workflow management" in text for text in header_texts)
         )
 
     def test_administration_shortcuts_use_existing_frappe_targets(self) -> None:

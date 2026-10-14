@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import csv
 import json
+from io import StringIO
 from pathlib import Path
 
 
@@ -67,6 +69,10 @@ def test_order_schema_has_customer_quote_separate_from_internal_planned_cost():
     assert "Approved" in fields["customer_quote_status"]["options"]
 
 
+def _catalog_has(catalog: str, source: str, arabic: str) -> bool:
+    return any(len(row) >= 2 and row[0] == source and row[1] == arabic for row in csv.reader(StringIO(catalog)))
+
+
 def test_special_estimate_defaults_are_configurable_and_start_at_zero():
     fields = _fields(SETTINGS_JSON)
     for fieldname in (
@@ -96,15 +102,28 @@ def test_operator_opens_only_new_documentation_runtime():
     assert "__documentationOnly: true" in entry
     assert "__manufacturingGeometrySeparated: true" in entry
     assert "function hasBlankDimensions(row)" in entry
-    assert "أدخل عرض الدرفة وطولها أولًا، ثم افتح توثيق الشكل." in entry
+    catalog = (APP_ROOT / "translations" / "ar.csv").read_text(encoding="utf-8")
+    assert '__("Enter the door width and length first, then open the shape documentation.")' in entry
+    assert _catalog_has(
+        catalog,
+        "Enter the door width and length first, then open the shape documentation.",
+        "أدخل عرض الدرفة وطولها أولًا، ثم افتح توثيق الشكل.",
+    )
     assert entry.index("if (!hasBlankDimensions(row))") < entry.index("await persistedRow")
     assert "function requirePieceDimensions(row, tr)" in operator
     assert "if (!row || !requirePieceDimensions(row, tr)) return" in operator
     assert "door_drawing_v4" not in entry
     for tool in ("select", "pen", "line", "rect", "ellipse", "dimension", "text"):
         assert f'tool("{tool}"' in shell
-    for label in ("رفع صورة", "مسح بالسكانر", "التقاط بالكاميرا", "شكل جاهز", "ملاحظات المصمم"):
+    for label, arabic in (
+        ("Upload an image", "رفع صورة"),
+        ("Scan", "مسح بالسكانر"),
+        ("Capture with the camera", "التقاط بالكاميرا"),
+        ("Ready-made shape", "شكل جاهز"),
+        ("Designer notes", "ملاحظات المصمم"),
+    ):
         assert label in shell
+        assert _catalog_has(catalog, label, arabic)
     assert "Api.save(context.order.name, context.piece.name, D.toStored(document))" in controller
     assert "geometry" not in controller.lower()
     assert "function simplify(" in pen
@@ -227,7 +246,7 @@ def test_cutting_plan_visually_audits_every_special_raw_piece():
     remnant_planning = REMNANT_PLANNING.read_text(encoding="utf-8")
     assert "render_special_raw_coverage(frm, plan)" in order_js
     assert "dco-special-raw-piece" in order_js
-    assert "✦ درفة خاصة · خام CNC" in order_js
+    assert 'htmlText("Special door · CNC raw")' in order_js
     assert "render_piece_edge_lines(piece, geometryModel, clipId)" in order_js
     assert '"special_shape_raw_summary": summarize_special_shapes(expanded, plan)' in optimization
     assert '"piece_type": row.piece_type or "Regular"' in remnant_planning

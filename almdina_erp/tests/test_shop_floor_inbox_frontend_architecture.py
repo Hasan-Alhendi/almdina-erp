@@ -140,8 +140,8 @@ class ShopFloorInboxFrontendArchitectureTest(unittest.TestCase):
             "almdina-sf-kanban-column",
             "shop-floor-order-card",
             "almdina-sf-account-card",
-            "طلبات المسندة",
-            "الطلبات المنتهية",
+            "Assigned orders",
+            "Completed orders",
         ):
             self.assertIn(marker, self.renderer)
         for forbidden in ("frappe.call(", "shop_floor_query_service", "shop_floor_commands"):
@@ -198,7 +198,7 @@ class ShopFloorInboxFrontendArchitectureTest(unittest.TestCase):
         self.assertIn("AlmdinaUi.control", self.controller)
         self.assertIn("mountBoardToolbarControls", self.controller)
         self.assertIn("preserveBoardToolbar", self.controller)
-        self.assertIn('add_inner_button(__("تحديث"), refresh, null, "refresh")', self.controller)
+        self.assertIn('add_inner_button(translate("Refresh"), refresh, null, "refresh")', self.controller)
         self.assertIn("syncRefreshButtonVisibility", self.controller)
         self.assertNotIn("almdina-sf-refresh", self.renderer)
         self.assertNotIn("almdina-sf-refresh", self.interactions)

@@ -1,6 +1,23 @@
 (() => {
     "use strict";
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split(`{${index}}`).join(String(value));
+            });
+        }
+        return text;
+    }
+
     if (window.AlmdinaCostEditSessionUX) return;
 
     const COST_SETTING_FIELDS = Object.freeze([
@@ -9,8 +26,8 @@
     ]);
     const OFFCUT_PRICE_FIELD = "offcut_price_usd";
     const REQUIRED_COST_LABELS = Object.freeze({
-        board_rate_usd: "سعر اللوح",
-        cutting_cost_per_board_usd: "أجور القص / لوح",
+        board_rate_usd: "Board price",
+        cutting_cost_per_board_usd: "Cutting charge / board",
     });
     const STATUS_KEY = "__almdinaFocusedCostStatus";
     const STATUS_OWNER_KEY = "__almdinaFocusedCostStatusOwnerInstalled";
@@ -293,11 +310,12 @@
         });
         if (!missing.length) return true;
 
-        const labels = missing.map((fieldname) => __(REQUIRED_COST_LABELS[fieldname] || fieldname));
+        const labels = missing.map((fieldname) => REQUIRED_COST_LABELS[fieldname] || fieldname);
         frappe.msgprint({
-            title: __("حقول مطلوبة"),
-            message: __("يجب إدخال القيم التالية من صفحة التكلفة قبل الحفظ: {0}")
-                .replace("{0}", labels.join("، ")),
+            title: translate("Required fields"),
+            message: translate("Enter these cost-page values before saving: {0}", [
+                labels.map(label => translate(label)).join(", "),
+            ]),
             indicator: "orange",
         });
         const fieldEditor = editor();
@@ -346,11 +364,11 @@
 
     async function startEditing(frm, sessionContext = null) {
         if (!canEditCostWorkspace(frm)) {
-            frappe.msgprint(__("لا تملك صلاحية تعديل التكلفة أو تسعير الدرف الخاصة لهذا المستند."));
+            frappe.msgprint(translate("You do not have permission to edit the cost or special-door prices for this document."));
             return false;
         }
         if (frm.is_dirty && frm.is_dirty()) {
-            frappe.msgprint(__("احفظ أو ألغِ تعديلات الطلب الحالية قبل فتح تعديل التكلفة."));
+            frappe.msgprint(translate("Save or cancel the current order edits before opening cost editing."));
             return false;
         }
 
@@ -361,8 +379,8 @@
             if (!documentStillCurrent(frm, token)) return false;
             console.error("Cost workspace load failed while starting edit", error);
             frappe.msgprint({
-                title: __("تعذر تحميل التكلفة"),
-                message: __("تعذر تحميل بيانات التكلفة الحالية. أعد تحميل الطلب ثم حاول مرة أخرى."),
+                title: translate("Could not load the cost"),
+                message: translate("Could not load the current cost data. Reload the order and try again."),
                 indicator: "red",
             });
             return false;
@@ -373,7 +391,7 @@
         const store = storeFor(frm);
         const seed = currentSettings(frm);
         if (!store || !seed) {
-            frappe.msgprint(__("تعذر تحميل بيانات التكلفة الحالية."));
+            frappe.msgprint(translate("Could not load the current cost data."));
             return false;
         }
 
@@ -381,8 +399,8 @@
         const startedState = store.snapshot();
         if (!started || !startedState || startedState.editing !== true) {
             frappe.msgprint({
-                title: __("تعذر بدء التعديل"),
-                message: __("لم تصبح بيانات التكلفة جاهزة لوضع التعديل. أعد المحاولة بعد اكتمال التحميل."),
+                title: translate("Could not start editing"),
+                message: translate("The cost data is not ready for editing. Try again after loading finishes."),
                 indicator: "orange",
             });
             return false;
@@ -429,7 +447,7 @@
             await cancelEditing(frm, sessionContext);
             if (!sessionIsCurrent(frm, sessionContext)) return false;
             if (window.cur_frm === frm) {
-                frappe.msgprint(__("لم تعد صلاحياتك أو حالة هذا المستند تسمح بتعديل هذا القسم."));
+                frappe.msgprint(translate("Your permissions or this document state no longer allow editing this section."));
             }
             return false;
         }
@@ -500,8 +518,8 @@
                 if (!sessionIsCurrent(frm, sessionContext)) return false;
                 if (!validSavedSnapshot(saved)) {
                     frappe.msgprint({
-                        title: __("تعذر حفظ التكلفة"),
-                        message: __("لم يعُد الخادم ببيانات التكلفة المحفوظة. لم يتم إغلاق وضع التعديل."),
+                        title: translate("Could not save the cost"),
+                        message: translate("The server did not return the saved cost data. Editing was not closed."),
                         indicator: "red",
                     });
                     return false;
@@ -546,7 +564,7 @@
         sync(frm);
         signalEditChanged(frm);
         frappe.show_alert({
-            message: __("تم حفظ تعديلات التكلفة وإعادة القسم إلى وضع القراءة."),
+            message: translate("The cost edits were saved and the section returned to read-only."),
             indicator: "green",
         }, 5);
         return true;

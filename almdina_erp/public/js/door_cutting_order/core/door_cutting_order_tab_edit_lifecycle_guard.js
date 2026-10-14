@@ -16,7 +16,24 @@
     const LEGACY_ROOT_KEY = "__almdinaPageEditTabListenerRoot";
     const LEGACY_HANDLER_KEY = "__almdinaPageEditTabListenerHandler";
     const LOCK_CLASS = "dco-edit-navigation-locked";
-    const LOCK_TITLE = "احفظ أو ألغِ التعديل الحالي قبل الانتقال إلى قسم آخر.";
+    const LOCK_TITLE = "Save or cancel the current edit before moving to another section.";
+
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split("{" + index + "}").join(String(value));
+            });
+        }
+        return text;
+    }
     const STYLE_ID = "dco-tab-edit-lifecycle-guard-css";
 
     function documentContext() {
@@ -91,8 +108,8 @@
 
     function showOpenEditMessage() {
         frappe.msgprint({
-            title: __("التعديل ما زال مفتوحًا"),
-            message: __(LOCK_TITLE),
+            title: translate("The edit is still open"),
+            message: translate(LOCK_TITLE),
             indicator: "orange",
         });
     }
@@ -170,7 +187,7 @@
 
         control.attr("aria-disabled", "true");
         control.attr("tabindex", "-1");
-        control.attr("title", __(LOCK_TITLE));
+        control.attr("title", translate(LOCK_TITLE));
         if (typeof control.addClass === "function") {
             control.addClass(LOCK_CLASS);
         }

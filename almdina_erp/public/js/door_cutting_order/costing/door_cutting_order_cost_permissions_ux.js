@@ -1,6 +1,23 @@
 (() => {
     "use strict";
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split(`{${index}}`).join(String(value));
+            });
+        }
+        return text;
+    }
+
     const COST_INPUT_FIELDS = Object.freeze([
         "board_rate_usd",
         "cutting_cost_per_board_usd",
@@ -329,7 +346,7 @@
             : null;
         const modified = String(payload && payload.order_modified || "").trim();
         if (!modified) {
-            throw new Error(__("لم يعُد الخادم بنسخة الطلب بعد حفظ السعر."));
+            throw new Error("The server did not return the order revision after saving the price.");
         }
         frm.__almdina_pricing_command_modified = modified;
         return modified;
@@ -369,7 +386,7 @@
             if (!documentStillCurrent(frm, token)) return false;
             const expectedModified = pricingExpectedModified(frm);
             if (!expectedModified) {
-                throw new Error(__("تعذر التحقق من نسخة الطلب الحالية. أعد تحميل الطلب ثم حاول مرة أخرى."));
+                throw new Error("Could not verify the current order revision. Reload the order and try again.");
             }
 
             let response;
@@ -384,7 +401,7 @@
                         expected_modified: expectedModified,
                     },
                     freeze: true,
-                    freeze_message: __("جاري اعتماد أسعار القشاط..."),
+                    freeze_message: translate("Saving the edge prices..."),
                 });
             } else {
                 response = await frappe.call({
@@ -397,7 +414,7 @@
                         expected_modified: expectedModified,
                     },
                     freeze: true,
-                    freeze_message: __("جاري اعتماد أسعار الدرف الخاصة..."),
+                    freeze_message: translate("Saving the special door prices..."),
                 });
             }
             if (!documentStillCurrent(frm, token)) return false;
@@ -432,14 +449,14 @@
 
     function inlinePriceLabel(piece) {
         if (piece && piece.piece_type === "Special") {
-            return __("السعر الخاص الشامل للدرفة");
+            return translate("Inclusive special door price");
         }
         if (piece && (piece.piece_type === "Clipped Corner" || piece.piece_type === "L-Shaped Corner")) {
             return piece.piece_type === "L-Shaped Corner"
-                ? __("تكلفة معالجة قشاط زاوية L")
-                : __("تكلفة معالجة قشاط الزاوية المقصوصة");
+                ? translate("L-shaped corner edge processing cost")
+                : translate("Clipped-corner edge processing cost");
         }
-        return __("السعر");
+        return translate("Price");
     }
 
     function bindInlinePriceInputs(frm) {
@@ -454,7 +471,7 @@
             const priceLabel = inlinePriceLabel(piece);
             input.setAttribute(
                 "aria-label",
-                editable ? `${__("تعديل السعر")}: ${priceLabel}` : priceLabel
+                editable ? `${translate("Edit price")}: ${priceLabel}` : priceLabel
             );
             if (editable) {
                 input.removeAttribute("readonly");

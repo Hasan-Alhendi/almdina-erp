@@ -225,7 +225,7 @@ assert.equal(frm.__almdina_active_plan_tab, "System");
 assert.equal(isDisabled(wrapper.htmlValue, "System"), false);
 assert.equal(isDisabled(wrapper.htmlValue, "Custom"), true);
 assert.equal(isDisabled(wrapper.htmlValue, "Approved"), true);
-assert.match(buttonTag(wrapper.htmlValue, "Custom"), /احفظ أو ألغِ تعديل خطة القص قبل تغيير مصدر الخطة/);
+assert.match(buttonTag(wrapper.htmlValue, "Custom"), /Save or cancel the cutting plan edit before changing the plan source/);
 
 assert.equal(tabs.renderDualTabs(frm), true, "a later workspace rerender must keep the lock");
 assert.equal(isDisabled(wrapper.htmlValue, "Custom"), true);

@@ -86,12 +86,12 @@ assert.notEqual(fakeWindow.AlmdinaOrderCostUX, baseCostApi, "cost API should be 
 const lines = fakeWindow.AlmdinaOrderCostUX.invoiceLines({});
 assert.equal(lines.length, 3);
 assert.equal(lines[0].description, "ألواح MDF");
-assert.equal(lines[1].description, "لاينر");
+assert.equal(lines[1].description, "Liner");
 assert.equal(lines[1].quantity, 5);
 assert.equal(lines[1].rate, 3);
 assert.equal(lines[1].amount, 15);
 assert.equal(lines[1].note, "");
-assert.equal(lines[2].description, "مسكة غطس");
+assert.equal(lines[2].description, "Recessed handle");
 assert.equal(lines[2].quantity, 1);
 assert.equal(lines[2].amount, 4);
 assert.ok(lines.every(line => !String(line.description).includes("درفة رقم")));
@@ -121,7 +121,7 @@ const mixedRates = api.summarizeLines([
     },
 ]);
 assert.equal(mixedRates.length, 1);
-assert.equal(mixedRates[0].description, "لاينر");
+assert.equal(mixedRates[0].description, "Liner");
 assert.equal(mixedRates[0].quantity, 2);
 assert.equal(mixedRates[0].amount, 10);
 assert.equal(mixedRates[0].rate, 5);

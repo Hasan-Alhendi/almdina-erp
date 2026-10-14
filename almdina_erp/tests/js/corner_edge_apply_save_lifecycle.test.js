@@ -169,6 +169,7 @@ function createSandbox() {
         document,
         frappe,
         $,
+        __: (message) => String(message),
         console,
         Object,
         String,
