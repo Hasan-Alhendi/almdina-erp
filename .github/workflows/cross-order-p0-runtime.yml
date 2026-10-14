@@ -110,11 +110,13 @@ jobs:
           bench --site test.localhost execute almdina_erp.tests.cross_order_p0_runtime_fixture.prepare_saved_plan 2>&1 | tee "$RUNNER_TEMP/saved-plan.log"
       - name: Print the saved server plan through Desk
         if: always() && steps.saved_plan.outcome == 'success'
+        timeout-minutes: 3
         run: |
           set -o pipefail
           python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" -k test_saved_server_plan_print_runtime 2>&1 | tee "$RUNNER_TEMP/saved-plan-browser.log"
       - name: Observe NEW to Saved Recovery intersection
         if: always() && steps.route_preflight.outcome == 'success'
+        timeout-minutes: 3
         run: |
           set -o pipefail
           python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" -k test_recovery_new_saved_intersection 2>&1 | tee "$RUNNER_TEMP/recovery-browser.log"

@@ -478,14 +478,67 @@ def test_recovery_new_saved_intersection():
                 "board_width_cm": 122, "board_length_cm": 244,
                 "default_edge_type": fixture["edge_type"], "edge_color": "P0 Recovery edge",
                 "board_rate_usd": 7, "cutting_cost_per_board_usd": 2}})
-            evidence["native_save"] = page.evaluate("""async () => {
+            evidence["checkpoint"] = page.evaluate("""async () =>
+                await AlmdinaDcoRecovery.LocalCheckpoint.flush(cur_frm)""")
+            assert evidence["checkpoint"].get("ok"), evidence["checkpoint"]
+            page.evaluate("name => { frappe.set_route('Form','Door Cutting Order',name); }",
+                          fixture["orders"]["B"]["name"])
+            page.wait_for_function("name => cur_frm?.doc?.name === name",
+                                   arg=fixture["orders"]["B"]["name"], timeout=45000)
+
+            def open_new_form():
+                page.evaluate("""() => {
+                    const name=frappe.model.make_new_doc_and_get_name('Door Cutting Order');
+                    frappe.set_route('Form','Door Cutting Order',name);
+                }""")
+                page.wait_for_function("() => cur_frm?.doctype === 'Door Cutting Order' && !!cur_frm.is_new()",
+                                       timeout=45000)
+
+            open_new_form()
+            page.locator('[data-recovery-action="new"]:visible').wait_for(timeout=15000)
+            evidence["discovery_before_cancel"] = page.evaluate("""() => ({
+                draftCards:document.querySelectorAll('[data-draft-id]').length,
+                board:cur_frm.doc.board_description || null})""")
+            page.locator('[data-recovery-action="new"]:visible').click()
+            page.wait_for_function("""() => !document.querySelector('.modal.show [data-recovery-action="new"]')""",
+                                   timeout=15000)
+            evidence["cancel_restore"] = page.evaluate("""() => ({
+                board:cur_frm.doc.board_description || null,
+                isNew:!!cur_frm.is_new()})""")
+            page.evaluate("name => { frappe.set_route('Form','Door Cutting Order',name); }",
+                          fixture["orders"]["B"]["name"])
+            page.wait_for_function("name => cur_frm?.doc?.name === name",
+                                   arg=fixture["orders"]["B"]["name"], timeout=45000)
+            open_new_form()
+            page.locator('[data-recovery-action="continue"]:visible').wait_for(timeout=15000)
+            page.locator('[data-recovery-action="continue"]:visible').first.click()
+            page.wait_for_function("board => cur_frm?.doc?.board_description === board",
+                                   arg=fixture["recovery_board"], timeout=15000)
+            evidence["restore"] = page.evaluate("""() => ({
+                board:cur_frm.doc.board_description,
+                customer:cur_frm.doc.customer,
+                pieceWidths:cur_frm.doc.pieces.map(row=>row.width_cm),
+                recovery:AlmdinaDcoRecovery.LocalCheckpoint.snapshot(cur_frm)})""")
+            page.evaluate("""() => {
                 const frm=cur_frm;
-                try {await frm.save(); return {ok:!frm.is_new(),name:frm.doc.name,
-                    board:frm.doc.board_description,
-                    recovery:AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(frm) || null};}
-                catch(error) {return {ok:false,error:String(error),name:frm.doc.name,
-                    recovery:AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(frm) || null};}
+                window.__p0NativeSave={status:'pending',startName:frm.doc.name};
+                Promise.resolve().then(()=>frm.save()).then(
+                    ()=>window.__p0NativeSave={status:'settled',ok:!frm.is_new(),
+                        name:frm.doc.name,board:frm.doc.board_description,
+                        recovery:AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(frm) || null},
+                    error=>window.__p0NativeSave={status:'rejected',ok:false,
+                        error:String(error),name:frm.doc.name,
+                        recovery:AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(frm) || null});
             }""")
+            try:
+                page.wait_for_function("window.__p0NativeSave?.status !== 'pending'", timeout=20000)
+                evidence["native_save"] = page.evaluate("window.__p0NativeSave")
+            except Exception:
+                evidence["native_save"] = page.evaluate("""() => ({
+                    ...window.__p0NativeSave,ok:false,timeout:true,
+                    modal:document.querySelector('.modal.show')?.innerText.slice(0,700) || null,
+                    recovery:AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(cur_frm) || null})""")
+            assert not evidence["native_save"].get("timeout"), evidence["native_save"]
             if evidence["native_save"]["ok"]:
                 saved = evidence["native_save"]["name"]
                 page.evaluate("name => { frappe.set_route('Form','Door Cutting Order',name); }",
