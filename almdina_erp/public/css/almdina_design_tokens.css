@@ -6,7 +6,19 @@
  *
  * Brand primitives also live on :root so Frappe Desk can read --alm-primary
  * through almdina_desk_theme.css without duplicating hex values.
+ *
+ * Theme boards (Frappe owns data-theme on the document root):
+ * - Shared: brand + static scales (theme-independent).
+ * - Light surfaces: :root + [data-theme="light"] only.
+ * - Dark surfaces: [data-theme="dark"] only.
+ * Do not pin theme-dependent surfaces on .almdina-ui — that would re-force
+ * Light whites onto every Almdina surface and defeat document-level dark.
+ * .almdina-ui may keep one-way bridges into Frappe vars (control-bg, etc.).
  */
+
+/* -------------------------------------------------------------------------- */
+/* Shared brand + static scales (all themes)                                  */
+/* -------------------------------------------------------------------------- */
 
 :root,
 [data-theme="light"],
@@ -24,49 +36,13 @@
     --alm-success-hover: #166534;
     --alm-on-success: #ffffff;
 
-    --alm-canvas: #eef1f6;
-    --alm-card: #ffffff;
-    --alm-card-border: #e4e8ee;
     --alm-accent: #2563eb;
-    --alm-accent-soft: #eff6ff;
-    --alm-warning: #b45309;
-    --alm-warning-bg: #fff7e8;
-    --alm-danger-soft: #fff1f2;
-    --alm-danger-soft-border: #fecdd3;
 
     /* Workspace / section accents (identity palette). */
     --alm-accent-blue: #2563eb;
     --alm-accent-purple: #7c3aed;
     --alm-accent-warning: #f59e0b;
     --alm-accent-success: #10b981;
-    --alm-text-strong: #101828;
-    --alm-text-secondary: #344054;
-    --alm-text-subtle: #667085;
-    --alm-text-faint: #98a2b3;
-    --alm-border-subtle: #eaecf0;
-    --alm-border-hover: #d0d5dd;
-    --alm-surface-muted: #f4f6f8;
-
-    /* Semantic status tones (fg / bg / border). */
-    --alm-status-success-fg: #15803d;
-    --alm-status-success-bg: rgba(21, 128, 61, 0.08);
-    --alm-status-success-border: rgba(21, 128, 61, 0.22);
-
-    --alm-status-warning-fg: #b45309;
-    --alm-status-warning-bg: rgba(180, 83, 9, 0.09);
-    --alm-status-warning-border: rgba(180, 83, 9, 0.24);
-
-    --alm-status-danger-fg: #b91c1c;
-    --alm-status-danger-bg: rgba(185, 28, 28, 0.08);
-    --alm-status-danger-border: rgba(185, 28, 28, 0.22);
-
-    --alm-status-info-fg: #2563eb;
-    --alm-status-info-bg: #eff6ff;
-    --alm-status-info-border: rgba(37, 99, 235, 0.24);
-
-    --alm-status-neutral-fg: #344054;
-    --alm-status-neutral-bg: #f4f6f8;
-    --alm-status-neutral-border: #e4e8ee;
 
     /*
      * Static scales live globally so native Frappe surfaces (Type A lists)
@@ -109,6 +85,51 @@
     --alm-radius-lg: 18px;
     --alm-radius-button: 10px;
     --alm-radius-pill: 999px;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Light surface board (pinned — do not darken these to "fix" Dark)         */
+/* -------------------------------------------------------------------------- */
+
+:root,
+[data-theme="light"] {
+    --alm-canvas: #eef1f6;
+    --alm-card: #ffffff;
+    --alm-card-border: #e4e8ee;
+    --alm-accent-soft: #eff6ff;
+    --alm-warning: #b45309;
+    --alm-warning-bg: #fff7e8;
+    --alm-danger-soft: #fff1f2;
+    --alm-danger-soft-border: #fecdd3;
+
+    --alm-text-strong: #101828;
+    --alm-text-secondary: #344054;
+    --alm-text-subtle: #667085;
+    --alm-text-faint: #98a2b3;
+    --alm-border-subtle: #eaecf0;
+    --alm-border-hover: #d0d5dd;
+    --alm-surface-muted: #f4f6f8;
+
+    /* Semantic status tones (fg / bg / border). */
+    --alm-status-success-fg: #15803d;
+    --alm-status-success-bg: rgba(21, 128, 61, 0.08);
+    --alm-status-success-border: rgba(21, 128, 61, 0.22);
+
+    --alm-status-warning-fg: #b45309;
+    --alm-status-warning-bg: rgba(180, 83, 9, 0.09);
+    --alm-status-warning-border: rgba(180, 83, 9, 0.24);
+
+    --alm-status-danger-fg: #b91c1c;
+    --alm-status-danger-bg: rgba(185, 28, 28, 0.08);
+    --alm-status-danger-border: rgba(185, 28, 28, 0.22);
+
+    --alm-status-info-fg: #2563eb;
+    --alm-status-info-bg: #eff6ff;
+    --alm-status-info-border: rgba(37, 99, 235, 0.24);
+
+    --alm-status-neutral-fg: #344054;
+    --alm-status-neutral-bg: #f4f6f8;
+    --alm-status-neutral-border: #e4e8ee;
 
     /* Shadow scale. */
     --alm-shadow-none: none;
@@ -119,6 +140,62 @@
     --alm-shadow-button: 0 4px 12px rgba(23, 32, 51, 0.16);
     --alm-shadow-focus: 0 0 0 2px color-mix(in srgb, var(--alm-primary) 18%, transparent);
 }
+
+/* -------------------------------------------------------------------------- */
+/* Dark surface board (independent hex — no Frappe↔Alm dependency loops)      */
+/* -------------------------------------------------------------------------- */
+
+[data-theme="dark"] {
+    --alm-canvas: #12161e;
+    --alm-card: #1a2030;
+    --alm-card-border: #2a3344;
+    --alm-accent-soft: rgba(37, 99, 235, 0.18);
+    --alm-warning: #fbbf24;
+    --alm-warning-bg: rgba(245, 158, 11, 0.14);
+    --alm-danger-soft: rgba(185, 28, 28, 0.18);
+    --alm-danger-soft-border: rgba(248, 113, 113, 0.35);
+
+    --alm-text-strong: #f2f4f7;
+    --alm-text-secondary: #d0d5dd;
+    --alm-text-subtle: #98a2b3;
+    --alm-text-faint: #667085;
+    --alm-border-subtle: #2a3344;
+    --alm-border-hover: #3d4a5f;
+    --alm-surface-muted: #151b27;
+
+    /* Status pairs: muted dark backgrounds + readable light foregrounds. */
+    --alm-status-success-fg: #4ade80;
+    --alm-status-success-bg: rgba(34, 197, 94, 0.14);
+    --alm-status-success-border: rgba(74, 222, 128, 0.28);
+
+    --alm-status-warning-fg: #fbbf24;
+    --alm-status-warning-bg: rgba(245, 158, 11, 0.14);
+    --alm-status-warning-border: rgba(251, 191, 36, 0.28);
+
+    --alm-status-danger-fg: #f87171;
+    --alm-status-danger-bg: rgba(239, 68, 68, 0.14);
+    --alm-status-danger-border: rgba(248, 113, 113, 0.28);
+
+    --alm-status-info-fg: #93c5fd;
+    --alm-status-info-bg: #0f2748;
+    --alm-status-info-border: rgba(147, 197, 253, 0.28);
+
+    --alm-status-neutral-fg: #d0d5dd;
+    --alm-status-neutral-bg: #1e2533;
+    --alm-status-neutral-border: #2a3344;
+
+    --alm-shadow-none: none;
+    --alm-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35), 0 5px 18px rgba(0, 0, 0, 0.22);
+    --alm-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.28);
+    --alm-shadow-md: 0 12px 36px rgba(0, 0, 0, 0.4);
+    --alm-shadow-overlay: 0 18px 48px rgba(0, 0, 0, 0.5);
+    --alm-shadow-button: 0 4px 12px rgba(0, 0, 0, 0.35);
+    --alm-shadow-focus: 0 0 0 2px color-mix(in srgb, var(--alm-accent) 35%, transparent);
+}
+
+/* -------------------------------------------------------------------------- */
+/* .almdina-ui — one-way Frappe bridges + control metrics (not surface paints) */
+/* -------------------------------------------------------------------------- */
 
 .almdina-ui {
     --alm-secondary-bg: var(--control-bg, #ffffff);

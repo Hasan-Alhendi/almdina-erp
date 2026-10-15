@@ -33,6 +33,20 @@ Feature CSS may keep **domain/layout** tokens. It must not redefine **foundation
 | Patterns | `public/css/almdina_patterns.css` | page intro, toolbar, summary cards, section header |
 | Page templates | `public/css/almdina_page_templates.css` | admin / workbench / list / transaction page-family grammar |
 | Feature presentation | Feature CSS/JS | domain layout only; consume DS tokens/components/patterns |
+| Light pin | [`LIGHT_THEME_PIN.md`](LIGHT_THEME_PIN.md) | exact Light surface/text/status values that Dark must not rewrite |
+
+## Theme boards (Frappe-owned `data-theme`)
+
+Frappe Desk sets and persists `data-theme` on the document root. Almdina must not add a parallel theme switcher or storage.
+
+Token file structure:
+
+1. **Shared** (`:root`, `[data-theme="light"]`, `[data-theme="dark"]`, `.almdina-ui`): brand primitives + static scales (type/space/radius). Not surface paints.
+2. **Light surfaces** (`:root`, `[data-theme="light"]` only): canvas/card/text/status/shadow values pinned in `LIGHT_THEME_PIN.md`.
+3. **Dark surfaces** (`[data-theme="dark"]` only): independent dark hex/rgba pairs. No `var(--fg-color)` / `var(--control-bg)` loops back into foundational Alm tokens.
+4. **`.almdina-ui` bridges**: one-way aliases into Frappe vars for controls (`--alm-secondary-bg` ← `--control-bg`, etc.). Must **not** re-declare `--alm-card` / `--alm-text-*` / `--alm-status-*` or every Almdina surface would re-force Light whites under Dark.
+
+Shared components/patterns (`.alm-page-intro`, `.alm-toolbar`, `.alm-summary-card`, `.alm-badge--*`) consume `--alm-*` only. Feature CSS must not invent per-page Dark overrides for those roles.
 
 ## Shared CSS leakage rule
 

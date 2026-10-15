@@ -17,6 +17,41 @@ WORKSPACE_HOME_CSS = ROOT / "public" / "css" / "almdina_workspace_home.css"
 UI = ROOT / "public" / "js" / "almdina_ui.js"
 ASSETS = ROOT / "frontend_assets.py"
 TOKEN_OWNERSHIP = ROOT.parent / "docs" / "design_system" / "TOKEN_OWNERSHIP.md"
+LIGHT_THEME_PIN = ROOT.parent / "docs" / "design_system" / "LIGHT_THEME_PIN.md"
+
+# Exact Light surface values — never darken these to "fix" Dark Mode.
+LIGHT_SURFACE_PIN: dict[str, str] = {
+    "--alm-canvas": "#eef1f6",
+    "--alm-card": "#ffffff",
+    "--alm-card-border": "#e4e8ee",
+    "--alm-accent-soft": "#eff6ff",
+    "--alm-warning": "#b45309",
+    "--alm-warning-bg": "#fff7e8",
+    "--alm-danger-soft": "#fff1f2",
+    "--alm-danger-soft-border": "#fecdd3",
+    "--alm-text-strong": "#101828",
+    "--alm-text-secondary": "#344054",
+    "--alm-text-subtle": "#667085",
+    "--alm-text-faint": "#98a2b3",
+    "--alm-border-subtle": "#eaecf0",
+    "--alm-border-hover": "#d0d5dd",
+    "--alm-surface-muted": "#f4f6f8",
+    "--alm-status-success-fg": "#15803d",
+    "--alm-status-success-bg": "rgba(21, 128, 61, 0.08)",
+    "--alm-status-success-border": "rgba(21, 128, 61, 0.22)",
+    "--alm-status-warning-fg": "#b45309",
+    "--alm-status-warning-bg": "rgba(180, 83, 9, 0.09)",
+    "--alm-status-warning-border": "rgba(180, 83, 9, 0.24)",
+    "--alm-status-danger-fg": "#b91c1c",
+    "--alm-status-danger-bg": "rgba(185, 28, 28, 0.08)",
+    "--alm-status-danger-border": "rgba(185, 28, 28, 0.22)",
+    "--alm-status-info-fg": "#2563eb",
+    "--alm-status-info-bg": "#eff6ff",
+    "--alm-status-info-border": "rgba(37, 99, 235, 0.24)",
+    "--alm-status-neutral-fg": "#344054",
+    "--alm-status-neutral-bg": "#f4f6f8",
+    "--alm-status-neutral-border": "#e4e8ee",
+}
 EDGE_BANDING_UX = ROOT / "public" / "js" / "edge_banding_type_ux.js"
 SHARED_DS_CSS = (
     TOKENS,
@@ -310,8 +345,8 @@ class TestDesignSystemContract(unittest.TestCase):
 
     def test_static_scales_are_global_for_native_frappe_surfaces(self) -> None:
         # Native lists are not wrapped in .almdina-ui, so static scales must live
-        # in the global block, before the .almdina-ui-only Frappe-derived block.
-        scoped_block = self.tokens.index("}\n\n.almdina-ui {")
+        # in the global/theme boards, before the .almdina-ui-only Frappe-bridge block.
+        bridge_block = self.tokens.index("--alm-secondary-bg:")
         for token in (
             "--alm-font-size-sm:",
             "--alm-font-weight-bold:",
@@ -319,7 +354,72 @@ class TestDesignSystemContract(unittest.TestCase):
             "--alm-radius-xs:",
             "--alm-shadow-card:",
         ):
-            self.assertLess(self.tokens.index(token), scoped_block, msg=f"{token} must be global")
+            self.assertLess(self.tokens.index(token), bridge_block, msg=f"{token} must be global")
+
+    def test_theme_boards_separate_light_and_dark_surfaces(self) -> None:
+        # Regression: previously :root + light + dark + .almdina-ui shared one
+        # Light paint board, so Dark kept white intro/toolbar/summary/info badges.
+        shared_header = self.tokens.split("{", 1)[0]
+        self.assertIn('[data-theme="dark"]', shared_header)
+        self.assertNotIn("--alm-card:", shared_header)
+
+        light_match = re.search(
+            r":root,\s*\[data-theme=\"light\"\]\s*\{([^}]+)\}",
+            self.tokens,
+            flags=re.S,
+        )
+        self.assertIsNotNone(light_match, msg="Light surface board must be :root + [data-theme=light] only")
+        light_block = light_match.group(1)
+        for token, value in LIGHT_SURFACE_PIN.items():
+            self.assertIn(
+                f"{token}: {value}",
+                light_block,
+                msg=f"Light pin drift for {token}",
+            )
+
+        dark_match = re.search(
+            r"\[data-theme=\"dark\"\]\s*\{([^}]+)\}",
+            self.tokens,
+            flags=re.S,
+        )
+        self.assertIsNotNone(dark_match, msg="Dark surface board must exist")
+        dark_block = dark_match.group(1)
+        for token, value in (
+            ("--alm-card", "#1a2030"),
+            ("--alm-canvas", "#12161e"),
+            ("--alm-text-strong", "#f2f4f7"),
+            ("--alm-text-subtle", "#98a2b3"),
+            ("--alm-surface-muted", "#151b27"),
+            ("--alm-status-info-bg", "#0f2748"),
+            ("--alm-status-info-fg", "#93c5fd"),
+            ("--alm-status-success-fg", "#4ade80"),
+            ("--alm-status-danger-fg", "#f87171"),
+            ("--alm-status-neutral-bg", "#1e2533"),
+        ):
+            self.assertIn(f"{token}: {value}", dark_block, msg=f"missing Dark {token}")
+            self.assertNotIn(f"{token}: {LIGHT_SURFACE_PIN[token]}", dark_block)
+
+        # .almdina-ui must not re-pin Light surface paints (would defeat document theme).
+        bridge_start = self.tokens.rindex(".almdina-ui {")
+        bridge_block = self.tokens[bridge_start:]
+        for banned in (
+            "--alm-card:",
+            "--alm-canvas:",
+            "--alm-text-strong:",
+            "--alm-surface-muted:",
+            "--alm-status-info-bg:",
+        ):
+            self.assertNotIn(banned, bridge_block, msg=f".almdina-ui must not redefine {banned}")
+
+        self.assertTrue(LIGHT_THEME_PIN.is_file(), msg="LIGHT_THEME_PIN.md must exist")
+        pin_doc = LIGHT_THEME_PIN.read_text(encoding="utf-8")
+        self.assertIn("--alm-card: #ffffff", pin_doc)
+        self.assertIn("--alm-status-info-bg: #eff6ff", pin_doc)
+
+        ownership = TOKEN_OWNERSHIP.read_text(encoding="utf-8")
+        self.assertIn("Theme boards", ownership)
+        self.assertIn("LIGHT_THEME_PIN.md", ownership)
+        self.assertIn("data-theme", ownership)
 
     def test_native_list_chrome_reads_design_tokens(self) -> None:
         list_table = (ROOT / "public" / "css" / "almdina_list_table.css").read_text(encoding="utf-8")
@@ -484,7 +584,7 @@ class TestDesignSystemContract(unittest.TestCase):
         self.assertIn(".almdina-ui .alm-control .form-control:focus", self.components)
 
     def test_assets_load_design_system_before_feature_css_and_after_foundation(self) -> None:
-        tokens_asset = '"/assets/almdina_erp/css/almdina_design_tokens.css"'
+        tokens_asset = '"/assets/almdina_erp/css/almdina_design_tokens.css?v=2"'
         components_asset = '"/assets/almdina_erp/css/almdina_components.css"'
         patterns_asset = '"/assets/almdina_erp/css/almdina_patterns.css"'
         templates_asset = '"/assets/almdina_erp/css/almdina_page_templates.css?v=1"'
@@ -517,6 +617,12 @@ class TestDesignSystemContract(unittest.TestCase):
             '.almdina-ui .alm-summary-card[data-tone="success"]',
         ):
             self.assertIn(marker, patterns, msg=f"missing pattern selector {marker}")
+        # Shared patterns must paint via theme tokens — no Feature/Dark-only forks.
+        self.assertIn("background: var(--alm-card, var(--alm-surface))", patterns)
+        self.assertIn("background: var(--alm-surface-muted)", patterns)
+        self.assertIn("background: var(--alm-status-info-bg)", patterns)
+        self.assertNotIn('[data-theme="dark"] .aw-', patterns)
+        self.assertNotIn('[data-theme="dark"] .alm-page-intro', patterns)
 
     def test_admin_console_surfaces_adopt_shared_patterns(self) -> None:
         permissions = PERMISSIONS_RENDERER.read_text(encoding="utf-8")
