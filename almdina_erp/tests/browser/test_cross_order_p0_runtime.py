@@ -482,15 +482,35 @@ def test_saved_server_plan_print_runtime():
                         board:cur_frm.doc.board_description,rowBoard:row?.board?.description,
                         writes:__p0PrintWrites.length};
                     const originalMsg=frappe.msgprint, messages=[];
+                    const originalPrint=AlmdinaCuttingPlanRender.print;
+                    let printChecks=null;
+                    AlmdinaCuttingPlanRender.print=function(frm,plan,hint) {
+                        const context=AlmdinaDocumentContext, owner=AlmdinaPlanWorkspaceState;
+                        const token=context.capture(frm),state=owner.snapshot(frm);
+                        const row=owner.displayedPlanForTab(frm,hint?.tab);
+                        const geometry=row?.snapshot_json && JSON.parse(row.snapshot_json);
+                        const hintGeometry=hint?.row?.snapshot_json && JSON.parse(hint.row.snapshot_json);
+                        printChecks={current:context.isCurrent(frm,token),
+                            permission:AlmdinaPermissions.canDocument(frm,'print_cutting_plan'),
+                            status:state?.status,orderMatches:state?.data?.order_name===frm.doc?.name,
+                            capability:state?.data?.capabilities?.print,
+                            rowName:row?.name,hintName:hint?.row?.name,
+                            rowRevision:row?.revision,hintRevision:hint?.row?.revision,
+                            sheets:geometry?.sheets?.length,
+                            boardMatches:!row?.board?.description || row.board.description===frm.doc.board_description,
+                            hintGeometryMatches:JSON.stringify(hintGeometry)===JSON.stringify(geometry),
+                            planGeometryMatches:JSON.stringify(plan)===JSON.stringify(geometry)};
+                        return originalPrint.apply(this,arguments);
+                    };
                     let result;
                     frappe.msgprint=function(message,...args) {
                         messages.push(String(message?.message || message));
                         return originalMsg.call(this,message,...args);
                     };
                     try { result=await AlmdinaPlanTabsUX.printActivePlan(cur_frm); }
-                    finally { frappe.msgprint=originalMsg; }
+                    finally { frappe.msgprint=originalMsg; AlmdinaCuttingPlanRender.print=originalPrint; }
                     return {result,order:cur_frm.doc.name,row:row?.name,before,
-                        messages,
+                        messages,printChecks,
                         after:{generation:AlmdinaDocumentContext.capture(cur_frm)?.generation,
                             modified:cur_frm.doc.modified,writes:__p0PrintWrites.length,
                             state:AlmdinaPlanWorkspaceState.snapshot(cur_frm)?.status},
