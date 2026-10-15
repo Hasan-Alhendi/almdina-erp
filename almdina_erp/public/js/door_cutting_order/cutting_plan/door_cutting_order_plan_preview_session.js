@@ -156,11 +156,22 @@
         return previewRowData(stateFor(frm));
     }
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        return String(message == null ? "" : message);
+    }
+
     async function preview(frm, settings) {
         if (!frm || !frm.doc || !frm.doc.name || isBusy(frm)) return false;
         const api = window.AlmdinaPlanWorkspaceAPI;
         if (!api || typeof api.preview !== "function") {
-            frappe.msgprint(__("تعذر تحميل خدمة معاينة خطة القص. أعد تحميل الصفحة."));
+            frappe.msgprint(translate("Could not load the cutting plan preview service. Reload the page."));
             return false;
         }
 
@@ -202,7 +213,10 @@
             state.status = "error";
             state.previewId = null;
             state.payload = null;
-            state.error = String(error && (error.message || error) || __("تعذر إنشاء المعاينة."));
+            state.error = String(
+                (error && (error.message || error))
+                || "Could not create the preview."
+            );
             dispatch(frm);
             throw error;
         }
@@ -240,7 +254,10 @@
             state.status = "stale";
             state.previewId = null;
             state.payload = null;
-            state.error = String(error && (error.message || error) || __("تعذر حفظ المعاينة."));
+            state.error = String(
+                (error && (error.message || error))
+                || "Could not save the preview."
+            );
             dispatch(frm);
             throw error;
         }

@@ -55,34 +55,34 @@
                 return snapshot;
             }).catch(error => {
                 if (!current() || !requests.isCurrent(token)) return null;
-                renderer.renderBackupError(errorMessage(error, t("تعذر تحميل إدارة النسخ.")));
+                renderer.renderBackupError(errorMessage(error, t("Could not load backup management.")));
                 return null;
             });
         }
 
         function createBackup() {
             if (!current()) return;
-            api.createBackupNow({ freeze: true, freezeMessage: t("جاري إضافة النسخة إلى قائمة الانتظار...") })
+            api.createBackupNow({ freeze: true, freezeMessage: t("Adding backup to the queue...") })
                 .then(() => {
                     if (!current()) return;
-                    frappe.show_alert({ message: t("تمت جدولة النسخة المحلية في الخلفية."), indicator: "green" });
+                    frappe.show_alert({ message: t("Local backup scheduled in the background."), indicator: "green" });
                     return refresh();
                 })
                 .catch(error => {
                     if (!current()) return;
-                    frappe.msgprint({ title: t("تعذر إنشاء النسخة"), message: errorMessage(error, t("فشلت جدولة النسخة.")), indicator: "red" });
+                    frappe.msgprint({ title: t("Could not create the backup"), message: errorMessage(error, t("Backup scheduling failed.")), indicator: "red" });
                 });
         }
 
         function testConnection() {
             if (!current()) return;
-            api.testSshConnection({ freeze: true, freezeMessage: t("جاري اختبار اتصال SSH والمسار البعيد...") })
+            api.testSshConnection({ freeze: true, freezeMessage: t("Testing SSH connection and remote path...") })
                 .then(() => {
-                    if (current()) frappe.show_alert({ message: t("اتصال SSH والمسار البعيد صالحان."), indicator: "green" });
+                    if (current()) frappe.show_alert({ message: t("SSH connection and remote path are valid."), indicator: "green" });
                 })
                 .catch(error => {
                     if (!current()) return;
-                    frappe.msgprint({ title: t("فشل اختبار SSH"), message: errorMessage(error, t("تعذر الاتصال بالخادم البعيد.")), indicator: "red" });
+                    frappe.msgprint({ title: t("SSH test failed"), message: errorMessage(error, t("Could not connect to the remote server.")), indicator: "red" });
                 });
         }
 
@@ -93,10 +93,10 @@
                 onSubmit: confirmation => api.requestRestore(
                     operationId,
                     confirmation,
-                    { freeze: true, freezeMessage: t("جاري تجهيز طلب الاستعادة...") }
+                    { freeze: true, freezeMessage: t("Preparing the restore request...") }
                 ).then(result => {
                     if (current()) {
-                        frappe.show_alert({ message: t("بدأ تجهيز نسخة الأمان والاستعادة في الخلفية."), indicator: "orange" }, 10);
+                        frappe.show_alert({ message: t("Preparation of the backup and restore started in the background."), indicator: "orange" }, 10);
                         refresh();
                     }
                     return result;

@@ -100,15 +100,15 @@ vm.runInContext(source, context);
 
 (async () => {
     const api = context.window.AlmdinaShopFloorQuickActions;
-    assert.strictEqual(api.actionFor({ canStart: true }).label, "بدء العمل");
+    assert.strictEqual(api.actionFor({ canStart: true }).label, "Start work");
     assert.strictEqual(
         api.actionFor({ canHandoff: true, stageType: "Any Configured Stage" }).label,
-        "إنهاء وإرسال"
+        "Finish and send"
     );
 
     const deliveryAction = api.actionFor({ canDeliver: true, canStart: true, canHandoff: true });
     assert.strictEqual(deliveryAction.kind, "deliver", "server-authorized delivery must take precedence over production actions");
-    assert.strictEqual(deliveryAction.label, "تم التسليم");
+    assert.strictEqual(deliveryAction.label, "Delivered");
 
     const callsBeforeDelivery = calls.length;
     await api.perform({ order: "DCO-DELIVER", canDeliver: true }, { button });
@@ -138,7 +138,7 @@ vm.runInContext(source, context);
     await new Promise(resolve => setImmediate(resolve));
     assert(calls.some(call => call.method.endsWith("get_handoff_context")));
     assert.strictEqual(dialogs.length, 1, "non-final handoff must open one worker dropdown dialog");
-    assert.strictEqual(dialogs[0].config.title, "إنهاء وإرسال");
+    assert.strictEqual(dialogs[0].config.title, "Finish and send");
     assert.strictEqual(dialogs[0].config.fields[0].fieldtype, "HTML");
     assert.strictEqual(dropdownHideCount, 1, "handoff dialog must close after a worker is submitted");
     assert(calls.some(call => (

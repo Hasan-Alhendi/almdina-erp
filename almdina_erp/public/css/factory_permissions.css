@@ -154,7 +154,8 @@
     color: #667085;
     font-size: 10px;
     direction: ltr;
-    text-align: right;
+    text-align: start;
+    unicode-bidi: isolate;
 }
 
 .apc-toolbar {

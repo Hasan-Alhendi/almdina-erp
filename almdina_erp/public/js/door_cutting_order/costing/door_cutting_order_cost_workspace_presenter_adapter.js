@@ -1,6 +1,23 @@
 (() => {
     "use strict";
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split(`{${index}}`).join(String(value));
+            });
+        }
+        return text;
+    }
+
     if (window.AlmdinaCostWorkspacePresenterAdapter) return;
 
     function stateOwner() {
@@ -162,9 +179,9 @@
     function pendingMessage(frm) {
         const state = snapshot(frm);
         if (state && state.status === "error") {
-            return __("تعذر تحميل بيانات التكلفة. أعد المحاولة.");
+            return translate("Could not load the cost data. Try again.");
         }
-        return __("جاري تحميل بيانات التكلفة...");
+        return translate("Loading the cost data...");
     }
 
     const HOSTED_COST_SETTING_FIELDS = Object.freeze([
@@ -272,7 +289,7 @@
                 amount: isPending ? 0 : number(line.amount_usd),
                 pending: isPending,
                 note: isPending
-                    ? __("بانتظار إدخال السعر الخاص الشامل")
+                    ? translate("Waiting for the inclusive special price")
                     : (line.note || ""),
             };
         });
@@ -337,15 +354,15 @@
         card.classList.toggle("is-pending", pending.length > 0);
         if (pending.length) {
             card.innerHTML = `
-                <span>${__("الإجمالي الحالي قبل الأسعار غير المسعرة")}
-                    <small>${__("لا يعتبر إجماليًا نهائيًا حتى تسعير: {0}").replace("{0}", pending.map(esc).join("، "))}</small>
+                <span>${esc(translate("Current total before unpriced items"))}
+                    <small>${esc(translate("This is not a final total until these items are priced: {0}", [pending.join(", ")]))}</small>
                 </span>
                 <b>$ ${money(total)}</b>
             `;
             return;
         }
         card.innerHTML = `
-            <span>${__("الإجمالي النهائي للفاتورة")}</span>
+            <span>${esc(translate("Final invoice total"))}</span>
             <b>$ ${money(total)}</b>
         `;
     }

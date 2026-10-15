@@ -85,10 +85,10 @@ renderer.renderList(denied.target, {
     completed: [],
     canViewHistory: false,
 });
-assert.match(denied.html(), /طلباتك التشغيلية/);
-assert.doesNotMatch(denied.html(), /الطلبات المنتهية/);
-assert.doesNotMatch(denied.html(), />منتهية</);
-assert.doesNotMatch(denied.html(), /راجع ما أنهيته/);
+assert.match(denied.html(), /Your operational orders/);
+assert.doesNotMatch(denied.html(), /Completed orders/);
+assert.doesNotMatch(denied.html(), />Completed</);
+assert.doesNotMatch(denied.html(), /review completed work/);
 
 const allowed = shell();
 renderer.renderList(allowed.target, {
@@ -96,8 +96,8 @@ renderer.renderList(allowed.target, {
     completed,
     canViewHistory: true,
 });
-assert.match(allowed.html(), /الطلبات المنتهية/);
-assert.match(allowed.html(), />منتهية</);
-assert.match(allowed.html(), /راجع ما أنهيته/);
+assert.match(allowed.html(), /Completed orders/);
+assert.match(allowed.html(), />Completed</);
+assert.match(allowed.html(), /review completed work/);
 
 console.log("shop_floor history renderer simulation: ok");

@@ -63,6 +63,20 @@
         });
     }
 
+    function applyItemLabel(container, linkTo, fallbackLabel) {
+        const api = presentation();
+        if (!api) return;
+        const meta = (linkTo && typeof api.metaForRoute === "function" && api.metaForRoute(linkTo))
+            || (linkTo && typeof api.metaForLinkTo === "function" && api.metaForLinkTo(linkTo))
+            || (fallbackLabel && typeof api.metaForLabel === "function" && api.metaForLabel(fallbackLabel))
+            || null;
+        if (!meta || !meta.label) return;
+        const labelNode = container.querySelector(".sidebar-item-label");
+        if (!labelNode) return;
+        const translated = __(meta.label);
+        if (labelNode.textContent !== translated) labelNode.textContent = translated;
+    }
+
     function applyItemIcon(container) {
         const api = presentation();
         if (!api) return;
@@ -72,6 +86,7 @@
 
         const label = itemLabel(container);
         const linkTo = anchor.getAttribute("href") || "";
+        applyItemLabel(container, linkTo, label);
         const iconName = resolveIconName(label, linkTo);
         if (!iconName) return;
 

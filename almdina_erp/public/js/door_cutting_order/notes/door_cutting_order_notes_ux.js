@@ -4,7 +4,9 @@
     const DOCTYPE = "Door Cutting Order";
     const UPDATED_EVENT = "almdina:notes-context-updated";
     const CONTEXT_METHOD = "almdina_erp.almdina_erp.services.notes_service.get_order_notes_context";
-    const NOTES_ACTION_LABEL = __("الملاحظات");
+    // English message id: Frappe custom_buttons are keyed by this resolved label.
+    // Catalog maps Notes → الملاحظات (AR). Keep the identity stable within a language session.
+    const NOTES_ACTION_LABEL = __("Notes");
     const NOTES_BUTTON_CLASS = "dco-notes-toolbar-button";
     const NOTES_SURFACE = "collaborative-notes-toolbar";
 
@@ -112,14 +114,18 @@
         frm._almdinaNotesButton = button;
         button.classList.add(NOTES_BUTTON_CLASS);
         button.dataset.almdinaNotesButton = "1";
-        button.textContent = buttonLabel(frm);
+        const label = buttonLabel(frm);
+        if (button.textContent !== label) button.textContent = label;
         button.classList.toggle(
             "dco-notes-button-has-important",
             Boolean(String(frm.doc && frm.doc.important_note_preview || "").trim())
         );
         const preview = String(frm.doc && frm.doc.important_note_preview || "").trim();
-        button.title = preview ? `الملاحظة المهمة: ${preview}` : "فتح الملاحظات";
-        button.setAttribute("aria-label", button.title);
+        const title = preview
+            ? __("Important note: {0}", [preview])
+            : __("Open notes");
+        if (button.title !== title) button.title = title;
+        button.setAttribute("aria-label", title);
         return true;
     }
 
@@ -127,8 +133,8 @@
         const owner = panel();
         if (!owner || typeof owner.openForOrder !== "function") {
             frappe.msgprint({
-                title: "الملاحظات",
-                message: "تعذر تحميل واجهة الملاحظات. حدّث الصفحة وحاول مرة أخرى.",
+                title: NOTES_ACTION_LABEL,
+                message: __("The notes interface could not be loaded. Reload the page and try again."),
                 indicator: "orange",
             });
             return;

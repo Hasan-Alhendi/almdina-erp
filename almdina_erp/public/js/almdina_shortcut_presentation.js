@@ -7,32 +7,100 @@
 
     /**
      * Stable presentation keyed by Frappe link_to / route / DocType name.
-     * Prefer metaForLinkTo / metaForRoute over visible Arabic labels.
+     * label and desc are English message IDs. Translate them at render time.
      */
     const SHORTCUT_BY_LINK_TO = Object.freeze({
-        Customer: { desc: "إدارة سجلات الزبائن وبيانات التواصل", icon: "users" },
-        "Edge Banding Type": { desc: "تعريف أنواع القشاط والأسعار والسماكات", icon: "tool" },
-        "factory-production-settings": { desc: "إعدادات الإنتاج والقص الافتراضية", icon: "setting" },
-        Role: { desc: "أدوار Frappe المستخدمة في المعمل", icon: "shield" },
-        "factory-permissions": { desc: "مصفوفة صلاحيات Almdina حسب الدور", icon: "lock" },
-        "factory-workforce": { desc: "حسابات المعمل والأدوار وصفحات الدخول", icon: "hr" },
-        "factory-master-data": { desc: "مسارات الإنتاج والمراحل التشغيلية", icon: "branch" },
-        "Door Cutting Order": { desc: "إنشاء ومتابعة طلبات القص", icon: "clipboard" },
-        "shop-floor-inbox": { desc: "لوحة التشغيل وصندوق الوارد", icon: "organization" },
-        "Replacement Part": { desc: "قطع بديلة مرتبطة بأخطاء الإنتاج", icon: "duplicate" },
-        "Production Error": { desc: "تسجيل ومتابعة حوادث الإنتاج", icon: "close" },
-        "Factory Operations Summary": { desc: "نظرة عامة على حركة المعمل", icon: "es-line-chart" },
-        "Cutting Order Analysis": { desc: "تحليل الطلبات والأداء", icon: "es-line-reports" },
-        "Board Usage Analysis": { desc: "استهلاك الألواح والهدر", icon: "table" },
-        "Door Measurement Analysis": { desc: "أكثر المقاسات استخدامًا", icon: "small-file" },
-        "Production Stage Performance": { desc: "زمن المراحل والإنتاجية", icon: "timer" },
+        Customer: {
+            label: "Customers",
+            desc: "Manage customer records and contact details",
+            icon: "users",
+        },
+        "Edge Banding Type": {
+            label: "Edge banding types and prices",
+            desc: "Define edge banding types and their prices and thicknesses",
+            icon: "tool",
+        },
+        "factory-production-settings": {
+            label: "Factory Settings",
+            desc: "Default production and cutting settings",
+            icon: "setting",
+        },
+        Role: {
+            label: "Role management",
+            desc: "Frappe roles used in the factory",
+            icon: "shield",
+        },
+        "factory-permissions": {
+            label: "Permission management",
+            desc: "Almdina permission matrix by role",
+            icon: "lock",
+        },
+        "factory-workforce": {
+            label: "User management",
+            desc: "Factory accounts, roles, and entry pages",
+            icon: "hr",
+        },
+        "factory-master-data": {
+            label: "Production route management",
+            desc: "Production routes and operational stages",
+            icon: "branch",
+        },
+        "Door Cutting Order": {
+            label: "Door cutting orders",
+            desc: "Create and follow cutting orders",
+            icon: "clipboard",
+        },
+        "shop-floor-inbox": {
+            label: "Production stages",
+            desc: "Shop floor board and inbox",
+            icon: "organization",
+        },
+        "Replacement Part": {
+            label: "Replacement parts",
+            desc: "Replacement parts linked to production errors",
+            icon: "duplicate",
+        },
+        "Production Error": {
+            label: "Production errors",
+            desc: "Record and follow production incidents",
+            icon: "close",
+        },
+        "Factory Operations Summary": {
+            label: "Factory operations summary",
+            desc: "Overview of factory activity",
+            icon: "es-line-chart",
+        },
+        "Cutting Order Analysis": {
+            label: "Cutting order analysis",
+            desc: "Order and performance analysis",
+            icon: "es-line-reports",
+        },
+        "Board Usage Analysis": {
+            label: "Board usage analysis",
+            desc: "Board consumption and waste",
+            icon: "table",
+        },
+        "Door Measurement Analysis": {
+            label: "Door measurement analysis",
+            desc: "Most used measurements",
+            icon: "small-file",
+        },
+        "Production Stage Performance": {
+            label: "Production stage performance",
+            desc: "Stage time and productivity",
+            icon: "timer",
+        },
         "Production Errors and Replacement Parts": {
-            desc: "تقرير موحد للحوادث والتعويض",
+            label: "Production errors and replacement parts",
+            desc: "Combined incident and compensation report",
             icon: "es-line-reports",
         },
     });
 
-    /** Label → link_to bridge for Frappe widgets that only expose the shortcut label. */
+    /**
+     * Label → link_to bridge for widgets that only expose a stored shortcut name.
+     * Arabic keys are legacy compatibility. They are not the displayed text.
+     */
     const LABEL_TO_LINK_TO = Object.freeze({
         "الزبائن": "Customer",
         "أنواع القشاط وأسعاره": "Edge Banding Type",
@@ -51,6 +119,23 @@
         "تحليل قياسات الدرف": "Door Measurement Analysis",
         "أداء مراحل الإنتاج": "Production Stage Performance",
         "أخطاء الإنتاج والقطع التعويضية": "Production Errors and Replacement Parts",
+        Customers: "Customer",
+        "Edge banding types and prices": "Edge Banding Type",
+        "Factory Settings": "factory-production-settings",
+        "Role management": "Role",
+        "Permission management": "factory-permissions",
+        "User management": "factory-workforce",
+        "Production route management": "factory-master-data",
+        "Door cutting orders": "Door Cutting Order",
+        "Production stages": "shop-floor-inbox",
+        "Replacement parts": "Replacement Part",
+        "Production errors": "Production Error",
+        "Factory operations summary": "Factory Operations Summary",
+        "Cutting order analysis": "Cutting Order Analysis",
+        "Board usage analysis": "Board Usage Analysis",
+        "Door measurement analysis": "Door Measurement Analysis",
+        "Production stage performance": "Production Stage Performance",
+        "Production errors and replacement parts": "Production Errors and Replacement Parts",
     });
 
     /** Compatibility surface: label → presentation (derived from link_to catalog). */
@@ -105,6 +190,28 @@
         return String(value || "").replace(/\s+/g, " ").trim();
     }
 
+    function linkRouteKey(value) {
+        return normalizeText(value).toLowerCase().replace(/\s+/g, "-");
+    }
+
+    const LINK_TO_BY_ROUTE_KEY = Object.freeze(
+        Object.fromEntries(
+            Object.keys(SHORTCUT_BY_LINK_TO).map((key) => [linkRouteKey(key), key])
+        )
+    );
+
+    function canonicalLinkTo(linkTo) {
+        const key = normalizeText(linkTo);
+        if (!key) return "";
+        if (SHORTCUT_BY_LINK_TO[key]) return key;
+        const routed = LINK_TO_BY_ROUTE_KEY[linkRouteKey(key)];
+        if (routed && SHORTCUT_BY_LINK_TO[routed]) return routed;
+        if (LABEL_TO_LINK_TO[key] && SHORTCUT_BY_LINK_TO[LABEL_TO_LINK_TO[key]]) {
+            return LABEL_TO_LINK_TO[key];
+        }
+        return "";
+    }
+
     function normalizeRoute(value) {
         const text = normalizeText(value);
         if (!text) return "";
@@ -122,9 +229,9 @@
     }
 
     function metaForLinkTo(linkTo) {
+        const canonical = canonicalLinkTo(linkTo);
+        if (canonical) return SHORTCUT_BY_LINK_TO[canonical];
         const key = normalizeText(linkTo);
-        if (!key) return null;
-        if (SHORTCUT_BY_LINK_TO[key]) return SHORTCUT_BY_LINK_TO[key];
         const aliasIcon = LABEL_ICON_ALIASES[key];
         if (aliasIcon) return Object.freeze({ desc: "", icon: aliasIcon });
         return null;

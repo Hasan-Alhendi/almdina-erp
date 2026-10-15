@@ -228,7 +228,7 @@
             flex-wrap:wrap !important;
             align-items:stretch !important;
             gap:8px !important;
-            direction:rtl !important;
+            direction:inherit !important;
             margin:0 0 6px !important;
         }
         [data-fieldname="cutting_plan_html"] .dco-plan-meta-strip .dco-special-raw-coverage {
@@ -338,7 +338,7 @@
             display:flex !important;
             align-items:flex-start !important;
             gap:8px !important;
-            direction:rtl !important;
+            direction:inherit !important;
             margin:0 0 10px !important;
             padding:8px 10px !important;
             border:1px solid #e0b34c !important;
@@ -351,7 +351,7 @@
             display:flex !important;
             align-items:flex-start !important;
             gap:12px !important;
-            direction:rtl !important;
+            direction:inherit !important;
             width:100% !important;
             box-sizing:border-box !important;
             margin:0 0 14px !important;
@@ -462,7 +462,7 @@
             gap:1px 6px;
             margin:0 0 2px;
             padding:0;
-            direction:rtl;
+            direction:inherit;
             line-height:1.15;
             pointer-events:none;
         }
@@ -620,7 +620,7 @@
             border-radius:16px;
             background:var(--card-bg,#fff);
             box-shadow:0 24px 80px rgba(0,0,0,.28);
-            direction:rtl;
+            direction:inherit;
         }
         .dco-board-focus__header {
             flex:0 0 auto;

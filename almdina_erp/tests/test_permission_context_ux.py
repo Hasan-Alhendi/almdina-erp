@@ -142,7 +142,7 @@ def test_cutting_plan_tabs_use_capability_not_role_names() -> None:
     assert "view_system_cutting_plan" in source
     assert "view_uploaded_cutting_plan" in source
     assert "view_approved_cutting_plan" in source
-    assert "الخطة المعتمدة" in source
+    assert 'label: "Approved plan"' in source
     assert "frappe.user_roles" not in source
     assert "DUAL_ROLES" not in source
     for role in ("Order Entry", "Production Manager", "System Manager", "عامل رسم"):

@@ -433,24 +433,41 @@
         return Boolean(frm && frm.doc && !frm.is_new());
     }
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split("{" + index + "}").join(String(value));
+            });
+        }
+        return text;
+    }
+
     function stageMutationBlockReason(frm) {
         if (!frm || !frm.doc) return "";
         if (!frm.doc.current_production_stage) {
             if (String(frm.doc.status || "Draft").trim() === "Draft") return "";
             if (String(frm.doc.production_path || "").trim()) {
-                return "يمكنك عرض هذا الطلب فقط. الطلب غادر مراحل الإنتاج النشطة.";
+                return translate("You can view this order only. The order has left the active production stages.");
             }
             return "";
         }
         if (isStageContextPending(frm)) {
-            return "جاري التحقق من إسناد المرحلة الحالية...";
+            return translate("Checking the current stage assignment...");
         }
         if (isCurrentStageAssignee(frm)) return "";
         const stage = frm.__almdina_stage_context || {};
         if (stage.active_stage_assigned_to) {
-            return "يمكنك عرض هذا الطلب فقط. المرحلة الحالية مسندة إلى مستخدم آخر.";
+            return translate("You can view this order only. The current stage is assigned to another user.");
         }
-        return "يمكنك عرض هذا الطلب فقط. أسند المرحلة الحالية إلى مستخدم قبل تنفيذ أي تعديل.";
+        return translate("You can view this order only. Assign the current stage to a user before making any change.");
     }
 
     // A surface is any region that a lazily loaded module owns. Rendering runs

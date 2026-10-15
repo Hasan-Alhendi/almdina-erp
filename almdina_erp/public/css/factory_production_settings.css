@@ -181,14 +181,19 @@
     line-height: 1.7;
 }
 
-.aps-restore-warning code {
+.aps-restore-warning code,
+.aps-ltr-value {
     direction: ltr;
+    unicode-bidi: isolate;
+}
+
+.aps-restore-warning code {
     display: block;
     padding: var(--alm-space-2, 8px);
     border-radius: var(--alm-radius-sm, 10px);
     background: var(--alm-surface, #fff);
     color: var(--alm-text-strong, #101828);
-    text-align: left;
+    text-align: start;
     user-select: all;
 }
 
@@ -198,7 +203,6 @@
     justify-items: center;
     text-align: center;
     padding: 8px 4px 4px;
-    direction: rtl;
 }
 
 .aps-whatsapp-qr img {
@@ -681,8 +685,9 @@
     position: absolute;
     top: 15px;
     bottom: -18px;
-    right: 8px;
+    inset-inline-start: 50%;
     width: 1px;
+    margin-inline-start: -0.5px;
     background: var(--border-color, #e5e7eb);
 }
 

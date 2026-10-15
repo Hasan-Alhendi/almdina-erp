@@ -157,8 +157,8 @@ class TestWorkspaceFreshnessArchitecture(unittest.TestCase):
         self.assertIn('"total_cost_usd": flt(plan.total_cost_usd)', backend)
         self.assertIn("const cost = summary && summary.cost", presenter)
         self.assertIn("if (cost)", presenter)
-        self.assertIn("تكلفة الخطة المتوقعة", presenter)
-        self.assertIn("هذه الخطة وتكلفتها المعروضة للمعاينة فقط", presenter)
+        self.assertIn("Expected plan cost", presenter)
+        self.assertIn("This plan and its cost are only a preview", presenter)
 
     def test_committed_preview_reconciles_plan_then_cost(self) -> None:
         source = (
@@ -169,15 +169,15 @@ class TestWorkspaceFreshnessArchitecture(unittest.TestCase):
         self.assertIn("AlmdinaWorkspaceSyncCoordinator", source)
         self.assertIn('coordinator.invalidate(frm, ["plan", "cost"], "plan_changed")', source)
         self.assertIn('await coordinator.refresh(frm, ["plan", "cost"]', source)
-        self.assertIn("تم حفظ خطة المعاينة وتحديث التكلفة المرتبطة بها", source)
+        self.assertIn("The preview plan was saved", source)
 
     def test_freshness_ux_never_owns_persistence(self) -> None:
         source = (
             PUBLIC / "core" / "door_cutting_order_workspace_freshness_ux.js"
         ).read_text(encoding="utf-8")
-        self.assertIn("بانتظار التحديث", source)
-        self.assertIn("السعر السابق", source)
-        self.assertIn("هناك معاينة خطة غير محفوظة", source)
+        self.assertIn('translate("Waiting for update")', source)
+        self.assertIn('translate("Previous price")', source)
+        self.assertIn('translate("There is an unsaved plan preview")', source)
         self.assertIn("data-almdina-cost-freshness", source)
         self.assertNotIn("frappe.call", source)
         self.assertNotIn("frm.save", source)

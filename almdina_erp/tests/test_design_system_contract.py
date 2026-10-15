@@ -114,7 +114,6 @@ DCO_STYLE_INJECTION_DEBT = frozenset(
     {
         "core/door_cutting_order_plan_cost_workspace_visual_ux.js",
         "core/door_cutting_order_tab_edit_lifecycle_guard.js",
-        "core/door_cutting_order_toolbar_stability_ux.js",
         "core/door_cutting_order_workspace_freshness_ux.js",
         "costing/door_cutting_order_compact_pricing_ux.js",
         "costing/door_cutting_order_cost_page_layout_ux.js",
@@ -134,7 +133,6 @@ DCO_STYLE_INJECTION_DEBT = frozenset(
         "order_entry/measurements/door_cutting_order_measurement_resilience_ux.js",
         "order_entry/measurements/door_cutting_order_measurement_toolbar_ux.js",
         "printing/door_cutting_order_document_compactness_ux.js",
-        "responsive/door_cutting_order_header_ux.js",
     }
 )
 LEGACY_PRIMARY_MARKERS = (
@@ -489,10 +487,10 @@ class TestDesignSystemContract(unittest.TestCase):
         tokens_asset = '"/assets/almdina_erp/css/almdina_design_tokens.css"'
         components_asset = '"/assets/almdina_erp/css/almdina_components.css"'
         patterns_asset = '"/assets/almdina_erp/css/almdina_patterns.css"'
-        templates_asset = '"/assets/almdina_erp/css/almdina_page_templates.css"'
+        templates_asset = '"/assets/almdina_erp/css/almdina_page_templates.css?v=1"'
         desk_theme_asset = '"/assets/almdina_erp/css/almdina_desk_theme.css"'
         desk_sidebar_asset = '"/assets/almdina_erp/css/almdina_desk_sidebar.css?v=2"'
-        workspace_home_asset = '"/assets/almdina_erp/css/almdina_workspace_home.css?v=10"'
+        workspace_home_asset = '"/assets/almdina_erp/css/almdina_workspace_home.css?v=11"'
         ui_asset = '"/assets/almdina_erp/js/almdina_ui.js"'
         foundation_asset = '"/assets/almdina_erp/js/frontend_foundation.js"'
         notes_asset = '"/assets/almdina_erp/css/notes.css"'
@@ -546,8 +544,11 @@ class TestDesignSystemContract(unittest.TestCase):
             ".almdina-ui.alm-page--transaction",
             "body:has(.frappe-list)",
             "--alm-page-max-width",
+            "text-align: start",
         ):
             self.assertIn(marker, templates, msg=f"missing page template marker {marker}")
+        self.assertNotIn("direction: rtl", templates)
+        self.assertNotIn("direction:rtl", templates)
 
     def test_surfaces_adopt_page_template_families(self) -> None:
         permissions = PERMISSIONS_RENDERER.read_text(encoding="utf-8")
@@ -690,7 +691,7 @@ class TestDesignSystemContract(unittest.TestCase):
         self.assertIn("prw-stage-role-mount", self.factory_master_data_page)
         self.assertIn("search_operational_roles", self.factory_master_data_page)
         self.assertNotIn('data-stage-field="operational_role"', self.factory_master_data_page)
-        self.assertIn('page.set_primary_action(__("مسار إنتاج جديد")', self.factory_master_data_page)
+        self.assertIn('page.set_primary_action(translate("New production route")', self.factory_master_data_page)
         self.assertIn("syncPrimaryAction()", self.factory_master_data_page)
         self.assertNotIn("prw-new-route", self.factory_master_data_page)
         self.assertNotIn('class="btn btn-primary prw-save-route"', self.factory_master_data_page)
@@ -711,7 +712,7 @@ class TestDesignSystemContract(unittest.TestCase):
         self.assertIn("AlmdinaUi.badge is required for factory master data rendering", page)
         self.assertIn('className: "prw-status"', page)
         self.assertIn('className: "prw-mini-badge"', page)
-        self.assertIn('this.errorStateHtml(__("تعذر فتح إدارة المسارات"), message, "prw-retry")', page)
+        self.assertIn('this.errorStateHtml(translate("Could not open route management"), message, "prw-retry")', page)
         self.assertNotIn('class="prw-error"', page)
 
         # Feature CSS keeps geometry; intro/summary/status/empty chrome belongs to the DS.
@@ -747,18 +748,18 @@ class TestDesignSystemContract(unittest.TestCase):
 
     def test_migrated_admin_pages_use_frappe_page_toolbar_actions(self) -> None:
         self.assertNotIn("aw-refresh", self.workforce_renderer)
-        self.assertIn('add_inner_button(__("تحديث"), load, null, "refresh")', self.workforce_controller)
-        self.assertIn('set_primary_action(__("إنشاء مستخدم جديد"), openCreateDialog, "add")', self.workforce_controller)
+        self.assertIn('add_inner_button(translate("Refresh"), load, null, "refresh")', self.workforce_controller)
+        self.assertIn('set_primary_action(translate("Create new user"), openCreateDialog, "add")', self.workforce_controller)
 
         self.assertNotIn("almdina-sf-refresh", self.shop_floor_renderer)
         self.assertNotIn("almdina-sf-refresh", self.shop_floor_interactions)
-        self.assertIn('add_inner_button(__("تحديث"), refresh, null, "refresh")', self.shop_floor_controller)
+        self.assertIn('add_inner_button(translate("Refresh"), refresh, null, "refresh")', self.shop_floor_controller)
         self.assertIn("syncRefreshButtonVisibility", self.shop_floor_controller)
 
-        self.assertIn('page.set_primary_action(__("مسار إنتاج جديد")', self.factory_master_data_page)
+        self.assertIn('page.set_primary_action(translate("New production route")', self.factory_master_data_page)
         self.assertIn("syncPrimaryAction()", self.factory_master_data_page)
         self.assertIn('this.page.add_inner_button(', self.factory_master_data_page)
-        self.assertIn('page.set_primary_action(__("تحديث"), load, "refresh")', self.factory_plan_archive_page)
+        self.assertIn('page.set_primary_action(translate("Refresh"), load, "refresh")', self.factory_plan_archive_page)
 
     def test_migrated_admin_dialogs_reject_structured_prompts(self) -> None:
         shop_floor_dialogs = (ROOT / "public" / "js" / "shop_floor_inbox" / "dialogs.js").read_text(encoding="utf-8")

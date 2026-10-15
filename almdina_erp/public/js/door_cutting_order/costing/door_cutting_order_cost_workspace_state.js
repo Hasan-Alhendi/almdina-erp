@@ -187,7 +187,7 @@
             store.rejectLoad(
                 currentIdentity,
                 requestId,
-                new Error("تعذر تحميل بيانات التكلفة.")
+                new Error("Could not load the cost data.")
             );
             const state = store.snapshot();
             dispatch(frm, state);

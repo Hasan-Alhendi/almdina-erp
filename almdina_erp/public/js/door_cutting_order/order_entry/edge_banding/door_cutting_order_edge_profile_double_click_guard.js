@@ -7,29 +7,25 @@
             side: "long_right",
             selectedField: "edge_long_right",
             overrideField: "edge_long_right_type_override",
-            labelAr: "الطول الأيمن",
-            labelEn: "Right long edge",
+            label: "Right long edge",
         },
         long_left: {
             side: "long_left",
             selectedField: "edge_long_left",
             overrideField: "edge_long_left_type_override",
-            labelAr: "الطول الأيسر",
-            labelEn: "Left long edge",
+            label: "Left long edge",
         },
         width_top: {
             side: "width_top",
             selectedField: "edge_width_top",
             overrideField: "edge_width_top_type_override",
-            labelAr: "العرض العلوي",
-            labelEn: "Top width edge",
+            label: "Top width edge",
         },
         width_bottom: {
             side: "width_bottom",
             selectedField: "edge_width_bottom",
             overrideField: "edge_width_bottom_type_override",
-            labelAr: "العرض السفلي",
-            labelEn: "Bottom width edge",
+            label: "Bottom width edge",
         },
     };
     let activeFrm = null;

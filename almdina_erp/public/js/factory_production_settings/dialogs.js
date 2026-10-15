@@ -60,23 +60,33 @@
             drafts.clear();
         }
 
-        function optimizationCatalog(current = {}) {
-            return (current.optimization_catalog || [])
-                .map((entry) => ({
-                    id: String(entry && entry.id || "").trim(),
-                    label: String(entry && entry.label || entry && entry.id || "").trim(),
-                    available: entry && entry.available !== false,
-                }))
+        function localizeCatalog(catalogName, rows) {
+            const labels = window.AlmdinaFactoryProductionSettingsCatalogLabels;
+            return (rows || [])
+                .map((entry) => {
+                    if (labels && typeof labels.localizeEntry === "function") {
+                        const localized = labels.localizeEntry(catalogName, entry, t);
+                        return {
+                            id: localized.id,
+                            label: localized.label,
+                            available: localized.available,
+                        };
+                    }
+                    return {
+                        id: String(entry && entry.id || "").trim(),
+                        label: String(entry && entry.label || entry && entry.id || "").trim(),
+                        available: entry && entry.available !== false,
+                    };
+                })
                 .filter((entry) => entry.id && entry.label);
         }
 
+        function optimizationCatalog(current = {}) {
+            return localizeCatalog("optimization_catalog", current.optimization_catalog);
+        }
+
         function machineCatalog(current = {}) {
-            return (current.machine_type_catalog || [])
-                .map((entry) => ({
-                    id: String(entry && entry.id || "").trim(),
-                    label: String(entry && entry.label || entry && entry.id || "").trim(),
-                }))
-                .filter((entry) => entry.id && entry.label);
+            return localizeCatalog("machine_type_catalog", current.machine_type_catalog);
         }
 
         function catalogWithCurrent(catalog, value) {
@@ -106,38 +116,38 @@
                     values.default_cutting_machine_type
                 );
                 return [
-                    { fieldname: "default_packing_mode", fieldtype: "Select", label: t("خوارزمية التوزيع"), options: algorithms.map(entry => entry.label).join("\n"), default: catalogLabel(algorithms, values.default_packing_mode), reqd: 1 },
-                    { fieldname: "default_cutting_machine_type", fieldtype: "Select", label: t("نوع آلة القص"), options: machines.map(entry => entry.label).join("\n"), default: catalogLabel(machines, values.default_cutting_machine_type), reqd: 1 },
-                    { fieldname: "default_kerf_mm", fieldtype: "Float", label: t("Kerf الافتراضي (مم)"), default: values.default_kerf_mm, reqd: 1 },
-                    { fieldname: "default_trim_margin_mm", fieldtype: "Float", label: t("هامش التشذيب (مم)"), default: values.default_trim_margin_mm, reqd: 1 },
-                    { fieldname: "default_optimization_time_limit_sec", fieldtype: "Float", label: t("مهلة التحسين (ثانية)"), default: values.default_optimization_time_limit_sec, reqd: 1 },
-                    { fieldname: "optimal_search_piece_limit", fieldtype: "Int", label: t("حد القطع للبحث الأمثل"), default: values.optimal_search_piece_limit, reqd: 1 },
+                    { fieldname: "default_packing_mode", fieldtype: "Select", label: t("Distribution algorithm"), options: algorithms.map(entry => entry.label).join("\n"), default: catalogLabel(algorithms, values.default_packing_mode), reqd: 1 },
+                    { fieldname: "default_cutting_machine_type", fieldtype: "Select", label: t("Cutting machine type"), options: machines.map(entry => entry.label).join("\n"), default: catalogLabel(machines, values.default_cutting_machine_type), reqd: 1 },
+                    { fieldname: "default_kerf_mm", fieldtype: "Float", label: t("Default kerf (mm)"), default: values.default_kerf_mm, reqd: 1 },
+                    { fieldname: "default_trim_margin_mm", fieldtype: "Float", label: t("Trimming margin (mm)"), default: values.default_trim_margin_mm, reqd: 1 },
+                    { fieldname: "default_optimization_time_limit_sec", fieldtype: "Float", label: t("Optimization timeout (seconds)"), default: values.default_optimization_time_limit_sec, reqd: 1 },
+                    { fieldname: "optimal_search_piece_limit", fieldtype: "Int", label: t("Piece limit for optimal search"), default: values.optimal_search_piece_limit, reqd: 1 },
                 ];
             }
             if (section === "costing") {
                 return [
-                    { fieldname: "default_cutting_cost_per_board_usd", fieldtype: "Currency", label: t("أجرة القص لكل لوح (USD)"), default: values.default_cutting_cost_per_board_usd, reqd: 1 },
-                    { fieldname: "default_special_design_fee_usd", fieldtype: "Currency", label: t("رسم التصميم الخاص / قطعة"), default: values.default_special_design_fee_usd, reqd: 1 },
-                    { fieldname: "default_special_cnc_fee_usd", fieldtype: "Currency", label: t("رسم CNC الخاص / قطعة"), default: values.default_special_cnc_fee_usd, reqd: 1 },
-                    { fieldname: "default_special_manual_edge_fee_usd", fieldtype: "Currency", label: t("رسم القشاط اليدوي / قطعة"), default: values.default_special_manual_edge_fee_usd, reqd: 1 },
-                    { fieldname: "default_special_margin_percent", fieldtype: "Percent", label: t("هامش الدرف الخاصة"), default: values.default_special_margin_percent, reqd: 1 },
+                    { fieldname: "default_cutting_cost_per_board_usd", fieldtype: "Currency", label: t("Cutting fee per board (USD)"), default: values.default_cutting_cost_per_board_usd, reqd: 1 },
+                    { fieldname: "default_special_design_fee_usd", fieldtype: "Currency", label: t("Custom design drawing / piece"), default: values.default_special_design_fee_usd, reqd: 1 },
+                    { fieldname: "default_special_cnc_fee_usd", fieldtype: "Currency", label: t("Custom CNC drawing / piece"), default: values.default_special_cnc_fee_usd, reqd: 1 },
+                    { fieldname: "default_special_manual_edge_fee_usd", fieldtype: "Currency", label: t("Manual edge banding drawing / piece"), default: values.default_special_manual_edge_fee_usd, reqd: 1 },
+                    { fieldname: "default_special_margin_percent", fieldtype: "Percent", label: t("Special door leaf margin"), default: values.default_special_margin_percent, reqd: 1 },
                 ];
             }
             if (section === "extra_addons") {
                 return [
-                    { fieldname: "default_extra_double_unit_price_usd", fieldtype: "Currency", label: t("سعر Double لكل درفة (USD)"), description: t("سعر بيع يضاف تلقائيًا لكل درفة مفعّل عليها الخيار."), default: values.default_extra_double_unit_price_usd, reqd: 1 },
-                    { fieldname: "default_extra_full_door_double_unit_price_usd", fieldtype: "Currency", label: t("أجرة دبل كامل الدرفة (USD)"), description: t("أجرة معالجة تُضاف لكل درفة أصلية عند اختيار دبل كامل الدرفة."), default: values.default_extra_full_door_double_unit_price_usd, reqd: 1 },
-                    { fieldname: "default_extra_liner_unit_price_usd", fieldtype: "Currency", label: t("سعر Liner لكل درفة (USD)"), description: t("لا يستخدم للدرفة الخاصة؛ لاينر الدرفة الخاصة يبقى ضمن سعرها الخاص الشامل."), default: values.default_extra_liner_unit_price_usd, reqd: 1 },
-                    { fieldname: "default_extra_back_groove_unit_price_usd", fieldtype: "Currency", label: t("سعر فرزة ظهر لكل درفة (USD)"), description: t("لا يستخدم للدرفة الخاصة؛ فرزة ظهر الدرفة الخاصة تبقى ضمن سعرها الخاص الشامل."), default: values.default_extra_back_groove_unit_price_usd, reqd: 1 },
-                    { fieldname: "default_extra_recessed_handle_cutout_unit_price_usd", fieldtype: "Currency", label: t("سعر تفريغ المسكة المخفية لكل درفة (USD)"), default: values.default_extra_recessed_handle_cutout_unit_price_usd, reqd: 1 },
+                    { fieldname: "default_extra_double_unit_price_usd", fieldtype: "Currency", label: t("Double price per door leaf (USD)"), description: t("Sale price added automatically for each door leaf with the option enabled."), default: values.default_extra_double_unit_price_usd, reqd: 1 },
+                    { fieldname: "default_extra_full_door_double_unit_price_usd", fieldtype: "Currency", label: t("Full door leaf double fee (USD)"), description: t("Processing fee added per original door leaf when full door leaf double is selected."), default: values.default_extra_full_door_double_unit_price_usd, reqd: 1 },
+                    { fieldname: "default_extra_liner_unit_price_usd", fieldtype: "Currency", label: t("Liner price per door leaf (USD)"), description: t("Not used for the special door leaf; the special door leaf's liner stays within its all-inclusive special price."), default: values.default_extra_liner_unit_price_usd, reqd: 1 },
+                    { fieldname: "default_extra_back_groove_unit_price_usd", fieldtype: "Currency", label: t("Back groove price per door leaf (USD)"), description: t("Not used for the special door leaf; the special door leaf's back groove stays within its all-inclusive special price."), default: values.default_extra_back_groove_unit_price_usd, reqd: 1 },
+                    { fieldname: "default_extra_recessed_handle_cutout_unit_price_usd", fieldtype: "Currency", label: t("Hidden handle cutout price per door leaf (USD)"), default: values.default_extra_recessed_handle_cutout_unit_price_usd, reqd: 1 },
                 ];
             }
             if (section === "print_identity") {
                 return [
-                    { fieldname: "print_factory_name", fieldtype: "Data", label: t("اسم المعمل"), default: values.print_factory_name, reqd: 1 },
-                    { fieldname: "print_factory_description", fieldtype: "Small Text", label: t("لمحة مختصرة عن المعمل"), default: values.print_factory_description, reqd: 1 },
-                    { fieldname: "print_factory_address", fieldtype: "Small Text", label: t("العنوان"), default: values.print_factory_address, reqd: 1 },
-                    { fieldname: "print_factory_contacts", fieldtype: "Small Text", label: t("أرقام التواصل"), description: t("سطر مستقل لكل رقم: أرضي / موبايل / واتس اب."), default: values.print_factory_contacts || "" },
+                    { fieldname: "print_factory_name", fieldtype: "Data", label: t("Factory name"), default: values.print_factory_name, reqd: 1 },
+                    { fieldname: "print_factory_description", fieldtype: "Small Text", label: t("Factory brief overview"), default: values.print_factory_description, reqd: 1 },
+                    { fieldname: "print_factory_address", fieldtype: "Small Text", label: t("Address"), default: values.print_factory_address, reqd: 1 },
+                    { fieldname: "print_factory_contacts", fieldtype: "Small Text", label: t("Contact numbers"), description: t("One separate line for each number: landline / mobile / WhatsApp."), default: values.print_factory_contacts || "" },
                 ];
             }
             if (section === "whatsapp_messages") {
@@ -148,26 +158,26 @@
                     {
                         fieldname: "whatsapp_measurements_text",
                         fieldtype: "Small Text",
-                        label: t("رسالة القياسات"),
-                        description: `${t("تُرفق مع ملف PDF في رسالة واحدة عند أول إرسال. الحد 1024 حرفًا. استخدم")} {order_name} ${t("لرقم الطلب.")}`,
+                        label: t("Measurements message"),
+                        description: `${t("Attached with the PDF file in a single message on first send. Limit is 1024 characters. Use")} {order_name} ${t("for the order number.")}`,
                     },
                     {
                         fieldname: "whatsapp_measurement_amendments_text",
                         fieldtype: "Small Text",
-                        label: t("رسالة تعديلات القياسات"),
-                        description: `${t("تُرفق مع ملف PDF في رسالة واحدة عند إرسال التعديلات. الحد 1024 حرفًا. استخدم")} {order_name} ${t("لرقم الطلب.")}`,
+                        label: t("Measurement changes message"),
+                        description: `${t("Attached with the PDF file in a single message when sending edits. Limit is 1024 characters. Use")} {order_name} ${t("for the order number.")}`,
                     },
                     {
                         fieldname: "whatsapp_invoice_text",
                         fieldtype: "Small Text",
-                        label: t("رسالة الفاتورة"),
-                        description: `${t("تُرفق مع ملف PDF في رسالة واحدة. الحد 1024 حرفًا. استخدم")} {order_name} ${t("لرقم الطلب.")}`,
+                        label: t("Invoice message"),
+                        description: `${t("Attached with the PDF file in a single message. Limit is 1024 characters. Use")} {order_name} ${t("for the order number.")}`,
                     },
                     ...stageRows.map(row => ({
                         fieldname: stageMessageFieldname(row && row.id),
                         fieldtype: "Small Text",
-                        label: `${t("رسالة إتمام")} — ${row && row.label ? row.label : row && row.id}`,
-                        description: `${t("تُرسل عند إتمام هذه المرحلة. استخدم")} {order_name} ${t("و")} {stage_label}.`,
+                        label: `${t("Completion message")} — ${row && row.label ? row.label : row && row.id}`,
+                        description: `${t("Sent when this stage is completed. Use")} {order_name} ${t("and")} {stage_label}.`,
                     })),
                 ];
             }
@@ -193,27 +203,27 @@
                     { fieldname: "ssh_port", fieldtype: "Int", label: t("SSH Port"), default: values.ssh_port || 22 },
                     { fieldname: "ssh_username", fieldtype: "Data", label: t("SSH Username"), default: values.ssh_username || "" },
                     { fieldname: "ssh_auth_method", fieldtype: "Select", label: t("Authentication Method"), options: "Private Key\nPassword", default: values.ssh_auth_method || "Private Key" },
-                    { fieldname: "ssh_password", fieldtype: "Password", label: t("SSH Password"), description: values.ssh_password_configured ? t("كلمة المرور محفوظة. اترك الحقل فارغًا للاحتفاظ بها.") : t("تُحفظ مشفرة عبر Frappe ولا تعود إلى المتصفح."), depends_on: "eval:doc.ssh_auth_method==='Password'" },
-                    { fieldname: "ssh_private_key", fieldtype: "Code", options: "text", label: t("SSH Private Key"), description: values.ssh_private_key_configured ? t("المفتاح محفوظ. اترك الحقل فارغًا للاحتفاظ به.") : t("ألصق المفتاح الخاص؛ سيُحفظ مشفرًا عبر Frappe."), depends_on: "eval:doc.ssh_auth_method==='Private Key'" },
-                    { fieldname: "ssh_private_key_passphrase", fieldtype: "Password", label: t("Private Key Passphrase (Optional)"), description: values.ssh_private_key_passphrase_configured ? t("عبارة المرور محفوظة. اترك الحقل فارغًا للاحتفاظ بها.") : "", depends_on: "eval:doc.ssh_auth_method==='Private Key'" },
-                    { fieldname: "remote_backup_path", fieldtype: "Data", label: t("Remote Backup Path"), description: t("مسار POSIX مطلق وغير جذري. يجب تسجيل مفتاح الخادم مسبقًا في known_hosts لمستخدم bench."), default: values.remote_backup_path || "" },
+                    { fieldname: "ssh_password", fieldtype: "Password", label: t("SSH Password"), description: values.ssh_password_configured ? t("Password is saved. Leave the field empty to keep it.") : t("Stored encrypted through Frappe and never returned to the browser."), depends_on: "eval:doc.ssh_auth_method==='Password'" },
+                    { fieldname: "ssh_private_key", fieldtype: "Code", options: "text", label: t("SSH Private Key"), description: values.ssh_private_key_configured ? t("Key is saved. Leave the field empty to keep it.") : t("Paste the private key; it will be stored encrypted through Frappe."), depends_on: "eval:doc.ssh_auth_method==='Private Key'" },
+                    { fieldname: "ssh_private_key_passphrase", fieldtype: "Password", label: t("Private Key Passphrase (Optional)"), description: values.ssh_private_key_passphrase_configured ? t("Passphrase is saved. Leave the field empty to keep it.") : "", depends_on: "eval:doc.ssh_auth_method==='Private Key'" },
+                    { fieldname: "remote_backup_path", fieldtype: "Data", label: t("Remote Backup Path"), description: t("Absolute non-root POSIX path. The server key must be registered beforehand in known_hosts for the bench user."), default: values.remote_backup_path || "" },
                 ];
             }
             return [
-                { fieldname: "default_production_routing", fieldtype: "Select", label: t("مسار الإنتاج الافتراضي (اختياري)"), options: ["", ...(current.routing_options || [])].join("\n"), default: values.default_production_routing || "", reqd: 0 },
-                { fieldname: "allow_stage_override", fieldtype: "Check", label: t("السماح بتجاوز تسلسل المراحل"), default: values.allow_stage_override },
-                { fieldname: "allow_unplaced_approval", fieldtype: "Check", label: t("السماح الاستثنائي باعتماد قطع غير موزعة"), default: values.allow_unplaced_approval },
+                { fieldname: "default_production_routing", fieldtype: "Select", label: t("Default production route (optional)"), options: ["", ...(current.routing_options || [])].join("\n"), default: values.default_production_routing || "", reqd: 0 },
+                { fieldname: "allow_stage_override", fieldtype: "Check", label: t("Allow bypassing stage sequence"), default: values.allow_stage_override },
+                { fieldname: "allow_unplaced_approval", fieldtype: "Check", label: t("Exceptional approval of unallocated pieces"), default: values.allow_unplaced_approval },
             ];
         }
 
         function sectionTitle(section) {
-            if (section === "cutting") return t("تعديل القص والمحسّن");
-            if (section === "costing") return t("تعديل التكلفة الافتراضية");
-            if (section === "extra_addons") return t("تعديل أسعار إضافات الدرف");
-            if (section === "print_identity") return t("تعديل هوية أوراق الطباعة");
-            if (section === "whatsapp_messages") return t("تعديل رسائل واتساب");
-            if (section === "backup_restore") return t("إعدادات Backup & Restore");
-            return t("تعديل ضوابط الإنتاج");
+            if (section === "cutting") return t("Edit cutting and optimizer");
+            if (section === "costing") return t("Edit default cost");
+            if (section === "extra_addons") return t("Edit door leaf add-on prices");
+            if (section === "print_identity") return t("Edit print sheet identity");
+            if (section === "whatsapp_messages") return t("Edit WhatsApp messages");
+            if (section === "backup_restore") return t("Backup & Restore settings");
+            return t("Edit production controls");
         }
 
         function stageMessageFieldname(id) {
@@ -290,7 +300,7 @@
                 const $option = $(option);
                 if (!unavailableLabels.has(String($option.val() || ""))) return;
                 $option.prop("disabled", true);
-                $option.text(`${$option.text()} — ${t("غير متاح حاليًا")}`);
+                $option.text(`${$option.text()} — ${t("Currently unavailable")}`);
             });
         }
 
@@ -300,7 +310,7 @@
             const dialog = own(new frappe.ui.Dialog({
                 title: sectionTitle(config.section),
                 fields: sectionFields(config.section, current),
-                primary_action_label: t("حفظ التغييرات"),
+                primary_action_label: t("Save changes"),
                 primary_action(payload) {
                     const button = dialog.get_primary_btn();
                     button.prop("disabled", true);
@@ -322,10 +332,10 @@
                         })
                         .catch(error => {
                             if (!ownedSurfaces.has(dialog)) return;
-                            const fallback = t("حدث خطأ غير متوقع.");
+                            const fallback = t("An unexpected error occurred.");
                             const message = error && error.message ? error.message : fallback;
                             own(frappe.msgprint({
-                                title: t("تعذر الحفظ"),
+                                title: t("Could not save"),
                                 message: escapeHtml(message),
                                 indicator: "red",
                             }));
@@ -358,7 +368,7 @@
 
         function openAudit(initialHtml) {
             const dialog = own(new frappe.ui.Dialog({
-                title: t("سجل تغييرات إعدادات المعمل"),
+                title: t("Factory settings change log"),
                 size: "large",
                 fields: [{ fieldname: "audit_html", fieldtype: "HTML" }],
             }));
@@ -372,12 +382,12 @@
         }
 
         function showSaved() {
-            frappe.show_alert({ message: t("تم تحديث إعدادات المعمل."), indicator: "green" });
+            frappe.show_alert({ message: t("Factory settings updated."), indicator: "green" });
         }
 
         function openQr(config = {}) {
             const dialog = own(new frappe.ui.Dialog({
-                title: t("مسح رمز WhatsApp"),
+                title: t("Scan WhatsApp code"),
                 fields: [{ fieldname: "qr_html", fieldtype: "HTML" }],
                 on_hide() {
                     if (typeof config.onHide === "function") config.onHide();
@@ -389,9 +399,9 @@
                 const safeSource = source.indexOf("data:image/") === 0 ? source : "";
                 $wrapper.html(`
                     <div class="aps-whatsapp-qr">
-                        <p>${escapeHtml(config.statusLabel ? config.statusLabel(status) : String(status || t("بانتظار مسح الرمز")))}</p>
-                        ${safeSource ? `<img alt="${escapeHtml(t("رمز QR"))}" src="${escapeHtml(safeSource)}">` : `<div class="aps-whatsapp-qr-wait">${t("جاري تجهيز الرمز...")}</div>`}
-                        <small>${t("يُحدَّث الرمز كل 5 ثوانٍ. امسحه من واتساب على الجوال.")}</small>
+                        <p>${escapeHtml(config.statusLabel ? config.statusLabel(status) : String(status || t("Waiting for code scan")))}</p>
+                        ${safeSource ? `<img alt="${escapeHtml(t("QR code"))}" src="${escapeHtml(safeSource)}">` : `<div class="aps-whatsapp-qr-wait">${t("Preparing the code...")}</div>`}
+                        <small>${t("The code refreshes every 5 seconds. Scan it from WhatsApp on your phone.")}</small>
                     </div>
                 `);
             }
@@ -408,20 +418,20 @@
         function openRestore(config = {}) {
             const phrase = String(config.confirmationPhrase || "");
             const dialog = own(new frappe.ui.Dialog({
-                title: t("استعادة نسخة احتياطية"),
+                title: t("Restore backup"),
                 fields: [
                     {
                         fieldname: "warning",
                         fieldtype: "HTML",
-                        options: `<div class="aps-restore-warning"><strong>${escapeHtml(t("تحذير: الاستعادة تستبدل قاعدة البيانات والملفات الحالية."))}</strong><span>${escapeHtml(t("سينشئ النظام نسخة أمان كاملة أولًا، ثم يستخدم Frappe Restore ويشغّل migrate."))}</span><code>${escapeHtml(phrase)}</code></div>`,
+                        options: `<div class="aps-restore-warning"><strong>${escapeHtml(t("Warning: Restore replaces the current database and files."))}</strong><span>${escapeHtml(t("The system will first create a full backup, then use Frappe Restore and run migrate."))}</span><code>${escapeHtml(phrase)}</code></div>`,
                     },
-                    { fieldname: "confirmation", fieldtype: "Data", label: t("اكتب عبارة التأكيد كما تظهر أعلاه"), reqd: 1 },
+                    { fieldname: "confirmation", fieldtype: "Data", label: t("Type the confirmation phrase as shown above"), reqd: 1 },
                 ],
-                primary_action_label: t("إنشاء نسخة أمان ثم الاستعادة"),
+                primary_action_label: t("Create backup, then Restore"),
                 primary_action(values) {
                     const confirmation = String(values.confirmation || "").trim();
                     if (confirmation !== phrase) {
-                        frappe.msgprint({ title: t("تأكيد غير مطابق"), message: t("اكتب عبارة التأكيد حرفيًا."), indicator: "red" });
+                        frappe.msgprint({ title: t("Confirmation does not match"), message: t("Type the confirmation phrase exactly."), indicator: "red" });
                         return;
                     }
                     const button = dialog.get_primary_btn();
@@ -431,8 +441,8 @@
                         .catch(error => {
                             if (!ownedSurfaces.has(dialog)) return;
                             frappe.msgprint({
-                                title: t("تعذر بدء الاستعادة"),
-                                message: escapeHtml(error && error.message ? error.message : t("حدث خطأ غير متوقع.")),
+                                title: t("Could not start the restore"),
+                                message: escapeHtml(error && error.message ? error.message : t("An unexpected error occurred.")),
                                 indicator: "red",
                             });
                         })

@@ -370,7 +370,7 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
         self.assertIn("const costing = window.AlmdinaOrderCostUX", document_source)
         self.assertIn("costing.invoiceLines(frm)", document_source)
         self.assertIn("persisted server-cost snapshot", document_source)
-        self.assertIn("سطر مستقل لكل نوع قشاط", document_source)
+        self.assertIn('translate("A separate line for each edge type and its price — from the saved order cost")', document_source)
         self.assertNotIn("tbody.innerHTML = invoiceRowsHtml", document_source)
         self.assertNotIn("group.amount += num(detail.amount)", document_source)
         self.assertIn("Edge thickness (mm)", edge_source)

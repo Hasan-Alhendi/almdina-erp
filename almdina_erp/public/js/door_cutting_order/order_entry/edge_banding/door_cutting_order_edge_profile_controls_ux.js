@@ -96,7 +96,7 @@
         const rate = Number(profile.rate_usd_per_meter || 0).toLocaleString("en-US", {
             maximumFractionDigits: 2,
         });
-        return `${thickness} مم · $ ${rate}/م`;
+        return __("{0} mm · $ {1}/m", [thickness, rate]);
     }
 
     function installStyles() {
@@ -144,7 +144,7 @@
                 position:fixed;z-index:1065;width:min(292px,calc(100vw - 20px));max-height:min(390px,calc(100vh - 20px));
                 display:flex;flex-direction:column;border:1px solid var(--border-color,#cbd2d9);border-radius:12px;
                 background:var(--card-bg,#fff);box-shadow:0 14px 38px rgba(15,23,42,.22);overflow:hidden;
-                direction:rtl;color:var(--text-color,#172033)
+                color:var(--text-color,#172033)
             }
             #${POPOVER_ID} .dco-edge-popover-head{
                 flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 10px 7px;
@@ -205,9 +205,16 @@
         });
     }
 
-    function notifyChanged(frm, tr, row, fieldname) {
+    function notifyChanged(frm, tr, row, fieldname, changedFields = []) {
         frm.dirty();
         syncToggleVisuals(tr, row);
+
+        if (frm.script_manager && typeof frm.script_manager.trigger === "function") {
+            changedFields.forEach(name => {
+                Promise.resolve(frm.script_manager.trigger(name, row.doctype, row.name))
+                    .catch(error => console.error(error));
+            });
+        }
 
         const root = rootFor(frm);
         if (root) {
@@ -246,9 +253,19 @@
         const row = materialize(frm, tr);
         if (!row) return;
         if (lockedBreakSides(row).has(config.selectedField)) return;
-        row[config.selectedField] = 1;
-        row[config.overrideField] = String(overrideType || "").trim();
-        notifyChanged(frm, tr, row, config.overrideField);
+        const selectedType = String(overrideType || "").trim();
+        const changedFields = [];
+        if (Number(row[config.selectedField] || 0) !== 1) {
+            row[config.selectedField] = 1;
+            changedFields.push(config.selectedField);
+        }
+        if (String(row[config.overrideField] || "").trim() !== selectedType) {
+            row[config.overrideField] = selectedType;
+            changedFields.push(config.overrideField);
+        }
+        if (changedFields.length) {
+            notifyChanged(frm, tr, row, config.overrideField, changedFields);
+        }
     }
 
     function applyAllSides(frm, tr, selectedValue) {
@@ -258,12 +275,21 @@
             ? ""
             : String(selectedValue || "").trim();
         const locked = lockedBreakSides(row);
+        const changedFields = [];
         SIDE_CONFIG.forEach(config => {
             if (locked.has(config.selectedField)) return;
-            row[config.selectedField] = 1;
-            row[config.overrideField] = overrideType;
+            if (Number(row[config.selectedField] || 0) !== 1) {
+                row[config.selectedField] = 1;
+                changedFields.push(config.selectedField);
+            }
+            if (String(row[config.overrideField] || "").trim() !== overrideType) {
+                row[config.overrideField] = overrideType;
+                changedFields.push(config.overrideField);
+            }
         });
-        notifyChanged(frm, tr, row, "all_side_edge_profiles");
+        if (changedFields.length) {
+            notifyChanged(frm, tr, row, "all_side_edge_profiles", changedFields);
+        }
     }
 
     function ensureBulkHeader(root) {
@@ -471,6 +497,9 @@
         popover.id = POPOVER_ID;
         popover.setAttribute("role", "menu");
         popover.setAttribute("aria-label", ariaLabel);
+        const locale = window.AlmdinaLocale;
+        const direction = locale && typeof locale.direction === "function" ? locale.direction() : "";
+        if (direction === "ltr" || direction === "rtl") popover.setAttribute("dir", direction);
         popover.innerHTML = `
             <div class="dco-edge-popover-head">
                 <div><strong>${escapeHtml(title)}</strong><small>${escapeHtml(subtitle)}</small></div>

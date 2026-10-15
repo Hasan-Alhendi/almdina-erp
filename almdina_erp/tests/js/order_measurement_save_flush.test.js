@@ -126,6 +126,8 @@ function createSandbox() {
         window,
         document,
         $,
+        // Frappe Desk always exposes __() to loaded operator UX modules.
+        __: (message) => String(message),
         frappe: {
             ui: { form: { on(doctype, handlers) { formHandlers[doctype] = handlers; } } },
             utils: { escape_html(value) { return String(value); } },

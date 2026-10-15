@@ -10,6 +10,7 @@ class EndpointAuthorizationContract:
     DELEGATE = "delegate"
     FAIL_CLOSED = "fail_closed"
     SELF_CONTEXT = "self_context"
+    SELF_WRITE = "self_write"
 
 
 def _contracts(module: str, contract: str, *functions: str) -> dict[str, str]:
@@ -20,6 +21,7 @@ C = EndpointAuthorizationContract.CAPABILITY
 D = EndpointAuthorizationContract.DELEGATE
 F = EndpointAuthorizationContract.FAIL_CLOSED
 S = EndpointAuthorizationContract.SELF_CONTEXT
+W = EndpointAuthorizationContract.SELF_WRITE
 
 _GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("almdina_erp.almdina_erp.api", C, ("get_approved_cutting_plan_snapshot", "preview_door_cutting_order")),
@@ -105,6 +107,8 @@ _GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("almdina_erp.almdina_erp.services.shop_floor_query_service", C, ("get_assignee_filter_options", "get_current_stage_context", "get_dispatch_options", "get_my_archive", "get_my_inbox", "get_order_operational_role_flags", "get_ready_for_delivery", "get_revert_targets", "get_shop_floor_context", "get_status_filter_options")),
     ("almdina_erp.almdina_erp.services.special_shape_service", D, ("approve_special_piece_price",)),
     ("almdina_erp.almdina_erp.services.special_shape_workspace_service", C, ("get_drawing_workspace", "remove_reference_image", "save_documentation_workspace", "upload_reference_image")),
+    # Authenticated, POST-only write strictly to frappe.session.user (never an arbitrary user).
+    ("almdina_erp.almdina_erp.services.user_language_service", W, ("set_current_user_language",)),
     ("almdina_erp.almdina_erp.services.workforce_service", C, ("adopt_workforce_user", "create_workforce_user", "get_workforce_console", "get_workforce_user_audit", "reset_workforce_password", "set_workforce_user_enabled", "update_workforce_user")),
 )
 

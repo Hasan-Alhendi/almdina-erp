@@ -52,7 +52,7 @@
     {"fieldname":"results_tab","fieldtype":"Tab Break","label":"Cutting Plan"},
     {"fieldname":"plan_actions_section","fieldtype":"Section Break"},
     {"fieldname":"plan_control_actions","fieldtype":"HTML"},
-    {"fieldname":"plan_section","fieldtype":"Section Break","label":"توزيع القطع على الألواح"},
+    {"fieldname":"plan_section","fieldtype":"Section Break","label":"Piece layout on boards"},
     {"fieldname":"cutting_plan_html","fieldtype":"HTML","label":"Cutting Plan"},
     {"collapsible":1,"fieldname":"totals_section","fieldtype":"Section Break","hidden":1,"label":"تفاصيل الحساب والتكلفة"},
     {"fieldname":"total_area_m2","fieldtype":"Float","label":"Total Area M2","precision":"3","read_only":1},

@@ -68,7 +68,7 @@
             if (!qrSurface) {
                 qrSurface = dialogs.openQr({
                     onHide: stopPoll,
-                    statusLabel: () => t("امسح الرمز من واتساب"),
+                    statusLabel: () => t("Scan the code from WhatsApp"),
                 });
             }
             const tick = () => {
@@ -91,7 +91,7 @@
                                 needs_qr: false,
                             }
                             : payload);
-                        frappe.show_alert({ message: t("تم ربط WhatsApp."), indicator: "green" }, 6);
+                        frappe.show_alert({ message: t("WhatsApp linked."), indicator: "green" }, 6);
                         return refresh();
                     }
                     if (qrSurface && typeof qrSurface.setQr === "function") {
@@ -101,7 +101,7 @@
                 }).catch(error => {
                     if (!isActive() || !requests.isCurrent(token)) return;
                     frappe.show_alert({
-                        message: errorMessage(error, t("تعذر جلب رمز QR.")),
+                        message: errorMessage(error, t("Could not fetch the QR code.")),
                         indicator: "red",
                     }, 7);
                 });
@@ -121,21 +121,21 @@
                 if (!isActive() || !requests.isCurrent(token)) return null;
                 renderer.renderWhatsApp({
                     configured: false,
-                    reason: errorMessage(error, t("تعذر تحميل حالة WhatsApp.")),
+                    reason: errorMessage(error, t("Could not load WhatsApp status.")),
                 });
                 return null;
             });
         }
 
         function create() {
-            return api.createWhatsAppSession(freeze(t("جاري إنشاء جلسة WhatsApp..."))).then(snapshot => {
+            return api.createWhatsAppSession(freeze(t("Creating WhatsApp session..."))).then(snapshot => {
                 if (!isActive()) return snapshot;
                 renderer.renderWhatsApp(snapshot || {});
                 maybeOpenQr(snapshot);
                 return snapshot;
             }).catch(error => {
                 frappe.show_alert({
-                    message: errorMessage(error, t("تعذر إنشاء جلسة WhatsApp.")),
+                    message: errorMessage(error, t("Could not create WhatsApp session.")),
                     indicator: "red",
                 }, 7);
                 return null;
@@ -143,14 +143,14 @@
         }
 
         function reconnect() {
-            return api.reconnectWhatsAppSession(freeze(t("جاري إعادة الاتصال..."))).then(snapshot => {
+            return api.reconnectWhatsAppSession(freeze(t("Reconnecting..."))).then(snapshot => {
                 if (!isActive()) return snapshot;
                 renderer.renderWhatsApp(snapshot || {});
                 maybeOpenQr(snapshot);
                 return snapshot;
             }).catch(error => {
                 frappe.show_alert({
-                    message: errorMessage(error, t("تعذر إعادة اتصال WhatsApp.")),
+                    message: errorMessage(error, t("Could not reconnect WhatsApp.")),
                     indicator: "red",
                 }, 7);
                 return null;
