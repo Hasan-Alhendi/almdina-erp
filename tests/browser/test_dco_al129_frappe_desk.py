@@ -754,7 +754,7 @@ def _set_link(page: Page, fieldname: str, value: str) -> None:
     suggestions = page.locator(".awesomplete ul li:visible")
     try:
         expect(suggestions.first).to_be_visible(timeout=20_000)
-    except PlaywrightTimeoutError as error:
+    except (PlaywrightTimeoutError, AssertionError) as error:
         state = page.evaluate(
             "fieldname => { const frm = window.cur_frm;"
             " const field = frm && frm.fields_dict && frm.fields_dict[fieldname];"
