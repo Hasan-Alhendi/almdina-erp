@@ -197,7 +197,7 @@ def test_phase2a_isolated_desk_boundary():
                 for doc in payloads if doc and doc.get("board_description") == edited_board]
             assert evidence["legitimate_b_savedocs"] == [edited_board], evidence
             evidence["restored_b"] = page.evaluate("""async value => {
-                await cur_frm.set_value('board_description',value);
+                cur_frm.fields_dict.board_description.$input.val(value).trigger('input');
                 cur_frm.dirty(); await cur_frm.save();
                 const response=await frappe.call({method:'frappe.client.get',
                     args:{doctype:'Door Cutting Order',name:cur_frm.doc.name}});
@@ -439,12 +439,15 @@ def test_saved_server_plan_print_runtime():
         try:
             page = browser.new_page(locale="en-US")
             _login(page, fixture)
+            evidence["factory_identity"] = page.evaluate("""async () => {
+                await frappe.require('/assets/almdina_erp/js/door_cutting_order/printing/door_cutting_order_print_identity.js');
+                if (!window.AlmdinaFactoryPrintIdentity?.get)
+                    throw new Error('Production factory print identity asset unavailable');
+                return await AlmdinaFactoryPrintIdentity.get();
+            }""")
             page.evaluate("""() => {
                 window.__p0PrintWrites=[];
                 window.open=()=>({document:{open(){},write(html){__p0PrintWrites.push(html)},close(){}},close(){}});
-                window.__p0OriginalPrintIdentity=window.AlmdinaFactoryPrintIdentity || null;
-                window.AlmdinaFactoryPrintIdentity={
-                    ...(window.AlmdinaFactoryPrintIdentity || {}),get:async()=>({})};
             }""")
             for label, order, other in (("A", a, b), ("B", b, a)):
                 page.evaluate("name => frappe.set_route('Form','Door Cutting Order',name)", order["name"])
@@ -453,11 +456,27 @@ def test_saved_server_plan_print_runtime():
                 page.evaluate("""async () => {
                     await AlmdinaDcoWorkspaceAssetRegistry.ensure('plan');
                     await AlmdinaPlanWorkspaceState.load(cur_frm,{force:true});
+                    if (!AlmdinaPlanWorkspacePresenterAdapter.project(cur_frm)
+                        || !AlmdinaPlanTabsUX.displayedPlanForTab(cur_frm,'System')?.sheets?.length)
+                        throw new Error('Persisted Plan row did not reach the active Plan presenter');
                 }""")
                 result = page.evaluate("""async () => {
                     const row=AlmdinaPlanWorkspaceState.displayedPlanForTab(cur_frm,'System');
+                    const tab=AlmdinaPlanTabsUX.activeTab(cur_frm);
+                    const visible=AlmdinaPlanTabsUX.displayedPlanForTab(cur_frm,tab);
+                    const token=AlmdinaDocumentContext.capture(cur_frm);
+                    const before={tab,visibleSheets:visible?.sheets?.length,
+                        matchesRow:JSON.stringify(visible)===JSON.stringify(JSON.parse(row.snapshot_json)),
+                        canPrint:AlmdinaPermissions.canDocument(cur_frm,'print_cutting_plan'),
+                        generation:token?.generation,modified:cur_frm.doc.modified,
+                        state:AlmdinaPlanWorkspaceState.snapshot(cur_frm)?.status,
+                        board:cur_frm.doc.board_description,rowBoard:row?.board?.description,
+                        writes:__p0PrintWrites.length};
                     const result=await AlmdinaPlanTabsUX.printActivePlan(cur_frm);
-                    return {result,order:cur_frm.doc.name,row:row?.name,
+                    return {result,order:cur_frm.doc.name,row:row?.name,before,
+                        after:{generation:AlmdinaDocumentContext.capture(cur_frm)?.generation,
+                            modified:cur_frm.doc.modified,writes:__p0PrintWrites.length,
+                            state:AlmdinaPlanWorkspaceState.snapshot(cur_frm)?.status},
                         revision:row?.revision,html:__p0PrintWrites.at(-1)};
                 }""")
                 assert result["result"] is True and result["row"] == saved_plan[label]["name"], result
@@ -467,6 +486,7 @@ def test_saved_server_plan_print_runtime():
                 assert saved_plan[label]["name"] in html and str(saved_plan[label]["revision"]) in html
                 assert 'class="dco-unified-print-header"' in html
                 assert f"<title>Cutting plan - {order['name']}</title>" in html
+                assert evidence["factory_identity"]["print_factory_name"] in html
                 piece = saved_plan[label]["first_piece"]
                 geometry = f"{int(float(piece['w']) * 10)} × {int(float(piece['h']) * 10)}"
                 assert geometry in html, (label, geometry)
@@ -529,19 +549,23 @@ def test_saved_server_plan_print_runtime():
                 AlmdinaPlanWorkspaceState.reset(cur_frm);
                 await AlmdinaPlanWorkspaceState.load(cur_frm,{force:true});
                 AlmdinaPlanWorkspacePresenterAdapter.project(cur_frm);
-                AlmdinaFactoryPrintIdentity.get=()=>new Promise(resolve=>__p0ResolveIdentity=resolve);
+                window.AlmdinaFactoryPrintIdentity={...window.AlmdinaFactoryPrintIdentity,
+                    get:()=>new Promise(resolve=>__p0ResolveIdentity=resolve)};
                 const row=AlmdinaPlanWorkspaceState.planForTab(cur_frm,'System');
                 const plan=JSON.parse(row.snapshot_json);
                 window.__p0Pending=AlmdinaCuttingPlanRender.print(cur_frm,plan,
                     {tab:'System',row});
             }""")
             page.wait_for_function("!!window.__p0ResolveIdentity", timeout=10000)
+            pending_writes = page.evaluate("__p0PrintWrites.length")
+            assert pending_writes == writes_before + 1
             page.evaluate("name => frappe.set_route('Form','Door Cutting Order',name)", a["name"])
             page.wait_for_function("name => cur_frm?.doc?.name === name", arg=a["name"], timeout=45000)
             page.evaluate("__p0ResolveIdentity({})")
             assert page.evaluate("async () => await __p0Pending") is False
-            assert page.evaluate("__p0PrintWrites.length") == writes_before
-            evidence["mid_await_route_change_cancelled"] = True
+            assert page.evaluate("__p0PrintWrites.length") == pending_writes
+            evidence["mid_await_route_change_cancelled"] = {
+                "preparation_writes": 1, "final_html_writes": 0}
         except Exception as exc:
             evidence["failure"] = repr(exc)
             evidence["browser_state"] = page.evaluate("""() => ({route:frappe.get_route?.(),
