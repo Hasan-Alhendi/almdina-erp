@@ -468,7 +468,10 @@ def test_saved_server_plan_print_runtime():
                     const tab=AlmdinaPlanTabsUX.activeTab(cur_frm);
                     const visible=AlmdinaPlanTabsUX.displayedPlanForTab(cur_frm,tab);
                     const token=AlmdinaDocumentContext.capture(cur_frm);
+                    const detached=document.createElement('div');
+                    detached.innerHTML=AlmdinaCuttingPlanRender.build(cur_frm,visible);
                     const before={tab,visibleSheets:visible?.sheets?.length,
+                        detachedSheetCards:detached.querySelectorAll('.dco-sheet-card').length,
                         matchesRow:JSON.stringify(visible)===JSON.stringify(JSON.parse(row.snapshot_json)),
                         canPrint:AlmdinaPermissions.canDocument(cur_frm,'print_cutting_plan'),
                         generation:token?.generation,modified:cur_frm.doc.modified,
@@ -478,8 +481,16 @@ def test_saved_server_plan_print_runtime():
                         statePrint:AlmdinaPlanWorkspaceState.snapshot(cur_frm)?.data?.capabilities?.print,
                         board:cur_frm.doc.board_description,rowBoard:row?.board?.description,
                         writes:__p0PrintWrites.length};
-                    const result=await AlmdinaPlanTabsUX.printActivePlan(cur_frm);
+                    const originalMsg=frappe.msgprint, messages=[];
+                    let result;
+                    frappe.msgprint=function(message,...args) {
+                        messages.push(String(message?.message || message));
+                        return originalMsg.call(this,message,...args);
+                    };
+                    try { result=await AlmdinaPlanTabsUX.printActivePlan(cur_frm); }
+                    finally { frappe.msgprint=originalMsg; }
                     return {result,order:cur_frm.doc.name,row:row?.name,before,
+                        messages,
                         after:{generation:AlmdinaDocumentContext.capture(cur_frm)?.generation,
                             modified:cur_frm.doc.modified,writes:__p0PrintWrites.length,
                             state:AlmdinaPlanWorkspaceState.snapshot(cur_frm)?.status},
