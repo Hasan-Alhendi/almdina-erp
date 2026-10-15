@@ -158,6 +158,7 @@ def _loopback_cdp_browser(
         trace("browser_launch_started")
         arguments = [
             executable,
+            "--no-sandbox",
             "--headless=new",
             "--disable-dev-shm-usage",
             "--no-first-run",
@@ -167,8 +168,6 @@ def _loopback_cdp_browser(
             f"--user-data-dir={profile}",
             "about:blank",
         ]
-        if os.geteuid() == 0:
-            arguments.insert(1, "--no-sandbox")
         browser_process = subprocess.Popen(
             arguments,
             stdout=subprocess.DEVNULL,
