@@ -578,8 +578,6 @@ def test_saved_server_plan_print_runtime():
                 geometry.sheets.push(offcut);
                 const assignments=[{piece_instance_id:'CONTROLLED-OFFCUT-PIECE-B',
                     business_state:'FACTORY_FACTORY',business_state_label:'P0 FACTORY ASSIGNED'}];
-                Object.defineProperty(geometry,'__offcut_assignments',{
-                    value:assignments,enumerable:false});
                 const testRow={...row,name:'CONTROLLED-PLAN-B',revision:Number(row.revision)+1,
                     snapshot_json:JSON.stringify(geometry),offcut:{assignments}};
                 const id=AlmdinaDocumentContext.formIdentity(frm),store=state.storeFor(frm);

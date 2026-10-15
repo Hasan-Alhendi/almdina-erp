@@ -205,6 +205,41 @@ test("final OFFCUT HTML retains assigned business context from the verified row"
     assert.match(h.writes.at(-1), /FACTORY-OWNED/);
 });
 
+test("unowned OFFCUT metadata cannot enter another order's final HTML", async () => {
+    const h = harness();
+    h.frm.doc.name = "B";
+    h.generation();
+    h.state.identity = "Door Cutting Order::B";
+    h.state.data.order_name = "B";
+    h.frm.__almdina_active_plan_tab = "System";
+    const plan = geometry();
+    plan.sheets.push({sheet_no: 2, resource_kind: "OFFCUT", pieces: [{
+        ...plan.sheets[0].pieces[0], piece_instance_id: "OFFCUT-PIECE-1",
+    }]});
+    const owned = {piece_instance_id: "OFFCUT-PIECE-1",
+        business_state: "FACTORY_FACTORY", business_state_label: "B-OWNED-LABEL"};
+    h.state.data.plans.system_draft = {...row("SYSTEM-B", plan), offcut: {assignments: [owned]}};
+    const untrustedOverride = JSON.parse(JSON.stringify(plan));
+    Object.defineProperty(untrustedOverride, "__offcut_assignments", {value: [{...owned,
+        business_state_label: "A-PRIVATE-LABEL"}], enumerable: false});
+    assert.equal(await h.window.AlmdinaCuttingPlanRender.print(h.frm, untrustedOverride,
+        {tab: "System", row: h.state.data.plans.system_draft}), true);
+    assert.match(h.writes.at(-1), /B-OWNED-LABEL/);
+    assert.doesNotMatch(h.writes.at(-1), /A-PRIVATE-LABEL/);
+
+    const beforePending = h.writes.length;
+    const release = h.deferIdentity();
+    const pending = h.window.AlmdinaCuttingPlanRender.print(h.frm, untrustedOverride,
+        {tab: "System", row: h.state.data.plans.system_draft});
+    h.state.data.plans.system_draft = {...h.state.data.plans.system_draft, offcut: {
+        assignments: [{...owned, business_state_label: "B-UPDATED-LABEL"}],
+    }};
+    release();
+    assert.equal(await pending, false, "changed owned assignment cancels the frozen print");
+    assert.equal(h.writes.length, beforePending + 1, "only preparation HTML was written");
+    assert.doesNotMatch(h.writes.at(-1), /B-UPDATED-LABEL/);
+});
+
 test("changes at the async boundary reject revision, preview, permission and A→B→A", async () => {
     const h = harness();
     h.frm.__almdina_active_plan_tab = "System";

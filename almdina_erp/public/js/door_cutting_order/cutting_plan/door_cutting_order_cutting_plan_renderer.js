@@ -1201,6 +1201,11 @@ ${printHeaderCss()}
         }
     }
 
+    function rowAssignmentJson(row) {
+        return JSON.stringify(Array.isArray(row?.offcut?.assignments)
+            ? row.offcut.assignments : []);
+    }
+
     function printAllowed(frm) {
         const permissions = window.AlmdinaPermissions;
         return Boolean(permissions && (typeof permissions.canDocument === "function"
@@ -1237,13 +1242,15 @@ ${printHeaderCss()}
                 || JSON.stringify(rowGeometry(hint.row)) !== JSON.stringify(geometry)))
             || (planOverride && JSON.stringify(planOverride) !== JSON.stringify(geometry))) return null;
         const plan = JSON.parse(JSON.stringify(geometry));
-        const assignments = planOverride?.__offcut_assignments;
-        if (assignments) Object.defineProperty(plan, "__offcut_assignments", {
-            value: JSON.parse(JSON.stringify(assignments)), enumerable: false,
+        // Presentation labels are owned by the selected Workspace row. A
+        // caller's non-enumerable plan metadata is outside the geometry check.
+        const assignmentJson = rowAssignmentJson(row);
+        Object.defineProperty(plan, "__offcut_assignments", {
+            value: JSON.parse(assignmentJson), enumerable: false,
         });
         const frozenDoc = JSON.parse(JSON.stringify(printableDoc(frm.doc)));
         return { token, tab, orderName: frm.doc.name, planName: row.name,
-            revision: row.revision, geometryJson: JSON.stringify(geometry),
+            revision: row.revision, geometryJson: JSON.stringify(geometry), assignmentJson,
             documentJson: JSON.stringify(frozenDoc), plan, frm: { doc: frozenDoc } };
     }
 
@@ -1259,7 +1266,8 @@ ${printHeaderCss()}
             && state.data?.capabilities?.print !== false
             && row?.name === source.planName && row.revision === source.revision
             && (!row.board?.description || row.board.description === frm.doc.board_description)
-            && JSON.stringify(rowGeometry(row)) === source.geometryJson);
+            && JSON.stringify(rowGeometry(row)) === source.geometryJson
+            && rowAssignmentJson(row) === source.assignmentJson);
     }
 
     async function print_cutting_plan(frm, planOverride = null, hint = null) {
