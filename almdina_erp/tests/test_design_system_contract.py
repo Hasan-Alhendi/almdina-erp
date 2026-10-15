@@ -21,6 +21,11 @@ LIGHT_THEME_PIN = ROOT.parent / "docs" / "design_system" / "LIGHT_THEME_PIN.md"
 
 # Exact Light surface values — never darken these to "fix" Dark Mode.
 LIGHT_SURFACE_PIN: dict[str, str] = {
+    "--alm-action": "#172033",
+    "--alm-action-hover": "#0f172a",
+    "--alm-on-action": "#ffffff",
+    "--alm-brand-soft": "#eff6ff",
+    "--alm-brand-soft-fg": "#172033",
     "--alm-canvas": "#eef1f6",
     "--alm-card": "#ffffff",
     "--alm-card-border": "#e4e8ee",
@@ -395,9 +400,22 @@ class TestDesignSystemContract(unittest.TestCase):
             ("--alm-status-success-fg", "#4ade80"),
             ("--alm-status-danger-fg", "#f87171"),
             ("--alm-status-neutral-bg", "#1e2533"),
+            ("--alm-action", "#dbe4f0"),
+            ("--alm-on-action", "#101828"),
+            ("--alm-brand-soft", "#0f2748"),
+            ("--alm-brand-soft-fg", "#93c5fd"),
         ):
             self.assertIn(f"{token}: {value}", dark_block, msg=f"missing Dark {token}")
-            self.assertNotIn(f"{token}: {LIGHT_SURFACE_PIN[token]}", dark_block)
+            if token in LIGHT_SURFACE_PIN:
+                self.assertNotIn(f"{token}: {LIGHT_SURFACE_PIN[token]}", dark_block)
+
+        # Dark CTA fill must stay independent of brand navy (Frappe uses black --neutral text).
+        self.assertIn("--alm-primary: #172033", self.tokens)
+        self.assertNotEqual(
+            re.search(r"--alm-action:\s*([^;]+);", dark_block).group(1).strip(),
+            "#172033",
+            msg="Dark --alm-action must not equal brand navy",
+        )
 
         # .almdina-ui must not re-pin Light surface paints (would defeat document theme).
         bridge_start = self.tokens.rindex(".almdina-ui {")
@@ -408,6 +426,7 @@ class TestDesignSystemContract(unittest.TestCase):
             "--alm-text-strong:",
             "--alm-surface-muted:",
             "--alm-status-info-bg:",
+            "--alm-action:",
         ):
             self.assertNotIn(banned, bridge_block, msg=f".almdina-ui must not redefine {banned}")
 
@@ -415,11 +434,13 @@ class TestDesignSystemContract(unittest.TestCase):
         pin_doc = LIGHT_THEME_PIN.read_text(encoding="utf-8")
         self.assertIn("--alm-card: #ffffff", pin_doc)
         self.assertIn("--alm-status-info-bg: #eff6ff", pin_doc)
+        self.assertIn("--alm-action: #172033", pin_doc)
 
         ownership = TOKEN_OWNERSHIP.read_text(encoding="utf-8")
         self.assertIn("Theme boards", ownership)
         self.assertIn("LIGHT_THEME_PIN.md", ownership)
         self.assertIn("data-theme", ownership)
+        self.assertIn("Brand vs action", ownership)
 
     def test_native_list_chrome_reads_design_tokens(self) -> None:
         list_table = (ROOT / "public" / "css" / "almdina_list_table.css").read_text(encoding="utf-8")
@@ -503,7 +524,8 @@ class TestDesignSystemContract(unittest.TestCase):
     def test_components_stay_scoped_and_define_primary_button(self) -> None:
         self.assertIn(".almdina-ui .btn.alm-btn-primary", self.components)
         self.assertIn(".almdina-ui .btn.alm-btn-secondary", self.components)
-        self.assertIn("background: var(--alm-primary)", self.components)
+        self.assertIn("background: var(--alm-action, var(--alm-primary))", self.components)
+        self.assertIn("color: var(--alm-on-action, var(--alm-on-primary))", self.components)
         self.assertNotIn("body .btn-primary", self.components)
 
     def test_ui_builder_is_presentation_only(self) -> None:
@@ -584,11 +606,11 @@ class TestDesignSystemContract(unittest.TestCase):
         self.assertIn(".almdina-ui .alm-control .form-control:focus", self.components)
 
     def test_assets_load_design_system_before_feature_css_and_after_foundation(self) -> None:
-        tokens_asset = '"/assets/almdina_erp/css/almdina_design_tokens.css?v=2"'
-        components_asset = '"/assets/almdina_erp/css/almdina_components.css"'
+        tokens_asset = '"/assets/almdina_erp/css/almdina_design_tokens.css?v=3"'
+        components_asset = '"/assets/almdina_erp/css/almdina_components.css?v=2"'
         patterns_asset = '"/assets/almdina_erp/css/almdina_patterns.css"'
         templates_asset = '"/assets/almdina_erp/css/almdina_page_templates.css?v=1"'
-        desk_theme_asset = '"/assets/almdina_erp/css/almdina_desk_theme.css"'
+        desk_theme_asset = '"/assets/almdina_erp/css/almdina_desk_theme.css?v=2"'
         desk_sidebar_asset = '"/assets/almdina_erp/css/almdina_desk_sidebar.css?v=2"'
         workspace_home_asset = '"/assets/almdina_erp/css/almdina_workspace_home.css?v=11"'
         ui_asset = '"/assets/almdina_erp/js/almdina_ui.js"'
@@ -677,11 +699,44 @@ class TestDesignSystemContract(unittest.TestCase):
 
     def test_desk_theme_bridges_frappe_primary_to_alm_tokens(self) -> None:
         source = DESK_THEME.read_text(encoding="utf-8")
+        # Light keeps brand identity; CTA fill comes from --alm-action (same navy in Light).
         self.assertIn("--primary: var(--alm-primary)", source)
-        self.assertIn("--btn-primary: var(--alm-primary)", source)
+        self.assertIn("--btn-primary: var(--alm-action)", source)
+        self.assertIn("--bg-blue: var(--alm-brand-soft)", source)
+        self.assertIn("--surface-menu-bar: var(--alm-primary)", source)
         self.assertIn(".indicator-pill.blue", source)
         self.assertNotIn("body .btn-primary", source)
         self.assertNotIn("#2490ef", source)
+
+        # Regression: never pin --btn-primary to brand navy on a shared light+dark board.
+        # Frappe Dark paints .btn-primary text with --neutral (black); navy fill = unreadable.
+        shared_both = re.search(
+            r":root,\s*\[data-theme=\"light\"\],\s*\[data-theme=\"dark\"\]\s*\{([^}]+)\}",
+            source,
+            flags=re.S,
+        )
+        self.assertIsNone(
+            shared_both,
+            msg="Desk bridge must theme-split Light/Dark; do not share one board for both",
+        )
+        self.assertNotIn("--btn-primary: var(--alm-primary)", source)
+
+        dark_bridge = re.search(
+            r"\[data-theme=\"dark\"\]\s*\{([^}]+)\}",
+            source,
+            flags=re.S,
+        )
+        self.assertIsNotNone(dark_bridge, msg="Dark Desk bridge board required")
+        dark_vars = dark_bridge.group(1)
+        self.assertIn("--btn-primary: var(--alm-action)", dark_vars)
+        self.assertIn("--surface-menu-bar: var(--alm-primary)", dark_vars)
+        self.assertIn("--primary: var(--alm-accent)", dark_vars)
+        self.assertNotIn("#ffffff", dark_vars)
+        self.assertNotIn("color-mix(in srgb, var(--alm-primary) 10%, #ffffff)", source)
+
+        # Components consume action tokens so Alm buttons match Frappe page CTAs.
+        self.assertIn("var(--alm-action, var(--alm-primary))", self.components)
+        self.assertIn("var(--alm-on-action, var(--alm-on-primary))", self.components)
 
     def test_workspace_home_css_uses_design_tokens_without_global_desk_overrides(self) -> None:
         source = WORKSPACE_HOME_CSS.read_text(encoding="utf-8")

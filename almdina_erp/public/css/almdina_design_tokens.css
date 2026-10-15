@@ -24,6 +24,10 @@
 [data-theme="light"],
 [data-theme="dark"],
 .almdina-ui {
+    /*
+     * Brand identity (sidebar / chrome). Theme boards may redefine action
+     * fills for CTAs; do not lighten --alm-primary globally to fix button text.
+     */
     --alm-primary: #172033;
     --alm-primary-hover: #0f172a;
     --alm-on-primary: #ffffff;
@@ -93,6 +97,16 @@
 
 :root,
 [data-theme="light"] {
+    /*
+     * Action fills for primary CTAs (Frappe .btn-primary + .alm-btn-primary).
+     * Light keeps brand navy so page appearance stays pinned.
+     */
+    --alm-action: #172033;
+    --alm-action-hover: #0f172a;
+    --alm-on-action: #ffffff;
+    --alm-brand-soft: #eff6ff;
+    --alm-brand-soft-fg: #172033;
+
     --alm-canvas: #eef1f6;
     --alm-card: #ffffff;
     --alm-card-border: #e4e8ee;
@@ -146,6 +160,17 @@
 /* -------------------------------------------------------------------------- */
 
 [data-theme="dark"] {
+    /*
+     * Frappe .btn-primary uses color: var(--neutral) which is black in Dark.
+     * Action fill must therefore be a light elevated surface — never navy —
+     * while --alm-primary stays the sidebar/brand navy.
+     */
+    --alm-action: #dbe4f0;
+    --alm-action-hover: #c5d0e0;
+    --alm-on-action: #101828;
+    --alm-brand-soft: #0f2748;
+    --alm-brand-soft-fg: #93c5fd;
+
     --alm-canvas: #12161e;
     --alm-card: #1a2030;
     --alm-card-border: #2a3344;

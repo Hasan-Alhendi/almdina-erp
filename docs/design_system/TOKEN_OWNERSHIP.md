@@ -42,11 +42,27 @@ Frappe Desk sets and persists `data-theme` on the document root. Almdina must no
 Token file structure:
 
 1. **Shared** (`:root`, `[data-theme="light"]`, `[data-theme="dark"]`, `.almdina-ui`): brand primitives + static scales (type/space/radius). Not surface paints.
-2. **Light surfaces** (`:root`, `[data-theme="light"]` only): canvas/card/text/status/shadow values pinned in `LIGHT_THEME_PIN.md`.
+2. **Light surfaces** (`:root`, `[data-theme="light"]` only): canvas/card/text/status/shadow/action values pinned in `LIGHT_THEME_PIN.md`.
 3. **Dark surfaces** (`[data-theme="dark"]` only): independent dark hex/rgba pairs. No `var(--fg-color)` / `var(--control-bg)` loops back into foundational Alm tokens.
 4. **`.almdina-ui` bridges**: one-way aliases into Frappe vars for controls (`--alm-secondary-bg` ← `--control-bg`, etc.). Must **not** re-declare `--alm-card` / `--alm-text-*` / `--alm-status-*` or every Almdina surface would re-force Light whites under Dark.
 
 Shared components/patterns (`.alm-page-intro`, `.alm-toolbar`, `.alm-summary-card`, `.alm-badge--*`) consume `--alm-*` only. Feature CSS must not invent per-page Dark overrides for those roles.
+
+## Brand vs action vs Desk bridge
+
+| Role | Alm token | Frappe mapping (in `almdina_desk_theme.css`) | Notes |
+|---|---|---|---|
+| Brand / sidebar | `--alm-primary` | `--surface-menu-bar`, `--brand-color` | Never lighten globally to fix CTA text |
+| Primary CTA fill | `--alm-action` / `--alm-on-action` | `--btn-primary` ← `--alm-action` | Frappe `.btn-primary` text uses `--neutral` (white Light / black Dark) |
+| Soft info chrome | `--alm-brand-soft` / `--alm-brand-soft-fg` | `--bg-blue`, `--bg-light-blue`, blue indicator pills | Theme-split; no `#ffffff` color-mix wash in Dark |
+| Interactive accent | `--alm-accent` | Dark `--primary` / indicator dots | Readable links/focus-adjacent roles without changing sidebar navy |
+
+Desk bridge rules:
+
+- Map Frappe → read Alm. Never set `--alm-*` from `--primary` / `--btn-primary`.
+- Light and Dark boards must be separate selectors; do not pin `--btn-primary: var(--alm-primary)` on both themes.
+- Do not add broad `body .btn` / global icon recolors; prefer token remaps.
+- Sidebar polish stays in `almdina_desk_sidebar.css` (layout/icons on brand navy).
 
 ## Shared CSS leakage rule
 

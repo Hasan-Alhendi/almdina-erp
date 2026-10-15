@@ -207,10 +207,10 @@ Store/selectors/actions الخالصة تحصل على Node/unit tests عند ا
 - كل surface يعلن عائلة صفحته عبر `.alm-page--admin|workbench|list|transaction`؛ Feature CSS لا يعيد تعريف max-width/shell rhythm الأساسي.
 - Shared DS CSS لا يحتوي Feature selectors (`.apc-*` / `.dco-*` …)؛ allowlist في `test_design_system_contract` فارغ منذ Phase 6 ويجب أن يبقى فارغًا.
 - لا override selector-based لـ `body .btn-primary` داخل `almdina_components.css`.
-- **Frappe Desk bridge (DS-10):** `public/css/almdina_desk_theme.css` يعيد توجيه `--primary` / `--btn-primary` و`indicator-pill.blue` إلى `--alm-primary` على `:root` — بدون تغيير markup Frappe.
-- Brand primitives (`--alm-primary` …) تعيش على `:root` + `.almdina-ui` في `almdina_design_tokens.css` حتى يكفي تعديل hex واحد للـDesk وAlmdina surfaces معًا.
+- **Frappe Desk bridge (DS-10):** `public/css/almdina_desk_theme.css` يربط متغيرات Desk بـ `--alm-*` باتجاه واحد. `--btn-primary` ← `--alm-action` (منفصل عن `--alm-primary` للشريط الجانبي). لا تُثبَّت `--btn-primary: var(--alm-primary)` على Light+Dark معًا — نص `.btn-primary` في Dark يعتمد `--neutral` الأسود.
+- Brand primitives (`--alm-primary` …) تعيش على `:root` + `.almdina-ui` في `almdina_design_tokens.css` حتى يكفي تعديل hex واحد للـDesk وAlmdina surfaces معًا. لا تُفتحّن `--alm-primary` عالميًا لإصلاح نص زر.
 - **Theme boards:** Frappe يملك `data-theme`؛ Light surfaces على `:root`/`[data-theme="light"]` فقط، وDark على `[data-theme="dark"]` فقط. لا تُثبَّت ألوان الأسطح على `.almdina-ui` (انظر `TOKEN_OWNERSHIP.md` + `LIGHT_THEME_PIN.md`).
-- تغيير اللون الأساسي يتم من `--alm-primary` في tokens فقط، ثم `bench build --app almdina_erp` + `clear-cache` (ومع bump `?v=` على مسار الـtokens إن لزم).
+- تغيير اللون الأساسي يتم من `--alm-primary` في tokens فقط، ثم `bench build --app almdina_erp` + `clear-cache` (ومع bump `?v=` على مسارات CSS المتغيرة إن لزم).
 - Design System migration تبقى presentation-only: لا تغيّر Domain/Application/Services أو capabilities أو lifecycle.
 
 **استثناءات مسجّلة (allowlist):**

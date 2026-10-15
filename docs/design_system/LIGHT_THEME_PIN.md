@@ -46,3 +46,15 @@ Brand primitives that stay theme-shared (also pinned for Light identity):
 --alm-primary-hover: #0f172a
 --alm-accent: #2563eb
 ```
+
+Light action / soft-brand tokens (must match brand navy so CTAs look unchanged):
+
+```text
+--alm-action: #172033
+--alm-action-hover: #0f172a
+--alm-on-action: #ffffff
+--alm-brand-soft: #eff6ff
+--alm-brand-soft-fg: #172033
+```
+
+Dark Mode must **not** lighten `--alm-primary` to fix CTA contrast. Use `--alm-action` / `--alm-on-action` (and Desk bridge `--btn-primary`) instead.

@@ -8,11 +8,11 @@ coverage.
 app_include_css = [
     # Raw /assets paths are not content-fingerprinted by Frappe; bump when the
     # Light/Dark token boards or shared component/pattern paint contracts change.
-    "/assets/almdina_erp/css/almdina_design_tokens.css?v=2",
-    "/assets/almdina_erp/css/almdina_components.css",
+    "/assets/almdina_erp/css/almdina_design_tokens.css?v=3",
+    "/assets/almdina_erp/css/almdina_components.css?v=2",
     "/assets/almdina_erp/css/almdina_patterns.css",
     "/assets/almdina_erp/css/almdina_page_templates.css?v=1",
-    "/assets/almdina_erp/css/almdina_desk_theme.css",
+    "/assets/almdina_erp/css/almdina_desk_theme.css?v=2",
     "/assets/almdina_erp/css/almdina_desk_sidebar.css?v=2",
     "/assets/almdina_erp/css/almdina_workspace_home.css?v=11",
     "/assets/almdina_erp/css/almdina_list_table.css",
