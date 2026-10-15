@@ -35,6 +35,7 @@
     const EFFECT_STATE_FIELD = "__almdinaDocumentEffects";
     const IDENTITY_ALIASES_FIELD = "__almdinaDocumentContextIdentityAliases";
     const PENDING_INSERT_FIELD = "__almdinaDocumentContextPendingInsert";
+    const nativeInputVisits = new WeakMap();
 
     function formIdentity(frm) {
         const doc = frm && frm.doc;
@@ -135,8 +136,35 @@
         Object.entries(frm.fields_dict || {}).forEach(([fieldname, field]) => {
             if (!field || field.df?.fieldname !== fieldname || !field.$input?.length
                 || typeof field.$input.val !== "function") return;
+            guardNativeInput(frm, field);
             const value = frm.doc[fieldname];
             field.$input.val(value == null ? "" : value);
+        });
+    }
+
+    function guardNativeInput(frm, field) {
+        const element = field.$input?.get?.(0) || field.$input?.[0];
+        if (!element || typeof element.addEventListener !== "function"
+            || typeof field.parse_validate_and_set_in_model !== "function") return;
+        if (!field.__almdinaNativeInputGuard) {
+            const original = field.parse_validate_and_set_in_model;
+            field.parse_validate_and_set_in_model = function (value, event, ...rest) {
+                const source = event && nativeInputVisits.get(event.originalEvent || event);
+                if (source && !isSameDocument(frm, source)) return Promise.resolve();
+                return original.call(this, value, event, ...rest);
+            };
+            field.__almdinaNativeInputGuard = true;
+        }
+        if (field.__almdinaNativeInputElement === element) return;
+        const mark = event => nativeInputVisits.set(event, capture(frm));
+        element.addEventListener("input", mark, true);
+        element.addEventListener("change", mark, true);
+        field.__almdinaNativeInputElement = element;
+    }
+
+    function guardCurrentNativeInputs(frm) {
+        Object.entries(frm.fields_dict || {}).forEach(([name, field]) => {
+            if (field?.df?.fieldname === name) guardNativeInput(frm, field);
         });
     }
 
@@ -842,10 +870,14 @@
         before_save(frm) { beginSave(frm); },
         refresh(frm) {
             synchronize(frm);
+            guardCurrentNativeInputs(frm);
             ensureStageContext(frm);
             scheduleSettle(frm, 0);
         },
-        onload_post_render(frm) { scheduleSettle(frm, 0); },
+        onload_post_render(frm) {
+            guardCurrentNativeInputs(frm);
+            scheduleSettle(frm, 0);
+        },
         after_save(frm) {
             reconcileAfterSave(frm);
             scheduleSettle(frm, 0);

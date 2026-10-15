@@ -11,9 +11,12 @@ test("native inputs belong to the current document visit, while B's unsaved edit
     const elements = {};
     const fields = {};
     for (const name of ["board_description", "board_length_cm", "board_width_cm"]) {
-        const element = { value: "", listeners: [] };
+        const element = { value: "", listeners: [], captures: [],
+            addEventListener(_type, callback) { this.captures.push(callback); } };
         elements[name] = element;
-        fields[name] = { df: { fieldname: name }, $input: {
+        fields[name] = { df: { fieldname: name },
+            parse_validate_and_set_in_model(value) { frm.doc[name] = value; return Promise.resolve(); },
+            $input: {
             length: 1, 0: element, get() { return element; },
             val(value) { if (arguments.length) { element.value = value; return this; } return element.value; },
             on(_events, callback) { element.listeners.push(callback); },
@@ -41,6 +44,8 @@ test("native inputs belong to the current document visit, while B's unsaved edit
     handlers.before_load(frm);
     handlers.refresh(frm);
     elements.board_description.value = "A White";
+    const nativeAEvent = {};
+    elements.board_description.captures.forEach(mark => mark(nativeAEvent));
     elements.board_description.listeners.forEach(listener => listener());
     const tokenA = window.AlmdinaDocumentContext.capture(frm);
     frm.doc = { doctype: "Door Cutting Order", name: "B", board_description: "B Black",
@@ -52,6 +57,9 @@ test("native inputs belong to the current document visit, while B's unsaved edit
 
     // A stale control read and stale event cannot lend A ownership of B.
     elements.board_description.value = "A White";
+    await fields.board_description.parse_validate_and_set_in_model("A White",
+        { originalEvent: nativeAEvent });
+    assert.equal(frm.doc.board_description, "B Black", "native debounced A input must be inert on B");
     assert.equal((await window.AlmdinaBoardTextUX.syncInputs(frm)).board_description, "B Black");
     assert.equal(frm.doc.board_description, "B Black");
 

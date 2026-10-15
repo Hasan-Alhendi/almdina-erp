@@ -8,7 +8,7 @@ The implementation branch starts at Phase 2A `074fe87556b9f4f6e0b137aa0ae70c0839
 
 In pinned Frappe v16.17.5, a Data control debounces its native `input` handler and reads `$input` when the handler executes. The same Form and controls are reused on route changes. The previous custom `controlValue` read an old `$input` (or `get_value`) during `before_save` and copied it into the new document. The underlying risk also affects dimensions and measurement controls, not only color.
 
-At an actual DocumentContext generation transition, native scalar controls are reconciled synchronously to the new model. Board text and dimensions accept input values only when a user input/change event was tagged with the current document token and the same DOM element/value. The `before_save` projection rechecks its token before and after `frm.set_value`; same-document unsaved input remains authoritative. The fast measurement shell carries order and generation attributes, and its row synchronization rejects a shell from an earlier visit. This uses native `frm.save()` / `savedocs`; no parallel save endpoint or permission bypass was introduced.
+At an actual DocumentContext generation transition, native scalar controls are reconciled synchronously to the new model. The native input/change event is tagged during DOM capture, before Frappe's handler, and `parse_validate_and_set_in_model` rejects a delayed event from an obsolete generation. Board text and dimensions accept custom projection only when a user input/change event was tagged with the current document token and the same DOM element/value. The `before_save` projection rechecks its token before and after `frm.set_value`; same-document unsaved input remains authoritative. The fast measurement shell carries order and generation attributes, and its row synchronization rejects a shell from an earlier visit. This uses native `frm.save()` / `savedocs`; no parallel save endpoint or permission bypass was introduced.
 
 ## Atomic print contract
 
@@ -20,10 +20,10 @@ This contract intentionally fails closed when no owned Plan Workspace row is ava
 
 - Original Phase 1 Node regressions: **15/15 GREEN**, assertions unchanged.
 - Phase 2A ownership regressions: **4/4 GREEN**.
-- Phase 2B native input contract: GREEN; stale A value rejected and unsaved B board/dimension edits retained.
-- Final HTML geometry/edge regression with trusted plan row: GREEN.
+- Phase 2B native input contract: GREEN; delayed Frappe native A input and stale custom A value rejected, and unsaved B board/dimension edits retained.
+- Final HTML geometry/edge regression with trusted plan row: GREEN; wrong geometry, revision change, and A→B→A generation reuse are rejected; Custom/Approved print geometry remains valid.
 - Full JS sweep: **135/139 passed**. The four failures (`dco_sticky_tabs_geometry`, `measurement_toolbar_shared_loop`, `order_entry_locale`, `plan_tab_capabilities`) reproduce on pristine `Develop` at `f6a3be63`: **Baseline**, zero newly identified failures in this sweep. The three path-based failures refer to pre-existing moved files; the measurement frame-loop test is also red on the base. No out-of-scope baseline assertions were changed.
-- Pinned Desk Native Save, independent DB read, persisted System Plan A/B HTML, wrong-plan rejection, and route change mid-await are exercised by `cross-order-p0-runtime.yml`; record the actual CI result and artifact before certification.
+- Pinned Desk Native Save, independent DB read, persisted System Plan A/B HTML, wrong-plan rejection, and route change mid-await are exercised by `cross-order-p0-runtime.yml`. A separate same-order controlled renderer fixture adds multiple sheets, OFFCUT and Extra and saves its HTML artifact. This controlled print cannot substitute for the two server-persisted plan prints. Record the actual CI result and artifacts before certification.
 
 ## Remaining release boundary
 

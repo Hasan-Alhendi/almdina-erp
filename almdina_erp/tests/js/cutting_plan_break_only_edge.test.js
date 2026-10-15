@@ -44,6 +44,7 @@ const fakeWindow = {
                 write(html) { prints.push(String(html)); },
                 close() {},
             },
+            close() {},
         };
     },
 };
@@ -103,12 +104,15 @@ const frm = {
     },
 };
 fakeWindow.cur_frm = frm;
+let generation = 1;
 fakeWindow.AlmdinaDocumentContext = {
-    capture() { return { identity: frm.doc.name, generation: 1 }; },
-    isCurrent(_frm, token) { return token.identity === frm.doc.name && token.generation === 1; },
+    capture() { return { identity: frm.doc.name, generation }; },
+    isCurrent(_frm, token) { return token.identity === frm.doc.name && token.generation === generation; },
 };
 fakeWindow.AlmdinaPermissions = { canDocument() { return true; } };
 let currentRow;
+let currentTab = "System";
+fakeWindow.AlmdinaPlanTabsUX = { activeTab() { return currentTab; } };
 fakeWindow.AlmdinaPlanWorkspaceState = {
     snapshot() { return { status: "ready", data: { order_name: frm.doc.name } }; },
     displayedPlanForTab() { return currentRow; },
@@ -217,6 +221,41 @@ async function main() {
     assert.doesNotMatch(printedClear, /<svg class="dco-piece-edge-svg/);
     assert.doesNotMatch(printedClear, /<polyline/);
     assert.doesNotMatch(printedClear, /dco-edge-break-only-svg/);
+
+    assert.equal(await renderer.print(frm, planFor(alone)), false,
+        "a plan other than the verified row must be rejected");
+    assert.equal(prints.length, 2, "a rejected plan cannot create a window");
+
+    for (const tab of ["Custom", "Approved"]) {
+        currentTab = tab;
+        const html = await printed(alone);
+        assert.match(html, /PLAN-alone/);
+        assert.match(html, /DCO-BREAK-ONLY/);
+    }
+    currentTab = "System";
+
+    let release;
+    fakeWindow.AlmdinaFactoryPrintIdentity = {
+        get() { return new Promise(resolve => { release = resolve; }); },
+    };
+    currentRow = { name: "PLAN-alone", revision: 1,
+        snapshot_json: JSON.stringify(planFor(alone)) };
+    const before = prints.length;
+    const revisionPrint = renderer.print(frm, planFor(alone));
+    currentRow = { ...currentRow, revision: 2 };
+    release({});
+    assert.equal(await revisionPrint, false);
+    assert.equal(prints.length, before + 1, "revision change cannot issue final HTML");
+
+    currentRow = { ...currentRow, revision: 3 };
+    const generationPrint = renderer.print(frm, planFor(alone));
+    frm.doc.name = "OTHER";
+    generation += 1;
+    frm.doc.name = "DCO-BREAK-ONLY";
+    generation += 1;
+    release({});
+    assert.equal(await generationPrint, false, "A→B→A must not reuse the old visit token");
+    assert.equal(prints.length, before + 2, "route change cannot issue final HTML");
 
     console.log("Cutting plan break-only edge regression passed");
 }

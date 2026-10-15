@@ -465,6 +465,47 @@ def test_saved_server_plan_print_runtime():
                 await AlmdinaCuttingPlanRender.print(cur_frm,plan)""", a_plan)
             assert rejected is False and page.evaluate("__p0PrintWrites.length") == writes_before
             evidence["wrong_plan_rejected"] = True
+            # Separate controlled renderer case: retain B ownership but add an
+            # OFFCUT sheet and Extra flag. This does not pretend to be a saved
+            # server plan; the A/B HTML checks above use persisted API rows.
+            controlled = page.evaluate("""async () => {
+                const frm=cur_frm, state=AlmdinaPlanWorkspaceState;
+                const payload=state.snapshot(frm).data;
+                const row=payload.plans.system_draft;
+                const geometry=JSON.parse(row.snapshot_json);
+                const offcut=JSON.parse(JSON.stringify(geometry.sheets[0]));
+                offcut.sheet_no=geometry.sheets.length+1;
+                offcut.resource_kind='OFFCUT';
+                offcut.pieces[0].id='CONTROLLED-OFFCUT-B';
+                offcut.pieces[0].label='CONTROLLED-OFFCUT-B';
+                offcut.pieces[0].source_piece_no=1;
+                offcut.pieces[0].extra_double=1;
+                geometry.sheets.push(offcut);
+                const testRow={...row,name:'CONTROLLED-PLAN-B',revision:Number(row.revision)+1,
+                    snapshot_json:JSON.stringify(geometry)};
+                const id=AlmdinaDocumentContext.formIdentity(frm),store=state.storeFor(frm);
+                store.reset(id);
+                store.resolveLoad(id,store.beginLoad(id),{
+                    ...payload,plans:{...payload.plans,system_draft:testRow}});
+                const originalExtra=frm.doc.pieces[0].extra_double;
+                frm.doc.pieces[0].extra_double=1;
+                const before=__p0PrintWrites.length;
+                const result=await AlmdinaCuttingPlanRender.print(frm,geometry,{tab:'System',row:testRow});
+                frm.doc.pieces[0].extra_double=originalExtra;
+                return {result,html:__p0PrintWrites.at(-1),before,
+                    after:__p0PrintWrites.length};
+            }""")
+            assert controlled["result"] is True and controlled["after"] == controlled["before"] + 2
+            controlled_html = controlled.pop("html")
+            assert b["name"] in controlled_html and a["name"] not in controlled_html
+            assert "CONTROLLED-PLAN-B" in controlled_html
+            assert 'data-resource-kind="OFFCUT"' in controlled_html
+            assert "CONTROLLED-OFFCUT-B" in controlled_html
+            assert 'data-addon-kind="double"' in controlled_html
+            (evidence_dir / "controlled-multisheet-offcut-final.html").write_text(
+                controlled_html, encoding="utf-8")
+            evidence["controlled_multisheet_offcut"] = controlled
+            writes_before = page.evaluate("__p0PrintWrites.length")
             # Freeze B, then navigate while the production print handler awaits
             # the asynchronous identity service. No final HTML may be issued.
             page.evaluate("""() => {
