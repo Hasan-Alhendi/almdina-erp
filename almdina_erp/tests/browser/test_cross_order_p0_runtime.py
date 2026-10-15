@@ -176,6 +176,34 @@ def test_phase2a_isolated_desk_boundary():
                     board:response.message.board_description};
             }""", b["name"])
             assert evidence["server_read"] == {"name": b["name"], "board": b["board"]}
+            edited_board = b["board"] + " — current visit edit"
+            page.on("request", capture)
+            try:
+                evidence["legitimate_b_edit"] = page.evaluate("""async value => {
+                    const frm=cur_frm;
+                    frm.fields_dict.board_description.$input.val(value).trigger('input');
+                    frm.dirty();
+                    await frm.save();
+                    const response=await frappe.call({method:'frappe.client.get',
+                        args:{doctype:'Door Cutting Order',name:frm.doc.name}});
+                    return {model:frm.doc.board_description,
+                        server:response.message.board_description};
+                }""", edited_board)
+            finally:
+                page.remove_listener("request", capture)
+            assert evidence["legitimate_b_edit"] == {
+                "model": edited_board, "server": edited_board}, evidence
+            evidence["legitimate_b_savedocs"] = [doc.get("board_description")
+                for doc in payloads if doc and doc.get("board_description") == edited_board]
+            assert evidence["legitimate_b_savedocs"] == [edited_board], evidence
+            evidence["restored_b"] = page.evaluate("""async value => {
+                await cur_frm.set_value('board_description',value);
+                cur_frm.dirty(); await cur_frm.save();
+                const response=await frappe.call({method:'frappe.client.get',
+                    args:{doctype:'Door Cutting Order',name:cur_frm.doc.name}});
+                return response.message.board_description;
+            }""", b["board"])
+            assert evidence["restored_b"] == b["board"]
         finally:
             evidence_dir.mkdir(parents=True, exist_ok=True)
             (evidence_dir / "phase2a-runtime-isolation.json").write_text(

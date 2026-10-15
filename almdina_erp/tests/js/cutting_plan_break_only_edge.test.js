@@ -228,9 +228,12 @@ async function main() {
 
     for (const tab of ["Custom", "Approved"]) {
         currentTab = tab;
-        const html = await printed(alone);
-        assert.match(html, /PLAN-alone/);
+        const piece = tab === "Custom" ? withSide : fullPath;
+        const html = await printed(piece);
+        assert.match(html, new RegExp(`PLAN-${piece.id}`));
         assert.match(html, /DCO-BREAK-ONLY/);
+        assert.equal(await renderer.print(frm, planFor(alone)), false,
+            `${tab} cannot print geometry from the other source`);
     }
     currentTab = "System";
 

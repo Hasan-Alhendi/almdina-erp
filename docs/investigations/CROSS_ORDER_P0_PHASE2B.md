@@ -31,6 +31,8 @@ The first full static workflow on `7cb08c32` failed an older source contract tha
 
 The pinned Desk run on `97edebe1` (`38676746720`, artifact `11946094252`) confirms real server-persisted **A** and **B** System plans printed successfully to intercepted final HTML. A: `26-00001`, `CP-2026-00001` revision 1, white board, `420 × 810` geometry. B: `26-00002`, `CP-2026-00002` revision 1, black board, `570 × 930` geometry. Each HTML excludes the other order and board. Passing A geometry to B's renderer was rejected before printing. A separate B-owned controlled plan produced final HTML containing two sheets, OFFCUT and an Extra marker. The saved-form Recovery/EDIT route observation passed. The last browser step failed because the controlled plan left the PlanTabs presenter showing an injected row, so the attempted mid-await print was rejected synchronously and the harness waited for a lookup that never began. The test now reloads the real B plan and invokes the production renderer with that owned row to reach the asynchronous boundary. This last cancellation check remains pending CI; do not count it as certified yet.
 
+The next pinned run also verifies that a real user input event on B reaches native `savedocs` and the server read, then restores B before plan persistence. This positive save case is pending CI; it is separate from the controlled stale DOM rejection.
+
 ## Remaining release boundary
 
 NEW Form in Desk remains a separate Recovery release blocker. Recovery code was not changed; NEW→Saved model identity promotion is retained, but this phase does not certify the blocked NEW Form workflow. No DB migration, DXF/nesting algorithm change, or printer dispatch was introduced.
