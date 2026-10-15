@@ -156,9 +156,9 @@ def _loopback_cdp_browser(playwright_instance) -> tuple[Browser, subprocess.Pope
         "--no-default-browser-check",
         "--disable-background-networking",
         "--disable-dev-shm-usage",
+        # Match Playwright's Linux launch default in the isolated CI browser.
+        "--no-sandbox",
     ]
-    if os.geteuid() == 0:
-        args.append("--no-sandbox")
     args.append("about:blank")
     process = subprocess.Popen(
         args,
