@@ -7,20 +7,41 @@
     const OWNER_ATTR = "data-almdina-plan-settings-summary-owner";
     const STYLE_ID = "dco-plan-settings-summary-owner-css-v2";
     const LEGACY_STYLE_IDS = ["dco-plan-settings-summary-owner-css"];
-    const TIME_LIMIT_HELP = "أقصى مدة يمنحها النظام لمحرك التحسين للبحث عن توزيع أفضل. قد ينتهي البحث قبلها، وزيادتها قد تحسن بعض الخطط المعقدة لكنها تجعل المعاينة أبطأ.";
+    const TIME_LIMIT_HELP = "The maximum time the optimizer may spend searching for a better layout. The search may finish sooner. Increasing it can improve some complex plans, but it makes the preview slower.";
     const FALLBACK_SPECS = Object.freeze([
-        Object.freeze({ fieldname: "kerf_mm", shortLabel: "الشفرة", fieldtype: "Float", suffix: "مم" }),
-        Object.freeze({ fieldname: "trim_margin_mm", shortLabel: "الهامش", fieldtype: "Float", suffix: "مم" }),
-        Object.freeze({ fieldname: "packing_mode", shortLabel: "الخوارزمية", fieldtype: "Select" }),
-        Object.freeze({ fieldname: "cutting_machine_type", shortLabel: "الآلة", fieldtype: "Select" }),
+        Object.freeze({ fieldname: "kerf_mm", shortLabel: "Blade", fieldtype: "Float", suffix: "mm" }),
+        Object.freeze({ fieldname: "trim_margin_mm", shortLabel: "Margin", fieldtype: "Float", suffix: "mm" }),
+        Object.freeze({ fieldname: "packing_mode", shortLabel: "Algorithm", fieldtype: "Select" }),
+        Object.freeze({ fieldname: "cutting_machine_type", shortLabel: "Cutting machine", fieldtype: "Select" }),
         Object.freeze({
             fieldname: "optimization_time_limit_sec",
-            shortLabel: "المهلة",
+            shortLabel: "Time limit",
             fieldtype: "Float",
-            suffix: "ث",
+            suffix: "seconds",
             help: TIME_LIMIT_HELP,
         }),
     ]);
+
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        return String(message == null ? "" : message);
+    }
+
+    function uiDirection() {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.direction === "function") {
+            const value = locale.direction();
+            if (value === "ltr" || value === "rtl") return value;
+        }
+        const dir = document.documentElement && document.documentElement.getAttribute("dir");
+        return dir === "ltr" ? "ltr" : "rtl";
+    }
 
     function documentContext() {
         return window.AlmdinaDocumentContext || null;
@@ -84,10 +105,11 @@
         if (spec.fieldtype === "Select") {
             const normalized = String(raw ?? "").trim();
             const option = (spec.options || []).find((entry) => String(entry.value) === normalized);
+            if (option && option.canonical) return translate(option.label);
             if (option && option.label) return String(option.label);
             if (normalized) return normalized;
-            if (spec.fieldname === "packing_mode") return "Auto Pro";
-            if (spec.fieldname === "cutting_machine_type") return "Auto";
+            if (spec.fieldname === "packing_mode") return translate("Auto Pro (recommended)");
+            if (spec.fieldname === "cutting_machine_type") return translate("Automatic");
             return "—";
         }
         if (raw === null || raw === undefined || String(raw).trim() === "") return "—";
@@ -133,7 +155,6 @@
                 border-radius:var(--alm-radius-sm,10px) !important;
                 background:var(--alm-card,#fff) !important;
                 box-shadow:none !important;
-                direction:rtl;
             }
             .${SUMMARY_CLASS} .dco-plan-settings-readonly__strip {
                 display:flex !important;
@@ -243,14 +264,14 @@
 
     function summaryMarkup(frm, settings) {
         const fields = settingSpecs(frm, settings).map((spec) => {
-            const label = frappe.utils.escape_html(__(spec.shortLabel || spec.label));
+            const label = frappe.utils.escape_html(translate(spec.shortLabel || spec.label));
             const value = frappe.utils.escape_html(displayValue(spec, settings));
             const helpText = spec.fieldname === "optimization_time_limit_sec" ? TIME_LIMIT_HELP : spec.help;
             const help = helpText
-                ? `<span class="dco-plan-settings-readonly__label-help" title="${frappe.utils.escape_html(__(helpText))}" aria-label="${frappe.utils.escape_html(__(helpText))}">?</span>`
+                ? `<span class="dco-plan-settings-readonly__label-help" title="${frappe.utils.escape_html(translate(helpText))}" aria-label="${frappe.utils.escape_html(translate(helpText))}">?</span>`
                 : "";
             const suffix = spec.suffix
-                ? `<span class="dco-plan-settings-readonly__suffix">${frappe.utils.escape_html(__(spec.suffix))}</span>`
+                ? `<span class="dco-plan-settings-readonly__suffix">${frappe.utils.escape_html(translate(spec.suffix))}</span>`
                 : "";
             const wrapClass = spec.suffix
                 ? "dco-plan-settings-readonly__input-wrap has-suffix"
@@ -275,7 +296,7 @@
             `;
         }).join("");
         return `
-            <div class="dco-plan-settings-readonly__strip" role="group" aria-label="${frappe.utils.escape_html(__("إعدادات الخطة"))}">
+            <div class="dco-plan-settings-readonly__strip" role="group" aria-label="${frappe.utils.escape_html(translate("Plan settings"))}">
                 ${fields}
             </div>
         `;
@@ -304,6 +325,7 @@
             anchor.parentNode.insertBefore(summary, anchor);
         }
         summary.setAttribute("data-almdina-order", String(frm.doc.name || ""));
+        summary.setAttribute("dir", uiDirection());
         summary.innerHTML = summaryMarkup(frm, settings);
         return true;
     }

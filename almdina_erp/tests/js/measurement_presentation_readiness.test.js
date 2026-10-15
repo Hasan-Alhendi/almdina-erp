@@ -129,5 +129,24 @@ const css = fs.readFileSync(
 );
 assert.match(css, /\.dco-fast-entry-shell\s+\.dco-edge-buttons\s*\{[^}]*display:\s*grid;/s);
 assert.doesNotMatch(css, /!important/);
+assert.doesNotMatch(
+    css,
+    /\.dco-fast-entry-shell\s*\{[^}]*direction:\s*rtl/s,
+    "measurement shell must not hard-code RTL; it follows the page language direction"
+);
+assert.match(
+    css,
+    /\.dco-fast-entry-shell\s+\.dco-fast-input\[type="number"\]\s*\{[^}]*direction:\s*ltr;/s,
+    "numeric measurement inputs stay LTR for digit clarity"
+);
+
+const operatorSource = fs.readFileSync(
+    path.resolve(__dirname, "../../public/js/door_cutting_order/order_entry/door_cutting_order_operator_ux.js"),
+    "utf8"
+);
+assert.match(operatorSource, /function shellDirection\s*\(/);
+assert.match(operatorSource, /AlmdinaLocale/);
+assert.match(operatorSource, /dir="\$\{shellDirection\(\)\}"/);
+assert.doesNotMatch(operatorSource, /language\s*===\s*["']ar["']/);
 
 console.log("measurement presentation readiness regression tests passed");

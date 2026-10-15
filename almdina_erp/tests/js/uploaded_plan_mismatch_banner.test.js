@@ -176,8 +176,8 @@ const staleTabs = loadTabs({
 const staleHtml = renderCustom(staleTabs, createWrapper(), true);
 assert.match(staleHtml, /dco-uploaded-plan-mismatch-banner/);
 assert.match(staleHtml, /role="alert"/);
-assert.match(staleHtml, /الخطة غير مطابقة للطلب/);
-assert.match(staleHtml, /بيانات هذا الطلب تم تعديلها وأصبحت الخطة غير مطابقة/);
+assert.match(staleHtml, /The plan does not match the order/);
+assert.match(staleHtml, /This order was changed and the plan no longer matches/);
 assert.match(staleHtml, /dco-uploaded-plan-mismatch-banner[\s\S]*dco-plan/);
 assert.match(staleHtml, /dco-plan/);
 

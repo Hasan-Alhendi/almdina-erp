@@ -1,6 +1,35 @@
 (() => {
     "use strict";
 
+
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split("{" + index + "}").join(String(value));
+            });
+        }
+        return text;
+    }
+
+    function uiDirection() {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.direction === "function") {
+            const value = locale.direction();
+            if (value === "ltr" || value === "rtl") return value;
+        }
+        const root = typeof document !== "undefined" ? document.documentElement : null;
+        const dir = root && root.getAttribute("dir");
+        return dir === "ltr" ? "ltr" : "rtl";
+    }
+
     function workerOptions(workers) {
         return (workers || []).map(worker => {
             const id = String(worker && worker.name || "").trim();
@@ -72,16 +101,16 @@
                 throw new Error("Shop Floor worker dropdown dialog is unavailable");
             }
             const workers = Array.isArray(handoff && handoff.workers) ? handoff.workers : [];
-            const nextDepartment = handoff.next_department || handoff.next_stage_type || __("القسم التالي");
+            const nextDepartment = handoff.next_department || handoff.next_stage_type || translate("Next department");
             const lifecycle = {
                 isCurrent: () => isCurrent(generation),
                 ownTransient: surface => own(surface, "handoff-worker", generation),
             };
             return quickActions.createWorkerDropdownDialog({
-                title: __("إرسال للقسم التالي"),
-                label: `${__("العامل التالي")} — ${nextDepartment}`,
+                title: translate("Send to the next department"),
+                label: `${translate("Next worker")} — ${nextDepartment}`,
                 workers,
-                primaryLabel: __("إرسال"),
+                primaryLabel: translate("Send"),
                 lifecycle,
                 onSubmit(nextAssignee, dialogSurface) {
                     if (!isCurrent(generation)) {
@@ -98,7 +127,7 @@
 
         function noWorkers(handoff, generation) {
             if (!isCurrent(generation)) return null;
-            return own(frappe.msgprint(__("لا يوجد عمال متاحون للدور {0} في القسم التالي.", [
+            return own(frappe.msgprint(translate("No workers are available for role {0} in the next department.", [
                 (handoff && handoff.operational_role) || "",
             ])), "no-workers", generation);
         }
@@ -119,13 +148,13 @@
         return Object.freeze({
             own,
             confirmTerminal: (generation, onYes) => confirm(
-                __("تأكيد إنهاء آخر مرحلة واعتبار الطلب جاهزًا للتسليم؟"),
+                translate("Confirm finishing the last stage and marking the order ready for delivery?"),
                 generation,
                 "terminal-confirm",
                 onYes
             ),
             confirmLogout: (generation, onYes) => confirm(
-                __("تأكيد تسجيل الخروج؟"),
+                translate("Confirm sign-out?"),
                 generation,
                 "logout-confirm",
                 onYes
@@ -140,15 +169,15 @@
                 if (!isCurrent(generation) || !result) return null;
                 return frappe.show_alert({
                     message: result.ok
-                        ? __("تم إرسال رسالة واتساب للزبون.")
-                        : (result.message || __("اكتملت المرحلة دون إرسال واتساب.")),
+                        ? translate("A WhatsApp message was sent to the customer.")
+                        : (result.message || translate("The stage completed without sending WhatsApp.")),
                     indicator: result.ok ? "green" : "orange",
                 }, 6);
             },
             error(message, generation) {
                 if (!isCurrent(generation)) return null;
                 return own(
-                    frappe.msgprint(message || __("تعذر تنفيذ العملية.")),
+                    frappe.msgprint(message || translate("Could not complete the operation.")),
                     "error",
                     generation
                 );

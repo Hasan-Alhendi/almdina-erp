@@ -1,23 +1,47 @@
 (() => {
     "use strict";
 
-    const ACTION_GROUP = __("دورة الطلب"); // legacy cleanup only
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split("{" + index + "}").join(String(value));
+            });
+        }
+        return text;
+    }
+
+    const LEGACY_ACTION_GROUP = "دورة الطلب";
     const NON_RETURNABLE_STATUSES = new Set(["Draft", "Rejected", "Delivered", "Cancelled"]);
     const NON_CANCELLABLE_STATUSES = new Set(["Cancelled", "Delivered", "Completed"]);
     const LABELS = Object.freeze({
-        submit_for_review: __("إرسال للمراجعة"),
-        approve: __("اعتماد الطلب"),
-        create_revision: __("تعديل الطلب"),
-        return_to_draft: __("إعادة للمسودة"),
-        cancel: __("إلغاء الطلب"),
-        resume_cancelled: __("استئناف الطلب"),
+        submit_for_review: "Submit for review",
+        approve: "Approve the order",
+        create_revision: "Edit the order",
+        return_to_draft: "Return to draft",
+        cancel: "Cancel the order",
+        resume_cancelled: "Resume the order",
     });
-    const RETIRED_LABELS = Object.freeze([
-        __("إرسال للمراجعة"),
-        __("اعتماد الطلب"),
-        __("Cancel Order"),
+    const LEGACY_RETIRED_LABELS = Object.freeze([
+        "إرسال للمراجعة",
+        "اعتماد الطلب",
         "Cancel Order",
     ]);
+
+    function actionGroup() {
+        return translate("Order lifecycle");
+    }
+
+    function labelText(messageId) {
+        return translate(messageId);
+    }
 
     function permissions() {
         return window.AlmdinaPermissions;
@@ -77,20 +101,31 @@
     }
 
     function removeRetiredLifecycleButtons(frm) {
-        RETIRED_LABELS.forEach(label => {
+        const labels = new Set([
+            ...LEGACY_RETIRED_LABELS,
+            labelText(LABELS.submit_for_review),
+            labelText(LABELS.approve),
+            LABELS.submit_for_review,
+            LABELS.approve,
+        ]);
+        labels.forEach(label => {
             frm.remove_custom_button(label);
-            frm.remove_custom_button(label, ACTION_GROUP);
-            frm.remove_custom_button(label, __("Order Workflow"));
+            frm.remove_custom_button(label, actionGroup());
+            frm.remove_custom_button(label, LEGACY_ACTION_GROUP);
+            frm.remove_custom_button(label, "Order Workflow");
         });
     }
 
-    function removeManagedLifecycleButton(frm, label) {
-        frm.remove_custom_button(label);
-        frm.remove_custom_button(label, ACTION_GROUP);
-        frm.remove_custom_button(label, __("Order Workflow"));
-        if (frm.__almdinaLifecycleRenderedLabels instanceof Set) {
-            frm.__almdinaLifecycleRenderedLabels.delete(label);
-        }
+    function removeManagedLifecycleButton(frm, messageId) {
+        [messageId, labelText(messageId)].forEach(label => {
+            frm.remove_custom_button(label);
+            frm.remove_custom_button(label, actionGroup());
+            frm.remove_custom_button(label, LEGACY_ACTION_GROUP);
+            frm.remove_custom_button(label, "Order Workflow");
+            if (frm.__almdinaLifecycleRenderedLabels instanceof Set) {
+                frm.__almdinaLifecycleRenderedLabels.delete(label);
+            }
+        });
     }
 
     function removeLifecycleButtons(frm) {
@@ -212,22 +247,22 @@
 
     function submitForReview(frm) {
         frappe.confirm(
-            __("سيتم إرسال الطلب للمراجعة ومنع التعديل عليه بعد الاعتماد. هل تريد المتابعة؟"),
+            translate("The order will be submitted for review and editing will be blocked after approval. Do you want to continue?"),
             () => callAction(frm, {
                 method: "almdina_erp.almdina_erp.services.order_lifecycle_permission_service.submit_order_for_review",
-                freezeMessage: __("جاري إرسال الطلب للمراجعة..."),
-                successMessage: __("تم إرسال الطلب للمراجعة."),
+                freezeMessage: translate("Submitting the order for review..."),
+                successMessage: translate("The order was submitted for review."),
             })
         );
     }
 
     function approveOrder(frm) {
         frappe.confirm(
-            __("سيتم اعتماد الطلب والخطة الحالية. هل تريد المتابعة؟"),
+            translate("The order and the current plan will be approved. Do you want to continue?"),
             () => callAction(frm, {
                 method: "almdina_erp.almdina_erp.services.order_approval_service.approve_order",
-                freezeMessage: __("جاري اعتماد الطلب..."),
-                successMessage: __("تم اعتماد الطلب بنجاح."),
+                freezeMessage: translate("Approving the order..."),
+                successMessage: translate("The order was approved."),
             })
         );
     }
@@ -237,8 +272,8 @@
             [{
                 fieldname: "reason",
                 fieldtype: "Small Text",
-                label: __("سبب إعادة الطلب للمسودة (اختياري)"),
-                description: __("سيتم إلغاء مراحل الإنتاج النشطة وإعادة نفس الطلب إلى المسودة حتى يمكن تعديله."),
+                label: translate("Reason for returning the order to draft (optional)"),
+                description: translate("Active production stages will be cancelled and the same order will be returned to draft so it can be edited."),
                 reqd: 0,
             }],
             values => callAction(frm, {
@@ -247,11 +282,11 @@
                     order_name: frm.doc.name,
                     reason: String(values.reason || "").trim(),
                 },
-                freezeMessage: __("جاري إعادة الطلب للمسودة..."),
-                successMessage: __("تمت إعادة الطلب نفسه إلى المسودة."),
+                freezeMessage: translate("Returning the order to draft..."),
+                successMessage: translate("The same order was returned to draft."),
             }),
-            __("إعادة الطلب للمسودة"),
-            __("تأكيد الإعادة")
+            translate("Return the order to draft"),
+            translate("Confirm return")
         );
     }
 
@@ -260,37 +295,37 @@
             [{
                 fieldname: "reason",
                 fieldtype: "Small Text",
-                label: __("سبب إلغاء الطلب"),
-                description: __("سيتم إلغاء مراحل الإنتاج النشطة التي يمكن إلغاؤها بأمان."),
+                label: translate("Reason for cancelling the order"),
+                description: translate("Active production stages that can be cancelled safely will be cancelled."),
                 reqd: 1,
             }],
             values => {
                 frappe.confirm(
-                    __("هذا الإجراء يلغي الطلب ومراحل الإنتاج النشطة. هل تريد المتابعة؟"),
+                    translate("This action cancels the order and the active production stages. Do you want to continue?"),
                     () => callAction(frm, {
                         method: "almdina_erp.almdina_erp.services.order_lifecycle_service.cancel_order",
                         args: {
                             order_name: frm.doc.name,
                             reason: String(values.reason || "").trim(),
                         },
-                        freezeMessage: __("جاري إلغاء الطلب..."),
-                        successMessage: __("تم إلغاء الطلب ومراحل الإنتاج المرتبطة به."),
+                        freezeMessage: translate("Cancelling the order..."),
+                        successMessage: translate("The order and its related production stages were cancelled."),
                         indicator: "orange",
                     })
                 );
             },
-            __("إلغاء الطلب"),
-            __("متابعة")
+            translate("Cancel the order"),
+            translate("Continue")
         );
     }
 
     function resumeCancelledOrder(frm) {
         frappe.confirm(
-            __("سيتم استئناف الطلب من المرحلة التي أُلغي فيها. هل تريد المتابعة؟"),
+            translate("The order will resume from the stage where it was cancelled. Do you want to continue?"),
             () => callAction(frm, {
                 method: "almdina_erp.almdina_erp.services.order_lifecycle_service.resume_cancelled_order",
-                freezeMessage: __("جاري استئناف الطلب..."),
-                successMessage: __("تم استئناف الطلب إلى مرحلته السابقة."),
+                freezeMessage: translate("Resuming the order..."),
+                successMessage: translate("The order was resumed to its previous stage."),
             })
         );
     }
@@ -307,7 +342,7 @@
         if (canReturnToDraft(frm, context)) {
             ensureLifecycleButton(
                 frm,
-                LABELS.return_to_draft,
+                labelText(LABELS.return_to_draft),
                 () => returnToDraft(frm)
             );
         } else {
@@ -316,7 +351,7 @@
         if (canCancelOrder(frm, context)) {
             const cancelButton = ensureLifecycleButton(
                 frm,
-                LABELS.cancel,
+                labelText(LABELS.cancel),
                 () => cancelOrder(frm)
             );
             if (cancelButton && typeof cancelButton.removeClass === "function") {
@@ -328,7 +363,7 @@
         if (canResumeCancelledOrder(frm, context)) {
             ensureLifecycleButton(
                 frm,
-                LABELS.resume_cancelled,
+                labelText(LABELS.resume_cancelled),
                 () => resumeCancelledOrder(frm)
             );
         } else {
@@ -438,9 +473,9 @@
         const wantsCancel = canCancelOrder(frm, context);
         const wantsResume = canResumeCancelledOrder(frm, context);
         return (
-            lifecycleButtonRendered(frm, LABELS.return_to_draft) === wantsReturn
-            && lifecycleButtonRendered(frm, LABELS.cancel) === wantsCancel
-            && lifecycleButtonRendered(frm, LABELS.resume_cancelled) === wantsResume
+            lifecycleButtonRendered(frm, labelText(LABELS.return_to_draft)) === wantsReturn
+            && lifecycleButtonRendered(frm, labelText(LABELS.cancel)) === wantsCancel
+            && lifecycleButtonRendered(frm, labelText(LABELS.resume_cancelled)) === wantsResume
         );
     }
 

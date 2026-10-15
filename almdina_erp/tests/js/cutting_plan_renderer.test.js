@@ -202,7 +202,7 @@ assert.equal(html.split("dco-board-waste-hatch").length - 1, 1);
 assert.match(html, /background:#e4f5ff/);
 assert.match(html, /fill="#ffe5ad"/);
 assert.match(html, /dco-special-exact-piece/);
-assert.match(html, /◆ درفة خاصة · مسار هندسي/);
+assert.match(html, /Special door · geometric path/);
 assert.match(html, /<path d="/);
 assert.match(html, /data-geometry-source="manual-special"/);
 assert.match(html, /data-geometry-source="dxf"/);
@@ -218,9 +218,9 @@ assert.match(html, /<rect class="dco-extra-overlay-path dco-extra-overlay-handle
 assert.match(html, /data-overlay-kind="recessed_handle_cutout"[^>]*stroke-width="0.65"/);
 assert.doesNotMatch(html, /stroke-width="1.75"/);
 assert.match(html, /dco-extra-addon-legend/);
-assert.match(html, /رموز إضافات الدرف/);
-assert.match(html, /دبل قشاط/);
-assert.match(html, /دبل كامل الدرفة/);
+assert.match(html, /Door add-on symbols/);
+assert.match(html, /Edge banding double/);
+assert.match(html, /Full door double/);
 assert.doesNotMatch(html, /dco-extra-addon-marks/);
 assert.match(html, /data-geometry-id="pg-/);
 assert.match(html, /fill-rule="evenodd"/);
@@ -243,7 +243,7 @@ const doubledFrm = {
     },
 };
 const doubledHtml = renderer.build(doubledFrm, renderer.parse(doubledFrm));
-assert.match(doubledHtml, /عدد 6/);
+assert.match(doubledHtml, /Qty 6/);
 
 const extraAddonFrm = {
     doc: {
@@ -272,8 +272,8 @@ assert.match(extraAddonHtml, /data-addon-kind="full_door_double"/);
 assert.match(extraAddonHtml, /data-addon-slot="top-end"/);
 assert.match(extraAddonHtml, /data-addon-slot="top-start"/);
 assert.match(extraAddonHtml, /dco-extra-addon-mark/);
-assert.match(extraAddonHtml, /دبل قشاط/);
-assert.match(extraAddonHtml, /دبل كامل الدرفة/);
+assert.match(extraAddonHtml, /Edge banding double/);
+assert.match(extraAddonHtml, /Full door double/);
 assert.doesNotMatch(extraAddonHtml, /dco-extra-addon-icon/);
 assert.match(extraAddonHtml, /dco-extra-overlay/);
 assert.match(extraAddonHtml, /data-overlay-layer="Liner"/);
@@ -378,9 +378,9 @@ const pastFiftyFrm = {
 const pastFiftyHtml = renderer.build(pastFiftyFrm, pastFiftyPlan);
 assert.match(pastFiftyHtml, />50</);
 assert.match(pastFiftyHtml, />51</);
-assert.match(pastFiftyHtml, /لوح 2/);
-assert.match(pastFiftyHtml, /لوح 1/);
-assert.ok(pastFiftyHtml.indexOf("لوح 2") < pastFiftyHtml.indexOf("لوح 1"));
+assert.match(pastFiftyHtml, /Board 2/);
+assert.match(pastFiftyHtml, /Board 1/);
+assert.ok(pastFiftyHtml.indexOf("Board 2") < pastFiftyHtml.indexOf("Board 1"));
 assert.doesNotMatch(html, /dco-sheet-board-has-trim/);
 assert.doesNotMatch(html, /#e4dfd8/);
 

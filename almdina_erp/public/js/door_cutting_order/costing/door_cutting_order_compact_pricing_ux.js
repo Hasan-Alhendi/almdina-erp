@@ -1,6 +1,23 @@
 (() => {
     "use strict";
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split(`{${index}}`).join(String(value));
+            });
+        }
+        return text;
+    }
+
     if (window.AlmdinaCompactPricingUX) return;
 
     const STYLE_ID = "dco-compact-pricing-ux-v1";
@@ -56,7 +73,7 @@
                 background:#fff3d8;color:#875812!important;font-size:9px!important;font-weight:900;white-space:nowrap;
             }
             .dco-compact-pricing-section .dco-special-price-card>.dco-special-price-cell:not(.is-unpriced)::after{
-                content:"✓ مسعّر";display:inline-flex;align-items:center;padding:3px 7px;border-radius:999px;
+                content:var(--dco-priced-label, "Priced");display:inline-flex;align-items:center;padding:3px 7px;border-radius:999px;
                 background:rgba(31,130,82,.1);color:#14653d;font-size:9px;font-weight:900;white-space:nowrap;
             }
             .dco-compact-pricing-section .dco-special-price-actions{
@@ -129,9 +146,10 @@
         const header = section.querySelector(":scope > .dco-cost-section-title");
         const subtitle = header && header.querySelector("span");
         if (subtitle) {
+            section.style.setProperty("--dco-priced-label", `"${String(translate("Priced")).replace(/["\\]/g, "")}"`);
             subtitle.textContent = stats.unpriced
-                ? `${stats.unpriced} غير مسعّرة من ${stats.total}`
-                : `تم تسعير ${stats.total}`;
+                ? translate("{0} of {1} are unpriced", [stats.unpriced, stats.total])
+                : translate("{0} priced", [stats.total]);
             subtitle.setAttribute("aria-live", "polite");
         }
         return true;

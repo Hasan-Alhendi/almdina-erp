@@ -89,12 +89,12 @@
                 text = new URL(text, window.location.origin).pathname;
             }
         } catch (error) {
-            console.debug("تعذر تحليل رابط أثناء تطبيق الصلاحيات", error);
+            console.debug("Could not parse a link while applying permissions", error);
         }
         try {
             text = decodeURIComponent(text);
         } catch (error) {
-            console.debug("تعذر فك ترميز رابط أثناء تطبيق الصلاحيات", error);
+            console.debug("Could not decode a link while applying permissions", error);
         }
         text = text
             .replace(/^#\/?/, "")
@@ -357,7 +357,7 @@
             lastDeniedRoute = deniedRoute;
             frappe.show_alert(
                 {
-                    message: __("لا تملك صلاحية الوصول إلى هذا القسم."),
+                    message: __("You do not have permission to access this section."),
                     indicator: "orange",
                 },
                 5

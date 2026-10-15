@@ -234,10 +234,10 @@ function makePlanEditForm(overrides = {}) {
     // standalone return action; draft never gets a meaningless return action.
     assert.deepEqual(
         frm.added.map(item => item.label).sort(),
-        ["إعادة للمسودة"].sort()
+        ["Return to draft"].sort()
     );
     assert.equal(
-        frm.added.find(item => item.label === "إعادة للمسودة").group,
+        frm.added.find(item => item.label === "Return to draft").group,
         undefined
     );
     assert.equal(
@@ -246,12 +246,12 @@ function makePlanEditForm(overrides = {}) {
     );
     loaded.api.installButtons(frm, lifecycle);
     assert.equal(
-        frm.added.filter(item => item.label === "إعادة للمسودة").length,
+        frm.added.filter(item => item.label === "Return to draft").length,
         1,
         "reinstalling the same lifecycle state must not remove and recreate the action"
     );
 
-    const returned = frm.added.find(item => item.label === "إعادة للمسودة");
+    const returned = frm.added.find(item => item.label === "Return to draft");
     returned.handler();
     await new Promise(resolve => setTimeout(resolve, 0));
     assert.ok(
@@ -306,25 +306,25 @@ function makePlanEditForm(overrides = {}) {
     await liveLoaded.api.loadContext(liveForm);
     assert.deepEqual(
         liveForm.added.map(item => ({ label: item.label, group: item.group })),
-        [{ label: "إلغاء الطلب", group: undefined }]
+        [{ label: "Cancel the order", group: undefined }]
     );
     liveLoaded.api.installButtons(liveForm, drawingLifecycle);
     assert.equal(
-        liveForm.added.filter(item => item.label === "إلغاء الطلب").length,
+        liveForm.added.filter(item => item.label === "Cancel the order").length,
         1,
         "the cancel action must remain stable across repeated permission refreshes"
     );
 
-    liveForm.added.find(item => item.label === "إلغاء الطلب").handler();
+    liveForm.added.find(item => item.label === "Cancel the order").handler();
     await new Promise(resolve => setTimeout(resolve, 0));
     assert.equal(liveForm.doc.status, "Cancelled");
     assert.deepEqual(
         liveForm.added.map(item => item.label),
-        ["استئناف الطلب"],
+        ["Resume the order"],
         "after cancel the form must refresh to the resume action"
     );
 
-    liveForm.added.find(item => item.label === "استئناف الطلب").handler();
+    liveForm.added.find(item => item.label === "Resume the order").handler();
     await new Promise(resolve => setTimeout(resolve, 0));
     const resumeCall = liveLoaded.calls.find(call =>
         call.method.endsWith("order_lifecycle_service.resume_cancelled_order")
@@ -334,7 +334,7 @@ function makePlanEditForm(overrides = {}) {
     assert.equal(liveForm.doc.status, "At Drawing");
     assert.deepEqual(
         liveForm.added.map(item => item.label),
-        ["إلغاء الطلب"],
+        ["Cancel the order"],
         "after resume the form must refresh to the cancel action"
     );
 

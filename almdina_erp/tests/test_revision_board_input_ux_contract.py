@@ -57,7 +57,7 @@ class TestRevisionReasonUxContract(unittest.TestCase):
         source = REVISION_UX.read_text(encoding="utf-8")
         self.assertIn('fieldname: "reason"', source)
         self.assertIn("reqd: 0", source)
-        self.assertIn("سبب إنشاء نسخة التعديل (اختياري)", source)
+        self.assertIn('translate("Reason for creating the edit copy (optional)")', source)
         self.assertIn("function createRevision(frm, reason = \"\")", source)
         self.assertIn(
             "almdina_erp.almdina_erp.services.order_revision_service.create_order_revision",
@@ -68,14 +68,14 @@ class TestRevisionReasonUxContract(unittest.TestCase):
 
     def test_return_to_draft_dialog_keeps_reason_optional(self) -> None:
         source = LIFECYCLE_UX.read_text(encoding="utf-8")
-        self.assertIn("سبب إعادة الطلب للمسودة (اختياري)", source)
+        self.assertIn('translate("Reason for returning the order to draft (optional)")', source)
         self.assertIn("reqd: 0", source)
         self.assertIn(
             "order_revision_service.return_order_to_draft",
             source,
         )
         self.assertIn('reason: String(values.reason || "").trim()', source)
-        self.assertIn("إعادة نفس الطلب إلى المسودة", source)
+        self.assertIn('translate("The same order was returned to draft.")', source)
         self.assertNotIn("routeToResult: true", source.split("function returnToDraft", 1)[1].split(
             "function cancelOrder", 1
         )[0])
@@ -95,12 +95,14 @@ class TestRevisionReasonUxContract(unittest.TestCase):
 
     def test_retired_buttons_are_removed_by_the_final_lifecycle_owner(self) -> None:
         source = LIFECYCLE_UX.read_text(encoding="utf-8")
-        self.assertIn("const RETIRED_LABELS = Object.freeze([", source)
+        self.assertIn("const LEGACY_RETIRED_LABELS = Object.freeze([", source)
         self.assertIn("function removeRetiredLifecycleButtons(frm)", source)
-        self.assertIn("RETIRED_LABELS.forEach", source)
+        self.assertIn("...LEGACY_RETIRED_LABELS", source)
+        self.assertIn("labels.forEach", source)
         self.assertIn("function removeLifecycleButtons(frm)", source)
-        self.assertIn('__("إعادة للمسودة")', source)
-        self.assertIn('__("Cancel Order")', source)
+        self.assertIn('labelText(LABELS.submit_for_review)', source)
+        self.assertIn('labelText(LABELS.approve)', source)
+        self.assertIn('"Cancel Order"', source)
         self.assertIn("removeRetiredLifecycleButtons(frm)", source)
         self.assertNotIn('document.addEventListener("click"', source)
         self.assertNotIn("stopImmediatePropagation", source)

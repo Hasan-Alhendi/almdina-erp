@@ -13,7 +13,7 @@
     }
 
     function orderEdgeColor(frm) {
-        return String(frm.doc.edge_color || "").trim() || "غير محدد";
+        return String(frm.doc.edge_color || "").trim() || __("Not specified");
     }
 
     function removeLegacyColorDuplicates(root) {
@@ -28,6 +28,7 @@
         const color = orderEdgeColor(frm);
         [...root.querySelectorAll(".dco-cost-kpi")].forEach(card => {
             const label = card.querySelector(".label");
+            // Compatibility with the cost view, which still renders this KPI label until costing is localized.
             if (!label || label.textContent.trim() !== "لون القشاط") return;
             const value = card.querySelector(".value");
             if (value) value.textContent = color;
@@ -47,8 +48,8 @@
             badge.style.cssText = "display:inline-flex;align-items:center;gap:5px;margin-inline-start:auto;padding:5px 9px;border:1px solid color-mix(in srgb, var(--alm-primary, #172033) 22%, transparent);border-radius:999px;background:color-mix(in srgb, var(--alm-primary, #172033) 6%, transparent);font-size:10px;font-weight:800;white-space:nowrap";
             toolbar.appendChild(badge);
         }
-        badge.innerHTML = `<span style="width:7px;height:7px;border-radius:50%;background:var(--alm-primary,#172033)"></span><span>لون القشاط: ${esc(color)}</span>`;
-        badge.title = "لون القشاط العام للطلب";
+        badge.innerHTML = `<span style="width:7px;height:7px;border-radius:50%;background:var(--alm-primary,#172033)"></span><span>${esc(__("Edge color: {0}", [color]))}</span>`;
+        badge.title = __("Order edge color");
     }
 
     function patchCostView(frm) {

@@ -60,7 +60,7 @@ class TestCuttingPlanBoardGalleryUX(unittest.TestCase):
         self.assertIn("function openBoardFocus", presenter)
         self.assertIn("dco-board-focus__dialog", presenter)
         self.assertIn('event.key === "Escape"', presenter)
-        self.assertIn('button.setAttribute("aria-label", "تكبير اللوح")', presenter)
+        self.assertIn('button.setAttribute("aria-label", translate("Enlarge board"))', presenter)
 
     def test_focus_view_is_materially_larger_and_user_zoomable(self) -> None:
         presenter = PLAN_PRESENTER.read_text(encoding="utf-8")

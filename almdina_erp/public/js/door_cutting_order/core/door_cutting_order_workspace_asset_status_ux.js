@@ -14,8 +14,25 @@
         return field && field.$wrapper ? field.$wrapper : null;
     }
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split("{" + index + "}").join(String(value));
+            });
+        }
+        return text;
+    }
+
     function featureLabel(feature) {
-        return feature === "plan" ? __("خطة القص") : __("التكلفة");
+        return feature === "plan" ? translate("Cutting plan") : translate("Order cost");
     }
 
     function uiButton(options) {
@@ -32,8 +49,8 @@
         target.html(`
             <div class="dco-workspace-asset-status" data-phase="loading" role="status" aria-live="polite"
                  style="padding:18px;text-align:center;border:1px dashed var(--border-color,#dfe3e8);border-radius:12px;background:var(--subtle-fg,#fafbfc);color:var(--text-muted,#667085);">
-                <strong style="display:block;margin-bottom:5px;color:var(--text-color,#26313b);">${frappe.utils.escape_html(__("جاري تجهيز القسم"))}</strong>
-                <span>${frappe.utils.escape_html(__(`يتم تحميل ${featureLabel(feature)} لأول مرة على هذا الجهاز.`))}</span>
+                <strong style="display:block;margin-bottom:5px;color:var(--text-color,#26313b);">${frappe.utils.escape_html(translate("Preparing the section"))}</strong>
+                <span>${frappe.utils.escape_html(translate("Loading {0} on this device for the first time.", [featureLabel(feature)]))}</span>
             </div>
         `);
         return true;
@@ -53,10 +70,10 @@
         target.html(`
             <div class="almdina-ui dco-workspace-asset-status" data-phase="failed" role="alert"
                  style="padding:18px;text-align:center;border:1px solid rgba(220,53,69,.25);border-radius:12px;background:rgba(220,53,69,.04);">
-                <strong style="display:block;margin-bottom:6px;color:var(--text-color,#26313b);">${frappe.utils.escape_html(__(`تعذر تحميل ${label}`))}</strong>
-                <span style="display:block;margin-bottom:12px;color:var(--text-muted,#667085);">${frappe.utils.escape_html(errorMessage || __("تحقق من اتصال الإنترنت ثم أعد المحاولة."))}</span>
+                <strong style="display:block;margin-bottom:6px;color:var(--text-color,#26313b);">${frappe.utils.escape_html(translate("Could not load {0}", [label]))}</strong>
+                <span style="display:block;margin-bottom:12px;color:var(--text-muted,#667085);">${frappe.utils.escape_html(errorMessage || translate("Check the internet connection, then try again."))}</span>
                 ${uiButton({
-                    label: __("إعادة المحاولة"),
+                    label: translate("Try again"),
                     variant: "primary",
                     size: "btn-sm",
                     className: "dco-workspace-assets-retry",

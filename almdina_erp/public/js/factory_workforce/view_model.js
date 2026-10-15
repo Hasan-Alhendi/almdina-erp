@@ -55,22 +55,22 @@
                 .filter(role => String(role && role.name || "").toLowerCase().includes(needle))
                 .map(role => {
                     const homePage = normalizeRoute(role.home_page);
-                    const access = role.desk_access ? t("وصول Desk") : t("دور بدون Desk");
+                    const access = role.desk_access ? t("Desk access") : t("Role without Desk");
                     return {
                         value: role.name,
                         description: homePage
-                            ? `${access} · ${t("صفحة الدخول")}: ${homePage}`
-                            : `${access} · ${t("صفحة الدخول غير محددة")}`,
+                            ? `${access} · ${t("Login page")}: ${homePage}`
+                            : `${access} · ${t("Login page not specified")}`,
                     };
                 });
         }
 
         function summaryCards(summary = {}) {
             return [
-                { label: t("إجمالي حسابات المعمل"), value: summary.total || 0 },
-                { label: t("الحسابات المفعلة"), value: summary.enabled || 0 },
-                { label: t("الحسابات المعطلة"), value: summary.disabled || 0 },
-                { label: t("المراحل النشطة المسندة"), value: summary.active_assignments || 0 },
+                { label: t("Total factory accounts"), value: summary.total || 0 },
+                { label: t("Enabled accounts"), value: summary.enabled || 0 },
+                { label: t("Disabled accounts"), value: summary.disabled || 0 },
+                { label: t("Assigned active stages"), value: summary.active_assignments || 0 },
             ];
         }
 
@@ -97,7 +97,7 @@
                 languageLabel: languageName(user.language, data && data.languages),
                 defaultWorkspace: user.default_workspace || "—",
                 lastActive: user.last_active || "—",
-                roleHomeSummary: configuredRoutes.length ? configuredRoutes.join(" · ") : t("حسب Frappe / غير محددة"),
+                roleHomeSummary: configuredRoutes.length ? configuredRoutes.join(" · ") : t("By Frappe / not specified"),
                 roleHomeConflict: navigation.role_home_conflict === true,
                 defaultWorkspaceConflict: navigation.default_workspace_conflict === true,
                 canEdit: actionAllowed(user, "edit") || actionAllowed(user, "assign_roles"),
@@ -114,7 +114,7 @@
                 email: user.email,
                 name: user.full_name || user.email,
                 enabled: Boolean(user.enabled),
-                source: user.default_app || t("بدون تطبيق افتراضي"),
+                source: user.default_app || t("No default app"),
                 defaultWorkspace: user.default_workspace || "—",
                 lastActive: user.last_active || "—",
             };

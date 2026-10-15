@@ -1,6 +1,35 @@
 frappe.pages["factory-permissions"].on_page_load = function (wrapper) {
     "use strict";
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split("{" + index + "}").join(String(value));
+            });
+        }
+        return text;
+    }
+
+    function uiDirection() {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.direction === "function") {
+            const value = locale.direction();
+            if (value === "ltr" || value === "rtl") return value;
+        }
+        const root = typeof document !== "undefined" ? document.documentElement : null;
+        const dir = root && root.getAttribute("dir");
+        return dir === "ltr" ? "ltr" : "rtl";
+    }
+
+
     const FOUNDATION = "/assets/almdina_erp/js/frontend_foundation.js";
     const PAGE_LIFECYCLE = "/assets/almdina_erp/js/page_revisit_refresh.js";
     const MODULES = Object.freeze([
@@ -17,7 +46,7 @@ frappe.pages["factory-permissions"].on_page_load = function (wrapper) {
 
     frappe.ui.make_app_page({
         parent: wrapper,
-        title: __("إدارة صلاحيات المعمل"),
+        title: translate("Factory permission management"),
         single_column: true,
     });
     const $main = $(wrapper).find(".layout-main-section");
@@ -30,10 +59,10 @@ frappe.pages["factory-permissions"].on_page_load = function (wrapper) {
         $main.html(`<div class="almdina-ui">${body}</div>`);
     }
 
-    paintState("loading", __("جاري تحميل مصفوفة الصلاحيات..."));
+    paintState("loading", translate("Loading permission matrix..."));
 
     function showBootstrapError(error) {
-        const fallback = __("تعذر تحميل واجهة إدارة الصلاحيات.");
+        const fallback = translate("Could not load the permission management interface.");
         const frontend = window.AlmdinaFrontend;
         const message = frontend && typeof frontend.errorMessage === "function"
             ? frontend.errorMessage(error, fallback)

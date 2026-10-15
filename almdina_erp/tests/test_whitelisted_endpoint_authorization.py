@@ -98,6 +98,7 @@ class TestWhitelistedEndpointAuthorization(unittest.TestCase):
             EndpointAuthorizationContract.DELEGATE,
             EndpointAuthorizationContract.FAIL_CLOSED,
             EndpointAuthorizationContract.SELF_CONTEXT,
+            EndpointAuthorizationContract.SELF_WRITE,
         }
         self.assertTrue(WHITELISTED_ENDPOINT_CONTRACTS)
         self.assertFalse(set(WHITELISTED_ENDPOINT_CONTRACTS.values()).difference(allowed))
@@ -110,6 +111,16 @@ class TestWhitelistedEndpointAuthorization(unittest.TestCase):
             {
                 "almdina_erp.almdina_erp.services.master_data_service.can_open_master_data",
                 "almdina_erp.almdina_erp.services.permission_context_service.get_permission_context",
+            },
+        )
+        self.assertEqual(
+            {
+                endpoint
+                for endpoint, contract in WHITELISTED_ENDPOINT_CONTRACTS.items()
+                if contract == EndpointAuthorizationContract.SELF_WRITE
+            },
+            {
+                "almdina_erp.almdina_erp.services.user_language_service.set_current_user_language",
             },
         )
         self.assertEqual(
@@ -129,6 +140,20 @@ class TestWhitelistedEndpointAuthorization(unittest.TestCase):
                 "almdina_erp.almdina_erp.services.production_service.pause_stage",
                 "almdina_erp.almdina_erp.services.production_service.resume_stage",
             },
+        )
+
+    def test_language_write_has_an_explicit_self_only_contract(self) -> None:
+        endpoint = "almdina_erp.almdina_erp.services.user_language_service.set_current_user_language"
+        self.assertEqual(WHITELISTED_ENDPOINT_CONTRACTS[endpoint], EndpointAuthorizationContract.SELF_WRITE)
+        self.assertIn(endpoint, _whitelisted_functions())
+        source = (APP / "services" / "user_language_service.py").read_text(encoding="utf-8")
+        self.assertIn('@frappe.whitelist(methods=["POST"])', source)
+        self.assertIn('frappe.session.user in (None, "", "Guest")', source)
+        self.assertIn("resolve_ui_language(language)", source)
+        self.assertIn('frappe.get_doc("User", frappe.session.user)', source)
+        self.assertEqual(
+            [arg.arg for arg in _whitelisted_functions()[endpoint][1].args.args],
+            ["language"],
         )
 
     def test_high_risk_endpoints_keep_their_authorization_boundaries(self) -> None:

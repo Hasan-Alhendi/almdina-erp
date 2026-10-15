@@ -31,8 +31,8 @@ def test_workforce_polish_has_professional_hierarchy_and_accessibility() -> None
     ):
         assert marker in renderer
 
-    assert "إدارة القوى العاملة" in renderer
-    assert "الأدوار والصلاحيات لا تُمنح تلقائيًا" in renderer
+    assert "Workforce management" in renderer
+    assert "Roles and permissions are not granted automatically" in renderer
 
 
 def test_workforce_polish_is_dense_and_responsive() -> None:

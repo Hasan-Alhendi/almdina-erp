@@ -37,7 +37,7 @@
         }
 
         function yesNo(value) {
-            return Number(value || 0) ? t("نعم") : t("لا");
+            return Number(value || 0) ? t("Yes") : t("No");
         }
 
         function display(value, fallback = "—") {
@@ -51,6 +51,15 @@
                 ? current[catalogName]
                 : [];
             const entry = catalog.find(item => String(item && item.id || "").trim() === normalized);
+            const labels = window.AlmdinaFactoryProductionSettingsCatalogLabels;
+            if (labels && typeof labels.resolveLabel === "function") {
+                return labels.resolveLabel(
+                    catalogName,
+                    normalized,
+                    entry ? entry.label : normalized,
+                    t
+                );
+            }
             return entry ? String(entry.label || entry.id || normalized) : normalized;
         }
 
@@ -71,61 +80,61 @@
         function sections(current = {}) {
             const source = values(current);
             return [
-                section("cutting", t("القص والمحسّن"), t("الهندسة الافتراضية وخوارزمية التوزيع وحدود البحث."), [
-                    [t("Kerf الافتراضي (مم)"), source.default_kerf_mm],
-                    [t("هامش التشذيب (مم)"), source.default_trim_margin_mm],
-                    [t("الخوارزمية"), t(catalogLabel(current, "optimization_catalog", source.default_packing_mode))],
-                    [t("نوع آلة القص"), t(catalogLabel(current, "machine_type_catalog", source.default_cutting_machine_type))],
-                    [t("مهلة التحسين (ث)"), source.default_optimization_time_limit_sec],
-                    [t("حد القطع للبحث الأمثل"), source.optimal_search_piece_limit],
+                section("cutting", t("Cutting and optimizer"), t("Default geometry, distribution algorithm, and search limits."), [
+                    [t("Default kerf (mm)"), source.default_kerf_mm],
+                    [t("Trimming margin (mm)"), source.default_trim_margin_mm],
+                    [t("Algorithm"), catalogLabel(current, "optimization_catalog", source.default_packing_mode)],
+                    [t("Cutting machine type"), catalogLabel(current, "machine_type_catalog", source.default_cutting_machine_type)],
+                    [t("Optimization timeout (s)"), source.default_optimization_time_limit_sec],
+                    [t("Piece limit for optimal search"), source.optimal_search_piece_limit],
                 ], current),
-                section("costing", t("التكلفة الافتراضية"), t("أجرة القص ورسوم الدرف الخاصة وهوامشها الافتراضية."), [
-                    [t("أجرة القص / لوح"), `${display(source.default_cutting_cost_per_board_usd)} USD`],
-                    [t("رسم التصميم الخاص"), `${display(source.default_special_design_fee_usd)} USD`],
-                    [t("رسم CNC الخاص"), `${display(source.default_special_cnc_fee_usd)} USD`],
-                    [t("رسم القشاط اليدوي"), `${display(source.default_special_manual_edge_fee_usd)} USD`],
-                    [t("هامش الدرف الخاصة"), `${display(source.default_special_margin_percent)}%`],
+                section("costing", t("Default cost"), t("Cutting fee, special door leaf charges, and their default margins."), [
+                    [t("Cutting fee / board"), `${display(source.default_cutting_cost_per_board_usd)} USD`],
+                    [t("Custom design drawing"), `${display(source.default_special_design_fee_usd)} USD`],
+                    [t("Custom CNC drawing"), `${display(source.default_special_cnc_fee_usd)} USD`],
+                    [t("Manual edge banding drawing"), `${display(source.default_special_manual_edge_fee_usd)} USD`],
+                    [t("Special door leaf margin"), `${display(source.default_special_margin_percent)}%`],
                 ], current),
-                section("extra_addons", t("إضافات الدرف"), t("أسعار بيع ثابتة لكل درفة. يحفظ الطلب نسخة السعر وقت إنشائه ولا تتأثر الطلبات القديمة لاحقًا."), [
-                    [t("Double / درفة"), `${display(source.default_extra_double_unit_price_usd)} USD`],
-                    [t("أجرة دبل كامل الدرفة"), `${display(source.default_extra_full_door_double_unit_price_usd)} USD`],
-                    [t("Liner / درفة"), `${display(source.default_extra_liner_unit_price_usd)} USD`],
-                    [t("فرزة ظهر / درفة"), `${display(source.default_extra_back_groove_unit_price_usd)} USD`],
-                    [t("تفريغ مسكة مخفية / درفة"), `${display(source.default_extra_recessed_handle_cutout_unit_price_usd)} USD`],
+                section("extra_addons", t("Door leaf add-ons"), t("Fixed sale prices per door leaf. The order stores a copy of the price at the time it is created, and existing orders are not affected later."), [
+                    [t("Double / door leaf"), `${display(source.default_extra_double_unit_price_usd)} USD`],
+                    [t("Full door leaf double fee"), `${display(source.default_extra_full_door_double_unit_price_usd)} USD`],
+                    [t("Liner / door leaf"), `${display(source.default_extra_liner_unit_price_usd)} USD`],
+                    [t("Back groove / door leaf"), `${display(source.default_extra_back_groove_unit_price_usd)} USD`],
+                    [t("Hidden handle cutout / door leaf"), `${display(source.default_extra_recessed_handle_cutout_unit_price_usd)} USD`],
                 ], current),
-                section("production", t("ضوابط الإنتاج"), t("يمكن ترك المسار الافتراضي فارغًا وبناء المسارات من شاشة إدارة المسارات. عند إرسال الطلب للإنتاج يجب اختيار مسار فعلي."), [
-                    [t("مسار الإنتاج الافتراضي"), source.default_production_routing || t("غير محدد")],
-                    [t("تجاوز تسلسل المراحل"), source.allow_stage_override ? t("مسموح") : t("غير مسموح")],
-                    [t("اعتماد قطع غير موزعة"), source.allow_unplaced_approval ? t("مسموح") : t("غير مسموح")],
+                section("production", t("Production controls"), t("The default route can be left empty and routes built from the route management screen. A real route must be selected when sending the order to production."), [
+                    [t("Default production route"), source.default_production_routing || t("Not specified")],
+                    [t("Bypass stage sequence"), source.allow_stage_override ? t("Allowed") : t("Denied")],
+                    [t("Approve unallocated pieces"), source.allow_unplaced_approval ? t("Allowed") : t("Denied")],
                 ], current),
-                section("print_identity", t("هوية أوراق الطباعة"), t("تظهر هذه البيانات تلقائيًا في طباعة القياسات وخطة القص وفاتورة الزبون."), [
-                    [t("اسم المعمل"), source.print_factory_name],
-                    [t("لمحة عن المعمل"), source.print_factory_description],
-                    [t("العنوان"), source.print_factory_address],
-                    [t("أرقام التواصل"), source.print_factory_contacts || "—", true],
+                section("print_identity", t("Print sheet identity"), t("This data appears automatically on the measurements printout, cutting plan, and customer invoice."), [
+                    [t("Factory name"), source.print_factory_name],
+                    [t("Factory overview"), source.print_factory_description],
+                    [t("Address"), source.print_factory_address],
+                    [t("Contact numbers"), source.print_factory_contacts || "—", true],
                 ], current),
-                section("whatsapp_messages", t("رسائل واتساب"), `${t("نص القياسات وتعديلاتها والفاتورة يُرفق مع ملف PDF في رسالة واحدة بحد 1024 حرفًا. رسائل إتمام المراحل تبقى نصًا من مسار الإنتاج. استخدم")} {order_name} ${t("لرقم الطلب و")} {stage_label} ${t("لاسم المرحلة.")}`, [
-                    [t("رسالة القياسات"), source.whatsapp_measurements_text, true],
-                    [t("رسالة تعديلات القياسات"), source.whatsapp_measurement_amendments_text, true],
-                    [t("رسالة الفاتورة"), source.whatsapp_invoice_text, true],
+                section("whatsapp_messages", t("WhatsApp messages"), `${t("The measurements text, its edits, and the invoice are attached with the PDF file in one message limited to 1024 characters. Stage completion messages remain text from the production route. Use")} {order_name} ${t("for the order number and")} {stage_label} ${t("for the stage name.")}`, [
+                    [t("Measurements message"), source.whatsapp_measurements_text, true],
+                    [t("Measurement changes message"), source.whatsapp_measurement_amendments_text, true],
+                    [t("Invoice message"), source.whatsapp_invoice_text, true],
                     ...((current && current.whatsapp_stage_message_rows) || []).map(row => [
-                        `${t("رسالة إتمام")} — ${display(row && row.label)}`,
+                        `${t("Completion message")} — ${display(row && row.label)}`,
                         row && row.text,
                         true,
                     ]),
                 ], current),
-                ...(canManageBackups(current) ? [section("backup_restore", t("Backup & Restore"), t("نسخ محلية وخارجية مستقلة مبنية على آلية Frappe الرسمية، مع احتفاظ منفصل واتصال SFTP آمن."), [
-                    [t("النسخ المحلي"), source.local_backup_enabled ? t("مفعّل") : t("معطّل")],
-                    [t("جدولة المحلي"), `${t(source.local_backup_frequency || "Daily")} · ${display(source.local_backup_time, "02:00")}`],
-                    [t("احتفاظ المحلي"), `${t("آخر")} ${display(source.local_backup_retention, 7)} ${t("نسخ")}`],
-                    [t("النسخ الخارجي"), source.external_backup_enabled ? t("مفعّل") : t("معطّل")],
-                    [t("جدولة الخارجي"), `${t(source.external_backup_frequency || "Daily")} · ${display(source.external_backup_time, "03:00")}`],
-                    [t("احتفاظ الخارجي"), `${t("آخر")} ${display(source.external_backup_retention, 4)} ${t("نسخ")}`],
-                    [t("خادم SSH"), source.ssh_host ? `${source.ssh_host}:${display(source.ssh_port, 22)}` : t("غير مضبوط")],
-                    [t("مستخدم SSH"), source.ssh_username || t("غير مضبوط")],
-                    [t("طريقة المصادقة"), t(source.ssh_auth_method || "Private Key")],
-                    [t("المسار البعيد"), source.remote_backup_path || t("غير مضبوط")],
-                    [t("بيانات الاعتماد"), (source.ssh_password_configured || source.ssh_private_key_configured) ? t("محفوظة بأمان") : t("غير مضبوطة")],
+                ...(canManageBackups(current) ? [section("backup_restore", t("Backup & Restore"), t("Independent local and external backups built on the official Frappe mechanism, with separate retention and a secure SFTP connection."), [
+                    [t("Local backup"), source.local_backup_enabled ? t("Enabled") : t("Disabled")],
+                    [t("Local schedule"), `${t(source.local_backup_frequency || "Daily")} · ${display(source.local_backup_time, "02:00")}`],
+                    [t("Local retention"), t("Last {0} backups", [display(source.local_backup_retention, 7)])],
+                    [t("External backup"), source.external_backup_enabled ? t("Enabled") : t("Disabled")],
+                    [t("External schedule"), `${t(source.external_backup_frequency || "Daily")} · ${display(source.external_backup_time, "03:00")}`],
+                    [t("External retention"), t("Last {0} backups", [display(source.external_backup_retention, 4)])],
+                    [t("SSH server"), source.ssh_host ? `${source.ssh_host}:${display(source.ssh_port, 22)}` : t("Not configured")],
+                    [t("SSH user"), source.ssh_username || t("Not configured")],
+                    [t("Authentication method"), t(source.ssh_auth_method || "Private Key")],
+                    [t("Remote path"), source.remote_backup_path || t("Not configured")],
+                    [t("Credentials"), (source.ssh_password_configured || source.ssh_private_key_configured) ? t("Saved securely") : t("Not set up")],
                 ], current)] : []),
             ];
         }
@@ -134,16 +143,16 @@
             const source = current.legacy_values || {};
             if (!source || typeof source !== "object") return [];
             return [
-                [t("التحكم القديم بالمخزون"), yesNo(source.enforce_stock_control)],
-                [t("المستودع الافتراضي القديم"), display(source.default_warehouse)],
-                [t("حجز المخزون عند الاعتماد"), yesNo(source.reserve_stock_on_approval)],
-                [t("نقطة استهلاك المخزون"), display(source.stock_consumption_point)],
-                [t("تفضيل بقايا الألواح قبل الألواح الكاملة"), yesNo(source.prefer_remnants_before_full_boards)],
-                [t("أدنى عرض للبقايا (مم)"), display(source.min_remnant_width_mm)],
-                [t("أدنى طول للبقايا (مم)"), display(source.min_remnant_length_mm)],
-                [t("أدنى مساحة للبقايا (م²)"), display(source.min_remnant_area_m2)],
-                [t("سياسة تكلفة البقايا"), display(source.remnant_cost_policy)],
-                [t("سعر البقايا / م²"), `${display(source.remnant_rate_usd_per_m2)} USD`],
+                [t("Legacy stock control"), yesNo(source.enforce_stock_control)],
+                [t("Legacy default warehouse"), display(source.default_warehouse)],
+                [t("Reserve stock on approval"), yesNo(source.reserve_stock_on_approval)],
+                [t("Stock consumption point"), display(source.stock_consumption_point)],
+                [t("Prefer board remnants before full boards"), yesNo(source.prefer_remnants_before_full_boards)],
+                [t("Minimum remnant width (mm)"), display(source.min_remnant_width_mm)],
+                [t("Minimum remnant length (mm)"), display(source.min_remnant_length_mm)],
+                [t("Minimum remnant area (m²)"), display(source.min_remnant_area_m2)],
+                [t("Remnant cost policy"), display(source.remnant_cost_policy)],
+                [t("Remnant price / m²"), `${display(source.remnant_rate_usd_per_m2)} USD`],
             ].map(([label, value]) => ({ label, value }));
         }
 

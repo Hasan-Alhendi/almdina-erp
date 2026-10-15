@@ -368,10 +368,10 @@ function runCleanups(frm) {
     const startNewForm = form("new-door-cutting-order-discovery");
     await Recovery.LocalCheckpoint.initializeNewForm(startNewForm);
     const html = lastDialog.options.fields[0].options;
-    assert.match(html, /مسودة محلية غير محفوظة رسميًا/);
-    assert.match(html, /متابعة الطلب/);
-    assert.match(html, /بدء طلب جديد/);
-    assert.match(html, /حذف المسودة/);
+    assert.match(html, /This data is an unofficial local draft/);
+    assert.match(html, /Continue the order/);
+    assert.match(html, /Start a new order/);
+    assert.match(html, /Delete the draft/);
     assert.match(html, /44444444-4444-4444-8444-444444444444/);
     assert.match(html, /55555555-5555-4555-8555-555555555555/);
     const newButton = { disabled: false, dataset: { recoveryAction: "new" } };
