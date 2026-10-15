@@ -40,7 +40,7 @@
         const edit = field.__almdinaOwnedInputEdit;
         const element = input && (typeof input.get === "function" ? input.get(0) : input[0]);
         if (input?.length && edit && edit.element === element && owns(frm, edit.token)
-            && edit.value === input.val()) return edit.value;
+            && edit.value === field.$input.val()) return edit.value;
         // The Frappe model owns values not entered during this document visit.
         // get_value() and $input.val() can both expose an old control's value.
         return frm.doc[fieldname];
