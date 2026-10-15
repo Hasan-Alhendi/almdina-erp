@@ -176,7 +176,7 @@
         padding: 3px 7px;
         border: 1px solid var(--border-color);
         border-radius: 999px;
-        background: var(--subtle-fg);
+        background: var(--alm-surface-muted, #f4f6f8);
         box-sizing: border-box;
         text-align: center;
     }
@@ -287,8 +287,8 @@
         padding: 2px 8px;
         border-radius: 999px;
         border: 1px solid var(--alm-card-border, #e4e8ee);
-        background: var(--subtle-fg, #f7f9fa);
-        color: var(--text-muted, #687481);
+        background: var(--alm-surface-muted, #f4f6f8);
+        color: var(--alm-text-subtle, #667085);
         font-size: 10px;
         font-weight: 800;
         line-height: 1.35;
@@ -296,15 +296,15 @@
     }
 
     .dco-order-list .dco-list-price-approval.is-approved {
-        border-color: color-mix(in srgb, var(--alm-success, #15803d) 35%, #fff);
-        background: color-mix(in srgb, var(--alm-success, #15803d) 10%, #fff);
+        border-color: color-mix(in srgb, var(--alm-success, #15803d) 35%, var(--alm-card, #ffffff));
+        background: color-mix(in srgb, var(--alm-success, #15803d) 10%, var(--alm-card, #ffffff));
         color: var(--alm-success, #15803d);
     }
 
     .dco-order-list .dco-list-price-approval.is-unapproved {
         border-color: var(--alm-card-border, #e4e8ee);
-        background: var(--subtle-fg, #f7f9fa);
-        color: var(--text-color, #1f272e);
+        background: var(--alm-surface-muted, #f4f6f8);
+        color: var(--alm-text-strong, #101828);
     }
 
     .dco-order-list .dco-status-filter-slot .control-label,
@@ -426,6 +426,6 @@
 
     .dco-order-list .filter-section > .filter-selector .filter-button:hover,
     .dco-order-list .filter-section > .filter-selector .filter-x-button:hover {
-        background-color: var(--subtle-fg) !important;
+        background-color: var(--alm-surface-muted, #f4f6f8) !important;
     }
 }

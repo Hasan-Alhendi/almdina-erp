@@ -14,7 +14,7 @@
     ]);
     const KANBAN_VIEW_PATCH_KEY = "__almdinaDcoCardPresentationInstalled";
     const MOBILE_CARD_STYLESHEET_ID = "almdina-dco-mobile-list-css";
-    const MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=9";
+    const MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=10";
     function translate(message, replacements) {
         const locale = window.AlmdinaLocale;
         if (locale && typeof locale.translate === "function") {

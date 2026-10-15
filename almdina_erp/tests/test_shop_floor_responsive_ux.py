@@ -119,7 +119,8 @@ def test_worker_list_keeps_assigned_work_first_and_completed_history_last() -> N
     assert ".almdina-sf-list-title.is-completed" in css
     assert ".almdina-sf-order-card.is-completed" in css
     assert ".almdina-sf-order-card.is-completed[data-status]" in css
-    assert "background: #dcfce7 !important;" in css
+    assert "background: color-mix(in srgb, #16a34a 14%, var(--alm-card, #ffffff)) !important;" in css
+    assert "background: #dcfce7 !important;" not in css
     assert "--sf-accent: #16a34a;" in css
     assert "is-other-role" not in css
     assert "is-other-role" not in view_model

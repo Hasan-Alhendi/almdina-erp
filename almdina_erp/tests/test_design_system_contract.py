@@ -612,7 +612,7 @@ class TestDesignSystemContract(unittest.TestCase):
         templates_asset = '"/assets/almdina_erp/css/almdina_page_templates.css?v=1"'
         desk_theme_asset = '"/assets/almdina_erp/css/almdina_desk_theme.css?v=2"'
         desk_sidebar_asset = '"/assets/almdina_erp/css/almdina_desk_sidebar.css?v=2"'
-        workspace_home_asset = '"/assets/almdina_erp/css/almdina_workspace_home.css?v=11"'
+        workspace_home_asset = '"/assets/almdina_erp/css/almdina_workspace_home.css?v=12"'
         ui_asset = '"/assets/almdina_erp/js/almdina_ui.js"'
         foundation_asset = '"/assets/almdina_erp/js/frontend_foundation.js"'
         notes_asset = '"/assets/almdina_erp/css/notes.css"'
@@ -972,10 +972,55 @@ class TestDesignSystemContract(unittest.TestCase):
     def test_factory_routing_workflow_aliases_brand_primary(self) -> None:
         source = FACTORY_ROUTING_WORKFLOW_CSS.read_text(encoding="utf-8")
         self.assertIn("--prw-primary: var(--alm-primary, #172033)", source)
+        self.assertIn("--prw-card: var(--alm-card, #ffffff)", source)
+        self.assertIn("--prw-subtle: var(--alm-surface-muted, #f4f6f8)", source)
+        self.assertIn("--prw-text: var(--alm-text-strong, #101828)", source)
+        self.assertNotIn("--prw-card: var(--card-bg", source)
 
     def test_shop_floor_responsive_aliases_brand_primary(self) -> None:
         source = SHOP_FLOOR_RESPONSIVE_CSS.read_text(encoding="utf-8")
         self.assertIn("--sf-primary: var(--alm-primary, #172033)", source)
+        self.assertIn("--sf-card: var(--alm-card, #ffffff)", source)
+        self.assertIn("--sf-subtle: var(--alm-surface-muted, #f4f6f8)", source)
+        self.assertIn("--sf-text: var(--alm-text-strong, #101828)", source)
+        self.assertNotIn("--sf-card: var(--card-bg", source)
+        # Completed history keeps green identity without Light-only solid washes.
+        self.assertIn("background: color-mix(in srgb, #16a34a 14%, var(--alm-card, #ffffff)) !important;", source)
+        self.assertNotIn("background: #dcfce7 !important;", source)
+
+    def test_workspace_home_icon_wash_mixes_onto_theme_card(self) -> None:
+        source = WORKSPACE_HOME_CSS.read_text(encoding="utf-8")
+        self.assertIn(
+            "background: color-mix(in srgb, var(--alm-section-accent) 12%, var(--alm-card));",
+            source,
+        )
+        self.assertNotIn("color-mix(in srgb, var(--alm-section-accent) 12%, #fff)", source)
+
+    def test_native_list_chrome_uses_alm_text_tokens(self) -> None:
+        list_table = (ROOT / "public" / "css" / "almdina_list_table.css").read_text(encoding="utf-8")
+        self.assertIn("color: var(--alm-text-strong, #101828);", list_table)
+        self.assertIn("color: var(--alm-text-subtle, #667085);", list_table)
+        self.assertNotIn("color: var(--text-color, #1f272e);", list_table)
+
+    def test_dco_mobile_list_soft_washes_mix_onto_theme_card(self) -> None:
+        mobile = (ROOT / "public" / "css" / "door_cutting_order_mobile_list.css").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("#2563eb", mobile)
+        self.assertIn(
+            "--dco-accent-soft: color-mix(in srgb, var(--dco-accent) 12%, var(--alm-card, #ffffff));",
+            mobile,
+        )
+        self.assertIn("--dco-card-bg: var(--alm-card, #ffffff);", mobile)
+        self.assertNotIn("--dco-accent-soft: #eff6ff;", mobile)
+        self.assertNotIn("color: #101828;", mobile)
+
+    def test_factory_stage_library_reads_alm_surfaces(self) -> None:
+        source = FACTORY_STAGE_LIBRARY_CSS.read_text(encoding="utf-8")
+        self.assertIn("background: var(--alm-card, #ffffff);", source)
+        self.assertIn("background: var(--alm-surface-muted, #f4f6f8);", source)
+        self.assertNotIn("var(--card-bg, #fff)", source)
+        self.assertNotIn("var(--subtle-fg, #f7f7f7)", source)
 
     def test_admin_console_shells_alias_foundation_tokens(self) -> None:
         permissions = FACTORY_PERMISSIONS_CSS.read_text(encoding="utf-8")
