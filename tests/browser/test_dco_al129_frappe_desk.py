@@ -5,12 +5,14 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 import time
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
+from urllib.request import urlopen
 from uuid import uuid4
 
 import pytest
@@ -134,6 +136,141 @@ def _browser(playwright_instance) -> Browser:
     )
     trace("browser_launch_completed", duration_ms=round((time.monotonic() - started) * 1000))
     return browser
+
+
+def _loopback_cdp_browser(playwright_instance) -> tuple[Browser, subprocess.Popen, Path, int]:
+    executable = (
+        os.environ.get("CHROMIUM_PATH")
+        or shutil.which("chromium")
+        or shutil.which("chromium-browser")
+        or playwright_instance.chromium.executable_path
+    )
+    profile = Path(tempfile.mkdtemp(prefix="al129-cdp-profile-"))
+    args = [
+        executable,
+        "--headless=new",
+        "--remote-debugging-address=127.0.0.1",
+        "--remote-debugging-port=0",
+        f"--user-data-dir={profile}",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--disable-background-networking",
+        "--disable-dev-shm-usage",
+    ]
+    if os.geteuid() == 0:
+        args.append("--no-sandbox")
+    args.append("about:blank")
+    process = subprocess.Popen(
+        args,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    active_port = profile / "DevToolsActivePort"
+    deadline = time.monotonic() + 12
+    port = None
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            break
+        try:
+            values = active_port.read_text(encoding="utf-8").splitlines()
+            if values and values[0].isdigit():
+                port = int(values[0])
+                break
+        except OSError:
+            pass
+        time.sleep(0.1)
+    if port is None:
+        process.terminate()
+        try:
+            process.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=3)
+        shutil.rmtree(profile, ignore_errors=True)
+        raise RuntimeError("Isolated Chromium did not publish its loopback CDP endpoint.")
+
+    try:
+        with urlopen(
+            f"http://127.0.0.1:{port}/json/version",
+            timeout=1.0,
+        ) as response:
+            endpoint = json.loads(response.read())
+        websocket_url = endpoint.get("webSocketDebuggerUrl", "")
+        if not websocket_url.startswith("ws://127.0.0.1:"):
+            raise RuntimeError("Chromium CDP endpoint was not loopback-only.")
+        started = time.monotonic()
+        trace("browser_cdp_attach_started")
+        browser = playwright_instance.chromium.connect_over_cdp(
+            f"http://127.0.0.1:{port}", timeout=10_000
+        )
+        trace(
+            "browser_cdp_attach_completed",
+            duration_ms=round((time.monotonic() - started) * 1000),
+        )
+        return browser, process, profile, port
+    except Exception:
+        process.terminate()
+        try:
+            process.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=3)
+        shutil.rmtree(profile, ignore_errors=True)
+        raise
+
+
+def _start_independent_cdp_monitor(port: int) -> tuple[subprocess.Popen, Path]:
+    host = urlsplit(DESK_URL).hostname
+    if not host:
+        raise RuntimeError("Desk host is required to scope the CDP monitor target.")
+    stop_file = RUNNER_TEMP / "al129-cdp-monitor.stop"
+    evidence_file = RUNNER_TEMP / "al129-cdp-monitor.jsonl"
+    stop_file.unlink(missing_ok=True)
+    evidence_file.unlink(missing_ok=True)
+    monitor = Path(__file__).with_name("al129_cdp_monitor.py")
+    command = [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=3s",
+        "55s",
+        sys.executable,
+        "-u",
+        str(monitor),
+        "--port",
+        str(port),
+        "--target-host",
+        host,
+        "--interval",
+        "0.35",
+        "--duration",
+        "50",
+        "--stop-file",
+        str(stop_file),
+        "--evidence-file",
+        str(evidence_file),
+    ]
+    process = subprocess.Popen(command, stdout=None, stderr=subprocess.STDOUT)
+    trace("independent_cdp_monitor_started", duration_limit_seconds=55)
+    return process, stop_file
+
+
+def _stop_independent_cdp_monitor(monitor: tuple[subprocess.Popen, Path] | None) -> None:
+    if monitor is None:
+        return
+    process, stop_file = monitor
+    stop_file.touch()
+    try:
+        exit_code = process.wait(timeout=4)
+    except subprocess.TimeoutExpired:
+        process.terminate()
+        try:
+            exit_code = process.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            exit_code = process.wait(timeout=3)
+    trace("independent_cdp_monitor_finished", exit_code=exit_code)
 
 
 def _attach_diagnostics(page: Page) -> None:
@@ -752,7 +889,9 @@ def test_real_desk_customer_field_permission_differential() -> None:
         stack_dump_after_seconds=120,
     )
     with sync_playwright() as playwright_instance:
-        browser = _browser(playwright_instance)
+        browser, chrome_process, chrome_profile, cdp_port = _loopback_cdp_browser(
+            playwright_instance
+        )
         try:
             for case_name, user in (
                 ("create_only", fixture["user"]),
@@ -762,7 +901,15 @@ def test_real_desk_customer_field_permission_differential() -> None:
                 try:
                     _login(page, fixture, user=user)
                     suffix = f"customer-permission-{case_name}"
-                    _open_new_form(page, suffix, expected_state="ready_for_entry")
+                    monitor = (
+                        _start_independent_cdp_monitor(cdp_port)
+                        if case_name == "create_only"
+                        else None
+                    )
+                    try:
+                        _open_new_form(page, suffix, expected_state="ready_for_entry")
+                    finally:
+                        _stop_independent_cdp_monitor(monitor)
                     state = _customer_permission_state(page)
                     outcomes[case_name] = state
                     trace(f"customer_permission_case_{case_name}", **state)
@@ -1113,6 +1260,14 @@ def test_real_desk_customer_field_permission_differential() -> None:
             try:
                 browser.close()
             finally:
+                if chrome_process.poll() is None:
+                    chrome_process.terminate()
+                    try:
+                        chrome_process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        chrome_process.kill()
+                        chrome_process.wait(timeout=5)
+                shutil.rmtree(chrome_profile, ignore_errors=True)
                 faulthandler.cancel_dump_traceback_later()
 
 
