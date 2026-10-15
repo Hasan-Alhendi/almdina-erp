@@ -1203,6 +1203,16 @@ ${printHeaderCss()}
             : permissions.can?.("print_cutting_plan")));
     }
 
+    function printableDoc(doc) {
+        return {
+            name: doc.name, modified: doc.modified, customer: doc.customer,
+            order_date: doc.order_date, board_description: doc.board_description,
+            board_width_cm: doc.board_width_cm, board_length_cm: doc.board_length_cm,
+            edge_color: doc.edge_color, packing_method: doc.packing_method,
+            pieces: doc.pieces || [],
+        };
+    }
+
     function printSource(frm, planOverride, hint) {
         const context = window.AlmdinaDocumentContext;
         const owner = window.AlmdinaPlanWorkspaceState;
@@ -1213,7 +1223,9 @@ ${printHeaderCss()}
         const geometry = rowGeometry(row);
         if (!token || !context.isCurrent(frm, token) || !printAllowed(frm)
             || !state || state.status !== "ready" || state.data?.order_name !== frm.doc?.name
+            || state.data?.capabilities?.print === false
             || !row?.name || !geometry?.sheets?.length
+            || (row.board?.description && row.board.description !== frm.doc.board_description)
             || (hint?.row && (hint.row.name !== row.name
                 || hint.row.revision !== row.revision
                 || JSON.stringify(rowGeometry(hint.row)) !== JSON.stringify(geometry)))
@@ -1223,16 +1235,10 @@ ${printHeaderCss()}
         if (assignments) Object.defineProperty(plan, "__offcut_assignments", {
             value: JSON.parse(JSON.stringify(assignments)), enumerable: false,
         });
-        const doc = frm.doc;
-        const frozenDoc = JSON.parse(JSON.stringify({
-            name: doc.name, customer: doc.customer, order_date: doc.order_date,
-            board_description: doc.board_description, board_width_cm: doc.board_width_cm,
-            board_length_cm: doc.board_length_cm, edge_color: doc.edge_color,
-            packing_method: doc.packing_method, pieces: doc.pieces || [],
-        }));
-        return { token, tab, orderName: doc.name, planName: row.name,
+        const frozenDoc = JSON.parse(JSON.stringify(printableDoc(frm.doc)));
+        return { token, tab, orderName: frm.doc.name, planName: row.name,
             revision: row.revision, geometryJson: JSON.stringify(geometry),
-            plan, frm: { doc: frozenDoc } };
+            documentJson: JSON.stringify(frozenDoc), plan, frm: { doc: frozenDoc } };
     }
 
     function printSourceStillCurrent(frm, source) {
@@ -1241,8 +1247,11 @@ ${printHeaderCss()}
         const row = printPlanRow(frm, source.tab);
         return Boolean(context?.isCurrent(frm, source.token)
             && printAllowed(frm) && frm.doc.name === source.orderName
+            && JSON.stringify(printableDoc(frm.doc)) === source.documentJson
             && state?.status === "ready" && state.data?.order_name === source.orderName
+            && state.data?.capabilities?.print !== false
             && row?.name === source.planName && row.revision === source.revision
+            && (!row.board?.description || row.board.description === frm.doc.board_description)
             && JSON.stringify(rowGeometry(row)) === source.geometryJson);
     }
 

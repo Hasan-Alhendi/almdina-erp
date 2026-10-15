@@ -257,6 +257,12 @@ async function main() {
     assert.equal(await generationPrint, false, "A→B→A must not reuse the old visit token");
     assert.equal(prints.length, before + 2, "route change cannot issue final HTML");
 
+    const documentPrint = renderer.print(frm, planFor(alone));
+    frm.doc.board_description = "changed while waiting";
+    release({});
+    assert.equal(await documentPrint, false, "a changed board invalidates the frozen print document");
+    assert.equal(prints.length, before + 3);
+
     console.log("Cutting plan break-only edge regression passed");
 }
 

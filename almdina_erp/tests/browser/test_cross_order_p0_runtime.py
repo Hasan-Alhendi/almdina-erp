@@ -437,6 +437,8 @@ def test_saved_server_plan_print_runtime():
                 assert order["name"] in html and other["name"] not in html, result
                 assert order["board"] in html and other["board"] not in html, result
                 assert saved_plan[label]["name"] in html and str(saved_plan[label]["revision"]) in html
+                assert 'class="dco-unified-print-header"' in html
+                assert f"<title>Cutting plan - {order['name']}</title>" in html
                 piece = saved_plan[label]["first_piece"]
                 geometry = f"{int(float(piece['w']) * 10)} × {int(float(piece['h']) * 10)}"
                 assert geometry in html, (label, geometry)
@@ -495,9 +497,15 @@ def test_saved_server_plan_print_runtime():
             writes_before = page.evaluate("__p0PrintWrites.length")
             # Freeze B, then navigate while the production print handler awaits
             # the asynchronous identity service. No final HTML may be issued.
-            page.evaluate("""() => {
+            page.evaluate("""async () => {
+                AlmdinaPlanWorkspaceState.reset(cur_frm);
+                await AlmdinaPlanWorkspaceState.load(cur_frm,{force:true});
+                AlmdinaPlanWorkspacePresenterAdapter.project(cur_frm);
                 AlmdinaFactoryPrintIdentity.get=()=>new Promise(resolve=>__p0ResolveIdentity=resolve);
-                window.__p0Pending=AlmdinaPlanTabsUX.printActivePlan(cur_frm);
+                const row=AlmdinaPlanWorkspaceState.planForTab(cur_frm,'System');
+                const plan=JSON.parse(row.snapshot_json);
+                window.__p0Pending=AlmdinaCuttingPlanRender.print(cur_frm,plan,
+                    {tab:'System',row});
             }""")
             page.wait_for_function("!!window.__p0ResolveIdentity", timeout=10000)
             page.evaluate("name => frappe.set_route('Form','Door Cutting Order',name)", a["name"])
