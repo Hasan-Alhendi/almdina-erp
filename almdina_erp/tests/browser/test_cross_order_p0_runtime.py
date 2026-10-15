@@ -458,21 +458,73 @@ def test_saved_server_plan_print_runtime():
                     (("A", a, b), ("B", b, a), ("A", a, b), ("B", b, a)), 1):
                 page.evaluate("name => frappe.set_route('Form','Door Cutting Order',name)", order["name"])
                 page.wait_for_function("name => cur_frm?.doc?.name === name", arg=order["name"], timeout=45000)
+                page.evaluate("""name => {
+                    window.__p0ReadyEvent = null;
+                    window.__p0ReadyFor = name;
+                    if (!window.__p0ReadyListener) {
+                        window.__p0ReadyListener = event => {
+                            const detail = event.detail || {};
+                            if (detail.orderName === window.__p0ReadyFor
+                                && detail.snapshot?.status === 'ready')
+                                window.__p0ReadyEvent = {order:detail.orderName,
+                                    identity:detail.identity, status:detail.snapshot.status};
+                        };
+                        window.addEventListener('almdina:plan-workspace-updated', window.__p0ReadyListener);
+                    }
+                }""", order["name"])
                 page.get_by_text("Cutting Plan", exact=True).first.click()
-                page.evaluate("""async () => {
+                if visit <= 2:
+                    # Operator path: the real workspace event paints the action.
+                    # A missing button is a distinct lifecycle/permission failure.
+                    page.wait_for_function("""name => window.__p0ReadyEvent?.order === name
+                        || (window.AlmdinaPlanWorkspaceState?.snapshot?.(cur_frm)?.status === 'ready'
+                            && cur_frm?.doc?.name === name)""", arg=order["name"], timeout=45000)
+                    button = page.locator('.dco-plan-context-actions-host .dco-print-cutting-plan:visible')
+                    try:
+                        button.wait_for(state="visible", timeout=15000)
+                        assert button.is_enabled(), "Print action disabled despite ready Plan"
+                    except Exception:
+                        evidence.setdefault("operator_failures", {})[label] = page.evaluate("""() => ({
+                            event:window.__p0ReadyEvent,tab:AlmdinaPlanTabsUX?.activeTab(cur_frm),
+                            state:AlmdinaPlanWorkspaceState?.snapshot(cur_frm)?.status,
+                            row:AlmdinaPlanWorkspaceState?.displayedPlanForTab(cur_frm,'System')?.name,
+                            buttons:document.querySelectorAll('.dco-print-cutting-plan').length})""")
+                        raise
+                    before_click = page.evaluate('__p0PrintWrites.length')
+                    button.click()
+                    page.wait_for_function("count => window.__p0PrintWrites.length >= count + 2",
+                                           arg=before_click, timeout=15000)
+                    operator_html = page.evaluate('__p0PrintWrites.at(-1)')
+                    assert order["name"] in operator_html and other["name"] not in operator_html
+                    assert order["board"] in operator_html and saved_plan[label]["name"] in operator_html
+                    evidence.setdefault("operator_clicks", {})[label] = {
+                        "ready_event": page.evaluate('window.__p0ReadyEvent'),
+                        "final_html": f"saved-plan-{label}-operator-final.html"}
+                    (evidence_dir / f"saved-plan-{label}-operator-final.html").write_text(
+                        operator_html, encoding="utf-8")
+                    # Direct handler on the same ready visit, in a separate
+                    # Playwright evaluation, to compare with the real click.
+                    result = page.evaluate("""async () => {
+                        const result=await AlmdinaPlanTabsUX.printActivePlan(cur_frm);
+                        const row=AlmdinaPlanWorkspaceState.displayedPlanForTab(cur_frm,'System');
+                        return {result,order:cur_frm.doc.name,row:row?.name,
+                            writes:__p0PrintWrites.length,
+                            revision:row?.revision,html:__p0PrintWrites.at(-1)};
+                    }""")
+                else:
+                    # Same JS operation, while retaining the real async load
+                    # and factory identity boundaries inside that operation.
+                    result = page.evaluate("""async () => {
                     await AlmdinaDcoWorkspaceAssetRegistry.ensure('plan');
                     await AlmdinaPlanWorkspaceState.load(cur_frm,{force:true});
-                    if (!AlmdinaPlanWorkspacePresenterAdapter.project(cur_frm)
-                        || !AlmdinaPlanTabsUX.displayedPlanForTab(cur_frm,'System')?.sheets?.length)
-                        throw new Error('Persisted Plan row did not reach the active Plan presenter');
-                }""")
-                result = page.evaluate("""async () => {
+                    if (!AlmdinaPlanWorkspacePresenterAdapter.project(cur_frm))
+                        throw new Error('Ready Plan projection unavailable');
                     const result=await AlmdinaPlanTabsUX.printActivePlan(cur_frm);
                     const row=AlmdinaPlanWorkspaceState.displayedPlanForTab(cur_frm,'System');
                     return {result,order:cur_frm.doc.name,row:row?.name,
                         writes:__p0PrintWrites.length,
                         revision:row?.revision,html:__p0PrintWrites.at(-1)};
-                }""")
+                    }""")
                 evidence.setdefault("attempts", {})[f"{label}-{visit}"] = {
                     key: value for key, value in result.items() if key != "html"}
                 assert result["result"] is True and result["row"] == saved_plan[label]["name"], result
