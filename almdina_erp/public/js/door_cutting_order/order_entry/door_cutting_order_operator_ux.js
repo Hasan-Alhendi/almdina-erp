@@ -437,6 +437,7 @@
             <option value="Special" ${pieceType === "Special" ? "selected" : ""}>${__("Special")}</option>
             <option value="Clipped Corner" ${pieceType === "Clipped Corner" ? "selected" : ""}>${__("Clipped corner")}</option>
             <option value="L-Shaped Corner" ${pieceType === "L-Shaped Corner" ? "selected" : ""}>${__("L-shaped corner")}</option>
+            <option value="Glass" ${pieceType === "Glass" ? "selected" : ""}>${__("Glass")}</option>
         </select>`;
         const pieceTypeControl = extraAddons && typeof extraAddons.renderTypePicker === "function"
             ? extraAddons.renderTypePicker(data, { editable, virtual })

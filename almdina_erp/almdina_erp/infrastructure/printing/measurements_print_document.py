@@ -15,6 +15,7 @@ PIECE_TYPE_LABELS = {
     "Special": "Special door",
     "Clipped Corner": "Clipped corner",
     "L-Shaped Corner": "L-shaped corner",
+    "Glass": "Glass door",
 }
 EXTRA_ADDONS = (
     ("extra_double", "Double edge banding"),

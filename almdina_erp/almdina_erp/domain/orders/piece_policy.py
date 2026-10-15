@@ -3,13 +3,19 @@ from __future__ import annotations
 import json
 import math
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from typing import Any, Mapping
+
+from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import MM_PER_CM
 
 
 CLIPPED_CORNER_TYPE = "Clipped Corner"
 L_SHAPED_CORNER_TYPE = "L-Shaped Corner"
+GLASS_TYPE = "Glass"
 CORNER_CUT_TYPES = frozenset({CLIPPED_CORNER_TYPE, L_SHAPED_CORNER_TYPE})
-PIECE_TYPES = frozenset({"Regular", "Clipped Corner", "L-Shaped Corner", "Special"})
+PIECE_TYPES = frozenset(
+    {"Regular", "Clipped Corner", "L-Shaped Corner", "Special", GLASS_TYPE}
+)
 CLIPPED_CORNER_POSITIONS = frozenset(
     {"Top Right", "Top Left", "Bottom Right", "Bottom Left"}
 )
@@ -17,6 +23,10 @@ CLIPPED_CORNER_POSITIONS = frozenset(
 
 def is_corner_cut(piece_type: str | None) -> bool:
     return (piece_type or "Regular") in CORNER_CUT_TYPES
+
+
+def is_glass(piece_type: str | None) -> bool:
+    return (piece_type or "") == GLASS_TYPE
 
 
 def corner_cut_arabic_label(piece_type: str | None) -> str:
@@ -208,6 +218,7 @@ class PieceGeometry:
     edge_break: int = 0
     edge_break_only: int = 0
     edge_type: str = ""
+    glass_margin_mm: float = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -277,6 +288,73 @@ def resolve_clipped_corner(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class GlassOpening:
+    """Inner glass opening derived from the entered outer size and one margin."""
+
+    margin_mm: Decimal
+    opening_width_mm: Decimal
+    opening_length_mm: Decimal
+
+
+def _decimal_mm(value: object) -> Decimal:
+    try:
+        number = Decimal(str(value if value not in (None, "") else "0"))
+    except (InvalidOperation, ValueError, TypeError) as exc:
+        raise PiecePolicyError("glass_margin_must_be_positive") from exc
+    if not number.is_finite():
+        raise PiecePolicyError("glass_margin_must_be_positive")
+    return number
+
+
+def validate_glass_opening(
+    *,
+    outer_width_cm: object,
+    outer_length_cm: object,
+    glass_margin_mm: object,
+) -> GlassOpening:
+    """Require a positive uniform margin and a positive inner opening.
+
+    Outer width and length stay in the order's centimetre input. They are
+    converted with the shared ``MM_PER_CM`` factor. The margin itself is
+    already millimetres. Each side keeps the same margin, so the opening is
+    the outer size minus twice the margin on each axis.
+    """
+
+    margin_mm = _decimal_mm(glass_margin_mm)
+    if margin_mm <= 0:
+        raise PiecePolicyError("glass_margin_must_be_positive")
+
+    opening_width_mm = (_decimal_mm(outer_width_cm) * MM_PER_CM) - (margin_mm * 2)
+    opening_length_mm = (_decimal_mm(outer_length_cm) * MM_PER_CM) - (margin_mm * 2)
+    if opening_width_mm <= 0 or opening_length_mm <= 0:
+        raise PiecePolicyError("glass_opening_must_be_positive")
+    return GlassOpening(
+        margin_mm=margin_mm,
+        opening_width_mm=opening_width_mm,
+        opening_length_mm=opening_length_mm,
+    )
+
+
+def canonical_glass_margin_mm(value: object) -> float | None:
+    """Return a stored margin for plan fingerprints, omitting an empty value.
+
+    Historical rows have no margin. Zero and blank stay out of the fingerprint
+    so an unchanged order keeps its current plan hash. Any other finite value
+    is geometry.
+    """
+
+    if value in (None, ""):
+        return None
+    try:
+        number = Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError):
+        return None
+    if not number.is_finite() or number == 0:
+        return None
+    return float(number)
+
+
 def geometry_changed(
     old: PieceGeometry | None,
     current: PieceGeometry,
@@ -307,6 +385,7 @@ def geometry_changed(
         or old.edge_break != current.edge_break
         or old.edge_break_only != current.edge_break_only
         or old.edge_type != current.edge_type
+        or not _same_number(old.glass_margin_mm, current.glass_margin_mm)
         or drawing_changed
     )
 
@@ -491,10 +570,12 @@ __all__ = [
     "CLIPPED_CORNER_POSITIONS",
     "CLIPPED_CORNER_TYPE",
     "CORNER_CUT_TYPES",
+    "GLASS_TYPE",
     "L_SHAPED_CORNER_TYPE",
     "PIECE_TYPES",
     "ClippedCorner",
     "EdgeBreakDecision",
+    "GlassOpening",
     "PieceGeometry",
     "PiecePolicyError",
     "SpecialMeasurementEdgeDecision",
@@ -503,15 +584,18 @@ __all__ = [
     "apply_edge_break_policy",
     "apply_special_measurement_edge_policy",
     "break_adjacent_sides",
+    "canonical_glass_margin_mm",
     "corner_cut_arabic_label",
     "drawing_token",
     "evaluate_special_shape",
     "geometry_changed",
     "is_corner_cut",
+    "is_glass",
     "measurement_edges_disabled_for_piece",
     "pricing_basis_changed",
     "protected_price_changed",
     "pending_custom_edge_price_labels",
     "reset_price_values",
     "resolve_clipped_corner",
+    "validate_glass_opening",
 ]

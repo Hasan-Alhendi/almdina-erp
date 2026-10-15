@@ -18,6 +18,7 @@ const ARABIC = {
     Special: "خاصة",
     "Clipped corner": "الزاوية الكسر",
     "L-shaped corner": "زاوية L",
+    Glass: "درفة بلور",
     "Piece type": "نوع الدرفة",
     "Double Banding": "دبل قشاط",
     "Full Double": "دبل كامل",
@@ -70,7 +71,7 @@ const api = fakeWindow.AlmdinaExtraDoorAddonsUX;
 assert.ok(api);
 assert.deepEqual(
     JSON.parse(JSON.stringify(api.PIECE_TYPES.map(item => item.value))),
-    ["Regular", "Special", "Clipped Corner", "L-Shaped Corner"]
+    ["Regular", "Special", "Clipped Corner", "L-Shaped Corner", "Glass"]
 );
 assert.deepEqual(
     JSON.parse(JSON.stringify(api.FIELDS.map(item => item.button))),
@@ -98,6 +99,8 @@ assert.match(picker, />عادية<\/option>/);
 assert.match(picker, />خاصة<\/option>/);
 assert.match(picker, />الزاوية الكسر<\/option>/);
 assert.match(picker, />زاوية L<\/option>/);
+assert.match(picker, /value="Glass"/);
+assert.match(picker, />درفة بلور<\/option>/);
 assert.doesNotMatch(picker, /value="Extra"/);
 
 const emptySummary = api.addonSummary({});
@@ -157,6 +160,11 @@ assert.deepEqual(
     ["extra_liner"]
 );
 assert.equal(row.extra_full_door_double, 1);
+
+const glass = { piece_type: "Glass", glass_margin_mm: 65 };
+assert.equal(api.reconcilePieceType({ dirty() {} }, glass), false);
+assert.equal(glass.piece_type, "Glass");
+assert.equal(glass.glass_margin_mm, 65);
 
 const legacy = { piece_type: "Extra", extra_liner: 1 };
 let dirtyCalls = 0;

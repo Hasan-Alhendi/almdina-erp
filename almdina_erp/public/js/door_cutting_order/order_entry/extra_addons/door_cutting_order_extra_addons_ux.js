@@ -8,6 +8,7 @@
         Object.freeze({ value: "Special", label: "Special" }),
         Object.freeze({ value: "Clipped Corner", label: "Clipped corner" }),
         Object.freeze({ value: "L-Shaped Corner", label: "L-shaped corner" }),
+        Object.freeze({ value: "Glass", label: "Glass" }),
     ]);
     const FIELDS = Object.freeze([
         Object.freeze({ fieldname: "extra_double", label: "Double Edge Banding", button: "Double Banding" }),

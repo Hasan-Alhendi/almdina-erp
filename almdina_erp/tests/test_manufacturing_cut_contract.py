@@ -235,6 +235,34 @@ def test_full_door_double_expands_manufacturing_copies_without_changing_stored_q
     ]
 
 
+def test_plan_fingerprint_tracks_glass_type_and_margin_without_staling_empty_rows():
+    order = _order(_piece())
+    plan = _plan()
+    baseline = plan_input_fingerprint(order, plan)
+
+    order.pieces[0].glass_margin_mm = 0
+    assert plan_input_fingerprint(order, plan) == baseline
+    order.pieces[0].glass_margin_mm = None
+    assert plan_input_fingerprint(order, plan) == baseline
+    assert "glass_margin_mm" not in FrappeCutDimensionPlanAdapter.piece_row_as_dict(
+        order.pieces[0]
+    )
+
+    order.pieces[0].piece_type = "Glass"
+    typed = plan_input_fingerprint(order, plan)
+    assert typed != baseline
+
+    order.pieces[0].glass_margin_mm = 65
+    with_margin = plan_input_fingerprint(order, plan)
+    assert with_margin != typed
+    assert FrappeCutDimensionPlanAdapter.piece_row_as_dict(order.pieces[0])[
+        "glass_margin_mm"
+    ] == 65
+
+    order.pieces[0].glass_margin_mm = 66
+    assert plan_input_fingerprint(order, plan) != with_margin
+
+
 def test_plan_fingerprint_changes_when_persisted_cut_dimension_changes():
     order = _order(_piece(cut_width_cm=59.9))
     first = plan_input_fingerprint(order, _plan())

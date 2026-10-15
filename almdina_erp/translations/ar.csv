@@ -565,6 +565,8 @@ Row {0}: Width must be greater than zero.,السطر {0}: يجب أن يكون �
 Row {0}: Length must be greater than zero.,السطر {0}: يجب أن يكون الطول أكبر من صفر.
 Row {0}: Quantity must be a positive integer.,السطر {0}: يجب أن يكون العدد رقمًا صحيحًا أكبر من صفر.
 Row {0}: Piece Type is invalid.,السطر {0}: نوع الدرفة غير صالح.
+Row {0}: Glass margin must be greater than zero.,السطر {0}: هامش البلور يجب أن يكون أكبر من صفر.
+Row {0}: The inner glass opening must have a positive width and length.,السطر {0}: فتحة البلور الداخلية يجب أن يبقى عرضها وطولها أكبر من صفر.
 Row {0}: Clipped Corner Position is invalid.,السطر {0}: موضع الزاوية المقصوصة غير صالح.
 Row {0} Clipped Corner Width CM,قص الزاوية على عرض الدرفة في السطر {0} (سم)
 Row {0} Clipped Corner Length CM,قص الزاوية على طول الدرفة في السطر {0} (سم)
@@ -636,6 +638,9 @@ None,لا يوجد
 تسليم,تسليم
 Piece Type,نوع الدرفة
 Regular,عادية
+Glass,درفة بلور
+Glass door,درفة بلور
+Glass Margin (MM),هامش البلور (مم)
 Clipped Corner,الزاوية الكسر
 Special,خاصة
 Clipped Corner Position,موضع الزاوية المقصوصة

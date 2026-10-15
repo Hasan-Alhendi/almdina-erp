@@ -23,6 +23,7 @@ _OLD_PIECE_FIELDS = [
     "clipped_corner_position",
     "clipped_corner_width_cm",
     "clipped_corner_length_cm",
+    "glass_margin_mm",
     "edge_long_right",
     "edge_long_left",
     "edge_width_top",

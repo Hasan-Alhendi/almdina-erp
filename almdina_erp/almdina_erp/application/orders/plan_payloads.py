@@ -38,6 +38,7 @@ class PlanPieceInput:
     clipped_corner_position: str
     clipped_corner_width_cm: float
     clipped_corner_length_cm: float
+    glass_margin_mm: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,20 +97,27 @@ def build_plan_input_payload(
             "min_remnant_area_m2": optimizer.min_remnant_area_m2,
         },
         "pieces": [
-            {
-                "index": piece.index,
-                "width_cm": piece.width_cm,
-                "length_cm": piece.length_cm,
-                "qty": piece.qty,
-                "allow_rotation": piece.allow_rotation,
-                "piece_type": piece.piece_type,
-                "clipped_corner_position": piece.clipped_corner_position,
-                "clipped_corner_width_cm": piece.clipped_corner_width_cm,
-                "clipped_corner_length_cm": piece.clipped_corner_length_cm,
-            }
+            _plan_piece_payload(piece)
             for piece in pieces
         ],
     }
+
+
+def _plan_piece_payload(piece: PlanPieceInput) -> dict[str, Any]:
+    payload = {
+        "index": piece.index,
+        "width_cm": piece.width_cm,
+        "length_cm": piece.length_cm,
+        "qty": piece.qty,
+        "allow_rotation": piece.allow_rotation,
+        "piece_type": piece.piece_type,
+        "clipped_corner_position": piece.clipped_corner_position,
+        "clipped_corner_width_cm": piece.clipped_corner_width_cm,
+        "clipped_corner_length_cm": piece.clipped_corner_length_cm,
+    }
+    if piece.glass_margin_mm is not None:
+        payload["glass_margin_mm"] = piece.glass_margin_mm
+    return payload
 
 
 def build_plan_metadata_payload(

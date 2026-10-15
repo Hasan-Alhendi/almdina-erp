@@ -20,6 +20,7 @@ from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
     validation_code,
 )
 from almdina_erp.almdina_erp.domain.orders.piece_policy import (
+    GLASS_TYPE,
     PIECE_TYPES,
     PieceGeometry,
     PiecePolicyError,
@@ -32,6 +33,7 @@ from almdina_erp.almdina_erp.domain.orders.piece_policy import (
     pending_custom_edge_price_labels,
     reset_price_values,
     resolve_clipped_corner,
+    validate_glass_opening,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
@@ -84,6 +86,7 @@ class FrappeOrderPiecePolicyAdapter:
             edge_break=cint(getattr(row, "edge_break", 0)),
             edge_break_only=cint(getattr(row, "edge_break_only", 0)),
             edge_type=str(getattr(row, "edge_type", None) or ""),
+            glass_margin_mm=flt(getattr(row, "glass_margin_mm", 0)),
         )
 
     @staticmethod
@@ -343,6 +346,8 @@ class FrappeOrderPiecePolicyAdapter:
             row.piece_type = row.piece_type or "Regular"
             if row.piece_type not in PIECE_TYPES:
                 frappe.throw(_("Row {0}: Piece Type is invalid.").format(index))
+            if row.piece_type == GLASS_TYPE:
+                self._validate_glass_opening(row, index)
             self._apply_liner_parameters(row, index, old_rows.get(row.name))
             if is_corner_cut(row.piece_type):
                 self._validate_clipped_corner(row, index)
@@ -418,6 +423,29 @@ class FrappeOrderPiecePolicyAdapter:
                     row.piece_type
                 ).items():
                     setattr(row, fieldname, value)
+
+    @staticmethod
+    def _validate_glass_opening(row: Any, index: int) -> None:
+        try:
+            validate_glass_opening(
+                outer_width_cm=getattr(row, "width_cm", 0),
+                outer_length_cm=getattr(row, "length_cm", 0),
+                glass_margin_mm=getattr(row, "glass_margin_mm", None),
+            )
+        except PiecePolicyError as error:
+            if error.code == "glass_margin_must_be_positive":
+                frappe.throw(
+                    _(
+                        "Row {0}: Glass margin must be greater than zero."
+                    ).format(index)
+                )
+            if error.code == "glass_opening_must_be_positive":
+                frappe.throw(
+                    _(
+                        "Row {0}: The inner glass opening must have a positive width and length."
+                    ).format(index)
+                )
+            raise
 
     def ensure_documented(self) -> None:
         missing = [

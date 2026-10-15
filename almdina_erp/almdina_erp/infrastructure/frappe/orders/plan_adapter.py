@@ -32,6 +32,9 @@ from almdina_erp.almdina_erp.domain.orders.numeric_input import (
     default_if_missing,
 )
 from almdina_erp.almdina_erp.domain.orders.extra_addons import physical_cut_quantity
+from almdina_erp.almdina_erp.domain.orders.piece_policy import (
+    canonical_glass_margin_mm,
+)
 from almdina_erp.almdina_erp.domain.orders.plan_fingerprint import (
     fingerprint_payload,
 )
@@ -86,6 +89,11 @@ class FrappeOrderPlanAdapter:
             ),
             "notes": row.notes or "",
         }
+        glass_margin_mm = canonical_glass_margin_mm(
+            getattr(row, "glass_margin_mm", None)
+        )
+        if glass_margin_mm is not None:
+            piece["glass_margin_mm"] = glass_margin_mm
         from almdina_erp.almdina_erp.domain.cutting.machining_overlay import (
             MACHINING_ADDONS,
         )
@@ -171,6 +179,9 @@ class FrappeOrderPlanAdapter:
                     ),
                     clipped_corner_length_cm=self.access.normalized_number(
                         row.clipped_corner_length_cm
+                    ),
+                    glass_margin_mm=canonical_glass_margin_mm(
+                        getattr(row, "glass_margin_mm", None)
                     ),
                 )
                 for index, row in enumerate(source.pieces or [], start=1)
