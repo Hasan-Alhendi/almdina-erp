@@ -95,7 +95,15 @@
 
         if (Object.keys(updates).length) {
             if (!owns(frm, token)) return false;
-            await frm.set_value(updates);
+            // Frappe v16 frm.set_value({...}) runs one field at a time and
+            // reads me.doc.name again for each task. A route change during an
+            // awaited field trigger could otherwise apply later A values to B.
+            // model.set_value(doc, updates) selects the captured document once
+            // and applies the whole batch before its asynchronous triggers.
+            const targetDoc = frm.doc;
+            await (typeof frappe.model?.set_value === "function"
+                ? frappe.model.set_value(targetDoc, updates)
+                : frm.set_value(updates));
         }
 
         if (!owns(frm, token)) return false;

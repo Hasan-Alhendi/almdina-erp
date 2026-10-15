@@ -121,7 +121,9 @@ class TestBoardInputSyncContract(unittest.TestCase):
         self.assertIn("function controlValue", source)
         self.assertIn("field.$input.val()", source)
         self.assertIn("async function syncInputs", source)
-        self.assertIn("await frm.set_value(updates)", source)
+        self.assertIn("const targetDoc = frm.doc", source)
+        self.assertIn("frappe.model.set_value(targetDoc, updates)", source)
+        self.assertIn("if (!owns(frm, token)) return false", source)
         self.assertIn("before_save(frm) { return syncInputs(frm); }", source)
         self.assertIn("syncInputs,", source)
 

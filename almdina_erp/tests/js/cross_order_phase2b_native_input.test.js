@@ -73,4 +73,22 @@ test("native inputs belong to the current document visit, while B's unsaved edit
     assert.equal(saved.board_description, "B New Black");
     assert.equal(frm.doc.board_length_cm, 301);
     assert.equal(frm.doc.full_board_length_mm, 3010);
+
+    let release;
+    frappe.model.set_value = (doc, updates) => {
+        Object.assign(doc, updates);
+        return new Promise(resolve => { release = resolve; });
+    };
+    elements.board_description.value = "B unsaved after await";
+    elements.board_description.listeners.forEach(listener => listener());
+    const docB = frm.doc;
+    const pending = handlers.before_save(frm);
+    assert.equal(docB.board_description, "B unsaved after await");
+    frm.doc = { doctype: "Door Cutting Order", name: "A", board_description: "A White",
+        board_length_cm: 244, board_width_cm: 122, pieces: [] };
+    handlers.before_load(frm);
+    release();
+    assert.equal(await pending, false);
+    assert.equal(frm.doc.board_description, "A White");
+    assert.equal(frm.doc.full_board_length_mm, undefined);
 });
