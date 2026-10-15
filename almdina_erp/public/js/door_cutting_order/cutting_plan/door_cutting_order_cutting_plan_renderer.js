@@ -1213,23 +1213,6 @@ ${printHeaderCss()}
         };
     }
 
-    function rejectPrintSource(reason, frm, token, state, tab, row, hint) {
-        // This observer is opt-in for the isolated Desk regression harness. It
-        // executes only after a rejection and cannot affect the print decision.
-        const observer = window.__almdinaP0PrintSourceRejected;
-        if (typeof observer === "function") {
-            try {
-                observer({ reason, order: frm?.doc?.name || null, tab,
-                    identity: token?.identity || null, generation: token?.generation ?? null,
-                    currentGeneration: frm?._almdinaDocumentContextGeneration ?? null,
-                    status: state?.status || null, stateOrder: state?.data?.order_name || null,
-                    plan: row?.name || null, revision: row?.revision ?? null,
-                    hintPlan: hint?.row?.name || null, hintRevision: hint?.row?.revision ?? null });
-            } catch (error) { /* The observer cannot alter fail-closed behavior. */ }
-        }
-        return null;
-    }
-
     function printSource(frm, planOverride, hint) {
         const context = window.AlmdinaDocumentContext;
         const owner = window.AlmdinaPlanWorkspaceState;
@@ -1238,29 +1221,15 @@ ${printHeaderCss()}
         const tab = hint?.tab || window.AlmdinaPlanTabsUX?.activeTab?.(frm) || "System";
         const row = printPlanRow(frm, tab);
         const geometry = rowGeometry(row);
-        const reject = reason => rejectPrintSource(reason, frm, token, state, tab, row, hint);
-        if (!token) return reject("DOCUMENT_TOKEN_INVALID");
-        if (!context.isCurrent(frm, token)) {
-            return reject(context.formIdentity?.(frm) === token.identity
-                && Number(frm?._almdinaDocumentContextGeneration || 0) !== token.generation
-                ? "DOCUMENT_GENERATION_MISMATCH" : "DOCUMENT_TOKEN_INVALID");
-        }
-        if (!printAllowed(frm)) return reject("PRINT_PERMISSION_DENIED");
-        if (!state || state.status !== "ready") return reject("PLAN_WORKSPACE_NOT_READY");
-        if (state.data?.order_name !== frm.doc?.name) return reject("ORDER_IDENTITY_MISMATCH");
-        if (state.data?.capabilities?.print === false) return reject("PLAN_CAPABILITY_DENIED");
-        if (!row?.name) return reject("PLAN_ROW_MISSING");
-        if (!geometry?.sheets?.length) return reject("GEOMETRY_MISSING");
-        if (row.board?.description && row.board.description !== frm.doc.board_description)
-            return reject("MATERIAL_MISMATCH");
-        if (hint?.row) {
-            if (hint.row.name !== row.name) return reject("HINT_ROW_MISMATCH");
-            if (hint.row.revision !== row.revision) return reject("HINT_REVISION_MISMATCH");
-            if (JSON.stringify(rowGeometry(hint.row)) !== JSON.stringify(geometry))
-                return reject("HINT_GEOMETRY_MISMATCH");
-        }
-        if (planOverride && JSON.stringify(planOverride) !== JSON.stringify(geometry))
-            return reject("PLAN_OVERRIDE_MISMATCH");
+        if (!token || !context.isCurrent(frm, token) || !printAllowed(frm)
+            || !state || state.status !== "ready" || state.data?.order_name !== frm.doc?.name
+            || state.data?.capabilities?.print === false
+            || !row?.name || !geometry?.sheets?.length
+            || (row.board?.description && row.board.description !== frm.doc.board_description)
+            || (hint?.row && (hint.row.name !== row.name
+                || hint.row.revision !== row.revision
+                || JSON.stringify(rowGeometry(hint.row)) !== JSON.stringify(geometry)))
+            || (planOverride && JSON.stringify(planOverride) !== JSON.stringify(geometry))) return null;
         const plan = JSON.parse(JSON.stringify(geometry));
         const assignments = planOverride?.__offcut_assignments;
         if (assignments) Object.defineProperty(plan, "__offcut_assignments", {

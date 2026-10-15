@@ -450,8 +450,6 @@ def test_saved_server_plan_print_runtime():
             }""")
             page.evaluate("""() => {
                 window.__p0PrintWrites=[];
-                window.__p0PrintRejections=[];
-                window.__almdinaP0PrintSourceRejected=reason=>__p0PrintRejections.push(reason);
                 window.open=()=>({document:{open(){},write(html){__p0PrintWrites.push(html)},close(){}},close(){}});
             }""")
             # Two bounded visits to each saved order exercise a fresh document
@@ -469,26 +467,9 @@ def test_saved_server_plan_print_runtime():
                         throw new Error('Persisted Plan row did not reach the active Plan presenter');
                 }""")
                 result = page.evaluate("""async () => {
-                    const before=__p0PrintRejections.length;
-                    // Recreate the previous failing run's read-only PlanTabs /
-                    // renderer inspection, with the rejection recorded inside
-                    // the renderer instead of wrapping its print function.
-                    const inspectedRow=AlmdinaPlanWorkspaceState.displayedPlanForTab(cur_frm,'System');
-                    const inspectedTab=AlmdinaPlanTabsUX.activeTab(cur_frm);
-                    const inspectedPlan=AlmdinaPlanTabsUX.displayedPlanForTab(cur_frm,inspectedTab);
-                    const inspectedToken=AlmdinaDocumentContext.capture(cur_frm);
-                    const detached=document.createElement('div');
-                    detached.innerHTML=AlmdinaCuttingPlanRender.build(cur_frm,inspectedPlan);
-                    const inspection={tab:inspectedTab,row:inspectedRow?.name,
-                        matchesRow:JSON.stringify(inspectedPlan)===JSON.stringify(JSON.parse(inspectedRow.snapshot_json)),
-                        cards:detached.querySelectorAll('.dco-sheet-card').length,
-                        canPrint:AlmdinaPermissions.canDocument(cur_frm,'print_cutting_plan'),
-                        tokenCurrent:AlmdinaDocumentContext.isCurrent(cur_frm,inspectedToken),
-                        state:AlmdinaPlanWorkspaceState.snapshot(cur_frm)?.status};
                     const result=await AlmdinaPlanTabsUX.printActivePlan(cur_frm);
                     const row=AlmdinaPlanWorkspaceState.displayedPlanForTab(cur_frm,'System');
                     return {result,order:cur_frm.doc.name,row:row?.name,
-                        inspection,rejections:__p0PrintRejections.slice(before),
                         writes:__p0PrintWrites.length,
                         revision:row?.revision,html:__p0PrintWrites.at(-1)};
                 }""")
