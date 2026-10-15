@@ -759,7 +759,7 @@ def _set_link(page: Page, fieldname: str, value: str) -> None:
     else:
         control = page.locator(f"[data-fieldname='{fieldname}'] input").first
     control.fill(value)
-    suggestions = page.locator(".awesomplete ul li:visible")
+    suggestions = page.locator(".awesomplete ul [role='option']:visible")
     try:
         expect(suggestions.first).to_be_visible(timeout=20_000)
     except (PlaywrightTimeoutError, AssertionError) as error:
@@ -788,7 +788,7 @@ def _set_link(page: Page, fieldname: str, value: str) -> None:
             " fieldReadOnly: Boolean(field && (field.read_only || (field.df && field.df.read_only))),"
             " inputConnected: Boolean(input && input.isConnected), inputDisabled: Boolean(input && input.disabled),"
             " inputValuePresent: Boolean(input && input.value), suggestionCount:"
-            " [...document.querySelectorAll('.awesomplete ul li')].filter(item => item.getClientRects().length > 0).length,"
+            " [...document.querySelectorAll('.awesomplete ul [role=\"option\"]')].filter(item => item.getClientRects().length > 0).length,"
             " inputFocused: Boolean(input && document.activeElement === input), linkSearch,"
             " linkReadPermission: option && frappe.perm && frappe.perm.has_perm"
             " ? Boolean(frappe.perm.has_perm(option, 0, 'read')) : null}; }",
