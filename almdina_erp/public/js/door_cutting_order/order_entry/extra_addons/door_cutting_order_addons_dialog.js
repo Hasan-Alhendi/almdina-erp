@@ -69,7 +69,7 @@
             fields().forEach((item) => {
                 const kind = kindFor(item.fieldname);
                 if (!kind) return;
-                const draft = editor.draftFromRow(row, kind);
+                const draft = editor.draftFromRow(row, kind, { blankWhenMissing: true });
                 draft.piece = piece;
                 draft.row = row;
                 drafts[item.fieldname] = draft;
@@ -345,11 +345,20 @@
         }
         const hint = root.querySelector("[data-addons-hint]");
         if (!hint) return;
+        const draft = session.drafts && session.drafts[session.activeField];
         const pending = removalPending(session);
-        hint.hidden = enabled && !pending;
-        hint.textContent = pending
-            ? translate("This removal is saved when you press Apply.")
-            : translate("Turn this add-on on to include it.");
+        if (pending) {
+            hint.hidden = false;
+            hint.textContent = translate("This removal is saved when you press Apply.");
+            return;
+        }
+        if (!enabled && draft && !draft.side) {
+            hint.hidden = false;
+            hint.textContent = translate("Choose a reference side to include this add-on.");
+            return;
+        }
+        hint.hidden = enabled;
+        hint.textContent = translate("Turn this add-on on to include it.");
     }
 
     function syncRemove(root, session, editable) {
@@ -477,6 +486,12 @@
         return false;
     }
 
+    function controlAttached(node) {
+        if (!node) return false;
+        if (typeof node.isConnected === "boolean") return node.isConnected;
+        return Boolean(node.parentNode || node.parent);
+    }
+
     async function commitSession(session, root) {
         if (!session) return false;
         if (session.savePromise) return session.savePromise;
@@ -530,9 +545,10 @@
                 session.saving = false;
                 session.savePromise = null;
                 locked.forEach((node) => {
-                    if (node.parent) node.disabled = Boolean(node.addonsLock);
+                    if (!controlAttached(node)) return;
+                    node.disabled = Boolean(node.addonsLock);
                 });
-                if (apply && apply.parent) {
+                if (apply && controlAttached(apply)) {
                     apply.removeAttribute("aria-busy");
                     apply.textContent = applyLabel || translate("Apply");
                 }
@@ -598,6 +614,7 @@
                 if (!current || typeof editor.selectSide !== "function") return;
                 const draft = editor.selectSide(current, session.piece, side.getAttribute("data-liner-side"));
                 session.drafts[session.activeField] = draft;
+                setEnabled(session, session.activeField, true);
                 writeSpanInputs(root, draft);
                 syncChrome(root, session, editable);
                 return;

@@ -29,7 +29,7 @@ app_include_css = [
     # Subject-direction correction must load after the list presentation owner:
     # keep Frappe's checkbox at the RTL edge while isolating only ID text as LTR.
     "/assets/almdina_erp/css/door_cutting_order_list_rtl_subject.css?v=1",
-    "/assets/almdina_erp/css/door_cutting_order_extra_addons.css?v=2",
+    "/assets/almdina_erp/css/door_cutting_order_extra_addons.css?v=3",
     "/assets/almdina_erp/css/notes.css",
     "/assets/almdina_erp/css/notes_interactions.css",
 ]

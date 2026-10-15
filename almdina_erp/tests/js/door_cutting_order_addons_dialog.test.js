@@ -59,8 +59,10 @@ const session = dialog.createSession({ doc: {} }, row);
 assert.equal(session.activeField, "extra_double");
 assert.equal(session.flags.extra_double, 1);
 assert.equal(session.drafts.extra_liner.enabled, true);
+assert.equal(session.drafts.extra_liner.side, "edge_width_top");
 assert.equal(session.drafts.extra_back_groove.side, "edge_long_right");
 assert.equal(session.drafts.extra_recessed_handle_cutout.enabled, false);
+assert.equal(session.drafts.extra_recessed_handle_cutout.side, "");
 
 assert.equal(dialog.machiningDirty(session, "extra_liner"), false);
 dialog.selectTab(session, "extra_back_groove");
@@ -77,6 +79,11 @@ assert.equal(row.extra_double, 1);
 assert.equal(row.extra_full_door_double, 0);
 
 dialog.setEnabled(session, "extra_recessed_handle_cutout", true);
+fakeWindow.AlmdinaLinerEditor.selectSide(
+    session.drafts.extra_recessed_handle_cutout,
+    session.piece,
+    "edge_width_bottom"
+);
 assert.equal(session.drafts.extra_recessed_handle_cutout.enabled, true);
 assert.equal(row.extra_recessed_handle_cutout, 0);
 
@@ -382,20 +389,27 @@ async function interactionChecks() {
     assert.equal(footer.children[0].querySelector("[data-addons-apply]") !== null, true);
     assert.equal(footer.children[1].getAttribute("data-addons-remove"), "");
     const css = fs.readFileSync(path.resolve(__dirname, "../../public/css/door_cutting_order_extra_addons.css"), "utf8");
-    const footerCss = css.slice(css.indexOf(".dco-addons-footer {"), css.indexOf(".dco-addons-footer-main"));
-    assert.match(footerCss, /direction:\s*ltr/);
-    assert.match(footerCss, /flex-direction:\s*row/);
-    assert.match(css, /\.dco-addons-remove\s*\{\s*margin-left:\s*auto;/);
+    assert.match(css, /grid-template-areas:\s*"actions \. remove"/);
+    assert.match(css, /grid-area:\s*actions/);
+    assert.match(css, /grid-area:\s*remove/);
+    assert.match(css, /direction:\s*ltr/);
 
     ui.root.querySelector('[data-addon-tab="extra_liner"]').dispatch("click");
-    const enable = ui.root.querySelector("[data-addon-enable]");
-    enable.dispatch("click");
-    assert.equal(enable.classList.contains("is-on"), true);
+    assert.equal(ui.root.querySelector("[data-liner-sides] .is-active"), null);
+    assert.equal(ui.root.querySelector('[data-addons-preview] [data-machining-kind="liner"]'), null);
+    assert.match(ui.root.querySelector("[data-addons-hint]").textContent, /reference side/);
+    const beforeSide = writes.length;
+    ui.root.querySelector('[data-liner-side="edge_width_top"]').dispatch("click");
+    assert.equal(writes.length, beforeSide);
+    assert.equal(row.extra_liner, undefined);
+    assert.equal(ui.root.querySelector("[data-addon-enable]").classList.contains("is-on"), true);
+    assert.equal(ui.root.querySelector('[data-liner-side="edge_width_top"]').classList.contains("is-active"), true);
+    assert.equal(ui.root.querySelector('[data-addons-preview] [data-machining-kind="liner"]') !== null, true);
     const offset = ui.root.querySelector("[data-liner-offset]");
     offset.value = "1.2";
     offset.dispatch("input");
     assert.equal(ui.root.querySelector("[data-liner-offset]"), offset);
-    assert.equal(ui.root.querySelector('[data-addons-preview] [data-machining-kind="liner"]') !== null, true);
+    assert.match(ui.root.querySelector("[data-addons-preview]").textContent, /1\.2/);
     ui.root.querySelector("[data-addons-apply]").dispatch("click");
     await tick();
     assert.equal(context.frappe.ui.dialogs.at(-1).hidden, true);
@@ -411,25 +425,39 @@ async function interactionChecks() {
     ui.root.querySelector('[data-addon-tab="extra_liner"]').dispatch("click");
     assert.equal(ui.root.querySelector("[data-liner-offset]").value, "1.2");
     assert.equal(ui.root.querySelector("[data-addon-enable]").classList.contains("is-on"), true);
+    assert.equal(ui.root.querySelector('[data-liner-side="edge_width_top"]').classList.contains("is-active"), true);
+    ui.root.querySelector('[data-liner-side="edge_long_left"]').dispatch("click");
+    ui.root.querySelector("[data-addons-apply]").dispatch("click");
+    await tick();
+    assert.equal(writes.at(-1).liner_reference_side, "edge_long_left");
+    assert.equal(row.liner_reference_side, "edge_long_left");
 
     const pair = blankRow({ name: "piece-2" });
     dialog.open({ doc: { pieces: [pair] }, dirty() {} }, pair);
     ui = latest();
+    ui.root.querySelector('[data-addon-tab="extra_liner"]').dispatch("click");
+    ui.root.querySelector('[data-liner-side="edge_width_bottom"]').dispatch("click");
+    ui.root.querySelector("[data-liner-offset]").value = "2.5";
+    ui.root.querySelector("[data-liner-offset]").dispatch("input");
     ui.root.querySelector('[data-addon-tab="extra_back_groove"]').dispatch("click");
-    ui.root.querySelector("[data-addon-enable]").dispatch("click");
+    ui.root.querySelector('[data-liner-side="edge_width_top"]').dispatch("click");
     ui.root.querySelector("[data-liner-width]").value = "0.8";
     ui.root.querySelector("[data-liner-width]").dispatch("input");
     ui.root.querySelector('[data-addon-tab="extra_recessed_handle_cutout"]').dispatch("click");
-    ui.root.querySelector("[data-addon-enable]").dispatch("click");
+    ui.root.querySelector('[data-liner-side="edge_long_right"]').dispatch("click");
     ui.root.querySelector("[data-liner-width]").value = "1";
     ui.root.querySelector("[data-liner-width]").dispatch("input");
     const beforePair = writes.length;
     ui.root.querySelector("[data-addons-apply]").dispatch("click");
     await tick();
     assert.equal(writes.length, beforePair + 1);
+    assert.equal(writes.at(-1).extra_liner, 1);
+    assert.equal(writes.at(-1).liner_offset_cm, 2.5);
+    assert.equal(writes.at(-1).liner_reference_side, "edge_width_bottom");
     assert.equal(writes.at(-1).extra_back_groove, 1);
     assert.equal(writes.at(-1).back_groove_width_cm, 0.8);
     assert.equal(writes.at(-1).extra_recessed_handle_cutout, 1);
+    assert.equal(writes.at(-1).recessed_handle_reference_side, "edge_long_right");
     assert.equal(writes.at(-1).recessed_handle_width_cm, 1);
     assert.equal(pair.extra_back_groove, 1);
     assert.equal(pair.extra_recessed_handle_cutout, 1);
@@ -438,7 +466,7 @@ async function interactionChecks() {
     dialog.open({ doc: { pieces: [invalid] }, dirty() {} }, invalid);
     ui = latest();
     ui.root.querySelector('[data-addon-tab="extra_liner"]').dispatch("click");
-    ui.root.querySelector("[data-addon-enable]").dispatch("click");
+    ui.root.querySelector('[data-liner-side="edge_width_top"]').dispatch("click");
     const length = ui.root.querySelector("[data-liner-length]");
     length.value = "9999";
     length.dispatch("input");
@@ -475,7 +503,8 @@ async function interactionChecks() {
     dialog.open({ doc: { pieces: [cancelled] }, dirty() {} }, cancelled);
     ui = latest();
     ui.root.querySelector('[data-addon-tab="extra_liner"]').dispatch("click");
-    ui.root.querySelector("[data-addon-enable]").dispatch("click");
+    ui.root.querySelector('[data-liner-side="edge_width_top"]').dispatch("click");
+    assert.equal(ui.root.querySelector('[data-addons-preview] [data-machining-kind="liner"]') !== null, true);
     const beforeCancel = writes.length;
     ui.root.querySelector("[data-addons-cancel]").dispatch("click");
     assert.equal(ui.ui.hidden, true);
@@ -494,8 +523,11 @@ async function interactionChecks() {
     dialog.open({ doc: { pieces: [saved] }, dirty() {} }, saved);
     ui = latest();
     ui.root.querySelector('[data-addon-tab="extra_liner"]').dispatch("click");
+    assert.equal(ui.root.querySelector('[data-liner-side="edge_width_top"]').classList.contains("is-active"), true);
+    assert.equal(ui.root.querySelector('[data-addons-preview] [data-machining-kind="liner"]') !== null, true);
     ui.root.querySelector("[data-addons-remove]").dispatch("click");
     assert.equal(ui.root.querySelector("[data-addon-enable]").classList.contains("is-on"), false);
+    assert.equal(ui.root.querySelector("[data-addons-preview] [data-machining-kind]"), null);
     assert.match(ui.root.querySelector("[data-addons-hint]").textContent, /Apply/);
     assert.equal(saved.extra_liner, 1);
     ui.root.querySelector("[data-addons-apply]").dispatch("click");
@@ -503,6 +535,27 @@ async function interactionChecks() {
     assert.equal(writes.at(-1).extra_liner, 0);
     assert.equal(saved.extra_liner, 0);
     assert.equal(saved.liner_reference_side, "");
+
+    const removable = blankRow({
+        name: "piece-remove-cancel",
+        extra_liner: 1,
+        liner_reference_side: "edge_width_top",
+        liner_offset_cm: 2,
+        liner_width_cm: 1.5,
+        liner_start_cm: 0,
+        liner_length_cm: 80,
+    });
+    dialog.open({ doc: { pieces: [removable] }, dirty() {} }, removable);
+    ui = latest();
+    ui.root.querySelector('[data-addon-tab="extra_liner"]').dispatch("click");
+    ui.root.querySelector("[data-addons-remove]").dispatch("click");
+    assert.equal(ui.root.querySelector("[data-addons-preview] [data-machining-kind]"), null);
+    ui.root.querySelector("[data-addons-cancel]").dispatch("click");
+    assert.equal(removable.extra_liner, 1);
+    dialog.open({ doc: { pieces: [removable] }, dirty() {} }, removable);
+    ui = latest();
+    ui.root.querySelector('[data-addon-tab="extra_liner"]').dispatch("click");
+    assert.equal(ui.root.querySelector('[data-addons-preview] [data-machining-kind="liner"]') !== null, true);
 
     const flaky = blankRow({ name: "piece-7" });
     dialog.open({ doc: { pieces: [flaky] }, dirty() {} }, flaky);
@@ -564,10 +617,18 @@ async function interactionChecks() {
     ui = latest();
     ui.root.querySelector('[data-addon-tab="extra_liner"]').dispatch("click");
     ui.root.querySelector("[data-addon-enable]").dispatch("click");
+    const beforeMissingSide = writes.length;
+    ui.root.querySelector("[data-addons-apply]").dispatch("click");
+    await tick();
+    assert.equal(ui.ui.hidden, false);
+    assert.equal(writes.length, beforeMissingSide);
+    assert.match(ui.root.querySelector("[data-addons-error]").textContent, /reference side/);
+    assert.equal(ui.root.querySelector("[data-addons-apply]").disabled, false);
+    ui.root.querySelector('[data-liner-side="edge_width_top"]').dispatch("click");
     ui.root.querySelector("[data-liner-length]").value = "9999";
     ui.root.querySelector("[data-liner-length]").dispatch("input");
     ui.root.querySelector('[data-addon-tab="extra_back_groove"]').dispatch("click");
-    ui.root.querySelector("[data-addon-enable]").dispatch("click");
+    ui.root.querySelector('[data-liner-side="edge_long_right"]').dispatch("click");
     const beforeMixed = writes.length;
     ui.root.querySelector("[data-addons-apply]").dispatch("click");
     await tick();

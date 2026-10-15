@@ -38,6 +38,7 @@
         missing_corner: "اضبط زاوية الدرفة أولًا، ثم حدّد اللاينر.",
         invalid_corner: "موضع الزاوية غير صالح للاينر.",
         side_unavailable: "الجهة المختارة غير متاحة لهذا النوع من الدرفات.",
+        choose_side: "Choose a reference side.",
         offset_invalid: "المسافة يجب أن تكون صفرًا أو أكبر.",
         width_invalid: "عرض اللاينر يجب أن يكون أكبر من صفر.",
         strip_outside: "اللاينر يخرج خارج الدرفة. قلّل المسافة أو العرض.",
@@ -84,30 +85,34 @@
         };
     }
 
-    function draftFromRow(row, kind) {
+    function draftFromRow(row, kind, options) {
         const api = geometry();
         const addon = addonFor(kind);
         const piece = api.pieceFromRow(row);
         const sides = api.availableSides(piece.pieceType);
-        const storedSide = row && row[addon.side];
-        const stored = sides.includes(storedSide) ? storedSide : (sides[0] || "");
-        const edge = edgeCm(piece, stored);
+        const rawSide = row && row[addon.side] ? String(row[addon.side]) : "";
+        const validStored = Boolean(rawSide) && sides.includes(rawSide);
+        let side = "";
+        if (validStored) side = rawSide;
+        else if (!rawSide && !(options && options.blankWhenMissing)) side = sides[0] || "";
+        const edge = edgeCm(piece, side);
         const storedLength = num(row && row[addon.length]);
         return {
             piece,
             row,
             kind: addon.kind,
-            side: stored,
-            offsetCm: storedSide ? num(row[addon.offset]) : 2,
-            widthCm: storedSide ? num(row[addon.width]) : 1.5,
-            startCm: num(row && row[addon.start]),
-            lengthCm: storedLength > 0 ? storedLength : edge,
+            side,
+            offsetCm: rawSide ? num(row[addon.offset]) : 2,
+            widthCm: rawSide ? num(row[addon.width]) : 1.5,
+            startCm: rawSide ? num(row && row[addon.start]) : 0,
+            lengthCm: rawSide && storedLength > 0 ? storedLength : edge,
             edgeCm: edge,
             enabled: Boolean(Number(row && row[addon.enabled])),
         };
     }
 
     function validationMessage(draft) {
+        if (!draft || !draft.side) return localize(MESSAGES.choose_side, draft && draft.kind);
         const code = geometry().validationCode(draft.piece, draft.side, draft.offsetCm, draft.widthCm);
         if (code) return localize(MESSAGES[code] || code, draft && draft.kind);
         try {

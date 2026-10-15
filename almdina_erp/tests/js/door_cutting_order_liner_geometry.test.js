@@ -149,6 +149,25 @@ const moved = editor.draftFromRow({
     liner_offset_cm: 5,
     liner_width_cm: 3,
 });
+const blank = editor.draftFromRow({
+    piece_type: "Regular",
+    width_cm: 40,
+    length_cm: 60,
+}, "liner", { blankWhenMissing: true });
+assert.equal(blank.side, "");
+assert.equal(editor.draftFromRow({
+    piece_type: "Regular",
+    width_cm: 40,
+    length_cm: 60,
+}).side, "edge_width_top");
+assert.equal(editor.draftFromRow({
+    piece_type: "Regular",
+    width_cm: 40,
+    length_cm: 60,
+    extra_liner: 1,
+    liner_reference_side: "not-a-side",
+}).side, "");
+assert.match(editor.validationMessage(blank), /reference side/);
 const secondPreview = editor.previewSvg(moved);
 assert.match(firstPreview, /data-liner-strip="1"/);
 assert.match(firstPreview, /data-liner-offset-line="1"/);
