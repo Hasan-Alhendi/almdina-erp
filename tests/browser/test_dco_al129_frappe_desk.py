@@ -752,7 +752,29 @@ def _set_link(page: Page, fieldname: str, value: str) -> None:
         control = page.locator(f"[data-fieldname='{fieldname}'] input").first
     control.fill(value)
     suggestions = page.locator(".awesomplete ul li:visible")
-    expect(suggestions.first).to_be_visible(timeout=20_000)
+    try:
+        expect(suggestions.first).to_be_visible(timeout=20_000)
+    except PlaywrightTimeoutError as error:
+        state = page.evaluate(
+            "fieldname => { const frm = window.cur_frm;"
+            " const field = frm && frm.fields_dict && frm.fields_dict[fieldname];"
+            " const option = field && field.df && field.df.options;"
+            " const input = field && field.$input && typeof field.$input.get === 'function'"
+            " ? field.$input.get(0) : field && field.$input && field.$input[0];"
+            " const route = window.frappe && frappe.get_route ? frappe.get_route() : [];"
+            " return {doctype: frm && frm.doctype || null, isNew: Boolean(frm && frm.is_new && frm.is_new()),"
+            " route: Array.isArray(route) ? route.join('/') : null, fieldType: field && field.df && field.df.fieldtype || null,"
+            " linkDoctype: option || null, fieldHidden: Boolean(field && field.df && field.df.hidden),"
+            " fieldReadOnly: Boolean(field && (field.read_only || (field.df && field.df.read_only))),"
+            " inputConnected: Boolean(input && input.isConnected), inputDisabled: Boolean(input && input.disabled),"
+            " inputValuePresent: Boolean(input && input.value), suggestionCount: document.querySelectorAll('.awesomplete ul li:visible').length,"
+            " linkReadPermission: option && frappe.perm && frappe.perm.has_perm"
+            " ? Boolean(frappe.perm.has_perm(option, 0, 'read')) : null}; }",
+            fieldname,
+        )
+        state["runtimeErrors"] = PAGE_RUNTIME_DIAGNOSTICS.get(id(page), [])[-12:]
+        trace("link_field_suggestions_unavailable", **state)
+        raise AssertionError(f"Frappe {fieldname} link suggestions were not visible: {state}") from error
     exact = suggestions.filter(has_text=re.compile(rf"^{re.escape(value)}(?:\s|$)"))
     (exact.first if exact.count() else suggestions.first).click()
     page.wait_for_function(
