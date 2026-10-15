@@ -62,6 +62,15 @@ STEP_SUMMARY_EVENTS = {
     "new_form_cur_frm_wait_started",
     "new_form_cur_frm_ready",
     "new_form_cur_frm_wait_failed",
+    "new_form_checkpoint_snapshot_wait_started",
+    "new_form_checkpoint_snapshot_wait_completed",
+    "new_form_checkpoint_snapshot_wait_failed",
+    "new_form_fast_table_visibility_wait_started",
+    "new_form_fast_table_visibility_wait_completed",
+    "new_form_fast_table_visibility_wait_failed",
+    "new_form_model_state_read_started",
+    "new_form_model_state_read_completed",
+    "new_form_model_state_read_failed",
 }
 
 
@@ -383,20 +392,65 @@ def _open_new_form(page: Page, suffix: str, *, expected_state: str) -> None:
         NEW_FORM_IDENTITIES[id(page)] = {"name": state["name"], "is_new": state["isNew"]}
         return
 
-    page.wait_for_function(
-        "() => window.AlmdinaDcoRecovery && AlmdinaDcoRecovery.LocalCheckpoint "
-        "&& AlmdinaDcoRecovery.LocalCheckpoint.snapshot(cur_frm)",
-        timeout=30_000,
+    checkpoint_started = time.monotonic()
+    trace("new_form_checkpoint_snapshot_wait_started", timeout_seconds=30)
+    try:
+        page.wait_for_function(
+            "() => window.AlmdinaDcoRecovery && AlmdinaDcoRecovery.LocalCheckpoint "
+            "&& AlmdinaDcoRecovery.LocalCheckpoint.snapshot(cur_frm)",
+            timeout=30_000,
+        )
+    except Exception as error:
+        trace(
+            "new_form_checkpoint_snapshot_wait_failed",
+            duration_ms=round((time.monotonic() - checkpoint_started) * 1000),
+            error_type=type(error).__name__,
+        )
+        raise
+    trace(
+        "new_form_checkpoint_snapshot_wait_completed",
+        duration_ms=round((time.monotonic() - checkpoint_started) * 1000),
     )
-    expect(page.locator("[data-fieldname='pieces_fast_entry'] .dco-fast-table")).to_be_visible(
-        timeout=30_000
+
+    fast_table_started = time.monotonic()
+    trace("new_form_fast_table_visibility_wait_started", timeout_seconds=30)
+    try:
+        fast_table = page.locator(
+            "[data-fieldname='pieces_fast_entry'] .dco-fast-table"
+        )
+        expect(fast_table).to_be_visible(timeout=30_000)
+    except Exception as error:
+        trace(
+            "new_form_fast_table_visibility_wait_failed",
+            duration_ms=round((time.monotonic() - fast_table_started) * 1000),
+            error_type=type(error).__name__,
+        )
+        raise
+    trace(
+        "new_form_fast_table_visibility_wait_completed",
+        duration_ms=round((time.monotonic() - fast_table_started) * 1000),
     )
-    state = page.evaluate(
-        "() => ({name: cur_frm.doc.name, doctype: cur_frm.doctype,"
-        " isNew: Boolean(cur_frm.is_new()),"
-        " checkpoint: Boolean(AlmdinaDcoRecovery.LocalCheckpoint.snapshot(cur_frm)),"
-        " discoveryVisible: Boolean(document.querySelector("
-        "'.modal.show [data-recovery-action=\"continue\"]'))})"
+
+    model_state_started = time.monotonic()
+    trace("new_form_model_state_read_started")
+    try:
+        state = page.evaluate(
+            "() => ({name: cur_frm.doc.name, doctype: cur_frm.doctype,"
+            " isNew: Boolean(cur_frm.is_new()),"
+            " checkpoint: Boolean(AlmdinaDcoRecovery.LocalCheckpoint.snapshot(cur_frm)),"
+            " discoveryVisible: Boolean(document.querySelector("
+            "'.modal.show [data-recovery-action=\"continue\"]'))})"
+        )
+    except Exception as error:
+        trace(
+            "new_form_model_state_read_failed",
+            duration_ms=round((time.monotonic() - model_state_started) * 1000),
+            error_type=type(error).__name__,
+        )
+        raise
+    trace(
+        "new_form_model_state_read_completed",
+        duration_ms=round((time.monotonic() - model_state_started) * 1000),
     )
     trace(
         "real_new_dco_form_ready",
