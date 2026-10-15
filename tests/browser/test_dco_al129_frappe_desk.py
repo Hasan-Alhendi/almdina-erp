@@ -797,11 +797,14 @@ def _set_link(page: Page, fieldname: str, value: str) -> None:
         state["runtimeErrors"] = PAGE_RUNTIME_DIAGNOSTICS.get(id(page), [])[-12:]
         trace("link_field_suggestions_unavailable", **state)
         raise AssertionError(f"Frappe {fieldname} link suggestions were not visible: {state}") from error
-    # Frappe v16 renders Link options with a label and a separate description.
-    # Match the option's actual autocomplete value, not its concatenated HTML text.
-    option_values = suggestions.evaluate_all(
-        "nodes => nodes.map(node => { const item = window.jQuery && window.jQuery(node).data('item.autocomplete');"
-        " return item && item.value != null ? String(item.value) : null; })"
+    # Match the Link control's underlying result values; rendered labels can
+    # combine a translated title and description and are not the document name.
+    option_values = page.evaluate(
+        "fieldname => { const field = window.cur_frm && cur_frm.fields_dict[fieldname];"
+        " const list = field && field.awesomplete && field.awesomplete.list;"
+        " return Array.isArray(list) ? list.map(item => item && item.value != null"
+        " ? String(item.value) : null) : []; }",
+        fieldname,
     )
     exact_indexes = [index for index, option_value in enumerate(option_values) if option_value == value]
     if len(exact_indexes) != 1:
