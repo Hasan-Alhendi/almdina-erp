@@ -258,9 +258,13 @@ class TestDcoLocalRecoveryArchitecture(unittest.TestCase):
             / "presentation"
             / "door_cutting_order_local_checkpoint.js"
         ).read_text(encoding="utf-8")
-        for label in ("متابعة الطلب", "بدء طلب جديد", "حذف المسودة"):
+        for label in (
+            'translate("Continue the order")',
+            'translate("Start a new order")',
+            'translate("Delete the draft")',
+        ):
             self.assertIn(label, presentation)
-        self.assertIn("مسودة محلية غير محفوظة رسميًا", presentation)
+        self.assertIn('translate("This data is an unofficial local draft', presentation)
         self.assertIn("session.beginRestore()", application)
         self.assertIn("session.completeRestore()", application)
         self.assertIn("hydrationPort(dco)", application)
@@ -383,7 +387,7 @@ class TestDcoLocalRecoveryArchitecture(unittest.TestCase):
         self.assertIn("await initialization.promise;", presentation)
         self.assertIn("if (!state && !discoveryOwnsForm) return;", presentation)
         self.assertIn("if (state) initializations.delete(frm);", presentation)
-        self.assertIn("اكتمل تجهيز الحفظ المحلي", presentation)
+        self.assertIn('translate("Local save preparation finished. Press Save again to finish creating the order.")', presentation)
         self.assertGreaterEqual(
             presentation.count('if (initialization.pendingDirty && state) markDirty(frm, "DCO");'),
             5,

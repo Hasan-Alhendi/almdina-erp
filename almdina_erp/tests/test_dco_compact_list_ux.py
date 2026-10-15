@@ -39,7 +39,7 @@ class TestDcoCompactListUx(unittest.TestCase):
             'door_cutting_order_compact_list_ux.js?v=13"'
         )
 
-        self.assertIn('"/assets/almdina_erp/css/door_cutting_order_list.css?v=15"', manifest)
+        self.assertIn('"/assets/almdina_erp/css/door_cutting_order_list.css?v=16"', manifest)
         self.assertIn('"/assets/almdina_erp/js/notes/notes_dco_list_integration.js?v=14"', manifest)
         self.assertIn(compact_global, manifest)
         self.assertIn(canonical, manifest)
@@ -170,7 +170,8 @@ class TestDcoCompactListUx(unittest.TestCase):
         self.assertIn('--dco-col-basis: 150px;', css)
         self.assertIn('.current_production_stage, [data-fieldname="current_production_stage"]', css)
         self.assertIn('.department_status, [data-fieldname="department_status"]', css)
-        self.assertIn('.name, .list-subject, .order_date, [data-fieldname="name"]', css)
+        self.assertIn('.order_date, [data-fieldname="order_date"]', css)
+        self.assertIn("direction: ltr;", css)
         self.assertIn('.dco-order-list .list-row-head > .level-right', css)
         self.assertIn('.dco-order-list .list-row > .level-right', css)
         self.assertIn('display: none !important;', css)

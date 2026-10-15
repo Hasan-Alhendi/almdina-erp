@@ -1,9 +1,24 @@
 (() => {
 	"use strict";
 
-	const ACTION_GROUP = __("الرسم / DXF");
-	const APPROVE_LABEL = __("اعتماد الرسم");
-	const REAPPROVE_LABEL = __("إعادة اعتماد الرسم");
+	const ACTION_GROUP_ID = "Drawing / DXF";
+	const APPROVE_LABEL_ID = "Approve drawing";
+	const REAPPROVE_LABEL_ID = "Re-approve drawing";
+	// Compatibility: historical department value and toolbar labels used only for removal.
+	const DRAWING_DEPARTMENT = "رسم";
+	const LEGACY_ACTION_GROUP = "الرسم / DXF";
+	const LEGACY_APPROVAL_LABELS = Object.freeze(["اعتماد الرسم", "إعادة اعتماد الرسم"]);
+
+	function translate(message, replacements) {
+		const locale = window.AlmdinaLocale;
+		if (locale && typeof locale.translate === "function") {
+			return locale.translate(message, replacements);
+		}
+		if (typeof __ === "function") {
+			return replacements === undefined ? __(message) : __(message, replacements);
+		}
+		return String(message == null ? "" : message);
+	}
 
 	function canApprove(frm) {
 		const permissions = window.AlmdinaPermissions;
@@ -24,7 +39,7 @@
 				frm.doc.status === "At Drawing" ||
 				(
 					frm.doc.production_path === "Drawing" &&
-					frm.doc.current_department === "رسم"
+					frm.doc.current_department === DRAWING_DEPARTMENT
 				)
 			)
 		);
@@ -48,10 +63,10 @@
 	function approvalSources(frm) {
 		const sources = [];
 		if (hasPlan(frm.doc.system_plan_json) || hasPlan(frm.doc.cutting_plan_json)) {
-			sources.push({ value: "System", label: __("خطة النظام") });
+			sources.push({ value: "System", label: translate("System plan") });
 		}
 		if (hasPlan(frm.doc.custom_plan_json) && frm.doc.production_dxf) {
-			sources.push({ value: "Custom", label: __("الخطة المرفوعة من DXF") });
+			sources.push({ value: "Custom", label: translate("Plan uploaded from DXF") });
 		}
 		return sources;
 	}
@@ -61,13 +76,13 @@
 			method: "almdina_erp.almdina_erp.services.shop_floor_service.approve_production_dxf",
 			args: { order_name: frm.doc.name, plan_source: source },
 			freeze: true,
-			freeze_message: __("جاري اعتماد خطة الرسم..."),
+			freeze_message: translate("Approving the drawing plan..."),
 		}).then((response) => {
 			const result = response.message || {};
 			frappe.show_alert({
 				message: result.was_previously_approved
-					? __("تم تحديث اعتماد الرسم واستبدال الخطة المعتمدة السابقة.")
-					: __("تم اعتماد الرسم للإنتاج."),
+					? translate("The drawing approval was updated and replaced the previous approved plan.")
+					: translate("The drawing was approved for production."),
 				indicator: "green",
 			}, 6);
 			return frm.reload_doc();
@@ -77,7 +92,7 @@
 	function chooseSource(frm) {
 		const sources = approvalSources(frm);
 		if (!sources.length) {
-			frappe.msgprint(__("لا توجد خطة صالحة للاعتماد."));
+			frappe.msgprint(translate("There is no valid plan to approve."));
 			return;
 		}
 		if (sources.length === 1) {
@@ -89,14 +104,14 @@
 			[{
 				fieldname: "source",
 				fieldtype: "Select",
-				label: __("الخطة المعتمدة للإنتاج"),
+				label: translate("Plan approved for production"),
 				options: [...labels.keys()].join("\n"),
 				reqd: 1,
-				description: __("اختر النسخة النهائية التي تريد اعتمادها للإنتاج."),
+				description: translate("Choose the final version you want to approve for production."),
 			}],
 			(values) => submitApproval(frm, labels.get(values.source)),
-			APPROVE_LABEL,
-			__("اعتماد للإنتاج")
+			translate(APPROVE_LABEL_ID),
+			translate("Approve for production")
 		);
 	}
 
@@ -106,16 +121,17 @@
 			return;
 		}
 		frappe.confirm(
-			__(
-				"تنبيه: تم اعتماد خطة لهذا الطلب سابقًا. المتابعة ستنشئ اعتمادًا جديدًا وتستبدل الخطة المعتمدة الحالية. هل تريد المتابعة؟"
-			),
+			translate("Warning: a plan was already approved for this order. Continuing creates a new approval and replaces the current approved plan. Do you want to continue?"),
 			() => chooseSource(frm)
 		);
 	}
 
 	function installButton(frm) {
-		frm.remove_custom_button(APPROVE_LABEL, ACTION_GROUP);
-		frm.remove_custom_button(REAPPROVE_LABEL, ACTION_GROUP);
+		const groups = [translate(ACTION_GROUP_ID), LEGACY_ACTION_GROUP];
+		const labels = [translate(APPROVE_LABEL_ID), translate(REAPPROVE_LABEL_ID), ...LEGACY_APPROVAL_LABELS];
+		labels.forEach((label) => {
+			groups.forEach((group) => frm.remove_custom_button(label, group));
+		});
 		// Drawing approval actions stay in the form sections, not the page toolbar.
 	}
 

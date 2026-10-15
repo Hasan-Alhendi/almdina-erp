@@ -10,6 +10,9 @@ from almdina_erp.almdina_erp.application.security.permission_context import (
 from almdina_erp.almdina_erp.application.presentation.shortcut_icon_catalog import (
     apply_sidebar_icon_catalog,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.ui_language_catalog import (
+    almdina_ui_languages,
+)
 from almdina_erp.almdina_erp.application.security.workspace_visibility import (
     project_workspace_page,
     workspace_item_allowed,
@@ -257,11 +260,18 @@ def _apply_shared_shell(bootinfo: dict[str, Any]) -> None:
         _set_almdina_app_route(bootinfo, ALMDINA_WORKSPACE_ROUTE)
 
 
+def _apply_ui_languages(bootinfo: dict[str, Any]) -> None:
+    """Expose the Desk language-switcher catalog without closing the workforce set."""
+
+    bootinfo["almdina_ui_languages"] = almdina_ui_languages()
+
+
 def boot_session(bootinfo: dict[str, Any]) -> None:
     """Attach the read-only shared-shell authorization context."""
 
     _apply_shared_shell(bootinfo)
     apply_sidebar_icon_catalog(bootinfo)
+    _apply_ui_languages(bootinfo)
 
 
 def extend_bootinfo(bootinfo: dict[str, Any] | None = None) -> None:
@@ -270,3 +280,4 @@ def extend_bootinfo(bootinfo: dict[str, Any] | None = None) -> None:
     if bootinfo:
         _apply_shared_shell(bootinfo)
         apply_sidebar_icon_catalog(bootinfo)
+        _apply_ui_languages(bootinfo)

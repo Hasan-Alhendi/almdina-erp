@@ -46,7 +46,7 @@ class TestPermissionMatrixApplication(unittest.TestCase):
             for item in plan_group["capabilities"]
             if item["key"] == Capability.APPROVE_DXF
         )
-        self.assertEqual(approval["label"], "اعتماد خطة القص")
+        self.assertEqual(approval["label"], "Approve cutting plan")
         drawing_group = next(group for group in groups if group["key"] == "drawing")
         self.assertNotIn(
             Capability.APPROVE_DXF,

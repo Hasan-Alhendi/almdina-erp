@@ -21,6 +21,82 @@
             .replace(/'/g, "&#039;");
     }
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split(`{${index}}`).join(String(value));
+            });
+        }
+        return text;
+    }
+
+    function uiDirection() {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.direction === "function") {
+            const value = locale.direction();
+            if (value === "ltr" || value === "rtl") return value;
+        }
+        const root = typeof document !== "undefined" ? document.documentElement : null;
+        const dir = root && root.getAttribute("dir");
+        return dir === "ltr" ? "ltr" : "rtl";
+    }
+
+    function uiLanguage() {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.currentLanguage === "function") {
+            const value = String(locale.currentLanguage() || "").trim();
+            if (value) return value;
+        }
+        const root = typeof document !== "undefined" ? document.documentElement : null;
+        const lang = root && root.getAttribute("lang");
+        return String(lang || "");
+    }
+
+    function htmlText(message, replacements) {
+        return escape_html(translate(message, replacements));
+    }
+
+    const STRATEGY_MESSAGE_IDS = Object.freeze({
+        Auto: "Auto",
+        "Auto Pro": "Auto Pro",
+        "Deep Search": "Deep Search",
+        "Optimal Search": "Optimal Search",
+        "MaxRects Best Short Side": "MaxRects Best Short Side",
+        "MaxRects Best Area": "MaxRects Best Area",
+        "MaxRects Bottom Left": "MaxRects Bottom Left",
+        "MaxRects Contact Point": "MaxRects Contact Point",
+        "MaxRects Width": "MaxRects Width",
+        "MaxRects Length": "MaxRects Length",
+        "Shelf Horizontal": "Shelf Horizontal",
+        "Shelf Vertical": "Shelf Vertical",
+        "Shelf First Fit": "Shelf First Fit",
+        "Shelf Next Fit": "Shelf Next Fit",
+        "Guillotine Short Axis": "Guillotine Short Axis",
+        "Guillotine Long Axis": "Guillotine Long Axis",
+        "Guillotine Best Area Fit": "Guillotine Best Area Fit",
+        "Guillotine Best Short Side Fit": "Guillotine Best Short Side Fit",
+        "Guillotine Best Long Side Fit": "Guillotine Best Long Side Fit",
+        "Skyline Bottom Left": "Skyline Bottom Left",
+        "Skyline Best Fit": "Skyline Best Fit",
+    });
+
+    function knownStrategyText(methodKey, methodLabel) {
+        const key = String(methodKey ?? "").trim();
+        const messageId = key && STRATEGY_MESSAGE_IDS[key];
+        if (messageId) return translate(messageId);
+        const label = String(methodLabel ?? "").trim();
+        if (label) return label;
+        return key;
+    }
+
     function physicalCutQuantity(row) {
         const extra = window.AlmdinaExtraDoorAddonsUX;
         if (extra && typeof extra.physicalCutQuantity === "function") {
@@ -191,27 +267,30 @@
     const EXTRA_DOUBLE_MARK_COLOR = "#5a2d82";
     const EXTRA_FULL_DOOR_DOUBLE_MARK_COLOR = "#1a5f4a";
     const EXTRA_ADDON_LEGEND_ITEMS = Object.freeze([
-        Object.freeze({ fieldname: "extra_liner", labelAr: "لاينر", overlayKind: "liner" }),
-        Object.freeze({ fieldname: "extra_back_groove", labelAr: "فرزة ظهر", overlayKind: "back_groove" }),
+        Object.freeze({ fieldname: "extra_liner", label: "Liner", overlayKind: "liner" }),
+        Object.freeze({ fieldname: "extra_back_groove", label: "Back groove", overlayKind: "back_groove" }),
         Object.freeze({
             fieldname: "extra_recessed_handle_cutout",
-            labelAr: "مسكة غطس",
+            label: "Recessed handle",
             overlayKind: "recessed_handle_cutout",
         }),
-        Object.freeze({ fieldname: "extra_double", labelAr: "دبل قشاط", addonKind: "double" }),
+        Object.freeze({ fieldname: "extra_double", label: "Edge banding double", addonKind: "double" }),
         Object.freeze({
             fieldname: "extra_full_door_double",
-            labelAr: "دبل كامل الدرفة",
+            label: "Full door double",
             addonKind: "full_door_double",
         }),
     ]);
 
-    function extraAddonLegendLabel(fieldname, fallback) {
-        const extra = window.AlmdinaExtraDoorAddonsUX;
-        const field = extra && Array.isArray(extra.FIELDS)
-            ? extra.FIELDS.find(item => item.fieldname === fieldname)
-            : null;
-        return (field && field.labelAr) || fallback;
+    function extraAddonLegendItem(fieldname) {
+        return EXTRA_ADDON_LEGEND_ITEMS.find(item => item.fieldname === fieldname) || null;
+    }
+
+    function extraAddonLegendLabel(itemOrFieldname) {
+        const item = typeof itemOrFieldname === "string"
+            ? extraAddonLegendItem(itemOrFieldname)
+            : itemOrFieldname;
+        return item ? translate(item.label) : "";
     }
 
     function extraGroupNo(piece) {
@@ -264,7 +343,7 @@
 
     function render_extra_addon_legend() {
         const items = EXTRA_ADDON_LEGEND_ITEMS.map(item => {
-            const label = extraAddonLegendLabel(item.fieldname, item.labelAr);
+            const label = extraAddonLegendLabel(item);
             if (item.addonKind) {
                 return `
             <span class="dco-extra-addon-legend-item">
@@ -277,8 +356,8 @@
                 <span>${escape_html(label)}</span>
             </span>`;
         }).join("");
-        return `<div class="dco-extra-addon-legend" dir="rtl">
-            <span class="dco-extra-addon-legend-title">رموز إضافات الدرف</span>
+        return `<div class="dco-extra-addon-legend" dir="${escape_html(uiDirection())}">
+            <span class="dco-extra-addon-legend-title">${htmlText("Door add-on symbols")}</span>
             ${items}
         </div>`;
     }
@@ -287,7 +366,7 @@
         const coverage = render_special_raw_coverage(frm, plan);
         const legend = render_extra_addon_legend();
         if (!coverage && !legend) return "";
-        return `<div class="dco-plan-meta-strip" dir="rtl">${coverage}${legend}</div>`;
+        return `<div class="dco-plan-meta-strip" dir="${escape_html(uiDirection())}">${coverage}${legend}</div>`;
     }
 
     function extraAddonMarkPlate(slot, kind, innerHtml) {
@@ -306,7 +385,7 @@
                 "full_door_double",
                 extraAddonTextMark(
                     "full_door_double",
-                    extraAddonLegendLabel("extra_full_door_double", "دبل كامل الدرفة")
+                    extraAddonLegendLabel("extra_full_door_double")
                 )
             ));
         }
@@ -316,7 +395,7 @@
                 "double",
                 extraAddonTextMark(
                     "double",
-                    extraAddonLegendLabel("extra_double", "دبل قشاط")
+                    extraAddonLegendLabel("extra_double")
                 )
             ));
         }
@@ -598,10 +677,10 @@
             && geometryModel
             && geometryModel.exact;
         const special = piece.piece_type === "Special"
-            ? `<span class="dco-piece-kind-badge" style="display:inline-block;margin-bottom:2px;padding:2px 6px;border-radius:999px;background:#7a4c13;color:#fff;font-size:9px;font-weight:900">${exact_special ? "◆ درفة خاصة · مسار هندسي" : "✦ درفة خاصة · خام CNC"}</span><br>`
+            ? `<span class="dco-piece-kind-badge" style="display:inline-block;margin-bottom:2px;padding:2px 6px;border-radius:999px;background:#7a4c13;color:#fff;font-size:9px;font-weight:900">${exact_special ? htmlText("Special door · geometric path") : htmlText("Special door · CNC raw")}</span><br>`
             : "";
         const invalidGeometry = geometryModel && geometryModel.invalid
-            ? '<span class="dco-geometry-error-badge" style="display:inline-block;margin-bottom:2px;padding:2px 6px;border-radius:999px;background:#a61b1b;color:#fff;font-size:9px;font-weight:900">تعذر عرض المسار الهندسي</span><br>'
+            ? `<span class="dco-geometry-error-badge" style="display:inline-block;margin-bottom:2px;padding:2px 6px;border-radius:999px;background:#a61b1b;color:#fff;font-size:9px;font-weight:900">${htmlText("Could not display the geometric path")}</span><br>`
             : "";
         const clippedGeometry = window.AlmdinaClippedCornerGeometry;
         const clipped = Boolean(clippedGeometry && clippedGeometry.isCornerCut(piece));
@@ -643,12 +722,13 @@
         const tone = complete
             ? "border-color:#c9a66b;background:linear-gradient(135deg,#fff8e8,#fffdf8);color:#684117"
             : "border-color:#dc7b72;background:#fff4f2;color:#9b2f26";
+        const counts = `<b>${escape_html(translate("{0} of {1}", [placed, requested]))}</b>`;
         const message = complete
-            ? `تم إدخال جميع الدرف الخاصة في خطة القص: <b>${placed} من ${requested}</b>`
-            : `تنبيه: دخل خطة القص <b>${placed} من ${requested}</b> فقط من الدرف الخاصة. راجع المقاسات والقطع غير الموزعة.`;
+            ? `${htmlText("All special doors were placed in the cutting plan:")} ${counts}`
+            : `${htmlText("Warning: only")} ${counts} ${htmlText("special doors were placed in the cutting plan. Review the measurements and the unplaced pieces.")}`;
 
         return `
-            <div class="dco-special-raw-coverage" style="direction:rtl;border:1px solid;border-radius:10px;padding:7px 10px;font-size:12px;font-weight:700;${tone}">
+            <div class="dco-special-raw-coverage" style="direction:${escape_html(uiDirection())};border:1px solid;border-radius:10px;padding:7px 10px;font-size:12px;font-weight:700;${tone}">
                 <span style="font-size:16px;margin-left:6px">✦</span>${message}
             </div>
         `;
@@ -663,19 +743,19 @@
 
         let html = `
             <div class="dco-piece-groups" style="border:1px solid #ddd;border-radius:8px;padding:8px;margin:8px 0 12px 0;font-size:12px;line-height:1.8;background:#fafafa;">
-                <b>قائمة الدرف:</b><br>
+                <b>${htmlText("Door list:")}</b><br>
         `;
 
         rows.forEach((row, index) => {
             const cornerGeometry = window.AlmdinaClippedCornerGeometry;
             const typeLabel = row.piece_type === "Special"
-                ? " · ✦ خاصة (CNC)"
+                ? ` · ${htmlText("Special (CNC)")}`
                 : (cornerGeometry && cornerGeometry.isCornerCut(row)
-                    ? ` · ${cornerGeometry.typeIcon(row)} ${cornerGeometry.typeLabel(row)}`
+                    ? ` · ${cornerGeometry.typeIcon(row)} ${escape_html(cornerGeometry.typeLabel(row))}`
                     : "");
             html += `
-                <span style="display:inline-block;margin-left:16px;white-space:nowrap;">
-                    ${index + 1}- ${round(row.width_cm, 1)}*${round(row.length_cm, 1)} عدد ${physicalCutQuantity(row)}${typeLabel}
+                <span style="display:inline-block;margin-inline-start:16px;white-space:nowrap;direction:ltr;">
+                    ${index + 1}- ${round(row.width_cm, 1)}*${round(row.length_cm, 1)} ${htmlText("Qty {0}", [physicalCutQuantity(row)])}${typeLabel}
                 </span>
             `;
         });
@@ -695,11 +775,11 @@
 
     function render_plan_header_cards(frm) {
         const cards = [
-            { label: "رقم الطلب", value: frm.doc.name || "—" },
-            { label: "اسم الزبون", value: frm.doc.customer || "—" },
-            { label: "تاريخ الطلب", value: format_order_date(frm) },
-            { label: "نوع اللوح", value: frm.doc.board_description || "—" },
-            { label: "لون القشاط", value: frm.doc.edge_color || "—" },
+            { label: translate("Order number"), value: frm.doc.name || "—" },
+            { label: translate("Customer name"), value: frm.doc.customer || "—" },
+            { label: translate("Order date"), value: format_order_date(frm) },
+            { label: translate("Board type"), value: frm.doc.board_description || "—" },
+            { label: translate("Edge color"), value: frm.doc.edge_color || "—" },
         ];
 
         return `
@@ -812,26 +892,26 @@
         const board_width_px = 560;
 
         let html = `
-            <div class="dco-cutting-plan" data-almdina-order="${escape_html(frm.doc.name || "")}" style="font-family:Arial,Tahoma,sans-serif;direction:rtl;color:#111;background:#fff;">
-                <h2 style="margin:0 0 8px 0;font-size:18px;">خطة القص</h2>
+            <div class="dco-cutting-plan" dir="${escape_html(uiDirection())}" data-almdina-order="${escape_html(frm.doc.name || "")}" style="font-family:Arial,Tahoma,sans-serif;color:#111;background:#fff;">
+                <h2 style="margin:0 0 8px 0;font-size:18px;">${htmlText("Cutting plan")}</h2>
                 ${render_plan_header_cards(frm)}
 
                 <div class="dco-summary-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:8px 0 12px 0;">
-                    <div class="dco-summary-card" style="border:1px solid #ddd;border-radius:8px;padding:8px;background:#f8fafc;"><b>عدد الألواح</b><span>${fullBoardSheets.length}</span></div>
-                    <div class="dco-summary-card" style="border:1px solid #ddd;border-radius:8px;padding:8px;background:#f8fafc;"><b>مساحة القطع</b><span>${used_area_m2} م²</span></div>
-                    <div class="dco-summary-card" style="border:1px solid #ddd;border-radius:8px;padding:8px;background:#f8fafc;"><b>مساحة الهدر</b><span>${waste_area_m2} م²</span></div>
-                    <div class="dco-summary-card" style="border:1px solid #ddd;border-radius:8px;padding:8px;background:#f8fafc;"><b>نسبة الهدر</b><span>${waste_percent}%</span></div>
+                    <div class="dco-summary-card" style="border:1px solid #ddd;border-radius:8px;padding:8px;background:#f8fafc;"><b>${htmlText("Board count")}</b><span style="direction:ltr;">${fullBoardSheets.length}</span></div>
+                    <div class="dco-summary-card" style="border:1px solid #ddd;border-radius:8px;padding:8px;background:#f8fafc;"><b>${htmlText("Cut area")}</b><span style="direction:ltr;">${htmlText("{0} m²", [used_area_m2])}</span></div>
+                    <div class="dco-summary-card" style="border:1px solid #ddd;border-radius:8px;padding:8px;background:#f8fafc;"><b>${htmlText("Waste area")}</b><span style="direction:ltr;">${htmlText("{0} m²", [waste_area_m2])}</span></div>
+                    <div class="dco-summary-card" style="border:1px solid #ddd;border-radius:8px;padding:8px;background:#f8fafc;"><b>${htmlText("Waste percent")}</b><span style="direction:ltr;">${waste_percent}%</span></div>
                 </div>
 
                 ${render_piece_groups_summary(frm)}
                 ${render_plan_meta_strip(frm, plan)}
 
-                <div class="dco-plan-method-line" style="font-size:12px;margin-bottom:8px;"><b>${__("Layout method:")}</b> ${escape_html(window.AlmdinaLocale ? AlmdinaLocale.translateLabel(plan.method_label || frm.doc.packing_method || "") : (plan.method_label || frm.doc.packing_method || ""))}</div>
+                <div class="dco-plan-method-line" style="font-size:12px;margin-bottom:8px;"><b>${htmlText("Layout method:")}</b> ${escape_html(knownStrategyText(plan.method_key, plan.method_label || frm.doc.packing_method || ""))}</div>
         `;
 
         plan.sheets.forEach(sheet => {
             const isOffcut = String(sheet.resource_kind || "FULL_BOARD").toUpperCase() === "OFFCUT";
-            const sheetTitle = isOffcut ? "نقص" : `لوح ${sheet.sheet_no}`;
+            const sheetTitle = isOffcut ? translate("Offcut") : translate("Board {0}", [sheet.sheet_no]);
             const sheet_used_area_m2 = round((sheet.pieces || []).reduce((sum, p) => sum + num(p.area_m2), 0), 3);
             const sheet_waste_area_m2 = round(Math.max(0, board_area_m2 - sheet_used_area_m2), 3);
             const sheet_waste_percent = board_area_m2 ? round((sheet_waste_area_m2 / board_area_m2) * 100, 2) : 0;
@@ -850,10 +930,10 @@
             html += `
                 <div class="dco-sheet-card" data-resource-kind="${isOffcut ? "OFFCUT" : "FULL_BOARD"}" style="border:1px solid #bbb;border-radius:10px;padding:10px;margin:14px 0;background:#fff;page-break-inside:avoid;break-inside:avoid;">
                     <div class="dco-sheet-title" style="display:flex;justify-content:space-between;gap:10px;margin-bottom:8px;font-size:13px;font-weight:bold;">
-                        <div>${sheetTitle}</div>
+                        <div>${escape_html(sheetTitle)}</div>
                         <div>
-                            <span class="dco-sheet-stats-read">عدد القطع: ${(sheet.pieces || []).length} &nbsp; | &nbsp; الهدر: ${sheet_waste_area_m2} م² (${sheet_waste_percent}%)</span>
-                            <span class="dco-sheet-stats-edit" style="display:none">قطع: ${(sheet.pieces || []).length} | الهدر: ${sheet_waste_area_m2} م² (${sheet_waste_percent}%)</span>
+                            <span class="dco-sheet-stats-read" style="direction:ltr;">${htmlText("Pieces: {0} | waste: {1} m² ({2}%)", [(sheet.pieces || []).length, sheet_waste_area_m2, sheet_waste_percent])}</span>
+                            <span class="dco-sheet-stats-edit" style="display:none;direction:ltr;">${htmlText("Cuts: {0} | waste: {1} m² ({2}%)", [(sheet.pieces || []).length, sheet_waste_area_m2, sheet_waste_percent])}</span>
                         </div>
                     </div>
                     <div class="dco-sheet-board" data-trim-width-cm="${frame.insetX}" data-trim-length-cm="${frame.insetY}" style="position:relative;direction:ltr;width:${board_width_px}px;height:${board_height_px}px;max-width:100%;border:2px solid #111;background:#fff;overflow:hidden;margin:0 auto 8px auto;">
@@ -907,7 +987,7 @@
         });
 
         if (plan.unplaced && plan.unplaced.length) {
-            html += `<div style="border:1px solid #d9534f;background:#fff5f5;color:#a94442;padding:8px;border-radius:8px;margin-top:12px;"><b>تنبيه:</b> توجد ${plan.unplaced.length} قطعة لم تدخل ضمن الألواح. راجع المقاسات أو مقاس اللوح أو سماحية التدوير.</div>`;
+            html += `<div style="border:1px solid #d9534f;background:#fff5f5;color:#a94442;padding:8px;border-radius:8px;margin-top:12px;"><b>${htmlText("Warning:")}</b> ${htmlText("{0} pieces were not placed on the boards. Review the measurements, the board size, or the rotation allowance.", [plan.unplaced.length])}</div>`;
         }
 
         html += "</div>";
@@ -960,7 +1040,7 @@
         const width = num(plan && plan.full_board_width_cm) || num(frm.doc.board_width_cm);
         const length = num(plan && plan.full_board_length_cm) || num(frm.doc.board_length_cm);
         if (!width || !length) return "—";
-        return `${round(width, 1)} × ${round(length, 1)} سم`;
+        return translate("{0} × {1} cm", [round(width, 1), round(length, 1)]);
     }
 
     function printThemeApi() {
@@ -985,12 +1065,12 @@
 
     function printOrderMetaHtml(frm, plan, totalSheets) {
         const items = [
-            ["رقم الطلب", frm.doc.name || "—"],
-            ["اسم الزبون", frm.doc.customer || "—"],
-            ["لون اللوح", frm.doc.board_description || "—"],
-            ["عدد الألواح", totalSheets],
-            ["عدد القطع", requestedPieceCount(frm)],
-            ["قياس اللوح", printBoardSize(frm, plan)],
+            [translate("Order number"), frm.doc.name || "—"],
+            [translate("Customer name"), frm.doc.customer || "—"],
+            [translate("Board color"), frm.doc.board_description || "—"],
+            [translate("Board count"), totalSheets],
+            [translate("Piece count"), requestedPieceCount(frm)],
+            [translate("Board size"), printBoardSize(frm, plan)],
         ];
         return `<div class="dco-print-order-meta">${items.map(([label, value]) => `
             <div><b>${escape_html(label)}</b><span>${escape_html(value)}</span></div>
@@ -1045,7 +1125,7 @@
             const title = card.querySelector(".dco-sheet-title");
             const isOffcut = card.dataset.resourceKind === "OFFCUT";
             if (!isOffcut) boardIndex += 1;
-            if (title) title.innerHTML = `<div class="dco-print-sheet-number">${isOffcut ? "نقص" : "لوح " + boardIndex}</div>`;
+            if (title) title.innerHTML = `<div class="dco-print-sheet-number">${isOffcut ? htmlText("Offcut") : htmlText("Board {0}", [boardIndex])}</div>`;
             if (board) {
                 board.style.width = `${boardWmm}mm`;
                 board.style.height = `${boardHmm}mm`;
@@ -1086,13 +1166,13 @@
                     const title = card.querySelector(".dco-sheet-title");
                     const isOffcut = card.dataset.resourceKind === "OFFCUT";
                     if (!isOffcut) globalBoardIndex += 1;
-                    if (title) title.innerHTML = `<div class="dco-print-sheet-number">${isOffcut ? "نقص" : "لوح " + globalBoardIndex}</div>`;
+                    if (title) title.innerHTML = `<div class="dco-print-sheet-number">${isOffcut ? htmlText("Offcut") : htmlText("Board {0}", [globalBoardIndex])}</div>`;
                     return card.outerHTML;
                 }).join("");
                 return `<div class="dco-print-sheets-row">${rowHtml}</div>`;
             }).join("");
             return `<section class="dco-print-page" data-page="${pageIndex + 1}">
-                ${printHeaderHtml(identity, "خطة القص", `صفحة ${pageIndex + 1} من ${chunks.length}`)}
+                ${printHeaderHtml(identity, translate("Cutting plan"), translate("Page {0} of {1}", [pageIndex + 1, chunks.length]))}
                 ${printOrderMetaHtml(frm, plan, totalSheets)}
                 ${render_extra_addon_legend()}
                 <div class="dco-print-sheets-grid">${gridRows}</div>
@@ -1102,9 +1182,8 @@
 
     function buildPrintDocument(title, frm, planRoot, plan, identity) {
         const pages = buildPrintPages(frm, planRoot, plan, identity);
-        const locale = window.AlmdinaLocale;
-        const language = locale ? locale.currentLanguage() : "ar";
-        const direction = locale ? locale.direction() : "rtl";
+        const language = uiLanguage();
+        const direction = uiDirection();
         return `<!DOCTYPE html>
 <html lang="${escape_html(language)}" dir="${escape_html(direction)}">
 <head>
@@ -1263,7 +1342,7 @@ ${printHeaderCss()}
     gap: .2mm .8mm;
     margin: 0 0 .25mm !important;
     padding: 0 !important;
-    direction: rtl;
+    direction: inherit;
     line-height: 1 !important;
 }
 .dco-board-original-edge {
@@ -1351,22 +1430,21 @@ ${printHeaderCss()}
             planRoot = planRootFromPlan(frm, plan);
         }
         if (!planRoot || !planRoot.querySelector(".dco-sheet-card")) {
-            frappe.msgprint("لا يوجد مخطط قص للطباعة. اضغط أولًا على إعادة حساب خطة القص.");
+            frappe.msgprint(translate("There is no cutting plan to print. Recalculate the cutting plan first."));
             return false;
         }
 
-        const title = "خطة قص - " + (frm.doc.name || "");
+        const title = translate("Cutting plan - {0}", [frm.doc.name || ""]);
         const print_window = window.open("", "_blank");
         if (!print_window) {
-            frappe.msgprint("المتصفح منع فتح نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم جرّب مرة أخرى.");
+            frappe.msgprint(translate("The browser blocked the print window. Allow pop-ups and try again."));
             return false;
         }
 
         print_window.document.open();
-        const locale = window.AlmdinaLocale;
-        const language = locale ? locale.currentLanguage() : "ar";
-        const direction = locale ? locale.direction() : "rtl";
-        print_window.document.write(`<!doctype html><html lang="${escape_html(language)}" dir="${escape_html(direction)}"><head><meta charset="utf-8"><title>${__("Preparing the cutting plan…")}</title></head><body style="font-family:Tahoma,Arial,sans-serif;direction:${escape_html(direction)};padding:24px">${__("Preparing the cutting plan for printing…")}</body></html>`);
+        const language = uiLanguage();
+        const direction = uiDirection();
+        print_window.document.write(`<!doctype html><html lang="${escape_html(language)}" dir="${escape_html(direction)}"><head><meta charset="utf-8"><title>${htmlText("Preparing the cutting plan…")}</title></head><body style="font-family:Tahoma,Arial,sans-serif;padding:24px">${htmlText("Preparing the cutting plan for printing…")}</body></html>`);
         print_window.document.close();
 
         try {
@@ -1381,7 +1459,7 @@ ${printHeaderCss()}
         } catch (error) {
             console.error("Cutting plan print preparation failed", error);
             try { print_window.close(); } catch (closeError) { /* ignored */ }
-            frappe.msgprint("تعذر تجهيز خطة القص للطباعة. أعد تحميل الصفحة ثم حاول مرة أخرى.");
+            frappe.msgprint(translate("Could not prepare the cutting plan for printing. Reload the page and try again."));
             return false;
         }
     }

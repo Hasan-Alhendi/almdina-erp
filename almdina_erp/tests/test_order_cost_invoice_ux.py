@@ -74,15 +74,15 @@ def test_cost_measurements_are_compact_and_custom_edge_details_have_one_owner():
     cost = _source(COST_PRESENTER)
     edges = _source(MULTI_EDGE_DOCUMENTS)
 
-    assert "جدول قياسات الطلب" in cost
+    assert "Order measurement table" in cost
     assert "<th>طول القشاط (م)</th>" not in cost
     assert "<th>طول القشاط م</th>" not in cost
-    assert "<th>نوع القشاط</th>" in cost
-    assert '<th class="text-start">ملاحظات</th><th>نوع القشاط</th>' in cost
+    assert 'htmlText("Edge type")' in cost
+    assert '<th class="text-start">${htmlText("Notes")}</th><th>${htmlText("Edge type")}</th>' in cost
 
     # The focused edge-document presenter decorates only exceptional/custom
     # per-side edge choices; the cost presenter remains the table owner.
-    assert 'headerCells[6].textContent = "القشاط المخصص"' in edges
+    assert 'translate("Custom edge banding")' in edges
     assert "customEdgeSummaryHtml(data[index].details)" in edges
     assert "dco-notes-col" in edges
 
@@ -135,14 +135,14 @@ def test_edge_color_is_order_owned_and_customer_documents_show_it_once():
 
 def test_customer_invoice_breaks_down_boards_cutting_and_edge_banding():
     src = _source(COST_PRESENTER)
-    assert "ألواح MDF" in src
-    assert "أجور قص وتجهيز الألواح" in src
-    assert "قشاط —" in src
+    assert "MDF boards" in src
+    assert "Board cutting and preparation" in src
+    assert "Edge banding —" in src
     assert "function invoiceLines(frm)" in src
     assert "function invoiceTotal(frm)" in src
     assert "boardCount * boardRate" in src
     assert "boardCount * cuttingRate" in src
-    assert 'unit: "لوح"' in src
+    assert 'translate("Board")' in src
     assert "regularAreaRatio" not in src
     assert "حصة خام MDF" not in src
     assert "حصة قص وتجهيز" not in src
@@ -154,9 +154,9 @@ def test_invoice_has_secure_customer_action_and_shared_a4_print_layout():
     presenter = _source(PRINT_PRESENTER)
     theme = _source(PRINT_THEME)
 
-    assert "طباعة فاتورة الزبون" in toolbar
-    assert "إرسال الفاتورة عبر واتساب" in toolbar
-    assert "هل تريد إرسال الفاتورة للزبون؟" in toolbar
+    assert "Print customer invoice" in toolbar
+    assert "Send the invoice on WhatsApp" in toolbar
+    assert "Send the invoice to the customer?" in toolbar
     assert "dco-whatsapp-send-invoice" in toolbar
     assert 'can(frm, "print_customer_invoice")' in toolbar
     assert "@page{size:A4 portrait" in theme

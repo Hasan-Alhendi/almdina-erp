@@ -277,16 +277,16 @@ def test_operator_warning_is_visible_idempotent_and_mobile_friendly():
     assert "function ensureMarginPolicyAlert" in source
     assert "normalizedMarginNotes" in source
     assert 'className = "dco-margin-policy-alert"' in source
-    assert "تنبيه هامش التشذيب" in source
+    assert 'translate("Trim margin warning")' in source
     assert "marginSignature" in source
     assert 'existing.dataset.marginSignature === signature' in source
     assert 'role", "status"' in source
     assert 'aria-live", "polite"' in source
     assert "grid-template-columns:repeat(2,minmax(0,1fr))" in styles
-    assert '["يمين", margins.right]' in source
-    assert '["يسار", margins.left]' in source
-    assert '["أعلى", margins.top]' in source
-    assert '["أسفل", margins.bottom]' in source
+    assert '["Margin right", margins.right]' in source
+    assert '["Margin left", margins.left]' in source
+    assert '["Margin top", margins.top]' in source
+    assert '["Margin bottom", margins.bottom]' in source
     assert "physicalMarginsMm" in source
 
 
@@ -306,8 +306,8 @@ def test_zero_margin_edges_are_visually_marked_without_touching_cut_geometry():
     assert "dco-board-original-edge--right" in styles
     assert "dco-board-original-edges" in styles
     assert "position:static" in styles
-    assert "حافة أصلية · أعلى" in source
-    assert "حافة أصلية · أسفل" in source
+    assert '"Original edge · top"' in source
+    assert '"Original edge · bottom"' in source
     assert "originalEdgeSignature" in source
     assert "ZERO_MARGIN_EPSILON_MM" in source
     assert "ensureOriginalBoardEdges(planRoot, plan)" in source
@@ -317,11 +317,10 @@ def test_margin_warning_is_compact_except_when_original_edge_is_used():
     source = PLAN_CONTENT_UX.read_text(encoding="utf-8")
     styles = PLAN_CONTENT_STYLES.read_text(encoding="utf-8")
 
-    assert "const hasOriginalEdge = Boolean(margins.anyOriginal)" in source
-    assert "const detailNotes = margins.everySheetOriginal ? notes : []" in source
-    assert "بعض الألواح تلامس حافة اللوح الأصلية؛ افحص استقامتها قبل التنفيذ." in source
-    assert "تم تخفيض الهامش تلقائيًا بالقدر اللازم للحفاظ على قياسات القطع." in source
-    assert "تم استخدام حافة أصلية من اللوح؛ افحص استقامتها قبل التنفيذ." in source
+    assert "const hasOriginalEdge = zeroEdges.length > 0" in source
+    assert "const detailNotes = hasOriginalEdge ? notes : []" in source
+    assert 'translate("The margin was reduced automatically by the amount needed to keep the piece measurements.")' in source
+    assert 'translate("An original board edge was used; check that it is straight before cutting.")' in source
     assert "dco-margin-policy-alert__summary" in source
     assert "dco-margin-policy-alert__details" in source
     assert "dco-margin-policy-alert__row" in source
@@ -331,12 +330,12 @@ def test_margin_warning_is_compact_except_when_original_edge_is_used():
     assert "justify-content:space-between" in styles
 
 
-def test_cutting_plan_sections_are_always_arabic_for_factory_operator_ui():
+def test_cutting_plan_sections_use_locale_message_ids():
     source = PLAN_CONTENT_UX.read_text(encoding="utf-8")
 
     assert "function applyArabicPlanLabels" in source
     assert "function isArabic" not in source
-    assert 'cut_geometry_section: "إعدادات تنفيذ القص"' in source
-    assert 'optimizer_section: "محرك خطة القص"' in source
-    assert 'plan_section: "توزيع القطع على الألواح"' in source
+    assert 'cut_geometry_section: translate("Cut execution settings")' in source
+    assert 'optimizer_section: translate("Cutting plan engine")' in source
+    assert 'plan_section: translate("Piece layout on boards")' in source
     assert "applyArabicPlanLabels(frm);" in source

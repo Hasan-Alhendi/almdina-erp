@@ -1,16 +1,47 @@
 (() => {
     "use strict";
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split("{" + index + "}").join(String(value));
+            });
+        }
+        return text;
+    }
+
+    function uiDirection() {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.direction === "function") {
+            const value = locale.direction();
+            if (value === "ltr" || value === "rtl") return value;
+        }
+        const root = typeof document !== "undefined" ? document.documentElement : null;
+        const dir = root && root.getAttribute("dir");
+        return dir === "ltr" ? "ltr" : "rtl";
+    }
+
+
     const root = window.AlmdinaDcoRecovery = window.AlmdinaDcoRecovery || Object.create(null);
     if (root.LocalCheckpoint) return;
 
     const CHECKPOINT_EFFECT = "dco-local-recovery-checkpoint";
     const CLEANUP_EFFECT = "dco-local-recovery-cleanup";
+    const ERROR_STATUS_CLEANUP_EFFECT = "dco-local-recovery-error-status-cleanup";
     const DISCOVERY_CLEANUP_EFFECT = "dco-new-recovery-discovery-cleanup";
     const WORKSPACE_SUBSCRIPTIONS_EFFECT = "dco-local-recovery-workspace-subscriptions";
     const INACTIVE_SAVE_ERROR = "recovery_document_inactive";
     const CLEAR_ATTEMPT_MAX_TRIES = 3;
     const states = new WeakMap();
+    const unownedErrorStatuses = new WeakMap();
     const initializations = new WeakMap();
     const dialogs = new WeakMap();
     const observedSaves = new WeakMap();
@@ -81,6 +112,27 @@
 
     function documentContext() {
         return window.AlmdinaDocumentContext || null;
+    }
+
+    function ownErrorStatusForGeneration(frm, element) {
+        const context = documentContext();
+        if (!frm || !element || !context || typeof context.registerCleanup !== "function") return false;
+        let owner = unownedErrorStatuses.get(frm);
+        if (owner) {
+            owner.element = element;
+            return true;
+        }
+        owner = { element };
+        unownedErrorStatuses.set(frm, owner);
+        const registered = context.registerCleanup(frm, ERROR_STATUS_CLEANUP_EFFECT, () => {
+            if (owner.element && typeof owner.element.remove === "function") owner.element.remove();
+            if (unownedErrorStatuses.get(frm) === owner) unownedErrorStatuses.delete(frm);
+        });
+        if (registered === false) {
+            unownedErrorStatuses.delete(frm);
+            return false;
+        }
+        return true;
     }
 
     function activeDocumentGuard(frm) {
@@ -232,8 +284,75 @@
         if (!state || !context || typeof context.isSameDocument !== "function") return state || null;
         if (context.isSameDocument(frm, state.documentToken)) return state;
         state.session.dispose();
+        if (state.statusElement) state.statusElement.remove();
         states.delete(frm);
         return null;
+    }
+
+    function domNode(value) {
+        if (value && value.nodeType === 1) return value;
+        if (value && typeof value.get === "function") return value.get(0) || null;
+        return value && value[0] && value[0].nodeType === 1 ? value[0] : null;
+    }
+
+    function checkpointStatusText(snapshot) {
+        const messages = {
+            DIRTY: "Changes have not been saved locally yet.",
+            LOCAL_SAVING: "Saving a local recovery copy…",
+            LOCAL_SAVED: "A local recovery copy is saved; the order has not been officially saved on the server.",
+            OFFICIAL_SAVING: "Saving the order officially on the server…",
+            PENDING_RECONCILIATION: "The official save was sent. Its result is being verified before recovery can continue.",
+            RESTORING: "Restoring the local draft…",
+            COMPLETED: "The order was officially saved.",
+            ERROR: "Could not save the local recovery copy. Keep this page open until the draft is resolved.",
+        };
+        return translate(messages[String(snapshot && snapshot.state || "")] || "");
+    }
+
+    function renderCheckpointStatus(frm, state, snapshot) {
+        const message = checkpointStatusText(snapshot);
+        let element = state && state.statusElement;
+        if (!element || !element.isConnected) {
+            const pageRoot = domNode(frm && frm.page && frm.page.wrapper);
+            const formRoot = domNode(frm && (frm.$wrapper || frm.wrapper));
+            const host = pageRoot && pageRoot.querySelector(".page-head") || formRoot || pageRoot;
+            if (!host || typeof document.createElement !== "function") {
+                if (snapshot && snapshot.state === "ERROR" && typeof frappe.show_alert === "function") {
+                    frappe.show_alert({
+                        message,
+                        indicator: "red",
+                    });
+                }
+                return false;
+            }
+            element = host.querySelector(".dco-recovery-status");
+            if (!element) {
+                element = document.createElement("div");
+                element.className = "dco-recovery-status alert";
+                element.setAttribute("role", "status");
+                host.appendChild(element);
+            }
+        }
+        if (state) state.statusElement = element;
+        else if (snapshot && snapshot.state === "ERROR") ownErrorStatusForGeneration(frm, element);
+        element.hidden = !message;
+        element.dataset.recoveryState = String(snapshot && snapshot.state || "");
+        element.className = "dco-recovery-status alert";
+        if (snapshot && snapshot.state === "ERROR") {
+            element.classList.add("alert-danger");
+            element.setAttribute("role", "alert");
+            element.setAttribute("aria-live", "assertive");
+        } else if (snapshot && snapshot.state === "LOCAL_SAVED") {
+            element.classList.add("alert-success");
+            element.setAttribute("role", "status");
+            element.setAttribute("aria-live", "polite");
+        } else {
+            element.classList.add("alert-info");
+            element.setAttribute("role", "status");
+            element.setAttribute("aria-live", "polite");
+        }
+        element.textContent = message;
+        return element;
     }
 
     async function workspaceProjection(frm, state, dirtyScope) {
@@ -288,7 +407,12 @@
         const context = documentContext();
         const repo = repository();
         const factory = root.CheckpointSession;
-        if (!context || !repo || !factory || typeof factory.create !== "function") return null;
+        if (repo && (!context || !factory || typeof factory.create !== "function")) return null;
+        if (!repo) {
+            renderCheckpointStatus(frm, null, { state: "ERROR" });
+            return null;
+        }
+        if (!context || !factory || typeof factory.create !== "function") return null;
         const token = context.capture(frm);
         if (!token) return null;
         const recovered = options.record || null;
@@ -327,6 +451,7 @@
                     : null,
                 capture: ({ dirtyScope }) => workspaceProjection(frm, state, dirtyScope),
                 onStateChange: (snapshot) => {
+                    renderCheckpointStatus(frm, state, snapshot);
                     if (snapshot.state === factory.STATES.ERROR) {
                         console.debug("DCO local recovery checkpoint failed safely", snapshot.error);
                     }
@@ -342,6 +467,7 @@
             context.registerCleanup(frm, CLEANUP_EFFECT, () => {
                 const active = states.get(frm);
                 if (active === state) states.delete(frm);
+                if (state.statusElement) state.statusElement.remove();
                 const dialog = dialogs.get(frm);
                 if (dialog && typeof dialog.hide === "function") dialog.hide();
                 dialogs.delete(frm);
@@ -390,8 +516,8 @@
     function showRecoveryError(message) {
         if (typeof frappe.msgprint !== "function") return;
         frappe.msgprint({
-            title: "تعذر استعادة المسودة",
-            message: String(message || "تعذر قراءة المسودة المحلية بأمان. يمكنك بدء طلب جديد."),
+            title: translate("Could not restore the draft"),
+            message: String(message || translate("The local draft could not be read safely. You can start a new order.")),
             indicator: "red",
         });
     }
@@ -610,7 +736,7 @@
                 record.official_save_attempted_at
             );
             if (!resumed || resumed.ok !== true) {
-                throw new Error("تعذر تأكيد جاهزية المسودة للمتابعة.");
+                throw new Error(translate("Could not confirm that the draft is ready to continue."));
             }
             if (!isCurrent()) return { cancelled: true };
             selected = resumed.value;
@@ -652,22 +778,22 @@
     function discoveryHtml(summaries) {
         const cards = summaries.map((summary) => `
             <article class="dco-recovery-card" data-draft-id="${escapeHtml(summary.draft_id)}">
-                <div class="dco-recovery-card__title">مسودة غير محفوظة محليًا</div>
-                <div><strong>آخر تحديث:</strong> ${escapeHtml(userTimestamp(summary.captured_at))}</div>
-                <div><strong>العميل:</strong> ${escapeHtml(summary.customer || "غير محدد")}</div>
-                <div><strong>القياسات:</strong> ${summary.piece_count}</div>
-                <div><strong>اللوح:</strong> ${escapeHtml(summary.board_description || "غير محدد")}</div>
-                <div><strong>لون القشاط:</strong> ${escapeHtml(summary.edge_color || "غير محدد")}</div>
-                ${summary.has_special_piece ? '<div class="text-warning">تتضمن بيانات درفة خاصة</div>' : ""}
+                <div class="dco-recovery-card__title">${escapeHtml(translate("Unsaved local draft"))}</div>
+                <div><strong>${escapeHtml(translate("Last update:"))}</strong> ${escapeHtml(userTimestamp(summary.captured_at))}</div>
+                <div><strong>${escapeHtml(translate("Customer:"))}</strong> ${escapeHtml(summary.customer || translate("Unspecified"))}</div>
+                <div><strong>${escapeHtml(translate("Measurements:"))}</strong> ${summary.piece_count}</div>
+                <div><strong>${escapeHtml(translate("Board:"))}</strong> ${escapeHtml(summary.board_description || translate("Unspecified"))}</div>
+                <div><strong>${escapeHtml(translate("Edge color:"))}</strong> ${escapeHtml(summary.edge_color || translate("Unspecified"))}</div>
+                ${summary.has_special_piece ? `<div class="text-warning">${escapeHtml(translate("Includes special door data"))}</div>` : ""}
                 <div class="dco-recovery-card__actions almdina-ui">
                     ${uiButton({
-                        label: "متابعة الطلب",
+                        label: translate("Continue the order"),
                         variant: "primary",
                         size: "btn-sm",
                         attrs: { "data-recovery-action": "continue" },
                     })}
                     ${uiButton({
-                        label: "حذف المسودة",
+                        label: translate("Delete the draft"),
                         variant: "danger",
                         size: "btn-sm",
                         attrs: { "data-recovery-action": "delete" },
@@ -685,12 +811,12 @@
                 .dco-recovery-new{margin-top:14px;width:100%}
             </style>
             <div class="dco-recovery-intro">
-                هذه البيانات <strong>مسودة محلية غير محفوظة رسميًا</strong>. لن يُنشأ طلب رسمي إلا عند ضغط «حفظ» بعد المتابعة.
+                ${translate("This data is an unofficial local draft. A formal order is created only when you press Save after continuing.")}
             </div>
             <div class="dco-recovery-list">${cards}</div>
             <div class="almdina-ui">
                 ${uiButton({
-                    label: "بدء طلب جديد",
+                    label: translate("Start a new order"),
                     variant: "secondary",
                     className: "dco-recovery-new",
                     attrs: { "data-recovery-action": "new" },
@@ -713,7 +839,7 @@
             }
         });
         if (rejected.length) {
-            showRecoveryError("تم تجاهل مسودة محلية تالفة أو غير متوافقة دون تطبيق أي جزء منها.");
+            showRecoveryError(translate("A damaged or incompatible local draft was ignored without applying any of it."));
         }
         if (!summaries.length) {
             initializations.delete(frm);
@@ -723,12 +849,15 @@
         }
         const displayedDraftIds = new Set(summaries.map((summary) => summary.draft_id));
         const dialog = new frappe.ui.Dialog({
-            title: "استعادة طلب قص غير مكتمل",
+            title: translate("Restore an incomplete cutting order"),
             static: true,
             fields: [{ fieldtype: "HTML", fieldname: "recovery_drafts", options: discoveryHtml(summaries) }],
         });
         dialogs.set(frm, dialog);
         dialog.show();
+        if (dialog.$wrapper && typeof dialog.$wrapper.attr === "function") {
+            dialog.$wrapper.attr("dir", uiDirection());
+        }
         const wrapper = dialog.$wrapper && typeof dialog.$wrapper.get === "function"
             ? dialog.$wrapper.get(0)
             : dialog.$wrapper;
@@ -798,7 +927,7 @@
                     const current = await repository().read(recoveryIdentity(record.draft_id));
                     if (!ownsDiscovery()) return false;
                     if (!current || current.ok !== true) {
-                        throw new Error("تعذر التحقق من المسودة المحلية.");
+                        throw new Error(translate("Could not verify the local draft."));
                     }
                     const currentRecord = current.value;
                     if (
@@ -810,7 +939,7 @@
                         accepted.delete(record.draft_id);
                         releaseDiscoveryAction(card, button);
                         freezeCardActions(card, button);
-                        showRecoveryError("تغيرت المسودة في تبويب آخر. أعد فتح الطلب قبل متابعتها.");
+                        showRecoveryError(translate("The draft changed in another tab. Reopen the order before continuing it."));
                         return false;
                     }
                     await continueDraft(frm, currentRecord);
@@ -848,8 +977,8 @@
                         }
                         showRecoveryError(
                             ownershipConflict
-                                ? "تغيرت المسودة في تبويب آخر. أعد فتح الطلب قبل حذفها."
-                                : "تعذر حذف المسودة المحلية."
+                                ? translate("The draft changed in another tab. Reopen the order before deleting it.")
+                                : translate("Could not delete the local draft.")
                         );
                         return;
                     }
@@ -868,7 +997,7 @@
                 };
                 if (meaningful(recovery.summarize(record)) && typeof frappe.confirm === "function") {
                     frappe.confirm(
-                        "هل تريد حذف هذه المسودة المحلية نهائيًا؟",
+                        translate("Do you want to permanently delete this local draft?"),
                         remove,
                         () => {
                             if (ownsDiscovery()) releaseDiscoveryAction(card, button);
@@ -981,6 +1110,7 @@
             scheduleFlush(frm, state);
             return true;
         } catch (error) {
+            renderCheckpointStatus(frm, null, { state: "ERROR" });
             console.debug("DCO local recovery mutation was not checkpointed", error);
             return false;
         }
@@ -1212,7 +1342,7 @@
         }
         const resumed = await state.session.resumeAfterProvenFailure();
         if (!isCurrent()) abortInactiveSave();
-        if (!resumed) throw new Error("تعذر تثبيت نتيجة المصالحة محليًا.");
+        if (!resumed) throw new Error(translate("Could not store the reconciliation result locally."));
         return true;
     }
 
@@ -1230,8 +1360,8 @@
             frappe.validated = false;
             showRecoveryError(
                 state
-                    ? "اكتمل تجهيز الحفظ المحلي. اضغط حفظ مرة أخرى لإتمام إنشاء الطلب."
-                    : "اختر متابعة مسودة محلية أو بدء طلب جديد قبل الحفظ."
+                    ? translate("Local save preparation finished. Press Save again to finish creating the order.")
+                    : translate("Choose Continue a local draft or Start a new order before saving.")
             );
             return;
         }
@@ -1241,7 +1371,7 @@
         if (state.externalRevisionConflict) {
             if (!isCurrent()) abortInactiveSave();
             frappe.validated = false;
-            showRecoveryError("توجد نسخة أحدث من هذه المسودة في تبويب آخر. أعد فتح الطلب لاستعادتها قبل الحفظ.");
+            showRecoveryError(translate("A newer copy of this draft exists in another tab. Reopen the order to restore it before saving."));
             return;
         }
         state.saveWasNew = state.mode === "NEW" && isNew(frm);
@@ -1266,8 +1396,8 @@
                 frappe.validated = false;
                 showRecoveryError(
                     code === "save_attempt_conflict"
-                        ? "توجد محاولة حفظ قيد التحقق لهذه المسودة في تبويب آخر. أعد فتح الطلب للتحقق منها."
-                        : "توجد نسخة أحدث من هذه المسودة في تبويب آخر. أعد فتح الطلب قبل الحفظ."
+                        ? translate("Another tab is verifying a save attempt for this draft. Reopen the order to check it.")
+                        : translate("A newer copy of this draft exists in another tab. Reopen the order before saving.")
                 );
                 return;
             }
@@ -1282,7 +1412,7 @@
                 if (error && error.code === INACTIVE_SAVE_ERROR) throw error;
                 if (!isCurrent()) abortInactiveSave();
                 frappe.validated = false;
-                showRecoveryError("تعذر التحقق من نتيجة محاولة الحفظ السابقة. لم تتم إعادة الإدراج.");
+                showRecoveryError(translate("Could not verify the previous save attempt. The insert was not retried."));
                 return;
             }
         }
@@ -1313,13 +1443,13 @@
             if (started && started.error && started.error.code === "stale_revision") {
                 quarantineExternalRevision(state, "stale_revision");
                 frappe.validated = false;
-                showRecoveryError("توجد نسخة أحدث من هذه المسودة في تبويب آخر. أعد فتح الطلب قبل الحفظ.");
+                showRecoveryError(translate("A newer copy of this draft exists in another tab. Reopen the order before saving."));
                 return;
             }
             if (started && started.error && started.error.code === "save_attempt_conflict") {
                 quarantineExternalRevision(state, "save_attempt_conflict");
                 frappe.validated = false;
-                showRecoveryError("توجد محاولة حفظ أحدث لهذه المسودة في تبويب آخر. أعد فتح الطلب للتحقق منها.");
+                showRecoveryError(translate("A newer save attempt for this draft exists in another tab. Reopen the order to check it."));
                 return;
             }
             // The server-side unique token still protects retries in this form;

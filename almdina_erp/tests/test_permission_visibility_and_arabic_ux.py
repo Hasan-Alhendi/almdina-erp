@@ -33,7 +33,13 @@ class TestPermissionVisibilityAndArabicUX(unittest.TestCase):
         self.assertIn("hideUnauthorizedShortcuts", source)
         self.assertIn("guardCurrentRoute", source)
         self.assertIn("surfaceAllowed", source)
-        self.assertIn("لا تملك صلاحية الوصول إلى هذا القسم", source)
+        self.assertIn('__("You do not have permission to access this section.")', source)
+        self.assertNotIn("لا تملك صلاحية الوصول إلى هذا القسم", source)
+        catalog = (ROOT / "translations" / "ar.csv").read_text(encoding="utf-8")
+        self.assertIn(
+            "You do not have permission to access this section.,لا تملك صلاحية الوصول إلى هذا القسم.",
+            catalog,
+        )
         for route in (
             "customer",
             "factory-workforce",
@@ -79,10 +85,10 @@ class TestPermissionVisibilityAndArabicUX(unittest.TestCase):
         }
 
         self.assertEqual({"طلبات قص الدرف"}, shortcut_names)
-        self.assertTrue(any("التشغيل اليومي" in value for value in headers))
+        self.assertTrue(any("Daily operations" in value for value in headers))
         for hidden_section in (
-            "الإعدادات الأساسية",
-            "إدارة النظام ومسارات العمل",
+            "Basic settings",
+            "System and workflow management",
         ):
             self.assertFalse(any(hidden_section in value for value in headers))
         self.assertFalse(any("التقارير التشغيلية والتكلفة" in value for value in headers))
@@ -133,7 +139,7 @@ class TestPermissionVisibilityAndArabicUX(unittest.TestCase):
     def test_workforce_create_action_is_page_owned_and_guard_is_retired(self) -> None:
         controller = (PUBLIC / "factory_workforce" / "controller.js").read_text(encoding="utf-8")
         manifest = MANIFEST.read_text(encoding="utf-8")
-        self.assertIn('page.set_primary_action(__("إنشاء مستخدم جديد"), openCreateDialog, "add");', controller)
+        self.assertIn('page.set_primary_action(translate("Create new user"), openCreateDialog, "add");', controller)
         self.assertIn('if (!can("create_users")) return;', controller)
         self.assertIn("syncPrimaryAction();", controller)
         self.assertFalse((PUBLIC / "permission_action_visibility_guard.js").exists())

@@ -1169,6 +1169,8 @@
     frappe.almdina.can_export_dxf = canExportDxf;
     frappe.almdina.export_validated_dxf = validatedExport;
 
+    // Compatibility: historical toolbar labels and title patterns used only to find and remove legacy buttons.
+    const LEGACY_DXF_BUTTON_GROUPS = Object.freeze(["الرسم / DXF", "دورة الطلب"]);
     const STRIP_EXPORT_LABELS = [
         "تصدير DXF",
         "Export DXF",
@@ -1198,8 +1200,7 @@
         STRIP_EXPORT_LABELS.forEach(label => {
             try {
                 frm.remove_custom_button(label);
-                frm.remove_custom_button(label, __("الرسم / DXF"));
-                frm.remove_custom_button(label, __("دورة الطلب"));
+                LEGACY_DXF_BUTTON_GROUPS.forEach((group) => frm.remove_custom_button(label, group));
             } catch (error) {
                 void error;
             }
@@ -1235,13 +1236,13 @@
         ensureExportStripObserver(frm);
         [
             buttonLabel(),
+            // Compatibility: historical print button label, used only for removal.
             "طباعة خطة القص",
             "Print Cutting Plan",
         ].forEach(label => {
             try {
                 frm.remove_custom_button(label);
-                frm.remove_custom_button(label, __("الرسم / DXF"));
-                frm.remove_custom_button(label, __("دورة الطلب"));
+                LEGACY_DXF_BUTTON_GROUPS.forEach((group) => frm.remove_custom_button(label, group));
             } catch (error) {
                 void error;
             }

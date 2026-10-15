@@ -68,21 +68,31 @@ class TestOrderPageStabilityContract(unittest.TestCase):
         self.assertNotIn("AlmdinaPermissions.refresh()", duplicate_guard)
         self.assertNotIn("permissions.refresh()", recovery)
 
-    def test_header_actions_are_physically_anchored_left(self) -> None:
+    def test_header_actions_stay_in_sticky_page_head_flow(self) -> None:
         toolbar = source("door_cutting_order/core/door_cutting_order_toolbar_stability_ux.js")
         presentation_css = (ROOT / "public" / "css" / "door_cutting_order_form_presentation.css").read_text(
             encoding="utf-8"
         )
 
         self.assertIn("@media(min-width:992px)", presentation_css)
-        self.assertIn("position:fixed!important", presentation_css)
-        self.assertIn("--dco-viewport-left-compensation", toolbar)
+        self.assertIn(
+            ".dco-form-presentation-shell .page-head.dco-stable-actions-head .page-actions",
+            presentation_css,
+        )
+        self.assertIn("position:static!important", presentation_css)
+        self.assertIn("margin-inline-start:auto!important", presentation_css)
+        self.assertIn("flex-wrap:wrap!important", presentation_css)
+        self.assertNotIn("top:10px!important", presentation_css)
+        self.assertNotIn("right:auto!important", presentation_css)
+        self.assertNotIn(
+            "left:calc(16px + var(--dco-viewport-left-compensation, 0px))!important",
+            presentation_css,
+        )
         self.assertIn("function anchorActionsToViewportLeft", toolbar)
-        self.assertIn("Math.min(...visibleLefts)", toolbar)
-        self.assertIn('!node.closest(".dropdown-menu")', toolbar)
-        self.assertIn("16 - actualLeft", toolbar)
-        self.assertIn("right:auto!important", presentation_css)
-        self.assertIn("top:10px!important", presentation_css)
+        self.assertIn("--dco-viewport-left-compensation", toolbar)
+        self.assertIn('removeProperty("--dco-viewport-left-compensation")', toolbar)
+        self.assertNotIn("Math.min(...visibleLefts)", toolbar)
+        self.assertNotIn("16 - actualLeft", toolbar)
         self.assertNotIn("dco-primary-action-pending", toolbar)
 
     def test_plan_recovery_does_not_destroy_ready_html(self) -> None:

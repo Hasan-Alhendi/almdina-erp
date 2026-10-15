@@ -69,16 +69,16 @@ class TestPlanContextualActionsUI(unittest.TestCase):
         context = source(CONTEXT)
 
         for label in (
-            "اعتماد خطة النظام",
-            "اعتماد الخطة المرفوعة",
-            "استبدال الخطة المعتمدة بخطة النظام",
-            "استبدال الخطة المعتمدة بالخطة المرفوعة",
-            "إلغاء اعتماد الخطة",
-            "رفع خطة DXF",
-            "استبدال الخطة المرفوعة",
-            "تصدير DXF",
-            "تنزيل DXF المرفوع",
-            "طباعة",
+            "Approve the system plan",
+            "Approve the uploaded plan",
+            "Replace the approved plan with the system plan",
+            "Replace the approved plan with the uploaded plan",
+            "Cancel plan approval",
+            "Upload a DXF plan",
+            "Replace the uploaded plan",
+            "Export DXF",
+            "Download uploaded DXF",
+            "Print",
         ):
             with self.subTest(label=label):
                 self.assertIn(label, context)
@@ -131,7 +131,7 @@ class TestPlanContextualActionsUI(unittest.TestCase):
     def test_optimizer_time_limit_has_operator_help(self) -> None:
         summary = source(SETTINGS_SUMMARY)
         self.assertIn("TIME_LIMIT_HELP", summary)
-        self.assertIn("أقصى مدة يمنحها النظام لمحرك التحسين للبحث عن توزيع أفضل", summary)
+        self.assertIn("The maximum time the optimizer may spend searching for a better layout.", summary)
         self.assertIn('cursor:help', summary)
         self.assertIn('title=', summary)
 

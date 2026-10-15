@@ -39,6 +39,28 @@
         return rowsEqual(htmlRowNames(value), modelRowNames(frm));
     }
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split("{" + index + "}").join(String(value));
+            });
+        }
+        return text;
+    }
+
+    function isOrderNumberLabel(label) {
+        const value = String(label && label.textContent || "").trim();
+        return value === "رقم الطلب" || value === translate("Order number");
+    }
+
     function costHtmlOrderName(value) {
         if (typeof value !== "string" || !value.includes("dco-cost-shell")) return "";
         const template = document.createElement("template");
@@ -50,7 +72,7 @@
         const items = template.content.querySelectorAll(".dco-invoice-meta-item");
         for (const item of items) {
             const label = item.querySelector(".label");
-            if (String(label && label.textContent || "").trim() !== "رقم الطلب") continue;
+            if (!isOrderNumberLabel(label)) continue;
             return String(item.querySelector(".value")?.textContent || "").trim();
         }
         return "";
@@ -64,7 +86,7 @@
         const items = shell.querySelectorAll(".dco-invoice-meta-item");
         for (const item of items) {
             const label = item.querySelector(".label");
-            if (String(label && label.textContent || "").trim() !== "رقم الطلب") continue;
+            if (!isOrderNumberLabel(label)) continue;
             return String(item.querySelector(".value")?.textContent || "").trim();
         }
         return "";
@@ -131,7 +153,7 @@
         if (!isCorner) return;
 
         // Corner rows replace edge toggles with a summary button. Value-only
-        // sync must refresh that label after «اعتماد الزاوية» without a save.
+        // sync must refresh that label after corner approval without a save.
         const summaryButton = cell.querySelector(".dco-corner-edges-summary");
         if (summaryButton && typeof cornerGeometry.edgeSelectionSummary === "function") {
             const label = summaryButton.querySelector("span");

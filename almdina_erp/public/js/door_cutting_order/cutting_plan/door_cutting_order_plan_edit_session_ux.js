@@ -13,46 +13,72 @@
     const PLAN_SETTING_SPECS = Object.freeze([
         Object.freeze({
             fieldname: "kerf_mm",
-            label: "سماكة شفرة القص (مم)",
-            shortLabel: "الشفرة",
+            label: "Saw blade thickness (mm)",
+            shortLabel: "Blade",
             fieldtype: "Float",
             min: 0,
             step: "0.1",
-            suffix: "مم",
+            suffix: "mm",
         }),
         Object.freeze({
             fieldname: "trim_margin_mm",
-            label: "هامش تشذيب اللوح",
-            shortLabel: "الهامش",
+            label: "Board trim margin",
+            shortLabel: "Margin",
             fieldtype: "Float",
             min: 0,
             step: "0.1",
-            suffix: "مم",
+            suffix: "mm",
         }),
         Object.freeze({
             fieldname: "packing_mode",
-            label: "خوارزمية توزيع القطع",
-            shortLabel: "الخوارزمية",
+            label: "Piece packing algorithm",
+            shortLabel: "Algorithm",
             fieldtype: "Select",
             catalog: "optimization_catalog",
         }),
         Object.freeze({
             fieldname: "cutting_machine_type",
-            label: "نوع آلة القص",
-            shortLabel: "الآلة",
+            label: "Cutting machine type",
+            shortLabel: "Cutting machine",
             fieldtype: "Select",
             catalog: "machine_type_catalog",
         }),
         Object.freeze({
             fieldname: "optimization_time_limit_sec",
-            label: "مهلة التحسين",
-            shortLabel: "المهلة",
+            label: "Optimization time limit",
+            shortLabel: "Time limit",
             fieldtype: "Float",
             min: 0,
             step: "1",
-            suffix: "ث",
+            suffix: "seconds",
         }),
     ]);
+    // Legacy catalog rows still send Arabic labels. Resolve only known stable IDs.
+    const CATALOG_MESSAGE_IDS = Object.freeze({
+        optimization_catalog: Object.freeze({
+            auto: "Automatic",
+            auto_pro: "Auto Pro (recommended)",
+            deep_search: "Deep Search",
+            optimal: "Optimal Search",
+            maxrects: "MaxRects",
+            guillotine: "Guillotine",
+            shelf: "Shelf packing",
+            skyline: "Skyline",
+            cp_sat_ortools: "Constraint programming — CP-SAT",
+            mip_cbc: "Mixed-integer programming — CBC",
+            scip: "SCIP solver",
+            highs: "HiGHS solver",
+            gecode: "Gecode constraint solver",
+            chuffed: "Chuffed constraint solver",
+            genetic: "Genetic algorithm",
+            simulated_annealing: "Simulated annealing",
+        }),
+        machine_type_catalog: Object.freeze({
+            Auto: "Automatic",
+            "CNC Router": "CNC Router",
+            "Panel Saw": "Panel Saw",
+        }),
+    });
     const DRAFT_LIKE = new Set(["Draft", "Pending Review", "Rejected"]);
     const ACTIVE_ROUTED_STATUSES = new Set([
         "At Sharyoun",
@@ -96,15 +122,25 @@
         return state && state.status === "ready" && state.data ? state.data : null;
     }
 
+    function catalogMessageId(catalogName, entryId) {
+        const catalog = CATALOG_MESSAGE_IDS[catalogName];
+        return catalog && catalog[entryId] ? catalog[entryId] : "";
+    }
+
     function catalogOptions(frm, catalogName, selectedValue) {
         const data = workspaceData(frm);
         const catalog = data && Array.isArray(data[catalogName]) ? data[catalogName] : [];
         const options = catalog
-            .map((entry) => ({
-                value: String(entry && entry.id || "").trim(),
-                label: String(entry && entry.label || entry && entry.id || "").trim(),
-                available: entry && entry.available !== false,
-            }))
+            .map((entry) => {
+                const value = String(entry && entry.id || "").trim();
+                const messageId = catalogMessageId(catalogName, value);
+                return {
+                    value,
+                    label: messageId || String((entry && entry.label) || value).trim(),
+                    canonical: Boolean(messageId),
+                    available: entry && entry.available !== false,
+                };
+            })
             .filter((entry) => entry.value);
 
         const selected = String(selectedValue ?? "").trim();
@@ -112,6 +148,7 @@
             options.push({
                 value: selected,
                 label: selected,
+                canonical: false,
                 available: true,
                 compatibility: true,
             });
@@ -299,9 +336,25 @@
         });
     }
 
-    function translate(value) {
-        const text = String(value ?? "");
-        return typeof __ === "function" ? __(text) : text;
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        return String(message == null ? "" : message);
+    }
+
+    function uiDirection() {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.direction === "function") {
+            const value = locale.direction();
+            if (value === "ltr" || value === "rtl") return value;
+        }
+        const dir = document.documentElement && document.documentElement.getAttribute("dir");
+        return dir === "ltr" ? "ltr" : "rtl";
     }
 
     function escapeHtml(value) {
@@ -336,7 +389,6 @@
                 border-radius: var(--alm-radius-sm, 10px);
                 background: var(--alm-card, #fff);
                 box-shadow: none;
-                direction: rtl;
                 overflow: visible;
                 width: 100%;
                 box-sizing: border-box;
@@ -543,8 +595,11 @@
         return (spec.options || []).map((option) => {
             const selected = String(option.value) === String(value ?? "") ? " selected" : "";
             const disabled = option.available === false ? " disabled" : "";
-            const suffix = option.available === false ? " — غير متاح حاليًا" : "";
-            return `<option value="${escapeHtml(option.value)}"${selected}${disabled}>${escapeHtml(translate(option.label))}${escapeHtml(translate(suffix))}</option>`;
+            const label = option.canonical ? translate(option.label) : String(option.label || "");
+            const text = option.available === false
+                ? translate("{0} — currently unavailable", [label])
+                : label;
+            return `<option value="${escapeHtml(option.value)}"${selected}${disabled}>${escapeHtml(text)}</option>`;
         }).join("");
     }
 
@@ -640,12 +695,12 @@
             .map((spec) => fieldMarkup(spec, (state.draft || {})[spec.fieldname]))
             .join("");
         host.prepend(`
-            <section class="dco-plan-settings-editor${state.dirty ? " is-dirty" : ""}" aria-label="${escapeHtml(translate("إعدادات خطة القص"))}">
+            <section class="dco-plan-settings-editor${state.dirty ? " is-dirty" : ""}" dir="${escapeHtml(uiDirection())}" aria-label="${escapeHtml(translate("Cutting plan settings"))}">
                 <div class="dco-plan-settings-editor__sheet">
                     <div class="dco-plan-settings-editor__settings-row">
                         <div class="dco-plan-settings-editor__lead">
                             <span class="dco-plan-settings-editor__icon" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5h3.2M8.2 4.5h5.3M2.5 11.5h5.3M10.3 11.5h3.2"/><circle cx="7" cy="4.5" r="1.6"/><circle cx="9.2" cy="11.5" r="1.6"/></svg></span>
-                            <span class="dco-plan-settings-editor__lead-text">${escapeHtml(translate("إعدادات القص"))}</span>
+                            <span class="dco-plan-settings-editor__lead-text">${escapeHtml(translate("Cutting settings"))}</span>
                         </div>
                         <div class="dco-plan-settings-editor__grid">${fields}</div>
                     </div>
@@ -720,16 +775,18 @@
             if (spec.fieldtype === "Select") {
                 const normalized = String(value ?? "").trim();
                 const selected = (spec.options || []).find((option) => option.value === normalized);
+                const label = translate(spec.label);
                 if (!normalized || !selected || selected.available === false) {
-                    return translate("يجب تحديد قيمة صالحة للحقل «{0}».").replace("{0}", translate(spec.label));
+                    return translate("A valid value is required for {0}.", [label]);
                 }
                 continue;
             }
+            const label = translate(spec.label);
             if (value === null || value === undefined || value === "" || !Number.isFinite(Number(value))) {
-                return translate("القيمة المدخلة في «{0}» غير صالحة.").replace("{0}", translate(spec.label));
+                return translate("The value entered for {0} is not valid.", [label]);
             }
             if (Number(value) < Number(spec.min || 0)) {
-                return translate("لا يمكن أن تكون قيمة «{0}» سالبة.").replace("{0}", translate(spec.label));
+                return translate("{0} cannot be negative.", [label]);
             }
         }
         return "";
@@ -772,25 +829,25 @@
 
     async function startEditing(frm, sessionContext = null) {
         if (!can(frm, "edit_optimizer_settings")) {
-            frappe.msgprint(translate("لا تملك صلاحية تعديل إعدادات خطة القص."));
+            frappe.msgprint(translate("You do not have permission to edit the cutting plan settings."));
             return false;
         }
         if (frm.is_dirty && frm.is_dirty()) {
-            frappe.msgprint(translate("احفظ أو ألغِ تعديلات الطلب الحالية قبل فتح تعديل إعدادات خطة القص."));
+            frappe.msgprint(translate("Save or cancel the current order changes before editing the cutting plan settings."));
             return false;
         }
 
         await ensureLoaded(frm);
         if (!sessionIsCurrent(frm, sessionContext)) return false;
         if (!lifecycleAllowsEdit(frm)) {
-            frappe.msgprint(translate("حالة الطلب الحالية لا تسمح بتعديل إعدادات خطة القص."));
+            frappe.msgprint(translate("The current order status does not allow editing the cutting plan settings."));
             return false;
         }
 
         const store = storeFor(frm);
         const seed = activeSettings(frm);
         if (!store || !seed) {
-            frappe.msgprint(translate("لا توجد خطة قص قابلة لتعديل الإعدادات حاليًا."));
+            frappe.msgprint(translate("There is no cutting plan whose settings can be edited right now."));
             return false;
         }
         store.beginEdit(seed);
@@ -821,7 +878,7 @@
         if (!canEditPlanSettings(frm)) {
             await cancelEditing(frm, sessionContext);
             if (!sessionIsCurrent(frm, sessionContext)) return false;
-            frappe.msgprint(translate("لم تعد حالة الطلب الحالية تسمح لك بتعديل إعدادات خطة القص."));
+            frappe.msgprint(translate("The current order status no longer allows you to edit the cutting plan settings."));
             return false;
         }
 
@@ -869,7 +926,7 @@
         refreshFieldAccess(frm);
         signalEditChanged(frm);
         frappe.show_alert({
-            message: translate("تم حفظ إعدادات خطة القص. أعد الحساب لتحديث النتيجة."),
+            message: translate("The cutting plan settings were saved. Recalculate to update the result."),
             indicator: "green",
         }, 5);
         return true;

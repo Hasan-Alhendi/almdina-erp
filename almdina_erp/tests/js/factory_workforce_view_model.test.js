@@ -32,11 +32,11 @@ const roles = [
 ];
 assert.deepEqual(
     JSON.parse(JSON.stringify(model.roleOptions(roles, "cn"))),
-    [{ value: "CNC", description: "دور بدون Desk · صفحة الدخول غير محددة" }]
+    [{ value: "CNC", description: "Role without Desk · Login page not specified" }]
 );
 assert.deepEqual(
     JSON.parse(JSON.stringify(model.roleOptions(roles, "draw"))),
-    [{ value: "Drawing", description: "وصول Desk · صفحة الدخول: /desk/door-cutting-order" }]
+    [{ value: "Drawing", description: "Desk access · Login page: /desk/door-cutting-order" }]
 );
 assert.equal(model.roleHomePolicy(roles, ["Drawing"]).hasConflict, false);
 assert.equal(model.roleHomePolicy(roles, ["Drawing", "Sanding"]).hasConflict, true);
@@ -107,7 +107,7 @@ const available = model.availableUserModel({
     default_workspace: "",
     last_active: "",
 });
-assert.equal(available.source, "بدون تطبيق افتراضي");
+assert.equal(available.source, "No default app");
 assert.equal(available.enabled, false);
 assert.equal(available.defaultWorkspace, "—");
 

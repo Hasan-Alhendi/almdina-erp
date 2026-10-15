@@ -92,6 +92,23 @@
         return Boolean(system && system.validation && system.validation.needs_recalculation);
     }
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split("{" + index + "}").join(String(value));
+            });
+        }
+        return text;
+    }
+
     function fieldNode(frm, fieldname) {
         const field = frm && frm.fields_dict && frm.fields_dict[fieldname];
         const wrapper = field && field.$wrapper;
@@ -107,6 +124,14 @@
             node.setAttribute("data-almdina-workspace-kind", kind);
             node.setAttribute("data-almdina-workspace-status", status);
             node.setAttribute("data-almdina-workspace-editing", editing ? "1" : "0");
+            if (editing && fieldname === "order_cost_invoice_html") {
+                node.setAttribute(
+                    "data-dco-edit-banner",
+                    translate("Edit mode is on. Change the required values, then use Save or Cancel in this section.")
+                );
+            } else {
+                node.removeAttribute("data-dco-edit-banner");
+            }
             if (options.stale) node.setAttribute("data-almdina-workspace-stale", "1");
             else node.removeAttribute("data-almdina-workspace-stale");
             if (status === "loading") node.setAttribute("aria-busy", "true");
@@ -472,7 +497,7 @@
                 display:none !important;
             }
             .${ROOT_CLASS} [data-fieldname="order_cost_invoice_html"][data-almdina-workspace-editing="1"]::before{
-                content:"وضع التعديل مفعّل — غيّر القيم المطلوبة ثم اضغط «حفظ» من أعلى الصفحة.";
+                content:attr(data-dco-edit-banner);
                 display:flex;align-items:center;min-height:38px;margin:0 0 10px;padding:8px 12px;
                 border:1px solid color-mix(in srgb, var(--alm-primary, #172033) 28%, transparent);border-radius:var(--dco-workspace-radius-sm);
                 background:color-mix(in srgb, var(--alm-primary, #172033) 8%, transparent);color:var(--text-color,#26313b);font-size:11px;font-weight:800;line-height:1.55;

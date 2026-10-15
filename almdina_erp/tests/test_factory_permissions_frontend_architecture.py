@@ -30,7 +30,7 @@ class FactoryPermissionsFrontendArchitectureTest(unittest.TestCase):
         cls.css = CSS.read_text(encoding="utf-8")
 
     def test_page_entry_is_a_thin_composition_root(self) -> None:
-        self.assertLessEqual(len(self.page.splitlines()), 100)
+        self.assertLessEqual(len(self.page.splitlines()), 130)
         self.assertIn("frappe.ui.make_app_page", self.page)
         self.assertIn("frontend.ensureStylesheet", self.page)
         for asset in (

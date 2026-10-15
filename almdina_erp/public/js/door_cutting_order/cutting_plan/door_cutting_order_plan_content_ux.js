@@ -4,6 +4,42 @@
     if (window.AlmdinaPlanContentUX) return;
 
     const ZERO_MARGIN_EPSILON_MM = 0.001;
+    // Compatibility: historical rendered plan headers. Used only to detect and remove legacy duplicates.
+    const LEGACY_HEADER_ORDER = "الطلب:";
+    const LEGACY_HEADER_CUSTOMER = "الزبون:";
+    const LEGACY_HEADER_BOARD = "اللوح:";
+    const LEGACY_HEADER_ITEM = "الصنف:";
+    const LEGACY_HEADER_FULL_BOARD_SIZE = "مقاس اللوح الكامل";
+    const LEGACY_HEADER_KERF = "سماكة القص";
+    const LEGACY_METHOD_LABEL = "طريقة الترتيب:";
+
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split(`{${index}}`).join(String(value));
+            });
+        }
+        return text;
+    }
+
+    function uiDirection() {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.direction === "function") {
+            const value = locale.direction();
+            if (value === "ltr" || value === "rtl") return value;
+        }
+        const root = typeof document !== "undefined" ? document.documentElement : null;
+        const dir = root && root.getAttribute("dir");
+        return dir === "ltr" ? "ltr" : "rtl";
+    }
 
     function documentContext() {
         return window.AlmdinaDocumentContext || null;
@@ -84,11 +120,11 @@
 
     function applyArabicPlanLabels(frm) {
         const labels = {
-            cut_geometry_section: "إعدادات تنفيذ القص",
-            optimizer_section: "محرك خطة القص",
-            plan_result_section: "نتيجة الخطة الحالية",
-            plan_section: "توزيع القطع على الألواح",
-            totals_section: "تفاصيل الحساب والتكلفة",
+            cut_geometry_section: translate("Cut execution settings"),
+            optimizer_section: translate("Cutting plan engine"),
+            plan_result_section: translate("Current plan result"),
+            plan_section: translate("Piece layout on boards"),
+            totals_section: translate("Calculation and cost details"),
         };
         Object.entries(labels).forEach(([fieldname, label]) => {
             const field = frm.fields_dict[fieldname];
@@ -231,7 +267,7 @@
             .filter(([, value]) => value !== null && value !== undefined && value !== "")
             .map(([label, value]) => {
                 const zeroClass = isZeroMargin(value) ? " is-zero" : "";
-                return `<span class="dco-margin-policy-alert__edge${zeroClass}">${label}: ${escapeHtml(value)} مم</span>`;
+                return `<span class="dco-margin-policy-alert__edge${zeroClass}" style="direction:ltr;">${escapeHtml(translate(label))}: ${escapeHtml(translate("{0} mm", [value]))}</span>`;
             })
             .join("");
     }
@@ -239,24 +275,23 @@
     function buildMarginPolicyAlert(plan, notes, signature) {
         const margins = sharedPhysicalMargins(plan);
         const hasOriginalEdge = Boolean(margins.anyOriginal);
-        const summary = margins.everySheetOriginal
-            ? "تم استخدام حافة أصلية من اللوح؛ افحص استقامتها قبل التنفيذ."
-            : (hasOriginalEdge
-                ? "بعض الألواح تلامس حافة اللوح الأصلية؛ افحص استقامتها قبل التنفيذ."
-                : "تم تخفيض الهامش تلقائيًا بالقدر اللازم للحفاظ على قياسات القطع.");
+        const summary = hasOriginalEdge
+            ? translate("An original board edge was used; check that it is straight before cutting.")
+            : translate("The margin was reduced automatically by the amount needed to keep the piece measurements.");
         const detailNotes = margins.everySheetOriginal ? notes : [];
         const horizontalEdges = marginEdgeBadges(margins, [
-            ["يمين", margins.right],
-            ["يسار", margins.left],
+            ["Margin right", margins.right],
+            ["Margin left", margins.left],
         ]);
         const verticalEdges = marginEdgeBadges(margins, [
-            ["أعلى", margins.top],
-            ["أسفل", margins.bottom],
+            ["Margin top", margins.top],
+            ["Margin bottom", margins.bottom],
         ]);
         const detailsHtml = detailNotes.length
             ? `<div class="dco-margin-policy-alert__details">${detailNotes.map(note => `<div class="dco-margin-policy-alert__note">${escapeHtml(note)}</div>`).join("")}</div>`
             : "";
         const alert = document.createElement("div");
+        alert.dir = uiDirection();
         alert.className = "dco-margin-policy-alert";
         alert.dataset.marginSignature = signature;
         alert.setAttribute("role", "status");
@@ -266,7 +301,7 @@
             <div class="dco-margin-policy-alert__body">
                 <div class="dco-margin-policy-alert__row">
                     <div class="dco-margin-policy-alert__copy">
-                        <strong class="dco-margin-policy-alert__title">تنبيه هامش التشذيب</strong>
+                        <strong class="dco-margin-policy-alert__title">${escapeHtml(translate("Trim margin warning"))}</strong>
                         <span class="dco-margin-policy-alert__summary">${escapeHtml(summary)}</span>
                     </div>
                     <div class="dco-margin-policy-alert__edges">${horizontalEdges}</div>
@@ -309,12 +344,12 @@
 
     function originalEdgeLabel(edge) {
         const labels = {
-            right: "حافة أصلية · يمين",
-            left: "حافة أصلية · يسار",
-            top: "حافة أصلية · أعلى",
-            bottom: "حافة أصلية · أسفل",
+            right: "Original edge · right",
+            left: "Original edge · left",
+            top: "Original edge · top",
+            bottom: "Original edge · bottom",
         };
-        return labels[edge] || "حافة أصلية";
+        return translate(labels[edge] || "Original edge");
     }
 
     function orderedOriginalEdges(edges) {
@@ -389,11 +424,11 @@
                 if (child.classList.contains("dco-margin-policy-alert")) return;
                 const text = (child.textContent || "").replace(/\s+/g, " ").trim();
                 const isDuplicatedHeader =
-                    (text.includes("الطلب:") && (text.includes("الزبون:") || text.includes("اللوح:") || text.includes("الصنف:"))) ||
-                    (text.includes("مقاس اللوح الكامل") && text.includes("سماكة القص"));
+                    (text.includes(LEGACY_HEADER_ORDER) && (text.includes(LEGACY_HEADER_CUSTOMER) || text.includes(LEGACY_HEADER_BOARD) || text.includes(LEGACY_HEADER_ITEM))) ||
+                    (text.includes(LEGACY_HEADER_FULL_BOARD_SIZE) && text.includes(LEGACY_HEADER_KERF));
                 const isMethodDuplicate = child.classList.contains("dco-plan-method-line")
                     || text.includes("Layout method:")
-                    || text.includes("طريقة الترتيب:");
+                    || text.includes(LEGACY_METHOD_LABEL);
                 if (isDuplicatedHeader || isMethodDuplicate) child.remove();
             });
 
@@ -426,7 +461,7 @@
             return ![...planRoot.children].some(child =>
                 child.classList.contains("dco-plan-method-line")
                 || String(child.textContent || "").replace(/\s+/g, " ").includes("Layout method:")
-                || String(child.textContent || "").replace(/\s+/g, " ").includes("طريقة الترتيب:")
+                || String(child.textContent || "").replace(/\s+/g, " ").includes(LEGACY_METHOD_LABEL)
             );
         });
     }

@@ -11,7 +11,35 @@
         "CUSTOMER_CUSTOMER",
         "FACTORY_FACTORY",
     ]);
-    const UNASSIGNED_LABEL = "غير محدد";
+    const UNASSIGNED_LABEL = "Unassigned";
+
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split(`{${index}}`).join(String(value));
+            });
+        }
+        return text;
+    }
+
+    function uiDirection() {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.direction === "function") {
+            const value = locale.direction();
+            if (value === "ltr" || value === "rtl") return value;
+        }
+        const root = typeof document !== "undefined" ? document.documentElement : null;
+        const dir = root && root.getAttribute("dir");
+        return dir === "ltr" ? "ltr" : "rtl";
+    }
 
     function escapeHtml(value) {
         return String(value ?? "")
@@ -49,12 +77,12 @@
     }
 
     function canonicalAssignmentLabel(assignment) {
-        if (!assignment) return UNASSIGNED_LABEL;
+        if (!assignment) return translate(UNASSIGNED_LABEL);
         const state = String(assignment.business_state || "UNASSIGNED").trim().toUpperCase();
-        if (!SUPPORTED_OFFCUT_STATES.has(state)) return UNASSIGNED_LABEL;
-        if (state === "UNASSIGNED") return UNASSIGNED_LABEL;
+        if (!SUPPORTED_OFFCUT_STATES.has(state)) return translate(UNASSIGNED_LABEL);
+        if (state === "UNASSIGNED") return translate(UNASSIGNED_LABEL);
         const label = String(assignment.business_state_label || "").trim();
-        return label || UNASSIGNED_LABEL;
+        return label || translate(UNASSIGNED_LABEL);
     }
 
     function offcutContextLabels(source, assignmentIndex) {
@@ -69,7 +97,7 @@
                 labels.push(label);
             }
         });
-        if (!labels.length) labels.push(UNASSIGNED_LABEL);
+        if (!labels.length) labels.push(translate(UNASSIGNED_LABEL));
         return labels;
     }
 
@@ -92,7 +120,7 @@
                 resource_kind: kind,
                 sheet_no: source ? source.sheet_no : null,
                 full_board_no: fullBoardNo,
-                primary_label: isOffcut ? "نقص" : `لوح ${fullBoardNo}`,
+                primary_label: isOffcut ? translate("Offcut") : translate("Board {0}", [fullBoardNo]),
                 business_context_labels: Object.freeze(
                     isOffcut ? offcutContextLabels(source, assignmentIndex) : []
                 ),
@@ -111,7 +139,7 @@
         const content = labels
             .map(label => `<span class="dco-offcut-business-context__state">${escapeHtml(label)}</span>`)
             .join('<span class="dco-offcut-business-context__separator" aria-hidden="true"> · </span>');
-        return `<div class="dco-offcut-business-context" dir="rtl" style="font-size:10px;color:#64748b;font-weight:700;line-height:1.35;margin:-3px 0 7px;text-align:right;">${content}</div>`;
+        return `<div class="dco-offcut-business-context" dir="${escapeHtml(uiDirection())}" style="font-size:10px;color:#64748b;font-weight:700;line-height:1.35;margin:-3px 0 7px;text-align:start;">${content}</div>`;
     }
 
     function decorateHtml(html, plan) {

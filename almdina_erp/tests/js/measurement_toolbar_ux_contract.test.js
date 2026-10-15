@@ -19,9 +19,9 @@ const assets = fs.readFileSync(path.join(root, "frontend_assets.py"), "utf8");
 assert.doesNotThrow(() => new Function(toolbarSource), "Measurement toolbar UX must remain valid JavaScript");
 assert.doesNotThrow(() => new Function(actionsSource), "Measurement actions UX must remain valid JavaScript");
 for (const marker of [
-    "جدول قياسات الدرف",
+    '__("Door Measurements Table")',
     "dco-measurement-instructions",
-    "تعليمات جدول القياسات",
+    '__("Measurement table help")',
 ]) {
     assert.ok(toolbarSource.includes(marker), `Missing toolbar marker: ${marker}`);
 }

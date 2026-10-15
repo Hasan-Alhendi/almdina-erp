@@ -3,6 +3,17 @@
 
     const EDITABLE_STATUSES = new Set(["Draft", "Pending Review", "Rejected"]);
 
+    function translateCopy(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        return String(message == null ? "" : message);
+    }
+
     function editable(frm) {
         if (window.frappe && frappe.almdina && frappe.almdina.orderCanEdit) {
             return frappe.almdina.orderCanEdit(frm);
@@ -121,18 +132,18 @@
             return true;
         }
         if (!editable(frm)) {
-            frappe.msgprint(__("تعذر تثبيت تعديلات القياسات قبل حساب خطة القص. افتح الطلب للتعديل ثم حاول مرة أخرى."));
+            frappe.msgprint(translateCopy("Could not persist the measurement changes before calculating the cutting plan. Open the order for editing and try again."));
             return false;
         }
 
         const editPolicy = window.frappe && frappe.almdina;
         if (!editPolicy || typeof editPolicy.persistOrderEditCheckpoint !== "function") {
-            frappe.msgprint(__("تعذر تثبيت تعديلات القياسات قبل حساب خطة القص. أعد تحميل الصفحة ثم حاول مرة أخرى."));
+            frappe.msgprint(translateCopy("Could not persist the measurement changes before calculating the cutting plan. Reload the page and try again."));
             return false;
         }
 
         frappe.show_alert({
-            message: __("يتم حفظ تعديلات القياسات أولًا حتى لا تفقد عند إعادة حساب خطة القص."),
+            message: translateCopy("Measurement changes are saved first so they are not lost when the cutting plan is recalculated."),
             indicator: "blue",
         }, 4);
 
@@ -208,13 +219,13 @@
         const job = backgroundJob(frm);
         if (jobIsActive(frm)) {
             const stalled = Boolean(job && job.stalled);
-            const title = stalled
-                ? __("حساب خطة القص ما زال في الانتظار")
-                : __("جاري إعادة حساب خطة القص والتكلفة في الخلفية");
-            const body = stalled
-                ? __("الحفظ تم بنجاح، لكن العامل الخلفي لم يبدأ بعد. يمكنك متابعة العمل أو استخدام زر إعادة الحساب اليدوي.")
-                : __("يمكنك متابعة العمل على الطلب. ستتحدث خطة القص والتكلفة تلقائيًا عند اكتمال الحساب.");
-            const message = stalled ? title : `${title} — ${body}`;
+            const title = translateCopy(stalled
+                ? "Cutting plan calculation is still waiting"
+                : "Recalculating the cutting plan and cost in the background");
+            const body = translateCopy(stalled
+                ? "The save succeeded, but the background worker has not started yet. You can keep working or use manual recalculation."
+                : "You can keep working on the order. The cutting plan and cost will update automatically when the calculation finishes.");
+            const message = stalled ? title : translateCopy("{0} — {1}", [title, body]);
             if (inEditLayout && renderEditActionBar(frm, wrapper, {
                 calculating: true,
                 stalled,
@@ -234,7 +245,7 @@
         const stale = planIsStale(frm);
         if (inEditLayout) {
             const staleLine = stale
-                ? __("⚡ تحتاج إعادة حساب")
+                ? translateCopy("⚡ Recalculation needed")
                 : "";
             renderEditActionBar(frm, wrapper, {
                 stale,
@@ -247,7 +258,7 @@
 
         if (!stale) return;
 
-        const staleLine = __("خطة القص تحتاج إعادة حساب — اضغط «إعادة الحساب بالإعدادات الحالية» بعد الانتهاء.");
+        const staleLine = translateCopy("The cutting plan needs recalculation — press “Recalculate with the current settings” when you finish.");
         wrapper.prepend(`
             <div class="dco-plan-stale-banner">
                 <span class="icon">⚡</span>

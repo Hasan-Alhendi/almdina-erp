@@ -36,9 +36,21 @@ function __(value) {
 }
 
 const fakeWindow = {};
+const documentStub = { documentElement: { lang: "ar" } };
+const csv = fs.readFileSync(path.resolve(__dirname, "../../translations/ar.csv"), "utf8");
+const translations = new Map(csv.split(/\r?\n/).map(line => {
+    const delimiter = line.indexOf(",");
+    return delimiter < 0 ? ["", ""] : [line.slice(0, delimiter), line.slice(delimiter + 1).split(",")[0]];
+}));
+function translate(message) {
+    return documentStub.documentElement.lang === "ar"
+        ? (translations.get(String(message)) || String(message))
+        : String(message);
+}
 const context = vm.createContext({
     window: fakeWindow,
-    document: { documentElement: { lang: "ar" } },
+    document: documentStub,
+    __: translate,
     frappe: {
         boot: { lang: "ar" },
         utils: { escape_html(value) { return String(value); } },

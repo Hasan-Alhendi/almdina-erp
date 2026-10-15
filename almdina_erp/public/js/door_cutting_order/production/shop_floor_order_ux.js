@@ -1,20 +1,76 @@
 (() => {
 	"use strict";
 
-	const DRAWING_ACTION_GROUP = __("الرسم / DXF");
-	const PRODUCTION_ACTION_GROUP = __("صالة الإنتاج");
+
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split("{" + index + "}").join(String(value));
+            });
+        }
+        return text;
+    }
+
+    function uiDirection() {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.direction === "function") {
+            const value = locale.direction();
+            if (value === "ltr" || value === "rtl") return value;
+        }
+        const root = typeof document !== "undefined" ? document.documentElement : null;
+        const dir = root && root.getAttribute("dir");
+        return dir === "ltr" ? "ltr" : "rtl";
+    }
+
 	const ACTIVE_STAGE_STATUSES = new Set(["Pending", "In Progress", "Paused"]);
 	const NON_REVERTABLE_ORDER_STATUSES = new Set(["Draft", "Rejected", "Delivered", "Cancelled"]);
-	const OWNED_PRODUCTION_ACTION_LABELS = new Set([
-		__("إرسال للإنتاج"),
-		__("تم التسليم"),
-		__("إرجاع لمرحلة سابقة"),
-		__("بدء العمل"),
-		__("إرسال للقسم التالي"),
-		__("جاهزة للتسليم"),
-		__("إنهاء وإرسال"),
-		__("تغيير العامل"),
+	const PRODUCTION_ACTION_IDS = Object.freeze([
+		"Send to production",
+		"Delivered",
+		"Return to a previous stage",
+		"Start work",
+		"Send to the next department",
+		"Ready for delivery",
+		"Finish and send",
+		"Change worker",
 	]);
+	const LEGACY_PRODUCTION_ACTION_LABELS = Object.freeze([
+		"إرسال للإنتاج",
+		"تم التسليم",
+		"إرجاع لمرحلة سابقة",
+		"بدء العمل",
+		"إرسال للقسم التالي",
+		"جاهزة للتسليم",
+		"إنهاء وإرسال",
+		"تغيير العامل",
+		"رجوع لصالة الإنتاج",
+		"العودة إلى الطلبات",
+	]);
+
+	function drawingActionGroup() {
+		return translate("Drawing / DXF");
+	}
+
+	function productionActionGroup() {
+		return translate("Production floor");
+	}
+
+	function matchesProductionLabel(label, messageId) {
+		return label === messageId || label === translate(messageId);
+	}
+
+	function isOwnedProductionLabel(label) {
+		if (LEGACY_PRODUCTION_ACTION_LABELS.includes(label)) return true;
+		return PRODUCTION_ACTION_IDS.some((messageId) => matchesProductionLabel(label, messageId));
+	}
 
 	function permissionContext() {
 		return window.AlmdinaPermissions || null;
@@ -144,7 +200,7 @@
 				method,
 				args,
 				freeze: true,
-				freeze_message: __("جاري تنفيذ العملية..."),
+				freeze_message: translate("Running the operation..."),
 			})
 			.then((response) => {
 				if (successMessage) {
@@ -161,19 +217,19 @@
 	}
 
 	const STATUS_LABELS = {
-		Draft: "مسودة",
-		"Pending Review": "بانتظار المراجعة",
-		Approved: "معتمد",
-		"At Sharyoun": "في الشريون",
-		"At Drawing": "في الرسم",
-		"At CNC": "في CNC",
-		"At Sanding": "في التقشيط",
-		"Ready for Delivery": "جاهز للتسليم",
-		Delivered: "تم التسليم",
-		Completed: "مكتمل",
-		Rejected: "مرفوض",
-		"On Hold": "معلّق",
-		Cancelled: "ملغى",
+		Draft: "Draft",
+		"Pending Review": "Pending Review",
+		Approved: "Approved",
+		"At Sharyoun": "At Sharyoun",
+		"At Drawing": "At Drawing",
+		"At CNC": "At CNC",
+		"At Sanding": "At Sanding",
+		"Ready for Delivery": "Ready for delivery",
+		Delivered: "Delivered",
+		Completed: "Completed",
+		Rejected: "Rejected",
+		"On Hold": "On Hold",
+		Cancelled: "Cancelled",
 	};
 
 	const STATUS_COLORS = {
@@ -207,7 +263,7 @@
 	};
 
 	function statusLabel(status) {
-		return __(STATUS_LABELS[status] || status || "");
+		return translate(STATUS_LABELS[status] || status || "");
 	}
 
 	function looksLikeEmail(value) {
@@ -301,14 +357,14 @@
 		const current = STATUS_STEP[frm.doc.status] || frm.doc.current_department || "";
 		const delivered = frm.doc.status === "Delivered";
 		const currentIndex = delivered ? steps.length - 1 : steps.indexOf(current);
-		return `<div class="dco-order-tracking-strip__path" role="list" aria-label="${frappe.utils.escape_html(String(__("مسار الطلب")))}">${steps
+		return `<div class="dco-order-tracking-strip__path" role="list" aria-label="${frappe.utils.escape_html(String(translate("Order route")))}">${steps
 			.map((step, index) => {
 				const done = delivered || index < currentIndex;
 				const active = !delivered && index === currentIndex;
 				const state = done ? "done" : active ? "current" : "upcoming";
 				return (
 					`<span class="dco-order-tracking-strip__step is-${state}" role="listitem"${active ? ' aria-current="step"' : ""}>`
-					+ `${done ? "✓ " : ""}${frappe.utils.escape_html(String(__(step)))}`
+					+ `${done ? "✓ " : ""}${frappe.utils.escape_html(String(step))}`
 					+ `</span>`
 				);
 			})
@@ -340,12 +396,12 @@
 			<div class="frappe-card dco-order-tracking-strip" style="--dco-status-color:${escape(color)}" data-order-status="${escape(status)}">
 				<div class="dco-order-tracking-strip__layout">
 					<div class="dco-order-tracking-strip__lead">
-						${factItem(__("حالة الطلب"), statusLabel(status), "badge")}
+						${factItem(translate("Order status"), statusLabel(status), "badge")}
 						${pathHtml}
 					</div>
 					<div class="dco-order-tracking-strip__facts">
-						${factItem(__("العامل"), currentAssigneeDisplayName(frm.doc.current_assignee))}
-						${factItem(__("حالة القسم"), frm.doc.department_status || "-")}
+						${factItem(translate("Worker"), currentAssigneeDisplayName(frm.doc.current_assignee))}
+						${factItem(translate("Department status"), frm.doc.department_status || "-")}
 					</div>
 				</div>
 			</div>`;
@@ -376,8 +432,8 @@
 		// primary label while permission requests settle.
 
 		if (!isShopFloorProfile(frm)) return false;
-		frm.remove_custom_button(__("رجوع لصالة الإنتاج"));
-		frm.remove_custom_button(__("العودة إلى الطلبات"));
+		frm.remove_custom_button(translate("Back to the shop floor"));
+		frm.remove_custom_button(translate("Back to orders"));
 		return true;
 	}
 
@@ -392,11 +448,11 @@
 				const paths = Array.isArray(payload.paths) ? payload.paths : [];
 				const workers = payload.workers || {};
 				if (!paths.length) {
-					frappe.msgprint(__("لا يوجد مسار إنتاج مفعّل. أنشئ مسارًا من البيانات الأساسية أولًا."));
+					frappe.msgprint(translate("No production route is enabled. Create a route from master data first."));
 					return;
 				}
 				const pathOptions = paths.map((path) => ({
-					label: `${path.label} · ${path.stage_count || 0} ${__("مراحل")}`,
+					label: `${path.label} · ${path.stage_count || 0} ${translate("Stages")}`,
 					value: path.value,
 				}));
 				const workerOptions = (path) => workerSelectOptions(workers[path] || []);
@@ -407,7 +463,7 @@
 							<span>${index + 1}. ${frappe.utils.escape_html(stage.department || stage.stage_type)}</span>
 							<small style="font-weight:500;color:var(--text-muted,#667085)">${frappe.utils.escape_html(stage.operational_role || "")}</small>
 						</span>`).join('<span style="color:var(--text-muted,#98a2b3)">←</span>');
-					return `<div style="direction:rtl;padding:11px;border:1px solid var(--border-color,#e5e7eb);border-radius:12px;background:var(--fg-color,#fff)">
+					return `<div style="direction:${uiDirection()};padding:11px;border:1px solid var(--border-color,#e5e7eb);border-radius:12px;background:var(--fg-color,#fff)">
 						<div style="font-weight:800;margin-bottom:8px">${frappe.utils.escape_html(route.label || route.value)}</div>
 						<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${stages}</div>
 					</div>`;
@@ -417,13 +473,13 @@
 					: paths[0].value;
 				const firstWorkers = workerOptions(firstPath);
 				const dialog = new frappe.ui.Dialog({
-					title: __("إرسال للإنتاج"),
+					title: translate("Send to production"),
 					size: "large",
 					fields: [
 						{
 							fieldname: "path",
 							fieldtype: "Select",
-							label: __("المسار"),
+							label: translate("Route"),
 							options: pathOptions,
 							reqd: 1,
 							default: firstPath,
@@ -439,19 +495,19 @@
 						{
 							fieldname: "assignee",
 							fieldtype: "Select",
-							label: __("العامل المسؤول عن أول مرحلة"),
+							label: translate("Worker responsible for the first stage"),
 							options: firstWorkers,
 							default: firstWorkers[0] ? firstWorkers[0].value : "",
 							reqd: 1,
 						},
 					],
-					primary_action_label: __("إرسال"),
+					primary_action_label: translate("Send"),
 					primary_action(values) {
 						dialog.hide();
 						callAction(
 							"almdina_erp.almdina_erp.services.shop_floor_service.dispatch_order",
 							{ order_name: frm.doc.name, path: values.path, assignee: values.assignee },
-							__("تم إرسال الطلب للإنتاج."),
+							translate("The order was sent to production."),
 							frm
 						);
 					},
@@ -483,7 +539,7 @@
 		}
 		// Standalone toolbar button — not nested under «صالة الإنتاج».
 		// Keep the Frappe button reference; never re-find by visible label.
-		const button = frm.add_custom_button(__("إرسال للإنتاج"), () => openDispatchDialog(frm));
+		const button = frm.add_custom_button(translate("Send to production"), () => openDispatchDialog(frm));
 		if (button && typeof button.addClass === "function") {
 			button.addClass("dco-dispatch-toolbar-button");
 		}
@@ -564,7 +620,7 @@
 			if (current && rows.length) {
 				// Standalone toolbar button — rendered only after the server confirms
 				// that at least one earlier stage really exists.
-				frm.add_custom_button(__("إرجاع لمرحلة سابقة"), () => openRevertDialog(frm));
+				frm.add_custom_button(translate("Return to a previous stage"), () => openRevertDialog(frm));
 			}
 			if (current) {
 				const owner = documentContext();
@@ -591,38 +647,38 @@
 			(serverAllowsDelivery || frm.doc.status === "Ready for Delivery")
 			&& can(frm, "mark_delivered")
 		) {
-			frm.add_custom_button(__("تم التسليم"), () => {
-				frappe.confirm(__("تأكيد تسليم الطلب للعميل؟"), () =>
+			frm.add_custom_button(translate("Delivered"), () => {
+				frappe.confirm(translate("Confirm delivery of the order to the customer?"), () =>
 					callAction(
 						"almdina_erp.almdina_erp.services.shop_floor_service.mark_delivered",
 						{ order_name: frm.doc.name },
-						__("تم تسجيل التسليم."),
+						translate("Delivery was recorded."),
 						frm
 					)
 				);
-			}, PRODUCTION_ACTION_GROUP);
+			}, productionActionGroup());
 		}
 	}
 
 	function showRevertDialog(frm, rows) {
-		const labels = new Map(rows.map((row) => [row.label || __(row.stage_type), row.stage_type]));
+		const labels = new Map(rows.map((row) => [row.label || row.stage_type, row.stage_type]));
 		frappe.prompt(
-			[{ fieldname: "target", fieldtype: "Select", label: __("المرحلة"), options: [...labels.keys()].join("\n"), reqd: 1 }],
+			[{ fieldname: "target", fieldtype: "Select", label: translate("Stage"), options: [...labels.keys()].join("\n"), reqd: 1 }],
 			(values) => callAction(
 				"almdina_erp.almdina_erp.services.shop_floor_service.revert_department",
 				{ order_name: frm.doc.name, target_stage_type: labels.get(values.target) },
-				__("تم إرجاع الطلب للمرحلة المحددة."),
+				translate("The order was returned to the selected stage."),
 				frm
 			),
-			__("إرجاع لمرحلة سابقة"),
-			__("إرجاع")
+			translate("Return to a previous stage"),
+			translate("Revert")
 		);
 	}
 
 	function openRevertDialog(frm) {
 		return ensureRevertTargets(frm).then((rows) => {
 			if (!rows.length) {
-				frappe.msgprint(__("لا توجد مراحل يمكن الرجوع إليها."));
+				frappe.msgprint(translate("There are no stages that can be reverted to."));
 				return;
 			}
 			showRevertDialog(frm, rows);
@@ -632,10 +688,10 @@
 	function availableApprovalSources(frm) {
 		const sources = [];
 		if (frm.doc.system_plan_json || frm.doc.cutting_plan_json) {
-			sources.push({ value: "System", label: __("خطة النظام") });
+			sources.push({ value: "System", label: translate("System plan") });
 		}
 		if (frm.doc.custom_plan_json && frm.doc.production_dxf) {
-			sources.push({ value: "Custom", label: __("الخطة المرفوعة من DXF") });
+			sources.push({ value: "Custom", label: translate("Uploaded DXF plan") });
 		}
 		return sources;
 	}
@@ -643,19 +699,19 @@
 	function approveDrawing(frm) {
 		const sources = availableApprovalSources(frm);
 		if (!sources.length) {
-			frappe.msgprint(__("لا توجد خطة صالحة للاعتماد."));
+			frappe.msgprint(translate("There is no valid plan to approve."));
 			return;
 		}
 		const submit = (source) =>
 			callAction(
 				"almdina_erp.almdina_erp.services.shop_floor_service.approve_production_dxf",
 				{ order_name: frm.doc.name, plan_source: source },
-				__("تم اعتماد الرسم وإثبات المصمم المعتمد."),
+				translate("The drawing was approved and the approved designer was recorded."),
 				frm
 			);
 		if (sources.length === 1) {
 			frappe.confirm(
-				__("سيتم تثبيت {0} كنسخة الإنتاج النهائية باسمك. هل تريد المتابعة؟", [sources[0].label]),
+				translate("{0} will be fixed as the final production copy under your name. Do you want to continue?", [sources[0].label]),
 				() => submit(sources[0].value)
 			);
 			return;
@@ -665,20 +721,20 @@
 			[{
 				fieldname: "source",
 				fieldtype: "Select",
-				label: __("الخطة المعتمدة للإنتاج"),
+				label: translate("Approved production plan"),
 				options: [...labels.keys()].join("\n"),
 				reqd: 1,
-				description: __("اختر الخطة التي راجعتها. سيتم تسجيل اعتمادك باسم المستخدم الحالي."),
+				description: translate("Choose the plan you reviewed. Your approval will be recorded under the current user."),
 			}],
 			(values) => submit(labels.get(values.source)),
-			__("اعتماد الرسم"),
-			__("اعتماد للإنتاج")
+			translate("Approve the drawing"),
+			translate("Approve for production")
 		);
 	}
 
 	function uploadDrawingDxf(frm) {
 		if (frm.is_new()) {
-			frappe.msgprint(__("احفظ الطلب قبل رفع ملف DXF."));
+			frappe.msgprint(translate("Save the order before uploading a DXF file."));
 			return;
 		}
 		const context = documentContext();
@@ -686,13 +742,13 @@
 			const reason = typeof context.stageMutationBlockReason === "function"
 				? context.stageMutationBlockReason(frm)
 				: "";
-			frappe.msgprint(__(reason || "يمكنك عرض هذا الطلب فقط. مرحلته الحالية ليست ضمن أدوارك التشغيلية."));
+			frappe.msgprint(translate(reason || "You can view this order only. Its current stage is outside your operational roles."));
 			return;
 		}
 		const replacing = Boolean(frm.doc.production_dxf);
 		const capability = replacing ? "replace_dxf" : "upload_dxf";
 		if (!can(frm, capability)) {
-			frappe.msgprint(__("ليست لديك صلاحية رفع خطة القص كملف DXF."));
+			frappe.msgprint(translate("You do not have permission to upload the cutting plan as a DXF file."));
 			return;
 		}
 		const core = frappe.almdina && frappe.almdina.__uploadProductionDxfCore;
@@ -701,7 +757,7 @@
 		}
 		const ui = window.AlmdinaUi;
 		if (!ui || typeof ui.fileUploader !== "function") {
-			frappe.msgprint(__("تعذر فتح رفع DXF."));
+			frappe.msgprint(translate("Could not open DXF upload."));
 			return null;
 		}
 		return ui.fileUploader({
@@ -711,7 +767,7 @@
 				callAction(
 					"almdina_erp.almdina_erp.services.shop_floor_service.upload_production_dxf",
 					{ order_name: frm.doc.name, file_url: file.file_url },
-					replacing ? __("تم استبدال ملف DXF والتحقق منه.") : __("تم رفع ملف DXF والتحقق منه."),
+					replacing ? translate("The DXF file was replaced and validated.") : translate("The DXF file was uploaded and validated."),
 					frm
 				);
 			},
@@ -722,18 +778,18 @@
 		if (frm.is_new()) return;
 
 		[
-			__("تصدير DXF للرسم"),
-			__("تصدير DXF لأوتوكاد"),
-			__("تصدير DXF"),
-			__("طباعة خطة القص"),
-			__("تنزيل DXF للإنتاج"),
-			__("رفع ملف DXF"),
-			__("استبدال ملف DXF"),
-			__("اعتماد الرسم"),
-			__("إعادة اعتماد الرسم"),
+			translate("Export DXF for drawing"),
+			translate("Export DXF for AutoCAD"),
+			translate("Export DXF"),
+			translate("Print cutting plan"),
+			translate("Download production DXF"),
+			translate("Upload a DXF plan"),
+			translate("Replace the uploaded plan"),
+			translate("Approve the drawing"),
+			translate("Re-approve the drawing"),
 		].forEach(label => {
 			frm.remove_custom_button(label);
-			frm.remove_custom_button(label, DRAWING_ACTION_GROUP);
+			frm.remove_custom_button(label, drawingActionGroup());
 		});
 		// Drawing/DXF actions belong in the form sections, not the page toolbar.
 	}
@@ -745,11 +801,11 @@
 		}).then((response) => {
 			const handoff = response.message || {};
 			if (handoff.final_stage) {
-				frappe.confirm(__("تأكيد إنهاء آخر مرحلة واعتبار الطلب جاهزًا للتسليم؟"), () =>
+				frappe.confirm(translate("Confirm finishing the last stage and marking the order ready for delivery?"), () =>
 					callAction(
 						"almdina_erp.almdina_erp.services.shop_floor_service.handoff_to_next",
 						{ stage_name: stageName },
-						__("الطلب جاهز للتسليم."),
+						translate("The order is ready for delivery."),
 						frm
 					)
 				);
@@ -757,25 +813,25 @@
 			}
 			const workers = handoff.workers || [];
 			if (!workers.length) {
-				frappe.msgprint(__("لا يوجد عمال متاحون للدور {0} في القسم التالي.", [handoff.operational_role || ""]));
+				frappe.msgprint(translate("No workers are available for role {0} in the next department.", [handoff.operational_role || ""]));
 				return;
 			}
 			frappe.prompt(
 				[{
 					fieldname: "next_assignee",
 					fieldtype: "Select",
-					label: `${__("العامل التالي")} — ${handoff.next_department || handoff.next_stage_type || ""}`,
+					label: `${translate("Next worker")} — ${handoff.next_department || handoff.next_stage_type || ""}`,
 					options: workerSelectOptions(workers),
 					reqd: 1,
 				}],
 				(values) => callAction(
 					"almdina_erp.almdina_erp.services.shop_floor_service.handoff_to_next",
 					{ stage_name: stageName, next_assignee: values.next_assignee },
-					__("تم إرسال الطلب."),
+					translate("The order was sent."),
 					frm
 				),
-				__("إرسال للقسم التالي"),
-				__("إرسال")
+				translate("Send to the next department"),
+				translate("Send")
 			);
 		});
 	}
@@ -789,26 +845,26 @@
 			.then((response) => {
 				const workers = (response.message || []).filter((worker) => worker.name !== currentAssignee);
 				if (!workers.length) {
-					frappe.msgprint(__("لا يوجد عامل آخر متاح لهذا القسم."));
+					frappe.msgprint(translate("No other worker is available for this department."));
 					return;
 				}
 				frappe.prompt(
 					[{
 						fieldname: "worker",
 						fieldtype: "Select",
-						label: __("العامل الجديد"),
+						label: translate("New worker"),
 						options: workerSelectOptions(workers),
 						reqd: 1,
-						description: __("سيصبح العامل الجديد مسؤولًا عن بدء المرحلة وتسليمها."),
+						description: translate("The new worker will be responsible for starting and handing off the stage."),
 					}],
 					(values) => callAction(
 						"almdina_erp.almdina_erp.services.shop_floor_commands.reassign_worker",
 						{ stage_name: stageName, assignee: values.worker },
-						__("تم تغيير العامل المسؤول عن المرحلة."),
+						translate("The worker responsible for the stage was changed."),
 						frm
 					),
-					__("تغيير العامل"),
-					__("إسناد")
+					translate("Change worker"),
+					translate("Assign")
 				);
 			});
 	}
@@ -858,7 +914,7 @@
 			&& DISPATCHABLE_STATUSES.has(status)
 			&& !frm.doc.production_path
 			&& !frm.doc.current_production_stage
-		) labels.push(__("إرسال للإنتاج"));
+		) labels.push(translate("Send to production"));
 		const deliveryContext = frm.__almdina_stage_context || {};
 		const serverAllowsDelivery = Boolean(
 			deliveryContext.can_mark_delivered
@@ -872,7 +928,7 @@
 			(serverAllowsDelivery || status === "Ready for Delivery")
 			&& can(frm, "mark_delivered")
 		) {
-			labels.push(__("تم التسليم"));
+			labels.push(translate("Delivered"));
 		}
 		if (
 			canCheckRevertTargets(frm)
@@ -880,7 +936,7 @@
 			&& Array.isArray(frm.__almdinaRevertTargets)
 			&& frm.__almdinaRevertTargets.length
 		) {
-			labels.push(__("إرجاع لمرحلة سابقة"));
+			labels.push(translate("Return to a previous stage"));
 		}
 
 		const stage = frm.__almdina_stage_context || {};
@@ -889,12 +945,12 @@
 			stage.can_reassign_worker
 			&& ACTIVE_STAGE_STATUSES.has(stageStatus)
 			&& can(frm, "reassign_worker")
-		) labels.push(__("تغيير العامل"));
+		) labels.push(translate("Change worker"));
 		if (canShowStartAction(frm, stage)) {
-			labels.push(__("بدء العمل"));
+			labels.push(translate("Start work"));
 		}
 		if (canShowHandoffAction(frm, stage)) {
-			labels.push(__("إنهاء وإرسال"));
+			labels.push(translate("Finish and send"));
 		}
 		return labels;
 	}
@@ -908,7 +964,7 @@
 		if (frm.__almdinaProductionActionsKey !== productionActionsKey(frm)) return false;
 		const expected = new Set(expectedProductionActionLabels(frm));
 		const rendered = renderedButtonLabels(frm);
-		const renderedOwned = [...rendered].filter(label => OWNED_PRODUCTION_ACTION_LABELS.has(label));
+		const renderedOwned = [...rendered].filter(label => isOwnedProductionLabel(label));
 		return (
 			[...expected].every(label => rendered.has(label))
 			&& renderedOwned.every(label => expected.has(label))
@@ -988,7 +1044,7 @@
 
 			if (stage.can_reassign_worker && ACTIVE_STAGE_STATUSES.has(stageStatus) && can(frm, "reassign_worker")) {
 				frm.add_custom_button(
-					__("تغيير العامل"),
+					translate("Change worker"),
 					() => openReassignDialog(frm, stageName, assignedTo)
 				);
 			}
@@ -997,18 +1053,18 @@
 			if (canShowStartAction(frm, stage)) {
 				// The worker's current stage action is intentionally top-level: it is
 				// the primary next step, not a category that needs another tap.
-				frm.add_custom_button(__("بدء العمل"), () =>
+				frm.add_custom_button(translate("Start work"), () =>
 					callAction(
 						"almdina_erp.almdina_erp.services.shop_floor_service.start_my_stage",
 						{ stage_name: stageName },
-						__("تم بدء العمل."),
+						translate("Work has started."),
 						frm
 					));
 			}
 			if (!canShowHandoffAction(frm, stage)) return;
 			// Keep the handoff dialog and server authorization unchanged; only the
 			// toolbar placement is direct so the worker reaches it in one tap.
-			frm.add_custom_button(__("إنهاء وإرسال"), () => {
+			frm.add_custom_button(translate("Finish and send"), () => {
 				openHandoffDialog(frm, stageName);
 			});
 		}).catch((error) => {
@@ -1027,23 +1083,18 @@
 	}
 
 	function removeProductionButtons(frm) {
-		[
-			"تم التسليم",
-			"إرجاع لمرحلة سابقة",
-			"بدء العمل",
-			"إرسال للقسم التالي",
-			"جاهزة للتسليم",
-			"إنهاء وإرسال",
-			"تغيير العامل",
-		].forEach((label) => frm.remove_custom_button(__(label), PRODUCTION_ACTION_GROUP));
-		// Standalone toolbar buttons (no group). Removing both direct and legacy
-		// grouped variants prevents a stale stage action after a state refresh.
-		frm.remove_custom_button(__("إرسال للإنتاج"));
-		frm.remove_custom_button(__("إرجاع لمرحلة سابقة"));
-		frm.remove_custom_button(__("بدء العمل"));
-		frm.remove_custom_button(__("إنهاء وإرسال"));
-		frm.remove_custom_button(__("تغيير العامل"));
-		frm.remove_custom_button(__("إرجاع لمرحلة سابقة"), PRODUCTION_ACTION_GROUP);
+		const group = productionActionGroup();
+		PRODUCTION_ACTION_IDS.forEach((messageId) => {
+			const localized = translate(messageId);
+			frm.remove_custom_button(messageId, group);
+			frm.remove_custom_button(localized, group);
+			frm.remove_custom_button(messageId);
+			frm.remove_custom_button(localized);
+		});
+		LEGACY_PRODUCTION_ACTION_LABELS.forEach((label) => {
+			frm.remove_custom_button(label, group);
+			frm.remove_custom_button(label);
+		});
 	}
 
 	function reconcileProductionActions(frm) {

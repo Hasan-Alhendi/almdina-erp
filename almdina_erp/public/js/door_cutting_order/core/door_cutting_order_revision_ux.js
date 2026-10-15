@@ -3,11 +3,41 @@
 
     const DRAFT_LIKE = new Set(["Draft", "Pending Review", "Rejected"]);
     const TERMINAL = new Set(["Delivered", "Cancelled"]);
-    const EDIT_LABEL = __("تعديل");
-    const SAVE_LABEL = __("حفظ");
-    const CONFIRM_EDIT_LABEL = __("اعتماد التعديل"); // legacy label removed from UI; kept for cleanup
-    const REVISION_GROUP = __("نسخ الطلب");
-    const LEGACY_LIFECYCLE_GROUP = __("دورة الطلب");
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split("{" + index + "}").join(String(value));
+            });
+        }
+        return text;
+    }
+
+    const EDIT_LABEL = "Edit order";
+    const SAVE_LABEL = "Save";
+    const LEGACY_CONFIRM_EDIT_LABEL = "اعتماد التعديل";
+    const LEGACY_EDIT_ORDER_LABEL = "تعديل الطلب";
+    const LEGACY_REVISION_GROUP = "نسخ الطلب";
+    const LEGACY_LIFECYCLE_GROUP = "دورة الطلب";
+
+    function editLabel() {
+        return translate(EDIT_LABEL);
+    }
+
+    function saveLabel() {
+        return translate(SAVE_LABEL);
+    }
+
+    function revisionGroup() {
+        return translate("Order copies");
+    }
     const ORDER_INPUT_FIELDS = [
         "customer",
         "order_date",
@@ -70,8 +100,8 @@
     function setPrimaryActionMode(frm, mode, label = "", handler = null, disabled = true) {
         const currentLabel = primaryActionLabel(frm);
         const changingBetweenEditModes = Boolean(
-            label === EDIT_LABEL
-            && currentLabel === EDIT_LABEL
+            label === editLabel()
+            && currentLabel === editLabel()
             && ["edit", "edit-pending"].includes(mode)
             && ["edit", "edit-pending"].includes(frm.__almdinaPrimaryActionMode)
         );
@@ -228,7 +258,7 @@
     function markEditSessionSticky(frm) {
         if (!frm || !frm.doc || !frm.doc.name || frm.is_new()) return;
         // Checkpoint sticky must never *open* an edit session. It only preserves
-        // one that the user already started with «تعديل».
+        // one that the user already started with Edit.
         if (
             !frm.__almdina_edit_session
             || frm.__almdina_edit_session_abandoned
@@ -314,7 +344,7 @@
             return;
         }
 
-        // Same visit (user pressed تعديل and has not left this order).
+        // Same visit (user pressed Edit and has not left this order).
         if (
             frm.__almdina_edit_session
             && frm.__almdina_edit_session_order === name
@@ -477,7 +507,7 @@
         if (frm.is_new()) {
             if (
                 frm.__almdinaPrimaryActionMode !== "new"
-                || primaryActionLabel(frm) !== SAVE_LABEL
+                || primaryActionLabel(frm) !== saveLabel()
             ) {
                 frm.__almdinaPrimaryActionMode = "new";
                 frm.save_disabled = false;
@@ -500,7 +530,7 @@
                 setPrimaryActionMode(
                     frm,
                     "edit-pending",
-                    EDIT_LABEL,
+                    editLabel(),
                     () => requestEditSession(frm),
                     true
                 );
@@ -511,7 +541,7 @@
         }
 
         if (orderCanEdit(frm)) {
-            setPrimaryActionMode(frm, "save", SAVE_LABEL, () => {
+            setPrimaryActionMode(frm, "save", saveLabel(), () => {
                 const coordinator = window.AlmdinaDcoEditSessionCoordinator;
                 return coordinator && typeof coordinator.save === "function"
                     ? coordinator.save(frm, "order")
@@ -521,7 +551,7 @@
         }
 
         if (canShowEditAction(frm)) {
-            setPrimaryActionMode(frm, "edit", EDIT_LABEL, () => requestEditSession(frm), true);
+            setPrimaryActionMode(frm, "edit", editLabel(), () => requestEditSession(frm), true);
             return;
         }
 
@@ -536,7 +566,7 @@
     function requestEditSession(frm) {
         if (!permissionsResolved()) {
             frappe.show_alert({
-                message: __("جاري تحميل صلاحيات التعديل..."),
+                message: translate("Loading edit permissions..."),
                 indicator: "blue",
             }, 3);
             return;
@@ -550,23 +580,25 @@
             }
             return;
         }
-        frappe.msgprint(__(
-            "زر التعديل متاح لك، لكن فتح الحقول يتطلب أن يكون الطلب في حالة «مسودة». استخدم «إعادة للمسودة» أولًا."
+        frappe.msgprint(translate(
+            "The edit button is available, but the fields open only while the order is in Draft. Use Return to draft first."
         ));
     }
 
     function removeEditSessionButtons(frm) {
-        [EDIT_LABEL, CONFIRM_EDIT_LABEL, __("تعديل الطلب"), SAVE_LABEL].forEach((label) => {
-            frm.remove_custom_button(label, LEGACY_LIFECYCLE_GROUP);
+        const labels = [
+            editLabel(),
+            saveLabel(),
+            EDIT_LABEL,
+            SAVE_LABEL,
+            LEGACY_CONFIRM_EDIT_LABEL,
+            LEGACY_EDIT_ORDER_LABEL,
+        ];
+        const groups = [revisionGroup(), LEGACY_REVISION_GROUP, LEGACY_LIFECYCLE_GROUP];
+        labels.forEach((label) => {
+            frm.remove_custom_button(label);
+            groups.forEach((group) => frm.remove_custom_button(label, group));
         });
-        frm.remove_custom_button(EDIT_LABEL);
-        frm.remove_custom_button(CONFIRM_EDIT_LABEL);
-        frm.remove_custom_button(EDIT_LABEL, REVISION_GROUP);
-        frm.remove_custom_button(CONFIRM_EDIT_LABEL, REVISION_GROUP);
-        frm.remove_custom_button(__("تعديل الطلب"));
-        frm.remove_custom_button(__("تعديل الطلب"), REVISION_GROUP);
-        frm.remove_custom_button(SAVE_LABEL);
-        frm.remove_custom_button(SAVE_LABEL, REVISION_GROUP);
     }
 
     function refreshDependentUx(frm) {
@@ -619,7 +651,7 @@
 
     function enterEditSession(frm) {
         if (!canOfferEditSession(frm)) {
-            frappe.msgprint(__("يمكن تعديل الطلب فقط وهو في حالة المسودة."));
+            frappe.msgprint(translate("The order can be edited only while it is in draft."));
             return;
         }
         setEditSession(frm, true, { resetRecalc: true });
@@ -630,7 +662,7 @@
         schedulePrimaryActionSync(frm);
         refreshDependentUx(frm);
         frappe.show_alert({
-            message: __("وضع التعديل مفعّل. عدّل الدرف والحقول، ثم اضغط «حفظ» لاعتماد التعديل وإعادة قفل الحقول."),
+            message: translate("Edit mode is on. Change the pieces and fields, then press Save to apply the edit and lock the fields again."),
             indicator: "blue",
         }, 6);
     }
@@ -658,7 +690,7 @@
         scheduleDependentUxRefresh(frm);
         if (options.silent !== true) {
             frappe.show_alert({
-                message: __("تم حفظ التعديل وإعادة قفل الحقول. اعتماد الطلب/الخطة للإنتاج يتم بزر منفصل إن لزم."),
+                message: translate("The edit was saved and the fields were locked again. Approving the order or plan for production uses a separate button when needed."),
                 indicator: "green",
             }, 6);
         }
@@ -782,21 +814,21 @@
         const state = revisionState(frm);
         if (state === "Pending Activation") {
             frm.set_intro(
-                __("هذه نسخة تعديل غير مفعّلة. يمكن تجهيزها ومراجعتها، لكنها لن تُرسل للإنتاج قبل اعتمادها واستبدال النسخة السابقة بأمان."),
+                translate("This is an inactive edit copy. It can be prepared and reviewed, but it will not be sent to production before it is approved and safely replaces the previous copy."),
                 "orange"
             );
             return;
         }
         if (state === "Superseded") {
             frm.set_intro(
-                __("هذه نسخة تاريخية تم استبدالها بنسخة أحدث، وهي للقراءة والتوثيق فقط."),
+                translate("This is a historical copy that was replaced by a newer copy. It is for reading and documentation only."),
                 "red"
             );
             return;
         }
         if (frm.doc.revision_of) {
             frm.set_intro(
-                __("هذه هي النسخة الحالية ضمن سلسلة مراجعات الطلب."),
+                translate("This is the current copy in the order revision chain."),
                 "green"
             );
             return;
@@ -807,7 +839,7 @@
             && !DRAFT_LIKE.has(frm.doc.status || "Draft")
         ) {
             frm.set_intro(
-                __("الحقول مقفلة. اضغط «تعديل» لفتح الحقول، ثم «حفظ» لاعتماد التعديل وإعادة القفل."),
+                translate("The fields are locked. Press Edit to open the fields, then Save to apply the edit and lock them again."),
                 "blue"
             );
         }
@@ -821,14 +853,14 @@
                 reason: String(reason || "").trim(),
             },
             freeze: true,
-            freeze_message: __("جاري إنشاء نسخة تعديل مستقلة..."),
+            freeze_message: translate("Creating an independent edit copy..."),
         }).then(response => {
             const data = response.message || {};
             if (!data.name) return;
             frappe.show_alert({
                 message: data.already_exists
-                    ? __("توجد نسخة تعديل مرتبطة بهذا الطلب.")
-                    : __("تم إنشاء نسخة مسودة مع الحفاظ على الطلب والخطة الأصلية."),
+                    ? translate("An edit copy is already linked to this order.")
+                    : translate("A draft copy was created and the original order and plan were kept."),
                 indicator: data.already_exists ? "orange" : "green",
             }, 6);
             frappe.set_route("Form", "Door Cutting Order", data.name);
@@ -840,13 +872,13 @@
             [{
                 fieldname: "reason",
                 fieldtype: "Small Text",
-                label: __("سبب إنشاء نسخة التعديل (اختياري)"),
-                description: __("ينشئ مستندًا مسودة مستقلاً دون تعديل الطلب الحالي مباشرة."),
+                label: translate("Reason for creating the edit copy (optional)"),
+                description: translate("Creates an independent draft document without editing the current order directly."),
                 reqd: 0,
             }],
             values => createRevision(frm, values.reason),
-            __("إنشاء نسخة تعديل"),
-            __("إنشاء النسخة المسودة")
+            translate("Create an edit copy"),
+            translate("Create the draft copy")
         );
     }
 
@@ -892,19 +924,23 @@
             renderRevisionState(frm);
             removeEditSessionButtons(frm);
 
-            frm.remove_custom_button(__("إنشاء نسخة تعديل"), REVISION_GROUP);
-            frm.remove_custom_button(__("إنشاء نسخة تعديل"), LEGACY_LIFECYCLE_GROUP);
+            const createCopyLabel = translate("Create an edit copy");
+            frm.remove_custom_button(createCopyLabel, revisionGroup());
+            frm.remove_custom_button(createCopyLabel, LEGACY_REVISION_GROUP);
+            frm.remove_custom_button(createCopyLabel, LEGACY_LIFECYCLE_GROUP);
+            frm.remove_custom_button("إنشاء نسخة تعديل", LEGACY_REVISION_GROUP);
+            frm.remove_custom_button("إنشاء نسخة تعديل", LEGACY_LIFECYCLE_GROUP);
 
             if (frm.doc.revision_of) {
-                frm.add_custom_button(__("فتح الطلب الأصلي"), () => {
+                frm.add_custom_button(translate("Open the original order"), () => {
                     frappe.set_route("Form", "Door Cutting Order", frm.doc.revision_of);
-                }, REVISION_GROUP);
+                }, revisionGroup());
             }
 
             if (frm.doc.superseded_by) {
-                frm.add_custom_button(__("فتح نسخة التعديل"), () => {
+                frm.add_custom_button(translate("Open the edit copy"), () => {
                     frappe.set_route("Form", "Door Cutting Order", frm.doc.superseded_by);
-                }, REVISION_GROUP);
+                }, revisionGroup());
                 schedulePrimaryActionSync(frm);
                 if (editable || wasEditable || leftEdit) {
                     scheduleDependentUxRefresh(frm);
@@ -917,9 +953,9 @@
 
             if (canCreateRevision(frm) && !canOfferEditSession(frm)) {
                 frm.add_custom_button(
-                    __("إنشاء نسخة تعديل"),
+                    translate("Create an edit copy"),
                     () => openRevision(frm),
-                    REVISION_GROUP
+                    revisionGroup()
                 );
             }
 

@@ -58,7 +58,9 @@ def test_virtual_piece_type_change_materializes_one_row_without_rebuilding_table
     assert 'tbody.appendChild(clone)' in source
     assert 'frm.script_manager.trigger("pieces_add", row.doctype, row.name)' in source
     assert 'extraAddons.renderTypePicker(' in source
-    assert 'clone.classList.remove("dco-special-row", "dco-clipped-corner-row", "dco-extra-row"' in source
+    # Extra is an add-on for Regular/Special, no longer an independent row type.
+    assert 'clone.classList.remove("dco-special-row", "dco-clipped-corner-row", "dco-row-selected")' in source
+    assert '"dco-extra-row"' not in source
     materialize = source.split("function materializeVirtualRow(frm, tr)", 1)[1].split(
         "function updatePieceTypeVisual", 1
     )[0]
