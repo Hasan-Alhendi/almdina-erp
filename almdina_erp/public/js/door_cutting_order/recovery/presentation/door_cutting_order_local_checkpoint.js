@@ -1446,7 +1446,7 @@
             if (!matchesCheckpoint) {
                 frappe.validated = false;
                 showRecoveryError(
-                    "نتيجة الحفظ السابق غير محسومة. احتُفظ بالمسودة دون تغيير؛ أعد فتحها للتحقق ثم أعد المحاولة بنفس الهوية."
+                    translate("The previous save result is unresolved. The draft was retained unchanged; reopen it to verify before retrying with the same identity.")
                 );
                 return;
             }
@@ -1454,7 +1454,7 @@
             if (!retry) {
                 frappe.validated = false;
                 showRecoveryError(
-                    "نتيجة الحفظ السابق غير محسومة أو تغيّرت المسودة. احتُفظ بالمسودة دون حذف."
+                    translate("The previous save result is unresolved or the draft changed. The draft was retained without deletion.")
                 );
                 return;
             }

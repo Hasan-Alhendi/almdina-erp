@@ -143,7 +143,7 @@ def _browser(playwright_instance) -> Browser:
 
 def _loopback_cdp_browser(
     playwright_instance,
-) -> tuple[Browser, BrowserContext, Path, int]:
+) -> tuple[Browser, BrowserContext, Path, int, subprocess.Popen]:
     executable = (
         os.environ.get("CHROMIUM_PATH")
         or shutil.which("chromium")
@@ -151,50 +151,85 @@ def _loopback_cdp_browser(
         or playwright_instance.chromium.executable_path
     )
     profile = Path(tempfile.mkdtemp(prefix="al129-cdp-profile-"))
-    persistent_context = None
+    browser_process = None
+    browser = None
     try:
         started = time.monotonic()
         trace("browser_launch_started")
-        persistent_context = playwright_instance.chromium.launch_persistent_context(
-            user_data_dir=str(profile),
-            executable_path=executable,
-            headless=True,
-            args=[
-                "--remote-debugging-address=127.0.0.1",
-                "--remote-debugging-port=0",
-            ],
-            timeout=30_000,
+        arguments = [
+            executable,
+            "--headless=new",
+            "--disable-dev-shm-usage",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--remote-debugging-address=127.0.0.1",
+            "--remote-debugging-port=0",
+            f"--user-data-dir={profile}",
+            "about:blank",
+        ]
+        if os.geteuid() == 0:
+            arguments.insert(1, "--no-sandbox")
+        browser_process = subprocess.Popen(
+            arguments,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        active_port = profile / "DevToolsActivePort"
+        deadline = time.monotonic() + 30
+        endpoint = None
+        port = None
+        while time.monotonic() < deadline:
+            if browser_process.poll() is not None:
+                raise RuntimeError("Chromium exited before publishing its CDP endpoint.")
+            try:
+                values = active_port.read_text(encoding="utf-8").splitlines()
+                if values and values[0].isdigit():
+                    port = int(values[0])
+                    with urlopen(
+                        f"http://127.0.0.1:{port}/json/version",
+                        timeout=1.0,
+                    ) as response:
+                        endpoint = json.loads(response.read())
+                    break
+            except (OSError, ValueError, json.JSONDecodeError):
+                time.sleep(0.1)
+        if endpoint is None or port is None:
+            raise TimeoutError("Chromium did not publish a responsive CDP endpoint in 30 seconds.")
+        websocket_url = endpoint.get("webSocketDebuggerUrl", "")
+        if not websocket_url.startswith("ws://127.0.0.1:"):
+            raise RuntimeError("Chromium CDP endpoint was not loopback-only.")
+        browser = playwright_instance.chromium.connect_over_cdp(
+            f"http://127.0.0.1:{port}",
+            timeout=10_000,
+        )
+        if not browser.contexts:
+            raise RuntimeError("Chromium did not expose its isolated browser context.")
+        context = browser.contexts[0]
+        trace(
+            "browser_cdp_loopback_verified",
+            browser_product=str(endpoint.get("Browser", ""))[:48],
         )
         trace(
             "browser_launch_completed",
             duration_ms=round((time.monotonic() - started) * 1000),
         )
-        browser = persistent_context.browser
-        if browser is None:
-            raise RuntimeError("Playwright did not expose the isolated Chromium browser.")
-        active_port = profile / "DevToolsActivePort"
-        values = active_port.read_text(encoding="utf-8").splitlines()
-        if not values or not values[0].isdigit():
-            raise RuntimeError("Playwright Chromium did not publish its loopback CDP endpoint.")
-        port = int(values[0])
-        with urlopen(
-            f"http://127.0.0.1:{port}/json/version",
-            timeout=1.0,
-        ) as response:
-            endpoint = json.loads(response.read())
-        websocket_url = endpoint.get("webSocketDebuggerUrl", "")
-        if not websocket_url.startswith("ws://127.0.0.1:"):
-            raise RuntimeError("Chromium CDP endpoint was not loopback-only.")
-        trace(
-            "browser_cdp_loopback_verified",
-            browser_product=str(endpoint.get("Browser", ""))[:48],
-        )
-        return browser, persistent_context, profile, port
+        return browser, context, profile, port, browser_process
     except Exception as error:
         trace("browser_cdp_launch_failed", error_type=type(error).__name__)
-        if persistent_context is not None:
-            persistent_context.close()
-        shutil.rmtree(profile, ignore_errors=True)
+        try:
+            if browser is not None:
+                browser.close()
+        except Exception:
+            pass
+        finally:
+            if browser_process is not None and browser_process.poll() is None:
+                browser_process.terminate()
+                try:
+                    browser_process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    browser_process.kill()
+                    browser_process.wait(timeout=5)
+            shutil.rmtree(profile, ignore_errors=True)
         raise
 
 
@@ -866,8 +901,8 @@ def test_real_desk_customer_field_permission_differential() -> None:
         stack_dump_after_seconds=120,
     )
     with sync_playwright() as playwright_instance:
-        browser, browser_owner_context, chrome_profile, cdp_port = _loopback_cdp_browser(
-            playwright_instance
+        browser, _browser_context, chrome_profile, cdp_port, browser_process = (
+            _loopback_cdp_browser(playwright_instance)
         )
         try:
             for case_name, user in (
@@ -1235,8 +1270,15 @@ def test_real_desk_customer_field_permission_differential() -> None:
             })
         finally:
             try:
-                browser_owner_context.close()
+                browser.close()
             finally:
+                if browser_process.poll() is None:
+                    browser_process.terminate()
+                    try:
+                        browser_process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        browser_process.kill()
+                        browser_process.wait(timeout=5)
                 shutil.rmtree(chrome_profile, ignore_errors=True)
                 faulthandler.cancel_dump_traceback_later()
 
