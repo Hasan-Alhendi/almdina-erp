@@ -797,8 +797,24 @@ def _set_link(page: Page, fieldname: str, value: str) -> None:
         state["runtimeErrors"] = PAGE_RUNTIME_DIAGNOSTICS.get(id(page), [])[-12:]
         trace("link_field_suggestions_unavailable", **state)
         raise AssertionError(f"Frappe {fieldname} link suggestions were not visible: {state}") from error
-    exact = suggestions.filter(has_text=re.compile(rf"^{re.escape(value)}(?:\s|$)"))
-    (exact.first if exact.count() else suggestions.first).click()
+    # Frappe v16 renders Link options with a label and a separate description.
+    # Match the option's actual autocomplete value, not its concatenated HTML text.
+    option_values = suggestions.evaluate_all(
+        "nodes => nodes.map(node => { const item = window.jQuery && window.jQuery(node).data('item.autocomplete');"
+        " return item && item.value != null ? String(item.value) : null; })"
+    )
+    exact_indexes = [index for index, option_value in enumerate(option_values) if option_value == value]
+    if len(exact_indexes) != 1:
+        trace(
+            "link_field_exact_option_unavailable",
+            fieldname=fieldname,
+            visible_option_count=len(option_values),
+            exact_option_count=len(exact_indexes),
+        )
+        raise AssertionError(
+            f"Frappe {fieldname} link options did not contain exactly one requested value"
+        )
+    suggestions.nth(exact_indexes[0]).click()
     try:
         page.wait_for_function(
             "({fieldname, value}) => window.cur_frm && cur_frm.doc[fieldname] === value",
