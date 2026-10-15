@@ -153,6 +153,7 @@ def _loopback_cdp_browser(
     profile = Path(tempfile.mkdtemp(prefix="al129-cdp-profile-"))
     browser_process = None
     browser = None
+    stderr_path = profile / "chromium-stderr.log"
     try:
         started = time.monotonic()
         trace("browser_launch_started")
@@ -168,11 +169,12 @@ def _loopback_cdp_browser(
             f"--user-data-dir={profile}",
             "about:blank",
         ]
-        browser_process = subprocess.Popen(
-            arguments,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+        with stderr_path.open("ab") as stderr_output:
+            browser_process = subprocess.Popen(
+                arguments,
+                stdout=subprocess.DEVNULL,
+                stderr=stderr_output,
+            )
         active_port = profile / "DevToolsActivePort"
         deadline = time.monotonic() + 30
         endpoint = None
@@ -193,7 +195,13 @@ def _loopback_cdp_browser(
             except (OSError, ValueError, json.JSONDecodeError):
                 time.sleep(0.1)
         if endpoint is None or port is None:
-            raise TimeoutError("Chromium did not publish a responsive CDP endpoint in 30 seconds.")
+            stderr_tail = "\n".join(
+                stderr_path.read_text(encoding="utf-8", errors="replace").splitlines()[-8:]
+            )
+            raise TimeoutError(
+                "Chromium did not publish a responsive CDP endpoint in 30 seconds. "
+                f"Chromium stderr: {stderr_tail or '[empty]'}"
+            )
         websocket_url = endpoint.get("webSocketDebuggerUrl", "")
         if not websocket_url.startswith("ws://127.0.0.1:"):
             raise RuntimeError("Chromium CDP endpoint was not loopback-only.")
