@@ -450,9 +450,14 @@ def test_saved_server_plan_print_runtime():
             }""")
             page.evaluate("""() => {
                 window.__p0PrintWrites=[];
+                window.__p0PrintRejections=[];
+                window.__almdinaP0PrintSourceRejected=reason=>__p0PrintRejections.push(reason);
                 window.open=()=>({document:{open(){},write(html){__p0PrintWrites.push(html)},close(){}},close(){}});
             }""")
-            for label, order, other in (("A", a, b), ("B", b, a)):
+            # Two bounded visits to each saved order exercise a fresh document
+            # generation without retrying a failed print in the same visit.
+            for visit, (label, order, other) in enumerate(
+                    (("A", a, b), ("B", b, a), ("A", a, b), ("B", b, a)), 1):
                 page.evaluate("name => frappe.set_route('Form','Door Cutting Order',name)", order["name"])
                 page.wait_for_function("name => cur_frm?.doc?.name === name", arg=order["name"], timeout=45000)
                 page.get_by_text("Cutting Plan", exact=True).first.click()
@@ -464,59 +469,15 @@ def test_saved_server_plan_print_runtime():
                         throw new Error('Persisted Plan row did not reach the active Plan presenter');
                 }""")
                 result = page.evaluate("""async () => {
+                    const before=__p0PrintRejections.length;
+                    const result=await AlmdinaPlanTabsUX.printActivePlan(cur_frm);
                     const row=AlmdinaPlanWorkspaceState.displayedPlanForTab(cur_frm,'System');
-                    const tab=AlmdinaPlanTabsUX.activeTab(cur_frm);
-                    const visible=AlmdinaPlanTabsUX.displayedPlanForTab(cur_frm,tab);
-                    const token=AlmdinaDocumentContext.capture(cur_frm);
-                    const detached=document.createElement('div');
-                    detached.innerHTML=AlmdinaCuttingPlanRender.build(cur_frm,visible);
-                    const before={tab,visibleSheets:visible?.sheets?.length,
-                        detachedSheetCards:detached.querySelectorAll('.dco-sheet-card').length,
-                        matchesRow:JSON.stringify(visible)===JSON.stringify(JSON.parse(row.snapshot_json)),
-                        canPrint:AlmdinaPermissions.canDocument(cur_frm,'print_cutting_plan'),
-                        generation:token?.generation,modified:cur_frm.doc.modified,
-                        tokenCurrent:AlmdinaDocumentContext.isCurrent(cur_frm,token),
-                        state:AlmdinaPlanWorkspaceState.snapshot(cur_frm)?.status,
-                        stateOrder:AlmdinaPlanWorkspaceState.snapshot(cur_frm)?.data?.order_name,
-                        statePrint:AlmdinaPlanWorkspaceState.snapshot(cur_frm)?.data?.capabilities?.print,
-                        board:cur_frm.doc.board_description,rowBoard:row?.board?.description,
-                        writes:__p0PrintWrites.length};
-                    const originalMsg=frappe.msgprint, messages=[];
-                    const originalPrint=AlmdinaCuttingPlanRender.print;
-                    let printChecks=null;
-                    AlmdinaCuttingPlanRender.print=function(frm,plan,hint) {
-                        const context=AlmdinaDocumentContext, owner=AlmdinaPlanWorkspaceState;
-                        const token=context.capture(frm),state=owner.snapshot(frm);
-                        const row=owner.displayedPlanForTab(frm,hint?.tab);
-                        const geometry=row?.snapshot_json && JSON.parse(row.snapshot_json);
-                        const hintGeometry=hint?.row?.snapshot_json && JSON.parse(hint.row.snapshot_json);
-                        printChecks={current:context.isCurrent(frm,token),
-                            permission:AlmdinaPermissions.canDocument(frm,'print_cutting_plan'),
-                            status:state?.status,orderMatches:state?.data?.order_name===frm.doc?.name,
-                            capability:state?.data?.capabilities?.print,
-                            rowName:row?.name,hintName:hint?.row?.name,
-                            rowRevision:row?.revision,hintRevision:hint?.row?.revision,
-                            sheets:geometry?.sheets?.length,
-                            boardMatches:!row?.board?.description || row.board.description===frm.doc.board_description,
-                            hintGeometryMatches:JSON.stringify(hintGeometry)===JSON.stringify(geometry),
-                            planGeometryMatches:JSON.stringify(plan)===JSON.stringify(geometry)};
-                        return originalPrint.apply(this,arguments);
-                    };
-                    let result;
-                    frappe.msgprint=function(message,...args) {
-                        messages.push(String(message?.message || message));
-                        return originalMsg.call(this,message,...args);
-                    };
-                    try { result=await AlmdinaPlanTabsUX.printActivePlan(cur_frm); }
-                    finally { frappe.msgprint=originalMsg; AlmdinaCuttingPlanRender.print=originalPrint; }
-                    return {result,order:cur_frm.doc.name,row:row?.name,before,
-                        messages,printChecks,
-                        after:{generation:AlmdinaDocumentContext.capture(cur_frm)?.generation,
-                            modified:cur_frm.doc.modified,writes:__p0PrintWrites.length,
-                            state:AlmdinaPlanWorkspaceState.snapshot(cur_frm)?.status},
+                    return {result,order:cur_frm.doc.name,row:row?.name,
+                        rejections:__p0PrintRejections.slice(before),
+                        writes:__p0PrintWrites.length,
                         revision:row?.revision,html:__p0PrintWrites.at(-1)};
                 }""")
-                evidence.setdefault("attempts", {})[label] = {
+                evidence.setdefault("attempts", {})[f"{label}-{visit}"] = {
                     key: value for key, value in result.items() if key != "html"}
                 assert result["result"] is True and result["row"] == saved_plan[label]["name"], result
                 html = result.pop("html")
