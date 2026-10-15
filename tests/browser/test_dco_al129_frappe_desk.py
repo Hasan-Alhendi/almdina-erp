@@ -761,10 +761,19 @@ def _set_link(page: Page, fieldname: str, value: str) -> None:
     control.fill(value)
     suggestions = page.locator(".awesomplete ul [role='option']:visible")
     try:
-        expect(suggestions.first).to_be_visible(timeout=20_000)
-    except (PlaywrightTimeoutError, AssertionError) as error:
+        page.wait_for_function(
+            "({fieldname, value}) => { const frm = window.cur_frm;"
+            " const field = frm && frm.fields_dict && frm.fields_dict[fieldname];"
+            " const list = field && field.awesomplete && field.awesomplete.list;"
+            " const hasExactValue = Array.isArray(list) && list.some(item => item && String(item.value) === value);"
+            " const options = [...document.querySelectorAll('.awesomplete ul [role=\"option\"]')];"
+            " return hasExactValue && options.some(item => item.getClientRects().length > 0); }",
+            arg={"fieldname": fieldname, "value": value},
+            timeout=20_000,
+        )
+    except PlaywrightTimeoutError as error:
         state = page.evaluate(
-            "async fieldname => { const frm = window.cur_frm;"
+            "async ({fieldname, value}) => { const frm = window.cur_frm;"
             " const field = frm && frm.fields_dict && frm.fields_dict[fieldname];"
             " const option = field && field.df && field.df.options;"
             " const input = field && field.$input && typeof field.$input.get === 'function'"
@@ -776,27 +785,31 @@ def _set_link(page: Page, fieldname: str, value: str) -> None:
             " page_length: 10, link_fieldname: fieldname,"
             " ignore_user_permissions: Boolean(field.df && field.df.ignore_user_permissions)});"
             " linkSearch = {ok: true, resultCount: Array.isArray(results) ? results.length : null,"
+            " exactResultCount: Array.isArray(results) ? results.filter(item => String(item.value) === value).length : null,"
             " errorType: null, permissionDenied: false};"
             " } catch (searchError) { const details = [searchError && searchError.message,"
             " searchError && searchError.exc_type].join(' '); linkSearch = {ok: false, resultCount: null,"
-            " errorType: searchError && searchError.exc_type || searchError && searchError.name || 'Error',"
+            " exactResultCount: null, errorType: searchError && searchError.exc_type || searchError && searchError.name || 'Error',"
             " permissionDenied: /permission|not permitted/i.test(details)}; } }"
             " const route = window.frappe && frappe.get_route ? frappe.get_route() : [];"
+            " const list = field && field.awesomplete && field.awesomplete.list;"
+            " const values = Array.isArray(list) ? list : [];"
             " return {doctype: frm && frm.doctype || null, isNew: Boolean(frm && frm.is_new && frm.is_new()),"
             " route: Array.isArray(route) ? route.join('/') : null, fieldType: field && field.df && field.df.fieldtype || null,"
             " linkDoctype: option || null, fieldHidden: Boolean(field && field.df && field.df.hidden),"
             " fieldReadOnly: Boolean(field && (field.read_only || (field.df && field.df.read_only))),"
             " inputConnected: Boolean(input && input.isConnected), inputDisabled: Boolean(input && input.disabled),"
-            " inputValuePresent: Boolean(input && input.value), suggestionCount:"
+            " inputMatchesRequested: Boolean(input && input.value === value), sourceListCount: values.length,"
+            " sourceExactValueCount: values.filter(item => item && String(item.value) === value).length, suggestionCount:"
             " [...document.querySelectorAll('.awesomplete ul [role=\"option\"]')].filter(item => item.getClientRects().length > 0).length,"
             " inputFocused: Boolean(input && document.activeElement === input), linkSearch,"
             " linkReadPermission: option && frappe.perm && frappe.perm.has_perm"
             " ? Boolean(frappe.perm.has_perm(option, 0, 'read')) : null}; }",
-            fieldname,
+            {"fieldname": fieldname, "value": value},
         )
         state["runtimeErrors"] = PAGE_RUNTIME_DIAGNOSTICS.get(id(page), [])[-12:]
         trace("link_field_suggestions_unavailable", **state)
-        raise AssertionError(f"Frappe {fieldname} link suggestions were not visible: {state}") from error
+        raise AssertionError(f"Frappe {fieldname} exact link option was not available: {state}") from error
     # Match the Link control's underlying result values; rendered labels can
     # combine a translated title and description and are not the document name.
     option_values = page.evaluate(
