@@ -299,6 +299,15 @@ def commit_cutting_plan_preview(order_name: str, preview_id: str) -> dict[str, A
     apply_plan_costs(plan, edge_cost_usd=factory_execution_edge_cost(order, plan))
     repository.save_document(plan)
     refresh_order_commercial_totals(order, plan)
+    from almdina_erp.almdina_erp.services.final_price_approval_service import (
+        maybe_invalidate_final_price_approval,
+    )
+
+    maybe_invalidate_final_price_approval(
+        order.name,
+        reason="cost_plan_basis_changed",
+        only_if_basis_changed=True,
+    )
     order.add_comment(
         "Info",
         text=_("تم حفظ معاينة خطة القص {0} بواسطة {1}.").format(

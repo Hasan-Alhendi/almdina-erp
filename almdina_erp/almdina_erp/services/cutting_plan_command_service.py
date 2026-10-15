@@ -401,6 +401,15 @@ def finalize_uploaded_dxf_order_state(order: Any, plan: Any) -> None:
 
     _set_drawing_dxf_status(order, "Uploaded")
     refresh_order_commercial_totals(order, plan)
+    from almdina_erp.almdina_erp.services.final_price_approval_service import (
+        maybe_invalidate_final_price_approval,
+    )
+
+    maybe_invalidate_final_price_approval(
+        order.name,
+        reason="cost_plan_basis_changed",
+        only_if_basis_changed=True,
+    )
 
 
 def approve_order_plan(order: Any, plan_source: str) -> dict[str, Any]:
@@ -439,6 +448,16 @@ def approve_order_plan(order: Any, plan_source: str) -> dict[str, Any]:
     repository.save_document(plan, allow_status_transition=True)
     _set_approved_plan_relation(order, plan)
     refresh_order_commercial_totals(order, plan)
+    from almdina_erp.almdina_erp.services.final_price_approval_service import (
+        maybe_invalidate_final_price_approval,
+    )
+
+    # Production status alone must not clear price approval; only a real basis shift.
+    maybe_invalidate_final_price_approval(
+        order.name,
+        reason="cost_plan_authority_changed",
+        only_if_basis_changed=True,
+    )
 
     return {
         "name": order.name,
@@ -516,6 +535,16 @@ def recalculate_system_plan(
     apply_plan_costs(plan, edge_cost_usd=factory_execution_edge_cost(order, plan))
     repository.save_document(plan)
     refresh_order_commercial_totals(order, plan)
+    from almdina_erp.almdina_erp.services.final_price_approval_service import (
+        maybe_invalidate_final_price_approval,
+    )
+
+    # Non-authority draft recalculation keeps the official cost plan unchanged.
+    maybe_invalidate_final_price_approval(
+        order.name,
+        reason="cost_plan_basis_changed",
+        only_if_basis_changed=True,
+    )
     result = plan_payload(plan, order)
     result["changed_fields"] = changed
     return result

@@ -143,10 +143,18 @@
     const STATUS_FILTER_ALL_LABEL = "All statuses";
     const ASSIGNEE_FILTER_FIELDNAME = "current_assignee";
     const ASSIGNEE_FILTER_ALL_LABEL = "All workers";
+    const PRICE_APPROVAL_FILTER_FIELDNAME = "price_approval_status";
+    const PRICE_APPROVAL_FILTER_ALL_LABEL = "All price statuses";
+    const PRICE_APPROVAL_STATUS_APPROVED = "Approved";
+    const PRICE_APPROVAL_STATUS_UNAPPROVED = "Unapproved";
     const DEFAULT_STATUS_OPTIONS = Object.freeze([
         Object.freeze({ value: "Draft", label: "Draft" }),
         Object.freeze({ value: "Delivered", label: "Delivered" }),
         Object.freeze({ value: "Cancelled", label: "Cancelled" }),
+    ]);
+    const PRICE_APPROVAL_FILTER_OPTIONS = Object.freeze([
+        Object.freeze({ value: PRICE_APPROVAL_STATUS_APPROVED, label: "Approved" }),
+        Object.freeze({ value: PRICE_APPROVAL_STATUS_UNAPPROVED, label: "Unapproved" }),
     ]);
     let loadedStatusOptions = [...DEFAULT_STATUS_OPTIONS];
     let loadedAssigneeOptions = [];
@@ -498,6 +506,36 @@
         };
     }
 
+    function priceApprovalFilterOptions() {
+        return [
+            { value: "", label: translate(PRICE_APPROVAL_FILTER_ALL_LABEL) },
+            ...PRICE_APPROVAL_FILTER_OPTIONS.map(option => ({
+                value: option.value,
+                label: translate(option.label),
+            })),
+        ];
+    }
+
+    function priceApprovalFilterConfig(options = {}) {
+        const localize = options.localize !== false;
+        const labelFor = (message) => (localize ? translate(message) : message);
+        return {
+            fieldtype: "Select",
+            fieldname: PRICE_APPROVAL_FILTER_FIELDNAME,
+            label: labelFor("Price approval status"),
+            options: localize
+                ? priceApprovalFilterOptions()
+                : [
+                    { value: "", label: PRICE_APPROVAL_FILTER_ALL_LABEL },
+                    ...PRICE_APPROVAL_FILTER_OPTIONS.map(option => ({
+                        value: option.value,
+                        label: option.label,
+                    })),
+                ],
+            condition: "=",
+        };
+    }
+
     function statusFilterField(listview) {
         return listview && listview.page && listview.page.fields_dict
             ? listview.page.fields_dict[STATUS_FILTER_FIELDNAME]
@@ -508,6 +546,34 @@
         return listview && listview.page && listview.page.fields_dict
             ? listview.page.fields_dict[ASSIGNEE_FILTER_FIELDNAME]
             : null;
+    }
+
+    function priceApprovalFilterField(listview) {
+        return listview && listview.page && listview.page.fields_dict
+            ? listview.page.fields_dict[PRICE_APPROVAL_FILTER_FIELDNAME]
+            : null;
+    }
+
+    function normalizePriceApprovalStatus(value) {
+        return String(value || "").trim() === PRICE_APPROVAL_STATUS_APPROVED
+            ? PRICE_APPROVAL_STATUS_APPROVED
+            : PRICE_APPROVAL_STATUS_UNAPPROVED;
+    }
+
+    function priceApprovalStatusLabel(value) {
+        const status = normalizePriceApprovalStatus(value);
+        return translate(
+            status === PRICE_APPROVAL_STATUS_APPROVED
+                ? PRICE_APPROVAL_STATUS_APPROVED
+                : PRICE_APPROVAL_STATUS_UNAPPROVED
+        );
+    }
+
+    function priceApprovalBadgeHtml(value) {
+        const status = normalizePriceApprovalStatus(value);
+        const approved = status === PRICE_APPROVAL_STATUS_APPROVED;
+        const label = priceApprovalStatusLabel(status);
+        return `<span class="dco-list-price-approval ${approved ? "is-approved" : "is-unapproved"}" data-price-approval-status="${escapeHtml(status)}" title="${escapeHtml(translate("Price approval status"))}: ${escapeHtml(label)}" role="status">${escapeHtml(label)}</span>`;
     }
 
     function controlWrapper(field) {
@@ -581,6 +647,22 @@
         if (!select) return;
         select.setAttribute("aria-label", translate("Current worker"));
         select.setAttribute("title", translate(ASSIGNEE_FILTER_ALL_LABEL));
+    }
+
+    function applyPriceApprovalFilterHint(listview) {
+        const field = priceApprovalFilterField(listview);
+        if (field && field.df) {
+            field.df.label = translate("Price approval status");
+            if (typeof field.set_label === "function") {
+                field.set_label(translate("Price approval status"));
+            }
+        }
+        const wrapper = controlWrapper(field);
+        if (!wrapper || typeof wrapper.querySelector !== "function") return;
+        const select = wrapper.querySelector("select");
+        if (!select) return;
+        select.setAttribute("aria-label", translate("Price approval status"));
+        select.setAttribute("title", translate(PRICE_APPROVAL_FILTER_ALL_LABEL));
     }
 
     function applyLoadedStatusFilterOptions(listview, rows) {
@@ -670,14 +752,17 @@
         const root = rootNode(listview);
         const statusWrapper = controlWrapper(statusFilterField(listview));
         const assigneeWrapper = controlWrapper(assigneeFilterField(listview));
+        const priceWrapper = controlWrapper(priceApprovalFilterField(listview));
         if (!root || !statusWrapper || !assigneeWrapper) return false;
 
         const target = ensureStatusFilterSlot(root);
         if (!target) return false;
         if (statusWrapper.parentNode !== target) target.appendChild(statusWrapper);
         if (assigneeWrapper.parentNode !== target) target.appendChild(assigneeWrapper);
+        if (priceWrapper && priceWrapper.parentNode !== target) target.appendChild(priceWrapper);
         applyStatusFilterHint(listview);
         applyAssigneeFilterHint(listview);
+        applyPriceApprovalFilterHint(listview);
         return true;
     }
 
@@ -841,6 +926,7 @@
         const action = state.history ? null : candidateAction;
         const overview = context.overview === true;
         const productionStage = productionStageLabel(doc);
+        const priceApprovalStatus = normalizePriceApprovalStatus(doc.price_approval_status);
         return Object.freeze({
             orderId: displayValue(doc.name),
             customer: displayValue(doc.customer),
@@ -855,6 +941,8 @@
             overview,
             productionStageLabel: productionStage,
             stageLabel: overview ? overviewStageLabel(doc) : productionStage,
+            priceApprovalStatus,
+            priceApprovalLabel: priceApprovalStatusLabel(priceApprovalStatus),
         });
     }
 
@@ -893,6 +981,11 @@
         const label = String(model && model.productionStageLabel || "").trim();
         if (!label) return "";
         return `<span class="dco-card-stage">${escapeHtml(label)}</span>`;
+    }
+
+    function renderPriceApprovalBadge(model) {
+        if (!model) return "";
+        return priceApprovalBadgeHtml(model.priceApprovalStatus);
     }
 
     function renderCustomer(model) {
@@ -993,6 +1086,7 @@
                     ${renderCustomer(model)}
                     <div class="dco-card-header-meta">
                         ${renderStageChip(model)}
+                        ${renderPriceApprovalBadge(model)}
                         ${renderStatusPill(model.state)}
                     </div>
                 </header>
@@ -1028,6 +1122,7 @@
             model.overview ? 1 : 0,
             model.stageLabel || "",
             model.productionStageLabel || "",
+            model.priceApprovalStatus || "",
             hasSelection ? 1 : 0,
             String(doc.department_status || ""),
         ]);
@@ -1210,6 +1305,40 @@
                 DESKTOP_DELIVERY_ROW_CLASSES.forEach(className => card.classList.remove(className));
             }
         });
+    }
+
+    function applyDesktopPriceApprovalBadges(listview) {
+        const root = rootNode(listview);
+        if (!root) return false;
+        if (root.classList.contains("dco-order-card-layout")) {
+            root.querySelectorAll(".dco-list-price-approval-host").forEach(node => node.remove());
+            return false;
+        }
+
+        const result = root.querySelector(".result") || root;
+        const docs = orderDocuments(listview);
+        [...result.querySelectorAll(".list-row-container")].forEach(container => {
+            if (container.classList.contains("dco-list-row-history-hidden")) {
+                const stale = container.querySelector(".dco-list-price-approval-host");
+                if (stale) stale.remove();
+                return;
+            }
+            const name = rowDocumentName(container);
+            const doc = docs.get(name) || {};
+            const subject = container.querySelector(".list-subject")
+                || container.querySelector(".level-left .ellipsis")
+                || container.querySelector(".list-row-col.ellipsis");
+            if (!subject) return;
+
+            let host = subject.querySelector(".dco-list-price-approval-host");
+            if (!host) {
+                host = document.createElement("span");
+                host.className = "dco-list-price-approval-host";
+                subject.appendChild(host);
+            }
+            host.innerHTML = priceApprovalBadgeHtml(doc.price_approval_status);
+        });
+        return true;
     }
 
     function queueTimeValue(item, fieldname) {
@@ -1645,6 +1774,7 @@
         }
         renderMobileCards(listview);
         applyDesktopDeliveryRowColors(listview);
+        applyDesktopPriceApprovalBadges(listview);
     }
 
     function schedulePresentation(listview, { refreshRoleFlags = false } = {}) {
@@ -1698,11 +1828,13 @@
             "order_notes",
             "current_department", "current_assignee",
             "current_production_stage",
+            "price_approval_status",
         ])],
         custom_filter_configs: [
             ...(Array.isArray(existing.custom_filter_configs) ? existing.custom_filter_configs : []),
             statusFilterConfig({ localize: false }),
             assigneeFilterConfig({ localize: false }),
+            priceApprovalFilterConfig({ localize: false }),
         ],
         formatters: Object.assign({}, existing.formatters || {}, {
             current_department(value, df, doc) {
@@ -1736,6 +1868,7 @@
 
     window.AlmdinaDoorCuttingOrderListUX = Object.freeze({
         applyDesktopDeliveryRowColors,
+        applyDesktopPriceApprovalBadges,
         applyKanbanCardPresentation,
         applyLoadedAssigneeFilterOptions,
         applyLoadedStatusFilterOptions,
@@ -1756,6 +1889,9 @@
         overviewDefaultSortSql,
         overviewListState,
         overviewStageLabel,
+        priceApprovalBadgeHtml,
+        priceApprovalFilterConfig,
+        priceApprovalFilterOptions,
         productionStageLabel,
         personalQueueState,
         quickActionContext,

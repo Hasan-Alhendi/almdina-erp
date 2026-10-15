@@ -212,6 +212,10 @@ class TestDcoCompactListUx(unittest.TestCase):
         css = LIST_CSS.read_text(encoding="utf-8")
 
         self.assertIn('.dco-order-list .dco-status-filter-slot {', css)
+        self.assertIn(
+            '.dco-order-list .dco-status-filter-slot [data-fieldname="price_approval_status"]',
+            css,
+        )
         self.assertIn('display: inline-flex !important;', css)
         self.assertIn('gap: 5px !important;', css)
         self.assertIn('width: auto !important;', css)

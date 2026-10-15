@@ -207,6 +207,35 @@
     white-space: nowrap;
 }
 
+.dco-order-list.dco-order-card-layout .dco-list-price-approval {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    max-width: 100%;
+    min-height: 22px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    border: 1px solid var(--alm-card-border, #e4e8ee);
+    background: var(--subtle-fg, #f7f9fa);
+    color: var(--text-color, #1f272e);
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.dco-order-list.dco-order-card-layout .dco-list-price-approval.is-approved {
+    border-color: color-mix(in srgb, var(--alm-success, #15803d) 35%, #fff);
+    background: color-mix(in srgb, var(--alm-success, #15803d) 10%, #fff);
+    color: var(--alm-success, #15803d);
+}
+
+.dco-order-list.dco-order-card-layout .dco-list-price-approval.is-unapproved {
+    border-color: var(--alm-card-border, #e4e8ee);
+    background: var(--subtle-fg, #f7f9fa);
+    color: var(--text-color, #1f272e);
+}
+
 .dco-order-list.dco-order-card-layout .dco-card-state-pill {
     display: inline-flex;
     align-items: center;

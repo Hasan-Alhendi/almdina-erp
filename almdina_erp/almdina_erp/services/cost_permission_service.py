@@ -295,6 +295,29 @@ def _offcut_projection(plan: Any | None) -> dict[str, Any] | None:
 
 
 def _cost_snapshot(order: Any, *, plan: Any | None = None) -> dict[str, Any]:
+    from almdina_erp.almdina_erp.application.orders.final_price_approval import (
+        decide_final_price_approval_actions,
+    )
+    from almdina_erp.almdina_erp.domain.orders.final_price_basis import (
+        fingerprint_final_price_basis,
+        price_basis_token,
+    )
+    from almdina_erp.almdina_erp.domain.orders.price_approval import (
+        FinalPriceApprovalEligibilityError,
+        evaluate_final_price_approval_eligibility,
+        normalize_price_approval_status,
+    )
+    from almdina_erp.almdina_erp.domain.security.authorization import Capability
+    from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
+        document_has_capability,
+    )
+    from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization import (
+        cutting_plan_capability_allowed,
+    )
+    from almdina_erp.almdina_erp.infrastructure.frappe.final_price_approval_gateway import (
+        FrappeFinalPriceApprovalGateway,
+    )
+
     order_snapshot = {
         fieldname: getattr(order, fieldname, None)
         for fieldname in ORDER_COST_FIELDS
@@ -314,6 +337,80 @@ def _cost_snapshot(order: Any, *, plan: Any | None = None) -> dict[str, Any]:
         resolved_order,
         invoice_rows,
     )
+
+    gateway = FrappeFinalPriceApprovalGateway()
+    price_status = normalize_price_approval_status(
+        getattr(order, "price_approval_status", None)
+    )
+    current_approval = str(getattr(order, "current_price_approval", None) or "").strip() or None
+    basis_token = None
+    approval_payload = None
+    eligibility_error = None
+    if resolved_plan is not None:
+        basis = gateway.build_basis_payload(order, resolved_plan)
+        digest = fingerprint_final_price_basis(basis)
+        basis_token = price_basis_token(
+            digest,
+            formula_version=str(basis.get("formula_version") or ""),
+        )
+        board_present, cutting_present = gateway.cost_input_presence(resolved_plan)
+        try:
+            evaluate_final_price_approval_eligibility(
+                order_name=str(order.name),
+                order_status=str(getattr(order, "status", None) or ""),
+                revision_state=str(getattr(order, "revision_state", None) or "Current"),
+                docstatus=int(getattr(order, "docstatus", 0) or 0),
+                cutting_plan=str(getattr(resolved_plan, "name", None) or ""),
+                plan_belongs_to_order=gateway.plan_belongs_to_order(
+                    resolved_plan, str(order.name)
+                ),
+                plan_is_current=gateway.plan_is_current(order, resolved_plan),
+                pending_price_labels=tuple(pending_labels),
+                board_rate_present=board_present,
+                cutting_rate_present=cutting_present,
+                board_rate_usd=float((basis.get("plan") or {}).get("board_rate_usd") or 0),
+                cutting_cost_per_board_usd=float(
+                    (basis.get("plan") or {}).get("cutting_cost_per_board_usd") or 0
+                ),
+                offcut_price_usd=float((basis.get("plan") or {}).get("offcut_price_usd") or 0),
+                approved_amount_usd=float(basis.get("approved_amount_usd") or 0),
+            )
+        except FinalPriceApprovalEligibilityError as error:
+            eligibility_error = error
+    else:
+        eligibility_error = FinalPriceApprovalEligibilityError(
+            "cost_plan_missing",
+            "A valid cost-reference cutting plan is required before approving the final price.",
+        )
+
+    if current_approval:
+        approval_doc = gateway.load_approval(current_approval)
+        if approval_doc is not None:
+            approval_payload = {
+                "name": approval_doc.name,
+                "approved_amount_usd": flt(approval_doc.approved_amount),
+                "currency": approval_doc.currency,
+                "cutting_plan": approval_doc.cutting_plan,
+                "approved_by": approval_doc.approved_by,
+                "approved_on": approval_doc.approved_on,
+                "validity_status": approval_doc.validity_status,
+                "fingerprint_formula_version": approval_doc.fingerprint_formula_version,
+            }
+
+    decision = decide_final_price_approval_actions(
+        has_approve_final_price=document_has_capability(
+            order, Capability.APPROVE_FINAL_PRICE
+        ),
+        has_view_costs=cutting_plan_capability_allowed(order, Capability.VIEW_COSTS),
+        has_edit_cost_settings=cutting_plan_capability_allowed(
+            order, Capability.EDIT_COST_SETTINGS
+        ),
+        price_approval_status=price_status,
+        current_price_approval=current_approval,
+        price_basis_token_value=basis_token,
+        eligibility_error=eligibility_error,
+    )
+
     return {
         "order_name": order.name,
         "order_modified": _document_version(order),
@@ -324,6 +421,20 @@ def _cost_snapshot(order: Any, *, plan: Any | None = None) -> dict[str, Any]:
         "invoice_preview_lines": invoice_lines,
         "invoice_preview_total_usd": invoice_total,
         "pending_factory_price_labels": list(pending_labels),
+        "price_approval_status": decision.price_approval_status,
+        "current_price_approval": decision.current_price_approval,
+        "price_approval": approval_payload,
+        "price_basis_token": decision.price_basis_token,
+        "can_approve_final_price": decision.can_approve_final_price,
+        "final_price_approval_blocker": (
+            {
+                "code": decision.reason_code,
+                "message": decision.reason_message,
+            }
+            if decision.reason_code
+            else None
+        ),
+        "can_edit_cost_settings": decision.can_edit_cost_settings,
     }
 
 
@@ -354,6 +465,11 @@ def update_order_cost_settings(
     )
     order = _authorized_order(name, Capability.EDIT_COST_SETTINGS)
     _require_cost_visibility(order)
+    from almdina_erp.almdina_erp.infrastructure.frappe.final_price_approval_gateway import (
+        assert_cost_settings_unlocked_for_order,
+    )
+
+    assert_cost_settings_unlocked_for_order(order)
 
     board_rate = _required_cost_input(board_rate_usd, _("سعر اللوح"))
     cutting_rate = _required_cost_input(

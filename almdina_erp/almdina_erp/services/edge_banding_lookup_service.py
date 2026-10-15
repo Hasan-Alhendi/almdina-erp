@@ -177,6 +177,17 @@ def _persist_operational_piece_state(order: Any, piece: Any, override_field: str
         update_modified=True,
     )
     invalidate_stale_draft_plans(order)
+    from almdina_erp.almdina_erp.services.final_price_approval_service import (
+        maybe_invalidate_final_price_approval,
+    )
+
+    # Per-side edge profile changes the commercial banding rate/type without a
+    # full DCO save; keep final-price approval in the same request transaction.
+    maybe_invalidate_final_price_approval(
+        order.name,
+        reason="edge_banding_override_changed",
+        only_if_basis_changed=False,
+    )
     frappe.clear_document_cache("Door Cutting Order", order.name)
 
 

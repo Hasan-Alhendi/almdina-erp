@@ -24,6 +24,8 @@
         "almdina_erp.almdina_erp.services.cost_permission_service.get_order_cost_snapshot";
     const SAVE_SETTINGS_METHOD =
         "almdina_erp.almdina_erp.services.cost_permission_service.update_order_cost_settings";
+    const APPROVE_FINAL_PRICE_METHOD =
+        "almdina_erp.almdina_erp.services.final_price_approval_service.approve_order_final_price";
 
     function unwrapResponse(response) {
         return response && response.message !== undefined ? response.message : response;
@@ -96,10 +98,26 @@
         );
     }
 
+    function approveFinalPrice(orderName, expectedPriceBasisToken) {
+        return call(
+            APPROVE_FINAL_PRICE_METHOD,
+            {
+                order_name: orderName,
+                expected_price_basis_token: expectedPriceBasisToken,
+            },
+            {
+                freeze: true,
+                freezeMessage: translate("Approving the final price..."),
+            }
+        );
+    }
+
     window.AlmdinaCostWorkspaceAPI = Object.freeze({
         READ_METHOD,
         SAVE_SETTINGS_METHOD,
+        APPROVE_FINAL_PRICE_METHOD,
         load,
         saveSettings,
+        approveFinalPrice,
     });
 })();

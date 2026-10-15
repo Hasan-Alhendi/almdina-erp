@@ -2689,6 +2689,7 @@ Edit the existing customer details.,تعديل بيانات الزبون الح�
 Delete customer,حذف زبون
 Delete a customer who is not linked to any saved orders.,حذف زبون غير مرتبط بطلبات محفوظة.
 Price approval status,حالة السعر
+All price statuses,كل حالات السعر
 Current price approval,اعتماد السعر الحالي
 Door Cutting Price Approval,اعتماد سعر القص
 Cost reference Cutting Plan,خطة التكلفة المرجعية
@@ -2709,3 +2710,37 @@ Door Cutting Price Approval records are immutable after insert.,سجلات اع�
 Only an Active price approval may transition to Invalidated.,يمكن إبطال اعتماد السعر النشط فقط.
 Invalidating a price approval cannot rewrite historical approval details.,إبطال اعتماد السعر لا يجوز أن يعيد كتابة تفاصيل الاعتماد التاريخية.
 The selected Cutting Plan belongs to another order.,خطة القص المحددة تتبع طلبًا آخر.
+لا تملك صلاحية اعتماد السعر النهائي لهذا الطلب.,لا تملك صلاحية اعتماد السعر النهائي لهذا الطلب.
+اعتماد السعر النهائي يتطلب صلاحية عرض التكلفة لهذا الطلب.,اعتماد السعر النهائي يتطلب صلاحية عرض التكلفة لهذا الطلب.
+"لا يمكن تعديل إعدادات التكلفة لأن السعر النهائي معتمد. ألغِ اعتماد السعر أولاً بعد تغيير أساس التسعير.",لا يمكن تعديل إعدادات التكلفة لأن السعر النهائي معتمد. ألغِ اعتماد السعر أولاً بعد تغيير أساس التسعير.
+Refresh the cost page and review the current price before approving.,حدّث صفحة التكلفة وراجع السعر الحالي قبل الاعتماد.
+The price basis changed since it was last loaded. Refresh and review the price before approving.,تغيّر أساس السعر منذ آخر تحميل. حدّث الصفحة وراجع السعر قبل الاعتماد.
+The cutting order must be saved before its final price can be approved.,يجب حفظ طلب القص قبل اعتماد سعره النهائي.
+A cancelled order cannot receive final-price approval.,لا يمكن اعتماد السعر النهائي لطلب ملغى.
+A superseded order revision cannot receive final-price approval.,لا يمكن اعتماد السعر النهائي لنسخة طلب مستبدلة.
+A valid cost-reference cutting plan is required before approving the final price.,يلزم وجود خطة تكلفة مرجعية صالحة قبل اعتماد السعر النهائي.
+The cost-reference cutting plan is outdated. Recalculate and review the price first.,خطة التكلفة المرجعية قديمة. أعد الحساب وراجع السعر أولاً.
+Board rate must be entered on the cost page before approving the final price.,يجب إدخال سعر اللوح من صفحة التكلفة قبل اعتماد السعر النهائي.
+Cutting fee per board must be entered on the cost page before approving the final price.,يجب إدخال أجور القص / لوح من صفحة التكلفة قبل اعتماد السعر النهائي.
+The final price is already approved for a different pricing basis.,السعر النهائي معتمد مسبقاً لأساس تسعير مختلف.
+Final-price approval capability is required.,صلاحية اعتماد السعر النهائي مطلوبة.
+Approving the final price...,جارٍ اعتماد السعر النهائي...
+Approving…,جارٍ الاعتماد…
+Updating…,جارٍ التحديث…
+Approved by {0} on {1},اعتمده {0} في {1}
+Approved by {0},اعتمده {0}
+Approved on {0},اعتمد في {0}
+Cost settings are locked because the final price is approved.,إعدادات التكلفة مقفلة لاعتماد السعر النهائي.
+Cost settings locked,إعدادات التكلفة مقفلة
+Unsaved changes,تغييرات غير محفوظة
+Save or cancel unsaved changes before approving the final price.,احفظ التغييرات غير المحفوظة أو ألغها قبل اعتماد السعر النهائي.
+Final price not ready,السعر النهائي غير جاهز
+The final price is not ready to approve yet.,السعر النهائي غير جاهز للاعتماد بعد.
+Final price approved,تم اعتماد السعر النهائي
+The final price was approved but the cost data could not be refreshed. Open the Cost tab again to load the latest status.,تم اعتماد السعر النهائي لكن تعذر تحديث بيانات التكلفة. افتح تاب التكلفة مجدداً لتحميل الحالة الأحدث.
+"The final price was approved, but the cost data could not be refreshed. Open the Cost tab again to load the latest status.",تم اعتماد السعر النهائي لكن تعذر تحديث بيانات التكلفة. افتح تاب التكلفة مجدداً لتحميل الحالة الأحدث.
+Price changed,تغيّر السعر
+The price basis changed. Review the total then approve again.,تغيّر أساس السعر. راجع الإجمالي ثم اضغط الاعتماد مجدداً.
+"The price basis changed. Review the total, then approve again.",تغيّر أساس السعر. راجع الإجمالي ثم اضغط الاعتماد مجدداً.
+Could not approve the final price,تعذر اعتماد السعر النهائي
+Could not approve the final price.,تعذر اعتماد السعر النهائي.
