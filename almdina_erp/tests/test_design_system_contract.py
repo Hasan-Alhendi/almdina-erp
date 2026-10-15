@@ -894,11 +894,20 @@ class TestDesignSystemContract(unittest.TestCase):
         self.assertIn(".prw-empty.alm-state", css)
 
     def test_factory_plan_archive_uses_design_system(self) -> None:
+        archive_css = (ROOT / "public" / "css" / "factory_plan_archive.css").read_text(encoding="utf-8")
         self.assertIn('class="almdina-ui apa-shell alm-page alm-page--admin"', self.factory_plan_archive_page)
         self.assertIn("AlmdinaUi.button", self.factory_plan_archive_page)
         self.assertIn("AlmdinaUi.control", self.factory_plan_archive_page)
         self.assertIn("disposeControls", self.factory_plan_archive_page)
         self.assertNotIn('class="btn btn-primary apa-archive"', self.factory_plan_archive_page)
+        # Dark Mode: archive paints live in static CSS via --alm-* (no JS <style> board).
+        self.assertIn('factory_plan_archive.css?v=1', self.factory_plan_archive_page)
+        self.assertIn("ensureArchiveStyles", self.factory_plan_archive_page)
+        self.assertNotIn('createElement("style")', self.factory_plan_archive_page)
+        self.assertIn("background: var(--alm-card, var(--fg-color, #fff));", archive_css)
+        self.assertIn("color: var(--alm-text-strong, #101828);", archive_css)
+        self.assertIn("background: var(--alm-status-success-bg);", archive_css)
+        self.assertNotIn("background:#eaf8ef", archive_css.replace(" ", ""))
 
     def test_widget_migrated_surfaces_reject_raw_search_inputs(self) -> None:
         for path in WIDGET_MIGRATED_SURFACES:

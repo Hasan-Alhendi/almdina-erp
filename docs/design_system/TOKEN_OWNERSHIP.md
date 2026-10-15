@@ -21,7 +21,7 @@ Feature CSS may keep **domain/layout** tokens. It must not redefine **foundation
 | `prw-*` | Factory Master Data / Routing | stage rail, editor geometry, workflow story layout | independent brand/status scales (alias `--alm-*`) |
 | `sf-*` | Shop Floor | kanban columns, board geometry, production-card hierarchy | independent brand/radius/shadow scales (alias `--alm-*`) |
 | `dco-*` | Door Cutting Order | measurement grid, plan canvas, edge rendering, sticky measurement geometry | brand/status/type/space scales that belong to DS |
-| `apa-*` | Factory Plan Archive | archive list/layout specifics | foundational DS primitives |
+| `apa-*` | Factory Plan Archive (`public/css/factory_plan_archive.css`) | archive list/layout specifics | foundational DS primitives / parallel Light-only paint boards |
 
 ## Layer ownership
 
