@@ -22,7 +22,7 @@ app_include_css = [
     "/assets/almdina_erp/css/door_cutting_order_responsive.css",
     "/assets/almdina_erp/css/door_cutting_order_form_tab_layout.css?v=5",
     "/assets/almdina_erp/css/door_cutting_order_plan_workspace_layout.css?v=12",
-    "/assets/almdina_erp/css/door_cutting_order_plan_workspace_shell.css?v=13",
+    "/assets/almdina_erp/css/door_cutting_order_plan_workspace_shell.css?v=14",
     "/assets/almdina_erp/css/door_cutting_order_form_presentation.css?v=1",
     "/assets/almdina_erp/css/door_cutting_order_form_sidebar.css",
     # Raw /assets paths are not content-fingerprinted by Frappe; bump the bounded

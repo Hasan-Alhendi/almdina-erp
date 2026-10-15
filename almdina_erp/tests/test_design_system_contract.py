@@ -951,8 +951,54 @@ class TestDesignSystemContract(unittest.TestCase):
             DCO_JS / "cutting_plan" / "door_cutting_order_plan_content_styles.js"
         ).read_text(encoding="utf-8")
         self.assertIn('.dco-plan-tabs--underline .btn.is-active', plan_content_styles)
-        self.assertIn("color:var(--alm-primary, #172033) !important;", plan_content_styles)
+        # Interactive tab paint must stay readable in Dark (navy primary fails on dark canvas).
+        self.assertIn("color:var(--alm-brand-soft-fg, #172033) !important;", plan_content_styles)
+        self.assertIn(
+            "background:var(--alm-brand-soft-fg, #172033);",
+            plan_content_styles,
+        )
+        self.assertNotIn("color:var(--alm-primary, #172033) !important;", plan_content_styles)
         self.assertNotIn(".dco-plan-tabs", self.components)
+
+    def test_dco_plan_screen_chrome_contrast_stays_out_of_board_and_print(self) -> None:
+        styles = (
+            DCO_JS / "cutting_plan" / "door_cutting_order_plan_content_styles.js"
+        ).read_text(encoding="utf-8")
+        renderer = (
+            DCO_JS / "cutting_plan" / "door_cutting_order_cutting_plan_renderer.js"
+        ).read_text(encoding="utf-8")
+
+        # Board card titles: screen gallery only.
+        self.assertIn(
+            "[data-fieldname=\"cutting_plan_html\"] .dco-board-gallery .dco-sheet-title",
+            styles,
+        )
+        self.assertIn(
+            "color:var(--alm-text-strong,#101828) !important;",
+            styles,
+        )
+        # Legend label remaps must stay under .dco-extra-addon-legend, not global text marks.
+        self.assertIn(
+            ".dco-extra-addon-legend .dco-extra-addon-text[data-addon-kind=\"double\"]",
+            styles,
+        )
+        self.assertNotIn(
+            "[data-fieldname=\"cutting_plan_html\"] .dco-extra-addon-text[data-addon-kind=\"double\"] {",
+            styles,
+        )
+        self.assertIn(
+            "color:var(--alm-status-warning-fg, #b45309) !important;",
+            styles,
+        )
+        # Print / in-board identity paints remain paper-dark for Light boards.
+        self.assertIn('color:#111;', renderer)
+        self.assertIn("EXTRA_DOUBLE_MARK_COLOR = \"#5a2d82\"", renderer)
+        print_doc = renderer[renderer.index("function buildPrintDocument") :]
+        self.assertIn("background: #fff !important;", print_doc)
+        self.assertIn("color: #111 !important;", print_doc)
+        self.assertIn(".dco-sheet-title {", print_doc)
+        self.assertNotIn("var(--alm-text-strong", print_doc)
+        self.assertNotIn("var(--alm-brand-soft-fg", print_doc)
 
     def test_migrated_surfaces_reject_legacy_primary_markup(self) -> None:
         for path in MIGRATED_SURFACES:

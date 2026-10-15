@@ -360,8 +360,8 @@ body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="cutting_p
 }
 
 body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="cutting_plan_html"] .dco-plan-tabs .btn.is-active {
-    color: var(--alm-primary, #172033) !important;
-    border-bottom-color: var(--alm-primary, #172033) !important;
+    color: var(--alm-brand-soft-fg, #172033) !important;
+    border-bottom-color: var(--alm-brand-soft-fg, #172033) !important;
     font-weight: 800 !important;
 }
 
