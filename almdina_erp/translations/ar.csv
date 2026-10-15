@@ -1545,6 +1545,8 @@ Cut execution settings,إعدادات تنفيذ القص
 Cuts: {0} | waste: {1} m² ({2}%),قطع: {0} | الهدر: {1} م² ({2}%)
 Cutting plan,خطة القص
 Cutting plan - {0},خطة قص - {0}
+Plan name,اسم الخطة
+Plan revision,إصدار الخطة
 Cutting plan approval was cancelled and its history was kept.,تم إلغاء اعتماد خطة القص مع الاحتفاظ بسجلها.
 Cutting plan commands,أوامر خطة القص
 Cutting plan engine,محرك خطة القص

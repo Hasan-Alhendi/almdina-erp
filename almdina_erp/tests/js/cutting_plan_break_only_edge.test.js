@@ -102,6 +102,17 @@ const frm = {
         pieces: [],
     },
 };
+fakeWindow.cur_frm = frm;
+fakeWindow.AlmdinaDocumentContext = {
+    capture() { return { identity: frm.doc.name, generation: 1 }; },
+    isCurrent(_frm, token) { return token.identity === frm.doc.name && token.generation === 1; },
+};
+fakeWindow.AlmdinaPermissions = { canDocument() { return true; } };
+let currentRow;
+fakeWindow.AlmdinaPlanWorkspaceState = {
+    snapshot() { return { status: "ready", data: { order_name: frm.doc.name } }; },
+    displayedPlanForTab() { return currentRow; },
+};
 
 function planFor(piece) {
     return {
@@ -182,7 +193,9 @@ assert.doesNotMatch(clearHtml, /dco-edge-line-svg/);
 
 async function printed(piece) {
     prints.length = 0;
-    const opened = await renderer.print(frm, planFor(piece));
+    const plan = planFor(piece);
+    currentRow = { name: `PLAN-${piece.id}`, revision: 1, snapshot_json: JSON.stringify(plan) };
+    const opened = await renderer.print(frm, plan);
     assert.equal(opened, true);
     return prints[prints.length - 1] || "";
 }

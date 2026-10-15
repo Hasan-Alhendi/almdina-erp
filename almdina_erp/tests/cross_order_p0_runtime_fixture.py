@@ -232,7 +232,7 @@ def audit_db() -> dict[str, object]:
 
 
 def prepare_saved_plan() -> dict[str, object]:
-    """Persist a real System plan for A on this disposable site."""
+    """Persist distinct real System plans for A and B on this disposable site."""
     fixture = json.loads(Path(os.environ["P0_FIXTURE_PATH"]).read_text(encoding="utf-8"))
     frappe.set_user("Administrator")
     before_reset = audit_db()
@@ -249,18 +249,22 @@ def prepare_saved_plan() -> dict[str, object]:
         recalculate_system_plan,
     )
 
-    order = frappe.get_doc("Door Cutting Order", fixture["orders"]["A"]["name"])
-    result = recalculate_system_plan(order)
-    frappe.db.commit()
-    plan = frappe.get_doc("Cutting Plan", result["cutting_plan"])
-    snapshot = frappe.parse_json(plan.snapshot_json or "{}") or {}
-    summary = {"order_name": order.name, "name": plan.name,
-               "revision": int(plan.revision or 0),
-               "board": plan.board_description,
-               "sheet_count": len(snapshot.get("sheets") or []),
-               "first_piece": ((snapshot.get("sheets") or [{}])[0].get("pieces") or [{}])[0]}
-    if not summary["sheet_count"]:
-        raise AssertionError(f"Saved System plan has no printable sheets: {summary}")
+    summaries = {}
+    for label in ("A", "B"):
+        order = frappe.get_doc("Door Cutting Order", fixture["orders"][label]["name"])
+        result = recalculate_system_plan(order)
+        frappe.db.commit()
+        plan = frappe.get_doc("Cutting Plan", result["cutting_plan"])
+        snapshot = frappe.parse_json(plan.snapshot_json or "{}") or {}
+        summary = {"order_name": order.name, "name": plan.name,
+                   "revision": int(plan.revision or 0),
+                   "board": plan.board_description,
+                   "sheet_count": len(snapshot.get("sheets") or []),
+                   "first_piece": ((snapshot.get("sheets") or [{}])[0].get("pieces") or [{}])[0]}
+        if not summary["sheet_count"]:
+            raise AssertionError(f"Saved System plan has no printable sheets: {summary}")
+        summaries[label] = summary
     (directory / "saved-plan-fixture.json").write_text(
-        json.dumps(summary, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
-    return {key: value for key, value in summary.items() if key != "first_piece"}
+        json.dumps(summaries, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+    return {key: {field: value for field, value in summary.items() if field != "first_piece"}
+            for key, summary in summaries.items()}

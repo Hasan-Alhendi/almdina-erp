@@ -826,9 +826,11 @@
         return theme.headerCss();
     }
 
-    function printOrderMetaHtml(frm, plan, totalSheets) {
+    function printOrderMetaHtml(frm, plan, totalSheets, source) {
         const items = [
             [translate("Order number"), frm.doc.name || "—"],
+            [translate("Plan name"), source.planName],
+            [translate("Plan revision"), source.revision == null ? "—" : source.revision],
             [translate("Customer name"), frm.doc.customer || "—"],
             [translate("Board color"), frm.doc.board_description || "—"],
             [translate("Board count"), totalSheets],
@@ -910,7 +912,7 @@
         return chunks;
     }
 
-    function buildPrintPages(frm, planRoot, plan, identity) {
+    function buildPrintPages(frm, planRoot, plan, identity, source) {
         const sourceCards = [...planRoot.querySelectorAll(".dco-sheet-card")]
             .map(card => card.cloneNode(true));
         const totalSheets = sourceCards.filter(
@@ -936,15 +938,15 @@
             }).join("");
             return `<section class="dco-print-page" data-page="${pageIndex + 1}">
                 ${printHeaderHtml(identity, translate("Cutting plan"), translate("Page {0} of {1}", [pageIndex + 1, chunks.length]))}
-                ${printOrderMetaHtml(frm, plan, totalSheets)}
+                ${printOrderMetaHtml(frm, plan, totalSheets, source)}
                 ${render_extra_addon_legend()}
                 <div class="dco-print-sheets-grid">${gridRows}</div>
             </section>`;
         }).join("");
     }
 
-    function buildPrintDocument(title, frm, planRoot, plan, identity) {
-        const pages = buildPrintPages(frm, planRoot, plan, identity);
+    function buildPrintDocument(title, frm, planRoot, plan, identity, source) {
+        const pages = buildPrintPages(frm, planRoot, plan, identity, source);
         const language = uiLanguage();
         const direction = uiDirection();
         return `<!DOCTYPE html>
@@ -1180,24 +1182,87 @@ ${printHeaderCss()}
 </html>`;
     }
 
-    async function print_cutting_plan(frm, planOverride = null) {
-        const plan = planOverride || parse_plan(frm) || {};
-        let planRoot = null;
-        if (planOverride) {
-            planRoot = planRootFromPlan(frm, planOverride);
+    function printPlanRow(frm, tab) {
+        return window.AlmdinaPlanWorkspaceState?.displayedPlanForTab?.(frm, tab) || null;
+    }
+
+    function rowGeometry(row) {
+        const raw = row?.snapshot_json;
+        if (!raw) return null;
+        try {
+            return typeof raw === "string" ? JSON.parse(raw) : raw;
+        } catch (error) {
+            return null;
         }
-        if (!planRoot) {
-            planRoot = planRootFromVisibleDom(frm);
+    }
+
+    function printAllowed(frm) {
+        const permissions = window.AlmdinaPermissions;
+        return Boolean(permissions && (typeof permissions.canDocument === "function"
+            ? permissions.canDocument(frm, "print_cutting_plan")
+            : permissions.can?.("print_cutting_plan")));
+    }
+
+    function printSource(frm, planOverride, hint) {
+        const context = window.AlmdinaDocumentContext;
+        const owner = window.AlmdinaPlanWorkspaceState;
+        const token = context?.capture?.(frm);
+        const state = owner?.snapshot?.(frm);
+        const tab = hint?.tab || window.AlmdinaPlanTabsUX?.activeTab?.(frm) || "System";
+        const row = printPlanRow(frm, tab);
+        const geometry = rowGeometry(row);
+        if (!token || !context.isCurrent(frm, token) || !printAllowed(frm)
+            || !state || state.status !== "ready" || state.data?.order_name !== frm.doc?.name
+            || !row?.name || !geometry?.sheets?.length
+            || (hint?.row && (hint.row.name !== row.name
+                || hint.row.revision !== row.revision
+                || JSON.stringify(rowGeometry(hint.row)) !== JSON.stringify(geometry)))
+            || (planOverride && JSON.stringify(planOverride) !== JSON.stringify(geometry))) return null;
+        const plan = JSON.parse(JSON.stringify(geometry));
+        const assignments = planOverride?.__offcut_assignments;
+        if (assignments) Object.defineProperty(plan, "__offcut_assignments", {
+            value: JSON.parse(JSON.stringify(assignments)), enumerable: false,
+        });
+        const doc = frm.doc;
+        const frozenDoc = JSON.parse(JSON.stringify({
+            name: doc.name, customer: doc.customer, order_date: doc.order_date,
+            board_description: doc.board_description, board_width_cm: doc.board_width_cm,
+            board_length_cm: doc.board_length_cm, edge_color: doc.edge_color,
+            packing_method: doc.packing_method, pieces: doc.pieces || [],
+        }));
+        return { token, tab, orderName: doc.name, planName: row.name,
+            revision: row.revision, geometryJson: JSON.stringify(geometry),
+            plan, frm: { doc: frozenDoc } };
+    }
+
+    function printSourceStillCurrent(frm, source) {
+        const context = window.AlmdinaDocumentContext;
+        const state = window.AlmdinaPlanWorkspaceState?.snapshot?.(frm);
+        const row = printPlanRow(frm, source.tab);
+        return Boolean(context?.isCurrent(frm, source.token)
+            && printAllowed(frm) && frm.doc.name === source.orderName
+            && state?.status === "ready" && state.data?.order_name === source.orderName
+            && row?.name === source.planName && row.revision === source.revision
+            && JSON.stringify(rowGeometry(row)) === source.geometryJson);
+    }
+
+    async function print_cutting_plan(frm, planOverride = null, hint = null) {
+        const source = printSource(frm, planOverride, hint);
+        if (!source) {
+            frappe.msgprint(translate("Could not prepare printing."));
+            return false;
         }
-        if (!planRoot) {
-            planRoot = planRootFromPlan(frm, plan);
-        }
+        const plan = source.plan;
+        const frozenFrm = source.frm;
+        // Always build from the verified Plan row. A visible DOM node may
+        // outlive its owning document or represent a different plan revision.
+        const planRoot = planRootFromPlan(frozenFrm, plan);
         if (!planRoot || !planRoot.querySelector(".dco-sheet-card")) {
             frappe.msgprint(translate("There is no cutting plan to print. Recalculate the cutting plan first."));
             return false;
         }
 
-        const title = translate("Cutting plan - {0}", [frm.doc.name || ""]);
+        const title = translate("Cutting plan - {0}", [source.orderName]);
         const print_window = window.open("", "_blank");
         if (!print_window) {
             frappe.msgprint(translate("The browser blocked the print window. Allow pop-ups and try again."));
@@ -1215,8 +1280,12 @@ ${printHeaderCss()}
             const identity = identityApi && typeof identityApi.get === "function"
                 ? await identityApi.get()
                 : (identityApi && typeof identityApi.fallback === "function" ? identityApi.fallback() : {});
+            if (!printSourceStillCurrent(frm, source)) {
+                print_window.close();
+                return false;
+            }
             print_window.document.open();
-            print_window.document.write(buildPrintDocument(title, frm, planRoot, plan, identity));
+            print_window.document.write(buildPrintDocument(title, frozenFrm, planRoot, plan, identity, source));
             print_window.document.close();
             return true;
         } catch (error) {

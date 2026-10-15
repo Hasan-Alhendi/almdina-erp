@@ -128,6 +128,18 @@
         HTML_FIELDS.forEach(fieldname => clearWrapper(fieldWrapper(frm, fieldname)));
     }
 
+    function reconcileNativeInputs(frm) {
+        // Frappe v16 reuses controls and debounces their input handler. A queued
+        // handler reads the input *later*, so discard the previous visit's DOM
+        // value synchronously when the Form begins displaying another document.
+        Object.entries(frm.fields_dict || {}).forEach(([fieldname, field]) => {
+            if (!field || field.df?.fieldname !== fieldname || !field.$input?.length
+                || typeof field.$input.val !== "function") return;
+            const value = frm.doc[fieldname];
+            field.$input.val(value == null ? "" : value);
+        });
+    }
+
     function clearTimer(frm, fieldname) {
         const timer = frm[fieldname];
         if (!timer) return;
@@ -726,6 +738,7 @@
         if (window.AlmdinaPlanPreviewSession?.reset) {
             window.AlmdinaPlanPreviewSession.reset(frm);
         }
+        reconcileNativeInputs(frm);
         clearDocumentHtml(frm);
         return true;
     }

@@ -480,10 +480,11 @@
     function shellHtml(frm) {
         const editable = isEditable(frm);
         const extraAddons = window.AlmdinaExtraDoorAddonsUX;
+        const visit = documentContext()?.capture?.(frm);
         const rows = (frm.doc.pieces || []).map(row => rowHtml(frm, row, false)).join("");
         const virtual = editable ? rowHtml(frm, { qty:1 }, true) : "";
         return `
-            <div class="dco-fast-entry-shell" dir="${shellDirection()}">
+            <div class="dco-fast-entry-shell" data-almdina-order="${escapeHtml(frm.doc.name || "")}" data-almdina-generation="${Number(visit?.generation || 0)}" dir="${shellDirection()}">
                 <div class="dco-fast-entry-toolbar">
                     <div class="dco-fast-help">
                         <b>${__("Fast entry:")}</b>
@@ -718,7 +719,18 @@
             || String(notes && notes.value || "").trim() !== "";
     }
 
+    function measurementInputOwned(frm, node) {
+        const shell = node?.matches?.(".dco-fast-entry-shell")
+            ? node : node?.closest?.(".dco-fast-entry-shell");
+        if (!shell?.dataset?.almdinaOrder) return true;
+        const visit = documentContext()?.capture?.(frm);
+        return String(frm?.doc?.name || "") === shell.dataset.almdinaOrder
+            && Number(visit?.generation || 0) === Number(shell.dataset.almdinaGeneration)
+            && (!window.cur_frm || window.cur_frm === frm);
+    }
+
     function syncInputToModel(frm, input, trigger = false) {
+        if (!measurementInputOwned(frm, input)) return null;
         const tr = input.closest("tr[data-row-name]");
         const fieldname = input.dataset.field;
         if (!tr || !fieldname) return null;
@@ -763,6 +775,7 @@
         const field = frm && frm.fields_dict && frm.fields_dict.pieces_fast_entry;
         const root = field && field.$wrapper ? field.$wrapper.get(0) : null;
         if (!root || !root.querySelectorAll) return false;
+        if (!measurementInputOwned(frm, root)) return false;
         let flushed = false;
         root.querySelectorAll(".dco-fast-input[data-field], .dco-fast-select[data-field]").forEach((control) => {
             const tr = control.closest("tr[data-row-name]");

@@ -1,10 +1,11 @@
-name: Cross-order P0 RED baseline
+name: Cross-order P0 regression gates
 
 on:
   pull_request:
     branches: [Develop]
     paths:
       - 'almdina_erp/tests/js/cross_order_p0_baseline.test.js'
+      - 'almdina_erp/tests/js/cross_order_phase2b_native_input.test.js'
       - 'almdina_erp/tests/browser/test_cross_order_p0_runtime.py'
       - 'almdina_erp/tests/cross_order_p0_runtime_fixture.py'
       - 'almdina_erp/public/js/door_cutting_order/**'
@@ -27,8 +28,12 @@ jobs:
           node almdina_erp/tests/js/plan_preview_state_ownership.test.js
           node almdina_erp/tests/js/corner_edge_tab_navigation.test.js
           node almdina_erp/tests/js/special_price_workspace_refresh.test.js
-      - name: Run intentional RED regression suite
+      - name: Run original Phase 1 regressions (15 expected GREEN)
         run: node almdina_erp/tests/js/cross_order_p0_baseline.test.js
+      - name: Run Phase 2B native input and print geometry regressions
+        run: |
+          node almdina_erp/tests/js/cross_order_phase2b_native_input.test.js
+          node almdina_erp/tests/js/cutting_plan_break_only_edge.test.js
 
   pinned-desk-runtime:
     uses: ./.github/workflows/cross-order-p0-runtime.yml

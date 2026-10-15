@@ -82,6 +82,8 @@ def test_phase2a_isolated_desk_boundary():
                                        arg=order["name"], timeout=45000)
                 if order is a:
                     evidence["a_token"] = page.evaluate("AlmdinaDocumentContext.capture(cur_frm)")
+                    page.evaluate("""() => cur_frm.fields_dict.board_description.$input
+                        .val(cur_frm.doc.board_description).trigger('input')""")
             evidence["before"] = page.evaluate("""() => ({name:cur_frm.doc.name,
                 board:cur_frm.doc.board_description,
                 customer:cur_frm.doc.customer,
@@ -129,6 +131,15 @@ def test_phase2a_isolated_desk_boundary():
                 AlmdinaCostWorkspaceState.reset(cur_frm);
                 AlmdinaPlanWorkspaceState.reset(cur_frm);
             }""")
+            # A controlled stale DOM value with no B-owned input event must not
+            # enter Frappe's native savedocs payload. This is an injection probe.
+            evidence["stale_dom_probe"] = page.evaluate("""value => {
+                const input=cur_frm.fields_dict.board_description.$input;
+                input.val(value);
+                return {control:input.val(),model:cur_frm.doc.board_description};
+            }""", a["board"])
+            assert evidence["stale_dom_probe"]["control"] == a["board"]
+            assert evidence["stale_dom_probe"]["model"] == b["board"]
             payloads = []
 
             def capture(request):
@@ -403,136 +414,70 @@ def test_cross_order_desk_runtime():
 
 
 def test_saved_server_plan_print_runtime():
-    """Separate real persisted Plan response from controlled cross-order injection."""
+    """Final HTML uses one persisted plan and cancels on a route change."""
     fixture = json.loads(Path(os.environ["P0_FIXTURE_PATH"]).read_text())
     evidence_dir = Path(os.environ["P0_EVIDENCE_DIR"])
     saved_plan = json.loads((evidence_dir / "saved-plan-fixture.json").read_text())
     a, b = fixture["orders"]["A"], fixture["orders"]["B"]
-    evidence = {"saved_plan": {key: value for key, value in saved_plan.items()
-                               if key != "first_piece"}, "orders": fixture["orders"]}
+    evidence = {"saved_plan": saved_plan, "orders": fixture["orders"]}
     with browser_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
             page = browser.new_page(locale="en-US")
             _login(page, fixture)
-            held = []
-
-            def delay_actual_a_plan(route):
-                request = route.request
-                if a["name"] in (request.url + (request.post_data or "")):
-                    held.append((route, None))
-                    response = route.fetch()
-                    held[-1] = (route, response)
-                    page.evaluate("window.__p0PlanHeld = true")
-                else:
-                    route.continue_()
-
-            page.route("**/api/method/*get_plan_workspace_snapshot*", delay_actual_a_plan)
-            page.evaluate("name => { frappe.set_route('Form','Door Cutting Order',name); }", a["name"])
-            page.wait_for_function("name => cur_frm?.doc?.name === name", arg=a["name"], timeout=45000)
-            page.wait_for_function("() => AlmdinaPlanWorkspaceState?.canView(cur_frm)", timeout=15000)
-            a_identity = page.evaluate("""() => ({name:cur_frm.doc.name,
-                identity:AlmdinaDocumentContext.formIdentity(cur_frm),
-                generation:AlmdinaDocumentContext.capture(cur_frm).generation,
-                modified:cur_frm.doc.modified})""")
-            page.evaluate("() => { window.__p0FrmA=cur_frm; }")
-            # Start the production Plan state transport while A is visible, hold
-            # its *real* HTTP response, then navigate B before releasing it.
-            with page.expect_request(lambda request: "get_plan_workspace_snapshot" in request.url
-                                     and a["name"] in (request.url + (request.post_data or "")),
-                                     timeout=15000):
-                page.evaluate("() => { AlmdinaPlanWorkspaceState.load(cur_frm,{force:true}); }")
-            page.wait_for_function("window.__p0PlanHeld === true", timeout=15000)
-            assert held and held[0][1], "No real A Plan API response was intercepted"
-            payload = held[0][1].json().get("message")
-            assert payload and payload.get("order_name") == a["name"], payload
-            row = payload.get("plans", {}).get("system_draft") or {}
-            assert row.get("name") == saved_plan["name"] and row.get("revision") == saved_plan["revision"], row
-            evidence["actual_api"] = {"order_name": payload["order_name"],
-                                      "plan_name": row["name"], "revision": row["revision"],
-                                      "snapshot_json": row.get("snapshot_json")}
-
-            page.evaluate("name => { frappe.set_route('Form','Door Cutting Order',name); }", b["name"])
-            page.wait_for_function("name => cur_frm?.doc?.name === name", arg=b["name"], timeout=45000)
-            before_release = page.evaluate("""() => ({sameFrm:cur_frm===window.__p0FrmA,
-                name:cur_frm.doc.name,board:cur_frm.doc.board_description,
-                state:AlmdinaPlanWorkspaceState.snapshot(cur_frm)})""")
-            held[0][0].fulfill(response=held[0][1])
-            page.unroute("**/api/method/*get_plan_workspace_snapshot*", delay_actual_a_plan)
-            page.wait_for_function("() => AlmdinaPlanWorkspaceState.snapshot(cur_frm)?.status !== 'loading'",
-                                   timeout=10000)
-            evidence["natural_late_response"] = {"before": before_release,
-                "after": page.evaluate("""() => ({name:cur_frm.doc.name,
-                    board:cur_frm.doc.board_description,
-                    state:AlmdinaPlanWorkspaceState.snapshot(cur_frm)})""")}
-
-            # Controlled identity-defense probe, using the unmodified response
-            # returned by the real server for a saved A plan.
-            page.get_by_text("Cutting Plan", exact=True).first.click()
-            page.evaluate("""async () => {
-                await AlmdinaDcoWorkspaceAssetRegistry.ensure('plan');
-                await AlmdinaPlanWorkspaceState.load(cur_frm,{force:true});
-            }""")
-            evidence["controlled_projection"] = page.evaluate("""args => {
-                const frm=cur_frm, store=AlmdinaPlanWorkspaceState.storeFor(frm);
-                store.reset(args.identity);
-                const requestId=store.beginLoad(args.identity);
-                const accepted=store.resolveLoad(args.identity,requestId,args.payload);
-                const projected=AlmdinaPlanWorkspacePresenterAdapter.project(frm);
-                return {accepted,projected,name:frm.doc.name,
-                    board:frm.doc.board_description,
-                    plan:AlmdinaPlanWorkspaceState.planForTab(frm,'System')?.name,
-                    modelPlan:frm.doc.system_plan_json};
-            }""", {"identity": a_identity["identity"], "payload": payload})
-            evidence["print_button_state"] = page.evaluate("""() => {
-                AlmdinaDoorCuttingPlanUX.renderActions(cur_frm);
-                return {permission:AlmdinaPermissions?.canDocument(cur_frm,'print_cutting_plan'),
-                    actionField:!!cur_frm.fields_dict.plan_control_actions,
-                    buttons:document.querySelectorAll('.dco-print-cutting-plan').length};
-            }""")
             page.evaluate("""() => {
                 window.__p0PrintWrites=[];
                 window.open=()=>({document:{open(){},write(html){__p0PrintWrites.push(html)},close(){}},close(){}});
-                const oldIdentity=AlmdinaFactoryPrintIdentity;
-                window.AlmdinaFactoryPrintIdentity={...oldIdentity,
-                    get:()=>new Promise(resolve=>window.__p0ResolveIdentity=resolve)};
-                const renderer=AlmdinaCuttingPlanRender;
-                const original=renderer.print;
-                renderer.print=(frm,plan)=>{
-                    window.__p0PrintedSource={dco:frm.doc.name,
-                        planName:AlmdinaPlanWorkspaceState.planForTab(frm,'System')?.name,
-                        revision:AlmdinaPlanWorkspaceState.planForTab(frm,'System')?.revision};
-                    window.__p0PrintResult=original(frm,plan);
-                    return window.__p0PrintResult;
-                };
+                window.__p0OriginalPrintIdentity=AlmdinaFactoryPrintIdentity;
+                window.AlmdinaFactoryPrintIdentity={...AlmdinaFactoryPrintIdentity,get:async()=>({})};
             }""")
-            button = page.locator(".dco-print-cutting-plan:visible").first
-            if button.count():
-                button.click()
-                evidence["print_invocation"] = "clicked visible .dco-print-cutting-plan on B"
-            else:
-                page.evaluate("() => AlmdinaPlanTabsUX.printActivePlan(cur_frm)")
-                evidence["print_invocation"] = "production PlanTabsUX handler; B has no visible print action"
+            for label, order, other in (("A", a, b), ("B", b, a)):
+                page.evaluate("name => frappe.set_route('Form','Door Cutting Order',name)", order["name"])
+                page.wait_for_function("name => cur_frm?.doc?.name === name", arg=order["name"], timeout=45000)
+                page.get_by_text("Cutting Plan", exact=True).first.click()
+                page.evaluate("""async () => {
+                    await AlmdinaDcoWorkspaceAssetRegistry.ensure('plan');
+                    await AlmdinaPlanWorkspaceState.load(cur_frm,{force:true});
+                }""")
+                result = page.evaluate("""async () => {
+                    const row=AlmdinaPlanWorkspaceState.displayedPlanForTab(cur_frm,'System');
+                    const result=await AlmdinaPlanTabsUX.printActivePlan(cur_frm);
+                    return {result,order:cur_frm.doc.name,row:row?.name,
+                        revision:row?.revision,html:__p0PrintWrites.at(-1)};
+                }""")
+                assert result["result"] is True and result["row"] == saved_plan[label]["name"], result
+                html = result.pop("html")
+                assert order["name"] in html and other["name"] not in html, result
+                assert order["board"] in html and other["board"] not in html, result
+                assert saved_plan[label]["name"] in html and str(saved_plan[label]["revision"]) in html
+                piece = saved_plan[label]["first_piece"]
+                geometry = f"{int(float(piece['w']) * 10)} × {int(float(piece['h']) * 10)}"
+                assert geometry in html, (label, geometry)
+                (evidence_dir / f"saved-plan-{label}-final.html").write_text(html, encoding="utf-8")
+                evidence[label] = {**result, "geometry": geometry,
+                                   "html_file": f"saved-plan-{label}-final.html"}
+                if label == "A":
+                    a_plan = page.evaluate("""() => JSON.parse(
+                        AlmdinaPlanWorkspaceState.planForTab(cur_frm,'System').snapshot_json)""")
+            # The real saved A geometry cannot be passed to B's print command.
+            writes_before = page.evaluate("__p0PrintWrites.length")
+            rejected = page.evaluate("""async plan =>
+                await AlmdinaCuttingPlanRender.print(cur_frm,plan)""", a_plan)
+            assert rejected is False and page.evaluate("__p0PrintWrites.length") == writes_before
+            evidence["wrong_plan_rejected"] = True
+            # Freeze B, then navigate while the production print handler awaits
+            # the asynchronous identity service. No final HTML may be issued.
+            page.evaluate("""() => {
+                AlmdinaFactoryPrintIdentity.get=()=>new Promise(resolve=>__p0ResolveIdentity=resolve);
+                window.__p0Pending=AlmdinaPlanTabsUX.printActivePlan(cur_frm);
+            }""")
             page.wait_for_function("!!window.__p0ResolveIdentity", timeout=10000)
-            evidence["print_start"] = page.evaluate("window.__p0PrintedSource")
-            page.evaluate("name => { frappe.set_route('Form','Door Cutting Order',name); }", a["name"])
+            page.evaluate("name => frappe.set_route('Form','Door Cutting Order',name)", a["name"])
             page.wait_for_function("name => cur_frm?.doc?.name === name", arg=a["name"], timeout=45000)
-            page.evaluate("window.__p0ResolveIdentity({})")
-            page.wait_for_function("window.__p0PrintWrites.length >= 2", timeout=10000)
-            html = page.evaluate("window.__p0PrintWrites.at(-1)")
-            (evidence_dir / "saved-plan-final-print.html").write_text(html, encoding="utf-8")
-            evidence["print_result"] = page.evaluate("async () => await window.__p0PrintResult")
-            a_piece = saved_plan["first_piece"]
-            a_geometry = f"{int(float(a_piece['w']) * 10)} × {int(float(a_piece['h']) * 10)}"
-            b_geometry = f"{b['width_cm'] * 10} × {b['length_cm'] * 10}"
-            evidence["html_checks"] = {"title_b": f"خطة قص - {b['name']}" in html,
-                "title_a": f"خطة قص - {a['name']}" in html,
-                "board_a": a["board"] in html, "board_b": b["board"] in html,
-                "geometry_a": a_geometry in html, "geometry_b": b_geometry in html,
-                "plan_name_rendered": saved_plan["name"] in html,
-                "revision_rendered": None,
-                "revision_note": "Renderer has no plan revision field; compare API/source identity"}
-            evidence["final_html_file"] = "saved-plan-final-print.html"
+            page.evaluate("__p0ResolveIdentity({})")
+            assert page.evaluate("async () => await __p0Pending") is False
+            assert page.evaluate("__p0PrintWrites.length") == writes_before
+            evidence["mid_await_route_change_cancelled"] = True
         except Exception as exc:
             evidence["failure"] = repr(exc)
             evidence["browser_state"] = page.evaluate("""() => ({route:frappe.get_route?.(),
