@@ -982,12 +982,16 @@ def test_real_desk_customer_field_permission_differential() -> None:
                             "() => { const frm = cur_frm;"
                             " const cached = frappe.perm.doctype_perm[frm.doctype];"
                             " if (!cached || !cached[0]) throw new Error('doctype permission cache unavailable');"
+                            " const isVisible = element => { if (!element || !element.isConnected) return false;"
+                            " const style = getComputedStyle(element); return element.getClientRects().length > 0"
+                            " && style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0'; };"
                             " const original = cached[0].create; let revoked;"
                             " try { cached[0].create = 0;"
                             " window.dispatchEvent(new CustomEvent('almdina:permissions-updated'));"
                             " const button = document.querySelector('.page-actions .primary-action');"
                             " revoked = {nativeCreate: frm.has_perm('create'), saveDisabled: frm.save_disabled,"
-                            " saveActionPresent: Boolean(button), saveActionDisabled: button ? Boolean(button.disabled"
+                            " saveActionPresent: Boolean(button), saveActionVisible: isVisible(button),"
+                            " saveActionDisabled: button ? Boolean(button.disabled"
                             " || button.getAttribute('aria-disabled') === 'true') : null,"
                             " projection: Boolean(frm.__almdina_new_create_field_projection)};"
                             " } finally { cached[0].create = original;"
@@ -995,6 +999,7 @@ def test_real_desk_customer_field_permission_differential() -> None:
                             " const button = document.querySelector('.page-actions .primary-action');"
                             " return {revoked, restored: {nativeCreate: frm.has_perm('create'),"
                             " saveDisabled: frm.save_disabled, saveActionPresent: Boolean(button),"
+                            " saveActionVisible: isVisible(button),"
                             " saveActionDisabled: button ? Boolean(button.disabled"
                             " || button.getAttribute('aria-disabled') === 'true') : null,"
                             " projection: Boolean(frm.__almdina_new_create_field_projection)}}; }"
@@ -1003,13 +1008,10 @@ def test_real_desk_customer_field_permission_differential() -> None:
                         assert revoked["nativeCreate"] is False
                         assert revoked["saveDisabled"] is True
                         assert revoked["projection"] is False
-                        assert (
-                            revoked["saveActionPresent"] is False
-                            or revoked["saveActionDisabled"] is True
-                        )
+                        assert revoked["saveActionVisible"] is False
                         assert permission_transition["restored"]["nativeCreate"] is True
                         assert permission_transition["restored"]["saveDisabled"] is False
-                        assert permission_transition["restored"]["saveActionPresent"] is True
+                        assert permission_transition["restored"]["saveActionVisible"] is True
                         assert permission_transition["restored"]["saveActionDisabled"] is False
                         assert permission_transition["restored"]["projection"] is True
                         expect(page.locator(".page-actions .primary-action").first).to_be_enabled(
