@@ -90,6 +90,14 @@
         );
     }
 
+    function finishPlanPresentation(name) {
+        if (name !== "plan") return;
+        // The asset group can finish with SourcePresentation evaluated before
+        // the Renderer. Reinstall against the final Renderer once all assets
+        // have loaded, so the visible-plan print path has one fixed contract.
+        window.AlmdinaPlanSourcePresentation?.install?.();
+    }
+
     function isLoaded(featureName) {
         return globalsReady(descriptor(featureName));
     }
@@ -122,7 +130,10 @@
         const name = String(featureName || "").trim();
         const feature = descriptor(name);
         if (!feature) return Promise.resolve(false);
-        if (!options.force && globalsReady(feature)) return Promise.resolve(true);
+        if (!options.force && globalsReady(feature)) {
+            finishPlanPresentation(name);
+            return Promise.resolve(true);
+        }
         if (pending.has(name)) return pending.get(name);
 
         const requireAssets = loader();
@@ -133,6 +144,7 @@
         emit(name, "loading");
         const operation = Promise.resolve(requireAssets(feature.assets))
             .then(() => {
+                finishPlanPresentation(name);
                 if (!globalsReady(feature)) {
                     throw new Error(`DCO ${name} workspace assets did not initialize completely`);
                 }

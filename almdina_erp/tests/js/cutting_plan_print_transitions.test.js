@@ -23,7 +23,7 @@ function element(html) {
         cloneNode() { return element(this.innerHTML); }};
 }
 
-function harness() {
+function harness({ sourceFirst = false } = {}) {
     const writes = [], messages = [];
     const reads = {snapshot: 0, displayedRow: 0};
     const frm = {doctype: "Door Cutting Order", doc: {name: "A", doctype: "Door Cutting Order",
@@ -70,14 +70,21 @@ function harness() {
         utils: {escape_html: String}};
     const context = vm.createContext({window, document, frappe, console, JSON, Number, String,
         Math, Object, Array, Set, Map, WeakMap, Promise, Boolean, Error, __: value => value});
-    for (const file of ["drawing/door_cutting_order_special_shape_geometry.js",
+    const files = ["drawing/door_cutting_order_special_shape_geometry.js",
         "drawing/door_cutting_order_shape_output_contract.js",
         "drawing/door_cutting_order_clipped_corner_ux.js",
         "cutting_plan/door_cutting_order_piece_geometry.js",
         "cutting_plan/door_cutting_order_cutting_plan_renderer.js",
         "cutting_plan/door_cutting_order_plan_source_presentation.js",
         "cutting_plan/door_cutting_order_plan_tabs_ux.js",
-        "cutting_plan/door_cutting_order_plan_workspace_presenter_adapter.js"]) {
+        "cutting_plan/door_cutting_order_plan_workspace_presenter_adapter.js"];
+    if (sourceFirst) {
+        const presenter = files.splice(files.indexOf(
+            "cutting_plan/door_cutting_order_plan_source_presentation.js"), 1)[0];
+        files.splice(files.indexOf(
+            "cutting_plan/door_cutting_order_cutting_plan_renderer.js"), 0, presenter);
+    }
+    for (const file of files) {
         vm.runInContext(fs.readFileSync(path.join(root, file), "utf8"), context, {filename: file});
     }
     return {window, frm, state, writes, messages, reads,
@@ -134,6 +141,24 @@ test("a visible owned plan must print through the real Form identity", async () 
     assert.match(h.writes.at(-1), /SYSTEM-B/);
     assert.equal(await h.window.AlmdinaCuttingPlanRender.print(h.frm, aPlan), false,
         "a visible B plan cannot authorize A geometry");
+});
+
+test("both lazy-asset evaluation orders install one safe print contract", async () => {
+    const first = harness({sourceFirst: true});
+    assert.equal(Boolean(first.window.AlmdinaCuttingPlanRender.__almadina179SourcePresentation),
+        false, "the source module can evaluate before its renderer");
+    assert.equal(first.window.AlmdinaPlanSourcePresentation.install(), true);
+    assert.equal(first.window.AlmdinaPlanSourcePresentation.install(), false);
+    assert.equal(Boolean(first.window.AlmdinaCuttingPlanRender.__almadina179SourcePresentation), true);
+    first.window.visibleRoot = true;
+    first.frm.__almdina_active_plan_tab = "System";
+    assert.equal(await first.print(), true);
+
+    const second = harness();
+    assert.equal(Boolean(second.window.AlmdinaCuttingPlanRender.__almadina179SourcePresentation), true);
+    second.window.visibleRoot = true;
+    second.frm.__almdina_active_plan_tab = "System";
+    assert.equal(await second.print(), true);
 });
 
 test("tabs, preview and independent representation keep or reject the selected source", async () => {

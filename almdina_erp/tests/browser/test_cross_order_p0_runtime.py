@@ -497,6 +497,7 @@ def test_saved_server_plan_print_runtime():
                         selectedTab:AlmdinaPlanTabsUX.activeTab(cur_frm),
                         row:AlmdinaPlanWorkspaceState.displayedPlanForTab(cur_frm,'System')?.name
                     })""")
+                    assert action_source["decorated"] and action_source["visiblePlanRoot"], action_source
                     before_click = page.evaluate('__p0PrintWrites.length')
                     button.click()
                     page.wait_for_function("count => window.__p0PrintWrites.length >= count + 2",

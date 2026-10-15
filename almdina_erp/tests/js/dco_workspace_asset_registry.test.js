@@ -94,7 +94,10 @@ class CustomEvent {
         "Plan readiness must wait for the ALMADINA-179 source presentation contract"
     );
 
-    fakeWindow.AlmdinaPlanSourcePresentation = {};
+    let installed = 0;
+    fakeWindow.AlmdinaPlanSourcePresentation = {
+        install() { installed += 1; return true; },
+    };
     assert.equal(
         registry.isLoaded("plan"),
         false,
@@ -106,7 +109,11 @@ class CustomEvent {
     fakeWindow.AlmdinaPlanEditSessionUX = {};
     flights[0].resolve(calls[0]);
     assert.equal(await planOne, true);
+    assert.equal(installed, 1,
+        "after the full asset group, source presentation must attach to the final renderer");
     assert.equal(await registry.ensure("plan"), true);
+    assert.equal(installed, 2,
+        "a cached ready asset group must repair a renderer replaced after source presentation");
     assert.equal(calls.length, 1, "loaded Plan assets must remain cached by ready globals");
 
     const costOne = registry.ensureForTab("cost_tab");
