@@ -774,7 +774,12 @@
     function planRootFromPlan(frm, plan) {
         if (!plan || !plan.sheets || !plan.sheets.length) return null;
         const holder = document.createElement("div");
-        holder.innerHTML = build_cutting_plan_html(frm, plan);
+        const markup = build_cutting_plan_html(frm, plan);
+        const presentation = window.AlmdinaPlanSourcePresentation;
+        // Decorate only the verified, frozen plan. OFFCUT assignment labels
+        // used to come from a visible DOM clone, which is not a print source.
+        holder.innerHTML = presentation?.decorateHtml
+            ? presentation.decorateHtml(markup, plan) : markup;
         return holder.querySelector(".dco-cutting-plan");
     }
 
@@ -1222,7 +1227,8 @@ ${printHeaderCss()}
         const row = printPlanRow(frm, tab);
         const geometry = rowGeometry(row);
         if (!token || !context.isCurrent(frm, token) || !printAllowed(frm)
-            || !state || state.status !== "ready" || state.data?.order_name !== frm.doc?.name
+            || !state || state.status !== "ready" || state.freshness === "stale"
+            || state.data?.order_name !== frm.doc?.name
             || state.data?.capabilities?.print === false
             || !row?.name || !geometry?.sheets?.length
             || (row.board?.description && row.board.description !== frm.doc.board_description)
@@ -1248,7 +1254,8 @@ ${printHeaderCss()}
         return Boolean(context?.isCurrent(frm, source.token)
             && printAllowed(frm) && frm.doc.name === source.orderName
             && JSON.stringify(printableDoc(frm.doc)) === source.documentJson
-            && state?.status === "ready" && state.data?.order_name === source.orderName
+            && state?.status === "ready" && state.freshness !== "stale"
+            && state.data?.order_name === source.orderName
             && state.data?.capabilities?.print !== false
             && row?.name === source.planName && row.revision === source.revision
             && (!row.board?.description || row.board.description === frm.doc.board_description)

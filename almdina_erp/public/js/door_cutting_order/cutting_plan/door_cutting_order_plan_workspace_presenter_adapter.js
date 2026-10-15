@@ -283,7 +283,7 @@
 
     function ready(frm) {
         const state = snapshot(frm);
-        return Boolean(data(frm) && state.status === "ready");
+        return Boolean(data(frm) && state.status === "ready" && state.freshness !== "stale");
     }
 
     function paintPlanSurface(frm, legacyPainter) {

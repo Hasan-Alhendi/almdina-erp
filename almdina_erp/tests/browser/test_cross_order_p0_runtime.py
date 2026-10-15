@@ -490,6 +490,13 @@ def test_saved_server_plan_print_runtime():
                             row:AlmdinaPlanWorkspaceState?.displayedPlanForTab(cur_frm,'System')?.name,
                             buttons:document.querySelectorAll('.dco-print-cutting-plan').length})""")
                         raise
+                    action_source = page.evaluate("""() => ({
+                        decorated:!!AlmdinaCuttingPlanRender?.__almadina179SourcePresentation,
+                        visiblePlanRoot:!!cur_frm.fields_dict.cutting_plan_html.$wrapper
+                            .get(0)?.querySelector('.dco-cutting-plan'),
+                        selectedTab:AlmdinaPlanTabsUX.activeTab(cur_frm),
+                        row:AlmdinaPlanWorkspaceState.displayedPlanForTab(cur_frm,'System')?.name
+                    })""")
                     before_click = page.evaluate('__p0PrintWrites.length')
                     button.click()
                     page.wait_for_function("count => window.__p0PrintWrites.length >= count + 2",
@@ -499,6 +506,7 @@ def test_saved_server_plan_print_runtime():
                     assert order["board"] in operator_html and saved_plan[label]["name"] in operator_html
                     evidence.setdefault("operator_clicks", {})[label] = {
                         "ready_event": page.evaluate('window.__p0ReadyEvent'),
+                        "source": action_source,
                         "final_html": f"saved-plan-{label}-operator-final.html"}
                     (evidence_dir / f"saved-plan-{label}-operator-final.html").write_text(
                         operator_html, encoding="utf-8")
@@ -563,11 +571,16 @@ def test_saved_server_plan_print_runtime():
                 offcut.resource_kind='OFFCUT';
                 offcut.pieces[0].id='CONTROLLED-OFFCUT-B';
                 offcut.pieces[0].label='CONTROLLED-OFFCUT-B';
+                offcut.pieces[0].piece_instance_id='CONTROLLED-OFFCUT-PIECE-B';
                 offcut.pieces[0].source_piece_no=1;
                 offcut.pieces[0].extra_double=1;
                 geometry.sheets.push(offcut);
+                const assignments=[{piece_instance_id:'CONTROLLED-OFFCUT-PIECE-B',
+                    business_state:'FACTORY_FACTORY',business_state_label:'P0 FACTORY ASSIGNED'}];
+                Object.defineProperty(geometry,'__offcut_assignments',{
+                    value:assignments,enumerable:false});
                 const testRow={...row,name:'CONTROLLED-PLAN-B',revision:Number(row.revision)+1,
-                    snapshot_json:JSON.stringify(geometry)};
+                    snapshot_json:JSON.stringify(geometry),offcut:{assignments}};
                 const id=AlmdinaDocumentContext.formIdentity(frm),store=state.storeFor(frm);
                 store.reset(id);
                 store.resolveLoad(id,store.beginLoad(id),{
@@ -586,6 +599,8 @@ def test_saved_server_plan_print_runtime():
             assert "CONTROLLED-PLAN-B" in controlled_html
             assert 'data-resource-kind="OFFCUT"' in controlled_html
             assert "CONTROLLED-OFFCUT-B" in controlled_html
+            assert 'dco-offcut-business-context' in controlled_html
+            assert 'P0 FACTORY ASSIGNED' in controlled_html
             assert 'data-addon-kind="double"' in controlled_html
             (evidence_dir / "controlled-multisheet-offcut-final.html").write_text(
                 controlled_html, encoding="utf-8")

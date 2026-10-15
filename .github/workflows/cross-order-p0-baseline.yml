@@ -6,6 +6,7 @@ on:
     paths:
       - 'almdina_erp/tests/js/cross_order_p0_baseline.test.js'
       - 'almdina_erp/tests/js/cross_order_phase2b_native_input.test.js'
+      - 'almdina_erp/tests/js/cutting_plan_print_transitions.test.js'
       - 'almdina_erp/tests/browser/test_cross_order_p0_runtime.py'
       - 'almdina_erp/tests/cross_order_p0_runtime_fixture.py'
       - 'almdina_erp/public/js/door_cutting_order/**'
@@ -34,6 +35,9 @@ jobs:
         run: |
           node almdina_erp/tests/js/cross_order_phase2b_native_input.test.js
           node almdina_erp/tests/js/cutting_plan_break_only_edge.test.js
+          node --test almdina_erp/tests/js/cutting_plan_print_transitions.test.js
+          node almdina_erp/tests/js/offcut_plan_presentation.test.js
+          node almdina_erp/tests/js/order_action_permission_guard.test.js
 
   pinned-desk-runtime:
     uses: ./.github/workflows/cross-order-p0-runtime.yml

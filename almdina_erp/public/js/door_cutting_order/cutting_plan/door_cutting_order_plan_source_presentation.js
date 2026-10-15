@@ -168,26 +168,6 @@
         return output;
     }
 
-    function visiblePlanRoot(frm) {
-        const field = frm && frm.fields_dict && frm.fields_dict.cutting_plan_html;
-        const wrapper = field && field.$wrapper;
-        const root = wrapper && typeof wrapper.get === "function" ? wrapper.get(0) : null;
-        return root && typeof root.querySelector === "function"
-            ? root.querySelector(".dco-cutting-plan")
-            : null;
-    }
-
-    function printFrame(frm, planOverride) {
-        if (!planOverride || !frm || !frm.doc) return frm;
-        return {
-            ...frm,
-            doc: {
-                ...frm.doc,
-                cutting_plan_json: planOverride,
-            },
-        };
-    }
-
     function install() {
         const renderer = window.AlmdinaCuttingPlanRender;
         if (!renderer || renderer.__almadina179SourcePresentation) return false;
@@ -199,15 +179,11 @@
             build(frm, plan) {
                 return decorateHtml(renderer.build(frm, plan), plan);
             },
-            print(frm, planOverride = null) {
-                // The active Plan action prints the already-rendered surface. The
-                // original renderer can clone that DOM when no override is passed;
-                // a shallow form projection keeps its plan-dependent print metadata
-                // aligned with the active plan without mutating the real Frappe doc.
-                if (visiblePlanRoot(frm)) {
-                    return renderer.print(printFrame(frm, planOverride), null);
-                }
-                return renderer.print(frm, planOverride);
+            print(frm, planOverride = null, hint = null) {
+                // Printing owns the real Form identity and revalidates the Plan
+                // Workspace row. A displayed DOM plan is not an owned source.
+                // Passing a synthetic Form would fail DocumentContext.isCurrent.
+                return renderer.print(frm, planOverride, hint);
             },
         };
         window.AlmdinaCuttingPlanRender = decorated;

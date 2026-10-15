@@ -27,7 +27,9 @@ function harness() {
     const writes = [], messages = [];
     const reads = {snapshot: 0, displayedRow: 0};
     const frm = {doctype: "Door Cutting Order", doc: {name: "A", doctype: "Door Cutting Order",
-        board_description: "White", pieces: []}};
+        board_description: "White", pieces: []}, fields_dict: {cutting_plan_html: {
+            $wrapper: {get() { return {querySelector() { return window.visibleRoot ? {} : null; }}; }},
+        }}};
     let generation = 1, allowed = true, pendingIdentity = null;
     const state = {status: "ready", identity: "Door Cutting Order::A",
         data: {order_name: "A", capabilities: {print: true}, plans: {
@@ -42,7 +44,7 @@ function harness() {
         AlmdinaDocumentContext: {
             formIdentity() { return `Door Cutting Order::${frm.doc.name}`; },
             capture() { return {identity: frm.doc.name, generation}; },
-            isCurrent(_form, token) { return token.identity === frm.doc.name
+            isCurrent(form, token) { return window.cur_frm === form && token.identity === frm.doc.name
                 && token.generation === generation; },
         },
         AlmdinaPermissions: {canDocument(_form, capability) {
@@ -73,6 +75,7 @@ function harness() {
         "drawing/door_cutting_order_clipped_corner_ux.js",
         "cutting_plan/door_cutting_order_piece_geometry.js",
         "cutting_plan/door_cutting_order_cutting_plan_renderer.js",
+        "cutting_plan/door_cutting_order_plan_source_presentation.js",
         "cutting_plan/door_cutting_order_plan_tabs_ux.js",
         "cutting_plan/door_cutting_order_plan_workspace_presenter_adapter.js"]) {
         vm.runInContext(fs.readFileSync(path.join(root, file), "utf8"), context, {filename: file});
@@ -106,6 +109,33 @@ test("ready, loading, stale and forced reload gate the actual handler", async ()
     assert.equal(h.writes.length, 6);
 });
 
+test("a visible owned plan must print through the real Form identity", async () => {
+    const h = harness();
+    h.frm.__almdina_active_plan_tab = "System";
+    assert.equal(await h.print(), true, "hidden initial plan prints from its owned row");
+    h.window.visibleRoot = true;
+    assert.equal(await h.print(), true,
+        "a mounted plan must not turn the real Form into a synthetic, non-current Form");
+    assert.match(h.writes.at(-1), /SYSTEM-A/);
+    const aPlan = JSON.parse(h.state.data.plans.system_draft.snapshot_json);
+    const before = h.writes.length;
+    assert.equal(await h.window.AlmdinaCuttingPlanRender.print(h.frm, aPlan,
+        {tab: "System", row: {...h.state.data.plans.system_draft, revision: 99}}), false,
+    "a visible plan cannot bypass the selected row revision hint");
+    assert.equal(h.writes.length, before);
+    h.frm.doc.name = "B";
+    h.generation();
+    h.state.identity = "Door Cutting Order::B";
+    h.state.data.order_name = "B";
+    h.state.data.plans.system_draft = row("SYSTEM-B", {
+        ...geometry(), sheets: [{sheet_no: 1, pieces: [{...geometry().sheets[0].pieces[0], w: 57}]}],
+    });
+    assert.equal(await h.print(), true);
+    assert.match(h.writes.at(-1), /SYSTEM-B/);
+    assert.equal(await h.window.AlmdinaCuttingPlanRender.print(h.frm, aPlan), false,
+        "a visible B plan cannot authorize A geometry");
+});
+
 test("tabs, preview and independent representation keep or reject the selected source", async () => {
     const h = harness();
     for (const [tab, name] of [["System", "SYSTEM-A"], ["Custom", "CUSTOM-A"],
@@ -133,6 +163,23 @@ test("tabs, preview and independent representation keep or reject the selected s
     assert.equal(h.writes.length, before);
 });
 
+test("final OFFCUT HTML retains assigned business context from the verified row", async () => {
+    const h = harness();
+    h.frm.__almdina_active_plan_tab = "System";
+    const plan = geometry();
+    plan.sheets.push({sheet_no: 2, resource_kind: "OFFCUT", pieces: [{
+        ...plan.sheets[0].pieces[0], piece_instance_id: "OFFCUT-PIECE-1",
+    }]});
+    h.state.data.plans.system_draft = {...row("SYSTEM-OFFCUT", plan), offcut: {
+        assignments: [{piece_instance_id: "OFFCUT-PIECE-1",
+            business_state: "FACTORY_FACTORY", business_state_label: "FACTORY-OWNED"}],
+    }};
+    assert.equal(await h.print(), true);
+    assert.match(h.writes.at(-1), /data-resource-kind="OFFCUT"/);
+    assert.match(h.writes.at(-1), /dco-offcut-business-context/);
+    assert.match(h.writes.at(-1), /FACTORY-OWNED/);
+});
+
 test("changes at the async boundary reject revision, preview, permission and Aâ†’Bâ†’A", async () => {
     const h = harness();
     h.frm.__almdina_active_plan_tab = "System";
@@ -149,6 +196,11 @@ test("changes at the async boundary reject revision, preview, permission and Aâ†
     release(); assert.equal(await pending, false);
     h.window.previewRow = null;
 
+    release = h.deferIdentity(); pending = h.print();
+    h.state.freshness = "stale";
+    release(); assert.equal(await pending, false);
+    h.state.freshness = "fresh";
+
     h.permission(false);
     assert.equal(await h.window.AlmdinaCuttingPlanRender.print(h.frm), false);
     h.permission(true);
@@ -160,14 +212,14 @@ test("changes at the async boundary reject revision, preview, permission and Aâ†
     h.frm.doc.name = "B"; h.generation();
     h.frm.doc.name = "A"; h.generation();
     release(); assert.equal(await pending, false);
-    assert.equal(h.writes.length, 4, "only preparation HTML, never a final document");
+    assert.equal(h.writes.length, 5, "only preparation HTML, never a final document");
 });
 
-test.todo("a ready-but-invalidated Plan snapshot should not print until it becomes fresh", async () => {
+test("a ready-but-invalidated Plan snapshot waits until it becomes fresh", async () => {
     // WorkspaceStore.invalidate() retains status=ready and sets freshness=stale.
-    // The current Renderer checks status but does not check freshness. This
-    // fail-closed requirement is recorded without changing production here.
     const h = harness();
     h.state.freshness = "stale";
     assert.equal(await h.print(), false);
+    h.state.freshness = "fresh";
+    assert.equal(await h.print(), true);
 });
