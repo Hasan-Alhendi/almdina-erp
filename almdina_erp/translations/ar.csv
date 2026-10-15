@@ -1009,8 +1009,13 @@ Door piece add-ons,إضافات الدرفة
 Add-on enabled,مفعّلة
 Piece preview,معاينة الدرفة
 Apply,تطبيق
+Saving,جارٍ الحفظ
 Size,المقاس
 Remove {0},إزالة {0}
+{0}: {1},{0}: {1}
+This removal is saved when you press Apply.,تُحفظ الإزالة عند الضغط على تطبيق.
+Could not save the add-ons.,تعذر حفظ الإضافات.
+This door piece is no longer in the order.,هذه الدرفة لم تعد ضمن الطلب.
 Turn this add-on on to include it.,فعّل الإضافة لتظهر على الدرفة.
 Enter the piece width and length before editing add-ons.,أدخل عرض الدرفة وطولها قبل تعديل الإضافات.
 Order notes:,ملاحظات الطلب:

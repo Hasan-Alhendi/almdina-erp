@@ -121,11 +121,15 @@
         if (!session || !fieldByName(fieldname)) return session;
         const next = enabled ? 1 : 0;
         if (FLAG_FIELDS.includes(fieldname)) {
-            session.flags[fieldname] = next;
-            if (next) {
-                const peer = fieldname === "extra_double" ? "extra_full_door_double" : "extra_double";
-                session.flags[peer] = 0;
+            const scratch = {};
+            FLAG_FIELDS.forEach((name) => { scratch[name] = session.flags[name] ? 1 : 0; });
+            const api = extras();
+            if (api && typeof api.enforceMutualExclusivity === "function") {
+                api.enforceMutualExclusivity(scratch, fieldname, Boolean(next));
+            } else {
+                scratch[fieldname] = next;
             }
+            FLAG_FIELDS.forEach((name) => { session.flags[name] = scratch[name] ? 1 : 0; });
             return session;
         }
         const draft = session.drafts[fieldname];
@@ -146,12 +150,30 @@
 
     function invalidEnabledDraft(session) {
         const editor = editorApi();
-        if (!editor || typeof editor.validationMessage !== "function") return null;
-        const found = fields().map(item => session.drafts[item.fieldname]).find(draft => (
-            draft && draft.enabled && editor.validationMessage(draft)
-        ));
-        if (!found) return null;
-        return { draft: found, message: editor.validationMessage(found) };
+        if (!session || !editor || typeof editor.validationMessage !== "function") return null;
+        const item = fields().find((entry) => {
+            const draft = session.drafts[entry.fieldname];
+            return draft && draft.enabled && editor.validationMessage(draft);
+        });
+        if (!item) return null;
+        const draft = session.drafts[item.fieldname];
+        return {
+            fieldname: item.fieldname,
+            label: translate(item.button),
+            draft,
+            message: editor.validationMessage(draft),
+        };
+    }
+
+    function removalPending(session) {
+        if (!session) return false;
+        const fieldname = session.activeField;
+        if (FLAG_FIELDS.includes(fieldname)) {
+            return !session.flags[fieldname] && Boolean(Number(session.row && session.row[fieldname]));
+        }
+        const initial = session.initial && session.initial[fieldname];
+        const draft = session.drafts && session.drafts[fieldname];
+        return Boolean(initial && initial.enabled && draft && !draft.enabled);
     }
 
     function pieceTypeLabel(row) {
@@ -201,6 +223,7 @@
         </button>`;
         if (FLAG_FIELDS.includes(fieldname)) {
             return `${toggle}
+                <div class="dco-corner-help" data-addons-hint ${enabled ? "hidden" : ""}>${esc(translate("Turn this add-on on to include it."))}</div>
                 <div class="dco-corner-help">${esc(translate("Add-ons are available for every type; Double and Full Door Double are mutually exclusive."))}</div>`;
         }
         if (!session.supported) {
@@ -211,9 +234,7 @@
         const fieldsHtml = draft && editor && typeof editor.controlsHtml === "function"
             ? editor.controlsHtml(draft)
             : "";
-        const hint = enabled
-            ? ""
-            : `<div class="dco-corner-help">${esc(translate("Turn this add-on on to include it."))}</div>`;
+        const hint = `<div class="dco-corner-help" data-addons-hint ${enabled ? "hidden" : ""}>${esc(translate("Turn this add-on on to include it."))}</div>`;
         const body = `${toggle}${hint}<div data-addon-fields>${fieldsHtml}</div>`;
         return editable ? body : `<fieldset disabled>${body}</fieldset>`;
     }
@@ -234,6 +255,7 @@
         return `<div class="dco-addons-shell almdina-ui" data-addons-dialog>
             <div class="dco-addons-meta">${meta}</div>
             <div class="dco-addons-tabs" role="tablist">${tabs}</div>
+            <div class="dco-addons-error" data-addons-error hidden></div>
             <div class="dco-addons-body">
                 <section class="dco-addons-settings" data-addons-settings>${settingsMarkup(session, editable)}</section>
                 <section class="dco-addons-preview-pane">
@@ -275,11 +297,29 @@
         if (lengthInput) lengthInput.value = String(Math.round(Number(draft.lengthCm) * 10) / 10);
     }
 
-    function paintChrome(root, session, editable) {
-        const settings = root.querySelector("[data-addons-settings]");
-        const preview = root.querySelector("[data-addons-preview]");
-        if (settings) settings.innerHTML = settingsMarkup(session, editable);
+    function showIssue(root, session, issue) {
+        const banner = root && root.querySelector("[data-addons-error]");
+        const help = root && root.querySelector("[data-liner-help]");
+        const here = Boolean(issue && issue.fieldname === session.activeField);
+        if (help) help.textContent = here ? issue.message : "";
+        if (!banner) return;
+        if (!issue) {
+            banner.hidden = true;
+            banner.textContent = "";
+            return;
+        }
+        banner.hidden = false;
+        banner.textContent = !issue.label || here
+            ? issue.message
+            : translate("{0}: {1}", [issue.label, issue.message]);
+    }
+
+    function syncPreview(root, session) {
+        const preview = root && root.querySelector("[data-addons-preview]");
         if (preview) preview.innerHTML = previewMarkup(session);
+    }
+
+    function syncTabs(root, session) {
         root.querySelectorAll("[data-addon-tab]").forEach((button) => {
             const fieldname = button.getAttribute("data-addon-tab");
             const selected = fieldname === session.activeField;
@@ -293,19 +333,80 @@
             }
             if (!enabled && existing) existing.remove();
         });
+    }
+
+    function syncEnable(root, session, editable) {
+        const button = root.querySelector("[data-addon-enable]");
+        const enabled = isEnabled(session, session.activeField);
+        if (button) {
+            button.classList.toggle("is-on", enabled);
+            button.setAttribute("aria-pressed", enabled ? "true" : "false");
+            button.disabled = !editable;
+        }
+        const hint = root.querySelector("[data-addons-hint]");
+        if (!hint) return;
+        const pending = removalPending(session);
+        hint.hidden = enabled && !pending;
+        hint.textContent = pending
+            ? translate("This removal is saved when you press Apply.")
+            : translate("Turn this add-on on to include it.");
+    }
+
+    function syncRemove(root, session, editable) {
         const remove = root.querySelector("[data-addons-remove]");
         const definition = fieldByName(session.activeField);
-        if (remove && definition) {
-            remove.textContent = translate("Remove {0}", [translate(definition.button)]);
-            remove.hidden = !editable;
-            remove.disabled = !isEnabled(session, session.activeField);
+        if (!remove || !definition) return;
+        if (!session.saving) remove.textContent = translate("Remove {0}", [translate(definition.button)]);
+        remove.hidden = !editable;
+        remove.disabled = !editable || !isEnabled(session, session.activeField);
+    }
+
+    function syncSides(root, draft) {
+        if (!root || !draft) return;
+        root.querySelectorAll("[data-liner-side]").forEach((button) => {
+            const selected = button.getAttribute("data-liner-side") === draft.side;
+            button.classList.toggle("is-active", selected);
+            button.setAttribute("aria-pressed", selected ? "true" : "false");
+        });
+        const available = root.querySelector("[data-liner-available]");
+        const direction = root.querySelector("[data-liner-direction]");
+        if (available) {
+            available.textContent = `${translate("Available Length")}: ${Math.round(Number(draft.edgeCm) * 10) / 10} ${translate("cm")}`;
         }
+        if (direction) {
+            const directionKey = {
+                edge_long_right: "Top to bottom",
+                edge_long_left: "Top to bottom",
+                edge_width_top: "Left to right",
+                edge_width_bottom: "Left to right",
+            }[draft.side] || "Along the selected edge";
+            direction.textContent = `${translate("Measurement Direction")}: ${translate(directionKey)}`;
+        }
+    }
+
+    function syncApply(root, session, editable) {
         const apply = root.querySelector("[data-addons-apply]");
-        const invalid = invalidEnabledDraft(session);
-        if (apply) apply.disabled = Boolean(invalid);
-        const editor = editorApi();
-        const active = session.drafts[session.activeField];
-        if (active && settings && editor && typeof editor.paint === "function") editor.paint(settings, active, null);
+        if (!apply || session.saving) return;
+        apply.disabled = !editable;
+        apply.removeAttribute("aria-busy");
+    }
+
+    function syncChrome(root, session, editable) {
+        if (!root) return;
+        syncTabs(root, session);
+        syncEnable(root, session, editable);
+        syncRemove(root, session, editable);
+        syncSides(root, session.drafts[session.activeField]);
+        syncPreview(root, session);
+        showIssue(root, session, invalidEnabledDraft(session));
+        syncApply(root, session, editable);
+    }
+
+    function paintStructure(root, session, editable) {
+        const settings = root && root.querySelector("[data-addons-settings]");
+        if (settings) settings.innerHTML = settingsMarkup(session, editable);
+        if (root) root._addonsField = session.activeField;
+        syncChrome(root, session, editable);
     }
 
     function refreshTable(frm) {
@@ -313,67 +414,132 @@
         if (fast && typeof fast.render === "function") fast.render(frm);
     }
 
-    async function commitFlags(frm, row, flags) {
-        const api = extras();
-        if (!api || typeof api.enforceMutualExclusivity !== "function") return;
-        const changed = [];
-        FLAG_FIELDS.forEach((fieldname) => {
-            const want = flags[fieldname] ? 1 : 0;
-            if (Number(row[fieldname] || 0) === want) return;
-            api.enforceMutualExclusivity(row, fieldname, Boolean(want)).forEach((name) => {
-                if (!changed.includes(name)) changed.push(name);
+    function snapshotDraft(draft) {
+        return {
+            enabled: draft.enabled,
+            side: draft.side,
+            offsetCm: draft.offsetCm,
+            widthCm: draft.widthCm,
+            startCm: draft.startCm,
+            lengthCm: draft.lengthCm,
+        };
+    }
+
+    function collectValues(session) {
+        const values = {};
+        const touched = [];
+        const flagsDirty = FLAG_FIELDS.some(fieldname => (
+            Number(session.flags[fieldname] || 0) !== Number(session.row && session.row[fieldname] || 0)
+        ));
+        if (flagsDirty) {
+            FLAG_FIELDS.forEach((fieldname) => {
+                values[fieldname] = session.flags[fieldname] ? 1 : 0;
+                touched.push(fieldname);
             });
-        });
-        if (!changed.length) return;
-        if (typeof frm.dirty === "function") frm.dirty();
-        changed.forEach((fieldname) => {
-            if (frm.script_manager && typeof frm.script_manager.trigger === "function") {
-                Promise.resolve(frm.script_manager.trigger(fieldname, row.doctype, row.name)).catch(() => {});
-            }
+        }
+        const editor = editorApi();
+        if (session.supported && editor && typeof editor.valuesFor === "function") {
+            fields().forEach((item) => {
+                const draft = session.drafts[item.fieldname];
+                if (!draft || !machiningDirty(session, item.fieldname)) return;
+                const next = editor.valuesFor(draft.kind, draft, draft.enabled);
+                if (sameValues(session.row, next)) return;
+                Object.assign(values, next);
+                touched.push(item.fieldname);
+            });
+        }
+        return { values, touched };
+    }
+
+    function markClean(session) {
+        Object.entries(session.drafts || {}).forEach(([fieldname, draft]) => {
+            session.initial[fieldname] = snapshotDraft(draft);
         });
     }
 
-    async function commitMachining(frm, row, session) {
-        const editor = editorApi();
-        if (!session.supported || !editor || typeof editor.applyLiner !== "function") return true;
-        for (let index = 0; index < fields().length; index += 1) {
-            const fieldname = fields()[index].fieldname;
-            const draft = session.drafts[fieldname];
-            if (!draft || typeof editor.valuesFor !== "function" || !machiningDirty(session, fieldname)) continue;
-            const values = editor.valuesFor(draft.kind, draft, draft.enabled);
-            if (sameValues(row, values)) continue;
-            const saved = await editor.applyLiner(frm, row, values, draft.kind);
-            if (!saved) return false;
+    function failSave(session, root, issue, indicator) {
+        if (issue && issue.fieldname && issue.fieldname !== session.activeField) {
+            selectTab(session, issue.fieldname);
+            if (root) paintStructure(root, session, session.editable !== false);
+        } else if (root) {
+            showIssue(root, session, issue);
+            syncPreview(root, session);
         }
-        return true;
+        if (typeof frappe !== "undefined" && frappe.msgprint) {
+            frappe.msgprint({
+                title: translate("Check add-on"),
+                message: issue && issue.label
+                    ? translate("{0}: {1}", [issue.label, issue.message])
+                    : (issue && issue.message) || translate("Could not save the add-ons."),
+                indicator: indicator || "orange",
+            });
+        }
+        return false;
     }
 
     async function commitSession(session, root) {
+        if (!session) return false;
+        if (session.savePromise) return session.savePromise;
         captureActive(session, root);
         const invalid = invalidEnabledDraft(session);
-        if (invalid) {
-            const fieldname = fields().find(item => session.drafts[item.fieldname] === invalid.draft);
-            if (fieldname) selectTab(session, fieldname.fieldname);
-            frappe.msgprint({
-                title: translate("Check add-on"),
-                message: invalid.message,
-                indicator: "orange",
+        if (invalid) return failSave(session, root, invalid, "orange");
+        const pending = collectValues(session);
+        if (!pending.touched.length) return true;
+        const run = (async () => {
+            session.saving = true;
+            const apply = root && root.querySelector("[data-addons-apply]");
+            const applyLabel = apply ? apply.textContent : "";
+            const locked = root ? Array.from(root.querySelectorAll("input, button")) : [];
+            locked.forEach((node) => {
+                node.addonsLock = node.disabled;
+                node.disabled = true;
             });
-            return false;
-        }
-        const dirtyMachining = fields().some(item => machiningDirty(session, item.fieldname));
-        const dirtyFlags = FLAG_FIELDS.some(fieldname => (
-            Number(session.flags[fieldname] || 0) !== Number(session.row[fieldname] || 0)
-        ));
-        if (dirtyMachining) {
-            const machiningSaved = await commitMachining(session.frm, session.row, session);
-            if (!machiningSaved) return false;
-        }
-        if (dirtyFlags) {
-            await commitFlags(session.frm, session.row, session.flags);
-            refreshTable(session.frm);
-        }
-        return true;
+            if (apply) {
+                apply.setAttribute("aria-busy", "true");
+                apply.textContent = translate("Saving");
+            }
+            try {
+                const frm = session.frm;
+                const corner = window.AlmdinaClippedCornerEditor;
+                const row = corner && typeof corner.resolveChildRow === "function"
+                    ? corner.resolveChildRow(frm, session.row)
+                    : session.row;
+                if (!row) {
+                    return failSave(session, root, {
+                        message: translate("This door piece is no longer in the order."),
+                    }, "orange");
+                }
+                let live = row;
+                if (corner && typeof corner.commitChildValues === "function") {
+                    live = (await corner.commitChildValues(frm, row, pending.values)) || row;
+                } else if (typeof frappe !== "undefined" && frappe.model && typeof frappe.model.set_value === "function") {
+                    await frappe.model.set_value(row.doctype, row.name, pending.values);
+                } else if (frm && typeof frm.dirty === "function") {
+                    frm.dirty();
+                }
+                Object.assign(live, pending.values);
+                session.row = live;
+                markClean(session);
+                refreshTable(frm);
+                return true;
+            } catch (error) {
+                return failSave(session, root, {
+                    message: (error && error.message) || translate("Could not save the add-ons."),
+                }, "red");
+            } finally {
+                session.saving = false;
+                session.savePromise = null;
+                locked.forEach((node) => {
+                    if (node.parent) node.disabled = Boolean(node.addonsLock);
+                });
+                if (apply && apply.parent) {
+                    apply.removeAttribute("aria-busy");
+                    apply.textContent = applyLabel || translate("Apply");
+                }
+            }
+        })();
+        session.savePromise = run;
+        return run;
     }
 
     let activeDialog = null;
@@ -398,6 +564,7 @@
         const fast = window.AlmdinaDoorCuttingFastEntry;
         const editable = !(fast && typeof fast.isEditable === "function") || fast.isEditable(frm);
         const session = createSession(frm, row);
+        session.editable = editable;
         const dialog = new frappe.ui.Dialog({
             title: translate("Door piece add-ons"),
             fields: [{ fieldname: "addons_editor", fieldtype: "HTML" }],
@@ -409,20 +576,20 @@
         const field = dialog.get_field("addons_editor");
         field.$wrapper.html(shellHtml(session, editable));
         const root = field.$wrapper.find("[data-addons-dialog]").get(0);
-        paintChrome(root, session, editable);
+        paintStructure(root, session, editable);
         root.addEventListener("click", (event) => {
             const tab = event.target.closest("[data-addon-tab]");
             if (tab && root.contains(tab)) {
                 captureActive(session, root);
                 selectTab(session, tab.getAttribute("data-addon-tab"));
-                paintChrome(root, session, editable);
+                paintStructure(root, session, editable);
                 return;
             }
             const enable = event.target.closest("[data-addon-enable]");
             if (enable && root.contains(enable) && editable) {
                 captureActive(session, root);
                 setEnabled(session, session.activeField, !isEnabled(session, session.activeField));
-                paintChrome(root, session, editable);
+                syncChrome(root, session, editable);
                 return;
             }
             const side = event.target.closest("[data-liner-side]");
@@ -432,7 +599,7 @@
                 const draft = editor.selectSide(current, session.piece, side.getAttribute("data-liner-side"));
                 session.drafts[session.activeField] = draft;
                 writeSpanInputs(root, draft);
-                paintChrome(root, session, editable);
+                syncChrome(root, session, editable);
                 return;
             }
             if (event.target.closest("[data-addons-cancel]")) {
@@ -442,28 +609,20 @@
             if (event.target.closest("[data-addons-remove]") && editable) {
                 captureActive(session, root);
                 setEnabled(session, session.activeField, false);
-                paintChrome(root, session, editable);
+                syncChrome(root, session, editable);
                 return;
             }
             if (event.target.closest("[data-addons-apply]") && editable) {
-                const button = event.target.closest("[data-addons-apply]");
-                button.disabled = true;
                 commitSession(session, root).then((saved) => {
                     if (saved) dialog.hide();
-                    else {
-                        paintChrome(root, session, editable);
-                        button.disabled = Boolean(invalidEnabledDraft(session));
-                    }
                 });
             }
         });
         root.addEventListener("input", () => {
-            const draft = captureActive(session, root);
-            if (draft && typeof editor.paint === "function") editor.paint(root, draft, null);
-            const preview = root.querySelector("[data-addons-preview]");
-            if (preview) preview.innerHTML = previewMarkup(session);
-            const apply = root.querySelector("[data-addons-apply]");
-            if (apply) apply.disabled = Boolean(invalidEnabledDraft(session));
+            captureActive(session, root);
+            syncPreview(root, session);
+            showIssue(root, session, invalidEnabledDraft(session));
+            syncApply(root, session, editable);
         });
         return true;
     }

@@ -144,7 +144,7 @@ def test_measurement_table_uses_one_addons_column_and_shared_dialog() -> None:
     assert "dco-addons-preview-card" in dialog
     assert "controlsHtml" in dialog
     assert "previewSvg" in dialog
-    assert "applyLiner" in dialog
+    assert "commitChildValues" in dialog
     assert "enforceMutualExclusivity" in dialog
     assert "selectTab" in dialog
     assert "door_cutting_order_extra_addons_ux.js" in assets

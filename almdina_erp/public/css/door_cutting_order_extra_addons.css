@@ -471,11 +471,26 @@ body[dir="ltr"] .dco-addons-preview-pane {
     border-color: var(--alm-primary, #172033);
 }
 
+.dco-addons-error {
+    flex: 0 0 auto;
+    margin: 0 var(--alm-space-4, 16px) var(--alm-space-2, 8px);
+    color: var(--alm-danger, #b91c1c);
+    font-size: var(--alm-font-size-sm, 12px);
+    line-height: var(--alm-line-height-normal, 1.6);
+}
+
+.dco-addons-error[hidden] {
+    display: none;
+}
+
 .dco-addons-footer {
     display: flex;
     flex: 0 0 auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+    direction: ltr;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
     gap: var(--alm-space-2, 8px);
     padding: var(--alm-space-3, 12px) var(--alm-space-4, 16px);
     border-top: 1px solid var(--alm-border-subtle, #eaecf0);
@@ -484,6 +499,8 @@ body[dir="ltr"] .dco-addons-preview-pane {
 
 .dco-addons-footer-main {
     display: flex;
+    flex-direction: row;
+    direction: ltr;
     gap: var(--alm-space-2, 8px);
 }
 
@@ -491,6 +508,10 @@ body[dir="ltr"] .dco-addons-preview-pane {
     min-height: var(--alm-height-button, 42px);
     margin: 0;
     border-radius: var(--alm-radius-button, 10px);
+}
+
+.dco-addons-modal .dco-addons-footer .dco-addons-remove {
+    margin-left: auto;
 }
 
 .dco-addons-remove:not(:disabled) {
@@ -524,6 +545,12 @@ body[dir="ltr"] .dco-addons-preview-pane {
 
     .dco-addons-preview-card {
         height: min(360px, 52vh);
+    }
+
+    .dco-addons-footer-main,
+    .dco-addons-remove {
+        flex: 1 1 auto;
+        min-width: 0;
     }
 
     .dco-addons-modal .dco-addons-tab {
