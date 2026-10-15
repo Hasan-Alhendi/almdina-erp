@@ -74,6 +74,10 @@
         return Math.round(num(value) * 10) / 10;
     }
 
+    function widthMm(cm) {
+        return rounded(num(cm) * 10);
+    }
+
     function esc(value) {
         return frappe.utils.escape_html(value == null ? "" : String(value));
     }
@@ -186,7 +190,7 @@
                 <line class="dco-liner-measure" data-liner-offset-line="1" x1="${rounded(from[0])}" y1="${rounded(from[1])}" x2="${rounded(mid[0])}" y2="${rounded(mid[1])}" stroke="#9a6207" stroke-width="1.2"/>
                 <line class="dco-liner-measure" data-liner-width-line="1" x1="${rounded(mid[0])}" y1="${rounded(mid[1])}" x2="${rounded(to[0])}" y2="${rounded(to[1])}" stroke="${tone.stroke}" stroke-width="1.2"/>
                 <text data-liner-offset-label="1" x="${rounded((from[0] + mid[0]) / 2)}" y="${rounded((from[1] + mid[1]) / 2) - 4}" font-size="11" fill="#9a6207">${rounded(draft.offsetCm)}</text>
-                <text data-liner-width-label="1" x="${rounded((mid[0] + to[0]) / 2)}" y="${rounded((mid[1] + to[1]) / 2) - 4}" font-size="11" fill="${tone.stroke}">${rounded(draft.widthCm)}</text>`;
+                <text data-liner-width-label="1" x="${rounded((mid[0] + to[0]) / 2)}" y="${rounded((mid[1] + to[1]) / 2) - 4}" font-size="11" fill="${tone.stroke}">${widthMm(draft.widthCm)} ${esc(__("mm"))}</text>`;
         }
         return `${strip}${center}${measures}`;
     }
@@ -269,7 +273,7 @@
                     </div>
                     <div class="dco-corner-input-wrap">
                         <label>${esc(widthLabel)}</label>
-                        <div class="dco-corner-input-shell"><input type="number" min="0.1" step="0.1" data-liner-width value="${rounded(draft.widthCm)}"><span>${esc(__("cm"))}</span></div>
+                        <div class="dco-corner-input-shell"><input type="number" min="0.1" step="0.1" data-liner-width value="${widthMm(draft.widthCm)}"><span>${esc(__("mm"))}</span></div>
                     </div>
                     <div class="dco-corner-input-wrap">
                         <label>${esc(startLabel)}</label>
@@ -335,7 +339,7 @@
             kind: kind || "liner",
             side,
             offsetCm: offset ? Number(offset.value) : NaN,
-            widthCm: width ? Number(width.value) : NaN,
+            widthCm: width ? Number(width.value) / 10 : NaN,
             startCm: start ? Number(start.value) : 0,
             lengthCm: length ? Number(length.value) : NaN,
             edgeCm: edgeCm(piece, side),

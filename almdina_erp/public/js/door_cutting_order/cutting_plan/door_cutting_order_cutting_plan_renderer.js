@@ -324,24 +324,27 @@
         return `<div class="dco-extra-addon-marks" aria-hidden="true" style="position:absolute;inset:0;z-index:5;pointer-events:none;">${marks.join("")}</div>`;
     }
 
-    function overlayMajorAxisLine(local) {
-        const xs = local.map(point => point[0]);
-        const ys = local.map(point => point[1]);
-        const minX = Math.min(...xs);
-        const maxX = Math.max(...xs);
-        const minY = Math.min(...ys);
-        const maxY = Math.max(...ys);
-        if ((maxX - minX) >= (maxY - minY)) {
-            const midY = (minY + maxY) / 2;
-            return [[minX, midY], [maxX, midY]];
-        }
-        const midX = (minX + maxX) / 2;
-        return [[midX, minY], [midX, maxY]];
+    function overlayRegionCenterline(local, closed) {
+        if (!closed || local.length < 4 || local.length % 2 !== 0) return local;
+        const half = local.length / 2;
+        const near = local.slice(0, half);
+        const far = local.slice(half).slice().reverse();
+        return near.map((point, index) => [
+            (point[0] + far[index][0]) / 2,
+            (point[1] + far[index][1]) / 2,
+        ]);
     }
 
     function overlaySingleLine(local, closed) {
-        if (local.length === 2 && !closed) return local;
-        return overlayMajorAxisLine(local);
+        return overlayRegionCenterline(local, closed);
+    }
+
+    function axisAlignedPolygon(local) {
+        if (!local || local.length < 4) return false;
+        return local.every((point, index) => {
+            const next = local[(index + 1) % local.length];
+            return Math.abs(point[0] - next[0]) <= 0.05 || Math.abs(point[1] - next[1]) <= 0.05;
+        });
     }
 
     function overlayHandleRect(local) {
@@ -567,18 +570,24 @@
             const attrs = `data-overlay-kind="${escape_html(kind)}" data-overlay-layer="${escape_html(layer)}" data-overlay-index="${index}" fill="none" stroke="${stroke}" vector-effect="non-scaling-stroke"`;
             const closed = Boolean(geometry && geometry.closed) && local.length >= 3;
             const isToolpath = Boolean(geometry && geometry.toolpath);
-            if (kind === "recessed_handle_cutout" && !isToolpath) {
-                const box = overlayHandleRect(local);
-                return `<rect class="dco-extra-overlay-path dco-extra-overlay-handle" ${attrs} x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" stroke-width="0.65" stroke-linejoin="miter"/>`;
+            if (isToolpath) return "";
+            if (kind === "recessed_handle_cutout") {
+                if (axisAlignedPolygon(local)) {
+                    const box = overlayHandleRect(local);
+                    return `<rect class="dco-extra-overlay-path dco-extra-overlay-handle" ${attrs} x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" stroke-width="0.65" stroke-linejoin="miter"/>`;
+                }
+                const outline = local
+                    .map((point, pointIndex) => `${pointIndex ? "L" : "M"}${point[0]} ${point[1]}`)
+                    .join(" ") + (closed ? " Z" : "");
+                return `<path class="dco-extra-overlay-path dco-extra-overlay-handle" ${attrs} d="${outline}" stroke-width="0.65" stroke-linejoin="miter"/>`;
             }
-            const machiningKind = kind === "liner" || kind === "back_groove" || kind === "recessed_handle_cutout";
-            const openToolpath = machiningKind && isToolpath && !closed && local.length > 2;
-            const strokePoints = machiningKind && !openToolpath ? overlaySingleLine(local, closed) : local;
+            const machiningKind = kind === "liner" || kind === "back_groove";
+            const strokePoints = machiningKind ? overlaySingleLine(local, closed) : local;
             const d = strokePoints
                 .map((point, pointIndex) => `${pointIndex ? "L" : "M"}${point[0]} ${point[1]}`)
                 .join(" ") + (machiningKind ? "" : (closed ? " Z" : ""));
-            const toolClass = openToolpath ? " dco-liner-toolpath" : "";
-            return `<path class="dco-extra-overlay-path${toolClass}" ${attrs} d="${d}" stroke-width="0.7" stroke-dasharray="3 2.2" stroke-linejoin="round" stroke-linecap="round"/>`;
+            const dash = machiningKind ? ` stroke-dasharray="3 2.2" stroke-linecap="round"` : "";
+            return `<path class="dco-extra-overlay-path" ${attrs} d="${d}" stroke-width="0.7"${dash} stroke-linejoin="round"/>`;
         }).filter(Boolean).join("");
         if (!paths) return "";
         return `<svg class="dco-extra-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;z-index:2;overflow:visible;pointer-events:none">${paths}</svg>`;

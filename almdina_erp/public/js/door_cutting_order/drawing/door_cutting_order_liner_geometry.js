@@ -291,7 +291,7 @@
         return "";
     }
 
-    function stripPolygonMm(piece, side, offsetCm, widthCm) {
+    function regionPolygonMm(piece, side, offsetCm, widthCm, startCm, lengthCm) {
         const error = validationCode(piece, side, offsetCm, widthCm);
         if (error) {
             const failure = new Error(error);
@@ -299,11 +299,15 @@
             throw failure;
         }
         const polygon = piecePolygonMm(piece);
-        const reference = edgePaths(piece)[side];
-        const sign = inwardSign(reference, polygon);
-        const near = offsetPolyline(reference, Number(offsetCm) * 10, sign);
-        const far = offsetPolyline(reference, (Number(offsetCm) + Number(widthCm)) * 10, sign);
+        const prepared = preparedReference(piece, side, startCm, lengthCm);
+        const sign = inwardSign(prepared.reference, polygon);
+        const near = offsetPolyline(prepared.clipped, Number(offsetCm) * 10, sign);
+        const far = offsetPolyline(prepared.clipped, (Number(offsetCm) + Number(widthCm)) * 10, sign);
         return near.concat(far.slice().reverse());
+    }
+
+    function stripPolygonMm(piece, side, offsetCm, widthCm) {
+        return regionPolygonMm(piece, side, offsetCm, widthCm, 0, null);
     }
 
     function cutterCenterOffsetsMm(widthMm, diameterMm) {
@@ -812,6 +816,15 @@
                     cutterDiameterMm: diameter,
                     ends,
                 });
+            } else if (kind === "recessed_handle_cutout") {
+                local = regionPolygonMm(
+                    linerPiece,
+                    side,
+                    spec.offsetCm,
+                    spec.widthCm,
+                    spec.startCm,
+                    spec.lengthCm
+                );
             } else {
                 local = centerlineMm(
                     linerPiece,
@@ -838,7 +851,7 @@
                 schema_version: 1,
                 unit: "mm",
                 coordinate_space: "usable_sheet",
-                closed: false,
+                closed: !toolpath && kind === "recessed_handle_cutout",
                 toolpath,
                 path: placeLocalPath(piece, linerPiece, local),
             },
@@ -928,6 +941,7 @@
         edgePaths,
         validationCode,
         stripPolygonMm,
+        regionPolygonMm,
         cutterCenterOffsetsMm,
         centerlineMm,
         toolpathMm,

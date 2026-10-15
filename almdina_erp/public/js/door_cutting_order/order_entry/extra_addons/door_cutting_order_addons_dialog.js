@@ -535,6 +535,7 @@
                 Object.assign(live, pending.values);
                 session.row = live;
                 markClean(session);
+                if (frm && typeof frm.dirty === "function") frm.dirty();
                 refreshTable(frm);
                 return true;
             } catch (error) {

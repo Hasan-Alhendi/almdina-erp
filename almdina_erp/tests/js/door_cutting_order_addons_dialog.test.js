@@ -135,6 +135,60 @@ assert.equal(special.supported, false);
 assert.equal(special.flags.extra_double, 1);
 assert.equal(Object.keys(special.drafts).length, 0);
 
+const editor = fakeWindow.AlmdinaLinerEditor;
+function machiningRow(kind, widthCm) {
+    const piece = {
+        piece_type: "Regular",
+        width_cm: 80,
+        length_cm: 210,
+        edge_width_top: 1,
+    };
+    if (kind === "liner") {
+        piece.extra_liner = 1;
+        piece.liner_reference_side = "edge_width_top";
+        piece.liner_offset_cm = 2;
+        piece.liner_width_cm = widthCm;
+        piece.liner_start_cm = 4;
+        piece.liner_length_cm = 30;
+    } else if (kind === "back_groove") {
+        piece.extra_back_groove = 1;
+        piece.back_groove_reference_side = "edge_width_top";
+        piece.back_groove_offset_cm = 1.5;
+        piece.back_groove_width_cm = widthCm;
+        piece.back_groove_start_cm = 3;
+        piece.back_groove_length_cm = 20;
+    } else {
+        piece.extra_recessed_handle_cutout = 1;
+        piece.recessed_handle_reference_side = "edge_width_top";
+        piece.recessed_handle_offset_cm = 0.5;
+        piece.recessed_handle_width_cm = widthCm;
+        piece.recessed_handle_start_cm = 1;
+        piece.recessed_handle_length_cm = 12;
+    }
+    return piece;
+}
+const linerControls = editor.controlsHtml(editor.draftFromRow(machiningRow("liner", 1.8), "liner"));
+assert.match(linerControls, /data-liner-width value="18"/);
+assert.match(linerControls, /data-liner-offset value="2"/);
+assert.match(linerControls, /data-liner-start value="4"/);
+assert.match(linerControls, /data-liner-length value="30"/);
+assert.match(linerControls, />mm</);
+assert.match(editor.previewSvg(editor.draftFromRow(machiningRow("liner", 1.8), "liner")), /18 mm/);
+const grooveControls = editor.controlsHtml(editor.draftFromRow(machiningRow("back_groove", 0.5), "back_groove"));
+assert.match(grooveControls, /data-liner-width value="5"/);
+assert.match(grooveControls, /data-liner-offset value="1.5"/);
+assert.match(grooveControls, /data-liner-start value="3"/);
+assert.match(grooveControls, /data-liner-length value="20"/);
+const handleControls = editor.controlsHtml(editor.draftFromRow(machiningRow("recessed_handle", 1.5), "recessed_handle_cutout"));
+assert.match(handleControls, /data-liner-width value="15"/);
+assert.match(handleControls, /data-liner-offset value="0.5"/);
+assert.match(handleControls, /data-liner-length value="12"/);
+const dialogSource = fs.readFileSync(
+    path.resolve(__dirname, "../../public/js/door_cutting_order/order_entry/extra_addons/door_cutting_order_addons_dialog.js"),
+    "utf8"
+);
+assert.doesNotMatch(dialogSource, /frm\.save\s*\(/);
+
 console.log("Unified add-ons dialog session passed");
 
 function ClassList(el) {
@@ -347,7 +401,13 @@ async function interactionChecks() {
     context.frappe.ui = { Dialog, dialogs: [] };
     fakeWindow.AlmdinaDoorCuttingFastEntry = {
         isEditable() { return true; },
-        render(frm) { renders.push(frm.doc.pieces[0].extra_liner); },
+        render(frm) {
+            const piece = frm.doc.pieces[0];
+            renders.push(piece.extra_liner);
+            if (frm._addonsTable) {
+                fakeWindow.AlmdinaExtraDoorAddonsUX.syncAddonButtons(frm._addonsTable, piece, true);
+            }
+        },
     };
     fakeWindow.AlmdinaClippedCornerEditor = {
         resolveChildRow(_frm, row) { return row; },
@@ -372,6 +432,20 @@ async function interactionChecks() {
             piece_no: 1,
             qty: 1,
         }, extra || {});
+    }
+
+    function mountTable(order, piece) {
+        const table = new Element("tr");
+        table.setAttribute("data-row-name", piece.name);
+        const cell = new Element("td");
+        cell.innerHTML = fakeWindow.AlmdinaExtraDoorAddonsUX.renderAddonSummary(piece, { editable: true });
+        table.append(cell);
+        order._addonsTable = table;
+        return table;
+    }
+
+    function addonLabel(table) {
+        return table.querySelector(".dco-addons-open-label").textContent;
     }
 
     function latest() {
@@ -405,25 +479,42 @@ async function interactionChecks() {
     assert.equal(ui.root.querySelector("[data-addon-enable]").classList.contains("is-on"), true);
     assert.equal(ui.root.querySelector('[data-liner-side="edge_width_top"]').classList.contains("is-active"), true);
     assert.equal(ui.root.querySelector('[data-addons-preview] [data-machining-kind="liner"]') !== null, true);
+    const widthInput = ui.root.querySelector("[data-liner-width]");
+    assert.equal(widthInput.value, "15");
+    assert.match(widthInput.parent.textContent, /mm/);
+    assert.match(ui.root.querySelector("[data-liner-offset]").parent.textContent, /cm/);
+    assert.match(ui.root.querySelector("[data-liner-start]").parent.textContent, /cm/);
+    assert.match(ui.root.querySelector("[data-liner-length]").parent.textContent, /cm/);
+    assert.equal(ui.root.querySelector("[data-liner-length]").value, "80");
+    assert.match(ui.root.querySelector("[data-addons-preview]").textContent, /15 mm/);
     const offset = ui.root.querySelector("[data-liner-offset]");
     offset.value = "1.2";
     offset.dispatch("input");
+    widthInput.value = "18";
+    widthInput.dispatch("input");
     assert.equal(ui.root.querySelector("[data-liner-offset]"), offset);
+    assert.equal(widthInput.value, "18");
     assert.match(ui.root.querySelector("[data-addons-preview]").textContent, /1\.2/);
+    assert.match(ui.root.querySelector("[data-addons-preview]").textContent, /18 mm/);
     ui.root.querySelector("[data-addons-apply]").dispatch("click");
     await tick();
     assert.equal(context.frappe.ui.dialogs.at(-1).hidden, true);
     assert.equal(writes.length, 1);
     assert.equal(writes[0].extra_liner, 1);
     assert.equal(writes[0].liner_offset_cm, 1.2);
+    assert.equal(writes[0].liner_width_cm, 1.8);
     assert.equal(writes[0].liner_reference_side, "edge_width_top");
     assert.equal(row.extra_liner, 1);
+    assert.equal(row.liner_width_cm, 1.8);
     assert.equal(renders.at(-1), 1);
 
     dialog.open({ doc: { pieces: [row] }, dirty() {} }, row);
     ui = latest();
     ui.root.querySelector('[data-addon-tab="extra_liner"]').dispatch("click");
     assert.equal(ui.root.querySelector("[data-liner-offset]").value, "1.2");
+    assert.equal(ui.root.querySelector("[data-liner-width]").value, "18");
+    assert.equal(ui.root.querySelector("[data-liner-start]").value, "0");
+    assert.equal(ui.root.querySelector("[data-liner-length]").value, "80");
     assert.equal(ui.root.querySelector("[data-addon-enable]").classList.contains("is-on"), true);
     assert.equal(ui.root.querySelector('[data-liner-side="edge_width_top"]').classList.contains("is-active"), true);
     ui.root.querySelector('[data-liner-side="edge_long_left"]').dispatch("click");
@@ -433,19 +524,28 @@ async function interactionChecks() {
     assert.equal(row.liner_reference_side, "edge_long_left");
 
     const pair = blankRow({ name: "piece-2" });
-    dialog.open({ doc: { pieces: [pair] }, dirty() {} }, pair);
+    const pairOrder = { doc: { pieces: [pair] }, dirty() {} };
+    const pairTable = mountTable(pairOrder, pair);
+    dialog.open(pairOrder, pair);
     ui = latest();
     ui.root.querySelector('[data-addon-tab="extra_liner"]').dispatch("click");
     ui.root.querySelector('[data-liner-side="edge_width_bottom"]').dispatch("click");
     ui.root.querySelector("[data-liner-offset]").value = "2.5";
     ui.root.querySelector("[data-liner-offset]").dispatch("input");
+    assert.equal(ui.root.querySelector("[data-liner-offset]").value, "2.5");
+    assert.match(ui.root.querySelector("[data-liner-offset]").parent.textContent, /cm/);
     ui.root.querySelector('[data-addon-tab="extra_back_groove"]').dispatch("click");
     ui.root.querySelector('[data-liner-side="edge_width_top"]').dispatch("click");
-    ui.root.querySelector("[data-liner-width]").value = "0.8";
+    assert.equal(ui.root.querySelector("[data-liner-width]").value, "15");
+    assert.match(ui.root.querySelector("[data-liner-width]").parent.textContent, /mm/);
+    assert.equal(ui.root.querySelector("[data-liner-start]").value, "0");
+    assert.equal(ui.root.querySelector("[data-liner-length]").value, "80");
+    ui.root.querySelector("[data-liner-width]").value = "8";
     ui.root.querySelector("[data-liner-width]").dispatch("input");
     ui.root.querySelector('[data-addon-tab="extra_recessed_handle_cutout"]').dispatch("click");
     ui.root.querySelector('[data-liner-side="edge_long_right"]').dispatch("click");
-    ui.root.querySelector("[data-liner-width]").value = "1";
+    assert.equal(ui.root.querySelector("[data-liner-width]").value, "15");
+    ui.root.querySelector("[data-liner-width]").value = "10";
     ui.root.querySelector("[data-liner-width]").dispatch("input");
     const beforePair = writes.length;
     ui.root.querySelector("[data-addons-apply]").dispatch("click");
@@ -461,6 +561,8 @@ async function interactionChecks() {
     assert.equal(writes.at(-1).recessed_handle_width_cm, 1);
     assert.equal(pair.extra_back_groove, 1);
     assert.equal(pair.extra_recessed_handle_cutout, 1);
+    assert.equal(addonLabel(pairTable), "Liner · Back Groove");
+    assert.equal(pairTable.querySelector(".dco-addons-more").textContent, "+1");
 
     const invalid = blankRow({ name: "piece-3" });
     dialog.open({ doc: { pieces: [invalid] }, dirty() {} }, invalid);
@@ -523,6 +625,10 @@ async function interactionChecks() {
     dialog.open({ doc: { pieces: [saved] }, dirty() {} }, saved);
     ui = latest();
     ui.root.querySelector('[data-addon-tab="extra_liner"]').dispatch("click");
+    assert.equal(ui.root.querySelector("[data-liner-width]").value, "15");
+    assert.equal(ui.root.querySelector("[data-liner-offset]").value, "2");
+    assert.equal(ui.root.querySelector("[data-liner-start]").value, "0");
+    assert.equal(ui.root.querySelector("[data-liner-length]").value, "80");
     assert.equal(ui.root.querySelector('[data-liner-side="edge_width_top"]').classList.contains("is-active"), true);
     assert.equal(ui.root.querySelector('[data-addons-preview] [data-machining-kind="liner"]') !== null, true);
     ui.root.querySelector("[data-addons-remove]").dispatch("click");
@@ -661,6 +767,88 @@ async function interactionChecks() {
     assert.equal(writes.at(-1).extra_full_door_double, 1);
     assert.equal(writes.at(-1).extra_double, 0);
     assert.equal(ui.ui.hidden, true);
+
+    const live = blankRow({ name: "piece-live" });
+    const order = {
+        doc: { pieces: [live] },
+        dirtyCount: 0,
+        dirty() { this.dirtyCount += 1; },
+        save() { throw new Error("order must stay unsaved"); },
+    };
+    const table = mountTable(order, live);
+    assert.equal(addonLabel(table), "Add-ons");
+    dialog.open(order, live);
+    ui = latest();
+    ui.root.querySelector('[data-addon-tab="extra_liner"]').dispatch("click");
+    ui.root.querySelector('[data-liner-side="edge_width_top"]').dispatch("click");
+    const beforeDismiss = writes.length;
+    ui.root.querySelector("[data-addons-cancel]").dispatch("click");
+    assert.equal(writes.length, beforeDismiss);
+    assert.equal(order.dirtyCount, 0);
+    assert.equal(live.extra_liner, undefined);
+    assert.equal(addonLabel(table), "Add-ons");
+
+    dialog.open(order, live);
+    ui = latest();
+    ui.root.querySelector('[data-addon-tab="extra_double"]').dispatch("click");
+    assert.equal(ui.root.querySelector("[data-liner-side]"), null);
+    ui.root.querySelector("[data-addon-enable]").dispatch("click");
+    assert.equal(ui.root.querySelector("[data-addon-enable]").classList.contains("is-on"), true);
+    assert.equal(ui.root.querySelector('[data-addon-tab="extra_double"]').classList.contains("is-enabled"), true);
+    assert.equal(live.extra_double, undefined);
+    assert.equal(addonLabel(table), "Add-ons");
+    ui.root.querySelector('[data-addon-tab="extra_full_door_double"]').dispatch("click");
+    assert.equal(ui.root.querySelector("[data-liner-side]"), null);
+    ui.root.querySelector("[data-addon-enable]").dispatch("click");
+    assert.equal(ui.root.querySelector("[data-addon-enable]").classList.contains("is-on"), true);
+    assert.equal(ui.root.querySelector('[data-addon-tab="extra_double"]').classList.contains("is-enabled"), false);
+    assert.equal(ui.root.querySelector('[data-addon-tab="extra_full_door_double"]').classList.contains("is-enabled"), true);
+    ui.root.querySelector("[data-addons-apply]").dispatch("click");
+    await tick();
+    assert.equal(live.extra_full_door_double, 1);
+    assert.equal(live.extra_double, 0);
+    assert.equal(order.dirtyCount, 1);
+    assert.equal(addonLabel(table), "Full Double");
+    live.extra_double = 0;
+    live.extra_full_door_double = 0;
+    fakeWindow.AlmdinaExtraDoorAddonsUX.syncAddonButtons(table, live, true);
+    assert.equal(addonLabel(table), "Add-ons");
+
+    dialog.open(order, live);
+    ui = latest();
+    ui.root.querySelector('[data-addon-tab="extra_double"]').dispatch("click");
+    ui.root.querySelector("[data-addon-enable]").dispatch("click");
+    ui.root.querySelector("[data-addons-apply]").dispatch("click");
+    await tick();
+    assert.equal(live.extra_double, 1);
+    assert.equal(live.extra_full_door_double, 0);
+    assert.equal(addonLabel(table), "Double Banding");
+    assert.equal(order.dirtyCount, 2);
+    dialog.open(order, live);
+    ui = latest();
+    ui.root.querySelector('[data-addon-tab="extra_double"]').dispatch("click");
+    assert.equal(ui.root.querySelector("[data-addon-enable]").classList.contains("is-on"), true);
+    ui.root.querySelector("[data-addon-enable]").dispatch("click");
+    assert.equal(ui.root.querySelector("[data-addon-enable]").classList.contains("is-on"), false);
+    ui.root.querySelector("[data-addons-apply]").dispatch("click");
+    await tick();
+    assert.equal(live.extra_double, 0);
+    assert.equal(addonLabel(table), "Add-ons");
+
+    live.extra_double = 1;
+    fakeWindow.AlmdinaExtraDoorAddonsUX.syncAddonButtons(table, live, true);
+    assert.equal(addonLabel(table), "Double Banding");
+    dialog.open(order, live);
+    ui = latest();
+    ui.root.querySelector('[data-addon-tab="extra_double"]').dispatch("click");
+    ui.root.querySelector("[data-addons-remove]").dispatch("click");
+    ui.root.querySelector("[data-addons-apply]").dispatch("click");
+    await tick();
+    assert.equal(live.extra_double, 0);
+    assert.equal(addonLabel(table), "Add-ons");
+    live.extra_double = 1;
+    fakeWindow.AlmdinaExtraDoorAddonsUX.syncAddonButtons(table, live, true);
+    assert.equal(addonLabel(table), "Double Banding");
 
     console.log("Unified add-ons dialog interaction passed");
 }

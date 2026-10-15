@@ -65,6 +65,34 @@ assert.deepEqual(
     copy(geometry.stripPolygonMm(regular, "edge_width_top", 2, 1.5).map(point => point.map(value => Math.round(value)))),
     [[0, 20], [400, 20], [400, 35], [0, 35]]
 );
+const wide = geometry.pieceFromRow({ piece_type: "Regular", width_cm: 100, length_cm: 80 });
+function segmentLength(start, end) {
+    return Math.hypot(end[0] - start[0], end[1] - start[1]);
+}
+const partialRegion = geometry.regionPolygonMm(wide, "edge_width_top", 10, 1.8, 20, 30);
+assert.ok(Math.abs(segmentLength(partialRegion[0], partialRegion[1]) - 300) < 0.1);
+assert.ok(Math.abs(segmentLength(partialRegion[1], partialRegion[2]) - 18) < 0.1);
+assert.ok(segmentLength(partialRegion[0], partialRegion[1]) < 1000);
+const fullRegion = geometry.regionPolygonMm(wide, "edge_width_top", 10, 1.8, 0, 100);
+assert.ok(Math.abs(segmentLength(fullRegion[0], fullRegion[1]) - 1000) < 0.1);
+const grooveRegion = geometry.regionPolygonMm(wide, "edge_long_right", 4, 0.5, 10, 25);
+assert.ok(Math.abs(segmentLength(grooveRegion[0], grooveRegion[1]) - 250) < 0.1);
+assert.ok(segmentLength(grooveRegion[0], grooveRegion[1]) < 800);
+const handleRegion = geometry.regionPolygonMm(wide, "edge_width_bottom", 2, 1.5, 15, 20);
+assert.ok(Math.abs(segmentLength(handleRegion[0], handleRegion[1]) - 200) < 0.1);
+assert.ok(segmentLength(handleRegion[0], handleRegion[1]) < 1000);
+const breakPiece = geometry.pieceFromRow({
+    piece_type: "Clipped Corner",
+    width_cm: 40,
+    length_cm: 60,
+    clipped_corner_position: "Top Right",
+    clipped_corner_width_cm: 10,
+    clipped_corner_length_cm: 16,
+});
+const breakRegion = geometry.regionPolygonMm(breakPiece, "edge_break_only", 1, 0.8, 2, 4);
+assert.ok(Math.abs(segmentLength(breakRegion[0], breakRegion[1]) - 40) < 0.2);
+assert.ok(Math.abs(breakRegion[1][0] - breakRegion[0][0]) > 1);
+assert.ok(Math.abs(breakRegion[1][1] - breakRegion[0][1]) > 1);
 
 const clipped = geometry.pieceFromRow({
     piece_type: "Clipped Corner",

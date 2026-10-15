@@ -450,6 +450,7 @@
             const usesPath = Array.isArray(geometry.path);
             const path = usesPath ? geometry.path : geometry.outer;
             return {
+                kind: String(overlay.kind || ""),
                 layer: layerName,
                 closed: usesPath
                     ? Boolean(geometry.closed) && Array.isArray(path) && path.length >= 3
@@ -753,7 +754,9 @@
         const side = spec ? spec.side : piece && piece.liner_reference_side;
         const offset = spec ? spec.offsetCm : piece && piece.liner_offset_cm;
         const width = spec ? spec.widthCm : piece && piece.liner_width_cm;
-        if (!liner || typeof liner.stripPolygonMm !== "function" || typeof liner.pieceFromRow !== "function") return null;
+        const start = spec ? spec.startCm : piece && piece.liner_start_cm;
+        const length = spec ? spec.lengthCm : piece && piece.liner_length_cm;
+        if (!liner || typeof liner.regionPolygonMm !== "function" || typeof liner.pieceFromRow !== "function") return null;
         if (!String(side || "").trim() || !(num(width) > 0)) return null;
         let linerPiece;
         let local;
@@ -763,7 +766,7 @@
                 liner_offset_cm: offset,
                 liner_width_cm: width,
             }));
-            local = liner.stripPolygonMm(linerPiece, side, offset, width);
+            local = liner.regionPolygonMm(linerPiece, side, offset, width, start, length);
         } catch (error) {
             return null;
         }
@@ -854,27 +857,28 @@
                 overlays.forEach(overlay => {
                     entities += emitOverlayEntity(overlay, placement, sheet, piece);
                 });
+                const regionEngine = window.AlmdinaMachiningOverlay;
+                const regionAddons = regionEngine && Array.isArray(regionEngine.ADDONS)
+                    ? regionEngine.ADDONS
+                    : [{ kind: "liner" }];
                 const regionEmitted = new Set();
+                regionAddons.forEach(addon => {
+                    const spec = regionEngine && typeof regionEngine.specFrom === "function"
+                        ? regionEngine.specFrom(piece, addon.kind)
+                        : null;
+                    const region = linerRegionPoints(piece, placement, spec);
+                    if (!region) return;
+                    entities += lwpolyline(FINISHED_GEOMETRY_LAYER, region, true);
+                    regionEmitted.add(addon.kind);
+                });
                 overlays.forEach(overlay => {
                     if (overlay.toolpath || !overlay.closed) return;
+                    if (overlay.kind && regionEmitted.has(overlay.kind)) return;
                     entities += lwpolyline(
                         FINISHED_GEOMETRY_LAYER,
                         topologyDxfPoints(overlay.path, placement),
                         true
                     );
-                    if (overlay.kind) regionEmitted.add(overlay.kind);
-                });
-                const regionEngine = window.AlmdinaMachiningOverlay;
-                const regionAddons = regionEngine && Array.isArray(regionEngine.ADDONS)
-                    ? regionEngine.ADDONS
-                    : [{ kind: "liner" }];
-                regionAddons.forEach(addon => {
-                    if (regionEmitted.has(addon.kind)) return;
-                    const spec = regionEngine && typeof regionEngine.specFrom === "function"
-                        ? regionEngine.specFrom(piece, addon.kind)
-                        : null;
-                    const region = linerRegionPoints(piece, placement, spec);
-                    if (region) entities += lwpolyline(FINISHED_GEOMETRY_LAYER, region, true);
                 });
                 const bounds = polygonBounds(rings.outer);
                 entities += textEntity(

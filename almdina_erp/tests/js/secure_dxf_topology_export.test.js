@@ -182,6 +182,7 @@ const context = vm.createContext({
 vm.runInContext(source, context, { filename: "secure_dxf_export.js" });
 for (const relativePath of [
     "../../public/js/door_cutting_order/drawing/door_cutting_order_liner_geometry.js",
+    "../../public/js/door_cutting_order/drawing/door_cutting_order_machining_overlay.js",
     "../../public/js/door_cutting_order/drawing/door_cutting_order_clipped_corner_ux.js",
 ]) {
     vm.runInContext(
@@ -1034,6 +1035,55 @@ async function run() {
         closedSpan = Math.max(closedSpan, Math.abs(run[run.length - 1][1] - run[0][1]));
     }
     assert.ok(closedSpan > 10);
+    const geometryRegion = polylinePoints(downloadedDxf, "GEOMETRY");
+    let regionEdge = 0;
+    for (let index = 1; index < geometryRegion.length; index += 1) {
+        regionEdge = Math.max(regionEdge, Math.hypot(
+            geometryRegion[index][0] - geometryRegion[index - 1][0],
+            geometryRegion[index][1] - geometryRegion[index - 1][1]
+        ));
+    }
+    assert.ok(Math.abs(regionEdge - 200) < 0.2, regionEdge);
+    assert.equal((downloadedDxf.match(/LWPOLYLINE\r\n100\r\nAcDbEntity\r\n8\r\nGEOMETRY\r\n/g) || []).length, 1);
+    assert.ok((downloadedDxf.match(/8\r\nLiner\r\n/g) || []).length >= 1);
+
+    nextPlan = linerEndPlan([linerDoor({
+        w: 100,
+        h: 80,
+        width_cm: 100,
+        length_cm: 80,
+        liner_offset_cm: 10,
+        liner_width_cm: 1.8,
+        liner_start_cm: 20,
+        liner_length_cm: 30,
+        extra_back_groove: 1,
+        back_groove_reference_side: "edge_long_right",
+        back_groove_offset_cm: 4,
+        back_groove_width_cm: 1.8,
+        back_groove_start_cm: 10,
+        back_groove_length_cm: 25,
+        extra_recessed_handle_cutout: 1,
+        recessed_handle_reference_side: "edge_width_bottom",
+        recessed_handle_offset_cm: 2,
+        recessed_handle_width_cm: 1.8,
+        recessed_handle_start_cm: 15,
+        recessed_handle_length_cm: 20,
+    })]);
+    downloadedDxf = "";
+    await fakeFrappe.almdina.export_order_dxf("26-LINER-ENDS", "system");
+    const regionRings = polylineRings(downloadedDxf, "GEOMETRY");
+    assert.equal(regionRings.length, 3);
+    const regionLengths = regionRings.map(ring => ring.reduce((longest, point, index) => {
+        const previous = ring[index - 1];
+        if (!previous) return longest;
+        return Math.max(longest, Math.hypot(point[0] - previous[0], point[1] - previous[1]));
+    }, 0)).sort((left, right) => left - right);
+    assert.ok(Math.abs(regionLengths[0] - 200) < 0.2, regionLengths.join(","));
+    assert.ok(Math.abs(regionLengths[1] - 250) < 0.2, regionLengths.join(","));
+    assert.ok(Math.abs(regionLengths[2] - 300) < 0.2, regionLengths.join(","));
+    assert.ok(polylinePoints(downloadedDxf, "Liner").length >= 2);
+    assert.ok(polylinePoints(downloadedDxf, "Rear Groove").length >= 2);
+    assert.ok(polylinePoints(downloadedDxf, "Handle Recess").length >= 2);
 
     for (const pieceType of ["Clipped Corner", "L-Shaped Corner"]) {
         nextPlan = linerEndPlan([linerDoor({
@@ -1088,6 +1138,23 @@ function constantAxisRuns(points, axis, minimum) {
     }
     commit(run);
     return count;
+}
+
+function polylineRings(dxf, layerName) {
+    const lines = dxf.split("\r\n");
+    const rings = [];
+    for (let index = 0; index < lines.length; index += 1) {
+        if (lines[index] !== "LWPOLYLINE" || lines[index + 4] !== layerName) continue;
+        const count = Number(lines[index + 8]);
+        const ring = [];
+        let cursor = index + 11;
+        for (let point = 0; point < count; point += 1) {
+            ring.push([Number(lines[cursor + 1]), Number(lines[cursor + 3])]);
+            cursor += 4;
+        }
+        rings.push(ring);
+    }
+    return rings;
 }
 
 function polylinePoints(dxf, layerName) {

@@ -158,6 +158,8 @@ def test_post_save_dom_layer_reuses_unchanged_measurement_table():
     assert "edgeSelectionSummary" in source
     assert "dco-corner-edges-summary" in source
     assert "syncCornerEdgesSummary(frm, tr, row, editable)" in source
+    sync_table = source.split("function syncExistingTable", 1)[1].split("function installMeasurementGuard", 1)[0]
+    assert "syncAddonButtons" in sync_table
 
 
 def test_post_save_dom_layer_loads_after_table_and_invoice_renderers():
