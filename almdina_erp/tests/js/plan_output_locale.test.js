@@ -83,8 +83,8 @@ for (const selector of [
 const dxfSource = fs.readFileSync(path.join(root, planDir, "secure_dxf_export.js"), "utf8");
 assert.match(dxfSource, /const EXTRA_DOUBLE_DXF_TEXT = "دبل القشاط"/);
 assert.match(dxfSource, /const EXTRA_FULL_DOOR_DOUBLE_DXF_TEXT = "دبل كامل"/);
-assert.match(dxfSource, /const DXF_VERSION = "AC1009"/);
-assert.match(dxfSource, /const DXF_LAYER_COUNT = 8/);
+assert.match(dxfSource, /const DXF_VERSION = "AC1015"/);
+assert.match(dxfSource, /const DXF_LAYER_COUNT = 9/);
 assert.match(dxfSource, /function pair\(code, value\)/);
 assert.doesNotMatch(dxfSource, /translate\(\s*EXTRA_DOUBLE_DXF_TEXT/);
 assert.doesNotMatch(dxfSource, /translate\(\s*EXTRA_FULL_DOOR_DOUBLE_DXF_TEXT/);
