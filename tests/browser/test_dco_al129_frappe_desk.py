@@ -799,11 +799,30 @@ def _set_link(page: Page, fieldname: str, value: str) -> None:
         raise AssertionError(f"Frappe {fieldname} link suggestions were not visible: {state}") from error
     exact = suggestions.filter(has_text=re.compile(rf"^{re.escape(value)}(?:\s|$)"))
     (exact.first if exact.count() else suggestions.first).click()
-    page.wait_for_function(
-        "({fieldname, value}) => window.cur_frm && cur_frm.doc[fieldname] === value",
-        arg={"fieldname": fieldname, "value": value},
-        timeout=10_000,
-    )
+    try:
+        page.wait_for_function(
+            "({fieldname, value}) => window.cur_frm && cur_frm.doc[fieldname] === value",
+            arg={"fieldname": fieldname, "value": value},
+            timeout=10_000,
+        )
+    except PlaywrightTimeoutError as error:
+        state = page.evaluate(
+            "({fieldname, value}) => { const frm = window.cur_frm;"
+            " const field = frm && frm.fields_dict && frm.fields_dict[fieldname];"
+            " const input = field && field.$input && typeof field.$input.get === 'function'"
+            " ? field.$input.get(0) : field && field.$input && field.$input[0];"
+            " const options = [...document.querySelectorAll('.awesomplete ul [role=\"option\"]')];"
+            " return {doctype: frm && frm.doctype || null, isNew: Boolean(frm && frm.is_new && frm.is_new()),"
+            " documentValuePresent: Boolean(frm && frm.doc && frm.doc[fieldname]),"
+            " documentValueMatchesRequested: Boolean(frm && frm.doc && frm.doc[fieldname] === value),"
+            " inputValuePresent: Boolean(input && input.value), inputFocused: Boolean(input && document.activeElement === input),"
+            " visibleOptionCount: options.filter(item => item.getClientRects().length > 0).length,"
+            " fieldReadOnly: Boolean(field && (field.read_only || (field.df && field.df.read_only)))}; }",
+            {"fieldname": fieldname, "value": value},
+        )
+        state["runtimeErrors"] = PAGE_RUNTIME_DIAGNOSTICS.get(id(page), [])[-12:]
+        trace("link_selection_did_not_update_document", **state)
+        raise AssertionError(f"Frappe {fieldname} selection did not update the document: {state}") from error
 
 
 def _customer_permission_state(page: Page) -> dict[str, Any]:
