@@ -116,11 +116,11 @@
             .dco-all-sides-profile-button{
                 width:100%;max-width:100%;height:38px;min-height:38px;display:flex;align-items:center;
                 justify-content:center;gap:5px;border:1px solid color-mix(in srgb, var(--alm-primary, #172033) 38%, transparent);border-radius:7px;
-                background:color-mix(in srgb, var(--alm-primary, #172033) 7%, transparent);color:var(--text-color,#36414c);padding:2px 6px;
+                background:color-mix(in srgb, var(--alm-primary, #172033) 7%, transparent);color:var(--alm-text-strong,#101828);padding:2px 6px;
                 font-size:9.5px;font-weight:850;line-height:1.1;cursor:pointer;outline:none
             }
             .dco-all-sides-profile-button:hover,.dco-all-sides-profile-button:focus{
-                border-color:var(--alm-primary,#172033);background:color-mix(in srgb, var(--alm-primary, #172033) 6%, #ffffff);box-shadow:0 0 0 2px color-mix(in srgb, var(--alm-primary, #172033) 10%, transparent)
+                border-color:var(--alm-primary,#172033);background:color-mix(in srgb, var(--alm-primary, #172033) 6%, var(--alm-card,#ffffff));box-shadow:0 0 0 2px color-mix(in srgb, var(--alm-primary, #172033) 10%, transparent)
             }
             .dco-all-sides-profile-button:disabled{opacity:.48;cursor:not-allowed;box-shadow:none}
             .dco-all-sides-profile-button .dco-bulk-chevron{font-size:11px;line-height:1;opacity:.72}
@@ -130,25 +130,25 @@
                 overflow:hidden!important;cursor:pointer;transition:background .14s ease,border-color .14s ease,box-shadow .14s ease,color .14s ease
             }
             .dco-col-edges .dco-check-toggle.dco-edge-profile-target.is-edge-custom{
-                background:#fff0b8!important;border-color:#c88a00!important;color:#674900!important;
+                background:color-mix(in srgb, #c88a00 16%, var(--alm-card,#ffffff))!important;border-color:#c88a00!important;color:#c88a00!important;
                 box-shadow:inset 0 0 0 1px rgba(200,138,0,.24),0 0 0 1px rgba(200,138,0,.08)!important
             }
             .dco-col-edges .dco-check-toggle.dco-edge-profile-target.is-edge-custom:hover{
-                background:#ffe79a!important;border-color:#aa7400!important
+                background:color-mix(in srgb, #aa7400 18%, var(--alm-card,#ffffff))!important;border-color:#aa7400!important
             }
             .dco-col-edges .dco-check-toggle.dco-edge-profile-target.is-edge-custom .dco-check-mark{color:#674900!important}
             .dco-col-edges .dco-check-toggle.dco-edge-profile-target.is-edge-missing{
-                background:#fff0f0!important;border-color:#d94a4a!important;color:#9d2525!important
+                background:color-mix(in srgb, #d94a4a 12%, var(--alm-card,#ffffff))!important;border-color:#d94a4a!important;color:#d94a4a!important
             }
             #${POPOVER_ID}{
                 position:fixed;z-index:1065;width:min(292px,calc(100vw - 20px));max-height:min(390px,calc(100vh - 20px));
                 display:flex;flex-direction:column;border:1px solid var(--border-color,#cbd2d9);border-radius:12px;
-                background:var(--card-bg,#fff);box-shadow:0 14px 38px rgba(15,23,42,.22);overflow:hidden;
+                background:var(--alm-card,#ffffff);box-shadow:0 14px 38px rgba(15,23,42,.22);overflow:hidden;
                 color:var(--text-color,#172033)
             }
             #${POPOVER_ID} .dco-edge-popover-head{
                 flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 10px 7px;
-                border-bottom:1px solid var(--border-color,#e1e5e9);background:var(--subtle-fg,#f7f9fb)
+                border-bottom:1px solid var(--alm-card-border,#e4e8ee);background:var(--alm-surface-muted,#f4f6f8)
             }
             #${POPOVER_ID} .dco-edge-popover-head strong{font-size:12px;line-height:1.25}
             #${POPOVER_ID} .dco-edge-popover-head small{display:block;margin-top:2px;color:var(--text-muted,#65717d);font-size:9px;font-weight:600}
@@ -172,10 +172,10 @@
                 color:inherit;text-align:right;cursor:pointer
             }
             #${POPOVER_ID} .dco-edge-profile-option:hover,#${POPOVER_ID} .dco-edge-profile-option:focus{
-                border-color:color-mix(in srgb, var(--alm-primary, #172033) 42%, transparent);background:color-mix(in srgb, var(--alm-primary, #172033) 6%, #ffffff);outline:0
+                border-color:color-mix(in srgb, var(--alm-primary, #172033) 42%, transparent);background:color-mix(in srgb, var(--alm-primary, #172033) 6%, var(--alm-card,#ffffff));outline:0
             }
-            #${POPOVER_ID} .dco-edge-profile-option.is-current{border-color:var(--alm-primary,#172033);background:color-mix(in srgb, var(--alm-primary, #172033) 8%, #ffffff)}
-            #${POPOVER_ID} .dco-edge-profile-option.is-custom-current{border-color:#c88a00;background:#fff4cc}
+            #${POPOVER_ID} .dco-edge-profile-option.is-current{border-color:var(--alm-primary,#172033);background:color-mix(in srgb, var(--alm-primary, #172033) 8%, var(--alm-card,#ffffff))}
+            #${POPOVER_ID} .dco-edge-profile-option.is-custom-current{border-color:#c88a00;background:color-mix(in srgb, #c88a00 14%, var(--alm-card,#ffffff))}
             #${POPOVER_ID} .dco-edge-profile-option b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
             #${POPOVER_ID} .dco-edge-profile-option small{grid-column:1;color:var(--text-muted,#65717d);font-size:8.5px;line-height:1.2}
             #${POPOVER_ID} .dco-edge-profile-option span{grid-column:2;grid-row:1/3;font-size:13px;font-weight:900;color:var(--alm-primary,#172033)}

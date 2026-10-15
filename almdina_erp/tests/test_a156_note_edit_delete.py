@@ -137,7 +137,7 @@ def test_editing_or_deleting_important_note_reuses_existing_projection_event() -
 def test_edit_delete_styles_are_static_responsive_and_focus_visible() -> None:
     manifest = source(MANIFEST)
     css = source(CSS)
-    assert '"/assets/almdina_erp/css/notes_interactions.css"' in manifest
+    assert '"/assets/almdina_erp/css/notes_interactions.css?v=1"' in manifest
     assert ".almdina-note-actions" in css
     assert ".almdina-note-editor" in css
     assert ".almdina-note-action.is-danger" in css

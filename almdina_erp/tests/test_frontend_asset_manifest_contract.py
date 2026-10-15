@@ -26,7 +26,7 @@ def test_global_asset_order_is_frozen_during_manifest_extraction():
     css = manifest["app_include_css"]
     js = manifest["app_include_js"]
     responsive = "/assets/almdina_erp/css/door_cutting_order_responsive.css"
-    presentation = "/assets/almdina_erp/css/door_cutting_order_form_presentation.css"
+    presentation = "/assets/almdina_erp/css/door_cutting_order_form_presentation.css?v=1"
     sidebar = "/assets/almdina_erp/css/door_cutting_order_form_sidebar.css"
     assert css.count(presentation) == 1
     assert css.count(sidebar) == 1

@@ -245,9 +245,9 @@
             .dco-price-approval-copy{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0}
             .dco-price-approval-status{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
             .dco-price-approval-label{font-size:11px;font-weight:800;color:var(--text-muted,#687481)}
-            .dco-price-approval-badge{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:800;border:1px solid var(--alm-card-border,#e4e8ee);background:var(--subtle-fg,#f7f9fa);color:var(--text-color,#1f272e)}
-            .dco-price-approval-badge.is-approved{border-color:color-mix(in srgb, var(--alm-success,#15803d) 35%, #fff);background:color-mix(in srgb, var(--alm-success,#15803d) 10%, #fff);color:var(--alm-success,#15803d)}
-            .dco-price-approval-badge.is-unapproved{border-color:color-mix(in srgb, var(--alm-warning,#b45309) 30%, #fff);background:var(--alm-warning-bg,#fff7e8);color:var(--alm-warning,#b45309)}
+            .dco-price-approval-badge{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:800;border:1px solid var(--alm-card-border,#e4e8ee);background:var(--alm-surface-muted,#f4f6f8);color:var(--alm-text-strong,#101828)}
+            .dco-price-approval-badge.is-approved{border-color:color-mix(in srgb, var(--alm-success,#15803d) 35%, var(--alm-card,#ffffff));background:color-mix(in srgb, var(--alm-success,#15803d) 10%, var(--alm-card,#ffffff));color:var(--alm-success,#15803d)}
+            .dco-price-approval-badge.is-unapproved{border-color:color-mix(in srgb, var(--alm-warning,#b45309) 30%, var(--alm-card,#ffffff));background:var(--alm-warning-bg,#fff7e8);color:var(--alm-warning,#b45309)}
             .dco-price-approval-badge.is-unknown{opacity:.72}
             .dco-price-approval-icon{font-weight:900;line-height:1}
             .dco-price-approval-meta,.dco-price-approval-lock-note,.dco-price-approval-blocker{display:block;max-width:220px;font-size:10px;font-weight:700;color:var(--text-muted,#687481);line-height:1.45}

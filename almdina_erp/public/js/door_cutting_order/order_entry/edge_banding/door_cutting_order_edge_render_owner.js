@@ -16,7 +16,7 @@
             .dco-check-toggle.dco-edge-profile-target.is-edge-missing.is-checked {
                 background:var(--alm-primary,#172033)!important;
                 border-color:var(--alm-primary,#172033)!important;
-                color:#fff!important;
+                color:var(--alm-on-primary,#ffffff)!important;
                 box-shadow:0 2px 7px rgba(15,23,42,.16)!important;
             }
             .dco-operator-form .dco-fast-table tbody tr.dco-special-row
@@ -27,7 +27,7 @@
             .dco-check-toggle.dco-edge-profile-target.is-edge-missing.is-checked {
                 background:#b5701c!important;
                 border-color:#b5701c!important;
-                color:#fff!important;
+                color:var(--alm-on-primary,#ffffff)!important;
                 box-shadow:0 2px 7px rgba(111,78,55,.18)!important;
             }
         `;

@@ -615,7 +615,7 @@ class TestDesignSystemContract(unittest.TestCase):
         workspace_home_asset = '"/assets/almdina_erp/css/almdina_workspace_home.css?v=12"'
         ui_asset = '"/assets/almdina_erp/js/almdina_ui.js"'
         foundation_asset = '"/assets/almdina_erp/js/frontend_foundation.js"'
-        notes_asset = '"/assets/almdina_erp/css/notes.css"'
+        notes_asset = '"/assets/almdina_erp/css/notes.css?v=1"'
 
         self.assertLess(self.assets.index(tokens_asset), self.assets.index(components_asset))
         self.assertLess(self.assets.index(components_asset), self.assets.index(patterns_asset))
@@ -1021,6 +1021,58 @@ class TestDesignSystemContract(unittest.TestCase):
         self.assertIn("background: var(--alm-surface-muted, #f4f6f8);", source)
         self.assertNotIn("var(--card-bg, #fff)", source)
         self.assertNotIn("var(--subtle-fg, #f7f7f7)", source)
+
+    def test_dco_form_chrome_reads_alm_surfaces_not_frappe_fallbacks(self) -> None:
+        tab = (ROOT / "public" / "css" / "door_cutting_order_form_tab_layout.css").read_text(
+            encoding="utf-8"
+        )
+        presentation = (ROOT / "public" / "css" / "door_cutting_order_form_presentation.css").read_text(
+            encoding="utf-8"
+        )
+        notes = (ROOT / "public" / "css" / "notes.css").read_text(encoding="utf-8")
+        shell = (ROOT / "public" / "css" / "door_cutting_order_plan_workspace_shell.css").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn(
+            "border-color: color-mix(in srgb, var(--alm-accent, #2563eb) 35%, var(--alm-card, #ffffff));",
+            tab,
+        )
+        self.assertNotIn("color-mix(in srgb, var(--alm-accent, #2563eb) 35%, #fff)", tab)
+        self.assertIn("background: var(--alm-card, #ffffff) !important;", presentation)
+        self.assertNotIn("var(--card-bg, #fff)", presentation)
+
+        self.assertIn("background: var(--alm-card, #ffffff);", notes)
+        self.assertNotIn("background: #fff;", notes)
+        self.assertNotIn("color: #10203f;", notes)
+
+        self.assertIn(
+            "background: color-mix(in srgb, var(--alm-success, #15803d) 10%, var(--alm-card, #ffffff)) !important;",
+            shell,
+        )
+        self.assertNotIn("background: #ecfdf3 !important;", shell)
+
+    def test_dco_print_and_drawing_owners_stay_theme_independent(self) -> None:
+        print_theme = (
+            ROOT
+            / "public"
+            / "js"
+            / "door_cutting_order"
+            / "printing"
+            / "door_cutting_order_document_print_theme.js"
+        ).read_text(encoding="utf-8")
+        financial = (
+            ROOT
+            / "public"
+            / "js"
+            / "door_cutting_order"
+            / "costing"
+            / "door_cutting_order_financial_documents_ux.js"
+        ).read_text(encoding="utf-8")
+        # Print document CSS keeps paper whites; screen theme must not reclaim them.
+        self.assertIn("background:#fff", financial)
+        self.assertIn("@page{size:A4", print_theme)
+        self.assertNotIn("var(--alm-card", financial[financial.index("function printCss") :])
 
     def test_admin_console_shells_alias_foundation_tokens(self) -> None:
         permissions = FACTORY_PERMISSIONS_CSS.read_text(encoding="utf-8")
