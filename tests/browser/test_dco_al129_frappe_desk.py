@@ -775,7 +775,8 @@ def _set_link(page: Page, fieldname: str, value: str) -> None:
             " linkDoctype: option || null, fieldHidden: Boolean(field && field.df && field.df.hidden),"
             " fieldReadOnly: Boolean(field && (field.read_only || (field.df && field.df.read_only))),"
             " inputConnected: Boolean(input && input.isConnected), inputDisabled: Boolean(input && input.disabled),"
-            " inputValuePresent: Boolean(input && input.value), suggestionCount: document.querySelectorAll('.awesomplete ul li:visible').length,"
+            " inputValuePresent: Boolean(input && input.value), suggestionCount:"
+            " [...document.querySelectorAll('.awesomplete ul li')].filter(item => item.getClientRects().length > 0).length,"
             " linkReadPermission: option && frappe.perm && frappe.perm.has_perm"
             " ? Boolean(frappe.perm.has_perm(option, 0, 'read')) : null}; }",
             fieldname,
