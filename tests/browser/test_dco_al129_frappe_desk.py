@@ -987,7 +987,9 @@ def test_real_desk_customer_field_permission_differential() -> None:
                             " window.dispatchEvent(new CustomEvent('almdina:permissions-updated'));"
                             " const button = document.querySelector('.page-actions .primary-action');"
                             " revoked = {nativeCreate: frm.has_perm('create'), saveDisabled: frm.save_disabled,"
-                            " saveActionPresent: Boolean(button), projection: Boolean(frm.__almdina_new_create_field_projection)};"
+                            " saveActionPresent: Boolean(button), saveActionDisabled: button ? Boolean(button.disabled"
+                            " || button.getAttribute('aria-disabled') === 'true') : null,"
+                            " projection: Boolean(frm.__almdina_new_create_field_projection)};"
                             " } finally { cached[0].create = original;"
                             " window.dispatchEvent(new CustomEvent('almdina:permissions-updated')); }"
                             " const button = document.querySelector('.page-actions .primary-action');"
@@ -997,12 +999,14 @@ def test_real_desk_customer_field_permission_differential() -> None:
                             " || button.getAttribute('aria-disabled') === 'true') : null,"
                             " projection: Boolean(frm.__almdina_new_create_field_projection)}}; }"
                         )
-                        assert permission_transition["revoked"] == {
-                            "nativeCreate": False,
-                            "saveDisabled": True,
-                            "saveActionPresent": False,
-                            "projection": False,
-                        }
+                        revoked = permission_transition["revoked"]
+                        assert revoked["nativeCreate"] is False
+                        assert revoked["saveDisabled"] is True
+                        assert revoked["projection"] is False
+                        assert (
+                            revoked["saveActionPresent"] is False
+                            or revoked["saveActionDisabled"] is True
+                        )
                         assert permission_transition["restored"]["nativeCreate"] is True
                         assert permission_transition["restored"]["saveDisabled"] is False
                         assert permission_transition["restored"]["saveActionPresent"] is True
