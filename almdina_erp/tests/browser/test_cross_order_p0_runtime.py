@@ -439,6 +439,9 @@ def test_saved_server_plan_print_runtime():
         try:
             page = browser.new_page(locale="en-US")
             _login(page, fixture)
+            evidence["browser_errors"] = []
+            page.on("console", lambda message: evidence["browser_errors"].append(message.text)
+                    if message.type == "error" else None)
             evidence["factory_identity"] = page.evaluate("""async () => {
                 await frappe.require('/assets/almdina_erp/js/door_cutting_order/printing/door_cutting_order_print_identity.js');
                 if (!window.AlmdinaFactoryPrintIdentity?.get)
@@ -469,7 +472,10 @@ def test_saved_server_plan_print_runtime():
                         matchesRow:JSON.stringify(visible)===JSON.stringify(JSON.parse(row.snapshot_json)),
                         canPrint:AlmdinaPermissions.canDocument(cur_frm,'print_cutting_plan'),
                         generation:token?.generation,modified:cur_frm.doc.modified,
+                        tokenCurrent:AlmdinaDocumentContext.isCurrent(cur_frm,token),
                         state:AlmdinaPlanWorkspaceState.snapshot(cur_frm)?.status,
+                        stateOrder:AlmdinaPlanWorkspaceState.snapshot(cur_frm)?.data?.order_name,
+                        statePrint:AlmdinaPlanWorkspaceState.snapshot(cur_frm)?.data?.capabilities?.print,
                         board:cur_frm.doc.board_description,rowBoard:row?.board?.description,
                         writes:__p0PrintWrites.length};
                     const result=await AlmdinaPlanTabsUX.printActivePlan(cur_frm);
@@ -479,6 +485,8 @@ def test_saved_server_plan_print_runtime():
                             state:AlmdinaPlanWorkspaceState.snapshot(cur_frm)?.status},
                         revision:row?.revision,html:__p0PrintWrites.at(-1)};
                 }""")
+                evidence.setdefault("attempts", {})[label] = {
+                    key: value for key, value in result.items() if key != "html"}
                 assert result["result"] is True and result["row"] == saved_plan[label]["name"], result
                 html = result.pop("html")
                 assert order["name"] in html and other["name"] not in html, result
