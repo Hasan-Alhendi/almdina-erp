@@ -50,6 +50,13 @@ jobs:
             almdina_erp/tests/test_configurable_production_permissions.py \
             almdina_erp/tests/test_configurable_production_routing_domain.py
 
+      - name: Run DXF Kerf identity regression
+        run: |
+          python -m pytest -q \
+            almdina_erp/tests/test_dxf_kerf_proven_door_identity.py \
+            almdina_erp/tests/test_dxf_hole_topology.py \
+            almdina_erp/tests/test_dxf_validation_issue_contract.py
+
       - name: Re-run plan and financial isolation contracts
         run: |
           python -m unittest -v \

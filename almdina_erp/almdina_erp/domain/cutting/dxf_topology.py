@@ -92,6 +92,9 @@ class ResolvedPartGeometry:
     geometry: PartGeometry
     hole_contour_keys: tuple[int, ...] = ()
     expected_piece_index: int | None = None
+    # A door row is proven only if every feasible assignment names the same row.
+    # The selected copy index alone is not an identity proof.
+    proven_source_piece_no: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -359,6 +362,59 @@ def _inventory_assignment(
         for expected_index, contour_index in expected_owner.items()
     }
     return tuple(contour_to_expected[index] for index in range(len(selected)))
+
+
+def _proven_source_piece_numbers(
+    selected: Sequence[ContourCandidate],
+    expected: Sequence[ExpectedPieceEvidence],
+    assignment: Sequence[int],
+    *,
+    dimension_tolerance: float,
+) -> dict[int, int]:
+    """Prove door rows across *all* complete dimension-feasible matchings.
+
+    One deterministic bipartite matching is not evidence of identity when
+    dimensions repeat or multiple order rows share the same cut envelope.
+    A non-matching edge can occur in another perfect matching precisely when
+    its ends belong to the same alternating-cycle strongly connected component.
+    Copies may be ambiguous while their common source door row is still proven.
+    """
+    count = len(selected)
+    if not count or count != len(expected) or len(assignment) != count:
+        return {}
+
+    candidates: list[list[int]] = []
+    graph: list[list[int]] = [[] for _ in range(2 * count)]
+    for contour_index, contour in enumerate(selected):
+        feasible = [
+            index
+            for index, piece in enumerate(expected)
+            if _dimensions_match(
+                contour, piece, dimension_tolerance=dimension_tolerance
+            )
+        ]
+        candidates.append(feasible)
+        for expected_index in feasible:
+            if expected_index == assignment[contour_index]:
+                graph[count + expected_index].append(contour_index)
+            else:
+                graph[contour_index].append(count + expected_index)
+
+    components = _strong_components(graph)
+    proven: dict[int, int] = {}
+    for contour_index, contour in enumerate(selected):
+        possible_expected = [
+            index
+            for index in candidates[contour_index]
+            if index == assignment[contour_index]
+            or components[contour_index] == components[count + index]
+        ]
+        source_nos = {expected[index].source_piece_no for index in possible_expected}
+        if len(source_nos) == 1:
+            source_no = next(iter(source_nos))
+            if source_no is not None:
+                proven[contour.key] = int(source_no)
+    return proven
 
 
 def _minimum_cost_assignment(
@@ -766,6 +822,7 @@ def _classify_selection(
     *,
     geometry_tolerance: float,
     expected_piece_indexes: dict[int, int],
+    proven_source_piece_nos: dict[int, int],
 ) -> ResolvedTopology | None:
     """Attach each proven hole to exactly one selected outer contour.
 
@@ -811,6 +868,7 @@ def _classify_selection(
                 geometry=geometry,
                 hole_contour_keys=tuple(hole.key for hole in owned_holes),
                 expected_piece_index=expected_piece_indexes.get(contour.key),
+                proven_source_piece_no=proven_source_piece_nos.get(contour.key),
             )
         )
 
@@ -948,6 +1006,10 @@ def resolve_contour_ownership(
             contour.key: assignment[index]
             for index, contour in enumerate(selected)
         },
+        proven_source_piece_nos=_proven_source_piece_numbers(
+            selected, expected, assignment,
+            dimension_tolerance=dimension_tolerance,
+        ),
     )
     if topology is None:
         raise DxfTopologyError(
