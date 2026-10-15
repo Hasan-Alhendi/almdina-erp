@@ -119,10 +119,14 @@ from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
     LinerGeometryError,
     LinerPiece,
     canonical_path,
-    compare_liner_path,
     liner_parameters_active,
     localize_path,
     sawn_liner_ends,
+)
+from almdina_erp.almdina_erp.domain.cutting.machining_overlay import (
+    MACHINING_ADDONS,
+    compare_overlay_path,
+    machining_values,
 )
 from almdina_erp.almdina_erp.domain.cutting.extra_overlays import (
     ExtraOverlayCandidate,
@@ -1324,6 +1328,7 @@ def _expected_order_pieces(order: Any) -> list[dict[str, Any]]:
                     "liner_width_cm": _num(getattr(row, "liner_width_cm", 0)),
                     "liner_start_cm": _num(getattr(row, "liner_start_cm", 0)),
                     "liner_length_cm": _num(getattr(row, "liner_length_cm", 0)),
+                    "machining": machining_values(row),
                 }
             )
     return expected
@@ -1534,6 +1539,7 @@ def _match_pieces_to_order(pieces: list[dict[str, Any]], order: Any) -> list[dic
         piece["_liner_width_cm"] = _num(candidate.get("liner_width_cm"))
         piece["_liner_start_cm"] = _num(candidate.get("liner_start_cm"))
         piece["_liner_length_cm"] = _num(candidate.get("liner_length_cm"))
+        piece["_machining"] = candidate.get("machining") or {}
         if "_material_area_m2" in piece:
             piece["area_m2"] = round(_num(piece["_material_area_m2"]), 4)
         else:
@@ -1968,12 +1974,14 @@ def liner_geometry_issue(
     source_piece_no: int,
     copy_no: int,
     piece_type: str,
+    overlay_kind: str = "liner",
 ):
     return _liner_issue(
         measurement,
         source_piece_no=source_piece_no,
         copy_no=copy_no,
         piece_type=piece_type,
+        overlay_kind=overlay_kind,
     )
 
 
@@ -1983,21 +1991,46 @@ def _liner_issue(
     source_piece_no: int,
     copy_no: int,
     piece_type: str,
+    overlay_kind: str = "liner",
 ):
     if measurement.ok:
         return None
+    params = {
+        "property_code": measurement.property_code,
+        "expected": measurement.expected,
+        "measured": measurement.measured,
+        "reason_code": measurement.reason_code,
+        "piece_type": piece_type,
+    }
+    if overlay_kind and overlay_kind != "liner":
+        params["overlay_kind"] = overlay_kind
     return issue(
         _LINER_ISSUE_BY_CODE[measurement.code],
         CATEGORY_OVERLAY,
         target=piece_target(source_piece_no=source_piece_no, copy_no=copy_no),
-        params={
-            "property_code": measurement.property_code,
-            "expected": measurement.expected,
-            "measured": measurement.measured,
-            "reason_code": measurement.reason_code,
-            "piece_type": piece_type,
-        },
+        params=params,
     )
+
+
+def _regular_overlay_params(piece: dict[str, Any], kind: str) -> dict[str, Any]:
+    if kind == "liner":
+        return {
+            "enabled": "liner" in tuple(piece.get("_extra_selected_codes") or ()),
+            "side": str(piece.get("_liner_side") or ""),
+            "offset_cm": _num(piece.get("_liner_offset_cm")),
+            "width_cm": _num(piece.get("_liner_width_cm")),
+            "start_cm": piece.get("_liner_start_cm"),
+            "length_cm": piece.get("_liner_length_cm"),
+        }
+    spec = (piece.get("_machining") or {}).get(kind) or {}
+    return {
+        "enabled": kind in tuple(piece.get("_extra_selected_codes") or ()),
+        "side": str(spec.get("side") or ""),
+        "offset_cm": _num(spec.get("offset_cm")),
+        "width_cm": _num(spec.get("width_cm")),
+        "start_cm": spec.get("start_cm"),
+        "length_cm": spec.get("length_cm"),
+    }
 
 
 def _regular_liner_issue(
@@ -2006,30 +2039,31 @@ def _regular_liner_issue(
     sheet: dict[str, Any],
     trim_mm: float,
     cutter_diameter_mm: float | None = None,
+    kind: str = "liner",
 ):
-    """Geometric liner check for a rectangular door once its 0/90 orientation is known."""
+    """Geometric machining check for a rectangular door once its 0/90 orientation is known."""
 
     piece_type = str(piece.get("piece_type") or "Regular")
     if piece_type != "Regular":
         return None
-    enabled = "liner" in tuple(piece.get("_extra_selected_codes") or ())
-    side = str(piece.get("_liner_side") or "")
-    offset_cm = _num(piece.get("_liner_offset_cm"))
-    width_cm = _num(piece.get("_liner_width_cm"))
+    params = _regular_overlay_params(piece, kind)
+    side = params["side"]
+    offset_cm = params["offset_cm"]
+    width_cm = params["width_cm"]
     if not liner_parameters_active(
-        enabled=enabled,
+        enabled=params["enabled"],
         side=side,
         offset_cm=offset_cm,
         width_cm=width_cm,
     ):
         return None
-    liners = [item for item in items if item.kind == "liner"]
-    if len(liners) != 1:
+    marks = [item for item in items if item.kind == kind]
+    if len(marks) != 1:
         return None
     outline = tuple((point[0] * 10.0, point[1] * 10.0) for point in piece.get("_outline_cm") or ())
     if len(outline) < 3:
         return None
-    path_cm = _to_plan_points(list(liners[0].path), sheet=sheet, trim_mm=trim_mm)
+    path_cm = _to_plan_points(list(marks[0].path), sheet=sheet, trim_mm=trim_mm)
     local = localize_path(tuple((point[0] * 10.0, point[1] * 10.0) for point in path_cm), outline)
     width_mm = _num(piece.get("original_w")) * 10.0
     height_mm = _num(piece.get("original_h")) * 10.0
@@ -2056,20 +2090,21 @@ def _regular_liner_issue(
                 _num(sheet.get("full_width_mm")) - trim,
                 _num(sheet.get("full_height_mm")) - trim,
             ),
-            start_cm=piece.get("_liner_start_cm"),
-            length_cm=piece.get("_liner_length_cm"),
+            start_cm=params["start_cm"],
+            length_cm=params["length_cm"],
         )
     except LinerGeometryError:
         start_sawn, end_sawn = None, None
-    measurement = compare_liner_path(
+    measurement = compare_overlay_path(
         canonical,
         liner_piece,
+        kind,
         side,
         offset_cm,
         width_cm,
         cutter_diameter_mm,
-        piece.get("_liner_start_cm"),
-        piece.get("_liner_length_cm"),
+        params["start_cm"],
+        params["length_cm"],
         start_sawn=start_sawn,
         end_sawn=end_sawn,
     )
@@ -2078,7 +2113,30 @@ def _regular_liner_issue(
         source_piece_no=int(piece.get("source_piece_no") or 0),
         copy_no=int(piece.get("copy_no") or 1),
         piece_type=piece_type,
+        overlay_kind=kind,
     )
+
+
+def _regular_machining_issues(
+    piece: dict[str, Any],
+    items,
+    sheet: dict[str, Any],
+    trim_mm: float,
+    cutter_diameter_mm: float | None = None,
+):
+    issues = []
+    for addon in MACHINING_ADDONS:
+        found = _regular_liner_issue(
+            piece,
+            items,
+            sheet,
+            trim_mm,
+            cutter_diameter_mm,
+            addon.kind,
+        )
+        if found is not None:
+            issues.append(found)
+    return issues
 
 
 def _attach_extra_overlays(
@@ -2125,15 +2183,15 @@ def _attach_extra_overlays(
         sheet = sheets_by_no.get(int(piece["_sheet_no"]))
         if sheet is None:
             continue
-        liner_issue = _regular_liner_issue(
-            piece,
-            grouped.get(int(piece["id"])) or [],
-            sheet,
-            trim_mm,
-            cutter_diameter_mm,
+        liner_issues.extend(
+            _regular_machining_issues(
+                piece,
+                grouped.get(int(piece["id"])) or [],
+                sheet,
+                trim_mm,
+                cutter_diameter_mm,
+            )
         )
-        if liner_issue is not None:
-            liner_issues.append(liner_issue)
     if liner_issues:
         raise DxfImportError(issues=liner_issues)
     for piece in pieces:

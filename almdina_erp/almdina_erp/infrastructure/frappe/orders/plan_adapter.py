@@ -86,16 +86,20 @@ class FrappeOrderPlanAdapter:
             ),
             "notes": row.notes or "",
         }
-        side = str(getattr(row, "liner_reference_side", "") or "")
-        offset = flt(getattr(row, "liner_offset_cm", 0))
-        width = flt(getattr(row, "liner_width_cm", 0))
-        if cint(getattr(row, "extra_liner", 0)) and side and width > 0:
-            piece["extra_liner"] = 1
-            piece["liner_reference_side"] = side
-            piece["liner_offset_cm"] = offset
-            piece["liner_width_cm"] = width
-            piece["liner_start_cm"] = flt(getattr(row, "liner_start_cm", 0))
-            piece["liner_length_cm"] = flt(getattr(row, "liner_length_cm", 0))
+        from almdina_erp.almdina_erp.domain.cutting.machining_overlay import (
+            MACHINING_ADDONS,
+        )
+
+        for addon in MACHINING_ADDONS:
+            side = str(getattr(row, addon.side_field, "") or "")
+            width = flt(getattr(row, addon.width_field, 0))
+            if cint(getattr(row, addon.enabled_field, 0)) and side and width > 0:
+                piece[addon.enabled_field] = 1
+                piece[addon.side_field] = side
+                piece[addon.offset_field] = flt(getattr(row, addon.offset_field, 0))
+                piece[addon.width_field] = width
+                piece[addon.start_field] = flt(getattr(row, addon.start_field, 0))
+                piece[addon.length_field] = flt(getattr(row, addon.length_field, 0))
         return piece
 
     def _plan_input_payload(

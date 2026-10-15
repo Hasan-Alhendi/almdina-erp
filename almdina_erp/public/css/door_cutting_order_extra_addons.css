@@ -8,56 +8,525 @@
     min-width: 0;
 }
 
-.dco-fast-table .dco-col-addon {
-    width: 74px;
-    min-width: 74px;
-    max-width: 74px;
-    padding-inline: 2px;
+.dco-fast-table .dco-col-addons {
+    width: 168px;
+    min-width: 148px;
+    max-width: 188px;
+    padding-inline: 4px;
     text-align: center;
 }
 
-.dco-fast-table th.dco-col-addon {
-    white-space: normal;
-    font-size: 9px;
-    line-height: 1.15;
-    overflow-wrap: anywhere;
+.dco-fast-table th.dco-col-addons {
+    white-space: nowrap;
+    font-size: 11px;
+    line-height: 1.2;
 }
 
-.dco-fast-table .dco-addon-toggle {
+.dco-fast-table .dco-addons-open {
     display: inline-flex;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
-    width: 68px;
-    min-width: 68px;
-    height: 40px;
-    min-height: 40px;
-    padding: 3px 2px;
-    overflow: hidden;
-    box-sizing: border-box;
-    font-size: 9px;
-    font-weight: 800;
-    line-height: 1.15;
-    text-align: center;
-}
-
-.dco-fast-table .dco-addon-toggle .dco-addon-label-line {
-    display: block;
+    gap: 6px;
     width: 100%;
-    max-width: 100%;
-    white-space: nowrap;
-    text-align: center;
+    max-width: 176px;
+    min-height: 32px;
+    padding: 4px 8px;
+    box-sizing: border-box;
+    border: 1px solid var(--alm-border, var(--border-color, #d9e0e6));
+    border-radius: var(--alm-radius-pill, 999px);
+    background: var(--card-bg, #fff);
+    color: var(--alm-text-secondary, #344054);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.2;
+    cursor: pointer;
 }
 
-.dco-addon-toggle:focus-visible {
+.dco-fast-table .dco-addons-open.is-active {
+    background: var(--alm-surface-muted, #f8fafc);
+    border-color: var(--alm-border-hover, #d0d5dd);
+    color: var(--alm-text-strong, #101828);
+}
+
+.dco-fast-table .dco-addons-open-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dco-fast-table .dco-addons-icon {
+    flex: 0 0 auto;
+}
+
+.dco-fast-table .dco-addons-more {
+    flex: 0 0 auto;
+    border-radius: var(--alm-radius-pill, 999px);
+    background: var(--alm-border-subtle, #eaecf0);
+    color: var(--alm-text-secondary, #344054);
+    padding: 1px 6px;
+    font-size: 10px;
+    font-weight: 800;
+}
+
+.dco-addons-open:focus-visible,
+.dco-addons-tab:focus-visible,
+.dco-addons-enable:focus-visible {
     outline: 2px solid var(--alm-focus-ring, var(--alm-primary, #172033));
     outline-offset: 1px;
 }
 
+.dco-addons-modal .modal-dialog {
+    width: min(1120px, 95vw);
+    max-width: min(1120px, 95vw);
+    margin: 5vh auto;
+}
+
+.dco-addons-modal .modal-content {
+    display: flex;
+    flex-direction: column;
+    max-height: 90vh;
+    overflow: hidden;
+    border: 0;
+    border-radius: var(--alm-radius-md, 14px);
+    background: var(--alm-card, #fff);
+}
+
+.dco-addons-modal .modal-header {
+    flex: 0 0 auto;
+    padding: var(--alm-space-3, 12px) var(--alm-space-4, 16px);
+    border-bottom: 1px solid var(--alm-border-subtle, #eaecf0);
+}
+
+.dco-addons-modal .modal-body,
+.dco-addons-modal .modal-body > div,
+.dco-addons-modal .form-layout,
+.dco-addons-modal .form-page,
+.dco-addons-modal .form-section,
+.dco-addons-modal .section-body,
+.dco-addons-modal .form-column,
+.dco-addons-modal .form-column > form,
+.dco-addons-modal .frappe-control {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+}
+
+.dco-addons-modal .modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--alm-card, #fff);
+}
+
+.dco-addons-modal .modal-footer {
+    display: none;
+}
+
+.dco-addons-shell,
+.dco-addons-shell * {
+    box-sizing: border-box;
+}
+
+.dco-addons-shell {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    max-height: calc(90vh - 64px);
+    overflow: hidden;
+    background: var(--alm-card, #fff);
+}
+
+.dco-addons-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--alm-space-2, 8px) var(--alm-space-3, 12px);
+    flex: 0 0 auto;
+    padding: var(--alm-space-2, 8px) var(--alm-space-4, 16px) var(--alm-space-3, 12px);
+    border-bottom: 1px solid var(--alm-border-subtle, #eaecf0);
+}
+
+.dco-addons-meta-item {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--alm-space-1, 4px);
+    min-width: 0;
+}
+
+.dco-addons-meta-label {
+    color: var(--alm-text-subtle, #667085);
+    font-size: var(--alm-font-size-xs, 10px);
+    font-weight: var(--alm-font-weight-medium, 500);
+}
+
+.dco-addons-meta-value {
+    color: var(--alm-text-strong, #101828);
+    font-size: var(--alm-font-size-sm, 12px);
+    font-weight: var(--alm-font-weight-semibold, 600);
+}
+
+.dco-addons-meta-sep {
+    flex: 0 0 auto;
+    width: 1px;
+    height: 12px;
+    background: var(--alm-border-hover, #d0d5dd);
+}
+
+.dco-addons-tabs {
+    display: flex;
+    gap: var(--alm-space-2, 8px);
+    flex: 0 0 auto;
+    padding: var(--alm-space-3, 12px) var(--alm-space-4, 16px);
+    overflow-x: auto;
+}
+
+.dco-addons-modal .dco-addons-tab {
+    flex: 1 1 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 0;
+    height: var(--alm-height-button, 42px);
+    margin: 0;
+    padding: 0 var(--alm-space-2, 8px);
+    border: 1px solid var(--alm-border, #dfe3e8);
+    border-radius: var(--alm-radius-button, 10px);
+    background: var(--alm-surface-muted, #f4f6f8);
+    box-shadow: none;
+    color: var(--alm-text-secondary, #344054);
+    font-size: var(--alm-font-size-sm, 12px);
+    font-weight: var(--alm-font-weight-semibold, 600);
+    line-height: var(--alm-line-height-tight, 1.35);
+    white-space: nowrap;
+    cursor: pointer;
+    appearance: none;
+}
+
+.dco-addons-modal .dco-addons-tab.is-enabled:not(.is-selected) {
+    background: var(--alm-card, #fff);
+}
+
+.dco-addons-modal .dco-addons-tab.is-selected {
+    background: var(--alm-primary, #172033);
+    border-color: var(--alm-primary, #172033);
+    color: var(--alm-on-primary, #fff);
+}
+
+.dco-addons-tab-dot {
+    flex: 0 0 auto;
+    width: 6px;
+    height: 6px;
+    border-radius: var(--alm-radius-pill, 999px);
+    background: var(--alm-primary, #172033);
+}
+
+.dco-addons-modal .dco-addons-tab.is-selected .dco-addons-tab-dot {
+    background: var(--alm-on-primary, #fff);
+}
+
+/* Physical columns: settings on the left, preview on the right in RTL and LTR. */
+.dco-addons-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--alm-space-4, 16px);
+    align-items: start;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    padding: 0 var(--alm-space-4, 16px) var(--alm-space-4, 16px);
+    direction: ltr;
+    overflow: hidden;
+}
+
+.dco-addons-settings,
+.dco-addons-preview-pane {
+    direction: rtl;
+}
+
+:root[dir="ltr"] .dco-addons-settings,
+:root[dir="ltr"] .dco-addons-preview-pane,
+body[dir="ltr"] .dco-addons-settings,
+body[dir="ltr"] .dco-addons-preview-pane {
+    direction: ltr;
+}
+
+.dco-addons-settings {
+    display: flex;
+    flex-direction: column;
+    gap: var(--alm-space-2, 8px);
+    min-width: 0;
+    max-height: min(450px, calc(90vh - 240px));
+    overflow: auto;
+    padding: var(--alm-space-1, 4px);
+    background: var(--alm-card, #fff);
+}
+
+.dco-addons-preview-pane {
+    min-width: 0;
+}
+
+.dco-addons-preview-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--alm-space-2, 8px);
+    width: 100%;
+    height: min(420px, calc(90vh - 240px));
+    padding: var(--alm-space-3, 12px);
+    overflow: hidden;
+    border: 1px solid var(--alm-border-subtle, #eaecf0);
+    border-radius: var(--alm-radius-sm, 10px);
+    background: var(--alm-surface-muted, #f4f6f8);
+}
+
+.dco-addons-preview-title {
+    flex: 0 0 auto;
+    color: var(--alm-text-secondary, #344054);
+    font-size: var(--alm-font-size-sm, 12px);
+    font-weight: var(--alm-font-weight-bold, 700);
+}
+
+.dco-addons-preview {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+    overflow: hidden;
+    border-radius: var(--alm-radius-xs, 8px);
+    background: var(--alm-card, #fff);
+}
+
+.dco-addons-preview svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    min-height: 0;
+}
+
+.dco-addons-modal [data-liner-fields] {
+    display: flex;
+    flex-direction: column;
+    gap: var(--alm-space-2, 8px);
+    min-width: 0;
+}
+
+.dco-addons-modal .dco-corner-section-label {
+    margin: 0;
+    color: var(--alm-text-subtle, #667085);
+    font-size: var(--alm-font-size-xs, 10px);
+    font-weight: var(--alm-font-weight-bold, 700);
+}
+
+.dco-addons-modal .dco-corner-position-grid,
+.dco-addons-modal .dco-corner-input-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--alm-space-2, 8px);
+    min-width: 0;
+}
+
+.dco-addons-modal .dco-corner-position {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: auto;
+    height: var(--alm-height-button, 42px);
+    min-height: var(--alm-height-button, 42px);
+    max-height: var(--alm-space-12, 48px);
+    margin: 0;
+    padding: 0 var(--alm-space-2, 8px);
+    overflow: hidden;
+    border: 1px solid var(--alm-border, #dfe3e8);
+    border-radius: var(--alm-radius-button, 10px);
+    background: var(--alm-card, #fff);
+    box-shadow: none;
+    color: var(--alm-text-secondary, #344054);
+    font-size: var(--alm-font-size-md, 14px);
+    font-weight: var(--alm-font-weight-semibold, 600);
+    line-height: var(--alm-line-height-tight, 1.35);
+    text-align: center;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    cursor: pointer;
+    appearance: none;
+}
+
+.dco-addons-modal .dco-corner-position:hover {
+    border-color: var(--alm-border-hover, #d0d5dd);
+    background: var(--alm-surface-muted, #f4f6f8);
+}
+
+.dco-addons-modal .dco-corner-position.is-active {
+    border-color: var(--alm-primary, #172033);
+    background: var(--alm-primary, #172033);
+    color: var(--alm-on-primary, #fff);
+    box-shadow: none;
+}
+
+.dco-addons-modal .dco-corner-input-wrap {
+    min-width: 0;
+}
+
+.dco-addons-modal .dco-corner-input-wrap label {
+    display: block;
+    margin: 0 0 var(--alm-space-1, 4px);
+    color: var(--alm-text-subtle, #667085);
+    font-size: var(--alm-font-size-xs, 10px);
+    font-weight: var(--alm-font-weight-semibold, 600);
+}
+
+.dco-addons-modal .dco-corner-input-shell {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--alm-border, #dfe3e8);
+    border-radius: var(--alm-radius-button, 10px);
+    background: var(--alm-card, #fff);
+}
+
+.dco-addons-modal .dco-corner-input-shell input {
+    width: 100%;
+    min-width: 0;
+    height: var(--alm-height-button, 42px);
+    margin: 0;
+    padding: 0 var(--alm-space-2, 8px);
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+    color: var(--alm-text-strong, #101828);
+    font-size: var(--alm-font-size-md, 14px);
+    font-weight: var(--alm-font-weight-semibold, 600);
+    text-align: center;
+}
+
+.dco-addons-modal .dco-corner-input-shell span {
+    flex: 0 0 auto;
+    padding: 0 var(--alm-space-2, 8px);
+    border-inline-start: 1px solid var(--alm-border-subtle, #eaecf0);
+    color: var(--alm-text-subtle, #667085);
+    font-size: var(--alm-font-size-xs, 10px);
+    white-space: nowrap;
+}
+
+.dco-addons-modal .dco-corner-help {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--alm-text-subtle, #667085);
+    font-size: var(--alm-font-size-xs, 10px);
+    line-height: var(--alm-line-height-normal, 1.6);
+}
+
+.dco-addons-modal .dco-corner-help.is-error {
+    border: 0;
+    background: transparent;
+    color: var(--alm-danger, #b91c1c);
+}
+
+.dco-addons-modal .dco-addons-enable {
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    gap: var(--alm-space-2, 8px);
+    height: var(--alm-height-button-compact, 34px);
+    margin: 0;
+    padding: 0 var(--alm-space-2, 8px);
+    border: 1px solid var(--alm-border, #dfe3e8);
+    border-radius: var(--alm-radius-button, 10px);
+    background: var(--alm-card, #fff);
+    box-shadow: none;
+    color: var(--alm-text-secondary, #344054);
+    font-size: var(--alm-font-size-sm, 12px);
+    font-weight: var(--alm-font-weight-semibold, 600);
+    cursor: pointer;
+    appearance: none;
+}
+
+.dco-addons-modal .dco-addons-enable.is-on {
+    border-color: var(--alm-border-hover, #d0d5dd);
+    background: var(--alm-surface-muted, #f4f6f8);
+    color: var(--alm-text-strong, #101828);
+}
+
+.dco-addons-enable-mark {
+    width: 8px;
+    height: 8px;
+    border-radius: var(--alm-radius-pill, 999px);
+    border: 1px solid var(--alm-border-hover, #d0d5dd);
+}
+
+.dco-addons-modal .dco-addons-enable.is-on .dco-addons-enable-mark {
+    background: var(--alm-primary, #172033);
+    border-color: var(--alm-primary, #172033);
+}
+
+.dco-addons-footer {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--alm-space-2, 8px);
+    padding: var(--alm-space-3, 12px) var(--alm-space-4, 16px);
+    border-top: 1px solid var(--alm-border-subtle, #eaecf0);
+    background: var(--alm-card, #fff);
+}
+
+.dco-addons-footer-main {
+    display: flex;
+    gap: var(--alm-space-2, 8px);
+}
+
+.dco-addons-modal .dco-addons-footer .btn {
+    min-height: var(--alm-height-button, 42px);
+    margin: 0;
+    border-radius: var(--alm-radius-button, 10px);
+}
+
+.dco-addons-remove:not(:disabled) {
+    color: var(--alm-danger, #b91c1c);
+}
+
 @media (max-width: 720px) {
-    .dco-fast-table .dco-col-addon {
-        width: 70px;
-        min-width: 70px;
-        max-width: 70px;
+    .dco-fast-table .dco-col-addons {
+        width: 148px;
+        min-width: 136px;
+        max-width: 160px;
+    }
+}
+
+@media (max-width: 640px) {
+    .dco-addons-modal .modal-dialog {
+        width: calc(100vw - 16px);
+        max-width: calc(100vw - 16px);
+        margin: 8px auto;
+    }
+
+    .dco-addons-body {
+        grid-template-columns: minmax(0, 1fr);
+        overflow: auto;
+    }
+
+    .dco-addons-settings {
+        max-height: none;
+        overflow: visible;
+    }
+
+    .dco-addons-preview-card {
+        height: min(360px, 52vh);
+    }
+
+    .dco-addons-modal .dco-addons-tab {
+        flex: 1 0 auto;
     }
 }

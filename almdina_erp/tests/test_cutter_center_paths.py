@@ -507,6 +507,67 @@ def test_split_trim_exports_saw_centers_and_reimports(tmp_path):
     assert sizes == [(40, 40), (40, 40), (40, 40)]
 
 
+def test_three_millimetre_kerf_trim_exports_and_reimports(tmp_path):
+    client_path = tmp_path / "kerf3-trim.dxf"
+    env = os.environ.copy()
+    env["KERF3_DXF_OUT"] = str(client_path)
+    subprocess.run(
+        ["node", str(ROOT / "tests" / "js" / "secure_dxf_topology_export.test.js")],
+        check=True,
+        env=env,
+    )
+    source = ezdxf.readfile(str(client_path))
+    cuts = [
+        entity for entity in source.modelspace()
+        if entity.dxftype() == "LINE" and entity.dxf.layer == "CUT_PATH"
+    ]
+
+    def vertical(value):
+        return [
+            entity for entity in cuts
+            if abs(entity.dxf.start.x - value) < 0.05 and abs(entity.dxf.end.x - value) < 0.05
+        ]
+
+    def horizontal(value):
+        return [
+            entity for entity in cuts
+            if abs(entity.dxf.start.y - value) < 0.05 and abs(entity.dxf.end.y - value) < 0.05
+        ]
+
+    assert len(vertical(3.5)) == 1
+    assert len(vertical(406.5)) == 1
+    assert len(vertical(809.5)) == 1
+    assert len(vertical(1212.5)) == 1
+    assert len(horizontal(3.5)) == 1
+    assert vertical(0) == []
+    assert vertical(1220) == []
+    geometry = [
+        entity for entity in source.modelspace()
+        if entity.dxftype() == "LINE" and entity.dxf.layer == "GEOMETRY"
+    ]
+    xs = [
+        value
+        for entity in geometry
+        for value in (entity.dxf.start.x, entity.dxf.end.x)
+    ]
+    assert min(xs) == pytest.approx(5, abs=0.05)
+    assert max(xs) == pytest.approx(1211, abs=0.05)
+
+    normalized = rebuild_autocad_dxf(client_path.read_bytes())
+    audited = ezdxf.read(io.StringIO(normalized.decode("utf-8")))
+    assert audited.audit().has_errors is False
+    normalized_path = tmp_path / "kerf3-trim-normalized.dxf"
+    normalized_path.write_bytes(normalized)
+    order = _order([
+        _piece(piece_instance_id="door-1", width_cm=40, length_cm=40, cut_width_cm=40, cut_length_cm=40),
+        _piece(piece_instance_id="door-2", width_cm=40, length_cm=40, cut_width_cm=40, cut_length_cm=40),
+        _piece(piece_instance_id="door-3", width_cm=40, length_cm=40, cut_width_cm=40, cut_length_cm=40),
+    ])
+    imported = _import(str(normalized_path), order, kerf_mm=3, trim_mm=5)
+    sizes = sorted((piece["w"], piece["h"]) for piece in imported["sheets"][0]["pieces"])
+    assert sizes == [(40, 40), (40, 40), (40, 40)]
+
+
 def test_reference_file_uses_the_same_radius_offset():
     if not REFERENCE.is_file():
         pytest.skip("reference 147.dxf is not on this machine")

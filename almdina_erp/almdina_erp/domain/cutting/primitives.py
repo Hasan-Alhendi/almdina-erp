@@ -43,14 +43,11 @@ def clone_pieces(pieces: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def liner_metadata(row: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "extra_liner": 1 if row.get("extra_liner") else 0,
-        "liner_reference_side": str(row.get("liner_reference_side") or ""),
-        "liner_offset_cm": num(row.get("liner_offset_cm")),
-        "liner_width_cm": num(row.get("liner_width_cm")),
-        "liner_start_cm": num(row.get("liner_start_cm")),
-        "liner_length_cm": num(row.get("liner_length_cm")),
-    }
+    from almdina_erp.almdina_erp.domain.cutting.machining_overlay import (
+        machining_metadata,
+    )
+
+    return machining_metadata(row)
 
 
 def _edge_metadata(row: dict[str, Any]) -> dict[str, Any]:

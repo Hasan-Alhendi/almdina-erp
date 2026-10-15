@@ -250,34 +250,35 @@ def _present_liner_mismatch(issue: DxfValidationIssue, target_text: str) -> Pres
     params = issue.params or {}
     piece_type = params.get("piece_type")
     code = issue.code
-    action = "صحّح اللاينر في ملف DXF ثم أعد الرفع. لا يُعدَّل الملف تلقائيًا."
+    name = _OVERLAY_KIND_AR.get(str(params.get("overlay_kind") or "liner"), "اللاينر")
+    action = f"صحّح {name} في ملف DXF ثم أعد الرفع. لا يُعدَّل الملف تلقائيًا."
     if code == codes.LINER_WIDTH_NOT_MEASURABLE:
         problem = (
-            "عرض اللاينر غير قابل للقياس من مسار الطبقة. "
+            f"عرض {name} غير قابل للقياس من مسار الطبقة. "
             "المسار خط بلا سماكة هندسية، والمطلوب "
             f"{params.get('expected') or '؟'} سم."
         )
     elif code == codes.LINER_OFFSET_MISMATCH:
         problem = (
-            "مسافة اللاينر عن الجهة المرجعية غير مطابقة. "
+            f"مسافة {name} عن الجهة المرجعية غير مطابقة. "
             f"المطلوب {params.get('expected') or '؟'} سم، "
             f"والمقاس من DXF {params.get('measured') or '؟'} سم."
         )
     elif code == codes.LINER_WIDTH_MISMATCH:
         problem = (
-            "عرض اللاينر غير مطابق. "
+            f"عرض {name} غير مطابق. "
             f"المطلوب {params.get('expected') or '؟'} سم، "
             f"والمقاس من DXF {params.get('measured') or '؟'} سم."
         )
     elif code == codes.LINER_SIDE_MISMATCH:
         problem = (
-            "جهة اللاينر غير مطابقة. "
+            f"جهة {name} غير مطابقة. "
             f"المطلوب {_liner_side_label(params.get('expected'), piece_type)}، "
             f"والمقاس من DXF {_liner_side_label(params.get('measured'), piece_type)}."
         )
     else:
         problem = (
-            "مسار اللاينر لا يطابق شكل الجهة المطلوبة "
+            f"مسار {name} لا يطابق الجهة المحددة "
             f"({_liner_side_label(params.get('expected'), piece_type)})."
         )
     return PresentedDxfError(problem, target_text, action, code, issue.category)

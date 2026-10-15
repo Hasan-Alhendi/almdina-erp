@@ -171,7 +171,19 @@ assert.match(ux, /commitChildValues/);
 assert.match(ux, /resolveChildRow/);
 assert.match(ux, /queueChildApply/);
 assert.match(ux, /if \(saved\) dialog.hide\(\)/);
-assert.match(ux, /extra_liner: 0/);
+const clearedLiner = editor.valuesFor("liner", {
+    side: "edge_width_top",
+    offsetCm: 2,
+    widthCm: 1.5,
+    startCm: 0,
+    lengthCm: 40,
+}, false);
+assert.equal(clearedLiner.extra_liner, 0);
+assert.equal(clearedLiner.liner_reference_side, "");
+assert.equal(clearedLiner.liner_offset_cm, 0);
+assert.equal(clearedLiner.liner_width_cm, 0);
+assert.equal(clearedLiner.liner_start_cm, 0);
+assert.equal(clearedLiner.liner_length_cm, 0);
 assert.doesNotMatch(ux, /createElement\("style"\)/);
 
 const shapedLiner = geometry.pieceFromRow({

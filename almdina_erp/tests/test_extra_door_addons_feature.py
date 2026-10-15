@@ -104,16 +104,18 @@ def test_pricing_plan_quantity_and_mutation_impacts_stay_in_their_owners() -> No
     assert "extra_back_groove" in cost_fields
 
 
-def test_measurement_table_owns_five_compact_checkbox_columns_without_popup() -> None:
+def test_measurement_table_uses_one_addons_column_and_shared_dialog() -> None:
     ux = UX.read_text(encoding="utf-8")
     operator = OPERATOR.read_text(encoding="utf-8")
     css = CSS.read_text(encoding="utf-8")
     assets = ASSETS.read_text(encoding="utf-8")
+    dialog = (UX.parent / "door_cutting_order_addons_dialog.js").read_text(encoding="utf-8")
 
     assert '<select class="dco-fast-select dco-piece-type-select"' in ux
     assert 'data-field="piece_type"' in ux
     assert 'value="Extra"' not in ux
-    assert "renderAddonCell" in ux
+    assert "renderAddonSummary" in ux
+    assert "addonSummary" in ux
     assert "enforceMutualExclusivity" in ux
     assert "dco-extra-submenu-flyout" not in ux
     assert "renderSubmenu" not in ux
@@ -126,9 +128,25 @@ def test_measurement_table_owns_five_compact_checkbox_columns_without_popup() ->
         "extra_recessed_handle_cutout",
     ):
         assert fieldname in operator
-    assert "dco-col-addon" in operator
-    assert ".dco-col-addon" in css
-    assert "width: 46px" in css
-    assert ".dco-extra-submenu-flyout" not in css
+        assert fieldname in ux
+    header = operator.split("<thead>", 1)[1].split("</thead>", 1)[0]
+    assert header.count("dco-col-addons") == 1
+    assert header.index("dco-col-addons") < header.index("dco-col-notes")
+    assert "dco-col-addon\"" not in header
+    assert "data-open-addons" in operator
+    assert "AlmdinaDoorAddonsDialog" in operator
+    assert ".dco-col-addons" in css
+    assert ".dco-addons-shell" in css
+    assert "--alm-primary" in css
+    assert "grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)" in css
+    assert "direction: ltr" in css
+    assert "dco-addons-meta-item" in dialog
+    assert "dco-addons-preview-card" in dialog
+    assert "controlsHtml" in dialog
+    assert "previewSvg" in dialog
+    assert "applyLiner" in dialog
+    assert "enforceMutualExclusivity" in dialog
+    assert "selectTab" in dialog
     assert "door_cutting_order_extra_addons_ux.js" in assets
+    assert "door_cutting_order_addons_dialog.js" in assets
     assert "door_cutting_order_extra_addons.css" in assets

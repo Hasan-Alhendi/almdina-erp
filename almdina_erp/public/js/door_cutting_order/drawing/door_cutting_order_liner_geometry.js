@@ -755,9 +755,94 @@
         return Math.round(value * 1000) / 1000;
     }
 
-    function linerRequested(piece) {
-        return Boolean(String(piece && piece.liner_reference_side || "").trim())
-            && num(piece && piece.liner_width_cm) > 0;
+    function linerView(piece, spec) {
+        return Object.assign({}, piece, {
+            liner_reference_side: spec.side,
+            liner_offset_cm: spec.offsetCm,
+            liner_width_cm: spec.widthCm,
+            liner_start_cm: spec.startCm,
+            liner_length_cm: spec.lengthCm,
+        });
+    }
+
+    function generateToolpath(options) {
+        const spec = options || {};
+        return toolpathMm(
+            spec.piece,
+            spec.referenceSide,
+            spec.offsetCm,
+            spec.widthCm,
+            spec.cutterDiameterMm,
+            spec.startCm,
+            spec.lengthCm,
+            spec.ends || null
+        );
+    }
+
+    function buildMachiningOverlay(piece, spec, mode) {
+        if (!piece || !spec) return null;
+        const kind = String(spec.kind || "liner");
+        const layer = String(spec.layer || "Liner");
+        const overlays = Array.isArray(piece.overlays) ? piece.overlays : [];
+        const toolpath = mode === "toolpath";
+        if (mode !== "visual") {
+            if (overlays.some(overlay => overlay && overlay.kind === kind)) return null;
+            if (piece.geometry && Array.isArray(piece.geometry.outer) && overlays.length) return null;
+        }
+        const side = String(spec.side || "").trim();
+        if (!side || !(num(spec.widthCm) > 0)) return null;
+        const host = linerView(piece, spec);
+        const linerPiece = pieceFromRow(host);
+        let local;
+        try {
+            if (toolpath) {
+                const diameter = num(piece.kerf_mm);
+                if (!(diameter > TOLERANCE_MM)) {
+                    return { kind, layer, synthetic: true, error: "cutter_diameter_invalid" };
+                }
+                const ends = piece.board ? sawnBoundaryEnds(host, linerPiece, piece.board) : null;
+                local = generateToolpath({
+                    type: kind,
+                    piece: linerPiece,
+                    referenceSide: side,
+                    offsetCm: spec.offsetCm,
+                    widthCm: spec.widthCm,
+                    startCm: spec.startCm,
+                    lengthCm: spec.lengthCm,
+                    cutterDiameterMm: diameter,
+                    ends,
+                });
+            } else {
+                local = centerlineMm(
+                    linerPiece,
+                    side,
+                    spec.offsetCm,
+                    spec.widthCm,
+                    spec.startCm,
+                    spec.lengthCm
+                );
+            }
+        } catch (error) {
+            return {
+                kind,
+                layer,
+                synthetic: true,
+                error: error.code || "liner_extension_unsafe",
+            };
+        }
+        return {
+            kind,
+            layer,
+            synthetic: true,
+            geometry: {
+                schema_version: 1,
+                unit: "mm",
+                coordinate_space: "usable_sheet",
+                closed: false,
+                toolpath,
+                path: placeLocalPath(piece, linerPiece, local),
+            },
+        };
     }
 
     function placeLocalPath(piece, linerPiece, local) {
@@ -777,128 +862,28 @@
         });
     }
 
-    function linerOverlayGate(piece) {
-        if (!piece) return null;
-        const overlays = Array.isArray(piece.overlays) ? piece.overlays : [];
-        if (overlays.some(overlay => overlay && overlay.kind === "liner")) return null;
-        if (piece.geometry && Array.isArray(piece.geometry.outer) && overlays.length) return null;
-        if (!linerRequested(piece)) return null;
-        return pieceFromRow(piece);
+    function linerSpec(piece) {
+        return {
+            kind: "liner",
+            layer: "Liner",
+            side: piece && piece.liner_reference_side,
+            offsetCm: piece && piece.liner_offset_cm,
+            widthCm: piece && piece.liner_width_cm,
+            startCm: piece && piece.liner_start_cm,
+            lengthCm: piece && piece.liner_length_cm,
+        };
     }
 
     function visualCenterline(piece) {
-        if (!linerRequested(piece)) return null;
-        const linerPiece = pieceFromRow(piece);
-        let local;
-        try {
-            local = centerlineMm(
-                linerPiece,
-                piece.liner_reference_side,
-                piece.liner_offset_cm,
-                piece.liner_width_cm,
-                piece.liner_start_cm,
-                piece.liner_length_cm
-            );
-        } catch (error) {
-            return {
-                kind: "liner",
-                layer: "Liner",
-                synthetic: true,
-                error: error.code || "liner_extension_unsafe",
-            };
-        }
-        return {
-            kind: "liner",
-            layer: "Liner",
-            synthetic: true,
-            geometry: {
-                schema_version: 1,
-                unit: "mm",
-                coordinate_space: "usable_sheet",
-                closed: false,
-                toolpath: false,
-                path: placeLocalPath(piece, linerPiece, local),
-            },
-        };
+        return buildMachiningOverlay(piece, linerSpec(piece), "visual");
     }
 
     function centerlineOverlay(piece) {
-        const linerPiece = linerOverlayGate(piece);
-        if (!linerPiece) return null;
-        let local;
-        try {
-            local = centerlineMm(
-                linerPiece,
-                piece.liner_reference_side,
-                piece.liner_offset_cm,
-                piece.liner_width_cm,
-                piece.liner_start_cm,
-                piece.liner_length_cm
-            );
-        } catch (error) {
-            return {
-                kind: "liner",
-                layer: "Liner",
-                synthetic: true,
-                error: error.code || "liner_extension_unsafe",
-            };
-        }
-        return {
-            kind: "liner",
-            layer: "Liner",
-            synthetic: true,
-            geometry: {
-                schema_version: 1,
-                unit: "mm",
-                coordinate_space: "usable_sheet",
-                closed: false,
-                toolpath: false,
-                path: placeLocalPath(piece, linerPiece, local),
-            },
-        };
+        return buildMachiningOverlay(piece, linerSpec(piece), "centerline");
     }
 
     function syntheticOverlay(piece) {
-        const linerPiece = linerOverlayGate(piece);
-        if (!linerPiece) return null;
-        const diameter = num(piece.kerf_mm);
-        if (!(diameter > TOLERANCE_MM)) {
-            return { kind: "liner", layer: "Liner", synthetic: true, error: "cutter_diameter_invalid" };
-        }
-        let local;
-        try {
-            const ends = piece.board ? sawnBoundaryEnds(piece, linerPiece, piece.board) : null;
-            local = toolpathMm(
-                linerPiece,
-                piece.liner_reference_side,
-                piece.liner_offset_cm,
-                piece.liner_width_cm,
-                diameter,
-                piece.liner_start_cm,
-                piece.liner_length_cm,
-                ends
-            );
-        } catch (error) {
-            return {
-                kind: "liner",
-                layer: "Liner",
-                synthetic: true,
-                error: error.code || "liner_extension_unsafe",
-            };
-        }
-        return {
-            kind: "liner",
-            layer: "Liner",
-            synthetic: true,
-            geometry: {
-                schema_version: 1,
-                unit: "mm",
-                coordinate_space: "usable_sheet",
-                closed: false,
-                toolpath: true,
-                path: placeLocalPath(piece, linerPiece, local),
-            },
-        };
+        return buildMachiningOverlay(piece, linerSpec(piece), "toolpath");
     }
 
     function contourNotchFromOrder(frm, row) {
@@ -946,6 +931,8 @@
         cutterCenterOffsetsMm,
         centerlineMm,
         toolpathMm,
+        generateToolpath,
+        buildMachiningOverlay,
         extensionConflict,
         placedPolygonMm,
         contourNotchCm,

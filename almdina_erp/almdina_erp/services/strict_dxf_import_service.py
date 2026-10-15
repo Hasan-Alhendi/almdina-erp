@@ -16,11 +16,15 @@ from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
     LinerMeasurement,
     LinerPiece,
     canonical_path,
-    compare_liner_path,
     contour_notch_cm,
     liner_parameters_active,
     localize_path,
     sawn_liner_ends,
+)
+from almdina_erp.almdina_erp.domain.cutting.machining_overlay import (
+    MACHINING_ADDONS,
+    MACHINING_ADDONS_BY_KIND,
+    compare_overlay_path,
 )
 from almdina_erp.almdina_erp.domain.cutting.dxf_applied_trim import (
     DxfAppliedTrimError,
@@ -834,14 +838,16 @@ def _corner_liner_issue(
     *,
     cutter_diameter_mm: float | None = None,
     sheet: dict[str, Any] | None = None,
+    kind: str = "liner",
 ):
     if not is_corner_cut(spec.piece_type) or order is None:
         return None
+    addon = MACHINING_ADDONS_BY_KIND[kind]
     row = _row_for_spec(order, spec)
-    enabled = bool(int(getattr(row, "extra_liner", 0) or 0)) if row else False
-    side = str(getattr(row, "liner_reference_side", "") or "") if row else ""
-    offset_cm = float(getattr(row, "liner_offset_cm", 0) or 0) if row else 0.0
-    width_cm = float(getattr(row, "liner_width_cm", 0) or 0) if row else 0.0
+    enabled = bool(int(getattr(row, addon.enabled_field, 0) or 0)) if row else False
+    side = str(getattr(row, addon.side_field, "") or "") if row else ""
+    offset_cm = float(getattr(row, addon.offset_field, 0) or 0) if row else 0.0
+    width_cm = float(getattr(row, addon.width_field, 0) or 0) if row else 0.0
     if not liner_parameters_active(
         enabled=enabled,
         side=side,
@@ -852,7 +858,7 @@ def _corner_liner_issue(
     liners = [
         overlay
         for overlay in (piece.get("overlays") or [])
-        if isinstance(overlay, dict) and overlay.get("kind") == "liner"
+        if isinstance(overlay, dict) and overlay.get("kind") == kind
     ]
     if len(liners) != 1:
         return None
@@ -881,6 +887,7 @@ def _corner_liner_issue(
                 source_piece_no=spec.row_index,
                 copy_no=int(piece.get("copy_no") or 1),
                 piece_type=spec.piece_type,
+                overlay_kind=kind,
             )
         turns = int(match.quarter_turns)
         mirrored = bool(match.mirrored)
@@ -900,8 +907,8 @@ def _corner_liner_issue(
         notch_width_cm,
         notch_length_cm,
     )
-    start_cm = float(getattr(row, "liner_start_cm", 0) or 0) if row else None
-    length_cm = float(getattr(row, "liner_length_cm", 0) or 0) if row else None
+    start_cm = float(getattr(row, addon.start_field, 0) or 0) if row else None
+    length_cm = float(getattr(row, addon.length_field, 0) or 0) if row else None
     try:
         start_sawn, end_sawn = sawn_liner_ends(
             liner_piece,
@@ -915,9 +922,10 @@ def _corner_liner_issue(
         )
     except LinerGeometryError:
         start_sawn, end_sawn = None, None
-    measurement = compare_liner_path(
+    measurement = compare_overlay_path(
         canonical,
         liner_piece,
+        kind,
         side,
         offset_cm,
         width_cm,
@@ -936,7 +944,31 @@ def _corner_liner_issue(
         source_piece_no=spec.row_index,
         copy_no=int(piece.get("copy_no") or 1),
         piece_type=spec.piece_type,
+        overlay_kind=kind,
     )
+
+
+def _corner_machining_issues(
+    piece: dict[str, Any],
+    spec: OrderPieceCutSpec,
+    order: Any | None,
+    *,
+    cutter_diameter_mm: float | None = None,
+    sheet: dict[str, Any] | None = None,
+):
+    issues = []
+    for addon in MACHINING_ADDONS:
+        found = _corner_liner_issue(
+            piece,
+            spec,
+            order,
+            cutter_diameter_mm=cutter_diameter_mm,
+            sheet=sheet,
+            kind=addon.kind,
+        )
+        if found is not None:
+            issues.append(found)
+    return issues
 
 
 def _apply_strict_dimension_contract(
@@ -983,15 +1015,15 @@ def _apply_strict_dimension_contract(
                 if binding_error:
                     issues.append(binding_error)
                 else:
-                    liner_issue = _corner_liner_issue(
-                        piece,
-                        candidate["spec"],
-                        order,
-                        cutter_diameter_mm=cutter_diameter_mm,
-                        sheet=sheet,
+                    issues.extend(
+                        _corner_machining_issues(
+                            piece,
+                            candidate["spec"],
+                            order,
+                            cutter_diameter_mm=cutter_diameter_mm,
+                            sheet=sheet,
+                        )
                     )
-                    if liner_issue is not None:
-                        issues.append(liner_issue)
                 continue
             if str(piece.get("piece_type") or "") == "Special":
                 issues.append(
@@ -1092,15 +1124,15 @@ def _apply_strict_dimension_contract(
             if binding_error:
                 issues.append(binding_error)
             else:
-                liner_issue = _corner_liner_issue(
-                    piece,
-                    candidate["spec"],
-                    order,
-                    cutter_diameter_mm=cutter_diameter_mm,
-                    sheet=sheet,
+                issues.extend(
+                    _corner_machining_issues(
+                        piece,
+                        candidate["spec"],
+                        order,
+                        cutter_diameter_mm=cutter_diameter_mm,
+                        sheet=sheet,
+                    )
                 )
-                if liner_issue is not None:
-                    issues.append(liner_issue)
 
     if unmatched:
         preview = "، ".join(

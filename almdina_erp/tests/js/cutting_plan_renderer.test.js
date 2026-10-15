@@ -482,4 +482,50 @@ const linerYs = linerPath[1].match(/[\d.]+/g).filter((_, index) => index % 2 ===
 assert.equal(linerYs[0], linerYs[1]);
 assert.ok(Math.abs(linerYs[0] - 1.5) < 0.05);
 
+const marginPlan = {
+    applied_trim_width_cm: 0,
+    applied_trim_length_cm: 0,
+    trim_cm: 0.5,
+    full_board_width_cm: 122,
+    full_board_length_cm: 244,
+    sheets: [
+        {
+            sheet_no: 1,
+            full_width_cm: 122,
+            full_length_cm: 244,
+            usable_width_cm: 122,
+            usable_length_cm: 244,
+            applied_trim_width_cm: 0,
+            applied_trim_length_cm: 0,
+            pieces: [{ x: 0, y: 0, w: 122, h: 244 }],
+        },
+        {
+            sheet_no: 2,
+            full_width_cm: 122,
+            full_length_cm: 244,
+            usable_width_cm: 121,
+            usable_length_cm: 243,
+            pieces: [
+                { x: 0, y: 203, w: 40, h: 40 },
+                { x: 40.3, y: 203, w: 40, h: 40 },
+                { x: 80.6, y: 203, w: 40, h: 40 },
+            ],
+        },
+    ],
+};
+assert.equal(
+    JSON.stringify(renderer.originalEdges(marginPlan, marginPlan.sheets[0])),
+    JSON.stringify(["right", "left", "top", "bottom"])
+);
+assert.equal(JSON.stringify(renderer.originalEdges(marginPlan, marginPlan.sheets[1])), "[]");
+assert.equal(JSON.stringify(renderer.physicalMarginsMm(marginPlan, marginPlan.sheets[1])), JSON.stringify({
+    left: 5,
+    right: 9,
+    top: 2035,
+    bottom: 5,
+}));
+const marginHtml = renderer.build({ doc: { name: "26-00107" } }, marginPlan);
+const trimWidths = [...marginHtml.matchAll(/data-trim-width-cm="([^"]+)"/g)].map(match => match[1]);
+assert.deepEqual(trimWidths, ["0", "0.5"]);
+
 console.log("Cutting-plan renderer simulation passed");

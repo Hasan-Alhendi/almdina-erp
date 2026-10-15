@@ -52,8 +52,18 @@ _OLD_PIECE_FIELDS = [
     "liner_length_cm",
     "extra_liner_unit_price_usd",
     "extra_back_groove",
+    "back_groove_reference_side",
+    "back_groove_offset_cm",
+    "back_groove_width_cm",
+    "back_groove_start_cm",
+    "back_groove_length_cm",
     "extra_back_groove_unit_price_usd",
     "extra_recessed_handle_cutout",
+    "recessed_handle_reference_side",
+    "recessed_handle_offset_cm",
+    "recessed_handle_width_cm",
+    "recessed_handle_start_cm",
+    "recessed_handle_length_cm",
     "extra_recessed_handle_cutout_unit_price_usd",
 ]
 

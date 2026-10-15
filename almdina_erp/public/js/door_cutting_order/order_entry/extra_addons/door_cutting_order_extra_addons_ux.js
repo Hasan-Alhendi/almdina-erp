@@ -53,14 +53,54 @@
         </div>`;
     }
 
+    function translate(message) {
+        return typeof __ === "function" ? __(message) : message;
+    }
+
+    function addonButtonLabel(definition) {
+        return String(translate(definition && definition.button) || "");
+    }
+
+    function addonSummary(row) {
+        const names = selectedFields(row).map(addonButtonLabel).filter(Boolean);
+        const hidden = names.length > 2 ? names.length - 2 : 0;
+        const empty = translate("Add-ons");
+        const label = names.length === 0
+            ? empty
+            : (hidden ? `${names[0]} · ${names[1]}` : names.join(" · "));
+        return {
+            names,
+            label,
+            hidden,
+            tooltip: names.length ? names.join(" · ") : empty,
+        };
+    }
+
+    function renderAddonSummary(row, options = {}) {
+        const summary = addonSummary(row);
+        const disabled = options.editable === false ? "disabled" : "";
+        const active = summary.names.length ? "is-active" : "";
+        const badge = summary.hidden
+            ? `<span class="dco-addons-more" aria-hidden="true">+${summary.hidden}</span>`
+            : "";
+        const icon = summary.names.length
+            ? ""
+            : `<svg class="dco-addons-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>`;
+        return `<button type="button" class="dco-addons-open ${active}" data-open-addons="1" title="${esc(summary.tooltip)}" aria-label="${esc(summary.tooltip)}" ${disabled}>${icon}<span class="dco-addons-open-label">${esc(summary.label)}</span>${badge}</button>`;
+    }
+
     function renderAddonCell(row, fieldname, options = {}) {
         const definition = FIELDS.find(item => item.fieldname === fieldname);
         if (!definition) return "";
         const selected = Boolean(Number(row && row[fieldname]));
         const disabled = options.editable === false ? "disabled" : "";
         const label = __(definition.label);
-        const liner = fieldname === "extra_liner" && window.AlmdinaLinerGeometry;
-        const linerSummary = liner && selected ? window.AlmdinaLinerGeometry.summary(row) : "";
+        const engine = window.AlmdinaMachiningOverlay;
+        const machiningSummary = engine && selected && typeof engine.summary === "function"
+            ? engine.summary(row, fieldname)
+            : "";
+        const liner = !machiningSummary && fieldname === "extra_liner" && window.AlmdinaLinerGeometry;
+        const linerSummary = machiningSummary || (liner && selected ? window.AlmdinaLinerGeometry.summary(row) : "");
         const title = linerSummary ? `${label} — ${linerSummary}` : label;
         const buttonLabel = __(definition.button);
         const buttonLines = buttonLabel.split(/\s+/).map(word => (
@@ -98,6 +138,11 @@
             button.setAttribute("aria-pressed", selected ? "true" : "false");
             button.disabled = !editable;
         });
+        const summary = tableRow.querySelector("[data-open-addons]");
+        if (summary) {
+            const cell = summary.closest("td") || summary.parentElement;
+            if (cell) cell.innerHTML = renderAddonSummary(row, { editable });
+        }
         return true;
     }
 
@@ -132,6 +177,8 @@
         selectedFields,
         physicalCutQuantity,
         renderTypePicker,
+        addonSummary,
+        renderAddonSummary,
         renderAddonCell,
         enforceMutualExclusivity,
         syncAddonButtons,

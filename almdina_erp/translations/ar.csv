@@ -844,6 +844,15 @@ Reference Side,الجهة المرجعية
 Edge Offset,المسافة عن الحافة
 Liner Width,عرض اللاينر
 Liner Start Position,بداية اللاينر
+Machining Width,عرض التفريز
+Machining Start,بداية التفريز
+Machining Length,طول التفريز
+Remove add-on,إزالة الإضافة
+Check add-on,تحقق من الإضافة
+Could not save the add-on.,تعذر حفظ الإضافة.
+This piece type does not support this add-on.,نوع الدرفة لا يدعم هذه الإضافة.
+Row {0}: Machining add-on needs a reference side and a width greater than zero.,الصف {0}: الإضافة تحتاج جهة مرجعية وعرضاً أكبر من صفر.
+Row {0}: Machining add-on settings are invalid ({1}).,الصف {0}: إعدادات الإضافة غير صالحة ({1}).
 Liner Length,طول اللاينر
 Available Length,الطول المتاح
 Measurement Direction,اتجاه القياس
@@ -995,7 +1004,15 @@ Door count,عدد الدرف
 Not specified,غير محدد
 Type,النوع
 Custom edge banding,القشاط المخصص
-Add-ons,إضافات
+Add-ons,الإضافات
+Door piece add-ons,إضافات الدرفة
+Add-on enabled,مفعّلة
+Piece preview,معاينة الدرفة
+Apply,تطبيق
+Size,المقاس
+Remove {0},إزالة {0}
+Turn this add-on on to include it.,فعّل الإضافة لتظهر على الدرفة.
+Enter the piece width and length before editing add-ons.,أدخل عرض الدرفة وطولها قبل تعديل الإضافات.
 Order notes:,ملاحظات الطلب:
 Order number:,رقم الطلب:
 Printed on:,تاريخ الطباعة:

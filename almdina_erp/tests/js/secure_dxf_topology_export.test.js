@@ -97,6 +97,13 @@ const fakeFrappe = {
             ) {
                 fs.writeFileSync(process.env.TRIM_GAPS_DXF_OUT, clientDxf);
             }
+            if (
+                process.env.KERF3_DXF_OUT
+                && opts.args
+                && opts.args.order_name === "26-KERF3-TRIM"
+            ) {
+                fs.writeFileSync(process.env.KERF3_DXF_OUT, clientDxf);
+            }
             return Promise.resolve({
                 message: {
                     filename: "cutting_plan_DCO-TOPOLOGY_AutoCAD2011_2026.dxf",
@@ -890,6 +897,50 @@ async function run() {
     assert.equal(onVertical(0).length, 0);
     assert.equal(onVertical(1220).length, 0);
     assert.equal(onHorizontal(0).length, 0);
+
+    nextPlan = {
+        full_board_width_cm: 122,
+        full_board_length_cm: 244,
+        usable_board_width_cm: 122,
+        usable_board_length_cm: 244,
+        applied_trim_width_cm: 0,
+        applied_trim_length_cm: 0,
+        trim_cm: 0.5,
+        kerf_mm: 3,
+        kerf_cm: 0.3,
+        sheets: [{
+            sheet_no: 2,
+            full_width_cm: 122,
+            full_length_cm: 244,
+            usable_width_cm: 121,
+            usable_length_cm: 243,
+            pieces: [
+                linerDoor({ id: 1, label: "2.1", x: 0, y: 203, w: 40, h: 40, width_cm: 40, length_cm: 40, extra_liner: 0, liner_reference_side: "" }),
+                linerDoor({ id: 2, label: "3.1", x: 40.3, y: 203, w: 40, h: 40, width_cm: 40, length_cm: 40, extra_liner: 0, liner_reference_side: "" }),
+                linerDoor({ id: 3, label: "4.1", x: 80.6, y: 203, w: 40, h: 40, width_cm: 40, length_cm: 40, extra_liner: 0, liner_reference_side: "" }),
+            ],
+        }],
+    };
+    downloadedDxf = "";
+    await fakeFrappe.almdina.export_order_dxf("26-KERF3-TRIM", "system");
+    const kerf3Cuts = layerLines(downloadedDxf, "CUT_PATH");
+    const kerf3Vertical = (value) => kerf3Cuts.filter(edge => (
+        Math.abs(edge.x1 - value) < 0.02 && Math.abs(edge.x2 - value) < 0.02
+    ));
+    const kerf3Horizontal = (value) => kerf3Cuts.filter(edge => (
+        Math.abs(edge.y1 - value) < 0.02 && Math.abs(edge.y2 - value) < 0.02
+    ));
+    assert.equal(kerf3Vertical(3.5).length, 1);
+    assert.equal(kerf3Vertical(406.5).length, 1);
+    assert.equal(kerf3Vertical(809.5).length, 1);
+    assert.equal(kerf3Vertical(1212.5).length, 1);
+    assert.equal(kerf3Horizontal(3.5).length, 1);
+    assert.equal(kerf3Vertical(0).length, 0);
+    assert.equal(kerf3Vertical(1220).length, 0);
+    const kerf3Geometry = layerLines(downloadedDxf, "GEOMETRY");
+    const geometryXs = kerf3Geometry.flatMap(edge => [edge.x1, edge.x2]);
+    assert.ok(Math.abs(Math.min(...geometryXs) - 5) < 0.02);
+    assert.ok(Math.abs(Math.max(...geometryXs) - 1211) < 0.02);
 
     nextPlan = linerEndPlan([linerDoor({ x: 5, w: 40, width_cm: 40 })]);
     downloadedDxf = "";

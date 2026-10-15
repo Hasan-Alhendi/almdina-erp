@@ -92,10 +92,8 @@ def test_export_keeps_required_cut_and_preview_layers():
 def test_export_uses_resolved_per_axis_trim_without_rewriting_optimizer_spacing():
     src = _source(SECURE_DXF)
     assert "function appliedTrimMm(plan, sheet)" in src
-    assert "sheet && sheet.applied_trim_width_cm" in src
-    assert "sheet && sheet.applied_trim_length_cm" in src
-    assert "plan.applied_trim_width_cm" in src
-    assert "plan.applied_trim_length_cm" in src
+    assert "function sheetTrimCm(plan, sheet, axis)" in src
+    assert 'axis === "x" ? "applied_trim_width_cm" : "applied_trim_length_cm"' in src
     assert "const appliedTrim = appliedTrimMm(plan, sheet);" in src
     assert "const x = offsetX + appliedTrim.width + num(piece.x) * 10;" in src
     assert (

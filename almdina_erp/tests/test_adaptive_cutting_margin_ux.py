@@ -2,11 +2,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from almdina_erp.almdina_erp.application.cutting.optimize_order_plan import (
     BoardGeometry,
     OptimizeOrderPlanCommand,
     OptimizerOptions,
     optimize_order_plan,
+)
+from almdina_erp.almdina_erp.domain.cutting.sheet_edge_trim import (
+    physical_edge_margins_mm,
 )
 from almdina_erp.almdina_erp.infrastructure.cutting.domain_engine import (
     domain_cutting_engine,
@@ -192,6 +197,57 @@ def test_slack_on_a_later_sheet_is_split_across_both_edges():
     assert xs[2] - (xs[1] + 40) == 0.5
 
 
+def test_fourteen_millimetres_with_three_millimetre_kerf_keeps_five_on_both_sides():
+    outcome = optimize_order_plan(
+        _command(
+            [
+                {
+                    "width_cm": 122,
+                    "length_cm": 244,
+                    "qty": 1,
+                    "allow_rotation": 0,
+                },
+                {
+                    "width_cm": 40,
+                    "length_cm": 40,
+                    "qty": 3,
+                    "allow_rotation": 0,
+                },
+            ],
+            kerf_cm=0.3,
+        ),
+        engine=domain_cutting_engine,
+    )
+
+    snapshot = outcome.snapshot
+    assert not snapshot["unplaced"]
+    assert outcome.required_boards == 2
+    assert snapshot["applied_trim_width_cm"] == 0
+    assert snapshot["kerf_cm"] == 0.3
+    full = next(
+        sheet for sheet in snapshot["sheets"]
+        if any(piece["w"] >= 122 and piece["h"] >= 244 for piece in sheet["pieces"])
+    )
+    row = next(sheet for sheet in snapshot["sheets"] if sheet is not full)
+    assert physical_edge_margins_mm(full, snapshot) == {
+        "left": 0.0,
+        "right": 0.0,
+        "top": 0.0,
+        "bottom": 0.0,
+    }
+    pieces = sorted(row["pieces"], key=lambda piece: piece["x"])
+    assert [piece["w"] for piece in pieces] == [40, 40, 40]
+    assert pieces[1]["x"] - (pieces[0]["x"] + pieces[0]["w"]) == pytest.approx(0.3)
+    assert pieces[2]["x"] - (pieces[1]["x"] + pieces[1]["w"]) == pytest.approx(0.3)
+    margins = physical_edge_margins_mm(row, snapshot)
+    assert margins["left"] >= 5
+    assert margins["right"] >= 5
+    assert margins["bottom"] >= 5
+    assert margins["left"] + margins["right"] == pytest.approx(14)
+    assert pieces[0]["x"] == 0
+    assert pieces[-1]["x"] == pytest.approx(80.6)
+
+
 def test_impossible_piece_is_not_hidden_by_margin_relaxation():
     outcome = optimize_order_plan(
         _command(
@@ -227,10 +283,11 @@ def test_operator_warning_is_visible_idempotent_and_mobile_friendly():
     assert 'role", "status"' in source
     assert 'aria-live", "polite"' in source
     assert "grid-template-columns:repeat(2,minmax(0,1fr))" in styles
-    assert '["يمين", policy.right_mm]' in source
-    assert '["يسار", policy.left_mm]' in source
-    assert '["أعلى", policy.top_mm]' in source
-    assert '["أسفل", policy.bottom_mm]' in source
+    assert '["يمين", margins.right]' in source
+    assert '["يسار", margins.left]' in source
+    assert '["أعلى", margins.top]' in source
+    assert '["أسفل", margins.bottom]' in source
+    assert "physicalMarginsMm" in source
 
 
 def test_zero_margin_edges_are_visually_marked_without_touching_cut_geometry():
@@ -260,8 +317,9 @@ def test_margin_warning_is_compact_except_when_original_edge_is_used():
     source = PLAN_CONTENT_UX.read_text(encoding="utf-8")
     styles = PLAN_CONTENT_STYLES.read_text(encoding="utf-8")
 
-    assert "const hasOriginalEdge = zeroEdges.length > 0" in source
-    assert "const detailNotes = hasOriginalEdge ? notes : []" in source
+    assert "const hasOriginalEdge = Boolean(margins.anyOriginal)" in source
+    assert "const detailNotes = margins.everySheetOriginal ? notes : []" in source
+    assert "بعض الألواح تلامس حافة اللوح الأصلية؛ افحص استقامتها قبل التنفيذ." in source
     assert "تم تخفيض الهامش تلقائيًا بالقدر اللازم للحفاظ على قياسات القطع." in source
     assert "تم استخدام حافة أصلية من اللوح؛ افحص استقامتها قبل التنفيذ." in source
     assert "dco-margin-policy-alert__summary" in source

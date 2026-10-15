@@ -368,7 +368,10 @@
     function pieceWithLinerSpec(frm, piece) {
         const row = extraOrderRowForPiece(frm, piece);
         if (!row) return piece;
-        const copy = Object.assign({}, piece, {
+        const engine = window.AlmdinaMachiningOverlay;
+        const copy = engine && typeof engine.applySpecs === "function"
+            ? engine.applySpecs(piece, row)
+            : Object.assign({}, piece, {
             extra_liner: row.extra_liner,
             liner_reference_side: row.liner_reference_side,
             liner_offset_cm: row.liner_offset_cm,
@@ -381,6 +384,13 @@
             clipped_corner_width_cm: row.clipped_corner_width_cm,
             clipped_corner_length_cm: row.clipped_corner_length_cm,
         });
+        if (engine && typeof engine.applySpecs === "function") {
+            copy.kerf_mm = num(frm && frm.doc && frm.doc.kerf_mm);
+            copy.piece_type = row.piece_type || piece.piece_type;
+            copy.clipped_corner_position = row.clipped_corner_position || piece.clipped_corner_position;
+            copy.clipped_corner_width_cm = row.clipped_corner_width_cm;
+            copy.clipped_corner_length_cm = row.clipped_corner_length_cm;
+        }
         const liner = window.AlmdinaLinerGeometry;
         if (liner && typeof liner.contourNotchFromOrder === "function") {
             const notch = liner.contourNotchFromOrder(frm, row);
@@ -392,6 +402,13 @@
 
     function drawingOverlays(piece) {
         const overlays = Array.isArray(piece && piece.overlays) ? piece.overlays.slice() : [];
+        const engine = window.AlmdinaMachiningOverlay;
+        if (engine && typeof engine.visualOverlays === "function") {
+            const visuals = engine.visualOverlays(piece);
+            if (!visuals.length) return overlays;
+            const kinds = new Set(visuals.map(item => item && item.kind));
+            return overlays.filter(item => !(item && kinds.has(item.kind))).concat(visuals);
+        }
         const liner = window.AlmdinaLinerGeometry;
         const drawCenter = liner && typeof liner.visualCenterline === "function"
             ? liner.visualCenterline
@@ -432,6 +449,52 @@
     function guardLinerToolpath(frm, piece, sheet, frame, overlays) {
         const liner = window.AlmdinaLinerGeometry;
         const kept = overlays.filter(overlay => !(overlay && overlay.geometry && overlay.geometry.toolpath));
+        const engine = window.AlmdinaMachiningOverlay;
+        if (engine && typeof engine.syntheticOverlays === "function" && sheet && frame) {
+            if (kept.some(item => item && item.error)) return kept;
+            const board = {
+                minX: -num(frame.insetX) * 10,
+                minY: -num(frame.insetY) * 10,
+                maxX: (num(frame.drawW) - num(frame.insetX)) * 10,
+                maxY: (num(frame.drawH) - num(frame.insetY)) * 10,
+            };
+            const tools = engine.syntheticOverlays(Object.assign({}, piece, {
+                board,
+                kerf_mm: num(frm && frm.doc && frm.doc.kerf_mm) || num(piece && piece.kerf_mm),
+            }));
+            const obstacles = (sheet.pieces || []).filter(other => !samePlacedPiece(other, piece)).map(other => {
+                const polygon = liner && typeof liner.placedPolygonMm === "function" ? liner.placedPolygonMm(other) : [];
+                if (polygon.length >= 3) return { polygon };
+                return {
+                    minX: num(other.x) * 10,
+                    minY: num(other.y) * 10,
+                    maxX: (num(other.x) + num(other.w)) * 10,
+                    maxY: (num(other.y) + num(other.h)) * 10,
+                };
+            });
+            const result = kept.slice();
+            tools.forEach(tool => {
+                if (!tool) return;
+                if (tool.error) {
+                    result.push(tool);
+                    return;
+                }
+                if (liner && typeof liner.extensionConflict === "function" && tool.geometry) {
+                    const conflict = liner.extensionConflict(
+                        tool.geometry.path,
+                        num(frm && frm.doc && frm.doc.kerf_mm) || num(piece && piece.kerf_mm),
+                        board,
+                        obstacles
+                    );
+                    if (conflict) {
+                        result.push({ kind: tool.kind, layer: tool.layer, synthetic: true, error: conflict });
+                        return;
+                    }
+                }
+                result.push(tool);
+            });
+            return result;
+        }
         if (!liner || typeof liner.syntheticOverlay !== "function" || !sheet || !frame) return kept;
         if (kept.some(item => item && item.error)) return kept;
         const board = {
@@ -485,7 +548,10 @@
             const kind = String((overlay && overlay.kind) || "").trim();
             const geometry = overlay && overlay.geometry;
             if (overlay && overlay.error) {
-                const message = LINER_TOOLPATH_MESSAGES[overlay.error] || overlay.error;
+                const engine = window.AlmdinaMachiningOverlay;
+                const addon = engine && typeof engine.addon === "function" ? engine.addon(kind) : null;
+                const noun = addon && addon.nounAr ? addon.nounAr : "اللاينر";
+                const message = (LINER_TOOLPATH_MESSAGES[overlay.error] || overlay.error).replaceAll("اللاينر", noun);
                 return `<text data-liner-toolpath-error="${escape_html(overlay.error)}" x="50" y="50" text-anchor="middle" font-size="8" fill="#9a6207">${escape_html(message)}</text>`;
             }
             const points = geometry && Array.isArray(geometry.path)
@@ -499,16 +565,18 @@
             const stroke = EXTRA_OVERLAY_STROKE_BY_KIND[kind] || "#5c4d2e";
             const layer = String((overlay && overlay.layer) || kind || "overlay");
             const attrs = `data-overlay-kind="${escape_html(kind)}" data-overlay-layer="${escape_html(layer)}" data-overlay-index="${index}" fill="none" stroke="${stroke}" vector-effect="non-scaling-stroke"`;
-            if (kind === "recessed_handle_cutout") {
+            const closed = Boolean(geometry && geometry.closed) && local.length >= 3;
+            const isToolpath = Boolean(geometry && geometry.toolpath);
+            if (kind === "recessed_handle_cutout" && !isToolpath) {
                 const box = overlayHandleRect(local);
                 return `<rect class="dco-extra-overlay-path dco-extra-overlay-handle" ${attrs} x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" stroke-width="0.65" stroke-linejoin="miter"/>`;
             }
-            const closed = Boolean(geometry && geometry.closed) && local.length >= 3;
-            const openToolpath = kind === "liner" && !closed && local.length > 2;
-            const strokePoints = kind === "liner" && !openToolpath ? overlaySingleLine(local, closed) : local;
+            const machiningKind = kind === "liner" || kind === "back_groove" || kind === "recessed_handle_cutout";
+            const openToolpath = machiningKind && isToolpath && !closed && local.length > 2;
+            const strokePoints = machiningKind && !openToolpath ? overlaySingleLine(local, closed) : local;
             const d = strokePoints
                 .map((point, pointIndex) => `${pointIndex ? "L" : "M"}${point[0]} ${point[1]}`)
-                .join(" ") + (kind === "liner" ? "" : (closed ? " Z" : ""));
+                .join(" ") + (machiningKind ? "" : (closed ? " Z" : ""));
             const toolClass = openToolpath ? " dco-liner-toolpath" : "";
             return `<path class="dco-extra-overlay-path${toolClass}" ${attrs} d="${d}" stroke-width="0.7" stroke-dasharray="3 2.2" stroke-linejoin="round" stroke-linecap="round"/>`;
         }).filter(Boolean).join("");
@@ -637,9 +705,58 @@
         `;
     }
 
-    function explicitTrim(source, key) {
-        if (!source || !Object.prototype.hasOwnProperty.call(source, key)) return null;
-        return Math.max(0, num(source[key]));
+    function hasOwn(source, key) {
+        return Boolean(source) && Object.prototype.hasOwnProperty.call(source, key);
+    }
+
+    function resolvedTrimCm(plan, sheet, axis) {
+        // Usable-frame coordinates. Physical inset is this trim. An explicit
+        // sheet value, including 0, wins. A missing value is recovered from
+        // full - usable before the plan-level applied trim, so a plan-wide 0
+        // does not hide a sheet that recovered leftover edge space.
+        const trimKey = axis === "x" ? "applied_trim_width_cm" : "applied_trim_length_cm";
+        const fullKey = axis === "x" ? "full_width_cm" : "full_length_cm";
+        const usableKey = axis === "x" ? "usable_width_cm" : "usable_length_cm";
+        const sizeKey = axis === "x" ? "w" : "h";
+        const planFullKey = axis === "x" ? "full_board_width_cm" : "full_board_length_cm";
+        const planUsableKey = axis === "x" ? "usable_board_width_cm" : "usable_board_length_cm";
+        if (hasOwn(sheet, trimKey)) return Math.max(0, num(sheet[trimKey]));
+        const sheetFull = num(sheet && sheet[fullKey]);
+        const sheetUsable = num(sheet && sheet[usableKey]) || num(sheet && sheet[sizeKey]);
+        if (sheetFull > sheetUsable && sheetUsable > 0) return (sheetFull - sheetUsable) / 2;
+        if (hasOwn(plan, trimKey)) return Math.max(0, num(plan[trimKey]));
+        const planFull = num(plan && plan[planFullKey]);
+        const planUsable = num(plan && plan[planUsableKey]);
+        if (planFull > planUsable && planUsable > 0) return (planFull - planUsable) / 2;
+        return Math.max(0, num(plan && plan.trim_cm));
+    }
+
+    function roundMm(value) {
+        return Math.round(num(value) * 1000) / 1000;
+    }
+
+    function physicalMarginsMm(plan, sheet) {
+        const pieces = (sheet && sheet.pieces) || [];
+        const trimW = resolvedTrimCm(plan, sheet, "x");
+        const trimH = resolvedTrimCm(plan, sheet, "y");
+        const fullW = num(sheet && sheet.full_width_cm) || num(plan && plan.full_board_width_cm);
+        const fullH = num(sheet && sheet.full_length_cm) || num(plan && plan.full_board_length_cm);
+        if (!pieces.length) return { left: 0, right: 0, top: 0, bottom: 0 };
+        const minX = Math.min(...pieces.map(piece => num(piece.x)));
+        const maxX = Math.max(...pieces.map(piece => num(piece.x) + num(piece.w)));
+        const minY = Math.min(...pieces.map(piece => num(piece.y)));
+        const maxY = Math.max(...pieces.map(piece => num(piece.y) + num(piece.h)));
+        return {
+            left: roundMm((trimW + minX) * 10),
+            right: roundMm((fullW - trimW - maxX) * 10),
+            top: roundMm((trimH + minY) * 10),
+            bottom: roundMm((fullH - trimH - maxY) * 10),
+        };
+    }
+
+    function originalEdges(plan, sheet) {
+        const margins = physicalMarginsMm(plan, sheet);
+        return ["right", "left", "top", "bottom"].filter(edge => Math.abs(margins[edge]) <= 0.001);
     }
 
     function sheetBoardFrame(plan, sheet) {
@@ -649,12 +766,8 @@
         const usableH = num(sheet && sheet.usable_length_cm) || num(sheet && sheet.h) || num(plan.usable_board_length_cm) || fullH;
         const drawW = fullW > 0 ? fullW : usableW;
         const drawH = fullH > 0 ? fullH : usableH;
-        const trimW = explicitTrim(sheet, "applied_trim_width_cm");
-        const trimH = explicitTrim(sheet, "applied_trim_length_cm");
-        const planTrimW = trimW === null ? explicitTrim(plan, "applied_trim_width_cm") : trimW;
-        const planTrimH = trimH === null ? explicitTrim(plan, "applied_trim_length_cm") : trimH;
-        let insetX = planTrimW === null ? (drawW > usableW && usableW > 0 ? (drawW - usableW) / 2 : 0) : planTrimW;
-        let insetY = planTrimH === null ? (drawH > usableH && usableH > 0 ? (drawH - usableH) / 2 : 0) : planTrimH;
+        let insetX = resolvedTrimCm(plan, sheet, "x");
+        let insetY = resolvedTrimCm(plan, sheet, "y");
         insetX = Math.max(0, Math.min(insetX, drawW / 2));
         insetY = Math.max(0, Math.min(insetY, drawH / 2));
         const innerW = usableW > 0 ? Math.min(usableW, Math.max(0, drawW - (insetX * 2))) : Math.max(0, drawW - (insetX * 2));
@@ -1268,5 +1381,7 @@ ${printHeaderCss()}
         build: build_cutting_plan_html,
         parse: parse_plan,
         print: print_cutting_plan,
+        physicalMarginsMm,
+        originalEdges,
     };
 })();

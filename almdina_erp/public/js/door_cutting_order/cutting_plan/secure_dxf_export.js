@@ -359,21 +359,22 @@
         return 0;
     }
 
-    function linerExportError(piece, code) {
+    function linerExportError(piece, code, addon) {
+        const noun = addon && addon.nounAr ? addon.nounAr : "اللاينر";
         const messages = {
-            cutter_diameter_invalid: "حدّد سماكة الشفرة أكبر من صفر قبل تصدير مسارات اللاينر.",
-            liner_narrower_than_cutter: "عرض اللاينر أصغر من سماكة الشفرة.",
-            liner_extension_hits_piece: "امتداد ريشة اللاينر يتداخل مع قطعة مجاورة.",
-            liner_extension_unsafe: "تعذر تمديد مسار اللاينر حتى خط القص.",
-            strip_outside: "شريط اللاينر يخرج خارج الدرفة.",
-            offset_invalid: "بعد اللاينر غير صالح.",
-            width_invalid: "عرض اللاينر غير صالح.",
-            side_unavailable: "جهة اللاينر غير متاحة لهذه الدرفة.",
-            liner_start_invalid: "بداية اللاينر غير صالحة.",
-            liner_length_invalid: "طول اللاينر غير صالح.",
-            liner_span_exceeds_edge: "بداية اللاينر وطوله يتجاوزان طول الجهة.",
+            cutter_diameter_invalid: `حدّد سماكة الشفرة أكبر من صفر قبل تصدير مسارات ${noun}.`,
+            liner_narrower_than_cutter: `عرض ${noun} أصغر من سماكة الشفرة.`,
+            liner_extension_hits_piece: `امتداد ريشة ${noun} يتداخل مع قطعة مجاورة.`,
+            liner_extension_unsafe: `تعذر تمديد مسار ${noun} حتى خط القص.`,
+            strip_outside: `شريط ${noun} يخرج خارج الدرفة.`,
+            offset_invalid: `بعد ${noun} غير صالح.`,
+            width_invalid: `عرض ${noun} غير صالح.`,
+            side_unavailable: `جهة ${noun} غير متاحة لهذه الدرفة.`,
+            liner_start_invalid: `بداية ${noun} غير صالحة.`,
+            liner_length_invalid: `طول ${noun} غير صالح.`,
+            liner_span_exceeds_edge: `بداية ${noun} وطوله يتجاوزان طول الجهة.`,
             liner_flat_end_unmachinable: "النهاية المستقيمة غير قابلة للتنفيذ بريشة دائرية في تمريرة واحدة، أو طول المنطقة أقصر من قطر الريشة.",
-            liner_span_on_corner: "بداية اللاينر أو نهايته تقع على انعطاف لا يملك اتجاهاً واحداً للنهاية المستقيمة.",
+            liner_span_on_corner: `بداية ${noun} أو نهايته تقع على انعطاف لا يملك اتجاهاً واحداً للنهاية المستقيمة.`,
         };
         const label = String((piece && (piece.label || piece.piece_no || piece.id)) || "").split(".")[0] || "؟";
         const error = new Error(`الدرفة ${label}: ${messages[code] || code}`);
@@ -396,6 +397,14 @@
 
     function exportOverlays(piece, kerfMm, board) {
         const overlays = Array.isArray(piece && piece.overlays) ? piece.overlays.slice() : [];
+        const engine = window.AlmdinaMachiningOverlay;
+        if (engine && typeof engine.completeToolpaths === "function") {
+            const completed = engine.completeToolpaths(piece, overlays, kerfMm, board);
+            if (completed && completed.error) {
+                throw linerExportError(piece, completed.error.code, completed.error.addon);
+            }
+            return (completed && completed.overlays) || overlays;
+        }
         if (overlays.some(item => item && item.kind === "liner")) return overlays;
         const requiresLiner = Boolean(String(piece && piece.liner_reference_side || "").trim())
             && num(piece && piece.liner_width_cm) > 0;
@@ -451,30 +460,36 @@
         });
     }
 
-    function firstDefined(...values) {
-        return values.find(value => value !== undefined && value !== null && value !== "");
+    function hasOwn(source, key) {
+        return Boolean(source) && Object.prototype.hasOwnProperty.call(source, key);
+    }
+
+    function sheetTrimCm(plan, sheet, axis) {
+        // Same contract as the preview: piece x/y are usable-frame centimetres.
+        // Physical millimetres add this trim once. A stored 0 is real. A missing
+        // sheet trim is recovered from full - usable before the plan-level 0,
+        // which is the adaptive decision and not each board's realized margin.
+        const trimKey = axis === "x" ? "applied_trim_width_cm" : "applied_trim_length_cm";
+        const fullKey = axis === "x" ? "full_width_cm" : "full_length_cm";
+        const usableKey = axis === "x" ? "usable_width_cm" : "usable_length_cm";
+        const sizeKey = axis === "x" ? "w" : "h";
+        const planFullKey = axis === "x" ? "full_board_width_cm" : "full_board_length_cm";
+        const planUsableKey = axis === "x" ? "usable_board_width_cm" : "usable_board_length_cm";
+        if (hasOwn(sheet, trimKey)) return Math.max(0, num(sheet[trimKey]));
+        const sheetFull = num(sheet && sheet[fullKey]);
+        const sheetUsable = num(sheet && sheet[usableKey]) || num(sheet && sheet[sizeKey]);
+        if (sheetFull > sheetUsable && sheetUsable > 0) return (sheetFull - sheetUsable) / 2;
+        if (hasOwn(plan, trimKey)) return Math.max(0, num(plan[trimKey]));
+        const planFull = num(plan && plan[planFullKey]);
+        const planUsable = num(plan && plan[planUsableKey]);
+        if (planFull > planUsable && planUsable > 0) return (planFull - planUsable) / 2;
+        return Math.max(0, num(plan && plan.trim_cm));
     }
 
     function appliedTrimMm(plan, sheet) {
-        // Piece coordinates are relative to the optimizer's usable board. Translate
-        // them back to the physical sheet with the *resolved* per-axis trim. This is
-        // intentionally not derived from the requested trim because adaptive-margin
-        // plans may remove/reduce only one axis to fit exact customer dimensions.
-        const widthTrimCm = firstDefined(
-            sheet && sheet.applied_trim_width_cm,
-            plan.applied_trim_width_cm,
-            plan.trim_cm,
-            0
-        );
-        const lengthTrimCm = firstDefined(
-            sheet && sheet.applied_trim_length_cm,
-            plan.applied_trim_length_cm,
-            plan.trim_cm,
-            0
-        );
         return {
-            width: Math.max(0, num(widthTrimCm)) * 10,
-            length: Math.max(0, num(lengthTrimCm)) * 10,
+            width: sheetTrimCm(plan, sheet, "x") * 10,
+            length: sheetTrimCm(plan, sheet, "y") * 10,
         };
     }
 
@@ -733,20 +748,22 @@
         };
     }
 
-    function linerRegionPoints(piece, placement) {
+    function linerRegionPoints(piece, placement, spec) {
         const liner = window.AlmdinaLinerGeometry;
+        const side = spec ? spec.side : piece && piece.liner_reference_side;
+        const offset = spec ? spec.offsetCm : piece && piece.liner_offset_cm;
+        const width = spec ? spec.widthCm : piece && piece.liner_width_cm;
         if (!liner || typeof liner.stripPolygonMm !== "function" || typeof liner.pieceFromRow !== "function") return null;
-        if (!String(piece && piece.liner_reference_side || "").trim() || !(num(piece && piece.liner_width_cm) > 0)) return null;
+        if (!String(side || "").trim() || !(num(width) > 0)) return null;
         let linerPiece;
         let local;
         try {
-            linerPiece = liner.pieceFromRow(piece);
-            local = liner.stripPolygonMm(
-                linerPiece,
-                piece.liner_reference_side,
-                piece.liner_offset_cm,
-                piece.liner_width_cm
-            );
+            linerPiece = liner.pieceFromRow(Object.assign({}, piece, {
+                liner_reference_side: side,
+                liner_offset_cm: offset,
+                liner_width_cm: width,
+            }));
+            local = liner.stripPolygonMm(linerPiece, side, offset, width);
         } catch (error) {
             return null;
         }
@@ -837,7 +854,7 @@
                 overlays.forEach(overlay => {
                     entities += emitOverlayEntity(overlay, placement, sheet, piece);
                 });
-                let regionEmitted = false;
+                const regionEmitted = new Set();
                 overlays.forEach(overlay => {
                     if (overlay.toolpath || !overlay.closed) return;
                     entities += lwpolyline(
@@ -845,12 +862,20 @@
                         topologyDxfPoints(overlay.path, placement),
                         true
                     );
-                    if (overlay.layer === "Liner") regionEmitted = true;
+                    if (overlay.kind) regionEmitted.add(overlay.kind);
                 });
-                if (!regionEmitted) {
-                    const region = linerRegionPoints(piece, placement);
+                const regionEngine = window.AlmdinaMachiningOverlay;
+                const regionAddons = regionEngine && Array.isArray(regionEngine.ADDONS)
+                    ? regionEngine.ADDONS
+                    : [{ kind: "liner" }];
+                regionAddons.forEach(addon => {
+                    if (regionEmitted.has(addon.kind)) return;
+                    const spec = regionEngine && typeof regionEngine.specFrom === "function"
+                        ? regionEngine.specFrom(piece, addon.kind)
+                        : null;
+                    const region = linerRegionPoints(piece, placement, spec);
                     if (region) entities += lwpolyline(FINISHED_GEOMETRY_LAYER, region, true);
-                }
+                });
                 const bounds = polygonBounds(rings.outer);
                 entities += textEntity(
                     TEXT_LABEL_LAYER,
@@ -995,21 +1020,42 @@
             (sheet.pieces || []).forEach(piece => {
                 const row = orderRowForPlanPiece(rows, piece);
                 applyManufacturingNotch(piece, frm, row);
-                if ((piece.overlays || []).some(item => item && item.kind === "liner")) return;
-                if (!row || !num(row.extra_liner)) return;
-                const side = String(row.liner_reference_side || "").trim();
-                if (!side || !(num(row.liner_width_cm) > 0)) return;
-                piece.extra_liner = 1;
-                if (!String(piece.liner_reference_side || "").trim()) {
-                    piece.liner_reference_side = side;
-                    piece.liner_offset_cm = row.liner_offset_cm;
-                    piece.liner_width_cm = row.liner_width_cm;
+                const engine = window.AlmdinaMachiningOverlay;
+                const addons = engine && Array.isArray(engine.ADDONS) ? engine.ADDONS : null;
+                if (!addons) {
+                    if ((piece.overlays || []).some(item => item && item.kind === "liner")) return;
+                    if (!row || !num(row.extra_liner)) return;
+                    const side = String(row.liner_reference_side || "").trim();
+                    if (!side || !(num(row.liner_width_cm) > 0)) return;
+                    piece.extra_liner = 1;
+                    if (!String(piece.liner_reference_side || "").trim()) {
+                        piece.liner_reference_side = side;
+                        piece.liner_offset_cm = row.liner_offset_cm;
+                        piece.liner_width_cm = row.liner_width_cm;
+                    }
+                    if (String(piece.liner_reference_side || "") === side) {
+                        piece.liner_start_cm = row.liner_start_cm;
+                        piece.liner_length_cm = row.liner_length_cm;
+                    }
+                } else if (row) {
+                    addons.forEach(addon => {
+                        if ((piece.overlays || []).some(item => item && item.kind === addon.kind)) return;
+                        if (!num(row[addon.enabled])) return;
+                        const side = String(row[addon.side] || "").trim();
+                        if (!side || !(num(row[addon.width]) > 0)) return;
+                        piece[addon.enabled] = 1;
+                        if (!String(piece[addon.side] || "").trim()) {
+                            piece[addon.side] = side;
+                            piece[addon.offset] = row[addon.offset];
+                            piece[addon.width] = row[addon.width];
+                        }
+                        if (String(piece[addon.side] || "") === side) {
+                            piece[addon.start] = row[addon.start];
+                            piece[addon.length] = row[addon.length];
+                        }
+                    });
                 }
-                if (String(piece.liner_reference_side || "") === side) {
-                    piece.liner_start_cm = row.liner_start_cm;
-                    piece.liner_length_cm = row.liner_length_cm;
-                }
-                if (!piece.piece_type && row.piece_type) piece.piece_type = row.piece_type;
+                if (!piece.piece_type && row && row.piece_type) piece.piece_type = row.piece_type;
             });
         });
     }

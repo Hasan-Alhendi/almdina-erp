@@ -7,6 +7,10 @@ from frappe import _
 from frappe.utils import cint, flt, get_datetime, now_datetime
 
 from almdina_erp.almdina_erp.domain.cutting import round_value
+from almdina_erp.almdina_erp.domain.cutting.machining_overlay import (
+    MACHINING_ADDONS,
+    MACHINING_ADDONS_BY_KIND,
+)
 from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
     LinerPiece,
     available_liner_sides,
@@ -214,13 +218,23 @@ class FrappeOrderPiecePolicyAdapter:
         )
 
     def _legacy_liner_checkbox(self, old_row: Any) -> bool:
-        if old_row is None or not cint(getattr(old_row, "extra_liner", 0)):
+        return self._legacy_machining_checkbox(old_row, MACHINING_ADDONS_BY_KIND["liner"])
+
+    def _legacy_machining_checkbox(self, old_row: Any, addon: Any) -> bool:
+        if old_row is None or not cint(getattr(old_row, addon.enabled_field, 0)):
             return False
         return (
-            not str(getattr(old_row, "liner_reference_side", "") or "").strip()
-            and flt(getattr(old_row, "liner_offset_cm", 0)) <= 0
-            and flt(getattr(old_row, "liner_width_cm", 0)) <= 0
+            not str(getattr(old_row, addon.side_field, "") or "").strip()
+            and flt(getattr(old_row, addon.offset_field, 0)) <= 0
+            and flt(getattr(old_row, addon.width_field, 0)) <= 0
         )
+
+    def _clear_machining(self, row: Any, addon: Any) -> None:
+        setattr(row, addon.side_field, "")
+        setattr(row, addon.offset_field, 0)
+        setattr(row, addon.width_field, 0)
+        setattr(row, addon.start_field, 0)
+        setattr(row, addon.length_field, 0)
 
     def _liner_notch_cm(self, row: Any) -> tuple[float, float]:
         return contour_notch_cm(
@@ -246,77 +260,70 @@ class FrappeOrderPiecePolicyAdapter:
         }
 
     def _apply_liner_parameters(self, row: Any, index: int, old_row: Any) -> None:
-        if not cint(getattr(row, "extra_liner", 0)):
-            row.liner_reference_side = ""
-            row.liner_offset_cm = 0
-            row.liner_width_cm = 0
-            row.liner_start_cm = 0
-            row.liner_length_cm = 0
+        for addon in MACHINING_ADDONS:
+            self._apply_machining_addon(row, index, old_row, addon)
+
+    def _apply_machining_addon(self, row: Any, index: int, old_row: Any, addon: Any) -> None:
+        if not cint(getattr(row, addon.enabled_field, 0)):
+            self._clear_machining(row, addon)
             return
         if not available_liner_sides(row.piece_type or "Regular"):
-            row.liner_reference_side = ""
-            row.liner_offset_cm = 0
-            row.liner_width_cm = 0
-            row.liner_start_cm = 0
-            row.liner_length_cm = 0
+            self._clear_machining(row, addon)
             return
-        side = str(getattr(row, "liner_reference_side", "") or "").strip()
-        offset = flt(getattr(row, "liner_offset_cm", 0))
-        width = flt(getattr(row, "liner_width_cm", 0))
+        side = str(getattr(row, addon.side_field, "") or "").strip()
+        offset = flt(getattr(row, addon.offset_field, 0))
+        width = flt(getattr(row, addon.width_field, 0))
         activation = liner_activation_error(
             enabled=True,
             piece_type=row.piece_type or "Regular",
             side=side,
             offset_cm=offset,
             width_cm=width,
-            legacy_checkbox_only=self._legacy_liner_checkbox(old_row),
+            legacy_checkbox_only=self._legacy_machining_checkbox(old_row, addon),
         )
         if activation:
+            if addon.kind == "liner":
+                frappe.throw(
+                    _("Row {0}: Liner needs a reference side and a width greater than zero.").format(index)
+                )
             frappe.throw(
-                _("Row {0}: Liner needs a reference side and a width greater than zero.").format(index)
+                _("Row {0}: Machining add-on needs a reference side and a width greater than zero.").format(index)
             )
         if not side and offset <= 0 and width <= 0:
             return
         width_cm = flt(getattr(row, "cut_width_cm", 0)) or flt(row.width_cm)
         length_cm = flt(getattr(row, "cut_length_cm", 0)) or flt(row.length_cm)
         notch_width_cm, notch_length_cm = self._liner_notch_cm(row)
-        code = validation_code(
-            LinerPiece(
-                piece_type=row.piece_type or "Regular",
-                width_cm=width_cm,
-                length_cm=length_cm,
-                clipped_corner_position=str(
-                    getattr(row, "clipped_corner_position", "") or ""
-                ),
-                clipped_corner_width_cm=notch_width_cm,
-                clipped_corner_length_cm=notch_length_cm,
-            ),
-            side,
-            offset,
-            width,
+        piece = LinerPiece(
+            piece_type=row.piece_type or "Regular",
+            width_cm=width_cm,
+            length_cm=length_cm,
+            clipped_corner_position=str(getattr(row, "clipped_corner_position", "") or ""),
+            clipped_corner_width_cm=notch_width_cm,
+            clipped_corner_length_cm=notch_length_cm,
         )
+        code = validation_code(piece, side, offset, width)
         if code:
+            if addon.kind == "liner":
+                frappe.throw(
+                    _("Row {0}: Liner settings are invalid ({1}).").format(index, code)
+                )
             frappe.throw(
-                _("Row {0}: Liner settings are invalid ({1}).").format(index, code)
+                _("Row {0}: Machining add-on settings are invalid ({1}).").format(index, code)
             )
         _start_mm, _length_mm, span_error = resolved_liner_span_mm(
-            LinerPiece(
-                piece_type=row.piece_type or "Regular",
-                width_cm=width_cm,
-                length_cm=length_cm,
-                clipped_corner_position=str(
-                    getattr(row, "clipped_corner_position", "") or ""
-                ),
-                clipped_corner_width_cm=notch_width_cm,
-                clipped_corner_length_cm=notch_length_cm,
-            ),
+            piece,
             side,
-            flt(getattr(row, "liner_start_cm", 0)),
-            flt(getattr(row, "liner_length_cm", 0)),
+            flt(getattr(row, addon.start_field, 0)),
+            flt(getattr(row, addon.length_field, 0)),
         )
         if span_error:
+            if addon.kind == "liner":
+                frappe.throw(
+                    _("Row {0}: Liner settings are invalid ({1}).").format(index, span_error)
+                )
             frappe.throw(
-                _("Row {0}: Liner settings are invalid ({1}).").format(index, span_error)
+                _("Row {0}: Machining add-on settings are invalid ({1}).").format(index, span_error)
             )
 
     def validate_rows(self) -> None:
