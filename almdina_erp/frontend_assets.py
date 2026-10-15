@@ -6,7 +6,8 @@ coverage.
 """
 
 app_include_css = [
-    "/assets/almdina_erp/css/almdina_design_tokens.css",
+    # Raw CSS paths need a revision bump so existing Desk sessions load the palette.
+    "/assets/almdina_erp/css/almdina_design_tokens.css?v=2",
     "/assets/almdina_erp/css/almdina_components.css",
     "/assets/almdina_erp/css/almdina_patterns.css",
     "/assets/almdina_erp/css/almdina_page_templates.css?v=1",

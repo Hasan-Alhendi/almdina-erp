@@ -34,6 +34,42 @@ Feature CSS may keep **domain/layout** tokens. It must not redefine **foundation
 | Page templates | `public/css/almdina_page_templates.css` | admin / workbench / list / transaction page-family grammar |
 | Feature presentation | Feature CSS/JS | domain layout only; consume DS tokens/components/patterns |
 
+## Theme ownership — dark-mode repair, step 1
+
+- Frappe owns the active `data-theme` value, persistence, and automatic/system
+  mode. This step adds no theme-switching JavaScript or independent preference.
+- `:root` owns stable brand/action primitives and geometry/type/spacing scales.
+  `:root, [data-theme="light"]` owns the unchanged Light palette/default;
+  `[data-theme="dark"]` owns surfaces, readable text, status tones and shadows.
+- `.almdina-ui` inherits that palette. It must not redeclare theme-dependent
+  colors, including in newly created or nested wrappers. Native lists outside
+  the wrapper inherit the same global palette.
+- The dark canvas/card prefer Frappe's `--bg-color` / `--fg-color` with dark
+  fallbacks. Existing native-control aliases remain Frappe-first; their fallback
+  text/border/hover values now belong to the theme palette rather than fixed
+  Light literals. Do not alias an `--alm-*` token back to a Frappe variable which
+  the Desk bridge already maps to that same `--alm-*` token (dependency cycle).
+- `--alm-primary`, action fills/on-colors and the Desk/sidebar bridge remain
+  unchanged in step 1. Native primary-button contrast, white-based mixes in the
+  bridge/workspace, feature-local colors, DCO drawing and print colors are later
+  steps; this change does not certify those surfaces as fully dark-mode ready.
+- `tests/fixtures/design_tokens_light.json` under `almdina_erp` records all 94
+  pre-change declarations at `f6a3be632eb4fd13ae30afd7078b27b25bbb2492`.
+  Contract tests compare their resolved Light/default values, protect palette
+  inheritance, preserve native aliases/brand/geometry, and check dark fallback
+  text/status contrast (including alpha-composited status backgrounds) >= 4.5:1.
+  These are static palette checks, not browser computed-style or live Desk tests.
+- The raw token asset revision is `?v=2`; build/clear cache and reload Desk after
+  deployment. Removing the theme attribute returns to the existing Light default.
+
+Manual acceptance for this step: compare Light before/after on Workspace, a native
+list and Factory Workforce; toggle Light → Dark → Light, navigate away/back, open
+a dialog, and check a newly mounted/nested `.almdina-ui` in Arabic/RTL and
+English/LTR on desktop/mobile. Inspect intro, toolbar, summaries, shared badges,
+cards, and empty/error/loading states. Record any remaining feature-owned colors
+for their later phase. Run `python -m unittest almdina_erp.tests.test_design_system_contract`
+and `node almdina_erp/tests/js/almdina_ui.test.js` before release.
+
 ## Shared CSS leakage rule
 
 Shared DS stylesheets (`almdina_design_tokens.css`, `almdina_components.css`, `almdina_patterns.css`, `almdina_page_templates.css`) must not introduce Feature selectors such as `.apc-*`, `.aps-*`, `.aw-*`, `.prw-*`, `.sf-*`, `.dco-*` except entries on an explicit temporary allowlist in `test_design_system_contract.py`.

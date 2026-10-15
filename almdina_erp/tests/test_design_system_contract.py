@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import json
 import re
 import unittest
 from pathlib import Path
@@ -484,7 +485,7 @@ class TestDesignSystemContract(unittest.TestCase):
         self.assertIn(".almdina-ui .alm-control .form-control:focus", self.components)
 
     def test_assets_load_design_system_before_feature_css_and_after_foundation(self) -> None:
-        tokens_asset = '"/assets/almdina_erp/css/almdina_design_tokens.css"'
+        tokens_asset = '"/assets/almdina_erp/css/almdina_design_tokens.css?v=2"'
         components_asset = '"/assets/almdina_erp/css/almdina_components.css"'
         patterns_asset = '"/assets/almdina_erp/css/almdina_patterns.css"'
         templates_asset = '"/assets/almdina_erp/css/almdina_page_templates.css?v=1"'
@@ -892,6 +893,138 @@ class TestDesignSystemContract(unittest.TestCase):
         self.assertIn("frappe.almdina.upload_production_dxf = uploadDrawingDxf", source)
         self.assertNotIn("new frappe.ui.FileUploader", source)
         self.assertIn('preset: "securePrivate"', source)
+
+
+class TestDesignSystemThemeContract(unittest.TestCase):
+    """Palette/ownership checks, not a substitute for computed-style Desk UAT."""
+
+    def setUp(self) -> None:
+        source = re.sub(r"/\*.*?\*/", "", TOKENS.read_text(encoding="utf-8"), flags=re.S)
+        self.rules = [
+            (
+                tuple(part.strip() for part in selectors.split(",")),
+                dict(re.findall(r"(--[\w-]+)\s*:\s*([^;]+);", body)),
+            )
+            for selectors, body in re.findall(r"([^{}]+)\{([^{}]*)\}", source)
+        ]
+        self.baseline = json.loads(
+            (ROOT / "tests/fixtures/design_tokens_light.json").read_text(encoding="utf-8")
+        )
+
+    def palette(self, theme: str, *, wrapped: bool = False) -> dict[str, str]:
+        values: dict[str, str] = {}
+        for selectors, declarations in self.rules:
+            if ":root" in selectors or f'[data-theme="{theme}"]' in selectors:
+                values.update(declarations)
+        if wrapped:
+            for selectors, declarations in self.rules:
+                if ".almdina-ui" in selectors:
+                    values.update(declarations)
+        return values
+
+    def resolve(self, value: str, values: dict[str, str]) -> str:
+        # Resolve only the flat token file's var() dependencies. This deliberately
+        # does not claim to emulate browser selector specificity or layout.
+        pattern = r"var\((--[\w-]+)(?:,\s*([^()]*))?\)"
+        for _ in range(30):
+            if "var(" not in value:
+                return value.strip()
+
+            def replace(match: re.Match[str]) -> str:
+                replacement = values.get(match[1], match[2])
+                self.assertIsNotNone(replacement, f"unresolved token {match[1]}")
+                return str(replacement)
+
+            updated = re.sub(pattern, replace, value)
+            self.assertNotEqual(updated, value, f"cyclic or unsupported dependency: {value}")
+            value = updated
+        self.fail("token dependency chain did not terminate")
+
+    @staticmethod
+    def rgb(value: str) -> tuple[float, float, float, float]:
+        if value.startswith("#"):
+            return tuple(int(value[index:index + 2], 16) / 255 for index in (1, 3, 5)) + (1.0,)
+        parts = [float(part.strip()) for part in value.removeprefix("rgba(").removesuffix(")").split(",")]
+        return tuple(part / 255 for part in parts[:3]) + (parts[3],)
+
+    @staticmethod
+    def luminance(color: tuple[float, ...]) -> float:
+        linear = [
+            part / 12.92 if part <= 0.04045 else ((part + 0.055) / 1.055) ** 2.4
+            for part in color[:3]
+        ]
+        return sum(part * weight for part, weight in zip(linear, (0.2126, 0.7152, 0.0722)))
+
+    def contrast(self, foreground: str, background: str, canvas: str) -> float:
+        fg, bg, base = (self.rgb(value) for value in (foreground, background, canvas))
+        composited = tuple(bg[index] * bg[3] + base[index] * (1 - bg[3]) for index in range(3))
+        lights = sorted((self.luminance(fg), self.luminance(composited)))
+        return (lights[1] + 0.05) / (lights[0] + 0.05)
+
+    def test_light_default_and_explicit_preserve_all_94_existing_tokens(self) -> None:
+        for theme in ("default", "light"):
+            values = self.palette(theme, wrapped=True)
+            for token, expected in self.baseline.items():
+                with self.subTest(theme=theme, token=token):
+                    self.assertIn(token, values)
+                    self.assertEqual(self.resolve(expected, self.baseline), self.resolve(values[token], values))
+
+    def test_dark_palette_is_complete_and_not_redeclared_on_ui_wrappers(self) -> None:
+        light = next(values for selectors, values in self.rules if selectors == (":root", '[data-theme="light"]'))
+        dark = next(values for selectors, values in self.rules if selectors == ('[data-theme="dark"]',))
+        self.assertEqual(set(light), set(dark), "Every theme-dependent token needs both palettes")
+        for selectors, declarations in self.rules:
+            if any(".almdina-ui" in selector for selector in selectors):
+                self.assertFalse(set(declarations) & set(light), "UI wrappers must inherit the active palette")
+        for token in ("--alm-canvas", "--alm-card", "--alm-text-strong", "--alm-status-info-bg"):
+            self.assertNotEqual(self.palette("light")[token], self.palette("dark")[token])
+            self.assertEqual(self.palette("dark")[token], self.palette("dark", wrapped=True)[token])
+
+    def test_brand_and_geometry_stay_identical_in_both_modes(self) -> None:
+        light, dark = (self.palette(theme, wrapped=True) for theme in ("light", "dark"))
+        for token in self.baseline:
+            if token.startswith((
+                "--alm-font-", "--alm-space-", "--alm-radius-", "--alm-height-",
+                "--alm-padding-", "--alm-line-height-",
+            )) or token in ("--alm-primary", "--alm-primary-hover", "--alm-on-primary"):
+                with self.subTest(token=token):
+                    self.assertEqual(light[token], dark[token])
+
+    def test_dark_text_and_status_fallbacks_meet_normal_text_contrast(self) -> None:
+        values = self.palette("dark", wrapped=True)
+        resolved = {key: self.resolve(value, values) for key, value in values.items()}
+        for surface in ("--alm-canvas", "--alm-card", "--alm-surface-muted"):
+            for token in (
+                "--alm-text-strong", "--alm-text-secondary", "--alm-text-subtle",
+                "--alm-text-faint", "--alm-text-default", "--alm-text-muted-default",
+                "--alm-accent", "--alm-warning",
+            ):
+                with self.subTest(surface=surface, token=token):
+                    self.assertGreaterEqual(self.contrast(resolved[token], resolved[surface], resolved[surface]), 4.5)
+            for tone in ("success", "warning", "danger", "info", "neutral"):
+                with self.subTest(surface=surface, tone=tone):
+                    self.assertGreaterEqual(self.contrast(resolved[f"--alm-status-{tone}-fg"], resolved[f"--alm-status-{tone}-bg"], resolved[surface]), 4.5)
+
+    def test_frappe_aliases_remain_native_first_and_have_dark_fallbacks(self) -> None:
+        values = self.palette("dark", wrapped=True)
+        # Representative native variables, not a claim about an installed site.
+        native = {
+            "--fg-color": "#171717", "--bg-color": "#101010", "--control-bg": "#242424",
+            "--border-color": "#444444", "--text-color": "#eeeeee",
+            "--text-muted": "#bbbbbb", "--subtle-fg": "#303030",
+        }
+        aliases = {
+            "--alm-card": "--fg-color", "--alm-canvas": "--bg-color",
+            "--alm-surface": "--fg-color", "--alm-secondary-bg": "--control-bg",
+            "--alm-secondary-border": "--border-color", "--alm-secondary-text": "--text-color",
+            "--alm-secondary-hover-bg": "--subtle-fg", "--alm-text-muted": "--text-muted",
+            "--alm-border": "--border-color",
+        }
+        for token, native_token in aliases.items():
+            with self.subTest(token=token):
+                self.assertEqual(self.resolve(values[token], {**values, **native}), native[native_token])
+                if token in ("--alm-surface", "--alm-secondary-bg"):
+                    self.assertLess(self.luminance(self.rgb(self.resolve(values[token], values))), 0.15)
 
 
 if __name__ == "__main__":

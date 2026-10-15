@@ -215,7 +215,7 @@ Store/selectors/actions الخالصة تحصل على Node/unit tests عند ا
 - Shared DS CSS لا يحتوي Feature selectors (`.apc-*` / `.dco-*` …)؛ allowlist في `test_design_system_contract` فارغ منذ Phase 6 ويجب أن يبقى فارغًا.
 - لا override selector-based لـ `body .btn-primary` داخل `almdina_components.css`.
 - **Frappe Desk bridge (DS-10):** `public/css/almdina_desk_theme.css` يعيد توجيه `--primary` / `--btn-primary` و`indicator-pill.blue` إلى `--alm-primary` على `:root` — بدون تغيير markup Frappe.
-- Brand primitives (`--alm-primary` …) تعيش على `:root` + `.almdina-ui` في `almdina_design_tokens.css` حتى يكفي تعديل hex واحد للـDesk وAlmdina surfaces معًا.
+- Brand primitives (`--alm-primary` …) والمقاييس الثابتة تعيش على `:root` في `almdina_design_tokens.css` وتُورَث داخل `.almdina-ui`. ألوان الأسطح والنصوص والحالات والظلال لها لوحتان مستقلتان: `:root, [data-theme="light"]` للقيم الفاتحة الافتراضية، و`[data-theme="dark"]` للقيم الداكنة. لا تعيد `.almdina-ui` تعريف لوحة الألوان، كي لا تلغي وراثة الوضع الداكن. Frappe هو مالك اختيار الثيم؛ لا يُضاف toggle أو storage أو theme lifecycle موازٍ.
 - تغيير اللون الأساسي يتم من `--alm-primary` في tokens فقط، ثم `bench build --app almdina_erp` + `clear-cache`.
 - Design System migration تبقى presentation-only: لا تغيّر Domain/Application/Services أو capabilities أو lifecycle.
 
