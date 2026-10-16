@@ -1066,6 +1066,10 @@ def _regular_machining_issues(
                 actual_w=actual_w, actual_h=actual_h,
             )
         ]
+    # Persist the same canonical machining settings used to prove orientation.
+    # Export and preview consume this physical binding without re-reading or
+    # guessing each add-on's side. Do not write metadata on invalid imports.
+    piece.update(machining_metadata(row))
     piece["rotation_quarter_turns"] = result.quarter_turns
     return []
 
