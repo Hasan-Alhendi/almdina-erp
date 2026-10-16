@@ -580,12 +580,12 @@ async function run() {
 
     nextPlan = linerPlan({ kerf_mm: 5, kerf_cm: 0.3 });
     downloadedDxf = "";
-    await assert.rejects(savedPlanExport(), /متعارضة/);
+    await assert.rejects(savedPlanExport(), /Saw blade thickness conflict/);
     assert.equal(downloadedDxf, "");
 
     nextPlan = linerPlan({});
     downloadedDxf = "";
-    await assert.rejects(savedPlanExport(), /حدّد سماكة الشفرة/);
+    await assert.rejects(savedPlanExport(), /Specify a saw blade thickness/);
     assert.equal(downloadedDxf, "");
 
     nextPlan = {
@@ -1004,7 +1004,7 @@ async function run() {
     downloadedDxf = "";
     await assert.rejects(
         fakeFrappe.almdina.export_order_dxf("26-LINER-ENDS", "system"),
-        /يتداخل مع قطعة مجاورة/
+        /overlaps an adjacent piece/
     );
 
     nextPlan = linerEndPlan([linerDoor({
