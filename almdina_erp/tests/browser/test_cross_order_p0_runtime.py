@@ -1281,3 +1281,144 @@ def test_recovery_new_saved_intersection():
             (evidence_dir / "recovery-intersection.json").write_text(
                 json.dumps(evidence, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
             browser.close()
+
+
+def test_recovery_extra_fields_new_saved_in_desk():
+    """Prove three distinct Extra rows survive NEW recovery and the first native Save."""
+    fixture = json.loads(Path(os.environ["P0_FIXTURE_PATH"]).read_text())
+    evidence_dir = Path(os.environ["P0_EVIDENCE_DIR"])
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    evidence_file = evidence_dir / "recovery-extras.json"
+    extras = {
+        "P0-LINER": {"extra_liner": 1, "liner_reference_side": "edge_width_top",
+                     "liner_offset_cm": 2, "liner_width_cm": 1.8,
+                     "liner_start_cm": 1, "liner_length_cm": 25},
+        "P0-GROOVE": {"extra_back_groove": 1,
+                      "back_groove_reference_side": "edge_long_right",
+                      "back_groove_offset_cm": 1, "back_groove_width_cm": 0.7,
+                      "back_groove_start_cm": 3, "back_groove_length_cm": 20},
+        "P0-HANDLE": {"extra_recessed_handle_cutout": 1,
+                      "recessed_handle_reference_side": "edge_width_bottom",
+                      "recessed_handle_offset_cm": 3, "recessed_handle_width_cm": 1.2,
+                      "recessed_handle_start_cm": 2, "recessed_handle_length_cm": 18},
+    }
+    evidence = {"expected": extras, "scope": "isolated Desk NEW, checkpoint, cancel, restore, Native Save, DB audit"}
+
+    def capture(page):
+        return page.evaluate("""() => ({name:cur_frm.doc.name,
+            token:AlmdinaDocumentContext.capture(cur_frm),
+            rows:(cur_frm.doc.pieces || []).filter(row=>row.notes?.startsWith('P0-'))
+                .map(row=>{const result={name:row.name,notes:row.notes};
+                    for(const prefix of ['liner','back_groove','recessed_handle']) {
+                        result[`extra_${prefix === 'recessed_handle' ? 'recessed_handle_cutout' : prefix}`]
+                            = row[`extra_${prefix === 'recessed_handle' ? 'recessed_handle_cutout' : prefix}`];
+                        for(const suffix of ['reference_side','offset_cm','width_cm','start_cm','length_cm'])
+                            result[`${prefix}_${suffix}`]=row[`${prefix}_${suffix}`];
+                    } return result;})})""")
+
+    def verify_rows(rows):
+        assert len(rows) == len(extras), rows
+        assert set(row["notes"] for row in rows) == set(extras), rows
+        for row in rows:
+            for field, value in extras[row["notes"]].items():
+                assert row[field] == value, (row["notes"], field, row[field], value)
+
+    with browser_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page(locale="en-US")
+        try:
+            _login(page, fixture)
+            page.evaluate("name => frappe.set_route('Form','Door Cutting Order',name)",
+                          fixture["orders"]["A"]["name"])
+            page.wait_for_function("name => cur_frm?.doc?.name === name",
+                                   arg=fixture["orders"]["A"]["name"], timeout=45000)
+
+            def open_new():
+                page.evaluate("""() => {
+                    const name=frappe.model.make_new_doc_and_get_name('Door Cutting Order');
+                    frappe.set_route('Form','Door Cutting Order',name);
+                }""")
+                page.wait_for_function("() => cur_frm?.doctype === 'Door Cutting Order' && !!cur_frm.is_new()",
+                                       timeout=45000)
+                page.wait_for_function("() => !!AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(cur_frm)",
+                                       timeout=15000)
+
+            open_new()
+            page.evaluate("""args => {
+                window.__p0ExtrasInput={status:'pending'};
+                (async () => {
+                    const frm=cur_frm;
+                    for(const [field,value] of Object.entries(args.fields)) await frm.set_value(field,value);
+                    for(const [note,fields] of Object.entries(args.extras)) {
+                        const row=frappe.model.add_child(frm.doc,'Door Cutting Order Detail','pieces');
+                        Object.assign(row,{piece_type:'Regular',width_cm:40,length_cm:60,qty:1,
+                            notes:note},fields);
+                    }
+                    frm.refresh_field('pieces');
+                    AlmdinaDcoRecovery.LocalCheckpoint.markDirty(frm);
+                    const result=await AlmdinaDcoRecovery.LocalCheckpoint.flush(frm);
+                    window.__p0ExtrasInput={status:'settled',ok:!!result?.ok,
+                        error:result?.error?.code || null};
+                })().catch(error=>window.__p0ExtrasInput={status:'rejected',error:String(error)});
+            }""", {"fields": {"customer": fixture["customer"],
+                "board_description": fixture["recovery_board"], "order_cutting_machine": "CNC",
+                "board_width_cm": 122, "board_length_cm": 244,
+                "default_edge_type": fixture["edge_type"], "board_rate_usd": 7,
+                "cutting_cost_per_board_usd": 2}, "extras": extras})
+            page.wait_for_function("window.__p0ExtrasInput?.status !== 'pending'", timeout=25000)
+            evidence["checkpoint"] = page.evaluate("window.__p0ExtrasInput")
+            assert evidence["checkpoint"]["status"] == "settled" and evidence["checkpoint"]["ok"]
+            evidence["before"] = capture(page)
+            verify_rows(evidence["before"]["rows"])
+            page.evaluate("name => frappe.set_route('Form','Door Cutting Order',name)",
+                          fixture["orders"]["B"]["name"])
+            page.wait_for_function("name => cur_frm?.doc?.name === name",
+                                   arg=fixture["orders"]["B"]["name"], timeout=45000)
+            evidence["other_order"] = capture(page)
+            assert not evidence["other_order"]["rows"]
+
+            open_new()
+            page.locator('[data-recovery-action="new"]:visible').wait_for(timeout=15000)
+            page.locator('[data-recovery-action="new"]:visible').click()
+            page.wait_for_function("""() => !document.querySelector('.modal.show [data-recovery-action="new"]')""",
+                                   timeout=15000)
+            evidence["cancel"] = capture(page)
+            assert not evidence["cancel"]["rows"]
+            page.evaluate("name => frappe.set_route('Form','Door Cutting Order',name)",
+                          fixture["orders"]["B"]["name"])
+            page.wait_for_function("name => cur_frm?.doc?.name === name",
+                                   arg=fixture["orders"]["B"]["name"], timeout=45000)
+            open_new()
+            page.locator('[data-recovery-action="continue"]:visible').first.click()
+            page.wait_for_function("() => (cur_frm?.doc?.pieces || []).some(row => row.notes === 'P0-LINER')",
+                                   timeout=15000)
+            evidence["restore"] = capture(page)
+            verify_rows(evidence["restore"]["rows"])
+            page.evaluate("""() => {
+                const frm=cur_frm;
+                window.__p0ExtrasSave={status:'pending'};
+                Promise.resolve().then(()=>frm.save()).then(
+                    ()=>window.__p0ExtrasSave={status:'settled',name:frm.doc.name,
+                        isNew:!!frm.is_new(),token:AlmdinaDocumentContext.capture(frm)},
+                    error=>window.__p0ExtrasSave={status:'rejected',error:String(error)});
+            }""")
+            page.wait_for_function("window.__p0ExtrasSave?.status !== 'pending'", timeout=25000)
+            evidence["native_save"] = page.evaluate("window.__p0ExtrasSave")
+            assert evidence["native_save"]["status"] == "settled" and not evidence["native_save"]["isNew"]
+            assert not evidence["native_save"]["name"].startswith("new-")
+            assert evidence["native_save"]["token"]["generation"] == evidence["restore"]["token"]["generation"]
+            evidence["saved"] = capture(page)
+            verify_rows(evidence["saved"]["rows"])
+            assert len({row["name"] for row in evidence["saved"]["rows"]}) == 3
+            page.evaluate("name => frappe.set_route('Form','Door Cutting Order',name)",
+                          fixture["orders"]["B"]["name"])
+            page.wait_for_function("name => cur_frm?.doc?.name === name",
+                                   arg=fixture["orders"]["B"]["name"], timeout=45000)
+            assert not capture(page)["rows"]
+        except Exception as exc:
+            evidence["failure"] = repr(exc)
+            page.screenshot(path=str(evidence_dir / "recovery-extras-failure.png"), full_page=True)
+            raise
+        finally:
+            evidence_file.write_text(json.dumps(evidence, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+            browser.close()

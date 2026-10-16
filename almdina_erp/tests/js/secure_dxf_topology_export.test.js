@@ -167,7 +167,17 @@ const context = vm.createContext({
     MutationObserver: class {
         observe() {}
     },
-    __: value => value,
+    // Standalone DXF simulations do not load Frappe dictionaries, but
+    // identity-language translation must still interpolate {0}, {1}, etc.
+    __: (message, values) => {
+        let output = String(message);
+        if (Array.isArray(values)) {
+            values.forEach((value, index) => {
+                output = output.split("{" + index + "}").join(String(value));
+            });
+        }
+        return output;
+    },
     $: () => ({
         find() { return this; },
         filter() { return this; },
@@ -580,12 +590,12 @@ async function run() {
 
     nextPlan = linerPlan({ kerf_mm: 5, kerf_cm: 0.3 });
     downloadedDxf = "";
-    await assert.rejects(savedPlanExport(), /متعارضة/);
+    await assert.rejects(savedPlanExport(), /Saw blade thickness conflict/);
     assert.equal(downloadedDxf, "");
 
     nextPlan = linerPlan({});
     downloadedDxf = "";
-    await assert.rejects(savedPlanExport(), /حدّد سماكة الشفرة/);
+    await assert.rejects(savedPlanExport(), /Specify a saw blade thickness/);
     assert.equal(downloadedDxf, "");
 
     nextPlan = {
@@ -1004,7 +1014,7 @@ async function run() {
     downloadedDxf = "";
     await assert.rejects(
         fakeFrappe.almdina.export_order_dxf("26-LINER-ENDS", "system"),
-        /يتداخل مع قطعة مجاورة/
+        /overlaps an adjacent piece/
     );
 
     nextPlan = linerEndPlan([linerDoor({

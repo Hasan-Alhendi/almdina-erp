@@ -23,7 +23,7 @@ function element(html) {
         cloneNode() { return element(this.innerHTML); }};
 }
 
-function harness({ sourceFirst = false } = {}) {
+function harness({ sourceFirst = false, arabic = false } = {}) {
     const writes = [], messages = [];
     const reads = {snapshot: 0, displayedRow: 0};
     const frm = {doctype: "Door Cutting Order", doc: {name: "A", doctype: "Door Cutting Order",
@@ -63,6 +63,21 @@ function harness({ sourceFirst = false } = {}) {
             load() { return Promise.resolve(state); },
         },
     };
+    if (arabic) {
+        const catalog = fs.readFileSync(path.resolve(__dirname, "../../translations/ar.csv"), "utf8")
+            .split(/\r?\n/);
+        window.AlmdinaLocale = {
+            currentLanguage() { return "ar"; }, direction() { return "rtl"; },
+            translate(message, replacements) {
+                const entry = catalog.find(line => line.startsWith(`${message},`));
+                let value = entry ? entry.slice(message.length + 1) : String(message);
+                if (Array.isArray(replacements)) replacements.forEach((item, index) => {
+                    value = value.replaceAll(`{${index}}`, String(item));
+                });
+                return value;
+            },
+        };
+    }
     const document = {documentElement: {getAttribute(key) { return key === "dir" ? "rtl" : "ar"; }},
         getElementById() { return null; }, createElement() { return element(""); },
         head: {appendChild() {}}};
@@ -230,6 +245,29 @@ test("final HTML preserves the live nonzero kerf in owned liner geometry", async
         "the print must not invent a missing-kerf machining error");
     assert.equal(linerPath(h.writes.at(-1)), linerPath(liveHtml),
         "the final frozen print document must retain the live liner toolpath");
+});
+
+test("frozen A print keeps its revision and localized machining error in final HTML", async () => {
+    const h = harness({arabic: true});
+    h.frm.__almdina_active_plan_tab = "System";
+    h.frm.doc.kerf_mm = 25;
+    h.frm.doc.pieces = [{piece_type: "Regular", width_cm: 40, length_cm: 60,
+        extra_liner: 1, liner_reference_side: "edge_width_top",
+        liner_offset_cm: 0, liner_width_cm: 1.8}];
+    const plan = geometry();
+    plan.kerf_mm = 25;
+    plan.sheets[0].pieces[0] = {...plan.sheets[0].pieces[0], x: 5, y: 5,
+        w: 40, h: 60, source_piece_no: 1, extra_liner: 1,
+        liner_reference_side: "edge_width_top", liner_offset_cm: 0, liner_width_cm: 1.8};
+    h.state.data.plans.system_draft = row("SYSTEM-OWNED-A", plan, 7);
+    assert.equal(await h.print(), true);
+    const finalHtml = h.writes.at(-1);
+    assert.match(finalHtml, /SYSTEM-OWNED-A/);
+    assert.match(finalHtml, /إصدار الخطة<\/b><span>7<\/span>/);
+    assert.ok(finalHtml.includes('data-liner-toolpath-error="liner_narrower_than_cutter"'),
+        `machining error markers: ${JSON.stringify(finalHtml.match(/data-liner-toolpath-error[^>]*|data-overlay-kind="liner"[^>]*/g))}`);
+    assert.match(finalHtml, /عرض اللاينر أصغر من سماكة الشفرة/);
+    assert.doesNotMatch(finalHtml, /The width of|\{0\}|SYSTEM-B/);
 });
 
 test("frozen print preserves L-corner edge thickness without financial profiles", async () => {

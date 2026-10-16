@@ -1193,7 +1193,6 @@ Image crop tools,أدوات اقتصاص الصورة
 Drag the frame or its handles,اسحب الإطار أو مقابضه
 Auto crop,اقتصاص تلقائي
 Reset,إعادة ضبط
-Apply,تطبيق
 Documentation tools,أدوات التوثيق
 Select,تحديد
 Smart pen,قلم ذكي
@@ -2738,3 +2737,34 @@ Edit customers,تعديل الزبائن
 Edit the existing customer details.,تعديل بيانات الزبون الحالية.
 Delete customer,حذف زبون
 Delete a customer who is not linked to any saved orders.,حذف زبون غير مرتبط بطلبات محفوظة.
+Saw blade thickness conflict: {0} mm versus {1} mm in the cutting plan. DXF was not exported.,سماكة الشفرة متعارضة: {0} مم مقابل {1} مم في خطة القص، ولم يُصدَّر الملف.
+Door {0}: {1},الدرفة {0}: {1}
+the liner,اللاينر
+the back groove,فرزة الظهر
+the recessed handle,مسكة الغطس
+Specify a saw blade thickness above zero for {0} toolpaths,حدّد سماكة الشفرة أكبر من صفر لمسارات {0}
+The width of {0} is less than the saw blade thickness,عرض {0} أصغر من سماكة الشفرة
+The {0} extension overlaps another piece,امتداد {0} يتداخل مع قطعة أخرى
+Could not extend the {0} toolpath safely,تعذر تمديد مسار {0} بأمان
+The {0} strip extends beyond the door,شريط {0} يخرج خارج الدرفة
+The {0} offset is invalid,بعد {0} غير صالح
+The {0} width is invalid,عرض {0} غير صالح
+The {0} side is unavailable for this door,جهة {0} غير متاحة لهذه الدرفة
+The {0} start position is invalid,بداية {0} غير صالحة
+The {0} length is invalid,طول {0} غير صالح
+The start and length exceed the side length,البداية والطول يتجاوزان طول الجهة
+The flat {0} end cannot be machined with this cutter,نهاية {0} المستقيمة غير قابلة للتنفيذ بهذه الريشة
+The {0} start or end falls on a corner without one direction,بداية {0} أو نهايته تقع على انعطاف بلا اتجاه واحد
+Specify a saw blade thickness above zero before exporting {0} toolpaths.,حدّد سماكة الشفرة أكبر من صفر قبل تصدير مسارات {0}.
+The width of {0} is less than the saw blade thickness.,عرض {0} أصغر من سماكة الشفرة.
+The {0} cutter extension overlaps an adjacent piece.,امتداد ريشة {0} يتداخل مع قطعة مجاورة.
+Could not extend the {0} toolpath to the cutting line.,تعذر تمديد مسار {0} حتى خط القص.
+The {0} strip extends beyond the door.,شريط {0} يخرج خارج الدرفة.
+The {0} offset is invalid.,بعد {0} غير صالح.
+The {0} width is invalid.,عرض {0} غير صالح.
+The {0} side is unavailable for this door.,جهة {0} غير متاحة لهذه الدرفة.
+The {0} start position is invalid.,بداية {0} غير صالحة.
+The {0} length is invalid.,طول {0} غير صالح.
+The start and length of {0} exceed the side length.,بداية {0} وطوله يتجاوزان طول الجهة.
+"The flat end cannot be machined by a circular cutter in one pass, or the region is shorter than the cutter diameter.",النهاية المستقيمة غير قابلة للتنفيذ بريشة دائرية في تمريرة واحدة، أو طول المنطقة أقصر من قطر الريشة.
+The {0} start or end falls on a corner without a single direction for a flat end.,بداية {0} أو نهايته تقع على انعطاف لا يملك اتجاهاً واحداً للنهاية المستقيمة.

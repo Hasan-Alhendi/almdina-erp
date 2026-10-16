@@ -317,8 +317,11 @@ def test_margin_warning_is_compact_except_when_original_edge_is_used():
     source = PLAN_CONTENT_UX.read_text(encoding="utf-8")
     styles = PLAN_CONTENT_STYLES.read_text(encoding="utf-8")
 
-    assert "const hasOriginalEdge = zeroEdges.length > 0" in source
-    assert "const detailNotes = hasOriginalEdge ? notes : []" in source
+    # Use the actual physical margins across all sheets, not only a nominal
+    # plan policy. Show detailed notes only if every sheet uses an original edge.
+    assert "const margins = sharedPhysicalMargins(plan);" in source
+    assert "const hasOriginalEdge = Boolean(margins.anyOriginal);" in source
+    assert "const detailNotes = margins.everySheetOriginal ? notes : []" in source
     assert 'translate("The margin was reduced automatically by the amount needed to keep the piece measurements.")' in source
     assert 'translate("An original board edge was used; check that it is straight before cutting.")' in source
     assert "dco-margin-policy-alert__summary" in source

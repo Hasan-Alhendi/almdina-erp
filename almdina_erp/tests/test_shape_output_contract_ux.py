@@ -164,7 +164,10 @@ def test_plan_dxf_and_browser_surfaces_do_not_reimplement_exact_shape_policy():
         assert "AlmdinaSpecialShapeGeometry" not in source, path
         assert ".isExact(" not in source, path
     assert "AlmdinaCuttingPlanPieceGeometry" in _source(PLAN_RENDERER)
-    assert "geometry.resolve(piece)" in _source(PLAN_RENDERER)
+    plan_renderer = _source(PLAN_RENDERER)
+    assert "const manufacturingPiece = pieceWithLinerSpec(frm, piece);" in plan_renderer
+    assert "geometry.resolve(manufacturingPiece)" in plan_renderer
+    assert "render_piece_edge_lines(manufacturingPiece, geometryModel, clipId)" in plan_renderer
     assert "contract.points(piece, widthMm, heightMm)" in _source(PIECE_GEOMETRY)
     assert "shapeOutput.dxfPoints(piece" in _source(SECURE_DXF)
     assert not (ROOT / "public" / "js" / "door_cutting_order_workflow.js").exists()

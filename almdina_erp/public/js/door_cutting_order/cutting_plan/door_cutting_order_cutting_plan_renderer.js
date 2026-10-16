@@ -501,19 +501,19 @@
     }
 
     const LINER_TOOLPATH_MESSAGES = Object.freeze({
-        cutter_diameter_invalid: "حدّد سماكة الشفرة أكبر من صفر لمسارات اللاينر",
-        liner_narrower_than_cutter: "عرض اللاينر أصغر من سماكة الشفرة",
-        liner_extension_hits_piece: "امتداد اللاينر يتداخل مع قطعة أخرى",
-        liner_extension_unsafe: "تعذر تمديد مسار اللاينر بأمان",
-        strip_outside: "شريط اللاينر يخرج خارج الدرفة",
-        offset_invalid: "بعد اللاينر غير صالح",
-        width_invalid: "عرض اللاينر غير صالح",
-        side_unavailable: "جهة اللاينر غير متاحة لهذه الدرفة",
-        liner_start_invalid: "بداية اللاينر غير صالحة",
-        liner_length_invalid: "طول اللاينر غير صالح",
-        liner_span_exceeds_edge: "البداية والطول يتجاوزان طول الجهة",
-        liner_flat_end_unmachinable: "نهاية اللاينر المستقيمة غير قابلة للتنفيذ بهذه الريشة",
-        liner_span_on_corner: "بداية اللاينر أو نهايته تقع على انعطاف بلا اتجاه واحد",
+        cutter_diameter_invalid: "Specify a saw blade thickness above zero for {0} toolpaths",
+        liner_narrower_than_cutter: "The width of {0} is less than the saw blade thickness",
+        liner_extension_hits_piece: "The {0} extension overlaps another piece",
+        liner_extension_unsafe: "Could not extend the {0} toolpath safely",
+        strip_outside: "The {0} strip extends beyond the door",
+        offset_invalid: "The {0} offset is invalid",
+        width_invalid: "The {0} width is invalid",
+        side_unavailable: "The {0} side is unavailable for this door",
+        liner_start_invalid: "The {0} start position is invalid",
+        liner_length_invalid: "The {0} length is invalid",
+        liner_span_exceeds_edge: "The start and length exceed the side length",
+        liner_flat_end_unmachinable: "The flat {0} end cannot be machined with this cutter",
+        liner_span_on_corner: "The {0} start or end falls on a corner without one direction",
     });
 
     function samePlacedPiece(left, right) {
@@ -632,8 +632,8 @@
             if (overlay && overlay.error) {
                 const engine = window.AlmdinaMachiningOverlay;
                 const addon = engine && typeof engine.addon === "function" ? engine.addon(kind) : null;
-                const noun = addon && addon.nounAr ? addon.nounAr : "اللاينر";
-                const message = (LINER_TOOLPATH_MESSAGES[overlay.error] || overlay.error).replaceAll("اللاينر", noun);
+                const noun = translate(addon && addon.nounMessageId || "the liner");
+                const message = translate(LINER_TOOLPATH_MESSAGES[overlay.error] || overlay.error, [noun]);
                 return `<text data-liner-toolpath-error="${escape_html(overlay.error)}" x="50" y="50" text-anchor="middle" font-size="8" fill="#9a6207">${escape_html(message)}</text>`;
             }
             const points = geometry && Array.isArray(geometry.path)

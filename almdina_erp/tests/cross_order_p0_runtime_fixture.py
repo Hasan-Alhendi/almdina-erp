@@ -309,6 +309,33 @@ def audit_db() -> dict[str, object]:
                 )
                 if not result["post_save_edit_db_verified"]:
                     raise AssertionError(f"Post-save Plan/Cost not persisted: {result['post_save_edit']}")
+    extra_evidence = Path(os.environ.get("P0_EVIDENCE_DIR") or "") / "recovery-extras.json"
+    if extra_evidence.is_file():
+        browser = json.loads(extra_evidence.read_text(encoding="utf-8"))
+        saved = browser.get("native_save") or {}
+        if saved.get("status") == "settled" and saved.get("name"):
+            doc = frappe.get_doc("Door Cutting Order", saved["name"])
+            expected = browser["expected"]
+            actual = {}
+            for piece in doc.pieces:
+                if piece.notes not in expected:
+                    continue
+                actual[piece.notes] = {"name": piece.name, **{
+                    field: piece.get(field) for field in expected[piece.notes]
+                }}
+            result["recovery_extra_rows"] = {"order": doc.name, "rows": actual}
+            result["recovery_extra_db_verified"] = bool(
+                doc.board_description == fixture["recovery_board"]
+                and doc.customer == fixture["customer"]
+                and len(actual) == len(expected)
+                and len({row["name"] for row in actual.values()}) == len(expected)
+                and all(all(actual[note].get(field) == value for field, value in fields.items())
+                        for note, fields in expected.items() if note in actual)
+                and not any(piece.notes in expected for piece in
+                            frappe.get_doc("Door Cutting Order", fixture["orders"]["B"]["name"]).pieces)
+            )
+            if not result["recovery_extra_db_verified"]:
+                raise AssertionError(f"NEW Extra fields did not persist in the owned rows: {actual}")
     evidence_dir = os.environ.get("P0_EVIDENCE_DIR")
     if evidence_dir:
         Path(evidence_dir).mkdir(parents=True, exist_ok=True)
