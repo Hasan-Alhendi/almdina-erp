@@ -31,7 +31,7 @@ const fakeWindow = {
         completeToolpaths: (_piece, overlays) => ({ overlays }),
     },
 };
-const fakeFrappe = {ui: {form: {on() {}}}};
+const fakeFrappe = {almdina: {}, provide() {}, ui: {form: {on() {}}}};
 const c = vm.createContext({
     window: fakeWindow, frappe: fakeFrappe, console, Number, Array, Object, Set, Math,
     __: message => message,
