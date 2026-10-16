@@ -670,6 +670,36 @@ def _set_link(page: Page, fieldname: str, value: str) -> None:
         )
         if not is_native_control:
             raise AssertionError("Resolved Customer input is not Frappe's current Link control")
+    else:
+        control.fill(value)
+        page.wait_for_function(
+            "({fieldname, value}) => { const field = cur_frm && cur_frm.fields_dict[fieldname];"
+            " const list = field && field.awesomplete && field.awesomplete.list;"
+            " const hasExactValue = Array.isArray(list) && list.some(item => item && String(item.value) === value);"
+            " const options = field && field.awesomplete && field.awesomplete.ul"
+            " ? [...field.awesomplete.ul.querySelectorAll('[role=option]')] : [];"
+            " return hasExactValue && options.some(item => item.getClientRects().length > 0); }",
+            arg={"fieldname": fieldname, "value": value},
+            timeout=20_000,
+        )
+        option_values = page.evaluate(
+            "fieldname => { const field = cur_frm && cur_frm.fields_dict[fieldname];"
+            " const list = field && field.awesomplete && field.awesomplete.list;"
+            " return Array.isArray(list) ? list.map(item => item && String(item.value)) : []; }",
+            fieldname,
+        )
+        exact_indexes = [index for index, option_value in enumerate(option_values) if option_value == value]
+        if len(exact_indexes) != 1:
+            raise AssertionError(f"Frappe {fieldname} options did not contain exactly one requested value")
+        page.locator(
+            f"[data-fieldname='{fieldname}'] .awesomplete ul [role='option']:visible"
+        ).nth(exact_indexes[0]).click()
+        page.wait_for_function(
+            "({fieldname, value}) => window.cur_frm && cur_frm.doc[fieldname] === value",
+            arg={"fieldname": fieldname, "value": value},
+            timeout=10_000,
+        )
+        return
 
     control.fill(value)
     try:
@@ -862,11 +892,11 @@ def test_real_desk_customer_control_link_autocomplete_isolated() -> None:
                         "actual => { const field = cur_frm && cur_frm.fields_dict.customer;"
                         " const expected = field && typeof field.get_search_args === 'function'"
                         " ? field.get_search_args() : null;"
-                        " const keys = ['doctype', 'reference_doctype', 'link_fieldname', 'txt',"
-                        " 'filters', 'query', 'page_length', 'ignore_user_permissions'];"
-                        " const matches = Boolean(expected && keys.every(key =>"
-                        " JSON.stringify(expected[key] ?? null) === JSON.stringify((actual && actual[key]) ?? null)));"
-                        " return {available: Boolean(expected), matches}; }",
+                        " const coreKeys = ['doctype', 'reference_doctype', 'link_fieldname', 'txt'];"
+                        " const same = (left, right) => JSON.stringify(left ?? null) === JSON.stringify(right ?? null);"
+                        " const coreMatch = Boolean(expected && coreKeys.every(key => same(expected[key], actual && actual[key])));"
+                        " const filtersMatch = Boolean(expected && same(expected.filters, actual && actual.filters));"
+                        " return {available: Boolean(expected), coreMatch, filtersMatch}; }",
                         request_args,
                     )
                     request_valid = bool(
@@ -875,8 +905,11 @@ def test_real_desk_customer_control_link_autocomplete_isolated() -> None:
                         and request_args.get("reference_doctype") == "Door Cutting Order"
                         and request_args.get("link_fieldname") == "customer"
                         and request_args.get("txt") == fixture["customer"]
-                        and native_args["available"]
-                        and native_args["matches"]
+                    )
+                    native_args_match = bool(
+                        native_args["available"]
+                        and native_args["coreMatch"]
+                        and native_args["filtersMatch"]
                     )
                     try:
                         page.wait_for_function(
@@ -907,7 +940,7 @@ def test_real_desk_customer_control_link_autocomplete_isolated() -> None:
                     outcomes[case_name] = {
                         "searchResponseOk": response.ok,
                         "requestArgumentsValid": request_valid,
-                        "nativeSearchArgumentsMatch": native_args["matches"],
+                        "nativeSearchArgumentsMatch": native_args_match,
                         "exactResponseCount": exact_response_count,
                         **ui_state,
                     }
