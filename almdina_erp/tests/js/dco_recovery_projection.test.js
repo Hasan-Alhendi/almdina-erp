@@ -131,7 +131,7 @@ assert.equal(dcoPayload.cost_workspace_draft, null);
 assert.deepEqual(Array.from(dcoPayload.special_shape_drafts), []);
 const serialized = Projection.serialize(dcoPayload);
 assert.equal(Projection.serialize(Projection.deserialize(serialized)), Projection.serialize(dcoPayload));
-const restoredMachining = Projection.deserialize(serialized).dco_input.pieces[0];
+const restoredMachining = Projection.deserialize(serialized).dco.pieces[0];
 for (const [fieldname, expected] of Object.entries(machiningInputs)) {
     assert.equal(restoredMachining[fieldname], expected, fieldname);
 }
