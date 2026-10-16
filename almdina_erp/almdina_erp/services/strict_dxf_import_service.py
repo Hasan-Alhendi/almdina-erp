@@ -212,6 +212,7 @@ def _proxy_order(
             attr: getattr(row, attr, 0) if row else 0
             for attr in EXTRA_ADDON_FIELD_BY_CODE.values()
         }
+        addon_flags.update(machining_metadata(row))
         pieces.append(
             SimpleNamespace(
                 qty=spec.qty,
@@ -228,8 +229,6 @@ def _proxy_order(
                 finished_length_cm=float(spec.finished_length_cm),
                 allow_rotation=spec.allow_rotation,
                 piece_type=spec.piece_type,
-                # The canonical registry supplies all three add-ons uniformly.
-                **machining_metadata(row),
             )
         )
     return SimpleNamespace(
@@ -1013,7 +1012,10 @@ def _regular_machining_issues(
     actual_w, actual_h = _actual_dimensions(piece)
     # Strict dimensions already selected direct/swapped geometry. A square
     # permits all four angles; a non-square admits only one parity.
-    square = dimensions_match_exact(spec.cut_width_cm, spec.cut_length_cm)
+    square = dimensions_match_exact(
+        spec.cut_width_cm, spec.cut_length_cm,
+        spec.cut_length_cm, spec.cut_width_cm,
+    )
     turns = (0, 1, 2, 3) if square else ((1, 3) if piece.get("rotated") else (0, 2))
     result = match_regular_machining_orientation(
         piece=LinerPiece("Regular", float(spec.cut_width_cm), float(spec.cut_length_cm)),
