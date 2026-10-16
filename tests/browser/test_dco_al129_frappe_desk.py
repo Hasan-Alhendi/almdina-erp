@@ -28,6 +28,7 @@ from playwright.sync_api import (
 from tests.browser.al129_link_search_request import (
     decode_search_link_request_args,
     normalize_search_link_args,
+    search_link_argument_differences,
 )
 
 
@@ -665,36 +666,72 @@ def _set_link(page: Page, fieldname: str, value: str) -> None:
     control = page.locator(f"[data-fieldname='{fieldname}'] input").first
     expect(control).to_be_visible(timeout=5_000)
     expect(control).to_be_enabled(timeout=5_000)
-    is_native_control = control.evaluate(
-        "(input, fieldname) => { const field = window.cur_frm && cur_frm.fields_dict[fieldname];"
+    link_state = control.evaluate(
+        "(input, {fieldname, value}) => { const frm = window.cur_frm;"
+        " const field = frm && frm.fields_dict[fieldname];"
         " const control = field && field.$input;"
         " const current = control && typeof control.get === 'function' ? control.get(0) : control;"
-        " return Boolean(field && field.df && field.df.fieldtype === 'Link' && current === input); }",
-        fieldname,
+        " const fetchColumns = field && field.fetch_map ? Object.values(field.fetch_map) : [];"
+        " const modelValue = frm && frm.doc ? frm.doc[fieldname] : undefined;"
+        " const skipsValidation = Boolean(field && (field._validated || field.df.ignore_link_validation"
+        " || field.df.options === '[Select]'));"
+        " const unchanged = modelValue === value;"
+        " const sameDefaultWithoutFetch = fetchColumns.length === 0 && field.df.__default_value === value;"
+        " return {native: Boolean(field && field.df && field.df.fieldtype === 'Link' && current === input),"
+        " unchanged, skipsValidation, sameDefaultWithoutFetch,"
+        " validationRequestExpected: Boolean(value && !unchanged && !skipsValidation"
+        " && !sameDefaultWithoutFetch), fetchColumnCount: fetchColumns.length}; }",
+        {"fieldname": fieldname, "value": value},
     )
-    if not is_native_control:
+    if not link_state["native"]:
         raise AssertionError(f"Resolved {fieldname} input is not Frappe's current Link control")
+    if link_state["skipsValidation"] and not link_state["unchanged"]:
+        raise AssertionError(f"Frappe Link validation is disabled for changed {fieldname} input")
 
     control.fill(value)
-    try:
-        with page.expect_response(
-            lambda response: "frappe.client.validate_link_and_fetch" in response.url,
-            timeout=15_000,
-        ) as validation_response:
-            control.press("Tab")
-        response = validation_response.value
-    except PlaywrightTimeoutError as error:
-        raise AssertionError(
-            f"Frappe did not validate the {fieldname} Link through its native blur lifecycle"
-        ) from error
-    if not response.ok:
-        raise AssertionError(f"Frappe rejected native {fieldname} Link validation: HTTP {response.status}")
+    response_status = None
+    if link_state["validationRequestExpected"]:
+        try:
+            with page.expect_response(
+                lambda response: "frappe.client.validate_link_and_fetch" in response.url,
+                timeout=15_000,
+            ) as validation_response:
+                control.press("Tab")
+            response = validation_response.value
+        except PlaywrightTimeoutError as error:
+            raise AssertionError(
+                f"Frappe Link validation request was expected for changed {fieldname} value"
+            ) from error
+        response_status = response.status
+        if not response.ok:
+            raise AssertionError(f"Frappe rejected native {fieldname} Link validation: HTTP {response.status}")
+    else:
+        # ControlBase intentionally skips validation when the model value is
+        # unchanged; ControlLink also skips its request for its unchanged
+        # default value when there are no fetch fields.
+        control.press("Tab")
+
     page.wait_for_function(
         "({fieldname, value}) => window.cur_frm && cur_frm.doc[fieldname] === value",
         arg={"fieldname": fieldname, "value": value},
         timeout=10_000,
     )
-    trace("native_link_validation_completed", fieldname=fieldname, status=response.status)
+    after_matches = page.evaluate(
+        "({fieldname, value}) => cur_frm.doc[fieldname] === value",
+        {"fieldname": fieldname, "value": value},
+    )
+    if not after_matches:
+        raise AssertionError(f"Native Link interaction did not set {fieldname} in cur_frm.doc")
+    trace(
+        "native_link_interaction_completed",
+        fieldname=fieldname,
+        model_value_unchanged_before_entry=link_state["unchanged"],
+        native_validation_skipped_by_frappe=link_state["skipsValidation"],
+        unchanged_default_without_fetch=link_state["sameDefaultWithoutFetch"],
+        validation_request_expected=link_state["validationRequestExpected"],
+        validation_status=response_status,
+        model_value_matches_after_entry=after_matches,
+    )
 
 
 def _search_link_response_for_term(response: Any, term: str) -> bool:
@@ -705,6 +742,21 @@ def _search_link_response_for_term(response: Any, term: str) -> bool:
     except (TypeError, ValueError):
         return False
     return args.get("txt") == term
+
+
+def _safe_search_argument_differences(
+    differences: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    def redact(value: Any) -> Any:
+        if isinstance(value, str):
+            return _safe_diagnostic_text(value, limit=500)
+        if isinstance(value, list):
+            return [redact(item) for item in value]
+        if isinstance(value, dict):
+            return {key: redact(item) for key, item in value.items()}
+        return value
+
+    return {key: redact(value) for key, value in differences.items()}
 
 
 def _customer_permission_state(page: Page) -> dict[str, Any]:
@@ -840,11 +892,26 @@ def test_real_desk_customer_control_link_autocomplete_isolated() -> None:
                 )
                 state = _customer_permission_state(page)
                 assert state["isNew"] is True and state["doctype"] == "Door Cutting Order"
+                # Leave the native Link unfocused so fill() reproduces the
+                # real Frappe focus-then-type sequence in this probe.
+                page.locator("[data-fieldname='board_description'] input").click()
                 control = page.locator("[data-fieldname='customer'] input").first
                 expect(control).to_be_visible(timeout=5_000)
                 control.evaluate(
                     "input => { const field = cur_frm.fields_dict.customer;"
-                    " window.__al129ControlProbe = {form: cur_frm, field, input, awesomplete: field.awesomplete}; }"
+                    " window.__al129ControlProbe = {form: cur_frm, field, input, awesomplete: field.awesomplete,"
+                    " focusEvents: []};"
+                    " input.addEventListener('focus', () => window.__al129ControlProbe.focusEvents.push('focus'));"
+                    " input.addEventListener('blur', () => window.__al129ControlProbe.focusEvents.push('blur')); }"
+                )
+                page_errors: list[str] = []
+                page.on("pageerror", lambda error: page_errors.append(_safe_diagnostic_text(str(error))))
+                empty_search_responses: list[Any] = []
+                page.on(
+                    "response",
+                    lambda response: empty_search_responses.append(response)
+                    if _search_link_response_for_term(response, "")
+                    else None,
                 )
                 expected_search_args = normalize_search_link_args(
                     control.evaluate(
@@ -871,6 +938,9 @@ def test_real_desk_customer_control_link_autocomplete_isolated() -> None:
                     request_args = decode_search_link_request_args(
                         request.url, request.post_data
                     )
+                    argument_differences = search_link_argument_differences(
+                        expected_search_args, request_args
+                    )
                     request_valid = bool(
                         isinstance(request_args, dict)
                         and request_args.get("doctype") == "Customer"
@@ -878,12 +948,14 @@ def test_real_desk_customer_control_link_autocomplete_isolated() -> None:
                         and request_args.get("link_fieldname") == "customer"
                         and request_args.get("txt") == fixture["customer"]
                     )
-                    native_args_match = request_args == expected_search_args
+                    native_args_match = not argument_differences
                     try:
                         page.wait_for_function(
                             "value => { const field = cur_frm && cur_frm.fields_dict.customer;"
-                            " const list = field && field.awesomplete && field.awesomplete.list;"
-                            " return Array.isArray(list) && list.some(item => item && item.value === value); }",
+                            " const cache = field && field.$input.cache && field.$input.cache.Customer;"
+                            " const typed = cache && cache[value];"
+                            " return Boolean(cache && Object.prototype.hasOwnProperty.call(cache, '')"
+                            " && Array.isArray(typed) && typed.some(item => item && item.value === value)); }",
                             arg=fixture["customer"],
                             timeout=3_000,
                         )
@@ -898,7 +970,13 @@ def test_real_desk_customer_control_link_autocomplete_isolated() -> None:
                         " const values = Array.isArray(list) ? list : [];"
                         " const options = field && field.awesomplete && field.awesomplete.ul"
                         " ? field.awesomplete.ul.querySelectorAll('[role=option]') : [];"
+                        " const cache = field && field.$input && field.$input.cache"
+                        " && field.$input.cache.Customer || {};"
+                        " const cachedTyped = Array.isArray(cache[expectedValue]) ? cache[expectedValue] : [];"
+                        " const cachedEmpty = Array.isArray(cache['']) ? cache[''] : [];"
+                        " const currentArgs = field && field.get_search_args(expectedValue);"
                         " const exactItems = values.filter(item => item && String(item.value) === expectedValue);"
+                        " const cachedExactItems = cachedTyped.filter(item => item && String(item.value) === expectedValue);"
                         " const renderText = value => { const node = document.createElement('span');"
                         " node.innerHTML = String(value || ''); return (node.textContent || '').trim(); };"
                         " const labels = exactItems.flatMap(item => [item.label, item.value, item.html])"
@@ -911,14 +989,30 @@ def test_real_desk_customer_control_link_autocomplete_isolated() -> None:
                         " inputStable: Boolean(before && before.input === input),"
                         " awesompleteStable: Boolean(before && before.awesomplete === (field && field.awesomplete)),"
                         " inputFocused: Boolean(input && document.activeElement === input),"
+                        " focusEvents: before ? [...before.focusEvents] : [],"
+                        " filterDescriptionRequired: Boolean(field &&"
+                        " (field.df.filter_description || (currentArgs && currentArgs.filters))),"
+                        " typedCachePresent: Object.prototype.hasOwnProperty.call(cache, expectedValue),"
+                        " typedCacheExactValueCount: cachedExactItems.length,"
+                        " emptyCacheExactValueCount: cachedEmpty.filter(item => item"
+                        " && String(item.value) === expectedValue).length,"
+                        " currentListIsTypedCache: values === cachedTyped,"
+                        " currentListIsEmptyCache: values === cachedEmpty,"
                         " sourceListCount: values.length, sourceExactValueCount: exactItems.length,"
                         " exactVisibleOptionCount: exactOptionCount, optionCount: options.length}; }",
                         fixture["customer"],
                     )
                     outcomes[case_name] = {
                         "searchResponseOk": response.ok,
+                        "initialEmptySearchResponseCount": len(empty_search_responses),
+                        "initialEmptySearchResponseOk": bool(empty_search_responses)
+                        and all(response.ok for response in empty_search_responses),
                         "requestArgumentsValid": request_valid,
                         "nativeSearchArgumentsMatch": native_args_match,
+                        "searchArgumentDifferences": _safe_search_argument_differences(
+                            argument_differences
+                        ),
+                        "pageErrors": page_errors,
                         "exactResponseCount": exact_response_count,
                         **ui_state,
                     }
@@ -940,11 +1034,16 @@ def test_real_desk_customer_control_link_autocomplete_isolated() -> None:
 
     assert set(outcomes) == {"create_only", "create_and_edit"}
     assert all(item["searchResponseOk"] for item in outcomes.values()), outcomes
+    assert all(item["initialEmptySearchResponseOk"] for item in outcomes.values()), outcomes
+    assert all(item["initialEmptySearchResponseCount"] >= 1 for item in outcomes.values()), outcomes
     assert all(item["requestArgumentsValid"] for item in outcomes.values()), outcomes
     assert all(item["nativeSearchArgumentsMatch"] for item in outcomes.values()), outcomes
+    assert all(not item["pageErrors"] for item in outcomes.values()), outcomes
     assert all(item["exactResponseCount"] == 1 for item in outcomes.values()), outcomes
+    assert all(item["typedCachePresent"] and item["typedCacheExactValueCount"] == 1 for item in outcomes.values()), outcomes
     assert all(item["sourceExactValueCount"] == 1 for item in outcomes.values()), outcomes
     assert all(item["exactVisibleOptionCount"] == 1 for item in outcomes.values()), outcomes
+    assert all(item["focusEvents"] == ["focus"] for item in outcomes.values()), outcomes
     assert all(item["formStable"] and item["fieldStable"] and item["inputStable"] for item in outcomes.values()), outcomes
     assert all(item["awesompleteStable"] and item["inputFocused"] for item in outcomes.values()), outcomes
     assert all(item["optionCount"] > 0 for item in outcomes.values()), outcomes
