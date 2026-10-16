@@ -674,6 +674,66 @@ def test_recovery_saved_form_compatibility():
             browser.close()
 
 
+def test_new_form_clean_preflight():
+    """Open a first NEW Form before creating any recovery checkpoint."""
+    fixture = json.loads(Path(os.environ["P0_FIXTURE_PATH"]).read_text())
+    evidence_dir = Path(os.environ["P0_EVIDENCE_DIR"])
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    evidence = {"scope": "fresh browser context, no recovery restore"}
+
+    def record(name, value):
+        evidence[name] = value
+        (evidence_dir / "new-form-preflight.json").write_text(
+            json.dumps(evidence, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+
+    with browser_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page(locale="en-US")
+        page.on("pageerror", lambda error: record("page_error", str(error)))
+        try:
+            _login(page, fixture)
+            page.evaluate("name => { frappe.set_route('Form','Door Cutting Order',name); }",
+                          fixture["orders"]["A"]["name"])
+            page.wait_for_function("name => cur_frm?.doc?.name === name",
+                                   arg=fixture["orders"]["A"]["name"], timeout=45000)
+            record("saved_form", page.evaluate("""() => ({name:cur_frm.doc.name,
+                route:frappe.get_route(),formFactory:!!frappe.views?.FormFactory,
+                newDocApi:typeof frappe.new_doc})"""))
+            record("new_local_name", page.evaluate("""() => {
+                const name=frappe.model.make_new_doc_and_get_name('Door Cutting Order');
+                window.__p0NewPreflightName=name;
+                return name;
+            }"""))
+            page.evaluate("""() => {
+                frappe.set_route('Form','Door Cutting Order',window.__p0NewPreflightName);
+            }""")
+            record("route_requested", True)
+            page.wait_for_function("""() => cur_frm?.doctype === 'Door Cutting Order'
+                && cur_frm?.doc?.name === window.__p0NewPreflightName && !!cur_frm.is_new()""",
+                timeout=15000)
+            record("new_form", page.evaluate("""() => ({name:cur_frm.doc.name,
+                route:frappe.get_route(),isNew:!!cur_frm.is_new(),
+                token:AlmdinaDocumentContext.capture(cur_frm),
+                recovery:AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(cur_frm) || null,
+                modal:document.querySelector('.modal.show')?.innerText.slice(0,500) || null})"""))
+            assert not evidence["new_form"]["modal"], evidence
+        except Exception as error:
+            record("failure", repr(error))
+            try:
+                record("browser_state", page.evaluate("""() => ({route:frappe.get_route?.(),
+                    name:cur_frm?.doc?.name, isNew:!!cur_frm?.is_new?.(),
+                    localName:window.__p0NewPreflightName,
+                    modal:document.querySelector('.modal.show')?.innerText.slice(0,500) || null,
+                    body:document.body.innerText.slice(-600)})"""))
+                page.screenshot(path=str(evidence_dir / "new-form-preflight-failure.png"),
+                                full_page=True)
+            except Exception as probe_error:
+                record("probe_error", repr(probe_error))
+            raise
+        finally:
+            browser.close()
+
+
 @pytest.mark.skip(reason="NEW Form Desk Recovery is an independent release blocker")
 def test_recovery_new_saved_intersection():
     """Observe the real NEW→Saved boundary without mutating Recovery code."""
