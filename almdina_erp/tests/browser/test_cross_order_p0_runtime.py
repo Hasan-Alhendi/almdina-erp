@@ -1306,6 +1306,8 @@ def test_recovery_extra_fields_new_saved_in_desk():
 
     def capture(page):
         return page.evaluate("""() => ({name:cur_frm.doc.name,
+            customer:cur_frm.doc.customer,board:cur_frm.doc.board_description,
+            boardWidth:cur_frm.doc.board_width_cm,boardLength:cur_frm.doc.board_length_cm,
             token:AlmdinaDocumentContext.capture(cur_frm),
             rows:(cur_frm.doc.pieces || []).filter(row=>row.notes?.startsWith('P0-'))
                 .map(row=>{const result={name:row.name,notes:row.notes};
@@ -1366,7 +1368,8 @@ def test_recovery_extra_fields_new_saved_in_desk():
             }""", {"fields": {"customer": fixture["customer"],
                 "board_description": fixture["recovery_board"], "order_cutting_machine": "CNC",
                 "board_width_cm": 122, "board_length_cm": 244,
-                "default_edge_type": fixture["edge_type"], "board_rate_usd": 7,
+                "default_edge_type": fixture["edge_type"], "edge_color": "P0 Extra edge",
+                "board_rate_usd": 7,
                 "cutting_cost_per_board_usd": 2}, "extras": extras})
             page.wait_for_function("window.__p0ExtrasInput?.status !== 'pending'", timeout=25000)
             evidence["checkpoint"] = page.evaluate("window.__p0ExtrasInput")
@@ -1396,6 +1399,10 @@ def test_recovery_extra_fields_new_saved_in_desk():
                                    timeout=15000)
             evidence["restore"] = capture(page)
             verify_rows(evidence["restore"]["rows"])
+            assert evidence["restore"]["customer"] == fixture["customer"]
+            assert evidence["restore"]["board"] == fixture["recovery_board"]
+            assert evidence["restore"]["boardWidth"] == 122
+            assert evidence["restore"]["boardLength"] == 244
             page.evaluate("""() => {
                 const frm=cur_frm;
                 window.__p0ExtrasSave={status:'pending'};
@@ -1411,6 +1418,8 @@ def test_recovery_extra_fields_new_saved_in_desk():
             assert evidence["native_save"]["token"]["generation"] == evidence["restore"]["token"]["generation"]
             evidence["saved"] = capture(page)
             verify_rows(evidence["saved"]["rows"])
+            assert evidence["saved"]["customer"] == fixture["customer"]
+            assert evidence["saved"]["board"] == fixture["recovery_board"]
             assert len({row["name"] for row in evidence["saved"]["rows"]}) == 3
             page.evaluate("name => frappe.set_route('Form','Door Cutting Order',name)",
                           fixture["orders"]["B"]["name"])
