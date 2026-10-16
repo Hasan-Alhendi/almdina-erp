@@ -226,6 +226,8 @@ jobs:
             almdina_erp/tests/test_dxf_cut_size_diagnostics.py \
             almdina_erp/tests/test_dxf_original_upload_download.py \
             almdina_erp/tests/test_corner_dxf_edge_binding.py \
+            almdina_erp/tests/test_regular_machining_orientation.py \
+            almdina_erp/tests/test_strict_regular_machining_rotation.py \
             almdina_erp/tests/test_arabic_operator_localization.py \
             almdina_erp/tests/test_compact_invoice_print_contract.py \
             almdina_erp/tests/test_advanced_cutting_optimizer.py
