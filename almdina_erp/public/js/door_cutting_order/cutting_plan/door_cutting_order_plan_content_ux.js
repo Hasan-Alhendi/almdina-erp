@@ -215,14 +215,50 @@
             .map(([edge]) => edge);
     }
 
+    function renderApi() {
+        return window.AlmdinaCuttingPlanRender || null;
+    }
+
+    function sheetPhysicalMargins(plan, sheet) {
+        const render = renderApi();
+        if (!sheet || !render || typeof render.physicalMarginsMm !== "function") return null;
+        return render.physicalMarginsMm(plan, sheet);
+    }
+
+    function sharedPhysicalMargins(plan) {
+        const sheets = ((plan && plan.sheets) || []).filter(sheet => (sheet.pieces || []).length);
+        const measured = sheets.map(sheet => sheetPhysicalMargins(plan, sheet)).filter(Boolean);
+        if (!measured.length) {
+            const policy = (plan && plan.margin_policy) || {};
+            return {
+                left: policy.left_mm,
+                right: policy.right_mm,
+                top: policy.top_mm,
+                bottom: policy.bottom_mm,
+                anyOriginal: zeroMarginEdges(policy).length > 0,
+                everySheetOriginal: zeroMarginEdges(policy).length > 0,
+            };
+        }
+        const margins = {};
+        ["left", "right", "top", "bottom"].forEach(edge => {
+            const values = measured.map(row => row[edge]);
+            const same = values.every(value => Math.abs(value - values[0]) <= ZERO_MARGIN_EPSILON_MM);
+            margins[edge] = same ? values[0] : null;
+        });
+        const zeroSets = measured.map(row => (
+            ["left", "right", "top", "bottom"].filter(edge => isZeroMargin(row[edge])).join("|")
+        ));
+        margins.anyOriginal = zeroSets.some(value => value.length > 0);
+        margins.everySheetOriginal = zeroSets.length > 0
+            && zeroSets[0].length > 0
+            && zeroSets.every(value => value === zeroSets[0]);
+        return margins;
+    }
+
     function marginPolicySignature(plan, notes) {
-        const policy = (plan && plan.margin_policy) || {};
         return JSON.stringify({
             notes,
-            left_mm: policy.left_mm,
-            right_mm: policy.right_mm,
-            top_mm: policy.top_mm,
-            bottom_mm: policy.bottom_mm,
+            margins: sharedPhysicalMargins(plan),
         });
     }
 
@@ -237,20 +273,19 @@
     }
 
     function buildMarginPolicyAlert(plan, notes, signature) {
-        const policy = (plan && plan.margin_policy) || {};
-        const zeroEdges = zeroMarginEdges(policy);
-        const hasOriginalEdge = zeroEdges.length > 0;
+        const margins = sharedPhysicalMargins(plan);
+        const hasOriginalEdge = Boolean(margins.anyOriginal);
         const summary = hasOriginalEdge
             ? translate("An original board edge was used; check that it is straight before cutting.")
             : translate("The margin was reduced automatically by the amount needed to keep the piece measurements.");
-        const detailNotes = hasOriginalEdge ? notes : [];
-        const horizontalEdges = marginEdgeBadges(policy, [
-            ["Margin right", policy.right_mm],
-            ["Margin left", policy.left_mm],
+        const detailNotes = margins.everySheetOriginal ? notes : [];
+        const horizontalEdges = marginEdgeBadges(margins, [
+            ["Margin right", margins.right],
+            ["Margin left", margins.left],
         ]);
-        const verticalEdges = marginEdgeBadges(policy, [
-            ["Margin top", policy.top_mm],
-            ["Margin bottom", policy.bottom_mm],
+        const verticalEdges = marginEdgeBadges(margins, [
+            ["Margin top", margins.top],
+            ["Margin bottom", margins.bottom],
         ]);
         const detailsHtml = detailNotes.length
             ? `<div class="dco-margin-policy-alert__details">${detailNotes.map(note => `<div class="dco-margin-policy-alert__note">${escapeHtml(note)}</div>`).join("")}</div>`
@@ -336,14 +371,22 @@
         return caption;
     }
 
-    function ensureOriginalBoardEdges(planRoot, plan) {
-        const policy = (plan && plan.margin_policy) || {};
-        const edges = zeroMarginEdges(policy);
-        const signature = edges.join("|");
+    function originalEdgesForSheet(plan, sheet) {
+        const render = renderApi();
+        if (sheet && render && typeof render.originalEdges === "function") {
+            return render.originalEdges(plan, sheet);
+        }
+        return zeroMarginEdges((plan && plan.margin_policy) || {});
+    }
 
-        planRoot.querySelectorAll(".dco-sheet-card").forEach(card => {
+    function ensureOriginalBoardEdges(planRoot, plan) {
+        const sheets = (plan && plan.sheets) || [];
+        const cards = [...planRoot.querySelectorAll(".dco-sheet-card")];
+        cards.forEach((card, index) => {
             const board = card.querySelector(":scope > .dco-sheet-board");
             if (!board) return;
+            const edges = originalEdgesForSheet(plan, sheets[index]);
+            const signature = edges.join("|");
             const caption = card.querySelector(":scope > .dco-board-original-edges");
             if (board.dataset.originalEdgeSignature === signature && (!edges.length || caption)) return;
             if (caption) caption.remove();

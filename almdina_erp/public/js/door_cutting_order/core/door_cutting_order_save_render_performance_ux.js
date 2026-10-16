@@ -189,6 +189,10 @@
                 syncToggle(button, Boolean(row[button.dataset.checkField]));
             });
             syncCornerEdgesSummary(frm, tr, row, editable);
+            const extras = window.AlmdinaExtraDoorAddonsUX;
+            if (extras && typeof extras.syncAddonButtons === "function") {
+                extras.syncAddonButtons(tr, row, editable);
+            }
 
             const areaCell = tr.querySelector("[data-calc='area_m2']");
             const edgeCell = tr.querySelector("[data-calc='edge_meters']");

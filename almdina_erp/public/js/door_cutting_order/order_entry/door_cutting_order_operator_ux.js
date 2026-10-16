@@ -449,9 +449,6 @@
                 <td class="dco-col-number dco-col-width" data-label="${labels.width}"><input class="dco-fast-input" type="number" inputmode="decimal" step="any" min="0" data-field="width_cm" value="${virtual ? "" : escapeHtml(data.width_cm || "")}" ${disabled}></td>
                 <td class="dco-col-number dco-col-length" data-label="${labels.length}"><input class="dco-fast-input" type="number" inputmode="decimal" step="any" min="0" data-field="length_cm" value="${virtual ? "" : escapeHtml(data.length_cm || "")}" ${disabled}></td>
                 <td class="dco-col-qty" data-label="${labels.quantity}"><input class="dco-fast-input" type="number" inputmode="numeric" step="1" min="1" data-field="qty" value="${virtual ? "1" : escapeHtml(data.qty || 1)}" ${disabled}></td>
-                ${extraAddons && typeof extraAddons.renderAddonCell === "function"
-                    ? extraAddons.FIELDS.map(item => `<td class="dco-col-addon" data-label="${escapeHtml(__(item.label))}">${extraAddons.renderAddonCell(data, item.fieldname, { editable })}</td>`).join("")
-                    : ""}
                 <td class="dco-col-rotate" data-label="${labels.rotation}">${toggle("allow_rotation", "↻", "dco-rotate-toggle")}</td>
                 <td class="dco-col-edges" data-label="${labels.edges}">${edgesCellHtml(frm, data, { editable, virtual })}</td>
                 <td class="dco-col-edge-type" data-label="${labels.edgeType}"><select class="dco-fast-select" data-field="edge_type" ${edgeTypeDisabled}>${edgeOptions(frm, virtual || isSpecial ? "" : (data.edge_type || ""))}</select></td>
@@ -462,6 +459,9 @@
                 </button></td>
                 <td class="dco-col-calc" data-label="${labels.area}" data-calc="area_m2">${virtual ? "0.000" : localArea(data).toFixed(3)}</td>
                 <td class="dco-col-calc" data-label="${labels.edgeMeters}" data-calc="edge_meters">${virtual ? "0.000" : localEdgeMeters(data).toFixed(3)}</td>
+                ${extraAddons && typeof extraAddons.renderAddonSummary === "function"
+                    ? `<td class="dco-col-addons" data-label="${escapeHtml(__("Add-ons"))}">${extraAddons.renderAddonSummary(data, { editable })}</td>`
+                    : ""}
                 <td class="dco-col-notes" data-label="${labels.notes}"><input class="dco-fast-input" type="text" data-field="notes" value="${virtual ? "" : escapeHtml(data.notes || "")}" ${disabled}></td>
                 <td class="dco-col-delete" data-label="${labels.remove}">${editable && !virtual ? `<button type="button" class="dco-delete-row" title="${__("Delete row")}">×</button>` : ""}</td>
             </tr>`;
@@ -503,7 +503,6 @@
                             <th class="dco-col-number">${__("Width (CM)")}</th>
                             <th class="dco-col-number">${__("Length (CM)")}</th>
                             <th class="dco-col-qty">${__("Qty")}</th>
-                            ${(extraAddons && Array.isArray(extraAddons.FIELDS) ? extraAddons.FIELDS : []).map(item => `<th class="dco-col-addon" title="${escapeHtml(__(item.label))}">${escapeHtml(__(item.button || item.label))}</th>`).join("")}
                             <th class="dco-col-rotate">${__("Rotate")}</th>
                             <th class="dco-col-edges">${__("Edge sides")}</th>
                             <th class="dco-col-edge-type">${__("Edge type")}</th>
@@ -511,6 +510,7 @@
                             <th class="dco-col-sketch">${__("Shape")}</th>
                             <th class="dco-col-calc">${__("Area")}</th>
                             <th class="dco-col-calc">${__("Edge m")}</th>
+                            <th class="dco-col-addons">${__("Add-ons")}</th>
                             <th class="dco-col-notes">${__("Notes")}</th>
                             <th class="dco-col-delete"></th>
                         </tr></thead>
@@ -877,6 +877,19 @@
         ) {
             return;
         }
+        const machining = window.AlmdinaMachiningOverlay;
+        const machiningKind = machining && typeof machining.kindForField === "function"
+            ? machining.kindForField(fieldname)
+            : (fieldname === "extra_liner" ? "liner" : "");
+        if (
+            machiningKind
+            && (row.piece_type || "Regular") !== "Special"
+            && window.AlmdinaLinerEditor
+            && typeof window.AlmdinaLinerEditor.open === "function"
+        ) {
+            window.AlmdinaLinerEditor.open(frm, row, machiningKind);
+            return;
+        }
         if (
             ["edge_break", "edge_break_only"].includes(fieldname)
             && cornerGeometry
@@ -926,6 +939,30 @@
         }
         ensureSingleVirtualRow(frm);
         Promise.resolve(frm.script_manager.trigger("pieces_remove")).catch(() => {});
+    }
+
+    function openPieceAddons(frm, tr) {
+        if (!frm || !tr || !isEditable(frm)) return;
+        const widthInput = tr.querySelector("input[data-field='width_cm']");
+        const lengthInput = tr.querySelector("input[data-field='length_cm']");
+        if (tr.classList.contains("dco-virtual-row")) {
+            if (!(num(widthInput && widthInput.value) > 0 && num(lengthInput && lengthInput.value) > 0)) {
+                frappe.msgprint({
+                    title: __("Enter dimensions first"),
+                    message: __("Enter the piece width and length before editing add-ons."),
+                    indicator: "orange",
+                });
+                focusWidth(tr);
+                return;
+            }
+        }
+        ["width_cm", "length_cm", "qty", "piece_type", "notes"].forEach((fieldname) => {
+            const input = tr.querySelector(`[data-field='${fieldname}']`);
+            if (input) syncInputToModel(frm, input, false);
+        });
+        const row = rowByName(frm, tr.dataset.rowName || "");
+        const dialog = window.AlmdinaDoorAddonsDialog;
+        if (row && dialog && typeof dialog.open === "function") dialog.open(frm, row);
     }
 
     function bindFastMeasurements(frm) {
@@ -1031,7 +1068,7 @@
         });
 
         root.addEventListener("pointerdown", event => {
-            const button = event.target.closest(".dco-check-toggle,.dco-delete-row");
+            const button = event.target.closest(".dco-check-toggle,.dco-delete-row,.dco-addons-open");
             if (!button || !root.contains(button)) return;
             // No parent Frappe grid exists here, but stop pointer bubbling so no
             // surrounding form handler can turn a checkbox click into row activation.
@@ -1041,6 +1078,13 @@
         root.addEventListener("click", event => {
             const currentFrm = root._dcoFastEntryForm;
             if (!currentFrm) return;
+            const addonsButton = event.target.closest("[data-open-addons]");
+            if (addonsButton && root.contains(addonsButton)) {
+                event.preventDefault();
+                event.stopPropagation();
+                openPieceAddons(currentFrm, addonsButton.closest("tr[data-row-name]"));
+                return;
+            }
             const check = event.target.closest(".dco-check-toggle[data-check-field]");
             if (check && root.contains(check)) {
                 event.preventDefault();

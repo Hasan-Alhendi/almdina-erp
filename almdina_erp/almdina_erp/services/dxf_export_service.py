@@ -540,7 +540,7 @@ def normalize_dxf_for_autocad(
         try:
             frappe.log_error(
                 title="AutoCAD DXF normalization failed",
-                message=frappe.get_traceback(),
+                message=f"{type(exc).__name__}: {exc}\n{frappe.get_traceback()}",
             )
         except Exception:
             pass

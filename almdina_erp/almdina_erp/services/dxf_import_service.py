@@ -50,6 +50,11 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
     FORBIDDEN_ROTATION,
     KERF_VIOLATION,
     LEGACY_MESSAGE,
+    LINER_OFFSET_MISMATCH,
+    LINER_SHAPE_MISMATCH,
+    LINER_SIDE_MISMATCH,
+    LINER_WIDTH_MISMATCH,
+    LINER_WIDTH_NOT_MEASURABLE,
     MATERIAL_OVERLAP,
     MINSERT_UNSUPPORTED,
     MIXED_RESOURCE_SOURCE,
@@ -110,6 +115,19 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_topology import (
     resolve_contour_ownership,
     validate_material_layout,
 )
+from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
+    LinerGeometryError,
+    LinerPiece,
+    canonical_path,
+    liner_parameters_active,
+    localize_path,
+    sawn_liner_ends,
+)
+from almdina_erp.almdina_erp.domain.cutting.machining_overlay import (
+    MACHINING_ADDONS,
+    compare_overlay_path,
+    machining_values,
+)
 from almdina_erp.almdina_erp.domain.cutting.extra_overlays import (
     ExtraOverlayCandidate,
     ExtraOverlayError,
@@ -147,6 +165,13 @@ from almdina_erp.almdina_erp.infrastructure.cutting.dxf_reader import (
 SHEET_OUTLINE_LAYER = "SHEET_OUTLINE"
 CUT_PATH_LAYER = "CUT_PATH"
 OFFCUT_LAYER = "OFFCUT"
+GEOMETRY_LAYER = "GEOMETRY"
+# Finished door contours in the new export are LINE entities. A closed
+# LWPOLYLINE on GEOMETRY is an illustrative region (liner strip or addon
+# boundary) and is not a door. If a file has GEOMETRY but no LINE, every
+# GEOMETRY contour is a candidate so a later save that converted the doors
+# is rejected by topology instead of being read from the saw centers.
+_GEOMETRY_PIECE_ENTITY_TYPES = frozenset({"LINE", "POLYLINE"})
 SHEETS_PER_ROW = 2
 SHEET_GAP_MM = 200
 CONNECTIVITY_TOLERANCE_MM = 1.5
@@ -910,6 +935,7 @@ def _read_normalized_geometry(
                 SHEET_OUTLINE_LAYER,
                 CUT_PATH_LAYER,
                 OFFCUT_LAYER,
+                GEOMETRY_LAYER,
                 DESIGNER_DEFAULT_LAYER,
                 TEXT_LABEL_LAYER,
                 *EXTRA_OVERLAY_LAYER_NAMES,
@@ -997,9 +1023,10 @@ def _missing_role_layer_guidance(diagnostics: dict[str, Any]) -> list[str]:
         if str(layer or "").strip()
     }
     hints = [
-        "أي طبقة غير SHEET_OUTLINE أو CUT_PATH أو OFFCUT لا تُستخدم كحدود لوح أو مسار قص. "
-        "ضع مستطيل كل لوح على SHEET_OUTLINE، ومحيط الدرفة الكاملة على CUT_PATH، "
-        "ومحيط الدرفة الناقصة على OFFCUT. طبقة text تحمل أرقام الدرف داخل DXF فقط ولا تُعد قصًا."
+        "إذا وُجدت طبقة GEOMETRY فهي الحدود النهائية للدرفات، وCUT_PATH هو مركز ريشة القص لا حدود الدرفة. "
+        "حدود مناطق الإضافات على GEOMETRY تُرسم للتوضيح ولا تُحسب درفات. "
+        "إذا غابت GEOMETRY يبقى التنسيق القديم: محيط الدرفة على CUT_PATH ومحيط الدرفة الناقصة على OFFCUT.",
+        "طبقة TEXT أو text لأرقام الدرف داخل DXF فقط ولا تُعد قصًا.",
     ]
     if DESIGNER_DEFAULT_LAYER in detected:
         hints.append(
@@ -1024,6 +1051,38 @@ def _missing_role_layer_guidance(diagnostics: dict[str, Any]) -> list[str]:
             "طبقة text تحمل أرقام الدرف داخل DXF فقط ولا تُعد قصًا."
         )
     return hints
+
+
+def _geometry_piece_segments(
+    rows: list[dict[str, Any]],
+) -> list[tuple[tuple[float, float], tuple[float, float]]] | None:
+    """Finished contours when the file is the new GEOMETRY export.
+
+    ``None`` means the layer is absent, so the caller keeps the legacy
+    CUT_PATH reading. An empty list means the layer exists but has no piece
+    lines; CUT_PATH centers must not fill that gap.
+    """
+
+    wanted = GEOMETRY_LAYER.upper()
+    geometry_rows = [
+        row
+        for row in rows
+        if str(row.get("layer") or "").strip().upper() == wanted
+    ]
+    if not geometry_rows:
+        return None
+    has_finished_lines = any(
+        str(row.get("entity_type") or "").strip().upper() == "LINE"
+        for row in geometry_rows
+    )
+    chosen = geometry_rows
+    if has_finished_lines:
+        chosen = [
+            row
+            for row in geometry_rows
+            if str(row.get("entity_type") or "").strip().upper() in _GEOMETRY_PIECE_ENTITY_TYPES
+        ]
+    return [(row["start"], row["end"]) for row in chosen]
 
 
 def _segments_for_layer(rows: list[dict[str, Any]], layer: str) -> list[tuple[tuple[float, float], tuple[float, float]]]:
@@ -1264,6 +1323,12 @@ def _expected_order_pieces(order: Any) -> list[dict[str, Any]]:
                     "source_piece_no": group_index,
                     "copy_no": copy_no,
                     "selected_codes": selected_codes,
+                    "liner_reference_side": str(getattr(row, "liner_reference_side", "") or ""),
+                    "liner_offset_cm": _num(getattr(row, "liner_offset_cm", 0)),
+                    "liner_width_cm": _num(getattr(row, "liner_width_cm", 0)),
+                    "liner_start_cm": _num(getattr(row, "liner_start_cm", 0)),
+                    "liner_length_cm": _num(getattr(row, "liner_length_cm", 0)),
+                    "machining": machining_values(row),
                 }
             )
     return expected
@@ -1469,6 +1534,12 @@ def _match_pieces_to_order(pieces: list[dict[str, Any]], order: Any) -> list[dic
         piece["rotated"] = rotated
         piece["piece_type"] = candidate["piece_type"]
         piece["_extra_selected_codes"] = tuple(candidate.get("selected_codes") or ())
+        piece["_liner_side"] = str(candidate.get("liner_reference_side") or "")
+        piece["_liner_offset_cm"] = _num(candidate.get("liner_offset_cm"))
+        piece["_liner_width_cm"] = _num(candidate.get("liner_width_cm"))
+        piece["_liner_start_cm"] = _num(candidate.get("liner_start_cm"))
+        piece["_liner_length_cm"] = _num(candidate.get("liner_length_cm"))
+        piece["_machining"] = candidate.get("machining") or {}
         if "_material_area_m2" in piece:
             piece["area_m2"] = round(_num(piece["_material_area_m2"]), 4)
         else:
@@ -1888,12 +1959,193 @@ def _collect_extra_overlay_candidates(rows: list[dict[str, Any]]) -> tuple[Extra
     return tuple(candidates)
 
 
+_LINER_ISSUE_BY_CODE = {
+    "liner_offset_mismatch": LINER_OFFSET_MISMATCH,
+    "liner_width_mismatch": LINER_WIDTH_MISMATCH,
+    "liner_side_mismatch": LINER_SIDE_MISMATCH,
+    "liner_shape_mismatch": LINER_SHAPE_MISMATCH,
+    "liner_width_not_measurable": LINER_WIDTH_NOT_MEASURABLE,
+}
+
+
+def liner_geometry_issue(
+    measurement,
+    *,
+    source_piece_no: int,
+    copy_no: int,
+    piece_type: str,
+    overlay_kind: str = "liner",
+):
+    return _liner_issue(
+        measurement,
+        source_piece_no=source_piece_no,
+        copy_no=copy_no,
+        piece_type=piece_type,
+        overlay_kind=overlay_kind,
+    )
+
+
+def _liner_issue(
+    measurement,
+    *,
+    source_piece_no: int,
+    copy_no: int,
+    piece_type: str,
+    overlay_kind: str = "liner",
+):
+    if measurement.ok:
+        return None
+    params = {
+        "property_code": measurement.property_code,
+        "expected": measurement.expected,
+        "measured": measurement.measured,
+        "reason_code": measurement.reason_code,
+        "piece_type": piece_type,
+    }
+    if overlay_kind and overlay_kind != "liner":
+        params["overlay_kind"] = overlay_kind
+    return issue(
+        _LINER_ISSUE_BY_CODE[measurement.code],
+        CATEGORY_OVERLAY,
+        target=piece_target(source_piece_no=source_piece_no, copy_no=copy_no),
+        params=params,
+    )
+
+
+def _regular_overlay_params(piece: dict[str, Any], kind: str) -> dict[str, Any]:
+    if kind == "liner":
+        return {
+            "enabled": "liner" in tuple(piece.get("_extra_selected_codes") or ()),
+            "side": str(piece.get("_liner_side") or ""),
+            "offset_cm": _num(piece.get("_liner_offset_cm")),
+            "width_cm": _num(piece.get("_liner_width_cm")),
+            "start_cm": piece.get("_liner_start_cm"),
+            "length_cm": piece.get("_liner_length_cm"),
+        }
+    spec = (piece.get("_machining") or {}).get(kind) or {}
+    return {
+        "enabled": kind in tuple(piece.get("_extra_selected_codes") or ()),
+        "side": str(spec.get("side") or ""),
+        "offset_cm": _num(spec.get("offset_cm")),
+        "width_cm": _num(spec.get("width_cm")),
+        "start_cm": spec.get("start_cm"),
+        "length_cm": spec.get("length_cm"),
+    }
+
+
+def _regular_liner_issue(
+    piece: dict[str, Any],
+    items,
+    sheet: dict[str, Any],
+    trim_mm: float,
+    cutter_diameter_mm: float | None = None,
+    kind: str = "liner",
+):
+    """Geometric machining check for a rectangular door once its 0/90 orientation is known."""
+
+    piece_type = str(piece.get("piece_type") or "Regular")
+    if piece_type != "Regular":
+        return None
+    params = _regular_overlay_params(piece, kind)
+    side = params["side"]
+    offset_cm = params["offset_cm"]
+    width_cm = params["width_cm"]
+    if not liner_parameters_active(
+        enabled=params["enabled"],
+        side=side,
+        offset_cm=offset_cm,
+        width_cm=width_cm,
+    ):
+        return None
+    marks = [item for item in items if item.kind == kind]
+    if len(marks) != 1:
+        return None
+    outline = tuple((point[0] * 10.0, point[1] * 10.0) for point in piece.get("_outline_cm") or ())
+    if len(outline) < 3:
+        return None
+    path_cm = _to_plan_points(list(marks[0].path), sheet=sheet, trim_mm=trim_mm)
+    local = localize_path(tuple((point[0] * 10.0, point[1] * 10.0) for point in path_cm), outline)
+    width_mm = _num(piece.get("original_w")) * 10.0
+    height_mm = _num(piece.get("original_h")) * 10.0
+    quarter_turns = 1 if piece.get("rotated") else 0
+    canonical = canonical_path(
+        local,
+        mirrored=False,
+        quarter_turns=quarter_turns,
+        width_mm=width_mm,
+        height_mm=height_mm,
+    )
+    liner_piece = LinerPiece(piece_type, _num(piece.get("original_w")), _num(piece.get("original_h")))
+    trim = max(0.0, float(trim_mm or 0.0))
+    try:
+        start_sawn, end_sawn = sawn_liner_ends(
+            liner_piece,
+            side,
+            origin_mm=(_num(piece.get("x")) * 10.0, _num(piece.get("y")) * 10.0),
+            mirrored=False,
+            quarter_turns=quarter_turns,
+            board=(
+                -trim,
+                -trim,
+                _num(sheet.get("full_width_mm")) - trim,
+                _num(sheet.get("full_height_mm")) - trim,
+            ),
+            start_cm=params["start_cm"],
+            length_cm=params["length_cm"],
+        )
+    except LinerGeometryError:
+        start_sawn, end_sawn = None, None
+    measurement = compare_overlay_path(
+        canonical,
+        liner_piece,
+        kind,
+        side,
+        offset_cm,
+        width_cm,
+        cutter_diameter_mm,
+        params["start_cm"],
+        params["length_cm"],
+        start_sawn=start_sawn,
+        end_sawn=end_sawn,
+    )
+    return _liner_issue(
+        measurement,
+        source_piece_no=int(piece.get("source_piece_no") or 0),
+        copy_no=int(piece.get("copy_no") or 1),
+        piece_type=piece_type,
+        overlay_kind=kind,
+    )
+
+
+def _regular_machining_issues(
+    piece: dict[str, Any],
+    items,
+    sheet: dict[str, Any],
+    trim_mm: float,
+    cutter_diameter_mm: float | None = None,
+):
+    issues = []
+    for addon in MACHINING_ADDONS:
+        found = _regular_liner_issue(
+            piece,
+            items,
+            sheet,
+            trim_mm,
+            cutter_diameter_mm,
+            addon.kind,
+        )
+        if found is not None:
+            issues.append(found)
+    return issues
+
+
 def _attach_extra_overlays(
     pieces: list[dict[str, Any]],
     *,
     overlays: Sequence[ExtraOverlayCandidate],
     sheets: list[dict[str, Any]],
     trim_mm: float,
+    cutter_diameter_mm: float | None = None,
 ) -> None:
     hosts = tuple(
         ExtraOverlayHost(
@@ -1917,6 +2169,7 @@ def _attach_extra_overlays(
             hosts,
             tolerance=GEOMETRY_TOLERANCE_MM,
             host_margin=OVERLAY_HOST_MARGIN_MM,
+            cutter_radius_mm=(float(cutter_diameter_mm or 0.0) / 2.0),
         )
     except ExtraOverlayError as exc:
         raise DxfImportError(issues=[_overlay_error_issue(exc)]) from exc
@@ -1925,6 +2178,22 @@ def _attach_extra_overlays(
     grouped: dict[int, list] = {}
     for item in assigned:
         grouped.setdefault(int(item.host_key), []).append(item)
+    liner_issues = []
+    for piece in pieces:
+        sheet = sheets_by_no.get(int(piece["_sheet_no"]))
+        if sheet is None:
+            continue
+        liner_issues.extend(
+            _regular_machining_issues(
+                piece,
+                grouped.get(int(piece["id"])) or [],
+                sheet,
+                trim_mm,
+                cutter_diameter_mm,
+            )
+        )
+    if liner_issues:
+        raise DxfImportError(issues=liner_issues)
     for piece in pieces:
         items = grouped.get(int(piece["id"])) or []
         if not items:
@@ -2166,13 +2435,19 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
 
     overlays = _collect_extra_overlay_candidates(rows)
     sheet_segments = _segments_for_layer(rows, SHEET_OUTLINE_LAYER)
-    cut_segments = _segments_for_layer(rows, CUT_PATH_LAYER)
     offcut_segments = _segments_for_layer(rows, OFFCUT_LAYER)
-    if offcut_segments:
-        # OFFCUT is an input classification, not a validation bypass. Its
-        # contours enter the same topology, spacing, bounds and exact-size
-        # pipeline as ordinary CUT_PATH contours.
-        cut_segments = [*cut_segments, *offcut_segments]
+    geometry_piece_segments = _geometry_piece_segments(rows)
+    if geometry_piece_segments is not None:
+        # New export: GEOMETRY is the finished door. CUT_PATH is the saw
+        # center and must not be assembled as another door.
+        cut_segments = geometry_piece_segments
+    else:
+        cut_segments = _segments_for_layer(rows, CUT_PATH_LAYER)
+        if offcut_segments:
+            # OFFCUT is an input classification, not a validation bypass. Its
+            # contours enter the same topology, spacing, bounds and exact-size
+            # pipeline as ordinary CUT_PATH contours.
+            cut_segments = [*cut_segments, *offcut_segments]
     if not sheet_segments or not cut_segments:
         fallback_sheets, fallback_cuts = _default_layer_role_segments(
             rows,
@@ -2252,11 +2527,13 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
 
     _validate_piece_spacing(pieces, kerf_mm=max(0.0, flt(order.kerf_mm)))
     labeled = _match_pieces_to_order(pieces, order)
+    cutter_diameter_mm = flt(order.kerf_mm)
     _attach_extra_overlays(
         labeled,
         overlays=overlays,
         sheets=sheets,
         trim_mm=trim_mm,
+        cutter_diameter_mm=cutter_diameter_mm if cutter_diameter_mm > 0 else None,
     )
     _attach_text_labels(
         sheets,
@@ -2369,6 +2646,7 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
 
 __all__ = [
     "CUT_PATH_LAYER",
+    "GEOMETRY_LAYER",
     "OFFCUT_LAYER",
     "DIMENSION_TOLERANCE_MM",
     "DxfImportError",

@@ -137,6 +137,21 @@ def seed_plan_settings(order_name: str) -> PlanSettings:
     return plan_settings(existing) if existing else factory_default_plan_settings()
 
 
+def manufacturing_plan_settings(order_name: str) -> PlanSettings:
+    """Settings the operator edits, which a system-plan DXF export cuts with.
+
+    Optimizer fields are saved on the system draft. An older uploaded revision
+    keeps the kerf it was created with, and revision order would otherwise make
+    that stale copy win. A toolpath cut at 5 mm is then measured as a 3 mm bit
+    and rejected even though the file was not edited.
+    """
+
+    system = latest_plan(order_name, source_type=SYSTEM, status=DRAFT)
+    if system is not None:
+        return plan_settings(system)
+    return seed_plan_settings(order_name)
+
+
 def _plan_is_stale(order: Any, plan: Any) -> bool:
     if cint(getattr(plan, "plan_needs_recalculation", 0)):
         return True

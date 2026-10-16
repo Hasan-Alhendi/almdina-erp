@@ -10,6 +10,22 @@ from almdina_erp.almdina_erp.domain.cutting.corner_contour_rotation import (
     match_corner_contour,
     measure_l_remainings_cm,
 )
+from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
+    LINER_SHAPE_MISMATCH as LINER_SHAPE_CODE,
+    LinerGeometryError,
+    LinerMeasurement,
+    LinerPiece,
+    canonical_path,
+    contour_notch_cm,
+    liner_parameters_active,
+    localize_path,
+    sawn_liner_ends,
+)
+from almdina_erp.almdina_erp.domain.cutting.machining_overlay import (
+    MACHINING_ADDONS,
+    MACHINING_ADDONS_BY_KIND,
+    compare_overlay_path,
+)
 from almdina_erp.almdina_erp.domain.cutting.dxf_applied_trim import (
     DxfAppliedTrimError,
     apply_adaptive_trim_to_fixed_dxf_layout,
@@ -59,6 +75,7 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
 )
 from almdina_erp.almdina_erp.services.dxf_import_service import (
     DxfImportError,
+    liner_geometry_issue,
     parse_production_dxf as _legacy_parse_production_dxf,
 )
 from almdina_erp.almdina_erp.services.piece_cut_dimension_service import (
@@ -205,6 +222,11 @@ def _proxy_order(
                 finished_length_cm=float(spec.finished_length_cm),
                 allow_rotation=spec.allow_rotation,
                 piece_type=spec.piece_type,
+                liner_reference_side=str(getattr(row, "liner_reference_side", "") or ""),
+                liner_offset_cm=float(getattr(row, "liner_offset_cm", 0) or 0),
+                liner_width_cm=float(getattr(row, "liner_width_cm", 0) or 0),
+                liner_start_cm=float(getattr(row, "liner_start_cm", 0) or 0),
+                liner_length_cm=float(getattr(row, "liner_length_cm", 0) or 0),
             )
         )
     return SimpleNamespace(
@@ -628,26 +650,19 @@ def _l_corner_cut(spec: OrderPieceCutSpec):
 
 
 def _contour_notch_cm(spec: OrderPieceCutSpec) -> tuple[float, float]:
-    """Notch passed to the contour matcher, in centimetres.
+    """Notch passed to the contour matcher and to liner checks, in centimetres."""
 
-    L corners use the raw bite once the inner-band thickness is proven. Clipped
-    corners, and an L whose inner thickness cannot be loaded, keep the stored
-    finished cut distance.
-    """
-
-    finished = (
-        float(spec.clipped_corner_width_cm),
-        float(spec.clipped_corner_length_cm),
+    return contour_notch_cm(
+        piece_type=spec.piece_type,
+        finished_width_cm=float(spec.finished_width_cm),
+        finished_length_cm=float(spec.finished_length_cm),
+        notch_width_cm=float(spec.clipped_corner_width_cm),
+        notch_length_cm=float(spec.clipped_corner_length_cm),
+        position=str(spec.clipped_corner_position or ""),
+        side_thickness_mm=_side_thickness_mm(spec),
+        edge_break=bool(spec.edge_break),
+        edge_break_thickness_mm=spec.edge_break_thickness_mm,
     )
-    raw = _l_corner_cut(spec)
-    if (
-        raw is None
-        or not raw.proven
-        or raw.raw_notch_width_cm is None
-        or raw.raw_notch_length_cm is None
-    ):
-        return finished
-    return float(raw.raw_notch_width_cm), float(raw.raw_notch_length_cm)
 
 
 def _l_notch_mismatch_issue(
@@ -790,11 +805,178 @@ def _bind_corner_edge_rotation(
     return None
 
 
+def _shifted_board_mm(sheet: dict[str, Any] | None) -> tuple[float, float, float, float] | None:
+    """Physical board in the post-adaptive usable frame.
+
+    Legacy ingestion for a strict import does not subtract trim. Adaptive trim
+    then shifts piece coordinates by the applied inset, so the board origin in
+    that frame sits one applied inset outside usable ``(0, 0)``. The inset is
+    the symmetric difference between the physical sheet and its usable size.
+    """
+
+    if not sheet:
+        return None
+    full_w = float(sheet.get("full_width_cm") or 0.0) * 10.0
+    full_h = float(sheet.get("full_length_cm") or 0.0) * 10.0
+    if full_w <= 0.0 or full_h <= 0.0:
+        return None
+    usable_w = sheet.get("usable_width_cm")
+    usable_h = sheet.get("usable_length_cm")
+    if usable_w is None:
+        usable_w = sheet.get("w")
+    if usable_h is None:
+        usable_h = sheet.get("h")
+    applied_w = max(0.0, (full_w - float(usable_w) * 10.0) / 2.0) if usable_w is not None else 0.0
+    applied_l = max(0.0, (full_h - float(usable_h) * 10.0) / 2.0) if usable_h is not None else 0.0
+    return (-applied_w, -applied_l, full_w - applied_w, full_h - applied_l)
+
+
+def _corner_liner_issue(
+    piece: dict[str, Any],
+    spec: OrderPieceCutSpec,
+    order: Any | None,
+    *,
+    cutter_diameter_mm: float | None = None,
+    sheet: dict[str, Any] | None = None,
+    kind: str = "liner",
+):
+    if not is_corner_cut(spec.piece_type) or order is None:
+        return None
+    addon = MACHINING_ADDONS_BY_KIND[kind]
+    row = _row_for_spec(order, spec)
+    enabled = bool(int(getattr(row, addon.enabled_field, 0) or 0)) if row else False
+    side = str(getattr(row, addon.side_field, "") or "") if row else ""
+    offset_cm = float(getattr(row, addon.offset_field, 0) or 0) if row else 0.0
+    width_cm = float(getattr(row, addon.width_field, 0) or 0) if row else 0.0
+    if not liner_parameters_active(
+        enabled=enabled,
+        side=side,
+        offset_cm=offset_cm,
+        width_cm=width_cm,
+    ):
+        return None
+    liners = [
+        overlay
+        for overlay in (piece.get("overlays") or [])
+        if isinstance(overlay, dict) and overlay.get("kind") == kind
+    ]
+    if len(liners) != 1:
+        return None
+    geometry = piece.get("geometry") if isinstance(piece.get("geometry"), dict) else {}
+    outer = geometry.get("outer") or ()
+    path = ((liners[0].get("geometry") or {}).get("path") or ())
+    if len(outer) < 3 or len(path) < 2:
+        return None
+    notch_width_cm, notch_length_cm = _contour_notch_cm(spec)
+    if "corner_rotation_quarter_turns" in piece:
+        turns = int(piece.get("corner_rotation_quarter_turns") or 0)
+        mirrored = bool(int(piece.get("corner_mirrored") or 0))
+    else:
+        match = match_corner_contour(
+            outer,
+            piece_type=spec.piece_type,
+            position=str(spec.clipped_corner_position or ""),
+            width_cm=float(spec.cut_width_cm),
+            length_cm=float(spec.cut_length_cm),
+            cut_width_cm=notch_width_cm,
+            cut_length_cm=notch_length_cm,
+        )
+        if match.quarter_turns is None:
+            return liner_geometry_issue(
+                LinerMeasurement(False, LINER_SHAPE_CODE, "shape", side, "", "orientation_unresolved"),
+                source_piece_no=spec.row_index,
+                copy_no=int(piece.get("copy_no") or 1),
+                piece_type=spec.piece_type,
+                overlay_kind=kind,
+            )
+        turns = int(match.quarter_turns)
+        mirrored = bool(match.mirrored)
+    local = localize_path(path, outer)
+    canonical = canonical_path(
+        local,
+        mirrored=mirrored,
+        quarter_turns=turns,
+        width_mm=float(spec.cut_width_cm) * 10.0,
+        height_mm=float(spec.cut_length_cm) * 10.0,
+    )
+    liner_piece = LinerPiece(
+        spec.piece_type,
+        float(spec.cut_width_cm),
+        float(spec.cut_length_cm),
+        str(spec.clipped_corner_position or ""),
+        notch_width_cm,
+        notch_length_cm,
+    )
+    start_cm = float(getattr(row, addon.start_field, 0) or 0) if row else None
+    length_cm = float(getattr(row, addon.length_field, 0) or 0) if row else None
+    try:
+        start_sawn, end_sawn = sawn_liner_ends(
+            liner_piece,
+            side,
+            origin_mm=(float(piece.get("x") or 0.0) * 10.0, float(piece.get("y") or 0.0) * 10.0),
+            mirrored=mirrored,
+            quarter_turns=turns,
+            board=_shifted_board_mm(sheet),
+            start_cm=start_cm,
+            length_cm=length_cm,
+        )
+    except LinerGeometryError:
+        start_sawn, end_sawn = None, None
+    measurement = compare_overlay_path(
+        canonical,
+        liner_piece,
+        kind,
+        side,
+        offset_cm,
+        width_cm,
+        (
+            float(cutter_diameter_mm)
+            if cutter_diameter_mm is not None and float(cutter_diameter_mm) > 0
+            else None
+        ),
+        start_cm,
+        length_cm,
+        start_sawn=start_sawn,
+        end_sawn=end_sawn,
+    )
+    return liner_geometry_issue(
+        measurement,
+        source_piece_no=spec.row_index,
+        copy_no=int(piece.get("copy_no") or 1),
+        piece_type=spec.piece_type,
+        overlay_kind=kind,
+    )
+
+
+def _corner_machining_issues(
+    piece: dict[str, Any],
+    spec: OrderPieceCutSpec,
+    order: Any | None,
+    *,
+    cutter_diameter_mm: float | None = None,
+    sheet: dict[str, Any] | None = None,
+):
+    issues = []
+    for addon in MACHINING_ADDONS:
+        found = _corner_liner_issue(
+            piece,
+            spec,
+            order,
+            cutter_diameter_mm=cutter_diameter_mm,
+            sheet=sheet,
+            kind=addon.kind,
+        )
+        if found is not None:
+            issues.append(found)
+    return issues
+
+
 def _apply_strict_dimension_contract(
     snapshot: dict[str, Any],
     specs: list[OrderPieceCutSpec],
     *,
     order: Any | None = None,
+    cutter_diameter_mm: float | None = None,
 ) -> list[DxfValidationIssue]:
     """Relabel pieces and enrich them with exact order + edge-print metadata."""
     issues: list[DxfValidationIssue] = []
@@ -832,6 +1014,16 @@ def _apply_strict_dimension_contract(
                 binding_error = _bind_corner_edge_rotation(piece, candidate)
                 if binding_error:
                     issues.append(binding_error)
+                else:
+                    issues.extend(
+                        _corner_machining_issues(
+                            piece,
+                            candidate["spec"],
+                            order,
+                            cutter_diameter_mm=cutter_diameter_mm,
+                            sheet=sheet,
+                        )
+                    )
                 continue
             if str(piece.get("piece_type") or "") == "Special":
                 issues.append(
@@ -931,6 +1123,16 @@ def _apply_strict_dimension_contract(
             binding_error = _bind_corner_edge_rotation(piece, candidate)
             if binding_error:
                 issues.append(binding_error)
+            else:
+                issues.extend(
+                    _corner_machining_issues(
+                        piece,
+                        candidate["spec"],
+                        order,
+                        cutter_diameter_mm=cutter_diameter_mm,
+                        sheet=sheet,
+                    )
+                )
 
     if unmatched:
         preview = "، ".join(
@@ -1086,7 +1288,12 @@ def parse_production_dxf(
             issues=[issue(APPLIED_TRIM_OVERFLOW, CATEGORY_LAYOUT)]
         ) from exc
 
-    exact_issues = _apply_strict_dimension_contract(snapshot, specs, order=order)
+    exact_issues = _apply_strict_dimension_contract(
+        snapshot,
+        specs,
+        order=order,
+        cutter_diameter_mm=settings.kerf_mm,
+    )
     if exact_issues:
         raise DxfImportError(issues=exact_issues)
 

@@ -2,11 +2,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from almdina_erp.almdina_erp.application.cutting.optimize_order_plan import (
     BoardGeometry,
     OptimizeOrderPlanCommand,
     OptimizerOptions,
     optimize_order_plan,
+)
+from almdina_erp.almdina_erp.domain.cutting.sheet_edge_trim import (
+    physical_edge_margins_mm,
 )
 from almdina_erp.almdina_erp.infrastructure.cutting.domain_engine import (
     domain_cutting_engine,
@@ -143,6 +148,106 @@ def test_normal_plan_keeps_preferred_trim_and_has_no_warning():
     assert "⚠" not in outcome.packing_score
 
 
+def test_slack_on_a_later_sheet_is_split_across_both_edges():
+    outcome = optimize_order_plan(
+        _command(
+            [
+                {
+                    "width_cm": 122,
+                    "length_cm": 244,
+                    "qty": 1,
+                    "allow_rotation": 0,
+                },
+                {
+                    "width_cm": 40,
+                    "length_cm": 40,
+                    "qty": 3,
+                    "allow_rotation": 0,
+                },
+            ],
+            kerf_cm=0.5,
+        ),
+        engine=domain_cutting_engine,
+    )
+
+    snapshot = outcome.snapshot
+    assert not snapshot["unplaced"]
+    assert outcome.required_boards == 2
+    assert snapshot["applied_trim_width_cm"] == 0
+    assert snapshot["applied_trim_length_cm"] == 0
+    sheets = snapshot["sheets"]
+    full = next(
+        sheet for sheet in sheets
+        if any(piece["w"] >= 122 and piece["h"] >= 244 for piece in sheet["pieces"])
+    )
+    row = next(sheet for sheet in sheets if sheet is not full)
+    assert full["applied_trim_width_cm"] == 0
+    assert full["applied_trim_length_cm"] == 0
+    door = full["pieces"][0]
+    assert (door["x"], door["y"], door["w"], door["h"]) == (0, 0, 122, 244)
+    assert row["applied_trim_width_cm"] == 0.5
+    assert row["applied_trim_length_cm"] == 0.5
+    pieces = row["pieces"]
+    assert len(pieces) == 3
+    assert min(piece["x"] for piece in pieces) == 0
+    assert max(piece["x"] + piece["w"] for piece in pieces) == 121
+    assert max(piece["y"] + piece["h"] for piece in pieces) == 243
+    xs = sorted(piece["x"] for piece in pieces)
+    assert xs[1] - (xs[0] + 40) == 0.5
+    assert xs[2] - (xs[1] + 40) == 0.5
+
+
+def test_fourteen_millimetres_with_three_millimetre_kerf_keeps_five_on_both_sides():
+    outcome = optimize_order_plan(
+        _command(
+            [
+                {
+                    "width_cm": 122,
+                    "length_cm": 244,
+                    "qty": 1,
+                    "allow_rotation": 0,
+                },
+                {
+                    "width_cm": 40,
+                    "length_cm": 40,
+                    "qty": 3,
+                    "allow_rotation": 0,
+                },
+            ],
+            kerf_cm=0.3,
+        ),
+        engine=domain_cutting_engine,
+    )
+
+    snapshot = outcome.snapshot
+    assert not snapshot["unplaced"]
+    assert outcome.required_boards == 2
+    assert snapshot["applied_trim_width_cm"] == 0
+    assert snapshot["kerf_cm"] == 0.3
+    full = next(
+        sheet for sheet in snapshot["sheets"]
+        if any(piece["w"] >= 122 and piece["h"] >= 244 for piece in sheet["pieces"])
+    )
+    row = next(sheet for sheet in snapshot["sheets"] if sheet is not full)
+    assert physical_edge_margins_mm(full, snapshot) == {
+        "left": 0.0,
+        "right": 0.0,
+        "top": 0.0,
+        "bottom": 0.0,
+    }
+    pieces = sorted(row["pieces"], key=lambda piece: piece["x"])
+    assert [piece["w"] for piece in pieces] == [40, 40, 40]
+    assert pieces[1]["x"] - (pieces[0]["x"] + pieces[0]["w"]) == pytest.approx(0.3)
+    assert pieces[2]["x"] - (pieces[1]["x"] + pieces[1]["w"]) == pytest.approx(0.3)
+    margins = physical_edge_margins_mm(row, snapshot)
+    assert margins["left"] >= 5
+    assert margins["right"] >= 5
+    assert margins["bottom"] >= 5
+    assert margins["left"] + margins["right"] == pytest.approx(14)
+    assert pieces[0]["x"] == 0
+    assert pieces[-1]["x"] == pytest.approx(80.6)
+
+
 def test_impossible_piece_is_not_hidden_by_margin_relaxation():
     outcome = optimize_order_plan(
         _command(
@@ -178,10 +283,11 @@ def test_operator_warning_is_visible_idempotent_and_mobile_friendly():
     assert 'role", "status"' in source
     assert 'aria-live", "polite"' in source
     assert "grid-template-columns:repeat(2,minmax(0,1fr))" in styles
-    assert '["Margin right", policy.right_mm]' in source
-    assert '["Margin left", policy.left_mm]' in source
-    assert '["Margin top", policy.top_mm]' in source
-    assert '["Margin bottom", policy.bottom_mm]' in source
+    assert '["Margin right", margins.right]' in source
+    assert '["Margin left", margins.left]' in source
+    assert '["Margin top", margins.top]' in source
+    assert '["Margin bottom", margins.bottom]' in source
+    assert "physicalMarginsMm" in source
 
 
 def test_zero_margin_edges_are_visually_marked_without_touching_cut_geometry():

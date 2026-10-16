@@ -109,10 +109,14 @@ doctype_js = {
         "public/js/door_cutting_order/printing/door_cutting_order_print_identity.js",
         "public/js/door_cutting_order/order_entry/door_cutting_order_defaults.js",
         "public/js/door_cutting_order/drawing/door_cutting_order_clipped_corner_ux.js",
+        "public/js/door_cutting_order/drawing/door_cutting_order_liner_geometry.js",
+        "public/js/door_cutting_order/drawing/door_cutting_order_machining_overlay.js",
+        "public/js/door_cutting_order/drawing/door_cutting_order_liner_ux.js",
         "public/js/door_cutting_order/printing/door_cutting_order_shape_print.js",
         # Door add-on selection owns customer requirements; Full Door Double also
         # impacts Plan quantity while other extras remain cost-only.
         "public/js/door_cutting_order/order_entry/extra_addons/door_cutting_order_extra_addons_ux.js",
+        "public/js/door_cutting_order/order_entry/extra_addons/door_cutting_order_addons_dialog.js",
         "public/js/door_cutting_order/order_entry/door_cutting_order_operator_ux.js",
         # Presentation-only owner for the native Order tab fields. It does not
         # duplicate document state or save commands; it only arranges the existing
