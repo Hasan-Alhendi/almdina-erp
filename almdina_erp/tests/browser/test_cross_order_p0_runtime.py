@@ -1244,8 +1244,28 @@ def test_recovery_new_saved_intersection():
                 page.evaluate("name => frappe.set_route('Form','Door Cutting Order',name)", fixture["orders"]["A"]["name"])
                 page.wait_for_function("name => cur_frm?.doc?.name === name",
                                        arg=fixture["orders"]["A"]["name"], timeout=45000)
-                assert float(page.evaluate('cur_frm.doc.kerf_mm')) != new_kerf
-                assert float(page.evaluate('cur_frm.doc.board_rate_usd')) != new_rate
+                page.get_by_text("Cutting Plan", exact=True).first.click()
+                page.get_by_text("Order Cost", exact=True).first.click()
+                page.wait_for_function("""name =>
+                    AlmdinaPlanWorkspaceState?.snapshot(cur_frm)?.status === 'ready'
+                    && AlmdinaPlanWorkspaceState.snapshot(cur_frm)?.data?.order_name === name
+                    && AlmdinaCostWorkspaceState?.snapshot(cur_frm)?.status === 'ready'
+                    && AlmdinaCostWorkspaceState.snapshot(cur_frm)?.data?.order_name === name""",
+                    arg=fixture["orders"]["A"]["name"], timeout=45000)
+                evidence["other_order_after_edit"] = page.evaluate("""() => ({
+                    token:AlmdinaDocumentContext.capture(cur_frm),
+                    docKerf:cur_frm.doc.kerf_mm, docRate:cur_frm.doc.board_rate_usd,
+                    planKerf:AlmdinaPlanWorkspaceState.snapshot(cur_frm)?.data?.plans
+                        ?.system_draft?.settings?.kerf_mm,
+                    costRate:AlmdinaCostWorkspaceState.snapshot(cur_frm)?.data?.order?.board_rate_usd,
+                    planOrder:AlmdinaPlanWorkspaceState.snapshot(cur_frm)?.data?.order_name,
+                    costOrder:AlmdinaCostWorkspaceState.snapshot(cur_frm)?.data?.order_name,
+                })""")
+                other = evidence["other_order_after_edit"]
+                assert other["token"]["identity"].endswith(f"::{fixture['orders']['A']['name']}")
+                assert other["planOrder"] == other["costOrder"] == fixture["orders"]["A"]["name"]
+                assert other["docKerf"] != new_kerf and other["planKerf"] != new_kerf
+                assert other["docRate"] != new_rate and other["costRate"] != new_rate
                 mark_step("post_save_cross_order_isolated")
         except Exception as exc:
             evidence["failure"] = repr(exc)
