@@ -313,7 +313,7 @@ def audit_db() -> dict[str, object]:
     if extra_evidence.is_file():
         browser = json.loads(extra_evidence.read_text(encoding="utf-8"))
         saved = browser.get("native_save") or {}
-        if saved.get("status") == "settled" and saved.get("name"):
+        if saved.get("status") == "settled" and not saved.get("isNew") and saved.get("name"):
             doc = frappe.get_doc("Door Cutting Order", saved["name"])
             expected = browser["expected"]
             actual = {}
@@ -336,6 +336,11 @@ def audit_db() -> dict[str, object]:
             )
             if not result["recovery_extra_db_verified"]:
                 raise AssertionError(f"NEW Extra fields did not persist in the owned rows: {actual}")
+        else:
+            result["recovery_extra_db_verified"] = False
+            result["recovery_extra_not_saved"] = {
+                "status": saved.get("status"), "is_new": saved.get("isNew"),
+            }
     evidence_dir = os.environ.get("P0_EVIDENCE_DIR")
     if evidence_dir:
         Path(evidence_dir).mkdir(parents=True, exist_ok=True)

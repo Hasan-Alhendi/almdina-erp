@@ -1328,6 +1328,26 @@ def test_recovery_extra_fields_new_saved_in_desk():
     with browser_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         page = browser.new_page(locale="en-US")
+        evidence["savedocs_responses"] = []
+
+        def record_save_response(response):
+            if "frappe.desk.form.save.savedocs" not in response.url:
+                return
+            try:
+                payload = response.json()
+                evidence["savedocs_responses"].append({
+                    "status": response.status, "keys": sorted(payload),
+                    "exc_type": payload.get("exc_type"),
+                    "exception": str(payload.get("exception") or "")[:500],
+                    "server_messages": str(payload.get("_server_messages") or "")[:700],
+                    "message_name": (payload.get("docs") or [{}])[0].get("name")
+                        if isinstance(payload.get("docs"), list) else None,
+                })
+            except Exception as exc:
+                evidence["savedocs_responses"].append({"status": response.status,
+                                                         "parse_error": type(exc).__name__})
+
+        page.on("response", record_save_response)
         try:
             _login(page, fixture)
             page.evaluate("name => frappe.set_route('Form','Door Cutting Order',name)",
@@ -1407,7 +1427,8 @@ def test_recovery_extra_fields_new_saved_in_desk():
                 const frm=cur_frm;
                 window.__p0ExtrasSave={status:'pending'};
                 Promise.resolve().then(()=>frm.save()).then(
-                    ()=>window.__p0ExtrasSave={status:'settled',name:frm.doc.name,
+                    value=>window.__p0ExtrasSave={status:'settled',name:frm.doc.name,
+                        result:value === undefined ? 'undefined' : String(value).slice(0,100),
                         isNew:!!frm.is_new(),token:AlmdinaDocumentContext.capture(frm)},
                     error=>window.__p0ExtrasSave={status:'rejected',error:String(error)});
             }""")
@@ -1431,8 +1452,11 @@ def test_recovery_extra_fields_new_saved_in_desk():
             evidence["failure_state"] = page.evaluate("""() => ({
                 route:frappe.get_route?.(),name:cur_frm?.doc?.name,
                 isNew:!!cur_frm?.is_new?.(),
+                validated:frappe.validated, machine:cur_frm?.doc?.order_cutting_machine,
+                edgeColor:cur_frm?.doc?.edge_color,pieces:cur_frm?.doc?.pieces?.length,
                 checkpoint:AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(cur_frm) || null,
-                modal:document.querySelector('.modal.show')?.innerText.slice(0,400) || null})""")
+                modal:document.querySelector('.modal.show')?.innerText.slice(0,400) || null,
+                tail:document.body.innerText.slice(-600)})""")
             page.screenshot(path=str(evidence_dir / "recovery-extras-failure.png"), full_page=True)
             raise
         finally:
