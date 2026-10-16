@@ -1147,9 +1147,24 @@ def test_recovery_new_saved_intersection():
             save_plan = plan_toolbar.locator('.dco-tab-edit-save')
             assert save_plan.is_enabled()
             save_plan.click()
-            page.wait_for_function("""value =>
-                AlmdinaDcoEditSessionCoordinator.snapshot(cur_frm).activeKind === null
-                && Number(cur_frm.doc.kerf_mm) === value""", arg=new_kerf, timeout=60000)
+            try:
+                page.wait_for_function("""value =>
+                    AlmdinaDcoEditSessionCoordinator.snapshot(cur_frm).activeKind === null
+                    && Number(cur_frm.doc.kerf_mm) === value""", arg=new_kerf, timeout=60000)
+            except Exception:
+                evidence["plan_save_boundary"] = page.evaluate("""() => {
+                    const snapshot=AlmdinaPlanWorkspaceState.snapshot(cur_frm);
+                    const row=snapshot?.data?.plans?.system_draft;
+                    return {token:AlmdinaDocumentContext.capture(cur_frm),
+                        edit:AlmdinaDcoEditSessionCoordinator.snapshot(cur_frm),
+                        preview:AlmdinaPlanPreviewSession.snapshot(cur_frm),
+                        planStatus:snapshot?.status,planOrder:snapshot?.data?.order_name,
+                        planName:row?.name,planRevision:row?.revision,
+                        rowKerf:row?.settings?.kerf_mm,docKerf:cur_frm.doc.kerf_mm,
+                        summary:document.querySelector('[data-fieldname="kerf_mm"]')?.innerText.slice(0,150),
+                        modal:document.querySelector('.modal.show')?.innerText.slice(0,500) || null};
+                }""")
+                raise
             evidence["plan_saved"] = page.evaluate("""() => ({
                 kerf:cur_frm.doc.kerf_mm,
                 plan:AlmdinaPlanWorkspaceState.snapshot(cur_frm)?.data?.plans?.system_draft?.name,
