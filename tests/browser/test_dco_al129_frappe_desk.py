@@ -9,9 +9,10 @@ import subprocess
 import sys
 import tempfile
 import time
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 from urllib.request import urlopen
 from uuid import uuid4
 
@@ -238,6 +239,28 @@ def _loopback_cdp_browser(
                     browser_process.wait(timeout=5)
             shutil.rmtree(profile, ignore_errors=True)
         raise
+
+
+@contextmanager
+def _cdp_browser_session():
+    with sync_playwright() as playwright_instance:
+        browser, _context, profile, port, browser_process = _loopback_cdp_browser(
+            playwright_instance
+        )
+        try:
+            yield browser, port
+        finally:
+            try:
+                browser.close()
+            finally:
+                if browser_process.poll() is None:
+                    browser_process.terminate()
+                    try:
+                        browser_process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        browser_process.kill()
+                        browser_process.wait(timeout=5)
+                shutil.rmtree(profile, ignore_errors=True)
 
 
 def _start_independent_cdp_monitor(port: int) -> tuple[subprocess.Popen, Path]:
@@ -635,227 +658,39 @@ def _read_local_drafts(page: Page) -> dict[str, Any]:
 
 
 def _set_link(page: Page, fieldname: str, value: str) -> None:
+    control = page.locator(f"[data-fieldname='{fieldname}'] input").first
+    expect(control).to_be_visible(timeout=5_000)
+    expect(control).to_be_enabled(timeout=5_000)
     if fieldname == "customer":
-        customer_state_script = (
-            "() => {"
-            " const frm = window.cur_frm;"
-            " const field = frm && frm.fields_dict && frm.fields_dict.customer;"
-            " const unwrap = value => value && typeof value.get === 'function'"
-            " ? value.get(0) : (value && value[0]) || value || null;"
-            " const wrapper = unwrap(field && field.$wrapper);"
-            " const input = unwrap(field && field.$input);"
-            " const visible = node => { if (!node || !node.isConnected) return false;"
-            " const style = getComputedStyle(node); return node.getClientRects().length > 0"
-            " && style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0'; };"
-            " const matches = [...document.querySelectorAll(\"[data-fieldname='customer'] input\")];"
-            " const modals = [...document.querySelectorAll('.modal.show')].filter(visible);"
-            " const activeTabs = [...document.querySelectorAll('.nav-link.active, .tab-pane.active')]"
-            " .map(node => ({kind: node.matches('.tab-pane') ? 'pane' : 'tab',"
-            " label: (node.getAttribute('aria-label') || node.textContent || '').trim().slice(0, 80),"
-            " fieldname: node.getAttribute('data-fieldname'), visible: visible(node)}));"
-            " const route = window.frappe && typeof frappe.get_route === 'function'"
-            " ? frappe.get_route() : null;"
-            " const allInputs = [...document.querySelectorAll('input')];"
-            " const pane = wrapper && wrapper.closest('.tab-pane');"
-            " const formWrapper = unwrap(frm && (frm.$wrapper || frm.wrapper));"
-            " return {documentName: frm && frm.doc && frm.doc.name || null,"
-            " isNew: Boolean(cur_frm && typeof cur_frm.is_new === 'function' && cur_frm.is_new()),"
-            " doctype: frm && frm.doctype || null,"
-            " route: Array.isArray(route) ? route.join('/') : null,"
-            " customerFieldExists: Boolean(field),"
-            " fieldType: field && field.df && field.df.fieldtype || null,"
-            " hidden: field && field.df ? Boolean(field.df.hidden) : null,"
-            " readOnly: field ? Boolean(field.read_only || (field.df && field.df.read_only)) : null,"
-            " permlevel: field && field.df ? field.df.permlevel : null,"
-            " dispStatus: field && field.disp_status || null,"
-            " wrapperExists: Boolean(wrapper), wrapperConnected: Boolean(wrapper && wrapper.isConnected),"
-            " wrapperVisible: visible(wrapper), wrapperHiddenAttribute: Boolean(wrapper && wrapper.hidden),"
-            " tabPaneVisible: pane ? visible(pane) : null,"
-            " fieldInputExists: Boolean(input), fieldInputConnected: Boolean(input && input.isConnected),"
-            " fieldInputVisible: visible(input), fieldInputTag: input && input.tagName || null,"
-            " fieldInputId: input && input.id || null,"
-            " fieldInputIndex: input ? allInputs.indexOf(input) : -1,"
-            " fieldInputDisabled: input ? Boolean(input.disabled) : null,"
-            " fieldInputReadOnly: input ? Boolean(input.readOnly) : null,"
-            " fieldInputAriaLabel: input && input.getAttribute('aria-label') || null,"
-            " customerDomMatchCount: matches.length,"
-            " visibleCustomerDomMatchCount: matches.filter(visible).length,"
-            " overlays: modals.map(modal => ({recoveryContinue: modal.querySelectorAll("
-            "'[data-recovery-action=\"continue\"]').length, recoveryNew: modal.querySelectorAll("
-            "'[data-recovery-action=\"new\"]').length})),"
-            " activeTabs, formRendering: Boolean(formWrapper && formWrapper.isConnected),"
-            " formVisible: visible(formWrapper),"
-            " pageReadyState: document.readyState}; }"
+        is_native_control = control.evaluate(
+            "input => { const field = window.cur_frm && cur_frm.fields_dict.customer;"
+            " const current = field && field.$input"
+            " && typeof field.$input.get === 'function' ? field.$input.get(0) : field && field.$input;"
+            " return current === input; }"
         )
-        initial_identity = NEW_FORM_IDENTITIES.get(id(page), {})
-        try:
-            page.wait_for_function(
-                "expectedName => {"
-                " const frm = window.cur_frm;"
-                " if (!frm || frm.doctype !== 'Door Cutting Order'"
-                " || !Boolean(frm.is_new()) || frm.doc.name !== expectedName) return false;"
-                " const field = frm.fields_dict && frm.fields_dict.customer;"
-                " const control = field && field.$input;"
-                " const input = control && typeof control.get === 'function'"
-                " ? control.get(0) : control && control[0];"
-                " if (!input || !input.isConnected || !input.getClientRects().length) return false;"
-                " const style = getComputedStyle(input);"
-                " return style.display !== 'none' && style.visibility !== 'hidden'"
-                " && style.opacity !== '0'; }",
-                arg=initial_identity.get("name"),
-                timeout=5_000,
-            )
-        except PlaywrightTimeoutError as error:
-            state = page.evaluate(customer_state_script)
-            state["identityUnchangedSinceOpen"] = (
-                state.get("documentName") == initial_identity.get("name")
-                and state.get("isNew") is initial_identity.get("is_new") is True
-            )
-            state["runtimeErrors"] = PAGE_RUNTIME_DIAGNOSTICS.get(id(page), [])[-12:]
-            state["customerInputReadyWait"] = "timed_out_after_5000ms"
-            trace("customer_field_state_before_fill", **state)
-            raise AssertionError(
-                f"Customer Frappe input did not render as a visible user control: {state}"
-            ) from error
+        if not is_native_control:
+            raise AssertionError("Resolved Customer input is not Frappe's current Link control")
 
-        state = page.evaluate(customer_state_script)
-        state["identityUnchangedSinceOpen"] = (
-            state.get("documentName") == initial_identity.get("name")
-            and state.get("isNew") is initial_identity.get("is_new") is True
-        )
-        state["runtimeErrors"] = PAGE_RUNTIME_DIAGNOSTICS.get(id(page), [])[-12:]
-        state["customerInputReadyWait"] = "visible"
-        trace("customer_field_state_before_fill", **state)
-        if not state.get("identityUnchangedSinceOpen"):
-            raise AssertionError(f"Customer field is not on the NEW document verified by _open_new_form: {state}")
-        if (
-            state.get("hidden")
-            or state.get("readOnly")
-            or not state.get("fieldInputVisible")
-            or state.get("fieldInputDisabled")
-            or state.get("fieldInputReadOnly")
-        ):
-            raise AssertionError(f"Customer Frappe input is not an enabled visible user control: {state}")
-
-        input_id = state.get("fieldInputId")
-        input_index = state.get("fieldInputIndex", -1)
-        if isinstance(input_id, str) and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]*", input_id):
-            control = page.locator(f"#{input_id}")
-        elif isinstance(input_index, int) and input_index >= 0:
-            control = page.locator("input").nth(input_index)
-        else:
-            raise AssertionError(f"Frappe exposes no addressable visible Customer input: {state}")
-        if control.count() != 1 or not control.is_visible():
-            raise AssertionError(f"Resolved Customer input is not uniquely visible: {state}")
-        is_frappe_customer_input = control.evaluate(
-            "node => { const field = window.cur_frm && cur_frm.fields_dict.customer;"
-            " const input = field && field.$input;"
-            " const element = input && typeof input.get === 'function'"
-            " ? input.get(0) : (input && input[0]) || input;"
-            " return element === node; }"
-        )
-        if not is_frappe_customer_input:
-            raise AssertionError(f"Resolved locator no longer matches Frappe's Customer control: {state}")
-    else:
-        control = page.locator(f"[data-fieldname='{fieldname}'] input").first
     control.fill(value)
-    suggestions = page.locator(".awesomplete ul [role='option']:visible")
     try:
-        page.wait_for_function(
-            "({fieldname, value}) => { const frm = window.cur_frm;"
-            " const field = frm && frm.fields_dict && frm.fields_dict[fieldname];"
-            " const list = field && field.awesomplete && field.awesomplete.list;"
-            " const hasExactValue = Array.isArray(list) && list.some(item => item && String(item.value) === value);"
-            " const options = [...document.querySelectorAll('.awesomplete ul [role=\"option\"]')];"
-            " return hasExactValue && options.some(item => item.getClientRects().length > 0); }",
-            arg={"fieldname": fieldname, "value": value},
-            timeout=20_000,
-        )
+        with page.expect_response(
+            lambda response: "frappe.client.validate_link_and_fetch" in response.url,
+            timeout=15_000,
+        ) as validation_response:
+            control.press("Tab")
+        response = validation_response.value
     except PlaywrightTimeoutError as error:
-        state = page.evaluate(
-            "async ({fieldname, value}) => { const frm = window.cur_frm;"
-            " const field = frm && frm.fields_dict && frm.fields_dict[fieldname];"
-            " const option = field && field.df && field.df.options;"
-            " const input = field && field.$input && typeof field.$input.get === 'function'"
-            " ? field.$input.get(0) : field && field.$input && field.$input[0];"
-            " let linkSearch = {ok: false, resultCount: null, errorType: null, permissionDenied: false};"
-            " if (option && input && input.value && window.frappe && frappe.xcall) {"
-            " try { const results = await frappe.xcall('frappe.desk.search.search_link', {"
-            " doctype: option, txt: input.value, reference_doctype: frm.doctype,"
-            " page_length: 10, link_fieldname: fieldname,"
-            " ignore_user_permissions: Boolean(field.df && field.df.ignore_user_permissions)});"
-            " linkSearch = {ok: true, resultCount: Array.isArray(results) ? results.length : null,"
-            " exactResultCount: Array.isArray(results) ? results.filter(item => String(item.value) === value).length : null,"
-            " errorType: null, permissionDenied: false};"
-            " } catch (searchError) { const details = [searchError && searchError.message,"
-            " searchError && searchError.exc_type].join(' '); linkSearch = {ok: false, resultCount: null,"
-            " exactResultCount: null, errorType: searchError && searchError.exc_type || searchError && searchError.name || 'Error',"
-            " permissionDenied: /permission|not permitted/i.test(details)}; } }"
-            " const route = window.frappe && frappe.get_route ? frappe.get_route() : [];"
-            " const list = field && field.awesomplete && field.awesomplete.list;"
-            " const values = Array.isArray(list) ? list : [];"
-            " return {doctype: frm && frm.doctype || null, isNew: Boolean(frm && frm.is_new && frm.is_new()),"
-            " route: Array.isArray(route) ? route.join('/') : null, fieldType: field && field.df && field.df.fieldtype || null,"
-            " linkDoctype: option || null, fieldHidden: Boolean(field && field.df && field.df.hidden),"
-            " fieldReadOnly: Boolean(field && (field.read_only || (field.df && field.df.read_only))),"
-            " inputConnected: Boolean(input && input.isConnected), inputDisabled: Boolean(input && input.disabled),"
-            " inputMatchesRequested: Boolean(input && input.value === value), sourceListCount: values.length,"
-            " sourceExactValueCount: values.filter(item => item && String(item.value) === value).length, suggestionCount:"
-            " [...document.querySelectorAll('.awesomplete ul [role=\"option\"]')].filter(item => item.getClientRects().length > 0).length,"
-            " inputFocused: Boolean(input && document.activeElement === input), linkSearch,"
-            " linkReadPermission: option && frappe.perm && frappe.perm.has_perm"
-            " ? Boolean(frappe.perm.has_perm(option, 0, 'read')) : null}; }",
-            {"fieldname": fieldname, "value": value},
-        )
-        state["runtimeErrors"] = PAGE_RUNTIME_DIAGNOSTICS.get(id(page), [])[-12:]
-        trace("link_field_suggestions_unavailable", **state)
-        raise AssertionError(f"Frappe {fieldname} exact link option was not available: {state}") from error
-    # Match the Link control's underlying result values; rendered labels can
-    # combine a translated title and description and are not the document name.
-    option_values = page.evaluate(
-        "fieldname => { const field = window.cur_frm && cur_frm.fields_dict[fieldname];"
-        " const list = field && field.awesomplete && field.awesomplete.list;"
-        " return Array.isArray(list) ? list.map(item => item && item.value != null"
-        " ? String(item.value) : null) : []; }",
-        fieldname,
-    )
-    exact_indexes = [index for index, option_value in enumerate(option_values) if option_value == value]
-    if len(exact_indexes) != 1:
-        trace(
-            "link_field_exact_option_unavailable",
-            fieldname=fieldname,
-            visible_option_count=len(option_values),
-            exact_option_count=len(exact_indexes),
-        )
         raise AssertionError(
-            f"Frappe {fieldname} link options did not contain exactly one requested value"
-        )
-    suggestions.nth(exact_indexes[0]).click()
-    try:
-        page.wait_for_function(
-            "({fieldname, value}) => window.cur_frm && cur_frm.doc[fieldname] === value",
-            arg={"fieldname": fieldname, "value": value},
-            timeout=10_000,
-        )
-    except PlaywrightTimeoutError as error:
-        state = page.evaluate(
-            "({fieldname, value}) => { const frm = window.cur_frm;"
-            " const field = frm && frm.fields_dict && frm.fields_dict[fieldname];"
-            " const input = field && field.$input && typeof field.$input.get === 'function'"
-            " ? field.$input.get(0) : field && field.$input && field.$input[0];"
-            " const options = [...document.querySelectorAll('.awesomplete ul [role=\"option\"]')];"
-            " return {doctype: frm && frm.doctype || null, isNew: Boolean(frm && frm.is_new && frm.is_new()),"
-            " documentValuePresent: Boolean(frm && frm.doc && frm.doc[fieldname]),"
-            " documentValueMatchesRequested: Boolean(frm && frm.doc && frm.doc[fieldname] === value),"
-            " inputValuePresent: Boolean(input && input.value), inputFocused: Boolean(input && document.activeElement === input),"
-            " visibleOptionCount: options.filter(item => item.getClientRects().length > 0).length,"
-            " fieldReadOnly: Boolean(field && (field.read_only || (field.df && field.df.read_only)))}; }",
-            {"fieldname": fieldname, "value": value},
-        )
-        state["runtimeErrors"] = PAGE_RUNTIME_DIAGNOSTICS.get(id(page), [])[-12:]
-        trace("link_selection_did_not_update_document", **state)
-        raise AssertionError(f"Frappe {fieldname} selection did not update the document: {state}") from error
-
+            f"Frappe did not validate the {fieldname} Link through its native blur lifecycle"
+        ) from error
+    if not response.ok:
+        raise AssertionError(f"Frappe rejected native {fieldname} Link validation: HTTP {response.status}")
+    page.wait_for_function(
+        "({fieldname, value}) => window.cur_frm && cur_frm.doc[fieldname] === value",
+        arg={"fieldname": fieldname, "value": value},
+        timeout=10_000,
+    )
+    trace("native_link_validation_completed", fieldname=fieldname, status=response.status)
 
 def _customer_permission_state(page: Page) -> dict[str, Any]:
     return page.evaluate(
@@ -971,7 +806,138 @@ def _save_new_document(page: Page) -> str:
     return str(page.evaluate("() => cur_frm.doc.name"))
 
 
-def test_real_desk_customer_field_permission_differential() -> None:
+def test_real_desk_customer_control_link_autocomplete_isolated() -> None:
+    """Observe native ControlLink search separately for create-only and create+edit."""
+    fixture = _fixtures()
+    outcomes: dict[str, dict[str, Any]] = {}
+    with _cdp_browser_session() as (browser, _cdp_port):
+        for case_name, user in (
+            ("create_only", fixture["user"]),
+            ("create_and_edit", fixture["write_user"]),
+        ):
+            context, page = _new_traced_desk_page(browser, f"autocomplete-{case_name}")
+            try:
+                _login(page, fixture, user=user)
+                _open_new_form(
+                    page,
+                    f"customer-autocomplete-{case_name}",
+                    expected_state="ready_for_entry",
+                )
+                state = _customer_permission_state(page)
+                assert state["isNew"] is True and state["doctype"] == "Door Cutting Order"
+                control = page.locator("[data-fieldname='customer'] input").first
+                expect(control).to_be_visible(timeout=5_000)
+                control.evaluate(
+                    "input => { const field = cur_frm.fields_dict.customer;"
+                    " window.__al129ControlProbe = {form: cur_frm, field, input, awesomplete: field.awesomplete}; }"
+                )
+                try:
+                    with page.expect_response(
+                        lambda response: "frappe.desk.search.search_link" in response.url,
+                        timeout=15_000,
+                    ) as search_response:
+                        control.fill(fixture["customer"])
+                    response = search_response.value
+                    response_body = response.json()
+                    results = response_body.get("message", []) if isinstance(response_body, dict) else []
+                    exact_response_count = sum(
+                        1 for item in results
+                        if isinstance(item, dict) and item.get("value") == fixture["customer"]
+                    )
+                    request = response.request
+                    try:
+                        request_args = request.post_data_json
+                    except (AttributeError, ValueError):
+                        raw_data = request.post_data or ""
+                        try:
+                            request_args = json.loads(raw_data)
+                        except json.JSONDecodeError:
+                            request_args = {
+                                key: values[-1]
+                                for key, values in parse_qs(raw_data, keep_blank_values=True).items()
+                            }
+                    if isinstance(request_args, dict) and isinstance(request_args.get("args"), dict):
+                        request_args = request_args["args"]
+                    native_args = page.evaluate(
+                        "actual => { const field = cur_frm && cur_frm.fields_dict.customer;"
+                        " const expected = field && typeof field.get_search_args === 'function'"
+                        " ? field.get_search_args() : null;"
+                        " const keys = ['doctype', 'reference_doctype', 'link_fieldname', 'txt',"
+                        " 'filters', 'query', 'page_length', 'ignore_user_permissions'];"
+                        " const matches = Boolean(expected && keys.every(key =>"
+                        " JSON.stringify(expected[key] ?? null) === JSON.stringify((actual && actual[key]) ?? null)));"
+                        " return {available: Boolean(expected), matches}; }",
+                        request_args,
+                    )
+                    request_valid = bool(
+                        isinstance(request_args, dict)
+                        and request_args.get("doctype") == "Customer"
+                        and request_args.get("reference_doctype") == "Door Cutting Order"
+                        and request_args.get("link_fieldname") == "customer"
+                        and request_args.get("txt") == fixture["customer"]
+                        and native_args["available"]
+                        and native_args["matches"]
+                    )
+                    try:
+                        page.wait_for_function(
+                            "value => { const field = cur_frm && cur_frm.fields_dict.customer;"
+                            " const list = field && field.awesomplete && field.awesomplete.list;"
+                            " return Array.isArray(list) && list.some(item => item && item.value === value); }",
+                            arg=fixture["customer"],
+                            timeout=3_000,
+                        )
+                    except PlaywrightTimeoutError:
+                        pass
+                    ui_state = page.evaluate(
+                        "() => { const before = window.__al129ControlProbe;"
+                        " const field = cur_frm && cur_frm.fields_dict.customer;"
+                        " const input = field && field.$input && typeof field.$input.get === 'function'"
+                        " ? field.$input.get(0) : field && field.$input;"
+                        " const list = field && field.awesomplete && field.awesomplete.list;"
+                        " const values = Array.isArray(list) ? list : [];"
+                        " const options = field && field.awesomplete && field.awesomplete.ul"
+                        " ? field.awesomplete.ul.querySelectorAll('[role=option]') : [];"
+                        " return {formStable: Boolean(before && before.form === cur_frm),"
+                        " fieldStable: Boolean(before && before.field === field),"
+                        " inputStable: Boolean(before && before.input === input),"
+                        " awesompleteStable: Boolean(before && before.awesomplete === (field && field.awesomplete)),"
+                        " inputFocused: Boolean(input && document.activeElement === input),"
+                        " sourceListCount: values.length, optionCount: options.length}; }"
+                    )
+                    outcomes[case_name] = {
+                        "searchResponseOk": response.ok,
+                        "requestArgumentsValid": request_valid,
+                        "nativeSearchArgumentsMatch": native_args["matches"],
+                        "exactResponseCount": exact_response_count,
+                        **ui_state,
+                    }
+                except PlaywrightTimeoutError:
+                    outcomes[case_name] = {
+                        "searchResponseOk": False,
+                        "requestArgumentsValid": False,
+                        "exactResponseCount": 0,
+                        "controlFocused": bool(control.evaluate("input => document.activeElement === input")),
+                    }
+                finally:
+                    page.evaluate("() => { delete window.__al129ControlProbe; }")
+                trace("customer_control_link_probe", case_name=case_name, **outcomes[case_name])
+            except Exception as error:
+                _capture_failure_screenshot(page, f"customer_autocomplete_{case_name}_failed", error)
+                raise
+            finally:
+                context.close()
+
+    assert set(outcomes) == {"create_only", "create_and_edit"}
+    assert all(item["searchResponseOk"] for item in outcomes.values()), outcomes
+    assert all(item["requestArgumentsValid"] for item in outcomes.values()), outcomes
+    assert all(item["nativeSearchArgumentsMatch"] for item in outcomes.values()), outcomes
+    assert all(item["exactResponseCount"] == 1 for item in outcomes.values()), outcomes
+    assert all(item["formStable"] and item["fieldStable"] and item["inputStable"] for item in outcomes.values()), outcomes
+    assert all(item["awesompleteStable"] and item["inputFocused"] for item in outcomes.values()), outcomes
+    assert all(item["optionCount"] > 0 for item in outcomes.values()), outcomes
+
+
+def test_real_desk_customer_native_entry_and_permission_differential() -> None:
     """Certify create-only NEW input, persisted write denial, and no-create denial."""
     fixture = _fixtures()
     assert fixture["versions"] == {"frappe": "16.17.5", "erpnext": "16.17.0"}
@@ -1073,47 +1039,8 @@ def test_real_desk_customer_field_permission_differential() -> None:
                             for row in state["nativePermissionRows"]
                         ]
 
-                        permission_transition = page.evaluate(
-                            "() => { const frm = cur_frm;"
-                            " const cached = frappe.perm.doctype_perm[frm.doctype];"
-                            " if (!cached || !cached[0]) throw new Error('doctype permission cache unavailable');"
-                            " const isVisible = element => { if (!element || !element.isConnected) return false;"
-                            " const style = getComputedStyle(element); return element.getClientRects().length > 0"
-                            " && style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0'; };"
-                            " const original = cached[0].create; let revoked;"
-                            " try { cached[0].create = 0;"
-                            " window.dispatchEvent(new CustomEvent('almdina:permissions-updated'));"
-                            " const button = document.querySelector('.page-actions .primary-action');"
-                            " revoked = {nativeCreate: frm.has_perm('create'), saveDisabled: frm.save_disabled,"
-                            " saveActionPresent: Boolean(button), saveActionVisible: isVisible(button),"
-                            " saveActionDisabled: button ? Boolean(button.disabled"
-                            " || button.getAttribute('aria-disabled') === 'true') : null,"
-                            " projection: Boolean(frm.__almdina_new_create_field_projection)};"
-                            " } finally { cached[0].create = original;"
-                            " window.dispatchEvent(new CustomEvent('almdina:permissions-updated')); }"
-                            " const button = document.querySelector('.page-actions .primary-action');"
-                            " return {revoked, restored: {nativeCreate: frm.has_perm('create'),"
-                            " saveDisabled: frm.save_disabled, saveActionPresent: Boolean(button),"
-                            " saveActionVisible: isVisible(button),"
-                            " saveActionDisabled: button ? Boolean(button.disabled"
-                            " || button.getAttribute('aria-disabled') === 'true') : null,"
-                            " projection: Boolean(frm.__almdina_new_create_field_projection)}}; }"
-                        )
-                        revoked = permission_transition["revoked"]
-                        assert revoked["nativeCreate"] is False
-                        assert revoked["saveDisabled"] is True
-                        assert revoked["projection"] is False
-                        assert revoked["saveActionVisible"] is False
-                        assert permission_transition["restored"]["nativeCreate"] is True
-                        assert permission_transition["restored"]["saveDisabled"] is False
-                        assert permission_transition["restored"]["saveActionVisible"] is True
-                        assert permission_transition["restored"]["saveActionDisabled"] is False
-                        assert permission_transition["restored"]["projection"] is True
-                        expect(page.locator(".page-actions .primary-action").first).to_be_enabled(
-                            timeout=5_000
-                        )
-                        trace("create_only_native_permission_revoke_restore", **permission_transition)
-
+                        # Keep the NEW form's native permission and Link lifecycle untouched
+                        # until Customer validation and official Save have completed.
                         _fill_header(page, fixture, "Create-only official save permission check")
                         _enter_real_measurements(page, 1)
                         save_requests: list[str] = []
@@ -1381,6 +1308,61 @@ def test_real_desk_customer_field_permission_differential() -> None:
                         browser_process.wait(timeout=5)
                 shutil.rmtree(chrome_profile, ignore_errors=True)
                 faulthandler.cancel_dump_traceback_later()
+
+
+def test_real_desk_create_permission_revoke_restore_isolated() -> None:
+    """Exercise permission projection transitions on a fresh form, without Customer entry."""
+    fixture = _fixtures()
+    with _cdp_browser_session() as (browser, _cdp_port):
+        context, page = _new_traced_desk_page(browser, "permission-revoke-restore")
+        try:
+            _login(page, fixture, user=fixture["user"])
+            _open_new_form(page, "permission-revoke-restore", expected_state="ready_for_entry")
+            state = _customer_permission_state(page)
+            assert state["isNew"] is True and state["createProjectionActive"] is True
+            transition = page.evaluate(
+                "() => { const frm = cur_frm;"
+                " const cached = frappe.perm.doctype_perm[frm.doctype];"
+                " if (!cached || !cached[0]) throw new Error('doctype permission cache unavailable');"
+                " const isVisible = element => { if (!element || !element.isConnected) return false;"
+                " const style = getComputedStyle(element); return element.getClientRects().length > 0"
+                " && style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0'; };"
+                " const before = JSON.stringify(cached.map(row => row && ({create: row.create, write: row.write})));"
+                " const originalCreate = cached[0].create; let revoked;"
+                " try { cached[0].create = 0;"
+                " window.dispatchEvent(new CustomEvent('almdina:permissions-updated'));"
+                " const button = document.querySelector('.page-actions .primary-action');"
+                " revoked = {nativeCreate: frm.has_perm('create'), saveDisabled: frm.save_disabled,"
+                " saveActionVisible: isVisible(button), projection: Boolean(frm.__almdina_new_create_field_projection)};"
+                " } finally { cached[0].create = originalCreate;"
+                " window.dispatchEvent(new CustomEvent('almdina:permissions-updated')); }"
+                " const button = document.querySelector('.page-actions .primary-action');"
+                " return {revoked, restored: {nativeCreate: frm.has_perm('create'),"
+                " saveDisabled: frm.save_disabled, saveActionVisible: isVisible(button),"
+                " projection: Boolean(frm.__almdina_new_create_field_projection)},"
+                " cacheIdentityStable: cached === frappe.perm.doctype_perm[frm.doctype],"
+                " cacheValuesRestored: before === JSON.stringify(cached.map(row => row && ({create: row.create, write: row.write})))}; }"
+            )
+            assert transition["revoked"] == {
+                "nativeCreate": False,
+                "saveDisabled": True,
+                "saveActionVisible": False,
+                "projection": False,
+            }, transition
+            assert transition["restored"] == {
+                "nativeCreate": True,
+                "saveDisabled": False,
+                "saveActionVisible": True,
+                "projection": True,
+            }, transition
+            assert transition["cacheIdentityStable"] is True, transition
+            assert transition["cacheValuesRestored"] is True, transition
+            trace("create_permission_revoke_restore_isolated", **transition)
+        except Exception as error:
+            _capture_failure_screenshot(page, "permission_revoke_restore_failed", error)
+            raise
+        finally:
+            context.close()
 
 
 def _fill_header(page: Page, fixture: dict[str, Any], notes: str) -> None:

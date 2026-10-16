@@ -23,6 +23,7 @@ on:
           - al128_desk
           - al128_desk_edit
           - al128_performance
+          - al129_backend
           - al129_new_desk
           - al129_desk_only
           - al129_customer_permission_smoke
@@ -133,16 +134,16 @@ jobs:
           redis-cli -h 127.0.0.1 -p 13000 ping | grep -qx PONG
           redis-cli -h 127.0.0.1 -p 11000 ping | grep -qx PONG
 
-      - name: Require pinned Desk acceptance runtime refs
-        if: env.TARGET_SUITE == 'al128_desk' || env.TARGET_SUITE == 'al128_desk_edit' || env.TARGET_SUITE == 'al128_performance' || env.TARGET_SUITE == 'al129_new_desk' || env.TARGET_SUITE == 'al129_desk_only' || env.TARGET_SUITE == 'al129_customer_permission_smoke'
+      - name: Require pinned ALMADINA-129 and Desk runtime refs
+        if: env.TARGET_SUITE == 'al128_desk' || env.TARGET_SUITE == 'al128_desk_edit' || env.TARGET_SUITE == 'al128_performance' || env.TARGET_SUITE == 'al129_backend' || env.TARGET_SUITE == 'al129_new_desk' || env.TARGET_SUITE == 'al129_desk_only' || env.TARGET_SUITE == 'al129_customer_permission_smoke'
         run: |
           set -euo pipefail
           test "$FRAPPE_REF" = "v16.17.5" || {
-            echo "Pinned Desk acceptance requires Frappe v16.17.5; received '$FRAPPE_REF'." >&2
+            echo "Pinned Frappe v16 certification requires Frappe v16.17.5; received '$FRAPPE_REF'." >&2
             exit 1
           }
           test "$ERPNEXT_REF" = "v16.17.0" || {
-            echo "Pinned Desk acceptance requires ERPNext v16.17.0; received '$ERPNEXT_REF'." >&2
+            echo "Pinned Frappe v16 certification requires ERPNext v16.17.0; received '$ERPNEXT_REF'." >&2
             exit 1
           }
 
@@ -183,7 +184,7 @@ jobs:
           ERPNEXT_SHA="$(git -C apps/erpnext rev-parse HEAD)"
           printf 'Frappe ref=%s sha=%s\nERPNext ref=%s sha=%s\n' \
             "$FRAPPE_REF" "$FRAPPE_SHA" "$ERPNEXT_REF" "$ERPNEXT_SHA"
-          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" && ("$TARGET_SUITE" == "al128_desk" || "$TARGET_SUITE" == "al128_desk_edit" || "$TARGET_SUITE" == "al128_performance" || "$TARGET_SUITE" == "al129_new_desk" || "$TARGET_SUITE" == "al129_desk_only" || "$TARGET_SUITE" == "al129_customer_permission_smoke") ]]; then
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" && ("$TARGET_SUITE" == "al128_desk" || "$TARGET_SUITE" == "al128_desk_edit" || "$TARGET_SUITE" == "al128_performance" || "$TARGET_SUITE" == "al129_backend" || "$TARGET_SUITE" == "al129_new_desk" || "$TARGET_SUITE" == "al129_desk_only" || "$TARGET_SUITE" == "al129_customer_permission_smoke") ]]; then
             test "$FRAPPE_SHA" = "75baafaa0bde07a86bf28764383b93b5df97bc7e"
             test "$ERPNEXT_SHA" = "7b494dc9e8e47d288de5427bae25ce8a52c37d96"
           else
@@ -307,7 +308,7 @@ jobs:
           echo "DCO_AL129_FIXTURE_FILE=$DCO_AL129_FIXTURE_FILE" >> "$GITHUB_ENV"
 
       - name: Run the ALMADINA-129 concurrent token database race test
-        if: github.event_name == 'workflow_dispatch' && inputs.suite == 'al129_new_desk'
+        if: github.event_name == 'workflow_dispatch' && (inputs.suite == 'al129_new_desk' || inputs.suite == 'al129_backend')
         env:
           AL129_DB_ROOT_HOST: 127.0.0.1
           AL129_DB_ROOT_USER: root
@@ -394,7 +395,7 @@ jobs:
           cat "$AL129_CONCURRENCY_EVIDENCE_FILE"
 
       - name: Run six ALMADINA-129 functional integration tests
-        if: github.event_name == 'workflow_dispatch' && inputs.suite == 'al129_new_desk'
+        if: github.event_name == 'workflow_dispatch' && (inputs.suite == 'al129_new_desk' || inputs.suite == 'al129_backend')
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP/frappe-bench"
@@ -495,10 +496,13 @@ jobs:
           if [[ "$TARGET_CASE" == "al129_new_desk" || "$TARGET_CASE" == "al129_desk_only" || "$TARGET_CASE" == "al129_customer_permission_smoke" ]]; then
             test -s "$DCO_AL129_FIXTURE_FILE"
             if [[ "$TARGET_CASE" == "al129_customer_permission_smoke" ]]; then
-              test_targets=("tests/browser/test_dco_al129_frappe_desk.py::test_real_desk_customer_field_permission_differential")
+              test_targets=(
+                "tests/browser/test_dco_al129_frappe_desk.py::test_real_desk_customer_native_entry_and_permission_differential"
+                "tests/browser/test_dco_al129_frappe_desk.py::test_real_desk_customer_control_link_autocomplete_isolated"
+                "tests/browser/test_dco_al129_frappe_desk.py::test_real_desk_create_permission_revoke_restore_isolated"
+              )
             elif [[ "$TARGET_CASE" == "al129_desk_only" ]]; then
               test_targets=(
-                "tests/browser/test_dco_al129_frappe_desk.py::test_real_desk_customer_field_permission_differential"
                 "tests/browser/test_dco_al129_frappe_desk.py::test_real_desk_multiple_drafts_start_new_delete_and_restore_geometry"
                 "tests/browser/test_dco_al129_frappe_desk.py::test_real_desk_100_piece_checkpoint_restore_and_lost_save_response"
               )
