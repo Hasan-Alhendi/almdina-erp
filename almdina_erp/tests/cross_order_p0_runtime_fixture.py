@@ -221,6 +221,10 @@ def cleanup() -> None:
             frappe.delete_doc("File", file_name, force=True, ignore_permissions=True)
         frappe.delete_doc("Door Cutting Order", extra_order["name"], force=True,
                           ignore_permissions=True)
+    if "prior_liner_price" in fixture:
+        frappe.db.set_single_value("Almdina ERP Settings",
+                                   "default_extra_liner_unit_price_usd",
+                                   fixture["prior_liner_price"])
     frappe.delete_doc("Customer", fixture["customer"], force=True,
                       ignore_permissions=True)
     frappe.delete_doc("Edge Banding Type", fixture["edge_type"], force=True,
@@ -387,10 +391,15 @@ def prepare_multiboard_extra_plan() -> dict[str, object]:
     fixture_path = Path(os.environ["P0_FIXTURE_PATH"])
     fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
     frappe.set_user("Administrator")
+    fixture["prior_liner_price"] = frappe.db.get_single_value(
+        "Almdina ERP Settings", "default_extra_liner_unit_price_usd") or 0
+    frappe.db.set_single_value("Almdina ERP Settings",
+                               "default_extra_liner_unit_price_usd", 3)
     order = frappe.get_doc({
         "doctype": "Door Cutting Order", "customer": fixture["customer"],
         "board_description": "P0 متعدد", "board_length_cm": 244,
         "board_width_cm": 122, "default_edge_type": fixture["edge_type"],
+        "edge_color": "P0 multi edge",
         "kerf_mm": 5, "trim_margin_mm": 5,
         "optimization_time_limit_sec": 10, "board_rate_usd": 11,
         "cutting_cost_per_board_usd": 2,
@@ -438,6 +447,7 @@ def prepare_saved_offcut_plan() -> dict[str, object]:
         "doctype": "Door Cutting Order", "customer": fixture["customer"],
         "board_description": "P0 فضلة من المعمل", "board_length_cm": 244,
         "board_width_cm": 122, "default_edge_type": fixture["edge_type"],
+        "edge_color": "P0 offcut edge",
         "kerf_mm": 5, "trim_margin_mm": 5,
         "optimization_time_limit_sec": 10, "board_rate_usd": 11,
         "cutting_cost_per_board_usd": 2, "current_department": "رسم",
