@@ -39,6 +39,7 @@ jobs:
           node almdina_erp/tests/js/offcut_plan_presentation.test.js
           node almdina_erp/tests/js/order_action_permission_guard.test.js
           node almdina_erp/tests/js/dco_workspace_asset_registry.test.js
+          node --test almdina_erp/tests/js/phase3_jquery_thenable_boundaries.test.js
 
   pinned-desk-runtime:
     uses: ./.github/workflows/cross-order-p0-runtime.yml

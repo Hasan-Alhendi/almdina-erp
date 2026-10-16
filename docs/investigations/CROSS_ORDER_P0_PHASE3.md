@@ -1,5 +1,30 @@
 # P0 Phase 3 — Integration and release certification
 
+## Phase 3A — Post-Save Edit Session Certification
+
+### Change contract (before implementation)
+
+Scope: diagnose the observed `.finally` exception in the pinned Frappe lifecycle and exercise the real post-save Plan/Cost edit contracts through Desk. Expected owned files are Document Context and Notes UX only if their transport boundary is proven, focused JS regressions, the disposable `cross_order_p0_runtime_fixture.py` role/capabilities and independent DB audit, `browser/test_cross_order_p0_runtime.py`, the isolated runtime workflow, and this report. Plan/Cost UX, Preview, Recovery, DXF, manufacturing algorithms and production permission policy remain owned by their existing components; no schema or production data migration is authorized. Test-only roles receive only the dynamic capabilities required for each scenario; denied permissions remain covered by the existing independent tests. Fixtures and site-scoped settings are disposed on completion. Rollback is a regular revert of any focused production fix and its matching test/asset commit; the prior P0 identity and print commits are retained. Release PR #514 and #506/#507 remain untouched until the separate release decision.
+
+Evidence must include the actual Desk action, captured document token and edit phase, draft before/after, native request/response where saving, and a separate server/DB read. A controlled Store mutation alone cannot certify the operator edit flow. The old general CI debt is registered separately below; making those jobs green is outside this change contract.
+
+### Deterministic transport boundary and post-save proof
+
+`phase3_jquery_thenable_boundaries.test.js` supplies a Frappe-style thenable with `.then` and `.catch` but no `.finally`. It was **RED 0/2** on the prior tree: Notes `refreshNotesSummary` and active-stage `ensureStageContext` synchronously threw `.finally is not a function`. Normalizing each `frappe.call` result through `Promise.resolve` before its existing callbacks is **GREEN 2/2** and preserves late-A rejection, B's stage ownership, cleanup and NEW bypass. The earlier Desk artifact recorded only the message, without a stack, and cannot attribute that historical event to either independently proven site. The next browser evidence captures page-error stacks without extra Store reads.
+
+The enhanced NEW→Saved browser gate stays in the same Desk visit after Native Save, bootstraps a real System Plan through its visible button, cancels and saves Plan settings through Preview, then cancels and saves Cost settings using the toolbar. It captures generation, draft and Save state and visits A to check isolation. A separate bench process checks the permanent order and **Plan-owned** kerf and rate on the persisted Cutting Plan. Projected `frm.doc` values are checked for UI consistency, never substituted for this database evidence. The role receives only the three additional capabilities needed on this disposable site. The pinned runtime result remains **pending**; local Bench is unavailable. Original Phase 1 15/15, Phase 2A 4/4 and the focused transport/print Node tests pass locally.
+
+### Repository CI debt register, separate from P0
+
+| Owner / next action | Proven cause on Develop `6ff81adb` | Impact / closure evidence |
+| --- | --- | --- |
+| i18n and Renderer owner, separate PR | 32 direct visible Arabic literals in Renderer and duplicate `Apply` in `ar.csv`; both predate P0 integration | Static and locale release gates red. Translate at the display boundary, deduplicate the catalog, and pass locale/static gates without changing print identity or geometry. |
+| Cost contract test owner, separate PR | Stage 13 source-text test searches the entire runtime repository and finds an unrelated System settings lookup before the Uploaded fallback within `resolve_canonical_cost_plan` | False-positive ordering assertion, **not** observed wrong financial calculation. Scope the assertion to the resolver and retain behavioral Frappe tests for Approved → Uploaded DXF → System plus OFFCUT; pass Stage 13. |
+| Recovery documentation owner, separate PR | Ownership manifest omits an explicit `liner_reference_side` owner/capture boundary while DocType and Recovery projection already include it | Documentation contract gate red; no demonstrated Recovery data leak. Complete the allowlist/ownership manifest and pass its Frappe contract test. |
+| CI infrastructure | Final HEAD `28785f5e` Frappe Integration bootstrap received Yarn registry HTTP 502 for `@vue/runtime-core-3.3.9.tgz`; later `apps.txt Not Found` followed | Tests did not start in that job. A previous pinned run completed and exposed four Develop baseline failures. Retry only after a meaningful change, not with identical premises. |
+
+These debts still block release. They are not repairs to perform in this P0 PR. Certify separate scoped changes and CI before advancing cumulative release PR #514.
+
 ## Integration boundary
 
 The verified Phase 2B head is `515accf7e5a6d683941f7ce2a7aba50444db5bb9`. A separate temporary integration branch, `agent/dco-cross-order-p0-phase3-integration`, merged `Develop` at `6ff81adbdf45337d1f5c59bc2336cd6ae485cc4f` (17 additional Develop commits) in merge commit `2bd6c77135a528c1f28655a4e32ba07227e0f9ec`. Git had no textual conflicts. The resulting history preserves the Phase 2A/2B identity guards, Native Save code and the newer manufacturing changes. The original #514 branch has not been advanced during the integration gate. Temporary Draft PR #515 exists only to run isolated CI and is not a release PR.

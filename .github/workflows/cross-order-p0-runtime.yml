@@ -106,7 +106,7 @@ jobs:
           python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" -k test_new_form_clean_preflight 2>&1 | tee "$RUNNER_TEMP/new-form-preflight.log"
       - name: Exercise NEW checkpoint restore cancel and native save in Desk
         if: always() && steps.new_form_preflight.outcome == 'success'
-        timeout-minutes: 5
+        timeout-minutes: 8
         run: |
           set -o pipefail
           python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" -k test_recovery_new_saved_intersection 2>&1 | tee "$RUNNER_TEMP/recovery-intersection.log"

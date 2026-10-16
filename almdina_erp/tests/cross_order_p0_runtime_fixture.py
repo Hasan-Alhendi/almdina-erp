@@ -139,6 +139,9 @@ def prepare() -> dict[str, object]:
         Capability.VIEW_SYSTEM_CUTTING_PLAN: True,
         Capability.VIEW_UPLOADED_CUTTING_PLAN: True,
         Capability.VIEW_APPROVED_CUTTING_PLAN: True,
+        Capability.EDIT_OPTIMIZER_SETTINGS: True,
+        Capability.RECALCULATE_PLAN: True,
+        Capability.EDIT_COST_SETTINGS: True,
         Capability.UPLOAD_DXF: True,
         Capability.APPROVE_DXF: True,
         Capability.SET_OFFCUT_EXECUTION_OWNER: True,
@@ -188,6 +191,10 @@ def cleanup() -> None:
     for name in frappe.get_all("Door Cutting Order",
                                filters={"board_description": fixture["recovery_board"]},
                                pluck="name"):
+        for plan_name in frappe.get_all("Cutting Plan",
+                                        filters={"door_cutting_order": name}, pluck="name"):
+            frappe.delete_doc("Cutting Plan", plan_name, force=True,
+                              ignore_permissions=True)
         frappe.delete_doc("Door Cutting Order", name, force=True,
                           ignore_permissions=True)
     for row in fixture["orders"].values():
@@ -278,6 +285,30 @@ def audit_db() -> dict[str, object]:
             )
             if not result["recovery_db_verified"]:
                 raise AssertionError(f"NEW Native Save did not persist its owned fields: {matches}")
+            edit_evidence = json.loads(recovery_evidence.read_text(encoding="utf-8"))
+            if edit_evidence.get("plan_saved") and edit_evidence.get("cost_saved"):
+                order = frappe.get_doc("Door Cutting Order", native["name"])
+                plan_name = edit_evidence["plan_saved"]["plan"]
+                plan = frappe.get_doc("Cutting Plan", plan_name)
+                result["post_save_edit"] = {
+                    "order_name": order.name, "plan_name": plan.name,
+                    "plan_order_name": plan.door_cutting_order,
+                    "source": plan.source_type, "revision": plan.revision,
+                    "kerf": float(plan.kerf_mm or 0),
+                    "board_rate": float(plan.board_rate_usd or 0),
+                    "piece_widths_cm": [piece.width_cm for piece in order.pieces],
+                }
+                expected_kerf = float(edit_evidence["plan_saved"]["kerf"])
+                expected_rate = float(edit_evidence["cost_saved"]["board_rate"])
+                result["post_save_edit_db_verified"] = bool(
+                    result["post_save_edit"]["kerf"] == expected_kerf
+                    and result["post_save_edit"]["board_rate"] == expected_rate
+                    and plan.door_cutting_order == order.name
+                    and plan.source_type == "System"
+                    and 31 in result["post_save_edit"]["piece_widths_cm"]
+                )
+                if not result["post_save_edit_db_verified"]:
+                    raise AssertionError(f"Post-save Plan/Cost not persisted: {result['post_save_edit']}")
     evidence_dir = os.environ.get("P0_EVIDENCE_DIR")
     if evidence_dir:
         Path(evidence_dir).mkdir(parents=True, exist_ok=True)

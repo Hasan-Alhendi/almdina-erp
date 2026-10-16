@@ -708,7 +708,9 @@ def test_new_form_clean_preflight():
     with browser_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         page = browser.new_page(locale="en-US")
-        page.on("pageerror", lambda error: record("page_error", str(error)))
+        page.on("pageerror", lambda error: record("page_error", {
+            "message": str(error), "stack": getattr(error, "stack", None),
+        }))
         try:
             _login(page, fixture)
             page.evaluate("name => { frappe.set_route('Form','Door Cutting Order',name); }",
@@ -868,7 +870,7 @@ def test_recovery_new_saved_intersection():
     """Observe the real NEW→Saved boundary without mutating Recovery code."""
     fixture = json.loads(Path(os.environ["P0_FIXTURE_PATH"]).read_text())
     evidence_dir = Path(os.environ["P0_EVIDENCE_DIR"])
-    evidence = {"scope": "Develop NEW checkpoint, Start New cancel, Continue restore, Native Save, EDIT and Plan/Cost state"}
+    evidence = {"scope": "Develop NEW checkpoint, Start New cancel, Continue restore, Native Save, post-save Plan/Cost edits"}
 
     def mark_step(name):
         evidence["last_completed_step"] = name
@@ -880,6 +882,10 @@ def test_recovery_new_saved_intersection():
         browser = playwright.chromium.launch(headless=True)
         try:
             page = browser.new_page(locale="en-US")
+            page_errors = []
+            page.on("pageerror", lambda error: page_errors.append({
+                "message": str(error), "stack": getattr(error, "stack", None),
+            }))
             _login(page, fixture)
             page.evaluate("name => { frappe.set_route('Form','Door Cutting Order',name); }",
                           fixture["orders"]["A"]["name"])
@@ -1038,6 +1044,109 @@ def test_recovery_new_saved_intersection():
                 f"::{evidence['native_save']['name']}")
             assert evidence["native_save"]["token"]["generation"] == evidence["restore"]["token"]["generation"]
             mark_step("native_save_settled")
+            # Continue within the same Desk visit and generation immediately after
+            # the first Native Save. All edits use the visible operator controls.
+            saved = evidence["native_save"]["name"]
+            page.get_by_text("Cutting Plan", exact=True).first.click()
+            page.wait_for_function("""name => cur_frm?.doc?.name === name
+                && AlmdinaPlanWorkspaceState?.snapshot(cur_frm)?.status === 'ready'
+                && AlmdinaPlanWorkspaceState?.snapshot(cur_frm)?.data?.order_name === name""",
+                arg=saved, timeout=45000)
+            first_plan = page.locator('.dco-recalculate-plan:visible').first()
+            first_plan.wait_for(state="visible", timeout=15000)
+            assert first_plan.is_enabled(), "First System plan bootstrap is not available"
+            first_plan.click()
+            page.wait_for_function("""name =>
+                AlmdinaPlanWorkspaceState?.snapshot(cur_frm)?.status === 'ready'
+                && AlmdinaPlanWorkspaceState?.snapshot(cur_frm)?.data?.order_name === name
+                && !!AlmdinaPlanWorkspaceState?.snapshot(cur_frm)?.data?.plans?.system_draft?.name""",
+                arg=saved, timeout=60000)
+            evidence["plan_bootstrap"] = page.evaluate("""() => ({
+                token:AlmdinaDocumentContext.capture(cur_frm),
+                plan:AlmdinaPlanWorkspaceState.snapshot(cur_frm).data.plans.system_draft.name,
+                kerf:cur_frm.doc.kerf_mm})""")
+            assert evidence["plan_bootstrap"]["token"]["generation"] == evidence["native_save"]["token"]["generation"]
+            mark_step("post_save_system_plan_bootstrapped")
+
+            plan_toolbar = page.locator('.dco-tab-edit-toolbar[data-almdina-tab-edit-kind="plan"]')
+            plan_toolbar.locator('.dco-tab-edit-start').click()
+            kerf = page.locator('[data-almdina-plan-setting="kerf_mm"]:visible').first()
+            kerf.wait_for(state="visible", timeout=15000)
+            original_kerf = float(kerf.input_value())
+            new_kerf = original_kerf + 1
+            kerf.fill(str(new_kerf))
+            evidence["plan_draft"] = page.evaluate("""() => ({
+                edit:AlmdinaDcoEditSessionCoordinator.snapshot(cur_frm),
+                draft:AlmdinaPlanEditSessionUX.snapshot?.(cur_frm) || null,
+                token:AlmdinaDocumentContext.capture(cur_frm)})""")
+            assert evidence["plan_draft"]["token"]["generation"] == evidence["native_save"]["token"]["generation"]
+            plan_toolbar.locator('.dco-tab-edit-cancel').click()
+            page.wait_for_function("""() => AlmdinaDcoEditSessionCoordinator.snapshot(cur_frm).activeKind === null""",
+                                   timeout=15000)
+            assert float(page.evaluate('cur_frm.doc.kerf_mm')) == original_kerf
+            assert float(page.evaluate("""() => AlmdinaPlanWorkspaceState.snapshot(cur_frm)
+                .data.plans.system_draft.settings.kerf_mm""")) == original_kerf
+            mark_step("plan_draft_cancelled")
+            plan_toolbar.locator('.dco-tab-edit-start').click()
+            kerf = page.locator('[data-almdina-plan-setting="kerf_mm"]:visible').first()
+            kerf.fill(str(new_kerf))
+            recalculate = page.locator('.dco-recalculate-plan:visible').first()
+            assert recalculate.is_enabled()
+            recalculate.click()
+            page.wait_for_function("""() => AlmdinaPlanPreviewSession?.snapshot(cur_frm)?.status === 'ready'
+                && AlmdinaPlanPreviewSession?.isCommittable(cur_frm)""", timeout=60000)
+            evidence["plan_preview"] = page.evaluate("""() => {
+                const preview=AlmdinaPlanPreviewSession.snapshot(cur_frm);
+                const row=AlmdinaPlanWorkspaceState.snapshot(cur_frm)?.data?.plans?.system_draft;
+                return {preview_id:preview.previewId, status:preview.status,
+                    source_plan:row?.name, source_revision:row?.revision,
+                    token:AlmdinaDocumentContext.capture(cur_frm)};
+            }""")
+            save_plan = plan_toolbar.locator('.dco-tab-edit-save')
+            assert save_plan.is_enabled()
+            save_plan.click()
+            page.wait_for_function("""value =>
+                AlmdinaDcoEditSessionCoordinator.snapshot(cur_frm).activeKind === null
+                && Number(cur_frm.doc.kerf_mm) === value""", arg=new_kerf, timeout=60000)
+            evidence["plan_saved"] = page.evaluate("""() => ({
+                kerf:cur_frm.doc.kerf_mm,
+                plan:AlmdinaPlanWorkspaceState.snapshot(cur_frm)?.data?.plans?.system_draft?.name,
+                token:AlmdinaDocumentContext.capture(cur_frm)})""")
+            mark_step("plan_preview_committed")
+
+            page.get_by_text("Order Cost", exact=True).first.click()
+            page.wait_for_function("""name => AlmdinaCostWorkspaceState?.snapshot(cur_frm)?.status === 'ready'
+                && AlmdinaCostWorkspaceState?.snapshot(cur_frm)?.data?.order_name === name""",
+                arg=saved, timeout=45000)
+            cost_toolbar = page.locator('.dco-tab-edit-toolbar[data-almdina-tab-edit-kind="cost"]')
+            cost_toolbar.locator('.dco-tab-edit-start').click()
+            board_rate = page.locator('[data-fieldname="board_rate_usd"] .almdina-workspace-field-editor .form-control:visible').first()
+            board_rate.wait_for(state="visible", timeout=15000)
+            original_rate = float(board_rate.input_value())
+            new_rate = original_rate + 3
+            board_rate.fill(str(new_rate))
+            evidence["cost_draft"] = page.evaluate("""() => ({
+                edit:AlmdinaDcoEditSessionCoordinator.snapshot(cur_frm),
+                token:AlmdinaDocumentContext.capture(cur_frm)})""")
+            assert evidence["cost_draft"]["token"]["generation"] == evidence["native_save"]["token"]["generation"]
+            cost_toolbar.locator('.dco-tab-edit-cancel').click()
+            page.wait_for_function("""() => AlmdinaDcoEditSessionCoordinator.snapshot(cur_frm).activeKind === null""",
+                                   timeout=15000)
+            assert float(page.evaluate('cur_frm.doc.board_rate_usd')) == original_rate
+            assert float(page.evaluate("""() => AlmdinaCostWorkspaceState.snapshot(cur_frm)
+                .data.order.board_rate_usd""")) == original_rate
+            mark_step("cost_draft_cancelled")
+            cost_toolbar.locator('.dco-tab-edit-start').click()
+            board_rate = page.locator('[data-fieldname="board_rate_usd"] .almdina-workspace-field-editor .form-control:visible').first()
+            board_rate.fill(str(new_rate))
+            cost_toolbar.locator('.dco-tab-edit-save').click()
+            page.wait_for_function("""value =>
+                AlmdinaDcoEditSessionCoordinator.snapshot(cur_frm).activeKind === null
+                && Number(cur_frm.doc.board_rate_usd) === value""", arg=new_rate, timeout=45000)
+            evidence["cost_saved"] = page.evaluate("""() => ({
+                board_rate:cur_frm.doc.board_rate_usd,
+                token:AlmdinaDocumentContext.capture(cur_frm)})""")
+            mark_step("cost_settings_committed")
             if evidence["native_save"]["ok"]:
                 saved = evidence["native_save"]["name"]
                 page.evaluate("name => { frappe.set_route('Form','Door Cutting Order',name); }",
@@ -1046,6 +1155,18 @@ def test_recovery_new_saved_intersection():
                                        arg=fixture["orders"]["B"]["name"], timeout=45000)
                 page.evaluate("name => { frappe.set_route('Form','Door Cutting Order',name); }", saved)
                 page.wait_for_function("name => cur_frm?.doc?.name === name", arg=saved, timeout=45000)
+                page.get_by_text("Cutting Plan", exact=True).first.click()
+                page.wait_for_function("""name =>
+                    AlmdinaPlanWorkspaceState?.snapshot(cur_frm)?.status === 'ready'
+                    && AlmdinaPlanWorkspaceState?.snapshot(cur_frm)?.data?.order_name === name""",
+                    arg=saved, timeout=45000)
+                page.get_by_text("Order Cost", exact=True).first.click()
+                page.wait_for_function("""name =>
+                    AlmdinaPlanWorkspaceState?.snapshot(cur_frm)?.status === 'ready'
+                    && AlmdinaPlanWorkspaceState?.snapshot(cur_frm)?.data?.order_name === name
+                    && AlmdinaCostWorkspaceState?.snapshot(cur_frm)?.status === 'ready'
+                    && AlmdinaCostWorkspaceState?.snapshot(cur_frm)?.data?.order_name === name""",
+                    arg=saved, timeout=45000)
                 evidence["saved_reopen"] = page.evaluate("""() => ({name:cur_frm.doc.name,
                     board:cur_frm.doc.board_description,
                     customer:cur_frm.doc.customer,
@@ -1059,6 +1180,16 @@ def test_recovery_new_saved_intersection():
                 assert evidence["saved_reopen"]["customer"] == fixture["customer"]
                 assert 31 in evidence["saved_reopen"]["pieceWidths"]
                 assert evidence["saved_reopen"]["token"]["identity"].endswith(f"::{saved}")
+                assert float(page.evaluate("""() => AlmdinaPlanWorkspaceState.snapshot(cur_frm)
+                    .data.plans.system_draft.settings.kerf_mm""")) == new_kerf
+                assert float(page.evaluate("""() => AlmdinaCostWorkspaceState.snapshot(cur_frm)
+                    .data.order.board_rate_usd""")) == new_rate
+                page.evaluate("name => frappe.set_route('Form','Door Cutting Order',name)", fixture["orders"]["A"]["name"])
+                page.wait_for_function("name => cur_frm?.doc?.name === name",
+                                       arg=fixture["orders"]["A"]["name"], timeout=45000)
+                assert float(page.evaluate('cur_frm.doc.kerf_mm')) != new_kerf
+                assert float(page.evaluate('cur_frm.doc.board_rate_usd')) != new_rate
+                mark_step("post_save_cross_order_isolated")
         except Exception as exc:
             evidence["failure"] = repr(exc)
             evidence["browser_state"] = page.evaluate("""() => ({route:frappe.get_route?.(),
@@ -1068,6 +1199,7 @@ def test_recovery_new_saved_intersection():
             page.screenshot(path=str(evidence_dir / "recovery-failure.png"), full_page=True)
             raise
         finally:
+            evidence["page_errors"] = page_errors
             evidence_dir.mkdir(parents=True, exist_ok=True)
             (evidence_dir / "recovery-intersection.json").write_text(
                 json.dumps(evidence, ensure_ascii=False, indent=2, default=str), encoding="utf-8")

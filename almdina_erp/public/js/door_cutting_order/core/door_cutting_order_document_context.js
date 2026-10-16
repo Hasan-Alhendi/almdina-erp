@@ -683,11 +683,10 @@
         frm.__almdina_stage_context_key = cacheKey;
         frm.__almdinaStageContextToken = token;
 
-        const promise = frappe
-            .call({
+        const promise = Promise.resolve(frappe.call({
                 method: STAGE_CONTEXT_METHOD,
                 args: { order_name: frm.doc.name },
-            })
+            }))
             .then((response) => {
                 if (frm.__almdinaStageContextRequestId !== requestId) return false;
                 if (!isSameDocument(frm, token)) return false;
