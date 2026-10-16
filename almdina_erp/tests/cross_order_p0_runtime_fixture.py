@@ -141,6 +141,7 @@ def prepare() -> dict[str, object]:
         Capability.VIEW_APPROVED_CUTTING_PLAN: True,
         Capability.UPLOAD_DXF: True,
         Capability.APPROVE_DXF: True,
+        Capability.SET_OFFCUT_EXECUTION_OWNER: True,
         Capability.PRINT_CUTTING_PLAN: True,
         Capability.VIEW_CUSTOMERS: True,
         Capability.VIEW_EDGE_BANDING_TYPES: True,
@@ -201,6 +202,25 @@ def cleanup() -> None:
                               ignore_permissions=True)
         frappe.delete_doc("Door Cutting Order", row["name"], force=True,
                           ignore_permissions=True)
+    for key in ("multi_order", "offcut_order"):
+        extra_order = fixture.get(key) or {}
+        if not extra_order.get("name"):
+            continue
+        for plan_name in frappe.get_all("Cutting Plan",
+                                        filters={"door_cutting_order": extra_order["name"]},
+                                        pluck="name"):
+            for file_name in frappe.get_all("File",
+                                            filters={"attached_to_doctype": "Cutting Plan",
+                                                     "attached_to_name": plan_name}, pluck="name"):
+                frappe.delete_doc("File", file_name, force=True, ignore_permissions=True)
+            frappe.delete_doc("Cutting Plan", plan_name, force=True,
+                              ignore_permissions=True)
+        for file_name in frappe.get_all("File",
+                                        filters={"attached_to_doctype": "Door Cutting Order",
+                                                 "attached_to_name": extra_order["name"]}, pluck="name"):
+            frappe.delete_doc("File", file_name, force=True, ignore_permissions=True)
+        frappe.delete_doc("Door Cutting Order", extra_order["name"], force=True,
+                          ignore_permissions=True)
     frappe.delete_doc("Customer", fixture["customer"], force=True,
                       ignore_permissions=True)
     frappe.delete_doc("Edge Banding Type", fixture["edge_type"], force=True,
@@ -239,6 +259,18 @@ def audit_db() -> dict[str, object]:
               "distinct_child_names": rows["A"]["pieces"][0]["name"] != rows["B"]["pieces"][0]["name"],
               "recovery_saved_names": recovered_names,
               "recovery_saved_rows": recovered}
+    recovery_evidence = Path(os.environ.get("P0_EVIDENCE_DIR") or "") / "recovery-intersection.json"
+    if recovery_evidence.is_file():
+        native = json.loads(recovery_evidence.read_text(encoding="utf-8")).get("native_save") or {}
+        if native.get("ok"):
+            matches = [row for row in recovered if row["name"] == native["name"]]
+            result["recovery_db_verified"] = bool(
+                len(matches) == 1 and matches[0]["board"] == fixture["recovery_board"]
+                and matches[0]["customer"] == fixture["customer"]
+                and 31 in matches[0]["piece_widths_cm"]
+            )
+            if not result["recovery_db_verified"]:
+                raise AssertionError(f"NEW Native Save did not persist its owned fields: {matches}")
     evidence_dir = os.environ.get("P0_EVIDENCE_DIR")
     if evidence_dir:
         Path(evidence_dir).mkdir(parents=True, exist_ok=True)
@@ -346,5 +378,115 @@ def prepare_custom_dxf_plan() -> dict[str, object]:
                 "status": plan.status, "board": plan.board_description,
                 "sheets": len((frappe.parse_json(plan.snapshot_json or "{}") or {}).get("sheets") or [])}
     (Path(os.environ["P0_EVIDENCE_DIR"]) / "custom-plan-fixture.json").write_text(
+        json.dumps(evidence, ensure_ascii=False, indent=2), encoding="utf-8")
+    return evidence
+
+
+def prepare_multiboard_extra_plan() -> dict[str, object]:
+    """Persist several real System sheets with a liner requirement on one order."""
+    fixture_path = Path(os.environ["P0_FIXTURE_PATH"])
+    fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+    frappe.set_user("Administrator")
+    order = frappe.get_doc({
+        "doctype": "Door Cutting Order", "customer": fixture["customer"],
+        "board_description": "P0 متعدد", "board_length_cm": 244,
+        "board_width_cm": 122, "default_edge_type": fixture["edge_type"],
+        "kerf_mm": 5, "trim_margin_mm": 5,
+        "optimization_time_limit_sec": 10, "board_rate_usd": 11,
+        "cutting_cost_per_board_usd": 2,
+        "pieces": [{"piece_type": "Regular", "width_cm": 42,
+                    "length_cm": 81, "qty": 24, "extra_liner": 1,
+                    "liner_reference_side": "edge_width_top",
+                    "liner_offset_cm": 0, "liner_width_cm": 1.8}],
+    }).insert(ignore_permissions=True)
+    fixture["multi_order"] = {"name": order.name, "board": order.board_description}
+    fixture_path.write_text(json.dumps(fixture, ensure_ascii=False), encoding="utf-8")
+    from almdina_erp.almdina_erp.services.cutting_plan_command_service import recalculate_system_plan
+
+    result = recalculate_system_plan(order)
+    frappe.db.commit()
+    plan = frappe.get_doc("Cutting Plan", result["cutting_plan"])
+    snapshot = frappe.parse_json(plan.snapshot_json or "{}") or {}
+    evidence = {"order_name": order.name, "plan_name": plan.name,
+                "revision": int(plan.revision or 0), "source": plan.source_type,
+                "status": plan.status, "board": plan.board_description,
+                "sheets": len(snapshot.get("sheets") or [])}
+    if evidence["sheets"] < 2:
+        raise AssertionError(f"Real persisted fixture did not generate several boards: {evidence}")
+    (Path(os.environ["P0_EVIDENCE_DIR"]) / "multi-plan-fixture.json").write_text(
+        json.dumps(evidence, ensure_ascii=False, indent=2), encoding="utf-8")
+    return evidence
+
+
+def prepare_saved_offcut_plan() -> dict[str, object]:
+    """Import a genuine OFFCUT contour and classify its production owner."""
+    from tempfile import NamedTemporaryFile
+
+    import ezdxf
+    from frappe.utils.file_manager import save_file
+
+    from almdina_erp.almdina_erp.services.dxf_import_service import (
+        OFFCUT_LAYER, SHEET_OUTLINE_LAYER,
+    )
+    from almdina_erp.almdina_erp.services.shop_floor_dxf_service import upload_production_dxf
+    from almdina_erp.almdina_erp.services.offcut_service import set_offcut_execution_owner
+
+    fixture_path = Path(os.environ["P0_FIXTURE_PATH"])
+    fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+    frappe.set_user("Administrator")
+    order = frappe.get_doc({
+        "doctype": "Door Cutting Order", "customer": fixture["customer"],
+        "board_description": "P0 فضلة من المعمل", "board_length_cm": 244,
+        "board_width_cm": 122, "default_edge_type": fixture["edge_type"],
+        "kerf_mm": 5, "trim_margin_mm": 5,
+        "optimization_time_limit_sec": 10, "board_rate_usd": 11,
+        "cutting_cost_per_board_usd": 2, "current_department": "رسم",
+        "pieces": [{"piece_type": "Regular", "width_cm": 42,
+                    "length_cm": 81, "qty": 1}],
+    }).insert(ignore_permissions=True)
+    fixture["offcut_order"] = {"name": order.name, "board": order.board_description}
+    fixture_path.write_text(json.dumps(fixture, ensure_ascii=False), encoding="utf-8")
+    drawing = ezdxf.new("R2010")
+    model = drawing.modelspace()
+    for points, layer in (
+        (((0, 0), (1220, 0), (1220, 2440), (0, 2440)), SHEET_OUTLINE_LAYER),
+        (((10, 10), (430, 10), (430, 820), (10, 820)), OFFCUT_LAYER),
+    ):
+        for start, end in zip(points, (*points[1:], points[0])):
+            model.add_line(start, end, dxfattribs={"layer": layer})
+    with NamedTemporaryFile(suffix=".dxf") as staged:
+        drawing.saveas(staged.name)
+        raw = Path(staged.name).read_bytes()
+    file_doc = save_file(f"p0-offcut-{order.name}.dxf", raw,
+                         "Door Cutting Order", order.name, is_private=1)
+    frappe.db.commit()
+    frappe.set_user(fixture["user"])
+    uploaded = upload_production_dxf(order.name, file_doc.file_url)
+    plan = frappe.get_doc("Cutting Plan", uploaded["cutting_plan"])
+    snapshot = frappe.parse_json(plan.snapshot_json or "{}") or {}
+    offcut = [piece for sheet in snapshot.get("sheets") or []
+              for piece in sheet.get("pieces") or []
+              if piece.get("resource_kind") == "OFFCUT"]
+    if len(offcut) != 1:
+        raise AssertionError(f"Real DXF OFFCUT contour was not classified: {offcut}")
+    set_offcut_execution_owner(plan.name, [{
+        "piece_instance_id": offcut[0]["piece_instance_id"],
+        "business_state": "FACTORY_FACTORY",
+    }])
+    frappe.db.commit()
+    plan.reload()
+    snapshot = frappe.parse_json(plan.snapshot_json or "{}") or {}
+    evidence = {"order_name": order.name, "plan_name": plan.name,
+                "revision": int(plan.revision or 0), "source": plan.source_type,
+                "status": plan.status, "board": plan.board_description,
+                "sheets": len(snapshot.get("sheets") or []),
+                "offcut_kind": snapshot["sheets"][0]["pieces"][0].get("resource_kind"),
+                "offcut_source": snapshot["sheets"][0]["pieces"][0].get("offcut_source_party"),
+                "offcut_execution": snapshot["sheets"][0]["pieces"][0].get("offcut_execution_party")}
+    if (evidence["offcut_kind"], evidence["offcut_source"], evidence["offcut_execution"]) != (
+        "OFFCUT", "FACTORY", "FACTORY"
+    ):
+        raise AssertionError(f"Saved OFFCUT classification differs: {evidence}")
+    (Path(os.environ["P0_EVIDENCE_DIR"]) / "offcut-plan-fixture.json").write_text(
         json.dumps(evidence, ensure_ascii=False, indent=2), encoding="utf-8")
     return evidence

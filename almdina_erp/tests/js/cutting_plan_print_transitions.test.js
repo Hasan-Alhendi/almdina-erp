@@ -266,6 +266,11 @@ test("frozen print preserves L-corner edge thickness without financial profiles"
     h.frm._dco_side_edge_profiles.get("INNER").thickness_mm = 6;
     release();
     assert.equal(await pending, false, "an edge thickness update cancels a pending print");
+    const releaseType = h.deferIdentity();
+    const pendingType = h.print();
+    h.frm.doc.default_edge_type = "OTHER";
+    releaseType();
+    assert.equal(await pendingType, false, "a default edge type change cancels a pending print");
 });
 
 test("unowned OFFCUT metadata cannot enter another order's final HTML", async () => {

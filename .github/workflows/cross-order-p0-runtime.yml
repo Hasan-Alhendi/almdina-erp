@@ -141,6 +141,19 @@ jobs:
           set -o pipefail
           cd "$RUNNER_TEMP/frappe-bench"
           bench --site test.localhost execute almdina_erp.tests.cross_order_p0_runtime_fixture.prepare_approved_plan 2>&1 | tee "$RUNNER_TEMP/approved-plan.log"
+      - name: Persist a multi-board System plan with an Extra liner
+        id: multi_plan
+        if: always() && steps.saved_plan_browser.outcome == 'success'
+        run: |
+          set -o pipefail
+          cd "$RUNNER_TEMP/frappe-bench"
+          bench --site test.localhost execute almdina_erp.tests.cross_order_p0_runtime_fixture.prepare_multiboard_extra_plan 2>&1 | tee "$RUNNER_TEMP/multi-plan.log"
+      - name: Print persisted multi-board Extra through the real Desk button
+        if: always() && steps.multi_plan.outcome == 'success'
+        timeout-minutes: 3
+        run: |
+          set -o pipefail
+          python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" -k test_saved_multiboard_extra_operator_print 2>&1 | tee "$RUNNER_TEMP/multi-plan-browser.log"
       - name: Import a private Custom DXF plan through the real command
         id: custom_plan
         if: always() && steps.saved_plan_browser.outcome == 'success'
@@ -154,6 +167,19 @@ jobs:
         run: |
           set -o pipefail
           python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" -k test_saved_custom_plan_operator_print 2>&1 | tee "$RUNNER_TEMP/custom-plan-browser.log"
+      - name: Persist and classify actual OFFCUT DXF
+        id: offcut_plan
+        if: always() && steps.saved_plan_browser.outcome == 'success'
+        run: |
+          set -o pipefail
+          cd "$RUNNER_TEMP/frappe-bench"
+          bench --site test.localhost execute almdina_erp.tests.cross_order_p0_runtime_fixture.prepare_saved_offcut_plan 2>&1 | tee "$RUNNER_TEMP/offcut-plan.log"
+      - name: Print persisted OFFCUT from the real Desk button
+        if: always() && steps.offcut_plan.outcome == 'success'
+        timeout-minutes: 3
+        run: |
+          set -o pipefail
+          python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" -k test_saved_offcut_operator_print 2>&1 | tee "$RUNNER_TEMP/offcut-plan-browser.log"
       - name: Print the approved plan using the real Desk button
         if: always() && steps.approved_plan.outcome == 'success'
         timeout-minutes: 3
@@ -208,6 +234,8 @@ jobs:
             ${{ runner.temp }}/approved-plan-browser.log
             ${{ runner.temp }}/custom-plan.log
             ${{ runner.temp }}/custom-plan-browser.log
+            ${{ runner.temp }}/multi-plan.log
+            ${{ runner.temp }}/multi-plan-browser.log
             ${{ runner.temp }}/recovery-browser.log
           if-no-files-found: warn
           retention-days: 14

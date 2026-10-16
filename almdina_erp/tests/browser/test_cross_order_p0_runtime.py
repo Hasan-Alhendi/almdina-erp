@@ -754,11 +754,10 @@ def test_new_form_clean_preflight():
             browser.close()
 
 
-def _print_saved_plan_variant(source):
+def _print_saved_plan_variant(source, prefix):
     """Real persisted manufacturing row prints via the visible Desk action."""
     fixture = json.loads(Path(os.environ["P0_FIXTURE_PATH"]).read_text())
     evidence_dir = Path(os.environ["P0_EVIDENCE_DIR"])
-    prefix = "custom" if source == "Custom" else "approved"
     selected = json.loads((evidence_dir / f"{prefix}-plan-fixture.json").read_text())
     evidence = {"fixture": selected}
     with browser_playwright() as playwright:
@@ -802,9 +801,20 @@ def _print_saved_plan_variant(source):
             assert str(selected["revision"]) in html
             assert selected["board"] in html
             assert html.count('class="dco-sheet-card"') == selected["sheets"]
-            other = "B" if source == "Custom" else "A"
-            assert fixture["orders"][other]["name"] not in html
-            assert ("420 × 810" if source == "Custom" else "570 × 930") in html
+            other_labels = ("B",) if prefix == "custom" else (("A",) if prefix == "approved" else ("A", "B"))
+            for other in other_labels:
+                assert fixture["orders"][other]["name"] not in html
+            assert ("570 × 930" if prefix == "approved" else "420 × 810") in html
+            if prefix == "multi":
+                assert selected["sheets"] >= 2
+                assert 'data-overlay-kind="liner"' in html
+            if prefix == "offcut":
+                assert selected["offcut_kind"] == "OFFCUT"
+                assert selected["offcut_source"] == "FACTORY"
+                assert selected["offcut_execution"] == "FACTORY"
+                assert 'data-resource-kind="OFFCUT"' in html
+                assert 'dco-offcut-business-context' in html
+                assert "من المعمل" in html
             filename = f"{prefix}-plan-operator-final.html"
             (evidence_dir / filename).write_text(html, encoding="utf-8")
             evidence["final_html"] = filename
@@ -827,11 +837,19 @@ def _print_saved_plan_variant(source):
 
 
 def test_saved_custom_plan_operator_print():
-    _print_saved_plan_variant("Custom")
+    _print_saved_plan_variant("Custom", "custom")
 
 
 def test_saved_approved_plan_operator_print():
-    _print_saved_plan_variant("Approved")
+    _print_saved_plan_variant("Approved", "approved")
+
+
+def test_saved_multiboard_extra_operator_print():
+    _print_saved_plan_variant("System", "multi")
+
+
+def test_saved_offcut_operator_print():
+    _print_saved_plan_variant("Custom", "offcut")
 
 
 def test_recovery_new_saved_intersection():
@@ -972,6 +990,7 @@ def test_recovery_new_saved_intersection():
                 board:cur_frm.doc.board_description,
                 customer:cur_frm.doc.customer,
                 pieceWidths:cur_frm.doc.pieces.map(row=>row.width_cm),
+                token:AlmdinaDocumentContext.capture(cur_frm),
                 recovery:AlmdinaDcoRecovery.LocalCheckpoint.snapshot(cur_frm)})""")
             assert evidence["restore"]["customer"] == fixture["customer"]
             assert 31 in evidence["restore"]["pieceWidths"]
@@ -1005,6 +1024,7 @@ def test_recovery_new_saved_intersection():
             assert 31 in evidence["native_save"]["pieceWidths"]
             assert evidence["native_save"]["token"]["identity"].endswith(
                 f"::{evidence['native_save']['name']}")
+            assert evidence["native_save"]["token"]["generation"] == evidence["restore"]["token"]["generation"]
             mark_step("native_save_settled")
             if evidence["native_save"]["ok"]:
                 saved = evidence["native_save"]["name"]
