@@ -30,7 +30,16 @@ const context = vm.createContext({
     Number,
     String,
     Math,
-    __: value => value,
+    // Frappe identity-language translation still interpolates positional values.
+    __: (message, values) => {
+        let output = String(message);
+        if (Array.isArray(values)) {
+            values.forEach((value, index) => {
+                output = output.split("{" + index + "}").join(String(value));
+            });
+        }
+        return output;
+    },
 });
 vm.runInContext(geometrySource, context, {
     filename: "door_cutting_order_special_shape_geometry.js",
