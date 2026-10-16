@@ -110,12 +110,25 @@ jobs:
         run: |
           set -o pipefail
           python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" -k test_recovery_new_saved_intersection 2>&1 | tee "$RUNNER_TEMP/recovery-intersection.log"
-      - name: Verify Recovery Extra fields across NEW restore and native Save
+      - name: Configure priced Extras on the disposable site
+        id: extra_prices
         if: always() && steps.new_form_preflight.outcome == 'success'
+        run: |
+          set -o pipefail
+          cd "$RUNNER_TEMP/frappe-bench"
+          bench --site test.localhost execute almdina_erp.tests.cross_order_p0_runtime_fixture.prepare_recovery_extra_prices 2>&1 | tee "$RUNNER_TEMP/extra-prices.log"
+      - name: Verify Recovery Extra fields across NEW restore and native Save
+        if: always() && steps.extra_prices.outcome == 'success'
         timeout-minutes: 5
         run: |
           set -o pipefail
           python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" -k test_recovery_extra_fields_new_saved_in_desk 2>&1 | tee "$RUNNER_TEMP/recovery-extras-browser.log"
+      - name: Restore disposable Extra prices
+        if: always() && steps.extra_prices.outcome == 'success'
+        run: |
+          set -o pipefail
+          cd "$RUNNER_TEMP/frappe-bench"
+          bench --site test.localhost execute almdina_erp.tests.cross_order_p0_runtime_fixture.restore_recovery_extra_prices 2>&1 | tee "$RUNNER_TEMP/extra-prices-restore.log"
       - name: Prove Phase 2A isolation through native Desk Save
         if: always() && steps.route_preflight.outcome == 'success'
         timeout-minutes: 3
@@ -234,6 +247,8 @@ jobs:
             ${{ runner.temp }}/new-form-preflight.log
             ${{ runner.temp }}/recovery-intersection.log
             ${{ runner.temp }}/recovery-extras-browser.log
+            ${{ runner.temp }}/extra-prices.log
+            ${{ runner.temp }}/extra-prices-restore.log
             ${{ runner.temp }}/phase2a-browser.log
             ${{ runner.temp }}/database-audit.log
             ${{ runner.temp }}/saved-plan.log

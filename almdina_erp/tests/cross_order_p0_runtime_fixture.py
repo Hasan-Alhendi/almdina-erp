@@ -235,6 +235,8 @@ def cleanup() -> None:
         frappe.db.set_single_value("Almdina ERP Settings",
                                    "default_extra_liner_unit_price_usd",
                                    fixture["prior_liner_price"])
+    for field, value in (fixture.get("recovery_extra_original_prices") or {}).items():
+        frappe.db.set_single_value("Almdina ERP Settings", field, value)
     frappe.delete_doc("Customer", fixture["customer"], force=True,
                       ignore_permissions=True)
     frappe.delete_doc("Edge Banding Type", fixture["edge_type"], force=True,
@@ -347,6 +349,39 @@ def audit_db() -> dict[str, object]:
         (Path(evidence_dir) / "database-audit.json").write_text(
             json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     return result
+
+
+def prepare_recovery_extra_prices() -> dict[str, object]:
+    """Enable priced add-ons only for the disposable NEW Extra runtime test."""
+    path = Path(os.environ["P0_FIXTURE_PATH"])
+    fixture = json.loads(path.read_text(encoding="utf-8"))
+    frappe.set_user("Administrator")
+    prices = {"default_extra_liner_unit_price_usd": 3,
+              "default_extra_back_groove_unit_price_usd": 4,
+              "default_extra_recessed_handle_cutout_unit_price_usd": 5}
+    if "recovery_extra_original_prices" not in fixture:
+        fixture["recovery_extra_original_prices"] = {
+            field: frappe.db.get_single_value("Almdina ERP Settings", field) or 0
+            for field in prices
+        }
+        path.write_text(json.dumps(fixture, ensure_ascii=False), encoding="utf-8")
+    for field, value in prices.items():
+        frappe.db.set_single_value("Almdina ERP Settings", field, value)
+    frappe.db.commit()
+    return {"configured": prices}
+
+
+def restore_recovery_extra_prices() -> dict[str, object]:
+    path = Path(os.environ["P0_FIXTURE_PATH"])
+    if not path.is_file():
+        return {"restored": False, "reason": "fixture unavailable"}
+    fixture = json.loads(path.read_text(encoding="utf-8"))
+    original = fixture.get("recovery_extra_original_prices") or {}
+    frappe.set_user("Administrator")
+    for field, value in original.items():
+        frappe.db.set_single_value("Almdina ERP Settings", field, value)
+    frappe.db.commit()
+    return {"restored": bool(original)}
 
 
 def prepare_saved_plan() -> dict[str, object]:
