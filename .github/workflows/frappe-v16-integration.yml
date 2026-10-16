@@ -497,9 +497,9 @@ jobs:
             test -s "$DCO_AL129_FIXTURE_FILE"
             if [[ "$TARGET_CASE" == "al129_customer_permission_smoke" ]]; then
               test_targets=(
+                "tests/browser/test_al129_link_search_request.py"
                 "tests/browser/test_dco_al129_frappe_desk.py::test_real_desk_customer_native_entry_and_permission_differential"
                 "tests/browser/test_dco_al129_frappe_desk.py::test_real_desk_customer_control_link_autocomplete_isolated"
-                "tests/browser/test_dco_al129_frappe_desk.py::test_real_desk_create_permission_revoke_restore_isolated"
               )
             elif [[ "$TARGET_CASE" == "al129_desk_only" ]]; then
               test_targets=(
@@ -705,7 +705,8 @@ jobs:
               {
                 echo '### ALMADINA-129 NEW permission boundary acceptance: PASS'
                 echo 'Runtime: Frappe v16.17.5 / ERPNext v16.17.0'
-                echo 'Covers create-only NEW input/save, permission revoke/restore, persisted write denial, create+edit, and no-create denial.'
+                echo 'Covers create-only native Link entry/save, persisted write denial, create+edit, and no-create denial.'
+                echo 'The isolated permission revoke/restore case passed in the prior run and is not repeated here.'
               } >> "$GITHUB_STEP_SUMMARY"
             else
               {

@@ -12,7 +12,7 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import urlsplit
 from urllib.request import urlopen
 from uuid import uuid4
 
@@ -24,6 +24,10 @@ from playwright.sync_api import (
     TimeoutError as PlaywrightTimeoutError,
     expect,
     sync_playwright,
+)
+from tests.browser.al129_link_search_request import (
+    decode_search_link_request_args,
+    normalize_search_link_args,
 )
 
 
@@ -661,45 +665,15 @@ def _set_link(page: Page, fieldname: str, value: str) -> None:
     control = page.locator(f"[data-fieldname='{fieldname}'] input").first
     expect(control).to_be_visible(timeout=5_000)
     expect(control).to_be_enabled(timeout=5_000)
-    if fieldname == "customer":
-        is_native_control = control.evaluate(
-            "input => { const field = window.cur_frm && cur_frm.fields_dict.customer;"
-            " const current = field && field.$input"
-            " && typeof field.$input.get === 'function' ? field.$input.get(0) : field && field.$input;"
-            " return current === input; }"
-        )
-        if not is_native_control:
-            raise AssertionError("Resolved Customer input is not Frappe's current Link control")
-    else:
-        control.fill(value)
-        page.wait_for_function(
-            "({fieldname, value}) => { const field = cur_frm && cur_frm.fields_dict[fieldname];"
-            " const list = field && field.awesomplete && field.awesomplete.list;"
-            " const hasExactValue = Array.isArray(list) && list.some(item => item && String(item.value) === value);"
-            " const options = field && field.awesomplete && field.awesomplete.ul"
-            " ? [...field.awesomplete.ul.querySelectorAll('[role=option]')] : [];"
-            " return hasExactValue && options.some(item => item.getClientRects().length > 0); }",
-            arg={"fieldname": fieldname, "value": value},
-            timeout=20_000,
-        )
-        option_values = page.evaluate(
-            "fieldname => { const field = cur_frm && cur_frm.fields_dict[fieldname];"
-            " const list = field && field.awesomplete && field.awesomplete.list;"
-            " return Array.isArray(list) ? list.map(item => item && String(item.value)) : []; }",
-            fieldname,
-        )
-        exact_indexes = [index for index, option_value in enumerate(option_values) if option_value == value]
-        if len(exact_indexes) != 1:
-            raise AssertionError(f"Frappe {fieldname} options did not contain exactly one requested value")
-        page.locator(
-            f"[data-fieldname='{fieldname}'] .awesomplete ul [role='option']:visible"
-        ).nth(exact_indexes[0]).click()
-        page.wait_for_function(
-            "({fieldname, value}) => window.cur_frm && cur_frm.doc[fieldname] === value",
-            arg={"fieldname": fieldname, "value": value},
-            timeout=10_000,
-        )
-        return
+    is_native_control = control.evaluate(
+        "(input, fieldname) => { const field = window.cur_frm && cur_frm.fields_dict[fieldname];"
+        " const control = field && field.$input;"
+        " const current = control && typeof control.get === 'function' ? control.get(0) : control;"
+        " return Boolean(field && field.df && field.df.fieldtype === 'Link' && current === input); }",
+        fieldname,
+    )
+    if not is_native_control:
+        raise AssertionError(f"Resolved {fieldname} input is not Frappe's current Link control")
 
     control.fill(value)
     try:
@@ -721,6 +695,17 @@ def _set_link(page: Page, fieldname: str, value: str) -> None:
         timeout=10_000,
     )
     trace("native_link_validation_completed", fieldname=fieldname, status=response.status)
+
+
+def _search_link_response_for_term(response: Any, term: str) -> bool:
+    if "frappe.desk.search.search_link" not in response.url:
+        return False
+    try:
+        args = decode_search_link_request_args(response.request.url, response.request.post_data)
+    except (TypeError, ValueError):
+        return False
+    return args.get("txt") == term
+
 
 def _customer_permission_state(page: Page) -> dict[str, Any]:
     return page.evaluate(
@@ -861,9 +846,17 @@ def test_real_desk_customer_control_link_autocomplete_isolated() -> None:
                     "input => { const field = cur_frm.fields_dict.customer;"
                     " window.__al129ControlProbe = {form: cur_frm, field, input, awesomplete: field.awesomplete}; }"
                 )
+                expected_search_args = normalize_search_link_args(
+                    control.evaluate(
+                        "term => cur_frm.fields_dict.customer.get_search_args(term)",
+                        fixture["customer"],
+                    )
+                )
                 try:
                     with page.expect_response(
-                        lambda response: "frappe.desk.search.search_link" in response.url,
+                        lambda response: _search_link_response_for_term(
+                            response, fixture["customer"]
+                        ),
                         timeout=15_000,
                     ) as search_response:
                         control.fill(fixture["customer"])
@@ -875,29 +868,8 @@ def test_real_desk_customer_control_link_autocomplete_isolated() -> None:
                         if isinstance(item, dict) and item.get("value") == fixture["customer"]
                     )
                     request = response.request
-                    try:
-                        request_args = request.post_data_json
-                    except (AttributeError, ValueError):
-                        raw_data = request.post_data or ""
-                        try:
-                            request_args = json.loads(raw_data)
-                        except json.JSONDecodeError:
-                            request_args = {
-                                key: values[-1]
-                                for key, values in parse_qs(raw_data, keep_blank_values=True).items()
-                            }
-                    if isinstance(request_args, dict) and isinstance(request_args.get("args"), dict):
-                        request_args = request_args["args"]
-                    native_args = page.evaluate(
-                        "actual => { const field = cur_frm && cur_frm.fields_dict.customer;"
-                        " const expected = field && typeof field.get_search_args === 'function'"
-                        " ? field.get_search_args() : null;"
-                        " const coreKeys = ['doctype', 'reference_doctype', 'link_fieldname', 'txt'];"
-                        " const same = (left, right) => JSON.stringify(left ?? null) === JSON.stringify(right ?? null);"
-                        " const coreMatch = Boolean(expected && coreKeys.every(key => same(expected[key], actual && actual[key])));"
-                        " const filtersMatch = Boolean(expected && same(expected.filters, actual && actual.filters));"
-                        " return {available: Boolean(expected), coreMatch, filtersMatch}; }",
-                        request_args,
+                    request_args = decode_search_link_request_args(
+                        request.url, request.post_data
                     )
                     request_valid = bool(
                         isinstance(request_args, dict)
@@ -906,11 +878,7 @@ def test_real_desk_customer_control_link_autocomplete_isolated() -> None:
                         and request_args.get("link_fieldname") == "customer"
                         and request_args.get("txt") == fixture["customer"]
                     )
-                    native_args_match = bool(
-                        native_args["available"]
-                        and native_args["coreMatch"]
-                        and native_args["filtersMatch"]
-                    )
+                    native_args_match = request_args == expected_search_args
                     try:
                         page.wait_for_function(
                             "value => { const field = cur_frm && cur_frm.fields_dict.customer;"
@@ -922,7 +890,7 @@ def test_real_desk_customer_control_link_autocomplete_isolated() -> None:
                     except PlaywrightTimeoutError:
                         pass
                     ui_state = page.evaluate(
-                        "() => { const before = window.__al129ControlProbe;"
+                        "expectedValue => { const before = window.__al129ControlProbe;"
                         " const field = cur_frm && cur_frm.fields_dict.customer;"
                         " const input = field && field.$input && typeof field.$input.get === 'function'"
                         " ? field.$input.get(0) : field && field.$input;"
@@ -930,12 +898,22 @@ def test_real_desk_customer_control_link_autocomplete_isolated() -> None:
                         " const values = Array.isArray(list) ? list : [];"
                         " const options = field && field.awesomplete && field.awesomplete.ul"
                         " ? field.awesomplete.ul.querySelectorAll('[role=option]') : [];"
+                        " const exactItems = values.filter(item => item && String(item.value) === expectedValue);"
+                        " const renderText = value => { const node = document.createElement('span');"
+                        " node.innerHTML = String(value || ''); return (node.textContent || '').trim(); };"
+                        " const labels = exactItems.flatMap(item => [item.label, item.value, item.html])"
+                        " .map(renderText).filter(Boolean);"
+                        " const visibleOptions = [...options].filter(item => item.getClientRects().length > 0);"
+                        " const exactOptionCount = visibleOptions.filter(option => labels.some(label =>"
+                        " (option.textContent || '').includes(label))).length;"
                         " return {formStable: Boolean(before && before.form === cur_frm),"
                         " fieldStable: Boolean(before && before.field === field),"
                         " inputStable: Boolean(before && before.input === input),"
                         " awesompleteStable: Boolean(before && before.awesomplete === (field && field.awesomplete)),"
                         " inputFocused: Boolean(input && document.activeElement === input),"
-                        " sourceListCount: values.length, optionCount: options.length}; }"
+                        " sourceListCount: values.length, sourceExactValueCount: exactItems.length,"
+                        " exactVisibleOptionCount: exactOptionCount, optionCount: options.length}; }",
+                        fixture["customer"],
                     )
                     outcomes[case_name] = {
                         "searchResponseOk": response.ok,
@@ -965,6 +943,8 @@ def test_real_desk_customer_control_link_autocomplete_isolated() -> None:
     assert all(item["requestArgumentsValid"] for item in outcomes.values()), outcomes
     assert all(item["nativeSearchArgumentsMatch"] for item in outcomes.values()), outcomes
     assert all(item["exactResponseCount"] == 1 for item in outcomes.values()), outcomes
+    assert all(item["sourceExactValueCount"] == 1 for item in outcomes.values()), outcomes
+    assert all(item["exactVisibleOptionCount"] == 1 for item in outcomes.values()), outcomes
     assert all(item["formStable"] and item["fieldStable"] and item["inputStable"] for item in outcomes.values()), outcomes
     assert all(item["awesompleteStable"] and item["inputFocused"] for item in outcomes.values()), outcomes
     assert all(item["optionCount"] > 0 for item in outcomes.values()), outcomes
@@ -1100,6 +1080,7 @@ def test_real_desk_customer_native_entry_and_permission_differential() -> None:
                             order_name,
                         )
                         assert persisted["customer"] == fixture["customer"]
+                        assert persisted["default_edge_type"] == fixture["edge_type"]
                         assert persisted["board_description"] == "AL129 recovery test MDF"
                         assert len(persisted["pieces"]) == 1
                         denied_write = page.evaluate(
