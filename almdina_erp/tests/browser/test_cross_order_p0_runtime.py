@@ -1052,6 +1052,30 @@ def test_recovery_new_saved_intersection():
                 && AlmdinaPlanWorkspaceState?.snapshot(cur_frm)?.status === 'ready'
                 && AlmdinaPlanWorkspaceState?.snapshot(cur_frm)?.data?.order_name === name""",
                 arg=saved, timeout=45000)
+            evidence["post_save_action_readiness"] = page.evaluate("""() => {
+                const frm=cur_frm;
+                const actions=frm.fields_dict.plan_control_actions;
+                const node=actions?.$wrapper?.get(0);
+                const permission=window.AlmdinaPermissions;
+                const context=window.AlmdinaDocumentContext;
+                return {name:frm.doc.name,isNew:frm.is_new(),status:frm.doc.status,
+                    docstatus:frm.doc.docstatus,productionStage:frm.doc.current_production_stage,
+                    generation:context?.capture(frm)?.generation,
+                    permissionsVersion:permission?.version?.(),
+                    recalculateAllowed:permission?.canDocument?.(frm,'recalculate_plan'),
+                    editSettingsAllowed:permission?.canDocument?.(frm,'edit_optimizer_settings'),
+                    costSettingsAllowed:permission?.canDocument?.(frm,'edit_cost_settings'),
+                    canMutateStage:context?.canMutateCurrentStage?.(frm),
+                    canTune:context?.canTuneCuttingAlgorithm?.(frm),
+                    actionFieldHidden:actions?.df?.hidden,
+                    actionWrapperConnected:!!node?.isConnected,
+                    actionShell:!!node?.querySelector('.dco-plan-actions-shell'),
+                    recalculateCount:node?.querySelectorAll('.dco-recalculate-plan').length || 0,
+                    planToolbar:!!document.querySelector('.dco-tab-edit-toolbar[data-almdina-tab-edit-kind="plan"]'),
+                    activeTab:frm.get_active_tab?.()?.df?.fieldname,
+                    planStatus:AlmdinaPlanWorkspaceState.snapshot(frm)?.status};
+            }""")
+            mark_step("post_save_action_readiness_captured")
             first_plan = page.locator('.dco-recalculate-plan:visible').first
             first_plan.wait_for(state="visible", timeout=15000)
             assert first_plan.is_enabled(), "First System plan bootstrap is not available"
