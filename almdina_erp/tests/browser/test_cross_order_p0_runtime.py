@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 from pathlib import Path
 from urllib.parse import parse_qs
 import pytest
@@ -775,9 +776,16 @@ def _print_saved_plan_variant(source, prefix):
             page.wait_for_function("name => cur_frm?.doc?.name === name",
                                    arg=selected["order_name"], timeout=45000)
             page.get_by_text("Cutting Plan", exact=True).first.click()
+            source_tab = page.locator(f'.dco-plan-tabs [data-plan-tab="{source}"]')
+            source_tab.wait_for(state="visible", timeout=45000)
+            assert source_tab.is_enabled(), f"Operator source tab {source} is disabled"
+            source_tab.click()
             page.wait_for_function("""args =>
                 AlmdinaPlanWorkspaceState?.snapshot(cur_frm)?.status === 'ready'
                 && AlmdinaPlanWorkspaceState?.snapshot(cur_frm)?.data?.order_name === args.name
+                && AlmdinaPlanTabsUX.activeTab(cur_frm) === args.source
+                && cur_frm.fields_dict.cutting_plan_html.$wrapper.get(0)
+                    ?.querySelector(`[data-plan-tab="${args.source}"][aria-selected="true"]`)
                 && AlmdinaPlanWorkspaceState?.displayedPlanForTab(cur_frm,args.source)?.name
                 && !!cur_frm.fields_dict.cutting_plan_html.$wrapper.get(0)
                     ?.querySelector('.dco-cutting-plan')""",
@@ -813,8 +821,12 @@ def _print_saved_plan_variant(source, prefix):
                 assert selected["offcut_source"] == "FACTORY"
                 assert selected["offcut_execution"] == "FACTORY"
                 assert 'data-resource-kind="OFFCUT"' in html
-                assert 'dco-offcut-business-context' in html
-                assert "من المعمل" in html
+                context = re.search(
+                    r'<div class="dco-offcut-business-context"[^>]*>(.*?)</div>',
+                    html, re.S,
+                )
+                assert context and "من المعمل" in context.group(1)
+                assert "في المعمل" in context.group(1)
             filename = f"{prefix}-plan-operator-final.html"
             (evidence_dir / filename).write_text(html, encoding="utf-8")
             evidence["final_html"] = filename

@@ -236,6 +236,8 @@ jobs:
             ${{ runner.temp }}/custom-plan-browser.log
             ${{ runner.temp }}/multi-plan.log
             ${{ runner.temp }}/multi-plan-browser.log
+            ${{ runner.temp }}/offcut-plan.log
+            ${{ runner.temp }}/offcut-plan-browser.log
             ${{ runner.temp }}/recovery-browser.log
           if-no-files-found: warn
           retention-days: 14

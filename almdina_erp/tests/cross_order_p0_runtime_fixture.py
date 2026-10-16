@@ -221,6 +221,9 @@ def cleanup() -> None:
             frappe.delete_doc("File", file_name, force=True, ignore_permissions=True)
         frappe.delete_doc("Door Cutting Order", extra_order["name"], force=True,
                           ignore_permissions=True)
+    staged_file = fixture.get("offcut_staged_file")
+    if staged_file and frappe.db.exists("File", staged_file):
+        frappe.delete_doc("File", staged_file, force=True, ignore_permissions=True)
     if "prior_liner_price" in fixture:
         frappe.db.set_single_value("Almdina ERP Settings",
                                    "default_extra_liner_unit_price_usd",
@@ -393,6 +396,7 @@ def prepare_multiboard_extra_plan() -> dict[str, object]:
     frappe.set_user("Administrator")
     fixture["prior_liner_price"] = frappe.db.get_single_value(
         "Almdina ERP Settings", "default_extra_liner_unit_price_usd") or 0
+    fixture_path.write_text(json.dumps(fixture, ensure_ascii=False), encoding="utf-8")
     frappe.db.set_single_value("Almdina ERP Settings",
                                "default_extra_liner_unit_price_usd", 3)
     order = frappe.get_doc({
@@ -467,8 +471,12 @@ def prepare_saved_offcut_plan() -> dict[str, object]:
     with NamedTemporaryFile(suffix=".dxf") as staged:
         drawing.saveas(staged.name)
         raw = Path(staged.name).read_bytes()
+    # The real upload command requires a private *unattached* staging File;
+    # successful import reattaches it to the Cutting Plan for cleanup.
     file_doc = save_file(f"p0-offcut-{order.name}.dxf", raw,
-                         "Door Cutting Order", order.name, is_private=1)
+                         None, None, is_private=1)
+    fixture["offcut_staged_file"] = file_doc.name
+    fixture_path.write_text(json.dumps(fixture, ensure_ascii=False), encoding="utf-8")
     frappe.db.commit()
     frappe.set_user(fixture["user"])
     uploaded = upload_production_dxf(order.name, file_doc.file_url)
@@ -486,13 +494,19 @@ def prepare_saved_offcut_plan() -> dict[str, object]:
     frappe.db.commit()
     plan.reload()
     snapshot = frappe.parse_json(plan.snapshot_json or "{}") or {}
+    persisted_offcuts = [piece for sheet in snapshot.get("sheets") or []
+                         for piece in sheet.get("pieces") or []
+                         if piece.get("resource_kind") == "OFFCUT"]
+    if len(persisted_offcuts) != 1:
+        raise AssertionError(f"Saved OFFCUT identity changed: {persisted_offcuts}")
+    owned_piece = persisted_offcuts[0]
     evidence = {"order_name": order.name, "plan_name": plan.name,
                 "revision": int(plan.revision or 0), "source": plan.source_type,
                 "status": plan.status, "board": plan.board_description,
                 "sheets": len(snapshot.get("sheets") or []),
-                "offcut_kind": snapshot["sheets"][0]["pieces"][0].get("resource_kind"),
-                "offcut_source": snapshot["sheets"][0]["pieces"][0].get("offcut_source_party"),
-                "offcut_execution": snapshot["sheets"][0]["pieces"][0].get("offcut_execution_party")}
+                "offcut_kind": owned_piece.get("resource_kind"),
+                "offcut_source": owned_piece.get("offcut_source_party"),
+                "offcut_execution": owned_piece.get("offcut_execution_party")}
     if (evidence["offcut_kind"], evidence["offcut_source"], evidence["offcut_execution"]) != (
         "OFFCUT", "FACTORY", "FACTORY"
     ):
