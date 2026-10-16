@@ -124,7 +124,7 @@
     // Cutting plan rendering
     // =====================================================
 
-    function piece_edge_flags(piece) {
+    function piece_edge_flags(piece, geometryModel = null) {
         let left = 0;
         let right = 0;
         let top = 0;
@@ -132,7 +132,23 @@
         let edgeBreak = piece.edge_break ? 1 : 0;
         let edgeBreakOnly = piece.edge_break_only ? 1 : 0;
 
-        if (!piece.rotated) {
+        if (geometryModel && geometryModel.source === "dxf"
+            && Number.isInteger(piece.rotation_quarter_turns)) {
+            // Imported DXF geometry is already physically oriented. Rotate
+            // the original semantic bands only, never its stored contour.
+            const turns = ((piece.rotation_quarter_turns % 4) + 4) % 4;
+            left = piece.edge_long_left ? 1 : 0;
+            right = piece.edge_long_right ? 1 : 0;
+            top = piece.edge_width_top ? 1 : 0;
+            bottom = piece.edge_width_bottom ? 1 : 0;
+            for (let turn = 0; turn < turns; turn += 1) {
+                const previous = { left, top, right, bottom };
+                left = previous.bottom;
+                top = previous.left;
+                right = previous.top;
+                bottom = previous.right;
+            }
+        } else if (!piece.rotated) {
             left = piece.edge_long_left ? 1 : 0;
             right = piece.edge_long_right ? 1 : 0;
             top = piece.edge_width_top ? 1 : 0;
@@ -201,7 +217,7 @@
     }
 
     function render_piece_edge_lines(piece, geometryModel = null, clipId = "") {
-        const { left, right, top, bottom, edgeBreak, edgeBreakOnly } = piece_edge_flags(piece);
+        const { left, right, top, bottom, edgeBreak, edgeBreakOnly } = piece_edge_flags(piece, geometryModel);
         const geometry = window.AlmdinaClippedCornerGeometry;
         const isCornerPiece = Boolean(
             geometry
@@ -613,13 +629,17 @@
 
     function render_piece_overlays(frm, piece, geometryModel, sheet, frame) {
         const spec = pieceWithLinerSpec(frm, piece);
-        const overlays = guardLinerToolpath(
-            frm,
-            spec,
-            sheet,
-            frame,
-            drawingOverlays(spec)
-        );
+        // DXF paths are imported physical evidence. A synthetic redraw from
+        // order-side settings can reverse their orientation after a half-turn.
+        const overlays = geometryModel && geometryModel.source === "dxf"
+            ? (Array.isArray(piece.overlays) ? piece.overlays : [])
+            : guardLinerToolpath(
+                frm,
+                spec,
+                sheet,
+                frame,
+                drawingOverlays(spec)
+            );
         if (!overlays.length || !geometryModel) return "";
         const originX = num(geometryModel.placement.xCm) * 10;
         const originY = num(geometryModel.placement.yCm) * 10;
