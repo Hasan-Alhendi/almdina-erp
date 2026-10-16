@@ -105,6 +105,9 @@ def test_strict_snapshot_preserves_original_edge_and_three_machining_paths(turns
     assert actual["rotated"] == bool(turns % 2)
     assert actual["edge_long_right"] == 1
     assert actual["edge_width_top"] == 0
+    assert actual["liner_reference_side"] == "edge_long_right"
+    assert actual["back_groove_reference_side"] == "edge_long_left"
+    assert actual["recessed_handle_reference_side"] == "edge_width_bottom"
     assert actual["geometry"]["outer"] == _snapshot(turns)["sheets"][0]["pieces"][0]["geometry"]["outer"]
     assert len(actual["overlays"]) == 3
 
