@@ -1052,7 +1052,7 @@ def test_recovery_new_saved_intersection():
                 && AlmdinaPlanWorkspaceState?.snapshot(cur_frm)?.status === 'ready'
                 && AlmdinaPlanWorkspaceState?.snapshot(cur_frm)?.data?.order_name === name""",
                 arg=saved, timeout=45000)
-            first_plan = page.locator('.dco-recalculate-plan:visible').first()
+            first_plan = page.locator('.dco-recalculate-plan:visible').first
             first_plan.wait_for(state="visible", timeout=15000)
             assert first_plan.is_enabled(), "First System plan bootstrap is not available"
             first_plan.click()
@@ -1070,7 +1070,7 @@ def test_recovery_new_saved_intersection():
 
             plan_toolbar = page.locator('.dco-tab-edit-toolbar[data-almdina-tab-edit-kind="plan"]')
             plan_toolbar.locator('.dco-tab-edit-start').click()
-            kerf = page.locator('[data-almdina-plan-setting="kerf_mm"]:visible').first()
+            kerf = page.locator('[data-almdina-plan-setting="kerf_mm"]:visible').first
             kerf.wait_for(state="visible", timeout=15000)
             original_kerf = float(kerf.input_value())
             new_kerf = original_kerf + 1
@@ -1088,9 +1088,9 @@ def test_recovery_new_saved_intersection():
                 .data.plans.system_draft.settings.kerf_mm""")) == original_kerf
             mark_step("plan_draft_cancelled")
             plan_toolbar.locator('.dco-tab-edit-start').click()
-            kerf = page.locator('[data-almdina-plan-setting="kerf_mm"]:visible').first()
+            kerf = page.locator('[data-almdina-plan-setting="kerf_mm"]:visible').first
             kerf.fill(str(new_kerf))
-            recalculate = page.locator('.dco-recalculate-plan:visible').first()
+            recalculate = page.locator('.dco-recalculate-plan:visible').first
             assert recalculate.is_enabled()
             recalculate.click()
             page.wait_for_function("""() => AlmdinaPlanPreviewSession?.snapshot(cur_frm)?.status === 'ready'
@@ -1120,7 +1120,7 @@ def test_recovery_new_saved_intersection():
                 arg=saved, timeout=45000)
             cost_toolbar = page.locator('.dco-tab-edit-toolbar[data-almdina-tab-edit-kind="cost"]')
             cost_toolbar.locator('.dco-tab-edit-start').click()
-            board_rate = page.locator('[data-fieldname="board_rate_usd"] .almdina-workspace-field-editor .form-control:visible').first()
+            board_rate = page.locator('[data-fieldname="board_rate_usd"] .almdina-workspace-field-editor .form-control:visible').first
             board_rate.wait_for(state="visible", timeout=15000)
             original_rate = float(board_rate.input_value())
             new_rate = original_rate + 3
@@ -1137,7 +1137,7 @@ def test_recovery_new_saved_intersection():
                 .data.order.board_rate_usd""")) == original_rate
             mark_step("cost_draft_cancelled")
             cost_toolbar.locator('.dco-tab-edit-start').click()
-            board_rate = page.locator('[data-fieldname="board_rate_usd"] .almdina-workspace-field-editor .form-control:visible').first()
+            board_rate = page.locator('[data-fieldname="board_rate_usd"] .almdina-workspace-field-editor .form-control:visible').first
             board_rate.fill(str(new_rate))
             cost_toolbar.locator('.dco-tab-edit-save').click()
             page.wait_for_function("""value =>
