@@ -117,12 +117,13 @@ jobs:
           set -o pipefail
           python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" -k test_recovery_extra_fields_new_saved_in_desk 2>&1 | tee "$RUNNER_TEMP/recovery-extras-browser.log"
       - name: Prove Phase 2A isolation through native Desk Save
-        if: steps.route_preflight.outcome == 'success'
+        if: always() && steps.route_preflight.outcome == 'success'
         timeout-minutes: 3
         run: |
           set -o pipefail
           python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" -k test_phase2a_isolated_desk_boundary 2>&1 | tee "$RUNNER_TEMP/phase2a-browser.log"
       - name: Run Desk runtime proof
+        if: always() && steps.route_preflight.outcome == 'success'
         run: |
           set -o pipefail
           python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" -k test_cross_order_desk_runtime 2>&1 | tee "$RUNNER_TEMP/browser.log"

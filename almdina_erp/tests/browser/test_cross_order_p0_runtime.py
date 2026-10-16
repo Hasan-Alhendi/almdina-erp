@@ -1333,15 +1333,18 @@ def test_recovery_extra_fields_new_saved_in_desk():
             page.wait_for_function("name => cur_frm?.doc?.name === name",
                                    arg=fixture["orders"]["A"]["name"], timeout=45000)
 
-            def open_new():
+            def open_new(discovery=False):
                 page.evaluate("""() => {
                     const name=frappe.model.make_new_doc_and_get_name('Door Cutting Order');
                     frappe.set_route('Form','Door Cutting Order',name);
                 }""")
                 page.wait_for_function("() => cur_frm?.doctype === 'Door Cutting Order' && !!cur_frm.is_new()",
                                        timeout=45000)
-                page.wait_for_function("() => !!AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(cur_frm)",
-                                       timeout=15000)
+                if discovery:
+                    page.locator('[data-recovery-action="new"]:visible').wait_for(timeout=15000)
+                else:
+                    page.wait_for_function("() => !!AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(cur_frm)",
+                                           timeout=15000)
 
             open_new()
             page.evaluate("""args => {
@@ -1377,8 +1380,7 @@ def test_recovery_extra_fields_new_saved_in_desk():
             evidence["other_order"] = capture(page)
             assert not evidence["other_order"]["rows"]
 
-            open_new()
-            page.locator('[data-recovery-action="new"]:visible').wait_for(timeout=15000)
+            open_new(discovery=True)
             page.locator('[data-recovery-action="new"]:visible').click()
             page.wait_for_function("""() => !document.querySelector('.modal.show [data-recovery-action="new"]')""",
                                    timeout=15000)
@@ -1388,7 +1390,7 @@ def test_recovery_extra_fields_new_saved_in_desk():
                           fixture["orders"]["B"]["name"])
             page.wait_for_function("name => cur_frm?.doc?.name === name",
                                    arg=fixture["orders"]["B"]["name"], timeout=45000)
-            open_new()
+            open_new(discovery=True)
             page.locator('[data-recovery-action="continue"]:visible').first.click()
             page.wait_for_function("() => (cur_frm?.doc?.pieces || []).some(row => row.notes === 'P0-LINER')",
                                    timeout=15000)
@@ -1417,6 +1419,11 @@ def test_recovery_extra_fields_new_saved_in_desk():
             assert not capture(page)["rows"]
         except Exception as exc:
             evidence["failure"] = repr(exc)
+            evidence["failure_state"] = page.evaluate("""() => ({
+                route:frappe.get_route?.(),name:cur_frm?.doc?.name,
+                isNew:!!cur_frm?.is_new?.(),
+                checkpoint:AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(cur_frm) || null,
+                modal:document.querySelector('.modal.show')?.innerText.slice(0,400) || null})""")
             page.screenshot(path=str(evidence_dir / "recovery-extras-failure.png"), full_page=True)
             raise
         finally:
