@@ -790,7 +790,12 @@
             return null;
         }
         if (!Array.isArray(local) || local.length < 3 || typeof liner.transformPoint !== "function") return null;
-        const turns = piece.rotated ? 1 : 0;
+        // A saved physical orientation is authoritative for imported DXF.
+        // The legacy bbox flag remains the fallback for old/System plans.
+        const turns = Number.isInteger(piece.rotation_quarter_turns)
+            ? piece.rotation_quarter_turns
+            : (Number.isInteger(piece.corner_rotation_quarter_turns)
+                ? piece.corner_rotation_quarter_turns : (piece.rotated ? 1 : 0));
         const mirrored = Boolean(piece.corner_mirrored);
         const originX = num(piece.x) * 10;
         const originY = num(piece.y) * 10;
