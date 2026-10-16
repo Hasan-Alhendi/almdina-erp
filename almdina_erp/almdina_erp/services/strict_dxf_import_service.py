@@ -25,6 +25,11 @@ from almdina_erp.almdina_erp.domain.cutting.machining_overlay import (
     MACHINING_ADDONS,
     MACHINING_ADDONS_BY_KIND,
     compare_overlay_path,
+    machining_metadata,
+    machining_values,
+)
+from almdina_erp.almdina_erp.domain.cutting.regular_machining_orientation import (
+    match_regular_machining_orientation,
 )
 from almdina_erp.almdina_erp.domain.cutting.dxf_applied_trim import (
     DxfAppliedTrimError,
@@ -56,6 +61,7 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
     CATEGORY_TOPOLOGY,
     APPLIED_TRIM_OVERFLOW,
     CORNER_EDGE_UNRESOLVED,
+    REGULAR_EDGE_ORIENTATION_UNRESOLVED,
     L_CORNER_NOTCH_MISMATCH,
     CUT_DIMENSIONS_BIND_FAILED,
     CUT_DIMENSIONS_MISSING,
@@ -222,11 +228,8 @@ def _proxy_order(
                 finished_length_cm=float(spec.finished_length_cm),
                 allow_rotation=spec.allow_rotation,
                 piece_type=spec.piece_type,
-                liner_reference_side=str(getattr(row, "liner_reference_side", "") or ""),
-                liner_offset_cm=float(getattr(row, "liner_offset_cm", 0) or 0),
-                liner_width_cm=float(getattr(row, "liner_width_cm", 0) or 0),
-                liner_start_cm=float(getattr(row, "liner_start_cm", 0) or 0),
-                liner_length_cm=float(getattr(row, "liner_length_cm", 0) or 0),
+                # The canonical registry supplies all three add-ons uniformly.
+                **machining_metadata(row),
             )
         )
     return SimpleNamespace(
@@ -971,6 +974,119 @@ def _corner_machining_issues(
     return issues
 
 
+
+def _regular_machining_issues(
+    piece: dict[str, Any],
+    spec: OrderPieceCutSpec,
+    order: Any | None,
+    *,
+    cutter_diameter_mm: float | None,
+    sheet: dict[str, Any] | None,
+) -> list[DxfValidationIssue]:
+    """Bind one proved rotation after exact dimensions and piece identity."""
+    if spec.piece_type != "Regular" or order is None:
+        return []
+    row = _row_for_spec(order, spec)
+    if row is None:
+        return []
+    settings = machining_values(row)
+    if not any(
+        item["enabled"] and item["side"] and item["width_cm"] > 0
+        for item in settings.values()
+    ):
+        # Without geometric evidence, preserve the historical 0/90 contract.
+        # Never assert that its 180/270 physical orientation was proved.
+        return []
+
+    geometry = piece.get("geometry") or {}
+    outer = geometry.get("outer") or []
+    if len(outer) < 3:
+        return []
+    paths = {}
+    for overlay in piece.get("overlays") or []:
+        if not isinstance(overlay, dict):
+            continue
+        path = ((overlay.get("geometry") or {}).get("path") or ())
+        if len(path) >= 2:
+            paths[str(overlay.get("kind") or "")] = localize_path(path, outer)
+
+    actual_w, actual_h = _actual_dimensions(piece)
+    # Strict dimensions already selected direct/swapped geometry. A square
+    # permits all four angles; a non-square admits only one parity.
+    square = dimensions_match_exact(spec.cut_width_cm, spec.cut_length_cm)
+    turns = (0, 1, 2, 3) if square else ((1, 3) if piece.get("rotated") else (0, 2))
+    result = match_regular_machining_orientation(
+        piece=LinerPiece("Regular", float(spec.cut_width_cm), float(spec.cut_length_cm)),
+        overlay_paths=paths,
+        settings=settings,
+        candidate_turns=turns,
+        edge_bands=_corner_band_tokens(spec),
+        cutter_diameter_mm=cutter_diameter_mm,
+        origin_mm=(float(piece.get("x") or 0) * 10, float(piece.get("y") or 0) * 10),
+        board_mm=_shifted_board_mm(sheet),
+    )
+    target = piece_target(source_piece_no=spec.row_index, copy_no=int(piece.get("copy_no") or 1))
+    if result.reason == "ambiguous":
+        return [
+            issue(
+                REGULAR_EDGE_ORIENTATION_UNRESOLVED,
+                CATEGORY_TOPOLOGY,
+                target=target,
+                params={"reason": "machining_symmetric"},
+            )
+        ]
+    if result.reason == "invalid":
+        if result.failure is not None:
+            return [
+                liner_geometry_issue(
+                    result.failure,
+                    source_piece_no=spec.row_index,
+                    copy_no=int(piece.get("copy_no") or 1),
+                    piece_type=spec.piece_type,
+                    overlay_kind=result.failed_kind,
+                )
+            ]
+        return [
+            issue(
+                REGULAR_EDGE_ORIENTATION_UNRESOLVED,
+                CATEGORY_TOPOLOGY,
+                target=target,
+                params={"reason": "machining_invalid"},
+            )
+        ]
+    if result.quarter_turns is None:
+        return []
+    if result.quarter_turns != 0 and not spec.allow_rotation:
+        return [
+            _dimension_issue(
+                FORBIDDEN_ROTATION, spec=spec,
+                candidate={"label": piece.get("label"), "copy_no": piece.get("copy_no")},
+                actual_w=actual_w, actual_h=actual_h,
+            )
+        ]
+    piece["rotation_quarter_turns"] = result.quarter_turns
+    return []
+
+
+def _piece_machining_issues(
+    piece: dict[str, Any],
+    spec: OrderPieceCutSpec,
+    order: Any | None,
+    *,
+    cutter_diameter_mm: float | None,
+    sheet: dict[str, Any] | None,
+) -> list[DxfValidationIssue]:
+    if spec.piece_type == "Regular":
+        return _regular_machining_issues(
+            piece, spec, order,
+            cutter_diameter_mm=cutter_diameter_mm, sheet=sheet,
+        )
+    return _corner_machining_issues(
+        piece, spec, order,
+        cutter_diameter_mm=cutter_diameter_mm, sheet=sheet,
+    )
+
+
 def _apply_strict_dimension_contract(
     snapshot: dict[str, Any],
     specs: list[OrderPieceCutSpec],
@@ -1016,7 +1132,7 @@ def _apply_strict_dimension_contract(
                     issues.append(binding_error)
                 else:
                     issues.extend(
-                        _corner_machining_issues(
+                        _piece_machining_issues(
                             piece,
                             candidate["spec"],
                             order,
@@ -1125,7 +1241,7 @@ def _apply_strict_dimension_contract(
                 issues.append(binding_error)
             else:
                 issues.extend(
-                    _corner_machining_issues(
+                    _piece_machining_issues(
                         piece,
                         candidate["spec"],
                         order,
@@ -1271,6 +1387,7 @@ def parse_production_dxf(
         snapshot = _legacy_parse_production_dxf(
             file_url,
             _proxy_order(order, specs, settings),
+            validate_regular_machining=False,
         )
     except DxfImportError as exc:
         annotated = _with_persisted_cut_context(exc, specs)
