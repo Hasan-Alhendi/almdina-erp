@@ -522,7 +522,12 @@ def test_saved_server_plan_print_runtime():
                     page.wait_for_function("count => window.__p0PrintWrites.length >= count + 2",
                                            arg=before_click, timeout=15000)
                     operator_html = page.evaluate('__p0PrintWrites.at(-1)')
-                    assert order["name"] in operator_html and other["name"] not in operator_html
+                    # Plan identifiers can contain another order's numeric suffix.
+                    # Check the printed order field, rather than an unrelated plan name.
+                    assert (f'<div><b>Order number</b><span>{order["name"]}</span></div>'
+                            in operator_html)
+                    assert (f'<div><b>Order number</b><span>{other["name"]}</span></div>'
+                            not in operator_html)
                     assert order["board"] in operator_html and saved_plan[label]["name"] in operator_html
                     evidence.setdefault("operator_clicks", {})[label] = {
                         "ready_event": page.evaluate('window.__p0ReadyEvent'),
@@ -557,7 +562,10 @@ def test_saved_server_plan_print_runtime():
                     key: value for key, value in result.items() if key != "html"}
                 assert result["result"] is True and result["row"] == saved_plan[label]["name"], result
                 html = result.pop("html")
-                assert order["name"] in html and other["name"] not in html, result
+                assert (f'<div><b>Order number</b><span>{order["name"]}</span></div>'
+                        in html), result
+                assert (f'<div><b>Order number</b><span>{other["name"]}</span></div>'
+                        not in html), result
                 assert order["board"] in html and other["board"] not in html, result
                 assert saved_plan[label]["name"] in html and str(saved_plan[label]["revision"]) in html
                 assert 'class="dco-unified-print-header"' in html
@@ -1123,7 +1131,10 @@ def test_recovery_new_saved_intersection():
             kerf.fill(str(new_kerf))
             recalculate = page.locator('.dco-recalculate-plan:visible').first
             assert recalculate.is_enabled()
-            recalculate.click()
+            # In this Desk viewport the sticky page head can cover the editor's
+            # button when Playwright scrolls to its center. Keyboard activation
+            # exercises the same visible, enabled operator control.
+            recalculate.press("Enter")
             page.wait_for_function("""() => AlmdinaPlanPreviewSession?.snapshot(cur_frm)?.status === 'ready'
                 && AlmdinaPlanPreviewSession?.isCommittable(cur_frm)""", timeout=60000)
             evidence["plan_preview"] = page.evaluate("""() => {
