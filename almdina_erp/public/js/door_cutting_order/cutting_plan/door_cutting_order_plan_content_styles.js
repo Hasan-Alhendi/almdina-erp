@@ -50,10 +50,13 @@
             margin:0 !important;
             min-height:0 !important;
         }
-        /* Read mode: plan_control_actions is display:none; collapse leftover section-body padding. */
-        .dco-operator-form .form-section[data-fieldname="plan_actions_section"]:has([data-fieldname="plan_control_actions"][style*="display: none"]),
-        .dco-operator-form .dco-plan-actions-section:has([data-fieldname="plan_control_actions"][style*="display: none"]),
-        .dco-operator-form .form-section[data-fieldname="plan_actions_section"]:has([data-almdina-workspace-editing="0"][data-fieldname="plan_control_actions"]) {
+        .dco-operator-form [data-fieldname="plan_control_actions"][data-almdina-plan-bootstrap="1"] {
+            display:block !important;
+        }
+        /* Keep the authorized first System-plan action reachable in read mode. */
+        .dco-operator-form .form-section[data-fieldname="plan_actions_section"]:has([data-fieldname="plan_control_actions"][style*="display: none"]):not(:has([data-almdina-plan-bootstrap="1"])),
+        .dco-operator-form .dco-plan-actions-section:has([data-fieldname="plan_control_actions"][style*="display: none"]):not(:has([data-almdina-plan-bootstrap="1"])),
+        .dco-operator-form .form-section[data-fieldname="plan_actions_section"]:has([data-almdina-workspace-editing="0"][data-fieldname="plan_control_actions"]):not(:has([data-almdina-plan-bootstrap="1"])) {
             display:none !important;
             height:0 !important;
             margin:0 !important;

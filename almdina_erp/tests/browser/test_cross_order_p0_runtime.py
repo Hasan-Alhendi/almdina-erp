@@ -1056,6 +1056,8 @@ def test_recovery_new_saved_intersection():
                 const frm=cur_frm;
                 const actions=frm.fields_dict.plan_control_actions;
                 const node=actions?.$wrapper?.get(0);
+                const section=node?.closest('.form-section');
+                const button=node?.querySelector('.dco-recalculate-plan');
                 const permission=window.AlmdinaPermissions;
                 const context=window.AlmdinaDocumentContext;
                 return {name:frm.doc.name,isNew:frm.is_new(),status:frm.doc.status,
@@ -1071,6 +1073,11 @@ def test_recovery_new_saved_intersection():
                     actionWrapperConnected:!!node?.isConnected,
                     actionShell:!!node?.querySelector('.dco-plan-actions-shell'),
                     recalculateCount:node?.querySelectorAll('.dco-recalculate-plan').length || 0,
+                    bootstrapMarker:node?.getAttribute('data-almdina-plan-bootstrap'),
+                    actionInlineStyle:node?.getAttribute('style'),
+                    actionDisplay:node && getComputedStyle(node).display,
+                    sectionDisplay:section && getComputedStyle(section).display,
+                    buttonDisplay:button && getComputedStyle(button).display,
                     planToolbar:!!document.querySelector('.dco-tab-edit-toolbar[data-almdina-tab-edit-kind="plan"]'),
                     activeTab:frm.get_active_tab?.()?.df?.fieldname,
                     planStatus:AlmdinaPlanWorkspaceState.snapshot(frm)?.status};
