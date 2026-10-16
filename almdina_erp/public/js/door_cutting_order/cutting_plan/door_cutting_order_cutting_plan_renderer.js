@@ -1455,9 +1455,17 @@ ${printHeaderCss()}
             name: doc.name, modified: doc.modified, customer: doc.customer,
             order_date: doc.order_date, board_description: doc.board_description,
             board_width_cm: doc.board_width_cm, board_length_cm: doc.board_length_cm,
+            kerf_mm: doc.kerf_mm, default_edge_type: doc.default_edge_type,
             edge_color: doc.edge_color, packing_method: doc.packing_method,
             pieces: doc.pieces || [],
         };
+    }
+
+    function printableEdgeProfiles(frm) {
+        const profiles = frm && frm._dco_side_edge_profiles;
+        if (!(profiles instanceof Map)) return [];
+        return [...profiles].map(([name, profile]) => [String(name), Number(profile?.thickness_mm) || 0])
+            .sort(([left], [right]) => left.localeCompare(right));
     }
 
     function printSource(frm, planOverride, hint) {
@@ -1486,9 +1494,12 @@ ${printHeaderCss()}
             value: JSON.parse(assignmentJson), enumerable: false,
         });
         const frozenDoc = JSON.parse(JSON.stringify(printableDoc(frm.doc)));
+        const edgeProfilesJson = JSON.stringify(printableEdgeProfiles(frm));
         return { token, tab, orderName: frm.doc.name, planName: row.name,
             revision: row.revision, geometryJson: JSON.stringify(geometry), assignmentJson,
-            documentJson: JSON.stringify(frozenDoc), plan, frm: { doc: frozenDoc } };
+            documentJson: JSON.stringify(frozenDoc), edgeProfilesJson, plan,
+            frm: { doc: frozenDoc, _dco_side_edge_profiles: new Map(JSON.parse(edgeProfilesJson)
+                .map(([name, thickness_mm]) => [name, { thickness_mm }])) } };
     }
 
     function printSourceStillCurrent(frm, source) {
@@ -1498,6 +1509,7 @@ ${printHeaderCss()}
         return Boolean(context?.isCurrent(frm, source.token)
             && printAllowed(frm) && frm.doc.name === source.orderName
             && JSON.stringify(printableDoc(frm.doc)) === source.documentJson
+            && JSON.stringify(printableEdgeProfiles(frm)) === source.edgeProfilesJson
             && state?.status === "ready" && state.freshness !== "stale"
             && state.data?.order_name === source.orderName
             && state.data?.capabilities?.print !== false

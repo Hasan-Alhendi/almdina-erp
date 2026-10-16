@@ -1,0 +1,21 @@
+# P0 Phase 3 — Integration and release certification
+
+## Integration boundary
+
+The verified Phase 2B head is `515accf7e5a6d683941f7ce2a7aba50444db5bb9`. A separate temporary integration branch, `agent/dco-cross-order-p0-phase3-integration`, merged `Develop` at `6ff81adbdf45337d1f5c59bc2336cd6ae485cc4f` (17 additional Develop commits) in merge commit `2bd6c77135a528c1f28655a4e32ba07227e0f9ec`. Git had no textual conflicts. The resulting history preserves the Phase 2A/2B identity guards, Native Save code and the newer manufacturing changes. The original #514 branch has not been advanced during the integration gate. Temporary Draft PR #515 exists only to run isolated CI and is not a release PR.
+
+## Independent architecture review: manufacturing print
+
+Develop added liner toolpath and corner edge-thickness rendering to the existing Renderer. Its atomic print source retained the prior printable document fields and omitted `kerf_mm`, `default_edge_type`, and the nonfinancial edge-profile thickness map on `frm`. This was a **new integration defect**: the verified Plan row could produce different final HTML from the live order's manufacturing drawing. Two final-HTML Node tests were RED against the merged pre-fix Renderer: a valid nonzero-kerf liner printed a `cutter_diameter_invalid` error, and an L-shaped corner with unequal edge thicknesses printed a different path. The tests are GREEN after freezing `kerf_mm`, `default_edge_type` and only `[type, thickness_mm]` pairs in the same print intent; the permission, row, revision and generation checks remain in force. A changed thickness or document value during the factory-identity await now cancels final output. Financial edge-profile rates never enter the print form.
+
+## Runtime evidence and release gates
+
+The pinned disposable Desk site uses Frappe v16.17.5 (`75baafaa`) and ERPNext v16.17.0 (`7b494dc9`). Clean NEW Form is opened through Frappe's v16 Form route and waits for the Recovery checkpoint. The separate Recovery test exercises Start New, Continue, a real child measurement, Native Save and reopened permanent identity; the audit reads committed rows in a new bench process. The real operator print gate opens A and B's persisted System plans, waits for Plan readiness and actual painted geometry, clicks the visible print button, and intercepts final HTML without sending to a printer.
+
+Runtime gate status and artifact identifiers: **pending final pinned run on the manufacturing print fix and strict Recovery assertions**. Do not interpret the pre-fix integration run as certification of the final tree.
+
+## Regression classification and release decision
+
+The original Phase 1 15/15, Phase 2A 4/4, and focused Phase 2B/liner/edge/Recovery/DXF/OFFCUT Node checks pass locally on the integrated fix. Before the manufacturing fix, both new print regressions fail against the merged Renderer; after it, both pass. Existing Static Checks locale/catalog and Stage 13 cost-ordering assertions reproduce on pristine `6ff81adb` and are Develop baseline failures. Other CI and real saved Custom/Approved/multisheet manufacturing print coverage must be classified from final runtime artifacts before a PASS decision.
+
+Release remains **BLOCKED pending runtime evidence**. Do not merge, deploy, or advance #514 until all requested NEW/Recovery and manufacturing print gates pass; preserve #506 and #507 independently and merge the cumulative #514 changes only once after certification. A rollback must restore the previous application revision together with its compatible asset build; no schema migration is part of this print fix.

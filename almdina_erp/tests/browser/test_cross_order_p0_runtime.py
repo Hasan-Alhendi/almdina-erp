@@ -754,6 +754,86 @@ def test_new_form_clean_preflight():
             browser.close()
 
 
+def _print_saved_plan_variant(source):
+    """Real persisted manufacturing row prints via the visible Desk action."""
+    fixture = json.loads(Path(os.environ["P0_FIXTURE_PATH"]).read_text())
+    evidence_dir = Path(os.environ["P0_EVIDENCE_DIR"])
+    prefix = "custom" if source == "Custom" else "approved"
+    selected = json.loads((evidence_dir / f"{prefix}-plan-fixture.json").read_text())
+    evidence = {"fixture": selected}
+    with browser_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(locale="en-US")
+            _login(page, fixture)
+            page.evaluate("""() => {
+                window.__p0VariantWrites=[];
+                window.open=()=>({document:{open(){},write(html){__p0VariantWrites.push(html)},
+                    close(){}},close(){}});
+            }""")
+            page.evaluate("name => frappe.set_route('Form','Door Cutting Order',name)",
+                          selected["order_name"])
+            page.wait_for_function("name => cur_frm?.doc?.name === name",
+                                   arg=selected["order_name"], timeout=45000)
+            page.get_by_text("Cutting Plan", exact=True).first.click()
+            page.wait_for_function("""args =>
+                AlmdinaPlanWorkspaceState?.snapshot(cur_frm)?.status === 'ready'
+                && AlmdinaPlanWorkspaceState?.snapshot(cur_frm)?.data?.order_name === args.name
+                && AlmdinaPlanWorkspaceState?.displayedPlanForTab(cur_frm,args.source)?.name
+                && !!cur_frm.fields_dict.cutting_plan_html.$wrapper.get(0)
+                    ?.querySelector('.dco-cutting-plan')""",
+                arg={"name": selected["order_name"], "source": source}, timeout=45000)
+            evidence["source"] = page.evaluate("""source => ({
+                selected:AlmdinaPlanTabsUX.activeTab(cur_frm),
+                row:AlmdinaPlanWorkspaceState.displayedPlanForTab(cur_frm,source)?.name,
+                revision:AlmdinaPlanWorkspaceState.displayedPlanForTab(cur_frm,source)?.revision,
+                permission:AlmdinaPermissions.canDocument(cur_frm,'print_cutting_plan')})""", source)
+            assert evidence["source"]["selected"] == source, evidence["source"]
+            assert evidence["source"]["row"] == selected["plan_name"], evidence["source"]
+            assert evidence["source"]["permission"]
+            button = page.locator('.dco-plan-context-actions-host .dco-print-cutting-plan:visible')
+            button.wait_for(state="visible", timeout=15000)
+            assert button.is_enabled()
+            button.click()
+            page.wait_for_function("() => __p0VariantWrites.length >= 2", timeout=15000)
+            html = page.evaluate("__p0VariantWrites.at(-1)")
+            assert selected["order_name"] in html
+            assert selected["plan_name"] in html
+            assert str(selected["revision"]) in html
+            assert selected["board"] in html
+            assert html.count('class="dco-sheet-card"') == selected["sheets"]
+            other = "B" if source == "Custom" else "A"
+            assert fixture["orders"][other]["name"] not in html
+            assert ("420 × 810" if source == "Custom" else "570 × 930") in html
+            filename = f"{prefix}-plan-operator-final.html"
+            (evidence_dir / filename).write_text(html, encoding="utf-8")
+            evidence["final_html"] = filename
+        except Exception as exc:
+            evidence["failure"] = repr(exc)
+            try:
+                evidence["browser_state"] = page.evaluate("""() => ({
+                    route:frappe.get_route(), current:cur_frm?.doc?.name,
+                    tab:AlmdinaPlanTabsUX?.activeTab(cur_frm),
+                    plan:AlmdinaPlanWorkspaceState?.snapshot(cur_frm)?.status,
+                    body:document.body.innerText.slice(-650)})""")
+                page.screenshot(path=str(evidence_dir / f"{prefix}-plan-failure.png"), full_page=True)
+            except Exception:
+                pass
+            raise
+        finally:
+            (evidence_dir / f"{prefix}-plan-print-evidence.json").write_text(
+                json.dumps(evidence, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+            browser.close()
+
+
+def test_saved_custom_plan_operator_print():
+    _print_saved_plan_variant("Custom")
+
+
+def test_saved_approved_plan_operator_print():
+    _print_saved_plan_variant("Approved")
+
+
 def test_recovery_new_saved_intersection():
     """Observe the real NEW→Saved boundary without mutating Recovery code."""
     fixture = json.loads(Path(os.environ["P0_FIXTURE_PATH"]).read_text())
@@ -873,7 +953,11 @@ def test_recovery_new_saved_intersection():
                                    timeout=15000)
             evidence["cancel_restore"] = page.evaluate("""() => ({
                 board:cur_frm.doc.board_description || null,
+                pieces:(cur_frm.doc.pieces || []).map(row=>row.width_cm),
                 isNew:!!cur_frm.is_new()})""")
+            assert evidence["cancel_restore"]["isNew"]
+            assert not evidence["cancel_restore"]["board"]
+            assert 31 not in evidence["cancel_restore"]["pieces"]
             mark_step("restore_cancelled_with_start_new")
             page.evaluate("name => { frappe.set_route('Form','Door Cutting Order',name); }",
                           fixture["orders"]["B"]["name"])
@@ -889,6 +973,8 @@ def test_recovery_new_saved_intersection():
                 customer:cur_frm.doc.customer,
                 pieceWidths:cur_frm.doc.pieces.map(row=>row.width_cm),
                 recovery:AlmdinaDcoRecovery.LocalCheckpoint.snapshot(cur_frm)})""")
+            assert evidence["restore"]["customer"] == fixture["customer"]
+            assert 31 in evidence["restore"]["pieceWidths"]
             mark_step("draft_restored")
             page.evaluate("""() => {
                 const frm=cur_frm;
@@ -896,6 +982,8 @@ def test_recovery_new_saved_intersection():
                 Promise.resolve().then(()=>frm.save()).then(
                     ()=>window.__p0NativeSave={status:'settled',ok:!frm.is_new(),
                         name:frm.doc.name,board:frm.doc.board_description,
+                        token:AlmdinaDocumentContext.capture(frm),
+                        pieceWidths:(frm.doc.pieces || []).map(row=>row.width_cm),
                         recovery:AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(frm) || null},
                     error=>window.__p0NativeSave={status:'rejected',ok:false,
                         error:String(error),name:frm.doc.name,
@@ -911,6 +999,12 @@ def test_recovery_new_saved_intersection():
                     modal:document.querySelector('.modal.show')?.innerText.slice(0,700) || null,
                     recovery:AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(cur_frm) || null})""")
             assert not evidence["native_save"].get("timeout"), evidence["native_save"]
+            assert evidence["native_save"]["status"] == "settled" and evidence["native_save"]["ok"], evidence["native_save"]
+            assert evidence["native_save"]["board"] == fixture["recovery_board"]
+            assert not evidence["native_save"]["name"].startswith("new-"), evidence["native_save"]
+            assert 31 in evidence["native_save"]["pieceWidths"]
+            assert evidence["native_save"]["token"]["identity"].endswith(
+                f"::{evidence['native_save']['name']}")
             mark_step("native_save_settled")
             if evidence["native_save"]["ok"]:
                 saved = evidence["native_save"]["name"]
@@ -922,10 +1016,17 @@ def test_recovery_new_saved_intersection():
                 page.wait_for_function("name => cur_frm?.doc?.name === name", arg=saved, timeout=45000)
                 evidence["saved_reopen"] = page.evaluate("""() => ({name:cur_frm.doc.name,
                     board:cur_frm.doc.board_description,
+                    customer:cur_frm.doc.customer,
+                    pieceWidths:(cur_frm.doc.pieces || []).map(row=>row.width_cm),
+                    token:AlmdinaDocumentContext.capture(cur_frm),
                     edit:AlmdinaDcoEditSessionCoordinator?.snapshot(cur_frm) || null,
                     recovery:AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(cur_frm) || null,
                     plan:AlmdinaPlanWorkspaceState.snapshot(cur_frm),
                     cost:AlmdinaCostWorkspaceState.snapshot(cur_frm)})""")
+                assert evidence["saved_reopen"]["board"] == fixture["recovery_board"]
+                assert evidence["saved_reopen"]["customer"] == fixture["customer"]
+                assert 31 in evidence["saved_reopen"]["pieceWidths"]
+                assert evidence["saved_reopen"]["token"]["identity"].endswith(f"::{saved}")
         except Exception as exc:
             evidence["failure"] = repr(exc)
             evidence["browser_state"] = page.evaluate("""() => ({route:frappe.get_route?.(),

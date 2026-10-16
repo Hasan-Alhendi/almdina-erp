@@ -128,11 +128,38 @@ jobs:
           cd "$RUNNER_TEMP/frappe-bench"
           bench --site test.localhost execute almdina_erp.tests.cross_order_p0_runtime_fixture.prepare_saved_plan 2>&1 | tee "$RUNNER_TEMP/saved-plan.log"
       - name: Print the saved server plan through Desk
+        id: saved_plan_browser
         if: always() && steps.saved_plan.outcome == 'success'
         timeout-minutes: 3
         run: |
           set -o pipefail
           python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" -k test_saved_server_plan_print_runtime 2>&1 | tee "$RUNNER_TEMP/saved-plan-browser.log"
+      - name: Approve a persisted System plan under isolated permissions
+        id: approved_plan
+        if: always() && steps.saved_plan_browser.outcome == 'success'
+        run: |
+          set -o pipefail
+          cd "$RUNNER_TEMP/frappe-bench"
+          bench --site test.localhost execute almdina_erp.tests.cross_order_p0_runtime_fixture.prepare_approved_plan 2>&1 | tee "$RUNNER_TEMP/approved-plan.log"
+      - name: Import a private Custom DXF plan through the real command
+        id: custom_plan
+        if: always() && steps.saved_plan_browser.outcome == 'success'
+        run: |
+          set -o pipefail
+          cd "$RUNNER_TEMP/frappe-bench"
+          bench --site test.localhost execute almdina_erp.tests.cross_order_p0_runtime_fixture.prepare_custom_dxf_plan 2>&1 | tee "$RUNNER_TEMP/custom-plan.log"
+      - name: Print the imported Custom DXF through the real Desk button
+        if: always() && steps.custom_plan.outcome == 'success'
+        timeout-minutes: 3
+        run: |
+          set -o pipefail
+          python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" -k test_saved_custom_plan_operator_print 2>&1 | tee "$RUNNER_TEMP/custom-plan-browser.log"
+      - name: Print the approved plan using the real Desk button
+        if: always() && steps.approved_plan.outcome == 'success'
+        timeout-minutes: 3
+        run: |
+          set -o pipefail
+          python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" -k test_saved_approved_plan_operator_print 2>&1 | tee "$RUNNER_TEMP/approved-plan-browser.log"
       - name: Observe saved Form Recovery and Edit compatibility
         if: always() && steps.route_preflight.outcome == 'success'
         timeout-minutes: 3
@@ -177,6 +204,10 @@ jobs:
             ${{ runner.temp }}/database-audit.log
             ${{ runner.temp }}/saved-plan.log
             ${{ runner.temp }}/saved-plan-browser.log
+            ${{ runner.temp }}/approved-plan.log
+            ${{ runner.temp }}/approved-plan-browser.log
+            ${{ runner.temp }}/custom-plan.log
+            ${{ runner.temp }}/custom-plan-browser.log
             ${{ runner.temp }}/recovery-browser.log
           if-no-files-found: warn
           retention-days: 14

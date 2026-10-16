@@ -66,13 +66,17 @@ function harness({ sourceFirst = false } = {}) {
     const document = {documentElement: {getAttribute(key) { return key === "dir" ? "rtl" : "ar"; }},
         getElementById() { return null; }, createElement() { return element(""); },
         head: {appendChild() {}}};
-    const frappe = {boot: {lang: "ar"}, msgprint(message) { messages.push(message); },
+    const frappe = {boot: {lang: "ar"}, ui: {form: {on() {}}},
+        msgprint(message) { messages.push(message); },
         utils: {escape_html: String}};
     const context = vm.createContext({window, document, frappe, console, JSON, Number, String,
         Math, Object, Array, Set, Map, WeakMap, Promise, Boolean, Error, __: value => value});
     const files = ["drawing/door_cutting_order_special_shape_geometry.js",
         "drawing/door_cutting_order_shape_output_contract.js",
         "drawing/door_cutting_order_clipped_corner_ux.js",
+        "drawing/door_cutting_order_liner_geometry.js",
+        "drawing/door_cutting_order_machining_overlay.js",
+        "order_entry/edge_banding/door_cutting_order_multi_edge_ux.js",
         "cutting_plan/door_cutting_order_piece_geometry.js",
         "cutting_plan/door_cutting_order_cutting_plan_renderer.js",
         "cutting_plan/door_cutting_order_plan_source_presentation.js",
@@ -203,6 +207,65 @@ test("final OFFCUT HTML retains assigned business context from the verified row"
     assert.match(h.writes.at(-1), /data-resource-kind="OFFCUT"/);
     assert.match(h.writes.at(-1), /dco-offcut-business-context/);
     assert.match(h.writes.at(-1), /FACTORY-OWNED/);
+});
+
+test("final HTML preserves the live nonzero kerf in owned liner geometry", async () => {
+    const h = harness();
+    h.frm.__almdina_active_plan_tab = "System";
+    h.frm.doc.kerf_mm = 5;
+    h.frm.doc.pieces = [{piece_type: "Regular", width_cm: 40, length_cm: 60,
+        extra_liner: 1, liner_reference_side: "edge_width_top",
+        liner_offset_cm: 0, liner_width_cm: 1.8}];
+    const plan = geometry();
+    plan.kerf_mm = 5;
+    plan.sheets[0].pieces[0] = {...plan.sheets[0].pieces[0], x: 5, y: 5,
+        w: 40, h: 60, original_w: 40, original_h: 60, source_piece_no: 1};
+    h.state.data.plans.system_draft = row("SYSTEM-LINER", plan);
+    const liveHtml = h.window.AlmdinaCuttingPlanRender.build(h.frm, plan);
+    const linerPath = html => html.match(/data-overlay-kind="liner"[^>]*d="([^"]+)"/)?.[1];
+    assert.ok(linerPath(liveHtml), "the real Desk geometry contains a liner");
+    assert.doesNotMatch(liveHtml, /data-liner-toolpath-error/);
+    assert.equal(await h.print(), true);
+    assert.doesNotMatch(h.writes.at(-1), /data-liner-toolpath-error/,
+        "the print must not invent a missing-kerf machining error");
+    assert.equal(linerPath(h.writes.at(-1)), linerPath(liveHtml),
+        "the final frozen print document must retain the live liner toolpath");
+});
+
+test("frozen print preserves L-corner edge thickness without financial profiles", async () => {
+    const h = harness();
+    h.frm.__almdina_active_plan_tab = "System";
+    h.frm.doc.kerf_mm = 5;
+    h.frm.doc.default_edge_type = "INNER";
+    h.frm._dco_side_edge_profiles = new Map([
+        ["INNER", {thickness_mm: 4, rate_usd_per_meter: 900, edge_color: "private"}],
+        ["RIGHT", {thickness_mm: 1}], ["TOP", {thickness_mm: 2}]]);
+    const piece = {piece_type: "L-Shaped Corner", width_cm: 40, length_cm: 60,
+        clipped_corner_position: "Top Right", clipped_corner_width_cm: 12,
+        clipped_corner_length_cm: 15, edge_width_top: 1, edge_long_right: 1,
+        edge_width_top_type_override: "TOP", edge_long_right_type_override: "RIGHT",
+        edge_break: 1};
+    h.frm.doc.pieces = [piece];
+    const plan = geometry();
+    plan.sheets[0].pieces[0] = {...plan.sheets[0].pieces[0], x: 5, y: 5,
+        source_piece_no: 1, piece_type: "L-Shaped Corner", w: 40, h: 60,
+        original_w: 40, original_h: 60, clipped_corner_position: "Top Right",
+        clipped_corner_width_cm: 12, clipped_corner_length_cm: 15};
+    h.state.data.plans.system_draft = row("SYSTEM-L-CORNER", plan);
+    const notch = h.window.AlmdinaLinerGeometry.contourNotchFromOrder(h.frm, piece);
+    assert.equal(notch.cutWidthCm, 12.3);
+    assert.equal(notch.cutLengthCm, 15.2);
+    const liveHtml = h.window.AlmdinaCuttingPlanRender.build(h.frm, plan);
+    const shape = html => html.match(/dco-shaped-piece-outline[^>]*><path d="([^"]+)"/)?.[1];
+    assert.ok(shape(liveHtml));
+    assert.equal(await h.print(), true);
+    assert.equal(shape(h.writes.at(-1)), shape(liveHtml));
+    assert.doesNotMatch(h.writes.at(-1), /rate_usd_per_meter|private/);
+    const release = h.deferIdentity();
+    const pending = h.print();
+    h.frm._dco_side_edge_profiles.get("INNER").thickness_mm = 6;
+    release();
+    assert.equal(await pending, false, "an edge thickness update cancels a pending print");
 });
 
 test("unowned OFFCUT metadata cannot enter another order's final HTML", async () => {

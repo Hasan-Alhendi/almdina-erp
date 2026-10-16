@@ -137,6 +137,10 @@ def prepare() -> dict[str, object]:
         Capability.VIEW_COSTS: True,
         Capability.VIEW_CUTTING_PLAN: True,
         Capability.VIEW_SYSTEM_CUTTING_PLAN: True,
+        Capability.VIEW_UPLOADED_CUTTING_PLAN: True,
+        Capability.VIEW_APPROVED_CUTTING_PLAN: True,
+        Capability.UPLOAD_DXF: True,
+        Capability.APPROVE_DXF: True,
         Capability.PRINT_CUTTING_PLAN: True,
         Capability.VIEW_CUSTOMERS: True,
         Capability.VIEW_EDGE_BANDING_TYPES: True,
@@ -189,6 +193,10 @@ def cleanup() -> None:
         for plan_name in frappe.get_all("Cutting Plan",
                                         filters={"door_cutting_order": row["name"]},
                                         pluck="name"):
+            for file_name in frappe.get_all("File",
+                                            filters={"attached_to_doctype": "Cutting Plan",
+                                                     "attached_to_name": plan_name}, pluck="name"):
+                frappe.delete_doc("File", file_name, force=True, ignore_permissions=True)
             frappe.delete_doc("Cutting Plan", plan_name, force=True,
                               ignore_permissions=True)
         frappe.delete_doc("Door Cutting Order", row["name"], force=True,
@@ -218,11 +226,19 @@ def audit_db() -> dict[str, object]:
                        "modified": str(order.modified),
                        "pieces": [{"name": piece.name, "width_cm": piece.width_cm,
                                    "length_cm": piece.length_cm} for piece in order.pieces]}
+    recovered_names = frappe.get_all("Door Cutting Order",
+                                     filters={"board_description": fixture.get("recovery_board")},
+                                     pluck="name")
+    recovered = []
+    for name in recovered_names:
+        doc = frappe.get_doc("Door Cutting Order", name)
+        recovered.append({"name": name, "board": doc.board_description,
+                          "customer": doc.customer,
+                          "piece_widths_cm": [piece.width_cm for piece in doc.pieces]})
     result = {"status": "OBSERVED", "rows": rows,
               "distinct_child_names": rows["A"]["pieces"][0]["name"] != rows["B"]["pieces"][0]["name"],
-              "recovery_saved_names": frappe.get_all(
-                  "Door Cutting Order", filters={"board_description": fixture.get("recovery_board")},
-                  pluck="name")}
+              "recovery_saved_names": recovered_names,
+              "recovery_saved_rows": recovered}
     evidence_dir = os.environ.get("P0_EVIDENCE_DIR")
     if evidence_dir:
         Path(evidence_dir).mkdir(parents=True, exist_ok=True)
@@ -268,3 +284,67 @@ def prepare_saved_plan() -> dict[str, object]:
         json.dumps(summaries, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
     return {key: {field: value for field, value in summary.items() if field != "first_piece"}
             for key, summary in summaries.items()}
+
+
+def prepare_approved_plan() -> dict[str, object]:
+    """Approve B's real saved System row under the disposable role's capability."""
+    fixture = json.loads(Path(os.environ["P0_FIXTURE_PATH"]).read_text(encoding="utf-8"))
+    from almdina_erp.almdina_erp.services.cutting_plan_command_service import approve_order_plan
+
+    frappe.set_user(fixture["user"])
+    order = frappe.get_doc("Door Cutting Order", fixture["orders"]["B"]["name"])
+    result = approve_order_plan(order, "System")
+    frappe.db.commit()
+    approved = frappe.get_doc("Cutting Plan", result["cutting_plan"])
+    evidence = {"order_name": order.name, "plan_name": approved.name,
+                "revision": int(approved.revision or 0), "source": approved.source_type,
+                "status": approved.status, "board": approved.board_description,
+                "sheets": len((frappe.parse_json(approved.snapshot_json or "{}") or {}).get("sheets") or [])}
+    destination = Path(os.environ["P0_EVIDENCE_DIR"]) / "approved-plan-fixture.json"
+    destination.write_text(json.dumps(evidence, ensure_ascii=False, indent=2), encoding="utf-8")
+    return evidence
+
+
+def prepare_custom_dxf_plan() -> dict[str, object]:
+    """Stage an actual private DXF and import it through the authorized command."""
+    from tempfile import NamedTemporaryFile
+
+    import ezdxf
+    from frappe.utils.file_manager import save_file
+
+    from almdina_erp.almdina_erp.services.dxf_import_service import (
+        CUT_PATH_LAYER, SHEET_OUTLINE_LAYER,
+    )
+    from almdina_erp.almdina_erp.services.shop_floor_dxf_service import upload_production_dxf
+
+    fixture = json.loads(Path(os.environ["P0_FIXTURE_PATH"]).read_text(encoding="utf-8"))
+    order_name = fixture["orders"]["A"]["name"]
+    frappe.set_user("Administrator")
+    # This disposable Draft has no dispatched stage. Assign it to the drawing
+    # department; the real endpoint still checks the role capability and stage
+    # assignment policy as the fixture user.
+    frappe.db.set_value("Door Cutting Order", order_name, "current_department", "رسم")
+    drawing = ezdxf.new("R2010")
+    model = drawing.modelspace()
+    for points, layer in (
+        (((0, 0), (1220, 0), (1220, 2440), (0, 2440)), SHEET_OUTLINE_LAYER),
+        (((10, 10), (430, 10), (430, 820), (10, 820)), CUT_PATH_LAYER),
+    ):
+        for start, end in zip(points, (*points[1:], points[0])):
+            model.add_line(start, end, dxfattribs={"layer": layer})
+    with NamedTemporaryFile(suffix=".dxf") as staged:
+        drawing.saveas(staged.name)
+        raw = Path(staged.name).read_bytes()
+    file_doc = save_file(f"p0-{order_name}.dxf", raw, None, None, is_private=1)
+    frappe.db.commit()
+    frappe.set_user(fixture["user"])
+    result = upload_production_dxf(order_name, file_doc.file_url)
+    frappe.db.commit()
+    plan = frappe.get_doc("Cutting Plan", result["cutting_plan"])
+    evidence = {"order_name": order_name, "plan_name": plan.name,
+                "revision": int(plan.revision or 0), "source": plan.source_type,
+                "status": plan.status, "board": plan.board_description,
+                "sheets": len((frappe.parse_json(plan.snapshot_json or "{}") or {}).get("sheets") or [])}
+    (Path(os.environ["P0_EVIDENCE_DIR"]) / "custom-plan-fixture.json").write_text(
+        json.dumps(evidence, ensure_ascii=False, indent=2), encoding="utf-8")
+    return evidence
