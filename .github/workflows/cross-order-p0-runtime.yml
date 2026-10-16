@@ -98,11 +98,18 @@ jobs:
           set -o pipefail
           python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" -k test_desk_route_preflight 2>&1 | tee "$RUNNER_TEMP/preflight.log"
       - name: Open clean NEW Form in Desk before Recovery
+        id: new_form_preflight
         if: steps.route_preflight.outcome == 'success'
         timeout-minutes: 3
         run: |
           set -o pipefail
           python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" -k test_new_form_clean_preflight 2>&1 | tee "$RUNNER_TEMP/new-form-preflight.log"
+      - name: Exercise NEW checkpoint restore cancel and native save in Desk
+        if: always() && steps.new_form_preflight.outcome == 'success'
+        timeout-minutes: 5
+        run: |
+          set -o pipefail
+          python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" -k test_recovery_new_saved_intersection 2>&1 | tee "$RUNNER_TEMP/recovery-intersection.log"
       - name: Prove Phase 2A isolation through native Desk Save
         if: steps.route_preflight.outcome == 'success'
         timeout-minutes: 3
@@ -165,6 +172,7 @@ jobs:
             ${{ runner.temp }}/browser.log
             ${{ runner.temp }}/preflight.log
             ${{ runner.temp }}/new-form-preflight.log
+            ${{ runner.temp }}/recovery-intersection.log
             ${{ runner.temp }}/phase2a-browser.log
             ${{ runner.temp }}/database-audit.log
             ${{ runner.temp }}/saved-plan.log

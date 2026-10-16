@@ -497,6 +497,24 @@ def test_saved_server_plan_print_runtime():
                         selectedTab:AlmdinaPlanTabsUX.activeTab(cur_frm),
                         row:AlmdinaPlanWorkspaceState.displayedPlanForTab(cur_frm,'System')?.name
                     })""")
+                    if not action_source["visiblePlanRoot"]:
+                        try:
+                            page.wait_for_function("""() => !!cur_frm?.fields_dict?.cutting_plan_html
+                                ?.$wrapper?.get(0)?.querySelector('.dco-cutting-plan')""",
+                                timeout=10000)
+                            action_source["visiblePlanRoot"] = True
+                        except Exception:
+                            evidence.setdefault("paint_failure", {})[label] = page.evaluate("""() => ({
+                                event:window.__p0ReadyEvent, tab:AlmdinaPlanTabsUX.activeTab(cur_frm),
+                                identity:AlmdinaDocumentContext.formIdentity(cur_frm),
+                                snapshotStatus:AlmdinaPlanWorkspaceState.snapshot(cur_frm)?.status,
+                                freshness:AlmdinaPlanWorkspaceState.snapshot(cur_frm)?.freshness,
+                                stateOrder:AlmdinaPlanWorkspaceState.snapshot(cur_frm)?.data?.order_name,
+                                canonicalRow:AlmdinaPlanWorkspaceState.planForTab(cur_frm,'System')?.name,
+                                displayedRow:AlmdinaPlanWorkspaceState.displayedPlanForTab(cur_frm,'System')?.name,
+                                presenterReady:AlmdinaPlanWorkspacePresenterAdapter.ready(cur_frm),
+                                planSurface:cur_frm.fields_dict.cutting_plan_html.$wrapper.get(0)
+                                    ?.innerText.slice(-500)})""")
                     assert action_source["decorated"] and action_source["visiblePlanRoot"], action_source
                     before_click = page.evaluate('__p0PrintWrites.length')
                     button.click()
@@ -711,6 +729,8 @@ def test_new_form_clean_preflight():
             page.wait_for_function("""() => cur_frm?.doctype === 'Door Cutting Order'
                 && cur_frm?.doc?.name === window.__p0NewPreflightName && !!cur_frm.is_new()""",
                 timeout=15000)
+            page.wait_for_function("""() => !!AlmdinaDcoRecovery?.LocalCheckpoint
+                ?.snapshot(cur_frm)""", timeout=15000)
             record("new_form", page.evaluate("""() => ({name:cur_frm.doc.name,
                 route:frappe.get_route(),isNew:!!cur_frm.is_new(),
                 token:AlmdinaDocumentContext.capture(cur_frm),
@@ -734,7 +754,6 @@ def test_new_form_clean_preflight():
             browser.close()
 
 
-@pytest.mark.skip(reason="NEW Form Desk Recovery is an independent release blocker")
 def test_recovery_new_saved_intersection():
     """Observe the real NEW→Saved boundary without mutating Recovery code."""
     fixture = json.loads(Path(os.environ["P0_FIXTURE_PATH"]).read_text())
@@ -807,6 +826,7 @@ def test_recovery_new_saved_intersection():
                 })().catch(error=>window.__p0Input={status:'rejected',error:String(error)});
             }""", {"fields": {"customer": fixture["customer"],
                 "board_description": fixture["recovery_board"],
+                "order_cutting_machine": "CNC",
                 "board_width_cm": 122, "board_length_cm": 244,
                 "default_edge_type": fixture["edge_type"], "edge_color": "P0 Recovery edge",
                 "board_rate_usd": 7, "cutting_cost_per_board_usd": 2}})
