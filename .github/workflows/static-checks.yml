@@ -286,6 +286,7 @@ jobs:
           node almdina_erp/tests/js/cutting_plan_break_only_edge.test.js
           node almdina_erp/tests/js/cutting_plan_rotated_corner_edges.test.js
           node almdina_erp/tests/js/dxf_physical_edge_rotation.test.js
+          node almdina_erp/tests/js/dxf_extra_region_rotation.test.js
           node almdina_erp/tests/js/document_context.test.js
           node almdina_erp/tests/js/document_context_async.test.js
           node almdina_erp/tests/js/approved_plan_navigation.test.js
