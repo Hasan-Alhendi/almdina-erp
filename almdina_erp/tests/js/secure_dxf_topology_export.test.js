@@ -167,7 +167,17 @@ const context = vm.createContext({
     MutationObserver: class {
         observe() {}
     },
-    __: value => value,
+    // Standalone DXF simulations do not load Frappe dictionaries, but
+    // identity-language translation must still interpolate {0}, {1}, etc.
+    __: (message, values) => {
+        let output = String(message);
+        if (Array.isArray(values)) {
+            values.forEach((value, index) => {
+                output = output.split("{" + index + "}").join(String(value));
+            });
+        }
+        return output;
+    },
     $: () => ({
         find() { return this; },
         filter() { return this; },
