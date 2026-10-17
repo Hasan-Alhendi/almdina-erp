@@ -233,3 +233,32 @@ test("validated DXF export abandons old form response and old normalize response
     await explicit;
     assert.equal(h.downloads.length, 1);
 });
+
+
+test("DXF keeps the original edge-profile cache for L-shaped notch compensation", async () => {
+    const h = makeHarness("cutting_plan/secure_dxf_export.js");
+    h.frm._dco_side_edge_profiles = new Map([
+        ["EDGE-2MM", { thickness_mm: 2, rate_usd_per_meter: 1 }],
+    ]);
+    h.frm.doc.default_edge_type = "EDGE-2MM";
+    h.frm.doc.pieces = [{
+        piece_type: "L-Shaped Corner", clipped_corner_position: "top_right",
+        clipped_corner_width_cm: 2, clipped_corner_length_cm: 2,
+        edge_break: 1,
+    }];
+    let capturedThickness = null;
+    h.win.AlmdinaLinerGeometry = {
+        contourNotchFromOrder(sourceForm) {
+            capturedThickness = sourceForm._dco_side_edge_profiles?.get("EDGE-2MM")?.thickness_mm;
+            throw new Error("STOP_AFTER_INPUT_SNAPSHOT");
+        },
+    };
+    const plan = {
+        sheets: [{ pieces: [{ source_piece_no: 1, x: 1, y: 1, w: 10, h: 10 }] }],
+    };
+    const operation = h.frappe.almdina.export_validated_dxf(h.frm);
+    h.frm._dco_side_edge_profiles.clear();
+    h.calls[0].resolve({ message: { plan } });
+    await assert.rejects(operation, /STOP_AFTER_INPUT_SNAPSHOT/);
+    assert.equal(capturedThickness, 2, "form-owned profiles must be frozen with DXF inputs");
+});
