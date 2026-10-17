@@ -318,9 +318,15 @@ def _customer_invoice_lines(
                 }
             )
 
-        # Customer-billed execution services must exclude OFFCUT/external copies.
-        # The per-copy execution projection above is the billing authority.
-        addon_quantity = quantity
+        # Physical execution counts manufactured copies; the commercial
+        # projection supplies the billable door quantity for every add-on.
+        # Old snapshots without that projection retain ordered quantity.
+        addon_quantity = max(
+            0.0,
+            _number(_value(piece, "addon_billable_qty"))
+            if "addon_billable_qty" in piece
+            else float(_quantity(_value(piece, "qty"))),
+        )
         specs = (
             (
                 "extra_double",
@@ -365,7 +371,12 @@ def _customer_invoice_lines(
                     "quantity": addon_quantity,
                     "unit": "درفة",
                     "rate_usd": _money(rate),
-                    "amount_usd": _money(rate * addon_quantity if rate else amount),
+                    # Saved totals already include the factory execution
+                    # share. Multiplying again would double-prorate OFFCUT.
+                    "amount_usd": _money(
+                        amount if amount_field in piece and piece[amount_field] is not None
+                        else rate * addon_quantity
+                    ),
                     "note": _text(_value(piece, "notes")),
                 }
             )
