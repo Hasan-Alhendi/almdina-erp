@@ -801,9 +801,13 @@
                 <div><strong>${escapeHtml(translate("Board:"))}</strong> ${escapeHtml(summary.board_description || translate("Unspecified"))}</div>
                 <div><strong>${escapeHtml(translate("Edge color:"))}</strong> ${escapeHtml(summary.edge_color || translate("Unspecified"))}</div>
                 ${summary.has_special_piece ? `<div class="text-warning">${escapeHtml(translate("Includes special door data"))}</div>` : ""}
+                ${summary.official_save_state === "PENDING_RECONCILIATION"
+                    ? `<div class="text-warning">${escapeHtml(translate("Previous official Save is pending verification. Check the result before continuing; no second insert will be sent."))}</div>`
+                    : ""}
                 <div class="dco-recovery-card__actions almdina-ui">
                     ${uiButton({
-                        label: translate("Continue the order"),
+                        label: translate(summary.official_save_state === "PENDING_RECONCILIATION"
+                            ? "Check save result" : "Continue the order"),
                         variant: "primary",
                         size: "btn-sm",
                         attrs: { "data-recovery-action": "continue" },
@@ -812,7 +816,10 @@
                         label: translate("Delete the draft"),
                         variant: "danger",
                         size: "btn-sm",
-                        attrs: { "data-recovery-action": "delete" },
+                        attrs: {
+                            "data-recovery-action": "delete",
+                            disabled: summary.official_save_state === "PENDING_RECONCILIATION",
+                        },
                     })}
                 </div>
             </article>
@@ -962,9 +969,9 @@
                     if (!ownsDiscovery()) return false;
                     if (outcome && outcome.pending === true) {
                         // A query returning NOT_FOUND cannot prove the previous insert
-                        // has finished. Keep discovery open and the pending card visible.
+                        // has finished. Keep discovery open and allow an explicit
+                        // future recheck; deleting an unresolved attempt stays disabled.
                         releaseDiscoveryAction(card, button);
-                        freezeCardActions(card, button);
                         return false;
                     }
                     if (initializations.get(frm) === initialization) initializations.delete(frm);
