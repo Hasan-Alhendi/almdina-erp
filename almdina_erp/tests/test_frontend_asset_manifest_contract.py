@@ -39,7 +39,7 @@ def test_addons_modal_stylesheet_url_tracks_css_content() -> None:
     """Reject missing or stale cache revisions for raw, non-fingerprinted /assets CSS."""
     css_file = ROOT / "public" / "css" / "door_cutting_order_extra_addons.css"
     raw = css_file.read_bytes()
-    git_blob = hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\\0" + raw).hexdigest()
+    git_blob = hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest()
     url = "/assets/almdina_erp/css/door_cutting_order_extra_addons.css"
     css = runpy.run_path(str(MANIFEST))["app_include_css"]
     matches = [asset for asset in css if asset.split("?")[0] == url]
