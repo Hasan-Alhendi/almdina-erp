@@ -1486,9 +1486,9 @@
             if (!current()) throw new Error("DCO edit permission changed during row removal checks");
             await frm.script_manager.trigger("before_pieces_remove", row.doctype, row.name);
             if (!current()) throw new Error("The DCO edit session changed during row removal checks");
-            if (!await freshPreDispatchOwnership()) {
-                throw new Error("DCO lifecycle, capability, or revision changed during row removal checks");
-            }
+            // The authoritative server guard below runs once after all
+            // pre-remove hooks. Per-row fetches cause O(rows) HTTP requests.
+            if (!current()) throw new Error("DCO identity or edit session changed during row removal checks");
         }
         if (!current()) throw new Error("DCO edit permission changed before applying the restored rows");
         if (!await freshPreDispatchOwnership()) {
@@ -1520,9 +1520,9 @@
                 pendingPieceKeys.push({ row, pieceKey: item.piece_key });
                 await frm.script_manager.trigger("pieces_add", row.doctype, row.name);
                 if (!current()) throw new Error("The DCO edit session changed while creating a restored piece");
-                if (!await freshPreDispatchOwnership()) {
-                    throw new Error("DCO lifecycle, capability, or revision changed while creating a restored piece");
-                }
+                // Keep the local generation/permission fence after each
+                // awaited hook; one final server verification covers the batch.
+                if (!current()) throw new Error("DCO edit permission or identity changed while adding a restored piece");
             }
             Object.entries(item.values).forEach(([fieldname, value]) => {
                 if (currentPieceFieldStatus(frm, grid, row, fieldname) === "Write") {
@@ -1554,9 +1554,7 @@
                 if (!current()) throw new Error("The DCO edit session changed before the row removal hook");
                 await frm.script_manager.trigger("pieces_remove", row.doctype, row.name);
                 if (!current()) throw new Error("The DCO edit session changed during the row removal hook");
-                if (!await freshPreDispatchOwnership()) {
-                    throw new Error("DCO lifecycle, capability, or revision changed during the row removal hook");
-                }
+                if (!current()) throw new Error("DCO identity or edit session changed during the row removal hook");
             }
         }
         if (!current()) throw new Error("The DCO edit session changed before refreshing the restored form");
