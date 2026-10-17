@@ -246,7 +246,7 @@ def test_a156_notes_panel_is_reusable_rtl_and_independent_from_form_save() -> No
     css = source(CSS)
 
     assert '"/assets/almdina_erp/js/notes/notes_panel.js"' in manifest
-    assert '"/assets/almdina_erp/css/notes.css"' in manifest
+    assert '"/assets/almdina_erp/css/notes.css?v=1"' in manifest
     assert 'const MAX_LENGTH = 500' in panel
     assert 'data-notes-tab="order"' in panel
     assert 'data-notes-tab="customer"' in panel

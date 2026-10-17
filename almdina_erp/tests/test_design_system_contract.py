@@ -17,6 +17,46 @@ WORKSPACE_HOME_CSS = ROOT / "public" / "css" / "almdina_workspace_home.css"
 UI = ROOT / "public" / "js" / "almdina_ui.js"
 ASSETS = ROOT / "frontend_assets.py"
 TOKEN_OWNERSHIP = ROOT.parent / "docs" / "design_system" / "TOKEN_OWNERSHIP.md"
+LIGHT_THEME_PIN = ROOT.parent / "docs" / "design_system" / "LIGHT_THEME_PIN.md"
+
+# Exact Light surface values — never darken these to "fix" Dark Mode.
+LIGHT_SURFACE_PIN: dict[str, str] = {
+    "--alm-action": "#172033",
+    "--alm-action-hover": "#0f172a",
+    "--alm-on-action": "#ffffff",
+    "--alm-brand-soft": "#eff6ff",
+    "--alm-brand-soft-fg": "#172033",
+    "--alm-canvas": "#eef1f6",
+    "--alm-card": "#ffffff",
+    "--alm-card-border": "#e4e8ee",
+    "--alm-accent-soft": "#eff6ff",
+    "--alm-warning": "#b45309",
+    "--alm-warning-bg": "#fff7e8",
+    "--alm-danger-soft": "#fff1f2",
+    "--alm-danger-soft-border": "#fecdd3",
+    "--alm-text-strong": "#101828",
+    "--alm-text-secondary": "#344054",
+    "--alm-text-subtle": "#667085",
+    "--alm-text-faint": "#98a2b3",
+    "--alm-border-subtle": "#eaecf0",
+    "--alm-border-hover": "#d0d5dd",
+    "--alm-surface-muted": "#f4f6f8",
+    "--alm-status-success-fg": "#15803d",
+    "--alm-status-success-bg": "rgba(21, 128, 61, 0.08)",
+    "--alm-status-success-border": "rgba(21, 128, 61, 0.22)",
+    "--alm-status-warning-fg": "#b45309",
+    "--alm-status-warning-bg": "rgba(180, 83, 9, 0.09)",
+    "--alm-status-warning-border": "rgba(180, 83, 9, 0.24)",
+    "--alm-status-danger-fg": "#b91c1c",
+    "--alm-status-danger-bg": "rgba(185, 28, 28, 0.08)",
+    "--alm-status-danger-border": "rgba(185, 28, 28, 0.22)",
+    "--alm-status-info-fg": "#2563eb",
+    "--alm-status-info-bg": "#eff6ff",
+    "--alm-status-info-border": "rgba(37, 99, 235, 0.24)",
+    "--alm-status-neutral-fg": "#344054",
+    "--alm-status-neutral-bg": "#f4f6f8",
+    "--alm-status-neutral-border": "#e4e8ee",
+}
 EDGE_BANDING_UX = ROOT / "public" / "js" / "edge_banding_type_ux.js"
 SHARED_DS_CSS = (
     TOKENS,
@@ -310,8 +350,8 @@ class TestDesignSystemContract(unittest.TestCase):
 
     def test_static_scales_are_global_for_native_frappe_surfaces(self) -> None:
         # Native lists are not wrapped in .almdina-ui, so static scales must live
-        # in the global block, before the .almdina-ui-only Frappe-derived block.
-        scoped_block = self.tokens.index("}\n\n.almdina-ui {")
+        # in the global/theme boards, before the .almdina-ui-only Frappe-bridge block.
+        bridge_block = self.tokens.index("--alm-secondary-bg:")
         for token in (
             "--alm-font-size-sm:",
             "--alm-font-weight-bold:",
@@ -319,7 +359,88 @@ class TestDesignSystemContract(unittest.TestCase):
             "--alm-radius-xs:",
             "--alm-shadow-card:",
         ):
-            self.assertLess(self.tokens.index(token), scoped_block, msg=f"{token} must be global")
+            self.assertLess(self.tokens.index(token), bridge_block, msg=f"{token} must be global")
+
+    def test_theme_boards_separate_light_and_dark_surfaces(self) -> None:
+        # Regression: previously :root + light + dark + .almdina-ui shared one
+        # Light paint board, so Dark kept white intro/toolbar/summary/info badges.
+        shared_header = self.tokens.split("{", 1)[0]
+        self.assertIn('[data-theme="dark"]', shared_header)
+        self.assertNotIn("--alm-card:", shared_header)
+
+        light_match = re.search(
+            r":root,\s*\[data-theme=\"light\"\]\s*\{([^}]+)\}",
+            self.tokens,
+            flags=re.S,
+        )
+        self.assertIsNotNone(light_match, msg="Light surface board must be :root + [data-theme=light] only")
+        light_block = light_match.group(1)
+        for token, value in LIGHT_SURFACE_PIN.items():
+            self.assertIn(
+                f"{token}: {value}",
+                light_block,
+                msg=f"Light pin drift for {token}",
+            )
+
+        dark_match = re.search(
+            r"\[data-theme=\"dark\"\]\s*\{([^}]+)\}",
+            self.tokens,
+            flags=re.S,
+        )
+        self.assertIsNotNone(dark_match, msg="Dark surface board must exist")
+        dark_block = dark_match.group(1)
+        for token, value in (
+            ("--alm-card", "#1a2030"),
+            ("--alm-canvas", "#12161e"),
+            ("--alm-text-strong", "#f2f4f7"),
+            ("--alm-text-subtle", "#98a2b3"),
+            ("--alm-surface-muted", "#151b27"),
+            ("--alm-status-info-bg", "#0f2748"),
+            ("--alm-status-info-fg", "#93c5fd"),
+            ("--alm-status-success-fg", "#4ade80"),
+            ("--alm-status-danger-fg", "#f87171"),
+            ("--alm-status-neutral-bg", "#1e2533"),
+            ("--alm-action", "#dbe4f0"),
+            ("--alm-on-action", "#101828"),
+            ("--alm-brand-soft", "#0f2748"),
+            ("--alm-brand-soft-fg", "#93c5fd"),
+        ):
+            self.assertIn(f"{token}: {value}", dark_block, msg=f"missing Dark {token}")
+            if token in LIGHT_SURFACE_PIN:
+                self.assertNotIn(f"{token}: {LIGHT_SURFACE_PIN[token]}", dark_block)
+
+        # Dark CTA fill must stay independent of brand navy (Frappe uses black --neutral text).
+        self.assertIn("--alm-primary: #172033", self.tokens)
+        self.assertNotEqual(
+            re.search(r"--alm-action:\s*([^;]+);", dark_block).group(1).strip(),
+            "#172033",
+            msg="Dark --alm-action must not equal brand navy",
+        )
+
+        # .almdina-ui must not re-pin Light surface paints (would defeat document theme).
+        bridge_start = self.tokens.rindex(".almdina-ui {")
+        bridge_block = self.tokens[bridge_start:]
+        for banned in (
+            "--alm-card:",
+            "--alm-canvas:",
+            "--alm-text-strong:",
+            "--alm-surface-muted:",
+            "--alm-status-info-bg:",
+            "--alm-action:",
+        ):
+            self.assertNotIn(banned, bridge_block, msg=f".almdina-ui must not redefine {banned}")
+
+        self.assertTrue(LIGHT_THEME_PIN.is_file(), msg="LIGHT_THEME_PIN.md must exist")
+        pin_doc = LIGHT_THEME_PIN.read_text(encoding="utf-8")
+        self.assertIn("--alm-card: #ffffff", pin_doc)
+        self.assertIn("--alm-status-info-bg: #eff6ff", pin_doc)
+        self.assertIn("--alm-action: #172033", pin_doc)
+
+        ownership = TOKEN_OWNERSHIP.read_text(encoding="utf-8")
+        self.assertIn("Theme boards", ownership)
+        self.assertIn("LIGHT_THEME_PIN.md", ownership)
+        self.assertIn("data-theme", ownership)
+        self.assertIn("Brand vs action", ownership)
 
     def test_native_list_chrome_reads_design_tokens(self) -> None:
         list_table = (ROOT / "public" / "css" / "almdina_list_table.css").read_text(encoding="utf-8")
@@ -403,7 +524,8 @@ class TestDesignSystemContract(unittest.TestCase):
     def test_components_stay_scoped_and_define_primary_button(self) -> None:
         self.assertIn(".almdina-ui .btn.alm-btn-primary", self.components)
         self.assertIn(".almdina-ui .btn.alm-btn-secondary", self.components)
-        self.assertIn("background: var(--alm-primary)", self.components)
+        self.assertIn("background: var(--alm-action, var(--alm-primary))", self.components)
+        self.assertIn("color: var(--alm-on-action, var(--alm-on-primary))", self.components)
         self.assertNotIn("body .btn-primary", self.components)
 
     def test_ui_builder_is_presentation_only(self) -> None:
@@ -484,16 +606,16 @@ class TestDesignSystemContract(unittest.TestCase):
         self.assertIn(".almdina-ui .alm-control .form-control:focus", self.components)
 
     def test_assets_load_design_system_before_feature_css_and_after_foundation(self) -> None:
-        tokens_asset = '"/assets/almdina_erp/css/almdina_design_tokens.css"'
-        components_asset = '"/assets/almdina_erp/css/almdina_components.css"'
+        tokens_asset = '"/assets/almdina_erp/css/almdina_design_tokens.css?v=3"'
+        components_asset = '"/assets/almdina_erp/css/almdina_components.css?v=2"'
         patterns_asset = '"/assets/almdina_erp/css/almdina_patterns.css"'
         templates_asset = '"/assets/almdina_erp/css/almdina_page_templates.css?v=1"'
-        desk_theme_asset = '"/assets/almdina_erp/css/almdina_desk_theme.css"'
+        desk_theme_asset = '"/assets/almdina_erp/css/almdina_desk_theme.css?v=2"'
         desk_sidebar_asset = '"/assets/almdina_erp/css/almdina_desk_sidebar.css?v=2"'
-        workspace_home_asset = '"/assets/almdina_erp/css/almdina_workspace_home.css?v=11"'
+        workspace_home_asset = '"/assets/almdina_erp/css/almdina_workspace_home.css?v=12"'
         ui_asset = '"/assets/almdina_erp/js/almdina_ui.js"'
         foundation_asset = '"/assets/almdina_erp/js/frontend_foundation.js"'
-        notes_asset = '"/assets/almdina_erp/css/notes.css"'
+        notes_asset = '"/assets/almdina_erp/css/notes.css?v=1"'
 
         self.assertLess(self.assets.index(tokens_asset), self.assets.index(components_asset))
         self.assertLess(self.assets.index(components_asset), self.assets.index(patterns_asset))
@@ -517,6 +639,12 @@ class TestDesignSystemContract(unittest.TestCase):
             '.almdina-ui .alm-summary-card[data-tone="success"]',
         ):
             self.assertIn(marker, patterns, msg=f"missing pattern selector {marker}")
+        # Shared patterns must paint via theme tokens — no Feature/Dark-only forks.
+        self.assertIn("background: var(--alm-card, var(--alm-surface))", patterns)
+        self.assertIn("background: var(--alm-surface-muted)", patterns)
+        self.assertIn("background: var(--alm-status-info-bg)", patterns)
+        self.assertNotIn('[data-theme="dark"] .aw-', patterns)
+        self.assertNotIn('[data-theme="dark"] .alm-page-intro', patterns)
 
     def test_admin_console_surfaces_adopt_shared_patterns(self) -> None:
         permissions = PERMISSIONS_RENDERER.read_text(encoding="utf-8")
@@ -571,11 +699,44 @@ class TestDesignSystemContract(unittest.TestCase):
 
     def test_desk_theme_bridges_frappe_primary_to_alm_tokens(self) -> None:
         source = DESK_THEME.read_text(encoding="utf-8")
+        # Light keeps brand identity; CTA fill comes from --alm-action (same navy in Light).
         self.assertIn("--primary: var(--alm-primary)", source)
-        self.assertIn("--btn-primary: var(--alm-primary)", source)
+        self.assertIn("--btn-primary: var(--alm-action)", source)
+        self.assertIn("--bg-blue: var(--alm-brand-soft)", source)
+        self.assertIn("--surface-menu-bar: var(--alm-primary)", source)
         self.assertIn(".indicator-pill.blue", source)
         self.assertNotIn("body .btn-primary", source)
         self.assertNotIn("#2490ef", source)
+
+        # Regression: never pin --btn-primary to brand navy on a shared light+dark board.
+        # Frappe Dark paints .btn-primary text with --neutral (black); navy fill = unreadable.
+        shared_both = re.search(
+            r":root,\s*\[data-theme=\"light\"\],\s*\[data-theme=\"dark\"\]\s*\{([^}]+)\}",
+            source,
+            flags=re.S,
+        )
+        self.assertIsNone(
+            shared_both,
+            msg="Desk bridge must theme-split Light/Dark; do not share one board for both",
+        )
+        self.assertNotIn("--btn-primary: var(--alm-primary)", source)
+
+        dark_bridge = re.search(
+            r"\[data-theme=\"dark\"\]\s*\{([^}]+)\}",
+            source,
+            flags=re.S,
+        )
+        self.assertIsNotNone(dark_bridge, msg="Dark Desk bridge board required")
+        dark_vars = dark_bridge.group(1)
+        self.assertIn("--btn-primary: var(--alm-action)", dark_vars)
+        self.assertIn("--surface-menu-bar: var(--alm-primary)", dark_vars)
+        self.assertIn("--primary: var(--alm-accent)", dark_vars)
+        self.assertNotIn("#ffffff", dark_vars)
+        self.assertNotIn("color-mix(in srgb, var(--alm-primary) 10%, #ffffff)", source)
+
+        # Components consume action tokens so Alm buttons match Frappe page CTAs.
+        self.assertIn("var(--alm-action, var(--alm-primary))", self.components)
+        self.assertIn("var(--alm-on-action, var(--alm-on-primary))", self.components)
 
     def test_workspace_home_css_uses_design_tokens_without_global_desk_overrides(self) -> None:
         source = WORKSPACE_HOME_CSS.read_text(encoding="utf-8")
@@ -733,11 +894,20 @@ class TestDesignSystemContract(unittest.TestCase):
         self.assertIn(".prw-empty.alm-state", css)
 
     def test_factory_plan_archive_uses_design_system(self) -> None:
+        archive_css = (ROOT / "public" / "css" / "factory_plan_archive.css").read_text(encoding="utf-8")
         self.assertIn('class="almdina-ui apa-shell alm-page alm-page--admin"', self.factory_plan_archive_page)
         self.assertIn("AlmdinaUi.button", self.factory_plan_archive_page)
         self.assertIn("AlmdinaUi.control", self.factory_plan_archive_page)
         self.assertIn("disposeControls", self.factory_plan_archive_page)
         self.assertNotIn('class="btn btn-primary apa-archive"', self.factory_plan_archive_page)
+        # Dark Mode: archive paints live in static CSS via --alm-* (no JS <style> board).
+        self.assertIn('factory_plan_archive.css?v=1', self.factory_plan_archive_page)
+        self.assertIn("ensureArchiveStyles", self.factory_plan_archive_page)
+        self.assertNotIn('createElement("style")', self.factory_plan_archive_page)
+        self.assertIn("background: var(--alm-card, var(--fg-color, #fff));", archive_css)
+        self.assertIn("color: var(--alm-text-strong, #101828);", archive_css)
+        self.assertIn("background: var(--alm-status-success-bg);", archive_css)
+        self.assertNotIn("background:#eaf8ef", archive_css.replace(" ", ""))
 
     def test_widget_migrated_surfaces_reject_raw_search_inputs(self) -> None:
         for path in WIDGET_MIGRATED_SURFACES:
@@ -781,8 +951,54 @@ class TestDesignSystemContract(unittest.TestCase):
             DCO_JS / "cutting_plan" / "door_cutting_order_plan_content_styles.js"
         ).read_text(encoding="utf-8")
         self.assertIn('.dco-plan-tabs--underline .btn.is-active', plan_content_styles)
-        self.assertIn("color:var(--alm-primary, #172033) !important;", plan_content_styles)
+        # Interactive tab paint must stay readable in Dark (navy primary fails on dark canvas).
+        self.assertIn("color:var(--alm-brand-soft-fg, #172033) !important;", plan_content_styles)
+        self.assertIn(
+            "background:var(--alm-brand-soft-fg, #172033);",
+            plan_content_styles,
+        )
+        self.assertNotIn("color:var(--alm-primary, #172033) !important;", plan_content_styles)
         self.assertNotIn(".dco-plan-tabs", self.components)
+
+    def test_dco_plan_screen_chrome_contrast_stays_out_of_board_and_print(self) -> None:
+        styles = (
+            DCO_JS / "cutting_plan" / "door_cutting_order_plan_content_styles.js"
+        ).read_text(encoding="utf-8")
+        renderer = (
+            DCO_JS / "cutting_plan" / "door_cutting_order_cutting_plan_renderer.js"
+        ).read_text(encoding="utf-8")
+
+        # Board card titles: screen gallery only.
+        self.assertIn(
+            "[data-fieldname=\"cutting_plan_html\"] .dco-board-gallery .dco-sheet-title",
+            styles,
+        )
+        self.assertIn(
+            "color:var(--alm-text-strong,#101828) !important;",
+            styles,
+        )
+        # Legend label remaps must stay under .dco-extra-addon-legend, not global text marks.
+        self.assertIn(
+            ".dco-extra-addon-legend .dco-extra-addon-text[data-addon-kind=\"double\"]",
+            styles,
+        )
+        self.assertNotIn(
+            "[data-fieldname=\"cutting_plan_html\"] .dco-extra-addon-text[data-addon-kind=\"double\"] {",
+            styles,
+        )
+        self.assertIn(
+            "color:var(--alm-status-warning-fg, #b45309) !important;",
+            styles,
+        )
+        # Print / in-board identity paints remain paper-dark for Light boards.
+        self.assertIn('color:#111;', renderer)
+        self.assertIn("EXTRA_DOUBLE_MARK_COLOR = \"#5a2d82\"", renderer)
+        print_doc = renderer[renderer.index("function buildPrintDocument") :]
+        self.assertIn("background: #fff !important;", print_doc)
+        self.assertIn("color: #111 !important;", print_doc)
+        self.assertIn(".dco-sheet-title {", print_doc)
+        self.assertNotIn("var(--alm-text-strong", print_doc)
+        self.assertNotIn("var(--alm-brand-soft-fg", print_doc)
 
     def test_migrated_surfaces_reject_legacy_primary_markup(self) -> None:
         for path in MIGRATED_SURFACES:
@@ -802,10 +1018,107 @@ class TestDesignSystemContract(unittest.TestCase):
     def test_factory_routing_workflow_aliases_brand_primary(self) -> None:
         source = FACTORY_ROUTING_WORKFLOW_CSS.read_text(encoding="utf-8")
         self.assertIn("--prw-primary: var(--alm-primary, #172033)", source)
+        self.assertIn("--prw-card: var(--alm-card, #ffffff)", source)
+        self.assertIn("--prw-subtle: var(--alm-surface-muted, #f4f6f8)", source)
+        self.assertIn("--prw-text: var(--alm-text-strong, #101828)", source)
+        self.assertNotIn("--prw-card: var(--card-bg", source)
 
     def test_shop_floor_responsive_aliases_brand_primary(self) -> None:
         source = SHOP_FLOOR_RESPONSIVE_CSS.read_text(encoding="utf-8")
         self.assertIn("--sf-primary: var(--alm-primary, #172033)", source)
+        self.assertIn("--sf-card: var(--alm-card, #ffffff)", source)
+        self.assertIn("--sf-subtle: var(--alm-surface-muted, #f4f6f8)", source)
+        self.assertIn("--sf-text: var(--alm-text-strong, #101828)", source)
+        self.assertNotIn("--sf-card: var(--card-bg", source)
+        # Completed history keeps green identity without Light-only solid washes.
+        self.assertIn("background: color-mix(in srgb, #16a34a 14%, var(--alm-card, #ffffff)) !important;", source)
+        self.assertNotIn("background: #dcfce7 !important;", source)
+
+    def test_workspace_home_icon_wash_mixes_onto_theme_card(self) -> None:
+        source = WORKSPACE_HOME_CSS.read_text(encoding="utf-8")
+        self.assertIn(
+            "background: color-mix(in srgb, var(--alm-section-accent) 12%, var(--alm-card));",
+            source,
+        )
+        self.assertNotIn("color-mix(in srgb, var(--alm-section-accent) 12%, #fff)", source)
+
+    def test_native_list_chrome_uses_alm_text_tokens(self) -> None:
+        list_table = (ROOT / "public" / "css" / "almdina_list_table.css").read_text(encoding="utf-8")
+        self.assertIn("color: var(--alm-text-strong, #101828);", list_table)
+        self.assertIn("color: var(--alm-text-subtle, #667085);", list_table)
+        self.assertNotIn("color: var(--text-color, #1f272e);", list_table)
+
+    def test_dco_mobile_list_soft_washes_mix_onto_theme_card(self) -> None:
+        mobile = (ROOT / "public" / "css" / "door_cutting_order_mobile_list.css").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("#2563eb", mobile)
+        self.assertIn(
+            "--dco-accent-soft: color-mix(in srgb, var(--dco-accent) 12%, var(--alm-card, #ffffff));",
+            mobile,
+        )
+        self.assertIn("--dco-card-bg: var(--alm-card, #ffffff);", mobile)
+        self.assertNotIn("--dco-accent-soft: #eff6ff;", mobile)
+        self.assertNotIn("color: #101828;", mobile)
+
+    def test_factory_stage_library_reads_alm_surfaces(self) -> None:
+        source = FACTORY_STAGE_LIBRARY_CSS.read_text(encoding="utf-8")
+        self.assertIn("background: var(--alm-card, #ffffff);", source)
+        self.assertIn("background: var(--alm-surface-muted, #f4f6f8);", source)
+        self.assertNotIn("var(--card-bg, #fff)", source)
+        self.assertNotIn("var(--subtle-fg, #f7f7f7)", source)
+
+    def test_dco_form_chrome_reads_alm_surfaces_not_frappe_fallbacks(self) -> None:
+        tab = (ROOT / "public" / "css" / "door_cutting_order_form_tab_layout.css").read_text(
+            encoding="utf-8"
+        )
+        presentation = (ROOT / "public" / "css" / "door_cutting_order_form_presentation.css").read_text(
+            encoding="utf-8"
+        )
+        notes = (ROOT / "public" / "css" / "notes.css").read_text(encoding="utf-8")
+        shell = (ROOT / "public" / "css" / "door_cutting_order_plan_workspace_shell.css").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn(
+            "border-color: color-mix(in srgb, var(--alm-accent, #2563eb) 35%, var(--alm-card, #ffffff));",
+            tab,
+        )
+        self.assertNotIn("color-mix(in srgb, var(--alm-accent, #2563eb) 35%, #fff)", tab)
+        self.assertIn("background: var(--alm-card, #ffffff) !important;", presentation)
+        self.assertNotIn("var(--card-bg, #fff)", presentation)
+
+        self.assertIn("background: var(--alm-card, #ffffff);", notes)
+        self.assertNotIn("background: #fff;", notes)
+        self.assertNotIn("color: #10203f;", notes)
+
+        self.assertIn(
+            "background: color-mix(in srgb, var(--alm-success, #15803d) 10%, var(--alm-card, #ffffff)) !important;",
+            shell,
+        )
+        self.assertNotIn("background: #ecfdf3 !important;", shell)
+
+    def test_dco_print_and_drawing_owners_stay_theme_independent(self) -> None:
+        print_theme = (
+            ROOT
+            / "public"
+            / "js"
+            / "door_cutting_order"
+            / "printing"
+            / "door_cutting_order_document_print_theme.js"
+        ).read_text(encoding="utf-8")
+        financial = (
+            ROOT
+            / "public"
+            / "js"
+            / "door_cutting_order"
+            / "costing"
+            / "door_cutting_order_financial_documents_ux.js"
+        ).read_text(encoding="utf-8")
+        # Print document CSS keeps paper whites; screen theme must not reclaim them.
+        self.assertIn("background:#fff", financial)
+        self.assertIn("@page{size:A4", print_theme)
+        self.assertNotIn("var(--alm-card", financial[financial.index("function printCss") :])
 
     def test_admin_console_shells_alias_foundation_tokens(self) -> None:
         permissions = FACTORY_PERMISSIONS_CSS.read_text(encoding="utf-8")

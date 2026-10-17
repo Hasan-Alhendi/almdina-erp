@@ -6,34 +6,36 @@ coverage.
 """
 
 app_include_css = [
-    "/assets/almdina_erp/css/almdina_design_tokens.css",
-    "/assets/almdina_erp/css/almdina_components.css",
+    # Raw /assets paths are not content-fingerprinted by Frappe; bump when the
+    # Light/Dark token boards or shared component/pattern paint contracts change.
+    "/assets/almdina_erp/css/almdina_design_tokens.css?v=3",
+    "/assets/almdina_erp/css/almdina_components.css?v=2",
     "/assets/almdina_erp/css/almdina_patterns.css",
     "/assets/almdina_erp/css/almdina_page_templates.css?v=1",
-    "/assets/almdina_erp/css/almdina_desk_theme.css",
+    "/assets/almdina_erp/css/almdina_desk_theme.css?v=2",
     "/assets/almdina_erp/css/almdina_desk_sidebar.css?v=2",
-    "/assets/almdina_erp/css/almdina_workspace_home.css?v=11",
-    "/assets/almdina_erp/css/almdina_list_table.css",
+    "/assets/almdina_erp/css/almdina_workspace_home.css?v=12",
+    "/assets/almdina_erp/css/almdina_list_table.css?v=1",
     "/assets/almdina_erp/css/edge_banding_type_form.css?v=4",
     "/assets/almdina_erp/css/role_form.css?v=2",
     "/assets/almdina_erp/css/door_cutting_order_measurement_structure.css",
     "/assets/almdina_erp/css/door_cutting_order_responsive.css",
-    "/assets/almdina_erp/css/door_cutting_order_form_tab_layout.css?v=4",
+    "/assets/almdina_erp/css/door_cutting_order_form_tab_layout.css?v=5",
     "/assets/almdina_erp/css/door_cutting_order_plan_workspace_layout.css?v=12",
-    "/assets/almdina_erp/css/door_cutting_order_plan_workspace_shell.css?v=12",
-    "/assets/almdina_erp/css/door_cutting_order_form_presentation.css",
+    "/assets/almdina_erp/css/door_cutting_order_plan_workspace_shell.css?v=14",
+    "/assets/almdina_erp/css/door_cutting_order_form_presentation.css?v=1",
     "/assets/almdina_erp/css/door_cutting_order_form_sidebar.css",
     # Raw /assets paths are not content-fingerprinted by Frappe; bump the bounded
     # DCO list revision when its presentation contract changes.
-    "/assets/almdina_erp/css/door_cutting_order_list.css?v=16",
+    "/assets/almdina_erp/css/door_cutting_order_list.css?v=17",
     # Subject-direction correction must load after the list presentation owner:
     # inherit page direction so the checkbox stays at the logical start, and
     # isolate only ID text as LTR.
     "/assets/almdina_erp/css/door_cutting_order_list_rtl_subject.css?v=2",
     "/assets/almdina_erp/css/door_cutting_order_extra_addons.css?v=43b0eed83bf2",
     "/assets/almdina_erp/css/door_cutting_order_glass_shape.css?v=1",
-    "/assets/almdina_erp/css/notes.css",
-    "/assets/almdina_erp/css/notes_interactions.css",
+    "/assets/almdina_erp/css/notes.css?v=1",
+    "/assets/almdina_erp/css/notes_interactions.css?v=1",
 ]
 
 app_include_js = [

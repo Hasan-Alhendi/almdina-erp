@@ -118,7 +118,7 @@ class TestAlmdinaWorkspaceHomeUX(unittest.TestCase):
         self.assertIn("margin-inline-start", css)
         self.assertIn("flex-direction: row", css)
         manifest = MANIFEST.read_text(encoding="utf-8")
-        self.assertIn("almdina_workspace_home.css?v=11", manifest)
+        self.assertIn("almdina_workspace_home.css?v=12", manifest)
         self.assertIn("almdina_workspace_home_ux.js?v=12", manifest)
 
 

@@ -1,0 +1,124 @@
+/*
+ * Factory Plan Archive — presentation only (apa-* layout + Alm tokens).
+ * Owns archive list/card geometry; foundational paints come from --alm-*.
+ */
+
+.apa-shell {
+    display: grid;
+    gap: var(--alm-space-3, 12px);
+}
+
+.apa-hero {
+    padding: 18px;
+    border: 1px solid var(--alm-card-border, var(--border-color, #e5e7eb));
+    border-radius: 15px;
+    background: var(--alm-card, var(--fg-color, #fff));
+    box-shadow: var(--alm-shadow-sm);
+}
+
+.apa-hero h3 {
+    margin: 0 0 6px;
+    color: var(--alm-text-strong, #101828);
+    font-size: 19px;
+    font-weight: 800;
+}
+
+.apa-hero p {
+    margin: 0;
+    color: var(--alm-text-subtle, #667085);
+    line-height: 1.8;
+}
+
+.apa-tools {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.apa-list {
+    display: grid;
+    gap: 10px;
+}
+
+.apa-card {
+    padding: 14px;
+    border: 1px solid var(--alm-card-border, var(--border-color, #e5e7eb));
+    border-radius: 14px;
+    background: var(--alm-card, var(--fg-color, #fff));
+    box-shadow: var(--alm-shadow-sm);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 14px;
+    align-items: center;
+}
+
+.apa-card:hover {
+    border-color: var(--alm-border-hover, #d0d5dd);
+}
+
+.apa-title {
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--alm-text-strong, #101828);
+}
+
+.apa-title a {
+    color: var(--alm-accent, #2563eb);
+    text-decoration: none;
+}
+
+.apa-title a:hover {
+    text-decoration: underline;
+}
+
+.apa-meta {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+
+.apa-chip {
+    padding: 5px 9px;
+    border-radius: var(--alm-radius-pill, 999px);
+    border: 1px solid var(--alm-border-subtle, #eaecf0);
+    background: var(--alm-surface-muted, var(--subtle-fg, #f5f7f9));
+    color: var(--alm-text-secondary, #344054);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.apa-card .btn {
+    min-height: 40px;
+    border-radius: 9px;
+    font-weight: 700;
+}
+
+.apa-result {
+    margin-top: 10px;
+    padding: 11px;
+    border-radius: 10px;
+    border: 1px solid var(--alm-status-success-border);
+    background: var(--alm-status-success-bg);
+    color: var(--alm-status-success-fg);
+    font-size: 12px;
+}
+
+.apa-empty {
+    padding: 32px;
+    text-align: center;
+    border: 1px dashed var(--alm-border-hover, var(--border-color, #d8dee4));
+    border-radius: 14px;
+    color: var(--alm-text-subtle, #667085);
+    background: var(--alm-surface-muted, var(--subtle-fg, #fafafa));
+}
+
+@media (max-width: 700px) {
+    .apa-card {
+        grid-template-columns: 1fr;
+    }
+
+    .apa-card .btn {
+        width: 100%;
+    }
+}

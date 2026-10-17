@@ -1,11 +1,11 @@
 .prw-shell {
     --prw-primary: var(--alm-primary, #172033);
     --prw-primary-soft: color-mix(in srgb, var(--prw-primary) 9%, transparent);
-    --prw-border: var(--border-color, #e2e8f0);
-    --prw-card: var(--card-bg, var(--fg-color, #fff));
-    --prw-subtle: var(--subtle-fg, #f8fafc);
-    --prw-text: var(--text-color, #172033);
-    --prw-muted: var(--text-muted, #667085);
+    --prw-border: var(--alm-card-border, #e4e8ee);
+    --prw-card: var(--alm-card, #ffffff);
+    --prw-subtle: var(--alm-surface-muted, #f4f6f8);
+    --prw-text: var(--alm-text-strong, #101828);
+    --prw-muted: var(--alm-text-subtle, #667085);
     /* Page shell owned by almdina_page_templates.css (.alm-page--workbench). */
     color: var(--prw-text);
 }
@@ -38,7 +38,7 @@
     padding: 7px 16px;
     border-radius: var(--alm-radius-pill);
     background: var(--prw-primary);
-    color: #fff;
+    color: var(--alm-on-primary, #ffffff);
     font-size: 10px;
     font-weight: 900;
     letter-spacing: 0.06em;
@@ -880,7 +880,7 @@
 }
 
 .prw-field em {
-    color: #dc2626;
+    color: var(--alm-status-danger-fg, #b91c1c);
     font-style: normal;
 }
 
@@ -943,7 +943,7 @@
     width: 38px;
     height: 22px;
     border-radius: 999px;
-    background: #cbd5e1;
+    background: var(--alm-card-border, #e4e8ee);
     transition: background .16s ease;
 }
 
@@ -954,7 +954,7 @@
     width: 16px;
     height: 16px;
     border-radius: 50%;
-    background: #fff;
+    background: var(--alm-card, #ffffff);
     box-shadow: 0 1px 3px rgba(15, 23, 42, .2);
     content: "";
     transition: transform .16s ease;
@@ -1026,7 +1026,7 @@
     border: 3px solid color-mix(in srgb, var(--prw-primary) 18%, var(--prw-card));
     border-radius: 10px;
     background: var(--prw-primary);
-    color: #fff;
+    color: var(--alm-on-primary, #ffffff);
     font-size: 10px;
     font-weight: 850;
     box-shadow: 0 3px 9px color-mix(in srgb, var(--prw-primary) 25%, transparent);
@@ -1049,8 +1049,8 @@
 }
 
 .prw-stage-editor.is-planning {
-    border-color: #f0b429;
-    background: #fffaf0;
+    border-color: var(--alm-status-warning-border, rgba(180, 83, 9, 0.24));
+    background: var(--alm-status-warning-bg, rgba(180, 83, 9, 0.09));
     box-shadow: inset 3px 0 0 #f59e0b;
 }
 
@@ -1121,8 +1121,8 @@
 }
 
 .prw-icon-btn.is-danger:hover:not(:disabled) {
-    border-color: #dc2626;
-    color: #dc2626;
+    border-color: var(--alm-status-danger-fg, #b91c1c);
+    color: var(--alm-status-danger-fg, #b91c1c);
 }
 
 .prw-icon-btn:disabled {
@@ -1284,7 +1284,7 @@
     padding: 2px 5px;
     border-radius: 999px;
     background: #f59e0b;
-    color: #fff;
+    color: var(--alm-on-primary, #ffffff);
     font-size: 7px;
     font-style: normal;
     font-weight: 800;

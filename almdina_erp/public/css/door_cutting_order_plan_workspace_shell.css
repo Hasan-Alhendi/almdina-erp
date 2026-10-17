@@ -168,7 +168,7 @@ body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_cont
     margin-bottom: 0 !important;
     font-size: 11px !important;
     font-weight: 700 !important;
-    color: var(--text-muted, #667085) !important;
+    color: var(--alm-text-subtle, #667085) !important;
     white-space: nowrap !important;
 }
 
@@ -181,13 +181,13 @@ body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_cont
     min-height: 28px !important;
     height: 28px !important;
     padding: 2px 8px !important;
-    border: 1px solid var(--border-color, #d0d5dd) !important;
+    border: 1px solid var(--alm-card-border, #e4e8ee) !important;
     border-radius: var(--alm-radius-button, 8px) !important;
     background: var(--alm-card, #fff) !important;
     box-shadow: none !important;
     font-size: 11px !important;
     font-weight: 700 !important;
-    color: var(--text-color, #1f272e) !important;
+    color: var(--alm-text-strong, #101828) !important;
     line-height: 1.2 !important;
 }
 
@@ -210,7 +210,7 @@ body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_cont
 }
 
 body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__suffix {
-    color: var(--text-muted, #667085) !important;
+    color: var(--alm-text-subtle, #667085) !important;
     font-size: 10px !important;
     font-weight: 700 !important;
 }
@@ -233,7 +233,7 @@ body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_cont
 body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__stale-copy {
     margin: 0 !important;
     padding: 4px 8px !important;
-    border: 1px solid #f0c36d !important;
+    border: 1px solid var(--alm-status-warning-border, rgba(180, 83, 9, 0.24)) !important;
     border-radius: 999px !important;
     background: var(--alm-warning-bg, #fff7e8) !important;
     color: var(--alm-warning, #b45309) !important;
@@ -284,13 +284,13 @@ body.dco-plan-settings-edit-active .dco-tab-edit-save.btn {
 body.dco-plan-settings-edit-active .dco-tab-edit-cancel.btn {
     border-radius: 999px !important;
     background: var(--alm-card, #fff) !important;
-    color: var(--text-color, #1f272e) !important;
+    color: var(--alm-text-strong, #101828) !important;
 }
 
 body.dco-plan-settings-edit-active .page-head .page-actions .dco-whatsapp-send-measurements {
     color: var(--alm-success, #15803d) !important;
-    background: #ecfdf3 !important;
-    border-color: #bbf7d0 !important;
+    background: color-mix(in srgb, var(--alm-success, #15803d) 10%, var(--alm-card, #ffffff)) !important;
+    border-color: color-mix(in srgb, var(--alm-success, #15803d) 35%, var(--alm-card, #ffffff)) !important;
     border-radius: 999px !important;
     font-weight: 750 !important;
 }
@@ -298,9 +298,9 @@ body.dco-plan-settings-edit-active .page-head .page-actions .dco-whatsapp-send-m
 body.dco-plan-settings-edit-active .page-head .page-actions .btn:has(.fa-paper-plane),
 body.dco-plan-settings-edit-active .page-head .page-actions button[data-label*="إنتاج"],
 body.dco-plan-settings-edit-active .page-head .page-actions button[data-label*="Production"] {
-    color: #175cd3 !important;
-    background: #eff8ff !important;
-    border-color: #b2ddff !important;
+    color: var(--alm-accent, #2563eb) !important;
+    background: var(--alm-accent-soft, #eff6ff) !important;
+    border-color: color-mix(in srgb, var(--alm-accent, #2563eb) 35%, var(--alm-card, #ffffff)) !important;
     border-radius: 999px !important;
 }
 
@@ -355,13 +355,13 @@ body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="cutting_p
     border-bottom: 2px solid transparent !important;
     background: transparent !important;
     box-shadow: none !important;
-    color: var(--text-muted, #6b7280) !important;
+    color: var(--alm-text-subtle, #667085) !important;
     font-weight: 700 !important;
 }
 
 body.dco-plan-settings-edit-active .dco-operator-form [data-fieldname="cutting_plan_html"] .dco-plan-tabs .btn.is-active {
-    color: var(--alm-primary, #172033) !important;
-    border-bottom-color: var(--alm-primary, #172033) !important;
+    color: var(--alm-brand-soft-fg, #172033) !important;
+    border-bottom-color: var(--alm-brand-soft-fg, #172033) !important;
     font-weight: 800 !important;
 }
 

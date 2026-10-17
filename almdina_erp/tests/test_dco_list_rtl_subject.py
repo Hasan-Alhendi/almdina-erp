@@ -17,7 +17,7 @@ COMPACT_JS = (
 class TestDcoListRtlSubject(unittest.TestCase):
     def test_rtl_subject_asset_loads_after_main_list_css(self) -> None:
         manifest = MANIFEST.read_text(encoding="utf-8")
-        main = '"/assets/almdina_erp/css/door_cutting_order_list.css?v=16"'
+        main = '"/assets/almdina_erp/css/door_cutting_order_list.css?v=17"'
         rtl = '"/assets/almdina_erp/css/door_cutting_order_list_rtl_subject.css?v=2"'
 
         self.assertIn(main, manifest)

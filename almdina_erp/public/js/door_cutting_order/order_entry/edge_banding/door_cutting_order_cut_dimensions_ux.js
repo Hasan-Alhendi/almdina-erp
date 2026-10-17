@@ -20,7 +20,7 @@
             }
             .dco-cut-rule-hint{
                 display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:3px 8px;
-                background:color-mix(in srgb, var(--alm-primary, #172033) 8%, transparent);color:var(--text-color,#36414c);font-weight:700
+                background:color-mix(in srgb, var(--alm-primary, #172033) 8%, transparent);color:var(--alm-text-strong,#101828);font-weight:700
             }
         `;
         document.head.appendChild(style);
