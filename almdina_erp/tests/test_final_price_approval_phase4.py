@@ -10,6 +10,8 @@ PUBLIC = ROOT / "public" / "js" / "door_cutting_order"
 COSTING = PUBLIC / "costing"
 CORE = PUBLIC / "core"
 TRANSLATIONS = ROOT / "translations" / "ar.csv"
+APPROVAL_CSS = ROOT / "public" / "css" / "door_cutting_order_final_price_approval.css"
+ASSETS = ROOT / "frontend_assets.py"
 
 
 def _read(path: Path) -> str:
@@ -101,8 +103,15 @@ class TestFinalPriceApprovalPhase4(unittest.TestCase):
             ux,
         )
         self.assertNotIn("${esc(token)", ux)
-        self.assertIn("var(--alm-primary", ux)
         self.assertIn("dco-final-price-approve-dialog", ux)
+        css = _read(APPROVAL_CSS)
+        self.assertIn("var(--alm-primary", css)
+        self.assertIn(".dco-final-price-approve-dialog", css)
+        self.assertNotIn('createElement("style")', ux)
+        self.assertIn(
+            "/assets/almdina_erp/css/door_cutting_order_final_price_approval.css?v=1",
+            _read(ASSETS),
+        )
 
     def test_arabic_translation_keys_for_cost_tab_ui(self) -> None:
         ar = _read(TRANSLATIONS)
