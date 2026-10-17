@@ -12,30 +12,33 @@
         .dco-glass-modal .modal-dialog{max-width:min(860px,94vw)!important;width:860px!important}
         .dco-glass-modal .modal-content{border:0;border-radius:var(--alm-radius-lg,18px);overflow:hidden;background:var(--card-bg,var(--alm-card,#fff));color:var(--text-color)}
         .dco-glass-modal .modal-header,.dco-glass-modal .modal-footer{background:var(--card-bg,var(--alm-card,#fff));color:var(--text-color);border-color:var(--border-color)}
-        .dco-glass-modal .modal-body{padding:0!important;background:var(--subtle-fg,var(--alm-canvas,#eef1f6));color:var(--text-color)}
-        .dco-glass-editor{direction:inherit;display:grid;grid-template-columns:minmax(0,1.2fr) minmax(260px,.8fr);min-height:420px;color:var(--text-color)}
-        .dco-glass-preview-panel{padding:var(--alm-space-6,24px);display:flex;flex-direction:column;gap:var(--alm-space-3,12px);background:color-mix(in srgb,var(--alm-accent,#2563eb) 6%,var(--subtle-fg,var(--alm-canvas,#eef1f6)))}
-        .dco-glass-preview-head strong{display:block;font-size:var(--alm-font-size-lg,16px);color:var(--text-color)}
-        .dco-glass-preview-head span,.dco-glass-readout span{color:var(--text-muted,var(--alm-text-muted,#6b7280));font-size:var(--alm-font-size-sm,12px)}
-        .dco-glass-preview{flex:1;min-height:260px;border:1px solid var(--border-color,var(--alm-card-border,#e4e8ee));border-radius:var(--alm-radius-card,16px);background:var(--card-bg,var(--alm-card,#fff));display:flex;align-items:center;justify-content:center;padding:var(--alm-space-4,16px)}
-        .dco-glass-preview svg{width:100%;height:100%;min-height:220px;overflow:visible;color:var(--text-color)}
+        .dco-glass-modal .modal-body{padding:0!important;overflow:visible;background:var(--subtle-fg,var(--alm-canvas,#eef1f6));color:var(--text-color)}
+        .dco-glass-modal .frappe-control,.dco-glass-modal .form-group{margin:0}
+        .dco-glass-editor{direction:inherit;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(230px,.85fr);color:var(--text-color)}
+        .dco-glass-preview-panel{padding:12px 14px;display:flex;flex-direction:column;gap:8px;background:color-mix(in srgb,var(--alm-accent,#2563eb) 6%,var(--subtle-fg,var(--alm-canvas,#eef1f6)))}
+        .dco-glass-preview-head strong{display:block;font-size:var(--alm-font-size-md,14px);line-height:1.3;color:var(--text-color)}
+        .dco-glass-preview-head span,.dco-glass-readout span,.dco-glass-field{color:var(--text-muted,var(--alm-text-muted,#6b7280));font-size:var(--alm-font-size-xs,11px)}
+        .dco-glass-preview{height:188px;min-height:0;border:1px solid var(--border-color,var(--alm-card-border,#e4e8ee));border-radius:var(--alm-radius-md,14px);background:var(--card-bg,var(--alm-card,#fff));display:flex;align-items:center;justify-content:center;padding:8px;overflow:hidden}
+        .dco-glass-preview svg{width:100%;height:100%;min-height:0;display:block;color:var(--text-color)}
         .dco-glass-frame{fill:color-mix(in srgb,var(--alm-warning,#b45309) 32%,var(--card-bg,#fff));stroke:var(--alm-warning,#b45309);stroke-width:2}
         .dco-glass-opening{fill:color-mix(in srgb,var(--alm-accent,#2563eb) 24%,var(--card-bg,#fff));stroke:var(--alm-accent,#2563eb);stroke-width:2}
         .dco-glass-preview text{fill:currentColor;font-size:11px;font-weight:700}
-        .dco-glass-controls{padding:var(--alm-space-5,20px);background:var(--card-bg,var(--alm-card,#fff));border-inline-start:1px solid var(--border-color);display:flex;flex-direction:column;gap:var(--alm-space-4,16px);color:var(--text-color)}
-        .dco-glass-field{display:flex;flex-direction:column;gap:6px;font-size:var(--alm-font-size-sm,12px);font-weight:700;color:var(--text-color)}
+        .dco-glass-controls{padding:12px 14px;background:var(--card-bg,var(--alm-card,#fff));border-inline-start:1px solid var(--border-color);display:flex;flex-direction:column;gap:8px;color:var(--text-color)}
+        .dco-glass-field{display:flex;flex-direction:column;gap:4px;font-weight:700;color:var(--text-color)}
         .dco-glass-input-shell{display:flex;align-items:center;border:1px solid var(--border-color);border-radius:var(--alm-radius-button,10px);overflow:hidden;background:var(--control-bg,var(--card-bg,#fff));color:var(--text-color)}
-        .dco-glass-input-shell input{width:100%;border:0!important;box-shadow:none!important;min-height:42px;padding:8px 10px;background:transparent;color:inherit;font-size:var(--alm-font-size-lg,16px);font-weight:700;text-align:center}
-        .dco-glass-input-shell span{padding-inline:10px;color:var(--text-muted,var(--alm-text-muted,#6b7280));border-inline-start:1px solid var(--border-color)}
-        .dco-glass-readout{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-        .dco-glass-readout b{display:block;color:var(--text-color);font-size:var(--alm-font-size-md,14px)}
-        .dco-glass-help{margin-top:auto;border-radius:var(--alm-radius-sm,10px);padding:10px 12px;background:var(--subtle-fg,var(--alm-canvas,#eef1f6));border:1px solid var(--border-color);color:var(--text-muted,var(--text-color));font-size:var(--alm-font-size-sm,12px);line-height:1.6}
+        .dco-glass-input-shell input{width:100%;border:0!important;box-shadow:none!important;min-height:36px;padding:4px 8px;background:transparent;color:inherit;font-size:var(--alm-font-size-md,14px);font-weight:700;text-align:center}
+        .dco-glass-input-shell span{padding-inline:8px;color:var(--text-muted,var(--alm-text-muted,#6b7280));border-inline-start:1px solid var(--border-color)}
+        .dco-glass-readout{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+        .dco-glass-readout b{display:block;color:var(--text-color);font-size:var(--alm-font-size-sm,12px)}
+        .dco-glass-help{border-radius:var(--alm-radius-sm,10px);padding:8px 10px;background:var(--subtle-fg,var(--alm-canvas,#eef1f6));border:1px solid var(--border-color);color:var(--text-muted,var(--text-color));font-size:11px;line-height:1.45}
         .dco-glass-help.is-error{color:var(--alm-danger,#b91c1c);background:color-mix(in srgb,var(--alm-danger,#b91c1c) 12%,var(--card-bg,#fff));border-color:color-mix(in srgb,var(--alm-danger,#b91c1c) 35%,var(--border-color,#fecdd3))}
         .dco-fast-table .dco-special-sketch-button.is-glass{border-style:solid;border-color:color-mix(in srgb,var(--alm-accent,#2563eb) 45%,var(--border-color,#d9e0e6));background:color-mix(in srgb,var(--alm-accent,#2563eb) 12%,var(--card-bg,#fff));color:var(--text-color)}
         .dco-fast-table .dco-special-sketch-button.is-glass.is-incomplete{border-color:color-mix(in srgb,var(--alm-warning,#b45309) 55%,var(--border-color,#d9e0e6));background:color-mix(in srgb,var(--alm-warning,#b45309) 14%,var(--card-bg,#fff));color:var(--text-color)}
         @media(max-width:720px){
             .dco-glass-modal .modal-dialog{width:100vw!important;max-width:100vw!important;margin:0!important}
+            .dco-glass-modal .modal-content{max-height:100dvh;overflow-y:auto}
             .dco-glass-editor{display:flex;flex-direction:column}
+            .dco-glass-preview{height:160px}
             .dco-glass-controls{border-inline-start:0;border-top:1px solid var(--border-color)}
         }
     `;
@@ -85,16 +88,28 @@
         );
     }
 
-    function approvedMarginText(row) {
-        const value = Number(row && row.glass_margin_mm);
-        if (!Number.isFinite(value) || value === 0) return "";
-        return formatNumber(value);
+    function marginMmFromCm(value) {
+        const centimeters = Number(value);
+        if (!Number.isFinite(centimeters)) return null;
+        return roundMm(centimeters * MM_PER_CM);
     }
 
-    function previewState(widthCm, lengthCm, draftText) {
-        const text = String(draftText ?? "").trim();
+    function marginCmTextFromMm(value) {
+        const millimeters = Number(value);
+        if (!Number.isFinite(millimeters) || millimeters === 0) return "";
+        const thousandths = Math.round(millimeters * 1000);
+        return String(thousandths / 10000);
+    }
+
+    function approvedMarginText(row) {
+        return marginCmTextFromMm(row && row.glass_margin_mm);
+    }
+
+    function previewState(widthCm, lengthCm, draftCmText) {
+        const text = String(draftCmText ?? "").trim();
         if (!text) return { status: "empty", opening: null };
-        const opening = openingMm(widthCm, lengthCm, text);
+        const marginMm = marginMmFromCm(text);
+        const opening = marginMm == null ? null : openingMm(widthCm, lengthCm, marginMm);
         if (!isPositiveOpening(opening)) return { status: "invalid", opening };
         return { status: "valid", opening };
     }
@@ -142,7 +157,7 @@
         const state = previewState(row.width_cm, row.length_cm, approvedMarginText(row));
         const valid = state.status === "valid";
         const summary = valid
-            ? `${formatNumber(state.opening.marginMm)} ${__("mm")}`
+            ? `${marginCmTextFromMm(state.opening.marginMm)} ${__("cm")}`
             : "";
         return {
             enabled: Boolean(options.editable) && !options.virtual,
@@ -257,19 +272,19 @@
                     <span>${__("Glass Opening Dimensions")}</span>
                 </div>
                 <div class="dco-glass-preview" data-glass-preview></div>
-                <div class="dco-glass-readout">
-                    <span>${__("Opening Width")}<b data-opening-width>—</b></span>
-                    <span>${__("Opening Length")}<b data-opening-length>—</b></span>
-                </div>
             </section>
             <section class="dco-glass-controls">
                 <label class="dco-glass-field">
                     <span>${__("Glass Margin")}</span>
                     <span class="dco-glass-input-shell">
                         <input type="number" inputmode="decimal" step="any" data-glass-margin aria-label="${escapeHtml(__("Glass Margin"))}">
-                        <span>${__("mm")}</span>
+                        <span>${__("cm")}</span>
                     </span>
                 </label>
+                <div class="dco-glass-readout">
+                    <span>${__("Opening Width")}<b data-opening-width>—</b></span>
+                    <span>${__("Opening Length")}<b data-opening-length>—</b></span>
+                </div>
                 <p class="dco-glass-help" data-glass-help></p>
             </section>
         </div>`;
@@ -383,6 +398,8 @@
         openingMm,
         previewState,
         applyDraft,
+        marginMmFromCm,
+        marginCmTextFromMm,
         approvedMarginText,
         beginSession,
         shapeButtonState,

@@ -74,33 +74,49 @@ const reference = {
 const opening = api.openingMm(52.1, 72.5, 65);
 assert.equal(opening.openingWidthMm, 391);
 assert.equal(opening.openingLengthMm, 595);
+assert.equal(api.marginCmTextFromMm(65), "6.5");
+assert.equal(api.marginMmFromCm("6.5"), 65);
+assert.equal(api.approvedMarginText(reference), "6.5");
 
-const preview = api.previewSvg(52.1, 72.5, api.previewState(52.1, 72.5, "65"));
+const shown = api.previewState(52.1, 72.5, "6.5");
+assert.equal(shown.status, "valid");
+assert.equal(shown.opening.marginMm, 65);
+assert.equal(shown.opening.openingWidthMm, 391);
+assert.equal(shown.opening.openingLengthMm, 595);
+
+const precise = { piece_type: "Glass", width_cm: 52.1, length_cm: 72.5, glass_margin_mm: 65.125 };
+assert.equal(api.marginCmTextFromMm(65.001), "6.5001");
+assert.equal(api.approvedMarginText(precise), "6.5125");
+assert.equal(api.marginMmFromCm("6.5125"), 65.125);
+assert.equal(api.marginMmFromCm(api.approvedMarginText(precise)), 65.125);
+assert.equal(api.applyDraft(precise, api.approvedMarginText(precise)).glass_margin_mm, 65.125);
+
+const preview = api.previewSvg(52.1, 72.5, shown);
 assert.match(preview, /dco-glass-frame/);
 assert.match(preview, /dco-glass-opening/);
 assert.match(preview, /391/);
 assert.match(preview, /595/);
 
 const liveRoot = fakeEditorRoot();
-api.renderEditor(liveRoot, reference, "65");
+api.renderEditor(liveRoot, reference, "6.5");
 assert.equal(liveRoot.nodes["[data-opening-width]"].textContent, "391");
 assert.equal(liveRoot.nodes["[data-opening-length]"].textContent, "595");
 assert.match(liveRoot.nodes["[data-glass-preview]"].innerHTML, /dco-glass-opening/);
-api.renderEditor(liveRoot, reference, "70");
+api.renderEditor(liveRoot, reference, "7");
 assert.equal(liveRoot.nodes["[data-opening-width]"].textContent, "381");
 assert.match(source, /addEventListener\("input"/);
 
 const session = api.beginSession(reference);
-assert.equal(session.draft, "65");
-session.setDraft("80");
+assert.equal(session.draft, "6.5");
+session.setDraft("8");
 assert.equal(session.preview().opening.openingWidthMm, 361);
 const cancelled = session.cancel();
 assert.equal(cancelled.dirty, false);
 assert.equal(cancelled.save, false);
-assert.equal(cancelled.draft, "65");
+assert.equal(cancelled.draft, "6.5");
 assert.equal(reference.glass_margin_mm, 65);
 
-session.setDraft("65");
+session.setDraft("6.5");
 const applied = session.apply();
 assert.equal(applied.ok, true);
 assert.equal(applied.save, false);
@@ -108,17 +124,18 @@ assert.equal(applied.values.glass_margin_mm, 65);
 assert.equal(reference.glass_margin_mm, 65);
 reference.glass_margin_mm = applied.glass_margin_mm;
 const reopened = api.beginSession(reference);
-assert.equal(reopened.draft, "65");
+assert.equal(reopened.draft, "6.5");
 assert.equal(reopened.preview().opening.openingLengthMm, 595);
+assert.equal(api.applyDraft(reference, reopened.draft).glass_margin_mm, reference.glass_margin_mm);
 
 reference.width_cm = 10;
 const resized = api.previewState(reference.width_cm, reference.length_cm, api.approvedMarginText(reference));
 assert.equal(resized.status, "invalid");
 assert.equal(reference.glass_margin_mm, 65);
-assert.equal(api.applyDraft(reference, "65").ok, false);
+assert.equal(api.applyDraft(reference, "6.5").ok, false);
 reference.width_cm = 52.1;
 
-for (const draft of ["0", "-5", "", "260.5"]) {
+for (const draft of ["0", "-0.5", "", "26.05"]) {
     const rejected = api.applyDraft(
         { piece_type: "Glass", width_cm: 52.1, length_cm: 72.5, glass_margin_mm: 65 },
         draft
@@ -138,12 +155,13 @@ stored.piece_type = "Glass";
 const glassButton = api.shapeButtonState(stored, { editable: true, virtual: false });
 assert.equal(glassButton.enabled, true);
 assert.equal(glassButton.incomplete, false);
-assert.match(glassButton.label, /65/);
+assert.match(glassButton.label, /6\.5/);
+assert.match(glassButton.label, /سم/);
 stored.piece_type = "Regular";
 assert.equal(api.shapeButtonState(stored, { editable: true, virtual: false }), null);
 assert.equal(stored.glass_margin_mm, 65);
 stored.piece_type = "Glass";
-assert.equal(api.approvedMarginText(stored), "65");
+assert.equal(api.approvedMarginText(stored), "6.5");
 assert.equal(api.shapeButtonState(stored, { editable: true, virtual: false }).incomplete, false);
 
 const empty = {
@@ -163,6 +181,16 @@ assert.equal(api.shapeButtonState({
     glass_margin_mm: 65,
 }, { editable: true }), null);
 assert.match(corner, /Apply corner/);
+assert.match(corner, /min-height:430px/);
+assert.match(corner, /min-height:280px/);
+assert.match(corner, /min-height:240px/);
+const desktopStyles = api.editorStyles.split("@media")[0];
+assert.match(desktopStyles, /\.dco-glass-preview\{[^}]*height:188px/);
+assert.match(desktopStyles, /min-height:0/);
+assert.doesNotMatch(desktopStyles, /min-height:\s*420px|min-height:\s*260px|min-height:\s*220px/);
+assert.doesNotMatch(desktopStyles, /overflow-y:\s*auto/);
+assert.match(api.editorStyles, /@media\(max-width:720px\)\{[\s\S]*overflow-y:auto/);
+assert.match(source, /\$\{__\("cm"\)\}/);
 const cornerOpen = operator.indexOf("window.AlmdinaClippedCornerEditor.open(currentFrm, row)");
 const glassOpen = operator.indexOf("window.AlmdinaGlassShape.open(currentFrm, row)");
 const specialOpen = operator.indexOf("window.AlmdinaSpecialShapeEditor.open(currentFrm, row)");
@@ -194,7 +222,8 @@ const arabic = api.shapeButtonState({
     glass_margin_mm: 65,
 }, { editable: true, virtual: false });
 assert.match(arabic.title, /درفة بلور/);
-assert.match(arabic.label, /مم/);
+assert.match(arabic.label, /6\.5/);
+assert.match(arabic.label, /سم/);
 const invalidArabic = api.shapeButtonState({
     piece_type: "Glass",
     width_cm: 10,
