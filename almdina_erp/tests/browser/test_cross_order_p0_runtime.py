@@ -1258,9 +1258,13 @@ def test_recovery_new_saved_intersection():
                 assert evidence["preview_commit_responses"][-1]["response"] is None
             finally:
                 page.unroute(commit_route)
-            if page.locator('.modal.show').count():
-                page.locator('.modal.show .modal-header button:visible').first.click()
-                page.locator('.modal.show').wait_for(state="hidden", timeout=15000)
+            # The error modal may enter `.show` after the state snapshot above.
+            # Wait for its real visibility before dismissing it through Frappe.
+            message_modal = page.locator('.modal.show').filter(
+                has_text="The cutting plan save could not be confirmed.")
+            message_modal.wait_for(state="visible", timeout=15000)
+            message_modal.locator('.modal-header button:visible').first.click()
+            message_modal.wait_for(state="hidden", timeout=15000)
             plan_toolbar.locator('.dco-tab-edit-cancel').click()
             page.wait_for_function("""() => AlmdinaDcoEditSessionCoordinator.snapshot(cur_frm)
                 .phase === 'idle'""", timeout=15000)
