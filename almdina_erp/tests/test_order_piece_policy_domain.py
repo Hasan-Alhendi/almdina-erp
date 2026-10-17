@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import subprocess
+import sys
 import unittest
 from pathlib import Path
 
@@ -19,6 +21,30 @@ from almdina_erp.almdina_erp.domain.orders.piece_policy import (
 
 
 class TestOrderPiecePolicyDomain(unittest.TestCase):
+    def test_glass_piece_type_import_is_order_independent(self) -> None:
+        """Fresh processes must import the order policy and cutting engine in either order."""
+        modules = (
+            "almdina_erp.almdina_erp.domain.orders.piece_policy",
+            "almdina_erp.almdina_erp.domain.cutting.glass_opening_dxf",
+        )
+        for first, second in (modules, tuple(reversed(modules))):
+            with self.subTest(first=first):
+                script = (
+                    "from importlib import import_module; "
+                    f"first = import_module({first!r}); "
+                    f"second = import_module({second!r}); "
+                    "assert first.GLASS_TYPE == second.GLASS_TYPE == 'Glass'"
+                )
+                result = subprocess.run(
+                    [sys.executable, "-c", script],
+                    cwd=Path(__file__).resolve().parents[2],
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+
     def test_corner_edge_modes_are_mutually_exclusive(self) -> None:
         with self.assertRaisesRegex(
             PiecePolicyError,

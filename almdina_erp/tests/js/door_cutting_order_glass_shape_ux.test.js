@@ -23,6 +23,10 @@ const recovery = fs.readFileSync(
     "utf8"
 );
 const csv = fs.readFileSync(path.join(root, "translations/ar.csv"), "utf8");
+const glassCss = fs.readFileSync(
+    path.join(root, "public/css/door_cutting_order_glass_shape.css"), "utf8"
+);
+const assetManifest = fs.readFileSync(path.join(root, "frontend_assets.py"), "utf8");
 const translations = new Map(csv.split(/\r?\n/).map((line) => {
     const delimiter = line.indexOf(",");
     return delimiter < 0 ? ["", ""] : [line.slice(0, delimiter), line.slice(delimiter + 1).split(",")[0]];
@@ -184,12 +188,12 @@ assert.match(corner, /Apply corner/);
 assert.match(corner, /min-height:430px/);
 assert.match(corner, /min-height:280px/);
 assert.match(corner, /min-height:240px/);
-const desktopStyles = api.editorStyles.split("@media")[0];
+const desktopStyles = glassCss.split("@media")[0];
 assert.match(desktopStyles, /\.dco-glass-preview\{[^}]*height:188px/);
 assert.match(desktopStyles, /min-height:0/);
 assert.doesNotMatch(desktopStyles, /min-height:\s*420px|min-height:\s*260px|min-height:\s*220px/);
 assert.doesNotMatch(desktopStyles, /overflow-y:\s*auto/);
-assert.match(api.editorStyles, /@media\(max-width:720px\)\{[\s\S]*overflow-y:auto/);
+assert.match(glassCss, /@media\(max-width:720px\)\{[\s\S]*overflow-y:auto/);
 assert.match(source, /\$\{__\("cm"\)\}/);
 const cornerOpen = operator.indexOf("window.AlmdinaClippedCornerEditor.open(currentFrm, row)");
 const glassOpen = operator.indexOf("window.AlmdinaGlassShape.open(currentFrm, row)");
@@ -200,8 +204,8 @@ assert.match(source, /commitChildValues/);
 assert.match(source, /glass_margin_mm: marginMm/);
 assert.match(recovery, /glass_margin_mm/);
 
-assert.match(api.editorStyles, /var\(--text-color\)/);
-assert.doesNotMatch(api.editorStyles, /#172033|#000\b|color:\s*#/);
+assert.match(glassCss, /var\(--text-color\)/);
+assert.doesNotMatch(glassCss, /#172033|#000\b|color:\s*#/);
 assert.match(translations.get("Glass Door"), /درفة بلور/);
 assert.equal(translations.get("Glass Margin"), "هامش البلور");
 assert.equal(translations.get("Glass Opening Dimensions"), "أبعاد فتحة البلور");
@@ -256,6 +260,9 @@ const frameWidth = Number(enlargedPreview.match(/class="dco-glass-frame"[^>]*wid
 assert.ok(frameWidth > 170, `glass drawing should fill more of the preview, got ${frameWidth}`);
 assert.match(enlargedPreview, /class="dco-glass-opening"/);
 assert.match(desktopStyles, /var\(--card-bg/);
+assert.match(assetManifest, /\/assets\/almdina_erp\/css\/door_cutting_order_glass_shape\.css\?v=1/);
+assert.doesNotMatch(source, /createElement\("style"\)|installStyles|editorStyles/);
+assert.equal(Object.prototype.hasOwnProperty.call(api, "editorStyles"), false);
 assert.doesNotMatch(desktopStyles, /overflow-y:\s*auto/);
 
 console.log("door_cutting_order_glass_shape_ux.test.js: ok");

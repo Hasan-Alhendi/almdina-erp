@@ -34,7 +34,7 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_topology import (
     polygon_strictly_contains_polygon,
 )
 from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import MM_PER_CM
-from almdina_erp.almdina_erp.domain.orders.piece_policy import GLASS_TYPE
+from almdina_erp.almdina_erp.domain.orders.piece_types import GLASS_TYPE
 
 # 0° and 180° keep the door width on the contour X axis. They are rotations.
 # A single-axis mirror is not in this list.
