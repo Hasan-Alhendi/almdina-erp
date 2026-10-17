@@ -5,6 +5,7 @@ on:
     branches: [Develop, agent/dco-cross-order-p0-final-semantic-candidate]
     paths:
       - 'almdina_erp/tests/js/cross_order_p0_baseline.test.js'
+      - 'almdina_erp/tests/js/cross_order_final_async_isolation.test.js'
       - 'almdina_erp/tests/js/cross_order_phase2b_native_input.test.js'
       - 'almdina_erp/tests/js/cutting_plan_print_transitions.test.js'
       - 'almdina_erp/tests/browser/test_cross_order_p0_runtime.py'
@@ -24,6 +25,7 @@ jobs:
       - name: Run Phase 2A ownership and compatibility regressions
         run: |
           node almdina_erp/tests/js/cross_order_phase2a_ownership.test.js
+          node almdina_erp/tests/js/cross_order_final_async_isolation.test.js
           node almdina_erp/tests/js/dco_workspace_lifecycle.test.js
           node almdina_erp/tests/js/cost_edit_session_lifecycle.test.js
           node almdina_erp/tests/js/plan_preview_state_ownership.test.js

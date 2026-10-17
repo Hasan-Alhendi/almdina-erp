@@ -72,12 +72,17 @@
 	}
 
 	function submitApproval(frm, source) {
+		const context = window.AlmdinaDocumentContext;
+		const owner = context && typeof context.capture === "function" ? context.capture(frm) : null;
+		const orderName = frm.doc.name;
 		return frappe.call({
 			method: "almdina_erp.almdina_erp.services.shop_floor_service.approve_production_dxf",
-			args: { order_name: frm.doc.name, plan_source: source },
+			args: { order_name: orderName, plan_source: source },
 			freeze: true,
 			freeze_message: translate("Approving the drawing plan..."),
 		}).then((response) => {
+			if (!owner || !context || typeof context.isCurrent !== "function"
+				|| !context.isCurrent(frm, owner)) return null;
 			const result = response.message || {};
 			frappe.show_alert({
 				message: result.was_previously_approved
