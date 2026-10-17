@@ -200,9 +200,14 @@ class TestPlanPreviewSessionExactCommit(unittest.TestCase):
 
         self.assertLess(manifest.index(api), manifest.index(state))
         self.assertIn(page, manifest)
+        # Count declarations in the Plan bundle, not subsequent references in
+        # the lazy loader, which may load a registered dependent asset later.
+        plan_assets = registry.split("readyGlobals: Object.freeze([", 1)[0]
         for asset in (preview, edit, presenter, preview_edit):
             self.assertNotIn(f'public/js/door_cutting_order/cutting_plan/{asset}', manifest)
-            self.assertEqual(registry.count(asset), 1)
+            self.assertEqual(plan_assets.count(asset), 1)
+        self.assertIn("requireAssets([previewEditAsset])", registry)
+        self.assertIn('"AlmdinaPlanPreviewEditUX"', registry)
         self.assertLess(registry.index(preview), registry.index(edit))
         self.assertLess(registry.index(edit), registry.index(presenter))
         self.assertLess(registry.index(presenter), registry.index(preview_edit))
