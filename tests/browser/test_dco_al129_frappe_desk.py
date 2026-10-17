@@ -1998,38 +1998,42 @@ def test_real_desk_100_piece_checkpoint_restore_and_lost_save_response() -> None
             )
             assert missing_documents == [], "the first request was stopped before reaching Frappe"
             retry_page.unroute("**/api/method/frappe.desk.form.save.savedocs")
-            retry_page.locator(".page-actions .primary-action").filter(
-                has_text=re.compile(r"Save|حفظ")
-            ).click()
-            retry_page.wait_for_function(
-                "() => cur_frm && !cur_frm.is_new() && cur_frm.doc.recovery_creation_token",
-                timeout=45_000,
+            # NOT_FOUND is not terminal proof: a successful response could
+            # simply be delayed while the first request is still in flight.
+            # The explicit second Save must be rejected before native insert.
+            with retry_page.expect_response(
+                lambda response: "reconcile_new_order_creation" in response.url,
+                timeout=30_000,
+            ):
+                retry_page.locator(".page-actions .primary-action").filter(
+                    has_text=re.compile(r"Save|حفظ")
+                ).click()
+            assert "NOT_FOUND" in retry_reconciliation_statuses
+            assert len(save_posts) == first_save_attempts + 1, (
+                "NOT_FOUND must not trigger another native Save request"
             )
-            retry_documents = retry_page.evaluate(
+            persisted_pending = retry_page.evaluate(
+                "async draftId => { const repo = AlmdinaDcoRecovery.LocalDraftRepository.create();"
+                " const result = await repo.read({site: frappe.boot.sitename || frappe.boot.site_name || location.host,"
+                " user: frappe.session.user, target_doctype: 'Door Cutting Order', draft_id: draftId});"
+                " return result.ok && result.value && result.value.official_save_state; }",
+                retry_identity["draftId"],
+            )
+            assert persisted_pending == "PENDING_RECONCILIATION"
+            still_absent = retry_page.evaluate(
                 "draftId => frappe.xcall('frappe.client.get_list', {doctype: 'Door Cutting Order',"
                 " fields: ['name'], filters: {recovery_creation_token: draftId}, limit_page_length: 10})",
                 retry_identity["draftId"],
             )
-            assert len(retry_documents) == 1
-            assert retry_page.evaluate("() => cur_frm.doc.recovery_creation_token") == retry_identity["draftId"]
-            assert "NOT_FOUND" in retry_reconciliation_statuses
-            assert len(save_posts) == first_save_attempts + 2
-            retry_local_draft = retry_page.evaluate(
-                "async draftId => { const repo = AlmdinaDcoRecovery.LocalDraftRepository.create();"
-                " const result = await repo.read({site: frappe.boot.sitename || frappe.boot.site_name || location.host,"
-                " user: frappe.session.user, target_doctype: 'Door Cutting Order', draft_id: draftId});"
-                " return Boolean(result.ok && result.value); }",
-                retry_identity["draftId"],
-            )
-            assert retry_local_draft is False
+            assert still_absent == [], "No second DCO may be inserted on uncertain result"
             _capture_evidence({
-                "same_token_retry_after_not_found": "PASS",
+                "not_found_does_not_authorize_retry": "PASS",
                 "retry_reconciliation_statuses": retry_reconciliation_statuses,
-                "retry_saved_documents_for_token": len(retry_documents),
-                "retry_used_original_creation_token": True,
-                "retry_attempt_count": 2,
+                "native_save_requests": len(save_posts),
+                "pending_checkpoint_retained": True,
+                "new_documents_for_token": len(still_absent),
             })
-            trace("same_token_not_found_retry_created_one_document")
+            trace("not_found_retains_pending_and_blocks_duplicate_insert")
         except Exception as error:
             _capture_failure_screenshot(diagnostic_page, "new_save_test_failed", error)
             raise
