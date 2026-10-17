@@ -1149,7 +1149,7 @@
                 });
                 if (!retained) return null;
                 frappe.show_alert({
-                    message: "توجد مسودة تعديل محلية محفوظة. لا يمكن استعادتها بعد بدء مرحلة الإنتاج؛ استخدم «إعادة للمسودة» بعد الإذن المناسب.",
+                    message: translate("A local edit draft is retained. Recovery is unavailable after production dispatch. Return to Draft with permission before explicitly reviewing the draft."),
                     indicator: "orange",
                 }, 8);
                 return true;
@@ -1168,16 +1168,16 @@
     function editDiscoveryHtml(frm, summaries) {
         const cards = summaries.map((summary) => `
             <article class="dco-recovery-card" data-draft-id="${escapeHtml(summary.draft_id)}">
-                <div class="dco-recovery-card__title">مسودة تعديل محلية</div>
-                <div><strong>آخر تحديث:</strong> ${escapeHtml(userTimestamp(summary.captured_at))}</div>
-                <div><strong>العميل:</strong> ${escapeHtml(summary.customer || "غير محدد")}</div>
-                <div><strong>القياسات:</strong> ${summary.piece_count}</div>
+                <div class="dco-recovery-card__title">${escapeHtml(translate("Local edit draft"))}</div>
+                <div><strong>${escapeHtml(translate("Last updated"))}</strong> ${escapeHtml(userTimestamp(summary.captured_at))}</div>
+                <div><strong>${escapeHtml(translate("Customer"))}</strong> ${escapeHtml(summary.customer || translate("Not specified"))}</div>
+                <div><strong>${escapeHtml(translate("Measurements"))}</strong> ${summary.piece_count}</div>
                 ${summary.versionConflict
-                    ? '<div class="text-warning">تغير الطلب على الخادم منذ إنشاء هذه المسودة. لن تُطبق تلقائيًا.</div>'
+                    ? '<div class="text-warning">' + escapeHtml(translate("The server order has changed since this draft was captured. It will not be applied automatically.")) + '</div>'
                     : ""}
                 <div class="dco-recovery-card__actions almdina-ui">
                     ${uiButton({
-                        label: "متابعة التعديل",
+                        label: translate("Continue editing"),
                         variant: "primary",
                         size: "btn-sm",
                         attrs: {
@@ -1186,7 +1186,7 @@
                         },
                     })}
                     ${uiButton({
-                        label: "حذف المسودة",
+                        label: translate("Delete draft"),
                         variant: "danger",
                         size: "btn-sm",
                         attrs: { "data-edit-recovery-action": "delete" },
@@ -1196,12 +1196,12 @@
         `).join("");
         return `
             <div class="dco-recovery-intro">
-                هذه مسودة محلية غير محفوظة رسميًا. ستُعاد إلى حقول الطلب بعد التحقق من نسخة الخادم، ويبقى الحفظ الرسمي بضغط «حفظ».
+                ${escapeHtml(translate("This local draft has not been officially saved. Its inputs will be restored only after verifying the server version. Press Save to commit officially."))}
             </div>
             <div class="dco-recovery-list">${cards}</div>
             <div class="almdina-ui" style="margin-top:12px">
                 ${uiButton({
-                    label: "لاحقًا",
+                    label: translate("Later"),
                     variant: "secondary",
                     attrs: { "data-edit-recovery-action": "dismiss" },
                 })}
@@ -1239,29 +1239,29 @@
                 ? difference.identity
                 : `${difference.identity}${difference.fieldname ? ` / ${difference.fieldname}` : ""}`;
             const description = difference.kind === "local_addition"
-                ? "إضافة محلية"
+                ? translate("Local addition")
                 : (difference.kind === "server_row_omitted"
-                    ? "صف موجود على الخادم ومحذوف في المسودة"
+                    ? translate("Server row omitted from draft")
                     : (difference.kind === "order"
-                        ? `ترتيب الخادم: ${displayConflictValue(difference.server_value)}؛ ترتيب المسودة: ${displayConflictValue(difference.draft_value)}`
+                        ? translate("Server order: {0}; draft order: {1}", [displayConflictValue(difference.server_value), displayConflictValue(difference.draft_value)])
                         : `${displayConflictValue(difference.server_value)} ← ${displayConflictValue(difference.draft_value)}`));
             return `<li><strong>${escapeHtml(label)}</strong>: ${escapeHtml(description)}</li>`;
         }).join("");
         const more = differences.length > 40
-            ? `<li>و ${differences.length - 40} فرقًا إضافيًا</li>`
+            ? `<li>${escapeHtml(translate("And {0} additional differences", [differences.length - 40]))}</li>`
             : "";
         panel.innerHTML = `
-            <div class="text-warning"><strong>تعارض نسخة الخادم</strong></div>
-            <div>المصدر: ${escapeHtml(details.source.target_doctype)} / ${escapeHtml(details.source.target_name)}</div>
-            <div>وقت المسودة: ${escapeHtml(details.source.captured_at || "غير محدد")}</div>
-            <div>النسخة المتوقعة: ${escapeHtml(details.versions.draft_expected)}</div>
-            <div>نسخة النموذج المحمّلة: ${escapeHtml(details.versions.loaded_form)}</div>
-            <div>نسخة الخادم الحالية: ${escapeHtml(details.versions.current_server)}</div>
-            <div>الفروقات المسموح بمراجعتها:</div>
-            <ul>${rows || "<li>لا توجد فروقات في حقول DCO المسموح بها.</li>"}${more}</ul>
-            <div>لم تُطبق المسودة. انسخ بياناتها أو احذفها بعد مراجعتها.</div>
+            <div class="text-warning"><strong>${escapeHtml(translate("Server version conflict"))}</strong></div>
+            <div>${escapeHtml(translate("Source"))} ${escapeHtml(details.source.target_doctype)} / ${escapeHtml(details.source.target_name)}</div>
+            <div>${escapeHtml(translate("Draft captured"))} ${escapeHtml(details.source.captured_at || translate("Not specified"))}</div>
+            <div>${escapeHtml(translate("Expected version"))} ${escapeHtml(details.versions.draft_expected)}</div>
+            <div>${escapeHtml(translate("Loaded form version"))} ${escapeHtml(details.versions.loaded_form)}</div>
+            <div>${escapeHtml(translate("Current server version"))} ${escapeHtml(details.versions.current_server)}</div>
+            <div>${escapeHtml(translate("Allowed field differences"))}</div>
+            <ul>${rows || "<li>" + escapeHtml(translate("No differences in eligible DCO fields.")) + "</li>"}${more}</ul>
+            <div>${escapeHtml(translate("The draft was not applied. Copy its data or discard after review."))}</div>
             <div class="almdina-ui">${uiButton({
-                label: "نسخ بيانات المسودة",
+                label: translate("Copy draft data"),
                 variant: "secondary",
                 size: "btn-sm",
                 attrs: { "data-edit-recovery-action": "copy" },
@@ -1627,7 +1627,7 @@
             return null;
         }
         const dialog = new frappe.ui.Dialog({
-            title: "مسودات تعديل محلية",
+            title: translate("Local edit drafts"),
             static: true,
             fields: [{ fieldtype: "HTML", fieldname: "edit_recovery_drafts", options: editDiscoveryHtml(frm, summaries) }],
         });
@@ -1670,9 +1670,9 @@
                     if (!frappe.utils || typeof frappe.utils.copy_to_clipboard !== "function") {
                         throw new Error("Clipboard copy is unavailable");
                     }
-                    frappe.utils.copy_to_clipboard(contents, "تم نسخ بيانات المسودة المحلية.");
+                    frappe.utils.copy_to_clipboard(contents, translate("Local draft data copied."));
                 } catch (error) {
-                    showRecoveryError("تعذر نسخ بيانات المسودة المحلية.");
+                    showRecoveryError(translate("Could not copy local draft data."));
                 }
                 return;
             }
@@ -1790,7 +1790,7 @@
                         if (!ownsDiscovery()) return;
                         dismissEditRecoveryDialog(frm, initialization);
                         frappe.show_alert({
-                            message: "استُعيدت المسودة إلى نموذج التعديل. اضغط «حفظ» لاعتمادها رسميًا.",
+                            message: translate("The draft is restored into Edit mode. Press Save to commit it officially."),
                             indicator: "blue",
                         }, 6);
                         return result;
@@ -1806,10 +1806,10 @@
                             renderEditConflict(card, error.details);
                         }
                         const message = error && error.code === "dirty_document"
-                            ? "احفظ أو ألغِ تغييرات النموذج الحالية قبل استعادة المسودة."
+                            ? translate("Save or cancel current form changes before restoring the draft.")
                             : (error && error.code === "version_conflict"
-                                ? "تغير الطلب على الخادم. احتُفظ بالمسودة ولم تُطبق."
-                                : String(error && error.message || "تعذر استعادة المسودة المحلية."));
+                                ? translate("The server order has changed. The draft was retained and not applied.")
+                                : String(error && error.message || translate("Could not restore the local draft.")));
                         showRecoveryError(message);
                     });
                 return;
@@ -1828,14 +1828,14 @@
                         if (!ownsDiscovery()) return;
                         actionInFlight = false;
                         lockButtons(false);
-                        showRecoveryError("تعذر تأكيد حذف المسودة المحلية. احتُفظ بها للتحقق لاحقًا.");
+                        showRecoveryError(translate("Could not confirm local draft deletion. The draft was retained for review."));
                         return;
                     }
                     if (!ownsDiscovery()) return;
                     if (!result || result.ok !== true) {
                         actionInFlight = false;
                         lockButtons(false);
-                        showRecoveryError("تغيرت المسودة أو تعذر حذفها. احتُفظ بها للتحقق لاحقًا.");
+                        showRecoveryError(translate("The draft changed or could not be deleted. It was retained for review."));
                         return;
                     }
                     accepted.delete(selected.draft_id);
@@ -1847,7 +1847,7 @@
                     }
                 };
                 if (typeof frappe.confirm === "function") {
-                    frappe.confirm("هل تريد حذف مسودة التعديل المحلية نهائيًا؟", discard, () => {
+                    frappe.confirm(translate("Delete this local edit draft permanently?"), discard, () => {
                         if (!ownsDiscovery()) return;
                         actionInFlight = false;
                         lockButtons(false);
@@ -2358,6 +2358,7 @@
         onload(frm) {
             if (isNew(frm)) return initializeNewForm(frm);
             if (lifecycleIneligibleForEditRecovery(frm)) notifyRetainedEditDraft(frm);
+            if (!root.EditRecovery) return ensureState(frm);
             if (currentState(frm)) return ensureState(frm);
             if (isEditSessionActive(frm)) {
                 const coordinator = window.AlmdinaDcoEditSessionCoordinator;
@@ -2371,6 +2372,7 @@
         refresh(frm) {
             if (isNew(frm)) return initializeNewForm(frm);
             if (lifecycleIneligibleForEditRecovery(frm)) notifyRetainedEditDraft(frm);
+            if (!root.EditRecovery) return ensureState(frm);
             if (currentState(frm)) return ensureState(frm);
             if (isEditSessionActive(frm)) {
                 const coordinator = window.AlmdinaDcoEditSessionCoordinator;
