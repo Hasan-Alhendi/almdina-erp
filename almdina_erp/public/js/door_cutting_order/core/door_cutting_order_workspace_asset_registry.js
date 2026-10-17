@@ -40,6 +40,9 @@
                 "AlmdinaPlanWorkspacePresenterAdapter",
                 "AlmdinaCuttingPlanSurfaceBootstrap",
                 "AlmdinaPlanEditSessionUX",
+                // The legacy settings adapter alone cannot commit a trusted
+                // Preview. Do not mark Plan ready until its Save decorator loads.
+                "AlmdinaPlanPreviewEditUX",
                 "AlmdinaPlanFieldAccessAdapter",
             ]),
         }),
