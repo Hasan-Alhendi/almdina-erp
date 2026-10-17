@@ -68,7 +68,7 @@ def test_primary_tab_bar_is_fixed_on_scroll_and_labels_are_arabic():
     assert "search-bar[data-dco-mobile-slot=\"utility-search\"]" in css
     # The responsive shell owns this native-control token after the CSS split.
     assert "--control-bg" in _source(RESPONSIVE_CSS)
-    assert "--alm-border" in css
+    assert "--alm-border" in _source(RESPONSIVE_CSS)
     assert "min-width: 0 !important" in css
 
 
