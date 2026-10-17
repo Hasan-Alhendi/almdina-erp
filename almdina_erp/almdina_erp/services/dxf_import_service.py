@@ -1310,6 +1310,7 @@ def _expected_order_pieces(order: Any) -> list[dict[str, Any]]:
             for code, attr in EXTRA_ADDON_FIELD_BY_CODE.items()
             if bool(cint(getattr(row, attr, 0)))
         )
+        glass_margin_mm, margin_state = _margin_reading(row)
         for copy_no in range(
             1,
             physical_cut_quantity(
@@ -1327,7 +1328,8 @@ def _expected_order_pieces(order: Any) -> list[dict[str, Any]]:
                     "finished_length_cm": _num(finished_length_cm),
                     "allow_rotation": cint(row.allow_rotation),
                     "piece_type": row.piece_type or "Regular",
-                    "glass_margin_mm": _stored_margin_mm(getattr(row, "glass_margin_mm", None)),
+                    "glass_margin_mm": glass_margin_mm,
+                    "margin_state": margin_state,
                     "edge_long_left": cint(getattr(row, "edge_long_left", 0)),
                     "edge_long_right": cint(getattr(row, "edge_long_right", 0)),
                     "edge_width_top": cint(getattr(row, "edge_width_top", 0)),
@@ -1470,6 +1472,24 @@ def _stored_margin_mm(value: Any) -> float | None:
     return _num(value)
 
 
+def _margin_reading(row: Any) -> tuple[float | None, str]:
+    """Read the saved glass margin without turning a missing field into zero.
+
+    ``absent`` means the import row has no margin attribute. ``blank`` and
+    ``zero`` are values actually stored on that row.
+    """
+
+    if not hasattr(row, "glass_margin_mm"):
+        return None, "absent"
+    value = getattr(row, "glass_margin_mm")
+    if value in (None, ""):
+        return None, "blank"
+    number = _num(value)
+    if number == 0:
+        return 0.0, "zero"
+    return number, "stored"
+
+
 def _side_band_mm(candidate: dict[str, Any], flag: str, thickness_key: str) -> float:
     if not candidate.get(flag):
         return 0.0
@@ -1544,6 +1564,9 @@ def _glass_opening_issues(labeled: list[dict[str, Any]]) -> list[DxfValidationIs
         )
         if decision.ok:
             continue
+        params = dict(decision.params or {})
+        if spec.get("margin_state"):
+            params["margin_state"] = spec.get("margin_state")
         issues.append(
             issue(
                 decision.code or GLASS_GEOMETRY_AMBIGUOUS,
@@ -1552,7 +1575,7 @@ def _glass_opening_issues(labeled: list[dict[str, Any]]) -> list[DxfValidationIs
                     source_piece_no=piece.get("source_piece_no"),
                     copy_no=piece.get("copy_no"),
                 ),
-                params=decision.params or {},
+                params=params,
             )
         )
     return issues
@@ -1644,6 +1667,7 @@ def _match_pieces_to_order(pieces: list[dict[str, Any]], order: Any) -> list[dic
         piece["piece_type"] = candidate["piece_type"]
         piece["_glass_spec"] = {
             "margin_mm": candidate.get("glass_margin_mm"),
+            "margin_state": candidate.get("margin_state") or "",
             "long_left_mm": _side_band_mm(candidate, "edge_long_left", "edge_long_thickness_mm"),
             "long_right_mm": _side_band_mm(candidate, "edge_long_right", "edge_long_thickness_mm"),
             "width_bottom_mm": _side_band_mm(candidate, "edge_width_bottom", "edge_width_thickness_mm"),

@@ -380,6 +380,27 @@ def _glass_pair_mm(width: Any, height: Any) -> str | None:
     return f"\u2066{width_text} × {height_text} مم\u2069"
 
 
+def _glass_size_gap_lines(params: Mapping[str, Any]) -> tuple[str, ...]:
+    values = []
+    for key in ("finished_width_mm", "finished_length_mm", "cut_width_mm", "cut_height_mm"):
+        raw = params.get(key)
+        if raw in (None, ""):
+            return ()
+        try:
+            values.append(float(raw))
+        except (TypeError, ValueError):
+            return ()
+    finished_width, finished_length, cut_width, cut_height = values
+    width_gap = finished_width - cut_width
+    length_gap = finished_length - cut_height
+    if abs(width_gap) <= 0.001 and abs(length_gap) <= 0.001:
+        return ()
+    return (
+        "فرق المقاس النهائي عن محيط القص: "
+        f"العرض {_glass_signed_mm(width_gap)}، الطول {_glass_signed_mm(length_gap)}.",
+    )
+
+
 def _glass_context_lines(params: Mapping[str, Any]) -> tuple[str, ...]:
     lines: list[str] = []
     piece_type = _GLASS_TYPE_AR.get(str(params.get("piece_type") or "Glass"), "بلور")
@@ -391,6 +412,7 @@ def _glass_context_lines(params: Mapping[str, Any]) -> tuple[str, ...]:
     cut = _glass_pair_mm(params.get("cut_width_mm"), params.get("cut_height_mm"))
     if cut:
         lines.append(f"محيط القص في الملف: {cut}.")
+    lines.extend(_glass_size_gap_lines(params))
     opening = _glass_pair_mm(params.get("opening_width_mm"), params.get("opening_height_mm"))
     if opening:
         lines.append(f"فتحة البلور في الملف: {opening}.")
@@ -567,9 +589,21 @@ def _present_glass_opening(
     else:
         side = _glass_side_name(params.get("side"))
         if params.get("reason") == "margin_missing" or params.get("margin_known") is False:
-            problem = "هامش البلور غير محفوظ على صف الدرفة."
-            highlight = "لا توجد قيمة هامش يمكن مقارنتها مع فتحة الملف."
-            action = "احفظ هامش البلور على صف الدرفة في الطلب، ثم أعد رفع الملف."
+            door_no = issue.target.source_piece_no if issue.target is not None else None
+            if params.get("margin_state") == "absent":
+                if door_no is not None and not params.get("identity_unproven"):
+                    problem = f"تعذرت قراءة هامش البلور المحفوظ للدرفة {door_no} أثناء الاستيراد."
+                else:
+                    problem = "تعذرت قراءة هامش البلور المحفوظ أثناء الاستيراد."
+                highlight = "مرجع التشخيص: glass_margin_absent_on_import_row."
+                action = "أعد رفع الملف. إذا تكرر الرفض، أبلغ الدعم الفني بهذا المرجع."
+            else:
+                if door_no is not None and not params.get("identity_unproven"):
+                    problem = f"لم يتم العثور على هامش بلور محفوظ للدرفة {door_no}."
+                else:
+                    problem = "لم يتم العثور على هامش بلور محفوظ على صف الدرفة."
+                highlight = "القيمة غير موجودة في صف الدرفة الذي قرأه الاستيراد."
+                action = "افتح شكل الدرفة، أدخل الهامش، اضغط اعتماد الشكل، ثم احفظ طلب القص وأعد رفع الملف."
         elif params.get("reason") == "band_consumes_margin":
             problem = "هامش البلور لا يترك مسافة صالحة داخل محيط القص بعد خصم القشاط."
             highlight = (

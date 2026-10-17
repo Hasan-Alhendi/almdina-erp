@@ -206,29 +206,41 @@ def _proxy_order(
             attr: getattr(row, attr, 0) if row else 0
             for attr in EXTRA_ADDON_FIELD_BY_CODE.values()
         }
-        pieces.append(
-            SimpleNamespace(
-                qty=spec.qty,
-                **addon_flags,
-                # The legacy topology parser expects its public width/length inputs in
-                # manufacturing space. Preserve the same canonical values explicitly
-                # under cut_* as well so ALMADINA-143 never relies on a finished-size
-                # fallback while this internal proxy crosses the service boundary.
-                width_cm=float(spec.cut_width_cm),
-                length_cm=float(spec.cut_length_cm),
-                cut_width_cm=float(spec.cut_width_cm),
-                cut_length_cm=float(spec.cut_length_cm),
-                finished_width_cm=float(spec.finished_width_cm),
-                finished_length_cm=float(spec.finished_length_cm),
-                allow_rotation=spec.allow_rotation,
-                piece_type=spec.piece_type,
-                liner_reference_side=str(getattr(row, "liner_reference_side", "") or ""),
-                liner_offset_cm=float(getattr(row, "liner_offset_cm", 0) or 0),
-                liner_width_cm=float(getattr(row, "liner_width_cm", 0) or 0),
-                liner_start_cm=float(getattr(row, "liner_start_cm", 0) or 0),
-                liner_length_cm=float(getattr(row, "liner_length_cm", 0) or 0),
-            )
-        )
+        piece_values = {
+            "qty": spec.qty,
+            **addon_flags,
+            # The legacy topology parser expects its public width/length inputs in
+            # manufacturing space. Preserve the same canonical values explicitly
+            # under cut_* as well so ALMADINA-143 never relies on a finished-size
+            # fallback while this internal proxy crosses the service boundary.
+            "width_cm": float(spec.cut_width_cm),
+            "length_cm": float(spec.cut_length_cm),
+            "cut_width_cm": float(spec.cut_width_cm),
+            "cut_length_cm": float(spec.cut_length_cm),
+            "finished_width_cm": float(spec.finished_width_cm),
+            "finished_length_cm": float(spec.finished_length_cm),
+            "allow_rotation": spec.allow_rotation,
+            "piece_type": spec.piece_type,
+            "liner_reference_side": str(getattr(row, "liner_reference_side", "") or ""),
+            "liner_offset_cm": float(getattr(row, "liner_offset_cm", 0) or 0),
+            "liner_width_cm": float(getattr(row, "liner_width_cm", 0) or 0),
+            "liner_start_cm": float(getattr(row, "liner_start_cm", 0) or 0),
+            "liner_length_cm": float(getattr(row, "liner_length_cm", 0) or 0),
+        }
+        # Copy only fields that exist on the saved row. A missing glass margin
+        # stays missing so import can tell a dropped field from a blank value.
+        for fieldname in (
+            "glass_margin_mm",
+            "edge_long_left",
+            "edge_long_right",
+            "edge_width_top",
+            "edge_width_bottom",
+            "edge_long_thickness_mm",
+            "edge_width_thickness_mm",
+        ):
+            if row is not None and hasattr(row, fieldname):
+                piece_values[fieldname] = getattr(row, fieldname)
+        pieces.append(SimpleNamespace(**piece_values))
     return SimpleNamespace(
         pieces=pieces,
         # Before ALMADINA-141 this boundary used

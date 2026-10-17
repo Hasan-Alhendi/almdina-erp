@@ -1,6 +1,8 @@
 """Glass opening geometry against the stored margin and the cut outline."""
 
+from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -46,8 +48,12 @@ from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import (
 )
 from almdina_erp.almdina_erp.domain.cutting.dxf_issue import issue
 from almdina_erp.almdina_erp.services.dxf_import_service import (
+    _expected_order_pieces,
     _glass_opening_issues,
+    _side_band_mm,
 )
+from almdina_erp.almdina_erp.services.piece_cut_dimension_service import OrderPieceCutSpec
+from almdina_erp.almdina_erp.services.strict_dxf_import_service import _proxy_order
 
 TOLERANCE = 0.25
 OUTER = ((0.0, 0.0), (521.0, 0.0), (521.0, 725.0), (0.0, 725.0))
@@ -436,6 +442,8 @@ def test_missing_margin_is_not_presented_as_zero():
     assert decision.code == GLASS_MARGIN_MISMATCH
     assert decision.params["margin_known"] is False
     assert decision.params["order_margin_mm"] is None
+    assert "لم يتم العثور على هامش بلور محفوظ للدرفة 8." in presented.problem
+    assert "افتح شكل الدرفة، أدخل الهامش، اضغط اعتماد الشكل، ثم احفظ طلب القص وأعد رفع الملف." in presented.action
     assert "غير محفوظ" in text
     assert "هامش البلور في الطلب 0 مم" not in text
     assert "0 مم" not in presented.problem
@@ -542,3 +550,155 @@ def test_glass_dialog_escapes_untrusted_text_and_leaves_other_errors_unchanged()
     assert "التفاصيل الهندسية" not in other_html
     assert "ما المشكلة؟" in other_html
     assert "مقاس القص غير مطابق" in other_html
+
+
+def _glass_spec(**overrides):
+    values = dict(
+        row_index=1,
+        finished_width_cm=Decimal("52.3"),
+        finished_length_cm=Decimal("72.7"),
+        cut_width_cm=Decimal("52.1"),
+        cut_length_cm=Decimal("72.5"),
+        width_deduction_mm=Decimal("2"),
+        length_deduction_mm=Decimal("2"),
+        allow_rotation=1,
+        piece_type="Glass",
+        qty=2,
+        side_profiles=(),
+    )
+    values.update(overrides)
+    return OrderPieceCutSpec(**values)
+
+
+def _saved_glass_row(**overrides):
+    values = dict(
+        qty=2,
+        piece_type="Glass",
+        allow_rotation=1,
+        cut_width_cm=52.1,
+        cut_length_cm=72.5,
+        finished_width_cm=52.3,
+        finished_length_cm=72.7,
+        width_cm=52.3,
+        length_cm=72.7,
+        glass_margin_mm=65,
+        edge_long_left=0,
+        edge_long_right=0,
+        edge_width_top=0,
+        edge_width_bottom=0,
+        edge_long_thickness_mm=0,
+        edge_width_thickness_mm=0,
+    )
+    values.update(overrides)
+    return SimpleNamespace(**values)
+
+
+def _issues_for_saved_row(row):
+    proxy = _proxy_order(SimpleNamespace(pieces=[row]), [_glass_spec(piece_type=row.piece_type)], SimpleNamespace(kerf_mm=5))
+    expected = _expected_order_pieces(proxy)
+    labeled = []
+    for candidate in expected:
+        labeled.append({
+            "piece_type": candidate["piece_type"],
+            "source_piece_no": candidate["source_piece_no"],
+            "copy_no": candidate["copy_no"],
+            "rotated": False,
+            "_outline_mm": OUTER,
+            "_holes_mm": (HOLE,),
+            "_glass_spec": {
+                "margin_mm": candidate.get("glass_margin_mm"),
+                "margin_state": candidate.get("margin_state"),
+                "long_left_mm": _side_band_mm(candidate, "edge_long_left", "edge_long_thickness_mm"),
+                "long_right_mm": _side_band_mm(candidate, "edge_long_right", "edge_long_thickness_mm"),
+                "width_bottom_mm": _side_band_mm(candidate, "edge_width_bottom", "edge_width_thickness_mm"),
+                "width_top_mm": _side_band_mm(candidate, "edge_width_top", "edge_width_thickness_mm"),
+                "allow_rotation": bool(candidate.get("allow_rotation")),
+                "finished_width_mm": candidate.get("finished_width_cm") * 10,
+                "finished_length_mm": candidate.get("finished_length_cm") * 10,
+            },
+        })
+    return expected, _glass_opening_issues(labeled)
+
+
+def test_saved_glass_margin_reaches_both_copies_through_the_import_proxy():
+    expected, issues = _issues_for_saved_row(_saved_glass_row())
+
+    assert len(expected) == 2
+    assert [row["glass_margin_mm"] for row in expected] == [65, 65]
+    assert {row["margin_state"] for row in expected} == {"stored"}
+    assert issues == []
+
+
+def test_finished_cut_gap_stays_visible_when_saved_bands_are_zero():
+    row = _saved_glass_row()
+    proxy = _proxy_order(SimpleNamespace(pieces=[row]), [_glass_spec()], SimpleNamespace(kerf_mm=5))
+    piece = proxy.pieces[0]
+
+    assert piece.glass_margin_mm == 65
+    assert piece.edge_long_left == 0
+    assert piece.edge_width_thickness_mm == 0
+    assert round((piece.finished_width_cm - piece.cut_width_cm) * 10, 3) == 2
+    assert round((piece.finished_length_cm - piece.cut_length_cm) * 10, 3) == 2
+
+
+def test_saved_band_changes_the_expected_inset_without_hiding_the_margin():
+    expected, issues = _issues_for_saved_row(_saved_glass_row(
+        edge_long_left=1,
+        edge_long_right=1,
+        edge_width_top=1,
+        edge_width_bottom=1,
+        edge_long_thickness_mm=1,
+        edge_width_thickness_mm=1,
+    ))
+    presented = present_issues(issues)
+    text = " ".join(card.problem + card.highlight + card.action + "".join(card.details) for card in presented)
+
+    assert expected[0]["margin_state"] == "stored"
+    assert expected[0]["glass_margin_mm"] == 65
+    assert len(presented) == 1
+    assert presented[0].target == "الدرفة 1 — النسختان 1 و2."
+    assert "لم يتم العثور على هامش بلور محفوظ" not in text
+    assert "64" in text
+    assert "فرق المقاس النهائي عن محيط القص" in text
+    assert "+2" in text
+
+
+def test_blank_margin_asks_the_user_to_apply_the_shape():
+    _expected, issues = _issues_for_saved_row(_saved_glass_row(glass_margin_mm=None))
+    presented = present_issues(issues)
+
+    assert len(presented) == 1
+    assert presented[0].problem == "لم يتم العثور على هامش بلور محفوظ للدرفة 1."
+    assert presented[0].action == "افتح شكل الدرفة، أدخل الهامش، اضغط اعتماد الشكل، ثم احفظ طلب القص وأعد رفع الملف."
+    assert "glass_margin_absent_on_import_row" not in presented[0].highlight
+
+
+def test_missing_margin_field_is_an_internal_read_fault():
+    row = _saved_glass_row()
+    del row.glass_margin_mm
+    _expected, issues = _issues_for_saved_row(row)
+    presented = present_issues(issues)
+    text = presented[0].problem + presented[0].highlight + presented[0].action
+
+    assert _expected[0]["margin_state"] == "absent"
+    assert _expected[0]["glass_margin_mm"] is None
+    assert "glass_margin_absent_on_import_row" in text
+    assert "افتح شكل الدرفة" not in text
+
+
+def test_stored_zero_margin_is_not_reported_as_a_missing_field():
+    _expected, issues = _issues_for_saved_row(_saved_glass_row(glass_margin_mm=0))
+    presented = present_issues(issues)
+    text = presented[0].problem + presented[0].highlight + "".join(presented[0].details)
+
+    assert _expected[0]["margin_state"] == "zero"
+    assert _expected[0]["glass_margin_mm"] == 0
+    assert "لم يتم العثور على هامش بلور محفوظ" not in text
+    assert "0 مم" in text
+
+
+def test_regular_row_does_not_use_the_glass_margin_check():
+    row = _saved_glass_row(piece_type="Regular", glass_margin_mm=65)
+    _expected, issues = _issues_for_saved_row(row)
+
+    assert issues == []
