@@ -2741,3 +2741,12 @@ Edit customers,تعديل الزبائن
 Edit the existing customer details.,تعديل بيانات الزبون الحالية.
 Delete customer,حذف زبون
 Delete a customer who is not linked to any saved orders.,حذف زبون غير مرتبط بطلبات محفوظة.
+Glass Door,درفة بلور
+Glass Margin,هامش البلور
+Glass Opening Dimensions,أبعاد فتحة البلور
+Opening Width,عرض الفتحة
+Opening Length,طول الفتحة
+Apply Shape,اعتماد الشكل
+Invalid Glass Margin,هامش البلور غير صالح
+Glass margin is measured from the entered outer size. The cut size can differ after edge banding.,هامش البلور يُقاس من المقاس الخارجي المدخل. مقاس القص قد يختلف بعد القشاط.
+Glass shape applied,تم اعتماد شكل البلور

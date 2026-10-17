@@ -470,10 +470,15 @@ class TestOrderPiecePolicyDomain(unittest.TestCase):
                 glass_margin_mm=Decimal("260.5"),
             )
 
-        self.assertIsNone(canonical_glass_margin_mm(None))
-        self.assertIsNone(canonical_glass_margin_mm(0))
-        self.assertIsNone(canonical_glass_margin_mm(""))
-        self.assertEqual(canonical_glass_margin_mm("65"), 65.0)
+        self.assertIsNone(canonical_glass_margin_mm(None, "Glass"))
+        self.assertIsNone(canonical_glass_margin_mm(0, "Glass"))
+        self.assertIsNone(canonical_glass_margin_mm("", "Glass"))
+        self.assertEqual(canonical_glass_margin_mm("65", "Glass"), 65.0)
+        self.assertIsNone(canonical_glass_margin_mm(65, "Regular"))
+        self.assertIsNone(canonical_glass_margin_mm(65, "Clipped Corner"))
+        self.assertIsNone(canonical_glass_margin_mm(65, "L-Shaped Corner"))
+        self.assertIsNone(canonical_glass_margin_mm(65, "Special"))
+        self.assertIsNone(canonical_glass_margin_mm(65))
 
     def test_glass_margin_changes_geometry_without_repricing_basis(self) -> None:
         from almdina_erp.almdina_erp.domain.orders.piece_policy import (

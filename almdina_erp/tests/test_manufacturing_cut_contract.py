@@ -248,6 +248,26 @@ def test_plan_fingerprint_tracks_glass_type_and_margin_without_staling_empty_row
         order.pieces[0]
     )
 
+    order.pieces[0].glass_margin_mm = 65
+    assert plan_input_fingerprint(order, plan) == baseline
+    assert "glass_margin_mm" not in FrappeCutDimensionPlanAdapter.piece_row_as_dict(
+        order.pieces[0]
+    )
+    for piece_type in ("Clipped Corner", "L-Shaped Corner", "Special"):
+        order.pieces[0].piece_type = piece_type
+        order.pieces[0].glass_margin_mm = 65
+        with_unused_margin = plan_input_fingerprint(order, plan)
+        assert "glass_margin_mm" not in FrappeCutDimensionPlanAdapter.piece_row_as_dict(
+            order.pieces[0]
+        )
+        order.pieces[0].glass_margin_mm = None
+        assert plan_input_fingerprint(order, plan) == with_unused_margin
+        assert with_unused_margin != baseline
+
+    order.pieces[0].piece_type = "Regular"
+    order.pieces[0].glass_margin_mm = None
+    assert plan_input_fingerprint(order, plan) == baseline
+
     order.pieces[0].piece_type = "Glass"
     typed = plan_input_fingerprint(order, plan)
     assert typed != baseline

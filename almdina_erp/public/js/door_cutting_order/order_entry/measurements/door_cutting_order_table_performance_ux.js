@@ -176,7 +176,7 @@
         const sketch = clone.querySelector("button.dco-special-sketch-button");
         if (sketch) {
             sketch.disabled = true;
-            sketch.classList.remove("is-documented", "is-clipped-corner");
+            sketch.classList.remove("is-documented", "is-clipped-corner", "is-glass", "is-incomplete");
             const icon = sketch.querySelector("span:first-child");
             const label = sketch.querySelector("span:last-child");
             if (icon) icon.textContent = "✎";
@@ -259,26 +259,36 @@
 
         const sketch = tr.querySelector("button.dco-special-sketch-button");
         if (sketch) {
-            const cornerSummary = clipped && cornerGeometry
-                ? cornerGeometry.summary(row)
-                : "";
-            sketch.disabled = !((special || clipped) && isEditable(frm));
-            sketch.classList.toggle("is-documented", special && (drawing || exact));
-            sketch.classList.toggle("is-exact-geometry", exact);
-            sketch.classList.toggle("is-clipped-corner", clipped);
-            const icon = sketch.querySelector("span:first-child");
-            const label = sketch.querySelector("span:last-child");
-            if (icon) icon.textContent = clipped ? (cornerGeometry.typeIcon(row) || "⌑") : ((drawing || exact) ? "✓" : "✎");
-            if (label) {
-                label.textContent = clipped
-                    ? (__("Set"))
-                    : ((drawing || exact)
-                        ? (__("Documented"))
-                        : (__("Document")));
+            const glassApi = window.AlmdinaGlassShape;
+            const glass = Boolean(glassApi && glassApi.isGlass(row));
+            if (glass && typeof glassApi.syncShapeButton === "function") {
+                glassApi.syncShapeButton(tr, row, {
+                    editable: isEditable(frm),
+                    virtual: false,
+                });
+            } else {
+                const cornerSummary = clipped && cornerGeometry
+                    ? cornerGeometry.summary(row)
+                    : "";
+                sketch.classList.remove("is-glass", "is-incomplete");
+                sketch.disabled = !((special || clipped) && isEditable(frm));
+                sketch.classList.toggle("is-documented", special && (drawing || exact));
+                sketch.classList.toggle("is-exact-geometry", exact);
+                sketch.classList.toggle("is-clipped-corner", clipped);
+                const icon = sketch.querySelector("span:first-child");
+                const label = sketch.querySelector("span:last-child");
+                if (icon) icon.textContent = clipped ? (cornerGeometry.typeIcon(row) || "⌑") : ((drawing || exact) ? "✓" : "✎");
+                if (label) {
+                    label.textContent = clipped
+                        ? (__("Set"))
+                        : ((drawing || exact)
+                            ? (__("Documented"))
+                            : (__("Document")));
+                }
+                sketch.title = clipped
+                    ? `${__("Configure {0}", [cornerGeometry.typeLabel(row)])}${cornerSummary ? ` — ${cornerSummary}` : ""}`
+                    : (__("Open image, measurements and notes documentation"));
             }
-            sketch.title = clipped
-                ? `${__("Configure {0}", [cornerGeometry.typeLabel(row)])}${cornerSummary ? ` — ${cornerSummary}` : ""}`
-                : (__("Open image, measurements and notes documentation"));
         }
 
         const extraAddons = window.AlmdinaExtraDoorAddonsUX;

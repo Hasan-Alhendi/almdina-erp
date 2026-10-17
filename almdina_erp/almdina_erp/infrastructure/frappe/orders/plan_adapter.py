@@ -90,7 +90,8 @@ class FrappeOrderPlanAdapter:
             "notes": row.notes or "",
         }
         glass_margin_mm = canonical_glass_margin_mm(
-            getattr(row, "glass_margin_mm", None)
+            getattr(row, "glass_margin_mm", None),
+            getattr(row, "piece_type", None) or "Regular",
         )
         if glass_margin_mm is not None:
             piece["glass_margin_mm"] = glass_margin_mm
@@ -181,7 +182,8 @@ class FrappeOrderPlanAdapter:
                         row.clipped_corner_length_cm
                     ),
                     glass_margin_mm=canonical_glass_margin_mm(
-                        getattr(row, "glass_margin_mm", None)
+                        getattr(row, "glass_margin_mm", None),
+                        getattr(row, "piece_type", None) or "Regular",
                     ),
                 )
                 for index, row in enumerate(source.pieces or [], start=1)

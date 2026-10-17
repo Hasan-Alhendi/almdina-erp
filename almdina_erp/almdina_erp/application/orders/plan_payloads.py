@@ -3,6 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Iterable
 
+from almdina_erp.almdina_erp.domain.orders.piece_policy import (
+    canonical_glass_margin_mm,
+)
+
 @dataclass(frozen=True, slots=True)
 class PlanBoardInput:
     item: str
@@ -115,8 +119,12 @@ def _plan_piece_payload(piece: PlanPieceInput) -> dict[str, Any]:
         "clipped_corner_width_cm": piece.clipped_corner_width_cm,
         "clipped_corner_length_cm": piece.clipped_corner_length_cm,
     }
-    if piece.glass_margin_mm is not None:
-        payload["glass_margin_mm"] = piece.glass_margin_mm
+    glass_margin_mm = canonical_glass_margin_mm(
+        piece.glass_margin_mm,
+        piece.piece_type,
+    )
+    if glass_margin_mm is not None:
+        payload["glass_margin_mm"] = glass_margin_mm
     return payload
 
 

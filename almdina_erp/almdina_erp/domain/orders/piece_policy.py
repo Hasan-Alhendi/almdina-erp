@@ -336,14 +336,20 @@ def validate_glass_opening(
     )
 
 
-def canonical_glass_margin_mm(value: object) -> float | None:
-    """Return a stored margin for plan fingerprints, omitting an empty value.
+def canonical_glass_margin_mm(
+    value: object,
+    piece_type: str | None = None,
+) -> float | None:
+    """Return a Glass margin for plan fingerprints, omitting every other case.
 
-    Historical rows have no margin. Zero and blank stay out of the fingerprint
-    so an unchanged order keeps its current plan hash. Any other finite value
-    is geometry.
+    A stored margin may remain on Regular, Corner, and Special rows. It changes
+    the plan hash only while the piece type is Glass. Zero and blank stay
+    omitted so a Glass row without a margin adds no extra key, and historical
+    non-glass plans keep their current hash.
     """
 
+    if piece_type != GLASS_TYPE:
+        return None
     if value in (None, ""):
         return None
     try:

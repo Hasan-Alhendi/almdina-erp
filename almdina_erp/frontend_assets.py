@@ -109,6 +109,7 @@ doctype_js = {
         "public/js/door_cutting_order/printing/door_cutting_order_print_identity.js",
         "public/js/door_cutting_order/order_entry/door_cutting_order_defaults.js",
         "public/js/door_cutting_order/drawing/door_cutting_order_clipped_corner_ux.js",
+        "public/js/door_cutting_order/drawing/door_cutting_order_glass_shape_ux.js",
         "public/js/door_cutting_order/drawing/door_cutting_order_liner_geometry.js",
         "public/js/door_cutting_order/drawing/door_cutting_order_machining_overlay.js",
         "public/js/door_cutting_order/drawing/door_cutting_order_liner_ux.js",
