@@ -610,6 +610,11 @@
         if (!workspaceReady(frm)) return;
 
         const mayMutate = canRecalculatePlan(frm);
+        // Read mode hides the Plan settings section, except for the first
+        // authorized System-plan command. Its only entry point lives here.
+        const firstSystemPlan = mayMutate
+            && !workspaceData(frm)?.plans?.system_draft;
+        wrapper.attr("data-almdina-plan-bootstrap", firstSystemPlan ? "1" : "0");
         const settings = activeSettings(frm);
         const mode = String(settings.packing_mode || "Auto Pro");
         const blockReason = stageMutationBlockReason(frm);
@@ -684,6 +689,10 @@
     }
 
     function renderWorkspacePending(frm) {
+        const actionsField = frm.fields_dict && frm.fields_dict.plan_control_actions;
+        if (actionsField && actionsField.$wrapper) {
+            actionsField.$wrapper.attr("data-almdina-plan-bootstrap", "0");
+        }
         const adapter = window.AlmdinaPlanWorkspacePresenterAdapter;
         if (adapter && typeof adapter.renderPending === "function") {
             adapter.renderPending(frm);

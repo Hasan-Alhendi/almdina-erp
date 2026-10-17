@@ -66,14 +66,33 @@
         return window.AlmdinaWorkspaceSyncCoordinator || null;
     }
 
+    function documentContext() {
+        return window.AlmdinaDocumentContext || null;
+    }
+
+    function capture(frm) {
+        const context = documentContext();
+        return context && typeof context.capture === "function"
+            ? context.capture(frm)
+            : { identity: `${frm.doctype}::${frm.doc.name}` };
+    }
+
+    function owns(frm, token) {
+        const context = documentContext();
+        return context && typeof context.isSameDocument === "function"
+            ? context.isSameDocument(frm, token)
+            : `${frm.doctype}::${frm.doc.name}` === token.identity;
+    }
+
     function normalizeResources(values) {
         return [...new Set((values || []).map((value) => String(value || "").trim()).filter(Boolean))];
     }
 
     function pendingImpact(frm) {
         if (!frm) return null;
-        if (!frm[IMPACT_KEY]) {
+        if (!frm[IMPACT_KEY] || !owns(frm, frm[IMPACT_KEY].owner)) {
             frm[IMPACT_KEY] = {
+                owner: capture(frm),
                 resources: [],
                 reasons: [],
                 specialPriceBasisChanged: false,
@@ -159,13 +178,14 @@
 
     async function reconcileAfterSave(frm) {
         const impact = frm && frm[IMPACT_KEY];
-        if (!impact || !(impact.resources || []).length) return false;
+        if (!impact || !owns(frm, impact.owner) || !(impact.resources || []).length) return false;
         frm[IMPACT_KEY] = null;
 
         const job = backgroundRecalc();
         if (job && typeof job.enqueueAfterSave === "function") {
             await job.enqueueAfterSave(frm, impact);
         }
+        if (!owns(frm, impact.owner)) return false;
 
         const coordinator = syncCoordinator();
         if (!coordinator || typeof coordinator.refresh !== "function") return false;
@@ -175,6 +195,7 @@
             activeOnly: true,
             reason: "order_saved",
         });
+        if (!owns(frm, impact.owner)) return false;
         clearSpecialPriceStaleMarkers(frm);
 
         const jobActive = Boolean(job && typeof job.isActive === "function" && job.isActive(frm));

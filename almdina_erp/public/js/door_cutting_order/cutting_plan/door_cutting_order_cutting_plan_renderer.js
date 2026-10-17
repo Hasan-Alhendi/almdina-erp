@@ -1031,7 +1031,12 @@
     function planRootFromPlan(frm, plan) {
         if (!plan || !plan.sheets || !plan.sheets.length) return null;
         const holder = document.createElement("div");
-        holder.innerHTML = build_cutting_plan_html(frm, plan);
+        const markup = build_cutting_plan_html(frm, plan);
+        const presentation = window.AlmdinaPlanSourcePresentation;
+        // Decorate only the verified, frozen plan. OFFCUT assignment labels
+        // used to come from a visible DOM clone, which is not a print source.
+        holder.innerHTML = presentation?.decorateHtml
+            ? presentation.decorateHtml(markup, plan) : markup;
         return holder.querySelector(".dco-cutting-plan");
     }
 
@@ -1083,9 +1088,11 @@
         return theme.headerCss();
     }
 
-    function printOrderMetaHtml(frm, plan, totalSheets) {
+    function printOrderMetaHtml(frm, plan, totalSheets, source) {
         const items = [
             [translate("Order number"), frm.doc.name || "—"],
+            [translate("Plan name"), source.planName],
+            [translate("Plan revision"), source.revision == null ? "—" : source.revision],
             [translate("Customer name"), frm.doc.customer || "—"],
             [translate("Board color"), frm.doc.board_description || "—"],
             [translate("Board count"), totalSheets],
@@ -1167,7 +1174,7 @@
         return chunks;
     }
 
-    function buildPrintPages(frm, planRoot, plan, identity) {
+    function buildPrintPages(frm, planRoot, plan, identity, source) {
         const sourceCards = [...planRoot.querySelectorAll(".dco-sheet-card")]
             .map(card => card.cloneNode(true));
         const totalSheets = sourceCards.filter(
@@ -1193,15 +1200,15 @@
             }).join("");
             return `<section class="dco-print-page" data-page="${pageIndex + 1}">
                 ${printHeaderHtml(identity, translate("Cutting plan"), translate("Page {0} of {1}", [pageIndex + 1, chunks.length]))}
-                ${printOrderMetaHtml(frm, plan, totalSheets)}
+                ${printOrderMetaHtml(frm, plan, totalSheets, source)}
                 ${render_extra_addon_legend()}
                 <div class="dco-print-sheets-grid">${gridRows}</div>
             </section>`;
         }).join("");
     }
 
-    function buildPrintDocument(title, frm, planRoot, plan, identity) {
-        const pages = buildPrintPages(frm, planRoot, plan, identity);
+    function buildPrintDocument(title, frm, planRoot, plan, identity, source) {
+        const pages = buildPrintPages(frm, planRoot, plan, identity, source);
         const language = uiLanguage();
         const direction = uiDirection();
         return `<!DOCTYPE html>
@@ -1437,24 +1444,118 @@ ${printHeaderCss()}
 </html>`;
     }
 
-    async function print_cutting_plan(frm, planOverride = null) {
-        const plan = planOverride || parse_plan(frm) || {};
-        let planRoot = null;
-        if (planOverride) {
-            planRoot = planRootFromPlan(frm, planOverride);
+    function printPlanRow(frm, tab) {
+        return window.AlmdinaPlanWorkspaceState?.displayedPlanForTab?.(frm, tab) || null;
+    }
+
+    function rowGeometry(row) {
+        const raw = row?.snapshot_json;
+        if (!raw) return null;
+        try {
+            return typeof raw === "string" ? JSON.parse(raw) : raw;
+        } catch (error) {
+            return null;
         }
-        if (!planRoot) {
-            planRoot = planRootFromVisibleDom(frm);
+    }
+
+    function rowAssignmentJson(row) {
+        return JSON.stringify(Array.isArray(row?.offcut?.assignments)
+            ? row.offcut.assignments : []);
+    }
+
+    function printAllowed(frm) {
+        const permissions = window.AlmdinaPermissions;
+        return Boolean(permissions && (typeof permissions.canDocument === "function"
+            ? permissions.canDocument(frm, "print_cutting_plan")
+            : permissions.can?.("print_cutting_plan")));
+    }
+
+    function printableDoc(doc) {
+        return {
+            name: doc.name, modified: doc.modified, customer: doc.customer,
+            order_date: doc.order_date, board_description: doc.board_description,
+            board_width_cm: doc.board_width_cm, board_length_cm: doc.board_length_cm,
+            kerf_mm: doc.kerf_mm, default_edge_type: doc.default_edge_type,
+            edge_color: doc.edge_color, packing_method: doc.packing_method,
+            pieces: doc.pieces || [],
+        };
+    }
+
+    function printableEdgeProfiles(frm) {
+        const profiles = frm && frm._dco_side_edge_profiles;
+        if (!(profiles instanceof Map)) return [];
+        return [...profiles].map(([name, profile]) => [String(name), Number(profile?.thickness_mm) || 0])
+            .sort(([left], [right]) => left.localeCompare(right));
+    }
+
+    function printSource(frm, planOverride, hint) {
+        const context = window.AlmdinaDocumentContext;
+        const owner = window.AlmdinaPlanWorkspaceState;
+        const token = context?.capture?.(frm);
+        const state = owner?.snapshot?.(frm);
+        const tab = hint?.tab || window.AlmdinaPlanTabsUX?.activeTab?.(frm) || "System";
+        const row = printPlanRow(frm, tab);
+        const geometry = rowGeometry(row);
+        if (!token || !context.isCurrent(frm, token) || !printAllowed(frm)
+            || !state || state.status !== "ready" || state.freshness === "stale"
+            || state.data?.order_name !== frm.doc?.name
+            || state.data?.capabilities?.print === false
+            || !row?.name || !geometry?.sheets?.length
+            || (row.board?.description && row.board.description !== frm.doc.board_description)
+            || (hint?.row && (hint.row.name !== row.name
+                || hint.row.revision !== row.revision
+                || JSON.stringify(rowGeometry(hint.row)) !== JSON.stringify(geometry)))
+            || (planOverride && JSON.stringify(planOverride) !== JSON.stringify(geometry))) return null;
+        const plan = JSON.parse(JSON.stringify(geometry));
+        // Presentation labels are owned by the selected Workspace row. A
+        // caller's non-enumerable plan metadata is outside the geometry check.
+        const assignmentJson = rowAssignmentJson(row);
+        Object.defineProperty(plan, "__offcut_assignments", {
+            value: JSON.parse(assignmentJson), enumerable: false,
+        });
+        const frozenDoc = JSON.parse(JSON.stringify(printableDoc(frm.doc)));
+        const edgeProfilesJson = JSON.stringify(printableEdgeProfiles(frm));
+        return { token, tab, orderName: frm.doc.name, planName: row.name,
+            revision: row.revision, geometryJson: JSON.stringify(geometry), assignmentJson,
+            documentJson: JSON.stringify(frozenDoc), edgeProfilesJson, plan,
+            frm: { doc: frozenDoc, _dco_side_edge_profiles: new Map(JSON.parse(edgeProfilesJson)
+                .map(([name, thickness_mm]) => [name, { thickness_mm }])) } };
+    }
+
+    function printSourceStillCurrent(frm, source) {
+        const context = window.AlmdinaDocumentContext;
+        const state = window.AlmdinaPlanWorkspaceState?.snapshot?.(frm);
+        const row = printPlanRow(frm, source.tab);
+        return Boolean(context?.isCurrent(frm, source.token)
+            && printAllowed(frm) && frm.doc.name === source.orderName
+            && JSON.stringify(printableDoc(frm.doc)) === source.documentJson
+            && JSON.stringify(printableEdgeProfiles(frm)) === source.edgeProfilesJson
+            && state?.status === "ready" && state.freshness !== "stale"
+            && state.data?.order_name === source.orderName
+            && state.data?.capabilities?.print !== false
+            && row?.name === source.planName && row.revision === source.revision
+            && (!row.board?.description || row.board.description === frm.doc.board_description)
+            && JSON.stringify(rowGeometry(row)) === source.geometryJson
+            && rowAssignmentJson(row) === source.assignmentJson);
+    }
+
+    async function print_cutting_plan(frm, planOverride = null, hint = null) {
+        const source = printSource(frm, planOverride, hint);
+        if (!source) {
+            frappe.msgprint(translate("Could not prepare printing."));
+            return false;
         }
-        if (!planRoot) {
-            planRoot = planRootFromPlan(frm, plan);
-        }
+        const plan = source.plan;
+        const frozenFrm = source.frm;
+        // Always build from the verified Plan row. A visible DOM node may
+        // outlive its owning document or represent a different plan revision.
+        const planRoot = planRootFromPlan(frozenFrm, plan);
         if (!planRoot || !planRoot.querySelector(".dco-sheet-card")) {
             frappe.msgprint(translate("There is no cutting plan to print. Recalculate the cutting plan first."));
             return false;
         }
 
-        const title = translate("Cutting plan - {0}", [frm.doc.name || ""]);
+        const title = translate("Cutting plan - {0}", [source.orderName]);
         const print_window = window.open("", "_blank");
         if (!print_window) {
             frappe.msgprint(translate("The browser blocked the print window. Allow pop-ups and try again."));
@@ -1472,8 +1573,12 @@ ${printHeaderCss()}
             const identity = identityApi && typeof identityApi.get === "function"
                 ? await identityApi.get()
                 : (identityApi && typeof identityApi.fallback === "function" ? identityApi.fallback() : {});
+            if (!printSourceStillCurrent(frm, source)) {
+                print_window.close();
+                return false;
+            }
             print_window.document.open();
-            print_window.document.write(buildPrintDocument(title, frm, planRoot, plan, identity));
+            print_window.document.write(buildPrintDocument(title, frozenFrm, planRoot, plan, identity, source));
             print_window.document.close();
             return true;
         } catch (error) {

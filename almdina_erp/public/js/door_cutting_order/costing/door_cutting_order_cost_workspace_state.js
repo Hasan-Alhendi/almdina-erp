@@ -5,6 +5,7 @@
 
     const STORE_KEY = "__almdinaCostWorkspaceStore";
     const LOAD_PROMISE_KEY = "__almdinaCostWorkspaceLoadPromise";
+    const LOAD_OWNER_KEY = "__almdinaCostWorkspaceLoadOwner";
     const LOADED_IDENTITY_KEY = "__almdinaCostWorkspaceLoadedIdentity";
     const RECOVER_KEY = "__almdinaCostWorkspaceLoadRecoveries";
 
@@ -51,11 +52,35 @@
         }));
     }
 
+    function ownedSnapshot(frm, store) {
+        const state = store && store.snapshot();
+        return state && state.identity === identity(frm)
+            && (!state.data || payloadMatches(state.data, String(frm.doc?.name || "")))
+            ? state : null;
+    }
+
+    function capture(frm) {
+        const context = documentContext();
+        return context?.capture?.(frm) || { identity: identity(frm) };
+    }
+
+    function owns(frm, token) {
+        const context = documentContext();
+        return context?.isSameDocument
+            ? context.isSameDocument(frm, token)
+            : identity(frm) === token.identity;
+    }
+
+    function payloadMatches(payload, orderName) {
+        return Boolean(payload && String(payload.order_name || "") === orderName);
+    }
+
     function reset(frm) {
         const store = storeFor(frm);
         if (!store) return null;
         frm[LOADED_IDENTITY_KEY] = null;
         frm[LOAD_PROMISE_KEY] = null;
+        frm[LOAD_OWNER_KEY] = null;
         frm[RECOVER_KEY] = 0;
         const snapshot = store.reset(identity(frm));
         dispatch(frm, snapshot);
@@ -64,7 +89,7 @@
 
     function invalidate(frm, reason = "dependency_changed") {
         const store = storeFor(frm);
-        if (!store || typeof store.invalidate !== "function") return false;
+        if (!ownedSnapshot(frm, store) || typeof store.invalidate !== "function") return false;
         const snapshot = store.invalidate(reason);
         dispatch(frm, snapshot);
         return snapshot;
@@ -78,11 +103,13 @@
         const currentIdentity = identity(frm);
         const current = store.snapshot();
         if (current.identity && current.identity !== currentIdentity) return null;
+        if (!payloadMatches(payload, String(frm.doc.name || ""))) return null;
         if (!current.identity) store.reset(currentIdentity);
 
         const snapshot = store.commit(payload);
         frm[LOADED_IDENTITY_KEY] = currentIdentity;
         frm[LOAD_PROMISE_KEY] = null;
+        frm[LOAD_OWNER_KEY] = null;
         dispatch(frm, snapshot);
         return snapshot;
     }
@@ -100,24 +127,16 @@
         const settled = store.reset(currentIdentity);
         frm[LOADED_IDENTITY_KEY] = currentIdentity;
         frm[LOAD_PROMISE_KEY] = null;
+        frm[LOAD_OWNER_KEY] = null;
         frm[RECOVER_KEY] = 0;
         dispatch(frm, settled);
         return settled;
     }
 
-    function rejectIdentityTransition(frm, store, expectedIdentity) {
-        const liveIdentity = identity(frm);
-        if (liveIdentity === expectedIdentity) return false;
-        frm[LOADED_IDENTITY_KEY] = null;
-        store.reset(liveIdentity);
-        dispatch(frm, store.snapshot());
-        return true;
-    }
-
     function isFreshReady(frm, store, currentIdentity) {
-        const current = store.snapshot();
+        const current = ownedSnapshot(frm, store);
         return Boolean(
-            frm[LOADED_IDENTITY_KEY] === currentIdentity
+            current && frm[LOADED_IDENTITY_KEY] === currentIdentity
             && current.identity === currentIdentity
             && current.status === "ready"
             && current.freshness !== "stale"
@@ -142,7 +161,10 @@
         });
         let promise = null;
         promise = flight.finally(() => {
-            if (frm[LOAD_PROMISE_KEY] === promise) frm[LOAD_PROMISE_KEY] = null;
+            if (frm[LOAD_PROMISE_KEY] === promise) {
+                frm[LOAD_PROMISE_KEY] = null;
+                frm[LOAD_OWNER_KEY] = null;
+            }
         });
         return { promise, resolveFlight, rejectFlight };
     }
@@ -182,6 +204,7 @@
         if (!store || !api || typeof api.load !== "function") return null;
 
         const currentIdentity = identity(frm);
+        const requestToken = capture(frm);
         const editing = activeEditSnapshot(store, currentIdentity);
         if (editing) {
             // WorkspaceStore.editing is the canonical edit-session boundary.
@@ -201,7 +224,7 @@
         }
 
         const pending = frm[LOAD_PROMISE_KEY];
-        if (pending) {
+        if (pending && owns(frm, frm[LOAD_OWNER_KEY] || {})) {
             if (!options.force) return pending;
 
             // A forced lifecycle refresh must not race a still-current read. Wait
@@ -213,7 +236,7 @@
                 // The store owns the error state. Force below decides whether a
                 // retry is still valid for the same live document identity.
             }
-            if (identity(frm) !== currentIdentity) return store.snapshot();
+            if (!owns(frm, requestToken)) return snapshot(frm);
             const editingAfterFlight = activeEditSnapshot(store, currentIdentity);
             if (editingAfterFlight) return editingAfterFlight;
             if (isFreshReady(frm, store, currentIdentity)) return store.snapshot();
@@ -228,11 +251,19 @@
         frm[LOAD_PROMISE_KEY] = promise;
         const completed = promise.then(
             (result) => {
-                if (frm[LOAD_PROMISE_KEY] === completed) frm[LOAD_PROMISE_KEY] = null;
+                if (frm[LOAD_PROMISE_KEY] === completed) {
+                    frm[LOAD_PROMISE_KEY] = null;
+                    frm[LOAD_OWNER_KEY] = null;
+                }
+                if (!owns(frm, requestToken)) return snapshot(frm);
                 return recoverAbandonedLoad(frm, store, currentIdentity, result);
             },
             (error) => {
-                if (frm[LOAD_PROMISE_KEY] === completed) frm[LOAD_PROMISE_KEY] = null;
+                if (frm[LOAD_PROMISE_KEY] === completed) {
+                    frm[LOAD_PROMISE_KEY] = null;
+                    frm[LOAD_OWNER_KEY] = null;
+                }
+                if (!owns(frm, requestToken)) return snapshot(frm);
                 if (abandonedLoadingSnapshot(frm, store, currentIdentity)) {
                     return recoverAbandonedLoad(frm, store, currentIdentity, null);
                 }
@@ -240,6 +271,7 @@
             }
         );
         frm[LOAD_PROMISE_KEY] = completed;
+        frm[LOAD_OWNER_KEY] = requestToken;
         const requestId = store.beginLoad(currentIdentity);
         dispatch(frm, store.snapshot());
 
@@ -255,16 +287,20 @@
 
         Promise.resolve(transport)
             .then((payload) => {
-                if (rejectIdentityTransition(frm, store, currentIdentity)) {
-                    return store.snapshot();
-                }
+                if (!owns(frm, requestToken)) return snapshot(frm);
                 // If the operator entered edit mode while this read was in flight,
                 // the response is now stale relative to the local draft. Never let
                 // resolveLoad() clear editing/baseline/draft in that case.
                 const editingNow = activeEditSnapshot(store, currentIdentity);
                 if (editingNow) return editingNow;
+                if (!payloadMatches(payload, orderName)) {
+                    store.rejectLoad(currentIdentity, requestId, new Error("Cost response order mismatch"));
+                    const invalid = snapshot(frm);
+                    if (invalid) dispatch(frm, invalid);
+                    return invalid;
+                }
                 const accepted = store.resolveLoad(currentIdentity, requestId, payload);
-                if (!accepted) return store.snapshot();
+                if (!accepted) return snapshot(frm);
                 frm[LOADED_IDENTITY_KEY] = currentIdentity;
                 // Cost GET is read-only workspace data. Never advance frm.doc.modified
                 // from a read because that could hide a real concurrent DCO mutation.
@@ -273,9 +309,7 @@
                 return state;
             })
             .catch((error) => {
-                if (rejectIdentityTransition(frm, store, currentIdentity)) {
-                    return store.snapshot();
-                }
+                if (!owns(frm, requestToken)) return snapshot(frm);
                 const editingNow = activeEditSnapshot(store, currentIdentity);
                 if (editingNow) return editingNow;
                 store.rejectLoad(currentIdentity, requestId, error);
@@ -290,7 +324,7 @@
 
     function snapshot(frm) {
         const store = storeFor(frm);
-        return store ? store.snapshot() : null;
+        return ownedSnapshot(frm, store);
     }
 
     function settings(frm) {

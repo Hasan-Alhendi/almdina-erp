@@ -27,6 +27,8 @@ for (const row of [
     "Recalculate with the current settings,إعادة الحساب بالإعدادات الحالية",
     "{0} mm,{0} مم",
     "Width {0} mm / length {1} mm,عرض {0} مم / طول {1} مم",
+    '"The cutting plan save could not be confirmed. Check the saved plan, then create a new preview.",تعذر تأكيد حفظ خطة القص. تحقق من الخطة المحفوظة ثم أنشئ معاينة جديدة.',
+    "The plan was verified on the server after its save response was lost.,تم التحقق من حفظ الخطة على الخادم بعد فقدان رد الحفظ.",
 ]) {
     assert.ok(catalog.includes(row), row);
 }
@@ -47,6 +49,8 @@ const french = {
     "Saving the same plan that was previewed.": "Enregistrement du plan prévisualisé.",
     "Recalculate with these settings first, then save the plan shown in front of you.": "Recalculez d'abord.",
     "The preview plan was saved and its related cost was updated.": "Plan enregistré et coût mis à jour.",
+    "The cutting plan save could not be confirmed. Check the saved plan, then create a new preview.": "Enregistrement non confirmé.",
+    "The plan was verified on the server after its save response was lost.": "Plan confirmé sur le serveur.",
     "Recalculate with the current settings": "Recalculer avec les réglages actuels",
     "Press “Edit” to try algorithms and settings. Recalculation creates a preview, and the change is not saved until you press “Save”.": "Appuyez sur Modifier.",
     "Auto Pro (recommended)": "Auto Pro recommandé",
@@ -205,7 +209,9 @@ context.window.AlmdinaPlanWorkspaceAPI = {
         apiCalls.push({ method: "preview", name, settings: { ...settings } });
         if (commitError === "preview") throw new Error("server rejected preview");
         return {
-            preview_id: "PV-1",
+            preview_id: "PV-1", order_name: name,
+            source_plan_name: "CP-1", source_plan_revision: 1,
+            source_plan_modified: "before",
             plan: { sheets: [{ name: "sheet" }] },
             summary: {
                 settings: { ...settings },
@@ -216,7 +222,12 @@ context.window.AlmdinaPlanWorkspaceAPI = {
     async commitPreview(name, previewId) {
         apiCalls.push({ method: "commitPreview", name, previewId });
         if (commitError === "commit") throw new Error("server rejected preview");
-        return { ok: true };
+        if (commitError === "empty") return null;
+        return { exact_preview_commit: true, committed_preview_id: previewId,
+            name, cutting_plan: "CP-1", plan_revision: 1,
+            plan_source_type: "System", plan_status: "Draft",
+            packing_mode: "auto_pro", cutting_machine_type: "Panel Saw", kerf_mm: 0,
+            trim_margin_mm: 0, optimization_time_limit_sec: 0 };
     },
 };
 context.window.addEventListener = function addEventListener() {};
@@ -317,6 +328,13 @@ assert.equal(rejected.previewId, null);
 assert.equal(rejected.error, "server rejected preview");
 assert.equal(calls.includes("server rejected preview"), false);
 assert.equal(calls.includes("Could not save the preview."), false);
+commitError = null;
+
+await session.preview(order, settings);
+commitError = "empty";
+assert.equal(await session.commit(order), false);
+assert.equal(session.snapshot(order).status, "stale");
+assert.equal(messages.at(-1), "Enregistrement non confirmé.");
 commitError = null;
 
 const traced = frm();

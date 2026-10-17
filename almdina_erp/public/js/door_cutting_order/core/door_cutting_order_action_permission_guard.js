@@ -210,13 +210,13 @@
             && typeof renderer.print === "function"
         ) {
             const originalRendererPrint = renderer.print.bind(renderer);
-            renderer.print = (targetFrm, planOverride = null) => {
+            renderer.print = (targetFrm, planOverride = null, hint = null) => {
                 const active = targetFrm || window.cur_frm || frm;
                 if (!can(active, "print_cutting_plan")) {
                     deny("You do not have permission to print the cutting plan.");
                     return false;
                 }
-                return originalRendererPrint(active, planOverride);
+                return originalRendererPrint(active, planOverride, hint);
             };
             renderer.__almdinaPrintPermissionGuarded = true;
         }

@@ -13,6 +13,12 @@
             : `${frm.doctype || frm.doc.doctype || ""}::${frm.doc.name || ""}`;
     }
 
+    function ownsVisit(frm, token) {
+        const context = window.AlmdinaDocumentContext;
+        return context?.isCurrent?.(frm, token)
+            ?? (context?.isSameDocument?.(frm, token) !== false);
+    }
+
     function settingsSnapshot(settings) {
         return Object.freeze(Object.fromEntries(SETTINGS.map(key => [key, settings && settings[key]])));
     }
@@ -25,6 +31,60 @@
                 ? Number(actual[key]) === Number(requested[key])
                 : String(actual[key]) === String(requested[key]))
         ));
+    }
+
+    function exactCommitReceipt(result, state, orderName) {
+        const payload = state.payload || {};
+        return Boolean(result && typeof result === "object"
+            && result.exact_preview_commit === true
+            && result.committed_preview_id === state.previewId
+            && result.name === orderName
+            && result.cutting_plan === payload.source_plan_name
+            && Number.isInteger(Number(result.plan_revision))
+            && Number(result.plan_revision) === Number(payload.source_plan_revision)
+            && Number(result.plan_revision) > 0
+            && result.plan_source_type === "System"
+            && result.plan_status === "Draft"
+            && SETTINGS.every(key => result[key] != null
+                && (["kerf_mm", "trim_margin_mm", "optimization_time_limit_sec"].includes(key)
+                    ? Number.isFinite(Number(result[key]))
+                        && Number(result[key]) === Number(state.requestedSettings?.[key])
+                    : String(result[key]) === String(state.requestedSettings?.[key]))));
+    }
+
+    function canonicalJson(value) {
+        if (Array.isArray(value)) return value.map(canonicalJson);
+        if (value && typeof value === "object") {
+            return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonicalJson(value[key])]));
+        }
+        return value;
+    }
+
+    async function reconcileCommittedPreview(api, state, orderName) {
+        if (typeof api.load !== "function") return false;
+        try {
+            const data = await api.load(orderName);
+            const row = data?.plans?.system_draft;
+            const expected = state.payload;
+            if (data?.order_name !== orderName || !row || !expected
+                || row.name !== expected.source_plan_name
+                || Number(row.revision) !== Number(expected.source_plan_revision)
+                || !expected.source_plan_modified
+                || !row.modified || String(row.modified) === String(expected.source_plan_modified)
+                || row.source_type !== "System" || row.status !== "Draft"
+                || row.validation?.status !== "Valid" || row.validation?.needs_recalculation) return false;
+            const settings = row.settings || {};
+            if (!SETTINGS.every(key => key in settings
+                && (["kerf_mm", "trim_margin_mm", "optimization_time_limit_sec"].includes(key)
+                    ? Number(settings[key]) === Number(state.requestedSettings[key])
+                    : String(settings[key]) === String(state.requestedSettings[key])))) return false;
+            const saved = typeof row.snapshot_json === "string"
+                ? JSON.parse(row.snapshot_json) : row.snapshot_json;
+            return Boolean(saved && JSON.stringify(canonicalJson(saved))
+                === JSON.stringify(canonicalJson(expected.plan)));
+        } catch (_error) {
+            return false;
+        }
     }
 
     function emptyState() {
@@ -43,6 +103,13 @@
     function stateFor(frm) {
         if (!frm) return emptyState();
         if (!frm[STATE_KEY]) frm[STATE_KEY] = emptyState();
+        const state = frm[STATE_KEY];
+        const context = window.AlmdinaDocumentContext;
+        if (state.identity && (context?.isSameDocument
+            ? !context.isSameDocument(frm, state.documentToken || state.identity)
+            : state.identity !== identity(frm))) {
+            frm[STATE_KEY] = { ...emptyState(), generation: state.generation + 1 };
+        }
         return frm[STATE_KEY];
     }
 
@@ -103,6 +170,7 @@
             && state.payload
             && state.payload.plan
             && state.identity === identity(frm)
+            && ownsVisit(frm, state.documentToken)
         );
     }
 
@@ -124,7 +192,8 @@
     function displayedPreviewRow(frm) {
         const state = stateFor(frm);
         if (state.status !== "saving" && !isReady(frm)) return null;
-        if (state.identity !== identity(frm) || !state.payload || !state.payload.plan) return null;
+        if (state.identity !== identity(frm) || !ownsVisit(frm, state.documentToken)
+            || !state.payload || !state.payload.plan) return null;
         return previewRowData(state);
     }
 
@@ -170,24 +239,32 @@
 
         const state = stateFor(frm);
         const requestIdentity = identity(frm);
+        const orderName = frm.doc.name;
         const requested = settingsSnapshot(settings || {});
         const generation = ++state.generation;
         state.activeRequestGeneration = generation;
         state.requestedSettings = requested;
         state.identity = requestIdentity;
+        state.documentToken = window.AlmdinaDocumentContext?.capture?.(frm) || requestIdentity;
         const current = () => frm[STATE_KEY] === state
             && state.generation === generation
             && state.activeRequestGeneration === generation
-            && identity(frm) === requestIdentity;
+            && identity(frm) === requestIdentity
+            && ownsVisit(frm, state.documentToken);
         state.status = "previewing";
         state.previewId = null;
         state.payload = null;
         state.error = null;
         dispatch(frm);
         try {
-            const payload = await api.preview(frm.doc.name, { ...requested });
+            const payload = await api.preview(orderName, { ...requested });
             if (!current()) return false;
-            if (!payload || !payload.preview_id || !payload.plan) {
+            if (!payload || !payload.preview_id || !payload.plan
+                || payload.order_name !== orderName
+                || !payload.source_plan_name
+                || !payload.source_plan_modified
+                || !Number.isInteger(Number(payload.source_plan_revision))
+                || Number(payload.source_plan_revision) < 1) {
                 throw new Error("Invalid cutting-plan preview response");
             }
             if (!matchesSettings(payload, requested)) {
@@ -222,31 +299,52 @@
         const previewId = state.previewId;
         const commitGeneration = state.generation;
         const requestIdentity = identity(frm);
+        const orderName = frm.doc.name;
+        const requestToken = window.AlmdinaDocumentContext?.capture?.(frm) || requestIdentity;
         const current = () => frm[STATE_KEY] === state
             && state.generation === commitGeneration
             && state.previewId === previewId
             && state.status === "saving"
-            && identity(frm) === requestIdentity;
+            && identity(frm) === requestIdentity
+            && ownsVisit(frm, requestToken);
         state.status = "saving";
         state.error = null;
         dispatch(frm);
-        try {
-            const result = await api.commitPreview(frm.doc.name, previewId);
+        async function finishUncertain(allowReconciliation = true) {
+            const confirmed = allowReconciliation
+                && await reconcileCommittedPreview(api, state, orderName);
             if (!current()) return false;
-            frm[STATE_KEY] = { ...emptyState(), generation: state.generation + 1 };
-            dispatch(frm);
-            return result || true;
-        } catch (error) {
-            if (!current()) return false;
-            // The server consumes preview tokens even when a stale commit is
-            // rejected. Mark it stale so Save cannot replay the same token.
+            if (confirmed) {
+                frm[STATE_KEY] = { ...emptyState(), generation: state.generation + 1 };
+                dispatch(frm);
+                return { reconciled_commit: true };
+            }
             state.status = "stale";
             state.previewId = null;
             state.payload = null;
-            state.error = String(
-                (error && (error.message || error))
-                || "Could not save the preview."
-            );
+            state.error = "The cutting plan save could not be confirmed. Check the saved plan, then create a new preview.";
+            dispatch(frm);
+            frappe.msgprint(translate(state.error));
+            return false;
+        }
+        try {
+            const result = await api.commitPreview(orderName, previewId);
+            if (!current()) return false;
+            if (!exactCommitReceipt(result, state, orderName)) {
+                // A contradictory receipt is never promoted to a success by a
+                // later read. Only absent or lost replies need reconciliation.
+                return finishUncertain(result == null || result === false);
+            }
+            frm[STATE_KEY] = { ...emptyState(), generation: state.generation + 1 };
+            dispatch(frm);
+            return result;
+        } catch (error) {
+            if (!current()) return false;
+            const reconciled = await finishUncertain();
+            if (reconciled) return reconciled;
+            // A rejected or uncertain transaction consumes the token; the
+            // operator must create a new preview instead of replaying it.
+            state.error = String((error && (error.message || error)) || "Could not save the preview.");
             dispatch(frm);
             throw error;
         }

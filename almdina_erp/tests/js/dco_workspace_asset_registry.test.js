@@ -94,7 +94,10 @@ class CustomEvent {
         "Plan readiness must wait for the ALMADINA-179 source presentation contract"
     );
 
-    fakeWindow.AlmdinaPlanSourcePresentation = {};
+    let installed = 0;
+    fakeWindow.AlmdinaPlanSourcePresentation = {
+        install() { installed += 1; return true; },
+    };
     assert.equal(
         registry.isLoaded("plan"),
         false,
@@ -104,26 +107,42 @@ class CustomEvent {
     // The edit-session module is part of the same cold Plan bundle. A Plan feature
     // becomes ready only after that module has evaluated as well.
     fakeWindow.AlmdinaPlanEditSessionUX = {};
+    assert.equal(registry.isLoaded("plan"), false,
+        "The legacy Plan settings adapter is not the Preview Commit Save owner");
+    assert.ok(!calls[0].some(asset => asset.endsWith("door_cutting_order_plan_preview_edit_ux.js")),
+        "Preview Save must not evaluate in parallel with its legacy Plan adapter");
     flights[0].resolve(calls[0]);
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.equal(calls.length, 2, "Preview Save installs only after the base Plan group resolves");
+    assert.deepEqual(calls[1].map(asset => asset.split("/").pop()),
+        ["door_cutting_order_plan_preview_edit_ux.js"]);
+    assert.equal(registry.isLoaded("plan"), false);
+    fakeWindow.AlmdinaPlanPreviewEditUX = {};
+    flights[1].resolve(calls[1]);
     assert.equal(await planOne, true);
+    assert.equal(installed, 1,
+        "after the full asset group, source presentation must attach to the final renderer");
     assert.equal(await registry.ensure("plan"), true);
-    assert.equal(calls.length, 1, "loaded Plan assets must remain cached by ready globals");
+    assert.equal(installed, 2,
+        "a cached ready asset group must repair a renderer replaced after source presentation");
+    assert.equal(calls.length, 2, "loaded Plan assets must remain cached by ready globals");
 
     const costOne = registry.ensureForTab("cost_tab");
     const costTwo = registry.ensure("cost");
     assert.strictEqual(costOne, costTwo, "concurrent Cost activation must share one asset flight");
-    assert.equal(calls.length, 2);
-    assert.ok(calls[1].length >= 7);
-    assert.ok(calls[1].every(asset => asset.includes("/costing/")));
-    assert.ok(calls[1].some(asset => asset.endsWith("door_cutting_order_cost_presenter.js")));
-    assert.ok(calls[1].some(asset => asset.endsWith("door_cutting_order_compact_pricing_ux.js")));
+    assert.equal(calls.length, 3);
+    assert.ok(calls[2].length >= 7);
+    assert.ok(calls[2].every(asset => asset.includes("/costing/")));
+    assert.ok(calls[2].some(asset => asset.endsWith("door_cutting_order_cost_presenter.js")));
+    assert.ok(calls[2].some(asset => asset.endsWith("door_cutting_order_compact_pricing_ux.js")));
 
-    flights[1].reject(new Error("offline"));
+    flights[2].reject(new Error("offline"));
     await assert.rejects(costOne, /offline/);
     assert.equal(registry.isLoaded("cost"), false);
 
     const costRetry = registry.ensure("cost");
-    assert.equal(calls.length, 3, "failed bundle must be retryable");
+    assert.equal(calls.length, 4, "failed bundle must be retryable");
     fakeWindow.AlmdinaOrderCostUX = {};
     fakeWindow.AlmdinaCompactPricingUX = {};
     fakeWindow.AlmdinaCostWorkspacePresenterAdapter = {};
@@ -135,7 +154,7 @@ class CustomEvent {
         "Cost readiness must also wait for the final-price approval module"
     );
     fakeWindow.AlmdinaFinalPriceApprovalUX = {};
-    flights[2].resolve(calls[2]);
+    flights[3].resolve(calls[3]);
     assert.equal(await costRetry, true);
     assert.equal(registry.isLoaded("cost"), true);
 

@@ -1,0 +1,269 @@
+✖ plan: A snapshot cannot be presented or projected on B after Frappe before_load (9.782421ms)
+✖ plan: B starts its own GET while A is pending (3.348427ms)
+✖ plan: late A cannot clear a ready B (1.792332ms)
+✖ cost: A snapshot cannot be presented or projected on B after Frappe before_load (2.396843ms)
+✖ cost: B starts its own GET while A is pending (1.47311ms)
+✖ cost: late A cannot clear a ready B (1.308102ms)
+✖ cost: stale A projection must not mutate B board or pieces (2.208308ms)
+✖ plan: stale A projection must not write B's cutting_plan_json (1.67148ms)
+✖ cost: server payload identity must match current order before model projection (1.588654ms)
+✖ plan: mismatched server payload cannot become current plan (2.034457ms)
+✖ plan: print command must reject geometry owned by A while current form is B (1.435624ms)
+✔ control: reload of same order retains an active Plan edit draft (1.608945ms)
+✔ control: separate Form instances have separate workspace stores (1.383125ms)
+✔ control: NEW first insert promotes Document Context without a new generation (1.263955ms)
+✖ board DOM: stale input from A cannot become B's next save payload (1.48637ms)
+ℹ tests 15
+ℹ suites 0
+ℹ pass 3
+ℹ fail 12
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 42.685928
+
+✖ failing tests:
+
+test at almdina_erp/tests/js/cross_order_p0_baseline.test.js:107:5
+✖ plan: A snapshot cannot be presented or projected on B after Frappe before_load (9.782421ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  true !== false
+
+      at TestContext.<anonymous> (/workspace/scratch/2e6bef7fa901/almdina-erp/almdina_erp/tests/js/cross_order_p0_baseline.test.js:111:16)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at almdina_erp/tests/js/cross_order_p0_baseline.test.js:122:5
+✖ plan: B starts its own GET while A is pending (3.348427ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    [
+      'A',
+  -   'B'
+    ]
+
+      at TestContext.<anonymous> (/workspace/scratch/2e6bef7fa901/almdina-erp/almdina_erp/tests/js/cross_order_p0_baseline.test.js:127:16)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [Array],
+    expected: [Array],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at almdina_erp/tests/js/cross_order_p0_baseline.test.js:132:5
+✖ plan: late A cannot clear a ready B (1.792332ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  'idle' !== 'ready'
+
+      at TestContext.<anonymous> (/workspace/scratch/2e6bef7fa901/almdina-erp/almdina_erp/tests/js/cross_order_p0_baseline.test.js:146:16)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'idle',
+    expected: 'ready',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at almdina_erp/tests/js/cross_order_p0_baseline.test.js:107:5
+✖ cost: A snapshot cannot be presented or projected on B after Frappe before_load (2.396843ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  true !== false
+
+      at TestContext.<anonymous> (/workspace/scratch/2e6bef7fa901/almdina-erp/almdina_erp/tests/js/cross_order_p0_baseline.test.js:111:16)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at almdina_erp/tests/js/cross_order_p0_baseline.test.js:122:5
+✖ cost: B starts its own GET while A is pending (1.47311ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    [
+      'A',
+  -   'B'
+    ]
+
+      at TestContext.<anonymous> (/workspace/scratch/2e6bef7fa901/almdina-erp/almdina_erp/tests/js/cross_order_p0_baseline.test.js:127:16)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [Array],
+    expected: [Array],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at almdina_erp/tests/js/cross_order_p0_baseline.test.js:132:5
+✖ cost: late A cannot clear a ready B (1.308102ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  'idle' !== 'ready'
+
+      at TestContext.<anonymous> (/workspace/scratch/2e6bef7fa901/almdina-erp/almdina_erp/tests/js/cross_order_p0_baseline.test.js:146:16)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'idle',
+    expected: 'ready',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at almdina_erp/tests/js/cross_order_p0_baseline.test.js:151:1
+✖ cost: stale A projection must not mutate B board or pieces (2.208308ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    {
+  +   board: 'أبيض',
+  +   pieceWidth: 10
+  -   board: 'أسود',
+  -   pieceWidth: 99
+    }
+
+      at TestContext.<anonymous> (/workspace/scratch/2e6bef7fa901/almdina-erp/almdina_erp/tests/js/cross_order_p0_baseline.test.js:156:12)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [Object],
+    expected: [Object],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at almdina_erp/tests/js/cross_order_p0_baseline.test.js:162:1
+✖ plan: stale A projection must not write B's cutting_plan_json (1.67148ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+
+  + {
+  +   sheets: [
+  +     {
+  +       sheet_no: 'A'
+  +     }
+  +   ]
+  + }
+  - undefined
+
+      at TestContext.<anonymous> (/workspace/scratch/2e6bef7fa901/almdina-erp/almdina_erp/tests/js/cross_order_p0_baseline.test.js:167:12)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [Object],
+    expected: undefined,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at almdina_erp/tests/js/cross_order_p0_baseline.test.js:170:1
+✖ cost: server payload identity must match current order before model projection (1.588654ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  true !== false
+
+      at TestContext.<anonymous> (/workspace/scratch/2e6bef7fa901/almdina-erp/almdina_erp/tests/js/cross_order_p0_baseline.test.js:175:12)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at almdina_erp/tests/js/cross_order_p0_baseline.test.js:179:1
+✖ plan: mismatched server payload cannot become current plan (2.034457ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+
+  + {
+  +   name: 'PLAN-B',
+  +   snapshot_json: '{"sheets":[{"sheet_no":"B"}]}'
+  + }
+  - null
+
+      at TestContext.<anonymous> (/workspace/scratch/2e6bef7fa901/almdina-erp/almdina_erp/tests/js/cross_order_p0_baseline.test.js:184:12)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [Object],
+    expected: null,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at almdina_erp/tests/js/cross_order_p0_baseline.test.js:188:1
+✖ plan: print command must reject geometry owned by A while current form is B (1.435624ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  true !== false
+
+      at TestContext.<anonymous> (/workspace/scratch/2e6bef7fa901/almdina-erp/almdina_erp/tests/js/cross_order_p0_baseline.test.js:197:12)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at almdina_erp/tests/js/cross_order_p0_baseline.test.js:241:1
+✖ board DOM: stale input from A cannot become B's next save payload (1.48637ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    {
+  +   board_description: 'أبيض',
+  -   board_description: 'أسود',
+      name: 'B'
+    }
+
+      at TestContext.<anonymous> (/workspace/scratch/2e6bef7fa901/almdina-erp/almdina_erp/tests/js/cross_order_p0_baseline.test.js:257:12)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [Object],
+    expected: [Object],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }

@@ -40,6 +40,9 @@
                 "AlmdinaPlanWorkspacePresenterAdapter",
                 "AlmdinaCuttingPlanSurfaceBootstrap",
                 "AlmdinaPlanEditSessionUX",
+                // The legacy settings adapter alone cannot commit a trusted
+                // Preview. Do not mark Plan ready until its Save decorator loads.
+                "AlmdinaPlanPreviewEditUX",
                 "AlmdinaPlanFieldAccessAdapter",
             ]),
         }),
@@ -92,6 +95,14 @@
         );
     }
 
+    function finishPlanPresentation(name) {
+        if (name !== "plan") return;
+        // The asset group can finish with SourcePresentation evaluated before
+        // the Renderer. Reinstall against the final Renderer once all assets
+        // have loaded, so the visible-plan print path has one fixed contract.
+        window.AlmdinaPlanSourcePresentation?.install?.();
+    }
+
     function isLoaded(featureName) {
         return globalsReady(descriptor(featureName));
     }
@@ -124,7 +135,10 @@
         const name = String(featureName || "").trim();
         const feature = descriptor(name);
         if (!feature) return Promise.resolve(false);
-        if (!options.force && globalsReady(feature)) return Promise.resolve(true);
+        if (!options.force && globalsReady(feature)) {
+            finishPlanPresentation(name);
+            return Promise.resolve(true);
+        }
         if (pending.has(name)) return pending.get(name);
 
         const requireAssets = loader();
@@ -133,8 +147,18 @@
         }
 
         emit(name, "loading");
-        const operation = Promise.resolve(requireAssets(feature.assets))
+        // The Preview Save adapter decorates the legacy Plan coordinator adapter.
+        // A parallel asset batch may execute the decorator too early, leaving
+        // the old settings-only Save handler active or the Plan feature unready.
+        // Resolve its dependency group first, then install the Save owner.
+        const previewEditAsset = `${ASSET_ROOT}/cutting_plan/door_cutting_order_plan_preview_edit_ux.js`;
+        const baseAssets = name === "plan"
+            ? feature.assets.filter(asset => asset !== previewEditAsset)
+            : feature.assets;
+        const operation = Promise.resolve(requireAssets(baseAssets))
+            .then(() => name === "plan" ? requireAssets([previewEditAsset]) : null)
             .then(() => {
+                finishPlanPresentation(name);
                 if (!globalsReady(feature)) {
                     throw new Error(`DCO ${name} workspace assets did not initialize completely`);
                 }
