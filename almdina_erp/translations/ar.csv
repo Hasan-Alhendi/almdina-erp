@@ -2907,3 +2907,4 @@ Could not restore the local draft.,تعذر استعادة المسودة الم
 Could not confirm local draft deletion. The draft was retained for review.,تعذر تأكيد حذف المسودة المحلية. احتُفظ بها للتحقق لاحقًا.
 The draft changed or could not be deleted. It was retained for review.,تغيرت المسودة أو تعذر حذفها. احتُفظ بها للتحقق لاحقًا.
 Delete this local edit draft permanently?,هل تريد حذف مسودة التعديل المحلية نهائيًا؟
+The official insert may still be in progress. No retry was sent. Keep this draft and check again later.,قد تكون عملية إنشاء الطلب الرسمية السابقة ما تزال قيد التنفيذ. لم تُرسل محاولة أخرى. احتفظ بالمسودة وتحقق لاحقًا.
