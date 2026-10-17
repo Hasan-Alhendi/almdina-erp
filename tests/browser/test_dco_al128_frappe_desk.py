@@ -469,6 +469,21 @@ def test_real_desk_edits_checkpoint_and_permission_isolation() -> None:
             browser.close()
 
 
+def _changed_base_files(base_sha: str) -> set[str]:
+    """Only actual source differences qualify as substituted benchmark assets."""
+    changed = set()
+    for suffix, path in BASE_FILES.items():
+        head_source = subprocess.check_output(
+            ["git", "show", f"HEAD:{path}"], cwd=REPOSITORY, text=True,
+        )
+        base_source = subprocess.check_output(
+            ["git", "show", f"{base_sha}:{path}"], cwd=REPOSITORY, text=True,
+        )
+        if head_source != base_source:
+            changed.add(suffix)
+    return changed
+
+
 def _install_base_metadata_overrides(
     context: BrowserContext,
     base_sha: str,
@@ -501,10 +516,10 @@ def _install_base_metadata_overrides(
                 cwd=REPOSITORY,
                 text=True,
             )
+            # Unchanged assets are a valid equality result for latest-Develop
+            # comparisons. Replacing them would create a fictional difference.
             if head_source == base_source:
-                raise AssertionError(
-                    f"{repository_path} is unchanged between Base and HEAD; it cannot distinguish the benchmark variants."
-                )
+                continue
             if head_source in script:
                 script = script.replace(head_source, base_source, 1)
                 replaced.add(suffix)
@@ -625,9 +640,10 @@ def _benchmark_order(
         _open_order(page, name, count)
         phase_durations["open_order"] = round(time.monotonic() - phase_started, 2)
         if variant == "base":
-            assert replaced == set(BASE_FILES), (
-                "Frappe DCO metadata did not supply all base recovery assets; "
-                f"matched={sorted(replaced)}"
+            expected = _changed_base_files(base_sha)
+            assert replaced == expected, (
+                "Frappe DCO metadata did not supply changed base recovery assets; "
+                f"expected={sorted(expected)}, matched={sorted(replaced)}"
             )
         phase = "edit_session_and_initial_checkpoint"
         phase_started = time.monotonic()
@@ -753,7 +769,7 @@ def _benchmark_order(
         assert len(checkpoint_ms) == sample_count
         assert not save_requests, "Measurement checkpoint unexpectedly invoked Official Save."
         if variant == "base":
-            assert replaced == set(BASE_FILES), f"Base metadata replacement missed: {set(BASE_FILES) - replaced}"
+            assert replaced == _changed_base_files(base_sha), "Changed Base metadata was not substituted"
         result = {
             "variant": variant,
             "rows": count,
@@ -866,6 +882,13 @@ def test_actual_measurement_entry_performance_100_before_after() -> None:
         "base_sha": base_sha,
         "benchmarks": results,
         "p95_comparison": comparisons,
+        "source_files_identical": not _changed_base_files(base_sha),
+        "interpretation": (
+            "Baseline and HEAD recovery assets identical: these are same-code "
+            "measurement samples, NOT evidence of a runtime optimization."
+            if not _changed_base_files(base_sha)
+            else "Baseline and HEAD contain changed recovery source assets."
+        ),
     }
     TEST_RESULTS.append({"test": "actual_measurement_entry_performance", "evidence": evidence})
     print(f"AL128_MEASUREMENT_PERFORMANCE {json.dumps(evidence, ensure_ascii=False)}")
