@@ -958,7 +958,15 @@
                         showRecoveryError(translate("The draft changed in another tab. Reopen the order before continuing it."));
                         return false;
                     }
-                    await continueDraft(frm, currentRecord);
+                    const outcome = await continueDraft(frm, currentRecord);
+                    if (!ownsDiscovery()) return false;
+                    if (outcome && outcome.pending === true) {
+                        // A query returning NOT_FOUND cannot prove the previous insert
+                        // has finished. Keep discovery open and the pending card visible.
+                        releaseDiscoveryAction(card, button);
+                        freezeCardActions(card, button);
+                        return false;
+                    }
                     if (initializations.get(frm) === initialization) initializations.delete(frm);
                     return true;
                 })
