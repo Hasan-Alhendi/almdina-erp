@@ -45,6 +45,23 @@
     const NORMALIZE_DXF_METHOD =
         "almdina_erp.almdina_erp.services.dxf_export_service.normalize_dxf_for_autocad";
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split("{" + index + "}").join(String(value));
+            });
+        }
+        return text;
+    }
+
     function canExportDxf(frm = window.cur_frm) {
         const permissions = window.AlmdinaPermissions;
         return Boolean(
@@ -347,9 +364,10 @@
         const centimetres = positiveKerf(plan && plan.kerf_cm);
         const fromCentimetres = centimetres == null ? null : centimetres * 10;
         if (millimetres != null && fromCentimetres != null && Math.abs(millimetres - fromCentimetres) > 0.05) {
-            const error = new Error(
-                `سماكة الشفرة متعارضة: ${millimetres} مم مقابل ${fromCentimetres} مم في خطة القص، ولم يُصدَّر الملف.`
-            );
+            const error = new Error(translate(
+                "Saw blade thickness conflict: {0} mm versus {1} mm in the cutting plan. DXF was not exported.",
+                [millimetres, fromCentimetres]
+            ));
             error.linerExport = true;
             error.code = "cutter_diameter_conflict";
             return error;
@@ -360,24 +378,25 @@
     }
 
     function linerExportError(piece, code, addon) {
-        const noun = addon && addon.nounAr ? addon.nounAr : "اللاينر";
+        const noun = translate(addon && addon.nounMessageId || "the liner");
         const messages = {
-            cutter_diameter_invalid: `حدّد سماكة الشفرة أكبر من صفر قبل تصدير مسارات ${noun}.`,
-            liner_narrower_than_cutter: `عرض ${noun} أصغر من سماكة الشفرة.`,
-            liner_extension_hits_piece: `امتداد ريشة ${noun} يتداخل مع قطعة مجاورة.`,
-            liner_extension_unsafe: `تعذر تمديد مسار ${noun} حتى خط القص.`,
-            strip_outside: `شريط ${noun} يخرج خارج الدرفة.`,
-            offset_invalid: `بعد ${noun} غير صالح.`,
-            width_invalid: `عرض ${noun} غير صالح.`,
-            side_unavailable: `جهة ${noun} غير متاحة لهذه الدرفة.`,
-            liner_start_invalid: `بداية ${noun} غير صالحة.`,
-            liner_length_invalid: `طول ${noun} غير صالح.`,
-            liner_span_exceeds_edge: `بداية ${noun} وطوله يتجاوزان طول الجهة.`,
-            liner_flat_end_unmachinable: "النهاية المستقيمة غير قابلة للتنفيذ بريشة دائرية في تمريرة واحدة، أو طول المنطقة أقصر من قطر الريشة.",
-            liner_span_on_corner: `بداية ${noun} أو نهايته تقع على انعطاف لا يملك اتجاهاً واحداً للنهاية المستقيمة.`,
+            cutter_diameter_invalid: "Specify a saw blade thickness above zero before exporting {0} toolpaths.",
+            liner_narrower_than_cutter: "The width of {0} is less than the saw blade thickness.",
+            liner_extension_hits_piece: "The {0} cutter extension overlaps an adjacent piece.",
+            liner_extension_unsafe: "Could not extend the {0} toolpath to the cutting line.",
+            strip_outside: "The {0} strip extends beyond the door.",
+            offset_invalid: "The {0} offset is invalid.",
+            width_invalid: "The {0} width is invalid.",
+            side_unavailable: "The {0} side is unavailable for this door.",
+            liner_start_invalid: "The {0} start position is invalid.",
+            liner_length_invalid: "The {0} length is invalid.",
+            liner_span_exceeds_edge: "The start and length of {0} exceed the side length.",
+            liner_flat_end_unmachinable: "The flat end cannot be machined by a circular cutter in one pass, or the region is shorter than the cutter diameter.",
+            liner_span_on_corner: "The {0} start or end falls on a corner without a single direction for a flat end.",
         };
-        const label = String((piece && (piece.label || piece.piece_no || piece.id)) || "").split(".")[0] || "؟";
-        const error = new Error(`الدرفة ${label}: ${messages[code] || code}`);
+        const label = String((piece && (piece.label || piece.piece_no || piece.id)) || "").split(".")[0] || "?";
+        const message = translate(messages[code] || code, [noun]);
+        const error = new Error(translate("Door {0}: {1}", [label, message]));
         error.linerExport = true;
         error.code = code;
         return error;
@@ -798,7 +817,12 @@
             return null;
         }
         if (!Array.isArray(local) || local.length < 3 || typeof liner.transformPoint !== "function") return null;
-        const turns = piece.rotated ? 1 : 0;
+        // A saved physical orientation is authoritative for imported DXF.
+        // The legacy bbox flag remains the fallback for old/System plans.
+        const turns = Number.isInteger(piece.rotation_quarter_turns)
+            ? piece.rotation_quarter_turns
+            : (Number.isInteger(piece.corner_rotation_quarter_turns)
+                ? piece.corner_rotation_quarter_turns : (piece.rotated ? 1 : 0));
         const mirrored = Boolean(piece.corner_mirrored);
         const originX = num(piece.x) * 10;
         const originY = num(piece.y) * 10;

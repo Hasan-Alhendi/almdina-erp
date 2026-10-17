@@ -124,7 +124,7 @@
     // Cutting plan rendering
     // =====================================================
 
-    function piece_edge_flags(piece) {
+    function piece_edge_flags(piece, geometryModel = null) {
         let left = 0;
         let right = 0;
         let top = 0;
@@ -132,7 +132,23 @@
         let edgeBreak = piece.edge_break ? 1 : 0;
         let edgeBreakOnly = piece.edge_break_only ? 1 : 0;
 
-        if (!piece.rotated) {
+        if (geometryModel && geometryModel.source === "dxf"
+            && Number.isInteger(piece.rotation_quarter_turns)) {
+            // Imported DXF geometry is already physically oriented. Rotate
+            // the original semantic bands only, never its stored contour.
+            const turns = ((piece.rotation_quarter_turns % 4) + 4) % 4;
+            left = piece.edge_long_left ? 1 : 0;
+            right = piece.edge_long_right ? 1 : 0;
+            top = piece.edge_width_top ? 1 : 0;
+            bottom = piece.edge_width_bottom ? 1 : 0;
+            for (let turn = 0; turn < turns; turn += 1) {
+                const previous = { left, top, right, bottom };
+                left = previous.bottom;
+                top = previous.left;
+                right = previous.top;
+                bottom = previous.right;
+            }
+        } else if (!piece.rotated) {
             left = piece.edge_long_left ? 1 : 0;
             right = piece.edge_long_right ? 1 : 0;
             top = piece.edge_width_top ? 1 : 0;
@@ -201,7 +217,7 @@
     }
 
     function render_piece_edge_lines(piece, geometryModel = null, clipId = "") {
-        const { left, right, top, bottom, edgeBreak, edgeBreakOnly } = piece_edge_flags(piece);
+        const { left, right, top, bottom, edgeBreak, edgeBreakOnly } = piece_edge_flags(piece, geometryModel);
         const geometry = window.AlmdinaClippedCornerGeometry;
         const isCornerPiece = Boolean(
             geometry
@@ -501,19 +517,19 @@
     }
 
     const LINER_TOOLPATH_MESSAGES = Object.freeze({
-        cutter_diameter_invalid: "حدّد سماكة الشفرة أكبر من صفر لمسارات اللاينر",
-        liner_narrower_than_cutter: "عرض اللاينر أصغر من سماكة الشفرة",
-        liner_extension_hits_piece: "امتداد اللاينر يتداخل مع قطعة أخرى",
-        liner_extension_unsafe: "تعذر تمديد مسار اللاينر بأمان",
-        strip_outside: "شريط اللاينر يخرج خارج الدرفة",
-        offset_invalid: "بعد اللاينر غير صالح",
-        width_invalid: "عرض اللاينر غير صالح",
-        side_unavailable: "جهة اللاينر غير متاحة لهذه الدرفة",
-        liner_start_invalid: "بداية اللاينر غير صالحة",
-        liner_length_invalid: "طول اللاينر غير صالح",
-        liner_span_exceeds_edge: "البداية والطول يتجاوزان طول الجهة",
-        liner_flat_end_unmachinable: "نهاية اللاينر المستقيمة غير قابلة للتنفيذ بهذه الريشة",
-        liner_span_on_corner: "بداية اللاينر أو نهايته تقع على انعطاف بلا اتجاه واحد",
+        cutter_diameter_invalid: "Specify a saw blade thickness above zero for {0} toolpaths",
+        liner_narrower_than_cutter: "The width of {0} is less than the saw blade thickness",
+        liner_extension_hits_piece: "The {0} extension overlaps another piece",
+        liner_extension_unsafe: "Could not extend the {0} toolpath safely",
+        strip_outside: "The {0} strip extends beyond the door",
+        offset_invalid: "The {0} offset is invalid",
+        width_invalid: "The {0} width is invalid",
+        side_unavailable: "The {0} side is unavailable for this door",
+        liner_start_invalid: "The {0} start position is invalid",
+        liner_length_invalid: "The {0} length is invalid",
+        liner_span_exceeds_edge: "The start and length exceed the side length",
+        liner_flat_end_unmachinable: "The flat {0} end cannot be machined with this cutter",
+        liner_span_on_corner: "The {0} start or end falls on a corner without one direction",
     });
 
     function samePlacedPiece(left, right) {
@@ -613,13 +629,17 @@
 
     function render_piece_overlays(frm, piece, geometryModel, sheet, frame) {
         const spec = pieceWithLinerSpec(frm, piece);
-        const overlays = guardLinerToolpath(
-            frm,
-            spec,
-            sheet,
-            frame,
-            drawingOverlays(spec)
-        );
+        // DXF paths are imported physical evidence. A synthetic redraw from
+        // order-side settings can reverse their orientation after a half-turn.
+        const overlays = geometryModel && geometryModel.source === "dxf"
+            ? (Array.isArray(piece.overlays) ? piece.overlays : [])
+            : guardLinerToolpath(
+                frm,
+                spec,
+                sheet,
+                frame,
+                drawingOverlays(spec)
+            );
         if (!overlays.length || !geometryModel) return "";
         const originX = num(geometryModel.placement.xCm) * 10;
         const originY = num(geometryModel.placement.yCm) * 10;
@@ -632,8 +652,8 @@
             if (overlay && overlay.error) {
                 const engine = window.AlmdinaMachiningOverlay;
                 const addon = engine && typeof engine.addon === "function" ? engine.addon(kind) : null;
-                const noun = addon && addon.nounAr ? addon.nounAr : "اللاينر";
-                const message = (LINER_TOOLPATH_MESSAGES[overlay.error] || overlay.error).replaceAll("اللاينر", noun);
+                const noun = translate(addon && addon.nounMessageId || "the liner");
+                const message = translate(LINER_TOOLPATH_MESSAGES[overlay.error] || overlay.error, [noun]);
                 return `<text data-liner-toolpath-error="${escape_html(overlay.error)}" x="50" y="50" text-anchor="middle" font-size="8" fill="#9a6207">${escape_html(message)}</text>`;
             }
             const points = geometry && Array.isArray(geometry.path)

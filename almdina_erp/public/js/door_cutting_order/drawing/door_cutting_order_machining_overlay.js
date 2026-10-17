@@ -16,6 +16,7 @@
             start: "liner_start_cm",
             length: "liner_length_cm",
             title: "Liner",
+            nounMessageId: "the liner",
             nounAr: "اللاينر",
         }),
         Object.freeze({
@@ -29,6 +30,7 @@
             start: "back_groove_start_cm",
             length: "back_groove_length_cm",
             title: "Back Groove",
+            nounMessageId: "the back groove",
             nounAr: "فرزة الظهر",
         }),
         Object.freeze({
@@ -42,6 +44,7 @@
             start: "recessed_handle_start_cm",
             length: "recessed_handle_length_cm",
             title: "Recessed Handle",
+            nounMessageId: "the recessed handle",
             nounAr: "مسكة الغطس",
         }),
     ]);

@@ -10,6 +10,8 @@ import html
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Sequence
 
+from frappe import _
+
 from almdina_erp.almdina_erp.domain.cutting import dxf_issue as codes
 from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
     DxfIssueTarget,
@@ -677,6 +679,14 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
             code,
             issue.category,
         )
+    if code == codes.REGULAR_EDGE_ORIENTATION_UNRESOLVED:
+        if str(params.get("reason") or "") == "machining_invalid":
+            problem = _("The machining paths do not prove a safe orientation for this door.")
+            action = _("Check the machining paths and their saved reference sides then re-upload the DXF.")
+        else:
+            problem = _("The machining paths permit multiple orientations that move edge bands to different physical sides.")
+            action = _("Add a distinct machining reference that establishes the door orientation then re-upload the DXF.")
+        return PresentedDxfError(problem, target_text, action, code, issue.category)
     if code == codes.CORNER_EDGE_UNRESOLVED:
         reason = str(params.get("reason") or "")
         if reason == "break_thickness_unknown":
