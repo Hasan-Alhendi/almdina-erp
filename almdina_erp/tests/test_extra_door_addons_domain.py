@@ -174,6 +174,18 @@ class TestExtraDoorAddonsDomain(unittest.TestCase):
         self.assertEqual(first["extra_double"], 1)
         self.assertEqual(second["extra_full_door_double"], 1)
 
+    def test_glass_addons_use_the_same_pricing_as_a_regular_piece(self) -> None:
+        glass = calculate_extra_addon_pricing(
+            [ExtraAddonPieceInput(piece_type="Glass", qty=2, liner=True)],
+            rates=self.rates,
+        )
+        regular = calculate_extra_addon_pricing(
+            [ExtraAddonPieceInput(piece_type="Regular", qty=2, liner=True)],
+            rates=self.rates,
+        )
+        self.assertEqual(glass.total_usd, regular.total_usd)
+        self.assertEqual(glass.pieces[0].selected_codes, regular.pieces[0].selected_codes)
+
 
 if __name__ == "__main__":
     unittest.main()

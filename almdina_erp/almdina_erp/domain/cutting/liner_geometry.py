@@ -23,6 +23,7 @@ from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
     CutDimensionError,
     l_shaped_raw_cut,
 )
+from almdina_erp.almdina_erp.domain.orders.piece_policy import GLASS_TYPE
 from almdina_erp.almdina_erp.domain.orders.piece_policy import (
     CLIPPED_CORNER_TYPE,
     L_SHAPED_CORNER_TYPE,
@@ -79,7 +80,7 @@ def available_liner_sides(piece_type: str | None) -> tuple[str, ...]:
         return OUTER_SIDES + (SIDE_BREAK, SIDE_BREAK_ONLY)
     if kind == L_SHAPED_CORNER_TYPE:
         return OUTER_SIDES + (SIDE_BREAK,)
-    if kind == "Regular":
+    if kind in {"Regular", GLASS_TYPE}:
         return OUTER_SIDES
     return ()
 

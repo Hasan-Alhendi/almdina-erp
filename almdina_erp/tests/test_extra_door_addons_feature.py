@@ -25,12 +25,20 @@ def _fields(path: Path) -> dict[str, dict]:
     return {field["fieldname"]: field for field in payload["fields"]}
 
 
-def test_piece_type_contract_has_only_four_supported_types() -> None:
-    expected = "Regular\nClipped Corner\nL-Shaped Corner\nSpecial"
+def test_piece_type_contract_includes_glass_without_restoring_extra() -> None:
+    expected = "Regular\nClipped Corner\nL-Shaped Corner\nSpecial\nGlass"
     assert _fields(DETAIL)["piece_type"]["options"] == expected
     assert _fields(PLAN_PIECE)["piece_type"]["options"] == expected
+    margin = _fields(DETAIL)["glass_margin_mm"]
+    assert margin["fieldtype"] == "Float"
+    assert margin["label"] == "Glass Margin (MM)"
+    assert "default" not in margin
     domain = DOMAIN.read_text(encoding="utf-8")
+    policy = (ROOT / "almdina_erp" / "domain" / "orders" / "piece_policy.py").read_text(
+        encoding="utf-8"
+    )
     assert "EXTRA_PIECE_TYPE" not in domain
+    assert 'GLASS_TYPE = "Glass"' in policy
 
 
 def test_selections_are_requirements_while_price_snapshots_are_protected() -> None:
@@ -99,6 +107,7 @@ def test_pricing_plan_quantity_and_mutation_impacts_stay_in_their_owners() -> No
     assert "extra_liner" in cost_fields
     assert "extra_liner" not in plan_fields
     assert "liner_reference_side" in plan_fields
+    assert "glass_margin_mm" in plan_fields
     assert "liner_offset_cm" in plan_fields
     assert "liner_width_cm" in plan_fields
     assert "extra_back_groove" in cost_fields

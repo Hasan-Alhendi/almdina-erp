@@ -80,6 +80,7 @@
         if (value === "Special") return translate("Special");
         if (value === "Clipped Corner") return translate("Clipped corner");
         if (value === "L-Shaped Corner") return translate("L-shaped corner");
+        if (value === "Glass") return translate("Glass");
         if (value === "Regular" || value == null || value === "") return translate("Regular");
         return String(value);
     }

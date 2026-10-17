@@ -565,6 +565,8 @@ Row {0}: Width must be greater than zero.,السطر {0}: يجب أن يكون �
 Row {0}: Length must be greater than zero.,السطر {0}: يجب أن يكون الطول أكبر من صفر.
 Row {0}: Quantity must be a positive integer.,السطر {0}: يجب أن يكون العدد رقمًا صحيحًا أكبر من صفر.
 Row {0}: Piece Type is invalid.,السطر {0}: نوع الدرفة غير صالح.
+Row {0}: Glass margin must be greater than zero.,السطر {0}: هامش البلور يجب أن يكون أكبر من صفر.
+Row {0}: The inner glass opening must have a positive width and length.,السطر {0}: فتحة البلور الداخلية يجب أن يبقى عرضها وطولها أكبر من صفر.
 Row {0}: Clipped Corner Position is invalid.,السطر {0}: موضع الزاوية المقصوصة غير صالح.
 Row {0} Clipped Corner Width CM,قص الزاوية على عرض الدرفة في السطر {0} (سم)
 Row {0} Clipped Corner Length CM,قص الزاوية على طول الدرفة في السطر {0} (سم)
@@ -636,6 +638,9 @@ None,لا يوجد
 تسليم,تسليم
 Piece Type,نوع الدرفة
 Regular,عادية
+Glass,درفة بلور
+Glass door,درفة بلور
+Glass Margin (MM),هامش البلور (مم)
 Clipped Corner,الزاوية الكسر
 Special,خاصة
 Clipped Corner Position,موضع الزاوية المقصوصة
@@ -766,6 +771,7 @@ Edge m,متر قشاط
 Enter the piece width and length before opening the shape.,أدخل عرض الدرفة وطولها أولًا، ثم افتح توثيق الشكل.
 Export DXF for AutoCAD,تصدير DXF لأوتوكاد
 DXF export failed its compatibility self-check and was not downloaded.,فشل ملف DXF في فحص التوافق الداخلي، لذلك تم منع تنزيل ملف تالف.
+The Glass opening is missing from this cutting plan. Recalculate the system plan before exporting DXF.,فتحة البلور غير موجودة في خطة القص هذه. أعد حساب خطة النظام قبل تصدير DXF.
 Preparing an AutoCAD-compatible DXF...,جاري تجهيز ملف DXF المتوافق مع AutoCAD...
 Validated AutoCAD-compatible DXF exported successfully.,تم تصدير ملف DXF متوافق مع AutoCAD بنجاح.
 Downloading the uploaded DXF file...,جاري تنزيل ملف DXF المرفوع...
@@ -2735,6 +2741,15 @@ Edit customers,تعديل الزبائن
 Edit the existing customer details.,تعديل بيانات الزبون الحالية.
 Delete customer,حذف زبون
 Delete a customer who is not linked to any saved orders.,حذف زبون غير مرتبط بطلبات محفوظة.
+Glass Door,درفة بلور
+Glass Margin,هامش البلور
+Glass Opening Dimensions,أبعاد فتحة البلور
+Opening Width,عرض الفتحة
+Opening Length,طول الفتحة
+Apply Shape,اعتماد الشكل
+Invalid Glass Margin,هامش البلور غير صالح
+Glass margin is measured from the entered outer size. The cut size can differ after edge banding.,هامش البلور يُقاس من المقاس الخارجي المدخل. مقاس القص قد يختلف بعد القشاط.
+Glass shape applied,تم اعتماد شكل البلور
 Saw blade thickness conflict: {0} mm versus {1} mm in the cutting plan. DXF was not exported.,سماكة الشفرة متعارضة: {0} مم مقابل {1} مم في خطة القص، ولم يُصدَّر الملف.
 Door {0}: {1},الدرفة {0}: {1}
 the liner,اللاينر
