@@ -26,6 +26,7 @@ on:
           - al129_customer
           - al129_new
           - al131_edit
+          - al129_backend
       comparison_base:
         description: PR base branch used for AL128 before/after measurements
         required: true
@@ -56,7 +57,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: ${{ fromJSON(github.event_name == 'pull_request' && '["full","al128_desk","al128_performance","al129_customer","al129_new","al131_edit"]' || format('["{0}"]', inputs.suite)) }}
+        suite: ${{ fromJSON(github.event_name == 'pull_request' && '["full","al128_desk","al128_performance","al129_customer","al129_new","al131_edit","al129_backend"]' || format('["{0}"]', inputs.suite)) }}
     timeout-minutes: 60
 
     services:
@@ -137,7 +138,7 @@ jobs:
           redis-cli -h 127.0.0.1 -p 11000 ping | grep -qx PONG
 
       - name: Require ALMADINA-128 target runtime refs
-        if: matrix.suite != 'full'
+        if: matrix.suite != 'full' && matrix.suite != 'al129_backend'
         env:
           FRAPPE_REF: ${{ 'v16.17.5' }}
           ERPNEXT_REF: ${{ 'v16.17.0' }}
@@ -291,7 +292,7 @@ jobs:
           echo "DCO_AL128_FIXTURE_FILE=$DCO_AL128_FIXTURE_FILE" >> "$GITHUB_ENV"
 
       - name: Prepare isolated ALMADINA-129 Desk fixtures
-        if: startsWith(matrix.suite, 'al129_')
+        if: matrix.suite == 'al129_new' || matrix.suite == 'al129_customer'
         env:
           DCO_AL129_FIXTURE_FILE: ${{ runner.temp }}/al129-desk-fixtures.json
         run: |
@@ -318,26 +319,66 @@ jobs:
           test -s "$DCO_DESK_FIXTURE_FILE"
           echo "DCO_DESK_FIXTURE_FILE=$DCO_DESK_FIXTURE_FILE" >> "$GITHUB_ENV"
 
+      - name: Run pinned ALMADINA-129 database and native Save integration
+        if: matrix.suite == 'al129_backend'
+        env:
+          AL129_DB_ROOT_HOST: 127.0.0.1
+          AL129_DB_ROOT_USER: root
+          AL129_DB_ROOT_PASSWORD: root
+          AL129_CONCURRENCY_EVIDENCE_FILE: ${{ runner.temp }}/al129-concurrency-evidence.json
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/frappe-bench"
+          bench --site test.localhost set-config allow_tests true
+          bench --site test.localhost run-tests --module almdina_erp.tests.test_new_order_recovery_integration \
+            --test test_concurrent_database_inserts_reject_duplicate_creation_token \
+            2>&1 | tee "$RUNNER_TEMP/al129-race.log"
+          grep -Eq 'Ran 1 tests? in ' "$RUNNER_TEMP/al129-race.log"
+          test -s "$AL129_CONCURRENCY_EVIDENCE_FILE"
+          grep -Fq '"status": "PASS"' "$AL129_CONCURRENCY_EVIDENCE_FILE"
+          bench --site test.localhost run-tests --module almdina_erp.tests.test_new_order_recovery_integration \
+            --test test_lost_response_reconciles_to_one_native_insert \
+            --test test_reconciliation_rejects_unauthenticated_token_probing \
+            --test test_unbound_identity_is_proven_without_creating_a_dco \
+            --test test_acknowledged_creation_binding_is_immutable \
+            --test test_insert_binds_token_to_session_user_and_rejects_malformed_token \
+            --test test_reconciliation_scopes_tokens_and_checks_real_document_read_permission \
+            2>&1 | tee "$RUNNER_TEMP/al129-native-save.log"
+          grep -Eq 'Ran 6 tests? in ' "$RUNNER_TEMP/al129-native-save.log"
+        timeout-minutes: 15
+
+      - name: Upload ALMADINA-129 database evidence
+        if: always() && matrix.suite == 'al129_backend'
+        uses: actions/upload-artifact@v4
+        with:
+          name: al129-mariadb-token-race
+          path: |
+            ${{ runner.temp }}/al129-concurrency-evidence.json
+            ${{ runner.temp }}/al129-race.log
+            ${{ runner.temp }}/al129-native-save.log
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Install Chromium for targeted Desk certification
-        if: matrix.suite != 'full'
+        if: matrix.suite != 'full' && matrix.suite != 'al129_backend'
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Install Playwright and Chromium for targeted Desk certification
-        if: matrix.suite != 'full'
+        if: matrix.suite != 'full' && matrix.suite != 'al129_backend'
         run: |
           python -m pip install 'pytest>=9,<10' 'playwright==1.55.0'
           python -m playwright install --with-deps chromium
 
       - name: Build Almdina ERP Desk assets
-        if: matrix.suite != 'full'
+        if: matrix.suite != 'full' && matrix.suite != 'al129_backend'
         run: |
           cd "$RUNNER_TEMP/frappe-bench"
           bench build --app almdina_erp
 
       - name: Start isolated Frappe Desk server
-        if: matrix.suite != 'full'
+        if: matrix.suite != 'full' && matrix.suite != 'al129_backend'
         run: |
           set -euo pipefail
           echo '127.0.0.1 test.localhost' | sudo tee -a /etc/hosts >/dev/null
@@ -503,6 +544,10 @@ jobs:
 
       - name: Run Almdina ERP tests
         if: matrix.suite == 'full'
+        env:
+          AL129_DB_ROOT_HOST: 127.0.0.1
+          AL129_DB_ROOT_USER: root
+          AL129_DB_ROOT_PASSWORD: root
         run: |
           cd "$RUNNER_TEMP/frappe-bench"
           bench --site test.localhost set-config allow_tests true
