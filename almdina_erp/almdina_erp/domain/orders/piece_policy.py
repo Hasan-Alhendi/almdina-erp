@@ -7,11 +7,11 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Mapping
 
 from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import MM_PER_CM
+from almdina_erp.almdina_erp.domain.orders.piece_types import GLASS_TYPE
 
 
 CLIPPED_CORNER_TYPE = "Clipped Corner"
 L_SHAPED_CORNER_TYPE = "L-Shaped Corner"
-GLASS_TYPE = "Glass"
 CORNER_CUT_TYPES = frozenset({CLIPPED_CORNER_TYPE, L_SHAPED_CORNER_TYPE})
 PIECE_TYPES = frozenset(
     {"Regular", "Clipped Corner", "L-Shaped Corner", "Special", GLASS_TYPE}
