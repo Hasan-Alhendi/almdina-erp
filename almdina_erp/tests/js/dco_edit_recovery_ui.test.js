@@ -23,6 +23,8 @@ let clipboardCopy = null;
 let pauseRemovalHook = null;
 let pauseDerivedRebuild = null;
 let recoveryDiscoveries = 0;
+let serverDocumentReads = 0;
+let capabilityRefreshes = 0;
 const recoveryAlerts = [];
 
 function makeDialog(options) {
@@ -99,7 +101,10 @@ const fakeWindow = {
     addEventListener(name, callback) { windowListeners.set(name, callback); },
     AlmdinaPermissions: {
         canDocument() { return permission; },
-        async refresh() { return { capabilities: { edit_order: permission } }; },
+        async refresh() {
+            capabilityRefreshes += 1;
+            return { capabilities: { edit_order: permission } };
+        },
     },
     AlmdinaOrderRevisionUX: {
         canOfferEditSession(frm) {
@@ -228,6 +233,7 @@ const fakeFrappe = {
         get_field_display_status(df) { return df.fieldname === "edge_break" ? "Read" : "Write"; },
     },
     async call(options) {
+        serverDocumentReads += 1;
         assert.equal(options.method, "frappe.client.get");
         assert.equal(options.args.doctype, "Door Cutting Order");
         assert.equal(options.args.name, fakeWindow.cur_frm.doc.name);
@@ -471,6 +477,41 @@ async function settle() {
     assert.ok(!structuralForm.doc.pieces.includes(removedRow), "rows removed by the saved draft leave the live child model");
     assert.ok(scriptEvents.some((event) => event.event === "before_pieces_remove" && event.name === "EDIT-ROW-3"));
     assert.ok(scriptEvents.some((event) => event.event === "pieces_remove" && event.name === "EDIT-ROW-3"));
+
+    // 10/50/100 local piece additions must use bounded server calls.
+    // Keep the actual Frappe Desk timings as a separate required gate.
+    for (const count of [10, 50, 100]) {
+        selectedRecord = makeRecord({
+            payload: fakeWindow.AlmdinaDcoRecovery.Projection.createPayload({
+                dco: fakeWindow.AlmdinaDcoRecovery.Projection.createDcoInput({
+                    customer: "BULK-RESTORE",
+                    pieces: Array.from({ length: count }, (_, index) => ({
+                        name: `e4c16a0d-6149-4d3c-9b70-${index.toString(16).padStart(12, "0")}`,
+                        width_cm: 20 + index,
+                        length_cm: 40,
+                        qty: 1,
+                    })),
+                }),
+                dirtyScope: "DCO",
+            }),
+        });
+        const batchForm = form();
+        fakeWindow.cur_frm = batchForm;
+        await handlers["Door Cutting Order"].onload(batchForm);
+        const beforeReads = serverDocumentReads;
+        const beforeCapabilities = capabilityRefreshes;
+        dialogs.at(-1).wrapper.fire("continue");
+        for (let attempt = 0; attempt < 200 && !batchForm.dirtyState; attempt += 1) {
+            await new Promise((resolve) => setImmediate(resolve));
+        }
+        assert.equal(batchForm.dirtyState, true, `restore ${count} pieces reached a dirty, explicit-Save form`);
+        assert.equal(batchForm.doc.pieces.length, count);
+        assert.equal(serverDocumentReads - beforeReads, 3,
+            `restore ${count} pieces uses initial version read plus two operation-boundary reads`);
+        assert.equal(capabilityRefreshes - beforeCapabilities, 2,
+            `restore ${count} pieces refreshes capabilities at operation boundaries only`);
+        assert.equal(officialSaves, 1, "bulk recovery cannot trigger an extra official Save");
+    }
 
     const interruptedForm = form();
     const interruptedRemovedRow = { doctype: "Door Cutting Order Detail", name: "EDIT-ROW-3", idx: 3, width_cm: 30 };
