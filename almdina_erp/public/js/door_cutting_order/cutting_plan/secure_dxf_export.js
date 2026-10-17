@@ -1116,7 +1116,8 @@
         });
     }
 
-    function downloadValidatedPlan(data, orderName, frm) {
+    function downloadValidatedPlan(data, orderName, frm, ownsExport = null) {
+        if (ownsExport && !ownsExport()) return null;
         const plan = (data && data.plan) || {};
         applyOrderLinerSpecs(plan, frm);
         if (!(plan.sheets || []).length) {
@@ -1144,6 +1145,7 @@
             freeze: true,
             freeze_message: __("Preparing an AutoCAD-compatible DXF..."),
         }).then(response => {
+            if (ownsExport && !ownsExport()) return null;
             const output = (response && response.message) || {};
             if (!output.filename || !output.content_b64) {
                 throw new Error("AutoCAD DXF normalization response is incomplete.");
@@ -1192,14 +1194,29 @@
     }
 
     function validatedExport(frm) {
-        const args = { doc: JSON.stringify(frm.doc) };
-        if (!frm.is_new()) args.order_name = frm.doc.name;
+        const serializedDoc = JSON.stringify(frm.doc);
+        const sourceForm = { doc: JSON.parse(serializedDoc) };
+        const args = { doc: serializedDoc };
+        if (!frm.is_new()) args.order_name = sourceForm.doc.name;
+        const context = window.AlmdinaDocumentContext;
+        const owner = context && typeof context.capture === "function" ? context.capture(frm) : null;
+        const ownsExport = () => Boolean(owner && context && typeof context.isCurrent === "function"
+            && context.isCurrent(frm, owner));
 
-        return fetchValidatedPlan(args).then(r => downloadValidatedPlan(r.message, frm.doc.name, frm));
+        return fetchValidatedPlan(args).then(r => {
+            if (!ownsExport()) return null;
+            return downloadValidatedPlan(r.message, sourceForm.doc.name, sourceForm, ownsExport);
+        });
     }
 
     function exportOrderDxf(orderName, planSource = null, options = null) {
         const args = { order_name: orderName };
+        // By-name exports are independent of the visible Desk form. If a caller
+        // supplies form-only add-on data, freeze the matching order at invocation.
+        const sourceDoc = options && options.frm && options.frm.doc;
+        const sourceForm = sourceDoc && String(sourceDoc.name || "") === String(orderName || "")
+            ? { doc: JSON.parse(JSON.stringify(sourceDoc)) }
+            : null;
         if (planSource) args.plan_source = planSource;
         if (shouldDownloadOriginalUpload(planSource, options)) {
             return fetchOriginalUploadedDxf(args).then(r => {
@@ -1212,7 +1229,7 @@
             });
         }
         return fetchValidatedPlan(args).then(r =>
-            downloadValidatedPlan(r.message, orderName, options && options.frm)
+            downloadValidatedPlan(r.message, orderName, sourceForm)
         );
     }
 
