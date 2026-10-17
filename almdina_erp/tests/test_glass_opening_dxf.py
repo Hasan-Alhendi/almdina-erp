@@ -9,6 +9,8 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
     serialize_geometry_mm,
 )
 from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
+    CATEGORY_DIMENSIONS,
+    CUT_SIZE_MISMATCH,
     FORBIDDEN_ROTATION,
     piece_target,
 )
@@ -37,7 +39,11 @@ from almdina_erp.almdina_erp.domain.cutting.primitives import (
     expand_piece_groups,
     make_placed_piece,
 )
-from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import present_issue
+from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import (
+    present_issue,
+    present_issues,
+    render_error_cards_html,
+)
 from almdina_erp.almdina_erp.domain.cutting.dxf_issue import issue
 from almdina_erp.almdina_erp.services.dxf_import_service import (
     _glass_opening_issues,
@@ -347,8 +353,8 @@ def test_import_issue_names_the_door_only_after_identity_is_known():
 
     assert issues[0].code == GLASS_MARGIN_MISMATCH
     assert presented.target == "الدرفة 8."
-    assert "65" in presented.details[0]
-    assert "60" in presented.details[0]
+    assert "60" in presented.highlight
+    assert "65" in presented.highlight
     assert "DXF Validation Failed" not in presented.problem
 
 
@@ -363,3 +369,176 @@ def test_failed_glass_validation_is_raised_before_plan_persistence():
     assert error_at < save_at
     assert parse_at < save_at
     assert _glass_opening_issues([]) == []
+
+
+def _side(decision, name):
+    return next(row for row in decision.params["sides"] if row["side"] == name)
+
+
+def test_margin_message_shows_order_band_expected_actual_and_tolerance():
+    decision = _check(OUTER, (_rect(60, 65, 456, 660),), long_left_mm=2)
+    left = _side(decision, "long_left")
+    presented = present_issue(issue(
+        decision.code,
+        decision.category,
+        target=piece_target(source_piece_no=8, copy_no=1),
+        params=decision.params,
+    ))
+    card = render_error_cards_html([issue(
+        decision.code,
+        decision.category,
+        target=piece_target(source_piece_no=8, copy_no=1),
+        params=decision.params,
+    )])
+
+    assert left["order_margin_mm"] == 65
+    assert left["band_mm"] == 2
+    assert left["expected_inset_mm"] == 63
+    assert left["actual_inset_mm"] == 60
+    assert left["delta_mm"] == pytest.approx(-3)
+    assert decision.params["tolerance_mm"] == TOLERANCE
+    assert "● اليسار" in card
+    assert "63" in card and "60" in card and "-3" in card
+    assert "0.25" in card
+    assert "6.5 سم" in presented.highlight or "6.5 سم" in "".join(presented.details)
+    assert "التفاصيل الهندسية" in card
+
+
+def test_rotated_message_uses_the_validator_side_map():
+    decision = _check(
+        _rect(0, 0, 725, 521),
+        (_rect(65, 65, 660, 461),),
+        rotated=True,
+        allow_rotation=True,
+        long_left_mm=2,
+    )
+    left = _side(decision, "long_left")
+    top = _side(decision, "width_top")
+
+    assert decision.params["orientation"] == "orientation_cw"
+    assert left["expected_inset_mm"] == 63
+    assert left["actual_inset_mm"] == 60
+    assert left["dxf_side"] == "top"
+    assert top["actual_inset_mm"] == 65
+    assert top["violates"] is False
+
+
+def test_missing_margin_is_not_presented_as_zero():
+    decision = _check(OUTER, (HOLE,), margin_mm=None, long_left_mm=2)
+    presented = present_issue(issue(
+        decision.code,
+        decision.category,
+        target=piece_target(source_piece_no=8, copy_no=1),
+        params=decision.params,
+    ))
+    text = " ".join((presented.problem, presented.highlight, *presented.details, presented.action))
+
+    assert decision.code == GLASS_MARGIN_MISMATCH
+    assert decision.params["margin_known"] is False
+    assert decision.params["order_margin_mm"] is None
+    assert "غير محفوظ" in text
+    assert "هامش البلور في الطلب 0 مم" not in text
+    assert "0 مم" not in presented.problem
+    assert "0 مم" not in presented.highlight
+
+
+def test_stored_zero_margin_reports_the_real_negative_inset():
+    decision = _check(OUTER, (HOLE,), margin_mm=0, long_left_mm=2)
+    presented = present_issue(issue(
+        decision.code,
+        decision.category,
+        target=piece_target(source_piece_no=8, copy_no=1),
+        params=decision.params,
+    ))
+    text = " ".join((presented.problem, presented.highlight, presented.action, *presented.details))
+
+    assert decision.params["margin_known"] is True
+    assert decision.params["order_margin_mm"] == 0
+    assert decision.params["expected_inset_mm"] == -2
+    assert "0 مم" in text
+    assert "-2" in text
+    assert "غير محفوظ" not in text
+    assert "اخفض قشاط" not in presented.action
+
+
+def test_each_glass_code_has_a_specific_reason():
+    samples = {
+        GLASS_OPENING_MISSING: _check(OUTER, ()),
+        GLASS_MULTIPLE_OPENINGS: _check(OUTER, (HOLE, HOLE)),
+        GLASS_OPENING_INVALID: _check(OUTER, (((65, 65), (456, 65), (456, 660)),)),
+        GLASS_OPENING_OUTSIDE: _check(OUTER, (_rect(0, 65, 456, 660),)),
+        GLASS_OPENING_UNEXPECTED: _check(OUTER, (HOLE,), piece_type="Regular"),
+        GLASS_GEOMETRY_AMBIGUOUS: None,
+    }
+    ambiguous = present_issue(issue(
+        GLASS_GEOMETRY_AMBIGUOUS,
+        "IDENTITY",
+        target=piece_target(),
+        params={"identity_unproven": True, "reason": "same_size_opening_not_unique"},
+    ))
+    assert "رقم درفة" in ambiguous.highlight
+    assert "الدرفة" not in ambiguous.target
+    for code, decision in samples.items():
+        if decision is None:
+            continue
+        presented = present_issue(issue(decision.code, decision.category, params=decision.params))
+        assert presented.code == code
+        assert presented.highlight
+        assert "DXF Validation Failed" not in presented.problem
+    invalid = samples[GLASS_OPENING_INVALID]
+    assert invalid.params["geometry_errors"] == ["not_rectangle"]
+    assert "ليست مستطيلاً" in present_issue(issue(
+        invalid.code, invalid.category, params=invalid.params
+    )).highlight
+
+
+def test_identical_glass_copies_group_and_different_values_stay_separate():
+    def glass_issue(copy_no, hole):
+        decision = _check(OUTER, (hole,))
+        return issue(
+            decision.code,
+            decision.category,
+            target=piece_target(source_piece_no=8, copy_no=copy_no),
+            params=decision.params,
+        )
+
+    same = present_issues([
+        glass_issue(1, _rect(60, 65, 456, 660)),
+        glass_issue(2, _rect(60, 65, 456, 660)),
+    ])
+    different = present_issues([
+        glass_issue(1, _rect(60, 65, 456, 660)),
+        glass_issue(2, _rect(50, 65, 456, 660)),
+    ])
+    mixed = present_issues([
+        glass_issue(1, _rect(60, 65, 456, 660)),
+        issue(GLASS_OPENING_MISSING, "TOPOLOGY", target=piece_target(source_piece_no=8, copy_no=2)),
+    ])
+
+    assert len(same) == 1
+    assert same[0].target == "الدرفة 8 — النسختان 1 و2."
+    assert len(different) == 2
+    assert len(mixed) == 2
+
+
+def test_glass_dialog_escapes_untrusted_text_and_leaves_other_errors_unchanged():
+    glass = issue(
+        GLASS_OPENING_INVALID,
+        "TOPOLOGY",
+        target=piece_target(source_piece_no=8, copy_no=1),
+        params={"geometry_errors": ["<script>alert(1)</script>"], "margin_known": True, "order_margin_mm": 65, "tolerance_mm": 0.25},
+    )
+    other = issue(
+        CUT_SIZE_MISMATCH,
+        CATEGORY_DIMENSIONS,
+        target=piece_target(source_piece_no=3, copy_no=1),
+        params={"actual_width_cm": 10, "actual_height_cm": 20, "expected_width_cm": 11, "expected_height_cm": 21},
+    )
+    glass_html = render_error_cards_html([glass])
+    other_html = render_error_cards_html([other])
+
+    assert "<script>" not in glass_html
+    assert "&lt;script&gt;" in glass_html
+    assert "التفاصيل الهندسية" not in other_html
+    assert "ما المشكلة؟" in other_html
+    assert "مقاس القص غير مطابق" in other_html

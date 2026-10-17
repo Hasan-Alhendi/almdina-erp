@@ -97,8 +97,17 @@ class GlassIdentityExpectation:
     is_glass: bool
 
 
+_DOOR_SIDES = ("long_left", "long_right", "width_top", "width_bottom")
+
+
 def _decimal(value: object) -> Decimal:
     return Decimal(str(value if value not in (None, "") else 0))
+
+
+def _known_decimal(value: object) -> Decimal | None:
+    if value in (None, ""):
+        return None
+    return Decimal(str(value))
 
 
 def cut_insets_mm(
@@ -215,24 +224,117 @@ def _best_mapping(
     expected: Mapping[str, Decimal],
     mappings: tuple[tuple[tuple[str, str], ...], ...],
 ) -> tuple[float, str, float, Decimal]:
+    delta, _name, pairs = _select_mapping(actual, expected, mappings, ("",) * len(mappings))
+    worst_side = ""
+    worst_actual = 0.0
+    worst_expected = Decimal(0)
+    worst_delta = -1.0
+    for dxf_side, door_side in pairs:
+        difference = abs(actual[dxf_side] - float(expected[door_side]))
+        if difference > worst_delta:
+            worst_delta = difference
+            worst_side = door_side
+            worst_actual = actual[dxf_side]
+            worst_expected = expected[door_side]
+    return delta, worst_side, worst_actual, worst_expected
+
+
+def _select_mapping(
+    actual: Mapping[str, float],
+    expected: Mapping[str, Decimal],
+    mappings: tuple[tuple[tuple[str, str], ...], ...],
+    names: tuple[str, ...],
+) -> tuple[float, str, tuple[tuple[str, str], ...]]:
     best_delta = None
-    best: tuple[float, str, float, Decimal] | None = None
-    for mapping in mappings:
+    best_name = names[0]
+    best_pairs = mappings[0]
+    for name, mapping in zip(names, mappings, strict=True):
         worst_delta = -1.0
-        worst: tuple[float, str, float, Decimal] | None = None
         for dxf_side, door_side in mapping:
-            delta = abs(actual[dxf_side] - float(expected[door_side]))
-            if delta > worst_delta:
-                worst_delta = delta
-                worst = (delta, door_side, actual[dxf_side], expected[door_side])
-        if worst is None:
-            continue
+            difference = abs(actual[dxf_side] - float(expected[door_side]))
+            if difference > worst_delta:
+                worst_delta = difference
         if best_delta is None or worst_delta < best_delta:
             best_delta = worst_delta
-            best = worst
-    if best is None:
-        raise ValueError("glass opening mapping is empty")
-    return best
+            best_name = name
+            best_pairs = mapping
+    return float(best_delta or 0.0), best_name, best_pairs
+
+
+def _size_mm(points: Sequence[Sequence[float]]) -> tuple[float, float] | None:
+    if len(points) < 2:
+        return None
+    min_x, min_y, max_x, max_y = bbox(points)
+    return max_x - min_x, max_y - min_y
+
+
+def _side_rows(
+    actual: Mapping[str, float],
+    expected: Mapping[str, Decimal],
+    bands: Mapping[str, Decimal],
+    mapping: tuple[tuple[str, str], ...],
+    *,
+    order_margin: Decimal | None,
+    tolerance: float,
+) -> list[dict[str, object]]:
+    dxf_for_door = {door_side: dxf_side for dxf_side, door_side in mapping}
+    rows: list[dict[str, object]] = []
+    for door_side in _DOOR_SIDES:
+        dxf_side = dxf_for_door[door_side]
+        measured = float(actual[dxf_side])
+        inset = expected[door_side]
+        delta = measured - float(inset)
+        rows.append({
+            "side": door_side,
+            "dxf_side": dxf_side,
+            "order_margin_mm": None if order_margin is None else float(order_margin),
+            "band_mm": float(bands[door_side]),
+            "expected_inset_mm": float(inset),
+            "actual_inset_mm": measured,
+            "delta_mm": delta,
+            "violates": float(inset) <= 0 or abs(delta) > tolerance,
+        })
+    return rows
+
+
+def _failure_context(
+    *,
+    outer: Sequence[Sequence[float]],
+    hole: Sequence[Sequence[float]] | None,
+    margin: Decimal | None,
+    tolerance: float,
+    rotated: bool,
+    finished_width_mm: object = None,
+    finished_length_mm: object = None,
+) -> dict[str, object]:
+    params: dict[str, object] = {
+        "margin_known": margin is not None,
+        "order_margin_mm": None if margin is None else float(margin),
+        "tolerance_mm": float(tolerance),
+        "rotated": bool(rotated),
+    }
+    outer_size = _size_mm(outer)
+    if outer_size is not None:
+        params["cut_width_mm"] = outer_size[0]
+        params["cut_height_mm"] = outer_size[1]
+    if hole is not None:
+        hole_size = _size_mm(hole)
+        if hole_size is not None:
+            params["opening_width_mm"] = hole_size[0]
+            params["opening_height_mm"] = hole_size[1]
+    finished_width = _known_decimal(finished_width_mm)
+    finished_length = _known_decimal(finished_length_mm)
+    if finished_width is not None and finished_width > 0:
+        params["finished_width_mm"] = float(finished_width)
+    if finished_length is not None and finished_length > 0:
+        params["finished_length_mm"] = float(finished_length)
+    if margin is not None and margin > 0 and finished_width is not None and finished_length is not None:
+        opening_width = finished_width - (margin * 2)
+        opening_length = finished_length - (margin * 2)
+        if opening_width > 0 and opening_length > 0:
+            params["expected_opening_width_mm"] = float(opening_width)
+            params["expected_opening_length_mm"] = float(opening_length)
+    return params
 
 
 def validate_glass_dxf_opening(
@@ -248,30 +350,69 @@ def validate_glass_dxf_opening(
     rotated: bool = False,
     allow_rotation: bool = False,
     tolerance: float,
+    finished_width_mm: object = None,
+    finished_length_mm: object = None,
 ) -> GlassOpeningDecision:
     hole_list = list(holes or ())
+    order_margin = _known_decimal(margin_mm)
+    context = _failure_context(
+        outer=outer,
+        hole=hole_list[0] if len(hole_list) == 1 else None,
+        margin=order_margin,
+        tolerance=tolerance,
+        rotated=rotated,
+        finished_width_mm=finished_width_mm,
+        finished_length_mm=finished_length_mm,
+    )
     if (piece_type or "") != GLASS_TYPE:
         if hole_list:
             return GlassOpeningDecision(
                 code=GLASS_OPENING_UNEXPECTED,
                 category=CATEGORY_TOPOLOGY,
+                params={**context, "piece_type": piece_type or "", "opening_count": len(hole_list)},
             )
         return GlassOpeningDecision()
     if not hole_list:
-        return GlassOpeningDecision(code=GLASS_OPENING_MISSING, category=CATEGORY_TOPOLOGY)
+        return GlassOpeningDecision(
+            code=GLASS_OPENING_MISSING,
+            category=CATEGORY_TOPOLOGY,
+            params=context,
+        )
     if len(hole_list) > 1:
         return GlassOpeningDecision(
             code=GLASS_MULTIPLE_OPENINGS,
             category=CATEGORY_TOPOLOGY,
-            params={"opening_count": len(hole_list)},
+            params={**context, "opening_count": len(hole_list)},
         )
     if rotated and not allow_rotation:
         return GlassOpeningDecision(code=FORBIDDEN_ROTATION, category=CATEGORY_DIMENSIONS)
     hole = hole_list[0]
-    if validate_polygon(hole, tolerance) or not is_axis_aligned_rectangle(hole, tolerance):
-        return GlassOpeningDecision(code=GLASS_OPENING_INVALID, category=CATEGORY_TOPOLOGY)
+    geometry_errors = validate_polygon(hole, tolerance)
+    if geometry_errors or not is_axis_aligned_rectangle(hole, tolerance):
+        reasons = list(geometry_errors)
+        if not reasons:
+            reasons.append("not_rectangle")
+        return GlassOpeningDecision(
+            code=GLASS_OPENING_INVALID,
+            category=CATEGORY_TOPOLOGY,
+            params={**context, "geometry_errors": reasons},
+        )
+    measured = _measured_insets(outer, hole)
     if not polygon_strictly_contains_polygon(outer, hole, tolerance=tolerance):
-        return GlassOpeningDecision(code=GLASS_OPENING_OUTSIDE, category=CATEGORY_TOPOLOGY)
+        outside = [
+            {
+                "side": name,
+                "inset_mm": value,
+                "relation": "crosses" if value < 0 else "touches",
+            }
+            for name, value in measured.items()
+            if value <= tolerance
+        ]
+        return GlassOpeningDecision(
+            code=GLASS_OPENING_OUTSIDE,
+            category=CATEGORY_TOPOLOGY,
+            params={**context, "outside_sides": outside},
+        )
 
     bands = {
         "long_left": _decimal(long_left_mm),
@@ -279,43 +420,72 @@ def validate_glass_dxf_opening(
         "width_bottom": _decimal(width_bottom_mm),
         "width_top": _decimal(width_top_mm),
     }
+    if order_margin is None:
+        return GlassOpeningDecision(
+            code=GLASS_MARGIN_MISMATCH,
+            category=CATEGORY_DIMENSIONS,
+            params={
+                **context,
+                "reason": "margin_missing",
+                "margin_known": False,
+                "order_margin_mm": None,
+                "file_insets_mm": measured,
+                "door_bands_mm": {name: float(value) for name, value in bands.items()},
+            },
+        )
     expected = cut_insets_mm(
-        margin_mm=margin_mm,
+        margin_mm=order_margin,
         long_left_mm=bands["long_left"],
         long_right_mm=bands["long_right"],
         width_bottom_mm=bands["width_bottom"],
         width_top_mm=bands["width_top"],
     )
-    order_margin = _decimal(margin_mm)
-    if any(value <= 0 for value in expected.values()):
-        side = next(name for name, value in expected.items() if value <= 0)
-        return GlassOpeningDecision(
-            code=GLASS_MARGIN_MISMATCH,
-            category=CATEGORY_DIMENSIONS,
-            params={
-                "reason": "band_consumes_margin",
-                "side": side,
-                "order_margin_mm": float(order_margin),
-                "expected_inset_mm": float(expected[side]),
-                "band_mm": float(bands[side]),
-            },
-        )
-    delta, side, actual_inset, expected_inset = _best_mapping(
-        _measured_insets(outer, hole),
+    mapping_names = ("orientation_cw", "orientation_ccw") if rotated else ("orientation_0", "orientation_180")
+    mappings = _ROTATED if rotated else _UNROTATED
+    _delta, orientation, mapping = _select_mapping(measured, expected, mappings, mapping_names)
+    rows = _side_rows(
+        measured,
         expected,
-        _ROTATED if rotated else _UNROTATED,
+        bands,
+        mapping,
+        order_margin=order_margin,
+        tolerance=tolerance,
     )
-    if delta > tolerance:
+    report = {
+        **context,
+        "orientation": orientation,
+        "sides": rows,
+    }
+    if any(value <= 0 for value in expected.values()):
+        side = next(name for name in _DOOR_SIDES if expected[name] <= 0)
+        report.update({
+            "reason": "band_consumes_margin",
+            "side": side,
+            "order_margin_mm": float(order_margin),
+            "expected_inset_mm": float(expected[side]),
+            "band_mm": float(bands[side]),
+            "actual_inset_mm": next(row["actual_inset_mm"] for row in rows if row["side"] == side),
+        })
         return GlassOpeningDecision(
             code=GLASS_MARGIN_MISMATCH,
             category=CATEGORY_DIMENSIONS,
-            params={
-                "side": side,
-                "order_margin_mm": float(order_margin),
-                "expected_inset_mm": float(expected_inset),
-                "actual_inset_mm": actual_inset,
-                "band_mm": float(bands[side]),
-            },
+            params=report,
+        )
+    delta, side, actual_inset, expected_inset = _best_mapping(measured, expected, mappings)
+    if delta > tolerance:
+        report.update({
+            "reason": "inset_mismatch",
+            "side": side,
+            "order_margin_mm": float(order_margin),
+            "expected_inset_mm": float(expected_inset),
+            "actual_inset_mm": actual_inset,
+            "band_mm": float(bands[side]),
+            "delta_mm": actual_inset - float(expected_inset),
+        })
+        return GlassOpeningDecision(
+            code=GLASS_MARGIN_MISMATCH,
+            category=CATEGORY_DIMENSIONS,
+            params=report,
         )
     return GlassOpeningDecision()
 

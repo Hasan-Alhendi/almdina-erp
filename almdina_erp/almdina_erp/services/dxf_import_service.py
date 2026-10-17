@@ -1327,7 +1327,7 @@ def _expected_order_pieces(order: Any) -> list[dict[str, Any]]:
                     "finished_length_cm": _num(finished_length_cm),
                     "allow_rotation": cint(row.allow_rotation),
                     "piece_type": row.piece_type or "Regular",
-                    "glass_margin_mm": _num(getattr(row, "glass_margin_mm", 0)),
+                    "glass_margin_mm": _stored_margin_mm(getattr(row, "glass_margin_mm", None)),
                     "edge_long_left": cint(getattr(row, "edge_long_left", 0)),
                     "edge_long_right": cint(getattr(row, "edge_long_right", 0)),
                     "edge_width_top": cint(getattr(row, "edge_width_top", 0)),
@@ -1464,6 +1464,12 @@ def _topology_piece_rotation(
     )
 
 
+def _stored_margin_mm(value: Any) -> float | None:
+    if value in (None, ""):
+        return None
+    return _num(value)
+
+
 def _side_band_mm(candidate: dict[str, Any], flag: str, thickness_key: str) -> float:
     if not candidate.get(flag):
         return 0.0
@@ -1503,7 +1509,10 @@ def _apply_glass_identity(pieces: list[dict[str, Any]], expected: list[dict[str,
                     GLASS_GEOMETRY_AMBIGUOUS,
                     CATEGORY_IDENTITY,
                     target=contour_target(1),
-                    params={"identity_unproven": True},
+                    params={
+                        "identity_unproven": True,
+                        "reason": "same_size_opening_not_unique",
+                    },
                 )
             ]
         )
@@ -1530,6 +1539,8 @@ def _glass_opening_issues(labeled: list[dict[str, Any]]) -> list[DxfValidationIs
             rotated=bool(piece.get("rotated")),
             allow_rotation=bool(spec.get("allow_rotation")),
             tolerance=GEOMETRY_TOLERANCE_MM,
+            finished_width_mm=spec.get("finished_width_mm"),
+            finished_length_mm=spec.get("finished_length_mm"),
         )
         if decision.ok:
             continue
@@ -1638,6 +1649,8 @@ def _match_pieces_to_order(pieces: list[dict[str, Any]], order: Any) -> list[dic
             "width_bottom_mm": _side_band_mm(candidate, "edge_width_bottom", "edge_width_thickness_mm"),
             "width_top_mm": _side_band_mm(candidate, "edge_width_top", "edge_width_thickness_mm"),
             "allow_rotation": bool(candidate.get("allow_rotation")),
+            "finished_width_mm": _num(candidate.get("finished_width_cm")) * 10.0,
+            "finished_length_mm": _num(candidate.get("finished_length_cm")) * 10.0,
         }
         piece["_extra_selected_codes"] = tuple(candidate.get("selected_codes") or ())
         piece["_liner_side"] = str(candidate.get("liner_reference_side") or "")
