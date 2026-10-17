@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ast
+
 from pathlib import Path
 
 from almdina_erp.almdina_erp.domain.cutting.plan_freshness import (
@@ -98,7 +100,23 @@ def test_active_controller_invalidates_plans_only_after_order_persistence() -> N
     assert "apply_stale_approved_plan_cancellation" not in on_update
     assert "invalidate_stale_draft_plans" in on_update
     assert "recalculate" not in on_update.lower()
-    assert "save(" not in on_update
+    # Inspect actual calls; `process_order_save(...)` is not Document.save().
+    controller = next(
+        node for node in ast.parse(text).body
+        if isinstance(node, ast.ClassDef) and node.name == "DoorCuttingOrderController"
+    )
+    update_method = next(
+        node for node in controller.body
+        if isinstance(node, ast.FunctionDef) and node.name == "on_update"
+    )
+    assert not any(
+        isinstance(node, ast.Call)
+        and (
+            isinstance(node.func, ast.Attribute) and node.func.attr == "save"
+            or isinstance(node.func, ast.Name) and node.func.id == "save"
+        )
+        for node in ast.walk(update_method)
+    )
 
 
 def test_invalidation_service_is_focused_and_never_runs_optimizer() -> None:

@@ -99,6 +99,8 @@ DCO_DRAWING_PLAN = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan
 DCO_PLAN_CONTEXT = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan" / "door_cutting_order_plan_context_actions_ux.js"
 DCO_FINANCIAL_DOCS = ROOT / "public" / "js" / "door_cutting_order" / "costing" / "door_cutting_order_financial_documents_ux.js"
 DCO_INVOICE_TOOLBAR = ROOT / "public" / "js" / "door_cutting_order" / "costing" / "door_cutting_order_customer_invoice_toolbar_ux.js"
+DCO_FINAL_PRICE_APPROVAL = ROOT / "public" / "js" / "door_cutting_order" / "costing" / "door_cutting_order_final_price_approval_ux.js"
+DCO_FINAL_PRICE_APPROVAL_CSS = ROOT / "public" / "css" / "door_cutting_order_final_price_approval.css"
 DCO_WORKSPACE_ASSET = ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_workspace_asset_status_ux.js"
 DCO_RECOVERY = ROOT / "public" / "js" / "door_cutting_order" / "recovery" / "presentation" / "door_cutting_order_local_checkpoint.js"
 SPECIAL_SHAPE_SHELL = ROOT / "public" / "js" / "special_shape_documentation" / "presentation" / "workspace_shell.js"
@@ -133,6 +135,7 @@ MIGRATED_SURFACES = (
     DCO_PLAN_CONTEXT,
     DCO_FINANCIAL_DOCS,
     DCO_INVOICE_TOOLBAR,
+    DCO_FINAL_PRICE_APPROVAL,
     DCO_WORKSPACE_ASSET,
     DCO_RECOVERY,
     SPECIAL_SHAPE_SHELL,
@@ -456,6 +459,18 @@ class TestDesignSystemContract(unittest.TestCase):
         self.assertNotIn("body:has(.frappe-list) .page-body", list_table)
         self.assertIn("body:has(.frappe-list) .page-body", templates)
         self.assertIn("background: var(--alm-canvas, #eef1f6);", templates)
+
+    def test_final_price_approval_uses_registered_static_styles(self) -> None:
+        script = DCO_FINAL_PRICE_APPROVAL.read_text(encoding="utf-8")
+        stylesheet = DCO_FINAL_PRICE_APPROVAL_CSS.read_text(encoding="utf-8")
+        self.assertNotIn('createElement("style")', script)
+        self.assertNotIn("ensureStyles()", script)
+        self.assertIn(".dco-price-approval-panel", stylesheet)
+        self.assertIn(".dco-final-price-approve-dialog", stylesheet)
+        self.assertIn(
+            "/assets/almdina_erp/css/door_cutting_order_final_price_approval.css?v=1",
+            self.assets,
+        )
 
     def test_dco_js_style_injection_debt_only_shrinks(self) -> None:
         injectors = {

@@ -423,89 +423,6 @@
         </div>`;
     }
 
-    function ensureStyles() {
-        if (document.getElementById("dco-final-price-approval-style")) return;
-        const style = document.createElement("style");
-        style.id = "dco-final-price-approval-style";
-        style.textContent = `
-            .dco-price-approval-panel{display:flex;align-items:center;flex-wrap:wrap;gap:8px;min-width:0}
-            .dco-price-approval-copy{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0;max-width:min(280px,100%)}
-            .dco-price-approval-status{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
-            .dco-price-approval-label{font-size:11px;font-weight:800;color:var(--text-muted,#687481)}
-            .dco-price-approval-badge{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:800;border:1px solid var(--alm-card-border,#e4e8ee);background:var(--alm-surface-muted,#f4f6f8);color:var(--alm-text-strong,#101828)}
-            .dco-price-approval-badge.is-approved{border-color:color-mix(in srgb, var(--alm-success,#15803d) 35%, var(--alm-card,#ffffff));background:color-mix(in srgb, var(--alm-success,#15803d) 10%, var(--alm-card,#ffffff));color:var(--alm-success,#15803d)}
-            .dco-price-approval-badge.is-unapproved{border-color:color-mix(in srgb, var(--alm-warning,#b45309) 30%, var(--alm-card,#ffffff));background:var(--alm-warning-bg,#fff7e8);color:var(--alm-warning,#b45309)}
-            .dco-price-approval-badge.is-unknown{opacity:.72}
-            .dco-price-approval-icon{font-weight:900;line-height:1}
-            .dco-price-approval-meta,.dco-price-approval-blocker{display:block;max-width:100%;font-size:10px;font-weight:700;color:var(--text-muted,#687481);line-height:1.45}
-            .dco-price-approval-note{display:flex;flex-direction:column;align-items:flex-start;gap:2px;max-width:100%;margin-top:2px}
-            .dco-price-approval-note-label{font-size:10px;font-weight:800;color:var(--text-muted,#687481)}
-            .dco-price-approval-note-text{font-size:11px;font-weight:600;color:var(--text-color,#1f272e);line-height:1.45;white-space:pre-wrap;word-break:break-word;max-width:100%}
-            .dco-price-approval-note-text.is-collapsed{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
-            .dco-price-approval-note-more{appearance:none;border:0;background:transparent;padding:0;margin:0;font-size:10px;font-weight:800;color:var(--alm-primary,#172033);cursor:pointer;text-decoration:underline}
-            .dco-invoice-total-card .dco-approve-final-price.alm-btn-primary,
-            .dco-invoice-total-card .dco-cancel-final-price.alm-btn-secondary{
-                box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;
-                min-width:var(--alm-min-width-button-compact,96px);min-height:unset;height:auto;
-                padding-block:var(--alm-padding-button-compact-y,8px);padding-inline:var(--alm-padding-button-compact-x,18px);
-                border-radius:var(--alm-radius-button,999px);
-                font-size:var(--alm-font-size-sm,12px);font-weight:var(--alm-font-weight-heavy,800);line-height:1.2;
-                box-shadow:none;flex:0 0 auto;white-space:nowrap
-            }
-            .dco-invoice-total-card .dco-approve-final-price.alm-btn-primary{
-                border:1px solid var(--alm-primary,#172033);background:var(--alm-primary,#172033);color:var(--alm-on-primary,#fff)
-            }
-            .dco-invoice-total-card .dco-approve-final-price.alm-btn-primary:hover:not(:disabled){
-                background:var(--alm-primary-hover,#0f1624);border-color:var(--alm-primary-hover,#0f1624);color:var(--alm-on-primary,#fff)
-            }
-            .dco-invoice-total-card .dco-cancel-final-price.alm-btn-secondary{
-                border:1px solid color-mix(in srgb, var(--alm-warning,#b45309) 45%, var(--alm-card-border,#e4e8ee));
-                background:color-mix(in srgb, var(--alm-warning,#b45309) 8%, var(--alm-card,#fff));
-                color:var(--alm-warning,#b45309)
-            }
-            .dco-invoice-total-card .dco-cancel-final-price.alm-btn-secondary:hover:not(:disabled){
-                background:color-mix(in srgb, var(--alm-warning,#b45309) 14%, var(--alm-card,#fff));
-                border-color:color-mix(in srgb, var(--alm-warning,#b45309) 55%, var(--alm-card-border,#e4e8ee))
-            }
-            .dco-invoice-total-card .dco-approve-final-price:focus-visible,
-            .dco-invoice-total-card .dco-cancel-final-price:focus-visible{
-                outline:none;box-shadow:0 0 0 3px color-mix(in srgb, var(--alm-primary, #172033) 18%, transparent)
-            }
-            .dco-invoice-total-card .dco-approve-final-price:disabled,
-            .dco-invoice-total-card .dco-cancel-final-price:disabled,
-            .dco-invoice-total-card .dco-approve-final-price.is-loading,
-            .dco-invoice-total-card .dco-cancel-final-price.is-loading{
-                opacity:.55;cursor:not-allowed;box-shadow:none
-            }
-            .dco-final-price-approve-dialog .modal-dialog{max-width:min(480px,calc(100vw - 24px))}
-            .dco-final-price-approve-dialog .dco-approve-amount-summary{
-                display:flex;flex-direction:column;gap:4px;margin-bottom:10px;padding:10px 12px;
-                border:1px solid var(--alm-card-border,#e4e8ee);border-radius:12px;
-                background:color-mix(in srgb, var(--alm-primary,#172033) 4%, var(--alm-card,#fff))
-            }
-            .dco-final-price-approve-dialog .dco-approve-amount-summary strong{
-                font-size:18px;font-weight:900;color:var(--text-color,#1f272e);direction:ltr;text-align:start
-            }
-            .dco-final-price-approve-dialog .dco-approve-amount-summary span,
-            .dco-final-price-approve-dialog .dco-approve-note-hint{
-                font-size:11px;font-weight:700;color:var(--text-muted,#687481)
-            }
-            .dco-final-price-approve-dialog textarea[data-fieldname="approval_note"]{
-                min-height:4.5em;max-height:6.5em;resize:vertical
-            }
-            .dco-final-price-approve-dialog .dco-approve-note-counter{
-                display:block;margin-top:4px;font-size:10px;font-weight:700;color:var(--text-muted,#687481);text-align:end
-            }
-            .dco-final-price-approve-dialog .dco-approve-note-counter.is-limit{color:var(--alm-danger,#b91c1c)}
-            @media(max-width:560px){
-                .dco-price-approval-panel{flex:1 1 auto}
-                .dco-invoice-total-card .dco-approve-final-price,
-                .dco-invoice-total-card .dco-cancel-final-price{flex:0 1 auto}
-            }
-        `;
-        document.head.appendChild(style);
-    }
-
     function wrapTotalCardStructure(card) {
         if (!card || card.querySelector("[data-price-approval-panel]")) return card;
         const label = document.createElement("div");
@@ -531,7 +448,6 @@
     }
 
     function reconcile(frm) {
-        ensureStyles();
         if (frm && window.cur_frm && window.cur_frm !== frm) {
             disposeDialogs(frm);
         }
