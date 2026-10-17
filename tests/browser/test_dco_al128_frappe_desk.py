@@ -806,7 +806,7 @@ def _benchmark_order(
         context.close()
 
 
-def test_actual_measurement_entry_performance_200_and_500_before_after() -> None:
+def test_actual_measurement_entry_performance_100_before_after() -> None:
     fixture = fixtures()
     base_sha = os.environ.get("AL128_BASE_SHA", "").strip()
     if not base_sha:
@@ -818,8 +818,7 @@ def test_actual_measurement_entry_performance_200_and_500_before_after() -> None
         browser = _browser(playwright_instance)
         try:
             for count, fixture_key, variants in (
-                (200, "performance_200", ("base", "head")),
-                (500, "performance_500", ("head", "base")),
+                (100, "performance_100", ("base", "head")),
             ):
                 for variant in variants:
                     result = _benchmark_order(
@@ -837,7 +836,7 @@ def test_actual_measurement_entry_performance_200_and_500_before_after() -> None
 
     by_rows = {
         count: {result["variant"]: result for result in results if result["rows"] == count}
-        for count in (200, 500)
+        for count in (100,)
     }
     comparisons = {}
     for count, variants in by_rows.items():

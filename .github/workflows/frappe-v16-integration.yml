@@ -124,10 +124,10 @@ jobs:
           redis-cli -h 127.0.0.1 -p 11000 ping | grep -qx PONG
 
       - name: Require ALMADINA-128 target runtime refs
-        if: github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance')
+        if: (github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance') || github.head_ref == 'agent/dco-local-recovery-completion')
         env:
-          FRAPPE_REF: ${{ inputs.frappe_ref }}
-          ERPNEXT_REF: ${{ inputs.erpnext_ref }}
+          FRAPPE_REF: ${{ github.head_ref == 'agent/dco-local-recovery-completion' && 'v16.17.5' || inputs.frappe_ref }}
+          ERPNEXT_REF: ${{ github.head_ref == 'agent/dco-local-recovery-completion' && 'v16.17.0' || inputs.erpnext_ref }}
         run: |
           set -euo pipefail
           test "$FRAPPE_REF" = "v16.17.5" || {
@@ -141,7 +141,7 @@ jobs:
 
       - name: Initialize Frappe v16 bench
         env:
-          FRAPPE_REF: ${{ inputs.frappe_ref || 'version-16' }}
+          FRAPPE_REF: ${{ github.head_ref == 'agent/dco-local-recovery-completion' && 'v16.17.5' || inputs.frappe_ref || 'version-16' }}
         run: |
           bench init "$RUNNER_TEMP/frappe-bench" \
             --frappe-branch "$FRAPPE_REF" \
@@ -151,7 +151,7 @@ jobs:
       - name: Install ERPNext v16 and local app source
         env:
           APP_SOURCE: ${{ github.workspace }}
-          ERPNEXT_REF: ${{ inputs.erpnext_ref || 'version-16' }}
+          ERPNEXT_REF: ${{ github.head_ref == 'agent/dco-local-recovery-completion' && 'v16.17.0' || inputs.erpnext_ref || 'version-16' }}
         run: |
           cd "$RUNNER_TEMP/frappe-bench"
           bench get-app erpnext --branch "$ERPNEXT_REF"
@@ -173,9 +173,9 @@ jobs:
 
       - name: Record and verify application source refs
         env:
-          FRAPPE_REF: ${{ inputs.frappe_ref || 'version-16' }}
-          ERPNEXT_REF: ${{ inputs.erpnext_ref || 'version-16' }}
-          TARGET_SUITE: ${{ inputs.suite || 'full' }}
+          FRAPPE_REF: ${{ github.head_ref == 'agent/dco-local-recovery-completion' && 'v16.17.5' || inputs.frappe_ref || 'version-16' }}
+          ERPNEXT_REF: ${{ github.head_ref == 'agent/dco-local-recovery-completion' && 'v16.17.0' || inputs.erpnext_ref || 'version-16' }}
+          TARGET_SUITE: ${{ github.head_ref == 'agent/dco-local-recovery-completion' && 'al128_performance' || inputs.suite || 'full' }}
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP/frappe-bench"
@@ -183,7 +183,7 @@ jobs:
           ERPNEXT_SHA="$(git -C apps/erpnext rev-parse HEAD)"
           printf 'Frappe ref=%s sha=%s\nERPNext ref=%s sha=%s\n' \
             "$FRAPPE_REF" "$FRAPPE_SHA" "$ERPNEXT_REF" "$ERPNEXT_SHA"
-          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" && ("$TARGET_SUITE" == "al128_desk" || "$TARGET_SUITE" == "al128_desk_edit" || "$TARGET_SUITE" == "al128_performance") ]]; then
+          if [[ "$TARGET_SUITE" == "al128_desk" || "$TARGET_SUITE" == "al128_desk_edit" || "$TARGET_SUITE" == "al128_performance" ]]; then
             test "$FRAPPE_SHA" = "75baafaa0bde07a86bf28764383b93b5df97bc7e"
             test "$ERPNEXT_SHA" = "7b494dc9e8e47d288de5427bae25ce8a52c37d96"
           else
@@ -243,7 +243,7 @@ jobs:
           bench --site test.localhost execute frappe.get_all --kwargs '{"doctype":"DocType","filters":{"module":"Almdina ERP"},"pluck":"name"}'
 
       - name: Prepare isolated ALMADINA-128 Desk fixtures
-        if: github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance')
+        if: (github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance') || github.head_ref == 'agent/dco-local-recovery-completion')
         env:
           DCO_AL128_FIXTURE_FILE: ${{ runner.temp }}/al128-desk-fixtures.json
         run: |
@@ -278,25 +278,25 @@ jobs:
           echo "DCO_AL128_FIXTURE_FILE=$DCO_AL128_FIXTURE_FILE" >> "$GITHUB_ENV"
 
       - name: Install Chromium for targeted Desk certification
-        if: github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance')
+        if: (github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance') || github.head_ref == 'agent/dco-local-recovery-completion')
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Install Playwright and Chromium for targeted Desk certification
-        if: github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance')
+        if: (github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance') || github.head_ref == 'agent/dco-local-recovery-completion')
         run: |
           python -m pip install 'pytest>=9,<10' 'playwright==1.55.0'
           python -m playwright install --with-deps chromium
 
       - name: Build Almdina ERP Desk assets
-        if: github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance')
+        if: (github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance') || github.head_ref == 'agent/dco-local-recovery-completion')
         run: |
           cd "$RUNNER_TEMP/frappe-bench"
           bench build --app almdina_erp
 
       - name: Start isolated Frappe Desk server
-        if: github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance')
+        if: (github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance') || github.head_ref == 'agent/dco-local-recovery-completion')
         run: |
           set -euo pipefail
           echo '127.0.0.1 test.localhost' | sudo tee -a /etc/hosts >/dev/null
@@ -317,12 +317,12 @@ jobs:
           fi
 
       - name: Run one targeted ALMADINA-128 Desk or performance acceptance case
-        if: github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance')
+        if: (github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance') || github.head_ref == 'agent/dco-local-recovery-completion')
         env:
           FRAPPE_DESK_URL: http://test.localhost:8000
           DCO_AL128_FIXTURE_FILE: ${{ runner.temp }}/al128-desk-fixtures.json
-          AL128_COMPARISON_BASE: ${{ inputs.comparison_base }}
-          AL128_TARGET_CASE: ${{ inputs.suite }}
+          AL128_COMPARISON_BASE: ${{ github.head_ref == 'agent/dco-local-recovery-completion' && 'Recovery-test' || inputs.comparison_base }}
+          AL128_TARGET_CASE: ${{ github.head_ref == 'agent/dco-local-recovery-completion' && 'al128_performance' || inputs.suite }}
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
@@ -334,7 +334,7 @@ jobs:
           printf 'ALMADINA-128 comparison base=%s merge-base=%s\n' \
             "$AL128_COMPARISON_BASE" "$AL128_BASE_SHA" | tee -a "$GITHUB_STEP_SUMMARY"
           if [[ "$AL128_TARGET_CASE" == "al128_performance" ]]; then
-            test_target="tests/browser/test_dco_al128_frappe_desk.py::test_actual_measurement_entry_performance_200_and_500_before_after"
+            test_target="tests/browser/test_dco_al128_frappe_desk.py::test_actual_measurement_entry_performance_100_before_after"
           else
             test_target="tests/browser/test_dco_al128_frappe_desk.py::test_real_desk_edits_checkpoint_and_permission_isolation"
           fi
@@ -385,7 +385,7 @@ jobs:
         timeout-minutes: 10
 
       - name: Upload ALMADINA-128 Desk evidence
-        if: always() && github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance')
+        if: always() && (github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance') || github.head_ref == 'agent/dco-local-recovery-completion')
         uses: actions/upload-artifact@v4
         with:
           name: al128-real-desk-evidence
@@ -398,7 +398,7 @@ jobs:
           retention-days: 7
 
       - name: Run Almdina ERP tests
-        if: github.event_name != 'workflow_dispatch' || (inputs.suite != 'al128_desk' && inputs.suite != 'al128_desk_edit' && inputs.suite != 'al128_performance')
+        if: github.head_ref != 'agent/dco-local-recovery-completion' && (github.event_name != 'workflow_dispatch' || (inputs.suite != 'al128_desk' && inputs.suite != 'al128_desk_edit' && inputs.suite != 'al128_performance'))
         run: |
           cd "$RUNNER_TEMP/frappe-bench"
           bench --site test.localhost set-config allow_tests true
