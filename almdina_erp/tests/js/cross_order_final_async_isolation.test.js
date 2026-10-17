@@ -164,7 +164,7 @@ test("drawing approval does not reload or announce another order or another visi
     // Use the exposed Frappe handler's button path in production when registered.
     // Direct closure entry is intentionally not exported; execute the source with one test-only tail.
     const code = fs.readFileSync(path.join(root, "cutting_plan/door_cutting_order_drawing_approval_ux.js"), "utf8");
-    const instrumented = code.replace("    window.AlmdinaDrawingApprovalUX = Object.freeze({", "    window.__approvalForTest = submitApproval;\n    window.AlmdinaDrawingApprovalUX = Object.freeze({");
+    const instrumented = code.replace("window.AlmdinaDrawingApprovalUX = Object.freeze({", "window.__approvalForTest = submitApproval;\n\twindow.AlmdinaDrawingApprovalUX = Object.freeze({");
     const ctx = vm.createContext({ window: h.win, frappe: h.frappe, console, __: x => x, setTimeout() {} });
     vm.runInContext(instrumented, ctx);
     const a = h.win.__approvalForTest(h.frm, "System");
