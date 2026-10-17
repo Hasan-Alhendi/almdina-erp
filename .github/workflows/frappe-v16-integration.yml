@@ -20,6 +20,7 @@ on:
         type: choice
         options:
           - full
+          - full_pinned
           - al128_desk
           - al128_desk_edit
           - al128_performance
@@ -57,7 +58,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: ${{ fromJSON(github.event_name == 'pull_request' && '["full","al128_desk","al128_performance","al129_customer","al129_new","al131_edit","al129_backend"]' || format('["{0}"]', inputs.suite)) }}
+        suite: ${{ fromJSON(github.event_name == 'pull_request' && '["full","full_pinned","al128_desk","al128_performance","al129_customer","al129_new","al131_edit","al129_backend"]' || format('["{0}"]', inputs.suite)) }}
     timeout-minutes: 60
 
     services:
@@ -138,7 +139,7 @@ jobs:
           redis-cli -h 127.0.0.1 -p 11000 ping | grep -qx PONG
 
       - name: Require ALMADINA-128 target runtime refs
-        if: matrix.suite != 'full' && matrix.suite != 'al129_backend'
+        if: matrix.suite != 'full' && matrix.suite != 'full_pinned' && matrix.suite != 'al129_backend'
         env:
           FRAPPE_REF: ${{ 'v16.17.5' }}
           ERPNEXT_REF: ${{ 'v16.17.0' }}
@@ -360,25 +361,25 @@ jobs:
           retention-days: 7
 
       - name: Install Chromium for targeted Desk certification
-        if: matrix.suite != 'full' && matrix.suite != 'al129_backend'
+        if: matrix.suite != 'full' && matrix.suite != 'full_pinned' && matrix.suite != 'al129_backend'
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Install Playwright and Chromium for targeted Desk certification
-        if: matrix.suite != 'full' && matrix.suite != 'al129_backend'
+        if: matrix.suite != 'full' && matrix.suite != 'full_pinned' && matrix.suite != 'al129_backend'
         run: |
           python -m pip install 'pytest>=9,<10' 'playwright==1.55.0'
           python -m playwright install --with-deps chromium
 
       - name: Build Almdina ERP Desk assets
-        if: matrix.suite != 'full' && matrix.suite != 'al129_backend'
+        if: matrix.suite != 'full' && matrix.suite != 'full_pinned' && matrix.suite != 'al129_backend'
         run: |
           cd "$RUNNER_TEMP/frappe-bench"
           bench build --app almdina_erp
 
       - name: Start isolated Frappe Desk server
-        if: matrix.suite != 'full' && matrix.suite != 'al129_backend'
+        if: matrix.suite != 'full' && matrix.suite != 'full_pinned' && matrix.suite != 'al129_backend'
         run: |
           set -euo pipefail
           echo '127.0.0.1 test.localhost' | sudo tee -a /etc/hosts >/dev/null
@@ -543,7 +544,7 @@ jobs:
           retention-days: 7
 
       - name: Run Almdina ERP tests
-        if: matrix.suite == 'full'
+        if: matrix.suite == 'full' || matrix.suite == 'full_pinned'
         env:
           AL129_DB_ROOT_HOST: 127.0.0.1
           AL129_DB_ROOT_USER: root
