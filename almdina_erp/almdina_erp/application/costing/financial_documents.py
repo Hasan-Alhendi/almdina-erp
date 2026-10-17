@@ -398,14 +398,14 @@ def _customer_invoice_lines(
                 else rate * addon_quantity
             )
             line = {
-                    "type": "extra_addon",
-                    "description": f"إضافة {label} — درفة رقم {index}",
-                    "quantity": addon_quantity,
-                    "unit": "درفة",
-                    "rate_usd": _money(rate),
-                    "amount_usd": _money(billable_amount),
-                    "note": _text(_value(piece, "notes")),
-                }
+                "type": "extra_addon",
+                "description": f"إضافة {label} — درفة رقم {index}",
+                "quantity": addon_quantity,
+                "unit": "درفة",
+                "rate_usd": _money(rate),
+                "amount_usd": _money(billable_amount),
+                "note": _text(_value(piece, "notes")),
+            }
             lines.append(line)
             addon_amounts.append((line, billable_amount))
 
