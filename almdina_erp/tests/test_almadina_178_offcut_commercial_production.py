@@ -430,6 +430,38 @@ def test_full_double_partial_customer_execution_prorates_commercial_addon_once()
     assert doc["totals"][0]["value_usd"] == 0.50
 
 
+def test_partial_customer_offcut_half_cent_total_matches_quote():
+    from almdina_erp.almdina_erp.services.cost_document_service import _commercial_piece_snapshots
+
+    execution = physical_execution_projection([
+        _piece("door:1", copy_no=1),
+        _piece("door:2", copy_no=2, kind="OFFCUT", source="CUSTOMER", execution="CUSTOMER"),
+    ])
+    fields = (
+        "extra_full_door_double", "extra_liner",
+        "extra_back_groove", "extra_recessed_handle_cutout",
+    )
+    data = {"piece_type": "Regular", "qty": 1}
+    for flag in fields:
+        data[flag] = 1
+        data[flag + "_unit_price_usd"] = 0.01
+        data[flag + "_total_usd"] = 0.01
+    data["extra_addons_total_usd"] = 0.04
+    snapshot = _commercial_piece_snapshots(
+        [SimpleNamespace(**data)],
+        dict(execution.factory_processing_qty_by_source_piece_no),
+        dict(execution.physical_qty_by_source_piece_no),
+    )[0]
+    assert snapshot["addon_billable_qty"] == 0.5
+    assert snapshot["extra_addons_total_usd"] == 0.02
+    invoice = build_customer_invoice_document(
+        {"required_boards": 0, "customer_quote_total_usd": 0.02}, [snapshot]
+    )
+    addons = [line for line in invoice["lines"] if line["type"] == "extra_addon"]
+    assert [line["amount_usd"] for line in addons] == [0.01, 0.01, 0.0, 0.0]
+    assert invoice["totals"][0]["value_usd"] == 0.02
+
+
 def test_historical_and_invalid_execution_projection_keep_commercial_source_qty():
     from almdina_erp.almdina_erp.services.cost_document_service import _commercial_piece_snapshots
 
