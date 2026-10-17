@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import io
+import math
 import re
 from typing import Any
 
 
 AUTOCAD_DXF_VERSION = "AC1024"
-_ALLOWED_ENTITY_TYPES = frozenset({"LINE", "TEXT"})
+_ALLOWED_ENTITY_TYPES = frozenset({"LINE", "TEXT", "LWPOLYLINE"})
 _TEXT_STYLE_NAME = "Tahoma"
 _TEXT_STYLE_FONT = "tahoma.ttf"
 _DXF_UNICODE_ESCAPE = re.compile(r"\\U\+([0-9A-Fa-f]{4})")
@@ -93,17 +94,46 @@ def _copy_text_entity(target_modelspace: Any, entity: Any) -> None:
         )
 
 
+def _polyline_points(entity: Any) -> list[tuple[float, float]]:
+    points = [(float(point[0]), float(point[1])) for point in entity.get_points("xy")]
+    if len(points) < 2:
+        raise ValueError("LWPOLYLINE must contain at least two points.")
+    if any(not math.isfinite(x) or not math.isfinite(y) for x, y in points):
+        raise ValueError("LWPOLYLINE contains an invalid point.")
+    return points
+
+
+def _copy_lwpolyline(target_modelspace: Any, entity: Any) -> None:
+    target_modelspace.add_lwpolyline(
+        _polyline_points(entity),
+        close=bool(entity.closed),
+        format="xy",
+        dxfattribs={"layer": str(entity.dxf.layer or "0")},
+    )
+
+
 def rebuild_autocad_dxf(raw: bytes, ezdxf_module: Any | None = None) -> bytes:
-    """Rebuild LINE and TEXT client geometry as a canonical AutoCAD 2010 document."""
+    """Rebuild client geometry as a canonical AutoCAD 2010 document.
+
+    LINE and TEXT stay supported for older exports. An open or closed
+    LWPOLYLINE is copied as one polyline so a machine toolpath stays connected.
+    """
     if ezdxf_module is None:
         import ezdxf as ezdxf_module
 
     source_document = ezdxf_module.read(io.StringIO(canonical_dxf_text(raw)))
     source_entities = list(source_document.modelspace())
-    if not source_entities or any(
-        entity.dxftype() not in _ALLOWED_ENTITY_TYPES for entity in source_entities
-    ):
-        raise ValueError("The client DXF must contain LINE and TEXT entities only.")
+    unsupported = sorted({
+        entity.dxftype()
+        for entity in source_entities
+        if entity.dxftype() not in _ALLOWED_ENTITY_TYPES
+    })
+    if not source_entities or unsupported:
+        found = ", ".join(unsupported) if unsupported else "none"
+        raise ValueError(
+            "The client DXF contains unsupported entities: "
+            f"{found}. Only LINE, TEXT, and LWPOLYLINE are allowed."
+        )
 
     target_document = ezdxf_module.new("R2010", setup=True)
     target_document.units = 4
@@ -116,6 +146,9 @@ def rebuild_autocad_dxf(raw: bytes, ezdxf_module: Any | None = None) -> bytes:
         layer = str(entity.dxf.layer or "0")
         if entity.dxftype() == "TEXT":
             _copy_text_entity(target_modelspace, entity)
+            continue
+        if entity.dxftype() == "LWPOLYLINE":
+            _copy_lwpolyline(target_modelspace, entity)
             continue
         target_modelspace.add_line(
             entity.dxf.start,

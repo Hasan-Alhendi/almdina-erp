@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import runpy
 from pathlib import Path
 
@@ -32,6 +33,19 @@ def test_global_asset_order_is_frozen_during_manifest_extraction():
     assert css.count(sidebar) == 1
     assert css.index(responsive) < css.index(presentation) < css.index(sidebar)
     assert len(js) == len(set(js)), "global app scripts must not be loaded twice"
+
+
+def test_addons_modal_stylesheet_url_tracks_css_content() -> None:
+    """Reject missing or stale cache revisions for raw, non-fingerprinted /assets CSS."""
+    css_file = ROOT / "public" / "css" / "door_cutting_order_extra_addons.css"
+    raw = css_file.read_bytes()
+    git_blob = hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest()
+    url = "/assets/almdina_erp/css/door_cutting_order_extra_addons.css"
+    css = runpy.run_path(str(MANIFEST))["app_include_css"]
+    matches = [asset for asset in css if asset.split("?")[0] == url]
+    assert matches == [f"{url}?v={git_blob[:12]}"], (
+        "Add-ons CSS must use its content fingerprint to avoid stale browser styles."
+    )
 
 
 def test_door_cutting_order_asset_order_is_frozen_during_manifest_extraction():

@@ -124,7 +124,7 @@
     // Cutting plan rendering
     // =====================================================
 
-    function piece_edge_flags(piece) {
+    function piece_edge_flags(piece, geometryModel = null) {
         let left = 0;
         let right = 0;
         let top = 0;
@@ -132,7 +132,23 @@
         let edgeBreak = piece.edge_break ? 1 : 0;
         let edgeBreakOnly = piece.edge_break_only ? 1 : 0;
 
-        if (!piece.rotated) {
+        if (geometryModel && geometryModel.source === "dxf"
+            && Number.isInteger(piece.rotation_quarter_turns)) {
+            // Imported DXF geometry is already physically oriented. Rotate
+            // the original semantic bands only, never its stored contour.
+            const turns = ((piece.rotation_quarter_turns % 4) + 4) % 4;
+            left = piece.edge_long_left ? 1 : 0;
+            right = piece.edge_long_right ? 1 : 0;
+            top = piece.edge_width_top ? 1 : 0;
+            bottom = piece.edge_width_bottom ? 1 : 0;
+            for (let turn = 0; turn < turns; turn += 1) {
+                const previous = { left, top, right, bottom };
+                left = previous.bottom;
+                top = previous.left;
+                right = previous.top;
+                bottom = previous.right;
+            }
+        } else if (!piece.rotated) {
             left = piece.edge_long_left ? 1 : 0;
             right = piece.edge_long_right ? 1 : 0;
             top = piece.edge_width_top ? 1 : 0;
@@ -201,7 +217,7 @@
     }
 
     function render_piece_edge_lines(piece, geometryModel = null, clipId = "") {
-        const { left, right, top, bottom, edgeBreak, edgeBreakOnly } = piece_edge_flags(piece);
+        const { left, right, top, bottom, edgeBreak, edgeBreakOnly } = piece_edge_flags(piece, geometryModel);
         const geometry = window.AlmdinaClippedCornerGeometry;
         const isCornerPiece = Boolean(
             geometry
@@ -403,24 +419,27 @@
         return `<div class="dco-extra-addon-marks" aria-hidden="true" style="position:absolute;inset:0;z-index:5;pointer-events:none;">${marks.join("")}</div>`;
     }
 
-    function overlayMajorAxisLine(local) {
-        const xs = local.map(point => point[0]);
-        const ys = local.map(point => point[1]);
-        const minX = Math.min(...xs);
-        const maxX = Math.max(...xs);
-        const minY = Math.min(...ys);
-        const maxY = Math.max(...ys);
-        if ((maxX - minX) >= (maxY - minY)) {
-            const midY = (minY + maxY) / 2;
-            return [[minX, midY], [maxX, midY]];
-        }
-        const midX = (minX + maxX) / 2;
-        return [[midX, minY], [midX, maxY]];
+    function overlayRegionCenterline(local, closed) {
+        if (!closed || local.length < 4 || local.length % 2 !== 0) return local;
+        const half = local.length / 2;
+        const near = local.slice(0, half);
+        const far = local.slice(half).slice().reverse();
+        return near.map((point, index) => [
+            (point[0] + far[index][0]) / 2,
+            (point[1] + far[index][1]) / 2,
+        ]);
     }
 
     function overlaySingleLine(local, closed) {
-        if (local.length === 2 && !closed) return local;
-        return overlayMajorAxisLine(local);
+        return overlayRegionCenterline(local, closed);
+    }
+
+    function axisAlignedPolygon(local) {
+        if (!local || local.length < 4) return false;
+        return local.every((point, index) => {
+            const next = local[(index + 1) % local.length];
+            return Math.abs(point[0] - next[0]) <= 0.05 || Math.abs(point[1] - next[1]) <= 0.05;
+        });
     }
 
     function overlayHandleRect(local) {
@@ -444,8 +463,183 @@
         return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
     }
 
-    function render_piece_overlays(piece, geometryModel) {
-        const overlays = Array.isArray(piece && piece.overlays) ? piece.overlays : [];
+    function pieceWithLinerSpec(frm, piece) {
+        const row = extraOrderRowForPiece(frm, piece);
+        if (!row) return piece;
+        const engine = window.AlmdinaMachiningOverlay;
+        const copy = engine && typeof engine.applySpecs === "function"
+            ? engine.applySpecs(piece, row)
+            : Object.assign({}, piece, {
+            extra_liner: row.extra_liner,
+            liner_reference_side: row.liner_reference_side,
+            liner_offset_cm: row.liner_offset_cm,
+            liner_width_cm: row.liner_width_cm,
+            liner_start_cm: row.liner_start_cm,
+            liner_length_cm: row.liner_length_cm,
+            kerf_mm: num(frm && frm.doc && frm.doc.kerf_mm),
+            piece_type: row.piece_type || piece.piece_type,
+            clipped_corner_position: row.clipped_corner_position || piece.clipped_corner_position,
+            clipped_corner_width_cm: row.clipped_corner_width_cm,
+            clipped_corner_length_cm: row.clipped_corner_length_cm,
+        });
+        if (engine && typeof engine.applySpecs === "function") {
+            copy.kerf_mm = num(frm && frm.doc && frm.doc.kerf_mm);
+            copy.piece_type = row.piece_type || piece.piece_type;
+            copy.clipped_corner_position = row.clipped_corner_position || piece.clipped_corner_position;
+            copy.clipped_corner_width_cm = row.clipped_corner_width_cm;
+            copy.clipped_corner_length_cm = row.clipped_corner_length_cm;
+        }
+        const liner = window.AlmdinaLinerGeometry;
+        if (liner && typeof liner.contourNotchFromOrder === "function") {
+            const notch = liner.contourNotchFromOrder(frm, row);
+            copy.clipped_corner_width_cm = notch.cutWidthCm;
+            copy.clipped_corner_length_cm = notch.cutLengthCm;
+        }
+        return copy;
+    }
+
+    function drawingOverlays(piece) {
+        const overlays = Array.isArray(piece && piece.overlays) ? piece.overlays.slice() : [];
+        const engine = window.AlmdinaMachiningOverlay;
+        if (engine && typeof engine.visualOverlays === "function") {
+            const visuals = engine.visualOverlays(piece);
+            if (!visuals.length) return overlays;
+            const kinds = new Set(visuals.map(item => item && item.kind));
+            return overlays.filter(item => !(item && kinds.has(item.kind))).concat(visuals);
+        }
+        const liner = window.AlmdinaLinerGeometry;
+        const drawCenter = liner && typeof liner.visualCenterline === "function"
+            ? liner.visualCenterline
+            : null;
+        const visual = drawCenter ? drawCenter(piece) : null;
+        if (!visual) return overlays;
+        return overlays.filter(item => !(item && item.kind === "liner")).concat(visual);
+    }
+
+    const LINER_TOOLPATH_MESSAGES = Object.freeze({
+        cutter_diameter_invalid: "Specify a saw blade thickness above zero for {0} toolpaths",
+        liner_narrower_than_cutter: "The width of {0} is less than the saw blade thickness",
+        liner_extension_hits_piece: "The {0} extension overlaps another piece",
+        liner_extension_unsafe: "Could not extend the {0} toolpath safely",
+        strip_outside: "The {0} strip extends beyond the door",
+        offset_invalid: "The {0} offset is invalid",
+        width_invalid: "The {0} width is invalid",
+        side_unavailable: "The {0} side is unavailable for this door",
+        liner_start_invalid: "The {0} start position is invalid",
+        liner_length_invalid: "The {0} length is invalid",
+        liner_span_exceeds_edge: "The start and length exceed the side length",
+        liner_flat_end_unmachinable: "The flat {0} end cannot be machined with this cutter",
+        liner_span_on_corner: "The {0} start or end falls on a corner without one direction",
+    });
+
+    function samePlacedPiece(left, right) {
+        if (!left || !right) return false;
+        if (left === right) return true;
+        if (left.id != null && right.id != null && String(left.id) !== "" && String(left.id) === String(right.id)) {
+            return true;
+        }
+        return Boolean(left.label)
+            && String(left.label) === String(right.label || "")
+            && Number(left.x) === Number(right.x)
+            && Number(left.y) === Number(right.y);
+    }
+
+    function guardLinerToolpath(frm, piece, sheet, frame, overlays) {
+        const liner = window.AlmdinaLinerGeometry;
+        const kept = overlays.filter(overlay => !(overlay && overlay.geometry && overlay.geometry.toolpath));
+        const engine = window.AlmdinaMachiningOverlay;
+        if (engine && typeof engine.syntheticOverlays === "function" && sheet && frame) {
+            if (kept.some(item => item && item.error)) return kept;
+            const board = {
+                minX: -num(frame.insetX) * 10,
+                minY: -num(frame.insetY) * 10,
+                maxX: (num(frame.drawW) - num(frame.insetX)) * 10,
+                maxY: (num(frame.drawH) - num(frame.insetY)) * 10,
+            };
+            const tools = engine.syntheticOverlays(Object.assign({}, piece, {
+                board,
+                kerf_mm: num(frm && frm.doc && frm.doc.kerf_mm) || num(piece && piece.kerf_mm),
+            }));
+            const obstacles = (sheet.pieces || []).filter(other => !samePlacedPiece(other, piece)).map(other => {
+                const polygon = liner && typeof liner.placedPolygonMm === "function" ? liner.placedPolygonMm(other) : [];
+                if (polygon.length >= 3) return { polygon };
+                return {
+                    minX: num(other.x) * 10,
+                    minY: num(other.y) * 10,
+                    maxX: (num(other.x) + num(other.w)) * 10,
+                    maxY: (num(other.y) + num(other.h)) * 10,
+                };
+            });
+            const result = kept.slice();
+            tools.forEach(tool => {
+                if (!tool) return;
+                if (tool.error) {
+                    result.push(tool);
+                    return;
+                }
+                if (liner && typeof liner.extensionConflict === "function" && tool.geometry) {
+                    const conflict = liner.extensionConflict(
+                        tool.geometry.path,
+                        num(frm && frm.doc && frm.doc.kerf_mm) || num(piece && piece.kerf_mm),
+                        board,
+                        obstacles
+                    );
+                    if (conflict) {
+                        result.push({ kind: tool.kind, layer: tool.layer, synthetic: true, error: conflict });
+                        return;
+                    }
+                }
+                result.push(tool);
+            });
+            return result;
+        }
+        if (!liner || typeof liner.syntheticOverlay !== "function" || !sheet || !frame) return kept;
+        if (kept.some(item => item && item.error)) return kept;
+        const board = {
+            minX: -num(frame.insetX) * 10,
+            minY: -num(frame.insetY) * 10,
+            maxX: (num(frame.drawW) - num(frame.insetX)) * 10,
+            maxY: (num(frame.drawH) - num(frame.insetY)) * 10,
+        };
+        const tool = liner.syntheticOverlay(Object.assign({}, piece, { board }));
+        if (!tool) return kept;
+        if (tool.error) {
+            return kept.concat({ kind: "liner", layer: "Liner", synthetic: true, error: tool.error });
+        }
+        if (typeof liner.extensionConflict !== "function" || !tool.geometry) return kept;
+        const obstacles = (sheet.pieces || []).filter(other => !samePlacedPiece(other, piece)).map(other => {
+            const polygon = typeof liner.placedPolygonMm === "function" ? liner.placedPolygonMm(other) : [];
+            if (polygon.length >= 3) return { polygon };
+            return {
+                minX: num(other.x) * 10,
+                minY: num(other.y) * 10,
+                maxX: (num(other.x) + num(other.w)) * 10,
+                maxY: (num(other.y) + num(other.h)) * 10,
+            };
+        });
+        const conflict = liner.extensionConflict(
+            tool.geometry.path,
+            num(frm && frm.doc && frm.doc.kerf_mm) || num(piece && piece.kerf_mm),
+            board,
+            obstacles
+        );
+        if (!conflict) return kept;
+        return kept.concat({ kind: "liner", layer: "Liner", synthetic: true, error: conflict });
+    }
+
+    function render_piece_overlays(frm, piece, geometryModel, sheet, frame) {
+        const spec = pieceWithLinerSpec(frm, piece);
+        // DXF paths are imported physical evidence. A synthetic redraw from
+        // order-side settings can reverse their orientation after a half-turn.
+        const overlays = geometryModel && geometryModel.source === "dxf"
+            ? (Array.isArray(piece.overlays) ? piece.overlays : [])
+            : guardLinerToolpath(
+                frm,
+                spec,
+                sheet,
+                frame,
+                drawingOverlays(spec)
+            );
         if (!overlays.length || !geometryModel) return "";
         const originX = num(geometryModel.placement.xCm) * 10;
         const originY = num(geometryModel.placement.yCm) * 10;
@@ -455,6 +649,13 @@
         const paths = overlays.map((overlay, index) => {
             const kind = String((overlay && overlay.kind) || "").trim();
             const geometry = overlay && overlay.geometry;
+            if (overlay && overlay.error) {
+                const engine = window.AlmdinaMachiningOverlay;
+                const addon = engine && typeof engine.addon === "function" ? engine.addon(kind) : null;
+                const noun = translate(addon && addon.nounMessageId || "the liner");
+                const message = translate(LINER_TOOLPATH_MESSAGES[overlay.error] || overlay.error, [noun]);
+                return `<text data-liner-toolpath-error="${escape_html(overlay.error)}" x="50" y="50" text-anchor="middle" font-size="8" fill="#9a6207">${escape_html(message)}</text>`;
+            }
             const points = geometry && Array.isArray(geometry.path)
                 ? geometry.path
                 : (geometry && Array.isArray(geometry.outer) ? geometry.outer : []);
@@ -466,16 +667,26 @@
             const stroke = EXTRA_OVERLAY_STROKE_BY_KIND[kind] || "#5c4d2e";
             const layer = String((overlay && overlay.layer) || kind || "overlay");
             const attrs = `data-overlay-kind="${escape_html(kind)}" data-overlay-layer="${escape_html(layer)}" data-overlay-index="${index}" fill="none" stroke="${stroke}" vector-effect="non-scaling-stroke"`;
-            if (kind === "recessed_handle_cutout") {
-                const box = overlayHandleRect(local);
-                return `<rect class="dco-extra-overlay-path dco-extra-overlay-handle" ${attrs} x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" stroke-width="0.65" stroke-linejoin="miter"/>`;
-            }
             const closed = Boolean(geometry && geometry.closed) && local.length >= 3;
-            const strokePoints = kind === "liner" ? overlaySingleLine(local, closed) : local;
+            const isToolpath = Boolean(geometry && geometry.toolpath);
+            if (isToolpath) return "";
+            if (kind === "recessed_handle_cutout") {
+                if (axisAlignedPolygon(local)) {
+                    const box = overlayHandleRect(local);
+                    return `<rect class="dco-extra-overlay-path dco-extra-overlay-handle" ${attrs} x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" stroke-width="0.65" stroke-linejoin="miter"/>`;
+                }
+                const outline = local
+                    .map((point, pointIndex) => `${pointIndex ? "L" : "M"}${point[0]} ${point[1]}`)
+                    .join(" ") + (closed ? " Z" : "");
+                return `<path class="dco-extra-overlay-path dco-extra-overlay-handle" ${attrs} d="${outline}" stroke-width="0.65" stroke-linejoin="miter"/>`;
+            }
+            const machiningKind = kind === "liner" || kind === "back_groove";
+            const strokePoints = machiningKind ? overlaySingleLine(local, closed) : local;
             const d = strokePoints
                 .map((point, pointIndex) => `${pointIndex ? "L" : "M"}${point[0]} ${point[1]}`)
-                .join(" ") + (kind === "liner" ? "" : (closed ? " Z" : ""));
-            return `<path class="dco-extra-overlay-path" ${attrs} d="${d}" stroke-width="0.7" stroke-dasharray="3 2.2" stroke-linejoin="round" stroke-linecap="round"/>`;
+                .join(" ") + (machiningKind ? "" : (closed ? " Z" : ""));
+            const dash = machiningKind ? ` stroke-dasharray="3 2.2" stroke-linecap="round"` : "";
+            return `<path class="dco-extra-overlay-path" ${attrs} d="${d}" stroke-width="0.7"${dash} stroke-linejoin="round"/>`;
         }).filter(Boolean).join("");
         if (!paths) return "";
         return `<svg class="dco-extra-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;z-index:2;overflow:visible;pointer-events:none">${paths}</svg>`;
@@ -603,9 +814,58 @@
         `;
     }
 
-    function explicitTrim(source, key) {
-        if (!source || !Object.prototype.hasOwnProperty.call(source, key)) return null;
-        return Math.max(0, num(source[key]));
+    function hasOwn(source, key) {
+        return Boolean(source) && Object.prototype.hasOwnProperty.call(source, key);
+    }
+
+    function resolvedTrimCm(plan, sheet, axis) {
+        // Usable-frame coordinates. Physical inset is this trim. An explicit
+        // sheet value, including 0, wins. A missing value is recovered from
+        // full - usable before the plan-level applied trim, so a plan-wide 0
+        // does not hide a sheet that recovered leftover edge space.
+        const trimKey = axis === "x" ? "applied_trim_width_cm" : "applied_trim_length_cm";
+        const fullKey = axis === "x" ? "full_width_cm" : "full_length_cm";
+        const usableKey = axis === "x" ? "usable_width_cm" : "usable_length_cm";
+        const sizeKey = axis === "x" ? "w" : "h";
+        const planFullKey = axis === "x" ? "full_board_width_cm" : "full_board_length_cm";
+        const planUsableKey = axis === "x" ? "usable_board_width_cm" : "usable_board_length_cm";
+        if (hasOwn(sheet, trimKey)) return Math.max(0, num(sheet[trimKey]));
+        const sheetFull = num(sheet && sheet[fullKey]);
+        const sheetUsable = num(sheet && sheet[usableKey]) || num(sheet && sheet[sizeKey]);
+        if (sheetFull > sheetUsable && sheetUsable > 0) return (sheetFull - sheetUsable) / 2;
+        if (hasOwn(plan, trimKey)) return Math.max(0, num(plan[trimKey]));
+        const planFull = num(plan && plan[planFullKey]);
+        const planUsable = num(plan && plan[planUsableKey]);
+        if (planFull > planUsable && planUsable > 0) return (planFull - planUsable) / 2;
+        return Math.max(0, num(plan && plan.trim_cm));
+    }
+
+    function roundMm(value) {
+        return Math.round(num(value) * 1000) / 1000;
+    }
+
+    function physicalMarginsMm(plan, sheet) {
+        const pieces = (sheet && sheet.pieces) || [];
+        const trimW = resolvedTrimCm(plan, sheet, "x");
+        const trimH = resolvedTrimCm(plan, sheet, "y");
+        const fullW = num(sheet && sheet.full_width_cm) || num(plan && plan.full_board_width_cm);
+        const fullH = num(sheet && sheet.full_length_cm) || num(plan && plan.full_board_length_cm);
+        if (!pieces.length) return { left: 0, right: 0, top: 0, bottom: 0 };
+        const minX = Math.min(...pieces.map(piece => num(piece.x)));
+        const maxX = Math.max(...pieces.map(piece => num(piece.x) + num(piece.w)));
+        const minY = Math.min(...pieces.map(piece => num(piece.y)));
+        const maxY = Math.max(...pieces.map(piece => num(piece.y) + num(piece.h)));
+        return {
+            left: roundMm((trimW + minX) * 10),
+            right: roundMm((fullW - trimW - maxX) * 10),
+            top: roundMm((trimH + minY) * 10),
+            bottom: roundMm((fullH - trimH - maxY) * 10),
+        };
+    }
+
+    function originalEdges(plan, sheet) {
+        const margins = physicalMarginsMm(plan, sheet);
+        return ["right", "left", "top", "bottom"].filter(edge => Math.abs(margins[edge]) <= 0.001);
     }
 
     function sheetBoardFrame(plan, sheet) {
@@ -615,12 +875,8 @@
         const usableH = num(sheet && sheet.usable_length_cm) || num(sheet && sheet.h) || num(plan.usable_board_length_cm) || fullH;
         const drawW = fullW > 0 ? fullW : usableW;
         const drawH = fullH > 0 ? fullH : usableH;
-        const trimW = explicitTrim(sheet, "applied_trim_width_cm");
-        const trimH = explicitTrim(sheet, "applied_trim_length_cm");
-        const planTrimW = trimW === null ? explicitTrim(plan, "applied_trim_width_cm") : trimW;
-        const planTrimH = trimH === null ? explicitTrim(plan, "applied_trim_length_cm") : trimH;
-        let insetX = planTrimW === null ? (drawW > usableW && usableW > 0 ? (drawW - usableW) / 2 : 0) : planTrimW;
-        let insetY = planTrimH === null ? (drawH > usableH && usableH > 0 ? (drawH - usableH) / 2 : 0) : planTrimH;
+        let insetX = resolvedTrimCm(plan, sheet, "x");
+        let insetY = resolvedTrimCm(plan, sheet, "y");
         insetX = Math.max(0, Math.min(insetX, drawW / 2));
         insetY = Math.max(0, Math.min(insetY, drawH / 2));
         const innerW = usableW > 0 ? Math.min(usableW, Math.max(0, drawW - (insetX * 2))) : Math.max(0, drawW - (insetX * 2));
@@ -703,7 +959,7 @@
                     <div class="dco-sheet-board" data-trim-width-cm="${frame.insetX}" data-trim-length-cm="${frame.insetY}" style="position:relative;direction:ltr;width:${board_width_px}px;height:${board_height_px}px;max-width:100%;border:2px solid #111;background:#fff;overflow:hidden;margin:0 auto 8px auto;">
                         <div class="dco-board-waste-hatch" aria-hidden="true" style="position:absolute;inset:0;z-index:0;pointer-events:none;background-image:repeating-linear-gradient(45deg,rgba(71,85,105,.18) 0 1px,transparent 1px 8px);"></div>
                         ${board_caption ? `<div class="dco-board-size-caption" aria-hidden="true" style="display:none">${escape_html(board_caption)}</div>` : ""}
-                        <div class="dco-usable-sheet" style="position:absolute;z-index:1;left:${usableLeft}%;top:${usableTop}%;width:${usableWidth}%;height:${usableHeight}%;box-sizing:border-box;overflow:hidden;">
+                        <div class="dco-usable-sheet" style="position:absolute;z-index:1;left:${usableLeft}%;top:${usableTop}%;width:${usableWidth}%;height:${usableHeight}%;box-sizing:border-box;overflow:visible;">
             `;
 
             (sheet.pieces || []).forEach(piece => {
@@ -711,7 +967,8 @@
                 if (!geometry || typeof geometry.resolve !== "function") {
                     throw new Error("Canonical cutting-plan piece geometry is unavailable");
                 }
-                const geometryModel = geometry.resolve(piece);
+                const manufacturingPiece = pieceWithLinerSpec(frm, piece);
+                const geometryModel = geometry.resolve(manufacturingPiece);
                 const placement = geometryModel.placement;
                 const left = (num(placement.xCm) / frame.usableW) * 100;
                 const top = (num(placement.yCm) / frame.usableH) * 100;
@@ -733,12 +990,12 @@
                     : special_piece_style;
                 const clipId = `dco-clip-${sheet.sheet_no || 0}-${piece.id || piece.label || 0}-${geometryModel.geometryIdentity}`
                     .replace(/[^a-zA-Z0-9_-]/g, "-");
-                const edgeLines = render_piece_edge_lines(piece, geometryModel, clipId);
+                const edgeLines = render_piece_edge_lines(manufacturingPiece, geometryModel, clipId);
 
                 html += `
-                    <div class="dco-piece ${piece.piece_type === "Special" ? "dco-special-raw-piece" : ""} ${exactSpecial ? "dco-special-exact-piece" : ""} ${clipped ? "dco-clipped-corner-piece" : ""} ${shaped ? "dco-vector-piece" : ""}" data-piece-type="${escape_html(piece.piece_type || "Regular")}" data-geometry-source="${escape_html(geometryModel.source)}" data-geometry-id="${escape_html(geometryModel.geometryIdentity)}" style="position:absolute;left:${left}%;top:${top}%;width:${width}%;height:${height}%;${pieceStyle}color:#111;overflow:hidden;padding:2px;font-size:10px;line-height:1.2;text-align:center;box-sizing:border-box;display:flex;align-items:center;justify-content:center;">
+                    <div class="dco-piece ${piece.piece_type === "Special" ? "dco-special-raw-piece" : ""} ${exactSpecial ? "dco-special-exact-piece" : ""} ${clipped ? "dco-clipped-corner-piece" : ""} ${shaped ? "dco-vector-piece" : ""}" data-piece-type="${escape_html(piece.piece_type || "Regular")}" data-geometry-source="${escape_html(geometryModel.source)}" data-geometry-id="${escape_html(geometryModel.geometryIdentity)}" style="position:absolute;left:${left}%;top:${top}%;width:${width}%;height:${height}%;${pieceStyle}color:#111;overflow:visible;padding:2px;font-size:10px;line-height:1.2;text-align:center;box-sizing:border-box;display:flex;align-items:center;justify-content:center;">
                         ${shapeOutline}
-                        ${render_piece_overlays(piece, geometryModel)}
+                        ${render_piece_overlays(frm, manufacturingPiece, geometryModel, sheet, frame)}
                         ${edgeLines}
                         ${render_piece_addon_marks(frm, piece)}
                         ${render_piece_label(piece, geometryModel)}
@@ -1127,12 +1384,12 @@ ${printHeaderCss()}
 }
 .dco-usable-sheet {
     position: absolute !important;
-    overflow: hidden !important;
+    overflow: visible !important;
     border: 0 !important;
     background: transparent !important;
 }
 .dco-piece {
-    overflow: hidden !important;
+    overflow: visible !important;
     background: #fff !important;
     border-color: #111 !important;
     color: #111 !important;
@@ -1231,5 +1488,7 @@ ${printHeaderCss()}
         build: build_cutting_plan_html,
         parse: parse_plan,
         print: print_cutting_plan,
+        physicalMarginsMm,
+        originalEdges,
     };
 })();

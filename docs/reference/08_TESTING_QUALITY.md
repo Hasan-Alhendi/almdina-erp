@@ -59,9 +59,18 @@
 | Drawing/DXF | geometry/import/export + drawing auth | Door Drawing + Security/UI + Frappe |
 | DocType/schema | relevant tests | Frappe install + migrate twice إلزامي |
 | UI only | JS/UX contracts | Static/Security UI حسب السطح |
+| Localization/i18n أو نص جديد ظاهر للمستخدم | مفاتيح Frappe + ترجمتها العربية المطلوبة، `test_translation_catalog_gate` و`test_locale_text_branch_gate`، واختبارات JS/عرض للنطاق المعدل | Arabic/RTL وEnglish/LTR UAT، والطباعة/PDF عند التأثر، وFrappe Integration بحسب السطح |
 | Design System / brand tokens | `test_design_system_contract` + `almdina_ui.test.js` | Static Checks |
 | Frappe widget migration (FE-ARCH-017) | design system tests + surface lifecycle when touched | Static Checks |
 | Documentation contract | Stage15 docs test | Static/Stage13 لتجنب وصف Architecture مكسورة |
+
+### 4.1. Localization by Design — إثبات القبول
+
+- عند إضافة/تعديل نص يملكه التطبيق (زر، عنوان، قائمة، رسالة، tooltip/ARIA، تقرير، طباعة، PDF، أو رسالة آلية) تحقق من وجود مفتاح إنجليزي ثابت يمر عبر ترجمة Frappe، ومن الترجمة العربية اللازمة في `translations/ar.csv` إذا لم تكن موجودة في القاموس الرسمي.
+- شغّل بوابتي `test_translation_catalog_gate` و`test_locale_text_branch_gate`، مع اختبارات JavaScript/العرض المناسبة للواجهة المتأثرة. البوابات الحالية **ليست دليلًا آليًا على اكتمال ترجمة المشروع كله**؛ أضف Regression مناسبًا للنص الجديد ولا تفترض أن فحص ملف CSV وحده كافٍ.
+- اختبر عرض النص بالعربية والإنجليزية، مع اتجاه RTL/LTR، والمحافظة على placeholders والمقاسات والمعرفات؛ اختبر لغة ثالثة عند توسيع دعم اللغات أو تعديل عقد متعدد اللغات.
+- لا تُترجم بيانات المستخدم أو قيم الأعمال المخزنة تلقائيًا. وثّق الاستثناءات المقصودة لنصوص البيانات، ولا تُعفِ نص واجهة جديدًا من الترجمة بحجة توافق قديم.
+- يجب أن يثبت تقرير الـPR التغطية المناسبة أو يذكر بوضوح ما لم يُتحقق منه؛ ولا يُقبل اكتمال Feature ذات نص مرئي دون عقد `FE-ARCH-010`.
 
 ## 5. لا تضعف Test
 

@@ -40,9 +40,9 @@ def test_worker_start_and_handoff_are_direct_toolbar_actions() -> None:
         "}).catch((error)",
     )
 
-    assert 'frm.add_custom_button(__("بدء العمل")' in start
+    assert 'frm.add_custom_button(translate("Start work")' in start
     assert "PRODUCTION_ACTION_GROUP" not in start
-    assert 'frm.add_custom_button(__("إنهاء وإرسال")' in handoff
+    assert 'frm.add_custom_button(translate("Finish and send")' in handoff
     assert "PRODUCTION_ACTION_GROUP" not in handoff
 
 
@@ -131,7 +131,7 @@ def test_reconciliation_removes_direct_and_legacy_grouped_stage_actions() -> Non
         "function reconcileProductionActions(frm) {",
     )
 
-    assert 'frm.remove_custom_button(__("بدء العمل"));' in cleanup
-    assert 'frm.remove_custom_button(__("إنهاء وإرسال"));' in cleanup
-    assert 'frm.remove_custom_button(__("تغيير العامل"));' in cleanup
-    assert 'frm.remove_custom_button(__(label), PRODUCTION_ACTION_GROUP)' in cleanup
+    assert "PRODUCTION_ACTION_IDS.forEach" in cleanup
+    assert "LEGACY_PRODUCTION_ACTION_LABELS.forEach" in cleanup
+    assert "frm.remove_custom_button(messageId);" in cleanup
+    assert "frm.remove_custom_button(localized);" in cleanup

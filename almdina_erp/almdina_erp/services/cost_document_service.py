@@ -181,12 +181,21 @@ def _commercial_piece_snapshots(
     for source_piece_no, piece in enumerate(pieces, start=1):
         row = _snapshot(piece, PIECE_DOCUMENT_FIELDS)
         physical_qty = physical_qty_by_source.get(source_piece_no)
-        if physical_qty is None:
+        if physical_qty is None or physical_qty <= 0:
+            # Historical plans without a valid physical projection keep their
+            # original commercial quantities and saved add-on amounts.
             snapshots.append(row)
             continue
         factory_qty = execution_qty_by_source.get(source_piece_no, 0)
+        if not 0 <= factory_qty <= physical_qty:
+            snapshots.append(row)
+            continue
         row["factory_execution_qty"] = factory_qty
-        ratio = factory_qty / physical_qty if physical_qty else 0
+        ratio = factory_qty / physical_qty
+        # The factory quantity counts cut copies. Add-ons are priced against
+        # ordered doors, which can expand to two physical Full Door Double
+        # copies. Reuse the same execution ratio as the saved amount projection.
+        row["addon_billable_qty"] = (row.get("qty") or 0) * ratio
         for fieldname in ("edge_meters", "edge_cost_usd", *_FACTORY_SCALED_TOTAL_FIELDS):
             row[fieldname] = (row.get(fieldname) or 0) * ratio
         snapshots.append(row)

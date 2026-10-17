@@ -13,14 +13,50 @@ const source = fs.readFileSync(
     "utf8"
 );
 
+const ARABIC = {
+    Regular: "عادية",
+    Special: "خاصة",
+    "Clipped corner": "الزاوية الكسر",
+    "L-shaped corner": "زاوية L",
+    Glass: "درفة بلور",
+    "Piece type": "نوع الدرفة",
+    "Double Banding": "دبل قشاط",
+    "Full Double": "دبل كامل",
+    Liner: "لاينر",
+    "Back Groove": "فرزة ظهر",
+    "Recessed Handle": "مسكة غطس",
+    "Recessed Handle Cutout": "حفر مسكة غطس",
+    "Double Edge Banding": "دبل قشاط",
+    "Full Door Double": "دبل كامل الدرفة",
+    "Add-ons": "الإضافات",
+};
+let useArabic = true;
+function __(value) {
+    const text = Array.isArray(value) ? value[0] : value;
+    return useArabic ? (ARABIC[text] || text) : text;
+}
+
 const fakeWindow = {};
+const documentStub = { documentElement: { lang: "ar" } };
+const csv = fs.readFileSync(path.resolve(__dirname, "../../translations/ar.csv"), "utf8");
+const translations = new Map(csv.split(/\r?\n/).map(line => {
+    const delimiter = line.indexOf(",");
+    return delimiter < 0 ? ["", ""] : [line.slice(0, delimiter), line.slice(delimiter + 1).split(",")[0]];
+}));
+function translate(message) {
+    return documentStub.documentElement.lang === "ar"
+        ? (translations.get(String(message)) || String(message))
+        : String(message);
+}
 const context = vm.createContext({
     window: fakeWindow,
-    document: { documentElement: { lang: "ar" } },
+    document: documentStub,
+    __: translate,
     frappe: {
         boot: { lang: "ar" },
         utils: { escape_html(value) { return String(value); } },
     },
+    __,
     Object,
     Array,
     Boolean,
@@ -35,14 +71,10 @@ const api = fakeWindow.AlmdinaExtraDoorAddonsUX;
 assert.ok(api);
 assert.deepEqual(
     JSON.parse(JSON.stringify(api.PIECE_TYPES.map(item => item.value))),
-    ["Regular", "Special", "Clipped Corner", "L-Shaped Corner"]
+    ["Regular", "Special", "Clipped Corner", "L-Shaped Corner", "Glass"]
 );
 assert.deepEqual(
-    JSON.parse(JSON.stringify(api.FIELDS.map(item => item.buttonAr))),
-    ["دبل قشاط", "دبل كامل", "لاينر", "فرزة ظهر", "مسكة غطس"]
-);
-assert.deepEqual(
-    JSON.parse(JSON.stringify(api.FIELDS.map(item => item.buttonEn))),
+    JSON.parse(JSON.stringify(api.FIELDS.map(item => item.button))),
     ["Double Banding", "Full Double", "Liner", "Back Groove", "Recessed Handle"]
 );
 
@@ -67,34 +99,54 @@ assert.match(picker, />عادية<\/option>/);
 assert.match(picker, />خاصة<\/option>/);
 assert.match(picker, />الزاوية الكسر<\/option>/);
 assert.match(picker, />زاوية L<\/option>/);
+assert.match(picker, /value="Glass"/);
+assert.match(picker, />درفة بلور<\/option>/);
 assert.doesNotMatch(picker, /value="Extra"/);
 
-const cell = api.renderAddonCell({ extra_liner: 1 }, "extra_liner", { editable: true });
-assert.match(cell, /dco-col-addon|dco-addon-toggle/);
-assert.match(cell, /data-check-field="extra_liner"/);
-assert.match(cell, /aria-pressed="true"/);
-assert.match(cell, /لاينر/);
-assert.doesNotMatch(cell, /✓|dco-check-mark/);
+const emptySummary = api.addonSummary({});
+assert.equal(emptySummary.label, "الإضافات");
+assert.equal(emptySummary.hidden, 0);
+assert.deepEqual(JSON.parse(JSON.stringify(emptySummary.names)), []);
+const emptyButton = api.renderAddonSummary({}, { editable: true });
+assert.match(emptyButton, /data-open-addons="1"/);
+assert.match(emptyButton, /الإضافات/);
+assert.doesNotMatch(emptyButton, />0<|>\+0</);
 
-const arabicFullLabelCell = api.renderAddonCell(
-    { extra_full_door_double: 1 },
-    "extra_full_door_double",
-    { editable: true }
-);
-assert.match(arabicFullLabelCell, /دبل كامل الدرفة/);
-assert.match(arabicFullLabelCell, />دبل<\/span>\s*<span class="dco-addon-label-line">كامل<\/span>/);
-assert.doesNotMatch(arabicFullLabelCell, /✓|dco-check-mark/);
+const one = api.addonSummary({ extra_liner: 1 });
+assert.deepEqual(JSON.parse(JSON.stringify(one.names)), ["لاينر"]);
+assert.equal(one.label, "لاينر");
+assert.match(api.renderAddonSummary({ extra_liner: 1 }, { editable: true }), /لاينر/);
 
-context.document.documentElement.lang = "en";
-const englishFullLabelCell = api.renderAddonCell(
-    { extra_recessed_handle_cutout: 1 },
-    "extra_recessed_handle_cutout",
-    { editable: true }
-);
-assert.match(englishFullLabelCell, /Recessed Handle Cutout/);
-assert.match(englishFullLabelCell, />Recessed<\/span>\s*<span class="dco-addon-label-line">Handle<\/span>/);
-assert.doesNotMatch(englishFullLabelCell, /✓|dco-check-mark/);
-context.document.documentElement.lang = "ar";
+const two = api.addonSummary({ extra_liner: 1, extra_back_groove: 1, extra_double: 0 });
+assert.equal(two.label, "لاينر · فرزة ظهر");
+assert.equal(two.hidden, 0);
+assert.equal(two.tooltip, "لاينر · فرزة ظهر");
+
+const many = api.addonSummary({
+    extra_double: 1,
+    extra_liner: 1,
+    extra_back_groove: 1,
+    extra_recessed_handle_cutout: 1,
+});
+assert.deepEqual(JSON.parse(JSON.stringify(many.names)), ["دبل قشاط", "لاينر", "فرزة ظهر", "مسكة غطس"]);
+assert.equal(many.label, "دبل قشاط · لاينر");
+assert.equal(many.hidden, 2);
+assert.equal(many.tooltip, "دبل قشاط · لاينر · فرزة ظهر · مسكة غطس");
+const manyButton = api.renderAddonSummary({
+    extra_double: 1,
+    extra_liner: 1,
+    extra_back_groove: 1,
+    extra_recessed_handle_cutout: 1,
+}, { editable: true });
+assert.match(manyButton, /دبل قشاط · لاينر/);
+assert.match(manyButton, /\+2/);
+assert.match(manyButton, /title="دبل قشاط · لاينر · فرزة ظهر · مسكة غطس"/);
+assert.doesNotMatch(manyButton, /✓|dco-check-mark/);
+
+useArabic = false;
+const english = api.addonSummary({ extra_recessed_handle_cutout: 1 });
+assert.equal(english.label, "Recessed Handle");
+useArabic = true;
 
 const row = { extra_double: 1, extra_full_door_double: 0 };
 assert.deepEqual(
@@ -108,6 +160,11 @@ assert.deepEqual(
     ["extra_liner"]
 );
 assert.equal(row.extra_full_door_double, 1);
+
+const glass = { piece_type: "Glass", glass_margin_mm: 65 };
+assert.equal(api.reconcilePieceType({ dirty() {} }, glass), false);
+assert.equal(glass.piece_type, "Glass");
+assert.equal(glass.glass_margin_mm, 65);
 
 const legacy = { piece_type: "Extra", extra_liner: 1 };
 let dirtyCalls = 0;

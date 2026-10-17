@@ -48,8 +48,14 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
     FILE_REQUIRED,
     FILE_UNREADABLE,
     FORBIDDEN_ROTATION,
+    GLASS_GEOMETRY_AMBIGUOUS,
     KERF_VIOLATION,
     LEGACY_MESSAGE,
+    LINER_OFFSET_MISMATCH,
+    LINER_SHAPE_MISMATCH,
+    LINER_SIDE_MISMATCH,
+    LINER_WIDTH_MISMATCH,
+    LINER_WIDTH_NOT_MEASURABLE,
     MATERIAL_OVERLAP,
     MINSERT_UNSUPPORTED,
     MIXED_RESOURCE_SOURCE,
@@ -78,6 +84,12 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
     pair_target,
     sheet_target,
     topology_error_to_issue,
+)
+from almdina_erp.almdina_erp.domain.cutting.glass_opening_dxf import (
+    GlassIdentityContour,
+    GlassIdentityExpectation,
+    reassign_glass_identity,
+    validate_glass_dxf_opening,
 )
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import (
     assemble_contours,
@@ -109,6 +121,19 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_topology import (
     diagnostic_piece_contours,
     resolve_contour_ownership,
     validate_material_layout,
+)
+from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
+    LinerGeometryError,
+    LinerPiece,
+    canonical_path,
+    liner_parameters_active,
+    localize_path,
+    sawn_liner_ends,
+)
+from almdina_erp.almdina_erp.domain.cutting.machining_overlay import (
+    MACHINING_ADDONS,
+    compare_overlay_path,
+    machining_values,
 )
 from almdina_erp.almdina_erp.domain.cutting.extra_overlays import (
     ExtraOverlayCandidate,
@@ -147,6 +172,13 @@ from almdina_erp.almdina_erp.infrastructure.cutting.dxf_reader import (
 SHEET_OUTLINE_LAYER = "SHEET_OUTLINE"
 CUT_PATH_LAYER = "CUT_PATH"
 OFFCUT_LAYER = "OFFCUT"
+GEOMETRY_LAYER = "GEOMETRY"
+# Finished door contours in the new export are LINE entities. A closed
+# LWPOLYLINE on GEOMETRY is an illustrative region (liner strip or addon
+# boundary) and is not a door. If a file has GEOMETRY but no LINE, every
+# GEOMETRY contour is a candidate so a later save that converted the doors
+# is rejected by topology instead of being read from the saw centers.
+_GEOMETRY_PIECE_ENTITY_TYPES = frozenset({"LINE", "POLYLINE"})
 SHEETS_PER_ROW = 2
 SHEET_GAP_MM = 200
 CONNECTIVITY_TOLERANCE_MM = 1.5
@@ -910,6 +942,7 @@ def _read_normalized_geometry(
                 SHEET_OUTLINE_LAYER,
                 CUT_PATH_LAYER,
                 OFFCUT_LAYER,
+                GEOMETRY_LAYER,
                 DESIGNER_DEFAULT_LAYER,
                 TEXT_LABEL_LAYER,
                 *EXTRA_OVERLAY_LAYER_NAMES,
@@ -997,9 +1030,10 @@ def _missing_role_layer_guidance(diagnostics: dict[str, Any]) -> list[str]:
         if str(layer or "").strip()
     }
     hints = [
-        "أي طبقة غير SHEET_OUTLINE أو CUT_PATH أو OFFCUT لا تُستخدم كحدود لوح أو مسار قص. "
-        "ضع مستطيل كل لوح على SHEET_OUTLINE، ومحيط الدرفة الكاملة على CUT_PATH، "
-        "ومحيط الدرفة الناقصة على OFFCUT. طبقة text تحمل أرقام الدرف داخل DXF فقط ولا تُعد قصًا."
+        "إذا وُجدت طبقة GEOMETRY فهي الحدود النهائية للدرفات، وCUT_PATH هو مركز ريشة القص لا حدود الدرفة. "
+        "حدود مناطق الإضافات على GEOMETRY تُرسم للتوضيح ولا تُحسب درفات. "
+        "إذا غابت GEOMETRY يبقى التنسيق القديم: محيط الدرفة على CUT_PATH ومحيط الدرفة الناقصة على OFFCUT.",
+        "طبقة TEXT أو text لأرقام الدرف داخل DXF فقط ولا تُعد قصًا.",
     ]
     if DESIGNER_DEFAULT_LAYER in detected:
         hints.append(
@@ -1024,6 +1058,38 @@ def _missing_role_layer_guidance(diagnostics: dict[str, Any]) -> list[str]:
             "طبقة text تحمل أرقام الدرف داخل DXF فقط ولا تُعد قصًا."
         )
     return hints
+
+
+def _geometry_piece_segments(
+    rows: list[dict[str, Any]],
+) -> list[tuple[tuple[float, float], tuple[float, float]]] | None:
+    """Finished contours when the file is the new GEOMETRY export.
+
+    ``None`` means the layer is absent, so the caller keeps the legacy
+    CUT_PATH reading. An empty list means the layer exists but has no piece
+    lines; CUT_PATH centers must not fill that gap.
+    """
+
+    wanted = GEOMETRY_LAYER.upper()
+    geometry_rows = [
+        row
+        for row in rows
+        if str(row.get("layer") or "").strip().upper() == wanted
+    ]
+    if not geometry_rows:
+        return None
+    has_finished_lines = any(
+        str(row.get("entity_type") or "").strip().upper() == "LINE"
+        for row in geometry_rows
+    )
+    chosen = geometry_rows
+    if has_finished_lines:
+        chosen = [
+            row
+            for row in geometry_rows
+            if str(row.get("entity_type") or "").strip().upper() in _GEOMETRY_PIECE_ENTITY_TYPES
+        ]
+    return [(row["start"], row["end"]) for row in chosen]
 
 
 def _segments_for_layer(rows: list[dict[str, Any]], layer: str) -> list[tuple[tuple[float, float], tuple[float, float]]]:
@@ -1244,6 +1310,7 @@ def _expected_order_pieces(order: Any) -> list[dict[str, Any]]:
             for code, attr in EXTRA_ADDON_FIELD_BY_CODE.items()
             if bool(cint(getattr(row, attr, 0)))
         )
+        glass_margin_mm, margin_state = _margin_reading(row)
         for copy_no in range(
             1,
             physical_cut_quantity(
@@ -1261,9 +1328,23 @@ def _expected_order_pieces(order: Any) -> list[dict[str, Any]]:
                     "finished_length_cm": _num(finished_length_cm),
                     "allow_rotation": cint(row.allow_rotation),
                     "piece_type": row.piece_type or "Regular",
+                    "glass_margin_mm": glass_margin_mm,
+                    "margin_state": margin_state,
+                    "edge_long_left": cint(getattr(row, "edge_long_left", 0)),
+                    "edge_long_right": cint(getattr(row, "edge_long_right", 0)),
+                    "edge_width_top": cint(getattr(row, "edge_width_top", 0)),
+                    "edge_width_bottom": cint(getattr(row, "edge_width_bottom", 0)),
+                    "edge_long_thickness_mm": _num(getattr(row, "edge_long_thickness_mm", 0)),
+                    "edge_width_thickness_mm": _num(getattr(row, "edge_width_thickness_mm", 0)),
                     "source_piece_no": group_index,
                     "copy_no": copy_no,
                     "selected_codes": selected_codes,
+                    "liner_reference_side": str(getattr(row, "liner_reference_side", "") or ""),
+                    "liner_offset_cm": _num(getattr(row, "liner_offset_cm", 0)),
+                    "liner_width_cm": _num(getattr(row, "liner_width_cm", 0)),
+                    "liner_start_cm": _num(getattr(row, "liner_start_cm", 0)),
+                    "liner_length_cm": _num(getattr(row, "liner_length_cm", 0)),
+                    "machining": machining_values(row),
                 }
             )
     return expected
@@ -1385,8 +1466,124 @@ def _topology_piece_rotation(
     )
 
 
+def _stored_margin_mm(value: Any) -> float | None:
+    if value in (None, ""):
+        return None
+    return _num(value)
+
+
+def _margin_reading(row: Any) -> tuple[float | None, str]:
+    """Read the saved glass margin without turning a missing field into zero.
+
+    ``absent`` means the import row has no margin attribute. ``blank`` and
+    ``zero`` are values actually stored on that row.
+    """
+
+    if not hasattr(row, "glass_margin_mm"):
+        return None, "absent"
+    value = getattr(row, "glass_margin_mm")
+    if value in (None, ""):
+        return None, "blank"
+    number = _num(value)
+    if number == 0:
+        return 0.0, "zero"
+    return number, "stored"
+
+
+def _side_band_mm(candidate: dict[str, Any], flag: str, thickness_key: str) -> float:
+    if not candidate.get(flag):
+        return 0.0
+    return _num(candidate.get(thickness_key))
+
+
+def _apply_glass_identity(pieces: list[dict[str, Any]], expected: list[dict[str, Any]]) -> None:
+    indexes, error = reassign_glass_identity(
+        tuple(
+            GlassIdentityContour(
+                width_mm=_num(piece.get("w")) * 10.0,
+                height_mm=_num(piece.get("h")) * 10.0,
+                hole_count=len(piece.get("_holes_mm") or ()),
+                expected_index=(
+                    int(piece["_expected_piece_index"])
+                    if piece.get("_expected_piece_index") is not None
+                    else None
+                ),
+            )
+            for piece in pieces
+        ),
+        tuple(
+            GlassIdentityExpectation(
+                width_mm=_num(item["width_cm"]) * 10.0,
+                height_mm=_num(item["length_cm"]) * 10.0,
+                allow_rotation=bool(item["allow_rotation"]),
+                is_glass=item["piece_type"] == "Glass",
+            )
+            for item in expected
+        ),
+        dimension_tolerance=DIMENSION_TOLERANCE_MM,
+    )
+    if error:
+        raise DxfImportError(
+            issues=[
+                issue(
+                    GLASS_GEOMETRY_AMBIGUOUS,
+                    CATEGORY_IDENTITY,
+                    target=contour_target(1),
+                    params={
+                        "identity_unproven": True,
+                        "reason": "same_size_opening_not_unique",
+                    },
+                )
+            ]
+        )
+    for piece, index in zip(pieces, indexes, strict=True):
+        if index is not None:
+            piece["_expected_piece_index"] = index
+
+
+def _glass_opening_issues(labeled: list[dict[str, Any]]) -> list[DxfValidationIssue]:
+    issues: list[DxfValidationIssue] = []
+    for piece in labeled:
+        if piece.get("piece_type") != "Glass":
+            continue
+        spec = piece.get("_glass_spec") or {}
+        decision = validate_glass_dxf_opening(
+            outer=piece.get("_outline_mm") or (),
+            holes=piece.get("_holes_mm") or (),
+            piece_type="Glass",
+            margin_mm=spec.get("margin_mm"),
+            long_left_mm=spec.get("long_left_mm"),
+            long_right_mm=spec.get("long_right_mm"),
+            width_bottom_mm=spec.get("width_bottom_mm"),
+            width_top_mm=spec.get("width_top_mm"),
+            rotated=bool(piece.get("rotated")),
+            allow_rotation=bool(spec.get("allow_rotation")),
+            tolerance=GEOMETRY_TOLERANCE_MM,
+            finished_width_mm=spec.get("finished_width_mm"),
+            finished_length_mm=spec.get("finished_length_mm"),
+        )
+        if decision.ok:
+            continue
+        params = dict(decision.params or {})
+        if spec.get("margin_state"):
+            params["margin_state"] = spec.get("margin_state")
+        issues.append(
+            issue(
+                decision.code or GLASS_GEOMETRY_AMBIGUOUS,
+                decision.category,
+                target=piece_target(
+                    source_piece_no=piece.get("source_piece_no"),
+                    copy_no=piece.get("copy_no"),
+                ),
+                params=params,
+            )
+        )
+    return issues
+
+
 def _match_pieces_to_order(pieces: list[dict[str, Any]], order: Any) -> list[dict[str, Any]]:
     expected = _expected_order_pieces(order)
+    _apply_glass_identity(pieces, expected)
     unmatched_indexes = list(range(len(expected)))
     labeled: list[dict[str, Any]] = []
     issues: list[DxfValidationIssue] = []
@@ -1468,7 +1665,24 @@ def _match_pieces_to_order(pieces: list[dict[str, Any]], order: Any) -> list[dic
         piece["original_h"] = candidate["length_cm"]
         piece["rotated"] = rotated
         piece["piece_type"] = candidate["piece_type"]
+        piece["_glass_spec"] = {
+            "margin_mm": candidate.get("glass_margin_mm"),
+            "margin_state": candidate.get("margin_state") or "",
+            "long_left_mm": _side_band_mm(candidate, "edge_long_left", "edge_long_thickness_mm"),
+            "long_right_mm": _side_band_mm(candidate, "edge_long_right", "edge_long_thickness_mm"),
+            "width_bottom_mm": _side_band_mm(candidate, "edge_width_bottom", "edge_width_thickness_mm"),
+            "width_top_mm": _side_band_mm(candidate, "edge_width_top", "edge_width_thickness_mm"),
+            "allow_rotation": bool(candidate.get("allow_rotation")),
+            "finished_width_mm": _num(candidate.get("finished_width_cm")) * 10.0,
+            "finished_length_mm": _num(candidate.get("finished_length_cm")) * 10.0,
+        }
         piece["_extra_selected_codes"] = tuple(candidate.get("selected_codes") or ())
+        piece["_liner_side"] = str(candidate.get("liner_reference_side") or "")
+        piece["_liner_offset_cm"] = _num(candidate.get("liner_offset_cm"))
+        piece["_liner_width_cm"] = _num(candidate.get("liner_width_cm"))
+        piece["_liner_start_cm"] = _num(candidate.get("liner_start_cm"))
+        piece["_liner_length_cm"] = _num(candidate.get("liner_length_cm"))
+        piece["_machining"] = candidate.get("machining") or {}
         if "_material_area_m2" in piece:
             piece["area_m2"] = round(_num(piece["_material_area_m2"]), 4)
         else:
@@ -1491,6 +1705,9 @@ def _match_pieces_to_order(pieces: list[dict[str, Any]], order: Any) -> list[dic
         )
     if issues:
         raise DxfImportError(issues=issues)
+    glass_issues = _glass_opening_issues(labeled)
+    if glass_issues:
+        raise DxfImportError(issues=glass_issues)
     return labeled
 
 
@@ -1888,12 +2105,194 @@ def _collect_extra_overlay_candidates(rows: list[dict[str, Any]]) -> tuple[Extra
     return tuple(candidates)
 
 
+_LINER_ISSUE_BY_CODE = {
+    "liner_offset_mismatch": LINER_OFFSET_MISMATCH,
+    "liner_width_mismatch": LINER_WIDTH_MISMATCH,
+    "liner_side_mismatch": LINER_SIDE_MISMATCH,
+    "liner_shape_mismatch": LINER_SHAPE_MISMATCH,
+    "liner_width_not_measurable": LINER_WIDTH_NOT_MEASURABLE,
+}
+
+
+def liner_geometry_issue(
+    measurement,
+    *,
+    source_piece_no: int,
+    copy_no: int,
+    piece_type: str,
+    overlay_kind: str = "liner",
+):
+    return _liner_issue(
+        measurement,
+        source_piece_no=source_piece_no,
+        copy_no=copy_no,
+        piece_type=piece_type,
+        overlay_kind=overlay_kind,
+    )
+
+
+def _liner_issue(
+    measurement,
+    *,
+    source_piece_no: int,
+    copy_no: int,
+    piece_type: str,
+    overlay_kind: str = "liner",
+):
+    if measurement.ok:
+        return None
+    params = {
+        "property_code": measurement.property_code,
+        "expected": measurement.expected,
+        "measured": measurement.measured,
+        "reason_code": measurement.reason_code,
+        "piece_type": piece_type,
+    }
+    if overlay_kind and overlay_kind != "liner":
+        params["overlay_kind"] = overlay_kind
+    return issue(
+        _LINER_ISSUE_BY_CODE[measurement.code],
+        CATEGORY_OVERLAY,
+        target=piece_target(source_piece_no=source_piece_no, copy_no=copy_no),
+        params=params,
+    )
+
+
+def _regular_overlay_params(piece: dict[str, Any], kind: str) -> dict[str, Any]:
+    if kind == "liner":
+        return {
+            "enabled": "liner" in tuple(piece.get("_extra_selected_codes") or ()),
+            "side": str(piece.get("_liner_side") or ""),
+            "offset_cm": _num(piece.get("_liner_offset_cm")),
+            "width_cm": _num(piece.get("_liner_width_cm")),
+            "start_cm": piece.get("_liner_start_cm"),
+            "length_cm": piece.get("_liner_length_cm"),
+        }
+    spec = (piece.get("_machining") or {}).get(kind) or {}
+    return {
+        "enabled": kind in tuple(piece.get("_extra_selected_codes") or ()),
+        "side": str(spec.get("side") or ""),
+        "offset_cm": _num(spec.get("offset_cm")),
+        "width_cm": _num(spec.get("width_cm")),
+        "start_cm": spec.get("start_cm"),
+        "length_cm": spec.get("length_cm"),
+    }
+
+
+def _regular_liner_issue(
+    piece: dict[str, Any],
+    items,
+    sheet: dict[str, Any],
+    trim_mm: float,
+    cutter_diameter_mm: float | None = None,
+    kind: str = "liner",
+):
+    """Geometric machining check for a rectangular door once its 0/90 orientation is known."""
+
+    piece_type = str(piece.get("piece_type") or "Regular")
+    if piece_type != "Regular":
+        return None
+    params = _regular_overlay_params(piece, kind)
+    side = params["side"]
+    offset_cm = params["offset_cm"]
+    width_cm = params["width_cm"]
+    if not liner_parameters_active(
+        enabled=params["enabled"],
+        side=side,
+        offset_cm=offset_cm,
+        width_cm=width_cm,
+    ):
+        return None
+    marks = [item for item in items if item.kind == kind]
+    if len(marks) != 1:
+        return None
+    outline = tuple((point[0] * 10.0, point[1] * 10.0) for point in piece.get("_outline_cm") or ())
+    if len(outline) < 3:
+        return None
+    path_cm = _to_plan_points(list(marks[0].path), sheet=sheet, trim_mm=trim_mm)
+    local = localize_path(tuple((point[0] * 10.0, point[1] * 10.0) for point in path_cm), outline)
+    width_mm = _num(piece.get("original_w")) * 10.0
+    height_mm = _num(piece.get("original_h")) * 10.0
+    quarter_turns = 1 if piece.get("rotated") else 0
+    canonical = canonical_path(
+        local,
+        mirrored=False,
+        quarter_turns=quarter_turns,
+        width_mm=width_mm,
+        height_mm=height_mm,
+    )
+    liner_piece = LinerPiece(piece_type, _num(piece.get("original_w")), _num(piece.get("original_h")))
+    trim = max(0.0, float(trim_mm or 0.0))
+    try:
+        start_sawn, end_sawn = sawn_liner_ends(
+            liner_piece,
+            side,
+            origin_mm=(_num(piece.get("x")) * 10.0, _num(piece.get("y")) * 10.0),
+            mirrored=False,
+            quarter_turns=quarter_turns,
+            board=(
+                -trim,
+                -trim,
+                _num(sheet.get("full_width_mm")) - trim,
+                _num(sheet.get("full_height_mm")) - trim,
+            ),
+            start_cm=params["start_cm"],
+            length_cm=params["length_cm"],
+        )
+    except LinerGeometryError:
+        start_sawn, end_sawn = None, None
+    measurement = compare_overlay_path(
+        canonical,
+        liner_piece,
+        kind,
+        side,
+        offset_cm,
+        width_cm,
+        cutter_diameter_mm,
+        params["start_cm"],
+        params["length_cm"],
+        start_sawn=start_sawn,
+        end_sawn=end_sawn,
+    )
+    return _liner_issue(
+        measurement,
+        source_piece_no=int(piece.get("source_piece_no") or 0),
+        copy_no=int(piece.get("copy_no") or 1),
+        piece_type=piece_type,
+        overlay_kind=kind,
+    )
+
+
+def _regular_machining_issues(
+    piece: dict[str, Any],
+    items,
+    sheet: dict[str, Any],
+    trim_mm: float,
+    cutter_diameter_mm: float | None = None,
+):
+    issues = []
+    for addon in MACHINING_ADDONS:
+        found = _regular_liner_issue(
+            piece,
+            items,
+            sheet,
+            trim_mm,
+            cutter_diameter_mm,
+            addon.kind,
+        )
+        if found is not None:
+            issues.append(found)
+    return issues
+
+
 def _attach_extra_overlays(
     pieces: list[dict[str, Any]],
     *,
     overlays: Sequence[ExtraOverlayCandidate],
     sheets: list[dict[str, Any]],
     trim_mm: float,
+    cutter_diameter_mm: float | None = None,
+    validate_regular_machining: bool = True,
 ) -> None:
     hosts = tuple(
         ExtraOverlayHost(
@@ -1917,6 +2316,7 @@ def _attach_extra_overlays(
             hosts,
             tolerance=GEOMETRY_TOLERANCE_MM,
             host_margin=OVERLAY_HOST_MARGIN_MM,
+            cutter_radius_mm=(float(cutter_diameter_mm or 0.0) / 2.0),
         )
     except ExtraOverlayError as exc:
         raise DxfImportError(issues=[_overlay_error_issue(exc)]) from exc
@@ -1925,6 +2325,26 @@ def _attach_extra_overlays(
     grouped: dict[int, list] = {}
     for item in assigned:
         grouped.setdefault(int(item.host_key), []).append(item)
+    # Strict imports validate machining only after persisted dimensions and
+    # piece identity have been proved, so 180° and 270° are not guessed here.
+    # Standalone legacy callers retain their original early check.
+    if validate_regular_machining:
+        liner_issues = []
+        for piece in pieces:
+            sheet = sheets_by_no.get(int(piece["_sheet_no"]))
+            if sheet is None:
+                continue
+            liner_issues.extend(
+                _regular_machining_issues(
+                    piece,
+                    grouped.get(int(piece["id"])) or [],
+                    sheet,
+                    trim_mm,
+                    cutter_diameter_mm,
+                )
+            )
+        if liner_issues:
+            raise DxfImportError(issues=liner_issues)
     for piece in pieces:
         items = grouped.get(int(piece["id"])) or []
         if not items:
@@ -2141,8 +2561,10 @@ def validate_imported_plan(
     return {"is_valid": not issues, "errors": present_issues_as_strings(issues)}
 
 
-def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
-    """Parse and fully validate an uploaded production DXF without mutating it."""
+def parse_production_dxf(
+    file_url: str, order: Any, *, validate_regular_machining: bool = True
+) -> dict[str, Any]:
+    """Parse production DXF; strict callers own the final machining check."""
     if not file_url:
         raise DxfImportError(issues=[issue(FILE_REQUIRED, CATEGORY_FILE, target=file_target())])
 
@@ -2166,13 +2588,19 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
 
     overlays = _collect_extra_overlay_candidates(rows)
     sheet_segments = _segments_for_layer(rows, SHEET_OUTLINE_LAYER)
-    cut_segments = _segments_for_layer(rows, CUT_PATH_LAYER)
     offcut_segments = _segments_for_layer(rows, OFFCUT_LAYER)
-    if offcut_segments:
-        # OFFCUT is an input classification, not a validation bypass. Its
-        # contours enter the same topology, spacing, bounds and exact-size
-        # pipeline as ordinary CUT_PATH contours.
-        cut_segments = [*cut_segments, *offcut_segments]
+    geometry_piece_segments = _geometry_piece_segments(rows)
+    if geometry_piece_segments is not None:
+        # New export: GEOMETRY is the finished door. CUT_PATH is the saw
+        # center and must not be assembled as another door.
+        cut_segments = geometry_piece_segments
+    else:
+        cut_segments = _segments_for_layer(rows, CUT_PATH_LAYER)
+        if offcut_segments:
+            # OFFCUT is an input classification, not a validation bypass. Its
+            # contours enter the same topology, spacing, bounds and exact-size
+            # pipeline as ordinary CUT_PATH contours.
+            cut_segments = [*cut_segments, *offcut_segments]
     if not sheet_segments or not cut_segments:
         fallback_sheets, fallback_cuts = _default_layer_role_segments(
             rows,
@@ -2252,11 +2680,14 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
 
     _validate_piece_spacing(pieces, kerf_mm=max(0.0, flt(order.kerf_mm)))
     labeled = _match_pieces_to_order(pieces, order)
+    cutter_diameter_mm = flt(order.kerf_mm)
     _attach_extra_overlays(
         labeled,
         overlays=overlays,
         sheets=sheets,
         trim_mm=trim_mm,
+        cutter_diameter_mm=cutter_diameter_mm if cutter_diameter_mm > 0 else None,
+        validate_regular_machining=validate_regular_machining,
     )
     _attach_text_labels(
         sheets,
@@ -2369,6 +2800,7 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
 
 __all__ = [
     "CUT_PATH_LAYER",
+    "GEOMETRY_LAYER",
     "OFFCUT_LAYER",
     "DIMENSION_TOLERANCE_MM",
     "DxfImportError",

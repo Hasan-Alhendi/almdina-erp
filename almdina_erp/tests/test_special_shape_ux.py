@@ -45,7 +45,7 @@ def _fields(path: Path) -> dict[str, dict]:
 
 def test_special_piece_schema_keeps_documentation_and_accounting_price_separate():
     fields = _fields(DETAIL_JSON)
-    assert fields["piece_type"]["options"] == "Regular\nClipped Corner\nL-Shaped Corner\nSpecial"
+    assert fields["piece_type"]["options"] == "Regular\nClipped Corner\nL-Shaped Corner\nSpecial\nGlass"
     assert fields["special_shape_drawing_json"]["fieldtype"] == "Long Text"
     assert fields["special_shape_status"]["read_only"] == 1
     for fieldname in (
@@ -236,7 +236,7 @@ def test_review_and_production_keep_special_drawing_optional_and_plan_approval_i
     assert "ensure_special_prices_approved" not in approval
     assert "pending_custom_edge_price_labels" in invoice
     assert "قبل طباعة الفاتورة" in invoice
-    assert placed_piece_fields["piece_type"]["options"] == "Regular\nClipped Corner\nL-Shaped Corner\nSpecial"
+    assert placed_piece_fields["piece_type"]["options"] == "Regular\nClipped Corner\nL-Shaped Corner\nSpecial\nGlass"
     assert '"piece_type": piece.get("piece_type") or "Regular"' in workspace
 
 
@@ -246,7 +246,9 @@ def test_cutting_plan_visually_audits_every_special_raw_piece():
     remnant_planning = REMNANT_PLANNING.read_text(encoding="utf-8")
     assert "render_special_raw_coverage(frm, plan)" in order_js
     assert "dco-special-raw-piece" in order_js
-    assert "✦ درفة خاصة · خام CNC" in order_js
-    assert "render_piece_edge_lines(piece, geometryModel, clipId)" in order_js
+    assert 'htmlText("Special door · CNC raw")' in order_js
+    assert "const manufacturingPiece = pieceWithLinerSpec(frm, piece);" in order_js
+    assert "geometry.resolve(manufacturingPiece)" in order_js
+    assert "render_piece_edge_lines(manufacturingPiece, geometryModel, clipId)" in order_js
     assert '"special_shape_raw_summary": summarize_special_shapes(expanded, plan)' in optimization
     assert '"piece_type": row.piece_type or "Regular"' in remnant_planning

@@ -182,6 +182,39 @@ assert.equal(corner.source, "corner");
 assert.equal(corner.geometry.outer.length, 6);
 assertLabelInside(corner);
 
+const glassPlan = geometry.resolve({
+    x: 0,
+    y: 0,
+    w: 52.1,
+    h: 72.5,
+    piece_type: "Glass",
+    glass_hole_local_mm: [[65, 65], [456, 65], [456, 660], [65, 660]],
+});
+assert.equal(glassPlan.source, "rectangle");
+assert.equal(glassPlan.vector, true);
+assert.equal(glassPlan.geometry.holes.length, 1);
+assert.equal(pathCommandCount(glassPlan, "M"), 2);
+assert.equal(glassPlan.geometry.pathData.includes("evenodd"), false);
+assertLabelInside(glassPlan);
+
+const uploadedGlass = geometry.resolve(dxfPiece(
+    [[0, 0], [521, 0], [521, 725], [0, 725]],
+    [[[65, 65], [456, 65], [456, 660], [65, 660]]],
+    { piece_type: "Glass", w: 52.1, h: 72.5 }
+));
+assert.equal(uploadedGlass.source, "dxf");
+assert.equal(uploadedGlass.geometry.holes.length, 1);
+assertLabelInside(uploadedGlass);
+
+const rendererSource = fs.readFileSync(
+    path.join(root, "public/js/door_cutting_order/cutting_plan/door_cutting_order_cutting_plan_renderer.js"),
+    "utf8"
+);
+assert.match(rendererSource, /geometryModel\.geometry\.pathData/);
+assert.match(rendererSource, /fill-rule="evenodd"/);
+assert.match(rendererSource, /\.dco-shaped-piece-outline path \{ fill: #fff !important; stroke: #111 !important; \}/);
+assert.match(rendererSource, /buildPrintDocument/);
+
 const invalidDeclared = geometry.resolve(dxfPiece([[0, 0], [1, 1]]));
 assert.equal(invalidDeclared.source, "invalid-dxf");
 assert.equal(invalidDeclared.invalid, true);

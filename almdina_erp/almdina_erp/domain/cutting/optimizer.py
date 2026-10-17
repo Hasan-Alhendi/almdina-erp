@@ -8,7 +8,8 @@ from typing import Any
 
 from .evaluation import evaluate_plan, validate_plan
 from .kerf_layout import pack_with_stable_kerf
-from .primitives import num, prune_free_rects, split_free_rect
+from .glass_opening_dxf import record_glass_opening
+from .primitives import liner_metadata, num, prune_free_rects, split_free_rect
 from .registry import METHOD_CONFIGS, PACKING_OPTIONS, run_single_method
 
 AUTO_FAST = "Auto"
@@ -750,6 +751,7 @@ def _solve_cp_sat(
             "rotated": rotated,
             "area_m2": num(piece.get("area_m2")),
             "notes": piece.get("notes") or "",
+            **liner_metadata(piece),
             "edge_long_right": 1 if piece.get("edge_long_right") else 0,
             "edge_long_left": 1 if piece.get("edge_long_left") else 0,
             "edge_width_top": 1 if piece.get("edge_width_top") else 0,
@@ -760,6 +762,7 @@ def _solve_cp_sat(
             "edge_rate_usd": num(piece.get("edge_rate_usd")),
             "edge_cost_usd": num(piece.get("edge_cost_usd")),
         }
+        record_glass_opening(placed, piece, rotated=rotated)
         sheets_by_bin.setdefault(chosen, []).append(placed)
 
     sheets: list[dict[str, Any]] = []

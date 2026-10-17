@@ -42,6 +42,14 @@ def clone_pieces(pieces: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return deepcopy(pieces)
 
 
+def liner_metadata(row: dict[str, Any]) -> dict[str, Any]:
+    from almdina_erp.almdina_erp.domain.cutting.machining_overlay import (
+        machining_metadata,
+    )
+
+    return machining_metadata(row)
+
+
 def _edge_metadata(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "edge_long_right": 1 if row.get("edge_long_right") else 0,
@@ -100,9 +108,13 @@ def expand_piece_groups(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     "allow_rotation": 1 if row.get("allow_rotation") else 0,
                     "area_m2": (width_cm * length_cm) / 10000,
                     "notes": row.get("notes") or "",
+                    **liner_metadata(row),
                     **_edge_metadata(row),
                 }
             )
+            margin = row.get("glass_margin_mm")
+            if (row.get("piece_type") or "") == "Glass" and margin not in (None, "", 0, 0.0):
+                pieces[-1]["glass_margin_mm"] = num(margin)
             serial += 1
     return pieces
 
@@ -136,7 +148,11 @@ def make_placed_piece(
     h: float,
     rotated: bool,
 ) -> dict[str, Any]:
-    return {
+    from almdina_erp.almdina_erp.domain.cutting.glass_opening_dxf import (
+        record_glass_opening,
+    )
+
+    placed = {
         "id": piece["id"],
         "label": piece["label"],
         "source_piece_no": piece["source_piece_no"],
@@ -160,8 +176,11 @@ def make_placed_piece(
         "rotated": bool(rotated),
         "area_m2": num(piece.get("area_m2")),
         "notes": piece.get("notes") or "",
+        **liner_metadata(piece),
         **_edge_metadata(piece),
     }
+    record_glass_opening(placed, piece, rotated=bool(rotated))
+    return placed
 
 
 def sort_pieces(pieces: list[dict[str, Any]], method: str) -> list[dict[str, Any]]:

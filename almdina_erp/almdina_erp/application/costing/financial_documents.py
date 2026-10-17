@@ -115,6 +115,32 @@ def _measurement_rows(pieces: Sequence[Mapping[str, Any]]) -> list[dict[str, Any
     return rows
 
 
+def _allocate_addon_cents(entries: list[tuple[dict[str, Any], float]]) -> None:
+    """Round the aggregate saved add-on amount, then allocate cents by remainder.
+
+    Individual half-cent rounding can otherwise overcharge when several
+    prorated add-ons share one commercial door. Largest remainders get the
+    remaining cents, with invoice order as a stable tie-breaker; no arbitrary
+    adjustment of the last line and no re-pricing of unit rates.
+    """
+    if not entries or any(amount < 0 for _, amount in entries):
+        return
+    raw_cents = [amount * 100 for _, amount in entries]
+    assigned_cents = [math.floor(value) for value in raw_cents]
+    target_cents = int(round(_money(sum(amount for _, amount in entries)) * 100))
+    cents_remaining = target_cents - sum(assigned_cents)
+    if not 0 <= cents_remaining <= len(entries):
+        raise ValueError("addon_rounding_allocation_invalid")
+    priority = sorted(
+        range(len(entries)),
+        key=lambda index: (-(raw_cents[index] - assigned_cents[index]), index),
+    )
+    for index in priority[:cents_remaining]:
+        assigned_cents[index] += 1
+    for (line, _amount), cents in zip(entries, assigned_cents):
+        line["amount_usd"] = cents / 100
+
+
 def _customer_invoice_lines(
     order: Mapping[str, Any],
     pieces: Sequence[Mapping[str, Any]],
@@ -134,6 +160,7 @@ def _customer_invoice_lines(
     )
     board_description = _text(_value(order, "board_description"))
     lines: list[dict[str, Any]] = []
+    addon_amounts: list[tuple[dict[str, Any], float]] = []
 
     if board_count or material_amount:
         lines.append(
@@ -318,7 +345,15 @@ def _customer_invoice_lines(
                 }
             )
 
-        addon_quantity = _quantity(_value(piece, "qty"))
+        # Physical execution counts manufactured copies; the commercial
+        # projection supplies the billable door quantity for every add-on.
+        # Old snapshots without that projection retain ordered quantity.
+        addon_quantity = max(
+            0.0,
+            _number(_value(piece, "addon_billable_qty"))
+            if "addon_billable_qty" in piece
+            else float(_quantity(_value(piece, "qty"))),
+        )
         specs = (
             (
                 "extra_double",
@@ -356,18 +391,25 @@ def _customer_invoice_lines(
             if not _number(_value(piece, flag_field)) and amount <= 0:
                 continue
             rate = _number(_value(piece, rate_field))
-            lines.append(
-                {
-                    "type": "extra_addon",
-                    "description": f"إضافة {label} — درفة رقم {index}",
-                    "quantity": addon_quantity,
-                    "unit": "درفة",
-                    "rate_usd": _money(rate),
-                    "amount_usd": _money(rate * addon_quantity if rate else amount),
-                    "note": _text(_value(piece, "notes")),
-                }
+            # Already prorated by the commercial execution projection. Retain
+            # its unrounded value until all add-ons can share cent allocation.
+            billable_amount = (
+                amount if amount_field in piece and piece[amount_field] is not None
+                else rate * addon_quantity
             )
+            line = {
+                "type": "extra_addon",
+                "description": f"إضافة {label} — درفة رقم {index}",
+                "quantity": addon_quantity,
+                "unit": "درفة",
+                "rate_usd": _money(rate),
+                "amount_usd": _money(billable_amount),
+                "note": _text(_value(piece, "notes")),
+            }
+            lines.append(line)
+            addon_amounts.append((line, billable_amount))
 
+    _allocate_addon_cents(addon_amounts)
     return lines
 
 

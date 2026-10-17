@@ -178,6 +178,7 @@ def test_invoice_uses_one_aggregate_offcut_line_and_excludes_customer_execution_
                 "piece_type": "Regular",
                 "qty": 5,
                 "factory_execution_qty": 4,
+                "addon_billable_qty": 4,  # five ordered doors, four executed
                 "extra_liner": 1,
                 "extra_liner_unit_price_usd": 3,
                 "extra_liner_total_usd": 12,
@@ -340,11 +341,142 @@ def test_invoice_service_scales_edge_and_extra_totals_to_factory_physical_quanti
     result = _commercial_piece_snapshots([row], {1: 4}, {1: 5})[0]
 
     assert result["factory_execution_qty"] == 4
+    assert result["addon_billable_qty"] == 4
     assert result["edge_meters"] == 8
     assert result["edge_cost_usd"] == 16
     assert result["extra_liner_total_usd"] == 12
     assert result["extra_addons_total_usd"] == 12
 
+
+
+@pytest.mark.parametrize(
+    "second_piece",
+    [
+        _piece("door:2", copy_no=2),  # FULL_BOARD + FULL_BOARD
+        _piece("door:2", copy_no=2, kind="OFFCUT", source="FACTORY", execution="FACTORY"),
+        _piece("door:2", copy_no=2, kind="OFFCUT", source="CUSTOMER", execution="FACTORY"),
+    ],
+    ids=("two-full-boards", "factory-offcut", "customer-supplied-factory-executed"),
+)
+def test_full_double_offcut_source_does_not_double_commercial_addons(second_piece):
+    from almdina_erp.almdina_erp.services.cost_document_service import _commercial_piece_snapshots
+    from almdina_erp.almdina_erp.domain.orders.extra_addons import physical_cut_quantity
+
+    addon_flags = (
+        "extra_full_door_double",
+        "extra_liner",
+        "extra_back_groove",
+        "extra_recessed_handle_cutout",
+    )
+    assert physical_cut_quantity(1, full_door_double=True) == 2
+    projection = physical_execution_projection([_piece("door:1", copy_no=1), second_piece])
+    assert projection.physical_qty_by_source_piece_no == {1: 2}
+    assert projection.factory_processing_qty_by_source_piece_no == {1: 2}
+    row_values = {"piece_type": "Regular", "qty": 1, "piece_no": 1}
+    for flag in addon_flags:
+        row_values[flag] = 1
+        row_values[flag + "_unit_price_usd"] = 0.50
+        row_values[flag + "_total_usd"] = 0.50
+    row_values["extra_addons_total_usd"] = 2.00
+    row = SimpleNamespace(**row_values)
+    snapshot = _commercial_piece_snapshots(
+        [row],
+        dict(projection.factory_processing_qty_by_source_piece_no),
+        dict(projection.physical_qty_by_source_piece_no),
+    )[0]
+    assert snapshot["factory_execution_qty"] == 2
+    assert snapshot["addon_billable_qty"] == 1
+    assert snapshot["extra_addons_total_usd"] == 2.00
+    document = build_customer_invoice_document(
+        {"required_boards": 0, "cutting_cost_usd": 1.00, "customer_quote_total_usd": 3.00},
+        [snapshot],
+    )
+    addons = [line for line in document["lines"] if line["type"] == "extra_addon"]
+    assert len(addons) == 4
+    assert {line["quantity"] for line in addons} == {1}
+    assert {line["amount_usd"] for line in addons} == {0.50}
+    assert document["totals"][0]["value_usd"] == 3.00
+
+
+def test_full_double_partial_customer_execution_prorates_commercial_addon_once():
+    from almdina_erp.almdina_erp.services.cost_document_service import _commercial_piece_snapshots
+
+    projection = physical_execution_projection([
+        _piece("door:1", copy_no=1),
+        _piece("door:2", copy_no=2, kind="OFFCUT", source="CUSTOMER", execution="CUSTOMER"),
+    ])
+    assert projection.physical_qty_by_source_piece_no == {1: 2}
+    assert projection.factory_processing_qty_by_source_piece_no == {1: 1}
+    row = SimpleNamespace(
+        piece_type="Regular", qty=1,
+        extra_full_door_double=1,
+        extra_full_door_double_unit_price_usd=0.50,
+        extra_full_door_double_total_usd=0.50,
+        extra_liner=1, extra_liner_unit_price_usd=0.50, extra_liner_total_usd=0.50,
+        extra_addons_total_usd=1.00,
+    )
+    snapshot = _commercial_piece_snapshots(
+        [row],
+        dict(projection.factory_processing_qty_by_source_piece_no),
+        dict(projection.physical_qty_by_source_piece_no),
+    )[0]
+    assert snapshot["factory_execution_qty"] == 1
+    assert snapshot["addon_billable_qty"] == 0.5
+    assert snapshot["extra_addons_total_usd"] == 0.50
+    doc = build_customer_invoice_document({"required_boards": 0}, [snapshot])
+    addons = [line for line in doc["lines"] if line["type"] == "extra_addon"]
+    assert [line["quantity"] for line in addons] == [0.5, 0.5]
+    assert [line["amount_usd"] for line in addons] == [0.25, 0.25]
+    assert doc["totals"][0]["value_usd"] == 0.50
+
+
+def test_partial_customer_offcut_half_cent_total_matches_quote():
+    from almdina_erp.almdina_erp.services.cost_document_service import _commercial_piece_snapshots
+
+    execution = physical_execution_projection([
+        _piece("door:1", copy_no=1),
+        _piece("door:2", copy_no=2, kind="OFFCUT", source="CUSTOMER", execution="CUSTOMER"),
+    ])
+    fields = (
+        "extra_full_door_double", "extra_liner",
+        "extra_back_groove", "extra_recessed_handle_cutout",
+    )
+    data = {"piece_type": "Regular", "qty": 1}
+    for flag in fields:
+        data[flag] = 1
+        data[flag + "_unit_price_usd"] = 0.01
+        data[flag + "_total_usd"] = 0.01
+    data["extra_addons_total_usd"] = 0.04
+    snapshot = _commercial_piece_snapshots(
+        [SimpleNamespace(**data)],
+        dict(execution.factory_processing_qty_by_source_piece_no),
+        dict(execution.physical_qty_by_source_piece_no),
+    )[0]
+    assert snapshot["addon_billable_qty"] == 0.5
+    assert snapshot["extra_addons_total_usd"] == 0.02
+    invoice = build_customer_invoice_document(
+        {"required_boards": 0, "customer_quote_total_usd": 0.02}, [snapshot]
+    )
+    addons = [line for line in invoice["lines"] if line["type"] == "extra_addon"]
+    assert [line["amount_usd"] for line in addons] == [0.01, 0.01, 0.0, 0.0]
+    assert invoice["totals"][0]["value_usd"] == 0.02
+
+
+def test_historical_and_invalid_execution_projection_keep_commercial_source_qty():
+    from almdina_erp.almdina_erp.services.cost_document_service import _commercial_piece_snapshots
+
+    row = SimpleNamespace(
+        piece_type="Regular", qty=3,
+        extra_full_door_double=1,
+        extra_full_door_double_unit_price_usd=0.50,
+        extra_full_door_double_total_usd=1.50,
+    )
+    for physical in ({}, {1: 0}, {1: 2}):
+        projected = _commercial_piece_snapshots([row], {1: 3}, physical)[0]
+        assert "addon_billable_qty" not in projected
+        invoice = build_customer_invoice_document({"required_boards": 0}, [projected])
+        assert invoice["lines"][0]["quantity"] == 3
+        assert invoice["lines"][0]["amount_usd"] == 1.50
 
 def test_cost_price_has_one_canonical_save_boundary() -> None:
     source = (

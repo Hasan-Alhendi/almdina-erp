@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 import unittest
 from pathlib import Path
@@ -28,6 +29,13 @@ CONTROLLER = SETTINGS / "controller.js"
 
 
 class WhatsAppFrontendContractTests(unittest.TestCase):
+    def assert_localized(self, source: str, message_id: str, expected_arabic: str) -> None:
+        # Verify the message ID and real Arabic catalog, not obsolete inline Arabic.
+        self.assertIn(f'"{message_id}"', source)
+        with (ROOT / "translations" / "ar.csv").open(encoding="utf-8", newline="") as handle:
+            translations = {row[0]: row[1] for row in csv.reader(handle) if len(row) >= 2}
+        self.assertEqual(translations.get(message_id), expected_arabic)
+
     def test_openwa_secrets_never_reach_javascript(self) -> None:
         offenders = []
         for path in PUBLIC.rglob("*.js"):
@@ -58,7 +66,7 @@ class WhatsAppFrontendContractTests(unittest.TestCase):
         dialogs = DIALOGS.read_text(encoding="utf-8")
         self.assertIn("function openQr(", dialogs)
         self.assertIn('source.indexOf("data:image/") === 0', dialogs)
-        self.assertIn("يُحدَّث الرمز كل 5 ثوانٍ", dialogs)
+        self.assert_localized(dialogs, "The code refreshes every 5 seconds. Scan it from WhatsApp on your phone.", "يُحدَّث الرمز كل 5 ثوانٍ. امسحه من واتساب على الجوال.")
         qr_block = dialogs.split("function openQr(", 1)[1]
         self.assertIn("${escapeHtml(", qr_block)
         self.assertNotIn("${esc(", qr_block)
@@ -67,8 +75,8 @@ class WhatsAppFrontendContractTests(unittest.TestCase):
         renderer = RENDERER.read_text(encoding="utf-8")
         controller = CONTROLLER.read_text(encoding="utf-8")
         self.assertIn("data-whatsapp-root", renderer)
-        self.assertIn("إنشاء وربط WhatsApp", renderer)
-        self.assertIn("إعادة اتصال", renderer)
+        self.assert_localized(renderer, "Create and link WhatsApp", "إنشاء وربط WhatsApp")
+        self.assert_localized(renderer, "Reconnect", "إعادة اتصال")
         self.assertIn("whatsapp.refresh", controller)
         self.assertIn("viewModel.canManageWhatsAppSession(state.current)", controller)
         self.assertIn("model.canManageWhatsAppSession", renderer)
@@ -124,10 +132,10 @@ class WhatsAppFrontendContractTests(unittest.TestCase):
 
     def test_cost_tab_invoice_send_confirms_then_uses_server_invoice_rpc(self) -> None:
         source = INVOICE_TOOLBAR.read_text(encoding="utf-8")
-        self.assertIn("إرسال الفاتورة عبر واتساب", source)
-        self.assertIn("هل تريد إرسال الفاتورة للزبون؟", source)
+        self.assert_localized(source, "Send the invoice on WhatsApp", "إرسال الفاتورة عبر واتساب")
+        self.assert_localized(source, "Send the invoice to the customer?", "هل تريد إرسال الفاتورة للزبون؟")
         self.assertIn("dco-whatsapp-send-invoice", source)
-        self.assertIn("frappe.confirm(INVOICE_CONFIRM_MESSAGE", source)
+        self.assertIn("frappe.confirm(translate(INVOICE_CONFIRM_MESSAGE", source)
         self.assertIn("send_order_invoice", source)
         self.assertIn("get_whatsapp_delivery_status", source)
         self.assertIn('can(frm, "print_customer_invoice")', source)
@@ -144,10 +152,10 @@ class WhatsAppFrontendContractTests(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn('section("whatsapp_messages"', view_model)
-        self.assertIn("رسائل واتساب", view_model)
+        self.assert_localized(view_model, "WhatsApp messages", "رسائل واتساب")
         self.assertIn("whatsapp_measurements_text", view_model)
         self.assertIn("whatsapp_measurement_amendments_text", view_model)
-        self.assertIn("رسالة تعديلات القياسات", view_model)
+        self.assert_localized(view_model, "Measurement changes message", "رسالة تعديلات القياسات")
         self.assertIn("whatsapp_measurement_amendments_text", dialogs)
         self.assertIn("whatsapp_invoice_text", dialogs)
         self.assertIn('section === "whatsapp_messages"', dialogs)
