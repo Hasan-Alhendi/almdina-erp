@@ -48,6 +48,7 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
     FILE_REQUIRED,
     FILE_UNREADABLE,
     FORBIDDEN_ROTATION,
+    GLASS_GEOMETRY_AMBIGUOUS,
     KERF_VIOLATION,
     LEGACY_MESSAGE,
     LINER_OFFSET_MISMATCH,
@@ -83,6 +84,12 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
     pair_target,
     sheet_target,
     topology_error_to_issue,
+)
+from almdina_erp.almdina_erp.domain.cutting.glass_opening_dxf import (
+    GlassIdentityContour,
+    GlassIdentityExpectation,
+    reassign_glass_identity,
+    validate_glass_dxf_opening,
 )
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import (
     assemble_contours,
@@ -1320,6 +1327,13 @@ def _expected_order_pieces(order: Any) -> list[dict[str, Any]]:
                     "finished_length_cm": _num(finished_length_cm),
                     "allow_rotation": cint(row.allow_rotation),
                     "piece_type": row.piece_type or "Regular",
+                    "glass_margin_mm": _num(getattr(row, "glass_margin_mm", 0)),
+                    "edge_long_left": cint(getattr(row, "edge_long_left", 0)),
+                    "edge_long_right": cint(getattr(row, "edge_long_right", 0)),
+                    "edge_width_top": cint(getattr(row, "edge_width_top", 0)),
+                    "edge_width_bottom": cint(getattr(row, "edge_width_bottom", 0)),
+                    "edge_long_thickness_mm": _num(getattr(row, "edge_long_thickness_mm", 0)),
+                    "edge_width_thickness_mm": _num(getattr(row, "edge_width_thickness_mm", 0)),
                     "source_piece_no": group_index,
                     "copy_no": copy_no,
                     "selected_codes": selected_codes,
@@ -1450,8 +1464,92 @@ def _topology_piece_rotation(
     )
 
 
+def _side_band_mm(candidate: dict[str, Any], flag: str, thickness_key: str) -> float:
+    if not candidate.get(flag):
+        return 0.0
+    return _num(candidate.get(thickness_key))
+
+
+def _apply_glass_identity(pieces: list[dict[str, Any]], expected: list[dict[str, Any]]) -> None:
+    indexes, error = reassign_glass_identity(
+        tuple(
+            GlassIdentityContour(
+                width_mm=_num(piece.get("w")) * 10.0,
+                height_mm=_num(piece.get("h")) * 10.0,
+                hole_count=len(piece.get("_holes_mm") or ()),
+                expected_index=(
+                    int(piece["_expected_piece_index"])
+                    if piece.get("_expected_piece_index") is not None
+                    else None
+                ),
+            )
+            for piece in pieces
+        ),
+        tuple(
+            GlassIdentityExpectation(
+                width_mm=_num(item["width_cm"]) * 10.0,
+                height_mm=_num(item["length_cm"]) * 10.0,
+                allow_rotation=bool(item["allow_rotation"]),
+                is_glass=item["piece_type"] == "Glass",
+            )
+            for item in expected
+        ),
+        dimension_tolerance=DIMENSION_TOLERANCE_MM,
+    )
+    if error:
+        raise DxfImportError(
+            issues=[
+                issue(
+                    GLASS_GEOMETRY_AMBIGUOUS,
+                    CATEGORY_IDENTITY,
+                    target=contour_target(1),
+                    params={"identity_unproven": True},
+                )
+            ]
+        )
+    for piece, index in zip(pieces, indexes, strict=True):
+        if index is not None:
+            piece["_expected_piece_index"] = index
+
+
+def _glass_opening_issues(labeled: list[dict[str, Any]]) -> list[DxfValidationIssue]:
+    issues: list[DxfValidationIssue] = []
+    for piece in labeled:
+        if piece.get("piece_type") != "Glass":
+            continue
+        spec = piece.get("_glass_spec") or {}
+        decision = validate_glass_dxf_opening(
+            outer=piece.get("_outline_mm") or (),
+            holes=piece.get("_holes_mm") or (),
+            piece_type="Glass",
+            margin_mm=spec.get("margin_mm"),
+            long_left_mm=spec.get("long_left_mm"),
+            long_right_mm=spec.get("long_right_mm"),
+            width_bottom_mm=spec.get("width_bottom_mm"),
+            width_top_mm=spec.get("width_top_mm"),
+            rotated=bool(piece.get("rotated")),
+            allow_rotation=bool(spec.get("allow_rotation")),
+            tolerance=GEOMETRY_TOLERANCE_MM,
+        )
+        if decision.ok:
+            continue
+        issues.append(
+            issue(
+                decision.code or GLASS_GEOMETRY_AMBIGUOUS,
+                decision.category,
+                target=piece_target(
+                    source_piece_no=piece.get("source_piece_no"),
+                    copy_no=piece.get("copy_no"),
+                ),
+                params=decision.params or {},
+            )
+        )
+    return issues
+
+
 def _match_pieces_to_order(pieces: list[dict[str, Any]], order: Any) -> list[dict[str, Any]]:
     expected = _expected_order_pieces(order)
+    _apply_glass_identity(pieces, expected)
     unmatched_indexes = list(range(len(expected)))
     labeled: list[dict[str, Any]] = []
     issues: list[DxfValidationIssue] = []
@@ -1533,6 +1631,14 @@ def _match_pieces_to_order(pieces: list[dict[str, Any]], order: Any) -> list[dic
         piece["original_h"] = candidate["length_cm"]
         piece["rotated"] = rotated
         piece["piece_type"] = candidate["piece_type"]
+        piece["_glass_spec"] = {
+            "margin_mm": candidate.get("glass_margin_mm"),
+            "long_left_mm": _side_band_mm(candidate, "edge_long_left", "edge_long_thickness_mm"),
+            "long_right_mm": _side_band_mm(candidate, "edge_long_right", "edge_long_thickness_mm"),
+            "width_bottom_mm": _side_band_mm(candidate, "edge_width_bottom", "edge_width_thickness_mm"),
+            "width_top_mm": _side_band_mm(candidate, "edge_width_top", "edge_width_thickness_mm"),
+            "allow_rotation": bool(candidate.get("allow_rotation")),
+        }
         piece["_extra_selected_codes"] = tuple(candidate.get("selected_codes") or ())
         piece["_liner_side"] = str(candidate.get("liner_reference_side") or "")
         piece["_liner_offset_cm"] = _num(candidate.get("liner_offset_cm"))
@@ -1562,6 +1668,9 @@ def _match_pieces_to_order(pieces: list[dict[str, Any]], order: Any) -> list[dic
         )
     if issues:
         raise DxfImportError(issues=issues)
+    glass_issues = _glass_opening_issues(labeled)
+    if glass_issues:
+        raise DxfImportError(issues=glass_issues)
     return labeled
 
 

@@ -284,6 +284,110 @@ def _present_liner_mismatch(issue: DxfValidationIssue, target_text: str) -> Pres
     return PresentedDxfError(problem, target_text, action, code, issue.category)
 
 
+def _glass_mm(value: Any) -> str:
+    return f"\u2066{format_cm(value)} مم\u2069"
+
+
+def _present_glass_opening(
+    issue: DxfValidationIssue,
+    target_text: str,
+) -> PresentedDxfError | None:
+    code = issue.code
+    params = issue.params or {}
+    sides = {
+        "long_left": "اليسار",
+        "long_right": "اليمين",
+        "width_bottom": "الأسفل",
+        "width_top": "الأعلى",
+    }
+    if code == codes.GLASS_OPENING_MISSING:
+        return PresentedDxfError(
+            "درفة البلور بلا فتحة داخلية.",
+            target_text,
+            "أضف محيطًا داخليًا مغلقًا لفتحة البلور.",
+            code,
+            issue.category,
+        )
+    if code == codes.GLASS_OPENING_UNEXPECTED:
+        return PresentedDxfError(
+            "هذه الدرفة ليست درفة بلور، والتفريغ الداخلي لا يُقبل كفتحة بلور.",
+            target_text,
+            "أزل التفريغ أو اجعل نوع الدرفة بلور إذا كانت الفتحة مقصودة.",
+            code,
+            issue.category,
+        )
+    if code == codes.GLASS_MULTIPLE_OPENINGS:
+        return PresentedDxfError(
+            "درفة البلور تحتوي أكثر من فتحة داخلية.",
+            target_text,
+            "اترك فتحة مستطيلة واحدة داخل الدرفة.",
+            code,
+            issue.category,
+        )
+    if code == codes.GLASS_OPENING_INVALID:
+        return PresentedDxfError(
+            "فتحة البلور غير صالحة أو غير مستطيلة.",
+            target_text,
+            "اجعل الفتحة محيطًا مستطيلًا مغلقًا داخل الدرفة.",
+            code,
+            issue.category,
+        )
+    if code == codes.GLASS_OPENING_OUTSIDE:
+        return PresentedDxfError(
+            "فتحة البلور تخرج عن حدود الدرفة أو تلامس محيطها.",
+            target_text,
+            "أبقِ الفتحة بالكامل داخل المحيط الخارجي دون ملامسة.",
+            code,
+            issue.category,
+        )
+    if code == codes.GLASS_GEOMETRY_AMBIGUOUS:
+        return PresentedDxfError(
+            "تعذّر تمييز درفة البلور عن درفة أخرى بالمقاس نفسه.",
+            target_text,
+            "اجعل فتحة البلور داخل درفة البلور فقط، ثم أعد الرفع.",
+            code,
+            issue.category,
+        )
+    if code != codes.GLASS_MARGIN_MISMATCH:
+        return None
+    side = sides.get(str(params.get("side") or ""), "أحد الأطراف")
+    order_margin = _glass_mm(params.get("order_margin_mm"))
+    if params.get("reason") == "band_consumes_margin":
+        return PresentedDxfError(
+            "هامش فتحة البلور لا يترك مسافة داخل محيط القص بعد خصم القشاط.",
+            target_text,
+            "قلّل سماكة القشاط أو زِد هامش البلور حتى تبقى الفتحة داخل محيط القص.",
+            code,
+            issue.category,
+            details=(
+                f"هامش البلور في الطلب {order_margin}، والقشاط على طرف {side} يستهلك هذه المسافة.",
+            ),
+        )
+    required = _glass_mm(params.get("expected_inset_mm"))
+    actual = _glass_mm(params.get("actual_inset_mm"))
+    band = params.get("band_mm") or 0
+    try:
+        has_band = float(band) > 0
+    except (TypeError, ValueError):
+        has_band = False
+    if has_band:
+        detail = (
+            f"الهامش المطلوب على حد القص {required} "
+            f"(هامش البلور {order_margin} بعد خصم القشاط)، "
+            f"والهامش الموجود في طرف {side} {actual}."
+        )
+    else:
+        detail = f"الهامش المطلوب {required}، والهامش الموجود في طرف {side} {actual}."
+    return PresentedDxfError(
+        "هامش فتحة البلور لا يطابق الهامش المحدد في الطلب.",
+        target_text,
+        "عدّل أبعاد التفريغ في DXF أو راجع هامش البلور في الطلب.",
+        code,
+        issue.category,
+        details=(detail,),
+    )
+
+
 def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
     params = dict(issue.params or {})
     target_text = present_target(issue.target, params=params)
@@ -910,6 +1014,9 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
             code,
             issue.category,
         )
+    glass_error = _present_glass_opening(issue, target_text)
+    if glass_error is not None:
+        return glass_error
 
     # Export / plan parity codes
     if code == codes.TOPOLOGY_VALIDATION_FAILED:

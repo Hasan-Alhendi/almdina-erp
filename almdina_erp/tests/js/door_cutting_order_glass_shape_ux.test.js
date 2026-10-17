@@ -251,4 +251,11 @@ function fakeEditorRoot() {
     };
 }
 
+const enlargedPreview = api.previewSvg(52.1, 72.5, api.previewState(52.1, 72.5, "6.5"));
+const frameWidth = Number(enlargedPreview.match(/class="dco-glass-frame"[^>]*width="([0-9.]+)"/)[1]);
+assert.ok(frameWidth > 170, `glass drawing should fill more of the preview, got ${frameWidth}`);
+assert.match(enlargedPreview, /class="dco-glass-opening"/);
+assert.match(desktopStyles, /var\(--card-bg/);
+assert.doesNotMatch(desktopStyles, /overflow-y:\s*auto/);
+
 console.log("door_cutting_order_glass_shape_ux.test.js: ok");

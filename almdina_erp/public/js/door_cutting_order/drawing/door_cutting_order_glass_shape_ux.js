@@ -219,12 +219,17 @@
         const safeLength = Number.isFinite(length) && length > 0 ? length : 1;
         const viewWidth = 220;
         const viewHeight = 280;
-        const pad = 36;
-        const scale = Math.min((viewWidth - (pad * 2)) / safeWidth, (viewHeight - (pad * 2)) / safeLength);
+        const padTop = 18;
+        const padBottom = 20;
+        const padSide = 8;
+        const scale = Math.min(
+            (viewWidth - (padSide * 2)) / safeWidth,
+            (viewHeight - padTop - padBottom) / safeLength
+        );
         const frameWidth = safeWidth * scale;
         const frameHeight = safeLength * scale;
         const x = (viewWidth - frameWidth) / 2;
-        const y = (viewHeight - frameHeight) / 2;
+        const y = padTop + ((viewHeight - padTop - padBottom - frameHeight) / 2);
         const round = (value) => Math.round(value * 100) / 100;
         let opening = "";
         if (state && state.status === "valid" && state.opening) {
@@ -239,8 +244,8 @@
         return `<svg viewBox="0 0 ${viewWidth} ${viewHeight}" role="img" aria-label="${escapeHtml(__("Glass Opening Dimensions"))}">
             <rect class="dco-glass-frame" x="${round(x)}" y="${round(y)}" width="${round(frameWidth)}" height="${round(frameHeight)}"></rect>
             ${opening}
-            <text x="${round(x + (frameWidth / 2))}" y="${round(y - 8)}" text-anchor="middle">${escapeHtml(formatNumber(safeWidth))} ${escapeHtml(__("cm"))}</text>
-            <text x="${round(x + frameWidth + 8)}" y="${round(y + (frameHeight / 2))}">${escapeHtml(formatNumber(safeLength))} ${escapeHtml(__("cm"))}</text>
+            <text x="${round(x + (frameWidth / 2))}" y="${round(y - 6)}" text-anchor="middle">${escapeHtml(formatNumber(safeWidth))} ${escapeHtml(__("cm"))}</text>
+            <text x="${round(x + (frameWidth / 2))}" y="${round(y + frameHeight + 14)}" text-anchor="middle">${escapeHtml(formatNumber(safeLength))} ${escapeHtml(__("cm"))}</text>
         </svg>`;
     }
 

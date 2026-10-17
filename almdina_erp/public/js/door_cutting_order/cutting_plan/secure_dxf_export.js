@@ -738,15 +738,17 @@
             : (exactSpecial
                 ? shapeOutput.dxfPoints(piece, x, y, pieceWidth, pieceHeight)
                 : null);
-        return {
-            outer: cutPath || [
-                [x, y],
-                [x + pieceWidth, y],
-                [x + pieceWidth, y + pieceHeight],
-                [x, y + pieceHeight],
-            ],
-            holes: [],
-        };
+        const outer = cutPath || [
+            [x, y],
+            [x + pieceWidth, y],
+            [x + pieceWidth, y + pieceHeight],
+            [x, y + pieceHeight],
+        ];
+        const ring = piece && piece.glass_hole_local_mm;
+        const holes = !cutPath && Array.isArray(ring) && ring.length >= 3
+            ? [ring.map(point => [x + num(point[0]), y + pieceHeight - num(point[1])])]
+            : [];
+        return { outer, holes };
     }
 
     function linerRegionPoints(piece, placement, spec) {

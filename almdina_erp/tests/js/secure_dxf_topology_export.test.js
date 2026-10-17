@@ -287,7 +287,40 @@ async function run() {
     await fakeFrappe.almdina.export_order_dxf("DCO-LEGACY", "system");
     assert.equal(cutPathLineCount(downloadedDxf), 4);
 
-    nextPlan.sheets[0].pieces[0].resource_kind = "OFFCUT";
+    nextPlan = {
+        full_board_width_cm: 100,
+        full_board_length_cm: 100,
+        trim_cm: 0,
+        sheets: [{
+            sheet_no: 1,
+            full_width_cm: 100,
+            full_length_cm: 100,
+            pieces: [{
+                id: 1,
+                x: 1,
+                y: 1,
+                w: 52.1,
+                h: 72.5,
+                piece_type: "Glass",
+                glass_hole_local_mm: [[65, 65], [456, 65], [456, 660], [65, 660]],
+            }],
+        }],
+    };
+    downloadedDxf = "";
+    await fakeFrappe.almdina.export_order_dxf("DCO-GLASS", "system");
+    assert.equal(cutPathLineCount(downloadedDxf), 8);
+
+    nextPlan = {
+        full_board_width_cm: 100,
+        full_board_length_cm: 100,
+        trim_cm: 0,
+        sheets: [{
+            sheet_no: 1,
+            full_width_cm: 100,
+            full_length_cm: 100,
+            pieces: [{ id: 1, x: 1, y: 1, w: 10, h: 10, resource_kind: "OFFCUT" }],
+        }],
+    };
     downloadedDxf = "";
     await fakeFrappe.almdina.export_order_dxf("DCO-OFFCUT", "system");
     assert.match(downloadedDxf, /8\r\nOFFCUT\r\n/);
