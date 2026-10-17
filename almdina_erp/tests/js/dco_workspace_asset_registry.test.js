@@ -129,6 +129,12 @@ class CustomEvent {
     fakeWindow.AlmdinaCostWorkspacePresenterAdapter = {};
     fakeWindow.AlmdinaCostPermissionsUX = {};
     fakeWindow.AlmdinaCostEditSessionUX = {};
+    assert.equal(
+        registry.isLoaded("cost"),
+        false,
+        "Cost readiness must also wait for the final-price approval module"
+    );
+    fakeWindow.AlmdinaFinalPriceApprovalUX = {};
     flights[2].resolve(calls[2]);
     assert.equal(await costRetry, true);
     assert.equal(registry.isLoaded("cost"), true);
