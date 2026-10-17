@@ -64,7 +64,13 @@ def normalize_search_link_args(args: dict[str, Any]) -> dict[str, Any]:
         if key == "page_length" and isinstance(value, str) and value.isdecimal():
             normalized[key] = int(value)
         elif key == "ignore_user_permissions" and isinstance(value, str):
-            if value.lower() == "true":
+            # jQuery form serialization sends numeric permission flags as strings.
+            # Preserve booleans as booleans and normalize this field only.
+            if value == "0":
+                normalized[key] = 0
+            elif value == "1":
+                normalized[key] = 1
+            elif value.lower() == "true":
                 normalized[key] = True
             elif value.lower() == "false":
                 normalized[key] = False

@@ -677,10 +677,19 @@ def _set_link(page: Page, fieldname: str, value: str) -> None:
         " || field.df.options === '[Select]'));"
         " const unchanged = modelValue === value;"
         " const sameDefaultWithoutFetch = fetchColumns.length === 0 && field.df.__default_value === value;"
+        " const probe = {events: [], before: {modelValue, inputValue: input.value,"
+        " focused: document.activeElement === input, lastValue: field && field.last_value,"
+        " validated: field && field._validated}, validationResponses: []};"
+        " window.__al129LinkProbe = probe;"
+        " for (const eventName of ['focus', 'input', 'change', 'blur']) input.addEventListener(eventName, event =>"
+        " probe.events.push({event: event.type, inputValue: input.value,"
+        " modelValue: frm.doc[fieldname], focused: document.activeElement === input,"
+        " lastValue: field.last_value, validated: field._validated}));"
         " return {native: Boolean(field && field.df && field.df.fieldtype === 'Link' && current === input),"
         " unchanged, skipsValidation, sameDefaultWithoutFetch,"
         " validationRequestExpected: Boolean(value && !unchanged && !skipsValidation"
-        " && !sameDefaultWithoutFetch), fetchColumnCount: fetchColumns.length}; }",
+        " && !sameDefaultWithoutFetch), fetchColumnCount: fetchColumns.length,"
+        " before: probe.before}; }",
         {"fieldname": fieldname, "value": value},
     )
     if not link_state["native"]:
@@ -688,48 +697,66 @@ def _set_link(page: Page, fieldname: str, value: str) -> None:
     if link_state["skipsValidation"] and not link_state["unchanged"]:
         raise AssertionError(f"Frappe Link validation is disabled for changed {fieldname} input")
 
-    control.fill(value)
-    response_status = None
-    if link_state["validationRequestExpected"]:
-        try:
-            with page.expect_response(
-                lambda response: "frappe.client.validate_link_and_fetch" in response.url,
-                timeout=15_000,
-            ) as validation_response:
-                control.press("Tab")
-            response = validation_response.value
-        except PlaywrightTimeoutError as error:
-            raise AssertionError(
-                f"Frappe Link validation request was expected for changed {fieldname} value"
-            ) from error
-        response_status = response.status
-        if not response.ok:
-            raise AssertionError(f"Frappe rejected native {fieldname} Link validation: HTTP {response.status}")
-    else:
-        # ControlBase intentionally skips validation when the model value is
-        # unchanged; ControlLink also skips its request for its unchanged
-        # default value when there are no fetch fields.
-        control.press("Tab")
+    responses = []
 
-    page.wait_for_function(
-        "({fieldname, value}) => window.cur_frm && cur_frm.doc[fieldname] === value",
-        arg={"fieldname": fieldname, "value": value},
-        timeout=10_000,
+    def capture_validation(response: Any) -> None:
+        if "frappe.client.validate_link_and_fetch" in response.url:
+            responses.append({"status": response.status, "ok": response.ok})
+
+    page.on("response", capture_validation)
+    control.fill(value)
+    after_fill = page.evaluate(
+        "({fieldname}) => { const field = cur_frm.fields_dict[fieldname];"
+        " const input = field.$input.get(0); return {inputValue: input.value,"
+        " modelValue: cur_frm.doc[fieldname], focused: document.activeElement === input,"
+        " lastValue: field.last_value, validated: field._validated}; }",
+        {"fieldname": fieldname},
     )
-    after_matches = page.evaluate(
-        "({fieldname, value}) => cur_frm.doc[fieldname] === value",
-        {"fieldname": fieldname, "value": value},
+    control.press("Tab")
+    if link_state["before"]["modelValue"] != value:
+        page.wait_for_function(
+            "({fieldname, value}) => window.cur_frm && cur_frm.doc[fieldname] === value",
+            arg={"fieldname": fieldname, "value": value},
+            timeout=10_000,
+        )
+    interaction = page.evaluate(
+        "({fieldname}) => { const field = cur_frm.fields_dict[fieldname];"
+        " return {modelValue: cur_frm.doc[fieldname], inputValue: field.$input.val(),"
+        " focused: document.activeElement === field.$input.get(0), lastValue: field.last_value,"
+        " validated: field._validated, events: [...window.__al129LinkProbe.events]}; }",
+        {"fieldname": fieldname},
     )
+    after_matches = interaction["modelValue"] == value
     if not after_matches:
-        raise AssertionError(f"Native Link interaction did not set {fieldname} in cur_frm.doc")
+        raise AssertionError(
+            f"Native Link interaction did not set {fieldname} in cur_frm.doc: "
+            f"before={link_state['before']!r}, after_fill={after_fill!r}, interaction={interaction!r}"
+        )
+    skip_reason_proven = bool(
+        link_state["unchanged"]
+        or link_state["skipsValidation"]
+        or link_state["sameDefaultWithoutFetch"]
+    )
+    if link_state["validationRequestExpected"] and not responses and not skip_reason_proven:
+        raise AssertionError(
+            f"Changed native Link value reached the model without observable Link validation: "
+            f"field={fieldname!r}, before={link_state['before']!r}, after_fill={after_fill!r}, "
+            f"interaction={interaction!r}"
+        )
+    if any(not response["ok"] for response in responses):
+        raise AssertionError(f"Frappe rejected native {fieldname} Link validation: {responses!r}")
+    page.evaluate("() => { delete window.__al129LinkProbe; }")
     trace(
         "native_link_interaction_completed",
         fieldname=fieldname,
+        before=link_state["before"],
+        after_fill=after_fill,
+        interaction=interaction,
         model_value_unchanged_before_entry=link_state["unchanged"],
         native_validation_skipped_by_frappe=link_state["skipsValidation"],
         unchanged_default_without_fetch=link_state["sameDefaultWithoutFetch"],
         validation_request_expected=link_state["validationRequestExpected"],
-        validation_status=response_status,
+        validation_responses=responses,
         model_value_matches_after_entry=after_matches,
     )
 
@@ -742,6 +769,15 @@ def _search_link_response_for_term(response: Any, term: str) -> bool:
     except (TypeError, ValueError):
         return False
     return args.get("txt") == term
+
+
+def _search_link_term(response: Any) -> str | None:
+    try:
+        return decode_search_link_request_args(
+            response.request.url, response.request.post_data
+        ).get("txt")
+    except (TypeError, ValueError):
+        return None
 
 
 def _safe_search_argument_differences(
@@ -907,15 +943,22 @@ def test_real_desk_customer_control_link_autocomplete_isolated() -> None:
                 page_errors: list[str] = []
                 page.on("pageerror", lambda error: page_errors.append(_safe_diagnostic_text(str(error))))
                 empty_search_responses: list[Any] = []
+                search_response_order: list[dict[str, Any]] = []
                 page.on(
                     "response",
-                    lambda response: empty_search_responses.append(response)
-                    if _search_link_response_for_term(response, "")
-                    else None,
+                    lambda response: (
+                        search_response_order.append({
+                            "term": _search_link_term(response),
+                            "status": response.status,
+                        }),
+                        empty_search_responses.append(response)
+                        if _search_link_term(response) == ""
+                        else None,
+                    ) if "frappe.desk.search.search_link" in response.url else None,
                 )
                 expected_search_args = normalize_search_link_args(
                     control.evaluate(
-                        "term => cur_frm.fields_dict.customer.get_search_args(term)",
+                        "(input, term) => cur_frm.fields_dict.customer.get_search_args(term)",
                         fixture["customer"],
                     )
                 )
@@ -982,6 +1025,8 @@ def test_real_desk_customer_control_link_autocomplete_isolated() -> None:
                         " const labels = exactItems.flatMap(item => [item.label, item.value, item.html])"
                         " .map(renderText).filter(Boolean);"
                         " const visibleOptions = [...options].filter(item => item.getClientRects().length > 0);"
+                        " const dropdown = field && field.awesomplete && field.awesomplete.ul;"
+                        " const dropdownStyle = dropdown ? getComputedStyle(dropdown) : null;"
                         " const exactOptionCount = visibleOptions.filter(option => labels.some(label =>"
                         " (option.textContent || '').includes(label))).length;"
                         " return {formStable: Boolean(before && before.form === cur_frm),"
@@ -999,7 +1044,11 @@ def test_real_desk_customer_control_link_autocomplete_isolated() -> None:
                         " currentListIsTypedCache: values === cachedTyped,"
                         " currentListIsEmptyCache: values === cachedEmpty,"
                         " sourceListCount: values.length, sourceExactValueCount: exactItems.length,"
-                        " exactVisibleOptionCount: exactOptionCount, optionCount: options.length}; }",
+                        " exactVisibleOptionCount: exactOptionCount, optionCount: options.length,"
+                        " dropdownVisible: Boolean(dropdown && dropdown.getClientRects().length"
+                        " && dropdownStyle.display !== 'none' && dropdownStyle.visibility !== 'hidden'),"
+                        " dropdownText: dropdown ? (dropdown.innerText || '').trim() : '',"
+                        " dropdownClass: dropdown ? dropdown.className : null}; }",
                         fixture["customer"],
                     )
                     outcomes[case_name] = {
@@ -1013,6 +1062,7 @@ def test_real_desk_customer_control_link_autocomplete_isolated() -> None:
                             argument_differences
                         ),
                         "pageErrors": page_errors,
+                        "searchResponseOrder": search_response_order,
                         "exactResponseCount": exact_response_count,
                         **ui_state,
                     }

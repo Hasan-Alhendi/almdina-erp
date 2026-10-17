@@ -166,6 +166,62 @@ def test_argument_difference_keeps_boolean_and_number_distinct() -> None:
     }
 
 
+def test_permission_flag_normalizes_numeric_transport_without_coercing_other_fields() -> None:
+    assert normalize_search_link_args({"ignore_user_permissions": "0"}) == {
+        "ignore_user_permissions": 0
+    }
+    assert normalize_search_link_args({"ignore_user_permissions": "1"}) == {
+        "ignore_user_permissions": 1
+    }
+    assert normalize_search_link_args({"ignore_user_permissions": False}) == {
+        "ignore_user_permissions": False
+    }
+    assert normalize_search_link_args({"ignore_user_permissions": True}) == {
+        "ignore_user_permissions": True
+    }
+    assert search_link_argument_differences(
+        {"ignore_user_permissions": False},
+        normalize_search_link_args({"ignore_user_permissions": "0"}),
+    ) == {"ignore_user_permissions": {"expected": False, "actual": 0}}
+    assert normalize_search_link_args({"other_security_flag": "0"}) == {
+        "other_security_flag": "0"
+    }
+
+
+def test_numeric_permission_flag_is_normalized_after_form_decoding() -> None:
+    actual = decode_search_link_request_args(
+        "https://desk.test/api/method/frappe.desk.search.search_link",
+        urlencode({"doctype": "Customer", "ignore_user_permissions": "0"}),
+    )
+    assert actual == {"doctype": "Customer", "ignore_user_permissions": 0}
+
+
+def test_locator_evaluate_passes_search_text_after_the_dom_element() -> None:
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(executable_path="/usr/bin/chromium", headless=True)
+        try:
+            page = browser.new_page()
+            page.set_content(
+                "<input id='customer'><script>window.cur_frm={fields_dict:{customer:{"
+                "get_search_args(term){return {term, termIsDomNode: term instanceof Node};}"
+                "}}};</script>"
+            )
+            result = page.locator("#customer").evaluate(
+                "(input, term) => ({inputIsDomNode: input instanceof Node,"
+                " ...cur_frm.fields_dict.customer.get_search_args(term)})",
+                "AL129 Customer",
+            )
+            assert result == {
+                "inputIsDomNode": True,
+                "term": "AL129 Customer",
+                "termIsDomNode": False,
+            }
+        finally:
+            browser.close()
+
+
 def test_optional_normalization_does_not_drop_other_empty_arguments() -> None:
     assert normalize_search_link_args({
         "doctype": "",
