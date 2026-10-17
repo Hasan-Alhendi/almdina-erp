@@ -1270,6 +1270,85 @@ def test_recovery_new_saved_intersection():
                 .phase === 'idle'""", timeout=15000)
             mark_step("null_preview_receipt_rejected")
 
+            # Prove the opposite ambiguous boundary on the REAL server: commit
+            # Kerf 6 durably, but replace only its browser-facing response with
+            # HTTP 200 + null. Canonical read-only reconciliation must close
+            # editing without replaying the single-use preview token.
+            original_preview_evidence = evidence["plan_preview"]
+            original_saved_evidence = evidence["plan_saved"]
+            reconciled_kerf = new_kerf + 2
+            plan_toolbar.locator('.dco-tab-edit-start').click()
+            kerf = page.locator('[data-almdina-plan-setting="kerf_mm"]:visible').first
+            kerf.fill(str(reconciled_kerf))
+            page.locator('.dco-recalculate-plan:visible').first.press("Enter")
+            page.wait_for_function("""value => AlmdinaPlanPreviewSession?.isCommittable(cur_frm)
+                && Number(AlmdinaPlanPreviewSession.snapshot(cur_frm)?.requestedSettings?.kerf_mm) === value""",
+                arg=reconciled_kerf, timeout=60000)
+            reconciled_preview_id = page.evaluate("AlmdinaPlanPreviewSession.snapshot(cur_frm).previewId")
+            reconciled_source = page.evaluate("""() => ({
+                source_plan:AlmdinaPlanPreviewSession.snapshot(cur_frm)?.payload?.source_plan_name,
+                source_revision:AlmdinaPlanPreviewSession.snapshot(cur_frm)?.payload?.source_plan_revision,
+                preview_id:AlmdinaPlanPreviewSession.snapshot(cur_frm)?.previewId,
+            })""")
+            actual_server_commit = {}
+
+            def hide_only_successful_commit_response(route):
+                response = route.fetch()
+                actual_server_commit["status"] = response.status
+                try:
+                    message = response.json().get("message")
+                    actual_server_commit["receipt"] = {
+                        key: message.get(key) for key in (
+                            "name", "cutting_plan", "plan_revision",
+                            "committed_preview_id", "exact_preview_commit", "kerf_mm"
+                        )
+                    } if isinstance(message, dict) else message
+                except Exception as exc:
+                    actual_server_commit["parse_error"] = type(exc).__name__
+                route.fulfill(status=200, content_type="application/json",
+                              body='{"message":null}')
+
+            page.route(commit_route, hide_only_successful_commit_response)
+            try:
+                plan_toolbar.locator('.dco-tab-edit-save').click()
+                page.wait_for_function("""value =>
+                    AlmdinaDcoEditSessionCoordinator.snapshot(cur_frm).phase === 'idle'
+                    && Number(AlmdinaPlanWorkspaceState.snapshot(cur_frm)
+                        ?.data?.plans?.system_draft?.settings?.kerf_mm) === value""",
+                    arg=reconciled_kerf, timeout=60000)
+                evidence["lost_response_durable_commit"] = {
+                    "server": actual_server_commit,
+                    "preview": reconciled_source,
+                    "browser_response": evidence["preview_commit_responses"][-1],
+                    "coordinator": page.evaluate(
+                        "AlmdinaDcoEditSessionCoordinator.snapshot(cur_frm)"),
+                    "canonical_kerf": page.evaluate("""() =>
+                        AlmdinaPlanWorkspaceState.snapshot(cur_frm)
+                        ?.data?.plans?.system_draft?.settings?.kerf_mm"""),
+                }
+                receipt = actual_server_commit.get("receipt")
+                assert actual_server_commit.get("status") == 200 and isinstance(receipt, dict)
+                assert receipt["exact_preview_commit"] is True
+                assert receipt["committed_preview_id"] == reconciled_preview_id
+                assert receipt["name"] == saved
+                assert receipt["cutting_plan"] == reconciled_source["source_plan"]
+                assert receipt["plan_revision"] == reconciled_source["source_revision"]
+                assert float(receipt["kerf_mm"]) == reconciled_kerf
+                assert evidence["preview_commit_requests"][-1]["preview_id"] == reconciled_preview_id
+                assert evidence["preview_commit_responses"][-1]["response"] is None
+            finally:
+                page.unroute(commit_route)
+            evidence["initial_plan_preview"] = original_preview_evidence
+            evidence["initial_plan_saved"] = original_saved_evidence
+            evidence["plan_preview"] = reconciled_source
+            evidence["plan_saved"] = page.evaluate("""() => ({
+                kerf:cur_frm.doc.kerf_mm,
+                plan:AlmdinaPlanWorkspaceState.snapshot(cur_frm)?.data?.plans?.system_draft?.name,
+                token:AlmdinaDocumentContext.capture(cur_frm)})""")
+            assert float(evidence["plan_saved"]["kerf"]) == reconciled_kerf
+            new_kerf = reconciled_kerf
+            mark_step("lost_response_commit_verified_from_server")
+
             page.get_by_text("Order Cost", exact=True).first.click()
             page.wait_for_function("""name => AlmdinaCostWorkspaceState?.snapshot(cur_frm)?.status === 'ready'
                 && AlmdinaCostWorkspaceState?.snapshot(cur_frm)?.data?.order_name === name""",
