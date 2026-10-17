@@ -1213,8 +1213,10 @@
         if (!frm.is_new()) args.order_name = sourceForm.doc.name;
         const context = window.AlmdinaDocumentContext;
         const owner = context && typeof context.capture === "function" ? context.capture(frm) : null;
-        const ownsExport = () => Boolean(owner && context && typeof context.isCurrent === "function"
-            && context.isCurrent(frm, owner));
+        const initialDoc = frm.doc;
+        const ownsExport = () => context && typeof context.isCurrent === "function"
+            ? Boolean(owner && context.isCurrent(frm, owner))
+            : Boolean(frm.doc === initialDoc && (!window.cur_frm || window.cur_frm === frm));
 
         return fetchValidatedPlan(args).then(r => {
             if (!ownsExport()) return null;
