@@ -734,6 +734,8 @@ function runCleanups(frm) {
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(Recovery.LocalCheckpoint.snapshot(lockedContinueForm), null,
         "NOT_FOUND leaves the in-flight insertion marker untouched");
+    assert.equal(lockedContinueButton.disabled, false,
+        "the worker may explicitly recheck a pending INSERT without a forced page refresh");
     reconciliationDeferred = null;
 
     discoveredRecords = [];
