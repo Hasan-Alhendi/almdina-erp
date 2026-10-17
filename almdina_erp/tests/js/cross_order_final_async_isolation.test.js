@@ -262,3 +262,15 @@ test("DXF keeps the original edge-profile cache for L-shaped notch compensation"
     await assert.rejects(operation, /STOP_AFTER_INPUT_SNAPSHOT/);
     assert.equal(capturedThickness, 2, "form-owned profiles must be frozen with DXF inputs");
 });
+
+
+test("late enqueue within the same visit cannot regress a newer realtime job state", async () => {
+    const h = makeHarness("cutting_plan/door_cutting_order_plan_recalculation_job.js");
+    const job = h.win.AlmdinaPlanRecalculationJob;
+    const pending = job.enqueueAfterSave(h.frm, { resources: ["plan"] });
+    job.applyState(h.frm, { status: "running", generation: 8 });
+    h.calls[0].resolve({ message: { queued: true, status: "queued", generation: 8 } });
+    await pending;
+    assert.equal(job.snapshot(h.frm).status, "running");
+    assert.equal(h.invalidations.length, 1, "accepted enqueue still invalidates dependent cost");
+});
