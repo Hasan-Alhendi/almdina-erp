@@ -57,6 +57,7 @@
                 `${ASSET_ROOT}/costing/door_cutting_order_financial_documents_ux.js`,
                 `${ASSET_ROOT}/costing/door_cutting_order_customer_invoice_toolbar_ux.js`,
                 `${ASSET_ROOT}/costing/door_cutting_order_cost_edit_session_ux.js`,
+                `${ASSET_ROOT}/costing/door_cutting_order_final_price_approval_ux.js`,
             ]),
             readyGlobals: Object.freeze([
                 "AlmdinaOrderCostUX",
@@ -64,6 +65,7 @@
                 "AlmdinaCostWorkspacePresenterAdapter",
                 "AlmdinaCostPermissionsUX",
                 "AlmdinaCostEditSessionUX",
+                "AlmdinaFinalPriceApprovalUX",
             ]),
         }),
     });

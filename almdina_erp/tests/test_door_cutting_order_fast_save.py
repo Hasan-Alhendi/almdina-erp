@@ -100,6 +100,7 @@ def test_order_save_use_case_never_owns_cutting_plan_recalculation():
     source = _text(SAVE_USE_CASE)
     assert "without touching Cutting Plan state" in source
     assert "gateway.enforce_immutability()" in source
+    assert "gateway.enforce_price_approval_integrity()" in source
     assert "gateway.calculate_cut_dimensions()" in source
     assert "gateway.calculate_piece_costs()" in source
     assert "force_recalculation_requested" not in source

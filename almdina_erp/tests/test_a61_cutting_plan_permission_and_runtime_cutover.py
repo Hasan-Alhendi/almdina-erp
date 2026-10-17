@@ -44,6 +44,7 @@ def test_plan_owned_capabilities_are_attached_to_cutting_plan() -> None:
     # These operations still mutate customer/order input and must stay order-owned.
     assert CAPABILITY_CATALOG[Capability.EDIT_SPECIAL_PRICE].applies_to == "Door Cutting Order"
     assert CAPABILITY_CATALOG[Capability.APPROVE_SPECIAL_PRICE].applies_to == "Door Cutting Order"
+    assert CAPABILITY_CATALOG[Capability.APPROVE_FINAL_PRICE].applies_to == "Door Cutting Order"
     assert CAPABILITY_CATALOG[Capability.EDIT_SPECIAL_DRAWING].applies_to == "Door Cutting Order"
 
 

@@ -311,6 +311,8 @@ def test_order_list_status_filter_uses_frappe_standard_filter_contract():
     assert "function statusFilterConfig(options = {})" in list_source
     assert "statusFilterConfig({ localize: false })" in list_source
     assert "assigneeFilterConfig({ localize: false })" in list_source
+    assert "priceApprovalFilterConfig({ localize: false })" in list_source
+    assert 'PRICE_APPROVAL_FILTER_FIELDNAME = "price_approval_status"' in list_source
     assert "function reconcileStatusFilterLayout(listview)" in list_source
     assert "function reconcileMobileListToolbarLayout(listview)" in list_source
     assert "data-dco-list-toolbar-slot" in list_source
