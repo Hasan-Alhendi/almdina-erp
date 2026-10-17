@@ -287,10 +287,14 @@
         const ownerToken = capture(frm);
         if (!ownsCurrent(frm, ownerToken)) return snapshot(frm);
         const orderName = frm.doc.name;
+        const stateAtStart = frm[STATE_KEY];
         try {
             const payload = await call(ENQUEUE_METHOD, { order_name: orderName });
             if (!ownsCurrent(frm, ownerToken)) return snapshot(frm);
-            const next = applyState(frm, payload || emptyState());
+            // A status poll or realtime event may already have advanced this job.
+            const next = frm[STATE_KEY] === stateAtStart
+                ? applyState(frm, payload || emptyState())
+                : snapshot(frm);
             if (isActive(frm)) schedulePoll(frm);
             if (payload && payload.queued) {
                 const coordinator = syncCoordinator();
