@@ -264,21 +264,21 @@ class TestFinancialDocumentApplication(unittest.TestCase):
         self.assertEqual(invoice["summary"][1]["value"], 3)
 
     def test_prorated_saved_amount_is_not_prorated_twice_or_repriced(self) -> None:
-        # qty=3; physical=6; factory=5 => 2.5 billable doors.
-        # Stored $0.99 * 5/6 is $0.825, rounded once to $0.82.
-        # Multiplying the displayed $0.33 rate by 2.5 would produce $0.83.
+        # Pricing rounds the saved commercial total first: $0.005 => $0.01.
+        # One of two physical copies is executed by the factory: $0.01 / 2.
+        # Recomputing from raw unit rate * 0.5 would wrongly give $0.00.
         piece = {
-            "piece_type": "Regular", "qty": 3, "factory_execution_qty": 5,
-            "addon_billable_qty": 2.5, "extra_liner": 1,
-            "extra_liner_unit_price_usd": 0.33,
-            "extra_liner_total_usd": 0.99 * 5 / 6,
+            "piece_type": "Regular", "qty": 1, "factory_execution_qty": 1,
+            "addon_billable_qty": 0.5, "extra_liner": 1,
+            "extra_liner_unit_price_usd": 0.005,
+            "extra_liner_total_usd": 0.01 / 2,
         }
         invoice = build_customer_invoice_document({"required_boards": 0}, [piece])
         line = invoice["lines"][0]
-        self.assertEqual(line["quantity"], 2.5)
-        self.assertEqual(line["rate_usd"], 0.33)
-        self.assertEqual(line["amount_usd"], round(0.99 * 5 / 6, 2))
-        self.assertEqual(invoice["totals"][0]["value_usd"], line["amount_usd"])
+        self.assertEqual(line["quantity"], 0.5)
+        self.assertEqual(line["rate_usd"], 0.01)
+        self.assertEqual(line["amount_usd"], 0.01)
+        self.assertEqual(invoice["totals"][0]["value_usd"], 0.01)
 
     def test_legacy_addon_quantity_and_explicit_zero_total_are_preserved(self) -> None:
         piece = {
