@@ -891,9 +891,45 @@ def test_recovery_new_saved_intersection():
         try:
             page = browser.new_page(locale="en-US")
             page_errors = []
+            evidence["preview_commit_requests"] = []
+            evidence["preview_commit_responses"] = []
             page.on("pageerror", lambda error: page_errors.append({
                 "message": str(error), "stack": getattr(error, "stack", None),
             }))
+            commit_method = "cutting_plan_preview_service.commit_cutting_plan_preview"
+
+            def record_commit_request(request):
+                if commit_method not in request.url:
+                    return
+                args = parse_qs(request.post_data or "")
+                evidence["preview_commit_requests"].append({
+                    "method": commit_method,
+                    "order_name": (args.get("order_name") or [None])[0],
+                    "preview_id": (args.get("preview_id") or [None])[0],
+                })
+
+            def record_commit_response(response):
+                if commit_method not in response.url:
+                    return
+                item = {"method": commit_method, "http_status": response.status,
+                        "received": True}
+                try:
+                    body = response.json()
+                    message = body.get("message") if isinstance(body, dict) else None
+                    item.update({
+                        "response": {key: message.get(key) for key in (
+                            "name", "committed_preview_id", "exact_preview_commit",
+                            "cutting_plan", "plan_revision", "kerf_mm")}
+                            if isinstance(message, dict) else message,
+                        "exc_type": body.get("exc_type"),
+                        "server_messages": str(body.get("_server_messages") or "")[:500],
+                    })
+                except Exception as exc:
+                    item["response_error"] = type(exc).__name__
+                evidence["preview_commit_responses"].append(item)
+
+            page.on("request", record_commit_request)
+            page.on("response", record_commit_response)
             _login(page, fixture)
             page.evaluate("name => { frappe.set_route('Form','Door Cutting Order',name); }",
                           fixture["orders"]["A"]["name"])
@@ -1142,6 +1178,10 @@ def test_recovery_new_saved_intersection():
                 const row=AlmdinaPlanWorkspaceState.snapshot(cur_frm)?.data?.plans?.system_draft;
                 return {preview_id:preview.previewId, status:preview.status,
                     source_plan:row?.name, source_revision:row?.revision,
+                    source_modified:preview.payload?.source_plan_modified,
+                    settings_fingerprint:preview.payload?.settings_fingerprint,
+                    requested_kerf:preview.requestedSettings?.kerf_mm,
+                    session_generation:AlmdinaDcoEditSessionCoordinator.snapshot(cur_frm).sessionGeneration,
                     token:AlmdinaDocumentContext.capture(cur_frm)};
             }""")
             save_plan = plan_toolbar.locator('.dco-tab-edit-save')
@@ -1169,7 +1209,60 @@ def test_recovery_new_saved_intersection():
                 kerf:cur_frm.doc.kerf_mm,
                 plan:AlmdinaPlanWorkspaceState.snapshot(cur_frm)?.data?.plans?.system_draft?.name,
                 token:AlmdinaDocumentContext.capture(cur_frm)})""")
+            requests = evidence["preview_commit_requests"]
+            responses = evidence["preview_commit_responses"]
+            assert len(requests) == len(responses) == 1, (requests, responses)
+            assert requests[0]["order_name"] == saved
+            assert requests[0]["preview_id"] == evidence["plan_preview"]["preview_id"]
+            receipt = responses[0]["response"]
+            assert responses[0]["http_status"] == 200 and isinstance(receipt, dict)
+            assert receipt["exact_preview_commit"] is True
+            assert receipt["committed_preview_id"] == requests[0]["preview_id"]
+            assert receipt["name"] == saved
+            assert receipt["cutting_plan"] == evidence["plan_preview"]["source_plan"]
+            assert receipt["plan_revision"] == evidence["plan_preview"]["source_revision"]
+            assert float(receipt["kerf_mm"]) == new_kerf
             mark_step("plan_preview_committed")
+
+            # Exercise the same real Save button with a completed HTTP 200 whose
+            # Frappe message is null. The endpoint is intercepted only for this
+            # second preview, so the canonical server plan remains at Kerf 4.
+            plan_toolbar.locator('.dco-tab-edit-start').click()
+            kerf = page.locator('[data-almdina-plan-setting="kerf_mm"]:visible').first
+            kerf.fill(str(new_kerf + 1))
+            page.locator('.dco-recalculate-plan:visible').first.press("Enter")
+            page.wait_for_function("""value => AlmdinaPlanPreviewSession?.isCommittable(cur_frm)
+                && Number(AlmdinaPlanPreviewSession.snapshot(cur_frm)?.requestedSettings?.kerf_mm) === value""",
+                arg=new_kerf + 1, timeout=60000)
+            injected_preview = page.evaluate("AlmdinaPlanPreviewSession.snapshot(cur_frm).previewId")
+            commit_route = "**/api/method/almdina_erp.almdina_erp.services.cutting_plan_preview_service.commit_cutting_plan_preview"
+            page.route(commit_route, lambda route: route.fulfill(
+                status=200, content_type="application/json", body='{"message":null}'))
+            try:
+                plan_toolbar.locator('.dco-tab-edit-save').click()
+                page.wait_for_function("""() => AlmdinaPlanPreviewSession.snapshot(cur_frm).status === 'stale'
+                    && AlmdinaDcoEditSessionCoordinator.snapshot(cur_frm).phase === 'editing'""",
+                    timeout=15000)
+                evidence["null_receipt_rejected"] = page.evaluate("""() => ({
+                    preview:AlmdinaPlanPreviewSession.snapshot(cur_frm),
+                    coordinator:AlmdinaDcoEditSessionCoordinator.snapshot(cur_frm),
+                    canonicalKerf:AlmdinaPlanWorkspaceState.snapshot(cur_frm)?.data?.plans
+                        ?.system_draft?.settings?.kerf_mm,
+                    docKerf:cur_frm.doc.kerf_mm,
+                })""")
+                assert float(evidence["null_receipt_rejected"]["canonicalKerf"]) == new_kerf
+                assert float(evidence["null_receipt_rejected"]["docKerf"]) == new_kerf
+                assert evidence["preview_commit_requests"][-1]["preview_id"] == injected_preview
+                assert evidence["preview_commit_responses"][-1]["response"] is None
+            finally:
+                page.unroute(commit_route)
+            if page.locator('.modal.show').count():
+                page.keyboard.press("Escape")
+                page.locator('.modal.show').wait_for(state="hidden", timeout=15000)
+            plan_toolbar.locator('.dco-tab-edit-cancel').click()
+            page.wait_for_function("""() => AlmdinaDcoEditSessionCoordinator.snapshot(cur_frm)
+                .phase === 'idle'""", timeout=15000)
+            mark_step("null_preview_receipt_rejected")
 
             page.get_by_text("Order Cost", exact=True).first.click()
             page.wait_for_function("""name => AlmdinaCostWorkspaceState?.snapshot(cur_frm)?.status === 'ready'
