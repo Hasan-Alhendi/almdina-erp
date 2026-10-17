@@ -145,7 +145,16 @@
         }
 
         emit(name, "loading");
-        const operation = Promise.resolve(requireAssets(feature.assets))
+        // The Preview Save adapter decorates the legacy Plan coordinator adapter.
+        // A parallel asset batch may execute the decorator too early, leaving
+        // the old settings-only Save handler active or the Plan feature unready.
+        // Resolve its dependency group first, then install the Save owner.
+        const previewEditAsset = `${ASSET_ROOT}/cutting_plan/door_cutting_order_plan_preview_edit_ux.js`;
+        const baseAssets = name === "plan"
+            ? feature.assets.filter(asset => asset !== previewEditAsset)
+            : feature.assets;
+        const operation = Promise.resolve(requireAssets(baseAssets))
+            .then(() => name === "plan" ? requireAssets([previewEditAsset]) : null)
             .then(() => {
                 finishPlanPresentation(name);
                 if (!globalsReady(feature)) {
