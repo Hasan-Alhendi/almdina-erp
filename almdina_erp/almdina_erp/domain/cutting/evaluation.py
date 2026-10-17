@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .glass_opening_nesting import classify_piece_pair, host_link_errors
 from .primitives import num, present_shop_floor_packing, rect_intersects, rects_have_clearance
 
 
@@ -109,6 +110,12 @@ def validate_plan(
                     f"Piece {placed.get('label')} has invalid dimensions or rotation state."
                 )
 
+        linked = []
+        for placed in pieces:
+            row = dict(placed)
+            row["_sheet_no"] = sheet.get("sheet_no")
+            linked.append(row)
+        errors.extend(host_link_errors(linked))
         for index, first in enumerate(pieces):
             first_rect = {
                 "x": num(first["x"]),
@@ -123,6 +130,20 @@ def validate_plan(
                     "w": num(second["w"]),
                     "h": num(second["h"]),
                 }
+                relation = classify_piece_pair(
+                    first,
+                    second,
+                    kerf_cm=required_kerf_cm,
+                    tolerance=tolerance,
+                )
+                if relation == "nested":
+                    continue
+                if relation == "invalid":
+                    errors.append(
+                        f"Pieces {first.get('label')} and {second.get('label')} do not form "
+                        f"a valid Glass opening nest on sheet {sheet.get('sheet_no')}."
+                    )
+                    continue
                 if rect_intersects(first_rect, second_rect):
                     errors.append(
                         f"Pieces {first.get('label')} and {second.get('label')} overlap "
