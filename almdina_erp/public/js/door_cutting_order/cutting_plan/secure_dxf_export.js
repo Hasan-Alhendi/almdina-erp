@@ -1193,9 +1193,22 @@
         });
     }
 
+    function manufacturingSourceForm(frm, serializedDoc) {
+        const profiles = frm && frm._dco_side_edge_profiles;
+        return {
+            doc: JSON.parse(serializedDoc),
+            // L-shaped notch compensation also reads the form's edge profile cache.
+            // Capture it with the document so a later route change cannot alter cuts.
+            _dco_side_edge_profiles: profiles instanceof Map
+                ? new Map([...profiles].map(([key, value]) => [key, { ...value }]))
+                : new Map(),
+            _dco_side_edge_profiles_financial: frm && frm._dco_side_edge_profiles_financial === true,
+        };
+    }
+
     function validatedExport(frm) {
         const serializedDoc = JSON.stringify(frm.doc);
-        const sourceForm = { doc: JSON.parse(serializedDoc) };
+        const sourceForm = manufacturingSourceForm(frm, serializedDoc);
         const args = { doc: serializedDoc };
         if (!frm.is_new()) args.order_name = sourceForm.doc.name;
         const context = window.AlmdinaDocumentContext;
@@ -1215,7 +1228,7 @@
         // supplies form-only add-on data, freeze the matching order at invocation.
         const sourceDoc = options && options.frm && options.frm.doc;
         const sourceForm = sourceDoc && String(sourceDoc.name || "") === String(orderName || "")
-            ? { doc: JSON.parse(JSON.stringify(sourceDoc)) }
+            ? manufacturingSourceForm(options.frm, JSON.stringify(sourceDoc))
             : null;
         if (planSource) args.plan_source = planSource;
         if (shouldDownloadOriginalUpload(planSource, options)) {
