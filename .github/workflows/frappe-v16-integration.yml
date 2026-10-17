@@ -23,6 +23,8 @@ on:
           - al128_desk
           - al128_desk_edit
           - al128_performance
+          - al129_customer
+          - al129_new
       comparison_base:
         description: PR base branch used for AL128 before/after measurements
         required: true
@@ -37,6 +39,9 @@ on:
       - ".github/workflows/frappe-v16-integration.yml"
       - "almdina_erp/tests/al128_desk_fixture.py"
       - "tests/browser/test_dco_al128_frappe_desk.py"
+      - "tests/browser/test_dco_al129_frappe_desk.py"
+      - "tests/browser/test_al129_link_search_request.py"
+      - "almdina_erp/tests/al129_desk_fixture.py"
 
 permissions:
   contents: read
@@ -48,7 +53,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: ${{ fromJSON(github.event_name == 'pull_request' && '["full","al128_desk","al128_performance"]' || format('["{0}"]', inputs.suite)) }}
+        suite: ${{ fromJSON(github.event_name == 'pull_request' && '["full","al128_desk","al128_performance","al129_customer","al129_new"]' || format('["{0}"]', inputs.suite)) }}
     timeout-minutes: 60
 
     services:
@@ -248,7 +253,7 @@ jobs:
           bench --site test.localhost execute frappe.get_all --kwargs '{"doctype":"DocType","filters":{"module":"Almdina ERP"},"pluck":"name"}'
 
       - name: Prepare isolated ALMADINA-128 Desk fixtures
-        if: matrix.suite != 'full'
+        if: startsWith(matrix.suite, 'al128_')
         env:
           DCO_AL128_FIXTURE_FILE: ${{ runner.temp }}/al128-desk-fixtures.json
         run: |
@@ -281,6 +286,20 @@ jobs:
           run_fixture_step almdina_erp.tests.al128_desk_fixture.create_al128_desk_fixtures al128-fixture-create.log
           test -s "$DCO_AL128_FIXTURE_FILE"
           echo "DCO_AL128_FIXTURE_FILE=$DCO_AL128_FIXTURE_FILE" >> "$GITHUB_ENV"
+
+      - name: Prepare isolated ALMADINA-129 Desk fixtures
+        if: startsWith(matrix.suite, 'al129_')
+        env:
+          DCO_AL129_FIXTURE_FILE: ${{ runner.temp }}/al129-desk-fixtures.json
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/frappe-bench"
+          bench --site test.localhost execute almdina_erp.tests.al129_desk_fixture.prepare_al129_desk_site \
+            2>&1 | tee "$RUNNER_TEMP/al129-fixture-setup.log"
+          bench --site test.localhost execute almdina_erp.tests.al129_desk_fixture.create_al129_desk_fixtures \
+            2>&1 | tee "$RUNNER_TEMP/al129-fixture-create.log"
+          test -s "$DCO_AL129_FIXTURE_FILE"
+          echo "DCO_AL129_FIXTURE_FILE=$DCO_AL129_FIXTURE_FILE" >> "$GITHUB_ENV"
 
       - name: Install Chromium for targeted Desk certification
         if: matrix.suite != 'full'
@@ -321,8 +340,8 @@ jobs:
             exit 1
           fi
 
-      - name: Run one targeted ALMADINA-128 Desk or performance acceptance case
-        if: matrix.suite != 'full'
+      - name: Run pinned ALMADINA-128 Desk/performance acceptance case
+        if: startsWith(matrix.suite, 'al128_')
         env:
           FRAPPE_DESK_URL: http://test.localhost:8000
           DCO_AL128_FIXTURE_FILE: ${{ runner.temp }}/al128-desk-fixtures.json
@@ -389,11 +408,48 @@ jobs:
           exit "$test_status"
         timeout-minutes: 10
 
-      - name: Upload ALMADINA-128 Desk evidence
-        if: always() && matrix.suite != 'full'
+      - name: Run pinned ALMADINA-129 NEW Desk acceptance
+        if: startsWith(matrix.suite, 'al129_')
+        env:
+          FRAPPE_DESK_URL: http://test.localhost:8000
+          DCO_AL129_FIXTURE_FILE: ${{ runner.temp }}/al129-desk-fixtures.json
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          if [[ "${{ matrix.suite }}" == "al129_customer" ]]; then
+            python -m pytest -q -s \
+              tests/browser/test_al129_link_search_request.py \
+              tests/browser/test_dco_al129_frappe_desk.py::test_real_desk_customer_native_entry_and_permission_differential \
+              tests/browser/test_dco_al129_frappe_desk.py::test_real_desk_customer_control_link_autocomplete_isolated \
+              2>&1 | tee "$RUNNER_TEMP/al129-desk-tests.log"
+          else
+            python -m pytest -q -s \
+              tests/browser/test_dco_al129_frappe_desk.py::test_real_desk_multiple_drafts_start_new_delete_and_restore_geometry \
+              tests/browser/test_dco_al129_frappe_desk.py::test_real_desk_100_piece_checkpoint_restore_and_lost_save_response \
+              2>&1 | tee "$RUNNER_TEMP/al129-desk-tests.log"
+          fi
+        timeout-minutes: 15
+
+      - name: Upload ALMADINA-129 Desk evidence
+        if: always() && startsWith(matrix.suite, 'al129_')
         uses: actions/upload-artifact@v4
         with:
-          name: al128-real-desk-evidence
+          name: al129-real-desk-${{ matrix.suite }}
+          path: |
+            ${{ runner.temp }}/al129-new-desk-evidence.json
+            ${{ runner.temp }}/al129-new-desk-trace.json
+            ${{ runner.temp }}/al129-desk-failure.png
+            ${{ runner.temp }}/al129-desk-tests.log
+            ${{ runner.temp }}/al129-fixture-setup.log
+            ${{ runner.temp }}/al129-fixture-create.log
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload ALMADINA-128 Desk evidence
+        if: always() && startsWith(matrix.suite, 'al128_')
+        uses: actions/upload-artifact@v4
+        with:
+          name: al128-real-desk-evidence-${{ matrix.suite }}
           path: |
             ${{ runner.temp }}/al128-desk-evidence.json
             ${{ runner.temp }}/al128-desk-trace.json
