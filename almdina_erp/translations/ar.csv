@@ -2876,3 +2876,34 @@ Could not cancel the final price approval.,تعذر إلغاء اعتماد ال
 Do you want to cancel the final price approval for this order? Order details and prices will stay the same.,هل تريد إلغاء اعتماد السعر النهائي لهذا الطلب؟ ستبقى تفاصيل الطلب والأسعار كما هي.
 Save or cancel unsaved changes before cancelling the final price approval.,احفظ التغييرات غير المحفوظة أو ألغها قبل إلغاء اعتماد السعر النهائي.
 {0} / {1},{0} / {1}
+A local edit draft is retained. Recovery is unavailable after production dispatch. Return to Draft with permission before explicitly reviewing the draft.,توجد مسودة تعديل محلية محفوظة. لا يمكن استعادتها بعد بدء مرحلة الإنتاج؛ استخدم «إعادة للمسودة» بعد الإذن المناسب.
+Local edit draft,مسودة تعديل محلية
+Last updated,آخر تحديث:
+The server order has changed since this draft was captured. It will not be applied automatically.,تغير الطلب على الخادم منذ إنشاء هذه المسودة. لن تُطبق تلقائيًا.
+Continue editing,متابعة التعديل
+Delete draft,حذف المسودة
+This local draft has not been officially saved. Its inputs will be restored only after verifying the server version. Press Save to commit officially.,هذه مسودة محلية غير محفوظة رسميًا. ستُعاد إلى حقول الطلب بعد التحقق من نسخة الخادم، ويبقى الحفظ الرسمي بضغط «حفظ».
+Later,لاحقًا
+Local addition,إضافة محلية
+Server row omitted from draft,صف موجود على الخادم ومحذوف في المسودة
+Server order: {0}; draft order: {1},ترتيب الخادم: {0}؛ ترتيب المسودة: {1}
+And {0} additional differences,و {0} فرقًا إضافيًا
+Server version conflict,تعارض نسخة الخادم
+Draft captured,وقت المسودة:
+Expected version,النسخة المتوقعة:
+Loaded form version,نسخة النموذج المحمّلة:
+Current server version,نسخة الخادم الحالية:
+Allowed field differences,الفروقات المسموح بمراجعتها:
+No differences in eligible DCO fields.,لا توجد فروقات في حقول DCO المسموح بها.
+The draft was not applied. Copy its data or discard after review.,لم تُطبق المسودة. انسخ بياناتها أو احذفها بعد مراجعتها.
+Copy draft data,نسخ بيانات المسودة
+Local edit drafts,مسودات تعديل محلية
+Local draft data copied.,تم نسخ بيانات المسودة المحلية.
+Could not copy local draft data.,تعذر نسخ بيانات المسودة المحلية.
+The draft is restored into Edit mode. Press Save to commit it officially.,استُعيدت المسودة إلى نموذج التعديل. اضغط «حفظ» لاعتمادها رسميًا.
+Save or cancel current form changes before restoring the draft.,احفظ أو ألغِ تغييرات النموذج الحالية قبل استعادة المسودة.
+The server order has changed. The draft was retained and not applied.,تغير الطلب على الخادم. احتُفظ بالمسودة ولم تُطبق.
+Could not restore the local draft.,تعذر استعادة المسودة المحلية.
+Could not confirm local draft deletion. The draft was retained for review.,تعذر تأكيد حذف المسودة المحلية. احتُفظ بها للتحقق لاحقًا.
+The draft changed or could not be deleted. It was retained for review.,تغيرت المسودة أو تعذر حذفها. احتُفظ بها للتحقق لاحقًا.
+Delete this local edit draft permanently?,هل تريد حذف مسودة التعديل المحلية نهائيًا؟
