@@ -172,7 +172,9 @@ def _start_real_edit_session(page: Page) -> None:
         "&& window.cur_frm && window.cur_frm.doc.status === 'Draft'",
         timeout=30_000,
     )
-    edit_action = page.get_by_role("button", name="تعديل", exact=True).first
+    # PageEditAction owns the action and uses a translated label ("Edit order").
+    # Locate its stable component class rather than assuming the test user's locale.
+    edit_action = page.locator("button.dco-tab-edit-start").first
     expect(edit_action).to_be_visible(timeout=30_000)
     edit_action.click()
     page.wait_for_function(
