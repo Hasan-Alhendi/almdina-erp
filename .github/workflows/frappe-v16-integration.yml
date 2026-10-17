@@ -400,7 +400,7 @@ jobs:
           fi
 
       - name: Run pinned ALMADINA-128 Desk/performance acceptance case
-        if: startsWith(matrix.suite, 'al128_')
+        if: matrix.suite == 'al128_desk' || matrix.suite == 'al128_desk_edit' || matrix.suite == 'al128_performance'
         env:
           FRAPPE_DESK_URL: http://test.localhost:8000
           DCO_AL128_FIXTURE_FILE: ${{ runner.temp }}/al128-desk-fixtures.json
@@ -468,7 +468,7 @@ jobs:
         timeout-minutes: 10
 
       - name: Run pinned ALMADINA-129 NEW Desk acceptance
-        if: startsWith(matrix.suite, 'al129_')
+        if: matrix.suite == 'al129_customer' || matrix.suite == 'al129_new'
         env:
           FRAPPE_DESK_URL: http://test.localhost:8000
           DCO_AL129_FIXTURE_FILE: ${{ runner.temp }}/al129-desk-fixtures.json
@@ -480,6 +480,7 @@ jobs:
               tests/browser/test_al129_link_search_request.py \
               tests/browser/test_dco_al129_frappe_desk.py::test_real_desk_customer_native_entry_and_permission_differential \
               tests/browser/test_dco_al129_frappe_desk.py::test_real_desk_customer_control_link_autocomplete_isolated \
+              tests/browser/test_dco_al129_frappe_desk.py::test_real_desk_create_permission_revoke_restore_isolated \
               2>&1 | tee "$RUNNER_TEMP/al129-desk-tests.log"
           else
             python -m pytest -q -s \
@@ -490,7 +491,7 @@ jobs:
         timeout-minutes: 15
 
       - name: Upload ALMADINA-129 Desk evidence
-        if: always() && startsWith(matrix.suite, 'al129_')
+        if: always() && (matrix.suite == 'al129_customer' || matrix.suite == 'al129_new')
         uses: actions/upload-artifact@v4
         with:
           name: al129-real-desk-${{ matrix.suite }}
@@ -531,7 +532,7 @@ jobs:
           retention-days: 7
 
       - name: Upload ALMADINA-128 Desk evidence
-        if: always() && startsWith(matrix.suite, 'al128_')
+        if: always() && (matrix.suite == 'al128_desk' || matrix.suite == 'al128_desk_edit' || matrix.suite == 'al128_performance')
         uses: actions/upload-artifact@v4
         with:
           name: al128-real-desk-evidence-${{ matrix.suite }}
