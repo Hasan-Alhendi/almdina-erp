@@ -195,6 +195,8 @@ def _pieces(count: int, *, include_special: bool) -> list[dict[str, object]]:
                 "qty": 1 + index % 3,
                 "notes": f"AL128 fixture piece {index + 1}",
                 "extra_liner": int(index == 8),
+                "liner_reference_side": "edge_width_top" if index == 8 else "",
+                "liner_width_cm": 1.8 if index == 8 else 0,
                 "edge_long_left": int(index == 0),
                 "edge_width_top": int(index == 0),
                 "special_shape_geometry_json": geometry if special else "",
