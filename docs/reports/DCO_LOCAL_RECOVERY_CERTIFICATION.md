@@ -10,6 +10,17 @@
 
 This file is a **checkpoint assessment**, not a PASS certificate. Its creation does not alter Recovery runtime behavior, approve release, or advance Jira issue statuses.
 
+## Continuation — verified 2026-10-17
+
+- Jira direct issue access now works. ALMADINA-127 Architecture Gate was approved (Done); ALMADINA-128 remains Ready for Review, with 129/131/135 To Do. Historical Jira 403 text below is superseded.
+- PR #532 at previous head 0bcee7e passed 15/15 workflows, including [integration run 39057418235](https://github.com/Hasan-Alhendi/almdina-erp/actions/runs/39057418235): 1,567 + 81 tests and the new ownership test. These tests used moving Frappe 16.52.0/ERPNext 16.51.1, NOT the pinned acceptance runtime.
+- The AL128 actual Frappe Desk performance workload has been corrected from 200/500 to 100 pieces per Jira acceptance; Base-versus-HEAD P50/P95 input-to-frame and IndexedDB checkpoint acknowledgement remain separately measured. Synthetic 200/500 storage tests remain unchanged.
+- Existing Frappe v16 Integration workflow was extended on PR #532 to run the 100-piece benchmark pinned to Frappe v16.17.5 (75baafaa) and ERPNext v16.17.0 (7b494dc9). No production change.
+- [First pinned run 39062569533](https://github.com/Hasan-Alhendi/almdina-erp/actions/runs/39062569533) installed/verified both pinned runtimes, but failed during isolated fixture seeding: Row 9 Liner lacked reference side and width. A targeted test fixture correction was committed as 763333785c5e4071bf107dc47d3eacf1ee1f54c0; succeeding runs must be examined before any PASS.
+- Pinned NEW Desk run 38998378203 retains two unresolved Frappe Link test failures. EDIT integration has not yet been ported into current Develop; ALMADINA-135 Local Gate therefore cannot pass.
+- The ownership drift Python test ran and passed in Static Checks. Historical pending-test statements later in this report were superseded by this run.
+
+**Release decision: BLOCKED — no merge or deployment.**
 ## Executive summary and baseline
 
 The existing local Recovery implementation is to be extended rather than rebuilt. `Develop` already contains `RecoveryProjection`, `CheckpointSession`, IndexedDB gateway, local draft/asset repositories, NEW Recovery presentation, and NEW server insert reconciliation. The checked baseline also contains P0 cross-order isolation from merged PRs [#524](https://github.com/Hasan-Alhendi/almdina-erp/pull/524) and [#531](https://github.com/Hasan-Alhendi/almdina-erp/pull/531). Old recovery branch ancestry is not suitable for wholesale merge.
