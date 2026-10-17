@@ -7,6 +7,7 @@
     "piece_instance_id",
     "piece_no",
     "piece_type",
+    "glass_margin_mm",
     "extra_double",
     "extra_full_door_double",
     "extra_liner",
@@ -100,7 +101,8 @@
   "fields": [
     {"fieldname":"piece_instance_id","fieldtype":"Data","hidden":1,"label":"Piece Instance ID","read_only":1},
     {"fieldname":"piece_no","fieldtype":"Int","in_list_view":1,"label":"Piece No","read_only":1},
-    {"default":"Regular","fieldname":"piece_type","fieldtype":"Select","in_list_view":1,"label":"Piece Type","options":"Regular\nClipped Corner\nL-Shaped Corner\nSpecial","reqd":1},
+    {"default":"Regular","fieldname":"piece_type","fieldtype":"Select","in_list_view":1,"label":"Piece Type","options":"Regular\nClipped Corner\nL-Shaped Corner\nSpecial\nGlass","reqd":1},
+    {"description":"Uniform millimetre margin between the entered outer size and the inner glass opening. Empty unless the piece type is Glass.","fieldname":"glass_margin_mm","fieldtype":"Float","hidden":1,"label":"Glass Margin (MM)","precision":"3"},
     {"default":"0","fieldname":"extra_double","fieldtype":"Check","hidden":1,"label":"Double Edge Banding"},
     {"default":"0","fieldname":"extra_full_door_double","fieldtype":"Check","hidden":1,"label":"Full Door Double"},
     {"default":"0","fieldname":"extra_liner","fieldtype":"Check","hidden":1,"label":"Liner"},

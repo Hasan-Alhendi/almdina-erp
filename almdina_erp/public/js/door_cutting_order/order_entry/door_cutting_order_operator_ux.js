@@ -363,6 +363,10 @@
         const edge = tr.querySelector("[data-calc='edge_meters']");
         if (area) area.textContent = localArea(row).toFixed(3);
         if (edge) edge.textContent = localEdgeMeters(row).toFixed(3);
+        const glass = window.AlmdinaGlassShape;
+        if (glass && typeof glass.syncShapeButton === "function") {
+            glass.syncShapeButton(tr, row);
+        }
     }
 
     function triggerChildField(frm, row, fieldname, delay = 0) {
@@ -421,22 +425,36 @@
         const cornerSummary = isClipped && cornerGeometry
             ? cornerGeometry.summary(data)
             : "";
-        const shapeIcon = isClipped
-            ? (cornerGeometry && cornerGeometry.typeIcon(data)) || "⌑"
-            : ((hasDrawing || hasExactGeometry) ? "✓" : "✎");
-        const shapeLabel = isClipped
-            ? (__("Set"))
-            : ((hasDrawing || hasExactGeometry)
-                ? (__("Documented"))
-                : (__("Document")));
-        const shapeTitle = isClipped
-            ? `${__("Configure {0}", [cornerGeometry ? cornerGeometry.typeLabel(data) : __("corner")])}${cornerSummary ? ` — ${cornerSummary}` : ""}`
-            : (__("Open image, measurements and notes documentation"));
+        const glassApi = window.AlmdinaGlassShape;
+        const glassState = glassApi && typeof glassApi.shapeButtonState === "function"
+            ? glassApi.shapeButtonState(data, { editable, virtual })
+            : null;
+        const shapeIcon = glassState
+            ? glassState.icon
+            : (isClipped
+                ? (cornerGeometry && cornerGeometry.typeIcon(data)) || "⌑"
+                : ((hasDrawing || hasExactGeometry) ? "✓" : "✎"));
+        const shapeLabel = glassState
+            ? glassState.label
+            : (isClipped
+                ? (__("Set"))
+                : ((hasDrawing || hasExactGeometry)
+                    ? (__("Documented"))
+                    : (__("Document"))));
+        const shapeTitle = glassState
+            ? glassState.title
+            : (isClipped
+                ? `${__("Configure {0}", [cornerGeometry ? cornerGeometry.typeLabel(data) : __("corner")])}${cornerSummary ? ` — ${cornerSummary}` : ""}`
+                : (__("Open image, measurements and notes documentation")));
+        const shapeEnabled = glassState
+            ? glassState.enabled
+            : ((isSpecial || isClipped) && editable && !virtual);
         const nativePieceTypeSelect = `<select class="dco-fast-select" data-field="piece_type" ${disabled}>
             <option value="Regular" ${pieceType === "Regular" ? "selected" : ""}>${__("Regular")}</option>
             <option value="Special" ${pieceType === "Special" ? "selected" : ""}>${__("Special")}</option>
             <option value="Clipped Corner" ${pieceType === "Clipped Corner" ? "selected" : ""}>${__("Clipped corner")}</option>
             <option value="L-Shaped Corner" ${pieceType === "L-Shaped Corner" ? "selected" : ""}>${__("L-shaped corner")}</option>
+            <option value="Glass" ${pieceType === "Glass" ? "selected" : ""}>${__("Glass")}</option>
         </select>`;
         const pieceTypeControl = extraAddons && typeof extraAddons.renderTypePicker === "function"
             ? extraAddons.renderTypePicker(data, { editable, virtual })
@@ -453,7 +471,7 @@
                 <td class="dco-col-edges" data-label="${labels.edges}">${edgesCellHtml(frm, data, { editable, virtual })}</td>
                 <td class="dco-col-edge-type" data-label="${labels.edgeType}"><select class="dco-fast-select" data-field="edge_type" ${edgeTypeDisabled}>${edgeOptions(frm, virtual || isSpecial ? "" : (data.edge_type || ""))}</select></td>
                 <td class="dco-col-edge-bulk" data-label="${__("Apply to all four")}"></td>
-                <td class="dco-col-sketch" data-label="${labels.shape}"><button type="button" class="dco-special-sketch-button ${hasDrawing || hasExactGeometry ? "is-documented" : ""} ${hasExactGeometry ? "is-exact-geometry" : ""} ${isClipped ? "is-clipped-corner" : ""}" ${(isSpecial || isClipped) && editable && !virtual ? "" : "disabled"} title="${escapeHtml(shapeTitle)}">
+                <td class="dco-col-sketch" data-label="${labels.shape}"><button type="button" class="dco-special-sketch-button ${!glassState && (hasDrawing || hasExactGeometry) ? "is-documented" : ""} ${!glassState && hasExactGeometry ? "is-exact-geometry" : ""} ${!glassState && isClipped ? "is-clipped-corner" : ""} ${glassState ? "is-glass" : ""} ${glassState && glassState.incomplete ? "is-incomplete" : ""}" ${shapeEnabled ? "" : "disabled"} title="${escapeHtml(shapeTitle)}">
                     <span aria-hidden="true">${shapeIcon}</span>
                     <span>${shapeLabel}</span>
                 </button></td>
@@ -1109,6 +1127,8 @@
                 if (tr && tr.dataset.rowName !== row.name) tr.dataset.rowName = row.name;
                 if (window.AlmdinaClippedCornerGeometry && window.AlmdinaClippedCornerGeometry.isCornerCut(row) && window.AlmdinaClippedCornerEditor) {
                     window.AlmdinaClippedCornerEditor.open(currentFrm, row);
+                } else if (window.AlmdinaGlassShape && window.AlmdinaGlassShape.isGlass(row)) {
+                    window.AlmdinaGlassShape.open(currentFrm, row);
                 } else if (window.AlmdinaSpecialShapeEditor) {
                     window.AlmdinaSpecialShapeEditor.open(currentFrm, row);
                 }

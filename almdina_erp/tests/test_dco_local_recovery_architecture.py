@@ -167,6 +167,7 @@ class TestDcoLocalRecoveryArchitecture(unittest.TestCase):
             "clipped_corner_position",
             "clipped_corner_width_cm",
             "clipped_corner_length_cm",
+            "glass_margin_mm",
             "width_cm",
             "length_cm",
             "qty",

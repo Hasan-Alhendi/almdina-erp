@@ -1,0 +1,33 @@
+/* Glass door: static DCO feature styling; behavior stays in glass_shape_ux.js. */
+.dco-glass-modal .modal-dialog{max-width:min(860px,94vw)!important;width:860px!important}
+        .dco-glass-modal .modal-content{border:0;border-radius:var(--alm-radius-lg,18px);overflow:hidden;background:var(--card-bg,var(--alm-card,#fff));color:var(--text-color)}
+        .dco-glass-modal .modal-header,.dco-glass-modal .modal-footer{background:var(--card-bg,var(--alm-card,#fff));color:var(--text-color);border-color:var(--border-color)}
+        .dco-glass-modal .modal-body{padding:0!important;overflow:visible;background:var(--subtle-fg,var(--alm-canvas,#eef1f6));color:var(--text-color)}
+        .dco-glass-modal .frappe-control,.dco-glass-modal .form-group{margin:0}
+        .dco-glass-editor{direction:inherit;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(230px,.85fr);color:var(--text-color)}
+        .dco-glass-preview-panel{padding:12px 14px;display:flex;flex-direction:column;gap:8px;background:color-mix(in srgb,var(--alm-accent,#2563eb) 6%,var(--subtle-fg,var(--alm-canvas,#eef1f6)))}
+        .dco-glass-preview-head strong{display:block;font-size:var(--alm-font-size-md,14px);line-height:1.3;color:var(--text-color)}
+        .dco-glass-preview-head span,.dco-glass-readout span,.dco-glass-field{color:var(--text-muted,var(--alm-text-muted,#6b7280));font-size:var(--alm-font-size-xs,11px)}
+        .dco-glass-preview{height:188px;min-height:0;border:1px solid var(--border-color,var(--alm-card-border,#e4e8ee));border-radius:var(--alm-radius-md,14px);background:var(--card-bg,var(--alm-card,#fff));display:flex;align-items:center;justify-content:center;padding:8px;overflow:hidden}
+        .dco-glass-preview svg{width:100%;height:100%;min-height:0;display:block;color:var(--text-color)}
+        .dco-glass-frame{fill:color-mix(in srgb,var(--alm-warning,#b45309) 32%,var(--card-bg,#fff));stroke:var(--alm-warning,#b45309);stroke-width:2}
+        .dco-glass-opening{fill:color-mix(in srgb,var(--alm-accent,#2563eb) 24%,var(--card-bg,#fff));stroke:var(--alm-accent,#2563eb);stroke-width:2}
+        .dco-glass-preview text{fill:currentColor;font-size:11px;font-weight:700}
+        .dco-glass-controls{padding:12px 14px;background:var(--card-bg,var(--alm-card,#fff));border-inline-start:1px solid var(--border-color);display:flex;flex-direction:column;gap:8px;color:var(--text-color)}
+        .dco-glass-field{display:flex;flex-direction:column;gap:4px;font-weight:700;color:var(--text-color)}
+        .dco-glass-input-shell{display:flex;align-items:center;border:1px solid var(--border-color);border-radius:var(--alm-radius-button,10px);overflow:hidden;background:var(--control-bg,var(--card-bg,#fff));color:var(--text-color)}
+        .dco-glass-input-shell input{width:100%;border:0!important;box-shadow:none!important;min-height:36px;padding:4px 8px;background:transparent;color:inherit;font-size:var(--alm-font-size-md,14px);font-weight:700;text-align:center}
+        .dco-glass-input-shell span{padding-inline:8px;color:var(--text-muted,var(--alm-text-muted,#6b7280));border-inline-start:1px solid var(--border-color)}
+        .dco-glass-readout{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+        .dco-glass-readout b{display:block;color:var(--text-color);font-size:var(--alm-font-size-sm,12px)}
+        .dco-glass-help{border-radius:var(--alm-radius-sm,10px);padding:8px 10px;background:var(--subtle-fg,var(--alm-canvas,#eef1f6));border:1px solid var(--border-color);color:var(--text-muted,var(--text-color));font-size:11px;line-height:1.45}
+        .dco-glass-help.is-error{color:var(--alm-danger,#b91c1c);background:color-mix(in srgb,var(--alm-danger,#b91c1c) 12%,var(--card-bg,#fff));border-color:color-mix(in srgb,var(--alm-danger,#b91c1c) 35%,var(--border-color,#fecdd3))}
+        .dco-fast-table .dco-special-sketch-button.is-glass{border-style:solid;border-color:color-mix(in srgb,var(--alm-accent,#2563eb) 45%,var(--border-color,#d9e0e6));background:color-mix(in srgb,var(--alm-accent,#2563eb) 12%,var(--card-bg,#fff));color:var(--text-color)}
+        .dco-fast-table .dco-special-sketch-button.is-glass.is-incomplete{border-color:color-mix(in srgb,var(--alm-warning,#b45309) 55%,var(--border-color,#d9e0e6));background:color-mix(in srgb,var(--alm-warning,#b45309) 14%,var(--card-bg,#fff));color:var(--text-color)}
+        @media(max-width:720px){
+            .dco-glass-modal .modal-dialog{width:100vw!important;max-width:100vw!important;margin:0!important}
+            .dco-glass-modal .modal-content{max-height:100dvh;overflow-y:auto}
+            .dco-glass-editor{display:flex;flex-direction:column}
+            .dco-glass-preview{height:160px}
+            .dco-glass-controls{border-inline-start:0;border-top:1px solid var(--border-color)}
+        }

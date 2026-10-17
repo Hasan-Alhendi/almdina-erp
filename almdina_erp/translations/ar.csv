@@ -565,6 +565,8 @@ Row {0}: Width must be greater than zero.,السطر {0}: يجب أن يكون �
 Row {0}: Length must be greater than zero.,السطر {0}: يجب أن يكون الطول أكبر من صفر.
 Row {0}: Quantity must be a positive integer.,السطر {0}: يجب أن يكون العدد رقمًا صحيحًا أكبر من صفر.
 Row {0}: Piece Type is invalid.,السطر {0}: نوع الدرفة غير صالح.
+Row {0}: Glass margin must be greater than zero.,السطر {0}: هامش البلور يجب أن يكون أكبر من صفر.
+Row {0}: The inner glass opening must have a positive width and length.,السطر {0}: فتحة البلور الداخلية يجب أن يبقى عرضها وطولها أكبر من صفر.
 Row {0}: Clipped Corner Position is invalid.,السطر {0}: موضع الزاوية المقصوصة غير صالح.
 Row {0} Clipped Corner Width CM,قص الزاوية على عرض الدرفة في السطر {0} (سم)
 Row {0} Clipped Corner Length CM,قص الزاوية على طول الدرفة في السطر {0} (سم)
@@ -636,6 +638,9 @@ None,لا يوجد
 تسليم,تسليم
 Piece Type,نوع الدرفة
 Regular,عادية
+Glass,درفة بلور
+Glass door,درفة بلور
+Glass Margin (MM),هامش البلور (مم)
 Clipped Corner,الزاوية الكسر
 Special,خاصة
 Clipped Corner Position,موضع الزاوية المقصوصة
@@ -766,6 +771,7 @@ Edge m,متر قشاط
 Enter the piece width and length before opening the shape.,أدخل عرض الدرفة وطولها أولًا، ثم افتح توثيق الشكل.
 Export DXF for AutoCAD,تصدير DXF لأوتوكاد
 DXF export failed its compatibility self-check and was not downloaded.,فشل ملف DXF في فحص التوافق الداخلي، لذلك تم منع تنزيل ملف تالف.
+The Glass opening is missing from this cutting plan. Recalculate the system plan before exporting DXF.,فتحة البلور غير موجودة في خطة القص هذه. أعد حساب خطة النظام قبل تصدير DXF.
 Preparing an AutoCAD-compatible DXF...,جاري تجهيز ملف DXF المتوافق مع AutoCAD...
 Validated AutoCAD-compatible DXF exported successfully.,تم تصدير ملف DXF متوافق مع AutoCAD بنجاح.
 Downloading the uploaded DXF file...,جاري تنزيل ملف DXF المرفوع...
@@ -2737,6 +2743,15 @@ Edit customers,تعديل الزبائن
 Edit the existing customer details.,تعديل بيانات الزبون الحالية.
 Delete customer,حذف زبون
 Delete a customer who is not linked to any saved orders.,حذف زبون غير مرتبط بطلبات محفوظة.
+Glass Door,درفة بلور
+Glass Margin,هامش البلور
+Glass Opening Dimensions,أبعاد فتحة البلور
+Opening Width,عرض الفتحة
+Opening Length,طول الفتحة
+Apply Shape,اعتماد الشكل
+Invalid Glass Margin,هامش البلور غير صالح
+Glass margin is measured from the entered outer size. The cut size can differ after edge banding.,هامش البلور يُقاس من المقاس الخارجي المدخل. مقاس القص قد يختلف بعد القشاط.
+Glass shape applied,تم اعتماد شكل البلور
 Saw blade thickness conflict: {0} mm versus {1} mm in the cutting plan. DXF was not exported.,سماكة الشفرة متعارضة: {0} مم مقابل {1} مم في خطة القص، ولم يُصدَّر الملف.
 Door {0}: {1},الدرفة {0}: {1}
 the liner,اللاينر
@@ -2774,3 +2789,90 @@ The machining paths permit multiple orientations that move edge bands to differe
 Add a distinct machining reference that establishes the door orientation then re-upload the DXF.,أضف مرجع تشغيل مميزًا يثبت اتجاه الدرفة ثم أعد رفع ملف DXF.
 "The cutting plan save could not be confirmed. Check the saved plan, then create a new preview.",تعذر تأكيد حفظ خطة القص. تحقق من الخطة المحفوظة ثم أنشئ معاينة جديدة.
 The plan was verified on the server after its save response was lost.,تم التحقق من حفظ الخطة على الخادم بعد فقدان رد الحفظ.
+Price approval status,حالة السعر
+All price statuses,كل حالات السعر
+Current price approval,اعتماد السعر الحالي
+Door Cutting Price Approval,اعتماد سعر القص
+Cost reference Cutting Plan,خطة التكلفة المرجعية
+Approved final amount,المبلغ النهائي المعتمد
+Approved on,وقت الاعتماد
+Pricing basis fingerprint,بصمة أساس التسعير
+Fingerprint formula version,إصدار صيغة البصمة
+Validity status,حالة صلاحية الاعتماد
+Invalidated on,وقت الإبطال
+Invalidation reason,سبب الإبطال
+Approve final price,اعتماد السعر
+Cancel final price approval,إلغاء اعتماد السعر
+The price approval for this order has been cancelled,لقد تم إلغاء اعتماد سعر هذا الطلب
+You do not have permission to edit cost settings.,لا تملك صلاحية تعديل إعدادات التكلفة.
+"Cancel the order's final price approval while keeping the approval record and its details.",إلغاء اعتماد السعر النهائي للطلب مع الاحتفاظ بسجل الموافقة وتفاصيلها.
+Approval note,ملاحظة الاعتماد
+Invalidated by,أُلغي اعتماده بواسطة
+Approval note must be text.,يجب أن تكون ملاحظة الاعتماد نصاً.
+Approval note cannot exceed 500 characters.,لا يمكن أن تتجاوز ملاحظة الاعتماد 500 حرفاً.
+Invalidated by must be a user link.,يجب أن يكون منفّذ الإلغاء رابط مستخدم.
+Invalidated by can be recorded only during an authorized invalidation.,لا يُسجَّل منفّذ الإلغاء إلا ضمن انتقال إبطال مصرح به.
+"Approve the final order price, record the approval data, and lock cost settings.",اعتماد السعر النهائي للطلب، وتثبيت بيانات الاعتماد وقفل إعدادات التكلفة.
+Unapproved,غير معتمد
+Price approval status and current approval link are command-owned and cannot be changed through ordinary document save.,حالة السعر ورابط الاعتماد الحالي مملوكان للأمر المعتمد ولا يمكن تغييرهما عبر حفظ المستند العادي.
+Door Cutting Price Approval records can only be created by an authorized command.,يمكن إنشاء سجلات اعتماد سعر القص فقط عبر أمر مخوّل.
+Door Cutting Price Approval records cannot be deleted.,لا يمكن حذف سجلات اعتماد سعر القص.
+Door Cutting Price Approval records are immutable after insert.,سجلات اعتماد سعر القص غير قابلة للتعديل بعد الإنشاء.
+Only an Active price approval may transition to Invalidated.,يمكن إبطال اعتماد السعر النشط فقط.
+Invalidating a price approval cannot rewrite historical approval details.,إبطال اعتماد السعر لا يجوز أن يعيد كتابة تفاصيل الاعتماد التاريخية.
+The selected Cutting Plan belongs to another order.,خطة القص المحددة تتبع طلبًا آخر.
+لا تملك صلاحية اعتماد السعر النهائي لهذا الطلب.,لا تملك صلاحية اعتماد السعر النهائي لهذا الطلب.
+اعتماد السعر النهائي يتطلب صلاحية عرض التكلفة لهذا الطلب.,اعتماد السعر النهائي يتطلب صلاحية عرض التكلفة لهذا الطلب.
+"لا يمكن تعديل إعدادات التكلفة لأن السعر النهائي معتمد. ألغِ اعتماد السعر أولاً بعد تغيير أساس التسعير.",لا يمكن تعديل إعدادات التكلفة لأن السعر النهائي معتمد. ألغِ اعتماد السعر أولاً بعد تغيير أساس التسعير.
+Refresh the cost page and review the current price before approving.,حدّث صفحة التكلفة وراجع السعر الحالي قبل الاعتماد.
+The price basis changed since it was last loaded. Refresh and review the price before approving.,تغيّر أساس السعر منذ آخر تحميل. حدّث الصفحة وراجع السعر قبل الاعتماد.
+The cutting order must be saved before its final price can be approved.,يجب حفظ طلب القص قبل اعتماد سعره النهائي.
+A cancelled order cannot receive final-price approval.,لا يمكن اعتماد السعر النهائي لطلب ملغى.
+A superseded order revision cannot receive final-price approval.,لا يمكن اعتماد السعر النهائي لنسخة طلب مستبدلة.
+A valid cost-reference cutting plan is required before approving the final price.,يلزم وجود خطة تكلفة مرجعية صالحة قبل اعتماد السعر النهائي.
+The cost-reference cutting plan is outdated. Recalculate and review the price first.,خطة التكلفة المرجعية قديمة. أعد الحساب وراجع السعر أولاً.
+Board rate must be entered on the cost page before approving the final price.,يجب إدخال سعر اللوح من صفحة التكلفة قبل اعتماد السعر النهائي.
+Cutting fee per board must be entered on the cost page before approving the final price.,يجب إدخال أجور القص / لوح من صفحة التكلفة قبل اعتماد السعر النهائي.
+The final price is already approved for a different pricing basis.,السعر النهائي معتمد مسبقاً لأساس تسعير مختلف.
+Final-price approval capability is required.,صلاحية اعتماد السعر النهائي مطلوبة.
+Approving the final price...,جارٍ اعتماد السعر النهائي...
+Approving…,جارٍ الاعتماد…
+Updating…,جارٍ التحديث…
+Approved by {0} on {1},اعتمده {0} في {1}
+Approved by {0},اعتمده {0}
+Approved on {0},اعتمد في {0}
+Save or cancel unsaved changes before approving the final price.,احفظ التغييرات غير المحفوظة أو ألغها قبل اعتماد السعر النهائي.
+Final price not ready,السعر النهائي غير جاهز
+The final price is not ready to approve yet.,السعر النهائي غير جاهز للاعتماد بعد.
+Final price approved,تم اعتماد السعر النهائي
+The final price was approved but the cost data could not be refreshed. Open the Cost tab again to load the latest status.,تم اعتماد السعر النهائي لكن تعذر تحديث بيانات التكلفة. افتح تاب التكلفة مجدداً لتحميل الحالة الأحدث.
+"The final price was approved, but the cost data could not be refreshed. Open the Cost tab again to load the latest status.",تم اعتماد السعر النهائي لكن تعذر تحديث بيانات التكلفة. افتح تاب التكلفة مجدداً لتحميل الحالة الأحدث.
+Price changed,تغيّر السعر
+The price basis changed. Review the total then approve again.,تغيّر أساس السعر. راجع الإجمالي ثم اضغط الاعتماد مجدداً.
+"The price basis changed. Review the total, then approve again.",تغيّر أساس السعر. راجع الإجمالي ثم اضغط الاعتماد مجدداً.
+Could not approve the final price,تعذر اعتماد السعر النهائي
+Could not approve the final price.,تعذر اعتماد السعر النهائي.
+Final-price cancellation capability is required.,صلاحية إلغاء اعتماد السعر النهائي مطلوبة.
+The price approval changed since this page was loaded. Refresh and review before cancelling.,تغيّر اعتماد السعر منذ تحميل هذه الصفحة. حدّث البيانات وراجع قبل الإلغاء.
+There is no active final-price approval to cancel.,لا يوجد اعتماد سعر نهائي نشط لإلغائه.
+The cutting order must be saved before its final price can be cancelled.,يجب حفظ طلب القص قبل إلغاء اعتماد سعره النهائي.
+The order document state does not allow final-price cancellation.,حالة مستند الطلب لا تسمح بإلغاء اعتماد السعر النهائي.
+A cancelled order cannot have its final-price approval cancelled.,لا يمكن إلغاء اعتماد السعر النهائي لطلب ملغى.
+A superseded order revision cannot have its final-price approval cancelled.,لا يمكن إلغاء اعتماد السعر النهائي لمراجعة طلب مستبدلة.
+Refresh the cost page and cancel the current price approval again.,حدّث صفحة التكلفة وألغِ اعتماد السعر الحالي مجدداً.
+The selected price approval was not found. Refresh and try again.,تعذر العثور على اعتماد السعر المحدد. حدّث الصفحة وحاول مجدداً.
+The selected price approval belongs to another order.,اعتماد السعر المحدد يخص طلباً آخر.
+Optional,اختياري
+Confirm approval,تأكيد الاعتماد
+Add a note linked to this price approval…,أضف ملاحظة مرتبطة باعتماد السعر…
+The note is saved with the approval record.,تُحفظ الملاحظة مع سجل الاعتماد.
+Show more,عرض المزيد
+Go back,رجوع
+Cancelling…,جارٍ الإلغاء…
+Cancelling the final price approval...,جارٍ إلغاء اعتماد السعر النهائي...
+Final price approval cancelled,تم إلغاء اعتماد السعر
+Could not cancel the final price approval,تعذر إلغاء اعتماد السعر النهائي
+Could not cancel the final price approval.,تعذر إلغاء اعتماد السعر النهائي.
+Do you want to cancel the final price approval for this order? Order details and prices will stay the same.,هل تريد إلغاء اعتماد السعر النهائي لهذا الطلب؟ ستبقى تفاصيل الطلب والأسعار كما هي.
+Save or cancel unsaved changes before cancelling the final price approval.,احفظ التغييرات غير المحفوظة أو ألغها قبل إلغاء اعتماد السعر النهائي.
+{0} / {1},{0} / {1}

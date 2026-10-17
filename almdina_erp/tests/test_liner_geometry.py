@@ -59,6 +59,8 @@ def test_regular_outer_sides_and_invalid_values():
         "edge_long_right",
     )
     assert "edge_break" not in available_liner_sides("Regular")
+    assert available_liner_sides("Glass") == available_liner_sides("Regular")
+    assert available_liner_sides("Special") == ()
     piece = _regular()
     assert validation_code(piece, "edge_width_top", 2, 1.5) == ""
     assert validation_code(piece, "edge_width_top", -1, 1.5) == "offset_invalid"

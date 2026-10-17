@@ -34,6 +34,8 @@ frappe.pages["factory-plan-archive"].on_page_load = function (wrapper) {
         context: "almdina_erp.almdina_erp.services.archive_service.get_archive_context",
         archive: "almdina_erp.almdina_erp.services.archive_service.archive_approved_plan_pdf",
     });
+    const FOUNDATION = "/assets/almdina_erp/js/frontend_foundation.js";
+    const STYLESHEET = "/assets/almdina_erp/css/factory_plan_archive.css?v=1";
     const page = frappe.ui.make_app_page({
         parent: wrapper,
         title: translate("Approved cutting plans archive"),
@@ -44,10 +46,19 @@ frappe.pages["factory-plan-archive"].on_page_load = function (wrapper) {
     let requestId = 0;
     let searchControl = null;
 
-    injectStyles();
-    page.set_primary_action(translate("Refresh"), load, "refresh");
-    if (window.AlmdinaPageRevisit) window.AlmdinaPageRevisit.refreshOnRevisit(wrapper, load);
-    load();
+    ensureArchiveStyles()
+        .then(() => {
+            page.set_primary_action(translate("Refresh"), load, "refresh");
+            if (window.AlmdinaPageRevisit) window.AlmdinaPageRevisit.refreshOnRevisit(wrapper, load);
+            load();
+        })
+        .catch(error => {
+            const message = error && error.message
+                ? error.message
+                : translate("Could not load the plans archive.");
+            loading(message);
+            frappe.show_alert({ message, indicator: "red" }, 7);
+        });
 
     frappe.pages["factory-plan-archive"].on_page_hide = function () {
         disposeControls();
@@ -80,14 +91,18 @@ frappe.pages["factory-plan-archive"].on_page_load = function (wrapper) {
         }
     }
 
-    function injectStyles() {
-        if (document.getElementById("almdina-plan-archive-style")) return;
-        const style = document.createElement("style");
-        style.id = "almdina-plan-archive-style";
-        style.textContent = `
-            .apa-shell{display:grid;gap:12px}.apa-hero{padding:18px;border:1px solid var(--border-color,#e5e7eb);border-radius:15px;background:linear-gradient(135deg,var(--fg-color,#fff),var(--subtle-fg,#f8fafb))}.apa-hero h3{margin:0 0 6px;font-size:19px;font-weight:800}.apa-hero p{margin:0;color:var(--text-muted,#667085);line-height:1.8}.apa-tools{display:flex;gap:10px;align-items:center}.apa-list{display:grid;gap:10px}.apa-card{padding:14px;border:1px solid var(--border-color,#e5e7eb);border-radius:14px;background:var(--fg-color,#fff);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:center}.apa-title{font-size:15px;font-weight:800}.apa-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.apa-chip{padding:5px 9px;border-radius:999px;background:var(--subtle-fg,#f5f7f9);font-size:11px;font-weight:700}.apa-card .btn{min-height:40px;border-radius:9px;font-weight:700}.apa-result{margin-top:10px;padding:11px;border-radius:10px;background:#eaf8ef;color:#166534;font-size:12px}.apa-empty{padding:32px;text-align:center;border:1px dashed var(--border-color,#d8dee4);border-radius:14px;color:var(--text-muted,#667085);background:var(--subtle-fg,#fafafa)}@media(max-width:700px){.apa-card{grid-template-columns:1fr}.apa-card .btn{width:100%}}
-        `;
-        document.head.appendChild(style);
+    function ensureArchiveStyles() {
+        const frontend = window.AlmdinaFrontend;
+        if (frontend && typeof frontend.ensureStylesheet === "function") {
+            return frontend.ensureStylesheet(STYLESHEET, { id: "almdina-plan-archive-style" });
+        }
+        return Promise.resolve(frappe.require([FOUNDATION])).then(() => {
+            const ready = window.AlmdinaFrontend;
+            if (!ready || typeof ready.ensureStylesheet !== "function") {
+                throw new Error("Almdina frontend foundation did not initialize");
+            }
+            return ready.ensureStylesheet(STYLESHEET, { id: "almdina-plan-archive-style" });
+        });
     }
 
     function loading(message) {

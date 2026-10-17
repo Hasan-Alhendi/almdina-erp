@@ -13,6 +13,8 @@ class OrderSaveGateway(Protocol):
 
     def enforce_immutability(self) -> None: ...
 
+    def enforce_price_approval_integrity(self) -> None: ...
+
     def set_piece_numbers(self) -> None: ...
 
     def validate_piece_inputs(self) -> None: ...
@@ -32,6 +34,7 @@ def process_order_save(gateway: OrderSaveGateway) -> None:
     """Validate and prepare one order without touching Cutting Plan state."""
 
     gateway.enforce_immutability()
+    gateway.enforce_price_approval_integrity()
     gateway.set_piece_numbers()
     gateway.validate_piece_inputs()
     gateway.validate_piece_policies()

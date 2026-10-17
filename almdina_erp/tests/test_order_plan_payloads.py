@@ -157,6 +157,111 @@ class TestPlanPayloadApplication(unittest.TestCase):
             },
         )
 
+    def test_empty_glass_margin_stays_out_of_the_plan_input_hash(self) -> None:
+        def payload(margin):
+            return build_plan_input_payload(
+                version=1,
+                board=PlanBoardInput(item="MDF", width_mm=1220, length_mm=2440),
+                cut=PlanCutInput(
+                    kerf_mm=3,
+                    trim_margin_mm=5,
+                    packing_mode="Auto Pro",
+                    machine_type="Auto",
+                    time_limit_sec=10,
+                ),
+                optimizer=PlanOptimizerSettings(
+                    exact_piece_limit=40,
+                    min_remnant_width_mm=0,
+                    min_remnant_length_mm=0,
+                    min_remnant_area_m2=0,
+                ),
+                pieces=[
+                    PlanPieceInput(
+                        index=1,
+                        width_cm=52.1,
+                        length_cm=72.5,
+                        qty=2,
+                        allow_rotation=0,
+                        piece_type="Glass",
+                        clipped_corner_position="",
+                        clipped_corner_width_cm=0,
+                        clipped_corner_length_cm=0,
+                        glass_margin_mm=margin,
+                    )
+                ],
+            )
+
+        empty = payload(None)
+        self.assertNotIn("glass_margin_mm", empty["pieces"][0])
+        self.assertEqual(fingerprint_payload(empty), fingerprint_payload(payload(None)))
+        self.assertNotEqual(
+            fingerprint_payload(empty),
+            fingerprint_payload(payload(65)),
+        )
+        self.assertNotEqual(
+            fingerprint_payload(payload(65)),
+            fingerprint_payload(payload(66)),
+        )
+
+    def test_unused_glass_margin_does_not_change_a_non_glass_plan_hash(self) -> None:
+        def payload(piece_type, margin):
+            return build_plan_input_payload(
+                version=1,
+                board=PlanBoardInput(item="MDF", width_mm=1220, length_mm=2440),
+                cut=PlanCutInput(
+                    kerf_mm=3,
+                    trim_margin_mm=5,
+                    packing_mode="Auto Pro",
+                    machine_type="Auto",
+                    time_limit_sec=10,
+                ),
+                optimizer=PlanOptimizerSettings(
+                    exact_piece_limit=40,
+                    min_remnant_width_mm=0,
+                    min_remnant_length_mm=0,
+                    min_remnant_area_m2=0,
+                ),
+                pieces=[
+                    PlanPieceInput(
+                        index=1,
+                        width_cm=52.1,
+                        length_cm=72.5,
+                        qty=2,
+                        allow_rotation=0,
+                        piece_type=piece_type,
+                        clipped_corner_position="",
+                        clipped_corner_width_cm=0,
+                        clipped_corner_length_cm=0,
+                        glass_margin_mm=margin,
+                    )
+                ],
+            )
+
+        regular = payload("Regular", None)
+        regular_with_margin = payload("Regular", 65)
+        self.assertNotIn("glass_margin_mm", regular_with_margin["pieces"][0])
+        self.assertEqual(
+            fingerprint_payload(regular),
+            fingerprint_payload(regular_with_margin),
+        )
+        for piece_type in ("Clipped Corner", "L-Shaped Corner", "Special"):
+            plain = payload(piece_type, None)
+            stored = payload(piece_type, 65)
+            self.assertNotIn("glass_margin_mm", stored["pieces"][0])
+            self.assertEqual(fingerprint_payload(plain), fingerprint_payload(stored))
+            self.assertNotEqual(fingerprint_payload(plain), fingerprint_payload(regular))
+
+        glass = payload("Glass", 65)
+        self.assertEqual(glass["pieces"][0]["glass_margin_mm"], 65.0)
+        self.assertNotEqual(
+            fingerprint_payload(glass),
+            fingerprint_payload(payload("Glass", None)),
+        )
+        self.assertNotEqual(
+            fingerprint_payload(glass),
+            fingerprint_payload(payload("Glass", 66)),
+        )
+
     def test_metadata_payload_preserves_four_effective_side_profiles(self) -> None:
         payload = build_plan_metadata_payload(
             default_edge_type="2cm Normal",

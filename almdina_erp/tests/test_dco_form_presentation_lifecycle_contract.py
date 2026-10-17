@@ -121,8 +121,8 @@ def test_static_styles_load_with_manifest_and_are_not_injected_at_refresh():
     toolbar = text(TOOLBAR)
 
     assert assets.count('"/assets/almdina_erp/css/door_cutting_order_form_sidebar.css"') == 1
-    assert assets.count('"/assets/almdina_erp/css/door_cutting_order_form_presentation.css"') == 1
-    assert '"/assets/almdina_erp/css/door_cutting_order_form_presentation.css"' in assets
+    assert assets.count('"/assets/almdina_erp/css/door_cutting_order_form_presentation.css?v=1"') == 1
+    assert '"/assets/almdina_erp/css/door_cutting_order_form_presentation.css?v=1"' in assets
     assert ".dco-sticky-tabs .nav-link.active" in css
     assert ".page-head.dco-stable-actions-head .page-actions" in css
     assert ".page-head.dco-responsive-head .page-actions" in css

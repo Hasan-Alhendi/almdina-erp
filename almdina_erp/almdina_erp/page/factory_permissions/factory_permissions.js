@@ -42,7 +42,7 @@ frappe.pages["factory-permissions"].on_page_load = function (wrapper) {
         "/assets/almdina_erp/js/factory_permissions/dialogs.js",
         "/assets/almdina_erp/js/factory_permissions/controller.js",
     ]);
-    const STYLESHEET = "/assets/almdina_erp/css/factory_permissions.css?v=4";
+    const STYLESHEET = "/assets/almdina_erp/css/factory_permissions.css?v=5";
 
     frappe.ui.make_app_page({
         parent: wrapper,

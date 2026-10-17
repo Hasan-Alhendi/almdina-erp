@@ -23,6 +23,7 @@ _OLD_PIECE_FIELDS = [
     "clipped_corner_position",
     "clipped_corner_width_cm",
     "clipped_corner_length_cm",
+    "glass_margin_mm",
     "edge_long_right",
     "edge_long_left",
     "edge_width_top",
@@ -159,6 +160,50 @@ class FrappeOrderDocumentAccess:
         )
 
         enforce_order_immutability_on_save(self.document, old)
+
+    def enforce_price_approval_integrity(self) -> None:
+        """Keep price-approval fields command-owned on ordinary order saves.
+
+        A stale form may still carry Unapproved after a successful approve (the
+        Cost workspace Store updates without rewriting ``frm.doc``). Restore the
+        trusted database values instead of failing the commercial save. Client
+        values never create, clear, or restore approval on their own.
+        """
+
+        from almdina_erp.almdina_erp.domain.orders.price_approval import (
+            reconcile_order_price_approval_fields,
+        )
+
+        allow_mutation = bool(self.document.flags.get("price_approval_action"))
+        is_new = bool(self.document.is_new())
+        previous_status = None
+        previous_link = None
+        if not is_new:
+            columns = {
+                str(column or "").strip()
+                for column in (frappe.db.get_table_columns("Door Cutting Order") or [])
+            }
+            if "price_approval_status" not in columns:
+                return
+            previous = frappe.db.get_value(
+                "Door Cutting Order",
+                self.document.name,
+                ["price_approval_status", "current_price_approval"],
+                as_dict=True,
+            ) or {}
+            previous_status = previous.get("price_approval_status")
+            previous_link = previous.get("current_price_approval")
+
+        trusted_status, trusted_link = reconcile_order_price_approval_fields(
+            previous_status=previous_status,
+            previous_link=previous_link,
+            incoming_status=getattr(self.document, "price_approval_status", None),
+            incoming_link=getattr(self.document, "current_price_approval", None),
+            allow_mutation=allow_mutation,
+            is_new=is_new,
+        )
+        self.document.price_approval_status = trusted_status
+        self.document.current_price_approval = trusted_link
 
     def set_piece_numbers(self) -> None:
         for index, row in enumerate(self.document.pieces or [], start=1):

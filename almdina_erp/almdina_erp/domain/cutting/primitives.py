@@ -112,6 +112,9 @@ def expand_piece_groups(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     **_edge_metadata(row),
                 }
             )
+            margin = row.get("glass_margin_mm")
+            if (row.get("piece_type") or "") == "Glass" and margin not in (None, "", 0, 0.0):
+                pieces[-1]["glass_margin_mm"] = num(margin)
             serial += 1
     return pieces
 
@@ -145,7 +148,11 @@ def make_placed_piece(
     h: float,
     rotated: bool,
 ) -> dict[str, Any]:
-    return {
+    from almdina_erp.almdina_erp.domain.cutting.glass_opening_dxf import (
+        record_glass_opening,
+    )
+
+    placed = {
         "id": piece["id"],
         "label": piece["label"],
         "source_piece_no": piece["source_piece_no"],
@@ -172,6 +179,8 @@ def make_placed_piece(
         **liner_metadata(piece),
         **_edge_metadata(piece),
     }
+    record_glass_opening(placed, piece, rotated=bool(rotated))
+    return placed
 
 
 def sort_pieces(pieces: list[dict[str, Any]], method: str) -> list[dict[str, Any]]:

@@ -17,6 +17,7 @@ SUPPORTING_DOCTYPES = (
     "Production Stage",
     "Customer",
     "Edge Banding Type",
+    "Door Cutting Price Approval",
 )
 
 _STAGE_READ_CAPABILITIES = frozenset(PRODUCTION_CAPABILITIES)
@@ -96,6 +97,18 @@ def supporting_standard_permission_projection(
     if doctype == "Edge Banding Type":
         can_read = normalized[Capability.VIEW_EDGE_BANDING_TYPES]
         return {"read": can_read, "select": can_read}
+    if doctype == "Door Cutting Price Approval":
+        # Financial history is readable only with cost visibility. Create/write/
+        # delete stay closed so Desk never mutates approval rows; phase-2
+        # commands will use an ephemeral authorization flag instead.
+        can_read = normalized[Capability.VIEW_COSTS]
+        return {
+            "read": can_read,
+            "select": can_read,
+            "create": False,
+            "write": False,
+            "delete": False,
+        }
     return {}
 
 

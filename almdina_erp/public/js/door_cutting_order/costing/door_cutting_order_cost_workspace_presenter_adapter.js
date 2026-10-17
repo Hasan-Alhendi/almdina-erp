@@ -352,24 +352,34 @@
 
         const pending = pendingFactoryPriceLabels(frm);
         card.classList.toggle("is-pending", pending.length > 0);
-        if (pending.length) {
-            card.innerHTML = `
-                <span>${esc(translate("Current total before unpriced items"))}
-                    <small>${esc(translate("This is not a final total until these items are priced: {0}", [pending.join(", ")]))}</small>
-                </span>
-                <b>$ ${money(total)}</b>
-            `;
-            return;
+        const labelHtml = pending.length
+            ? `<div class="dco-invoice-total-label">
+                <span>${esc(translate("Current total before unpriced items"))}</span>
+                <small>${esc(translate("This is not a final total until these items are priced: {0}", [pending.join(", ")]))}</small>
+            </div>`
+            : `<div class="dco-invoice-total-label">
+                <span>${esc(translate("Final invoice total"))}</span>
+            </div>`;
+        const existingPanel = card.querySelector("[data-price-approval-panel]");
+        const panelHtml = existingPanel
+            ? existingPanel.outerHTML
+            : '<div class="dco-price-approval-slot" data-price-approval-panel></div>';
+        const amountHtml = `<b class="dco-invoice-total-amount">$ ${money(total)}</b>`;
+        card.innerHTML = `${labelHtml}<div class="dco-invoice-total-end">${panelHtml}${amountHtml}</div>`;
+    }
+
+    function reconcileFinalPriceApproval(frm) {
+        const ux = window.AlmdinaFinalPriceApprovalUX;
+        if (ux && typeof ux.reconcile === "function") {
+            return ux.reconcile(frm);
         }
-        card.innerHTML = `
-            <span>${esc(translate("Final invoice total"))}</span>
-            <b>$ ${money(total)}</b>
-        `;
+        return false;
     }
 
     function reconcileRenderedCommercialProjection(frm) {
         reconcileNonFactoryPricingCards(frm);
         reconcileInvoiceTotalCard(frm);
+        reconcileFinalPriceApproval(frm);
     }
 
     function reconcileActiveCostEditSession(frm) {

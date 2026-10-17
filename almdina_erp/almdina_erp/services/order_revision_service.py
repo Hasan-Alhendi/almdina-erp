@@ -43,6 +43,9 @@ RESET_FIELDS: dict[str, Any] = {
     "plan_needs_recalculation": 1,
     "material_variance_cost_usd": 0,
     "actual_cost_usd": 0,
+    # Final-price approval history stays on the source order; revisions start clean.
+    "price_approval_status": "Unapproved",
+    "current_price_approval": None,
 }
 
 

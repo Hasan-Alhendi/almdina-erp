@@ -31,9 +31,9 @@ body.almdina-notes-open {
     height: 100%;
     min-width: 0;
     overflow: hidden;
-    border-inline-end: 1px solid #dfe7f2;
-    background: #fff;
-    color: #10203f;
+    border-inline-end: 1px solid var(--alm-card-border, #e4e8ee);
+    background: var(--alm-card, #ffffff);
+    color: var(--alm-text-strong, #101828);
     box-shadow: 12px 0 36px rgba(15, 23, 42, .13);
     transform: translateX(-102%);
     transition: transform 220ms ease;
@@ -57,8 +57,8 @@ body.almdina-notes-open {
     gap: 14px;
     min-height: 72px;
     padding: 14px 18px;
-    border-bottom: 1px solid #e8eef6;
-    background: #fff;
+    border-bottom: 1px solid var(--alm-card-border, #e4e8ee);
+    background: var(--alm-card, #ffffff);
 }
 
 .almdina-notes-header > div {
@@ -67,7 +67,7 @@ body.almdina-notes-open {
 
 .almdina-notes-header h2 {
     margin: 0;
-    color: #10235b;
+    color: var(--alm-text-strong, #101828);
     font-size: 20px;
     font-weight: 850;
     line-height: 1.25;
@@ -77,7 +77,7 @@ body.almdina-notes-open {
     display: block;
     margin-top: 3px;
     direction: ltr;
-    color: #7b879c;
+    color: var(--alm-text-subtle, #667085);
     font-size: 11px;
     font-weight: 700;
     text-align: right;
@@ -94,7 +94,7 @@ body.almdina-notes-open {
     border: 1px solid transparent;
     border-radius: 11px;
     background: transparent;
-    color: #34445f;
+    color: var(--alm-text-secondary, #344054);
     font-size: 26px;
     font-weight: 350;
     line-height: 1;
@@ -102,8 +102,8 @@ body.almdina-notes-open {
 }
 
 .almdina-notes-icon-button:hover {
-    border-color: #dce5f1;
-    background: #f6f9fd;
+    border-color: var(--alm-card-border, #e4e8ee);
+    background: var(--alm-surface-muted, #f4f6f8);
 }
 
 .almdina-notes-scroll {
@@ -112,7 +112,7 @@ body.almdina-notes-open {
     overflow: auto;
     overscroll-behavior: contain;
     padding: 14px 18px 22px;
-    background: #fbfdff;
+    background: var(--alm-surface-muted, #f4f6f8);
 }
 
 .almdina-notes-tabs {
@@ -121,9 +121,9 @@ body.almdina-notes-open {
     gap: 5px;
     padding: 4px;
     margin-bottom: 17px;
-    border: 1px solid #dbe6f4;
+    border: 1px solid var(--alm-card-border, #e4e8ee);
     border-radius: 12px;
-    background: #f3f7fc;
+    background: var(--alm-surface-muted, #f4f6f8);
 }
 
 .almdina-notes-tab {
@@ -136,7 +136,7 @@ body.almdina-notes-open {
     border: 0;
     border-radius: 9px;
     background: transparent;
-    color: #52617b;
+    color: var(--alm-text-subtle, #667085);
     font-size: 13px;
     font-weight: 800;
     cursor: pointer;
@@ -150,20 +150,20 @@ body.almdina-notes-open {
     height: 22px;
     padding-inline: 6px;
     border-radius: 999px;
-    background: #e4edf9;
-    color: #3a506f;
+    background: var(--alm-accent-soft, #eff6ff);
+    color: var(--alm-text-secondary, #344054);
     font-size: 11px;
 }
 
 .almdina-notes-tab.is-active {
-    background: #1d6df2;
-    color: #fff;
-    box-shadow: 0 3px 10px rgba(29, 109, 242, .2);
+    background: var(--alm-accent, #2563eb);
+    color: var(--alm-on-primary, #ffffff);
+    box-shadow: 0 3px 10px color-mix(in srgb, var(--alm-accent, #2563eb) 20%, transparent);
 }
 
 .almdina-notes-tab.is-active > span {
     background: rgba(255, 255, 255, .2);
-    color: #fff;
+    color: var(--alm-on-primary, #ffffff);
 }
 
 .almdina-notes-tab:disabled {
@@ -174,7 +174,7 @@ body.almdina-notes-open {
 .almdina-notes-section-label {
     display: block;
     margin-bottom: 9px;
-    color: #233454;
+    color: var(--alm-text-strong, #101828);
     font-size: 12px;
     font-weight: 850;
 }
@@ -198,7 +198,7 @@ body.almdina-notes-open {
     padding: 0 0 7px;
     border: 0;
     background: transparent;
-    color: #8a6112;
+    color: var(--alm-warning, #b45309);
     font-size: 11px;
     font-weight: 750;
     cursor: pointer;
@@ -214,14 +214,14 @@ body.almdina-notes-open {
     align-items: flex-start;
     gap: 11px;
     padding: 13px 14px;
-    border: 1px solid #f2cf73;
+    border: 1px solid var(--alm-status-warning-border, rgba(180, 83, 9, 0.24));
     border-radius: 13px;
-    background: #fff9e8;
+    background: var(--alm-warning-bg, #fff7e8);
 }
 
 .almdina-notes-star {
     flex: 0 0 auto;
-    color: #e39b08;
+    color: var(--alm-warning, #b45309);
     font-size: 19px;
     line-height: 1.2;
 }
@@ -232,7 +232,7 @@ body.almdina-notes-open {
 
 .almdina-notes-important-card strong {
     display: block;
-    color: #372b12;
+    color: var(--alm-status-warning-fg, #b45309);
     font-size: 13.5px;
     font-weight: 800;
     line-height: 1.65;
@@ -242,17 +242,17 @@ body.almdina-notes-open {
 
 .almdina-notes-meta {
     margin-top: 7px;
-    color: #87775a;
+    color: var(--alm-text-subtle, #667085);
     font-size: 10.5px;
     font-weight: 650;
 }
 
 .almdina-notes-important-empty {
     padding: 11px 13px;
-    border: 1px dashed #d9e2ee;
+    border: 1px dashed var(--alm-card-border, #e4e8ee);
     border-radius: 12px;
-    background: #fff;
-    color: #8a95a8;
+    background: var(--alm-card, #ffffff);
+    color: var(--alm-text-subtle, #667085);
     font-size: 12px;
 }
 
@@ -271,14 +271,14 @@ body.almdina-notes-open {
     grid-template-columns: 34px minmax(0, 1fr);
     gap: 9px;
     padding: 12px;
-    border: 1px solid #e1e8f1;
+    border: 1px solid var(--alm-card-border, #e4e8ee);
     border-radius: 13px;
-    background: #fff;
+    background: var(--alm-card, #ffffff);
 }
 
 .almdina-note-card.is-important {
-    border-color: #f0d48f;
-    background: #fffdf7;
+    border-color: var(--alm-status-warning-border, rgba(180, 83, 9, 0.24));
+    background: color-mix(in srgb, var(--alm-warning, #b45309) 6%, var(--alm-card, #ffffff));
 }
 
 .almdina-note-avatar {
@@ -288,8 +288,8 @@ body.almdina-notes-open {
     width: 34px;
     height: 34px;
     border-radius: 999px;
-    background: #eaf2ff;
-    color: #2466cf;
+    background: var(--alm-accent-soft, #eff6ff);
+    color: var(--alm-accent, #2563eb);
     font-size: 12px;
     font-weight: 850;
 }
@@ -312,7 +312,7 @@ body.almdina-notes-open {
 }
 
 .almdina-note-head strong {
-    color: #1e2f4c;
+    color: var(--alm-text-strong, #101828);
     font-size: 12px;
     font-weight: 850;
     overflow-wrap: anywhere;
@@ -320,13 +320,13 @@ body.almdina-notes-open {
 
 .almdina-note-head span:not(.almdina-note-pin) {
     margin-top: 2px;
-    color: #8a96a8;
+    color: var(--alm-text-subtle, #667085);
     font-size: 10px;
 }
 
 .almdina-note-body p {
     margin: 7px 0 0;
-    color: #2f405c;
+    color: var(--alm-text-secondary, #344054);
     font-size: 12.5px;
     line-height: 1.65;
     overflow-wrap: anywhere;
@@ -341,10 +341,10 @@ body.almdina-notes-open {
     width: 30px;
     height: 30px;
     padding: 0;
-    border: 1px solid #e1e7ef;
+    border: 1px solid var(--alm-card-border, #e4e8ee);
     border-radius: 9px;
-    background: #fff;
-    color: #a66f00;
+    background: var(--alm-card, #ffffff);
+    color: var(--alm-warning, #b45309);
     font-size: 18px;
     line-height: 1;
     cursor: pointer;
@@ -352,8 +352,8 @@ body.almdina-notes-open {
 
 .almdina-note-pin.is-important {
     border-color: transparent;
-    background: #fff5d4;
-    color: #e39b08;
+    background: var(--alm-warning-bg, #fff7e8);
+    color: var(--alm-warning, #b45309);
     cursor: default;
 }
 
@@ -364,10 +364,10 @@ body.almdina-notes-open {
 
 .almdina-notes-empty-state {
     padding: 18px 14px;
-    border: 1px dashed #dce4ef;
+    border: 1px dashed var(--alm-card-border, #e4e8ee);
     border-radius: 13px;
-    background: #fff;
-    color: #8692a6;
+    background: var(--alm-card, #ffffff);
+    color: var(--alm-text-subtle, #667085);
     font-size: 12px;
     line-height: 1.6;
     text-align: center;
@@ -378,14 +378,14 @@ body.almdina-notes-open {
     bottom: -22px;
     z-index: 2;
     padding: 14px 0 22px;
-    border-top: 1px solid #e7edf5;
-    background: #fbfdff;
+    border-top: 1px solid var(--alm-card-border, #e4e8ee);
+    background: var(--alm-surface-muted, #f4f6f8);
 }
 
 .almdina-notes-composer > label {
     display: block;
     margin-bottom: 8px;
-    color: #243552;
+    color: var(--alm-text-strong, #101828);
     font-size: 12px;
     font-weight: 850;
 }
@@ -397,10 +397,10 @@ body.almdina-notes-open {
     max-height: 180px;
     resize: vertical;
     padding: 10px 12px;
-    border: 1px solid #cfd9e7;
+    border: 1px solid var(--alm-card-border, #e4e8ee);
     border-radius: 12px;
-    background: #fff;
-    color: #1f2f49;
+    background: var(--alm-card, #ffffff);
+    color: var(--alm-text-strong, #101828);
     font-size: 13px;
     line-height: 1.6;
     direction: rtl;
@@ -408,7 +408,7 @@ body.almdina-notes-open {
 }
 
 .almdina-notes-composer textarea:focus {
-    border-color: #70a5fa;
+    border-color: var(--alm-accent, #2563eb);
     box-shadow: 0 0 0 3px rgba(37, 99, 235, .10);
 }
 
@@ -422,7 +422,7 @@ body.almdina-notes-open {
 }
 
 .almdina-notes-counter {
-    color: #929daf;
+    color: var(--alm-text-faint, #98a2b3);
     font-size: 10px;
     direction: ltr;
 }
@@ -432,7 +432,7 @@ body.almdina-notes-open {
     align-items: center;
     gap: 6px;
     margin: 0 !important;
-    color: #6f5420 !important;
+    color: var(--alm-warning, #b45309) !important;
     font-size: 11px !important;
     font-weight: 750 !important;
     cursor: pointer;
@@ -442,11 +442,11 @@ body.almdina-notes-open {
     width: 16px;
     height: 16px;
     margin: 0;
-    accent-color: #d89400;
+    accent-color: var(--alm-warning, #b45309);
 }
 
 .almdina-notes-important-toggle > span:first-of-type {
-    color: #e09a07;
+    color: var(--alm-warning, #b45309);
     font-size: 15px;
 }
 
@@ -460,10 +460,10 @@ body.almdina-notes-open {
 .almdina-notes-error {
     margin: 7px 0;
     padding: 9px 10px;
-    border: 1px solid #fecaca;
+    border: 1px solid var(--alm-status-danger-border, rgba(185, 28, 28, 0.22));
     border-radius: 10px;
-    background: #fff5f5;
-    color: #a33a3a;
+    background: var(--alm-status-danger-bg, rgba(185, 28, 28, 0.08));
+    color: var(--alm-status-danger-fg, #b91c1c);
     font-size: 11px;
     line-height: 1.5;
 }
@@ -477,15 +477,15 @@ body.almdina-notes-open {
     flex-direction: column;
     gap: 10px;
     padding: 24px;
-    border: 1px solid #e4ebf4;
+    border: 1px solid var(--alm-card-border, #e4e8ee);
     border-radius: 14px;
-    background: #fff;
-    color: #68758b;
+    background: var(--alm-card, #ffffff);
+    color: var(--alm-text-subtle, #667085);
     text-align: center;
 }
 
 .almdina-notes-load-error strong {
-    color: #283854;
+    color: var(--alm-text-strong, #101828);
 }
 
 .almdina-notes-load-error span {
@@ -496,8 +496,8 @@ body.almdina-notes-open {
 .almdina-notes-spinner {
     width: 25px;
     height: 25px;
-    border: 3px solid #d8e4f4;
-    border-top-color: #2563eb;
+    border: 3px solid var(--alm-card-border, #e4e8ee);
+    border-top-color: var(--alm-accent, #2563eb);
     border-radius: 999px;
     animation: almdina-notes-spin .8s linear infinite;
 }
@@ -513,10 +513,10 @@ body.almdina-notes-open {
     max-width: 100%;
     gap: 6px;
     padding: 4px 8px;
-    border: 1px solid #f1d694;
+    border: 1px solid var(--alm-status-warning-border, rgba(180, 83, 9, 0.24));
     border-radius: 999px;
-    background: #fff8e7;
-    color: #8b5d00;
+    background: var(--alm-warning-bg, #fff7e8);
+    color: var(--alm-warning, #b45309);
     font-size: 11px;
     font-weight: 750;
     line-height: 1.25;
@@ -525,7 +525,7 @@ body.almdina-notes-open {
 
 .dco-important-note-link .dco-important-note-star {
     flex: 0 0 auto;
-    color: #df9700;
+    color: var(--alm-warning, #b45309);
     font-size: 13px;
 }
 
@@ -537,8 +537,8 @@ body.almdina-notes-open {
 }
 
 .dco-important-note-link:hover {
-    border-color: #e4b94f;
-    background: #fff3cf;
+    border-color: var(--alm-warning, #b45309);
+    background: color-mix(in srgb, var(--alm-warning, #b45309) 14%, var(--alm-card, #ffffff));
 }
 
 /* The DCO mobile card has its own renderer; the same list projection is shown here. */
@@ -551,10 +551,10 @@ body.almdina-notes-open {
     min-height: 54px;
     margin: 0 0 10px;
     padding: 9px 11px;
-    border: 1px solid #f1d28a;
+    border: 1px solid var(--alm-status-warning-border, rgba(180, 83, 9, 0.24));
     border-radius: 13px;
-    background: #fff9e9;
-    color: #4e3a11;
+    background: var(--alm-warning-bg, #fff7e8);
+    color: var(--alm-status-warning-fg, #b45309);
     text-align: right;
     cursor: pointer;
 }
@@ -566,8 +566,8 @@ body.almdina-notes-open {
     width: 28px;
     height: 28px;
     border-radius: 9px;
-    background: #ffefbd;
-    color: #d99000;
+    background: color-mix(in srgb, var(--alm-warning, #b45309) 18%, var(--alm-card, #ffffff));
+    color: var(--alm-warning, #b45309);
     font-size: 17px;
 }
 
@@ -580,7 +580,7 @@ body.almdina-notes-open {
 
 .dco-order-list.dco-order-card-layout .dco-card-important-note-copy > span {
     margin-bottom: 2px;
-    color: #8e6d2a;
+    color: var(--alm-warning, #b45309);
     font-size: 10px;
     font-weight: 750;
 }
@@ -589,7 +589,7 @@ body.almdina-notes-open {
     display: -webkit-box;
     max-width: 100%;
     overflow: hidden;
-    color: #4b3710;
+    color: var(--alm-status-warning-fg, #b45309);
     font-size: 12px;
     font-weight: 850;
     line-height: 1.45;
@@ -600,8 +600,8 @@ body.almdina-notes-open {
 
 .dco-order-list.dco-order-card-layout .dco-card-important-note:hover,
 .dco-order-list.dco-order-card-layout .dco-card-important-note:focus-visible {
-    border-color: #e7bb51;
-    background: #fff3d2;
+    border-color: var(--alm-warning, #b45309);
+    background: color-mix(in srgb, var(--alm-warning, #b45309) 14%, var(--alm-card, #ffffff));
 }
 
 .almdina-notes-icon-button:focus-visible,
@@ -649,7 +649,7 @@ body.almdina-notes-open {
         width: 44px;
         height: 4px;
         border-radius: 999px;
-        background: #dbe3ee;
+        background: var(--alm-card-border, #e4e8ee);
         transform: translateX(-50%);
     }
 

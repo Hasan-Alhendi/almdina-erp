@@ -8,6 +8,7 @@ from typing import Any
 
 from .evaluation import evaluate_plan, validate_plan
 from .kerf_layout import pack_with_stable_kerf
+from .glass_opening_dxf import record_glass_opening
 from .primitives import liner_metadata, num, prune_free_rects, split_free_rect
 from .registry import METHOD_CONFIGS, PACKING_OPTIONS, run_single_method
 
@@ -761,6 +762,7 @@ def _solve_cp_sat(
             "edge_rate_usd": num(piece.get("edge_rate_usd")),
             "edge_cost_usd": num(piece.get("edge_cost_usd")),
         }
+        record_glass_opening(placed, piece, rotated=rotated)
         sheets_by_bin.setdefault(chosen, []).append(placed)
 
     sheets: list[dict[str, Any]] = []

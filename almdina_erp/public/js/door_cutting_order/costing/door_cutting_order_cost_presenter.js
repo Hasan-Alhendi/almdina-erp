@@ -80,6 +80,7 @@
         if (value === "Special") return translate("Special");
         if (value === "Clipped Corner") return translate("Clipped corner");
         if (value === "L-Shaped Corner") return translate("L-shaped corner");
+        if (value === "Glass") return translate("Glass");
         if (value === "Regular" || value == null || value === "") return translate("Regular");
         return String(value);
     }
@@ -418,17 +419,20 @@
             .dco-cost-section-title{background:var(--alm-card,#fff)}
             .dco-cost-invoice-section .dco-cost-section-title{align-items:flex-start}
             .dco-cost-actions .btn,.dco-cost-actions .alm-btn-primary{border-radius:999px;background:var(--alm-primary,#172033);color:var(--alm-on-primary,#fff);border-color:var(--alm-primary,#172033)}
-            .dco-invoice-total-card{margin:12px;padding:16px 18px;border:1px solid var(--alm-card-border,#e4e8ee);border-radius:14px;background:var(--alm-card,#fff);display:flex;align-items:center;justify-content:space-between;gap:16px}
+            .dco-invoice-total-card{margin:12px;padding:16px 18px;border:1px solid var(--alm-card-border,#e4e8ee);border-radius:14px;background:var(--alm-card,#fff);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
             .dco-invoice-total-card.is-pending{border-color:color-mix(in srgb, var(--alm-warning,#b45309) 35%, #fff);background:var(--alm-warning-bg,#fff7e8)}
-            .dco-invoice-total-card span{display:block;font-size:13px;font-weight:800;color:var(--text-color,#1f272e)}
-            .dco-invoice-total-card.is-pending span{color:var(--alm-warning,#b45309)}
-            .dco-invoice-total-card small{display:block;margin-top:4px;font-size:10px;color:var(--text-muted,#687481);font-weight:700}
-            .dco-invoice-total-card b{display:inline-flex;align-items:center;min-height:52px;padding:8px 16px;border:1px solid color-mix(in srgb, var(--alm-warning,#b45309) 45%, #fff);border-radius:12px;background:#fff;font-size:28px;font-weight:900;direction:ltr;text-align:left;color:var(--alm-warning,#b45309);letter-spacing:.01em}
-            .dco-invoice-total-card.is-pending b{color:var(--alm-warning,#b45309)}
+            .dco-invoice-total-label{display:flex;flex-direction:column;gap:4px;flex:1 1 160px;min-width:0}
+            .dco-invoice-total-end{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px;margin-inline-start:auto;flex:0 1 auto;min-width:0}
+            .dco-invoice-total-card .dco-invoice-total-label>span{display:block;font-size:13px;font-weight:800;color:var(--text-color,#1f272e)}
+            .dco-invoice-total-card.is-pending .dco-invoice-total-label>span{color:var(--alm-warning,#b45309)}
+            .dco-invoice-total-card .dco-invoice-total-label small{display:block;margin-top:0;font-size:10px;color:var(--text-muted,#687481);font-weight:700}
+            .dco-invoice-total-amount{display:inline-flex;align-items:center;justify-content:center;min-height:52px;padding:8px 16px;border:1px solid color-mix(in srgb, var(--alm-warning,#b45309) 45%, #fff);border-radius:12px;background:#fff;font-size:28px;font-weight:900;direction:ltr;text-align:left;color:var(--alm-warning,#b45309);letter-spacing:.01em;flex:0 0 auto}
+            .dco-invoice-total-card.is-pending .dco-invoice-total-amount{color:var(--alm-warning,#b45309)}
+            .dco-price-approval-slot{display:flex;align-items:center;flex:0 1 auto;min-width:0}
             .dco-cost-empty{padding:24px;text-align:center;color:var(--text-muted,#687481)}
             .dco-cost-plan-stale-notice{margin:0;padding:10px 14px;border-bottom:1px solid rgba(190,125,25,.28);background:rgba(190,125,25,.08);color:#875812;font-size:11px;font-weight:800;line-height:1.55}
             @media(max-width:900px){.dco-special-price-card{grid-template-columns:1fr 1fr}.dco-special-price-actions,.dco-special-price-card>.dco-special-price-id,.dco-special-price-note{grid-column:1/-1}}
-            @media(max-width:560px){.dco-cost-actions .btn{width:100%}.dco-special-price-card{grid-template-columns:1fr}.dco-invoice-total-card{flex-direction:column;align-items:flex-start}.dco-invoice-total-card b{font-size:24px}.dco-offcut-price-body{align-items:flex-start;flex-direction:column}.dco-offcut-price-control{width:100%;justify-content:flex-start}}
+            @media(max-width:560px){.dco-cost-actions .btn{width:100%}.dco-special-price-card{grid-template-columns:1fr}.dco-invoice-total-card{align-items:stretch}.dco-invoice-total-label{flex:1 1 100%}.dco-invoice-total-end{flex:1 1 100%;margin-inline-start:0;justify-content:flex-start}.dco-invoice-total-amount{font-size:24px;margin-inline-start:auto}.dco-offcut-price-body{align-items:flex-start;flex-direction:column}.dco-offcut-price-control{width:100%;justify-content:flex-start}}
         `;
         document.head.appendChild(style);
     }
@@ -503,16 +507,28 @@
     function invoiceTotalCardHtml(frm) {
         const total = quoteTotal(frm);
         const pending = pendingCustomEdgePriceLabels(frm);
-        const finalLabel = htmlText("Final invoice total");
+        const approvalSlot = '<div class="dco-price-approval-slot" data-price-approval-panel></div>';
+        const amount = `<b class="dco-invoice-total-amount">$ ${money(total)}</b>`;
         if (!pending.length) {
             return `<div class="dco-invoice-total-card">
-                <span>${finalLabel}</span>
-                <b>$ ${money(total)}</b>
+                <div class="dco-invoice-total-label">
+                    <span>${htmlText("Final invoice total")}</span>
+                </div>
+                <div class="dco-invoice-total-end">
+                    ${approvalSlot}
+                    ${amount}
+                </div>
             </div>`;
         }
         return `<div class="dco-invoice-total-card is-pending">
-            <span>${htmlText("Current total before unpriced items")}<small>${htmlText("This is not a final total until these items are priced: {0}", [pending.join(", ")])}</small></span>
-            <b>$ ${money(total)}</b>
+            <div class="dco-invoice-total-label">
+                <span>${htmlText("Current total before unpriced items")}</span>
+                <small>${htmlText("This is not a final total until these items are priced: {0}", [pending.join(", ")])}</small>
+            </div>
+            <div class="dco-invoice-total-end">
+                ${approvalSlot}
+                ${amount}
+            </div>
         </div>`;
     }
 

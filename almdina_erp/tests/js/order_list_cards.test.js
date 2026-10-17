@@ -1248,12 +1248,15 @@ assert(
 assert(desktopCssSource.includes(".list-row-container.dco-list-row-ready-for-delivery .level-right"));
 assert(desktopCssSource.includes(".list-row-container.dco-list-row-delivered .level-right"));
 assert(desktopCssSource.includes(".list-row-container.dco-list-row-cancelled .level-right"));
-assert(desktopCssSource.includes("background: #ecfdf3 !important;"));
-assert(desktopCssSource.includes("background: #a7f3d0 !important;"));
-assert(desktopCssSource.includes("background: #fecaca !important;"));
+assert(desktopCssSource.includes("background: color-mix(in srgb, #16a34a 8%, var(--alm-card, #ffffff)) !important;"));
+assert(desktopCssSource.includes("background: color-mix(in srgb, #047857 22%, var(--alm-card, #ffffff)) !important;"));
+assert(desktopCssSource.includes("background: color-mix(in srgb, #b91c1c 18%, var(--alm-card, #ffffff)) !important;"));
 assert(desktopCssSource.includes("border-color: #16a34a !important;"));
 assert(desktopCssSource.includes("border-color: #047857 !important;"));
 assert(desktopCssSource.includes("border-color: #b91c1c !important;"));
+assert(!desktopCssSource.includes("background: #ecfdf3 !important;"));
+assert(!desktopCssSource.includes("background: #a7f3d0 !important;"));
+assert(!desktopCssSource.includes("background: #fecaca !important;"));
 
 assert(cssSource.includes(".dco-card-header-meta"));
 assert(cssSource.includes(".dco-card-stage"));

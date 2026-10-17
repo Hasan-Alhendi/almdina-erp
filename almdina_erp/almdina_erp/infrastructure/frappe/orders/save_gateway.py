@@ -43,6 +43,9 @@ class FrappeDoorCuttingOrderSaveGateway:
     def enforce_immutability(self) -> None:
         self.access.enforce_immutability()
 
+    def enforce_price_approval_integrity(self) -> None:
+        self.access.enforce_price_approval_integrity()
+
     def set_piece_numbers(self) -> None:
         self.access.set_piece_numbers()
 

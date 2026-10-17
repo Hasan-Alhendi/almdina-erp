@@ -36,6 +36,7 @@
         "clipped_corner_position",
         "clipped_corner_width_cm",
         "clipped_corner_length_cm",
+        "glass_margin_mm",
         "special_shape_geometry_json",
         "extra_full_door_double",
         "liner_reference_side",

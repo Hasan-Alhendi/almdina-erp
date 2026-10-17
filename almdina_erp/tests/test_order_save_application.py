@@ -14,6 +14,9 @@ class FakeOrderSaveGateway:
     def enforce_immutability(self) -> None:
         self.calls.append("enforce_immutability")
 
+    def enforce_price_approval_integrity(self) -> None:
+        self.calls.append("enforce_price_approval_integrity")
+
     def set_piece_numbers(self) -> None:
         self.calls.append("set_piece_numbers")
 
@@ -65,6 +68,7 @@ class TestOrderSaveApplication(unittest.TestCase):
             gateway.calls,
             [
                 "enforce_immutability",
+                "enforce_price_approval_integrity",
                 "set_piece_numbers",
                 "validate_piece_inputs",
                 "validate_piece_policies",

@@ -95,9 +95,23 @@
         return true;
     }
 
+    function serverAllowsCostSettingsEdit(frm) {
+        const state = workspaceSnapshot(frm);
+        if (!state || state.status !== "ready" || !state.data) return null;
+        if (!Object.prototype.hasOwnProperty.call(state.data, "can_edit_cost_settings")) {
+            return null;
+        }
+        return Boolean(state.data.can_edit_cost_settings);
+    }
+
     function canEditCostSettings(frm) {
         if (!baseDocumentEditable(frm)) return false;
-        return Boolean(can(frm, "view_costs") && can(frm, "edit_cost_settings"));
+        if (!(can(frm, "view_costs") && can(frm, "edit_cost_settings"))) return false;
+        // Server decision remains authoritative for lifecycle/capability narrowing.
+        // Approved final price no longer freezes board/cutting/offcut inputs.
+        const server = serverAllowsCostSettingsEdit(frm);
+        if (server === false) return false;
+        return true;
     }
 
     function canEditPiecePrices(frm) {
@@ -508,6 +522,15 @@
             store.replaceDraft(payload);
             const pending = store.snapshot();
 
+            if (pending.dirty && !canEditCostSettings(frm)) {
+                frappe.msgprint({
+                    title: translate("Missing permission"),
+                    message: translate("You do not have permission to edit cost settings."),
+                    indicator: "orange",
+                });
+                return false;
+            }
+
             if (pending.dirty && !validateRequiredCostSettings(frm, captured)) {
                 return false;
             }
@@ -528,6 +551,10 @@
                     owner.commit(frm, saved);
                 } else {
                     store.commit(saved);
+                }
+                const approvalUx = window.AlmdinaFinalPriceApprovalUX;
+                if (approvalUx && typeof approvalUx.consumeInvalidationSignal === "function") {
+                    approvalUx.consumeInvalidationSignal(frm, saved, token);
                 }
             } else {
                 store.cancelEdit();
