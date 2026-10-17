@@ -309,6 +309,8 @@ async function run() {
     await ready(revisit);
     const oldVisitSave = revisit.coordinator.save(revisit.frm, "plan");
     revisit.advanceGeneration();
+    assert.equal(revisit.preview.displayedPreviewRow(revisit.frm), null);
+    assert.equal(revisit.preview.isCommittable(revisit.frm), false);
     revisit.commitFlight.resolve(receipt());
     assert.equal(await oldVisitSave, false);
     assert.equal(revisit.coordinator.snapshot(revisit.frm).phase, "idle");

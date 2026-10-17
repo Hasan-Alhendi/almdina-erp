@@ -1259,7 +1259,7 @@ def test_recovery_new_saved_intersection():
             finally:
                 page.unroute(commit_route)
             if page.locator('.modal.show').count():
-                page.keyboard.press("Escape")
+                page.locator('.modal.show .modal-header button:visible').first.click()
                 page.locator('.modal.show').wait_for(state="hidden", timeout=15000)
             plan_toolbar.locator('.dco-tab-edit-cancel').click()
             page.wait_for_function("""() => AlmdinaDcoEditSessionCoordinator.snapshot(cur_frm)

@@ -13,6 +13,12 @@
             : `${frm.doctype || frm.doc.doctype || ""}::${frm.doc.name || ""}`;
     }
 
+    function ownsVisit(frm, token) {
+        const context = window.AlmdinaDocumentContext;
+        return context?.isCurrent?.(frm, token)
+            ?? (context?.isSameDocument?.(frm, token) !== false);
+    }
+
     function settingsSnapshot(settings) {
         return Object.freeze(Object.fromEntries(SETTINGS.map(key => [key, settings && settings[key]])));
     }
@@ -164,6 +170,7 @@
             && state.payload
             && state.payload.plan
             && state.identity === identity(frm)
+            && ownsVisit(frm, state.documentToken)
         );
     }
 
@@ -185,7 +192,8 @@
     function displayedPreviewRow(frm) {
         const state = stateFor(frm);
         if (state.status !== "saving" && !isReady(frm)) return null;
-        if (state.identity !== identity(frm) || !state.payload || !state.payload.plan) return null;
+        if (state.identity !== identity(frm) || !ownsVisit(frm, state.documentToken)
+            || !state.payload || !state.payload.plan) return null;
         return previewRowData(state);
     }
 
@@ -242,7 +250,7 @@
             && state.generation === generation
             && state.activeRequestGeneration === generation
             && identity(frm) === requestIdentity
-            && (window.AlmdinaDocumentContext?.isSameDocument?.(frm, state.documentToken) !== false);
+            && ownsVisit(frm, state.documentToken);
         state.status = "previewing";
         state.previewId = null;
         state.payload = null;
@@ -298,8 +306,7 @@
             && state.previewId === previewId
             && state.status === "saving"
             && identity(frm) === requestIdentity
-            && (window.AlmdinaDocumentContext?.isCurrent?.(frm, requestToken)
-                ?? (window.AlmdinaDocumentContext?.isSameDocument?.(frm, requestToken) !== false));
+            && ownsVisit(frm, requestToken);
         state.status = "saving";
         state.error = null;
         dispatch(frm);
