@@ -806,8 +806,9 @@
                     : ""}
                 <div class="dco-recovery-card__actions almdina-ui">
                     ${uiButton({
-                        label: translate(summary.official_save_state === "PENDING_RECONCILIATION"
-                            ? "Check save result" : "Continue the order"),
+                        label: summary.official_save_state === "PENDING_RECONCILIATION"
+                            ? translate("Check save result")
+                            : translate("Continue the order"),
                         variant: "primary",
                         size: "btn-sm",
                         attrs: { "data-recovery-action": "continue" },
