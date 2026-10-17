@@ -749,17 +749,13 @@
                 );
                 return { reconciled: true };
             }
-            const resumed = await repo.setOfficialSaveState(
-                recoveryIdentity(record.draft_id),
-                "ACTIVE",
-                record.recovery_revision,
-                record.official_save_attempted_at
-            );
-            if (!resumed || resumed.ok !== true) {
-                throw new Error(translate("Could not confirm that the draft is ready to continue."));
+            // NOT_FOUND reports the state of a single query, not the terminal
+            // outcome of an earlier in-flight INSERT. Never release the marker.
+            if (reconciliation.status === "NOT_FOUND") {
+                showRecoveryError(translate("The official insert may still be in progress. No retry was sent. Keep this draft and check again later."));
+                return { pending: true };
             }
-            if (!isCurrent()) return { cancelled: true };
-            selected = resumed.value;
+            throw new Error(translate("Could not verify the previous save attempt. The insert was not retried."));
         }
         if (!isCurrent()) return { cancelled: true };
         const hydrationSnapshot = captureHydrationSnapshot(frm);
@@ -2187,12 +2183,7 @@
         const result = await root.ServerReconciliation.reconcileNewCreation(
             state.session.snapshot().draft_id
         );
-        if (!isCurrent()) {
-            if (result.status === "NOT_FOUND") {
-                await clearProvenSaveAttempt(state, reconciledAttempt);
-            }
-            abortInactiveSave();
-        }
+        if (!isCurrent()) abortInactiveSave();
         if (result.status === "CREATED") {
             await cleanupConfirmedNewDraft(
                 frm,
@@ -2208,10 +2199,14 @@
             frappe.validated = false;
             return false;
         }
-        const resumed = await state.session.resumeAfterProvenFailure();
-        if (!isCurrent()) abortInactiveSave();
-        if (!resumed) throw new Error(translate("Could not store the reconciliation result locally."));
-        return true;
+        // Server-side NOT_FOUND is not a proof of a completed failed insert.
+        // The same creation token and pending marker must remain untouched.
+        if (result.status === "NOT_FOUND") {
+            frappe.validated = false;
+            showRecoveryError(translate("The official insert may still be in progress. No retry was sent. Keep this draft and check again later."));
+            return false;
+        }
+        throw new Error(translate("Could not verify the previous save attempt. The insert was not retried."));
     }
 
     async function beforeSave(frm) {
