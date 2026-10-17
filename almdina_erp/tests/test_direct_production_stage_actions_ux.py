@@ -40,9 +40,9 @@ def test_worker_start_and_handoff_are_direct_toolbar_actions() -> None:
         "}).catch((error)",
     )
 
-    assert 'frm.add_custom_button(__("بدء العمل")' in start
+    assert 'frm.add_custom_button(translate("Start work")' in start
     assert "PRODUCTION_ACTION_GROUP" not in start
-    assert 'frm.add_custom_button(__("إنهاء وإرسال")' in handoff
+    assert 'frm.add_custom_button(translate("Finish and send")' in handoff
     assert "PRODUCTION_ACTION_GROUP" not in handoff
 
 
@@ -99,7 +99,7 @@ def test_direct_stage_actions_keep_existing_authorization_and_state_gates() -> N
         "if (stage.can_reassign_worker",
         "if (!assignedToCurrentUser(stage)) return;",
     )
-    assert "PRODUCTION_ACTION_GROUP" in reassign
+    assert "PRODUCTION_ACTION_GROUP" not in reassign
 
 
 def test_handoff_visibility_trusts_server_flag_without_local_status_whitelist() -> None:
@@ -131,6 +131,7 @@ def test_reconciliation_removes_direct_and_legacy_grouped_stage_actions() -> Non
         "function reconcileProductionActions(frm) {",
     )
 
-    assert 'frm.remove_custom_button(__("بدء العمل"));' in cleanup
-    assert 'frm.remove_custom_button(__("إنهاء وإرسال"));' in cleanup
-    assert 'frm.remove_custom_button(__(label), PRODUCTION_ACTION_GROUP)' in cleanup
+    assert "PRODUCTION_ACTION_IDS.forEach" in cleanup
+    assert "LEGACY_PRODUCTION_ACTION_LABELS.forEach" in cleanup
+    assert "frm.remove_custom_button(messageId);" in cleanup
+    assert "frm.remove_custom_button(localized);" in cleanup

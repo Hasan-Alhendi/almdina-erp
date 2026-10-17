@@ -187,9 +187,9 @@ def test_order_tracking_strip_exposes_layout_hook_class() -> None:
 def test_notes_and_edge_color_never_disappear_when_empty() -> None:
     layout = LAYOUT.read_text(encoding="utf-8")
 
-    assert 'order_notes: "أضف ملاحظة للطلب…"' in layout
-    assert 'order_cutting_machine: "اختر آلة القص"' in layout
-    assert 'edge_color: "أدخل لون القشاط"' in layout
+    assert 'order_notes: "Add an order note…"' in layout
+    assert 'order_cutting_machine: "Choose the cutting machine"' in layout
+    assert 'edge_color: "Enter the edge color"' in layout
     assert "function keepFieldVisible" in layout
     assert 'wrapper.classList.add("dco-keep-empty-field")' in layout
     assert 'wrapper.classList.remove("hide-control")' in layout
@@ -232,7 +232,8 @@ def test_cutting_machine_radios_are_client_required_and_server_optional() -> Non
     assert 'set_value("order_cutting_machine"' in machine
     assert 'validate(frm) { validateSelection(frm); }' in machine
     assert "frappe.throw" in machine
-    assert "يجب اختيار نوع آلة القص" in machine
+    assert "Select the cutting machine type" in machine
+    assert 'label: "Panel Saw"' in machine
     assert 'content: " *"' in machine
     assert ".control-label::after" in machine
     assert ".form-group label::after" not in machine
@@ -260,11 +261,11 @@ def test_cutting_machine_radios_are_client_required_and_server_optional() -> Non
 def test_arabic_labels_reflect_the_new_information_hierarchy() -> None:
     defaults = DEFAULTS.read_text(encoding="utf-8")
 
-    assert 'order_details_section: "بيانات الطلب"' in defaults
-    assert 'board_section: "المادة والقشاط"' in defaults
-    assert 'default_edge_type: "نوع القشاط الافتراضي"' in defaults
-    assert 'edge_color: "لون القشاط"' in defaults
-    assert 'order_cutting_machine: "نوع آلة القص"' in defaults
+    assert 'order_details_section: "Order details"' in defaults
+    assert 'board_section: "Material and edge banding"' in defaults
+    assert 'default_edge_type: "Default edge banding type"' in defaults
+    assert 'edge_color: "Edge Color"' in defaults
+    assert 'order_cutting_machine: "Cutting machine type"' in defaults
     assert "cutting_settings_section" not in defaults
 
 

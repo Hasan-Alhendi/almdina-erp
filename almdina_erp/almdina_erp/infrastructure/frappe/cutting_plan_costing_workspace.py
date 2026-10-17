@@ -248,7 +248,7 @@ def _persist_special_piece_pricing_projection(order: Any, summary: Any) -> None:
 
 
 def _persist_extra_addon_pricing_projection(order: Any) -> None:
-    """Persist only server-derived Extra price snapshots after the child save."""
+    """Persist only server-derived add-on price snapshots after the child save."""
 
     fields = (
         "extra_double_unit_price_usd",

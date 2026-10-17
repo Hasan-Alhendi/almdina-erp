@@ -150,7 +150,7 @@ def test_phone_measurements_use_labelled_cards_without_fixed_table_width():
         "labels.remove",
     ):
         assert f'data-label="${{{label_key}}}"' in operator
-    assert 'cell.dataset.label = isArabic() ? "تحديد السطر" : "Select row"' in bulk
+    assert 'cell.dataset.label = __("Select row")' in bulk
 
 
 def test_phone_controls_are_touch_sized_and_primary_surfaces_stack():
@@ -249,9 +249,9 @@ def test_mobile_order_list_uses_reference_card_and_server_authorized_actions():
     assert 'class="dco-card-state-icon"' in list_source
     assert 'class="dco-card-order-link"' in list_source
     assert 'class="dco-card-info-grid"' in list_source
-    assert 'renderInfoTile("لون اللوح", model.boardColor' in list_source
-    assert 'renderInfoTile("لون القشاط", model.edgeColor' in list_source
-    assert 'renderInfoTile("نوع القشاط", model.edgeType' in list_source
+    assert 'renderInfoTile("Board color", model.boardColor' in list_source
+    assert 'renderInfoTile("Edge color", model.edgeColor' in list_source
+    assert 'renderInfoTile("Edge type", model.edgeType' in list_source
     assert '"default_edge_type"' in list_source
     assert 'class="dco-card-workflow"' not in list_source
     assert 'class="dco-card-assignee"' not in list_source
@@ -308,15 +308,18 @@ def test_order_list_status_filter_uses_frappe_standard_filter_contract():
     list_source = source(LIST_UX)
 
     assert "custom_filter_configs:" in list_source
-    assert "function statusFilterConfig()" in list_source
+    assert "function statusFilterConfig(options = {})" in list_source
+    assert "statusFilterConfig({ localize: false })" in list_source
+    assert "assigneeFilterConfig({ localize: false })" in list_source
     assert "function reconcileStatusFilterLayout(listview)" in list_source
     assert "function reconcileMobileListToolbarLayout(listview)" in list_source
     assert "data-dco-list-toolbar-slot" in list_source
     assert "function hydrateStatusFilterOptions(listview)" in list_source
     assert 'STATUS_FILTER_FIELDNAME = "status"' in list_source
-    assert 'STATUS_FILTER_ALL_LABEL = "كل الحالات"' in list_source
+    assert 'STATUS_FILTER_ALL_LABEL = "All statuses"' in list_source
     assert "get_status_filter_options" in list_source
-    assert 'label: __("Status")' in list_source
+    assert 'label: labelFor("Status")' in list_source
+    assert 'field.df.label = translate("Status")' in list_source
     assert ".dco-status-filter-slot" in css
     assert ".dco-order-list .dco-status-filter-slot" in css
     assert ".dco-order-list.dco-order-card-layout .page-form" in css
@@ -432,7 +435,7 @@ def test_overview_list_puts_delivered_orders_last_for_view_all_orders():
     assert "const OVERVIEW_LIST_SORT_RULES = Object.freeze({" in list_source
     assert 'delivered: Object.freeze({ rank: 1, field: "modified", direction: -1 })' in list_source
     assert 'const OVERVIEW_DEFAULT_SORT_FIELD = "__dco_default_sort"' in list_source
-    assert 'const OVERVIEW_DEFAULT_SORT_LABEL = "الترتيب الافتراضي"' in list_source
+    assert 'const OVERVIEW_DEFAULT_SORT_LABEL = "Default sort"' in list_source
     assert "function isOverviewDefaultSortActive(listview)" in list_source
     assert "function shouldSelectOverviewDefaultSort(sortBy, storage)" in list_source
     assert "function installOverviewDefaultSort(listview)" in list_source

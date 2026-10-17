@@ -134,7 +134,7 @@ function makeForm(status) {
     await Promise.resolve();
     const first = frm.page.wrapper.button;
 
-    if (!first || !first.isConnected || !frm.custom_buttons['الملاحظات']) {
+    if (!first || !first.isConnected || !frm.custom_buttons['Notes']) {
         throw new Error('Notes action did not mount with a stable registry key');
     }
 
@@ -157,7 +157,7 @@ function makeForm(status) {
         recovered,
         secondConnected: Boolean(second && second.isConnected),
         secondLabel: second && second.textContent,
-        stableRegistryKey: Boolean(frm.custom_buttons['الملاحظات']),
+        stableRegistryKey: Boolean(frm.custom_buttons['Notes']),
         status: frm.doc.status,
         assignee: frm.doc.current_assignee,
     }));
@@ -185,7 +185,7 @@ class TestA156NotesToolbarRuntime(unittest.TestCase):
         self.assertIs(result["readyBeforeRecovery"], False)
         self.assertIs(result["recovered"], True)
         self.assertIs(result["secondConnected"], True)
-        self.assertTrue(result["secondLabel"].startswith("الملاحظات"))
+        self.assertTrue(result["secondLabel"].startswith("Notes"))
         self.assertIs(result["stableRegistryKey"], True)
 
 

@@ -3,13 +3,23 @@
     const root = window.AlmdinaSpecialShapeDocumentation = window.AlmdinaSpecialShapeDocumentation || Object.create(null);
 
     const TOOL_HINTS = Object.freeze({
-        select: "انقر على عنصر لتحديده. استخدم Delete للحذف.", pen: "ارسم بحرية؛ سننظف الخط ونثبت اتجاهاته.",
-        line: "اسحب من بداية الخط إلى نهايته.", rect: "اسحب لرسم مستطيل.", ellipse: "اسحب لرسم دائرة أو قطع ناقص.",
-        dimension: "اسحب بين نقطتي القياس.", text: "انقر في موضع الملاحظة.",
+        select: "Click an element to select it. Use Delete to remove it.",
+        pen: "Draw freely; the line will be cleaned and its directions fixed.",
+        line: "Drag from the start of the line to its end.",
+        rect: "Drag to draw a rectangle.",
+        ellipse: "Drag to draw a circle or ellipse.",
+        dimension: "Drag between the two measurement points.",
+        text: "Click where the note should go.",
     });
+    function translateCopy(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") return locale.translate(message, replacements);
+        if (typeof __ === "function") return replacements === undefined ? __(message) : __(message, replacements);
+        return String(message == null ? "" : message);
+    }
     function readFile(file) { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result || "")); reader.onerror = reject; reader.readAsDataURL(file); }); }
     function confirmAsync(message) { return new Promise(resolve => frappe.confirm(message, () => resolve(true), () => resolve(false))); }
-    function promptText() { return new Promise(resolve => frappe.prompt([{ fieldname: "text", fieldtype: "Data", label: "نص الملاحظة", reqd: 1, maxlength: 300 }], values => resolve(String(values.text || "").trim()), "إضافة ملاحظة", "إضافة")); }
+    function promptText() { return new Promise(resolve => frappe.prompt([{ fieldname: "text", fieldtype: "Data", label: translateCopy("Note text"), reqd: 1, maxlength: 300 }], values => resolve(String(values.text || "").trim()), translateCopy("Add a note"), translateCopy("Add"))); }
     function distance(a, b) { return Math.hypot(b.xMm - a.xMm, b.yMm - a.yMm); }
     function makeElement(tool, start, end) {
         const D = root.Document;
@@ -50,7 +60,7 @@
         }
         function render() {
             if (!history || !shell || !renderer) return; const state = history.state();
-            shell.render(state.document, { ...state, selectedId, cropMode: Boolean(cropSession), cropCanReset: cropSession ? !Crop.isFull(cropSession.value) : false }); shell.setActiveTool(tool); shell.setHint(cropSession ? "اسحب داخل الإطار لتحريكه، أو اسحب أحد المقابض لتحديد الجزء المطلوب." : TOOL_HINTS[tool]); shell.setSaveState(cropSession ? "اقتصاص قيد التعديل" : (state.dirty ? "غير محفوظ" : "محفوظ"), cropSession || state.dirty ? "dirty" : "saved");
+            shell.render(state.document, { ...state, selectedId, cropMode: Boolean(cropSession), cropCanReset: cropSession ? !Crop.isFull(cropSession.value) : false }); shell.setActiveTool(tool); shell.setHint(cropSession ? translateCopy("Drag inside the frame to move it, or drag a handle to choose the required part.") : translateCopy(TOOL_HINTS[tool])); shell.setSaveState(cropSession ? translateCopy("Crop in progress") : (state.dirty ? translateCopy("Unsaved") : translateCopy("Saved")), cropSession || state.dirty ? "dirty" : "saved");
             renderer.render(draft && draft.previewDocument || state.document, { selectedId, preview: draft && draft.points, cropSession: cropSession ? { active: true, value: cropSession.value } : null });
             syncZoom();
         }
@@ -59,25 +69,25 @@
         function chooseTool(next) { if (cropSession || (!context.permissions.can_edit && next !== "select")) return; tool = next; draft = null; dragging = false; render(); }
         async function save() {
             if (saving || !context.permissions.can_edit) return; const document = history.get();
-            if (cropSession) { frappe.msgprint("طبّق الاقتصاص أو ألغِه قبل حفظ التوثيق."); return; }
-            if (!D.hasContent(document)) { frappe.msgprint("أضف صورة مرجعية أو عنصرًا توضيحيًا قبل الحفظ."); return; }
-            saving = true; shell.setSaving(true); shell.setSaveState("جار الحفظ…", "saving");
+            if (cropSession) { frappe.msgprint(translateCopy("Apply or cancel the crop before saving the documentation.")); return; }
+            if (!D.hasContent(document)) { frappe.msgprint(translateCopy("Add a reference image or an explanatory element before saving.")); return; }
+            saving = true; shell.setSaving(true); shell.setSaveState(translateCopy("Saving…"), "saving");
             try {
                 const result = await Api.save(context.order.name, context.piece.name, D.toStored(document)); context = { ...context, piece: result.piece }; history.markSaved(document);
                 const removals = [...pendingFileRemovals]; pendingFileRemovals.clear(); await Promise.all(removals.map(url => Api.removeImage(context.order.name, context.piece.name, url).catch(error => console.warn("Deferred reference cleanup failed", error))));
-                frappe.show_alert({ message: "تم حفظ توثيق الدرفة.", indicator: "green" }, 3); render();
-            } catch (error) { console.error("Documentation save failed", error); shell.setSaveState("فشل الحفظ", "error"); frappe.msgprint("تعذر حفظ التوثيق. تحقق من البيانات والصلاحيات ثم حاول مرة أخرى."); }
+                frappe.show_alert({ message: translateCopy("Door documentation was saved."), indicator: "green" }, 3); render();
+            } catch (error) { console.error("Documentation save failed", error); shell.setSaveState(translateCopy("Save failed"), "error"); frappe.msgprint(translateCopy("Could not save the documentation. Check the data and permissions, then try again.")); }
             finally { saving = false; if (shell) shell.setSaving(false); }
         }
         async function requestBack() {
-            if (cropSession && !await confirmAsync("لم يُطبّق الاقتصاص بعد. هل تريد الرجوع وإلغاء الاقتصاص؟")) return;
+            if (cropSession && !await confirmAsync(translateCopy("The crop has not been applied yet. Go back and cancel the crop?"))) return;
             if (!history || !history.isDirty()) { back(); return; }
-            if (await confirmAsync("لديك تعديلات غير محفوظة. هل تريد الرجوع دون حفظ؟")) back();
+            if (await confirmAsync(translateCopy("You have unsaved changes. Go back without saving?"))) back();
         }
         async function upload(file, options = {}) {
-            if (!file || !context || !context.permissions.can_edit) return false; if (file.size > 8 * 1024 * 1024) { frappe.msgprint("حجم الصورة يتجاوز 8 MB."); return false; }
+            if (!file || !context || !context.permissions.can_edit) return false; if (file.size > 8 * 1024 * 1024) { frappe.msgprint(translateCopy("The image is larger than 8 MB.")); return false; }
             const token = generation, activeContext = context;
-            shell.setSaveState("جار رفع الصورة…", "saving");
+            shell.setSaveState(translateCopy("Uploading the image…"), "saving");
             try {
                 const encoded = await readFile(file); const previous = history.get().reference; const result = await Api.upload(activeContext.order.name, activeContext.piece.name, file.name, encoded);
                 if (token !== generation || suspended || !history) {
@@ -85,30 +95,30 @@
                     return false;
                 }
                 if (previous && previous.fileUrl !== result.file_url) pendingFileRemovals.add(previous.fileUrl);
-                commit(D.setReference(history.get(), { fileUrl: result.file_url, rotationDeg: 0, opacity: 1, locked: true, crop: Crop.FULL })); frappe.show_alert({ message: options.successMessage || "تم رفع الصورة وإضافتها إلى التوثيق.", indicator: "green" }, 3); return true;
-            } catch (error) { console.error("Reference upload failed", error); frappe.msgprint("تعذر رفع الصورة. استخدم JPG أو PNG أو WEBP بحجم لا يتجاوز 8 MB."); render(); return false; }
+                commit(D.setReference(history.get(), { fileUrl: result.file_url, rotationDeg: 0, opacity: 1, locked: true, crop: Crop.FULL })); frappe.show_alert({ message: options.successMessage || translateCopy("The image was uploaded and added to the documentation."), indicator: "green" }, 3); return true;
+            } catch (error) { console.error("Reference upload failed", error); frappe.msgprint(translateCopy("Could not upload the image. Use JPG, PNG, or WEBP no larger than 8 MB.")); render(); return false; }
             finally { if (shell) { shell.referenceInput.value = ""; shell.cameraInput.value = ""; } }
         }
         function scannerErrorMessage(error) {
-            if (error && error.code === Scanner.ERROR_CODES.FORBIDDEN) return "هذا الموقع غير مضاف إلى المواقع المسموحة في جسر السكانر. اطلب من مسؤول النظام إضافته ثم إعادة تشغيل الجسر.";
-            if (error && error.code === Scanner.ERROR_CODES.BUSY) return "السكانر مشغول بعملية أخرى. انتظر انتهاءها ثم أعد المحاولة.";
-            if (error && error.code === Scanner.ERROR_CODES.NO_SCANNER) return "لم يتم العثور على سكانر متوافق. تأكد من توصيله وأن Windows يتعرف عليه ثم أعد المحاولة.";
-            if (error && error.code === Scanner.ERROR_CODES.INVALID_IMAGE) return "أعاد السكانر صورة غير مدعومة وتعذر تحويلها. أرسل سجل Scanner Bridge لمسؤول النظام.";
-            if (error && error.code === Scanner.ERROR_CODES.SCAN_FAILED) return "تعذر إتمام المسح. تحقق من أن Windows يرى السكانر وأنه غير مستخدم من برنامج آخر.";
-            if (error && error.code === Scanner.ERROR_CODES.IMAGE_TOO_LARGE) return "الصورة الناتجة من السكانر تتجاوز 8 MB. خفّض دقة المسح ثم حاول مرة أخرى.";
-            if (error && error.code === Scanner.ERROR_CODES.INVALID_RESPONSE) return "استجابة السكانر غير صالحة. أعد تشغيل Almdina Scanner Bridge ثم حاول مرة أخرى.";
-            return "برنامج السكانر غير مثبت أو متوقف. ثبّته مرة واحدة، أو افتحه من قائمة ابدأ إذا كان مثبتًا.";
+            if (error && error.code === Scanner.ERROR_CODES.FORBIDDEN) return translateCopy("This site is not allowed by the scanner bridge. Ask a system administrator to add it, then restart the bridge.");
+            if (error && error.code === Scanner.ERROR_CODES.BUSY) return translateCopy("The scanner is busy with another job. Wait until it finishes, then try again.");
+            if (error && error.code === Scanner.ERROR_CODES.NO_SCANNER) return translateCopy("No compatible scanner was found. Make sure it is connected and recognized by Windows, then try again.");
+            if (error && error.code === Scanner.ERROR_CODES.INVALID_IMAGE) return translateCopy("The scanner returned an unsupported image and it could not be converted. Send the Scanner Bridge log to a system administrator.");
+            if (error && error.code === Scanner.ERROR_CODES.SCAN_FAILED) return translateCopy("The scan could not be completed. Check that Windows sees the scanner and that no other program is using it.");
+            if (error && error.code === Scanner.ERROR_CODES.IMAGE_TOO_LARGE) return translateCopy("The scanned image is larger than 8 MB. Lower the scan resolution and try again.");
+            if (error && error.code === Scanner.ERROR_CODES.INVALID_RESPONSE) return translateCopy("The scanner response is invalid. Restart Almdina Scanner Bridge and try again.");
+            return translateCopy("The scanner program is not installed or is stopped. Install it once, or open it from the Start menu if it is already installed.");
         }
         async function scanReference() {
             if (scanning || !context || !context.permissions.can_edit) return;
             const token = generation; let feedback = "", feedbackState = "idle", installerUrl = ""; scanning = true;
-            shell.setScannerState({ busy: true, message: "سيظهر مربع Windows لاختيار جهاز السكانر وإعدادات المسح." });
+            shell.setScannerState({ busy: true, message: translateCopy("Windows will ask you to choose the scanner and the scan settings.") });
             try {
                 await Scanner.health(); if (token !== generation || suspended) return;
                 const file = await Scanner.scan(); if (token !== generation || suspended) return;
-                if (!file) { feedback = "تم إلغاء عملية المسح ولم تُضف صورة."; return; }
-                const added = await upload(file, { successMessage: "تم المسح وإضافة الصورة إلى التوثيق." });
-                feedback = added ? "تمت إضافة صورة السكانر. يمكنك الآن الرسم أو إضافة القياسات." : "تعذر إضافة صورة السكانر إلى التوثيق.";
+                if (!file) { feedback = translateCopy("The scan was cancelled and no image was added."); return; }
+                const added = await upload(file, { successMessage: translateCopy("The scan finished and the image was added to the documentation.") });
+                feedback = added ? translateCopy("The scanner image was added. You can now draw or add dimensions.") : translateCopy("Could not add the scanner image to the documentation.");
                 feedbackState = added ? "success" : "error";
             } catch (error) {
                 console.error("Scanner acquisition failed", error); feedback = scannerErrorMessage(error); feedbackState = "error";
@@ -118,7 +128,7 @@
                 scanning = false; if (shell && token === generation && !suspended) shell.setScannerState({ busy: false, message: feedback, state: feedbackState, installerUrl });
             }
         }
-        async function removeImage() { if (!context.permissions.can_edit) return; const reference = history.get().reference; if (!reference || !await confirmAsync("هل تريد مسح الصورة المرجعية من التوثيق؟")) return; pendingFileRemovals.add(reference.fileUrl); commit(D.setReference(history.get(), null)); }
+        async function removeImage() { if (!context.permissions.can_edit) return; const reference = history.get().reference; if (!reference || !await confirmAsync(translateCopy("Remove the reference image from the documentation?"))) return; pendingFileRemovals.add(reference.fileUrl); commit(D.setReference(history.get(), null)); }
         function updateReference(changes) { if (!context.permissions.can_edit || cropSession) return; const current = history.get(); if (!current.reference) return; commit(D.setReference(current, { ...current.reference, ...changes })); }
         function startCrop() {
             const reference = history.get().reference;
@@ -144,13 +154,13 @@
         function autoCrop() {
             if (!cropSession) return;
             const suggested = renderer.suggestReferenceCrop();
-            if (!suggested || Crop.isFull(suggested)) { frappe.show_alert({ message: "لم نتمكن من تمييز هوامش بيضاء واضحة. عدّل الإطار يدويًا.", indicator: "orange" }, 4); return; }
+            if (!suggested || Crop.isFull(suggested)) { frappe.show_alert({ message: translateCopy("No clear white margins were found. Adjust the frame manually."), indicator: "orange" }, 4); return; }
             cropSession = { value: suggested }; draft = null; dragging = false; render();
         }
         async function finishPen() {
             if (!draft || !draft.points || draft.points.length < 2) { draft = null; render(); return; }
             const cleaned = Pen.clean(draft.points, { toleranceMm: Math.max(3, history.get().canvas.widthMm * 0.006), joinToleranceMm: Math.max(18, history.get().canvas.widthMm * 0.025) }); let points = cleaned.points, closed = false;
-            if (cleaned.suggestClose && await confirmAsync("النهاية قريبة من البداية. هل تريد إغلاق الشكل؟")) { points = Pen.close(points); closed = true; }
+            if (cleaned.suggestClose && await confirmAsync(translateCopy("The end is close to the start. Close the shape?"))) { points = Pen.close(points); closed = true; }
             commit(D.addElement(history.get(), { id: D.id("stroke"), type: "stroke", points, closed, style: { color: "#1463e6", width: 3 } })); draft = null;
         }
         function pointerDown(event) {
@@ -301,19 +311,19 @@
                 else if (target.dataset.layer && target.dataset.layer !== "reference") { selectedId = target.dataset.layer; tool = "select"; render(); }
             });
             shell.referenceInput.addEventListener("change", () => upload(shell.referenceInput.files && shell.referenceInput.files[0]));
-            shell.cameraInput.addEventListener("change", () => upload(shell.cameraInput.files && shell.cameraInput.files[0], { successMessage: "تم التقاط الصورة وإضافتها إلى التوثيق." }));
+            shell.cameraInput.addEventListener("change", () => upload(shell.cameraInput.files && shell.cameraInput.files[0], { successMessage: translateCopy("The photo was captured and added to the documentation.") }));
             workspace.querySelector("[data-reference-lock]").addEventListener("change", event => updateReference({ locked: Boolean(event.target.checked) }));
             workspace.querySelector("[data-notes]").addEventListener("change", event => commit(D.setNotes(history.get(), event.target.value)));
             shell.canvas.addEventListener("pointerdown", pointerDown); shell.canvas.addEventListener("pointermove", pointerMove); shell.canvas.addEventListener("pointerup", pointerUp); shell.canvas.addEventListener("pointercancel", pointerUp); shell.canvas.addEventListener("wheel", wheel, { passive: false });
             workspace.addEventListener("keydown", keydown); window.addEventListener("keyup", keyupHandler); window.addEventListener("resize", resizeHandler); window.addEventListener("beforeunload", beforeUnloadHandler);
         }
         async function open(route) {
-            const token = ++generation; suspended = false; cleanup(); showMessage("جار تحميل توثيق الدرفة…");
+            const token = ++generation; suspended = false; cleanup(); showMessage(translateCopy("Loading door documentation…"));
             try {
                 const loaded = await Api.load(route.orderName, route.pieceName); if (token !== generation || suspended) return; context = loaded;
                 const document = D.fromStored(loaded.piece.special_shape_drawing_json, loaded.piece); history = H.create(document); main.innerHTML = ""; shell = Shell.mount(main, loaded); renderer = Canvas.create(shell.canvas); bindEvents(); chooseTool("select");
                 if (!loaded.permissions.can_edit && loaded.permissions.edit_reason) frappe.show_alert({ message: loaded.permissions.edit_reason, indicator: "orange" }, 5);
-            } catch (error) { console.error("Documentation workspace load failed", error); if (token === generation) showMessage("تعذر تحميل الدرفة. افتح التوثيق من الطلب وتحقق من الصلاحيات.", true); }
+            } catch (error) { console.error("Documentation workspace load failed", error); if (token === generation) showMessage(translateCopy("Could not load the door. Open the documentation from the order and check the permissions."), true); }
         }
         function suspend() { suspended = true; generation += 1; cleanup(); }
         return Object.freeze({ open, suspend, destroy: suspend, showRouteError: message => showMessage(message, true) });

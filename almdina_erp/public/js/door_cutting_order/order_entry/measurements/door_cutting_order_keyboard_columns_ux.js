@@ -3,11 +3,11 @@
 
     const EDITABLE_ORDER_STATUSES = new Set(["Draft", "Pending Review", "Rejected"]);
     const CHECK_COLUMNS = [
-        { field: "allow_rotation", labelAr: "تدوير", labelEn: "Rotate" },
-        { field: "edge_width_top", labelAr: "عرض أعلى", labelEn: "Top" },
-        { field: "edge_width_bottom", labelAr: "عرض أسفل", labelEn: "Bottom" },
-        { field: "edge_long_right", labelAr: "طول يمين", labelEn: "Long R" },
-        { field: "edge_long_left", labelAr: "طول يسار", labelEn: "Long L" },
+        { field: "allow_rotation", label: "Rotate" },
+        { field: "edge_width_top", label: "Top" },
+        { field: "edge_width_bottom", label: "Bottom" },
+        { field: "edge_long_right", label: "Long right" },
+        { field: "edge_long_left", label: "Long left" },
     ];
     const EDGE_COLUMNS = CHECK_COLUMNS.slice(1);
     const ARROW_KEYS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
@@ -17,15 +17,6 @@
         "button.dco-check-toggle[data-check-field]",
     ].join(",");
 
-    function isArabic() {
-        const lang = String(
-            (frappe.boot && frappe.boot.lang) ||
-            (frappe.boot && frappe.boot.user && frappe.boot.user.language) ||
-            document.documentElement.lang ||
-            ""
-        ).toLowerCase();
-        return lang === "ar" || lang.startsWith("ar-");
-    }
 
     function isEditable(frm) {
         if (window.frappe && frappe.almdina && frappe.almdina.orderCanEdit) {
@@ -201,8 +192,8 @@
         checkbox.checked = values.length > 0 && checkedCount === values.length;
         checkbox.indeterminate = checkedCount > 0 && checkedCount < values.length;
         checkbox.title = checkbox.checked
-            ? (isArabic() ? "إلغاء تحديد الكل" : "Clear all")
-            : (isArabic() ? "تحديد الكل" : "Select all");
+            ? (__("Clear all"))
+            : (__("Select all"));
     }
 
     function refreshAllHeaderStates(frm, root) {
@@ -211,9 +202,9 @@
 
     function headerCheckbox(fieldname) {
         return `
-            <label class="dco-column-select-all" title="${isArabic() ? "تحديد الكل" : "Select all"}">
+            <label class="dco-column-select-all" title="${__("Select all")}">
                 <input type="checkbox" class="dco-column-select-all-input" data-column-field="${fieldname}">
-                <span>${isArabic() ? "الكل" : "All"}</span>
+                <span>${__("All")}</span>
             </label>`;
     }
 
@@ -226,7 +217,7 @@
             rotate.dataset.columnUxReady = "1";
             rotate.innerHTML = `
                 <div class="dco-column-header-select">
-                    <span>${isArabic() ? "تدوير" : "Rotate"}</span>
+                    <span>${__("Rotate")}</span>
                     ${headerCheckbox("allow_rotation")}
                 </div>`;
         }
@@ -238,7 +229,7 @@
                 <div class="dco-edge-header-grid">
                     ${EDGE_COLUMNS.map(column => `
                         <div class="dco-edge-header-item">
-                            <span>${isArabic() ? column.labelAr : column.labelEn}</span>
+                            <span>${__(column.label)}</span>
                             ${headerCheckbox(column.field)}
                         </div>`).join("")}
                 </div>`;
@@ -249,7 +240,7 @@
             help.insertAdjacentHTML("beforeend", `
                 <span class="dco-arrow-nav-hint">
                     <kbd>← ↑ ↓ →</kbd>
-                    <span>${isArabic() ? "للتنقل بين الخلايا" : "move between cells"}</span>
+                    <span>${__("move between cells")}</span>
                 </span>`);
         }
         refreshAllHeaderStates(frm, root);

@@ -140,7 +140,7 @@ All report definitions remain **UAT Pending** until reconciled against source do
 ## Known Code / Configuration Gaps Still Open
 
 1. **Authoritative new-order defaults for every creation path**: UI reads `Almdina ERP Settings`; real Bench/API/Import behavior must be verified so no static DocField default can override configured factory defaults. This remains a validation/code-cleanup item until tested and normalized on a real site.
-2. **Legacy hardcoded UI language strings**: core/new workflows use translation functions, but the large legacy visual/print script still contains hardcoded Arabic strings. Conversion must be incremental with visual regression so the Baseline is not broken.
+2. **Active UI translation**: new and active screens use English message IDs with Frappe `__()` / `_()` and `translations/ar.csv`. `domain/` and `application/` stay free of Frappe translation. User-configured names, such as production stage names and edge-banding type names, are stored data and are not translated. Historical Arabic source IDs that were not part of an active screen remain until that screen is touched.
 3. **Concurrent approval of the same order**: remnant/material races are protected, but same-order double-approval must be explicitly stress-tested and, if reproduced, protected with an order-row approval lock before Go-Live.
 4. **Official A4 server PDF pagination**: Print Formats exist; wkhtmltopdf rendering must be checked with long/narrow sources and many pieces.
 5. **Real ERPNext accounting behavior**: Material Issue/Receipt cancellation/repost dependencies require integration testing with the target Company/Warehouse/accounts.

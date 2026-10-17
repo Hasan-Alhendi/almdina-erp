@@ -28,7 +28,7 @@ const cases = [
         file: "../../almdina_erp/page/factory_production_settings/factory_production_settings.js",
         page: "factory-production-settings",
         controller: "AlmdinaFactoryProductionSettingsController",
-        featureModuleCount: 8,
+        featureModuleCount: 10,
         modulePrefix: "/assets/almdina_erp/js/factory_production_settings/",
         sharedModules: [DESIGN_SYSTEM_MODULE],
     },
@@ -140,6 +140,10 @@ async function simulateCachedFoundation(config) {
         config.featureModuleCount + config.sharedModules.length,
         `${config.page} must load the full approved module batch`
     );
+
+    if (config.page === "factory-production-settings") {
+        assert.ok(batch.includes("/assets/almdina_erp/js/factory_production_settings/backup_panel.js"));
+    }
 
     const approvedSharedModules = new Set(config.sharedModules);
     for (const sharedModule of approvedSharedModules) {

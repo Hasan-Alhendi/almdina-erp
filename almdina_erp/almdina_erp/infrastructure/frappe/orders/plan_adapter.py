@@ -59,7 +59,7 @@ class FrappeOrderPlanAdapter:
     @staticmethod
     def piece_row_as_dict(row: Any) -> dict[str, Any]:
         piece_instance_id = str(getattr(row, "piece_instance_id", "") or "").strip()
-        return {
+        piece = {
             "piece_instance_id": piece_instance_id,
             "width_cm": flt(row.width_cm),
             "length_cm": flt(row.length_cm),
@@ -73,6 +73,7 @@ class FrappeOrderPlanAdapter:
             "edge_width_top": cint(row.edge_width_top),
             "edge_width_bottom": cint(row.edge_width_bottom),
             "edge_break": cint(getattr(row, "edge_break", 0)),
+            "edge_break_only": cint(getattr(row, "edge_break_only", 0)),
             "edge_type": row.edge_type or "",
             "edge_rate_usd": flt(row.edge_rate_usd),
             "edge_cost_usd": flt(row.edge_cost_usd),
@@ -85,6 +86,21 @@ class FrappeOrderPlanAdapter:
             ),
             "notes": row.notes or "",
         }
+        from almdina_erp.almdina_erp.domain.cutting.machining_overlay import (
+            MACHINING_ADDONS,
+        )
+
+        for addon in MACHINING_ADDONS:
+            side = str(getattr(row, addon.side_field, "") or "")
+            width = flt(getattr(row, addon.width_field, 0))
+            if cint(getattr(row, addon.enabled_field, 0)) and side and width > 0:
+                piece[addon.enabled_field] = 1
+                piece[addon.side_field] = side
+                piece[addon.offset_field] = flt(getattr(row, addon.offset_field, 0))
+                piece[addon.width_field] = width
+                piece[addon.start_field] = flt(getattr(row, addon.start_field, 0))
+                piece[addon.length_field] = flt(getattr(row, addon.length_field, 0))
+        return piece
 
     def _plan_input_payload(
         self,
@@ -139,7 +155,12 @@ class FrappeOrderPlanAdapter:
                     index=index,
                     width_cm=self.access.normalized_number(row.width_cm),
                     length_cm=self.access.normalized_number(row.length_cm),
-                    qty=cint(row.qty),
+                    qty=physical_cut_quantity(
+                        cint(row.qty),
+                        full_door_double=bool(
+                            cint(getattr(row, "extra_full_door_double", 0))
+                        ),
+                    ),
                     allow_rotation=cint(row.allow_rotation),
                     piece_type=str(row.piece_type or "Regular"),
                     clipped_corner_position=str(
@@ -174,6 +195,7 @@ class FrappeOrderPlanAdapter:
                     edge_width_top=cint(row.edge_width_top),
                     edge_width_bottom=cint(row.edge_width_bottom),
                     edge_break=cint(getattr(row, "edge_break", 0)),
+                    edge_break_only=cint(getattr(row, "edge_break_only", 0)),
                     edge_type=str(row.edge_type or ""),
                     edge_rate_usd=self.access.normalized_number(
                         row.edge_rate_usd

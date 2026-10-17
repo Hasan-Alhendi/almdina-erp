@@ -154,7 +154,25 @@ Event handlers وtimers وMutationObservers تكون idempotent أو قابلة 
 لا يملك shared shell CSS خاصًا بFeature محلية بعد اكتمال migration. Inline style injection الموجود حاليًا يعد migration debt، لا pattern جديدًا.
 
 ### `FE-ARCH-010` — Arabic-first professional UX
-النصوص القابلة للترجمة تمر عبر `__()`، والواجهات تدعم RTL/logical layout، keyboard/focus، touch targets، responsive behavior، reduced-motion عندما توجد حركة، وحالات loading/error/empty/disabled/dirty الواضحة.
+النصوص القابلة للترجمة تمر عبر `__()` في الواجهة و`_()` في الطبقات الخارجية وJinja. العربية تبقى اللغة الافتراضية عند غياب لغة المستخدم أو لغة الموقع. الاتجاه يأتي من لغة الصفحة: `rtl` لـ `ar` و`he` و`fa` و`ps`، و`ltr` لغير ذلك. المقاسات والأرقام والمعرفات الفنية تبقى `direction: ltr`.
+
+`window.AlmdinaLocale` يقرأ اللغة والاتجاه فقط ويفوّض الترجمة إلى `__()`، ولا يملك قاموسًا. `domain/` و`application/` لا يستوردان Frappe ولا دوال الترجمة؛ يُرجعان رموز أخطاء ثابتة وتُترجم في Service أو العرض.
+
+**Localization by Design — عقد إلزامي لكل Feature/Fix:** أي ميزة أو إصلاح يضيف أو يغيّر نصًا يملكه التطبيق وموجّهًا للمستخدم يجب أن يربطه بمسار الترجمة الرسمي من لحظة التنفيذ، **حتى لو لم تُذكر الترجمة في الطلب**. يشمل ذلك الأزرار، العناوين، تسميات الحقول والخيارات، القوائم، placeholders، التلميحات، رسائل التأكيد والنجاح والخطأ والتحميل والحالات الفارغة، النصوص المساعدة وARIA/accessibility، التقارير، الطباعة وPDF، ورسائل النظام الآلية. ينطبق العقد على واجهات Frappe وJavaScript وPython/Jinja دون إنشاء محرك ترجمة موازٍ.
+
+- استخدم **مفاتيح نصية إنجليزية مستقرة** مع `__()` أو `_()` في طبقة العرض/الحدود الخارجية، ووفر الترجمة العربية في `translations/ar.csv` لكل مفتاح جديد لا تغطيه ترجمة Frappe الرسمية بالفعل. لا تُنشئ تكرارات أو أسماء مفاتيح مصطنعة، واحفظ placeholders والسياق عند الحاجة.
+- تُترجم **تسميات العرض فقط**؛ لا تُترجم القيم الداخلية أو مفاتيح الحالة أو أسماء المستندات أو مدخلات المستخدم والعملاء أو النصوص المحفوظة في بياناتهم تلقائيًا. استخدم IDs مستقرة عندما تأتي التسميات من catalogs أو خيارات مخزنة.
+- احترم `rtl/ltr` بحسب اللغة الفعلية. لا تستخدم `isArabic()` لاختيار النص، ولا `MutationObserver` لتبديل كلمات DOM، ولا `dir="rtl"` ثابتًا لتطبيق كامل؛ تبقى المقاسات والمعرّفات الفنية LTR.
+- أي تغيير في النصوص الظاهرة يضم اختبارات/أدلة مناسبة لمفاتيح الترجمة، placeholders، واتجاه العرض بالعربية والإنجليزية، وأي لغة إضافية يطالها التغيير. يجب عدم اعتبار ميزة ظاهرة للمستخدم مكتملة قبل تحقق هذا العقد. الاستثناءات للبيانات التي لا يملك التطبيق ترجمتها تُوثّق ولا تُستخدم لإخفاء نص واجهة ناقص.
+
+إضافة لغة جديدة لا تحتاج فرعًا برمجيًا خاصًا بها:
+
+1. فعّل اللغة من DocType `Language` في Frappe.
+2. أضف `translations/<language-code>.csv` بمفاتيح إنجليزية مطابقة للنص في الكود، والترجمة في العمود الثاني. العمود الثالث سياق اختياري عندما يختلف معنى المفتاح نفسه.
+3. عيّن `User.language` للمستخدم، ثم نفّذ `bench build` و`bench --site <site> clear-cache`.
+4. تحقق من `AlmdinaLocale.direction()` ومن مستند طباعة: `lang` و`dir` يتبعان اللغة، والمقاسات تبقى LTR.
+
+ترجمة الواجهة ليست ترجمة بيانات المستخدم. أسماء مراحل الإنتاج وأنواع القشاط والنصوص التي أدخلها المستخدم تبقى كما خُزنت. لا تُضاف فروع `isArabic()` لاختيار النص، ولا ترجمة عبر `MutationObserver`.
 
 ### `FE-ARCH-011` — Respect bounded frontend subsystems
 Special Shape Documentation يحتفظ ببنيته `domain/application/infrastructure/presentation`. لا تُفرض عليه بنية Frappe Page لمجرد توحيد الأسماء، ولا تُدخل هندسة التصنيع إلى عقد التوثيق.
@@ -176,24 +194,37 @@ Store/selectors/actions الخالصة تحصل على Node/unit tests عند ا
 
 | الطبقة | الملف | الدور |
 |---|---|---|
-| Tokens | `public/css/almdina_design_tokens.css` | `--alm-primary` وباقي brand tokens |
-| Components | `public/css/almdina_components.css` | `.alm-btn-primary` وpatterns مشتركة |
-| Builder | `public/js/almdina_ui.js` | `AlmdinaUi.button()` / `AlmdinaUi.empty()` |
+| Ownership | [`docs/design_system/TOKEN_OWNERSHIP.md`](../design_system/TOKEN_OWNERSHIP.md) | من يملك `alm-*` مقابل feature namespaces |
+| Tokens | `public/css/almdina_design_tokens.css` | brand/semantic + typography + spacing + radius + shadow + status |
+| Components | `public/css/almdina_components.css` | `.alm-btn-*` / `.alm-control` / `.alm-empty` / `.alm-card` / `.alm-panel` / `.alm-badge` / `.alm-status` / `.alm-state` / `.alm-actions--compact` |
+| Patterns | `public/css/almdina_patterns.css` | `.alm-page-intro` / `.alm-toolbar` / `.alm-summary-*` / `.alm-section-header` |
+| Page templates | `public/css/almdina_page_templates.css` | `.alm-page--admin` / `--workbench` / `--list` / `--transaction` |
+| Builder | `public/js/almdina_ui.js` | `button()` / `empty()` / `badge()` / `status()` / `state()` / `control()` / `filterGroup()` |
 
 **القواعد:**
 
 - كل Surface جديد أو migrated يضع shell/container تحت `.almdina-ui`.
 - الأزرار الأساسية/الخطرة/النجاح تُبنى عبر `AlmdinaUi.button()` — لا `class="btn btn-primary"` في surfaces مهاجرة.
 - ألوان العلامة التجارية تقرأ `var(--alm-primary, #172033)` أو aliases مشتقة (`--sf-primary`, `--prw-primary`) — لا `var(--primary, #2490ef)`.
+- Feature CSS لا يعيد تعريف radius/shadow/typography/spacing/status scales؛ يقرأ `--alm-*` أو يعمل alias إليها.
+- Admin Console surfaces تستهلك Patterns المشتركة عبر dual-class (`aps-hero alm-page-intro`) وتبقي Feature classes لـhooks/layout فقط.
+- Workbench: نظرة Factory Master Data العامة تستهلك نفس Patterns (`prw-hero alm-page-intro` / `prw-summary alm-summary-grid` / `prw-toolbar alm-toolbar`) و`AlmdinaUi.status()` / `badge()` / `.alm-state`؛ محرر المسار (stage rail/library) يبقى domain layout غير مهاجَر بعد.
+- Lists (Type A): المقاييس الثابتة (typography/spacing/radius/shadow) على `:root` لتقرأها قوائم Frappe الأصلية بدون `.almdina-ui`؛ `almdina_list_table.css` يملك chrome الصفوف عبر tokens، و`almdina_page_templates.css` يملك canvas القائمة. CSS قائمة DCO مؤجَّل إلى خطوة DCO.
+- Workbench: Shop Floor يستهلك `alm-page-intro` / `alm-toolbar` وtokens الحالة والـradius/shadow؛ أعمدة Kanban وبطاقات الإنتاج والسحب تبقى freeze.
+- كل surface يعلن عائلة صفحته عبر `.alm-page--admin|workbench|list|transaction`؛ Feature CSS لا يعيد تعريف max-width/shell rhythm الأساسي.
+- Shared DS CSS لا يحتوي Feature selectors (`.apc-*` / `.dco-*` …)؛ allowlist في `test_design_system_contract` فارغ منذ Phase 6 ويجب أن يبقى فارغًا.
 - لا override selector-based لـ `body .btn-primary` داخل `almdina_components.css`.
 - **Frappe Desk bridge (DS-10):** `public/css/almdina_desk_theme.css` يعيد توجيه `--primary` / `--btn-primary` و`indicator-pill.blue` إلى `--alm-primary` على `:root` — بدون تغيير markup Frappe.
 - Brand primitives (`--alm-primary` …) تعيش على `:root` + `.almdina-ui` في `almdina_design_tokens.css` حتى يكفي تعديل hex واحد للـDesk وAlmdina surfaces معًا.
 - تغيير اللون الأساسي يتم من `--alm-primary` في tokens فقط، ثم `bench build --app almdina_erp` + `clear-cache`.
+- Design System migration تبقى presentation-only: لا تغيّر Domain/Application/Services أو capabilities أو lifecycle.
 
 **استثناءات مسجّلة (allowlist):**
 
 - `notes.css` — spinner/notes presentation contract منفصل.
 - `door_cutting_order_mobile_list.css` — list cards identity contract (`#2563eb`) مستقل عن admin surfaces.
+- (Phase 6) لم يعد هناك Feature selectors في `almdina_components.css`: tabs الخطة يملكها plan-content owner، وشريط تعديل التبويب يستخدم `.alm-actions--compact`.
+- DCO JS style injection (FE-ARCH-009) مجمّد بـratchet `DCO_STYLE_INJECTION_DEBT`: لا module جديد يحقن `<style>`، وكل نقل إلى CSS ثابت تغيير عقد صريح لأن عدة قواعد مثبّتة باختبارات feature.
 
 **Gate:** `almdina_erp.tests.test_design_system_contract` + `almdina_erp/tests/js/almdina_ui.test.js`.
 
@@ -275,7 +306,7 @@ Professional UI لا يعني المزيد من animation أو cards؛ يعني 
 لكل surface نراجع:
 
 - **Hierarchy:** primary action واضح، secondary actions أقل بروزًا.
-- **Feedback:** loading/save/processing/success/error states مرئية ولا تعتمد على التخمين.
+- **Feedback:** loading/error/empty/disabled/dirty states، وكذلك save/processing/success، مرئية ولا تعتمد على التخمين.
 - **Density:** desktop يستفيد من العرض، mobile يعيد ترتيب المحتوى بدل تصغيره فقط.
 - **Input safety:** لا يعاد render أثناء الكتابة بطريقة تفقد focus أو تحذف أحرفًا.
 - **Navigation:** reopening/revisit يعرض record الصحيح ولا state من record سابق.

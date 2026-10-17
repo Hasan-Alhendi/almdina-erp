@@ -299,7 +299,16 @@ def validate_cutting_plan_document(plan: Any) -> list[str]:
 
 
 def _plan_to_export_snapshot(plan: Any) -> dict[str, Any]:
+    from almdina_erp.almdina_erp.domain.cutting.sheet_edge_trim import (
+        resolved_sheet_trim_cm,
+    )
+
     snapshot = frappe.parse_json(plan.snapshot_json or "{}") or {}
+    persisted_sheets = {
+        int(sheet.get("sheet_no") or 0): sheet
+        for sheet in (snapshot.get("sheets") or [])
+        if isinstance(sheet, dict)
+    }
     geometry_by_identity, has_geometry = snapshot_geometry_index(snapshot)
     consumed_geometry: set[tuple[int, int]] = set()
     sheets: list[dict[str, Any]] = []
@@ -331,6 +340,10 @@ def _plan_to_export_snapshot(plan: Any) -> dict[str, Any]:
                 "clipped_corner_position": piece.clipped_corner_position or "",
                 "clipped_corner_width_cm": flt(piece.clipped_corner_width_cm),
                 "clipped_corner_length_cm": flt(piece.clipped_corner_length_cm),
+                "extra_liner": cint(getattr(piece, "extra_liner", 0)),
+                "liner_reference_side": getattr(piece, "liner_reference_side", "") or "",
+                "liner_offset_cm": flt(getattr(piece, "liner_offset_cm", 0)),
+                "liner_width_cm": flt(getattr(piece, "liner_width_cm", 0)),
                 "special_shape_geometry_json": (
                     getattr(piece, "special_shape_geometry_json", "") or ""
                 ),
@@ -340,6 +353,7 @@ def _plan_to_export_snapshot(plan: Any) -> dict[str, Any]:
                 "edge_width_top": cint(piece.edge_width_top),
                 "edge_width_bottom": cint(piece.edge_width_bottom),
                 "edge_break": cint(getattr(piece, "edge_break", 0)),
+                "edge_break_only": cint(getattr(piece, "edge_break_only", 0)),
                 "edge_type": piece.edge_type or "",
                 "notes": piece.notes or "",
                 "area_m2": flt(piece.original_width_cm) * flt(piece.original_length_cm) / 10000,
@@ -354,23 +368,34 @@ def _plan_to_export_snapshot(plan: Any) -> dict[str, Any]:
                 public_piece["geometry"] = geometry
                 consumed_geometry.add(identity)
             sheet_pieces.append(public_piece)
-        sheets.append(
-            {
-                "sheet_no": sheet_no,
-                "source_type": source.source_type,
-                "remnant": source.remnant,
-                "board_item": source.board_item,
-                "material": source.material or "",
-                "color": source.color or "",
-                "thickness_mm": flt(source.thickness_mm),
-                "full_width_cm": flt(source.full_width_mm) / 10,
-                "full_length_cm": flt(source.full_length_mm) / 10,
-                "usable_width_cm": flt(source.usable_width_mm) / 10,
-                "usable_length_cm": flt(source.usable_length_mm) / 10,
-                "source_area_m2": flt(source.source_area_m2),
-                "pieces": sheet_pieces,
-            }
-        )
+        persisted = persisted_sheets.get(sheet_no) or {}
+        rebuilt_sheet = {
+            "sheet_no": sheet_no,
+            "source_type": source.source_type,
+            "remnant": source.remnant,
+            "board_item": source.board_item,
+            "material": source.material or "",
+            "color": source.color or "",
+            "thickness_mm": flt(source.thickness_mm),
+            "full_width_cm": flt(source.full_width_mm) / 10,
+            "full_length_cm": flt(source.full_length_mm) / 10,
+            "usable_width_cm": flt(source.usable_width_mm) / 10,
+            "usable_length_cm": flt(source.usable_length_mm) / 10,
+            "source_area_m2": flt(source.source_area_m2),
+            "pieces": sheet_pieces,
+        }
+        for axis, key in (
+            ("x", "applied_trim_width_cm"),
+            ("y", "applied_trim_length_cm"),
+        ):
+            if key in persisted and persisted.get(key) is not None:
+                rebuilt_sheet[key] = flt(persisted.get(key))
+            rebuilt_sheet[key] = resolved_sheet_trim_cm(
+                rebuilt_sheet,
+                snapshot,
+                axis=axis,
+            )
+        sheets.append(rebuilt_sheet)
 
     if has_geometry and consumed_geometry != set(geometry_by_identity):
         missing = sorted(set(geometry_by_identity) - consumed_geometry)

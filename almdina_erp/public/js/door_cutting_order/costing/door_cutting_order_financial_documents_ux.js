@@ -99,6 +99,42 @@
         return esc(item.value ?? "—");
     }
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split(`{${index}}`).join(String(value));
+            });
+        }
+        return text;
+    }
+
+    function uiDirection() {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.direction === "function") {
+            const value = locale.direction();
+            if (value === "ltr" || value === "rtl") return value;
+        }
+        const root = typeof document !== "undefined" ? document.documentElement : null;
+        const dir = root && root.getAttribute("dir");
+        return dir === "ltr" ? "ltr" : "rtl";
+    }
+
+    function uiLanguage() {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.currentLanguage === "function") {
+            return String(locale.currentLanguage() || "");
+        }
+        return "";
+    }
+
     function metaHtml(payload) {
         return `<div class="financial-meta">${(payload.meta || []).map(item => `
             <div class="financial-meta-item">
@@ -120,10 +156,10 @@
         const total = rows.reduce((sum, row) => sum + number(row.amount_usd), 0);
         return `
             <section>
-                <h2>تفصيل التكلفة التشغيلية</h2>
-                <table class="compact"><thead><tr><th class="right">البند</th><th>القيمة $</th></tr></thead><tbody>
+                <h2>${esc(translate("Operating cost breakdown"))}</h2>
+                <table class="compact"><thead><tr><th class="right">${esc(translate("Cost item"))}</th><th>${esc(translate("Amount $"))}</th></tr></thead><tbody>
                     ${rows.map(row => `<tr><td class="right">${esc(row.label)}</td><td>${money(row.amount_usd)}</td></tr>`).join("")}
-                    <tr class="strong"><td class="right">مجموع البنود التفصيلية</td><td>${money(total)}</td></tr>
+                    <tr class="strong"><td class="right">${esc(translate("Breakdown total"))}</td><td>${money(total)}</td></tr>
                 </tbody></table>
             </section>`;
     }
@@ -132,7 +168,7 @@
         if (!rows || !rows.length) return "";
         return `
             <section>
-                <h2>مؤشرات التشغيل والهدر</h2>
+                <h2>${esc(translate("Operations and waste indicators"))}</h2>
                 <div class="operations-grid">${rows.map(row => `
                     <div><span>${esc(row.label)}</span><b>${esc(row.value)}</b></div>
                 `).join("")}</div>
@@ -143,11 +179,11 @@
         if (!rows || !rows.length) return "";
         return `
             <section>
-                <h2>مراجعة أسعار الدرف الخاصة</h2>
+                <h2>${esc(translate("Special door price review"))}</h2>
                 <table><thead><tr>
-                    <th>#</th><th>العدد</th><th>التقديري / وحدة $</th><th>المعتمد / وحدة $</th>
-                    <th>النهائي / وحدة $</th><th>الفرق الإجمالي $</th><th>الحالة</th>
-                    <th>اعتمده</th><th>تاريخ الاعتماد</th><th class="right">ملاحظة</th>
+                    <th>#</th><th>${esc(translate("Quantity"))}</th><th>${esc(translate("Estimated / unit $"))}</th><th>${esc(translate("Approved / unit $"))}</th>
+                    <th>${esc(translate("Final / unit $"))}</th><th>${esc(translate("Total variance $"))}</th><th>${esc(translate("Status"))}</th>
+                    <th>${esc(translate("Approved by"))}</th><th>${esc(translate("Approval date"))}</th><th class="right">${esc(translate("Note"))}</th>
                 </tr></thead><tbody>
                     ${rows.map(row => `<tr>
                         <td>${esc(row.piece_no)}</td><td>${qty(row.quantity)}</td>
@@ -178,12 +214,13 @@
         return theme.headerHtml(printIdentity, {
             title: payload.title,
             meta: metaParts.join(" · "),
-            badge: payload.classification || "داخلي",
+            badge: payload.classification || translate("Internal"),
             badgeClass: "internal",
         });
     }
 
-    function printCss() {
+    function printCss(direction) {
+        const documentDirection = direction === "ltr" ? "ltr" : "rtl";
         const theme = printThemeApi();
         if (!theme || typeof theme.headerCss !== "function") {
             throw new Error("Unified factory print header styles are unavailable");
@@ -191,7 +228,7 @@
         return `
             @page{size:A4 landscape;margin:11mm}
             *{box-sizing:border-box}
-            body{font-family:Tahoma,Arial,sans-serif;color:#172033;margin:0;direction:rtl;font-size:10px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+            body{font-family:Tahoma,Arial,sans-serif;color:#172033;margin:0;direction:${documentDirection};font-size:10px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
             ${theme.headerCss()}
             .financial-meta,.financial-summary{display:grid;gap:7px;margin-top:10px}
             .financial-meta{grid-template-columns:repeat(3,minmax(0,1fr))}
@@ -200,14 +237,14 @@
             .financial-meta-item span,.financial-summary-card span,.operations-grid span{display:block;color:#697582;font-size:8px;margin-bottom:3px}
             .financial-meta-item b,.financial-summary-card b,.operations-grid b{font-size:11px;word-break:break-word}
             .financial-summary-card{background:#f7fafc}
-            section{margin-top:12px;break-inside:avoid} h2{font-size:13px;margin:0 0 6px;padding:6px 8px;background:#eef2f6;border-right:3px solid #273b50}
+            section{margin-top:12px;break-inside:avoid} h2{font-size:13px;margin:0 0 6px;padding:6px 8px;background:#eef2f6;border-inline-start:3px solid #273b50}
             table{width:100%;border-collapse:collapse;font-size:9px} th,td{border:1px solid #aeb8c2;padding:4.5px;text-align:center;vertical-align:middle}
-            th{background:#edf1f5;font-weight:900} td.right,th.right{text-align:right} td small{display:block;color:#66717d;font-size:7.5px;margin-top:2px;line-height:1.5}
+            th{background:#edf1f5;font-weight:900} td.right,th.right{text-align:start} td small{display:block;color:#66717d;font-size:7.5px;margin-top:2px;line-height:1.5}
             tr.strong td{font-weight:900;background:#f5f7f9} table.compact{max-width:620px}
             .operations-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
             .financial-totals{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-top:12px}
             .financial-totals>div{padding:10px;border:1px solid #273b50;border-radius:8px;background:#f4f7fa}
-            .financial-totals span{display:block;font-size:8px;color:#66717d;margin-bottom:4px}.financial-totals b{font-size:14px;direction:ltr;display:block;text-align:right}
+            .financial-totals span{display:block;font-size:8px;color:#66717d;margin-bottom:4px}.financial-totals b{font-size:14px;direction:ltr;display:block;text-align:end}
             .notes{margin-top:10px;border:1px solid #cfd6de;border-radius:7px;padding:8px;min-height:34px;line-height:1.7}
             footer{display:flex;justify-content:space-between;gap:12px;margin-top:12px;padding-top:6px;border-top:1px solid #b9c1ca;color:#687481;font-size:8px}
             @media print{section{break-inside:auto}thead{display:table-header-group}tr{break-inside:avoid}}
@@ -224,15 +261,17 @@
                 ? identityApi.fallback()
                 : {}
         );
-        return `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${esc(payload.title)} — ${esc(payload.order_name)}</title><style>${printCss()}</style></head><body>
+        const language = uiLanguage();
+        const direction = uiDirection();
+        return `<!doctype html><html dir="${esc(direction)}"${language ? ` lang="${esc(language)}"` : ""}><head><meta charset="utf-8"><title>${esc(payload.title)} — ${esc(payload.order_name)}</title><style>${printCss(direction)}</style></head><body>
             ${printHeaderHtml(payload, identity)}
             ${metaHtml(payload)}${summaryHtml(payload)}
             ${costBreakdownHtml(payload.cost_breakdown)}
             ${operationsHtml(payload.operations)}
             ${specialPricesHtml(payload.special_prices)}
             ${totalsHtml(payload.totals)}
-            ${payload.notes ? `<div class="notes"><b>ملاحظات الطلب:</b> ${esc(payload.notes)}</div>` : ""}
-            <footer><span>أنشئ بواسطة: ${esc(payload.generated_by || "—")}</span><span>تاريخ الإنشاء: ${esc(payload.generated_on || "—")}</span><span>المراجعة: ${esc(payload.source_revision || "1")}</span></footer>
+            ${payload.notes ? `<div class="notes"><b>${esc(translate("Order notes:"))}</b> ${esc(payload.notes)}</div>` : ""}
+            <footer><span>${esc(translate("Created by: {0}", [payload.generated_by || "—"]))}</span><span>${esc(translate("Created on: {0}", [payload.generated_on || "—"]))}</span><span>${esc(translate("Revision: {0}", [payload.source_revision || "1"]))}</span></footer>
         </body></html>`;
     }
 
@@ -260,7 +299,7 @@
             } catch (error) {
                 console.error("Secure financial print failed", error);
                 cleanup();
-                frappe.msgprint(__("تعذر تشغيل الطباعة. أعد تحميل الصفحة ثم حاول مرة أخرى."));
+                frappe.msgprint(translate("Could not start printing. Reload the page and try again."));
             }
         };
         frame.srcdoc = html;
@@ -280,9 +319,10 @@
             ? costApi.pendingCustomEdgePriceLabels(frm)
             : [];
         if (!pending.length) return true;
-        frappe.msgprint(__(
-            "لا يمكن طباعة فاتورة غير مكتملة. أدخل السعر الخاص الشامل للدرف الخاصة وسعر قشاط درف الزاوية المقصوصة أولًا. المتبقي: {0}."
-        ).replace("{0}", pending.join("، ")));
+        frappe.msgprint(translate(
+            "An incomplete invoice cannot be printed. Enter the special door inclusive price and the clipped-corner edge price first. Remaining: {0}.",
+            [pending.join(", ")]
+        ));
         return false;
     }
 
@@ -306,11 +346,11 @@
             ? can(frm, capability)
             : can(frm, "view_costs") && can(frm, capability);
         if (!canPrint) {
-            frappe.msgprint(__("ليس لديك صلاحية طباعة هذا المستند."));
+            frappe.msgprint(translate("You do not have permission to print this document."));
             return handledRejection("Missing print capability");
         }
         if (frm.is_new()) {
-            frappe.msgprint(__("احفظ الطلب قبل طباعة المستند."));
+            frappe.msgprint(translate("Save the order before printing the document."));
             return handledRejection("Unsaved order");
         }
         if (kind === "customer_invoice" && !validateCustomerPrices(frm)) {
@@ -322,8 +362,8 @@
             args: { order_name: frm.doc.name },
             freeze: true,
             freeze_message: kind === "internal_cost_report"
-                ? __("جاري تجهيز تقرير التكلفة الداخلي...")
-                : __("جاري تجهيز فاتورة الزبون..."),
+                ? translate("Preparing the internal cost report...")
+                : translate("Preparing the customer invoice..."),
         }).then(response => {
             const payload = response.message || {};
             if (payload.kind !== kind || payload.order_name !== frm.doc.name) {
@@ -374,7 +414,7 @@
 
         ensureActionButton(actions, {
             className: CUSTOMER_CLASS,
-            label: __("طباعة فاتورة الزبون"),
+            label: translate("Print customer invoice"),
             primary: true,
             visible: !frm.is_new() && can(frm, "print_customer_invoice"),
             handler: () => {
@@ -387,7 +427,7 @@
         });
         ensureActionButton(actions, {
             className: INTERNAL_CLASS,
-            label: __("طباعة تقرير التكلفة الداخلي"),
+            label: translate("Print internal cost report"),
             primary: false,
             visible: can(frm, "view_costs") && !frm.is_new() && can(frm, "print_internal_cost_report"),
             handler: () => {

@@ -10,12 +10,12 @@
     const AMENDMENT_KEY = "__almdina_whatsapp_amendment";
     const STATUS_METHOD = "almdina_erp.almdina_erp.services.whatsapp_service.get_whatsapp_delivery_status";
     const SEND_METHOD = "almdina_erp.almdina_erp.services.whatsapp_service.send_order_measurements";
-    const CONFIRM_MESSAGE = "هل تريد إرسال ملف القياسات للزبون؟";
-    const AMENDMENT_CONFIRM_MESSAGE = "هل تريد إرسال تعديلات القياسات للزبون؟";
-    const DISCONNECTED_MESSAGE = "لن يتم إرسال رسالة واتساب لأن الجلسة غير متصلة.";
-    const SAVE_FIRST_MESSAGE = "احفظ الطلب أولاً ثم أرسل جدول القياسات.";
-    const BUTTON_ACTION_LABEL = "إرسال القياسات عبر واتساب";
-    const BUTTON_LABEL_AMENDMENT = "إرسال تعديلات القياسات عبر واتساب";
+    const CONFIRM_MESSAGE = "Send the measurements file to the customer?";
+    const AMENDMENT_CONFIRM_MESSAGE = "Send the measurement changes to the customer?";
+    const DISCONNECTED_MESSAGE = "A WhatsApp message will not be sent because the session is disconnected.";
+    const SAVE_FIRST_MESSAGE = "Save the order first, then send the measurements table.";
+    const BUTTON_ACTION_LABEL = "Send measurements via WhatsApp";
+    const BUTTON_LABEL_AMENDMENT = "Send measurement changes via WhatsApp";
     const BUTTON_CLASS = "dco-whatsapp-send-measurements";
 
     let offerQueued = false;
@@ -80,12 +80,23 @@
         return isSavedOrder(frm);
     }
 
+    function translateCopy(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        return String(message == null ? "" : message);
+    }
+
     function confirmMessage(frm) {
-        return isAmendmentContext(frm) ? AMENDMENT_CONFIRM_MESSAGE : CONFIRM_MESSAGE;
+        return translateCopy(isAmendmentContext(frm) ? AMENDMENT_CONFIRM_MESSAGE : CONFIRM_MESSAGE);
     }
 
     function buttonLabel(frm) {
-        return isAmendmentContext(frm) ? BUTTON_LABEL_AMENDMENT : BUTTON_ACTION_LABEL;
+        return translateCopy(isAmendmentContext(frm) ? BUTTON_LABEL_AMENDMENT : BUTTON_ACTION_LABEL);
     }
 
     function canShowSendButton(frm) {
@@ -103,15 +114,15 @@
     function rpc(method, args) {
         const api = frontend();
         if (api && typeof api.rpc === "function") {
-            return api.rpc(method, args, { freeze: true, freezeMessage: "جاري إرسال واتساب..." });
+            return api.rpc(method, args, { freeze: true, freezeMessage: translateCopy("Sending WhatsApp…") });
         }
-        return Promise.reject(new Error("تعذر الاتصال بالخادم."));
+        return Promise.reject(new Error(translateCopy("Could not reach the server.")));
     }
 
     function sendMeasurements(frm) {
         const orderName = String(frm && frm.doc && frm.doc.name || "").trim();
         if (!orderName) {
-            frappe.msgprint("تعذر تحديد الطلب لإرسال القياسات.");
+            frappe.msgprint(translateCopy("Could not identify the order for sending measurements."));
             return Promise.resolve(null);
         }
         return rpc(SEND_METHOD, {
@@ -121,17 +132,17 @@
             const payload = result || {};
             const ok = payload.ok !== false && payload.code !== "document_failed";
             frappe.show_alert({
-                message: payload.message || (ok ? "تم إرسال جدول القياسات إلى الزبون عبر واتساب." : "تعذر إرسال ملف القياسات."),
+                message: payload.message || translateCopy(ok ? "The measurements table was sent to the customer via WhatsApp." : "Could not send the measurements file."),
                 indicator: ok ? "green" : "orange",
             }, 8);
             if (!ok && payload.message) {
-                frappe.msgprint({ title: "إرسال واتساب", message: payload.message, indicator: "orange" });
+                frappe.msgprint({ title: translateCopy("WhatsApp send"), message: payload.message, indicator: "orange" });
             }
             return payload;
         }).catch(error => {
             frappe.msgprint({
-                title: "تعذر إرسال واتساب",
-                message: errorMessage(error, "حدثت مشكلة أثناء إرسال جدول القياسات."),
+                title: translateCopy("Could not send WhatsApp"),
+                message: errorMessage(error, translateCopy("Something went wrong while sending the measurements table.")),
                 indicator: "red",
             });
             return null;
@@ -147,8 +158,8 @@
             const snapshot = status || {};
             if (!snapshot.working) {
                 frappe.msgprint({
-                    title: "واتساب",
-                    message: snapshot.reason || DISCONNECTED_MESSAGE,
+                    title: translateCopy("WhatsApp"),
+                    message: snapshot.reason || translateCopy(DISCONNECTED_MESSAGE),
                     indicator: "orange",
                 });
                 return;
@@ -158,8 +169,8 @@
             });
         }).catch(error => {
             frappe.msgprint({
-                title: "واتساب",
-                message: errorMessage(error, DISCONNECTED_MESSAGE),
+                title: translateCopy("WhatsApp"),
+                message: errorMessage(error, translateCopy(DISCONNECTED_MESSAGE)),
                 indicator: "orange",
             });
         });
@@ -176,8 +187,8 @@
         if (!canShowSendButton(frm)) return false;
         if (isDirty(frm)) {
             frappe.msgprint({
-                title: "واتساب",
-                message: SAVE_FIRST_MESSAGE,
+                title: translateCopy("WhatsApp"),
+                message: translateCopy(SAVE_FIRST_MESSAGE),
                 indicator: "orange",
             });
             return false;

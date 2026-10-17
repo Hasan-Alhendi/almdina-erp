@@ -1,0 +1,252 @@
+/*
+ * Almdina ERP — shared presentation patterns.
+ * Scope: composition chrome only (page intro, toolbar, summary, section header).
+ * Feature CSS may extend layout geometry but must not redefine this visual grammar.
+ * See docs/design_system/TOKEN_OWNERSHIP.md.
+ */
+
+/* Page intro (replaces divergent Feature heroes as the shared brand grammar) */
+.almdina-ui .alm-page-intro {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: flex-start;
+    gap: var(--alm-space-5);
+    padding: var(--alm-space-5);
+    margin-bottom: var(--alm-space-3);
+    border: 1px solid var(--alm-card-border, var(--alm-border));
+    border-radius: var(--alm-radius-card);
+    background: var(--alm-card, var(--alm-surface));
+    box-shadow: var(--alm-shadow-card);
+    overflow: hidden;
+}
+
+.almdina-ui .alm-page-intro--accented {
+    padding-inline-start: calc(var(--alm-space-5) + 4px);
+}
+
+.almdina-ui .alm-page-intro--accented::before {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    width: 4px;
+    background: var(--alm-primary);
+}
+
+.almdina-ui .alm-page-intro__copy {
+    min-width: 0;
+}
+
+.almdina-ui .alm-page-intro__eyebrow {
+    display: block;
+    margin-bottom: var(--alm-space-1);
+    color: var(--alm-text-subtle);
+    font-size: var(--alm-font-size-xs);
+    font-weight: var(--alm-font-weight-heavy);
+    letter-spacing: 0.02em;
+}
+
+.almdina-ui .alm-page-intro h2,
+.almdina-ui .alm-page-intro__title {
+    margin: 0;
+    color: var(--alm-text-strong);
+    font-size: clamp(var(--alm-font-size-xl), 2vw, var(--alm-font-size-2xl));
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    line-height: var(--alm-line-height-tight);
+}
+
+.almdina-ui .alm-page-intro p,
+.almdina-ui .alm-page-intro__description {
+    margin: var(--alm-space-2) 0 0;
+    max-width: 52rem;
+    color: var(--alm-text-subtle);
+    font-size: var(--alm-font-size-sm);
+    line-height: var(--alm-line-height-relaxed);
+    font-weight: var(--alm-font-weight-semibold);
+}
+
+.almdina-ui .alm-page-intro__meta {
+    min-width: 140px;
+    padding: var(--alm-space-3) var(--alm-space-4);
+    border: 1px solid color-mix(in srgb, var(--alm-primary) 22%, transparent);
+    border-radius: var(--alm-radius-md);
+    background: color-mix(in srgb, var(--alm-card, #fff) 86%, transparent);
+    text-align: center;
+}
+
+.almdina-ui .alm-page-intro__meta span {
+    display: block;
+    color: var(--alm-text-subtle);
+    font-size: var(--alm-font-size-xs);
+    font-weight: var(--alm-font-weight-bold);
+}
+
+.almdina-ui .alm-page-intro__meta strong {
+    display: block;
+    margin-top: var(--alm-space-1);
+    color: var(--alm-text-strong);
+    font-size: var(--alm-font-size-2xl);
+    line-height: var(--alm-line-height-tight);
+}
+
+/* Section header */
+.almdina-ui .alm-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--alm-space-4);
+    padding: var(--alm-space-1) var(--alm-space-1);
+}
+
+.almdina-ui .alm-section-header__kicker {
+    display: block;
+    color: var(--alm-text-muted);
+    font-size: var(--alm-font-size-xs);
+    font-weight: var(--alm-font-weight-heavy);
+}
+
+.almdina-ui .alm-section-header__title {
+    display: block;
+    margin-top: var(--alm-space-1);
+    color: var(--alm-text-strong);
+    font-size: var(--alm-font-size-md);
+    font-weight: 900;
+}
+
+.almdina-ui .alm-section-header__note {
+    color: var(--alm-text-subtle);
+    font-size: var(--alm-font-size-xs);
+    font-weight: var(--alm-font-weight-bold);
+}
+
+/* Toolbar / filter bar chrome */
+.almdina-ui .alm-toolbar,
+.almdina-ui .alm-filterbar {
+    display: grid;
+    gap: var(--alm-space-3);
+    align-items: end;
+    padding: var(--alm-space-3);
+    border: 1px solid var(--alm-card-border, var(--alm-border));
+    border-radius: var(--alm-radius-md);
+    background: color-mix(in srgb, var(--alm-card, #fff) 94%, transparent);
+    box-shadow: var(--alm-shadow-sm);
+}
+
+.almdina-ui .alm-toolbar__heading,
+.almdina-ui .alm-filterbar__heading {
+    min-width: 0;
+}
+
+.almdina-ui .alm-toolbar__kicker,
+.almdina-ui .alm-filterbar__kicker {
+    display: block;
+    color: var(--alm-primary);
+    font-size: var(--alm-font-size-xs);
+    font-weight: var(--alm-font-weight-heavy);
+    letter-spacing: 0.02em;
+}
+
+.almdina-ui .alm-toolbar__heading strong,
+.almdina-ui .alm-filterbar__heading strong {
+    display: block;
+    margin-top: 2px;
+    color: var(--alm-text-strong);
+    font-size: var(--alm-font-size-sm);
+    font-weight: 900;
+}
+
+/* Summary cards */
+.almdina-ui .alm-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--alm-space-2);
+}
+
+.almdina-ui .alm-summary-card {
+    padding: var(--alm-space-3) var(--alm-space-2) var(--alm-space-2);
+    border: 1px solid var(--alm-border-subtle);
+    border-radius: var(--alm-radius-sm);
+    background: var(--alm-surface-muted);
+    text-align: center;
+}
+
+.almdina-ui .alm-summary-card strong,
+.almdina-ui .alm-summary-card b,
+.almdina-ui .alm-summary-card__value {
+    display: block;
+    color: var(--alm-text-strong);
+    font-size: var(--alm-font-size-lg);
+    line-height: 1.05;
+    font-weight: 900;
+}
+
+.almdina-ui .alm-summary-card span,
+.almdina-ui .alm-summary-card__label {
+    display: block;
+    margin-top: var(--alm-space-1);
+    color: var(--alm-text-subtle);
+    font-size: var(--alm-font-size-xs);
+    font-weight: var(--alm-font-weight-bold);
+}
+
+.almdina-ui .alm-summary-card[data-tone="success"] {
+    border-color: var(--alm-status-success-border);
+    background: var(--alm-status-success-bg);
+}
+
+.almdina-ui .alm-summary-card[data-tone="success"] strong,
+.almdina-ui .alm-summary-card[data-tone="success"] b,
+.almdina-ui .alm-summary-card[data-tone="success"] .alm-summary-card__value {
+    color: var(--alm-status-success-fg);
+}
+
+.almdina-ui .alm-summary-card[data-tone="warning"] {
+    border-color: var(--alm-status-warning-border);
+    background: var(--alm-status-warning-bg);
+}
+
+.almdina-ui .alm-summary-card[data-tone="warning"] strong,
+.almdina-ui .alm-summary-card[data-tone="warning"] b,
+.almdina-ui .alm-summary-card[data-tone="warning"] .alm-summary-card__value {
+    color: var(--alm-status-warning-fg);
+}
+
+.almdina-ui .alm-summary-card[data-tone="danger"] {
+    border-color: var(--alm-status-danger-border);
+    background: var(--alm-status-danger-bg);
+}
+
+.almdina-ui .alm-summary-card[data-tone="danger"] strong,
+.almdina-ui .alm-summary-card[data-tone="danger"] b,
+.almdina-ui .alm-summary-card[data-tone="danger"] .alm-summary-card__value {
+    color: var(--alm-status-danger-fg);
+}
+
+.almdina-ui .alm-summary-card[data-tone="info"] {
+    border-color: var(--alm-status-info-border);
+    background: var(--alm-status-info-bg);
+}
+
+.almdina-ui .alm-summary-card[data-tone="info"] strong,
+.almdina-ui .alm-summary-card[data-tone="info"] b,
+.almdina-ui .alm-summary-card[data-tone="info"] .alm-summary-card__value {
+    color: var(--alm-status-info-fg);
+}
+
+@media (max-width: 900px) {
+    .almdina-ui .alm-page-intro {
+        grid-template-columns: 1fr;
+    }
+
+    .almdina-ui .alm-summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 430px) {
+    .almdina-ui .alm-summary-grid {
+        grid-template-columns: 1fr;
+    }
+}

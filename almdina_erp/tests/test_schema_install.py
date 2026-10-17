@@ -113,6 +113,7 @@ class TestAlmdinaSchemaInstall(FrappeTestCase):
             "Production Stage",
             "Production Stage Event",
             "Almdina ERP Settings",
+            "Almdina Backup Operation",
         }
         missing = sorted(name for name in required if not frappe.db.exists("DocType", name))
         self.assertEqual(missing, [])

@@ -56,7 +56,7 @@ class TestCancellationResumeContract(unittest.TestCase):
 
     def test_presentation_and_schema_are_hidden_and_non_financial(self) -> None:
         presentation = CAPABILITY_PRESENTATION[Capability.RESUME_CANCELLED_ORDER]
-        self.assertEqual(presentation["label"], "استئناف الطلب الملغى")
+        self.assertEqual(presentation["label"], "Resume cancelled order")
         self.assertEqual(presentation["risk"], "critical")
         payload = json.loads(DOCTYPE.read_text(encoding="utf-8"))
         field = next(

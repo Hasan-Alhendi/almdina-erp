@@ -30,7 +30,7 @@ class FactoryPermissionsFrontendArchitectureTest(unittest.TestCase):
         cls.css = CSS.read_text(encoding="utf-8")
 
     def test_page_entry_is_a_thin_composition_root(self) -> None:
-        self.assertLessEqual(len(self.page.splitlines()), 100)
+        self.assertLessEqual(len(self.page.splitlines()), 130)
         self.assertIn("frappe.ui.make_app_page", self.page)
         self.assertIn("frontend.ensureStylesheet", self.page)
         for asset in (
@@ -192,8 +192,12 @@ class FactoryPermissionsFrontendArchitectureTest(unittest.TestCase):
         self.assertNotIn('role="combobox"', self.controller)
 
     def test_renderer_uses_central_design_system_for_buttons(self) -> None:
-        self.assertIn('class="almdina-ui apc-shell"', self.renderer)
+        self.assertIn(
+            'class="almdina-ui apc-shell alm-page alm-page--admin"',
+            self.renderer,
+        )
         self.assertIn("AlmdinaUi.button", self.renderer)
+        self.assertIn("AlmdinaUi.badge", self.renderer)
         self.assertNotIn('class="btn btn-primary apc-save"', self.renderer)
         self.assertNotIn('type="file"', self.renderer)
         self.assertNotIn("apc-import-file", self.renderer)

@@ -57,7 +57,7 @@ def test_notes_toolbar_registration_uses_stable_frappe_action_identity() -> None
         1,
     )[0]
 
-    assert 'const NOTES_ACTION_LABEL = __("الملاحظات");' in ux
+    assert 'const NOTES_ACTION_LABEL = __("Notes");' in ux
     assert "frm.add_custom_button(NOTES_ACTION_LABEL" in ensure_body
     assert "frm.add_custom_button(buttonLabel(frm)" not in ux
     assert "Frappe indexes custom actions by the label" in ensure_body

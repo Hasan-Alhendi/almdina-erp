@@ -70,6 +70,14 @@ has_permission = {
 boot_session = "almdina_erp.boot.boot_session"
 extend_bootinfo = ["almdina_erp.boot.extend_bootinfo"]
 
+scheduler_events = {
+    "cron": {
+        "* * * * *": [
+            "almdina_erp.almdina_erp.services.backup_restore_service.scheduled_backup_tick",
+        ],
+    },
+}
+
 override_whitelisted_methods = {
     "frappe.desk.desktop.get_desktop_page":
         "almdina_erp.workspace_api.get_desktop_page",

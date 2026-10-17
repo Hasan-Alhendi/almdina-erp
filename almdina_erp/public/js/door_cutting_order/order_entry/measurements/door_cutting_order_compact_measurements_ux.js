@@ -3,21 +3,11 @@
 
     const STYLE_ID = "dco-compact-measurements-css";
     const EDGE_LABELS = {
-        edge_width_top: { ar: "قشاط العرض العلوي", en: "Top width edge" },
-        edge_width_bottom: { ar: "قشاط العرض السفلي", en: "Bottom width edge" },
-        edge_long_right: { ar: "قشاط الطول الأيمن", en: "Right long edge" },
-        edge_long_left: { ar: "قشاط الطول الأيسر", en: "Left long edge" },
+        edge_width_top: "Top width edge",
+        edge_width_bottom: "Bottom width edge",
+        edge_long_right: "Right long edge",
+        edge_long_left: "Left long edge",
     };
-
-    function isArabic() {
-        const lang = String(
-            (frappe.boot && frappe.boot.lang) ||
-            (frappe.boot && frappe.boot.user && frappe.boot.user.language) ||
-            document.documentElement.lang ||
-            ""
-        ).toLowerCase();
-        return lang === "ar" || lang.startsWith("ar-");
-    }
 
     function installStyles() {
         if (document.getElementById(STYLE_ID)) return;
@@ -30,7 +20,7 @@
             .dco-fast-entry-shell{width:100% !important;max-width:100% !important;}
 
             .dco-fast-entry-toolbar{
-                flex-wrap:nowrap !important;
+                flex-wrap:wrap !important;
                 align-items:center !important;
                 padding:5px 8px !important;
                 gap:6px 9px !important;
@@ -38,7 +28,7 @@
             }
 
             .dco-fast-entry-toolbar .dco-fast-help{
-                flex:1 1 auto !important;
+                flex:1 1 12rem !important;
                 min-width:0;
                 display:flex !important;
                 align-items:center !important;
@@ -49,6 +39,7 @@
                 line-height:1.2 !important;
                 white-space:nowrap;
                 overflow:hidden;
+                text-align:start;
             }
 
             .dco-fast-entry-toolbar .dco-measurement-title{
@@ -58,6 +49,7 @@
                 overflow:hidden;
                 text-overflow:ellipsis;
                 white-space:nowrap;
+                text-align:start;
             }
 
             /* The header now intentionally contains only the table title and actions. */
@@ -67,13 +59,17 @@
             }
 
             .dco-fast-entry-toolbar>.dco-measurement-table-actions{
-                order:100;
-                direction:ltr;
+                position:static;
+                inset:auto;
+                transform:none;
+                direction:inherit;
                 display:flex;
+                flex-wrap:wrap;
                 align-items:center;
                 gap:5px !important;
                 width:auto !important;
                 margin:0 !important;
+                margin-inline-start:auto !important;
                 flex:0 0 auto;
             }
 
@@ -312,8 +308,8 @@
             }
 
             @media (max-width:760px){
-                .dco-fast-entry-toolbar{flex-wrap:nowrap !important;align-items:center !important;}
-                .dco-fast-entry-toolbar .dco-fast-help{flex:1 1 auto !important;overflow:hidden;}
+                .dco-fast-entry-toolbar{flex-wrap:wrap !important;align-items:center !important;}
+                .dco-fast-entry-toolbar .dco-fast-help{flex:1 1 12rem !important;overflow:hidden;}
             }
 
             @media (max-width:720px){
@@ -325,7 +321,10 @@
                 .dco-fast-table .dco-col-rotate{width:39px !important;}
                 .dco-fast-table .dco-col-edges{width:148px !important;}
                 .dco-fast-table .dco-col-edge-type{width:94px !important;}
-                .dco-fast-entry-toolbar>.dco-measurement-table-actions{width:auto !important;}
+                .dco-fast-entry-toolbar>.dco-measurement-table-actions{
+                    width:auto !important;
+                    margin-inline-start:0 !important;
+                }
                 .dco-fast-entry-toolbar .dco-measurement-table-actions .dco-toolbar-icon-button{flex:0 0 32px !important;}
             }
         `;
@@ -336,86 +335,46 @@
         const help = root.querySelector(".dco-fast-help");
         if (!help || help.dataset.compactHelpReady === "1") return;
         help.dataset.compactHelpReady = "1";
-        help.innerHTML = `<b class="dco-measurement-title">${isArabic() ? "جدول قياسات الدرف" : "Door Measurements Table"}</b>`;
-    }
-
-    function toolbarIconSvg(kind) {
-        if (kind === "print") {
-            return `
-                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                    <path d="M7 8V4h10v4"></path>
-                    <path d="M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"></path>
-                    <path d="M7 14h10v6H7z"></path>
-                    <path d="M17.5 11.5h.01"></path>
-                </svg>`;
-        }
-        return `
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <path d="M8 3H3v5"></path>
-                <path d="M16 3h5v5"></path>
-                <path d="M21 16v5h-5"></path>
-                <path d="M3 16v5h5"></path>
-            </svg>`;
+        help.innerHTML = `<b class="dco-measurement-title">${__("Door Measurements Table")}</b>`;
     }
 
     function compactReadonlyNote(root) {
         const note = root.querySelector(".dco-fast-readonly-note");
         if (!note || note.dataset.compactReadonlyReady === "1") return;
-        const label = isArabic() ? "الطلب للعرض فقط" : "Order is read only";
+        const label = __("Order is read only");
         note.dataset.compactReadonlyReady = "1";
         note.title = label;
         note.setAttribute("aria-label", label);
-        note.textContent = isArabic() ? "🔒 عرض فقط" : "🔒 Read only";
+        note.textContent = __("🔒 Read only");
     }
 
     function polishToolbar(root) {
+        // Print/expand icon content is owned by measurement_actions_ux.ensureActions.
+        // This layer only keeps the read-only note compact and never rewrites button HTML.
         compactReadonlyNote(root);
-        const actions = root.querySelector(".dco-measurement-table-actions");
-        if (!actions) return;
-
-        const printButton = actions.querySelector(".dco-print-measurements");
-        if (printButton && printButton.dataset.compactIconReady !== "1") {
-            const label = isArabic() ? "طباعة القياسات" : "Print measurements";
-            printButton.dataset.compactIconReady = "1";
-            printButton.classList.add("dco-toolbar-icon-button");
-            printButton.title = label;
-            printButton.setAttribute("aria-label", label);
-            printButton.innerHTML = toolbarIconSvg("print");
-        }
-
-        const openButton = actions.querySelector(".dco-open-measurements-window");
-        if (openButton && openButton.dataset.compactIconReady !== "1") {
-            const label = isArabic() ? "تكبير جدول الإدخال" : "Expand measurement table";
-            const title = isArabic() ? "فتح جدول الإدخال في نافذة مستقلة" : "Open measurement table in a separate window";
-            openButton.dataset.compactIconReady = "1";
-            openButton.classList.add("dco-toolbar-icon-button");
-            openButton.title = title;
-            openButton.setAttribute("aria-label", label);
-            openButton.innerHTML = toolbarIconSvg("expand");
-        }
     }
 
     function decorateControls(root) {
         Object.entries(EDGE_LABELS).forEach(([fieldname, labels]) => {
             root.querySelectorAll(`button.dco-check-toggle[data-check-field="${fieldname}"]`).forEach(button => {
-                const label = isArabic() ? labels.ar : labels.en;
+                const label = __(labels);
                 button.title = label;
                 button.setAttribute("aria-label", label);
             });
         });
 
         root.querySelectorAll("button.dco-rotate-toggle").forEach(button => {
-            const label = isArabic() ? "السماح بتدوير الدرفة" : "Allow piece rotation";
+            const label = __("Allow piece rotation");
             button.title = label;
             button.setAttribute("aria-label", label);
         });
 
         root.querySelectorAll("input.dco-fast-input[data-field='notes']").forEach(input => {
-            if (!input.placeholder) input.placeholder = isArabic() ? "ملاحظات..." : "Notes...";
+            if (!input.placeholder) input.placeholder = __("Notes...");
         });
 
         const sketchHeader = root.querySelector("th.dco-col-sketch");
-        if (sketchHeader) sketchHeader.textContent = isArabic() ? "الشكل" : "Shape";
+        if (sketchHeader) sketchHeader.textContent = __("Shape");
     }
 
     function observeRows(frm, root) {

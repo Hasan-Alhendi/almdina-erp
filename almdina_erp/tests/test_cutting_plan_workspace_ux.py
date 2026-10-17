@@ -78,9 +78,9 @@ def test_plan_workspace_commands_are_contextual_to_the_active_plan():
     assert 'class="dco-plan-context-actions-host"' in tabs
     assert "renderContextActions(frm, wrapper)" in tabs
     assert "frm.__almdina_active_plan_tab" in context
-    assert "استبدال الخطة المعتمدة بخطة النظام" in context
-    assert "استبدال الخطة المعتمدة بالخطة المرفوعة" in context
-    assert "إلغاء اعتماد الخطة" in context
+    assert "Replace the approved plan with the system plan" in context
+    assert "Replace the approved plan with the uploaded plan" in context
+    assert "Cancel plan approval" in context
     assert "export_order_dxf(frm.doc.name, activeTab(frm), {" in context
     assert "tabs.printActivePlan(frm)" in context
     assert "frappe.call" not in context
@@ -98,7 +98,7 @@ def test_plan_source_tabs_lock_during_edit_inside_render_not_after_it():
     assert "isPlanEditing(frm) && allowed.includes(\"System\")" in tabs
     assert "isSourceTabLocked(frm, nextTab)" in tabs
     assert "lockSourceTabs(frm, wrapper)" in tabs
-    assert "احفظ أو ألغِ تعديل خطة القص قبل تغيير مصدر الخطة" in tabs
+    assert "Save or cancel the cutting plan edit before changing the plan source." in tabs
     render_dual = tabs[tabs.index("function renderDualTabs(frm)"):]
     assert render_dual.index("buildTabBar(frm, selectedTab, tabs)") < render_dual.index(
         "lockSourceTabs(frm, wrapper)"
@@ -118,5 +118,5 @@ def test_uploaded_tab_keeps_accepted_plan_and_warns_on_order_mismatch():
     assert "function uploadedPlanMismatched(frm)" in tabs
     assert "function mismatchBanner()" in tabs
     assert "dco-uploaded-plan-mismatch-banner" in tabs
-    assert "بيانات هذا الطلب تم تعديلها وأصبحت الخطة غير مطابقة" in tabs
-    assert "الخطة غير مطابقة للطلب" in tabs
+    assert "This order was changed and the plan no longer matches" in tabs
+    assert "The plan does not match the order" in tabs

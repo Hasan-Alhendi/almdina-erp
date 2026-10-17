@@ -273,6 +273,15 @@ def test_plan_fingerprint_changes_when_qty_or_board_size_changes():
     assert plan_input_fingerprint(order, plan) != first
 
 
+def test_plan_fingerprint_changes_when_full_door_double_changes_physical_quantity():
+    order = _order(_piece(qty=2, extra_full_door_double=0))
+    plan = _plan()
+    first = plan_input_fingerprint(order, plan)
+
+    order.pieces[0].extra_full_door_double = 1
+    assert plan_input_fingerprint(order, plan) != first
+
+
 def test_legacy_stored_hash_stays_fresh_when_only_board_label_changes():
     from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import (
         _legacy_plan_input_fingerprint,
@@ -340,14 +349,14 @@ def test_strict_dxf_import_proxy_preserves_extra_overlay_addon_flags():
         width_deduction_mm=Decimal("0"),
         length_deduction_mm=Decimal("1.000"),
         allow_rotation=0,
-        piece_type="Extra",
+        piece_type="Regular",
         qty=1,
         side_profiles=(),
     )
     proxy = _proxy_order(
         _order(
             _piece(
-                piece_type="Extra",
+                piece_type="Regular",
                 extra_liner=1,
                 extra_back_groove=1,
                 extra_recessed_handle_cutout=1,

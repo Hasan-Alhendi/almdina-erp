@@ -11,6 +11,36 @@
         "Bottom Right": "Bottom Left",
         "Bottom Left": "Top Left",
     };
+    const MIRRORED_POSITION = {
+        "Top Left": "Top Right",
+        "Top Right": "Top Left",
+        "Bottom Left": "Bottom Right",
+        "Bottom Right": "Bottom Left",
+    };
+    const ROTATED_SIDE = {
+        width_top: "long_left",
+        width_bottom: "long_right",
+        long_right: "width_top",
+        long_left: "width_bottom",
+    };
+    const MIRRORED_SIDE = {
+        width_top: "width_top",
+        width_bottom: "width_bottom",
+        long_left: "long_right",
+        long_right: "long_left",
+    };
+    const SIDE_FLAG = {
+        width_top: "edge_width_top",
+        width_bottom: "edge_width_bottom",
+        long_left: "edge_long_left",
+        long_right: "edge_long_right",
+    };
+    const SIDE_OVERRIDE = {
+        width_top: "edge_width_top_type_override",
+        width_bottom: "edge_width_bottom_type_override",
+        long_left: "edge_long_left_type_override",
+        long_right: "edge_long_right_type_override",
+    };
     const POSITIONS = [
         { value: "Top Right", ar: "أعلى اليمين", en: "Top right" },
         { value: "Top Left", ar: "أعلى اليسار", en: "Top left" },
@@ -23,16 +53,6 @@
         "Bottom Right": Object.freeze(["edge_width_bottom", "edge_long_right"]),
         "Bottom Left": Object.freeze(["edge_width_bottom", "edge_long_left"]),
     });
-
-    function isArabic() {
-        const lang = String(
-            (frappe.boot && frappe.boot.lang) ||
-            (frappe.boot && frappe.boot.user && frappe.boot.user.language) ||
-            document.documentElement.lang ||
-            ""
-        ).toLowerCase();
-        return lang === "ar" || lang.startsWith("ar-");
-    }
 
     function num(value) {
         const result = Number(String(value ?? "").replace(",", "."));
@@ -67,9 +87,9 @@
         return isLShaped(piece) ? "L" : "diagonal";
     }
 
-    function typeLabel(piece, arabic = isArabic()) {
-        if (isLShaped(piece)) return arabic ? "زاوية L" : "L-shaped corner";
-        return arabic ? "الزاوية الكسر" : "Clipped corner";
+    function typeLabel(piece) {
+        if (isLShaped(piece)) return __("L-shaped corner");
+        return __("Clipped corner");
     }
 
     function typeIcon(piece) {
@@ -202,6 +222,92 @@
         };
     }
 
+    function mirrorFlag(value) {
+        if (value === undefined || value === null || value === false || value === 0 || value === "0") {
+            return false;
+        }
+        if (value === true || value === 1 || value === "1") return true;
+        return null;
+    }
+
+    function permuteSideState(state, mapping) {
+        const nextFlags = {};
+        const nextOverrides = {};
+        const nextProfiles = {};
+        Object.keys(mapping).forEach((side) => {
+            const sourceSide = mapping[side];
+            nextFlags[SIDE_FLAG[side]] = state.flags[SIDE_FLAG[sourceSide]] ? 1 : 0;
+            nextOverrides[SIDE_OVERRIDE[side]] = state.overrides[SIDE_OVERRIDE[sourceSide]] || "";
+            if (state.profiles[sourceSide]) {
+                nextProfiles[side] = { ...state.profiles[sourceSide], side };
+            }
+        });
+        return {
+            flags: nextFlags,
+            overrides: nextOverrides,
+            profiles: nextProfiles,
+        };
+    }
+
+    function pieceForQuarterTurns(piece, quarterTurns, mirrored) {
+        const turns = Number(quarterTurns);
+        const source = piece || {};
+        const reflected = mirrorFlag(mirrored === undefined ? source.corner_mirrored : mirrored);
+        if (reflected === null) return null;
+        if (!Number.isInteger(turns) || turns < 0 || turns > 3) return null;
+        if (!POSITIONS.some(item => item.value === source.clipped_corner_position)) return null;
+        let position = source.clipped_corner_position;
+        let cutWidth = num(source.clipped_corner_width_cm);
+        let cutLength = num(source.clipped_corner_length_cm);
+        if (!(cutWidth > 0) || !(cutLength > 0)) return null;
+        let sideState = {
+            flags: {
+                edge_width_top: source.edge_width_top ? 1 : 0,
+                edge_width_bottom: source.edge_width_bottom ? 1 : 0,
+                edge_long_left: source.edge_long_left ? 1 : 0,
+                edge_long_right: source.edge_long_right ? 1 : 0,
+            },
+            overrides: {
+                edge_width_top_type_override: source.edge_width_top_type_override || "",
+                edge_width_bottom_type_override: source.edge_width_bottom_type_override || "",
+                edge_long_left_type_override: source.edge_long_left_type_override || "",
+                edge_long_right_type_override: source.edge_long_right_type_override || "",
+            },
+            profiles: (source.edge_profiles && typeof source.edge_profiles === "object")
+                ? source.edge_profiles
+                : {},
+        };
+        // Reflection is applied once, before rotation, matching the domain matcher.
+        // The DXF contour is already drawn; this copy only renames its edges.
+        if (reflected) {
+            position = MIRRORED_POSITION[position] || position;
+            sideState = permuteSideState(sideState, MIRRORED_SIDE);
+        }
+        for (let index = 0; index < turns; index += 1) {
+            position = ROTATED_POSITION[position] || position;
+            const nextCutWidth = cutLength;
+            cutLength = cutWidth;
+            cutWidth = nextCutWidth;
+            sideState = permuteSideState(sideState, ROTATED_SIDE);
+        }
+        return {
+            ...source,
+            rotated: false,
+            clipped_corner_position: position,
+            clipped_corner_width_cm: cutWidth,
+            clipped_corner_length_cm: cutLength,
+            edge_width_top: sideState.flags.edge_width_top,
+            edge_width_bottom: sideState.flags.edge_width_bottom,
+            edge_long_left: sideState.flags.edge_long_left,
+            edge_long_right: sideState.flags.edge_long_right,
+            edge_width_top_type_override: sideState.overrides.edge_width_top_type_override,
+            edge_width_bottom_type_override: sideState.overrides.edge_width_bottom_type_override,
+            edge_long_left_type_override: sideState.overrides.edge_long_left_type_override,
+            edge_long_right_type_override: sideState.overrides.edge_long_right_type_override,
+            edge_profiles: sideState.profiles,
+        };
+    }
+
     function breakAdjacentSides(position) {
         return BREAK_ADJACENT_SIDES[position || DEFAULT_POSITION] || BREAK_ADJACENT_SIDES[DEFAULT_POSITION];
     }
@@ -210,7 +316,17 @@
         const row = piece || {};
         if (!isCornerCut(row)) {
             row.edge_break = 0;
+            row.edge_break_only = 0;
             return row;
+        }
+        if (!isClipped(row)) row.edge_break_only = 0;
+        if (row.edge_break) row.edge_break_only = 0;
+        if (isClipped(row) && row.edge_break_only) {
+            const adjacentSides = breakAdjacentSides(row.clipped_corner_position);
+            if (adjacentSides.every((side) => Boolean(row[side]))) {
+                row.edge_break = 1;
+                row.edge_break_only = 0;
+            }
         }
         // L-shaped corner strap is only the inner notch; outer sides stay free.
         if (!row.edge_break || isLShaped(row)) return row;
@@ -221,26 +337,104 @@
         return row;
     }
 
+    function toggleEdgeSelection(piece, fieldname) {
+        const draft = piece || {};
+        draft[fieldname] = draft[fieldname] ? 0 : 1;
+        if (draft[fieldname] && fieldname === "edge_break") {
+            draft.edge_break_only = 0;
+        } else if (draft[fieldname] && fieldname === "edge_break_only") {
+            draft.edge_break = 0;
+        }
+        return applyEdgeBreakPolicy(draft);
+    }
+
     function locksAdjacentSidesForBreak(piece) {
         return Boolean(isClipped(piece) && piece && piece.edge_break);
     }
 
-    function breakEdgeLabel(piece, arabic = isArabic()) {
-        if (isLShaped(piece)) return arabic ? "قشاط الزاوية" : "Corner";
-        return arabic ? "قشاط الكسر" : "Break";
+    function breakEdgeLabel(piece) {
+        if (isLShaped(piece)) return __("Corner banding");
+        return __("Full corner path");
     }
 
-    function insetPoint(point, centerX, centerY, amount) {
-        const dx = centerX - point[0];
-        const dy = centerY - point[1];
+    function offsetBoundaryLine(start, end, amount, orientation) {
+        const dx = end[0] - start[0];
+        const dy = end[1] - start[1];
         const length = Math.hypot(dx, dy) || 1;
-        return [point[0] + (dx / length) * amount, point[1] + (dy / length) * amount];
+        const normalX = orientation * -dy / length * amount;
+        const normalY = orientation * dx / length * amount;
+        return {
+            start: [start[0] + normalX, start[1] + normalY],
+            end: [end[0] + normalX, end[1] + normalY],
+        };
     }
 
-    function insetPath(path, width, height, amount) {
-        const centerX = width / 2;
-        const centerY = height / 2;
-        return (path || []).map((point) => insetPoint(point, centerX, centerY, amount));
+    function lineIntersection(first, second) {
+        const x1 = first.start[0];
+        const y1 = first.start[1];
+        const x2 = first.end[0];
+        const y2 = first.end[1];
+        const x3 = second.start[0];
+        const y3 = second.start[1];
+        const x4 = second.end[0];
+        const y4 = second.end[1];
+        const denominator = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+        if (Math.abs(denominator) < 1e-9) return null;
+        const firstCross = x1 * y2 - y1 * x2;
+        const secondCross = x3 * y4 - y3 * x4;
+        return [
+            (firstCross * (x3 - x4) - (x1 - x2) * secondCross) / denominator,
+            (firstCross * (y3 - y4) - (y1 - y2) * secondCross) / denominator,
+        ];
+    }
+
+    function insetBoundary(boundary, amount) {
+        const polygon = boundary || [];
+        if (polygon.length < 3) return polygon.map(point => [...point]);
+        const signedArea = polygon.reduce((total, point, index) => {
+            const next = polygon[(index + 1) % polygon.length];
+            return total + point[0] * next[1] - next[0] * point[1];
+        }, 0);
+        // Screen coordinates make clockwise polygons positive. Their interior
+        // lies to the right of every directed boundary edge.
+        const orientation = signedArea >= 0 ? 1 : -1;
+        const lines = polygon.map((point, index) => offsetBoundaryLine(
+            point,
+            polygon[(index + 1) % polygon.length],
+            amount,
+            orientation
+        ));
+        const maxMiter = amount * 6;
+        return polygon.map((point, index) => {
+            const previous = lines[(index + lines.length - 1) % lines.length];
+            const next = lines[index];
+            const intersection = lineIntersection(previous, next);
+            if (intersection && Math.hypot(intersection[0] - point[0], intersection[1] - point[1]) <= maxMiter) {
+                return { miter: intersection, incoming: intersection, outgoing: intersection };
+            }
+            // Extremely shallow corners use a bevel instead of an unbounded
+            // miter. Both points still lie on their exact parallel edge.
+            return { miter: null, incoming: previous.end, outgoing: next.start };
+        });
+    }
+
+    function insetBoundaryPath(path, boundary, inset) {
+        const indices = (path || []).map((point) => boundary.findIndex(
+            candidate => Math.abs(candidate[0] - point[0]) < 1e-7
+                && Math.abs(candidate[1] - point[1]) < 1e-7
+        ));
+        if (indices.some(index => index < 0)) return (path || []).map(point => [...point]);
+        const forward = indices.length < 2
+            || (indices[1] - indices[0] + boundary.length) % boundary.length === 1;
+        return indices.flatMap((index, pathIndex) => {
+            const join = inset[index];
+            if (join.miter) return [join.miter];
+            if (pathIndex === 0) return [forward ? join.outgoing : join.incoming];
+            if (pathIndex === indices.length - 1) return [forward ? join.incoming : join.outgoing];
+            return forward
+                ? [join.incoming, join.outgoing]
+                : [join.outgoing, join.incoming];
+        });
     }
 
     function clippedEdgePaths(piece, viewportWidth = 100, viewportHeight = 100) {
@@ -252,6 +446,7 @@
             left: null,
             right: null,
             break: null,
+            breakOnly: null,
         };
         if (!isCornerCut(piece) || !width || !height) return empty;
 
@@ -323,12 +518,18 @@
         };
         const byPosition = cutStyle(piece) === "L" ? lByPosition : diagonalByPosition;
         const source = byPosition[config.position] || byPosition[DEFAULT_POSITION];
+        const boundary = points(piece, width, height);
+        const inset = insetBoundary(boundary, amount);
+        const insetPath = path => insetBoundaryPath(path, boundary, inset);
         return {
-            top: insetPath(source.top, width, height, amount),
-            bottom: insetPath(source.bottom, width, height, amount),
-            left: insetPath(source.left, width, height, amount),
-            right: insetPath(source.right, width, height, amount),
-            break: insetPath(source.break, width, height, amount),
+            top: insetPath(source.top),
+            bottom: insetPath(source.bottom),
+            left: insetPath(source.left),
+            right: insetPath(source.right),
+            break: insetPath(source.break),
+            breakOnly: isClipped(piece)
+                ? insetPath(source.break.slice(1, 3))
+                : null,
         };
     }
 
@@ -348,7 +549,7 @@
             .join(" ");
         const polyline = (path, extraClass = "") => {
             if (inheritStroke) {
-                return `<polyline class="dco-edge-line-svg ${extraClass}" fill="none" vector-effect="non-scaling-stroke" points="${toPoints(path)}"/>`;
+                return `<polyline class="dco-edge-line-svg ${extraClass}" fill="none" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="${toPoints(path)}"/>`;
             }
             return `<polyline class="dco-edge-line-svg ${extraClass}" fill="none" stroke="${color}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="${toPoints(path)}"/>`;
         };
@@ -365,6 +566,9 @@
         if (flags.right && paths.right) lines.push(polyline(paths.right));
         if (piece && piece.edge_break && paths.break) {
             lines.push(polyline(paths.break, "dco-edge-break-svg"));
+        }
+        if (piece && piece.edge_break_only && paths.breakOnly) {
+            lines.push(polyline(paths.breakOnly, "dco-edge-break-only-svg"));
         }
         return lines.join("");
     }
@@ -430,9 +634,9 @@
         ]);
     }
 
-    function positionLabel(value, arabic = isArabic()) {
+    function positionLabel(value) {
         const item = POSITIONS.find(position => position.value === value) || POSITIONS[0];
-        return arabic ? item.ar : item.en;
+        return __(item.en);
     }
 
     function prepareRow(row) {
@@ -454,27 +658,26 @@
         return changed;
     }
 
-    function summary(row, arabic = isArabic()) {
+    function summary(row) {
         if (!isCornerCut(row)) return "";
         const config = baseConfig(row);
         const size = config.remainingWidth && config.remainingLength
-            ? `${rounded(config.remainingWidth)}×${rounded(config.remainingLength)} ${arabic ? "سم متبقي" : "cm remaining"}`
-            : (arabic ? "بعد إدخال المقاس" : "after dimensions");
-        return `${positionLabel(config.position, arabic)} · ${size}`;
+            ? `${rounded(config.remainingWidth)}×${rounded(config.remainingLength)} ${__("cm remaining")}`
+            : __("after dimensions");
+        return `${positionLabel(config.position)} · ${size}`;
     }
 
-    function edgeSelectionSummary(row, arabic = isArabic()) {
+    function edgeSelectionSummary(row) {
         if (!isCornerCut(row)) return "";
         const labels = [];
-        if (row.edge_width_top) labels.push(arabic ? "أعلى" : "Top");
-        if (row.edge_width_bottom) labels.push(arabic ? "أسفل" : "Bottom");
-        if (row.edge_long_right) labels.push(arabic ? "يمين" : "Right");
-        if (row.edge_long_left) labels.push(arabic ? "يسار" : "Left");
-        if (row.edge_break) labels.push(isLShaped(row) ? (arabic ? "الزاوية" : "Corner") : (arabic ? "الكسر" : "Break"));
-        if (!labels.length) {
-            return arabic ? "بدون قشاط" : "No banding";
-        }
-        return labels.join(arabic ? " · " : " · ");
+        if (row.edge_width_top) labels.push(__("Top edge"));
+        if (row.edge_width_bottom) labels.push(__("Bottom edge"));
+        if (row.edge_long_right) labels.push(__("Right edge"));
+        if (row.edge_long_left) labels.push(__("Left edge"));
+        if (row.edge_break) labels.push(isLShaped(row) ? __("Corner") : __("Break"));
+        if (row.edge_break_only) labels.push(__("Break only"));
+        if (!labels.length) return __("No banding");
+        return labels.join(" · ");
     }
 
     function cloneEdgeDraft(row) {
@@ -484,6 +687,7 @@
             edge_long_right: row.edge_long_right ? 1 : 0,
             edge_long_left: row.edge_long_left ? 1 : 0,
             edge_break: row.edge_break ? 1 : 0,
+            edge_break_only: row.edge_break_only ? 1 : 0,
             clipped_corner_position: row.clipped_corner_position || DEFAULT_POSITION,
             piece_type: pieceType(row) || CLIPPED_TYPE,
         };
@@ -492,7 +696,7 @@
     function edgeToggleHtml(field, label, draft, locked, extra = "") {
         const checked = Boolean(draft[field]);
         return `
-            <button type="button" class="dco-corner-edge-toggle ${checked ? "is-checked" : ""} ${locked ? "is-break-locked" : ""} ${extra}" data-corner-edge="${field}" aria-pressed="${checked ? "true" : "false"}" ${locked ? "disabled" : ""} title="${locked ? (isArabic() ? "مشمول في قشاط الكسر" : "Included in break banding") : ""}">
+            <button type="button" class="dco-corner-edge-toggle ${checked ? "is-checked" : ""} ${locked ? "is-break-locked" : ""} ${extra}" data-corner-edge="${field}" aria-pressed="${checked ? "true" : "false"}" ${locked ? "disabled" : ""} title="${locked ? (__("Included in break banding")) : ""}">
                 <span class="dco-check-mark">${checked ? "✓" : ""}</span>
                 <span>${label}</span>
             </button>`;
@@ -506,13 +710,14 @@
             : new Set();
         return `
             <div data-corner-edges-section>
-                <div class="dco-corner-section-label">${isArabic() ? "3. اختر جهات القشاط على الشكل" : "3. Choose banding sides on the shape"}</div>
+                <div class="dco-corner-section-label">${__("3. Choose banding sides on the shape")}</div>
                 <div class="dco-corner-edges has-break" data-corner-edges>
-                    ${edgeToggleHtml("edge_width_top", isArabic() ? "عرض أعلى" : "Top", draft, locked.has("edge_width_top"))}
-                    ${edgeToggleHtml("edge_width_bottom", isArabic() ? "عرض أسفل" : "Bottom", draft, locked.has("edge_width_bottom"))}
-                    ${edgeToggleHtml("edge_long_right", isArabic() ? "طول يمين" : "Right", draft, locked.has("edge_long_right"))}
-                    ${edgeToggleHtml("edge_long_left", isArabic() ? "طول يسار" : "Left", draft, locked.has("edge_long_left"))}
+                    ${edgeToggleHtml("edge_width_top", __("Top"), draft, locked.has("edge_width_top"))}
+                    ${edgeToggleHtml("edge_width_bottom", __("Bottom"), draft, locked.has("edge_width_bottom"))}
+                    ${edgeToggleHtml("edge_long_right", __("Right"), draft, locked.has("edge_long_right"))}
+                    ${edgeToggleHtml("edge_long_left", __("Left"), draft, locked.has("edge_long_left"))}
                     ${edgeToggleHtml("edge_break", breakEdgeLabel(row), draft, false, "dco-edge-break-toggle")}
+                    ${isClipped(row) ? edgeToggleHtml("edge_break_only", __("Break only"), draft, false, "dco-edge-break-toggle") : ""}
                 </div>
             </div>`;
     }
@@ -524,13 +729,145 @@
         root.querySelectorAll("[data-corner-edge]").forEach((button) => {
             const field = button.dataset.cornerEdge;
             const checked = Boolean(draft[field]);
-            const isLocked = field !== "edge_break" && locked.has(field);
+            const isLocked = !["edge_break", "edge_break_only"].includes(field) && locked.has(field);
             button.classList.toggle("is-checked", checked);
             button.classList.toggle("is-break-locked", isLocked);
             button.setAttribute("aria-pressed", checked ? "true" : "false");
             button.disabled = isLocked;
             const mark = button.querySelector(".dco-check-mark");
             if (mark) mark.textContent = checked ? "✓" : "";
+        });
+    }
+
+    function cornerValueUpdates(config, edgeDraft) {
+        const updates = [
+            ["clipped_corner_position", config.position],
+            ["clipped_corner_width_cm", rounded(config.cutWidth)],
+            ["clipped_corner_length_cm", rounded(config.cutLength)],
+            ["edge_width_top", edgeDraft.edge_width_top],
+            ["edge_width_bottom", edgeDraft.edge_width_bottom],
+            ["edge_long_right", edgeDraft.edge_long_right],
+            ["edge_long_left", edgeDraft.edge_long_left],
+        ];
+        if (locksAdjacentSidesForBreak(edgeDraft)) {
+            breakAdjacentSides(config.position).forEach((side) => {
+                updates.push([`${side}_type_override`, ""]);
+            });
+        }
+        // Keep a deterministic trigger order inside the atomic model update:
+        // clear the opposite mode before notifying handlers about the selected one.
+        if (edgeDraft.edge_break) {
+            updates.push(["edge_break_only", 0], ["edge_break", 1]);
+        } else if (edgeDraft.edge_break_only) {
+            updates.push(["edge_break", 0], ["edge_break_only", 1]);
+        } else {
+            updates.push(["edge_break", 0], ["edge_break_only", 0]);
+        }
+        return updates;
+    }
+
+    function captureRowLocator(row) {
+        return {
+            reference: row,
+            doctype: row && row.doctype,
+            name: row && row.name,
+            pieceInstanceId: String(row && row.piece_instance_id || "").trim(),
+        };
+    }
+
+    function mappedRowName(name) {
+        const names = frappe.model && frappe.model.new_names || {};
+        let current = String(name || "").trim();
+        const visited = new Set();
+        while (current && names[current] && !visited.has(current)) {
+            visited.add(current);
+            current = String(names[current] || "").trim();
+        }
+        return current;
+    }
+
+    function resolveCurrentRow(frm, locator) {
+        const rows = frm && frm.doc && Array.isArray(frm.doc.pieces)
+            ? frm.doc.pieces
+            : [];
+        if (!locator || !rows.length) return null;
+
+        let current = null;
+        if (locator.pieceInstanceId) {
+            current = rows.find((candidate) => (
+                String(candidate && candidate.piece_instance_id || "").trim()
+                === locator.pieceInstanceId
+            )) || null;
+        }
+        if (!current && locator.reference && rows.includes(locator.reference)) {
+            current = locator.reference;
+        }
+        if (!current) {
+            const names = new Set([
+                locator.name,
+                locator.reference && locator.reference.name,
+                mappedRowName(locator.name),
+                mappedRowName(locator.reference && locator.reference.name),
+            ].map((value) => String(value || "").trim()).filter(Boolean));
+            current = rows.find((candidate) => names.has(String(candidate && candidate.name || "").trim())) || null;
+        }
+        if (!current) return null;
+
+        locator.reference = current;
+        locator.doctype = current.doctype || locator.doctype;
+        locator.name = current.name || locator.name;
+        locator.pieceInstanceId = String(
+            current.piece_instance_id || locator.pieceInstanceId || ""
+        ).trim();
+        return current;
+    }
+
+    async function persistCornerValues(frm, locator, config, edgeDraft) {
+        const current = resolveCurrentRow(frm, locator);
+        if (!current) throw new Error("The corner piece is no longer available in the current order.");
+        // Frappe assigns every key from an object-form set_value before running
+        // any field handler. Commit one final snapshot so handlers never observe
+        // edge_break and edge_break_only in a transient/previous combination.
+        const values = Object.fromEntries(cornerValueUpdates(config, edgeDraft));
+        await frappe.model.set_value(current.doctype, current.name, values);
+        return resolveCurrentRow(frm, locator);
+    }
+
+    const pendingApplyStates = new WeakMap();
+
+    function applyState(frm) {
+        let state = pendingApplyStates.get(frm);
+        if (!state) {
+            state = { tail: Promise.resolve({ ok: true, value: null }), failure: null };
+            pendingApplyStates.set(frm, state);
+        }
+        return state;
+    }
+
+    function queueCornerApply(frm, task) {
+        const state = applyState(frm);
+        const queued = state.tail.then(async () => {
+            try {
+                const value = await task();
+                state.failure = null;
+                return { ok: true, value };
+            } catch (error) {
+                state.failure = error;
+                return { ok: false, error };
+            }
+        });
+        state.tail = queued;
+        return queued;
+    }
+
+    function flushPendingCornerApply(frm) {
+        const state = pendingApplyStates.get(frm);
+        if (!state) return Promise.resolve();
+        const pending = state.tail;
+        return pending.then((result) => {
+            if (state.tail !== pending) return flushPendingCornerApply(frm);
+            if (state.failure) throw state.failure;
+            return result && result.value;
         });
     }
 
@@ -543,36 +880,36 @@
             .dco-clipped-corner-modal .modal-content{border:0;border-radius:18px;overflow:hidden;box-shadow:0 24px 80px rgba(15,23,42,.24)}
             .dco-clipped-corner-modal .modal-body{padding:0!important;background:var(--subtle-fg,#f6f8fa)}
             .dco-corner-editor{direction:rtl;display:grid;grid-template-columns:minmax(0,1.18fr) minmax(290px,.82fr);min-height:430px}
-            .dco-corner-preview-panel{padding:24px;background:linear-gradient(150deg,#f8fbff,#edf5fb);display:flex;flex-direction:column;gap:14px}
-            .dco-corner-preview-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
-            .dco-corner-preview-head strong{display:block;font-size:16px;color:#172033}
-            .dco-corner-preview-head span{font-size:11px;color:#64748b;line-height:1.6}
-            .dco-corner-badge{display:inline-flex!important;align-items:center;gap:5px;padding:5px 9px;border-radius:999px;background:#fff3d6;color:#825314!important;border:1px solid #efd39b;font-weight:800;white-space:nowrap}
-            .dco-corner-preview{flex:1;min-height:280px;border:1px solid #d7e2ea;border-radius:16px;background:#fff;display:flex;align-items:center;justify-content:center;padding:18px;box-shadow:0 8px 28px rgba(15,23,42,.06)}
-            .dco-corner-preview svg{width:100%;height:100%;min-height:240px;overflow:visible}
-            .dco-corner-controls{padding:21px 20px;background:var(--card-bg,#fff);border-right:1px solid var(--border-color,#e2e8f0);display:flex;flex-direction:column;gap:16px}
-            .dco-corner-section-label{font-size:11px;font-weight:900;color:#475569;margin-bottom:7px}
-            .dco-corner-position-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
-            .dco-corner-position{border:1px solid var(--border-color,#d9e0e6);border-radius:11px;background:var(--card-bg,#fff);min-height:66px;padding:7px;cursor:pointer;display:flex;align-items:center;gap:8px;text-align:right;color:inherit}
-            .dco-corner-position:hover{border-color:#d09a35;background:#fffaf0}
-            .dco-corner-position.is-active{border-color:#c68519;background:#fff5de;color:#754900;box-shadow:0 0 0 2px rgba(198,133,25,.12)}
-            .dco-corner-position svg{width:38px;height:38px;flex:0 0 38px}
-            .dco-corner-position span{font-size:11px;font-weight:800;line-height:1.4}
-            .dco-corner-input-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
-            .dco-corner-input-wrap label{display:block;font-size:10px;font-weight:800;color:#64748b;margin-bottom:5px}
-            .dco-corner-input-shell{display:flex;align-items:center;border:1px solid var(--border-color,#d9e0e6);border-radius:10px;overflow:hidden;background:#fff}
-            .dco-corner-input-shell input{width:100%;border:0!important;box-shadow:none!important;min-height:40px;padding:7px 10px;font-size:16px;font-weight:800;text-align:center}
-            .dco-corner-input-shell span{padding:0 9px;color:#64748b;font-size:10px;border-right:1px solid #e7ebef;white-space:nowrap}
-            .dco-corner-equal{align-self:flex-start;border:0;background:transparent;color:var(--alm-primary, #172033);font-size:11px;font-weight:800;padding:0;cursor:pointer}
-            .dco-corner-edges{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
-            .dco-corner-edges.has-break{grid-template-columns:repeat(3,minmax(0,1fr))}
-            .dco-corner-edge-toggle{border:1px solid var(--border-color,#d9e0e6);border-radius:10px;background:var(--card-bg,#fff);min-height:40px;padding:7px 8px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;font-size:11px;font-weight:800;color:#334155}
-            .dco-corner-edge-toggle .dco-check-mark{width:14px;text-align:center}
-            .dco-corner-edge-toggle.is-checked{background:#172033;border-color:#172033;color:#fff}
-            .dco-corner-edge-toggle.is-break-locked{opacity:.45;cursor:not-allowed}
-            .dco-corner-edge-toggle.dco-edge-break-toggle.is-checked{background:#b42318;border-color:#912018}
-            .dco-corner-help{margin-top:auto;border-radius:11px;padding:10px 11px;background:#f8fafc;border:1px solid #e2e8f0;font-size:10px;line-height:1.65;color:#52606d}
-            .dco-corner-help.is-error{background:#fff3f1;border-color:#efb5ad;color:#9d2e23}
+            .dco-corner-editor .dco-corner-preview-panel{padding:24px;background:linear-gradient(150deg,#f8fbff,#edf5fb);display:flex;flex-direction:column;gap:14px}
+            .dco-corner-editor .dco-corner-preview-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+            .dco-corner-editor .dco-corner-preview-head strong{display:block;font-size:16px;color:#172033}
+            .dco-corner-editor .dco-corner-preview-head span{font-size:11px;color:#64748b;line-height:1.6}
+            .dco-corner-editor .dco-corner-badge{display:inline-flex!important;align-items:center;gap:5px;padding:5px 9px;border-radius:999px;background:#fff3d6;color:#825314!important;border:1px solid #efd39b;font-weight:800;white-space:nowrap}
+            .dco-corner-editor .dco-corner-preview{flex:1;min-height:280px;border:1px solid #d7e2ea;border-radius:16px;background:#fff;display:flex;align-items:center;justify-content:center;padding:18px;box-shadow:0 8px 28px rgba(15,23,42,.06)}
+            .dco-corner-editor .dco-corner-preview svg{width:100%;height:100%;min-height:240px;overflow:visible}
+            .dco-corner-editor .dco-corner-controls{padding:21px 20px;background:var(--card-bg,#fff);border-right:1px solid var(--border-color,#e2e8f0);display:flex;flex-direction:column;gap:16px}
+            .dco-corner-editor .dco-corner-section-label{font-size:11px;font-weight:900;color:#475569;margin-bottom:7px}
+            .dco-corner-editor .dco-corner-position-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+            .dco-corner-editor .dco-corner-position{border:1px solid var(--border-color,#d9e0e6);border-radius:11px;background:var(--card-bg,#fff);min-height:66px;padding:7px;cursor:pointer;display:flex;align-items:center;gap:8px;text-align:right;color:inherit}
+            .dco-corner-editor .dco-corner-position:hover{border-color:#d09a35;background:#fffaf0}
+            .dco-corner-editor .dco-corner-position.is-active{border-color:#c68519;background:#fff5de;color:#754900;box-shadow:0 0 0 2px rgba(198,133,25,.12)}
+            .dco-corner-editor .dco-corner-position svg{width:38px;height:38px;flex:0 0 38px}
+            .dco-corner-editor .dco-corner-position span{font-size:11px;font-weight:800;line-height:1.4}
+            .dco-corner-editor .dco-corner-input-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+            .dco-corner-editor .dco-corner-input-wrap label{display:block;font-size:10px;font-weight:800;color:#64748b;margin-bottom:5px}
+            .dco-corner-editor .dco-corner-input-shell{display:flex;align-items:center;border:1px solid var(--border-color,#d9e0e6);border-radius:10px;overflow:hidden;background:#fff}
+            .dco-corner-editor .dco-corner-input-shell input{width:100%;border:0!important;box-shadow:none!important;min-height:40px;padding:7px 10px;font-size:16px;font-weight:800;text-align:center}
+            .dco-corner-editor .dco-corner-input-shell span{padding:0 9px;color:#64748b;font-size:10px;border-right:1px solid #e7ebef;white-space:nowrap}
+            .dco-corner-editor .dco-corner-equal{align-self:flex-start;border:0;background:transparent;color:var(--alm-primary, #172033);font-size:11px;font-weight:800;padding:0;cursor:pointer}
+            .dco-corner-editor .dco-corner-edges{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+            .dco-corner-editor .dco-corner-edges.has-break{grid-template-columns:repeat(3,minmax(0,1fr))}
+            .dco-corner-editor .dco-corner-edge-toggle{border:1px solid var(--border-color,#d9e0e6);border-radius:10px;background:var(--card-bg,#fff);min-height:40px;padding:7px 8px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;font-size:11px;font-weight:800;color:#334155}
+            .dco-corner-editor .dco-corner-edge-toggle .dco-check-mark{width:14px;text-align:center}
+            .dco-corner-editor .dco-corner-edge-toggle.is-checked{background:#172033;border-color:#172033;color:#fff}
+            .dco-corner-editor .dco-corner-edge-toggle.is-break-locked{opacity:.45;cursor:not-allowed}
+            .dco-corner-editor .dco-corner-edge-toggle.dco-edge-break-toggle.is-checked{background:#b42318;border-color:#912018}
+            .dco-corner-editor .dco-corner-help{margin-top:auto;border-radius:11px;padding:10px 11px;background:#f8fafc;border:1px solid #e2e8f0;font-size:10px;line-height:1.65;color:#52606d}
+            .dco-corner-editor .dco-corner-help.is-error{background:#fff3f1;border-color:#efb5ad;color:#9d2e23}
             .dco-corner-edges-summary{display:flex;flex-direction:column;align-items:stretch;gap:3px;width:100%;border:1px dashed rgba(176,112,28,.4);border-radius:10px;background:#fffaf0;color:#8a5700;padding:6px 8px;font-size:10px;font-weight:800;line-height:1.35;cursor:pointer;text-align:right;opacity:.85}
             .dco-corner-edges-summary:hover{background:#fff3d6;border-color:rgba(176,112,28,.65);opacity:1}
             .dco-corner-edges-summary[disabled]{opacity:.7;cursor:default}
@@ -582,7 +919,7 @@
             .dco-fast-table tr.dco-clipped-corner-row:focus-within td{background:rgba(224,151,24,.085)!important}
             .dco-special-sketch-button.is-clipped-corner{border-style:solid!important;border-color:rgba(198,133,25,.5)!important;background:#fff7e6!important;color:#8a5700!important}
             .dco-special-sketch-button.is-clipped-corner>span:first-child{font-size:19px!important}
-            @media(max-width:720px){.dco-clipped-corner-modal .modal-dialog{width:100vw!important;margin:0!important}.dco-corner-editor{display:flex;flex-direction:column}.dco-corner-preview-panel{padding:14px}.dco-corner-preview{min-height:220px}.dco-corner-preview svg{min-height:190px}.dco-corner-controls{border:0;border-top:1px solid #e2e8f0;padding:15px}}
+            @media(max-width:720px){.dco-clipped-corner-modal .modal-dialog{width:100vw!important;margin:0!important}.dco-corner-editor{display:flex;flex-direction:column}.dco-corner-editor .dco-corner-preview-panel{padding:14px}.dco-corner-editor .dco-corner-preview{min-height:220px}.dco-corner-editor .dco-corner-preview svg{min-height:190px}.dco-corner-editor .dco-corner-controls{border:0;border-top:1px solid #e2e8f0;padding:15px}}
         `;
         document.head.appendChild(style);
     }
@@ -610,37 +947,37 @@
                 <section class="dco-corner-preview-panel">
                     <div class="dco-corner-preview-head">
                         <div>
-                            <strong>${isArabic() ? "معاينة الدرفة داخل اللوح" : "Piece preview on the board"}</strong>
-                            <span>${isArabic() ? "المقاس الخارجي" : "Outer size"}: ${rounded(dimensions.width)} × ${rounded(dimensions.length)} ${isArabic() ? "سم" : "cm"}</span>
+                            <strong>${__("Piece preview on the board")}</strong>
+                            <span>${__("Outer size")}: ${rounded(dimensions.width)} × ${rounded(dimensions.length)} ${__("cm")}</span>
                         </div>
-                        <span class="dco-corner-badge">${typeIcon(row)} ${isArabic() ? "مسار قص حقيقي" : "Real cut path"}</span>
+                        <span class="dco-corner-badge">${typeIcon(row)} ${__("Real cut path")}</span>
                     </div>
                     <div class="dco-corner-preview" data-corner-preview></div>
                 </section>
                 <section class="dco-corner-controls">
                     <div>
-                        <div class="dco-corner-section-label">${isArabic() ? "1. اختر مكان الزاوية" : "1. Choose the corner"}</div>
+                        <div class="dco-corner-section-label">${__("1. Choose the corner")}</div>
                         <div class="dco-corner-position-grid">
                             ${POSITIONS.map(position => `
                                 <button type="button" class="dco-corner-position ${position.value === config.position ? "is-active" : ""}" data-position="${position.value}">
                                     ${cornerIcon(position.value, row)}
-                                    <span>${isArabic() ? position.ar : position.en}</span>
+                                    <span>${__(position.en)}</span>
                                 </button>`).join("")}
                         </div>
                     </div>
                     <div>
-                        <div class="dco-corner-section-label">${isArabic() ? "2. أدخل الجزء المتبقي من كل ضلع" : "2. Enter the remaining length of each side"}</div>
+                        <div class="dco-corner-section-label">${__("2. Enter the remaining length of each side")}</div>
                         <div class="dco-corner-input-grid">
                             <div class="dco-corner-input-wrap">
-                                <label>${isArabic() ? "المتبقي على ضلع العرض" : "Remaining on width side"}</label>
-                                <div class="dco-corner-input-shell"><input type="number" min="0.1" step="0.1" data-corner-remaining="width" value="${rounded(config.remainingWidth)}"><span>${isArabic() ? "سم" : "cm"}</span></div>
+                                <label>${__("Remaining on width side")}</label>
+                                <div class="dco-corner-input-shell"><input type="number" min="0.1" step="0.1" data-corner-remaining="width" value="${rounded(config.remainingWidth)}"><span>${__("cm")}</span></div>
                             </div>
                             <div class="dco-corner-input-wrap">
-                                <label>${isArabic() ? "المتبقي على ضلع الطول" : "Remaining on length side"}</label>
-                                <div class="dco-corner-input-shell"><input type="number" min="0.1" step="0.1" data-corner-remaining="length" value="${rounded(config.remainingLength)}"><span>${isArabic() ? "سم" : "cm"}</span></div>
+                                <label>${__("Remaining on length side")}</label>
+                                <div class="dco-corner-input-shell"><input type="number" min="0.1" step="0.1" data-corner-remaining="length" value="${rounded(config.remainingLength)}"><span>${__("cm")}</span></div>
                             </div>
                         </div>
-                        <button type="button" class="dco-corner-equal">${isArabic() ? "جعل الجزءين المتبقيين متساويين" : "Make both remaining lengths equal"}</button>
+                        <button type="button" class="dco-corner-equal">${__("Make both remaining lengths equal")}</button>
                     </div>
                     ${edgeControlsHtml(row)}
                     <div class="dco-corner-help" data-corner-help></div>
@@ -664,24 +1001,16 @@
 
     function validationMessage(config) {
         if (!config.width || !config.length) {
-            return isArabic()
-                ? "أدخل عرض الدرفة وطولها أولًا، ثم افتح إعداد الزاوية."
-                : "Enter the piece width and length before editing the corner.";
+            return __("Enter the piece width and length before editing the corner.");
         }
         if (config.remainingWidth <= 0 || config.remainingLength <= 0) {
-            return isArabic()
-                ? "يجب أن يكون الجزء المتبقي من كل ضلع أكبر من صفر."
-                : "The remaining length of each side must be greater than zero.";
+            return __("The remaining length of each side must be greater than zero.");
         }
         if (config.remainingWidth >= config.width) {
-            return isArabic()
-                ? "الجزء المتبقي على ضلع العرض يجب أن يكون أصغر من عرض الدرفة."
-                : "The remaining width-side length must be smaller than the piece width.";
+            return __("The remaining width-side length must be smaller than the piece width.");
         }
         if (config.remainingLength >= config.length) {
-            return isArabic()
-                ? "الجزء المتبقي على ضلع الطول يجب أن يكون أصغر من طول الدرفة."
-                : "The remaining length-side length must be smaller than the piece length.";
+            return __("The remaining length-side length must be smaller than the piece length.");
         }
         return "";
     }
@@ -693,9 +1022,7 @@
         const help = root.querySelector("[data-corner-help]");
         if (help) {
             help.classList.toggle("is-error", Boolean(message));
-            help.textContent = message || (isArabic()
-                ? "المعاينة تمثل الشكل بعد القص. يبقى المستطيل الخارجي هو المساحة المحجوزة الآمنة أثناء توزيع القطع."
-                : "The preview is the final cut shape. The outer rectangle remains the safe reserved area during nesting.");
+            help.textContent = message || (__("The preview is the final cut shape. The outer rectangle remains the safe reserved area during nesting."));
         }
         if (!preview) return;
 
@@ -718,6 +1045,7 @@
             edge_long_right: edgeDraft.edge_long_right,
             edge_long_left: edgeDraft.edge_long_left,
             edge_break: edgeDraft.edge_break,
+            edge_break_only: edgeDraft.edge_break_only,
         };
         const frame = previewFrame(sample.width_cm, sample.length_cm);
         const polygon = points(sample, frame.width, frame.height)
@@ -732,15 +1060,15 @@
         const labelX = rounded(frame.x + frame.width / 2);
         const labelY = rounded(frame.y + frame.height / 2);
         preview.innerHTML = `
-            <svg viewBox="0 0 420 280" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${isArabic() ? `معاينة ${typeLabel(row)}` : `${typeLabel(row, false)} preview`}">
+            <svg viewBox="0 0 420 280" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${__("{0} preview", [typeLabel(row)])}">
                 <defs><pattern id="dco-corner-grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" fill="none" stroke="#dfe8ef" stroke-width="1"/></pattern></defs>
                 <rect x="10" y="10" width="400" height="260" rx="12" fill="url(#dco-corner-grid)" stroke="#e2e8f0"/>
                 <rect x="${frame.x}" y="${frame.y}" width="${frame.width}" height="${frame.height}" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="6 4"/>
                 <polygon points="${polygon}" fill="#dff1fb" stroke="#172033" stroke-width="3" stroke-linejoin="round"/>
                 ${edgeMarkup}
-                <text x="${labelX}" y="${labelY - 6}" text-anchor="middle" font-size="18" font-weight="800" fill="#172033">${isArabic() ? "الدرفة" : "PIECE"}</text>
-                <text x="${labelX}" y="${labelY + 14}" text-anchor="middle" font-size="12" fill="#536577">${rounded(config.width)} × ${rounded(config.length)} ${isArabic() ? "سم" : "cm"}</text>
-                <text x="210" y="258" text-anchor="middle" font-size="11" font-weight="700" fill="#9a6207">${positionLabel(config.position)} · ${isArabic() ? "متبقي" : "remaining"} ${rounded(config.remainingWidth)} × ${rounded(config.remainingLength)} ${isArabic() ? "سم" : "cm"}</text>
+                <text x="${labelX}" y="${labelY - 6}" text-anchor="middle" font-size="18" font-weight="800" fill="#172033">${__("PIECE")}</text>
+                <text x="${labelX}" y="${labelY + 14}" text-anchor="middle" font-size="12" fill="#536577">${rounded(config.width)} × ${rounded(config.length)} ${__("cm")}</text>
+                <text x="210" y="258" text-anchor="middle" font-size="11" font-weight="700" fill="#9a6207">${positionLabel(config.position)} · ${__("remaining")} ${rounded(config.remainingWidth)} × ${rounded(config.remainingLength)} ${__("cm")}</text>
             </svg>`;
     }
 
@@ -754,19 +1082,29 @@
 
     function open(frm, row, options = {}) {
         if (!frm || !isCornerCut(row)) return;
-        const dimensions = originalDimensions(row);
+        const locator = captureRowLocator(row);
+        const currentRow = () => resolveCurrentRow(frm, locator);
+        let liveRow = currentRow() || row;
+        const dimensions = originalDimensions(liveRow);
         if (!dimensions.width || !dimensions.length) {
             frappe.msgprint({
-                title: isArabic() ? "أدخل المقاس أولًا" : "Enter dimensions first",
-                message: isArabic()
-                    ? "أدخل عرض الدرفة وطولها أولًا، ثم افتح إعداد الزاوية."
-                    : "Enter the piece width and length before editing the corner.",
+                title: __("Enter dimensions first"),
+                message: __("Enter the piece width and length before editing the corner."),
+                indicator: "orange",
+            });
+            return;
+        }
+        liveRow = currentRow();
+        if (!liveRow || !isCornerCut(liveRow)) {
+            frappe.msgprint({
+                title: __("Could not open corner"),
+                message: __("The piece is no longer in the current measurements table. Reopen it from the table."),
                 indicator: "orange",
             });
             return;
         }
         installStyles();
-        prepareRow(row);
+        prepareRow(liveRow);
         const readOnly = Boolean(options.readOnly);
 
         // Prevent stacked corner dialogs from duplicate click handlers.
@@ -776,66 +1114,78 @@
         }
 
         const dialog = new frappe.ui.Dialog({
-            title: isArabic()
-                ? `${readOnly ? "عرض" : "إعداد"} ${typeLabel(row)} — الدرفة ${row.piece_no || row.idx || ""}`
-                : `${readOnly ? "View" : "Edit"} ${typeLabel(row, false)} — piece ${row.piece_no || row.idx || ""}`,
+            title: __("{0} {1} — {2}", [
+                readOnly ? __("View") : __("Edit"),
+                typeLabel(liveRow),
+                __("Door piece {0}", [liveRow.piece_no || liveRow.idx || ""]),
+            ]),
             fields: [{ fieldname: "corner_editor", fieldtype: "HTML" }],
             primary_action_label: readOnly
-                ? (isArabic() ? "إغلاق" : "Close")
-                : (isArabic() ? "اعتماد الزاوية" : "Apply corner"),
+                ? (__("Close"))
+                : (__("Apply corner")),
             primary_action() {
                 if (readOnly) {
                     dialog.hide();
-                    return;
+                    return Promise.resolve();
                 }
                 const root = dialog.$wrapper.find(".dco-corner-editor").get(0);
                 if (!root) return;
-                const config = readEditor(root, row);
+                const latestRow = currentRow();
+                if (!latestRow) {
+                    frappe.msgprint({
+                        title: __("Could not apply corner"),
+                        message: __("The piece is no longer in the current measurements table. Reopen it from the table."),
+                        indicator: "orange",
+                    });
+                    return Promise.resolve(false);
+                }
+                const config = readEditor(root, latestRow);
                 const message = validationMessage(config);
                 if (message) {
-                    frappe.msgprint({ title: isArabic() ? "راجع مقاس الزاوية" : "Check corner size", message, indicator: "orange" });
-                    return;
+                    frappe.msgprint({ title: __("Check corner size"), message, indicator: "orange" });
+                    return Promise.resolve(false);
                 }
 
                 const edgeDraft = applyEdgeBreakPolicy(
                     Object.assign(
-                        cloneEdgeDraft(row),
+                        cloneEdgeDraft(latestRow),
                         root._cornerEdgeDraft || {},
                         {
                             clipped_corner_position: config.position,
-                            piece_type: pieceType(row) || CLIPPED_TYPE,
+                            piece_type: pieceType(latestRow) || CLIPPED_TYPE,
                         }
                     )
                 );
-                Promise.all([
-                    frappe.model.set_value(row.doctype, row.name, "clipped_corner_position", config.position),
-                    frappe.model.set_value(row.doctype, row.name, "clipped_corner_width_cm", rounded(config.cutWidth)),
-                    frappe.model.set_value(row.doctype, row.name, "clipped_corner_length_cm", rounded(config.cutLength)),
-                    frappe.model.set_value(row.doctype, row.name, "edge_width_top", edgeDraft.edge_width_top),
-                    frappe.model.set_value(row.doctype, row.name, "edge_width_bottom", edgeDraft.edge_width_bottom),
-                    frappe.model.set_value(row.doctype, row.name, "edge_long_right", edgeDraft.edge_long_right),
-                    frappe.model.set_value(row.doctype, row.name, "edge_long_left", edgeDraft.edge_long_left),
-                    frappe.model.set_value(row.doctype, row.name, "edge_break", edgeDraft.edge_break),
-                ]).then(() => {
-                    row.edge_width_top = edgeDraft.edge_width_top;
-                    row.edge_width_bottom = edgeDraft.edge_width_bottom;
-                    row.edge_long_right = edgeDraft.edge_long_right;
-                    row.edge_long_left = edgeDraft.edge_long_left;
-                    row.edge_break = edgeDraft.edge_break;
-                    if (locksAdjacentSidesForBreak(edgeDraft)) {
-                        breakAdjacentSides(config.position).forEach((side) => {
-                            row[`${side}_type_override`] = "";
-                        });
+                if (typeof dialog.disable_primary_action === "function") {
+                    dialog.disable_primary_action();
+                }
+                const apply = queueCornerApply(frm, async () => {
+                    const committedRow = await persistCornerValues(frm, locator, config, edgeDraft);
+                    if (!committedRow) {
+                        throw new Error("The corner piece changed while its values were being applied.");
                     }
-                    applyEdgeBreakPolicy(row);
                     frm.dirty();
                     dialog.hide();
                     refreshFastTable(frm);
                     frappe.show_alert({
-                        message: isArabic() ? "تم اعتماد الزاوية والقشاط وستظهر في خطة القص." : "Corner and banding applied and will appear in the cutting plan.",
+                        message: __("Corner and banding applied and will appear in the cutting plan."),
                         indicator: "green",
                     });
+                    return committedRow;
                 });
+                apply.then((result) => {
+                    if (typeof dialog.enable_primary_action === "function") {
+                        dialog.enable_primary_action();
+                    }
+                    if (!result.ok) {
+                        frappe.msgprint({
+                            title: __("Could not apply corner"),
+                            message: __("The banding changes were not fully applied. They were not saved; try again."),
+                            indicator: "red",
+                        });
+                    }
+                });
+                return apply;
             },
         });
         dialog.$wrapper.addClass("dco-clipped-corner-modal");
@@ -846,14 +1196,18 @@
         dialog.show();
 
         const field = dialog.fields_dict.corner_editor;
-        field.$wrapper.html(editorHtml(row));
+        field.$wrapper.html(editorHtml(liveRow));
         const root = field.$wrapper.find(".dco-corner-editor").get(0);
-        root._cornerEdgeDraft = applyEdgeBreakPolicy(cloneEdgeDraft(row));
+        root._cornerEdgeDraft = applyEdgeBreakPolicy(cloneEdgeDraft(liveRow));
+        const renderCurrentPreview = () => {
+            const latestRow = currentRow();
+            if (latestRow) renderPreview(root, latestRow);
+        };
         if (readOnly) {
             root.querySelectorAll("input,button").forEach(control => {
                 control.disabled = true;
             });
-            renderPreview(root, row);
+            renderCurrentPreview();
             return;
         }
         root.querySelectorAll(".dco-corner-position").forEach(button => {
@@ -864,41 +1218,51 @@
                     root._cornerEdgeDraft.clipped_corner_position = button.dataset.position || DEFAULT_POSITION;
                     applyEdgeBreakPolicy(root._cornerEdgeDraft);
                 }
-                renderPreview(root, row);
+                renderCurrentPreview();
             });
         });
         root.querySelectorAll("[data-corner-remaining]").forEach(input => {
-            input.addEventListener("input", () => renderPreview(root, row));
+            input.addEventListener("input", renderCurrentPreview);
             input.addEventListener("focus", () => input.select());
         });
         root.querySelector(".dco-corner-equal")?.addEventListener("click", () => {
             const widthInput = root.querySelector("[data-corner-remaining='width']");
             const lengthInput = root.querySelector("[data-corner-remaining='length']");
             if (widthInput && lengthInput) lengthInput.value = widthInput.value;
-            renderPreview(root, row);
+            renderCurrentPreview();
         });
         root.querySelectorAll("[data-corner-edge]").forEach((button) => {
             button.addEventListener("click", () => {
                 if (button.disabled || button.classList.contains("is-break-locked")) return;
+                const latestRow = currentRow();
+                if (!latestRow) return;
                 const fieldname = button.dataset.cornerEdge;
-                const draft = root._cornerEdgeDraft || applyEdgeBreakPolicy(cloneEdgeDraft(row));
-                draft[fieldname] = draft[fieldname] ? 0 : 1;
+                const draft = root._cornerEdgeDraft || applyEdgeBreakPolicy(cloneEdgeDraft(latestRow));
+                toggleEdgeSelection(draft, fieldname);
                 draft.clipped_corner_position = (
                     root.querySelector(".dco-corner-position.is-active")?.dataset.position
                     || draft.clipped_corner_position
                     || DEFAULT_POSITION
                 );
-                draft.piece_type = pieceType(row) || CLIPPED_TYPE;
+                draft.piece_type = pieceType(latestRow) || CLIPPED_TYPE;
                 applyEdgeBreakPolicy(draft);
                 root._cornerEdgeDraft = draft;
-                renderPreview(root, row);
+                renderCurrentPreview();
             });
         });
-        renderPreview(root, row);
+        renderCurrentPreview();
     }
 
     function view(frm, row) {
         open(frm, row, { readOnly: true });
+    }
+
+    if (frappe.ui && frappe.ui.form && typeof frappe.ui.form.on === "function") {
+        frappe.ui.form.on("Door Cutting Order", {
+            before_save(frm) {
+                return flushPendingCornerApply(frm);
+            },
+        });
     }
 
     window.AlmdinaClippedCornerGeometry = Object.freeze({
@@ -907,6 +1271,7 @@
         positions: POSITIONS.map(position => position.value),
         breakAdjacentSides,
         applyEdgeBreakPolicy,
+        toggleEdgeSelection,
         locksAdjacentSidesForBreak,
         breakEdgeLabel,
         clippedEdgePaths,
@@ -920,6 +1285,7 @@
         typeIcon,
         baseConfig,
         effectiveConfig,
+        pieceForQuarterTurns,
         remainingFromCut,
         cutFromRemaining,
         clampRemaining,
@@ -933,5 +1299,26 @@
         positionLabel,
         summary,
     });
-    window.AlmdinaClippedCornerEditor = Object.freeze({ open, view, prepare: prepareRow });
+    window.AlmdinaClippedCornerEditor = Object.freeze({
+        open,
+        view,
+        prepare: prepareRow,
+        cornerValueUpdates,
+        ensureStyles: installStyles,
+        resolveChildRow(frm, row) {
+            return resolveCurrentRow(frm, captureRowLocator(row));
+        },
+        queueChildApply: queueCornerApply,
+        commitChildValues(frm, row, values) {
+            const locator = captureRowLocator(row);
+            return (async () => {
+                const current = resolveCurrentRow(frm, locator);
+                if (!current) {
+                    throw new Error("The piece is no longer available in the current order.");
+                }
+                await frappe.model.set_value(current.doctype, current.name, values);
+                return resolveCurrentRow(frm, locator);
+            })();
+        },
+    });
 })();

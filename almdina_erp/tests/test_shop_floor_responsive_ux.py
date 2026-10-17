@@ -111,7 +111,7 @@ def test_worker_list_keeps_assigned_work_first_and_completed_history_last() -> N
     assert "? asRows(activeRows).filter(isMyOperationalStage)" in view_model
     assert "return { assigned, completed, canViewHistory: canViewHistory(context) };" in view_model
     assert "function workerBoardRows(activeRows, context)" in view_model
-    assert 'listSection(__("الطلبات المنتهية"), model.completed, mode, { completed: true })' in renderer
+    assert 'listSection(translate("Completed orders"), model.completed, mode, { completed: true })' in renderer
     assert 'terminal || completed ? "" : quickActionHtml(row, mode)' in renderer
     assert 'completed ? " is-completed" : ""' in renderer
 

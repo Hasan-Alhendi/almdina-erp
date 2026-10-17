@@ -104,7 +104,9 @@ flowchart LR
 
 ### Factory settings
 
-`view_factory_settings`, `edit_factory_cutting_defaults`, `edit_factory_cost_defaults`, `edit_factory_production_controls`, `edit_factory_print_identity`, `manage_whatsapp_session` (إنشاء جلسة المصنع وربطها وإعادة الاتصال)، `edit_whatsapp_messages` (نصوص القياسات والفاتورة وإتمام المراحل). عرض الإعدادات لا يمنح ربط الجلسة، وهوية الطباعة لا تمنح تعديل رسائل واتساب.
+`view_factory_settings`, `edit_factory_cutting_defaults`, `edit_factory_cost_defaults`, `edit_factory_production_controls`, `edit_factory_print_identity`, `manage_whatsapp_session` (إنشاء جلسة المصنع وربطها وإعادة الاتصال)، `edit_whatsapp_messages` (نصوص القياسات والفاتورة وإتمام المراحل)، `manage_backups` (الإعداد والجدولة والنسخ اليدوي واختبار SSH والسجل)، و`restore_backups` (الاستعادة المؤكدة فقط). عرض الإعدادات لا يمنح ربط الجلسة أو إدارة النسخ، و`manage_backups` لا يمنح الاستعادة. لا يحصل `System Manager` على أي منهما تلقائيًا؛ `Administrator` هو الاستثناء الصريح.
+
+اختيار نسخة للاستعادة يكون بمعرّف عملية محلية مكتملة من السجل، وليس بمسار يرسله العميل. يتحقق الخادم من نطاق ملفات النسخة وحجمها وchecksum، وينشئ نسخة أمان قبل استدعاء Frappe Restore. حقول SSH الحساسة من نوع `Password` وتبقى في مخزن Frappe المشفر؛ لا تُعاد قيمها إلى المتصفح أو السجل أو رسائل الخطأ.
 
 ### Master data
 

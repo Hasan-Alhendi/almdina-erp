@@ -70,7 +70,7 @@ def test_edge_color_is_manual_and_never_defaulted_from_edge_profile():
     source = _source(DEFAULTS)
     assert "edge_banding_lookup_service.get_order_edge_banding_options" in source
     assert "loadSafeEdgeOptions(frm);" in source
-    assert "أدخل لون القشاط يدويًا لهذا الطلب." in source
+    assert '__("Enter the edge color manually for this order.")' in source
     assert 'frappe.db.get_value("Edge Banding Type"' not in source
     assert 'frm.set_value("edge_color"' not in source
     assert "apply_edge_color_default" not in source
@@ -81,7 +81,8 @@ def test_edge_color_stays_in_cost_kpi_and_fast_entry_context_without_table_dupli
     source = _source(EDGE_COLOR_UX)
     assert "updateColorKpi(frm, root)" in source
     assert "patchFastEntryContext(frm)" in source
-    assert "لون القشاط:" in source
+    assert '__("Edge color: {0}"' in source
+    assert 'label.textContent.trim() !== "لون القشاط"' in source
     assert "removeLegacyColorDuplicates(root)" in source
     assert "patchMeasurementTable" not in source
     assert "patchInvoiceLines" not in source
@@ -109,7 +110,8 @@ def test_financial_documents_use_server_payload_and_shared_customer_presenter():
 def test_measurement_entry_print_delegates_to_unified_document_presenter():
     source = _source(MEASUREMENT_UX)
     assert "function orderEdgeColor(frm)" in source
-    assert "لون القشاط:" in source
+    assert 'emphasizedValue("Edge color: {0}"' in source
+    assert "translateCopy(template, [marker])" in source
     assert "window.AlmdinaOrderDocumentPrint" in source
     assert 'typeof documents.printMeasurements !== "function"' in source
     assert "return Promise.resolve(documents.printMeasurements(frm))" in source

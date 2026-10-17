@@ -26,7 +26,6 @@ from almdina_erp.almdina_erp.domain.cutting.extra_overlays import (
 )
 from almdina_erp.almdina_erp.domain.orders.extra_addons import (
     EXTRA_OVERLAY_LAYER_BY_KIND,
-    EXTRA_PIECE_TYPE,
     extra_overlay_kind_for_layer,
     extra_overlay_layer_for_kind,
 )
@@ -181,7 +180,7 @@ def serialize_overlay_geometry_mm(
     *,
     closed: bool = False,
 ) -> dict[str, Any]:
-    """Serialize an Extra overlay mark as a path, including open lines."""
+    """Serialize an add-on overlay mark as a path, including open lines."""
 
     return {
         "schema_version": GEOMETRY_SCHEMA_VERSION,
@@ -206,7 +205,7 @@ def serialize_overlay_geometry_from_cm(
 
 
 def parse_overlay_geometry_mm(value: Any, *, field: str = "geometry") -> dict[str, Any]:
-    """Parse an Extra overlay path without requiring a closed cut polygon."""
+    """Parse an add-on overlay path without requiring a closed cut polygon."""
 
     if not isinstance(value, Mapping):
         raise DxfGeometrySnapshotError(f"{field} must be an object.")
@@ -227,7 +226,7 @@ def parse_overlay_geometry_mm(value: Any, *, field: str = "geometry") -> dict[st
 
 
 def parse_overlay_annotation(value: Any, *, field: str = "overlays") -> dict[str, Any]:
-    """Parse one Extra overlay annotation without treating it as a cut hole."""
+    """Parse one add-on overlay annotation without treating it as a cut hole."""
 
     if not isinstance(value, Mapping):
         raise DxfGeometrySnapshotError(f"{field} must be an object.")
@@ -258,11 +257,8 @@ def _canonicalize_piece_overlays(piece: Mapping[str, Any]) -> list[dict[str, Any
     ]
     if not overlays:
         return overlays
-    piece_type = str(piece.get("piece_type") or "Regular")
-    if piece_type != EXTRA_PIECE_TYPE:
-        raise DxfGeometrySnapshotError("overlays are only allowed on Extra pieces.")
     if "geometry" not in piece:
-        raise DxfGeometrySnapshotError("Extra overlays require persisted piece geometry.")
+        raise DxfGeometrySnapshotError("add-on overlays require persisted piece geometry.")
     host = parse_geometry_mm(piece["geometry"])
     for index, overlay in enumerate(overlays):
         overlay_geometry = overlay["geometry"]
@@ -278,7 +274,7 @@ def _canonicalize_piece_overlays(piece: Mapping[str, Any]) -> list[dict[str, Any
             host_margin=OVERLAY_HOST_MARGIN_MM,
         ):
             raise DxfGeometrySnapshotError(
-                f"overlays[{index}] must lie inside the Extra piece outline."
+                f"overlays[{index}] must lie inside the piece outline."
             )
     return overlays
 
@@ -294,10 +290,10 @@ def geometry_mm_to_cm(geometry: PartGeometry) -> PartGeometry:
 
 
 def canonicalize_snapshot_geometries(value: Any) -> Any:
-    """Validate/canonicalize uploaded-DXF piece topology, Extra overlays, and text labels.
+    """Validate/canonicalize uploaded-DXF piece topology, add-on overlays, and text labels.
 
     Other snapshot metadata may legitimately use a generic ``geometry`` key for
-    unrelated features. This owns only placed-piece ``geometry``, Extra
+    unrelated features. This owns only placed-piece ``geometry``, add-on
     ``overlays`` annotations, and optional ``text_labels``, and therefore
     deliberately avoids interpreting geometry outside those fields.
     """

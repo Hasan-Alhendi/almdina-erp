@@ -126,7 +126,9 @@ def test_static_styles_load_with_manifest_and_are_not_injected_at_refresh():
     assert ".dco-sticky-tabs .nav-link.active" in css
     assert ".page-head.dco-stable-actions-head .page-actions" in css
     assert ".page-head.dco-responsive-head .page-actions" in css
-    assert "position:fixed!important" in css
+    assert "position:static!important" in css
+    assert "position: fixed !important" in css
+    assert "margin-inline-start:auto!important" in css
     assert "border-radius" in css
     assert "style.textContent" not in header and "style.textContent" not in toolbar
     assert "node almdina_erp/tests/js/dco_form_presentation_owner.test.js" in text(STATIC_WORKFLOW)

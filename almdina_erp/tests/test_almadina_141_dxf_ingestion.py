@@ -243,7 +243,7 @@ class TestAlmadina141AppliedTrim(unittest.TestCase):
     def test_applied_trim_shifts_extra_overlay_paths_with_piece_geometry(self) -> None:
         snapshot = self._snapshot(x=1.0, y=1.0, w=20.0, h=30.0)
         piece = snapshot["sheets"][0]["pieces"][0]
-        piece["piece_type"] = "Extra"
+        piece["piece_type"] = "Regular"
         piece["overlays"] = [
             {
                 "kind": "liner",

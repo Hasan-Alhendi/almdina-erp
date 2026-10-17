@@ -34,7 +34,7 @@ class DoorCuttingOrderController(DoorCuttingOrder):
 
     def on_update(self) -> None:
         invalidate_stale_draft_plans(self)
-        # Extra add-ons are order-owned commercial inputs. Refresh the quote after
+        # Door add-ons are order-owned commercial inputs. Refresh the quote after
         # persistence without creating, recalculating, or mutating Cutting Plan.
         refresh_order_commercial_totals(self)
 

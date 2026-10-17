@@ -164,7 +164,7 @@ def test_dxf_validation_receives_plan_settings_explicitly() -> None:
     assert "kerf_mm=settings.kerf_mm" in strict
     assert 'getattr(order, "kerf_mm"' not in strict
     assert 'getattr(order, "trim_margin_mm"' not in strict
-    assert "settings=seed_plan_settings(order.name)" in upload
+    assert "settings=manufacturing_plan_settings(order.name)" in upload
 
 
 def test_cost_workspace_no_longer_selects_plan_from_dco_source_projection() -> None:

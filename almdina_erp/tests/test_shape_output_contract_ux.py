@@ -147,7 +147,8 @@ def test_customer_documents_keep_drawing_first_and_share_one_renderer():
     assert "const shapeOutput = window.AlmdinaShapeOutputContract;" in shape_print
     assert "shapeOutput.visual(piece)" in shape_print
     assert 'selected.kind === "documentation"' in shape_print
-    assert "هذا توثيق لطلب العميل وليس ملف تصنيع" in shape_print
+    assert 'translate("This documents the customer request and is not a manufacturing file.")' in shape_print
+    assert "هذا توثيق لطلب العميل وليس ملف تصنيع" not in shape_print
     assert "renderer.notesCell(row, notes" in presenter
     assert "window.AlmdinaOrderDocumentPrint" in measurement_actions
     assert "measurementDocumentBodyWithPayload(frm, quotePayload, customerPhone)" in presenter
@@ -163,7 +164,10 @@ def test_plan_dxf_and_browser_surfaces_do_not_reimplement_exact_shape_policy():
         assert "AlmdinaSpecialShapeGeometry" not in source, path
         assert ".isExact(" not in source, path
     assert "AlmdinaCuttingPlanPieceGeometry" in _source(PLAN_RENDERER)
-    assert "geometry.resolve(piece)" in _source(PLAN_RENDERER)
+    plan_renderer = _source(PLAN_RENDERER)
+    assert "const manufacturingPiece = pieceWithLinerSpec(frm, piece);" in plan_renderer
+    assert "geometry.resolve(manufacturingPiece)" in plan_renderer
+    assert "render_piece_edge_lines(manufacturingPiece, geometryModel, clipId)" in plan_renderer
     assert "contract.points(piece, widthMm, heightMm)" in _source(PIECE_GEOMETRY)
     assert "shapeOutput.dxfPoints(piece" in _source(SECURE_DXF)
     assert not (ROOT / "public" / "js" / "door_cutting_order_workflow.js").exists()

@@ -97,6 +97,9 @@ jobs:
             almdina_erp.tests.test_permission_personas_e2e \
             almdina_erp.tests.test_final_security_architecture \
             almdina_erp.tests.test_workforce_authorization \
+            almdina_erp.tests.test_dynamic_language_foundation \
+            almdina_erp.tests.test_locale_text_branch_gate \
+            almdina_erp.tests.test_translation_catalog_gate \
             almdina_erp.tests.test_workforce_management_architecture \
             almdina_erp.tests.test_factory_workforce_frontend_architecture \
             almdina_erp.tests.test_factory_workforce_frontend_security \
@@ -222,6 +225,9 @@ jobs:
             almdina_erp/tests/test_dxf_lwpolyline_ascii_fallback.py \
             almdina_erp/tests/test_dxf_cut_size_diagnostics.py \
             almdina_erp/tests/test_dxf_original_upload_download.py \
+            almdina_erp/tests/test_corner_dxf_edge_binding.py \
+            almdina_erp/tests/test_regular_machining_orientation.py \
+            almdina_erp/tests/test_strict_regular_machining_rotation.py \
             almdina_erp/tests/test_arabic_operator_localization.py \
             almdina_erp/tests/test_compact_invoice_print_contract.py \
             almdina_erp/tests/test_advanced_cutting_optimizer.py
@@ -245,6 +251,8 @@ jobs:
       - name: Run active frontend browser simulations
         run: |
           node almdina_erp/tests/js/frontend_foundation.test.js
+          node almdina_erp/tests/js/almdina_locale.test.js
+          node almdina_erp/tests/js/factory_workforce_languages.test.js
           node almdina_erp/tests/js/dco_form_sidebar_controller.test.js
           node almdina_erp/tests/js/dco_form_presentation_owner.test.js
           node almdina_erp/tests/js/almdina_ui.test.js
@@ -275,6 +283,10 @@ jobs:
           node almdina_erp/tests/js/financial_documents.test.js
           node almdina_erp/tests/js/cutting_plan_piece_geometry.test.js
           node almdina_erp/tests/js/cutting_plan_renderer.test.js
+          node almdina_erp/tests/js/cutting_plan_break_only_edge.test.js
+          node almdina_erp/tests/js/cutting_plan_rotated_corner_edges.test.js
+          node almdina_erp/tests/js/dxf_physical_edge_rotation.test.js
+          node almdina_erp/tests/js/dxf_extra_region_rotation.test.js
           node almdina_erp/tests/js/document_context.test.js
           node almdina_erp/tests/js/document_context_async.test.js
           node almdina_erp/tests/js/approved_plan_navigation.test.js
@@ -293,8 +305,11 @@ jobs:
           node almdina_erp/tests/js/plan_source_tab_edit_lock.test.js
           node almdina_erp/tests/js/uploaded_plan_mismatch_banner.test.js
           node almdina_erp/tests/js/order_measurement_save_flush.test.js
+          node almdina_erp/tests/js/corner_edge_apply_save_lifecycle.test.js
+          node almdina_erp/tests/js/corner_edge_tab_navigation.test.js
           node almdina_erp/tests/js/factory_workforce_view_model.test.js
           node almdina_erp/tests/js/door_cutting_order_extra_addons_ux.test.js
+          node almdina_erp/tests/js/door_cutting_order_addons_dialog.test.js
           node almdina_erp/tests/js/door_cutting_order_extra_addons_row_integration.test.js
           node almdina_erp/tests/js/secure_dxf_topology_export.test.js
           node almdina_erp/tests/test_shape_print.js

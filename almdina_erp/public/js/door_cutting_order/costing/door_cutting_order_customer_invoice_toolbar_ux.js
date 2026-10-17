@@ -1,6 +1,23 @@
 (() => {
     "use strict";
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split(`{${index}}`).join(String(value));
+            });
+        }
+        return text;
+    }
+
     if (window.AlmdinaCustomerInvoiceToolbarUX) return;
 
     const CUSTOMER_CLASS = "dco-secure-print-customer-invoice";
@@ -8,8 +25,8 @@
     const COST_API_FLAG = "__almdinaInvoiceButtonCoordinator";
     const STATUS_METHOD = "almdina_erp.almdina_erp.services.whatsapp_service.get_whatsapp_delivery_status";
     const SEND_METHOD = "almdina_erp.almdina_erp.services.whatsapp_service.send_order_invoice";
-    const INVOICE_CONFIRM_MESSAGE = "هل تريد إرسال الفاتورة للزبون؟";
-    const DISCONNECTED_MESSAGE = "لن يتم إرسال رسالة واتساب لأن الجلسة غير متصلة.";
+    const INVOICE_CONFIRM_MESSAGE = "Send the invoice to the customer?";
+    const DISCONNECTED_MESSAGE = "WhatsApp will not be sent because the session is disconnected.";
 
     function can(frm, capability) {
         const permissions = window.AlmdinaPermissions;
@@ -70,35 +87,43 @@
         return String((error && error.message) || fallback || "");
     }
 
+    function localErrorMessage(error, fallbackId) {
+        const raw = errorMessage(error, fallbackId);
+        if (raw === fallbackId || raw === "Could not reach the server." || raw === DISCONNECTED_MESSAGE) {
+            return translate(raw);
+        }
+        return raw;
+    }
+
     function rpc(method, args, options) {
         const api = frontend();
         if (!api || typeof api.rpc !== "function") {
-            return Promise.reject(new Error("تعذر الاتصال بالخادم."));
+            return Promise.reject(new Error("Could not reach the server."));
         }
-        return api.rpc(method, args, options || { freeze: true, freezeMessage: "جاري إرسال واتساب..." });
+        return api.rpc(method, args, options || { freeze: true, freezeMessage: translate("Sending WhatsApp...") });
     }
 
     function sendInvoice(frm) {
         const orderName = String(frm && frm.doc && frm.doc.name || "").trim();
         if (!orderName) {
-            frappe.msgprint("تعذر تحديد الطلب لإرسال الفاتورة.");
+            frappe.msgprint(translate("Could not identify the order for sending the invoice."));
             return Promise.resolve(null);
         }
         return rpc(SEND_METHOD, { order_name: orderName }).then(result => {
             const payload = result || {};
             const ok = payload.ok !== false && payload.code !== "document_failed";
             frappe.show_alert({
-                message: payload.message || (ok ? "تم إرسال فاتورة الزبون إلى الزبون عبر واتساب." : "تعذر إرسال ملف الفاتورة."),
+                message: payload.message || translate(ok ? "The customer invoice was sent to the customer on WhatsApp." : "Could not send the invoice file."),
                 indicator: ok ? "green" : "orange",
             }, 8);
             if (!ok && payload.message) {
-                frappe.msgprint({ title: "إرسال واتساب", message: payload.message, indicator: "orange" });
+                frappe.msgprint({ title: translate("WhatsApp send"), message: payload.message, indicator: "orange" });
             }
             return payload;
         }).catch(error => {
             frappe.msgprint({
-                title: "تعذر إرسال واتساب",
-                message: errorMessage(error, "حدثت مشكلة أثناء إرسال فاتورة الزبون."),
+                title: translate("Could not send WhatsApp"),
+                message: localErrorMessage(error, "A problem occurred while sending the customer invoice."),
                 indicator: "red",
             });
             return null;
@@ -110,8 +135,8 @@
         const api = frontend();
         if (!api || typeof api.rpc !== "function") {
             frappe.msgprint({
-                title: "واتساب",
-                message: DISCONNECTED_MESSAGE,
+                title: translate("WhatsApp"),
+                message: translate(DISCONNECTED_MESSAGE),
                 indicator: "orange",
             });
             return false;
@@ -120,19 +145,19 @@
             const snapshot = status || {};
             if (!snapshot.working) {
                 frappe.msgprint({
-                    title: "واتساب",
-                    message: snapshot.reason || DISCONNECTED_MESSAGE,
+                    title: translate("WhatsApp"),
+                    message: snapshot.reason || translate(DISCONNECTED_MESSAGE),
                     indicator: "orange",
                 });
                 return;
             }
-            frappe.confirm(INVOICE_CONFIRM_MESSAGE, () => {
+            frappe.confirm(translate(INVOICE_CONFIRM_MESSAGE), () => {
                 sendInvoice(frm);
             });
         }).catch(error => {
             frappe.msgprint({
-                title: "واتساب",
-                message: errorMessage(error, DISCONNECTED_MESSAGE),
+                title: translate("WhatsApp"),
+                message: localErrorMessage(error, DISCONNECTED_MESSAGE),
                 indicator: "orange",
             });
         });
@@ -171,7 +196,7 @@
         let created = false;
         if (!button.length) {
             button = $(uiButton({
-                label: __("طباعة فاتورة الزبون"),
+                label: translate("Print customer invoice"),
                 variant: "primary",
                 size: "btn-sm",
                 className: CUSTOMER_CLASS,
@@ -198,7 +223,7 @@
         }
         if (!button.length) {
             button = $(uiButton({
-                label: __("إرسال الفاتورة عبر واتساب"),
+                label: translate("Send the invoice on WhatsApp"),
                 variant: "secondary",
                 size: "btn-sm",
                 className: WHATSAPP_CLASS,
@@ -315,7 +340,7 @@
     function printCustomerInvoice(frm) {
         const documents = window.AlmdinaFinancialDocuments;
         if (!documents || typeof documents.printCustomerInvoice !== "function") {
-            frappe.msgprint(__("تعذر تحميل خدمة طباعة فاتورة الزبون. أعد تحميل الصفحة ثم حاول مرة أخرى."));
+            frappe.msgprint(translate("Could not load the customer invoice print service. Reload the page and try again."));
             return Promise.resolve(false);
         }
         return Promise.resolve(documents.printCustomerInvoice(frm))
@@ -323,7 +348,7 @@
             .catch(error => {
                 if (!error || !error.__almdinaHandled) {
                     console.error("Customer invoice print failed", error);
-                    frappe.msgprint(__("تعذر تجهيز فاتورة الزبون. أعد تحميل الصفحة ثم حاول مرة أخرى."));
+                    frappe.msgprint(translate("Could not prepare the customer invoice. Reload the page and try again."));
                 }
                 return false;
             });

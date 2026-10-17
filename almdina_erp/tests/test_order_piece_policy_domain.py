@@ -7,6 +7,7 @@ from almdina_erp.almdina_erp.domain.orders.piece_policy import (
     PieceGeometry,
     PiecePolicyError,
     SpecialPrice,
+    apply_edge_break_policy,
     drawing_token,
     evaluate_special_shape,
     geometry_changed,
@@ -18,6 +19,63 @@ from almdina_erp.almdina_erp.domain.orders.piece_policy import (
 
 
 class TestOrderPiecePolicyDomain(unittest.TestCase):
+    def test_corner_edge_modes_are_mutually_exclusive(self) -> None:
+        with self.assertRaisesRegex(
+            PiecePolicyError,
+            "mutually_exclusive_corner_edge_options",
+        ):
+            apply_edge_break_policy(
+                piece_type="Clipped Corner",
+                clipped_corner_position="Top Right",
+                edge_break=1,
+                edge_break_only=1,
+                edge_long_right=0,
+                edge_long_left=0,
+                edge_width_top=0,
+                edge_width_bottom=0,
+            )
+
+    def test_break_only_keeps_one_clipped_corner_outer_side_independent(self) -> None:
+        decision = apply_edge_break_policy(
+            piece_type="Clipped Corner",
+            clipped_corner_position="Top Right",
+            edge_break=0,
+            edge_break_only=1,
+            edge_long_right=1,
+            edge_long_left=0,
+            edge_width_top=0,
+            edge_width_bottom=0,
+        )
+
+        self.assertEqual(decision.edge_break, 0)
+        self.assertEqual(decision.edge_break_only, 1)
+        self.assertEqual(decision.edge_long_right, 1)
+        self.assertEqual(decision.edge_width_top, 0)
+        self.assertEqual(decision.cleared_sides, ())
+
+    def test_break_only_with_both_adjacent_sides_becomes_full_path(self) -> None:
+        decision = apply_edge_break_policy(
+            piece_type="Clipped Corner",
+            clipped_corner_position="Top Right",
+            edge_break=0,
+            edge_break_only=1,
+            edge_long_right=1,
+            edge_long_left=1,
+            edge_width_top=1,
+            edge_width_bottom=1,
+        )
+
+        self.assertEqual(decision.edge_break, 1)
+        self.assertEqual(decision.edge_break_only, 0)
+        self.assertEqual(decision.edge_long_right, 0)
+        self.assertEqual(decision.edge_width_top, 0)
+        self.assertEqual(decision.edge_long_left, 1)
+        self.assertEqual(decision.edge_width_bottom, 1)
+        self.assertEqual(
+            decision.cleared_sides,
+            ("edge_width_top", "edge_long_right"),
+        )
+
     def test_drawing_token_is_stable_for_mapping_input(self) -> None:
         first = drawing_token({"elements": [], "version": 1})
         second = drawing_token({"version": 1, "elements": []})
@@ -256,6 +314,11 @@ class TestOrderPiecePolicyDomain(unittest.TestCase):
         )
 
         self.assertIn("L-Shaped Corner", PIECE_TYPES)
+        self.assertNotIn("Extra", PIECE_TYPES)
+        self.assertEqual(
+            PIECE_TYPES,
+            frozenset(("Regular", "Clipped Corner", "L-Shaped Corner", "Special")),
+        )
         self.assertTrue(is_corner_cut("Clipped Corner"))
         self.assertTrue(is_corner_cut(L_SHAPED_CORNER_TYPE))
         self.assertFalse(is_corner_cut("Regular"))
@@ -349,7 +412,6 @@ class TestOrderPiecePolicyDomain(unittest.TestCase):
 
         self.assertTrue(measurement_edges_disabled_for_piece("Special"))
         self.assertFalse(measurement_edges_disabled_for_piece("Regular"))
-        self.assertFalse(measurement_edges_disabled_for_piece("Extra"))
         self.assertFalse(measurement_edges_disabled_for_piece("Clipped Corner"))
 
         disabled = apply_special_measurement_edge_policy(piece_type="Special")

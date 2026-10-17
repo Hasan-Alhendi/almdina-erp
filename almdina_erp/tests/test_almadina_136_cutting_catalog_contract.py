@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import frappe
@@ -105,6 +106,30 @@ PLAN_CONTROLS = (
 FACTORY_DIALOGS = ROOT / "public" / "js" / "factory_production_settings" / "dialogs.js"
 ENGINE_ADAPTER = ROOT / "almdina_erp" / "infrastructure" / "cutting" / "domain_engine.py"
 PRODUCTION_SETTINGS = ROOT / "almdina_erp" / "services" / "production_settings_service.py"
+
+
+def _deterministic_throw(message, exc=None, *_args, **_kwargs):
+    error_type = exc if isinstance(exc, type) else frappe.ValidationError
+    raise error_type(message)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_catalog_frappe_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep catalog validation off site translation, cache, logs, and the database."""
+    identity = lambda message: message
+    monkeypatch.setattr(
+        "almdina_erp.almdina_erp.infrastructure.frappe.optimization_mode_validation._",
+        identity,
+    )
+    monkeypatch.setattr(
+        "almdina_erp.almdina_erp.services.plan_settings_edit_service._",
+        identity,
+    )
+    monkeypatch.setattr(
+        "almdina_erp.almdina_erp.services.order_plan_permission_service._",
+        identity,
+    )
+    monkeypatch.setattr(frappe, "throw", _deterministic_throw)
 
 
 class FakePlanRepository:
@@ -214,22 +239,24 @@ def test_disabled_public_modes_fail_closed_at_user_request_boundaries() -> None:
         label = EXPECTED_LABELS[mode_id]
         message = f"خوارزمية {label} غير متاحة للتنفيذ حاليًا. يرجى اختيار خوارزمية متاحة."
 
-        with pytest.raises(frappe.ValidationError, match=message):
+        with pytest.raises(frappe.ValidationError, match=re.escape(message)):
             require_executable_optimization_mode(mode_id)
 
-        with pytest.raises(frappe.ValidationError, match=message):
+        with pytest.raises(frappe.ValidationError, match=re.escape(message)):
             normalize_plan_settings_updates({"packing_mode": mode_id})
 
         # The whitelisted recalculation facade rejects the mode before any DB
         # read/mutation, so a crafted direct request cannot bypass the catalog.
-        with pytest.raises(frappe.ValidationError, match=message):
+        with pytest.raises(frappe.ValidationError, match=re.escape(message)):
             recalculate_order(order_name="DCO-1", packing_mode=mode_id)
 
 
 def test_unknown_public_mode_has_a_distinct_fail_closed_error() -> None:
     with pytest.raises(
         frappe.ValidationError,
-        match="خوارزمية التحسين المحددة غير معروفة. يرجى اختيار خوارزمية متاحة.",
+        match=re.escape(
+            "خوارزمية التحسين المحددة غير معروفة. يرجى اختيار خوارزمية متاحة."
+        ),
     ):
         require_executable_optimization_mode("unknown_solver")
 

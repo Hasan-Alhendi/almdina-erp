@@ -1,9 +1,9 @@
 # DCO Recovery State Ownership & Lifecycle Contracts
 
-> **Status:** R1 contract baseline for `ALMADINA-127`<br>
-> **Scope:** Door Cutting Order (DCO) recovery analysis only<br>
+> **Status:** Architecture and lifecycle contract baseline for `ALMADINA-127`<br>
+> **Scope:** State ownership and lifecycle contract characterization only. NEW recovery behavior belongs to `ALMADINA-129`; EDIT recovery and restore behavior are deferred to `ALMADINA-131`.<br>
 > **Runtime effect:** None. This document does not implement persistence or change product behavior.<br>
-> **Baseline:** `Develop` at `3d03fe09087b078bb26ce92992b2ba4330d89b6b`
+> **Baseline:** `Develop` at `17e526b6648d35983967c03549e2348b05cb2839`
 
 ## 1. Purpose and hard boundaries
 
@@ -27,8 +27,9 @@ exists in the current runtime.
 | State | Current owner / source of truth | Recoverable projection | Restore/commit boundary |
 |---|---|---|---|
 | DCO form identity and visit generation | `AlmdinaDocumentContext` | Identity metadata only | Restore only while the captured identity/generation is current. NEW promotion reuses the same generation. |
-| NEW/EDIT session intent | Existing order Edit Session | Mode, edit-active intent, and conflict tokens | Recovery may ask the existing Edit Session to enter/continue editing; it must not create a second session state machine. |
+| NEW/EDIT session intent | Existing `AlmdinaDcoEditSessionCoordinator` | Mode, edit-active intent, and conflict tokens | Recovery may ask the existing Edit Session to enter/continue editing; it must not create a second session state machine. |
 | Unsaved DCO header and piece requirements | Frappe form model under `AlmdinaDocumentContext` | `DcoInputProjection` | Hydrate the existing form model, mark it dirty, and leave final persistence to explicit Save or the already-existing internal checkpoint. |
+| Local temporary recovery record and checkpoint state | Existing `CheckpointSession`, `LocalDraftRepository`, and `LocalAssetRepository` | Versioned allowlisted projections and durable private-file references only | Own local revision/hash/checkpoint metadata and temporary bytes; they do not own a DCO, workspace, price, or official Save. |
 | Plan working settings | Plan `WorkspaceStore` | Dirty Plan draft only | Restore through the Plan workspace after it is loaded; commit through the existing plan command. Never copy into `frm.doc`. |
 | Cost working settings | Cost `WorkspaceStore` | Dirty Cost draft only, permission-filtered | Restore through the Cost workspace; commit through its focused API. Never bypass `view_costs` or reuse confidential values for another actor. |
 | Workspace freshness and refresh order | `WorkspaceSyncCoordinator` | Reason/version metadata only | Coordinator invalidates and refreshes Plan before Cost and synchronizes acknowledged document versions. Recovery never mirrors freshness state into another owner. |
@@ -96,7 +97,7 @@ dirty owners is invalid and must be blocked rather than merged.
 Header requirements:
 
 ```text
-customer, order_date, order_notes,
+customer, order_date, order_notes, order_cutting_machine,
 board_description, board_length_cm, board_width_cm,
 default_edge_type, edge_color
 ```
@@ -105,10 +106,17 @@ Each piece contains a recovery `piece_key` plus only editable requirement fields
 
 ```text
 piece_type,
-extra_double, extra_full_door_double, extra_liner, extra_back_groove, extra_recessed_handle_cutout,
+extra_double, extra_full_door_double, extra_liner,
+liner_reference_side, liner_offset_cm, liner_width_cm, liner_start_cm, liner_length_cm,
+extra_back_groove,
+back_groove_reference_side, back_groove_offset_cm, back_groove_width_cm,
+back_groove_start_cm, back_groove_length_cm,
+extra_recessed_handle_cutout,
+recessed_handle_reference_side, recessed_handle_offset_cm, recessed_handle_width_cm,
+recessed_handle_start_cm, recessed_handle_length_cm,
 clipped_corner_position, clipped_corner_width_cm, clipped_corner_length_cm,
 width_cm, length_cm, qty, allow_rotation,
-edge_long_right, edge_long_left, edge_width_top, edge_width_bottom, edge_break,
+edge_long_right, edge_long_left, edge_width_top, edge_width_bottom, edge_break, edge_break_only,
 edge_long_right_type_override, edge_long_left_type_override,
 edge_width_top_type_override, edge_width_bottom_type_override,
 notes,
@@ -136,7 +144,36 @@ visible on the child, but an independently dirty Special Shape Documentation
 workspace is restored only through its bounded workspace projection. Main-form
 restore must never silently overwrite a newer independently saved child drawing.
 
-### 3.3 Workspace draft projections
+### 3.3 Field Ownership / Mutation Capture Manifest
+
+The current `frm.doc` and its `pieces` child rows are the canonical live input
+model. Capture reads these model values after the existing mutation path has
+updated them; it does not scrape rendered controls, retain a parallel Fast Entry
+buffer, or infer state from calculated output. The recovery projection's
+`HEADER_FIELDS` and `PIECE_FIELDS` allowlists in
+`door_cutting_order_recovery_projection.js` are the capture manifest. The table
+maps those allowlists to their current owner and restore boundary:
+
+| Input family and exact capture fields | Current owner and mutation/capture point | Permitted recovery boundary |
+|---|---|---|
+| Order header: `customer`, `order_date`, `order_notes`, `order_cutting_machine`, `board_description`, `board_length_cm`, `board_width_cm`, `default_edge_type`, `edge_color` | Frappe `Door Cutting Order` form controls and `frm.doc`; ordinary control changes update the form model. | Capture/restore only these allowlisted inputs to the current form model. Never include read-only note preview/comment, status, production assignment, or derived totals. |
+| Piece identity and dimensions: `piece_type`, `width_cm`, `length_cm`, `qty`, `allow_rotation`, `notes`; clipped-corner inputs `clipped_corner_position`, `clipped_corner_width_cm`, `clipped_corner_length_cm` | `frm.doc.pieces` (`Door Cutting Order Detail`); Fast Entry and row editors mutate the existing child row. `piece_key` maps persisted child `name` or a NEW recovery-local UUID and is never a DocType field. | Capture values from child rows by `piece_key`; restore only requirement fields. Do not capture row position as identity, Frappe child names into NEW rows, or read-only `piece_no`. |
+| Direct Fast Entry extras: `extra_double`, `extra_full_door_double`, `extra_liner`, `extra_back_groove`, `extra_recessed_handle_cutout` | Existing Fast Entry and extra-addon controls mutate the same `frm.doc.pieces` row; calculation/presenter output is downstream. | Capture the five selection inputs only. Unit rates, totals, and other derived pricing are excluded and remain with Cost/pricing owners. |
+| Liner machining requirement: `liner_reference_side`, `liner_offset_cm`, `liner_width_cm`, `liner_start_cm`, `liner_length_cm` | The liner add-on configuration/editor mutates the same `frm.doc.pieces` child input row, with the side relative to the door/edge and the numeric offset, width, start, and length expressed in centimeters. Geometry calculation, visualization, and generated toolpaths are downstream consumers, not independent owners of the inputs. | Capture and restore these five editable scalar requirements with the same `piece_key` as the corresponding DCO row. Preserve the side value and measurements without inferring them from a rendered path. Only existing validation and Save/checkpoint recomputation may update derived geometry; do not capture toolpaths, material costs, or unit prices. |
+| Back-groove machining requirement: `back_groove_reference_side`, `back_groove_offset_cm`, `back_groove_width_cm`, `back_groove_start_cm`, `back_groove_length_cm` | The back-groove add-on configuration/editor updates the current `frm.doc.pieces` child input row; its reference side and centimeter dimensions belong to DCO input ownership, not Cutting Plan or the cost workspace. | Capture and restore exactly these editable requirement values on their `piece_key`, respecting the DCO dirty owner and current edit permissions. Never infer or replay generated groove toolpaths or any pricing. Downstream Plan/Cost data remains subject to existing lifecycle invalidation and reconciliation. |
+| Recessed-handle machining requirement: `recessed_handle_reference_side`, `recessed_handle_offset_cm`, `recessed_handle_width_cm`, `recessed_handle_start_cm`, `recessed_handle_length_cm` | The recessed-handle add-on configuration/editor writes these reference-side and centimeter input values into the current `frm.doc.pieces` row; the machining overlay/CNC shape is derived output. | Capture and restore these five editable DCO inputs with row identity and document-scoped permissions, never the resulting toolpath, drawing cache, or manual/service cost. Preserve the existing single-dirty-owner and server-version conflict rules. |
+| Side selection and bulk edge toggles: `edge_long_right`, `edge_long_left`, `edge_width_top`, `edge_width_bottom`, `edge_break`, `edge_break_only`; profile overrides `edge_long_right_type_override`, `edge_long_left_type_override`, `edge_width_top_type_override`, `edge_width_bottom_type_override` | Existing Fast Entry edge controls, “apply to all four” bulk action, multi-edge editor, and clipped-corner editor mutate the existing child rows. Mutation events and downstream invalidation observe the form model; DOM toggle classes are presentation only. | Capture the resulting selected-side flags and four per-side overrides from `frm.doc.pieces`. Do not capture aggregate `edge_type`, rates, meters, costs, or stale DOM state. Restore runs through the same form/context owner and leaves derived Plan/Cost refresh to the established Save/checkpoint lifecycle. |
+| Shape requirement and documentation reference: `special_shape_geometry_json`, `special_shape_drawing_json` | Manufacturing geometry is DCO child input owned by the shape editor. Drawing reference/metadata is owned by the bounded Special Shape Documentation workspace; the DCO child value is only its last saved reference. | Capture geometry as DCO requirement. In the DCO projection, include only the last saved drawing JSON; capture an independently dirty drawing only through its workspace projection. Restore must not overwrite a newer workspace-saved drawing or persist transient file bytes/URLs. |
+| Plan/Cost working fields: Plan `packing_mode`, `cutting_machine_type`, `optimization_time_limit_sec`, `kerf_mm`, `trim_margin_mm`; Cost `board_rate_usd`, `cutting_cost_per_board_usd` | Existing Plan and Cost `WorkspaceStore` / Edit Session own each mutable draft; current form values are not their owner. | Capture only when that exact workspace is dirty. Cost projection is filtered by current `view_costs` capability and actor/document scope; restore after canonical workspace load and baseline checks. Never copy Plan or Cost drafts into `frm.doc`. |
+| Protected manual prices and calculated finance: `special_shape_custom_unit_price_usd`, `clipped_corner_edge_price_usd` and pricing status/notes/set-by/set-on fields; `extra_*_unit_price_usd`, `extra_*_total_usd`, estimates/final prices, rates, costs, quote totals/status | Focused authorized pricing commands and server `Document`/Cost services own protected manual price decisions; server calculations and canonical plan/cost snapshots own computed fields. | Excluded from every recovery projection, including the permission-filtered Cost settings draft. Preserve acknowledged server values; pending price commands require their existing command reconciliation and must not be replayed by recovery. No price or cost data may cross actor/document scope. |
+
+The field sets above must stay aligned with `HEADER_FIELDS`, `PIECE_FIELDS`,
+`PLAN_DRAFT_FIELDS`, and `COST_DRAFT_FIELDS` in the recovery projection module.
+Any new mutable field requires an explicit owner, mutation source, sensitivity
+classification, and restore boundary here plus a characterization test before
+it enters a projection allowlist.
+
+### 3.4 Workspace draft projections
 
 `PlanWorkspaceDraftProjection v1` contains a baseline descriptor and only the
 existing mutable settings:
@@ -200,6 +237,17 @@ canonical save. Restore follows this order:
 
 No timer delay is evidence that a document or workspace is ready.
 
+### Authorization boundary
+
+Capture and restore are permitted only for the current authenticated actor, site,
+doctype, document, and active lifecycle. Evaluate the actor's current dynamic
+capability and applicable document scope, assignment, and configurable stage at
+capture and again at restore; never persist a capability result as authority or
+infer access from a role name or fixed stage name. Cost values additionally
+require the existing `view_costs` capability. Missing, stale, or indeterminate
+authorization blocks restore. Frappe's server permission check remains final on
+official Save.
+
 ## 4. NEW lifecycle contract
 
 1. A NEW DCO recovery session receives a UUID `draft_id` before its first
@@ -218,20 +266,25 @@ No timer delay is evidence that a document or workspace is ready.
    Recovery binds `draft_id -> target_name` and initializes both modified tokens
    from the acknowledged server document.
 
-## 5. EDIT lifecycle contract
+## 5. EDIT lifecycle contract: session ownership and deferred recovery
 
-1. EDIT recovery is keyed by site, user, DCO name, and `draft_id`; it does not
-   replace the existing Edit Session keyed by DCO.
+This section records current EDIT session ownership and version-token constraints
+for future recovery work. ALMADINA-127 does not implement EDIT checkpointing,
+restoration, or conflict UX; those behaviors belong to ALMADINA-131.
+
+1. The current Edit Session remains keyed by DCO. Any future EDIT recovery record
+   is keyed by site, user, DCO name, and `draft_id`; it must not replace that
+   session owner.
 2. At session start, capture the server's DCO `modified` into both
    `session_origin_modified` and `expected_server_modified`.
 3. Recovery capture never changes either token and never marks a server write as
    acknowledged.
-4. Restore first loads the current server DCO and compares its `modified` with
-   `expected_server_modified`. Equality allows hydration. Inequality is a
-   conflict; do not auto-merge or silently overwrite.
-5. Hydration happens only while Document Context is current and current
-   capabilities still allow the affected edits. The existing Edit Session remains
-   the owner of edit-active/lock behavior.
+4. ALMADINA-131 restore must first load the current server DCO and compare its
+   `modified` with `expected_server_modified`. Equality may permit hydration;
+   inequality is a conflict and must not auto-merge or silently overwrite.
+5. Any ALMADINA-131 hydration must happen only while Document Context is current
+   and current capabilities still allow the affected edits. The existing Edit
+   Session remains the owner of edit-active/lock behavior.
 6. Explicit Save retains its current behavior. On acknowledged success, advance
    `expected_server_modified`; `session_origin_modified` remains immutable.
 7. Cancel discards the current form edit according to existing behavior. It must
@@ -473,7 +526,38 @@ these rules:
 - Server permissions, document authorization, and optimistic concurrency remain
   authoritative even if tab messaging reports no conflict.
 
-## 13. Characterized gaps and deferred risks
+## 13. Frappe compatibility contract: source review baseline
+
+The compatibility target for this contract is **Frappe v16.17.5** at commit
+`75baafaa0bde07a86bf28764383b93b5df97bc7e` and **ERPNext v16.17.0** at commit
+`7b494dc9e8e47d288de5427bae25ce8a52c37d96`. These are the immutable source
+revisions reviewed for this contract. In Frappe's
+[`form.js`](https://github.com/frappe/frappe/blob/75baafaa0bde07a86bf28764383b93b5df97bc7e/frappe/public/js/frappe/form/form.js),
+`frm.save()` runs the existing form validation/before-save path and returns a
+Promise; the native form save module also retains the dedicated Cancel endpoint
+in [`save.js`](https://github.com/frappe/frappe/blob/75baafaa0bde07a86bf28764383b93b5df97bc7e/frappe/public/js/frappe/form/save.js).
+On the server, [`Document._save` and `check_if_latest`](https://github.com/frappe/frappe/blob/75baafaa0bde07a86bf28764383b93b5df97bc7e/frappe/model/document.py)
+retain permission checks and compare the loaded `modified` token before updating;
+a stale version raises `TimestampMismatchError`. The recovery contract therefore
+keeps official Save/Cancel, server permission enforcement, and native optimistic
+concurrency as the persistence authority.
+
+This is **source-level compatibility evidence only**. It does not claim an
+installed v16.17.5/ERPNext v16.17.0 site, browser certification, or actual
+Frappe Runtime test. The retained Frappe v16.51.0 / ERPNext v16.50.0 environment
+does not prove behavior for the pinned target. Actual Runtime and browser
+certification remain assigned to stories that require those tests, including
+ALMADINA-128, ALMADINA-129, ALMADINA-131, and ALMADINA-135.
+These contracts were checked against the pinned Frappe source and the
+current DCO implementation; unrelated Print Format Editor or Wiki draft
+implementations are not treated as drop-in DCO services or lifecycle authority.
+
+**Evidence classification:** A — Architecture, static, and characterization
+tests are ALMADINA-127 acceptance evidence. B — actual target-version Frappe
+Runtime and browser certification are separate certification evidence and are
+not claimed or required to mark this architecture-only story complete.
+
+## 14. Characterized gaps and deferred risks
 
 These are known boundaries, not R1 implementation tasks:
 

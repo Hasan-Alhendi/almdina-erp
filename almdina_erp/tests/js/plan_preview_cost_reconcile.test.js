@@ -117,7 +117,7 @@ async function validatePostCommitCostReconciliation() {
     ]);
     assert.equal(alerts.length, 1);
     assert.equal(alerts[0].options.indicator, "orange");
-    assert.match(alerts[0].options.message, /تم حفظ خطة المعاينة بنجاح/);
+    assert.match(alerts[0].options.message, /The preview plan was saved/);
 }
 
 async function validateCoordinatorCommitsDisplayedPreview() {

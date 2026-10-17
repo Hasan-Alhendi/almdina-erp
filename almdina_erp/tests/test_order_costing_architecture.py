@@ -183,13 +183,18 @@ class TestOrderCostingArchitecture(unittest.TestCase):
         runtime = PLAN_RUNTIME_REPOSITORY_PATH.read_text(encoding="utf-8")
 
         self.assertIn("def resolve_canonical_cost_plan", runtime)
+        # Scope ordering to the canonical resolver. Other repository functions
+        # legitimately look up System plans first for editable settings.
+        resolver = runtime.split("def resolve_canonical_cost_plan(", 1)[1].split(
+            "\n\ndef production_plan_facts(", 1
+        )[0]
         self.assertLess(
-            runtime.index("approved = approved_plan_for_order(order_doc)"),
-            runtime.index("source_type=UPLOADED_DXF"),
+            resolver.index("approved = approved_plan_for_order(order_doc)"),
+            resolver.index("source_type=UPLOADED_DXF"),
         )
         self.assertLess(
-            runtime.index("source_type=UPLOADED_DXF"),
-            runtime.index("source_type=SYSTEM"),
+            resolver.index("source_type=UPLOADED_DXF"),
+            resolver.index("source_type=SYSTEM"),
         )
         self.assertIn("return resolve_canonical_cost_plan(order)", workspace)
 

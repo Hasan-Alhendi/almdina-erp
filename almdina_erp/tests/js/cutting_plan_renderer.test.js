@@ -30,6 +30,16 @@ const context = vm.createContext({
     Number,
     String,
     Math,
+    // Frappe identity-language translation still interpolates positional values.
+    __: (message, values) => {
+        let output = String(message);
+        if (Array.isArray(values)) {
+            values.forEach((value, index) => {
+                output = output.split("{" + index + "}").join(String(value));
+            });
+        }
+        return output;
+    },
 });
 vm.runInContext(geometrySource, context, {
     filename: "door_cutting_order_special_shape_geometry.js",
@@ -129,7 +139,7 @@ const plan = {
                     area_m2: 0.24,
                     label: "4.1",
                     source_piece_no: 4,
-                    piece_type: "Extra",
+                    piece_type: "Regular",
                     rotated: false,
                     geometry: {
                         schema_version: 1,
@@ -196,8 +206,13 @@ assert.match(html, /زبون الاختبار/);
 assert.match(html, /MDF أبيض 18 مم/);
 assert.match(html, /dco-cutting-plan/);
 assert.match(html, /dco-sheet-board/);
+assert.match(html, /dco-board-waste-hatch[\s\S]*repeating-linear-gradient\(45deg,rgba\(71,85,105,\.18\) 0 1px,transparent 1px 8px\)/);
+assert.ok(html.indexOf("dco-board-waste-hatch") < html.indexOf("dco-usable-sheet"));
+assert.equal(html.split("dco-board-waste-hatch").length - 1, 1);
+assert.match(html, /background:#e4f5ff/);
+assert.match(html, /fill="#ffe5ad"/);
 assert.match(html, /dco-special-exact-piece/);
-assert.match(html, /◆ درفة خاصة · مسار هندسي/);
+assert.match(html, /Special door · geometric path/);
 assert.match(html, /<path d="/);
 assert.match(html, /data-geometry-source="manual-special"/);
 assert.match(html, /data-geometry-source="dxf"/);
@@ -213,9 +228,9 @@ assert.match(html, /<rect class="dco-extra-overlay-path dco-extra-overlay-handle
 assert.match(html, /data-overlay-kind="recessed_handle_cutout"[^>]*stroke-width="0.65"/);
 assert.doesNotMatch(html, /stroke-width="1.75"/);
 assert.match(html, /dco-extra-addon-legend/);
-assert.match(html, /رموز إضافات Extra/);
-assert.match(html, /دبل قشاط/);
-assert.match(html, /دبل كامل الدرفة/);
+assert.match(html, /Door add-on symbols/);
+assert.match(html, /Edge banding double/);
+assert.match(html, /Full door double/);
 assert.doesNotMatch(html, /dco-extra-addon-marks/);
 assert.match(html, /data-geometry-id="pg-/);
 assert.match(html, /fill-rule="evenodd"/);
@@ -232,28 +247,27 @@ const doubledFrm = {
                 length_cm: 80,
                 qty: 3,
                 extra_full_door_double: 1,
-                piece_type: "Extra",
+                piece_type: "Special",
             },
         ],
     },
 };
 const doubledHtml = renderer.build(doubledFrm, renderer.parse(doubledFrm));
-assert.match(doubledHtml, /عدد 6/);
+assert.match(doubledHtml, /Qty 6/);
 
 const extraAddonFrm = {
     doc: {
         ...frm.doc,
         pieces: [
-            { width_cm: 60, length_cm: 80, qty: 1, piece_type: "Regular" },
+            { width_cm: 60, length_cm: 80, qty: 1, piece_type: "Regular", extra_full_door_double: 1 },
             { width_cm: 62, length_cm: 80, qty: 1, piece_type: "Special" },
             { width_cm: 20, length_cm: 20, qty: 1, piece_type: "Special" },
             {
                 width_cm: 40,
                 length_cm: 60,
                 qty: 1,
-                piece_type: "Extra",
+                piece_type: "L-Shaped Corner",
                 extra_double: 1,
-                extra_full_door_double: 1,
                 extra_liner: 1,
             },
         ],
@@ -268,8 +282,8 @@ assert.match(extraAddonHtml, /data-addon-kind="full_door_double"/);
 assert.match(extraAddonHtml, /data-addon-slot="top-end"/);
 assert.match(extraAddonHtml, /data-addon-slot="top-start"/);
 assert.match(extraAddonHtml, /dco-extra-addon-mark/);
-assert.match(extraAddonHtml, /دبل قشاط/);
-assert.match(extraAddonHtml, /دبل كامل الدرفة/);
+assert.match(extraAddonHtml, /Edge banding double/);
+assert.match(extraAddonHtml, /Full door double/);
 assert.doesNotMatch(extraAddonHtml, /dco-extra-addon-icon/);
 assert.match(extraAddonHtml, /dco-extra-overlay/);
 assert.match(extraAddonHtml, /data-overlay-layer="Liner"/);
@@ -284,7 +298,6 @@ const regularOnlyFrm = {
                 length_cm: 80,
                 qty: 1,
                 piece_type: "Regular",
-                extra_double: 1,
                 extra_full_door_double: 1,
             },
         ],
@@ -300,7 +313,8 @@ const regularOnlyPlan = {
     ],
 };
 const regularOnlyHtml = renderer.build(regularOnlyFrm, regularOnlyPlan);
-assert.doesNotMatch(regularOnlyHtml, /dco-extra-addon-marks/);
+assert.match(regularOnlyHtml, /dco-extra-addon-marks/);
+assert.match(regularOnlyHtml, /data-addon-kind="full_door_double"/);
 assert.match(regularOnlyHtml, /dco-extra-addon-legend/);
 assert.doesNotMatch(regularOnlyHtml, /dco-sheet-text-labels/);
 assert.match(regularOnlyHtml, /dco-piece-number/);
@@ -374,9 +388,9 @@ const pastFiftyFrm = {
 const pastFiftyHtml = renderer.build(pastFiftyFrm, pastFiftyPlan);
 assert.match(pastFiftyHtml, />50</);
 assert.match(pastFiftyHtml, />51</);
-assert.match(pastFiftyHtml, /لوح 2/);
-assert.match(pastFiftyHtml, /لوح 1/);
-assert.ok(pastFiftyHtml.indexOf("لوح 2") < pastFiftyHtml.indexOf("لوح 1"));
+assert.match(pastFiftyHtml, /Board 2/);
+assert.match(pastFiftyHtml, /Board 1/);
+assert.ok(pastFiftyHtml.indexOf("Board 2") < pastFiftyHtml.indexOf("Board 1"));
 assert.doesNotMatch(html, /dco-sheet-board-has-trim/);
 assert.doesNotMatch(html, /#e4dfd8/);
 
@@ -418,5 +432,243 @@ assert.match(trimmedHtml, new RegExp(`data-trim-width-cm="1"`));
 assert.match(trimmedHtml, new RegExp(`data-trim-length-cm="0.2"`));
 assert.match(trimmedHtml, new RegExp(`left:${widthInset}%;top:${lengthInset}%;width:${usableWidth}%;height:${usableLength}%`));
 assert.match(trimmedHtml, /dco-usable-sheet[\s\S]*dco-piece[\s\S]*left:0%;top:0%/);
+
+vm.runInContext(
+    fs.readFileSync(
+        path.resolve(__dirname, "../../public/js/door_cutting_order/drawing/door_cutting_order_liner_geometry.js"),
+        "utf8"
+    ),
+    context,
+    { filename: "door_cutting_order_liner_geometry.js" }
+);
+const linerPlan = {
+    usable_board_width_cm: 122,
+    usable_board_length_cm: 244,
+    full_board_width_cm: 122,
+    full_board_length_cm: 244,
+    trim_cm: 0.5,
+    kerf_mm: 5,
+    sheets: [{
+        sheet_no: 1,
+        pieces: [{
+            x: 5,
+            y: 5,
+            w: 40,
+            h: 60,
+            original_w: 40,
+            original_h: 60,
+            label: "1.1",
+            piece_type: "Regular",
+            rotated: false,
+        }],
+    }],
+};
+const linerFrm = {
+    doc: {
+        name: "26-00103",
+        kerf_mm: 5,
+        pieces: [{
+            extra_liner: 1,
+            liner_reference_side: "edge_width_top",
+            liner_offset_cm: 0,
+            liner_width_cm: 1.8,
+            piece_type: "Regular",
+            width_cm: 40,
+            length_cm: 60,
+        }],
+    },
+};
+const linerHtml = renderer.build(linerFrm, linerPlan);
+const linerPath = linerHtml.match(/data-overlay-kind="liner"[^>]*d="([^"]+)"/);
+assert.ok(linerPath, linerHtml);
+assert.equal((linerPath[1].match(/L/g) || []).length, 1);
+assert.match(linerPath[1], /^M[\d.]+ [\d.]+ L[\d.]+ [\d.]+$/);
+assert.match(linerHtml, /data-overlay-kind="liner"[^>]*stroke-dasharray="3 2.2"/);
+assert.doesNotMatch(linerHtml, /data-overlay-kind="liner"[^>]* Z"/);
+assert.doesNotMatch(linerHtml, /data-liner-toolpath-error/);
+assert.match(linerHtml, /<div class="dco-sheet-card"[\s\S]*data-overlay-kind="liner"/);
+const linerYs = linerPath[1].match(/[\d.]+/g).filter((_, index) => index % 2 === 1).map(Number);
+assert.equal(linerYs[0], linerYs[1]);
+assert.ok(Math.abs(linerYs[0] - 1.5) < 0.05);
+
+vm.runInContext(
+    fs.readFileSync(
+        path.resolve(__dirname, "../../public/js/door_cutting_order/drawing/door_cutting_order_machining_overlay.js"),
+        "utf8"
+    ),
+    context,
+    { filename: "door_cutting_order_machining_overlay.js" }
+);
+const symbolPlan = {
+    usable_board_width_cm: 122,
+    usable_board_length_cm: 244,
+    full_board_width_cm: 122,
+    full_board_length_cm: 244,
+    trim_cm: 0,
+    kerf_mm: 5,
+    sheets: [{
+        sheet_no: 1,
+        pieces: [{
+            x: 0,
+            y: 0,
+            w: 100,
+            h: 80,
+            original_w: 100,
+            original_h: 80,
+            label: "1.1",
+            piece_type: "Regular",
+            rotated: false,
+        }],
+    }],
+};
+const symbolFrm = {
+    doc: {
+        name: "26-SYMBOLS",
+        kerf_mm: 5,
+        pieces: [{
+            extra_liner: 1,
+            liner_reference_side: "edge_width_top",
+            liner_offset_cm: 10,
+            liner_width_cm: 1.8,
+            liner_start_cm: 20,
+            liner_length_cm: 30,
+            extra_back_groove: 1,
+            back_groove_reference_side: "edge_long_right",
+            back_groove_offset_cm: 4,
+            back_groove_width_cm: 0.5,
+            back_groove_start_cm: 10,
+            back_groove_length_cm: 25,
+            extra_recessed_handle_cutout: 1,
+            recessed_handle_reference_side: "edge_width_bottom",
+            recessed_handle_offset_cm: 2,
+            recessed_handle_width_cm: 1.5,
+            recessed_handle_start_cm: 15,
+            recessed_handle_length_cm: 20,
+            piece_type: "Regular",
+            width_cm: 100,
+            length_cm: 80,
+        }],
+    },
+};
+const symbolHtml = renderer.build(symbolFrm, symbolPlan);
+const linerSymbol = symbolHtml.match(/data-overlay-kind="liner"[^>]*d="([^"]+)"/);
+const grooveSymbol = symbolHtml.match(/data-overlay-kind="back_groove"[^>]*d="([^"]+)"/);
+const handleSymbol = symbolHtml.match(/<rect class="dco-extra-overlay-path dco-extra-overlay-handle"[^>]*>/);
+assert.ok(linerSymbol);
+assert.ok(grooveSymbol);
+assert.ok(handleSymbol);
+assert.match(symbolHtml, /data-overlay-kind="liner"[^>]*stroke="#1d6fbf"/);
+assert.match(symbolHtml, /data-overlay-kind="back_groove"[^>]*stroke="#2a7d4f"/);
+assert.match(symbolHtml, /data-overlay-kind="recessed_handle_cutout"[^>]*stroke="#c45c12"/);
+assert.doesNotMatch(symbolHtml, /dco-liner-toolpath/);
+function pathSpan(path) {
+    const values = path.match(/-?[\d.]+/g).map(Number);
+    const xs = values.filter((_, index) => index % 2 === 0);
+    const ys = values.filter((_, index) => index % 2 === 1);
+    return {
+        dx: Math.max(...xs) - Math.min(...xs),
+        dy: Math.max(...ys) - Math.min(...ys),
+    };
+}
+const linerSpan = pathSpan(linerSymbol[1]);
+assert.ok(Math.abs(linerSpan.dx - 30) < 0.2, linerSymbol[1]);
+assert.ok(linerSpan.dy < 0.2);
+const grooveSpan = pathSpan(grooveSymbol[1]);
+assert.ok(Math.abs(grooveSpan.dy - 31.25) < 0.3, grooveSymbol[1]);
+assert.ok(grooveSpan.dx < 0.2);
+assert.match(handleSymbol[0], /width="20"/);
+assert.doesNotMatch(handleSymbol[0], /width="100"/);
+
+const diagonalPlan = {
+    ...symbolPlan,
+    sheets: [{
+        sheet_no: 1,
+        pieces: [{
+            x: 0,
+            y: 0,
+            w: 40,
+            h: 60,
+            original_w: 40,
+            original_h: 60,
+            label: "1.1",
+            piece_type: "Clipped Corner",
+            clipped_corner_position: "Top Right",
+            clipped_corner_width_cm: 10,
+            clipped_corner_length_cm: 16,
+            rotated: false,
+        }],
+    }],
+};
+const diagonalFrm = {
+    doc: {
+        name: "26-DIAGONAL",
+        kerf_mm: 5,
+        pieces: [{
+            extra_liner: 1,
+            liner_reference_side: "edge_break_only",
+            liner_offset_cm: 1,
+            liner_width_cm: 0.8,
+            liner_start_cm: 2,
+            liner_length_cm: 4,
+            piece_type: "Clipped Corner",
+            clipped_corner_position: "Top Right",
+            clipped_corner_width_cm: 10,
+            clipped_corner_length_cm: 16,
+            width_cm: 40,
+            length_cm: 60,
+        }],
+    },
+};
+const diagonalHtml = renderer.build(diagonalFrm, diagonalPlan);
+const diagonalPath = diagonalHtml.match(/data-overlay-kind="liner"[^>]*d="([^"]+)"/);
+assert.ok(diagonalPath);
+const diagonalSpan = pathSpan(diagonalPath[1]);
+assert.ok(diagonalSpan.dx > 1 && diagonalSpan.dy > 1, diagonalPath[1]);
+
+const marginPlan = {
+    applied_trim_width_cm: 0,
+    applied_trim_length_cm: 0,
+    trim_cm: 0.5,
+    full_board_width_cm: 122,
+    full_board_length_cm: 244,
+    sheets: [
+        {
+            sheet_no: 1,
+            full_width_cm: 122,
+            full_length_cm: 244,
+            usable_width_cm: 122,
+            usable_length_cm: 244,
+            applied_trim_width_cm: 0,
+            applied_trim_length_cm: 0,
+            pieces: [{ x: 0, y: 0, w: 122, h: 244 }],
+        },
+        {
+            sheet_no: 2,
+            full_width_cm: 122,
+            full_length_cm: 244,
+            usable_width_cm: 121,
+            usable_length_cm: 243,
+            pieces: [
+                { x: 0, y: 203, w: 40, h: 40 },
+                { x: 40.3, y: 203, w: 40, h: 40 },
+                { x: 80.6, y: 203, w: 40, h: 40 },
+            ],
+        },
+    ],
+};
+assert.equal(
+    JSON.stringify(renderer.originalEdges(marginPlan, marginPlan.sheets[0])),
+    JSON.stringify(["right", "left", "top", "bottom"])
+);
+assert.equal(JSON.stringify(renderer.originalEdges(marginPlan, marginPlan.sheets[1])), "[]");
+assert.equal(JSON.stringify(renderer.physicalMarginsMm(marginPlan, marginPlan.sheets[1])), JSON.stringify({
+    left: 5,
+    right: 9,
+    top: 2035,
+    bottom: 5,
+}));
+const marginHtml = renderer.build({ doc: { name: "26-00107" } }, marginPlan);
+const trimWidths = [...marginHtml.matchAll(/data-trim-width-cm="([^"]+)"/g)].map(match => match[1]);
+assert.deepEqual(trimWidths, ["0", "0.5"]);
 
 console.log("Cutting-plan renderer simulation passed");

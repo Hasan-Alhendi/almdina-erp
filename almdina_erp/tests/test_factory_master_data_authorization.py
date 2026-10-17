@@ -92,6 +92,7 @@ class TestFactoryMasterDataAuthorization(unittest.TestCase):
                 Capability.EDIT_FACTORY_PRODUCTION_CONTROLS,
                 Capability.EDIT_FACTORY_PRINT_IDENTITY,
                 Capability.EDIT_WHATSAPP_MESSAGES,
+                Capability.MANAGE_BACKUPS,
             }
         )
         self.assertIn(Capability.VIEW_FACTORY_SETTINGS, expanded)
@@ -99,6 +100,8 @@ class TestFactoryMasterDataAuthorization(unittest.TestCase):
         self.assertTrue(context["can_view"])
         self.assertFalse(context["can_manage_whatsapp_session"])
         self.assertTrue(all(section["editable"] for section in context["sections"].values()))
+        self.assertTrue(context["can_manage_backups"])
+        self.assertFalse(context["can_restore_backups"])
 
         session_only = expand_factory_settings_capabilities(
             {Capability.MANAGE_WHATSAPP_SESSION}
@@ -117,6 +120,15 @@ class TestFactoryMasterDataAuthorization(unittest.TestCase):
         )
         self.assertTrue(routing[Capability.VIEW_PRODUCTION_ROUTINGS])
         self.assertFalse(routing[Capability.EDIT_PRODUCTION_ROUTINGS])
+
+    def test_restore_capability_does_not_grant_backup_management(self) -> None:
+        expanded = expand_factory_settings_capabilities({Capability.RESTORE_BACKUPS})
+        context = settings_context(expanded)
+
+        self.assertTrue(context["can_view"])
+        self.assertTrue(context["can_restore_backups"])
+        self.assertFalse(context["can_manage_backups"])
+        self.assertFalse(context["sections"]["backup_restore"]["editable"])
 
         edges = normalize_capability_state(
             {Capability.CREATE_EDGE_BANDING_TYPES: True}

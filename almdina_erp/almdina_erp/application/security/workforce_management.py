@@ -7,8 +7,52 @@ from typing import Any
 
 
 _EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
-SUPPORTED_LANGUAGES = frozenset({"ar", "en"})
+_LANGUAGE_CODE = re.compile(r"^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$")
+DEFAULT_USER_LANGUAGE = "ar"
 MAX_USER_ROLES = 100
+
+
+class WorkforceLanguageError(Exception):
+    """Stable language-validation failure. Presentation translates ``code``."""
+
+    def __init__(self, code: str, params: dict[str, str] | None = None) -> None:
+        self.code = code
+        self.params = dict(params or {})
+        super().__init__(code)
+
+
+def _language_match_key(language: str) -> str:
+    return str(language or "").strip().replace("_", "-").lower()
+
+
+def _official_language_code(language: str) -> str:
+    """Hyphenate a code without changing the casing of its official spelling."""
+    return str(language or "").strip().replace("_", "-")
+
+
+def normalize_language_code(
+    language: str,
+    *,
+    allowed_languages: Iterable[str] | None = None,
+) -> str:
+    """Validate a language code shape, and membership when a catalog is supplied.
+
+    ``allowed_languages`` is an abstract set from the caller. This module does
+    not read Frappe or decide which languages a site has enabled. Comparison is
+    case-insensitive. When the catalog contains the official spelling, that
+    spelling is returned and stored (``pt-br`` matches ``pt-BR``).
+    """
+    supplied = str(language or "").strip() or DEFAULT_USER_LANGUAGE
+    match_key = _language_match_key(supplied)
+    if not _LANGUAGE_CODE.fullmatch(match_key):
+        raise WorkforceLanguageError("invalid_language_code", {"language": match_key})
+    if allowed_languages is None:
+        return _official_language_code(supplied)
+    for item in allowed_languages:
+        official = _official_language_code(item)
+        if official and _language_match_key(official) == match_key:
+            return official
+    raise WorkforceLanguageError("unsupported_language", {"language": match_key})
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,12 +68,16 @@ def normalize_identity(
     email: str,
     first_name: str,
     last_name: str = "",
-    language: str = "ar",
+    language: str = DEFAULT_USER_LANGUAGE,
+    allowed_languages: Iterable[str] | None = None,
 ) -> WorkforceIdentity:
     normalized_email = str(email or "").strip().lower()
     normalized_first = " ".join(str(first_name or "").split())
     normalized_last = " ".join(str(last_name or "").split())
-    normalized_language = str(language or "ar").strip().lower()
+    normalized_language = normalize_language_code(
+        language,
+        allowed_languages=allowed_languages,
+    )
 
     if not _EMAIL_PATTERN.match(normalized_email):
         raise ValueError("يجب إدخال بريد إلكتروني صالح للمستخدم.")
@@ -37,8 +85,6 @@ def normalize_identity(
         raise ValueError("الاسم الأول للمستخدم مطلوب.")
     if len(normalized_first) > 140 or len(normalized_last) > 140:
         raise ValueError("اسم المستخدم أطول من الحد المسموح.")
-    if normalized_language not in SUPPORTED_LANGUAGES:
-        raise ValueError("لغة المستخدم المحددة غير مدعومة.")
 
     return WorkforceIdentity(
         email=normalized_email,
@@ -99,11 +145,13 @@ def audit_snapshot(user: dict[str, Any] | None) -> dict[str, Any]:
 
 
 __all__ = [
+    "DEFAULT_USER_LANGUAGE",
     "MAX_USER_ROLES",
-    "SUPPORTED_LANGUAGES",
     "WorkforceIdentity",
+    "WorkforceLanguageError",
     "audit_snapshot",
     "normalize_identity",
+    "normalize_language_code",
     "normalize_role_selection",
     "validate_temporary_password",
 ]

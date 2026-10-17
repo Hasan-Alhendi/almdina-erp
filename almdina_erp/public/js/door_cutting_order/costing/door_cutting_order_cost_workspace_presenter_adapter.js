@@ -1,6 +1,23 @@
 (() => {
     "use strict";
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split(`{${index}}`).join(String(value));
+            });
+        }
+        return text;
+    }
+
     if (window.AlmdinaCostWorkspacePresenterAdapter) return;
 
     function stateOwner() {
@@ -87,6 +104,15 @@
         }
     }
 
+    // The cost read includes these selections so pricing can see them. They are
+    // owned by the order form. Copying them back replaces a newer corner Apply
+    // with the snapshot from when the cost tab was loaded. Ordinary side flags
+    // are not part of that snapshot, so the same refresh leaves them alone.
+    const ORDER_OWNED_CORNER_SELECTION_FIELDS = new Set([
+        "edge_break",
+        "edge_break_only",
+    ]);
+
     function projectPieces(frm, pieceSnapshots) {
         if (!frm || !frm.doc || !Array.isArray(frm.doc.pieces)) return;
         const byName = new Map(
@@ -103,7 +129,7 @@
             // this marker and then reloads the authoritative snapshot normally.
             if (piece && piece.__almdina_pending_price_edit) return;
             Object.entries(financial).forEach(([fieldname, value]) => {
-                if (fieldname === "name") return;
+                if (fieldname === "name" || ORDER_OWNED_CORNER_SELECTION_FIELDS.has(fieldname)) return;
                 piece[fieldname] = value;
             });
         });
@@ -122,9 +148,9 @@
     function pendingMessage(frm) {
         const state = snapshot(frm);
         if (state && state.status === "error") {
-            return __("تعذر تحميل بيانات التكلفة. أعد المحاولة.");
+            return translate("Could not load the cost data. Try again.");
         }
-        return __("جاري تحميل بيانات التكلفة...");
+        return translate("Loading the cost data...");
     }
 
     const HOSTED_COST_SETTING_FIELDS = Object.freeze([
@@ -232,7 +258,7 @@
                 amount: isPending ? 0 : number(line.amount_usd),
                 pending: isPending,
                 note: isPending
-                    ? __("بانتظار إدخال السعر الخاص الشامل")
+                    ? translate("Waiting for the inclusive special price")
                     : (line.note || ""),
             };
         });
@@ -297,15 +323,15 @@
         card.classList.toggle("is-pending", pending.length > 0);
         if (pending.length) {
             card.innerHTML = `
-                <span>${__("الإجمالي الحالي قبل الأسعار غير المسعرة")}
-                    <small>${__("لا يعتبر إجماليًا نهائيًا حتى تسعير: {0}").replace("{0}", pending.map(esc).join("، "))}</small>
+                <span>${esc(translate("Current total before unpriced items"))}
+                    <small>${esc(translate("This is not a final total until these items are priced: {0}", [pending.join(", ")]))}</small>
                 </span>
                 <b>$ ${money(total)}</b>
             `;
             return;
         }
         card.innerHTML = `
-            <span>${__("الإجمالي النهائي للفاتورة")}</span>
+            <span>${esc(translate("Final invoice total"))}</span>
             <b>$ ${money(total)}</b>
         `;
     }

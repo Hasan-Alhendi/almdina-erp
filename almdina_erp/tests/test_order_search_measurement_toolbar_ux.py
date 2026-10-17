@@ -53,8 +53,8 @@ def test_order_search_includes_customer_and_explains_id_or_customer_search():
     search_fields = {value.strip() for value in doctype["search_fields"].split(",") if value.strip()}
     assert {"customer", "board_description"}.issubset(search_fields)
     source = text(LIST_UX)
-    assert "ابحث باسم العميل أو رقم الطلب (ID)" in source
-    assert "اسم العميل أو رقم الطلب" in source
+    assert 'translate("Search by customer name or order number")' in source
+    assert 'translate("Customer name or order number")' in source
     assert '"customer", "order_date", "status"' in source
 
 
@@ -71,8 +71,9 @@ def test_visible_id_filter_is_replaced_with_combined_name_or_customer_search():
 
 def test_measurement_table_has_print_and_editable_full_screen_actions():
     source = text(MEASUREMENT_UX)
-    assert 'class="btn btn-default btn-sm dco-print-measurements"' in source
-    assert "فتح جدول الإدخال في نافذة مستقلة" in source
+    assert 'printButton.className = "btn btn-default btn-sm dco-toolbar-icon-button dco-print-measurements"' in source
+    assert 'title: translateCopy("Open measurement table in a separate window")' in source
+    assert 'openButton.className = "btn btn-default btn-sm dco-toolbar-icon-button dco-open-measurements-window"' in source
     assert "openEditableMeasurements(frm)" in source
     assert "dco-measurement-entry-window" in source
     assert "host.appendChild(root)" in source
@@ -95,17 +96,17 @@ def test_full_screen_entry_reuses_live_grid_and_preserves_all_existing_editing_b
     assert "dco-entry-window-close" in source
     assert "dco-entry-window-top" in source
     assert "dco-entry-window-icon-button" in source
-    assert "إغلاق والعودة" in source
-    assert "توجد تعديلات غير محفوظة" in source
-    assert "جميع التعديلات محفوظة" in source
+    assert "Close and return" in source
+    assert "Unsaved changes" in source
+    assert "All changes are saved" in source
     assert "height:100%;display:flex;flex-direction:column" in source
     assert "max-height:none!important" in source
 
 
 def test_measurement_print_is_the_shared_base_and_invoice_only_appends_quote():
     source = text(PRINT_PRESENTER)
-    for label in ("النوع", "العرض", "الطول", "العدد", "القشاط المخصص", "ملاحظات"):
-        assert label in source
+    for label in ("Type", "Width", "Length", "Qty", "Custom edge banding", "Notes"):
+        assert f'__("{label}")' in source
     assert "function measurementTable(frm)" in source
     assert 'function measurementDocumentBody(frm, customerPhone = "")' in source
     assert 'printHtml(documentHtml(frm, "measurements", printIdentity, null, customerPhone))' in source
@@ -125,7 +126,8 @@ def test_customer_invoice_keeps_edge_color_once_in_shared_measurement_header():
     print_source = text(PRINT_PRESENTER)
     edge_color_patch = text(EDGE_COLOR_UX)
 
-    assert print_source.count("<b>لون القشاط</b>") == 1
+    assert print_source.count('__("Edge color")') == 1
+    assert "<b>لون القشاط</b>" not in print_source
     assert "<th>لون القشاط</th>" not in print_source
     assert "<b>نوع القشاط</b>" not in print_source
     assert "patchMeasurementTable" not in edge_color_patch

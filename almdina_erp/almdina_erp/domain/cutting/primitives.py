@@ -42,6 +42,14 @@ def clone_pieces(pieces: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return deepcopy(pieces)
 
 
+def liner_metadata(row: dict[str, Any]) -> dict[str, Any]:
+    from almdina_erp.almdina_erp.domain.cutting.machining_overlay import (
+        machining_metadata,
+    )
+
+    return machining_metadata(row)
+
+
 def _edge_metadata(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "edge_long_right": 1 if row.get("edge_long_right") else 0,
@@ -49,6 +57,7 @@ def _edge_metadata(row: dict[str, Any]) -> dict[str, Any]:
         "edge_width_top": 1 if row.get("edge_width_top") else 0,
         "edge_width_bottom": 1 if row.get("edge_width_bottom") else 0,
         "edge_break": 1 if row.get("edge_break") else 0,
+        "edge_break_only": 1 if row.get("edge_break_only") else 0,
         "edge_long_type": row.get("edge_long_type") or "",
         "edge_width_type": row.get("edge_width_type") or "",
         "edge_long_thickness_mm": num(row.get("edge_long_thickness_mm")),
@@ -99,6 +108,7 @@ def expand_piece_groups(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     "allow_rotation": 1 if row.get("allow_rotation") else 0,
                     "area_m2": (width_cm * length_cm) / 10000,
                     "notes": row.get("notes") or "",
+                    **liner_metadata(row),
                     **_edge_metadata(row),
                 }
             )
@@ -159,6 +169,7 @@ def make_placed_piece(
         "rotated": bool(rotated),
         "area_m2": num(piece.get("area_m2")),
         "notes": piece.get("notes") or "",
+        **liner_metadata(piece),
         **_edge_metadata(piece),
     }
 

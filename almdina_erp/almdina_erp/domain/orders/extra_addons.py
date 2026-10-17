@@ -8,7 +8,6 @@ from typing import Any
 from .costing import round_value
 
 
-EXTRA_PIECE_TYPE = "Extra"
 EXTRA_ADDON_CODES = (
     "double",
     "full_door_double",
@@ -37,7 +36,7 @@ EXTRA_OVERLAY_KIND_BY_LAYER = {
 
 
 class ExtraAddonError(ValueError):
-    """Raised when an Extra-door selection or price violates a domain rule."""
+    """Raised when an add-on selection or price violates a domain rule."""
 
     def __init__(self, code: str, addon_code: str = "") -> None:
         super().__init__(code)
@@ -95,13 +94,13 @@ class ExtraAddonPricingSummary:
 
 
 def extra_overlay_kind_for_layer(layer: str) -> str | None:
-    """Map a DXF layer name to an Extra overlay kind after case/whitespace normalize."""
+    """Map a DXF layer name to an add-on overlay kind after normalization."""
 
     return EXTRA_OVERLAY_KIND_BY_LAYER.get(str(layer or "").strip().upper())
 
 
 def extra_overlay_layer_for_kind(kind: str) -> str:
-    """Return the canonical DXF layer name for one Extra overlay kind."""
+    """Return the canonical DXF layer name for one add-on overlay kind."""
 
     return EXTRA_OVERLAY_LAYER_BY_KIND[str(kind)]
 
@@ -146,17 +145,12 @@ def calculate_extra_addon_pricing(
             )
             if bool(enabled)
         )
-        piece_type = str(piece.piece_type or "Regular")
-        if piece_type != EXTRA_PIECE_TYPE:
-            if selected:
-                raise ExtraAddonError("non_extra_addon_selection", selected[0])
+        if not selected:
             results.append(_empty_result())
             continue
 
-        if not selected:
-            raise ExtraAddonError("extra_addon_required")
-        if not str(piece.notes or "").strip():
-            raise ExtraAddonError("extra_notes_required")
+        if piece.double and piece.full_door_double:
+            raise ExtraAddonError("mutually_exclusive_double_addons", "double")
 
         qty = int(piece.qty or 0)
         if qty <= 0:
@@ -250,18 +244,11 @@ def _finite_non_negative(value: float) -> float:
 
 def extra_double_text_flags(
     *,
-    piece_type: str,
     extra_double: bool,
     extra_full_door_double: bool,
 ) -> dict[str, int]:
-    """Return Extra double checkboxes that DXF/plan TEXT marks may copy.
+    """Return independent double add-ons that DXF/plan TEXT marks may copy."""
 
-    These flags are operational workshop marks, not prices. Regular/Special
-    rows stay empty even if a checkbox leaked onto the row.
-    """
-
-    if str(piece_type or "").strip() != EXTRA_PIECE_TYPE:
-        return {}
     flags: dict[str, int] = {}
     if extra_double:
         flags["extra_double"] = 1
@@ -274,7 +261,6 @@ def extra_double_text_flags_by_source_no(rows: Iterable[Any]) -> dict[int, dict[
     flags: dict[int, dict[str, int]] = {}
     for index, row in enumerate(rows or [], start=1):
         attached = extra_double_text_flags(
-            piece_type=str(_row_field(row, "piece_type", "Regular") or "Regular"),
             extra_double=_truthy_flag(_row_field(row, "extra_double", 0)),
             extra_full_door_double=_truthy_flag(
                 _row_field(row, "extra_full_door_double", 0)
@@ -289,7 +275,7 @@ def apply_extra_double_text_flags_to_snapshot(
     snapshot: Any,
     rows: Iterable[Any],
 ) -> Any:
-    """Copy Extra double checkboxes onto matching snapshot pieces for DXF TEXT."""
+    """Copy double add-on checkboxes onto matching snapshot pieces for DXF TEXT."""
 
     if not isinstance(snapshot, dict):
         return snapshot
@@ -349,7 +335,6 @@ __all__ = [
     "EXTRA_OVERLAY_KIND_BY_LAYER",
     "EXTRA_OVERLAY_LAYER_BY_KIND",
     "EXTRA_OVERLAY_LAYER_NAMES",
-    "EXTRA_PIECE_TYPE",
     "FULL_DOOR_DOUBLE_CUT_MULTIPLIER",
     "ExtraAddonError",
     "ExtraAddonPieceInput",

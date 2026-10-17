@@ -4,13 +4,23 @@
     if (window.AlmdinaCustomerInvoiceAddonSummary) return;
 
     const EXTRA_ADDON_TYPE = "extra_addon";
-    const ADDON_ALIASES = Object.freeze({
-        liner: "لاينر",
-        "لاينر": "لاينر",
-        "حفر مسكة غطس": "مسكة غطس",
-        "تفريغ مسكة مخفية": "مسكة غطس",
-        "مسكة غطس": "مسكة غطس",
+    // Compatibility: historical stored descriptions. They select a message ID and are not shown raw.
+    const LEGACY_ADDON_PREFIX = /^(?:إضافة|Add-on)\s+/;
+    const LEGACY_DOOR_SUFFIX = /\s*[—-]\s*(?:درفة\s+رقم|door number)\s+\d+\s*$/;
+    const ADDON_MESSAGE_IDS = Object.freeze({
+        liner: "Liner",
+        "لاينر": "Liner",
+        "حفر مسكة غطس": "Recessed handle",
+        "تفريغ مسكة مخفية": "Recessed handle",
+        "مسكة غطس": "Recessed handle",
     });
+
+    function translate(message) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") return locale.translate(message);
+        if (typeof __ === "function") return __(message);
+        return String(message == null ? "" : message);
+    }
 
     function number(value) {
         const parsed = Number(value || 0);
@@ -20,10 +30,12 @@
     function addonLabel(description) {
         const text = String(description || "")
             .trim()
-            .replace(/^إضافة\s+/, "")
-            .replace(/\s*[—-]\s*درفة\s+رقم\s+\d+\s*$/, "")
+            .replace(LEGACY_ADDON_PREFIX, "")
+            .replace(LEGACY_DOOR_SUFFIX, "")
             .trim();
-        return ADDON_ALIASES[text.toLocaleLowerCase()] || ADDON_ALIASES[text] || text || "إضافة";
+        const messageId = ADDON_MESSAGE_IDS[text.toLocaleLowerCase()] || ADDON_MESSAGE_IDS[text];
+        if (messageId) return translate(messageId);
+        return text || translate("Add-on");
     }
 
     function summarizeLines(lines) {
@@ -44,7 +56,7 @@
                     ...line,
                     description: label,
                     quantity: 0,
-                    unit: String(line.unit || "درفة").trim() || "درفة",
+                    unit: String(line.unit || "").trim() || translate("Door"),
                     rate: 0,
                     amount: 0,
                     note: "",

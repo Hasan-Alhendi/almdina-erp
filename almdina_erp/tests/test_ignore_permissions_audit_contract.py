@@ -18,6 +18,8 @@ IGNORE_RE = re.compile(r"ignore_permissions\s*=\s*True")
 _REVIEWED_SITES: dict[str, str] = {
     "install.py": "MIGRATION",
     "almdina_erp/doctype/board_remnant/board_remnant.py": "LEGACY_INACTIVE",
+    "almdina_erp/infrastructure/backups/history.py": "SAFE",  # Internal backup operation audit records, not a public insert endpoint.
+    "almdina_erp/infrastructure/backups/restore_runner.py": "MIGRATION",  # Privileged background restore finalizer, not an HTTP request.
     "almdina_erp/infrastructure/frappe/canonical_permission_state_repository.py": "MIGRATION",
     "almdina_erp/infrastructure/frappe/cutting_plan_surface_metadata.py": "SAFE",
     "almdina_erp/infrastructure/frappe/master_data_audit.py": "SAFE",
@@ -41,6 +43,8 @@ _REVIEWED_SITES: dict[str, str] = {
     "almdina_erp/services/production_settings_service.py": "SAFE",
     "almdina_erp/services/production_stage_bootstrap_service.py": "SAFE",
     "almdina_erp/services/special_shape_service.py": "SAFE",
+    "almdina_erp/services/user_language_service.py": "SAFE",  # POST-only authenticated current-user language edit.
+
 }
 
 

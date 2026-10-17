@@ -63,8 +63,8 @@
             return {
                 fieldname: "roles",
                 fieldtype: "MultiSelectList",
-                label: t("الأدوار"),
-                description: t("اختر الأدوار والصلاحيات المطلوبة. صفحة الدخول تأتي من Home Page في Role داخل Frappe ولا يحددها نظام Almdina."),
+                label: t("Roles"),
+                description: t("Select the required roles and permissions. The login page comes from the Home Page on the Role in Frappe and is not determined by the Almdina system."),
                 default: defaultValue,
                 read_only: readOnly ? 1 : 0,
                 get_data: txt => roleOptions(txt),
@@ -76,27 +76,61 @@
             const result = validator(roles || []);
             if (!result || result.ok !== false) return true;
             own(frappe.msgprint({
-                title: t("تعارض في صفحة الدخول"),
-                message: result.message || t("الأدوار المحددة تحتوي صفحات دخول مختلفة."),
+                title: t("Login page conflict"),
+                message: result.message || t("Selected roles have different login pages."),
                 indicator: "orange",
             }));
             return false;
+        }
+
+        function languageChoices(languages, current) {
+            const rows = [];
+            const seen = new Set();
+            (languages || []).forEach(language => {
+                const code = String(language && language.code || "").trim();
+                if (!code || seen.has(code)) return;
+                seen.add(code);
+                rows.push({
+                    value: code,
+                    label: String(language.name || code),
+                });
+            });
+            const selected = String(current || "").trim();
+            if (selected && !seen.has(selected)) {
+                rows.push({ value: selected, label: selected });
+            }
+            return rows;
+        }
+
+        function languageField(languages, current) {
+            const options = languageChoices(languages, current);
+            const codes = options.map(option => option.value);
+            const fallback = codes.includes("ar") ? "ar" : (codes[0] || "ar");
+            const selected = String(current || "").trim();
+            return {
+                fieldname: "language",
+                fieldtype: "Select",
+                label: t("Language"),
+                options,
+                default: codes.includes(selected) ? selected : fallback,
+                reqd: 1,
+            };
         }
 
         function openCreate(config = {}) {
             const canAssignRoles = config.canAssignRoles === true;
             const draftKey = "create";
             const dialog = own(new frappe.ui.Dialog({
-                title: t("إضافة مستخدم للمعمل"),
+                title: t("Add user to factory"),
                 fields: [
-                    { fieldname: "email", fieldtype: "Data", label: t("البريد الإلكتروني"), options: "Email", reqd: 1 },
-                    { fieldname: "first_name", fieldtype: "Data", label: t("الاسم"), reqd: 1 },
-                    { fieldname: "last_name", fieldtype: "Data", label: t("الكنية") },
-                    { fieldname: "language", fieldtype: "Select", label: t("اللغة"), options: ["ar", "en"], default: "ar", reqd: 1 },
+                    { fieldname: "email", fieldtype: "Data", label: t("Email"), options: "Email", reqd: 1 },
+                    { fieldname: "first_name", fieldtype: "Data", label: t("Name"), reqd: 1 },
+                    { fieldname: "last_name", fieldtype: "Data", label: t("Last name") },
+                    languageField(config.languages, ""),
                     roleField([], !canAssignRoles, config.roleOptions),
-                    { fieldname: "temporary_password", fieldtype: "Password", label: t("كلمة مرور مؤقتة"), reqd: 1, description: t("10 محارف على الأقل وتحتوي حرفًا ورقمًا.") },
+                    { fieldname: "temporary_password", fieldtype: "Password", label: t("Temporary password"), reqd: 1, description: t("At least 10 characters, including a letter and a number.") },
                 ],
-                primary_action_label: t("إنشاء المستخدم"),
+                primary_action_label: t("Create user"),
                 primary_action: values => {
                     const roles = canAssignRoles ? (values.roles || []) : [];
                     if (!validateRoleSelection(roles, config.validateRoles)) return false;
@@ -122,9 +156,9 @@
             const fields = [];
             if (canEdit) {
                 fields.push(
-                    { fieldname: "first_name", fieldtype: "Data", label: t("الاسم"), reqd: 1, default: user.first_name || "" },
-                    { fieldname: "last_name", fieldtype: "Data", label: t("الكنية"), default: user.last_name || "" },
-                    { fieldname: "language", fieldtype: "Select", label: t("اللغة"), options: ["ar", "en"], default: user.language || "ar", reqd: 1 }
+                    { fieldname: "first_name", fieldtype: "Data", label: t("Name"), reqd: 1, default: user.first_name || "" },
+                    { fieldname: "last_name", fieldtype: "Data", label: t("Last name"), default: user.last_name || "" },
+                    languageField(config.languages, user.language || "ar")
                 );
             }
             if (canAssignRoles) fields.push(roleField(user.roles || [], false, config.roleOptions));
@@ -132,9 +166,9 @@
 
             const draftKey = `edit:${user.email}`;
             const dialog = own(new frappe.ui.Dialog({
-                title: t("تعديل المستخدم {0}", [user.email]),
+                title: t("Edit user {0}", [user.email]),
                 fields,
-                primary_action_label: t("حفظ"),
+                primary_action_label: t("Save"),
                 primary_action: values => {
                     if (canAssignRoles && !validateRoleSelection(values.roles || [], config.validateRoles)) return false;
                     const payload = {};
@@ -162,9 +196,9 @@
             if (!user) return null;
             const draftKey = `password:${user.email}`;
             const dialog = own(new frappe.ui.Dialog({
-                title: t("تعيين كلمة مرور مؤقتة"),
-                fields: [{ fieldname: "temporary_password", fieldtype: "Password", label: t("كلمة المرور المؤقتة"), reqd: 1 }],
-                primary_action_label: t("حفظ كلمة المرور"),
+                title: t("Set temporary password"),
+                fields: [{ fieldname: "temporary_password", fieldtype: "Password", label: t("Temporary password"), reqd: 1 }],
+                primary_action_label: t("Save password"),
                 primary_action: values => Promise.resolve(
                     config.onSubmit && config.onSubmit(values.temporary_password)
                 ).then(() => {
@@ -182,9 +216,9 @@
         function confirmToggle(config = {}) {
             const user = config.user;
             if (!user) return false;
-            const label = config.enabled ? t("تفعيل") : t("تعطيل");
+            const label = config.enabled ? t("Enable") : t("Disable");
             own(frappe.confirm(
-                t("هل تريد {0} المستخدم {1}؟", [label, user.email]),
+                t("Do you want to {0} user {1}?", [label, user.email]),
                 () => config.onConfirm && config.onConfirm()
             ));
             return true;
@@ -194,7 +228,7 @@
             const user = config.user;
             if (!user) return false;
             own(frappe.confirm(
-                t("سيتم إضافة الحساب {0} إلى نطاق المعمل بدون منحه أي دور أو صلاحية تشغيلية تلقائيًا، وبدون تغيير Default Workspace أو Default App في Frappe. هل تريد المتابعة؟", [user.email]),
+                t("Account {0} will be added to the factory scope without automatically granting any role or operational permission, and without changing Default Workspace or Default App in Frappe. Do you want to continue?", [user.email]),
                 () => config.onConfirm && config.onConfirm()
             ));
             return true;
@@ -204,7 +238,7 @@
             const user = config.user;
             if (!user) return null;
             const dialog = own(new frappe.ui.Dialog({
-                title: t("سجل تغييرات {0}", [user.email]),
+                title: t("Change log for {0}", [user.email]),
                 fields: [{ fieldname: "audit", fieldtype: "HTML" }],
                 size: "large",
             }));

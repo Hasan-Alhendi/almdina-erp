@@ -2,9 +2,9 @@
     "use strict";
 
     const TAB_LABELS = {
-        order_tab: "الطلب",
-        results_tab: "خطة القص",
-        cost_tab: "تكلفة الطلب",
+        order_tab: "Order",
+        results_tab: "Cutting Plan",
+        cost_tab: "Order Cost",
     };
     const HIDE_EVENT = "hide.almdinaDcoHeaderUx";
 
@@ -22,15 +22,6 @@
         });
     }
 
-    function isArabic() {
-        const lang = String(
-            (frappe.boot && frappe.boot.lang) ||
-            (frappe.boot && frappe.boot.user && frappe.boot.user.language) ||
-            (document.documentElement && document.documentElement.lang) ||
-            ""
-        ).toLowerCase();
-        return lang === "ar" || lang.startsWith("ar-");
-    }
 
 
     function domNode(value) {
@@ -39,9 +30,10 @@
     }
 
     function forceRenderedTabLabels(frm, tabs) {
-        if (!isArabic() || !tabs) return;
+        if (!tabs) return;
 
-        Object.entries(TAB_LABELS).forEach(([fieldname, label]) => {
+        Object.entries(TAB_LABELS).forEach(([fieldname, message]) => {
+            const label = __(message);
             const field = frm.fields_dict && frm.fields_dict[fieldname];
             if (field && field.df && field.df.label !== label) {
                 frm.set_df_property(fieldname, "label", label);
@@ -52,15 +44,6 @@
                 const labelNode = direct.querySelector(".nav-link, .form-tab, .tab-label, span") || direct;
                 labelNode.textContent = label;
             }
-        });
-
-        // Frappe may render the tab text without a data-fieldname on the visible node.
-        // Replace exact legacy labels as a final rendering fallback without touching other UI text.
-        tabs.querySelectorAll(".nav-link, .form-tab, a, button").forEach(node => {
-            const text = String(node.textContent || "").trim();
-            if (text === "Order") node.textContent = "الطلب";
-            if (text === "Cutting Plan") node.textContent = "خطة القص";
-            if (text === "Order Cost") node.textContent = "تكلفة الطلب";
         });
     }
 

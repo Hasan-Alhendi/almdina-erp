@@ -8,9 +8,11 @@ coverage.
 app_include_css = [
     "/assets/almdina_erp/css/almdina_design_tokens.css",
     "/assets/almdina_erp/css/almdina_components.css",
+    "/assets/almdina_erp/css/almdina_patterns.css",
+    "/assets/almdina_erp/css/almdina_page_templates.css?v=1",
     "/assets/almdina_erp/css/almdina_desk_theme.css",
     "/assets/almdina_erp/css/almdina_desk_sidebar.css?v=2",
-    "/assets/almdina_erp/css/almdina_workspace_home.css?v=10",
+    "/assets/almdina_erp/css/almdina_workspace_home.css?v=11",
     "/assets/almdina_erp/css/almdina_list_table.css",
     "/assets/almdina_erp/css/edge_banding_type_form.css?v=4",
     "/assets/almdina_erp/css/role_form.css?v=2",
@@ -23,16 +25,20 @@ app_include_css = [
     "/assets/almdina_erp/css/door_cutting_order_form_sidebar.css",
     # Raw /assets paths are not content-fingerprinted by Frappe; bump the bounded
     # DCO list revision when its presentation contract changes.
-    "/assets/almdina_erp/css/door_cutting_order_list.css?v=15",
+    "/assets/almdina_erp/css/door_cutting_order_list.css?v=16",
     # Subject-direction correction must load after the list presentation owner:
-    # keep Frappe's checkbox at the RTL edge while isolating only ID text as LTR.
-    "/assets/almdina_erp/css/door_cutting_order_list_rtl_subject.css?v=1",
+    # inherit page direction so the checkbox stays at the logical start, and
+    # isolate only ID text as LTR.
+    "/assets/almdina_erp/css/door_cutting_order_list_rtl_subject.css?v=2",
     "/assets/almdina_erp/css/door_cutting_order_extra_addons.css",
     "/assets/almdina_erp/css/notes.css",
     "/assets/almdina_erp/css/notes_interactions.css",
 ]
 
 app_include_js = [
+    "/assets/almdina_erp/js/almdina_locale.js",
+    # Desk app-name menu language item. Loads after locale; binds sidebar_setup.
+    "/assets/almdina_erp/js/almdina_language_switcher.js",
     "/assets/almdina_erp/js/permission_context.js",
     "/assets/almdina_erp/js/frontend_foundation.js",
     "/assets/almdina_erp/js/almdina_ui.js",
@@ -46,9 +52,8 @@ app_include_js = [
     "/assets/almdina_erp/js/shop_floor_quick_actions.js",
     "/assets/almdina_erp/js/shared_shell.js",
     "/assets/almdina_erp/js/almdina_shortcut_presentation.js?v=2",
-    "/assets/almdina_erp/js/almdina_workspace_home_ux.js?v=11",
+    "/assets/almdina_erp/js/almdina_workspace_home_ux.js?v=12",
     "/assets/almdina_erp/js/almdina_desk_sidebar_ux.js?v=2",
-    "/assets/almdina_erp/js/arabic_operator_ui.js",
     "/assets/almdina_erp/js/input_stability.js",
     "/assets/almdina_erp/js/door_cutting_order/drawing/door_cutting_order_special_shape_geometry.js",
     "/assets/almdina_erp/js/door_cutting_order/drawing/door_cutting_order_shape_output_contract.js",
@@ -104,10 +109,14 @@ doctype_js = {
         "public/js/door_cutting_order/printing/door_cutting_order_print_identity.js",
         "public/js/door_cutting_order/order_entry/door_cutting_order_defaults.js",
         "public/js/door_cutting_order/drawing/door_cutting_order_clipped_corner_ux.js",
+        "public/js/door_cutting_order/drawing/door_cutting_order_liner_geometry.js",
+        "public/js/door_cutting_order/drawing/door_cutting_order_machining_overlay.js",
+        "public/js/door_cutting_order/drawing/door_cutting_order_liner_ux.js",
         "public/js/door_cutting_order/printing/door_cutting_order_shape_print.js",
-        # Extra-door selection owns customer requirements; Full Door Double also
+        # Door add-on selection owns customer requirements; Full Door Double also
         # impacts Plan quantity while other extras remain cost-only.
         "public/js/door_cutting_order/order_entry/extra_addons/door_cutting_order_extra_addons_ux.js",
+        "public/js/door_cutting_order/order_entry/extra_addons/door_cutting_order_addons_dialog.js",
         "public/js/door_cutting_order/order_entry/door_cutting_order_operator_ux.js",
         # Presentation-only owner for the native Order tab fields. It does not
         # duplicate document state or save commands; it only arranges the existing

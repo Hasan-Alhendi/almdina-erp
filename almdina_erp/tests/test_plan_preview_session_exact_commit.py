@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import csv
 import unittest
 from pathlib import Path
 
@@ -19,6 +20,13 @@ REGISTRY = (
 
 
 class TestPlanPreviewSessionExactCommit(unittest.TestCase):
+    def assert_arabic_message(self, message_id: str, expected_arabic: str) -> None:
+        # Ensure the user-visible Arabic text is provided by the translation catalog,
+        # not by hard-coded JS strings. Preserve copy while locale changes.
+        with (ROOT / "translations" / "ar.csv").open(encoding="utf-8", newline="") as handle:
+            translations = {row[0]: row[1] for row in csv.reader(handle) if len(row) >= 2}
+        self.assertEqual(translations.get(message_id), expected_arabic)
+
     def test_application_preview_contract_is_framework_neutral(self) -> None:
         source = (
             APP / "application" / "cutting" / "plan_preview_session.py"
@@ -110,7 +118,13 @@ class TestPlanPreviewSessionExactCommit(unittest.TestCase):
         self.assertIn("owner.invalidate(frm)", source)
         self.assertIn("await owner.commit(frm)", source)
         self.assertNotIn("legacy.saveEditing(frm)", source)
-        self.assertIn("المعاينة الحالية لم تنجح في التحقق الهندسي", source)
+        message_id = "The current preview did not pass the engineering check. Try other settings, then recalculate."
+        self.assertIn(message_id, source)
+        self.assertIn("owner.isCommittable(frm)", source)
+        self.assert_arabic_message(
+            message_id,
+            "المعاينة الحالية لم تنجح في التحقق الهندسي. جرّب إعدادات أخرى ثم أعد الحساب.",
+        )
         self.assertNotIn("<style", source)
         self.assertNotIn("renderer.build", source)
 
@@ -120,9 +134,20 @@ class TestPlanPreviewSessionExactCommit(unittest.TestCase):
         )
         self.assertIn("function renderPersistedEditingState(frm, status)", source)
         self.assertIn("function renderPreviewPlan(frm, previewState, committable)", source)
-        self.assertIn("المعاينة السابقة أصبحت قديمة", source)
-        self.assertIn("الخطة المعروضة أدناه هي الخطة المحفوظة", source)
-        self.assertIn("معاينة غير صالحة للحفظ", source)
+        stale_title = "The previous preview is out of date"
+        stale_message = (
+            "You changed a setting after the last preview. The plan shown below is the saved plan; "
+            "recalculate to see the new result."
+        )
+        invalid_label = "Preview cannot be saved"
+        for message_id in (stale_title, stale_message, invalid_label):
+            self.assertIn(message_id, source)
+        self.assert_arabic_message(stale_title, "المعاينة السابقة أصبحت قديمة")
+        self.assert_arabic_message(
+            stale_message,
+            "غيّرت أحد الإعدادات بعد آخر معاينة. الخطة المعروضة أدناه هي الخطة المحفوظة؛ أعد الحساب لرؤية النتيجة الجديدة.",
+        )
+        self.assert_arabic_message(invalid_label, "معاينة غير صالحة للحفظ")
         self.assertNotIn("frappe.call", source)
         self.assertNotIn("api.preview", source)
         self.assertNotIn("api.commitPreview", source)
