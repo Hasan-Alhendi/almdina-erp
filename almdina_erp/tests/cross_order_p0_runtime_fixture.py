@@ -288,6 +288,24 @@ def audit_db() -> dict[str, object]:
             if not result["recovery_db_verified"]:
                 raise AssertionError(f"NEW Native Save did not persist its owned fields: {matches}")
             edit_evidence = json.loads(recovery_evidence.read_text(encoding="utf-8"))
+            if edit_evidence.get("plan_preview"):
+                source_plan = frappe.get_doc("Cutting Plan", edit_evidence["plan_preview"]["source_plan"])
+                result["preview_commit_independent_db"] = {
+                    "order_name": source_plan.door_cutting_order,
+                    "plan_name": source_plan.name,
+                    "revision": int(source_plan.revision or 0),
+                    "kerf_mm": float(source_plan.kerf_mm or 0),
+                    "modified": str(source_plan.modified),
+                }
+                if edit_evidence.get("plan_saved"):
+                    expected = edit_evidence["plan_saved"]
+                    result["preview_commit_db_verified"] = bool(
+                        source_plan.door_cutting_order == native["name"]
+                        and source_plan.name == expected["plan"]
+                        and float(source_plan.kerf_mm or 0) == float(expected["kerf"])
+                    )
+                    if not result["preview_commit_db_verified"]:
+                        raise AssertionError("Plan preview commit did not persist the requested Kerf")
             if edit_evidence.get("plan_saved") and edit_evidence.get("cost_saved"):
                 order = frappe.get_doc("Door Cutting Order", native["name"])
                 plan_name = edit_evidence["plan_saved"]["plan"]

@@ -2768,3 +2768,5 @@ The {0} length is invalid.,طول {0} غير صالح.
 The start and length of {0} exceed the side length.,بداية {0} وطوله يتجاوزان طول الجهة.
 "The flat end cannot be machined by a circular cutter in one pass, or the region is shorter than the cutter diameter.",النهاية المستقيمة غير قابلة للتنفيذ بريشة دائرية في تمريرة واحدة، أو طول المنطقة أقصر من قطر الريشة.
 The {0} start or end falls on a corner without a single direction for a flat end.,بداية {0} أو نهايته تقع على انعطاف لا يملك اتجاهاً واحداً للنهاية المستقيمة.
+"The cutting plan save could not be confirmed. Check the saved plan, then create a new preview.",تعذر تأكيد حفظ خطة القص. تحقق من الخطة المحفوظة ثم أنشئ معاينة جديدة.
+The plan was verified on the server after its save response was lost.,تم التحقق من حفظ الخطة على الخادم بعد فقدان رد الحفظ.

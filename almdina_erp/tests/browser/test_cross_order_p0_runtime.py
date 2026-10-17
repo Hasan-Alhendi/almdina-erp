@@ -1184,6 +1184,8 @@ def test_recovery_new_saved_intersection():
                     session_generation:AlmdinaDcoEditSessionCoordinator.snapshot(cur_frm).sessionGeneration,
                     token:AlmdinaDocumentContext.capture(cur_frm)};
             }""")
+            assert evidence["plan_preview"]["source_modified"]
+            assert evidence["plan_preview"]["requested_kerf"] == new_kerf
             save_plan = plan_toolbar.locator('.dco-tab-edit-save')
             assert save_plan.is_enabled()
             save_plan.click()

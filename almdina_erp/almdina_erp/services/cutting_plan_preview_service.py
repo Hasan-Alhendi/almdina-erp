@@ -234,6 +234,10 @@ def preview_cutting_plan(
 
     return {
         "preview_id": session.preview_id,
+        "order_name": order.name,
+        "source_plan_name": source_plan.name,
+        "source_plan_revision": int(source_plan.revision or 0),
+        "source_plan_modified": str(source_plan.modified or ""),
         "settings_fingerprint": session.settings_fingerprint,
         "input_fingerprint": session.input_fingerprint,
         "plan": session.snapshot,
