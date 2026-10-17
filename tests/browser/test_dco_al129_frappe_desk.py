@@ -1746,6 +1746,7 @@ def test_real_desk_100_piece_checkpoint_restore_and_lost_save_response() -> None
         page = context.new_page()
         _attach_diagnostics(page)
         page.on("request", record_save_request)
+        diagnostic_page = page
         try:
             _login(page, fixture)
             _open_new_form(page, "create-100", expected_state="ready_for_entry")
