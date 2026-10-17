@@ -280,6 +280,31 @@ class TestFinancialDocumentApplication(unittest.TestCase):
         self.assertEqual(line["amount_usd"], 0.01)
         self.assertEqual(invoice["totals"][0]["value_usd"], 0.01)
 
+    def test_multiple_half_cent_addons_allocate_cents_without_last_line_patch(self) -> None:
+        # Four already-prorated $0.005 services are worth $0.02 together.
+        # Independent per-line rounding would incorrectly charge $0.04.
+        fields = (
+            "extra_full_door_double", "extra_liner",
+            "extra_back_groove", "extra_recessed_handle_cutout",
+        )
+        piece = {
+            "piece_type": "Regular", "qty": 1,
+            "factory_execution_qty": 1, "addon_billable_qty": 0.5,
+        }
+        for flag in fields:
+            piece[flag] = 1
+            piece[flag + "_unit_price_usd"] = 0.01
+            piece[flag + "_total_usd"] = 0.005
+        quote = {"required_boards": 0, "extra_addons_total_usd": 0.02,
+                 "customer_quote_total_usd": 0.02}
+        invoice = build_customer_invoice_document(quote, [piece])
+        lines = [line for line in invoice["lines"] if line["type"] == "extra_addon"]
+        self.assertEqual([line["quantity"] for line in lines], [0.5] * 4)
+        self.assertEqual([line["rate_usd"] for line in lines], [0.01] * 4)
+        self.assertEqual([line["amount_usd"] for line in lines], [0.01, 0.01, 0.00, 0.00])
+        self.assertEqual(invoice["totals"][0]["value_usd"], quote["customer_quote_total_usd"])
+        self.assertEqual(sum(line["amount_usd"] for line in lines), 0.02)
+
     def test_legacy_addon_quantity_and_explicit_zero_total_are_preserved(self) -> None:
         piece = {
             "piece_type": "Regular", "qty": 3,
