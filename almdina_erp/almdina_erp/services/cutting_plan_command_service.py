@@ -409,6 +409,7 @@ def finalize_uploaded_dxf_order_state(order: Any, plan: Any) -> None:
         order.name,
         reason="cost_plan_basis_changed",
         only_if_basis_changed=True,
+        order=order,
     )
 
 
@@ -453,10 +454,12 @@ def approve_order_plan(order: Any, plan_source: str) -> dict[str, Any]:
     )
 
     # Production status alone must not clear price approval; only a real basis shift.
-    maybe_invalidate_final_price_approval(
+    # Plan identity alone is ignored when board count and commercial totals match.
+    invalidated = maybe_invalidate_final_price_approval(
         order.name,
         reason="cost_plan_authority_changed",
         only_if_basis_changed=True,
+        order=order,
     )
 
     return {
@@ -465,6 +468,7 @@ def approve_order_plan(order: Any, plan_source: str) -> dict[str, Any]:
         "cutting_plan": plan.name,
         "revision": cint(plan.revision),
         "approved_plan_source": _legacy_plan_source(source_type),
+        "final_price_approval_invalidated": bool(invalidated),
     }
 
 
@@ -540,13 +544,16 @@ def recalculate_system_plan(
     )
 
     # Non-authority draft recalculation keeps the official cost plan unchanged.
-    maybe_invalidate_final_price_approval(
+    # Same board count + commercial basis keeps Approved (algorithm identity ignored).
+    invalidated = maybe_invalidate_final_price_approval(
         order.name,
         reason="cost_plan_basis_changed",
         only_if_basis_changed=True,
+        order=order,
     )
     result = plan_payload(plan, order)
     result["changed_fields"] = changed
+    result["final_price_approval_invalidated"] = bool(invalidated)
     return result
 
 

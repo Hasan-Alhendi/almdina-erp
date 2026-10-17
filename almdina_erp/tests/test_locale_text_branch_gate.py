@@ -353,6 +353,41 @@ class TestActiveUiHasNoLanguageTextBranches(unittest.TestCase):
                     leftovers.append(f"{relative}:{number}: {line.strip()}")
         self.assertEqual(leftovers, [])
 
+    def test_recovery_checkpoint_status_uses_translatable_ids_and_preserves_arabic(self) -> None:
+        """All recovery statuses translate at render time, without translating stored state keys."""
+        import csv
+
+        source = (
+            PUBLIC_JS / "door_cutting_order" / "recovery" / "presentation"
+            / "door_cutting_order_local_checkpoint.js"
+        ).read_text(encoding="utf-8")
+        statuses = source.split("function checkpointStatusText(snapshot)", 1)[1].split(
+            "function renderCheckpointStatus(", 1
+        )[0]
+        expected = (
+            ("DIRTY", "Changes have not been saved locally yet.", "هناك تغييرات لم تُحفظ محليًا بعد."),
+            ("LOCAL_SAVING", "Saving a local recovery copy…", "جارٍ حفظ نسخة الاسترداد محليًا…"),
+            ("LOCAL_SAVED", "A local recovery copy is saved; the order has not been officially saved on the server.", "تم تأكيد حفظ نسخة محلية؛ لم يُحفظ الطلب رسميًا على الخادم."),
+            ("OFFICIAL_SAVING", "Saving the order officially on the server…", "جارٍ حفظ الطلب رسميًا على الخادم…"),
+            ("PENDING_RECONCILIATION", "The official save was sent. Its result is being verified before recovery can continue.", "أُرسل الحفظ الرسمي، ويجري التحقق من نتيجته قبل متابعة الاسترداد."),
+            ("RESTORING", "Restoring the local draft…", "جارٍ استعادة المسودة المحلية…"),
+            ("COMPLETED", "The order was officially saved.", "اكتمل الحفظ الرسمي للطلب."),
+            ("ERROR", "Could not save the local recovery copy. Keep this page open until the draft is resolved.", "تعذر حفظ نسخة الاسترداد محليًا. تابع العمل مع إبقاء الصفحة مفتوحة حتى تعالج المسودة."),
+        )
+        self.assertIn(
+            'return translate(messages[String(snapshot && snapshot.state || "")] || "");',
+            statuses,
+        )
+        with (ROOT / "translations" / "ar.csv").open(encoding="utf-8", newline="") as handle:
+            translations = {
+                row[0]: row[1] for row in csv.reader(handle)
+                if len(row) >= 2
+            }
+        for state, english_id, arabic in expected:
+            with self.subTest(state=state):
+                self.assertIn(f'{state}: "{english_id}"', statuses)
+                self.assertEqual(translations.get(english_id), arabic)
+
     def test_operational_shell_avoids_hardcoded_dir_and_translated_label_rtl(self) -> None:
         """Translated surfaces inherit direction; only the Order ID link may force LTR."""
         list_js = (

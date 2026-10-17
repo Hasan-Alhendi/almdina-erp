@@ -389,12 +389,14 @@
         const placement = piecePlacement(piece);
         const widthMm = Math.max(EPSILON, placement.widthCm * 10);
         const heightMm = Math.max(EPSILON, placement.heightCm * 10);
+        const hole = Array.isArray(piece.glass_hole_local_mm) ? piece.glass_hole_local_mm : [];
         return createModel({
             source: options.source || "rectangle",
             exact: false,
             invalid: Boolean(options.invalid),
             placement,
             outerMm: [[0, 0], [widthMm, 0], [widthMm, heightMm], [0, heightMm]],
+            holesMm: hole.length >= 3 ? [hole] : [],
         });
     }
 

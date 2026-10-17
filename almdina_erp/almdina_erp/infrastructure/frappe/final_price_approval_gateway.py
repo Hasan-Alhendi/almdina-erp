@@ -158,6 +158,7 @@ def _order_pricing_input_fingerprint(order: Any) -> str:
             pieces=pieces,
             full_board_width_mm=width,
             full_board_length_mm=length,
+            order_cutting_machine=getattr(order, "order_cutting_machine", None),
         )
     )
 
@@ -255,6 +256,18 @@ class FrappeFinalPriceApprovalGateway:
         )
         return frappe.get_doc("Cutting Plan", name)
 
+    def lock_approval(self, approval_name: str) -> Any | None:
+        name = str(approval_name or "").strip()
+        if not name:
+            return None
+        rows = frappe.db.sql(
+            "select name from `tabDoor Cutting Price Approval` where name = %s for update",
+            (name,),
+        )
+        if not rows:
+            return None
+        return frappe.get_doc("Door Cutting Price Approval", name)
+
     def resolve_cost_plan(self, order: Any) -> Any | None:
         return current_cost_plan(order)
 
@@ -335,6 +348,7 @@ class FrappeFinalPriceApprovalGateway:
         currency: str,
         fingerprint: str,
         formula_version: str,
+        approval_note: str | None = None,
     ) -> Any:
         document = frappe.get_doc(
             {
@@ -345,6 +359,7 @@ class FrappeFinalPriceApprovalGateway:
                 "currency": str(currency or "USD"),
                 "approved_by": frappe.session.user,
                 "approved_on": now_datetime(),
+                "approval_note": approval_note,
                 "pricing_basis_fingerprint": fingerprint,
                 "fingerprint_formula_version": formula_version
                 or PRICE_APPROVAL_FINGERPRINT_FORMULA_VERSION,
@@ -373,6 +388,7 @@ class FrappeFinalPriceApprovalGateway:
             },
             update_modified=False,
         )
+        frappe.clear_document_cache("Door Cutting Order", order_name)
 
     def invalidate_approval(
         self,
@@ -404,28 +420,13 @@ class FrappeFinalPriceApprovalGateway:
 
 
 def assert_cost_settings_unlocked_for_order(order: Any) -> None:
-    """Reject cost-settings mutations while the commercial final price is Approved."""
+    """Historical hook: Approved price no longer blocks cost-settings edits.
 
-    from almdina_erp.almdina_erp.domain.orders.price_approval import (
-        cost_settings_locked_by_price_approval,
-    )
+    Capability, document scope, and plan lifecycle remain the authority. Kept so
+    older call sites stay safe after the product-contract change.
+    """
 
-    status = getattr(order, "price_approval_status", None)
-    if status is None and getattr(order, "name", None):
-        status = frappe.db.get_value(
-            "Door Cutting Order",
-            order.name,
-            "price_approval_status",
-        )
-    if not cost_settings_locked_by_price_approval(status):
-        return
-    frappe.throw(
-        _(
-            "لا يمكن تعديل إعدادات التكلفة لأن السعر النهائي معتمد. "
-            "يُرفع القفل تلقائياً بعد تغيير مشروع في أساس التسعير يُبطل الاعتماد."
-        ),
-        frappe.ValidationError,
-    )
+    del order
 
 
 __all__ = [

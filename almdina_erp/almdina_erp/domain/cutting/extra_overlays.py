@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Sequence
 
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import (
     EPSILON,
+    point_in_polygon,
     point_near_polygon,
+    point_to_polygon_distance,
     points_close,
     polygon_segments,
+    segment_distance,
     segments_intersect,
 )
 from almdina_erp.almdina_erp.domain.orders.extra_addons import (
@@ -179,20 +183,113 @@ def _segment_escapes_polygon(
     )
 
 
+def _centerline_gap(
+    path: Sequence[Point],
+    polygon: Sequence[Point],
+    *,
+    tolerance: float,
+    closed: bool,
+) -> float:
+    """Outside clearance from a centerline to a piece. Zero when the centerline meets it."""
+
+    gap = math.inf
+    points = tuple(path)
+    for point in points:
+        if point_in_polygon(point, polygon, tolerance):
+            return 0.0
+        gap = min(gap, point_to_polygon_distance(point, polygon))
+    for segment in overlay_path_segments(points, closed=closed):
+        midpoint = (
+            (segment[0][0] + segment[1][0]) / 2.0,
+            (segment[0][1] + segment[1][1]) / 2.0,
+        )
+        if point_in_polygon(midpoint, polygon, tolerance):
+            return 0.0
+        for edge in polygon_segments(polygon):
+            if segments_intersect(segment, edge, tolerance):
+                return 0.0
+            gap = min(gap, segment_distance(segment, edge, tolerance))
+    return gap
+
+
+def _assign_liner_by_cutter_footprint(
+    overlay: ExtraOverlayCandidate,
+    hosts: Sequence[ExtraOverlayHost],
+    *,
+    tolerance: float,
+    cutter_radius_mm: float,
+) -> AssignedExtraOverlay:
+    """Bind one liner path without treating a kerf-zone center as a second door.
+
+    The cutting gap between doors is the cutter kerf, not an extra safety margin.
+    A full-edge liner may place its center one cutter radius past the door outline,
+    so that center can sit in the kerf. That is not a collision. A collision is the
+    cutter disk entering the neighboring door's own area.
+    """
+
+    path = overlay.path
+    owners: list[ExtraOverlayHost] = []
+    intruded: list[ExtraOverlayHost] = []
+    intrusion_limit = cutter_radius_mm - tolerance
+    for host in hosts:
+        gap = _centerline_gap(
+            path,
+            host.polygon,
+            tolerance=tolerance,
+            closed=overlay.closed,
+        )
+        if gap <= tolerance:
+            owners.append(host)
+        if gap < intrusion_limit:
+            intruded.append(host)
+    if len(owners) > 1 or len(intruded) > 1:
+        raise ExtraOverlayError("extra_overlay_spans_hosts", layer=overlay.layer)
+    if len(owners) != 1:
+        raise ExtraOverlayError("extra_overlay_floating", layer=overlay.layer)
+    host = owners[0]
+    if overlay.kind not in host.selected_codes:
+        raise ExtraOverlayError(
+            "extra_overlay_addon_not_selected",
+            layer=overlay.layer,
+            host_key=host.key,
+            kind=overlay.kind,
+            label=host.label,
+        )
+    return AssignedExtraOverlay(
+        host_key=host.key,
+        kind=overlay.kind,
+        layer=overlay.layer,
+        path=path,
+        closed=overlay.closed,
+    )
+
+
 def assign_extra_overlays(
     overlays: Sequence[ExtraOverlayCandidate],
     hosts: Sequence[ExtraOverlayHost],
     *,
     tolerance: float = EPSILON,
     host_margin: float = 0.0,
+    cutter_radius_mm: float = 0.0,
 ) -> tuple[AssignedExtraOverlay, ...]:
     """Bind add-on overlay marks to their selected host without making cut pieces."""
 
     assigned: list[AssignedExtraOverlay] = []
+    radius = float(cutter_radius_mm or 0.0)
     for overlay in overlays:
         path = overlay.path
         if len(path) < 2:
             raise ExtraOverlayError("extra_overlay_invalid_path", layer=overlay.layer)
+        if overlay.kind == "liner" and radius > tolerance:
+            assigned.append(
+                _assign_liner_by_cutter_footprint(
+                    overlay,
+                    hosts,
+                    tolerance=tolerance,
+                    cutter_radius_mm=radius,
+                )
+            )
+            continue
         contained = tuple(
             host
             for host in hosts

@@ -71,6 +71,18 @@ class BootHarness:
         ):
             assert spec and spec.loader
             spec.loader.exec_module(module)
+        # Keep this authorization harness independent from a live Frappe DB.
+        # Exercise the real UI-catalog filter using a deterministic enabled list.
+        catalog = module.almdina_ui_languages
+
+        class FakeLanguageCatalog:
+            def enabled_languages(self):
+                return [
+                    {"code": "en", "name": "English", "direction": "ltr"},
+                    {"code": "ar", "name": "العربية", "direction": "rtl"},
+                ]
+
+        module.almdina_ui_languages = lambda: catalog(catalog=FakeLanguageCatalog())
         return module
 
 

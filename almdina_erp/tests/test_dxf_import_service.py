@@ -47,7 +47,7 @@ def test_dxf_import_service_exists_with_layered_core_functions():
         "_match_pieces_to_order",
         "read_dxf_geometry",
         "assemble_contours",
-        "أي طبقة غير SHEET_OUTLINE أو CUT_PATH أو OFFCUT",
+        "إذا وُجدت طبقة GEOMETRY فهي الحدود النهائية للدرفات",
     ]:
         assert token in src
     assert DXF_READER.exists()
@@ -59,6 +59,7 @@ def test_dxf_import_mirrors_secure_export_layers():
     importer = _source(DXF_IMPORT)
     assert 'layer("SHEET_OUTLINE", 8)' in secure
     assert 'layer("CUT_PATH", 1)' in secure
+    assert 'layer(FINISHED_GEOMETRY_LAYER, 4)' in secure
     assert 'layer("OFFCUT", EXTRA_OVERLAY_LAYER_COLORS.OFFCUT)' in secure
     assert 'layer("Liner", EXTRA_OVERLAY_LAYER_COLORS.Liner)' in secure
     assert 'layer(TEXT_LABEL_LAYER, 7)' in secure

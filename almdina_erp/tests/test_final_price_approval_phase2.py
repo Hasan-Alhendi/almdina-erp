@@ -88,6 +88,10 @@ class FakeApproval:
     pricing_basis_fingerprint: str
     fingerprint_formula_version: str
     validity_status: str = PRICE_APPROVAL_VALIDITY_ACTIVE
+    approval_note: str | None = None
+    invalidation_reason: str | None = None
+    invalidated_on: str | None = None
+    invalidated_by: str | None = None
 
 
 @dataclass
@@ -162,7 +166,16 @@ class FakeGateway:
         return self.active
 
     def load_approval(self, approval_name: str) -> FakeApproval | None:
-        return self.active if self.active and self.active.name == approval_name else None
+        for row in self.approvals:
+            if row.name == approval_name:
+                return row
+        if self.active and self.active.name == approval_name:
+            return self.active
+        return None
+
+    def lock_approval(self, approval_name: str) -> FakeApproval | None:
+        self.locks.append(f"approval:{approval_name}")
+        return self.load_approval(approval_name)
 
     def insert_approval(self, **kwargs: Any) -> FakeApproval:
         if self.fail_insert:
@@ -177,6 +190,7 @@ class FakeGateway:
             approved_on="2026-10-14 12:00:00",
             pricing_basis_fingerprint=kwargs["fingerprint"],
             fingerprint_formula_version=kwargs["formula_version"],
+            approval_note=kwargs.get("approval_note"),
         )
         self.approvals.append(approval)
         self.active = approval
@@ -262,7 +276,7 @@ class TestFinalPriceApprovalPhase2(unittest.TestCase):
             approved_amount_usd=0,
         )
         self.assertFalse(cost_settings_locked_by_price_approval("Unapproved"))
-        self.assertTrue(cost_settings_locked_by_price_approval("Approved"))
+        self.assertFalse(cost_settings_locked_by_price_approval("Approved"))
 
     def test_eligibility_allows_multiple_production_stages_including_post_drawing(self) -> None:
         """Final-price approval is not Draft-only and ignores production department."""
@@ -407,9 +421,19 @@ class TestFinalPriceApprovalPhase2(unittest.TestCase):
         source = APPROVAL_SERVICE.read_text(encoding="utf-8")
         self.assertIn("Capability.APPROVE_FINAL_PRICE", source)
         self.assertIn("Capability.VIEW_COSTS", source)
+        self.assertIn("Capability.CANCEL_FINAL_PRICE_APPROVAL", source)
         self.assertNotIn("EDIT_ORDER", source)
-        self.assertNotIn("EDIT_COST_SETTINGS", source)
         self.assertNotIn("APPROVE_SPECIAL_PRICE", source)
+        # EDIT_COST_SETTINGS may appear only in post-cancel action decisions,
+        # never as a required gate for approve/cancel RPCs.
+        self.assertNotIn(
+            "require_document_capability(\n        order,\n        Capability.EDIT_COST_SETTINGS",
+            source,
+        )
+        approve_endpoint = source.split("def approve_order_final_price", 1)[1].split(
+            "def cancel_order_final_price_approval", 1
+        )[0]
+        self.assertNotIn("EDIT_COST_SETTINGS", approve_endpoint)
 
     def test_approve_without_edit_capabilities_is_allowed_by_decision(self) -> None:
         decision = decide_final_price_approval_actions(
@@ -552,23 +576,30 @@ class TestFinalPriceApprovalPhase2(unittest.TestCase):
         self.assertIsNone(gateway.order.current_price_approval)
         self.assertEqual(gateway.order_updates, [])
 
-    def test_cost_settings_locked_after_approval_and_open_before(self) -> None:
+    def test_cost_settings_editable_after_approval_when_capability_holds(self) -> None:
         self.assertTrue(
             can_edit_cost_settings_for_order(
                 has_edit_cost_settings=True,
                 price_approval_status=PRICE_APPROVAL_STATUS_UNAPPROVED,
             )
         )
-        self.assertFalse(
+        self.assertTrue(
             can_edit_cost_settings_for_order(
                 has_edit_cost_settings=True,
                 price_approval_status=PRICE_APPROVAL_STATUS_APPROVED,
             )
         )
+        self.assertFalse(
+            can_edit_cost_settings_for_order(
+                has_edit_cost_settings=False,
+                price_approval_status=PRICE_APPROVAL_STATUS_APPROVED,
+            )
+        )
         cost_source = COST_SERVICE.read_text(encoding="utf-8")
         plan_source = PLAN_COST_SERVICE.read_text(encoding="utf-8")
-        self.assertIn("assert_cost_settings_unlocked_for_order", cost_source)
-        self.assertIn("assert_cost_settings_unlocked_for_order", plan_source)
+        self.assertNotIn("assert_cost_settings_unlocked_for_order", cost_source)
+        self.assertNotIn("assert_cost_settings_unlocked_for_order", plan_source)
+        self.assertIn("maybe_invalidate_final_price_approval", plan_source)
         self.assertEqual(
             COST_SETTINGS_FIELDS,
             ("board_rate_usd", "cutting_cost_per_board_usd", "offcut_price_usd"),
@@ -580,6 +611,9 @@ class TestFinalPriceApprovalPhase2(unittest.TestCase):
             "price_basis_token",
             "can_approve_final_price",
             "can_edit_cost_settings",
+            "can_cancel_final_price_approval",
+            "final_price_cancellation_blocker",
+            "approval_note",
             "price_approval_status",
             "final_price_approval_blocker",
         ):
@@ -587,6 +621,7 @@ class TestFinalPriceApprovalPhase2(unittest.TestCase):
         contracts = ENDPOINT_CONTRACTS.read_text(encoding="utf-8")
         self.assertIn("final_price_approval_service", contracts)
         self.assertIn("approve_order_final_price", contracts)
+        self.assertIn("cancel_order_final_price_approval", contracts)
         self.assertIn(Capability.APPROVE_FINAL_PRICE, {"approve_final_price"})
 
     def test_general_save_forgery_guard_still_blocks_status_and_link(self) -> None:

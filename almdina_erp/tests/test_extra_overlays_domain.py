@@ -243,6 +243,122 @@ def test_assign_extra_overlays_rejects_span_across_two_hosts():
     assert exc_info.value.code == "extra_overlay_spans_hosts"
 
 
+def _kerf_board_hosts():
+    """Three doors on one sheet. The gap between them is the 5 mm cutter kerf."""
+
+    kerf = 5.0
+    regular = _rect(0, 0, 400, 500)
+    clipped = (
+        (400 + kerf, 0),
+        (900 + kerf, 0),
+        (900 + kerf, 300),
+        (700 + kerf, 500),
+        (400 + kerf, 500),
+    )
+    shaped = (
+        (900 + kerf + kerf, 0),
+        (1400 + kerf + kerf, 0),
+        (1400 + kerf + kerf, 180),
+        (1150 + kerf + kerf, 180),
+        (1150 + kerf + kerf, 500),
+        (900 + kerf + kerf, 500),
+    )
+    return kerf, [
+        ExtraOverlayHost(1, "Regular", regular, ("liner",), "1"),
+        ExtraOverlayHost(2, "Clipped Corner", clipped, ("liner",), "2"),
+        ExtraOverlayHost(3, "L-Shaped Corner", shaped, ("liner",), "3"),
+    ]
+
+
+def _edge_liner(x1, y1, x2, y2, radius):
+    """One open zigzag whose ends extend by the cutter radius past the door."""
+
+    return (
+        (x1 - radius, y1),
+        (x2 + radius, y1),
+        (x2 + radius, y2),
+        (x1 - radius, y2),
+    )
+
+
+def test_liner_centers_in_the_kerf_do_not_span_neighboring_doors():
+    radius = 2.5
+    _kerf, hosts = _kerf_board_hosts()
+    # Top-edge liners. Their centers run inside each door and the ends extend
+    # by one radius into the kerf of the door on the right.
+    paths = [
+        _edge_liner(0, 30, 400, 45, radius),
+        _edge_liner(405, 30, 905, 45, radius),
+        _edge_liner(910, 30, 1410, 45, radius),
+    ]
+    overlays = [
+        ExtraOverlayCandidate(index + 1, "liner", "Liner", path)
+        for index, path in enumerate(paths)
+    ]
+
+    with pytest.raises(ExtraOverlayError) as legacy:
+        assign_extra_overlays(overlays, hosts, tolerance=0.25, host_margin=3.0)
+    assert legacy.value.code == "extra_overlay_spans_hosts"
+
+    assigned = assign_extra_overlays(
+        overlays,
+        hosts,
+        tolerance=0.25,
+        host_margin=3.0,
+        cutter_radius_mm=radius,
+    )
+    assert [item.host_key for item in assigned] == [1, 2, 3]
+
+
+def test_liner_disk_that_enters_the_next_door_still_spans():
+    radius = 2.5
+    hosts = [
+        ExtraOverlayHost(1, "Regular", _rect(0, 0, 400, 500), ("liner",), "1"),
+        ExtraOverlayHost(2, "Clipped Corner", _rect(405, 0, 800, 500), ("liner",), "2"),
+    ]
+    # The extended center is 1 mm from the next door, so a 5 mm bit cuts into it.
+    path = ((20, 30), (404, 30), (404, 45), (20, 45))
+    with pytest.raises(ExtraOverlayError) as exc_info:
+        assign_extra_overlays(
+            [ExtraOverlayCandidate(1, "liner", "Liner", path)],
+            hosts,
+            tolerance=0.25,
+            host_margin=3.0,
+            cutter_radius_mm=radius,
+        )
+    assert exc_info.value.code == "extra_overlay_spans_hosts"
+
+
+def test_liner_path_that_crosses_two_doors_still_spans_with_cutter_radius():
+    with pytest.raises(ExtraOverlayError) as exc_info:
+        assign_extra_overlays(
+            [ExtraOverlayCandidate(1, "liner", "Liner", ((80, 40), (220, 40)))],
+            [
+                ExtraOverlayHost(1, "Regular", _rect(0, 0, 150, 200), ("liner",)),
+                ExtraOverlayHost(2, "L-Shaped Corner", _rect(160, 0, 310, 200), ("liner",)),
+            ],
+            tolerance=0.25,
+            host_margin=3.0,
+            cutter_radius_mm=2.5,
+        )
+    assert exc_info.value.code == "extra_overlay_spans_hosts"
+
+
+def test_non_liner_mark_still_uses_the_host_margin_span_check():
+    with pytest.raises(ExtraOverlayError) as exc_info:
+        assign_extra_overlays(
+            [ExtraOverlayCandidate(1, "back_groove", "Rear Groove", ((80, 40), (220, 40)))],
+            [
+                ExtraOverlayHost(1, "Regular", _rect(0, 0, 150, 200), ("back_groove",)),
+                ExtraOverlayHost(2, "Regular", _rect(160, 0, 310, 200), ("back_groove",)),
+            ],
+            tolerance=0.25,
+            host_margin=3.0,
+            cutter_radius_mm=2.5,
+        )
+    assert exc_info.value.code == "extra_overlay_spans_hosts"
+
+
 def test_two_overlapping_cut_paths_still_fail_material_layout():
     with pytest.raises(DxfTopologyError) as exc_info:
         validate_material_layout(

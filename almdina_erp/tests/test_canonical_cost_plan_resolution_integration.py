@@ -322,6 +322,8 @@ class TestCanonicalCostPlanResolutionIntegration(FrappeTestCase):
         self.assertEqual(document_order["waste_percent"], 12.5)
         self.assertEqual(document_pieces[0]["qty"], 2)
         self.assertEqual(document_pieces[0]["factory_execution_qty"], 1)
+        self.assertEqual(document_pieces[0]["addon_billable_qty"], 1)
+        self.assertEqual(document_pieces[0]["qty"], 2)  # No persistence mutation.
 
     def test_factory_offcut_applicability_and_zero_new_board_count_share_plan(self) -> None:
         uploaded = self._plan(

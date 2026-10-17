@@ -107,8 +107,8 @@
     function canEditCostSettings(frm) {
         if (!baseDocumentEditable(frm)) return false;
         if (!(can(frm, "view_costs") && can(frm, "edit_cost_settings"))) return false;
-        // Server decision freezes board/cutting/offcut inputs while final price is Approved.
-        // Missing snapshot decision must not invent unlock; capability alone stays provisional.
+        // Server decision remains authoritative for lifecycle/capability narrowing.
+        // Approved final price no longer freezes board/cutting/offcut inputs.
         const server = serverAllowsCostSettingsEdit(frm);
         if (server === false) return false;
         return true;
@@ -524,8 +524,8 @@
 
             if (pending.dirty && !canEditCostSettings(frm)) {
                 frappe.msgprint({
-                    title: translate("Cost settings locked"),
-                    message: translate("Cost settings are locked because the final price is approved."),
+                    title: translate("Missing permission"),
+                    message: translate("You do not have permission to edit cost settings."),
                     indicator: "orange",
                 });
                 return false;
@@ -551,6 +551,10 @@
                     owner.commit(frm, saved);
                 } else {
                     store.commit(saved);
+                }
+                const approvalUx = window.AlmdinaFinalPriceApprovalUX;
+                if (approvalUx && typeof approvalUx.consumeInvalidationSignal === "function") {
+                    approvalUx.consumeInvalidationSignal(frm, saved, token);
                 }
             } else {
                 store.cancelEdit();

@@ -7,8 +7,12 @@ from frappe.model.document import Document
 from almdina_erp.almdina_erp.domain.orders.price_approval import (
     PRICE_APPROVAL_FINGERPRINT_FORMULA_VERSION,
     PRICE_APPROVAL_VALIDITY_ACTIVE,
+    ApprovalNoteError,
     PriceApprovalRecordMutationError,
+    assert_invalidated_by_mutation_allowed,
+    assert_invalidation_preserves_approval_details,
     assert_price_approval_record_immutable,
+    normalize_approval_note,
 )
 
 
@@ -20,6 +24,7 @@ class DoorCuttingPriceApproval(Document):
     """
 
     def before_insert(self) -> None:
+        self._apply_approval_note()
         self.validity_status = self.validity_status or PRICE_APPROVAL_VALIDITY_ACTIVE
         self.currency = str(self.currency or "USD").strip() or "USD"
         self.fingerprint_formula_version = (
@@ -33,6 +38,8 @@ class DoorCuttingPriceApproval(Document):
             )
 
     def validate(self) -> None:
+        if self.is_new():
+            self._apply_approval_note()
         self._validate_plan_scope()
         self._enforce_history_integrity()
 
@@ -41,6 +48,12 @@ class DoorCuttingPriceApproval(Document):
             _("Door Cutting Price Approval records cannot be deleted."),
             frappe.PermissionError,
         )
+
+    def _apply_approval_note(self) -> None:
+        try:
+            self.approval_note = normalize_approval_note(self.get("approval_note"))
+        except ApprovalNoteError as exc:
+            frappe.throw(_(str(exc)))
 
     def _validate_plan_scope(self) -> None:
         if not self.cutting_plan or not self.door_cutting_order:
@@ -63,33 +76,24 @@ class DoorCuttingPriceApproval(Document):
             return
         allow_invalidate = bool(self.flags.get("allow_price_approval_invalidate"))
         try:
+            assert_invalidated_by_mutation_allowed(
+                allow_authorized_invalidation=allow_invalidate,
+                previous_invalidated_by=old.get("invalidated_by"),
+                incoming_invalidated_by=self.get("invalidated_by"),
+            )
             assert_price_approval_record_immutable(
                 is_new=False,
                 allow_status_transition=allow_invalidate,
                 previous_validity=old.validity_status,
                 incoming_validity=self.validity_status,
             )
-        except PriceApprovalRecordMutationError as exc:
-            frappe.throw(str(exc))
-
-        if not allow_invalidate:
-            return
-
-        protected = (
-            "door_cutting_order",
-            "cutting_plan",
-            "approved_amount",
-            "currency",
-            "approved_by",
-            "approved_on",
-            "pricing_basis_fingerprint",
-            "fingerprint_formula_version",
-        )
-        for fieldname in protected:
-            if self.get(fieldname) != old.get(fieldname):
-                frappe.throw(
-                    _("Invalidating a price approval cannot rewrite historical approval details.")
+            if allow_invalidate:
+                assert_invalidation_preserves_approval_details(
+                    previous=old,
+                    incoming=self,
                 )
+        except PriceApprovalRecordMutationError as exc:
+            frappe.throw(_(str(exc)))
 
 
 __all__ = ["DoorCuttingPriceApproval"]

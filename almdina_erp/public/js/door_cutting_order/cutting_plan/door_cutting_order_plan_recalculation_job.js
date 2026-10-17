@@ -100,6 +100,13 @@
     }
 
     async function refreshWorkspaces(frm) {
+        const costOwner = window.AlmdinaCostWorkspaceState;
+        const before = costOwner && typeof costOwner.snapshot === "function"
+            ? costOwner.snapshot(frm)
+            : null;
+        const priorStatus = before && before.data
+            ? String(before.data.price_approval_status || "")
+            : "";
         const coordinator = syncCoordinator();
         if (!coordinator || typeof coordinator.refresh !== "function") return;
         await coordinator.refresh(frm, ["plan", "cost"], {
@@ -107,6 +114,21 @@
             activeOnly: false,
             reason: "background_recalculation",
         });
+        const after = costOwner && typeof costOwner.snapshot === "function"
+            ? costOwner.snapshot(frm)
+            : null;
+        const nextStatus = after && after.data
+            ? String(after.data.price_approval_status || "")
+            : "";
+        const approvalUx = window.AlmdinaFinalPriceApprovalUX;
+        if (
+            priorStatus === "Approved"
+            && nextStatus === "Unapproved"
+            && approvalUx
+            && typeof approvalUx.notifyAutoInvalidation === "function"
+        ) {
+            approvalUx.notifyAutoInvalidation(frm, { signal: true });
+        }
     }
 
     function stopPolling(frm) {

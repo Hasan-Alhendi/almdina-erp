@@ -391,6 +391,7 @@ def set_offcut_execution_owner(plan_name: str, assignments: Any) -> dict[str, An
         order.name,
         reason="offcut_classification_changed",
         only_if_basis_changed=True,
+        order=order,
     )
     production_reconciliation = _canonical_production_reconciliation(
         order,

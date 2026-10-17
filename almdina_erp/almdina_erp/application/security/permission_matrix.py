@@ -83,6 +83,11 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
         "Approve the final order price, record the approval data, and lock cost settings.",
         "critical",
     ),
+    Capability.CANCEL_FINAL_PRICE_APPROVAL: _presentation(
+        "Cancel final price approval",
+        "Cancel the order's final price approval while keeping the approval record and its details.",
+        "critical",
+    ),
     Capability.PRINT_MEASUREMENTS: _presentation("Print measurements", "Print the measurements document without any prices."),
     Capability.PRINT_CUSTOMER_INVOICE: _presentation("Print customer invoice", "Print the customer's financial document without internal data.", "sensitive"),
     Capability.PRINT_INTERNAL_COST_REPORT: _presentation("Print internal cost report", "Print the confidential report that includes operating cost and profitability.", "critical"),
@@ -156,6 +161,7 @@ _COST_VIEW_ACTIONS = frozenset({
     Capability.EDIT_SPECIAL_PRICE,
     Capability.APPROVE_SPECIAL_PRICE,
     Capability.APPROVE_FINAL_PRICE,
+    Capability.CANCEL_FINAL_PRICE_APPROVAL,
     Capability.PRINT_INTERNAL_COST_REPORT,
 })
 _PLAN_VIEW_ACTIONS = frozenset({

@@ -186,7 +186,7 @@ assert.match(qrHtml[0], /data:image\/png;base64,xx/);
 assert.match(qrHtml[0], /امسح الرمز من واتساب/);
 surface.setQr("http://evil.example/qr.png", "qr_ready");
 assert.doesNotMatch(qrHtml[1], /http:\/\/evil\.example/);
-assert.match(qrHtml[1], /جاري تجهيز الرمز/);
+assert.match(qrHtml[1], /Preparing the code\.\.\./);
 
 const delivery = loadDelivery();
 assert.equal(delivery.fakeWindow.AlmdinaDcoEditSessionCoordinator.kind, "order");
@@ -202,11 +202,11 @@ const invoiceToolbarSource = fs.readFileSync(
     ),
     "utf8"
 );
-assert.match(invoiceToolbarSource, /إرسال الفاتورة عبر واتساب/);
-assert.match(invoiceToolbarSource, /هل تريد إرسال الفاتورة للزبون؟/);
+assert.match(invoiceToolbarSource, /Send the invoice on WhatsApp/);
+assert.match(invoiceToolbarSource, /Send the invoice to the customer\?/);
 assert.match(invoiceToolbarSource, /dco-whatsapp-send-invoice/);
 assert.match(invoiceToolbarSource, /send_order_invoice/);
-assert.match(invoiceToolbarSource, /frappe\.confirm\(INVOICE_CONFIRM_MESSAGE/);
+assert.match(invoiceToolbarSource, /frappe\.confirm\(translate\(INVOICE_CONFIRM_MESSAGE/);
 assert.doesNotMatch(invoiceToolbarSource, /print_measurements/);
 
 const skipped = delivery.ux.offerAfterOrderSave({

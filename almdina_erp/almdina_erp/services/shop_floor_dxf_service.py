@@ -17,7 +17,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization im
     require_cutting_plan_capability,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
-    seed_plan_settings,
+    manufacturing_plan_settings,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.order_tracking_repository import (
     get_order,
@@ -269,7 +269,7 @@ def upload_production_dxf(order_name: str, file_url: str) -> dict[str, Any]:
         custom_snapshot = parse_production_dxf(
             normalized_url,
             order,
-            settings=seed_plan_settings(order.name),
+            settings=manufacturing_plan_settings(order.name),
         )
     except DxfImportError as error:
         _throw_dxf_validation_errors(issues=getattr(error, "issues", None))

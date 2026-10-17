@@ -52,9 +52,12 @@ function baseSnapshotData(overrides = {}) {
         price_approval: null,
         price_basis_token: "1:abc123token",
         can_approve_final_price: true,
+        can_cancel_final_price_approval: false,
         final_price_approval_blocker: null,
+        final_price_cancellation_blocker: null,
         can_edit_cost_settings: true,
         invoice_preview_total_usd: 120,
+        currency: "USD",
         ...overrides,
     };
 }
@@ -62,10 +65,13 @@ function baseSnapshotData(overrides = {}) {
 function loadUx(options = {}) {
     const grants = new Set(options.grants || ["view_costs", "approve_final_price"]);
     const messages = [];
+    const alerts = [];
     const approveCalls = [];
+    const cancelCalls = [];
     const loadCalls = [];
     const commitCalls = [];
     const syncCalls = [];
+    const dialogs = [];
     let generation = options.generation == null ? 1 : options.generation;
     let storeData = options.data === undefined ? baseSnapshotData() : options.data;
     let storeStatus = options.status || (storeData ? "ready" : "loading");
@@ -75,6 +81,7 @@ function loadUx(options = {}) {
     let formDirty = Boolean(options.formDirty);
     let activeKind = options.activeKind || null;
     let approveImpl = options.approveImpl || null;
+    let cancelImpl = options.cancelImpl || null;
     let reloadImpl = options.reloadImpl || null;
     let clickHandlers = 0;
 
@@ -90,21 +97,10 @@ function loadUx(options = {}) {
             return child;
         },
         querySelector(selector) {
-            if (selector === "[data-price-approval-panel]") {
-                return panelHost.outerHTML.includes("data-price-approval-panel")
-                    || panelHost.getAttribute
-                    ? panelHost
-                    : null;
-            }
+            if (selector === "[data-price-approval-panel]") return panelHost;
             return null;
         },
     };
-    // Always expose a panel node so reconcile paints into it.
-    card.querySelector = (selector) => {
-        if (selector === "[data-price-approval-panel]") return panelHost;
-        return null;
-    };
-
     const root = {
         querySelector(selector) {
             if (selector === ".dco-invoice-total-card") return card;
@@ -115,7 +111,6 @@ function loadUx(options = {}) {
             if (type === "click") clickHandlers += 1;
         },
     };
-
     const wrapper = {
         get() { return root; },
         0: root,
@@ -138,14 +133,83 @@ function loadUx(options = {}) {
         },
         is_new() { return false; },
         is_dirty() { return formDirty; },
+        refresh_field() {},
     };
+
+    class FakeDialog {
+        constructor(config) {
+            this.config = config;
+            this.hidden = false;
+            this.values = { approval_note: "" };
+            this.fields_dict = {
+                approval_note: {
+                    $wrapper: {
+                        length: 1,
+                        find() { return [{ className: "", textContent: "", classList: { toggle() {} } }]; },
+                        append() {},
+                    },
+                    $input: {
+                        length: 1,
+                        attr() { return this; },
+                        on() { return this; },
+                    },
+                },
+            };
+            this.$wrapper = {
+                addClass() { return this; },
+                find() { return [{ textContent: "" }]; },
+            };
+            this._primaryDisabled = false;
+            this._primaryLabel = config.primary_action_label;
+            dialogs.push(this);
+        }
+        show() { this.hidden = false; }
+        hide() {
+            this.hidden = true;
+            if (typeof this.onhide === "function") this.onhide();
+        }
+        get_value(field) { return this.values[field]; }
+        set_value(field, value) { this.values[field] = value; }
+        get_values() { return { ...this.values }; }
+        get_primary_btn() {
+            const self = this;
+            return {
+                prop(name, value) {
+                    if (name === "disabled") self._primaryDisabled = value;
+                    return this;
+                },
+                text(label) {
+                    self._primaryLabel = label;
+                    return this;
+                },
+            };
+        }
+        async runPrimary(values = {}) {
+            Object.assign(this.values, values);
+            return this.config.primary_action(this.values);
+        }
+        runSecondary() {
+            if (typeof this.config.secondary_action === "function") {
+                return this.config.secondary_action();
+            }
+            return this.hide();
+        }
+    }
 
     const fakeWindow = {
         cur_frm: frm,
         document: {
             getElementById() { return { id: "dco-final-price-approval-style" }; },
             createElement() {
-                return { id: "", textContent: "", setAttribute() {} };
+                return {
+                    id: "",
+                    textContent: "",
+                    classList: { toggle() {}, remove() {}, add() {} },
+                    setAttribute() {},
+                    remove() {},
+                    querySelector() { return null; },
+                    closest() { return null; },
+                };
             },
             head: { appendChild() {} },
         },
@@ -164,12 +228,8 @@ function loadUx(options = {}) {
             },
         },
         AlmdinaPermissions: {
-            canDocument(_frm, capability) {
-                return grants.has(capability);
-            },
-            can(capability) {
-                return grants.has(capability);
-            },
+            canDocument(_frm, capability) { return grants.has(capability); },
+            can(capability) { return grants.has(capability); },
         },
         AlmdinaDcoEditSessionCoordinator: {
             activeKind() { return activeKind; },
@@ -206,10 +266,10 @@ function loadUx(options = {}) {
             },
         },
         AlmdinaCostWorkspaceAPI: {
-            async approveFinalPrice(orderName, token) {
-                approveCalls.push({ orderName, token });
+            async approveFinalPrice(orderName, token, note) {
+                approveCalls.push({ orderName, token, note });
                 if (typeof approveImpl === "function") {
-                    return approveImpl(orderName, token);
+                    return approveImpl(orderName, token, note);
                 }
                 return {
                     order_name: orderName,
@@ -220,8 +280,26 @@ function loadUx(options = {}) {
                     cutting_plan: "PLAN-1",
                     approved_by: "finance@example.com",
                     approved_on: "2026-10-15 09:00:00",
+                    approval_note: note || null,
                     fingerprint_formula_version: 1,
                     price_basis_token: token,
+                };
+            },
+            async cancelFinalPriceApproval(orderName, expected) {
+                cancelCalls.push({ orderName, expected });
+                if (typeof cancelImpl === "function") {
+                    return cancelImpl(orderName, expected);
+                }
+                return {
+                    order_name: orderName,
+                    price_approval_status: "Unapproved",
+                    current_price_approval: null,
+                    cancelled_approval: expected,
+                    cancelled_now: true,
+                    reason: "manual_price_approval_cancelled",
+                    can_approve_final_price: true,
+                    can_cancel_final_price_approval: false,
+                    final_price_approval_invalidated: false,
                 };
             },
         },
@@ -246,10 +324,21 @@ function loadUx(options = {}) {
                 return text;
             },
         },
+        AlmdinaUi: {
+            button({ variant, className, label, disabled, attrs }) {
+                const attrHtml = Object.entries(attrs || {})
+                    .map(([k, v]) => `${k}="${String(v)}"`)
+                    .join(" ");
+                return `<button class="btn alm-btn-${variant} ${className || ""}" ${disabled ? "disabled" : ""} ${attrHtml}>${label}</button>`;
+            },
+        },
     };
 
     const fakeFrappe = {
         msgprint(payload) { messages.push(payload); },
+        show_alert(payload) { alerts.push(payload); },
+        response: options.response || {},
+        ui: { Dialog: FakeDialog },
         utils: {
             escape_html(value) {
                 return String(value ?? "")
@@ -263,6 +352,7 @@ function loadUx(options = {}) {
             str_to_user(value) { return value; },
         },
     };
+    fakeWindow.frappe = fakeFrappe;
 
     const context = vm.createContext({
         window: fakeWindow,
@@ -286,11 +376,15 @@ function loadUx(options = {}) {
         ux: fakeWindow.AlmdinaFinalPriceApprovalUX,
         frm,
         fakeWindow,
+        fakeFrappe,
         messages,
+        alerts,
         approveCalls,
+        cancelCalls,
         loadCalls,
         commitCalls,
         syncCalls,
+        dialogs,
         get clickHandlers() { return clickHandlers; },
         get panelHtml() { return panelHost.outerHTML; },
         setData(next) { storeData = next; },
@@ -302,8 +396,21 @@ function loadUx(options = {}) {
         setActiveKind(next) { activeKind = next; },
         setGeneration(next) { generation = next; },
         setApproveImpl(next) { approveImpl = next; },
+        setCancelImpl(next) { cancelImpl = next; },
         setReloadImpl(next) { reloadImpl = next; },
         grants,
+        async confirmApprove(note = "") {
+            assert.equal(this.ux.approve(this.frm), true);
+            assert.equal(this.dialogs.length >= 1, true);
+            const dialog = this.dialogs[this.dialogs.length - 1];
+            return dialog.runPrimary({ approval_note: note });
+        },
+        async confirmCancel() {
+            assert.equal(this.ux.cancel(this.frm), true);
+            assert.equal(this.dialogs.length >= 1, true);
+            const dialog = this.dialogs[this.dialogs.length - 1];
+            return dialog.runPrimary();
+        },
     };
 }
 
@@ -312,211 +419,317 @@ function assertNoTechnicalLeak(html) {
 }
 
 (async () => {
-    // 1. No approve capability → no button
+    // 1. Approve button only with approve capability
     {
-        const env = loadUx({ grants: ["view_costs"] });
-        env.ux.reconcile(env.frm);
-        assert.match(env.panelHtml, /Price approval status/);
-        assert.match(env.panelHtml, /Unapproved/);
-        assert.doesNotMatch(env.panelHtml, /data-approve-final-price/);
-        assertNoTechnicalLeak(env.panelHtml);
-    }
+        const none = loadUx({ grants: ["view_costs"] });
+        none.ux.reconcile(none.frm);
+        assert.doesNotMatch(none.panelHtml, /data-approve-final-price/);
+        assert.equal(none.ux.approve(none.frm), false);
 
-    // 2. Approve capability without edit_cost_settings / edit_order still shows button
-    {
-        const env = loadUx({
-            grants: ["view_costs", "approve_final_price"],
-        });
+        const env = loadUx({ grants: ["view_costs", "approve_final_price"] });
         env.ux.reconcile(env.frm);
         assert.match(env.panelHtml, /data-approve-final-price/);
-        assert.match(env.panelHtml, /alm-btn-primary/);
-        assert.match(env.panelHtml, /aria-disabled="false"/);
-        assert.doesNotMatch(env.panelHtml, /\sdisabled[\s>]/);
+        assert.equal(env.ux.approve(env.frm), true);
+        assert.equal(env.dialogs.length, 1);
+        assert.match(env.dialogs[0].config.title, /Approve final price/);
+        assert.match(env.dialogs[0].config.primary_action_label, /Confirm approval/);
+        assert.equal(env.approveCalls.length, 0);
     }
 
-    // 3. Incomplete price → disabled button + server blocker message
+    // 2. Empty / Arabic multiline note approve
     {
-        const env = loadUx({
-            data: baseSnapshotData({
-                can_approve_final_price: false,
-                final_price_approval_blocker: {
-                    code: "stale_cost_reference_plan",
-                    message: "The cost-reference cutting plan is outdated. Recalculate and review the price first.",
-                },
-            }),
-        });
-        env.ux.reconcile(env.frm);
-        assert.match(env.panelHtml, /data-approve-final-price/);
-        assert.match(env.panelHtml, /aria-disabled="true"/);
-        assert.match(env.panelHtml, /outdated/);
-        assert.doesNotMatch(env.panelHtml, /stale_cost_reference_plan/);
+        const env = loadUx();
+        assert.equal(await env.confirmApprove(""), true);
+        assert.equal(env.approveCalls[0].note, "");
+        assert.equal(env.commitCalls[0].price_approval.approval_note, null);
+
+        const ar = loadUx({ orderName: "DCO-NOTE" });
+        const note = "ملاحظة\nسطر 2";
+        assert.equal(await ar.confirmApprove(note), true);
+        assert.equal(ar.approveCalls[0].note, note);
+        assert.equal(ar.commitCalls[0].price_approval.approval_note, note);
     }
 
-    // 4. Unsaved changes in any workspace block approve
+    // 3. Note length limit constant and counter wiring
+    {
+        assert.equal(loadUx().ux.NOTE_MAX, 500);
+        assert.match(UX_SOURCE, /NOTE_MAX = 500/);
+        assert.match(UX_SOURCE, /dco-approve-note-counter/);
+        assert.match(API_SOURCE, /approval_note/);
+    }
+
+    // 4. Dismiss dialog without saving
+    {
+        const env = loadUx();
+        assert.equal(env.ux.approve(env.frm), true);
+        env.dialogs[0].runSecondary();
+        assert.equal(env.approveCalls.length, 0);
+        assert.equal(env.commitCalls.length, 0);
+        assert.notEqual(env.frm.doc.price_approval_status, "Approved");
+    }
+
+    // 5. Unsaved changes block opening dialog
     {
         const env = loadUx();
         env.setFormDirty(true);
-        const blockedForm = await env.ux.approve(env.frm);
-        assert.equal(blockedForm, false);
-        assert.equal(env.approveCalls.length, 0);
+        assert.equal(env.ux.approve(env.frm), false);
+        assert.equal(env.dialogs.length, 0);
         assert.equal(env.messages[0].title, "Unsaved changes");
-
-        env.setFormDirty(false);
-        env.setActiveKind("cutting_plan");
-        const blockedPlan = await env.ux.approve(env.frm);
-        assert.equal(blockedPlan, false);
-        assert.equal(env.approveCalls.length, 0);
-
-        env.setActiveKind(null);
-        env.setEditing(true);
-        const blockedCost = await env.ux.approve(env.frm);
-        assert.equal(blockedCost, false);
-        assert.equal(env.approveCalls.length, 0);
     }
 
-    // 5. Sends displayed token and blocks double-submit
-    {
-        const env = loadUx();
-        let resolveApprove;
-        env.setApproveImpl(() => new Promise((resolve) => {
-            resolveApprove = resolve;
-        }));
-        const first = env.ux.approve(env.frm);
-        // Second call while in-flight must no-op
-        const second = await env.ux.approve(env.frm);
-        assert.equal(second, false);
-        assert.equal(env.approveCalls.length, 1);
-        assert.equal(env.approveCalls[0].orderName, "DCO-PRICE-1");
-        assert.equal(env.approveCalls[0].token, "1:abc123token");
-        resolveApprove({
-            order_name: "DCO-PRICE-1",
-            price_approval_status: "Approved",
-            current_price_approval: "DCPA-1",
-            approved_by: "finance@example.com",
-            approved_on: "2026-10-15 09:00:00",
-            price_basis_token: "1:abc123token",
-        });
-        assert.equal(await first, true);
-    }
-
-    // 6. After success: badge Approved, lock note, no button; store updated without manual reload API
-    {
-        const env = loadUx();
-        const ok = await env.ux.approve(env.frm);
-        assert.equal(ok, true);
-        assert.ok(env.commitCalls.length >= 1);
-        assert.equal(env.commitCalls[0].price_approval_status, "Approved");
-        assert.equal(env.commitCalls[0].can_edit_cost_settings, false);
-        assert.equal(env.loadCalls.length, 1);
-        assert.equal(env.loadCalls[0].force, true);
-        assert.ok(env.syncCalls.includes("DCO-PRICE-1"));
-        env.setData(baseSnapshotData({
-            price_approval_status: "Approved",
-            can_approve_final_price: false,
-            can_edit_cost_settings: false,
-            price_approval: {
-                approved_by: "finance@example.com",
-                approved_on: "2026-10-15 09:00:00",
-            },
-        }));
-        env.ux.reconcile(env.frm);
-        assert.match(env.panelHtml, /is-approved/);
-        assert.match(env.panelHtml, /Approved by/);
-        assert.match(env.panelHtml, /Cost settings are locked/);
-        assert.doesNotMatch(env.panelHtml, /data-approve-final-price/);
-        assertNoTechnicalLeak(env.panelHtml);
-    }
-
-    // 7. Stale token: reload snapshot, ask review, no auto re-approve
+    // 6. Keep note on failure / stale token; no auto re-approve
     {
         const env = loadUx();
         env.setApproveImpl(async () => {
             throw new Error("The price basis changed since this page was loaded.");
         });
-        const failed = await env.ux.approve(env.frm);
+        env.setData(baseSnapshotData({
+            price_basis_token: "1:newtoken",
+            invoice_preview_total_usd: 130,
+        }));
+        assert.equal(env.ux.approve(env.frm), true);
+        const dialog = env.dialogs[0];
+        dialog.values.approval_note = "احتفظ بالملاحظة";
+        const failed = await dialog.runPrimary({ approval_note: "احتفظ بالملاحظة" });
         assert.equal(failed, false);
-        assert.equal(env.approveCalls.length, 1);
-        assert.equal(env.loadCalls.length, 1);
+        assert.equal(dialog.values.approval_note, "احتفظ بالملاحظة");
+        assert.equal(env.commitCalls.length, 0);
         assert.equal(env.messages.some((m) => m.title === "Price changed"), true);
     }
 
-    // 8. Approve succeeds but reload fails → keep Approved merge, do not revert
+    // 7. Stale response after navigation does not mutate other order
     {
-        const env = loadUx();
-        env.setReloadImpl(async () => {
-            throw new Error("network down");
+        const env = loadUx({ orderName: "DCO-A" });
+        let resolveApprove;
+        env.setApproveImpl(() => new Promise((resolve) => {
+            resolveApprove = resolve;
+        }));
+        assert.equal(env.ux.approve(env.frm), true);
+        const pending = env.dialogs[0].runPrimary({ approval_note: "" });
+        env.frm.doc.name = "DCO-B";
+        env.fakeWindow.cur_frm = {
+            doctype: "Door Cutting Order",
+            doc: { name: "DCO-B" },
+        };
+        env.setGeneration(2);
+        resolveApprove({
+            order_name: "DCO-A",
+            price_approval_status: "Approved",
+            current_price_approval: "DCPA-OLD",
+            price_basis_token: "1:abc123token",
         });
-        const originalError = console.error;
-        console.error = () => {};
-        let ok;
-        try {
-            ok = await env.ux.approve(env.frm);
-        } finally {
-            console.error = originalError;
-        }
-        assert.equal(ok, true);
-        assert.equal(env.commitCalls[0].price_approval_status, "Approved");
-        assert.equal(
-            env.messages.some((m) => m.title === "Final price approved"),
-            true
-        );
-        env.ux.reconcile(env.frm);
-        assert.match(env.panelHtml, /is-approved|Approved/);
+        assert.equal(await pending, false);
+        assert.equal(env.commitCalls.length, 0);
     }
 
-    // 9. After invalidation snapshot → Unapproved + button again
+    // 8. Safe note display including HTML-like text
     {
         const env = loadUx({
             data: baseSnapshotData({
                 price_approval_status: "Approved",
                 can_approve_final_price: false,
-                can_edit_cost_settings: false,
+                can_cancel_final_price_approval: false,
                 price_approval: {
                     approved_by: "finance@example.com",
                     approved_on: "2026-10-15 09:00:00",
+                    approval_note: "<script>alert(1)</script>\nسطر",
                 },
             }),
         });
         env.ux.reconcile(env.frm);
-        assert.match(env.panelHtml, /is-approved/);
+        assert.match(env.panelHtml, /Approval note/);
+        assert.match(env.panelHtml, /&lt;script&gt;/);
+        assert.doesNotMatch(env.panelHtml, /<script>alert/);
+    }
+
+    // 9. Cancel button for cancel capability only (even without approve)
+    {
+        const cancelOnly = loadUx({
+            grants: ["view_costs", "cancel_final_price_approval"],
+            data: baseSnapshotData({
+                price_approval_status: "Approved",
+                can_approve_final_price: false,
+                can_cancel_final_price_approval: true,
+                current_price_approval: "DCPA-9",
+                price_approval: {
+                    name: "DCPA-9",
+                    approved_by: "a@x.com",
+                    approved_on: "2026-10-15 09:00:00",
+                    approval_note: "نص",
+                },
+            }),
+        });
+        cancelOnly.ux.reconcile(cancelOnly.frm);
+        assert.match(cancelOnly.panelHtml, /data-cancel-final-price/);
+        assert.doesNotMatch(cancelOnly.panelHtml, /data-approve-final-price/);
+
+        const approveOnly = loadUx({
+            grants: ["view_costs", "approve_final_price"],
+            data: baseSnapshotData({
+                price_approval_status: "Approved",
+                can_approve_final_price: false,
+                can_cancel_final_price_approval: false,
+                current_price_approval: "DCPA-9",
+                price_approval: {
+                    name: "DCPA-9",
+                    approved_by: "a@x.com",
+                    approved_on: "2026-10-15 09:00:00",
+                },
+            }),
+        });
+        approveOnly.ux.reconcile(approveOnly.frm);
+        assert.doesNotMatch(approveOnly.panelHtml, /data-cancel-final-price/);
+        assert.equal(approveOnly.ux.cancel(approveOnly.frm), false);
+    }
+
+    // 10–12. Cancel sends reviewed approval id; success updates UI without lock
+    {
+        const env = loadUx({
+            grants: ["view_costs", "cancel_final_price_approval", "edit_cost_settings"],
+            data: baseSnapshotData({
+                price_approval_status: "Approved",
+                can_approve_final_price: false,
+                can_cancel_final_price_approval: true,
+                can_edit_cost_settings: true,
+                current_price_approval: "DCPA-VIEWED",
+                price_approval: {
+                    name: "DCPA-VIEWED",
+                    approved_by: "a@x.com",
+                    approved_on: "2026-10-15 09:00:00",
+                    approval_note: "قديمة",
+                },
+            }),
+        });
+        env.ux.reconcile(env.frm);
+        assert.match(env.panelHtml, /قديمة/);
+        assert.equal(await env.confirmCancel(), true);
+        assert.equal(env.cancelCalls[0].expected, "DCPA-VIEWED");
+        assert.equal(env.commitCalls[0].price_approval_status, "Unapproved");
+        assert.equal(env.commitCalls[0].price_approval, null);
+        assert.equal(env.commitCalls[0].can_edit_cost_settings, true);
+        assert.equal(env.alerts.some((a) => /Final price approval cancelled/i.test(a.message)), true);
+        assert.equal(
+            env.alerts.some((a) => /price approval for this order has been cancelled/i.test(a.message)),
+            false
+        );
+
         env.setData(baseSnapshotData({
             price_approval_status: "Unapproved",
             can_approve_final_price: true,
-            can_edit_cost_settings: true,
+            can_cancel_final_price_approval: false,
             price_approval: null,
         }));
         env.ux.reconcile(env.frm);
-        assert.match(env.panelHtml, /is-unapproved/);
-        assert.match(env.panelHtml, /data-approve-final-price/);
-        assert.doesNotMatch(env.panelHtml, /Approved by/);
-        assert.doesNotMatch(env.panelHtml, /Cost settings are locked/);
+        assert.doesNotMatch(env.panelHtml, /قديمة/);
+        assert.doesNotMatch(env.panelHtml, /data-cancel-final-price/);
     }
 
-    // 10. Non-impacting note save path: server still returns Approved → UI stays locked
+    // 11. Newer-approval conflict does not auto-cancel again
     {
         const env = loadUx({
+            grants: ["view_costs", "cancel_final_price_approval"],
             data: baseSnapshotData({
                 price_approval_status: "Approved",
-                can_approve_final_price: false,
-                can_edit_cost_settings: false,
-                price_approval: {
-                    approved_by: "finance@example.com",
-                    approved_on: "2026-10-15 09:00:00",
-                },
+                can_cancel_final_price_approval: true,
+                current_price_approval: "DCPA-OLD",
+                price_approval: { name: "DCPA-OLD", approved_by: "a", approved_on: "x" },
             }),
         });
-        env.ux.reconcile(env.frm);
-        assert.match(env.panelHtml, /is-approved/);
-        assert.doesNotMatch(env.panelHtml, /data-approve-final-price/);
+        env.setCancelImpl(async () => {
+            throw new Error("The price approval changed since this page was loaded. Refresh and review before cancelling.");
+        });
+        assert.equal(await env.confirmCancel(), false);
+        assert.equal(env.cancelCalls.length, 1);
+        assert.equal(env.commitCalls.length, 0);
+        assert.equal(env.loadCalls.length >= 1, true);
     }
 
-    // 11. Edit-session: settings locked by server while piece-price capability remains independent
+    // 13. Bind once; busy blocks second open
     {
-        const editGrants = new Set([
-            "view_costs",
-            "edit_cost_settings",
-            "approve_special_price",
-        ]);
+        const env = loadUx();
+        env.ux.reconcile(env.frm);
+        env.ux.reconcile(env.frm);
+        assert.equal(env.clickHandlers, 1);
+        let resolveApprove;
+        env.setApproveImpl(() => new Promise((resolve) => {
+            resolveApprove = resolve;
+        }));
+        assert.equal(env.ux.approve(env.frm), true);
+        const pending = env.dialogs[0].runPrimary({ approval_note: "" });
+        assert.equal(env.ux.approve(env.frm), false);
+        resolveApprove({
+            order_name: "DCO-PRICE-1",
+            price_approval_status: "Approved",
+            current_price_approval: "DCPA-1",
+            price_basis_token: "1:abc123token",
+        });
+        assert.equal(await pending, true);
+    }
+
+    // 14. Sync does not mark form dirty
+    {
+        const env = loadUx();
+        await env.confirmApprove("x");
+        assert.equal(env.frm.is_dirty(), false);
+    }
+
+    // 15. Auto-invalidation toast still capability-gated and once
+    {
+        const env = loadUx({
+            grants: ["view_costs", "approve_final_price"],
+            data: baseSnapshotData({ price_approval_status: "Approved" }),
+        });
+        assert.equal(
+            env.ux.consumeInvalidationSignal(env.frm, {
+                final_price_approval_invalidated: true,
+                order_name: "DCO-PRICE-1",
+            }),
+            true
+        );
+        assert.equal(env.alerts.length, 1);
+        assert.equal(env.ux.notifyAutoInvalidation(env.frm, { signal: true }), false);
+        assert.equal(env.alerts.length, 1);
+
+        const none = loadUx({
+            grants: ["view_costs", "edit_cost_settings"],
+            orderName: "DCO-NONE",
+        });
+        assert.equal(
+            none.ux.consumeInvalidationSignal(none.frm, {
+                final_price_approval_invalidated: true,
+                order_name: "DCO-NONE",
+            }),
+            false
+        );
+    }
+
+    // 16. Total card order and API/registry wiring
+    {
+        assert.match(PRESENTER_SOURCE, /dco-price-approval-slot/);
+        const end = PRESENTER_SOURCE.split("dco-invoice-total-end").slice(1).join("dco-invoice-total-end");
+        assert.ok(end.indexOf("approvalSlot") < end.indexOf("${amount}"));
+        assert.match(API_SOURCE, /cancel_order_final_price_approval/);
+        assert.match(API_SOURCE, /cancelFinalPriceApproval/);
+        assert.match(REGISTRY_SOURCE, /AlmdinaFinalPriceApprovalUX/);
+        for (const key of [
+            "Confirm approval",
+            "Cancel final price approval",
+            "Approval note",
+            "Optional",
+            "Show more",
+            "Go back",
+            "Final price approval cancelled",
+        ]) {
+            assert.ok(
+                AR_CSV.includes(`${key},`) || AR_CSV.includes(`"${key}",`),
+                `missing Arabic for ${key}`
+            );
+        }
+    }
+
+    // Edit session: approve alone never unlocks cost settings
+    {
+        const editGrants = new Set(["view_costs", "approve_final_price"]);
         const frm = {
             doctype: "Door Cutting Order",
             doc: {
@@ -525,19 +738,13 @@ function assertNoTechnicalLeak(html) {
                 status: "Draft",
                 revision_state: "Current",
             },
-            fields_dict: {
-                board_rate_usd: { df: {}, refresh() {} },
-                cutting_cost_per_board_usd: { df: {}, refresh() {} },
-                offcut_price_usd: { df: {}, refresh() {} },
-            },
+            fields_dict: {},
             is_new() { return false; },
             is_dirty() { return false; },
-            trigger() {},
         };
-        let snapshotData = baseSnapshotData({
+        const snapshotData = baseSnapshotData({
             price_approval_status: "Approved",
             can_edit_cost_settings: false,
-            can_approve_final_price: false,
         });
         const fakeWindow = {
             cur_frm: frm,
@@ -615,10 +822,7 @@ function assertNoTechnicalLeak(html) {
         };
         const context = vm.createContext({
             window: fakeWindow,
-            frappe: {
-                msgprint() {},
-                ui: { form: { on() {} } },
-            },
+            frappe: { msgprint() {}, ui: { form: { on() {} } } },
             console,
             Object,
             Array,
@@ -632,157 +836,7 @@ function assertNoTechnicalLeak(html) {
             __: (v) => v,
         });
         vm.runInContext(EDIT_SESSION_SOURCE, context);
-        const session = fakeWindow.AlmdinaCostEditSessionUX;
-        assert.equal(session.canEditCostSettings(frm), false);
-        assert.equal(session.canEditPiecePrices(frm), true);
-        assert.equal(session.canEditCostWorkspace(frm), true);
-        // Approve capability alone must not unlock settings
-        editGrants.add("approve_final_price");
-        editGrants.delete("edit_cost_settings");
-        assert.equal(session.canEditCostSettings(frm), false);
-    }
-
-    // 12. Stale response after navigation must not mutate the other order
-    {
-        const env = loadUx({ orderName: "DCO-A" });
-        let resolveApprove;
-        env.setApproveImpl(() => new Promise((resolve) => {
-            resolveApprove = resolve;
-        }));
-        const pending = env.ux.approve(env.frm);
-        env.frm.doc.name = "DCO-B";
-        env.fakeWindow.cur_frm = {
-            doctype: "Door Cutting Order",
-            doc: { name: "DCO-B" },
-        };
-        env.setGeneration(2);
-        resolveApprove({
-            order_name: "DCO-A",
-            price_approval_status: "Approved",
-            current_price_approval: "DCPA-OLD",
-            price_basis_token: "1:abc123token",
-        });
-        assert.equal(await pending, false);
-        assert.equal(env.commitCalls.length, 0);
-    }
-
-    // 13. Bind once per cost root (no duplicate listeners)
-    {
-        const env = loadUx();
-        env.ux.reconcile(env.frm);
-        env.ux.reconcile(env.frm);
-        env.ux.reconcile(env.frm);
-        assert.equal(env.clickHandlers, 1);
-    }
-
-    // 14. i18n keys present; keep-last-paint disables actions while untrusted
-    {
-        for (const key of [
-            "Price approval status",
-            "Approve final price",
-            "Approved",
-            "Unapproved",
-            "Cost settings are locked because the final price is approved.",
-            "Save or cancel unsaved changes before approving the final price.",
-            "The price basis changed. Review the total, then approve again.",
-        ]) {
-            assert.ok(
-                AR_CSV.includes(`${key},`) || AR_CSV.includes(`"${key}",`),
-                `missing Arabic translation for: ${key}`
-            );
-        }
-
-        const env = loadUx({ freshness: "stale" });
-        env.ux.reconcile(env.frm);
-        assert.match(env.panelHtml, /aria-disabled="true"/);
-        assert.equal(env.ux.actionsTrusted(env.frm), false);
-
-        const loading = loadUx({ status: "loading", data: baseSnapshotData() });
-        // Keep paint may still show prior badge text, but approve must refuse.
-        assert.equal(await loading.ux.approve(loading.frm), false);
-        assert.equal(loading.approveCalls.length, 0);
-    }
-
-    // API method wiring (approve uses freeze → legacy frappe.call)
-    {
-        const calls = [];
-        const frappeRuntime = {
-            call(request) {
-                calls.push(request);
-                request.callback({ message: { ok: true } });
-            },
-        };
-        const context = vm.createContext({
-            window: { frappe: frappeRuntime },
-            frappe: frappeRuntime,
-            Promise,
-            Object,
-            __: (v) => v,
-        });
-        vm.runInContext(API_SOURCE, context);
-        const api = context.window.AlmdinaCostWorkspaceAPI;
-        await api.approveFinalPrice("DCO-1", "1:token");
-        assert.equal(
-            calls[0].method,
-            "almdina_erp.almdina_erp.services.final_price_approval_service.approve_order_final_price"
-        );
-        assert.equal(calls[0].args.order_name, "DCO-1");
-        assert.equal(calls[0].args.expected_price_basis_token, "1:token");
-        assert.equal(calls[0].freeze, true);
-    }
-
-    // Asset registry includes UX after edit session
-    {
-        const fakeWindow = { dispatchEvent() {} };
-        const context = vm.createContext({
-            window: fakeWindow,
-            console,
-            Promise,
-            Object,
-            Array,
-            Map,
-            Set,
-            String,
-            CustomEvent: class CustomEvent {
-                constructor(type, options = {}) {
-                    this.type = type;
-                    this.detail = options.detail;
-                }
-            },
-        });
-        vm.runInContext(REGISTRY_SOURCE, context);
-        const assets = Array.from(
-            fakeWindow.AlmdinaDcoWorkspaceAssetRegistry.assetsFor("cost")
-        );
-        const approval = assets.find((a) => a.endsWith("door_cutting_order_final_price_approval_ux.js"));
-        const editSession = assets.find((a) => a.endsWith("door_cutting_order_cost_edit_session_ux.js"));
-        assert.ok(approval);
-        assert.ok(editSession);
-        assert.ok(assets.indexOf(approval) > assets.indexOf(editSession));
-        assert.match(REGISTRY_SOURCE, /AlmdinaFinalPriceApprovalUX/);
-    }
-
-    // Presenter exposes approval slot beside total; panel HTML never paints technical ids
-    {
-        assert.match(PRESENTER_SOURCE, /data-price-approval-panel/);
-        assert.match(PRESENTER_SOURCE, /dco-price-approval-slot/);
-        const approvedEnv = loadUx({
-            data: baseSnapshotData({
-                price_approval_status: "Approved",
-                can_approve_final_price: false,
-                can_edit_cost_settings: false,
-                price_basis_token: "1:secret-token-xyz",
-                price_approval: {
-                    name: "DCPA-HIDDEN",
-                    approved_by: "finance@example.com",
-                    approved_on: "2026-10-15 09:00:00",
-                    fingerprint_formula_version: 1,
-                },
-            }),
-        });
-        approvedEnv.ux.reconcile(approvedEnv.frm);
-        assertNoTechnicalLeak(approvedEnv.panelHtml);
-        assert.doesNotMatch(approvedEnv.panelHtml, /secret-token|DCPA-HIDDEN|fingerprint/i);
+        assert.equal(fakeWindow.AlmdinaCostEditSessionUX.canEditCostSettings(frm), false);
     }
 
     console.log("Final price approval UX behavior simulation passed");

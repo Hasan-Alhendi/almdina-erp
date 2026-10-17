@@ -307,6 +307,7 @@ def commit_cutting_plan_preview(order_name: str, preview_id: str) -> dict[str, A
         order.name,
         reason="cost_plan_basis_changed",
         only_if_basis_changed=True,
+        order=order,
     )
     order.add_comment(
         "Info",

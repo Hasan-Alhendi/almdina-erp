@@ -675,11 +675,19 @@
         qty(frm) { schedule(frm); },
     });
 
+    function thicknessForType(frm, typeName) {
+        const name = String(typeName || "").trim();
+        if (!name) return null;
+        const profile = profiles(frm).get(name);
+        return profile ? num(profile.thickness_mm) : null;
+    }
+
     window.AlmdinaMultiEdgeBanding = {
         ensureProfiles,
         profiles,
         effectiveType,
         profileFor,
+        thicknessForType,
         calculate,
         details,
         detailForSide,

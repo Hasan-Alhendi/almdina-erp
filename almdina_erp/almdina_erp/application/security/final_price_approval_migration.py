@@ -1,7 +1,8 @@
 """Idempotent helpers for final-price approval phase-1 install.
 
-Does not grant ``approve_final_price`` to any role and never creates approval
-records. Existing role grants remain untouched when migrate runs again.
+Does not grant ``approve_final_price`` or ``cancel_final_price_approval`` to
+any role and never creates approval records. Existing role grants remain
+untouched when migrate runs again.
 """
 
 from __future__ import annotations
@@ -32,6 +33,25 @@ def capability_is_ungranted_by_default(state: Mapping[str, Any] | None) -> bool:
     return (state or {}).get(Capability.APPROVE_FINAL_PRICE) is not True
 
 
+def cancel_capability_is_ungranted_by_default(state: Mapping[str, Any] | None) -> bool:
+    """The cancel capability stays off unless an administrator grants it explicitly."""
+
+    return (state or {}).get(Capability.CANCEL_FINAL_PRICE_APPROVAL) is not True
+
+
+def preserve_cancel_capability_grants(
+    before: Mapping[str, Any] | None,
+    after_sync: Mapping[str, Any] | None,
+) -> bool:
+    """Re-running sync must not clear an administrator grant of price-approval cancellation."""
+
+    before_state = dict(before or {})
+    after_state = dict(after_sync or {})
+    if before_state.get(Capability.CANCEL_FINAL_PRICE_APPROVAL) is True:
+        return after_state.get(Capability.CANCEL_FINAL_PRICE_APPROVAL) is True
+    return after_state.get(Capability.CANCEL_FINAL_PRICE_APPROVAL) is not True
+
+
 def preserve_existing_capability_grants(
     before: Mapping[str, Any] | None,
     after_sync: Mapping[str, Any] | None,
@@ -46,7 +66,9 @@ def preserve_existing_capability_grants(
 
 
 __all__ = [
+    "cancel_capability_is_ungranted_by_default",
     "capability_is_ungranted_by_default",
     "legacy_orders_remain_unapproved",
+    "preserve_cancel_capability_grants",
     "preserve_existing_capability_grants",
 ]

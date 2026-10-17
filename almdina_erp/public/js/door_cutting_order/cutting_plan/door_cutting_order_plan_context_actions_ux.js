@@ -428,6 +428,7 @@
         }
         return frappe.almdina.export_order_dxf(frm.doc.name, activeTab(frm), {
             hasOriginalFile: hasOriginalDxfFile(rowForTab(frm)),
+            frm,
         });
     }
 

@@ -54,7 +54,7 @@ class TestProductionRoutingWorkflowUx(unittest.TestCase):
     def test_stage_library_interaction_contract_is_one_click_and_read_only(self) -> None:
         source = PAGE.read_text(encoding="utf-8")
 
-        self.assertIn("＋ ${__(\"إضافة مرحلة\")}", source)
+        self.assertIn('label: `＋ ${translate("Add stage")}`', source)
         self.assertNotIn("إضافة مكتبة جديدة", source)
         self.assertNotIn("إضافة مرحلة مخصصة", source)
         self.assertIn("prw-library-card-actions", source)
@@ -64,7 +64,7 @@ class TestProductionRoutingWorkflowUx(unittest.TestCase):
         self.assertIn("event.stopPropagation()", source)
         self.assertIn('role=\"button\" tabindex=\"0\"', source)
         self.assertIn('event.key !== \"Enter\" && event.key !== \" \"', source)
-        self.assertIn('message: __(\"المرحلة موجودة بالفعل\")', source)
+        self.assertIn('message: translate("Stage already exists")', source)
         self.assertNotIn('data-stage-field=\"stage_type\"', source)
         self.assertNotIn('data-stage-field=\"department_label\"', source)
         self.assertIn("prw-stage-identity", source)
