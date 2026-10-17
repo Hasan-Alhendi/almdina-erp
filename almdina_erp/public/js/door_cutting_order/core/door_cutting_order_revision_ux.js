@@ -50,6 +50,8 @@
         "edge_color",
     ];
 
+    const NEW_CREATE_FIELD_PROJECTION = "__almdina_new_create_field_projection";
+
     function can(frm, capability) {
         const permissions = window.AlmdinaPermissions;
         return Boolean(
@@ -78,6 +80,89 @@
         } catch (error) {
             return false;
         }
+    }
+
+    function nativeMayCreate(frm) {
+        if (!frm || typeof frm.has_perm !== "function") return false;
+        try {
+            return Boolean(frm.has_perm("create"));
+        } catch (error) {
+            return false;
+        }
+    }
+
+    function clearNewCreateFieldProjection(frm) {
+        const projection = frm && frm[NEW_CREATE_FIELD_PROJECTION];
+        if (!projection) return false;
+        if (frm.perm === projection.projectedPermissions) {
+            frm.perm = projection.originalPermissions;
+        }
+        delete frm[NEW_CREATE_FIELD_PROJECTION];
+        refreshPermissionLevels(frm, projection.permissionLevels);
+        return true;
+    }
+
+    function refreshPermissionLevels(frm, permissionLevels) {
+        if (!frm || !frm.fields_dict || !Array.isArray(permissionLevels)) return;
+        Object.values(frm.fields_dict).forEach(field => {
+            const level = Number(field && field.df && field.df.permlevel || 0);
+            if (
+                permissionLevels.includes(level)
+                && typeof field.refresh === "function"
+            ) field.refresh();
+        });
+    }
+
+    // Frappe's form controls use frm.perm.write to render editable inputs, even
+    // when the user has create but no write permission. Project create-enabled
+    // levels on this NEW form only; never mutate Frappe's shared permission cache.
+    function applyNewCreateFieldProjection(frm) {
+        if (
+            !frm
+            || !frm.doc
+            || !frm.is_new()
+            || !permissionsResolved()
+            || !can(frm, "create_order")
+            || !nativeMayCreate(frm)
+        ) {
+            clearNewCreateFieldProjection(frm);
+            return false;
+        }
+
+        const version = window.AlmdinaPermissions.version();
+        const current = frm[NEW_CREATE_FIELD_PROJECTION];
+        if (
+            current
+            && current.doc === frm.doc
+            && current.name === frm.doc.name
+            && current.version === version
+            && frm.perm === current.projectedPermissions
+        ) return true;
+        clearNewCreateFieldProjection(frm);
+
+        const originalPermissions = Array.isArray(frm.perm) ? frm.perm : null;
+        if (!originalPermissions) return false;
+
+        const permissionLevels = [];
+        const projectedPermissions = originalPermissions.map((level, index) => {
+            if (!level || !level.create || level.write) return level;
+            permissionLevels.push(index);
+            return { ...level, write: true };
+        });
+        if (!permissionLevels.length) return false;
+
+        const projection = {
+            doc: frm.doc,
+            name: frm.doc.name,
+            version,
+            originalPermissions,
+            projectedPermissions,
+            permissionLevels,
+        };
+        frm.perm = projectedPermissions;
+        frm[NEW_CREATE_FIELD_PROJECTION] = projection;
+        refreshPermissionLevels(frm, permissionLevels);
+        return true;
     }
 
     function canShowEditAction(frm) {
@@ -498,6 +583,11 @@
     function applyEditableFields(frm) {
         const editable = orderCanEdit(frm);
         frm.toggle_enable(ORDER_INPUT_FIELDS, editable);
+        if (frm && frm.is_new() && editable) {
+            applyNewCreateFieldProjection(frm);
+        } else {
+            clearNewCreateFieldProjection(frm);
+        }
         syncPrimaryAction(frm);
     }
 
@@ -505,6 +595,11 @@
         if (!frm || !frm.page) return;
 
         if (frm.is_new()) {
+            if (!orderCanEdit(frm) || !nativeMayCreate(frm)) {
+                frm.save_disabled = true;
+                if (typeof frm.disable_save === "function") frm.disable_save();
+                return;
+            }
             if (
                 frm.__almdinaPrimaryActionMode !== "new"
                 || primaryActionLabel(frm) !== saveLabel()
@@ -895,6 +990,9 @@
         after_save(frm) {
             const preserveSession = Boolean(frm.__almdina_preserve_edit_session_after_save);
             frm.__almdina_preserve_edit_session_after_save = false;
+            if (clearNewCreateFieldProjection(frm)) {
+                applyEditableFields(frm);
+            }
             if (preserveSession && isEditSessionActive(frm)) {
                 frm.__almdina_lock_after_save = false;
                 markEditSessionSticky(frm);
