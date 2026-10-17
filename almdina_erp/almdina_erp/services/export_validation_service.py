@@ -311,6 +311,13 @@ def _plan_to_export_snapshot(plan: Any) -> dict[str, Any]:
     }
     geometry_by_identity, has_geometry = snapshot_geometry_index(snapshot)
     consumed_geometry: set[tuple[int, int]] = set()
+    stored_pieces = {
+        (int(sheet.get("sheet_no") or 0), int(piece.get("id") or 0)): piece
+        for sheet in (snapshot.get("sheets") or [])
+        if isinstance(sheet, dict)
+        for piece in (sheet.get("pieces") or [])
+        if isinstance(piece, dict)
+    }
     sheets: list[dict[str, Any]] = []
     pieces_by_sheet: dict[int, list[Any]] = {}
     for piece in plan.placed_pieces or []:
@@ -367,6 +374,16 @@ def _plan_to_export_snapshot(plan: Any) -> dict[str, Any]:
                     )
                 public_piece["geometry"] = geometry
                 consumed_geometry.add(identity)
+            stored = stored_pieces.get((sheet_no, piece_id)) or {}
+            persisted_holes = (
+                (public_piece.get("geometry") or {}).get("holes")
+                if isinstance(public_piece.get("geometry"), dict)
+                else None
+            )
+            if not persisted_holes:
+                for key in ("glass_margin_mm", "glass_hole_local_mm"):
+                    if stored.get(key) not in (None, "", []):
+                        public_piece[key] = stored[key]
             sheet_pieces.append(public_piece)
         persisted = persisted_sheets.get(sheet_no) or {}
         rebuilt_sheet = {

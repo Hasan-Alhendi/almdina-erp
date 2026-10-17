@@ -70,6 +70,10 @@ _ROTATED = (
 )
 
 
+class GlassOpeningError(ValueError):
+    """A saved Glass margin did not produce a through opening on the cut rectangle."""
+
+
 @dataclass(frozen=True, slots=True)
 class GlassOpeningDecision:
     code: str | None = None
@@ -167,18 +171,14 @@ def glass_hole_ring_mm(
     width = _decimal(cut_width_mm)
     length = _decimal(cut_length_mm)
     if not rotated:
-        return _ring(
-            insets["long_left"],
-            insets["width_top"],
-            width - insets["long_right"],
-            length - insets["width_bottom"],
-        )
-    return _ring(
-        insets["width_bottom"],
-        insets["long_left"],
-        length - insets["width_top"],
-        width - insets["long_right"],
-    )
+        x0, y0 = insets["long_left"], insets["width_top"]
+        x1, y1 = width - insets["long_right"], length - insets["width_bottom"]
+    else:
+        x0, y0 = insets["width_bottom"], insets["long_left"]
+        x1, y1 = length - insets["width_top"], width - insets["long_right"]
+    if x1 <= x0 or y1 <= y0:
+        return None
+    return _ring(x0, y0, x1, y1)
 
 
 def placed_glass_hole_mm(piece: Mapping[str, object], *, rotated: bool) -> list[list[float]] | None:
@@ -206,6 +206,32 @@ def placed_glass_hole_mm(piece: Mapping[str, object], *, rotated: bool) -> list[
     if ring is None:
         return None
     return [[x, y] for x, y in ring]
+
+
+def record_glass_opening(
+    placed: dict,
+    piece: Mapping[str, object],
+    *,
+    rotated: bool,
+) -> None:
+    """Store one local opening on a placed system piece.
+
+    A positive saved margin must produce that opening. A missing or zero
+    margin stays omitted so older plans are not rewritten as Glass geometry.
+    """
+
+    if str(piece.get("piece_type") or "") != GLASS_TYPE:
+        return
+    margin = piece.get("glass_margin_mm")
+    if margin in (None, "", 0, 0.0):
+        return
+    hole = placed_glass_hole_mm(piece, rotated=rotated)
+    if not hole:
+        raise GlassOpeningError(
+            "A saved Glass margin did not produce an opening inside the cut rectangle."
+        )
+    placed["glass_margin_mm"] = float(_decimal(margin))
+    placed["glass_hole_local_mm"] = hole
 
 
 def _measured_insets(outer: Sequence[Sequence[float]], hole: Sequence[Sequence[float]]) -> dict[str, float]:
@@ -588,9 +614,11 @@ __all__ = [
     "GlassIdentityContour",
     "GlassIdentityExpectation",
     "GlassOpeningDecision",
+    "GlassOpeningError",
     "cut_insets_mm",
     "glass_hole_ring_mm",
     "placed_glass_hole_mm",
+    "record_glass_opening",
     "reassign_glass_identity",
     "validate_glass_dxf_opening",
 ]

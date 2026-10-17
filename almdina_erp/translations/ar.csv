@@ -771,6 +771,7 @@ Edge m,متر قشاط
 Enter the piece width and length before opening the shape.,أدخل عرض الدرفة وطولها أولًا، ثم افتح توثيق الشكل.
 Export DXF for AutoCAD,تصدير DXF لأوتوكاد
 DXF export failed its compatibility self-check and was not downloaded.,فشل ملف DXF في فحص التوافق الداخلي، لذلك تم منع تنزيل ملف تالف.
+The Glass opening is missing from this cutting plan. Recalculate the system plan before exporting DXF.,فتحة البلور غير موجودة في خطة القص هذه. أعد حساب خطة النظام قبل تصدير DXF.
 Preparing an AutoCAD-compatible DXF...,جاري تجهيز ملف DXF المتوافق مع AutoCAD...
 Validated AutoCAD-compatible DXF exported successfully.,تم تصدير ملف DXF متوافق مع AutoCAD بنجاح.
 Downloading the uploaded DXF file...,جاري تنزيل ملف DXF المرفوع...

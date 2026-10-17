@@ -716,6 +716,31 @@
         return merged;
     }
 
+    function glassOpeningMissing(piece) {
+        if (String((piece && piece.piece_type) || "") !== "Glass") return false;
+        const margin = Number(piece && piece.glass_margin_mm);
+        if (!(margin > 0)) return false;
+        const persisted = piece.geometry && Array.isArray(piece.geometry.holes)
+            ? piece.geometry.holes
+            : null;
+        if (persisted && persisted.length) return false;
+        const local = piece.glass_hole_local_mm;
+        return !(Array.isArray(local) && local.length >= 3);
+    }
+
+    function assertRequiredGlassOpenings(plan) {
+        (plan.sheets || []).forEach(sheet => {
+            (sheet.pieces || []).forEach(piece => {
+                if (!glassOpeningMissing(piece)) return;
+                const error = new Error(
+                    "The Glass opening is missing from this cutting plan. Recalculate the system plan before exporting DXF."
+                );
+                error.glassOpening = true;
+                throw error;
+            });
+        });
+    }
+
     function finishedRings(piece, placement) {
         const topology = persistedTopology(piece);
         if (topology) {
@@ -787,6 +812,7 @@
     function buildDxf(plan) {
         const cutterMm = cutterDiameterMm(plan);
         if (cutterMm && cutterMm.linerExport) throw cutterMm;
+        assertRequiredGlassOpenings(plan);
         const sheets = plan.sheets || [];
         const perRow = 2;
         const gapMm = 200;
@@ -1078,7 +1104,7 @@
             dxf = buildDxf(plan);
             validateDxfText(dxf);
         } catch (error) {
-            if (error && error.linerExport) {
+            if (error && (error.linerExport || error.glassOpening)) {
                 frappe.throw(__(error.message));
             }
             console.error("DXF self-check failed", error);

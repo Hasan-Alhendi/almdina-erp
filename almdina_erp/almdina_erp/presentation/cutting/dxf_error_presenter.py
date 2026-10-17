@@ -309,12 +309,6 @@ _GLASS_GEOMETRY_AR = {
     "self_intersection": "الفتحة تتقاطع مع نفسها",
     "not_rectangle": "الفتحة ليست مستطيلاً",
 }
-_GLASS_ORIENTATION_AR = {
-    "orientation_0": "اتجاه المطابقة: الوضع المستقيم.",
-    "orientation_180": "اتجاه المطابقة: تدوير 180 درجة.",
-    "orientation_cw": "اتجاه المطابقة: تدوير 90 درجة مع عقارب الساعة.",
-    "orientation_ccw": "اتجاه المطابقة: تدوير 90 درجة عكس عقارب الساعة.",
-}
 _GLASS_CODES = {
     codes.GLASS_OPENING_MISSING,
     codes.GLASS_OPENING_UNEXPECTED,
@@ -350,127 +344,6 @@ def _glass_mm(value: Any, *, tolerance: Any = None) -> str:
     if text is None:
         return "غير متاح"
     return f"\u2066{text} مم\u2069"
-
-
-def _glass_signed_mm(value: Any, *, tolerance: Any = None) -> str:
-    text = _glass_number(value, tolerance=tolerance)
-    if text is None:
-        return "غير متاح"
-    number = float(value)
-    if number > 0 and not text.startswith("-"):
-        text = f"+{text}"
-    return f"\u2066{text} مم\u2069"
-
-
-def _glass_margin_text(params: Mapping[str, Any]) -> str:
-    if params.get("margin_known") is False or params.get("order_margin_mm") in (None, ""):
-        return "غير محفوظ"
-    millimetres = _glass_mm(params.get("order_margin_mm"))
-    centimetres = _glass_number(float(params.get("order_margin_mm")) / 10.0)
-    if centimetres is None:
-        return millimetres
-    return f"{millimetres} (\u2066{centimetres} سم\u2069)"
-
-
-def _glass_pair_mm(width: Any, height: Any) -> str | None:
-    width_text = _glass_number(width)
-    height_text = _glass_number(height)
-    if width_text is None or height_text is None:
-        return None
-    return f"\u2066{width_text} × {height_text} مم\u2069"
-
-
-def _glass_size_gap_lines(params: Mapping[str, Any]) -> tuple[str, ...]:
-    values = []
-    for key in ("finished_width_mm", "finished_length_mm", "cut_width_mm", "cut_height_mm"):
-        raw = params.get(key)
-        if raw in (None, ""):
-            return ()
-        try:
-            values.append(float(raw))
-        except (TypeError, ValueError):
-            return ()
-    finished_width, finished_length, cut_width, cut_height = values
-    width_gap = finished_width - cut_width
-    length_gap = finished_length - cut_height
-    if abs(width_gap) <= 0.001 and abs(length_gap) <= 0.001:
-        return ()
-    return (
-        "فرق المقاس النهائي عن محيط القص: "
-        f"العرض {_glass_signed_mm(width_gap)}، الطول {_glass_signed_mm(length_gap)}.",
-    )
-
-
-def _glass_context_lines(params: Mapping[str, Any]) -> tuple[str, ...]:
-    lines: list[str] = []
-    piece_type = _GLASS_TYPE_AR.get(str(params.get("piece_type") or "Glass"), "بلور")
-    if params.get("piece_type") or params.get("margin_known") is not None or params.get("sides"):
-        lines.append(f"نوع الدرفة: {piece_type}.")
-    finished = _glass_pair_mm(params.get("finished_width_mm"), params.get("finished_length_mm"))
-    if finished:
-        lines.append(f"الأبعاد الخارجية في الطلب: {finished}.")
-    cut = _glass_pair_mm(params.get("cut_width_mm"), params.get("cut_height_mm"))
-    if cut:
-        lines.append(f"محيط القص في الملف: {cut}.")
-    lines.extend(_glass_size_gap_lines(params))
-    opening = _glass_pair_mm(params.get("opening_width_mm"), params.get("opening_height_mm"))
-    if opening:
-        lines.append(f"فتحة البلور في الملف: {opening}.")
-    expected = _glass_pair_mm(
-        params.get("expected_opening_width_mm"),
-        params.get("expected_opening_length_mm"),
-    )
-    if expected:
-        lines.append(f"أبعاد الفتحة المتوقعة من الطلب: {expected}.")
-    if params.get("margin_known") is not None or params.get("order_margin_mm") not in (None, ""):
-        lines.append(f"هامش البلور في الطلب: {_glass_margin_text(params)}.")
-    if params.get("tolerance_mm") not in (None, ""):
-        lines.append(f"السماحية الهندسية: {_glass_mm(params.get('tolerance_mm'))}.")
-    file_insets = params.get("file_insets_mm")
-    if isinstance(file_insets, Mapping) and file_insets:
-        listed = "، ".join(
-            f"{_glass_side_name(name)} {_glass_mm(file_insets.get(name))}"
-            for name in ("left", "right", "top", "bottom")
-            if name in file_insets
-        )
-        lines.append(f"مسافات فتحة الملف عن محيط القص: {listed}.")
-    door_bands = params.get("door_bands_mm")
-    if isinstance(door_bands, Mapping) and door_bands:
-        listed = "، ".join(
-            f"{_GLASS_SIDE_AR.get(name, name)} {_glass_mm(door_bands.get(name))}"
-            for name in ("long_left", "long_right", "width_top", "width_bottom")
-        )
-        lines.append(f"قشاط الدرفة: {listed}.")
-        lines.append("لم تُربط جهات الملف بجهات الدرفة لأن هامش الطلب غير محفوظ.")
-    orientation = _GLASS_ORIENTATION_AR.get(str(params.get("orientation") or ""))
-    if orientation:
-        lines.append(orientation)
-        lines.append("أسماء الجهات في الجدول هي جهات الدرفة بعد هذه المطابقة.")
-    return tuple(lines)
-
-
-def _glass_table(params: Mapping[str, Any]) -> tuple[tuple[str, ...], ...]:
-    rows = params.get("sides")
-    if not isinstance(rows, (list, tuple)) or not rows:
-        return ()
-    table = [("الجهة", "هامش الطلب", "القشاط", "المتوقع", "الموجود في DXF", "الفرق")]
-    tolerance = params.get("tolerance_mm")
-    for row in rows:
-        if not isinstance(row, Mapping):
-            continue
-        side = _GLASS_SIDE_AR.get(str(row.get("side") or ""), "طرف")
-        if row.get("violates"):
-            side = f"● {side}"
-        margin = "غير محفوظ" if row.get("order_margin_mm") in (None, "") and params.get("margin_known") is False else _glass_mm(row.get("order_margin_mm"), tolerance=tolerance)
-        table.append((
-            side,
-            margin,
-            _glass_mm(row.get("band_mm"), tolerance=tolerance),
-            _glass_mm(row.get("expected_inset_mm"), tolerance=tolerance),
-            _glass_mm(row.get("actual_inset_mm"), tolerance=tolerance),
-            _glass_signed_mm(row.get("delta_mm"), tolerance=tolerance),
-        ))
-    return tuple(table) if len(table) > 1 else ()
 
 
 def _glass_side_name(side: Any) -> str:
@@ -532,6 +405,31 @@ def _inset_action(params: Mapping[str, Any]) -> str:
     return "، و".join(parts) + "."
 
 
+def _glass_margin_problem(params: Mapping[str, Any]) -> str:
+    tolerance = params.get("tolerance_mm")
+    rows = [
+        row for row in (params.get("sides") or ())
+        if isinstance(row, Mapping) and row.get("violates")
+    ]
+    if not rows and params.get("side"):
+        rows = [{
+            "side": params.get("side"),
+            "actual_inset_mm": params.get("actual_inset_mm"),
+            "expected_inset_mm": params.get("expected_inset_mm"),
+        }]
+    bits = [
+        (
+            f"طرف {_glass_side_name(row.get('side'))}: "
+            f"الموجود {_glass_mm(row.get('actual_inset_mm'), tolerance=tolerance)}، "
+            f"والمطلوب {_glass_mm(row.get('expected_inset_mm'), tolerance=tolerance)}"
+        )
+        for row in rows
+    ]
+    if not bits:
+        return "هامش فتحة البلور لا يطابق الهامش المحدد في الطلب."
+    return "هامش فتحة البلور لا يطابق الطلب. " + "، و".join(bits) + "."
+
+
 def _present_glass_opening(
     issue: DxfValidationIssue,
     target_text: str,
@@ -540,96 +438,72 @@ def _present_glass_opening(
     if code not in _GLASS_CODES:
         return None
     params = issue.params or {}
-    details = _glass_context_lines(params)
-    table = _glass_table(params)
-    tolerance = params.get("tolerance_mm")
     if code == codes.GLASS_OPENING_MISSING:
-        expected = _glass_pair_mm(
-            params.get("expected_opening_width_mm"),
-            params.get("expected_opening_length_mm"),
-        )
         problem = "درفة البلور بلا فتحة داخلية."
-        highlight = f"المتوقع فتحة مستطيلة واحدة{f' بمقاس {expected}' if expected else ''}."
-        action = "أضف محيطًا داخليًا مغلقًا واحدًا لفتحة البلور داخل محيط الدرفة."
+        action = "أضف فتحة مستطيلة واحدة داخل محيط الدرفة."
     elif code == codes.GLASS_OPENING_UNEXPECTED:
         piece_type = _GLASS_TYPE_AR.get(str(params.get("piece_type") or ""))
         kind = f"من نوع {piece_type}" if piece_type else "ليست من نوع بلور"
         problem = f"وُجدت فتحة داخلية في قطعة {kind}."
-        highlight = "فتحة البلور تُقبل فقط عندما تكون القطعة من نوع بلور."
-        action = "أزل الفتحة من هذه القطعة، أو اجعل نوع الدرفة بلور إذا كانت الفتحة مقصودة."
+        action = "أزل الفتحة، أو غيّر نوع الدرفة إلى بلور إذا كانت الفتحة مقصودة."
     elif code == codes.GLASS_MULTIPLE_OPENINGS:
-        count = params.get("opening_count")
-        count_text = _glass_number(count) or "أكثر من واحدة"
-        problem = "درفة البلور تحتوي أكثر من فتحة داخلية."
-        highlight = f"عدد الفتحات المكتشفة {count_text}، والمدعوم حاليًا فتحة واحدة."
+        count_text = _glass_number(params.get("opening_count"))
+        problem = (
+            f"درفة البلور تحتوي {count_text} فتحات داخلية."
+            if count_text
+            else "درفة البلور تحتوي أكثر من فتحة داخلية."
+        )
         action = "اترك فتحة مستطيلة واحدة واحذف الفتحات الزائدة."
     elif code == codes.GLASS_OPENING_INVALID:
         reasons = [
-            _GLASS_GEOMETRY_AR.get(str(error), str(error))
+            _GLASS_GEOMETRY_AR[str(error)]
             for error in (params.get("geometry_errors") or ())
-            if str(error) in _GLASS_GEOMETRY_AR or str(error)
+            if str(error) in _GLASS_GEOMETRY_AR
         ]
-        proven = [text for text in reasons if text]
-        problem = "فتحة البلور غير صالحة."
-        highlight = "السبب: " + "، ".join(proven) + "." if proven else "سبب بطلان الفتحة غير محدد في نتيجة التحقق."
-        action = "اجعل الفتحة محيطًا مستطيلًا مغلقًا بلا تقاطع."
+        problem = "فتحة البلور غير صالحة" + (": " + "، ".join(reasons) + "." if reasons else ".")
+        action = "اجعل الفتحة مستطيلاً مغلقًا بلا تقاطع."
     elif code == codes.GLASS_OPENING_OUTSIDE:
-        outside = [row for row in (params.get("outside_sides") or ()) if isinstance(row, Mapping)]
-        bits = []
-        for row in outside:
-            relation = "تتجاوز المحيط" if row.get("relation") == "crosses" else "تلامس المحيط أو تقترب منه"
-            bits.append(f"{_glass_side_name(row.get('side'))} {relation} ({_glass_mm(row.get('inset_mm'), tolerance=tolerance)})")
-        problem = "فتحة البلور ليست داخل الدرفة بالكامل."
-        highlight = "؛ ".join(bits) + "." if bits else "الفتحة تخرج عن المحيط أو تلامسه، من دون جهة واحدة يمكن تحديدها."
-        action = "أبعد الفتحة عن المحيط الخارجي حتى تبقى داخله من الجهات الأربع."
+        sides = [
+            _glass_side_name(row.get("side"))
+            for row in (params.get("outside_sides") or ())
+            if isinstance(row, Mapping)
+        ]
+        problem = (
+            "فتحة البلور تخرج عن محيط الدرفة من جهة " + " و".join(sides) + "."
+            if sides
+            else "فتحة البلور ليست داخل الدرفة بالكامل."
+        )
+        action = "أبعد الفتحة عن المحيط حتى تبقى داخله من الجهات الأربع."
     elif code == codes.GLASS_GEOMETRY_AMBIGUOUS:
         problem = "تعذّر تمييز درفة البلور عن قطعة أخرى بالمقاس نفسه."
-        highlight = "فتحات الملف لا تحدد درفة البلور بصورة واحدة، لذلك لم يُعرض رقم درفة."
         action = "اجعل فتحة البلور داخل درفة البلور فقط، ثم أعد الرفع."
-    else:
-        side = _glass_side_name(params.get("side"))
-        if params.get("reason") == "margin_missing" or params.get("margin_known") is False:
-            door_no = issue.target.source_piece_no if issue.target is not None else None
-            if params.get("margin_state") == "absent":
-                if door_no is not None and not params.get("identity_unproven"):
-                    problem = f"تعذرت قراءة هامش البلور المحفوظ للدرفة {door_no} أثناء الاستيراد."
-                else:
-                    problem = "تعذرت قراءة هامش البلور المحفوظ أثناء الاستيراد."
-                highlight = "مرجع التشخيص: glass_margin_absent_on_import_row."
-                action = "أعد رفع الملف. إذا تكرر الرفض، أبلغ الدعم الفني بهذا المرجع."
-            else:
-                if door_no is not None and not params.get("identity_unproven"):
-                    problem = f"لم يتم العثور على هامش بلور محفوظ للدرفة {door_no}."
-                else:
-                    problem = "لم يتم العثور على هامش بلور محفوظ على صف الدرفة."
-                highlight = "القيمة غير موجودة في صف الدرفة الذي قرأه الاستيراد."
-                action = "افتح شكل الدرفة، أدخل الهامش، اضغط اعتماد الشكل، ثم احفظ طلب القص وأعد رفع الملف."
-        elif params.get("reason") == "band_consumes_margin":
-            problem = "هامش البلور لا يترك مسافة صالحة داخل محيط القص بعد خصم القشاط."
-            highlight = (
-                f"طرف {side}: هامش الطلب {_glass_margin_text(params)}، "
-                f"القشاط {_glass_mm(params.get('band_mm'))}، "
-                f"الناتج {_glass_mm(params.get('expected_inset_mm'))}."
+    elif params.get("reason") == "margin_missing" or params.get("margin_known") is False:
+        door_no = issue.target.source_piece_no if issue.target is not None else None
+        if params.get("margin_state") == "absent":
+            problem = (
+                f"تعذرت قراءة هامش البلور المحفوظ للدرفة {door_no}."
+                if door_no is not None and not params.get("identity_unproven")
+                else "تعذرت قراءة هامش البلور المحفوظ."
             )
-            action = _band_consumes_action(params)
+            action = "أعد رفع الملف. إذا تكرر الرفض، أبلغ الدعم الفني."
         else:
-            problem = "هامش فتحة البلور لا يطابق الهامش المحدد في الطلب."
-            highlight = (
-                f"طرف {side}: الموجود {_glass_mm(params.get('actual_inset_mm'), tolerance=tolerance)}، "
-                f"المتوقع {_glass_mm(params.get('expected_inset_mm'), tolerance=tolerance)}، "
-                f"الفرق {_glass_signed_mm(params.get('delta_mm'), tolerance=tolerance)}."
+            problem = (
+                f"لم يتم العثور على هامش بلور محفوظ للدرفة {door_no}."
+                if door_no is not None and not params.get("identity_unproven")
+                else "لم يتم العثور على هامش بلور محفوظ على صف الدرفة."
             )
-            action = _inset_action(params)
-    return PresentedDxfError(
-        problem,
-        target_text,
-        action,
-        code,
-        issue.category,
-        details,
-        highlight,
-        table,
-    )
+            action = "افتح شكل الدرفة، أدخل الهامش، اضغط اعتماد الشكل، ثم احفظ طلب القص وأعد رفع الملف."
+    elif params.get("reason") == "band_consumes_margin":
+        problem = (
+            f"هامش البلور على طرف {_glass_side_name(params.get('side'))} لا يترك مسافة داخل القص: "
+            f"الهامش {_glass_mm(params.get('order_margin_mm'))}، "
+            f"والناتج {_glass_mm(params.get('expected_inset_mm'))}."
+        )
+        action = _band_consumes_action(params)
+    else:
+        problem = _glass_margin_problem(params)
+        action = _inset_action(params)
+    return PresentedDxfError(problem, target_text, action, code, issue.category)
 
 
 def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
@@ -1470,9 +1344,6 @@ def present_group(group: Sequence[DxfValidationIssue]) -> PresentedDxfError:
             presented.action,
             presented.code,
             presented.category,
-            presented.details + ("القيم الهندسية متطابقة في النسخ المذكورة.",),
-            presented.highlight,
-            presented.detail_table,
         )
     first = present_issue(group[0])
     contour_nos = [item.target.contour_no for item in group if item.target.contour_no is not None]
@@ -1599,11 +1470,9 @@ def render_error_cards_html(
 
     def render_card(item: PresentedDxfError) -> str:
         details = ""
-        if item.details or item.detail_table:
+        if item.code not in _GLASS_CODES and (item.details or item.detail_table):
             summary = (
-                "التفاصيل الهندسية"
-                if item.detail_table or item.code in _GLASS_CODES
-                else "تفاصيل الاختلاف"
+                "تفاصيل الاختلاف"
                 if item.code == codes.L_CORNER_NOTCH_MISMATCH
                 else "عرض كل المواضع المتأثرة"
             )
@@ -1616,7 +1485,7 @@ def render_error_cards_html(
                 "</details>"
             )
         highlight = ""
-        if item.highlight:
+        if item.code not in _GLASS_CODES and item.highlight:
             highlight = (
                 "<div style='margin-top:6px;'><strong>الفرق الأبرز:</strong> "
                 f"{html.escape(item.highlight)}</div>"

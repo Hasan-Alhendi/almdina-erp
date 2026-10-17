@@ -309,6 +309,82 @@ async function run() {
     downloadedDxf = "";
     await fakeFrappe.almdina.export_order_dxf("DCO-GLASS", "system");
     assert.equal(cutPathLineCount(downloadedDxf), 8);
+    assert.match(downloadedDxf, /10\r\n75\r\n20\r\n925\r\n/);
+    assert.match(downloadedDxf, /10\r\n466\r\n20\r\n330\r\n/);
+
+    nextPlan = {
+        full_board_width_cm: 200,
+        full_board_length_cm: 100,
+        trim_cm: 0,
+        kerf_cm: 0,
+        sheets: [{
+            sheet_no: 1,
+            full_width_cm: 200,
+            full_length_cm: 100,
+            pieces: [0, 1].map(index => ({
+                id: index + 1,
+                x: 1 + index * 60,
+                y: 1,
+                w: 52.1,
+                h: 72.5,
+                piece_type: "Glass",
+                piece_instance_id: `door-8:${index + 1}`,
+                glass_margin_mm: 65,
+                glass_hole_local_mm: [[65, 65], [456, 65], [456, 660], [65, 660]],
+            })),
+        }],
+    };
+    downloadedDxf = "";
+    await fakeFrappe.almdina.export_order_dxf("DCO-GLASS-TWO", "system");
+    assert.equal(cutPathLineCount(downloadedDxf), 16);
+
+    nextPlan = {
+        full_board_width_cm: 100,
+        full_board_length_cm: 100,
+        trim_cm: 0,
+        sheets: [{
+            sheet_no: 1,
+            full_width_cm: 100,
+            full_length_cm: 100,
+            pieces: [{
+                id: 1,
+                x: 1,
+                y: 1,
+                w: 52.1,
+                h: 72.5,
+                piece_type: "Glass",
+            }],
+        }],
+    };
+    downloadedDxf = "";
+    await fakeFrappe.almdina.export_order_dxf("DCO-GLASS-HISTORICAL", "system");
+    assert.equal(cutPathLineCount(downloadedDxf), 4);
+
+    nextPlan = {
+        full_board_width_cm: 100,
+        full_board_length_cm: 100,
+        trim_cm: 0,
+        sheets: [{
+            sheet_no: 1,
+            full_width_cm: 100,
+            full_length_cm: 100,
+            pieces: [{
+                id: 1,
+                x: 1,
+                y: 1,
+                w: 52.1,
+                h: 72.5,
+                piece_type: "Glass",
+                glass_margin_mm: 65,
+            }],
+        }],
+    };
+    downloadedDxf = "";
+    await assert.rejects(
+        fakeFrappe.almdina.export_order_dxf("DCO-GLASS-MISSING", "system"),
+        /The Glass opening is missing from this cutting plan/
+    );
+    assert.equal(downloadedDxf, "");
 
     nextPlan = {
         full_board_width_cm: 100,

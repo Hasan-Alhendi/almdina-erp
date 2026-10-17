@@ -149,7 +149,7 @@ def make_placed_piece(
     rotated: bool,
 ) -> dict[str, Any]:
     from almdina_erp.almdina_erp.domain.cutting.glass_opening_dxf import (
-        placed_glass_hole_mm,
+        record_glass_opening,
     )
 
     placed = {
@@ -179,9 +179,7 @@ def make_placed_piece(
         **liner_metadata(piece),
         **_edge_metadata(piece),
     }
-    hole = placed_glass_hole_mm(piece, rotated=bool(rotated))
-    if hole is not None:
-        placed["glass_hole_local_mm"] = hole
+    record_glass_opening(placed, piece, rotated=bool(rotated))
     return placed
 
 

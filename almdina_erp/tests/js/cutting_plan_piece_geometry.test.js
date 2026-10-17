@@ -206,6 +206,15 @@ assert.equal(uploadedGlass.source, "dxf");
 assert.equal(uploadedGlass.geometry.holes.length, 1);
 assertLabelInside(uploadedGlass);
 
+const rendererSource = fs.readFileSync(
+    path.join(root, "public/js/door_cutting_order/cutting_plan/door_cutting_order_cutting_plan_renderer.js"),
+    "utf8"
+);
+assert.match(rendererSource, /geometryModel\.geometry\.pathData/);
+assert.match(rendererSource, /fill-rule="evenodd"/);
+assert.match(rendererSource, /\.dco-shaped-piece-outline path \{ fill: #fff !important; stroke: #111 !important; \}/);
+assert.match(rendererSource, /buildPrintDocument/);
+
 const invalidDeclared = geometry.resolve(dxfPiece([[0, 0], [1, 1]]));
 assert.equal(invalidDeclared.source, "invalid-dxf");
 assert.equal(invalidDeclared.invalid, true);
