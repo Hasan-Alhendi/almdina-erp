@@ -35,7 +35,7 @@ def test_permissions_polish_has_clear_enabled_dirty_and_focus_states() -> None:
 
     assert ".apc-capability:has(.apc-capability-input:checked)" in css
     assert ".apc-dirty.is-dirty::before" in css
-    assert ".apc-switch input:focus-visible+.apc-slider" in css
+    assert ".apc-switch input:focus-visible + .apc-slider" in css
     assert "safe-area-inset-bottom" in css
     assert "prefers-reduced-motion" in css
     assert "border-radius: 15px" in css
