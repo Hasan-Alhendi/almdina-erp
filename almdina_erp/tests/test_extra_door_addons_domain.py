@@ -114,6 +114,28 @@ class TestExtraDoorAddonsDomain(unittest.TestCase):
         self.assertEqual(piece.liner_total_usd, 7.5)
         self.assertEqual(piece.total_usd, 25.5)
 
+    def test_full_double_and_all_machining_fees_remain_commercial_qty(self) -> None:
+        summary = calculate_extra_addon_pricing(
+            [
+                ExtraAddonPieceInput(
+                    piece_type="Regular", qty=3,
+                    full_door_double=True,
+                    liner=True, back_groove=True, recessed_handle_cutout=True,
+                )
+            ],
+            rates=ExtraAddonRates(
+                full_door_double_usd=0.50, liner_usd=0.50,
+                back_groove_usd=0.50, recessed_handle_cutout_usd=0.50,
+            ),
+        )
+        piece = summary.pieces[0]
+        self.assertEqual(physical_cut_quantity(3, full_door_double=True), 6)
+        self.assertEqual(piece.full_door_double_total_usd, 1.50)
+        self.assertEqual(piece.liner_total_usd, 1.50)
+        self.assertEqual(piece.back_groove_total_usd, 1.50)
+        self.assertEqual(piece.recessed_handle_cutout_total_usd, 1.50)
+        self.assertEqual(summary.total_usd, 6.00)
+
     def test_physical_quantity_doubles_only_for_full_door_double(self) -> None:
         self.assertEqual(physical_cut_quantity(3, full_door_double=True), 6)
         self.assertEqual(physical_cut_quantity(3, full_door_double=False), 3)

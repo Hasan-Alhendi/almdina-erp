@@ -2146,6 +2146,7 @@ def _attach_extra_overlays(
     sheets: list[dict[str, Any]],
     trim_mm: float,
     cutter_diameter_mm: float | None = None,
+    validate_regular_machining: bool = True,
 ) -> None:
     hosts = tuple(
         ExtraOverlayHost(
@@ -2178,22 +2179,26 @@ def _attach_extra_overlays(
     grouped: dict[int, list] = {}
     for item in assigned:
         grouped.setdefault(int(item.host_key), []).append(item)
-    liner_issues = []
-    for piece in pieces:
-        sheet = sheets_by_no.get(int(piece["_sheet_no"]))
-        if sheet is None:
-            continue
-        liner_issues.extend(
-            _regular_machining_issues(
-                piece,
-                grouped.get(int(piece["id"])) or [],
-                sheet,
-                trim_mm,
-                cutter_diameter_mm,
+    # Strict imports validate machining only after persisted dimensions and
+    # piece identity have been proved, so 180° and 270° are not guessed here.
+    # Standalone legacy callers retain their original early check.
+    if validate_regular_machining:
+        liner_issues = []
+        for piece in pieces:
+            sheet = sheets_by_no.get(int(piece["_sheet_no"]))
+            if sheet is None:
+                continue
+            liner_issues.extend(
+                _regular_machining_issues(
+                    piece,
+                    grouped.get(int(piece["id"])) or [],
+                    sheet,
+                    trim_mm,
+                    cutter_diameter_mm,
+                )
             )
-        )
-    if liner_issues:
-        raise DxfImportError(issues=liner_issues)
+        if liner_issues:
+            raise DxfImportError(issues=liner_issues)
     for piece in pieces:
         items = grouped.get(int(piece["id"])) or []
         if not items:
@@ -2410,8 +2415,10 @@ def validate_imported_plan(
     return {"is_valid": not issues, "errors": present_issues_as_strings(issues)}
 
 
-def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
-    """Parse and fully validate an uploaded production DXF without mutating it."""
+def parse_production_dxf(
+    file_url: str, order: Any, *, validate_regular_machining: bool = True
+) -> dict[str, Any]:
+    """Parse production DXF; strict callers own the final machining check."""
     if not file_url:
         raise DxfImportError(issues=[issue(FILE_REQUIRED, CATEGORY_FILE, target=file_target())])
 
@@ -2534,6 +2541,7 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
         sheets=sheets,
         trim_mm=trim_mm,
         cutter_diameter_mm=cutter_diameter_mm if cutter_diameter_mm > 0 else None,
+        validate_regular_machining=validate_regular_machining,
     )
     _attach_text_labels(
         sheets,
