@@ -300,6 +300,18 @@
             return result;
         }
 
+        function beginPendingSaveRetry() {
+            if (
+                disposed
+                || mode !== "NEW"
+                || officialSaveState !== OFFICIAL_SAVE_STATES.PENDING_RECONCILIATION
+                || !officialSaveAttemptedAt
+                || savedRevision !== revision
+            ) return false;
+            transition(STATES.OFFICIAL_SAVING);
+            return snapshot();
+        }
+
         function markPendingReconciliation() {
             if (disposed || mode !== "NEW") return false;
             officialSaveState = OFFICIAL_SAVE_STATES.PENDING_RECONCILIATION;
@@ -371,6 +383,7 @@
             advanceExpectedServerModified,
             flush,
             beginOfficialSave,
+            beginPendingSaveRetry,
             markPendingReconciliation,
             resumeAfterProvenFailure,
             adoptPersistedOfficialSaveState,

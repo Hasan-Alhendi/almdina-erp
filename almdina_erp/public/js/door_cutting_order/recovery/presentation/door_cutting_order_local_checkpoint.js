@@ -301,7 +301,7 @@
             LOCAL_SAVING: "Saving a local recovery copy…",
             LOCAL_SAVED: "A local recovery copy is saved; the order has not been officially saved on the server.",
             OFFICIAL_SAVING: "Saving the order officially on the server…",
-            PENDING_RECONCILIATION: "The official save was sent. Its result is being verified before recovery can continue.",
+            PENDING_RECONCILIATION: "The official save result is unresolved. The draft and its identity were retained for retry with the same data.",
             RESTORING: "Restoring the local draft…",
             COMPLETED: "The order was officially saved.",
             ERROR: "Could not save the local recovery copy. Keep this page open until the draft is resolved.",
@@ -401,6 +401,31 @@
             }),
             asset_refs: [],
         };
+    }
+
+    async function pendingCheckpointMatchesForm(frm, state) {
+        const snapshot = state && state.session && state.session.snapshot();
+        const repo = repository();
+        const projection = root.Projection;
+        if (
+            !snapshot
+            || !repo
+            || typeof repo.read !== "function"
+            || !projection
+            || snapshot.official_save_state !== "PENDING_RECONCILIATION"
+            || snapshot.saved_revision !== snapshot.recovery_revision
+        ) return false;
+        const stored = await repo.read(state.session.identity());
+        if (
+            !stored
+            || stored.ok !== true
+            || !stored.value
+            || stored.value.official_save_state !== "PENDING_RECONCILIATION"
+            || Number(stored.value.recovery_revision) !== snapshot.recovery_revision
+            || stored.value.official_save_attempted_at !== snapshot.official_save_attempted_at
+        ) return false;
+        const current = await workspaceProjection(frm, state, stored.value.dirty_scope);
+        return projection.serialize(current.payload) === projection.serialize(stored.value.payload);
     }
 
     function createState(frm, options = {}) {
@@ -708,7 +733,6 @@
     }
 
     async function continueDraft(frm, record) {
-        const repo = repository();
         const isCurrent = activeDocumentGuard(frm);
         let selected = record;
         if (record.official_save_state === "PENDING_RECONCILIATION") {
@@ -729,17 +753,12 @@
                 );
                 return { reconciled: true };
             }
-            const resumed = await repo.setOfficialSaveState(
-                recoveryIdentity(record.draft_id),
-                "ACTIVE",
-                record.recovery_revision,
-                record.official_save_attempted_at
-            );
-            if (!resumed || resumed.ok !== true) {
-                throw new Error(translate("Could not confirm that the draft is ready to continue."));
+            if (reconciliation.status !== "NOT_FOUND") {
+                throw new Error(translate("Could not resolve the result of the official save."));
             }
-            if (!isCurrent()) return { cancelled: true };
-            selected = resumed.value;
+            // NOT_FOUND only means no committed row was visible to this query.
+            // The original native insert may still be in flight, so retain the
+            // pending attempt, exact payload, and creation token while hydrating.
         }
         if (!isCurrent()) return { cancelled: true };
         const hydrationSnapshot = captureHydrationSnapshot(frm);
@@ -1191,6 +1210,12 @@
         if (error && error.code === INACTIVE_SAVE_ERROR) {
             return;
         }
+        if (operation.retryingPending) {
+            // A response to this retry does not resolve the earlier ambiguous
+            // request. Keep its exact saved revision and token fenced as pending.
+            state.session.markPendingReconciliation();
+            return;
+        }
         if (provesNoInsert(error)) {
             if (!attemptedAt) return;
             const resumed = await clearProvenSaveAttempt(state, attemptedAt);
@@ -1319,12 +1344,7 @@
         const result = await root.ServerReconciliation.reconcileNewCreation(
             state.session.snapshot().draft_id
         );
-        if (!isCurrent()) {
-            if (result.status === "NOT_FOUND") {
-                await clearProvenSaveAttempt(state, reconciledAttempt);
-            }
-            abortInactiveSave();
-        }
+        if (!isCurrent()) abortInactiveSave();
         if (result.status === "CREATED") {
             await cleanupConfirmedNewDraft(
                 frm,
@@ -1338,12 +1358,10 @@
             );
             if (!isCurrent()) abortInactiveSave();
             frappe.validated = false;
-            return false;
+            return "CREATED";
         }
-        const resumed = await state.session.resumeAfterProvenFailure();
-        if (!isCurrent()) abortInactiveSave();
-        if (!resumed) throw new Error(translate("Could not store the reconciliation result locally."));
-        return true;
+        if (result.status === "NOT_FOUND") return "NOT_FOUND";
+        throw new Error(translate("Could not resolve the result of the official save."));
     }
 
     async function beforeSave(frm) {
@@ -1381,6 +1399,7 @@
             saveOperation.cleanupAttemptedAt = null;
             saveOperation.attemptedRevision = null;
             saveOperation.nativeInsertAllowed = false;
+            saveOperation.retryingPending = false;
         }
         if (!state.saveWasNew) return;
 
@@ -1406,8 +1425,9 @@
         }
         const current = state.session.snapshot();
         if (current.official_save_state === "PENDING_RECONCILIATION") {
+            let reconciliationState = null;
             try {
-                if (await reconcilePendingState(frm, state, isCurrent) !== true) return;
+                reconciliationState = await reconcilePendingState(frm, state, isCurrent);
             } catch (error) {
                 if (error && error.code === INACTIVE_SAVE_ERROR) throw error;
                 if (!isCurrent()) abortInactiveSave();
@@ -1415,6 +1435,38 @@
                 showRecoveryError(translate("Could not verify the previous save attempt. The insert was not retried."));
                 return;
             }
+            if (reconciliationState !== "NOT_FOUND") return;
+            let matchesCheckpoint = false;
+            try {
+                matchesCheckpoint = await pendingCheckpointMatchesForm(frm, state);
+            } catch (error) {
+                console.debug("Unable to verify unchanged pending DCO checkpoint", error);
+            }
+            if (!isCurrent()) abortInactiveSave();
+            if (!matchesCheckpoint) {
+                frappe.validated = false;
+                showRecoveryError(
+                    translate("The previous save result is unresolved. The draft was retained unchanged; reopen it to verify before retrying with the same identity.")
+                );
+                return;
+            }
+            const retry = state.session.beginPendingSaveRetry();
+            if (!retry) {
+                frappe.validated = false;
+                showRecoveryError(
+                    translate("The previous save result is unresolved or the draft changed. The draft was retained without deletion.")
+                );
+                return;
+            }
+            frm.doc.recovery_creation_token = retry.draft_id;
+            if (saveOperation) {
+                saveOperation.retryingPending = true;
+                saveOperation.attemptedAt = retry.official_save_attempted_at;
+                saveOperation.cleanupAttemptedAt = retry.official_save_attempted_at;
+                saveOperation.attemptedRevision = retry.recovery_revision;
+                saveOperation.nativeInsertAllowed = true;
+            }
+            return;
         }
         frm.doc.recovery_creation_token = state.session.snapshot().draft_id;
         const preAttempt = state.session.snapshot();

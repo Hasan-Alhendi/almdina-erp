@@ -369,7 +369,7 @@ class TestActiveUiHasNoLanguageTextBranches(unittest.TestCase):
             ("LOCAL_SAVING", "Saving a local recovery copy…", "جارٍ حفظ نسخة الاسترداد محليًا…"),
             ("LOCAL_SAVED", "A local recovery copy is saved; the order has not been officially saved on the server.", "تم تأكيد حفظ نسخة محلية؛ لم يُحفظ الطلب رسميًا على الخادم."),
             ("OFFICIAL_SAVING", "Saving the order officially on the server…", "جارٍ حفظ الطلب رسميًا على الخادم…"),
-            ("PENDING_RECONCILIATION", "The official save was sent. Its result is being verified before recovery can continue.", "أُرسل الحفظ الرسمي، ويجري التحقق من نتيجته قبل متابعة الاسترداد."),
+            ("PENDING_RECONCILIATION", "The official save result is unresolved. The draft and its identity were retained for retry with the same data.", "نتيجة الحفظ الرسمي غير محسومة؛ احتُفظ بالمسودة وهويتها لإعادة التحقق أو المحاولة بالبيانات نفسها."),
             ("RESTORING", "Restoring the local draft…", "جارٍ استعادة المسودة المحلية…"),
             ("COMPLETED", "The order was officially saved.", "اكتمل الحفظ الرسمي للطلب."),
             ("ERROR", "Could not save the local recovery copy. Keep this page open until the draft is resolved.", "تعذر حفظ نسخة الاسترداد محليًا. تابع العمل مع إبقاء الصفحة مفتوحة حتى تعالج المسودة."),

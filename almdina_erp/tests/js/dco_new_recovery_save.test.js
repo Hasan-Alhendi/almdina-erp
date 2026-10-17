@@ -791,24 +791,81 @@ function runCleanups(frm) {
     const pendingRecord = draft(pendingId, "PENDING_RECONCILIATION");
     const retryForm = form("new-door-cutting-order-retry");
     reconciliationResult = { status: "NOT_FOUND" };
+    let pendingRetryEvidence = null;
+    retryForm.save = async function retrySameCreation() {
+        await handlers["Door Cutting Order"].before_save(this);
+        if (!fakeFrappe.validated) return false;
+        pendingRetryEvidence = {
+            state: Recovery.LocalCheckpoint.snapshot(this).state,
+            officialSaveState: Recovery.LocalCheckpoint.snapshot(this).official_save_state,
+            attempt: Recovery.LocalCheckpoint.snapshot(this).official_save_attempted_at,
+            token: this.doc.recovery_creation_token,
+            storedState: records.get(pendingId).official_save_state,
+        };
+        nativeSaveCalls += 1;
+        this.doc.name = "DCO-2026-00422";
+        this.doc.__islocal = 0;
+        this.doc.modified = "2026-08-29 11:05:00.000000";
+        return true;
+    };
     fakeWindow.cur_frm = retryForm;
     await Recovery.LocalCheckpoint.continueDraft(retryForm, pendingRecord);
-    assert.equal(records.get(pendingId).official_save_state, "ACTIVE");
+    assert.equal(records.get(pendingId).official_save_state, "PENDING_RECONCILIATION");
     assert.equal(retryForm.doc.customer, "CUST-RECOVERED");
     assert.equal(retryForm.doc.pieces.length, 1);
     assert.equal(
         Recovery.LocalCheckpoint.snapshot(retryForm).draft_id,
         pendingId,
-        "server-proven absence resumes with the same creation identity"
+        "NOT_FOUND preserves the original creation identity"
     );
-
-    await handlers["Door Cutting Order"].before_save(retryForm);
-    retryForm.doc.name = "DCO-2026-00422";
-    retryForm.doc.__islocal = 0;
-    retryForm.doc.modified = "2026-08-29 11:05:00.000000";
-    await handlers["Door Cutting Order"].after_save(retryForm);
+    const pendingAttempt = records.get(pendingId).official_save_attempted_at;
+    fakeFrappe.validated = true;
+    await retryForm.save();
     assert.equal(records.has(pendingId), false, "acknowledged success cleans up after binding");
     assert.equal(Recovery.LocalCheckpoint.snapshot(retryForm), null);
+    assert.deepEqual(pendingRetryEvidence, {
+        state: "OFFICIAL_SAVING",
+        officialSaveState: "PENDING_RECONCILIATION",
+        attempt: pendingAttempt,
+        token: pendingId,
+        storedState: "PENDING_RECONCILIATION",
+    }, "retry uses the unchanged checkpoint and creation token while pending");
+
+    const pendingEditId = "24242424-2424-4242-8242-242424242424";
+    const pendingEditRecord = draft(pendingEditId, "PENDING_RECONCILIATION");
+    const pendingEditForm = form("new-door-cutting-order-pending-edit");
+    fakeWindow.cur_frm = pendingEditForm;
+    await Recovery.LocalCheckpoint.continueDraft(pendingEditForm, pendingEditRecord);
+    Recovery.LocalCheckpoint.markDirty(pendingEditForm, "DCO");
+    fakeFrappe.validated = true;
+    const savesBeforePendingEdit = nativeSaveCalls;
+    await handlers["Door Cutting Order"].before_save(pendingEditForm);
+    assert.equal(fakeFrappe.validated, false, "a changed pending snapshot cannot be inserted");
+    assert.equal(nativeSaveCalls, savesBeforePendingEdit);
+    assert.equal(records.get(pendingEditId).official_save_state, "PENDING_RECONCILIATION");
+    assert.equal(pendingEditForm.doc.recovery_creation_token, pendingEditId);
+
+    const pendingRetryFailureId = "26262626-2626-4262-8262-262626262626";
+    const pendingRetryFailureRecord = draft(pendingRetryFailureId, "PENDING_RECONCILIATION");
+    const pendingRetryFailureForm = form("new-door-cutting-order-pending-retry-failure");
+    pendingRetryFailureForm.save = async function retrySameCreationAndFail() {
+        await handlers["Door Cutting Order"].before_save(this);
+        if (!fakeFrappe.validated) return false;
+        nativeSaveCalls += 1;
+        throw new Error("ambiguous retry transport failure");
+    };
+    fakeWindow.cur_frm = pendingRetryFailureForm;
+    await Recovery.LocalCheckpoint.continueDraft(pendingRetryFailureForm, pendingRetryFailureRecord);
+    const failedRetryAttempt = records.get(pendingRetryFailureId).official_save_attempted_at;
+    fakeFrappe.validated = true;
+    await assert.rejects(pendingRetryFailureForm.save(), /ambiguous retry transport failure/);
+    assert.equal(records.get(pendingRetryFailureId).official_save_state, "PENDING_RECONCILIATION");
+    assert.equal(
+        records.get(pendingRetryFailureId).official_save_attempted_at,
+        failedRetryAttempt,
+        "a retry failure cannot clear or rotate the earlier ambiguous attempt"
+    );
+    assert.equal(pendingRetryFailureForm.doc.recovery_creation_token, pendingRetryFailureId);
 
     const failOpenId = "23232323-2323-4232-8232-232323232323";
     const failOpenRecord = draft(failOpenId);
