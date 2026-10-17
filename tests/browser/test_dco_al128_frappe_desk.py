@@ -264,7 +264,16 @@ def test_real_desk_edits_checkpoint_and_permission_isolation() -> None:
             first.locator('.dco-check-toggle[data-check-field="edge_long_left"]').click()
 
             second = rows.nth(1)
-            second.locator('.dco-addon-toggle[data-check-field="extra_liner"]').click()
+            # The current measurements UI opens add-ons in a native Frappe dialog,
+            # rather than rendering five independent toggles in each table row.
+            second.locator("button.dco-addons-open[data-open-addons='1']").click()
+            addons = page.locator(".dco-addons-modal [data-addons-dialog]")
+            expect(addons).to_be_visible(timeout=10_000)
+            addons.locator('[data-addon-tab="extra_liner"]').click()
+            addons.locator('[data-liner-side="edge_width_top"]').click()
+            expect(addons.locator("[data-addons-apply]")).to_be_enabled()
+            addons.locator("[data-addons-apply]").click()
+            expect(addons).to_be_hidden(timeout=30_000)
             second.locator(".dco-all-sides-profile-button[data-bulk-edge-profile-button]").click()
             page.locator(
                 "#dco-edge-profile-popover "
