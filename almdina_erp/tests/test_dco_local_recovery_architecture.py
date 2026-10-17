@@ -219,7 +219,7 @@ class TestDcoLocalRecoveryArchitecture(unittest.TestCase):
 
         def allowlisted_fields(name: str) -> set[str]:
             match = re.search(
-                rf"const {name} = Object\\.freeze\\(\\[([\\s\\S]*?)\\]\\);",
+                rf"const {name} = Object\.freeze\(\[([\s\S]*?)\]\);",
                 projection,
             )
             self.assertIsNotNone(match, f"missing {name} allowlist")
