@@ -143,6 +143,7 @@ class TestFinalPriceApprovalPhase1(unittest.TestCase):
         self.assertFalse(state[Capability.APPROVE_SPECIAL_PRICE])
         self.assertFalse(state[Capability.EDIT_SPECIAL_PRICE])
         self.assertFalse(state[Capability.VIEW_ALL_ORDERS])
+        self.assertFalse(state[Capability.CANCEL_FINAL_PRICE_APPROVAL])
 
     def test_price_approval_record_access_stays_inside_order_and_cost_scope(self) -> None:
         self.assertTrue(
@@ -266,6 +267,13 @@ class TestFinalPriceApprovalPhase1(unittest.TestCase):
         translations = TRANSLATIONS.read_text(encoding="utf-8")
         self.assertIn("Price approval status,حالة السعر", translations)
         self.assertIn("Approve final price,اعتماد السعر", translations)
+        self.assertIn("Cancel final price approval,إلغاء اعتماد السعر", translations)
+        self.assertIn("Approval note,ملاحظة الاعتماد", translations)
+        self.assertIn("Invalidated by,أُلغي اعتماده بواسطة", translations)
+
+        approval_fields = _fields(APPROVAL_SCHEMA)
+        self.assertEqual(approval_fields["approval_note"]["fieldtype"], "Small Text")
+        self.assertEqual(approval_fields["invalidated_by"]["options"], "User")
 
 
 if __name__ == "__main__":

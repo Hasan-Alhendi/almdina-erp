@@ -26,6 +26,8 @@
         "almdina_erp.almdina_erp.services.cost_permission_service.update_order_cost_settings";
     const APPROVE_FINAL_PRICE_METHOD =
         "almdina_erp.almdina_erp.services.final_price_approval_service.approve_order_final_price";
+    const CANCEL_FINAL_PRICE_METHOD =
+        "almdina_erp.almdina_erp.services.final_price_approval_service.cancel_order_final_price_approval";
 
     function unwrapResponse(response) {
         return response && response.message !== undefined ? response.message : response;
@@ -98,16 +100,34 @@
         );
     }
 
-    function approveFinalPrice(orderName, expectedPriceBasisToken) {
+    function approveFinalPrice(orderName, expectedPriceBasisToken, approvalNote) {
+        const args = {
+            order_name: orderName,
+            expected_price_basis_token: expectedPriceBasisToken,
+        };
+        if (approvalNote !== undefined) {
+            args.approval_note = approvalNote;
+        }
         return call(
             APPROVE_FINAL_PRICE_METHOD,
-            {
-                order_name: orderName,
-                expected_price_basis_token: expectedPriceBasisToken,
-            },
+            args,
             {
                 freeze: true,
                 freezeMessage: translate("Approving the final price..."),
+            }
+        );
+    }
+
+    function cancelFinalPriceApproval(orderName, expectedCurrentPriceApproval) {
+        return call(
+            CANCEL_FINAL_PRICE_METHOD,
+            {
+                order_name: orderName,
+                expected_current_price_approval: expectedCurrentPriceApproval,
+            },
+            {
+                freeze: true,
+                freezeMessage: translate("Cancelling the final price approval..."),
             }
         );
     }
@@ -116,8 +136,10 @@
         READ_METHOD,
         SAVE_SETTINGS_METHOD,
         APPROVE_FINAL_PRICE_METHOD,
+        CANCEL_FINAL_PRICE_METHOD,
         load,
         saveSettings,
         approveFinalPrice,
+        cancelFinalPriceApproval,
     });
 })();

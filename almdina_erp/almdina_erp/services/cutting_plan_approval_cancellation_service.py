@@ -107,6 +107,7 @@ def cancel_approved_order_plan(order: Any) -> dict[str, Any]:
         order.name,
         reason="cost_plan_authority_changed",
         only_if_basis_changed=True,
+        order=order,
     )
 
     return {

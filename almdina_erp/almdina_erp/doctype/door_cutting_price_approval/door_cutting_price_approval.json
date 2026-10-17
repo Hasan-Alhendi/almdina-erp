@@ -11,10 +11,12 @@
     "currency",
     "approved_by",
     "approved_on",
+    "approval_note",
     "pricing_basis_fingerprint",
     "fingerprint_formula_version",
     "validity_status",
     "invalidated_on",
+    "invalidated_by",
     "invalidation_reason"
   ],
   "fields": [
@@ -71,6 +73,12 @@
       "reqd": 1
     },
     {
+      "fieldname": "approval_note",
+      "fieldtype": "Small Text",
+      "label": "Approval note",
+      "read_only": 1
+    },
+    {
       "fieldname": "pricing_basis_fingerprint",
       "fieldtype": "Data",
       "label": "Pricing basis fingerprint",
@@ -99,6 +107,13 @@
       "fieldname": "invalidated_on",
       "fieldtype": "Datetime",
       "label": "Invalidated on",
+      "read_only": 1
+    },
+    {
+      "fieldname": "invalidated_by",
+      "fieldtype": "Link",
+      "label": "Invalidated by",
+      "options": "User",
       "read_only": 1
     },
     {

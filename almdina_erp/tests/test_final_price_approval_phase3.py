@@ -128,6 +128,7 @@ class FakeApproval:
     pricing_basis_fingerprint: str
     fingerprint_formula_version: str
     validity_status: str = PRICE_APPROVAL_VALIDITY_ACTIVE
+    approval_note: str | None = None
     invalidated_on: str | None = None
     invalidation_reason: str | None = None
     invalidated_by: str | None = None
@@ -202,6 +203,10 @@ class FakeGateway:
                 return row
         return self.active if self.active and self.active.name == approval_name else None
 
+    def lock_approval(self, approval_name: str) -> FakeApproval | None:
+        self.locks.append(f"approval:{approval_name}")
+        return self.load_approval(approval_name)
+
     def insert_approval(self, **kwargs: Any) -> FakeApproval:
         approval = FakeApproval(
             name=f"DCPA-{len(self.approvals) + 1:05d}",
@@ -213,6 +218,7 @@ class FakeGateway:
             approved_on="2026-10-14 12:00:00",
             pricing_basis_fingerprint=kwargs["fingerprint"],
             fingerprint_formula_version=kwargs["formula_version"],
+            approval_note=kwargs.get("approval_note"),
         )
         self.approvals.append(approval)
         self.active = approval
@@ -316,9 +322,11 @@ class TestFinalPriceApprovalPhase3(unittest.TestCase):
     def test_invalidate_clears_status_and_preserves_history(self) -> None:
         gateway = _approved_gateway()
         approval = gateway.approvals[0]
+        approval.approval_note = "ملاحظة أصلية"
         original_amount = approval.approved_amount
         original_by = approval.approved_by
         original_fingerprint = approval.pricing_basis_fingerprint
+        original_note = approval.approval_note
 
         result = invalidate_order_final_price_approval(
             gateway,
@@ -332,9 +340,11 @@ class TestFinalPriceApprovalPhase3(unittest.TestCase):
         self.assertEqual(approval.validity_status, PRICE_APPROVAL_VALIDITY_INVALIDATED)
         self.assertEqual(approval.invalidation_reason, "order_pricing_inputs_changed")
         self.assertEqual(approval.invalidated_on, "2026-10-14 13:00:00")
+        self.assertEqual(approval.invalidated_by, "operator@example.com")
         self.assertEqual(approval.approved_amount, original_amount)
         self.assertEqual(approval.approved_by, original_by)
         self.assertEqual(approval.pricing_basis_fingerprint, original_fingerprint)
+        self.assertEqual(approval.approval_note, original_note)
         self.assertEqual(gateway.locks[:1], ["order:DCO-1"])
 
     def test_idempotent_repeat_invalidation_does_not_rewrite_history(self) -> None:
@@ -380,7 +390,7 @@ class TestFinalPriceApprovalPhase3(unittest.TestCase):
         self.assertEqual(gateway.order.price_approval_status, PRICE_APPROVAL_STATUS_APPROVED)
         self.assertEqual(gateway.active.validity_status, PRICE_APPROVAL_VALIDITY_ACTIVE)
 
-    def test_only_if_basis_changed_invalidates_when_plan_reference_changes(self) -> None:
+    def test_only_if_basis_changed_keeps_approval_when_only_plan_identity_changes(self) -> None:
         gateway = _approved_gateway()
         gateway.basis = _basis(cutting_plan="PLAN-2")
         gateway.plan = FakePlan(name="PLAN-2", door_cutting_order="DCO-1")
@@ -390,7 +400,11 @@ class TestFinalPriceApprovalPhase3(unittest.TestCase):
             reason="cost_plan_authority_changed",
             only_if_basis_changed=True,
         )
-        self.assertTrue(result.invalidated)
+        # Plan document identity alone is not a commercial basis change.
+        self.assertFalse(result.invalidated)
+        self.assertEqual(gateway.order.price_approval_status, PRICE_APPROVAL_STATUS_APPROVED)
+        self.assertEqual(gateway.active.validity_status, PRICE_APPROVAL_VALIDITY_ACTIVE)
+        # Full fingerprint still differs because it embeds cutting_plan.
         self.assertTrue(
             pricing_basis_diverged(
                 stored_fingerprint=gateway.approvals[0].pricing_basis_fingerprint,
@@ -531,15 +545,15 @@ class TestFinalPriceApprovalPhase3(unittest.TestCase):
                 expected_price_basis_token=old_token,
             )
 
-    def test_cost_settings_remain_locked_while_approved(self) -> None:
-        self.assertTrue(cost_settings_locked_by_price_approval(PRICE_APPROVAL_STATUS_APPROVED))
+    def test_cost_settings_commands_invalidate_instead_of_locking(self) -> None:
+        self.assertFalse(cost_settings_locked_by_price_approval(PRICE_APPROVAL_STATUS_APPROVED))
         cost_source = COST_SERVICE.read_text(encoding="utf-8")
         plan_cost = PLAN_COST_SERVICE.read_text(encoding="utf-8")
-        self.assertIn("assert_cost_settings_unlocked_for_order", cost_source)
-        self.assertIn("assert_cost_settings_unlocked_for_order", plan_cost)
-        # Must not unlock-by-invalidate inside the cost-settings command itself.
-        self.assertNotIn("maybe_invalidate_final_price_approval", cost_source)
-        self.assertNotIn("maybe_invalidate_final_price_approval", plan_cost)
+        self.assertNotIn("assert_cost_settings_unlocked_for_order", cost_source)
+        self.assertNotIn("assert_cost_settings_unlocked_for_order", plan_cost)
+        # Cost-settings save may clear Approved pricing when the commercial basis changes.
+        self.assertIn("maybe_invalidate_final_price_approval", plan_cost)
+        self.assertIn("cost_settings_changed", plan_cost)
 
     def test_mutation_paths_delegate_to_central_invalidation(self) -> None:
         controller = CONTROLLER.read_text(encoding="utf-8")

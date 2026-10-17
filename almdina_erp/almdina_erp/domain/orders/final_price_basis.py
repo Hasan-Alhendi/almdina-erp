@@ -1,7 +1,8 @@
 """Canonical pricing-basis payload and fingerprint for final-price approval.
 
 Reusable by phase-2 approval and phase-3 invalidation. Framework-free.
-The fingerprint covers inputs that change commercial price, not display notes.
+The fingerprint covers inputs that change commercial price, not display notes
+and not the historical approval note (``approval_note``).
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from almdina_erp.almdina_erp.domain.orders.costing import round_value
 from almdina_erp.almdina_erp.domain.orders.plan_fingerprint import fingerprint_payload
 from almdina_erp.almdina_erp.domain.orders.price_approval import (
     PRICE_APPROVAL_FINGERPRINT_FORMULA_VERSION,
+    pricing_basis_diverged,
 )
 
 
@@ -293,17 +295,45 @@ def fingerprint_final_price_basis(payload: Mapping[str, Any]) -> str:
     return fingerprint_payload(dict(payload))
 
 
+def pricing_basis_commercially_equivalent(
+    *,
+    stored_fingerprint: Any,
+    stored_cutting_plan: Any,
+    current_basis: Mapping[str, Any] | None,
+) -> bool:
+    """True when live commercial basis matches approval ignoring plan document identity.
+
+    Algorithm / plan-revision identity alone must not clear an Approved price when
+    board count and the rest of the commercial basis stay the same. The historical
+    approval row keeps its original plan reference and fingerprint.
+    """
+
+    if not isinstance(current_basis, Mapping) or not current_basis:
+        return False
+    adjusted = dict(current_basis)
+    adjusted["cutting_plan"] = str(stored_cutting_plan or "").strip()
+    return not pricing_basis_diverged(
+        stored_fingerprint=stored_fingerprint,
+        current_fingerprint=fingerprint_final_price_basis(adjusted),
+    )
+
+
 def build_order_pricing_input_payload(
     *,
     pieces: Sequence[Mapping[str, Any]],
     full_board_width_mm: float = 0,
     full_board_length_mm: float = 0,
+    order_cutting_machine: Any = None,
 ) -> dict[str, Any]:
     """Order-owned commercial inputs used to detect basis-affecting saves.
 
-    Excludes display notes, operational status, and plan-derived totals so a
-    notes-only save or derived recalculation with identical inputs does not
-    look like a pricing change.
+    Excludes display notes, the historical approval note, operational status,
+    and plan-derived totals so a notes-only save or derived recalculation with
+    identical inputs does not look like a pricing change.
+
+    ``order_cutting_machine`` is included so a machine change that would leave
+    the approved basis / reference plan stale invalidates on the same save
+    without waiting for a later optimizer run.
     """
 
     piece_rows: list[dict[str, Any]] = []
@@ -323,6 +353,7 @@ def build_order_pricing_input_payload(
             "full_board_width_mm": normalize_money(full_board_width_mm, decimals=3),
             "full_board_length_mm": normalize_money(full_board_length_mm, decimals=3),
         },
+        "order_cutting_machine": str(order_cutting_machine or "").strip() or None,
         "pieces": piece_rows,
     }
 
@@ -357,4 +388,5 @@ __all__ = [
     "normalize_money",
     "parse_price_basis_token",
     "price_basis_token",
+    "pricing_basis_commercially_equivalent",
 ]

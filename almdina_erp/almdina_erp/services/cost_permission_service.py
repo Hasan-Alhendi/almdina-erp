@@ -386,6 +386,7 @@ def _cost_snapshot(order: Any, *, plan: Any | None = None) -> dict[str, Any]:
     if current_approval:
         approval_doc = gateway.load_approval(current_approval)
         if approval_doc is not None:
+            note = str(getattr(approval_doc, "approval_note", None) or "").strip() or None
             approval_payload = {
                 "name": approval_doc.name,
                 "approved_amount_usd": flt(approval_doc.approved_amount),
@@ -393,6 +394,7 @@ def _cost_snapshot(order: Any, *, plan: Any | None = None) -> dict[str, Any]:
                 "cutting_plan": approval_doc.cutting_plan,
                 "approved_by": approval_doc.approved_by,
                 "approved_on": approval_doc.approved_on,
+                "approval_note": note,
                 "validity_status": approval_doc.validity_status,
                 "fingerprint_formula_version": approval_doc.fingerprint_formula_version,
             }
@@ -405,10 +407,16 @@ def _cost_snapshot(order: Any, *, plan: Any | None = None) -> dict[str, Any]:
         has_edit_cost_settings=cutting_plan_capability_allowed(
             order, Capability.EDIT_COST_SETTINGS
         ),
+        has_cancel_final_price_approval=document_has_capability(
+            order, Capability.CANCEL_FINAL_PRICE_APPROVAL
+        ),
         price_approval_status=price_status,
         current_price_approval=current_approval,
         price_basis_token_value=basis_token,
         eligibility_error=eligibility_error,
+        order_status=getattr(order, "status", None),
+        revision_state=getattr(order, "revision_state", None),
+        docstatus=int(getattr(order, "docstatus", 0) or 0),
     )
 
     return {
@@ -432,6 +440,15 @@ def _cost_snapshot(order: Any, *, plan: Any | None = None) -> dict[str, Any]:
                 "message": decision.reason_message,
             }
             if decision.reason_code
+            else None
+        ),
+        "can_cancel_final_price_approval": decision.can_cancel_final_price_approval,
+        "final_price_cancellation_blocker": (
+            {
+                "code": decision.cancel_reason_code,
+                "message": decision.cancel_reason_message,
+            }
+            if decision.cancel_reason_code
             else None
         ),
         "can_edit_cost_settings": decision.can_edit_cost_settings,
@@ -465,11 +482,6 @@ def update_order_cost_settings(
     )
     order = _authorized_order(name, Capability.EDIT_COST_SETTINGS)
     _require_cost_visibility(order)
-    from almdina_erp.almdina_erp.infrastructure.frappe.final_price_approval_gateway import (
-        assert_cost_settings_unlocked_for_order,
-    )
-
-    assert_cost_settings_unlocked_for_order(order)
 
     board_rate = _required_cost_input(board_rate_usd, _("سعر اللوح"))
     cutting_rate = _required_cost_input(
@@ -497,7 +509,22 @@ def update_order_cost_settings(
             frappe.ValidationError,
         )
     saved_plan = frappe.get_doc("Cutting Plan", plan_name)
-    return _cost_snapshot(order, plan=saved_plan)
+    snapshot = _cost_snapshot(order, plan=saved_plan)
+    from almdina_erp.almdina_erp.services.final_price_approval_service import (
+        final_price_approval_was_invalidated,
+    )
+
+    if final_price_approval_was_invalidated():
+        snapshot["final_price_approval_invalidated"] = True
+        snapshot["price_approval_status"] = getattr(
+            order, "price_approval_status", snapshot.get("price_approval_status")
+        )
+        snapshot["current_price_approval"] = getattr(
+            order, "current_price_approval", None
+        )
+        snapshot["price_approval"] = None
+        snapshot["can_approve_final_price"] = snapshot.get("can_approve_final_price")
+    return snapshot
 
 
 @frappe.whitelist()

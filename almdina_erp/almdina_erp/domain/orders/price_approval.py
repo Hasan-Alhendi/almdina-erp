@@ -35,6 +35,25 @@ PROTECTED_ORDER_PRICE_APPROVAL_FIELDS = (
     "current_price_approval",
 )
 
+# Historical approval text. Absent, None, and blank are stored as no note.
+APPROVAL_NOTE_MAX_LENGTH = 500
+
+# Fixed reason for authorized manual cancel (distinct from auto-invalidation).
+MANUAL_PRICE_APPROVAL_CANCELLED = "manual_price_approval_cancelled"
+
+# Fields an authorized invalidation must not rewrite, including the original note.
+PROTECTED_APPROVAL_HISTORY_FIELDS = (
+    "door_cutting_order",
+    "cutting_plan",
+    "approved_amount",
+    "currency",
+    "approved_by",
+    "approved_on",
+    "pricing_basis_fingerprint",
+    "fingerprint_formula_version",
+    "approval_note",
+)
+
 
 class PriceApprovalFieldForgeryError(ValueError):
     """Raised when a client tries to forge order price-approval fields."""
@@ -42,6 +61,82 @@ class PriceApprovalFieldForgeryError(ValueError):
 
 class PriceApprovalRecordMutationError(ValueError):
     """Raised when a price-approval audit row is mutated outside controlled transitions."""
+
+
+class ApprovalNoteError(ValueError):
+    """Raised when an approval note cannot be stored as entered."""
+
+
+def normalize_approval_note(value: Any) -> str | None:
+    """Return a stored approval note, or None when the caller left it blank.
+
+    Leading and trailing whitespace is removed. Line breaks inside the note stay.
+    Non-text values and notes longer than the limit are rejected without truncation.
+    """
+
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ApprovalNoteError("Approval note must be text.")
+    text = value.strip()
+    if not text:
+        return None
+    if len(text) > APPROVAL_NOTE_MAX_LENGTH:
+        raise ApprovalNoteError(
+            f"Approval note cannot exceed {APPROVAL_NOTE_MAX_LENGTH} characters."
+        )
+    return text
+
+
+def _history_value(source: Any, fieldname: str) -> Any:
+    if isinstance(source, dict):
+        return source.get(fieldname)
+    getter = getattr(source, "get", None)
+    if callable(getter):
+        return getter(fieldname)
+    return getattr(source, fieldname, None)
+
+
+def assert_invalidation_preserves_approval_details(
+    *,
+    previous: Any,
+    incoming: Any,
+) -> None:
+    """Authorized invalidation may close a record, not rewrite what was approved."""
+
+    for fieldname in PROTECTED_APPROVAL_HISTORY_FIELDS:
+        if _history_value(previous, fieldname) != _history_value(incoming, fieldname):
+            raise PriceApprovalRecordMutationError(
+                "Invalidating a price approval cannot rewrite historical approval details."
+            )
+
+
+def _user_link(value: Any) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise PriceApprovalRecordMutationError("Invalidated by must be a user link.")
+    text = value.strip()
+    return text or None
+
+
+def assert_invalidated_by_mutation_allowed(
+    *,
+    allow_authorized_invalidation: bool,
+    previous_invalidated_by: Any,
+    incoming_invalidated_by: Any,
+) -> None:
+    """Record the invalidating user only on an authorized Active to Invalidated transition."""
+
+    previous = _user_link(previous_invalidated_by)
+    incoming = _user_link(incoming_invalidated_by)
+    if previous == incoming:
+        return
+    if allow_authorized_invalidation:
+        return
+    raise PriceApprovalRecordMutationError(
+        "Invalidated by can be recorded only during an authorized invalidation."
+    )
 
 
 def default_price_approval_status() -> str:
@@ -60,6 +155,36 @@ def normalize_price_approval_link(value: Any) -> str | None:
     return text or None
 
 
+def reconcile_order_price_approval_fields(
+    *,
+    previous_status: Any,
+    previous_link: Any,
+    incoming_status: Any,
+    incoming_link: Any,
+    allow_mutation: bool,
+    is_new: bool = False,
+) -> tuple[str, str | None]:
+    """Return the status/link that ordinary saves must persist.
+
+    Client values never create, clear, or restore approval. Only an authorized
+    command (``allow_mutation``) may write its incoming values. A stale form that
+    still carries Unapproved after a successful approve is restored from the
+    trusted database values instead of failing the whole commercial save.
+    """
+
+    if allow_mutation:
+        return (
+            normalize_price_approval_status(incoming_status),
+            normalize_price_approval_link(incoming_link),
+        )
+    if is_new:
+        return PRICE_APPROVAL_STATUS_UNAPPROVED, None
+    return (
+        normalize_price_approval_status(previous_status),
+        normalize_price_approval_link(previous_link),
+    )
+
+
 def assert_order_price_approval_fields_unchanged(
     *,
     previous_status: Any,
@@ -69,21 +194,26 @@ def assert_order_price_approval_fields_unchanged(
     allow_mutation: bool,
     is_new: bool = False,
 ) -> None:
-    """Reject forged status/link writes unless an authorized command opts in."""
+    """Compatibility check: forged writes are ignored via reconcile, not trusted.
+
+    Prefer :func:`reconcile_order_price_approval_fields` on save paths. This helper
+    remains for contracts that assert client values cannot become authority.
+    """
 
     if allow_mutation:
         return
 
-    expected_status = (
-        PRICE_APPROVAL_STATUS_UNAPPROVED
-        if is_new
-        else normalize_price_approval_status(previous_status)
+    trusted_status, trusted_link = reconcile_order_price_approval_fields(
+        previous_status=previous_status,
+        previous_link=previous_link,
+        incoming_status=incoming_status,
+        incoming_link=incoming_link,
+        allow_mutation=False,
+        is_new=is_new,
     )
-    expected_link = None if is_new else normalize_price_approval_link(previous_link)
     actual_status = normalize_price_approval_status(incoming_status)
     actual_link = normalize_price_approval_link(incoming_link)
-
-    if actual_status != expected_status or actual_link != expected_link:
+    if actual_status != trusted_status or actual_link != trusted_link:
         raise PriceApprovalFieldForgeryError(
             "Price approval status and current approval link are command-owned "
             "and cannot be changed through ordinary document save."
@@ -115,9 +245,14 @@ def assert_price_approval_record_immutable(
 
 
 def cost_settings_locked_by_price_approval(status: Any) -> bool:
-    """Approved final price freezes cost-settings inputs until phase-3 invalidation."""
+    """Approved final price no longer freezes cost-settings edits.
 
-    return normalize_price_approval_status(status) == PRICE_APPROVAL_STATUS_APPROVED
+    Kept as a named policy hook so call sites fail closed to ``False`` (unlocked)
+    after the product contract change. Capability and lifecycle still govern edits.
+    """
+
+    del status
+    return False
 
 
 def can_edit_cost_settings_for_order(
@@ -125,11 +260,10 @@ def can_edit_cost_settings_for_order(
     has_edit_cost_settings: bool,
     price_approval_status: Any,
 ) -> bool:
-    """Capability remains granted; Approved status alone blocks cost-settings edits."""
+    """Cost-settings edits follow capability/lifecycle; Approved alone does not block."""
 
-    if not has_edit_cost_settings:
-        return False
-    return not cost_settings_locked_by_price_approval(price_approval_status)
+    del price_approval_status
+    return bool(has_edit_cost_settings)
 
 
 class FinalPriceApprovalEligibilityError(ValueError):
@@ -138,6 +272,49 @@ class FinalPriceApprovalEligibilityError(ValueError):
     def __init__(self, code: str, message: str) -> None:
         self.code = str(code)
         super().__init__(message)
+
+
+class FinalPriceCancellationError(ValueError):
+    """Raised when a manual final-price cancellation cannot proceed."""
+
+    def __init__(self, code: str, message: str) -> None:
+        self.code = str(code)
+        super().__init__(message)
+
+
+def evaluate_final_price_cancellation_document_rules(
+    *,
+    order_name: str | None,
+    order_status: str | None,
+    revision_state: str | None,
+    docstatus: int | None,
+) -> None:
+    """Document rules for manual cancel. Production stage is irrelevant.
+
+    Cancelling an existing approval does not require a fresh plan or complete
+    pricing. Cancelled orders and superseded revisions remain blocked.
+    """
+
+    if not str(order_name or "").strip():
+        raise FinalPriceCancellationError(
+            "order_missing",
+            "The cutting order must be saved before its final price can be cancelled.",
+        )
+    if int(docstatus or 0) != 0:
+        raise FinalPriceCancellationError(
+            "docstatus_invalid",
+            "The order document state does not allow final-price cancellation.",
+        )
+    if str(order_status or "").strip() == "Cancelled":
+        raise FinalPriceCancellationError(
+            "order_cancelled",
+            "A cancelled order cannot have its final-price approval cancelled.",
+        )
+    if str(revision_state or "Current").strip() == "Superseded":
+        raise FinalPriceCancellationError(
+            "order_superseded",
+            "A superseded order revision cannot have its final-price approval cancelled.",
+        )
 
 
 def evaluate_final_price_approval_eligibility(
@@ -284,19 +461,29 @@ __all__ = [
     "PRICE_APPROVAL_VALIDITY_ACTIVE",
     "PRICE_APPROVAL_VALIDITY_INVALIDATED",
     "PRICE_APPROVAL_VALIDITY_STATUSES",
+    "APPROVAL_NOTE_MAX_LENGTH",
+    "MANUAL_PRICE_APPROVAL_CANCELLED",
+    "PROTECTED_APPROVAL_HISTORY_FIELDS",
     "PROTECTED_ORDER_PRICE_APPROVAL_FIELDS",
+    "ApprovalNoteError",
     "FinalPriceApprovalEligibilityError",
+    "FinalPriceCancellationError",
     "PriceApprovalFieldForgeryError",
     "PriceApprovalRecordMutationError",
     "active_approval_matches_basis",
+    "assert_invalidated_by_mutation_allowed",
+    "assert_invalidation_preserves_approval_details",
     "assert_order_price_approval_fields_unchanged",
     "assert_price_approval_record_immutable",
+    "normalize_approval_note",
     "can_edit_cost_settings_for_order",
     "cost_settings_locked_by_price_approval",
     "default_price_approval_status",
     "evaluate_final_price_approval_eligibility",
+    "evaluate_final_price_cancellation_document_rules",
     "normalize_price_approval_link",
     "normalize_price_approval_status",
     "pricing_basis_diverged",
+    "reconcile_order_price_approval_fields",
     "should_invalidate_final_price_approval",
 ]

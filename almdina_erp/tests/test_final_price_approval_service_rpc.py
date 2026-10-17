@@ -52,6 +52,7 @@ class TestFinalPriceApprovalServiceRpc(unittest.TestCase):
         token = price_basis_token(digest)
         order = FakeOrder(name="DCO-RPC-1")
         order.check_permission = lambda *_args, **_kwargs: None  # type: ignore[attr-defined]
+        order.reload = lambda: order  # type: ignore[attr-defined]
         gateway = FakeGateway(
             order=order,
             plan=FakePlan(name="PLAN-1", door_cutting_order="DCO-RPC-1"),
@@ -73,9 +74,11 @@ class TestFinalPriceApprovalServiceRpc(unittest.TestCase):
 
         fake_auth = types.ModuleType(AUTH_GATEWAY)
         fake_auth.require_document_capability = lambda *a, **k: None
+        fake_auth.document_has_capability = lambda *_a, **_k: True
 
         fake_plan_auth = types.ModuleType(PLAN_AUTH)
         fake_plan_auth.require_cutting_plan_capability = lambda *a, **k: None
+        fake_plan_auth.cutting_plan_capability_allowed = lambda *_a, **_k: True
 
         fake_fp = types.ModuleType(FP_GATEWAY)
         fake_fp.FrappeFinalPriceApprovalGateway = lambda: gateway
@@ -115,10 +118,15 @@ class TestFinalPriceApprovalServiceRpc(unittest.TestCase):
                 module.run_approve_order_final_price,
             )
 
-            # Same kwargs shape as AlmdinaCostWorkspaceAPI.approveFinalPrice.
+            # Same kwargs shape as AlmdinaCostWorkspaceAPI.approveFinalPrice (+ optional note).
             result = module.approve_order_final_price(
                 order_name="DCO-RPC-1",
                 expected_price_basis_token=token,
+                approval_note="ملاحظة RPC",
+            )
+            cancelled = module.cancel_order_final_price_approval(
+                order_name="DCO-RPC-1",
+                expected_current_price_approval=result["current_price_approval"],
             )
         finally:
             sys.modules.pop("_almdina_final_price_approval_service_rpc_test", None)
@@ -135,10 +143,12 @@ class TestFinalPriceApprovalServiceRpc(unittest.TestCase):
         self.assertEqual(result["order_name"], "DCO-RPC-1")
         self.assertEqual(result["price_approval_status"], PRICE_APPROVAL_STATUS_APPROVED)
         self.assertEqual(result["price_basis_token"], token)
+        self.assertEqual(result["approval_note"], "ملاحظة RPC")
         self.assertTrue(result["current_price_approval"])
-        self.assertEqual(order.price_approval_status, PRICE_APPROVAL_STATUS_APPROVED)
-        self.assertEqual(order.current_price_approval, result["current_price_approval"])
-        self.assertEqual(gateway.locks, ["order:DCO-RPC-1", "plan:PLAN-1"])
+        self.assertTrue(cancelled["cancelled_now"])
+        self.assertFalse(cancelled["final_price_approval_invalidated"])
+        self.assertEqual(cancelled["price_approval_status"], "Unapproved")
+        self.assertIn("approval:DCPA-", "".join(gateway.locks))
 
     def test_service_source_uses_explicit_use_case_alias(self) -> None:
         source = SERVICE_PATH.read_text(encoding="utf-8")
@@ -146,12 +156,23 @@ class TestFinalPriceApprovalServiceRpc(unittest.TestCase):
             "approve_order_final_price as run_approve_order_final_price",
             source,
         )
-        endpoint_body = source.split("@frappe.whitelist()", 1)[1]
-        endpoint_body = endpoint_body.split("def maybe_invalidate_final_price_approval", 1)[0]
-        self.assertIn("run_approve_order_final_price(", endpoint_body)
+        self.assertIn(
+            "cancel_order_final_price_approval as run_cancel_order_final_price_approval",
+            source,
+        )
+        approve_body = source.split("def approve_order_final_price", 1)[1]
+        approve_body = approve_body.split("def cancel_order_final_price_approval", 1)[0]
+        self.assertIn("run_approve_order_final_price(", approve_body)
         self.assertNotIn(
             "\n        result = approve_order_final_price(",
-            endpoint_body,
+            approve_body,
+        )
+        cancel_body = source.split("def cancel_order_final_price_approval", 1)[1]
+        cancel_body = cancel_body.split("def maybe_invalidate_final_price_approval", 1)[0]
+        self.assertIn("run_cancel_order_final_price_approval(", cancel_body)
+        self.assertNotIn(
+            "\n        result = cancel_order_final_price_approval(",
+            cancel_body,
         )
 
 

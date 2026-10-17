@@ -228,6 +228,7 @@ class TestPermissionMatrixApplication(unittest.TestCase):
             Capability.EDIT_SPECIAL_PRICE,
             Capability.APPROVE_SPECIAL_PRICE,
             Capability.APPROVE_FINAL_PRICE,
+            Capability.CANCEL_FINAL_PRICE_APPROVAL,
             Capability.PRINT_INTERNAL_COST_REPORT,
         ):
             with self.subTest(action=action):
@@ -248,6 +249,7 @@ class TestPermissionMatrixApplication(unittest.TestCase):
         self.assertFalse(state[Capability.APPROVE_SPECIAL_PRICE])
         self.assertFalse(state[Capability.EDIT_SPECIAL_PRICE])
         self.assertFalse(state[Capability.VIEW_ALL_ORDERS])
+        self.assertFalse(state[Capability.CANCEL_FINAL_PRICE_APPROVAL])
 
     def test_read_grants_also_project_select_for_linked_records(self) -> None:
         order = standard_permission_projection(

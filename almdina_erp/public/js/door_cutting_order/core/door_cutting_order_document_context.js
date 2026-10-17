@@ -811,7 +811,13 @@
     frappe.ui.form.on("Door Cutting Order", {
         before_load(frm) { synchronize(frm); },
         onload(frm) { synchronize(frm); },
-        before_save(frm) { beginSave(frm); },
+        before_save(frm) {
+            beginSave(frm);
+            const approvalUx = window.AlmdinaFinalPriceApprovalUX;
+            if (approvalUx && typeof approvalUx.capturePriorPriceApprovalStatus === "function") {
+                approvalUx.capturePriorPriceApprovalStatus(frm);
+            }
+        },
         refresh(frm) {
             synchronize(frm);
             ensureStageContext(frm);
@@ -820,6 +826,10 @@
         onload_post_render(frm) { scheduleSettle(frm, 0); },
         after_save(frm) {
             reconcileAfterSave(frm);
+            const approvalUx = window.AlmdinaFinalPriceApprovalUX;
+            if (approvalUx && typeof approvalUx.afterOrderSave === "function") {
+                approvalUx.afterOrderSave(frm);
+            }
             scheduleSettle(frm, 0);
         },
     });

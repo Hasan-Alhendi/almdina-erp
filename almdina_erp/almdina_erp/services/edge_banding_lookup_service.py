@@ -187,6 +187,7 @@ def _persist_operational_piece_state(order: Any, piece: Any, override_field: str
         order.name,
         reason="edge_banding_override_changed",
         only_if_basis_changed=False,
+        order=order,
     )
     frappe.clear_document_cache("Door Cutting Order", order.name)
 
