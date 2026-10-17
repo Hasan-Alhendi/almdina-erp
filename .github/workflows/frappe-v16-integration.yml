@@ -51,6 +51,12 @@ on:
 permissions:
   contents: read
 
+# One authoritative PR-head acceptance run per pull request. Replaced commits
+# do not certify the final artifact; manual dispatches remain uncancelled.
+concurrency:
+  group: frappe-v16-integration-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   integration:
     name: integration / ${{ matrix.suite }}
