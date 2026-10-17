@@ -222,6 +222,104 @@ class TestFinancialDocumentApplication(unittest.TestCase):
         self.assertEqual(line["rate_usd"], 6.0)
         self.assertEqual(line["amount_usd"], 18.0)
 
+    def test_full_door_double_bills_four_addons_once_not_per_cut_copy(self) -> None:
+        addon_fields = (
+            "extra_full_door_double",
+            "extra_liner",
+            "extra_back_groove",
+            "extra_recessed_handle_cutout",
+        )
+        piece = {"piece_type": "Regular", "qty": 1, "factory_execution_qty": 2,
+                 "addon_billable_qty": 1}
+        for flag in addon_fields:
+            piece[flag] = 1
+            piece[f"{flag}_unit_price_usd"] = 0.50
+            piece[f"{flag}_total_usd"] = 0.50
+        quote = {
+            "required_boards": 0,
+            "cutting_cost_usd": 1.00,
+            "customer_quote_total_usd": 3.00,
+        }
+        invoice = build_customer_invoice_document(quote, [piece])
+        addons = [line for line in invoice["lines"] if line["type"] == "extra_addon"]
+        self.assertEqual(len(addons), 4)
+        self.assertEqual([line["quantity"] for line in addons], [1] * 4)
+        self.assertEqual([line["rate_usd"] for line in addons], [0.50] * 4)
+        self.assertEqual([line["amount_usd"] for line in addons], [0.50] * 4)
+        self.assertEqual(invoice["totals"][0]["value_usd"], quote["customer_quote_total_usd"])
+
+    def test_full_door_double_three_commercial_units_keep_six_factory_copies(self) -> None:
+        piece = {
+            "piece_type": "Regular",
+            "qty": 3,
+            "factory_execution_qty": 6,
+            "addon_billable_qty": 3,
+            "extra_full_door_double": 1,
+            "extra_full_door_double_unit_price_usd": 0.50,
+            "extra_full_door_double_total_usd": 1.50,
+        }
+        invoice = build_customer_invoice_document({"required_boards": 0}, [piece])
+        addon = next(line for line in invoice["lines"] if line["type"] == "extra_addon")
+        self.assertEqual((addon["quantity"], addon["amount_usd"]), (3, 1.50))
+        self.assertEqual(invoice["summary"][1]["value"], 3)
+
+    def test_prorated_saved_amount_is_not_prorated_twice_or_repriced(self) -> None:
+        # Pricing rounds the saved commercial total first: $0.005 => $0.01.
+        # One of two physical copies is executed by the factory: $0.01 / 2.
+        # Recomputing from raw unit rate * 0.5 would wrongly give $0.00.
+        piece = {
+            "piece_type": "Regular", "qty": 1, "factory_execution_qty": 1,
+            "addon_billable_qty": 0.5, "extra_liner": 1,
+            "extra_liner_unit_price_usd": 0.005,
+            "extra_liner_total_usd": 0.01 / 2,
+        }
+        invoice = build_customer_invoice_document({"required_boards": 0}, [piece])
+        line = invoice["lines"][0]
+        self.assertEqual(line["quantity"], 0.5)
+        self.assertEqual(line["rate_usd"], 0.01)
+        self.assertEqual(line["amount_usd"], 0.01)
+        self.assertEqual(invoice["totals"][0]["value_usd"], 0.01)
+
+    def test_multiple_half_cent_addons_allocate_cents_without_last_line_patch(self) -> None:
+        # Four already-prorated $0.005 services are worth $0.02 together.
+        # Independent per-line rounding would incorrectly charge $0.04.
+        fields = (
+            "extra_full_door_double", "extra_liner",
+            "extra_back_groove", "extra_recessed_handle_cutout",
+        )
+        piece = {
+            "piece_type": "Regular", "qty": 1,
+            "factory_execution_qty": 1, "addon_billable_qty": 0.5,
+        }
+        for flag in fields:
+            piece[flag] = 1
+            piece[flag + "_unit_price_usd"] = 0.01
+            piece[flag + "_total_usd"] = 0.005
+        quote = {"required_boards": 0, "extra_addons_total_usd": 0.02,
+                 "customer_quote_total_usd": 0.02}
+        invoice = build_customer_invoice_document(quote, [piece])
+        lines = [line for line in invoice["lines"] if line["type"] == "extra_addon"]
+        self.assertEqual([line["quantity"] for line in lines], [0.5] * 4)
+        self.assertEqual([line["rate_usd"] for line in lines], [0.01] * 4)
+        self.assertEqual([line["amount_usd"] for line in lines], [0.01, 0.01, 0.00, 0.00])
+        self.assertEqual(invoice["totals"][0]["value_usd"], quote["customer_quote_total_usd"])
+        self.assertEqual(sum(line["amount_usd"] for line in lines), 0.02)
+
+    def test_legacy_addon_quantity_and_explicit_zero_total_are_preserved(self) -> None:
+        piece = {
+            "piece_type": "Regular", "qty": 3,
+            "extra_liner": 1, "extra_liner_unit_price_usd": 0.50,
+            "extra_liner_total_usd": 0.0,
+        }
+        invoice = build_customer_invoice_document({"required_boards": 0}, [piece])
+        self.assertEqual(invoice["lines"][0]["quantity"], 3)
+        self.assertEqual(invoice["lines"][0]["amount_usd"], 0.0)
+        # Historic rows with no saved total still use unit rate * order qty.
+        del piece["extra_liner_total_usd"]
+        fallback = build_customer_invoice_document({"required_boards": 0}, [piece])
+        self.assertEqual(fallback["lines"][0]["quantity"], 3)
+        self.assertEqual(fallback["lines"][0]["amount_usd"], 1.50)
+
     def test_special_and_corner_prices_are_additive_with_addons(self) -> None:
         pieces = [
             {
