@@ -10,6 +10,8 @@ import html
 from dataclasses import dataclass
 from typing import Any, Iterable, Sequence
 
+from frappe import _
+
 from almdina_erp.almdina_erp.domain.cutting import dxf_issue as codes
 from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
     DxfIssueTarget,
@@ -229,6 +231,61 @@ def _special_range_action(params: dict[str, Any]) -> str:
     )
 
 
+_LINER_SIDE_AR = {
+    "edge_width_top": "أعلى",
+    "edge_width_bottom": "أسفل",
+    "edge_long_left": "يسار",
+    "edge_long_right": "يمين",
+    "edge_break": "الكسر الكامل",
+    "edge_break_only": "الكسر فقط",
+}
+
+
+def _liner_side_label(value: object, piece_type: object) -> str:
+    side = str(value or "")
+    if side == "edge_break" and str(piece_type or "") == "L-Shaped Corner":
+        return "زاوية L"
+    return _LINER_SIDE_AR.get(side, side or "؟")
+
+
+def _present_liner_mismatch(issue: DxfValidationIssue, target_text: str) -> PresentedDxfError:
+    params = issue.params or {}
+    piece_type = params.get("piece_type")
+    code = issue.code
+    name = _OVERLAY_KIND_AR.get(str(params.get("overlay_kind") or "liner"), "اللاينر")
+    action = f"صحّح {name} في ملف DXF ثم أعد الرفع. لا يُعدَّل الملف تلقائيًا."
+    if code == codes.LINER_WIDTH_NOT_MEASURABLE:
+        problem = (
+            f"عرض {name} غير قابل للقياس من مسار الطبقة. "
+            "المسار خط بلا سماكة هندسية، والمطلوب "
+            f"{params.get('expected') or '؟'} سم."
+        )
+    elif code == codes.LINER_OFFSET_MISMATCH:
+        problem = (
+            f"مسافة {name} عن الجهة المرجعية غير مطابقة. "
+            f"المطلوب {params.get('expected') or '؟'} سم، "
+            f"والمقاس من DXF {params.get('measured') or '؟'} سم."
+        )
+    elif code == codes.LINER_WIDTH_MISMATCH:
+        problem = (
+            f"عرض {name} غير مطابق. "
+            f"المطلوب {params.get('expected') or '؟'} سم، "
+            f"والمقاس من DXF {params.get('measured') or '؟'} سم."
+        )
+    elif code == codes.LINER_SIDE_MISMATCH:
+        problem = (
+            f"جهة {name} غير مطابقة. "
+            f"المطلوب {_liner_side_label(params.get('expected'), piece_type)}، "
+            f"والمقاس من DXF {_liner_side_label(params.get('measured'), piece_type)}."
+        )
+    else:
+        problem = (
+            f"مسار {name} لا يطابق الجهة المحددة "
+            f"({_liner_side_label(params.get('expected'), piece_type)})."
+        )
+    return PresentedDxfError(problem, target_text, action, code, issue.category)
+
+
 def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
     params = dict(issue.params or {})
     target_text = present_target(issue.target, params=params)
@@ -400,6 +457,14 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
             code,
             issue.category,
         )
+    if code == codes.REGULAR_EDGE_ORIENTATION_UNRESOLVED:
+        if str(params.get("reason") or "") == "machining_invalid":
+            problem = _("The machining paths do not prove a safe orientation for this door.")
+            action = _("Check the machining paths and their saved reference sides then re-upload the DXF.")
+        else:
+            problem = _("The machining paths permit multiple orientations that move edge bands to different physical sides.")
+            action = _("Add a distinct machining reference that establishes the door orientation then re-upload the DXF.")
+        return PresentedDxfError(problem, target_text, action, code, issue.category)
     if code == codes.CORNER_EDGE_UNRESOLVED:
         reason = str(params.get("reason") or "")
         if reason == "break_thickness_unknown":
@@ -814,6 +879,14 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
             code,
             issue.category,
         )
+    if code in {
+        codes.LINER_OFFSET_MISMATCH,
+        codes.LINER_WIDTH_MISMATCH,
+        codes.LINER_SIDE_MISMATCH,
+        codes.LINER_SHAPE_MISMATCH,
+        codes.LINER_WIDTH_NOT_MEASURABLE,
+    }:
+        return _present_liner_mismatch(issue, target_text)
     if code == codes.OVERLAY_UNKNOWN:
         return PresentedDxfError(
             "علامة تصنيع في DXF غير معروفة أو غير صالحة.",

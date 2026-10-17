@@ -241,6 +241,68 @@ def test_export_reconstruction_rebinds_geometry_by_piece_id_not_dimensions():
     assert pieces[1]["geometry"] == first_geometry
 
 
+def test_export_reconstruction_keeps_sheet_trim_when_plan_trim_is_zero():
+    persisted = {
+        "applied_trim_width_cm": 0,
+        "applied_trim_length_cm": 0,
+        "trim_cm": 0.5,
+        "full_board_width_cm": 122,
+        "full_board_length_cm": 244,
+        "usable_board_width_cm": 122,
+        "usable_board_length_cm": 244,
+        "sheets": [
+            {
+                "sheet_no": 2,
+                "applied_trim_width_cm": 0.5,
+                "applied_trim_length_cm": 0.5,
+                "full_width_cm": 122,
+                "full_length_cm": 244,
+                "usable_width_cm": 121,
+                "usable_length_cm": 243,
+                "pieces": [
+                    {"id": 1, "label": "2.1", "x": 0, "y": 203, "w": 40, "h": 40},
+                ],
+            }
+        ],
+    }
+    source = _source()
+    source.sheet_no = 2
+    source.full_width_mm = 1220
+    source.full_length_mm = 2440
+    source.usable_width_mm = 1210
+    source.usable_length_mm = 2430
+    piece = _saved_piece(1, "2.1", 0)
+    piece.sheet_no = 2
+    piece.y_mm = 2030
+    piece.width_mm = 400
+    piece.height_mm = 400
+    plan = SimpleNamespace(
+        snapshot_json=json.dumps(persisted),
+        placed_pieces=[piece],
+        sources=[source],
+        engine_version="dxf-import-v2",
+        method_key="maxrects",
+        method_label="MaxRects",
+        full_board_width_mm=1220,
+        full_board_length_mm=2440,
+        usable_board_width_mm=1220,
+        usable_board_length_mm=2440,
+        kerf_mm=3,
+        trim_margin_mm=5,
+        used_area_m2=0.48,
+        total_source_area_m2=2.9768,
+        waste_area_m2=2.4,
+        required_boards=1,
+    )
+
+    rebuilt = _plan_to_export_snapshot(plan)
+    sheet = rebuilt["sheets"][0]
+    assert sheet["applied_trim_width_cm"] == 0.5
+    assert sheet["applied_trim_length_cm"] == 0.5
+    assert sheet["pieces"][0]["x"] == 0
+    assert rebuilt["applied_trim_width_cm"] == 0
+
+
 def test_export_reconstruction_fails_closed_when_saved_piece_identity_is_missing():
     persisted = {
         "sheets": [

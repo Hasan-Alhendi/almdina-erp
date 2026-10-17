@@ -841,6 +841,33 @@ Double Banding,دبل قشاط
 Full Door Double,دبل كامل الدرفة
 Full Double,دبل كامل
 Liner,لاينر
+Liner Settings,إعدادات اللاينر
+Reference Side,الجهة المرجعية
+Choose a reference side.,اختر الجهة المرجعية.
+Choose a reference side to include this add-on.,اختر الجهة المرجعية لتضمين هذه الإضافة.
+Edge Offset,المسافة عن الحافة
+Liner Width,عرض اللاينر
+Liner Start Position,بداية اللاينر
+Machining Width,عرض التفريز
+Machining Start,بداية التفريز
+Machining Length,طول التفريز
+Remove add-on,إزالة الإضافة
+Check add-on,تحقق من الإضافة
+Could not save the add-on.,تعذر حفظ الإضافة.
+This piece type does not support this add-on.,نوع الدرفة لا يدعم هذه الإضافة.
+Row {0}: Machining add-on needs a reference side and a width greater than zero.,الصف {0}: الإضافة تحتاج جهة مرجعية وعرضاً أكبر من صفر.
+Row {0}: Machining add-on settings are invalid ({1}).,الصف {0}: إعدادات الإضافة غير صالحة ({1}).
+Liner Length,طول اللاينر
+Available Length,الطول المتاح
+Measurement Direction,اتجاه القياس
+Top to bottom,من الأعلى إلى الأسفل
+Left to right,من اليسار إلى اليمين
+Along the selected edge,على امتداد الجهة المختارة
+Liner start must be zero or greater.,بداية اللاينر يجب أن تكون صفراً أو أكبر.
+Liner length must be greater than zero.,طول اللاينر يجب أن يكون أكبر من صفر.
+Liner start plus length exceeds the reference side.,بداية اللاينر وطوله يتجاوزان طول الجهة.
+A flat end cannot be machined with this bit and length.,النهاية المستقيمة غير قابلة للتنفيذ بهذه الريشة وهذا الطول.
+The liner limit sits on a bend that has no single direction.,حد اللاينر يقع على انعطاف بلا اتجاه واحد.
 Back Groove,فرزة ظهر
 Recessed Handle Cutout,حفر مسكة غطس
 Recessed Handle,مسكة غطس
@@ -981,7 +1008,20 @@ Door count,عدد الدرف
 Not specified,غير محدد
 Type,النوع
 Custom edge banding,القشاط المخصص
-Add-ons,إضافات
+Add-ons,الإضافات
+Door piece add-ons,إضافات الدرفة
+Add-on enabled,مفعّلة
+Piece preview,معاينة الدرفة
+Apply,تطبيق
+Saving,جارٍ الحفظ
+Size,المقاس
+Remove {0},إزالة {0}
+{0}: {1},{0}: {1}
+This removal is saved when you press Apply.,تُحفظ الإزالة عند الضغط على تطبيق.
+Could not save the add-ons.,تعذر حفظ الإضافات.
+This door piece is no longer in the order.,هذه الدرفة لم تعد ضمن الطلب.
+Turn this add-on on to include it.,فعّل الإضافة لتظهر على الدرفة.
+Enter the piece width and length before editing add-ons.,أدخل عرض الدرفة وطولها قبل تعديل الإضافات.
 Order notes:,ملاحظات الطلب:
 Order number:,رقم الطلب:
 Printed on:,تاريخ الطباعة:
@@ -1153,7 +1193,6 @@ Image crop tools,أدوات اقتصاص الصورة
 Drag the frame or its handles,اسحب الإطار أو مقابضه
 Auto crop,اقتصاص تلقائي
 Reset,إعادة ضبط
-Apply,تطبيق
 Documentation tools,أدوات التوثيق
 Select,تحديد
 Smart pen,قلم ذكي
@@ -2696,3 +2735,38 @@ Edit customers,تعديل الزبائن
 Edit the existing customer details.,تعديل بيانات الزبون الحالية.
 Delete customer,حذف زبون
 Delete a customer who is not linked to any saved orders.,حذف زبون غير مرتبط بطلبات محفوظة.
+Saw blade thickness conflict: {0} mm versus {1} mm in the cutting plan. DXF was not exported.,سماكة الشفرة متعارضة: {0} مم مقابل {1} مم في خطة القص، ولم يُصدَّر الملف.
+Door {0}: {1},الدرفة {0}: {1}
+the liner,اللاينر
+the back groove,فرزة الظهر
+the recessed handle,مسكة الغطس
+Specify a saw blade thickness above zero for {0} toolpaths,حدّد سماكة الشفرة أكبر من صفر لمسارات {0}
+The width of {0} is less than the saw blade thickness,عرض {0} أصغر من سماكة الشفرة
+The {0} extension overlaps another piece,امتداد {0} يتداخل مع قطعة أخرى
+Could not extend the {0} toolpath safely,تعذر تمديد مسار {0} بأمان
+The {0} strip extends beyond the door,شريط {0} يخرج خارج الدرفة
+The {0} offset is invalid,بعد {0} غير صالح
+The {0} width is invalid,عرض {0} غير صالح
+The {0} side is unavailable for this door,جهة {0} غير متاحة لهذه الدرفة
+The {0} start position is invalid,بداية {0} غير صالحة
+The {0} length is invalid,طول {0} غير صالح
+The start and length exceed the side length,البداية والطول يتجاوزان طول الجهة
+The flat {0} end cannot be machined with this cutter,نهاية {0} المستقيمة غير قابلة للتنفيذ بهذه الريشة
+The {0} start or end falls on a corner without one direction,بداية {0} أو نهايته تقع على انعطاف بلا اتجاه واحد
+Specify a saw blade thickness above zero before exporting {0} toolpaths.,حدّد سماكة الشفرة أكبر من صفر قبل تصدير مسارات {0}.
+The width of {0} is less than the saw blade thickness.,عرض {0} أصغر من سماكة الشفرة.
+The {0} cutter extension overlaps an adjacent piece.,امتداد ريشة {0} يتداخل مع قطعة مجاورة.
+Could not extend the {0} toolpath to the cutting line.,تعذر تمديد مسار {0} حتى خط القص.
+The {0} strip extends beyond the door.,شريط {0} يخرج خارج الدرفة.
+The {0} offset is invalid.,بعد {0} غير صالح.
+The {0} width is invalid.,عرض {0} غير صالح.
+The {0} side is unavailable for this door.,جهة {0} غير متاحة لهذه الدرفة.
+The {0} start position is invalid.,بداية {0} غير صالحة.
+The {0} length is invalid.,طول {0} غير صالح.
+The start and length of {0} exceed the side length.,بداية {0} وطوله يتجاوزان طول الجهة.
+"The flat end cannot be machined by a circular cutter in one pass, or the region is shorter than the cutter diameter.",النهاية المستقيمة غير قابلة للتنفيذ بريشة دائرية في تمريرة واحدة، أو طول المنطقة أقصر من قطر الريشة.
+The {0} start or end falls on a corner without a single direction for a flat end.,بداية {0} أو نهايته تقع على انعطاف لا يملك اتجاهاً واحداً للنهاية المستقيمة.
+The machining paths do not prove a safe orientation for this door.,مسارات الإضافات لا تثبت اتجاهًا آمنًا لهذه الدرفة.
+Check the machining paths and their saved reference sides then re-upload the DXF.,تحقق من مسارات الإضافات والجهات المرجعية المحفوظة ثم أعد رفع ملف DXF.
+The machining paths permit multiple orientations that move edge bands to different physical sides.,مسارات الإضافات تسمح بأكثر من اتجاه مما ينقل القشاط إلى أضلاع فيزيائية مختلفة.
+Add a distinct machining reference that establishes the door orientation then re-upload the DXF.,أضف مرجع تشغيل مميزًا يثبت اتجاه الدرفة ثم أعد رفع ملف DXF.

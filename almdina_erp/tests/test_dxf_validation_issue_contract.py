@@ -508,7 +508,7 @@ def test_every_runtime_issue_call_has_explicit_presenter_branch():
     assert emitted <= handled, f"issue codes missing explicit presenter mappings: {sorted(emitted - handled)}"
 
 
-def test_all_73_declared_issue_codes_have_safe_three_question_presentations():
+def test_all_declared_issue_codes_have_safe_three_question_presentations():
     catalogue = sorted(
         value
         for name, value in vars(issue_codes).items()
@@ -516,7 +516,7 @@ def test_all_73_declared_issue_codes_have_safe_three_question_presentations():
         and not name.startswith(("CATEGORY_", "TARGET_"))
         and name.isupper()
     )
-    assert len(catalogue) == 73
+    assert len(catalogue) == 78
 
     for code in catalogue:
         card = present_issue(issue(code, "WORKFLOW"))
