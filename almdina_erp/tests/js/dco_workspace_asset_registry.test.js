@@ -107,6 +107,9 @@ class CustomEvent {
     // The edit-session module is part of the same cold Plan bundle. A Plan feature
     // becomes ready only after that module has evaluated as well.
     fakeWindow.AlmdinaPlanEditSessionUX = {};
+    assert.equal(registry.isLoaded("plan"), false,
+        "The legacy Plan settings adapter is not the Preview Commit Save owner");
+    fakeWindow.AlmdinaPlanPreviewEditUX = {};
     flights[0].resolve(calls[0]);
     assert.equal(await planOne, true);
     assert.equal(installed, 1,
