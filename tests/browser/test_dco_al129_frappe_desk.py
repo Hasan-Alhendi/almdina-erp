@@ -1267,18 +1267,39 @@ def test_real_desk_customer_native_entry_and_permission_differential() -> None:
                         assert persisted["default_edge_type"] == fixture["edge_type"]
                         assert persisted["board_description"] == "AL129 recovery test MDF"
                         assert len(persisted["pieces"]) == 1
-                        denied_write = page.evaluate(
-                            "async name => { try { await frappe.xcall('frappe.client.set_value',"
-                            " {doctype: 'Door Cutting Order', name, fieldname: 'order_notes',"
-                            " value: 'unauthorized write'}); return {denied: false, permissionDenied: false};"
-                            " } catch (error) { const details = [error && error.message,"
-                            " error && error.exception, error && error.exc_type,"
-                            " error && error.responseJSON && error.responseJSON.exc_type].join(' ');"
-                            " return {denied: true, permissionDenied: /permission|not permitted/i.test(details)}; } }",
-                            order_name,
-                        )
+                        # Frappe's rejected Promise may not expose the response
+                        # metadata. Verify the actual server HTTP response and its
+                        # exception type, not a regex over a browser error string.
+                        with page.expect_response(
+                            lambda response: (
+                                "frappe.client.set_value" in response.url
+                                and response.request.method == "POST"
+                            ),
+                            timeout=30_000,
+                        ) as denied_response_info:
+                            denied_write = page.evaluate(
+                                "async name => { try {"
+                                " await frappe.xcall('frappe.client.set_value',"
+                                " {doctype: 'Door Cutting Order', name,"
+                                " fieldname: 'order_notes', value: 'unauthorized write'});"
+                                " return {denied: false};"
+                                " } catch (error) { return {denied: true,"
+                                " errorType: String(error && error.name || ''),"
+                                " errorText: String(error && error.message || error || '')}; } }",
+                                order_name,
+                            )
+                        denied_response = denied_response_info.value
+                        denied_payload = denied_response.json()
+                        exception_type = str(denied_payload.get("exc_type") or "")
                         assert denied_write["denied"] is True
-                        assert denied_write["permissionDenied"] is True
+                        assert denied_response.status == 403, (
+                            "Unauthorized WRITE must be rejected at the HTTP boundary: "
+                            f"status={denied_response.status}, exc_type={exception_type}"
+                        )
+                        assert "PermissionError" in exception_type, (
+                            f"Expected Frappe PermissionError, got {exception_type}; "
+                            f"response_fields={list(denied_payload)}"
+                        )
                         unchanged = page.evaluate(
                             "name => frappe.xcall('frappe.client.get',"
                             " {doctype: 'Door Cutting Order', name})",
@@ -1301,7 +1322,7 @@ def test_real_desk_customer_native_entry_and_permission_differential() -> None:
                         outcomes[case_name].update({
                             "customerEnterable": True,
                             "officialSave": True,
-                            "savedDocumentWriteDenied": denied_write["permissionDenied"],
+                            "savedDocumentWriteDenied": denied_response.status == 403,
                             "doctypeCacheWriteAfterSave": after_save["doctypeCacheWrite"],
                             "postSaveProjectionRemoved": not after_save["createProjectionActive"],
                             "nextNewDocumentHasIsolatedProjection": (
@@ -2008,11 +2029,15 @@ def test_real_desk_100_piece_checkpoint_restore_and_lost_save_response() -> None
             }
             trace("reload_restore_values_verified", pieces=actual["pieceCount"])
 
+            save_url_pattern = re.compile(
+                r"/api/method/frappe\.desk\.form\.save\.savedocs(?:\?.*)?$"
+            )
+
             def commit_then_drop_response(route) -> None:
                 response = route.fetch(timeout=60_000)
                 response_body = response.text()
                 if not save_posts:
-                    save_posts.append({"url": "frappe.desk.form.save.savedocs"})
+                    raise AssertionError("No observed Official Save POST before route interception")
                 save_posts[-1]["server_status"] = response.status
                 trace(
                     "server_save_response_received_by_test_proxy",
@@ -2024,8 +2049,25 @@ def test_real_desk_100_piece_checkpoint_restore_and_lost_save_response() -> None
                 trace("native_save_committed_response_withheld", status=response.status)
                 route.abort("failed")
 
-            page.route("**/api/method/frappe.desk.form.save.savedocs", commit_then_drop_response)
-            page.locator(".page-actions .primary-action").filter(has_text=re.compile(r"Save|حفظ")).click()
+            page.route(save_url_pattern, commit_then_drop_response)
+            # A pending checkpoint means the browser has seen an uncertain
+            # outcome; it does not prove route.fetch() has committed anything.
+            # The deliberately aborted POST emits requestfailed only *after*
+            # route.fetch() returned and server_status was recorded.
+            with page.expect_event(
+                "requestfailed",
+                predicate=lambda request: (
+                    request.method == "POST"
+                    and "frappe.desk.form.save.savedocs" in request.url
+                ),
+                timeout=90_000,
+            ):
+                page.locator(".page-actions .primary-action").filter(
+                    has_text=re.compile(r"Save|حفظ")
+                ).click()
+            assert len(save_posts) == 1 and save_posts[0].get("server_status") == 200, (
+                f"Lost-response test must prove successful server INSERT: {save_posts}"
+            )
             page.wait_for_function(
                 "async draftId => { const repo = AlmdinaDcoRecovery.LocalDraftRepository.create();"
                 " const record = await repo.read({site: frappe.boot.sitename || frappe.boot.site_name || location.host,"
@@ -2035,7 +2077,6 @@ def test_real_desk_100_piece_checkpoint_restore_and_lost_save_response() -> None
                 arg=before_save["draftId"],
                 timeout=45_000,
             )
-            assert len(save_posts) == 1 and save_posts[0]["server_status"] == 200
             pending = page.evaluate(
                 "async draftId => { const repo = AlmdinaDcoRecovery.LocalDraftRepository.create();"
                 " const read = await repo.read({site: frappe.boot.sitename || frappe.boot.site_name || location.host,"
@@ -2046,7 +2087,7 @@ def test_real_desk_100_piece_checkpoint_restore_and_lost_save_response() -> None
             )
             assert pending["state"] == "PENDING_RECONCILIATION"
             assert pending["token"] == before_save["draftId"]
-            page.unroute("**/api/method/frappe.desk.form.save.savedocs")
+            page.unroute(save_url_pattern)
             page.close()
             context.close()
             trace("isolated_chromium_profile_closed_after_lost_save_response")
