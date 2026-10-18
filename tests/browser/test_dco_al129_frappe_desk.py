@@ -1397,20 +1397,27 @@ def test_real_desk_customer_native_entry_and_permission_differential() -> None:
             context, page = _new_traced_desk_page(browser, "no_create")
             try:
                 _login(page, fixture, user=fixture["no_create_user"])
-                create_attempt = page.evaluate(
-                    "async customer => { try { await frappe.xcall('frappe.client.insert',"
-                    " {doc: {doctype: 'Door Cutting Order', customer,"
-                    " order_date: frappe.datetime.get_today(), board_description: 'Denied',"
-                    " board_length_cm: 244, board_width_cm: 122}});"
-                    " return {created: true, permissionDenied: false};"
-                    " } catch (error) { const details = [error && error.message,"
-                    " error && error.exception, error && error.exc_type,"
-                    " error && error.responseJSON && error.responseJSON.exc_type].join(' ');"
-                    " return {created: false, permissionDenied: /permission|not permitted/i.test(details)}; } }",
-                    fixture["customer"],
-                )
+                # Assert native HTTP authorization, not an exception-message regex:
+                # Frappe xcall may reject with a generic JS error lacking exc_type.
+                with page.expect_response(
+                    lambda response: "frappe.client.insert" in response.url
+                    and response.request.method == "POST",
+                    timeout=30_000,
+                ) as denied_insert_response:
+                    create_attempt = page.evaluate(
+                        "async customer => { try { await frappe.xcall('frappe.client.insert',"
+                        " {doc: {doctype: 'Door Cutting Order', customer,"
+                        " order_date: frappe.datetime.get_today(), board_description: 'Denied',"
+                        " board_length_cm: 244, board_width_cm: 122}});"
+                        " return {created: true};"
+                        " } catch (error) { return {created: false}; } }",
+                        fixture["customer"],
+                    )
                 assert create_attempt["created"] is False
-                assert create_attempt["permissionDenied"] is True
+                denied_response = denied_insert_response.value
+                assert denied_response.status == 403, (
+                    f"Expected server permission denial HTTP 403, got {denied_response.status}"
+                )
 
                 response = page.goto(
                     f"{DESK_URL}/app/door-cutting-order",
