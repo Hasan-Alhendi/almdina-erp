@@ -202,6 +202,15 @@ def read_page_state(page: Page) -> dict:
                     scriptAssets: [...document.scripts]
                         .map(script => script.src).filter(Boolean).slice(-30),
                     form: window.cur_frm && window.cur_frm.doc && window.cur_frm.doc.name,
+                    readiness: {
+                        docContext: Boolean(window.AlmdinaDcoDocumentContext),
+                        coordinator: Boolean(window.AlmdinaDcoEditSessionCoordinator),
+                        recovery: Boolean(window.AlmdinaDcoRecovery),
+                        checkpoint: Boolean(window.AlmdinaDcoRecovery?.LocalCheckpoint),
+                        formFields: Boolean(window.cur_frm?.fields_dict?.order_notes),
+                        formDOM: Boolean(window.cur_frm?.wrapper?.isConnected),
+                        scriptManager: Boolean(window.cur_frm?.script_manager),
+                    },
                     saveProbe: window.__dcoDeskSaveProbe || null,
                 };
             }""")
