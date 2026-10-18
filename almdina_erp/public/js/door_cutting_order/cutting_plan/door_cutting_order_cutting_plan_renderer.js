@@ -97,6 +97,27 @@
         return key;
     }
 
+    // Domain nesting depth is capped at 2. Paint nested guests above their Glass
+    // hosts so adversarial snapshot order cannot hide doors inside openings.
+    const MAX_GLASS_NEST_PAINT_DEPTH = 2;
+
+    function glassNestPaintDepth(piece, piecesById) {
+        let depth = 0;
+        let hostId = piece && piece.glass_host_piece_id;
+        const seen = new Set();
+        while (hostId !== undefined && hostId !== null && hostId !== "") {
+            const key = String(hostId);
+            if (seen.has(key) || depth >= MAX_GLASS_NEST_PAINT_DEPTH) {
+                break;
+            }
+            seen.add(key);
+            depth += 1;
+            const host = piecesById.get(Number(hostId));
+            hostId = host && host.glass_host_piece_id;
+        }
+        return depth;
+    }
+
     function physicalCutQuantity(row) {
         const extra = window.AlmdinaExtraDoorAddonsUX;
         if (extra && typeof extra.physicalCutQuantity === "function") {
@@ -962,7 +983,14 @@
                         <div class="dco-usable-sheet" style="position:absolute;z-index:1;left:${usableLeft}%;top:${usableTop}%;width:${usableWidth}%;height:${usableHeight}%;box-sizing:border-box;overflow:visible;">
             `;
 
-            (sheet.pieces || []).forEach(piece => {
+            const sheetPieces = sheet.pieces || [];
+            const piecesById = new Map();
+            sheetPieces.forEach(piece => {
+                if (piece && piece.id != null && piece.id !== "") {
+                    piecesById.set(Number(piece.id), piece);
+                }
+            });
+            sheetPieces.forEach(piece => {
                 const geometry = window.AlmdinaCuttingPlanPieceGeometry;
                 if (!geometry || typeof geometry.resolve !== "function") {
                     throw new Error("Canonical cutting-plan piece geometry is unavailable");
@@ -982,6 +1010,7 @@
                 const exactSpecial = piece.piece_type === "Special"
                     && geometryModel.exact;
                 const shaped = geometryModel.vector;
+                const nestDepth = glassNestPaintDepth(piece, piecesById);
                 const shapeOutline = shaped
                     ? `<svg class="dco-shaped-piece-outline" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;z-index:1;overflow:visible"><path d="${geometryModel.geometry.pathData}" fill="${exactSpecial ? "#ffe5ad" : "#fff0c7"}" fill-rule="evenodd" clip-rule="evenodd" stroke="${exactSpecial ? "#7a4c13" : "#8a5700"}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>`
                     : "";
@@ -991,9 +1020,12 @@
                 const clipId = `dco-clip-${sheet.sheet_no || 0}-${piece.id || piece.label || 0}-${geometryModel.geometryIdentity}`
                     .replace(/[^a-zA-Z0-9_-]/g, "-");
                 const edgeLines = render_piece_edge_lines(manufacturingPiece, geometryModel, clipId);
+                const hostAttr = piece.glass_host_piece_id != null && piece.glass_host_piece_id !== ""
+                    ? ` data-glass-host="${escape_html(piece.glass_host_piece_id)}"`
+                    : "";
 
                 html += `
-                    <div class="dco-piece ${piece.piece_type === "Special" ? "dco-special-raw-piece" : ""} ${exactSpecial ? "dco-special-exact-piece" : ""} ${clipped ? "dco-clipped-corner-piece" : ""} ${shaped ? "dco-vector-piece" : ""}" data-piece-type="${escape_html(piece.piece_type || "Regular")}" data-geometry-source="${escape_html(geometryModel.source)}" data-geometry-id="${escape_html(geometryModel.geometryIdentity)}" style="position:absolute;left:${left}%;top:${top}%;width:${width}%;height:${height}%;${pieceStyle}color:#111;overflow:visible;padding:2px;font-size:10px;line-height:1.2;text-align:center;box-sizing:border-box;display:flex;align-items:center;justify-content:center;">
+                    <div class="dco-piece ${piece.piece_type === "Special" ? "dco-special-raw-piece" : ""} ${exactSpecial ? "dco-special-exact-piece" : ""} ${clipped ? "dco-clipped-corner-piece" : ""} ${shaped ? "dco-vector-piece" : ""}" data-piece-type="${escape_html(piece.piece_type || "Regular")}" data-geometry-source="${escape_html(geometryModel.source)}" data-geometry-id="${escape_html(geometryModel.geometryIdentity)}" data-nest-depth="${nestDepth}"${hostAttr} style="position:absolute;left:${left}%;top:${top}%;width:${width}%;height:${height}%;z-index:${2 + nestDepth};${pieceStyle}color:#111;overflow:visible;padding:2px;font-size:10px;line-height:1.2;text-align:center;box-sizing:border-box;display:flex;align-items:center;justify-content:center;">
                         ${shapeOutline}
                         ${render_piece_overlays(frm, manufacturingPiece, geometryModel, sheet, frame)}
                         ${edgeLines}

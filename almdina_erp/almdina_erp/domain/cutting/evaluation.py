@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import time
 from typing import Any
 
 from .glass_opening_nesting import host_link_errors, layout_pair_fault
 from .primitives import num, present_shop_floor_packing
+
+# Returned alone when an optional validation deadline elapses mid-check.
+VALIDATION_DEADLINE_EXCEEDED = "__validation_deadline_exceeded__"
 
 
 def evaluate_plan(
@@ -46,8 +50,14 @@ def validate_plan(
     tolerance: float = 1e-7,
     *,
     kerf_cm: float = 0.0,
+    deadline_monotonic: float | None = None,
 ) -> list[str]:
-    """Independent geometry validator required before a plan can be approved."""
+    """Independent geometry validator required before a plan can be approved.
+
+    ``deadline_monotonic`` is optional. Nesting uses it so a candidate check
+    cannot ignore the post-pass time budget during O(n²) pair scans. Callers
+    that omit it keep the historical unbounded validation path.
+    """
 
     errors: list[str] = []
     expected = {int(piece["id"]): piece for piece in requested_pieces}
@@ -117,6 +127,11 @@ def validate_plan(
             linked.append(row)
         errors.extend(host_link_errors(linked))
         for index, first in enumerate(pieces):
+            if (
+                deadline_monotonic is not None
+                and time.monotonic() > deadline_monotonic
+            ):
+                return [VALIDATION_DEADLINE_EXCEEDED]
             first_rect = {
                 "x": num(first["x"]),
                 "y": num(first["y"]),
@@ -124,6 +139,11 @@ def validate_plan(
                 "h": num(first["h"]),
             }
             for second in pieces[index + 1 :]:
+                if (
+                    deadline_monotonic is not None
+                    and time.monotonic() > deadline_monotonic
+                ):
+                    return [VALIDATION_DEADLINE_EXCEEDED]
                 second_rect = {
                     "x": num(second["x"]),
                     "y": num(second["y"]),
@@ -173,4 +193,8 @@ def validate_plan(
     return errors
 
 
-__all__ = ["evaluate_plan", "validate_plan"]
+__all__ = [
+    "VALIDATION_DEADLINE_EXCEEDED",
+    "evaluate_plan",
+    "validate_plan",
+]

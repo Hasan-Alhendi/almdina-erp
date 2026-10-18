@@ -422,6 +422,67 @@ async function run() {
         full_board_width_cm: 100,
         full_board_length_cm: 100,
         trim_cm: 0,
+        kerf_cm: 0,
+        sheets: [{
+            sheet_no: 1,
+            full_width_cm: 100,
+            full_length_cm: 100,
+            pieces: [
+                {
+                    id: 1,
+                    label: "1.1",
+                    source_piece_no: 1,
+                    x: 0,
+                    y: 0,
+                    w: 50,
+                    h: 50,
+                    piece_type: "Glass",
+                    glass_margin_mm: 50,
+                    glass_hole_local_mm: [[50, 50], [450, 50], [450, 450], [50, 450]],
+                },
+                {
+                    id: 2,
+                    label: "2.1",
+                    source_piece_no: 2,
+                    x: 6,
+                    y: 6,
+                    w: 30,
+                    h: 30,
+                    piece_type: "Glass",
+                    glass_margin_mm: 50,
+                    glass_hole_local_mm: [[50, 50], [250, 50], [250, 250], [50, 250]],
+                    glass_host_piece_id: 1,
+                },
+                {
+                    id: 3,
+                    label: "3.1",
+                    source_piece_no: 3,
+                    x: 12,
+                    y: 12,
+                    w: 10,
+                    h: 10,
+                    piece_type: "Regular",
+                    glass_host_piece_id: 2,
+                },
+            ],
+        }],
+    };
+    downloadedDxf = "";
+    await fakeFrappe.almdina.export_order_dxf("DCO-GLASS-IN-GLASS", "system");
+    // Outer glass + hole + inner glass + hole + regular = 20 GEOMETRY LINE entities.
+    assert.equal((downloadedDxf.match(/8\r\nGEOMETRY\r\n/g) || []).length, 20);
+    assert.ok(cutPathLineCount(downloadedDxf) >= 16);
+    // Board Y is flipped: piece (x,y,h) → DXF (x*10, board_h - (y+h)*10).
+    assert.match(downloadedDxf, /10\r\n0\r\n20\r\n1000\r\n/);
+    assert.match(downloadedDxf, /10\r\n50\r\n20\r\n950\r\n/);
+    assert.match(downloadedDxf, /10\r\n60\r\n20\r\n640\r\n/);
+    assert.match(downloadedDxf, /10\r\n110\r\n20\r\n690\r\n/);
+    assert.match(downloadedDxf, /10\r\n120\r\n20\r\n780\r\n/);
+
+    nextPlan = {
+        full_board_width_cm: 100,
+        full_board_length_cm: 100,
+        trim_cm: 0,
         sheets: [{
             sheet_no: 1,
             full_width_cm: 100,

@@ -451,6 +451,25 @@ def test_panel_saw_does_not_nest_inside_glass():
     assert len(plan["sheets"]) >= 2
 
 
+def test_validation_deadline_returns_sentinel_without_partial_pair_errors():
+    from almdina_erp.almdina_erp.domain.cutting.evaluation import (
+        VALIDATION_DEADLINE_EXCEEDED,
+        validate_plan,
+    )
+
+    pieces, plan = _plan([_glass(40, 40, 50), _regular(20, 20)], 50, 50)
+    # Already expired deadline must abort before emitting pair faults.
+    errors = validate_plan(
+        plan,
+        pieces,
+        50,
+        50,
+        kerf_cm=0.3,
+        deadline_monotonic=0.0,
+    )
+    assert errors == [VALIDATION_DEADLINE_EXCEEDED]
+
+
 def test_zero_time_budget_keeps_the_baseline():
     assert nesting_time_budget_sec(0) == 0
     _pieces, plan = _plan(
@@ -866,6 +885,34 @@ def test_export_rectangle_fallback_accepts_nested_guests_and_rejects_true_confli
     assert issues
     assert {issue.target.pair_contour_nos for issue in issues} == {("2.1", "3.1")}
 
+    frame_conflict = make_placed_piece(pieces[1], glass["x"], glass["y"], 12, 12, False)
+    frame_conflict.update(
+        {
+            GLASS_HOST_PIECE_ID: glass["id"],
+            "source_piece_no": 2,
+            "label": "2.1",
+            "id": 2,
+        }
+    )
+    glass_labeled = dict(glass)
+    glass_labeled.update(source_piece_no=1, label="1.1", id=1)
+    frame_rejected = {
+        "kerf_cm": 0.3,
+        "sheets": [{"sheet_no": 1, "pieces": [glass_labeled, frame_conflict]}],
+    }
+    frame_issues = dxf_export_service._kerf_errors(frame_rejected)
+    assert frame_issues
+    assert frame_issues[0].params.get("glass_frame_guest_label") == "2.1"
+    assert frame_issues[0].params.get("glass_frame_host_label") == "1.1"
+    from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import (
+        present_issue,
+    )
+
+    presented = present_issue(frame_issues[0])
+    assert "تتداخل مع إطار البلور" in presented.problem
+    assert "2" in presented.problem
+    assert "1" in presented.problem
+
 
 def test_export_rebuild_keeps_glass_host_piece_id():
     import json
@@ -1200,3 +1247,288 @@ def test_cutting_plan_validation_rejects_nested_and_historical_collisions():
         issue.code == MATERIAL_OVERLAP and issue.target.pair_piece_nos == (1, 2)
         for issue in issues
     )
+
+
+def _lifecycle_placed_row(piece, sheet_no=1):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(
+        sheet_no=sheet_no,
+        piece_id=piece["id"],
+        piece_label=piece.get("label") or f"{piece['id']}.1",
+        piece_instance_id=piece.get("piece_instance_id") or f"door-{piece['id']}:1",
+        source_piece_no=piece.get("source_piece_no", piece["id"]),
+        copy_no=piece.get("copy_no", 1),
+        x_mm=piece["x"] * 10,
+        y_mm=piece["y"] * 10,
+        width_mm=piece["w"] * 10,
+        height_mm=piece["h"] * 10,
+        original_width_cm=piece.get("original_w", piece["w"]),
+        original_length_cm=piece.get("original_h", piece["h"]),
+        piece_type=piece.get("piece_type") or "Regular",
+        clipped_corner_position=piece.get("clipped_corner_position") or "",
+        clipped_corner_width_cm=piece.get("clipped_corner_width_cm") or 0,
+        clipped_corner_length_cm=piece.get("clipped_corner_length_cm") or 0,
+        special_shape_geometry_json=piece.get("special_shape_geometry_json") or "",
+        rotated=1 if piece.get("rotated") else 0,
+        edge_long_right=0,
+        edge_long_left=0,
+        edge_width_top=0,
+        edge_width_bottom=0,
+        edge_type="",
+        notes="",
+        resource_kind="FULL_BOARD",
+        offcut_source_party="UNASSIGNED",
+        offcut_execution_party="UNASSIGNED",
+        extra_liner=0,
+        liner_reference_side="",
+        liner_offset_cm=0,
+        liner_width_cm=0,
+        liner_start_cm=0,
+        liner_length_cm=0,
+        extra_back_groove=0,
+        back_groove_reference_side="",
+        back_groove_offset_cm=0,
+        back_groove_width_cm=0,
+        back_groove_start_cm=0,
+        back_groove_length_cm=0,
+        extra_recessed_handle_cutout=0,
+        recessed_handle_reference_side="",
+        recessed_handle_offset_cm=0,
+        recessed_handle_width_cm=0,
+        recessed_handle_start_cm=0,
+        recessed_handle_length_cm=0,
+    )
+
+
+def _reload_export_snapshot(plan, *, board_w_cm, board_h_cm):
+    """Simulate save → placed_pieces without host fields → reload → export rebuild."""
+
+    import json
+    from types import SimpleNamespace
+
+    from almdina_erp.almdina_erp.application.orders.plan_snapshot_security import (
+        sanitize_plan_snapshot,
+    )
+    from almdina_erp.almdina_erp.services.export_validation_service import (
+        _plan_to_export_snapshot,
+    )
+
+    snapshot = sanitize_plan_snapshot(plan)
+    # JSON round-trip is the browser/workspace reload boundary.
+    snapshot = sanitize_plan_snapshot(json.loads(json.dumps(snapshot)))
+    sheet = snapshot["sheets"][0]
+    cutting_plan = SimpleNamespace(
+        snapshot_json=json.dumps(snapshot),
+        placed_pieces=[_lifecycle_placed_row(piece) for piece in sheet["pieces"]],
+        sources=[
+            SimpleNamespace(
+                sheet_no=1,
+                source_type="Full Board",
+                remnant=None,
+                board_item=None,
+                material="",
+                color="",
+                thickness_mm=18,
+                full_width_mm=board_w_cm * 10,
+                full_length_mm=board_h_cm * 10,
+                usable_width_mm=board_w_cm * 10,
+                usable_length_mm=board_h_cm * 10,
+                source_area_m2=board_w_cm * board_h_cm / 10000,
+                board_description="",
+                resource_kind="FULL_BOARD",
+                offcut_source_party="UNASSIGNED",
+                offcut_execution_party="UNASSIGNED",
+            )
+        ],
+        engine_version="system",
+        method_key=METHOD,
+        method_label=METHOD,
+        full_board_width_mm=board_w_cm * 10,
+        full_board_length_mm=board_h_cm * 10,
+        usable_board_width_mm=board_w_cm * 10,
+        usable_board_length_mm=board_h_cm * 10,
+        kerf_mm=3,
+        trim_margin_mm=0,
+        used_area_m2=0.5,
+        total_source_area_m2=board_w_cm * board_h_cm / 10000,
+        waste_area_m2=0.4,
+        required_boards=1,
+    )
+    rebuilt = _plan_to_export_snapshot(cutting_plan)
+    return snapshot, rebuilt, cutting_plan
+
+
+def test_nested_plan_survives_snapshot_reload_and_export_rebuild():
+    from almdina_erp.almdina_erp.services.dxf_export_service import _kerf_errors
+
+    _, plan = _plan(
+        [_glass(40, 40, 50), _regular(12, 12, qty=3)],
+        50,
+        50,
+    )
+    snapshot, rebuilt, _ = _reload_export_snapshot(plan, board_w_cm=50, board_h_cm=50)
+
+    before = {
+        int(piece["id"]): (
+            round(piece["x"], 4),
+            round(piece["y"], 4),
+            round(piece["w"], 4),
+            round(piece["h"], 4),
+            bool(piece.get("rotated")),
+            piece.get(GLASS_HOST_PIECE_ID),
+            piece.get("glass_hole_local_mm"),
+            piece.get("piece_type"),
+        )
+        for piece in snapshot["sheets"][0]["pieces"]
+    }
+    after = {
+        int(piece["id"]): (
+            round(piece["x"], 4),
+            round(piece["y"], 4),
+            round(piece["w"], 4),
+            round(piece["h"], 4),
+            bool(piece.get("rotated")),
+            piece.get(GLASS_HOST_PIECE_ID),
+            piece.get("glass_hole_local_mm"),
+            piece.get("piece_type"),
+        )
+        for piece in rebuilt["sheets"][0]["pieces"]
+    }
+    assert before == after
+    assert sorted(_hosts({"sheets": snapshot["sheets"]})) == [1, 1, 1]
+    assert sorted(_hosts({"sheets": rebuilt["sheets"]})) == [1, 1, 1]
+    assert len(rebuilt["sheets"][0]["pieces"]) == 4
+    assert len({piece["id"] for piece in rebuilt["sheets"][0]["pieces"]}) == 4
+    assert _kerf_errors(rebuilt) == []
+
+
+def test_glass_in_glass_host_chain_survives_reload():
+    _, plan = _plan(
+        [_glass(70, 70, 50), _glass(40, 40, 50), _regular(20, 20)],
+        80,
+        80,
+    )
+    snapshot, rebuilt, _ = _reload_export_snapshot(plan, board_w_cm=80, board_h_cm=80)
+    before = {
+        int(piece["id"]): piece.get(GLASS_HOST_PIECE_ID)
+        for piece in snapshot["sheets"][0]["pieces"]
+    }
+    after = {
+        int(piece["id"]): piece.get(GLASS_HOST_PIECE_ID)
+        for piece in rebuilt["sheets"][0]["pieces"]
+    }
+    assert before == after
+    assert before[2] == 1
+    assert before[3] == 2
+    assert all(
+        piece.get("glass_hole_local_mm")
+        for piece in rebuilt["sheets"][0]["pieces"]
+        if piece.get("piece_type") == "Glass"
+    )
+
+
+def test_corner_guests_keep_geometry_through_reload():
+    rows = [
+        _glass(50, 50, 50),
+        {
+            "piece_type": "Clipped Corner",
+            "width_cm": 15,
+            "length_cm": 15,
+            "qty": 1,
+            "allow_rotation": 0,
+            "clipped_corner_position": "Top Right",
+            "clipped_corner_width_cm": 5,
+            "clipped_corner_length_cm": 5,
+        },
+        {
+            "piece_type": "L-Shaped Corner",
+            "width_cm": 18,
+            "length_cm": 18,
+            "qty": 1,
+            "allow_rotation": 0,
+            "clipped_corner_position": "Top Right",
+            "clipped_corner_width_cm": 8,
+            "clipped_corner_length_cm": 8,
+        },
+    ]
+    _, plan = _plan(rows, 60, 60)
+    assert sorted(_hosts(plan)) == [1, 1]
+    snapshot, rebuilt, _ = _reload_export_snapshot(plan, board_w_cm=60, board_h_cm=60)
+    for source, target in (
+        (snapshot["sheets"][0]["pieces"], rebuilt["sheets"][0]["pieces"]),
+    ):
+        by_id = {int(piece["id"]): piece for piece in target}
+        for piece in source:
+            restored = by_id[int(piece["id"])]
+            assert restored.get("piece_type") == piece.get("piece_type")
+            assert restored.get("clipped_corner_position") == piece.get(
+                "clipped_corner_position"
+            )
+            assert restored.get("clipped_corner_width_cm") == piece.get(
+                "clipped_corner_width_cm"
+            )
+            assert restored.get("clipped_corner_length_cm") == piece.get(
+                "clipped_corner_length_cm"
+            )
+            assert restored.get(GLASS_HOST_PIECE_ID) == piece.get(GLASS_HOST_PIECE_ID)
+
+
+def test_legacy_plan_without_host_id_is_not_rejected_for_absence():
+    from almdina_erp.almdina_erp.services.dxf_export_service import _kerf_errors
+
+    pieces = expand_piece_groups([_regular(20, 20), _regular(15, 15)])
+    left = make_placed_piece(pieces[0], 0, 0, 20, 20, False)
+    right = make_placed_piece(pieces[1], 25, 0, 15, 15, False)
+    plan = {
+        "kerf_cm": 0.3,
+        "sheets": [{"sheet_no": 1, "pieces": [left, right]}],
+        "unplaced": [],
+    }
+    assert GLASS_HOST_PIECE_ID not in left
+    assert GLASS_HOST_PIECE_ID not in right
+    assert _kerf_errors(plan) == []
+    issues, _, topology_aware = _cutting_plan_for_layout([left, right])
+    assert topology_aware is False
+    assert issues == []
+
+
+def test_approved_snapshot_nesting_fields_are_not_rewritten_by_sanitize():
+    import json
+
+    from almdina_erp.almdina_erp.application.orders.plan_snapshot_security import (
+        sanitize_plan_snapshot,
+    )
+
+    _, plan = _plan([_glass(40, 40, 50), _regular(20, 20)], 50, 50)
+    approved = sanitize_plan_snapshot(plan)
+    original = json.dumps(approved, sort_keys=True)
+    # Re-opening an approved plan only re-sanitizes; it must not drop nesting.
+    reopened = sanitize_plan_snapshot(json.loads(original))
+    assert json.dumps(reopened, sort_keys=True) == original
+    assert sorted(_hosts({"sheets": reopened["sheets"]})) == [1]
+
+
+def test_true_overlap_still_fails_export_after_reload():
+    from almdina_erp.almdina_erp.services.dxf_export_service import _kerf_errors
+
+    _, plan = _plan([_glass(40, 40, 50), _regular(20, 20)], 50, 50)
+    snapshot, _, _ = _reload_export_snapshot(plan, board_w_cm=50, board_h_cm=50)
+    glass = next(
+        piece
+        for piece in snapshot["sheets"][0]["pieces"]
+        if piece.get("piece_type") == "Glass"
+    )
+    guest = next(
+        piece
+        for piece in snapshot["sheets"][0]["pieces"]
+        if piece.get(GLASS_HOST_PIECE_ID) == glass["id"]
+    )
+    conflict = dict(guest)
+    conflict["x"] = glass["x"]
+    conflict["y"] = glass["y"]
+    rejected = {
+        "kerf_cm": 0.3,
+        "sheets": [{"sheet_no": 1, "pieces": [glass, conflict]}],
+    }
+    assert _kerf_errors(rejected)

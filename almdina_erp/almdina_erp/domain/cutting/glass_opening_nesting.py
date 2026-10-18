@@ -286,7 +286,7 @@ def nest_glass_openings(
             guests_selected=selected_ids,
         )
 
-    from .evaluation import validate_plan
+    from .evaluation import VALIDATION_DEADLINE_EXCEEDED, validate_plan
     from .optimizer import enrich_plan_metrics
     from .registry import METHOD_CONFIGS, run_single_method
 
@@ -352,6 +352,13 @@ def nest_glass_openings(
     candidate["used_area_m2"] = used_area
     candidate["total_board_area_m2"] = board_area
     candidate["waste_area_m2"] = max(0.0, board_area - used_area)
+    if time.monotonic() - started > budget:
+        return _finish(
+            baseline,
+            outcome="budget",
+            openings_found=len(openings),
+            guests_selected=selected_ids,
+        )
     candidate = enrich_plan_metrics(
         candidate,
         str(candidate.get("method_key") or method_key),
@@ -366,8 +373,17 @@ def nest_glass_openings(
         board_w_cm,
         board_h_cm,
         kerf_cm=kerf_cm,
+        deadline_monotonic=started + budget,
     )
     candidate_nested = nested_piece_count(candidate)
+    if errors == [VALIDATION_DEADLINE_EXCEEDED]:
+        return _finish(
+            baseline,
+            outcome="budget",
+            openings_found=len(openings),
+            guests_selected=selected_ids,
+            candidate_nested_count=candidate_nested,
+        )
     if errors:
         return _finish(
             baseline,

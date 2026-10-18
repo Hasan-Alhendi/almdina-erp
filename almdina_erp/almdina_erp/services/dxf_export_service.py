@@ -215,12 +215,31 @@ def _kerf_errors(
                 # Rectangle-fallback layout faults keep the historical kerf code so
                 # existing export cards stay stable. Topology overlaps still arrive
                 # as MATERIAL_OVERLAP from validate_snapshot_material_layout.
+                params: dict[str, Any] = {
+                    "kerf_mm": required_kerf_cm * 10.0,
+                    "layout_fault": pair_issue,
+                }
+                if pair_issue == "invalid":
+                    first_host = first.get("glass_host_piece_id")
+                    second_host = second.get("glass_host_piece_id")
+                    first_id = first.get("id")
+                    second_id = second.get("id")
+                    if first_host not in (None, "") and int(first_host) == int(
+                        second_id or -1
+                    ):
+                        params["glass_frame_guest_label"] = str(first_key)
+                        params["glass_frame_host_label"] = str(second_key)
+                    elif second_host not in (None, "") and int(second_host) == int(
+                        first_id or -1
+                    ):
+                        params["glass_frame_guest_label"] = str(second_key)
+                        params["glass_frame_host_label"] = str(first_key)
                 errors.append(
                     issue(
                         KERF_VIOLATION,
                         CATEGORY_LAYOUT,
                         target=contour_pair_target(first_key, second_key, sheet_no=sheet_no),
-                        params={"kerf_mm": required_kerf_cm * 10.0},
+                        params=params,
                     )
                 )
     return errors
