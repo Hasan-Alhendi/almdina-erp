@@ -2096,7 +2096,7 @@
             || operation.nativeInsertAllowed !== true
             || state.mode !== "NEW"
         ) return;
-        // Frappe may settle frm.save() even when a transport request fails.
+        // Frappe's native Save promise may settle even when transport fails.
         // A resolved Promise is not authoritative proof that NEW was inserted.
         // Keep the last acknowledged local draft until the native Form owns the
         // saved document with the exact originating creation token.
