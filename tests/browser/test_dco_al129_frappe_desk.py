@@ -2269,13 +2269,23 @@ def test_real_desk_100_piece_checkpoint_restore_and_lost_save_response() -> None
             # NOT_FOUND is not terminal proof: a successful response could
             # simply be delayed while the first request is still in flight.
             # The explicit second Save must be rejected before native insert.
+            # A pending uncertain INSERT intentionally hides the visible
+            # native Save action; a user must not be able to click a second
+            # INSERT. Exercise Frappe's Save contract directly to prove the
+            # before_save guard performs reconciliation and blocks submission.
+            expect(
+                retry_page.locator(".page-actions .primary-action").filter(
+                    has_text=re.compile(r"Save|حفظ")
+                )
+            ).to_be_hidden()
             with retry_page.expect_response(
                 lambda response: "reconcile_new_order_creation" in response.url,
                 timeout=30_000,
             ):
-                retry_page.locator(".page-actions .primary-action").filter(
-                    has_text=re.compile(r"Save|حفظ")
-                ).click()
+                retry_page.evaluate(
+                    "async () => { try { await cur_frm.save(); } catch (_) {"
+                    " /* native validation denies the uncertain INSERT */ } }"
+                )
             assert "NOT_FOUND" in retry_reconciliation_statuses
             assert len(save_posts) == first_save_attempts + 1, (
                 "NOT_FOUND must not trigger another native Save request"
