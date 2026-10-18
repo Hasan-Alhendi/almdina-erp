@@ -210,6 +210,16 @@ def read_page_state(page: Page) -> dict:
                         formFields: Boolean(window.cur_frm?.fields_dict?.order_notes),
                         formDOM: Boolean(window.cur_frm?.wrapper?.isConnected),
                         scriptManager: Boolean(window.cur_frm?.script_manager),
+                        setupDone: Boolean(window.cur_frm?.setup_done),
+                        hasRead: Boolean(window.cur_frm?.perm?.[0]?.read),
+                        permissionRows: (window.cur_frm?.perm || []).slice(0, 2).map(p => ({
+                            read: Boolean(p.read), write: Boolean(p.write),
+                            permlevel: p.permlevel
+                        })),
+                        userRoles: (window.frappe?.user_roles || []).slice(0, 20),
+                        doctypeMetaLoaded: Boolean(window.frappe?.get_meta?.("Door Cutting Order")),
+                        doctypeRoles: (window.frappe?.get_meta?.("Door Cutting Order")?.permissions || [])
+                            .slice(0, 20).map(p => p.role),
                     },
                     saveProbe: window.__dcoDeskSaveProbe || null,
                 };
