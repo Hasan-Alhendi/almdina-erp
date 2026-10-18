@@ -274,6 +274,14 @@ def test_real_desk_edits_checkpoint_and_permission_isolation() -> None:
             expect(addons.locator("[data-addons-apply]")).to_be_enabled()
             addons.locator("[data-addons-apply]").click()
             expect(addons).to_be_hidden(timeout=30_000)
+            # Bulk options are populated asynchronously from the profile owner.
+            # Wait for the actual fixture profile rather than clicking an empty menu.
+            page.wait_for_function(
+                "value => Boolean(window.AlmdinaMultiEdgeBanding && window.cur_frm "
+                "&& AlmdinaMultiEdgeBanding.profiles(cur_frm).has(value))",
+                arg=fixture["bulk_edge_type"],
+                timeout=30_000,
+            )
             second.locator(".dco-all-sides-profile-button[data-bulk-edge-profile-button]").click()
             page.locator(
                 "#dco-edge-profile-popover "
