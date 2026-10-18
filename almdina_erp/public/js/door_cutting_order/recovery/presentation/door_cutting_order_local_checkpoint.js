@@ -2096,6 +2096,21 @@
             || operation.nativeInsertAllowed !== true
             || state.mode !== "NEW"
         ) return;
+        // Frappe may settle frm.save() even when a transport request fails.
+        // A resolved Promise is not authoritative proof that NEW was inserted.
+        // Keep the last acknowledged local draft until the native Form owns the
+        // saved document with the exact originating creation token.
+        const document = frm && frm.doc;
+        const token = String(state.session.snapshot().draft_id || "").trim();
+        if (
+            !document
+            || isNew(frm)
+            || String(document.recovery_creation_token || "").trim() !== token
+            || !String(document.name || "").trim()
+        ) {
+            state.session.markPendingReconciliation();
+            return;
+        }
         await cleanupConfirmedNewDraft(frm, state, null, {
             expectedRevision: operation.attemptedRevision,
             expectedAttemptedAt: operation.cleanupAttemptedAt,
