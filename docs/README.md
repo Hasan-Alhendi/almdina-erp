@@ -36,6 +36,7 @@
 - [`UAT_v1.0.md`](UAT_v1.0.md): سيناريوهات قبول ميدانية مفيدة، لكنها ليست مصدر Architecture.
 - [`SETUP_v1.0.md`](SETUP_v1.0.md): إعداد قديم مفيد كمرجع، ويجب مقارنة أوامره مع `reference/09_OPERATIONS_RELEASE.md` قبل الاستخدام.
 - [`permission-rollout-checklist.md`](permission-rollout-checklist.md): سجل/Checklist لمرحلة Rollout الصلاحيات.
+- [`customer_bot_gateway.md`](customer_bot_gateway.md): عقد الخطوة الأولى لبوت متابعة العملاء. لا يغيّر إرسال القياسات أو الفواتير أو إشعارات المراحل.
 
 ## 4. سجلات تاريخية — Historical / Audit
 
