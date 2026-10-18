@@ -1352,11 +1352,13 @@ function runCleanups(frm) {
     const unacknowledgedId = "92929292-9292-4292-8292-929292929292";
     const unacknowledgedForm = form("new-door-cutting-order-no-ack");
     unacknowledgedForm.save = async function saveWithoutNativeAcknowledgement() {
-        await handlers["Door Cutting Order"].before_save(this);
         nativeSaveCalls += 1;
     };
     fakeWindow.cur_frm = unacknowledgedForm;
     await Recovery.LocalCheckpoint.continueDraft(unacknowledgedForm, draft(unacknowledgedId));
+    // Reproduce the actual failed first-INSERT boundary: the pending marker
+    // exists before the observed native Save settles without a server ACK.
+    await handlers["Door Cutting Order"].before_save(unacknowledgedForm);
     await unacknowledgedForm.save();
     assert.equal(records.has(unacknowledgedId), true,
         "a resolved save without server acknowledgement must preserve the draft");
