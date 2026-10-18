@@ -67,7 +67,7 @@ class TestMachiningAddonAdapter(FrappeTestCase):
                 adapter, _row = self._adapter(
                     **{
                         addon.enabled_field: 1,
-                        addon.side_field: "edge_width_top",
+                        addon.side_field: "edge_long_right",
                         addon.offset_field: 18,
                         addon.width_field: 3,
                         addon.start_field: 0,
