@@ -1016,13 +1016,29 @@
         }
     }
 
+    function preferOriginalUpload(options) {
+        // Server workspace contract is authoritative. Missing flag keeps the
+        // historical "download attached bytes" path for older payloads.
+        if (options && Object.prototype.hasOwnProperty.call(options, "preferOriginalUpload")) {
+            return options.preferOriginalUpload !== false;
+        }
+        if (options && options.originalIsManufacturingReady === false) {
+            return false;
+        }
+        return true;
+    }
+
     function shouldDownloadOriginalUpload(planSource, options) {
         const normalized = String(planSource || "").trim().toLowerCase();
-        if (ORIGINAL_UPLOAD_SOURCES.has(normalized)) return true;
+        if (ORIGINAL_UPLOAD_SOURCES.has(normalized)) {
+            // Custom/uploaded tab: original design file before approval, or when
+            // the approved upload already embeds manufacturing-ready cut paths.
+            // After approval with Absent saw centers, regenerate instead.
+            return preferOriginalUpload(options);
+        }
         if (normalized === "approved") {
-            // Design uploads without saw centers must regenerate manufacturing DXF.
-            if (options && options.originalIsManufacturingReady === false) return false;
-            return Boolean(options && options.hasOriginalFile);
+            if (!(options && options.hasOriginalFile)) return false;
+            return preferOriginalUpload(options);
         }
         return false;
     }

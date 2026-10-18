@@ -196,12 +196,62 @@ def test_legacy_upload_without_geometry_stays_legacy():
 
 
 def test_export_include_saw_centers_only_after_approval():
-    draft = SimpleNamespace(status="Draft", source_type="System", saw_center_status="Absent", dxf_file="")
-    approved = SimpleNamespace(status="Approved", source_type="System", saw_center_status="Absent", dxf_file="")
-    assert dxf_export_service._include_saw_centers_for_export(draft, "system") is False
-    assert dxf_export_service._include_saw_centers_for_export(approved, "approved") is True
-    assert dxf_export_service._include_saw_centers_for_export(approved, None) is True
-    assert dxf_export_service._include_saw_centers_for_export(draft, None) is False
+    draft = SimpleNamespace(
+        name="CP-DRAFT",
+        status="Draft",
+        source_type="System",
+        saw_center_status="Absent",
+        dxf_file="",
+    )
+    approved = SimpleNamespace(
+        name="CP-APP",
+        status="Approved",
+        source_type="System",
+        saw_center_status="Absent",
+        dxf_file="",
+    )
+    order = SimpleNamespace(approved_plan="CP-APP")
+    assert dxf_export_service._include_saw_centers_for_export(draft, "system", order) is False
+    assert dxf_export_service._include_saw_centers_for_export(approved, "approved", order) is True
+    assert dxf_export_service._include_saw_centers_for_export(approved, None, order) is True
+    assert dxf_export_service._include_saw_centers_for_export(draft, None, order) is False
+
+
+def test_custom_tab_regenerates_when_uploaded_plan_is_current_approval_without_paths():
+    uploaded = SimpleNamespace(
+        name="CP-UP-1",
+        status="Approved",
+        source_type="Uploaded DXF",
+        saw_center_status="Absent",
+        dxf_file="/private/files/design.dxf",
+    )
+    order = SimpleNamespace(approved_plan="CP-UP-1")
+    assert dxf_export_service.prefer_original_uploaded_download(order, uploaded) is False
+    assert dxf_export_service._include_saw_centers_for_export(uploaded, "custom", order) is True
+
+
+def test_custom_tab_keeps_original_before_approval_and_when_paths_present():
+    draft = SimpleNamespace(
+        name="CP-UP-2",
+        status="Draft",
+        source_type="Uploaded DXF",
+        saw_center_status="Absent",
+        dxf_file="/private/files/design.dxf",
+    )
+    present = SimpleNamespace(
+        name="CP-UP-3",
+        status="Approved",
+        source_type="Uploaded DXF",
+        saw_center_status="Present",
+        dxf_file="/private/files/ready.dxf",
+    )
+    other_approved = SimpleNamespace(approved_plan="CP-SYSTEM")
+    same_approved = SimpleNamespace(approved_plan="CP-UP-3")
+    assert dxf_export_service.prefer_original_uploaded_download(other_approved, draft) is True
+    assert dxf_export_service._include_saw_centers_for_export(draft, "custom", other_approved) is False
+    assert dxf_export_service.prefer_original_uploaded_download(same_approved, present) is True
+    # A different approved plan must never force Custom to emit the other plan's paths.
+    assert dxf_export_service._is_current_approved_plan(other_approved, draft) is False
 
 
 def test_original_manufacturing_ready_matrix():

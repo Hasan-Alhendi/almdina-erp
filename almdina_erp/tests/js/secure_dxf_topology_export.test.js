@@ -1438,10 +1438,64 @@ async function run() {
     lastCallMethod = "";
     await fakeFrappe.almdina.export_order_dxf("DCO-APPROVED-ABSENT", "approved", {
         hasOriginalFile: true,
-        originalIsManufacturingReady: false,
+        preferOriginalUpload: false,
     });
     assert.match(lastCallMethod, /normalize_dxf_for_autocad/);
     assert.ok(cutPathLineCount(downloadedDxf) > 0);
+
+    // Custom tab before approval: keep the original designer file.
+    downloadedDxf = "";
+    lastCallMethod = "";
+    await fakeFrappe.almdina.export_order_dxf("DCO-CUSTOM-DRAFT", "custom", {
+        hasOriginalFile: true,
+        preferOriginalUpload: true,
+    });
+    assert.match(lastCallMethod, /download_uploaded_dxf/);
+    assert.equal(downloadedDxf, "0\nSECTION\n8\nGEOMETRY\n0\nEOF\n");
+
+    // Custom tab after the same upload was approved without saw centers:
+    // regenerate manufacturing DXF instead of shipping the design file.
+    nextPlan.include_saw_centers = true;
+    downloadedDxf = "";
+    lastCallMethod = "";
+    await fakeFrappe.almdina.export_order_dxf("DCO-CUSTOM-APPROVED-ABSENT", "custom", {
+        hasOriginalFile: true,
+        preferOriginalUpload: false,
+    });
+    assert.match(lastCallMethod, /normalize_dxf_for_autocad/);
+    assert.ok(cutPathLineCount(downloadedDxf) > 0);
+    const customApprovedSaw = cutPathLineCount(downloadedDxf);
+    downloadedDxf = "";
+    await fakeFrappe.almdina.export_order_dxf("DCO-CUSTOM-APPROVED-ABSENT", "custom", {
+        hasOriginalFile: true,
+        preferOriginalUpload: false,
+    });
+    assert.equal(cutPathLineCount(downloadedDxf), customApprovedSaw);
+
+    // Custom tab when a different plan is approved: still the uploaded original.
+    delete nextPlan.include_saw_centers;
+    downloadedDxf = "";
+    lastCallMethod = "";
+    await fakeFrappe.almdina.export_order_dxf("DCO-CUSTOM-OTHER-APPROVED", "custom", {
+        hasOriginalFile: true,
+        preferOriginalUpload: true,
+    });
+    assert.match(lastCallMethod, /download_uploaded_dxf/);
+    assert.equal(downloadedDxf, "0\nSECTION\n8\nGEOMETRY\n0\nEOF\n");
+
+    // Approved upload that already has saw centers keeps the original bytes.
+    originalUpload = {
+        filename: "ready-cut-paths.dxf",
+        content_b64: Buffer.from("0\nSECTION\n8\nCUT_PATH\n0\nEOF\n", "utf8").toString("base64"),
+    };
+    downloadedDxf = "";
+    lastCallMethod = "";
+    await fakeFrappe.almdina.export_order_dxf("DCO-CUSTOM-APPROVED-PRESENT", "custom", {
+        hasOriginalFile: true,
+        preferOriginalUpload: true,
+    });
+    assert.match(lastCallMethod, /download_uploaded_dxf/);
+    assert.equal(downloadedDxf, "0\nSECTION\n8\nCUT_PATH\n0\nEOF\n");
 
     console.log("Secure DXF topology export simulation passed");
 }
