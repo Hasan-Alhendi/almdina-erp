@@ -76,7 +76,13 @@ class TestA3PlanCostingOwnership(unittest.TestCase):
             with patch.object(cost_commands, "current_cost_plan", return_value=plan):
                 with patch.object(cost_commands, "FrappeCuttingPlanCommandRepository", FakeRepository):
                     with patch.object(cost_commands, "initialize_draft_plan_cost_snapshot", return_value=False):
-                        with patch.object(cost_commands, "refresh_order_commercial_totals"):
+                        with (
+                            patch.object(cost_commands, "refresh_order_commercial_totals"),
+                            patch(
+                                "almdina_erp.almdina_erp.services.final_price_approval_service."
+                                "maybe_invalidate_final_price_approval"
+                            ) as invalidate,
+                        ):
                             with patch.object(
                                 cost_commands.frappe.db,
                                 "get_value",
@@ -91,6 +97,12 @@ class TestA3PlanCostingOwnership(unittest.TestCase):
                                     cutting_cost_per_board_usd=2,
                                 )
 
+        invalidate.assert_called_once_with(
+            order.name,
+            reason="cost_settings_changed",
+            only_if_basis_changed=True,
+            order=order,
+        )
         self.assertEqual(len(saved), 1)
         self.assertEqual(plan.board_rate_usd, 8)
         self.assertEqual(plan.cutting_cost_per_board_usd, 2)
@@ -144,13 +156,25 @@ class TestA3PlanCostingOwnership(unittest.TestCase):
                                     "persist_plan_cost_snapshot",
                                     side_effect=lambda saved_plan: persisted.append(saved_plan) or {},
                                 ):
-                                    with patch.object(cost_commands, "refresh_order_commercial_totals"):
+                                    with (
+                                        patch.object(cost_commands, "refresh_order_commercial_totals"),
+                                        patch(
+                                            "almdina_erp.almdina_erp.services.final_price_approval_service."
+                                            "maybe_invalidate_final_price_approval"
+                                        ) as invalidate,
+                                    ):
                                         result = cost_commands.update_plan_cost_settings(
                                             order,
                                             board_rate_usd=8,
                                             cutting_cost_per_board_usd=2,
                                         )
 
+        invalidate.assert_called_once_with(
+            order.name,
+            reason="cost_settings_changed",
+            only_if_basis_changed=True,
+            order=order,
+        )
         repository_cls.assert_not_called()
         self.assertEqual(len(persisted), 1)
         self.assertEqual(plan.required_boards, 2)

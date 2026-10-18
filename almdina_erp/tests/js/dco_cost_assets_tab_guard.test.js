@@ -50,6 +50,10 @@ function verifyCostAssetContract() {
         assets.some(asset => asset.endsWith("door_cutting_order_cost_edit_session_ux.js")),
         "Cost edit-session API must be ready in the same lazy bundle"
     );
+    assert.ok(
+        assets.some(asset => asset.endsWith("door_cutting_order_final_price_approval_ux.js")),
+        "Final-price approval Cost-tab UX must load with the Cost lazy bundle"
+    );
 }
 
 function verifyNavigationOwnershipContract() {

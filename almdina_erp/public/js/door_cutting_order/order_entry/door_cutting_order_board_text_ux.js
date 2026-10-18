@@ -1,11 +1,48 @@
 (() => {
     "use strict";
 
+    const INPUT_FIELDS = ["board_description", "board_length_cm", "board_width_cm"];
+
+    function context() {
+        return window.AlmdinaDocumentContext || null;
+    }
+
+    function owns(frm, token) {
+        const owner = context();
+        return owner && owner.isSameDocument(frm, token)
+            && (!window.cur_frm || window.cur_frm === frm);
+    }
+
+    function bindInput(frm, fieldname) {
+        const field = frm.fields_dict && frm.fields_dict[fieldname];
+        const input = field && field.$input;
+        if (!input || !input.length || typeof input.on !== "function") return;
+        const element = typeof input.get === "function" ? input.get(0) : input[0];
+        if (field.__almdinaOwnedInputElement === element) return;
+        field.__almdinaOwnedInputElement = element;
+        field.__almdinaOwnedInputEdit = null;
+        input.on("input.almdinaBoardOwnership change.almdinaBoardOwnership", () => {
+            const owner = context();
+            const token = owner?.capture(frm);
+            if (!token || !owns(frm, token)) return;
+            field.__almdinaOwnedInputEdit = { token, element, value: input.val() };
+        });
+    }
+
+    function bindInputs(frm) {
+        INPUT_FIELDS.forEach(fieldname => bindInput(frm, fieldname));
+    }
+
     function controlValue(frm, fieldname) {
         const field = frm.fields_dict && frm.fields_dict[fieldname];
         if (!field) return frm.doc[fieldname];
-        if (field.$input && field.$input.length) return field.$input.val();
-        if (typeof field.get_value === "function") return field.get_value();
+        const input = field.$input;
+        const edit = field.__almdinaOwnedInputEdit;
+        const element = input && (typeof input.get === "function" ? input.get(0) : input[0]);
+        if (input?.length && edit && edit.element === element && owns(frm, edit.token)
+            && edit.value === field.$input.val()) return edit.value;
+        // The Frappe model owns values not entered during this document visit.
+        // get_value() and $input.val() can both expose an old control's value.
         return frm.doc[fieldname];
     }
 
@@ -37,6 +74,10 @@
     }
 
     async function syncInputs(frm) {
+        const owner = context();
+        const token = owner?.capture(frm);
+        if (!token || !owns(frm, token)) return false;
+        bindInputs(frm);
         const description = boardDescriptionValue(frm);
         const length = Number(controlValue(frm, "board_length_cm") || 0);
         const width = Number(controlValue(frm, "board_width_cm") || 0);
@@ -53,8 +94,19 @@
         }
 
         if (Object.keys(updates).length) {
-            await frm.set_value(updates);
+            if (!owns(frm, token)) return false;
+            // Frappe v16 frm.set_value({...}) runs one field at a time and
+            // reads me.doc.name again for each task. A route change during an
+            // awaited field trigger could otherwise apply later A values to B.
+            // model.set_value(doc, updates) selects the captured document once
+            // and applies the whole batch before its asynchronous triggers.
+            const targetDoc = frm.doc;
+            await (typeof frappe.model?.set_value === "function"
+                ? frappe.model.set_value(targetDoc, updates)
+                : frm.set_value(updates));
         }
+
+        if (!owns(frm, token)) return false;
 
         frm.doc.full_board_length_mm = Number(frm.doc.board_length_cm || 0) * 10;
         frm.doc.full_board_width_mm = Number(frm.doc.board_width_cm || 0) * 10;
@@ -102,6 +154,7 @@
     }
 
     function refresh(frm) {
+        bindInputs(frm);
         patchCostView(frm);
         installCostObserver(frm);
         requestAnimationFrame(() => patchCostView(frm));

@@ -55,7 +55,7 @@
                 min-width:31px;
                 border:1px solid var(--border-color,#ccd3da);
                 border-radius:7px;
-                background:var(--card-bg,#fff);
+                background:var(--alm-card,#ffffff);
                 color:var(--text-muted,#607080);
                 cursor:pointer;
                 display:inline-grid;
@@ -87,14 +87,14 @@
                 margin:-23px -22px 0 0;
                 border-radius:50%;
                 background:#e0a21a;
-                box-shadow:0 0 0 2px var(--card-bg,#fff);
+                box-shadow:0 0 0 2px var(--alm-card,#ffffff);
             }
             .dco-notes-expand { position:relative; }
             .dco-notes-expand:disabled { opacity:.38; cursor:not-allowed; }
 
             .dco-large-notes-dialog .modal-dialog { max-width:min(760px,94vw) !important; }
             .dco-large-notes-dialog .modal-content { border-radius:16px; overflow:hidden; }
-            .dco-large-notes-dialog .modal-body { background:var(--subtle-fg,#f6f8fa); }
+            .dco-large-notes-dialog .modal-body { background:var(--alm-surface-muted,#f4f6f8); }
             .dco-large-notes-dialog textarea[data-fieldname="notes"] {
                 min-height:240px !important;
                 max-height:55vh;
@@ -103,7 +103,7 @@
                 border-radius:11px !important;
                 font-size:15px;
                 line-height:1.85;
-                background:var(--card-bg,#fff);
+                background:var(--alm-card,#ffffff);
             }
             .dco-note-context {
                 display:flex;
@@ -114,7 +114,7 @@
                 padding:9px 11px;
                 border:1px solid var(--border-color,#dfe3e8);
                 border-radius:10px;
-                background:var(--card-bg,#fff);
+                background:var(--alm-card,#ffffff);
                 color:var(--text-muted,#607080);
                 font-size:12px;
             }
@@ -135,7 +135,7 @@
                 .dco-fast-table .dco-select-col,
                 .dco-fast-table .dco-col-no {
                     position:sticky;
-                    background:var(--card-bg,#fff) !important;
+                    background:var(--alm-card,#ffffff) !important;
                 }
                 .dco-fast-table .dco-select-col { right:0; z-index:7; }
                 .dco-fast-table .dco-col-no { right:32px; z-index:6; box-shadow:-5px 0 9px rgba(15,23,42,.055); }

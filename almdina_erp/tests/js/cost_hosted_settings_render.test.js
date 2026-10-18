@@ -195,8 +195,10 @@ function verifyPendingRenderParksHostedNativeFields() {
 function verifyReadyRenderAlsoParksHostedNativeFields() {
     const env = loadAdapter({
         snapshot: {
+            identity: "Door Cutting Order::DCO-HOSTED-SETTINGS",
             status: "ready",
-            data: { order: { board_rate_usd: 10, cutting_cost_per_board_usd: 2 }, pieces: [] },
+            data: { order_name: "DCO-HOSTED-SETTINGS",
+                order: { board_rate_usd: 10, cutting_cost_per_board_usd: 2 }, pieces: [] },
         },
     });
 

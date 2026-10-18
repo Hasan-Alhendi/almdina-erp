@@ -124,6 +124,7 @@ assert.equal(ignored.generation, 4);
 
 (async () => {
     frm.__almdinaWorkspaceMutationImpact = {
+        owner: windowObject.AlmdinaDocumentContext.capture(frm),
         resources: ["plan", "cost"],
         reasons: ["order_inputs_changed"],
     };
@@ -136,6 +137,7 @@ assert.equal(ignored.generation, 4);
     calls.length = 0;
     frm.__almdina_preserve_edit_session_after_save = true;
     frm.__almdinaWorkspaceMutationImpact = {
+        owner: windowObject.AlmdinaDocumentContext.capture(frm),
         resources: ["plan", "cost"],
         reasons: ["order_inputs_changed"],
     };

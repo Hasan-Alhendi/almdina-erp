@@ -151,6 +151,22 @@ const frm = {
         "coordinator must publish one reusable freshness event contract"
     );
 
+    let finishOldPlan;
+    coordinator.register("plan", {
+        async load() { await new Promise(resolve => { finishOldPlan = resolve; }); },
+    });
+    order.length = 0;
+    const oldRefresh = coordinator.refresh(frm, ["plan", "cost"], { force: true });
+    frm.doc = { name: "DCO-2", modified: "b-version" };
+    finishOldPlan();
+    assert.deepEqual(Array.from(await oldRefresh), [],
+        "an A completion cannot continue its queued cost refresh on B");
+    assert.deepEqual(order, []);
+    const oldReconcile = await coordinator.reconcile(frm, { order_modified: "a-version" },
+        { ownerToken: { identity: "Door Cutting Order::DCO-1" } });
+    assert.equal(oldReconcile.documentModifiedSynced, false);
+    assert.equal(frm.doc.modified, "b-version");
+
     console.log("Workspace sync coordinator simulation passed");
 })().catch((error) => {
     console.error(error);

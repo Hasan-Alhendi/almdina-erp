@@ -8,18 +8,19 @@
     min-height: var(--alm-height-button);
     padding: 0 var(--alm-padding-button-x);
     border-radius: var(--alm-radius-button);
-    border: 1px solid var(--alm-primary);
-    background: var(--alm-primary);
-    color: var(--alm-on-primary);
+    /* Action tokens: Light == brand navy; Dark == elevated light fill. */
+    border: 1px solid var(--alm-action, var(--alm-primary));
+    background: var(--alm-action, var(--alm-primary));
+    color: var(--alm-on-action, var(--alm-on-primary));
     font-weight: 700;
     box-shadow: var(--alm-shadow-button);
 }
 
 .almdina-ui :where(.btn, button).alm-btn-primary:hover:not(:disabled),
 .almdina-ui .btn.alm-btn-primary:hover:not(:disabled) {
-    background: var(--alm-primary-hover);
-    border-color: var(--alm-primary-hover);
-    color: var(--alm-on-primary);
+    background: var(--alm-action-hover, var(--alm-primary-hover));
+    border-color: var(--alm-action-hover, var(--alm-primary-hover));
+    color: var(--alm-on-action, var(--alm-on-primary));
 }
 
 .almdina-ui :where(.btn, button).alm-btn-primary:disabled,

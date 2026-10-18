@@ -132,6 +132,18 @@ def update_plan_cost_settings(
         offcut_price_usd=plan.offcut_price_usd,
     )
     refresh_order_commercial_totals(order, plan)
+    from almdina_erp.almdina_erp.services.final_price_approval_service import (
+        maybe_invalidate_final_price_approval,
+    )
+
+    # Same-rate saves keep the fingerprint; changed board/cutting/offcut rates clear
+    # Approved pricing inside this transaction without needing cancel capability.
+    maybe_invalidate_final_price_approval(
+        order.name,
+        reason="cost_settings_changed",
+        only_if_basis_changed=True,
+        order=order,
+    )
 
     return {
         "order_name": order.name,

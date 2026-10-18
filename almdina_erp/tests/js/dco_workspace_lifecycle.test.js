@@ -339,11 +339,12 @@ function makeFormRoot() {
     assert.equal(costCalls, 1, "forced Cost refresh must join the current flight");
 
     planFlights[0].resolve({
+        order_name: frm.doc.name,
         plans: { system_draft: null, uploaded_draft: null, approved: null },
         approved_plan: null,
         editable_settings: null,
     });
-    costFlight.resolve({ order: {}, pieces: [] });
+    costFlight.resolve({ order_name: frm.doc.name, order: {}, pieces: [] });
     await Promise.all([firstPlan, firstCost]);
     await flushPromises();
     assert.equal(planState.snapshot(frm).status, "ready");
@@ -363,6 +364,7 @@ function makeFormRoot() {
     assert.equal(planCalls, 2, "invalidated force must not race the old flight");
 
     planFlights[1].resolve({
+        order_name: frm.doc.name,
         plans: { system_draft: null, uploaded_draft: null, approved: null },
         approved_plan: null,
         editable_settings: null,
@@ -372,6 +374,7 @@ function makeFormRoot() {
     assert.equal(planCalls, 3, "stale old flight must be followed by one fresh request");
 
     planFlights[2].resolve({
+        order_name: frm.doc.name,
         plans: { system_draft: null, uploaded_draft: null, approved: null },
         approved_plan: null,
         editable_settings: null,

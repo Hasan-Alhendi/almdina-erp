@@ -1,0 +1,266 @@
+name: Cross Order P0 Pinned Runtime
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  desk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    services:
+      mariadb:
+        image: mariadb:11.8
+        env:
+          MARIADB_ROOT_PASSWORD: root
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -proot"
+          --health-interval=10s --health-timeout=5s --health-retries=20
+      redis-cache:
+        image: redis:7-alpine
+        ports: ['13000:6379']
+      redis-queue:
+        image: redis:7-alpine
+        ports: ['11000:6379']
+    env:
+      P0_ADMIN_PASSWORD: p0-disposable-only
+      FRAPPE_DESK_URL: http://test.localhost:8000
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set isolated evidence paths
+        run: |
+          echo "P0_FIXTURE_PATH=$RUNNER_TEMP/p0-fixture.json" >> "$GITHUB_ENV"
+          echo "P0_EVIDENCE_DIR=$RUNNER_TEMP/p0-evidence" >> "$GITHUB_ENV"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mariadb-client libmariadb-dev libffi-dev libssl-dev pkg-config wkhtmltopdf xvfb redis-tools
+          sudo npm install -g yarn
+          python -m pip install --upgrade pip frappe-bench
+      - name: Create pinned isolated bench
+        run: |
+          set -euo pipefail
+          bench init "$RUNNER_TEMP/frappe-bench" --frappe-branch v16.17.5 --python python3.14 --skip-redis-config-generation 2>&1 | tee "$RUNNER_TEMP/bench-init.log"
+          cd "$RUNNER_TEMP/frappe-bench"
+          test "$(git -C apps/frappe rev-parse HEAD)" = 75baafaa0bde07a86bf28764383b93b5df97bc7e
+          bench get-app erpnext --branch v16.17.0 2>&1 | tee "$RUNNER_TEMP/erpnext-install.log"
+          test "$(git -C apps/erpnext rev-parse HEAD)" = 7b494dc9e8e47d288de5427bae25ce8a52c37d96
+          git clone "$GITHUB_WORKSPACE" apps/almdina_erp
+          ./env/bin/pip install -e 'apps/almdina_erp[test]'
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('sites/apps.txt')
+          apps=p.read_text().splitlines()
+          if 'almdina_erp' not in apps: p.write_text('\n'.join([*apps,'almdina_erp'])+'\n')
+          PY
+          bench set-config -g redis_cache redis://127.0.0.1:13000
+          bench set-config -g redis_queue redis://127.0.0.1:11000
+          bench set-config -g redis_socketio redis://127.0.0.1:11000
+      - name: Build and create disposable site
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/frappe-bench"
+          bench new-site test.localhost --db-host 127.0.0.1 --db-root-username root --db-root-password root --admin-password "$P0_ADMIN_PASSWORD" --no-mariadb-socket 2>&1 | tee "$RUNNER_TEMP/site.log"
+          bench --site test.localhost install-app erpnext 2>&1 | tee "$RUNNER_TEMP/erpnext-site.log"
+          bench --site test.localhost install-app almdina_erp 2>&1 | tee "$RUNNER_TEMP/almdina-site.log"
+          bench --site test.localhost migrate 2>&1 | tee "$RUNNER_TEMP/migrate.log"
+          bench build --app almdina_erp 2>&1 | tee "$RUNNER_TEMP/build.log"
+          bench --site test.localhost execute almdina_erp.tests.cross_order_p0_runtime_fixture.prepare 2>&1 | tee "$RUNNER_TEMP/fixture.log"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install browser and serve Desk
+        run: |
+          python -m pip install 'pytest>=9,<10' 'playwright==1.55.0'
+          python -m playwright install --with-deps chromium
+          echo '127.0.0.1 test.localhost' | sudo tee -a /etc/hosts
+          cd "$RUNNER_TEMP/frappe-bench"
+          nohup bench serve --port 8000 > "$RUNNER_TEMP/serve.log" 2>&1 &
+          for attempt in $(seq 1 45); do
+            if curl --fail --silent --output /dev/null "$FRAPPE_DESK_URL/login"; then exit 0; fi
+            sleep 2
+          done
+          cat "$RUNNER_TEMP/serve.log"
+          exit 1
+      - name: Preflight actual Desk Form routing
+        id: route_preflight
+        run: |
+          set -o pipefail
+          python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" -k test_desk_route_preflight 2>&1 | tee "$RUNNER_TEMP/preflight.log"
+      - name: Open clean NEW Form in Desk before Recovery
+        id: new_form_preflight
+        if: steps.route_preflight.outcome == 'success'
+        timeout-minutes: 3
+        run: |
+          set -o pipefail
+          python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" -k test_new_form_clean_preflight 2>&1 | tee "$RUNNER_TEMP/new-form-preflight.log"
+      - name: Exercise NEW checkpoint restore cancel and native save in Desk
+        if: always() && steps.new_form_preflight.outcome == 'success'
+        timeout-minutes: 8
+        run: |
+          set -o pipefail
+          python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" -k test_recovery_new_saved_intersection 2>&1 | tee "$RUNNER_TEMP/recovery-intersection.log"
+      - name: Configure priced Extras on the disposable site
+        id: extra_prices
+        if: always() && steps.new_form_preflight.outcome == 'success'
+        run: |
+          set -o pipefail
+          cd "$RUNNER_TEMP/frappe-bench"
+          bench --site test.localhost execute almdina_erp.tests.cross_order_p0_runtime_fixture.prepare_recovery_extra_prices 2>&1 | tee "$RUNNER_TEMP/extra-prices.log"
+      - name: Verify Recovery Extra fields across NEW restore and native Save
+        if: always() && steps.extra_prices.outcome == 'success'
+        timeout-minutes: 5
+        run: |
+          set -o pipefail
+          python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" -k test_recovery_extra_fields_new_saved_in_desk 2>&1 | tee "$RUNNER_TEMP/recovery-extras-browser.log"
+      - name: Restore disposable Extra prices
+        if: always() && steps.extra_prices.outcome == 'success'
+        run: |
+          set -o pipefail
+          cd "$RUNNER_TEMP/frappe-bench"
+          bench --site test.localhost execute almdina_erp.tests.cross_order_p0_runtime_fixture.restore_recovery_extra_prices 2>&1 | tee "$RUNNER_TEMP/extra-prices-restore.log"
+      - name: Prove Phase 2A isolation through native Desk Save
+        if: always() && steps.route_preflight.outcome == 'success'
+        timeout-minutes: 3
+        run: |
+          set -o pipefail
+          python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" -k test_phase2a_isolated_desk_boundary 2>&1 | tee "$RUNNER_TEMP/phase2a-browser.log"
+      - name: Run Desk runtime proof
+        if: always() && steps.route_preflight.outcome == 'success'
+        run: |
+          set -o pipefail
+          python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" -k test_cross_order_desk_runtime 2>&1 | tee "$RUNNER_TEMP/browser.log"
+      - name: Persist actual System plans A and B on the isolated site
+        id: saved_plan
+        if: always() && steps.route_preflight.outcome == 'success'
+        run: |
+          set -o pipefail
+          cd "$RUNNER_TEMP/frappe-bench"
+          bench --site test.localhost execute almdina_erp.tests.cross_order_p0_runtime_fixture.prepare_saved_plan 2>&1 | tee "$RUNNER_TEMP/saved-plan.log"
+      - name: Print the saved server plan through Desk
+        id: saved_plan_browser
+        if: always() && steps.saved_plan.outcome == 'success'
+        timeout-minutes: 3
+        run: |
+          set -o pipefail
+          python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" -k test_saved_server_plan_print_runtime 2>&1 | tee "$RUNNER_TEMP/saved-plan-browser.log"
+      - name: Approve a persisted System plan under isolated permissions
+        id: approved_plan
+        if: always() && steps.saved_plan_browser.outcome == 'success'
+        run: |
+          set -o pipefail
+          cd "$RUNNER_TEMP/frappe-bench"
+          bench --site test.localhost execute almdina_erp.tests.cross_order_p0_runtime_fixture.prepare_approved_plan 2>&1 | tee "$RUNNER_TEMP/approved-plan.log"
+      - name: Persist a multi-board System plan with an Extra liner
+        id: multi_plan
+        if: always() && steps.saved_plan_browser.outcome == 'success'
+        run: |
+          set -o pipefail
+          cd "$RUNNER_TEMP/frappe-bench"
+          bench --site test.localhost execute almdina_erp.tests.cross_order_p0_runtime_fixture.prepare_multiboard_extra_plan 2>&1 | tee "$RUNNER_TEMP/multi-plan.log"
+      - name: Print persisted multi-board Extra through the real Desk button
+        if: always() && steps.multi_plan.outcome == 'success'
+        timeout-minutes: 3
+        run: |
+          set -o pipefail
+          python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" -k test_saved_multiboard_extra_operator_print 2>&1 | tee "$RUNNER_TEMP/multi-plan-browser.log"
+      - name: Import a private Custom DXF plan through the real command
+        id: custom_plan
+        if: always() && steps.saved_plan_browser.outcome == 'success'
+        run: |
+          set -o pipefail
+          cd "$RUNNER_TEMP/frappe-bench"
+          bench --site test.localhost execute almdina_erp.tests.cross_order_p0_runtime_fixture.prepare_custom_dxf_plan 2>&1 | tee "$RUNNER_TEMP/custom-plan.log"
+      - name: Print the imported Custom DXF through the real Desk button
+        if: always() && steps.custom_plan.outcome == 'success'
+        timeout-minutes: 3
+        run: |
+          set -o pipefail
+          python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" -k test_saved_custom_plan_operator_print 2>&1 | tee "$RUNNER_TEMP/custom-plan-browser.log"
+      - name: Persist and classify actual OFFCUT DXF
+        id: offcut_plan
+        if: always() && steps.saved_plan_browser.outcome == 'success'
+        run: |
+          set -o pipefail
+          cd "$RUNNER_TEMP/frappe-bench"
+          bench --site test.localhost execute almdina_erp.tests.cross_order_p0_runtime_fixture.prepare_saved_offcut_plan 2>&1 | tee "$RUNNER_TEMP/offcut-plan.log"
+      - name: Print persisted OFFCUT from the real Desk button
+        if: always() && steps.offcut_plan.outcome == 'success'
+        timeout-minutes: 3
+        run: |
+          set -o pipefail
+          python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" -k test_saved_offcut_operator_print 2>&1 | tee "$RUNNER_TEMP/offcut-plan-browser.log"
+      - name: Print the approved plan using the real Desk button
+        if: always() && steps.approved_plan.outcome == 'success'
+        timeout-minutes: 3
+        run: |
+          set -o pipefail
+          python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" -k test_saved_approved_plan_operator_print 2>&1 | tee "$RUNNER_TEMP/approved-plan-browser.log"
+      - name: Observe saved Form Recovery and Edit compatibility
+        if: always() && steps.route_preflight.outcome == 'success'
+        timeout-minutes: 3
+        run: |
+          set -o pipefail
+          python -m pytest -vv "$GITHUB_WORKSPACE/almdina_erp/tests/browser/test_cross_order_p0_runtime.py" -k test_recovery_saved_form_compatibility 2>&1 | tee "$RUNNER_TEMP/recovery-browser.log"
+      - name: Audit committed test-site database
+        if: always()
+        run: |
+          if test -f "$P0_FIXTURE_PATH"; then
+            cd "$RUNNER_TEMP/frappe-bench"
+            bench --site test.localhost execute almdina_erp.tests.cross_order_p0_runtime_fixture.audit_db 2>&1 | tee "$RUNNER_TEMP/database-audit.log"
+          fi
+      - name: Dispose of fixture data
+        if: always()
+        run: |
+          if test -f "$P0_FIXTURE_PATH"; then
+            cd "$RUNNER_TEMP/frappe-bench"
+            bench --site test.localhost execute almdina_erp.tests.cross_order_p0_runtime_fixture.cleanup || true
+          fi
+      - name: Upload runtime evidence and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cross-order-p0-runtime-evidence
+          path: |
+            ${{ runner.temp }}/p0-evidence
+            ${{ runner.temp }}/bench-init.log
+            ${{ runner.temp }}/erpnext-install.log
+            ${{ runner.temp }}/site.log
+            ${{ runner.temp }}/erpnext-site.log
+            ${{ runner.temp }}/almdina-site.log
+            ${{ runner.temp }}/migrate.log
+            ${{ runner.temp }}/build.log
+            ${{ runner.temp }}/fixture.log
+            ${{ runner.temp }}/serve.log
+            ${{ runner.temp }}/browser.log
+            ${{ runner.temp }}/preflight.log
+            ${{ runner.temp }}/new-form-preflight.log
+            ${{ runner.temp }}/recovery-intersection.log
+            ${{ runner.temp }}/recovery-extras-browser.log
+            ${{ runner.temp }}/extra-prices.log
+            ${{ runner.temp }}/extra-prices-restore.log
+            ${{ runner.temp }}/phase2a-browser.log
+            ${{ runner.temp }}/database-audit.log
+            ${{ runner.temp }}/saved-plan.log
+            ${{ runner.temp }}/saved-plan-browser.log
+            ${{ runner.temp }}/approved-plan.log
+            ${{ runner.temp }}/approved-plan-browser.log
+            ${{ runner.temp }}/custom-plan.log
+            ${{ runner.temp }}/custom-plan-browser.log
+            ${{ runner.temp }}/multi-plan.log
+            ${{ runner.temp }}/multi-plan-browser.log
+            ${{ runner.temp }}/offcut-plan.log
+            ${{ runner.temp }}/offcut-plan-browser.log
+            ${{ runner.temp }}/recovery-browser.log
+          if-no-files-found: warn
+          retention-days: 14

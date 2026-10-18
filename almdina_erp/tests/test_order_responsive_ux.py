@@ -261,7 +261,7 @@ def test_mobile_order_list_uses_reference_card_and_server_authorized_actions():
     assert 'if (!applyCardLayoutClass(listview)) {' in list_source
     assert "containers.forEach(removeMobileCard);" in list_source
     assert "ensureMobileCardStylesheet();" in list_source
-    assert 'MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=9"' in list_source
+    assert 'MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=10"' in list_source
     assert ".dco-order-list.dco-order-card-layout" in mobile_css
     scoped_result_rule = mobile_css.split(
         ".dco-order-list.dco-order-card-layout .result {",
@@ -311,6 +311,8 @@ def test_order_list_status_filter_uses_frappe_standard_filter_contract():
     assert "function statusFilterConfig(options = {})" in list_source
     assert "statusFilterConfig({ localize: false })" in list_source
     assert "assigneeFilterConfig({ localize: false })" in list_source
+    assert "priceApprovalFilterConfig({ localize: false })" in list_source
+    assert 'PRICE_APPROVAL_FILTER_FIELDNAME = "price_approval_status"' in list_source
     assert "function reconcileStatusFilterLayout(listview)" in list_source
     assert "function reconcileMobileListToolbarLayout(listview)" in list_source
     assert "data-dco-list-toolbar-slot" in list_source
@@ -378,7 +380,8 @@ def test_desktop_keeps_legacy_ordering_while_mobile_uses_five_states():
     assert "ordered.forEach(container => result.appendChild(container));" in list_source
     assert ".list-row-container.dco-list-row-completed > .list-row" in css
     assert ".list-row-container.dco-list-row-completed > .list-row .list-row-col" in css
-    assert "background: #dcfce7 !important;" in css
+    assert "background: color-mix(in srgb, #16a34a 14%, var(--alm-card, #ffffff)) !important;" in css
+    assert "background: #dcfce7 !important;" not in css
     assert ".list-row-container.dco-list-row-history-hidden" in css
     assert "display: none !important;" in css
 
@@ -405,12 +408,15 @@ def test_desktop_list_colors_ready_for_delivery_and_delivered_rows_only():
     assert ".list-row-container.dco-list-row-ready-for-delivery .level-right" in css
     assert ".list-row-container.dco-list-row-delivered .level-right" in css
     assert ".list-row-container.dco-list-row-cancelled .level-right" in css
-    assert "background: #ecfdf3 !important;" in css
-    assert "background: #a7f3d0 !important;" in css
-    assert "background: #fecaca !important;" in css
+    assert "background: color-mix(in srgb, #16a34a 8%, var(--alm-card, #ffffff)) !important;" in css
+    assert "background: color-mix(in srgb, #047857 22%, var(--alm-card, #ffffff)) !important;" in css
+    assert "background: color-mix(in srgb, #b91c1c 18%, var(--alm-card, #ffffff)) !important;" in css
     assert "border-color: #16a34a !important;" in css
     assert "border-color: #047857 !important;" in css
     assert "border-color: #b91c1c !important;" in css
+    assert "background: #ecfdf3 !important;" not in css
+    assert "background: #a7f3d0 !important;" not in css
+    assert "background: #fecaca !important;" not in css
     assert "applyDesktopDeliveryRowColors(listview)" in list_source
     assert 'department === "جاهز للتسليم"' in list_source
     assert 'department === "تم التسليم"' in list_source

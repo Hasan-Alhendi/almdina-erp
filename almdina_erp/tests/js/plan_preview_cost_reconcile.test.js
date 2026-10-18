@@ -118,6 +118,14 @@ async function validatePostCommitCostReconciliation() {
     assert.equal(alerts.length, 1);
     assert.equal(alerts[0].options.indicator, "orange");
     assert.match(alerts[0].options.message, /The preview plan was saved/);
+
+    calls.length = 0;
+    alerts.length = 0;
+    fakeWindow.AlmdinaPlanPreviewSession.commit = async () => ({ reconciled_commit: true });
+    fakeWindow.AlmdinaWorkspaceSyncCoordinator.refresh = async () => {};
+    assert.equal(await fakeWindow.AlmdinaPlanEditSessionUX.saveEditing(frm), true);
+    assert.equal(alerts[0].options.indicator, "orange");
+    assert.match(alerts[0].options.message, /verified on the server/);
 }
 
 async function validateCoordinatorCommitsDisplayedPreview() {

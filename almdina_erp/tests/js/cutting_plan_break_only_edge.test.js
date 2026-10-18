@@ -44,6 +44,7 @@ const fakeWindow = {
                 write(html) { prints.push(String(html)); },
                 close() {},
             },
+            close() {},
         };
     },
 };
@@ -101,6 +102,20 @@ const frm = {
         board_description: "MDF",
         pieces: [],
     },
+};
+fakeWindow.cur_frm = frm;
+let generation = 1;
+fakeWindow.AlmdinaDocumentContext = {
+    capture() { return { identity: frm.doc.name, generation }; },
+    isCurrent(_frm, token) { return token.identity === frm.doc.name && token.generation === generation; },
+};
+fakeWindow.AlmdinaPermissions = { canDocument() { return true; } };
+let currentRow;
+let currentTab = "System";
+fakeWindow.AlmdinaPlanTabsUX = { activeTab() { return currentTab; } };
+fakeWindow.AlmdinaPlanWorkspaceState = {
+    snapshot() { return { status: "ready", data: { order_name: frm.doc.name } }; },
+    displayedPlanForTab() { return currentRow; },
 };
 
 function planFor(piece) {
@@ -182,7 +197,9 @@ assert.doesNotMatch(clearHtml, /dco-edge-line-svg/);
 
 async function printed(piece) {
     prints.length = 0;
-    const opened = await renderer.print(frm, planFor(piece));
+    const plan = planFor(piece);
+    currentRow = { name: `PLAN-${piece.id}`, revision: 1, snapshot_json: JSON.stringify(plan) };
+    const opened = await renderer.print(frm, plan);
     assert.equal(opened, true);
     return prints[prints.length - 1] || "";
 }
@@ -204,6 +221,50 @@ async function main() {
     assert.doesNotMatch(printedClear, /<svg class="dco-piece-edge-svg/);
     assert.doesNotMatch(printedClear, /<polyline/);
     assert.doesNotMatch(printedClear, /dco-edge-break-only-svg/);
+
+    assert.equal(await renderer.print(frm, planFor(alone)), false,
+        "a plan other than the verified row must be rejected");
+    assert.equal(prints.length, 2, "a rejected plan cannot create a window");
+
+    for (const tab of ["Custom", "Approved"]) {
+        currentTab = tab;
+        const piece = tab === "Custom" ? withSide : fullPath;
+        const html = await printed(piece);
+        assert.match(html, new RegExp(`PLAN-${piece.id}`));
+        assert.match(html, /DCO-BREAK-ONLY/);
+        assert.equal(await renderer.print(frm, planFor(alone)), false,
+            `${tab} cannot print geometry from the other source`);
+    }
+    currentTab = "System";
+
+    let release;
+    fakeWindow.AlmdinaFactoryPrintIdentity = {
+        get() { return new Promise(resolve => { release = resolve; }); },
+    };
+    currentRow = { name: "PLAN-alone", revision: 1,
+        snapshot_json: JSON.stringify(planFor(alone)) };
+    const before = prints.length;
+    const revisionPrint = renderer.print(frm, planFor(alone));
+    currentRow = { ...currentRow, revision: 2 };
+    release({});
+    assert.equal(await revisionPrint, false);
+    assert.equal(prints.length, before + 1, "revision change cannot issue final HTML");
+
+    currentRow = { ...currentRow, revision: 3 };
+    const generationPrint = renderer.print(frm, planFor(alone));
+    frm.doc.name = "OTHER";
+    generation += 1;
+    frm.doc.name = "DCO-BREAK-ONLY";
+    generation += 1;
+    release({});
+    assert.equal(await generationPrint, false, "A→B→A must not reuse the old visit token");
+    assert.equal(prints.length, before + 2, "route change cannot issue final HTML");
+
+    const documentPrint = renderer.print(frm, planFor(alone));
+    frm.doc.board_description = "changed while waiting";
+    release({});
+    assert.equal(await documentPrint, false, "a changed board invalidates the frozen print document");
+    assert.equal(prints.length, before + 3);
 
     console.log("Cutting plan break-only edge regression passed");
 }

@@ -234,6 +234,10 @@ def preview_cutting_plan(
 
     return {
         "preview_id": session.preview_id,
+        "order_name": order.name,
+        "source_plan_name": source_plan.name,
+        "source_plan_revision": int(source_plan.revision or 0),
+        "source_plan_modified": str(source_plan.modified or ""),
         "settings_fingerprint": session.settings_fingerprint,
         "input_fingerprint": session.input_fingerprint,
         "plan": session.snapshot,
@@ -299,6 +303,16 @@ def commit_cutting_plan_preview(order_name: str, preview_id: str) -> dict[str, A
     apply_plan_costs(plan, edge_cost_usd=factory_execution_edge_cost(order, plan))
     repository.save_document(plan)
     refresh_order_commercial_totals(order, plan)
+    from almdina_erp.almdina_erp.services.final_price_approval_service import (
+        maybe_invalidate_final_price_approval,
+    )
+
+    maybe_invalidate_final_price_approval(
+        order.name,
+        reason="cost_plan_basis_changed",
+        only_if_basis_changed=True,
+        order=order,
+    )
     order.add_comment(
         "Info",
         text=_("تم حفظ معاينة خطة القص {0} بواسطة {1}.").format(

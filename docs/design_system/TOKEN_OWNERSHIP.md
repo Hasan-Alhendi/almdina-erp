@@ -21,7 +21,7 @@ Feature CSS may keep **domain/layout** tokens. It must not redefine **foundation
 | `prw-*` | Factory Master Data / Routing | stage rail, editor geometry, workflow story layout | independent brand/status scales (alias `--alm-*`) |
 | `sf-*` | Shop Floor | kanban columns, board geometry, production-card hierarchy | independent brand/radius/shadow scales (alias `--alm-*`) |
 | `dco-*` | Door Cutting Order | measurement grid, plan canvas, edge rendering, sticky measurement geometry | brand/status/type/space scales that belong to DS |
-| `apa-*` | Factory Plan Archive | archive list/layout specifics | foundational DS primitives |
+| `apa-*` | Factory Plan Archive (`public/css/factory_plan_archive.css`) | archive list/layout specifics | foundational DS primitives / parallel Light-only paint boards |
 
 ## Layer ownership
 
@@ -33,6 +33,36 @@ Feature CSS may keep **domain/layout** tokens. It must not redefine **foundation
 | Patterns | `public/css/almdina_patterns.css` | page intro, toolbar, summary cards, section header |
 | Page templates | `public/css/almdina_page_templates.css` | admin / workbench / list / transaction page-family grammar |
 | Feature presentation | Feature CSS/JS | domain layout only; consume DS tokens/components/patterns |
+| Light pin | [`LIGHT_THEME_PIN.md`](LIGHT_THEME_PIN.md) | exact Light surface/text/status values that Dark must not rewrite |
+
+## Theme boards (Frappe-owned `data-theme`)
+
+Frappe Desk sets and persists `data-theme` on the document root. Almdina must not add a parallel theme switcher or storage.
+
+Token file structure:
+
+1. **Shared** (`:root`, `[data-theme="light"]`, `[data-theme="dark"]`, `.almdina-ui`): brand primitives + static scales (type/space/radius). Not surface paints.
+2. **Light surfaces** (`:root`, `[data-theme="light"]` only): canvas/card/text/status/shadow/action values pinned in `LIGHT_THEME_PIN.md`.
+3. **Dark surfaces** (`[data-theme="dark"]` only): independent dark hex/rgba pairs. No `var(--fg-color)` / `var(--control-bg)` loops back into foundational Alm tokens.
+4. **`.almdina-ui` bridges**: one-way aliases into Frappe vars for controls (`--alm-secondary-bg` ← `--control-bg`, etc.). Must **not** re-declare `--alm-card` / `--alm-text-*` / `--alm-status-*` or every Almdina surface would re-force Light whites under Dark.
+
+Shared components/patterns (`.alm-page-intro`, `.alm-toolbar`, `.alm-summary-card`, `.alm-badge--*`) consume `--alm-*` only. Feature CSS must not invent per-page Dark overrides for those roles.
+
+## Brand vs action vs Desk bridge
+
+| Role | Alm token | Frappe mapping (in `almdina_desk_theme.css`) | Notes |
+|---|---|---|---|
+| Brand / sidebar | `--alm-primary` | `--surface-menu-bar`, `--brand-color` | Never lighten globally to fix CTA text |
+| Primary CTA fill | `--alm-action` / `--alm-on-action` | `--btn-primary` ← `--alm-action` | Frappe `.btn-primary` text uses `--neutral` (white Light / black Dark) |
+| Soft info chrome | `--alm-brand-soft` / `--alm-brand-soft-fg` | `--bg-blue`, `--bg-light-blue`, blue indicator pills | Theme-split; no `#ffffff` color-mix wash in Dark |
+| Interactive accent | `--alm-accent` | Dark `--primary` / indicator dots | Readable links/focus-adjacent roles without changing sidebar navy |
+
+Desk bridge rules:
+
+- Map Frappe → read Alm. Never set `--alm-*` from `--primary` / `--btn-primary`.
+- Light and Dark boards must be separate selectors; do not pin `--btn-primary: var(--alm-primary)` on both themes.
+- Do not add broad `body .btn` / global icon recolors; prefer token remaps.
+- Sidebar polish stays in `almdina_desk_sidebar.css` (layout/icons on brand navy).
 
 ## Shared CSS leakage rule
 
@@ -52,9 +82,10 @@ Current allowlist: **empty** (Phase 6). The former entries were resolved as:
 5. One surface family per PR when class/markup swaps begin.
 6. Admin status/risk badges use `AlmdinaUi.badge()` + `.alm-badge--*`; Feature CSS may keep layout sizing (`.aw-badge`, `.apc-badge`, `.aps-status-pill`) but must not own status palettes.
 7. Workbench — Factory Master Data overview (migrated): intro/summary/toolbar via patterns (`prw-hero alm-page-intro`, `prw-summary alm-summary-grid`, `prw-toolbar alm-toolbar`), route status via `AlmdinaUi.status()`, planning badge via `AlmdinaUi.badge()`, empty/error via `.alm-state`. The routing editor (stage rail, library, story rows) keeps its `prw-*` geometry and is not migrated yet.
-8. Workbench — Shop Floor page chrome (migrated): intro via `almdina-sf-hero alm-page-intro`, board toolbar via `alm-toolbar`, `--sf-radius-*` / `--sf-shadow` alias `--alm-*`, hero stats / board metrics / error state read `--alm-status-*`. Kanban columns, production cards (status accents, completed styling), drag/drop and the shared loading markup stay frozen as domain visualization. Legacy `.almdina-sf-*` rules injected by `shared_shell.js` (operator profiles only) were removed in Phase 6, so operators and managers now share the same Shop Floor presentation owner.
-9. Lists — Type A native Frappe lists (migrated chrome): static scales (typography, spacing, radius, shadow) are global on `:root` so native surfaces without `.almdina-ui` can read them; `almdina_list_table.css` owns row/table chrome via tokens; the list canvas belongs to `almdina_page_templates.css`. `door_cutting_order_list.css` (column geometry, pinned by `test_dco_compact_list_ux`) and `door_cutting_order_mobile_list.css` (allowlisted identity) are deferred to the DCO step.
-10. DCO — JS style-injection debt (FE-ARCH-009) is frozen by a ratchet (`DCO_STYLE_INJECTION_DEBT` in `test_design_system_contract.py`): no new DCO module may inject `<style>`, and migrated modules must be removed from the list. Several injected rules are pinned in place by existing feature tests (e.g. `test_cut_dimensions_architecture` requires the cut-size hide rule inside its module, and `measurement_presentation_readiness.test.js` forbids `!important` in `door_cutting_order_measurement_structure.css`), so each migration is an explicit contract change, not a silent move.
+8. Workbench — Shop Floor page chrome (migrated): intro via `almdina-sf-hero alm-page-intro`, board toolbar via `alm-toolbar`, `--sf-*` surface aliases read `--alm-card` / `--alm-surface-muted` / `--alm-text-*` (not Frappe `--card-bg` / `--subtle-fg`), hero stats / board metrics / error / status pills read `--alm-status-*`. Completed history keeps green identity (`#16a34a`) via `color-mix` onto `--alm-card` so Dark stays readable. Kanban geometry, production-card hierarchy, drag/drop and the shared loading markup stay frozen as domain visualization. Legacy `.almdina-sf-*` rules injected by `shared_shell.js` (operator profiles only) were removed in Phase 6, so operators and managers now share the same Shop Floor presentation owner. Factory Master Data routing (`--prw-*`) and stage library follow the same surface-alias rule.
+9. Lists — Type A native Frappe lists (migrated chrome): static scales (typography, spacing, radius, shadow) are global on `:root` so native surfaces without `.almdina-ui` can read them; `almdina_list_table.css` owns row/table chrome via `--alm-text-*` / card tokens; the list canvas belongs to `almdina_page_templates.css`. DCO desktop column geometry stays in `door_cutting_order_list.css`; mobile card identity accents stay hex in `door_cutting_order_mobile_list.css`, while soft/card washes mix onto `--alm-card`. Desktop delivery/completed/cancelled row paints in `door_cutting_order_responsive.css` use the same `color-mix` pattern (identity borders unchanged).
+10. DCO form screen chrome (Dark Mode): `door_cutting_order_form_tab_layout.css`, `door_cutting_order_form_presentation.css`, `notes.css` / `notes_interactions.css`, and `door_cutting_order_plan_workspace_shell.css` read `--alm-card` / `--alm-surface-muted` / `--alm-text-*` / status soft tokens. Injected screen chrome in allowlisted modules (plan content styles, measurement resilience, cost offcut assignment, final-price badges, edge UI chrome) remaps the same way. **Print/drawing stay Light-paper independent:** `door_cutting_order_document_print_theme.js`, financial `printCss`, and cutting-plan renderer print/board geometry must not be redirected through screen theme tokens. Edge/addon identity hues may stay hex; only soft UI washes mix onto `--alm-card`.
+11. DCO — JS style-injection debt (FE-ARCH-009) is frozen by a ratchet (`DCO_STYLE_INJECTION_DEBT` in `test_design_system_contract.py`): no new DCO module may inject `<style>`, and migrated modules must be removed from the list. Several injected rules are pinned in place by existing feature tests (e.g. `test_cut_dimensions_architecture` requires the cut-size hide rule inside its module, and `measurement_presentation_readiness.test.js` forbids `!important` in `door_cutting_order_measurement_structure.css`), so each migration is an explicit contract change, not a silent move. Dark Mode remaps inside debt modules are in-place paint fixes only — not a migration off the ratchet.
 
 ## Enforcement
 

@@ -10,6 +10,8 @@
     const REALTIME_EVENT = "almdina_system_plan_recalculation";
     const LOCAL_EVENT = "almdina:plan-recalculation-updated";
     const STATE_KEY = "__almdinaPlanRecalcJob";
+    const OWNER_KEY = "__almdinaPlanRecalcJobOwner";
+    const STATUS_REQUEST_KEY = "__almdinaPlanRecalcStatusRequest";
     const LISTENER_KEY = "__almdinaPlanRecalcRealtimeBound";
     const POLL_MS = 2500;
     const QUEUE_STALL_MS = 60000;
@@ -39,8 +41,31 @@
         };
     }
 
+    function capture(frm) {
+        const context = documentContext();
+        return context && typeof context.capture === "function" ? context.capture(frm) : null;
+    }
+
+    function ownsCurrent(frm, token) {
+        const context = documentContext();
+        return Boolean(token && context && typeof context.isCurrent === "function"
+            && context.isCurrent(frm, token));
+    }
+
+    function ownsStoredState(frm) {
+        if (!frm || !frm[OWNER_KEY]) return false;
+        const context = documentContext();
+        if (context && typeof context.isSameDocument === "function") {
+            return context.isSameDocument(frm, frm[OWNER_KEY]);
+        }
+        const current = capture(frm);
+        const owner = frm[OWNER_KEY];
+        return Boolean(current && current.identity === owner.identity
+            && current.generation === owner.generation);
+    }
+
     function snapshot(frm) {
-        return (frm && frm[STATE_KEY]) || emptyState();
+        return ownsStoredState(frm) ? frm[STATE_KEY] : emptyState();
     }
 
     function isActive(frm) {
@@ -82,6 +107,7 @@
             next.stalled = true;
         }
         frm[STATE_KEY] = next;
+        frm[OWNER_KEY] = capture(frm);
         dispatch(frm);
         return next;
     }
@@ -99,14 +125,39 @@
         return window.AlmdinaWorkspaceSyncCoordinator || null;
     }
 
-    async function refreshWorkspaces(frm) {
+    async function refreshWorkspaces(frm, ownerToken = capture(frm)) {
+        if (!ownsCurrent(frm, ownerToken)) return;
+        const costOwner = window.AlmdinaCostWorkspaceState;
+        const before = costOwner && typeof costOwner.snapshot === "function"
+            ? costOwner.snapshot(frm)
+            : null;
+        const priorStatus = before && before.data
+            ? String(before.data.price_approval_status || "")
+            : "";
         const coordinator = syncCoordinator();
         if (!coordinator || typeof coordinator.refresh !== "function") return;
         await coordinator.refresh(frm, ["plan", "cost"], {
             force: true,
             activeOnly: false,
             reason: "background_recalculation",
+            ownerToken,
         });
+        if (!ownsCurrent(frm, ownerToken)) return;
+        const after = costOwner && typeof costOwner.snapshot === "function"
+            ? costOwner.snapshot(frm)
+            : null;
+        const nextStatus = after && after.data
+            ? String(after.data.price_approval_status || "")
+            : "";
+        const approvalUx = window.AlmdinaFinalPriceApprovalUX;
+        if (
+            priorStatus === "Approved"
+            && nextStatus === "Unapproved"
+            && approvalUx
+            && typeof approvalUx.notifyAutoInvalidation === "function"
+        ) {
+            approvalUx.notifyAutoInvalidation(frm, { signal: true });
+        }
     }
 
     function stopPolling(frm) {
@@ -123,22 +174,32 @@
         }
         const context = documentContext();
         if (!context || typeof context.schedule !== "function") return;
+        const ownerToken = capture(frm);
         context.schedule(frm, "plan-recalculation-poll", async () => {
-            if (!window.cur_frm || window.cur_frm !== frm) return;
+            if (!ownsCurrent(frm, ownerToken)) return;
             await fetchStatus(frm);
-            if (isActive(frm)) schedulePoll(frm);
+            if (ownsCurrent(frm, ownerToken) && isActive(frm)) schedulePoll(frm);
         }, POLL_MS);
     }
 
     async function fetchStatus(frm) {
         if (!frm || !frm.doc || !frm.doc.name || (frm.is_new && frm.is_new())) return snapshot(frm);
+        const ownerToken = capture(frm);
+        if (!ownsCurrent(frm, ownerToken)) return snapshot(frm);
+        const orderName = frm.doc.name;
+        const requestId = (Number(frm[STATUS_REQUEST_KEY] || 0) + 1);
+        frm[STATUS_REQUEST_KEY] = requestId;
+        const stateAtStart = frm[STATE_KEY];
         try {
-            const payload = await call(STATUS_METHOD, { order_name: frm.doc.name });
+            const payload = await call(STATUS_METHOD, { order_name: orderName });
+            if (!ownsCurrent(frm, ownerToken)
+                || frm[STATUS_REQUEST_KEY] !== requestId
+                || frm[STATE_KEY] !== stateAtStart) return snapshot(frm);
             const previous = snapshot(frm);
-            const next = applyState(frm, payload || emptyState(), { force: true });
+            const next = applyState(frm, payload || emptyState());
             if (ACTIVE.has(previous.status) && !ACTIVE.has(next.status)) {
-                await refreshWorkspaces(frm);
-            } else if (isActive(frm)) {
+                await refreshWorkspaces(frm, ownerToken);
+            } else if (ownsCurrent(frm, ownerToken) && isActive(frm)) {
                 schedulePoll(frm);
             }
             return next;
@@ -165,7 +226,7 @@
         }
         stopPolling(frm);
         if (ACTIVE.has(previous.status) && !ACTIVE.has(next.status)) {
-            refreshWorkspaces(frm).catch((error) => {
+            refreshWorkspaces(frm, token).catch((error) => {
                 console.debug("Workspace refresh after background recalc failed", error);
             });
         }
@@ -223,9 +284,17 @@
 
     async function enqueueAfterSave(frm, impact) {
         if (!shouldEnqueueAfterSave(frm, impact)) return snapshot(frm);
+        const ownerToken = capture(frm);
+        if (!ownsCurrent(frm, ownerToken)) return snapshot(frm);
+        const orderName = frm.doc.name;
+        const stateAtStart = frm[STATE_KEY];
         try {
-            const payload = await call(ENQUEUE_METHOD, { order_name: frm.doc.name });
-            const next = applyState(frm, payload || emptyState(), { force: true });
+            const payload = await call(ENQUEUE_METHOD, { order_name: orderName });
+            if (!ownsCurrent(frm, ownerToken)) return snapshot(frm);
+            // A status poll or realtime event may already have advanced this job.
+            const next = frm[STATE_KEY] === stateAtStart
+                ? applyState(frm, payload || emptyState())
+                : snapshot(frm);
             if (isActive(frm)) schedulePoll(frm);
             if (payload && payload.queued) {
                 const coordinator = syncCoordinator();

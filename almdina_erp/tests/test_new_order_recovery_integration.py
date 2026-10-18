@@ -15,6 +15,9 @@ class _NoopOrderSaveGateway:
     def enforce_immutability(self) -> None:
         pass
 
+    def enforce_price_approval_integrity(self) -> None:
+        pass
+
     def set_piece_numbers(self) -> None:
         pass
 

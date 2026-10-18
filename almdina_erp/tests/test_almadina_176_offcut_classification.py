@@ -38,6 +38,14 @@ def _stub_plan_row_lock(monkeypatch):
         lambda *_args, **_kwargs: None,
         raising=False,
     )
+    # OFFCUT-only cases have no Active final-price approval. The new pricing
+    # invalidation path must see an empty approval history in this Frappe stub.
+    monkeypatch.setattr(
+        offcut_service.frappe,
+        "get_all",
+        lambda *_args, **_kwargs: [],
+        raising=False,
+    )
     monkeypatch.setattr(
         offcut_service,
         "refresh_order_commercial_totals",
