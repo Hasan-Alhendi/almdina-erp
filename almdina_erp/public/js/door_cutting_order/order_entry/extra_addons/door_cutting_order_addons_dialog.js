@@ -71,6 +71,8 @@
                 if (!kind) return;
                 const draft = editor.draftFromRow(row, kind, { blankWhenMissing: true });
                 draft.piece = piece;
+                draft.edgeCm = editor.edgeLengthCm(piece, draft.side);
+                if (draft.fullLength) draft.lengthCm = Math.max(0, draft.edgeCm - draft.startCm);
                 draft.row = row;
                 drafts[item.fieldname] = draft;
             });
@@ -89,6 +91,8 @@
                 widthCm: draft.widthCm,
                 startCm: draft.startCm,
                 lengthCm: draft.lengthCm,
+                fullLength: Boolean(draft.fullLength),
+                legacyCheckboxOnly: Boolean(draft.legacyCheckboxOnly),
             };
         });
         return {
@@ -108,6 +112,8 @@
         const initial = session && session.initial && session.initial[fieldname];
         if (!draft || !initial) return false;
         if (Boolean(draft.enabled) !== Boolean(initial.enabled) || draft.side !== initial.side) return true;
+        if (Boolean(draft.fullLength) !== Boolean(initial.fullLength)
+            || Boolean(draft.legacyCheckboxOnly) !== Boolean(initial.legacyCheckboxOnly)) return true;
         return ["offsetCm", "widthCm", "startCm", "lengthCm"].some(key => Number(draft[key]) !== Number(initial[key]));
     }
 
@@ -133,7 +139,10 @@
             return session;
         }
         const draft = session.drafts[fieldname];
-        if (draft) draft.enabled = Boolean(next);
+        if (draft) {
+            draft.enabled = Boolean(next);
+            if (next) draft.legacyCheckboxOnly = false;
+        }
         return session;
     }
 
@@ -151,18 +160,21 @@
     function invalidEnabledDraft(session) {
         const editor = editorApi();
         if (!session || !editor || typeof editor.validationMessage !== "function") return null;
-        const item = fields().find((entry) => {
+        const candidates = fields().filter((entry) => {
             const draft = session.drafts[entry.fieldname];
-            return draft && draft.enabled && editor.validationMessage(draft);
+            return draft && draft.enabled;
         });
-        if (!item) return null;
-        const draft = session.drafts[item.fieldname];
-        return {
-            fieldname: item.fieldname,
-            label: translate(item.button),
-            draft,
-            message: editor.validationMessage(draft),
-        };
+        candidates.sort((a, b) => Number(b.fieldname === session.activeField) - Number(a.fieldname === session.activeField));
+        for (const item of candidates) {
+            const draft = session.drafts[item.fieldname];
+            const issue = typeof editor.validationIssue === "function"
+                ? editor.validationIssue(draft)
+                : (editor.validationMessage(draft)
+                    ? { message: editor.validationMessage(draft), fields: [] }
+                    : null);
+            if (issue) return { ...issue, fieldname: item.fieldname, label: translate(item.button), draft };
+        }
+        return null;
     }
 
     function removalPending(session) {
@@ -275,14 +287,22 @@
         </div>`;
     }
 
-    function captureActive(session, root) {
+    function captureActive(session, root, changedField) {
         const fieldname = session.activeField;
         const draft = session.drafts[fieldname];
         const editor = editorApi();
         if (!draft || !root || !editor || typeof editor.readDraft !== "function") return draft;
         const fieldsRoot = root.querySelector("[data-addon-fields]") || root;
         if (!fieldsRoot.querySelector("[data-liner-offset]")) return draft;
-        const next = editor.readDraft(fieldsRoot, session.piece, draft.enabled, session.row, draft.kind);
+        const next = editor.readDraft(
+            fieldsRoot,
+            session.piece,
+            draft.enabled,
+            session.row,
+            draft.kind,
+            draft,
+            changedField,
+        );
         next.enabled = draft.enabled;
         session.drafts[fieldname] = next;
         return next;
@@ -293,15 +313,39 @@
         const lengthInput = root.querySelector("[data-liner-length]");
         const editor = editorApi();
         if (!editor) return;
-        if (startInput) startInput.value = String(Math.round(Number(draft.startCm) * 10) / 10);
-        if (lengthInput) lengthInput.value = String(Math.round(Number(draft.lengthCm) * 10) / 10);
+        const format = value => editor.formatInputCm ? editor.formatInputCm(value) : String(value);
+        if (startInput) startInput.value = format(draft.startCm);
+        if (lengthInput) lengthInput.value = format(draft.lengthCm);
     }
 
     function showIssue(root, session, issue) {
         const banner = root && root.querySelector("[data-addons-error]");
         const help = root && root.querySelector("[data-liner-help]");
         const here = Boolean(issue && issue.fieldname === session.activeField);
+        ["offset", "width", "start", "length"].forEach((field) => {
+            const input = root && root.querySelector(`[data-liner-${field}]`);
+            if (!input) return;
+            input.removeAttribute("aria-invalid");
+            const wrap = input.closest && input.closest(".dco-corner-input-wrap");
+            if (wrap) wrap.classList.remove("is-error");
+        });
+        const sideGroup = root && root.querySelector("[data-liner-sides]");
+        if (sideGroup) sideGroup.removeAttribute("aria-invalid");
+        if (issue && here) {
+            (issue.fields || (issue.field ? [issue.field] : [])).forEach((field) => {
+                if (field === "side") {
+                    if (sideGroup) sideGroup.setAttribute("aria-invalid", "true");
+                    return;
+                }
+                const input = root && root.querySelector(`[data-liner-${field}]`);
+                if (!input) return;
+                input.setAttribute("aria-invalid", "true");
+                const wrap = input.closest && input.closest(".dco-corner-input-wrap");
+                if (wrap) wrap.classList.add("is-error");
+            });
+        }
         if (help) help.textContent = here ? issue.message : "";
+        if (help) help.classList.toggle("is-error", here);
         if (!banner) return;
         if (!issue) {
             banner.hidden = true;
@@ -396,7 +440,7 @@
     function syncApply(root, session, editable) {
         const apply = root.querySelector("[data-addons-apply]");
         if (!apply || session.saving) return;
-        apply.disabled = !editable;
+        apply.disabled = !editable || Boolean(invalidEnabledDraft(session));
         apply.removeAttribute("aria-busy");
     }
 
@@ -431,6 +475,8 @@
             widthCm: draft.widthCm,
             startCm: draft.startCm,
             lengthCm: draft.lengthCm,
+            fullLength: Boolean(draft.fullLength),
+            legacyCheckboxOnly: Boolean(draft.legacyCheckboxOnly),
         };
     }
 
@@ -636,13 +682,59 @@
                 });
             }
         });
-        root.addEventListener("input", () => {
-            captureActive(session, root);
+        root.addEventListener("input", (event) => {
+            const target = event && event.target;
+            const changedField = ["offset", "width", "start", "length"].find(field => (
+                target && target.matches && target.matches(`[data-liner-${field}]`)
+            )) || "";
+            const draft = captureActive(session, root, changedField);
+            if (draft && draft.fullLength && changedField === "start") writeSpanInputs(root, draft);
             syncPreview(root, session);
             showIssue(root, session, invalidEnabledDraft(session));
             syncApply(root, session, editable);
         });
         return true;
+    }
+
+    function hasEnabledMachining(frm) {
+        const rows = frm && frm.doc && Array.isArray(frm.doc.pieces) ? frm.doc.pieces : [];
+        return rows.some(row => fields().some(item => {
+            return Boolean(kindFor(item.fieldname)) && Boolean(Number(row && row[item.fieldname]));
+        }));
+    }
+
+    function validateOrder(frm) {
+        const editor = editorApi();
+        const geometry = window.AlmdinaLinerGeometry;
+        const rows = frm && frm.doc && Array.isArray(frm.doc.pieces) ? frm.doc.pieces : [];
+        if (!editor || typeof editor.validationIssue !== "function" || !geometry) return null;
+        for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+            const row = rows[rowIndex];
+            if (!machiningSupported(row)) continue;
+            const piece = typeof editor.hostPiece === "function"
+                ? editor.hostPiece(frm, row)
+                : geometry.pieceFromRow(row);
+            for (const item of fields()) {
+                const kind = kindFor(item.fieldname);
+                if (!kind || !Number(row && row[item.fieldname])) continue;
+                const draft = editor.draftFromRow(row, kind, { blankWhenMissing: true });
+                draft.piece = piece;
+                draft.edgeCm = editor.edgeLengthCm(piece, draft.side);
+                if (draft.fullLength) draft.lengthCm = Math.max(0, draft.edgeCm - draft.startCm);
+                const issue = editor.validationIssue(draft);
+                if (!issue) continue;
+                const rowNumber = row.piece_no || row.idx || rowIndex + 1;
+                return {
+                    ...issue,
+                    row,
+                    rowNumber,
+                    fieldname: item.fieldname,
+                    label: translate(item.button),
+                    message: translate("Row {0}: {1}: {2}", [rowNumber, translate(item.button), issue.message]),
+                };
+            }
+        }
+        return null;
     }
 
     window.AlmdinaDoorAddonsDialog = Object.freeze({
@@ -655,5 +747,7 @@
         previewMarkup,
         sameValues,
         commitSession,
+        hasEnabledMachining,
+        validateOrder,
     });
 })();

@@ -205,6 +205,43 @@ assert.notEqual(firstPreview, secondPreview);
 assert.match(secondPreview, /data-liner-side="edge_long_right"/);
 assert.equal(editor.validationMessage(Object.assign({}, moved, { widthCm: 0 })), "عرض اللاينر يجب أن يكون أكبر من صفر.");
 
+const expectedBandCoordinates = {
+    edge_width_top: [[36, 34], [324, 34]],
+    edge_width_bottom: [[36, 206], [324, 206]],
+    edge_long_left: [[34, 36], [34, 204]],
+    edge_long_right: [[326, 36], [326, 204]],
+};
+let referenceOutline = null;
+let referenceMachining = null;
+for (const [side, expected] of Object.entries(expectedBandCoordinates)) {
+    const row = {
+        [`${side}`]: 1,
+    };
+    const preview = editor.previewSvg({
+        piece: regular,
+        row,
+        kind: "liner",
+        side: "edge_width_top",
+        offsetCm: 2,
+        widthCm: 1.5,
+        startCm: 4,
+        lengthCm: 20,
+        enabled: true,
+    });
+    const outline = preview.match(/<polygon points="([^"]+)"/)[1];
+    const band = preview.match(/data-liner-edge="1"[^>]*points="([^"]+)"/)[1]
+        .split(" ").map(point => point.split(",").map(Number));
+    assert.deepEqual(band, expected, `${side} indicator must be inset and shortened on its assigned side`);
+    if (referenceOutline === null) referenceOutline = outline;
+    else assert.equal(outline, referenceOutline, "preview edge indication must not alter the actual piece outline");
+    const machining = [
+        preview.match(/data-liner-center="1"[^>]*points="([^"]+)"/)?.[1] || "",
+        preview.match(/data-liner-strip="1"[^>]*points="([^"]+)"/)?.[1] || "",
+    ];
+    if (referenceMachining === null) referenceMachining = machining;
+    else assert.deepEqual(machining, referenceMachining, "edge preview styling must not move machining overlays");
+}
+
 const operator = fs.readFileSync(
     path.resolve(__dirname, "../../public/js/door_cutting_order/order_entry/door_cutting_order_operator_ux.js"),
     "utf8"

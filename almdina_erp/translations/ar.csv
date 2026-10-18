@@ -863,6 +863,25 @@ Could not save the add-on.,تعذر حفظ الإضافة.
 This piece type does not support this add-on.,نوع الدرفة لا يدعم هذه الإضافة.
 Row {0}: Machining add-on needs a reference side and a width greater than zero.,الصف {0}: الإضافة تحتاج جهة مرجعية وعرضاً أكبر من صفر.
 Row {0}: Machining add-on settings are invalid ({1}).,الصف {0}: إعدادات الإضافة غير صالحة ({1}).
+Row {0}: {1} needs a reference side and a width greater than zero.,الصف {0}: {1} تحتاج جهة مرجعية وعرضاً أكبر من صفر.
+Row {0}: {1} settings are invalid ({2}).,الصف {0}: إعدادات {1} غير صالحة ({2}).
+Current cutting dimensions are not valid.,أبعاد القص الحالية غير صالحة.
+Corner dimensions must be set before machining.,يجب إدخال أبعاد الزاوية قبل التفريز.
+Corner position is invalid.,موضع الزاوية غير صالح.
+The reference side is unavailable for this piece type.,الجهة المرجعية غير متاحة لنوع الدرفة هذا.
+Offset must be finite and zero or greater.,يجب أن تكون المسافة قيمة صالحة تساوي صفراً أو أكبر.
+Width must be finite and greater than zero.,يجب أن يكون العرض قيمة صالحة أكبر من صفر.
+Start position must be finite and zero or greater.,يجب أن تكون بداية التفريز قيمة صالحة تساوي صفراً أو أكبر.
+Length must be finite and greater than zero.,يجب أن يكون الطول قيمة صالحة أكبر من صفر.
+Machining geometry does not fit inside the piece.,هندسة التفريز لا تتسع داخل الدرفة.
+The machining limit falls on a corner bend.,حد التفريز يقع على انعطاف الزاوية.
+A flat end cannot be machined with this bit and length.,لا يمكن تشغيل نهاية مستقيمة بهذه الريشة وهذا الطول.
+"Row {0}: {1} length exceeds the reference side (available {2} cm, start {3} cm, entered {4} cm, maximum {5} cm).","الصف {0}: طول {1} يتجاوز الجهة المرجعية (طول الجهة {2} سم، البداية {3} سم، الطول المدخل {4} سم، والحد الأقصى {5} سم)."
+"{0}: reference side length is {1} cm, start is {2} cm, entered length is {3} cm; maximum allowed length is {4} cm.","{0}: طول الجهة المرجعية {1} سم، البداية {2} سم، الطول المدخل {3} سم؛ الحد الأقصى المسموح {4} سم."
+Row {0}: {1}: {2},الصف {0}: {1}: {2}
+Check machining add-ons,تحقق من إضافات التفريز
+Order changed while validating machining add-ons. Try saving again.,تغير الطلب أثناء التحقق من إضافات التفريز. أعد محاولة الحفظ.
+Check the machining add-on settings before saving.,تحقق من إعدادات إضافات التفريز قبل الحفظ.
 Liner Length,طول اللاينر
 Available Length,الطول المتاح
 Measurement Direction,اتجاه القياس

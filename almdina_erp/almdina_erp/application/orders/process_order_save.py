@@ -25,6 +25,8 @@ class OrderSaveGateway(Protocol):
 
     def calculate_cut_dimensions(self) -> None: ...
 
+    def validate_machining_rows(self) -> None: ...
+
     def calculate_piece_costs(self) -> None: ...
 
     def calculate_extra_addon_prices(self) -> None: ...
@@ -40,6 +42,7 @@ def process_order_save(gateway: OrderSaveGateway) -> None:
     gateway.validate_piece_policies()
     gateway.load_board_snapshot()
     gateway.calculate_cut_dimensions()
+    gateway.validate_machining_rows()
     gateway.calculate_piece_costs()
     gateway.calculate_extra_addon_prices()
 
