@@ -464,10 +464,23 @@ def certify_worker_identity_and_dynamic_permissions(admin_page: Page) -> None:
             {"name": identity_b, "baseline": baseline_b},
         )
         open_dco(worker_page, identity_a)
-        worker_page.locator('[data-edit-recovery-action="continue"]').wait_for(
-            state="visible", timeout=30_000
-        )
-        worker_page.locator('[data-edit-recovery-action="continue"]').click()
+        continue_button = worker_page.locator('[data-edit-recovery-action="continue"]')
+        continue_button.wait_for(state="visible", timeout=30_000)
+        if continue_button.is_disabled():
+            # A → B → A can retain dirty A in Frappe locals. Recovery must
+            # not overwrite that form. Prove the guard, then model a real
+            # browser restart to load the clean official document before
+            # explicitly restoring the IndexedDB checkpoint.
+            assert evaluate(
+                worker_page, "dirty A correctly blocks recovery",
+                "() => Boolean(cur_frm.is_dirty() || cur_frm.doc.__unsaved)"
+            ), "Continue was disabled for a reason other than dirty form ownership"
+            worker_page.reload(wait_until="domcontentloaded")
+            open_dco(worker_page, identity_a)
+            continue_button = worker_page.locator('[data-edit-recovery-action="continue"]')
+            continue_button.wait_for(state="visible", timeout=30_000)
+        expect(continue_button).to_be_enabled(timeout=30_000)
+        continue_button.click()
         wait_for_function(worker_page, "document A restores only its own EDIT checkpoint",
             "() => window.cur_frm && window.cur_frm.doc.name === "
             f"{json.dumps(identity_a)} && "
