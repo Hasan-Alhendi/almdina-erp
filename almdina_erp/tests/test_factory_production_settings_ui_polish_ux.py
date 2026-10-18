@@ -91,6 +91,42 @@ def test_production_settings_polish_is_presentation_only() -> None:
     assert "data-section=" in renderer
 
 
+def test_production_settings_polish_uses_theme_tokens_not_light_only_paints() -> None:
+    """Regression: section/note/error paints must follow --alm-* theme boards."""
+    import re
+
+    css = CSS.read_text(encoding="utf-8")
+    assert "background: var(--alm-card);" in css or "background: var(--alm-card, #fff);" in css
+    assert "color: var(--alm-text-strong);" in css or "color: var(--alm-text-strong, #101828);" in css
+    assert "color: var(--alm-status-danger-fg);" in css
+    assert "var(--alm-brand-soft-fg" in css
+    assert "background: color-mix(in srgb, var(--alm-accent) 18%, var(--alm-card));" in css
+    # Intentional exception: WhatsApp QR needs opaque white for scanners.
+    assert "/* QR must stay on opaque white for scanner contrast in both themes. */" in css
+    qr_block = css.split(".aps-whatsapp-qr img", 1)[1].split("}", 1)[0]
+    assert "background: #fff;" in qr_block
+
+    bare = []
+    for line in css.splitlines():
+        stripped = line
+        while "var(" in stripped:
+            start = stripped.find("var(")
+            depth = 0
+            end = start
+            for i, ch in enumerate(stripped[start:], start):
+                if ch == "(":
+                    depth += 1
+                elif ch == ")":
+                    depth -= 1
+                    if depth == 0:
+                        end = i + 1
+                        break
+            stripped = stripped[:start] + stripped[end:]
+        if re.search(r"#[0-9a-fA-F]{3,8}", stripped):
+            bare.append(stripped.strip())
+    assert bare == ["background: #fff;"], bare
+
+
 def test_production_settings_direction_uses_logical_properties() -> None:
     css = CSS.read_text(encoding="utf-8")
     templates = (ROOT / "public" / "css" / "almdina_page_templates.css").read_text(encoding="utf-8")

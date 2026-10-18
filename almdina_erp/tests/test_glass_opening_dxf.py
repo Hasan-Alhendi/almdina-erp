@@ -388,9 +388,13 @@ def test_import_issue_names_the_door_only_after_identity_is_known():
 
 
 def test_failed_glass_validation_is_raised_before_plan_persistence():
-    source = Path(
-        "almdina_erp/almdina_erp/services/shop_floor_dxf_service.py"
-    ).read_text(encoding="utf-8")
+    service_path = (
+        Path(__file__).resolve().parents[1]
+        / "almdina_erp"
+        / "services"
+        / "shop_floor_dxf_service.py"
+    )
+    source = service_path.read_text(encoding="utf-8")
     parse_at = source.index("custom_snapshot = parse_production_dxf")
     save_at = source.index("plan = save_uploaded_dxf_plan")
     error_at = source.index("except DxfImportError")

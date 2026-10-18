@@ -153,7 +153,7 @@ class TestConfigurableProductionPermissions(unittest.TestCase):
         self.assertIn("function openReassignDialog", source)
         self.assertIn("production_worker_service.get_reassignment_workers", source)
         self.assertIn("shop_floor_commands.reassign_worker", source)
-        self.assertIn("if (!assignedToCurrentUser(stage)) return", source)
+        self.assertIn("if (!canOperateCurrentStage(stage)) return", source)
         self.assertIn("frm.doc.name !== documentName", source)
 
 

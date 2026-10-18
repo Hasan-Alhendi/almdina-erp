@@ -33,8 +33,16 @@
         return window.AlmdinaWorkspaceKeepPaint || null;
     }
 
+    function identity(frm) {
+        return window.AlmdinaDocumentContext?.formIdentity?.(frm)
+            || `${frm?.doctype || frm?.doc?.doctype || ""}::${frm?.doc?.name || ""}`;
+    }
+
     function data(frm) {
         const state = snapshot(frm);
+        if (!frm?.doc || !state
+            || state.identity !== identity(frm)
+            || String(state.data?.order_name || "") !== String(frm.doc.name || "")) return null;
         const keeper = keepPaint();
         if (keeper && typeof keeper.presentationData === "function") {
             return keeper.presentationData(state);
@@ -49,7 +57,7 @@
 
     function ready(frm) {
         const state = snapshot(frm);
-        return Boolean(state && state.status === "ready" && state.data);
+        return Boolean(data(frm) && state.status === "ready");
     }
 
     function canPresent(frm) {
@@ -92,25 +100,48 @@
 
     function projectOrder(frm, orderSnapshot) {
         if (!frm || !frm.doc || !orderSnapshot) return;
-        Object.entries(orderSnapshot).forEach(([fieldname, value]) => {
-            frm.doc[fieldname] = value;
+        // The read model includes the board description and other order inputs
+        // for invoice calculation. It does not own those Form fields. Only the
+        // Cost command/results surface may reconcile financial values here.
+        COST_RESULT_FIELDS.forEach(fieldname => {
+            if (Object.prototype.hasOwnProperty.call(orderSnapshot, fieldname)) {
+                frm.doc[fieldname] = orderSnapshot[fieldname];
+            }
         });
         const editor = window.AlmdinaWorkspaceFieldEditor;
         if (editor && typeof editor.project === "function") {
-            editor.project(frm, orderSnapshot, [
-                "board_rate_usd",
-                "cutting_cost_per_board_usd",
-            ]);
+            editor.project(frm, orderSnapshot, COST_SETTING_FIELDS);
         }
     }
 
-    // The cost read includes these selections so pricing can see them. They are
-    // owned by the order form. Copying them back replaces a newer corner Apply
-    // with the snapshot from when the cost tab was loaded. Ordinary side flags
-    // are not part of that snapshot, so the same refresh leaves them alone.
-    const ORDER_OWNED_CORNER_SELECTION_FIELDS = new Set([
-        "edge_break",
-        "edge_break_only",
+    const COST_SETTING_FIELDS = Object.freeze([
+        "board_rate_usd", "cutting_cost_per_board_usd",
+    ]);
+    const COST_RESULT_FIELDS = Object.freeze([
+        ...COST_SETTING_FIELDS,
+        "mdf_cost_usd", "cutting_cost_usd", "edge_cost_usd", "total_cost_usd",
+        "total_edge_meters",
+        "special_shapes_baseline_cost_usd", "special_shapes_estimated_total_usd",
+        "special_shapes_final_total_usd", "extra_addons_total_usd",
+        "customer_quote_total_usd", "customer_quote_status",
+        "material_variance_cost_usd", "actual_cost_usd",
+    ]);
+    const COST_PIECE_FIELDS = new Set([
+        "edge_meters", "edge_break_length_cm", "edge_break_meters",
+        "edge_long_rate_usd", "edge_width_rate_usd", "edge_long_cost_usd",
+        "edge_width_cost_usd", "edge_cost_usd", "edge_rate_usd",
+        "special_shape_estimated_unit_price_usd", "special_shape_custom_unit_price_usd",
+        "special_shape_final_unit_price_usd", "special_shape_price_status",
+        "special_shape_price_note", "special_shape_price_approved_by",
+        "special_shape_price_approved_on", "edge_break_rate_usd", "edge_break_cost_usd",
+        "clipped_corner_edge_price_usd", "clipped_corner_edge_price_status",
+        "clipped_corner_edge_price_note", "clipped_corner_edge_price_set_by",
+        "clipped_corner_edge_price_set_on", "extra_double_unit_price_usd",
+        "extra_double_total_usd", "extra_full_door_double_unit_price_usd",
+        "extra_full_door_double_total_usd", "extra_liner_unit_price_usd",
+        "extra_liner_total_usd", "extra_back_groove_unit_price_usd",
+        "extra_back_groove_total_usd", "extra_recessed_handle_cutout_unit_price_usd",
+        "extra_recessed_handle_cutout_total_usd", "extra_addons_total_usd",
     ]);
 
     function projectPieces(frm, pieceSnapshots) {
@@ -129,7 +160,7 @@
             // this marker and then reloads the authoritative snapshot normally.
             if (piece && piece.__almdina_pending_price_edit) return;
             Object.entries(financial).forEach(([fieldname, value]) => {
-                if (fieldname === "name" || ORDER_OWNED_CORNER_SELECTION_FIELDS.has(fieldname)) return;
+                if (!COST_PIECE_FIELDS.has(fieldname)) return;
                 piece[fieldname] = value;
             });
         });
@@ -321,24 +352,34 @@
 
         const pending = pendingFactoryPriceLabels(frm);
         card.classList.toggle("is-pending", pending.length > 0);
-        if (pending.length) {
-            card.innerHTML = `
-                <span>${esc(translate("Current total before unpriced items"))}
-                    <small>${esc(translate("This is not a final total until these items are priced: {0}", [pending.join(", ")]))}</small>
-                </span>
-                <b>$ ${money(total)}</b>
-            `;
-            return;
+        const labelHtml = pending.length
+            ? `<div class="dco-invoice-total-label">
+                <span>${esc(translate("Current total before unpriced items"))}</span>
+                <small>${esc(translate("This is not a final total until these items are priced: {0}", [pending.join(", ")]))}</small>
+            </div>`
+            : `<div class="dco-invoice-total-label">
+                <span>${esc(translate("Final invoice total"))}</span>
+            </div>`;
+        const existingPanel = card.querySelector("[data-price-approval-panel]");
+        const panelHtml = existingPanel
+            ? existingPanel.outerHTML
+            : '<div class="dco-price-approval-slot" data-price-approval-panel></div>';
+        const amountHtml = `<b class="dco-invoice-total-amount">$ ${money(total)}</b>`;
+        card.innerHTML = `${labelHtml}<div class="dco-invoice-total-end">${panelHtml}${amountHtml}</div>`;
+    }
+
+    function reconcileFinalPriceApproval(frm) {
+        const ux = window.AlmdinaFinalPriceApprovalUX;
+        if (ux && typeof ux.reconcile === "function") {
+            return ux.reconcile(frm);
         }
-        card.innerHTML = `
-            <span>${esc(translate("Final invoice total"))}</span>
-            <b>$ ${money(total)}</b>
-        `;
+        return false;
     }
 
     function reconcileRenderedCommercialProjection(frm) {
         reconcileNonFactoryPricingCards(frm);
         reconcileInvoiceTotalCard(frm);
+        reconcileFinalPriceApproval(frm);
     }
 
     function reconcileActiveCostEditSession(frm) {
@@ -425,9 +466,11 @@
         return false;
     }
 
-    function refreshCurrent() {
+    function refreshCurrent(event) {
         const frm = window.cur_frm;
         if (!frm || frm.doctype !== "Door Cutting Order") return;
+        if (event?.detail?.identity
+            && event.detail.identity !== identity(frm)) return;
         const presenter = window.AlmdinaOrderCostUX;
         if (presenter && typeof presenter.render === "function") presenter.render(frm);
         // Rendering is synchronous. Apply permissions directly to the markup that

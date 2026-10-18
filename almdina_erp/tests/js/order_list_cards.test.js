@@ -82,6 +82,32 @@ vm.runInContext(source, context);
 const responsive = context.window.AlmdinaResponsiveDevice;
 const api = context.window.AlmdinaDoorCuttingOrderListUX;
 
+
+const desktopListCss = fs.readFileSync(
+    "almdina_erp/public/css/door_cutting_order_list.css",
+    "utf8"
+);
+
+// Price approval remains filterable, but must not be painted beside any ID,
+// in the header, or on mobile cards (regardless of approval status).
+assert(!source.includes("dco-list-price-approval"), "ListView must not inject price approval badges");
+assert(!desktopListCss.includes("dco-list-price-approval"), "desktop badge styles must be removed");
+assert(!cssSource.includes("dco-list-price-approval"), "mobile badge styles must be removed");
+const approvalFilterListSettings = context.frappe.listview_settings["Door Cutting Order"];
+assert(approvalFilterListSettings.add_fields.includes("price_approval_status"), "price approval data must remain queryable");
+assert(
+    approvalFilterListSettings.custom_filter_configs.some(config => config.fieldname === "price_approval_status"),
+    "price approval filtering must remain available"
+);
+for (const approvalStatus of ["Approved", "Unapproved", ""]) {
+    const card = context.window.AlmdinaDoorCuttingOrderListUX.buildCard({
+        name: "DCO-2026-00010",
+        customer: "عميل الاختبار",
+        price_approval_status: approvalStatus,
+    }, false);
+    assert(!card.includes("dco-list-price-approval"), "mobile cards must not show approval badges");
+}
+
 const listFormatters = context.frappe.listview_settings["Door Cutting Order"].formatters;
 context.frappe.user = {
     full_name(user) {
@@ -1248,12 +1274,15 @@ assert(
 assert(desktopCssSource.includes(".list-row-container.dco-list-row-ready-for-delivery .level-right"));
 assert(desktopCssSource.includes(".list-row-container.dco-list-row-delivered .level-right"));
 assert(desktopCssSource.includes(".list-row-container.dco-list-row-cancelled .level-right"));
-assert(desktopCssSource.includes("background: #ecfdf3 !important;"));
-assert(desktopCssSource.includes("background: #a7f3d0 !important;"));
-assert(desktopCssSource.includes("background: #fecaca !important;"));
+assert(desktopCssSource.includes("background: color-mix(in srgb, #16a34a 8%, var(--alm-card, #ffffff)) !important;"));
+assert(desktopCssSource.includes("background: color-mix(in srgb, #047857 22%, var(--alm-card, #ffffff)) !important;"));
+assert(desktopCssSource.includes("background: color-mix(in srgb, #b91c1c 18%, var(--alm-card, #ffffff)) !important;"));
 assert(desktopCssSource.includes("border-color: #16a34a !important;"));
 assert(desktopCssSource.includes("border-color: #047857 !important;"));
 assert(desktopCssSource.includes("border-color: #b91c1c !important;"));
+assert(!desktopCssSource.includes("background: #ecfdf3 !important;"));
+assert(!desktopCssSource.includes("background: #a7f3d0 !important;"));
+assert(!desktopCssSource.includes("background: #fecaca !important;"));
 
 assert(cssSource.includes(".dco-card-header-meta"));
 assert(cssSource.includes(".dco-card-stage"));

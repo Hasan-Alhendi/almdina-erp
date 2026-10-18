@@ -12,6 +12,7 @@ INVOICE_TOOLBAR = ROOT / "public" / "js" / "door_cutting_order" / "costing" / "d
 FINANCIAL_DOCUMENTS = ROOT / "public" / "js" / "door_cutting_order" / "costing" / "door_cutting_order_financial_documents_ux.js"
 HEADER_UX = ROOT / "public" / "js" / "door_cutting_order" / "responsive" / "door_cutting_order_header_ux.js"
 PRESENTATION_CSS = ROOT / "public" / "css" / "door_cutting_order_form_presentation.css"
+RESPONSIVE_CSS = ROOT / "public" / "css" / "door_cutting_order_responsive.css"
 HOOKS = ROOT / "frontend_assets.py"
 REGISTRY = ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_workspace_asset_registry.js"
 
@@ -65,8 +66,9 @@ def test_primary_tab_bar_is_fixed_on_scroll_and_labels_are_arabic():
     assert '[data-dco-mobile-slot="primary-left"]' in css
     assert '[data-dco-mobile-slot="utility-notes"]' in css
     assert "search-bar[data-dco-mobile-slot=\"utility-search\"]" in css
-    assert "--control-bg" in css
-    assert "--alm-border" in css
+    # The responsive shell owns this native-control token after the CSS split.
+    assert "--control-bg" in _source(RESPONSIVE_CSS)
+    assert "--alm-border" in _source(RESPONSIVE_CSS)
     assert "min-width: 0 !important" in css
 
 

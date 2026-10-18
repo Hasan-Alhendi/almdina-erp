@@ -228,6 +228,61 @@ async function flush() {
     );
     assert.equal(uiErrors, 0);
 
+    // The server's explicit stage-operation decision allows Administrator even
+    // though the factual assignee/role fields correctly remain false.
+    current = true;
+    const adminStart = api.perform(
+        { order: "DCO-ADMIN-START", stage: "PST-ADMIN-START", canStart: true },
+        options()
+    );
+    request("get_current_stage_context", 5).resolve({
+        message: {
+            actor_can_operate_current_stage: true,
+            actor_holds_operational_role: false,
+            can_start_stage: true,
+        },
+    });
+    await flush();
+    assert.equal(calls.filter(call => call.options.method.endsWith("start_my_stage")).length, 2);
+    request("start_my_stage", 1).resolve({ message: { ok: true } });
+    await adminStart;
+
+    const adminHandoff = api.perform(
+        { order: "DCO-ADMIN-HANDOFF", stage: "PST-ADMIN-HANDOFF", canHandoff: true },
+        { ...options(), skipFinalConfirmation: true }
+    );
+    request("get_current_stage_context", 6).resolve({
+        message: {
+            actor_can_operate_current_stage: true,
+            actor_holds_operational_role: false,
+            can_handoff_stage: true,
+        },
+    });
+    await flush();
+    request("get_handoff_context", 3).resolve({
+        message: { final_stage: true, workers: [] },
+    });
+    await flush();
+    request("handoff_to_next", 0).resolve({ message: { ok: true } });
+    await adminHandoff;
+
+    // An explicit false decision remains a denial even if the legacy factual
+    // role field suggests otherwise; the action flags remain mandatory too.
+    const deniedStage = api.perform(
+        { order: "DCO-ADMIN-DENIED", stage: "PST-ADMIN-DENIED", canStart: true },
+        options()
+    );
+    request("get_current_stage_context", 7).resolve({
+        message: {
+            actor_can_operate_current_stage: false,
+            actor_holds_operational_role: true,
+            can_start_stage: true,
+        },
+    });
+    await deniedStage;
+    assert.equal(calls.filter(call => call.options.method.endsWith("start_my_stage")).length, 2);
+    assert.equal(messages.length, 1);
+
     console.log("Shop Floor caller-owned quick-action lifecycle simulation passed");
 })().catch(error => {
     console.error(error);

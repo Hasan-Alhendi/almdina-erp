@@ -35,6 +35,7 @@
     const EFFECT_STATE_FIELD = "__almdinaDocumentEffects";
     const IDENTITY_ALIASES_FIELD = "__almdinaDocumentContextIdentityAliases";
     const PENDING_INSERT_FIELD = "__almdinaDocumentContextPendingInsert";
+    const nativeInputVisits = new WeakMap();
 
     function formIdentity(frm) {
         const doc = frm && frm.doc;
@@ -126,6 +127,45 @@
 
     function clearDocumentHtml(frm) {
         HTML_FIELDS.forEach(fieldname => clearWrapper(fieldWrapper(frm, fieldname)));
+    }
+
+    function reconcileNativeInputs(frm) {
+        // Frappe v16 reuses controls and debounces their input handler. A queued
+        // handler reads the input *later*, so discard the previous visit's DOM
+        // value synchronously when the Form begins displaying another document.
+        Object.entries(frm.fields_dict || {}).forEach(([fieldname, field]) => {
+            if (!field || field.df?.fieldname !== fieldname || !field.$input?.length
+                || typeof field.$input.val !== "function") return;
+            guardNativeInput(frm, field);
+            const value = frm.doc[fieldname];
+            field.$input.val(value == null ? "" : value);
+        });
+    }
+
+    function guardNativeInput(frm, field) {
+        const element = field.$input?.get?.(0) || field.$input?.[0];
+        if (!element || typeof element.addEventListener !== "function"
+            || typeof field.parse_validate_and_set_in_model !== "function") return;
+        if (!field.__almdinaNativeInputGuard) {
+            const original = field.parse_validate_and_set_in_model;
+            field.parse_validate_and_set_in_model = function (value, event, ...rest) {
+                const source = event && nativeInputVisits.get(event.originalEvent || event);
+                if (source && !isSameDocument(frm, source)) return Promise.resolve();
+                return original.call(this, value, event, ...rest);
+            };
+            field.__almdinaNativeInputGuard = true;
+        }
+        if (field.__almdinaNativeInputElement === element) return;
+        const mark = event => nativeInputVisits.set(event, capture(frm));
+        element.addEventListener("input", mark, true);
+        element.addEventListener("change", mark, true);
+        field.__almdinaNativeInputElement = element;
+    }
+
+    function guardCurrentNativeInputs(frm) {
+        Object.entries(frm.fields_dict || {}).forEach(([name, field]) => {
+            if (field?.df?.fieldname === name) guardNativeInput(frm, field);
+        });
     }
 
     function clearTimer(frm, fieldname) {
@@ -284,6 +324,8 @@
 
     function resetDocumentState(frm) {
         cancelDocumentEffects(frm);
+        frm.__almdinaWorkspaceMutationImpact = null;
+        frm.__almdina_offcut_pending_assignments = null;
         frm._dco_calc_version = Number(frm._dco_calc_version || 0) + 1;
 
         frm._dco_selected_piece_rows = new Set();
@@ -300,6 +342,7 @@
         frm.__almdina_approved_plan_context = null;
         frm.__almdina_stage_type = null;
         frm.__almdina_actor_is_current_assignee = false;
+        frm.__almdina_actor_can_operate_current_stage = false;
         // Compatibility only: old modules may still read this name, but its
         // value mirrors assignment ownership, never role membership.
         frm.__almdina_actor_holds_stage_role = false;
@@ -353,6 +396,9 @@
         frm.__almdina_stage_context = stage;
         frm.__almdina_stage_type = stage.active_stage_type || null;
         frm.__almdina_actor_is_current_assignee = assigned;
+        frm.__almdina_actor_can_operate_current_stage = stage.actor_can_operate_current_stage !== undefined
+            ? Boolean(stage.actor_can_operate_current_stage)
+            : assigned;
         frm.__almdina_actor_holds_stage_role = assigned;
         frm.__almdina_stage_operational_role = stage.active_stage_operational_role || null;
         frm.__almdina_stage_context_ready = true;
@@ -365,6 +411,7 @@
         frm.__almdina_stage_context = null;
         frm.__almdina_stage_type = null;
         frm.__almdina_actor_is_current_assignee = false;
+        frm.__almdina_actor_can_operate_current_stage = false;
         frm.__almdina_actor_holds_stage_role = false;
         frm.__almdina_stage_operational_role = null;
         frm.__almdina_stage_context_ready = true;
@@ -403,7 +450,8 @@
     function canMutateCurrentStage(frm) {
         if (!frm || !frm.doc) return false;
         if (isStageContextPending(frm)) return false;
-        return isCurrentStageAssignee(frm);
+        if (!frm.doc.current_production_stage) return isCurrentStageAssignee(frm);
+        return Boolean(frm.__almdina_actor_can_operate_current_stage);
     }
 
     // Tuning the cutting algorithm is a Plan capability. During an active route
@@ -460,7 +508,7 @@
         if (isStageContextPending(frm)) {
             return translate("Checking the current stage assignment...");
         }
-        if (isCurrentStageAssignee(frm)) return "";
+        if (canMutateCurrentStage(frm)) return "";
         const stage = frm.__almdina_stage_context || {};
         if (stage.active_stage_assigned_to) {
             return translate("You can view this order only. The current stage is assigned to another user.");
@@ -641,11 +689,10 @@
         frm.__almdina_stage_context_key = cacheKey;
         frm.__almdinaStageContextToken = token;
 
-        const promise = frappe
-            .call({
+        const promise = Promise.resolve(frappe.call({
                 method: STAGE_CONTEXT_METHOD,
                 args: { order_name: frm.doc.name },
-            })
+            }))
             .then((response) => {
                 if (frm.__almdinaStageContextRequestId !== requestId) return false;
                 if (!isSameDocument(frm, token)) return false;
@@ -662,6 +709,7 @@
                 ) {
                     frm.__almdina_stage_context = null;
                     frm.__almdina_actor_is_current_assignee = false;
+                    frm.__almdina_actor_can_operate_current_stage = false;
                     frm.__almdina_actor_holds_stage_role = false;
                     frm.__almdina_stage_context_ready = true;
                     notifyStageContextReady(frm);
@@ -711,6 +759,20 @@
         frm[IDENTITY_ALIASES_FIELD] = new Set([identity]);
         frm[PENDING_INSERT_FIELD] = null;
         resetDocumentState(frm);
+        // Frappe reuses one Form object across documents. Invalidate every
+        // workspace owned by the previous visit before the new form can paint.
+        // NEW -> Saved is handled by promotePendingInsert above and keeps its
+        // generation, drafts and pending reconciliation intact.
+        if (window.AlmdinaPlanWorkspaceState?.reset) {
+            window.AlmdinaPlanWorkspaceState.reset(frm);
+        }
+        if (window.AlmdinaCostWorkspaceState?.reset) {
+            window.AlmdinaCostWorkspaceState.reset(frm);
+        }
+        if (window.AlmdinaPlanPreviewSession?.reset) {
+            window.AlmdinaPlanPreviewSession.reset(frm);
+        }
+        reconcileNativeInputs(frm);
         clearDocumentHtml(frm);
         return true;
     }
@@ -811,15 +873,29 @@
     frappe.ui.form.on("Door Cutting Order", {
         before_load(frm) { synchronize(frm); },
         onload(frm) { synchronize(frm); },
-        before_save(frm) { beginSave(frm); },
+        before_save(frm) {
+            beginSave(frm);
+            const approvalUx = window.AlmdinaFinalPriceApprovalUX;
+            if (approvalUx && typeof approvalUx.capturePriorPriceApprovalStatus === "function") {
+                approvalUx.capturePriorPriceApprovalStatus(frm);
+            }
+        },
         refresh(frm) {
             synchronize(frm);
+            guardCurrentNativeInputs(frm);
             ensureStageContext(frm);
             scheduleSettle(frm, 0);
         },
-        onload_post_render(frm) { scheduleSettle(frm, 0); },
+        onload_post_render(frm) {
+            guardCurrentNativeInputs(frm);
+            scheduleSettle(frm, 0);
+        },
         after_save(frm) {
             reconcileAfterSave(frm);
+            const approvalUx = window.AlmdinaFinalPriceApprovalUX;
+            if (approvalUx && typeof approvalUx.afterOrderSave === "function") {
+                approvalUx.afterOrderSave(frm);
+            }
             scheduleSettle(frm, 0);
         },
     });

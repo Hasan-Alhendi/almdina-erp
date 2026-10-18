@@ -610,6 +610,14 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
             code,
             issue.category,
         )
+    if code == codes.SAW_CENTER_INVALID:
+        return PresentedDxfError(
+            "مسارات مركز الريشة على طبقة CUT_PATH غير صحيحة أو غير مكتملة ولا يمكن اعتمادها بأمان.",
+            "طبقة CUT_PATH.",
+            "احذف مسارات CUT_PATH غير الصحيحة واترك توليدها بعد الاعتماد، أو صحّحها بالكامل وفق Kerf ثم أعد الرفع. لا يُقبل إصلاح جزئي.",
+            code,
+            issue.category,
+        )
     if code == codes.SHEET_OPEN:
         return PresentedDxfError(
             "حدود اللوح غير مغلقة.",
@@ -946,6 +954,18 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
     if code == codes.KERF_VIOLATION:
         kerf = format_mm(params.get("kerf_mm") or 0)
         pair_subject, pair_object = _pair_nouns(issue)
+        guest_label = str(params.get("glass_frame_guest_label") or "").strip()
+        host_label = str(params.get("glass_frame_host_label") or "").strip()
+        if guest_label and host_label:
+            guest_no = guest_label.split(".", 1)[0]
+            host_no = host_label.split(".", 1)[0]
+            return PresentedDxfError(
+                f"الدرفة {guest_no} تتداخل مع إطار البلور في الدرفة {host_no}.",
+                target_text,
+                f"حرّك الدرفة داخل الفتحة مع ترك مسافة Kerf لا تقل عن {kerf} مم عن الإطار.",
+                code,
+                issue.category,
+            )
         if pair_subject == "مسارا القص":
             return PresentedDxfError("المسافة بين مساري القص أقل من Kerf.", target_text, f"اجعل المسافة {kerf} مم أو أكثر.", code, issue.category)
         return PresentedDxfError(

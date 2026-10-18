@@ -54,8 +54,8 @@ body.almdina-workspace-home #page-Workspaces .layout-main-section {
 }
 
 body.almdina-workspace-home #page-Workspaces .page-head {
-    background: var(--bg-color);
-    border-bottom: 1px solid var(--border-color);
+    background: var(--alm-card);
+    border-bottom: 1px solid var(--alm-card-border);
 }
 
 body.almdina-workspace-home #page-Workspaces .navbar-breadcrumbs li:last-child .dropdown,
@@ -212,7 +212,7 @@ body.almdina-workspace-home .alm-workspace-shortcut-icon {
     height: 34px;
     border-radius: 9px;
     color: var(--alm-section-accent);
-    background: color-mix(in srgb, var(--alm-section-accent) 12%, #fff);
+    background: color-mix(in srgb, var(--alm-section-accent) 12%, var(--alm-card));
     border: 1px solid color-mix(in srgb, var(--alm-section-accent) 16%, transparent);
     overflow: visible;
 }

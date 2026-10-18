@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import time
 from typing import Any
 
-from .primitives import num, present_shop_floor_packing, rect_intersects, rects_have_clearance
+from .glass_opening_nesting import host_link_errors, layout_pair_fault
+from .primitives import num, present_shop_floor_packing
+
+# Returned alone when an optional validation deadline elapses mid-check.
+VALIDATION_DEADLINE_EXCEEDED = "__validation_deadline_exceeded__"
 
 
 def evaluate_plan(
@@ -45,8 +50,14 @@ def validate_plan(
     tolerance: float = 1e-7,
     *,
     kerf_cm: float = 0.0,
+    deadline_monotonic: float | None = None,
 ) -> list[str]:
-    """Independent geometry validator required before a plan can be approved."""
+    """Independent geometry validator required before a plan can be approved.
+
+    ``deadline_monotonic`` is optional. Nesting uses it so a candidate check
+    cannot ignore the post-pass time budget during O(n²) pair scans. Callers
+    that omit it keep the historical unbounded validation path.
+    """
 
     errors: list[str] = []
     expected = {int(piece["id"]): piece for piece in requested_pieces}
@@ -109,7 +120,18 @@ def validate_plan(
                     f"Piece {placed.get('label')} has invalid dimensions or rotation state."
                 )
 
+        linked = []
+        for placed in pieces:
+            row = dict(placed)
+            row["_sheet_no"] = sheet.get("sheet_no")
+            linked.append(row)
+        errors.extend(host_link_errors(linked))
         for index, first in enumerate(pieces):
+            if (
+                deadline_monotonic is not None
+                and time.monotonic() > deadline_monotonic
+            ):
+                return [VALIDATION_DEADLINE_EXCEEDED]
             first_rect = {
                 "x": num(first["x"]),
                 "y": num(first["y"]),
@@ -117,23 +139,42 @@ def validate_plan(
                 "h": num(first["h"]),
             }
             for second in pieces[index + 1 :]:
+                if (
+                    deadline_monotonic is not None
+                    and time.monotonic() > deadline_monotonic
+                ):
+                    return [VALIDATION_DEADLINE_EXCEEDED]
                 second_rect = {
                     "x": num(second["x"]),
                     "y": num(second["y"]),
                     "w": num(second["w"]),
                     "h": num(second["h"]),
                 }
-                if rect_intersects(first_rect, second_rect):
+                hosted = first.get("glass_host_piece_id") not in (None, "") or second.get(
+                    "glass_host_piece_id"
+                ) not in (None, "")
+                fault = layout_pair_fault(
+                    first,
+                    second,
+                    kerf_cm=required_kerf_cm,
+                    tolerance=tolerance,
+                    sheet_pieces=pieces,
+                    first_rect=first_rect,
+                    second_rect=second_rect,
+                )
+                if fault is None:
+                    continue
+                if fault == "overlap":
                     errors.append(
                         f"Pieces {first.get('label')} and {second.get('label')} overlap "
                         f"on sheet {sheet.get('sheet_no')}."
                     )
-                elif required_kerf_cm and not rects_have_clearance(
-                    first_rect,
-                    second_rect,
-                    required_kerf_cm,
-                    tolerance,
-                ):
+                elif fault in {"invalid", "unproven"} or (fault == "kerf" and hosted):
+                    errors.append(
+                        f"Pieces {first.get('label')} and {second.get('label')} do not form "
+                        f"a valid Glass opening nest on sheet {sheet.get('sheet_no')}."
+                    )
+                elif fault == "kerf" and required_kerf_cm:
                     errors.append(
                         f"Pieces {first.get('label')} and {second.get('label')} do not preserve "
                         f"the required {required_kerf_cm:g} cm kerf clearance on sheet "
@@ -152,4 +193,8 @@ def validate_plan(
     return errors
 
 
-__all__ = ["evaluate_plan", "validate_plan"]
+__all__ = [
+    "VALIDATION_DEADLINE_EXCEEDED",
+    "evaluate_plan",
+    "validate_plan",
+]

@@ -49,6 +49,7 @@ def current_stage_assignment_access(
         "actor_is_current_assignee": bool(
             assigned_to and actor and assigned_to == actor
         ),
+        "actor_can_operate_current_stage": bool(stage_name and decision.allowed),
     }
 
 

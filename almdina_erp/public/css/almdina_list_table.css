@@ -6,13 +6,13 @@
 
 .layout-main-section .frappe-list {
     background: var(--alm-card, #fff);
-    color: var(--text-color, #1f272e);
+    color: var(--alm-text-strong, #101828);
 }
 
 .layout-main-section .frappe-list .list-row-head {
     background: var(--alm-canvas, #eef1f6);
     border-bottom: 1px solid var(--alm-card-border, #e4e8ee);
-    color: var(--text-muted, #6b7280);
+    color: var(--alm-text-subtle, #667085);
     font-size: var(--alm-font-size-sm);
     font-weight: var(--alm-font-weight-bold);
 }

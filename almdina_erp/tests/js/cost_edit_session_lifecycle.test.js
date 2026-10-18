@@ -21,6 +21,7 @@ function deferred() {
 
 function baseSnapshot(rate = 10, cutting = 2) {
     return {
+        order_name: "DCO-COST-LIFECYCLE-A",
         order: {
             board_rate_usd: rate,
             cutting_cost_per_board_usd: cutting,
@@ -386,6 +387,7 @@ async function verifyStaleStartCannotMutateNextDocument() {
 
     env.frm.doc.name = "DCO-COST-LIFECYCLE-B";
     env.bumpGeneration();
+    state.reset(env.frm);
     gate.resolve(baseSnapshot());
 
     assert.equal(await startPromise, false, "stale A load must not start an edit session on B");

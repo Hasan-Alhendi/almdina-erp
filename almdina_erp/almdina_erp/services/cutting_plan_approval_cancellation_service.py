@@ -98,6 +98,18 @@ def cancel_approved_order_plan(order: Any) -> dict[str, Any]:
     _clear_order_approved_plan(order)
     _reset_drawing_dxf_status(order, repository)
 
+    from almdina_erp.almdina_erp.services.final_price_approval_service import (
+        maybe_invalidate_final_price_approval,
+    )
+
+    # Cancelling production approval can move cost authority to another plan.
+    maybe_invalidate_final_price_approval(
+        order.name,
+        reason="cost_plan_authority_changed",
+        only_if_basis_changed=True,
+        order=order,
+    )
+
     return {
         "name": order.name,
         "cancelled_plan": plan.name,

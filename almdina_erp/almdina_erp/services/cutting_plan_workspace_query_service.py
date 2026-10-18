@@ -91,6 +91,7 @@ _PLAN_FIELDS = (
     "waste_percent",
     "dxf_file",
     "dxf_status",
+    "saw_center_status",
     "dxf_uploaded_by",
     "dxf_uploaded_on",
     "modified",
@@ -137,7 +138,19 @@ def _plan_settings(plan: Any) -> dict[str, Any]:
     }
 
 
-def _plan_row(plan: Any, snapshot_json: str = "") -> dict[str, Any]:
+def _prefer_original_upload_for_row(order: Any | None, plan: Any) -> bool:
+    """Server-owned download mode for uploaded DXF bytes vs manufacturing regen."""
+
+    if order is None:
+        return True
+    from almdina_erp.almdina_erp.services.dxf_export_service import (
+        prefer_original_uploaded_download,
+    )
+
+    return prefer_original_uploaded_download(order, plan)
+
+
+def _plan_row(plan: Any, snapshot_json: str = "", order: Any | None = None) -> dict[str, Any]:
     snapshot = frappe.parse_json(snapshot_json or "{}") or {}
     offcut_pieces = [
         piece
@@ -204,6 +217,8 @@ def _plan_row(plan: Any, snapshot_json: str = "") -> dict[str, Any]:
         "dxf": {
             "file": plan.get("dxf_file"),
             "status": str(plan.get("dxf_status") or "None"),
+            "saw_center_status": str(plan.get("saw_center_status") or "Unknown"),
+            "prefer_original_upload": _prefer_original_upload_for_row(order, plan),
             "uploaded_by": plan.get("dxf_uploaded_by"),
             "uploaded_on": plan.get("dxf_uploaded_on"),
         },
@@ -283,7 +298,7 @@ def _selected_snapshot_json(rows: list[Any | None]) -> dict[str, str]:
 
 
 def _uploaded_plan_row(order: Any, uploaded: Any, snapshot_json: str) -> dict[str, Any]:
-    payload = _plan_row(uploaded, snapshot_json)
+    payload = _plan_row(uploaded, snapshot_json, order=order)
     try:
         expected = freshness_expected_fingerprint(
             order,
@@ -358,12 +373,20 @@ def get_plan_workspace_snapshot(order_name: str) -> dict[str, Any]:
         "editable_settings": calculation_settings if capabilities["edit_settings"] else None,
         "plans": {
             "system_draft": (
-                _plan_row(system, snapshot_json.get(str(system.get("name") or ""), ""))
+                _plan_row(
+                    system,
+                    snapshot_json.get(str(system.get("name") or ""), ""),
+                    order=order,
+                )
                 if system else None
             ),
             "uploaded_draft": uploaded_payload,
             "approved": (
-                _plan_row(approved, snapshot_json.get(str(approved.get("name") or ""), ""))
+                _plan_row(
+                    approved,
+                    snapshot_json.get(str(approved.get("name") or ""), ""),
+                    order=order,
+                )
                 if approved else None
             ),
         },

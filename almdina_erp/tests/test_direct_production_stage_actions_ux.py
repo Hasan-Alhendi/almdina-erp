@@ -73,12 +73,12 @@ def test_direct_stage_actions_keep_existing_authorization_and_state_gates() -> N
         "function productionActionsReady(frm) {",
     )
 
-    assert "assignedToCurrentUser(stage)" in start_helper
+    assert "canOperateCurrentStage(stage)" in start_helper
     assert 'stage.active_stage_status === "Pending"' in start_helper
     assert 'can(frm, "start_assigned_stage")' in start_helper
     assert "stage.can_start_stage" in start_helper
 
-    assert "assignedToCurrentUser(stage)" in handoff_condition
+    assert "canOperateCurrentStage(stage)" in handoff_condition
     assert "stage.can_handoff_stage" in handoff_condition
     assert 'can(frm, "handoff_assigned_stage")' in handoff_condition
     assert "active_stage_status" not in handoff_condition
@@ -86,7 +86,7 @@ def test_direct_stage_actions_keep_existing_authorization_and_state_gates() -> N
     assert "Paused" not in handoff_condition
     assert "Pending" not in handoff_condition
 
-    assert "if (!assignedToCurrentUser(stage)) return;" in worker
+    assert "if (!canOperateCurrentStage(stage)) return;" in worker
     assert "if (canShowStartAction(frm, stage))" in worker
     assert "if (!canShowHandoffAction(frm, stage)) return;" in worker
     assert "if (canShowStartAction(frm, stage))" in expected
@@ -97,7 +97,7 @@ def test_direct_stage_actions_keep_existing_authorization_and_state_gates() -> N
     reassign = section(
         worker,
         "if (stage.can_reassign_worker",
-        "if (!assignedToCurrentUser(stage)) return;",
+        "if (!canOperateCurrentStage(stage)) return;",
     )
     assert "PRODUCTION_ACTION_GROUP" not in reassign
 
@@ -116,7 +116,7 @@ def test_handoff_visibility_trusts_server_flag_without_local_status_whitelist() 
 
     assert "stage.can_handoff_stage" in condition
     assert 'can(frm, "handoff_assigned_stage")' in condition
-    assert "assignedToCurrentUser(stage)" in condition
+    assert "canOperateCurrentStage(stage)" in condition
     assert "active_stage_status" not in condition
     assert "In Progress" not in condition
     assert "Paused" not in condition

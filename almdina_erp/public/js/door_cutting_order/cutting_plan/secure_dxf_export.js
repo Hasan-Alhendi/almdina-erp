@@ -833,7 +833,8 @@
         return topologyDxfPoints(placed, placement);
     }
 
-    function buildDxf(plan) {
+    function buildDxf(plan, options) {
+        const includeSawCenters = Boolean(options && options.includeSawCenters);
         const cutterMm = cutterDiameterMm(plan);
         if (cutterMm && cutterMm.linerExport) throw cutterMm;
         assertRequiredGlassOpenings(plan);
@@ -954,9 +955,12 @@
                 maxX: offsetX + fullWidth,
                 maxY: offsetY + fullHeight,
             };
-            cutterCenterSegments(shapes, num(cutterMm) / 2, physicalBoard).forEach(segment => {
-                entities += line(SAW_CENTER_LAYER, segment[0][0], segment[0][1], segment[1][0], segment[1][1]);
-            });
+            // Separation/trim CUT_PATH is manufacturing-only after plan approval.
+            if (includeSawCenters) {
+                cutterCenterSegments(shapes, num(cutterMm) / 2, physicalBoard).forEach(segment => {
+                    entities += line(SAW_CENTER_LAYER, segment[0][0], segment[0][1], segment[1][0], segment[1][1]);
+                });
+            }
         });
 
         let dxf = "";
@@ -1012,11 +1016,29 @@
         }
     }
 
+    function preferOriginalUpload(options) {
+        // Server workspace contract is authoritative. Missing flag keeps the
+        // historical "download attached bytes" path for older payloads.
+        if (options && Object.prototype.hasOwnProperty.call(options, "preferOriginalUpload")) {
+            return options.preferOriginalUpload !== false;
+        }
+        if (options && options.originalIsManufacturingReady === false) {
+            return false;
+        }
+        return true;
+    }
+
     function shouldDownloadOriginalUpload(planSource, options) {
         const normalized = String(planSource || "").trim().toLowerCase();
-        if (ORIGINAL_UPLOAD_SOURCES.has(normalized)) return true;
+        if (ORIGINAL_UPLOAD_SOURCES.has(normalized)) {
+            // Custom/uploaded tab: original design file before approval, or when
+            // the approved upload already embeds manufacturing-ready cut paths.
+            // After approval with Absent saw centers, regenerate instead.
+            return preferOriginalUpload(options);
+        }
         if (normalized === "approved") {
-            return Boolean(options && options.hasOriginalFile);
+            if (!(options && options.hasOriginalFile)) return false;
+            return preferOriginalUpload(options);
         }
         return false;
     }
@@ -1116,7 +1138,8 @@
         });
     }
 
-    function downloadValidatedPlan(data, orderName, frm) {
+    function downloadValidatedPlan(data, orderName, frm, ownsExport = null) {
+        if (ownsExport && !ownsExport()) return null;
         const plan = (data && data.plan) || {};
         applyOrderLinerSpecs(plan, frm);
         if (!(plan.sheets || []).length) {
@@ -1125,7 +1148,9 @@
 
         let dxf;
         try {
-            dxf = buildDxf(plan);
+            dxf = buildDxf(plan, {
+                includeSawCenters: Boolean(data && data.include_saw_centers),
+            });
             validateDxfText(dxf);
         } catch (error) {
             if (error && (error.linerExport || error.glassOpening)) {
@@ -1144,6 +1169,7 @@
             freeze: true,
             freeze_message: __("Preparing an AutoCAD-compatible DXF..."),
         }).then(response => {
+            if (ownsExport && !ownsExport()) return null;
             const output = (response && response.message) || {};
             if (!output.filename || !output.content_b64) {
                 throw new Error("AutoCAD DXF normalization response is incomplete.");
@@ -1191,15 +1217,45 @@
         });
     }
 
-    function validatedExport(frm) {
-        const args = { doc: JSON.stringify(frm.doc) };
-        if (!frm.is_new()) args.order_name = frm.doc.name;
+    function manufacturingSourceForm(frm, serializedDoc) {
+        const profiles = frm && frm._dco_side_edge_profiles;
+        return {
+            doc: JSON.parse(serializedDoc),
+            // L-shaped notch compensation also reads the form's edge profile cache.
+            // Capture it with the document so a later route change cannot alter cuts.
+            _dco_side_edge_profiles: profiles instanceof Map
+                ? new Map([...profiles].map(([key, value]) => [key, { ...value }]))
+                : new Map(),
+            _dco_side_edge_profiles_financial: frm && frm._dco_side_edge_profiles_financial === true,
+        };
+    }
 
-        return fetchValidatedPlan(args).then(r => downloadValidatedPlan(r.message, frm.doc.name, frm));
+    function validatedExport(frm) {
+        const serializedDoc = JSON.stringify(frm.doc);
+        const sourceForm = manufacturingSourceForm(frm, serializedDoc);
+        const args = { doc: serializedDoc };
+        if (!frm.is_new()) args.order_name = sourceForm.doc.name;
+        const context = window.AlmdinaDocumentContext;
+        const owner = context && typeof context.capture === "function" ? context.capture(frm) : null;
+        const initialDoc = frm.doc;
+        const ownsExport = () => context && typeof context.isCurrent === "function"
+            ? Boolean(owner && context.isCurrent(frm, owner))
+            : Boolean(frm.doc === initialDoc && (!window.cur_frm || window.cur_frm === frm));
+
+        return fetchValidatedPlan(args).then(r => {
+            if (!ownsExport()) return null;
+            return downloadValidatedPlan(r.message, sourceForm.doc.name, sourceForm, ownsExport);
+        });
     }
 
     function exportOrderDxf(orderName, planSource = null, options = null) {
         const args = { order_name: orderName };
+        // By-name exports are independent of the visible Desk form. If a caller
+        // supplies form-only add-on data, freeze the matching order at invocation.
+        const sourceDoc = options && options.frm && options.frm.doc;
+        const sourceForm = sourceDoc && String(sourceDoc.name || "") === String(orderName || "")
+            ? manufacturingSourceForm(options.frm, JSON.stringify(sourceDoc))
+            : null;
         if (planSource) args.plan_source = planSource;
         if (shouldDownloadOriginalUpload(planSource, options)) {
             return fetchOriginalUploadedDxf(args).then(r => {
@@ -1212,7 +1268,7 @@
             });
         }
         return fetchValidatedPlan(args).then(r =>
-            downloadValidatedPlan(r.message, orderName, options && options.frm)
+            downloadValidatedPlan(r.message, orderName, sourceForm)
         );
     }
 

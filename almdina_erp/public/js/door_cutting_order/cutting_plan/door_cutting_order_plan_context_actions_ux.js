@@ -426,8 +426,11 @@
             frappe.msgprint(translate("Could not load the secure DXF export service."));
             return false;
         }
+        const row = rowForTab(frm);
         return frappe.almdina.export_order_dxf(frm.doc.name, activeTab(frm), {
-            hasOriginalFile: hasOriginalDxfFile(rowForTab(frm)),
+            hasOriginalFile: hasOriginalDxfFile(row),
+            originalIsManufacturingReady: originalIsManufacturingReady(row),
+            preferOriginalUpload: preferOriginalUpload(frm, row),
             frm,
         });
     }
@@ -467,6 +470,30 @@
 
     function hasOriginalDxfFile(row) {
         return Boolean(row && row.dxf && String(row.dxf.file || "").trim());
+    }
+
+    function originalIsManufacturingReady(row) {
+        if (!hasOriginalDxfFile(row)) return false;
+        const status = String((row.dxf && row.dxf.saw_center_status) || "Unknown").trim();
+        if (status === "Absent") return false;
+        return status === "Present" || status === "Legacy" || status === "Unknown";
+    }
+
+    function preferOriginalUpload(frm, row) {
+        if (!row || !row.dxf) return true;
+        if (Object.prototype.hasOwnProperty.call(row.dxf, "prefer_original_upload")) {
+            return row.dxf.prefer_original_upload !== false;
+        }
+        // Fallback before workspace payload carries the server contract: only
+        // the current approved upload with Absent saw centers regenerates.
+        const approvedName = String((workspaceData(frm) || {}).approved_plan || "").trim();
+        const isCurrentApproval = (
+            String(row.status || "") === "Approved"
+            && approvedName
+            && String(row.name || "") === approvedName
+        );
+        if (isCurrentApproval && !originalIsManufacturingReady(row)) return false;
+        return true;
     }
 
     function exportLabel(tab, row) {

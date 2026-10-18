@@ -32,11 +32,12 @@ from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
     ManufacturingRequirementsError,
 )
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
+    APPROVED,
     DRAFT,
     SYSTEM,
     UPLOADED_DXF,
 )
-from almdina_erp.almdina_erp.domain.cutting.primitives import rects_have_clearance
+from almdina_erp.almdina_erp.domain.cutting.glass_opening_nesting import layout_pair_fault
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     require_doctype_capability,
@@ -199,21 +200,47 @@ def _kerf_errors(
                     "w": flt(second.get("w")),
                     "h": flt(second.get("h")),
                 }
-                if rects_have_clearance(
-                    first_rect,
-                    second_rect,
-                    required_kerf_cm,
-                    DXF_KERF_NUMERIC_TOLERANCE_CM,
-                ):
-                    continue
                 first_key = first.get("label") or first.get("id") or index + 1
                 second_key = second.get("label") or second.get("id") or index + 2
+                pair_issue = layout_pair_fault(
+                    first,
+                    second,
+                    kerf_cm=required_kerf_cm,
+                    tolerance=DXF_KERF_NUMERIC_TOLERANCE_CM,
+                    sheet_pieces=pieces,
+                    first_rect=first_rect,
+                    second_rect=second_rect,
+                )
+                if pair_issue is None:
+                    continue
+                # Rectangle-fallback layout faults keep the historical kerf code so
+                # existing export cards stay stable. Topology overlaps still arrive
+                # as MATERIAL_OVERLAP from validate_snapshot_material_layout.
+                params: dict[str, Any] = {
+                    "kerf_mm": required_kerf_cm * 10.0,
+                    "layout_fault": pair_issue,
+                }
+                if pair_issue == "invalid":
+                    first_host = first.get("glass_host_piece_id")
+                    second_host = second.get("glass_host_piece_id")
+                    first_id = first.get("id")
+                    second_id = second.get("id")
+                    if first_host not in (None, "") and int(first_host) == int(
+                        second_id or -1
+                    ):
+                        params["glass_frame_guest_label"] = str(first_key)
+                        params["glass_frame_host_label"] = str(second_key)
+                    elif second_host not in (None, "") and int(second_host) == int(
+                        first_id or -1
+                    ):
+                        params["glass_frame_guest_label"] = str(second_key)
+                        params["glass_frame_host_label"] = str(first_key)
                 errors.append(
                     issue(
                         KERF_VIOLATION,
                         CATEGORY_LAYOUT,
                         target=contour_pair_target(first_key, second_key, sheet_no=sheet_no),
-                        params={"kerf_mm": required_kerf_cm * 10.0},
+                        params=params,
                     )
                 )
     return errors
@@ -343,6 +370,74 @@ def _required_saved_plan(order: Any, plan_source: str | None = None) -> Any:
     return plan
 
 
+def _plan_field(plan: Any, field: str, default: Any = None) -> Any:
+    if isinstance(plan, dict):
+        return plan.get(field, default)
+    return getattr(plan, field, default)
+
+
+def _is_current_approved_plan(order: Any, plan: Any) -> bool:
+    """True only when this Cutting Plan is the order's current production approval."""
+
+    plan_name = str(_plan_field(plan, "name") or "").strip()
+    approved_name = str(getattr(order, "approved_plan", None) or "").strip()
+    return (
+        bool(plan_name)
+        and plan_name == approved_name
+        and str(_plan_field(plan, "status") or "") == APPROVED
+    )
+
+
+def _original_is_manufacturing_ready(plan: Any) -> bool:
+    """Uploaded bytes are CNC-ready when they already carry valid cut paths or legacy doors."""
+
+    status = str(_plan_field(plan, "saw_center_status") or "Unknown").strip()
+    if status in {"Present", "Legacy"}:
+        return True
+    if status == "Absent":
+        return False
+    # Historical plans without the field keep their original attached file.
+    return bool(str(_plan_field(plan, "dxf_file") or "").strip())
+
+
+def prefer_original_uploaded_download(order: Any, plan: Any) -> bool:
+    """Whether attached DXF bytes are the correct download for this plan surface.
+
+    Draft / non-current uploaded plans always return the designer file. The current
+    production-approved uploaded plan returns its original bytes only when those
+    bytes already carry manufacturing-ready cut paths (Present/Legacy/Unknown).
+    An approved upload with ``Absent`` saw centers must regenerate from snapshot.
+    """
+
+    if not str(_plan_field(plan, "dxf_file") or "").strip():
+        return False
+    if not _is_current_approved_plan(order, plan):
+        return True
+    return _original_is_manufacturing_ready(plan)
+
+
+def _include_saw_centers_for_export(
+    plan: Any,
+    plan_source: str | None,
+    order: Any | None = None,
+) -> bool:
+    """Saw centers belong to manufacturing DXF after Production plan approval.
+
+    When the Custom/uploaded tab resolves to the order's current approved upload,
+    regeneration must include saw centers even though ``plan_source`` is not
+    ``approved`` — otherwise the designer file without paths would be rebuilt.
+    """
+
+    normalized = str(plan_source or "").strip().lower()
+    if normalized == "approved":
+        return True
+    if order is not None and _is_current_approved_plan(order, plan):
+        return True
+    if normalized in {"system", "custom", "uploaded", "uploaded dxf", "uploaded_dxf", "dxf"}:
+        return False
+    return str(getattr(plan, "status", "") or "") == APPROVED
+
+
 def _assert_saved_plan_fresh(order: Any, plan: Any) -> None:
     """Reject stale manufacturing plans before any saved geometry is evaluated."""
 
@@ -430,7 +525,7 @@ def _attach_download_response(filename: str, content: bytes) -> None:
     response["filecontent"] = content
 
 
-def _load_original_uploaded_dxf(order: Any, plan_source: str | None) -> tuple[str, bytes]:
+def _load_original_uploaded_dxf(order: Any, plan_source: str | None) -> tuple[str, bytes, Any]:
     """Return the validated uploaded DXF bytes after attachment-scope checks.
 
     The client never supplies ``file_url``. The file is resolved from the Cutting
@@ -474,7 +569,7 @@ def _load_original_uploaded_dxf(order: Any, plan_source: str | None) -> tuple[st
 
     content = Path(path).read_bytes()
     filename = _safe_uploaded_dxf_filename(file_row.file_name, file_url, order.name)
-    return filename, content
+    return filename, content, plan
 
 
 @frappe.whitelist()
@@ -488,6 +583,10 @@ def download_uploaded_dxf(
     original bytes are returned as base64 after the same authorization and
     File-scope checks. ``frappe.local.response`` still carries the raw bytes
     for direct/API download clients.
+
+    Fail closed when this plan is the current production approval but its
+    attached file still lacks manufacturing saw centers — the client must
+    regenerate from the plan snapshot instead of shipping a design-only DXF.
     """
 
     if not str(order_name or "").strip():
@@ -497,7 +596,15 @@ def download_uploaded_dxf(
     if order is None:
         frappe.throw(_(_MISSING_UPLOADED_DXF_MESSAGE), frappe.ValidationError)
 
-    filename, content = _load_original_uploaded_dxf(order, plan_source)
+    filename, content, plan = _load_original_uploaded_dxf(order, plan_source)
+    if not prefer_original_uploaded_download(order, plan):
+        frappe.throw(
+            _(
+                "ملف DXF الأصلي لهذه الخطة المعتمدة لا يحتوي مسارات قص جاهزة للتصنيع. "
+                "أعد تنزيل ملف التصنيع المولَّد من الخطة المعتمدة."
+            ),
+            frappe.ValidationError,
+        )
     _attach_download_response(filename, content)
     return {
         "filename": filename,
@@ -593,9 +700,18 @@ def get_validated_dxf_plan(
             frappe.throw(render_error_cards_html(issues, context="export"), title=_("تعذر تصدير DXF"))
         snapshot = apply_extra_double_text_flags_to_snapshot(snapshot, order.pieces)
         _assert_export_kerf(snapshot, fallback_kerf_mm=flt(plan.kerf_mm))
+        include_saw_centers = _include_saw_centers_for_export(plan, plan_source, order)
+        prefer_original = prefer_original_uploaded_download(order, plan)
         return {
             "plan": snapshot,
             "manifest": _plan_manifest(order, plan),
+            "cutting_plan": str(plan.name or ""),
+            "plan_revision": cint(plan.revision),
+            "plan_status": str(plan.status or ""),
+            "include_saw_centers": include_saw_centers,
+            "saw_center_status": str(getattr(plan, "saw_center_status", None) or "Unknown"),
+            "original_is_manufacturing_ready": _original_is_manufacturing_ready(plan),
+            "prefer_original_upload": prefer_original,
         }
 
     if payload is None:
@@ -618,7 +734,17 @@ def get_validated_dxf_plan(
     return {
         "plan": snapshot,
         "manifest": _draft_manifest(editable, snapshot),
+        # Unsaved / draft desk export is for designer editing, not CNC.
+        "include_saw_centers": False,
+        "saw_center_status": "Absent",
+        "original_is_manufacturing_ready": False,
+        "prefer_original_upload": False,
     }
 
 
-__all__ = ["download_uploaded_dxf", "get_validated_dxf_plan", "normalize_dxf_for_autocad"]
+__all__ = [
+    "download_uploaded_dxf",
+    "get_validated_dxf_plan",
+    "normalize_dxf_for_autocad",
+    "prefer_original_uploaded_download",
+]

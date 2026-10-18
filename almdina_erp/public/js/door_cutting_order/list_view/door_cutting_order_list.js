@@ -14,7 +14,7 @@
     ]);
     const KANBAN_VIEW_PATCH_KEY = "__almdinaDcoCardPresentationInstalled";
     const MOBILE_CARD_STYLESHEET_ID = "almdina-dco-mobile-list-css";
-    const MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=9";
+    const MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=11";
     function translate(message, replacements) {
         const locale = window.AlmdinaLocale;
         if (locale && typeof locale.translate === "function") {
@@ -143,10 +143,18 @@
     const STATUS_FILTER_ALL_LABEL = "All statuses";
     const ASSIGNEE_FILTER_FIELDNAME = "current_assignee";
     const ASSIGNEE_FILTER_ALL_LABEL = "All workers";
+    const PRICE_APPROVAL_FILTER_FIELDNAME = "price_approval_status";
+    const PRICE_APPROVAL_FILTER_ALL_LABEL = "All price statuses";
+    const PRICE_APPROVAL_STATUS_APPROVED = "Approved";
+    const PRICE_APPROVAL_STATUS_UNAPPROVED = "Unapproved";
     const DEFAULT_STATUS_OPTIONS = Object.freeze([
         Object.freeze({ value: "Draft", label: "Draft" }),
         Object.freeze({ value: "Delivered", label: "Delivered" }),
         Object.freeze({ value: "Cancelled", label: "Cancelled" }),
+    ]);
+    const PRICE_APPROVAL_FILTER_OPTIONS = Object.freeze([
+        Object.freeze({ value: PRICE_APPROVAL_STATUS_APPROVED, label: "Approved" }),
+        Object.freeze({ value: PRICE_APPROVAL_STATUS_UNAPPROVED, label: "Unapproved" }),
     ]);
     let loadedStatusOptions = [...DEFAULT_STATUS_OPTIONS];
     let loadedAssigneeOptions = [];
@@ -498,6 +506,36 @@
         };
     }
 
+    function priceApprovalFilterOptions() {
+        return [
+            { value: "", label: translate(PRICE_APPROVAL_FILTER_ALL_LABEL) },
+            ...PRICE_APPROVAL_FILTER_OPTIONS.map(option => ({
+                value: option.value,
+                label: translate(option.label),
+            })),
+        ];
+    }
+
+    function priceApprovalFilterConfig(options = {}) {
+        const localize = options.localize !== false;
+        const labelFor = (message) => (localize ? translate(message) : message);
+        return {
+            fieldtype: "Select",
+            fieldname: PRICE_APPROVAL_FILTER_FIELDNAME,
+            label: labelFor("Price approval status"),
+            options: localize
+                ? priceApprovalFilterOptions()
+                : [
+                    { value: "", label: PRICE_APPROVAL_FILTER_ALL_LABEL },
+                    ...PRICE_APPROVAL_FILTER_OPTIONS.map(option => ({
+                        value: option.value,
+                        label: option.label,
+                    })),
+                ],
+            condition: "=",
+        };
+    }
+
     function statusFilterField(listview) {
         return listview && listview.page && listview.page.fields_dict
             ? listview.page.fields_dict[STATUS_FILTER_FIELDNAME]
@@ -507,6 +545,12 @@
     function assigneeFilterField(listview) {
         return listview && listview.page && listview.page.fields_dict
             ? listview.page.fields_dict[ASSIGNEE_FILTER_FIELDNAME]
+            : null;
+    }
+
+    function priceApprovalFilterField(listview) {
+        return listview && listview.page && listview.page.fields_dict
+            ? listview.page.fields_dict[PRICE_APPROVAL_FILTER_FIELDNAME]
             : null;
     }
 
@@ -581,6 +625,22 @@
         if (!select) return;
         select.setAttribute("aria-label", translate("Current worker"));
         select.setAttribute("title", translate(ASSIGNEE_FILTER_ALL_LABEL));
+    }
+
+    function applyPriceApprovalFilterHint(listview) {
+        const field = priceApprovalFilterField(listview);
+        if (field && field.df) {
+            field.df.label = translate("Price approval status");
+            if (typeof field.set_label === "function") {
+                field.set_label(translate("Price approval status"));
+            }
+        }
+        const wrapper = controlWrapper(field);
+        if (!wrapper || typeof wrapper.querySelector !== "function") return;
+        const select = wrapper.querySelector("select");
+        if (!select) return;
+        select.setAttribute("aria-label", translate("Price approval status"));
+        select.setAttribute("title", translate(PRICE_APPROVAL_FILTER_ALL_LABEL));
     }
 
     function applyLoadedStatusFilterOptions(listview, rows) {
@@ -670,14 +730,17 @@
         const root = rootNode(listview);
         const statusWrapper = controlWrapper(statusFilterField(listview));
         const assigneeWrapper = controlWrapper(assigneeFilterField(listview));
+        const priceWrapper = controlWrapper(priceApprovalFilterField(listview));
         if (!root || !statusWrapper || !assigneeWrapper) return false;
 
         const target = ensureStatusFilterSlot(root);
         if (!target) return false;
         if (statusWrapper.parentNode !== target) target.appendChild(statusWrapper);
         if (assigneeWrapper.parentNode !== target) target.appendChild(assigneeWrapper);
+        if (priceWrapper && priceWrapper.parentNode !== target) target.appendChild(priceWrapper);
         applyStatusFilterHint(listview);
         applyAssigneeFilterHint(listview);
+        applyPriceApprovalFilterHint(listview);
         return true;
     }
 
@@ -1698,11 +1761,13 @@
             "order_notes",
             "current_department", "current_assignee",
             "current_production_stage",
+            "price_approval_status",
         ])],
         custom_filter_configs: [
             ...(Array.isArray(existing.custom_filter_configs) ? existing.custom_filter_configs : []),
             statusFilterConfig({ localize: false }),
             assigneeFilterConfig({ localize: false }),
+            priceApprovalFilterConfig({ localize: false }),
         ],
         formatters: Object.assign({}, existing.formatters || {}, {
             current_department(value, df, doc) {
@@ -1756,6 +1821,8 @@
         overviewDefaultSortSql,
         overviewListState,
         overviewStageLabel,
+        priceApprovalFilterConfig,
+        priceApprovalFilterOptions,
         productionStageLabel,
         personalQueueState,
         quickActionContext,

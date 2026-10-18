@@ -35,7 +35,7 @@ Allowed action
 
 ### Assignment
 
-حتى لو كان المستخدم يحمل الدور التشغيلي الصحيح، يجب في أفعال العامل اليومية أن تكون **المرحلة مسندة إليه** عندما يتطلب العقد ذلك.
+حتى لو كان المستخدم يحمل الدور التشغيلي الصحيح، يجب في أفعال العامل اليومية أن تكون **المرحلة مسندة إليه** عندما يتطلب العقد ذلك. `Administrator` يتجاوز ملكية الإسناد للمرحلة النشطة فقط؛ تبقى صلاحية الفعل وحالة المرحلة وصحة الانتقال وسلامة البيانات مطلوبة، ولا يغيّر هذا التجاوز العامل المسند.
 
 ## 3. Administrator وSystem Manager
 
@@ -67,7 +67,13 @@ flowchart LR
 
 ### Costing & documents
 
-`view_costs`, `edit_cost_settings`, `edit_special_price`, `approve_special_price`, `print_measurements`, `print_customer_invoice`, `print_internal_cost_report`.
+`view_costs`, `edit_cost_settings`, `edit_special_price`, `approve_special_price`, `approve_final_price`, `cancel_final_price_approval`, `print_measurements`, `print_customer_invoice`, `print_internal_cost_report`.
+
+`approve_final_price` يعتمد السعر النهائي لإجمالي طلب القص ويثبّت سجل اعتماد مستقل. هي مستقلة عن اعتماد أسعار الدرف الخاصة وعن اعتماد خطة القص، ولا تُمنح لأي دور افتراضيًا. يُسمح بالاعتماد في أي مرحلة إنتاجية (بما فيها ما بعد الرسم) مع نطاق الوصول و`view_costs` واكتمال/حداثة التسعير؛ لا يُشترط Draft ولا تُستخدم سياسات تحرير الطلب أو تسعير الدرف المقيدة بالمسودة. الاعتماد يغيّر حالة السعر فقط دون حالة الطلب أو مرحلته أو إسناده أو اعتماد خطة القص. **Approved وحدها لا تمنع** تحرير تفاصيل الطلب أو خطة القص أو إعدادات التكلفة (`board_rate_usd` / `cutting_cost_per_board_usd` / `offcut_price_usd`)؛ التحرير يبقى محكوماً بـ`edit_order` / `edit_cost_settings` ونطاق المستند ودورة حياة الطلب/الخطة. المرحلة الثانية تضيف `approve_order_final_price` مع رمز أساس سعر (`price_basis_token`) من `get_order_cost_snapshot`. المرحلة الثالثة تُبطل الاعتماد تلقائياً عند حفظ تغيير مؤثر في أساس التسعير (بما فيها أسعار اللوح/القص/الفضلة) دون منح `approve_final_price` أو `cancel_final_price_approval` لمنفّذ التغيير. استثناء محدد: تغيير خوارزمية القص الذي يُبقي عدد الألواح والأساس المالي كما هما لا يُبطل الاعتماد. المرحلة الرابعة تضيف زر الاعتماد وشارة حالة السعر في تاب التكلفة مع إشعار Toast خفيف عند الإبطال التلقائي الفعلي لمن يملك `approve_final_price` أو `cancel_final_price_approval`. المرحلة الخامسة تضيف فلتر قائمة الطلبات وشارة حالة السعر في القائمة من الحقل `price_approval_status` فقط دون كشف مالي إضافي.
+
+`cancel_final_price_approval` تلغي اعتماد السعر النهائي للطلب مع الاحتفاظ بسجل الموافقة وتفاصيلها. هي مستقلة عن `approve_final_price` وعن `edit_order` و`edit_cost_settings` وأسعار الدرف الخاصة و`view_all_orders`، ولا تُستنتج من أي قدرة حالية ولا تُمنح لأي دور أو قالب افتراضي. منحها يضيف `view_orders` و`view_costs` فقط مع الإبقاء على نطاق المستند. `Administrator` يبقى الاستثناء الصريح، و`System Manager` لا يصبح استثناء. الإبطال التلقائي الناتج عن تعديل مصرح به لا يتطلب قدرة الإلغاء اليدوي. حقل `approval_note` جزء من سجل الاعتماد التاريخي ويُحمى من التعديل عند الإبطال، ولا يدخل في بصمة التسعير.
+
+أمر الاعتماد `approve_order_final_price(order_name, expected_price_basis_token, approval_note=None)` يقبل ملاحظة اختيارية (نص حتى 500 حرفاً، تُطبَّق عبر `normalize_approval_note`) وتُحفظ في سجل `Door Cutting Price Approval` فقط. إعادة الاعتماد لنفس الأساس تعيد الملاحظة الأصلية دون استبدالها. أمر الإلغاء اليدوي `cancel_order_final_price_approval(order_name, expected_current_price_approval)` يتطلب تطابق سجل الاعتماد الحالي؛ السبب الثابت `manual_price_approval_cancelled` مع `invalidated_by`؛ التكرار لنفس السجل الملغى لا يعيد كتابة الوقت/المنفّذ؛ موافقة أحدث تُرفض. الإلغاء اليدوي لا يطلق إشارة Toast الإبطال التلقائي. واجهة تاب التكلفة تربط النافذة/الزر بهذين الأمرين دون منح الصلاحيات أو إعادة بناء قواعد الأهلية في JavaScript.
 
 ### Cutting plan / drawing / DXF
 

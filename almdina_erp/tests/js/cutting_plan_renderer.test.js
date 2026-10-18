@@ -671,4 +671,91 @@ const marginHtml = renderer.build({ doc: { name: "26-00107" } }, marginPlan);
 const trimWidths = [...marginHtml.matchAll(/data-trim-width-cm="([^"]+)"/g)].map(match => match[1]);
 assert.deepEqual(trimWidths, ["0", "0.5"]);
 
+const nestedGlassPlan = {
+    usable_board_width_cm: 100,
+    usable_board_length_cm: 100,
+    full_board_width_cm: 100,
+    full_board_length_cm: 100,
+    kerf_cm: 0.3,
+    trim_cm: 0,
+    sheets: [{
+        sheet_no: 1,
+        // Adversarial order: guests before hosts must still paint above openings.
+        pieces: [
+            {
+                id: 3,
+                label: "3.1",
+                x: 12,
+                y: 12,
+                w: 10,
+                h: 10,
+                original_w: 10,
+                original_h: 10,
+                piece_type: "Regular",
+                glass_host_piece_id: 2,
+            },
+            {
+                id: 2,
+                label: "2.1",
+                x: 6,
+                y: 6,
+                w: 30,
+                h: 30,
+                original_w: 30,
+                original_h: 30,
+                piece_type: "Glass",
+                glass_margin_mm: 50,
+                glass_hole_local_mm: [[50, 50], [250, 50], [250, 250], [50, 250]],
+                glass_host_piece_id: 1,
+            },
+            {
+                id: 4,
+                label: "4.1",
+                x: 18,
+                y: 8,
+                w: 8,
+                h: 8,
+                original_w: 8,
+                original_h: 8,
+                piece_type: "Regular",
+                glass_host_piece_id: 1,
+            },
+            {
+                id: 1,
+                label: "1.1",
+                x: 0,
+                y: 0,
+                w: 50,
+                h: 50,
+                original_w: 50,
+                original_h: 50,
+                piece_type: "Glass",
+                glass_margin_mm: 50,
+                glass_hole_local_mm: [[50, 50], [450, 50], [450, 450], [50, 450]],
+            },
+        ],
+    }],
+};
+const nestedHtml = renderer.build({ doc: { name: "DCO-NEST-PREVIEW" } }, nestedGlassPlan);
+assert.equal((nestedHtml.match(/data-piece-type="Glass"/g) || []).length, 2);
+assert.equal((nestedHtml.match(/data-piece-type="Regular"/g) || []).length, 2);
+assert.match(nestedHtml, /data-glass-host="2"/);
+assert.match(nestedHtml, /data-glass-host="1"/);
+assert.match(nestedHtml, /data-nest-depth="0"/);
+assert.match(nestedHtml, /data-nest-depth="1"/);
+assert.match(nestedHtml, /data-nest-depth="2"/);
+assert.match(nestedHtml, /z-index:2;/);
+assert.match(nestedHtml, /z-index:3;/);
+assert.match(nestedHtml, /z-index:4;/);
+assert.match(nestedHtml, /fill-rule="evenodd"/);
+assert.match(nestedHtml, /dco-vector-piece/);
+assert.match(nestedHtml, /dco-piece-number/);
+assert.equal((nestedHtml.match(/dco-shaped-piece-outline/g) || []).length, 2);
+assert.doesNotMatch(nestedHtml, /undefined/);
+
+const nestedPrintRoot = renderer.build({ doc: { name: "DCO-NEST-PRINT" } }, nestedGlassPlan);
+assert.match(nestedPrintRoot, /data-glass-host="1"/);
+assert.match(nestedPrintRoot, /data-nest-depth="2"/);
+assert.equal((nestedPrintRoot.match(/data-piece-type="/g) || []).length, 4);
+
 console.log("Cutting-plan renderer simulation passed");

@@ -227,13 +227,15 @@
         return false;
     }
 
-    function showCommittedResult(workspacesRefreshed) {
+    function showCommittedResult(workspacesRefreshed, reconciled = false) {
         frappe.show_alert({
-            message: translate(workspacesRefreshed
+            message: translate(reconciled
+                ? "The plan was verified on the server after its save response was lost."
+                : workspacesRefreshed
                 ? "The preview plan was saved and its related cost was updated."
                 : "The preview plan was saved, but the view could not be refreshed. Reload the page to see the latest plan and cost."),
-            indicator: workspacesRefreshed ? "green" : "orange",
-        }, workspacesRefreshed ? 5 : 7);
+            indicator: reconciled || !workspacesRefreshed ? "orange" : "green",
+        }, reconciled || !workspacesRefreshed ? 7 : 5);
     }
 
     async function saveEditingCommand(frm, sessionContext = null) {
@@ -278,7 +280,7 @@
         if (view && typeof view.restorePersistedPresentation === "function") {
             view.restorePersistedPresentation(frm);
         }
-        showCommittedResult(workspacesRefreshed);
+        showCommittedResult(workspacesRefreshed, committed.reconciled_commit === true);
         schedule(frm);
         return true;
     }

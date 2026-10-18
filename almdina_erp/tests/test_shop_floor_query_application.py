@@ -529,6 +529,34 @@ class TestShopFloorQueryApplication(unittest.TestCase):
         detail = queries.get_order_detail(repository, "DCO-2")
         self.assertTrue(detail["can_recalculate_drawing_plan"])
 
+    def test_administrator_can_recalculate_on_another_users_planning_stage(self) -> None:
+        repository = FakeRepository()
+        repository.user = "Administrator"
+        repository.admin = True
+        repository.order = SimpleNamespace(
+            name="DCO-ADMIN",
+            status="At Drawing",
+            production_path="Drawing",
+            current_production_stage="PST-DRAWING",
+            approved_plan=None,
+            approved_plan_source="System",
+            has_current_approved_plan=False,
+            has_cutting_plan=True,
+            plan_needs_recalculation=False,
+        )
+        repository.stage_summaries["PST-DRAWING"] = {
+            "name": "PST-DRAWING",
+            "status": "In Progress",
+            "stage_type": "Drawing",
+            "assigned_to": "designer@example.com",
+            "operational_role": "عامل رسم",
+        }
+
+        detail = queries.get_order_detail(repository, "DCO-ADMIN")
+
+        self.assertFalse(detail["stage_snapshot"]["actor_is_current_assignee"])
+        self.assertTrue(detail["can_recalculate_drawing_plan"])
+
     def test_action_context_denies_another_workers_stage(self) -> None:
         repository = FakeRepository()
         repository.order = SimpleNamespace(
@@ -589,6 +617,122 @@ class TestShopFloorQueryApplication(unittest.TestCase):
         )
         self.assertTrue(context["route_stages"][0]["is_planning_stage"])
         self.assertNotIn("cutting_plan_json", context)
+
+    def test_administrator_operation_flag_does_not_change_assignee_fact(self) -> None:
+        repository = FakeRepository()
+        repository.user = "Administrator"
+        repository.admin = True
+        repository.order = SimpleNamespace(
+            name="DCO-ADMIN",
+            status="At Drawing",
+            production_path="Drawing",
+            current_production_stage="PST-DRAWING",
+            approved_plan="",
+            has_current_approved_plan=False,
+            has_cutting_plan=True,
+            plan_needs_recalculation=False,
+        )
+        repository.stage_summaries["PST-DRAWING"] = {
+            "name": "PST-DRAWING",
+            "status": "Pending",
+            "stage_type": "Drawing",
+            "assigned_to": "designer@example.com",
+            "operational_role": "عامل رسم",
+        }
+
+        context = queries.get_current_stage_context(repository, "DCO-ADMIN")
+
+        self.assertFalse(context["actor_is_current_assignee"])
+        self.assertTrue(context["actor_can_operate_current_stage"])
+        self.assertTrue(context["can_start_stage"])
+
+    def test_non_admin_stage_action_remains_assignment_scoped(self) -> None:
+        repository = FakeRepository()
+        repository.user = "operator@example.com"
+        repository.order = SimpleNamespace(
+            name="DCO-OTHER",
+            status="At Drawing",
+            production_path="Drawing",
+            current_production_stage="PST-DRAWING",
+            approved_plan="",
+            has_current_approved_plan=False,
+            has_cutting_plan=True,
+            plan_needs_recalculation=False,
+        )
+        repository.stage_summaries["PST-DRAWING"] = {
+            "name": "PST-DRAWING",
+            "status": "Pending",
+            "stage_type": "Drawing",
+            "assigned_to": "designer@example.com",
+            "operational_role": "عامل رسم",
+        }
+
+        context = queries.get_current_stage_context(repository, "DCO-OTHER")
+
+        self.assertFalse(context["actor_is_current_assignee"])
+        self.assertFalse(context["actor_can_operate_current_stage"])
+        self.assertFalse(context["can_start_stage"])
+
+    def test_partial_admin_scope_does_not_bypass_current_stage_assignment(self) -> None:
+        repository = FakeRepository()
+        repository.user = "supervisor@example.com"
+        repository.admin = True
+        repository.order = SimpleNamespace(
+            name="DCO-SUPERVISOR",
+            status="شريون",
+            production_path="Sharyoun",
+            current_production_stage="PST-SHARYOUN",
+            has_cutting_plan=True,
+            plan_needs_recalculation=False,
+        )
+        repository.stage_summaries["PST-SHARYOUN"] = {
+            "name": "PST-SHARYOUN",
+            "status": "Pending",
+            "stage_type": "Sharyoun",
+            "assigned_to": "worker@example.com",
+            "operational_role": "عامل شريون",
+        }
+
+        context = queries.get_current_stage_context(repository, "DCO-SUPERVISOR")
+
+        self.assertTrue(repository.is_admin())
+        self.assertFalse(context["actor_is_current_assignee"])
+        self.assertFalse(context["actor_can_operate_current_stage"])
+        self.assertFalse(context["can_start_stage"])
+
+    def test_partial_admin_scope_remains_for_inbox_but_not_stage_actions(self) -> None:
+        repository = FakeRepository()
+        repository.user = "supervisor@example.com"
+        repository.admin = True
+        repository.inbox = [{
+            "name": "PST-SHARYOUN",
+            "door_cutting_order": "DCO-SUPERVISOR",
+            "stage_type": "Sharyoun",
+            "status": "Pending",
+            "assigned_to": "worker@example.com",
+        }]
+        repository.current["DCO-SUPERVISOR"] = "PST-SHARYOUN"
+        repository.orders["DCO-SUPERVISOR"] = {
+            "name": "DCO-SUPERVISOR",
+            "status": "شريون",
+            "production_path": "Sharyoun",
+            "current_production_stage": "PST-SHARYOUN",
+            "has_cutting_plan": True,
+            "plan_needs_recalculation": False,
+        }
+        repository.stage_summaries["PST-SHARYOUN"] = {
+            "name": "PST-SHARYOUN",
+            "status": "Pending",
+            "stage_type": "Sharyoun",
+            "assigned_to": "worker@example.com",
+            "operational_role": "عامل شريون",
+        }
+
+        rows = queries.get_my_inbox(repository)
+
+        self.assertEqual(repository.last_inbox_args, ("supervisor@example.com", True))
+        self.assertFalse(rows[0]["actor_can_operate_current_stage"])
+        self.assertFalse(rows[0]["can_start_stage"])
 
     def test_revert_targets_are_unique_and_permission_protected(self) -> None:
         repository = FakeRepository()

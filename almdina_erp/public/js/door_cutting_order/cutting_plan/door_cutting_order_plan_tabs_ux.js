@@ -361,8 +361,9 @@
 			return;
 		}
 		if (renderer && typeof renderer.print === "function") {
-			renderer.print(frm, plan);
-			return;
+			const owner = window.AlmdinaPlanWorkspaceState;
+			const row = owner?.displayedPlanForTab?.(frm, tab);
+			return renderer.print(frm, plan, { tab, row });
 		}
 		frappe.msgprint(translate("Could not prepare printing."));
 	}

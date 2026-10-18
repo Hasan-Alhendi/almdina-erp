@@ -17,7 +17,8 @@ const settings = mode => ({
     trim_margin_mm: 5, optimization_time_limit_sec: 30,
 });
 const response = (id, requested) => ({
-    preview_id: id,
+    preview_id: id, order_name: "DCO-1", source_plan_name: "CP-1", source_plan_revision: 1,
+    source_plan_modified: "before",
     plan: { sheets: [{ id }], margin_policy: { notes: [id] }, method: id },
     summary: { settings: requested, validation: { status: "Valid", needs_recalculation: false } },
 });
@@ -49,8 +50,14 @@ async function run() {
         AlmdinaDocumentContext: { formIdentity(form) { return `DCO::${form.doc.name}`; } },
         AlmdinaPlanWorkspaceAPI: {
             preview(_name, requested) { const job = pending(); calls.push({ job, requested }); return job.promise; },
-            commitPreview(_name, id) { calls.push({ commit: id }); return Promise.resolve(true); },
-            load() { return Promise.resolve({ plans: { system_draft: { snapshot_json: frm.doc.system_plan_json } } }); },
+            commitPreview(name, id) { calls.push({ commit: id }); return Promise.resolve({
+                exact_preview_commit: true, committed_preview_id: id, name,
+                cutting_plan: "CP-1", plan_revision: 1,
+                plan_source_type: "System", plan_status: "Draft",
+                packing_mode: "optimal", cutting_machine_type: "saw", kerf_mm: 3,
+                trim_margin_mm: 5, optimization_time_limit_sec: 30,
+            }); },
+            load() { return Promise.resolve({ order_name: frm.doc.name, plans: { system_draft: { snapshot_json: frm.doc.system_plan_json } } }); },
         },
         AlmdinaPermissions: { canDocument() { return true; } },
         AlmdinaCuttingPlanRender: { build(_frm, plan) { return `<geometry id="${plan.sheets[0].id}"></geometry>`; } },
@@ -165,7 +172,7 @@ async function run() {
     const d = preview.preview(frm, settings("optimal"));
     calls[6].job.resolve(response("D", calls[6].requested));
     assert.equal(await d, true);
-    assert.equal((await preview.commit(frm)), true);
+    assert.equal((await preview.commit(frm)).exact_preview_commit, true);
     assert.equal(calls.at(-1).commit, "D");
     assert.equal(calls.filter(call => call.requested).length, 7);
 

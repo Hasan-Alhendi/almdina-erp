@@ -52,8 +52,8 @@ const fakeWindow = {
         parse() {
             return null;
         },
-        print(_frm, planOverride) {
-            printCalls.push(planOverride);
+        print(frm, planOverride, hint) {
+            printCalls.push({frm, planOverride, hint});
             return planOverride;
         },
     },
@@ -190,8 +190,14 @@ const visibleFrm = {
         },
     },
 };
-fakeWindow.AlmdinaCuttingPlanRender.print(visibleFrm, mixed);
-assert.equal(printCalls.at(-1), null, "print must clone the already projected visible plan for screen/print parity");
+const ownedHint = {tab: "System", row: {name: "OWNED-PLAN", revision: 3}};
+fakeWindow.AlmdinaCuttingPlanRender.print(visibleFrm, mixed, ownedHint);
+assert.strictEqual(printCalls.at(-1).frm, visibleFrm,
+    "a mounted DOM plan cannot replace the active Form identity");
+assert.strictEqual(printCalls.at(-1).planOverride, mixed,
+    "the canonical renderer must verify the requested geometry even when a DOM plan is visible");
+assert.strictEqual(printCalls.at(-1).hint, ownedHint,
+    "the canonical renderer must receive selected tab, row and revision");
 
 const hiddenFrm = {
     fields_dict: {
@@ -201,6 +207,8 @@ const hiddenFrm = {
     },
 };
 fakeWindow.AlmdinaCuttingPlanRender.print(hiddenFrm, mixed);
-assert.strictEqual(printCalls.at(-1), mixed, "legacy print fallback must preserve the explicit plan override");
+assert.strictEqual(printCalls.at(-1).frm, hiddenFrm);
+assert.strictEqual(printCalls.at(-1).planOverride, mixed,
+    "an unmounted plan must preserve the explicit geometry for canonical verification");
 
 console.log("ALMADINA-179 OFFCUT plan presentation simulation passed");

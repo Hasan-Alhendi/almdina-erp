@@ -115,11 +115,37 @@
         const value = String(state || EMPTY_STATE);
         return ["CUSTOMER_FACTORY", "FACTORY_FACTORY", "CUSTOMER_CUSTOMER"].includes(value) ? value : "";
     }
+
+    function formatMeasureNumber(value) {
+        if (value == null || value === "") return null;
+        const number = typeof value === "number" ? value : Number(String(value).trim());
+        if (!Number.isFinite(number)) return null;
+        const text = number.toFixed(2).replace(/\.?0+$/, "");
+        return text === "-0" ? "0" : text;
+    }
+
+    function formatMeasureText(value) {
+        if (value == null || value === "") return null;
+        if (typeof value === "number") return formatMeasureNumber(value);
+        const text = String(value).trim();
+        if (!text) return null;
+        let sawNumber = false;
+        const formatted = text.replace(/-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g, (match) => {
+            const next = formatMeasureNumber(match);
+            if (next == null) return match;
+            sawNumber = true;
+            return next;
+        });
+        return sawNumber ? formatted : text;
+    }
+
     function rowLabel(item) {
         const number = item.piece_number || item.piece_no || item.sequence || item.piece_label || item.index || "—";
-        const width = item.width || item.width_cm || item.w;
-        const length = item.length || item.length_cm || item.h;
-        const measure = item.measurement || item.size || (width && length ? translate("{0} × {1} cm", [width, length]) : "—");
+        const width = formatMeasureNumber(item.width ?? item.width_cm ?? item.w);
+        const length = formatMeasureNumber(item.length ?? item.length_cm ?? item.h);
+        const measure = formatMeasureText(item.measurement)
+            || formatMeasureText(item.size)
+            || (width != null && length != null ? translate("{0} × {1} cm", [width, length]) : "—");
         return { number, measure };
     }
     function rowHtml(item, editable) {
@@ -238,7 +264,7 @@
     function installStyles() {
         if (document.getElementById(STYLE_ID)) return;
         $("<style>", { id: STYLE_ID, text: `
-            .${ROOT_CLASS}{}.dco-cost-offcut-table-wrap{overflow:auto;padding:10px 12px 12px}.dco-cost-offcut-table{width:100%;border-collapse:separate;border-spacing:0 7px;font-size:12px}.dco-cost-offcut-table th{padding:9px 10px;text-align:start;white-space:nowrap}.dco-cost-offcut-table tbody th,.dco-cost-offcut-table tbody td{padding:10px;border:1px solid var(--border-color,#e1e6ea);background:var(--card-bg,#fff);vertical-align:middle}.dco-cost-offcut-table tbody th{border-radius:10px 0 0 10px;width:24%;font-weight:900}.dco-cost-offcut-measure{display:inline-flex;margin-inline-start:10px;padding:3px 9px;border-radius:999px;background:var(--subtle-fg,#f4f6f8);color:var(--text-muted,#687481);font-size:11px;font-weight:800;white-space:nowrap}.dco-cost-offcut-table tbody td{border-inline-end:0;border-radius:0 10px 10px 0}.dco-cost-offcut-option-group{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.dco-cost-offcut-option{display:flex;align-items:center;gap:7px;min-height:34px;margin:0;padding:7px 9px;border:1px solid var(--border-color,#e1e6ea);border-radius:9px;background:var(--subtle-fg,#f8fafc);font-size:11px;font-weight:800;cursor:pointer}.dco-cost-offcut-option:has(input:checked){border-color:var(--alm-primary,#172033);background:color-mix(in srgb, var(--alm-primary, #172033) 8%, transparent)}.dco-cost-offcut-option input{margin:0;accent-color:var(--alm-primary,#172033)}.dco-cost-offcut-option input:disabled+span{opacity:.72}.dco-cost-offcut-actions{display:flex;justify-content:flex-start;padding:0 12px 12px}@media(max-width:800px){.dco-cost-offcut-option-group{grid-template-columns:1fr}.dco-cost-offcut-table tbody th{width:32%}}
+            .${ROOT_CLASS}{}.dco-cost-offcut-table-wrap{overflow:auto;padding:10px 12px 12px}.dco-cost-offcut-table{width:100%;border-collapse:separate;border-spacing:0 7px;font-size:12px}.dco-cost-offcut-table th{padding:9px 10px;text-align:start;white-space:nowrap}.dco-cost-offcut-table tbody th,.dco-cost-offcut-table tbody td{padding:10px;border:1px solid var(--alm-card-border,#e4e8ee);background:var(--alm-card,#ffffff);vertical-align:middle}.dco-cost-offcut-table tbody th{border-radius:10px 0 0 10px;width:24%;font-weight:900}.dco-cost-offcut-measure{display:inline-flex;margin-inline-start:10px;padding:3px 9px;border-radius:999px;background:var(--alm-surface-muted,#f4f6f8);color:var(--alm-text-subtle,#667085);font-size:11px;font-weight:800;white-space:nowrap}.dco-cost-offcut-table tbody td{border-inline-end:0;border-radius:0 10px 10px 0}.dco-cost-offcut-option-group{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.dco-cost-offcut-option{display:flex;align-items:center;gap:7px;min-height:34px;margin:0;padding:7px 9px;border:1px solid var(--alm-card-border,#e4e8ee);border-radius:9px;background:var(--alm-surface-muted,#f4f6f8);font-size:11px;font-weight:800;cursor:pointer}.dco-cost-offcut-option:has(input:checked){border-color:var(--alm-primary,#172033);background:color-mix(in srgb, var(--alm-primary, #172033) 8%, transparent)}.dco-cost-offcut-option input{margin:0;accent-color:var(--alm-primary,#172033)}.dco-cost-offcut-option input:disabled+span{opacity:.72}.dco-cost-offcut-actions{display:flex;justify-content:flex-start;padding:0 12px 12px}@media(max-width:800px){.dco-cost-offcut-option-group{grid-template-columns:1fr}.dco-cost-offcut-table tbody th{width:32%}}
         ` }).appendTo("head");
     }
 
@@ -266,5 +292,13 @@
         return true;
     }
 
-    window.AlmdinaCostOffcutAssignmentUX = Object.freeze({ render, hasPending, hasFactorySelection, savePending });
+    window.AlmdinaCostOffcutAssignmentUX = Object.freeze({
+        render,
+        hasPending,
+        hasFactorySelection,
+        savePending,
+        formatMeasureNumber,
+        formatMeasureText,
+        rowLabel,
+    });
 })();

@@ -70,6 +70,13 @@ class TestPlanPreviewSessionExactCommit(unittest.TestCase):
         self.assertNotIn("optimize_order_plan", commit)
         self.assertIn("session.source_plan_modified", commit)
         self.assertIn("session.user != frappe.session.user", commit)
+        self.assertIn("result['committed_preview_id'] = token", commit)
+        self.assertIn("result['exact_preview_commit'] = True", commit)
+        self.assertLess(commit.index("repository.save_document(plan)"),
+                        commit.index("result['exact_preview_commit'] = True"))
+        self.assertIn("'source_plan_name': source_plan.name", preview)
+        self.assertIn("'source_plan_revision': int(source_plan.revision or 0)", preview)
+        self.assertIn("'source_plan_modified': str(source_plan.modified or '')", preview)
 
     def test_exact_commit_recomputes_input_fingerprint_and_rejects_invalid_geometry(self) -> None:
         source = (
@@ -102,8 +109,8 @@ class TestPlanPreviewSessionExactCommit(unittest.TestCase):
         )
         self.assertIn("__almdinaPlanPreviewSession", source)
         self.assertIn("almdina:plan-preview-updated", source)
-        self.assertIn("api.preview(frm.doc.name", source)
-        self.assertIn("api.commitPreview(frm.doc.name, previewId)", source)
+        self.assertIn("api.preview(orderName", source)
+        self.assertIn("api.commitPreview(orderName, previewId)", source)
         self.assertIn("function isCommittable(frm)", source)
         self.assertIn('String(validation.status || "") === "Valid"', source)
         self.assertNotIn("AlmdinaWorkspaceStore", source)
@@ -193,9 +200,14 @@ class TestPlanPreviewSessionExactCommit(unittest.TestCase):
 
         self.assertLess(manifest.index(api), manifest.index(state))
         self.assertIn(page, manifest)
+        # Count declarations in the Plan bundle, not subsequent references in
+        # the lazy loader, which may load a registered dependent asset later.
+        plan_assets = registry.split("readyGlobals: Object.freeze([", 1)[0]
         for asset in (preview, edit, presenter, preview_edit):
             self.assertNotIn(f'public/js/door_cutting_order/cutting_plan/{asset}', manifest)
-            self.assertEqual(registry.count(asset), 1)
+            self.assertEqual(plan_assets.count(asset), 1)
+        self.assertIn("requireAssets([previewEditAsset])", registry)
+        self.assertIn('"AlmdinaPlanPreviewEditUX"', registry)
         self.assertLess(registry.index(preview), registry.index(edit))
         self.assertLess(registry.index(edit), registry.index(presenter))
         self.assertLess(registry.index(presenter), registry.index(preview_edit))

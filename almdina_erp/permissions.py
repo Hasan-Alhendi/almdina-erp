@@ -339,6 +339,30 @@ def cutting_plan_query(user: str | None = None) -> str:
     return "`tabCutting Plan`.door_cutting_order in (" + _assigned_order_subquery(user) + ")"
 
 
+def door_cutting_price_approval_query(user: str | None = None) -> str:
+    """List only price-approval rows the user may see financially and by order scope."""
+
+    from almdina_erp.almdina_erp.application.security.price_approval_access import (
+        can_read_price_approval_record,
+    )
+
+    user = user or frappe.session.user
+    if user == "Administrator":
+        return ""
+    if not can_read_price_approval_record(
+        has_view_costs=_has(user, Capability.VIEW_COSTS),
+        can_access_parent_order=_has(user, Capability.VIEW_ORDERS),
+    ):
+        return "1=0"
+    if not _requires_assigned_scope(user):
+        return ""
+    return (
+        "`tabDoor Cutting Price Approval`.door_cutting_order in ("
+        + _assigned_order_subquery(user)
+        + ")"
+    )
+
+
 def _known_custom_type_owned_elsewhere(resolved_type: str | None, local_map: dict[str, str]) -> bool:
     value = str(resolved_type or "")
     return value in _KNOWN_CUSTOM_PERMISSION_TYPES and value not in local_map
@@ -427,11 +451,48 @@ def cutting_plan_has_permission(
     return False
 
 
+def door_cutting_price_approval_has_permission(
+    doc: Any,
+    user: str | None = None,
+    ptype: str | None = None,
+    permission_type: str | None = None,
+) -> bool:
+    """Financial approval history is read-scoped; Desk mutations stay closed."""
+
+    from almdina_erp.almdina_erp.application.security.price_approval_access import (
+        can_mutate_price_approval_via_desk,
+        can_read_price_approval_record,
+    )
+
+    resolved_user = user or frappe.session.user
+    resolved_type = _resolved_permission_type(ptype, permission_type)
+    order_name = getattr(doc, "door_cutting_order", None)
+
+    if resolved_user == "Administrator":
+        return True
+    if resolved_type in _MUTATING_PERMISSION_TYPES:
+        return can_mutate_price_approval_via_desk()
+    if resolved_type in _READ_PERMISSION_TYPES:
+        parent_allowed = _scoped_read_decision(
+            user=resolved_user,
+            required_capability=Capability.VIEW_ORDERS,
+            order_name=order_name,
+            supporting_workflow=True,
+        )
+        return can_read_price_approval_record(
+            has_view_costs=_has(resolved_user, Capability.VIEW_COSTS),
+            can_access_parent_order=parent_allowed,
+        )
+    return False
+
+
 __all__ = [
     "cutting_plan_has_permission",
     "cutting_plan_query",
     "door_cutting_order_has_permission",
     "door_cutting_order_query",
+    "door_cutting_price_approval_has_permission",
+    "door_cutting_price_approval_query",
     "production_stage_has_permission",
     "production_stage_query",
     "worker_can_view_order",

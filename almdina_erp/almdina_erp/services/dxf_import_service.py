@@ -51,6 +51,7 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
     GLASS_GEOMETRY_AMBIGUOUS,
     KERF_VIOLATION,
     LEGACY_MESSAGE,
+    SAW_CENTER_INVALID,
     LINER_OFFSET_MISMATCH,
     LINER_SHAPE_MISMATCH,
     LINER_SIDE_MISMATCH,
@@ -91,6 +92,13 @@ from almdina_erp.almdina_erp.domain.cutting.glass_opening_dxf import (
     reassign_glass_identity,
     validate_glass_dxf_opening,
 )
+from almdina_erp.almdina_erp.domain.cutting.cutter_center_paths import (
+    SAW_CENTER_ABSENT,
+    SAW_CENTER_INVALID as SAW_CENTER_CLASS_INVALID,
+    SAW_CENTER_MATCH,
+    classify_saw_center_segments,
+    cutter_center_segments,
+)
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import (
     assemble_contours,
     bbox,
@@ -118,9 +126,14 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_topology import (
     PartGeometry,
     PlacedPartGeometry,
     ResolvedTopology,
+    containing_hole,
     diagnostic_piece_contours,
+    polygon_strictly_contains_polygon,
     resolve_contour_ownership,
     validate_material_layout,
+)
+from almdina_erp.almdina_erp.domain.cutting.glass_opening_nesting import (
+    GLASS_HOST_PIECE_ID,
 )
 from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
     LinerGeometryError,
@@ -1031,6 +1044,7 @@ def _missing_role_layer_guidance(diagnostics: dict[str, Any]) -> list[str]:
     }
     hints = [
         "إذا وُجدت طبقة GEOMETRY فهي الحدود النهائية للدرفات، وCUT_PATH هو مركز ريشة القص لا حدود الدرفة. "
+        "درف OFFCUT الموجودة فقط على OFFCUT تُحسب مع درف GEOMETRY، وإذا تكرر المحيط على الطبقتين يُصنَّف نقصاً دون تكرار. "
         "حدود مناطق الإضافات على GEOMETRY تُرسم للتوضيح ولا تُحسب درفات. "
         "إذا غابت GEOMETRY يبقى التنسيق القديم: محيط الدرفة على CUT_PATH ومحيط الدرفة الناقصة على OFFCUT.",
         "طبقة TEXT أو text لأرقام الدرف داخل DXF فقط ولا تُعد قصًا.",
@@ -1242,6 +1256,61 @@ def _offcut_piece_indexes(
     return marked
 
 
+def _offcut_only_cut_segments(
+    offcut_segments: Sequence[tuple[tuple[float, float], tuple[float, float]]],
+    geometry_polygons: Sequence[Sequence[tuple[float, float]]],
+) -> list[tuple[tuple[float, float], tuple[float, float]]]:
+    """Keep exclusive OFFCUT contours for piece assembly.
+
+    Contours that already match a finished GEOMETRY door stay out of cut
+    assembly and are classified later. Exclusive or invalid OFFCUT topology
+    enters the same piece pipeline so validation remains fail-closed.
+    """
+    if not offcut_segments:
+        return []
+    kept: list[tuple[tuple[float, float], tuple[float, float]]] = []
+    for contour in assemble_contours(offcut_segments, CONNECTIVITY_TOLERANCE_MM):
+        points = simplify_polygon(contour.get("points") or [], GEOMETRY_TOLERANCE_MM)
+        is_valid_closed = (
+            bool(contour.get("closed"))
+            and not bool(contour.get("branched"))
+            and not validate_polygon(points, GEOMETRY_TOLERANCE_MM)
+        )
+        if is_valid_closed and any(
+            _same_polygon_geometry(
+                points,
+                geometry_polygon,
+                tolerance=GEOMETRY_TOLERANCE_MM,
+            )
+            for geometry_polygon in geometry_polygons
+        ):
+            continue
+        kept.extend(contour.get("segments") or [])
+    return kept
+
+
+def _exclusive_offcut_piece_indexes(
+    pieces: Sequence[dict[str, Any]],
+    offcut_indexes: set[int],
+    geometry_polygons: Sequence[Sequence[tuple[float, float]]],
+) -> set[int]:
+    """OFFCUT doors whose finished outline is not also present on GEOMETRY."""
+    exclusive: set[int] = set()
+    for index in offcut_indexes:
+        outline = pieces[index].get("_outline_mm") or ()
+        if any(
+            _same_polygon_geometry(
+                outline,
+                geometry_polygon,
+                tolerance=GEOMETRY_TOLERANCE_MM,
+            )
+            for geometry_polygon in geometry_polygons
+        ):
+            continue
+        exclusive.add(index)
+    return exclusive
+
+
 def _default_layer_role_segments(
     rows: list[dict[str, Any]],
     *,
@@ -1359,6 +1428,18 @@ def _expected_topology_evidence(order: Any) -> tuple[ExpectedPieceEvidence, ...]
             arbitrary_outline=piece["piece_type"] == "Special",
             source_piece_no=int(piece["source_piece_no"]),
             copy_no=int(piece["copy_no"]),
+            is_glass=piece["piece_type"] == "Glass",
+            glass_margin_mm=(
+                None
+                if piece.get("glass_margin_mm") in (None, "")
+                else _num(piece.get("glass_margin_mm"))
+            ),
+            long_left_mm=_side_band_mm(piece, "edge_long_left", "edge_long_thickness_mm"),
+            long_right_mm=_side_band_mm(piece, "edge_long_right", "edge_long_thickness_mm"),
+            width_bottom_mm=_side_band_mm(
+                piece, "edge_width_bottom", "edge_width_thickness_mm"
+            ),
+            width_top_mm=_side_band_mm(piece, "edge_width_top", "edge_width_thickness_mm"),
         )
         for piece in _expected_order_pieces(order)
     )
@@ -1708,7 +1789,50 @@ def _match_pieces_to_order(pieces: list[dict[str, Any]], order: Any) -> list[dic
     glass_issues = _glass_opening_issues(labeled)
     if glass_issues:
         raise DxfImportError(issues=glass_issues)
+    _assign_nested_glass_hosts(labeled)
     return labeled
+
+
+def _assign_nested_glass_hosts(labeled: list[dict[str, Any]]) -> None:
+    """Record the innermost Glass host for pieces that sit in a proven opening."""
+
+    geometries = {
+        int(piece["id"]): _piece_material_geometry(piece, units="mm")
+        for piece in labeled
+    }
+    for piece in labeled:
+        piece_id = int(piece["id"])
+        guest = geometries[piece_id]
+        hosts = [
+            other
+            for other in labeled
+            if int(other["id"]) != piece_id
+            and str(other.get("piece_type") or "") == "Glass"
+            and containing_hole(
+                geometries[int(other["id"])],
+                guest.outer,
+                tolerance=GEOMETRY_TOLERANCE_MM,
+            )
+            is not None
+        ]
+        if not hosts:
+            continue
+        tight = [
+            host
+            for host in hosts
+            if not any(
+                int(other["id"]) != int(host["id"])
+                and polygon_strictly_contains_polygon(
+                    geometries[int(host["id"])].outer,
+                    geometries[int(other["id"])].outer,
+                    tolerance=GEOMETRY_TOLERANCE_MM,
+                )
+                for other in hosts
+            )
+        ]
+        if len(tight) != 1:
+            continue
+        piece[GLASS_HOST_PIECE_ID] = int(tight[0]["id"])
 
 
 def _validate_sheet_contours(
@@ -2436,6 +2560,86 @@ def _public_piece(piece: dict[str, Any]) -> dict[str, Any]:
     return public_piece
 
 
+def _expected_saw_center_segments(
+    pieces: Sequence[dict[str, Any]],
+    sheets: Sequence[dict[str, Any]],
+    *,
+    kerf_mm: float,
+) -> list[tuple[tuple[float, float], tuple[float, float]]]:
+    """Saw centers from finished DXF outlines in absolute file coordinates."""
+
+    radius = max(0.0, float(kerf_mm or 0.0)) / 2.0
+    by_sheet: dict[int, list[dict[str, Any]]] = {}
+    for piece in pieces:
+        sheet_no = int(piece.get("_sheet_no") or 0)
+        by_sheet.setdefault(sheet_no, []).append(piece)
+    expected: list[tuple[tuple[float, float], tuple[float, float]]] = []
+    for sheet in sheets:
+        sheet_no = int(sheet.get("sheet_no") or 0)
+        shapes = []
+        for piece in by_sheet.get(sheet_no) or []:
+            outer = tuple(
+                (float(point[0]), float(point[1]))
+                for point in (piece.get("_outline_mm") or ())
+            )
+            if len(outer) < 3:
+                continue
+            holes = tuple(
+                tuple((float(point[0]), float(point[1])) for point in hole)
+                for hole in (piece.get("_holes_mm") or ())
+                if len(hole or ()) >= 3
+            )
+            shapes.append((outer, holes))
+        if not shapes:
+            continue
+        min_x = float(sheet.get("offset_x_mm") or 0.0)
+        min_y = float(sheet.get("offset_y_mm") or 0.0)
+        board = (
+            min_x,
+            min_y,
+            min_x + float(sheet.get("full_width_mm") or 0.0),
+            min_y + float(sheet.get("full_height_mm") or 0.0),
+        )
+        expected.extend(cutter_center_segments(shapes, radius, board=board))
+    return expected
+
+
+def _classify_modern_saw_centers(
+    rows: list[dict[str, Any]],
+    pieces: Sequence[dict[str, Any]],
+    sheets: Sequence[dict[str, Any]],
+    *,
+    kerf_mm: float,
+    geometry_format: bool,
+) -> str:
+    """Return snapshot status for modern GEOMETRY files; legacy stays Legacy."""
+
+    if not geometry_format:
+        return "Legacy"
+    observed = _segments_for_layer(rows, CUT_PATH_LAYER)
+    expected = _expected_saw_center_segments(pieces, sheets, kerf_mm=kerf_mm)
+    classification = classify_saw_center_segments(observed, expected)
+    if classification == SAW_CENTER_CLASS_INVALID:
+        raise DxfImportError(
+            issues=[
+                issue(
+                    SAW_CENTER_INVALID,
+                    CATEGORY_LAYOUT,
+                    target=layer_target(CUT_PATH_LAYER),
+                    params={
+                        "observed_count": len(observed),
+                        "expected_count": len(expected),
+                    },
+                )
+            ]
+        )
+    if classification == SAW_CENTER_MATCH:
+        return "Present"
+    if classification == SAW_CENTER_ABSENT:
+        return "Absent"
+    return "Absent"
+
+
 def validate_imported_plan_issues(
     plan: dict[str, Any],
     order: Any,
@@ -2590,10 +2794,22 @@ def parse_production_dxf(
     sheet_segments = _segments_for_layer(rows, SHEET_OUTLINE_LAYER)
     offcut_segments = _segments_for_layer(rows, OFFCUT_LAYER)
     geometry_piece_segments = _geometry_piece_segments(rows)
-    if geometry_piece_segments is not None:
+    geometry_format = geometry_piece_segments is not None
+    geometry_polygons: tuple[tuple[tuple[float, float], ...], ...] = ()
+    if geometry_format:
         # New export: GEOMETRY is the finished door. CUT_PATH is the saw
-        # center and must not be assembled as another door.
-        cut_segments = geometry_piece_segments
+        # center and must not be assembled as another door. Exclusive OFFCUT
+        # remnants still enter the same piece pipeline; dual-layer contours
+        # stay classification-only so they are not counted twice.
+        cut_segments = list(geometry_piece_segments or [])
+        geometry_polygons = _closed_polygons_from_segments(geometry_piece_segments or [])
+        if offcut_segments:
+            offcut_only_segments = _offcut_only_cut_segments(
+                offcut_segments,
+                geometry_polygons,
+            )
+            if offcut_only_segments:
+                cut_segments = [*cut_segments, *offcut_only_segments]
     else:
         cut_segments = _segments_for_layer(rows, CUT_PATH_LAYER)
         if offcut_segments:
@@ -2652,11 +2868,18 @@ def parse_production_dxf(
     )
     offcut_polygons = _closed_polygons_from_segments(offcut_segments)
     offcut_indexes = _offcut_piece_indexes(pieces, offcut_polygons)
+    exclusive_offcut_indexes = (
+        _exclusive_offcut_piece_indexes(pieces, offcut_indexes, geometry_polygons)
+        if geometry_format
+        else set()
+    )
     for piece_index, piece in enumerate(pieces):
         if piece_index in offcut_indexes:
             piece["resource_kind"] = "OFFCUT"
             piece["offcut_source_party"] = "UNASSIGNED"
             piece["offcut_execution_party"] = "UNASSIGNED"
+        if piece_index in exclusive_offcut_indexes:
+            piece["_exclusive_offcut"] = True
 
     expected_count = len(_expected_order_pieces(order))
     actual_count = len(pieces)
@@ -2731,6 +2954,20 @@ def parse_production_dxf(
 
     canonicalize_snapshot_sources({"sheets": sheets})
 
+    # Exclusive OFFCUT remnants are finished doors for count/size/layout checks,
+    # but modern CUT_PATH matching stays tied to GEOMETRY-backed doors. Their
+    # manufacturing centers are generated later from the approved snapshot.
+    saw_center_pieces = [
+        piece for piece in labeled if not piece.get("_exclusive_offcut")
+    ]
+    saw_center_status = _classify_modern_saw_centers(
+        rows,
+        saw_center_pieces,
+        sheets,
+        kerf_mm=flt(order.kerf_mm),
+        geometry_format=geometry_format,
+    )
+
     geometry_by_piece_id = {int(piece["id"]): piece["_outline_cm"] for piece in labeled}
     topology_by_piece_id = {
         int(piece["id"]): _piece_material_geometry(piece, units="cm")
@@ -2758,6 +2995,7 @@ def parse_production_dxf(
         "usable_board_length_cm": usable_board_length_cm,
         "kerf_cm": flt(order.kerf_mm) / 10.0,
         "trim_cm": trim_cm,
+        "saw_center_status": saw_center_status,
         "used_area_m2": used_area_m2,
         "total_board_area_m2": total_board_area_m2,
         "waste_area_m2": waste_area_m2,

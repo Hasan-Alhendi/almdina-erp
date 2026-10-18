@@ -1,0 +1,136 @@
+{
+  "actions": [],
+  "allow_rename": 0,
+  "autoname": "format:DCPA-{#####}",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "door_cutting_order",
+    "cutting_plan",
+    "approved_amount",
+    "currency",
+    "approved_by",
+    "approved_on",
+    "approval_note",
+    "pricing_basis_fingerprint",
+    "fingerprint_formula_version",
+    "validity_status",
+    "invalidated_on",
+    "invalidated_by",
+    "invalidation_reason"
+  ],
+  "fields": [
+    {
+      "fieldname": "door_cutting_order",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Door Cutting Order",
+      "options": "Door Cutting Order",
+      "read_only": 1,
+      "reqd": 1
+    },
+    {
+      "fieldname": "cutting_plan",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Cost reference Cutting Plan",
+      "options": "Cutting Plan",
+      "read_only": 1,
+      "reqd": 1
+    },
+    {
+      "fieldname": "approved_amount",
+      "fieldtype": "Currency",
+      "in_list_view": 1,
+      "label": "Approved final amount",
+      "non_negative": 1,
+      "read_only": 1,
+      "reqd": 1
+    },
+    {
+      "default": "USD",
+      "fieldname": "currency",
+      "fieldtype": "Data",
+      "label": "Currency",
+      "read_only": 1,
+      "reqd": 1
+    },
+    {
+      "fieldname": "approved_by",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Approved by",
+      "options": "User",
+      "read_only": 1,
+      "reqd": 1
+    },
+    {
+      "fieldname": "approved_on",
+      "fieldtype": "Datetime",
+      "in_list_view": 1,
+      "label": "Approved on",
+      "read_only": 1,
+      "reqd": 1
+    },
+    {
+      "fieldname": "approval_note",
+      "fieldtype": "Small Text",
+      "label": "Approval note",
+      "read_only": 1
+    },
+    {
+      "fieldname": "pricing_basis_fingerprint",
+      "fieldtype": "Data",
+      "label": "Pricing basis fingerprint",
+      "read_only": 1,
+      "reqd": 1
+    },
+    {
+      "default": "1",
+      "fieldname": "fingerprint_formula_version",
+      "fieldtype": "Data",
+      "label": "Fingerprint formula version",
+      "read_only": 1,
+      "reqd": 1
+    },
+    {
+      "default": "Active",
+      "fieldname": "validity_status",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Validity status",
+      "options": "Active\nInvalidated",
+      "read_only": 1,
+      "reqd": 1
+    },
+    {
+      "fieldname": "invalidated_on",
+      "fieldtype": "Datetime",
+      "label": "Invalidated on",
+      "read_only": 1
+    },
+    {
+      "fieldname": "invalidated_by",
+      "fieldtype": "Link",
+      "label": "Invalidated by",
+      "options": "User",
+      "read_only": 1
+    },
+    {
+      "fieldname": "invalidation_reason",
+      "fieldtype": "Small Text",
+      "label": "Invalidation reason",
+      "read_only": 1
+    }
+  ],
+  "index_web_pages_for_search": 0,
+  "is_submittable": 0,
+  "links": [],
+  "module": "Almdina ERP",
+  "name": "Door Cutting Price Approval",
+  "permissions": [],
+  "quick_entry": 0,
+  "sort_field": "approved_on",
+  "sort_order": "DESC",
+  "track_changes": 0
+}

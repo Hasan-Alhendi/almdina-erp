@@ -45,7 +45,8 @@ def test_shop_floor_polish_keeps_actionable_and_completed_work_visually_distinct
     assert 'terminal || completed ? "" : quickActionHtml(row, mode)' in renderer
     assert 'completed ? " is-completed" : ""' in renderer
     assert ".almdina-sf-order-card.is-completed" in css
-    assert "background: #dcfce7 !important;" in css
+    assert "background: color-mix(in srgb, #16a34a 14%, var(--alm-card, #ffffff)) !important;" in css
+    assert "background: #dcfce7 !important;" not in css
     assert ".almdina-sf-list-title.is-completed" in css
     assert '.almdina-sf-order-card[data-status="Pending"]' in css
     assert '.almdina-sf-order-card[data-status="In Progress"]' in css

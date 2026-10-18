@@ -1,30 +1,69 @@
 /*
  * Almdina ERP — Frappe Desk brand bridge (DS-10).
- * Maps native Frappe Desk tokens to --alm-primary from almdina_design_tokens.css.
- * Keeps Frappe markup; only retargets CSS variables and primary-blue indicators.
+ * One-way mapping: Frappe Desk tokens ← Almdina --alm-* tokens.
+ * Never alias Alm foundational tokens back to Frappe vars (no loops).
+ * Keeps Frappe markup; does not restyle arbitrary .btn / icon selectors.
+ *
+ * Roles (must stay independent):
+ * - Brand / sidebar: --alm-primary (+ --surface-menu-bar)
+ * - Primary CTA fill: --alm-action → --btn-primary
+ *   (Frappe paints .btn-primary text with --neutral: white in Light, black in Dark)
+ * - Interactive / soft info chrome: --alm-accent + --alm-brand-soft*
  */
 
+/* -------------------------------------------------------------------------- */
+/* Light — preserve existing Desk identity                                    */
+/* -------------------------------------------------------------------------- */
+
 :root,
-[data-theme="light"],
-[data-theme="dark"] {
+[data-theme="light"] {
     --primary: var(--alm-primary);
-    --btn-primary: var(--alm-primary);
+    --btn-primary: var(--alm-action);
     --primary-color: var(--alm-primary);
     --border-primary: var(--alm-primary);
     --brand-color: var(--alm-primary);
     --checkbox-color: var(--alm-primary);
 
-    --bg-blue: color-mix(in srgb, var(--alm-primary) 10%, #ffffff);
-    --text-on-blue: var(--alm-primary);
-    --bg-light-blue: color-mix(in srgb, var(--alm-primary) 7%, #ffffff);
+    --bg-blue: var(--alm-brand-soft);
+    --text-on-blue: var(--alm-brand-soft-fg);
+    --bg-light-blue: var(--alm-brand-soft);
     --text-on-light-blue: var(--alm-primary-hover);
 
     --surface-menu-bar: var(--alm-primary);
-    --sidebar-hover-color: color-mix(in srgb, #ffffff 12%, var(--alm-primary));
+    --sidebar-hover-color: color-mix(in srgb, var(--alm-on-primary) 12%, var(--alm-primary));
     --sidebar-active-color: var(--alm-accent, #2563eb);
     --sidebar-border-color: transparent;
 }
 
+/* -------------------------------------------------------------------------- */
+/* Dark — action fills stay light; brand/sidebar stay navy                    */
+/* -------------------------------------------------------------------------- */
+
+[data-theme="dark"] {
+    /* Interactive accent for focus-adjacent / progress-adjacent Frappe roles. */
+    --primary: var(--alm-accent);
+    --primary-color: var(--alm-accent);
+    --border-primary: var(--alm-border-hover);
+
+    /* CTA fill must contrast with Frappe --neutral (black) button text. */
+    --btn-primary: var(--alm-action);
+
+    /* Brand identity for chrome that should stay Almdina navy. */
+    --brand-color: var(--alm-primary);
+    --checkbox-color: var(--alm-on-primary);
+
+    --bg-blue: var(--alm-brand-soft);
+    --text-on-blue: var(--alm-brand-soft-fg);
+    --bg-light-blue: var(--alm-brand-soft);
+    --text-on-light-blue: var(--alm-brand-soft-fg);
+
+    --surface-menu-bar: var(--alm-primary);
+    --sidebar-hover-color: color-mix(in srgb, var(--alm-on-primary) 12%, var(--alm-primary));
+    --sidebar-active-color: var(--alm-accent, #2563eb);
+    --sidebar-border-color: transparent;
+}
+
+/* Sidebar text on brand navy (both themes). */
 .body-sidebar,
 .body-sidebar .sidebar-toggle-btn {
     color: var(--alm-on-primary, #fff);
@@ -39,9 +78,13 @@
 }
 
 .body-sidebar .active-sidebar .item-anchor {
-    color: #fff;
+    color: var(--alm-on-primary, #fff);
 }
 
+/*
+ * Blue indicators: Light keeps brand navy dots on soft brand pills.
+ * Dark uses accent / brand-soft pairs (no white color-mix wash).
+ */
 .indicator.blue::before,
 .indicator.blue::after,
 .indicator-pill.blue::before,
@@ -56,6 +99,17 @@
 .indicator-pill.blue,
 .indicator-pill-right.blue,
 .indicator-pill-round.blue {
-    background: color-mix(in srgb, var(--alm-primary) 10%, #ffffff);
-    color: var(--alm-primary);
+    background: var(--alm-brand-soft);
+    color: var(--alm-brand-soft-fg);
+}
+
+[data-theme="dark"] .indicator.blue::before,
+[data-theme="dark"] .indicator.blue::after,
+[data-theme="dark"] .indicator-pill.blue::before,
+[data-theme="dark"] .indicator-pill.blue::after,
+[data-theme="dark"] .indicator-pill-right.blue::before,
+[data-theme="dark"] .indicator-pill-right.blue::after,
+[data-theme="dark"] .indicator-pill-round.blue::before,
+[data-theme="dark"] .indicator-pill-round.blue::after {
+    background: var(--alm-accent);
 }

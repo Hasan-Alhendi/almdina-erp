@@ -196,7 +196,6 @@ class FakeShopFloorCommandRepository:
         updated = replace(
             stage,
             status=target_status,
-            assigned_to=stage.assigned_to or actor,
             start_time=datetime(2026, 1, 1, 8, 0, 0),
         )
         self.stages[stage_name] = updated
@@ -395,6 +394,59 @@ class TestShopFloorCommandApplication(unittest.TestCase):
             self._call_index(repository, "lock_stage"),
             self._call_index(repository, "start_stage"),
         )
+
+    def test_administrator_starts_assigned_stage_without_reassigning_worker(self) -> None:
+        repository = FakeShopFloorCommandRepository()
+        repository.actor = "Administrator"
+        repository.admin = True
+        repository.orders["DCO-1"] = replace(
+            self._approved_order(),
+            status="شريون",
+            production_path="Sharyoun",
+            current_stage="PST-1",
+        )
+        repository.stages["PST-1"] = commands.StageState(
+            name="PST-1",
+            order_name="DCO-1",
+            stage_type="Sharyoun",
+            status="Pending",
+            assigned_to="worker@example.com",
+            sequence=10,
+            department_label="شريون",
+        )
+
+        result = commands.start_my_stage(repository, "PST-1")
+
+        self.assertEqual(result["status"], "In Progress")
+        self.assertEqual(repository.stages["PST-1"].assigned_to, "worker@example.com")
+        self.assertIn(
+            ("start_stage", "PST-1", "Administrator", "In Progress"),
+            repository.calls,
+        )
+
+    def test_administrator_does_not_become_assignee_when_starting_unassigned_stage(self) -> None:
+        repository = FakeShopFloorCommandRepository()
+        repository.actor = "Administrator"
+        repository.admin = True
+        repository.orders["DCO-1"] = replace(
+            self._approved_order(),
+            status="شريون",
+            production_path="Sharyoun",
+            current_stage="PST-1",
+        )
+        repository.stages["PST-1"] = commands.StageState(
+            name="PST-1",
+            order_name="DCO-1",
+            stage_type="Sharyoun",
+            status="Pending",
+            assigned_to=None,
+            sequence=10,
+            department_label="شريون",
+        )
+
+        commands.start_my_stage(repository, "PST-1")
+
+        self.assertIsNone(repository.stages["PST-1"].assigned_to)
 
     def test_planning_stage_cannot_handoff_until_reviewed_plan_is_approved(self) -> None:
         repository = FakeShopFloorCommandRepository()

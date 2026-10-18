@@ -5,6 +5,7 @@
 
     const STORE_KEY = "__almdinaPlanWorkspaceStore";
     const LOAD_PROMISE_KEY = "__almdinaPlanWorkspaceLoadPromise";
+    const LOAD_OWNER_KEY = "__almdinaPlanWorkspaceLoadOwner";
     const LOADED_IDENTITY_KEY = "__almdinaPlanWorkspaceLoadedIdentity";
 
     function documentContext() {
@@ -50,11 +51,35 @@
         }));
     }
 
+    function ownedSnapshot(frm, store) {
+        const state = store && store.snapshot();
+        return state && state.identity === identity(frm)
+            && (!state.data || payloadMatches(state.data, String(frm.doc?.name || "")))
+            ? state : null;
+    }
+
+    function capture(frm) {
+        const context = documentContext();
+        return context?.capture?.(frm) || { identity: identity(frm) };
+    }
+
+    function owns(frm, token) {
+        const context = documentContext();
+        return context?.isSameDocument
+            ? context.isSameDocument(frm, token)
+            : identity(frm) === token.identity;
+    }
+
+    function payloadMatches(payload, orderName) {
+        return Boolean(payload && String(payload.order_name || "") === orderName);
+    }
+
     function reset(frm) {
         const store = storeFor(frm);
         if (!store) return null;
         frm[LOADED_IDENTITY_KEY] = null;
         frm[LOAD_PROMISE_KEY] = null;
+        frm[LOAD_OWNER_KEY] = null;
         const snapshot = store.reset(identity(frm));
         dispatch(frm, snapshot);
         return snapshot;
@@ -62,7 +87,7 @@
 
     function invalidate(frm, reason = "dependency_changed") {
         const store = storeFor(frm);
-        if (!store || typeof store.invalidate !== "function") return false;
+        if (!ownedSnapshot(frm, store) || typeof store.invalidate !== "function") return false;
         const snapshot = store.invalidate(reason);
         dispatch(frm, snapshot);
         return snapshot;
@@ -81,23 +106,15 @@
         const settled = store.reset(currentIdentity);
         frm[LOADED_IDENTITY_KEY] = currentIdentity;
         frm[LOAD_PROMISE_KEY] = null;
+        frm[LOAD_OWNER_KEY] = null;
         dispatch(frm, settled);
         return settled;
     }
 
-    function rejectIdentityTransition(frm, store, expectedIdentity) {
-        const liveIdentity = identity(frm);
-        if (liveIdentity === expectedIdentity) return false;
-        frm[LOADED_IDENTITY_KEY] = null;
-        store.reset(liveIdentity);
-        dispatch(frm, store.snapshot());
-        return true;
-    }
-
     function isFreshReady(frm, store, currentIdentity) {
-        const current = store.snapshot();
+        const current = ownedSnapshot(frm, store);
         return Boolean(
-            frm[LOADED_IDENTITY_KEY] === currentIdentity
+            current && frm[LOADED_IDENTITY_KEY] === currentIdentity
             && current.identity === currentIdentity
             && current.status === "ready"
             && current.freshness !== "stale"
@@ -113,7 +130,10 @@
         });
         let promise = null;
         promise = flight.finally(() => {
-            if (frm[LOAD_PROMISE_KEY] === promise) frm[LOAD_PROMISE_KEY] = null;
+            if (frm[LOAD_PROMISE_KEY] === promise) {
+                frm[LOAD_PROMISE_KEY] = null;
+                frm[LOAD_OWNER_KEY] = null;
+            }
         });
         return { promise, resolveFlight, rejectFlight };
     }
@@ -125,6 +145,7 @@
         if (!store || !api || typeof api.load !== "function") return null;
 
         const currentIdentity = identity(frm);
+        const requestToken = capture(frm);
         const orderName = String(frm.doc.name || "").trim();
         // A canonical read is deferred while the Plan workspace owns an edit
         // draft. resolveLoad() clears draft/editing, so loading here would lose
@@ -143,7 +164,7 @@
         }
 
         const pending = frm[LOAD_PROMISE_KEY];
-        if (pending) {
+        if (pending && owns(frm, frm[LOAD_OWNER_KEY] || {})) {
             if (!options.force) return pending;
 
             // A forced lifecycle refresh must not race a still-current read. Wait
@@ -155,7 +176,7 @@
                 // The store owns the error state. Force below decides whether a
                 // retry is still valid for the same live document identity.
             }
-            if (identity(frm) !== currentIdentity) return store.snapshot();
+            if (!owns(frm, requestToken)) return snapshot(frm);
             if (isFreshReady(frm, store, currentIdentity)) return store.snapshot();
             return load(frm, { force: true });
         }
@@ -166,6 +187,7 @@
         // are observable synchronously, so listeners must see an owned in-flight
         // request before they can re-enter this loader.
         frm[LOAD_PROMISE_KEY] = promise;
+        frm[LOAD_OWNER_KEY] = requestToken;
         const requestId = store.beginLoad(currentIdentity);
         dispatch(frm, store.snapshot());
 
@@ -181,23 +203,25 @@
 
         Promise.resolve(transport)
             .then((payload) => {
-                if (rejectIdentityTransition(frm, store, currentIdentity)) {
-                    return store.snapshot();
+                if (!owns(frm, requestToken)) return snapshot(frm);
+                if (!payloadMatches(payload, orderName)) {
+                    store.rejectLoad(currentIdentity, requestId, new Error("Plan response order mismatch"));
+                    const invalid = snapshot(frm);
+                    if (invalid) dispatch(frm, invalid);
+                    return invalid;
                 }
                 const accepted = store.resolveLoad(currentIdentity, requestId, payload);
-                if (!accepted) return store.snapshot();
+                if (!accepted) return snapshot(frm);
                 frm[LOADED_IDENTITY_KEY] = currentIdentity;
-                const snapshot = store.snapshot();
-                dispatch(frm, snapshot);
-                return snapshot;
+                const resultState = store.snapshot();
+                dispatch(frm, resultState);
+                return resultState;
             })
             .catch((error) => {
-                if (rejectIdentityTransition(frm, store, currentIdentity)) {
-                    return store.snapshot();
-                }
+                if (!owns(frm, requestToken)) return snapshot(frm);
                 store.rejectLoad(currentIdentity, requestId, error);
-                const snapshot = store.snapshot();
-                dispatch(frm, snapshot);
+                const resultState = store.snapshot();
+                dispatch(frm, resultState);
                 throw error;
             })
             .then(resolveFlight, rejectFlight);
@@ -207,7 +231,7 @@
 
     function snapshot(frm) {
         const store = storeFor(frm);
-        return store ? store.snapshot() : null;
+        return ownedSnapshot(frm, store);
     }
 
     function activePlan(frm, preferredSource = "System") {
