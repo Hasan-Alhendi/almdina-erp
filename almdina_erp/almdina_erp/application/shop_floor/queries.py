@@ -328,7 +328,7 @@ def _enrich_stage_rows(
                 assigned_to=_value(current_stage, "assigned_to"),
                 has_current_stage=True,
                 has_production_path=bool(production_path),
-                is_admin=repository.is_admin(),
+                is_admin=actor == "Administrator",
                 order_status=_effective_order_status(repository, order, current_stage),
             ).allowed
         )
@@ -744,15 +744,16 @@ def _active_stage_snapshot(
     stage_status = str(_value(stage, "status") or "")
     stage_type = str(_value(stage, "stage_type") or "")
     operational_role = _resolve_operational_role(repository, order, stage) or ""
+    actor = repository.current_user()
     actor_is_current_assignee = bool(
-        str(_value(stage, "assigned_to") or "").strip() == repository.current_user()
+        str(_value(stage, "assigned_to") or "").strip() == actor
     )
     actor_can_operate_current_stage = decide_stage_assignment_access(
-        actor=repository.current_user(),
+        actor=actor,
         assigned_to=_value(stage, "assigned_to"),
         has_current_stage=True,
         has_production_path=bool(_value(order, "production_path")),
-        is_admin=repository.is_admin(),
+        is_admin=actor == "Administrator",
         order_status=_effective_order_status(repository, order, stage),
     ).allowed
     production_path = _value(order, "production_path")
