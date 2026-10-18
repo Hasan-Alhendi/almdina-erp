@@ -248,11 +248,23 @@ def open_dco(page: Page, name: str) -> None:
     # navigation can expose cur_frm.doc before Form.setup / custom scripts
     # have mounted, which is not evidence of an EDIT-ready document.
     # Use the Desk router once, then require the full form ownership contract.
-    evaluate(
-        page, f"route to DCO {name} through Frappe Desk",
-        "name => frappe.set_route('Form', 'Door Cutting Order', name)",
+    same_document = page.evaluate(
+        "name => window.cur_frm && cur_frm.doctype === 'Door Cutting Order' "
+        "&& cur_frm.doc && cur_frm.doc.name === name",
         name,
     )
+    if same_document:
+        # Frappe router.push_state does not render an unchanged URL. Use
+        # native Form.reload_doc() to inspect new server state after dispatch
+        # or return-to-Draft without reloading the entire browser.
+        evaluate(page, f"reload current DCO {name} through Frappe Form",
+                 "() => cur_frm.reload_doc()")
+    else:
+        evaluate(
+            page, f"route to DCO {name} through Frappe Desk",
+            "name => frappe.set_route('Form', 'Door Cutting Order', name)",
+            name,
+        )
     try:
         wait_for_function(page, f"load DCO {name}",
             "name => window.cur_frm && window.cur_frm.doc && window.cur_frm.doc.name === name",
