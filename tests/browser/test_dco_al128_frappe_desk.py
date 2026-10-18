@@ -285,6 +285,28 @@ def test_real_desk_edits_checkpoint_and_permission_isolation() -> None:
             bulk_button = second.locator(
                 ".dco-all-sides-profile-button[data-bulk-edge-profile-button]"
             )
+            page.evaluate("""() => {
+                window.__al128PopoverEvents = [];
+                const events = window.__al128PopoverEvents;
+                const capture = type => e => {
+                    if (!e.target?.closest?.('[data-bulk-edge-profile-button]')) return;
+                    events.push({type, path: e.target.tagName, at: performance.now()});
+                };
+                document.addEventListener('pointerdown', capture('pointerdown'), true);
+                document.addEventListener('click', capture('click'), true);
+                const observer = new MutationObserver(records => {
+                    for (const item of records) {
+                        for (const node of item.addedNodes) if (node.id === 'dco-edge-profile-popover') {
+                            events.push({type: 'menu-added', at: performance.now()});
+                        }
+                        for (const node of item.removedNodes) if (node.id === 'dco-edge-profile-popover') {
+                            events.push({type: 'menu-removed', at: performance.now()});
+                        }
+                    }
+                });
+                observer.observe(document.body, {childList: true, subtree: true});
+                window.__al128PopoverObserver = observer;
+            }""")
             bulk_button.click()
             bulk_option = page.locator(
                 "#dco-edge-profile-popover "
@@ -315,6 +337,8 @@ def test_real_desk_edits_checkpoint_and_permission_isolation() -> None:
                             menuExists: Boolean(menu),
                             menuValues: menu ? [...menu.querySelectorAll('[data-bulk-profile-value]')]
                                 .map(option => option.dataset.bulkProfileValue) : [],
+                            handlerBound: Boolean(root._dcoCompactEdgeProfileControlsBound),
+                            popoverEvents: window.__al128PopoverEvents || [],
                             profileLoaded: Boolean(cur_frm._dco_side_edge_profiles_loaded),
                             profileExists: Boolean(window.AlmdinaMultiEdgeBanding
                                 && AlmdinaMultiEdgeBanding.profiles(cur_frm).has(value))
