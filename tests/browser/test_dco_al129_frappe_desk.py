@@ -1334,7 +1334,7 @@ def test_real_desk_customer_native_entry_and_permission_differential() -> None:
                             "create_only_official_save_and_existing_write_denial",
                             official_save_requests=len(save_requests),
                             native_write_after_save=after_save["formCanWrite"],
-                            direct_api_write_denied=denied_write["permissionDenied"],
+                            direct_api_write_denied=denied_response.status == 403 and "PermissionError" in exception_type,
                             stored_value_unchanged=unchanged["order_notes"]
                             == "Create-only official save permission check",
                             next_document_projection_isolated=(
