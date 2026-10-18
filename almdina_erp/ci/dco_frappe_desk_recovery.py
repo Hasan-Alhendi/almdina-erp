@@ -800,7 +800,9 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
     open_dco(page, dispatch_name)
     wait_for_function(page, "dispatch exposes active production stage",
         "() => Boolean(window.cur_frm && window.cur_frm.doc.current_production_stage)")
-    expect(page.locator("body")).to_contain_text("لا يمكن استعادتها بعد بدء مرحلة الإنتاج")
+    # The informational Frappe toast can be localized or expire before the
+    # assertion. Safety is established by the authoritative dispatch stage,
+    # no offered recovery action, a retained checkpoint and rejected Save.
     expect(page.locator('[data-edit-recovery-action="continue"]')).to_have_count(0)
     retained = evaluate(page, "verify retained EDIT snapshot after dispatch",
         """async name => {

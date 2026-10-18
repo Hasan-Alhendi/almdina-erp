@@ -2266,29 +2266,30 @@ def test_real_desk_100_piece_checkpoint_restore_and_lost_save_response() -> None
             )
             assert missing_documents == [], "the first request was stopped before reaching Frappe"
             retry_page.unroute("**/api/method/frappe.desk.form.save.savedocs")
-            # NOT_FOUND is not terminal proof: a successful response could
-            # simply be delayed while the first request is still in flight.
-            # The explicit second Save must be rejected before native insert.
-            # A pending uncertain INSERT intentionally hides the visible
-            # native Save action; a user must not be able to click a second
-            # INSERT. Exercise Frappe's Save contract directly to prove the
-            # before_save guard performs reconciliation and blocks submission.
-            expect(
-                retry_page.locator(".page-actions .primary-action").filter(
-                    has_text=re.compile(r"Save|حفظ")
-                )
-            ).to_be_hidden()
+            # NOT_FOUND is not terminal proof; a pending INSERT blocks the
+            # native Save action. Reopen the same persistent browser profile
+            # and use the explicit "Check save result" UI, rather than
+            # programmatically forcing a second Save on a blocked form.
+            retry_page.close()
+            retry_page = context.new_page()
+            diagnostic_page = retry_page
+            _attach_diagnostics(retry_page)
+            retry_page.on("request", record_save_request)
+            _track_reconciliation_responses(retry_page, retry_reconciliation_statuses)
+            _login(retry_page, fixture)
+            _open_new_form(
+                retry_page, "check-pending-insert",
+                expected_state="awaiting_draft_selection",
+            )
+            pending_card = retry_page.locator(
+                f".modal.show [data-draft-id='{retry_identity['draftId']}']"
+            )
+            expect(pending_card).to_be_visible(timeout=30_000)
             with retry_page.expect_response(
                 lambda response: "reconcile_new_order_creation" in response.url,
                 timeout=30_000,
             ):
-                retry_page.evaluate(
-                    "() => { const frm = window.cur_frm;"
-                    " if (!frm || !frm.script_manager)"
-                    " throw new Error('Frappe before_save handler unavailable');"
-                    " Promise.resolve(frm.script_manager.trigger('before_save'))"
-                    "   .catch(() => {}); return true; }"
-                )
+                pending_card.locator("[data-recovery-action='continue']").click()
             assert "NOT_FOUND" in retry_reconciliation_statuses
             assert len(save_posts) == first_save_attempts + 1, (
                 "NOT_FOUND must not trigger another native Save request"
