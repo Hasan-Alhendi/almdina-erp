@@ -244,21 +244,34 @@ def wait_for_function(page: Page, step: str, expression: str, *, arg=None, timeo
 def open_dco(page: Page, name: str) -> None:
     target_url = f"{DESK_URL}/app/door-cutting-order/{name}"
     _trace_event("open_dco_started", url=_safe_url(target_url))
-    # The user enters a Form through Frappe's own router. A new top-level
-    # navigation can expose cur_frm.doc before Form.setup / custom scripts
-    # have mounted, which is not evidence of an EDIT-ready document.
-    # Use the Desk router once, then require the full form ownership contract.
+    # The initial Form must be opened through the same native Desk entry
+    # proven by AL128. Calling set_route while Desk's first page is still
+    # mounting can leave cur_frm with metadata but without Form.setup.
+    # Once a Form is fully mounted, subsequent A -> B transitions use the
+    # normal in-app Frappe router.
     same_document = page.evaluate(
         "name => window.cur_frm && cur_frm.doctype === 'Door Cutting Order' "
         "&& cur_frm.doc && cur_frm.doc.name === name",
         name,
     )
-    if same_document:
+    mounted_form = page.evaluate(
+        "() => Boolean(window.cur_frm?.script_manager"
+        " && window.cur_frm?.fields_dict?.order_notes"
+        " && window.cur_frm?.wrapper?.isConnected)"
+    )
+    if same_document and mounted_form:
         # Frappe router.push_state does not render an unchanged URL. Use
         # native Form.reload_doc() to inspect new server state after dispatch
         # or return-to-Draft without reloading the entire browser.
         evaluate(page, f"reload current DCO {name} through Frappe Form",
                  "() => cur_frm.reload_doc()")
+    elif not mounted_form:
+        response = page.goto(target_url, wait_until="domcontentloaded", timeout=60_000)
+        if response is None or response.status >= 400:
+            raise RuntimeError(
+                f"Initial DCO Form navigation failed: HTTP {response.status if response else 'none'}"
+            )
+        _trace_event("initial_dco_form_navigation_completed", status=response.status)
     else:
         evaluate(
             page, f"route to DCO {name} through Frappe Desk",
