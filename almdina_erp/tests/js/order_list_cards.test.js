@@ -93,10 +93,10 @@ const desktopListCss = fs.readFileSync(
 assert(!source.includes("dco-list-price-approval"), "ListView must not inject price approval badges");
 assert(!desktopListCss.includes("dco-list-price-approval"), "desktop badge styles must be removed");
 assert(!cssSource.includes("dco-list-price-approval"), "mobile badge styles must be removed");
-const listSettings = context.frappe.listview_settings["Door Cutting Order"];
-assert(listSettings.add_fields.includes("price_approval_status"), "price approval data must remain queryable");
+const approvalFilterListSettings = context.frappe.listview_settings["Door Cutting Order"];
+assert(approvalFilterListSettings.add_fields.includes("price_approval_status"), "price approval data must remain queryable");
 assert(
-    listSettings.custom_filter_configs.some(config => config.fieldname === "price_approval_status"),
+    approvalFilterListSettings.custom_filter_configs.some(config => config.fieldname === "price_approval_status"),
     "price approval filtering must remain available"
 );
 for (const approvalStatus of ["Approved", "Unapproved", ""]) {
