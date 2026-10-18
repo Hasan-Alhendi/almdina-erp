@@ -1590,6 +1590,25 @@ def _enter_real_measurements(page: Page, count: int) -> list[dict[str, Any]]:
     table = page.locator("[data-fieldname='pieces_fast_entry'] .dco-fast-table")
     expect(table).to_be_visible()
     expected = []
+    row_observations = []
+    page.evaluate("""() => {
+        const root = document.querySelector("[data-fieldname='pieces_fast_entry']");
+        if (!root) return;
+        root.__recoveryKeyEvents = [];
+        if (root.__recoveryKeyObserver) return;
+        root.__recoveryKeyObserver = true;
+        root.addEventListener("keydown", event => {
+            if (!["Enter", "Tab"].includes(event.key)) return;
+            const input = event.target.closest("input[data-field]");
+            if (!input) return;
+            root.__recoveryKeyEvents.push({
+                key: event.key, field: input.dataset.field,
+                row: input.closest("tr")?.dataset.rowName || "",
+                value: input.value, defaultPrevented: event.defaultPrevented
+            });
+            if (root.__recoveryKeyEvents.length > 12) root.__recoveryKeyEvents.shift();
+        }, true);
+    }""")
     for index in range(count):
         row = table.locator("tbody tr.dco-virtual-row")
         width = 35 + index % 45
@@ -1599,6 +1618,13 @@ def _enter_real_measurements(page: Page, count: int) -> list[dict[str, Any]]:
         row.locator("input[data-field='length_cm']").fill(str(length))
         row.locator("input[data-field='length_cm']").press("Enter")
         expected.append({"width_cm": width, "length_cm": length, "qty": 1})
+        observed = page.evaluate("""() => ({
+            count: (window.cur_frm?.doc?.pieces || []).length,
+            virtual: document.querySelector(
+                "[data-fieldname='pieces_fast_entry'] tr.dco-virtual-row"
+            )?.dataset.rowName || null
+        })""")
+        row_observations.append({"row": index + 1, **observed})
     try:
         page.wait_for_function(
             "count => window.cur_frm && cur_frm.doc.pieces.length === count",
@@ -1625,15 +1651,16 @@ def _enter_real_measurements(page: Page, count: int) -> list[dict[str, Any]]:
                     virtualRow: virtual && virtual.dataset.rowName,
                     virtualInputs: inputs,
                     rowCount: root && root.querySelectorAll("tbody tr").length,
+                    recentKeyEvents: root && root.__recoveryKeyEvents,
                     keyboardOwnerInstalled: Boolean(root && root.querySelector(".dco-fast-table")),
                     activeElement: document.activeElement
                         && document.activeElement.outerHTML.slice(0, 300),
                 };
             }"""
         )
-        trace("fast_entry_commit_missing", requested=count, diagnostic=state)
+        trace("fast_entry_commit_missing", requested=count, row_observations=row_observations, diagnostic=state)
         raise AssertionError(
-            f"Fast Entry did not synchronize {count} rows to Frappe: {state}"
+            f"Fast Entry did not synchronize {count} rows to Frappe: "f"observations={row_observations}; state={state}"
         ) from None
     trace("fast_entry_completed", pieces=count)
     return expected
