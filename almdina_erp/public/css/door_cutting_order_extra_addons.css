@@ -408,6 +408,19 @@ body[dir="ltr"] .dco-addons-preview-pane {
     text-align: center;
 }
 
+.dco-addons-modal .dco-corner-input-wrap.is-error .dco-corner-input-shell {
+    border-color: var(--alm-danger, #b91c1c);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--alm-danger, #b91c1c) 14%, transparent);
+}
+
+.dco-addons-modal .dco-corner-input-shell input[aria-invalid="true"] {
+    color: var(--alm-danger, #b91c1c);
+}
+
+.dco-addons-modal [data-liner-sides][aria-invalid="true"] .dco-corner-position {
+    border-color: var(--alm-danger, #b91c1c);
+}
+
 .dco-addons-modal .dco-corner-input-shell span {
     flex: 0 0 auto;
     padding: 0 var(--alm-space-2, 8px);

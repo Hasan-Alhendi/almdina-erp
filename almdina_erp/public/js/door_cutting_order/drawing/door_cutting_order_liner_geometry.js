@@ -934,6 +934,7 @@
     }
 
     window.AlmdinaLinerGeometry = Object.freeze({
+        toleranceMm: TOLERANCE_MM,
         availableSides,
         sideLabel,
         pieceFromRow,

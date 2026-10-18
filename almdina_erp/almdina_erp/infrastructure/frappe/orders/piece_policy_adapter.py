@@ -12,10 +12,12 @@ from almdina_erp.almdina_erp.domain.cutting.machining_overlay import (
     MACHINING_ADDONS_BY_KIND,
 )
 from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
+    LinerGeometryError,
     LinerPiece,
     available_liner_sides,
     contour_notch_cm,
     liner_activation_error,
+    liner_centerline_mm,
     resolved_liner_span_mm,
     validation_code,
 )
@@ -51,6 +53,20 @@ from .document_access import FrappeOrderDocumentAccess
 
 class FrappeOrderPiecePolicyAdapter:
     """Translate Frappe child rows to pure piece-policy decisions."""
+
+    MACHINING_ERROR_LABELS = {
+        "missing_dimensions": "Current cutting dimensions are not valid.",
+        "missing_corner": "Corner dimensions must be set before machining.",
+        "invalid_corner": "Corner position is invalid.",
+        "side_unavailable": "The reference side is unavailable for this piece type.",
+        "offset_invalid": "Offset must be finite and zero or greater.",
+        "width_invalid": "Width must be finite and greater than zero.",
+        "liner_start_invalid": "Start position must be finite and zero or greater.",
+        "liner_length_invalid": "Length must be finite and greater than zero.",
+        "strip_outside": "Machining geometry does not fit inside the piece.",
+        "liner_span_on_corner": "The machining limit falls on a corner bend.",
+        "liner_flat_end_unmachinable": "A flat end cannot be machined with this bit and length.",
+    }
 
     def __init__(
         self,
@@ -266,6 +282,51 @@ class FrappeOrderPiecePolicyAdapter:
         for addon in MACHINING_ADDONS:
             self._apply_machining_addon(row, index, old_row, addon)
 
+    def _normalize_machining_fields(self, row: Any) -> None:
+        for addon in MACHINING_ADDONS:
+            if (
+                not cint(getattr(row, addon.enabled_field, 0))
+                or not available_liner_sides(row.piece_type or "Regular")
+            ):
+                self._clear_machining(row, addon)
+
+    @staticmethod
+    def _addon_title(addon: Any) -> str:
+        titles = {
+            "liner": _("Liner"),
+            "back_groove": _("Back Groove"),
+            "recessed_handle_cutout": _("Recessed Handle Cutout"),
+        }
+        return titles.get(addon.kind, _(addon.layer))
+
+    @staticmethod
+    def _format_cm(value: float) -> str:
+        return f"{value:.3f}".rstrip("0").rstrip(".") or "0"
+
+    @staticmethod
+    def _machining_number(value: Any) -> float:
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return 0.0
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return float("nan")
+
+    def _throw_machining_error(
+        self,
+        index: int,
+        addon: Any,
+        code: str,
+    ) -> None:
+        reason = _(self.MACHINING_ERROR_LABELS.get(code, code))
+        frappe.throw(
+            _("Row {0}: {1} settings are invalid ({2}).").format(
+                index,
+                self._addon_title(addon),
+                reason,
+            )
+        )
+
     def _apply_machining_addon(self, row: Any, index: int, old_row: Any, addon: Any) -> None:
         if not cint(getattr(row, addon.enabled_field, 0)):
             self._clear_machining(row, addon)
@@ -274,8 +335,8 @@ class FrappeOrderPiecePolicyAdapter:
             self._clear_machining(row, addon)
             return
         side = str(getattr(row, addon.side_field, "") or "").strip()
-        offset = flt(getattr(row, addon.offset_field, 0))
-        width = flt(getattr(row, addon.width_field, 0))
+        offset = self._machining_number(getattr(row, addon.offset_field, 0))
+        width = self._machining_number(getattr(row, addon.width_field, 0))
         activation = liner_activation_error(
             enabled=True,
             piece_type=row.piece_type or "Regular",
@@ -285,17 +346,18 @@ class FrappeOrderPiecePolicyAdapter:
             legacy_checkbox_only=self._legacy_machining_checkbox(old_row, addon),
         )
         if activation:
-            if addon.kind == "liner":
-                frappe.throw(
-                    _("Row {0}: Liner needs a reference side and a width greater than zero.").format(index)
-                )
             frappe.throw(
-                _("Row {0}: Machining add-on needs a reference side and a width greater than zero.").format(index)
+                _("Row {0}: {1} needs a reference side and a width greater than zero.").format(
+                    index,
+                    self._addon_title(addon),
+                )
             )
         if not side and offset <= 0 and width <= 0:
             return
-        width_cm = flt(getattr(row, "cut_width_cm", 0)) or flt(row.width_cm)
-        length_cm = flt(getattr(row, "cut_length_cm", 0)) or flt(row.length_cm)
+        cut_width = getattr(row, "cut_width_cm", None)
+        cut_length = getattr(row, "cut_length_cm", None)
+        width_cm = flt(row.width_cm) if cut_width is None else flt(cut_width)
+        length_cm = flt(row.length_cm) if cut_length is None else flt(cut_length)
         notch_width_cm, notch_length_cm = self._liner_notch_cm(row)
         piece = LinerPiece(
             piece_type=row.piece_type or "Regular",
@@ -305,29 +367,63 @@ class FrappeOrderPiecePolicyAdapter:
             clipped_corner_width_cm=notch_width_cm,
             clipped_corner_length_cm=notch_length_cm,
         )
+        start_raw = getattr(row, addon.start_field, 0)
+        length_raw = getattr(row, addon.length_field, 0)
+        start_cm = self._machining_number(start_raw)
+        length_cm_input = self._machining_number(length_raw)
+        if not start_cm >= 0:
+            self._throw_machining_error(index, addon, "liner_start_invalid")
+        if length_cm_input < 0:
+            self._throw_machining_error(index, addon, "liner_length_invalid")
         code = validation_code(piece, side, offset, width)
         if code:
-            if addon.kind == "liner":
-                frappe.throw(
-                    _("Row {0}: Liner settings are invalid ({1}).").format(index, code)
-                )
-            frappe.throw(
-                _("Row {0}: Machining add-on settings are invalid ({1}).").format(index, code)
-            )
-        _start_mm, _length_mm, span_error = resolved_liner_span_mm(
+            self._throw_machining_error(index, addon, code)
+        start_mm, _length_mm, span_error = resolved_liner_span_mm(
             piece,
             side,
-            flt(getattr(row, addon.start_field, 0)),
-            flt(getattr(row, addon.length_field, 0)),
+            start_cm,
+            length_cm_input,
         )
-        if span_error:
-            if addon.kind == "liner":
-                frappe.throw(
-                    _("Row {0}: Liner settings are invalid ({1}).").format(index, span_error)
-                )
-            frappe.throw(
-                _("Row {0}: Machining add-on settings are invalid ({1}).").format(index, span_error)
+        if span_error == "liner_span_exceeds_edge":
+            _edge_start_mm, edge_mm, _edge_error = resolved_liner_span_mm(
+                piece,
+                side,
+                0,
+                None,
             )
+            available_cm = edge_mm / 10
+            maximum_cm = max(0.0, available_cm - start_mm / 10)
+            frappe.throw(
+                _(
+                    "Row {0}: {1} length exceeds the reference side "
+                    "(available {2} cm, start {3} cm, entered {4} cm, maximum {5} cm)."
+                ).format(
+                    index,
+                    self._addon_title(addon),
+                    self._format_cm(available_cm),
+                    self._format_cm(start_cm),
+                    self._format_cm(length_cm_input),
+                    self._format_cm(maximum_cm),
+                )
+            )
+        if span_error:
+            self._throw_machining_error(index, addon, span_error)
+        try:
+            liner_centerline_mm(
+                piece,
+                side,
+                offset,
+                width,
+                start_cm,
+                length_cm_input,
+            )
+        except LinerGeometryError as error:
+            self._throw_machining_error(index, addon, error.code)
+
+    def validate_machining_rows(self) -> None:
+        old_rows = self.access.old_piece_map()
+        for index, row in enumerate(self.document.pieces or [], start=1):
+            self._apply_liner_parameters(row, index, old_rows.get(row.name))
 
     def validate_rows(self) -> None:
         old_rows = self.access.old_piece_map()
@@ -348,11 +444,11 @@ class FrappeOrderPiecePolicyAdapter:
                 frappe.throw(_("Row {0}: Piece Type is invalid.").format(index))
             if row.piece_type == GLASS_TYPE:
                 self._validate_glass_opening(row, index)
-            self._apply_liner_parameters(row, index, old_rows.get(row.name))
             if is_corner_cut(row.piece_type):
                 self._validate_clipped_corner(row, index)
             self._apply_edge_break(row)
             self._apply_special_measurement_edges(row)
+            self._normalize_machining_fields(row)
 
             old_row = old_rows.get(row.name)
             current_raw = drawing_token(row.special_shape_drawing_json)

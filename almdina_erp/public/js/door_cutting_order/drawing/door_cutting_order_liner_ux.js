@@ -45,6 +45,7 @@
         liner_start_invalid: "Liner start must be zero or greater.",
         liner_length_invalid: "Liner length must be greater than zero.",
         liner_span_exceeds_edge: "Liner start plus length exceeds the reference side.",
+        liner_span_exceeds_edge_detail: "{0}: reference side length is {1} cm, start is {2} cm, entered length is {3} cm; maximum allowed length is {4} cm.",
         liner_flat_end_unmachinable: "A flat end cannot be machined with this bit and length.",
         liner_span_on_corner: "The liner limit sits on a bend that has no single direction.",
     };
@@ -74,6 +75,23 @@
         return Math.round(num(value) * 10) / 10;
     }
 
+    function formatInput(value, places) {
+        if (!Number.isFinite(Number(value))) return "";
+        return Number(Number(value).toFixed(places)).toString();
+    }
+
+    function inputNumber(input) {
+        if (!input || String(input.value).trim() === "") return NaN;
+        const value = Number(input.value);
+        return Number.isFinite(value) ? value : NaN;
+    }
+
+    function storedNumber(value, fallback) {
+        if (value === undefined || value === null || String(value).trim() === "") return fallback;
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : NaN;
+    }
+
     function widthMm(cm) {
         return rounded(num(cm) * 10);
     }
@@ -83,9 +101,11 @@
     }
 
     function dimensions(row) {
+        const cutWidth = row && row.cut_width_cm;
+        const cutLength = row && row.cut_length_cm;
         return {
-            width: num(row && row.cut_width_cm) || num(row && row.width_cm),
-            length: num(row && row.cut_length_cm) || num(row && row.length_cm),
+            width: cutWidth !== undefined && cutWidth !== null ? num(cutWidth) : num(row && row.width_cm),
+            length: cutLength !== undefined && cutLength !== null ? num(cutLength) : num(row && row.length_cm),
         };
     }
 
@@ -100,25 +120,91 @@
         if (validStored) side = rawSide;
         else if (!rawSide && !(options && options.blankWhenMissing)) side = sides[0] || "";
         const edge = edgeCm(piece, side);
-        const storedLength = num(row && row[addon.length]);
+        const rawLength = row && row[addon.length];
+        const storedLength = Number(rawLength);
+        const missingLength = rawLength === undefined || rawLength === null || String(rawLength).trim() === "";
+        const validStoredLength = missingLength || Number.isFinite(storedLength);
+        const fullLength = missingLength || (validStoredLength && storedLength === 0);
+        const hasStoredValues = Boolean(
+            rawSide
+            || Number(row && row[addon.enabled])
+            || num(row && row[addon.offset])
+            || num(row && row[addon.width])
+            || num(row && row[addon.start])
+            || (!missingLength && storedLength !== 0)
+        );
+        const startCm = storedNumber(row && row[addon.start], 0);
+        const legacyCheckboxOnly = Boolean(
+            row && row.name && !row.__islocal
+            && Number(row && row[addon.enabled])
+            && !rawSide
+            && num(row && row[addon.offset]) <= 0
+            && num(row && row[addon.width]) <= 0
+        );
         return {
             piece,
             row,
             kind: addon.kind,
             side,
-            offsetCm: rawSide ? num(row[addon.offset]) : 2,
-            widthCm: rawSide ? num(row[addon.width]) : 1.5,
-            startCm: rawSide ? num(row && row[addon.start]) : 0,
-            lengthCm: rawSide && storedLength > 0 ? storedLength : edge,
+            offsetCm: hasStoredValues ? storedNumber(row && row[addon.offset], 0) : 2,
+            widthCm: hasStoredValues ? storedNumber(row && row[addon.width], 0) : 1.5,
+            startCm,
+            lengthCm: fullLength ? Math.max(0, edge - startCm) : storedLength,
+            fullLength,
+            legacyCheckboxOnly,
             edgeCm: edge,
             enabled: Boolean(Number(row && row[addon.enabled])),
         };
     }
 
-    function validationMessage(draft) {
-        if (!draft || !draft.side) return localize(MESSAGES.choose_side, draft && draft.kind);
+    function validationIssue(draft) {
+        if (!draft) return { code: "missing_draft", field: "side", fields: ["side"], message: localize(MESSAGES.choose_side, "liner") };
+        if (draft.legacyCheckboxOnly) return null;
+        if (!draft.side) return { code: "choose_side", field: "side", fields: ["side"], message: localize(MESSAGES.choose_side, draft.kind) };
+        const availableSides = geometry().availableSides(draft.piece && draft.piece.pieceType);
+        if (!availableSides.includes(draft.side)) {
+            return { code: "side_unavailable", field: "side", fields: ["side"], message: localize(MESSAGES.side_unavailable, draft.kind) };
+        }
+        if (!Number.isFinite(draft.offsetCm) || draft.offsetCm < 0) {
+            return { code: "offset_invalid", field: "offset", fields: ["offset"], message: localize(MESSAGES.offset_invalid, draft.kind) };
+        }
+        if (!Number.isFinite(draft.widthCm) || draft.widthCm <= 0) {
+            return { code: "width_invalid", field: "width", fields: ["width"], message: localize(MESSAGES.width_invalid, draft.kind) };
+        }
+        if (!Number.isFinite(draft.startCm) || draft.startCm < 0) {
+            return { code: "liner_start_invalid", field: "start", fields: ["start"], message: localize(MESSAGES.liner_start_invalid, draft.kind) };
+        }
+        const availableLengthCm = edgeCm(draft.piece, draft.side);
+        const maximumLengthCm = availableLengthCm - draft.startCm;
+        if (maximumLengthCm <= 0) {
+            return { code: "liner_length_invalid", field: "start", fields: ["start", "length"], message: localize(MESSAGES.liner_length_invalid, draft.kind) };
+        }
+        if (!Number.isFinite(draft.lengthCm) || draft.lengthCm <= 0) {
+            return { code: "liner_length_invalid", field: "length", fields: ["length"], message: localize(MESSAGES.liner_length_invalid, draft.kind) };
+        }
+        const spanToleranceCm = geometry().toleranceMm / 10;
+        if (!draft.fullLength && draft.lengthCm > maximumLengthCm + spanToleranceCm) {
+            const issueText = __(MESSAGES.liner_span_exceeds_edge_detail, [
+                noun(draft.kind),
+                formatInput(availableLengthCm, 3),
+                formatInput(draft.startCm, 3),
+                formatInput(draft.lengthCm, 3),
+                formatInput(Math.max(0, maximumLengthCm), 3),
+            ]);
+            return {
+                code: "liner_span_exceeds_edge",
+                field: "length",
+                fields: ["start", "length"],
+                message: issueText,
+                availableLengthCm,
+                maximumLengthCm,
+            };
+        }
         const code = geometry().validationCode(draft.piece, draft.side, draft.offsetCm, draft.widthCm);
-        if (code) return localize(MESSAGES[code] || code, draft && draft.kind);
+        if (code) {
+            const field = code === "offset_invalid" ? "offset" : code === "width_invalid" ? "width" : "side";
+            return { code, field, fields: [field], message: localize(MESSAGES[code] || code, draft.kind) };
+        }
         try {
             geometry().centerlineMm(
                 draft.piece,
@@ -126,12 +212,23 @@
                 draft.offsetCm,
                 draft.widthCm,
                 draft.startCm,
-                draft.lengthCm
+                draft.fullLength ? 0 : draft.lengthCm
             );
         } catch (error) {
-            return localize(MESSAGES[error.code] || error.code || "Liner settings are invalid.", draft && draft.kind);
+            const field = error.code === "liner_start_invalid" ? "start" : "length";
+            return {
+                code: error.code || "invalid_geometry",
+                field,
+                fields: [field],
+                message: localize(MESSAGES[error.code] || error.code || "Liner settings are invalid.", draft.kind),
+            };
         }
-        return "";
+        return null;
+    }
+
+    function validationMessage(draft) {
+        const issue = validationIssue(draft);
+        return issue ? issue.message : "";
     }
 
     function mapPoint(point, frame, piece) {
@@ -212,14 +309,16 @@
                 inheritStroke: false,
                 color: "#b42318",
                 strokeWidth: 3,
+                insetPx: 4,
+                endTrimPx: 6,
             })
             : [
-                [Number(source.edge_width_top), [[frame.x, frame.y], [frame.x + frame.width, frame.y]]],
-                [Number(source.edge_width_bottom), [[frame.x, frame.y + frame.height], [frame.x + frame.width, frame.y + frame.height]]],
-                [Number(source.edge_long_left), [[frame.x, frame.y], [frame.x, frame.y + frame.height]]],
-                [Number(source.edge_long_right), [[frame.x + frame.width, frame.y], [frame.x + frame.width, frame.y + frame.height]]],
+                [Number(source.edge_width_top), "edge_width_top", [[frame.x + 6, frame.y + 4], [frame.x + frame.width - 6, frame.y + 4]]],
+                [Number(source.edge_width_bottom), "edge_width_bottom", [[frame.x + 6, frame.y + frame.height - 4], [frame.x + frame.width - 6, frame.y + frame.height - 4]]],
+                [Number(source.edge_long_left), "edge_long_left", [[frame.x + 4, frame.y + 6], [frame.x + 4, frame.y + frame.height - 6]]],
+                [Number(source.edge_long_right), "edge_long_right", [[frame.x + frame.width - 4, frame.y + 6], [frame.x + frame.width - 4, frame.y + frame.height - 6]]],
             ].filter(entry => entry[0]).map((entry, index) => (
-                `<polyline data-liner-edge="1" data-liner-edge-index="${index}" points="${pointsAttr(entry[1])}" fill="none" stroke="#b42318" stroke-width="3" stroke-linecap="round"/>`
+                `<polyline data-liner-edge="1" data-liner-edge-side="${entry[1]}" data-liner-edge-index="${index}" points="${pointsAttr(entry[2])}" fill="none" stroke="#b42318" stroke-width="3" stroke-linecap="round"/>`
             )).join("");
         return { api, piece, frame, outline, bands };
     }
@@ -269,19 +368,19 @@
                 <div class="dco-corner-input-grid">
                     <div class="dco-corner-input-wrap">
                         <label>${esc(__("Edge Offset"))}</label>
-                        <div class="dco-corner-input-shell"><input type="number" min="0" step="0.1" data-liner-offset value="${rounded(draft.offsetCm)}"><span>${esc(__("cm"))}</span></div>
+                        <div class="dco-corner-input-shell"><input type="number" min="0" step="0.001" data-liner-offset value="${formatInput(draft.offsetCm, 3)}"><span>${esc(__("cm"))}</span></div>
                     </div>
                     <div class="dco-corner-input-wrap">
                         <label>${esc(widthLabel)}</label>
-                        <div class="dco-corner-input-shell"><input type="number" min="0.1" step="0.1" data-liner-width value="${widthMm(draft.widthCm)}"><span>${esc(__("mm"))}</span></div>
+                        <div class="dco-corner-input-shell"><input type="number" min="0.01" step="0.01" data-liner-width value="${formatInput(num(draft.widthCm) * 10, 2)}"><span>${esc(__("mm"))}</span></div>
                     </div>
                     <div class="dco-corner-input-wrap">
                         <label>${esc(startLabel)}</label>
-                        <div class="dco-corner-input-shell"><input type="number" min="0" step="0.1" data-liner-start value="${rounded(draft.startCm)}"><span>${esc(__("cm"))}</span></div>
+                        <div class="dco-corner-input-shell"><input type="number" min="0" step="0.001" data-liner-start value="${formatInput(draft.startCm, 3)}"><span>${esc(__("cm"))}</span></div>
                     </div>
                     <div class="dco-corner-input-wrap">
                         <label>${esc(lengthLabel)}</label>
-                        <div class="dco-corner-input-shell"><input type="number" min="0.1" step="0.1" data-liner-length value="${rounded(draft.lengthCm)}"><span>${esc(__("cm"))}</span></div>
+                        <div class="dco-corner-input-shell"><input type="number" min="0.001" step="0.001" data-liner-length value="${formatInput(draft.lengthCm, 3)}"><span>${esc(__("cm"))}</span></div>
                     </div>
                 </div>
                 <div class="dco-corner-help" data-liner-available>${esc(__("Available Length"))}: ${rounded(draft.edgeCm)} ${esc(__("cm"))}</div>
@@ -312,37 +411,46 @@
     }
 
     function selectSide(draft, piece, nextSide) {
-        const previousEdge = draft.edgeCm;
-        const previousLength = draft.lengthCm;
-        const previousStart = draft.startCm;
         const nextEdge = edgeCm(piece, nextSide);
-        const wasFull = previousStart <= 0.05 && Math.abs(previousLength - previousEdge) < 0.05;
         draft.side = nextSide;
         draft.edgeCm = nextEdge;
-        if (wasFull || draft.startCm + draft.lengthCm > nextEdge + 0.05) {
-            if (wasFull || draft.startCm >= nextEdge) draft.startCm = 0;
-            draft.lengthCm = Math.max(0.1, nextEdge - draft.startCm);
-        }
+        if (draft.fullLength) draft.lengthCm = Math.max(0, nextEdge - draft.startCm);
+        draft.legacyCheckboxOnly = false;
         return draft;
     }
 
-    function readDraft(root, piece, enabled, row, kind) {
+    function readDraft(root, piece, enabled, row, kind, previous, changedField) {
         const offset = root.querySelector("[data-liner-offset]");
         const width = root.querySelector("[data-liner-width]");
         const start = root.querySelector("[data-liner-start]");
         const length = root.querySelector("[data-liner-length]");
         const active = root.querySelector("[data-liner-sides] .is-active");
         const side = active ? active.getAttribute("data-liner-side") : "";
+        const startCm = inputNumber(start);
+        const edge = edgeCm(piece, side);
+        const fullLength = Boolean(previous && previous.fullLength && changedField !== "length");
+        const rawLength = inputNumber(length);
+        const lengthCm = fullLength && changedField === "start"
+            ? Math.max(0, edge - startCm)
+            : rawLength;
+        const offsetCm = inputNumber(offset);
+        const widthCm = inputNumber(width) / 10;
         return {
             piece,
             row: row || null,
             kind: kind || "liner",
             side,
-            offsetCm: offset ? Number(offset.value) : NaN,
-            widthCm: width ? Number(width.value) / 10 : NaN,
-            startCm: start ? Number(start.value) : 0,
-            lengthCm: length ? Number(length.value) : NaN,
-            edgeCm: edgeCm(piece, side),
+            offsetCm,
+            widthCm,
+            startCm,
+            lengthCm,
+            fullLength,
+            legacyCheckboxOnly: Boolean(previous && previous.legacyCheckboxOnly
+                && !changedField
+                && !(Number.isFinite(offsetCm) && offsetCm > 0)
+                && !(Number.isFinite(widthCm) && widthCm > 0)
+                && !side),
+            edgeCm: edge,
             enabled,
         };
     }
@@ -359,7 +467,7 @@
         const available = root.querySelector("[data-liner-available]");
         const direction = root.querySelector("[data-liner-direction]");
         const message = validationMessage(draft);
-        if (available) available.textContent = `${__("Available Length")}: ${rounded(draft.edgeCm)} ${__("cm")}`;
+        if (available) available.textContent = `${__("Available Length")}: ${formatInput(draft.edgeCm, 3)} ${__("cm")}`;
         if (direction) {
             direction.textContent = `${__("Measurement Direction")}: ${__(DIRECTION[draft.side] || "Along the selected edge")}`;
         }
@@ -378,12 +486,21 @@
 
     function hostPiece(frm, row) {
         const api = geometry();
-        const piece = api.pieceFromRow(row);
+        const banding = window.AlmdinaMultiEdgeBanding;
+        const calculated = banding && typeof banding.calculate === "function"
+            ? banding.calculate(frm, row)
+            : null;
         const size = dimensions(row);
-        piece.widthCm = size.width || piece.widthCm;
-        piece.lengthCm = size.length || piece.lengthCm;
+        const source = calculated ? {
+            ...row,
+            cut_width_cm: calculated.cutWidth,
+            cut_length_cm: calculated.cutLength,
+        } : row;
+        const piece = api.pieceFromRow(source);
+        piece.widthCm = calculated ? calculated.cutWidth : size.width;
+        piece.lengthCm = calculated ? calculated.cutLength : size.length;
         if (typeof api.contourNotchFromOrder === "function") {
-            const notch = api.contourNotchFromOrder(frm, row);
+            const notch = api.contourNotchFromOrder(frm, source);
             piece.cutWidthCm = notch.cutWidthCm;
             piece.cutLengthCm = notch.cutLengthCm;
         }
@@ -407,7 +524,7 @@
         values[addon.offset] = enabled ? draft.offsetCm : 0;
         values[addon.width] = enabled ? draft.widthCm : 0;
         values[addon.start] = enabled ? draft.startCm : 0;
-        values[addon.length] = enabled ? draft.lengthCm : 0;
+        values[addon.length] = enabled ? (draft.fullLength ? 0 : draft.lengthCm) : 0;
         return values;
     }
 
@@ -524,6 +641,8 @@
         const piece = hostPiece(frm, row);
         let draft = draftFromRow(row, addon.kind);
         draft.piece = piece;
+        draft.edgeCm = edgeCm(piece, draft.side);
+        if (draft.fullLength) draft.lengthCm = Math.max(0, draft.edgeCm - draft.startCm);
         const title = addon.kind === "liner"
             ? __("Liner — Door piece {0}", [row.piece_no || row.idx || ""])
             : __("{0} — Door piece {1}", [__(addon.title), row.piece_no || row.idx || ""]);
@@ -534,7 +653,7 @@
             primary_action() {
                 const root = dialog.$wrapper.find("[data-liner-editor]").get(0);
                 if (!root) return;
-                draft = readDraft(root, piece, true, row, addon.kind);
+                draft = readDraft(root, piece, true, row, addon.kind, draft);
                 const message = paint(root, draft, dialog);
                 if (message) {
                     frappe.msgprint({
@@ -562,12 +681,12 @@
         root.addEventListener("click", (event) => {
             const side = event.target.closest("[data-liner-side]");
             if (side && root.contains(side)) {
-                draft = readDraft(root, piece, draft.enabled, row, addon.kind);
+                draft = readDraft(root, piece, draft.enabled, row, addon.kind, draft);
                 draft = selectSide(draft, piece, side.getAttribute("data-liner-side"));
                 const startInput = root.querySelector("[data-liner-start]");
                 const lengthInput = root.querySelector("[data-liner-length]");
-                if (startInput) startInput.value = rounded(draft.startCm);
-                if (lengthInput) lengthInput.value = rounded(draft.lengthCm);
+                if (startInput) startInput.value = formatInput(draft.startCm, 3);
+                if (lengthInput) lengthInput.value = formatInput(draft.lengthCm, 3);
                 paint(root, draft, dialog);
                 return;
             }
@@ -584,8 +703,22 @@
                 });
             }
         });
-        root.addEventListener("input", () => {
-            draft = readDraft(root, piece, draft.enabled, row, addon.kind);
+        root.addEventListener("input", (event) => {
+            const target = event && event.target;
+            const changedField = target && target.matches && target.matches("[data-liner-start]")
+                ? "start"
+                : target && target.matches && target.matches("[data-liner-length]")
+                    ? "length"
+                    : target && target.matches && target.matches("[data-liner-offset]")
+                        ? "offset"
+                        : target && target.matches && target.matches("[data-liner-width]")
+                            ? "width"
+                            : "";
+            draft = readDraft(root, piece, draft.enabled, row, addon.kind, draft, changedField);
+            if (draft.fullLength && changedField === "start") {
+                const lengthInput = root.querySelector("[data-liner-length]");
+                if (lengthInput) lengthInput.value = formatInput(draft.lengthCm, 3);
+            }
             paint(root, draft, dialog);
         });
         return true;
@@ -596,8 +729,11 @@
         applyLiner,
         previewSvg,
         validationMessage,
+        validationIssue,
         draftFromRow,
+        edgeLengthCm: edgeCm,
         valuesFor,
+        formatInputCm: value => formatInput(value, 3),
         controlsHtml,
         readDraft,
         selectSide,

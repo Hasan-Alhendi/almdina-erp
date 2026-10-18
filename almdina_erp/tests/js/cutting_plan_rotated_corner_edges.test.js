@@ -355,3 +355,25 @@ assert.match(chordPlain, /dco-edge-break-only-svg/);
 assert.match(notchPlain, /dco-edge-break-svg/);
 assert.notEqual(polylines(chordPlain).join("|"), polylines(chordMirror).join("|"), "the clipped diagonal follows the reflection");
 assert.notEqual(polylines(notchPlain).join("|"), polylines(notchMirror).join("|"), "the L notch follows the reflection");
+
+const previewBandPiece = {
+    ...basePiece("Clipped Corner"),
+    edge_break: 0,
+    edge_break_only: 0,
+    edge_width_top: 1,
+    edge_width_bottom: 0,
+    edge_long_left: 0,
+    edge_long_right: 1,
+};
+const insetReference = geometry.clippedEdgePaths(previewBandPiece, 400, 800, { insetPx: 4 });
+const insetPreview = geometry.edgeBandSvgMarkup(previewBandPiece, 400, 800, {
+    inheritStroke: false,
+    insetPx: 4,
+    endTrimPx: 6,
+});
+const previewLines = polylines(insetPreview).map(line => line.split(" ").map(point => point.split(",").map(Number)));
+assert.equal(previewLines.length, 2);
+assert.ok(Math.abs(previewLines[0][0][0] - insetReference.top[0][0] - 6) < 0.1);
+assert.ok(Math.abs(previewLines[0].at(-1)[0] - insetReference.top.at(-1)[0] + 6) < 0.1);
+assert.ok(Math.abs(previewLines[1][0][1] - insetReference.right[0][1] - 6) < 0.1);
+assert.ok(Math.abs(previewLines[1].at(-1)[1] - insetReference.right.at(-1)[1] + 6) < 0.1);

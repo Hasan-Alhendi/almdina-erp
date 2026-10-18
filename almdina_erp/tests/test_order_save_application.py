@@ -32,6 +32,9 @@ class FakeOrderSaveGateway:
     def calculate_cut_dimensions(self) -> None:
         self.calls.append("calculate_cut_dimensions")
 
+    def validate_machining_rows(self) -> None:
+        self.calls.append("validate_machining_rows")
+
     def calculate_piece_costs(self) -> None:
         self.calls.append("calculate_piece_costs")
 
@@ -74,6 +77,7 @@ class TestOrderSaveApplication(unittest.TestCase):
                 "validate_piece_policies",
                 "load_board_snapshot",
                 "calculate_cut_dimensions",
+                "validate_machining_rows",
                 "calculate_piece_costs",
                 "calculate_extra_addon_prices",
             ],
@@ -84,10 +88,11 @@ class TestOrderSaveApplication(unittest.TestCase):
         process_order_save(gateway)
 
         self.assertEqual(
-            gateway.calls[-4:],
+            gateway.calls[-5:],
             [
                 "load_board_snapshot",
                 "calculate_cut_dimensions",
+                "validate_machining_rows",
                 "calculate_piece_costs",
                 "calculate_extra_addon_prices",
             ],
