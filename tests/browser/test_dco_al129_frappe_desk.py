@@ -1358,7 +1358,11 @@ def test_real_desk_customer_native_entry_and_permission_differential() -> None:
                             " && cur_frm.__almdinaPrimaryActionMode === 'edit'",
                             timeout=20_000,
                         )
-                        page.locator(".page-actions .primary-action").first.click()
+                        # DCO owns its tab-local Edit action; Frappe's primary action
+                        # is deliberately hidden after the document is saved.
+                        edit_action = page.locator("button.dco-tab-edit-start").first
+                        expect(edit_action).to_be_visible(timeout=20_000)
+                        edit_action.click()
                         page.wait_for_function(
                             "() => window.AlmdinaOrderRevisionUX"
                             " && AlmdinaOrderRevisionUX.isEditableDraft(cur_frm)",
