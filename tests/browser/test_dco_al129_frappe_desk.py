@@ -1591,6 +1591,17 @@ def _enter_real_measurements(page: Page, count: int) -> list[dict[str, Any]]:
     expect(table).to_be_visible()
     expected = []
     row_observations = []
+    if count:
+        # Real browser focus/blur on empty placeholder must not create a child.
+        # The real worker may tab through an untouched new row.
+        initial_count = page.evaluate("() => (cur_frm.doc.pieces || []).length")
+        blank = table.locator("tbody tr.dco-virtual-row")
+        blank.locator("input[data-field='width_cm']").focus()
+        blank.locator("input[data-field='length_cm']").focus()
+        page.locator("[data-fieldname='board_description'] input").focus()
+        assert page.evaluate("() => (cur_frm.doc.pieces || []).length") == initial_count, (
+            "Leaving an untouched virtual row must not create a child"
+        )
     page.evaluate("""() => {
         const root = document.querySelector("[data-fieldname='pieces_fast_entry']");
         if (!root) return;
