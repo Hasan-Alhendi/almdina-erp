@@ -130,10 +130,7 @@ def start_stage(
     stage.started_by = actor
     stage.start_time = now_datetime()
     stage.status = target_status
-    if not stage.assigned_to:
-        stage.assigned_to = actor
-        stage.assignment_time = now_datetime()
-    elif not getattr(stage, "assignment_time", None):
+    if stage.assigned_to and not getattr(stage, "assignment_time", None):
         stage.assignment_time = getattr(stage, "creation", None) or now_datetime()
     stage.save(ignore_permissions=True)
     return stage

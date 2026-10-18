@@ -198,7 +198,9 @@ def decide_production_action(
             )
         return _decision(action, True, "allowed", "")
 
-    if not facts.actor or facts.assigned_to != facts.actor:
+    if not facts.is_admin and (
+        not facts.actor or facts.assigned_to != facts.actor
+    ):
         return _decision(
             action,
             False,

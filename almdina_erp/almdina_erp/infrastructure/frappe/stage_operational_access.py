@@ -49,6 +49,9 @@ def current_stage_operational_access(
         "actor_is_current_assignee": bool(
             assignment.get("actor_is_current_assignee")
         ),
+        "actor_can_operate_current_stage": bool(
+            assignment.get("actor_can_operate_current_stage")
+        ),
         "operational_role": operational_role,
         # Compatibility only; no role lookup is performed.
         "actor_holds_operational_role": bool(assignment.get("allowed")),

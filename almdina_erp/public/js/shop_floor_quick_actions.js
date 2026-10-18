@@ -505,7 +505,10 @@
         }).then(response => {
             if (!boundary.isCurrent()) return null;
             const stage = response.message || {};
-            if (stage.actor_holds_operational_role === false) {
+            const canOperateCurrentStage = stage.actor_can_operate_current_stage !== undefined
+                ? stage.actor_can_operate_current_stage === true
+                : stage.actor_holds_operational_role !== false;
+            if (!canOperateCurrentStage) {
                 const surface = frappe.msgprint(translate("You can view this order only. Its current stage is outside your operational roles."));
                 boundary.ownTransient(surface, "not-operational-role");
                 return null;
