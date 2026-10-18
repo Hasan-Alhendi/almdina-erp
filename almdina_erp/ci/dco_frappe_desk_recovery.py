@@ -244,11 +244,15 @@ def wait_for_function(page: Page, step: str, expression: str, *, arg=None, timeo
 def open_dco(page: Page, name: str) -> None:
     target_url = f"{DESK_URL}/app/door-cutting-order/{name}"
     _trace_event("open_dco_started", url=_safe_url(target_url))
-    response = page.goto(target_url, wait_until="domcontentloaded")
-    # Desk may satisfy this navigation through its SPA router and history API;
-    # Playwright then returns None because there was no top-level HTTP response.
-    if response is not None and response.status >= 400:
-        raise RuntimeError(f"DCO navigation returned HTTP {response.status}: {_safe_url(page.url)}")
+    # The user enters a Form through Frappe's own router. A new top-level
+    # navigation can expose cur_frm.doc before Form.setup / custom scripts
+    # have mounted, which is not evidence of an EDIT-ready document.
+    # Use the Desk router once, then require the full form ownership contract.
+    evaluate(
+        page, f"route to DCO {name} through Frappe Desk",
+        "name => frappe.set_route('Form', 'Door Cutting Order', name)",
+        name,
+    )
     try:
         wait_for_function(page, f"load DCO {name}",
             "name => window.cur_frm && window.cur_frm.doc && window.cur_frm.doc.name === name",
