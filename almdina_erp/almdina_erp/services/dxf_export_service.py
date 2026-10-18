@@ -36,6 +36,12 @@ from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     SYSTEM,
     UPLOADED_DXF,
 )
+from almdina_erp.almdina_erp.domain.cutting.glass_opening_nesting import (
+    classify_piece_pair,
+    material_outline_cm,
+    material_pair_issue,
+    undeclared_opening_containment,
+)
 from almdina_erp.almdina_erp.domain.cutting.primitives import rects_have_clearance
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
@@ -199,15 +205,21 @@ def _kerf_errors(
                     "w": flt(second.get("w")),
                     "h": flt(second.get("h")),
                 }
-                if rects_have_clearance(
-                    first_rect,
-                    second_rect,
-                    required_kerf_cm,
-                    DXF_KERF_NUMERIC_TOLERANCE_CM,
-                ):
-                    continue
                 first_key = first.get("label") or first.get("id") or index + 1
                 second_key = second.get("label") or second.get("id") or index + 2
+                pair_issue = _export_pair_issue(
+                    first,
+                    second,
+                    first_rect=first_rect,
+                    second_rect=second_rect,
+                    kerf_cm=required_kerf_cm,
+                    pieces=pieces,
+                )
+                if pair_issue is None:
+                    continue
+                # Rectangle-fallback layout faults keep the historical kerf code so
+                # existing export cards stay stable. Topology overlaps still arrive
+                # as MATERIAL_OVERLAP from validate_snapshot_material_layout.
                 errors.append(
                     issue(
                         KERF_VIOLATION,
@@ -217,6 +229,59 @@ def _kerf_errors(
                     )
                 )
     return errors
+
+
+def _export_pair_issue(
+    first: dict[str, Any],
+    second: dict[str, Any],
+    *,
+    first_rect: dict[str, float],
+    second_rect: dict[str, float],
+    kerf_cm: float,
+    pieces: list[dict[str, Any]],
+) -> str | None:
+    """Return a fault token, or ``None`` when the pair may export."""
+
+    relation = classify_piece_pair(
+        first,
+        second,
+        kerf_cm=kerf_cm,
+        tolerance=DXF_KERF_NUMERIC_TOLERANCE_CM,
+        sheet_pieces=pieces,
+    )
+    if relation == "nested":
+        return None
+    if relation == "invalid":
+        return "kerf"
+    hosted = first.get("glass_host_piece_id") not in (None, "") or second.get(
+        "glass_host_piece_id"
+    ) not in (None, "")
+    if hosted or (
+        material_outline_cm(first) is not None and material_outline_cm(second) is not None
+    ):
+        if not hosted and undeclared_opening_containment(
+            first,
+            second,
+            tolerance=DXF_KERF_NUMERIC_TOLERANCE_CM,
+        ):
+            return "overlap"
+        material_issue = material_pair_issue(
+            first,
+            second,
+            kerf_cm=kerf_cm,
+            tolerance=DXF_KERF_NUMERIC_TOLERANCE_CM,
+        )
+        if material_issue is None:
+            return None
+        return material_issue
+    if not rects_have_clearance(
+        first_rect,
+        second_rect,
+        kerf_cm,
+        DXF_KERF_NUMERIC_TOLERANCE_CM,
+    ):
+        return "kerf"
+    return None
 
 
 def _assert_export_kerf(snapshot: dict[str, Any], *, fallback_kerf_mm: float = 0.0) -> None:

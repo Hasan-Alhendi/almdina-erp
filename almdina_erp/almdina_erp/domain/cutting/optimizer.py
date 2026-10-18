@@ -184,7 +184,11 @@ def _largest_reusable_free_area(
 
 
 def _cut_metrics(plan: dict[str, Any]) -> tuple[int, float]:
-    """Estimate distinct straight cut lines and their total span."""
+    """Estimate distinct straight cut lines and their total span.
+
+    Pieces nested inside a Glass opening are cut from the opening waste, not as
+    additional free-board saw lines, so they are excluded from this estimate.
+    """
 
     total_lines = 0
     total_length = 0.0
@@ -195,6 +199,8 @@ def _cut_metrics(plan: dict[str, Any]) -> tuple[int, float]:
         vertical: dict[float, list[tuple[float, float]]] = {}
         horizontal: dict[float, list[tuple[float, float]]] = {}
         for piece in sheet.get("pieces") or []:
+            if piece.get("glass_host_piece_id") not in (None, ""):
+                continue
             x = num(piece.get("x"))
             y = num(piece.get("y"))
             width = num(piece.get("w"))

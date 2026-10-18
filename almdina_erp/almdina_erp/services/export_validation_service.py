@@ -384,6 +384,9 @@ def _plan_to_export_snapshot(plan: Any) -> dict[str, Any]:
                 for key in ("glass_margin_mm", "glass_hole_local_mm"):
                     if stored.get(key) not in (None, "", []):
                         public_piece[key] = stored[key]
+            host_id = stored.get("glass_host_piece_id")
+            if host_id not in (None, ""):
+                public_piece["glass_host_piece_id"] = host_id
             sheet_pieces.append(public_piece)
         persisted = persisted_sheets.get(sheet_no) or {}
         rebuilt_sheet = {

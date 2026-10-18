@@ -248,27 +248,50 @@ def nest_glass_openings(
 ) -> dict[str, Any]:
     """Return a better nested plan, or the original baseline."""
 
+    def _finish(plan: dict[str, Any], **diagnostics: Any) -> dict[str, Any]:
+        plan["glass_nesting_diagnostics"] = {
+            "openings_found": int(diagnostics.get("openings_found") or 0),
+            "guests_selected": list(diagnostics.get("guests_selected") or ()),
+            "outcome": str(diagnostics.get("outcome") or "skipped"),
+            "baseline_rank": tuple(baseline.get("industrial_rank") or ()),
+            "candidate_rank": diagnostics.get("candidate_rank"),
+            "baseline_nested_count": nested_piece_count(baseline),
+            "candidate_nested_count": int(diagnostics.get("candidate_nested_count") or 0),
+            "validation_error_count": int(diagnostics.get("validation_error_count") or 0),
+        }
+        return plan
+
     if machine_type == _PANEL_SAW_ID:
-        return baseline
+        return _finish(baseline, outcome="panel_saw")
     budget = nesting_time_budget_sec(time_limit_sec)
     if budget <= 0 or not baseline.get("industrial_rank"):
-        return baseline
+        return _finish(baseline, outcome="no_budget")
     started = time.monotonic()
     openings = _openings(baseline, kerf_cm)
     if not openings:
-        return baseline
+        return _finish(baseline, outcome="no_openings", openings_found=0)
     selected = _select_guests(pieces, openings, kerf_cm)
+    selected_ids = [int(piece["id"]) for piece in selected]
     if not selected:
-        return baseline
+        return _finish(
+            baseline,
+            outcome="no_guests",
+            openings_found=len(openings),
+        )
     if time.monotonic() - started > budget:
-        return baseline
+        return _finish(
+            baseline,
+            outcome="budget",
+            openings_found=len(openings),
+            guests_selected=selected_ids,
+        )
 
     from .evaluation import validate_plan
     from .optimizer import enrich_plan_metrics
     from .registry import METHOD_CONFIGS, run_single_method
 
-    selected_ids = {int(piece["id"]) for piece in selected}
-    remainder = [piece for piece in pieces if int(piece["id"]) not in selected_ids]
+    selected_id_set = set(selected_ids)
+    remainder = [piece for piece in pieces if int(piece["id"]) not in selected_id_set]
     method_key = str(baseline.get("method_key") or "")
     if method_key not in METHOD_CONFIGS:
         method_key = _REPACK_METHOD
@@ -279,14 +302,36 @@ def nest_glass_openings(
         kerf_cm,
         method_key,
     )
-    if time.monotonic() - started > budget or repacked.get("unplaced"):
-        return baseline
+    if time.monotonic() - started > budget:
+        return _finish(
+            baseline,
+            outcome="budget",
+            openings_found=len(openings),
+            guests_selected=selected_ids,
+        )
+    if repacked.get("unplaced"):
+        return _finish(
+            baseline,
+            outcome="repack_unplaced",
+            openings_found=len(openings),
+            guests_selected=selected_ids,
+        )
     try:
         placed = _place_guests(repacked, selected, kerf_cm)
     except GlassOpeningError:
-        return baseline
+        return _finish(
+            baseline,
+            outcome="place_failed",
+            openings_found=len(openings),
+            guests_selected=selected_ids,
+        )
     if placed is None:
-        return baseline
+        return _finish(
+            baseline,
+            outcome="place_failed",
+            openings_found=len(openings),
+            guests_selected=selected_ids,
+        )
     candidate = placed
     for key in (
         "optimization_mode",
@@ -322,9 +367,34 @@ def nest_glass_openings(
         board_h_cm,
         kerf_cm=kerf_cm,
     )
-    if errors or not nested_plan_is_better(candidate, baseline):
-        return baseline
-    return candidate
+    candidate_nested = nested_piece_count(candidate)
+    if errors:
+        return _finish(
+            baseline,
+            outcome="rejected_validation",
+            openings_found=len(openings),
+            guests_selected=selected_ids,
+            candidate_rank=tuple(candidate.get("industrial_rank") or ()),
+            candidate_nested_count=candidate_nested,
+            validation_error_count=len(errors),
+        )
+    if not nested_plan_is_better(candidate, baseline):
+        return _finish(
+            baseline,
+            outcome="rejected_rank",
+            openings_found=len(openings),
+            guests_selected=selected_ids,
+            candidate_rank=tuple(candidate.get("industrial_rank") or ()),
+            candidate_nested_count=candidate_nested,
+        )
+    return _finish(
+        candidate,
+        outcome="accepted",
+        openings_found=len(openings),
+        guests_selected=selected_ids,
+        candidate_rank=tuple(candidate.get("industrial_rank") or ()),
+        candidate_nested_count=candidate_nested,
+    )
 
 
 def _openings(plan: Mapping[str, Any], kerf_cm: float) -> list[dict[str, Any]]:
@@ -570,6 +640,27 @@ def material_pair_issue(
     if polygon_distance(first_part.outer, second_part.outer) + tolerance < gap:
         return "kerf"
     return None
+
+
+def undeclared_opening_containment(
+    first: Mapping[str, Any],
+    second: Mapping[str, Any],
+    *,
+    tolerance: float = _GEOMETRY_TOLERANCE_CM,
+) -> bool:
+    """True when one outline sits in the other's Glass hole without a host link."""
+
+    if _declared_host_id(first) is not None or _declared_host_id(second) is not None:
+        return False
+    first_part = _part_geometry(first)
+    second_part = _part_geometry(second)
+    if first_part is None or second_part is None:
+        return False
+    if containing_hole(first_part, second_part.outer, tolerance=tolerance) is not None:
+        return True
+    if containing_hole(second_part, first_part.outer, tolerance=tolerance) is not None:
+        return True
+    return False
 
 
 def material_outline_cm(piece: Mapping[str, Any]) -> tuple[tuple[float, float], ...] | None:

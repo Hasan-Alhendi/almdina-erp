@@ -17,6 +17,9 @@ from almdina_erp.almdina_erp.domain.cutting.primitives import (
     make_placed_piece,
 )
 from almdina_erp.almdina_erp.domain.cutting.registry import run_single_method
+from almdina_erp.tests.frappe_test_stub import install_if_unavailable
+
+install_if_unavailable()
 
 
 METHOD = "MaxRects Best Short Side"
@@ -697,3 +700,291 @@ def test_asymmetric_banding_and_host_rotation_use_the_stored_opening_once():
     assert rotated_opening["x"] == 1 + (min(point[0] for point in rotated_ring) / 10)
     assert rotated_opening["y"] == 2 + (min(point[1] for point in rotated_ring) / 10)
     assert rotated_ring != placed["glass_hole_local_mm"]
+
+
+def test_glass_85_opening_75_nests_regular_20_on_a_shared_board():
+    """Regression: 850×850 Glass / 750×750 opening / 200×200 Regular / kerf 3 mm."""
+
+    pieces, plan = _plan(
+        [_glass(85, 85, 50), _regular(20, 20)],
+        122,
+        244,
+        kerf=0.3,
+    )
+    hosts = _hosts(plan)
+    diagnostics = plan.get("glass_nesting_diagnostics") or {}
+
+    assert len(plan["sheets"]) == 1
+    assert hosts == [1]
+    assert diagnostics.get("outcome") == "accepted"
+    assert diagnostics.get("openings_found") == 1
+    assert diagnostics.get("guests_selected") == [2]
+    assert _ids(plan) == [1, 2]
+    assert validate_plan(plan, pieces, 122, 244, kerf_cm=0.3) == []
+
+
+def test_nesting_diagnostics_name_rejected_rank_when_candidate_is_worse(monkeypatch):
+    pieces = expand_piece_groups([_glass(40, 40, 50), _regular(20, 20)])
+    baseline = run_single_method(pieces, 50, 50, 0.3, METHOD)
+    baseline["industrial_rank"] = (0, 1)
+
+    def worse_rank(plan, *_args, **_kwargs):
+        plan["industrial_rank"] = (0, 2)
+        return plan
+
+    monkeypatch.setattr(
+        "almdina_erp.almdina_erp.domain.cutting.optimizer.enrich_plan_metrics",
+        worse_rank,
+    )
+    rejected = nest_glass_openings(
+        baseline,
+        pieces,
+        50,
+        50,
+        0.3,
+        machine_type="CNC Router",
+        time_limit_sec=2,
+        min_remnant_width_cm=30,
+        min_remnant_length_cm=30,
+        min_remnant_area_m2=0.09,
+    )
+
+    assert rejected is baseline
+    assert rejected["glass_nesting_diagnostics"]["outcome"] == "rejected_rank"
+    assert rejected["glass_nesting_diagnostics"]["guests_selected"] == [2]
+
+
+def test_corner_and_second_regular_nest_inside_one_opening():
+    rows = [
+        _glass(70, 70, 50),
+        {
+            "piece_type": "Clipped Corner",
+            "width_cm": 18,
+            "length_cm": 16,
+            "qty": 1,
+            "clipped_corner_position": "Top Right",
+            "clipped_corner_width_cm": 5,
+            "clipped_corner_length_cm": 6,
+        },
+        _regular(12, 12),
+    ]
+    pieces, plan = _plan(rows, 80, 80)
+
+    nested = [
+        piece
+        for sheet in plan["sheets"]
+        for piece in sheet["pieces"]
+        if piece.get(GLASS_HOST_PIECE_ID) not in (None, "")
+    ]
+    assert {piece["piece_type"] for piece in nested} == {"Clipped Corner", "Regular"}
+    assert all(piece[GLASS_HOST_PIECE_ID] == 1 for piece in nested)
+    assert validate_plan(plan, pieces, 80, 80, kerf_cm=0.3) == []
+
+
+def test_l_shaped_beside_glass_uses_material_not_bbox():
+    pieces = expand_piece_groups(
+        [
+            _glass(40, 40, 50),
+            {
+                "piece_type": "L-Shaped Corner",
+                "width_cm": 20,
+                "length_cm": 20,
+                "qty": 1,
+                "clipped_corner_position": "Top Left",
+                "clipped_corner_width_cm": 5,
+                "clipped_corner_length_cm": 6,
+            },
+        ]
+    )
+    glass = make_placed_piece(pieces[0], 0, 0, 40, 40, False)
+    beside = make_placed_piece(pieces[1], 40.1, 35, 20, 20, False)
+
+    assert validate_plan(
+        {"sheets": [{"sheet_no": 1, "pieces": [glass, beside]}], "unplaced": []},
+        pieces,
+        80,
+        80,
+        kerf_cm=0.3,
+    ) == []
+
+
+def test_real_overlap_between_glass_frame_and_external_door_is_rejected():
+    pieces = expand_piece_groups([_glass(40, 40, 50), _regular(20, 20)])
+    glass = make_placed_piece(pieces[0], 0, 0, 40, 40, False)
+    crossing = make_placed_piece(pieces[1], 30, 10, 20, 20, False)
+
+    errors = validate_plan(
+        {"sheets": [{"sheet_no": 1, "pieces": [glass, crossing]}], "unplaced": []},
+        pieces,
+        80,
+        80,
+        kerf_cm=0.3,
+    )
+    assert any("overlap" in error for error in errors)
+
+
+def test_export_rectangle_fallback_accepts_nested_guests_and_rejects_true_conflicts():
+    from almdina_erp.almdina_erp.services import dxf_export_service
+
+    pieces = expand_piece_groups(
+        [
+            _glass(40, 40, 50),
+            _regular(12, 12),
+            _regular(12, 12),
+            {
+                "piece_type": "L-Shaped Corner",
+                "width_cm": 20,
+                "length_cm": 20,
+                "qty": 1,
+                "clipped_corner_position": "Top Left",
+                "clipped_corner_width_cm": 5,
+                "clipped_corner_length_cm": 6,
+            },
+        ]
+    )
+    glass = make_placed_piece(pieces[0], 0, 0, 40, 40, False)
+    hole = opening_board_rect(glass)
+    first = make_placed_piece(pieces[1], hole["x"] + 1, hole["y"] + 1, 12, 12, False)
+    second = make_placed_piece(pieces[2], hole["x"] + 14, hole["y"] + 1, 12, 12, False)
+    beside = make_placed_piece(pieces[3], 40.1, 35, 20, 20, False)
+    for guest in (first, second):
+        guest[GLASS_HOST_PIECE_ID] = glass["id"]
+
+    accepted = {
+        "kerf_cm": 0.3,
+        "sheets": [{"sheet_no": 1, "pieces": [glass, first, second, beside]}],
+    }
+    assert dxf_export_service._kerf_errors(accepted) == []
+
+    overlap = make_placed_piece(pieces[2], hole["x"] + 5, hole["y"] + 1, 12, 12, False)
+    overlap[GLASS_HOST_PIECE_ID] = glass["id"]
+    rejected = {
+        "kerf_cm": 0.3,
+        "sheets": [{"sheet_no": 1, "pieces": [glass, first, overlap]}],
+    }
+    issues = dxf_export_service._kerf_errors(rejected)
+    assert issues
+    assert {issue.target.pair_contour_nos for issue in issues} == {("2.1", "3.1")}
+
+
+def test_export_rebuild_keeps_glass_host_piece_id():
+    import json
+    from types import SimpleNamespace
+
+    from almdina_erp.almdina_erp.services.export_validation_service import (
+        _plan_to_export_snapshot,
+    )
+
+    hole = [[50.0, 50.0], [350.0, 50.0], [350.0, 350.0], [50.0, 350.0]]
+    persisted = {
+        "sheets": [
+            {
+                "sheet_no": 1,
+                "pieces": [
+                    {
+                        "id": 1,
+                        "piece_type": "Glass",
+                        "glass_margin_mm": 50,
+                        "glass_hole_local_mm": hole,
+                    },
+                    {
+                        "id": 2,
+                        "piece_type": "Regular",
+                        GLASS_HOST_PIECE_ID: 1,
+                    },
+                ],
+            }
+        ]
+    }
+    plan = SimpleNamespace(
+        snapshot_json=json.dumps(persisted),
+        placed_pieces=[
+            SimpleNamespace(
+                sheet_no=1,
+                piece_id=1,
+                piece_label="1.1",
+                piece_instance_id="door-1:1",
+                source_piece_no=1,
+                copy_no=1,
+                x_mm=0,
+                y_mm=0,
+                width_mm=400,
+                height_mm=400,
+                original_width_cm=40,
+                original_length_cm=40,
+                piece_type="Glass",
+                clipped_corner_position="",
+                clipped_corner_width_cm=0,
+                clipped_corner_length_cm=0,
+                special_shape_geometry_json="",
+                rotated=0,
+                edge_long_right=0,
+                edge_long_left=0,
+                edge_width_top=0,
+                edge_width_bottom=0,
+                edge_type="",
+                notes="",
+            ),
+            SimpleNamespace(
+                sheet_no=1,
+                piece_id=2,
+                piece_label="2.1",
+                piece_instance_id="door-2:1",
+                source_piece_no=2,
+                copy_no=1,
+                x_mm=60,
+                y_mm=60,
+                width_mm=120,
+                height_mm=120,
+                original_width_cm=12,
+                original_length_cm=12,
+                piece_type="Regular",
+                clipped_corner_position="",
+                clipped_corner_width_cm=0,
+                clipped_corner_length_cm=0,
+                special_shape_geometry_json="",
+                rotated=0,
+                edge_long_right=0,
+                edge_long_left=0,
+                edge_width_top=0,
+                edge_width_bottom=0,
+                edge_type="",
+                notes="",
+            ),
+        ],
+        sources=[
+            SimpleNamespace(
+                sheet_no=1,
+                source_type="Full Board",
+                remnant=None,
+                board_item=None,
+                material="",
+                color="",
+                thickness_mm=18,
+                full_width_mm=1220,
+                full_length_mm=2440,
+                usable_width_mm=1220,
+                usable_length_mm=2440,
+                source_area_m2=2.9768,
+            )
+        ],
+        engine_version="system",
+        method_key=METHOD,
+        method_label=METHOD,
+        full_board_width_mm=1220,
+        full_board_length_mm=2440,
+        usable_board_width_mm=1220,
+        usable_board_length_mm=2440,
+        kerf_mm=3,
+        trim_margin_mm=0,
+        used_area_m2=0.1744,
+        total_source_area_m2=2.9768,
+        waste_area_m2=2.8,
+        required_boards=1,
+    )
+
+    rebuilt = _plan_to_export_snapshot(plan)
+    by_id = {int(piece["id"]): piece for piece in rebuilt["sheets"][0]["pieces"]}
+
+    assert by_id[1]["glass_hole_local_mm"] == hole
+    assert by_id[2][GLASS_HOST_PIECE_ID] == 1

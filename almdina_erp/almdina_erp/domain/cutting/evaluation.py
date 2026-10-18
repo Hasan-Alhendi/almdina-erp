@@ -5,7 +5,9 @@ from typing import Any
 from .glass_opening_nesting import (
     classify_piece_pair,
     host_link_errors,
+    material_outline_cm,
     material_pair_issue,
+    undeclared_opening_containment,
 )
 from .primitives import num, present_shop_floor_packing, rect_intersects, rects_have_clearance
 
@@ -149,9 +151,23 @@ def validate_plan(
                         f"a valid Glass opening nest on sheet {sheet.get('sheet_no')}."
                     )
                     continue
-                if first.get("glass_host_piece_id") not in (None, "") or second.get(
+                hosted = first.get("glass_host_piece_id") not in (None, "") or second.get(
                     "glass_host_piece_id"
-                ) not in (None, ""):
+                ) not in (None, "")
+                # Real cut outlines beat bounding boxes for Corner/Special/Glass pairs
+                # and for siblings that share a host. Host id alone never skips checks.
+                if hosted or (
+                    material_outline_cm(first) is not None
+                    and material_outline_cm(second) is not None
+                ):
+                    if not hosted and undeclared_opening_containment(
+                        first, second, tolerance=tolerance
+                    ):
+                        errors.append(
+                            f"Pieces {first.get('label')} and {second.get('label')} overlap "
+                            f"on sheet {sheet.get('sheet_no')}."
+                        )
+                        continue
                     issue = material_pair_issue(
                         first,
                         second,
@@ -163,10 +179,16 @@ def validate_plan(
                             f"Pieces {first.get('label')} and {second.get('label')} overlap "
                             f"on sheet {sheet.get('sheet_no')}."
                         )
-                    elif issue in {"kerf", "unproven"}:
+                    elif issue == "unproven" or (issue == "kerf" and hosted):
                         errors.append(
                             f"Pieces {first.get('label')} and {second.get('label')} do not form "
                             f"a valid Glass opening nest on sheet {sheet.get('sheet_no')}."
+                        )
+                    elif issue == "kerf" and required_kerf_cm:
+                        errors.append(
+                            f"Pieces {first.get('label')} and {second.get('label')} do not preserve "
+                            f"the required {required_kerf_cm:g} cm kerf clearance on sheet "
+                            f"{sheet.get('sheet_no')}."
                         )
                     continue
                 if rect_intersects(first_rect, second_rect):
