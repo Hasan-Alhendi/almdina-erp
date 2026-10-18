@@ -431,7 +431,7 @@ def certify_worker_identity_and_dynamic_permissions(admin_page: Page) -> None:
     browser = admin_page.context.browser
     if browser is None:
         raise RuntimeError("Desk identity certification requires a browser context.")
-    worker_context = browser.new_context()
+    worker_context = browser.new_context(locale="en-US")
     worker_page = worker_context.new_page()
     attach_browser_diagnostics(worker_page)
     try:
@@ -849,7 +849,10 @@ if __name__ == "__main__":
         evidence_dir.mkdir(parents=True, exist_ok=True)
         TRACE_PATH = evidence_dir / "dco-desk-trace.json"
         browser = playwright.chromium.launch()
-        context = browser.new_context()
+        # Frappe v16 uses Intl.Locale(navigator.language) while creating a Form.
+        # The CI host locale may be an invalid BCP-47 value (for example C).
+        # Match other pinned Desk suites with a valid browser locale.
+        context = browser.new_context(locale="en-US")
         # Instrument the first native Form creation in every new document.
         # Hooks installed after login are lost on full navigation; this
         # init script observes the pinned Form lifecycle before the route loads.
