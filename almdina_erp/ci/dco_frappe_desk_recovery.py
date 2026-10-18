@@ -280,8 +280,17 @@ def open_dco(page: Page, name: str) -> None:
         # Frappe router.push_state does not render an unchanged URL. Use
         # native Form.reload_doc() to inspect new server state after dispatch
         # or return-to-Draft without reloading the entire browser.
-        evaluate(page, f"reload current DCO {name} through Frappe Form",
-                 "() => cur_frm.reload_doc()")
+        # reload_doc returns an asynchronous Frappe request. The real Form
+        # may navigate while that request completes, so do not await its
+        # Promise inside the old browser execution context. Observe the
+        # authoritative native getdoc response instead.
+        with page.expect_response(
+            lambda response: "frappe.desk.form.load.getdoc" in response.url
+            and response.status == 200,
+            timeout=60_000,
+        ):
+            evaluate(page, f"initiate native Form reload for {name}",
+                     "() => { setTimeout(() => { void cur_frm.reload_doc(); }, 0); return true; }")
     elif not mounted_form:
         response = page.goto(target_url, wait_until="domcontentloaded", timeout=60_000)
         if response is None or response.status >= 400:
