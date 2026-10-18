@@ -1465,7 +1465,7 @@ def test_real_desk_customer_native_entry_and_permission_differential() -> None:
                     " if (!route.length) return false;"
                     " if (route[0] === 'Form' && route[1] === 'Door Cutting Order')"
                     " return Boolean(frm && frm.doctype === 'Door Cutting Order' && frm.is_new()"
-                    " && frm.has_perm && !frm.has_perm('create'))"
+                    " && frm.has_perm && !frm.has_perm('create'));"
                     " const expectedPath = '/app/door-cutting-order/new-door-cutting-order-al129-no-create';"
                     " return location.pathname.replace(/\\/$/, '') !== expectedPath; }",
                     timeout=30_000,
@@ -1499,7 +1499,7 @@ def test_real_desk_customer_native_entry_and_permission_differential() -> None:
                 outcomes["no_create"] = {
                     "uiNewActionUnavailable": True,
                     "directDeskCreationUnavailable": True,
-                    "officialApiCreateDenied": create_attempt["permissionDenied"],
+                    "officialApiCreateDenied": denied_response.status == 403,
                     "deskRoute": list_state["route"],
                 }
                 trace("no_create_denied_by_desk_and_server", **outcomes["no_create"])
