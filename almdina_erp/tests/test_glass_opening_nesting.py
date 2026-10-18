@@ -988,3 +988,215 @@ def test_export_rebuild_keeps_glass_host_piece_id():
 
     assert by_id[1]["glass_hole_local_mm"] == hole
     assert by_id[2][GLASS_HOST_PIECE_ID] == 1
+
+
+def _cutting_plan_for_layout(pieces_cm, *, kerf_mm=3, plan_kind="Remnant"):
+    import json
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    from almdina_erp.almdina_erp.application.orders.plan_snapshot_security import (
+        sanitize_plan_snapshot,
+    )
+    from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
+        validate_snapshot_material_layout,
+    )
+    from almdina_erp.almdina_erp.services.export_validation_service import (
+        validate_cutting_plan_issues,
+    )
+
+    snapshot = sanitize_plan_snapshot(
+        {
+            "kerf_cm": kerf_mm / 10.0,
+            "sheets": [{"sheet_no": 1, "pieces": pieces_cm}],
+            "unplaced": [],
+        }
+    )
+    topology_aware = validate_snapshot_material_layout(
+        snapshot,
+        required_clearance_mm=float(kerf_mm),
+    )
+
+    def _placed(piece):
+        return SimpleNamespace(
+            sheet_no=1,
+            piece_id=piece["id"],
+            piece_label=piece.get("label") or f"{piece['id']}.1",
+            source_piece_no=piece.get("source_piece_no", piece["id"]),
+            copy_no=1,
+            x_mm=piece["x"] * 10,
+            y_mm=piece["y"] * 10,
+            width_mm=piece["w"] * 10,
+            height_mm=piece["h"] * 10,
+            original_width_cm=piece["w"],
+            original_length_cm=piece["h"],
+            piece_type=piece.get("piece_type") or "Regular",
+            rotated=0,
+            clipped_corner_position=piece.get("clipped_corner_position") or "",
+            clipped_corner_width_cm=piece.get("clipped_corner_width_cm") or 0,
+            clipped_corner_length_cm=piece.get("clipped_corner_length_cm") or 0,
+            special_shape_geometry_json=piece.get("special_shape_geometry_json") or "",
+        )
+
+    plan = SimpleNamespace(
+        plan_kind=plan_kind,
+        door_cutting_order="DCO-NEST",
+        board_item="",
+        snapshot_json=json.dumps(snapshot),
+        kerf_mm=kerf_mm,
+        sources=[
+            SimpleNamespace(
+                sheet_no=1,
+                source_type="Full Board",
+                remnant=None,
+                board_item="",
+                material="",
+                color="",
+                thickness_mm=18,
+                board_description="",
+                full_width_mm=2000,
+                full_length_mm=2000,
+                usable_width_mm=2000,
+                usable_length_mm=2000,
+            )
+        ],
+        placed_pieces=[_placed(piece) for piece in pieces_cm],
+    )
+    order = SimpleNamespace(
+        board_description="",
+        board_material="",
+        board_color="",
+        board_thickness_mm=18,
+    )
+    with patch(
+        "almdina_erp.almdina_erp.services.export_validation_service.frappe.get_doc",
+        return_value=order,
+    ):
+        issues = validate_cutting_plan_issues(plan)
+    return issues, snapshot, topology_aware
+
+
+def test_three_nested_guests_pass_plan_and_cutting_plan_validation():
+    from almdina_erp.almdina_erp.domain.cutting.dxf_issue import MATERIAL_OVERLAP
+    from almdina_erp.almdina_erp.services.dxf_export_service import _kerf_errors
+
+    pieces = expand_piece_groups(
+        [
+            _glass(70, 70, 50),
+            _regular(15, 15),
+            _regular(12, 12),
+            _regular(10, 10),
+        ]
+    )
+    glass = make_placed_piece(pieces[0], 0, 0, 70, 70, False)
+    glass.update(source_piece_no=1, label="1.1")
+    hole = opening_board_rect(glass)
+    guests = []
+    placements = (
+        (pieces[1], hole["x"] + 1, hole["y"] + 1, 15, 15, 2),
+        (pieces[2], hole["x"] + 1 + 15 + 0.3, hole["y"] + 1, 12, 12, 3),
+        (pieces[3], hole["x"] + 1, hole["y"] + 1 + 15 + 0.3, 10, 10, 4),
+    )
+    for source, x_pos, y_pos, width, height, source_no in placements:
+        guest = make_placed_piece(source, x_pos, y_pos, width, height, False)
+        guest.update(
+            {
+                GLASS_HOST_PIECE_ID: glass["id"],
+                "source_piece_no": source_no,
+                "label": f"{source_no}.1",
+            }
+        )
+        guests.append(guest)
+
+    plan = {
+        "kerf_cm": 0.3,
+        "sheets": [{"sheet_no": 1, "pieces": [glass, *guests]}],
+        "unplaced": [],
+    }
+    assert validate_plan(plan, pieces, 100, 100, kerf_cm=0.3) == []
+    assert _kerf_errors(plan) == []
+
+    issues, snapshot, topology_aware = _cutting_plan_for_layout(
+        [glass, *guests],
+        kerf_mm=3,
+    )
+    assert topology_aware is False
+    assert issues == []
+    assert snapshot["sheets"][0]["pieces"][0]["glass_hole_local_mm"]
+    assert [piece.get(GLASS_HOST_PIECE_ID) for piece in snapshot["sheets"][0]["pieces"][1:]] == [
+        1,
+        1,
+        1,
+    ]
+    assert not any(issue.code == MATERIAL_OVERLAP for issue in issues)
+
+
+def test_cutting_plan_validation_rejects_nested_and_historical_collisions():
+    from almdina_erp.almdina_erp.domain.cutting.dxf_issue import MATERIAL_OVERLAP
+
+    pieces = expand_piece_groups(
+        [
+            _glass(70, 70, 50),
+            _regular(15, 15),
+            _regular(12, 12),
+            _regular(20, 20, qty=2),
+        ]
+    )
+    glass = make_placed_piece(pieces[0], 0, 0, 70, 70, False)
+    glass.update(source_piece_no=1, label="1.1")
+    hole = opening_board_rect(glass)
+
+    touching = make_placed_piece(pieces[1], hole["x"], hole["y"] + 1, 15, 15, False)
+    touching.update({GLASS_HOST_PIECE_ID: 1, "source_piece_no": 2, "label": "2.1"})
+    issues, _, topology_aware = _cutting_plan_for_layout([glass, touching])
+    assert topology_aware is False
+    assert any(
+        issue.code == MATERIAL_OVERLAP and issue.target.pair_piece_nos == (1, 2)
+        for issue in issues
+    )
+
+    crossing = make_placed_piece(
+        pieces[1], hole["x"] + hole["w"] - 5, hole["y"] + 1, 15, 15, False
+    )
+    crossing.update({GLASS_HOST_PIECE_ID: 1, "source_piece_no": 2, "label": "2.1"})
+    issues, _, _ = _cutting_plan_for_layout([glass, crossing])
+    assert any(issue.code == MATERIAL_OVERLAP for issue in issues)
+
+    first = make_placed_piece(pieces[1], hole["x"] + 1, hole["y"] + 1, 15, 15, False)
+    first.update({GLASS_HOST_PIECE_ID: 1, "source_piece_no": 2, "label": "2.1"})
+    overlap = make_placed_piece(pieces[2], hole["x"] + 5, hole["y"] + 1, 12, 12, False)
+    overlap.update({GLASS_HOST_PIECE_ID: 1, "source_piece_no": 3, "label": "3.1"})
+    issues, _, _ = _cutting_plan_for_layout([glass, first, overlap])
+    assert any(
+        issue.code == MATERIAL_OVERLAP and issue.target.pair_piece_nos == (2, 3)
+        for issue in issues
+    )
+
+    short = make_placed_piece(pieces[1], hole["x"] + 0.1, hole["y"] + 1, 15, 15, False)
+    short.update({GLASS_HOST_PIECE_ID: 1, "source_piece_no": 2, "label": "2.1"})
+    issues, _, _ = _cutting_plan_for_layout([glass, short], kerf_mm=10)
+    assert any(issue.code == MATERIAL_OVERLAP for issue in issues)
+
+    wrong = make_placed_piece(pieces[1], hole["x"] + 1, hole["y"] + 1, 15, 15, False)
+    wrong.update({GLASS_HOST_PIECE_ID: 99, "source_piece_no": 2, "label": "2.1"})
+    issues, _, _ = _cutting_plan_for_layout([glass, wrong])
+    assert any(issue.code == MATERIAL_OVERLAP for issue in issues)
+
+    bare = dict(glass)
+    bare.pop("glass_hole_local_mm", None)
+    bare.pop("glass_margin_mm", None)
+    guest = make_placed_piece(pieces[1], hole["x"] + 1, hole["y"] + 1, 15, 15, False)
+    guest.update({GLASS_HOST_PIECE_ID: 1, "source_piece_no": 2, "label": "2.1"})
+    issues, _, _ = _cutting_plan_for_layout([bare, guest])
+    assert any(issue.code == MATERIAL_OVERLAP for issue in issues)
+
+    left = make_placed_piece(pieces[3], 0, 0, 20, 20, False)
+    left.update(source_piece_no=1, label="1.1")
+    right = make_placed_piece(pieces[4], 10, 0, 20, 20, False)
+    right.update(source_piece_no=2, label="2.1")
+    issues, _, topology_aware = _cutting_plan_for_layout([left, right])
+    assert topology_aware is False
+    assert any(
+        issue.code == MATERIAL_OVERLAP and issue.target.pair_piece_nos == (1, 2)
+        for issue in issues
+    )

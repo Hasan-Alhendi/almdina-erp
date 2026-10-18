@@ -663,6 +663,61 @@ def undeclared_opening_containment(
     return False
 
 
+def layout_pair_fault(
+    first: Mapping[str, Any],
+    second: Mapping[str, Any],
+    *,
+    kerf_cm: float,
+    tolerance: float = _GEOMETRY_TOLERANCE_CM,
+    sheet_pieces: Sequence[Mapping[str, Any]] | None = None,
+    first_rect: Mapping[str, float] | None = None,
+    second_rect: Mapping[str, float] | None = None,
+) -> str | None:
+    """Shared layout fault for optimizer validation and DXF export.
+
+    Returns ``None`` when the pair is clear, otherwise ``overlap``, ``kerf``, or
+    ``invalid``. Proven Glass nests are accepted only after real-outline checks.
+    Bounding boxes are the fallback when either outline is unproven.
+    """
+
+    relation = classify_piece_pair(
+        first,
+        second,
+        kerf_cm=kerf_cm,
+        tolerance=tolerance,
+        sheet_pieces=sheet_pieces,
+    )
+    if relation == "nested":
+        return None
+    if relation == "invalid":
+        return "invalid"
+    hosted = _declared_host_id(first) is not None or _declared_host_id(second) is not None
+    if hosted or (
+        material_outline_cm(first) is not None and material_outline_cm(second) is not None
+    ):
+        if not hosted and undeclared_opening_containment(
+            first, second, tolerance=tolerance
+        ):
+            return "overlap"
+        issue = material_pair_issue(
+            first,
+            second,
+            kerf_cm=kerf_cm,
+            tolerance=tolerance,
+        )
+        if issue is None:
+            return None
+        return issue
+    rect_a = first_rect or _rect(first)
+    rect_b = second_rect or _rect(second)
+    if rect_intersects(rect_a, rect_b):
+        return "overlap"
+    gap = max(0.0, num(kerf_cm))
+    if gap and not rects_have_clearance(rect_a, rect_b, gap, tolerance):
+        return "kerf"
+    return None
+
+
 def material_outline_cm(piece: Mapping[str, Any]) -> tuple[tuple[float, float], ...] | None:
     """Board-centimetre cut outline. ``None`` means the shape is not proven."""
 
