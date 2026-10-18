@@ -1582,6 +1582,16 @@ def _fill_header(page: Page, fixture: dict[str, Any], notes: str) -> None:
     page.locator("[data-fieldname='board_length_cm'] input").fill("244")
     page.locator("[data-fieldname='board_width_cm'] input").fill("122")
     _set_link(page, "default_edge_type", fixture["edge_type"])
+    # Exercise the production radio group, not a direct document mutation.
+    machine = page.locator(
+        "[data-fieldname='order_cutting_machine'] "
+        ".dco-cutting-machine-radios input[type='radio'][value='CNC']"
+    )
+    expect(machine).to_be_attached()
+    machine.check()
+    page.wait_for_function(
+        "() => cur_frm.doc.order_cutting_machine === 'CNC'"
+    )
     page.locator("[data-fieldname='edge_color'] input").fill("White")
     page.locator("[data-fieldname='order_notes'] textarea").fill(notes)
 
@@ -1893,7 +1903,26 @@ def test_real_desk_100_piece_checkpoint_restore_and_lost_save_response() -> None
             first_row = page.locator(
                 "[data-fieldname='pieces_fast_entry'] .dco-fast-table tbody tr[data-row-name]:not(.dco-virtual-row)"
             ).first
-            first_row.locator("button.dco-addon-toggle[data-check-field='extra_liner']").click()
+            # Add-ons moved to the current modal; operate the same controls
+            # used by a real operator instead of a removed inline toggle.
+            first_row.locator("button.dco-addons-open").click()
+            addons = page.locator(".modal.show [data-addons-dialog]")
+            expect(addons).to_be_visible()
+            addons.locator("[data-addon-tab='extra_liner']").click()
+            addons.locator("[data-addon-enable]").click()
+            sides = addons.locator("[data-liner-sides] [data-liner-side]")
+            expect(sides.first).to_be_visible()
+            sides.first.click()
+            addons.locator("[data-liner-offset]").fill("0")
+            addons.locator("[data-liner-width]").fill("18")
+            addons.locator("[data-liner-start]").fill("0")
+            # A valid full-length liner on the first 35x75 cm piece.
+            addons.locator("[data-liner-length]").fill("75")
+            addons.locator("[data-addons-apply]").click()
+            expect(addons).not_to_be_visible()
+            page.wait_for_function(
+                "() => Number(cur_frm.doc.pieces[0].extra_liner) === 1"
+            )
             first_row.locator("button.dco-check-toggle[data-check-field='edge_long_left']").click()
             first_row.locator("input[data-field='notes']").fill("First piece retained through NEW recovery")
             page.locator("[data-fieldname='order_notes'] textarea").fill(
