@@ -426,8 +426,10 @@
             frappe.msgprint(translate("Could not load the secure DXF export service."));
             return false;
         }
+        const row = rowForTab(frm);
         return frappe.almdina.export_order_dxf(frm.doc.name, activeTab(frm), {
-            hasOriginalFile: hasOriginalDxfFile(rowForTab(frm)),
+            hasOriginalFile: hasOriginalDxfFile(row),
+            originalIsManufacturingReady: originalIsManufacturingReady(row),
             frm,
         });
     }
@@ -467,6 +469,13 @@
 
     function hasOriginalDxfFile(row) {
         return Boolean(row && row.dxf && String(row.dxf.file || "").trim());
+    }
+
+    function originalIsManufacturingReady(row) {
+        if (!hasOriginalDxfFile(row)) return false;
+        const status = String((row.dxf && row.dxf.saw_center_status) || "Unknown").trim();
+        if (status === "Absent") return false;
+        return status === "Present" || status === "Legacy" || status === "Unknown";
     }
 
     function exportLabel(tab, row) {

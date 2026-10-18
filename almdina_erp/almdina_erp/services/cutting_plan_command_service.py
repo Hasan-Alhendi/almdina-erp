@@ -303,6 +303,14 @@ def _assert_plan_ready_for_approval(order: Any, plan: Any) -> None:
                 _("ارفع ملف DXF صالحًا وتحقق منه قبل اعتماد الخطة."),
                 frappe.ValidationError,
             )
+        # Invalid saw centers fail at upload. Absent paths are generated only
+        # after this approval when the manufacturing DXF is exported.
+        saw_status = str(getattr(plan, "saw_center_status", None) or "").strip()
+        if saw_status not in {"", "Unknown", "Absent", "Present", "Legacy"}:
+            frappe.throw(
+                _("مسارات القص في ملف DXF غير صالحة ولا يمكن اعتماد خطة تصنيع غير مضمونة."),
+                frappe.ValidationError,
+            )
 
 
 def plan_payload(plan: Any, order: Any | None = None) -> dict[str, Any]:

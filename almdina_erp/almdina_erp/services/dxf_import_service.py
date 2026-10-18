@@ -51,6 +51,7 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
     GLASS_GEOMETRY_AMBIGUOUS,
     KERF_VIOLATION,
     LEGACY_MESSAGE,
+    SAW_CENTER_INVALID,
     LINER_OFFSET_MISMATCH,
     LINER_SHAPE_MISMATCH,
     LINER_SIDE_MISMATCH,
@@ -90,6 +91,13 @@ from almdina_erp.almdina_erp.domain.cutting.glass_opening_dxf import (
     GlassIdentityExpectation,
     reassign_glass_identity,
     validate_glass_dxf_opening,
+)
+from almdina_erp.almdina_erp.domain.cutting.cutter_center_paths import (
+    SAW_CENTER_ABSENT,
+    SAW_CENTER_INVALID as SAW_CENTER_CLASS_INVALID,
+    SAW_CENTER_MATCH,
+    classify_saw_center_segments,
+    cutter_center_segments,
 )
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import (
     assemble_contours,
@@ -2496,6 +2504,86 @@ def _public_piece(piece: dict[str, Any]) -> dict[str, Any]:
     return public_piece
 
 
+def _expected_saw_center_segments(
+    pieces: Sequence[dict[str, Any]],
+    sheets: Sequence[dict[str, Any]],
+    *,
+    kerf_mm: float,
+) -> list[tuple[tuple[float, float], tuple[float, float]]]:
+    """Saw centers from finished DXF outlines in absolute file coordinates."""
+
+    radius = max(0.0, float(kerf_mm or 0.0)) / 2.0
+    by_sheet: dict[int, list[dict[str, Any]]] = {}
+    for piece in pieces:
+        sheet_no = int(piece.get("_sheet_no") or 0)
+        by_sheet.setdefault(sheet_no, []).append(piece)
+    expected: list[tuple[tuple[float, float], tuple[float, float]]] = []
+    for sheet in sheets:
+        sheet_no = int(sheet.get("sheet_no") or 0)
+        shapes = []
+        for piece in by_sheet.get(sheet_no) or []:
+            outer = tuple(
+                (float(point[0]), float(point[1]))
+                for point in (piece.get("_outline_mm") or ())
+            )
+            if len(outer) < 3:
+                continue
+            holes = tuple(
+                tuple((float(point[0]), float(point[1])) for point in hole)
+                for hole in (piece.get("_holes_mm") or ())
+                if len(hole or ()) >= 3
+            )
+            shapes.append((outer, holes))
+        if not shapes:
+            continue
+        min_x = float(sheet.get("offset_x_mm") or 0.0)
+        min_y = float(sheet.get("offset_y_mm") or 0.0)
+        board = (
+            min_x,
+            min_y,
+            min_x + float(sheet.get("full_width_mm") or 0.0),
+            min_y + float(sheet.get("full_height_mm") or 0.0),
+        )
+        expected.extend(cutter_center_segments(shapes, radius, board=board))
+    return expected
+
+
+def _classify_modern_saw_centers(
+    rows: list[dict[str, Any]],
+    pieces: Sequence[dict[str, Any]],
+    sheets: Sequence[dict[str, Any]],
+    *,
+    kerf_mm: float,
+    geometry_format: bool,
+) -> str:
+    """Return snapshot status for modern GEOMETRY files; legacy stays Legacy."""
+
+    if not geometry_format:
+        return "Legacy"
+    observed = _segments_for_layer(rows, CUT_PATH_LAYER)
+    expected = _expected_saw_center_segments(pieces, sheets, kerf_mm=kerf_mm)
+    classification = classify_saw_center_segments(observed, expected)
+    if classification == SAW_CENTER_CLASS_INVALID:
+        raise DxfImportError(
+            issues=[
+                issue(
+                    SAW_CENTER_INVALID,
+                    CATEGORY_LAYOUT,
+                    target=layer_target(CUT_PATH_LAYER),
+                    params={
+                        "observed_count": len(observed),
+                        "expected_count": len(expected),
+                    },
+                )
+            ]
+        )
+    if classification == SAW_CENTER_MATCH:
+        return "Present"
+    if classification == SAW_CENTER_ABSENT:
+        return "Absent"
+    return "Absent"
+
+
 def validate_imported_plan_issues(
     plan: dict[str, Any],
     order: Any,
@@ -2650,7 +2738,8 @@ def parse_production_dxf(
     sheet_segments = _segments_for_layer(rows, SHEET_OUTLINE_LAYER)
     offcut_segments = _segments_for_layer(rows, OFFCUT_LAYER)
     geometry_piece_segments = _geometry_piece_segments(rows)
-    if geometry_piece_segments is not None:
+    geometry_format = geometry_piece_segments is not None
+    if geometry_format:
         # New export: GEOMETRY is the finished door. CUT_PATH is the saw
         # center and must not be assembled as another door.
         cut_segments = geometry_piece_segments
@@ -2791,6 +2880,14 @@ def parse_production_dxf(
 
     canonicalize_snapshot_sources({"sheets": sheets})
 
+    saw_center_status = _classify_modern_saw_centers(
+        rows,
+        labeled,
+        sheets,
+        kerf_mm=flt(order.kerf_mm),
+        geometry_format=geometry_format,
+    )
+
     geometry_by_piece_id = {int(piece["id"]): piece["_outline_cm"] for piece in labeled}
     topology_by_piece_id = {
         int(piece["id"]): _piece_material_geometry(piece, units="cm")
@@ -2818,6 +2915,7 @@ def parse_production_dxf(
         "usable_board_length_cm": usable_board_length_cm,
         "kerf_cm": flt(order.kerf_mm) / 10.0,
         "trim_cm": trim_cm,
+        "saw_center_status": saw_center_status,
         "used_area_m2": used_area_m2,
         "total_board_area_m2": total_board_area_m2,
         "waste_area_m2": waste_area_m2,

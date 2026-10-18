@@ -833,7 +833,8 @@
         return topologyDxfPoints(placed, placement);
     }
 
-    function buildDxf(plan) {
+    function buildDxf(plan, options) {
+        const includeSawCenters = Boolean(options && options.includeSawCenters);
         const cutterMm = cutterDiameterMm(plan);
         if (cutterMm && cutterMm.linerExport) throw cutterMm;
         assertRequiredGlassOpenings(plan);
@@ -954,9 +955,12 @@
                 maxX: offsetX + fullWidth,
                 maxY: offsetY + fullHeight,
             };
-            cutterCenterSegments(shapes, num(cutterMm) / 2, physicalBoard).forEach(segment => {
-                entities += line(SAW_CENTER_LAYER, segment[0][0], segment[0][1], segment[1][0], segment[1][1]);
-            });
+            // Separation/trim CUT_PATH is manufacturing-only after plan approval.
+            if (includeSawCenters) {
+                cutterCenterSegments(shapes, num(cutterMm) / 2, physicalBoard).forEach(segment => {
+                    entities += line(SAW_CENTER_LAYER, segment[0][0], segment[0][1], segment[1][0], segment[1][1]);
+                });
+            }
         });
 
         let dxf = "";
@@ -1016,6 +1020,8 @@
         const normalized = String(planSource || "").trim().toLowerCase();
         if (ORIGINAL_UPLOAD_SOURCES.has(normalized)) return true;
         if (normalized === "approved") {
+            // Design uploads without saw centers must regenerate manufacturing DXF.
+            if (options && options.originalIsManufacturingReady === false) return false;
             return Boolean(options && options.hasOriginalFile);
         }
         return false;
@@ -1126,7 +1132,9 @@
 
         let dxf;
         try {
-            dxf = buildDxf(plan);
+            dxf = buildDxf(plan, {
+                includeSawCenters: Boolean(data && data.include_saw_centers),
+            });
             validateDxfText(dxf);
         } catch (error) {
             if (error && (error.linerExport || error.glassOpening)) {

@@ -371,6 +371,16 @@ def _apply_snapshot(
     )
     plan.input_fingerprint = fingerprint
     plan.plan_needs_recalculation = 0
+    saw_center_status = str(snapshot.get("saw_center_status") or "").strip()
+    if str(plan.source_type or "") == "System":
+        # System design exports omit saw centers until Production approval.
+        saw_center_status = "Absent"
+        snapshot["saw_center_status"] = "Absent"
+    elif saw_center_status not in {"Absent", "Present", "Legacy"}:
+        saw_center_status = "Unknown"
+        snapshot["saw_center_status"] = saw_center_status
+    if hasattr(plan, "saw_center_status"):
+        plan.saw_center_status = saw_center_status
     plan.snapshot_json = frappe.as_json(snapshot)
 
     plan.set("sources", [])

@@ -32,6 +32,7 @@ from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
     ManufacturingRequirementsError,
 )
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
+    APPROVED,
     DRAFT,
     SYSTEM,
     UPLOADED_DXF,
@@ -369,6 +370,29 @@ def _required_saved_plan(order: Any, plan_source: str | None = None) -> Any:
     return plan
 
 
+def _include_saw_centers_for_export(plan: Any, plan_source: str | None) -> bool:
+    """Saw centers belong to manufacturing DXF after Production plan approval."""
+
+    normalized = str(plan_source or "").strip().lower()
+    if normalized == "approved":
+        return True
+    if normalized in {"system", "custom", "uploaded", "uploaded dxf", "uploaded_dxf", "dxf"}:
+        return False
+    return str(getattr(plan, "status", "") or "") == APPROVED
+
+
+def _original_is_manufacturing_ready(plan: Any) -> bool:
+    """Uploaded bytes are CNC-ready when they already carry valid cut paths or legacy doors."""
+
+    status = str(getattr(plan, "saw_center_status", None) or "Unknown").strip()
+    if status in {"Present", "Legacy"}:
+        return True
+    if status == "Absent":
+        return False
+    # Historical plans without the field keep their original attached file.
+    return bool(str(getattr(plan, "dxf_file", "") or "").strip())
+
+
 def _assert_saved_plan_fresh(order: Any, plan: Any) -> None:
     """Reject stale manufacturing plans before any saved geometry is evaluated."""
 
@@ -619,9 +643,13 @@ def get_validated_dxf_plan(
             frappe.throw(render_error_cards_html(issues, context="export"), title=_("تعذر تصدير DXF"))
         snapshot = apply_extra_double_text_flags_to_snapshot(snapshot, order.pieces)
         _assert_export_kerf(snapshot, fallback_kerf_mm=flt(plan.kerf_mm))
+        include_saw_centers = _include_saw_centers_for_export(plan, plan_source)
         return {
             "plan": snapshot,
             "manifest": _plan_manifest(order, plan),
+            "include_saw_centers": include_saw_centers,
+            "saw_center_status": str(getattr(plan, "saw_center_status", None) or "Unknown"),
+            "original_is_manufacturing_ready": _original_is_manufacturing_ready(plan),
         }
 
     if payload is None:
@@ -644,6 +672,10 @@ def get_validated_dxf_plan(
     return {
         "plan": snapshot,
         "manifest": _draft_manifest(editable, snapshot),
+        # Unsaved / draft desk export is for designer editing, not CNC.
+        "include_saw_centers": False,
+        "saw_center_status": "Absent",
+        "original_is_manufacturing_ready": False,
     }
 
 

@@ -245,4 +245,129 @@ def _line_distance(point: Point, origin: Point, normal: Point) -> float:
     return abs((point[0] - origin[0]) * normal[0] + (point[1] - origin[1]) * normal[1])
 
 
-__all__ = ["COLLINEAR_TOLERANCE_MM", "cutter_center_segments"]
+SAW_CENTER_ABSENT = "absent"
+SAW_CENTER_MATCH = "match"
+SAW_CENTER_INVALID = "invalid"
+
+
+def _finite_segments(
+    segments: Sequence[Segment],
+    *,
+    tolerance: float,
+) -> list[Segment]:
+    cleaned: list[Segment] = []
+    for start, end in segments:
+        try:
+            a = (float(start[0]), float(start[1]))
+            b = (float(end[0]), float(end[1]))
+        except (TypeError, ValueError, IndexError):
+            continue
+        if not all(math.isfinite(value) for value in (*a, *b)):
+            continue
+        if math.dist(a, b) <= tolerance:
+            continue
+        cleaned.append((a, b))
+    return cleaned
+
+
+def _segment_cover_length(
+    candidate: Segment,
+    cover: Segment,
+    *,
+    tolerance: float,
+) -> float:
+    """Return how much of ``candidate`` lies on ``cover``; 0 when not collinear."""
+
+    origin, end = cover
+    dx = end[0] - origin[0]
+    dy = end[1] - origin[1]
+    length = math.hypot(dx, dy)
+    if length <= tolerance:
+        return 0.0
+    direction = (dx / length, dy / length)
+    normal = (-direction[1], direction[0])
+    start, finish = candidate
+    if (
+        _line_distance(start, origin, normal) > tolerance
+        or _line_distance(finish, origin, normal) > tolerance
+    ):
+        return 0.0
+    other_dx = finish[0] - start[0]
+    other_dy = finish[1] - start[1]
+    other_length = math.hypot(other_dx, other_dy)
+    if other_length <= tolerance:
+        return 0.0
+    sine = abs(direction[0] * other_dy - direction[1] * other_dx) / other_length
+    if sine > tolerance:
+        return 0.0
+    start_t = (start[0] - origin[0]) * direction[0] + (start[1] - origin[1]) * direction[1]
+    end_t = (finish[0] - origin[0]) * direction[0] + (finish[1] - origin[1]) * direction[1]
+    low, high = (min(start_t, end_t), max(start_t, end_t))
+    overlap = min(high, length) - max(low, 0.0)
+    return max(0.0, overlap)
+
+
+def saw_center_segments_match(
+    observed: Sequence[Segment],
+    expected: Sequence[Segment],
+    *,
+    tolerance: float = COLLINEAR_TOLERANCE_MM,
+) -> bool:
+    """True when observed saw centers cover the expected set without extras."""
+
+    left = _merge_collinear(_finite_segments(observed, tolerance=tolerance), tolerance)
+    right = _merge_collinear(_finite_segments(expected, tolerance=tolerance), tolerance)
+    if len(left) != len(right):
+        return False
+    if not left:
+        return True
+    remaining = list(right)
+    for candidate in left:
+        candidate_length = math.dist(candidate[0], candidate[1])
+        match_index = None
+        for index, cover in enumerate(remaining):
+            covered = _segment_cover_length(candidate, cover, tolerance=tolerance)
+            reverse = _segment_cover_length(cover, candidate, tolerance=tolerance)
+            cover_length = math.dist(cover[0], cover[1])
+            if (
+                abs(covered - candidate_length) <= tolerance
+                and abs(reverse - cover_length) <= tolerance
+            ):
+                match_index = index
+                break
+        if match_index is None:
+            return False
+        remaining.pop(match_index)
+    return not remaining
+
+
+def classify_saw_center_segments(
+    observed: Sequence[Segment],
+    expected: Sequence[Segment],
+    *,
+    tolerance: float = COLLINEAR_TOLERANCE_MM,
+) -> str:
+    """Classify uploaded CUT_PATH centers against the finished-geometry engine.
+
+    ``absent`` means the designer left manufacturing paths empty so approval may
+    generate them. ``match`` keeps the designer paths. ``invalid`` rejects the
+    file; partial paths are never repaired.
+    """
+
+    cleaned = _finite_segments(observed, tolerance=tolerance)
+    if not cleaned:
+        return SAW_CENTER_ABSENT
+    if saw_center_segments_match(cleaned, expected, tolerance=tolerance):
+        return SAW_CENTER_MATCH
+    return SAW_CENTER_INVALID
+
+
+__all__ = [
+    "COLLINEAR_TOLERANCE_MM",
+    "SAW_CENTER_ABSENT",
+    "SAW_CENTER_INVALID",
+    "SAW_CENTER_MATCH",
+    "classify_saw_center_segments",
+    "cutter_center_segments",
+    "saw_center_segments_match",
+]

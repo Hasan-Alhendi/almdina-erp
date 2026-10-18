@@ -610,6 +610,14 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
             code,
             issue.category,
         )
+    if code == codes.SAW_CENTER_INVALID:
+        return PresentedDxfError(
+            "مسارات مركز الريشة على طبقة CUT_PATH غير صحيحة أو غير مكتملة ولا يمكن اعتمادها بأمان.",
+            "طبقة CUT_PATH.",
+            "احذف مسارات CUT_PATH غير الصحيحة واترك توليدها بعد الاعتماد، أو صحّحها بالكامل وفق Kerf ثم أعد الرفع. لا يُقبل إصلاح جزئي.",
+            code,
+            issue.category,
+        )
     if code == codes.SHEET_OPEN:
         return PresentedDxfError(
             "حدود اللوح غير مغلقة.",

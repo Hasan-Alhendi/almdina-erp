@@ -91,6 +91,7 @@ _PLAN_FIELDS = (
     "waste_percent",
     "dxf_file",
     "dxf_status",
+    "saw_center_status",
     "dxf_uploaded_by",
     "dxf_uploaded_on",
     "modified",
@@ -204,6 +205,7 @@ def _plan_row(plan: Any, snapshot_json: str = "") -> dict[str, Any]:
         "dxf": {
             "file": plan.get("dxf_file"),
             "status": str(plan.get("dxf_status") or "None"),
+            "saw_center_status": str(plan.get("saw_center_status") or "Unknown"),
             "uploaded_by": plan.get("dxf_uploaded_by"),
             "uploaded_on": plan.get("dxf_uploaded_on"),
         },
