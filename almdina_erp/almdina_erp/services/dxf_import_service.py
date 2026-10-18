@@ -1044,6 +1044,7 @@ def _missing_role_layer_guidance(diagnostics: dict[str, Any]) -> list[str]:
     }
     hints = [
         "إذا وُجدت طبقة GEOMETRY فهي الحدود النهائية للدرفات، وCUT_PATH هو مركز ريشة القص لا حدود الدرفة. "
+        "درف OFFCUT الموجودة فقط على OFFCUT تُحسب مع درف GEOMETRY، وإذا تكرر المحيط على الطبقتين يُصنَّف نقصاً دون تكرار. "
         "حدود مناطق الإضافات على GEOMETRY تُرسم للتوضيح ولا تُحسب درفات. "
         "إذا غابت GEOMETRY يبقى التنسيق القديم: محيط الدرفة على CUT_PATH ومحيط الدرفة الناقصة على OFFCUT.",
         "طبقة TEXT أو text لأرقام الدرف داخل DXF فقط ولا تُعد قصًا.",
@@ -1253,6 +1254,61 @@ def _offcut_piece_indexes(
             )
         marked.add(matches[0])
     return marked
+
+
+def _offcut_only_cut_segments(
+    offcut_segments: Sequence[tuple[tuple[float, float], tuple[float, float]]],
+    geometry_polygons: Sequence[Sequence[tuple[float, float]]],
+) -> list[tuple[tuple[float, float], tuple[float, float]]]:
+    """Keep exclusive OFFCUT contours for piece assembly.
+
+    Contours that already match a finished GEOMETRY door stay out of cut
+    assembly and are classified later. Exclusive or invalid OFFCUT topology
+    enters the same piece pipeline so validation remains fail-closed.
+    """
+    if not offcut_segments:
+        return []
+    kept: list[tuple[tuple[float, float], tuple[float, float]]] = []
+    for contour in assemble_contours(offcut_segments, CONNECTIVITY_TOLERANCE_MM):
+        points = simplify_polygon(contour.get("points") or [], GEOMETRY_TOLERANCE_MM)
+        is_valid_closed = (
+            bool(contour.get("closed"))
+            and not bool(contour.get("branched"))
+            and not validate_polygon(points, GEOMETRY_TOLERANCE_MM)
+        )
+        if is_valid_closed and any(
+            _same_polygon_geometry(
+                points,
+                geometry_polygon,
+                tolerance=GEOMETRY_TOLERANCE_MM,
+            )
+            for geometry_polygon in geometry_polygons
+        ):
+            continue
+        kept.extend(contour.get("segments") or [])
+    return kept
+
+
+def _exclusive_offcut_piece_indexes(
+    pieces: Sequence[dict[str, Any]],
+    offcut_indexes: set[int],
+    geometry_polygons: Sequence[Sequence[tuple[float, float]]],
+) -> set[int]:
+    """OFFCUT doors whose finished outline is not also present on GEOMETRY."""
+    exclusive: set[int] = set()
+    for index in offcut_indexes:
+        outline = pieces[index].get("_outline_mm") or ()
+        if any(
+            _same_polygon_geometry(
+                outline,
+                geometry_polygon,
+                tolerance=GEOMETRY_TOLERANCE_MM,
+            )
+            for geometry_polygon in geometry_polygons
+        ):
+            continue
+        exclusive.add(index)
+    return exclusive
 
 
 def _default_layer_role_segments(
@@ -2739,10 +2795,21 @@ def parse_production_dxf(
     offcut_segments = _segments_for_layer(rows, OFFCUT_LAYER)
     geometry_piece_segments = _geometry_piece_segments(rows)
     geometry_format = geometry_piece_segments is not None
+    geometry_polygons: tuple[tuple[tuple[float, float], ...], ...] = ()
     if geometry_format:
         # New export: GEOMETRY is the finished door. CUT_PATH is the saw
-        # center and must not be assembled as another door.
-        cut_segments = geometry_piece_segments
+        # center and must not be assembled as another door. Exclusive OFFCUT
+        # remnants still enter the same piece pipeline; dual-layer contours
+        # stay classification-only so they are not counted twice.
+        cut_segments = list(geometry_piece_segments or [])
+        geometry_polygons = _closed_polygons_from_segments(geometry_piece_segments or [])
+        if offcut_segments:
+            offcut_only_segments = _offcut_only_cut_segments(
+                offcut_segments,
+                geometry_polygons,
+            )
+            if offcut_only_segments:
+                cut_segments = [*cut_segments, *offcut_only_segments]
     else:
         cut_segments = _segments_for_layer(rows, CUT_PATH_LAYER)
         if offcut_segments:
@@ -2801,11 +2868,18 @@ def parse_production_dxf(
     )
     offcut_polygons = _closed_polygons_from_segments(offcut_segments)
     offcut_indexes = _offcut_piece_indexes(pieces, offcut_polygons)
+    exclusive_offcut_indexes = (
+        _exclusive_offcut_piece_indexes(pieces, offcut_indexes, geometry_polygons)
+        if geometry_format
+        else set()
+    )
     for piece_index, piece in enumerate(pieces):
         if piece_index in offcut_indexes:
             piece["resource_kind"] = "OFFCUT"
             piece["offcut_source_party"] = "UNASSIGNED"
             piece["offcut_execution_party"] = "UNASSIGNED"
+        if piece_index in exclusive_offcut_indexes:
+            piece["_exclusive_offcut"] = True
 
     expected_count = len(_expected_order_pieces(order))
     actual_count = len(pieces)
@@ -2880,9 +2954,15 @@ def parse_production_dxf(
 
     canonicalize_snapshot_sources({"sheets": sheets})
 
+    # Exclusive OFFCUT remnants are finished doors for count/size/layout checks,
+    # but modern CUT_PATH matching stays tied to GEOMETRY-backed doors. Their
+    # manufacturing centers are generated later from the approved snapshot.
+    saw_center_pieces = [
+        piece for piece in labeled if not piece.get("_exclusive_offcut")
+    ]
     saw_center_status = _classify_modern_saw_centers(
         rows,
-        labeled,
+        saw_center_pieces,
         sheets,
         kerf_mm=flt(order.kerf_mm),
         geometry_format=geometry_format,

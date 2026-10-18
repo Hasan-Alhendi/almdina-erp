@@ -40,6 +40,7 @@ def test_dxf_import_service_exists_with_layered_core_functions():
         "_attach_text_labels",
         "TEXT_LABEL_LAYER",
         "_default_layer_role_segments",
+        "_offcut_only_cut_segments",
         "DESIGNER_DEFAULT_LAYER",
         "infer_sheets",
         "_missing_role_layer_guidance",
@@ -48,6 +49,7 @@ def test_dxf_import_service_exists_with_layered_core_functions():
         "read_dxf_geometry",
         "assemble_contours",
         "إذا وُجدت طبقة GEOMETRY فهي الحدود النهائية للدرفات",
+        "درف OFFCUT الموجودة فقط على OFFCUT تُحسب مع درف GEOMETRY",
     ]:
         assert token in src
     assert DXF_READER.exists()
