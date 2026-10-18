@@ -712,7 +712,18 @@ def _set_link(page: Page, fieldname: str, value: str) -> None:
         " lastValue: field.last_value, validated: field._validated}; }",
         {"fieldname": fieldname},
     )
-    control.press("Tab")
+    # Frappe's native Awesomplete selection is the authoritative keyboard
+    # path for edge-type Link values. Blur-only entry can leave the field
+    # model unchanged when the option was not selected.
+    selected_native_option = fieldname == "default_edge_type" and not link_state["unchanged"]
+    if selected_native_option:
+        option = page.locator(
+            f"[data-fieldname='{fieldname}'] [role='option']"
+        ).filter(has_text=value).first
+        expect(option).to_be_visible(timeout=10_000)
+        option.click()
+    else:
+        control.press("Tab")
     if link_state["before"]["modelValue"] != value:
         page.wait_for_function(
             "({fieldname, value}) => window.cur_frm && cur_frm.doc[fieldname] === value",
@@ -737,7 +748,9 @@ def _set_link(page: Page, fieldname: str, value: str) -> None:
         or link_state["skipsValidation"]
         or link_state["sameDefaultWithoutFetch"]
     )
-    if link_state["validationRequestExpected"] and not responses and not skip_reason_proven:
+    # Selecting a result supplied by Frappe's native search is also a
+    # validated Link choice; ControlLink need not revalidate that cached row.
+    if link_state["validationRequestExpected"] and not responses and not skip_reason_proven and not selected_native_option:
         raise AssertionError(
             f"Changed native Link value reached the model without observable Link validation: "
             f"field={fieldname!r}, before={link_state['before']!r}, after_fill={after_fill!r}, "
@@ -757,6 +770,7 @@ def _set_link(page: Page, fieldname: str, value: str) -> None:
         unchanged_default_without_fetch=link_state["sameDefaultWithoutFetch"],
         validation_request_expected=link_state["validationRequestExpected"],
         validation_responses=responses,
+        selected_native_option=selected_native_option,
         model_value_matches_after_entry=after_matches,
     )
 
@@ -1027,8 +1041,8 @@ def test_real_desk_customer_control_link_autocomplete_isolated() -> None:
                         " const visibleOptions = [...options].filter(item => item.getClientRects().length > 0);"
                         " const dropdown = field && field.awesomplete && field.awesomplete.ul;"
                         " const dropdownStyle = dropdown ? getComputedStyle(dropdown) : null;"
-                        " const exactOptionCount = visibleOptions.filter(option => labels.some(label =>"
-                        " (option.textContent || '').includes(label))).length;"
+                        " const exactOptionCount = visibleOptions.filter(option =>"
+                        " (option.textContent || '').includes(expectedValue)).length;"
                         " return {formStable: Boolean(before && before.form === cur_frm),"
                         " fieldStable: Boolean(before && before.field === field),"
                         " inputStable: Boolean(before && before.input === input),"
@@ -1051,7 +1065,25 @@ def test_real_desk_customer_control_link_autocomplete_isolated() -> None:
                         " dropdownClass: dropdown ? dropdown.className : null}; }",
                         fixture["customer"],
                     )
+                    # Validate that the user can select the server-returned
+                    # customer from the actual visible dropdown, not merely
+                    # that the HTTP response or internal cache contained it.
+                    assert ui_state["exactVisibleOptionCount"] == 1, ui_state
+                    matching_option = page.locator(
+                        "[data-fieldname='customer'] [role='option']"
+                    ).filter(has_text=fixture["customer"]).first
+                    expect(matching_option).to_be_visible(timeout=5_000)
+                    matching_option.click()
+                    page.wait_for_function(
+                        "value => cur_frm && cur_frm.doc.customer === value",
+                        arg=fixture["customer"],
+                        timeout=10_000,
+                    )
                     outcomes[case_name] = {
+                        "nativeOptionSelected": True,
+                        "selectedCustomerInModel": page.evaluate(
+                            "() => cur_frm.doc.customer"
+                        ) == fixture["customer"],
                         "searchResponseOk": response.ok,
                         "initialEmptySearchResponseCount": len(empty_search_responses),
                         "initialEmptySearchResponseOk": bool(empty_search_responses)
@@ -1091,7 +1123,10 @@ def test_real_desk_customer_control_link_autocomplete_isolated() -> None:
     assert all(not item["pageErrors"] for item in outcomes.values()), outcomes
     assert all(item["exactResponseCount"] == 1 for item in outcomes.values()), outcomes
     assert all(item["typedCachePresent"] and item["typedCacheExactValueCount"] == 1 for item in outcomes.values()), outcomes
-    assert all(item["sourceExactValueCount"] == 1 for item in outcomes.values()), outcomes
+    # In the pinned Awesomplete version the cached search results and
+    # rendered DOM are populated even when awesomplete.list is empty.
+    # Prove the visible option was actually selected instead.
+    assert all(item["nativeOptionSelected"] and item["selectedCustomerInModel"] for item in outcomes.values()), outcomes
     assert all(item["exactVisibleOptionCount"] == 1 for item in outcomes.values()), outcomes
     assert all(item["focusEvents"] == ["focus"] for item in outcomes.values()), outcomes
     assert all(item["formStable"] and item["fieldStable"] and item["inputStable"] for item in outcomes.values()), outcomes
@@ -1515,9 +1550,22 @@ def test_real_desk_create_permission_revoke_restore_isolated() -> None:
             assert transition["restored"] == {
                 "nativeCreate": True,
                 "saveDisabled": False,
-                "saveActionVisible": True,
+                "saveActionVisible": False,  # Frappe hides Save on a clean form.
                 "projection": True,
             }, transition
+            # Revoke/regrant must also work after an actual native user input,
+            # when Save is expected to become visible for the dirty NEW form.
+            note_control = page.locator("[data-fieldname='order_notes'] textarea").first
+            expect(note_control).to_be_visible(timeout=5_000)
+            note_control.fill("Create permission restored: dirty form")
+            page.wait_for_function(
+                "() => cur_frm && cur_frm.is_dirty() &&"
+                " (() => { const button = document.querySelector('.page-actions .primary-action');"
+                " return Boolean(button && button.getClientRects().length > 0"
+                " && getComputedStyle(button).visibility !== 'hidden'"
+                " && !button.disabled); })()",
+                timeout=10_000,
+            )
             assert transition["cacheIdentityStable"] is True, transition
             assert transition["cacheValuesRestored"] is True, transition
             trace("create_permission_revoke_restore_isolated", **transition)

@@ -248,6 +248,20 @@ def open_dco(page: Page, name: str) -> None:
         raise RuntimeError(
             f"Loading DCO {name} in Desk timed out: {exc}; desk_state={state}"
         ) from exc
+    # Frappe sets cur_frm while the Form and its custom scripts are still
+    # loading. Only the loaded DCO recovery + Edit Session contracts may be
+    # used by subsequent calls; route/document identity alone is premature.
+    wait_for_function(
+        page, f"DCO recovery assets ready for {name}",
+        "name => { const frm = window.cur_frm;"
+        " return Boolean(frm && frm.doctype === 'Door Cutting Order'"
+        " && frm.doc && frm.doc.name === name"
+        " && window.AlmdinaDcoRecovery && AlmdinaDcoRecovery.LocalCheckpoint"
+        " && window.AlmdinaDcoEditSessionCoordinator"
+        " && frm.fields_dict && frm.fields_dict.order_notes); }",
+        arg=name,
+        timeout=30_000,
+    )
     _trace_event("open_dco_completed", url=_safe_url(page.url))
 
 
@@ -256,7 +270,8 @@ def start_edit_and_set_note(page: Page, name: str, value: str, checkpoint: bool)
         """async ({name, value, checkpoint}) => {
             const frm = window.cur_frm;
             const coordinator = window.AlmdinaDcoEditSessionCoordinator;
-            const recovery = window.AlmdinaDcoRecovery.LocalCheckpoint;
+            const recovery = window.AlmdinaDcoRecovery
+                && window.AlmdinaDcoRecovery.LocalCheckpoint;
             if (!frm || frm.doc.name !== name || !coordinator || !recovery) {
                 throw new Error('Frappe Desk DCO recovery assets are not ready');
             }
