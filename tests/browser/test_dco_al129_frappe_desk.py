@@ -1599,11 +1599,42 @@ def _enter_real_measurements(page: Page, count: int) -> list[dict[str, Any]]:
         row.locator("input[data-field='length_cm']").fill(str(length))
         row.locator("input[data-field='length_cm']").press("Enter")
         expected.append({"width_cm": width, "length_cm": length, "qty": 1})
-    page.wait_for_function(
-        "count => window.cur_frm && cur_frm.doc.pieces.length === count",
-        arg=count,
-        timeout=30_000,
-    )
+    try:
+        page.wait_for_function(
+            "count => window.cur_frm && cur_frm.doc.pieces.length === count",
+            arg=count,
+            timeout=30_000,
+        )
+    except Exception:
+        state = page.evaluate(
+            """() => {
+                const frm = window.cur_frm;
+                const root = document.querySelector("[data-fieldname='pieces_fast_entry']");
+                const virtual = root && root.querySelector("tr.dco-virtual-row");
+                const inputs = virtual
+                    ? [...virtual.querySelectorAll("input[data-field]")]
+                        .map(el => ({field: el.dataset.field, value: el.value,
+                            disabled: el.disabled, focused: el === document.activeElement}))
+                    : [];
+                return {
+                    document: frm && frm.doc && frm.doc.name,
+                    pieceCount: frm && frm.doc && (frm.doc.pieces || []).length,
+                    lastPieces: frm && frm.doc && (frm.doc.pieces || []).slice(-3)
+                        .map(row => ({name: row.name, width_cm: row.width_cm,
+                            length_cm: row.length_cm, qty: row.qty})),
+                    virtualRow: virtual && virtual.dataset.rowName,
+                    virtualInputs: inputs,
+                    rowCount: root && root.querySelectorAll("tbody tr").length,
+                    keyboardOwnerInstalled: Boolean(root && root.querySelector(".dco-fast-table")),
+                    activeElement: document.activeElement
+                        && document.activeElement.outerHTML.slice(0, 300),
+                };
+            }"""
+        )
+        trace("fast_entry_commit_missing", requested=count, diagnostic=state)
+        raise AssertionError(
+            f"Fast Entry did not synchronize {count} rows to Frappe: {state}"
+        ) from None
     trace("fast_entry_completed", pieces=count)
     return expected
 
