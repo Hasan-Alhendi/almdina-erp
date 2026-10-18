@@ -2081,12 +2081,29 @@ def test_real_desk_100_piece_checkpoint_restore_and_lost_save_response() -> None
                 "async draftId => { const repo = AlmdinaDcoRecovery.LocalDraftRepository.create();"
                 " const read = await repo.read({site: frappe.boot.sitename || frappe.boot.site_name || location.host,"
                 " user: frappe.session.user, target_doctype: 'Door Cutting Order', draft_id: draftId});"
-                " return {state: read.value.official_save_state, token: cur_frm.doc.recovery_creation_token,"
-                " revision: read.value.recovery_revision}; }",
+                " const docs = await frappe.xcall('frappe.client.get_list', {"
+                " doctype: 'Door Cutting Order', fields: ['name'],"
+                " filters: {recovery_creation_token: draftId}, limit_page_length: 10});"
+                " return {state: read.ok && read.value ? read.value.official_save_state : null,"
+                " token: cur_frm.doc.recovery_creation_token,"
+                " revision: read.ok && read.value ? read.value.recovery_revision : null,"
+                " serverDocuments: docs}; }",
                 before_save["draftId"],
             )
-            assert pending["state"] == "PENDING_RECONCILIATION"
             assert pending["token"] == before_save["draftId"]
+            # The browser can reconcile the aborted response immediately,
+            # before the test reads the pending marker. A deleted checkpoint is
+            # acceptable ONLY with authenticated proof of exactly one INSERT.
+            early_created_name = None
+            if pending["state"] is None:
+                assert len(pending["serverDocuments"]) == 1, (
+                    "A lost Save response must never silently delete an unverified draft"
+                )
+                early_created_name = pending["serverDocuments"][0]["name"]
+                trace("lost_response_reconciled_before_browser_close",
+                      document=early_created_name)
+            else:
+                assert pending["state"] == "PENDING_RECONCILIATION", pending
             page.unroute(save_url_pattern)
             page.close()
             context.close()
@@ -2103,12 +2120,28 @@ def test_real_desk_100_piece_checkpoint_restore_and_lost_save_response() -> None
             _attach_diagnostics(recovery_page)
             recovery_page.on("request", record_save_request)
             _login(recovery_page, fixture)
-            recovery_page.goto(f"{DESK_URL}/app/door-cutting-order/new-door-cutting-order-al129-reconcile", wait_until="domcontentloaded", timeout=60_000)
-            recovery_page.wait_for_function(
-                "() => cur_frm && cur_frm.doctype === 'Door Cutting Order' "
-                "&& (cur_frm.is_new() || cur_frm.doc.name.startsWith('DCO-'))",
-                timeout=60_000,
-            )
+            if early_created_name:
+                # Reopen the already-authenticated official document after the
+                # browser profile restart; no second NEW or Save is permitted.
+                recovery_page.goto(
+                    f"{DESK_URL}/app/door-cutting-order/{early_created_name}",
+                    wait_until="domcontentloaded", timeout=60_000,
+                )
+                recovery_page.wait_for_function(
+                    "name => cur_frm && cur_frm.doctype === 'Door Cutting Order' "
+                    "&& cur_frm.doc.name === name && !cur_frm.is_new()",
+                    arg=early_created_name, timeout=60_000,
+                )
+            else:
+                recovery_page.goto(
+                    f"{DESK_URL}/app/door-cutting-order/new-door-cutting-order-al129-reconcile",
+                    wait_until="domcontentloaded", timeout=60_000,
+                )
+                recovery_page.wait_for_function(
+                    "() => cur_frm && cur_frm.doctype === 'Door Cutting Order' "
+                    "&& (cur_frm.is_new() || cur_frm.doc.name.startsWith('DCO-'))",
+                    timeout=60_000,
+                )
             recovery_page.wait_for_function(
                 "draftId => cur_frm && !cur_frm.is_new() "
                 "&& cur_frm.doc.recovery_creation_token === draftId "
