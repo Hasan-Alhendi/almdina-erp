@@ -875,7 +875,6 @@ Start position must be finite and zero or greater.,يجب أن تكون بداي
 Length must be finite and greater than zero.,يجب أن يكون الطول قيمة صالحة أكبر من صفر.
 Machining geometry does not fit inside the piece.,هندسة التفريز لا تتسع داخل الدرفة.
 The machining limit falls on a corner bend.,حد التفريز يقع على انعطاف الزاوية.
-A flat end cannot be machined with this bit and length.,لا يمكن تشغيل نهاية مستقيمة بهذه الريشة وهذا الطول.
 "Row {0}: {1} length exceeds the reference side (available {2} cm, start {3} cm, entered {4} cm, maximum {5} cm).","الصف {0}: طول {1} يتجاوز الجهة المرجعية (طول الجهة {2} سم، البداية {3} سم، الطول المدخل {4} سم، والحد الأقصى {5} سم)."
 "{0}: reference side length is {1} cm, start is {2} cm, entered length is {3} cm; maximum allowed length is {4} cm.","{0}: طول الجهة المرجعية {1} سم، البداية {2} سم، الطول المدخل {3} سم؛ الحد الأقصى المسموح {4} سم."
 Row {0}: {1}: {2},الصف {0}: {1}: {2}
