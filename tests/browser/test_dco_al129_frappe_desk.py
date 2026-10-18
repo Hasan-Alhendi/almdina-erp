@@ -1610,13 +1610,34 @@ def _enter_real_measurements(page: Page, count: int) -> list[dict[str, Any]]:
         }, true);
     }""")
     for index in range(count):
-        row = table.locator("tbody tr.dco-virtual-row")
         width = 35 + index % 45
         length = 75 + index % 90
-        row.locator("input[data-field='width_cm']").fill(str(width))
-        row.locator("input[data-field='width_cm']").press("Tab")
-        row.locator("input[data-field='length_cm']").fill(str(length))
-        row.locator("input[data-field='length_cm']").press("Enter")
+        # Materialization replaces the virtual row immediately. Retain the
+        # actual row identity, not a locator that resolves to the next blank row.
+        virtual = table.locator("tbody tr.dco-virtual-row")
+        expect(virtual).to_have_count(1)
+        virtual.locator("input[data-field='width_cm']").fill(str(width))
+        page.wait_for_function(
+            "prior => cur_frm.doc.pieces.length === prior + 1",
+            arg=index,
+        )
+        identity = page.evaluate(
+            "() => cur_frm.doc.pieces[cur_frm.doc.pieces.length - 1].name"
+        )
+        # The stable row-name attribute survives subsequent virtual cloning.
+        actual = table.locator(f'tbody tr[data-row-name="{identity}"]')
+        expect(actual).to_have_count(1)
+        actual.locator("input[data-field='width_cm']").press("Tab")
+        actual.locator("input[data-field='length_cm']").fill(str(length))
+        actual.locator("input[data-field='length_cm']").press("Enter")
+        page.wait_for_function(
+            "({identity, count, width, length}) => "
+            "cur_frm.doc.pieces.length === count && "
+            "cur_frm.doc.pieces.some(r => r.name === identity && "
+            "Number(r.width_cm) === width && Number(r.length_cm) === length)",
+            arg={"identity": identity, "count": index + 1,
+                 "width": width, "length": length},
+        )
         expected.append({"width_cm": width, "length_cm": length, "qty": 1})
         observed = page.evaluate("""() => ({
             count: (window.cur_frm?.doc?.pieces || []).length,
@@ -1624,7 +1645,7 @@ def _enter_real_measurements(page: Page, count: int) -> list[dict[str, Any]]:
                 "[data-fieldname='pieces_fast_entry'] tr.dco-virtual-row"
             )?.dataset.rowName || null
         })""")
-        row_observations.append({"row": index + 1, **observed})
+        row_observations.append({"row": index + 1, "identity": identity, **observed})
     try:
         page.wait_for_function(
             "count => window.cur_frm && cur_frm.doc.pieces.length === count",
