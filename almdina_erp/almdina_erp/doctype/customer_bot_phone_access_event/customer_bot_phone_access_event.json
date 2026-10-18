@@ -1,0 +1,19 @@
+{
+  "actions": [],
+  "allow_rename": 0,
+  "doctype": "DocType",
+  "editable_grid": 0,
+  "engine": "InnoDB",
+  "field_order": ["event_type", "actor", "occurred_on", "reason", "request"],
+  "fields": [
+    {"fieldname": "event_type", "fieldtype": "Select", "in_list_view": 1, "label": "Event Type", "options": "Approved\nRevoked\nReactivated", "read_only": 1, "reqd": 1},
+    {"fieldname": "actor", "fieldtype": "Link", "in_list_view": 1, "label": "Actor", "options": "User", "read_only": 1, "reqd": 1},
+    {"fieldname": "occurred_on", "fieldtype": "Datetime", "in_list_view": 1, "label": "Occurred On", "read_only": 1, "reqd": 1},
+    {"fieldname": "reason", "fieldtype": "Small Text", "label": "Reason", "read_only": 1},
+    {"fieldname": "request", "fieldtype": "Link", "label": "Phone Request", "options": "Customer Bot Phone Request", "read_only": 1}
+  ],
+  "istable": 1,
+  "module": "Almdina ERP",
+  "name": "Customer Bot Phone Access Event",
+  "permissions": []
+}

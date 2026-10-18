@@ -56,6 +56,8 @@ permission_query_conditions = {
     "Customer": "almdina_erp.resource_permissions.customer_query",
     "Edge Banding Type": "almdina_erp.resource_permissions.edge_banding_type_query",
     "Production Routing": "almdina_erp.resource_permissions.production_routing_query",
+    "Customer Bot Phone Access": "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_permissions.customer_bot_phone_access_query",
+    "Customer Bot Phone Request": "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_permissions.customer_bot_phone_request_query",
 }
 
 has_permission = {
@@ -67,6 +69,8 @@ has_permission = {
     "Edge Banding Type": "almdina_erp.resource_permissions.edge_banding_type_has_permission",
     "Production Routing": "almdina_erp.resource_permissions.production_routing_has_permission",
     "Almdina ERP Settings": "almdina_erp.resource_permissions.factory_settings_has_permission",
+    "Customer Bot Phone Access": "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_permissions.customer_bot_phone_access_has_permission",
+    "Customer Bot Phone Request": "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_permissions.customer_bot_phone_request_has_permission",
 }
 
 boot_session = "almdina_erp.boot.boot_session"

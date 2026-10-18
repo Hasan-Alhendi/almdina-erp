@@ -1,8 +1,8 @@
 """Provider-neutral customer-bot rules.
 
-This package does not send messages, open sessions, or identify a sender.
-A gateway adapter, added later in infrastructure, maps a provider payload
-onto these values after its own verification.
+Inbound messages still do not prove who sent them. Phone matching uses a
+number the gateway adapter has already verified, and that match is not tied
+to a provider name or session id.
 """
 
 from .gateway_capabilities import BotGatewayCapabilities

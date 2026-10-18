@@ -21,6 +21,7 @@ _REVIEWED_SITES: dict[str, str] = {
     "almdina_erp/infrastructure/backups/history.py": "SAFE",  # Internal backup operation audit records, not a public insert endpoint.
     "almdina_erp/infrastructure/backups/restore_runner.py": "MIGRATION",  # Privileged background restore finalizer, not an HTTP request.
     "almdina_erp/infrastructure/frappe/canonical_permission_state_repository.py": "MIGRATION",
+    "almdina_erp/infrastructure/frappe/customer_bot_phone_repository.py": "SAFE",  # Authorized phone-access commands; controller rejects writes without the service flag.
     "almdina_erp/infrastructure/frappe/cutting_plan_surface_metadata.py": "SAFE",
     "almdina_erp/infrastructure/frappe/final_price_approval_gateway.py": "SAFE",  # Authorized price commands and same-transaction basis invalidation; guarded history flags.
     "almdina_erp/infrastructure/frappe/master_data_audit.py": "SAFE",

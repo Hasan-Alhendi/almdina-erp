@@ -1,0 +1,40 @@
+{
+  "actions": [],
+  "allow_import": 0,
+  "allow_rename": 0,
+  "autoname": "format:CBPR-{#####}",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "requested_phone",
+    "claimed_primary_phone",
+    "proposed_customer",
+    "status",
+    "requester_ref",
+    "decided_by",
+    "decided_on",
+    "decision_note",
+    "phone_access",
+    "pending_phone_key"
+  ],
+  "fields": [
+    {"fieldname": "requested_phone", "fieldtype": "Data", "in_list_view": 1, "label": "Requested Phone", "read_only": 1, "reqd": 1, "search_index": 1},
+    {"fieldname": "claimed_primary_phone", "fieldtype": "Data", "in_list_view": 1, "label": "Claimed Primary Phone", "read_only": 1, "reqd": 1},
+    {"fieldname": "proposed_customer", "fieldtype": "Link", "label": "Proposed Customer", "options": "Customer", "read_only": 1},
+    {"fieldname": "status", "fieldtype": "Select", "in_list_view": 1, "label": "Status", "options": "Pending\nApproved\nRejected\nCancelled", "read_only": 1, "reqd": 1},
+    {"fieldname": "requester_ref", "fieldtype": "Data", "label": "Requester Reference", "read_only": 1, "reqd": 1},
+    {"fieldname": "decided_by", "fieldtype": "Link", "label": "Decided By", "options": "User", "read_only": 1},
+    {"fieldname": "decided_on", "fieldtype": "Datetime", "label": "Decided On", "read_only": 1},
+    {"fieldname": "decision_note", "fieldtype": "Small Text", "label": "Decision Note", "read_only": 1},
+    {"fieldname": "phone_access", "fieldtype": "Link", "label": "Phone Access", "options": "Customer Bot Phone Access", "read_only": 1},
+    {"fieldname": "pending_phone_key", "fieldtype": "Data", "hidden": 1, "label": "Pending Phone Key", "read_only": 1, "unique": 1}
+  ],
+  "index_web_pages_for_search": 0,
+  "links": [],
+  "module": "Almdina ERP",
+  "name": "Customer Bot Phone Request",
+  "permissions": [],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "track_changes": 1
+}

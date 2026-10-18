@@ -204,7 +204,8 @@ jobs:
       - name: Run customer bot contract tests
         run: |
           python -m unittest -v \
-            almdina_erp.tests.test_customer_bot_contracts
+            almdina_erp.tests.test_customer_bot_contracts \
+            almdina_erp.tests.test_customer_bot_phone_access
 
       - name: Enforce the no-stock product boundary
         run: |

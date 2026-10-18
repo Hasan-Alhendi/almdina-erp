@@ -7,6 +7,8 @@ from almdina_erp.almdina_erp.application.security.navigation_context import buil
 from almdina_erp.almdina_erp.domain.security.authorization import (
     ALL_CAPABILITIES,
     CAPABILITY_CATALOG,
+    CUSTOMER_BOT_PHONE_ACCESS_DOCTYPE,
+    CUSTOMER_BOT_PHONE_REQUEST_DOCTYPE,
     CUTTING_PLAN_DOCTYPE,
     FACTORY_SETTINGS_CAPABILITIES,
     WORKFORCE_CAPABILITIES,
@@ -26,6 +28,7 @@ CATEGORY_ORDER = (
     "control_center",
     "workforce",
     "factory_settings",
+    "customer_bot",
     "master_data",
     "administration",
 )
@@ -41,6 +44,7 @@ CATEGORY_PRESENTATION: dict[str, dict[str, str]] = {
     "control_center": {"label": "Control center and quality", "description": "Archive plans, view and record production incidents, and manage replacement pieces.", "icon": "dashboard"},
     "workforce": {"label": "Users and workforce", "description": "View, create, edit, and enable factory accounts, and manage their roles.", "icon": "users"},
     "factory_settings": {"label": "Factory settings", "description": "View and edit cutting, costing, production, printing, WhatsApp, and backup settings, each section independently.", "icon": "setting-gear"},
+    "customer_bot": {"label": "Customer bot access", "description": "Review additional phone numbers that ask to follow a customer's orders.", "icon": "comment"},
     "master_data": {"label": "Master data", "description": "Manage production routings and edge banding types, with separate view, create, edit, and delete permissions.", "icon": "database"},
     "administration": {"label": "Permission management", "description": "Edit the permission matrix for all roles.", "icon": "lock"},
 }
@@ -139,6 +143,11 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
     Capability.EDIT_FACTORY_PRINT_IDENTITY: _presentation("Edit print identity", "Edit the factory name, tagline, address, and contact numbers shown on printed sheets. Does not include WhatsApp messages or session linking.", "sensitive"),
     Capability.MANAGE_WHATSAPP_SESSION: _presentation("Manage WhatsApp session", "View the factory session status, create it, link it via QR code, and reconnect. Does not grant message editing or sending customer files.", "critical"),
     Capability.EDIT_WHATSAPP_MESSAGES: _presentation("Edit WhatsApp messages", "Edit the texts for measurements, measurement changes, the invoice, and stage completion in the factory settings. Does not grant session creation or file sending.", "sensitive"),
+    Capability.MANAGE_CUSTOMER_BOT_ACCESS: _presentation(
+        "Manage customer bot access",
+        "Review, approve, reject, and revoke an additional phone linked to a customer. Does not grant WhatsApp session control, message editing, or customer file sending.",
+        "critical",
+    ),
     Capability.MANAGE_BACKUPS: _presentation("Manage backups", "Configure scheduling, retention, and the SSH connection, create manual backups, and view their log. Does not grant restore.", "critical"),
     Capability.RESTORE_BACKUPS: _presentation("Restore backups", "Start a destructive restore after explicit confirmation and an automatic safety backup. Does not grant editing backup settings.", "critical"),
     Capability.VIEW_PRODUCTION_ROUTINGS: _presentation("View production routings", "View production routings and their stage sequence."),
@@ -314,6 +323,9 @@ def standard_permission_projection(
     if doctype == "Edge Banding Type":
         can_read = normalized[Capability.VIEW_EDGE_BANDING_TYPES]
         return {"read": can_read, "select": can_read, "create": normalized[Capability.CREATE_EDGE_BANDING_TYPES], "write": normalized[Capability.EDIT_EDGE_BANDING_TYPES], "delete": normalized[Capability.DELETE_EDGE_BANDING_TYPES]}
+    if doctype in {CUSTOMER_BOT_PHONE_ACCESS_DOCTYPE, CUSTOMER_BOT_PHONE_REQUEST_DOCTYPE}:
+        can_read = normalized[Capability.MANAGE_CUSTOMER_BOT_ACCESS]
+        return {"read": can_read, "select": can_read, "create": False, "write": False, "delete": False}
     enabled = any(
         normalized[capability]
         for capability, definition in CAPABILITY_CATALOG.items()

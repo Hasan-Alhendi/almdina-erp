@@ -84,6 +84,7 @@ class Capability:
     EDIT_FACTORY_PRINT_IDENTITY = "edit_factory_print_identity"
     MANAGE_WHATSAPP_SESSION = "manage_whatsapp_session"
     EDIT_WHATSAPP_MESSAGES = "edit_whatsapp_messages"
+    MANAGE_CUSTOMER_BOT_ACCESS = "manage_customer_bot_access"
     MANAGE_BACKUPS = "manage_backups"
     RESTORE_BACKUPS = "restore_backups"
 
@@ -122,6 +123,8 @@ _SETTINGS_DOCTYPE = "Almdina ERP Settings"
 _ROUTING_DOCTYPE = "Production Routing"
 _CUSTOMER_DOCTYPE = "Customer"
 _EDGE_DOCTYPE = "Edge Banding Type"
+CUSTOMER_BOT_PHONE_ACCESS_DOCTYPE = "Customer Bot Phone Access"
+CUSTOMER_BOT_PHONE_REQUEST_DOCTYPE = "Customer Bot Phone Request"
 
 _CAPABILITY_DEFINITIONS = (
     CapabilityDefinition(Capability.VIEW_ORDERS, "read", _ORDER_DOCTYPE, "order", False),
@@ -221,6 +224,12 @@ _CAPABILITY_DEFINITIONS = (
     CapabilityDefinition(Capability.EDIT_FACTORY_PRINT_IDENTITY, Capability.EDIT_FACTORY_PRINT_IDENTITY, _SETTINGS_DOCTYPE, "factory_settings"),
     CapabilityDefinition(Capability.MANAGE_WHATSAPP_SESSION, Capability.MANAGE_WHATSAPP_SESSION, _SETTINGS_DOCTYPE, "factory_settings"),
     CapabilityDefinition(Capability.EDIT_WHATSAPP_MESSAGES, Capability.EDIT_WHATSAPP_MESSAGES, _SETTINGS_DOCTYPE, "factory_settings"),
+    CapabilityDefinition(
+        Capability.MANAGE_CUSTOMER_BOT_ACCESS,
+        Capability.MANAGE_CUSTOMER_BOT_ACCESS,
+        CUSTOMER_BOT_PHONE_ACCESS_DOCTYPE,
+        "customer_bot",
+    ),
     CapabilityDefinition(Capability.MANAGE_BACKUPS, Capability.MANAGE_BACKUPS, _SETTINGS_DOCTYPE, "factory_settings"),
     CapabilityDefinition(Capability.RESTORE_BACKUPS, Capability.RESTORE_BACKUPS, _SETTINGS_DOCTYPE, "factory_settings"),
     CapabilityDefinition(Capability.VIEW_PRODUCTION_ROUTINGS, "read", _ROUTING_DOCTYPE, "master_data", False),
@@ -348,6 +357,8 @@ __all__ = [
     "CONTROL_CENTER_CAPABILITIES",
     "COSTING_CAPABILITIES",
     "CUSTOM_PERMISSION_DEFINITIONS",
+    "CUSTOMER_BOT_PHONE_ACCESS_DOCTYPE",
+    "CUSTOMER_BOT_PHONE_REQUEST_DOCTYPE",
     "CUTTING_PLAN_DOCTYPE",
     "DRAWING_CAPABILITIES",
     "FACTORY_SETTINGS_CAPABILITIES",

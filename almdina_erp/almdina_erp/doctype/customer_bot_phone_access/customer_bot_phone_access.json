@@ -1,0 +1,38 @@
+{
+  "actions": [],
+  "allow_import": 0,
+  "allow_rename": 0,
+  "autoname": "format:CBPA-{#####}",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "customer",
+    "normalized_phone",
+    "status",
+    "approved_by",
+    "approved_on",
+    "revoked_by",
+    "revoked_on",
+    "revoke_reason",
+    "events"
+  ],
+  "fields": [
+    {"fieldname": "customer", "fieldtype": "Link", "in_list_view": 1, "label": "Customer", "options": "Customer", "read_only": 1, "reqd": 1, "search_index": 1},
+    {"fieldname": "normalized_phone", "fieldtype": "Data", "in_list_view": 1, "label": "Normalized Phone", "read_only": 1, "reqd": 1, "unique": 1},
+    {"fieldname": "status", "fieldtype": "Select", "in_list_view": 1, "label": "Status", "options": "Active\nRevoked", "read_only": 1, "reqd": 1},
+    {"fieldname": "approved_by", "fieldtype": "Link", "label": "Approved By", "options": "User", "read_only": 1},
+    {"fieldname": "approved_on", "fieldtype": "Datetime", "label": "Approved On", "read_only": 1},
+    {"fieldname": "revoked_by", "fieldtype": "Link", "label": "Revoked By", "options": "User", "read_only": 1},
+    {"fieldname": "revoked_on", "fieldtype": "Datetime", "label": "Revoked On", "read_only": 1},
+    {"fieldname": "revoke_reason", "fieldtype": "Small Text", "label": "Revoke Reason", "read_only": 1},
+    {"fieldname": "events", "fieldtype": "Table", "label": "Access Events", "options": "Customer Bot Phone Access Event", "read_only": 1}
+  ],
+  "index_web_pages_for_search": 0,
+  "links": [],
+  "module": "Almdina ERP",
+  "name": "Customer Bot Phone Access",
+  "permissions": [],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "track_changes": 1
+}

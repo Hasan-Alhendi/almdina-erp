@@ -16,7 +16,10 @@ from almdina_erp.almdina_erp.application.security.permission_matrix import (
     field_permission_projection,
     standard_permission_projection,
 )
-from almdina_erp.almdina_erp.domain.security.authorization import CAPABILITY_CATALOG
+from almdina_erp.almdina_erp.domain.security.authorization import (
+    CAPABILITY_CATALOG,
+    CUSTOMER_BOT_PHONE_REQUEST_DOCTYPE,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.system_role_policy import (
     PROTECTED_SYSTEM_ROLES,
 )
@@ -173,6 +176,12 @@ class FrappePermissionMatrixRepository:
             for doctype, definitions in _DEFINITIONS_BY_DOCTYPE.items():
                 self._save_doctype_state(doctype, role, definitions, desired)
                 self._save_field_permission_state(doctype, role, desired)
+            self._save_doctype_state(
+                CUSTOMER_BOT_PHONE_REQUEST_DOCTYPE,
+                role,
+                [],
+                desired,
+            )
 
         for role in sorted(prepared):
             self.clear_role_cache(role)
@@ -262,7 +271,7 @@ class FrappePermissionMatrixRepository:
         return False
 
     def clear_role_cache(self, role: str) -> None:
-        for doctype in _DEFINITIONS_BY_DOCTYPE:
+        for doctype in (*_DEFINITIONS_BY_DOCTYPE, CUSTOMER_BOT_PHONE_REQUEST_DOCTYPE):
             frappe.clear_cache(doctype=doctype)
         users = frappe.get_all(
             "Has Role",
@@ -409,15 +418,15 @@ class FrappePermissionMatrixRepository:
                 },
             )
         )
-        any_enabled = any(
-            desired[capability] for capability, _ in definitions
+        standard_rights = standard_permission_projection(doctype, desired)
+        any_enabled = any(desired[capability] for capability, _ in definitions) or any(
+            bool(enabled) for enabled in standard_rights.values()
         )
         if not row_names and not any_enabled and not has_standard:
             return
         documents = [
             frappe.get_doc("Custom DocPerm", name) for name in row_names
         ] or self._new_override_documents(doctype, role)
-        standard_rights = standard_permission_projection(doctype, desired)
         for document in documents:
             for capability, definition in definitions:
                 if document.meta.has_field(definition.permission_type):
