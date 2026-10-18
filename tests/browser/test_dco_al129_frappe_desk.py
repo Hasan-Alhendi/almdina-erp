@@ -2243,15 +2243,21 @@ def test_real_desk_100_piece_checkpoint_restore_and_lost_save_response() -> None
                 " const record = await repo.read({site: frappe.boot.sitename || frappe.boot.site_name || location.host,"
                 " user: frappe.session.user, target_doctype: 'Door Cutting Order', draft_id: draftId});"
                 " return {state: record.value.official_save_state, revision: record.value.recovery_revision,"
-                " attempt: record.value.official_save_attempted_at, token: cur_frm.doc.recovery_creation_token}; }",
+                " attempt: record.value.official_save_attempted_at, token: cur_frm.doc.recovery_creation_token,"
+                " pieceCount: record.value.payload.dco.pieces.length,"
+                " pieceWidth: Number(record.value.payload.dco.pieces[0]?.width_cm),"
+                " liveWidth: Number(cur_frm.doc.pieces[0]?.width_cm)}; }",
                 retry_identity["draftId"],
             )
-            assert pending_retry == {
-                "state": "PENDING_RECONCILIATION",
-                "revision": retry_identity["revision"],
-                "attempt": pending_retry["attempt"],
-                "token": retry_identity["draftId"],
-            }
+            assert pending_retry["state"] == "PENDING_RECONCILIATION", pending_retry
+            assert pending_retry["token"] == retry_identity["draftId"], pending_retry
+            # A final native blur can acknowledge one more local checkpoint
+            # before the pending marker. Never require the earlier snapshot's
+            # revision to remain fixed; require monotonic, durable content.
+            assert pending_retry["revision"] >= retry_identity["revision"], pending_retry
+            assert pending_retry["pieceCount"] == 1, pending_retry
+            assert pending_retry["pieceWidth"] == pending_retry["liveWidth"], pending_retry
+            assert pending_retry["pieceWidth"] > 0, pending_retry
             assert pending_retry["attempt"]
             missing_documents = retry_page.evaluate(
                 "draftId => frappe.xcall('frappe.client.get_list', {doctype: 'Door Cutting Order',"
