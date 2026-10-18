@@ -282,11 +282,49 @@ def test_real_desk_edits_checkpoint_and_permission_isolation() -> None:
                 arg=fixture["bulk_edge_type"],
                 timeout=30_000,
             )
-            second.locator(".dco-all-sides-profile-button[data-bulk-edge-profile-button]").click()
-            page.locator(
+            bulk_button = second.locator(
+                ".dco-all-sides-profile-button[data-bulk-edge-profile-button]"
+            )
+            bulk_button.click()
+            bulk_option = page.locator(
                 "#dco-edge-profile-popover "
                 f"[data-bulk-profile-value={json.dumps(fixture['bulk_edge_type'])}]"
-            ).click()
+            )
+            try:
+                expect(bulk_option).to_be_visible(timeout=5_000)
+            except Exception:
+                # Distinguish a stale row / detached popover / missing option.
+                # Do not retry or silently bypass the real pointer interaction.
+                state = page.evaluate(
+                    """({value}) => {
+                        const root = cur_frm.fields_dict.pieces_fast_entry.$wrapper.get(0);
+                        const rows = [...root.querySelectorAll(
+                            '.dco-fast-table tbody tr[data-row-name]:not(.dco-virtual-row)')];
+                        const tr = rows[1];
+                        const button = tr && tr.querySelector('[data-bulk-edge-profile-button]');
+                        const menu = document.getElementById('dco-edge-profile-popover');
+                        const row = tr && (cur_frm.doc.pieces || []).find(
+                            piece => piece.name === tr.dataset.rowName);
+                        return {
+                            rowName: tr && tr.dataset.rowName,
+                            rowExists: Boolean(row),
+                            editable: Boolean(window.frappe?.almdina?.orderCanEdit?.(cur_frm)),
+                            buttonExists: Boolean(button),
+                            buttonDisabled: button && button.disabled,
+                            ariaExpanded: button && button.getAttribute('aria-expanded'),
+                            menuExists: Boolean(menu),
+                            menuValues: menu ? [...menu.querySelectorAll('[data-bulk-profile-value]')]
+                                .map(option => option.dataset.bulkProfileValue) : [],
+                            profileLoaded: Boolean(cur_frm._dco_side_edge_profiles_loaded),
+                            profileExists: Boolean(window.AlmdinaMultiEdgeBanding
+                                && AlmdinaMultiEdgeBanding.profiles(cur_frm).has(value))
+                        };
+                    }""",
+                    {"value": fixture["bulk_edge_type"]},
+                )
+                trace("bulk_profile_real_click_failed", **state)
+                raise AssertionError(f"Real bulk-profile menu failed to open/select: {state}")
+            bulk_option.click()
             bulk_edge_state_after_action = page.evaluate(
                 "pieceName => {"
                 " const row = cur_frm.doc.pieces.find(item => item.name === pieceName);"
