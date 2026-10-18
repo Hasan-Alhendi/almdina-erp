@@ -201,6 +201,7 @@ def read_page_state(page: Page) -> dict:
                         : "",
                     scriptAssets: [...document.scripts]
                         .map(script => script.src).filter(Boolean).slice(-30),
+                    nativeFormTrace: (window.__al131NativeFormTrace || []).slice(-12),
                     form: window.cur_frm && window.cur_frm.doc && window.cur_frm.doc.name,
                     readiness: {
                         docContext: Boolean(window.AlmdinaDcoDocumentContext),
@@ -389,6 +390,40 @@ def login_to_desk(page: Page, user: str, password: str) -> None:
         "window.location.pathname.startsWith('/desk')",
         timeout=30_000,
     )
+    # Trace the pinned Frappe Form boundary without changing its behavior.
+    # A loaded cur_frm.doc is not proof that Form.refresh reached Form.setup.
+    evaluate(page, "observe native Frappe Form lifecycle", """() => {
+        const proto = window.frappe?.ui?.form?.Form?.prototype;
+        if (!proto || proto.__al131TraceInstalled) return false;
+        proto.__al131TraceInstalled = true;
+        window.__al131NativeFormTrace = [];
+        const record = (phase, frm, failure) => {
+            if (frm?.doctype !== 'Door Cutting Order') return;
+            const steps = window.__al131NativeFormTrace;
+            steps.push({
+                phase,
+                docname: String(frm.docname || ''),
+                setupDone: Boolean(frm.setup_done),
+                hasLayout: Boolean(frm.layout),
+                scriptManager: Boolean(frm.script_manager),
+                hasRead: Boolean(frm.perm?.[0]?.read),
+                openDoc: Boolean(frm.opendocs?.[frm.docname]),
+                failure: failure ? String(failure?.stack || failure).slice(0, 600) : null
+            });
+            if (steps.length > 24) steps.shift();
+        };
+        for (const name of ['refresh', 'setup']) {
+            const original = proto[name];
+            if (typeof original !== 'function') continue;
+            proto[name] = function (...args) {
+                record(name + ':enter', this);
+                try { return original.apply(this, args); }
+                catch (error) { record(name + ':throw', this, error); throw error; }
+                finally { record(name + ':exit', this); }
+            };
+        }
+        return true;
+    }""")
     _trace_event("login_established", user=_redact_text(user, 80))
 
 
