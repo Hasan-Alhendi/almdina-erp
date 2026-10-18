@@ -273,40 +273,6 @@
         width: 128px !important;
     }
 
-    .dco-order-list .dco-list-price-approval-host {
-        display: inline-flex;
-        align-items: center;
-        margin-inline-start: 8px;
-        vertical-align: middle;
-    }
-
-    .dco-order-list .dco-list-price-approval {
-        display: inline-flex;
-        align-items: center;
-        max-width: 9.5rem;
-        padding: 2px 8px;
-        border-radius: 999px;
-        border: 1px solid var(--alm-card-border, #e4e8ee);
-        background: var(--alm-surface-muted, #f4f6f8);
-        color: var(--alm-text-subtle, #667085);
-        font-size: 10px;
-        font-weight: 800;
-        line-height: 1.35;
-        white-space: nowrap;
-    }
-
-    .dco-order-list .dco-list-price-approval.is-approved {
-        border-color: color-mix(in srgb, var(--alm-success, #15803d) 35%, var(--alm-card, #ffffff));
-        background: color-mix(in srgb, var(--alm-success, #15803d) 10%, var(--alm-card, #ffffff));
-        color: var(--alm-success, #15803d);
-    }
-
-    .dco-order-list .dco-list-price-approval.is-unapproved {
-        border-color: var(--alm-card-border, #e4e8ee);
-        background: var(--alm-surface-muted, #f4f6f8);
-        color: var(--alm-text-strong, #101828);
-    }
-
     .dco-order-list .dco-status-filter-slot .control-label,
     .dco-order-list .dco-status-filter-slot .help-box {
         display: none !important;

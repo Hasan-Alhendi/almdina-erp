@@ -82,6 +82,32 @@ vm.runInContext(source, context);
 const responsive = context.window.AlmdinaResponsiveDevice;
 const api = context.window.AlmdinaDoorCuttingOrderListUX;
 
+
+const desktopListCss = fs.readFileSync(
+    "almdina_erp/public/css/door_cutting_order_list.css",
+    "utf8"
+);
+
+// Price approval remains filterable, but must not be painted beside any ID,
+// in the header, or on mobile cards (regardless of approval status).
+assert(!source.includes("dco-list-price-approval"), "ListView must not inject price approval badges");
+assert(!desktopListCss.includes("dco-list-price-approval"), "desktop badge styles must be removed");
+assert(!cssSource.includes("dco-list-price-approval"), "mobile badge styles must be removed");
+const listSettings = context.frappe.listview_settings["Door Cutting Order"];
+assert(listSettings.add_fields.includes("price_approval_status"), "price approval data must remain queryable");
+assert(
+    listSettings.custom_filter_configs.some(config => config.fieldname === "price_approval_status"),
+    "price approval filtering must remain available"
+);
+for (const approvalStatus of ["Approved", "Unapproved", ""]) {
+    const card = context.window.AlmdinaDoorCuttingOrderListUX.buildCard({
+        name: "DCO-2026-00010",
+        customer: "عميل الاختبار",
+        price_approval_status: approvalStatus,
+    }, false);
+    assert(!card.includes("dco-list-price-approval"), "mobile cards must not show approval badges");
+}
+
 const listFormatters = context.frappe.listview_settings["Door Cutting Order"].formatters;
 context.frappe.user = {
     full_name(user) {

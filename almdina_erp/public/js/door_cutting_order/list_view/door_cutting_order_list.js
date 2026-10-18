@@ -14,7 +14,7 @@
     ]);
     const KANBAN_VIEW_PATCH_KEY = "__almdinaDcoCardPresentationInstalled";
     const MOBILE_CARD_STYLESHEET_ID = "almdina-dco-mobile-list-css";
-    const MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=10";
+    const MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=11";
     function translate(message, replacements) {
         const locale = window.AlmdinaLocale;
         if (locale && typeof locale.translate === "function") {
@@ -554,28 +554,6 @@
             : null;
     }
 
-    function normalizePriceApprovalStatus(value) {
-        return String(value || "").trim() === PRICE_APPROVAL_STATUS_APPROVED
-            ? PRICE_APPROVAL_STATUS_APPROVED
-            : PRICE_APPROVAL_STATUS_UNAPPROVED;
-    }
-
-    function priceApprovalStatusLabel(value) {
-        const status = normalizePriceApprovalStatus(value);
-        return translate(
-            status === PRICE_APPROVAL_STATUS_APPROVED
-                ? PRICE_APPROVAL_STATUS_APPROVED
-                : PRICE_APPROVAL_STATUS_UNAPPROVED
-        );
-    }
-
-    function priceApprovalBadgeHtml(value) {
-        const status = normalizePriceApprovalStatus(value);
-        const approved = status === PRICE_APPROVAL_STATUS_APPROVED;
-        const label = priceApprovalStatusLabel(status);
-        return `<span class="dco-list-price-approval ${approved ? "is-approved" : "is-unapproved"}" data-price-approval-status="${escapeHtml(status)}" title="${escapeHtml(translate("Price approval status"))}: ${escapeHtml(label)}" role="status">${escapeHtml(label)}</span>`;
-    }
-
     function controlWrapper(field) {
         if (!field) return null;
         if (field.$wrapper) {
@@ -926,7 +904,6 @@
         const action = state.history ? null : candidateAction;
         const overview = context.overview === true;
         const productionStage = productionStageLabel(doc);
-        const priceApprovalStatus = normalizePriceApprovalStatus(doc.price_approval_status);
         return Object.freeze({
             orderId: displayValue(doc.name),
             customer: displayValue(doc.customer),
@@ -941,8 +918,6 @@
             overview,
             productionStageLabel: productionStage,
             stageLabel: overview ? overviewStageLabel(doc) : productionStage,
-            priceApprovalStatus,
-            priceApprovalLabel: priceApprovalStatusLabel(priceApprovalStatus),
         });
     }
 
@@ -981,11 +956,6 @@
         const label = String(model && model.productionStageLabel || "").trim();
         if (!label) return "";
         return `<span class="dco-card-stage">${escapeHtml(label)}</span>`;
-    }
-
-    function renderPriceApprovalBadge(model) {
-        if (!model) return "";
-        return priceApprovalBadgeHtml(model.priceApprovalStatus);
     }
 
     function renderCustomer(model) {
@@ -1086,7 +1056,6 @@
                     ${renderCustomer(model)}
                     <div class="dco-card-header-meta">
                         ${renderStageChip(model)}
-                        ${renderPriceApprovalBadge(model)}
                         ${renderStatusPill(model.state)}
                     </div>
                 </header>
@@ -1122,7 +1091,6 @@
             model.overview ? 1 : 0,
             model.stageLabel || "",
             model.productionStageLabel || "",
-            model.priceApprovalStatus || "",
             hasSelection ? 1 : 0,
             String(doc.department_status || ""),
         ]);
@@ -1305,40 +1273,6 @@
                 DESKTOP_DELIVERY_ROW_CLASSES.forEach(className => card.classList.remove(className));
             }
         });
-    }
-
-    function applyDesktopPriceApprovalBadges(listview) {
-        const root = rootNode(listview);
-        if (!root) return false;
-        if (root.classList.contains("dco-order-card-layout")) {
-            root.querySelectorAll(".dco-list-price-approval-host").forEach(node => node.remove());
-            return false;
-        }
-
-        const result = root.querySelector(".result") || root;
-        const docs = orderDocuments(listview);
-        [...result.querySelectorAll(".list-row-container")].forEach(container => {
-            if (container.classList.contains("dco-list-row-history-hidden")) {
-                const stale = container.querySelector(".dco-list-price-approval-host");
-                if (stale) stale.remove();
-                return;
-            }
-            const name = rowDocumentName(container);
-            const doc = docs.get(name) || {};
-            const subject = container.querySelector(".list-subject")
-                || container.querySelector(".level-left .ellipsis")
-                || container.querySelector(".list-row-col.ellipsis");
-            if (!subject) return;
-
-            let host = subject.querySelector(".dco-list-price-approval-host");
-            if (!host) {
-                host = document.createElement("span");
-                host.className = "dco-list-price-approval-host";
-                subject.appendChild(host);
-            }
-            host.innerHTML = priceApprovalBadgeHtml(doc.price_approval_status);
-        });
-        return true;
     }
 
     function queueTimeValue(item, fieldname) {
@@ -1774,7 +1708,6 @@
         }
         renderMobileCards(listview);
         applyDesktopDeliveryRowColors(listview);
-        applyDesktopPriceApprovalBadges(listview);
     }
 
     function schedulePresentation(listview, { refreshRoleFlags = false } = {}) {
@@ -1868,7 +1801,6 @@
 
     window.AlmdinaDoorCuttingOrderListUX = Object.freeze({
         applyDesktopDeliveryRowColors,
-        applyDesktopPriceApprovalBadges,
         applyKanbanCardPresentation,
         applyLoadedAssigneeFilterOptions,
         applyLoadedStatusFilterOptions,
@@ -1889,7 +1821,6 @@
         overviewDefaultSortSql,
         overviewListState,
         overviewStageLabel,
-        priceApprovalBadgeHtml,
         priceApprovalFilterConfig,
         priceApprovalFilterOptions,
         productionStageLabel,
