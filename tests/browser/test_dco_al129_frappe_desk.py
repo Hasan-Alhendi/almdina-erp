@@ -2153,6 +2153,15 @@ def test_real_desk_100_piece_checkpoint_restore_and_lost_save_response() -> None
                     "&& (cur_frm.is_new() || cur_frm.doc.name.startsWith('DCO-'))",
                     timeout=60_000,
                 )
+                # After restart the pending INSERT is reconciled only when the
+                # worker explicitly chooses Continue. Navigation to NEW alone
+                # must not auto-reconcile or issue another native Save.
+                pending_card = recovery_page.locator(
+                    f".modal.show [data-draft-id='{before_save['draftId']}']"
+                )
+                expect(pending_card).to_be_visible(timeout=30_000)
+                pending_card.locator("[data-recovery-action='continue']").click()
+                trace("pending_first_insert_reconciliation_explicitly_requested")
             recovery_page.wait_for_function(
                 "draftId => cur_frm && !cur_frm.is_new() "
                 "&& cur_frm.doc.recovery_creation_token === draftId "
