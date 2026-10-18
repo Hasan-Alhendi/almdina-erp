@@ -21,6 +21,7 @@ on:
         options:
           - full
           - full_pinned
+          - full_pinned_base_permission
           - al128_desk
           - al128_desk_edit
           - al128_performance
@@ -64,7 +65,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: ${{ fromJSON(github.event_name == 'pull_request' && '["full","full_pinned","al128_desk","al128_performance","al129_customer","al129_new","al131_edit","al129_backend"]' || format('["{0}"]', inputs.suite)) }}
+        suite: ${{ fromJSON(github.event_name == 'pull_request' && '["full","full_pinned","full_pinned_base_permission","al128_desk","al128_performance","al129_customer","al129_new","al131_edit","al129_backend"]' || format('["{0}"]', inputs.suite)) }}
     timeout-minutes: 60
 
     services:
@@ -93,6 +94,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # Independent pinned baseline: the exact Develop code, not a mock,
+          # is installed into its own Frappe/MariaDB site.
+          ref: ${{ matrix.suite == 'full_pinned_base_permission' && 'Develop' || '' }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -547,6 +551,29 @@ jobs:
             ${{ runner.temp }}/al128-desk-trace.json
             ${{ runner.temp }}/al128-desk-failure.png
             ${{ runner.temp }}/al128-desk-server.log
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Reproduce permission metadata sync on pinned Develop baseline
+        if: matrix.suite == 'full_pinned_base_permission'
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/frappe-bench"
+          bench --site test.localhost set-config allow_tests true
+          git -C apps/almdina_erp rev-parse HEAD | tee "$RUNNER_TEMP/permission-baseline-sha.log"
+          bench --site test.localhost run-tests \
+            --module almdina_erp.tests.test_permission_type_integration \
+            --test test_permission_type_sync_repairs_existing_custom_field_metadata \
+            2>&1 | tee "$RUNNER_TEMP/pinned-permission-baseline.log"
+
+      - name: Upload pinned Develop baseline evidence
+        if: always() && matrix.suite == 'full_pinned_base_permission'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pinned-develop-permission-baseline
+          path: |
+            ${{ runner.temp }}/permission-baseline-sha.log
+            ${{ runner.temp }}/pinned-permission-baseline.log
           if-no-files-found: warn
           retention-days: 7
 
