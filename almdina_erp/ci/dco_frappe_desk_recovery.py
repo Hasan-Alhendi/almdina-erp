@@ -220,6 +220,22 @@ def read_page_state(page: Page) -> dict:
                         doctypeMetaLoaded: Boolean(window.frappe?.get_meta?.("Door Cutting Order")),
                         doctypeRoles: (window.frappe?.get_meta?.("Door Cutting Order")?.permissions || [])
                             .slice(0, 20).map(p => p.role),
+                        // Pinpoint the native Frappe FormFactory boundary. The
+                        // saved document can exist in locals while its Form
+                        // is still not rendered; recovery assets load later.
+                        documentCached: Boolean(window.cur_frm?.docname
+                            && window.frappe?.get_doc?.("Door Cutting Order", cur_frm.docname)),
+                        docinfoCached: Boolean(window.cur_frm?.docname
+                            && window.frappe?.model?.get_docinfo?.("Door Cutting Order", cur_frm.docname)),
+                        formFactoryPage: Boolean(window.frappe?.views?.formview?.["Door Cutting Order"]),
+                        formFactoryOwnsCurrent: Boolean(
+                            window.frappe?.views?.formview?.["Door Cutting Order"]?.frm
+                            === window.cur_frm
+                        ),
+                        formPageVisible: Boolean(window.cur_frm?.wrapper?.classList?.contains("show")),
+                        formHasLayout: Boolean(window.cur_frm?.layout),
+                        formDocname: String(window.cur_frm?.docname || ""),
+                        formName: String(window.cur_frm?.doc?.name || ""),
                     },
                     saveProbe: window.__dcoDeskSaveProbe || null,
                 };
