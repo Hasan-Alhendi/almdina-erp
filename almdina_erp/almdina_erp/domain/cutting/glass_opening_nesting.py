@@ -1,24 +1,31 @@
-"""Place eligible Regular doors inside Glass openings after the base pack.
+"""Place proven cut outlines inside Glass openings after the base pack.
 
 The base MaxRects, Shelf, Guillotine, Skyline, and CP-SAT searches stay
 unchanged. This pass runs once on the winning plan. It keeps that plan unless
-the nested result is geometrically valid and strictly better on
-``industrial_rank``. A tie, a Panel Saw job, or any failed check returns the
-baseline object untouched.
+the nested result is geometrically valid and better on ``industrial_rank``,
+or equal on that rank while it places more pieces inside openings.
 
 Clearance uses the plan Kerf once: the usable opening is the finished hole
 inset by that Kerf, and pieces inside it keep the same Kerf between each
-other. This pass proves rectangle containment only. It does not schedule CNC
-toolpaths or claim that the nested piece stays fixtured while the frame is cut.
+other. Final acceptance uses the real cut outline. A Glass guest may host one
+further piece, and no host chain may go deeper than that.
 """
 
 from __future__ import annotations
 
+import json
 import time
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from .catalog import MACHINE_TYPES as MACHINE_CATALOG
-from .machining_overlay import machining_values
+from .dxf_geometry import polygon_distance, validate_polygon
+from .dxf_topology import (
+    PartGeometry,
+    containing_hole,
+    material_footprints_overlap,
+    polygon_strictly_contains_polygon,
+)
+from .glass_opening_dxf import GlassOpeningError, placed_glass_hole_mm
 from .primitives import (
     make_placed_piece,
     num,
@@ -28,10 +35,21 @@ from .primitives import (
 )
 
 GLASS_HOST_PIECE_ID = "glass_host_piece_id"
+# Board glass, a glass inside it, then one more piece. No fourth level.
+MAX_NESTING_DEPTH = 2
 _PANEL_SAW_ID = next(
     machine.id for machine in MACHINE_CATALOG if machine.id == "Panel Saw"
 )
 _GEOMETRY_TOLERANCE_CM = 1e-7
+_SPECIAL_EPSILON_CM = 0.001
+_MAX_SPECIAL_VERTICES = 64
+_CORNER_TYPES = frozenset({"Clipped Corner", "L-Shaped Corner"})
+_ROTATED_CORNER = {
+    "Top Left": "Top Right",
+    "Top Right": "Bottom Right",
+    "Bottom Right": "Bottom Left",
+    "Bottom Left": "Top Left",
+}
 _REPACK_METHOD = "MaxRects Best Short Side"
 
 
@@ -44,11 +62,29 @@ def nesting_time_budget_sec(time_limit_sec: float) -> float:
     return min(limit, max(0.25, limit * 0.25))
 
 
+def nested_piece_count(plan: Mapping[str, Any]) -> int:
+    """Unique pieces whose placement declares one Glass host."""
+
+    seen: set[int] = set()
+    for sheet in plan.get("sheets") or []:
+        for piece in sheet.get("pieces") or []:
+            if piece.get(GLASS_HOST_PIECE_ID) in (None, ""):
+                continue
+            piece_id = _piece_id(piece)
+            if piece_id is not None:
+                seen.add(piece_id)
+    return len(seen)
+
+
 def nested_plan_is_better(
     candidate: Mapping[str, Any],
     baseline: Mapping[str, Any],
 ) -> bool:
-    """True only when the candidate rank is strictly better than the baseline."""
+    """Prefer a better industrial rank, then a plan that uses more openings.
+
+    Equal rank and equal opening use keep the baseline. Nesting never outranks
+    a plan that is better on ``industrial_rank``.
+    """
 
     candidate_rank = tuple(candidate.get("industrial_rank") or ())
     baseline_rank = tuple(baseline.get("industrial_rank") or ())
@@ -56,7 +92,11 @@ def nested_plan_is_better(
         return False
     if len(candidate_rank) != len(baseline_rank):
         return False
-    return candidate_rank < baseline_rank
+    if candidate_rank < baseline_rank:
+        return True
+    if candidate_rank > baseline_rank:
+        return False
+    return nested_piece_count(candidate) > nested_piece_count(baseline)
 
 
 def opening_board_rect(placed: Mapping[str, Any]) -> dict[str, float] | None:
@@ -101,20 +141,14 @@ def opening_board_rect(placed: Mapping[str, Any]) -> dict[str, float] | None:
 
 
 def guest_is_eligible(piece: Mapping[str, Any]) -> bool:
-    """Regular cut rectangles only. Machining and non-rectangular cuts stay out."""
+    """Any order piece whose real cut outline can be proven.
 
-    if str(piece.get("piece_type") or "Regular") != "Regular":
-        return False
-    if str(piece.get("clipped_corner_position") or "").strip():
-        return False
-    if str(piece.get("special_shape_geometry_json") or "").strip():
-        return False
-    if piece.get("edge_break") or piece.get("edge_break_only"):
-        return False
-    for spec in machining_values(piece).values():
-        if spec["enabled"] or str(spec["side"] or "").strip() or spec["width_cm"] > 0:
-            return False
-    return True
+    Banding and machining stay on the piece and move with it. A Special door
+    without an exact manufacturing polygon is not eligible. A Glass door is
+    eligible only when its own opening can be produced.
+    """
+
+    return material_outline_cm(_as_placed_source(piece)) is not None
 
 
 def classify_piece_pair(
@@ -123,12 +157,14 @@ def classify_piece_pair(
     *,
     kerf_cm: float,
     tolerance: float = _GEOMETRY_TOLERANCE_CM,
+    sheet_pieces: Sequence[Mapping[str, Any]] | None = None,
 ) -> str:
     """Classify one pair as ``nested``, ``invalid``, or ``separate``.
 
     ``separate`` leaves the caller on the ordinary rectangle rules. A proven
-    nest is a Regular piece whose declared host is the Glass piece and whose
-    cut rectangle lies inside that hole by at least one Kerf.
+    nest puts the guest's real cut outline inside the host opening by at least
+    one Kerf. A deeper piece is accepted against an outer Glass only when its
+    host chain reaches that Glass.
     """
 
     first_hosts = _declared_host_id(second) == _piece_id(first)
@@ -139,6 +175,11 @@ def classify_piece_pair(
         return "nested" if _proven_nest(second, first, kerf_cm, tolerance) else "invalid"
     if second_hosts:
         return "nested" if _proven_nest(first, second, kerf_cm, tolerance) else "invalid"
+    catalog = sheet_pieces if sheet_pieces is not None else (first, second)
+    for guest, host in ((second, first), (first, second)):
+        indirect = _indirect_relation(guest, host, kerf_cm, tolerance, catalog)
+        if indirect is not None:
+            return indirect
     return "separate"
 
 
@@ -174,7 +215,14 @@ def host_link_errors(
             )
         seen = {piece_id}
         cursor = host_id
+        depth = 0
         while cursor is not None:
+            depth += 1
+            if depth > MAX_NESTING_DEPTH:
+                errors.append(
+                    f"Piece {label} exceeds the Glass nesting depth."
+                )
+                break
             if cursor in seen:
                 errors.append(
                     f"Piece {label} is part of a circular Glass host relation."
@@ -198,7 +246,7 @@ def nest_glass_openings(
     min_remnant_length_cm: float,
     min_remnant_area_m2: float,
 ) -> dict[str, Any]:
-    """Return a strictly better nested plan, or the original baseline."""
+    """Return a better nested plan, or the original baseline."""
 
     if machine_type == _PANEL_SAW_ID:
         return baseline
@@ -233,7 +281,10 @@ def nest_glass_openings(
     )
     if time.monotonic() - started > budget or repacked.get("unplaced"):
         return baseline
-    placed = _place_guests(repacked, selected, kerf_cm)
+    try:
+        placed = _place_guests(repacked, selected, kerf_cm)
+    except GlassOpeningError:
+        return baseline
     if placed is None:
         return baseline
     candidate = placed
@@ -291,6 +342,7 @@ def _openings(plan: Mapping[str, Any], kerf_cm: float) -> list[dict[str, Any]]:
                     "host_id": int(placed["id"]),
                     "sheet_no": sheet.get("sheet_no"),
                     "usable": usable,
+                    "depth": 0,
                 }
             )
     openings.sort(
@@ -308,30 +360,10 @@ def _select_guests(
     kerf_cm: float,
 ) -> list[dict[str, Any]]:
     eligible = [piece for piece in pieces if guest_is_eligible(piece)]
-    eligible.sort(
-        key=lambda piece: (
-            -(num(piece.get("width_cm")) * num(piece.get("length_cm"))),
-            int(piece["id"]),
-        )
-    )
-    occupancy: dict[int, list[dict[str, float]]] = {
-        opening["host_id"]: [] for opening in openings
-    }
-    selected: list[dict[str, Any]] = []
-    for guest in eligible:
-        for opening in openings:
-            local = _place_in_usable(
-                guest,
-                opening["usable"],
-                occupancy[opening["host_id"]],
-                kerf_cm,
-            )
-            if local is None:
-                continue
-            occupancy[opening["host_id"]].append(local)
-            selected.append(guest)
-            break
-    return selected
+    return [
+        assignment["guest"]
+        for assignment in _assign_into_openings(eligible, openings, kerf_cm)
+    ]
 
 
 def _place_guests(
@@ -342,14 +374,42 @@ def _place_guests(
     openings = _openings(plan, kerf_cm)
     if not openings:
         return None
+    assignments = _assign_into_openings(guests, openings, kerf_cm)
+    if len(assignments) != len(guests):
+        return None
     sheets = {
         sheet.get("sheet_no"): sheet for sheet in plan.get("sheets") or []
     }
-    hosts = {
-        opening["host_id"]: opening for opening in openings
-    }
+    for assignment in assignments:
+        opening = assignment["opening"]
+        local = assignment["local"]
+        sheet = sheets.get(opening["sheet_no"])
+        if sheet is None:
+            return None
+        placed = make_placed_piece(
+            assignment["guest"],
+            opening["usable"]["x"] + local["x"],
+            opening["usable"]["y"] + local["y"],
+            local["w"],
+            local["h"],
+            bool(local["rotated"]),
+        )
+        placed[GLASS_HOST_PIECE_ID] = opening["host_id"]
+        sheet.setdefault("pieces", []).append(placed)
+    plan["unplaced"] = []
+    return plan
+
+
+def _assign_into_openings(
+    guests: list[dict[str, Any]],
+    openings: list[dict[str, Any]],
+    kerf_cm: float,
+) -> list[dict[str, Any]]:
+    """Greedy largest-first placement. A nested Glass publishes its opening."""
+
+    working = [dict(opening, depth=int(opening.get("depth") or 0)) for opening in openings]
     occupancy: dict[int, list[dict[str, float]]] = {
-        opening["host_id"]: [] for opening in openings
+        opening["host_id"]: [] for opening in working
     }
     ordered = sorted(
         guests,
@@ -358,9 +418,14 @@ def _place_guests(
             int(piece["id"]),
         ),
     )
+    assignments: list[dict[str, Any]] = []
     for guest in ordered:
         placed_into = None
-        for opening in openings:
+        for opening in working:
+            if int(opening["depth"]) + 1 > MAX_NESTING_DEPTH:
+                continue
+            if _piece_id(guest) in _host_chain(opening["host_id"], working):
+                continue
             local = _place_in_usable(
                 guest,
                 opening["usable"],
@@ -373,25 +438,11 @@ def _place_guests(
             placed_into = (opening, local)
             break
         if placed_into is None:
-            return None
+            continue
         opening, local = placed_into
-        if opening["host_id"] not in hosts:
-            return None
-        sheet = sheets.get(opening["sheet_no"])
-        if sheet is None:
-            return None
-        placed = make_placed_piece(
-            guest,
-            opening["usable"]["x"] + local["x"],
-            opening["usable"]["y"] + local["y"],
-            local["w"],
-            local["h"],
-            bool(local["rotated"]),
-        )
-        placed[GLASS_HOST_PIECE_ID] = opening["host_id"]
-        sheet.setdefault("pieces", []).append(placed)
-    plan["unplaced"] = []
-    return plan
+        assignments.append({"guest": guest, "opening": opening, "local": local})
+        _publish_nested_opening(guest, opening, local, working, occupancy, kerf_cm)
+    return assignments
 
 
 def _place_in_usable(
@@ -449,15 +500,490 @@ def _proven_nest(
     kerf_cm: float,
     tolerance: float,
 ) -> bool:
-    if not guest_is_eligible(guest):
-        return False
     if str(host.get("piece_type") or "") != "Glass":
         return False
-    hole = opening_board_rect(host)
-    if hole is None:
+    return _outline_in_hole(guest, host, kerf_cm, tolerance)
+
+
+def _indirect_relation(
+    guest: Mapping[str, Any],
+    host: Mapping[str, Any],
+    kerf_cm: float,
+    tolerance: float,
+    pieces: Sequence[Mapping[str, Any]],
+) -> str | None:
+    host_id = _piece_id(host)
+    if host_id is None or str(host.get("piece_type") or "") != "Glass":
+        return None
+    if _declared_host_id(guest) in (None, host_id):
+        return None
+    inside = _outline_in_hole(guest, host, kerf_cm, tolerance)
+    if not inside:
+        return None
+    if not _chain_reaches(guest, host_id, pieces):
+        return "invalid"
+    if _nesting_depth(guest, pieces) > MAX_NESTING_DEPTH:
+        return "invalid"
+    return "nested"
+
+
+def _outline_in_hole(
+    guest: Mapping[str, Any],
+    host: Mapping[str, Any],
+    kerf_cm: float,
+    tolerance: float,
+) -> bool:
+    outer = material_outline_cm(guest)
+    hole = _hole_polygon(host)
+    if outer is None or hole is None:
         return False
+    if not polygon_strictly_contains_polygon(hole, outer):
+        return False
+    return polygon_distance(hole, outer) + tolerance >= _edge_gap(kerf_cm)
+
+
+def material_pair_issue(
+    first: Mapping[str, Any],
+    second: Mapping[str, Any],
+    *,
+    kerf_cm: float,
+    tolerance: float,
+) -> str | None:
+    """Compare real cut material for two pieces that participate in a nest."""
+
+    first_part = _part_geometry(first)
+    second_part = _part_geometry(second)
+    if first_part is None or second_part is None:
+        return "unproven"
+    if material_footprints_overlap(first_part, second_part):
+        return "overlap"
+    hole = containing_hole(first_part, second_part.outer)
+    other = second_part.outer
+    if hole is None:
+        hole = containing_hole(second_part, first_part.outer)
+        other = first_part.outer
+    gap = _edge_gap(kerf_cm)
+    if hole is not None:
+        if polygon_distance(hole, other) + tolerance < gap:
+            return "kerf"
+        return None
+    if polygon_distance(first_part.outer, second_part.outer) + tolerance < gap:
+        return "kerf"
+    return None
+
+
+def material_outline_cm(piece: Mapping[str, Any]) -> tuple[tuple[float, float], ...] | None:
+    """Board-centimetre cut outline. ``None`` means the shape is not proven."""
+
+    placed = _as_placed_source(piece)
+    kind = str(placed.get("piece_type") or "Regular")
+    if kind in _CORNER_TYPES:
+        return _corner_outline(placed)
+    if kind == "Special":
+        return _special_outline(placed)
+    if kind == "Glass":
+        if _glass_ring(placed) is None:
+            return None
+        return _rectangle_outline(placed)
+    if kind == "Regular":
+        return _rectangle_outline(placed)
+    return None
+
+
+def _publish_nested_opening(
+    guest: Mapping[str, Any],
+    parent: Mapping[str, Any],
+    local: Mapping[str, float],
+    openings: list[dict[str, Any]],
+    occupancy: dict[int, list[dict[str, float]]],
+    kerf_cm: float,
+) -> None:
+    parent_depth = int(parent.get("depth") or 0)
+    if str(guest.get("piece_type") or "") != "Glass":
+        return
+    if parent_depth + 1 >= MAX_NESTING_DEPTH:
+        return
+    guest_id = _piece_id(guest)
+    if guest_id is None or guest_id in occupancy:
+        return
+    probe = dict(guest)
+    probe["x"] = num(parent["usable"]["x"]) + num(local["x"])
+    probe["y"] = num(parent["usable"]["y"]) + num(local["y"])
+    probe["w"] = num(local["w"])
+    probe["h"] = num(local["h"])
+    probe["rotated"] = bool(local["rotated"])
+    ring = placed_glass_hole_mm(probe, rotated=bool(local["rotated"]))
+    if not ring:
+        return
+    probe["glass_hole_local_mm"] = ring
+    hole = opening_board_rect(probe)
+    if hole is None:
+        return
     usable = _inset(hole, _edge_gap(kerf_cm))
-    return _inside_rect(_rect(guest), usable, tolerance)
+    if usable["w"] <= _GEOMETRY_TOLERANCE_CM or usable["h"] <= _GEOMETRY_TOLERANCE_CM:
+        return
+    openings.append(
+        {
+            "host_id": guest_id,
+            "sheet_no": parent.get("sheet_no"),
+            "usable": usable,
+            "depth": parent_depth + 1,
+            "host_chain": (*_host_chain(parent["host_id"], openings), guest_id),
+        }
+    )
+    occupancy[guest_id] = []
+
+
+def _host_chain(host_id: int, openings: Sequence[Mapping[str, Any]]) -> tuple[int, ...]:
+    for opening in openings:
+        if opening.get("host_id") == host_id:
+            chain = opening.get("host_chain")
+            if chain:
+                return tuple(chain)
+            return (host_id,)
+    return (host_id,)
+
+
+def _chain_reaches(
+    guest: Mapping[str, Any],
+    host_id: int,
+    pieces: Sequence[Mapping[str, Any]],
+) -> bool:
+    by_id = {
+        piece_id: piece
+        for piece in pieces
+        if (piece_id := _piece_id(piece)) is not None
+    }
+    cursor = _declared_host_id(guest)
+    seen = {_piece_id(guest)}
+    steps = 0
+    while cursor is not None:
+        steps += 1
+        if steps > MAX_NESTING_DEPTH or cursor in seen or cursor not in by_id:
+            return False
+        if cursor == host_id:
+            return True
+        seen.add(cursor)
+        cursor = _declared_host_id(by_id[cursor])
+    return False
+
+
+def _nesting_depth(
+    guest: Mapping[str, Any],
+    pieces: Sequence[Mapping[str, Any]],
+) -> int:
+    by_id = {
+        piece_id: piece
+        for piece in pieces
+        if (piece_id := _piece_id(piece)) is not None
+    }
+    depth = 0
+    cursor = _declared_host_id(guest)
+    seen: set[int] = set()
+    while cursor is not None:
+        if cursor in seen or cursor not in by_id:
+            return MAX_NESTING_DEPTH + 1
+        seen.add(cursor)
+        depth += 1
+        cursor = _declared_host_id(by_id[cursor])
+    return depth
+
+
+def _part_geometry(piece: Mapping[str, Any]) -> PartGeometry | None:
+    outer = material_outline_cm(piece)
+    if outer is None:
+        return None
+    return PartGeometry(outer=outer, holes=_glass_holes(piece))
+
+
+def _as_placed_source(piece: Mapping[str, Any]) -> dict[str, Any]:
+    placed = dict(piece)
+    if num(placed.get("w")) > 0 and num(placed.get("h")) > 0:
+        return placed
+    placed["x"] = 0.0
+    placed["y"] = 0.0
+    placed["w"] = num(placed.get("width_cm"))
+    placed["h"] = num(placed.get("length_cm"))
+    placed["rotated"] = False
+    return placed
+
+
+def _rectangle_outline(
+    placed: Mapping[str, Any],
+) -> tuple[tuple[float, float], ...] | None:
+    width = num(placed.get("w"))
+    height = num(placed.get("h"))
+    if width <= 0 or height <= 0:
+        return None
+    x_pos = num(placed.get("x"))
+    y_pos = num(placed.get("y"))
+    return (
+        (x_pos, y_pos),
+        (x_pos + width, y_pos),
+        (x_pos + width, y_pos + height),
+        (x_pos, y_pos + height),
+    )
+
+
+def _corner_outline(
+    placed: Mapping[str, Any],
+) -> tuple[tuple[float, float], ...] | None:
+    width = num(placed.get("w"))
+    height = num(placed.get("h"))
+    if width <= 0 or height <= 0:
+        return None
+    position = str(placed.get("clipped_corner_position") or "")
+    cut_x = num(placed.get("clipped_corner_width_cm"))
+    cut_y = num(placed.get("clipped_corner_length_cm"))
+    if placed.get("rotated"):
+        position = _ROTATED_CORNER.get(position, "")
+        cut_x, cut_y = cut_y, cut_x
+    if cut_x <= 0 or cut_y <= 0 or cut_x >= width or cut_y >= height:
+        return None
+    local = _corner_local(
+        width,
+        height,
+        cut_x,
+        cut_y,
+        position,
+        str(placed.get("piece_type") or ""),
+    )
+    if local is None or validate_polygon(local, _GEOMETRY_TOLERANCE_CM):
+        return None
+    x_pos = num(placed.get("x"))
+    y_pos = num(placed.get("y"))
+    return tuple((x_pos + point[0], y_pos + point[1]) for point in local)
+
+
+def _special_outline(
+    placed: Mapping[str, Any],
+) -> tuple[tuple[float, float], ...] | None:
+    raw = placed.get("special_shape_geometry_json")
+    if isinstance(raw, str):
+        if not raw.strip():
+            return None
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+    elif isinstance(raw, Mapping):
+        payload = raw
+    else:
+        return None
+    if (
+        not isinstance(payload, Mapping)
+        or payload.get("version") != 1
+        or payload.get("kind") != "polygon"
+        or payload.get("units") != "cm"
+        or payload.get("exact") is False
+    ):
+        return None
+    blank_w = round(num(payload.get("blank_width_cm")), 3)
+    blank_h = round(num(payload.get("blank_length_cm")), 3)
+    expected_w = num(
+        placed.get("original_w")
+        or placed.get("original_width_cm")
+        or placed.get("width_cm")
+        or blank_w
+    )
+    expected_h = num(
+        placed.get("original_h")
+        or placed.get("original_length_cm")
+        or placed.get("length_cm")
+        or blank_h
+    )
+    if blank_w <= 0 or blank_h <= 0:
+        return None
+    if abs(blank_w - expected_w) > _SPECIAL_EPSILON_CM or abs(blank_h - expected_h) > _SPECIAL_EPSILON_CM:
+        return None
+    points = _normalized_special_points(payload.get("points"))
+    if points is None or not (3 <= len(points) <= _MAX_SPECIAL_VERTICES):
+        return None
+    if any(
+        point[0] < -_SPECIAL_EPSILON_CM
+        or point[1] < -_SPECIAL_EPSILON_CM
+        or point[0] > blank_w + _SPECIAL_EPSILON_CM
+        or point[1] > blank_h + _SPECIAL_EPSILON_CM
+        for point in points
+    ):
+        return None
+    xs = [point[0] for point in points]
+    ys = [point[1] for point in points]
+    if (
+        abs(min(xs)) > _SPECIAL_EPSILON_CM
+        or abs(max(xs) - blank_w) > _SPECIAL_EPSILON_CM
+        or abs(min(ys)) > _SPECIAL_EPSILON_CM
+        or abs(max(ys) - blank_h) > _SPECIAL_EPSILON_CM
+    ):
+        return None
+    if validate_polygon(points, _SPECIAL_EPSILON_CM):
+        return None
+    if placed.get("rotated"):
+        points = tuple((blank_h - point[1], point[0]) for point in points)
+        scale_w, scale_h = blank_h, blank_w
+    else:
+        scale_w, scale_h = blank_w, blank_h
+    viewport_w = num(placed.get("w"))
+    viewport_h = num(placed.get("h"))
+    if viewport_w <= 0 or viewport_h <= 0 or scale_w <= 0 or scale_h <= 0:
+        return None
+    x_pos = num(placed.get("x"))
+    y_pos = num(placed.get("y"))
+    outline = tuple(
+        (
+            x_pos + (point[0] / scale_w) * viewport_w,
+            y_pos + (point[1] / scale_h) * viewport_h,
+        )
+        for point in points
+    )
+    if validate_polygon(outline, _GEOMETRY_TOLERANCE_CM):
+        return None
+    return outline
+
+
+def _normalized_special_points(points: Any) -> tuple[tuple[float, float], ...] | None:
+    if not isinstance(points, (list, tuple)):
+        return None
+    normalized: list[tuple[float, float]] = []
+    for point in points:
+        if not isinstance(point, (list, tuple)) or len(point) != 2:
+            return None
+        normalized.append((round(num(point[0]), 3), round(num(point[1]), 3)))
+    if len(normalized) > 1 and normalized[0] == normalized[-1]:
+        normalized.pop()
+    return tuple(normalized)
+
+
+def _glass_ring(placed: Mapping[str, Any]) -> list[list[float]] | None:
+    stored = placed.get("glass_hole_local_mm")
+    if isinstance(stored, (list, tuple)) and len(stored) >= 4:
+        return stored
+    ring = placed_glass_hole_mm(placed, rotated=bool(placed.get("rotated")))
+    return ring
+
+
+def _glass_holes(piece: Mapping[str, Any]) -> tuple[tuple[tuple[float, float], ...], ...]:
+    polygon = _hole_polygon(piece)
+    if polygon is None:
+        return ()
+    return (polygon,)
+
+
+def _hole_polygon(host: Mapping[str, Any]) -> tuple[tuple[float, float], ...] | None:
+    rect = opening_board_rect(host)
+    if rect is None:
+        ring = _glass_ring(host)
+        if ring is None:
+            return None
+        probe = dict(host)
+        probe["piece_type"] = "Glass"
+        probe["glass_hole_local_mm"] = ring
+        if num(probe.get("w")) <= 0:
+            probe["w"] = num(probe.get("width_cm"))
+            probe["h"] = num(probe.get("length_cm"))
+            probe["x"] = num(probe.get("x"))
+            probe["y"] = num(probe.get("y"))
+        rect = opening_board_rect(probe)
+    if rect is None:
+        return None
+    x_pos = num(rect["x"])
+    y_pos = num(rect["y"])
+    return (
+        (x_pos, y_pos),
+        (x_pos + num(rect["w"]), y_pos),
+        (x_pos + num(rect["w"]), y_pos + num(rect["h"])),
+        (x_pos, y_pos + num(rect["h"])),
+    )
+
+
+def _l_polygons(
+    width: float, height: float, cut_x: float, cut_y: float
+) -> dict[str, tuple[tuple[float, float], ...]]:
+    return {
+        "Top Right": (
+            (0.0, 0.0),
+            (width - cut_x, 0.0),
+            (width - cut_x, cut_y),
+            (width, cut_y),
+            (width, height),
+            (0.0, height),
+        ),
+        "Top Left": (
+            (cut_x, 0.0),
+            (width, 0.0),
+            (width, height),
+            (0.0, height),
+            (0.0, cut_y),
+            (cut_x, cut_y),
+        ),
+        "Bottom Right": (
+            (0.0, 0.0),
+            (width, 0.0),
+            (width, height - cut_y),
+            (width - cut_x, height - cut_y),
+            (width - cut_x, height),
+            (0.0, height),
+        ),
+        "Bottom Left": (
+            (0.0, 0.0),
+            (width, 0.0),
+            (width, height),
+            (cut_x, height),
+            (cut_x, height - cut_y),
+            (0.0, height - cut_y),
+        ),
+    }
+
+
+def _clipped_polygons(
+    width: float, height: float, cut_x: float, cut_y: float
+) -> dict[str, tuple[tuple[float, float], ...]]:
+    return {
+        "Top Right": (
+            (0.0, 0.0),
+            (width - cut_x, 0.0),
+            (width, cut_y),
+            (width, height),
+            (0.0, height),
+        ),
+        "Top Left": (
+            (cut_x, 0.0),
+            (width, 0.0),
+            (width, height),
+            (0.0, height),
+            (0.0, cut_y),
+        ),
+        "Bottom Right": (
+            (0.0, 0.0),
+            (width, 0.0),
+            (width, height - cut_y),
+            (width - cut_x, height),
+            (0.0, height),
+        ),
+        "Bottom Left": (
+            (0.0, 0.0),
+            (width, 0.0),
+            (width, height),
+            (cut_x, height),
+            (0.0, height - cut_y),
+        ),
+    }
+
+
+def _corner_local(
+    width: float,
+    height: float,
+    cut_x: float,
+    cut_y: float,
+    position: str,
+    piece_type: str,
+) -> tuple[tuple[float, float], ...] | None:
+    table = (
+        _l_polygons(width, height, cut_x, cut_y)
+        if piece_type == "L-Shaped Corner"
+        else _clipped_polygons(width, height, cut_x, cut_y)
+    )
+    return table.get(position)
 
 
 def _declared_host_id(piece: Mapping[str, Any]) -> int | None:
@@ -500,19 +1026,6 @@ def _edge_gap(kerf_cm: float) -> float:
     if gap <= _GEOMETRY_TOLERANCE_CM:
         return _GEOMETRY_TOLERANCE_CM * 2.0
     return gap
-
-
-def _inside_rect(
-    inner: Mapping[str, float],
-    outer: Mapping[str, float],
-    tolerance: float,
-) -> bool:
-    return (
-        num(inner["x"]) >= num(outer["x"]) - tolerance
-        and num(inner["y"]) >= num(outer["y"]) - tolerance
-        and num(inner["x"]) + num(inner["w"]) <= num(outer["x"]) + num(outer["w"]) + tolerance
-        and num(inner["y"]) + num(inner["h"]) <= num(outer["y"]) + num(outer["h"]) + tolerance
-    )
 
 
 def _strictly_inside(

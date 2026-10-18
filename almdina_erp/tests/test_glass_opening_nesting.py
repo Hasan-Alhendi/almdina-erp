@@ -1,10 +1,12 @@
-"""System-plan nesting of Regular doors inside Glass openings."""
+"""System-plan nesting of proven cut outlines inside Glass openings."""
 
 from almdina_erp.almdina_erp.domain.cutting.evaluation import validate_plan
 from almdina_erp.almdina_erp.domain.cutting.glass_opening_dxf import placed_glass_hole_mm
 from almdina_erp.almdina_erp.domain.cutting.glass_opening_nesting import (
     GLASS_HOST_PIECE_ID,
     guest_is_eligible,
+    material_outline_cm,
+    nest_glass_openings,
     nested_plan_is_better,
     nesting_time_budget_sec,
     opening_board_rect,
@@ -157,10 +159,93 @@ def test_forbidden_rotation_keeps_the_door_outside_the_opening():
     assert len(plan["sheets"]) == 2
 
 
-def test_machining_corner_and_special_doors_stay_outside():
+def _exact_special(width, length, points):
+    import json
+
+    return json.dumps(
+        {
+            "version": 1,
+            "kind": "polygon",
+            "units": "cm",
+            "blank_width_cm": width,
+            "blank_length_cm": length,
+            "points": points,
+            "exact": True,
+        }
+    )
+
+
+def test_regular_addons_corners_and_exact_specials_nest_together():
+    special = _exact_special(12, 12, [[2, 0], [12, 0], [12, 12], [0, 12], [0, 2]])
+    rows = [
+        _glass(70, 70, 50),
+        _regular(
+            12,
+            12,
+            extra_liner=1,
+            liner_reference_side="edge_long_right",
+            liner_width_cm=1.8,
+            edge_long_right=1,
+            edge_long_thickness_mm=2,
+        ),
+        {
+            "piece_type": "Clipped Corner",
+            "width_cm": 12,
+            "length_cm": 12,
+            "qty": 1,
+            "clipped_corner_position": "Top Left",
+            "clipped_corner_width_cm": 3,
+            "clipped_corner_length_cm": 4,
+        },
+        {
+            "piece_type": "L-Shaped Corner",
+            "width_cm": 12,
+            "length_cm": 12,
+            "qty": 1,
+            "clipped_corner_position": "Top Right",
+            "clipped_corner_width_cm": 3,
+            "clipped_corner_length_cm": 4,
+        },
+        {
+            "piece_type": "Special",
+            "width_cm": 12,
+            "length_cm": 12,
+            "qty": 1,
+            "special_shape_geometry_json": special,
+        },
+    ]
+    pieces, plan = _plan(rows, 80, 80)
+
+    nested = [
+        piece
+        for sheet in plan["sheets"]
+        for piece in sheet["pieces"]
+        if piece.get(GLASS_HOST_PIECE_ID) not in (None, "")
+    ]
+    by_type = {piece["piece_type"]: piece for piece in nested}
+
+    assert set(by_type) == {
+        "Regular",
+        "Clipped Corner",
+        "L-Shaped Corner",
+        "Special",
+    }
+    assert len(plan["sheets"]) == 1
+    assert by_type["Regular"]["extra_liner"] == 1
+    assert by_type["Regular"]["liner_reference_side"] == "edge_long_right"
+    assert by_type["Regular"]["liner_width_cm"] == 1.8
+    assert by_type["Regular"]["edge_long_right"] == 1
+    assert by_type["Clipped Corner"]["clipped_corner_position"] == "Top Left"
+    assert by_type["L-Shaped Corner"]["clipped_corner_width_cm"] == 3
+    assert by_type["Special"]["special_shape_geometry_json"] == special
+    assert [len(material_outline_cm(piece)) for piece in nested] == [4, 5, 6, 5]
+    assert _ids(plan) == [1, 2, 3, 4, 5]
+    assert validate_plan(plan, pieces, 80, 80, kerf_cm=0.3) == []
+
+
+def test_unproven_special_and_corner_shapes_stay_outside():
     rows = [
         _glass(40, 40, 50),
-        _regular(12, 12, extra_liner=1, liner_reference_side="edge_long_right", liner_width_cm=1.8),
         {
             "piece_type": "Clipped Corner",
             "width_cm": 12,
@@ -179,10 +264,176 @@ def test_machining_corner_and_special_doors_stay_outside():
         },
     ]
     pieces = expand_piece_groups(rows)
-    assert [guest_is_eligible(piece) for piece in pieces] == [False, False, False, False]
+
+    assert [guest_is_eligible(piece) for piece in pieces] == [True, False, False]
     plan = optimize_plan(pieces, 50, 50, 0.3, selected_mode=METHOD, time_limit_sec=2)
 
     assert _hosts(plan) == []
+
+
+def test_glass_inside_glass_stops_at_two_host_steps():
+    rows = [
+        _glass(70, 70, 50),
+        _glass(40, 40, 50),
+        _glass(24, 24, 40),
+        _regular(10, 10),
+    ]
+    pieces, plan = _plan(rows, 80, 80)
+    placed = {
+        piece["id"]: piece
+        for sheet in plan["sheets"]
+        for piece in sheet["pieces"]
+    }
+
+    assert len(plan["sheets"]) == 1
+    assert placed[2][GLASS_HOST_PIECE_ID] == 1
+    assert placed[3][GLASS_HOST_PIECE_ID] == 2
+    assert placed[4][GLASS_HOST_PIECE_ID] == 1
+    assert placed[2]["glass_hole_local_mm"]
+    assert placed[3]["glass_hole_local_mm"]
+    assert placed[4]["piece_type"] == "Regular"
+    assert validate_plan(plan, pieces, 80, 80, kerf_cm=0.3) == []
+
+
+def test_rotated_corner_outline_follows_the_placed_notch():
+    piece = {
+        "piece_type": "Clipped Corner",
+        "x": 4,
+        "y": 5,
+        "w": 12,
+        "h": 8,
+        "rotated": True,
+        "clipped_corner_position": "Top Left",
+        "clipped_corner_width_cm": 3,
+        "clipped_corner_length_cm": 2,
+        "width_cm": 8,
+        "length_cm": 12,
+    }
+
+    assert material_outline_cm(piece)[:3] == ((4.0, 5.0), (14.0, 5.0), (16.0, 8.0))
+
+
+def test_interlocking_corners_use_material_clearance_not_their_boxes():
+    pieces = expand_piece_groups(
+        [
+            _glass(40, 40, 20),
+            {
+                "piece_type": "L-Shaped Corner",
+                "width_cm": 12,
+                "length_cm": 10,
+                "qty": 1,
+                "clipped_corner_position": "Top Right",
+                "clipped_corner_width_cm": 6,
+                "clipped_corner_length_cm": 9,
+            },
+            _regular(8, 8),
+        ]
+    )
+    glass = make_placed_piece(pieces[0], 0, 0, 40, 40, False)
+    hole = opening_board_rect(glass)
+    shaped = make_placed_piece(pieces[1], hole["x"] + 1, hole["y"] + 1, 12, 10, False)
+    beside = make_placed_piece(pieces[2], hole["x"] + 8, hole["y"] + 1, 8, 8, False)
+    overlapping = make_placed_piece(pieces[2], hole["x"] + 6, hole["y"] + 1, 8, 8, False)
+    for guest in (shaped, beside, overlapping):
+        guest[GLASS_HOST_PIECE_ID] = glass["id"]
+
+    assert validate_plan(
+        {"sheets": [{"sheet_no": 1, "pieces": [glass, shaped, beside]}], "unplaced": []},
+        pieces,
+        50,
+        50,
+        kerf_cm=0.3,
+    ) == []
+    errors = validate_plan(
+        {"sheets": [{"sheet_no": 1, "pieces": [glass, shaped, overlapping]}], "unplaced": []},
+        pieces,
+        50,
+        50,
+        kerf_cm=0.3,
+    )
+    assert any("overlap" in error for error in errors)
+
+
+def test_rank_prefers_improvement_then_unique_opening_use():
+    assert nested_plan_is_better(
+        {"industrial_rank": (0, 1, 0), "sheets": []},
+        {"industrial_rank": (0, 2, 0), "sheets": []},
+    )
+    assert not nested_plan_is_better(
+        {"industrial_rank": (0, 2, 0), "sheets": []},
+        {"industrial_rank": (0, 1, 0), "sheets": []},
+    )
+    equal = (0, 1, 0)
+    hosted = {
+        "industrial_rank": equal,
+        "sheets": [
+            {
+                "pieces": [
+                    {"id": 2, GLASS_HOST_PIECE_ID: 1},
+                    {"id": 2, GLASS_HOST_PIECE_ID: 1},
+                ]
+            }
+        ],
+    }
+    plain = {"industrial_rank": equal, "sheets": [{"pieces": [{"id": 2}]}]}
+    also_hosted = {
+        "industrial_rank": equal,
+        "sheets": [{"pieces": [{"id": 4, GLASS_HOST_PIECE_ID: 3}]}],
+    }
+
+    assert nested_plan_is_better(hosted, plain)
+    assert not nested_plan_is_better(plain, plain)
+    assert not nested_plan_is_better(hosted, also_hosted)
+
+
+def test_equal_rank_accepts_nesting_and_a_worse_rank_keeps_baseline(monkeypatch):
+    pieces = expand_piece_groups([_glass(40, 40, 50), _regular(20, 20)])
+    baseline = run_single_method(pieces, 50, 50, 0.3, METHOD)
+    baseline["industrial_rank"] = (0, 1)
+
+    def same_rank(plan, *_args, **_kwargs):
+        plan["industrial_rank"] = (0, 1)
+        return plan
+
+    def worse_rank(plan, *_args, **_kwargs):
+        plan["industrial_rank"] = (0, 2)
+        return plan
+
+    monkeypatch.setattr(
+        "almdina_erp.almdina_erp.domain.cutting.optimizer.enrich_plan_metrics",
+        same_rank,
+    )
+    accepted = nest_glass_openings(
+        baseline,
+        pieces,
+        50,
+        50,
+        0.3,
+        machine_type="CNC Router",
+        time_limit_sec=2,
+        min_remnant_width_cm=30,
+        min_remnant_length_cm=30,
+        min_remnant_area_m2=0.09,
+    )
+    monkeypatch.setattr(
+        "almdina_erp.almdina_erp.domain.cutting.optimizer.enrich_plan_metrics",
+        worse_rank,
+    )
+    rejected = nest_glass_openings(
+        baseline,
+        pieces,
+        50,
+        50,
+        0.3,
+        machine_type="CNC Router",
+        time_limit_sec=2,
+        min_remnant_width_cm=30,
+        min_remnant_length_cm=30,
+        min_remnant_area_m2=0.09,
+    )
+
+    assert _hosts(accepted) == [1]
+    assert rejected is baseline
 
 
 def test_panel_saw_does_not_nest_inside_glass():
@@ -244,21 +495,6 @@ def test_orders_without_glass_keep_the_rectangle_pack():
     ]
 
 
-def test_rank_accepts_only_a_strict_improvement():
-    assert nested_plan_is_better(
-        {"industrial_rank": (0, 1, 0)},
-        {"industrial_rank": (0, 2, 0)},
-    )
-    assert not nested_plan_is_better(
-        {"industrial_rank": (0, 2, 0)},
-        {"industrial_rank": (0, 1, 0)},
-    )
-    assert not nested_plan_is_better(
-        {"industrial_rank": (0, 1, 0)},
-        {"industrial_rank": (0, 1, 0)},
-    )
-
-
 def test_failed_validation_keeps_the_unnested_plan(monkeypatch):
     def reject(*_args, **_kwargs):
         return ["forced"]
@@ -299,6 +535,15 @@ def test_touching_or_crossing_the_opening_is_rejected():
 
     assert any("valid Glass opening nest" in error for error in touching_errors)
     assert any("valid Glass opening nest" in error for error in crossing_errors)
+    unlinked = make_placed_piece(pieces[1], hole["x"] + 1, hole["y"] + 1, 20, 20, False)
+    unlinked_errors = validate_plan(
+        {"sheets": [{"sheet_no": 1, "pieces": [glass, unlinked]}], "unplaced": []},
+        pieces,
+        50,
+        50,
+        kerf_cm=0.3,
+    )
+    assert any("overlap" in error for error in unlinked_errors)
 
 
 def test_exact_single_kerf_gap_is_accepted_and_a_short_gap_is_rejected():
@@ -352,6 +597,31 @@ def test_wrong_host_id_and_circular_host_links_are_rejected():
 
     assert any("not in the plan" in error for error in wrong)
     assert any("circular" in error for error in circular)
+
+    deep_pieces = expand_piece_groups(
+        [_glass(70, 70, 50), _glass(40, 40, 50), _glass(20, 20, 30), _regular(6, 6)]
+    )
+    outer = make_placed_piece(deep_pieces[0], 0, 0, 70, 70, False)
+    middle = make_placed_piece(deep_pieces[1], 6, 6, 40, 40, False)
+    inner = make_placed_piece(deep_pieces[2], 12, 12, 20, 20, False)
+    deep_guest = make_placed_piece(deep_pieces[3], 16, 16, 6, 6, False)
+    middle[GLASS_HOST_PIECE_ID] = outer["id"]
+    inner[GLASS_HOST_PIECE_ID] = middle["id"]
+    deep_guest[GLASS_HOST_PIECE_ID] = inner["id"]
+    too_deep = validate_plan(
+        {
+            "sheets": [
+                {"sheet_no": 1, "pieces": [outer, middle, inner, deep_guest]}
+            ],
+            "unplaced": [],
+        },
+        deep_pieces,
+        80,
+        80,
+        kerf_cm=0.3,
+    )
+
+    assert any("nesting depth" in error for error in too_deep)
 
 
 def test_a_nested_door_outside_the_board_is_rejected():

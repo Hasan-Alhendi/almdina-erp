@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from .glass_opening_nesting import classify_piece_pair, host_link_errors
+from .glass_opening_nesting import (
+    classify_piece_pair,
+    host_link_errors,
+    material_pair_issue,
+)
 from .primitives import num, present_shop_floor_packing, rect_intersects, rects_have_clearance
 
 
@@ -135,6 +139,7 @@ def validate_plan(
                     second,
                     kerf_cm=required_kerf_cm,
                     tolerance=tolerance,
+                    sheet_pieces=pieces,
                 )
                 if relation == "nested":
                     continue
@@ -143,6 +148,26 @@ def validate_plan(
                         f"Pieces {first.get('label')} and {second.get('label')} do not form "
                         f"a valid Glass opening nest on sheet {sheet.get('sheet_no')}."
                     )
+                    continue
+                if first.get("glass_host_piece_id") not in (None, "") or second.get(
+                    "glass_host_piece_id"
+                ) not in (None, ""):
+                    issue = material_pair_issue(
+                        first,
+                        second,
+                        kerf_cm=required_kerf_cm,
+                        tolerance=tolerance,
+                    )
+                    if issue == "overlap":
+                        errors.append(
+                            f"Pieces {first.get('label')} and {second.get('label')} overlap "
+                            f"on sheet {sheet.get('sheet_no')}."
+                        )
+                    elif issue in {"kerf", "unproven"}:
+                        errors.append(
+                            f"Pieces {first.get('label')} and {second.get('label')} do not form "
+                            f"a valid Glass opening nest on sheet {sheet.get('sheet_no')}."
+                        )
                     continue
                 if rect_intersects(first_rect, second_rect):
                     errors.append(
